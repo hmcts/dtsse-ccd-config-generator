@@ -22,13 +22,14 @@ dependencies {
     testImplementation 'junit:junit:4.12'
     compile 'org.reflections:reflections:0.9.11'
     compile 'com.fasterxml.jackson.core:jackson-annotations:2.9.0'
+    compile project(':ccd-sdk-types')
 }
 
 gradlePlugin {
     // Define the plugin
     plugins {
         greeting {
-            id = 'ccd.sdk.greeting'
+            id = 'ccd.sdk'
             implementationClass = 'ccd.sdk.CcdSdkPlugin'
         }
     }

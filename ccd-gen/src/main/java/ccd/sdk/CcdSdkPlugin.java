@@ -13,7 +13,6 @@ import org.gradle.api.Task;
 public class CcdSdkPlugin implements Plugin<Project> {
     public void apply(Project project) {
         Task generate = project.getTasks().create("generateCCDConfig", ConfigGenerator.class);
-        Task javaCompile = project.getTasks().getByName("compileJava");
-        generate.dependsOn(javaCompile);
+        generate.dependsOn(project.getTasksByName("compileJava", true));
     }
 }

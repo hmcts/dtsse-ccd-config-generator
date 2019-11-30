@@ -19,21 +19,21 @@ import static org.junit.Assert.*;
 public class CcdSdkPluginFunctionalTest {
     @Test public void canRunTask() throws IOException {
         // Setup the test build
-        File projectDir = new File("../service");
+        File projectDir = new File("../../fpl-ccd-configuration/service");
 
         // Run the build
         GradleRunner runner = GradleRunner.create();
         runner.forwardOutput();
 
-
         runner.withPluginClasspath();
         runner.withArguments("generateCCDConfig");
         runner.withProjectDir(projectDir);
 
+
         BuildResult result = runner.build();
 
         // Verify the result
-        assertTrue(result.getOutput().contains("Hello from alex 'ccd.sdk.greeting'"));
+        assertTrue(result.getOutput().contains("Found types: 1"));
     }
 
     private void writeString(File file, String string) throws IOException {
