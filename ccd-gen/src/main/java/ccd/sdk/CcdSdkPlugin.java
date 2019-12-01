@@ -6,13 +6,24 @@ package ccd.sdk;
 import org.gradle.api.Plugin;
 import org.gradle.api.Project;
 import org.gradle.api.Task;
+import org.gradle.api.plugins.JavaPluginConvention;
+import org.gradle.api.tasks.SourceSet;
+import org.gradle.api.tasks.SourceSetContainer;
+import org.reflections.Reflections;
+import org.reflections.util.ClasspathHelper;
+import org.reflections.util.ConfigurationBuilder;
+
+import java.net.MalformedURLException;
+import java.net.URL;
+import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  * A simple 'hello world' plugin.
  */
 public class CcdSdkPlugin implements Plugin<Project> {
     public void apply(Project project) {
-        Task generate = project.getTasks().create("generateCCDConfig", ConfigGenerator.class);
+        Task generate = project.getTasks().create("generateCCDConfig", GenerateConfigTask.class, project);
         generate.dependsOn(project.getTasksByName("compileJava", true));
     }
 }
