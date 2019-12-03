@@ -19,7 +19,7 @@ import static org.junit.Assert.*;
 public class CcdSdkPluginFunctionalTest {
     @Test public void canRunTask() throws IOException {
         // Setup the test build
-        File projectDir = new File("../../fpl-ccd-configuration/service");
+        File projectDir = new File("../test-builds/fpl-ccd-configuration/service");
 
         // Run the build
         GradleRunner runner = GradleRunner.create();
