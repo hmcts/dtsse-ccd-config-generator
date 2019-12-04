@@ -3,5 +3,6 @@ package ccd.sdk.types;
 public enum FieldType {
     Unspecified,
     Email,
-    PhoneUK
+    PhoneUK,
+    Document, Schedule, TextArea, FixedList
 }

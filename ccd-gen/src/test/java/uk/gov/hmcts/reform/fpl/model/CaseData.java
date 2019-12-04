@@ -1,5 +1,8 @@
 package uk.gov.hmcts.reform.fpl.model;
 
+import ccd.sdk.types.CaseField;
+import ccd.sdk.types.FieldType;
+import ccd.sdk.types.Label;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -22,10 +25,15 @@ import static org.apache.commons.lang3.ObjectUtils.isEmpty;
 @Builder(toBuilder = true)
 @AllArgsConstructor
 @HasDocumentsIncludedInSwet(groups = UploadDocumentsGroup.class)
+@ccd.sdk.types.CaseData
 public class CaseData {
     @NotBlank(message = "Enter a case name")
+    @CaseField(label = "Case name",
+    hint = "Include the Local Authority name and respondent’s last name. For example, Endley Council v Smith/Tate/Jones")
     private final String caseName;
+    @Label(id = "gateKeeperLabel", value = "Let the gatekeeper know there's a new case")
     private final String gatekeeperEmail;
+    @CaseField(label = "Local Authority :", type = FieldType.FixedList)
     private final String caseLocalAuthority;
     private final Risks risks;
     @NotNull(message = "You need to add details to orders and directions needed")
@@ -59,8 +67,10 @@ public class CaseData {
     @Valid
     private final Solicitor solicitor;
     private final FactorsParenting factorsParenting;
+    @Label(id = "allocationProposal_label", value = "This should be completed by a solicitor with good knowledge of the case. Use the [President's Guidance](https://www.judiciary.uk/wp-content/uploads/2013/03/President%E2%80%99s-Guidance-on-Allocation-and-Gatekeeping.pdf) and [schedule](https://www.judiciary.uk/wp-content/uploads/2013/03/Schedule-to-the-President%E2%80%99s-Guidance-on-Allocation-and-Gatekeeping.pdf) on allocation and gatekeeping to make your recommendation.")
     private final Allocation allocationProposal;
     private final Allocation allocationDecision;
+    @Label(id="allPartiesPrecedentLabelCMO", value="Add completed directions from the precedent library or your own template.")
     private final List<Element<Direction>> allParties;
     private final List<Element<Direction>> allPartiesCustom;
     private final List<Element<Direction>> localAuthorityDirections;
@@ -94,6 +104,7 @@ public class CaseData {
     @Valid
     public final Document socialWorkAssessmentDocument;
     @JsonProperty("documents_socialWorkChronology_document")
+    @Label(id = "uploadDocuments_paragraph_1", value = "You must upload these documents if possible. Give the reason and date you expect to provide it if you don’t have a document yet.")
     @NotNull(message = "Tell us the status of all documents including those that you haven't uploaded")
     @Valid
     public final Document socialWorkChronologyDocument;
@@ -128,7 +139,9 @@ public class CaseData {
     private final List<Element<HearingBooking>> hearingDetails;
 
     private LocalDate dateSubmitted;
+    @Label(id = "hearingDate", value = "The next hearing is on ${hearingDetails.startDate}.")
     private final List<Element<DocumentBundle>> noticeOfProceedingsBundle;
+    @Label(id="c9Declaration", value="If you send documents to a party's solicitor or a children's guardian, give their details")
     private final List<Element<Recipients>> statementOfService;
     private final JudgeAndLegalAdvisor judgeAndLegalAdvisor;
     private final C2DocumentBundle temporaryC2Document;

@@ -33,12 +33,6 @@ public class Builder<T, P> {
 
     public <U> Builder<T, P> field(Consumer<T> c, Consumer<U> u) {
         Class<?> typeArg = TypeResolver.resolveRawArgument(Consumer.class, u.getClass());
-        System.out.println(typeArg);
-        System.out.println(typeArg);
-        System.out.println(typeArg);
-        System.out.println(typeArg);
-        System.out.println(typeArg);
-        System.out.println(typeArg);
 
         final MethodInterceptor hashCodeAlwaysNull = new MethodInterceptor() {
 

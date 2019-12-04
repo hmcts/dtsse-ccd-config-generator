@@ -6,6 +6,7 @@ import ccd.sdk.types.ComplexType;
 import ccd.sdk.generator.DisplayContext;
 import com.google.common.io.Resources;
 import org.apache.commons.io.FileUtils;
+import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
@@ -33,18 +34,19 @@ public class ComplexTypeTest {
     @Rule
     public TemporaryFolder temp = new TemporaryFolder();
 
+    ConfigGenerator generator;
+    Reflections reflections;
+
+    @Before
+    public void before() {
+        reflections = new Reflections("uk.gov.hmcts");
+        generator = new ConfigGenerator(reflections, temp.getRoot());
+        generator.generate("CARE_SUPERVISION_EPO");
+    }
+
     @Test
     public void solicitor() throws Exception {
-
-        Reflections reflections = new Reflections("uk.gov.hmcts");
-
-        ConfigGenerator g = new ConfigGenerator(reflections, temp.getRoot());
-        g.generate();
-
-        String expected = Resources.toString(Resources.getResource("ccd-definition/ComplexTypes/Solicitor.json"), Charset.defaultCharset());
-        String actual = FileUtils.readFileToString(new File(temp.getRoot(), "ComplexTypes/Solicitor.json"), Charset.defaultCharset());
-
-        JSONAssert.assertEquals(expected, actual, false);
+        assertEquals("ComplexTypes/Solicitor.json");
     }
 
     @Test
@@ -56,6 +58,17 @@ public class ComplexTypeTest {
                 .field(x -> x.getCaseName(), DisplayContext.Mandatory)
                 .field(x -> x.getC21Order(), DisplayContext.Mandatory)
                 .field(x -> x.getHearingDetails(), this::renderSolicitor);
+    }
+
+    private void assertEquals(String jsonPath) {
+        try {
+            String expected = Resources.toString(Resources.getResource("ccd-definition/" + jsonPath), Charset.defaultCharset());
+            String actual = FileUtils.readFileToString(new File(temp.getRoot(), jsonPath), Charset.defaultCharset());
+
+            JSONAssert.assertEquals(expected, actual, false);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
     }
 
     private void renderSolicitor(HearingBooking solicitor) {
