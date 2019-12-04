@@ -10,10 +10,15 @@ import org.reflections.Reflections;
 import org.skyscreamer.jsonassert.JSONAssert;
 import uk.gov.hmcts.reform.fpl.model.CaseData;
 import uk.gov.hmcts.reform.fpl.model.CaseState;
+import uk.gov.hmcts.reform.fpl.model.HearingBooking;
 import uk.gov.hmcts.reform.fpl.model.Solicitor;
+import uk.gov.hmcts.reform.fpl.model.common.Element;
 
+import javax.validation.constraints.NotNull;
 import java.nio.charset.Charset;
+import java.util.List;
 import java.util.Set;
+import java.util.function.Function;
 
 import static ccd.sdk.generator.Builder.builder;
 import static org.hamcrest.CoreMatchers.equalTo;
@@ -28,7 +33,7 @@ public class ComplexTypeTest {
         Set<Class<?>> types = reflections.getTypesAnnotatedWith(ComplexType.class);
         assertThat(types.size(), equalTo(1));
         Class c = getClass().getClassLoader().loadClass("uk.gov.hmcts.reform.fpl.model.Solicitor");
-        String expected = Resources.toString(Resources.getResource("ComplexTypes/Solicitor.json"), Charset.defaultCharset());
+        String expected = Resources.toString(Resources.getResource("ccd-definition/ComplexTypes/Solicitor.json"), Charset.defaultCharset());
 
         JSONAssert.assertEquals(expected, ConfigGenerator.toComplexType(c), false);
 
@@ -37,15 +42,17 @@ public class ComplexTypeTest {
 
     @Test
     public void foo() {
+        Function<CaseData, List<Element<HearingBooking>>> foo = CaseData::getHearingDetails;
+
         builder(CaseData.class, CaseState.class)
                 .event(CaseState.Open, CaseState.Submitted)
-                .field(x -> x.getSolicitors(), DisplayContext.Mandatory)
                 .field(x -> x.getCaseName(), DisplayContext.Mandatory)
-                .field(x -> x.getSolicitors(), this::renderSolicitor);
+                .field(x -> x.getC21Order(), DisplayContext.Mandatory)
+                .field(x -> x.getHearingDetails(), this::renderSolicitor);
     }
 
-    private void renderSolicitor(Solicitor solicitor) {
-        solicitor.getMobile();
-        solicitor.getEmail();
+    private void renderSolicitor(HearingBooking solicitor) {
+        solicitor.getStartDate();
+        solicitor.getType();
     }
 }
