@@ -5,12 +5,10 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
-import org.apache.commons.lang3.StringUtils;
 import org.objenesis.Objenesis;
 import org.objenesis.ObjenesisStd;
 import org.reflections.ReflectionUtils;
 import org.reflections.Reflections;
-import org.reflections.util.ConfigurationBuilder;
 
 import java.io.File;
 import java.io.IOException;
@@ -21,6 +19,9 @@ import java.nio.file.Paths;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
+
+import static ccd.sdk.generator.Utils.getField;
 
 public class ConfigGenerator {
     private final File outputfolder;
@@ -32,19 +33,30 @@ public class ConfigGenerator {
     }
 
     public void generate(String caseTypeId) {
-        generateComplex();
+        Set<Class<? extends CCDConfig>> types = reflections.getSubTypesOf(CCDConfig.class);
+        if (types.size() != 1) {
+            throw new RuntimeException("Expected 1 CCDConfig class but found " + types.size());
+        }
+
+        Objenesis objenesis = new ObjenesisStd();
+        CCDConfig config = objenesis.newInstance(types.iterator().next());
+        ConfigBuilderImpl builder = new ConfigBuilderImpl();
+        config.configure(builder);
+
+        EventGenerator.writeEvents(outputfolder, builder);
+        generateComplexTypes();
     }
 
 
 
-    public void generateComplex() {
+    public void generateComplexTypes() {
         File complexTypes = new File(outputfolder, "ComplexTypes");
         complexTypes.mkdir();
 
         Set<Class<?>> types = reflections.getTypesAnnotatedWith(ComplexType.class);
         for (Class<?> type : types) {
             Path path = Paths.get(complexTypes.getPath(), type.getSimpleName() + ".json");
-            writeFile(path, toComplexType(type));
+            Utils.writeFile(path, toComplexType(type));
         }
     }
 
@@ -61,7 +73,6 @@ public class ConfigGenerator {
             Map<String, Object> fieldInfo = getField(c.getSimpleName());
             fieldInfo.put("ListElementCode", field.getName());
             fieldInfo.put("FieldType", "Text");
-            fieldInfo.put("HintText", "Foo");
 
             CaseField f = field.getAnnotation(CaseField.class);
             fieldInfo.put("ElementLabel", f.label());
@@ -76,30 +87,8 @@ public class ConfigGenerator {
             fields.add(fieldInfo);
         }
 
-        return serialise(fields);
+        return Utils.serialise(fields);
     }
 
-    private static void writeFile(Path path, String value) {
-        try {
-            Files.writeString(path, value);
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
-    }
 
-    private static String serialise(List<Map<String, Object>> data) {
-        try {
-            return new ObjectMapper().writeValueAsString(data);
-        } catch (JsonProcessingException e) {
-            throw new RuntimeException(e);
-        }
-    }
-
-    private static Map<String, Object> getField(String id) {
-        Map<String, Object> field = Maps.newHashMap();
-        field.put("LiveFrom", "01/01/2017");
-        field.put("SecurityClassification", "Public");
-        field.put("ID", id);
-        return field;
-    }
 }

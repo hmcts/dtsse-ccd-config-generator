@@ -4,6 +4,7 @@ import ccd.sdk.generator.ConfigGenerator;
 import ccd.sdk.generator.Builder;
 import ccd.sdk.types.ComplexType;
 import ccd.sdk.generator.DisplayContext;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.io.Resources;
 import org.apache.commons.io.FileUtils;
 import org.junit.Before;
@@ -21,6 +22,8 @@ import uk.gov.hmcts.reform.fpl.model.common.Element;
 import javax.validation.constraints.NotNull;
 import java.io.File;
 import java.nio.charset.Charset;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.List;
 import java.util.Set;
 import java.util.function.Function;
@@ -50,6 +53,11 @@ public class ComplexTypeTest {
     }
 
     @Test
+    public void stateOpen() {
+        assertEquals("CaseEvent/Open.json");
+    }
+
+    @Test
     public void foo() {
         Function<CaseData, List<Element<HearingBooking>>> foo = CaseData::getHearingDetails;
 
@@ -64,6 +72,12 @@ public class ComplexTypeTest {
         try {
             String expected = Resources.toString(Resources.getResource("ccd-definition/" + jsonPath), Charset.defaultCharset());
             String actual = FileUtils.readFileToString(new File(temp.getRoot(), jsonPath), Charset.defaultCharset());
+            ObjectMapper mapper = new ObjectMapper();
+            Object json = mapper.readValue(actual, Object.class);
+            String indented = mapper.writerWithDefaultPrettyPrinter().writeValueAsString(json);
+            System.out.println(indented);
+
+
 
             JSONAssert.assertEquals(expected, actual, false);
         } catch (Exception e) {
