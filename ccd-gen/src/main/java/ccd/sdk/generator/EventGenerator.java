@@ -17,7 +17,7 @@ import java.util.stream.Collectors;
 public class EventGenerator {
     public static void writeEvents(File root, ConfigBuilderImpl impl) {
         List<Event> events = impl.events.stream().map(x -> x.build()).collect(Collectors.toList());
-        ImmutableListMultimap<String, Event> eventsByState = Multimaps.index(events, x -> "Open");
+        ImmutableListMultimap<String, Event> eventsByState = Multimaps.index(events, x -> x.getPostState());
 
         File folder = new File(root.getPath(), "CaseEvent");
         folder.mkdir();

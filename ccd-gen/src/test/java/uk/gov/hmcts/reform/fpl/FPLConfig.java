@@ -88,11 +88,13 @@ public class FPLConfig implements CCDConfig {
 
         builder.event("changeCaseName").forState("Open")
                 .name("Change case name")
-                .description("Change case name");
+                .description("Change case name")
+                .displayOrder(15);
 
         builder.event("addCaseIDReference").forState("Open")
                 .name("Add case ID")
-                .description("Add case ID");
+                .description("Add case ID")
+                .displayOrder(16);
     }
 
 }
