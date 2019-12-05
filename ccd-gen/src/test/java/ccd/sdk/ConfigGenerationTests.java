@@ -8,6 +8,7 @@ import de.cronn.reflection.util.PropertyUtils;
 import org.apache.commons.io.FileUtils;
 import org.hamcrest.core.Is;
 import org.junit.Before;
+import org.junit.Ignore;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
@@ -19,6 +20,7 @@ import uk.gov.hmcts.reform.fpl.model.HearingBooking;
 import uk.gov.hmcts.reform.fpl.model.common.Element;
 
 import java.io.File;
+import java.net.URL;
 import java.nio.charset.Charset;
 import java.util.List;
 import java.util.function.Function;
@@ -51,8 +53,24 @@ public class ConfigGenerationTests {
     }
 
     @Test
-    public void generatesCaseEventToField() {
+    public void generatesSingleCaseEventToField() {
         assertEquals("CaseEventToFields/enterParentingFactors.json");
+    }
+
+    @Ignore
+    @Test
+    public void generatesAllCaseEventToField() {
+        URL u = Resources.getResource("ccd-definition/CaseEventToFields");
+        for (File file : new File(u.getPath()).listFiles()) {
+            assertEquals("CaseEventToFields/" + file.getName());
+        }
+    }
+
+    // This will only pass once everything else is finished.
+    @Ignore
+    @Test
+    public void generatesAuthorisationCaseEvent() {
+        assertEquals("AuthorisationCaseEvent/AuthorisationCaseEvent.json");
     }
 
     @Test

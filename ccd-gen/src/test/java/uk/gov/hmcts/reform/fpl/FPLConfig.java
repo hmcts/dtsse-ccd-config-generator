@@ -66,6 +66,7 @@ public class FPLConfig implements CCDConfig<CaseData> {
         builder.event("enterParentingFactors").forState("Open")
                 .name("Factors affecting parenting")
                 .description("Entering the factors affecting parenting")
+                .grant("caseworker-publiclaw-solicitor", "CRU")
                 .field(CaseData::getFactorsParenting, DisplayContext.Optional);
 
         builder.event("enterInternationalElement").forState("Open")

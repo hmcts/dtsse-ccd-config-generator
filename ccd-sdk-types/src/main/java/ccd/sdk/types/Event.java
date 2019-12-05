@@ -29,17 +29,21 @@ public class Event<T> {
     @Builder.Default
     private int displayOrder = -1;
 
+    private Map<String, String> grants;
+    public Map<String, String> getGrants() {
+        return grants;
+    }
+
     private Class dataClass;
 
+
     private Map<String, DisplayContext> fields;
-    public Map<String, DisplayContext> getFields() {
-        return fields;
-    }
 
     public static <T> EventBuilder<T> builder(Class dataClass) {
         EventBuilder<T> result = new EventBuilder<T>();
         result.dataClass = dataClass;
         result.fields = Maps.newHashMap();
+        result.grants = Maps.newHashMap();
         return result;
     }
 
@@ -51,6 +55,10 @@ public class Event<T> {
             return this;
         }
 
+        public EventBuilder<T> grant(String role, String crud) {
+            grants.put(role, crud);
+            return this;
+        }
 
         public EventBuilder<T> field(TypedPropertyGetter<T, ?> getter, DisplayContext context) {
             String fieldName = PropertyUtils.getPropertyName(dataClass, getter);
