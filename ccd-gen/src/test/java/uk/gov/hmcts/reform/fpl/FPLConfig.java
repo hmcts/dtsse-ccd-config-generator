@@ -1,14 +1,16 @@
 package uk.gov.hmcts.reform.fpl;
 
+
 import ccd.sdk.types.CCDConfig;
 import ccd.sdk.types.ConfigBuilder;
-import ccd.sdk.types.FieldType;
-import uk.gov.hmcts.reform.ccd.client.model.Event;
+import ccd.sdk.types.DisplayContext;
+import ccd.sdk.types.Event;
+import uk.gov.hmcts.reform.fpl.model.CaseData;
 
-public class FPLConfig implements CCDConfig {
+public class FPLConfig implements CCDConfig<CaseData> {
 
     @Override
-    public void configure(ConfigBuilder builder) {
+    public void configure(ConfigBuilder<CaseData> builder) {
 
         builder.caseType("CARE_SUPERVISION_EPO");
 
@@ -63,7 +65,8 @@ public class FPLConfig implements CCDConfig {
 
         builder.event("enterParentingFactors").forState("Open")
                 .name("Factors affecting parenting")
-                .description("Entering the factors affecting parenting");
+                .description("Entering the factors affecting parenting")
+                .field(CaseData::getFactorsParenting, DisplayContext.Optional);
 
         builder.event("enterInternationalElement").forState("Open")
                 .name("International element")

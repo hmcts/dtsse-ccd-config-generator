@@ -1,5 +1,5 @@
 package ccd.sdk.types;
 
-public interface CCDConfig {
-  void configure(ConfigBuilder builder);
+public interface CCDConfig<T> {
+  void configure(ConfigBuilder<T> builder);
 }

@@ -1,10 +1,8 @@
 package ccd.sdk.generator;
 
 import ccd.sdk.types.Event;
-import com.google.common.base.Function;
 import com.google.common.collect.ImmutableListMultimap;
 import com.google.common.collect.Lists;
-import com.google.common.collect.Maps;
 import com.google.common.collect.Multimaps;
 
 import java.io.File;
@@ -12,11 +10,9 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 public class EventGenerator {
-    public static void writeEvents(File root, ConfigBuilderImpl impl) {
-        List<Event> events = impl.events.stream().map(x -> x.build()).collect(Collectors.toList());
+    public static void writeEvents(File root, String caseType, List<Event> events) {
         ImmutableListMultimap<String, Event> eventsByState = Multimaps.index(events, x -> x.getPostState());
 
         File folder = new File(root.getPath(), "CaseEvent");
@@ -24,7 +20,7 @@ public class EventGenerator {
         for (String state : eventsByState.keys()) {
             Path output = Paths.get(folder.getPath(), state + ".json");
 
-            Utils.writeFile(output, serialise(impl.caseType, eventsByState.get(state)));
+            Utils.writeFile(output, serialise(caseType, eventsByState.get(state)));
         }
     }
 

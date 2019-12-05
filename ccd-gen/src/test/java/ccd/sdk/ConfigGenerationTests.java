@@ -1,12 +1,12 @@
 package ccd.sdk;
 
 import ccd.sdk.generator.ConfigGenerator;
-import ccd.sdk.generator.Builder;
-import ccd.sdk.types.ComplexType;
-import ccd.sdk.generator.DisplayContext;
+import ccd.sdk.types.DisplayContext;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.io.Resources;
+import de.cronn.reflection.util.PropertyUtils;
 import org.apache.commons.io.FileUtils;
+import org.hamcrest.core.Is;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
@@ -16,24 +16,17 @@ import org.skyscreamer.jsonassert.JSONAssert;
 import uk.gov.hmcts.reform.fpl.model.CaseData;
 import uk.gov.hmcts.reform.fpl.model.CaseState;
 import uk.gov.hmcts.reform.fpl.model.HearingBooking;
-import uk.gov.hmcts.reform.fpl.model.Solicitor;
 import uk.gov.hmcts.reform.fpl.model.common.Element;
 
-import javax.validation.constraints.NotNull;
 import java.io.File;
 import java.nio.charset.Charset;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.List;
-import java.util.Set;
 import java.util.function.Function;
 
 import static ccd.sdk.generator.Builder.builder;
-import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.Assert.assertEquals;
 
-public class ComplexTypeTest {
+public class ConfigGenerationTests {
     @Rule
     public TemporaryFolder temp = new TemporaryFolder();
 
@@ -53,8 +46,13 @@ public class ComplexTypeTest {
     }
 
     @Test
-    public void stateOpen() {
+    public void generatesStateOpen() {
         assertEquals("CaseEvent/Open.json");
+    }
+
+    @Test
+    public void generatesCaseEventToField() {
+        assertEquals("CaseEventToFields/enterParentingFactors.json");
     }
 
     @Test
@@ -72,12 +70,10 @@ public class ComplexTypeTest {
         try {
             String expected = Resources.toString(Resources.getResource("ccd-definition/" + jsonPath), Charset.defaultCharset());
             String actual = FileUtils.readFileToString(new File(temp.getRoot(), jsonPath), Charset.defaultCharset());
-            ObjectMapper mapper = new ObjectMapper();
-            Object json = mapper.readValue(actual, Object.class);
-            String indented = mapper.writerWithDefaultPrettyPrinter().writeValueAsString(json);
-            System.out.println(indented);
-
-
+//            ObjectMapper mapper = new ObjectMapper();
+//            Object json = mapper.readValue(actual, Object.class);
+//            String indented = mapper.writerWithDefaultPrettyPrinter().writeValueAsString(json);
+//            System.out.println(indented);
 
             JSONAssert.assertEquals(expected, actual, false);
         } catch (Exception e) {

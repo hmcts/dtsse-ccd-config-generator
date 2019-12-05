@@ -13,16 +13,14 @@ public class ConfigBuilderImpl implements ConfigBuilder {
     public final List<Event.EventBuilder> events = Lists.newArrayList();
     public String caseType;
 
-    @Override
-    public FieldBuilder caseField(String id, FieldType type) {
-        FieldBuilder builder = new FieldBuilder(id, type);
-        fields.add(builder);
-        return builder;
+    private Class caseData;
+    public ConfigBuilderImpl(Class caseData) {
+        this.caseData = caseData;
     }
 
     @Override
     public Event.EventBuilder event(String id) {
-        Event.EventBuilder e = Event.builder();
+        Event.EventBuilder e = Event.builder(caseData);
         events.add(e);
         e.id(id);
         return e;

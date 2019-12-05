@@ -1,10 +1,14 @@
 package ccd.sdk.generator;
 
 import ccd.sdk.types.*;
+import ccd.sdk.types.DisplayContext;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
+import de.cronn.reflection.util.PropertyUtils;
+import de.cronn.reflection.util.TypedPropertyGetter;
+import net.jodah.typetools.TypeResolver;
 import org.objenesis.Objenesis;
 import org.objenesis.ObjenesisStd;
 import org.reflections.ReflectionUtils;
@@ -38,12 +42,17 @@ public class ConfigGenerator {
             throw new RuntimeException("Expected 1 CCDConfig class but found " + types.size());
         }
 
+        Class<? extends CCDConfig> theirs = types.iterator().next();
+        Class<?>[] typeArgs = TypeResolver.resolveRawArguments(CCDConfig.class, theirs);
+
         Objenesis objenesis = new ObjenesisStd();
         CCDConfig config = objenesis.newInstance(types.iterator().next());
-        ConfigBuilderImpl builder = new ConfigBuilderImpl();
+        ConfigBuilderImpl builder = new ConfigBuilderImpl(typeArgs[0]);
         config.configure(builder);
+        List<Event> events = builder.events.stream().map(x -> x.build()).collect(Collectors.toList());
 
-        EventGenerator.writeEvents(outputfolder, builder);
+        EventGenerator.writeEvents(outputfolder, builder.caseType, events);
+        CaseEventToFieldsGenerator.writeEvents(outputfolder, builder.caseType, events);
         generateComplexTypes();
     }
 

@@ -1,5 +1,6 @@
 package ccd.sdk.generator;
 
+import ccd.sdk.types.DisplayContext;
 import com.google.common.collect.Sets;
 import net.jodah.typetools.TypeResolver;
 import net.sf.cglib.proxy.Callback;
