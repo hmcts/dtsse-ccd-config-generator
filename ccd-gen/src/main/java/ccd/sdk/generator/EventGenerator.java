@@ -64,7 +64,7 @@ public class EventGenerator {
             data.put("CaseTypeID", caseTypeId);
             data.put("ShowSummary", "N");
             data.put("ShowEventNotes", "N");
-            data.put("EndButtonLabel", "Save and continue");
+            data.put("EndButtonLabel", event.getEndButtonLabel());
 
 
             if (event.getPreState() != null) {

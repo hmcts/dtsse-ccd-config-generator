@@ -1,18 +1,15 @@
 package ccd.sdk.types;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import de.cronn.reflection.util.PropertyUtils;
 import de.cronn.reflection.util.TypedPropertyGetter;
-import lombok.*;
-import net.jodah.typetools.TypeResolver;
+import lombok.Builder;
+import lombok.Data;
 
-import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
-import java.util.TreeMap;
-import java.util.function.Consumer;
-import java.util.function.Function;
 
 @Builder
 @Data
@@ -25,7 +22,10 @@ public class Event<T> {
     private String aboutToStartURL;
     private String aboutToSubmitURL;
     private String submittedURL;
+    private String midEventURL;
     private String retries;
+    @Builder.Default
+    private String endButtonLabel = "Save and continue";
     @Builder.Default
     private int displayOrder = -1;
 
@@ -37,17 +37,22 @@ public class Event<T> {
     private Class dataClass;
 
 
-    private Map<String, DisplayContext> fields;
+    private List<Field.FieldBuilder> fields;
 
     public static <T> EventBuilder<T> builder(Class dataClass) {
         EventBuilder<T> result = new EventBuilder<T>();
         result.dataClass = dataClass;
-        result.fields = Maps.newHashMap();
+        result.fields = Lists.newArrayList();
         result.grants = Maps.newHashMap();
         return result;
     }
 
     public static class EventBuilder<T> {
+
+        private Object pageId;
+        private int order;
+        private int pageDisplayOrder;
+        private String pageLabel;
 
         public EventBuilder<T> forState(String state) {
             this.preState = state;
@@ -60,14 +65,64 @@ public class Event<T> {
             return this;
         }
 
+        public EventBuilder<T> page(String id) {
+            this.pageId = id;
+            this.order = 0;
+            this.pageDisplayOrder++;
+            return this;
+        }
+
+        public EventBuilder<T> page(int id) {
+            this.pageId = id;
+            this.order = 0;
+            this.pageDisplayOrder++;
+            return this;
+        }
+
+        public EventBuilder<T> pageLabel(String id) {
+            this.pageLabel = id;
+            return this;
+        }
+
+        public EventBuilder<T> field(String id, DisplayContext context, String showCondition) {
+            field().id(id).context(context).showCondition(showCondition);
+            return this;
+        }
+
+        public EventBuilder<T> field(String fieldName, DisplayContext context) {
+            field().id(fieldName).context(context);
+            return this;
+        }
+
         public EventBuilder<T> field(TypedPropertyGetter<T, ?> getter) {
             return field(getter, null);
         }
 
         public EventBuilder<T> field(TypedPropertyGetter<T, ?> getter, DisplayContext context) {
-            String fieldName = PropertyUtils.getPropertyName(dataClass, getter);
-            fields.put(fieldName, context);
+            return field(getter, context, false);
+        }
+
+        public EventBuilder<T> field(TypedPropertyGetter<T, ?> getter, DisplayContext context, boolean showSummary) {
+            field().id(getter).context(context).showSummary(showSummary);
             return this;
+        }
+
+        public EventBuilder<T> label(String id, String value) {
+            field().id(id).context(DisplayContext.ReadOnly).label(value);
+            return this;
+        }
+
+        public Field.FieldBuilder<T> field() {
+            Field.FieldBuilder<T> f = Field.FieldBuilder.builder(dataClass, this);
+            f.page(this.pageId);
+            f.pageLabel(this.pageLabel);
+            if (this.pageId != null) {
+                f.pageLabel(" ");
+            }
+            fields.add(f);
+            f.pageFieldDisplayOrder(++order);
+            f.pageDisplayOrder(Math.max(1, this.pageDisplayOrder));
+            return f;
         }
     }
 }

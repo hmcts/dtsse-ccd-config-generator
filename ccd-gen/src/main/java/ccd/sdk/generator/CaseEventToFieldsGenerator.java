@@ -2,6 +2,7 @@ package ccd.sdk.generator;
 
 import ccd.sdk.types.DisplayContext;
 import ccd.sdk.types.Event;
+import ccd.sdk.types.Field;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 
@@ -17,20 +18,38 @@ public class CaseEventToFieldsGenerator {
         for (Event event : events) {
             if (event.getFields().size() > 0) {
                 List<Map<String, Object>> entries = Lists.newArrayList();
-                Map<String, DisplayContext> fields = event.getFields();
-                for (String fieldName : fields.keySet()) {
+                List<Field.FieldBuilder> fields = event.getFields();
+                boolean first = true;
+                for (Field.FieldBuilder fb : fields) {
+                    Field field = fb.build();
                     Map<String, Object> info = Utils.getField("");
                     entries.add(info);
                     info.remove("ID");
                     info.put("CaseTypeID", "CARE_SUPERVISION_EPO");
                     info.put("CaseEventID", event.getId());
-                    info.put("CaseFieldID", fieldName);
-                    String context = fields.get(fieldName) == null ? "COMPLEX" : fields.get(fieldName).toString().toUpperCase();
+                    info.put("CaseFieldID", field.getId());
+                    String context = field.getContext() == null ? "COMPLEX" : field.getContext().toString().toUpperCase();
                     info.put("DisplayContext", context);
-                    info.put("PageFieldDisplayOrder", 1);
-                    info.put("PageID", 1);
-                    info.put("PageDisplayOrder", 1);
+                    info.put("PageFieldDisplayOrder", field.getPageFieldDisplayOrder());
+                    info.put("PageID", field.getPage() == null ? 1 : field.getPage());
+                    info.put("PageDisplayOrder", field.getPageDisplayOrder());
                     info.put("PageColumnNumber", 1);
+                    if (field.getShowCondition() != null) {
+                        info.put("FieldShowCondition", field.getShowCondition());
+                    }
+
+                    if (first && event.getMidEventURL() != null) {
+                        info.put("CallBackURLMidEvent", "${CCD_DEF_CASE_SERVICE_BASE_URL}/callback" + event.getMidEventURL());
+                        first = false;
+                    }
+
+                    if (field.isShowSummary()) {
+                        info.put("ShowSummaryChangeOption", "Y");
+                    }
+
+                    if (field.getPageLabel() != null) {
+                        info.put("PageLabel", field.getPageLabel());
+                    }
                 }
 
                 File folder = new File(root.getPath(), "CaseEventToFields");

@@ -14,6 +14,9 @@ import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
 import org.reflections.Reflections;
 import org.skyscreamer.jsonassert.JSONAssert;
+import org.skyscreamer.jsonassert.JSONCompare;
+import org.skyscreamer.jsonassert.JSONCompareMode;
+import org.skyscreamer.jsonassert.JSONCompareResult;
 import uk.gov.hmcts.reform.fpl.model.CaseData;
 import uk.gov.hmcts.reform.fpl.model.CaseState;
 import uk.gov.hmcts.reform.fpl.model.HearingBooking;
@@ -64,7 +67,6 @@ public class ConfigGenerationTests {
         assertEquals("CaseEventToFields/amendAttendingHearingGatekeeping.json");
     }
 
-    @Ignore
     @Test
     public void generatesAllCaseEventToField() {
         URL u = Resources.getResource("ccd-definition/CaseEventToFields");
@@ -93,14 +95,21 @@ public class ConfigGenerationTests {
 
     private void assertEquals(String jsonPath) {
         try {
+            System.out.println("Comparing " + jsonPath);
             String expected = Resources.toString(Resources.getResource("ccd-definition/" + jsonPath), Charset.defaultCharset());
             String actual = FileUtils.readFileToString(new File(temp.getRoot(), jsonPath), Charset.defaultCharset());
-//            ObjectMapper mapper = new ObjectMapper();
-//            Object json = mapper.readValue(actual, Object.class);
-//            String indented = mapper.writerWithDefaultPrettyPrinter().writeValueAsString(json);
-//            System.out.println(indented);
+            JSONCompareResult result = JSONCompare.compareJSON(expected, actual, JSONCompareMode.LENIENT);
+            if (result.failed()) {
+                System.out.println(result.toString());
 
-            JSONAssert.assertEquals(expected, actual, false);
+                ObjectMapper mapper = new ObjectMapper();
+                Object json = mapper.readValue(actual, Object.class);
+                String indented = mapper.writerWithDefaultPrettyPrinter().writeValueAsString(json);
+                System.out.println(indented);
+
+                throw new RuntimeException("Compare failed for " + jsonPath);
+            }
+
         } catch (Exception e) {
             throw new RuntimeException(e);
         }

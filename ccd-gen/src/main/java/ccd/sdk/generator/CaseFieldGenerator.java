@@ -2,7 +2,6 @@ package ccd.sdk.generator;
 
 import ccd.sdk.types.CCDConfig;
 import ccd.sdk.types.CaseData;
-import ccd.sdk.types.FieldBuilder;
 import ccd.sdk.types.Label;
 import com.google.common.collect.Lists;
 import org.objenesis.Objenesis;
