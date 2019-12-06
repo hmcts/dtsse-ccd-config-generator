@@ -4,7 +4,6 @@ package uk.gov.hmcts.reform.fpl;
 import ccd.sdk.types.CCDConfig;
 import ccd.sdk.types.ConfigBuilder;
 import ccd.sdk.types.DisplayContext;
-import ccd.sdk.types.Event;
 import uk.gov.hmcts.reform.fpl.model.CaseData;
 
 public class FPLConfig implements CCDConfig<CaseData> {
@@ -13,7 +12,71 @@ public class FPLConfig implements CCDConfig<CaseData> {
     public void configure(ConfigBuilder<CaseData> builder) {
 
         builder.caseType("CARE_SUPERVISION_EPO");
+        buildInitialEvents(builder);
+        buildSharedEvents(builder, "Submitted", "");
+        buildSharedEvents(builder, "Gatekeeping", "Gatekeeping");
+        buildSharedEvents(builder, "PREPARE_FOR_HEARING", "-PREPARE_FOR_HEARING");
+    }
 
+    private void buildSharedEvents(ConfigBuilder<CaseData> builder, String state, String suffix) {
+        builder.event("hearingBookingDetails" + suffix)
+                .name("Add hearing details")
+                .description("Add hearing booking details to a case")
+                .field(CaseData::getHearingDetails, DisplayContext.Optional)
+                .forState(state);
+        builder.event("uploadStandardDirections" + suffix)
+                .name("Documents")
+                .description("Upload standard directions")
+                // TODO
+                .forState(state);
+        builder.event("uploadC2" + suffix)
+                .name("Upload a C2")
+                .description("Upload a c2 to the case")
+                .field(CaseData::getTemporaryC2Document)
+                .forState(state);
+        builder.event("sendToGatekeeper" + suffix)
+                .name("Send to gatekeeper")
+                .description("Send email to gatekeeper")
+                .field(CaseData::getGatekeeperEmail, DisplayContext.Mandatory)
+                .forState(state);
+        builder.event("amendChildren" + suffix)
+                .name("Children")
+                .description("Amending the children for the case")
+                .field(CaseData::getChildren1, DisplayContext.Optional)
+                .forState(state);
+        builder.event("amendRespondents" + suffix)
+                .name("Respondents")
+                .description("Amending the respondents for the case")
+                .field(CaseData::getRespondents1, DisplayContext.Optional)
+                .forState(state);
+        builder.event("amendOthers" + suffix)
+                .name("Others to be given notice")
+                .description("Amending others for the case")
+                .field(CaseData::getOthers, DisplayContext.Optional)
+                .forState(state);
+        builder.event("amendInternationalElement" + suffix)
+                .name("International element")
+                .description("Amending the international element")
+                .field(CaseData::getInternationalElement, DisplayContext.Optional)
+                .forState(state);
+        builder.event("amendOtherProceedings" + suffix)
+                .name("Other proceedings")
+                .description("Amending other proceedings and allocation proposals")
+                .field(CaseData::getProceeding, DisplayContext.Optional)
+                .forState(state);
+        builder.event("amendAttendingHearing" + suffix)
+                .name("Attending the hearing")
+                .description("Amend extra support needed for anyone to take part in hearing")
+                .field(CaseData::getHearingPreferences, DisplayContext.Optional)
+                .forState(state);
+        builder.event("createNoticeOfProceedings" + suffix)
+                .name("Create notice of proceedings")
+                .description("Create notice of proceedings")
+                .field(CaseData::getNoticeOfProceedings)
+                .forState(state);
+    }
+
+    private void buildInitialEvents(ConfigBuilder<CaseData> builder) {
         builder.event("openCase")
                 .preState(null)
                 .postState("Open")
@@ -22,7 +85,6 @@ public class FPLConfig implements CCDConfig<CaseData> {
                 .aboutToSubmitURL("/case-initiation/about-to-submit")
                 .submittedURL("/case-initiation/submitted")
                 .retries("1,2,3,4,5");
-
 
         builder.event("ordersNeeded").forState("Open")
                 .name("Orders and directions needed")

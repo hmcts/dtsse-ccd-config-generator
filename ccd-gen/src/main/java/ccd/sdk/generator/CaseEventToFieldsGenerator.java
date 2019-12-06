@@ -25,7 +25,8 @@ public class CaseEventToFieldsGenerator {
                     info.put("CaseTypeID", "CARE_SUPERVISION_EPO");
                     info.put("CaseEventID", event.getId());
                     info.put("CaseFieldID", fieldName);
-                    info.put("DisplayContext", fields.get(fieldName).toString().toUpperCase());
+                    String context = fields.get(fieldName) == null ? "COMPLEX" : fields.get(fieldName).toString().toUpperCase();
+                    info.put("DisplayContext", context);
                     info.put("PageFieldDisplayOrder", 1);
                     info.put("PageID", 1);
                     info.put("PageDisplayOrder", 1);

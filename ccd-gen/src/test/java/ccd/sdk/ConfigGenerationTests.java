@@ -57,6 +57,13 @@ public class ConfigGenerationTests {
         assertEquals("CaseEventToFields/enterParentingFactors.json");
     }
 
+    @Test
+    public void handlesEventForMultipleStates() {
+        assertEquals("CaseEventToFields/amendAttendingHearing.json");
+        assertEquals("CaseEventToFields/amendAttendingHearing-PREPARE_FOR_HEARING.json");
+        assertEquals("CaseEventToFields/amendAttendingHearingGatekeeping.json");
+    }
+
     @Ignore
     @Test
     public void generatesAllCaseEventToField() {

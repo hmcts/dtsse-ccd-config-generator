@@ -60,6 +60,10 @@ public class Event<T> {
             return this;
         }
 
+        public EventBuilder<T> field(TypedPropertyGetter<T, ?> getter) {
+            return field(getter, null);
+        }
+
         public EventBuilder<T> field(TypedPropertyGetter<T, ?> getter, DisplayContext context) {
             String fieldName = PropertyUtils.getPropertyName(dataClass, getter);
             fields.put(fieldName, context);
