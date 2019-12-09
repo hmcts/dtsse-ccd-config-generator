@@ -75,6 +75,11 @@ public class ConfigGenerationTests {
         }
     }
 
+    @Test
+    public void generatesCaseEventToComplexTypes() {
+        assertEquals("CaseEventToComplexTypes/hearingBookingDetails/hearingBookingDetails.json");;
+    }
+
     // This will only pass once everything else is finished.
     @Ignore
     @Test

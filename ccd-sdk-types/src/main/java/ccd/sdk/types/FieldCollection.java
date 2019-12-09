@@ -2,16 +2,22 @@ package ccd.sdk.types;
 
 import ccd.sdk.types.Field.FieldBuilder;
 import com.google.common.collect.Lists;
+import com.google.common.collect.Maps;
+import de.cronn.reflection.util.PropertyUtils;
 import de.cronn.reflection.util.TypedPropertyGetter;
 import lombok.Builder;
 import lombok.Data;
 
+import java.beans.PropertyDescriptor;
 import java.util.List;
+import java.util.Map;
 
 @Builder
 @Data
 public class FieldCollection<T> {
     private List<Field.FieldBuilder> fields;
+    private FieldCollectionBuilder<?> complexFields;
+    private String rootFieldname;
 
     public static class FieldCollectionBuilder<T> {
         private Class dataClass;
@@ -46,9 +52,30 @@ public class FieldCollection<T> {
             return field(getter, context, false);
         }
 
+        public FieldCollectionBuilder<T> field(TypedPropertyGetter<T, ?> getter, DisplayContext context, String showCondition) {
+            field().id(getter).context(context).showCondition(showCondition);
+            return this;
+        }
+
         public FieldCollectionBuilder<T> field(TypedPropertyGetter<T, ?> getter, DisplayContext context, boolean showSummary) {
             field().id(getter).context(context).showSummary(showSummary);
             return this;
+        }
+
+        public <U> FieldCollectionBuilder<U> complex(TypedPropertyGetter<T, U> getter) {
+            PropertyDescriptor descriptor = PropertyUtils.getPropertyDescriptor(dataClass, getter);
+            return complex(getter, (Class<U>) descriptor.getPropertyType());
+        }
+
+        public <U> FieldCollectionBuilder<U> complex(TypedPropertyGetter<T, ?> getter, Class<U> c) {
+            String fieldName = PropertyUtils.getPropertyName(dataClass, getter);
+            this.complexFields = FieldCollectionBuilder.builder(c);
+            this.complexFields.rootFieldname = fieldName;
+            if (null == this.rootFieldname) {
+                // Register only the root complex as a field
+                field().id(getter).showSummary(true);
+            }
+            return (FieldCollectionBuilder<U>) this.complexFields;
         }
 
         public FieldCollectionBuilder<T> label(String id, String value) {
@@ -87,5 +114,6 @@ public class FieldCollection<T> {
             this.pageLabel = id;
             return this;
         }
+
     }
 }

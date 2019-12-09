@@ -54,6 +54,7 @@ public class ConfigGenerator {
         EventGenerator.writeEvents(outputfolder, builder.caseType, events);
         CaseEventToFieldsGenerator.writeEvents(outputfolder, builder.caseType, events);
         generateComplexTypes();
+        ComplexFieldGenerator.writeEvents(outputfolder, builder.caseType, events);
     }
 
 

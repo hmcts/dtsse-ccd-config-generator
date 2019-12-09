@@ -5,6 +5,8 @@ import ccd.sdk.types.CCDConfig;
 import ccd.sdk.types.ConfigBuilder;
 import ccd.sdk.types.DisplayContext;
 import uk.gov.hmcts.reform.fpl.model.CaseData;
+import uk.gov.hmcts.reform.fpl.model.HearingBooking;
+import uk.gov.hmcts.reform.fpl.model.common.JudgeAndLegalAdvisor;
 
 public class FPLConfig implements CCDConfig<CaseData> {
 
@@ -270,7 +272,21 @@ public class FPLConfig implements CCDConfig<CaseData> {
                 .midEventURL("/add-hearing-bookings/mid-event")
                 .forState(state)
                 .fields()
-                .field().id(CaseData::getHearingDetails).showSummary(true).done();
+                .complex(CaseData::getHearingDetails, HearingBooking.class)
+                    .field(HearingBooking::getType, DisplayContext.Mandatory)
+                    .field(HearingBooking::getTypeDetails, DisplayContext.Mandatory, "hearingDetails.type=\"OTHER\"")
+                    .field(HearingBooking::getVenue, DisplayContext.Mandatory)
+                    .field(HearingBooking::getStartDate, DisplayContext.Mandatory)
+                    .field(HearingBooking::getEndDate, DisplayContext.Mandatory)
+                    .field(HearingBooking::getHearingNeedsBooked, DisplayContext.Mandatory)
+                    .field(HearingBooking::getHearingNeedsDetails, DisplayContext.Mandatory, "hearingDetails.hearingNeedsBooked!=\"NONE\"")
+                    .complex(HearingBooking::getJudgeAndLegalAdvisor)
+                        .field(JudgeAndLegalAdvisor::getJudgeTitle, DisplayContext.Mandatory)
+                        .field(JudgeAndLegalAdvisor::getOtherTitle, DisplayContext.Mandatory, "hearingDetails.judgeAndLegalAdvisor.judgeTitle=\"OTHER\"")
+                        .field(JudgeAndLegalAdvisor::getJudgeLastName, DisplayContext.Mandatory, "hearingDetails.judgeAndLegalAdvisor.judgeTitle!=\"MAGISTRATES\" AND hearingDetails.judgeAndLegalAdvisor.judgeTitle!=\"\"")
+                        .field(JudgeAndLegalAdvisor::getJudgeFullName, DisplayContext.Optional, "hearingDetails.judgeAndLegalAdvisor.judgeTitle=\"MAGISTRATES\"")
+                        .field(JudgeAndLegalAdvisor::getLegalAdvisorName, DisplayContext.Optional);
+
         builder.event("uploadC2" + suffix)
                 .name("Upload a C2")
                 .description("Upload a c2 to the case")
