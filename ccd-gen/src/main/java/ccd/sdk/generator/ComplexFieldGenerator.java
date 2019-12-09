@@ -21,7 +21,7 @@ public class ComplexFieldGenerator {
             String rootFieldname = complex != null ? complex.build().getRootFieldname() : null;
             expand(complex, entries, event.getId(), rootFieldname, "", 1);
             if (entries.size() > 0) {
-                File folder = new File(String.valueOf(Paths.get(root.getPath(), "CaseEventToComplexTypes", event.getId())));
+                File folder = new File(String.valueOf(Paths.get(root.getPath(), "CaseEventToComplexTypes")));
                 folder.mkdirs();
                 Path output = Paths.get(folder.getPath(), event.getId() + ".json");
                 Utils.writeFile(output, Utils.serialise(entries));
