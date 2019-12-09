@@ -19,12 +19,30 @@ public class FPLConfig implements CCDConfig<CaseData> {
         buildSharedEvents(builder, "Gatekeeping", "Gatekeeping");
         buildSharedEvents(builder, "PREPARE_FOR_HEARING", "-PREPARE_FOR_HEARING");
         buildPrepareForHearingEvents(builder);
+        buildC21Events(builder, "Submitted", "");
+        buildC21Events(builder, "Gatekeeping", "Gatekeeping");
         buildUniversalEvents(builder);
         buildSubmittedEvents(builder);
         buildGatekeepingEvents(builder);
         buildStandardDirections(builder, "Submitted", "");
         buildStandardDirections(builder, "Gatekeeping", "AfterGatekeeping");
         buildTransitions(builder);
+    }
+
+    private void buildC21Events(ConfigBuilder<CaseData> builder, String state, String suffix) {
+        builder.event("createC21Order" + suffix)
+                .forState(state)
+                .name("Create an order")
+                .description("Create an order")
+                .aboutToStartURL("/create-order/about-to-start")
+                .aboutToSubmitURL("/create-order/about-to-submit")
+                .submittedURL("/create-order/about-to-submit")
+                .midEventURL("/create-order/mid-event")
+                .fields()
+                    .page("OrderInformation")
+                    .field().id(CaseData::getC21Order).showSummary(true).done()
+                    .page("JudgeInformation")
+                    .field().id(CaseData::getJudgeAndLegalAdvisor).showSummary(true);
     }
 
     private void buildTransitions(ConfigBuilder<CaseData> builder) {
@@ -141,34 +159,6 @@ public class FPLConfig implements CCDConfig<CaseData> {
                 .fields()
                     .label("c9Declaration", "If you send documents to a party's solicitor or a children's guardian, give their details") .field(CaseData::getStatementOfService, DisplayContext.Mandatory, true) .label("serviceDeclarationLabel", "Declaration" ) .field("serviceConsent", DisplayContext.Mandatory);
 
-        builder.event("createC21Order")
-                .forState("Submitted")
-                .name("Create an order")
-                .description("Create an order")
-                .aboutToStartURL("/create-order/about-to-start")
-                .aboutToSubmitURL("/create-order/about-to-submit")
-                .submittedURL("/create-order/about-to-submit")
-                .midEventURL("/create-order/mid-event")
-                .fields()
-                    .page("OrderInformation")
-                        .field().id(CaseData::getC21Order).showSummary(true).done()
-                    .page("JudgeInformation")
-                        .field().id(CaseData::getJudgeAndLegalAdvisor).showSummary(true);
-
-        // TODO - dedupe!
-        builder.event("createC21OrderGatekeeping")
-                .forState("Submitted")
-                .name("Create an order")
-                .description("Create an order")
-                .aboutToStartURL("/create-order/about-to-start")
-                .aboutToSubmitURL("/create-order/about-to-submit")
-                .submittedURL("/create-order/about-to-submit")
-                .midEventURL("/create-order/mid-event")
-                .fields()
-                    .page("OrderInformation")
-                    .field().id(CaseData::getC21Order).showSummary(true).done()
-                    .page("JudgeInformation")
-                    .field().id(CaseData::getJudgeAndLegalAdvisor).showSummary(true);
 
         builder.event("uploadDocumentsAfterSubmission")
                 .forState("Submitted")
