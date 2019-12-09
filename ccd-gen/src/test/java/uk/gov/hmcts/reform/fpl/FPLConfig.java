@@ -4,6 +4,8 @@ package uk.gov.hmcts.reform.fpl;
 import ccd.sdk.types.CCDConfig;
 import ccd.sdk.types.ConfigBuilder;
 import ccd.sdk.types.DisplayContext;
+import ccd.sdk.types.FieldCollection;
+import uk.gov.hmcts.reform.fpl.model.C21Order;
 import uk.gov.hmcts.reform.fpl.model.CaseData;
 import uk.gov.hmcts.reform.fpl.model.HearingBooking;
 import uk.gov.hmcts.reform.fpl.model.common.JudgeAndLegalAdvisor;
@@ -40,9 +42,18 @@ public class FPLConfig implements CCDConfig<CaseData> {
                 .midEventURL("/create-order/mid-event")
                 .fields()
                     .page("OrderInformation")
-                    .field().id(CaseData::getC21Order).showSummary(true).done()
+                    .complex(CaseData::getC21Order)
+                        .field(C21Order::getOrderTitle, DisplayContext.Optional)
+                        .field(C21Order::getOrderDetails, DisplayContext.Mandatory)
+                        .field(C21Order::getDocument, DisplayContext.ReadOnly, "document=\"DO_NOT_SHOW\"")
+                        .field(C21Order::getOrderDate, DisplayContext.ReadOnly, "document=\"DO_NOT_SHOW\"")
+                        .done()
                     .page("JudgeInformation")
-                    .field().id(CaseData::getJudgeAndLegalAdvisor).showSummary(true);
+                    .complex(CaseData::getJudgeAndLegalAdvisor)
+                        .field(JudgeAndLegalAdvisor::getJudgeTitle, DisplayContext.Optional)
+                        .field(JudgeAndLegalAdvisor::getJudgeLastName, DisplayContext.Mandatory)
+                        .field(JudgeAndLegalAdvisor::getJudgeFullName, DisplayContext.Optional)
+                        .field(JudgeAndLegalAdvisor::getLegalAdvisorName, DisplayContext.Optional);
     }
 
     private void buildTransitions(ConfigBuilder<CaseData> builder) {

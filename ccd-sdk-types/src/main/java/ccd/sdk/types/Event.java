@@ -20,7 +20,7 @@ public class Event<T> {
     private String midEventURL;
     private String retries;
 
-    private FieldCollection.FieldCollectionBuilder<T> fields;
+    private FieldCollection.FieldCollectionBuilder<T, ?> fields;
 
     @Builder.Default
     private String endButtonLabel = "Save and continue";
@@ -41,11 +41,11 @@ public class Event<T> {
             EventBuilder<T> result = new EventBuilder<T>();
             result.dataClass = dataClass;
             result.grants = Maps.newHashMap();
-            result.fields = FieldCollection.FieldCollectionBuilder.builder(dataClass);
+            result.fields = FieldCollection.FieldCollectionBuilder.builder(null, dataClass);
             return result;
         }
 
-        public FieldCollection.FieldCollectionBuilder<T> fields() {
+        public FieldCollection.FieldCollectionBuilder<T, ?> fields() {
             return fields;
         }
 

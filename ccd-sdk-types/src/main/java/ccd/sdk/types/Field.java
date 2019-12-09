@@ -21,15 +21,16 @@ public class Field<T> {
     String showCondition;
     Object page;
     boolean showSummary;
+    int fieldDisplayOrder;
     int pageFieldDisplayOrder;
     int pageDisplayOrder;
     String pageLabel;
 
     private Class dataClass;
-    private FieldCollection.FieldCollectionBuilder<T> parent;
+    private FieldCollection.FieldCollectionBuilder<T, ?> parent;
 
     public static class FieldBuilder<T> {
-        public static <T> FieldBuilder<T> builder(Class dataclass, FieldCollection.FieldCollectionBuilder<T> parent) {
+        public static <T> FieldBuilder<T> builder(Class dataclass, FieldCollection.FieldCollectionBuilder<T, ?> parent) {
             FieldBuilder result = new FieldBuilder();
             result.dataClass = dataclass;
             result.parent = parent;
@@ -54,7 +55,7 @@ public class Field<T> {
             return this;
         }
 
-        public FieldCollection.FieldCollectionBuilder<T> done() {
+        public FieldCollection.FieldCollectionBuilder<T, ?> done() {
             return parent;
         }
     }

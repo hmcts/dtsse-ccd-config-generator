@@ -1,7 +1,7 @@
 [
   {
     "LiveFrom": "01/01/2017",
-    "ID": "C21OrderComplexType",
+    "ID": "CreateC21Order",
     "CaseEventID": "createC21Order",
     "CaseFieldID": "c21Order",
     "ListElementCode": "orderTitle",
@@ -11,7 +11,7 @@
   },
   {
     "LiveFrom": "01/01/2017",
-    "ID": "C21OrderComplexType",
+    "ID": "CreateC21Order",
     "CaseEventID": "createC21Order",
     "CaseFieldID": "c21Order",
     "ListElementCode": "orderDetails",
@@ -21,7 +21,7 @@
   },
   {
     "LiveFrom": "01/01/2017",
-    "ID": "C21OrderComplexType",
+    "ID": "CreateC21Order",
     "CaseEventID": "createC21Order",
     "CaseFieldID": "c21Order",
     "ListElementCode": "document",
@@ -32,7 +32,7 @@
   },
   {
     "LiveFrom": "01/01/2017",
-    "ID": "C21OrderComplexType",
+    "ID": "CreateC21Order",
     "CaseEventID": "createC21Order",
     "CaseFieldID": "c21Order",
     "ListElementCode": "orderDate",
@@ -43,7 +43,7 @@
   },
   {
     "LiveFrom": "01/01/2017",
-    "ID": "JudgeAndLegalAdvisorComplexType",
+    "ID": "CreateC21Order",
     "CaseEventID": "createC21Order",
     "CaseFieldID": "judgeAndLegalAdvisor",
     "ListElementCode": "judgeTitle",
@@ -53,7 +53,7 @@
   },
   {
     "LiveFrom": "01/01/2017",
-    "ID": "JudgeAndLegalAdvisorComplexType",
+    "ID": "CreateC21Order",
     "CaseEventID": "createC21Order",
     "CaseFieldID": "judgeAndLegalAdvisor",
     "ListElementCode": "judgeLastName",
@@ -63,7 +63,7 @@
   },
   {
     "LiveFrom": "01/01/2017",
-    "ID": "JudgeAndLegalAdvisorComplexType",
+    "ID": "CreateC21Order",
     "CaseEventID": "createC21Order",
     "CaseFieldID": "judgeAndLegalAdvisor",
     "ListElementCode": "judgeFullName",
@@ -73,7 +73,7 @@
   },
   {
     "LiveFrom": "01/01/2017",
-    "ID": "JudgeAndLegalAdvisorComplexType",
+    "ID": "CreateC21Order",
     "CaseEventID": "createC21Order",
     "CaseFieldID": "judgeAndLegalAdvisor",
     "ListElementCode": "legalAdvisorName",

@@ -16,10 +16,8 @@ public class ComplexFieldGenerator {
         for (Event event : events) {
             FieldCollection collection = event.getFields().build();
             List<Map<String, Object>> entries = Lists.newArrayList();
-            FieldCollection.FieldCollectionBuilder complex = collection.getComplexFields();
-
-            String rootFieldname = complex != null ? complex.build().getRootFieldname() : null;
-            expand(complex, entries, event.getId(), rootFieldname, "", 1);
+            List<FieldCollection.FieldCollectionBuilder> complexFields = collection.getComplexFields();
+            expand(complexFields, entries, event.getId(), null, "");
             if (entries.size() > 0) {
                 File folder = new File(String.valueOf(Paths.get(root.getPath(), "CaseEventToComplexTypes")));
                 folder.mkdirs();
@@ -28,35 +26,44 @@ public class ComplexFieldGenerator {
             }
         }
     }
-    private static void expand(FieldCollection.FieldCollectionBuilder complexFields, List<Map<String, Object>> entries, String eventId, String rootFieldname, String fieldLocator, int count) {
-        if (null != complexFields) {
-            FieldCollection complex = complexFields.build();
-            List<Field.FieldBuilder> fields = complex.getFields();
-            for (Field.FieldBuilder complexField : fields) {
-                String id = eventId;
-                id = id.substring(0, 1).toUpperCase() + id.substring(1);
-                Field field = complexField.build();
-                Map<String, Object> data = Utils.getField(id);
-                entries.add(data);
+    private static void expand(List<FieldCollection.FieldCollectionBuilder> complexFieldsCollection, List<Map<String, Object>> entries, String eventId, final String rootFieldName, final String fieldLocator) {
+        if (null != complexFieldsCollection) {
+            for (FieldCollection.FieldCollectionBuilder complexFields : complexFieldsCollection) {
+                FieldCollection complex = complexFields.build();
+                String rfn = rootFieldName;
+                String locator = fieldLocator;
+                if (null == rootFieldName) {
+                    // This is a root complex
+                    rfn = complex.getRootFieldname();
+                } else {
+                    // This is a nested complex
+                    locator += complex.getRootFieldname() + ".";
+                }
+                List<Field.FieldBuilder> fields = complex.getFields();
+                for (Field.FieldBuilder complexField : fields) {
+                    String id = eventId;
+                    id = id.substring(0, 1).toUpperCase() + id.substring(1);
+                    Field field = complexField.build();
+                    Map<String, Object> data = Utils.getField(id);
+                    entries.add(data);
 
-                data.put("ID", id);
-                data.put("CaseEventID", eventId);
-                data.put("CaseFieldID", rootFieldname);
-                data.put("DisplayContext", field.getContext().toString().toUpperCase());
-                data.put("ListElementCode", fieldLocator + field.getId());
-                data.put("EventElementLabel", field.getLabel());
-                data.put("FieldDisplayOrder", count++);
-                if (null != field.getHint()) {
-                    data.put("HintText", field.getHint());
+                    data.put("ID", id);
+                    data.put("CaseEventID", eventId);
+                    data.put("CaseFieldID", rfn);
+                    data.put("DisplayContext", field.getContext().toString().toUpperCase());
+                    data.put("ListElementCode", locator + field.getId());
+                    data.put("EventElementLabel", field.getLabel());
+                    data.put("FieldDisplayOrder", field.getFieldDisplayOrder());
+                    if (null != field.getHint()) {
+                        data.put("HintText", field.getHint());
+                    }
+                    if (null != field.getShowCondition()) {
+                        data.put("FieldShowCondition", field.getShowCondition());
+                    }
                 }
-                if (null != field.getShowCondition()) {
-                    data.put("FieldShowCondition", field.getShowCondition());
+                if (null != complex.getComplexFields()) {
+                    expand(complex.getComplexFields(), entries, eventId, rfn, locator);
                 }
-            }
-            if (null != complex.getComplexFields()) {
-                String nextPropertyName = complex.getComplexFields().build().getRootFieldname();
-                String locator = fieldLocator.length() == 0 ? nextPropertyName + "." : fieldLocator + "." + nextPropertyName;
-                expand(complex.getComplexFields(), entries, eventId, rootFieldname, locator, count);
             }
         }
     }
