@@ -82,6 +82,7 @@ public class ConfigGenerationTests {
         assertEquals("CaseEventToComplexTypes/hearingBookingDetails-PREPARE_FOR_HEARING.json");;
 
         assertEquals("CaseEventToComplexTypes/createC21Order.json");;
+        assertEquals("CaseEventToComplexTypes/createC21OrderGatekeeping.json");;
     }
 
     // This will only pass once everything else is finished.
