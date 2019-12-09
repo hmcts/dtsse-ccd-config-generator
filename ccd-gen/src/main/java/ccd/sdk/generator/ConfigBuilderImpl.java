@@ -17,7 +17,7 @@ public class ConfigBuilderImpl implements ConfigBuilder {
 
     @Override
     public Event.EventBuilder event(String id) {
-        Event.EventBuilder e = Event.builder(caseData);
+        Event.EventBuilder e = Event.EventBuilder.builder(caseData);
         events.add(e);
         e.id(id);
         return e;

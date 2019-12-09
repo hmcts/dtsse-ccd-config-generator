@@ -3,6 +3,7 @@ package ccd.sdk.generator;
 import ccd.sdk.types.DisplayContext;
 import ccd.sdk.types.Event;
 import ccd.sdk.types.Field;
+import ccd.sdk.types.FieldCollection;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 
@@ -16,9 +17,10 @@ public class CaseEventToFieldsGenerator {
     public static void writeEvents(File root, String caseType, List<Event> events) {
 
         for (Event event : events) {
-            if (event.getFields().size() > 0) {
+            FieldCollection collection = event.getFields().build();
+            if (collection.getFields().size() > 0) {
                 List<Map<String, Object>> entries = Lists.newArrayList();
-                List<Field.FieldBuilder> fields = event.getFields();
+                List<Field.FieldBuilder> fields = collection.getFields();
                 boolean first = true;
                 for (Field.FieldBuilder fb : fields) {
                     Field field = fb.build();

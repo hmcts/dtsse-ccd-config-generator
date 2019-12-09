@@ -22,10 +22,10 @@ public class Field<T> {
     String pageLabel;
 
     private Class dataClass;
-    private Event.EventBuilder<T> parent;
+    private FieldCollection.FieldCollectionBuilder<T> parent;
 
     public static class FieldBuilder<T> {
-        public static <T> FieldBuilder<T> builder(Class dataclass, Event.EventBuilder<T> parent) {
+        public static <T> FieldBuilder<T> builder(Class dataclass, FieldCollection.FieldCollectionBuilder<T> parent) {
             FieldBuilder result = new FieldBuilder();
             result.dataClass = dataclass;
             result.parent = parent;
@@ -43,7 +43,7 @@ public class Field<T> {
             return this;
         }
 
-        public Event.EventBuilder<T> done() {
+        public FieldCollection.FieldCollectionBuilder<T> done() {
             return parent;
         }
     }
