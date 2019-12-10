@@ -18,8 +18,7 @@ public class FPLConfig implements CCDConfig<CaseData> {
         buildInitialEvents(builder);
         buildSharedEvents(builder, "Submitted", "Gatekeeping", "-PREPARE_FOR_HEARING");
         buildPrepareForHearingEvents(builder);
-        buildC21Events(builder, "Submitted", "");
-        buildC21Events(builder, "Gatekeeping", "Gatekeeping");
+        buildC21Events(builder);
         buildUniversalEvents(builder);
         buildSubmittedEvents(builder);
         buildGatekeepingEvents(builder);
@@ -28,9 +27,9 @@ public class FPLConfig implements CCDConfig<CaseData> {
         buildTransitions(builder);
     }
 
-    private void buildC21Events(ConfigBuilder<CaseData> builder, String state, String suffix) {
-        builder.event("createC21Order" + suffix)
-                .forState(state)
+    private void buildC21Events(ConfigBuilder<CaseData> builder) {
+        builder.event("createC21Order")
+                .forStates("Submitted", "Gatekeeping")
                 .name("Create an order")
                 .description("Create an order")
                 .aboutToStartURL("/create-order/about-to-start")
