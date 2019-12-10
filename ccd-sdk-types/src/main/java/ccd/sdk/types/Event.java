@@ -1,5 +1,6 @@
 package ccd.sdk.types;
 
+import com.google.common.base.CaseFormat;
 import com.google.common.base.Joiner;
 import com.google.common.collect.Maps;
 import lombok.*;
@@ -102,9 +103,29 @@ public class Event<T> {
             return this;
         }
 
+        public EventBuilder<T> aboutToStartWebhook() {
+            // Use snake case event ID by convention
+            aboutToStartURL = "/" + getWebhookPathByConvention() + "/about-to-start";
+            return this;
+        }
+
+        public EventBuilder<T> aboutToSubmitWebhook() {
+            aboutToSubmitURL = "/" + getWebhookPathByConvention() + "/about-to-submit";
+            return this;
+        }
+
+        public EventBuilder<T> midEventWebhook() {
+            midEventURL = "/" + getWebhookPathByConvention() + "/mid-event";
+            return this;
+        }
+
         public EventBuilder<T> retries(Integer... retries) {
             this.retries = Joiner.on(",").join(retries);
             return this;
+        }
+
+        private String getWebhookPathByConvention() {
+            return CaseFormat.LOWER_CAMEL.to(CaseFormat.LOWER_HYPHEN, id);
         }
     }
 }
