@@ -54,6 +54,30 @@ public class FieldCollection<T, Parent> {
             return field(getter, null);
         }
 
+        public FieldCollectionBuilder<T, Parent> optional(TypedPropertyGetter<T, ?> getter, String showCondition) {
+            return field(getter, DisplayContext.Optional, showCondition);
+        }
+
+        public FieldCollectionBuilder<T, Parent> optional(TypedPropertyGetter<T, ?> getter) {
+            return field(getter, DisplayContext.Optional);
+        }
+
+        public FieldCollectionBuilder<T, Parent> mandatory(TypedPropertyGetter<T, ?> getter, String showCondition) {
+            return field(getter, DisplayContext.Mandatory, showCondition);
+        }
+
+        public FieldCollectionBuilder<T, Parent> mandatory(TypedPropertyGetter<T, ?> getter) {
+            return field(getter, DisplayContext.Mandatory);
+        }
+
+        public FieldCollectionBuilder<T, Parent> readonly(TypedPropertyGetter<T, ?> getter, String showCondition) {
+            return field(getter, DisplayContext.ReadOnly, showCondition);
+        }
+
+        public FieldCollectionBuilder<T, Parent> readonly(TypedPropertyGetter<T, ?> getter) {
+            return field(getter, DisplayContext.ReadOnly);
+        }
+
         public FieldCollectionBuilder<T, Parent> field(TypedPropertyGetter<T, ?> getter, DisplayContext context) {
             return field(getter, context, false);
         }

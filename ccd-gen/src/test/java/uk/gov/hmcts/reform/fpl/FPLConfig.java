@@ -39,17 +39,17 @@ public class FPLConfig implements CCDConfig<CaseData> {
                 .fields()
                     .page("OrderInformation")
                     .complex(CaseData::getC21Order)
-                        .field(C21Order::getOrderTitle, DisplayContext.Optional)
-                        .field(C21Order::getOrderDetails, DisplayContext.Mandatory)
-                        .field(C21Order::getDocument, DisplayContext.ReadOnly, "document=\"DO_NOT_SHOW\"")
-                        .field(C21Order::getOrderDate, DisplayContext.ReadOnly, "document=\"DO_NOT_SHOW\"")
+                        .optional(C21Order::getOrderTitle)
+                        .mandatory(C21Order::getOrderDetails)
+                        .readonly(C21Order::getDocument, "document=\"DO_NOT_SHOW\"")
+                        .readonly(C21Order::getOrderDate, "document=\"DO_NOT_SHOW\"")
                         .done()
                     .page("JudgeInformation")
                     .complex(CaseData::getJudgeAndLegalAdvisor)
-                        .field(JudgeAndLegalAdvisor::getJudgeTitle, DisplayContext.Optional)
-                        .field(JudgeAndLegalAdvisor::getJudgeLastName, DisplayContext.Mandatory)
-                        .field(JudgeAndLegalAdvisor::getJudgeFullName, DisplayContext.Optional)
-                        .field(JudgeAndLegalAdvisor::getLegalAdvisorName, DisplayContext.Optional);
+                        .optional(JudgeAndLegalAdvisor::getJudgeTitle)
+                        .mandatory(JudgeAndLegalAdvisor::getJudgeLastName)
+                        .optional(JudgeAndLegalAdvisor::getJudgeFullName)
+                        .optional(JudgeAndLegalAdvisor::getLegalAdvisorName);
     }
 
     private void buildTransitions(ConfigBuilder<CaseData> builder) {
@@ -75,12 +75,12 @@ public class FPLConfig implements CCDConfig<CaseData> {
                 .postState("Gatekeeping")
                 .fields()
                     .pageLabel(" ")
-                    .field(CaseData::getAllParties, DisplayContext.Optional)
-                    .field(CaseData::getLocalAuthorityDirections, DisplayContext.Optional)
-                    .field(CaseData::getRespondentDirections, DisplayContext.Optional)
-                    .field(CaseData::getCafcassDirections, DisplayContext.Optional)
-                    .field(CaseData::getOtherPartiesDirections, DisplayContext.Optional)
-                    .field(CaseData::getCourtDirections, DisplayContext.Optional);
+                    .optional(CaseData::getAllParties)
+                    .optional(CaseData::getLocalAuthorityDirections)
+                    .optional(CaseData::getRespondentDirections)
+                    .optional(CaseData::getCafcassDirections)
+                    .optional(CaseData::getOtherPartiesDirections)
+                    .optional(CaseData::getCourtDirections);
 
         builder.event("deleteApplication")
                 .preState("Open")
@@ -113,7 +113,7 @@ public class FPLConfig implements CCDConfig<CaseData> {
                 .forState("Gatekeeping")
                 .fields()
                     .page("judgeAndLegalAdvisor")
-                        .field(CaseData::getJudgeAndLegalAdvisor, DisplayContext.Optional)
+                        .optional(CaseData::getJudgeAndLegalAdvisor)
                     .page("allPartiesDirections")
                         .field().id(CaseData::getHearingDetails).showCondition("hearingDate=\"DO_NOT_SHOW\"").context(DisplayContext.ReadOnly).done()
                         .field().id("hearingDate").context(DisplayContext.ReadOnly).showCondition("hearingDetails.startDate=\"\"").context(DisplayContext.ReadOnly).done()
@@ -180,17 +180,17 @@ public class FPLConfig implements CCDConfig<CaseData> {
                 .midEventURL("/upload-documents/mid-event")
                 .fields()
                     .label("uploadDocuments_paragraph_1", "You must upload these documents if possible. Give the reason and date you expect to provide it if you don’t have a document yet.")
-                    .field(CaseData::getSocialWorkChronologyDocument, DisplayContext.Optional)
-                    .field(CaseData::getSocialWorkStatementDocument, DisplayContext.Optional)
-                    .field(CaseData::getSocialWorkAssessmentDocument, DisplayContext.Optional)
-                    .field(CaseData::getSocialWorkCarePlanDocument, DisplayContext.Optional)
-                    .field(CaseData::getSocialWorkEvidenceTemplateDocument, DisplayContext.Optional)
-                    .field(CaseData::getThresholdDocument, DisplayContext.Optional)
-                    .field(CaseData::getChecklistDocument, DisplayContext.Optional)
+                    .optional(CaseData::getSocialWorkChronologyDocument)
+                    .optional(CaseData::getSocialWorkStatementDocument)
+                    .optional(CaseData::getSocialWorkAssessmentDocument)
+                    .optional(CaseData::getSocialWorkCarePlanDocument)
+                    .optional(CaseData::getSocialWorkEvidenceTemplateDocument)
+                    .optional(CaseData::getThresholdDocument)
+                    .optional(CaseData::getChecklistDocument)
                     .field("[STATE]", DisplayContext.ReadOnly, "courtBundle = \"DO_NOT_SHOW\"")
                     .field("courtBundle", DisplayContext.Optional, "[STATE] != \"Open\"")
                     .label("documents_socialWorkOther_border_top", "---------------------------------")
-                    .field(CaseData::getOtherSocialWorkDocuments, DisplayContext.Optional)
+                    .optional(CaseData::getOtherSocialWorkDocuments)
                     .label("documents_socialWorkOther_border_bottom", "---------------------------------");
     }
 
@@ -218,25 +218,25 @@ public class FPLConfig implements CCDConfig<CaseData> {
                      .label("respondentsDirectionLabelCMO", "For the parents or respondents")
                      .label("respondentsDropdownLabelCMO", " ")
                      .complex(CaseData::getRespondentDirectionsCustom, Direction.class)
-                        .field(Direction::getDirectionType, DisplayContext.Optional)
-                        .field(Direction::getDirectionText, DisplayContext.Mandatory)
-                        .field(Direction::getParentsAndRespondentsAssignee, DisplayContext.Mandatory)
-                        .field(Direction::getDateToBeCompletedBy, DisplayContext.Optional)
+                        .optional(Direction::getDirectionType)
+                        .mandatory(Direction::getDirectionText)
+                        .mandatory(Direction::getParentsAndRespondentsAssignee)
+                        .optional(Direction::getDateToBeCompletedBy)
                     .done()
                 .page("cafcassDirections")
                      .label("cafcassDirectionsLabelCMO", "## For Cafcass")
                      .complex(CaseData::getCafcassDirectionsCustom, Direction.class, this::renderDirection)
                     .complex(CaseData::getCaseManagementOrder)
-                        .field(CaseManagementOrder::getHearingDate, DisplayContext.ReadOnly)
+                        .readonly(CaseManagementOrder::getHearingDate)
                     .done()
                 .page(3)
                      .label("otherPartiesDirectionLabelCMO", "## For other parties")
                      .label("otherPartiesDropdownLabelCMO", " ")
                      .complex(CaseData::getOtherPartiesDirectionsCustom, Direction.class)
-                        .field(Direction::getDirectionType, DisplayContext.Optional)
-                        .field(Direction::getDirectionText, DisplayContext.Mandatory)
-                        .field(Direction::getOtherPartiesAssignee, DisplayContext.Mandatory)
-                        .field(Direction::getDateToBeCompletedBy, DisplayContext.Optional)
+                        .optional(Direction::getDirectionType)
+                        .mandatory(Direction::getDirectionText)
+                        .mandatory(Direction::getOtherPartiesAssignee)
+                        .optional(Direction::getDateToBeCompletedBy)
                     .done()
                 .page("courtDirections")
                      .label("courtDirectionsLabelCMO", "## For the court")
@@ -277,8 +277,8 @@ public class FPLConfig implements CCDConfig<CaseData> {
 
     private void renderDirection(FieldCollection.FieldCollectionBuilder<Direction, ?> builder) {
         builder.field().id(Direction::getDirectionType).context(DisplayContext.Optional).label(" ").done()
-                .field(Direction::getDirectionText, DisplayContext.Mandatory)
-                .field(Direction::getDateToBeCompletedBy, DisplayContext.Optional);
+                .mandatory(Direction::getDirectionText)
+                .optional(Direction::getDateToBeCompletedBy);
     }
 
     private void buildSharedEvents(ConfigBuilder<CaseData> builder, String... states) {
@@ -289,19 +289,19 @@ public class FPLConfig implements CCDConfig<CaseData> {
                 .forStates(states)
                 .fields()
                 .complex(CaseData::getHearingDetails, HearingBooking.class)
-                    .field(HearingBooking::getType, DisplayContext.Mandatory)
-                    .field(HearingBooking::getTypeDetails, DisplayContext.Mandatory, "hearingDetails.type=\"OTHER\"")
-                    .field(HearingBooking::getVenue, DisplayContext.Mandatory)
-                    .field(HearingBooking::getStartDate, DisplayContext.Mandatory)
-                    .field(HearingBooking::getEndDate, DisplayContext.Mandatory)
-                    .field(HearingBooking::getHearingNeedsBooked, DisplayContext.Mandatory)
-                    .field(HearingBooking::getHearingNeedsDetails, DisplayContext.Mandatory, "hearingDetails.hearingNeedsBooked!=\"NONE\"")
+                    .mandatory(HearingBooking::getType)
+                    .mandatory(HearingBooking::getTypeDetails, "hearingDetails.type=\"OTHER\"")
+                    .mandatory(HearingBooking::getVenue)
+                    .mandatory(HearingBooking::getStartDate)
+                    .mandatory(HearingBooking::getEndDate)
+                    .mandatory(HearingBooking::getHearingNeedsBooked)
+                    .mandatory(HearingBooking::getHearingNeedsDetails, "hearingDetails.hearingNeedsBooked!=\"NONE\"")
                     .complex(HearingBooking::getJudgeAndLegalAdvisor)
-                        .field(JudgeAndLegalAdvisor::getJudgeTitle, DisplayContext.Mandatory)
-                        .field(JudgeAndLegalAdvisor::getOtherTitle, DisplayContext.Mandatory, "hearingDetails.judgeAndLegalAdvisor.judgeTitle=\"OTHER\"")
-                        .field(JudgeAndLegalAdvisor::getJudgeLastName, DisplayContext.Mandatory, "hearingDetails.judgeAndLegalAdvisor.judgeTitle!=\"MAGISTRATES\" AND hearingDetails.judgeAndLegalAdvisor.judgeTitle!=\"\"")
-                        .field(JudgeAndLegalAdvisor::getJudgeFullName, DisplayContext.Optional, "hearingDetails.judgeAndLegalAdvisor.judgeTitle=\"MAGISTRATES\"")
-                        .field(JudgeAndLegalAdvisor::getLegalAdvisorName, DisplayContext.Optional);
+                        .mandatory(JudgeAndLegalAdvisor::getJudgeTitle)
+                        .mandatory(JudgeAndLegalAdvisor::getOtherTitle, "hearingDetails.judgeAndLegalAdvisor.judgeTitle=\"OTHER\"")
+                        .mandatory(JudgeAndLegalAdvisor::getJudgeLastName, "hearingDetails.judgeAndLegalAdvisor.judgeTitle!=\"MAGISTRATES\" AND hearingDetails.judgeAndLegalAdvisor.judgeTitle!=\"\"")
+                        .optional(JudgeAndLegalAdvisor::getJudgeFullName, "hearingDetails.judgeAndLegalAdvisor.judgeTitle=\"MAGISTRATES\"")
+                        .optional(JudgeAndLegalAdvisor::getLegalAdvisorName);
 
         builder.event("uploadC2")
                 .name("Upload a C2")
@@ -316,44 +316,44 @@ public class FPLConfig implements CCDConfig<CaseData> {
                 .forStates(states)
                     .fields()
                     .label("gateKeeperLabel", "Let the gatekeeper know there's a new case")
-                    .field(CaseData::getGatekeeperEmail, DisplayContext.Mandatory);
+                    .mandatory(CaseData::getGatekeeperEmail);
         builder.event("amendChildren")
                 .name("Children")
                 .description("Amending the children for the case")
                 .forStates(states)
                 .fields()
-                    .field(CaseData::getChildren1, DisplayContext.Optional);
+                    .optional(CaseData::getChildren1);
         builder.event("amendRespondents")
                 .name("Respondents")
                 .description("Amending the respondents for the case")
                 .forStates(states)
                 .fields()
-                    .field(CaseData::getRespondents1, DisplayContext.Optional);
+                    .optional(CaseData::getRespondents1);
         builder.event("amendOthers")
                 .name("Others to be given notice")
                 .description("Amending others for the case")
                 .forStates(states)
                 .fields()
-                    .field(CaseData::getOthers, DisplayContext.Optional);
+                    .optional(CaseData::getOthers);
         builder.event("amendInternationalElement")
                 .name("International element")
                 .description("Amending the international element")
                 .forStates(states)
                 .fields()
-                    .field(CaseData::getInternationalElement, DisplayContext.Optional);
+                    .optional(CaseData::getInternationalElement);
         builder.event("amendOtherProceedings")
                 .name("Other proceedings")
                 .description("Amending other proceedings and allocation proposals")
                 .midEventURL("/enter-other-proceedings/mid-event")
                 .forStates(states)
                 .fields()
-                    .field(CaseData::getProceeding, DisplayContext.Optional);
+                    .optional(CaseData::getProceeding);
         builder.event("amendAttendingHearing")
                 .name("Attending the hearing")
                 .description("Amend extra support needed for anyone to take part in hearing")
                 .forStates(states)
                 .fields()
-                    .field(CaseData::getHearingPreferences, DisplayContext.Optional);
+                    .optional(CaseData::getHearingPreferences);
         builder.event("createNoticeOfProceedings")
                 .name("Create notice of proceedings")
                 .description("Create notice of proceedings")
@@ -373,20 +373,20 @@ public class FPLConfig implements CCDConfig<CaseData> {
                 .submittedURL("/case-initiation/submitted")
                 .retries("1,2,3,4,5")
                 .fields()
-                    .field(CaseData::getCaseName, DisplayContext.Optional);
+                    .optional(CaseData::getCaseName);
 
         builder.event("ordersNeeded").forState("Open")
                 .name("Orders and directions needed")
                 .description("Selecting the orders needed for application")
                 .aboutToSubmitURL("/orders-needed/about-to-submit")
                 .fields()
-                    .field(CaseData::getOrders, DisplayContext.Optional);
+                    .optional(CaseData::getOrders);
 
         builder.event("hearingNeeded").forState("Open")
                 .name("Hearing needed")
                 .description("Selecting the hearing needed for application")
                 .fields()
-                    .field(CaseData::getHearing, DisplayContext.Optional);
+                    .optional(CaseData::getHearing);
 
         builder.event("enterChildren").forState("Open")
                 .name("Children")
@@ -394,7 +394,7 @@ public class FPLConfig implements CCDConfig<CaseData> {
                 .aboutToStartURL("/enter-children/about-to-start")
                 .aboutToSubmitURL("/enter-children/about-to-submit")
                 .fields()
-                    .field(CaseData::getChildren1, DisplayContext.Optional);
+                    .optional(CaseData::getChildren1);
 
         builder.event("enterRespondents").forState("Open")
                 .name("Respondents")
@@ -403,7 +403,7 @@ public class FPLConfig implements CCDConfig<CaseData> {
                 .aboutToSubmitURL("/enter-respondents/about-to-submit")
                 .midEventURL("/enter-respondents/mid-event")
                 .fields()
-                    .field(CaseData::getRespondents1, DisplayContext.Optional);
+                    .optional(CaseData::getRespondents1);
 
         builder.event("enterApplicant").forState("Open")
                 .name("Applicant")
@@ -412,69 +412,69 @@ public class FPLConfig implements CCDConfig<CaseData> {
                 .aboutToSubmitURL("/enter-applicant/about-to-submit")
                 .midEventURL("/enter-applicant/mid-event")
                 .fields()
-                    .field(CaseData::getApplicants, DisplayContext.Optional)
-                    .field(CaseData::getSolicitor, DisplayContext.Optional);
+                    .optional(CaseData::getApplicants)
+                    .optional(CaseData::getSolicitor);
 
         builder.event("enterOthers").forState("Open")
                 .name("Others to be given notice")
                 .description("Entering others for the case")
                 .fields()
-                    .field(CaseData::getOthers, DisplayContext.Optional);
+                    .optional(CaseData::getOthers);
 
         builder.event("enterGrounds").forState("Open")
                 .name("Grounds for the application")
                 .description("Entering the grounds for the application")
                 .fields()
                     .field().id("EPO_REASONING_SHOW").context(DisplayContext.Optional).showCondition("groundsForEPO CONTAINS \"Workaround to show groundsForEPO. Needs to be hidden from UI\"").done()
-                    .field().id(CaseData::getGroundsForEPO).context(DisplayContext.Optional).showCondition("EPO_REASONING_SHOW CONTAINS \"SHOW_FIELD\"").done()
-                    .field(CaseData::getGrounds, DisplayContext.Optional);
+                    .optional(CaseData::getGroundsForEPO, "EPO_REASONING_SHOW CONTAINS \"SHOW_FIELD\"")
+                    .optional(CaseData::getGrounds);
 
         builder.event("enterRiskHarm").forState("Open")
                 .name("Risk and harm to children")
                 .description("Entering opinion on risk and harm to children")
                 .fields()
-                    .field(CaseData::getRisks, DisplayContext.Optional);
+                    .optional(CaseData::getRisks);
 
         builder.event("enterParentingFactors").forState("Open")
                 .name("Factors affecting parenting")
                 .description("Entering the factors affecting parenting")
                 .grant("caseworker-publiclaw-solicitor", "CRU")
                 .fields()
-                    .field(CaseData::getFactorsParenting, DisplayContext.Optional);
+                    .optional(CaseData::getFactorsParenting);
 
         builder.event("enterInternationalElement").forState("Open")
                 .name("International element")
                 .description("Entering the international element")
                 .fields()
-                    .field(CaseData::getInternationalElement, DisplayContext.Optional);
+                    .optional(CaseData::getInternationalElement);
 
         builder.event("otherProceedings").forState("Open")
                 .name("Other proceedings")
                 .description("Entering other proceedings and proposals")
                 .midEventURL("/enter-other-proceedings/mid-event")
                 .fields()
-                    .field(CaseData::getProceeding, DisplayContext.Optional);
+                    .optional(CaseData::getProceeding);
 
         builder.event("otherProposal").forState("Open")
                 .name("Allocation proposal")
                 .description("Entering other proceedings and allocation proposals")
                 .fields()
                     .label("allocationProposal_label", "This should be completed by a solicitor with good knowledge of the case. Use the [President's Guidance](https://www.judiciary.uk/wp-content/uploads/2013/03/President%E2%80%99s-Guidance-on-Allocation-and-Gatekeeping.pdf) and [schedule](https://www.judiciary.uk/wp-content/uploads/2013/03/Schedule-to-the-President%E2%80%99s-Guidance-on-Allocation-and-Gatekeeping.pdf) on allocation and gatekeeping to make your recommendation.")
-                    .field(CaseData::getAllocationProposal, DisplayContext.Optional);
+                    .optional(CaseData::getAllocationProposal);
 
         builder.event("attendingHearing").forState("Open")
                 .name("Attending the hearing")
                 .description("Enter extra support needed for anyone to take part in hearing")
                 .displayOrder(13)
                 .fields()
-                    .field(CaseData::getHearingPreferences, DisplayContext.Optional);
+                    .optional(CaseData::getHearingPreferences);
 
         builder.event("changeCaseName").forState("Open")
                 .name("Change case name")
                 .description("Change case name")
                 .displayOrder(15)
                 .fields()
-                    .field(CaseData::getCaseName, DisplayContext.Optional);
+                    .optional(CaseData::getCaseName);
 
         builder.event("addCaseIDReference").forState("Open")
                 .name("Add case ID")
