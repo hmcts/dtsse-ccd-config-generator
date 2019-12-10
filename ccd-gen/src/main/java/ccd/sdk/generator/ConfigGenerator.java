@@ -65,6 +65,8 @@ public class ConfigGenerator {
                 for (int t = 1; t < event.getStates().length; t++) {
                     String state = event.getStates()[t];
                     Event clone = event.withId(event.getId() + state);
+                    // Mark the clone as deriving from this event.
+                    clone.setEventID(event.getId());
                     clone.setPreState(state);
                     clone.setPostState(state);
                     sharedEvents.add(clone);

@@ -19,13 +19,14 @@ public class ComplexFieldGenerator {
             List<FieldCollection.FieldCollectionBuilder> complexFields = collection.getComplexFields();
             expand(complexFields, entries, event.getId(), null, "");
             if (entries.size() > 0) {
-                File folder = new File(String.valueOf(Paths.get(root.getPath(), "CaseEventToComplexTypes")));
+                File folder = new File(String.valueOf(Paths.get(root.getPath(), "CaseEventToComplexTypes", event.getEventID())));
                 folder.mkdirs();
                 Path output = Paths.get(folder.getPath(), event.getId() + ".json");
                 Utils.writeFile(output, Utils.serialise(entries));
             }
         }
     }
+
     private static void expand(List<FieldCollection.FieldCollectionBuilder> complexFieldsCollection, List<Map<String, Object>> entries, String eventId, final String rootFieldName, final String fieldLocator) {
         if (null != complexFieldsCollection) {
             for (FieldCollection.FieldCollectionBuilder complexFields : complexFieldsCollection) {

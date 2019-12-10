@@ -10,6 +10,8 @@ import java.util.Map;
 public class Event<T> {
     @With
     private String id;
+    // The same event can have a different ID if on different states.
+    private String eventId;
     private String name;
     private String preState;
     private String postState;
@@ -20,6 +22,14 @@ public class Event<T> {
     private String midEventURL;
     private String retries;
     private String[] states;
+
+    public void setEventID(String eventId) {
+        this.eventId = eventId;
+    }
+    public String getEventID() {
+        return this.eventId != null ? this.eventId : this.id;
+    }
+
 
     @ToString.Exclude
     private FieldCollection.FieldCollectionBuilder<T, ?> fields;

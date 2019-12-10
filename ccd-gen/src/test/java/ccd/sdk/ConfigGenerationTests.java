@@ -73,12 +73,12 @@ public class ConfigGenerationTests {
 
     @Test
     public void generatesCaseEventToComplexTypes() {
-        assertEquals("CaseEventToComplexTypes/hearingBookingDetails.json");;
-        assertEquals("CaseEventToComplexTypes/hearingBookingDetailsGatekeeping.json");;
-        assertEquals("CaseEventToComplexTypes/hearingBookingDetails-PREPARE_FOR_HEARING.json");;
+        assertEquals("CaseEventToComplexTypes/hearingBookingDetails/hearingBookingDetails.json");;
+        assertEquals("CaseEventToComplexTypes/hearingBookingDetails/hearingBookingDetailsGatekeeping.json");;
+        assertEquals("CaseEventToComplexTypes/hearingBookingDetails/hearingBookingDetails-PREPARE_FOR_HEARING.json");;
 
-        assertEquals("CaseEventToComplexTypes/createC21Order.json");;
-        assertEquals("CaseEventToComplexTypes/createC21OrderGatekeeping.json");;
+        assertEquals("CaseEventToComplexTypes/createC21Order/createC21Order.json");;
+        assertEquals("CaseEventToComplexTypes/createC21Order/createC21OrderGatekeeping.json");
     }
 
     // This will only pass once everything else is finished.
