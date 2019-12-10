@@ -2,16 +2,13 @@ package ccd.sdk.types;
 
 import ccd.sdk.types.Field.FieldBuilder;
 import com.google.common.collect.Lists;
-import com.google.common.collect.Maps;
 import de.cronn.reflection.util.PropertyUtils;
 import de.cronn.reflection.util.TypedPropertyGetter;
 import lombok.Builder;
 import lombok.Data;
-import lombok.ToString;
 
 import java.beans.PropertyDescriptor;
 import java.util.List;
-import java.util.Map;
 import java.util.function.Consumer;
 
 @Builder

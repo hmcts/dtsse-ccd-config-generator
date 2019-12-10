@@ -68,14 +68,24 @@ public class Event<T> {
             return fields;
         }
 
-        public EventBuilder<T> forStates(String... states) {
+        EventBuilder<T> forStates(String... states) {
             this.states = states;
             return forState(states[0]);
         }
 
-        public EventBuilder<T> forState(String state) {
+        EventBuilder<T> forState(String state) {
             this.preState = state;
             this.postState = state;
+            return this;
+        }
+
+        EventBuilder<T> postState(String state) {
+            this.postState = state;
+            return this;
+        }
+
+        EventBuilder<T> preState(String state) {
+            this.preState = state;
             return this;
         }
 

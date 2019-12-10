@@ -1,5 +1,6 @@
 package uk.gov.hmcts.reform.fpl.model;
 
+import ccd.sdk.types.CaseField;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import lombok.Builder;
 import lombok.Data;
@@ -18,6 +19,7 @@ import static org.apache.commons.lang3.ObjectUtils.defaultIfNull;
 @Builder(toBuilder = true)
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class Direction {
+    @CaseField(label = " ")
     private final String directionType;
     private String directionText;
     private final String status;

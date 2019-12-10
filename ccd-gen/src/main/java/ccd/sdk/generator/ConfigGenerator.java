@@ -49,7 +49,8 @@ public class ConfigGenerator {
         CCDConfig config = objenesis.newInstance(types.iterator().next());
         ConfigBuilderImpl builder = new ConfigBuilderImpl(typeArgs[0]);
         config.configure(builder);
-        List<Event> events = builder.events.stream().map(x -> x.build()).collect(Collectors.toList());
+        List<Event.EventBuilder> builders = builder.getEvents();
+        List<Event> events = builders.stream().map(x -> x.build()).collect(Collectors.toList());
         events = expandEvents(events);
 
         EventGenerator.writeEvents(outputfolder, builder.caseType, events);

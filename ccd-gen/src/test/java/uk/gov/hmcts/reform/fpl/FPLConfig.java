@@ -10,7 +10,6 @@ import uk.gov.hmcts.reform.fpl.model.common.JudgeAndLegalAdvisor;
 
 public class FPLConfig implements CCDConfig<CaseData> {
 
-
     @Override
     public void configure(ConfigBuilder<CaseData> builder) {
 
@@ -51,9 +50,8 @@ public class FPLConfig implements CCDConfig<CaseData> {
 
     private void buildTransitions(ConfigBuilder<CaseData> builder) {
         builder.event("submitApplication")
+                .forStateTransition("Open", "Submitted")
                 .name("Submit application")
-                .preState("Open")
-                .postState("Submitted")
                 .endButtonLabel("Submit")
                 .allWebhooks("case-submission")
                 .midEventURL("/case-submission/mid-event")
@@ -63,9 +61,8 @@ public class FPLConfig implements CCDConfig<CaseData> {
                     .field("submissionConsent", DisplayContext.Mandatory);
 
         builder.event("populateSDO")
+                .forStateTransition("Submitted", "Gatekeeping")
                 .name("Populate standard directions")
-                .preState("Submitted")
-                .postState("Gatekeeping")
                 .fields()
                     .pageLabel(" ")
                     .optional(CaseData::getAllParties)
@@ -76,8 +73,7 @@ public class FPLConfig implements CCDConfig<CaseData> {
                     .optional(CaseData::getCourtDirections);
 
         builder.event("deleteApplication")
-                .preState("Open")
-                .postState("Deleted")
+                .forStateTransition("Open", "Deleted")
                 .name("Delete an application")
                 .aboutToSubmitURL("/case-deletion/about-to-submit")
                 .endButtonLabel("Delete application")
@@ -87,22 +83,20 @@ public class FPLConfig implements CCDConfig<CaseData> {
 
     private void buildGatekeepingEvents(ConfigBuilder<CaseData> builder) {
         builder.event("otherAllocationDecision")
+                .forState("Gatekeeping")
                 .name("Allocation decision")
                 .description("Entering other proceedings and allocation proposals")
                 .aboutToStartURL("/allocation-decision/about-to-start")
                 .aboutToSubmitURL("/allocation-decision/about-to-submit")
                 .retries("1,2,3,4,5")
-                .forState("Gatekeeping")
                 .fields()
                     .field(CaseData::getAllocationDecision, DisplayContext.Mandatory, true);
 
         builder.event("draftSDO")
-                .name("Draft standard directions")
-                .aboutToStartURL("/draft-standard-directions/about-to-start")
-                .aboutToSubmitURL("/draft-standard-directions/about-to-submit")
-                .midEventURL("/draft-standard-directions/mid-event")
-                .submittedURL("/draft-standard-directions/submitted")
                 .forState("Gatekeeping")
+                .name("Draft standard directions")
+                .allWebhooks("draft-standard-directions")
+                .midEventURL("/draft-standard-directions/mid-event")
                 .fields()
                     .page("judgeAndLegalAdvisor")
                         .optional(CaseData::getJudgeAndLegalAdvisor)
@@ -132,9 +126,9 @@ public class FPLConfig implements CCDConfig<CaseData> {
 
     private void buildStandardDirections(ConfigBuilder<CaseData> builder, String state, String suffix) {
         builder.event("uploadStandardDirections" + suffix)
+                .forState(state)
                 .name("Documents")
                 .description("Upload standard directions")
-                .forState(state)
                 .fields()
                     .label("standardDirectionsLabel", "Upload standard directions and other relevant documents, for example the C6 Notice of Proceedings or C9 statement of service.")
                     .label("standardDirectionsTitle", "## 1. Standard directions")
@@ -144,8 +138,8 @@ public class FPLConfig implements CCDConfig<CaseData> {
 
     private void buildSubmittedEvents(ConfigBuilder<CaseData> builder) {
         builder.event("addFamilyManCaseNumber")
-                .name("Add case number")
                 .forState("Submitted")
+                .name("Add case number")
                 .fields()
                     .optional(CaseData::getFamilyManCaseNumber);
 
@@ -165,7 +159,8 @@ public class FPLConfig implements CCDConfig<CaseData> {
     }
 
     private void buildUniversalEvents(ConfigBuilder<CaseData> builder) {
-        builder.event("uploadDocuments").forState("*")
+        builder.event("uploadDocuments")
+                .forAllStates()
                 .name("Documents")
                 .description("Upload documents")
                 .midEventURL("/upload-documents/mid-event")
@@ -192,9 +187,9 @@ public class FPLConfig implements CCDConfig<CaseData> {
                     .field("otherCourtAdminDocuments", DisplayContext.Optional);
 
         builder.event("draftCMO")
-                .name("Draft CMO")
-                .name("Draft Case Management Order")
                 .forState("PREPARE_FOR_HEARING")
+                .name("Draft CMO")
+                .description("Draft Case Management Order")
                 .fields()
                 .page("hearingDate")
                     .field("cmoHearingDateList", DisplayContext.Mandatory)
@@ -240,26 +235,26 @@ public class FPLConfig implements CCDConfig<CaseData> {
                      .field("schedule", DisplayContext.Mandatory);
 
         builder.event("COMPLY_LOCAL_AUTHORITY")
+                .forState("PREPARE_FOR_HEARING")
                 .name("Comply with directions")
                 .description("Allows Local Authority user access to comply with their directions as well as ones for all parties")
-                .forState("PREPARE_FOR_HEARING")
                 .fields()
                 .pageLabel(" ")
                     .field(CaseData::getLocalAuthorityDirections);
 
         builder.event("COMPLY_CAFCASS")
+                .forState("PREPARE_FOR_HEARING")
                 .name("Comply with directions")
                 .description("Allows Cafcass user access to comply with their directions as well as ones for all parties")
-                .forState("PREPARE_FOR_HEARING")
                 .fields()
                 .pageLabel(" ")
                     .field(CaseData::getCafcassDirections);
 
         // courtDirectionsCustom is used here to prevent Gatekeeper inadvertently getting C and D permissions in draftSDO journey on courtDirections. We do not want them to able to create/delete directions"
         builder.event("COMPLY_COURT")
+                .forState("PREPARE_FOR_HEARING")
                 .name("Comply with directions")
                 .description("Event gives Court user access to comply with their directions as well as all parties")
-                .forState("PREPARE_FOR_HEARING")
                 .fields()
                 .pageLabel(" ")
                     .field(CaseData::getCourtDirectionsCustom);
@@ -267,17 +262,17 @@ public class FPLConfig implements CCDConfig<CaseData> {
     }
 
     private void renderDirection(FieldCollection.FieldCollectionBuilder<Direction, ?> builder) {
-        builder.field().id(Direction::getDirectionType).context(DisplayContext.Optional).label(" ").done()
+        builder.optional(Direction::getDirectionType)
                 .mandatory(Direction::getDirectionText)
                 .optional(Direction::getDateToBeCompletedBy);
     }
 
     private void buildSharedEvents(ConfigBuilder<CaseData> builder, String... states) {
         builder.event("hearingBookingDetails")
+                .forStates(states)
                 .name("Add hearing details")
                 .description("Add hearing booking details to a case")
                 .midEventURL("/add-hearing-bookings/mid-event")
-                .forStates(states)
                 .fields()
                 .complex(CaseData::getHearingDetails, HearingBooking.class)
                     .mandatory(HearingBooking::getType)
@@ -295,59 +290,59 @@ public class FPLConfig implements CCDConfig<CaseData> {
                         .optional(JudgeAndLegalAdvisor::getLegalAdvisorName);
 
         builder.event("uploadC2")
+                .forStates(states)
                 .name("Upload a C2")
                 .description("Upload a c2 to the case")
                 .midEventURL("/upload-c2/mid-event")
-                .forStates(states)
                 .fields()
                 .field(CaseData::getTemporaryC2Document);
         builder.event("sendToGatekeeper")
+                .forStates(states)
                 .name("Send to gatekeeper")
                 .description("Send email to gatekeeper")
-                .forStates(states)
                     .fields()
                     .label("gateKeeperLabel", "Let the gatekeeper know there's a new case")
                     .mandatory(CaseData::getGatekeeperEmail);
         builder.event("amendChildren")
+                .forStates(states)
                 .name("Children")
                 .description("Amending the children for the case")
-                .forStates(states)
                 .fields()
                     .optional(CaseData::getChildren1);
         builder.event("amendRespondents")
+                .forStates(states)
                 .name("Respondents")
                 .description("Amending the respondents for the case")
-                .forStates(states)
                 .fields()
                     .optional(CaseData::getRespondents1);
         builder.event("amendOthers")
+                .forStates(states)
                 .name("Others to be given notice")
                 .description("Amending others for the case")
-                .forStates(states)
                 .fields()
                     .optional(CaseData::getOthers);
         builder.event("amendInternationalElement")
+                .forStates(states)
                 .name("International element")
                 .description("Amending the international element")
-                .forStates(states)
                 .fields()
                     .optional(CaseData::getInternationalElement);
         builder.event("amendOtherProceedings")
+                .forStates(states)
                 .name("Other proceedings")
                 .description("Amending other proceedings and allocation proposals")
                 .midEventURL("/enter-other-proceedings/mid-event")
-                .forStates(states)
                 .fields()
                     .optional(CaseData::getProceeding);
         builder.event("amendAttendingHearing")
+                .forStates(states)
                 .name("Attending the hearing")
                 .description("Amend extra support needed for anyone to take part in hearing")
-                .forStates(states)
                 .fields()
                     .optional(CaseData::getHearingPreferences);
         builder.event("createNoticeOfProceedings")
-                .name("Create notice of proceedings")
                 .forStates(states)
+                .name("Create notice of proceedings")
                 .fields()
                     .label("proceedingLabel", "## Other proceedings 1")
                     .field().id(CaseData::getNoticeOfProceedings).showSummary(true).done();
@@ -355,8 +350,7 @@ public class FPLConfig implements CCDConfig<CaseData> {
 
     private void buildInitialEvents(ConfigBuilder<CaseData> builder) {
         builder.event("openCase")
-                .preState(null)
-                .postState("Open")
+                .initialState("Open")
                 .name("Start application")
                 .description("Create a new case – add a title")
                 .aboutToSubmitURL("/case-initiation/about-to-submit")
