@@ -83,5 +83,12 @@ public class Event<T> {
             grants.put(role, crud);
             return this;
         }
+
+        public EventBuilder<T> allWebhooks(String convention) {
+            aboutToStartURL = "/" + convention + "/about-to-start";
+            aboutToSubmitURL = "/" + convention + "/about-to-submit";
+            submittedURL = "/" + convention + "/submitted";
+            return this;
+        }
     }
 }

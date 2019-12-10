@@ -31,9 +31,7 @@ public class FPLConfig implements CCDConfig<CaseData> {
         builder.event("createC21Order")
                 .forStates("Submitted", "Gatekeeping")
                 .name("Create an order")
-                .aboutToStartURL("/create-order/about-to-start")
-                .aboutToSubmitURL("/create-order/about-to-submit")
-                .submittedURL("/create-order/about-to-submit")
+                .allWebhooks("create-order")
                 .midEventURL("/create-order/mid-event")
                 .fields()
                     .page("OrderInformation")
@@ -57,9 +55,7 @@ public class FPLConfig implements CCDConfig<CaseData> {
                 .preState("Open")
                 .postState("Submitted")
                 .endButtonLabel("Submit")
-                .aboutToStartURL("/case-submission/about-to-start")
-                .aboutToSubmitURL("/case-submission/about-to-submit")
-                .submittedURL("/case-submission/submitted")
+                .allWebhooks("case-submission")
                 .midEventURL("/case-submission/mid-event")
                 .retries("1,2,3,4,5")
                 .fields()
@@ -111,7 +107,7 @@ public class FPLConfig implements CCDConfig<CaseData> {
                     .page("judgeAndLegalAdvisor")
                         .optional(CaseData::getJudgeAndLegalAdvisor)
                     .page("allPartiesDirections")
-                        .field().id(CaseData::getHearingDetails).showCondition("hearingDate=\"DO_NOT_SHOW\"").context(DisplayContext.ReadOnly).done()
+                        .readonly(CaseData::getHearingDetails, "hearingDate=\"DO_NOT_SHOW\"")
                         .field().id("hearingDate").context(DisplayContext.ReadOnly).showCondition("hearingDetails.startDate=\"\"").context(DisplayContext.ReadOnly).done()
                         .field(CaseData::getAllParties)
                         .field(CaseData::getAllPartiesCustom)
@@ -151,7 +147,7 @@ public class FPLConfig implements CCDConfig<CaseData> {
                 .name("Add case number")
                 .forState("Submitted")
                 .fields()
-                    .field(CaseData::getFamilyManCaseNumber, DisplayContext.Optional);
+                    .optional(CaseData::getFamilyManCaseNumber);
 
         builder.event("addStatementOfService")
                 .forState("Submitted")
@@ -478,5 +474,4 @@ public class FPLConfig implements CCDConfig<CaseData> {
                     .pageLabel("Add Case ID")
                     .field("caseIDReference", DisplayContext.Optional);
     }
-
 }
