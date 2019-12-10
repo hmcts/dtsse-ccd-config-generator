@@ -12,6 +12,7 @@ import lombok.ToString;
 import java.beans.PropertyDescriptor;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Consumer;
 
 @Builder
 @Data
@@ -69,6 +70,11 @@ public class FieldCollection<T, Parent> {
 
         public FieldCollectionBuilder<Parent, ?> done() {
             return parent;
+        }
+
+        public <U> FieldCollectionBuilder<T, Parent> complex(TypedPropertyGetter<T, ?> getter, Class<U> c, Consumer<FieldCollectionBuilder<U, ?>> renderer) {
+            renderer.accept(complex(getter, c));
+            return this;
         }
 
         public <U> FieldCollectionBuilder<U, T> complex(TypedPropertyGetter<T, U> getter) {

@@ -4,10 +4,12 @@ package uk.gov.hmcts.reform.fpl;
 import ccd.sdk.types.CCDConfig;
 import ccd.sdk.types.ConfigBuilder;
 import ccd.sdk.types.DisplayContext;
+import ccd.sdk.types.FieldCollection;
 import uk.gov.hmcts.reform.fpl.model.*;
 import uk.gov.hmcts.reform.fpl.model.common.JudgeAndLegalAdvisor;
 
 public class FPLConfig implements CCDConfig<CaseData> {
+
 
     @Override
     public void configure(ConfigBuilder<CaseData> builder) {
@@ -208,18 +210,10 @@ public class FPLConfig implements CCDConfig<CaseData> {
                 .page("allPartiesDirections")
                     .label("allPartiesLabelCMO", "## For all parties")
                     .label("allPartiesPrecedentLabelCMO", "Add completed directions from the precedent library or your own template.")
-                    .complex(CaseData::getAllPartiesCustom, Direction.class)
-                        .field().id(Direction::getDirectionType).context(DisplayContext.Optional).label(" ").done()
-                        .field(Direction::getDirectionText, DisplayContext.Mandatory)
-                        .field(Direction::getDateToBeCompletedBy, DisplayContext.Optional)
-                    .done()
+                    .complex(CaseData::getAllPartiesCustom, Direction.class, this::renderDirection)
                 .page("localAuthorityDirections")
                      .label("localAuthorityDirectionsLabelCMO", "## For the local authority")
-                     .complex(CaseData::getLocalAuthorityDirectionsCustom, Direction.class)
-                        .field().id(Direction::getDirectionType).context(DisplayContext.Optional).label(" ").done()
-                        .field(Direction::getDirectionText, DisplayContext.Mandatory)
-                        .field(Direction::getDateToBeCompletedBy, DisplayContext.Optional)
-                     .done()
+                     .complex(CaseData::getLocalAuthorityDirectionsCustom, Direction.class, this::renderDirection)
                 .page(2)
                      .label("respondentsDirectionLabelCMO", "For the parents or respondents")
                      .label("respondentsDropdownLabelCMO", " ")
@@ -231,11 +225,7 @@ public class FPLConfig implements CCDConfig<CaseData> {
                     .done()
                 .page("cafcassDirections")
                      .label("cafcassDirectionsLabelCMO", "## For Cafcass")
-                     .complex(CaseData::getCafcassDirectionsCustom, Direction.class)
-                        .field().id(Direction::getDirectionType).context(DisplayContext.Optional).label(" ").done()
-                        .field(Direction::getDirectionText, DisplayContext.Mandatory)
-                        .field(Direction::getDateToBeCompletedBy, DisplayContext.Optional)
-                    .done()
+                     .complex(CaseData::getCafcassDirectionsCustom, Direction.class, this::renderDirection)
                     .complex(CaseData::getCaseManagementOrder)
                         .field(CaseManagementOrder::getHearingDate, DisplayContext.ReadOnly)
                     .done()
@@ -250,11 +240,7 @@ public class FPLConfig implements CCDConfig<CaseData> {
                     .done()
                 .page("courtDirections")
                      .label("courtDirectionsLabelCMO", "## For the court")
-                     .complex(CaseData::getCourtDirectionsCustom, Direction.class)
-                        .field().id(Direction::getDirectionType).context(DisplayContext.Optional).label(" ").done()
-                        .field(Direction::getDirectionText, DisplayContext.Mandatory)
-                        .field(Direction::getDateToBeCompletedBy, DisplayContext.Optional)
-                    .done()
+                     .complex(CaseData::getCourtDirectionsCustom, Direction.class, this::renderDirection)
                 .page(5)
                      .label("orderBasisLabel", "## Basis of order")
                      .label("addRecitalLabel", "## Add recital")
@@ -287,6 +273,12 @@ public class FPLConfig implements CCDConfig<CaseData> {
                 .pageLabel(" ")
                     .field(CaseData::getCourtDirectionsCustom);
 
+    }
+
+    private void renderDirection(FieldCollection.FieldCollectionBuilder<Direction, ?> builder) {
+        builder.field().id(Direction::getDirectionType).context(DisplayContext.Optional).label(" ").done()
+                .field(Direction::getDirectionText, DisplayContext.Mandatory)
+                .field(Direction::getDateToBeCompletedBy, DisplayContext.Optional);
     }
 
     private void buildSharedEvents(ConfigBuilder<CaseData> builder, String... states) {
