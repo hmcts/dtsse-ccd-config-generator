@@ -4,16 +4,13 @@ import ccd.sdk.generator.ConfigGenerator;
 import ccd.sdk.types.DisplayContext;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.io.Resources;
-import de.cronn.reflection.util.PropertyUtils;
 import org.apache.commons.io.FileUtils;
-import org.hamcrest.core.Is;
 import org.junit.Before;
 import org.junit.Ignore;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
 import org.reflections.Reflections;
-import org.skyscreamer.jsonassert.JSONAssert;
 import org.skyscreamer.jsonassert.JSONCompare;
 import org.skyscreamer.jsonassert.JSONCompareMode;
 import org.skyscreamer.jsonassert.JSONCompareResult;
@@ -29,7 +26,6 @@ import java.util.List;
 import java.util.function.Function;
 
 import static ccd.sdk.generator.Builder.builder;
-import static org.hamcrest.MatcherAssert.assertThat;
 
 public class ConfigGenerationTests {
     @Rule

@@ -50,6 +50,7 @@ public class ConfigGenerator {
         ConfigBuilderImpl builder = new ConfigBuilderImpl(typeArgs[0]);
         config.configure(builder);
         List<Event> events = builder.events.stream().map(x -> x.build()).collect(Collectors.toList());
+        events = expandEvents(events);
 
         EventGenerator.writeEvents(outputfolder, builder.caseType, events);
         CaseEventToFieldsGenerator.writeEvents(outputfolder, builder.caseType, events);
@@ -57,6 +58,22 @@ public class ConfigGenerator {
         ComplexFieldGenerator.writeEvents(outputfolder, builder.caseType, events);
     }
 
+    private List<Event> expandEvents(List<Event> events) {
+        List<Event> sharedEvents = Lists.newArrayList();
+        for (Event event : events) {
+            if (event.getStates() != null && event.getStates().length > 1) {
+                for (int t = 1; t < event.getStates().length; t++) {
+                    String state = event.getStates()[t];
+                    Event clone = event.withId(event.getId() + state);
+                    clone.setPreState(state);
+                    clone.setPostState(state);
+                    sharedEvents.add(clone);
+                }
+            }
+        }
+        events.addAll(sharedEvents);
+        return events;
+    }
 
 
     public void generateComplexTypes() {

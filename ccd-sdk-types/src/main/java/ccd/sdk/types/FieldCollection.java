@@ -7,6 +7,7 @@ import de.cronn.reflection.util.PropertyUtils;
 import de.cronn.reflection.util.TypedPropertyGetter;
 import lombok.Builder;
 import lombok.Data;
+import lombok.ToString;
 
 import java.beans.PropertyDescriptor;
 import java.util.List;

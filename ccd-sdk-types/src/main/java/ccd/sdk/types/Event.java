@@ -1,14 +1,14 @@
 package ccd.sdk.types;
 
 import com.google.common.collect.Maps;
-import lombok.Builder;
-import lombok.Data;
+import lombok.*;
 
 import java.util.Map;
 
 @Builder
 @Data
 public class Event<T> {
+    @With
     private String id;
     private String name;
     private String preState;
@@ -19,7 +19,9 @@ public class Event<T> {
     private String submittedURL;
     private String midEventURL;
     private String retries;
+    private String[] states;
 
+    @ToString.Exclude
     private FieldCollection.FieldCollectionBuilder<T, ?> fields;
 
     @Builder.Default
@@ -47,6 +49,11 @@ public class Event<T> {
 
         public FieldCollection.FieldCollectionBuilder<T, ?> fields() {
             return fields;
+        }
+
+        public EventBuilder<T> forStates(String... states) {
+            this.states = states;
+            return forState(states[0]);
         }
 
         public EventBuilder<T> forState(String state) {

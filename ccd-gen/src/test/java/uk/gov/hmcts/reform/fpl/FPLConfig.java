@@ -4,7 +4,6 @@ package uk.gov.hmcts.reform.fpl;
 import ccd.sdk.types.CCDConfig;
 import ccd.sdk.types.ConfigBuilder;
 import ccd.sdk.types.DisplayContext;
-import ccd.sdk.types.FieldCollection;
 import uk.gov.hmcts.reform.fpl.model.C21Order;
 import uk.gov.hmcts.reform.fpl.model.CaseData;
 import uk.gov.hmcts.reform.fpl.model.HearingBooking;
@@ -17,9 +16,7 @@ public class FPLConfig implements CCDConfig<CaseData> {
 
         builder.caseType("CARE_SUPERVISION_EPO");
         buildInitialEvents(builder);
-        buildSharedEvents(builder, "Submitted", "");
-        buildSharedEvents(builder, "Gatekeeping", "Gatekeeping");
-        buildSharedEvents(builder, "PREPARE_FOR_HEARING", "-PREPARE_FOR_HEARING");
+        buildSharedEvents(builder, "Submitted", "Gatekeeping", "-PREPARE_FOR_HEARING");
         buildPrepareForHearingEvents(builder);
         buildC21Events(builder, "Submitted", "");
         buildC21Events(builder, "Gatekeeping", "Gatekeeping");
@@ -266,12 +263,12 @@ public class FPLConfig implements CCDConfig<CaseData> {
 
     }
 
-    private void buildSharedEvents(ConfigBuilder<CaseData> builder, String state, String suffix) {
-        builder.event("hearingBookingDetails" + suffix)
+    private void buildSharedEvents(ConfigBuilder<CaseData> builder, String... states) {
+        builder.event("hearingBookingDetails")
                 .name("Add hearing details")
                 .description("Add hearing booking details to a case")
                 .midEventURL("/add-hearing-bookings/mid-event")
-                .forState(state)
+                .forStates(states)
                 .fields()
                 .complex(CaseData::getHearingDetails, HearingBooking.class)
                     .field(HearingBooking::getType, DisplayContext.Mandatory)
@@ -288,61 +285,61 @@ public class FPLConfig implements CCDConfig<CaseData> {
                         .field(JudgeAndLegalAdvisor::getJudgeFullName, DisplayContext.Optional, "hearingDetails.judgeAndLegalAdvisor.judgeTitle=\"MAGISTRATES\"")
                         .field(JudgeAndLegalAdvisor::getLegalAdvisorName, DisplayContext.Optional);
 
-        builder.event("uploadC2" + suffix)
+        builder.event("uploadC2")
                 .name("Upload a C2")
                 .description("Upload a c2 to the case")
                 .midEventURL("/upload-c2/mid-event")
-                .forState(state)
+                .forStates(states)
                 .fields()
                 .field(CaseData::getTemporaryC2Document);
-        builder.event("sendToGatekeeper" + suffix)
+        builder.event("sendToGatekeeper")
                 .name("Send to gatekeeper")
                 .description("Send email to gatekeeper")
-                .forState(state)
+                .forStates(states)
                     .fields()
                     .label("gateKeeperLabel", "Let the gatekeeper know there's a new case")
                     .field(CaseData::getGatekeeperEmail, DisplayContext.Mandatory);
-        builder.event("amendChildren" + suffix)
+        builder.event("amendChildren")
                 .name("Children")
                 .description("Amending the children for the case")
-                .forState(state)
+                .forStates(states)
                 .fields()
                     .field(CaseData::getChildren1, DisplayContext.Optional);
-        builder.event("amendRespondents" + suffix)
+        builder.event("amendRespondents")
                 .name("Respondents")
                 .description("Amending the respondents for the case")
-                .forState(state)
+                .forStates(states)
                 .fields()
                     .field(CaseData::getRespondents1, DisplayContext.Optional);
-        builder.event("amendOthers" + suffix)
+        builder.event("amendOthers")
                 .name("Others to be given notice")
                 .description("Amending others for the case")
-                .forState(state)
+                .forStates(states)
                 .fields()
                     .field(CaseData::getOthers, DisplayContext.Optional);
-        builder.event("amendInternationalElement" + suffix)
+        builder.event("amendInternationalElement")
                 .name("International element")
                 .description("Amending the international element")
-                .forState(state)
+                .forStates(states)
                 .fields()
                     .field(CaseData::getInternationalElement, DisplayContext.Optional);
-        builder.event("amendOtherProceedings" + suffix)
+        builder.event("amendOtherProceedings")
                 .name("Other proceedings")
                 .description("Amending other proceedings and allocation proposals")
                 .midEventURL("/enter-other-proceedings/mid-event")
-                .forState(state)
+                .forStates(states)
                 .fields()
                     .field(CaseData::getProceeding, DisplayContext.Optional);
-        builder.event("amendAttendingHearing" + suffix)
+        builder.event("amendAttendingHearing")
                 .name("Attending the hearing")
                 .description("Amend extra support needed for anyone to take part in hearing")
-                .forState(state)
+                .forStates(states)
                 .fields()
                     .field(CaseData::getHearingPreferences, DisplayContext.Optional);
-        builder.event("createNoticeOfProceedings" + suffix)
+        builder.event("createNoticeOfProceedings")
                 .name("Create notice of proceedings")
                 .description("Create notice of proceedings")
-                .forState(state)
+                .forStates(states)
                 .fields()
                     .label("proceedingLabel", "## Other proceedings 1")
                     .field().id(CaseData::getNoticeOfProceedings).showSummary(true).done();
