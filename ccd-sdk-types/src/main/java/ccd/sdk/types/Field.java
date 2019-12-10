@@ -11,7 +11,7 @@ import java.beans.PropertyDescriptor;
 
 @Builder
 @Data
-public class Field<T> {
+public class Field<T, Parent> {
     String id;
     String name;
     String description;
@@ -27,22 +27,22 @@ public class Field<T> {
     String pageLabel;
 
     private Class dataClass;
-    private FieldCollection.FieldCollectionBuilder<T, ?> parent;
+    private FieldCollection.FieldCollectionBuilder<T, Parent> parent;
 
-    public static class FieldBuilder<T> {
-        public static <T> FieldBuilder<T> builder(Class dataclass, FieldCollection.FieldCollectionBuilder<T, ?> parent) {
+    public static class FieldBuilder<T, Parent> {
+        public static <T, Parent> FieldBuilder<T, Parent> builder(Class dataclass, FieldCollection.FieldCollectionBuilder<T, ?> parent) {
             FieldBuilder result = new FieldBuilder();
             result.dataClass = dataclass;
             result.parent = parent;
             return result;
         }
 
-        public FieldBuilder<T> id(String id) {
+        public FieldBuilder<T, Parent> id(String id) {
             this.id = id;
             return this;
         }
 
-        public FieldBuilder<T> id(TypedPropertyGetter<T, ?> getter) {
+        public FieldBuilder<T, Parent> id(TypedPropertyGetter<T, ?> getter) {
             JsonProperty j = PropertyUtils.getAnnotationOfProperty(dataClass, getter, JsonProperty.class);
             PropertyDescriptor details = PropertyUtils.getPropertyDescriptor(dataClass, getter);
             id = j != null ? j.value() : details.getName();
@@ -55,8 +55,8 @@ public class Field<T> {
             return this;
         }
 
-        public FieldCollection.FieldCollectionBuilder<T, ?> done() {
-            return parent;
+        public FieldCollection.FieldCollectionBuilder<T, Parent> done() {
+            return (FieldCollection.FieldCollectionBuilder<T, Parent>) parent;
         }
     }
 }

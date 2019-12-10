@@ -12,6 +12,7 @@ public class Event<T> {
     private String id;
     // The same event can have a different ID if on different states.
     private String eventId;
+
     private String name;
     private String preState;
     private String postState;

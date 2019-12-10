@@ -81,10 +81,13 @@ public class FieldCollection<T, Parent> {
             FieldCollectionBuilder<T, Parent> result = (FieldCollectionBuilder<T, Parent>) FieldCollectionBuilder.builder(this, c);
             complexFields.add(result);
             result.rootFieldname = fieldName;
-            result.fieldDisplayOrder = this.fieldDisplayOrder;
+            // Nested builders inherit ordering state.
+            if (null != parent) {
+                result.fieldDisplayOrder = this.fieldDisplayOrder;
+            }
             if (null == this.rootFieldname) {
                 // Register only the root complex as a field
-                field().id(getter).showSummary(true);
+                field().id(getter).context(DisplayContext.Complex).showSummary(true);
             }
             return (FieldCollectionBuilder<U, T>) result;
         }
@@ -94,8 +97,8 @@ public class FieldCollection<T, Parent> {
             return this;
         }
 
-        public FieldBuilder<T> field() {
-            FieldBuilder<T> f = FieldBuilder.builder(dataClass, this);
+        public FieldBuilder<T, Parent> field() {
+            FieldBuilder<T, Parent> f = FieldBuilder.builder(dataClass, this);
             f.page(this.pageId);
             f.pageLabel(this.pageLabel);
             if (this.pageId != null) {
