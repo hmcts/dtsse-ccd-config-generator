@@ -31,7 +31,6 @@ public class FPLConfig implements CCDConfig<CaseData> {
         builder.event("createC21Order")
                 .forStates("Submitted", "Gatekeeping")
                 .name("Create an order")
-                .description("Create an order")
                 .aboutToStartURL("/create-order/about-to-start")
                 .aboutToSubmitURL("/create-order/about-to-submit")
                 .submittedURL("/create-order/about-to-submit")
@@ -55,7 +54,6 @@ public class FPLConfig implements CCDConfig<CaseData> {
     private void buildTransitions(ConfigBuilder<CaseData> builder) {
         builder.event("submitApplication")
                 .name("Submit application")
-                .description("Submit application")
                 .preState("Open")
                 .postState("Submitted")
                 .endButtonLabel("Submit")
@@ -70,7 +68,6 @@ public class FPLConfig implements CCDConfig<CaseData> {
 
         builder.event("populateSDO")
                 .name("Populate standard directions")
-                .description("Populate standard directions")
                 .preState("Submitted")
                 .postState("Gatekeeping")
                 .fields()
@@ -105,7 +102,6 @@ public class FPLConfig implements CCDConfig<CaseData> {
 
         builder.event("draftSDO")
                 .name("Draft standard directions")
-                .description("Draft standard directions")
                 .aboutToStartURL("/draft-standard-directions/about-to-start")
                 .aboutToSubmitURL("/draft-standard-directions/about-to-submit")
                 .midEventURL("/draft-standard-directions/mid-event")
@@ -153,7 +149,6 @@ public class FPLConfig implements CCDConfig<CaseData> {
     private void buildSubmittedEvents(ConfigBuilder<CaseData> builder) {
         builder.event("addFamilyManCaseNumber")
                 .name("Add case number")
-                .description("Add case number")
                 .forState("Submitted")
                 .fields()
                     .field(CaseData::getFamilyManCaseNumber, DisplayContext.Optional);
@@ -356,7 +351,6 @@ public class FPLConfig implements CCDConfig<CaseData> {
                     .optional(CaseData::getHearingPreferences);
         builder.event("createNoticeOfProceedings")
                 .name("Create notice of proceedings")
-                .description("Create notice of proceedings")
                 .forStates(states)
                 .fields()
                     .label("proceedingLabel", "## Other proceedings 1")

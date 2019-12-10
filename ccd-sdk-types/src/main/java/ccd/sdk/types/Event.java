@@ -31,6 +31,12 @@ public class Event<T> {
         return this.eventId != null ? this.eventId : this.id;
     }
 
+    public void name(String s) {
+        name = s;
+        if (null == description) {
+            description = s;
+        }
+    }
 
     @ToString.Exclude
     private FieldCollection.FieldCollectionBuilder<T, ?> fields;
