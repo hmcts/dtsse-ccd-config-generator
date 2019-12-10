@@ -55,7 +55,7 @@ public class FPLConfig implements CCDConfig<CaseData> {
                 .endButtonLabel("Submit")
                 .allWebhooks("case-submission")
                 .midEventURL("/case-submission/mid-event")
-                .retries("1,2,3,4,5")
+                .retries(1,2,3,4,5)
                 .fields()
                     .label("submissionConsentLabel", "")
                     .field("submissionConsent", DisplayContext.Mandatory);
@@ -88,7 +88,7 @@ public class FPLConfig implements CCDConfig<CaseData> {
                 .description("Entering other proceedings and allocation proposals")
                 .aboutToStartURL("/allocation-decision/about-to-start")
                 .aboutToSubmitURL("/allocation-decision/about-to-submit")
-                .retries("1,2,3,4,5")
+                .retries(1,2,3,4,5)
                 .fields()
                     .field(CaseData::getAllocationDecision, DisplayContext.Mandatory, true);
 
@@ -355,7 +355,7 @@ public class FPLConfig implements CCDConfig<CaseData> {
                 .description("Create a new case – add a title")
                 .aboutToSubmitURL("/case-initiation/about-to-submit")
                 .submittedURL("/case-initiation/submitted")
-                .retries("1,2,3,4,5")
+                .retries(1,2,3,4,5)
                 .fields()
                     .optional(CaseData::getCaseName);
 

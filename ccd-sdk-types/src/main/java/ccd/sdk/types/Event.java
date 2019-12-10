@@ -1,5 +1,6 @@
 package ccd.sdk.types;
 
+import com.google.common.base.Joiner;
 import com.google.common.collect.Maps;
 import lombok.*;
 
@@ -98,6 +99,11 @@ public class Event<T> {
             aboutToStartURL = "/" + convention + "/about-to-start";
             aboutToSubmitURL = "/" + convention + "/about-to-submit";
             submittedURL = "/" + convention + "/submitted";
+            return this;
+        }
+
+        public EventBuilder<T> retries(Integer... retries) {
+            this.retries = Joiner.on(",").join(retries);
             return this;
         }
     }
