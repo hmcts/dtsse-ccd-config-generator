@@ -4,5 +4,8 @@ public enum FieldType {
     Unspecified,
     Email,
     PhoneUK,
-    Document, Schedule, TextArea, FixedList
+    Document,
+    Schedule,
+    TextArea,
+    FixedList
 }

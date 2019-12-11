@@ -1,8 +1,6 @@
 package ccd.sdk;
 
 import ccd.sdk.generator.ConfigGenerator;
-import ccd.sdk.types.DisplayContext;
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.io.Resources;
 import org.apache.commons.io.FileUtils;
@@ -16,20 +14,12 @@ import org.reflections.Reflections;
 import org.skyscreamer.jsonassert.JSONCompare;
 import org.skyscreamer.jsonassert.JSONCompareMode;
 import org.skyscreamer.jsonassert.JSONCompareResult;
-import uk.gov.hmcts.reform.fpl.model.CaseData;
-import uk.gov.hmcts.reform.fpl.model.CaseState;
-import uk.gov.hmcts.reform.fpl.model.HearingBooking;
-import uk.gov.hmcts.reform.fpl.model.common.Element;
 
 import java.io.File;
 import java.net.URL;
 import java.nio.charset.Charset;
 import java.nio.file.Path;
 import java.util.Iterator;
-import java.util.List;
-import java.util.function.Function;
-
-import static ccd.sdk.generator.Builder.builder;
 
 public class ConfigGenerationTests {
     @Rule
@@ -46,8 +36,9 @@ public class ConfigGenerationTests {
     }
 
     @Test
-    public void solicitor() throws Exception {
+    public void generatesAllComplexTypes() throws Exception {
         assertEquals("ComplexTypes/Solicitor.json");
+        assertEquals("ComplexTypes/Recitals.json");
     }
 
     @Test

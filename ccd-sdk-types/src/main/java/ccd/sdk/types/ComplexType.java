@@ -5,5 +5,6 @@ import java.lang.annotation.RetentionPolicy;
 
 @Retention(RetentionPolicy.RUNTIME)
 public @interface ComplexType {
-    public String label();
+    String name() default "";
+    String label() default "";
 }

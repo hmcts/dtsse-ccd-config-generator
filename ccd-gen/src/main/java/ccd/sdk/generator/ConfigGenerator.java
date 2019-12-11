@@ -47,7 +47,7 @@ public class ConfigGenerator {
 
         EventGenerator.writeEvents(outputfolder, builder.caseType, events);
         CaseEventToFieldsGenerator.writeEvents(outputfolder, builder.caseType, events);
-        generateComplexTypes();
+        ComplexTypeGenerator.generate(outputfolder, reflections, builder.caseType, events);
         CaseEventToComplexTypesGenerator.writeEvents(outputfolder, builder.caseType, events);
     }
 
@@ -71,46 +71,6 @@ public class ConfigGenerator {
     }
 
 
-    public void generateComplexTypes() {
-        File complexTypes = new File(outputfolder, "ComplexTypes");
-        complexTypes.mkdir();
-
-        Set<Class<?>> types = reflections.getTypesAnnotatedWith(ComplexType.class);
-        for (Class<?> type : types) {
-            Path path = Paths.get(complexTypes.getPath(), type.getSimpleName() + ".json");
-            Utils.writeFile(path, toComplexType(type));
-        }
-    }
-
-    public static String toComplexType(Class c) {
-        Map<String, Object> label = getField(c.getSimpleName());
-        label.put("ListElementCode", c.getSimpleName().toLowerCase() + "Label");
-        ComplexType a = (ComplexType) c.getAnnotation(ComplexType.class);
-        label.put("FieldType", "Label");
-        label.put("ElementLabel", a.label());
-
-        List<Map<String, Object>> fields = Lists.newArrayList();
-        fields.add(label);
-        for (Field field : ReflectionUtils.getFields(c)) {
-            Map<String, Object> fieldInfo = getField(c.getSimpleName());
-            fieldInfo.put("ListElementCode", field.getName());
-            fieldInfo.put("FieldType", "Text");
-
-            CaseField f = field.getAnnotation(CaseField.class);
-            fieldInfo.put("ElementLabel", f.label());
-            if (f.hint().length() > 0) {
-                fieldInfo.put("HintText", f.hint());
-            }
-
-            if (f.type() != FieldType.Unspecified) {
-                fieldInfo.put("FieldType", f.type().toString());
-            }
-
-            fields.add(fieldInfo);
-        }
-
-        return Utils.serialise(fields);
-    }
 
 
 }
