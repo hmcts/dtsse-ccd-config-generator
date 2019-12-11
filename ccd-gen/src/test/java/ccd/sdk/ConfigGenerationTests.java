@@ -2,9 +2,11 @@ package ccd.sdk;
 
 import ccd.sdk.generator.ConfigGenerator;
 import ccd.sdk.types.DisplayContext;
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.io.Resources;
 import org.apache.commons.io.FileUtils;
+import org.apache.commons.io.filefilter.TrueFileFilter;
 import org.junit.Before;
 import org.junit.Ignore;
 import org.junit.Rule;
@@ -22,6 +24,8 @@ import uk.gov.hmcts.reform.fpl.model.common.Element;
 import java.io.File;
 import java.net.URL;
 import java.nio.charset.Charset;
+import java.nio.file.Path;
+import java.util.Iterator;
 import java.util.List;
 import java.util.function.Function;
 
@@ -52,49 +56,13 @@ public class ConfigGenerationTests {
     }
 
     @Test
-    public void generatesSingleCaseEventToField() {
-        assertEquals("CaseEventToFields/enterParentingFactors.json");
-    }
-
-    @Test
-    public void handlesEventForMultipleStates() {
-        assertEquals("CaseEventToFields/amendAttendingHearing.json");
-        assertEquals("CaseEventToFields/amendAttendingHearing-PREPARE_FOR_HEARING.json");
-        assertEquals("CaseEventToFields/amendAttendingHearingGatekeeping.json");
-    }
-
-    @Test
     public void generatesAllCaseEventToField() {
-        URL u = Resources.getResource("ccd-definition/CaseEventToFields");
-        for (File file : new File(u.getPath()).listFiles()) {
-            assertEquals("CaseEventToFields/" + file.getName());
-        }
+        assertResourceFolderMatchesGenerated("CaseEventToFields");
     }
 
     @Test
-    public void generatesCaseEventToComplexTypes() {
-        assertEquals("CaseEventToComplexTypes/hearingBookingDetails/hearingBookingDetails.json");;
-        assertEquals("CaseEventToComplexTypes/hearingBookingDetails/hearingBookingDetailsGatekeeping.json");;
-        assertEquals("CaseEventToComplexTypes/hearingBookingDetails/hearingBookingDetails-PREPARE_FOR_HEARING.json");;
-
-        assertEquals("CaseEventToComplexTypes/createC21Order/createC21Order.json");;
-        assertEquals("CaseEventToComplexTypes/createC21Order/createC21OrderGatekeeping.json");
-
-        assertEquals("CaseEventToComplexTypes/draftCMO/draftCMO.json");
-
-        assertEquals("CaseEventToComplexTypes/createNoticeOfProceedings/createNoticeOfProceedings.json");
-        assertEquals("CaseEventToComplexTypes/createNoticeOfProceedings/createNoticeOfProceedings-PREPARE_FOR_HEARING.json");
-        assertEquals("CaseEventToComplexTypes/createNoticeOfProceedings/createNoticeOfProceedingsGatekeeping.json");
-
-        assertEquals("CaseEventToComplexTypes/uploadC2/uploadC2.json");
-        assertEquals("CaseEventToComplexTypes/uploadC2/uploadC2-PREPARE_FOR_HEARING.json");
-        assertEquals("CaseEventToComplexTypes/uploadC2/uploadC2Gatekeeping.json");
-
-        assertEquals("CaseEventToComplexTypes/COMPLY_CAFCASS/COMPLY_CAFCASS.json");
-        assertEquals("CaseEventToComplexTypes/COMPLY_COURT/COMPLY_COURT.json");
-        assertEquals("CaseEventToComplexTypes/COMPLY_LOCAL_AUTHORITY/COMPLY_LOCAL_AUTHORITY.json");
-
-        assertEquals("CaseEventToComplexTypes/draftSDO/draftSDO.json");
+    public void generatesAllCaseEventToComplexTypes() {
+        assertResourceFolderMatchesGenerated("CaseEventToComplexTypes");
     }
 
     // This will only pass once everything else is finished.
@@ -104,41 +72,59 @@ public class ConfigGenerationTests {
         assertEquals("AuthorisationCaseEvent/AuthorisationCaseEvent.json");
     }
 
-    @Test
-    public void foo() {
-        Function<CaseData, List<Element<HearingBooking>>> foo = CaseData::getHearingDetails;
-
-        builder(CaseData.class, CaseState.class)
-                .event(CaseState.Open, CaseState.Submitted)
-                .field(x -> x.getCaseName(), DisplayContext.Mandatory)
-                .field(x -> x.getC21Order(), DisplayContext.Mandatory)
-                .field(x -> x.getHearingDetails(), this::renderSolicitor);
+    private void assertResourceFolderMatchesGenerated(String folder) {
+        URL u = Resources.getResource("ccd-definition/" + folder);
+        File dir = new File(u.getPath());
+        assert dir.exists();
+        for (Iterator<File> it = FileUtils.iterateFiles(dir, TrueFileFilter.INSTANCE, TrueFileFilter.INSTANCE); it.hasNext(); ) {
+            File expected = it.next();
+            Path path = dir.toPath().relativize(expected.toPath());
+            Path actual = temp.getRoot().toPath().resolve(folder).resolve(path);
+            assertEquals(expected, actual.toFile());
+        }
     }
 
     private void assertEquals(String jsonPath) {
+        System.out.println("Comparing " + jsonPath);
+        URL u = Resources.getResource("ccd-definition/" + jsonPath);
+        File expected = new File(u.getPath());
+        File actual = new File(temp.getRoot(), jsonPath);
+        assertEquals(expected, actual);
+    }
+
+    private void assertEquals(File expected, File actual) {
         try {
-            System.out.println("Comparing " + jsonPath);
-            String expected = Resources.toString(Resources.getResource("ccd-definition/" + jsonPath), Charset.defaultCharset());
-            String actual = FileUtils.readFileToString(new File(temp.getRoot(), jsonPath), Charset.defaultCharset());
-            JSONCompareResult result = JSONCompare.compareJSON(expected, actual, JSONCompareMode.LENIENT);
+            System.out.println("Comparing " + expected.getName());
+            String expectedString = FileUtils.readFileToString(expected, Charset.defaultCharset());
+            String actualString = FileUtils.readFileToString(actual, Charset.defaultCharset());
+            JSONCompareResult result = JSONCompare.compareJSON(expectedString, actualString, JSONCompareMode.LENIENT);
             if (result.failed()) {
                 System.out.println(result.toString());
 
-                ObjectMapper mapper = new ObjectMapper();
-                Object json = mapper.readValue(actual, Object.class);
-                String indented = mapper.writerWithDefaultPrettyPrinter().writeValueAsString(json);
-                System.out.println(indented);
+                System.out.println(pretty(actualString));
+                System.out.println("Expected:");
+                System.out.println(pretty(expectedString));
 
-                throw new RuntimeException("Compare failed for " + jsonPath);
+                throw new RuntimeException("Compare failed for " + expected.getName());
             }
 
         } catch (Exception e) {
+            System.out.println("Generated files:");
+            for (Iterator<File> it = FileUtils.iterateFiles(temp.getRoot(), TrueFileFilter.INSTANCE, TrueFileFilter.INSTANCE); it.hasNext(); ) {
+                File f = it.next();
+                System.out.println(f.getPath());
+            }
             throw new RuntimeException(e);
         }
     }
 
-    private void renderSolicitor(HearingBooking solicitor) {
-        solicitor.getStartDate();
-        solicitor.getType();
+    private String pretty(String json) {
+        ObjectMapper mapper = new ObjectMapper();
+        try {
+            Object o = mapper.readValue(json, Object.class);
+            return mapper.writerWithDefaultPrettyPrinter().writeValueAsString(o);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
     }
 }
