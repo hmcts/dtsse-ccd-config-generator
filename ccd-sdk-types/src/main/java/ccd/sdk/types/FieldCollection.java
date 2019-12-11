@@ -90,6 +90,7 @@ public class FieldCollection<T, Parent> {
         }
 
         public FieldCollectionBuilder<Parent, ?> done() {
+            parent.fieldDisplayOrder = this.fieldDisplayOrder;
             return parent;
         }
 

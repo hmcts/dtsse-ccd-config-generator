@@ -1,7 +1,7 @@
 [
   {
     "LiveFrom": "01/01/2017",
-    "ID": "NoticeOfProceedings",
+    "ID": "CreateNoticeOfProceedings-PREPARE_FOR_HEARING",
     "CaseEventID": "createNoticeOfProceedings-PREPARE_FOR_HEARING",
     "CaseFieldID": "noticeOfProceedings",
     "ListElementCode": "judgeAndLegalAdvisor.judgeTitle",
@@ -11,7 +11,7 @@
   },
   {
     "LiveFrom": "01/01/2017",
-    "ID": "NoticeOfProceedings",
+    "ID": "CreateNoticeOfProceedings-PREPARE_FOR_HEARING",
     "CaseEventID": "createNoticeOfProceedings-PREPARE_FOR_HEARING",
     "CaseFieldID": "noticeOfProceedings",
     "ListElementCode": "judgeAndLegalAdvisor.judgeLastName",
@@ -21,7 +21,7 @@
   },
   {
     "LiveFrom": "01/01/2017",
-    "ID": "NoticeOfProceedings",
+    "ID": "CreateNoticeOfProceedings-PREPARE_FOR_HEARING",
     "CaseEventID": "createNoticeOfProceedings-PREPARE_FOR_HEARING",
     "CaseFieldID": "noticeOfProceedings",
     "ListElementCode": "judgeAndLegalAdvisor.judgeFullName",
@@ -31,7 +31,7 @@
   },
   {
     "LiveFrom": "01/01/2017",
-    "ID": "NoticeOfProceedings",
+    "ID": "CreateNoticeOfProceedings-PREPARE_FOR_HEARING",
     "CaseEventID": "createNoticeOfProceedings-PREPARE_FOR_HEARING",
     "CaseFieldID": "noticeOfProceedings",
     "ListElementCode": "judgeAndLegalAdvisor.legalAdvisorName",
@@ -41,7 +41,7 @@
   },
   {
     "LiveFrom": "01/01/2017",
-    "ID": "NoticeOfProceedings",
+    "ID": "CreateNoticeOfProceedings-PREPARE_FOR_HEARING",
     "CaseEventID": "createNoticeOfProceedings-PREPARE_FOR_HEARING",
     "CaseFieldID": "noticeOfProceedings",
     "ListElementCode": "proceedingTypes",

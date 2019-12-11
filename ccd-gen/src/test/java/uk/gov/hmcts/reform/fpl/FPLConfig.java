@@ -345,7 +345,14 @@ public class FPLConfig implements CCDConfig<CaseData> {
                 .name("Create notice of proceedings")
                 .fields()
                     .label("proceedingLabel", "## Other proceedings 1")
-                    .field().id(CaseData::getNoticeOfProceedings).showSummary(true).done();
+                    .complex(CaseData::getNoticeOfProceedings)
+                        .complex(NoticeOfProceedings::getJudgeAndLegalAdvisor)
+                            .optional(JudgeAndLegalAdvisor::getJudgeTitle)
+                            .mandatory(JudgeAndLegalAdvisor::getJudgeLastName)
+                            .optional(JudgeAndLegalAdvisor::getJudgeFullName)
+                            .optional(JudgeAndLegalAdvisor::getLegalAdvisorName)
+                        .done()
+                        .mandatory(NoticeOfProceedings::getProceedingTypes);
     }
 
     private void buildInitialEvents(ConfigBuilder<CaseData> builder) {

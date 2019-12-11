@@ -1,8 +1,8 @@
 [
   {
     "LiveFrom": "01/01/2017",
-    "ID": "NoticeOfProceedings",
-    "CaseEventID": "createNoticeOfProceedings",
+    "ID": "CreateNoticeOfProceedingsGatekeeping",
+    "CaseEventID": "createNoticeOfProceedingsGatekeeping",
     "CaseFieldID": "noticeOfProceedings",
     "ListElementCode": "judgeAndLegalAdvisor.judgeTitle",
     "EventElementLabel": "Judge or magistrate's title",
@@ -11,8 +11,8 @@
   },
   {
     "LiveFrom": "01/01/2017",
-    "ID": "NoticeOfProceedings",
-    "CaseEventID": "createNoticeOfProceedings",
+    "ID": "CreateNoticeOfProceedingsGatekeeping",
+    "CaseEventID": "createNoticeOfProceedingsGatekeeping",
     "CaseFieldID": "noticeOfProceedings",
     "ListElementCode": "judgeAndLegalAdvisor.judgeLastName",
     "EventElementLabel": "Last name",
@@ -21,8 +21,8 @@
   },
   {
     "LiveFrom": "01/01/2017",
-    "ID": "NoticeOfProceedings",
-    "CaseEventID": "createNoticeOfProceedings",
+    "ID": "CreateNoticeOfProceedingsGatekeeping",
+    "CaseEventID": "createNoticeOfProceedingsGatekeeping",
     "CaseFieldID": "noticeOfProceedings",
     "ListElementCode": "judgeAndLegalAdvisor.judgeFullName",
     "EventElementLabel": "Full name",
@@ -31,8 +31,8 @@
   },
   {
     "LiveFrom": "01/01/2017",
-    "ID": "NoticeOfProceedings",
-    "CaseEventID": "createNoticeOfProceedings",
+    "ID": "CreateNoticeOfProceedingsGatekeeping",
+    "CaseEventID": "createNoticeOfProceedingsGatekeeping",
     "CaseFieldID": "noticeOfProceedings",
     "ListElementCode": "judgeAndLegalAdvisor.legalAdvisorName",
     "EventElementLabel": "Legal advisor's full name",
@@ -41,8 +41,8 @@
   },
   {
     "LiveFrom": "01/01/2017",
-    "ID": "NoticeOfProceedings",
-    "CaseEventID": "createNoticeOfProceedings",
+    "ID": "CreateNoticeOfProceedingsGatekeeping",
+    "CaseEventID": "createNoticeOfProceedingsGatekeeping",
     "CaseFieldID": "noticeOfProceedings",
     "ListElementCode": "proceedingTypes",
     "EventElementLabel": "What would you like to create?",
