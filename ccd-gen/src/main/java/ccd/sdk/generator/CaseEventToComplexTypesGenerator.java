@@ -11,7 +11,7 @@ import java.nio.file.Paths;
 import java.util.List;
 import java.util.Map;
 
-public class ComplexFieldGenerator {
+public class CaseEventToComplexTypesGenerator {
     public static void writeEvents(File root, String caseType, List<Event> events) {
         for (Event event : events) {
             FieldCollection collection = event.getFields().build();

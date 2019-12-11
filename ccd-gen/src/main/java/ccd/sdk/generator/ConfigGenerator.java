@@ -1,13 +1,7 @@
 package ccd.sdk.generator;
 
 import ccd.sdk.types.*;
-import ccd.sdk.types.DisplayContext;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.Lists;
-import com.google.common.collect.Maps;
-import de.cronn.reflection.util.PropertyUtils;
-import de.cronn.reflection.util.TypedPropertyGetter;
 import net.jodah.typetools.TypeResolver;
 import org.objenesis.Objenesis;
 import org.objenesis.ObjenesisStd;
@@ -15,9 +9,7 @@ import org.reflections.ReflectionUtils;
 import org.reflections.Reflections;
 
 import java.io.File;
-import java.io.IOException;
 import java.lang.reflect.Field;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.List;
@@ -56,7 +48,7 @@ public class ConfigGenerator {
         EventGenerator.writeEvents(outputfolder, builder.caseType, events);
         CaseEventToFieldsGenerator.writeEvents(outputfolder, builder.caseType, events);
         generateComplexTypes();
-        ComplexFieldGenerator.writeEvents(outputfolder, builder.caseType, events);
+        CaseEventToComplexTypesGenerator.writeEvents(outputfolder, builder.caseType, events);
     }
 
     private List<Event> expandEvents(List<Event> events) {
