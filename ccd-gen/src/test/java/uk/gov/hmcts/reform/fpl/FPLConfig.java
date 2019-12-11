@@ -6,6 +6,7 @@ import ccd.sdk.types.ConfigBuilder;
 import ccd.sdk.types.DisplayContext;
 import ccd.sdk.types.FieldCollection;
 import uk.gov.hmcts.reform.fpl.model.*;
+import uk.gov.hmcts.reform.fpl.model.common.C2DocumentBundle;
 import uk.gov.hmcts.reform.fpl.model.common.JudgeAndLegalAdvisor;
 
 public class FPLConfig implements CCDConfig<CaseData> {
@@ -295,7 +296,9 @@ public class FPLConfig implements CCDConfig<CaseData> {
                 .description("Upload a c2 to the case")
                 .midEventURL("/upload-c2/mid-event")
                 .fields()
-                .field(CaseData::getTemporaryC2Document);
+                    .complex(CaseData::getTemporaryC2Document)
+                        .mandatory(C2DocumentBundle::getDocument)
+                        .mandatory(C2DocumentBundle::getDescription);
         builder.event("sendToGatekeeper")
                 .forStates(states)
                 .name("Send to gatekeeper")
