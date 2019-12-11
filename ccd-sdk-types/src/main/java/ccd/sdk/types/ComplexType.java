@@ -7,4 +7,5 @@ import java.lang.annotation.RetentionPolicy;
 public @interface ComplexType {
     String name() default "";
     String label() default "";
+    String labelId() default "";
 }

@@ -7,5 +7,6 @@ public enum FieldType {
     Document,
     Schedule,
     TextArea,
-    FixedList
+    FixedList,
+    YesOrNo
 }

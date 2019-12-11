@@ -5,6 +5,7 @@ import ccd.sdk.types.ComplexType;
 import ccd.sdk.types.Event;
 import ccd.sdk.types.FieldType;
 import com.google.common.collect.Lists;
+import org.apache.commons.lang3.StringUtils;
 import org.reflections.ReflectionUtils;
 import org.reflections.Reflections;
 
@@ -35,7 +36,8 @@ public class ComplexTypeGenerator {
         if (a.label().length() > 0) {
             Map<String, Object> label = getField(id);
 
-            label.put("ListElementCode", c.getSimpleName().toLowerCase() + "Label");
+            String labelId = a.labelId().length() > 0 ? a.labelId() : c.getSimpleName().toLowerCase() + "Label";
+            label.put("ListElementCode", labelId);
             label.put("FieldType", "Label");
             label.put("ElementLabel", a.label());
 
@@ -56,6 +58,16 @@ public class ComplexTypeGenerator {
 
                 if (f.type() != FieldType.Unspecified) {
                     fieldInfo.put("FieldType", f.type().toString());
+                }
+
+
+                if (!StringUtils.isEmpty(f.showCondition())) {
+                    fieldInfo.put("FieldShowCondition", f.showCondition());
+                }
+
+                if (!StringUtils.isEmpty(f.typeParameter())) {
+                    fieldInfo.put("FieldType", "MultiSelectList");
+                    fieldInfo.put("FieldTypeParameter", f.typeParameter());
                 }
             }
 

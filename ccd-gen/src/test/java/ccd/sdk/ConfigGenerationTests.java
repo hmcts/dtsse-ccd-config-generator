@@ -39,6 +39,7 @@ public class ConfigGenerationTests {
     public void generatesAllComplexTypes() throws Exception {
         assertEquals("ComplexTypes/Solicitor.json");
         assertEquals("ComplexTypes/Recitals.json");
+        assertEquals("ComplexTypes/RiskAndHarm.json");
     }
 
     @Test

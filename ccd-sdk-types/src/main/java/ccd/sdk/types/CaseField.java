@@ -7,6 +7,8 @@ import java.lang.annotation.RetentionPolicy;
 public @interface CaseField {
     String label();
     String hint() default "";
+    String showCondition() default "";
     FieldType type() default FieldType.Unspecified;
 
+    String typeParameter() default "";
 }
