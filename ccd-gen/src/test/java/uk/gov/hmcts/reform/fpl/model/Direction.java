@@ -30,6 +30,7 @@ public class Direction {
     private String directionRemovable;
     private String directionNeeded;
     private String custom;
+    @CaseField(label = "Deadline")
     private LocalDateTime dateToBeCompletedBy;
     private DirectionResponse response;
     private List<Element<DirectionResponse>> responses;

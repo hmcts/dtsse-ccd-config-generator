@@ -5,6 +5,7 @@ import ccd.sdk.types.CCDConfig;
 import ccd.sdk.types.ConfigBuilder;
 import ccd.sdk.types.DisplayContext;
 import ccd.sdk.types.FieldCollection;
+import de.cronn.reflection.util.TypedPropertyGetter;
 import uk.gov.hmcts.reform.fpl.model.*;
 import uk.gov.hmcts.reform.fpl.model.common.C2DocumentBundle;
 import uk.gov.hmcts.reform.fpl.model.common.JudgeAndLegalAdvisor;
@@ -235,31 +236,30 @@ public class FPLConfig implements CCDConfig<CaseData> {
                 .page("schedule")
                      .field("schedule", DisplayContext.Mandatory);
 
-        builder.event("COMPLY_LOCAL_AUTHORITY")
+        this.renderComply(builder, "COMPLY_LOCAL_AUTHORITY", CaseData::getLocalAuthorityDirections, DisplayContext.Mandatory, "Allows Local Authority user access to comply with their directions as well as ones for all parties");
+        this.renderComply(builder, "COMPLY_CAFCASS", CaseData::getCafcassDirections, DisplayContext.Optional, "Allows Local Authority user access to comply with their directions as well as ones for all parties");
+        this.renderComply(builder, "COMPLY_COURT", CaseData::getCourtDirectionsCustom, DisplayContext.Optional, "Allows Local Authority user access to comply with their directions as well as ones for all parties");
+    }
+
+    private void renderComply(ConfigBuilder<CaseData> builder, String eventId, TypedPropertyGetter<CaseData, ?> getter, DisplayContext reasonContext, String description) {
+        builder.event(eventId)
                 .forState("PREPARE_FOR_HEARING")
                 .name("Comply with directions")
-                .description("Allows Local Authority user access to comply with their directions as well as ones for all parties")
+                .description(description)
                 .fields()
                 .pageLabel(" ")
-                    .field(CaseData::getLocalAuthorityDirections);
-
-        builder.event("COMPLY_CAFCASS")
-                .forState("PREPARE_FOR_HEARING")
-                .name("Comply with directions")
-                .description("Allows Cafcass user access to comply with their directions as well as ones for all parties")
-                .fields()
-                .pageLabel(" ")
-                    .field(CaseData::getCafcassDirections);
-
-        // courtDirectionsCustom is used here to prevent Gatekeeper inadvertently getting C and D permissions in draftSDO journey on courtDirections. We do not want them to able to create/delete directions"
-        builder.event("COMPLY_COURT")
-                .forState("PREPARE_FOR_HEARING")
-                .name("Comply with directions")
-                .description("Event gives Court user access to comply with their directions as well as all parties")
-                .fields()
-                .pageLabel(" ")
-                    .field(CaseData::getCourtDirectionsCustom);
-
+                .complex(getter, Direction.class)
+                    .readonly(Direction::getDirectionType)
+                    .readonly(Direction::getDirectionNeeded, "directionText = \"DO_NOT_SHOW\"")
+                    .readonly(Direction::getDateToBeCompletedBy)
+                    .complex(Direction::getResponse)
+                        .optional(DirectionResponse::getComplied)
+                        .optional(DirectionResponse::getDocumentDetails)
+                        .optional(DirectionResponse::getFile)
+                        .label("cannotComplyTitle", "TODO")
+                        .field(DirectionResponse::getCannotComplyReason, reasonContext)
+                        .optional(DirectionResponse::getC2Uploaded)
+                        .optional(DirectionResponse::getCannotComplyFile);
     }
 
     private void renderDirection(FieldCollection.FieldCollectionBuilder<Direction, ?> builder) {

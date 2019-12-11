@@ -89,6 +89,10 @@ public class ConfigGenerationTests {
         assertEquals("CaseEventToComplexTypes/uploadC2/uploadC2.json");
         assertEquals("CaseEventToComplexTypes/uploadC2/uploadC2-PREPARE_FOR_HEARING.json");
         assertEquals("CaseEventToComplexTypes/uploadC2/uploadC2Gatekeeping.json");
+
+        assertEquals("CaseEventToComplexTypes/COMPLY_CAFCASS/COMPLY_CAFCASS.json");
+        assertEquals("CaseEventToComplexTypes/COMPLY_COURT/COMPLY_COURT.json");
+        assertEquals("CaseEventToComplexTypes/COMPLY_LOCAL_AUTHORITY/COMPLY_LOCAL_AUTHORITY.json");
     }
 
     // This will only pass once everything else is finished.
