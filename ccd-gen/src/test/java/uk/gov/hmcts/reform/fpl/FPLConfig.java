@@ -6,6 +6,7 @@ import ccd.sdk.types.ConfigBuilder;
 import ccd.sdk.types.DisplayContext;
 import ccd.sdk.types.FieldCollection;
 import de.cronn.reflection.util.TypedPropertyGetter;
+import uk.gov.hmcts.reform.fpl.enums.UserRole;
 import uk.gov.hmcts.reform.fpl.model.*;
 import uk.gov.hmcts.reform.fpl.model.common.C2DocumentBundle;
 import uk.gov.hmcts.reform.fpl.model.common.JudgeAndLegalAdvisor;
@@ -33,7 +34,7 @@ public class FPLConfig implements CCDConfig<CaseData> {
                 .forStates("Submitted", "Gatekeeping")
                 .name("Create an order")
                 .allWebhooks("create-order")
-                .midEventURL("/create-order/mid-event")
+                .midEventWebhook()
                 .fields()
                     .page("OrderInformation")
                     .complex(CaseData::getC21Order)
@@ -56,7 +57,7 @@ public class FPLConfig implements CCDConfig<CaseData> {
                 .name("Submit application")
                 .endButtonLabel("Submit")
                 .allWebhooks("case-submission")
-                .midEventURL("/case-submission/mid-event")
+                .midEventWebhook()
                 .retries(1,2,3,4,5)
                 .fields()
                     .label("submissionConsentLabel", "")
@@ -98,7 +99,7 @@ public class FPLConfig implements CCDConfig<CaseData> {
                 .forState("Gatekeeping")
                 .name("Draft standard directions")
                 .allWebhooks("draft-standard-directions")
-                .midEventURL("/draft-standard-directions/mid-event")
+                .midEventWebhook()
                 .fields()
                     .page("judgeAndLegalAdvisor")
                         .optional(CaseData::getJudgeAndLegalAdvisor)
@@ -182,7 +183,7 @@ public class FPLConfig implements CCDConfig<CaseData> {
                 .forAllStates()
                 .name("Documents")
                 .description("Upload documents")
-                .midEventURL("/upload-documents/mid-event")
+                .midEventWebhook()
                 .fields()
                     .label("uploadDocuments_paragraph_1", "You must upload these documents if possible. Give the reason and date you expect to provide it if you don’t have a document yet.")
                     .optional(CaseData::getSocialWorkChronologyDocument)
@@ -253,9 +254,9 @@ public class FPLConfig implements CCDConfig<CaseData> {
                 .page("schedule")
                      .field("schedule", DisplayContext.Mandatory);
 
-        this.renderComply(builder, "COMPLY_LOCAL_AUTHORITY", CaseData::getLocalAuthorityDirections, DisplayContext.Mandatory, "Allows Local Authority user access to comply with their directions as well as ones for all parties");
-        this.renderComply(builder, "COMPLY_CAFCASS", CaseData::getCafcassDirections, DisplayContext.Optional, "Allows Local Authority user access to comply with their directions as well as ones for all parties");
-        this.renderComply(builder, "COMPLY_COURT", CaseData::getCourtDirectionsCustom, DisplayContext.Optional, "Allows Local Authority user access to comply with their directions as well as ones for all parties");
+        renderComply(builder, "COMPLY_LOCAL_AUTHORITY", CaseData::getLocalAuthorityDirections, DisplayContext.Mandatory, "Allows Local Authority user access to comply with their directions as well as ones for all parties");
+        renderComply(builder, "COMPLY_CAFCASS", CaseData::getCafcassDirections, DisplayContext.Optional, "Allows Local Authority user access to comply with their directions as well as ones for all parties");
+        renderComply(builder, "COMPLY_COURT", CaseData::getCourtDirectionsCustom, DisplayContext.Optional, "Allows Local Authority user access to comply with their directions as well as ones for all parties");
     }
 
     private void renderComply(ConfigBuilder<CaseData> builder, String eventId, TypedPropertyGetter<CaseData, ?> getter, DisplayContext reasonContext, String description) {
@@ -311,7 +312,7 @@ public class FPLConfig implements CCDConfig<CaseData> {
                 .forStates(states)
                 .name("Upload a C2")
                 .description("Upload a c2 to the case")
-                .midEventURL("/upload-c2/mid-event")
+                .midEventWebhook()
                 .fields()
                     .complex(CaseData::getTemporaryC2Document)
                         .mandatory(C2DocumentBundle::getDocument)

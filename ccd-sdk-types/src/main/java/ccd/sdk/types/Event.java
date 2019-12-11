@@ -96,10 +96,12 @@ public class Event<T> {
             return this;
         }
 
+        private String webhookConvention;
         public EventBuilder<T> allWebhooks(String convention) {
             aboutToStartURL = "/" + convention + "/about-to-start";
             aboutToSubmitURL = "/" + convention + "/about-to-submit";
             submittedURL = "/" + convention + "/submitted";
+            this.webhookConvention = convention;
             return this;
         }
 
@@ -125,6 +127,9 @@ public class Event<T> {
         }
 
         private String getWebhookPathByConvention() {
+            if (webhookConvention != null) {
+                return webhookConvention;
+            }
             return CaseFormat.LOWER_CAMEL.to(CaseFormat.LOWER_HYPHEN, id);
         }
     }
