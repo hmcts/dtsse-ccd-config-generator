@@ -26,8 +26,11 @@ public class Direction {
     private DirectionAssignee assignee;
     private ParentsAndRespondentsDirectionAssignee parentsAndRespondentsAssignee;
     private OtherPartiesDirectionAssignee otherPartiesAssignee;
+    @CaseField(label = " ")
     private String readOnly;
+    @CaseField(label = " ")
     private String directionRemovable;
+    @CaseField(label = " ")
     private String directionNeeded;
     private String custom;
     @CaseField(label = "Deadline")

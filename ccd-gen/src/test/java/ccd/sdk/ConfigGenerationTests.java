@@ -93,6 +93,8 @@ public class ConfigGenerationTests {
         assertEquals("CaseEventToComplexTypes/COMPLY_CAFCASS/COMPLY_CAFCASS.json");
         assertEquals("CaseEventToComplexTypes/COMPLY_COURT/COMPLY_COURT.json");
         assertEquals("CaseEventToComplexTypes/COMPLY_LOCAL_AUTHORITY/COMPLY_LOCAL_AUTHORITY.json");
+
+        assertEquals("CaseEventToComplexTypes/draftSDO/draftSDO.json");
     }
 
     // This will only pass once everything else is finished.

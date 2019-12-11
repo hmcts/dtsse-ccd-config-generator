@@ -80,6 +80,9 @@ public class FieldCollection<T, Parent> {
         }
 
         public FieldCollectionBuilder<T, Parent> field(TypedPropertyGetter<T, ?> getter, DisplayContext context, String showCondition) {
+            if (null != showCondition && null != rootFieldname) {
+                showCondition = showCondition.replace("{{FIELD_NAME}}", rootFieldname);
+            }
             field().id(getter).context(context).showCondition(showCondition);
             return this;
         }

@@ -1,5 +1,6 @@
 package uk.gov.hmcts.reform.fpl.model;
 
+import ccd.sdk.types.CaseField;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import lombok.Builder;
 import lombok.Data;
@@ -16,7 +17,9 @@ import java.util.List;
 public class Order {
     private final String hearingDate;
     private final List<Element<Direction>> directions;
+    @CaseField(label = "Is this the final version?")
     private final OrderStatus orderStatus;
+    @CaseField(label = "Check the order")
     private final DocumentReference orderDoc;
     private final JudgeAndLegalAdvisor judgeAndLegalAdvisor;
 }

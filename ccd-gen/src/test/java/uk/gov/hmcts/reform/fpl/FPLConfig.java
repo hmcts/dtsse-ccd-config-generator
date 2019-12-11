@@ -105,25 +105,42 @@ public class FPLConfig implements CCDConfig<CaseData> {
                     .page("allPartiesDirections")
                         .readonly(CaseData::getHearingDetails, "hearingDate=\"DO_NOT_SHOW\"")
                         .field().id("hearingDate").context(DisplayContext.ReadOnly).showCondition("hearingDetails.startDate=\"\"").context(DisplayContext.ReadOnly).done()
-                        .field(CaseData::getAllParties)
-                        .field(CaseData::getAllPartiesCustom)
+                        .complex(CaseData::getAllParties, Direction.class, this::renderSDODirection)
+                        .complex(CaseData::getAllPartiesCustom, Direction.class, this::renderSDODirectionsCustom)
                     .page("localAuthorityDirections")
-                        .field(CaseData::getLocalAuthorityDirections)
-                        .field(CaseData::getLocalAuthorityDirectionsCustom)
+                        .complex(CaseData::getLocalAuthorityDirections, Direction.class, this::renderSDODirection)
+                        .complex(CaseData::getLocalAuthorityDirectionsCustom, Direction.class, this::renderSDODirectionsCustom)
                     .page("parentsAndRespondentsDirections")
-                        .field(CaseData::getRespondentDirections)
-                        .field(CaseData::getRespondentDirectionsCustom)
+                        .complex(CaseData::getRespondentDirections, Direction.class, this::renderSDODirection)
+                        .complex(CaseData::getRespondentDirectionsCustom, Direction.class, this::renderSDODirectionsCustom)
                     .page("cafcassDirections")
-                        .field(CaseData::getCafcassDirections)
-                        .field(CaseData::getCafcassDirectionsCustom)
+                        .complex(CaseData::getCafcassDirections, Direction.class, this::renderSDODirection)
+                        .complex(CaseData::getCafcassDirectionsCustom, Direction.class, this::renderSDODirectionsCustom)
                     .page("otherPartiesDirections")
-                        .field(CaseData::getOtherPartiesDirections)
-                        .field(CaseData::getOtherPartiesDirectionsCustom)
+                        .complex(CaseData::getOtherPartiesDirections, Direction.class, this::renderSDODirection)
+                        .complex(CaseData::getOtherPartiesDirectionsCustom, Direction.class, this::renderSDODirectionsCustom)
                     .page("courtDirections")
-                        .field(CaseData::getCourtDirections)
-                        .field(CaseData::getCourtDirectionsCustom)
+                        .complex(CaseData::getCourtDirections, Direction.class, this::renderSDODirection)
+                        .complex(CaseData::getCourtDirectionsCustom, Direction.class, this::renderSDODirectionsCustom)
                     .page("documentReview")
-                        .field(CaseData::getStandardDirectionOrder);
+                        .complex(CaseData::getStandardDirectionOrder)
+                            .readonly(Order::getOrderDoc)
+                            .mandatory(Order::getOrderStatus);
+    }
+
+    private void renderSDODirectionsCustom(FieldCollection.FieldCollectionBuilder<Direction,?> builder) {
+        builder.optional(Direction::getDirectionType)
+                .optional(Direction::getDirectionText)
+                .optional(Direction::getDateToBeCompletedBy);
+    }
+
+    private void renderSDODirection(FieldCollection.FieldCollectionBuilder<Direction,?> builder) {
+        builder.readonly(Direction::getReadOnly)
+                .readonly(Direction::getDirectionRemovable)
+                .readonly(Direction::getDirectionType)
+                .optional(Direction::getDirectionNeeded)
+                .optional(Direction::getDirectionText, "{{FIELD_NAME}}.readOnly!=\"Yes\" AND {{FIELD_NAME}}.directionNeeded!=\"No\"")
+                .optional(Direction::getDateToBeCompletedBy);
     }
 
     private void buildStandardDirections(ConfigBuilder<CaseData> builder, String state, String suffix) {
