@@ -25,6 +25,7 @@ public class Event<T> {
     private String midEventURL;
     private String retries;
     private String[] states;
+    private boolean explicitGrants;
 
     public void setEventID(String eventId) {
         this.eventId = eventId;
@@ -70,6 +71,12 @@ public class Event<T> {
             return fields;
         }
 
+        // Do not inherit role permissions from states.
+        public EventBuilder<T> explicitGrants() {
+            this.explicitGrants = true;
+            return this;
+        }
+
         EventBuilder<T> forStates(String... states) {
             this.states = states;
             return forState(states[0]);
@@ -91,8 +98,11 @@ public class Event<T> {
             return this;
         }
 
-        public EventBuilder<T> grant(String role, String crud) {
-            grants.put(role, crud);
+        public EventBuilder<T> grant(String crud, String... roles) {
+            for (String role : roles) {
+                grants.put(role, crud);
+            }
+
             return this;
         }
 

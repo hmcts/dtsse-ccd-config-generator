@@ -18,7 +18,9 @@ import org.skyscreamer.jsonassert.JSONCompareResult;
 import java.io.File;
 import java.net.URL;
 import java.nio.charset.Charset;
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.Iterator;
 
 public class ConfigGenerationTests {
@@ -58,7 +60,6 @@ public class ConfigGenerationTests {
     }
 
     // This will only pass once everything else is finished.
-    @Ignore
     @Test
     public void generatesAuthorisationCaseEvent() {
         assertEquals("AuthorisationCaseEvent/AuthorisationCaseEvent.json");

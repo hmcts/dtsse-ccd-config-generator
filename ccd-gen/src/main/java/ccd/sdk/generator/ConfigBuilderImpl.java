@@ -3,13 +3,17 @@ package ccd.sdk.generator;
 import ccd.sdk.types.ConfigBuilder;
 import ccd.sdk.types.Event;
 import ccd.sdk.types.EventTypeBuilder;
-import com.google.common.collect.Lists;
+import com.google.common.collect.*;
 
 import java.util.List;
+import java.util.Map;
 
 public class ConfigBuilderImpl<T> implements ConfigBuilder<T> {
     public final List<Event.EventBuilder<T>> events = Lists.newArrayList();
     public String caseType;
+    public final Table<String, String, String> stateRoles = HashBasedTable.create();
+    public final Multimap<String, String> stateRoleblacklist = ArrayListMultimap.create();
+    public final Table<String, String, String> explicit = HashBasedTable.create();
 
     private Class caseData;
     public ConfigBuilderImpl(Class caseData) {
@@ -27,6 +31,24 @@ public class ConfigBuilderImpl<T> implements ConfigBuilder<T> {
     @Override
     public void caseType(String caseType) {
         this.caseType = caseType;
+    }
+
+    @Override
+    public void grant(String state, String permissions, String role) {
+        stateRoles.put(state, role, permissions);
+    }
+
+    @Override
+    public void blacklist(String state, String... roles) {
+        for (String role : roles) {
+            stateRoleblacklist.put(state, role);
+        }
+    }
+
+    @Override
+    public void explicitState(String eventId, String role, String crud) {
+        explicit.put(eventId, role, crud);
+
     }
 
     public List<Event.EventBuilder<T>> getEvents() {

@@ -23,29 +23,6 @@ public class EventGenerator {
 
             Utils.writeFile(output, serialise(caseType, eventsByState.get(state)));
         }
-        writeAuthorisationCaseEvent(root, events);
-    }
-
-    private static void writeAuthorisationCaseEvent(File root, List<Event> events) {
-        List<Map<String, String>> result = Lists.newArrayList();
-        for (Event event : events) {
-            Map<String, String> grants = event.getGrants();
-            for (String role : grants.keySet()) {
-                Map<String, String> data = Maps.newHashMap();
-                result.add(data);
-                data.put("LiveFrom", "01/01/2017");
-                data.put("CaseTypeID", "CARE_SUPERVISION_EPO");
-                data.put("CaseEventID", event.getId());
-                data.put("UserRole", role);
-                data.put("CRUD", grants.get(role));
-            }
-        }
-
-        File folder = new File(root.getPath(), "AuthorisationCaseEvent");
-        folder.mkdir();
-        Path output = Paths.get(folder.getPath(), "AuthorisationCaseEvent.json");
-
-        Utils.writeFile(output, Utils.serialise(result));
     }
 
     private static String serialise(String caseTypeId, List<Event> events) {
