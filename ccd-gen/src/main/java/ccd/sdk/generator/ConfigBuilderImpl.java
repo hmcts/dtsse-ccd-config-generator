@@ -14,6 +14,7 @@ public class ConfigBuilderImpl<T> implements ConfigBuilder<T> {
     public final Table<String, String, String> stateRoles = HashBasedTable.create();
     public final Multimap<String, String> stateRoleblacklist = ArrayListMultimap.create();
     public final Table<String, String, String> explicit = HashBasedTable.create();
+    public final Map<String, String> statePrefixes = Maps.newHashMap();
 
     private Class caseData;
     public ConfigBuilderImpl(Class caseData) {
@@ -49,6 +50,11 @@ public class ConfigBuilderImpl<T> implements ConfigBuilder<T> {
     public void explicitState(String eventId, String role, String crud) {
         explicit.put(eventId, role, crud);
 
+    }
+
+    @Override
+    public void prefix(String state, String prefix) {
+        statePrefixes.put(state, prefix);
     }
 
     public List<Event.EventBuilder<T>> getEvents() {

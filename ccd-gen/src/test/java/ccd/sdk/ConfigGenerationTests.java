@@ -6,7 +6,6 @@ import com.google.common.io.Resources;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.io.filefilter.TrueFileFilter;
 import org.junit.Before;
-import org.junit.Ignore;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
@@ -20,7 +19,6 @@ import java.net.URL;
 import java.nio.charset.Charset;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.Iterator;
 
 public class ConfigGenerationTests {
@@ -97,6 +95,9 @@ public class ConfigGenerationTests {
                 System.out.println(pretty(actualString));
                 System.out.println("Expected:");
                 System.out.println(pretty(expectedString));
+
+                Files.writeString(new File("src/test/resources/ccd-definition/mine.json").toPath(), actualString);
+
 
                 throw new RuntimeException("Compare failed for " + expected.getName());
             }

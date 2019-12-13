@@ -43,7 +43,7 @@ public class ConfigGenerator {
         config.configure(builder);
         List<Event.EventBuilder> builders = builder.getEvents();
         List<Event> events = builders.stream().map(x -> x.build()).collect(Collectors.toList());
-        events = expandEvents(events);
+        events = expandEvents(events, builder);
 
         EventGenerator.writeEvents(outputfolder, builder.caseType, events);
         CaseEventToFieldsGenerator.writeEvents(outputfolder, builder.caseType, events);
@@ -52,13 +52,14 @@ public class ConfigGenerator {
         AuthorisationCaseEventGenerator.generate(outputfolder, events, builder);
     }
 
-    private List<Event> expandEvents(List<Event> events) {
+    private List<Event> expandEvents(List<Event> events, ConfigBuilderImpl builder) {
         List<Event> sharedEvents = Lists.newArrayList();
         for (Event event : events) {
             if (event.getStates() != null && event.getStates().length > 1) {
                 for (int t = 1; t < event.getStates().length; t++) {
                     String state = event.getStates()[t];
-                    Event clone = event.withId(event.getId() + state);
+                    String prefix = (String) builder.statePrefixes.getOrDefault(state, "");
+                    Event clone = event.withId(event.getId() + prefix + state);
                     // Mark the clone as deriving from this event.
                     clone.setEventID(event.getId());
                     clone.setPreState(state);

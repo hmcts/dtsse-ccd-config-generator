@@ -20,16 +20,17 @@ public class FPLConfig implements CCDConfig<CaseData> {
     @Override
     public void configure(ConfigBuilder<CaseData> builder) {
         builder.caseType("CARE_SUPERVISION_EPO");
+        builder.prefix("PREPARE_FOR_HEARING", "-");
 
         builder.grant("Open", "CRU", LOCAL_AUTHORITY.getRole());
         builder.grant("Gatekeeping", "CRU", UserRole.GATEKEEPER.getRole());
         builder.grant("Submitted", "CRU", HMCTS_ADMIN.getRole());
-        builder.grant("-PREPARE_FOR_HEARING", "CRU", HMCTS_ADMIN.getRole());
-        builder.blacklist("-PREPARE_FOR_HEARING", GATEKEEPER.getRole(), LOCAL_AUTHORITY.getRole());
+        builder.grant("PREPARE_FOR_HEARING", "CRU", HMCTS_ADMIN.getRole());
+        builder.blacklist("PREPARE_FOR_HEARING", GATEKEEPER.getRole());
         builder.explicitState("hearingBookingDetails", JUDICIARY.getRole(), "CRU");
 
         buildInitialEvents(builder);
-        buildSharedEvents(builder, "Submitted", "Gatekeeping", "-PREPARE_FOR_HEARING");
+        buildSharedEvents(builder, "Submitted", "Gatekeeping", "PREPARE_FOR_HEARING");
         buildPrepareForHearingEvents(builder);
         buildC21Events(builder);
         buildUniversalEvents(builder);
@@ -43,6 +44,7 @@ public class FPLConfig implements CCDConfig<CaseData> {
                 .forStateTransition("Gatekeeping", "PREPARE_FOR_HEARING")
                 .explicitGrants()
                 .grant("C", SYSTEM_UPDATE.getRole());
+        builder.explicitState("uploadC2-PREPARE_FOR_HEARING", LOCAL_AUTHORITY.getRole(), "");
     }
 
 
@@ -74,6 +76,7 @@ public class FPLConfig implements CCDConfig<CaseData> {
     private void buildTransitions(ConfigBuilder<CaseData> builder) {
         builder.event("submitApplication")
                 .forStateTransition("Open", "Submitted")
+                .explicitGrants()
                 .grant("R", HMCTS_ADMIN.getRole(), UserRole.CAFCASS.getRole(), UserRole.JUDICIARY.getRole(), UserRole.GATEKEEPER.getRole())
                 .grant("CRU", LOCAL_AUTHORITY.getRole())
                 .name("Submit application")
@@ -256,6 +259,7 @@ public class FPLConfig implements CCDConfig<CaseData> {
 
         builder.event("draftCMO")
                 .forState("PREPARE_FOR_HEARING")
+                .explicitGrants()
                 .grant("CRU", LOCAL_AUTHORITY.getRole())
                 .name("Draft CMO")
                 .description("Draft Case Management Order")
@@ -311,6 +315,7 @@ public class FPLConfig implements CCDConfig<CaseData> {
     private void renderComply(ConfigBuilder<CaseData> builder, String eventId, UserRole role, TypedPropertyGetter<CaseData, ?> getter, DisplayContext reasonContext, String description) {
         builder.event(eventId)
                 .forState("PREPARE_FOR_HEARING")
+                .explicitGrants()
                 .grant("CRU", role.getRole())
                 .name("Comply with directions")
                 .description(description)

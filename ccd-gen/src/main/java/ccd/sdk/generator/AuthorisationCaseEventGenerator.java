@@ -30,18 +30,22 @@ public class AuthorisationCaseEventGenerator {
             Map<String, String> grants = event.getGrants();
             for (String role : grants.keySet()) {
                 if (!builder.stateRoleblacklist.containsEntry(event.getPostState(), role)) {
-                    eventRolePermissions.put(event.getId(), role, grants.get(role));
+                    if (!eventRolePermissions.contains(event.getId(), role)) {
+                        eventRolePermissions.put(event.getId(), role, grants.get(role));
+                    }
                 }
             }
         }
         for (Table.Cell<String, String, String> cell : eventRolePermissions.cellSet()) {
-            Map<String, String> entry = Maps.newHashMap();
-            entries.add(entry);
-            entry.put("LiveFrom", "01/01/2017");
-            entry.put("CaseTypeID", builder.caseType);
-            entry.put("CaseEventID", cell.getRowKey());
-            entry.put("UserRole", cell.getColumnKey());
-            entry.put("CRUD", cell.getValue());
+            if (cell.getValue().length() > 0) {
+                Map<String, String> entry = Maps.newHashMap();
+                entries.add(entry);
+                entry.put("LiveFrom", "01/01/2017");
+                entry.put("CaseTypeID", builder.caseType);
+                entry.put("CaseEventID", cell.getRowKey());
+                entry.put("UserRole", cell.getColumnKey());
+                entry.put("CRUD", cell.getValue());
+            }
         }
 
         File folder = new File(root.getPath(), "AuthorisationCaseEvent");

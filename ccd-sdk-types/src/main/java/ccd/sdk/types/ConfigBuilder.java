@@ -8,4 +8,5 @@ public interface ConfigBuilder<T> {
     void grant(String state, String permissions, String role);
     void blacklist(String state, String... role);
     void explicitState(String eventId, String role, String crud);
+    void prefix(String state, String prefix);
 }
