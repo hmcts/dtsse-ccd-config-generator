@@ -6,28 +6,30 @@ import ccd.sdk.types.ConfigBuilder;
 import ccd.sdk.types.DisplayContext;
 import ccd.sdk.types.FieldCollection;
 import de.cronn.reflection.util.TypedPropertyGetter;
+import uk.gov.hmcts.reform.fpl.enums.State;
 import uk.gov.hmcts.reform.fpl.enums.UserRole;
 import uk.gov.hmcts.reform.fpl.model.*;
 import uk.gov.hmcts.reform.fpl.model.common.C2DocumentBundle;
 import uk.gov.hmcts.reform.fpl.model.common.JudgeAndLegalAdvisor;
 
 
+import static uk.gov.hmcts.reform.fpl.enums.State.*;
 import static uk.gov.hmcts.reform.fpl.enums.UserRole.*;
 
 // Found and invoked by the config generator.
 // The CaseData type parameter tells the generator which class represents your case model.
-public class FPLConfig implements CCDConfig<CaseData, UserRole> {
+public class FPLConfig implements CCDConfig<CaseData, State, UserRole> {
 
     @Override
-    public void configure(ConfigBuilder<CaseData, UserRole> builder) {
+    public void configure(ConfigBuilder<CaseData, State, UserRole> builder) {
         builder.caseType("CARE_SUPERVISION_EPO");
-        builder.prefix("PREPARE_FOR_HEARING", "-");
+        builder.prefix(PREPARE_FOR_HEARING, "-");
 
-        builder.grant("Open", "CRU", LOCAL_AUTHORITY);
-        builder.grant("Gatekeeping", "CRU", GATEKEEPER);
-        builder.grant("Submitted", "CRU", HMCTS_ADMIN);
-        builder.grant("PREPARE_FOR_HEARING", "CRU", HMCTS_ADMIN);
-        builder.blacklist("PREPARE_FOR_HEARING", GATEKEEPER);
+        builder.grant(Open, "CRU", LOCAL_AUTHORITY);
+        builder.grant(Gatekeeping, "CRU", GATEKEEPER);
+        builder.grant(Submitted, "CRU", HMCTS_ADMIN);
+        builder.grant(PREPARE_FOR_HEARING, "CRU", HMCTS_ADMIN);
+        builder.blacklist(PREPARE_FOR_HEARING, GATEKEEPER);
         builder.explicitState("hearingBookingDetails", JUDICIARY, "CRU");
 
         buildOpen(builder);
@@ -37,17 +39,17 @@ public class FPLConfig implements CCDConfig<CaseData, UserRole> {
         buildTransitions(builder);
 
         builder.event("internal-changeState:Gatekeeping->PREPARE_FOR_HEARING")
-                .forStateTransition("Gatekeeping", "PREPARE_FOR_HEARING")
+                .forStateTransition(Gatekeeping, PREPARE_FOR_HEARING)
                 .name("-")
                 .explicitGrants()
                 .grant("C", SYSTEM_UPDATE);
     }
 
-    private void buildC21Event(ConfigBuilder<CaseData, UserRole> builder, String state) {
+    private void buildC21Event(ConfigBuilder<CaseData, State, UserRole> builder, State state) {
         builder.event("createC21Order")
                 .forState(state)
                 .explicitGrants()
-                .grant("CRU", HMCTS_ADMIN, UserRole.JUDICIARY)
+                .grant("CRU", HMCTS_ADMIN, JUDICIARY)
                 .name("Create an order")
                 .showSummary()
                 .allWebhooks("create-order")
@@ -68,9 +70,9 @@ public class FPLConfig implements CCDConfig<CaseData, UserRole> {
                         .optional(JudgeAndLegalAdvisor::getLegalAdvisorName);
     }
 
-    private void buildTransitions(ConfigBuilder<CaseData, UserRole> builder) {
+    private void buildTransitions(ConfigBuilder<CaseData, State, UserRole> builder) {
         builder.event("submitApplication")
-                .forStateTransition("Open", "Submitted")
+                .forStateTransition(Open, Submitted)
                 .name("Submit application")
                 .displayOrder(17) // TODO - necessary?
                 .explicitGrants()
@@ -85,7 +87,7 @@ public class FPLConfig implements CCDConfig<CaseData, UserRole> {
                     .field("submissionConsent", DisplayContext.Mandatory);
 
         builder.event("populateSDO")
-                .forStateTransition("Submitted", "Gatekeeping")
+                .forStateTransition(Submitted, Gatekeeping)
                 .name("Populate standard directions")
                 .displayOrder(14) // TODO - necessary?
                 .explicitGrants()
@@ -100,7 +102,7 @@ public class FPLConfig implements CCDConfig<CaseData, UserRole> {
                     .optional(CaseData::getCourtDirections);
 
         builder.event("deleteApplication")
-                .forStateTransition("Open", "Deleted")
+                .forStateTransition(Open, Deleted)
                 .displayOrder(18) // TODO - necessary?
                 .grant("CRU", LOCAL_AUTHORITY)
                 .name("Delete an application")
@@ -110,9 +112,9 @@ public class FPLConfig implements CCDConfig<CaseData, UserRole> {
                     .field("deletionConsent", DisplayContext.Mandatory);
     }
 
-    private void buildGatekeepingEvents(ConfigBuilder<CaseData, UserRole> builder) {
+    private void buildGatekeepingEvents(ConfigBuilder<CaseData, State, UserRole> builder) {
         builder.event("otherAllocationDecision")
-                .forState("Gatekeeping")
+                .forState(Gatekeeping)
                 .name("Allocation decision")
                 .description("Entering other proceedings and allocation proposals")
                 .showSummary()
@@ -122,12 +124,12 @@ public class FPLConfig implements CCDConfig<CaseData, UserRole> {
                 .fields()
                     .field(CaseData::getAllocationDecision, DisplayContext.Mandatory, true);
 
-        addHearingBookingDetails(builder, "Gatekeeping");
-        buildSharedEvents(builder, "Gatekeeping");
-        buildNoticeOfProceedings(builder, "Gatekeeping");
+        addHearingBookingDetails(builder, Gatekeeping);
+        buildSharedEvents(builder, Gatekeeping);
+        buildNoticeOfProceedings(builder, Gatekeeping);
 
         builder.event("draftSDO")
-                .forState("Gatekeeping")
+                .forState(Gatekeeping)
                 .name("Draft standard directions")
                 .allWebhooks("draft-standard-directions")
                 .midEventWebhook()
@@ -159,11 +161,11 @@ public class FPLConfig implements CCDConfig<CaseData, UserRole> {
                             .readonly(Order::getOrderDoc)
                             .mandatory(Order::getOrderStatus);
 
-        buildStandardDirections(builder, "Gatekeeping", "AfterGatekeeping");
-        buildUploadC2(builder, "Gatekeeping");
-        buildC21Event(builder, "Gatekeeping");
+        buildStandardDirections(builder, Gatekeeping, "AfterGatekeeping");
+        buildUploadC2(builder, Gatekeeping);
+        buildC21Event(builder, Gatekeeping);
         builder.event("uploadDocumentsAfterGatekeeping")
-                .forState("Gatekeeping")
+                .forState(Gatekeeping)
                 .name("Documents")
                 .description("Only here for backwards compatibility with case history")
                 .explicitGrants()
@@ -185,7 +187,7 @@ public class FPLConfig implements CCDConfig<CaseData, UserRole> {
                 .optional(Direction::getDateToBeCompletedBy);
     }
 
-    private void buildStandardDirections(ConfigBuilder<CaseData, UserRole> builder, String state, String suffix) {
+    private void buildStandardDirections(ConfigBuilder<CaseData, State, UserRole> builder, State state, String suffix) {
         builder.event("uploadStandardDirections" + suffix)
                 .forState(state)
                 .name("Documents")
@@ -199,19 +201,19 @@ public class FPLConfig implements CCDConfig<CaseData, UserRole> {
                     .field("otherCourtAdminDocuments", DisplayContext.Optional);
     }
 
-    private void buildSubmittedEvents(ConfigBuilder<CaseData, UserRole> builder) {
+    private void buildSubmittedEvents(ConfigBuilder<CaseData, State, UserRole> builder) {
         builder.event("addFamilyManCaseNumber")
-                .forState("Submitted")
+                .forState(Submitted)
                 .name("Add case number")
                 .fields()
                     .optional(CaseData::getFamilyManCaseNumber);
 
-        addHearingBookingDetails(builder, "Submitted");
-        this.buildStandardDirections(builder, "Submitted", "");
-        buildUploadC2(builder, "Submitted");
+        addHearingBookingDetails(builder, Submitted);
+        this.buildStandardDirections(builder, Submitted, "");
+        buildUploadC2(builder, Submitted);
 
         builder.event("sendToGatekeeper")
-                .forState("Submitted")
+                .forState(Submitted)
                 .name("Send to gatekeeper")
                 .description("Send email to gatekeeper")
                 .explicitGrants()
@@ -221,11 +223,11 @@ public class FPLConfig implements CCDConfig<CaseData, UserRole> {
                 .fields()
                     .label("gateKeeperLabel", "Let the gatekeeper know there's a new case")
                     .mandatory(CaseData::getGatekeeperEmail);
-        buildSharedEvents(builder, "Submitted");
-        buildNoticeOfProceedings(builder, "Submitted");
+        buildSharedEvents(builder, Submitted);
+        buildNoticeOfProceedings(builder, Submitted);
 
         builder.event("addStatementOfService")
-                .forState("Submitted")
+                .forState(Submitted)
                 .explicitGrants()
                 .grant("CRU", LOCAL_AUTHORITY)
                 .name("Add statement of service (c9)")
@@ -235,10 +237,10 @@ public class FPLConfig implements CCDConfig<CaseData, UserRole> {
                 .fields()
                     .label("c9Declaration", "If you send documents to a party's solicitor or a children's guardian, give their details") .field(CaseData::getStatementOfService, DisplayContext.Mandatory, true) .label("serviceDeclarationLabel", "Declaration" ) .field("serviceConsent", DisplayContext.Mandatory);
 
-        buildC21Event(builder, "Submitted");
+        buildC21Event(builder, Submitted);
 
         builder.event("uploadDocumentsAfterSubmission")
-                .forState("Submitted")
+                .forState(Submitted)
                 .explicitGrants()
                 .grant("R", LOCAL_AUTHORITY)
                 .name("Documents")
@@ -246,22 +248,22 @@ public class FPLConfig implements CCDConfig<CaseData, UserRole> {
 
     }
 
-    private void buildPrepareForHearing(ConfigBuilder<CaseData, UserRole> builder) {
-        addHearingBookingDetails(builder, "PREPARE_FOR_HEARING");
-        buildSharedEvents(builder, "PREPARE_FOR_HEARING");
+    private void buildPrepareForHearing(ConfigBuilder<CaseData, State, UserRole> builder) {
+        addHearingBookingDetails(builder, PREPARE_FOR_HEARING);
+        buildSharedEvents(builder, PREPARE_FOR_HEARING);
 
         builder.event("uploadOtherCourtAdminDocuments-PREPARE_FOR_HEARING")
-                .forState("PREPARE_FOR_HEARING")
+                .forState(PREPARE_FOR_HEARING)
                 .name("Documents")
                 .description("Upload documents")
                 .grant("CRU", HMCTS_ADMIN)
                 .fields()
                     .field("otherCourtAdminDocuments", DisplayContext.Optional);
-        buildUploadC2(builder, "PREPARE_FOR_HEARING");
-        buildNoticeOfProceedings(builder, "PREPARE_FOR_HEARING");
+        buildUploadC2(builder, PREPARE_FOR_HEARING);
+        buildNoticeOfProceedings(builder, PREPARE_FOR_HEARING);
 
         builder.event("draftCMO")
-                .forState("PREPARE_FOR_HEARING")
+                .forState(PREPARE_FOR_HEARING)
                 .explicitGrants()
                 .grant("CRU", LOCAL_AUTHORITY)
                 .name("Draft CMO")
@@ -319,9 +321,9 @@ public class FPLConfig implements CCDConfig<CaseData, UserRole> {
         builder.explicitState("uploadC2-PREPARE_FOR_HEARING", LOCAL_AUTHORITY, "");
     }
 
-    private void renderComply(ConfigBuilder<CaseData, UserRole> builder, String eventId, UserRole role, TypedPropertyGetter<CaseData, ?> getter, DisplayContext reasonContext, String description) {
+    private void renderComply(ConfigBuilder<CaseData, State, UserRole> builder, String eventId, UserRole role, TypedPropertyGetter<CaseData, ?> getter, DisplayContext reasonContext, String description) {
         builder.event(eventId)
-                .forState("PREPARE_FOR_HEARING")
+                .forState(PREPARE_FOR_HEARING)
                 .explicitGrants()
                 .grant("CRU", role)
                 .name("Comply with directions")
@@ -351,7 +353,7 @@ public class FPLConfig implements CCDConfig<CaseData, UserRole> {
                 .optional(Direction::getDateToBeCompletedBy);
     }
 
-    private void addHearingBookingDetails(ConfigBuilder<CaseData, UserRole> builder, String state) {
+    private void addHearingBookingDetails(ConfigBuilder<CaseData, State, UserRole> builder, State state) {
         builder.event("hearingBookingDetails")
                 .forState(state)
                 .grant("CRU", UserRole.GATEKEEPER)
@@ -377,9 +379,7 @@ public class FPLConfig implements CCDConfig<CaseData, UserRole> {
                 .optional(JudgeAndLegalAdvisor::getLegalAdvisorName);
     }
 
-    private void buildSharedEvents(ConfigBuilder<CaseData, UserRole> builder, String state) {
-
-
+    private void buildSharedEvents(ConfigBuilder<CaseData, State, UserRole> builder, State state) {
         builder.event("amendChildren")
                 .forState(state)
                 .name("Children")
@@ -431,7 +431,7 @@ public class FPLConfig implements CCDConfig<CaseData, UserRole> {
 
     }
 
-    private void buildNoticeOfProceedings(ConfigBuilder<CaseData, UserRole> builder, String state) {
+    private void buildNoticeOfProceedings(ConfigBuilder<CaseData, State, UserRole> builder, State state) {
         builder.event("createNoticeOfProceedings")
         .forState(state)
         .name("Create notice of proceedings")
@@ -451,7 +451,7 @@ public class FPLConfig implements CCDConfig<CaseData, UserRole> {
                 .mandatory(NoticeOfProceedings::getProceedingTypes);
     }
 
-    private void buildUploadC2(ConfigBuilder<CaseData, UserRole> builder, String state) {
+    private void buildUploadC2(ConfigBuilder<CaseData, State, UserRole> builder, State state) {
         builder.event("uploadC2")
         .forState(state)
         .explicitGrants()
@@ -467,9 +467,9 @@ public class FPLConfig implements CCDConfig<CaseData, UserRole> {
             .mandatory(C2DocumentBundle::getDescription);
     }
 
-    private void buildOpen(ConfigBuilder<CaseData, UserRole> builder) {
+    private void buildOpen(ConfigBuilder<CaseData, State, UserRole> builder) {
         builder.event("openCase")
-                .initialState("Open")
+                .initialState(Open)
                 .name("Start application")
                 .description("Create a new case – add a title")
                 .aboutToSubmitURL("/case-initiation/about-to-submit")
@@ -478,20 +478,20 @@ public class FPLConfig implements CCDConfig<CaseData, UserRole> {
                 .fields()
                     .optional(CaseData::getCaseName);
 
-        builder.event("ordersNeeded").forState("Open")
+        builder.event("ordersNeeded").forState(Open)
                 .name("Orders and directions needed")
                 .description("Selecting the orders needed for application")
                 .aboutToSubmitURL("/orders-needed/about-to-submit")
                 .fields()
                     .optional(CaseData::getOrders);
 
-        builder.event("hearingNeeded").forState("Open")
+        builder.event("hearingNeeded").forState(Open)
                 .name("Hearing needed")
                 .description("Selecting the hearing needed for application")
                 .fields()
                     .optional(CaseData::getHearing);
 
-        builder.event("enterChildren").forState("Open")
+        builder.event("enterChildren").forState(Open)
                 .name("Children")
                 .description("Entering the children for the case")
                 .aboutToStartURL("/enter-children/about-to-start")
@@ -499,7 +499,7 @@ public class FPLConfig implements CCDConfig<CaseData, UserRole> {
                 .fields()
                     .optional(CaseData::getChildren1);
 
-        builder.event("enterRespondents").forState("Open")
+        builder.event("enterRespondents").forState(Open)
                 .name("Respondents")
                 .description("Entering the respondents for the case")
                 .aboutToStartWebhook()
@@ -508,7 +508,7 @@ public class FPLConfig implements CCDConfig<CaseData, UserRole> {
                 .fields()
                     .optional(CaseData::getRespondents1);
 
-        builder.event("enterApplicant").forState("Open")
+        builder.event("enterApplicant").forState(Open)
                 .name("Applicant")
                 .description("Entering the applicant for the case")
                 .aboutToStartWebhook()
@@ -518,13 +518,13 @@ public class FPLConfig implements CCDConfig<CaseData, UserRole> {
                     .optional(CaseData::getApplicants)
                     .optional(CaseData::getSolicitor);
 
-        builder.event("enterOthers").forState("Open")
+        builder.event("enterOthers").forState(Open)
                 .name("Others to be given notice")
                 .description("Entering others for the case")
                 .fields()
                     .optional(CaseData::getOthers);
 
-        builder.event("enterGrounds").forState("Open")
+        builder.event("enterGrounds").forState(Open)
                 .name("Grounds for the application")
                 .description("Entering the grounds for the application")
                 .fields()
@@ -532,33 +532,33 @@ public class FPLConfig implements CCDConfig<CaseData, UserRole> {
                     .optional(CaseData::getGroundsForEPO, "EPO_REASONING_SHOW CONTAINS \"SHOW_FIELD\"")
                     .optional(CaseData::getGrounds);
 
-        builder.event("enterRiskHarm").forState("Open")
+        builder.event("enterRiskHarm").forState(Open)
                 .name("Risk and harm to children")
                 .description("Entering opinion on risk and harm to children")
                 .fields()
                     .optional(CaseData::getRisks);
 
-        builder.event("enterParentingFactors").forState("Open")
+        builder.event("enterParentingFactors").forState(Open)
                 .name("Factors affecting parenting")
                 .description("Entering the factors affecting parenting")
                 .grant("CRU", LOCAL_AUTHORITY)
                 .fields()
                     .optional(CaseData::getFactorsParenting);
 
-        builder.event("enterInternationalElement").forState("Open")
+        builder.event("enterInternationalElement").forState(Open)
                 .name("International element")
                 .description("Entering the international element")
                 .fields()
                     .optional(CaseData::getInternationalElement);
 
-        builder.event("otherProceedings").forState("Open")
+        builder.event("otherProceedings").forState(Open)
                 .name("Other proceedings")
                 .description("Entering other proceedings and proposals")
                 .midEventURL("/enter-other-proceedings/mid-event")
                 .fields()
                     .optional(CaseData::getProceeding);
 
-        builder.event("otherProposal").forState("Open")
+        builder.event("otherProposal").forState(Open)
                 .name("Allocation proposal")
                 .grant("CRU", GATEKEEPER)
                 .description("Entering other proceedings and allocation proposals")
@@ -566,7 +566,7 @@ public class FPLConfig implements CCDConfig<CaseData, UserRole> {
                     .label("allocationProposal_label", "This should be completed by a solicitor with good knowledge of the case. Use the [President's Guidance](https://www.judiciary.uk/wp-content/uploads/2013/03/President%E2%80%99s-Guidance-on-Allocation-and-Gatekeeping.pdf) and [schedule](https://www.judiciary.uk/wp-content/uploads/2013/03/Schedule-to-the-President%E2%80%99s-Guidance-on-Allocation-and-Gatekeeping.pdf) on allocation and gatekeeping to make your recommendation.")
                     .optional(CaseData::getAllocationProposal);
 
-        builder.event("attendingHearing").forState("Open")
+        builder.event("attendingHearing").forState(Open)
                 .name("Attending the hearing")
                 .description("Enter extra support needed for anyone to take part in hearing")
                 .displayOrder(13)
@@ -596,14 +596,14 @@ public class FPLConfig implements CCDConfig<CaseData, UserRole> {
                     .optional(CaseData::getOtherSocialWorkDocuments)
                     .label("documents_socialWorkOther_border_bottom", "---------------------------------");
 
-        builder.event("changeCaseName").forState("Open")
+        builder.event("changeCaseName").forState(Open)
                 .name("Change case name")
                 .description("Change case name")
                 .displayOrder(15)
                 .fields()
                     .optional(CaseData::getCaseName);
 
-        builder.event("addCaseIDReference").forState("Open")
+        builder.event("addCaseIDReference").forState(Open)
                 .name("Add case ID")
                 .description("Add case ID")
                 .explicitGrants() // Do not inherit State level role permissions

@@ -13,7 +13,7 @@ import java.util.Map;
 
 public class AuthorisationCaseEventGenerator {
 
-    public static <T, R extends Role> void generate(File root, List<Event> expandedEvents, ConfigBuilderImpl<T, R> builder) {
+    public static <T, S, R extends Role> void generate(File root, List<Event> expandedEvents, ConfigBuilderImpl<T, S, R> builder) {
         List<Map<String, String>> entries = Lists.newArrayList();
 
         Table<String, String, String> eventRolePermissions = builder.explicit;

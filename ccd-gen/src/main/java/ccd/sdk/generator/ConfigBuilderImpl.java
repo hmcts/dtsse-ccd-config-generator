@@ -9,8 +9,8 @@ import com.google.common.collect.*;
 import java.util.List;
 import java.util.Map;
 
-public class ConfigBuilderImpl<T, R extends Role> implements ConfigBuilder<T, R> {
-    public final Map<String, Event.EventBuilder<T, Role>> events = Maps.newHashMap();
+public class ConfigBuilderImpl<T, S, R extends Role> implements ConfigBuilder<T, S, R> {
+    public final Map<String, Event.EventBuilder<T, Role, S>> events = Maps.newHashMap();
     public String caseType;
     public final Table<String, String, String> stateRoles = HashBasedTable.create();
     public final Multimap<String, String> stateRoleblacklist = ArrayListMultimap.create();
@@ -23,8 +23,8 @@ public class ConfigBuilderImpl<T, R extends Role> implements ConfigBuilder<T, R>
     }
 
     @Override
-    public EventTypeBuilder<T> event(final String id) {
-        Event.EventBuilder<T, Role> e = Event.EventBuilder.builder(caseData);
+    public EventTypeBuilder<T, S> event(final String id) {
+        Event.EventBuilder<T, Role, S> e = Event.EventBuilder.builder(caseData);
         return new EventTypeBuilder<>(e, state -> {
             String actualId = id;
             if (events.containsKey(actualId)) {
@@ -45,14 +45,14 @@ public class ConfigBuilderImpl<T, R extends Role> implements ConfigBuilder<T, R>
     }
 
     @Override
-    public void grant(String state, String permissions, R role) {
-        stateRoles.put(state, role.getRole(), permissions);
+    public void grant(S state, String permissions, R role) {
+        stateRoles.put(state.toString(), role.getRole(), permissions);
     }
 
     @Override
-    public void blacklist(String state, R... roles) {
+    public void blacklist(S state, R... roles) {
         for (Role role : roles) {
-            stateRoleblacklist.put(state, role.getRole());
+            stateRoleblacklist.put(state.toString(), role.getRole());
         }
     }
 
@@ -63,11 +63,11 @@ public class ConfigBuilderImpl<T, R extends Role> implements ConfigBuilder<T, R>
     }
 
     @Override
-    public void prefix(String state, String prefix) {
-        statePrefixes.put(state, prefix);
+    public void prefix(S state, String prefix) {
+        statePrefixes.put(state.toString(), prefix);
     }
 
-    public List<Event.EventBuilder<T, Role>> getEvents() {
+    public List<Event.EventBuilder<T, Role, S>> getEvents() {
         return Lists.newArrayList(events.values());
     }
 }

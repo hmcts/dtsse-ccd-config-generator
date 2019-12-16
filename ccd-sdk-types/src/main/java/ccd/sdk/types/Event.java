@@ -5,11 +5,13 @@ import com.google.common.base.Joiner;
 import com.google.common.collect.Maps;
 import lombok.*;
 
+import java.util.Arrays;
 import java.util.Map;
+import java.util.Objects;
 
 @Builder
 @Data
-public class Event<T, R extends Role> {
+public class Event<T, R extends Role, S> {
     @With
     private String id;
     // The same event can have a different ID if on different states.
@@ -62,10 +64,10 @@ public class Event<T, R extends Role> {
     private static int eventCount;
 
 
-    public static class EventBuilder<T, R extends Role> {
+    public static class EventBuilder<T, R extends Role, S> {
 
-        public static <T> EventBuilder<T, Role> builder(Class dataClass) {
-            EventBuilder<T, Role> result = new EventBuilder<T, Role>();
+        public static <T, S> EventBuilder<T, Role, S> builder(Class dataClass) {
+            EventBuilder<T, Role, S> result = new EventBuilder<T, Role, S>();
             result.dataClass = dataClass;
             result.grants = Maps.newHashMap();
             result.fields = FieldCollection.FieldCollectionBuilder.builder(null, dataClass);
@@ -78,7 +80,7 @@ public class Event<T, R extends Role> {
             return fields;
         }
 
-        public EventBuilder<T, R> name(String n) {
+        public EventBuilder<T, R, S> name(String n) {
             this.name = n;
             if (description == null) {
                 description = n;
@@ -86,49 +88,57 @@ public class Event<T, R extends Role> {
             return this;
         }
 
-        public EventBuilder<T, R> showEventNotes() {
+        public EventBuilder<T, R, S> showEventNotes() {
             this.showEventNotes = true;
             return this;
         }
 
-        public EventBuilder<T, R> showSummary(boolean show) {
+        public EventBuilder<T, R, S> showSummary(boolean show) {
             this.showSummary = show;
             return this;
         }
 
-        public EventBuilder<T, R> showSummary() {
+        public EventBuilder<T, R, S> showSummary() {
             this.showSummary = true;
             return this;
         }
 
         // Do not inherit role permissions from states.
-        public EventBuilder<T, R> explicitGrants() {
+        public EventBuilder<T, R, S> explicitGrants() {
             this.explicitGrants = true;
             return this;
         }
 
-        EventBuilder<T, R> forStates(String... states) {
-            this.states = states;
+        EventBuilder<T, R, S> forStates(S... states) {
+            this.states = Arrays.stream(states).map(Objects::toString).toArray(String[]::new);
             return forState(states[0]);
         }
 
-        EventBuilder<T, R> forState(String state) {
+        protected EventBuilder<T, R, S> forState(String state) {
             this.preState = state;
             this.postState = state;
             return this;
         }
 
-        EventBuilder<T, R> postState(String state) {
-            this.postState = state;
+        EventBuilder<T, R, S> forState(S state) {
+            this.preState = state.toString();
+            this.postState = state.toString();
             return this;
         }
 
-        EventBuilder<T, R> preState(String state) {
-            this.preState = state;
+        EventBuilder<T, R, S> postState(S state) {
+            this.postState = state.toString();
             return this;
         }
 
-        public EventBuilder<T, R> grant(String crud, R... roles) {
+        EventBuilder<T, R, S> preState(S state) {
+            if (null != state) {
+                this.preState = state.toString();
+            }
+            return this;
+        }
+
+        public EventBuilder<T, R, S> grant(String crud, R... roles) {
             for (R role : roles) {
                 grants.put(role.getRole(), crud);
             }
@@ -137,7 +147,7 @@ public class Event<T, R extends Role> {
         }
 
         private String webhookConvention;
-        public EventBuilder<T, R> allWebhooks(String convention) {
+        public EventBuilder<T, R, S> allWebhooks(String convention) {
             this.webhookConvention = convention;
             aboutToStartURL = "/" + convention + "/about-to-start";
             aboutToSubmitURL = "/" + convention + "/about-to-submit";
@@ -145,35 +155,35 @@ public class Event<T, R extends Role> {
             return this;
         }
 
-        public EventBuilder<T, R> aboutToStartWebhook(String convention) {
+        public EventBuilder<T, R, S> aboutToStartWebhook(String convention) {
             this.webhookConvention = convention;
             // Use snake case event ID by convention
             aboutToStartURL = "/" + getWebhookPathByConvention() + "/about-to-start";
             return this;
         }
 
-        public EventBuilder<T, R> aboutToStartWebhook() {
+        public EventBuilder<T, R, S> aboutToStartWebhook() {
             // Use snake case event ID by convention
             aboutToStartURL = "/" + getWebhookPathByConvention() + "/about-to-start";
             return this;
         }
 
-        public EventBuilder<T, R> aboutToSubmitWebhook() {
+        public EventBuilder<T, R, S> aboutToSubmitWebhook() {
             aboutToSubmitURL = "/" + getWebhookPathByConvention() + "/about-to-submit";
             return this;
         }
 
-        public EventBuilder<T, R> submittedWebhook() {
+        public EventBuilder<T, R, S> submittedWebhook() {
             submittedURL = "/" + getWebhookPathByConvention() + "/submitted";
             return this;
         }
 
-        public EventBuilder<T, R> midEventWebhook() {
+        public EventBuilder<T, R, S> midEventWebhook() {
             midEventURL = "/" + getWebhookPathByConvention() + "/mid-event";
             return this;
         }
 
-        public EventBuilder<T, R> retries(Integer... retries) {
+        public EventBuilder<T, R, S> retries(Integer... retries) {
             this.retries = Joiner.on(",").join(retries);
             return this;
         }
