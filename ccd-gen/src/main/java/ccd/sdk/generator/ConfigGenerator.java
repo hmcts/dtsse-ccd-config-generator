@@ -22,7 +22,7 @@ public class ConfigGenerator {
     }
 
     public void generate(String caseTypeId) {
-        Set<Class<? extends CCDConfig>> types = reflections.getSubTypesOf(CCDConfig.class);
+        Set<Class<? extends BaseCCDConfig>> types = reflections.getSubTypesOf(BaseCCDConfig.class);
         if (types.size() != 1) {
             throw new RuntimeException("Expected 1 CCDConfig class but found " + types.size());
         }
