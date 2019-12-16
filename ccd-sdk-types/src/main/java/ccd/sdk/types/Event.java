@@ -9,7 +9,7 @@ import java.util.Map;
 
 @Builder
 @Data
-public class Event<T> {
+public class Event<T, R extends Role> {
     @With
     private String id;
     // The same event can have a different ID if on different states.
@@ -62,10 +62,10 @@ public class Event<T> {
     private static int eventCount;
 
 
-    public static class EventBuilder<T> {
+    public static class EventBuilder<T, R extends Role> {
 
-        public static <T> EventBuilder<T> builder(Class dataClass) {
-            EventBuilder<T> result = new EventBuilder<T>();
+        public static <T> EventBuilder<T, Role> builder(Class dataClass) {
+            EventBuilder<T, Role> result = new EventBuilder<T, Role>();
             result.dataClass = dataClass;
             result.grants = Maps.newHashMap();
             result.fields = FieldCollection.FieldCollectionBuilder.builder(null, dataClass);
@@ -78,7 +78,7 @@ public class Event<T> {
             return fields;
         }
 
-        public EventBuilder<T> name(String n) {
+        public EventBuilder<T, R> name(String n) {
             this.name = n;
             if (description == null) {
                 description = n;
@@ -86,58 +86,58 @@ public class Event<T> {
             return this;
         }
 
-        public EventBuilder<T> showEventNotes() {
+        public EventBuilder<T, R> showEventNotes() {
             this.showEventNotes = true;
             return this;
         }
 
-        public EventBuilder<T> showSummary(boolean show) {
+        public EventBuilder<T, R> showSummary(boolean show) {
             this.showSummary = show;
             return this;
         }
 
-        public EventBuilder<T> showSummary() {
+        public EventBuilder<T, R> showSummary() {
             this.showSummary = true;
             return this;
         }
 
         // Do not inherit role permissions from states.
-        public EventBuilder<T> explicitGrants() {
+        public EventBuilder<T, R> explicitGrants() {
             this.explicitGrants = true;
             return this;
         }
 
-        EventBuilder<T> forStates(String... states) {
+        EventBuilder<T, R> forStates(String... states) {
             this.states = states;
             return forState(states[0]);
         }
 
-        EventBuilder<T> forState(String state) {
+        EventBuilder<T, R> forState(String state) {
             this.preState = state;
             this.postState = state;
             return this;
         }
 
-        EventBuilder<T> postState(String state) {
+        EventBuilder<T, R> postState(String state) {
             this.postState = state;
             return this;
         }
 
-        EventBuilder<T> preState(String state) {
+        EventBuilder<T, R> preState(String state) {
             this.preState = state;
             return this;
         }
 
-        public EventBuilder<T> grant(String crud, String... roles) {
-            for (String role : roles) {
-                grants.put(role, crud);
+        public EventBuilder<T, R> grant(String crud, R... roles) {
+            for (R role : roles) {
+                grants.put(role.getRole(), crud);
             }
 
             return this;
         }
 
         private String webhookConvention;
-        public EventBuilder<T> allWebhooks(String convention) {
+        public EventBuilder<T, R> allWebhooks(String convention) {
             this.webhookConvention = convention;
             aboutToStartURL = "/" + convention + "/about-to-start";
             aboutToSubmitURL = "/" + convention + "/about-to-submit";
@@ -145,35 +145,35 @@ public class Event<T> {
             return this;
         }
 
-        public EventBuilder<T> aboutToStartWebhook(String convention) {
+        public EventBuilder<T, R> aboutToStartWebhook(String convention) {
             this.webhookConvention = convention;
             // Use snake case event ID by convention
             aboutToStartURL = "/" + getWebhookPathByConvention() + "/about-to-start";
             return this;
         }
 
-        public EventBuilder<T> aboutToStartWebhook() {
+        public EventBuilder<T, R> aboutToStartWebhook() {
             // Use snake case event ID by convention
             aboutToStartURL = "/" + getWebhookPathByConvention() + "/about-to-start";
             return this;
         }
 
-        public EventBuilder<T> aboutToSubmitWebhook() {
+        public EventBuilder<T, R> aboutToSubmitWebhook() {
             aboutToSubmitURL = "/" + getWebhookPathByConvention() + "/about-to-submit";
             return this;
         }
 
-        public EventBuilder<T> submittedWebhook() {
+        public EventBuilder<T, R> submittedWebhook() {
             submittedURL = "/" + getWebhookPathByConvention() + "/submitted";
             return this;
         }
 
-        public EventBuilder<T> midEventWebhook() {
+        public EventBuilder<T, R> midEventWebhook() {
             midEventURL = "/" + getWebhookPathByConvention() + "/mid-event";
             return this;
         }
 
-        public EventBuilder<T> retries(Integer... retries) {
+        public EventBuilder<T, R> retries(Integer... retries) {
             this.retries = Joiner.on(",").join(retries);
             return this;
         }

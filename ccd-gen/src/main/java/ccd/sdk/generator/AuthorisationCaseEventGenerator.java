@@ -1,6 +1,7 @@
 package ccd.sdk.generator;
 
 import ccd.sdk.types.Event;
+import ccd.sdk.types.Role;
 import com.google.common.collect.*;
 
 import java.io.File;
@@ -12,7 +13,7 @@ import java.util.Map;
 
 public class AuthorisationCaseEventGenerator {
 
-    public static <T> void generate(File root, List<Event> expandedEvents, ConfigBuilderImpl<T> builder) {
+    public static <T, R extends Role> void generate(File root, List<Event> expandedEvents, ConfigBuilderImpl<T, R> builder) {
         List<Map<String, String>> entries = Lists.newArrayList();
 
         Table<String, String, String> eventRolePermissions = builder.explicit;

@@ -3,13 +3,14 @@ package ccd.sdk.generator;
 import ccd.sdk.types.ConfigBuilder;
 import ccd.sdk.types.Event;
 import ccd.sdk.types.EventTypeBuilder;
+import ccd.sdk.types.Role;
 import com.google.common.collect.*;
 
 import java.util.List;
 import java.util.Map;
 
-public class ConfigBuilderImpl<T> implements ConfigBuilder<T> {
-    public final Map<String, Event.EventBuilder<T>> events = Maps.newHashMap();
+public class ConfigBuilderImpl<T, R extends Role> implements ConfigBuilder<T, R> {
+    public final Map<String, Event.EventBuilder<T, Role>> events = Maps.newHashMap();
     public String caseType;
     public final Table<String, String, String> stateRoles = HashBasedTable.create();
     public final Multimap<String, String> stateRoleblacklist = ArrayListMultimap.create();
@@ -23,7 +24,7 @@ public class ConfigBuilderImpl<T> implements ConfigBuilder<T> {
 
     @Override
     public EventTypeBuilder<T> event(final String id) {
-        Event.EventBuilder<T> e = Event.EventBuilder.builder(caseData);
+        Event.EventBuilder<T, Role> e = Event.EventBuilder.builder(caseData);
         return new EventTypeBuilder<>(e, state -> {
             String actualId = id;
             if (events.containsKey(actualId)) {
@@ -44,20 +45,20 @@ public class ConfigBuilderImpl<T> implements ConfigBuilder<T> {
     }
 
     @Override
-    public void grant(String state, String permissions, String role) {
-        stateRoles.put(state, role, permissions);
+    public void grant(String state, String permissions, R role) {
+        stateRoles.put(state, role.getRole(), permissions);
     }
 
     @Override
-    public void blacklist(String state, String... roles) {
-        for (String role : roles) {
-            stateRoleblacklist.put(state, role);
+    public void blacklist(String state, R... roles) {
+        for (Role role : roles) {
+            stateRoleblacklist.put(state, role.getRole());
         }
     }
 
     @Override
-    public void explicitState(String eventId, String role, String crud) {
-        explicit.put(eventId, role, crud);
+    public void explicitState(String eventId, R role, String crud) {
+        explicit.put(eventId, role.getRole(), crud);
 
     }
 
@@ -66,7 +67,7 @@ public class ConfigBuilderImpl<T> implements ConfigBuilder<T> {
         statePrefixes.put(state, prefix);
     }
 
-    public List<Event.EventBuilder<T>> getEvents() {
+    public List<Event.EventBuilder<T, Role>> getEvents() {
         return Lists.newArrayList(events.values());
     }
 }
