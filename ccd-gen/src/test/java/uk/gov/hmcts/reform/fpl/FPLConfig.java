@@ -21,9 +21,7 @@ public class FPLConfig extends BaseCCDConfig<CaseData, State, UserRole> {
     @Override
     public void configure() {
         caseType("CARE_SUPERVISION_EPO");
-        prefix(PREPARE_FOR_HEARING, "-");
 
-        blacklist(PREPARE_FOR_HEARING, GATEKEEPER);
         explicitState("hearingBookingDetails", JUDICIARY, "CRU");
 
         buildOpen();
@@ -245,6 +243,8 @@ public class FPLConfig extends BaseCCDConfig<CaseData, State, UserRole> {
     }
 
     private void buildPrepareForHearing() {
+        prefix(PREPARE_FOR_HEARING, "-");
+        blacklist(PREPARE_FOR_HEARING, GATEKEEPER);
         grant(PREPARE_FOR_HEARING, "CRU", HMCTS_ADMIN);
         addHearingBookingDetails( PREPARE_FOR_HEARING);
         buildSharedEvents( PREPARE_FOR_HEARING);
