@@ -1,27 +1,33 @@
 package ccd.sdk.generator;
 
 import ccd.sdk.types.Event;
-import com.google.common.collect.ImmutableListMultimap;
-import com.google.common.collect.Lists;
-import com.google.common.collect.Maps;
-import com.google.common.collect.Multimaps;
+import com.google.common.collect.*;
 
 import java.io.File;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
-public class EventGenerator {
+public class CaseEventGenerator {
     public static void writeEvents(File root, String caseType, List<Event> events) {
-        ImmutableListMultimap<String, Event> eventsByState = Multimaps.index(events, x -> x.getPostState());
+
+        ImmutableListMultimap<String, Event> eventsByState = Multimaps.index(events, x -> {
+            if (x.getPreState() == null)
+                return x.getPostState();
+
+            return Objects.equals(x.getPreState(), x.getPostState()) ? x.getPostState() : "StateChange";
+        });
 
         File folder = new File(root.getPath(), "CaseEvent");
         folder.mkdir();
         for (String state : eventsByState.keys()) {
             Path output = Paths.get(folder.getPath(), state + ".json");
 
-            Utils.writeFile(output, serialise(caseType, eventsByState.get(state)));
+            Ordering<Event> ordering = Ordering.natural().onResultOf(x -> x.getEventNumber());
+            Utils.writeFile(output, serialise(caseType, ordering.sortedCopy(eventsByState.get(state))));
         }
     }
 
@@ -39,8 +45,8 @@ public class EventGenerator {
                 data.put("DisplayOrder", t++);
             }
             data.put("CaseTypeID", caseTypeId);
-            data.put("ShowSummary", "N");
-            data.put("ShowEventNotes", "N");
+            data.put("ShowSummary", event.isShowSummary() ? "Y" : "N");
+            data.put("ShowEventNotes", event.isShowEventNotes() ? "Y" : "N");
             data.put("EndButtonLabel", event.getEndButtonLabel());
 
 
@@ -53,7 +59,7 @@ public class EventGenerator {
             if (event.getAboutToStartURL() != null) {
                 data.put("CallBackURLAboutToStartEvent", formatUrl(event.getAboutToStartURL()));
                 if (event.getRetries() != null) {
-                    data.put("RetriesTimeoutURLAboutToStartEvent", event.getRetries());
+                    data.put("RetriesTimeoutAboutToStartEvent", event.getRetries());
                 }
             }
 

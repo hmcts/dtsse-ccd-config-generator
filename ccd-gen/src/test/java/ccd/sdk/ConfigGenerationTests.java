@@ -53,6 +53,11 @@ public class ConfigGenerationTests {
     }
 
     @Test
+    public void generatesAllCaseEvent() {
+        assertResourceFolderMatchesGenerated("CaseEvent");
+    }
+
+    @Test
     public void generatesAllCaseEventToComplexTypes() {
         assertResourceFolderMatchesGenerated("CaseEventToComplexTypes");
     }
@@ -96,8 +101,7 @@ public class ConfigGenerationTests {
                 System.out.println("Expected:");
                 System.out.println(pretty(expectedString));
 
-                Files.writeString(new File("src/test/resources/ccd-definition/mine.json").toPath(), actualString);
-
+//                Files.writeString(new File("src/test/resources/ccd-definition/mine.json").toPath(), actualString);
 
                 throw new RuntimeException("Compare failed for " + expected.getName());
             }

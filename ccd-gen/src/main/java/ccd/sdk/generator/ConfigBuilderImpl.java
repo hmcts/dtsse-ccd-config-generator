@@ -9,7 +9,7 @@ import java.util.List;
 import java.util.Map;
 
 public class ConfigBuilderImpl<T> implements ConfigBuilder<T> {
-    public final List<Event.EventBuilder<T>> events = Lists.newArrayList();
+    public final Map<String, Event.EventBuilder<T>> events = Maps.newHashMap();
     public String caseType;
     public final Table<String, String, String> stateRoles = HashBasedTable.create();
     public final Multimap<String, String> stateRoleblacklist = ArrayListMultimap.create();
@@ -22,11 +22,20 @@ public class ConfigBuilderImpl<T> implements ConfigBuilder<T> {
     }
 
     @Override
-    public EventTypeBuilder<T> event(String id) {
-        Event.EventBuilder e = Event.EventBuilder.builder(caseData);
-        events.add(e);
-        e.id(id);
-        return new EventTypeBuilder<>(e);
+    public EventTypeBuilder<T> event(final String id) {
+        Event.EventBuilder<T> e = Event.EventBuilder.builder(caseData);
+        return new EventTypeBuilder<>(e, state -> {
+            String actualId = id;
+            if (events.containsKey(actualId)) {
+                actualId = id + statePrefixes.getOrDefault(state, "") + state;
+                if (events.containsKey(actualId)) {
+                    throw new RuntimeException("Duplicate event: " + actualId);
+                }
+            }
+            e.eventId(id);
+            e.id(actualId);
+            events.put(actualId, e);
+        });
     }
 
     @Override
@@ -58,6 +67,6 @@ public class ConfigBuilderImpl<T> implements ConfigBuilder<T> {
     }
 
     public List<Event.EventBuilder<T>> getEvents() {
-        return events;
+        return Lists.newArrayList(events.values());
     }
 }

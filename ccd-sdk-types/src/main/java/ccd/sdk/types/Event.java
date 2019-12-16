@@ -26,6 +26,9 @@ public class Event<T> {
     private String retries;
     private String[] states;
     private boolean explicitGrants;
+    private boolean showSummary;
+    private boolean showEventNotes;
+    private int eventNumber;
 
     public void setEventID(String eventId) {
         this.eventId = eventId;
@@ -45,6 +48,7 @@ public class Event<T> {
     private FieldCollection.FieldCollectionBuilder<T, ?> fields;
 
     @Builder.Default
+    // TODO: don't always add.
     private String endButtonLabel = "Save and continue";
     @Builder.Default
     private int displayOrder = -1;
@@ -55,6 +59,7 @@ public class Event<T> {
     }
 
     private Class dataClass;
+    private static int eventCount;
 
 
     public static class EventBuilder<T> {
@@ -64,11 +69,36 @@ public class Event<T> {
             result.dataClass = dataClass;
             result.grants = Maps.newHashMap();
             result.fields = FieldCollection.FieldCollectionBuilder.builder(null, dataClass);
+            result.eventNumber = eventCount++;
+
             return result;
         }
 
         public FieldCollection.FieldCollectionBuilder<T, ?> fields() {
             return fields;
+        }
+
+        public EventBuilder<T> name(String n) {
+            this.name = n;
+            if (description == null) {
+                description = n;
+            }
+            return this;
+        }
+
+        public EventBuilder<T> showEventNotes() {
+            this.showEventNotes = true;
+            return this;
+        }
+
+        public EventBuilder<T> showSummary(boolean show) {
+            this.showSummary = show;
+            return this;
+        }
+
+        public EventBuilder<T> showSummary() {
+            this.showSummary = true;
+            return this;
         }
 
         // Do not inherit role permissions from states.
@@ -108,10 +138,17 @@ public class Event<T> {
 
         private String webhookConvention;
         public EventBuilder<T> allWebhooks(String convention) {
+            this.webhookConvention = convention;
             aboutToStartURL = "/" + convention + "/about-to-start";
             aboutToSubmitURL = "/" + convention + "/about-to-submit";
             submittedURL = "/" + convention + "/submitted";
+            return this;
+        }
+
+        public EventBuilder<T> aboutToStartWebhook(String convention) {
             this.webhookConvention = convention;
+            // Use snake case event ID by convention
+            aboutToStartURL = "/" + getWebhookPathByConvention() + "/about-to-start";
             return this;
         }
 
@@ -123,6 +160,11 @@ public class Event<T> {
 
         public EventBuilder<T> aboutToSubmitWebhook() {
             aboutToSubmitURL = "/" + getWebhookPathByConvention() + "/about-to-submit";
+            return this;
+        }
+
+        public EventBuilder<T> submittedWebhook() {
+            submittedURL = "/" + getWebhookPathByConvention() + "/submitted";
             return this;
         }
 
@@ -140,7 +182,7 @@ public class Event<T> {
             if (webhookConvention != null) {
                 return webhookConvention;
             }
-            return CaseFormat.LOWER_CAMEL.to(CaseFormat.LOWER_HYPHEN, id);
+            return CaseFormat.LOWER_CAMEL.to(CaseFormat.LOWER_HYPHEN, eventId);
         }
     }
 }
