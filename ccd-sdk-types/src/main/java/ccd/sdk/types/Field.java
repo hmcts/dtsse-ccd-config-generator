@@ -6,6 +6,7 @@ import de.cronn.reflection.util.PropertyUtils;
 import de.cronn.reflection.util.TypedPropertyGetter;
 import lombok.Builder;
 import lombok.Data;
+import lombok.ToString;
 
 import java.beans.PropertyDescriptor;
 
@@ -25,8 +26,11 @@ public class Field<T, Parent> {
     int pageFieldDisplayOrder;
     int pageDisplayOrder;
     String pageLabel;
+    String type;
+    String fieldTypeParameter;
 
     private Class dataClass;
+    @ToString.Exclude
     private FieldCollection.FieldCollectionBuilder<T, Parent> parent;
 
     public static class FieldBuilder<T, Parent> {
@@ -37,8 +41,13 @@ public class Field<T, Parent> {
             return result;
         }
 
-        public FieldBuilder<T, Parent> id(String id) {
+        protected FieldBuilder<T, Parent> id(String id) {
             this.id = id;
+            return this;
+        }
+
+        protected FieldBuilder<T, Parent> type(String t) {
+            this.type = t;
             return this;
         }
 

@@ -35,6 +35,8 @@ public class FPLConfig extends BaseCCDConfig<CaseData, State, UserRole> {
                 .name("-")
                 .explicitGrants()
                 .grant("C", SYSTEM_UPDATE);
+        caseField("dateAndTimeSubmitted", null, "DateTime", null, "Date submitted");
+        caseField("submittedForm", "Attached PDF", "Document");
     }
 
     private void buildC21Event(State state) {
@@ -76,7 +78,7 @@ public class FPLConfig extends BaseCCDConfig<CaseData, State, UserRole> {
                 .retries(1,2,3,4,5)
                 .fields()
                     .label("submissionConsentLabel", "")
-                    .field("submissionConsent", DisplayContext.Mandatory);
+                    .field("submissionConsent", DisplayContext.Mandatory, null, "MultiSelectList", "Consent", " ");
 
         event("populateSDO")
                 .forStateTransition(Submitted, Gatekeeping)
@@ -131,7 +133,7 @@ public class FPLConfig extends BaseCCDConfig<CaseData, State, UserRole> {
                         .optional(CaseData::getJudgeAndLegalAdvisor)
                     .page("allPartiesDirections")
                         .readonly(CaseData::getHearingDetails, "hearingDate=\"DO_NOT_SHOW\"")
-                        .field().id("hearingDate").context(DisplayContext.ReadOnly).showCondition("hearingDetails.startDate=\"\"").context(DisplayContext.ReadOnly).done()
+                        .field("hearingDate", DisplayContext.ReadOnly, "hearingDetails.startDate=\"\"", "Label", null, "The next hearing is on ${hearingDetails.startDate}.")
                         .complex(CaseData::getAllParties, Direction.class, this::renderSDODirection)
                         .complex(CaseData::getAllPartiesCustom, Direction.class, this::renderSDODirectionsCustom)
                     .page("localAuthorityDirections")
@@ -279,7 +281,7 @@ public class FPLConfig extends BaseCCDConfig<CaseData, State, UserRole> {
                      .label("localAuthorityDirectionsLabelCMO", "## For the local authority")
                      .complex(CaseData::getLocalAuthorityDirectionsCustom, Direction.class, this::renderDirection)
                 .page(2)
-                     .label("respondentsDirectionLabelCMO", "For the parents or respondents")
+                     .label("respondentsDirectionLabelCMO", "## For the parents or respondents")
                      .label("respondentsDropdownLabelCMO", " ")
                      .complex(CaseData::getRespondentDirectionsCustom, Direction.class)
                         .optional(Direction::getDirectionType)
@@ -307,8 +309,8 @@ public class FPLConfig extends BaseCCDConfig<CaseData, State, UserRole> {
                      .complex(CaseData::getCourtDirectionsCustom, Direction.class, this::renderDirection)
                 .page(5)
                      .label("orderBasisLabel", "## Basis of order")
-                     .label("addRecitalLabel", "## Add recital")
-                     .field("recitals", DisplayContext.Optional)
+                     .label("addRecitalLabel", "### Add recital")
+                     .field("recitals", DisplayContext.Optional, null, "Collection", "Recitals", "Recitals")
                 .page("schedule")
                      .field("schedule", DisplayContext.Mandatory);
 
@@ -437,7 +439,7 @@ public class FPLConfig extends BaseCCDConfig<CaseData, State, UserRole> {
         .aboutToStartWebhook("notice-of-proceedings")
         .aboutToSubmitWebhook()
         .fields()
-            .label("proceedingLabel", "## Other proceedings 1")
+            .label("proceedingLabel", " ")
             .complex(CaseData::getNoticeOfProceedings)
                 .complex(NoticeOfProceedings::getJudgeAndLegalAdvisor)
                     .optional(JudgeAndLegalAdvisor::getJudgeTitle)
@@ -526,7 +528,7 @@ public class FPLConfig extends BaseCCDConfig<CaseData, State, UserRole> {
                 .name("Grounds for the application")
                 .description("Entering the grounds for the application")
                 .fields()
-                    .field().id("EPO_REASONING_SHOW").context(DisplayContext.Optional).showCondition("groundsForEPO CONTAINS \"Workaround to show groundsForEPO. Needs to be hidden from UI\"").done()
+                    .field("EPO_REASONING_SHOW", DisplayContext.Optional, "groundsForEPO CONTAINS \"Workaround to show groundsForEPO. Needs to be hidden from UI\"")
                     .optional(CaseData::getGroundsForEPO, "EPO_REASONING_SHOW CONTAINS \"SHOW_FIELD\"")
                     .optional(CaseData::getGrounds);
 
@@ -589,10 +591,10 @@ public class FPLConfig extends BaseCCDConfig<CaseData, State, UserRole> {
                     .optional(CaseData::getThresholdDocument)
                     .optional(CaseData::getChecklistDocument)
                     .field("[STATE]", DisplayContext.ReadOnly, "courtBundle = \"DO_NOT_SHOW\"")
-                    .field("courtBundle", DisplayContext.Optional, "[STATE] != \"Open\"")
-                    .label("documents_socialWorkOther_border_top", "---------------------------------")
+                    .field("courtBundle", DisplayContext.Optional, "[STATE] != \"Open\"", "CourtBundle", null, "8. Court bundle")
+                    .label("documents_socialWorkOther_border_top", "-------------------------------------------------------------------------------------------------------------")
                     .optional(CaseData::getOtherSocialWorkDocuments)
-                    .label("documents_socialWorkOther_border_bottom", "---------------------------------");
+                    .label("documents_socialWorkOther_border_bottom", "-------------------------------------------------------------------------------------------------------------");
 
         event("changeCaseName").forState(Open)
                 .name("Change case name")
@@ -610,4 +612,5 @@ public class FPLConfig extends BaseCCDConfig<CaseData, State, UserRole> {
                     .pageLabel("Add Case ID")
                     .field("caseIDReference", DisplayContext.Optional);
     }
+
 }

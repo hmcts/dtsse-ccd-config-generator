@@ -6,6 +6,7 @@ import de.cronn.reflection.util.PropertyUtils;
 import de.cronn.reflection.util.TypedPropertyGetter;
 import lombok.Builder;
 import lombok.Data;
+import lombok.ToString;
 
 import java.beans.PropertyDescriptor;
 import java.util.List;
@@ -14,8 +15,12 @@ import java.util.function.Consumer;
 @Builder
 @Data
 public class FieldCollection<T, Parent> {
+    @ToString.Exclude
     private List<Field.FieldBuilder> fields;
+    @ToString.Exclude
     private List<FieldCollectionBuilder<T, Parent>> complexFields;
+    @ToString.Exclude
+    private List<Field.FieldBuilder> explicitFields;
     private String rootFieldname;
 
     public static class FieldCollectionBuilder<T, Parent> {
@@ -26,6 +31,7 @@ public class FieldCollection<T, Parent> {
         private int pageDisplayOrder;
         private int fieldDisplayOrder;
         private String pageLabel;
+        @ToString.Exclude
         private FieldCollectionBuilder<Parent, ?> parent;
 
         public static <T, Parent> FieldCollectionBuilder<T, Parent> builder(FieldCollectionBuilder<Parent, ?> parent, Class<T> dataClass) {
@@ -34,16 +40,22 @@ public class FieldCollection<T, Parent> {
             result.dataClass = dataClass;
             result.fields = Lists.newArrayList();
             result.complexFields = Lists.newArrayList();
+            result.explicitFields = Lists.newArrayList();
             return result;
         }
 
+        public FieldCollectionBuilder<T, Parent> field(String id, DisplayContext context, String showCondition, String type, String typeParam, String label) {
+            explicitFields.add(field().id(id).context(context).showCondition(showCondition).type(type).fieldTypeParameter(typeParam).label(label));
+            return this;
+        }
+
         public FieldCollectionBuilder<T, Parent> field(String id, DisplayContext context, String showCondition) {
-            field().id(id).context(context).showCondition(showCondition);
+            explicitFields.add(field().id(id).context(context).showCondition(showCondition));
             return this;
         }
 
         public FieldCollectionBuilder<T, Parent> field(String fieldName, DisplayContext context) {
-            field().id(fieldName).context(context);
+            explicitFields.add(field().id(fieldName).context(context));
             return this;
         }
 
@@ -124,7 +136,7 @@ public class FieldCollection<T, Parent> {
         }
 
         public FieldCollectionBuilder<T, Parent> label(String id, String value) {
-            field().id(id).context(DisplayContext.ReadOnly).label(value);
+            explicitFields.add(field().id(id).context(DisplayContext.ReadOnly).label(value));
             return this;
         }
 

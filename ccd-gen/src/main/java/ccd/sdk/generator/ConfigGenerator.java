@@ -42,5 +42,6 @@ public class ConfigGenerator {
         ComplexTypeGenerator.generate(outputfolder, reflections, builder.caseType, events);
         CaseEventToComplexTypesGenerator.writeEvents(outputfolder, builder.caseType, events);
         AuthorisationCaseEventGenerator.generate(outputfolder, events, builder);
+        CaseFieldGenerator.generateCaseFields(outputfolder, caseTypeId, typeArgs[0], events, builder);
     }
 }

@@ -40,4 +40,19 @@ public abstract class BaseCCDConfig<T, S, R extends Role> implements CCDConfig<T
     public void prefix(S state, String prefix) {
         builder.prefix(state, prefix);
     }
+
+    @Override
+    public void caseField(String id, String label, String type, String collectionType) {
+        builder.caseField(id, label, type, collectionType);
+    }
+
+    @Override
+    public void caseField(String id, String label, String type) {
+        builder.caseField(id, label, type);
+    }
+
+    @Override
+    public void caseField(String id, String showCondition, String type, String typeParam, String label) {
+        builder.caseField(id, showCondition, type, typeParam, label);
+    }
 }

@@ -9,4 +9,7 @@ public interface ConfigBuilder<T, S, R extends Role> {
     void blacklist(S state, R... role);
     void explicitState(String eventId, R role, String crud);
     void prefix(S state, String prefix);
+    void caseField(String id, String showCondition, String type, String typeParam, String label);
+    void caseField(String id, String label, String type, String collectionType);
+    void caseField(String id, String label, String type);
 }
