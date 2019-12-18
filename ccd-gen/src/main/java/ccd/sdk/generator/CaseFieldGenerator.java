@@ -1,23 +1,22 @@
 package ccd.sdk.generator;
 
 import ccd.sdk.types.CaseField;
-import ccd.sdk.types.ConfigBuilder;
+import ccd.sdk.types.ComplexType;
 import ccd.sdk.types.Event;
+import ccd.sdk.types.FieldType;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.google.common.base.Strings;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import net.jodah.typetools.TypeResolver;
 import org.reflections.ReflectionUtils;
-import org.reflections.Reflections;
 
 import java.io.File;
 import java.lang.reflect.Field;
 import java.lang.reflect.ParameterizedType;
-import java.lang.reflect.Type;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
@@ -41,9 +40,22 @@ public class CaseFieldGenerator {
             fields.add(fieldInfo);
             if (null != cf) {
                 fieldInfo.put("Label", cf.label());
-                fieldInfo.put("Hint", cf.hint());
+                if (!Strings.isNullOrEmpty(cf.hint())) {
+                    fieldInfo.put("HintText", cf.hint());
+                }
+                if (cf.showSummaryContent()) {
+                    fieldInfo.put("ShowSummaryContentOption", "Y");
+                }
             }
-            setFieldType(dataClass, field, fieldInfo);
+
+            if (cf != null && cf.type() != FieldType.Unspecified) {
+                fieldInfo.put("FieldType", cf.type().toString());
+                if (!Strings.isNullOrEmpty(cf.typeParameter())) {
+                    fieldInfo.put("FieldTypeParameter", cf.typeParameter());
+                }
+            } else {
+                inferFieldType(dataClass, field, fieldInfo);
+            }
         }
 
         fields.addAll(getExplicitFields(caseTypeId, events, builder));
@@ -52,7 +64,7 @@ public class CaseFieldGenerator {
         Utils.writeFile(path, Utils.serialise(fields));
     }
 
-    private static void setFieldType(Class dataClass, Field field, Map<String, Object> info) {
+    private static void inferFieldType(Class dataClass, Field field, Map<String, Object> info) {
         String type = field.getType().getSimpleName();
         if (Collection.class.isAssignableFrom(field.getType())) {
             type = "Collection";
@@ -64,7 +76,12 @@ public class CaseFieldGenerator {
             } else {
                 typeClass = (Class) pType.getActualTypeArguments()[0];
             }
-            info.put("FieldTypeParameter", typeClass.getSimpleName());
+            ComplexType c = (ComplexType) typeClass.getAnnotation(ComplexType.class);
+            if (null != c && !Strings.isNullOrEmpty(c.name())) {
+                info.put("FieldTypeParameter", c.name());
+            } else {
+                info.put("FieldTypeParameter", typeClass.getSimpleName());
+            }
         } else {
             switch (type) {
                 case "String":
@@ -74,6 +91,10 @@ public class CaseFieldGenerator {
                     type = "Date";
                     break;
             }
+        }
+        ComplexType c = field.getType().getAnnotation(ComplexType.class);
+        if (null != c && !Strings.isNullOrEmpty(c.name())) {
+            type = c.name();
         }
         info.put("FieldType", type);
     }

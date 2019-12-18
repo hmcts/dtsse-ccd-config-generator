@@ -77,7 +77,7 @@ public class FPLConfig extends BaseCCDConfig<CaseData, State, UserRole> {
                 .midEventWebhook()
                 .retries(1,2,3,4,5)
                 .fields()
-                    .label("submissionConsentLabel", "")
+                    .field("submissionConsentLabel", DisplayContext.ReadOnly, null, "Text", null, " ")
                     .field("submissionConsent", DisplayContext.Mandatory, null, "MultiSelectList", "Consent", " ");
 
         event("populateSDO")
@@ -103,7 +103,7 @@ public class FPLConfig extends BaseCCDConfig<CaseData, State, UserRole> {
                 .aboutToSubmitURL("/case-deletion/about-to-submit")
                 .endButtonLabel("Delete application")
                 .fields()
-                    .field("deletionConsent", DisplayContext.Mandatory);
+                    .field("deletionConsent", DisplayContext.Mandatory, null, "MultiSelectList", "DeletionConsent", " ");
     }
 
     private void buildGatekeepingEvents() {
@@ -192,8 +192,8 @@ public class FPLConfig extends BaseCCDConfig<CaseData, State, UserRole> {
                 .fields()
                     .label("standardDirectionsLabel", "Upload standard directions and other relevant documents, for example the C6 Notice of Proceedings or C9 statement of service.")
                     .label("standardDirectionsTitle", "## 1. Standard directions")
-                    .field("standardDirectionsDocument", DisplayContext.Optional)
-                    .field("otherCourtAdminDocuments", DisplayContext.Optional);
+                    .field("standardDirectionsDocument", DisplayContext.Optional, null, "Document", null, "Upload a file")
+                    .field("otherCourtAdminDocuments", DisplayContext.Optional, null, "Collection", "CourtAdminDocument", "Other documents");
     }
 
     private void buildSubmittedEvents() {
@@ -231,7 +231,10 @@ public class FPLConfig extends BaseCCDConfig<CaseData, State, UserRole> {
                 .showSummary()
                 .aboutToStartWebhook("statement-of-service")
                 .fields()
-                    .label("c9Declaration", "If you send documents to a party's solicitor or a children's guardian, give their details") .field(CaseData::getStatementOfService, DisplayContext.Mandatory, true) .label("serviceDeclarationLabel", "Declaration" ) .field("serviceConsent", DisplayContext.Mandatory);
+                    .label("c9Declaration", "If you send documents to a party's solicitor or a children's guardian, give their details")
+                    .field(CaseData::getStatementOfService, DisplayContext.Mandatory, true)
+                    .field("serviceDeclarationLabel", DisplayContext.ReadOnly, null, "Text", null, "Declaration" )
+                    .field("serviceConsent", DisplayContext.Mandatory, null, "MultiSelectList", "Consent", " ");
 
         buildC21Event( Submitted);
 
@@ -257,7 +260,7 @@ public class FPLConfig extends BaseCCDConfig<CaseData, State, UserRole> {
                 .description("Upload documents")
                 .grant("CRU", HMCTS_ADMIN)
                 .fields()
-                    .field("otherCourtAdminDocuments", DisplayContext.Optional);
+                    .field("otherCourtAdminDocuments", DisplayContext.Optional, null, "Collection", "CourtAdminDocument", "Other documents");
         buildUploadC2( PREPARE_FOR_HEARING);
         buildNoticeOfProceedings( PREPARE_FOR_HEARING);
 
@@ -272,17 +275,17 @@ public class FPLConfig extends BaseCCDConfig<CaseData, State, UserRole> {
                 .aboutToSubmitWebhook()
                 .fields()
                 .page("hearingDate")
-                    .field("cmoHearingDateList", DisplayContext.Mandatory)
+                    .field("cmoHearingDateList", DisplayContext.Mandatory, null, "DynamicList", null, "Which hearing is this order for?")
                 .page("allPartiesDirections")
                     .label("allPartiesLabelCMO", "## For all parties")
-                    .label("allPartiesPrecedentLabelCMO", "Add completed directions from the precedent library or your own template.")
+                    .field("allPartiesPrecedentLabelCMO", DisplayContext.ReadOnly, null, null, "Direction", "Add completed directions from the precedent library or your own template.")
                     .complex(CaseData::getAllPartiesCustom, Direction.class, this::renderDirection)
                 .page("localAuthorityDirections")
                      .label("localAuthorityDirectionsLabelCMO", "## For the local authority")
                      .complex(CaseData::getLocalAuthorityDirectionsCustom, Direction.class, this::renderDirection)
                 .page(2)
                      .label("respondentsDirectionLabelCMO", "## For the parents or respondents")
-                     .label("respondentsDropdownLabelCMO", " ")
+                     .field("respondentsDropdownLabelCMO", DisplayContext.ReadOnly, null, "TextArea", null, " ")
                      .complex(CaseData::getRespondentDirectionsCustom, Direction.class)
                         .optional(Direction::getDirectionType)
                         .mandatory(Direction::getDirectionText)
@@ -297,7 +300,7 @@ public class FPLConfig extends BaseCCDConfig<CaseData, State, UserRole> {
                     .done()
                 .page(3)
                      .label("otherPartiesDirectionLabelCMO", "## For other parties")
-                     .label("otherPartiesDropdownLabelCMO", " ")
+                     .field("otherPartiesDropdownLabelCMO", DisplayContext.ReadOnly, null, "TextArea", null, " ")
                      .complex(CaseData::getOtherPartiesDirectionsCustom, Direction.class)
                         .optional(Direction::getDirectionType)
                         .mandatory(Direction::getDirectionText)
@@ -312,7 +315,7 @@ public class FPLConfig extends BaseCCDConfig<CaseData, State, UserRole> {
                      .label("addRecitalLabel", "### Add recital")
                      .field("recitals", DisplayContext.Optional, null, "Collection", "Recitals", "Recitals")
                 .page("schedule")
-                     .field("schedule", DisplayContext.Mandatory);
+                     .field("schedule", DisplayContext.Mandatory, null, "Schedule", null, "Schedule");
 
         renderComply( "COMPLY_LOCAL_AUTHORITY", LOCAL_AUTHORITY, CaseData::getLocalAuthorityDirections, DisplayContext.Mandatory, "Allows Local Authority user access to comply with their directions as well as ones for all parties");
         renderComply( "COMPLY_CAFCASS", UserRole.CAFCASS, CaseData::getCafcassDirections, DisplayContext.Optional, "Allows Cafcass user access to comply with their directions as well as ones for all parties");
@@ -439,7 +442,7 @@ public class FPLConfig extends BaseCCDConfig<CaseData, State, UserRole> {
         .aboutToStartWebhook("notice-of-proceedings")
         .aboutToSubmitWebhook()
         .fields()
-            .label("proceedingLabel", " ")
+            .field("proceedingLabel",  DisplayContext.ReadOnly, null, "Text", null, " ")
             .complex(CaseData::getNoticeOfProceedings)
                 .complex(NoticeOfProceedings::getJudgeAndLegalAdvisor)
                     .optional(JudgeAndLegalAdvisor::getJudgeTitle)
@@ -528,7 +531,7 @@ public class FPLConfig extends BaseCCDConfig<CaseData, State, UserRole> {
                 .name("Grounds for the application")
                 .description("Entering the grounds for the application")
                 .fields()
-                    .field("EPO_REASONING_SHOW", DisplayContext.Optional, "groundsForEPO CONTAINS \"Workaround to show groundsForEPO. Needs to be hidden from UI\"")
+                    .field("EPO_REASONING_SHOW", DisplayContext.Optional, "groundsForEPO CONTAINS \"Workaround to show groundsForEPO. Needs to be hidden from UI\"", "MultiSelectList", "ShowHide", "EPO Reason show or hide")
                     .optional(CaseData::getGroundsForEPO, "EPO_REASONING_SHOW CONTAINS \"SHOW_FIELD\"")
                     .optional(CaseData::getGrounds);
 
@@ -610,7 +613,7 @@ public class FPLConfig extends BaseCCDConfig<CaseData, State, UserRole> {
                 .displayOrder(16)
                 .fields()
                     .pageLabel("Add Case ID")
-                    .field("caseIDReference", DisplayContext.Optional);
+                    .field("caseIDReference", DisplayContext.Optional, null, "Text", null, "Case ID");
     }
 
 }

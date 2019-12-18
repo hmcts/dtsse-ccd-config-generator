@@ -14,8 +14,18 @@ public class Utils {
 
     public static void writeFile(Path path, String value) {
         try {
-            Files.writeString(path, value);
+            Files.writeString(path, pretty(value));
         } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    private static String pretty(String json) {
+        ObjectMapper mapper = new ObjectMapper();
+        try {
+            Object o = mapper.readValue(json, Object.class);
+            return mapper.writerWithDefaultPrettyPrinter().writeValueAsString(o);
+        } catch (Exception e) {
             throw new RuntimeException(e);
         }
     }

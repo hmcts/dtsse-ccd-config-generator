@@ -30,9 +30,9 @@ public class CaseData {
     @CaseField(label = "Case name",
     hint = "Include the Local Authority name and respondent’s last name. For example, Endley Council v Smith/Tate/Jones")
     private final String caseName;
-    @CaseField(type = FieldType.Email, label = "Gatekeeper's email address")
+    @CaseField(type = FieldType.Email, label = "Gatekeeper's email address", hint = "For example, joe.bloggs@la.gov.uk")
     private final String gatekeeperEmail;
-    @CaseField(label = "Local Authority :", type = FieldType.FixedList)
+    @CaseField(label = "Local Authority :", type = FieldType.FixedList, typeParameter = "AuthorityFixedList")
     private final String caseLocalAuthority;
     @CaseField(label = "Risks and harm to children")
     private final Risks risks;
@@ -80,9 +80,9 @@ public class CaseData {
     @CaseField(label = "Factors affecting parenting")
     private final FactorsParenting factorsParenting;
     @CaseField(label = "Allocation proposal")
-    private final Allocation allocationProposal;
-    @CaseField(label = "Allocation decision")
-    private final Allocation allocationDecision;
+    private final AllocationProposal allocationProposal;
+    @CaseField(label = "Allocation decision", showSummaryContent = true)
+    private final AllocationDecision allocationDecision;
     @CaseField(label = "For all parties")
     private final List<Element<Direction>> allParties;
     @CaseField(label = "Add directions")
@@ -156,7 +156,7 @@ public class CaseData {
     @JsonProperty("documents_socialWorkEvidenceTemplate_document")
     @Valid
     @CaseField(label = "5. Social work evidence template (SWET)")
-    private final Document socialWorkEvidenceTemplateDocument;
+    private final SWETDocument socialWorkEvidenceTemplateDocument;
     @NotNull(message = "You need to add details to children")
     @Valid
     @CaseField(label = "Child")
@@ -165,6 +165,7 @@ public class CaseData {
         C21CaseOrderGroup.class, NotifyGatekeeperGroup.class})
     @CaseField(label = "FamilyMan case number")
     private final String familyManCaseNumber;
+    @CaseField(label = " ")
     private final NoticeOfProceedings noticeOfProceedings;
 
     public List<Element<Applicant>> getAllApplicants() {
@@ -194,7 +195,7 @@ public class CaseData {
     private final List<Element<C2DocumentBundle>> c2DocumentBundle;
     @CaseField(label = "Create an order")
     private final C21Order c21Order;
-    @CaseField(label = "C21 Orders")
+    @CaseField(label = "C21 order")
     private final List<Element<C21Order>> c21Orders;
 
     public List<Element<C21Order>> getC21Orders() {

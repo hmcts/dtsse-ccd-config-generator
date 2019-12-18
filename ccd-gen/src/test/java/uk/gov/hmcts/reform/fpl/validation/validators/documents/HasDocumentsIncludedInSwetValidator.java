@@ -2,6 +2,7 @@ package uk.gov.hmcts.reform.fpl.validation.validators.documents;
 
 import uk.gov.hmcts.reform.fpl.model.CaseData;
 import uk.gov.hmcts.reform.fpl.model.common.Document;
+import uk.gov.hmcts.reform.fpl.model.common.SWETDocument;
 import uk.gov.hmcts.reform.fpl.validation.interfaces.HasDocumentsIncludedInSwet;
 import uk.gov.hmcts.reform.fpl.validation.models.ValidationDocumentMap;
 
@@ -40,7 +41,7 @@ public class HasDocumentsIncludedInSwetValidator implements ConstraintValidator<
         constraintValidatorContext.disableDefaultConstraintViolation();
     }
 
-    private boolean hasAttachedSwet(Document socialWorkEvidence) {
+    private boolean hasAttachedSwet(SWETDocument socialWorkEvidence) {
         return hasDocumentStatusOf(socialWorkEvidence, ATTACHED) && hasDocumentUploaded(socialWorkEvidence);
     }
 

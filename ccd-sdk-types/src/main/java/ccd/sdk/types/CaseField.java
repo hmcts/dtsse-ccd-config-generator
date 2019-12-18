@@ -11,4 +11,6 @@ public @interface CaseField {
     FieldType type() default FieldType.Unspecified;
 
     String typeParameter() default "";
+
+    boolean showSummaryContent() default false;
 }

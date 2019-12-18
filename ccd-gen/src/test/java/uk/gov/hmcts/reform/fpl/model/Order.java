@@ -1,6 +1,7 @@
 package uk.gov.hmcts.reform.fpl.model;
 
 import ccd.sdk.types.CaseField;
+import ccd.sdk.types.ComplexType;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import lombok.Builder;
 import lombok.Data;
@@ -14,6 +15,7 @@ import java.util.List;
 @Data
 @Builder(toBuilder = true)
 @JsonInclude(JsonInclude.Include.NON_NULL)
+@ComplexType(name = "StandardDirectionOrder")
 public class Order {
     private final String hearingDate;
     private final List<Element<Direction>> directions;

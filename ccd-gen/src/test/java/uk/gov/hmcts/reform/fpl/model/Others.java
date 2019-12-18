@@ -1,5 +1,6 @@
 package uk.gov.hmcts.reform.fpl.model;
 
+import ccd.sdk.types.ComplexType;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.google.common.collect.ImmutableList;
 import lombok.AllArgsConstructor;
@@ -13,6 +14,7 @@ import java.util.stream.Collectors;
 @Data
 @Builder
 @AllArgsConstructor
+@ComplexType(name = "Person")
 public class Others {
     private final Other firstOther;
     private final List<Element<Other>> additionalOthers;
