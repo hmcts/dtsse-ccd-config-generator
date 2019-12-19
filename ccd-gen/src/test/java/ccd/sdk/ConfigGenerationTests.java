@@ -40,6 +40,7 @@ public class ConfigGenerationTests {
         assertEquals("ComplexTypes/Solicitor.json");
         assertEquals("ComplexTypes/Recitals.json");
         assertEquals("ComplexTypes/RiskAndHarm.json");
+//        assertResourceFolderMatchesGenerated("ComplexTypes");
     }
 
     @Test
@@ -79,6 +80,9 @@ public class ConfigGenerationTests {
         assert dir.exists();
         for (Iterator<File> it = FileUtils.iterateFiles(dir, TrueFileFilter.INSTANCE, TrueFileFilter.INSTANCE); it.hasNext(); ) {
             File expected = it.next();
+            if (expected.getName().endsWith(".ignore")) {
+                continue;
+            }
             Path path = dir.toPath().relativize(expected.toPath());
             Path actual = temp.getRoot().toPath().resolve(folder).resolve(path);
             assertEquals(expected, actual.toFile());

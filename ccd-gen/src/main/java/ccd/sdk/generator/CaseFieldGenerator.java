@@ -22,13 +22,21 @@ import java.util.Map;
 
 public class CaseFieldGenerator {
     public static void generateCaseFields(File outputFolder, String caseTypeId, Class dataClass, List<Event> events, ConfigBuilderImpl builder) {
+        List<Map<String, Object>> fields = toComplex(dataClass, caseTypeId);
 
-        List<Map<String, Object>> fields = Lists.newArrayList();
-
-        Map<String, Object> history = getField(caseTypeId, "caseHistory");
+        Map<String, Object> history = getField(caseTypeId,"caseHistory");
         history.put("Label", " ");
         history.put("FieldType", "CaseHistoryViewer");
         fields.add(history);
+
+        fields.addAll(getExplicitFields(caseTypeId, events, builder));
+
+        Path path = Paths.get(outputFolder.getPath(), "CaseField.json");
+        Utils.writeFile(path, Utils.serialise(fields));
+    }
+
+    public static List<Map<String, Object>> toComplex(Class dataClass, String caseTypeId) {
+        List<Map<String, Object>> fields = Lists.newArrayList();
 
         for (Field field : ReflectionUtils.getFields(dataClass)) {
 
@@ -46,6 +54,9 @@ public class CaseFieldGenerator {
                 if (cf.showSummaryContent()) {
                     fieldInfo.put("ShowSummaryContentOption", "Y");
                 }
+                if (!Strings.isNullOrEmpty(cf.showCondition())) {
+                    fieldInfo.put("FieldShowCondition", cf.showCondition());
+                }
             }
 
             if (cf != null && cf.type() != FieldType.Unspecified) {
@@ -54,17 +65,14 @@ public class CaseFieldGenerator {
                     fieldInfo.put("FieldTypeParameter", cf.typeParameter());
                 }
             } else {
-                inferFieldType(dataClass, field, fieldInfo);
+                inferFieldType(dataClass, field, fieldInfo, cf);
             }
         }
 
-        fields.addAll(getExplicitFields(caseTypeId, events, builder));
-
-        Path path = Paths.get(outputFolder.getPath(), "CaseField.json");
-        Utils.writeFile(path, Utils.serialise(fields));
+        return fields;
     }
 
-    private static void inferFieldType(Class dataClass, Field field, Map<String, Object> info) {
+    private static void inferFieldType(Class dataClass, Field field, Map<String, Object> info, CaseField cf) {
         String type = field.getType().getSimpleName();
         if (Collection.class.isAssignableFrom(field.getType())) {
             type = "Collection";
@@ -80,7 +88,12 @@ public class CaseFieldGenerator {
             if (null != c && !Strings.isNullOrEmpty(c.name())) {
                 info.put("FieldTypeParameter", c.name());
             } else {
-                info.put("FieldTypeParameter", typeClass.getSimpleName());
+                if (null != cf && !Strings.isNullOrEmpty(cf.typeParameter())) {
+                    info.put("FieldTypeParameter", cf.typeParameter());
+                    type = "MultiSelectList";
+                } else {
+                    info.put("FieldTypeParameter", typeClass.getSimpleName());
+                }
             }
         } else {
             switch (type) {
@@ -134,7 +147,7 @@ public class CaseFieldGenerator {
         return result;
     }
 
-    private static Map<String, Object> getField(String caseType, String id) {
+    public static Map<String, Object> getField(String caseType, String id) {
         Map<String, Object> result = Maps.newHashMap();
         result.put("LiveFrom", "01/01/2017");
         result.put("CaseTypeID", caseType);

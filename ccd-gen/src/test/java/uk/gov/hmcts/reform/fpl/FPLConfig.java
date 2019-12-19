@@ -153,7 +153,7 @@ public class FPLConfig extends BaseCCDConfig<CaseData, State, UserRole> {
                         .complex(CaseData::getCourtDirectionsCustom, Direction.class, this::renderSDODirectionsCustom)
                     .page("documentReview")
                         .complex(CaseData::getStandardDirectionOrder)
-                            .readonly(Order::getOrderDoc)
+                            .field().id(Order::getOrderDoc).context(DisplayContext.ReadOnly).label("Check the order").done()
                             .mandatory(Order::getOrderStatus);
 
         buildStandardDirections( Gatekeeping, "AfterGatekeeping");
