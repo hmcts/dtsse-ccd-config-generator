@@ -1,5 +1,6 @@
 package uk.gov.hmcts.reform.fpl.model;
 
+import ccd.sdk.types.CaseField;
 import ccd.sdk.types.ComplexType;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import lombok.AllArgsConstructor;
@@ -16,5 +17,6 @@ import javax.validation.constraints.NotNull;
 public class Child {
     @Valid
     @NotNull(message = "You need to add details to children")
+    @CaseField(label = "Party")
     private final ChildParty party;
 }

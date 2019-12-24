@@ -49,8 +49,8 @@ public class ApplicantParty extends Party implements TelephoneContacts {
                            Telephone mobileNumber,
                            String jobTitle,
                            String pbaNumber) {
-        super(partyId, partyType, firstName, lastName, organisationName, dateOfBirth, address,
-            email, telephoneNumber);
+        super(partyId, partyType, firstName, lastName, dateOfBirth, address,
+            telephoneNumber);
 
         this.organisationName = organisationName;
         this.mobileNumber = mobileNumber;

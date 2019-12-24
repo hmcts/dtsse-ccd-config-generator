@@ -1,6 +1,7 @@
 package ccd.sdk;
 
 import ccd.sdk.generator.ConfigGenerator;
+import ccd.sdk.generator.TypeGraphResolver;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.io.Resources;
 import org.apache.commons.io.FileUtils;
@@ -13,6 +14,7 @@ import org.reflections.Reflections;
 import org.skyscreamer.jsonassert.JSONCompare;
 import org.skyscreamer.jsonassert.JSONCompareMode;
 import org.skyscreamer.jsonassert.JSONCompareResult;
+import uk.gov.hmcts.reform.fpl.model.CaseData;
 
 import java.io.File;
 import java.net.URL;
@@ -20,6 +22,11 @@ import java.nio.charset.Charset;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Iterator;
+import java.util.Map;
+import java.util.Set;
+
+import static org.hamcrest.CoreMatchers.equalTo;
+import static org.hamcrest.MatcherAssert.assertThat;
 
 public class ConfigGenerationTests {
     @Rule
@@ -38,10 +45,20 @@ public class ConfigGenerationTests {
     @Test
     public void generatesAllComplexTypes() throws Exception {
         assertEquals("ComplexTypes/Solicitor.json");
-        assertEquals("ComplexTypes/Recitals.json");
+        assertEquals("ComplexTypes/2_Recitals.json");
         assertEquals("ComplexTypes/RiskAndHarm.json");
-//        assertResourceFolderMatchesGenerated("ComplexTypes");
+        assertResourceFolderMatchesGenerated("ComplexTypes");
     }
+
+//    @Test
+//    public void generatesTypeGraph() {
+//        String basePackage = "uk.gov.hmcts.reform.fpl";
+//        Map<Class, Integer> result = TypeGraphResolver.resolve(CaseData.class, basePackage);
+//        for (Class aClass : result.keySet()) {
+//            System.out.println(aClass.getName());
+//        }
+//        assertThat(result.size(), equalTo(5));
+//    }
 
     @Test
     public void generatesStateOpen() {
@@ -110,8 +127,8 @@ public class ConfigGenerationTests {
                 System.out.println("Expected:");
                 System.out.println(pretty(expectedString));
 
-//                Files.writeString(new File("src/test/resources/ccd-definition/mine.json").toPath(), actualString);
-//                Files.writeString(new File("src/test/resources/ccd-definition/errors.json").toPath(), result.toString());
+                Files.writeString(new File("src/test/resources/ccd-definition/mine.json").toPath(), actualString);
+                Files.writeString(new File("src/test/resources/ccd-definition/errors.json").toPath(), result.toString());
 
                 throw new RuntimeException("Compare failed for " + expected.getName());
             }

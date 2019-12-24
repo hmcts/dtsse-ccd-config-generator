@@ -1,7 +1,6 @@
 package ccd.sdk.generator;
 
 import ccd.sdk.types.*;
-import com.google.common.collect.Lists;
 import net.jodah.typetools.TypeResolver;
 import org.objenesis.Objenesis;
 import org.objenesis.ObjenesisStd;
@@ -39,7 +38,7 @@ public class ConfigGenerator {
 
         CaseEventGenerator.writeEvents(outputfolder, builder.caseType, events);
         CaseEventToFieldsGenerator.writeEvents(outputfolder, builder.caseType, events);
-        ComplexTypeGenerator.generate(outputfolder, reflections, builder.caseType, events);
+        ComplexTypeGenerator.generate(outputfolder, typeArgs[0], builder.caseType, events, typeArgs[0].getPackageName());
         CaseEventToComplexTypesGenerator.writeEvents(outputfolder, builder.caseType, events);
         AuthorisationCaseEventGenerator.generate(outputfolder, events, builder);
         CaseFieldGenerator.generateCaseFields(outputfolder, caseTypeId, typeArgs[0], events, builder);

@@ -1,5 +1,9 @@
 package uk.gov.hmcts.reform.fpl.model;
 
+import ccd.sdk.types.CaseField;
+import ccd.sdk.types.ComplexType;
+import ccd.sdk.types.FieldType;
+import ccd.sdk.types.Label;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
@@ -18,14 +22,28 @@ import java.time.LocalDate;
 @EqualsAndHashCode(callSuper = true)
 @JsonInclude(JsonInclude.Include.NON_NULL)
 @JsonDeserialize(builder = RespondentParty.RespondentPartyBuilder.class)
+@ComplexType(border = "---", borderId = "respondent_border")
 public final class RespondentParty extends Party {
+    @CaseField(type = FieldType.FixedList, typeParameter = "GenderList", label = "Gender")
     private final String gender;
+    @CaseField(label = "What gender do they identify with?", showCondition = "gender=\"They identify in another way\"")
     private final String genderIdentification;
+    @CaseField(label = "Place of birth", hint = "For example, town or city")
     private final String placeOfBirth;
+    @Label(id = "relationshipLabel", value = "## Relationship to the child")
+    @CaseField(type = FieldType.TextArea, label = "What is the respondent’s relationship to the child or children in this case?", hint = "Include: the name of the child or children, the respondent’s relationship to them and any details if you’re not sure this person has parental responsibility")
     private final String relationshipToChild;
+
+    @CaseField(type = FieldType.YesOrNo, label = "Do you need contact details hidden from other parties?")
     private final String contactDetailsHidden;
+    @CaseField(type= FieldType.TextArea, label = "Give reason", showCondition = "contactDetailsHidden=\"Yes\"")
     private final String contactDetailsHiddenReason;
+
+    @Label(id = "proceedingsLabel", value = "## Ability to take part in proceedings")
+    @CaseField(type = FieldType.FixedRadioList, typeParameter = "LitigationCapacityIssues", label = "Do you believe this person will have problems with litigation capacity (understanding what's happening in the case)?")
     private final String litigationIssues;
+
+    @CaseField(type=FieldType.TextArea, showCondition = "litigationIssues=\"YES\"", label = "Give details, including assessment outcomes and referrals to health services")
     private final String litigationIssuesDetails;
 
     @NotBlank(message = "Enter the respondent's full name")
@@ -43,10 +61,8 @@ public final class RespondentParty extends Party {
                            PartyType partyType,
                            String firstName,
                            String lastName,
-                           String organisationName,
                            LocalDate dateOfBirth,
                            Address address,
-                           EmailAddress email,
                            Telephone telephoneNumber,
                            String gender,
                            String genderIdentification,
@@ -56,8 +72,8 @@ public final class RespondentParty extends Party {
                            String contactDetailsHiddenReason,
                            String litigationIssues,
                            String litigationIssuesDetails) {
-        super(partyId, partyType, firstName, lastName, organisationName,
-            dateOfBirth, address, email, telephoneNumber);
+        super(partyId, partyType, firstName, lastName,
+            dateOfBirth, address, telephoneNumber);
         this.gender = gender;
         this.genderIdentification = genderIdentification;
         this.placeOfBirth = placeOfBirth;

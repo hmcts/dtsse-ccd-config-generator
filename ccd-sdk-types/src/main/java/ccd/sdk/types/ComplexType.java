@@ -8,4 +8,6 @@ public @interface ComplexType {
     String name() default "";
     String label() default "";
     String labelId() default "";
+    String border() default "";
+    String borderId() default "";
 }

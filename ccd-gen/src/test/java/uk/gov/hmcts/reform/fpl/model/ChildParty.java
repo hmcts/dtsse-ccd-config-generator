@@ -5,7 +5,6 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 import uk.gov.hmcts.reform.fpl.enums.PartyType;
-import uk.gov.hmcts.reform.fpl.model.common.EmailAddress;
 import uk.gov.hmcts.reform.fpl.model.common.Party;
 import uk.gov.hmcts.reform.fpl.model.common.Telephone;
 
@@ -57,10 +56,8 @@ public final class ChildParty extends Party {
                       PartyType partyType,
                       String firstName,
                       String lastName,
-                      String organisationName,
                       LocalDate dateOfBirth,
                       Address address,
-                      EmailAddress email,
                       Telephone telephoneNumber,
                       String gender,
                       String genderIdentification,
@@ -86,8 +83,8 @@ public final class ChildParty extends Party {
                       String detailsHiddenReason,
                       String litigationIssues,
                       String litigationIssuesDetails) {
-        super(partyId, partyType, firstName, lastName, organisationName,
-            dateOfBirth, address, email, telephoneNumber);
+        super(partyId, partyType, firstName, lastName,
+            dateOfBirth, address, telephoneNumber);
         this.gender = gender;
         this.genderIdentification = genderIdentification;
         this.livingSituation = livingSituation;

@@ -1,9 +1,6 @@
 package ccd.sdk.generator;
 
-import ccd.sdk.types.CaseField;
-import ccd.sdk.types.ComplexType;
-import ccd.sdk.types.Event;
-import ccd.sdk.types.FieldType;
+import ccd.sdk.types.*;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.google.common.base.Strings;
 import com.google.common.collect.Lists;
@@ -38,10 +35,28 @@ public class CaseFieldGenerator {
     public static List<Map<String, Object>> toComplex(Class dataClass, String caseTypeId) {
         List<Map<String, Object>> fields = Lists.newArrayList();
 
-        for (Field field : ReflectionUtils.getFields(dataClass)) {
+        for (Field field : ReflectionUtils.getAllFields(dataClass)) {
 
             JsonProperty j = field.getAnnotation(JsonProperty.class);
             String id = j != null ? j.value() : field.getName();
+
+            Label label = field.getAnnotation(Label.class);
+            if (null != label) {
+
+                Map<String, Object> fieldInfo = getField(caseTypeId, label.id());
+                fieldInfo.put("FieldType", "Label");
+                fieldInfo.put("Label", label.value());
+                fields.add(fieldInfo);
+//                {
+//                    "LiveFrom": "01/01/2017",
+//                        "ID": "RespondentParty",
+//                        "ListElementCode": "relationshipLabel",
+//                        "FieldType": "Label",
+//                        "ElementLabel": "## Relationship to the child",
+//                        "SecurityClassification": "Public"
+//                },
+            }
+
 
             CaseField cf = field.getAnnotation(CaseField.class);
             Map<String, Object> fieldInfo = getField(caseTypeId, id);
@@ -67,6 +82,7 @@ public class CaseFieldGenerator {
             } else {
                 inferFieldType(dataClass, field, fieldInfo, cf);
             }
+
         }
 
         return fields;
@@ -74,6 +90,9 @@ public class CaseFieldGenerator {
 
     private static void inferFieldType(Class dataClass, Field field, Map<String, Object> info, CaseField cf) {
         String type = field.getType().getSimpleName();
+        if (null != cf && !Strings.isNullOrEmpty(cf.typeParameter())) {
+            info.put("FieldTypeParameter", cf.typeParameter());
+        }
         if (Collection.class.isAssignableFrom(field.getType())) {
             type = "Collection";
             ParameterizedType pType = (ParameterizedType) TypeResolver.reify(field.getGenericType(), dataClass);
@@ -89,20 +108,30 @@ public class CaseFieldGenerator {
                 info.put("FieldTypeParameter", c.name());
             } else {
                 if (null != cf && !Strings.isNullOrEmpty(cf.typeParameter())) {
-                    info.put("FieldTypeParameter", cf.typeParameter());
                     type = "MultiSelectList";
                 } else {
                     info.put("FieldTypeParameter", typeClass.getSimpleName());
                 }
             }
         } else {
-            switch (type) {
-                case "String":
-                    type = "Text";
-                    break;
-                case "LocalDate":
-                    type = "Date";
-                    break;
+            if (field.getType().isEnum()) {
+                type = "FixedRadioList";
+                info.putIfAbsent("FieldTypeParameter", field.getType().getSimpleName());
+            } else {
+                switch (type) {
+                    case "String":
+                        type = "Text";
+                        if (cf != null && !Strings.isNullOrEmpty(cf.typeParameter())) {
+                            type = "FixedList";
+                        }
+                        break;
+                    case "LocalDate":
+                        type = "Date";
+                        break;
+                    case "LocalDateTime":
+                        type = "DateTime";
+                        break;
+                }
             }
         }
         ComplexType c = field.getType().getAnnotation(ComplexType.class);

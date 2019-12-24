@@ -1,6 +1,8 @@
 package uk.gov.hmcts.reform.fpl.model;
 
 import ccd.sdk.types.CaseField;
+import ccd.sdk.types.ComplexType;
+import ccd.sdk.types.FieldType;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -17,12 +19,13 @@ import java.util.List;
 @Builder
 @AllArgsConstructor
 @HasEndDateAfterStartDate(groups = HearingBookingDetailsGroup.class)
+@ComplexType
 public class HearingBooking {
-    @CaseField(label = "Type of hearing")
+    @CaseField(label = "Type of hearing", type = FieldType.FixedRadioList, typeParameter = "HearingType")
     private final String type;
-    @CaseField(label = "Give details")
+    @CaseField(type = FieldType.TextArea, label = "Give details", showCondition = "type=\"OTHER\"")
     private final String typeDetails;
-    @CaseField(label = "Venue")
+    @CaseField(label = "Venue", typeParameter = "HearingVenue")
     private final String venue;
     @TimeNotMidnight(message = "Enter a valid start time", groups = HearingBookingDetailsGroup.class)
     @Future(message = "Enter a start date in the future", groups = HearingBookingDetailsGroup.class)
@@ -32,10 +35,11 @@ public class HearingBooking {
     @Future(message = "Enter an end date in the future", groups = HearingBookingDetailsGroup.class)
     @CaseField(label = "End date and time", hint = "Use 24 hour format")
     private final LocalDateTime endDate;
-    @CaseField(label = "Hearing needs booked")
+    @CaseField(label = "Hearing needs booked", typeParameter = "HearingNeedsBooked", showCondition = "hearingNeedsBooked!=\"NONE\"")
     private final List<String> hearingNeedsBooked;
-    @CaseField(label = "Give details")
+    @CaseField(type = FieldType.TextArea, label = "Give details", showCondition = "hearingNeedsBooked!=\"NONE\"")
     private final String hearingNeedsDetails;
+    @CaseField(label = "Judge and legal advisor")
     private final JudgeAndLegalAdvisor judgeAndLegalAdvisor;
 
     public boolean hasDatesOnSameDay() {

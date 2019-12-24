@@ -6,6 +6,7 @@ import ccd.sdk.types.FieldType;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import lombok.Builder;
 import lombok.Data;
+import org.checkerframework.checker.units.qual.C;
 import uk.gov.hmcts.reform.fpl.enums.OrderStatus;
 import uk.gov.hmcts.reform.fpl.model.common.DocumentReference;
 import uk.gov.hmcts.reform.fpl.model.common.Element;
@@ -20,6 +21,7 @@ import java.util.List;
 public class Order {
     @CaseField(label = "The date of the hearing", type = FieldType.Date)
     private final String hearingDate;
+    @CaseField(label = "Directions")
     private final List<Element<Direction>> directions;
     @CaseField(label = "Is this the final version?")
     private final OrderStatus orderStatus;

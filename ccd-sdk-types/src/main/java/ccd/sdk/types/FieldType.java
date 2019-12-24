@@ -9,5 +9,6 @@ public enum FieldType {
     Schedule,
     TextArea,
     FixedList,
+    FixedRadioList,
     YesOrNo
 }
