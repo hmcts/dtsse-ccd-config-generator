@@ -17,6 +17,7 @@ import org.skyscreamer.jsonassert.JSONCompareResult;
 import uk.gov.hmcts.reform.fpl.model.CaseData;
 
 import java.io.File;
+import java.io.IOException;
 import java.net.URL;
 import java.nio.charset.Charset;
 import java.nio.file.Files;
@@ -36,7 +37,11 @@ public class ConfigGenerationTests {
     Reflections reflections;
 
     @Before
-    public void before() {
+    public void before() throws IOException {
+        URL u = Resources.getResource("ccd-definition/ComplexTypes");
+        File dir = new File(u.getPath());
+        FileUtils.copyDirectory(dir, temp.newFolder("ComplexTypes"));
+
         reflections = new Reflections("uk.gov.hmcts");
         generator = new ConfigGenerator(reflections, temp.getRoot());
         generator.generate("CARE_SUPERVISION_EPO");
@@ -48,6 +53,7 @@ public class ConfigGenerationTests {
         assertEquals("ComplexTypes/2_Recitals.json");
         assertEquals("ComplexTypes/RiskAndHarm.json");
         assertResourceFolderMatchesGenerated("ComplexTypes");
+        assertGeneratedFolderMatchesResource("ComplexTypes");
     }
 
 //    @Test
@@ -91,6 +97,22 @@ public class ConfigGenerationTests {
         assertEquals("AuthorisationCaseEvent/AuthorisationCaseEvent.json");
     }
 
+    private void assertGeneratedFolderMatchesResource(String folder) {
+        URL u = Resources.getResource("ccd-definition/" + folder);
+        File resourceDir = new File(u.getPath());
+        File dir = temp.getRoot().toPath().resolve(folder).toFile();
+        assert dir.exists();
+        for (Iterator<File> it = FileUtils.iterateFiles(dir, TrueFileFilter.INSTANCE, TrueFileFilter.INSTANCE); it.hasNext(); ) {
+            File expected = it.next();
+            if (expected.getName().endsWith(".ignore")) {
+                continue;
+            }
+            Path path = dir.toPath().relativize(expected.toPath());
+            Path actual = resourceDir.toPath().resolve(path);
+            assertEquals(expected, actual.toFile());
+        }
+    }
+
     private void assertResourceFolderMatchesGenerated(String folder) {
         URL u = Resources.getResource("ccd-definition/" + folder);
         File dir = new File(u.getPath());
@@ -127,8 +149,8 @@ public class ConfigGenerationTests {
                 System.out.println("Expected:");
                 System.out.println(pretty(expectedString));
 
-                Files.writeString(new File("src/test/resources/ccd-definition/mine.json").toPath(), actualString);
-                Files.writeString(new File("src/test/resources/ccd-definition/errors.json").toPath(), result.toString());
+//                Files.writeString(new File("src/test/resources/ccd-definition/mine.json").toPath(), actualString);
+//                Files.writeString(new File("src/test/resources/ccd-definition/errors.json").toPath(), result.toString());
 
                 throw new RuntimeException("Compare failed for " + expected.getName());
             }

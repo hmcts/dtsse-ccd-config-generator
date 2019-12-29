@@ -1,5 +1,6 @@
 package uk.gov.hmcts.reform.fpl.model;
 
+import ccd.sdk.types.CaseField;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import lombok.Builder;
 import lombok.Data;
@@ -36,6 +37,9 @@ public class ApplicantParty extends Party implements TelephoneContacts {
     @Valid
     public final EmailAddress email;
 
+    @CaseField(label = "Telephone")
+    private final Telephone telephoneNumber;
+
     @Builder(toBuilder = true)
     private ApplicantParty(String partyId,
                            PartyType partyType,
@@ -49,8 +53,7 @@ public class ApplicantParty extends Party implements TelephoneContacts {
                            Telephone mobileNumber,
                            String jobTitle,
                            String pbaNumber) {
-        super(partyId, partyType, firstName, lastName, dateOfBirth, address,
-            telephoneNumber);
+        super(partyId, partyType, firstName, lastName, dateOfBirth, address);
 
         this.organisationName = organisationName;
         this.mobileNumber = mobileNumber;
@@ -58,5 +61,6 @@ public class ApplicantParty extends Party implements TelephoneContacts {
         this.pbaNumber = pbaNumber;
         this.address = address;
         this.email = email;
+        this.telephoneNumber = telephoneNumber;
     }
 }

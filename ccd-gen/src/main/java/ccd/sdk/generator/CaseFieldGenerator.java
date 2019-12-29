@@ -37,6 +37,12 @@ public class CaseFieldGenerator {
 
         for (Field field : ReflectionUtils.getAllFields(dataClass)) {
 
+            CaseField cf = field.getAnnotation(CaseField.class);
+            if (null != cf) {
+                if (cf.ignore()) {
+                    continue;
+                }
+            }
             JsonProperty j = field.getAnnotation(JsonProperty.class);
             String id = j != null ? j.value() : field.getName();
 
@@ -58,7 +64,6 @@ public class CaseFieldGenerator {
             }
 
 
-            CaseField cf = field.getAnnotation(CaseField.class);
             Map<String, Object> fieldInfo = getField(caseTypeId, id);
             fields.add(fieldInfo);
             if (null != cf) {

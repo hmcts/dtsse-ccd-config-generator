@@ -5,7 +5,7 @@ import java.lang.annotation.RetentionPolicy;
 
 @Retention(RetentionPolicy.RUNTIME)
 public @interface CaseField {
-    String label();
+    String label() default "";
     String hint() default "";
     String showCondition() default "";
     FieldType type() default FieldType.Unspecified;
@@ -13,4 +13,6 @@ public @interface CaseField {
     String typeParameter() default "";
 
     boolean showSummaryContent() default false;
+
+    boolean ignore() default false;
 }

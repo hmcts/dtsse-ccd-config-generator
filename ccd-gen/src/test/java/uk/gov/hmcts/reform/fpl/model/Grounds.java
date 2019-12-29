@@ -1,5 +1,7 @@
 package uk.gov.hmcts.reform.fpl.model;
 
+import ccd.sdk.types.CaseField;
+import ccd.sdk.types.FieldType;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -15,8 +17,10 @@ import java.util.List;
 public class Grounds {
     @NotNull(message = "Select at least one option for how this case meets the threshold criteria")
     @Size(min = 1, message = "Select at least one option for how this case meets the threshold criteria")
+    @CaseField(typeParameter = "GroundsList", label = "The child concerned is suffering or is likely to suffer significant harm because they are:", hint = "Select all that apply")
     private final List<@NotBlank(message = "Select at least one option for how this case meets the threshold criteria")
         String> thresholdReason;
     @NotBlank(message = "Enter details of how the case meets the threshold criteria")
+    @CaseField(type = FieldType.TextArea, label = "Give details of how this case meets the threshold criteria")
     private final String thresholdDetails;
 }

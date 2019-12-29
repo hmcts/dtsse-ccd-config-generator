@@ -58,7 +58,6 @@ public final class ChildParty extends Party {
                       String lastName,
                       LocalDate dateOfBirth,
                       Address address,
-                      Telephone telephoneNumber,
                       String gender,
                       String genderIdentification,
                       String livingSituation,
@@ -84,7 +83,7 @@ public final class ChildParty extends Party {
                       String litigationIssues,
                       String litigationIssuesDetails) {
         super(partyId, partyType, firstName, lastName,
-            dateOfBirth, address, telephoneNumber);
+            dateOfBirth, address);
         this.gender = gender;
         this.genderIdentification = genderIdentification;
         this.livingSituation = livingSituation;

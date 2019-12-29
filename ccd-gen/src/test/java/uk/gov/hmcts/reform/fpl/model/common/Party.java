@@ -26,6 +26,4 @@ public class Party {
     public final LocalDate dateOfBirth;
     @CaseField(label = "Current address")
     public final Address address;
-    @CaseField(label = "Telephone")
-    public final Telephone telephoneNumber;
 }

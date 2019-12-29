@@ -1,5 +1,6 @@
 package uk.gov.hmcts.reform.fpl.model;
 
+import ccd.sdk.types.CaseField;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import lombok.Builder;
 import lombok.Data;
@@ -16,7 +17,9 @@ import java.util.UUID;
 public class CaseManagementOrder {
     private final String hearingDate;
     private final List<Element<Direction>> directions;
+    @CaseField(ignore = true)
     private final Schedule schedule;
     private final UUID id;
+    @CaseField(ignore = true)
     private final Recital recital;
 }

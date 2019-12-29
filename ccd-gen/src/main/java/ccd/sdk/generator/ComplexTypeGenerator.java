@@ -6,7 +6,6 @@ import com.google.common.base.Strings;
 import com.google.common.collect.Maps;
 import net.jodah.typetools.TypeResolver;
 import org.reflections.ReflectionUtils;
-import org.reflections.Reflections;
 
 import java.io.File;
 import java.lang.reflect.Field;
@@ -70,7 +69,7 @@ public class ComplexTypeGenerator {
                 String prefix = maxDepth - depth + "_";
                 path = Paths.get(complexTypes.getPath(), prefix + id + ".json");
             }
-            Utils.writeFile(path, Utils.serialise(fields));
+            Utils.mergeInto(path, fields, "ListElementCode");
         }
     }
     public static Map<Class, Integer> resolve(Class dataClass, String basePackage) {
