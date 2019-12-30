@@ -17,13 +17,6 @@ public class Party {
     public final String partyId;
     @CaseField(label = " ", showCondition = "partyType=\"DO_NOT_SHOW\"")
     public final PartyType partyType;
-    @CaseField(label = "First name")
-    public final String firstName;
-    @CaseField(label = "Last name")
-    public final String lastName;
-    @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd")
-    @CaseField(label = "Date of birth", hint = "For example, 31 3 1980")
-    public final LocalDate dateOfBirth;
     @CaseField(label = "Current address")
     public final Address address;
 }

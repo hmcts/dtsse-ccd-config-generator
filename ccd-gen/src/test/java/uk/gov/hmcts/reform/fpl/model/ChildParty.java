@@ -1,10 +1,13 @@
 package uk.gov.hmcts.reform.fpl.model;
 
+import ccd.sdk.types.CaseField;
+import com.fasterxml.jackson.annotation.JsonFormat;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import lombok.Builder;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 import uk.gov.hmcts.reform.fpl.enums.PartyType;
+import uk.gov.hmcts.reform.fpl.model.common.IdentifiedParty;
 import uk.gov.hmcts.reform.fpl.model.common.Party;
 import uk.gov.hmcts.reform.fpl.model.common.Telephone;
 
@@ -14,8 +17,7 @@ import java.time.LocalDate;
 @Data
 @EqualsAndHashCode(callSuper = true)
 @JsonInclude(JsonInclude.Include.NON_NULL)
-
-public final class ChildParty extends Party {
+public final class ChildParty extends IdentifiedParty {
     private final String gender;
     private final String genderIdentification;
     private final String livingSituation;
@@ -82,8 +84,7 @@ public final class ChildParty extends Party {
                       String detailsHiddenReason,
                       String litigationIssues,
                       String litigationIssuesDetails) {
-        super(partyId, partyType, firstName, lastName,
-            dateOfBirth, address);
+        super(partyId, partyType, address, firstName, lastName, dateOfBirth);
         this.gender = gender;
         this.genderIdentification = genderIdentification;
         this.livingSituation = livingSituation;

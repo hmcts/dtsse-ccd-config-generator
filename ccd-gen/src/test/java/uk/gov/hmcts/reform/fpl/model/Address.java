@@ -14,7 +14,7 @@ import javax.validation.constraints.NotBlank;
 @Builder
 @JsonIgnoreProperties(ignoreUnknown = true)
 @JsonInclude(JsonInclude.Include.NON_NULL)
-@ComplexType(name = "AddressUK")
+@ComplexType(name = "AddressUK", generate = false)
 public class Address {
     @NotBlank(message = "Enter a valid address for the contact")
     private final String addressLine1;

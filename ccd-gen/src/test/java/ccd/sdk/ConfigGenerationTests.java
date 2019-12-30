@@ -6,9 +6,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.io.Resources;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.io.filefilter.TrueFileFilter;
-import org.junit.Before;
-import org.junit.Rule;
-import org.junit.Test;
+import org.junit.*;
 import org.junit.rules.TemporaryFolder;
 import org.reflections.Reflections;
 import org.skyscreamer.jsonassert.JSONCompare;
@@ -30,14 +28,14 @@ import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
 
 public class ConfigGenerationTests {
-    @Rule
-    public TemporaryFolder temp = new TemporaryFolder();
+    @ClassRule
+    public static TemporaryFolder temp = new TemporaryFolder();
 
-    ConfigGenerator generator;
-    Reflections reflections;
+    static ConfigGenerator generator;
+    static Reflections reflections;
 
-    @Before
-    public void before() throws IOException {
+    @BeforeClass
+    public static void before() throws IOException {
         URL u = Resources.getResource("ccd-definition/ComplexTypes");
         File dir = new File(u.getPath());
         FileUtils.copyDirectory(dir, temp.newFolder("ComplexTypes"));
@@ -104,9 +102,6 @@ public class ConfigGenerationTests {
         assert dir.exists();
         for (Iterator<File> it = FileUtils.iterateFiles(dir, TrueFileFilter.INSTANCE, TrueFileFilter.INSTANCE); it.hasNext(); ) {
             File expected = it.next();
-            if (expected.getName().endsWith(".ignore")) {
-                continue;
-            }
             Path path = dir.toPath().relativize(expected.toPath());
             Path actual = resourceDir.toPath().resolve(path);
             assertEquals(expected, actual.toFile());
@@ -119,9 +114,6 @@ public class ConfigGenerationTests {
         assert dir.exists();
         for (Iterator<File> it = FileUtils.iterateFiles(dir, TrueFileFilter.INSTANCE, TrueFileFilter.INSTANCE); it.hasNext(); ) {
             File expected = it.next();
-            if (expected.getName().endsWith(".ignore")) {
-                continue;
-            }
             Path path = dir.toPath().relativize(expected.toPath());
             Path actual = temp.getRoot().toPath().resolve(folder).resolve(path);
             assertEquals(expected, actual.toFile());

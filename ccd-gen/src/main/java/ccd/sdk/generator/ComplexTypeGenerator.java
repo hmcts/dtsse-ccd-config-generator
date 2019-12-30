@@ -35,6 +35,9 @@ public class ComplexTypeGenerator {
         for (Class<?> c : types.keySet()) {
             ComplexType complex = c.getAnnotation(ComplexType.class);
             String id = null != complex && complex.name().length() > 0 ? complex.name() : c.getSimpleName();
+            if (null != complex && !complex.generate()) {
+                continue;
+            }
 
             List<Map<String, Object>> fields = CaseFieldGenerator.toComplex(c, caseType);
 

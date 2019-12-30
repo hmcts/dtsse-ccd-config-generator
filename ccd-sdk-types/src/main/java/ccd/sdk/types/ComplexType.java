@@ -10,4 +10,5 @@ public @interface ComplexType {
     String labelId() default "";
     String border() default "";
     String borderId() default "";
+    boolean generate() default false;
 }

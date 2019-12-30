@@ -4,6 +4,7 @@ import ccd.sdk.types.CaseField;
 import ccd.sdk.types.ComplexType;
 import ccd.sdk.types.FieldType;
 import ccd.sdk.types.Label;
+import com.fasterxml.jackson.annotation.JsonFormat;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
@@ -11,9 +12,8 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 import uk.gov.hmcts.reform.fpl.enums.PartyType;
-import uk.gov.hmcts.reform.fpl.model.common.EmailAddress;
+import uk.gov.hmcts.reform.fpl.model.common.IdentifiedParty;
 import uk.gov.hmcts.reform.fpl.model.common.Party;
-import uk.gov.hmcts.reform.fpl.model.common.Telephone;
 
 import javax.validation.constraints.NotBlank;
 import java.time.LocalDate;
@@ -23,7 +23,7 @@ import java.time.LocalDate;
 @JsonInclude(JsonInclude.Include.NON_NULL)
 @JsonDeserialize(builder = RespondentParty.RespondentPartyBuilder.class)
 @ComplexType(border = "---", borderId = "respondent_border")
-public final class RespondentParty extends Party {
+public final class RespondentParty extends IdentifiedParty {
     @CaseField(type = FieldType.FixedList, typeParameter = "GenderList", label = "Gender")
     private final String gender;
     @CaseField(label = "What gender do they identify with?", showCondition = "gender=\"They identify in another way\"")
@@ -71,8 +71,7 @@ public final class RespondentParty extends Party {
                            String contactDetailsHiddenReason,
                            String litigationIssues,
                            String litigationIssuesDetails) {
-        super(partyId, partyType, firstName, lastName,
-            dateOfBirth, address);
+        super(partyId, partyType, address, firstName, lastName, dateOfBirth);
         this.gender = gender;
         this.genderIdentification = genderIdentification;
         this.placeOfBirth = placeOfBirth;

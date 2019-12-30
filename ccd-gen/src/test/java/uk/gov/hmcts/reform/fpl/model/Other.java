@@ -1,5 +1,6 @@
 package uk.gov.hmcts.reform.fpl.model;
 
+import ccd.sdk.types.CaseField;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -14,6 +15,7 @@ public class Other {
     private final String gender;
     private final Address address;
     private final String telephone;
+    @CaseField(ignore = true)
     private final String birthplace;
     private final String childInformation;
     private final String litigationIssues;
