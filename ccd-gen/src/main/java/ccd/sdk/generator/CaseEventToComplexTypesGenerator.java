@@ -1,5 +1,6 @@
 package ccd.sdk.generator;
 
+import ccd.sdk.Utils;
 import ccd.sdk.types.Event;
 import ccd.sdk.types.Field;
 import ccd.sdk.types.FieldCollection;

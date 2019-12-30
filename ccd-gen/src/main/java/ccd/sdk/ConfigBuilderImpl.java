@@ -1,4 +1,4 @@
-package ccd.sdk.generator;
+package ccd.sdk;
 
 import ccd.sdk.types.*;
 import com.google.common.base.Strings;

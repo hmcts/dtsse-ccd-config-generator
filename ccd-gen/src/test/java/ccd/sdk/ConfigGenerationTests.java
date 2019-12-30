@@ -1,31 +1,27 @@
 package ccd.sdk;
 
-import ccd.sdk.generator.ConfigGenerator;
-import ccd.sdk.generator.TypeGraphResolver;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.io.Resources;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.io.filefilter.TrueFileFilter;
-import org.junit.*;
+import org.junit.BeforeClass;
+import org.junit.ClassRule;
+import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
 import org.reflections.Reflections;
 import org.skyscreamer.jsonassert.JSONCompare;
 import org.skyscreamer.jsonassert.JSONCompareMode;
 import org.skyscreamer.jsonassert.JSONCompareResult;
-import uk.gov.hmcts.reform.fpl.model.CaseData;
 
 import java.io.File;
 import java.io.IOException;
+import java.net.URISyntaxException;
 import java.net.URL;
 import java.nio.charset.Charset;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.Iterator;
-import java.util.Map;
-import java.util.Set;
-
-import static org.hamcrest.CoreMatchers.equalTo;
-import static org.hamcrest.MatcherAssert.assertThat;
 
 public class ConfigGenerationTests {
     @ClassRule
@@ -35,10 +31,18 @@ public class ConfigGenerationTests {
     static Reflections reflections;
 
     @BeforeClass
-    public static void before() throws IOException {
-        URL u = Resources.getResource("ccd-definition/ComplexTypes");
-        File dir = new File(u.getPath());
-        FileUtils.copyDirectory(dir, temp.newFolder("ComplexTypes"));
+    public static void before() throws IOException, URISyntaxException {
+        Path resRoot = Paths.get(Resources.getResource("ccd-definition").toURI());
+        FileUtils.copyDirectory(resRoot.resolve("ComplexTypes").toFile(), temp.newFolder("ComplexTypes"));
+
+        FileUtils.copyFile(resRoot.resolve("FixedLists").resolve("ProceedingType.json").toFile(),
+                temp.newFolder("FixedLists").toPath().resolve("ProceedingType.json").toFile());
+
+        FileUtils.copyFile(resRoot.resolve("FixedLists").resolve("OrderStatus.json").toFile(),
+                temp.getRoot().toPath().resolve("FixedLists").resolve("OrderStatus.json").toFile());
+
+        FileUtils.copyFile(resRoot.resolve("FixedLists").resolve("DirectionAssignee.json").toFile(),
+                temp.getRoot().toPath().resolve("FixedLists").resolve("DirectionAssignee.json").toFile());
 
         reflections = new Reflections("uk.gov.hmcts");
         generator = new ConfigGenerator(reflections, temp.getRoot());
@@ -53,16 +57,6 @@ public class ConfigGenerationTests {
         assertResourceFolderMatchesGenerated("ComplexTypes");
         assertGeneratedFolderMatchesResource("ComplexTypes");
     }
-
-//    @Test
-//    public void generatesTypeGraph() {
-//        String basePackage = "uk.gov.hmcts.reform.fpl";
-//        Map<Class, Integer> result = TypeGraphResolver.resolve(CaseData.class, basePackage);
-//        for (Class aClass : result.keySet()) {
-//            System.out.println(aClass.getName());
-//        }
-//        assertThat(result.size(), equalTo(5));
-//    }
 
     @Test
     public void generatesStateOpen() {
@@ -89,17 +83,20 @@ public class ConfigGenerationTests {
         assertEquals("CaseField.json");
     }
 
-    // This will only pass once everything else is finished.
     @Test
     public void generatesAuthorisationCaseEvent() {
         assertEquals("AuthorisationCaseEvent/AuthorisationCaseEvent.json");
+    }
+
+    @Test
+    public void generatesFixedLists() {
+        assertGeneratedFolderMatchesResource("FixedLists");
     }
 
     private void assertGeneratedFolderMatchesResource(String folder) {
         URL u = Resources.getResource("ccd-definition/" + folder);
         File resourceDir = new File(u.getPath());
         File dir = temp.getRoot().toPath().resolve(folder).toFile();
-        assert dir.exists();
         for (Iterator<File> it = FileUtils.iterateFiles(dir, TrueFileFilter.INSTANCE, TrueFileFilter.INSTANCE); it.hasNext(); ) {
             File expected = it.next();
             Path path = dir.toPath().relativize(expected.toPath());

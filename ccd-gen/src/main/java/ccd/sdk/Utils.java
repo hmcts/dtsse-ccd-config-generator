@@ -1,4 +1,4 @@
-package ccd.sdk.generator;
+package ccd.sdk;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -68,7 +68,7 @@ public class Utils {
         for (Map<String, Object> field : fields) {
             Object pk = field.get(primaryKey);
 
-            Optional<Map<String, Object>> existingMatch = existing.stream().filter(x -> x.get(primaryKey).equals(pk)).findFirst();
+            Optional<Map<String, Object>> existingMatch = existing.stream().filter(x -> x.get(primaryKey).equals(pk.toString())).findFirst();
             if (!existingMatch.isPresent()) {
                 System.out.println("Adding new field " + field.get(primaryKey));
                 existing.add(field);

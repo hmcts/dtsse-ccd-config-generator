@@ -1,5 +1,7 @@
 package ccd.sdk.generator;
 
+import ccd.sdk.ConfigBuilderImpl;
+import ccd.sdk.Utils;
 import ccd.sdk.types.Event;
 import ccd.sdk.types.Role;
 import com.google.common.collect.*;
@@ -7,7 +9,6 @@ import com.google.common.collect.*;
 import java.io.File;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 

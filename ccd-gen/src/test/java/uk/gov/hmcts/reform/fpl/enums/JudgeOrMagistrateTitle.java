@@ -1,9 +1,10 @@
 package uk.gov.hmcts.reform.fpl.enums;
 
+import ccd.sdk.types.HasLabel;
 import lombok.Getter;
 
 @Getter
-public enum JudgeOrMagistrateTitle {
+public enum JudgeOrMagistrateTitle implements HasLabel {
     HER_HONOUR_JUDGE("Her Honour Judge"),
     HIS_HONOUR_JUDGE("His Honour Judge"),
     DISTRICT_JUDGE("District Judge"),

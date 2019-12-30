@@ -1,5 +1,7 @@
 package ccd.sdk.generator;
 
+import ccd.sdk.ConfigBuilderImpl;
+import ccd.sdk.Utils;
 import ccd.sdk.types.*;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.google.common.base.Strings;

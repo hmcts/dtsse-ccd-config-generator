@@ -1,37 +1,37 @@
 [
   {
     "LiveFrom": "01/01/2017",
-    "ID": "DirectionAssignees",
+    "ID": "DirectionAssignee",
     "ListElementCode": "LOCAL_AUTHORITY",
     "ListElement": "Local Authority"
   },
   {
     "LiveFrom": "01/01/2017",
-    "ID": "DirectionAssignees",
+    "ID": "DirectionAssignee",
     "ListElementCode": "CAFCASS",
     "ListElement": "Cafcass"
   },
   {
     "LiveFrom": "01/01/2017",
-    "ID": "DirectionAssignees",
+    "ID": "DirectionAssignee",
     "ListElementCode": "ALL_PARTIES",
     "ListElement": "All parties"
   },
   {
     "LiveFrom": "01/01/2017",
-    "ID": "DirectionAssignees",
+    "ID": "DirectionAssignee",
     "ListElementCode": "PARENTS_AND_RESPONDENTS",
     "ListElement": "Parents and other respondents"
   },
   {
     "LiveFrom": "01/01/2017",
-    "ID": "DirectionAssignees",
+    "ID": "DirectionAssignee",
     "ListElementCode": "OTHERS",
     "ListElement": "Other parties"
   },
   {
     "LiveFrom": "01/01/2017",
-    "ID": "DirectionAssignees",
+    "ID": "DirectionAssignee",
     "ListElementCode": "COURT",
     "ListElement": "Court"
   }

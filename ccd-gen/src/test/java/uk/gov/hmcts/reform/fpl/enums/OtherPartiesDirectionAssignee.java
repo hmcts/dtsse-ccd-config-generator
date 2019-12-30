@@ -1,9 +1,10 @@
 package uk.gov.hmcts.reform.fpl.enums;
 
+import ccd.sdk.types.HasLabel;
 import lombok.Getter;
 
 @Getter
-public enum OtherPartiesDirectionAssignee {
+public enum OtherPartiesDirectionAssignee implements HasLabel {
     PERSON_1("Person 1"),
     OTHER_PERSON_1("Other Person 1"),
     OTHER_PERSON_2("Other Person 2"),
