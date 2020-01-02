@@ -8,9 +8,14 @@ import java.io.IOException;
 import java.io.Writer;
 import java.io.FileWriter;
 import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+
 import org.gradle.testkit.runner.GradleRunner;
 import org.gradle.testkit.runner.BuildResult;
 import org.junit.Test;
+
+import static org.hamcrest.Matchers.greaterThan;
 import static org.junit.Assert.*;
 
 /**
@@ -19,26 +24,21 @@ import static org.junit.Assert.*;
 public class CcdSdkPluginFunctionalTest {
     @Test public void canRunTask() throws IOException {
         // Setup the test build
-        File projectDir = new File("../test-builds/fpl-ccd-configuration/service");
+        File projectDir = new File("../test-builds/fpl-ccd-configuration");
 
         // Run the build
         GradleRunner runner = GradleRunner.create();
         runner.forwardOutput();
 
         runner.withPluginClasspath();
-        runner.withArguments("generateCCDConfig");
+        runner.withArguments("generateCCDConfig", "-i", "--stacktrace");
         runner.withProjectDir(projectDir);
 
+        runner.build();
 
-        BuildResult result = runner.build();
+        long count = Files.walk(Path.of("../test-builds/fpl-ccd-configuration/ccd-definition-gen"))
+                .count();
 
-        // Verify the result
-        assertTrue(result.getOutput().contains("Found types: 1"));
-    }
-
-    private void writeString(File file, String string) throws IOException {
-        try (Writer writer = new FileWriter(file)) {
-            writer.write(string);
-        }
+        assertThat(count, greaterThan(20L));
     }
 }

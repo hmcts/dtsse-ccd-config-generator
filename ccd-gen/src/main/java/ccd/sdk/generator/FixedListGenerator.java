@@ -2,8 +2,8 @@ package ccd.sdk.generator;
 
 import ccd.sdk.Utils;
 import ccd.sdk.types.HasLabel;
+import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
-import org.gradle.internal.impldep.org.testng.collections.Lists;
 
 import java.io.File;
 import java.nio.file.Path;

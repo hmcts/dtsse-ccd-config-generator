@@ -4,6 +4,7 @@ import ccd.sdk.generator.*;
 import ccd.sdk.types.*;
 import com.google.common.collect.Maps;
 import net.jodah.typetools.TypeResolver;
+import org.apache.tools.ant.taskdefs.Classloader;
 import org.objenesis.Objenesis;
 import org.objenesis.ObjenesisStd;
 import org.reflections.ReflectionUtils;
@@ -29,6 +30,7 @@ public class ConfigGenerator {
     }
 
     public void generate(String caseTypeId) {
+        outputfolder.mkdirs();
         Set<Class<? extends BaseCCDConfig>> configTypes = reflections.getSubTypesOf(BaseCCDConfig.class);
         if (configTypes.size() != 1) {
             throw new RuntimeException("Expected 1 CCDConfig class but found " + configTypes.size());
@@ -38,6 +40,7 @@ public class ConfigGenerator {
         Class<?>[] typeArgs = TypeResolver.resolveRawArguments(CCDConfig.class, theirs);
 
         Objenesis objenesis = new ObjenesisStd();
+
         CCDConfig config = objenesis.newInstance(configTypes.iterator().next());
         ConfigBuilderImpl builder = new ConfigBuilderImpl(typeArgs[0]);
         config.configure(builder);

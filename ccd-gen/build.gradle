@@ -55,6 +55,10 @@ gradlePlugin {
     }
 }
 
+compileJava {
+    options.compilerArgs += ["-Werror"]
+}
+
 sourceSets {
   functionalTest {
   }
