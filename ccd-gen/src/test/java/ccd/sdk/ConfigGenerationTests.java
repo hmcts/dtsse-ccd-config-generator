@@ -49,6 +49,11 @@ public class ConfigGenerationTests {
     }
 
     @Test
+    public void handlesEmptyConfig() throws Exception {
+        generator.generate("foo", new EmptyConfig());
+    }
+
+    @Test
     public void generatesAllComplexTypes() throws Exception {
         assertEquals("ComplexTypes/Solicitor.json");
         assertEquals("ComplexTypes/2_Recitals.json");

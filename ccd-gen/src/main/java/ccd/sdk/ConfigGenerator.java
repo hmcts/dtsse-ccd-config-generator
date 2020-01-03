@@ -29,18 +29,19 @@ public class ConfigGenerator {
     }
 
     public void generate(String caseTypeId) {
-        outputfolder.mkdirs();
         Set<Class<? extends BaseCCDConfig>> configTypes = reflections.getSubTypesOf(BaseCCDConfig.class);
         if (configTypes.size() != 1) {
             throw new RuntimeException("Expected 1 CCDConfig class but found " + configTypes.size());
         }
 
-        Class<? extends CCDConfig> theirs = configTypes.iterator().next();
-        Class<?>[] typeArgs = TypeResolver.resolveRawArguments(CCDConfig.class, theirs);
-
         Objenesis objenesis = new ObjenesisStd();
-
         CCDConfig config = objenesis.newInstance(configTypes.iterator().next());
+        generate(caseTypeId, config);
+    }
+
+    public void generate(String caseTypeId, CCDConfig config) {
+        outputfolder.mkdirs();
+        Class<?>[] typeArgs = TypeResolver.resolveRawArguments(CCDConfig.class, config.getClass());
         ConfigBuilderImpl builder = new ConfigBuilderImpl(typeArgs[0]);
         config.configure(builder);
         List<Event.EventBuilder> builders = builder.getEvents();

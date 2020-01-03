@@ -14,11 +14,14 @@ import java.util.stream.Collectors;
 public class ComplexTypeGenerator {
 
     public static void generate(File root, String caseType, Map<Class, Integer> types) {
-
         File complexTypes = new File(root, "ComplexTypes");
         complexTypes.mkdir();
         types = types.entrySet().stream().filter(x -> !x.getKey().isEnum())
                 .collect(Collectors.toMap(x -> x.getKey(), x -> x.getValue()));
+
+        if (types.isEmpty()) {
+            return;
+        }
 
         int maxDepth = types.values().stream().mapToInt(Integer::intValue).max().getAsInt();
 
