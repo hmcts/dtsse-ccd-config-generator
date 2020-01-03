@@ -65,7 +65,7 @@ public class Field<T, Parent> {
         }
 
         public FieldCollection.FieldCollectionBuilder<T, Parent> done() {
-            return (FieldCollection.FieldCollectionBuilder<T, Parent>) parent;
+            return parent;
         }
     }
 }

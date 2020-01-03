@@ -1,6 +1,5 @@
 package ccd.sdk;
 
-import org.gradle.api.tasks.compile.JavaCompile;
 import org.reflections.Reflections;
 
 import java.io.File;

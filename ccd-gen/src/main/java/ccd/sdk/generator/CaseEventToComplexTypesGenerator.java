@@ -13,7 +13,7 @@ import java.util.List;
 import java.util.Map;
 
 public class CaseEventToComplexTypesGenerator {
-    public static void writeEvents(File root, String caseType, List<Event> events) {
+    public static void writeEvents(File root, List<Event> events) {
         for (Event event : events) {
             FieldCollection collection = event.getFields().build();
             List<Map<String, Object>> entries = Lists.newArrayList();

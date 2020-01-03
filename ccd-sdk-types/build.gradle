@@ -28,3 +28,11 @@ dependencies {
 
 }
 
+publishing {
+    publications {
+        types(MavenPublication) {
+            from components.java
+        }
+    }
+}
+

@@ -86,3 +86,11 @@ check {
     dependsOn(tasks.functionalTest)
 }
 
+publishing {
+    publications {
+        ccdGen(MavenPublication) {
+            from components.java
+        }
+    }
+}
+

@@ -1,0 +1,14 @@
+
+subprojects {
+    apply plugin: 'maven-publish'
+    group = "ccd-sdk"
+    version = '0.1.0'
+    publishing {
+        repositories {
+            maven {
+                url = "$rootProject.buildDir/repo"
+                name = "repo"
+            }
+        }
+    }
+}

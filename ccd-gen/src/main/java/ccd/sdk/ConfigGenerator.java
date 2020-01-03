@@ -4,7 +4,6 @@ import ccd.sdk.generator.*;
 import ccd.sdk.types.*;
 import com.google.common.collect.Maps;
 import net.jodah.typetools.TypeResolver;
-import org.apache.tools.ant.taskdefs.Classloader;
 import org.objenesis.Objenesis;
 import org.objenesis.ObjenesisStd;
 import org.reflections.ReflectionUtils;
@@ -49,9 +48,9 @@ public class ConfigGenerator {
         Map<Class, Integer> types = resolve(typeArgs[0], config.getClass().getPackageName());
 
         CaseEventGenerator.writeEvents(outputfolder, builder.caseType, events);
-        CaseEventToFieldsGenerator.writeEvents(outputfolder, builder.caseType, events);
+        CaseEventToFieldsGenerator.writeEvents(outputfolder, events);
         ComplexTypeGenerator.generate(outputfolder, builder.caseType, types);
-        CaseEventToComplexTypesGenerator.writeEvents(outputfolder, builder.caseType, events);
+        CaseEventToComplexTypesGenerator.writeEvents(outputfolder, events);
         AuthorisationCaseEventGenerator.generate(outputfolder, events, builder);
         CaseFieldGenerator.generateCaseFields(outputfolder, caseTypeId, typeArgs[0], events, builder);
         FixedListGenerator.generate(outputfolder, types);
