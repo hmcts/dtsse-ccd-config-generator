@@ -3,26 +3,39 @@
  */
 package ccd.sdk;
 
-import java.io.File;
-import java.io.IOException;
-import java.io.Writer;
-import java.io.FileWriter;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-
 import org.gradle.testkit.runner.GradleRunner;
-import org.gradle.testkit.runner.BuildResult;
 import org.junit.Test;
 
-import static org.hamcrest.Matchers.greaterThan;
-import static org.junit.Assert.*;
+import java.io.File;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 
-/**
- * A simple functional test for the 'ccd.sdk.greeting' plugin.
- */
-public class CcdSdkPluginFunctionalTest {
+import static org.hamcrest.Matchers.greaterThan;
+import static org.junit.Assert.assertThat;
+
+public class FPLFunctionalTest {
     @Test public void canRunTask() throws IOException {
+        // Setup the test build
+        File projectDir = new File("../test-builds/fpl-ccd-configuration");
+
+        // Run the build
+        GradleRunner runner = GradleRunner.create();
+        runner.forwardOutput();
+
+        runner.withPluginClasspath();
+        runner.withArguments("generateCCDConfig", "-i", "--stacktrace");
+        runner.withProjectDir(projectDir);
+
+        runner.build();
+
+        long count = Files.walk(Path.of("../test-builds/fpl-ccd-configuration/ccd-definition-gen"))
+                .count();
+
+        assertThat(count, greaterThan(20L));
+    }
+
+    @Test public void appliesToEmptyProject() throws IOException {
         // Setup the test build
         File projectDir = new File("../test-builds/fpl-ccd-configuration");
 

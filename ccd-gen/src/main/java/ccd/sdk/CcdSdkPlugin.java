@@ -26,10 +26,12 @@ public class CcdSdkPlugin implements Plugin<Project> {
         FileCollection deps = source.getRuntimeClasspath().plus(project.files((Object)l.getURLs()));
 
         JavaExec generate = project.getTasks().create("generateCCDConfig", JavaExec.class);
+        generate.setGroup("CCD tasks");
         generate.setClasspath(deps);
         generate.setMain(Main.class.getName());
         generate.dependsOn(project.getTasksByName("compileJava", true));
         CCDConfig config = project.getExtensions().create("ccd", CCDConfig.class);
+        config.configDir = project.getBuildDir();
         generate.doFirst(x -> generate.setArgs(Lists.newArrayList(
                 config.configDir.getAbsolutePath(),
                 config.rootPackage,
