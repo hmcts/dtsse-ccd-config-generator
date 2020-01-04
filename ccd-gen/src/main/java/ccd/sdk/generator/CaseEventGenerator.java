@@ -27,11 +27,11 @@ public class CaseEventGenerator {
             Path output = Paths.get(folder.getPath(), state + ".json");
 
             Ordering<Event> ordering = Ordering.natural().onResultOf(x -> x.getEventNumber());
-            Utils.writeFile(output, serialise(caseType, ordering.sortedCopy(eventsByState.get(state))));
+            Utils.mergeInto(output, serialise(caseType, ordering.sortedCopy(eventsByState.get(state))), "ID");
         }
     }
 
-    private static String serialise(String caseTypeId, List<Event> events) {
+    private static List<Map<String, Object>> serialise(String caseTypeId, List<Event> events) {
         int t = 1;
         List result = Lists.newArrayList();
         for (Event event : events) {
@@ -78,7 +78,7 @@ public class CaseEventGenerator {
             }
         }
 
-        return Utils.serialise(result);
+        return result;
     }
 
     private static String formatUrl(String url) {

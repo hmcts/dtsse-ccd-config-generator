@@ -15,7 +15,7 @@ import java.util.Optional;
 
 public class Utils {
 
-    public static void writeFile(Path path, String value) {
+    private static void writeFile(Path path, String value) {
         try {
             Files.writeString(path, pretty(value));
         } catch (IOException e) {
@@ -49,7 +49,7 @@ public class Utils {
         return field;
     }
 
-    public static void mergeInto(Path path, List<Map<String, Object>> fields, String primaryKey) {
+    public static void mergeInto(Path path, List<Map<String, Object>> fields, String... primaryKeys) {
         System.out.println("Merging into " + path.getFileName());
         ObjectMapper mapper = new ObjectMapper();
         CollectionType mapCollectionType = mapper.getTypeFactory().constructCollectionType(List.class, Map.class);
@@ -65,11 +65,17 @@ public class Utils {
         }
 
         for (Map<String, Object> field : fields) {
-            Object pk = field.get(primaryKey);
+            Optional<Map<String, Object>> existingMatch = existing.stream().filter(x -> {
+                for (String primaryKey : primaryKeys) {
+                    if (!x.get(primaryKey).equals(field.get(primaryKey).toString())) {
+                        return false;
+                    }
+                }
 
-            Optional<Map<String, Object>> existingMatch = existing.stream().filter(x -> x.get(primaryKey).equals(pk.toString())).findFirst();
+                return true;
+            }).findFirst();
             if (!existingMatch.isPresent()) {
-                System.out.println("Adding new field " + field.get(primaryKey));
+                System.out.println("Adding new field " + field.get(primaryKeys[0]));
                 existing.add(field);
             }
         }

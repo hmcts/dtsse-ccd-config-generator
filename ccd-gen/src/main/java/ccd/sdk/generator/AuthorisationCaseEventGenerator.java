@@ -15,7 +15,7 @@ import java.util.Map;
 public class AuthorisationCaseEventGenerator {
 
     public static <T, S, R extends Role> void generate(File root, List<Event> expandedEvents, ConfigBuilderImpl<T, S, R> builder) {
-        List<Map<String, String>> entries = Lists.newArrayList();
+        List<Map<String, Object>> entries = Lists.newArrayList();
 
         Table<String, String, String> eventRolePermissions = builder.explicit;
         for (Event event : expandedEvents) {
@@ -40,7 +40,7 @@ public class AuthorisationCaseEventGenerator {
         }
         for (Table.Cell<String, String, String> cell : eventRolePermissions.cellSet()) {
             if (cell.getValue().length() > 0) {
-                Map<String, String> entry = Maps.newHashMap();
+                Map<String, Object> entry = Maps.newHashMap();
                 entries.add(entry);
                 entry.put("LiveFrom", "01/01/2017");
                 entry.put("CaseTypeID", builder.caseType);
@@ -54,6 +54,6 @@ public class AuthorisationCaseEventGenerator {
         folder.mkdir();
 
         Path output = Paths.get(folder.getPath(), "AuthorisationCaseEvent.json");
-        Utils.writeFile(output, Utils.serialise(entries));
+        Utils.mergeInto(output, entries, "CaseEventID", "UserRole");
     }
 }

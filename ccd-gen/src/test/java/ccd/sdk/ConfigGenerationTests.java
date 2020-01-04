@@ -43,6 +43,8 @@ public class ConfigGenerationTests {
         reflections = new Reflections("uk.gov.hmcts");
         generator = new ConfigGenerator(reflections, temp.getRoot());
         generator.generate("CARE_SUPERVISION_EPO");
+        // Generate a second time to ensure existing config is correctly merged.
+        generator.generate("CARE_SUPERVISION_EPO");
     }
 
     @SneakyThrows

@@ -57,7 +57,7 @@ public class CaseEventToFieldsGenerator {
                 folder.mkdir();
 
                 Path output = Paths.get(folder.getPath(), event.getId() + ".json");
-                Utils.writeFile(output, Utils.serialise(entries));
+                Utils.mergeInto(output, entries, "CaseFieldID");
             }
         }
     }

@@ -23,7 +23,7 @@ public class CaseEventToComplexTypesGenerator {
                 File folder = new File(String.valueOf(Paths.get(root.getPath(), "CaseEventToComplexTypes", event.getEventID())));
                 folder.mkdirs();
                 Path output = Paths.get(folder.getPath(), event.getId() + ".json");
-                Utils.writeFile(output, Utils.serialise(entries));
+                Utils.mergeInto(output, entries, "CaseEventID", "CaseFieldID", "ListElementCode");
             }
         }
     }
