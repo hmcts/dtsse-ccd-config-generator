@@ -8,6 +8,5 @@ import uk.gov.hmcts.reform.fpl.enums.UserRole;
 public class EmptyConfig extends BaseCCDConfig<CaseData, State, UserRole> {
     @Override
     protected void configure() {
-
     }
 }

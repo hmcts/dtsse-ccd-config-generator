@@ -1,10 +1,10 @@
 package ccd.sdk.types;
 
-public abstract class BaseCCDConfig<T, S, R extends Role> implements CCDConfig<T, S, R>, ConfigBuilder<T, S, R> {
-    private ConfigBuilder<T, S, R> builder;
+public abstract class BaseCCDConfig<Model, State, Role extends ccd.sdk.types.Role> implements CCDConfig<Model, State, Role>, ConfigBuilder<Model, State, Role> {
+    private ConfigBuilder<Model, State, Role> builder;
 
     @Override
-    public void configure(ConfigBuilder<T, S, R> builder) {
+    public void configure(ConfigBuilder<Model, State, Role> builder) {
         this.builder = builder;
         configure();
     }
@@ -12,7 +12,7 @@ public abstract class BaseCCDConfig<T, S, R extends Role> implements CCDConfig<T
     protected abstract void configure();
 
     @Override
-    public EventTypeBuilder<T, S> event(String id) {
+    public EventTypeBuilder<Model, State> event(String id) {
         return builder.event(id);
     }
 
@@ -22,22 +22,22 @@ public abstract class BaseCCDConfig<T, S, R extends Role> implements CCDConfig<T
     }
 
     @Override
-    public void grant(S state, String permissions, R role) {
+    public void grant(State state, String permissions, Role role) {
         builder.grant(state, permissions, role);
     }
 
     @Override
-    public void blacklist(S state, R... role) {
+    public void blacklist(State state, Role... role) {
         builder.blacklist(state, role);
     }
 
     @Override
-    public void explicitState(String eventId, R role, String crud) {
+    public void explicitState(String eventId, Role role, String crud) {
         builder.explicitState(eventId, role, crud);
     }
 
     @Override
-    public void prefix(S state, String prefix) {
+    public void prefix(State state, String prefix) {
         builder.prefix(state, prefix);
     }
 
