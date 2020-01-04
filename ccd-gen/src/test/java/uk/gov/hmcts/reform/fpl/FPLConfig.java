@@ -119,9 +119,9 @@ public class FPLConfig extends BaseCCDConfig<CaseData, State, UserRole> {
                 .fields()
                     .field(CaseData::getAllocationDecision, DisplayContext.Mandatory, true);
 
-        addHearingBookingDetails( Gatekeeping);
-        buildSharedEvents( Gatekeeping);
-        buildNoticeOfProceedings( Gatekeeping);
+        addHearingBookingDetails(Gatekeeping);
+        buildSharedEvents(Gatekeeping);
+        buildNoticeOfProceedings(Gatekeeping);
 
         event("draftSDO")
                 .forState(Gatekeeping)
@@ -156,9 +156,9 @@ public class FPLConfig extends BaseCCDConfig<CaseData, State, UserRole> {
                             .field().id(Order::getOrderDoc).context(DisplayContext.ReadOnly).label("Check the order").done()
                             .mandatory(Order::getOrderStatus);
 
-        buildStandardDirections( Gatekeeping, "AfterGatekeeping");
-        buildUploadC2( Gatekeeping);
-        buildC21Event( Gatekeeping);
+        buildStandardDirections(Gatekeeping, "AfterGatekeeping");
+        buildUploadC2(Gatekeeping);
+        buildC21Event(Gatekeeping);
         event("uploadDocumentsAfterGatekeeping")
                 .forState(Gatekeeping)
                 .name("Documents")
@@ -204,9 +204,9 @@ public class FPLConfig extends BaseCCDConfig<CaseData, State, UserRole> {
                 .fields()
                     .optional(CaseData::getFamilyManCaseNumber);
 
-        addHearingBookingDetails( Submitted);
-        this.buildStandardDirections( Submitted, "");
-        buildUploadC2( Submitted);
+        addHearingBookingDetails(Submitted);
+        this.buildStandardDirections(Submitted, "");
+        buildUploadC2(Submitted);
 
         event("sendToGatekeeper")
                 .forState(Submitted)
@@ -219,8 +219,8 @@ public class FPLConfig extends BaseCCDConfig<CaseData, State, UserRole> {
                 .fields()
                     .label("gateKeeperLabel", "Let the gatekeeper know there's a new case")
                     .mandatory(CaseData::getGatekeeperEmail);
-        buildSharedEvents( Submitted);
-        buildNoticeOfProceedings( Submitted);
+        buildSharedEvents(Submitted);
+        buildNoticeOfProceedings(Submitted);
 
         event("addStatementOfService")
                 .forState(Submitted)
@@ -236,7 +236,7 @@ public class FPLConfig extends BaseCCDConfig<CaseData, State, UserRole> {
                     .field("serviceDeclarationLabel", DisplayContext.ReadOnly, null, "Text", null, "Declaration" )
                     .field("serviceConsent", DisplayContext.Mandatory, null, "MultiSelectList", "Consent", " ");
 
-        buildC21Event( Submitted);
+        buildC21Event(Submitted);
 
         event("uploadDocumentsAfterSubmission")
                 .forState(Submitted)
@@ -366,19 +366,19 @@ public class FPLConfig extends BaseCCDConfig<CaseData, State, UserRole> {
                 .showSummary()
                 .fields()
                 .complex(CaseData::getHearingDetails, HearingBooking.class)
-                .mandatory(HearingBooking::getType)
-                .mandatory(HearingBooking::getTypeDetails, "hearingDetails.type=\"OTHER\"")
-                .mandatory(HearingBooking::getVenue)
-                .mandatory(HearingBooking::getStartDate)
-                .mandatory(HearingBooking::getEndDate)
-                .mandatory(HearingBooking::getHearingNeedsBooked)
-                .mandatory(HearingBooking::getHearingNeedsDetails, "hearingDetails.hearingNeedsBooked!=\"NONE\"")
-                .complex(HearingBooking::getJudgeAndLegalAdvisor)
-                .mandatory(JudgeAndLegalAdvisor::getJudgeTitle)
-                .mandatory(JudgeAndLegalAdvisor::getOtherTitle, "hearingDetails.judgeAndLegalAdvisor.judgeTitle=\"OTHER\"")
-                .mandatory(JudgeAndLegalAdvisor::getJudgeLastName, "hearingDetails.judgeAndLegalAdvisor.judgeTitle!=\"MAGISTRATES\" AND hearingDetails.judgeAndLegalAdvisor.judgeTitle!=\"\"")
-                .optional(JudgeAndLegalAdvisor::getJudgeFullName, "hearingDetails.judgeAndLegalAdvisor.judgeTitle=\"MAGISTRATES\"")
-                .optional(JudgeAndLegalAdvisor::getLegalAdvisorName);
+                    .mandatory(HearingBooking::getType)
+                    .mandatory(HearingBooking::getTypeDetails, "hearingDetails.type=\"OTHER\"")
+                    .mandatory(HearingBooking::getVenue)
+                    .mandatory(HearingBooking::getStartDate)
+                    .mandatory(HearingBooking::getEndDate)
+                    .mandatory(HearingBooking::getHearingNeedsBooked)
+                    .mandatory(HearingBooking::getHearingNeedsDetails, "hearingDetails.hearingNeedsBooked!=\"NONE\"")
+                    .complex(HearingBooking::getJudgeAndLegalAdvisor)
+                        .mandatory(JudgeAndLegalAdvisor::getJudgeTitle)
+                        .mandatory(JudgeAndLegalAdvisor::getOtherTitle, "hearingDetails.judgeAndLegalAdvisor.judgeTitle=\"OTHER\"")
+                        .mandatory(JudgeAndLegalAdvisor::getJudgeLastName, "hearingDetails.judgeAndLegalAdvisor.judgeTitle!=\"MAGISTRATES\" AND hearingDetails.judgeAndLegalAdvisor.judgeTitle!=\"\"")
+                        .optional(JudgeAndLegalAdvisor::getJudgeFullName, "hearingDetails.judgeAndLegalAdvisor.judgeTitle=\"MAGISTRATES\"")
+                        .optional(JudgeAndLegalAdvisor::getLegalAdvisorName);
     }
 
     private void buildSharedEvents(State state) {
