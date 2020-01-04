@@ -1,7 +1,9 @@
 package ccd.sdk;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.google.common.io.Files;
 import com.google.common.io.Resources;
+import lombok.SneakyThrows;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.io.filefilter.TrueFileFilter;
 import org.junit.BeforeClass;
@@ -34,37 +36,32 @@ public class ConfigGenerationTests {
         Path resRoot = Paths.get(Resources.getResource("ccd-definition").toURI());
         FileUtils.copyDirectory(resRoot.resolve("ComplexTypes").toFile(), temp.newFolder("ComplexTypes"));
 
-        FileUtils.copyFile(resRoot.resolve("FixedLists").resolve("ProceedingType.json").toFile(),
-                temp.newFolder("FixedLists").toPath().resolve("ProceedingType.json").toFile());
-
-        FileUtils.copyFile(resRoot.resolve("FixedLists").resolve("OrderStatus.json").toFile(),
-                temp.getRoot().toPath().resolve("FixedLists").resolve("OrderStatus.json").toFile());
-
-        FileUtils.copyFile(resRoot.resolve("FixedLists").resolve("DirectionAssignee.json").toFile(),
-                temp.getRoot().toPath().resolve("FixedLists").resolve("DirectionAssignee.json").toFile());
+        copyResourceToOutput("FixedLists/ProceedingType.json");
+        copyResourceToOutput("FixedLists/OrderStatus.json");
+        copyResourceToOutput("FixedLists/DirectionAssignee.json");
 
         reflections = new Reflections("uk.gov.hmcts");
         generator = new ConfigGenerator(reflections, temp.getRoot());
         generator.generate("CARE_SUPERVISION_EPO");
     }
 
+    @SneakyThrows
+    static void copyResourceToOutput(String path) {
+        Path resRoot = Paths.get(Resources.getResource("ccd-definition").toURI());
+        File dest = temp.getRoot().toPath().resolve(path).toFile();
+        Files.createParentDirs(dest);
+        FileUtils.copyFile(resRoot.resolve(path).toFile(), dest);
+    }
+
     @Test
-    public void handlesEmptyConfig() throws Exception {
+    public void handlesEmptyConfig() {
         generator.generate("foo", new EmptyConfig());
     }
 
     @Test
-    public void generatesAllComplexTypes() throws Exception {
-        assertEquals("ComplexTypes/Solicitor.json");
-        assertEquals("ComplexTypes/2_Recitals.json");
-        assertEquals("ComplexTypes/RiskAndHarm.json");
+    public void generatesAllComplexTypes() {
         assertResourceFolderMatchesGenerated("ComplexTypes");
         assertGeneratedFolderMatchesResource("ComplexTypes");
-    }
-
-    @Test
-    public void generatesStateOpen() {
-        assertEquals("CaseEvent/Open.json");
     }
 
     @Test
