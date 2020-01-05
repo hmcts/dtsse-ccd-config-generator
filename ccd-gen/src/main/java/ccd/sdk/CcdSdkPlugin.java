@@ -7,6 +7,7 @@ import com.google.common.collect.Lists;
 import org.gradle.api.Plugin;
 import org.gradle.api.Project;
 import org.gradle.api.file.FileCollection;
+import org.gradle.api.plugins.JavaPlugin;
 import org.gradle.api.plugins.JavaPluginConvention;
 import org.gradle.api.tasks.JavaExec;
 import org.gradle.api.tasks.SourceSet;
@@ -20,6 +21,7 @@ import java.net.URLClassLoader;
  */
 public class CcdSdkPlugin implements Plugin<Project> {
     public void apply(Project project) {
+        project.getPlugins().apply(JavaPlugin.class);
         URLClassLoader l = (URLClassLoader) Thread.currentThread().getContextClassLoader();
         SourceSetContainer ssc = project.getConvention().getPlugin(JavaPluginConvention.class).getSourceSets();
         SourceSet source = ssc.getByName("main");
