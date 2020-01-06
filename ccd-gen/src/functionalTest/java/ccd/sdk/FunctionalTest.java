@@ -36,6 +36,7 @@ public class FunctionalTest {
                 .withArguments("generateCCDConfig", "-si")
                 .buildAndFail();
 
+        System.out.println(result.getOutput());
         assertTrue(result.getOutput().contains("Expected 1"));
     }
 }

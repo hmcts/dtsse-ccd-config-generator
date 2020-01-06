@@ -39,6 +39,10 @@ public class CcdSdkPlugin implements Plugin<Project> {
                 config.rootPackage,
                 config.caseType
         )));
+
+        project.getDependencies().add("compile", "ccd-sdk:ccd-sdk-types:0.1.0");
+        project.getRepositories().mavenCentral();
+        project.getRepositories().maven(x -> x.setUrl("https://raw.githubusercontent.com/banderous/ccd/master"));
     }
 
     static class CCDConfig {
