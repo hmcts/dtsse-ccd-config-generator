@@ -1,8 +1,9 @@
 
 subprojects {
+    apply plugin: 'java'
     apply plugin: 'maven-publish'
     group = "ccd-sdk"
-    version = '0.1.1'
+    version = '0.1.8'
     publishing {
         repositories {
             maven {
@@ -10,5 +11,10 @@ subprojects {
                 name = "repo"
             }
         }
+    }
+
+    compileJava   {
+        sourceCompatibility = '1.8'
+        targetCompatibility = '1.8'
     }
 }

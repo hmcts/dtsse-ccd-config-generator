@@ -28,7 +28,7 @@ public class FunctionalTest {
                 "    id 'java' \n" +
                 "    id 'ccd.sdk'" +
                 "}";
-        Files.writeString(buildFile.toPath(), buildFileContent);
+        Files.write(buildFile.toPath(), buildFileContent.getBytes());
 
         BuildResult result = GradleRunner.create()
                 .withPluginClasspath()

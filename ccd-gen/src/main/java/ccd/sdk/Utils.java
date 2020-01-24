@@ -1,6 +1,8 @@
 package ccd.sdk;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.util.DefaultIndenter;
+import com.fasterxml.jackson.core.util.DefaultPrettyPrinter;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.type.CollectionType;
 import com.google.common.collect.Lists;
@@ -17,25 +19,17 @@ public class Utils {
 
     private static void writeFile(Path path, String value) {
         try {
-            Files.writeString(path, pretty(value));
+            Files.write(path, value.getBytes());
         } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
-    }
-
-    private static String pretty(String json) {
-        ObjectMapper mapper = new ObjectMapper();
-        try {
-            Object o = mapper.readValue(json, Object.class);
-            return mapper.writerWithDefaultPrettyPrinter().writeValueAsString(o);
-        } catch (Exception e) {
             throw new RuntimeException(e);
         }
     }
 
     public static String serialise(List data) {
         try {
-            return new ObjectMapper().writeValueAsString(data);
+            DefaultPrettyPrinter printer = new DefaultPrettyPrinter();
+            printer.indentArraysWith(DefaultIndenter.SYSTEM_LINEFEED_INSTANCE);
+            return new ObjectMapper().writer(printer).writeValueAsString(data);
         } catch (JsonProcessingException e) {
             throw new RuntimeException(e);
         }

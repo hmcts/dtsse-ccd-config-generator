@@ -10,5 +10,7 @@ public class Main {
         Reflections reflections = new Reflections(args[1]);
         ConfigGenerator generator = new ConfigGenerator(reflections, outputDir);
         generator.generate(args[2]);
+        // Required on Gradle 4.X or build task hangs.
+        System.exit(0);
     }
 }

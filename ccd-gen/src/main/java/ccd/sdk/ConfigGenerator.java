@@ -46,7 +46,7 @@ public class ConfigGenerator {
         config.configure(builder);
         List<Event.EventBuilder> builders = builder.getEvents();
         List<Event> events = builders.stream().map(x -> x.build()).collect(Collectors.toList());
-        Map<Class, Integer> types = resolve(typeArgs[0], config.getClass().getPackageName());
+        Map<Class, Integer> types = resolve(typeArgs[0], getPackageName(config.getClass()));
 
         CaseEventGenerator.writeEvents(outputfolder, builder.caseType, events);
         CaseEventToFieldsGenerator.writeEvents(outputfolder, events);
@@ -57,12 +57,28 @@ public class ConfigGenerator {
         FixedListGenerator.generate(outputfolder, types);
     }
 
+    // Copied from jdk 9.
+    public static String getPackageName(Class<?> c) {
+        String pn;
+        while (c.isArray()) {
+            c = c.getComponentType();
+        }
+        if (c.isPrimitive()) {
+            pn = "java.lang";
+        } else {
+            String cn = c.getName();
+            int dot = cn.lastIndexOf('.');
+            pn = (dot != -1) ? cn.substring(0, dot).intern() : "";
+        }
+        return pn;
+    }
+
     public static Map<Class, Integer> resolve(Class dataClass, String basePackage) {
         Map<Class, Integer> result = Maps.newHashMap();
         resolve(dataClass, result, 0);
         System.out.println(result.size());
         System.out.println(basePackage);
-        result = Maps.filterKeys(result, x -> x.getPackageName().startsWith(basePackage));
+        result = Maps.filterKeys(result, x -> getPackageName(x).startsWith(basePackage));
         return result;
     }
 

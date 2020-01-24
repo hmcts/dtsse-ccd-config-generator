@@ -56,3 +56,4 @@ public abstract class BaseCCDConfig<Model, State, Role extends ccd.sdk.types.Rol
         builder.caseField(id, showCondition, type, typeParam, label);
     }
 }
+

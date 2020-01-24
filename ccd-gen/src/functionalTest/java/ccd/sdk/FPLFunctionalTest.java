@@ -10,6 +10,7 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 
 import static org.hamcrest.Matchers.greaterThan;
 import static org.junit.Assert.assertThat;
@@ -29,7 +30,8 @@ public class FPLFunctionalTest {
 
         runner.build();
 
-        long count = Files.walk(Path.of("../test-builds/fpl-ccd-configuration/ccd-definition-gen"))
+
+        long count = Files.walk(Paths.get("../test-builds/fpl-ccd-configuration/ccd-definition-gen"))
                 .count();
 
         assertThat(count, greaterThan(20L));
@@ -49,7 +51,7 @@ public class FPLFunctionalTest {
 
         runner.build();
 
-        long count = Files.walk(Path.of("../test-builds/fpl-ccd-configuration/ccd-definition-gen"))
+        long count = Files.walk(Paths.get("../test-builds/fpl-ccd-configuration/ccd-definition-gen"))
                 .count();
 
         assertThat(count, greaterThan(20L));
