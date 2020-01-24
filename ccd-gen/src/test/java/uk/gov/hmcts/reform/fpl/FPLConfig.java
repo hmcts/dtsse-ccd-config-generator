@@ -1,8 +1,10 @@
 package uk.gov.hmcts.reform.fpl;
 
 
-import ccd.sdk.types.*;
 import de.cronn.reflection.util.TypedPropertyGetter;
+import uk.gov.hmcts.ccd.sdk.types.BaseCCDConfig;
+import uk.gov.hmcts.ccd.sdk.types.DisplayContext;
+import uk.gov.hmcts.ccd.sdk.types.FieldCollection;
 import uk.gov.hmcts.reform.fpl.enums.State;
 import uk.gov.hmcts.reform.fpl.enums.UserRole;
 import uk.gov.hmcts.reform.fpl.model.*;

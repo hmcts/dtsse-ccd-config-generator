@@ -1,8 +1,7 @@
 package uk.gov.hmcts.reform.fpl.model.common;
 
-import ccd.sdk.types.CaseField;
+import uk.gov.hmcts.ccd.sdk.types.CaseField;
 import com.fasterxml.jackson.annotation.JsonFormat;
-import lombok.AllArgsConstructor;
 import lombok.Data;
 import uk.gov.hmcts.reform.fpl.enums.PartyType;
 import uk.gov.hmcts.reform.fpl.model.Address;

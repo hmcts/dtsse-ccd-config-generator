@@ -1,7 +1,6 @@
 package uk.gov.hmcts.reform.fpl.model;
 
-import ccd.sdk.types.CaseField;
-import com.fasterxml.jackson.annotation.JsonFormat;
+import uk.gov.hmcts.ccd.sdk.types.CaseField;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import lombok.Builder;
 import lombok.Data;
@@ -17,7 +16,6 @@ import uk.gov.hmcts.reform.fpl.validation.interfaces.HasTelephoneOrMobile;
 import javax.validation.Valid;
 import javax.validation.constraints.NotBlank;
 import javax.validation.constraints.NotNull;
-import java.time.LocalDate;
 
 @Data
 @EqualsAndHashCode(callSuper = true)

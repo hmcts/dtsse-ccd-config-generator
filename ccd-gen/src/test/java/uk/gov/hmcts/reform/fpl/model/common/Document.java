@@ -1,6 +1,6 @@
 package uk.gov.hmcts.reform.fpl.model.common;
 
-import ccd.sdk.types.ComplexType;
+import uk.gov.hmcts.ccd.sdk.types.ComplexType;
 import lombok.*;
 import lombok.experimental.SuperBuilder;
 import uk.gov.hmcts.reform.fpl.validation.groups.UploadDocumentsGroup;

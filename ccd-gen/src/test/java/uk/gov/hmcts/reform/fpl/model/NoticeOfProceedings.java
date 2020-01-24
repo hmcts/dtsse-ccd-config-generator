@@ -1,6 +1,6 @@
 package uk.gov.hmcts.reform.fpl.model;
 
-import ccd.sdk.types.CaseField;
+import uk.gov.hmcts.ccd.sdk.types.CaseField;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import lombok.Builder;
 import lombok.Data;

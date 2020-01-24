@@ -1,14 +1,10 @@
 package uk.gov.hmcts.reform.fpl.model.common;
 
-import ccd.sdk.types.CaseField;
-import com.fasterxml.jackson.annotation.JsonFormat;
+import uk.gov.hmcts.ccd.sdk.types.CaseField;
 import lombok.AllArgsConstructor;
 import lombok.Data;
-import org.checkerframework.checker.units.qual.C;
 import uk.gov.hmcts.reform.fpl.enums.PartyType;
 import uk.gov.hmcts.reform.fpl.model.Address;
-
-import java.time.LocalDate;
 
 @Data
 @AllArgsConstructor

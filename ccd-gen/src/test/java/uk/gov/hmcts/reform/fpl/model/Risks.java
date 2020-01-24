@@ -1,15 +1,14 @@
 package uk.gov.hmcts.reform.fpl.model;
 
-import ccd.sdk.types.CaseField;
-import ccd.sdk.types.ComplexType;
-import ccd.sdk.types.FieldType;
+import uk.gov.hmcts.ccd.sdk.types.CaseField;
+import uk.gov.hmcts.ccd.sdk.types.ComplexType;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 
 import java.util.List;
 
-import static ccd.sdk.types.FieldType.YesOrNo;
+import static uk.gov.hmcts.ccd.sdk.types.FieldType.YesOrNo;
 
 @Data
 @Builder

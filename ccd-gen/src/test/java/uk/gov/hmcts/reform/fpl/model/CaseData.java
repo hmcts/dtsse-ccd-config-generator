@@ -1,7 +1,7 @@
 package uk.gov.hmcts.reform.fpl.model;
 
-import ccd.sdk.types.CaseField;
-import ccd.sdk.types.FieldType;
+import uk.gov.hmcts.ccd.sdk.types.CaseField;
+import uk.gov.hmcts.ccd.sdk.types.FieldType;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -24,7 +24,7 @@ import static org.apache.commons.lang3.ObjectUtils.isEmpty;
 @Builder(toBuilder = true)
 @AllArgsConstructor
 @HasDocumentsIncludedInSwet(groups = UploadDocumentsGroup.class)
-@ccd.sdk.types.CaseData
+@uk.gov.hmcts.ccd.sdk.types.CaseData
 public class CaseData {
     @NotBlank(message = "Enter a case name")
     @CaseField(label = "Case name",

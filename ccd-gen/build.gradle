@@ -49,8 +49,8 @@ gradlePlugin {
     // Define the plugin
     plugins {
         greeting {
-            id = 'ccd.sdk'
-            implementationClass = 'ccd.sdk.CcdSdkPlugin'
+            id = 'hmcts.ccd.sdk'
+            implementationClass = 'uk.gov.hmcts.ccd.sdk.CcdSdkPlugin'
         }
     }
 }

@@ -1,12 +1,11 @@
 package uk.gov.hmcts.reform.fpl.model;
 
-import ccd.sdk.types.CaseField;
-import ccd.sdk.types.ComplexType;
-import ccd.sdk.types.FieldType;
+import uk.gov.hmcts.ccd.sdk.types.CaseField;
+import uk.gov.hmcts.ccd.sdk.types.ComplexType;
+import uk.gov.hmcts.ccd.sdk.types.FieldType;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
-import lombok.NoArgsConstructor;
 
 import javax.validation.constraints.NotBlank;
 

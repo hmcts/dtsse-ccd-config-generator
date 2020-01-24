@@ -1,10 +1,9 @@
 package uk.gov.hmcts.reform.fpl.model;
 
-import ccd.sdk.types.CaseField;
-import ccd.sdk.types.ComplexType;
-import ccd.sdk.types.FieldType;
-import ccd.sdk.types.Label;
-import com.fasterxml.jackson.annotation.JsonFormat;
+import uk.gov.hmcts.ccd.sdk.types.CaseField;
+import uk.gov.hmcts.ccd.sdk.types.ComplexType;
+import uk.gov.hmcts.ccd.sdk.types.FieldType;
+import uk.gov.hmcts.ccd.sdk.types.Label;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
@@ -13,7 +12,6 @@ import lombok.Data;
 import lombok.EqualsAndHashCode;
 import uk.gov.hmcts.reform.fpl.enums.PartyType;
 import uk.gov.hmcts.reform.fpl.model.common.IdentifiedParty;
-import uk.gov.hmcts.reform.fpl.model.common.Party;
 
 import javax.validation.constraints.NotBlank;
 import java.time.LocalDate;
