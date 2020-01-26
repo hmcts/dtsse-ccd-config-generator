@@ -14,7 +14,9 @@ import org.gradle.api.tasks.SourceSet;
 import org.gradle.api.tasks.SourceSetContainer;
 
 import java.io.File;
+import java.io.IOException;
 import java.net.URLClassLoader;
+import java.util.Properties;
 
 /**
  * A simple 'hello world' plugin.
@@ -40,7 +42,15 @@ public class CcdSdkPlugin implements Plugin<Project> {
                 config.caseType
         )));
 
-        project.getDependencies().add("compile", "ccd-sdk:ccd-sdk-types:0.1.8");
+        Properties properties = new Properties();
+        try {
+            properties.load(getClass().getClassLoader().getResourceAsStream("application.properties"));
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+        String version = properties.getProperty("types.version");
+
+        project.getDependencies().add("compile", "uk.gov.hmcts:ccd-sdk-types:" + version);
         project.getRepositories().mavenCentral();
         project.getRepositories().maven(x -> x.setUrl("https://raw.githubusercontent.com/banderous/ccd/master"));
     }

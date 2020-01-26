@@ -72,6 +72,14 @@ sourceSets {
   }
 }
 
+def input = rootProject.file('version.txt')
+assemble.inputs.file input
+assemble.doFirst {
+    def props = file('src/main/resources/application.properties')
+    def version = input.text
+    props.text = "types.version=${version}"
+}
+
 gradlePlugin.testSourceSets(sourceSets.functionalTest)
 configurations.functionalTestImplementation.extendsFrom(configurations.testImplementation)
 
@@ -86,4 +94,4 @@ check {
     dependsOn(tasks.functionalTest)
 }
 
-
+functionalTest.mustRunAfter test

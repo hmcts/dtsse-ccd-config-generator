@@ -3,7 +3,7 @@ subprojects {
     apply plugin: 'java'
     apply plugin: 'maven-publish'
     group = "ccd-sdk"
-    version = '0.1.8'
+    version = rootProject.file('version.txt').text.trim()
     publishing {
         repositories {
             maven {
@@ -17,4 +17,5 @@ subprojects {
         sourceCompatibility = '1.8'
         targetCompatibility = '1.8'
     }
+
 }
