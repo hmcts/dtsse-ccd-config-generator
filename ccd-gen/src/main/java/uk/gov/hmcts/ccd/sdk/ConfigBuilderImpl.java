@@ -11,12 +11,12 @@ import java.util.List;
 import java.util.Map;
 
 public class ConfigBuilderImpl<T, S, R extends Role> implements ConfigBuilder<T, S, R> {
-    public final Map<String, Event.EventBuilder<T, Role, S>> events = Maps.newHashMap();
     public String caseType;
     public final Table<String, String, String> stateRoles = HashBasedTable.create();
     public final Multimap<String, String> stateRoleblacklist = ArrayListMultimap.create();
     public final Table<String, String, String> explicit = HashBasedTable.create();
     public final Map<String, String> statePrefixes = Maps.newHashMap();
+    public final Table<String, String, List<Event.EventBuilder<T, R, S>>> events = HashBasedTable.create();
     public final List<Map<String, Object>> explicitFields = Lists.newArrayList();
 
     private Class caseData;
@@ -25,20 +25,11 @@ public class ConfigBuilderImpl<T, S, R extends Role> implements ConfigBuilder<T,
     }
 
     @Override
-    public EventTypeBuilder<T, S> event(final String id) {
-        Event.EventBuilder<T, Role, S> e = Event.EventBuilder.builder(caseData);
-        return new EventTypeBuilder<>(e, state -> {
-            String actualId = id;
-            if (events.containsKey(actualId)) {
-                actualId = id + statePrefixes.getOrDefault(state, "") + state;
-                if (events.containsKey(actualId)) {
-                    throw new RuntimeException("Duplicate event: " + actualId);
-                }
-            }
-            e.eventId(id);
-            e.id(actualId);
-            events.put(actualId, e);
-        });
+    public EventTypeBuilder<T, R, S> event(final String id) {
+        Event.EventBuilder<T, R, S> e = Event.EventBuilder.builder(caseData);
+        e.eventId(id);
+        e.id(id);
+        return new EventTypeBuilderImpl(e);
     }
 
     @Override
@@ -91,7 +82,77 @@ public class ConfigBuilderImpl<T, S, R extends Role> implements ConfigBuilder<T,
         caseField(id, label, type, null);
     }
 
-    public List<Event.EventBuilder<T, Role, S>> getEvents() {
-        return Lists.newArrayList(events.values());
+    public List<Event<T, R, S>> getEvents() {
+        Map<String, Event<T, R, S>> result = Maps.newHashMap();
+        for (Table.Cell<String, String, List<Event.EventBuilder<T, R, S>>> cell : events.cellSet()) {
+            for (Event.EventBuilder<T, R, S> builder : cell.getValue()) {
+                Event<T, R, S> event = builder.build();
+                event.setPreState(cell.getRowKey());
+                event.setPostState(cell.getColumnKey());
+                if (result.containsKey(event.getId())) {
+                    String stateSpecificId = event.getEventID() + statePrefixes.getOrDefault(cell.getColumnKey(), "") + cell.getColumnKey();
+                    if (result.containsKey(stateSpecificId)) {
+                        throw new RuntimeException("Duplicate event:" + stateSpecificId);
+                    }
+                    event.setId(stateSpecificId);
+                }
+                if (event.getPreState().isEmpty()) {
+                    event.setPreState(null);
+                }
+                result.put(event.getId(), event);
+            }
+        }
+
+        return Lists.newArrayList(result.values());
+    }
+
+    public class EventTypeBuilderImpl implements EventTypeBuilder<T, R, S> {
+
+
+        private final Event.EventBuilder<T, R, S> builder;
+
+        public EventTypeBuilderImpl(Event.EventBuilder<T, R, S> builder) {
+            this.builder = builder;
+        }
+
+        @Override
+        public Event.EventBuilder<T, R, S> forState(S state) {
+            add(state.toString(), state.toString());
+            return builder;
+        }
+
+        @Override
+        public Event.EventBuilder<T, R, S> initialState(S state) {
+            add("", state.toString());
+            return builder;
+        }
+
+        @Override
+        public Event.EventBuilder<T, R, S> forStateTransition(S from, S to) {
+            add(from.toString(), to.toString());
+            return builder;
+        }
+
+        @Override
+        public Event.EventBuilder<T, R, S> forAllStates() {
+            add("*", "*");
+            return builder;
+        }
+
+        @Override
+        public Event.EventBuilder<T, R, S> forStates(S... states) {
+            for (S state : states) {
+                forState(state);
+            }
+
+            return builder;
+        }
+
+        private void add(String from, String to) {
+            if (!events.contains(from, to)) {
+                events.put(from, to, Lists.newArrayList());
+            }
+            events.get(from, to).add(builder);
+        }
     }
 }

@@ -26,6 +26,9 @@ dependencies {
     testCompile 'org.skyscreamer:jsonassert:1.5.0'
     testCompile 'com.google.guava:guava:28.1-jre'
     testCompile group: 'org.hamcrest', name: 'hamcrest-all', version: '1.3'
+
+    testCompile group: 'org.assertj', name: 'assertj-core', version: '3.14.0'
+
     compile group: 'org.apache.commons', name: 'commons-lang3', version: '3.9'
 
     testCompile group: 'commons-lang', name: 'commons-lang', version: '2.6'
@@ -73,8 +76,8 @@ sourceSets {
 }
 
 def input = rootProject.file('version.txt')
-assemble.inputs.file input
-assemble.doFirst {
+compileJava.inputs.file input
+compileJava.doFirst {
     def props = file('src/main/resources/application.properties')
     def version = input.text
     props.text = "types.version=${version}"

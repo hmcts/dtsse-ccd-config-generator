@@ -1,7 +1,7 @@
 package uk.gov.hmcts.ccd.sdk.types;
 
 public interface ConfigBuilder<T, S, R extends Role> {
-    EventTypeBuilder<T, S> event(String id);
+    EventTypeBuilder<T, R, S> event(String id);
 
     void caseType(String caseType);
     // TODO: require enums as additional generic type params.

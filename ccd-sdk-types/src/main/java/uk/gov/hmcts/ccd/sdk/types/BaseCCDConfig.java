@@ -12,7 +12,7 @@ public abstract class BaseCCDConfig<Model, State, Role extends uk.gov.hmcts.ccd.
     protected abstract void configure();
 
     @Override
-    public EventTypeBuilder<Model, State> event(String id) {
+    public EventTypeBuilder<Model, Role, State> event(String id) {
         return builder.event(id);
     }
 

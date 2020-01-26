@@ -42,9 +42,9 @@ public class ConfigGenerationTests {
 
         reflections = new Reflections("uk.gov.hmcts.reform");
         generator = new ConfigGenerator(reflections);
-        generator.generate(temp.getRoot());
+        generator.resolveConfig(temp.getRoot());
         // Generate a second time to ensure existing config is correctly merged.
-        generator.generate(temp.getRoot());
+        generator.resolveConfig(temp.getRoot());
     }
 
     @SneakyThrows
@@ -57,7 +57,7 @@ public class ConfigGenerationTests {
 
     @Test
     public void handlesEmptyConfig() {
-        generator.generate(new EmptyConfig(), temp.getRoot());
+        generator.resolveConfig(new EmptyConfig());
     }
 
     @Test

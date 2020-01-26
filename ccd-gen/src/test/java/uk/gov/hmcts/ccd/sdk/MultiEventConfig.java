@@ -6,11 +6,10 @@ import uk.gov.hmcts.reform.fpl.enums.State;
 import uk.gov.hmcts.reform.fpl.enums.UserRole;
 import uk.gov.hmcts.reform.fpl.model.CaseData;
 
-public class MultiEvent implements CCDConfig<CaseData, State, UserRole> {
+public class MultiEventConfig implements CCDConfig<CaseData, State, UserRole> {
     @Override
     public void configure(ConfigBuilder<CaseData, State, UserRole> builder) {
-
-//        builder.event("judgeDetails")
-//                .forStates(State.PREPARE_FOR_HEARING, State.Open);
+        builder.event("judgeDetails")
+                .forStates(State.PREPARE_FOR_HEARING, State.Open);
     }
 }

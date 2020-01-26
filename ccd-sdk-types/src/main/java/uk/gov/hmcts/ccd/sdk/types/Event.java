@@ -26,7 +26,6 @@ public class Event<T, R extends Role, S> {
     private String submittedURL;
     private String midEventURL;
     private String retries;
-    private String[] states;
     private boolean explicitGrants;
     private boolean showSummary;
     private boolean showEventNotes;
@@ -66,8 +65,8 @@ public class Event<T, R extends Role, S> {
 
     public static class EventBuilder<T, R extends Role, S> {
 
-        public static <T, S> EventBuilder<T, Role, S> builder(Class dataClass) {
-            EventBuilder<T, Role, S> result = new EventBuilder<T, Role, S>();
+        public static <T, R extends Role, S> EventBuilder<T, R, S> builder(Class dataClass) {
+            EventBuilder<T, R, S> result = new EventBuilder<T, R, S>();
             result.dataClass = dataClass;
             result.grants = Maps.newHashMap();
             result.fields = FieldCollection.FieldCollectionBuilder.builder(null, dataClass);
@@ -110,7 +109,6 @@ public class Event<T, R extends Role, S> {
         }
 
         EventBuilder<T, R, S> forStates(S... states) {
-            this.states = Arrays.stream(states).map(Objects::toString).toArray(String[]::new);
             return forState(states[0]);
         }
 

@@ -28,7 +28,7 @@ public class ConfigGenerator {
         this.reflections = reflections;
     }
 
-    public void generate(File outputFolder) {
+    public void resolveConfig(File outputFolder) {
         Set<Class<? extends BaseCCDConfig>> configTypes = reflections.getSubTypesOf(BaseCCDConfig.class);
         if (configTypes.size() != 1) {
             throw new RuntimeException("Expected 1 CCDConfig class but found " + configTypes.size());
@@ -36,21 +36,20 @@ public class ConfigGenerator {
 
         Objenesis objenesis = new ObjenesisStd();
         CCDConfig config = objenesis.newInstance(configTypes.iterator().next());
-        writeConfig(outputFolder, generate(config, outputFolder));
+        writeConfig(outputFolder, resolveConfig(config));
     }
 
-    public ResolvedCCDConfig generate(CCDConfig config, File outputfolder) {
-        outputfolder.mkdirs();
+    public ResolvedCCDConfig resolveConfig(CCDConfig config) {
         Class<?>[] typeArgs = TypeResolver.resolveRawArguments(CCDConfig.class, config.getClass());
         ConfigBuilderImpl builder = new ConfigBuilderImpl(typeArgs[0]);
         config.configure(builder);
-        List<Event.EventBuilder> builders = builder.getEvents();
-        List<Event> events = builders.stream().map(x -> x.build()).collect(Collectors.toList());
+        List<Event> events = builder.getEvents();
         Map<Class, Integer> types = resolve(typeArgs[0], getPackageName(config.getClass()));
         return new ResolvedCCDConfig(typeArgs[0], builder, events, types);
     }
 
     public void writeConfig(File outputfolder, ResolvedCCDConfig config) {
+        outputfolder.mkdirs();
         CaseEventGenerator.writeEvents(outputfolder, config.builder.caseType, config.events);
         CaseEventToFieldsGenerator.writeEvents(outputfolder, config.events);
         ComplexTypeGenerator.generate(outputfolder, config.builder.caseType, config.types);
