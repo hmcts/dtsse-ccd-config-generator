@@ -41,10 +41,10 @@ public class ConfigGenerationTests {
         copyResourceToOutput("FixedLists/DirectionAssignee.json");
 
         reflections = new Reflections("uk.gov.hmcts.reform");
-        generator = new ConfigGenerator(reflections, temp.getRoot());
-        generator.generate("CARE_SUPERVISION_EPO");
+        generator = new ConfigGenerator(reflections);
+        generator.generate(temp.getRoot());
         // Generate a second time to ensure existing config is correctly merged.
-        generator.generate("CARE_SUPERVISION_EPO");
+        generator.generate(temp.getRoot());
     }
 
     @SneakyThrows
@@ -57,7 +57,7 @@ public class ConfigGenerationTests {
 
     @Test
     public void handlesEmptyConfig() {
-        generator.generate("foo", new EmptyConfig());
+        generator.generate(new EmptyConfig(), temp.getRoot());
     }
 
     @Test

@@ -22,15 +22,13 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 public class ConfigGenerator {
-    private final File outputfolder;
     private final Reflections reflections;
 
-    public ConfigGenerator(Reflections reflections, File outputFolder) {
+    public ConfigGenerator(Reflections reflections) {
         this.reflections = reflections;
-        this.outputfolder = outputFolder;
     }
 
-    public void generate(String caseTypeId) {
+    public void generate(File outputFolder) {
         Set<Class<? extends BaseCCDConfig>> configTypes = reflections.getSubTypesOf(BaseCCDConfig.class);
         if (configTypes.size() != 1) {
             throw new RuntimeException("Expected 1 CCDConfig class but found " + configTypes.size());
@@ -38,10 +36,10 @@ public class ConfigGenerator {
 
         Objenesis objenesis = new ObjenesisStd();
         CCDConfig config = objenesis.newInstance(configTypes.iterator().next());
-        generate(caseTypeId, config);
+        writeConfig(outputFolder, generate(config, outputFolder));
     }
 
-    public void generate(String caseTypeId, CCDConfig config) {
+    public ResolvedCCDConfig generate(CCDConfig config, File outputfolder) {
         outputfolder.mkdirs();
         Class<?>[] typeArgs = TypeResolver.resolveRawArguments(CCDConfig.class, config.getClass());
         ConfigBuilderImpl builder = new ConfigBuilderImpl(typeArgs[0]);
@@ -49,14 +47,17 @@ public class ConfigGenerator {
         List<Event.EventBuilder> builders = builder.getEvents();
         List<Event> events = builders.stream().map(x -> x.build()).collect(Collectors.toList());
         Map<Class, Integer> types = resolve(typeArgs[0], getPackageName(config.getClass()));
+        return new ResolvedCCDConfig(typeArgs[0], builder, events, types);
+    }
 
-        CaseEventGenerator.writeEvents(outputfolder, builder.caseType, events);
-        CaseEventToFieldsGenerator.writeEvents(outputfolder, events);
-        ComplexTypeGenerator.generate(outputfolder, builder.caseType, types);
-        CaseEventToComplexTypesGenerator.writeEvents(outputfolder, events);
-        AuthorisationCaseEventGenerator.generate(outputfolder, events, builder);
-        CaseFieldGenerator.generateCaseFields(outputfolder, caseTypeId, typeArgs[0], events, builder);
-        FixedListGenerator.generate(outputfolder, types);
+    public void writeConfig(File outputfolder, ResolvedCCDConfig config) {
+        CaseEventGenerator.writeEvents(outputfolder, config.builder.caseType, config.events);
+        CaseEventToFieldsGenerator.writeEvents(outputfolder, config.events);
+        ComplexTypeGenerator.generate(outputfolder, config.builder.caseType, config.types);
+        CaseEventToComplexTypesGenerator.writeEvents(outputfolder, config.events);
+        AuthorisationCaseEventGenerator.generate(outputfolder, config.events, config.builder);
+        CaseFieldGenerator.generateCaseFields(outputfolder, config.builder.caseType, config.typeArg, config.events, config.builder);
+        FixedListGenerator.generate(outputfolder, config.types);
     }
 
     // Copied from jdk 9.
