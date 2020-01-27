@@ -24,7 +24,6 @@ import static org.apache.commons.lang3.ObjectUtils.isEmpty;
 @Builder(toBuilder = true)
 @AllArgsConstructor
 @HasDocumentsIncludedInSwet(groups = UploadDocumentsGroup.class)
-@uk.gov.hmcts.ccd.sdk.types.CaseData
 public class CaseData {
     @NotBlank(message = "Enter a case name")
     @CaseField(label = "Case name",
