@@ -26,15 +26,18 @@ import java.util.Iterator;
 
 public class FPLConfigGenerationTests {
     @ClassRule
-    public static TemporaryFolder temp = new TemporaryFolder();
+    public static TemporaryFolder tmp = new TemporaryFolder();
+
+    private static Path prodConfig;
 
     static ConfigGenerator generator;
     static Reflections reflections;
 
     @BeforeClass
     public static void before() throws IOException, URISyntaxException {
+        prodConfig = tmp.getRoot().toPath().resolve("production");
         Path resRoot = Paths.get(Resources.getResource("ccd-definition").toURI());
-        FileUtils.copyDirectory(resRoot.resolve("ComplexTypes").toFile(), temp.newFolder("ComplexTypes"));
+        FileUtils.copyDirectory(resRoot.resolve("ComplexTypes").toFile(), prodConfig.resolve("ComplexTypes").toFile());
 
         copyResourceToOutput("FixedLists/ProceedingType.json");
         copyResourceToOutput("FixedLists/OrderStatus.json");
@@ -42,15 +45,15 @@ public class FPLConfigGenerationTests {
 
         reflections = new Reflections("uk.gov.hmcts.reform");
         generator = new ConfigGenerator(reflections);
-        generator.resolveConfig(temp.getRoot());
+        generator.resolveConfig(tmp.getRoot());
         // Generate a second time to ensure existing config is correctly merged.
-        generator.resolveConfig(temp.getRoot());
+        generator.resolveConfig(tmp.getRoot());
     }
 
     @SneakyThrows
     static void copyResourceToOutput(String path) {
         Path resRoot = Paths.get(Resources.getResource("ccd-definition").toURI());
-        File dest = temp.getRoot().toPath().resolve(path).toFile();
+        File dest = prodConfig.resolve(path).toFile();
         Files.createParentDirs(dest);
         FileUtils.copyFile(resRoot.resolve(path).toFile(), dest);
     }
@@ -95,7 +98,7 @@ public class FPLConfigGenerationTests {
     private void assertGeneratedFolderMatchesResource(String folder) {
         URL u = Resources.getResource("ccd-definition/" + folder);
         File resourceDir = new File(u.getPath());
-        File dir = temp.getRoot().toPath().resolve(folder).toFile();
+        File dir = prodConfig.resolve(folder).toFile();
         for (Iterator<File> it = FileUtils.iterateFiles(dir, TrueFileFilter.INSTANCE, TrueFileFilter.INSTANCE); it.hasNext(); ) {
             File expected = it.next();
             Path path = dir.toPath().relativize(expected.toPath());
@@ -111,7 +114,7 @@ public class FPLConfigGenerationTests {
         for (Iterator<File> it = FileUtils.iterateFiles(dir, TrueFileFilter.INSTANCE, TrueFileFilter.INSTANCE); it.hasNext(); ) {
             File expected = it.next();
             Path path = dir.toPath().relativize(expected.toPath());
-            Path actual = temp.getRoot().toPath().resolve(folder).resolve(path);
+            Path actual = prodConfig.resolve(folder).resolve(path);
             assertEquals(expected, actual.toFile());
         }
     }
@@ -120,7 +123,7 @@ public class FPLConfigGenerationTests {
         System.out.println("Comparing " + jsonPath);
         URL u = Resources.getResource("ccd-definition/" + jsonPath);
         File expected = new File(u.getPath());
-        File actual = new File(temp.getRoot(), jsonPath);
+        File actual = new File(prodConfig.toFile(), jsonPath);
         assertEquals(expected, actual);
     }
 
@@ -145,7 +148,7 @@ public class FPLConfigGenerationTests {
 
         } catch (Exception e) {
             System.out.println("Generated files:");
-            for (Iterator<File> it = FileUtils.iterateFiles(temp.getRoot(), TrueFileFilter.INSTANCE, TrueFileFilter.INSTANCE); it.hasNext(); ) {
+            for (Iterator<File> it = FileUtils.iterateFiles(prodConfig.toFile(), TrueFileFilter.INSTANCE, TrueFileFilter.INSTANCE); it.hasNext(); ) {
                 File f = it.next();
                 System.out.println(f.getPath());
             }

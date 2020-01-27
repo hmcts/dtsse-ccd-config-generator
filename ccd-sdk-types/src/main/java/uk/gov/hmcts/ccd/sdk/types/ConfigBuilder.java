@@ -4,6 +4,7 @@ public interface ConfigBuilder<T, S, R extends Role> {
     EventTypeBuilder<T, R, S> event(String id);
 
     void caseType(String caseType);
+    void setEnvironment(String env);
     // TODO: require enums as additional generic type params.
     void grant(S state, String permissions, R role);
     void blacklist(S state, R... role);

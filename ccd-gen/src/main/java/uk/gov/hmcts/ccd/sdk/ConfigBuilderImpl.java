@@ -19,6 +19,7 @@ public class ConfigBuilderImpl<T, S, R extends Role> implements ConfigBuilder<T,
 
     private Class caseData;
     private WebhookConvention webhookConvention = this::defaultWebhookConvention;
+    public String environment;
 
     private String defaultWebhookConvention(Webhook webhook, String eventId) {
         eventId = CaseFormat.LOWER_CAMEL.to(CaseFormat.LOWER_HYPHEN, eventId);
@@ -41,6 +42,11 @@ public class ConfigBuilderImpl<T, S, R extends Role> implements ConfigBuilder<T,
     @Override
     public void caseType(String caseType) {
         this.caseType = caseType;
+    }
+
+    @Override
+    public void setEnvironment(String env) {
+        this.environment = env;
     }
 
     @Override

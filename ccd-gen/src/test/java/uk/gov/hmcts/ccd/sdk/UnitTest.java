@@ -13,7 +13,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 public class UnitTest {
 
-    Reflections reflections = new Reflections("uk.gov.hmcts.reform");
+    Reflections reflections = new Reflections("uk.gov.hmcts");
     ConfigGenerator generator = new ConfigGenerator(reflections);
 
     @Test

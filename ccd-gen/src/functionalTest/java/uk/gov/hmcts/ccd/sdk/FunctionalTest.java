@@ -37,6 +37,6 @@ public class FunctionalTest {
                 .buildAndFail();
 
         System.out.println(result.getOutput());
-        assertTrue(result.getOutput().contains("Expected 1"));
+        assertTrue(result.getOutput().contains("Expected at least one"));
     }
 }

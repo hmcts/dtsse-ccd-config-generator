@@ -1,5 +1,6 @@
 package uk.gov.hmcts.ccd.sdk;
 
+import com.google.common.base.Strings;
 import com.google.common.collect.Maps;
 import net.jodah.typetools.TypeResolver;
 import org.objenesis.Objenesis;
@@ -7,7 +8,6 @@ import org.objenesis.ObjenesisStd;
 import org.reflections.ReflectionUtils;
 import org.reflections.Reflections;
 import uk.gov.hmcts.ccd.sdk.generator.*;
-import uk.gov.hmcts.ccd.sdk.types.BaseCCDConfig;
 import uk.gov.hmcts.ccd.sdk.types.CCDConfig;
 import uk.gov.hmcts.ccd.sdk.types.Event;
 
@@ -29,14 +29,21 @@ public class ConfigGenerator {
     }
 
     public void resolveConfig(File outputFolder) {
-        Set<Class<? extends BaseCCDConfig>> configTypes = reflections.getSubTypesOf(BaseCCDConfig.class);
-        if (configTypes.size() != 1) {
-            throw new RuntimeException("Expected 1 CCDConfig class but found " + configTypes.size());
+        Set<Class<? extends CCDConfig>> configTypes =
+                reflections.getSubTypesOf(CCDConfig.class).stream()
+                .filter(x -> !Modifier.isAbstract(x.getModifiers())).collect(Collectors.toSet());
+
+        if (configTypes.isEmpty()) {
+            throw new RuntimeException("Expected at least one CCDConfig implementation but none found ");
         }
 
-        Objenesis objenesis = new ObjenesisStd();
-        CCDConfig config = objenesis.newInstance(configTypes.iterator().next());
-        writeConfig(outputFolder, resolveConfig(config));
+        for (Class<? extends CCDConfig> configType : configTypes) {
+            Objenesis objenesis = new ObjenesisStd();
+            CCDConfig config = objenesis.newInstance(configType);
+            ResolvedCCDConfig resolved = resolveConfig(config);
+            File destination = Strings.isNullOrEmpty(resolved.environment) ? outputFolder : new File(outputFolder, resolved.environment);
+            writeConfig(destination, resolved);
+        }
     }
 
     public ResolvedCCDConfig resolveConfig(CCDConfig config) {
@@ -45,7 +52,7 @@ public class ConfigGenerator {
         config.configure(builder);
         List<Event> events = builder.getEvents();
         Map<Class, Integer> types = resolve(typeArgs[0], getPackageName(config.getClass()));
-        return new ResolvedCCDConfig(typeArgs[0], builder, events, types);
+        return new ResolvedCCDConfig(typeArgs[0], builder, events, types, builder.environment);
     }
 
     public void writeConfig(File outputfolder, ResolvedCCDConfig config) {

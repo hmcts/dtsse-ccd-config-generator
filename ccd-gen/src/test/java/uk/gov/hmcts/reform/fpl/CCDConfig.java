@@ -18,11 +18,12 @@ import static uk.gov.hmcts.reform.fpl.enums.UserRole.*;
 
 // Found and invoked by the config generator.
 // The CaseData type parameter tells the generator which class represents your case model.
-public class FPLConfig extends BaseCCDConfig<CaseData, State, UserRole> {
+public class CCDConfig extends BaseCCDConfig<CaseData, State, UserRole> {
 
     @Override
     public void configure() {
         caseType("CARE_SUPERVISION_EPO");
+        setEnvironment(environment());
         setWebhookConvention(this::webhookConvention);
 
         explicitState("hearingBookingDetails", JUDICIARY, "CRU");
@@ -42,7 +43,11 @@ public class FPLConfig extends BaseCCDConfig<CaseData, State, UserRole> {
         caseField("submittedForm", "Attached PDF", "Document");
     }
 
-    private String webhookConvention(Webhook webhook, String eventId) {
+    protected String environment() {
+        return "production";
+    }
+
+    protected String webhookConvention(Webhook webhook, String eventId) {
         eventId = CaseFormat.LOWER_CAMEL.to(CaseFormat.LOWER_HYPHEN, eventId);
         String path = CaseFormat.LOWER_CAMEL.to(CaseFormat.LOWER_HYPHEN, webhook.toString());
         return "${CCD_DEF_CASE_SERVICE_BASE_URL}/callback/" + eventId + "/" + path;

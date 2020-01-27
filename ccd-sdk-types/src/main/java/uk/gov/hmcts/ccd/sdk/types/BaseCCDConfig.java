@@ -60,5 +60,10 @@ public abstract class BaseCCDConfig<Model, State, Role extends uk.gov.hmcts.ccd.
     public void setWebhookConvention(WebhookConvention convention) {
         builder.setWebhookConvention(convention);
     }
+
+    @Override
+    public void setEnvironment(String env) {
+        builder.setEnvironment(env);
+    }
 }
 
