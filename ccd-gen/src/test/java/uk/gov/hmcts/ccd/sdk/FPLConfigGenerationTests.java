@@ -24,7 +24,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Iterator;
 
-public class ConfigGenerationTests {
+public class FPLConfigGenerationTests {
     @ClassRule
     public static TemporaryFolder temp = new TemporaryFolder();
 
@@ -55,10 +55,6 @@ public class ConfigGenerationTests {
         FileUtils.copyFile(resRoot.resolve(path).toFile(), dest);
     }
 
-    @Test
-    public void handlesEmptyConfig() {
-        generator.resolveConfig(new EmptyConfig());
-    }
 
     @Test
     public void generatesAllComplexTypes() {
