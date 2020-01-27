@@ -66,11 +66,11 @@ public class Event<T, R extends Role, S> {
 
         private WebhookConvention webhookConvention;
 
-        public static <T, R extends Role, S> EventBuilder<T, R, S> builder(Class dataClass, WebhookConvention convention) {
+        public static <T, R extends Role, S> EventBuilder<T, R, S> builder(Class dataClass, WebhookConvention convention, PropertyUtils propertyUtils) {
             EventBuilder<T, R, S> result = new EventBuilder<T, R, S>();
             result.dataClass = dataClass;
             result.grants = new HashMap<>();
-            result.fields = FieldCollection.FieldCollectionBuilder.builder(null, dataClass);
+            result.fields = FieldCollection.FieldCollectionBuilder.builder(null, dataClass, propertyUtils);
             result.eventNumber = eventCount++;
             result.webhookConvention = convention;
 

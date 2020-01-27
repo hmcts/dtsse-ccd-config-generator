@@ -1,12 +1,10 @@
 package uk.gov.hmcts.ccd.sdk.types;
 
-import de.cronn.reflection.util.PropertyUtils;
 import de.cronn.reflection.util.TypedPropertyGetter;
 import lombok.Builder;
 import lombok.Data;
 import lombok.ToString;
 
-import java.beans.PropertyDescriptor;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Consumer;
@@ -32,14 +30,16 @@ public class FieldCollection<T, Parent> {
         private String pageLabel;
         @ToString.Exclude
         private FieldCollectionBuilder<Parent, ?> parent;
+        private PropertyUtils propertyUtils;
 
-        public static <T, Parent> FieldCollectionBuilder<T, Parent> builder(FieldCollectionBuilder<Parent, ?> parent, Class<T> dataClass) {
+        public static <T, Parent> FieldCollectionBuilder<T, Parent> builder(FieldCollectionBuilder<Parent, ?> parent, Class<T> dataClass, PropertyUtils propertyUtils) {
             FieldCollectionBuilder<T, Parent> result = new FieldCollectionBuilder<T, Parent>();
             result.parent = parent;
             result.dataClass = dataClass;
             result.fields = new ArrayList<>();
             result.complexFields = new ArrayList<>();
             result.explicitFields = new ArrayList<>();
+            result.propertyUtils = propertyUtils;
             return result;
         }
 
@@ -114,13 +114,13 @@ public class FieldCollection<T, Parent> {
         }
 
         public <U> FieldCollectionBuilder<U, T> complex(TypedPropertyGetter<T, U> getter) {
-            PropertyDescriptor descriptor = PropertyUtils.getPropertyDescriptor(dataClass, getter);
-            return complex(getter, (Class<U>) descriptor.getPropertyType());
+            Class<U> c = propertyUtils.getPropertyType(dataClass, getter);
+            return complex(getter, c);
         }
 
         public <U> FieldCollectionBuilder<U, T> complex(TypedPropertyGetter<T, ?> getter, Class<U> c) {
-            String fieldName = PropertyUtils.getPropertyName(dataClass, getter);
-            FieldCollectionBuilder<T, Parent> result = (FieldCollectionBuilder<T, Parent>) FieldCollectionBuilder.builder(this, c);
+            String fieldName = propertyUtils.getPropertyName(dataClass, getter);
+            FieldCollectionBuilder<T, Parent> result = (FieldCollectionBuilder<T, Parent>) FieldCollectionBuilder.builder(this, c, propertyUtils);
             complexFields.add(result);
             result.rootFieldname = fieldName;
             // Nested builders inherit ordering state.
@@ -140,7 +140,7 @@ public class FieldCollection<T, Parent> {
         }
 
         public Field.FieldBuilder<T, Parent> field() {
-            Field.FieldBuilder<T, Parent> f = Field.FieldBuilder.builder(dataClass, this);
+            Field.FieldBuilder<T, Parent> f = Field.FieldBuilder.builder(dataClass, this, propertyUtils);
             f.page(this.pageId);
             f.pageLabel(this.pageLabel);
             if (this.pageId != null) {

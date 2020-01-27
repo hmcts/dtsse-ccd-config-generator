@@ -32,7 +32,7 @@ public class ConfigBuilderImpl<T, S, R extends Role> implements ConfigBuilder<T,
 
     @Override
     public EventTypeBuilder<T, R, S> event(final String id) {
-        Event.EventBuilder<T, R, S> e = Event.EventBuilder.builder(caseData, webhookConvention);
+        Event.EventBuilder<T, R, S> e = Event.EventBuilder.builder(caseData, webhookConvention, new PropertyUtils());
         e.eventId(id);
         e.id(id);
         return new EventTypeBuilderImpl(e);
