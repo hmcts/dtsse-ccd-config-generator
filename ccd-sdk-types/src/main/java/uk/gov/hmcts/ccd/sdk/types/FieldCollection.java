@@ -1,6 +1,5 @@
 package uk.gov.hmcts.ccd.sdk.types;
 
-import com.google.common.collect.Lists;
 import de.cronn.reflection.util.PropertyUtils;
 import de.cronn.reflection.util.TypedPropertyGetter;
 import lombok.Builder;
@@ -8,6 +7,7 @@ import lombok.Data;
 import lombok.ToString;
 
 import java.beans.PropertyDescriptor;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Consumer;
 
@@ -37,9 +37,9 @@ public class FieldCollection<T, Parent> {
             FieldCollectionBuilder<T, Parent> result = new FieldCollectionBuilder<T, Parent>();
             result.parent = parent;
             result.dataClass = dataClass;
-            result.fields = Lists.newArrayList();
-            result.complexFields = Lists.newArrayList();
-            result.explicitFields = Lists.newArrayList();
+            result.fields = new ArrayList<>();
+            result.complexFields = new ArrayList<>();
+            result.explicitFields = new ArrayList<>();
             return result;
         }
 

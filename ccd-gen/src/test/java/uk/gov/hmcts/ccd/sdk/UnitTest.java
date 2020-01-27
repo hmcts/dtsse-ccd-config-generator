@@ -4,6 +4,7 @@ import org.junit.Test;
 import org.reflections.Reflections;
 import uk.gov.hmcts.ccd.sdk.types.CCDConfig;
 import uk.gov.hmcts.ccd.sdk.types.Event;
+import uk.gov.hmcts.ccd.sdk.types.Webhook;
 import uk.gov.hmcts.reform.fpl.enums.State;
 import uk.gov.hmcts.reform.fpl.enums.UserRole;
 import uk.gov.hmcts.reform.fpl.model.CaseData;
@@ -31,5 +32,17 @@ public class UnitTest {
     public void handlesEmptyConfig() {
         // Should not throw any exception.
         generator.resolveConfig(x -> {});
+    }
+
+    @Test
+    public void webhookConvention() {
+        ResolvedCCDConfig resolved = generator.resolveConfig(x -> {
+            x.setWebhookConvention((webhookType, eventId) -> webhookType + "-" + eventId);
+            x.event("eventId")
+                    .forState("state")
+                    .allWebhooks();
+        });
+
+        assertThat(resolved.events.get(0).getAboutToStartURL()).isEqualTo(Webhook.AboutToStart + "-" + "eventId");
     }
 }

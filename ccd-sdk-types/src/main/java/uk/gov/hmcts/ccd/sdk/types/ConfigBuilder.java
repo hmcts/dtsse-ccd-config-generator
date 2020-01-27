@@ -12,4 +12,7 @@ public interface ConfigBuilder<T, S, R extends Role> {
     void caseField(String id, String showCondition, String type, String typeParam, String label);
     void caseField(String id, String label, String type, String collectionType);
     void caseField(String id, String label, String type);
+
+    // Webhooks can follow a convention derived from the webhook type and event id.
+    void setWebhookConvention(WebhookConvention convention);
 }

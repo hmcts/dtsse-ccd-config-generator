@@ -8,10 +8,8 @@ import uk.gov.hmcts.ccd.sdk.types.FieldCollection;
 import uk.gov.hmcts.reform.fpl.enums.State;
 import uk.gov.hmcts.reform.fpl.enums.UserRole;
 import uk.gov.hmcts.reform.fpl.model.*;
-import uk.gov.hmcts.reform.fpl.model.CaseData;
 import uk.gov.hmcts.reform.fpl.model.common.C2DocumentBundle;
 import uk.gov.hmcts.reform.fpl.model.common.JudgeAndLegalAdvisor;
-
 
 import static uk.gov.hmcts.reform.fpl.enums.State.*;
 import static uk.gov.hmcts.reform.fpl.enums.UserRole.*;

@@ -55,5 +55,10 @@ public abstract class BaseCCDConfig<Model, State, Role extends uk.gov.hmcts.ccd.
     public void caseField(String id, String showCondition, String type, String typeParam, String label) {
         builder.caseField(id, showCondition, type, typeParam, label);
     }
+
+    @Override
+    public void setWebhookConvention(WebhookConvention convention) {
+        builder.setWebhookConvention(convention);
+    }
 }
 

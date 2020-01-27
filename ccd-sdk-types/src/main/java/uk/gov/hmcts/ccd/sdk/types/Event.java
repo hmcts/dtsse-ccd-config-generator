@@ -1,13 +1,12 @@
 package uk.gov.hmcts.ccd.sdk.types;
 
-import com.google.common.base.CaseFormat;
-import com.google.common.base.Joiner;
-import com.google.common.collect.Maps;
 import lombok.*;
 
 import java.util.Arrays;
+import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
-import java.util.Objects;
+import java.util.stream.Collectors;
 
 @Builder
 @Data
@@ -65,12 +64,15 @@ public class Event<T, R extends Role, S> {
 
     public static class EventBuilder<T, R extends Role, S> {
 
-        public static <T, R extends Role, S> EventBuilder<T, R, S> builder(Class dataClass) {
+        private WebhookConvention webhookConvention;
+
+        public static <T, R extends Role, S> EventBuilder<T, R, S> builder(Class dataClass, WebhookConvention convention) {
             EventBuilder<T, R, S> result = new EventBuilder<T, R, S>();
             result.dataClass = dataClass;
-            result.grants = Maps.newHashMap();
+            result.grants = new HashMap<>();
             result.fields = FieldCollection.FieldCollectionBuilder.builder(null, dataClass);
             result.eventNumber = eventCount++;
+            result.webhookConvention = convention;
 
             return result;
         }
@@ -144,53 +146,57 @@ public class Event<T, R extends Role, S> {
             return this;
         }
 
-        private String webhookConvention;
+        private String customWebhookName;
+
+        public EventBuilder<T, R, S> allWebhooks() {
+            return allWebhooks(this.customWebhookName);
+        }
+
         public EventBuilder<T, R, S> allWebhooks(String convention) {
-            this.webhookConvention = convention;
-            aboutToStartURL = "/" + convention + "/about-to-start";
-            aboutToSubmitURL = "/" + convention + "/about-to-submit";
-            submittedURL = "/" + convention + "/submitted";
+            this.customWebhookName = convention;
+            aboutToStartWebhook();
+            aboutToSubmitWebhook();
+            submittedWebhook();
+            midEventWebhook();
             return this;
         }
 
-        public EventBuilder<T, R, S> aboutToStartWebhook(String convention) {
-            this.webhookConvention = convention;
-            // Use snake case event ID by convention
-            aboutToStartURL = "/" + getWebhookPathByConvention() + "/about-to-start";
-            return this;
+        public EventBuilder<T, R, S> aboutToStartWebhook(String eventId) {
+            this.customWebhookName = eventId;
+            return aboutToStartWebhook();
         }
 
         public EventBuilder<T, R, S> aboutToStartWebhook() {
             // Use snake case event ID by convention
-            aboutToStartURL = "/" + getWebhookPathByConvention() + "/about-to-start";
+            aboutToStartURL = getWebhookPathByConvention(Webhook.AboutToStart);
             return this;
         }
 
         public EventBuilder<T, R, S> aboutToSubmitWebhook() {
-            aboutToSubmitURL = "/" + getWebhookPathByConvention() + "/about-to-submit";
+            aboutToSubmitURL = getWebhookPathByConvention(Webhook.AboutToSubmit);
             return this;
         }
 
         public EventBuilder<T, R, S> submittedWebhook() {
-            submittedURL = "/" + getWebhookPathByConvention() + "/submitted";
+            submittedURL = getWebhookPathByConvention(Webhook.Submitted);
             return this;
         }
 
         public EventBuilder<T, R, S> midEventWebhook() {
-            midEventURL = "/" + getWebhookPathByConvention() + "/mid-event";
+            midEventURL = getWebhookPathByConvention(Webhook.MidEvent);
             return this;
         }
 
         public EventBuilder<T, R, S> retries(Integer... retries) {
-            this.retries = Joiner.on(",").join(retries);
+            List<String> strings = Arrays.stream(retries).map(x -> x.toString()).collect(Collectors.toList());
+            this.retries = String.join(",", strings);
             return this;
         }
 
-        private String getWebhookPathByConvention() {
-            if (webhookConvention != null) {
-                return webhookConvention;
-            }
-            return CaseFormat.LOWER_CAMEL.to(CaseFormat.LOWER_HYPHEN, eventId);
+        private String getWebhookPathByConvention(Webhook hook) {
+            String id = customWebhookName != null ? customWebhookName
+                    : eventId;
+            return webhookConvention.buildUrl(hook, id);
         }
     }
 }

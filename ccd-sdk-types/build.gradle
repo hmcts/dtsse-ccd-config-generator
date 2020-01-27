@@ -20,13 +20,11 @@ repositories {
 
 dependencies {
     testImplementation 'junit:junit:4.12'
-    compile group: 'com.google.guava', name: 'guava', version: '28.1-jre'
     annotationProcessor group: 'org.projectlombok', name: 'lombok', version: '1.18.10'
     compileOnly group: 'org.projectlombok', name: 'lombok', version: '1.18.10'
     compile group: 'de.cronn', name: 'reflection-util', version: '2.4.1'
     compile group: 'net.jodah', name: 'typetools', version: '0.6.1'
     compile group: 'com.fasterxml.jackson.core', name: 'jackson-annotations', version: '2.10.1'
-
 }
 
 group = "uk.gov.hmcts"

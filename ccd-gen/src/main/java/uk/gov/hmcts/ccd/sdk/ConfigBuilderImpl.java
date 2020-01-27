@@ -1,11 +1,9 @@
 package uk.gov.hmcts.ccd.sdk;
 
+import com.google.common.base.CaseFormat;
 import com.google.common.base.Strings;
 import com.google.common.collect.*;
-import uk.gov.hmcts.ccd.sdk.types.ConfigBuilder;
-import uk.gov.hmcts.ccd.sdk.types.Event;
-import uk.gov.hmcts.ccd.sdk.types.EventTypeBuilder;
-import uk.gov.hmcts.ccd.sdk.types.Role;
+import uk.gov.hmcts.ccd.sdk.types.*;
 
 import java.util.List;
 import java.util.Map;
@@ -20,13 +18,21 @@ public class ConfigBuilderImpl<T, S, R extends Role> implements ConfigBuilder<T,
     public final List<Map<String, Object>> explicitFields = Lists.newArrayList();
 
     private Class caseData;
+    private WebhookConvention webhookConvention = this::defaultWebhookConvention;
+
+    private String defaultWebhookConvention(Webhook webhook, String eventId) {
+        eventId = CaseFormat.LOWER_CAMEL.to(CaseFormat.LOWER_HYPHEN, eventId);
+        String path = CaseFormat.LOWER_CAMEL.to(CaseFormat.LOWER_HYPHEN, webhook.toString());
+        return "/" + eventId + "/" + path;
+    }
+
     public ConfigBuilderImpl(Class caseData) {
         this.caseData = caseData;
     }
 
     @Override
     public EventTypeBuilder<T, R, S> event(final String id) {
-        Event.EventBuilder<T, R, S> e = Event.EventBuilder.builder(caseData);
+        Event.EventBuilder<T, R, S> e = Event.EventBuilder.builder(caseData, webhookConvention);
         e.eventId(id);
         e.id(id);
         return new EventTypeBuilderImpl(e);
@@ -80,6 +86,11 @@ public class ConfigBuilderImpl<T, S, R extends Role> implements ConfigBuilder<T,
     @Override
     public void caseField(String id, String label, String type) {
         caseField(id, label, type, null);
+    }
+
+    @Override
+    public void setWebhookConvention(WebhookConvention convention) {
+        this.webhookConvention = convention;
     }
 
     public List<Event<T, R, S>> getEvents() {
