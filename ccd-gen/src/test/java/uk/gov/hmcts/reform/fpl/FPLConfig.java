@@ -1,10 +1,12 @@
 package uk.gov.hmcts.reform.fpl;
 
 
+import com.google.common.base.CaseFormat;
 import de.cronn.reflection.util.TypedPropertyGetter;
 import uk.gov.hmcts.ccd.sdk.types.BaseCCDConfig;
 import uk.gov.hmcts.ccd.sdk.types.DisplayContext;
 import uk.gov.hmcts.ccd.sdk.types.FieldCollection;
+import uk.gov.hmcts.ccd.sdk.types.Webhook;
 import uk.gov.hmcts.reform.fpl.enums.State;
 import uk.gov.hmcts.reform.fpl.enums.UserRole;
 import uk.gov.hmcts.reform.fpl.model.*;
@@ -21,6 +23,7 @@ public class FPLConfig extends BaseCCDConfig<CaseData, State, UserRole> {
     @Override
     public void configure() {
         caseType("CARE_SUPERVISION_EPO");
+        setWebhookConvention(this::webhookConvention);
 
         explicitState("hearingBookingDetails", JUDICIARY, "CRU");
 
@@ -37,6 +40,12 @@ public class FPLConfig extends BaseCCDConfig<CaseData, State, UserRole> {
                 .grant("C", SYSTEM_UPDATE);
         caseField("dateAndTimeSubmitted", null, "DateTime", null, "Date submitted");
         caseField("submittedForm", "Attached PDF", "Document");
+    }
+
+    private String webhookConvention(Webhook webhook, String eventId) {
+        eventId = CaseFormat.LOWER_CAMEL.to(CaseFormat.LOWER_HYPHEN, eventId);
+        String path = CaseFormat.LOWER_CAMEL.to(CaseFormat.LOWER_HYPHEN, webhook.toString());
+        return "${CCD_DEF_CASE_SERVICE_BASE_URL}/callback/" + eventId + "/" + path;
     }
 
     private void buildC21Event(State state) {
@@ -100,7 +109,7 @@ public class FPLConfig extends BaseCCDConfig<CaseData, State, UserRole> {
                 .displayOrder(18) // TODO - necessary?
                 .grant("CRU", LOCAL_AUTHORITY)
                 .name("Delete an application")
-                .aboutToSubmitURL("/case-deletion/about-to-submit")
+                .aboutToSubmitWebhook("case-deletion")
                 .endButtonLabel("Delete application")
                 .fields()
                     .field("deletionConsent", DisplayContext.Mandatory, null, "MultiSelectList", "DeletionConsent", " ");
@@ -362,7 +371,7 @@ public class FPLConfig extends BaseCCDConfig<CaseData, State, UserRole> {
                 .name("Add hearing details")
                 .description("Add hearing booking details to a case")
                 .aboutToStartWebhook("add-hearing-bookings")
-                .midEventURL("/add-hearing-bookings/mid-event")
+                .midEventWebhook("add-hearing-bookings")
                 .showSummary()
                 .fields()
                 .complex(CaseData::getHearingDetails, HearingBooking.class)
@@ -418,7 +427,7 @@ public class FPLConfig extends BaseCCDConfig<CaseData, State, UserRole> {
                 .forState(state)
                 .name("Other proceedings")
                 .description("Amending other proceedings and allocation proposals")
-                .midEventURL("/enter-other-proceedings/mid-event")
+                .midEventWebhook("enter-other-proceedings")
                 .showEventNotes()
                 .fields()
                     .optional(CaseData::getProceeding);
@@ -475,8 +484,8 @@ public class FPLConfig extends BaseCCDConfig<CaseData, State, UserRole> {
                 .initialState(Open)
                 .name("Start application")
                 .description("Create a new case – add a title")
-                .aboutToSubmitURL("/case-initiation/about-to-submit")
-                .submittedURL("/case-initiation/submitted")
+                .aboutToSubmitWebhook("case-initiation")
+                .submittedWebhook()
                 .retries(1,2,3,4,5)
                 .fields()
                     .optional(CaseData::getCaseName);
@@ -484,7 +493,7 @@ public class FPLConfig extends BaseCCDConfig<CaseData, State, UserRole> {
         event("ordersNeeded").forState(Open)
                 .name("Orders and directions needed")
                 .description("Selecting the orders needed for application")
-                .aboutToSubmitURL("/orders-needed/about-to-submit")
+                .aboutToSubmitWebhook("orders-needed")
                 .fields()
                     .optional(CaseData::getOrders);
 
@@ -497,8 +506,8 @@ public class FPLConfig extends BaseCCDConfig<CaseData, State, UserRole> {
         event("enterChildren").forState(Open)
                 .name("Children")
                 .description("Entering the children for the case")
-                .aboutToStartURL("/enter-children/about-to-start")
-                .aboutToSubmitURL("/enter-children/about-to-submit")
+                .aboutToStartWebhook()
+                .aboutToSubmitWebhook()
                 .fields()
                     .optional(CaseData::getChildren1);
 
@@ -557,7 +566,7 @@ public class FPLConfig extends BaseCCDConfig<CaseData, State, UserRole> {
         event("otherProceedings").forState(Open)
                 .name("Other proceedings")
                 .description("Entering other proceedings and proposals")
-                .midEventURL("/enter-other-proceedings/mid-event")
+                .midEventWebhook("enter-other-proceedings")
                 .fields()
                     .optional(CaseData::getProceeding);
 

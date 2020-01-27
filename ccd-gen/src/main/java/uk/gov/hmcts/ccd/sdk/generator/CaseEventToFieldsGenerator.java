@@ -40,7 +40,7 @@ public class CaseEventToFieldsGenerator {
                     }
 
                     if (first && event.getMidEventURL() != null) {
-                        info.put("CallBackURLMidEvent", "${CCD_DEF_CASE_SERVICE_BASE_URL}/callback" + event.getMidEventURL());
+                        info.put("CallBackURLMidEvent",  event.getMidEventURL());
                         first = false;
                     }
 

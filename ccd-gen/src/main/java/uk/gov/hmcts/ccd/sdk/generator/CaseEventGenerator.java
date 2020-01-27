@@ -57,21 +57,21 @@ public class CaseEventGenerator {
             data.put("SecurityClassification", "Public");
 
             if (event.getAboutToStartURL() != null) {
-                data.put("CallBackURLAboutToStartEvent", formatUrl(event.getAboutToStartURL()));
+                data.put("CallBackURLAboutToStartEvent", event.getAboutToStartURL());
                 if (event.getRetries() != null) {
                     data.put("RetriesTimeoutAboutToStartEvent", event.getRetries());
                 }
             }
 
             if (event.getAboutToSubmitURL() != null) {
-                data.put("CallBackURLAboutToSubmitEvent", formatUrl(event.getAboutToSubmitURL()));
+                data.put("CallBackURLAboutToSubmitEvent", event.getAboutToSubmitURL());
                 if (event.getRetries() != null) {
                     data.put("RetriesTimeoutURLAboutToSubmitEvent", event.getRetries());
                 }
             }
 
             if (event.getSubmittedURL() != null) {
-                data.put("CallBackURLSubmittedEvent", formatUrl(event.getSubmittedURL()));
+                data.put("CallBackURLSubmittedEvent", event.getSubmittedURL());
                 if (event.getRetries() != null) {
                     data.put("RetriesTimeoutURLSubmittedEvent", event.getRetries());
                 }
@@ -79,9 +79,5 @@ public class CaseEventGenerator {
         }
 
         return result;
-    }
-
-    private static String formatUrl(String url) {
-        return "${CCD_DEF_CASE_SERVICE_BASE_URL}/callback" + url;
     }
 }

@@ -50,9 +50,6 @@ public class CcdSdkPlugin implements Plugin<Project> {
         }
         String version = properties.getProperty("types.version");
 
-        project.getDependencies().add("compile", "uk.gov.hmcts:ccd-sdk-types:" + version);
-        project.getRepositories().mavenCentral();
-        project.getRepositories().maven(x -> x.setUrl("https://raw.githubusercontent.com/banderous/ccd/master"));
     }
 
     static class CCDConfig {

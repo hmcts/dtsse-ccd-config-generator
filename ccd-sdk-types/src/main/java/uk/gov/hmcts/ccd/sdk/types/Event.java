@@ -172,6 +172,12 @@ public class Event<T, R extends Role, S> {
             return this;
         }
 
+        public EventBuilder<T, R, S> aboutToSubmitWebhook(String eventId) {
+            this.customWebhookName = eventId;
+            aboutToSubmitURL = getWebhookPathByConvention(Webhook.AboutToSubmit);
+            return this;
+        }
+
         public EventBuilder<T, R, S> aboutToSubmitWebhook() {
             aboutToSubmitURL = getWebhookPathByConvention(Webhook.AboutToSubmit);
             return this;
@@ -179,6 +185,12 @@ public class Event<T, R extends Role, S> {
 
         public EventBuilder<T, R, S> submittedWebhook() {
             submittedURL = getWebhookPathByConvention(Webhook.Submitted);
+            return this;
+        }
+
+        public EventBuilder<T, R, S> midEventWebhook(String eventId) {
+            this.customWebhookName = eventId;
+            midEventURL = getWebhookPathByConvention(Webhook.MidEvent);
             return this;
         }
 
