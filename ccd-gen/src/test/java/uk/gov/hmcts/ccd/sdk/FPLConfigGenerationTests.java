@@ -11,6 +11,8 @@ import org.junit.ClassRule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
 import org.reflections.Reflections;
+import org.reflections.util.ClasspathHelper;
+import org.reflections.util.ConfigurationBuilder;
 import org.skyscreamer.jsonassert.JSONCompare;
 import org.skyscreamer.jsonassert.JSONCompareMode;
 import org.skyscreamer.jsonassert.JSONCompareResult;
@@ -43,7 +45,10 @@ public class FPLConfigGenerationTests {
         copyResourceToOutput("FixedLists/OrderStatus.json");
         copyResourceToOutput("FixedLists/DirectionAssignee.json");
 
-        reflections = new Reflections("uk.gov.hmcts.reform");
+        reflections = new Reflections(new ConfigurationBuilder()
+                .setUrls(ClasspathHelper.forPackage("uk.gov.hmcts"))
+                .setExpandSuperTypes(false));
+
         generator = new ConfigGenerator(reflections);
         generator.resolveConfig(tmp.getRoot());
         // Generate a second time to ensure existing config is correctly merged.

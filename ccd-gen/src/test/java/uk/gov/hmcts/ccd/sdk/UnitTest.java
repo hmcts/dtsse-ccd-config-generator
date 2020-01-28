@@ -3,6 +3,7 @@ package uk.gov.hmcts.ccd.sdk;
 import org.junit.Test;
 import org.reflections.Reflections;
 import uk.gov.hmcts.ccd.sdk.types.CCDConfig;
+import uk.gov.hmcts.ccd.sdk.types.ConfigBuilder;
 import uk.gov.hmcts.ccd.sdk.types.Event;
 import uk.gov.hmcts.ccd.sdk.types.Webhook;
 import uk.gov.hmcts.reform.fpl.enums.State;
@@ -44,5 +45,22 @@ public class UnitTest {
         });
 
         assertThat(resolved.events.get(0).getAboutToStartURL()).isEqualTo(Webhook.AboutToStart + "-" + "eventId");
+    }
+
+    @Test
+    public void npeBug() {
+        generator.resolveConfig(new NPEBug());
+    }
+    class NPEBug implements CCDConfig<CaseData, State, UserRole> {
+
+        @Override
+        public void configure(ConfigBuilder<CaseData, State, UserRole> builder) {
+            builder.event("addNotes")
+                    .forStates(State.Submitted, State.Open, State.Deleted)
+                    .allWebhooks()
+                    .fields()
+                    .readonly(CaseData::getProceeding)
+                    .complex(CaseData::getJudgeAndLegalAdvisor);
+        }
     }
 }

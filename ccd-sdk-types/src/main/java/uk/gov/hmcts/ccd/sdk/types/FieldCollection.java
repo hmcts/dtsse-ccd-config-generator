@@ -58,10 +58,6 @@ public class FieldCollection<T, Parent> {
             return this;
         }
 
-        public FieldCollectionBuilder<T, Parent> field(TypedPropertyGetter<T, ?> getter) {
-            return field(getter, null);
-        }
-
         public FieldCollectionBuilder<T, Parent> optional(TypedPropertyGetter<T, ?> getter, String showCondition) {
             return field(getter, DisplayContext.Optional, showCondition);
         }
