@@ -1,6 +1,6 @@
 package uk.gov.hmcts.reform.fpl.model;
 
-import uk.gov.hmcts.ccd.sdk.types.CaseField;
+import uk.gov.hmcts.ccd.sdk.types.CCD;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import lombok.Builder;
 import lombok.Data;
@@ -19,21 +19,21 @@ import static org.apache.commons.lang3.ObjectUtils.defaultIfNull;
 @Builder(toBuilder = true)
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class Direction {
-    @CaseField(label = " ")
+    @CCD(label = " ")
     private final String directionType;
     private String directionText;
     private final String status;
     private DirectionAssignee assignee;
     private ParentsAndRespondentsDirectionAssignee parentsAndRespondentsAssignee;
     private OtherPartiesDirectionAssignee otherPartiesAssignee;
-    @CaseField(label = " ")
+    @CCD(label = " ")
     private String readOnly;
-    @CaseField(label = " ")
+    @CCD(label = " ")
     private String directionRemovable;
-    @CaseField(label = " ")
+    @CCD(label = " ")
     private String directionNeeded;
     private String custom;
-    @CaseField(label = "Deadline")
+    @CCD(label = "Deadline")
     private LocalDateTime dateToBeCompletedBy;
     private DirectionResponse response;
     private List<Element<DirectionResponse>> responses;

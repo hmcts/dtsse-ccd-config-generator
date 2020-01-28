@@ -1,6 +1,6 @@
 package uk.gov.hmcts.reform.fpl.model.common;
 
-import uk.gov.hmcts.ccd.sdk.types.CaseField;
+import uk.gov.hmcts.ccd.sdk.types.CCD;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -15,6 +15,6 @@ import javax.validation.constraints.NotBlank;
 public class EmailAddress {
     @NotBlank(message = "Enter an email address for the contact")
     private final String email;
-    @CaseField(ignore = true)
+    @CCD(ignore = true)
     private final String emailUsageType;
 }

@@ -1,6 +1,6 @@
 package uk.gov.hmcts.reform.fpl.model;
 
-import uk.gov.hmcts.ccd.sdk.types.CaseField;
+import uk.gov.hmcts.ccd.sdk.types.CCD;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import lombok.Builder;
 import lombok.Data;
@@ -36,7 +36,7 @@ public class ApplicantParty extends Party implements TelephoneContacts {
     @Valid
     public final EmailAddress email;
 
-    @CaseField(label = "Telephone")
+    @CCD(label = "Telephone")
     private final Telephone telephoneNumber;
 
     @Builder(toBuilder = true)

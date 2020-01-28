@@ -39,7 +39,7 @@ public class CaseFieldGenerator {
 
         for (Field field : ReflectionUtils.getAllFields(dataClass)) {
 
-            CaseField cf = field.getAnnotation(CaseField.class);
+            CCD cf = field.getAnnotation(CCD.class);
             if (null != cf) {
                 if (cf.ignore()) {
                     continue;
@@ -87,7 +87,7 @@ public class CaseFieldGenerator {
         return fields;
     }
 
-    private static void inferFieldType(Class dataClass, Field field, Map<String, Object> info, CaseField cf) {
+    private static void inferFieldType(Class dataClass, Field field, Map<String, Object> info, CCD cf) {
         String type = field.getType().getSimpleName();
         if (null != cf && !Strings.isNullOrEmpty(cf.typeParameter())) {
             info.put("FieldTypeParameter", cf.typeParameter());

@@ -1,6 +1,6 @@
 package uk.gov.hmcts.reform.fpl.model;
 
-import uk.gov.hmcts.ccd.sdk.types.CaseField;
+import uk.gov.hmcts.ccd.sdk.types.CCD;
 import uk.gov.hmcts.ccd.sdk.types.FieldType;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import lombok.Data;
@@ -11,25 +11,25 @@ import lombok.experimental.SuperBuilder;
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class ProceedingType {
 
-    @CaseField(type = FieldType.FixedRadioList, typeParameter = "ProceedingStatus", label = "Are these previous or ongoing proceedings?")
+    @CCD(type = FieldType.FixedRadioList, typeParameter = "ProceedingStatus", label = "Are these previous or ongoing proceedings?")
     private final String proceedingStatus;
-    @CaseField(label = "Case number")
+    @CCD(label = "Case number")
     private final String caseNumber;
-    @CaseField(label = "Date started")
+    @CCD(label = "Date started")
     private final String started;
-    @CaseField(label = "Date ended")
+    @CCD(label = "Date ended")
     private final String ended;
-    @CaseField(label = "Orders made")
+    @CCD(label = "Orders made")
     private final String ordersMade;
-    @CaseField(label = "Judge", hint = "For example, District Judge Martin Brown")
+    @CCD(label = "Judge", hint = "For example, District Judge Martin Brown")
     private final String judge;
-    @CaseField(label = "Names of children involved", type = FieldType.TextArea)
+    @CCD(label = "Names of children involved", type = FieldType.TextArea)
     private final String children;
-    @CaseField(label = "Name of guardian")
+    @CCD(label = "Name of guardian")
     private final String guardian;
-    @CaseField(label = "Is the same guardian needed?", type = FieldType.YesOrNo)
+    @CCD(label = "Is the same guardian needed?", type = FieldType.YesOrNo)
     private final String sameGuardianNeeded;
-    @CaseField(label = "Give reason", showCondition = "sameGuardianNeeded=\"No\"", type = FieldType.TextArea)
+    @CCD(label = "Give reason", showCondition = "sameGuardianNeeded=\"No\"", type = FieldType.TextArea)
     private final String sameGuardianDetails;
 
 }

@@ -1,6 +1,6 @@
 package uk.gov.hmcts.reform.fpl.model;
 
-import uk.gov.hmcts.ccd.sdk.types.CaseField;
+import uk.gov.hmcts.ccd.sdk.types.CCD;
 import uk.gov.hmcts.ccd.sdk.types.ComplexType;
 import uk.gov.hmcts.ccd.sdk.types.FieldType;
 import com.fasterxml.jackson.annotation.JsonInclude;
@@ -18,14 +18,14 @@ import java.util.List;
 @JsonInclude(JsonInclude.Include.NON_NULL)
 @ComplexType(name = "StandardDirectionOrder")
 public class Order {
-    @CaseField(label = "The date of the hearing", type = FieldType.Date)
+    @CCD(label = "The date of the hearing", type = FieldType.Date)
     private final String hearingDate;
-    @CaseField(label = "Directions")
+    @CCD(label = "Directions")
     private final List<Element<Direction>> directions;
-    @CaseField(label = "Is this the final version?")
+    @CCD(label = "Is this the final version?")
     private final OrderStatus orderStatus;
-    @CaseField(label = "File")
+    @CCD(label = "File")
     private final DocumentReference orderDoc;
-    @CaseField(label = "Judge and legal advisor")
+    @CCD(label = "Judge and legal advisor")
     private final JudgeAndLegalAdvisor judgeAndLegalAdvisor;
 }

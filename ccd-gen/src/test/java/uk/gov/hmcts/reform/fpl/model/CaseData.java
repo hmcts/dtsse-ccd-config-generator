@@ -1,6 +1,6 @@
 package uk.gov.hmcts.reform.fpl.model;
 
-import uk.gov.hmcts.ccd.sdk.types.CaseField;
+import uk.gov.hmcts.ccd.sdk.types.CCD;
 import uk.gov.hmcts.ccd.sdk.types.FieldType;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.AllArgsConstructor;
@@ -26,37 +26,37 @@ import static org.apache.commons.lang3.ObjectUtils.isEmpty;
 @HasDocumentsIncludedInSwet(groups = UploadDocumentsGroup.class)
 public class CaseData {
     @NotBlank(message = "Enter a case name")
-    @CaseField(label = "Case name",
+    @CCD(label = "Case name",
     hint = "Include the Local Authority name and respondent’s last name. For example, Endley Council v Smith/Tate/Jones")
     private final String caseName;
-    @CaseField(type = FieldType.Email, label = "Gatekeeper's email address", hint = "For example, joe.bloggs@la.gov.uk")
+    @CCD(type = FieldType.Email, label = "Gatekeeper's email address", hint = "For example, joe.bloggs@la.gov.uk")
     private final String gatekeeperEmail;
-    @CaseField(label = "Local Authority :", type = FieldType.FixedList, typeParameter = "AuthorityFixedList")
+    @CCD(label = "Local Authority :", type = FieldType.FixedList, typeParameter = "AuthorityFixedList")
     private final String caseLocalAuthority;
-    @CaseField(label = "Risks and harm to children")
+    @CCD(label = "Risks and harm to children")
     private final Risks risks;
     @NotNull(message = "You need to add details to orders and directions needed")
     @Valid
-    @CaseField(label = "Orders and directions needed")
+    @CCD(label = "Orders and directions needed")
     private final Orders orders;
 
     @NotNull(message = "You need to add details to grounds for the application")
     @Valid
-    @CaseField(label = "How does this case meet the threshold criteria?")
+    @CCD(label = "How does this case meet the threshold criteria?")
     private final Grounds grounds;
 
     @NotNull(message = "You need to add details to grounds for the application", groups = EPOGroup.class)
     @Valid
-    @CaseField(label = "How are there grounds for an emergency protection order?")
+    @CCD(label = "How are there grounds for an emergency protection order?")
     private final GroundsForEPO groundsForEPO;
 
     @NotNull(message = "You need to add details to applicant")
     @Valid
-    @CaseField(label = "Applicants")
+    @CCD(label = "Applicants")
     private final List<@NotNull(message = "You need to add details to applicant")
             Element<Applicant>> applicants;
     @NotNull(message = "You need to add details to respondents")
-    @CaseField(label = "Respondents")
+    @CCD(label = "Respondents")
     private final List<@NotNull(message = "You need to add details to respondents") Element<Respondent>> respondents1;
 
     @Valid
@@ -68,103 +68,103 @@ public class CaseData {
         return respondents1.get(0).getValue();
     }
 
-    @CaseField(label = "Other proceedings")
+    @CCD(label = "Other proceedings")
     private final Proceeding proceeding;
 
     @NotNull(message = "You need to add details to solicitor")
     @Valid
-    @CaseField(label = "Solicitor")
+    @CCD(label = "Solicitor")
     private final Solicitor solicitor;
 
-    @CaseField(label = "Factors affecting parenting")
+    @CCD(label = "Factors affecting parenting")
     private final FactorsParenting factorsParenting;
-    @CaseField(label = "Allocation proposal")
+    @CCD(label = "Allocation proposal")
     private final AllocationProposal allocationProposal;
-    @CaseField(label = "Allocation decision", showSummaryContent = true)
+    @CCD(label = "Allocation decision", showSummaryContent = true)
     private final AllocationDecision allocationDecision;
-    @CaseField(label = "For all parties")
+    @CCD(label = "For all parties")
     private final List<Element<Direction>> allParties;
-    @CaseField(label = "Add directions")
+    @CCD(label = "Add directions")
     private final List<Element<Direction>> allPartiesCustom;
-    @CaseField(label = "Local Authority Directions")
+    @CCD(label = "Local Authority Directions")
     private final List<Element<Direction>> localAuthorityDirections;
-    @CaseField(label = "Add directions")
+    @CCD(label = "Add directions")
     private final List<Element<Direction>> localAuthorityDirectionsCustom;
-    @CaseField(label = "Court directions")
+    @CCD(label = "Court directions")
     private final List<Element<Direction>> courtDirections;
-    @CaseField(label = "Add directions")
+    @CCD(label = "Add directions")
     private final List<Element<Direction>> courtDirectionsCustom;
-    @CaseField(label = "Cafcass Directions")
+    @CCD(label = "Cafcass Directions")
     private final List<Element<Direction>> cafcassDirections;
-    @CaseField(label = "Add directions")
+    @CCD(label = "Add directions")
     private final List<Element<Direction>> cafcassDirectionsCustom;
-    @CaseField(label = "Other parties directions")
+    @CCD(label = "Other parties directions")
     private final List<Element<Direction>> otherPartiesDirections;
-    @CaseField(label = "Add directions")
+    @CCD(label = "Add directions")
     private final List<Element<Direction>> otherPartiesDirectionsCustom;
-    @CaseField(label = "Parents and respondents directions")
+    @CCD(label = "Parents and respondents directions")
     private final List<Element<Direction>> respondentDirections;
-    @CaseField(label = "Add directions")
+    @CCD(label = "Add directions")
     private final List<Element<Direction>> respondentDirectionsCustom;
 
-    @CaseField(label = "Standard directions order")
+    @CCD(label = "Standard directions order")
     private final Order standardDirectionOrder;
 
     @NotNull(message = "You need to add details to hearing needed")
     @Valid
-    @CaseField(label = "Hearing needed")
+    @CCD(label = "Hearing needed")
     private final Hearing hearing;
-    @CaseField(label = "Attending the hearing")
+    @CCD(label = "Attending the hearing")
     private final HearingPreferences hearingPreferences;
 
-    @CaseField(label = "International element")
+    @CCD(label = "International element")
     private final InternationalElement internationalElement;
-    @CaseField(label = "Additional documents")
+    @CCD(label = "Additional documents")
     @JsonProperty("documents_socialWorkOther")
     private final List<Element<DocumentSocialWorkOther>> otherSocialWorkDocuments;
     @JsonProperty("documents_socialWorkCarePlan_document")
     @NotNull(message = "Tell us the status of all documents including those that you haven't uploaded")
     @Valid
-    @CaseField(label = "4. Care plan")
+    @CCD(label = "4. Care plan")
     public final Document socialWorkCarePlanDocument;
     @JsonProperty("documents_socialWorkStatement_document")
     @NotNull(message = "Tell us the status of all documents including those that you haven't uploaded")
     @Valid
-    @CaseField(label = "2. Social work statement and genogram")
+    @CCD(label = "2. Social work statement and genogram")
     public final Document socialWorkStatementDocument;
     @JsonProperty("documents_socialWorkAssessment_document")
     @NotNull(message = "Tell us the status of all documents including those that you haven't uploaded")
     @Valid
-    @CaseField(label = "3. Social work assessment")
+    @CCD(label = "3. Social work assessment")
     public final Document socialWorkAssessmentDocument;
     @JsonProperty("documents_socialWorkChronology_document")
     @NotNull(message = "Tell us the status of all documents including those that you haven't uploaded")
     @Valid
-    @CaseField(label = "1. Social work chronology")
+    @CCD(label = "1. Social work chronology")
     public final Document socialWorkChronologyDocument;
     @JsonProperty("documents_checklist_document")
     @NotNull(message = "Tell us the status of all documents including those that you haven't uploaded")
     @Valid
-    @CaseField(label = "7. Checklist document")
+    @CCD(label = "7. Checklist document")
     public final Document checklistDocument;
     @JsonProperty("documents_threshold_document")
     @NotNull(message = "Tell us the status of all documents including those that you haven't uploaded")
     @Valid
-    @CaseField(label = "6. Threshold document")
+    @CCD(label = "6. Threshold document")
     public final Document thresholdDocument;
     @JsonProperty("documents_socialWorkEvidenceTemplate_document")
     @Valid
-    @CaseField(label = "5. Social work evidence template (SWET)")
+    @CCD(label = "5. Social work evidence template (SWET)")
     private final SWETDocument socialWorkEvidenceTemplateDocument;
     @NotNull(message = "You need to add details to children")
     @Valid
-    @CaseField(label = "Child")
+    @CCD(label = "Child")
     private final List<@NotNull(message = "You need to add details to children") Element<Child>> children1;
     @NotBlank(message = "Enter Familyman case number", groups = {NoticeOfProceedingsGroup.class,
         C21CaseOrderGroup.class, NotifyGatekeeperGroup.class})
-    @CaseField(label = "FamilyMan case number")
+    @CCD(label = "FamilyMan case number")
     private final String familyManCaseNumber;
-    @CaseField(label = " ")
+    @CCD(label = " ")
     private final NoticeOfProceedings noticeOfProceedings;
 
     public List<Element<Applicant>> getAllApplicants() {
@@ -176,33 +176,33 @@ public class CaseData {
     }
 
     @NotNull(message = "Enter hearing details", groups = NoticeOfProceedingsGroup.class)
-    @CaseField(label = "Hearing")
+    @CCD(label = "Hearing")
     private final List<Element<HearingBooking>> hearingDetails;
 
-    @CaseField(label = "Date submitted")
+    @CCD(label = "Date submitted")
     private LocalDate dateSubmitted;
-    @CaseField(label = "Notice of proceedings")
+    @CCD(label = "Notice of proceedings")
     private final List<Element<DocumentBundle>> noticeOfProceedingsBundle;
-    @CaseField(label = "Recipients")
+    @CCD(label = "Recipients")
     private final List<Element<Recipients>> statementOfService;
-    @CaseField(label = "Judge and legal advisor")
+    @CCD(label = "Judge and legal advisor")
     private final JudgeAndLegalAdvisor judgeAndLegalAdvisor;
 
-    @CaseField(label = "Upload C2")
+    @CCD(label = "Upload C2")
     private final C2DocumentBundle temporaryC2Document;
-    @CaseField(label = "C2")
+    @CCD(label = "C2")
     private final List<Element<C2DocumentBundle>> c2DocumentBundle;
-    @CaseField(label = "Create an order")
+    @CCD(label = "Create an order")
     private final C21Order c21Order;
-    @CaseField(label = "C21 order")
+    @CCD(label = "C21 order")
     private final List<Element<C21Order>> c21Orders;
 
     public List<Element<C21Order>> getC21Orders() {
         return defaultIfNull(c21Orders, new ArrayList<>());
     }
 
-    @CaseField(label = "Case management order")
+    @CCD(label = "Case management order")
     private final CaseManagementOrder caseManagementOrder;
-    @CaseField(label = "Others to be given notice")
+    @CCD(label = "Others to be given notice")
     private final Others others;
 }

@@ -1,6 +1,6 @@
 package uk.gov.hmcts.reform.fpl.model;
 
-import uk.gov.hmcts.ccd.sdk.types.CaseField;
+import uk.gov.hmcts.ccd.sdk.types.CCD;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import lombok.Builder;
 import lombok.Data;
@@ -13,7 +13,7 @@ import java.util.List;
 @Builder(toBuilder = true)
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class NoticeOfProceedings {
-    @CaseField(label = "What would you like to create?")
+    @CCD(label = "What would you like to create?")
     private final List<ProceedingType> proceedingTypes;
     private final JudgeAndLegalAdvisor judgeAndLegalAdvisor;
 }

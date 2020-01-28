@@ -53,7 +53,7 @@ public class Field<T, Parent> {
             JsonProperty j = propertyUtils.getAnnotationOfProperty(dataClass, getter, JsonProperty.class);
             id = j != null ? j.value() : propertyUtils.getPropertyName(dataClass, getter);
 
-            CaseField cf = propertyUtils.getAnnotationOfProperty(dataClass, getter, CaseField.class);
+            CCD cf = propertyUtils.getAnnotationOfProperty(dataClass, getter, CCD.class);
             if (null != cf) {
                 label = cf.label();
                 hint = cf.hint();

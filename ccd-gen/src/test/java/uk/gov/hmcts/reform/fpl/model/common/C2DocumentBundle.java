@@ -1,15 +1,15 @@
 package uk.gov.hmcts.reform.fpl.model.common;
 
-import uk.gov.hmcts.ccd.sdk.types.CaseField;
+import uk.gov.hmcts.ccd.sdk.types.CCD;
 import lombok.Builder;
 import lombok.Data;
 
 @Data
 @Builder
 public class C2DocumentBundle {
-    @CaseField(label = "Upload a file")
+    @CCD(label = "Upload a file")
     private final DocumentReference document;
-    @CaseField(label = "Description")
+    @CCD(label = "Description")
     private final String description;
     private final String uploadedDateTime;
     private final String author;
