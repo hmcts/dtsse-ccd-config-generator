@@ -9,6 +9,7 @@
 plugins {
     // Apply the Java Gradle plugin development plugin to add support for developing Gradle plugins
     id 'java-gradle-plugin'
+    id 'com.gradle.plugin-publish' version '0.10.1'
 }
 
 repositories {
@@ -41,11 +42,19 @@ dependencies {
     compile project(':ccd-sdk-types')
 }
 
+pluginBundle {
+    website = 'https://github.com/banderous/ccd-sdk'
+    vcsUrl = 'https://github.com/banderous/ccd-sdk'
+    tags = ['hmcts']
+}
+
 gradlePlugin {
     // Define the plugin
     plugins {
         greeting {
             id = 'hmcts.ccd.sdk'
+            displayName = 'CCD Config Generator'
+            description = 'Generate CCD Configuration from code'
             implementationClass = 'uk.gov.hmcts.ccd.sdk.CcdSdkPlugin'
         }
     }
