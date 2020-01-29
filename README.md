@@ -6,7 +6,7 @@ Add the plugin to your `build.gradle`
 
 ```groovy
 plugins {
-  id 'hmcts.ccd.sdk' version '0.3.1'
+  id 'hmcts.ccd.sdk' version '0.3.2'
 }
 ```
 
@@ -14,7 +14,15 @@ Add the configuration bindings library to your compile dependencies
 
 ```groovy
 dependencies {
-  compile "uk.gov.hmcts:ccd-sdk-types:0.3.1"
+  compile "uk.gov.hmcts:ccd-sdk-types:0.3.2"
+}
+```
+
+And set the destination for the generated config
+
+```
+ccd {
+  configDir = file('ccd-definition')
 }
 ```
 
@@ -22,7 +30,7 @@ dependencies {
 
 The tool is not yet published to jcenter/the gradle plugin repository.
  
-To try it out, add the following to your `build.gradle`:
+To try it out your will need to add the following to your `build.gradle`:
 
 ```groovy
 repositories {
