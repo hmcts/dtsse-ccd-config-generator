@@ -27,11 +27,15 @@ public class FunctionalTest {
         String buildFileContent = "plugins {" +
                 "    id 'java' \n" +
                 "    id 'hmcts.ccd.sdk'" +
+                "}\n" +
+                "ccd {" +
+                 "configDir file('ccd-definition')\n" +
                 "}";
         Files.write(buildFile.toPath(), buildFileContent.getBytes());
 
         BuildResult result = GradleRunner.create()
                 .withPluginClasspath()
+                .withGradleVersion("4.10.3")
                 .withProjectDir(testProjectDir.getRoot())
                 .withArguments("generateCCDConfig", "-si")
                 .buildAndFail();

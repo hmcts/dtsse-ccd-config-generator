@@ -4,6 +4,7 @@
 package uk.gov.hmcts.ccd.sdk;
 
 import com.google.common.collect.Lists;
+import lombok.Data;
 import org.gradle.api.Plugin;
 import org.gradle.api.Project;
 import org.gradle.api.file.FileCollection;
@@ -52,10 +53,11 @@ public class CcdSdkPlugin implements Plugin<Project> {
 
     }
 
+    @Data
     static class CCDConfig {
-        public File configDir;
-        public String rootPackage = "uk.gov.hmcts";
-        public String caseType = "";
+        private File configDir;
+        private String rootPackage = "uk.gov.hmcts";
+        private String caseType = "";
 
         public CCDConfig() {
         }

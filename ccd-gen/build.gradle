@@ -21,6 +21,9 @@ repositories {
 dependencies {
     // Use JUnit test framework for unit tests
     testImplementation 'junit:junit:4.12'
+    annotationProcessor group: 'org.projectlombok', name: 'lombok', version: '1.18.10'
+    compileOnly group: 'org.projectlombok', name: 'lombok', version: '1.18.10'
+
     testAnnotationProcessor group: 'org.projectlombok', name: 'lombok', version: '1.18.10'
     testCompileOnly group: 'org.projectlombok', name: 'lombok', version: '1.18.10'
     testCompile group: 'javax.validation', name: 'validation-api', version: '2.0.1.Final'
