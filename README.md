@@ -1,5 +1,54 @@
 # CCD Config Generator
 
+Autogenerate your CCD configuration from your Java domain model using a Gradle build task.
+
+The generator inspects your Java model and generates:
+
+* AuthorisationCaseEvent
+* CaseEvent
+* CaseEventToComplexTypes
+* CaseEventToFields
+* ComplexTypes
+* FixedLists
+* CaseField
+
+## Usage
+
+```shell
+./gradlew generateCCDConfig
+```
+
+```java
+public class ProdConfig implements CCDConfig<CaseData, State, UserRole> {
+
+    @Override
+    public void configure(ConfigBuilder<CaseData, State, UserRole> builder) {
+        // Permissions can be set on states as well as events.
+        builder.grant(State.Gatekeeping, "CRU", UserRole.GATEKEEPER);
+        
+        // Webhooks can be set with a custom generated convention.
+        builder.setWebhookConvention(this::webhookConvention);
+        
+        // Events can belong to any number of states.
+        builder.event("addNotes")
+            .forStates(State.Submitted, State.Gatekeeping)
+            .grant("CRU", UserRole.HMCTS_ADMIN)
+            .aboutToStartWebhook()
+            .aboutToSubmitWebhook()
+            .fields()
+                .optional(CaseData::getAllApplicants)
+                .complex(CaseData::getJudgeAndLegalAdvisor)
+                    .readonly(JudgeAndLegalAdvisor::getJudgeFullName)
+                    .readonly(JudgeAndLegalAdvisor::getLegalAdvisorName);
+
+    }
+
+    private String webhookConvention(Webhook webhook, String eventId) {
+        return "/" + eventId + "/" + webhook;
+    }
+}
+```
+
 ## Installation
 
 Add the plugin to your `build.gradle`
@@ -53,36 +102,4 @@ pluginManagement {
 }
 ```
 
-## Usage
-
-```java
-public class ProdConfig implements CCDConfig<CaseData, State, UserRole> {
-
-    @Override
-    public void configure(ConfigBuilder<CaseData, State, UserRole> builder) {
-        // Permissions can be set on states as well as events.
-        builder.grant(State.Gatekeeping, "CRU", UserRole.GATEKEEPER);
-        
-        // Webhooks can be set with a custom generated convention.
-        builder.setWebhookConvention(this::webhookConvention);
-        
-        // Events can belong to any number of states.
-        builder.event("addNotes")
-            .forStates(State.Submitted, State.Gatekeeping)
-            .grant("CRU", UserRole.HMCTS_ADMIN)
-            .aboutToStartWebhook()
-            .aboutToSubmitWebhook()
-            .fields()
-                .optional(CaseData::getAllApplicants)
-                .complex(CaseData::getJudgeAndLegalAdvisor)
-                    .readonly(JudgeAndLegalAdvisor::getJudgeFullName)
-                    .readonly(JudgeAndLegalAdvisor::getLegalAdvisorName);
-
-    }
-
-    private String webhookConvention(Webhook webhook, String eventId) {
-        return "/" + eventId + "/" + webhook;
-    }
-}
-```
 
