@@ -2,16 +2,11 @@
 subprojects {
     apply plugin: 'java'
     apply plugin: 'maven-publish'
-    group = "ccd-sdk"
-    version = rootProject.file('version.txt').text.trim()
-    publishing {
-        repositories {
-            maven {
-                url = "${project.rootDir}/repository"
-                name = "repo"
-            }
-        }
-    }
+
+    def buildNumber = System.getenv("RELEASE_VERSION")?.replace("refs/tags/", "") ?: "DEV-SNAPSHOT"
+
+    group 'uk.gov.hmcts.reform'
+    version buildNumber
 
     compileJava   {
         sourceCompatibility = '1.8'
