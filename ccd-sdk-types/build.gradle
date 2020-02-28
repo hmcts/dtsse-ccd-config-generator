@@ -42,10 +42,10 @@ java {
 
 publishing {
     publications {
-        maven(MavenPublication) {
+        Main(MavenPublication) {
             from components.java
             groupId project.group
-            artifactId 'ccd-config-generator'
+            artifactId 'ccd-sdk-types'
             version project.version
 
             pom.withXml {
