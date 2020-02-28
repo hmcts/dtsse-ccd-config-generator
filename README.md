@@ -1,4 +1,4 @@
-# CCD Config Generator
+# CCD Config Generator ![Java CI](https://github.com/hmcts/ccd-config-generator/workflows/Java%20CI/badge.svg?branch=master)
 
 Autogenerate your CCD configuration from your Java domain model using a Gradle build task.
 
