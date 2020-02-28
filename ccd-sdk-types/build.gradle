@@ -66,7 +66,7 @@ bintray {
     publish = true
     pkg {
         repo = 'hmcts-maven'
-        name = 'ccd-config-generator'
+        name = 'ccd-sdk-types'
         userOrg = 'hmcts'
         licenses = ['MIT']
         vcsUrl = gitRepo
