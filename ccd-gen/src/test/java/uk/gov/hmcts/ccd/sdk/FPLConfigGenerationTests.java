@@ -134,7 +134,7 @@ public class FPLConfigGenerationTests {
 
     private void assertEquals(File expected, File actual) {
         try {
-            System.out.println("Comparing " + expected.getName());
+            System.out.println("Comparing " + expected.getAbsolutePath() + " to " + actual.getAbsolutePath());
             String expectedString = FileUtils.readFileToString(expected, Charset.defaultCharset());
             String actualString = FileUtils.readFileToString(actual, Charset.defaultCharset());
             JSONCompareResult result = JSONCompare.compareJSON(expectedString, actualString, JSONCompareMode.LENIENT);
