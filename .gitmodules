@@ -1,3 +1,3 @@
 [submodule "test-builds/fpl-ccd-configuration"]
 	path = test-builds/fpl-ccd-configuration
-	url = git@github.com:banderous/fpl-ccd-configuration.git
+	url = https://github.com/banderous/fpl-ccd-configuration.git
