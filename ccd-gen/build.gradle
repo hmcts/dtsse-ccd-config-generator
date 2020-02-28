@@ -80,13 +80,14 @@ sourceSets {
   }
 }
 
-def input = rootProject.file('version.txt')
-compileJava.inputs.file input
-compileJava.doFirst {
-    def props = file('src/main/resources/application.properties')
-    def version = input.text
-    props.text = "types.version=${version}"
+task setVersion {
+    doLast {
+        def props = file('src/main/resources/application.properties')
+        props.text = "types.version=${version}"
+    }
 }
+
+compileJava.dependsOn setVersion
 
 gradlePlugin.testSourceSets(sourceSets.functionalTest)
 configurations.functionalTestImplementation.extendsFrom(configurations.testImplementation)
