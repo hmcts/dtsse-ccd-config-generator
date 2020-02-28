@@ -1,5 +1,6 @@
 
 subprojects {
+    apply plugin: 'checkstyle'
     apply plugin: 'java'
     apply plugin: 'maven-publish'
 
@@ -11,6 +12,12 @@ subprojects {
     compileJava   {
         sourceCompatibility = '1.8'
         targetCompatibility = '1.8'
+    }
+
+    checkstyle {
+        maxWarnings = 0
+        toolVersion '8.29'
+        sourceSets = [project.sourceSets.main]
     }
 
 }

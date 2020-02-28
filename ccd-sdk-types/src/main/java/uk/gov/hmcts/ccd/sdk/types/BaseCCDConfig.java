@@ -1,69 +1,73 @@
 package uk.gov.hmcts.ccd.sdk.types;
 
-public abstract class BaseCCDConfig<Model, State, Role extends uk.gov.hmcts.ccd.sdk.types.Role> implements CCDConfig<Model, State, Role>, ConfigBuilder<Model, State, Role> {
-    private ConfigBuilder<Model, State, Role> builder;
+public abstract class BaseCCDConfig<Model, State,
+    Role extends uk.gov.hmcts.ccd.sdk.types.Role> implements
+    CCDConfig<Model, State, Role>, ConfigBuilder<Model, State, Role> {
 
-    @Override
-    public void configure(ConfigBuilder<Model, State, Role> builder) {
-        this.builder = builder;
-        configure();
-    }
+  private ConfigBuilder<Model, State, Role> builder;
 
-    protected abstract void configure();
+  @Override
+  public void configure(ConfigBuilder<Model, State, Role> builder) {
+    this.builder = builder;
+    configure();
+  }
 
-    @Override
-    public EventTypeBuilder<Model, Role, State> event(String id) {
-        return builder.event(id);
-    }
+  protected abstract void configure();
 
-    @Override
-    public void caseType(String caseType) {
-        builder.caseType(caseType);
-    }
+  @Override
+  public EventTypeBuilder<Model, Role, State> event(String id) {
+    return builder.event(id);
+  }
 
-    @Override
-    public void grant(State state, String permissions, Role role) {
-        builder.grant(state, permissions, role);
-    }
+  @Override
+  public void caseType(String caseType) {
+    builder.caseType(caseType);
+  }
 
-    @Override
-    public void blacklist(State state, Role... role) {
-        builder.blacklist(state, role);
-    }
+  @Override
+  public void grant(State state, String permissions, Role role) {
+    builder.grant(state, permissions, role);
+  }
 
-    @Override
-    public void explicitState(String eventId, Role role, String crud) {
-        builder.explicitState(eventId, role, crud);
-    }
+  @Override
+  public void blacklist(State state, Role... role) {
+    builder.blacklist(state, role);
+  }
 
-    @Override
-    public void prefix(State state, String prefix) {
-        builder.prefix(state, prefix);
-    }
+  @Override
+  public void explicitState(String eventId, Role role, String crud) {
+    builder.explicitState(eventId, role, crud);
+  }
 
-    @Override
-    public void caseField(String id, String label, String type, String collectionType) {
-        builder.caseField(id, label, type, collectionType);
-    }
+  @Override
+  public void prefix(State state, String prefix) {
+    builder.prefix(state, prefix);
+  }
 
-    @Override
-    public void caseField(String id, String label, String type) {
-        builder.caseField(id, label, type);
-    }
+  @Override
+  public void caseField(String id, String label, String type, String collectionType) {
+    builder.caseField(id, label, type, collectionType);
+  }
 
-    @Override
-    public void caseField(String id, String showCondition, String type, String typeParam, String label) {
-        builder.caseField(id, showCondition, type, typeParam, label);
-    }
+  @Override
+  public void caseField(String id, String label, String type) {
+    builder.caseField(id, label, type);
+  }
 
-    @Override
-    public void setWebhookConvention(WebhookConvention convention) {
-        builder.setWebhookConvention(convention);
-    }
+  @Override
+  public void caseField(String id, String showCondition, String type, String typeParam,
+      String label) {
+    builder.caseField(id, showCondition, type, typeParam, label);
+  }
 
-    @Override
-    public void setEnvironment(String env) {
-        builder.setEnvironment(env);
-    }
+  @Override
+  public void setWebhookConvention(WebhookConvention convention) {
+    builder.setWebhookConvention(convention);
+  }
+
+  @Override
+  public void setEnvironment(String env) {
+    builder.setEnvironment(env);
+  }
 }
 

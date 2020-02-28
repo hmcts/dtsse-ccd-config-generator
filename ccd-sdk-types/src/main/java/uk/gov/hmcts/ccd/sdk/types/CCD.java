@@ -5,14 +5,18 @@ import java.lang.annotation.RetentionPolicy;
 
 @Retention(RetentionPolicy.RUNTIME)
 public @interface CCD {
-    String label() default "";
-    String hint() default "";
-    String showCondition() default "";
-    FieldType type() default FieldType.Unspecified;
 
-    String typeParameter() default "";
+  String label() default "";
 
-    boolean showSummaryContent() default false;
+  String hint() default "";
 
-    boolean ignore() default false;
+  String showCondition() default "";
+
+  FieldType type() default FieldType.Unspecified;
+
+  String typeParameter() default "";
+
+  boolean showSummaryContent() default false;
+
+  boolean ignore() default false;
 }
