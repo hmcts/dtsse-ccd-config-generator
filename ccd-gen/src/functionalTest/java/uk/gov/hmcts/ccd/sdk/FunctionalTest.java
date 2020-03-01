@@ -5,6 +5,7 @@ import static junit.framework.TestCase.assertTrue;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
+import org.apache.groovy.util.Maps;
 import org.gradle.testkit.runner.BuildResult;
 import org.gradle.testkit.runner.GradleRunner;
 import org.junit.Before;
@@ -34,14 +35,21 @@ public class FunctionalTest {
         + "}";
     Files.write(buildFile.toPath(), buildFileContent.getBytes());
 
-    BuildResult result = GradleRunner.create()
-        .withPluginClasspath()
+    BuildResult result = runner(testProjectDir.getRoot())
         .withGradleVersion("4.10.3")
-        .withProjectDir(testProjectDir.getRoot())
-        .withArguments("generateCCDConfig", "-si")
         .buildAndFail();
 
     System.out.println(result.getOutput());
     assertTrue(result.getOutput().contains("Expected at least one"));
   }
+
+  public static GradleRunner runner(File project) {
+    return GradleRunner.create()
+        .forwardOutput()
+        .withPluginClasspath()
+        .withProjectDir(project)
+        .withArguments("generateCCDConfig", "-si")
+        .withEnvironment(Maps.of("GRADLE_FUNCTIONAL_TEST", "true"));
+  }
 }
+

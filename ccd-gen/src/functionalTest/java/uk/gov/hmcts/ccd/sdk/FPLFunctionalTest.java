@@ -18,13 +18,7 @@ public class FPLFunctionalTest {
     File projectDir = new File("../test-builds/fpl-ccd-configuration");
 
     // Run the build
-    GradleRunner runner = GradleRunner.create();
-    runner.forwardOutput();
-
-    runner.withPluginClasspath();
-    runner.withArguments("generateCCDConfig", "-i", "--stacktrace");
-    runner.withProjectDir(projectDir);
-
+    GradleRunner runner = FunctionalTest.runner(projectDir);
     runner.build();
 
     long count = Files.walk(Paths.get("../test-builds/fpl-ccd-configuration/ccd-definition-gen"))
@@ -39,13 +33,7 @@ public class FPLFunctionalTest {
     File projectDir = new File("../test-builds/fpl-ccd-configuration");
 
     // Run the build
-    GradleRunner runner = GradleRunner.create();
-    runner.forwardOutput();
-
-    runner.withPluginClasspath();
-    runner.withArguments("generateCCDConfig", "-i", "--stacktrace");
-    runner.withProjectDir(projectDir);
-
+    GradleRunner runner = FunctionalTest.runner(projectDir);
     runner.build();
 
     long count = Files.walk(Paths.get("../test-builds/fpl-ccd-configuration/ccd-definition-gen"))

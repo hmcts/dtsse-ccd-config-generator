@@ -98,6 +98,8 @@ task functionalTest(type: Test) {
     classpath = sourceSets.functionalTest.runtimeClasspath
 }
 
+functionalTest.dependsOn(":ccd-sdk-types:publishMainPublicationToMavenLocal")
+
 check {
     // Run the functional tests as part of `check`
     dependsOn(tasks.functionalTest)

@@ -47,8 +47,15 @@ public class CcdSdkPlugin implements Plugin<Project> {
     } catch (IOException e) {
       throw new RuntimeException(e);
     }
-    String version = properties.getProperty("types.version");
+    if (System.getenv("GRADLE_FUNCTIONAL_TEST") != null) {
+      project.getRepositories().mavenLocal();
+    } else {
+      project.getRepositories().maven(x -> x.setUrl("https://dl.bintray.com/hmcts/hmcts-maven"));
+    }
+    project.getRepositories().jcenter();
 
+    String version = properties.getProperty("types.version");
+    project.getDependencies().add("compile", "uk.gov.hmcts.reform:ccd-sdk-types:" + version);
   }
 
   @Data
