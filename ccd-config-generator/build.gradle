@@ -1,13 +1,4 @@
 
-plugins {
-    id 'java-library'
-    id 'maven-publish'
-    id 'com.jfrog.bintray' version '1.8.4'
-}
-
-repositories {
-    jcenter()
-}
 
 dependencies {
     // Use JUnit test framework for unit tests
@@ -42,59 +33,3 @@ compileJava {
 
 
 
-def gitRepo = "https://github.com/hmcts/ccd-config-generator"
-
-def pomConfig = {
-    licenses {
-        license {
-            name "MIT License"
-            url "http://www.opensource.org/licenses/mit-license.php"
-            distribution "repo"
-        }
-    }
-
-    scm {
-        url "https://github.com/hmcts/ccd-config-generator"
-    }
-}
-
-java {
-    withJavadocJar()
-    withSourcesJar()
-}
-
-publishing {
-    publications {
-        Main(MavenPublication) {
-            from components.java
-            groupId project.group
-            artifactId 'ccd-config-generator'
-            version project.version
-
-            pom.withXml {
-                def root = asNode()
-                root.appendNode('description', 'Generate CCD Configuration from code')
-                root.appendNode('name', 'CCD Config generator')
-                root.appendNode('url', gitRepo)
-                root.children().last() + pomConfig
-            }
-        }
-    }
-}
-
-bintray {
-    user = System.getenv('BINTRAY_USER')
-    key = System.getenv('BINTRAY_KEY')
-    publications = ['Main']
-    publish = true
-    pkg {
-        repo = 'hmcts-maven'
-        name = 'ccd-config-generator'
-        userOrg = 'hmcts'
-        licenses = ['MIT']
-        vcsUrl = gitRepo
-        version {
-            name = project.version
-        }
-    }
-}
