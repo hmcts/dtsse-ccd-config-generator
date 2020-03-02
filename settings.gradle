@@ -1,1 +1,1 @@
-include 'ccd-gen', 'ccd-sdk-types'
+include 'ccd-gradle-plugin', 'ccd-sdk-types', 'ccd-config-generator'

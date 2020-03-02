@@ -1,16 +1,4 @@
 
-plugins {
-    id 'java-library'
-    id 'maven-publish'
-    id 'com.jfrog.bintray' version '1.8.4'
-}
-
-repositories {
-    // Use jcenter for resolving dependencies.
-    // You can declare any Maven/Ivy/file repository here.
-    jcenter()
-}
-
 dependencies {
     testImplementation 'junit:junit:4.12'
     annotationProcessor group: 'org.projectlombok', name: 'lombok', version: '1.18.10'
@@ -18,60 +6,3 @@ dependencies {
     compile group: 'com.fasterxml.jackson.core', name: 'jackson-annotations', version: '2.10.1'
 }
 
-
-def gitRepo = "https://github.com/hmcts/ccd-config-generator"
-
-def pomConfig = {
-    licenses {
-        license {
-            name "MIT License"
-            url "http://www.opensource.org/licenses/mit-license.php"
-            distribution "repo"
-        }
-    }
-
-    scm {
-        url "https://github.com/hmcts/ccd-config-generator"
-    }
-}
-
-java {
-    withJavadocJar()
-    withSourcesJar()
-}
-
-publishing {
-    publications {
-        Main(MavenPublication) {
-            from components.java
-            groupId project.group
-            artifactId 'ccd-sdk-types'
-            version project.version
-
-            pom.withXml {
-                def root = asNode()
-                root.appendNode('description', 'Generate CCD Configuration from code')
-                root.appendNode('name', 'CCD Config generator')
-                root.appendNode('url', gitRepo)
-                root.children().last() + pomConfig
-            }
-        }
-    }
-}
-
-bintray {
-    user = System.getenv('BINTRAY_USER')
-    key = System.getenv('BINTRAY_KEY')
-    publications = ['Main']
-    publish = true
-    pkg {
-        repo = 'hmcts-maven'
-        name = 'ccd-sdk-types'
-        userOrg = 'hmcts'
-        licenses = ['MIT']
-        vcsUrl = gitRepo
-        version {
-            name = project.version
-        }
-    }
-}
