@@ -12,11 +12,33 @@ The generator inspects your Java model and generates:
 * FixedLists
 * CaseField
 
+## Installation
+
+Add the plugin to your `build.gradle` file in the project containing your Java domain model:
+
+```groovy
+plugins {
+  id 'hmcts.ccd.sdk' version '0.3.6'
+}
+```
+
+And set the destination for the generated config
+
+```
+ccd {
+  configDir = file('ccd-definition')
+}
+```
+
 ## Usage
+
+The `generateCCDConfig` task generates the configuration:
 
 ```shell
 ./gradlew generateCCDConfig
 ```
+
+The generator is configured by providing an implementation of the CCDConfig<> interface:
 
 ```java
 public class ProdConfig implements CCDConfig<CaseData, State, UserRole> {
@@ -48,58 +70,4 @@ public class ProdConfig implements CCDConfig<CaseData, State, UserRole> {
     }
 }
 ```
-
-## Installation
-
-Add the plugin to your `build.gradle`
-
-```groovy
-plugins {
-  id 'hmcts.ccd.sdk' version '0.3.2'
-}
-```
-
-Add the configuration bindings library to your compile dependencies
-
-```groovy
-dependencies {
-  compile "uk.gov.hmcts:ccd-sdk-types:0.3.2"
-}
-```
-
-And set the destination for the generated config
-
-```
-ccd {
-  configDir = file('ccd-definition')
-}
-```
-
-### Repositories
-
-The tool is not yet published to jcenter/the gradle plugin repository.
- 
-To try it out your will need to add the following to your `build.gradle`:
-
-```groovy
-repositories {
-  maven {
-    url  "https://raw.githubusercontent.com/banderous/ccd/master"
-  }
-}
-```
-
-And the following in `settings.gradle`
-
-```groovy
-pluginManagement {
-  repositories {
-    maven {
-      url 'https://raw.githubusercontent.com/banderous/ccd/master'
-    }
-    gradlePluginPortal()
-  }
-}
-```
-
 
