@@ -23,7 +23,7 @@ dependencies {
     compile group: 'cglib', name: 'cglib', version: '3.3.0'
     compile group: 'net.jodah', name: 'typetools', version: '0.6.1'
     compile 'org.reflections:reflections:0.9.11'
-    compile 'com.fasterxml.jackson.core:jackson-databind:2.9.8'
+    compile 'com.fasterxml.jackson.core:jackson-databind:2.10.2'
     compile project(':ccd-sdk-types')
 }
 
