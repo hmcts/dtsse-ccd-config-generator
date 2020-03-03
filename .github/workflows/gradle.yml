@@ -24,6 +24,8 @@ jobs:
       env:
         BINTRAY_USER: jenkins-reform-hmcts
         BINTRAY_KEY: ${{ secrets.BINTRAY_KEY }}
+        GRADLE_PLUGIN_PORTAL_KEY: ${{ secrets.GRADLE_PLUGIN_PORTAL_KEY }}
+        GRADLE_PLUGIN_PORTAL_SECRET: ${{ secrets.GRADLE_PLUGIN_PORTAL_SECRET }}
         RELEASE_VERSION: ${{ github.ref }}
-      run: ./gradlew bintrayUpload
+      run: ./gradlew bintrayUpload publishPlugins
       if: startsWith(github.ref, 'refs/tags')
