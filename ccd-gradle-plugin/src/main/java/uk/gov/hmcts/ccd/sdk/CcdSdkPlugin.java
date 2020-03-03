@@ -1,10 +1,10 @@
 package uk.gov.hmcts.ccd.sdk;
 
 import java.io.File;
-import java.io.IOException;
 import java.util.Arrays;
 import java.util.Properties;
 import lombok.Data;
+import lombok.SneakyThrows;
 import org.gradle.api.Plugin;
 import org.gradle.api.Project;
 import org.gradle.api.artifacts.Configuration;
@@ -23,34 +23,27 @@ public class CcdSdkPlugin implements Plugin<Project> {
   public void apply(Project project) {
     project.getPlugins().apply(JavaPlugin.class);
 
-    Properties properties = new Properties();
-    try {
-      properties.load(getClass().getClassLoader().getResourceAsStream("application.properties"));
-    } catch (IOException e) {
-      throw new RuntimeException(e);
-    }
-
-    Configuration configuration = project.getConfigurations()
-        .create("ccd-config-generator");
-
-    String version = properties.getProperty("types.version");
-    Dependency d = project.getDependencies()
+    String version = getVersion();
+    Dependency generator = project.getDependencies()
         .create("uk.gov.hmcts.reform:ccd-config-generator:" + version);
-    configuration.getDependencies().add(d);
+
+    Configuration generatorConfiguration = project.getConfigurations()
+        .create("ccd-config-generator");
+    generatorConfiguration.getDependencies().add(generator);
     project.getDependencies().add("compile", "uk.gov.hmcts.reform:ccd-sdk-types:" + version);
 
     JavaExec generate = project.getTasks().create("generateCCDConfig", JavaExec.class);
     generate.setGroup("CCD tasks");
+    generate.setMain("uk.gov.hmcts.ccd.sdk.Main");
 
     SourceSetContainer ssc = project.getConvention().getPlugin(JavaPluginConvention.class)
         .getSourceSets();
-    SourceSet source = ssc.getByName("main");
-    generate.setClasspath(source.getRuntimeClasspath().plus(configuration));
-    generate.setMain("uk.gov.hmcts.ccd.sdk.Main");
-    generate.dependsOn(project.getTasksByName("compileJava", true));
+    SourceSet main = ssc.getByName("main");
+    generate.setClasspath(main.getRuntimeClasspath().plus(generatorConfiguration));
 
     CCDConfig config = project.getExtensions().create("ccd", CCDConfig.class);
     config.configDir = project.getBuildDir();
+
     generate.doFirst(x -> generate.setArgs(Arrays.asList(
         config.configDir.getAbsolutePath(),
         config.rootPackage,
@@ -63,6 +56,13 @@ public class CcdSdkPlugin implements Plugin<Project> {
       project.getRepositories().maven(x -> x.setUrl("https://dl.bintray.com/hmcts/hmcts-maven"));
     }
     project.getRepositories().jcenter();
+  }
+
+  @SneakyThrows
+  private String getVersion() {
+    Properties properties = new Properties();
+    properties.load(getClass().getClassLoader().getResourceAsStream("application.properties"));
+    return properties.getProperty("types.version");
   }
 
   @Data
