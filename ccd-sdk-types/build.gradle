@@ -3,6 +3,5 @@ dependencies {
     testImplementation 'junit:junit:4.12'
     annotationProcessor group: 'org.projectlombok', name: 'lombok', version: '1.18.10'
     compileOnly group: 'org.projectlombok', name: 'lombok', version: '1.18.10'
-    compile group: 'com.fasterxml.jackson.core', name: 'jackson-annotations', version: '2.10.1'
 }
 

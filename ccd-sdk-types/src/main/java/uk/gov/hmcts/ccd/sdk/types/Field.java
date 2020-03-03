@@ -1,6 +1,5 @@
 package uk.gov.hmcts.ccd.sdk.types;
 
-import com.fasterxml.jackson.annotation.JsonProperty;
 import de.cronn.reflection.util.TypedPropertyGetter;
 import lombok.Builder;
 import lombok.Data;
@@ -55,8 +54,7 @@ public class Field<T, Parent> {
     }
 
     public FieldBuilder<T, Parent> id(TypedPropertyGetter<T, ?> getter) {
-      JsonProperty j = propertyUtils.getAnnotationOfProperty(dataClass, getter, JsonProperty.class);
-      id = j != null ? j.value() : propertyUtils.getPropertyName(dataClass, getter);
+      id = propertyUtils.getPropertyName(dataClass, getter);
 
       CCD cf = propertyUtils.getAnnotationOfProperty(dataClass, getter, CCD.class);
       if (null != cf) {
