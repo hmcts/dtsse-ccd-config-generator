@@ -6,6 +6,7 @@ subprojects {
     apply plugin: 'checkstyle'
     apply plugin: 'java'
     apply plugin: 'maven-publish'
+    apply plugin: 'jacoco'
 
     def buildNumber = System.getenv("RELEASE_VERSION")?.replace("refs/tags/", "") ?: "DEV-SNAPSHOT"
 
@@ -21,6 +22,12 @@ subprojects {
         maxWarnings = 0
         toolVersion '8.29'
         sourceSets = [project.sourceSets.main]
+    }
+
+    jacocoTestReport {
+        reports {
+            html.enabled true
+        }
     }
 }
 

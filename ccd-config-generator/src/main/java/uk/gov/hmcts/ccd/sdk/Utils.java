@@ -1,37 +1,30 @@
 package uk.gov.hmcts.ccd.sdk;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.util.DefaultIndenter;
 import com.fasterxml.jackson.core.util.DefaultPrettyPrinter;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.type.CollectionType;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
-import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import lombok.SneakyThrows;
 
 public class Utils {
 
+  @SneakyThrows
   private static void writeFile(Path path, String value) {
-    try {
-      Files.write(path, value.getBytes());
-    } catch (IOException e) {
-      throw new RuntimeException(e);
-    }
+    Files.write(path, value.getBytes());
   }
 
+  @SneakyThrows
   public static String serialise(List data) {
-    try {
-      DefaultPrettyPrinter printer = new DefaultPrettyPrinter();
-      printer.indentArraysWith(DefaultIndenter.SYSTEM_LINEFEED_INSTANCE);
-      return new ObjectMapper().writer(printer).writeValueAsString(data);
-    } catch (JsonProcessingException e) {
-      throw new RuntimeException(e);
-    }
+    DefaultPrettyPrinter printer = new DefaultPrettyPrinter();
+    printer.indentArraysWith(DefaultIndenter.SYSTEM_LINEFEED_INSTANCE);
+    return new ObjectMapper().writer(printer).writeValueAsString(data);
   }
 
   public static Map<String, Object> getField(String id) {
@@ -42,20 +35,17 @@ public class Utils {
     return field;
   }
 
+  @SneakyThrows
   public static void mergeInto(Path path, List<Map<String, Object>> fields, String... primaryKeys) {
     System.out.println("Merging into " + path.getFileName());
     ObjectMapper mapper = new ObjectMapper();
     CollectionType mapCollectionType = mapper.getTypeFactory()
         .constructCollectionType(List.class, Map.class);
     List<Map<String, Object>> existing;
-    try {
-      if (path.toFile().exists()) {
-        existing = mapper.readValue(path.toFile(), mapCollectionType);
-      } else {
-        existing = Lists.newArrayList();
-      }
-    } catch (IOException e) {
-      throw new RuntimeException(e);
+    if (path.toFile().exists()) {
+      existing = mapper.readValue(path.toFile(), mapCollectionType);
+    } else {
+      existing = Lists.newArrayList();
     }
 
     for (Map<String, Object> field : fields) {

@@ -1,6 +1,5 @@
 package uk.gov.hmcts.ccd.sdk.generator;
 
-import com.google.common.base.Strings;
 import java.io.File;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -38,24 +37,6 @@ public class ComplexTypeGenerator {
         info.put("ListElementCode", info.get("ID"));
         info.put("ElementLabel", info.remove("Label"));
         info.put("ID", id);
-      }
-
-      if (null != complex && !Strings.isNullOrEmpty(complex.label())) {
-        Map<String, Object> fieldInfo = CaseFieldGenerator.getField(caseType, id);
-        fieldInfo.put("ElementLabel", complex.label());
-        fieldInfo.put("FieldType", "Label");
-        String labelId = complex.labelId().length() > 0 ? complex.labelId()
-            : c.getSimpleName().toLowerCase() + "Label";
-        fieldInfo.put("ListElementCode", labelId);
-        fields.add(0, fieldInfo);
-      }
-
-      if (null != complex && !Strings.isNullOrEmpty(complex.border())) {
-        Map<String, Object> fieldInfo = CaseFieldGenerator.getField(caseType, id);
-        fieldInfo.put("ElementLabel", complex.border());
-        fieldInfo.put("FieldType", "Label");
-        fieldInfo.put("ListElementCode", complex.borderId());
-        fields.add(fieldInfo);
       }
 
       int depth = types.get(c);
