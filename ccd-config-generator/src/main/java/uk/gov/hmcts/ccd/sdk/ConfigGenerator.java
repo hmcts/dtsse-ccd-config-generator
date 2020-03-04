@@ -29,9 +29,11 @@ import uk.gov.hmcts.ccd.sdk.types.Event;
 public class ConfigGenerator {
 
   private final Reflections reflections;
+  private final String basePackage;
 
-  public ConfigGenerator(Reflections reflections) {
+  public ConfigGenerator(Reflections reflections, String basePackage) {
     this.reflections = reflections;
+    this.basePackage = basePackage;
   }
 
   public void resolveConfig(File outputFolder) {
@@ -58,7 +60,7 @@ public class ConfigGenerator {
     ConfigBuilderImpl builder = new ConfigBuilderImpl(typeArgs[0]);
     config.configure(builder);
     List<Event> events = builder.getEvents();
-    Map<Class, Integer> types = resolve(typeArgs[0], getPackageName(config.getClass()));
+    Map<Class, Integer> types = resolve(typeArgs[0], basePackage);
     return new ResolvedCCDConfig(typeArgs[0], builder, events, types, builder.environment);
   }
 
