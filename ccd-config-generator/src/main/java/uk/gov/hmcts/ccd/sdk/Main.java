@@ -12,7 +12,7 @@ public class Main {
     Reflections reflections = new Reflections(new ConfigurationBuilder()
         .setUrls(ClasspathHelper.forPackage(args[1]))
         .setExpandSuperTypes(false));
-    ConfigGenerator generator = new ConfigGenerator(reflections);
+    ConfigGenerator generator = new ConfigGenerator(reflections, args[1]);
     generator.resolveConfig(outputDir);
     // Required on Gradle 4.X or build task hangs.
     System.exit(0);

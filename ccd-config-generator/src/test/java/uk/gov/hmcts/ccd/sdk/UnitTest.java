@@ -6,6 +6,8 @@ import uk.gov.hmcts.ccd.sdk.types.CCDConfig;
 import uk.gov.hmcts.ccd.sdk.types.ConfigBuilder;
 import uk.gov.hmcts.ccd.sdk.types.Event;
 import uk.gov.hmcts.ccd.sdk.types.Webhook;
+import uk.gov.hmcts.example.missingcomplex.Applicant;
+import uk.gov.hmcts.example.missingcomplex.MissingComplex;
 import uk.gov.hmcts.reform.fpl.enums.State;
 import uk.gov.hmcts.reform.fpl.enums.UserRole;
 import uk.gov.hmcts.reform.fpl.model.CaseData;
@@ -15,7 +17,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 public class UnitTest {
 
     Reflections reflections = new Reflections("uk.gov.hmcts");
-    ConfigGenerator generator = new ConfigGenerator(reflections);
+    ConfigGenerator generator = new ConfigGenerator(reflections, "uk.gov.hmcts");
 
     @Test
     public void multipleStatesPerEvent() {
@@ -62,5 +64,17 @@ public class UnitTest {
                     .readonly(CaseData::getProceeding)
                     .complex(CaseData::getJudgeAndLegalAdvisor);
         }
+    }
+
+    @Test
+    public void missingComplexBug() {
+        class MissingBug implements CCDConfig<MissingComplex, State, UserRole> {
+            @Override
+            public void configure(ConfigBuilder<MissingComplex, State, UserRole> builder) {
+            }
+        }
+
+        ResolvedCCDConfig resolved = generator.resolveConfig(new MissingBug());
+        assertThat(resolved.types).containsKeys(Applicant.class);
     }
 }

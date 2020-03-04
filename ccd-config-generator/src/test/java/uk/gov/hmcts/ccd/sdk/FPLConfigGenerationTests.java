@@ -49,7 +49,7 @@ public class FPLConfigGenerationTests {
                 .setUrls(ClasspathHelper.forPackage("uk.gov.hmcts"))
                 .setExpandSuperTypes(false));
 
-        generator = new ConfigGenerator(reflections);
+        generator = new ConfigGenerator(reflections, "uk.gov.hmcts");
         generator.resolveConfig(tmp.getRoot());
         // Generate a second time to ensure existing config is correctly merged.
         generator.resolveConfig(tmp.getRoot());
