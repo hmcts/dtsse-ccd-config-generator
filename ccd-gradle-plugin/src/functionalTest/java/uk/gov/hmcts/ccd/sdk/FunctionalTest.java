@@ -41,6 +41,7 @@ public class FunctionalTest {
 
     System.out.println(result.getOutput());
     assertTrue(result.getOutput().contains("Expected at least one"));
+    assertTrue(result.getOutput().contains("Searched package: uk.gov.hmcts"));
   }
 
   public static GradleRunner runner(File project) {
