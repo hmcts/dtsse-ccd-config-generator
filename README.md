@@ -1,4 +1,4 @@
-# CCD Config Generator ![Java CI](https://github.com/hmcts/ccd-config-generator/workflows/Java%20CI/badge.svg?branch=master)
+# CCD Config Generator ![Java CI](https://github.com/hmcts/ccd-config-generator/workflows/Java%20CI/badge.svg?branch=master) ![GitHub tag (latest SemVer)](https://img.shields.io/github/v/tag/hmcts/ccd-config-generator?label=release)
 
 Autogenerate your CCD configuration from your Java domain model using a Gradle build task.
 
@@ -18,7 +18,7 @@ Add the plugin to your `build.gradle` file in the project containing your Java d
 
 ```groovy
 plugins {
-  id 'hmcts.ccd.sdk' version '0.3.6'
+  id 'hmcts.ccd.sdk' version '[latest version at top of page]'
 }
 ```
 
