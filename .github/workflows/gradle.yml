@@ -14,8 +14,8 @@ jobs:
       run: |
         git submodule sync --recursive
         git submodule update --init --force --depth=1 test-builds/fpl-ccd-configuration
-    - uses: actions/cache@v1
     - name: Restore dependency cache
+      uses: actions/cache@v1
       with:
         path: ~/.gradle/caches
         key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle') }}
