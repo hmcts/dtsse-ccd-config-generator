@@ -141,6 +141,14 @@ public class CaseFieldGenerator {
           case "LocalDateTime":
             type = "DateTime";
             break;
+          case "int":
+          case "float":
+          case "double":
+          case "Integer":
+          case "Float":
+          case "Double":
+            type = "Number";
+            break;
           default:
             break;
         }
