@@ -2,6 +2,7 @@ package uk.gov.hmcts.ccd.sdk.generator;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.google.common.base.Strings;
+import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import java.io.File;
@@ -15,7 +16,7 @@ import java.util.Map;
 import net.jodah.typetools.TypeResolver;
 import org.reflections.ReflectionUtils;
 import uk.gov.hmcts.ccd.sdk.ConfigBuilderImpl;
-import uk.gov.hmcts.ccd.sdk.Utils;
+import uk.gov.hmcts.ccd.sdk.JsonUtils;
 import uk.gov.hmcts.ccd.sdk.types.CCD;
 import uk.gov.hmcts.ccd.sdk.types.ComplexType;
 import uk.gov.hmcts.ccd.sdk.types.Event;
@@ -23,6 +24,10 @@ import uk.gov.hmcts.ccd.sdk.types.FieldType;
 import uk.gov.hmcts.ccd.sdk.types.Label;
 
 public class CaseFieldGenerator {
+
+  // The field type set from code always takes precedence,
+  // so eg. if a field changes type it gets updated.
+  private static final ImmutableSet<String> OVERWRITES_FIELDS = ImmutableSet.of("FieldType");
 
   public static void generateCaseFields(File outputFolder, String caseTypeId, Class dataClass,
       List<Event> events, ConfigBuilderImpl builder) {
@@ -36,7 +41,7 @@ public class CaseFieldGenerator {
     fields.addAll(getExplicitFields(caseTypeId, events, builder));
 
     Path path = Paths.get(outputFolder.getPath(), "CaseField.json");
-    Utils.mergeInto(path, fields, "ID");
+    JsonUtils.mergeInto(path, fields, OVERWRITES_FIELDS, "ID");
   }
 
   public static List<Map<String, Object>> toComplex(Class dataClass, String caseTypeId) {

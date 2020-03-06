@@ -6,7 +6,7 @@ import java.nio.file.Paths;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
-import uk.gov.hmcts.ccd.sdk.Utils;
+import uk.gov.hmcts.ccd.sdk.JsonUtils;
 import uk.gov.hmcts.ccd.sdk.types.ComplexType;
 
 public class ComplexTypeGenerator {
@@ -47,7 +47,7 @@ public class ComplexTypeGenerator {
         String prefix = maxDepth - depth + "_";
         path = Paths.get(complexTypes.getPath(), prefix + id + ".json");
       }
-      Utils.mergeInto(path, fields, "ListElementCode");
+      JsonUtils.mergeInto(path, fields, "ListElementCode");
     }
   }
 

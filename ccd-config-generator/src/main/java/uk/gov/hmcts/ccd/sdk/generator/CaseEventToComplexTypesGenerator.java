@@ -6,7 +6,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.List;
 import java.util.Map;
-import uk.gov.hmcts.ccd.sdk.Utils;
+import uk.gov.hmcts.ccd.sdk.JsonUtils;
 import uk.gov.hmcts.ccd.sdk.types.Event;
 import uk.gov.hmcts.ccd.sdk.types.Field;
 import uk.gov.hmcts.ccd.sdk.types.FieldCollection;
@@ -24,7 +24,7 @@ public class CaseEventToComplexTypesGenerator {
             .valueOf(Paths.get(root.getPath(), "CaseEventToComplexTypes", event.getEventID())));
         folder.mkdirs();
         Path output = Paths.get(folder.getPath(), event.getId() + ".json");
-        Utils.mergeInto(output, entries, "CaseEventID", "CaseFieldID", "ListElementCode");
+        JsonUtils.mergeInto(output, entries, "CaseEventID", "CaseFieldID", "ListElementCode");
       }
     }
   }
@@ -48,7 +48,7 @@ public class CaseEventToComplexTypesGenerator {
         for (Field.FieldBuilder complexField : fields) {
           String id = eventId;
           id = id.substring(0, 1).toUpperCase() + id.substring(1);
-          Map<String, Object> data = Utils.getField(id);
+          Map<String, Object> data = JsonUtils.getField(id);
           entries.add(data);
 
           data.put("ID", id);
