@@ -3,36 +3,42 @@
     "LiveFrom": "01/01/2017",
     "ID": "DirectionAssignee",
     "ListElementCode": "LOCAL_AUTHORITY",
+    "DisplayOrder": 2,
     "ListElement": "Local Authority"
   },
   {
     "LiveFrom": "01/01/2017",
     "ID": "DirectionAssignee",
     "ListElementCode": "CAFCASS",
+    "DisplayOrder": 4,
     "ListElement": "Cafcass"
   },
   {
     "LiveFrom": "01/01/2017",
     "ID": "DirectionAssignee",
     "ListElementCode": "ALL_PARTIES",
+    "DisplayOrder": 1,
     "ListElement": "All parties"
   },
   {
     "LiveFrom": "01/01/2017",
     "ID": "DirectionAssignee",
     "ListElementCode": "PARENTS_AND_RESPONDENTS",
+    "DisplayOrder": 3,
     "ListElement": "Parents and other respondents"
   },
   {
     "LiveFrom": "01/01/2017",
     "ID": "DirectionAssignee",
     "ListElementCode": "OTHERS",
+    "DisplayOrder": 5,
     "ListElement": "Other parties"
   },
   {
     "LiveFrom": "01/01/2017",
     "ID": "DirectionAssignee",
     "ListElementCode": "COURT",
+    "DisplayOrder": 6,
     "ListElement": "Court"
   }
 ]

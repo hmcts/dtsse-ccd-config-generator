@@ -21,11 +21,13 @@ public class JsonUtilsTest {
     Map<String, Object> generated = Maps.newHashMap(Map.of(
         "id", "foo",
         "type", "string",
+        "new", "value",
         "label", "baz" ));
 
     Map<String, Object> expected = Maps.newHashMap(Map.of(
         "id", "foo",
         "type", "string",
+        "new", "value",
         "label", "bar" ));
 
     List<Map<String, Object>> result = JsonUtils

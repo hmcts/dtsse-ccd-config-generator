@@ -37,6 +37,7 @@ public class ComplexTypeGenerator {
         info.put("ListElementCode", info.get("ID"));
         info.put("ElementLabel", info.remove("Label"));
         info.put("ID", id);
+        info.remove("CaseTypeID");
       }
 
       int depth = types.get(c);

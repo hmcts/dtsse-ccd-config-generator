@@ -56,14 +56,11 @@ public class JsonUtils {
         existing.add(generatedField);
       } else {
         Map<String, Object> match = existingMatch.get();
-        for (String overwriteField : overwriteFields) {
-          if (!Objects.equal(match.get(overwriteField), generatedField.get(overwriteField))) {
-            System.out.println("Overwriting " + overwriteField + " with "
-                + generatedField.get(overwriteField));
-            match.put(overwriteField, generatedField.get(overwriteField));
+        for (String generatedKey : generatedField.keySet()) {
+          if (!match.containsKey(generatedKey) || overwriteFields.contains(generatedKey)) {
+            match.put(generatedKey, generatedField.get(generatedKey));
           }
         }
-
       }
     }
 
