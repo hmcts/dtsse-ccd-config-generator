@@ -10,7 +10,7 @@ import java.nio.file.Paths;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import uk.gov.hmcts.ccd.sdk.Utils;
+import uk.gov.hmcts.ccd.sdk.JsonUtils;
 import uk.gov.hmcts.ccd.sdk.types.Event;
 
 public class CaseEventGenerator {
@@ -31,7 +31,8 @@ public class CaseEventGenerator {
       Path output = Paths.get(folder.getPath(), state + ".json");
 
       Ordering<Event> ordering = Ordering.natural().onResultOf(x -> x.getEventNumber());
-      Utils.mergeInto(output, serialise(caseType, ordering.sortedCopy(eventsByState.get(state))),
+      JsonUtils.mergeInto(output, serialise(caseType,
+          ordering.sortedCopy(eventsByState.get(state))),
           "ID");
     }
   }
@@ -40,7 +41,7 @@ public class CaseEventGenerator {
     int t = 1;
     List result = Lists.newArrayList();
     for (Event event : events) {
-      Map<String, Object> data = Utils.getField(event.getId());
+      Map<String, Object> data = JsonUtils.getField(event.getId());
       result.add(data);
       data.put("Name", event.getName());
       data.put("Description", event.getDescription());

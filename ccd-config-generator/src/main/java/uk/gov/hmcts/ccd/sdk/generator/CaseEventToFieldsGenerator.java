@@ -6,7 +6,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.List;
 import java.util.Map;
-import uk.gov.hmcts.ccd.sdk.Utils;
+import uk.gov.hmcts.ccd.sdk.JsonUtils;
 import uk.gov.hmcts.ccd.sdk.types.Event;
 import uk.gov.hmcts.ccd.sdk.types.Field;
 import uk.gov.hmcts.ccd.sdk.types.FieldCollection;
@@ -22,7 +22,7 @@ public class CaseEventToFieldsGenerator {
         List<Field.FieldBuilder> fields = collection.getFields();
         boolean first = true;
         for (Field.FieldBuilder fb : fields) {
-          Map<String, Object> info = Utils.getField("");
+          Map<String, Object> info = JsonUtils.getField("");
           entries.add(info);
           info.remove("ID");
           info.put("CaseTypeID", "CARE_SUPERVISION_EPO");
@@ -58,7 +58,7 @@ public class CaseEventToFieldsGenerator {
         folder.mkdir();
 
         Path output = Paths.get(folder.getPath(), event.getId() + ".json");
-        Utils.mergeInto(output, entries, "CaseFieldID");
+        JsonUtils.mergeInto(output, entries, "CaseFieldID");
       }
     }
   }

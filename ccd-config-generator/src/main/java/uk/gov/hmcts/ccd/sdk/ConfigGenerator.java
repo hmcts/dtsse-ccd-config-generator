@@ -42,7 +42,8 @@ public class ConfigGenerator {
             .filter(x -> !Modifier.isAbstract(x.getModifiers())).collect(Collectors.toSet());
 
     if (configTypes.isEmpty()) {
-      throw new RuntimeException("Expected at least one CCDConfig implementation but none found ");
+      throw new RuntimeException("Expected at least one CCDConfig implementation but none found. "
+          + "Scanned: " + basePackage);
     }
 
     for (Class<? extends CCDConfig> configType : configTypes) {

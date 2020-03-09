@@ -9,7 +9,7 @@ import java.nio.file.Paths;
 import java.util.List;
 import java.util.Map;
 import uk.gov.hmcts.ccd.sdk.ConfigBuilderImpl;
-import uk.gov.hmcts.ccd.sdk.Utils;
+import uk.gov.hmcts.ccd.sdk.JsonUtils;
 import uk.gov.hmcts.ccd.sdk.types.Event;
 import uk.gov.hmcts.ccd.sdk.types.Role;
 
@@ -56,6 +56,6 @@ public class AuthorisationCaseEventGenerator {
     folder.mkdir();
 
     Path output = Paths.get(folder.getPath(), "AuthorisationCaseEvent.json");
-    Utils.mergeInto(output, entries, "CaseEventID", "UserRole");
+    JsonUtils.mergeInto(output, entries, "CaseEventID", "UserRole");
   }
 }
