@@ -544,6 +544,7 @@ public class CCDConfig extends BaseCCDConfig<CaseData, State, UserRole> {
         event("enterGrounds").forState(Open)
                 .name("Grounds for the application")
                 .description("Entering the grounds for the application")
+                .grant("CRU", LOCAL_AUTHORITY)
                 .fields()
                     .field("EPO_REASONING_SHOW", DisplayContext.Optional, "groundsForEPO CONTAINS \"Workaround to show groundsForEPO. Needs to be hidden from UI\"", "MultiSelectList", "ShowHide", "EPO Reason show or hide")
                     .optional(CaseData::getGroundsForEPO, "EPO_REASONING_SHOW CONTAINS \"SHOW_FIELD\"")

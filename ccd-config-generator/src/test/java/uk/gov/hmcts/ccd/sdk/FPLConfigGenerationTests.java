@@ -8,6 +8,7 @@ import org.apache.commons.io.FileUtils;
 import org.apache.commons.io.filefilter.TrueFileFilter;
 import org.junit.BeforeClass;
 import org.junit.ClassRule;
+import org.junit.Ignore;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
 import org.reflections.Reflections;
@@ -40,6 +41,7 @@ public class FPLConfigGenerationTests {
         prodConfig = tmp.getRoot().toPath().resolve("production");
         Path resRoot = Paths.get(Resources.getResource("ccd-definition").toURI());
         FileUtils.copyDirectory(resRoot.resolve("ComplexTypes").toFile(), prodConfig.resolve("ComplexTypes").toFile());
+        FileUtils.copyDirectory(resRoot.resolve("AuthorisationCaseField").toFile(), prodConfig.resolve("AuthorisationCaseField").toFile());
 
         copyResourceToOutput("FixedLists/ProceedingType.json");
         copyResourceToOutput("FixedLists/OrderStatus.json");
@@ -63,6 +65,15 @@ public class FPLConfigGenerationTests {
         FileUtils.copyFile(resRoot.resolve(path).toFile(), dest);
     }
 
+    @Test
+    public void generatesAuthorisationCaseFieldSystem() {
+        assertEquals("AuthorisationCaseField/caseworker-publiclaw-systemupdate.json");
+    }
+
+    @Test
+    public void generatesAuthorisationCaseFieldJudiciary() {
+        assertEquals("AuthorisationCaseField/caseworker-publiclaw-judiciary.json");
+    }
 
     @Test
     public void generatesAllComplexTypes() {

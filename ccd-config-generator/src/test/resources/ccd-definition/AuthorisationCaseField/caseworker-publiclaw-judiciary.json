@@ -23,13 +23,6 @@
   {
     "LiveFrom": "01/01/2017",
     "CaseTypeID": "CARE_SUPERVISION_EPO",
-    "CaseFieldID": "c21Orders",
-    "UserRole": "caseworker-publiclaw-judiciary",
-    "CRUD": "CRU"
-  },
-  {
-    "LiveFrom": "01/01/2017",
-    "CaseTypeID": "CARE_SUPERVISION_EPO",
     "CaseFieldID": "c21Order",
     "UserRole": "caseworker-publiclaw-judiciary",
     "CRUD": "CRU"
@@ -40,5 +33,26 @@
     "CaseFieldID": "judgeAndLegalAdvisor",
     "UserRole": "caseworker-publiclaw-judiciary",
     "CRUD": "CRU"
-  }
+  },
+  {
+    "CRUD" : "CRU",
+    "CaseTypeID" : "CARE_SUPERVISION_EPO",
+    "LiveFrom" : "01/01/2017",
+    "CaseFieldID" : "hearingDetails",
+    "UserRole" : "caseworker-publiclaw-judiciary"
+  },
+  {
+    "CRUD" : "R",
+    "CaseTypeID" : "CARE_SUPERVISION_EPO",
+    "LiveFrom" : "01/01/2017",
+    "CaseFieldID" : "submissionConsentLabel",
+    "UserRole" : "caseworker-publiclaw-judiciary"
+  },
+  {
+  "CRUD" : "R",
+  "CaseTypeID" : "CARE_SUPERVISION_EPO",
+  "LiveFrom" : "01/01/2017",
+  "CaseFieldID" : "submissionConsent",
+  "UserRole" : "caseworker-publiclaw-judiciary"
+}
 ]

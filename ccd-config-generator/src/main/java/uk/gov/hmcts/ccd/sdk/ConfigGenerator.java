@@ -2,6 +2,7 @@ package uk.gov.hmcts.ccd.sdk;
 
 import com.google.common.base.Strings;
 import com.google.common.collect.Maps;
+import com.google.common.collect.Table;
 import java.io.File;
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
@@ -17,6 +18,7 @@ import org.objenesis.ObjenesisStd;
 import org.reflections.ReflectionUtils;
 import org.reflections.Reflections;
 import uk.gov.hmcts.ccd.sdk.generator.AuthorisationCaseEventGenerator;
+import uk.gov.hmcts.ccd.sdk.generator.AuthorisationCaseFieldGenerator;
 import uk.gov.hmcts.ccd.sdk.generator.CaseEventGenerator;
 import uk.gov.hmcts.ccd.sdk.generator.CaseEventToComplexTypesGenerator;
 import uk.gov.hmcts.ccd.sdk.generator.CaseEventToFieldsGenerator;
@@ -56,6 +58,7 @@ public class ConfigGenerator {
     }
   }
 
+
   public ResolvedCCDConfig resolveConfig(CCDConfig config) {
     Class<?>[] typeArgs = TypeResolver.resolveRawArguments(CCDConfig.class, config.getClass());
     ConfigBuilderImpl builder = new ConfigBuilderImpl(typeArgs[0]);
@@ -71,7 +74,12 @@ public class ConfigGenerator {
     CaseEventToFieldsGenerator.writeEvents(outputfolder, config.events);
     ComplexTypeGenerator.generate(outputfolder, config.builder.caseType, config.types);
     CaseEventToComplexTypesGenerator.writeEvents(outputfolder, config.events);
-    AuthorisationCaseEventGenerator.generate(outputfolder, config.events, config.builder);
+    Table<String, String, String> eventPermissions = buildEventPermissions(config.builder,
+        config.events);
+    AuthorisationCaseEventGenerator.generate(outputfolder, eventPermissions,
+        config.builder.caseType);
+    AuthorisationCaseFieldGenerator.generate(outputfolder, config.builder.caseType, config.events,
+        eventPermissions);
     CaseFieldGenerator
         .generateCaseFields(outputfolder, config.builder.caseType, config.typeArg, config.events,
             config.builder);
@@ -127,5 +135,32 @@ public class ConfigGenerator {
       return (Class) type.getActualTypeArguments()[0];
     }
     return field.getType();
+  }
+
+  Table<String, String, String> buildEventPermissions(
+      ConfigBuilderImpl builder, List<Event> events) {
+
+    Table<String, String, String> eventRolePermissions = builder.explicit;
+    for (Event event : events) {
+      // Add any state based role permissions unless event permits only explicit grants.
+      if (!event.isExplicitGrants()) {
+        Map<String, String> roles = builder.stateRoles.row(event.getPostState());
+        for (String role : roles.keySet()) {
+          if (!builder.stateRoleblacklist.containsEntry(event.getPostState(), role)) {
+            eventRolePermissions.put(event.getId(), role, roles.get(role));
+          }
+        }
+      }
+      // Set event level permissions, overriding state level where set.
+      Map<String, String> grants = event.getGrants();
+      for (String role : grants.keySet()) {
+        if (!builder.stateRoleblacklist.containsEntry(event.getPostState(), role)) {
+          if (!eventRolePermissions.contains(event.getId(), role)) {
+            eventRolePermissions.put(event.getId(), role, grants.get(role));
+          }
+        }
+      }
+    }
+    return eventRolePermissions;
   }
 }
