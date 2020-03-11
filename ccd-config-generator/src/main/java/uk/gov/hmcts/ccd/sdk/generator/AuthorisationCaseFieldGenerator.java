@@ -50,7 +50,7 @@ public class AuthorisationCaseFieldGenerator {
       }
 
       Path output = Paths.get(folder.getPath(), role + ".json");
-      JsonUtils.mergeInto(output, permissions, "CaseFieldID");
+      JsonUtils.mergeInto(output, permissions, "CaseFieldID", "UserRole");
     }
   }
 }
