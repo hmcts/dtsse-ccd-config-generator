@@ -18,6 +18,7 @@ import org.objenesis.ObjenesisStd;
 import org.reflections.ReflectionUtils;
 import org.reflections.Reflections;
 import uk.gov.hmcts.ccd.sdk.generator.AuthorisationCaseEventGenerator;
+import uk.gov.hmcts.ccd.sdk.generator.AuthorisationCaseFieldGenerator;
 import uk.gov.hmcts.ccd.sdk.generator.CaseEventGenerator;
 import uk.gov.hmcts.ccd.sdk.generator.CaseEventToComplexTypesGenerator;
 import uk.gov.hmcts.ccd.sdk.generator.CaseEventToFieldsGenerator;
@@ -77,6 +78,8 @@ public class ConfigGenerator {
         config.events);
     AuthorisationCaseEventGenerator.generate(outputfolder, eventPermissions,
         config.builder.caseType);
+    AuthorisationCaseFieldGenerator.generate(outputfolder, config.builder.caseType, config.events,
+        eventPermissions);
     CaseFieldGenerator
         .generateCaseFields(outputfolder, config.builder.caseType, config.typeArg, config.events,
             config.builder);

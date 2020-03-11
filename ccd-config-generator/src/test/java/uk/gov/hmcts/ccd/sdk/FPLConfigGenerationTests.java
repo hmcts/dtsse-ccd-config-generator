@@ -63,6 +63,10 @@ public class FPLConfigGenerationTests {
         FileUtils.copyFile(resRoot.resolve(path).toFile(), dest);
     }
 
+    @Test
+    public void generatesAuthorisationCaseField() {
+        assertEquals("AuthorisationCaseField/caseworker-publiclaw-systemupdate.json");
+    }
 
     @Test
     public void generatesAllComplexTypes() {
