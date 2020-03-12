@@ -83,6 +83,11 @@ public class FPLConfigGenerationTests {
     }
 
     @Test
+    public void generatesAuthorisationCaseFieldCafcass() {
+        assertEquals("AuthorisationCaseField/caseworker-publiclaw-cafcass.json");
+    }
+
+    @Test
     public void generatesAllComplexTypes() {
         assertResourceFolderMatchesGenerated("ComplexTypes");
         assertGeneratedFolderMatchesResource("ComplexTypes");
