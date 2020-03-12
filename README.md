@@ -22,9 +22,9 @@ plugins {
 }
 ```
 
-And set the destination for the generated config
+And set the destination folder for the generated config
 
-```
+```groovy
 ccd {
   configDir = file('ccd-definition')
 }
