@@ -4,6 +4,7 @@ Autogenerate your CCD configuration from your Java domain model using a Gradle b
 
 The generator inspects your Java model and generates:
 
+* AuthorisationCaseField
 * AuthorisationCaseEvent
 * CaseEvent
 * CaseEventToComplexTypes
