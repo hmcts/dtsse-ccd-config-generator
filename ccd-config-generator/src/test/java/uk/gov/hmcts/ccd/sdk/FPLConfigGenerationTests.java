@@ -1,8 +1,15 @@
 package uk.gov.hmcts.ccd.sdk;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.type.CollectionType;
+import com.google.common.base.Predicates;
+import com.google.common.collect.Collections2;
+import com.google.common.collect.Lists;
 import com.google.common.io.Files;
 import com.google.common.io.Resources;
+import java.util.Collection;
+import java.util.List;
+import java.util.Map;
 import lombok.SneakyThrows;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.io.filefilter.TrueFileFilter;
@@ -143,18 +150,26 @@ public class FPLConfigGenerationTests {
         assertEquals(expected, actual);
     }
 
+    @SneakyThrows
     private void assertEquals(File expected, File actual) {
         try {
-            System.out.println("Comparing " + expected.getAbsolutePath() + " to " + actual.getAbsolutePath());
+            System.out.println("Comparing " + expected.getName() + " to " + actual.getName());
             String expectedString = FileUtils.readFileToString(expected, Charset.defaultCharset());
             String actualString = FileUtils.readFileToString(actual, Charset.defaultCharset());
             JSONCompareResult result = JSONCompare.compareJSON(expectedString, actualString, JSONCompareMode.LENIENT);
             if (result.failed()) {
                 System.out.println(result.toString());
 
-                System.out.println(pretty(actualString));
-                System.out.println("Expected:");
-                System.out.println(pretty(expectedString));
+                Collection<Map<String, Object>> missing = Collections2
+                    .filter(fromJSON(expectedString), Predicates.not(Predicates.in(fromJSON(actualString))));
+                Collection<Map<String, Object>> unexpected = Collections2
+                    .filter(fromJSON(actualString), Predicates.not(Predicates.in(fromJSON(expectedString))));
+
+                System.out.println("Missing values:");
+                System.out.println(pretty(missing));
+
+                System.out.println("Unexpected values:");
+                System.out.println(pretty(unexpected));
 
 //                Files.writeString(new File("src/test/resources/ccd-definition/mine.json").toPath(), actualString);
 //                Files.writeString(new File("src/test/resources/ccd-definition/errors.json").toPath(), result.toString());
@@ -172,13 +187,24 @@ public class FPLConfigGenerationTests {
         }
     }
 
+    @SneakyThrows
+    private List<Map<String, Object>> fromJSON(String json) {
+        ObjectMapper mapper = new ObjectMapper();
+        CollectionType mapCollectionType = mapper.getTypeFactory()
+            .constructCollectionType(List.class, Map.class);
+        return mapper.readValue(json, mapCollectionType);
+    }
+
+    @SneakyThrows
+    private String pretty(Object obj) {
+        ObjectMapper mapper = new ObjectMapper();
+        return mapper.writerWithDefaultPrettyPrinter().writeValueAsString(obj);
+    }
+
+    @SneakyThrows
     private String pretty(String json) {
         ObjectMapper mapper = new ObjectMapper();
-        try {
-            Object o = mapper.readValue(json, Object.class);
-            return mapper.writerWithDefaultPrettyPrinter().writeValueAsString(o);
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
+        Object o = mapper.readValue(json, Object.class);
+        return pretty(o);
     }
 }
