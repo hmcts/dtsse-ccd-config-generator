@@ -6,6 +6,7 @@ The generator inspects your Java model and generates:
 
 * AuthorisationCaseField
 * AuthorisationCaseEvent
+* AuthorisationCaseState
 * CaseEvent
 * CaseEventToComplexTypes
 * CaseEventToFields
