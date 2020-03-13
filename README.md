@@ -67,6 +67,7 @@ public class ProdConfig implements CCDConfig<CaseData, State, UserRole> {
 
     }
 
+    // Build webhook URLs by convention, based on the webhook details.
     private String webhookConvention(Webhook webhook, String eventId) {
         return "/" + eventId + "/" + webhook;
     }
