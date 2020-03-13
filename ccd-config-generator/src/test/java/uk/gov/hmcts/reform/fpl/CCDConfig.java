@@ -675,15 +675,6 @@ public class CCDConfig extends BaseCCDConfig<CaseData, State, UserRole> {
                 .displayOrder(15)
                 .fields()
                     .optional(CaseData::getCaseName);
-
-        event("addCaseIDReference").forState(Open)
-                .name("Add case ID")
-                .description("Add case ID")
-                .explicitGrants() // Do not inherit State level role permissions
-                .displayOrder(16)
-                .fields()
-                    .pageLabel("Add Case ID")
-                    .field("caseIDReference", DisplayContext.Optional, null, "Text", null, "Case ID");
     }
 
 }

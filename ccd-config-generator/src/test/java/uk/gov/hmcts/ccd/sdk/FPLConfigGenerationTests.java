@@ -82,15 +82,24 @@ public class FPLConfigGenerationTests {
         assertEquals("AuthorisationCaseField/caseworker-publiclaw-systemupdate.json");
     }
 
+    @Ignore
     @Test
     public void generatesAuthorisationCaseFieldJudiciary() {
         assertEquals("AuthorisationCaseField/caseworker-publiclaw-judiciary.json");
     }
 
+    @Ignore
     @Test
     public void generatesAuthorisationCaseFieldCafcass() {
         assertEquals("AuthorisationCaseField/caseworker-publiclaw-cafcass.json");
     }
+
+    @Ignore
+    @Test
+    public void generatesAuthorisationSolicitor() {
+        assertEquals("AuthorisationCaseField/caseworker-publiclaw-solicitor.json");
+    }
+
 
     @Test
     public void generatesCaseTypeTab() {
