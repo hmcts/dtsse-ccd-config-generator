@@ -1,5 +1,7 @@
 package uk.gov.hmcts.ccd.sdk.types;
 
+import uk.gov.hmcts.ccd.sdk.types.Tab.TabBuilder;
+
 public abstract class BaseCCDConfig<Model, State,
     Role extends uk.gov.hmcts.ccd.sdk.types.Role> implements
     CCDConfig<Model, State, Role>, ConfigBuilder<Model, State, Role> {
@@ -68,6 +70,10 @@ public abstract class BaseCCDConfig<Model, State,
   @Override
   public void setEnvironment(String env) {
     builder.setEnvironment(env);
+  }
+
+  public TabBuilder<Model> tab(String caseHistory, String history) {
+    return builder.tab(caseHistory, history);
   }
 }
 

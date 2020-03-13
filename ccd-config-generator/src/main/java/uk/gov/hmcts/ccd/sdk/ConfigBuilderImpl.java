@@ -14,6 +14,8 @@ import uk.gov.hmcts.ccd.sdk.types.ConfigBuilder;
 import uk.gov.hmcts.ccd.sdk.types.Event;
 import uk.gov.hmcts.ccd.sdk.types.EventTypeBuilder;
 import uk.gov.hmcts.ccd.sdk.types.Role;
+import uk.gov.hmcts.ccd.sdk.types.Tab;
+import uk.gov.hmcts.ccd.sdk.types.Tab.TabBuilder;
 import uk.gov.hmcts.ccd.sdk.types.Webhook;
 import uk.gov.hmcts.ccd.sdk.types.WebhookConvention;
 
@@ -27,6 +29,7 @@ public class ConfigBuilderImpl<T, S, R extends Role> implements ConfigBuilder<T,
   public final Table<String, String, List<Event.EventBuilder<T, R, S>>> events = HashBasedTable
       .create();
   public final List<Map<String, Object>> explicitFields = Lists.newArrayList();
+  public final List<TabBuilder> tabs = Lists.newArrayList();
 
   private Class caseData;
   private WebhookConvention webhookConvention = this::defaultWebhookConvention;
@@ -110,6 +113,14 @@ public class ConfigBuilderImpl<T, S, R extends Role> implements ConfigBuilder<T,
   @Override
   public void setWebhookConvention(WebhookConvention convention) {
     this.webhookConvention = convention;
+  }
+
+  @Override
+  public TabBuilder tab(String tabId, String tabLabel) {
+    TabBuilder result = Tab.TabBuilder.builder(caseData,
+        new PropertyUtils()).tabID(tabId).label(tabLabel);
+    tabs.add(result);
+    return result;
   }
 
   public List<Event<T, R, S>> getEvents() {
