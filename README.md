@@ -60,10 +60,10 @@ public class ProdConfig implements CCDConfig<CaseData, State, UserRole> {
             .aboutToStartWebhook()
             .aboutToSubmitWebhook()
             .fields()
-                .optional(CaseData::getAllApplicants)
-                .complex(CaseData::getJudgeAndLegalAdvisor)
-                    .readonly(JudgeAndLegalAdvisor::getJudgeFullName)
-                    .readonly(JudgeAndLegalAdvisor::getLegalAdvisorName);
+            .optional(CaseData::getAllApplicants)
+            .complex(CaseData::getJudgeAndLegalAdvisor)
+                .readonly(JudgeAndLegalAdvisor::getJudgeFullName)
+                .readonly(JudgeAndLegalAdvisor::getLegalAdvisorName);
 
     }
 
