@@ -88,6 +88,11 @@ public class FPLConfigGenerationTests {
     }
 
     @Test
+    public void generatesCaseTypeTab() {
+        assertEquals("CaseTypeTab.json");
+    }
+
+    @Test
     public void generatesAllComplexTypes() {
         assertResourceFolderMatchesGenerated("ComplexTypes");
         assertGeneratedFolderMatchesResource("ComplexTypes");
@@ -175,6 +180,11 @@ public class FPLConfigGenerationTests {
 
                 System.out.println("Unexpected values:");
                 System.out.println(pretty(unexpected));
+
+                System.out.println("Expected:");
+                System.out.println(expectedString);
+                System.out.println("Got:");
+                System.out.println(actualString);
 
 //                Files.writeString(new File("src/test/resources/ccd-definition/mine.json").toPath(), actualString);
 //                Files.writeString(new File("src/test/resources/ccd-definition/errors.json").toPath(), result.toString());

@@ -1,5 +1,7 @@
 package uk.gov.hmcts.ccd.sdk.types;
 
+import uk.gov.hmcts.ccd.sdk.types.Tab.TabBuilder;
+
 public interface ConfigBuilder<T, S, R extends Role> {
 
   EventTypeBuilder<T, R, S> event(String id);
@@ -25,4 +27,6 @@ public interface ConfigBuilder<T, S, R extends Role> {
 
   // Webhooks can follow a convention derived from the webhook type and event id.
   void setWebhookConvention(WebhookConvention convention);
+
+  TabBuilder tab(String tabId, String tabLabel);
 }

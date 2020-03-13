@@ -23,6 +23,7 @@ import uk.gov.hmcts.ccd.sdk.generator.CaseEventGenerator;
 import uk.gov.hmcts.ccd.sdk.generator.CaseEventToComplexTypesGenerator;
 import uk.gov.hmcts.ccd.sdk.generator.CaseEventToFieldsGenerator;
 import uk.gov.hmcts.ccd.sdk.generator.CaseFieldGenerator;
+import uk.gov.hmcts.ccd.sdk.generator.CaseTypeTabGenerator;
 import uk.gov.hmcts.ccd.sdk.generator.ComplexTypeGenerator;
 import uk.gov.hmcts.ccd.sdk.generator.FixedListGenerator;
 import uk.gov.hmcts.ccd.sdk.types.CCDConfig;
@@ -84,6 +85,7 @@ public class ConfigGenerator {
         .generateCaseFields(outputfolder, config.builder.caseType, config.typeArg, config.events,
             config.builder);
     FixedListGenerator.generate(outputfolder, config.types);
+    CaseTypeTabGenerator.generate(outputfolder, config.builder.caseType, config.builder);
   }
 
   // Copied from jdk 9.

@@ -28,6 +28,7 @@ public class CCDConfig extends BaseCCDConfig<CaseData, State, UserRole> {
 
         explicitState("hearingBookingDetails", JUDICIARY, "CRU");
 
+        buildTabs();
         buildOpen();
         buildSubmittedEvents();
         buildPrepareForHearing();
@@ -42,6 +43,60 @@ public class CCDConfig extends BaseCCDConfig<CaseData, State, UserRole> {
         caseField("dateAndTimeSubmitted", null, "DateTime", null, "Date submitted");
         caseField("submittedForm", "Attached PDF", "Document");
     }
+
+    private void buildTabs() {
+        tab("HearingTab", "Hearings")
+            .field(CaseData::getHearingDetails)
+            .field(CaseData::getHearing);
+
+        tab("DraftOrdersTab", "Draft orders")
+            .showCondition("standardDirectionOrder.orderStatus!=\"SEALED\"")
+            .field(CaseData::getStandardDirectionOrder, "standardDirectionOrder.orderStatus!=\"SEALED\"");
+
+        tab("OrdersTab", "Orders")
+            .field(CaseData::getStandardDirectionOrder, "standardDirectionOrder.orderStatus=\"SEALED\"")
+            .field(CaseData::getOrders)
+            .field(CaseData::getC21Orders);
+
+        tab("CasePeopleTab", "People in the case")
+            .field(CaseData::getChildren1)
+            .field(CaseData::getRespondents1)
+            .field(CaseData::getApplicants)
+            .field(CaseData::getSolicitor)
+            .field(CaseData::getOthers);
+
+        tab("LegalBasisTab", "Legal basis")
+            .field(CaseData::getStatementOfService)
+            .field("caseIDReference")
+            .field(CaseData::getGroundsForEPO)
+            .field(CaseData::getGrounds)
+            .field(CaseData::getRisks)
+            .field(CaseData::getFactorsParenting)
+            .field(CaseData::getInternationalElement)
+            .field(CaseData::getProceeding)
+            .field(CaseData::getAllocationDecision)
+            .field(CaseData::getAllocationProposal)
+            .field(CaseData::getHearingPreferences);
+
+        tab("DocumentsTab", "Documents")
+            .field("caseIDReference")
+            .field(CaseData::getSocialWorkChronologyDocument)
+            .field(CaseData::getSocialWorkStatementDocument)
+            .field(CaseData::getSocialWorkAssessmentDocument)
+            .field(CaseData::getSocialWorkCarePlanDocument)
+            .field("standardDirectionsDocument")
+            .field("otherCourtAdminDocuments")
+            .field(CaseData::getSocialWorkEvidenceTemplateDocument)
+            .field(CaseData::getThresholdDocument)
+            .field(CaseData::getChecklistDocument)
+            .field("courtBundle")
+            .field(CaseData::getOtherSocialWorkDocuments)
+            .field("submittedForm")
+            .field(CaseData::getNoticeOfProceedingsBundle)
+            .field(CaseData::getC2DocumentBundle);
+
+    }
+
 
     protected String environment() {
         return "production";

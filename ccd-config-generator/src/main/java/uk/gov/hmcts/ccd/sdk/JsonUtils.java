@@ -87,6 +87,9 @@ public class JsonUtils {
   }
 
   public static void mergeInto(Path path, List<Map<String, Object>> fields, String... primaryKeys) {
+    if (primaryKeys.length == 0) {
+      throw new RuntimeException("No primary keys!");
+    }
     mergeInto(path, fields, Sets.newHashSet(), primaryKeys);
   }
 }
