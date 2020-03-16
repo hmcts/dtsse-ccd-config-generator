@@ -1,7 +1,7 @@
 package uk.gov.hmcts.ccd.sdk.types;
 
 import uk.gov.hmcts.ccd.sdk.types.Tab.TabBuilder;
-import uk.gov.hmcts.ccd.sdk.types.WorkBasketResult.WorkBasketResultBuilder;
+import uk.gov.hmcts.ccd.sdk.types.WorkBasket.WorkBasketBuilder;
 
 public abstract class BaseCCDConfig<Model, State,
     Role extends uk.gov.hmcts.ccd.sdk.types.Role> implements
@@ -78,12 +78,12 @@ public abstract class BaseCCDConfig<Model, State,
   }
 
   @Override
-  public WorkBasketResultBuilder<Model> workBasketResultFields() {
+  public WorkBasketBuilder<Model> workBasketResultFields() {
     return builder.workBasketResultFields();
   }
 
   @Override
-  public WorkBasketResultBuilder<Model> workBasketInputFields() {
+  public WorkBasketBuilder<Model> workBasketInputFields() {
     return builder.workBasketInputFields();
   }
 }

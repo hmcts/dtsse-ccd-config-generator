@@ -1,7 +1,7 @@
 package uk.gov.hmcts.ccd.sdk.types;
 
 import uk.gov.hmcts.ccd.sdk.types.Tab.TabBuilder;
-import uk.gov.hmcts.ccd.sdk.types.WorkBasketResult.WorkBasketResultBuilder;
+import uk.gov.hmcts.ccd.sdk.types.WorkBasket.WorkBasketBuilder;
 
 public interface ConfigBuilder<T, S, R extends Role> {
 
@@ -31,7 +31,7 @@ public interface ConfigBuilder<T, S, R extends Role> {
 
   TabBuilder tab(String tabId, String tabLabel);
 
-  WorkBasketResultBuilder workBasketResultFields();
+  WorkBasketBuilder workBasketResultFields();
 
-  WorkBasketResultBuilder workBasketInputFields();
+  WorkBasketBuilder workBasketInputFields();
 }

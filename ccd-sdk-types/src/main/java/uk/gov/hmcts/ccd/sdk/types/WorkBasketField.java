@@ -5,7 +5,7 @@ import lombok.Data;
 
 @Data
 @Builder
-public class WorkBasketResultField {
+public class WorkBasketField {
   private String id;
   private String label;
 }

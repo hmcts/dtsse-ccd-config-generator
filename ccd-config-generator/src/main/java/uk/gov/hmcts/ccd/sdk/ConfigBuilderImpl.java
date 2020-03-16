@@ -18,7 +18,7 @@ import uk.gov.hmcts.ccd.sdk.types.Tab;
 import uk.gov.hmcts.ccd.sdk.types.Tab.TabBuilder;
 import uk.gov.hmcts.ccd.sdk.types.Webhook;
 import uk.gov.hmcts.ccd.sdk.types.WebhookConvention;
-import uk.gov.hmcts.ccd.sdk.types.WorkBasketResult.WorkBasketResultBuilder;
+import uk.gov.hmcts.ccd.sdk.types.WorkBasket.WorkBasketBuilder;
 
 public class ConfigBuilderImpl<T, S, R extends Role> implements ConfigBuilder<T, S, R> {
 
@@ -31,8 +31,8 @@ public class ConfigBuilderImpl<T, S, R extends Role> implements ConfigBuilder<T,
       .create();
   public final List<Map<String, Object>> explicitFields = Lists.newArrayList();
   public final List<TabBuilder> tabs = Lists.newArrayList();
-  public final List<WorkBasketResultBuilder> workBasketResultFields = Lists.newArrayList();
-  public final List<WorkBasketResultBuilder> workBasketInputFields = Lists.newArrayList();
+  public final List<WorkBasketBuilder> workBasketResultFields = Lists.newArrayList();
+  public final List<WorkBasketBuilder> workBasketInputFields = Lists.newArrayList();
 
   private Class caseData;
   private WebhookConvention webhookConvention = this::defaultWebhookConvention;
@@ -127,16 +127,16 @@ public class ConfigBuilderImpl<T, S, R extends Role> implements ConfigBuilder<T,
   }
 
   @Override
-  public WorkBasketResultBuilder workBasketResultFields() {
-    WorkBasketResultBuilder result = WorkBasketResultBuilder.builder(caseData,
+  public WorkBasketBuilder workBasketResultFields() {
+    WorkBasketBuilder result = WorkBasketBuilder.builder(caseData,
         new PropertyUtils());
     workBasketResultFields.add(result);
     return result;
   }
 
   @Override
-  public WorkBasketResultBuilder workBasketInputFields() {
-    WorkBasketResultBuilder result = WorkBasketResultBuilder.builder(caseData,
+  public WorkBasketBuilder workBasketInputFields() {
+    WorkBasketBuilder result = WorkBasketBuilder.builder(caseData,
         new PropertyUtils());
     workBasketInputFields.add(result);
     return result;

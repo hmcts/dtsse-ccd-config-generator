@@ -10,9 +10,9 @@ import java.util.Map;
 import uk.gov.hmcts.ccd.sdk.ConfigBuilderImpl;
 import uk.gov.hmcts.ccd.sdk.JsonUtils;
 import uk.gov.hmcts.ccd.sdk.types.Role;
-import uk.gov.hmcts.ccd.sdk.types.WorkBasketResult;
-import uk.gov.hmcts.ccd.sdk.types.WorkBasketResult.WorkBasketResultBuilder;
-import uk.gov.hmcts.ccd.sdk.types.WorkBasketResultField;
+import uk.gov.hmcts.ccd.sdk.types.WorkBasket;
+import uk.gov.hmcts.ccd.sdk.types.WorkBasket.WorkBasketBuilder;
+import uk.gov.hmcts.ccd.sdk.types.WorkBasketField;
 
 public class WorkBasketGenerator {
 
@@ -23,14 +23,14 @@ public class WorkBasketGenerator {
   }
 
   private static void buildJsonForFields(File root, String caseType,
-      List<WorkBasketResultBuilder> workBasketFields, String fileName) {
+      List<WorkBasketBuilder> workBasketFields, String fileName) {
     List<Map<String, Object>> result = Lists.newArrayList();
 
     int displayOrder = 1;
-    for (WorkBasketResultBuilder wb : workBasketFields) {
-      WorkBasketResult workBasketResult = wb.build();
+    for (WorkBasketBuilder wb : workBasketFields) {
+      WorkBasket workBasket = wb.build();
 
-      for (WorkBasketResultField field : workBasketResult.getFields()) {
+      for (WorkBasketField field : workBasket.getFields()) {
         Map<String, Object> map = buildField(caseType, field.getId(), field.getLabel(),
             displayOrder++);
 
