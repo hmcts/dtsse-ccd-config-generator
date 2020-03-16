@@ -18,6 +18,7 @@ import uk.gov.hmcts.ccd.sdk.types.Tab;
 import uk.gov.hmcts.ccd.sdk.types.Tab.TabBuilder;
 import uk.gov.hmcts.ccd.sdk.types.Webhook;
 import uk.gov.hmcts.ccd.sdk.types.WebhookConvention;
+import uk.gov.hmcts.ccd.sdk.types.WorkBasket;
 import uk.gov.hmcts.ccd.sdk.types.WorkBasket.WorkBasketBuilder;
 
 public class ConfigBuilderImpl<T, S, R extends Role> implements ConfigBuilder<T, S, R> {
@@ -128,16 +129,16 @@ public class ConfigBuilderImpl<T, S, R extends Role> implements ConfigBuilder<T,
 
   @Override
   public WorkBasketBuilder workBasketResultFields() {
-    WorkBasketBuilder result = WorkBasketBuilder.builder(caseData,
-        new PropertyUtils());
-    workBasketResultFields.add(result);
-    return result;
+    return getWorkBasketBuilder(workBasketResultFields);
   }
 
   @Override
   public WorkBasketBuilder workBasketInputFields() {
-    WorkBasketBuilder result = WorkBasketBuilder.builder(caseData,
-        new PropertyUtils());
+    return getWorkBasketBuilder(workBasketInputFields);
+  }
+
+  private WorkBasketBuilder getWorkBasketBuilder(List<WorkBasketBuilder> workBasketInputFields) {
+    WorkBasketBuilder result = WorkBasketBuilder.builder(caseData, new PropertyUtils());
     workBasketInputFields.add(result);
     return result;
   }

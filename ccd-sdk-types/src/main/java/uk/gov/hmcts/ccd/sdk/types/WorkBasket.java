@@ -15,8 +15,7 @@ public class WorkBasket {
     private Class<T> model;
     private PropertyUtils propertyUtils;
 
-    public static <T> WorkBasketBuilder<T> builder(Class<T> model,
-        PropertyUtils propertyUtils) {
+    public static <T> WorkBasketBuilder<T> builder(Class<T> model, PropertyUtils propertyUtils) {
       WorkBasketBuilder<T> result = WorkBasket.builder();
       result.model = model;
       result.propertyUtils = propertyUtils;

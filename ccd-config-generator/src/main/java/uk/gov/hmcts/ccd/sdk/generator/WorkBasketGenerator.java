@@ -18,11 +18,11 @@ public class WorkBasketGenerator {
 
   public static <T, R extends Role, S> void generate(File root, String caseType,
       ConfigBuilderImpl<T, S, R> builder) {
-    buildJsonForFields(root, caseType, builder.workBasketInputFields, "workBasketInputFields");
-    buildJsonForFields(root, caseType, builder.workBasketResultFields, "WorkBasketResultFields");
+    generateFields(root, caseType, builder.workBasketInputFields, "workBasketInputFields");
+    generateFields(root, caseType, builder.workBasketResultFields, "WorkBasketResultFields");
   }
 
-  private static void buildJsonForFields(File root, String caseType,
+  private static void generateFields(File root, String caseType,
       List<WorkBasketBuilder> workBasketFields, String fileName) {
     List<Map<String, Object>> result = Lists.newArrayList();
 
