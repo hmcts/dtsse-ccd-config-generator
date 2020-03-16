@@ -4,7 +4,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.type.CollectionType;
 import com.google.common.base.Predicates;
 import com.google.common.collect.Collections2;
-import com.google.common.collect.Lists;
 import com.google.common.io.Files;
 import com.google.common.io.Resources;
 import java.util.Collection;
@@ -15,7 +14,6 @@ import org.apache.commons.io.FileUtils;
 import org.apache.commons.io.filefilter.TrueFileFilter;
 import org.junit.BeforeClass;
 import org.junit.ClassRule;
-import org.junit.Ignore;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
 import org.reflections.Reflections;
@@ -95,6 +93,16 @@ public class FPLConfigGenerationTests {
     @Test
     public void generatesCaseTypeTab() {
         assertEquals("CaseTypeTab.json");
+    }
+
+    @Test
+    public void generatesWorkBasketResultFields() {
+        assertEquals("WorkBasketResultFields.json");
+    }
+
+    @Test
+    public void generatesWorkBasketInputFields() {
+        assertEquals("WorkBasketInputFields.json");
     }
 
     @Test

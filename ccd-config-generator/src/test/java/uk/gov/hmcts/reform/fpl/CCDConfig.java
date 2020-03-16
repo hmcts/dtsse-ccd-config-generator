@@ -34,6 +34,8 @@ public class CCDConfig extends BaseCCDConfig<CaseData, State, UserRole> {
         buildPrepareForHearing();
         buildGatekeepingEvents();
         buildTransitions();
+        buildWorkBasketResultFields();
+        buildWorkBasketInputFields();
 
         event("internal-changeState:Gatekeeping->PREPARE_FOR_HEARING")
                 .forStateTransition(Gatekeeping, PREPARE_FOR_HEARING)
@@ -42,6 +44,23 @@ public class CCDConfig extends BaseCCDConfig<CaseData, State, UserRole> {
                 .grant("C", SYSTEM_UPDATE);
         caseField("dateAndTimeSubmitted", null, "DateTime", null, "Date submitted");
         caseField("submittedForm", "Attached PDF", "Document");
+    }
+
+    private void buildWorkBasketResultFields() {
+        workBasketResultFields()
+            .field(CaseData::getCaseName, "Case name")
+            .field(CaseData::getFamilyManCaseNumber, "FamilyMan case number")
+            .field("[STATE]", "State")
+            .field(CaseData::getCaseLocalAuthority, "Local authority")
+            .field("dateAndTimeSubmitted", "Date submitted");
+    }
+
+    private void buildWorkBasketInputFields() {
+        workBasketInputFields()
+            .field(CaseData::getCaseLocalAuthority, "Local authority")
+            .field(CaseData::getCaseName, "Case name")
+            .field(CaseData::getFamilyManCaseNumber, "FamilyMan case number")
+            .field(CaseData::getDateSubmitted, "Date submitted");
     }
 
     private void buildTabs() {
@@ -685,5 +704,4 @@ public class CCDConfig extends BaseCCDConfig<CaseData, State, UserRole> {
                     .pageLabel("Add Case ID")
                     .field("caseIDReference", DisplayContext.Optional, null, "Text", null, "Case ID");
     }
-
 }

@@ -1,6 +1,7 @@
 package uk.gov.hmcts.ccd.sdk.types;
 
 import uk.gov.hmcts.ccd.sdk.types.Tab.TabBuilder;
+import uk.gov.hmcts.ccd.sdk.types.WorkBasket.WorkBasketBuilder;
 
 public interface ConfigBuilder<T, S, R extends Role> {
 
@@ -29,4 +30,8 @@ public interface ConfigBuilder<T, S, R extends Role> {
   void setWebhookConvention(WebhookConvention convention);
 
   TabBuilder tab(String tabId, String tabLabel);
+
+  WorkBasketBuilder workBasketResultFields();
+
+  WorkBasketBuilder workBasketInputFields();
 }
