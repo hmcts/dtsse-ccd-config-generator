@@ -24,6 +24,8 @@ public class Field<T, Parent> {
   String pageLabel;
   String type;
   String fieldTypeParameter;
+  boolean mutable;
+  boolean readOnly;
 
   private Class dataClass;
   @ToString.Exclude
@@ -43,12 +45,17 @@ public class Field<T, Parent> {
       return result;
     }
 
-    protected FieldBuilder<T, Parent> type(String t) {
+    public FieldBuilder<T, Parent> type(String t) {
       this.type = t;
       return this;
     }
 
-    protected FieldBuilder<T, Parent> id(String id) {
+    public FieldBuilder<T, Parent> mutable() {
+      this.mutable = true;
+      return this;
+    }
+
+    public FieldBuilder<T, Parent> id(String id) {
       this.id = id;
       return this;
     }
@@ -66,6 +73,11 @@ public class Field<T, Parent> {
 
     public FieldCollection.FieldCollectionBuilder<T, Parent> done() {
       return parent;
+    }
+
+    public FieldBuilder<T, Parent> readOnly() {
+      this.readOnly = true;
+      return this;
     }
   }
 }

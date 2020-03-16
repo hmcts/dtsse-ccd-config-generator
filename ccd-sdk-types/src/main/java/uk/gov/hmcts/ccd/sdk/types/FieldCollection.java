@@ -7,6 +7,7 @@ import java.util.function.Consumer;
 import lombok.Builder;
 import lombok.Data;
 import lombok.ToString;
+import uk.gov.hmcts.ccd.sdk.types.Field.FieldBuilder;
 
 @Builder
 @Data
@@ -44,7 +45,6 @@ public class FieldCollection<T, Parent> {
       result.propertyUtils = propertyUtils;
       return result;
     }
-
 
     public FieldCollectionBuilder<T, Parent> optional(TypedPropertyGetter<T, ?> getter,
         String showCondition) {
@@ -89,6 +89,12 @@ public class FieldCollection<T, Parent> {
     public FieldCollectionBuilder<T, Parent> field(String fieldName, DisplayContext context) {
       explicitFields.add(field().id(fieldName).context(context));
       return this;
+    }
+
+    public FieldBuilder<T, Parent> field(String id) {
+      FieldBuilder<T, Parent> result = field().id(id);
+      explicitFields.add(result);
+      return result;
     }
 
     public FieldCollectionBuilder<T, Parent> field(TypedPropertyGetter<T, ?> getter,
@@ -159,7 +165,7 @@ public class FieldCollection<T, Parent> {
     }
 
     public FieldCollectionBuilder<T, Parent> label(String id, String value) {
-      explicitFields.add(field().id(id).context(DisplayContext.ReadOnly).label(value));
+      explicitFields.add(field().id(id).context(DisplayContext.ReadOnly).label(value).readOnly());
       return this;
     }
 
