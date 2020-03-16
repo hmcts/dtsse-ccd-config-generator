@@ -9,12 +9,27 @@ import uk.gov.hmcts.ccd.sdk.types.FieldCollection;
 import uk.gov.hmcts.ccd.sdk.types.Webhook;
 import uk.gov.hmcts.reform.fpl.enums.State;
 import uk.gov.hmcts.reform.fpl.enums.UserRole;
-import uk.gov.hmcts.reform.fpl.model.*;
+import uk.gov.hmcts.reform.fpl.model.C21Order;
+import uk.gov.hmcts.reform.fpl.model.CaseData;
+import uk.gov.hmcts.reform.fpl.model.CaseManagementOrder;
+import uk.gov.hmcts.reform.fpl.model.Direction;
+import uk.gov.hmcts.reform.fpl.model.DirectionResponse;
+import uk.gov.hmcts.reform.fpl.model.HearingBooking;
+import uk.gov.hmcts.reform.fpl.model.NoticeOfProceedings;
+import uk.gov.hmcts.reform.fpl.model.Order;
 import uk.gov.hmcts.reform.fpl.model.common.C2DocumentBundle;
 import uk.gov.hmcts.reform.fpl.model.common.JudgeAndLegalAdvisor;
 
-import static uk.gov.hmcts.reform.fpl.enums.State.*;
-import static uk.gov.hmcts.reform.fpl.enums.UserRole.*;
+import static uk.gov.hmcts.reform.fpl.enums.State.Deleted;
+import static uk.gov.hmcts.reform.fpl.enums.State.Gatekeeping;
+import static uk.gov.hmcts.reform.fpl.enums.State.Open;
+import static uk.gov.hmcts.reform.fpl.enums.State.PREPARE_FOR_HEARING;
+import static uk.gov.hmcts.reform.fpl.enums.State.Submitted;
+import static uk.gov.hmcts.reform.fpl.enums.UserRole.GATEKEEPER;
+import static uk.gov.hmcts.reform.fpl.enums.UserRole.HMCTS_ADMIN;
+import static uk.gov.hmcts.reform.fpl.enums.UserRole.JUDICIARY;
+import static uk.gov.hmcts.reform.fpl.enums.UserRole.LOCAL_AUTHORITY;
+import static uk.gov.hmcts.reform.fpl.enums.UserRole.SYSTEM_UPDATE;
 
 // Found and invoked by the config generator.
 // The CaseData type parameter tells the generator which class represents your case model.
@@ -34,6 +49,7 @@ public class CCDConfig extends BaseCCDConfig<CaseData, State, UserRole> {
         buildPrepareForHearing();
         buildGatekeepingEvents();
         buildTransitions();
+        buildWorkBasketResultFields();
 
         event("internal-changeState:Gatekeeping->PREPARE_FOR_HEARING")
                 .forStateTransition(Gatekeeping, PREPARE_FOR_HEARING)
@@ -42,6 +58,15 @@ public class CCDConfig extends BaseCCDConfig<CaseData, State, UserRole> {
                 .grant("C", SYSTEM_UPDATE);
         caseField("dateAndTimeSubmitted", null, "DateTime", null, "Date submitted");
         caseField("submittedForm", "Attached PDF", "Document");
+    }
+
+    private void buildWorkBasketResultFields() {
+        workBasketResultFields()
+            .field("caseName", "Case name")
+            .field("familyManCaseNumber", "FamilyMan case number")
+            .field("[STATE]", "State")
+            .field("caseLocalAuthority", "Local authority")
+            .field("dateAndTimeSubmitted", "Date submitted");
     }
 
     private void buildTabs() {
@@ -685,5 +710,4 @@ public class CCDConfig extends BaseCCDConfig<CaseData, State, UserRole> {
                     .pageLabel("Add Case ID")
                     .field("caseIDReference", DisplayContext.Optional, null, "Text", null, "Case ID");
     }
-
 }
