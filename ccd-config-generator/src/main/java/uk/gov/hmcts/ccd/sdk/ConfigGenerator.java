@@ -27,6 +27,7 @@ import uk.gov.hmcts.ccd.sdk.generator.CaseFieldGenerator;
 import uk.gov.hmcts.ccd.sdk.generator.CaseTypeTabGenerator;
 import uk.gov.hmcts.ccd.sdk.generator.ComplexTypeGenerator;
 import uk.gov.hmcts.ccd.sdk.generator.FixedListGenerator;
+import uk.gov.hmcts.ccd.sdk.generator.WorkBasketGenerator;
 import uk.gov.hmcts.ccd.sdk.types.CCDConfig;
 import uk.gov.hmcts.ccd.sdk.types.Event;
 
@@ -89,6 +90,7 @@ public class ConfigGenerator {
     CaseTypeTabGenerator.generate(outputfolder, config.builder.caseType, config.builder);
     AuthorisationCaseStateGenerator.generate(outputfolder, config.builder.caseType, config.events,
         eventPermissions);
+    WorkBasketGenerator.generate(outputfolder, config.builder.caseType, config.builder);
   }
 
   // Copied from jdk 9.
