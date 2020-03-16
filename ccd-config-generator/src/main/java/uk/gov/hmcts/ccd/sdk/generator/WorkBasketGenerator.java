@@ -16,8 +16,7 @@ import uk.gov.hmcts.ccd.sdk.types.WorkBasketField;
 
 public class WorkBasketGenerator {
 
-  public static <T, R extends Role, S> void generate(File root, String caseType,
-      ConfigBuilderImpl<T, S, R> builder) {
+  public static void generate(File root, String caseType, ConfigBuilderImpl builder) {
     generateFields(root, caseType, builder.workBasketInputFields, "workBasketInputFields");
     generateFields(root, caseType, builder.workBasketResultFields, "WorkBasketResultFields");
   }
