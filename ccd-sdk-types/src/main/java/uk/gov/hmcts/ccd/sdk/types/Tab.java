@@ -34,10 +34,6 @@ public class Tab {
       return this;
     }
 
-    public TabBuilder<T> collection(TypedPropertyGetter<T, ? extends Collection> getter) {
-      return field(getter, null);
-    }
-
     public TabBuilder<T> field(TypedPropertyGetter<T, ?> getter) {
       return field(getter, null);
     }
@@ -47,5 +43,8 @@ public class Tab {
       return this;
     }
 
+    public TabBuilder<T> collection(TypedPropertyGetter<T, ? extends Collection> getter) {
+      return field(getter, null);
+    }
   }
 }

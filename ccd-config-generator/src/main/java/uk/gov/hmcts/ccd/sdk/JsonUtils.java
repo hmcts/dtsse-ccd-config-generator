@@ -4,13 +4,11 @@ import com.fasterxml.jackson.core.util.DefaultIndenter;
 import com.fasterxml.jackson.core.util.DefaultPrettyPrinter;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.type.CollectionType;
-import com.google.common.base.Objects;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -52,7 +50,7 @@ public class JsonUtils {
         return true;
       }).findFirst();
       if (!existingMatch.isPresent()) {
-//        System.out.println("Adding new field " + generatedField.get(primaryKeys[0]));
+        System.out.println("Adding new field " + generatedField.get(primaryKeys[0]));
         existing.add(generatedField);
       } else {
         Map<String, Object> match = existingMatch.get();
@@ -70,7 +68,7 @@ public class JsonUtils {
   @SneakyThrows
   public static void mergeInto(Path path, List<Map<String, Object>> fields,
       Set<String> overwritesFields, String... primaryKeys) {
-//    System.out.println("Merging into " + path.getFileName());
+    System.out.println("Merging into " + path.getFileName());
     ObjectMapper mapper = new ObjectMapper();
     List<Map<String, Object>> existing;
     if (path.toFile().exists()) {

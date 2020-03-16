@@ -86,7 +86,8 @@ public class Field<T, Parent> {
       return parent.complex(this.id, c);
     }
 
-    public <U> FieldCollectionBuilder<T, Parent> complex(Class<U> c, Consumer<FieldCollectionBuilder<U, ?>> renderer) {
+    public <U> FieldCollectionBuilder<T, Parent> complex(Class<U> c,
+        Consumer<FieldCollectionBuilder<U, ?>> renderer) {
       renderer.accept(parent.complex(this.id, c));
       return parent;
     }

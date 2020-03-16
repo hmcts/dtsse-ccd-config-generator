@@ -11,7 +11,6 @@ import java.nio.file.Paths;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
-import java.util.Set;
 import uk.gov.hmcts.ccd.sdk.JsonUtils;
 import uk.gov.hmcts.ccd.sdk.types.Event;
 import uk.gov.hmcts.ccd.sdk.types.Field;
@@ -55,14 +54,12 @@ public class AuthorisationCaseFieldGenerator {
       fieldRolePermissions.put("caseHistory", role, "CRU");
     }
 
-
     File folder = new File(root.getPath(), "AuthorisationCaseField");
     folder.mkdir();
     for (String role : fieldRolePermissions.columnKeySet()) {
 
       List<Map<String, Object>> permissions = Lists.newArrayList();
       Map<String, String> rolePermissions = fieldRolePermissions.column(role);
-
 
       for (Entry<String, String> fieldPerm : rolePermissions.entrySet()) {
         if (fieldPerm.getKey().equals("[STATE]")) {
