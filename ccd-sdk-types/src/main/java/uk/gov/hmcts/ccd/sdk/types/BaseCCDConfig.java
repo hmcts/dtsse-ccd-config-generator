@@ -81,5 +81,10 @@ public abstract class BaseCCDConfig<Model, State,
   public WorkBasketResultBuilder<Model> workBasketResultFields() {
     return builder.workBasketResultFields();
   }
+
+  @Override
+  public WorkBasketResultBuilder<Model> workBasketInputFields() {
+    return builder.workBasketInputFields();
+  }
 }
 

@@ -50,6 +50,7 @@ public class CCDConfig extends BaseCCDConfig<CaseData, State, UserRole> {
         buildGatekeepingEvents();
         buildTransitions();
         buildWorkBasketResultFields();
+        buildWorkBasketInputFields();
 
         event("internal-changeState:Gatekeeping->PREPARE_FOR_HEARING")
                 .forStateTransition(Gatekeeping, PREPARE_FOR_HEARING)
@@ -67,6 +68,14 @@ public class CCDConfig extends BaseCCDConfig<CaseData, State, UserRole> {
             .field("[STATE]", "State")
             .field(CaseData::getCaseLocalAuthority, "Local authority")
             .field("dateAndTimeSubmitted", "Date submitted");
+    }
+
+    private void buildWorkBasketInputFields() {
+        workBasketInputFields()
+            .field(CaseData::getCaseLocalAuthority, "Local authority")
+            .field(CaseData::getCaseName, "Case name")
+            .field(CaseData::getFamilyManCaseNumber, "FamilyMan case number")
+            .field(CaseData::getDateSubmitted, "Date submitted");
     }
 
     private void buildTabs() {

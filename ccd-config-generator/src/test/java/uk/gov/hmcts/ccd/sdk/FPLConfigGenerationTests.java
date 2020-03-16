@@ -98,6 +98,11 @@ public class FPLConfigGenerationTests {
     }
 
     @Test
+    public void generatesWorkBasketInputFields() {
+        assertEquals("WorkBasketInputFields.json");
+    }
+
+    @Test
     public void generatesAllComplexTypes() {
         assertResourceFolderMatchesGenerated("ComplexTypes");
         assertGeneratedFolderMatchesResource("ComplexTypes");

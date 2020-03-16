@@ -14,15 +14,20 @@ import uk.gov.hmcts.ccd.sdk.types.WorkBasketResult;
 import uk.gov.hmcts.ccd.sdk.types.WorkBasketResult.WorkBasketResultBuilder;
 import uk.gov.hmcts.ccd.sdk.types.WorkBasketResultField;
 
-public class WorkBasketResultFieldsGenerator {
+public class WorkBasketGenerator {
 
   public static <T, R extends Role, S> void generate(File root, String caseType,
       ConfigBuilderImpl<T, S, R> builder) {
+    buildJsonForFields(root, caseType, builder.workBasketInputFields, "workBasketInputFields");
+    buildJsonForFields(root, caseType, builder.workBasketResultFields, "WorkBasketResultFields");
+  }
 
+  private static void buildJsonForFields(File root, String caseType,
+      List<WorkBasketResultBuilder> workBasketFields, String fileName) {
     List<Map<String, Object>> result = Lists.newArrayList();
 
     int displayOrder = 1;
-    for (WorkBasketResultBuilder wb : builder.workBasketResultFields) {
+    for (WorkBasketResultBuilder wb : workBasketFields) {
       WorkBasketResult workBasketResult = wb.build();
 
       for (WorkBasketResultField field : workBasketResult.getFields()) {
@@ -32,7 +37,7 @@ public class WorkBasketResultFieldsGenerator {
         result.add(map);
       }
     }
-    Path output = Paths.get(root.getPath(), "WorkBasketResultFields.json");
+    Path output = Paths.get(root.getPath(), fileName + ".json");
     JsonUtils.mergeInto(output, result, "CaseFieldID");
   }
 

@@ -32,4 +32,6 @@ public interface ConfigBuilder<T, S, R extends Role> {
   TabBuilder tab(String tabId, String tabLabel);
 
   WorkBasketResultBuilder workBasketResultFields();
+
+  WorkBasketResultBuilder workBasketInputFields();
 }
