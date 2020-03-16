@@ -62,10 +62,10 @@ public class CCDConfig extends BaseCCDConfig<CaseData, State, UserRole> {
 
     private void buildWorkBasketResultFields() {
         workBasketResultFields()
-            .field("caseName", "Case name")
-            .field("familyManCaseNumber", "FamilyMan case number")
+            .field(CaseData::getCaseName, "Case name")
+            .field(CaseData::getFamilyManCaseNumber, "FamilyMan case number")
             .field("[STATE]", "State")
-            .field("caseLocalAuthority", "Local authority")
+            .field(CaseData::getCaseLocalAuthority, "Local authority")
             .field("dateAndTimeSubmitted", "Date submitted");
     }
 

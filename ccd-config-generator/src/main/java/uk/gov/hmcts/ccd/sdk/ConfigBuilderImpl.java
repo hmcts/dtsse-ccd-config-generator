@@ -128,7 +128,8 @@ public class ConfigBuilderImpl<T, S, R extends Role> implements ConfigBuilder<T,
 
   @Override
   public WorkBasketResultBuilder workBasketResultFields() {
-    WorkBasketResultBuilder result = WorkBasketResultBuilder.builder();
+    WorkBasketResultBuilder result = WorkBasketResultBuilder.builder(caseData,
+        new PropertyUtils());
     workBasketResultFields.add(result);
     return result;
   }
