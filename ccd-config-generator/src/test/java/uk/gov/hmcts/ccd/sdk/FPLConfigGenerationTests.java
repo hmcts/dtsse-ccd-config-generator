@@ -73,6 +73,11 @@ public class FPLConfigGenerationTests {
     }
 
     @Test
+    public void generatesAuthorisationCaseState() {
+        assertEquals("AuthorisationCaseState.json");
+    }
+
+    @Test
     public void generatesAuthorisationCaseFieldSystem() {
         assertEquals("AuthorisationCaseField/caseworker-publiclaw-systemupdate.json");
     }

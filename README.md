@@ -6,6 +6,7 @@ The generator inspects your Java model and generates:
 
 * AuthorisationCaseField
 * AuthorisationCaseEvent
+* AuthorisationCaseState
 * CaseEvent
 * CaseEventToComplexTypes
 * CaseEventToFields
@@ -59,13 +60,14 @@ public class ProdConfig implements CCDConfig<CaseData, State, UserRole> {
             .aboutToStartWebhook()
             .aboutToSubmitWebhook()
             .fields()
-                .optional(CaseData::getAllApplicants)
-                .complex(CaseData::getJudgeAndLegalAdvisor)
-                    .readonly(JudgeAndLegalAdvisor::getJudgeFullName)
-                    .readonly(JudgeAndLegalAdvisor::getLegalAdvisorName);
+            .optional(CaseData::getAllApplicants)
+            .complex(CaseData::getJudgeAndLegalAdvisor)
+                .readonly(JudgeAndLegalAdvisor::getJudgeFullName)
+                .readonly(JudgeAndLegalAdvisor::getLegalAdvisorName);
 
     }
 
+    // Build webhook URLs by convention, based on the webhook details.
     private String webhookConvention(Webhook webhook, String eventId) {
         return "/" + eventId + "/" + webhook;
     }

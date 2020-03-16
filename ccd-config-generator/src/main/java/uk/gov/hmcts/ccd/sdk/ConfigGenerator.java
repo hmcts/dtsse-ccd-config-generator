@@ -19,6 +19,7 @@ import org.reflections.ReflectionUtils;
 import org.reflections.Reflections;
 import uk.gov.hmcts.ccd.sdk.generator.AuthorisationCaseEventGenerator;
 import uk.gov.hmcts.ccd.sdk.generator.AuthorisationCaseFieldGenerator;
+import uk.gov.hmcts.ccd.sdk.generator.AuthorisationCaseStateGenerator;
 import uk.gov.hmcts.ccd.sdk.generator.CaseEventGenerator;
 import uk.gov.hmcts.ccd.sdk.generator.CaseEventToComplexTypesGenerator;
 import uk.gov.hmcts.ccd.sdk.generator.CaseEventToFieldsGenerator;
@@ -87,6 +88,8 @@ public class ConfigGenerator {
             config.builder);
     FixedListGenerator.generate(outputfolder, config.types);
     CaseTypeTabGenerator.generate(outputfolder, config.builder.caseType, config.builder);
+    AuthorisationCaseStateGenerator.generate(outputfolder, config.builder.caseType, config.events,
+        eventPermissions);
     WorkBasketGenerator.generate(outputfolder, config.builder.caseType, config.builder);
   }
 
