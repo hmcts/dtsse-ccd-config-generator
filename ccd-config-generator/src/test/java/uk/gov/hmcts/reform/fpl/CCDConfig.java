@@ -9,27 +9,12 @@ import uk.gov.hmcts.ccd.sdk.types.FieldCollection;
 import uk.gov.hmcts.ccd.sdk.types.Webhook;
 import uk.gov.hmcts.reform.fpl.enums.State;
 import uk.gov.hmcts.reform.fpl.enums.UserRole;
-import uk.gov.hmcts.reform.fpl.model.C21Order;
-import uk.gov.hmcts.reform.fpl.model.CaseData;
-import uk.gov.hmcts.reform.fpl.model.CaseManagementOrder;
-import uk.gov.hmcts.reform.fpl.model.Direction;
-import uk.gov.hmcts.reform.fpl.model.DirectionResponse;
-import uk.gov.hmcts.reform.fpl.model.HearingBooking;
-import uk.gov.hmcts.reform.fpl.model.NoticeOfProceedings;
-import uk.gov.hmcts.reform.fpl.model.Order;
+import uk.gov.hmcts.reform.fpl.model.*;
 import uk.gov.hmcts.reform.fpl.model.common.C2DocumentBundle;
 import uk.gov.hmcts.reform.fpl.model.common.JudgeAndLegalAdvisor;
 
-import static uk.gov.hmcts.reform.fpl.enums.State.Deleted;
-import static uk.gov.hmcts.reform.fpl.enums.State.Gatekeeping;
-import static uk.gov.hmcts.reform.fpl.enums.State.Open;
-import static uk.gov.hmcts.reform.fpl.enums.State.PREPARE_FOR_HEARING;
-import static uk.gov.hmcts.reform.fpl.enums.State.Submitted;
-import static uk.gov.hmcts.reform.fpl.enums.UserRole.GATEKEEPER;
-import static uk.gov.hmcts.reform.fpl.enums.UserRole.HMCTS_ADMIN;
-import static uk.gov.hmcts.reform.fpl.enums.UserRole.JUDICIARY;
-import static uk.gov.hmcts.reform.fpl.enums.UserRole.LOCAL_AUTHORITY;
-import static uk.gov.hmcts.reform.fpl.enums.UserRole.SYSTEM_UPDATE;
+import static uk.gov.hmcts.reform.fpl.enums.State.*;
+import static uk.gov.hmcts.reform.fpl.enums.UserRole.*;
 
 // Found and invoked by the config generator.
 // The CaseData type parameter tells the generator which class represents your case model.
