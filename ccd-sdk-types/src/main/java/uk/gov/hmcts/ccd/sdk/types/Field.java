@@ -1,9 +1,11 @@
 package uk.gov.hmcts.ccd.sdk.types;
 
 import de.cronn.reflection.util.TypedPropertyGetter;
+import java.util.function.Consumer;
 import lombok.Builder;
 import lombok.Data;
 import lombok.ToString;
+import uk.gov.hmcts.ccd.sdk.types.FieldCollection.FieldCollectionBuilder;
 
 @Builder
 @Data
@@ -78,6 +80,15 @@ public class Field<T, Parent> {
     public FieldBuilder<T, Parent> readOnly() {
       this.readOnly = true;
       return this;
+    }
+
+    public <U> FieldCollectionBuilder<U, T> complex(Class<U> c) {
+      return parent.complex(this.id, c);
+    }
+
+    public <U> FieldCollectionBuilder<T, Parent> complex(Class<U> c, Consumer<FieldCollectionBuilder<U, ?>> renderer) {
+      renderer.accept(parent.complex(this.id, c));
+      return parent;
     }
   }
 }

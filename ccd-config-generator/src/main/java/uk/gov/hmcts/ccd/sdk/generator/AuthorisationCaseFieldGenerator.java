@@ -51,6 +51,8 @@ public class AuthorisationCaseFieldGenerator {
           }
         }
       }
+      // Add CRU for caseHistory for all roles
+      fieldRolePermissions.put("caseHistory", role, "CRU");
     }
 
 
@@ -63,6 +65,9 @@ public class AuthorisationCaseFieldGenerator {
 
 
       for (Entry<String, String> fieldPerm : rolePermissions.entrySet()) {
+        if (fieldPerm.getKey().equals("[STATE]")) {
+          continue;
+        }
 
         Map<String, Object> permission = Maps.newHashMap();
         permissions.add(permission);

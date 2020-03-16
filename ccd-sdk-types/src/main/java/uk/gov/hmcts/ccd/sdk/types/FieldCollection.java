@@ -149,6 +149,14 @@ public class FieldCollection<T, Parent> {
 
     public <U> FieldCollectionBuilder<U, T> complex(TypedPropertyGetter<T, ?> getter, Class<U> c) {
       String fieldName = propertyUtils.getPropertyName(dataClass, getter);
+      if (null == this.rootFieldname) {
+        // Register only the root complex as a field
+        field().id(fieldName).context(DisplayContext.Complex).showSummary(true);
+      }
+      return complex(fieldName, c);
+    }
+
+    <U> FieldCollectionBuilder<U, T> complex(String fieldName, Class<U> c) {
       FieldCollectionBuilder<T, Parent> result = (FieldCollectionBuilder<T, Parent>)
           FieldCollectionBuilder.builder(this, c, propertyUtils);
       complexFields.add(result);
@@ -156,10 +164,6 @@ public class FieldCollection<T, Parent> {
       // Nested builders inherit ordering state.
       if (null != parent) {
         result.fieldDisplayOrder = this.fieldDisplayOrder;
-      }
-      if (null == this.rootFieldname) {
-        // Register only the root complex as a field
-        field().id(getter).context(DisplayContext.Complex).showSummary(true);
       }
       return (FieldCollectionBuilder<U, T>) result;
     }
