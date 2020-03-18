@@ -320,7 +320,7 @@ public class CCDConfig extends BaseCCDConfig<CaseData, State, UserRole> {
                 .aboutToStartWebhook("statement-of-service")
                 .fields()
                     .label("c9Declaration", "If you send documents to a party's solicitor or a children's guardian, give their details")
-                    .field(CaseData::getStatementOfService, DisplayContext.Mandatory, true)
+                    .field().id(CaseData::getStatementOfService).context(DisplayContext.Mandatory).showSummary(true).mutable().done()
                     .field("serviceDeclarationLabel", DisplayContext.ReadOnly, null, "Text", null, "Declaration" )
                     .field("serviceConsent", DisplayContext.Mandatory, null, "MultiSelectList", "Consent", " ");
 
@@ -366,15 +366,16 @@ public class CCDConfig extends BaseCCDConfig<CaseData, State, UserRole> {
                     .field("cmoHearingDateList", DisplayContext.Mandatory, null, "DynamicList", null, "Which hearing is this order for?")
                 .page("allPartiesDirections")
                     .label("allPartiesLabelCMO", "## For all parties")
-                    .field("allPartiesPrecedentLabelCMO", DisplayContext.ReadOnly, null, null, "Direction", "Add completed directions from the precedent library or your own template.")
-                    .complex(CaseData::getAllPartiesCustom, Direction.class, this::renderDirection)
+//                    .field("allPartiesPrecedentLabelCMO", DisplayContext.ReadOnly, null, null, "Direction", "Add completed directions from the precedent library or your own template.")
+            .field("allPartiesPrecedentLabelCMO").context(DisplayContext.ReadOnly).fieldTypeParameter("Direction").label("Add completed directions from the precedent library or your own template.").readOnly().done()
+            .field().id(CaseData::getAllPartiesCustom).mutable().showSummary(true).complex(Direction.class, this::renderDirection)
                 .page("localAuthorityDirections")
                      .label("localAuthorityDirectionsLabelCMO", "## For the local authority")
-                     .complex(CaseData::getLocalAuthorityDirectionsCustom, Direction.class, this::renderDirection)
+                     .field().id(CaseData::getLocalAuthorityDirectionsCustom).showSummary(true).mutable().complex(Direction.class, this::renderDirection)
                 .page(2)
                      .label("respondentsDirectionLabelCMO", "## For the parents or respondents")
                      .field("respondentsDropdownLabelCMO", DisplayContext.ReadOnly, null, "TextArea", null, " ")
-                     .complex(CaseData::getRespondentDirectionsCustom, Direction.class)
+                     .field().id(CaseData::getRespondentDirectionsCustom).mutable().showSummary(true).complex(Direction.class)
                         .optional(Direction::getDirectionType)
                         .mandatory(Direction::getDirectionText)
                         .mandatory(Direction::getParentsAndRespondentsAssignee)
@@ -382,14 +383,14 @@ public class CCDConfig extends BaseCCDConfig<CaseData, State, UserRole> {
                     .done()
                 .page("cafcassDirections")
                      .label("cafcassDirectionsLabelCMO", "## For Cafcass")
-                     .complex(CaseData::getCafcassDirectionsCustom, Direction.class, this::renderDirection)
-                    .complex(CaseData::getCaseManagementOrder)
+                     .field().id(CaseData::getCafcassDirectionsCustom).mutable().showSummary(true).complex(Direction.class, this::renderDirection)
+                    .field().id(CaseData::getCaseManagementOrder).showSummary(true).mutable().complex(CaseManagementOrder.class)
                         .readonly(CaseManagementOrder::getHearingDate)
                     .done()
                 .page(3)
                      .label("otherPartiesDirectionLabelCMO", "## For other parties")
                      .field("otherPartiesDropdownLabelCMO", DisplayContext.ReadOnly, null, "TextArea", null, " ")
-                     .complex(CaseData::getOtherPartiesDirectionsCustom, Direction.class)
+                     .field().id(CaseData::getOtherPartiesDirectionsCustom).mutable().showSummary(true).complex(Direction.class)
                         .optional(Direction::getDirectionType)
                         .mandatory(Direction::getDirectionText)
                         .mandatory(Direction::getOtherPartiesAssignee)
@@ -397,12 +398,13 @@ public class CCDConfig extends BaseCCDConfig<CaseData, State, UserRole> {
                     .done()
                 .page("courtDirections")
                      .label("courtDirectionsLabelCMO", "## For the court")
-                     .complex(CaseData::getCourtDirectionsCustom, Direction.class, this::renderDirection)
+//                    .complex(CaseData::getCourtDirectionsCustom, Direction.class, this::renderDirection)
+                     .field().id(CaseData::getCourtDirectionsCustom).mutable().complex(Direction.class, this::renderDirection)
                 .page(5)
                      .label("orderBasisLabel", "## Basis of order")
                      .label("addRecitalLabel", "### Add recital")
-                     .field("recitals", DisplayContext.Optional, null, "Collection", "Recitals", "Recitals")
-                .page("schedule")
+                     .field("recitals").context(DisplayContext.Optional).type("Collection").fieldTypeParameter("Recitals").label("Recitals").mutable().done()
+            .page("schedule")
                      .field("schedule", DisplayContext.Mandatory, null, "Schedule", null, "Schedule");
 
         renderComply( "COMPLY_LOCAL_AUTHORITY", LOCAL_AUTHORITY, CaseData::getLocalAuthorityDirections, DisplayContext.Mandatory, "Allows Local Authority user access to comply with their directions as well as ones for all parties");
@@ -423,7 +425,7 @@ public class CCDConfig extends BaseCCDConfig<CaseData, State, UserRole> {
                 .aboutToSubmitWebhook()
                 .fields()
                 .pageLabel(" ")
-                .complex(getter, Direction.class)
+                .field().id(getter).showSummary(true).mutable().complex(Direction.class)
                     .readonly(Direction::getDirectionType)
                     .readonly(Direction::getDirectionNeeded, "directionText = \"DO_NOT_SHOW\"")
                     .readonly(Direction::getDateToBeCompletedBy)
@@ -588,7 +590,7 @@ public class CCDConfig extends BaseCCDConfig<CaseData, State, UserRole> {
                 .aboutToStartWebhook()
                 .aboutToSubmitWebhook()
                 .fields()
-                    .optional(CaseData::getChildren1);
+                    .field().id(CaseData::getChildren1).context(DisplayContext.Optional).mutable();
 
         event("enterRespondents").forState(Open)
                 .name("Respondents")
@@ -597,7 +599,7 @@ public class CCDConfig extends BaseCCDConfig<CaseData, State, UserRole> {
                 .aboutToSubmitWebhook()
                 .midEventWebhook()
                 .fields()
-                    .optional(CaseData::getRespondents1);
+                    .field().id(CaseData::getRespondents1).context(DisplayContext.Optional).mutable();
 
         event("enterApplicant").forState(Open)
                 .name("Applicant")
@@ -685,7 +687,7 @@ public class CCDConfig extends BaseCCDConfig<CaseData, State, UserRole> {
                     .field("[STATE]", DisplayContext.ReadOnly, "courtBundle = \"DO_NOT_SHOW\"")
                     .field("courtBundle", DisplayContext.Optional, "[STATE] != \"Open\"", "CourtBundle", null, "8. Court bundle")
                     .label("documents_socialWorkOther_border_top", "-------------------------------------------------------------------------------------------------------------")
-                    .optional(CaseData::getOtherSocialWorkDocuments)
+                    .field().id(CaseData::getOtherSocialWorkDocuments).context(DisplayContext.Optional).mutable().done()
                     .label("documents_socialWorkOther_border_bottom", "-------------------------------------------------------------------------------------------------------------");
 
         event("changeCaseName").forState(Open)
@@ -694,14 +696,5 @@ public class CCDConfig extends BaseCCDConfig<CaseData, State, UserRole> {
                 .displayOrder(15)
                 .fields()
                     .optional(CaseData::getCaseName);
-
-        event("addCaseIDReference").forState(Open)
-                .name("Add case ID")
-                .description("Add case ID")
-                .explicitGrants() // Do not inherit State level role permissions
-                .displayOrder(16)
-                .fields()
-                    .pageLabel("Add Case ID")
-                    .field("caseIDReference", DisplayContext.Optional, null, "Text", null, "Case ID");
     }
 }

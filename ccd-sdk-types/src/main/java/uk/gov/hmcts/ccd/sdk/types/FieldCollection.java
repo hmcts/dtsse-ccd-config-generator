@@ -7,6 +7,7 @@ import java.util.function.Consumer;
 import lombok.Builder;
 import lombok.Data;
 import lombok.ToString;
+import uk.gov.hmcts.ccd.sdk.types.Field.FieldBuilder;
 
 @Builder
 @Data
@@ -44,7 +45,6 @@ public class FieldCollection<T, Parent> {
       result.propertyUtils = propertyUtils;
       return result;
     }
-
 
     public FieldCollectionBuilder<T, Parent> optional(TypedPropertyGetter<T, ?> getter,
         String showCondition) {
@@ -89,6 +89,12 @@ public class FieldCollection<T, Parent> {
     public FieldCollectionBuilder<T, Parent> field(String fieldName, DisplayContext context) {
       explicitFields.add(field().id(fieldName).context(context));
       return this;
+    }
+
+    public FieldBuilder<T, Parent> field(String id) {
+      FieldBuilder<T, Parent> result = field().id(id);
+      explicitFields.add(result);
+      return result;
     }
 
     public FieldCollectionBuilder<T, Parent> field(TypedPropertyGetter<T, ?> getter,
@@ -143,6 +149,14 @@ public class FieldCollection<T, Parent> {
 
     public <U> FieldCollectionBuilder<U, T> complex(TypedPropertyGetter<T, ?> getter, Class<U> c) {
       String fieldName = propertyUtils.getPropertyName(dataClass, getter);
+      if (null == this.rootFieldname) {
+        // Register only the root complex as a field
+        field().id(fieldName).context(DisplayContext.Complex).showSummary(true);
+      }
+      return complex(fieldName, c);
+    }
+
+    <U> FieldCollectionBuilder<U, T> complex(String fieldName, Class<U> c) {
       FieldCollectionBuilder<T, Parent> result = (FieldCollectionBuilder<T, Parent>)
           FieldCollectionBuilder.builder(this, c, propertyUtils);
       complexFields.add(result);
@@ -151,15 +165,11 @@ public class FieldCollection<T, Parent> {
       if (null != parent) {
         result.fieldDisplayOrder = this.fieldDisplayOrder;
       }
-      if (null == this.rootFieldname) {
-        // Register only the root complex as a field
-        field().id(getter).context(DisplayContext.Complex).showSummary(true);
-      }
       return (FieldCollectionBuilder<U, T>) result;
     }
 
     public FieldCollectionBuilder<T, Parent> label(String id, String value) {
-      explicitFields.add(field().id(id).context(DisplayContext.ReadOnly).label(value));
+      explicitFields.add(field().id(id).context(DisplayContext.ReadOnly).label(value).readOnly());
       return this;
     }
 

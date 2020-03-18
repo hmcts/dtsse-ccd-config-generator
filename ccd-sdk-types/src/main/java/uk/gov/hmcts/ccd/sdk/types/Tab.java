@@ -2,6 +2,7 @@ package uk.gov.hmcts.ccd.sdk.types;
 
 import de.cronn.reflection.util.TypedPropertyGetter;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import lombok.Builder;
 import lombok.Data;
@@ -42,5 +43,8 @@ public class Tab {
       return this;
     }
 
+    public TabBuilder<T> collection(TypedPropertyGetter<T, ? extends Collection> getter) {
+      return field(getter, null);
+    }
   }
 }
