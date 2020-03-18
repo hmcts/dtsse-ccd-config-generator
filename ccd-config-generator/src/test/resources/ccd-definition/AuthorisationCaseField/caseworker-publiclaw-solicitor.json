@@ -495,5 +495,30 @@
     "CaseFieldID": "submittedForm",
     "UserRole": "caseworker-publiclaw-solicitor",
     "CRUD": "R"
-  }
+  },
+  {
+    "CRUD" : "R",
+    "CaseTypeID" : "CARE_SUPERVISION_EPO",
+    "LiveFrom" : "01/01/2017",
+    "CaseFieldID" : "familyManCaseNumber",
+    "UserRole" : "caseworker-publiclaw-solicitor"
+  }, {
+  "CRUD" : "R",
+  "CaseTypeID" : "CARE_SUPERVISION_EPO",
+  "LiveFrom" : "01/01/2017",
+  "CaseFieldID" : "caseLocalAuthority",
+  "UserRole" : "caseworker-publiclaw-solicitor"
+}, {
+  "CRUD" : "R",
+  "CaseTypeID" : "CARE_SUPERVISION_EPO",
+  "LiveFrom" : "01/01/2017",
+  "CaseFieldID" : "dateSubmitted",
+  "UserRole" : "caseworker-publiclaw-solicitor"
+}, {
+  "CRUD" : "R",
+  "CaseTypeID" : "CARE_SUPERVISION_EPO",
+  "LiveFrom" : "01/01/2017",
+  "CaseFieldID" : "dateAndTimeSubmitted",
+  "UserRole" : "caseworker-publiclaw-solicitor"
+}
 ]

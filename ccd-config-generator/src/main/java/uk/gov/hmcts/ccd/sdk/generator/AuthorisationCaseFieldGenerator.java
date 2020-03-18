@@ -2,6 +2,7 @@ package uk.gov.hmcts.ccd.sdk.generator;
 
 import com.google.common.collect.HashBasedTable;
 import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Table;
@@ -17,11 +18,16 @@ import uk.gov.hmcts.ccd.sdk.types.Field;
 import uk.gov.hmcts.ccd.sdk.types.Tab;
 import uk.gov.hmcts.ccd.sdk.types.Tab.TabBuilder;
 import uk.gov.hmcts.ccd.sdk.types.TabField;
+import uk.gov.hmcts.ccd.sdk.types.WorkBasket;
+import uk.gov.hmcts.ccd.sdk.types.WorkBasket.WorkBasketBuilder;
+import uk.gov.hmcts.ccd.sdk.types.WorkBasketField;
 
 public class AuthorisationCaseFieldGenerator {
 
   public static void generate(File root, String caseType, List<Event> events,
-      Table<String, String, String> eventRolePermissions, List<TabBuilder> tabs) {
+      Table<String, String, String> eventRolePermissions, List<TabBuilder> tabs,
+      List<WorkBasketBuilder> workBasketInputFields,
+      List<WorkBasketBuilder> workBasketResultFields) {
 
     Table<String, String, String> fieldRolePermissions = HashBasedTable.create();
     for (Event event : events) {
@@ -41,6 +47,9 @@ public class AuthorisationCaseFieldGenerator {
     }
 
     for (String role : ImmutableSet.copyOf(fieldRolePermissions.columnKeySet())) {
+      // Add CRU for caseHistory for all roles
+      fieldRolePermissions.put("caseHistory", role, "CRU");
+
       // Add read for any tab fields
       for (TabBuilder tb : tabs) {
         Tab tab = tb.build();
@@ -50,8 +59,17 @@ public class AuthorisationCaseFieldGenerator {
           }
         }
       }
-      // Add CRU for caseHistory for all roles
-      fieldRolePermissions.put("caseHistory", role, "CRU");
+
+      // Add read for WorkBaskets
+      for (WorkBasketBuilder workBasketInputField :
+          Iterables.concat(workBasketInputFields, workBasketResultFields)) {
+        WorkBasket basket = workBasketInputField.build();
+        for (WorkBasketField field : basket.getFields()) {
+          if (!fieldRolePermissions.contains(field.getId(), role)) {
+            fieldRolePermissions.put(field.getId(), role, "R");
+          }
+        }
+      }
     }
 
     File folder = new File(root.getPath(), "AuthorisationCaseField");
