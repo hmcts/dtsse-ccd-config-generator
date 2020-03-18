@@ -34,4 +34,9 @@ compileJava {
 }
 
 
+// Since we symlink source from fpl we need this for up-to-date-checks.
+tasks.compileTestJava.inputs.files(
+        rootProject.file('test-builds/fpl-ccd-configuration/service/src'),
+        rootProject.file('test-builds/fpl-ccd-configuration/ccd-definition')
+)
 
