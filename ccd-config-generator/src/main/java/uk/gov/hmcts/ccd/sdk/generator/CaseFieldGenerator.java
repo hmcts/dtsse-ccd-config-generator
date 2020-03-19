@@ -1,5 +1,6 @@
 package uk.gov.hmcts.ccd.sdk.generator;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableSet;
@@ -55,6 +56,11 @@ public class CaseFieldGenerator {
           continue;
         }
       }
+
+      if (field.getAnnotation(JsonIgnore.class) != null) {
+        continue;
+      }
+
       JsonProperty j = field.getAnnotation(JsonProperty.class);
       String id = j != null ? j.value() : field.getName();
 
