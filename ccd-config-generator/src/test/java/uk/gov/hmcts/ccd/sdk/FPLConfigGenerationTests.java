@@ -109,13 +109,11 @@ public class FPLConfigGenerationTests {
         assertEquals("CaseTypeTab.json");
     }
 
-    @Ignore
     @Test
     public void generatesWorkBasketResultFields() {
         assertEquals("WorkBasketResultFields.json");
     }
 
-    @Ignore
     @Test
     public void generatesWorkBasketInputFields() {
         assertEquals("WorkBasketInputFields.json");
