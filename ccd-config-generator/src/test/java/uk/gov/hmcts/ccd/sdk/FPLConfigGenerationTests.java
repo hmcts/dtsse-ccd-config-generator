@@ -208,7 +208,7 @@ public class FPLConfigGenerationTests {
         try {
             String expectedString = FileUtils.readFileToString(expected, Charset.defaultCharset());
             String actualString = FileUtils.readFileToString(actual, Charset.defaultCharset());
-            JSONCompareResult result = JSONCompare.compareJSON(expectedString, actualString, JSONCompareMode.LENIENT);
+            JSONCompareResult result = JSONCompare.compareJSON(expectedString, actualString, JSONCompareMode.NON_EXTENSIBLE);
             if (result.failed()) {
                 System.out.println("Failed comparing " + expected.getName() + " to " + actual.getName());
                 System.out.println(result.toString());
