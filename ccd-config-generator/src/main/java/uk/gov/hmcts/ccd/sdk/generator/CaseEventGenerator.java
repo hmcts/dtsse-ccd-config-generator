@@ -53,8 +53,12 @@ public class CaseEventGenerator {
         data.put("DisplayOrder", t++);
       }
       data.put("CaseTypeID", caseTypeId);
-      data.put("ShowSummary", event.isShowSummary() ? "Y" : "N");
-      data.put("ShowEventNotes", event.isShowEventNotes() ? "Y" : "N");
+      if (event.isShowSummary()) {
+        data.put("ShowSummary", "Y");
+      }
+      if (event.isShowEventNotes()) {
+        data.put("ShowEventNotes", "Y");
+      }
       if (event.isShowSummaryChangeOption()) {
         data.put("ShowSummaryChangeOption", "Y");
       }
