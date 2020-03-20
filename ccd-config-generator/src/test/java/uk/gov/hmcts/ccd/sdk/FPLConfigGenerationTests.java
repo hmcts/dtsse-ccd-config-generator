@@ -2,16 +2,28 @@ package uk.gov.hmcts.ccd.sdk;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.type.CollectionType;
+import com.google.common.base.Function;
 import com.google.common.base.Predicates;
 import com.google.common.collect.Collections2;
+import com.google.common.collect.ImmutableSortedMap;
+import com.google.common.collect.MapDifference;
+import com.google.common.collect.MapDifference.ValueDifference;
+import com.google.common.collect.Maps;
+import com.google.common.collect.Sets;
+import com.google.common.collect.Sets.SetView;
 import com.google.common.io.Files;
 import com.google.common.io.Resources;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+import java.util.stream.Collectors;
 import lombok.SneakyThrows;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.io.filefilter.TrueFileFilter;
+import org.apache.commons.lang.StringUtils;
 import org.junit.BeforeClass;
 import org.junit.ClassRule;
 import org.junit.Ignore;
@@ -102,7 +114,6 @@ public class FPLConfigGenerationTests {
         assertEquals("AuthorisationCaseField/caseworker-publiclaw-solicitor.json");
     }
 
-
     @Ignore
     @Test
     public void generatesCaseTypeTab() {
@@ -131,10 +142,10 @@ public class FPLConfigGenerationTests {
         assertResourceFolderMatchesGenerated("CaseEventToFields");
     }
 
-    @Ignore
     @Test
     public void generatesAllCaseEvent() {
         assertResourceFolderMatchesGenerated("CaseEvent");
+        assertGeneratedFolderMatchesResource("CaseEvent");
     }
 
     @Ignore
@@ -202,24 +213,41 @@ public class FPLConfigGenerationTests {
                 System.out.println("Failed comparing " + expected.getName() + " to " + actual.getName());
                 System.out.println(result.toString());
 
+                List<Map<String, Object>> expectedValues = fromJSON(expectedString);
+                List<Map<String, Object>> actualValues = fromJSON(actualString);
+
+                Set<Object> expectedIds = expectedValues.stream().map(x -> x.get("ID"))
+                    .collect(Collectors.toSet());
+                Set<Object> actualIDs = actualValues.stream().map(x -> x.get("ID"))
+                    .collect(Collectors.toSet());
+
+                SetView<Object> m = Sets.difference(expectedIds, actualIDs);
+                System.out.println(m.size() + " missing:");
+                System.out.println(m);
+
+                SetView<Object> u = Sets.difference(actualIDs, expectedIds);
+                System.out.println(u.size() + " unexpected:");
+                System.out.println(u);
+
                 Collection<Map<String, Object>> missing = Collections2
-                    .filter(fromJSON(expectedString), Predicates.not(Predicates.in(fromJSON(actualString))));
-                Collection<Map<String, Object>> unexpected = Collections2
-                    .filter(fromJSON(actualString), Predicates.not(Predicates.in(fromJSON(expectedString))));
+                    .filter(fromJSON(expectedString), Predicates.not(Predicates.in(actualValues)));
 
                 System.out.println(missing.size() + " missing values:");
-                System.out.println(pretty(missing));
+                int count = 1;
+                for (Map<String, Object> missingValue : missing) {
+                    System.out.println(count++);
+                    debugMissingValue(actualValues, missingValue);
+                }
+
+                Collection<Map<String, Object>> unexpected = Collections2
+                    .filter(fromJSON(actualString), Predicates.not(Predicates.in(expectedValues)));
 
                 System.out.println(unexpected.size() + " unexpected values:");
-                System.out.println(pretty(unexpected));
-
-//                System.out.println("Expected:");
-//                System.out.println(expectedString);
-//                System.out.println("Got:");
-//                System.out.println(actualString);
-
-//                Files.writeString(new File("src/test/resources/ccd-definition/mine.json").toPath(), actualString);
-//                Files.writeString(new File("src/test/resources/ccd-definition/errors.json").toPath(), result.toString());
+                count = 1;
+                for (Map<String, Object> unexpectedValue : unexpected) {
+                    System.out.println(count++);
+                    debugMissingValue(expectedValues, unexpectedValue);
+                }
 
                 throw new RuntimeException("Compare failed for " + expected.getName());
             }
@@ -230,8 +258,52 @@ public class FPLConfigGenerationTests {
                 File f = it.next();
                 System.out.println(f.getPath());
             }
-            throw new RuntimeException(e);
+            throw e;
         }
+    }
+
+    private void debugMissingValue(List<Map<String, Object>> actualValues,
+        Map<String, Object> missingValue) {
+        Map<String, Object> match = getClosest(missingValue, actualValues);
+        System.out.println(pretty(ImmutableSortedMap.copyOf(missingValue)));
+        System.out.println("best match:");
+        System.out.println(pretty(ImmutableSortedMap.copyOf(match)));
+        MapDifference<String, Object> diff = Maps
+            .difference(missingValue, match);
+        if (!diff.entriesOnlyOnLeft().isEmpty()) {
+            System.out.println("Only on left:");
+            System.out.println(diff.entriesOnlyOnLeft());
+        }
+        if (!diff.entriesOnlyOnRight().isEmpty()) {
+            System.out.println("Only on right:");
+            System.out.println(diff.entriesOnlyOnRight());
+        }
+        if (!diff.entriesDiffering().isEmpty()) {
+            System.out.println("Differing values:");
+            System.out.println(diff.entriesDiffering());
+        }
+    }
+
+    private Map<String, Object> getClosest(Map<String, Object> missing, List<Map<String, Object>> expected) {
+        int bestScore = Integer.MAX_VALUE;
+        Map<String, Object> result = null;
+        for (Map<String, Object> e : expected) {
+            MapDifference<String, Object> diff = Maps.difference(missing, e);
+            int score = diff.entriesOnlyOnLeft().size() + diff.entriesOnlyOnRight().size();
+            for (ValueDifference<Object> value : diff.entriesDiffering().values()) {
+              if (value.leftValue() != null && value.rightValue() != null) {
+                  score += StringUtils.getLevenshteinDistance(value.leftValue().toString(),
+                      value.rightValue().toString());
+              }
+            }
+
+            if (score < bestScore) {
+                result = e;
+                bestScore = score;
+            }
+        }
+
+        return result;
     }
 
     @SneakyThrows

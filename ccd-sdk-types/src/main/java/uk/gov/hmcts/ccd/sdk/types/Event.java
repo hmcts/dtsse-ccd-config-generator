@@ -2,8 +2,10 @@ package uk.gov.hmcts.ccd.sdk.types;
 
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.Hashtable;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 import lombok.Builder;
@@ -28,10 +30,11 @@ public class Event<T, R extends Role, S> {
   private String aboutToSubmitURL;
   private String submittedURL;
   private String midEventURL;
-  private String retries;
+  private Map<Webhook, String> retries;
   private boolean explicitGrants;
   private boolean showSummary;
   private boolean showEventNotes;
+  private boolean showSummaryChangeOption;
   private int eventNumber;
 
   public void setEventID(String eventId) {
@@ -81,6 +84,7 @@ public class Event<T, R extends Role, S> {
           .builder(null, dataClass, propertyUtils);
       result.eventNumber = eventCount++;
       result.webhookConvention = convention;
+      result.retries = new HashMap<>();
 
       return result;
     }
@@ -94,6 +98,16 @@ public class Event<T, R extends Role, S> {
       if (description == null) {
         description = n;
       }
+      return this;
+    }
+
+    public EventBuilder<T, R, S> showSummaryChangeOption(boolean b) {
+      this.showSummaryChangeOption = b;
+      return this;
+    }
+
+    public EventBuilder<T, R, S> showSummaryChangeOption() {
+      this.showSummaryChangeOption = true;
       return this;
     }
 
@@ -169,30 +183,50 @@ public class Event<T, R extends Role, S> {
       return this;
     }
 
-    public EventBuilder<T, R, S> aboutToStartWebhook(String eventId) {
+    public EventBuilder<T, R, S> aboutToStartWebhook(String eventId, int... retries) {
       this.customWebhookName = eventId;
-      return aboutToStartWebhook();
+      return aboutToStartWebhook(retries);
     }
 
-    public EventBuilder<T, R, S> aboutToStartWebhook() {
+    public EventBuilder<T, R, S> aboutToStartWebhook(int... retries) {
       // Use snake case event ID by convention
       aboutToStartURL = getWebhookPathByConvention(Webhook.AboutToStart);
+      setRetries(Webhook.AboutToStart, retries);
       return this;
     }
 
-    public EventBuilder<T, R, S> aboutToSubmitWebhook(String eventId) {
+    public EventBuilder<T, R, S> aboutToSubmitWebhook(String eventId, int... retries) {
       this.customWebhookName = eventId;
       aboutToSubmitURL = getWebhookPathByConvention(Webhook.AboutToSubmit);
+      setRetries(Webhook.AboutToSubmit, retries);
       return this;
     }
 
-    public EventBuilder<T, R, S> aboutToSubmitWebhook() {
+    public EventBuilder<T, R, S> aboutToSubmitWebhook(boolean b, int... retries) {
+      if (b) {
+        aboutToSubmitURL = getWebhookPathByConvention(Webhook.AboutToSubmit);
+        setRetries(Webhook.AboutToSubmit, retries);
+      }
+      return this;
+    }
+
+    public EventBuilder<T, R, S> aboutToSubmitWebhook(int... retries) {
       aboutToSubmitURL = getWebhookPathByConvention(Webhook.AboutToSubmit);
+      setRetries(Webhook.AboutToSubmit, retries);
       return this;
     }
 
-    public EventBuilder<T, R, S> submittedWebhook() {
+    public EventBuilder<T, R, S> submittedWebhook(boolean b, int... retries) {
+      if (b) {
+        submittedURL = getWebhookPathByConvention(Webhook.Submitted);
+        setRetries(Webhook.Submitted, retries);
+      }
+      return this;
+    }
+
+    public EventBuilder<T, R, S> submittedWebhook(int... retries) {
       submittedURL = getWebhookPathByConvention(Webhook.Submitted);
+      setRetries(Webhook.Submitted, retries);
       return this;
     }
 
@@ -207,11 +241,20 @@ public class Event<T, R extends Role, S> {
       return this;
     }
 
-    public EventBuilder<T, R, S> retries(Integer... retries) {
-      List<String> strings = Arrays.stream(retries).map(x -> x.toString())
-          .collect(Collectors.toList());
-      this.retries = String.join(",", strings);
+    public EventBuilder<T, R, S> retries(int... retries) {
+      for (Webhook value : Webhook.values()) {
+        setRetries(value, retries);
+      }
+
       return this;
+    }
+
+    private void setRetries(Webhook hook, int... retries) {
+      if (retries.length > 0) {
+        String val = String.join(",", Arrays.stream(retries).mapToObj(String::valueOf).collect(
+            Collectors.toList()));
+        this.retries.put(hook, val);
+      }
     }
 
     private String getWebhookPathByConvention(Webhook hook) {
