@@ -2,11 +2,15 @@ package uk.gov.hmcts.ccd.sdk.types;
 
 import de.cronn.reflection.util.TypedPropertyGetter;
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Hashtable;
 import java.util.List;
+import java.util.Map;
 import java.util.function.Consumer;
 import lombok.Builder;
 import lombok.Data;
 import lombok.ToString;
+import uk.gov.hmcts.ccd.sdk.types.Event.EventBuilder;
 import uk.gov.hmcts.ccd.sdk.types.Field.FieldBuilder;
 
 @Builder
@@ -19,6 +23,9 @@ public class FieldCollection<T, Parent> {
   private List<FieldCollectionBuilder<T, Parent>> complexFields;
   @ToString.Exclude
   private List<Field.FieldBuilder> explicitFields;
+
+  @ToString.Exclude
+  private Map<Object, String> midEventWebhooks;
   private String rootFieldname;
 
   public static class FieldCollectionBuilder<T, Parent> {
@@ -33,15 +40,19 @@ public class FieldCollection<T, Parent> {
     @ToString.Exclude
     private FieldCollectionBuilder<Parent, ?> parent;
     private PropertyUtils propertyUtils;
+    private EventBuilder event;
 
-    public static <T, Parent> FieldCollectionBuilder<T, Parent> builder(
+    public static <T, Parent> FieldCollectionBuilder<T, Parent> builder(EventBuilder event,
         FieldCollectionBuilder<Parent, ?> parent, Class<T> dataClass, PropertyUtils propertyUtils) {
       FieldCollectionBuilder<T, Parent> result = new FieldCollectionBuilder<T, Parent>();
+      result.pageId = 1;
+      result.event = event;
       result.parent = parent;
       result.dataClass = dataClass;
       result.fields = new ArrayList<>();
       result.complexFields = new ArrayList<>();
       result.explicitFields = new ArrayList<>();
+      result.midEventWebhooks = new Hashtable<>();
       result.propertyUtils = propertyUtils;
       return result;
     }
@@ -121,9 +132,6 @@ public class FieldCollection<T, Parent> {
       Field.FieldBuilder<T, Parent> f = Field.FieldBuilder.builder(dataClass, this, propertyUtils);
       f.page(this.pageId);
       f.pageLabel(this.pageLabel);
-      if (this.pageId != null) {
-        f.pageLabel(" ");
-      }
       fields.add(f);
       f.fieldDisplayOrder(++fieldDisplayOrder);
       f.pageFieldDisplayOrder(++order);
@@ -134,6 +142,19 @@ public class FieldCollection<T, Parent> {
     public FieldCollectionBuilder<Parent, ?> done() {
       parent.fieldDisplayOrder = this.fieldDisplayOrder;
       return parent;
+    }
+
+    public FieldCollectionBuilder<T, Parent> midEventWebhook(String eventId) {
+      event.customWebhookName = eventId;
+      String url = event.getWebhookPathByConvention(Webhook.MidEvent);
+      midEventWebhooks.put(this.pageId.toString(), url);
+      return this;
+    }
+
+    public FieldCollectionBuilder<T, Parent> midEventWebhook() {
+      String url = event.getWebhookPathByConvention(Webhook.MidEvent);
+      midEventWebhooks.put(this.pageId.toString(), url);
+      return this;
     }
 
     public <U> FieldCollectionBuilder<T, Parent> complex(TypedPropertyGetter<T, ?> getter,
@@ -158,7 +179,7 @@ public class FieldCollection<T, Parent> {
 
     <U> FieldCollectionBuilder<U, T> complex(String fieldName, Class<U> c) {
       FieldCollectionBuilder<T, Parent> result = (FieldCollectionBuilder<T, Parent>)
-          FieldCollectionBuilder.builder(this, c, propertyUtils);
+          FieldCollectionBuilder.builder(event, this, c, propertyUtils);
       complexFields.add(result);
       result.rootFieldname = fieldName;
       // Nested builders inherit ordering state.

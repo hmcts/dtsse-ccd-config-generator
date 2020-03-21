@@ -50,7 +50,6 @@ public class JsonUtils {
         return true;
       }).findFirst();
       if (!existingMatch.isPresent()) {
-        System.out.println("Adding new field " + generatedField.get(primaryKeys[0]));
         existing.add(generatedField);
       } else {
         Map<String, Object> match = existingMatch.get();
@@ -68,7 +67,6 @@ public class JsonUtils {
   @SneakyThrows
   public static void mergeInto(Path path, List<Map<String, Object>> fields,
       Set<String> overwritesFields, String... primaryKeys) {
-    System.out.println("Merging into " + path.getFileName());
     ObjectMapper mapper = new ObjectMapper();
     List<Map<String, Object>> existing;
     if (path.toFile().exists()) {

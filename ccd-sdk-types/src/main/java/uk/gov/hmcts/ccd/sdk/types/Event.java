@@ -29,7 +29,6 @@ public class Event<T, R extends Role, S> {
   private String aboutToStartURL;
   private String aboutToSubmitURL;
   private String submittedURL;
-  private String midEventURL;
   private Map<Webhook, String> retries;
   private boolean explicitGrants;
   private boolean showSummary;
@@ -81,7 +80,7 @@ public class Event<T, R extends Role, S> {
       result.dataClass = dataClass;
       result.grants = new HashMap<>();
       result.fields = FieldCollection.FieldCollectionBuilder
-          .builder(null, dataClass, propertyUtils);
+          .builder(result, null, dataClass, propertyUtils);
       result.eventNumber = eventCount++;
       result.webhookConvention = convention;
       result.retries = new HashMap<>();
@@ -168,7 +167,7 @@ public class Event<T, R extends Role, S> {
       return this;
     }
 
-    private String customWebhookName;
+    String customWebhookName;
 
     public EventBuilder<T, R, S> allWebhooks() {
       return allWebhooks(this.customWebhookName);
@@ -179,7 +178,6 @@ public class Event<T, R extends Role, S> {
       aboutToStartWebhook();
       aboutToSubmitWebhook();
       submittedWebhook();
-      midEventWebhook();
       return this;
     }
 
@@ -230,17 +228,6 @@ public class Event<T, R extends Role, S> {
       return this;
     }
 
-    public EventBuilder<T, R, S> midEventWebhook(String eventId) {
-      this.customWebhookName = eventId;
-      midEventURL = getWebhookPathByConvention(Webhook.MidEvent);
-      return this;
-    }
-
-    public EventBuilder<T, R, S> midEventWebhook() {
-      midEventURL = getWebhookPathByConvention(Webhook.MidEvent);
-      return this;
-    }
-
     public EventBuilder<T, R, S> retries(int... retries) {
       for (Webhook value : Webhook.values()) {
         setRetries(value, retries);
@@ -257,7 +244,7 @@ public class Event<T, R extends Role, S> {
       }
     }
 
-    private String getWebhookPathByConvention(Webhook hook) {
+    String getWebhookPathByConvention(Webhook hook) {
       String id = customWebhookName != null ? customWebhookName
           : eventId;
       return webhookConvention.buildUrl(hook, id);

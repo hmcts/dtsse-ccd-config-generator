@@ -1,6 +1,7 @@
 package uk.gov.hmcts.ccd.sdk.generator;
 
 import com.google.common.collect.Lists;
+import com.google.common.collect.Maps;
 import java.io.File;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -20,13 +21,12 @@ public class CaseEventToFieldsGenerator {
       if (collection.getFields().size() > 0) {
         List<Map<String, Object>> entries = Lists.newArrayList();
         List<Field.FieldBuilder> fields = collection.getFields();
-        boolean first = true;
         for (Field.FieldBuilder fb : fields) {
-          Map<String, Object> info = JsonUtils.getField("");
+          Map<String, Object> info = Maps.newHashMap();
           entries.add(info);
-          info.remove("ID");
-          info.put("CaseTypeID", "CARE_SUPERVISION_EPO");
+          info.put("LiveFrom", "01/01/2017");
           info.put("CaseEventID", event.getId());
+          info.put("CaseTypeID", "CARE_SUPERVISION_EPO");
           Field field = fb.build();
           info.put("CaseFieldID", field.getId());
           String context =
@@ -40,9 +40,8 @@ public class CaseEventToFieldsGenerator {
             info.put("FieldShowCondition", field.getShowCondition());
           }
 
-          if (first && event.getMidEventURL() != null) {
-            info.put("CallBackURLMidEvent", event.getMidEventURL());
-            first = false;
+          if (collection.getMidEventWebhooks().containsKey(field.getPage())) {
+            info.put("CallBackURLMidEvent", collection.getMidEventWebhooks().remove(field.getPage()));
           }
 
           if (field.isShowSummary()) {
