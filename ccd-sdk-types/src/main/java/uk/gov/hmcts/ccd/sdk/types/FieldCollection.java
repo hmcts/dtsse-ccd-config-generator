@@ -25,14 +25,21 @@ public class FieldCollection<T, Parent> {
   private List<Field.FieldBuilder> explicitFields;
 
   @ToString.Exclude
-  private Map<Object, String> midEventWebhooks;
+  private Map<String, String> midEventWebhooks;
+
+  @ToString.Exclude
+  private Map<String, String> pageShowConditions;
+
+  @ToString.Exclude
+  private Map<String, String> pageLabels;
+
   private String rootFieldname;
 
   public static class FieldCollectionBuilder<T, Parent> {
 
-    private Class dataClass;
+    Class dataClass;
 
-    private Object pageId;
+    private String pageId;
     private int order;
     private int pageDisplayOrder;
     private int fieldDisplayOrder;
@@ -41,11 +48,12 @@ public class FieldCollection<T, Parent> {
     private FieldCollectionBuilder<Parent, ?> parent;
     private PropertyUtils propertyUtils;
     private EventBuilder event;
+    private TypedPropertyGetter<T, ?> getter;
 
     public static <T, Parent> FieldCollectionBuilder<T, Parent> builder(EventBuilder event,
         FieldCollectionBuilder<Parent, ?> parent, Class<T> dataClass, PropertyUtils propertyUtils) {
       FieldCollectionBuilder<T, Parent> result = new FieldCollectionBuilder<T, Parent>();
-      result.pageId = 1;
+      result.pageId = "1";
       result.event = event;
       result.parent = parent;
       result.dataClass = dataClass;
@@ -53,6 +61,8 @@ public class FieldCollection<T, Parent> {
       result.complexFields = new ArrayList<>();
       result.explicitFields = new ArrayList<>();
       result.midEventWebhooks = new Hashtable<>();
+      result.pageShowConditions = new Hashtable<>();
+      result.pageLabels = new Hashtable<>();
       result.propertyUtils = propertyUtils;
       return result;
     }
@@ -108,6 +118,10 @@ public class FieldCollection<T, Parent> {
       return result;
     }
 
+    public <U> FieldBuilder<T, U> field(TypedPropertyGetter<T, U> getter) {
+      return (FieldBuilder<T, U>) field().id(getter);
+    }
+
     public FieldCollectionBuilder<T, Parent> field(TypedPropertyGetter<T, ?> getter,
         DisplayContext context) {
       return field(getter, context, false);
@@ -131,7 +145,6 @@ public class FieldCollection<T, Parent> {
     public Field.FieldBuilder<T, Parent> field() {
       Field.FieldBuilder<T, Parent> f = Field.FieldBuilder.builder(dataClass, this, propertyUtils);
       f.page(this.pageId);
-      f.pageLabel(this.pageLabel);
       fields.add(f);
       f.fieldDisplayOrder(++fieldDisplayOrder);
       f.pageFieldDisplayOrder(++order);
@@ -142,6 +155,11 @@ public class FieldCollection<T, Parent> {
     public FieldCollectionBuilder<Parent, ?> done() {
       parent.fieldDisplayOrder = this.fieldDisplayOrder;
       return parent;
+    }
+
+    public FieldCollectionBuilder<T, Parent> showCondition(String condition) {
+      pageShowConditions.put(this.pageId.toString(), condition);
+      return this;
     }
 
     public FieldCollectionBuilder<T, Parent> midEventWebhook(String eventId) {
@@ -158,6 +176,12 @@ public class FieldCollection<T, Parent> {
     }
 
     public <U> FieldCollectionBuilder<T, Parent> complex(TypedPropertyGetter<T, ?> getter,
+        Class<U> c, Consumer<FieldCollectionBuilder<U, ?>> renderer, boolean showSummary) {
+      renderer.accept(complex(getter, c, showSummary));
+      return this;
+    }
+
+    public <U> FieldCollectionBuilder<T, Parent> complex(TypedPropertyGetter<T, ?> getter,
         Class<U> c, Consumer<FieldCollectionBuilder<U, ?>> renderer) {
       renderer.accept(complex(getter, c));
       return this;
@@ -168,13 +192,18 @@ public class FieldCollection<T, Parent> {
       return complex(getter, c);
     }
 
-    public <U> FieldCollectionBuilder<U, T> complex(TypedPropertyGetter<T, ?> getter, Class<U> c) {
+    public <U> FieldCollectionBuilder<U, T> complex(TypedPropertyGetter<T, ?> getter,
+        Class<U> c, boolean summary) {
       String fieldName = propertyUtils.getPropertyName(dataClass, getter);
       if (null == this.rootFieldname) {
         // Register only the root complex as a field
-        field().id(fieldName).context(DisplayContext.Complex).showSummary(true);
+        field().id(fieldName).context(DisplayContext.Complex).showSummary(summary);
       }
       return complex(fieldName, c);
+    }
+
+    public <U> FieldCollectionBuilder<U, T> complex(TypedPropertyGetter<T, ?> getter, Class<U> c) {
+      return complex(getter, c, true);
     }
 
     <U> FieldCollectionBuilder<U, T> complex(String fieldName, Class<U> c) {
@@ -199,10 +228,15 @@ public class FieldCollection<T, Parent> {
     }
 
     public FieldCollectionBuilder<T, Parent> page(int id) {
-      return this.pageObj(id);
+      return this.pageObj(String.valueOf(id));
     }
 
-    private FieldCollectionBuilder<T, Parent> pageObj(Object id) {
+    public FieldCollectionBuilder<T, Parent> previousPage() {
+      this.pageDisplayOrder--;
+      return this;
+    }
+
+    private FieldCollectionBuilder<T, Parent> pageObj(String id) {
       this.pageId = id;
       this.order = 0;
       this.fieldDisplayOrder = 0;
@@ -210,8 +244,8 @@ public class FieldCollection<T, Parent> {
       return this;
     }
 
-    public FieldCollectionBuilder<T, Parent> pageLabel(String id) {
-      this.pageLabel = id;
+    public FieldCollectionBuilder<T, Parent> pageLabel(String label) {
+      this.pageLabels.put(this.pageId.toString(), label);
       return this;
     }
 

@@ -2,11 +2,13 @@ package uk.gov.hmcts.ccd.sdk.generator;
 
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
+import com.google.common.primitives.Ints;
 import java.io.File;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.List;
 import java.util.Map;
+import org.checkerframework.checker.nullness.qual.Nullable;
 import uk.gov.hmcts.ccd.sdk.JsonUtils;
 import uk.gov.hmcts.ccd.sdk.types.Event;
 import uk.gov.hmcts.ccd.sdk.types.Field;
@@ -33,7 +35,16 @@ public class CaseEventToFieldsGenerator {
               field.getContext() == null ? "COMPLEX" : field.getContext().toString().toUpperCase();
           info.put("DisplayContext", context);
           info.put("PageFieldDisplayOrder", field.getPageFieldDisplayOrder());
-          info.put("PageID", field.getPage() == null ? 1 : field.getPage());
+
+          Object pageId = field.getPage();
+          if (pageId == null) {
+            pageId = 1;
+          } else {
+            Integer id = Ints
+                .tryParse(pageId.toString());
+            pageId = id != null ? id : pageId;
+          }
+          info.put("PageID", pageId);
           info.put("PageDisplayOrder", field.getPageDisplayOrder());
           info.put("PageColumnNumber", 1);
           if (field.getShowCondition() != null) {
@@ -41,15 +52,25 @@ public class CaseEventToFieldsGenerator {
           }
 
           if (collection.getMidEventWebhooks().containsKey(field.getPage())) {
-            info.put("CallBackURLMidEvent", collection.getMidEventWebhooks().remove(field.getPage()));
+            info.put("CallBackURLMidEvent",
+                collection.getMidEventWebhooks().remove(field.getPage()));
+          }
+
+          if (collection.getPageShowConditions().containsKey(field.getPage())) {
+            info.put("PageShowCondition",
+                collection.getPageShowConditions().remove(field.getPage()));
           }
 
           if (field.isShowSummary()) {
             info.put("ShowSummaryChangeOption", "Y");
           }
 
-          if (field.getPageLabel() != null) {
-            info.put("PageLabel", field.getPageLabel());
+          if (collection.getPageLabels().containsKey(field.getPage())) {
+            info.put("PageLabel", collection.getPageLabels().remove(field.getPage()));
+          }
+
+          if (null != field.getCaseEventFieldLabel()) {
+            info.put("CaseEventFieldLabel", field.getCaseEventFieldLabel());
           }
         }
 

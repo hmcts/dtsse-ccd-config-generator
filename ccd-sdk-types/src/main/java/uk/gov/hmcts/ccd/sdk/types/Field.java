@@ -18,24 +18,25 @@ public class Field<T, Parent> {
   String hint;
   DisplayContext context;
   String showCondition;
-  Object page;
+  String page;
+  String caseEventFieldLabel;
   boolean showSummary;
   int fieldDisplayOrder;
   int pageFieldDisplayOrder;
   int pageDisplayOrder;
-  String pageLabel;
   String type;
   String fieldTypeParameter;
   boolean mutable;
   boolean readOnly;
 
-  private Class dataClass;
+  Class dataClass;
   @ToString.Exclude
   private FieldCollection.FieldCollectionBuilder<T, Parent> parent;
 
   public static class FieldBuilder<T, Parent> {
 
     private uk.gov.hmcts.ccd.sdk.types.PropertyUtils propertyUtils;
+    private TypedPropertyGetter<T, ?> getter;
 
     public static <T, Parent> FieldBuilder<T, Parent> builder(Class dataclass,
         FieldCollection.FieldCollectionBuilder<T, ?> parent,
@@ -57,12 +58,38 @@ public class Field<T, Parent> {
       return this;
     }
 
+    public FieldBuilder<T, Parent> showSummary() {
+      this.showSummary = true;
+      return this;
+    }
+
+    public FieldBuilder<T, Parent> showSummary(boolean b) {
+      this.showSummary = b;
+      return this;
+    }
+
+    public FieldCollectionBuilder<Parent, T> complex() {
+      Class c = propertyUtils.getPropertyType(dataClass, getter);
+      return parent.complex(this.id, c);
+    }
+
+    public <U> FieldCollectionBuilder<U, T> complex(Class<U> c) {
+      return parent.complex(this.id, c);
+    }
+
+    public <U> FieldCollectionBuilder<T, Parent> complex(Class<U> c,
+        Consumer<FieldCollectionBuilder<U, ?>> renderer) {
+      renderer.accept(parent.complex(this.id, c));
+      return parent;
+    }
+
     public FieldBuilder<T, Parent> id(String id) {
       this.id = id;
       return this;
     }
 
     public FieldBuilder<T, Parent> id(TypedPropertyGetter<T, ?> getter) {
+      this.getter = getter;
       id = propertyUtils.getPropertyName(dataClass, getter);
 
       CCD cf = propertyUtils.getAnnotationOfProperty(dataClass, getter, CCD.class);
@@ -82,14 +109,5 @@ public class Field<T, Parent> {
       return this;
     }
 
-    public <U> FieldCollectionBuilder<U, T> complex(Class<U> c) {
-      return parent.complex(this.id, c);
-    }
-
-    public <U> FieldCollectionBuilder<T, Parent> complex(Class<U> c,
-        Consumer<FieldCollectionBuilder<U, ?>> renderer) {
-      renderer.accept(parent.complex(this.id, c));
-      return parent;
-    }
   }
 }

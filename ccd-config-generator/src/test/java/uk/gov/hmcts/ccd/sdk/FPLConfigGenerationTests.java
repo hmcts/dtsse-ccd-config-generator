@@ -183,11 +183,22 @@ public class FPLConfigGenerationTests {
         URL u = Resources.getResource("ccd-definition/" + folder);
         File dir = new File(u.getPath());
         assert dir.exists();
+        int succ = 0, failed = 0;
         for (Iterator<File> it = FileUtils.iterateFiles(dir, TrueFileFilter.INSTANCE, TrueFileFilter.INSTANCE); it.hasNext(); ) {
             File expected = it.next();
             Path path = dir.toPath().relativize(expected.toPath());
             Path actual = prodConfig.resolve(folder).resolve(path);
-            assertEquals(expected, actual.toFile());
+            try {
+                assertEquals(expected, actual.toFile());
+                succ++;
+            } catch (Exception r) {
+                failed++;
+            }
+        }
+        System.out.println("DONE " + succ);
+        System.out.println("TODO " + failed);
+        if (failed > 0) {
+            throw new RuntimeException();
         }
     }
 
@@ -201,9 +212,14 @@ public class FPLConfigGenerationTests {
 
     @SneakyThrows
     private void assertEquals(File expected, File actual) {
+        if (expected.getName().contains("nonprod")) {
+            return;
+        }
         try {
             String expectedString = FileUtils.readFileToString(expected, Charset.defaultCharset());
             String actualString = FileUtils.readFileToString(actual, Charset.defaultCharset());
+            expectedString = stripComments(expectedString);
+            actualString = stripComments(actualString);
             JSONCompareResult result = JSONCompare.compareJSON(expectedString, actualString, JSONCompareMode.NON_EXTENSIBLE);
             if (result.failed()) {
                 System.out.println("Failed comparing " + expected.getName() + " to " + actual.getName());
@@ -256,6 +272,15 @@ public class FPLConfigGenerationTests {
             }
             throw e;
         }
+    }
+
+    private String stripComments(String json) {
+        List<Map<String, Object>> entries = fromJSON(json);
+        for (Map<String, Object> entry : entries) {
+            entry.remove("Comment");
+        }
+
+        return JsonUtils.serialise(entries);
     }
 
     private void debugMissingValue(List<Map<String, Object>> actualValues,
