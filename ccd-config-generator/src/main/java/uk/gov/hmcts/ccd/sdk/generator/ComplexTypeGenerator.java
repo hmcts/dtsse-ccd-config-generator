@@ -35,7 +35,9 @@ public class ComplexTypeGenerator {
 
       for (Map<String, Object> info : fields) {
         info.put("ListElementCode", info.get("ID"));
-        info.put("ElementLabel", info.remove("Label"));
+        if (info.containsKey("Label")) {
+          info.put("ElementLabel", info.remove("Label"));
+        }
         info.put("ID", id);
         info.remove("CaseTypeID");
       }

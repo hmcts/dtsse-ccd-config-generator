@@ -59,6 +59,7 @@ public class FPLConfigGenerationTests {
         FileUtils.copyDirectory(resRoot.resolve("FixedLists").toFile(), prodConfig.resolve("FixedLists").toFile());
         FileUtils.copyDirectory(resRoot.resolve("CaseEventToComplexTypes").toFile(), prodConfig.resolve("CaseEventToComplexTypes").toFile());
 
+        copyResourceToOutput("CaseField.json");
         copyResourceToOutput("FixedLists/ProceedingType.json");
         copyResourceToOutput("FixedLists/OrderStatus.json");
         copyResourceToOutput("FixedLists/DirectionAssignee.json");
@@ -150,7 +151,6 @@ public class FPLConfigGenerationTests {
         assertGeneratedFolderMatchesResource("CaseEventToComplexTypes");
     }
 
-    @Ignore
     @Test
     public void generatesCaseField() {
         assertEquals("CaseField.json");

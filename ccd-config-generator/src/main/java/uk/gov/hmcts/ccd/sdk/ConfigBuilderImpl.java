@@ -24,7 +24,7 @@ import uk.gov.hmcts.ccd.sdk.types.WorkBasket.WorkBasketBuilder;
 
 public class ConfigBuilderImpl<T, S, R extends Role> implements ConfigBuilder<T, S, R> {
 
-  public String caseType;
+  public String caseType = "";
   public final Table<String, String, String> stateRoles = HashBasedTable.create();
   public final Multimap<String, String> stateRoleblacklist = ArrayListMultimap.create();
   public final Table<String, String, String> explicit = HashBasedTable.create();

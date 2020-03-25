@@ -12,6 +12,7 @@ import java.lang.reflect.ParameterizedType;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Collection;
+import java.util.Hashtable;
 import java.util.List;
 import java.util.Map;
 import net.jodah.typetools.TypeResolver;
@@ -28,7 +29,7 @@ public class CaseFieldGenerator {
 
   // The field type set from code always takes precedence,
   // so eg. if a field changes type it gets updated.
-  private static final ImmutableSet<String> OVERWRITES_FIELDS = ImmutableSet.of("FieldType");
+  private static final ImmutableSet<String> OVERWRITES_FIELDS = ImmutableSet.of();
 
   public static void generateCaseFields(File outputFolder, String caseTypeId, Class dataClass,
       List<Event> events, ConfigBuilderImpl builder) {
@@ -188,10 +189,14 @@ public class CaseFieldGenerator {
         continue;
       }
       result.add(fieldData);
-      fieldData.put("Label", field.getLabel());
+      if (field.getLabel() != null) {
+        fieldData.put("Label", field.getLabel());
+      }
       String type = field.getType() == null ? "Label" : field.getType();
       fieldData.put("FieldType", type);
-      fieldData.put("FieldTypeParameter", field.getFieldTypeParameter());
+      if (field.getFieldTypeParameter() != null) {
+        fieldData.put("FieldTypeParameter", field.getFieldTypeParameter());
+      }
     }
 
     List<Map<String, Object>> fs = builder.explicitFields;
@@ -205,7 +210,7 @@ public class CaseFieldGenerator {
   }
 
   public static Map<String, Object> getField(String caseType, String id) {
-    Map<String, Object> result = Maps.newHashMap();
+    Map<String, Object> result = new Hashtable<>();
     result.put("LiveFrom", "01/01/2017");
     result.put("CaseTypeID", caseType);
     result.put("ID", id);
