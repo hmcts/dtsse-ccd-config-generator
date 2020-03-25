@@ -32,6 +32,8 @@ public class CaseTypeTabGenerator {
             tab.getLabel(), tabDisplayOrder, tabFieldDisplayOrder++);
         if (tab.getShowCondition() != null) {
           field.put("TabShowCondition", tab.getShowCondition());
+          // Only set tab show condition on first field.
+          tab.setShowCondition(null);
         }
         if (tabField.getShowCondition() != null) {
           field.put("FieldShowCondition", tabField.getShowCondition());
@@ -41,8 +43,12 @@ public class CaseTypeTabGenerator {
       ++tabDisplayOrder;
     }
 
-    Path output = Paths.get(root.getPath(), "CaseTypeTab.json");
-    JsonUtils.mergeInto(output, result,"TabID", "CaseFieldID");
+    Path tabDir = Paths.get(root.getPath(), "CaseTypeTab");
+    tabDir.toFile().mkdirs();
+    for (Map<String, Object> tab : result) {
+      Path output = tabDir.resolve(tab.get("TabDisplayOrder") + "_" + tab.get("TabID") + ".json");
+      JsonUtils.mergeInto(output, Lists.newArrayList(tab),"TabID", "CaseFieldID");
+    }
   }
 
   private static Map<String, Object> buildField(String caseType, String tabId, String fieldId,

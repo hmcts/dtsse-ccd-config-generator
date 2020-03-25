@@ -73,8 +73,8 @@ public abstract class BaseCCDConfig<Model, State,
     builder.setEnvironment(env);
   }
 
-  public TabBuilder<Model> tab(String caseHistory, String history) {
-    return builder.tab(caseHistory, history);
+  public TabBuilder<Model> tab(String tabId, String tabLabel) {
+    return builder.tab(tabId, tabLabel);
   }
 
   @Override

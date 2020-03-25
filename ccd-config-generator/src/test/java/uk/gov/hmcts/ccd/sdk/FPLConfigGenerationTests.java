@@ -112,10 +112,10 @@ public class FPLConfigGenerationTests {
         assertEquals("AuthorisationCaseField/caseworker-publiclaw-solicitor.json");
     }
 
-    @Ignore
     @Test
     public void generatesCaseTypeTab() {
-        assertEquals("CaseTypeTab.json");
+        assertResourceFolderMatchesGenerated("CaseTypeTab");
+        assertGeneratedFolderMatchesResource("CaseTypeTab");
     }
 
     @Test
