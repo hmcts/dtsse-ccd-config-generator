@@ -45,6 +45,7 @@ public class Field<T, Parent> {
       result.dataClass = dataclass;
       result.parent = parent;
       result.propertyUtils = propertyUtils;
+      result.context = DisplayContext.Complex;
       return result;
     }
 

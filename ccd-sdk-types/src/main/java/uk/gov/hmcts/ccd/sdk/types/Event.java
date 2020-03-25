@@ -35,6 +35,8 @@ public class Event<T, R extends Role, S> {
   private boolean showEventNotes;
   private boolean showSummaryChangeOption;
   private int eventNumber;
+  @Builder.Default
+  private String namespace = "";
 
   public void setEventID(String eventId) {
     this.eventId = eventId;

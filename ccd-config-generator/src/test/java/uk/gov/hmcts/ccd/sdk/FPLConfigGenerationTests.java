@@ -57,6 +57,7 @@ public class FPLConfigGenerationTests {
         FileUtils.copyDirectory(resRoot.resolve("ComplexTypes").toFile(), prodConfig.resolve("ComplexTypes").toFile());
 //        FileUtils.copyDirectory(resRoot.resolve("AuthorisationCaseField").toFile(), prodConfig.resolve("AuthorisationCaseField").toFile());
         FileUtils.copyDirectory(resRoot.resolve("FixedLists").toFile(), prodConfig.resolve("FixedLists").toFile());
+        FileUtils.copyDirectory(resRoot.resolve("CaseEventToComplexTypes").toFile(), prodConfig.resolve("CaseEventToComplexTypes").toFile());
 
         copyResourceToOutput("FixedLists/ProceedingType.json");
         copyResourceToOutput("FixedLists/OrderStatus.json");
@@ -132,7 +133,6 @@ public class FPLConfigGenerationTests {
         assertGeneratedFolderMatchesResource("ComplexTypes");
     }
 
-//    @Ignore
     @Test
     public void generatesAllCaseEventToField() {
         assertResourceFolderMatchesGenerated("CaseEventToFields");
@@ -144,10 +144,10 @@ public class FPLConfigGenerationTests {
         assertGeneratedFolderMatchesResource("CaseEvent");
     }
 
-    @Ignore
     @Test
     public void generatesAllCaseEventToComplexTypes() {
         assertResourceFolderMatchesGenerated("CaseEventToComplexTypes");
+        assertGeneratedFolderMatchesResource("CaseEventToComplexTypes");
     }
 
     @Ignore
@@ -173,9 +173,11 @@ public class FPLConfigGenerationTests {
         File dir = prodConfig.resolve(folder).toFile();
         for (Iterator<File> it = FileUtils.iterateFiles(dir, TrueFileFilter.INSTANCE, TrueFileFilter.INSTANCE); it.hasNext(); ) {
             File expected = it.next();
-            Path path = dir.toPath().relativize(expected.toPath());
-            Path actual = resourceDir.toPath().resolve(path);
-            assertEquals(expected, actual.toFile());
+            if (expected.getName().endsWith(".json")) {
+                Path path = dir.toPath().relativize(expected.toPath());
+                Path actual = resourceDir.toPath().resolve(path);
+                assertEquals(expected, actual.toFile());
+            }
         }
     }
 
@@ -186,13 +188,15 @@ public class FPLConfigGenerationTests {
         int succ = 0, failed = 0;
         for (Iterator<File> it = FileUtils.iterateFiles(dir, TrueFileFilter.INSTANCE, TrueFileFilter.INSTANCE); it.hasNext(); ) {
             File expected = it.next();
-            Path path = dir.toPath().relativize(expected.toPath());
-            Path actual = prodConfig.resolve(folder).resolve(path);
-            try {
+            if (expected.getName().endsWith(".json")) {
+                Path path = dir.toPath().relativize(expected.toPath());
+                Path actual = prodConfig.resolve(folder).resolve(path);
+//            try {
                 assertEquals(expected, actual.toFile());
-                succ++;
-            } catch (Exception r) {
-                failed++;
+//                succ++;
+//            } catch (Exception r) {
+//                failed++;
+//            }
             }
         }
         System.out.println("DONE " + succ);
@@ -218,8 +222,8 @@ public class FPLConfigGenerationTests {
         try {
             String expectedString = FileUtils.readFileToString(expected, Charset.defaultCharset());
             String actualString = FileUtils.readFileToString(actual, Charset.defaultCharset());
-            expectedString = stripComments(expectedString);
-            actualString = stripComments(actualString);
+            expectedString = stripIrrelevant(expectedString);
+            actualString = stripIrrelevant(actualString);
             JSONCompareResult result = JSONCompare.compareJSON(expectedString, actualString, JSONCompareMode.NON_EXTENSIBLE);
             if (result.failed()) {
                 System.out.println("Failed comparing " + expected.getName() + " to " + actual.getName());
@@ -274,10 +278,13 @@ public class FPLConfigGenerationTests {
         }
     }
 
-    private String stripComments(String json) {
+    private String stripIrrelevant(String json) {
         List<Map<String, Object>> entries = fromJSON(json);
         for (Map<String, Object> entry : entries) {
             entry.remove("Comment");
+            if (" ".equals(entry.get("EventElementLabel"))) {
+                entry.remove("EventElementLabel");
+            }
         }
 
         return JsonUtils.serialise(entries);

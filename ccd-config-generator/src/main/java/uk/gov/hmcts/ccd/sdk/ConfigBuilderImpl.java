@@ -152,13 +152,15 @@ public class ConfigBuilderImpl<T, S, R extends Role> implements ConfigBuilder<T,
         event.setPreState(cell.getRowKey());
         event.setPostState(cell.getColumnKey());
         if (result.containsKey(event.getId())) {
-          String stateSpecificId =
-              event.getEventID() + statePrefixes.getOrDefault(cell.getColumnKey(), "") + cell
+          String namespace = statePrefixes.getOrDefault(cell.getColumnKey(), "") + cell
                   .getColumnKey();
+          String stateSpecificId =
+              event.getEventID() + namespace;
           if (result.containsKey(stateSpecificId)) {
             throw new RuntimeException("Duplicate event:" + stateSpecificId);
           }
           event.setId(stateSpecificId);
+          event.setNamespace(namespace);
         }
         if (event.getPreState().isEmpty()) {
           event.setPreState(null);
