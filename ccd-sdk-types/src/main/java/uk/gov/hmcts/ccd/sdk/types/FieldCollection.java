@@ -154,7 +154,6 @@ public class FieldCollection<Type, Parent> {
     }
 
     public FieldCollectionBuilder<Parent, ?> done() {
-      parent.fieldDisplayOrder = this.fieldDisplayOrder;
       return parent;
     }
 
