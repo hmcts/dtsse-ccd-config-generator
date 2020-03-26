@@ -249,5 +249,8 @@ public class FieldCollection<T, Parent> {
       return this;
     }
 
+    public EventBuilder<T, ?, ?> eventBuilder() {
+      return event;
+    }
   }
 }

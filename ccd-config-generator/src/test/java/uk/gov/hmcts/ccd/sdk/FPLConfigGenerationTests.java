@@ -156,7 +156,6 @@ public class FPLConfigGenerationTests {
         assertEquals("CaseField.json");
     }
 
-    @Ignore
     @Test
     public void generatesAuthorisationCaseEvent() {
         assertEquals("AuthorisationCaseEvent/AuthorisationCaseEvent.json");

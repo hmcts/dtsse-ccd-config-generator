@@ -71,6 +71,9 @@ public class Event<T, R extends Role, S> {
   private Class dataClass;
   private static int eventCount;
 
+  public boolean isForAllStates() {
+    return "*".equals(preState);
+  }
 
   public static class EventBuilder<T, R extends Role, S> {
 
@@ -133,31 +136,9 @@ public class Event<T, R extends Role, S> {
       return this;
     }
 
-    EventBuilder<T, R, S> forStates(S... states) {
-      return forState(states[0]);
-    }
-
-    protected EventBuilder<T, R, S> forState(String state) {
-      this.preState = state;
-      this.postState = state;
-      return this;
-    }
-
     EventBuilder<T, R, S> forState(S state) {
       this.preState = state.toString();
       this.postState = state.toString();
-      return this;
-    }
-
-    EventBuilder<T, R, S> postState(S state) {
-      this.postState = state.toString();
-      return this;
-    }
-
-    EventBuilder<T, R, S> preState(S state) {
-      if (null != state) {
-        this.preState = state.toString();
-      }
       return this;
     }
 

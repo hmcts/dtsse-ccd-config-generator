@@ -7,11 +7,9 @@ import com.google.common.collect.HashBasedTable;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Multimap;
-import com.google.common.collect.Sets;
 import com.google.common.collect.Table;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import uk.gov.hmcts.ccd.sdk.types.ConfigBuilder;
 import uk.gov.hmcts.ccd.sdk.types.Event;
 import uk.gov.hmcts.ccd.sdk.types.EventTypeBuilder;
@@ -25,7 +23,7 @@ import uk.gov.hmcts.ccd.sdk.types.WorkBasket.WorkBasketBuilder;
 public class ConfigBuilderImpl<T, S, R extends Role> implements ConfigBuilder<T, S, R> {
 
   public String caseType = "";
-  public final Table<String, String, String> stateRoles = HashBasedTable.create();
+  public final Table<String, String, String> stateRolePermissions = HashBasedTable.create();
   public final Multimap<String, String> stateRoleblacklist = ArrayListMultimap.create();
   public final Table<String, String, String> explicit = HashBasedTable.create();
   public final Map<String, String> statePrefixes = Maps.newHashMap();
@@ -71,7 +69,7 @@ public class ConfigBuilderImpl<T, S, R extends Role> implements ConfigBuilder<T,
 
   @Override
   public void grant(S state, String permissions, R role) {
-    stateRoles.put(state.toString(), role.getRole(), permissions);
+    stateRolePermissions.put(state.toString(), role.getRole(), permissions);
   }
 
   @Override

@@ -1,6 +1,7 @@
 package uk.gov.hmcts.ccd.sdk;
 
 import com.google.common.base.Strings;
+import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Table;
 import java.io.File;
@@ -152,10 +153,16 @@ public class ConfigGenerator {
     for (Event event : events) {
       // Add any state based role permissions unless event permits only explicit grants.
       if (!event.isExplicitGrants()) {
-        Map<String, String> roles = builder.stateRoles.row(event.getPostState());
-        for (String role : roles.keySet()) {
-          if (!builder.stateRoleblacklist.containsEntry(event.getPostState(), role)) {
-            eventRolePermissions.put(event.getId(), role, roles.get(role));
+        // If Event is for all states, then apply each state's state level permissions.
+        Set<String> keys = event.isForAllStates()
+            ? builder.stateRolePermissions.rowKeySet()
+            : ImmutableSet.of(event.getPostState());
+        for (String key : keys) {
+          Map<String, String> roles = builder.stateRolePermissions.row(key);
+          for (String role : roles.keySet()) {
+            if (!builder.stateRoleblacklist.containsEntry(event.getPostState(), role)) {
+              eventRolePermissions.put(event.getId(), role, roles.get(role));
+            }
           }
         }
       }
@@ -163,9 +170,7 @@ public class ConfigGenerator {
       Map<String, String> grants = event.getGrants();
       for (String role : grants.keySet()) {
         if (!builder.stateRoleblacklist.containsEntry(event.getPostState(), role)) {
-          if (!eventRolePermissions.contains(event.getId(), role)) {
-            eventRolePermissions.put(event.getId(), role, grants.get(role));
-          }
+          eventRolePermissions.put(event.getId(), role, grants.get(role));
         }
       }
     }
