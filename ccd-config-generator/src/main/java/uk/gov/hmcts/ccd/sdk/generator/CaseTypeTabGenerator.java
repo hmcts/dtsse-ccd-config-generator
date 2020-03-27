@@ -9,6 +9,7 @@ import java.util.List;
 import java.util.Map;
 import uk.gov.hmcts.ccd.sdk.ConfigBuilderImpl;
 import uk.gov.hmcts.ccd.sdk.JsonUtils;
+import uk.gov.hmcts.ccd.sdk.JsonUtils.AddMissing;
 import uk.gov.hmcts.ccd.sdk.types.Role;
 import uk.gov.hmcts.ccd.sdk.types.Tab;
 import uk.gov.hmcts.ccd.sdk.types.Tab.TabBuilder;
@@ -47,7 +48,8 @@ public class CaseTypeTabGenerator {
     tabDir.toFile().mkdirs();
     for (Map<String, Object> tab : result) {
       Path output = tabDir.resolve(tab.get("TabDisplayOrder") + "_" + tab.get("TabID") + ".json");
-      JsonUtils.mergeInto(output, Lists.newArrayList(tab),"TabID", "CaseFieldID");
+      JsonUtils.mergeInto(output, Lists.newArrayList(tab), new AddMissing(),
+          "TabID", "CaseFieldID");
     }
   }
 

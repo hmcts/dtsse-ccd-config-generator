@@ -8,8 +8,8 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.List;
 import java.util.Map;
-import org.checkerframework.checker.nullness.qual.Nullable;
 import uk.gov.hmcts.ccd.sdk.JsonUtils;
+import uk.gov.hmcts.ccd.sdk.JsonUtils.AddMissing;
 import uk.gov.hmcts.ccd.sdk.types.Event;
 import uk.gov.hmcts.ccd.sdk.types.Field;
 import uk.gov.hmcts.ccd.sdk.types.FieldCollection;
@@ -78,7 +78,7 @@ public class CaseEventToFieldsGenerator {
         folder.mkdir();
 
         Path output = Paths.get(folder.getPath(), event.getId() + ".json");
-        JsonUtils.mergeInto(output, entries, "CaseFieldID");
+        JsonUtils.mergeInto(output, entries, new AddMissing(), "CaseFieldID");
       }
     }
   }

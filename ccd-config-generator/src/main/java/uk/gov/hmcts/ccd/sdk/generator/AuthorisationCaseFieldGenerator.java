@@ -13,6 +13,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import uk.gov.hmcts.ccd.sdk.JsonUtils;
+import uk.gov.hmcts.ccd.sdk.JsonUtils.AddMissing;
 import uk.gov.hmcts.ccd.sdk.types.Event;
 import uk.gov.hmcts.ccd.sdk.types.Field;
 import uk.gov.hmcts.ccd.sdk.types.Tab;
@@ -95,7 +96,7 @@ public class AuthorisationCaseFieldGenerator {
       }
 
       Path output = Paths.get(folder.getPath(), role + ".json");
-      JsonUtils.mergeInto(output, permissions, "CaseFieldID", "UserRole");
+      JsonUtils.mergeInto(output, permissions, new AddMissing(), "CaseFieldID", "UserRole");
     }
   }
 }

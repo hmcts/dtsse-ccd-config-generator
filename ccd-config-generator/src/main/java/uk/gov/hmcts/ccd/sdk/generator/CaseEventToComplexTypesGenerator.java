@@ -10,6 +10,7 @@ import java.nio.file.Paths;
 import java.util.List;
 import java.util.Map;
 import uk.gov.hmcts.ccd.sdk.JsonUtils;
+import uk.gov.hmcts.ccd.sdk.JsonUtils.AddMissing;
 import uk.gov.hmcts.ccd.sdk.types.Event;
 import uk.gov.hmcts.ccd.sdk.types.Field;
 import uk.gov.hmcts.ccd.sdk.types.FieldCollection;
@@ -33,7 +34,7 @@ public class CaseEventToComplexTypesGenerator {
         for (String fieldID : entriesByCaseField.keySet()) {
           Path output = Paths.get(folder.getPath(), fieldID + event.getNamespace() + ".json");
           JsonUtils.mergeInto(output, entriesByCaseField.get(fieldID),
-              "CaseEventID", "CaseFieldID", "ListElementCode");
+              new AddMissing(), "CaseEventID", "CaseFieldID", "ListElementCode");
         }
       }
     }

@@ -59,6 +59,7 @@ public class FPLConfigGenerationTests {
         FileUtils.copyDirectory(resRoot.resolve("FixedLists").toFile(), prodConfig.resolve("FixedLists").toFile());
         FileUtils.copyDirectory(resRoot.resolve("CaseEventToComplexTypes").toFile(), prodConfig.resolve("CaseEventToComplexTypes").toFile());
 
+        copyResourceToOutput("AuthorisationCaseState.json");
         copyResourceToOutput("CaseField.json");
         copyResourceToOutput("FixedLists/ProceedingType.json");
         copyResourceToOutput("FixedLists/OrderStatus.json");
@@ -82,7 +83,6 @@ public class FPLConfigGenerationTests {
         FileUtils.copyFile(resRoot.resolve(path).toFile(), dest);
     }
 
-    @Ignore
     @Test
     public void generatesAuthorisationCaseState() {
         assertEquals("AuthorisationCaseState.json");
@@ -264,6 +264,9 @@ public class FPLConfigGenerationTests {
                     debugMissingValue(expectedValues, unexpectedValue);
                 }
 
+                System.out.println("ACTUAL count:" + actualValues.size());
+                System.out.println("ACTUAL:");
+                System.out.println(actualString);
                 throw new RuntimeException("Compare failed for " + expected.getName());
             }
 

@@ -13,6 +13,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import lombok.AllArgsConstructor;
 import lombok.SneakyThrows;
 
 public class JsonUtils {
@@ -37,8 +38,8 @@ public class JsonUtils {
     return field;
   }
 
-  public static List<Map<String, Object>> mergeInto(List<Map<String, Object>> existing,
-      List<Map<String, Object>> generated, Set<String> overwriteFields, String... primaryKeys) {
+  static List<Map<String, Object>> mergeInto(List<Map<String, Object>> existing,
+      List<Map<String, Object>> generated, JsonMerger merger, String... primaryKeys) {
     for (Map<String, Object> generatedField : generated) {
       Optional<Map<String, Object>> existingMatch = existing.stream().filter(x -> {
         for (String primaryKey : primaryKeys) {
@@ -49,13 +50,18 @@ public class JsonUtils {
 
         return true;
       }).findFirst();
+
       if (!existingMatch.isPresent()) {
         existing.add(generatedField);
       } else {
         Map<String, Object> match = existingMatch.get();
         for (String generatedKey : generatedField.keySet()) {
-          if (!match.containsKey(generatedKey) || overwriteFields.contains(generatedKey)) {
+          if (!match.containsKey(generatedKey)) {
             match.put(generatedKey, generatedField.get(generatedKey));
+          } else {
+            match.put(generatedKey,
+                merger.merge(generatedKey, match.get(generatedKey),
+                    generatedField.get(generatedKey)));
           }
         }
       }
@@ -66,7 +72,7 @@ public class JsonUtils {
 
   @SneakyThrows
   public static void mergeInto(Path path, List<Map<String, Object>> fields,
-      Set<String> overwritesFields, String... primaryKeys) {
+      JsonMerger merger, String... primaryKeys) {
     ObjectMapper mapper = new ObjectMapper();
     List<Map<String, Object>> existing;
     if (path.toFile().exists()) {
@@ -77,15 +83,29 @@ public class JsonUtils {
       existing = Lists.newArrayList();
     }
 
-    mergeInto(existing, fields, overwritesFields, primaryKeys);
+    mergeInto(existing, fields, merger, primaryKeys);
 
     writeFile(path, serialise(existing));
   }
 
-  public static void mergeInto(Path path, List<Map<String, Object>> fields, String... primaryKeys) {
-    if (primaryKeys.length == 0) {
-      throw new RuntimeException("No primary keys!");
+  @FunctionalInterface
+  public interface JsonMerger {
+    Object merge(String key, Object existingValue, Object generatedValue);
+  }
+
+  @AllArgsConstructor
+  public static  class OverwriteSpecific implements JsonMerger {
+    private Set<String> overwriteKeys;
+
+    @Override
+    public Object merge(String key, Object existingValue, Object generatedValue) {
+      return overwriteKeys.contains(key) ? generatedValue : existingValue;
     }
-    mergeInto(path, fields, Sets.newHashSet(), primaryKeys);
+  }
+
+  public static class AddMissing extends OverwriteSpecific {
+    public AddMissing() {
+      super(Sets.newHashSet());
+    }
   }
 }

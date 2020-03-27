@@ -8,6 +8,7 @@ import java.nio.file.Paths;
 import java.util.List;
 import java.util.Map;
 import uk.gov.hmcts.ccd.sdk.JsonUtils;
+import uk.gov.hmcts.ccd.sdk.JsonUtils.AddMissing;
 import uk.gov.hmcts.ccd.sdk.types.HasLabel;
 
 public class FixedListGenerator {
@@ -36,7 +37,7 @@ public class FixedListGenerator {
         }
 
         Path path = Paths.get(dir.getPath(), c.getSimpleName() + ".json");
-        JsonUtils.mergeInto(path, fields, "ListElementCode");
+        JsonUtils.mergeInto(path, fields, new AddMissing(), "ListElementCode");
       }
     }
   }

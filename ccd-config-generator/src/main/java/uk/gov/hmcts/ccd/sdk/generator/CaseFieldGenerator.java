@@ -19,6 +19,7 @@ import net.jodah.typetools.TypeResolver;
 import org.reflections.ReflectionUtils;
 import uk.gov.hmcts.ccd.sdk.ConfigBuilderImpl;
 import uk.gov.hmcts.ccd.sdk.JsonUtils;
+import uk.gov.hmcts.ccd.sdk.JsonUtils.OverwriteSpecific;
 import uk.gov.hmcts.ccd.sdk.types.CCD;
 import uk.gov.hmcts.ccd.sdk.types.ComplexType;
 import uk.gov.hmcts.ccd.sdk.types.Event;
@@ -43,7 +44,7 @@ public class CaseFieldGenerator {
     fields.addAll(getExplicitFields(caseTypeId, events, builder));
 
     Path path = Paths.get(outputFolder.getPath(), "CaseField.json");
-    JsonUtils.mergeInto(path, fields, OVERWRITES_FIELDS, "ID");
+    JsonUtils.mergeInto(path, fields, new OverwriteSpecific(OVERWRITES_FIELDS), "ID");
   }
 
   public static List<Map<String, Object>> toComplex(Class dataClass, String caseTypeId) {

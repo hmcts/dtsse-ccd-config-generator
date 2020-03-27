@@ -1,7 +1,6 @@
 package uk.gov.hmcts.ccd.sdk.generator;
 
 import com.google.common.collect.HashBasedTable;
-import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Ordering;
@@ -18,9 +17,11 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.stream.Collectors;
 import uk.gov.hmcts.ccd.sdk.JsonUtils;
+import uk.gov.hmcts.ccd.sdk.JsonUtils.JsonMerger;
 import uk.gov.hmcts.ccd.sdk.types.Event;
 
 public class AuthorisationCaseStateGenerator {
+
   public static void generate(File root, String caseType, List<Event> events,
       Table<String, String, String> eventRolePermissions) {
 
@@ -51,6 +52,10 @@ public class AuthorisationCaseStateGenerator {
       if (stateRolePermission.getRowKey().equals("*")) {
         continue;
       }
+      if (stateRolePermission.getColumnKey().matches("\\[.*?\\]")) {
+        // Ignore CCD roles.
+        continue;
+      }
       Map<String, Object> permission = Maps.newHashMap();
       result.add(permission);
       permission.put("CaseTypeID", caseType);
@@ -62,8 +67,21 @@ public class AuthorisationCaseStateGenerator {
       permission.put("CRUD", perm.stream().map(String::valueOf).collect(Collectors.joining()));
     }
 
+    JsonMerger merger = (key, existing, generated) -> {
+      if (!key.equals("CRUD")) {
+        return existing;
+      }
+      String existingPermissions = existing.toString() + generated.toString();
+      // Remove any dupes.
+      existingPermissions = Sets.newHashSet(Chars.asList(existingPermissions.toCharArray()))
+          .stream().map(String::valueOf).collect(Collectors.joining());
+
+      List<Character> perm = Chars.asList(existingPermissions.toCharArray());
+      Collections.sort(perm, Ordering.explicit('C', 'R', 'U', 'D'));
+      return perm.stream().map(String::valueOf).collect(Collectors.joining());
+    };
     Path output = Paths.get(root.getPath(), "AuthorisationCaseState.json");
-    JsonUtils.mergeInto(output, result, ImmutableSet.of("CRUD"), "CaseStateID", "UserRole");
+    JsonUtils.mergeInto(output, result, merger, "CaseStateID", "UserRole");
 
   }
 

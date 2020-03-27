@@ -12,6 +12,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import uk.gov.hmcts.ccd.sdk.JsonUtils;
+import uk.gov.hmcts.ccd.sdk.JsonUtils.AddMissing;
 import uk.gov.hmcts.ccd.sdk.types.Event;
 import uk.gov.hmcts.ccd.sdk.types.Webhook;
 
@@ -35,7 +36,7 @@ public class CaseEventGenerator {
       Ordering<Event> ordering = Ordering.natural().onResultOf(x -> x.getEventNumber());
       JsonUtils.mergeInto(output, serialise(caseType,
           ordering.sortedCopy(eventsByState.get(state))),
-          "ID");
+          new AddMissing(), "ID");
     }
   }
 
