@@ -14,14 +14,14 @@ import java.util.Map;
 import uk.gov.hmcts.ccd.sdk.types.ConfigBuilder;
 import uk.gov.hmcts.ccd.sdk.types.Event;
 import uk.gov.hmcts.ccd.sdk.types.EventTypeBuilder;
-import uk.gov.hmcts.ccd.sdk.types.Role;
+import uk.gov.hmcts.ccd.sdk.types.HasRole;
 import uk.gov.hmcts.ccd.sdk.types.Tab;
 import uk.gov.hmcts.ccd.sdk.types.Tab.TabBuilder;
 import uk.gov.hmcts.ccd.sdk.types.Webhook;
 import uk.gov.hmcts.ccd.sdk.types.WebhookConvention;
 import uk.gov.hmcts.ccd.sdk.types.WorkBasket.WorkBasketBuilder;
 
-public class ConfigBuilderImpl<T, S, R extends Role> implements ConfigBuilder<T, S, R> {
+public class ConfigBuilderImpl<T, S, R extends HasRole> implements ConfigBuilder<T, S, R> {
 
   public String caseType = "";
   public final Table<String, String, String> stateRolePermissions = HashBasedTable.create();
@@ -75,7 +75,7 @@ public class ConfigBuilderImpl<T, S, R extends Role> implements ConfigBuilder<T,
 
   @Override
   public void blacklist(S state, R... roles) {
-    for (Role role : roles) {
+    for (HasRole role : roles) {
       stateRoleblacklist.put(state.toString(), role.getRole());
     }
   }
@@ -132,7 +132,7 @@ public class ConfigBuilderImpl<T, S, R extends Role> implements ConfigBuilder<T,
   }
 
   @Override
-  public void roleExtends(Role child, Role parent) {
+  public void roleExtends(HasRole child, HasRole parent) {
     roleHierarchy.put(child.getRole(), parent.getRole());
   }
 

@@ -3,7 +3,7 @@ package uk.gov.hmcts.ccd.sdk.types;
 import uk.gov.hmcts.ccd.sdk.types.Tab.TabBuilder;
 import uk.gov.hmcts.ccd.sdk.types.WorkBasket.WorkBasketBuilder;
 
-public interface ConfigBuilder<T, S, R extends Role> {
+public interface ConfigBuilder<T, S, R extends HasRole> {
 
   EventTypeBuilder<T, R, S> event(String id);
 
@@ -33,5 +33,5 @@ public interface ConfigBuilder<T, S, R extends Role> {
 
   WorkBasketBuilder workBasketInputFields();
 
-  void roleExtends(Role child, Role parent);
+  void roleExtends(HasRole child, HasRole parent);
 }

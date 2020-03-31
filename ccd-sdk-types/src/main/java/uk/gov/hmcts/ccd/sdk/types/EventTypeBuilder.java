@@ -1,6 +1,6 @@
 package uk.gov.hmcts.ccd.sdk.types;
 
-public interface EventTypeBuilder<T, R extends Role, S> {
+public interface EventTypeBuilder<T, R extends HasRole, S> {
 
   Event.EventBuilder<T, R, S> forState(S state);
 

@@ -4,7 +4,7 @@ import uk.gov.hmcts.ccd.sdk.types.Tab.TabBuilder;
 import uk.gov.hmcts.ccd.sdk.types.WorkBasket.WorkBasketBuilder;
 
 public abstract class BaseCCDConfig<Model, State,
-    Role extends uk.gov.hmcts.ccd.sdk.types.Role> implements
+    Role extends HasRole> implements
     CCDConfig<Model, State, Role>, ConfigBuilder<Model, State, Role> {
 
   private ConfigBuilder<Model, State, Role> builder;
@@ -82,8 +82,8 @@ public abstract class BaseCCDConfig<Model, State,
     return builder.workBasketInputFields();
   }
 
-  public void roleExtends(uk.gov.hmcts.ccd.sdk.types.Role child,
-      uk.gov.hmcts.ccd.sdk.types.Role parent) {
+  public void roleExtends(HasRole child,
+      HasRole parent) {
     builder.roleExtends(child, parent);
   }
 }

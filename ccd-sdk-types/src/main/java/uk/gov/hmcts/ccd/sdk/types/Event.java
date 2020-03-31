@@ -2,11 +2,7 @@ package uk.gov.hmcts.ccd.sdk.types;
 
 import java.util.Arrays;
 import java.util.HashMap;
-import java.util.Hashtable;
-import java.util.List;
 import java.util.Map;
-import java.util.Objects;
-import java.util.Set;
 import java.util.stream.Collectors;
 import lombok.Builder;
 import lombok.Data;
@@ -15,7 +11,7 @@ import lombok.With;
 
 @Builder
 @Data
-public class Event<T, R extends Role, S> {
+public class Event<T, R extends HasRole, S> {
 
   @With
   private String id;
@@ -75,11 +71,11 @@ public class Event<T, R extends Role, S> {
     return "*".equals(preState);
   }
 
-  public static class EventBuilder<T, R extends Role, S> {
+  public static class EventBuilder<T, R extends HasRole, S> {
 
     private WebhookConvention webhookConvention;
 
-    public static <T, R extends Role, S> EventBuilder<T, R, S> builder(Class dataClass,
+    public static <T, R extends HasRole, S> EventBuilder<T, R, S> builder(Class dataClass,
         WebhookConvention convention, PropertyUtils propertyUtils) {
       EventBuilder<T, R, S> result = new EventBuilder<T, R, S>();
       result.dataClass = dataClass;

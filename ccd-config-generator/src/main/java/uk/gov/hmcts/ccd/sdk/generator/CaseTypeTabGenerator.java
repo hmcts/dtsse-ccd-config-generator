@@ -10,14 +10,14 @@ import java.util.Map;
 import uk.gov.hmcts.ccd.sdk.ConfigBuilderImpl;
 import uk.gov.hmcts.ccd.sdk.JsonUtils;
 import uk.gov.hmcts.ccd.sdk.JsonUtils.AddMissing;
-import uk.gov.hmcts.ccd.sdk.types.Role;
+import uk.gov.hmcts.ccd.sdk.types.HasRole;
 import uk.gov.hmcts.ccd.sdk.types.Tab;
 import uk.gov.hmcts.ccd.sdk.types.Tab.TabBuilder;
 import uk.gov.hmcts.ccd.sdk.types.TabField;
 
 public class CaseTypeTabGenerator {
 
-  public static <T, R extends Role, S> void generate(File root, String caseType,
+  public static <T, R extends HasRole, S> void generate(File root, String caseType,
       ConfigBuilderImpl<T, S, R> builder) {
 
     List<Map<String, Object>> result = Lists.newArrayList();
