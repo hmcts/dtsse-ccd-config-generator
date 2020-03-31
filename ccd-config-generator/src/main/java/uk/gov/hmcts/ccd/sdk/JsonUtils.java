@@ -1,5 +1,6 @@
 package uk.gov.hmcts.ccd.sdk;
 
+import com.fasterxml.jackson.core.JsonGenerator;
 import com.fasterxml.jackson.core.util.DefaultIndenter;
 import com.fasterxml.jackson.core.util.DefaultPrettyPrinter;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -9,6 +10,7 @@ import com.google.common.collect.Maps;
 import com.google.common.collect.Ordering;
 import com.google.common.collect.Sets;
 import com.google.common.primitives.Chars;
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Collections;
@@ -29,9 +31,22 @@ public class JsonUtils {
 
   @SneakyThrows
   public static String serialise(List data) {
-    DefaultPrettyPrinter printer = new DefaultPrettyPrinter();
-    printer.indentArraysWith(DefaultIndenter.SYSTEM_LINEFEED_INSTANCE);
-    return new ObjectMapper().writer(printer).writeValueAsString(data);
+    class CustomPrinter extends DefaultPrettyPrinter {
+      @Override
+      public DefaultPrettyPrinter createInstance() {
+        CustomPrinter result = new CustomPrinter();
+        result.indentArraysWith(DefaultIndenter.SYSTEM_LINEFEED_INSTANCE);
+        return result;
+      }
+
+      @Override
+      public void writeObjectFieldValueSeparator(JsonGenerator jg) throws IOException {
+        jg.writeRaw(": ");
+      }
+    }
+
+    CustomPrinter printer = new CustomPrinter();
+    return new ObjectMapper().writer(printer).writeValueAsString(data) + "\n";
   }
 
   public static Map<String, Object> getField(String id) {
