@@ -1,19 +1,27 @@
 package uk.gov.hmcts.ccd.sdk.generator;
 
+import com.google.common.base.Strings;
 import com.google.common.collect.HashBasedTable;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
+import com.google.common.collect.Sets;
 import com.google.common.collect.Table;
+import com.google.common.primitives.Chars;
 import java.io.File;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.HashSet;
+import java.util.Hashtable;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Set;
+import java.util.stream.Collectors;
 import uk.gov.hmcts.ccd.sdk.JsonUtils;
 import uk.gov.hmcts.ccd.sdk.JsonUtils.AddMissing;
+import uk.gov.hmcts.ccd.sdk.JsonUtils.CRUDMerger;
 import uk.gov.hmcts.ccd.sdk.types.Event;
 import uk.gov.hmcts.ccd.sdk.types.Field;
 import uk.gov.hmcts.ccd.sdk.types.Tab;
@@ -28,9 +36,10 @@ public class AuthorisationCaseFieldGenerator {
   public static void generate(File root, String caseType, List<Event> events,
       Table<String, String, String> eventRolePermissions, List<TabBuilder> tabs,
       List<WorkBasketBuilder> workBasketInputFields,
-      List<WorkBasketBuilder> workBasketResultFields) {
+      List<WorkBasketBuilder> workBasketResultFields, Map<String, String> roleHierarchy) {
 
     Table<String, String, String> fieldRolePermissions = HashBasedTable.create();
+    // Add field permissions based on event permissions.
     for (Event event : events) {
       Map<String, String> eventPermissions = eventRolePermissions.row(event.getEventID());
       List<Field.FieldBuilder> fields = event.getFields().build().getFields();
@@ -41,12 +50,16 @@ public class AuthorisationCaseFieldGenerator {
           if (!perm.contains("D") && fb.build().isMutable()) {
             perm += "D";
           }
+          if (fb.build().isImmutable()) {
+            perm = perm.replaceAll("C", "");
+          }
           fieldRolePermissions.put(fb.build().getId(), rolePermission.getKey(),
               perm);
         }
       }
     }
 
+    // Add Permissions for all tabs.
     for (String role : ImmutableSet.copyOf(fieldRolePermissions.columnKeySet())) {
       // Add CRU for caseHistory for all roles
       fieldRolePermissions.put("caseHistory", role, "CRU");
@@ -85,18 +98,47 @@ public class AuthorisationCaseFieldGenerator {
           continue;
         }
 
-        Map<String, Object> permission = Maps.newHashMap();
-        permissions.add(permission);
-        permission.put("CaseTypeID", caseType);
-        permission.put("LiveFrom", "01/01/2017");
-        permission.put("UserRole", role);
-        permission.put("CaseFieldID", fieldPerm.getKey());
-        String p = fieldPerm.getValue();
-        permission.put("CRUD", p);
+        String field = fieldPerm.getKey();
+        String inheritedPermission = getInheritedPermission(fieldRolePermissions, roleHierarchy,
+            role, field);
+        String fieldPermission = fieldPerm.getValue();
+        if (inheritedPermission != null) {
+          Set<Character> newPermissions = Sets
+              .newHashSet(Chars.asList(fieldPerm.getValue().toCharArray()));
+          Set<Character> existingPermissions = Sets
+              .newHashSet(Chars.asList(inheritedPermission.toCharArray()));
+          newPermissions.removeAll(existingPermissions);
+          fieldPermission = newPermissions.stream().map(String::valueOf)
+              .collect(Collectors.joining());
+        }
+        if (!Strings.isNullOrEmpty(fieldPermission)) {
+          Map<String, Object> permission = new Hashtable<>();
+          permissions.add(permission);
+          permission.put("CaseTypeID", caseType);
+          permission.put("LiveFrom", "01/01/2017");
+          permission.put("UserRole", role);
+          permission.put("CaseFieldID", field);
+          permission.put("CRUD", fieldPermission);
+        }
       }
 
-      Path output = Paths.get(folder.getPath(), role + ".json");
-      JsonUtils.mergeInto(output, permissions, new AddMissing(), "CaseFieldID", "UserRole");
+      String filename = role.replace("[", "").replace("]", "");
+      Path output = Paths.get(folder.getPath(), filename + ".json");
+      JsonUtils.mergeInto(output, permissions, new CRUDMerger(), "CaseFieldID", "UserRole");
     }
+  }
+
+  private static String getInheritedPermission(
+      Table<String, String, String> fieldRolePermissions,
+      Map<String, String> roleHierarchy, String role,
+      String field) {
+    if (roleHierarchy.containsKey(role)) {
+      String parentRole = roleHierarchy.get(role);
+      if (fieldRolePermissions.contains(field, parentRole)) {
+        return fieldRolePermissions.get(field, parentRole);
+      }
+      return getInheritedPermission(fieldRolePermissions, roleHierarchy, parentRole, field);
+    }
+    return null;
   }
 }

@@ -8,6 +8,7 @@ import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Multimap;
 import com.google.common.collect.Table;
+import java.util.Hashtable;
 import java.util.List;
 import java.util.Map;
 import uk.gov.hmcts.ccd.sdk.types.ConfigBuilder;
@@ -25,7 +26,6 @@ public class ConfigBuilderImpl<T, S, R extends Role> implements ConfigBuilder<T,
   public String caseType = "";
   public final Table<String, String, String> stateRolePermissions = HashBasedTable.create();
   public final Multimap<String, String> stateRoleblacklist = ArrayListMultimap.create();
-  public final Table<String, String, String> explicit = HashBasedTable.create();
   public final Map<String, String> statePrefixes = Maps.newHashMap();
   public final Table<String, String, List<Event.EventBuilder<T, R, S>>> events = HashBasedTable
       .create();
@@ -33,6 +33,7 @@ public class ConfigBuilderImpl<T, S, R extends Role> implements ConfigBuilder<T,
   public final List<TabBuilder> tabs = Lists.newArrayList();
   public final List<WorkBasketBuilder> workBasketResultFields = Lists.newArrayList();
   public final List<WorkBasketBuilder> workBasketInputFields = Lists.newArrayList();
+  public final Map<String, String> roleHierarchy = new Hashtable<>();
 
   private Class caseData;
   private WebhookConvention webhookConvention = this::defaultWebhookConvention;
@@ -77,12 +78,6 @@ public class ConfigBuilderImpl<T, S, R extends Role> implements ConfigBuilder<T,
     for (Role role : roles) {
       stateRoleblacklist.put(state.toString(), role.getRole());
     }
-  }
-
-  @Override
-  public void explicitState(String eventId, R role, String crud) {
-    explicit.put(eventId, role.getRole(), crud);
-
   }
 
   @Override
@@ -134,6 +129,11 @@ public class ConfigBuilderImpl<T, S, R extends Role> implements ConfigBuilder<T,
   @Override
   public WorkBasketBuilder workBasketInputFields() {
     return getWorkBasketBuilder(workBasketInputFields);
+  }
+
+  @Override
+  public void roleExtends(Role child, Role parent) {
+    roleHierarchy.put(child.getRole(), parent.getRole());
   }
 
   private WorkBasketBuilder getWorkBasketBuilder(List<WorkBasketBuilder> workBasketInputFields) {

@@ -6,13 +6,17 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.type.CollectionType;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
+import com.google.common.collect.Ordering;
 import com.google.common.collect.Sets;
+import com.google.common.primitives.Chars;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Collectors;
 import lombok.AllArgsConstructor;
 import lombok.SneakyThrows;
 
@@ -106,6 +110,29 @@ public class JsonUtils {
   public static class AddMissing extends OverwriteSpecific {
     public AddMissing() {
       super(Sets.newHashSet());
+    }
+  }
+
+  public static class CRUDMerger implements JsonMerger {
+
+    @Override
+    public Object merge(String key, Object existing, Object generated) {
+      if (!key.equals("CRUD")) {
+        return existing;
+      }
+      String existingPermissions = existing.toString() + generated.toString();
+      // Remove any dupes.
+      existingPermissions = Sets.newHashSet(Chars.asList(existingPermissions.toCharArray()))
+          .stream().map(String::valueOf).collect(Collectors.joining());
+
+      existingPermissions = existingPermissions.replaceAll("[^CRUD]+", "");
+      if (!existingPermissions.matches("^[CRUD]+$")) {
+        throw new RuntimeException(existingPermissions);
+      }
+
+      List<Character> perm = Chars.asList(existingPermissions.toCharArray());
+      Collections.sort(perm, Ordering.explicit('C', 'R', 'U', 'D'));
+      return perm.stream().map(String::valueOf).collect(Collectors.joining());
     }
   }
 }

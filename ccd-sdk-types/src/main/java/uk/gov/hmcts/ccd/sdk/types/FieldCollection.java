@@ -94,6 +94,11 @@ public class FieldCollection<Type, Parent> {
       return field(getter, DisplayContext.ReadOnly);
     }
 
+    public <U extends Iterable> FieldBuilder<Type, U> immutableList(
+        TypedPropertyGetter<Type, U> getter) {
+      return (FieldBuilder<Type, U>) field().id(getter).immutable();
+    }
+
     public FieldCollectionBuilder<Type, Parent> field(String id, DisplayContext context,
         String showCondition, String type, String typeParam, String label) {
       explicitFields.add(field().id(id).context(context).showCondition(showCondition).type(type)

@@ -58,6 +58,7 @@ public class FPLConfigGenerationTests {
 //        FileUtils.copyDirectory(resRoot.resolve("AuthorisationCaseField").toFile(), prodConfig.resolve("AuthorisationCaseField").toFile());
         FileUtils.copyDirectory(resRoot.resolve("FixedLists").toFile(), prodConfig.resolve("FixedLists").toFile());
         FileUtils.copyDirectory(resRoot.resolve("CaseEventToComplexTypes").toFile(), prodConfig.resolve("CaseEventToComplexTypes").toFile());
+        FileUtils.copyDirectory(resRoot.resolve("AuthorisationCaseField").toFile(), prodConfig.resolve("AuthorisationCaseField").toFile());
 
         copyResourceToOutput("AuthorisationCaseState.json");
         copyResourceToOutput("CaseField.json");
@@ -88,6 +89,12 @@ public class FPLConfigGenerationTests {
         assertEquals("AuthorisationCaseState.json");
     }
 
+    // TODO: why does Gatekeeper have CRU on draftSDO but only RU on the fields in it?
+    @Test
+    public void generatesAuthorisationCaseFieldGatekeeper() {
+        assertEquals("AuthorisationCaseField/caseworker-publiclaw-gatekeeper.json");
+    }
+
     @Ignore
     @Test
     public void generatesAuthorisationCaseFieldSystem() {
@@ -102,13 +109,31 @@ public class FPLConfigGenerationTests {
 
     @Ignore
     @Test
+    public void generatesAuthorisationCaseFieldLASOLICITOR() {
+        assertEquals("AuthorisationCaseField/LASOLICITOR.json");
+    }
+
+    @Ignore
+    @Test
+    public void generatesAuthorisationCaseFieldSOLICITOR() {
+        assertEquals("AuthorisationCaseField/SOLICITOR.json");
+    }
+
+    @Ignore
+    @Test
+    public void generatesAuthorisationCaseFieldCourtAdmin() {
+        assertEquals("AuthorisationCaseField/caseworker-publiclaw-courtadmin.json");
+    }
+
+    @Ignore
+    @Test
     public void generatesAuthorisationCaseFieldCafcass() {
         assertEquals("AuthorisationCaseField/caseworker-publiclaw-cafcass.json");
     }
 
     @Ignore
     @Test
-    public void generatesAuthorisationSolicitor() {
+    public void generatesAuthorisationCaseFieldSolicitor() {
         assertEquals("AuthorisationCaseField/caseworker-publiclaw-solicitor.json");
     }
 
@@ -231,9 +256,9 @@ public class FPLConfigGenerationTests {
                 List<Map<String, Object>> expectedValues = fromJSON(expectedString);
                 List<Map<String, Object>> actualValues = fromJSON(actualString);
 
-                Set<Object> expectedIds = expectedValues.stream().map(x -> x.get("ID"))
+                Set<Object> expectedIds = expectedValues.stream().map(x -> x.get("CaseFieldID"))
                     .collect(Collectors.toSet());
-                Set<Object> actualIDs = actualValues.stream().map(x -> x.get("ID"))
+                Set<Object> actualIDs = actualValues.stream().map(x -> x.get("CaseFieldID"))
                     .collect(Collectors.toSet());
 
                 SetView<Object> m = Sets.difference(expectedIds, actualIDs);
@@ -294,6 +319,9 @@ public class FPLConfigGenerationTests {
 
     private void debugMissingValue(List<Map<String, Object>> actualValues,
         Map<String, Object> missingValue) {
+        if (actualValues.isEmpty()) {
+            throw new RuntimeException("No values!");
+        }
         Map<String, Object> match = getClosest(missingValue, actualValues);
         System.out.println(pretty(ImmutableSortedMap.copyOf(missingValue)));
         System.out.println("best match:");

@@ -17,6 +17,7 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.stream.Collectors;
 import uk.gov.hmcts.ccd.sdk.JsonUtils;
+import uk.gov.hmcts.ccd.sdk.JsonUtils.CRUDMerger;
 import uk.gov.hmcts.ccd.sdk.JsonUtils.JsonMerger;
 import uk.gov.hmcts.ccd.sdk.types.Event;
 
@@ -67,21 +68,8 @@ public class AuthorisationCaseStateGenerator {
       permission.put("CRUD", perm.stream().map(String::valueOf).collect(Collectors.joining()));
     }
 
-    JsonMerger merger = (key, existing, generated) -> {
-      if (!key.equals("CRUD")) {
-        return existing;
-      }
-      String existingPermissions = existing.toString() + generated.toString();
-      // Remove any dupes.
-      existingPermissions = Sets.newHashSet(Chars.asList(existingPermissions.toCharArray()))
-          .stream().map(String::valueOf).collect(Collectors.joining());
-
-      List<Character> perm = Chars.asList(existingPermissions.toCharArray());
-      Collections.sort(perm, Ordering.explicit('C', 'R', 'U', 'D'));
-      return perm.stream().map(String::valueOf).collect(Collectors.joining());
-    };
     Path output = Paths.get(root.getPath(), "AuthorisationCaseState.json");
-    JsonUtils.mergeInto(output, result, merger, "CaseStateID", "UserRole");
+    JsonUtils.mergeInto(output, result, new CRUDMerger(), "CaseStateID", "UserRole");
 
   }
 

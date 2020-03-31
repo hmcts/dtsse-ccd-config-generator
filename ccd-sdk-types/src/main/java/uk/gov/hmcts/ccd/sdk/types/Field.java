@@ -27,6 +27,7 @@ public class Field<T, Parent> {
   String type;
   String fieldTypeParameter;
   boolean mutable;
+  boolean immutable;
   boolean readOnly;
 
   Class dataClass;
@@ -51,6 +52,11 @@ public class Field<T, Parent> {
 
     public FieldBuilder<T, Parent> type(String t) {
       this.type = t;
+      return this;
+    }
+
+    public FieldBuilder<T, Parent> immutable() {
+      this.immutable = true;
       return this;
     }
 

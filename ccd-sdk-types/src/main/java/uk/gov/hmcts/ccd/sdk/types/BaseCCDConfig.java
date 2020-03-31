@@ -38,11 +38,6 @@ public abstract class BaseCCDConfig<Model, State,
   }
 
   @Override
-  public void explicitState(String eventId, Role role, String crud) {
-    builder.explicitState(eventId, role, crud);
-  }
-
-  @Override
   public void prefix(State state, String prefix) {
     builder.prefix(state, prefix);
   }
@@ -85,6 +80,11 @@ public abstract class BaseCCDConfig<Model, State,
   @Override
   public WorkBasketBuilder<Model> workBasketInputFields() {
     return builder.workBasketInputFields();
+  }
+
+  public void roleExtends(uk.gov.hmcts.ccd.sdk.types.Role child,
+      uk.gov.hmcts.ccd.sdk.types.Role parent) {
+    builder.roleExtends(child, parent);
   }
 }
 
