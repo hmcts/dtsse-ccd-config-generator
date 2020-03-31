@@ -82,9 +82,9 @@ public abstract class BaseCCDConfig<Model, State,
     return builder.workBasketInputFields();
   }
 
-  public void roleExtends(HasRole child,
-      HasRole parent) {
-    builder.roleExtends(child, parent);
+  @Override
+  public RoleBuilder<Role> role(Role role) {
+    return builder.role(role);
   }
 }
 

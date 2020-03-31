@@ -15,6 +15,7 @@ import uk.gov.hmcts.ccd.sdk.types.ConfigBuilder;
 import uk.gov.hmcts.ccd.sdk.types.Event;
 import uk.gov.hmcts.ccd.sdk.types.EventTypeBuilder;
 import uk.gov.hmcts.ccd.sdk.types.HasRole;
+import uk.gov.hmcts.ccd.sdk.types.RoleBuilder;
 import uk.gov.hmcts.ccd.sdk.types.Tab;
 import uk.gov.hmcts.ccd.sdk.types.Tab.TabBuilder;
 import uk.gov.hmcts.ccd.sdk.types.Webhook;
@@ -132,8 +133,8 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements ConfigBuilder
   }
 
   @Override
-  public void roleExtends(HasRole child, HasRole parent) {
-    roleHierarchy.put(child.getRole(), parent.getRole());
+  public RoleBuilder<R> role(R role) {
+    return (parent) -> roleHierarchy.put(role.getRole(), parent.getRole());
   }
 
   private WorkBasketBuilder getWorkBasketBuilder(List<WorkBasketBuilder> workBasketInputFields) {
