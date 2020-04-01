@@ -99,7 +99,6 @@ public class FPLConfigGenerationTests {
         assertEquals("AuthorisationCaseField/caseworker-publiclaw-systemupdate.json");
     }
 
-    @Ignore
     @Test
     public void generatesAuthorisationCaseFieldJudiciary() {
         assertEquals("AuthorisationCaseField/caseworker-publiclaw-judiciary.json");
