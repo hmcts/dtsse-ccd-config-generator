@@ -21,6 +21,7 @@ import uk.gov.hmcts.ccd.sdk.JsonUtils;
 import uk.gov.hmcts.ccd.sdk.JsonUtils.CRUDMerger;
 import uk.gov.hmcts.ccd.sdk.types.Event;
 import uk.gov.hmcts.ccd.sdk.types.Field;
+import uk.gov.hmcts.ccd.sdk.types.Field.FieldBuilder;
 import uk.gov.hmcts.ccd.sdk.types.Tab;
 import uk.gov.hmcts.ccd.sdk.types.Tab.TabBuilder;
 import uk.gov.hmcts.ccd.sdk.types.TabField;
@@ -34,7 +35,7 @@ public class AuthorisationCaseFieldGenerator {
       Table<String, String, String> eventRolePermissions, List<TabBuilder> tabs,
       List<WorkBasketBuilder> workBasketInputFields,
       List<WorkBasketBuilder> workBasketResultFields, Map<String, String> roleHierarchy,
-      Set<String> apiOnlyRoles) {
+      Set<String> apiOnlyRoles, List<FieldBuilder> explicitFields) {
 
     Table<String, String, String> fieldRolePermissions = HashBasedTable.create();
     // Add field permissions based on event permissions.
@@ -44,6 +45,9 @@ public class AuthorisationCaseFieldGenerator {
       for (Field.FieldBuilder fb : fields) {
 
         for (Entry<String, String> rolePermission : eventPermissions.entrySet()) {
+          if (event.getHistoryOnlyRoles().contains(rolePermission.getKey())) {
+            continue;
+          }
           String perm = fb.build().isReadOnly() ? "R" : rolePermission.getValue();
           if (!perm.contains("D") && fb.build().isMutable()) {
             perm += "D";
@@ -82,6 +86,37 @@ public class AuthorisationCaseFieldGenerator {
               fieldRolePermissions.put(field.getId(), role, "R");
             }
           }
+        }
+      }
+    }
+
+    // Subtract any blacklisted permissions
+    for (Event event : events) {
+      for (FieldBuilder fb : (List<Field.FieldBuilder>) event.getFields().build().getFields()) {
+        Field field = fb.build();
+        Map<String, String> entries = field.getBlacklistedRolePermissions();
+        for (Map.Entry<String, String> roleBlacklist : entries.entrySet()) {
+          String perm = fieldRolePermissions.get(field.getId(), roleBlacklist.getKey());
+          if (null != perm) {
+            String regex = "[" + roleBlacklist.getValue() + "]";
+            perm = perm.replaceAll(regex, "");
+            fieldRolePermissions.put(field.getId(), roleBlacklist.getKey(), perm);
+          }
+        }
+      }
+    }
+
+    // Plus explicit field blacklists.
+    // TODO: refactor!
+    for (FieldBuilder fb : explicitFields) {
+      Field field = fb.build();
+      Map<String, String> entries = field.getBlacklistedRolePermissions();
+      for (Map.Entry<String, String> roleBlacklist : entries.entrySet()) {
+        String perm = fieldRolePermissions.get(field.getId(), roleBlacklist.getKey());
+        if (null != perm) {
+          String regex = "[" + roleBlacklist.getValue() + "]";
+          perm = perm.replaceAll(regex, "");
+          fieldRolePermissions.put(field.getId(), roleBlacklist.getKey(), perm);
         }
       }
     }

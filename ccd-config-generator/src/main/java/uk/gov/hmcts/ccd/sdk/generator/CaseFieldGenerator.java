@@ -23,6 +23,7 @@ import uk.gov.hmcts.ccd.sdk.JsonUtils.OverwriteSpecific;
 import uk.gov.hmcts.ccd.sdk.types.CCD;
 import uk.gov.hmcts.ccd.sdk.types.ComplexType;
 import uk.gov.hmcts.ccd.sdk.types.Event;
+import uk.gov.hmcts.ccd.sdk.types.Field.FieldBuilder;
 import uk.gov.hmcts.ccd.sdk.types.FieldType;
 import uk.gov.hmcts.ccd.sdk.types.Label;
 
@@ -182,6 +183,12 @@ public class CaseFieldGenerator {
       }
     }
 
+    List<uk.gov.hmcts.ccd.sdk.types.Field.FieldBuilder> fs = builder.explicitFields;
+    for (FieldBuilder explicitField : fs) {
+      uk.gov.hmcts.ccd.sdk.types.Field field = explicitField.build();
+      explicitFields.put(field.getId(), field);
+    }
+
     List<Map<String, Object>> result = Lists.newArrayList();
     for (String fieldId : explicitFields.keySet()) {
       uk.gov.hmcts.ccd.sdk.types.Field field = explicitFields.get(fieldId);
@@ -200,12 +207,6 @@ public class CaseFieldGenerator {
       }
     }
 
-    List<Map<String, Object>> fs = builder.explicitFields;
-    for (Map<String, Object> explicitField : fs) {
-      Map<String, Object> entry = getField(caseType, explicitField.get("ID").toString());
-      entry.putAll(explicitField);
-      result.add(entry);
-    }
 
     return result;
   }

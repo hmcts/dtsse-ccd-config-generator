@@ -2,7 +2,9 @@ package uk.gov.hmcts.ccd.sdk.types;
 
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 import lombok.Builder;
 import lombok.Data;
@@ -59,9 +61,14 @@ public class Event<T, R extends HasRole, S> {
   private int displayOrder = -1;
 
   private Map<String, String> grants;
+  private Set<String> historyOnlyRoles;
 
   public Map<String, String> getGrants() {
     return grants;
+  }
+
+  public Set<String> getHistoryOnlyRoles() {
+    return historyOnlyRoles;
   }
 
   private Class dataClass;
@@ -80,6 +87,7 @@ public class Event<T, R extends HasRole, S> {
       EventBuilder<T, R, S> result = new EventBuilder<T, R, S>();
       result.dataClass = dataClass;
       result.grants = new HashMap<>();
+      result.historyOnlyRoles = new HashSet<>();
       result.fields = FieldCollection.FieldCollectionBuilder
           .builder(result, null, dataClass, propertyUtils);
       result.eventNumber = eventCount++;
@@ -135,6 +143,16 @@ public class Event<T, R extends HasRole, S> {
     EventBuilder<T, R, S> forState(S state) {
       this.preState = state.toString();
       this.postState = state.toString();
+      return this;
+    }
+
+
+    public EventBuilder<T, R, S> grantHistoryOnly(R... roles) {
+      for (R role : roles) {
+        historyOnlyRoles.add(role.getRole());
+      }
+      grant("R", roles);
+
       return this;
     }
 

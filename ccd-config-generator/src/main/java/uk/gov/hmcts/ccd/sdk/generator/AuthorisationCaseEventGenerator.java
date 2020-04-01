@@ -10,11 +10,10 @@ import java.util.List;
 import java.util.Map;
 import uk.gov.hmcts.ccd.sdk.JsonUtils;
 import uk.gov.hmcts.ccd.sdk.JsonUtils.AddMissing;
-import uk.gov.hmcts.ccd.sdk.types.HasRole;
 
 public class AuthorisationCaseEventGenerator {
 
-  public static <T, S, R extends HasRole> void generate(File root,
+  public static void generate(File root,
       Table<String, String, String> eventRolePermissions,
       String caseType) {
     List<Map<String, Object>> entries = Lists.newArrayList();

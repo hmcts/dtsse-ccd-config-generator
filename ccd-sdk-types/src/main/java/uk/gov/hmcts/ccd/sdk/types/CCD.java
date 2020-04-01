@@ -19,4 +19,5 @@ public @interface CCD {
   boolean showSummaryContent() default false;
 
   boolean ignore() default false;
+
 }

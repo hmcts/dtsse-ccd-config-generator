@@ -1,5 +1,6 @@
 package uk.gov.hmcts.ccd.sdk.types;
 
+import uk.gov.hmcts.ccd.sdk.types.Field.FieldBuilder;
 import uk.gov.hmcts.ccd.sdk.types.Tab.TabBuilder;
 import uk.gov.hmcts.ccd.sdk.types.WorkBasket.WorkBasketBuilder;
 
@@ -17,6 +18,8 @@ public interface ConfigBuilder<T, S, R extends HasRole> {
   void blacklist(S state, R... role);
 
   void prefix(S state, String prefix);
+
+  FieldBuilder<T, ?> field(String id);
 
   void caseField(String id, String showCondition, String type, String typeParam, String label);
 

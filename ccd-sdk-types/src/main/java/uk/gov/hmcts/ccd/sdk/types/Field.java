@@ -1,6 +1,8 @@
 package uk.gov.hmcts.ccd.sdk.types;
 
 import de.cronn.reflection.util.TypedPropertyGetter;
+import java.util.Hashtable;
+import java.util.Map;
 import java.util.function.Consumer;
 import lombok.Builder;
 import lombok.Data;
@@ -29,6 +31,7 @@ public class Field<T, Parent> {
   boolean mutable;
   boolean immutable;
   boolean readOnly;
+  private Map<String, String> blacklistedRolePermissions;
 
   Class dataClass;
   @ToString.Exclude
@@ -47,7 +50,20 @@ public class Field<T, Parent> {
       result.parent = parent;
       result.propertyUtils = propertyUtils;
       result.context = DisplayContext.Complex;
+      result.blacklistedRolePermissions = new Hashtable<>();
       return result;
+    }
+
+    public FieldBuilder<T, Parent> blacklist(String crud, HasRole... roles) {
+      for (HasRole role : roles) {
+        blacklistedRolePermissions.put(role.getRole(), crud);
+      }
+
+      return this;
+    }
+
+    public FieldBuilder<T, Parent> blacklist(HasRole... roles) {
+      return blacklist("CRUD", roles);
     }
 
     public FieldBuilder<T, Parent> type(String t) {

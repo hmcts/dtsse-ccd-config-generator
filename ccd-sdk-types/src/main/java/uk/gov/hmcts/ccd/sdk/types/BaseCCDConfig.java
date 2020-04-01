@@ -1,5 +1,6 @@
 package uk.gov.hmcts.ccd.sdk.types;
 
+import uk.gov.hmcts.ccd.sdk.types.Field.FieldBuilder;
 import uk.gov.hmcts.ccd.sdk.types.Tab.TabBuilder;
 import uk.gov.hmcts.ccd.sdk.types.WorkBasket.WorkBasketBuilder;
 
@@ -40,6 +41,10 @@ public abstract class BaseCCDConfig<Model, State,
   @Override
   public void prefix(State state, String prefix) {
     builder.prefix(state, prefix);
+  }
+
+  public FieldBuilder<Model, ?> field(String id) {
+    return builder.field(id);
   }
 
   @Override

@@ -1,7 +1,6 @@
 package uk.gov.hmcts.ccd.sdk;
 
 import com.google.common.base.CaseFormat;
-import com.google.common.base.Strings;
 import com.google.common.collect.ArrayListMultimap;
 import com.google.common.collect.HashBasedTable;
 import com.google.common.collect.Lists;
@@ -16,6 +15,8 @@ import java.util.Set;
 import uk.gov.hmcts.ccd.sdk.types.ConfigBuilder;
 import uk.gov.hmcts.ccd.sdk.types.Event;
 import uk.gov.hmcts.ccd.sdk.types.EventTypeBuilder;
+import uk.gov.hmcts.ccd.sdk.types.Field;
+import uk.gov.hmcts.ccd.sdk.types.Field.FieldBuilder;
 import uk.gov.hmcts.ccd.sdk.types.HasRole;
 import uk.gov.hmcts.ccd.sdk.types.RoleBuilder;
 import uk.gov.hmcts.ccd.sdk.types.Tab;
@@ -33,7 +34,7 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements ConfigBuilder
   public final Set<String> apiOnlyRoles = Sets.newHashSet();
   public final Table<String, String, List<Event.EventBuilder<T, R, S>>> events = HashBasedTable
       .create();
-  public final List<Map<String, Object>> explicitFields = Lists.newArrayList();
+  public final List<Field.FieldBuilder> explicitFields = Lists.newArrayList();
   public final List<TabBuilder> tabs = Lists.newArrayList();
   public final List<WorkBasketBuilder> workBasketResultFields = Lists.newArrayList();
   public final List<WorkBasketBuilder> workBasketInputFields = Lists.newArrayList();
@@ -90,16 +91,17 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements ConfigBuilder
   }
 
   @Override
+  public FieldBuilder<T, ?> field(String id) {
+    FieldBuilder builder = FieldBuilder
+        .builder(caseData, null, new PropertyUtils());
+    explicitFields.add(builder);
+    return builder.id(id);
+  }
+
+  @Override
   public void caseField(String id, String showCondition, String type, String typeParam,
       String label) {
-    Map<String, Object> data = Maps.newHashMap();
-    explicitFields.add(data);
-    data.put("ID", id);
-    data.put("Label", label);
-    data.put("FieldType", type);
-    if (!Strings.isNullOrEmpty(typeParam)) {
-      data.put("FieldTypeParameter", typeParam);
-    }
+    field(id).label(label).type(type).fieldTypeParameter(typeParam);
   }
 
   @Override
