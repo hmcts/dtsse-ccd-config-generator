@@ -89,13 +89,11 @@ public class FPLConfigGenerationTests {
         assertEquals("AuthorisationCaseState.json");
     }
 
-    // TODO: why does Gatekeeper have CRU on draftSDO but only RU on the fields in it?
     @Test
     public void generatesAuthorisationCaseFieldGatekeeper() {
         assertEquals("AuthorisationCaseField/caseworker-publiclaw-gatekeeper.json");
     }
 
-    @Ignore
     @Test
     public void generatesAuthorisationCaseFieldSystem() {
         assertEquals("AuthorisationCaseField/caseworker-publiclaw-systemupdate.json");

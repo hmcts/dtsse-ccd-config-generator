@@ -5,14 +5,12 @@ import com.google.common.collect.HashBasedTable;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
-import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
 import com.google.common.collect.Table;
 import com.google.common.primitives.Chars;
 import java.io.File;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.HashSet;
 import java.util.Hashtable;
 import java.util.List;
 import java.util.Map;
@@ -20,7 +18,6 @@ import java.util.Map.Entry;
 import java.util.Set;
 import java.util.stream.Collectors;
 import uk.gov.hmcts.ccd.sdk.JsonUtils;
-import uk.gov.hmcts.ccd.sdk.JsonUtils.AddMissing;
 import uk.gov.hmcts.ccd.sdk.JsonUtils.CRUDMerger;
 import uk.gov.hmcts.ccd.sdk.types.Event;
 import uk.gov.hmcts.ccd.sdk.types.Field;
@@ -36,7 +33,8 @@ public class AuthorisationCaseFieldGenerator {
   public static void generate(File root, String caseType, List<Event> events,
       Table<String, String, String> eventRolePermissions, List<TabBuilder> tabs,
       List<WorkBasketBuilder> workBasketInputFields,
-      List<WorkBasketBuilder> workBasketResultFields, Map<String, String> roleHierarchy) {
+      List<WorkBasketBuilder> workBasketResultFields, Map<String, String> roleHierarchy,
+      Set<String> apiOnlyRoles) {
 
     Table<String, String, String> fieldRolePermissions = HashBasedTable.create();
     // Add field permissions based on event permissions.
@@ -61,26 +59,28 @@ public class AuthorisationCaseFieldGenerator {
 
     // Add Permissions for all tabs.
     for (String role : ImmutableSet.copyOf(fieldRolePermissions.columnKeySet())) {
-      // Add CRU for caseHistory for all roles
-      fieldRolePermissions.put("caseHistory", role, "CRU");
 
-      // Add read for any tab fields
-      for (TabBuilder tb : tabs) {
-        Tab tab = tb.build();
-        for (TabField field : tab.getFields()) {
-          if (!fieldRolePermissions.contains(field.getId(), role)) {
-            fieldRolePermissions.put(field.getId(), role, "R");
+      if (!apiOnlyRoles.contains(role)) {
+        fieldRolePermissions.put("caseHistory", role, "CRU");
+
+        // Add read for any tab fields
+        for (TabBuilder tb : tabs) {
+          Tab tab = tb.build();
+          for (TabField field : tab.getFields()) {
+            if (!fieldRolePermissions.contains(field.getId(), role)) {
+              fieldRolePermissions.put(field.getId(), role, "R");
+            }
           }
         }
-      }
 
-      // Add read for WorkBaskets
-      for (WorkBasketBuilder workBasketInputField :
-          Iterables.concat(workBasketInputFields, workBasketResultFields)) {
-        WorkBasket basket = workBasketInputField.build();
-        for (WorkBasketField field : basket.getFields()) {
-          if (!fieldRolePermissions.contains(field.getId(), role)) {
-            fieldRolePermissions.put(field.getId(), role, "R");
+        // Add read for WorkBaskets
+        for (WorkBasketBuilder workBasketInputField :
+            Iterables.concat(workBasketInputFields, workBasketResultFields)) {
+          WorkBasket basket = workBasketInputField.build();
+          for (WorkBasketField field : basket.getFields()) {
+            if (!fieldRolePermissions.contains(field.getId(), role)) {
+              fieldRolePermissions.put(field.getId(), role, "R");
+            }
           }
         }
       }

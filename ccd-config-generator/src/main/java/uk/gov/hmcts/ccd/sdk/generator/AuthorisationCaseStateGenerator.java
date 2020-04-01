@@ -18,7 +18,6 @@ import java.util.Map.Entry;
 import java.util.stream.Collectors;
 import uk.gov.hmcts.ccd.sdk.JsonUtils;
 import uk.gov.hmcts.ccd.sdk.JsonUtils.CRUDMerger;
-import uk.gov.hmcts.ccd.sdk.JsonUtils.JsonMerger;
 import uk.gov.hmcts.ccd.sdk.types.Event;
 
 public class AuthorisationCaseStateGenerator {

@@ -33,5 +33,5 @@ public interface ConfigBuilder<T, S, R extends HasRole> {
 
   WorkBasketBuilder workBasketInputFields();
 
-  RoleBuilder<R> role(R role);
+  RoleBuilder<R> role(R... role);
 }

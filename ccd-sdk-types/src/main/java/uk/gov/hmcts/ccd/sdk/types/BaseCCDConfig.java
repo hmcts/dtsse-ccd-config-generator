@@ -83,8 +83,8 @@ public abstract class BaseCCDConfig<Model, State,
   }
 
   @Override
-  public RoleBuilder<Role> role(Role role) {
-    return builder.role(role);
+  public RoleBuilder<Role> role(Role... roles) {
+    return builder.role(roles);
   }
 }
 

@@ -85,7 +85,8 @@ public class ConfigGenerator {
         config.builder.caseType);
     AuthorisationCaseFieldGenerator.generate(outputfolder, config.builder.caseType, config.events,
         eventPermissions, config.builder.tabs, config.builder.workBasketInputFields,
-        config.builder.workBasketResultFields, config.builder.roleHierarchy);
+        config.builder.workBasketResultFields, config.builder.roleHierarchy,
+        config.builder.apiOnlyRoles);
     CaseFieldGenerator
         .generateCaseFields(outputfolder, config.builder.caseType, config.typeArg, config.events,
             config.builder);

@@ -7,10 +7,12 @@ import com.google.common.collect.HashBasedTable;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Multimap;
+import com.google.common.collect.Sets;
 import com.google.common.collect.Table;
 import java.util.Hashtable;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import uk.gov.hmcts.ccd.sdk.types.ConfigBuilder;
 import uk.gov.hmcts.ccd.sdk.types.Event;
 import uk.gov.hmcts.ccd.sdk.types.EventTypeBuilder;
@@ -28,6 +30,7 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements ConfigBuilder
   public final Table<String, String, String> stateRolePermissions = HashBasedTable.create();
   public final Multimap<String, String> stateRoleblacklist = ArrayListMultimap.create();
   public final Map<String, String> statePrefixes = Maps.newHashMap();
+  public final Set<String> apiOnlyRoles = Sets.newHashSet();
   public final Table<String, String, List<Event.EventBuilder<T, R, S>>> events = HashBasedTable
       .create();
   public final List<Map<String, Object>> explicitFields = Lists.newArrayList();
@@ -133,8 +136,22 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements ConfigBuilder
   }
 
   @Override
-  public RoleBuilder<R> role(R role) {
-    return (parent) -> roleHierarchy.put(role.getRole(), parent.getRole());
+  public RoleBuilder<R> role(R... roles) {
+    return new RoleBuilder<R>() {
+      @Override
+      public void has(R parent) {
+        for (R role : roles) {
+          roleHierarchy.put(role.getRole(), parent.getRole());
+        }
+      }
+
+      @Override
+      public void apiOnly() {
+        for (R role : roles) {
+          apiOnlyRoles.add(role.getRole());
+        }
+      }
+    };
   }
 
   private WorkBasketBuilder getWorkBasketBuilder(List<WorkBasketBuilder> workBasketInputFields) {
