@@ -120,8 +120,8 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements ConfigBuilder
   }
 
   @Override
-  public TabBuilder tab(String tabId, String tabLabel) {
-    TabBuilder result = Tab.TabBuilder.builder(caseData,
+  public TabBuilder<T, R> tab(String tabId, String tabLabel) {
+    TabBuilder<T, R> result = Tab.TabBuilder.builder(caseData,
         new PropertyUtils()).tabID(tabId).label(tabLabel);
     tabs.add(result);
     return result;

@@ -73,17 +73,17 @@ public abstract class BaseCCDConfig<Model, State,
     builder.setEnvironment(env);
   }
 
-  public TabBuilder<Model> tab(String tabId, String tabLabel) {
+  public TabBuilder<Model, Role> tab(String tabId, String tabLabel) {
     return builder.tab(tabId, tabLabel);
   }
 
   @Override
-  public WorkBasketBuilder<Model> workBasketResultFields() {
+  public WorkBasketBuilder<Model, Role> workBasketResultFields() {
     return builder.workBasketResultFields();
   }
 
   @Override
-  public WorkBasketBuilder<Model> workBasketInputFields() {
+  public WorkBasketBuilder<Model, Role> workBasketInputFields() {
     return builder.workBasketInputFields();
   }
 

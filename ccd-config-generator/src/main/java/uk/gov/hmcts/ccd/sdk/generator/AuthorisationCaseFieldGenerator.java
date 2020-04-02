@@ -11,6 +11,7 @@ import com.google.common.primitives.Chars;
 import java.io.File;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.Arrays;
 import java.util.Hashtable;
 import java.util.List;
 import java.util.Map;
@@ -22,6 +23,7 @@ import uk.gov.hmcts.ccd.sdk.JsonUtils.CRUDMerger;
 import uk.gov.hmcts.ccd.sdk.types.Event;
 import uk.gov.hmcts.ccd.sdk.types.Field;
 import uk.gov.hmcts.ccd.sdk.types.Field.FieldBuilder;
+import uk.gov.hmcts.ccd.sdk.types.HasRole;
 import uk.gov.hmcts.ccd.sdk.types.Tab;
 import uk.gov.hmcts.ccd.sdk.types.Tab.TabBuilder;
 import uk.gov.hmcts.ccd.sdk.types.TabField;
@@ -70,9 +72,18 @@ public class AuthorisationCaseFieldGenerator {
         // Add read for any tab fields
         for (TabBuilder tb : tabs) {
           Tab tab = tb.build();
-          for (TabField field : tab.getFields()) {
-            if (!fieldRolePermissions.contains(field.getId(), role)) {
-              fieldRolePermissions.put(field.getId(), role, "R");
+          if (!tab.getExcludedRoles().contains(role)) {
+            for (TabField field : tab.getFields()) {
+
+              HasRole[] roles = tab.getFieldsExcludedByRole().get(field.getId());
+              if (roles != null) {
+                if (Arrays.stream(roles).anyMatch(x -> x.getRole().equals(role))) {
+                  continue;
+                }
+              }
+              if (!fieldRolePermissions.contains(field.getId(), role)) {
+                fieldRolePermissions.put(field.getId(), role, "R");
+              }
             }
           }
         }
