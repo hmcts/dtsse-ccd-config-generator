@@ -29,6 +29,11 @@ public abstract class BaseCCDConfig<Model, State,
   }
 
   @Override
+  public void grantHistory(State state, Role... roles) {
+    builder.grantHistory(state, roles);
+  }
+
+  @Override
   public void grant(State state, String permissions, Role role) {
     builder.grant(state, permissions, role);
   }

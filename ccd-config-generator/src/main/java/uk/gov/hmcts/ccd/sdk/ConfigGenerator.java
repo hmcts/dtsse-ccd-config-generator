@@ -4,6 +4,7 @@ import com.google.common.base.Strings;
 import com.google.common.collect.HashBasedTable;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Maps;
+import com.google.common.collect.Multimap;
 import com.google.common.collect.Table;
 import java.io.File;
 import java.lang.reflect.Field;
@@ -86,7 +87,8 @@ public class ConfigGenerator {
     AuthorisationCaseFieldGenerator.generate(outputfolder, config.builder.caseType, config.events,
         eventPermissions, config.builder.tabs, config.builder.workBasketInputFields,
         config.builder.workBasketResultFields, config.builder.roleHierarchy,
-        config.builder.apiOnlyRoles, config.builder.explicitFields);
+        config.builder.apiOnlyRoles, config.builder.explicitFields,
+        config.builder.stateRoleHistoryAccess);
     CaseFieldGenerator
         .generateCaseFields(outputfolder, config.builder.caseType, config.typeArg, config.events,
             config.builder);
@@ -151,6 +153,7 @@ public class ConfigGenerator {
   Table<String, String, String> buildEventPermissions(
       ConfigBuilderImpl builder, List<Event> events) {
 
+
     Table<String, String, String> eventRolePermissions = HashBasedTable.create();
     for (Event event : events) {
       // Add any state based role permissions unless event permits only explicit grants.
@@ -165,6 +168,14 @@ public class ConfigGenerator {
             if (!builder.stateRoleblacklist.containsEntry(event.getPostState(), role)) {
               eventRolePermissions.put(event.getId(), role, roles.get(role));
             }
+          }
+        }
+
+        // Add any case history access
+        Multimap<String, String> stateRoleHistoryAccess = builder.stateRoleHistoryAccess;
+        if (stateRoleHistoryAccess.containsKey(event.getPostState())) {
+          for (String role : stateRoleHistoryAccess.get(event.getPostState())) {
+            eventRolePermissions.put(event.getId(), role, "R");
           }
         }
       }

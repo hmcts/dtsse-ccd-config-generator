@@ -12,8 +12,9 @@ public interface ConfigBuilder<T, S, R extends HasRole> {
 
   void setEnvironment(String env);
 
-  // TODO: require enums as additional generic type params.
   void grant(S state, String permissions, R role);
+
+  void grantHistory(S state, R... role);
 
   void blacklist(S state, R... role);
 

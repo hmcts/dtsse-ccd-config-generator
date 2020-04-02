@@ -126,7 +126,6 @@ public class FPLConfigGenerationTests {
         assertEquals("AuthorisationCaseField/caseworker-publiclaw-cafcass.json");
     }
 
-    @Ignore
     @Test
     public void generatesAuthorisationCaseFieldSolicitor() {
         assertEquals("AuthorisationCaseField/caseworker-publiclaw-solicitor.json");
@@ -262,7 +261,7 @@ public class FPLConfigGenerationTests {
 
                 SetView<Object> u = Sets.difference(actualIDs, expectedIds);
                 System.out.println(u.size() + " unexpected:");
-                System.out.println(u);
+                System.out.println(u.stream().sorted().collect(Collectors.toList()));
 
                 Collection<Map<String, Object>> missing = Collections2
                     .filter(fromJSON(expectedString), Predicates.not(Predicates.in(actualValues)));

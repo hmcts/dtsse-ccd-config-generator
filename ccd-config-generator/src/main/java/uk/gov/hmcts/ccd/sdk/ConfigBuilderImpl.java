@@ -28,6 +28,7 @@ import uk.gov.hmcts.ccd.sdk.types.WorkBasket.WorkBasketBuilder;
 public class ConfigBuilderImpl<T, S, R extends HasRole> implements ConfigBuilder<T, S, R> {
 
   public String caseType = "";
+  public final Multimap<String, String> stateRoleHistoryAccess = ArrayListMultimap.create();
   public final Table<String, String, String> stateRolePermissions = HashBasedTable.create();
   public final Multimap<String, String> stateRoleblacklist = ArrayListMultimap.create();
   public final Map<String, String> statePrefixes = Maps.newHashMap();
@@ -76,6 +77,13 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements ConfigBuilder
   @Override
   public void grant(S state, String permissions, R role) {
     stateRolePermissions.put(state.toString(), role.getRole(), permissions);
+  }
+
+  @Override
+  public void grantHistory(S state, R... roles) {
+    for (R role : roles) {
+      stateRoleHistoryAccess.put(state.toString(), role.getRole());
+    }
   }
 
   @Override

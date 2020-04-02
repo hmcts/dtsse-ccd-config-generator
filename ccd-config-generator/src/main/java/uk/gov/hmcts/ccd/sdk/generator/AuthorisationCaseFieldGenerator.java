@@ -5,6 +5,7 @@ import com.google.common.collect.HashBasedTable;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
+import com.google.common.collect.Multimap;
 import com.google.common.collect.Sets;
 import com.google.common.collect.Table;
 import com.google.common.primitives.Chars;
@@ -37,7 +38,8 @@ public class AuthorisationCaseFieldGenerator {
       Table<String, String, String> eventRolePermissions, List<TabBuilder> tabs,
       List<WorkBasketBuilder> workBasketInputFields,
       List<WorkBasketBuilder> workBasketResultFields, Map<String, String> roleHierarchy,
-      Set<String> apiOnlyRoles, List<FieldBuilder> explicitFields) {
+      Set<String> apiOnlyRoles, List<FieldBuilder> explicitFields,
+      Multimap<String, String> stateRoleHistoryAccess) {
 
     Table<String, String, String> fieldRolePermissions = HashBasedTable.create();
     // Add field permissions based on event permissions.
@@ -48,6 +50,9 @@ public class AuthorisationCaseFieldGenerator {
 
         for (Entry<String, String> rolePermission : eventPermissions.entrySet()) {
           if (event.getHistoryOnlyRoles().contains(rolePermission.getKey())) {
+            continue;
+          }
+          if (stateRoleHistoryAccess.containsEntry(event.getPostState(), rolePermission.getKey())) {
             continue;
           }
           String perm = fb.build().isReadOnly() ? "R" : rolePermission.getValue();
