@@ -163,6 +163,10 @@ public class AuthorisationCaseFieldGenerator {
               .collect(Collectors.joining());
         }
         if (!Strings.isNullOrEmpty(fieldPermission)) {
+          // Don't export metadata fields.
+          if (field.matches("\\[.+\\]")) {
+            continue;
+          }
           Map<String, Object> permission = new Hashtable<>();
           permissions.add(permission);
           permission.put("CaseTypeID", caseType);

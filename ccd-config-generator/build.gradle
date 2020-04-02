@@ -32,6 +32,8 @@ dependencies {
     testCompile group: 'org.assertj', name: 'assertj-core', version: '3.14.0'
 
 
+    testCompile group: 'org.flywaydb', name: 'flyway-core', version: '6.3.2'
+    testCompile group: 'org.springframework.boot', name: 'spring-boot-starter-quartz', version: versions.springBoot
     testCompile (group: 'org.springframework.boot', name: 'spring-boot-starter-web', version: versions.springBoot)
     testCompile group: 'org.springframework.security', name: 'spring-security-config', version: '5.2.1.RELEASE'
     testCompile group: 'org.springframework.security', name: 'spring-security-oauth2-resource-server', version: '5.2.1.RELEASE'

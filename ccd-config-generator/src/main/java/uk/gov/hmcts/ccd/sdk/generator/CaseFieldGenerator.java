@@ -193,7 +193,8 @@ public class CaseFieldGenerator {
     for (String fieldId : explicitFields.keySet()) {
       uk.gov.hmcts.ccd.sdk.types.Field field = explicitFields.get(fieldId);
       Map<String, Object> fieldData = getField(caseType, fieldId);
-      if (fieldId.equals("[STATE]")) {
+      // Don't export inbuilt metadata fields.
+      if (fieldId.matches("\\[.+\\]")) {
         continue;
       }
       result.add(fieldData);

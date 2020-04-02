@@ -57,12 +57,14 @@ public class CaseEventGenerator {
       if (event.isShowSummary()) {
         data.put("ShowSummary", "Y");
       }
+
       if (event.isShowEventNotes()) {
         data.put("ShowEventNotes", "Y");
       }
       if (event.isShowSummaryChangeOption()) {
         data.put("ShowSummaryChangeOption", "Y");
       }
+
       if (!Strings.isNullOrEmpty(event.getEndButtonLabel())) {
         data.put("EndButtonLabel", event.getEndButtonLabel());
       }

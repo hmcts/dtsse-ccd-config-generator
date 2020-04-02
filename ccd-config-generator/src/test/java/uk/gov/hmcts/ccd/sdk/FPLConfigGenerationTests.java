@@ -55,10 +55,12 @@ public class FPLConfigGenerationTests {
         prodConfig = tmp.getRoot().toPath().resolve("production");
         Path resRoot = Paths.get(Resources.getResource("ccd-definition").toURI());
         FileUtils.copyDirectory(resRoot.resolve("ComplexTypes").toFile(), prodConfig.resolve("ComplexTypes").toFile());
+//        FileUtils.copyDirectory(resRoot.resolve("CaseEvent").toFile(), prodConfig.resolve("CaseEvent").toFile());
 //        FileUtils.copyDirectory(resRoot.resolve("AuthorisationCaseField").toFile(), prodConfig.resolve("AuthorisationCaseField").toFile());
         FileUtils.copyDirectory(resRoot.resolve("FixedLists").toFile(), prodConfig.resolve("FixedLists").toFile());
         FileUtils.copyDirectory(resRoot.resolve("CaseEventToComplexTypes").toFile(), prodConfig.resolve("CaseEventToComplexTypes").toFile());
         FileUtils.copyDirectory(resRoot.resolve("AuthorisationCaseField").toFile(), prodConfig.resolve("AuthorisationCaseField").toFile());
+        FileUtils.copyDirectory(resRoot.resolve("CaseEventToFields").toFile(), prodConfig.resolve("CaseEventToFields").toFile());
 
         copyResourceToOutput("AuthorisationCaseState.json");
         copyResourceToOutput("CaseField.json");
@@ -303,8 +305,19 @@ public class FPLConfigGenerationTests {
         List<Map<String, Object>> entries = fromJSON(json);
         for (Map<String, Object> entry : entries) {
             entry.remove("Comment");
+            entry.remove("DisplayOrder");
             if (" ".equals(entry.get("EventElementLabel"))) {
                 entry.remove("EventElementLabel");
+            }
+
+            if ("N".equals(entry.get("ShowSummary"))) {
+                entry.remove("ShowSummary");
+            }
+            if ("N".equals(entry.get("ShowEventNotes"))) {
+                entry.remove("ShowEventNotes");
+            }
+            if ("N".equals(entry.get("ShowSummaryChangeOption"))) {
+                entry.remove("ShowSummaryChangeOption");
             }
         }
 
