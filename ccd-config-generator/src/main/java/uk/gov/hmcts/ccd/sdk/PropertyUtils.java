@@ -16,10 +16,10 @@ public class PropertyUtils implements uk.gov.hmcts.ccd.sdk.types.PropertyUtils {
   }
 
   @Override
-  public <U> Class<U> getPropertyType(Class<U> c, TypedPropertyGetter<U, ?> getter) {
+  public <U, T> Class<T> getPropertyType(Class<U> c, TypedPropertyGetter<U, T> getter) {
     PropertyDescriptor descriptor = de.cronn.reflection.util.PropertyUtils
         .getPropertyDescriptor(c, getter);
-    return (Class<U>) descriptor.getPropertyType();
+    return (Class<T>) descriptor.getPropertyType();
   }
 
   @Override

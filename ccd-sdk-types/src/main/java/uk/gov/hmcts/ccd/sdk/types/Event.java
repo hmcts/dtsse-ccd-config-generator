@@ -52,7 +52,7 @@ public class Event<T, R extends HasRole, S> {
   }
 
   @ToString.Exclude
-  private FieldCollection.FieldCollectionBuilder<T, ?> fields;
+  private FieldCollection.FieldCollectionBuilder<T, EventBuilder<T, R, S>> fields;
 
   @Builder.Default
   // TODO: don't always add.
@@ -89,7 +89,7 @@ public class Event<T, R extends HasRole, S> {
       result.grants = new HashMap<>();
       result.historyOnlyRoles = new HashSet<>();
       result.fields = FieldCollection.FieldCollectionBuilder
-          .builder(result, null, dataClass, propertyUtils);
+          .builder(result, result, dataClass, propertyUtils);
       result.eventNumber = eventCount++;
       result.webhookConvention = convention;
       result.retries = new HashMap<>();
@@ -97,7 +97,7 @@ public class Event<T, R extends HasRole, S> {
       return result;
     }
 
-    public FieldCollection.FieldCollectionBuilder<T, ?> fields() {
+    public FieldCollection.FieldCollectionBuilder<T, EventBuilder<T, R, S>> fields() {
       return fields;
     }
 

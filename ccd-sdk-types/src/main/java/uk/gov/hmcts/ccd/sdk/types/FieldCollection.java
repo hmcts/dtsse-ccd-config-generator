@@ -14,12 +14,12 @@ import uk.gov.hmcts.ccd.sdk.types.Field.FieldBuilder;
 
 @Builder
 @Data
-public class FieldCollection<Type, Parent> {
+public class FieldCollection {
 
   @ToString.Exclude
   private List<Field.FieldBuilder> fields;
   @ToString.Exclude
-  private List<FieldCollectionBuilder<Type, Parent>> complexFields;
+  private List<FieldCollectionBuilder> complexFields;
   @ToString.Exclude
   private List<Field.FieldBuilder> explicitFields;
 
@@ -44,13 +44,13 @@ public class FieldCollection<Type, Parent> {
     private int fieldDisplayOrder;
     private String pageLabel;
     @ToString.Exclude
-    private FieldCollectionBuilder<Parent, ?> parent;
+    private Parent parent;
     private PropertyUtils propertyUtils;
     private EventBuilder event;
     private TypedPropertyGetter<Type, ?> getter;
 
     public static <Type, Parent> FieldCollectionBuilder<Type, Parent> builder(EventBuilder event,
-        FieldCollectionBuilder<Parent, ?> parent, Class<Type> dataClass,
+        Parent parent, Class<Type> dataClass,
         PropertyUtils propertyUtils) {
       FieldCollectionBuilder<Type, Parent> result = new FieldCollectionBuilder<Type, Parent>();
       result.pageId = "1";
@@ -94,37 +94,33 @@ public class FieldCollection<Type, Parent> {
       return field(getter, DisplayContext.ReadOnly);
     }
 
-    public <U extends Iterable> FieldBuilder<Type, U> immutableList(
+    public <U extends Iterable> FieldBuilder<U, Type, Parent> immutableList(
         TypedPropertyGetter<Type, U> getter) {
-      return (FieldBuilder<Type, U>) field().id(getter).immutable();
+      return field(getter).immutable();
     }
 
     public FieldCollectionBuilder<Type, Parent> field(String id, DisplayContext context,
         String showCondition, String type, String typeParam, String label) {
-      explicitFields.add(field().id(id).context(context).showCondition(showCondition).type(type)
+      explicitFields.add(field(id).context(context).showCondition(showCondition).type(type)
           .fieldTypeParameter(typeParam).label(label));
       return this;
     }
 
     public FieldCollectionBuilder<Type, Parent> field(String id, DisplayContext context,
         String showCondition) {
-      explicitFields.add(field().id(id).context(context).showCondition(showCondition));
+      explicitFields.add(field(id).context(context).showCondition(showCondition));
       return this;
     }
 
     public FieldCollectionBuilder<Type, Parent> field(String fieldName, DisplayContext context) {
-      explicitFields.add(field().id(fieldName).context(context));
+      explicitFields.add(field(fieldName).context(context));
       return this;
     }
 
-    public FieldBuilder<Type, Parent> field(String id) {
-      FieldBuilder<Type, Parent> result = field().id(id);
+    public FieldBuilder<?, Type, Parent> field(String id) {
+      FieldBuilder<?, Type, Parent> result = createField(id, null);
       explicitFields.add(result);
       return result;
-    }
-
-    public <U> FieldBuilder<Type, U> field(TypedPropertyGetter<Type, U> getter) {
-      return (FieldBuilder<Type, U>) field().id(getter);
     }
 
     public FieldCollectionBuilder<Type, Parent> field(TypedPropertyGetter<Type, ?> getter,
@@ -137,19 +133,30 @@ public class FieldCollection<Type, Parent> {
       if (null != showCondition && null != rootFieldname) {
         showCondition = showCondition.replace("{{FIELD_NAME}}", rootFieldname);
       }
-      field().id(getter).context(context).showCondition(showCondition);
+      field(getter).context(context).showCondition(showCondition);
       return this;
     }
 
     public FieldCollectionBuilder<Type, Parent> field(TypedPropertyGetter<Type, ?> getter,
         DisplayContext context, boolean showSummary) {
-      field().id(getter).context(context).showSummary(showSummary);
+      field(getter).context(context).showSummary(showSummary);
       return this;
     }
 
-    Field.FieldBuilder<Type, Parent> field() {
-      Field.FieldBuilder<Type, Parent> f = Field.FieldBuilder.builder(dataClass, this,
-          propertyUtils);
+    public <U> Field.FieldBuilder<U, Type, Parent> field(TypedPropertyGetter<Type, U> getter) {
+      String id = propertyUtils.getPropertyName(dataClass, getter);
+      Class<U> clazz = propertyUtils.getPropertyType(dataClass, getter);
+      FieldBuilder<U, Type, Parent> f = createField(id, clazz);
+      CCD cf = propertyUtils.getAnnotationOfProperty(dataClass, getter, CCD.class);
+      if (null != cf) {
+        f.label(cf.label());
+        f.hint(cf.hint());
+      }
+      return f;
+    }
+
+    private <U> FieldBuilder<U, Type, Parent> createField(String id, Class<U> clazz) {
+      FieldBuilder<U, Type, Parent> f = FieldBuilder.builder(clazz, this, id);
       f.page(this.pageId);
       fields.add(f);
       f.fieldDisplayOrder(++fieldDisplayOrder);
@@ -158,7 +165,7 @@ public class FieldCollection<Type, Parent> {
       return f;
     }
 
-    public FieldCollectionBuilder<Parent, ?> done() {
+    public Parent done() {
       return parent;
     }
 
@@ -192,28 +199,30 @@ public class FieldCollection<Type, Parent> {
       return this;
     }
 
-    public <U> FieldCollectionBuilder<U, Type> complex(TypedPropertyGetter<Type, U> getter) {
+    public <U> FieldCollectionBuilder<U, FieldCollectionBuilder<Type, Parent>> complex(
+        TypedPropertyGetter<Type, U> getter) {
       Class<U> c = propertyUtils.getPropertyType(dataClass, getter);
       return complex(getter, c);
     }
 
-    public <U> FieldCollectionBuilder<U, Type> complex(TypedPropertyGetter<Type, ?> getter,
-        Class<U> c, boolean summary) {
+    public <U> FieldCollectionBuilder<U, FieldCollectionBuilder<Type, Parent>> complex(
+        TypedPropertyGetter<Type, ?> getter, Class<U> c, boolean summary) {
       String fieldName = propertyUtils.getPropertyName(dataClass, getter);
       if (null == this.rootFieldname) {
         // Register only the root complex as a field
-        field().id(fieldName).context(DisplayContext.Complex).showSummary(summary);
+        field(fieldName).context(DisplayContext.Complex).showSummary(summary);
       }
       return complex(fieldName, c);
     }
 
-    public <U> FieldCollectionBuilder<U, Type> complex(TypedPropertyGetter<Type, ?> getter,
-        Class<U> c) {
+    public <U> FieldCollectionBuilder<U, FieldCollectionBuilder<Type, Parent>> complex(
+        TypedPropertyGetter<Type, ?> getter, Class<U> c) {
       return complex(getter, c, true);
     }
 
-    <U> FieldCollectionBuilder<U, Type> complex(String fieldName, Class<U> c) {
-      FieldCollectionBuilder<Type, Parent> result = (FieldCollectionBuilder<Type, Parent>)
+    <U> FieldCollectionBuilder<U, FieldCollectionBuilder<Type, Parent>> complex(String fieldName,
+        Class<U> c) {
+      FieldCollectionBuilder<U, FieldCollectionBuilder<Type, Parent>> result =
           FieldCollectionBuilder.builder(event, this, c, propertyUtils);
       complexFields.add(result);
       result.rootFieldname = fieldName;
@@ -221,11 +230,11 @@ public class FieldCollection<Type, Parent> {
       if (null != parent) {
         result.fieldDisplayOrder = this.fieldDisplayOrder;
       }
-      return (FieldCollectionBuilder<U, Type>) result;
+      return result;
     }
 
     public FieldCollectionBuilder<Type, Parent> label(String id, String value) {
-      explicitFields.add(field().id(id).context(DisplayContext.ReadOnly).label(value).readOnly());
+      explicitFields.add(field(id).context(DisplayContext.ReadOnly).label(value).readOnly());
       return this;
     }
 
@@ -253,10 +262,6 @@ public class FieldCollection<Type, Parent> {
     public FieldCollectionBuilder<Type, Parent> pageLabel(String label) {
       this.pageLabels.put(this.pageId.toString(), label);
       return this;
-    }
-
-    public EventBuilder<Type, ?, ?> eventBuilder() {
-      return event;
     }
   }
 }

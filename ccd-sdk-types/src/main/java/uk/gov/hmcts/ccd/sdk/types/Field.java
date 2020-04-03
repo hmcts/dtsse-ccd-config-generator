@@ -1,6 +1,5 @@
 package uk.gov.hmcts.ccd.sdk.types;
 
-import de.cronn.reflection.util.TypedPropertyGetter;
 import java.util.Hashtable;
 import java.util.Map;
 import java.util.function.Consumer;
@@ -11,7 +10,7 @@ import uk.gov.hmcts.ccd.sdk.types.FieldCollection.FieldCollectionBuilder;
 
 @Builder
 @Data
-public class Field<T, Parent> {
+public class Field<Type, Parent, Grandparent> {
 
   String id;
   String name;
@@ -33,28 +32,25 @@ public class Field<T, Parent> {
   boolean readOnly;
   private Map<String, String> blacklistedRolePermissions;
 
-  Class dataClass;
+  Class<Type> clazz;
   @ToString.Exclude
-  private FieldCollection.FieldCollectionBuilder<T, Parent> parent;
+  private FieldCollectionBuilder<Parent, Grandparent> parent;
 
-  public static class FieldBuilder<T, Parent> {
+  public static class FieldBuilder<Type, Parent, Grandparent> {
 
-    private uk.gov.hmcts.ccd.sdk.types.PropertyUtils propertyUtils;
-    private TypedPropertyGetter<T, ?> getter;
-
-    public static <T, Parent> FieldBuilder<T, Parent> builder(Class dataclass,
-        FieldCollection.FieldCollectionBuilder<T, ?> parent,
-        uk.gov.hmcts.ccd.sdk.types.PropertyUtils propertyUtils) {
+    public static <Type, Parent, Grandparent> FieldBuilder<Type, Parent, Grandparent> builder(
+        Class<Type> clazz, FieldCollection.FieldCollectionBuilder<Parent, Grandparent> parent,
+        String id) {
       FieldBuilder result = new FieldBuilder();
-      result.dataClass = dataclass;
+      result.clazz = clazz;
       result.parent = parent;
-      result.propertyUtils = propertyUtils;
       result.context = DisplayContext.Complex;
       result.blacklistedRolePermissions = new Hashtable<>();
+      result.id = id;
       return result;
     }
 
-    public FieldBuilder<T, Parent> blacklist(String crud, HasRole... roles) {
+    public FieldBuilder<Type, Parent, Grandparent> blacklist(String crud, HasRole... roles) {
       for (HasRole role : roles) {
         blacklistedRolePermissions.put(role.getRole(), crud);
       }
@@ -62,72 +58,60 @@ public class Field<T, Parent> {
       return this;
     }
 
-    public FieldBuilder<T, Parent> blacklist(HasRole... roles) {
+    public FieldBuilder<Type, Parent, Grandparent> blacklist(HasRole... roles) {
       return blacklist("CRUD", roles);
     }
 
-    public FieldBuilder<T, Parent> type(String t) {
+    public FieldBuilder<Type, Parent, Grandparent> type(String t) {
       this.type = t;
       return this;
     }
 
-    public FieldBuilder<T, Parent> immutable() {
+    public FieldBuilder<Type, Parent, Grandparent> immutable() {
       this.immutable = true;
       return this;
     }
 
-    public FieldBuilder<T, Parent> mutable() {
+    public FieldBuilder<Type, Parent, Grandparent> mutable() {
       this.mutable = true;
       return this;
     }
 
-    public FieldBuilder<T, Parent> showSummary() {
+    public FieldBuilder<Type, Parent, Grandparent> showSummary() {
       this.showSummary = true;
       return this;
     }
 
-    public FieldBuilder<T, Parent> showSummary(boolean b) {
+    public FieldBuilder<Type, Parent, Grandparent> showSummary(boolean b) {
       this.showSummary = b;
       return this;
     }
 
-    public FieldCollectionBuilder<Parent, T> complex() {
-      Class c = propertyUtils.getPropertyType(dataClass, getter);
+    public FieldCollectionBuilder<Type, FieldCollectionBuilder<Parent, Grandparent>> complex() {
+      if (clazz == null) {
+        throw new RuntimeException("Cannot infer type for field: " + id
+            + ". Provide an explicit type.");
+      }
+      return parent.complex(this.id, clazz);
+    }
+
+    public <U> FieldCollectionBuilder<U, FieldCollectionBuilder<Parent, Grandparent>> complex(
+        Class<U> c) {
       return parent.complex(this.id, c);
     }
 
-    public <U> FieldCollectionBuilder<U, T> complex(Class<U> c) {
-      return parent.complex(this.id, c);
-    }
-
-    public <U> FieldCollectionBuilder<T, Parent> complex(Class<U> c,
+    public <U> FieldCollectionBuilder<Parent, Grandparent> complex(Class<U> c,
         Consumer<FieldCollectionBuilder<U, ?>> renderer) {
       renderer.accept(parent.complex(this.id, c));
       return parent;
     }
 
-    public FieldBuilder<T, Parent> id(String id) {
-      this.id = id;
-      return this;
-    }
 
-    public FieldBuilder<T, Parent> id(TypedPropertyGetter<T, ?> getter) {
-      this.getter = getter;
-      id = propertyUtils.getPropertyName(dataClass, getter);
-
-      CCD cf = propertyUtils.getAnnotationOfProperty(dataClass, getter, CCD.class);
-      if (null != cf) {
-        label = cf.label();
-        hint = cf.hint();
-      }
-      return this;
-    }
-
-    public FieldCollection.FieldCollectionBuilder<T, Parent> done() {
+    public FieldCollection.FieldCollectionBuilder<Parent, Grandparent> done() {
       return parent;
     }
 
-    public FieldBuilder<T, Parent> readOnly() {
+    public FieldBuilder<Type, Parent, Grandparent> readOnly() {
       this.readOnly = true;
       return this;
     }

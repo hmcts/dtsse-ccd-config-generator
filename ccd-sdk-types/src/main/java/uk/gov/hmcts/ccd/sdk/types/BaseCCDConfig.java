@@ -48,7 +48,8 @@ public abstract class BaseCCDConfig<Model, State,
     builder.prefix(state, prefix);
   }
 
-  public FieldBuilder<Model, ?> field(String id) {
+  @Override
+  public FieldBuilder<?, ?, ?> field(String id) {
     return builder.field(id);
   }
 
