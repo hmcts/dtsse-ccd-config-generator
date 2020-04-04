@@ -55,12 +55,10 @@ public class FPLConfigGenerationTests {
         prodConfig = tmp.getRoot().toPath().resolve("production");
         Path resRoot = Paths.get(Resources.getResource("ccd-definition").toURI());
         FileUtils.copyDirectory(resRoot.resolve("ComplexTypes").toFile(), prodConfig.resolve("ComplexTypes").toFile());
-//        FileUtils.copyDirectory(resRoot.resolve("CaseEvent").toFile(), prodConfig.resolve("CaseEvent").toFile());
-//        FileUtils.copyDirectory(resRoot.resolve("AuthorisationCaseField").toFile(), prodConfig.resolve("AuthorisationCaseField").toFile());
         FileUtils.copyDirectory(resRoot.resolve("FixedLists").toFile(), prodConfig.resolve("FixedLists").toFile());
-        FileUtils.copyDirectory(resRoot.resolve("CaseEventToComplexTypes").toFile(), prodConfig.resolve("CaseEventToComplexTypes").toFile());
+        FileUtils.copyDirectory(resRoot.resolve("CaseEventToComplexTypes/createOrder/child-selector").toFile(),
+            prodConfig.resolve("CaseEventToComplexTypes/createOrder/child-selector").toFile());
         FileUtils.copyDirectory(resRoot.resolve("AuthorisationCaseField").toFile(), prodConfig.resolve("AuthorisationCaseField").toFile());
-        FileUtils.copyDirectory(resRoot.resolve("CaseEventToFields").toFile(), prodConfig.resolve("CaseEventToFields").toFile());
 
         copyResourceToOutput("AuthorisationCaseState.json");
         copyResourceToOutput("CaseField.json");
@@ -242,8 +240,10 @@ public class FPLConfigGenerationTests {
         try {
             String expectedString = FileUtils.readFileToString(expected, Charset.defaultCharset());
             String actualString = FileUtils.readFileToString(actual, Charset.defaultCharset());
-            expectedString = stripIrrelevant(expectedString);
-            actualString = stripIrrelevant(actualString);
+            // ID irrelevant to this sheet.
+            boolean stripID = expected.getAbsolutePath().contains("CaseEventToComplexTypes");
+            expectedString = stripIrrelevant(expectedString, stripID);
+            actualString = stripIrrelevant(actualString, stripID);
             JSONCompareResult result = JSONCompare.compareJSON(expectedString, actualString, JSONCompareMode.NON_EXTENSIBLE);
             if (result.failed()) {
                 System.out.println("Failed comparing " + expected.getName() + " to " + actual.getName());
@@ -288,7 +288,7 @@ public class FPLConfigGenerationTests {
                 System.out.println("ACTUAL count:" + actualValues.size());
                 System.out.println("ACTUAL:");
                 System.out.println(actualString);
-                throw new RuntimeException("Compare failed for " + expected.getName());
+                throw new RuntimeException("Compare failed for " + expected.getPath());
             }
 
         } catch (Exception e) {
@@ -301,13 +301,27 @@ public class FPLConfigGenerationTests {
         }
     }
 
-    private String stripIrrelevant(String json) {
+    private String stripIrrelevant(String json, boolean stripID) {
         List<Map<String, Object>> entries = fromJSON(json);
         for (Map<String, Object> entry : entries) {
             entry.remove("Comment");
             entry.remove("DisplayOrder");
+            entry.remove("PageFieldDisplayOrder");
+            entry.remove("FieldDisplayOrder");
+            entry.remove("EventElementLabel");
+            entry.remove("ElementLabel");
+            if (stripID) {
+               entry.remove("ID");
+            }
+            if ("Public".equals(entry.get("SecurityClassification"))) {
+                entry.remove("SecurityClassification");
+            }
             if (" ".equals(entry.get("EventElementLabel"))) {
                 entry.remove("EventElementLabel");
+            }
+
+            if (" ".equals(entry.get("PageLabel"))) {
+                entry.remove("PageLabel");
             }
 
             if ("N".equals(entry.get("ShowSummary"))) {
@@ -317,6 +331,9 @@ public class FPLConfigGenerationTests {
                 entry.remove("ShowEventNotes");
             }
             if ("N".equals(entry.get("ShowSummaryChangeOption"))) {
+                entry.remove("ShowSummaryChangeOption");
+            }
+            if ("No".equals(entry.get("ShowSummaryChangeOption"))) {
                 entry.remove("ShowSummaryChangeOption");
             }
         }

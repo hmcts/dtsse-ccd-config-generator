@@ -106,6 +106,10 @@ public class Field<Type, Parent, Grandparent> {
       return parent;
     }
 
+    public <U> FieldCollectionBuilder<U,
+        FieldCollectionBuilder<Parent, Grandparent>> complexWithParent(Class<U> c) {
+      return parent.complex(this.id, c, false);
+    }
 
     public FieldCollection.FieldCollectionBuilder<Parent, Grandparent> done() {
       return parent;

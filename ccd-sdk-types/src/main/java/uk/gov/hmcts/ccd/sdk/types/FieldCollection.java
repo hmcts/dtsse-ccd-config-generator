@@ -221,9 +221,14 @@ public class FieldCollection {
     }
 
     <U> FieldCollectionBuilder<U, FieldCollectionBuilder<Type, Parent>> complex(String fieldName,
-        Class<U> c) {
+        Class<U> c, boolean stripRoot) {
       FieldCollectionBuilder<U, FieldCollectionBuilder<Type, Parent>> result =
           FieldCollectionBuilder.builder(event, this, c, propertyUtils);
+      if (null != rootFieldname && stripRoot) {
+        // TODO: refactor.
+        // Nested fields should not be added to the main field list.
+        fields.removeIf(x -> x.build().getId().equals(fieldName));
+      }
       complexFields.add(result);
       result.rootFieldname = fieldName;
       // Nested builders inherit ordering state.
@@ -231,6 +236,11 @@ public class FieldCollection {
         result.fieldDisplayOrder = this.fieldDisplayOrder;
       }
       return result;
+    }
+
+    <U> FieldCollectionBuilder<U, FieldCollectionBuilder<Type, Parent>> complex(String fieldName,
+        Class<U> c) {
+      return complex(fieldName, c, true);
     }
 
     public FieldCollectionBuilder<Type, Parent> label(String id, String value) {

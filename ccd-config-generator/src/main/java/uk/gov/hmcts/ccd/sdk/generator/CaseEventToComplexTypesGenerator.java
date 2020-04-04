@@ -34,7 +34,9 @@ public class CaseEventToComplexTypesGenerator {
         for (String fieldID : entriesByCaseField.keySet()) {
           Path output = Paths.get(folder.getPath(), fieldID + event.getNamespace() + ".json");
           JsonUtils.mergeInto(output, entriesByCaseField.get(fieldID),
-              new AddMissing(), "CaseEventID", "CaseFieldID", "ListElementCode");
+              // TODO: remove show condition primary key.
+              new AddMissing(), "CaseEventID", "CaseFieldID", "ListElementCode",
+              "FieldShowCondition");
         }
       }
     }

@@ -62,6 +62,13 @@ public class JsonUtils {
     for (Map<String, Object> generatedField : generated) {
       Optional<Map<String, Object>> existingMatch = existing.stream().filter(x -> {
         for (String primaryKey : primaryKeys) {
+          if (!x.containsKey(primaryKey)) {
+            return !generatedField.containsKey(primaryKey);
+          }
+          if (!generatedField.containsKey(primaryKey)) {
+            return !x.containsKey(primaryKey);
+          }
+
           if (!x.get(primaryKey).equals(generatedField.get(primaryKey).toString())) {
             return false;
           }
