@@ -47,7 +47,6 @@ public class FieldCollection {
     private Parent parent;
     private PropertyUtils propertyUtils;
     private EventBuilder event;
-    private TypedPropertyGetter<Type, ?> getter;
 
     public static <Type, Parent> FieldCollectionBuilder<Type, Parent> builder(EventBuilder event,
         Parent parent, Class<Type> dataClass,
@@ -94,9 +93,18 @@ public class FieldCollection {
       return field(getter, DisplayContext.ReadOnly);
     }
 
+    public FieldBuilder<?, Type, Parent> list(String id) {
+      return field(id).mutableList().type("Collection");
+    }
+
+    public <U extends Iterable> FieldBuilder<U, Type, Parent> list(
+        TypedPropertyGetter<Type, U> getter) {
+      return field(getter).mutableList();
+    }
+
     public <U extends Iterable> FieldBuilder<U, Type, Parent> immutableList(
         TypedPropertyGetter<Type, U> getter) {
-      return field(getter).immutable();
+      return field(getter).immutableList();
     }
 
     public FieldCollectionBuilder<Type, Parent> field(String id, DisplayContext context,
@@ -244,7 +252,7 @@ public class FieldCollection {
     }
 
     public FieldCollectionBuilder<Type, Parent> label(String id, String value) {
-      explicitFields.add(field(id).context(DisplayContext.ReadOnly).label(value).readOnly());
+      explicitFields.add(field(id).context(DisplayContext.ReadOnly).label(value).immutable());
       return this;
     }
 

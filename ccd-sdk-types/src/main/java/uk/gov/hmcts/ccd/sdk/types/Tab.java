@@ -54,7 +54,7 @@ public class Tab {
     }
 
     public RestrictedFieldBuilder<T, R> restrictedField(String id) {
-      fields.add(TabField.builder().id(id).showCondition(showCondition).build());
+      fields.add(TabField.builder().id(id).build());
       return (roles) -> {
         fieldsExcludedByRole.put(id, roles);
         return this;

@@ -1,5 +1,6 @@
 package uk.gov.hmcts.ccd.sdk.generator;
 
+import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableListMultimap;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
@@ -71,7 +72,7 @@ public class CaseEventToComplexTypesGenerator {
             data.put("EventElementLabel", field.getLabel());
           }
           data.put("FieldDisplayOrder", field.getFieldDisplayOrder());
-          if (null != field.getHint()) {
+          if (!Strings.isNullOrEmpty(field.getHint())) {
             data.put("HintText", field.getHint());
           }
           if (null != field.getShowCondition()) {

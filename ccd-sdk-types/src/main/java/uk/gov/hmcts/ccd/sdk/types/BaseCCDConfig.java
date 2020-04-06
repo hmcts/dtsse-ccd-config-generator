@@ -39,11 +39,6 @@ public abstract class BaseCCDConfig<Model, State,
   }
 
   @Override
-  public void blacklist(State state, Role... role) {
-    builder.blacklist(state, role);
-  }
-
-  @Override
   public void prefix(State state, String prefix) {
     builder.prefix(state, prefix);
   }

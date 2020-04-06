@@ -197,25 +197,15 @@ public class Event<T, R extends HasRole, S> {
       return this;
     }
 
-    public EventBuilder<T, R, S> aboutToSubmitWebhook(boolean b, int... retries) {
-      if (b) {
-        aboutToSubmitURL = getWebhookPathByConvention(Webhook.AboutToSubmit);
-        setRetries(Webhook.AboutToSubmit, retries);
-      }
-      return this;
-    }
-
     public EventBuilder<T, R, S> aboutToSubmitWebhook(int... retries) {
       aboutToSubmitURL = getWebhookPathByConvention(Webhook.AboutToSubmit);
       setRetries(Webhook.AboutToSubmit, retries);
       return this;
     }
 
-    public EventBuilder<T, R, S> submittedWebhook(boolean b, int... retries) {
-      if (b) {
-        submittedURL = getWebhookPathByConvention(Webhook.Submitted);
-        setRetries(Webhook.Submitted, retries);
-      }
+    public EventBuilder<T, R, S> submittedWebhook(String eventId) {
+      customWebhookName = eventId;
+      submittedURL = getWebhookPathByConvention(Webhook.Submitted);
       return this;
     }
 

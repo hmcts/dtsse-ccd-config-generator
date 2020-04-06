@@ -165,9 +165,7 @@ public class ConfigGenerator {
         for (String key : keys) {
           Map<String, String> roles = builder.stateRolePermissions.row(key);
           for (String role : roles.keySet()) {
-            if (!builder.stateRoleblacklist.containsEntry(event.getPostState(), role)) {
-              eventRolePermissions.put(event.getId(), role, roles.get(role));
-            }
+            eventRolePermissions.put(event.getId(), role, roles.get(role));
           }
         }
 
@@ -182,9 +180,7 @@ public class ConfigGenerator {
       // Set event level permissions, overriding state level where set.
       Map<String, String> grants = event.getGrants();
       for (String role : grants.keySet()) {
-        if (!builder.stateRoleblacklist.containsEntry(event.getPostState(), role)) {
-          eventRolePermissions.put(event.getId(), role, grants.get(role));
-        }
+        eventRolePermissions.put(event.getId(), role, grants.get(role));
       }
     }
     return eventRolePermissions;

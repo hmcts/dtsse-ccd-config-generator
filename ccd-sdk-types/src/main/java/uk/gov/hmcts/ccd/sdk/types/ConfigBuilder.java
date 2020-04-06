@@ -16,8 +16,6 @@ public interface ConfigBuilder<T, S, R extends HasRole> {
 
   void grantHistory(S state, R... role);
 
-  void blacklist(S state, R... role);
-
   void prefix(S state, String prefix);
 
   FieldBuilder<?, ?, ?> field(String id);

@@ -27,7 +27,8 @@ public class Field<Type, Parent, Grandparent> {
   int pageDisplayOrder;
   String type;
   String fieldTypeParameter;
-  boolean mutable;
+  boolean mutableList;
+  boolean immutableList;
   boolean immutable;
   boolean readOnly;
   private Map<String, String> blacklistedRolePermissions;
@@ -48,6 +49,16 @@ public class Field<Type, Parent, Grandparent> {
       result.blacklistedRolePermissions = new Hashtable<>();
       result.id = id;
       return result;
+    }
+
+    public FieldBuilder<Type, Parent, Grandparent> optional() {
+      context = DisplayContext.Optional;
+      return this;
+    }
+
+    public FieldBuilder<Type, Parent, Grandparent> mandatory() {
+      context = DisplayContext.Mandatory;
+      return this;
     }
 
     public FieldBuilder<Type, Parent, Grandparent> blacklist(String crud, HasRole... roles) {
@@ -72,8 +83,13 @@ public class Field<Type, Parent, Grandparent> {
       return this;
     }
 
-    public FieldBuilder<Type, Parent, Grandparent> mutable() {
-      this.mutable = true;
+    FieldBuilder<Type, Parent, Grandparent> immutableList() {
+      this.immutableList = true;
+      return this;
+    }
+
+    FieldBuilder<Type, Parent, Grandparent> mutableList() {
+      this.mutableList = true;
       return this;
     }
 
@@ -116,9 +132,8 @@ public class Field<Type, Parent, Grandparent> {
     }
 
     public FieldBuilder<Type, Parent, Grandparent> readOnly() {
-      this.readOnly = true;
+      this.context = DisplayContext.ReadOnly;
       return this;
     }
-
   }
 }

@@ -30,7 +30,6 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements ConfigBuilder
   public String caseType = "";
   public final Multimap<String, String> stateRoleHistoryAccess = ArrayListMultimap.create();
   public final Table<String, String, String> stateRolePermissions = HashBasedTable.create();
-  public final Multimap<String, String> stateRoleblacklist = ArrayListMultimap.create();
   public final Map<String, String> statePrefixes = Maps.newHashMap();
   public final Set<String> apiOnlyRoles = Sets.newHashSet();
   public final Table<String, String, List<Event.EventBuilder<T, R, S>>> events = HashBasedTable
@@ -83,13 +82,6 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements ConfigBuilder
   public void grantHistory(S state, R... roles) {
     for (R role : roles) {
       stateRoleHistoryAccess.put(state.toString(), role.getRole());
-    }
-  }
-
-  @Override
-  public void blacklist(S state, R... roles) {
-    for (HasRole role : roles) {
-      stateRoleblacklist.put(state.toString(), role.getRole());
     }
   }
 
@@ -156,7 +148,7 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements ConfigBuilder
       }
 
       @Override
-      public void apiOnly() {
+      public void setApiOnly() {
         for (R role : roles) {
           apiOnlyRoles.add(role.getRole());
         }

@@ -55,11 +55,11 @@ public class AuthorisationCaseFieldGenerator {
           if (stateRoleHistoryAccess.containsEntry(event.getPostState(), rolePermission.getKey())) {
             continue;
           }
-          String perm = fb.build().isReadOnly() ? "R" : rolePermission.getValue();
-          if (!perm.contains("D") && fb.build().isMutable()) {
+          String perm = fb.build().isImmutable() ? "R" : rolePermission.getValue();
+          if (!perm.contains("D") && fb.build().isMutableList()) {
             perm += "D";
           }
-          if (fb.build().isImmutable()) {
+          if (fb.build().isImmutable() || fb.build().isImmutableList()) {
             perm = perm.replaceAll("C", "");
           }
           fieldRolePermissions.put(fb.build().getId(), rolePermission.getKey(),
