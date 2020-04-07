@@ -154,6 +154,7 @@ public class FPLConfigGenerationTests {
     @Test
     public void generatesAllCaseEventToField() {
         assertResourceFolderMatchesGenerated("CaseEventToFields");
+        assertGeneratedFolderMatchesResource("CaseEventToFields");
     }
 
     @Test
