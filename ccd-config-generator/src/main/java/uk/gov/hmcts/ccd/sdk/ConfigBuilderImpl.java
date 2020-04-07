@@ -32,6 +32,7 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements ConfigBuilder
   public final Table<String, String, String> stateRolePermissions = HashBasedTable.create();
   public final Map<String, String> statePrefixes = Maps.newHashMap();
   public final Set<String> apiOnlyRoles = Sets.newHashSet();
+  public final Set<String> noFieldAuthRoles = Sets.newHashSet();
   public final Table<String, String, List<Event.EventBuilder<T, R, S>>> events = HashBasedTable
       .create();
   public final List<Field.FieldBuilder> explicitFields = Lists.newArrayList();
@@ -151,6 +152,13 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements ConfigBuilder
       public void setApiOnly() {
         for (R role : roles) {
           apiOnlyRoles.add(role.getRole());
+        }
+      }
+
+      @Override
+      public void noCaseEventToField() {
+        for (R role : roles) {
+          noFieldAuthRoles.add(role.getRole());
         }
       }
     };

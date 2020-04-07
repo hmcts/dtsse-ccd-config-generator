@@ -39,7 +39,7 @@ public class AuthorisationCaseFieldGenerator {
       List<WorkBasketBuilder> workBasketInputFields,
       List<WorkBasketBuilder> workBasketResultFields, Map<String, String> roleHierarchy,
       Set<String> apiOnlyRoles, List<FieldBuilder> explicitFields,
-      Multimap<String, String> stateRoleHistoryAccess) {
+      Multimap<String, String> stateRoleHistoryAccess, Set excludeFieldAuthRoles) {
 
     Table<String, String, String> fieldRolePermissions = HashBasedTable.create();
     // Add field permissions based on event permissions.
@@ -140,6 +140,9 @@ public class AuthorisationCaseFieldGenerator {
     File folder = new File(root.getPath(), "AuthorisationCaseField");
     folder.mkdir();
     for (String role : fieldRolePermissions.columnKeySet()) {
+      if (excludeFieldAuthRoles.contains(role)) {
+        continue;
+      }
 
       List<Map<String, Object>> permissions = Lists.newArrayList();
       Map<String, String> rolePermissions = fieldRolePermissions.column(role);
