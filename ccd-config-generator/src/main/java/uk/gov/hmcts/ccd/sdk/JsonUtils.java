@@ -1,18 +1,25 @@
 package uk.gov.hmcts.ccd.sdk;
 
+import com.fasterxml.jackson.core.JsonGenerator;
 import com.fasterxml.jackson.core.util.DefaultIndenter;
 import com.fasterxml.jackson.core.util.DefaultPrettyPrinter;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.type.CollectionType;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
+import com.google.common.collect.Ordering;
 import com.google.common.collect.Sets;
+import com.google.common.primitives.Chars;
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Collectors;
+import lombok.AllArgsConstructor;
 import lombok.SneakyThrows;
 
 public class JsonUtils {
@@ -24,9 +31,22 @@ public class JsonUtils {
 
   @SneakyThrows
   public static String serialise(List data) {
-    DefaultPrettyPrinter printer = new DefaultPrettyPrinter();
-    printer.indentArraysWith(DefaultIndenter.SYSTEM_LINEFEED_INSTANCE);
-    return new ObjectMapper().writer(printer).writeValueAsString(data);
+    class CustomPrinter extends DefaultPrettyPrinter {
+      @Override
+      public DefaultPrettyPrinter createInstance() {
+        CustomPrinter result = new CustomPrinter();
+        result.indentArraysWith(DefaultIndenter.SYSTEM_LINEFEED_INSTANCE);
+        return result;
+      }
+
+      @Override
+      public void writeObjectFieldValueSeparator(JsonGenerator jg) throws IOException {
+        jg.writeRaw(": ");
+      }
+    }
+
+    CustomPrinter printer = new CustomPrinter();
+    return new ObjectMapper().writer(printer).writeValueAsString(data) + "\n";
   }
 
   public static Map<String, Object> getField(String id) {
@@ -37,11 +57,18 @@ public class JsonUtils {
     return field;
   }
 
-  public static List<Map<String, Object>> mergeInto(List<Map<String, Object>> existing,
-      List<Map<String, Object>> generated, Set<String> overwriteFields, String... primaryKeys) {
+  static List<Map<String, Object>> mergeInto(List<Map<String, Object>> existing,
+      List<Map<String, Object>> generated, JsonMerger merger, String... primaryKeys) {
     for (Map<String, Object> generatedField : generated) {
       Optional<Map<String, Object>> existingMatch = existing.stream().filter(x -> {
         for (String primaryKey : primaryKeys) {
+          if (!x.containsKey(primaryKey)) {
+            return !generatedField.containsKey(primaryKey);
+          }
+          if (!generatedField.containsKey(primaryKey)) {
+            return !x.containsKey(primaryKey);
+          }
+
           if (!x.get(primaryKey).equals(generatedField.get(primaryKey).toString())) {
             return false;
           }
@@ -49,14 +76,18 @@ public class JsonUtils {
 
         return true;
       }).findFirst();
+
       if (!existingMatch.isPresent()) {
-        System.out.println("Adding new field " + generatedField.get(primaryKeys[0]));
         existing.add(generatedField);
       } else {
         Map<String, Object> match = existingMatch.get();
         for (String generatedKey : generatedField.keySet()) {
-          if (!match.containsKey(generatedKey) || overwriteFields.contains(generatedKey)) {
+          if (!match.containsKey(generatedKey)) {
             match.put(generatedKey, generatedField.get(generatedKey));
+          } else {
+            match.put(generatedKey,
+                merger.merge(generatedKey, match.get(generatedKey),
+                    generatedField.get(generatedKey)));
           }
         }
       }
@@ -67,8 +98,7 @@ public class JsonUtils {
 
   @SneakyThrows
   public static void mergeInto(Path path, List<Map<String, Object>> fields,
-      Set<String> overwritesFields, String... primaryKeys) {
-    System.out.println("Merging into " + path.getFileName());
+      JsonMerger merger, String... primaryKeys) {
     ObjectMapper mapper = new ObjectMapper();
     List<Map<String, Object>> existing;
     if (path.toFile().exists()) {
@@ -79,15 +109,52 @@ public class JsonUtils {
       existing = Lists.newArrayList();
     }
 
-    mergeInto(existing, fields, overwritesFields, primaryKeys);
+    mergeInto(existing, fields, merger, primaryKeys);
 
     writeFile(path, serialise(existing));
   }
 
-  public static void mergeInto(Path path, List<Map<String, Object>> fields, String... primaryKeys) {
-    if (primaryKeys.length == 0) {
-      throw new RuntimeException("No primary keys!");
+  @FunctionalInterface
+  public interface JsonMerger {
+    Object merge(String key, Object existingValue, Object generatedValue);
+  }
+
+  @AllArgsConstructor
+  public static  class OverwriteSpecific implements JsonMerger {
+    private Set<String> overwriteKeys;
+
+    @Override
+    public Object merge(String key, Object existingValue, Object generatedValue) {
+      return overwriteKeys.contains(key) ? generatedValue : existingValue;
     }
-    mergeInto(path, fields, Sets.newHashSet(), primaryKeys);
+  }
+
+  public static class AddMissing extends OverwriteSpecific {
+    public AddMissing() {
+      super(Sets.newHashSet());
+    }
+  }
+
+  public static class CRUDMerger implements JsonMerger {
+
+    @Override
+    public Object merge(String key, Object existing, Object generated) {
+      if (!key.equals("CRUD")) {
+        return existing;
+      }
+      String existingPermissions = existing.toString() + generated.toString();
+      // Remove any dupes.
+      existingPermissions = Sets.newHashSet(Chars.asList(existingPermissions.toCharArray()))
+          .stream().map(String::valueOf).collect(Collectors.joining());
+
+      existingPermissions = existingPermissions.replaceAll("[^CRUD]+", "");
+      if (!existingPermissions.matches("^[CRUD]+$")) {
+        throw new RuntimeException(existingPermissions);
+      }
+
+      List<Character> perm = Chars.asList(existingPermissions.toCharArray());
+      Collections.sort(perm, Ordering.explicit('C', 'R', 'U', 'D'));
+      return perm.stream().map(String::valueOf).collect(Collectors.joining());
+    }
   }
 }

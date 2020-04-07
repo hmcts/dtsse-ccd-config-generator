@@ -8,14 +8,12 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.List;
 import java.util.Map;
-import uk.gov.hmcts.ccd.sdk.ConfigBuilderImpl;
 import uk.gov.hmcts.ccd.sdk.JsonUtils;
-import uk.gov.hmcts.ccd.sdk.types.Event;
-import uk.gov.hmcts.ccd.sdk.types.Role;
+import uk.gov.hmcts.ccd.sdk.JsonUtils.AddMissing;
 
 public class AuthorisationCaseEventGenerator {
 
-  public static <T, S, R extends Role> void generate(File root,
+  public static void generate(File root,
       Table<String, String, String> eventRolePermissions,
       String caseType) {
     List<Map<String, Object>> entries = Lists.newArrayList();
@@ -36,6 +34,6 @@ public class AuthorisationCaseEventGenerator {
     folder.mkdir();
 
     Path output = Paths.get(folder.getPath(), "AuthorisationCaseEvent.json");
-    JsonUtils.mergeInto(output, entries, "CaseEventID", "UserRole");
+    JsonUtils.mergeInto(output, entries, new AddMissing(), "CaseEventID", "UserRole");
   }
 }

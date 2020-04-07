@@ -21,22 +21,7 @@ public class FPLFunctionalTest {
     GradleRunner runner = FunctionalTest.runner(projectDir);
     runner.build();
 
-    long count = Files.walk(Paths.get("../test-builds/fpl-ccd-configuration/ccd-definition-gen"))
-        .count();
-
-    assertThat(count, greaterThan(20L));
-  }
-
-  @Test
-  public void appliesToEmptyProject() throws IOException {
-    // Setup the test build
-    File projectDir = new File("../test-builds/fpl-ccd-configuration");
-
-    // Run the build
-    GradleRunner runner = FunctionalTest.runner(projectDir);
-    runner.build();
-
-    long count = Files.walk(Paths.get("../test-builds/fpl-ccd-configuration/ccd-definition-gen"))
+    long count = Files.walk(Paths.get("../test-builds/fpl-ccd-configuration/ccd-definition"))
         .count();
 
     assertThat(count, greaterThan(20L));

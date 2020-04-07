@@ -1,7 +1,10 @@
 package uk.gov.hmcts.ccd.sdk;
 
 import com.google.common.base.Strings;
+import com.google.common.collect.HashBasedTable;
+import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Maps;
+import com.google.common.collect.Multimap;
 import com.google.common.collect.Table;
 import java.io.File;
 import java.lang.reflect.Field;
@@ -83,7 +86,9 @@ public class ConfigGenerator {
         config.builder.caseType);
     AuthorisationCaseFieldGenerator.generate(outputfolder, config.builder.caseType, config.events,
         eventPermissions, config.builder.tabs, config.builder.workBasketInputFields,
-        config.builder.workBasketResultFields);
+        config.builder.workBasketResultFields, config.builder.roleHierarchy,
+        config.builder.apiOnlyRoles, config.builder.explicitFields,
+        config.builder.stateRoleHistoryAccess, config.builder.noFieldAuthRoles);
     CaseFieldGenerator
         .generateCaseFields(outputfolder, config.builder.caseType, config.typeArg, config.events,
             config.builder);
@@ -148,25 +153,34 @@ public class ConfigGenerator {
   Table<String, String, String> buildEventPermissions(
       ConfigBuilderImpl builder, List<Event> events) {
 
-    Table<String, String, String> eventRolePermissions = builder.explicit;
+
+    Table<String, String, String> eventRolePermissions = HashBasedTable.create();
     for (Event event : events) {
       // Add any state based role permissions unless event permits only explicit grants.
       if (!event.isExplicitGrants()) {
-        Map<String, String> roles = builder.stateRoles.row(event.getPostState());
-        for (String role : roles.keySet()) {
-          if (!builder.stateRoleblacklist.containsEntry(event.getPostState(), role)) {
+        // If Event is for all states, then apply each state's state level permissions.
+        Set<String> keys = event.isForAllStates()
+            ? builder.stateRolePermissions.rowKeySet()
+            : ImmutableSet.of(event.getPostState());
+        for (String key : keys) {
+          Map<String, String> roles = builder.stateRolePermissions.row(key);
+          for (String role : roles.keySet()) {
             eventRolePermissions.put(event.getId(), role, roles.get(role));
+          }
+        }
+
+        // Add any case history access
+        Multimap<String, String> stateRoleHistoryAccess = builder.stateRoleHistoryAccess;
+        if (stateRoleHistoryAccess.containsKey(event.getPostState())) {
+          for (String role : stateRoleHistoryAccess.get(event.getPostState())) {
+            eventRolePermissions.put(event.getId(), role, "R");
           }
         }
       }
       // Set event level permissions, overriding state level where set.
       Map<String, String> grants = event.getGrants();
       for (String role : grants.keySet()) {
-        if (!builder.stateRoleblacklist.containsEntry(event.getPostState(), role)) {
-          if (!eventRolePermissions.contains(event.getId(), role)) {
-            eventRolePermissions.put(event.getId(), role, grants.get(role));
-          }
-        }
+        eventRolePermissions.put(event.getId(), role, grants.get(role));
       }
     }
     return eventRolePermissions;

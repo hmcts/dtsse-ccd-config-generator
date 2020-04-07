@@ -2,7 +2,7 @@ package uk.gov.hmcts.ccd.sdk.types;
 
 import java.util.Arrays;
 import java.util.HashMap;
-import java.util.List;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -13,7 +13,7 @@ import lombok.With;
 
 @Builder
 @Data
-public class Event<T, R extends Role, S> {
+public class Event<T, R extends HasRole, S> {
 
   @With
   private String id;
@@ -27,12 +27,14 @@ public class Event<T, R extends Role, S> {
   private String aboutToStartURL;
   private String aboutToSubmitURL;
   private String submittedURL;
-  private String midEventURL;
-  private String retries;
+  private Map<Webhook, String> retries;
   private boolean explicitGrants;
   private boolean showSummary;
   private boolean showEventNotes;
+  private boolean showSummaryChangeOption;
   private int eventNumber;
+  @Builder.Default
+  private String namespace = "";
 
   public void setEventID(String eventId) {
     this.eventId = eventId;
@@ -50,7 +52,7 @@ public class Event<T, R extends Role, S> {
   }
 
   @ToString.Exclude
-  private FieldCollection.FieldCollectionBuilder<T, ?> fields;
+  private FieldCollection.FieldCollectionBuilder<T, EventBuilder<T, R, S>> fields;
 
   @Builder.Default
   // TODO: don't always add.
@@ -59,33 +61,43 @@ public class Event<T, R extends Role, S> {
   private int displayOrder = -1;
 
   private Map<String, String> grants;
+  private Set<String> historyOnlyRoles;
 
   public Map<String, String> getGrants() {
     return grants;
   }
 
+  public Set<String> getHistoryOnlyRoles() {
+    return historyOnlyRoles;
+  }
+
   private Class dataClass;
   private static int eventCount;
 
+  public boolean isForAllStates() {
+    return "*".equals(preState);
+  }
 
-  public static class EventBuilder<T, R extends Role, S> {
+  public static class EventBuilder<T, R extends HasRole, S> {
 
     private WebhookConvention webhookConvention;
 
-    public static <T, R extends Role, S> EventBuilder<T, R, S> builder(Class dataClass,
+    public static <T, R extends HasRole, S> EventBuilder<T, R, S> builder(Class dataClass,
         WebhookConvention convention, PropertyUtils propertyUtils) {
       EventBuilder<T, R, S> result = new EventBuilder<T, R, S>();
       result.dataClass = dataClass;
       result.grants = new HashMap<>();
+      result.historyOnlyRoles = new HashSet<>();
       result.fields = FieldCollection.FieldCollectionBuilder
-          .builder(null, dataClass, propertyUtils);
+          .builder(result, result, dataClass, propertyUtils);
       result.eventNumber = eventCount++;
       result.webhookConvention = convention;
+      result.retries = new HashMap<>();
 
       return result;
     }
 
-    public FieldCollection.FieldCollectionBuilder<T, ?> fields() {
+    public FieldCollection.FieldCollectionBuilder<T, EventBuilder<T, R, S>> fields() {
       return fields;
     }
 
@@ -94,6 +106,16 @@ public class Event<T, R extends Role, S> {
       if (description == null) {
         description = n;
       }
+      return this;
+    }
+
+    public EventBuilder<T, R, S> showSummaryChangeOption(boolean b) {
+      this.showSummaryChangeOption = b;
+      return this;
+    }
+
+    public EventBuilder<T, R, S> showSummaryChangeOption() {
+      this.showSummaryChangeOption = true;
       return this;
     }
 
@@ -118,31 +140,19 @@ public class Event<T, R extends Role, S> {
       return this;
     }
 
-    EventBuilder<T, R, S> forStates(S... states) {
-      return forState(states[0]);
-    }
-
-    protected EventBuilder<T, R, S> forState(String state) {
-      this.preState = state;
-      this.postState = state;
-      return this;
-    }
-
     EventBuilder<T, R, S> forState(S state) {
       this.preState = state.toString();
       this.postState = state.toString();
       return this;
     }
 
-    EventBuilder<T, R, S> postState(S state) {
-      this.postState = state.toString();
-      return this;
-    }
 
-    EventBuilder<T, R, S> preState(S state) {
-      if (null != state) {
-        this.preState = state.toString();
+    public EventBuilder<T, R, S> grantHistoryOnly(R... roles) {
+      for (R role : roles) {
+        historyOnlyRoles.add(role.getRole());
       }
+      grant("R", roles);
+
       return this;
     }
 
@@ -154,7 +164,7 @@ public class Event<T, R extends Role, S> {
       return this;
     }
 
-    private String customWebhookName;
+    String customWebhookName;
 
     public EventBuilder<T, R, S> allWebhooks() {
       return allWebhooks(this.customWebhookName);
@@ -165,56 +175,63 @@ public class Event<T, R extends Role, S> {
       aboutToStartWebhook();
       aboutToSubmitWebhook();
       submittedWebhook();
-      midEventWebhook();
       return this;
     }
 
-    public EventBuilder<T, R, S> aboutToStartWebhook(String eventId) {
+    public EventBuilder<T, R, S> aboutToStartWebhook(String eventId, int... retries) {
       this.customWebhookName = eventId;
-      return aboutToStartWebhook();
+      return aboutToStartWebhook(retries);
     }
 
-    public EventBuilder<T, R, S> aboutToStartWebhook() {
+    public EventBuilder<T, R, S> aboutToStartWebhook(int... retries) {
       // Use snake case event ID by convention
       aboutToStartURL = getWebhookPathByConvention(Webhook.AboutToStart);
+      setRetries(Webhook.AboutToStart, retries);
       return this;
     }
 
-    public EventBuilder<T, R, S> aboutToSubmitWebhook(String eventId) {
+    public EventBuilder<T, R, S> aboutToSubmitWebhook(String eventId, int... retries) {
       this.customWebhookName = eventId;
       aboutToSubmitURL = getWebhookPathByConvention(Webhook.AboutToSubmit);
+      setRetries(Webhook.AboutToSubmit, retries);
       return this;
     }
 
-    public EventBuilder<T, R, S> aboutToSubmitWebhook() {
+    public EventBuilder<T, R, S> aboutToSubmitWebhook(int... retries) {
       aboutToSubmitURL = getWebhookPathByConvention(Webhook.AboutToSubmit);
+      setRetries(Webhook.AboutToSubmit, retries);
       return this;
     }
 
-    public EventBuilder<T, R, S> submittedWebhook() {
+    public EventBuilder<T, R, S> submittedWebhook(String eventId) {
+      customWebhookName = eventId;
       submittedURL = getWebhookPathByConvention(Webhook.Submitted);
       return this;
     }
 
-    public EventBuilder<T, R, S> midEventWebhook(String eventId) {
-      this.customWebhookName = eventId;
-      midEventURL = getWebhookPathByConvention(Webhook.MidEvent);
+    public EventBuilder<T, R, S> submittedWebhook(int... retries) {
+      submittedURL = getWebhookPathByConvention(Webhook.Submitted);
+      setRetries(Webhook.Submitted, retries);
       return this;
     }
 
-    public EventBuilder<T, R, S> midEventWebhook() {
-      midEventURL = getWebhookPathByConvention(Webhook.MidEvent);
+    public EventBuilder<T, R, S> retries(int... retries) {
+      for (Webhook value : Webhook.values()) {
+        setRetries(value, retries);
+      }
+
       return this;
     }
 
-    public EventBuilder<T, R, S> retries(Integer... retries) {
-      List<String> strings = Arrays.stream(retries).map(x -> x.toString())
-          .collect(Collectors.toList());
-      this.retries = String.join(",", strings);
-      return this;
+    private void setRetries(Webhook hook, int... retries) {
+      if (retries.length > 0) {
+        String val = String.join(",", Arrays.stream(retries).mapToObj(String::valueOf).collect(
+            Collectors.toList()));
+        this.retries.put(hook, val);
+      }
     }
 
-    private String getWebhookPathByConvention(Webhook hook) {
+    String getWebhookPathByConvention(Webhook hook) {
       String id = customWebhookName != null ? customWebhookName
           : eventId;
       return webhookConvention.buildUrl(hook, id);

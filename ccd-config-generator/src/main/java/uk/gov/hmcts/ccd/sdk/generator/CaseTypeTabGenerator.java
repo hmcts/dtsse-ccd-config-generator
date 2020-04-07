@@ -9,14 +9,15 @@ import java.util.List;
 import java.util.Map;
 import uk.gov.hmcts.ccd.sdk.ConfigBuilderImpl;
 import uk.gov.hmcts.ccd.sdk.JsonUtils;
-import uk.gov.hmcts.ccd.sdk.types.Role;
+import uk.gov.hmcts.ccd.sdk.JsonUtils.AddMissing;
+import uk.gov.hmcts.ccd.sdk.types.HasRole;
 import uk.gov.hmcts.ccd.sdk.types.Tab;
 import uk.gov.hmcts.ccd.sdk.types.Tab.TabBuilder;
 import uk.gov.hmcts.ccd.sdk.types.TabField;
 
 public class CaseTypeTabGenerator {
 
-  public static <T, R extends Role, S> void generate(File root, String caseType,
+  public static <T, R extends HasRole, S> void generate(File root, String caseType,
       ConfigBuilderImpl<T, S, R> builder) {
 
     List<Map<String, Object>> result = Lists.newArrayList();
@@ -32,6 +33,8 @@ public class CaseTypeTabGenerator {
             tab.getLabel(), tabDisplayOrder, tabFieldDisplayOrder++);
         if (tab.getShowCondition() != null) {
           field.put("TabShowCondition", tab.getShowCondition());
+          // Only set tab show condition on first field.
+          tab.setShowCondition(null);
         }
         if (tabField.getShowCondition() != null) {
           field.put("FieldShowCondition", tabField.getShowCondition());
@@ -41,8 +44,13 @@ public class CaseTypeTabGenerator {
       ++tabDisplayOrder;
     }
 
-    Path output = Paths.get(root.getPath(), "CaseTypeTab.json");
-    JsonUtils.mergeInto(output, result,"TabID", "CaseFieldID");
+    Path tabDir = Paths.get(root.getPath(), "CaseTypeTab");
+    tabDir.toFile().mkdirs();
+    for (Map<String, Object> tab : result) {
+      Path output = tabDir.resolve(tab.get("TabDisplayOrder") + "_" + tab.get("TabID") + ".json");
+      JsonUtils.mergeInto(output, Lists.newArrayList(tab), new AddMissing(),
+          "TabID", "CaseFieldID");
+    }
   }
 
   private static Map<String, Object> buildField(String caseType, String tabId, String fieldId,

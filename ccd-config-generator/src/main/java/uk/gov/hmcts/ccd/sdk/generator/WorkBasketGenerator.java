@@ -9,6 +9,7 @@ import java.util.List;
 import java.util.Map;
 import uk.gov.hmcts.ccd.sdk.ConfigBuilderImpl;
 import uk.gov.hmcts.ccd.sdk.JsonUtils;
+import uk.gov.hmcts.ccd.sdk.JsonUtils.AddMissing;
 import uk.gov.hmcts.ccd.sdk.types.WorkBasket;
 import uk.gov.hmcts.ccd.sdk.types.WorkBasket.WorkBasketBuilder;
 import uk.gov.hmcts.ccd.sdk.types.WorkBasketField;
@@ -36,7 +37,7 @@ public class WorkBasketGenerator {
       }
     }
     Path output = Paths.get(root.getPath(), fileName + ".json");
-    JsonUtils.mergeInto(output, result, "CaseFieldID");
+    JsonUtils.mergeInto(output, result, new AddMissing(), "CaseFieldID");
   }
 
   private static Map<String, Object> buildField(String caseType, String fieldId, String label,

@@ -1,9 +1,10 @@
 package uk.gov.hmcts.ccd.sdk.types;
 
+import uk.gov.hmcts.ccd.sdk.types.Field.FieldBuilder;
 import uk.gov.hmcts.ccd.sdk.types.Tab.TabBuilder;
 import uk.gov.hmcts.ccd.sdk.types.WorkBasket.WorkBasketBuilder;
 
-public interface ConfigBuilder<T, S, R extends Role> {
+public interface ConfigBuilder<T, S, R extends HasRole> {
 
   EventTypeBuilder<T, R, S> event(String id);
 
@@ -11,14 +12,13 @@ public interface ConfigBuilder<T, S, R extends Role> {
 
   void setEnvironment(String env);
 
-  // TODO: require enums as additional generic type params.
   void grant(S state, String permissions, R role);
 
-  void blacklist(S state, R... role);
-
-  void explicitState(String eventId, R role, String crud);
+  void grantHistory(S state, R... role);
 
   void prefix(S state, String prefix);
+
+  FieldBuilder<?, ?, ?> field(String id);
 
   void caseField(String id, String showCondition, String type, String typeParam, String label);
 
@@ -34,4 +34,6 @@ public interface ConfigBuilder<T, S, R extends Role> {
   WorkBasketBuilder workBasketResultFields();
 
   WorkBasketBuilder workBasketInputFields();
+
+  RoleBuilder<R> role(R... role);
 }

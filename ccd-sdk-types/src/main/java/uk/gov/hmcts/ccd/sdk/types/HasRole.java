@@ -1,6 +1,6 @@
 package uk.gov.hmcts.ccd.sdk.types;
 
-public interface Role {
+public interface HasRole {
 
   String getRole();
 }

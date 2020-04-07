@@ -1,12 +1,17 @@
 package uk.gov.hmcts.ccd.sdk.generator;
 
+import com.google.common.base.Strings;
+import com.google.common.collect.ImmutableListMultimap;
 import com.google.common.collect.Lists;
+import com.google.common.collect.Maps;
+import com.google.common.collect.Multimaps;
 import java.io.File;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.List;
 import java.util.Map;
 import uk.gov.hmcts.ccd.sdk.JsonUtils;
+import uk.gov.hmcts.ccd.sdk.JsonUtils.AddMissing;
 import uk.gov.hmcts.ccd.sdk.types.Event;
 import uk.gov.hmcts.ccd.sdk.types.Field;
 import uk.gov.hmcts.ccd.sdk.types.FieldCollection;
@@ -19,12 +24,21 @@ public class CaseEventToComplexTypesGenerator {
       List<Map<String, Object>> entries = Lists.newArrayList();
       List<FieldCollection.FieldCollectionBuilder> complexFields = collection.getComplexFields();
       expand(complexFields, entries, event.getId(), null, "");
-      if (entries.size() > 0) {
+
+      ImmutableListMultimap<String, Map<String, Object>> entriesByCaseField = Multimaps
+          .index(entries, x -> x.get("CaseFieldID").toString());
+
+      if (entriesByCaseField.size() > 0) {
         File folder = new File(String
             .valueOf(Paths.get(root.getPath(), "CaseEventToComplexTypes", event.getEventID())));
         folder.mkdirs();
-        Path output = Paths.get(folder.getPath(), event.getId() + ".json");
-        JsonUtils.mergeInto(output, entries, "CaseEventID", "CaseFieldID", "ListElementCode");
+        for (String fieldID : entriesByCaseField.keySet()) {
+          Path output = Paths.get(folder.getPath(), fieldID + event.getNamespace() + ".json");
+          JsonUtils.mergeInto(output, entriesByCaseField.get(fieldID),
+              // TODO: remove show condition primary key.
+              new AddMissing(), "CaseEventID", "CaseFieldID", "ListElementCode",
+              "FieldShowCondition");
+        }
       }
     }
   }
@@ -46,20 +60,19 @@ public class CaseEventToComplexTypesGenerator {
         }
         List<Field.FieldBuilder> fields = complex.getFields();
         for (Field.FieldBuilder complexField : fields) {
-          String id = eventId;
-          id = id.substring(0, 1).toUpperCase() + id.substring(1);
-          Map<String, Object> data = JsonUtils.getField(id);
+          Map<String, Object> data = Maps.newHashMap();
           entries.add(data);
-
-          data.put("ID", id);
+          data.put("LiveFrom", "01/01/2017");
           data.put("CaseEventID", eventId);
           data.put("CaseFieldID", rfn);
           Field field = complexField.build();
           data.put("DisplayContext", field.getContext().toString().toUpperCase());
           data.put("ListElementCode", locator + field.getId());
-          data.put("EventElementLabel", field.getLabel());
+          if (field.getLabel() != null) {
+            data.put("EventElementLabel", field.getLabel());
+          }
           data.put("FieldDisplayOrder", field.getFieldDisplayOrder());
-          if (null != field.getHint()) {
+          if (!Strings.isNullOrEmpty(field.getHint())) {
             data.put("HintText", field.getHint());
           }
           if (null != field.getShowCondition()) {

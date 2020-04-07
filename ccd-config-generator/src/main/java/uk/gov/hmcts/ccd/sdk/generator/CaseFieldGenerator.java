@@ -1,5 +1,6 @@
 package uk.gov.hmcts.ccd.sdk.generator;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableSet;
@@ -11,15 +12,18 @@ import java.lang.reflect.ParameterizedType;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Collection;
+import java.util.Hashtable;
 import java.util.List;
 import java.util.Map;
 import net.jodah.typetools.TypeResolver;
 import org.reflections.ReflectionUtils;
 import uk.gov.hmcts.ccd.sdk.ConfigBuilderImpl;
 import uk.gov.hmcts.ccd.sdk.JsonUtils;
+import uk.gov.hmcts.ccd.sdk.JsonUtils.OverwriteSpecific;
 import uk.gov.hmcts.ccd.sdk.types.CCD;
 import uk.gov.hmcts.ccd.sdk.types.ComplexType;
 import uk.gov.hmcts.ccd.sdk.types.Event;
+import uk.gov.hmcts.ccd.sdk.types.Field.FieldBuilder;
 import uk.gov.hmcts.ccd.sdk.types.FieldType;
 import uk.gov.hmcts.ccd.sdk.types.Label;
 
@@ -27,7 +31,7 @@ public class CaseFieldGenerator {
 
   // The field type set from code always takes precedence,
   // so eg. if a field changes type it gets updated.
-  private static final ImmutableSet<String> OVERWRITES_FIELDS = ImmutableSet.of("FieldType");
+  private static final ImmutableSet<String> OVERWRITES_FIELDS = ImmutableSet.of();
 
   public static void generateCaseFields(File outputFolder, String caseTypeId, Class dataClass,
       List<Event> events, ConfigBuilderImpl builder) {
@@ -41,7 +45,7 @@ public class CaseFieldGenerator {
     fields.addAll(getExplicitFields(caseTypeId, events, builder));
 
     Path path = Paths.get(outputFolder.getPath(), "CaseField.json");
-    JsonUtils.mergeInto(path, fields, OVERWRITES_FIELDS, "ID");
+    JsonUtils.mergeInto(path, fields, new OverwriteSpecific(OVERWRITES_FIELDS), "ID");
   }
 
   public static List<Map<String, Object>> toComplex(Class dataClass, String caseTypeId) {
@@ -55,6 +59,11 @@ public class CaseFieldGenerator {
           continue;
         }
       }
+
+      if (field.getAnnotation(JsonIgnore.class) != null) {
+        continue;
+      }
+
       JsonProperty j = field.getAnnotation(JsonProperty.class);
       String id = j != null ? j.value() : field.getName();
 
@@ -174,32 +183,37 @@ public class CaseFieldGenerator {
       }
     }
 
+    List<uk.gov.hmcts.ccd.sdk.types.Field.FieldBuilder> fs = builder.explicitFields;
+    for (FieldBuilder explicitField : fs) {
+      uk.gov.hmcts.ccd.sdk.types.Field field = explicitField.build();
+      explicitFields.put(field.getId(), field);
+    }
+
     List<Map<String, Object>> result = Lists.newArrayList();
     for (String fieldId : explicitFields.keySet()) {
       uk.gov.hmcts.ccd.sdk.types.Field field = explicitFields.get(fieldId);
       Map<String, Object> fieldData = getField(caseType, fieldId);
-      if (fieldId.equals("[STATE]")) {
+      // Don't export inbuilt metadata fields.
+      if (fieldId.matches("\\[.+\\]")) {
         continue;
       }
       result.add(fieldData);
-      fieldData.put("Label", field.getLabel());
+      if (field.getLabel() != null) {
+        fieldData.put("Label", field.getLabel());
+      }
       String type = field.getType() == null ? "Label" : field.getType();
       fieldData.put("FieldType", type);
-      fieldData.put("FieldTypeParameter", field.getFieldTypeParameter());
+      if (field.getFieldTypeParameter() != null) {
+        fieldData.put("FieldTypeParameter", field.getFieldTypeParameter());
+      }
     }
 
-    List<Map<String, Object>> fs = builder.explicitFields;
-    for (Map<String, Object> explicitField : fs) {
-      Map<String, Object> entry = getField(caseType, explicitField.get("ID").toString());
-      entry.putAll(explicitField);
-      result.add(entry);
-    }
 
     return result;
   }
 
   public static Map<String, Object> getField(String caseType, String id) {
-    Map<String, Object> result = Maps.newHashMap();
+    Map<String, Object> result = new Hashtable<>();
     result.put("LiveFrom", "01/01/2017");
     result.put("CaseTypeID", caseType);
     result.put("ID", id);

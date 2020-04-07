@@ -1,10 +1,11 @@
 package uk.gov.hmcts.ccd.sdk.types;
 
+import uk.gov.hmcts.ccd.sdk.types.Field.FieldBuilder;
 import uk.gov.hmcts.ccd.sdk.types.Tab.TabBuilder;
 import uk.gov.hmcts.ccd.sdk.types.WorkBasket.WorkBasketBuilder;
 
 public abstract class BaseCCDConfig<Model, State,
-    Role extends uk.gov.hmcts.ccd.sdk.types.Role> implements
+    Role extends HasRole> implements
     CCDConfig<Model, State, Role>, ConfigBuilder<Model, State, Role> {
 
   private ConfigBuilder<Model, State, Role> builder;
@@ -28,23 +29,23 @@ public abstract class BaseCCDConfig<Model, State,
   }
 
   @Override
+  public void grantHistory(State state, Role... roles) {
+    builder.grantHistory(state, roles);
+  }
+
+  @Override
   public void grant(State state, String permissions, Role role) {
     builder.grant(state, permissions, role);
   }
 
   @Override
-  public void blacklist(State state, Role... role) {
-    builder.blacklist(state, role);
-  }
-
-  @Override
-  public void explicitState(String eventId, Role role, String crud) {
-    builder.explicitState(eventId, role, crud);
-  }
-
-  @Override
   public void prefix(State state, String prefix) {
     builder.prefix(state, prefix);
+  }
+
+  @Override
+  public FieldBuilder<?, ?, ?> field(String id) {
+    return builder.field(id);
   }
 
   @Override
@@ -73,18 +74,23 @@ public abstract class BaseCCDConfig<Model, State,
     builder.setEnvironment(env);
   }
 
-  public TabBuilder<Model> tab(String caseHistory, String history) {
-    return builder.tab(caseHistory, history);
+  public TabBuilder<Model, Role> tab(String tabId, String tabLabel) {
+    return builder.tab(tabId, tabLabel);
   }
 
   @Override
-  public WorkBasketBuilder<Model> workBasketResultFields() {
+  public WorkBasketBuilder<Model, Role> workBasketResultFields() {
     return builder.workBasketResultFields();
   }
 
   @Override
-  public WorkBasketBuilder<Model> workBasketInputFields() {
+  public WorkBasketBuilder<Model, Role> workBasketInputFields() {
     return builder.workBasketInputFields();
+  }
+
+  @Override
+  public RoleBuilder<Role> role(Role... roles) {
+    return builder.role(roles);
   }
 }
 
