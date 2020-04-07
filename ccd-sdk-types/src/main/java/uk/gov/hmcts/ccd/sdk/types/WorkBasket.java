@@ -33,5 +33,20 @@ public class WorkBasket {
       fields.add(WorkBasketField.builder().id(fieldName).label(label).build());
       return this;
     }
+
+    public WorkBasketBuilder<T> caseReferenceField() {
+      fields.add(WorkBasketField.builder().id("[CASE_REFERENCE]").label("Case ID").build());
+      return this;
+    }
+
+    public WorkBasketBuilder<T> stateField() {
+      fields.add(WorkBasketField.builder().id("[STATE]").label("State").build());
+      return this;
+    }
+
+    public WorkBasketBuilder<T> createdDateField() {
+      fields.add(WorkBasketField.builder().id("[CREATED_DATE]").label("Created date").build());
+      return this;
+    }
   }
 }
