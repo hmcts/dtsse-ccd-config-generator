@@ -20,15 +20,20 @@ public class UnitTest {
     ConfigGenerator generator = new ConfigGenerator(reflections, "uk.gov.hmcts");
 
     @Test
+
     public void multipleStatesPerEvent() {
         CCDConfig<CaseData, State, UserRole> cfg =
                 builder -> builder.event("judgeDetails")
-                        .forStates(State.PREPARE_FOR_HEARING, State.Open);
+                        .forStates(State.PREPARE_FOR_HEARING, State.OPEN);
 
         ResolvedCCDConfig resolved = generator.resolveConfig(cfg);
         assertThat(resolved.events)
                 .extracting(Event::getId)
-                .contains("judgeDetails", "judgeDetailsOpen");
+                .contains("judgeDetails");
+
+        assertThat(resolved.events)
+                .flatExtracting(event -> event.getPreState()) // doesn't work with the method reference, inference issues?
+                .containsExactlyInAnyOrder("PREPARE_FOR_HEARING", "Open");
     }
 
     @Test
@@ -42,7 +47,7 @@ public class UnitTest {
         ResolvedCCDConfig resolved = generator.resolveConfig(x -> {
             x.setWebhookConvention((webhookType, eventId) -> webhookType + "-" + eventId);
             x.event("eventId")
-                    .forState("state")
+                    .forState(State.OPEN)
                     .allWebhooks();
         });
 
@@ -58,7 +63,7 @@ public class UnitTest {
         @Override
         public void configure(ConfigBuilder<CaseData, State, UserRole> builder) {
             builder.event("addNotes")
-                    .forStates(State.Submitted, State.Open, State.Deleted)
+                    .forStates(State.SUBMITTED, State.OPEN, State.DELETED)
                     .allWebhooks()
                     .fields()
                     .readonly(CaseData::getProceeding)

@@ -1,8 +1,10 @@
 package uk.gov.hmcts.ccd.sdk.types;
 
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -11,9 +13,11 @@ import lombok.Data;
 import lombok.ToString;
 import lombok.With;
 
+import static java.util.Arrays.stream;
+
 @Builder
 @Data
-public class Event<T, R extends HasRole, S> {
+public class Event<T, R extends HasRole, S extends HasState> {
 
   @With
   private String id;
@@ -21,8 +25,9 @@ public class Event<T, R extends HasRole, S> {
   private String eventId;
 
   private String name;
-  private String preState;
+  private List<String> preState;
   private String postState;
+  private boolean transition;
   private String description;
   private String aboutToStartURL;
   private String aboutToSubmitURL;
@@ -75,14 +80,26 @@ public class Event<T, R extends HasRole, S> {
   private static int eventCount;
 
   public boolean isForAllStates() {
-    return "*".equals(preState);
+    return !isTransition() && preState != null && preState.size() > 0 && "*".equals(preState.get(0));
   }
 
-  public static class EventBuilder<T, R extends HasRole, S> {
+  public boolean isTransition(){
+    return transition;
+  }
+
+  public boolean isInitial() {
+    return preState == null;
+  }
+
+  public boolean isMultiState() {
+    return isForAllStates() || (!isInitial() && !isTransition() && preState.size() > 1);
+  }
+
+  public static class EventBuilder<T, R extends HasRole, S extends HasState> {
 
     private WebhookConvention webhookConvention;
 
-    public static <T, R extends HasRole, S> EventBuilder<T, R, S> builder(Class dataClass,
+    public static <T, R extends HasRole, S extends HasState> EventBuilder<T, R, S> builder(Class dataClass,
         WebhookConvention convention, PropertyUtils propertyUtils) {
       EventBuilder<T, R, S> result = new EventBuilder<T, R, S>();
       result.dataClass = dataClass;
@@ -140,9 +157,42 @@ public class Event<T, R extends HasRole, S> {
       return this;
     }
 
-    EventBuilder<T, R, S> forState(S state) {
-      this.preState = state.toString();
-      this.postState = state.toString();
+    public EventBuilder<T, R, S> forState(S state) {
+      this.preState = List.of(state.getState());
+      this.postState = state.getState();
+      return this;
+
+    }
+    public EventBuilder<T, R, S> initialState(S initialState) {
+      this.preState = List.of();
+      this.postState = initialState.getState();
+      return this;
+    }
+    public EventBuilder<T, R, S> forStateTransition(S from, S to) {
+      this.preState = List.of(from.getState());
+      this.postState = to.getState();
+      this.transition = true;
+      return this;
+    }
+
+    public EventBuilder<T, R, S> forStateTransition(List<S> from, S to) {
+      this.preState = from.stream().map(S::getState).collect(Collectors.toList());
+      this.postState = to.getState();
+      this.transition = true;
+      return this;
+    }
+
+
+    public EventBuilder<T, R, S> forStates(S ... states) {
+      this.preState = stream(states)
+              .map(S::getState)
+              .collect(Collectors.toList());
+      this.postState = "*";
+      return this;
+    }
+    public EventBuilder<T, R, S> forAllStates() {
+      this.preState = List.of("*");
+      this.postState = "*";
       return this;
     }
 
@@ -225,7 +275,7 @@ public class Event<T, R extends HasRole, S> {
 
     private void setRetries(Webhook hook, int... retries) {
       if (retries.length > 0) {
-        String val = String.join(",", Arrays.stream(retries).mapToObj(String::valueOf).collect(
+        String val = String.join(",", stream(retries).mapToObj(String::valueOf).collect(
             Collectors.toList()));
         this.retries.put(hook, val);
       }

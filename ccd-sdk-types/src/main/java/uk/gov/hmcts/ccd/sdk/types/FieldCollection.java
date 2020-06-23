@@ -84,6 +84,18 @@ public class FieldCollection {
       return field(getter, DisplayContext.Mandatory);
     }
 
+    public FieldCollectionBuilder<Type, Parent> mandatory(String id, String showCondition) {
+      return field(id, DisplayContext.Mandatory, showCondition);
+    }
+
+    public FieldCollectionBuilder<Type, Parent> mandatory(String id) {
+      return field(id, DisplayContext.Mandatory, null);
+    }
+
+    public FieldCollectionBuilder<Type, Parent> optional(String id) {
+      return field(id, DisplayContext.Optional, null);
+    }
+
     public FieldCollectionBuilder<Type, Parent> readonly(TypedPropertyGetter<Type, ?> getter,
         String showCondition) {
       return field(getter, DisplayContext.ReadOnly, showCondition);
@@ -91,6 +103,14 @@ public class FieldCollection {
 
     public FieldCollectionBuilder<Type, Parent> readonly(TypedPropertyGetter<Type, ?> getter) {
       return field(getter, DisplayContext.ReadOnly);
+    }
+
+    public FieldCollectionBuilder<Type, Parent> readonly(String id) {
+      return field(id, DisplayContext.ReadOnly);
+    }
+
+    public FieldCollectionBuilder<Type, Parent> readonly(String id, String showCondition) {
+      return field(id, DisplayContext.ReadOnly, showCondition);
     }
 
     public FieldBuilder<?, Type, Parent> list(String id) {
@@ -211,6 +231,12 @@ public class FieldCollection {
         TypedPropertyGetter<Type, U> getter) {
       Class<U> c = propertyUtils.getPropertyType(dataClass, getter);
       return complex(getter, c);
+    }
+
+    public <U> FieldCollectionBuilder<U, FieldCollectionBuilder<Type, Parent>> complex(
+            TypedPropertyGetter<Type, U> getter, boolean summary) {
+      Class<U> c = propertyUtils.getPropertyType(dataClass, getter);
+      return complex(getter, c, summary);
     }
 
     public <U> FieldCollectionBuilder<U, FieldCollectionBuilder<Type, Parent>> complex(

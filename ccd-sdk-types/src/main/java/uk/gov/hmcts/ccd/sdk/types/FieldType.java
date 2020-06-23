@@ -10,5 +10,6 @@ public enum FieldType {
   TextArea,
   FixedList,
   FixedRadioList,
-  YesOrNo
+  YesOrNo,
+  Text
 }

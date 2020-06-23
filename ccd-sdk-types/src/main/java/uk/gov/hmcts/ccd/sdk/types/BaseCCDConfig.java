@@ -4,7 +4,7 @@ import uk.gov.hmcts.ccd.sdk.types.Field.FieldBuilder;
 import uk.gov.hmcts.ccd.sdk.types.Tab.TabBuilder;
 import uk.gov.hmcts.ccd.sdk.types.WorkBasket.WorkBasketBuilder;
 
-public abstract class BaseCCDConfig<Model, State,
+public abstract class BaseCCDConfig<Model, State extends HasState,
     Role extends HasRole> implements
     CCDConfig<Model, State, Role>, ConfigBuilder<Model, State, Role> {
 

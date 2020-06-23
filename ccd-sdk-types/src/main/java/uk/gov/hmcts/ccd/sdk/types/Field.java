@@ -104,10 +104,12 @@ public class Field<Type, Parent, Grandparent> {
     }
 
     public FieldCollectionBuilder<Type, FieldCollectionBuilder<Parent, Grandparent>> complex() {
-      if (clazz == null) {
-        throw new RuntimeException("Cannot infer type for field: " + id
-            + ". Provide an explicit type.");
-      }
+//      if (clazz == null) {
+//        throw new RuntimeException("Cannot infer type for field: " + id
+//            + ". Provide an explicit type.");
+//      }
+
+      //TODO what if user wants to build without class?
       return parent.complex(this.id, clazz);
     }
 

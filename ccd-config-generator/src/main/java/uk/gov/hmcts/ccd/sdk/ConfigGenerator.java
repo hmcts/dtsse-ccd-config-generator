@@ -158,10 +158,10 @@ public class ConfigGenerator {
     for (Event event : events) {
       // Add any state based role permissions unless event permits only explicit grants.
       if (!event.isExplicitGrants()) {
-        // If Event is for all states, then apply each state's state level permissions.
-        Set<String> keys = event.isForAllStates()
-            ? builder.stateRolePermissions.rowKeySet()
-            : ImmutableSet.of(event.getPostState());
+        // If Event is for multi states, then apply each state's state level permissions.
+        Set<String> keys = event.isMultiState()
+            ? filterMultiStatesByEventStates(builder, event)
+            : getStatesForEvent(event); //XXX: why this requires cast?
         for (String key : keys) {
           Map<String, String> roles = builder.stateRolePermissions.row(key);
           for (String role : roles.keySet()) {
@@ -172,11 +172,12 @@ public class ConfigGenerator {
         // Add any case history access
         Multimap<String, String> stateRoleHistoryAccess = builder.stateRoleHistoryAccess;
         if (stateRoleHistoryAccess.containsKey(event.getPostState())) {
-          for (String role : stateRoleHistoryAccess.get(event.getPostState())) {
+          for (String role : stateRoleHistoryAccess.get(event.getPostState())) { //TODO that wouldn't work with multi states yet
             eventRolePermissions.put(event.getId(), role, "R");
           }
         }
       }
+
       // Set event level permissions, overriding state level where set.
       Map<String, String> grants = event.getGrants();
       for (String role : grants.keySet()) {
@@ -184,5 +185,19 @@ public class ConfigGenerator {
       }
     }
     return eventRolePermissions;
+  }
+
+  private Set<String> filterMultiStatesByEventStates(ConfigBuilderImpl builder, Event event) {
+    if (event.isForAllStates()) {
+      return builder.stateRolePermissions.rowKeySet();
+    }
+    else {
+      return (Set<String>) builder.stateRolePermissions.rowKeySet().stream()
+              .filter(state -> event.getPreState().contains(state)).collect(Collectors.toSet());
+    }
+  }
+
+  private Set<String> getStatesForEvent(Event event) {
+    return event.isInitial() ? Set.of(event.getPostState()) : (Set<String>) event.getPreState().stream().collect(Collectors.toSet());
   }
 }

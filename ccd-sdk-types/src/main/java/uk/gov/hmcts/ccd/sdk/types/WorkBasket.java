@@ -31,7 +31,11 @@ public class WorkBasket {
     }
 
     public WorkBasketBuilder<T, R> field(String fieldName, String label) {
-      fields.add(WorkBasketField.builder().id(fieldName).label(label).build());
+      return field(fieldName, label, null);
+    }
+
+   public WorkBasketBuilder<T, R> field(String fieldName, String label, String sortingInfo) {
+      fields.add(WorkBasketField.builder().id(fieldName).sortingInformation(sortingInfo).label(label).build());
       return this;
     }
 

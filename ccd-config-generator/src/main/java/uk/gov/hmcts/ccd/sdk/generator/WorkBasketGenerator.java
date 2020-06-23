@@ -31,6 +31,7 @@ public class WorkBasketGenerator {
 
       for (WorkBasketField field : workBasket.getFields()) {
         Map<String, Object> map = buildField(caseType, field.getId(), field.getLabel(),
+                field.getSortingInformation(),
             displayOrder++);
 
         result.add(map);
@@ -41,13 +42,16 @@ public class WorkBasketGenerator {
   }
 
   private static Map<String, Object> buildField(String caseType, String fieldId, String label,
-      int displayOrder) {
+      String sortingInformation, int displayOrder) {
     Map<String, Object> field = Maps.newHashMap();
     field.put("LiveFrom", "01/01/2017");
     field.put("CaseTypeID", caseType);
     field.put("CaseFieldID", fieldId);
     field.put("Label", label);
     field.put("DisplayOrder", displayOrder);
+    if (sortingInformation != null) {
+      field.put("ResultsOrdering", sortingInformation);
+    }
     return field;
   }
 }

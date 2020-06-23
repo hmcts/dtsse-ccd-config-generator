@@ -27,22 +27,27 @@ public class AuthorisationCaseStateGenerator {
 
     Table<String, String, String> stateRolePermissions = HashBasedTable.create();
     for (Event event : events) {
-      String state = event.getPreState() == null ? event.getPostState() : event.getPreState();
       Map<String, String> rolePermissions = eventRolePermissions.row(event.getEventID());
       for (Entry<String, String> rolePermission : rolePermissions.entrySet()) {
         // For state transitions if you have C then you get both states.
         // Otherwise you only need permission for the destination state.
-        if (event.getPreState() != event.getPostState()) {
+        if (event.isTransition()) {
           if (rolePermission.getValue().contains("C") && event.getPreState() != null) {
             addPermissions(stateRolePermissions, event.getPreState(), rolePermission.getKey(),
                 rolePermission.getValue());
             // They get R only on the destination state.
-            addPermissions(stateRolePermissions, event.getPostState(), rolePermission.getKey(),
+            addPermissions(stateRolePermissions, List.of(event.getPostState()), rolePermission.getKey(),
                 "R");
           }
         } else {
-          addPermissions(stateRolePermissions, event.getPostState(), rolePermission.getKey(),
-              rolePermission.getValue());
+          if (event.isInitial()) {
+            addPermissions(stateRolePermissions, List.of(event.getPostState()), rolePermission.getKey(),
+                    rolePermission.getValue());
+          }
+          else {
+            addPermissions(stateRolePermissions, event.getPreState(), rolePermission.getKey(),
+                    rolePermission.getValue());
+          }
         }
       }
     }
@@ -73,16 +78,18 @@ public class AuthorisationCaseStateGenerator {
   }
 
   private static void addPermissions(Table<String, String, String> stateRolePermissions,
-      String state, String role, String permissions) {
-    String existingPermissions = stateRolePermissions.get(state, role);
-    existingPermissions = existingPermissions == null ? "" : existingPermissions;
-    existingPermissions += permissions;
-    // Remove any dupes.
-    existingPermissions = Sets.newHashSet(Chars.asList(existingPermissions.toCharArray()))
-        .stream().map(String::valueOf).collect(Collectors.joining());
+                                     List<String> states, String role, String permissions) {
+    for (String state : states) {
+      String existingPermissions = stateRolePermissions.get(state, role);
+      existingPermissions = existingPermissions == null ? "" : existingPermissions;
+      existingPermissions += permissions;
+      // Remove any dupes.
+      existingPermissions = Sets.newHashSet(Chars.asList(existingPermissions.toCharArray()))
+              .stream().map(String::valueOf).collect(Collectors.joining());
 
-    if (existingPermissions != null) {
-      stateRolePermissions.put(state, role, existingPermissions);
+      if (existingPermissions != null) {
+        stateRolePermissions.put(state, role, existingPermissions);
+      }
     }
   }
 

@@ -4,6 +4,8 @@ import org.assertj.core.api.Condition;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
+import uk.gov.hmcts.ccd.sdk.types.CCD;
+import uk.gov.hmcts.ccd.sdk.types.FieldType;
 
 import java.util.Arrays;
 import java.util.Collection;
@@ -25,7 +27,8 @@ public class CaseFieldGeneratorTest {
                 {"floatField", "Number"},
                 {"FloatField", "Number"},
                 {"doubleField", "Number"},
-                {"DoubleField", "Number"}
+                {"DoubleField", "Number"},
+                {"builderField", "Text"}
         });
     }
 
@@ -38,6 +41,9 @@ public class CaseFieldGeneratorTest {
         private int FloatField;
         private int DoubleField;
         private int IntegerField;
+
+        @CCD(type = FieldType.Text)
+        private StringBuilder builderField;
     }
 
     @Parameterized.Parameter
@@ -48,12 +54,8 @@ public class CaseFieldGeneratorTest {
 
 
     @Test
-    public void shouldConvertStringToAppropriateTextType() {
-        List<Map<String, Object>> generatedFromTestClass = CaseFieldGenerator.toComplex(TestClass.class, "TestClass");
-
-        Optional<Map<String, Object>> fieldUnderTest = generatedFromTestClass.stream()
-                .filter(field -> field.get("ID").equals(fieldName))
-                .findAny();
+    public void shouldConvertSimpleFieldToAppropriateType() {
+        Optional<Map<String, Object>> fieldUnderTest = getFieldUnderTest();
 
         Condition<Map<String, Object>> isOfExpectedType =
                 new Condition<>(field -> field.get("FieldType").equals(expectedType), "of type: " + expectedType);
@@ -62,4 +64,25 @@ public class CaseFieldGeneratorTest {
                 .hasValueSatisfying(isOfExpectedType);
     }
 
+    @Test
+    public void shouldNotAddTypeParameterInformationToSimpleTypes() {
+        Optional<Map<String, Object>> fieldUnderTest = getFieldUnderTest();
+
+        Condition<Map<String, Object>> doesntHaveTypeInformation =
+                new Condition<>(field -> !field.containsKey("FieldTypeParameter"), "of type: " + expectedType);
+
+        assertThat(fieldUnderTest)
+                .hasValueSatisfying(doesntHaveTypeInformation);
+    }
+
+    //TODO add JsonUnwrapped tests
+
+    private Optional<Map<String, Object>> getFieldUnderTest() {
+        List<Map<String, Object>> generatedFromTestClass = CaseFieldGenerator.toComplex(TestClass.class, "TestClass");
+
+        Optional<Map<String, Object>> fieldUnderTest = generatedFromTestClass.stream()
+                .filter(field -> field.get("ID").equals(fieldName))
+                .findAny();
+        return fieldUnderTest;
+    }
 }

@@ -11,21 +11,26 @@ import java.nio.file.Paths;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.stream.Collectors;
+
+import org.apache.commons.lang3.StringUtils;
 import uk.gov.hmcts.ccd.sdk.JsonUtils;
 import uk.gov.hmcts.ccd.sdk.JsonUtils.AddMissing;
 import uk.gov.hmcts.ccd.sdk.types.Event;
 import uk.gov.hmcts.ccd.sdk.types.Webhook;
+
+import static java.util.stream.Collectors.joining;
 
 public class CaseEventGenerator {
 
   public static void writeEvents(File root, String caseType, List<Event> events) {
 
     ImmutableListMultimap<String, Event> eventsByState = Multimaps.index(events, x -> {
-      if (x.getPreState() == null) {
+      if (x.isInitial()) {
         return x.getPostState();
       }
 
-      return Objects.equals(x.getPreState(), x.getPostState()) ? x.getPostState() : "StateChange";
+      return groupingEvents(x);
     });
 
     File folder = new File(root.getPath(), "CaseEvent");
@@ -40,6 +45,10 @@ public class CaseEventGenerator {
     }
   }
 
+  private static String groupingEvents(Event x) {
+    return !x.isTransition() ? (x.isMultiState() ? "MultiState" : x.getPostState()) : "StateChange";
+  }
+
   private static List<Map<String, Object>> serialise(String caseTypeId, List<Event> events) {
     int t = 1;
     List result = Lists.newArrayList();
@@ -47,7 +56,9 @@ public class CaseEventGenerator {
       Map<String, Object> data = JsonUtils.getField(event.getId());
       result.add(data);
       data.put("Name", event.getName());
-      data.put("Description", event.getDescription());
+      if (StringUtils.isNotBlank(event.getDescription())) {
+        data.put("Description", event.getDescription());
+      }
       if (event.getDisplayOrder() != -1) {
         data.put("DisplayOrder", event.getDisplayOrder());
       } else {
@@ -70,7 +81,7 @@ public class CaseEventGenerator {
       }
 
       if (event.getPreState() != null) {
-        data.put("PreConditionState(s)", event.getPreState());
+        data.put("PreConditionState(s)", renderPreStates(event));
       }
       data.put("PostConditionState", event.getPostState());
       data.put("SecurityClassification", "Public");
@@ -99,5 +110,9 @@ public class CaseEventGenerator {
     }
 
     return result;
+  }
+
+  private static Object renderPreStates(Event event) {
+    return event.getPreState().stream().collect(joining(";"));
   }
 }

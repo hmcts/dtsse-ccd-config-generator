@@ -8,6 +8,8 @@ import com.google.common.collect.Maps;
 import com.google.common.collect.Multimap;
 import com.google.common.collect.Sets;
 import com.google.common.collect.Table;
+
+import java.util.ArrayList;
 import java.util.Hashtable;
 import java.util.List;
 import java.util.Map;
@@ -18,6 +20,7 @@ import uk.gov.hmcts.ccd.sdk.types.EventTypeBuilder;
 import uk.gov.hmcts.ccd.sdk.types.Field;
 import uk.gov.hmcts.ccd.sdk.types.Field.FieldBuilder;
 import uk.gov.hmcts.ccd.sdk.types.HasRole;
+import uk.gov.hmcts.ccd.sdk.types.HasState;
 import uk.gov.hmcts.ccd.sdk.types.RoleBuilder;
 import uk.gov.hmcts.ccd.sdk.types.Tab;
 import uk.gov.hmcts.ccd.sdk.types.Tab.TabBuilder;
@@ -25,7 +28,7 @@ import uk.gov.hmcts.ccd.sdk.types.Webhook;
 import uk.gov.hmcts.ccd.sdk.types.WebhookConvention;
 import uk.gov.hmcts.ccd.sdk.types.WorkBasket.WorkBasketBuilder;
 
-public class ConfigBuilderImpl<T, S, R extends HasRole> implements ConfigBuilder<T, S, R> {
+public class ConfigBuilderImpl<T, S extends HasState, R extends HasRole> implements ConfigBuilder<T, S, R> {
 
   public String caseType = "";
   public final Multimap<String, String> stateRoleHistoryAccess = ArrayListMultimap.create();
@@ -33,8 +36,9 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements ConfigBuilder
   public final Map<String, String> statePrefixes = Maps.newHashMap();
   public final Set<String> apiOnlyRoles = Sets.newHashSet();
   public final Set<String> noFieldAuthRoles = Sets.newHashSet();
-  public final Table<String, String, List<Event.EventBuilder<T, R, S>>> events = HashBasedTable
-      .create();
+//  public final Table<String, String, List<Event.EventBuilder<T, R, S>>> events = HashBasedTable
+//      .create();
+  public final List<Event.EventBuilder<T, R, S>> events = new ArrayList();
   public final List<Field.FieldBuilder> explicitFields = Lists.newArrayList();
   public final List<TabBuilder> tabs = Lists.newArrayList();
   public final List<WorkBasketBuilder> workBasketResultFields = Lists.newArrayList();
@@ -76,7 +80,7 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements ConfigBuilder
 
   @Override
   public void grant(S state, String permissions, R role) {
-    stateRolePermissions.put(state.toString(), role.getRole(), permissions);
+    stateRolePermissions.put(state.getState(), role.getRole(), permissions);
   }
 
   @Override
@@ -172,27 +176,15 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements ConfigBuilder
 
   public List<Event<T, R, S>> getEvents() {
     Map<String, Event<T, R, S>> result = Maps.newHashMap();
-    for (Table.Cell<String, String, List<Event.EventBuilder<T, R, S>>> cell : events.cellSet()) {
-      for (Event.EventBuilder<T, R, S> builder : cell.getValue()) {
-        Event<T, R, S> event = builder.build();
-        event.setPreState(cell.getRowKey());
-        event.setPostState(cell.getColumnKey());
-        if (result.containsKey(event.getId())) {
-          String namespace = statePrefixes.getOrDefault(cell.getColumnKey(), "") + cell
-                  .getColumnKey();
-          String stateSpecificId =
-              event.getEventID() + namespace;
-          if (result.containsKey(stateSpecificId)) {
-            throw new RuntimeException("Duplicate event:" + stateSpecificId);
-          }
-          event.setId(stateSpecificId);
-          event.setNamespace(namespace);
-        }
-        if (event.getPreState().isEmpty()) {
-          event.setPreState(null);
-        }
-        result.put(event.getId(), event);
+    for (Event.EventBuilder<T, R, S> builder : events) {
+      Event<T, R, S> event = builder.build();
+      if (result.containsKey(event.getId())) {
+        event.setId(event.getEventID());
       }
+      if (event.getPreState().isEmpty()) {
+        event.setPreState(null);
+      }
+      result.put(event.getId(), event);
     }
 
     return Lists.newArrayList(result.values());
@@ -209,42 +201,40 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements ConfigBuilder
 
     @Override
     public Event.EventBuilder<T, R, S> forState(S state) {
-      add(state.toString(), state.toString());
-      return builder;
+      return add(builder.forState(state));
     }
 
     @Override
     public Event.EventBuilder<T, R, S> initialState(S state) {
-      add("", state.toString());
-      return builder;
+      return add(builder.initialState(state));
     }
 
     @Override
     public Event.EventBuilder<T, R, S> forStateTransition(S from, S to) {
-      add(from.toString(), to.toString());
-      return builder;
+      return add(builder.forStateTransition(from, to));
     }
 
     @Override
+    public Event.EventBuilder<T, R, S> forStateTransition(List<S> from, S to) {
+      return add(builder.forStateTransition(from, to));
+    }
+
+
+
+    @Override
     public Event.EventBuilder<T, R, S> forAllStates() {
-      add("*", "*");
-      return builder;
+      return add(builder.forAllStates());
     }
 
     @Override
     public Event.EventBuilder<T, R, S> forStates(S... states) {
-      for (S state : states) {
-        forState(state);
-      }
+      return add(builder.forStates(states));
+    }
 
+    private Event.EventBuilder<T,R,S> add(Event.EventBuilder<T,R,S> eventBuilder) {
+      events.add(builder);
       return builder;
     }
 
-    private void add(String from, String to) {
-      if (!events.contains(from, to)) {
-        events.put(from, to, Lists.newArrayList());
-      }
-      events.get(from, to).add(builder);
-    }
   }
 }

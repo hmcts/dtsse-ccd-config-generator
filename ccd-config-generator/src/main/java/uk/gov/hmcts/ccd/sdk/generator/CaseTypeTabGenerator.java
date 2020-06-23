@@ -11,20 +11,19 @@ import uk.gov.hmcts.ccd.sdk.ConfigBuilderImpl;
 import uk.gov.hmcts.ccd.sdk.JsonUtils;
 import uk.gov.hmcts.ccd.sdk.JsonUtils.AddMissing;
 import uk.gov.hmcts.ccd.sdk.types.HasRole;
+import uk.gov.hmcts.ccd.sdk.types.HasState;
 import uk.gov.hmcts.ccd.sdk.types.Tab;
 import uk.gov.hmcts.ccd.sdk.types.Tab.TabBuilder;
 import uk.gov.hmcts.ccd.sdk.types.TabField;
 
 public class CaseTypeTabGenerator {
 
-  public static <T, R extends HasRole, S> void generate(File root, String caseType,
-      ConfigBuilderImpl<T, S, R> builder) {
+  public static <T, R extends HasRole, S extends HasState> void generate(File root, String caseType,
+                                                                         ConfigBuilderImpl<T, S, R> builder) {
 
     List<Map<String, Object>> result = Lists.newArrayList();
-    result.add(buildField(caseType, "CaseHistory", "caseHistory",
-        "History", 1, 1));
 
-    int tabDisplayOrder = 2;
+    int tabDisplayOrder = 1;
     for (TabBuilder tb : builder.tabs) {
       Tab tab = tb.build();
       int tabFieldDisplayOrder = 1;

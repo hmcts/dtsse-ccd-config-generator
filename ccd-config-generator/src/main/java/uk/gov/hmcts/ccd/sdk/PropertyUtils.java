@@ -3,6 +3,8 @@ package uk.gov.hmcts.ccd.sdk;
 import com.fasterxml.jackson.annotation.JsonGetter;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import de.cronn.reflection.util.TypedPropertyGetter;
+import org.apache.commons.lang3.StringUtils;
+
 import java.beans.PropertyDescriptor;
 import java.lang.annotation.Annotation;
 
@@ -31,7 +33,7 @@ public class PropertyUtils implements uk.gov.hmcts.ccd.sdk.types.PropertyUtils {
     }
     JsonProperty j = de.cronn.reflection.util.PropertyUtils
         .getAnnotationOfProperty(c, getter, JsonProperty.class);
-    return j != null ? j.value() : de.cronn.reflection.util.PropertyUtils
+    return j != null && StringUtils.isNotBlank(j.value()) ? j.value() : de.cronn.reflection.util.PropertyUtils
         .getPropertyName(c, getter);
   }
 }

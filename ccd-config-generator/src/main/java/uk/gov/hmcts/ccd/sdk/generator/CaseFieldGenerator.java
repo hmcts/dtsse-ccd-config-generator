@@ -2,6 +2,7 @@ package uk.gov.hmcts.ccd.sdk.generator;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonUnwrapped;
 import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Lists;
@@ -15,7 +16,11 @@ import java.util.Collection;
 import java.util.Hashtable;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
+
 import net.jodah.typetools.TypeResolver;
+import org.apache.commons.lang3.StringUtils;
 import org.reflections.ReflectionUtils;
 import uk.gov.hmcts.ccd.sdk.ConfigBuilderImpl;
 import uk.gov.hmcts.ccd.sdk.JsonUtils;
@@ -26,6 +31,8 @@ import uk.gov.hmcts.ccd.sdk.types.Event;
 import uk.gov.hmcts.ccd.sdk.types.Field.FieldBuilder;
 import uk.gov.hmcts.ccd.sdk.types.FieldType;
 import uk.gov.hmcts.ccd.sdk.types.Label;
+
+import static java.util.stream.Collectors.toSet;
 
 public class CaseFieldGenerator {
 
@@ -51,7 +58,7 @@ public class CaseFieldGenerator {
   public static List<Map<String, Object>> toComplex(Class dataClass, String caseTypeId) {
     List<Map<String, Object>> fields = Lists.newArrayList();
 
-    for (Field field : ReflectionUtils.getAllFields(dataClass)) {
+    for (Field field : getAllFieldDistinct(dataClass)) {
 
       CCD cf = field.getAnnotation(CCD.class);
       if (null != cf) {
@@ -64,8 +71,13 @@ public class CaseFieldGenerator {
         continue;
       }
 
+      JsonUnwrapped ju = field.getAnnotation(JsonUnwrapped.class);
+      if (ju != null) {
+        fields.addAll(toComplex(field.getType(), caseTypeId));
+        continue;
+      }
       JsonProperty j = field.getAnnotation(JsonProperty.class);
-      String id = j != null ? j.value() : field.getName();
+      String id = j != null && StringUtils.isNotBlank(j.value()) ? j.value() : field.getName();
 
       Label label = field.getAnnotation(Label.class);
       if (null != label) {
@@ -103,6 +115,15 @@ public class CaseFieldGenerator {
     }
 
     return fields;
+  }
+
+  private static Set<Field> getAllFieldDistinct(Class dataClass) {
+    Set<String> fields = ReflectionUtils.getFields(dataClass)
+            .stream().map(Field::getName).collect(toSet());
+
+    return ReflectionUtils.getAllFields(dataClass, field ->
+            field.getDeclaringClass() == dataClass || !fields.contains(field.getName())
+    );
   }
 
   private static void inferFieldType(Class dataClass, Field field, Map<String, Object> info,

@@ -4,7 +4,7 @@ import uk.gov.hmcts.ccd.sdk.types.Field.FieldBuilder;
 import uk.gov.hmcts.ccd.sdk.types.Tab.TabBuilder;
 import uk.gov.hmcts.ccd.sdk.types.WorkBasket.WorkBasketBuilder;
 
-public interface ConfigBuilder<T, S, R extends HasRole> {
+public interface ConfigBuilder<T, S extends HasState, R extends HasRole> {
 
   EventTypeBuilder<T, R, S> event(String id);
 

@@ -49,12 +49,19 @@ public class Tab {
     }
 
     public TabBuilder<T, R> field(String fieldName) {
-      fields.add(TabField.builder().id(fieldName).build());
+      return field(fieldName, null);
+    }
+
+    public TabBuilder<T, R> field(String fieldName, String showCondition) {
+      fields.add(TabField.builder().id(fieldName).showCondition(showCondition).build());
       return this;
     }
 
     public RestrictedFieldBuilder<T, R> restrictedField(String id) {
-      fields.add(TabField.builder().id(id).build());
+      return restrictedField(id, null);
+    }
+    public RestrictedFieldBuilder<T, R> restrictedField(String id, String showCondition) {
+      fields.add(TabField.builder().id(id).showCondition(showCondition).build());
       return (roles) -> {
         fieldsExcludedByRole.put(id, roles);
         return this;
