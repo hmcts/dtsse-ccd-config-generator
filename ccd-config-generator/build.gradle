@@ -64,7 +64,7 @@ dependencies {
     testCompile group: 'javax.xml.bind', name: 'jaxb-api', version: '2.3.1'
     testCompile group: 'org.springframework.boot', name: 'spring-boot-starter-mail', version: versions.springBoot
 
-    compile group: 'org.apache.commons', name: 'commons-lang3', version: '3.9'
+    compile group: 'org.apache.commons', name: 'commons-lang3', version: '3.11'
     compile group: 'de.cronn', name: 'reflection-util', version: '2.4.1'
     compile group: 'org.objenesis', name: 'objenesis', version: '3.1'
     compile group: 'cglib', name: 'cglib', version: '3.3.0'
