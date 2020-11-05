@@ -35,7 +35,7 @@ dependencies {
     testCompile group: 'org.flywaydb', name: 'flyway-core', version: '6.3.2'
     testCompile group: 'org.springframework.boot', name: 'spring-boot-starter-quartz', version: versions.springBoot
     testCompile (group: 'org.springframework.boot', name: 'spring-boot-starter-web', version: versions.springBoot)
-    testCompile group: 'org.springframework.security', name: 'spring-security-config', version: '5.2.1.RELEASE'
+    testCompile group: 'org.springframework.security', name: 'spring-security-config', version: '5.4.1'
     testCompile group: 'org.springframework.security', name: 'spring-security-oauth2-resource-server', version: '5.2.1.RELEASE'
     testCompile group: 'org.springframework.security', name: 'spring-security-oauth2-jose', version: '5.2.1.RELEASE'
     testCompile group: 'com.nimbusds', name: 'nimbus-jose-jwt', version: '8.6' // override to fix vulnerability issue (CVE-2019-17195)
