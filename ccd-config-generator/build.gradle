@@ -48,7 +48,7 @@ dependencies {
     testCompile group: 'io.springfox', name: 'springfox-swagger2', version: versions.springfoxSwagger
     testCompile group: 'io.springfox', name: 'springfox-swagger-ui', version: versions.springfoxSwagger
     testCompile group: 'uk.gov.hmcts.reform', name: 'health-spring-boot-starter', version: '0.0.5'
-    testCompile group: 'uk.gov.hmcts.reform', name: 'properties-volume-spring-boot-starter', version: '0.0.4'
+    testCompile group: 'uk.gov.hmcts.reform', name: 'properties-volume-spring-boot-starter', version: '0.1.0'
     testCompile group: 'uk.gov.hmcts.reform', name: 'logging', version: versions.reformLogging
     testCompile group: 'uk.gov.hmcts.reform', name: 'logging-appinsights', version: versions.reformLogging
     testCompile group: 'uk.gov.hmcts.reform', name: 'pdf-generator', version: '1.0.2'
