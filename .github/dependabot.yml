@@ -1,0 +1,13 @@
+version: 2
+updates:
+  - package-ecosystem: "gradle"
+    directory: "/java"
+    schedule:
+      interval: "daily"
+    open-pull-requests-limit: 20
+
+  - package-ecosystem: "npm"
+    directory: "/angular"
+    schedule:
+      interval: "daily"
+    open-pull-requests-limit: 20
