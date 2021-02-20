@@ -32,13 +32,6 @@ dependencies {
     testCompile group: 'org.assertj', name: 'assertj-core', version: '3.14.0'
 
 
-    testCompile group: 'com.nimbusds', name: 'nimbus-jose-jwt', version: '8.6' // override to fix vulnerability issue (CVE-2019-17195)
-    testCompile group: 'com.squareup.okhttp3', name: 'okhttp', version: '4.4.0'
-    testCompile group: 'io.github.openfeign', name: 'feign-core', version: '10.4.0'
-    testCompile group: 'org.springframework.boot', name: 'spring-boot-starter-actuator', version: versions.springBoot
-    testCompile group: 'org.springframework.cloud', name: 'spring-cloud-starter-netflix-hystrix', version: '2.2.1.RELEASE'
-    testCompile group: 'io.springfox', name: 'springfox-swagger2', version: versions.springfoxSwagger
-    testCompile group: 'io.springfox', name: 'springfox-swagger-ui', version: versions.springfoxSwagger
     testCompile group: 'uk.gov.hmcts.reform', name: 'health-spring-boot-starter', version: '0.0.5'
     testCompile group: 'uk.gov.hmcts.reform', name: 'properties-volume-spring-boot-starter', version: '0.0.4'
     testCompile group: 'uk.gov.hmcts.reform', name: 'logging', version: versions.reformLogging
