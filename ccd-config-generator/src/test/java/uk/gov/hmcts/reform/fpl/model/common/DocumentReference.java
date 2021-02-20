@@ -4,7 +4,6 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Builder;
 import lombok.Data;
 import uk.gov.hmcts.ccd.sdk.types.ComplexType;
-import uk.gov.hmcts.reform.document.domain.Document;
 
 @Data
 @Builder(toBuilder = true)
@@ -17,11 +16,4 @@ public class DocumentReference {
     @JsonProperty("document_binary_url")
     private final String binaryUrl;
 
-    public static DocumentReference buildFromDocument(Document document) {
-        return DocumentReference.builder()
-            .url(document.links.self.href)
-            .binaryUrl(document.links.binary.href)
-            .filename(document.originalDocumentName)
-            .build();
-    }
 }
