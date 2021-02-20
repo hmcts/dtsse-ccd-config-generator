@@ -32,9 +32,6 @@ dependencies {
     testCompile group: 'org.assertj', name: 'assertj-core', version: '3.14.0'
 
 
-    testCompile group: 'com.google.guava', name: 'guava', version: '28.2-jre'
-    testCompile group: 'commons-io', name: 'commons-io', version: '2.6'
-    testCompile group: 'javax.xml.bind', name: 'jaxb-api', version: '2.3.1'
     testCompile group: 'org.springframework.boot', name: 'spring-boot-starter-mail', version: versions.springBoot
 
     compile group: 'org.apache.commons', name: 'commons-lang3', version: '3.9'
