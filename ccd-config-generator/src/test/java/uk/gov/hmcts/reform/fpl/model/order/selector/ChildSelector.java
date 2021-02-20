@@ -4,10 +4,10 @@ import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Data;
 import lombok.Setter;
+import uk.gov.hmcts.ccd.sdk.types.CCD;
 
 import java.util.ArrayList;
 import java.util.List;
-import uk.gov.hmcts.ccd.sdk.types.CCD;
 
 @Data
 @Builder

@@ -18,7 +18,7 @@ import java.util.List;
 @Data
 @Builder
 @AllArgsConstructor
-@HasEndDateAfterStartDate(groups = HearingBookingDetailsGroup.class)
+
 @ComplexType
 public class HearingBooking {
     @CCD(label = "Type of hearing", type = FieldType.FixedRadioList, typeParameter = "HearingType")
@@ -27,12 +27,10 @@ public class HearingBooking {
     private final String typeDetails;
     @CCD(label = "Venue", typeParameter = "HearingVenue")
     private final String venue;
-    @TimeNotMidnight(message = "Enter a valid start time", groups = HearingBookingDetailsGroup.class)
-    @Future(message = "Enter a start date in the future", groups = HearingBookingDetailsGroup.class)
+        @Future(message = "Enter a start date in the future")
     @CCD(label = "Start date and time", hint = "Use 24 hour format")
     private final LocalDateTime startDate;
-    @TimeNotMidnight(message = "Enter a valid end time", groups = HearingBookingDetailsGroup.class)
-    @Future(message = "Enter an end date in the future", groups = HearingBookingDetailsGroup.class)
+        @Future(message = "Enter an end date in the future")
     @CCD(label = "End date and time", hint = "Use 24 hour format")
     private final LocalDateTime endDate;
     @CCD(label = "Hearing needs booked", typeParameter = "HearingNeedsBooked", showCondition = "hearingNeedsBooked!=\"NONE\"")

@@ -2,9 +2,9 @@ package uk.gov.hmcts.reform.fpl.model.common.dynamic;
 
 import lombok.Builder;
 import lombok.Data;
+import uk.gov.hmcts.ccd.sdk.types.ComplexType;
 
 import java.util.UUID;
-import uk.gov.hmcts.ccd.sdk.types.ComplexType;
 
 /**
  * An element of the {@link DynamicList}.

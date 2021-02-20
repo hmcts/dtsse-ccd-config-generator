@@ -15,12 +15,9 @@ import java.util.List;
 @Builder
 @AllArgsConstructor(onConstructor_ = {@JsonCreator})
 public class GroundsForEPO {
-    @NotNull(message = "Select at least one option for how this case meets grounds for an emergency protection order",
-        groups = EPOGroup.class)
+    @NotNull(message = "Select at least one option for how this case meets grounds for an emergency protection order")
     @Size(min = 1,
-        message = "Select at least one option for how this case meets grounds for an emergency protection order",
-        groups = EPOGroup.class)
+        message = "Select at least one option for how this case meets grounds for an emergency protection order")
     private List<@NotBlank(
-        message = "Select at least one option for how this case meets grounds for an emergency protection order",
-        groups = EPOGroup.class) String> reason;
+        message = "Select at least one option for how this case meets grounds for an emergency protection order") String> reason;
 }

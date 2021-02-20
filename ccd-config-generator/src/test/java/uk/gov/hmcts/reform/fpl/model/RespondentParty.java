@@ -1,7 +1,5 @@
 package uk.gov.hmcts.reform.fpl.model;
 
-import static org.apache.commons.lang3.StringUtils.defaultString;
-
 import com.fasterxml.jackson.annotation.JsonFormat;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonInclude;
@@ -13,11 +11,11 @@ import lombok.EqualsAndHashCode;
 import uk.gov.hmcts.reform.fpl.enums.PartyType;
 import uk.gov.hmcts.reform.fpl.model.common.Party;
 import uk.gov.hmcts.reform.fpl.model.common.Telephone;
-import uk.gov.hmcts.reform.fpl.validation.groups.SealedSDOGroup;
 
-import java.time.LocalDate;
 import javax.validation.constraints.NotBlank;
-import javax.validation.groups.Default;
+import java.time.LocalDate;
+
+import static org.apache.commons.lang3.StringUtils.defaultString;
 
 @Data
 @EqualsAndHashCode(callSuper = true)
@@ -49,8 +47,7 @@ public final class RespondentParty extends Party {
         return lastName;
     }
 
-    @NotBlank(message = "Enter the respondent's relationship to child",
-        groups = {Default.class, SealedSDOGroup.class})
+    @NotBlank(message = "Enter the respondent's relationship to child")
     public String getRelationshipToChild() {
         return relationshipToChild;
     }

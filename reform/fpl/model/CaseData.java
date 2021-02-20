@@ -23,7 +23,6 @@ import static org.apache.commons.lang3.ObjectUtils.isEmpty;
 @Data
 @Builder(toBuilder = true)
 @AllArgsConstructor
-@HasDocumentsIncludedInSwet(groups = UploadDocumentsGroup.class)
 public class CaseData {
     @NotBlank(message = "Enter a case name")
     @CCD(label = "Case name",
@@ -45,7 +44,7 @@ public class CaseData {
     @CCD(label = "How does this case meet the threshold criteria?")
     private final Grounds grounds;
 
-    @NotNull(message = "You need to add details to grounds for the application", groups = EPOGroup.class)
+    @NotNull(message = "You need to add details to grounds for the application")
     @Valid
     @CCD(label = "How are there grounds for an emergency protection order?")
     private final GroundsForEPO groundsForEPO;
@@ -160,8 +159,7 @@ public class CaseData {
     @Valid
     @CCD(label = "Child")
     private final List<@NotNull(message = "You need to add details to children") Element<Child>> children1;
-    @NotBlank(message = "Enter Familyman case number", groups = {NoticeOfProceedingsGroup.class,
-        C21CaseOrderGroup.class, NotifyGatekeeperGroup.class})
+    @NotBlank(message = "Enter Familyman case number")
     @CCD(label = "FamilyMan case number")
     private final String familyManCaseNumber;
     @CCD(label = " ")
@@ -175,7 +173,7 @@ public class CaseData {
         return children1 != null ? children1 : new ArrayList<>();
     }
 
-    @NotNull(message = "Enter hearing details", groups = NoticeOfProceedingsGroup.class)
+    @NotNull(message = "Enter hearing details")
     @CCD(label = "Hearing")
     private final List<Element<HearingBooking>> hearingDetails;
 

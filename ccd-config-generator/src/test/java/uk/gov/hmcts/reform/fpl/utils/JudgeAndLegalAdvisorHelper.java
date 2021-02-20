@@ -6,7 +6,6 @@ import java.util.Optional;
 
 import static org.apache.commons.lang.StringUtils.isBlank;
 import static uk.gov.hmcts.reform.fpl.enums.JudgeOrMagistrateTitle.MAGISTRATES;
-import static uk.gov.hmcts.reform.fpl.enums.JudgeOrMagistrateTitle.OTHER;
 
 public class JudgeAndLegalAdvisorHelper {
 

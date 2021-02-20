@@ -7,10 +7,8 @@ import com.fasterxml.jackson.annotation.JsonSetter;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
-import uk.gov.hmcts.ccd.sdk.types.CCD;
 import uk.gov.hmcts.reform.fpl.enums.C2ApplicationType;
 import uk.gov.hmcts.reform.fpl.enums.EPOType;
-import uk.gov.hmcts.reform.fpl.enums.UserRole;
 import uk.gov.hmcts.reform.fpl.model.common.C2DocumentBundle;
 import uk.gov.hmcts.reform.fpl.model.common.Document;
 import uk.gov.hmcts.reform.fpl.model.common.DocumentBundle;
@@ -28,18 +26,12 @@ import uk.gov.hmcts.reform.fpl.model.order.generated.GeneratedOrder;
 import uk.gov.hmcts.reform.fpl.model.order.generated.InterimEndDate;
 import uk.gov.hmcts.reform.fpl.model.order.selector.ChildSelector;
 import uk.gov.hmcts.reform.fpl.utils.ElementUtils;
-import uk.gov.hmcts.reform.fpl.validation.groups.DateOfIssueGroup;
-import uk.gov.hmcts.reform.fpl.validation.groups.EPOGroup;
-import uk.gov.hmcts.reform.fpl.validation.groups.NoticeOfProceedingsGroup;
-import uk.gov.hmcts.reform.fpl.validation.groups.SealedSDOGroup;
-import uk.gov.hmcts.reform.fpl.validation.groups.UploadDocumentsGroup;
-import uk.gov.hmcts.reform.fpl.validation.groups.ValidateFamilyManCaseNumberGroup;
-import uk.gov.hmcts.reform.fpl.validation.groups.epoordergroup.EPOEndDateGroup;
-import uk.gov.hmcts.reform.fpl.validation.interfaces.HasDocumentsIncludedInSwet;
-import uk.gov.hmcts.reform.fpl.validation.interfaces.time.TimeDifference;
-import uk.gov.hmcts.reform.fpl.validation.interfaces.time.TimeNotMidnight;
-import uk.gov.hmcts.reform.fpl.validation.interfaces.time.TimeRange;
 
+import javax.validation.Valid;
+import javax.validation.constraints.NotBlank;
+import javax.validation.constraints.NotEmpty;
+import javax.validation.constraints.NotNull;
+import javax.validation.constraints.PastOrPresent;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -48,14 +40,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Stream;
-import javax.validation.Valid;
-import javax.validation.constraints.Future;
-import javax.validation.constraints.NotBlank;
-import javax.validation.constraints.NotEmpty;
-import javax.validation.constraints.NotNull;
-import javax.validation.constraints.PastOrPresent;
 
-import static java.time.temporal.ChronoUnit.DAYS;
 import static java.util.Optional.empty;
 import static java.util.Optional.ofNullable;
 import static java.util.stream.Collectors.toList;
@@ -66,7 +51,6 @@ import static uk.gov.hmcts.reform.fpl.enums.CMOStatus.SEND_TO_JUDGE;
 @Data
 @Builder(toBuilder = true)
 @AllArgsConstructor
-@HasDocumentsIncludedInSwet(groups = UploadDocumentsGroup.class)
 public class CaseData {
     @NotBlank(message = "Enter a case name")
     private final String caseName;
@@ -79,7 +63,7 @@ public class CaseData {
     @NotNull(message = "You need to add details to grounds for the application")
     @Valid
     private final Grounds grounds;
-    @NotNull(message = "You need to add details to grounds for the application", groups = EPOGroup.class)
+    @NotNull(message = "You need to add details to grounds for the application")
     @Valid
     private final GroundsForEPO groundsForEPO;
     @NotNull(message = "You need to add details to applicant")
@@ -128,7 +112,7 @@ public class CaseData {
     private final List<Element<Placement>> placements;
     private final Order standardDirectionOrder;
 
-    @NotNull(message = "You need to enter the allocated judge.", groups = SealedSDOGroup.class)
+    @NotNull(message = "You need to enter the allocated judge.")
     private final Judge allocatedJudge;
     @NotNull(message = "You need to add details to hearing needed")
     @Valid
@@ -167,8 +151,7 @@ public class CaseData {
     @NotNull(message = "You need to add details to children")
     @Valid
     private final List<@NotNull(message = "You need to add details to children") Element<Child>> children1;
-    @NotBlank(message = "Enter Familyman case number", groups = {NoticeOfProceedingsGroup.class,
-        ValidateFamilyManCaseNumberGroup.class})
+    @NotBlank(message = "Enter Familyman case number")
     private final String familyManCaseNumber;
     private final NoticeOfProceedings noticeOfProceedings;
 
@@ -187,8 +170,8 @@ public class CaseData {
         return children1 != null ? children1 : new ArrayList<>();
     }
 
-    @NotNull(message = "Enter hearing details", groups = NoticeOfProceedingsGroup.class)
-    @NotEmpty(message = "You need to enter a hearing date.", groups = SealedSDOGroup.class)
+    @NotNull(message = "Enter hearing details")
+    @NotEmpty(message = "You need to enter a hearing date.")
     private final List<Element<HearingBooking>> hearingDetails;
 
     private LocalDate dateSubmitted;
@@ -215,7 +198,7 @@ public class CaseData {
     private final InterimEndDate interimEndDate;
     private final ChildSelector childSelector;
     private final String orderAppliesToAllChildren;
-    @PastOrPresent(message = "Date of issue cannot be in the future", groups = DateOfIssueGroup.class)
+    @PastOrPresent(message = "Date of issue cannot be in the future")
     private final LocalDate dateOfIssue;
     private final List<Element<GeneratedOrder>> orderCollection;
 
@@ -275,10 +258,6 @@ public class CaseData {
 
     // EPO Order
     private final EPOChildren epoChildren;
-    @TimeNotMidnight(message = "Enter a valid end time", groups = EPOEndDateGroup.class)
-    @Future(message = "Enter an end date in the future", groups = EPOEndDateGroup.class)
-    @TimeRange(message = "Date must be within the next 8 days", groups = EPOEndDateGroup.class,
-        maxDate = @TimeDifference(amount = 8, unit = DAYS))
     private final LocalDateTime epoEndDate;
     private final EPOPhrase epoPhrase;
     private final EPOType epoType;

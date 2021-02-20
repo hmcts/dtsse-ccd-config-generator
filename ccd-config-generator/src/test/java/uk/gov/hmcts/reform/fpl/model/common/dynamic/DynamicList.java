@@ -3,11 +3,11 @@ package uk.gov.hmcts.reform.fpl.model.common.dynamic;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Builder;
 import lombok.Data;
+import uk.gov.hmcts.ccd.sdk.types.ComplexType;
 
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
-import uk.gov.hmcts.ccd.sdk.types.ComplexType;
 
 /**
  * Representation of a CCD Dynamic List which is then converted to a select dropdown list.

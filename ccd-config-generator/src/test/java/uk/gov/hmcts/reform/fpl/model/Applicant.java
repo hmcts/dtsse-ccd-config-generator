@@ -3,10 +3,10 @@ package uk.gov.hmcts.reform.fpl.model;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
+import uk.gov.hmcts.ccd.sdk.types.ComplexType;
 
 import javax.validation.Valid;
 import javax.validation.constraints.NotNull;
-import uk.gov.hmcts.ccd.sdk.types.ComplexType;
 
 @Data
 @Builder(toBuilder = true)

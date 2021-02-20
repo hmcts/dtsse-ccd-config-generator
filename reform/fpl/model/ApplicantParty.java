@@ -19,8 +19,6 @@ import javax.validation.constraints.NotNull;
 
 @Data
 @EqualsAndHashCode(callSuper = true)
-@HasTelephoneOrMobile
-@HasContactDirection
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class ApplicantParty extends Party implements TelephoneContacts {
     @NotBlank(message = "Enter the applicant's full name")

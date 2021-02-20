@@ -10,11 +10,9 @@ import lombok.Builder;
 import lombok.Data;
 import org.apache.commons.lang3.StringUtils;
 import uk.gov.hmcts.ccd.sdk.types.ComplexType;
-import uk.gov.hmcts.reform.fpl.validation.groups.epoordergroup.EPOAddressGroup;
 
-import java.util.stream.Collectors;
 import javax.validation.constraints.NotBlank;
-import javax.validation.groups.Default;
+import java.util.stream.Collectors;
 
 import static org.apache.commons.lang3.ObjectUtils.defaultIfNull;
 
@@ -24,13 +22,13 @@ import static org.apache.commons.lang3.ObjectUtils.defaultIfNull;
 @JsonInclude(JsonInclude.Include.NON_NULL)
 @ComplexType(generate = false)
 public class Address {
-    @NotBlank(message = "Enter a valid address for the contact", groups = { Default.class, EPOAddressGroup.class })
+    @NotBlank(message = "Enter a valid address for the contact")
     private final String addressLine1;
     private final String addressLine2;
     private final String addressLine3;
     private final String postTown;
     private final String county;
-    @NotBlank(message = "Enter a postcode for the contact", groups = { Default.class, EPOAddressGroup.class })
+    @NotBlank(message = "Enter a postcode for the contact")
     private final String postcode;
     private final String country;
 
