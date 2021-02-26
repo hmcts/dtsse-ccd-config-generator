@@ -79,9 +79,14 @@ public class CaseFieldGenerator {
       Map<String, Object> fieldInfo = getField(caseTypeId, id);
       fields.add(fieldInfo);
       if (null != cf) {
-        fieldInfo.put("Label", cf.label());
+        if (!Strings.isNullOrEmpty(cf.label())) {
+          fieldInfo.put("Label", cf.label());
+        }
         if (!Strings.isNullOrEmpty(cf.hint())) {
           fieldInfo.put("HintText", cf.hint());
+        }
+        if (!Strings.isNullOrEmpty(cf.regex())) {
+          fieldInfo.put("RegularExpression", cf.regex());
         }
         if (cf.showSummaryContent()) {
           fieldInfo.put("ShowSummaryContentOption", "Y");

@@ -7,6 +7,7 @@ import com.fasterxml.jackson.annotation.JsonSetter;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
+import uk.gov.hmcts.ccd.sdk.types.CCD;
 import uk.gov.hmcts.reform.fpl.enums.C2ApplicationType;
 import uk.gov.hmcts.reform.fpl.enums.EPOType;
 import uk.gov.hmcts.reform.fpl.model.common.C2DocumentBundle;
@@ -54,6 +55,7 @@ import static uk.gov.hmcts.reform.fpl.enums.CMOStatus.SEND_TO_JUDGE;
 public class CaseData {
     @NotBlank(message = "Enter a case name")
     private final String caseName;
+    @CCD(regex = ".*")
     private final String gatekeeperEmail;
     private final String caseLocalAuthority;
     private final Risks risks;

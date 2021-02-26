@@ -12,6 +12,8 @@ public @interface CCD {
 
   String showCondition() default "";
 
+  String regex() default "";
+
   FieldType type() default FieldType.Unspecified;
 
   String typeParameter() default "";
