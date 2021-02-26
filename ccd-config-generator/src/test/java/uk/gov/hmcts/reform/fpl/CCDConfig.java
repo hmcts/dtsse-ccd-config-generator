@@ -67,6 +67,7 @@ public class CCDConfig extends BaseCCDConfig<CaseData, State, UserRole> {
 
     @Override
     public void configure() {
+        jurisdiction("PUBLICLAW", "Family Public Law", "Family Public Law desc");
         caseType("CARE_SUPERVISION_EPO");
         setEnvironment(environment());
         setWebhookConvention(this::webhookConvention);
@@ -1299,4 +1300,5 @@ public class CCDConfig extends BaseCCDConfig<CaseData, State, UserRole> {
                 .fields()
                     .optional(CaseData::getCaseName);
     }
+
 }

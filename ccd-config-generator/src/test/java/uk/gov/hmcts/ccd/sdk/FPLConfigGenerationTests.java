@@ -119,6 +119,11 @@ public class FPLConfigGenerationTests {
     }
 
     @Test
+    public void generatesJurisdiction() {
+        assertEquals("Jurisdiction.json");
+    }
+
+    @Test
     public void generatesCaseTypeTab() {
         assertResourceFolderMatchesGenerated("CaseTypeTab");
         assertGeneratedFolderMatchesResource("CaseTypeTab");

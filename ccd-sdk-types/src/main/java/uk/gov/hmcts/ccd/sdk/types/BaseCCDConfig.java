@@ -29,6 +29,11 @@ public abstract class BaseCCDConfig<Model, State,
   }
 
   @Override
+  public void jurisdiction(String id, String name, String description) {
+    builder.jurisdiction(id, name, description);
+  }
+
+  @Override
   public void grantHistory(State state, Role... roles) {
     builder.grantHistory(state, roles);
   }

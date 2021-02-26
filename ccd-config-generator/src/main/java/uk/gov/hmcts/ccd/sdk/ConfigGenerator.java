@@ -2,7 +2,9 @@ package uk.gov.hmcts.ccd.sdk;
 
 import com.google.common.base.Strings;
 import com.google.common.collect.HashBasedTable;
+import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Multimap;
 import com.google.common.collect.Table;
@@ -10,6 +12,8 @@ import java.io.File;
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
 import java.lang.reflect.ParameterizedType;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
@@ -92,11 +96,24 @@ public class ConfigGenerator {
     CaseFieldGenerator
         .generateCaseFields(outputfolder, config.builder.caseType, config.typeArg, config.events,
             config.builder);
+    generateJurisdiction(outputfolder, config.builder);
     FixedListGenerator.generate(outputfolder, config.types);
     CaseTypeTabGenerator.generate(outputfolder, config.builder.caseType, config.builder);
     AuthorisationCaseStateGenerator.generate(outputfolder, config.builder.caseType, config.events,
         eventPermissions);
     WorkBasketGenerator.generate(outputfolder, config.builder.caseType, config.builder);
+  }
+
+  private void generateJurisdiction(File outputfolder, ConfigBuilderImpl builder) {
+    List<Map<String, Object>> fields = Lists.newArrayList();
+    fields.add(ImmutableMap.of(
+        "LiveFrom", "01/01/2017",
+        "ID", builder.jurId,
+        "Name", builder.jurName,
+        "Description", builder.jurDesc
+    ));
+    Path output = Paths.get(outputfolder.getPath(),"Jurisdiction.json");
+    JsonUtils.mergeInto(output, fields, new JsonUtils.AddMissing(), "ID");
   }
 
   // Copied from jdk 9.
