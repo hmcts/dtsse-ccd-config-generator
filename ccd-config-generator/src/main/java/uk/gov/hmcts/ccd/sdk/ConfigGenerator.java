@@ -34,6 +34,7 @@ import uk.gov.hmcts.ccd.sdk.generator.CaseFieldGenerator;
 import uk.gov.hmcts.ccd.sdk.generator.CaseTypeTabGenerator;
 import uk.gov.hmcts.ccd.sdk.generator.ComplexTypeGenerator;
 import uk.gov.hmcts.ccd.sdk.generator.FixedListGenerator;
+import uk.gov.hmcts.ccd.sdk.generator.StateGenerator;
 import uk.gov.hmcts.ccd.sdk.generator.WorkBasketGenerator;
 import uk.gov.hmcts.ccd.sdk.types.CCDConfig;
 import uk.gov.hmcts.ccd.sdk.types.Event;
@@ -75,7 +76,8 @@ public class ConfigGenerator {
     config.configure(builder);
     List<Event> events = builder.getEvents();
     Map<Class, Integer> types = resolve(typeArgs[0], basePackage);
-    return new ResolvedCCDConfig(typeArgs[0], builder, events, types, builder.environment);
+    return new ResolvedCCDConfig(typeArgs[0], typeArgs[1], builder, events, types,
+        builder.environment);
   }
 
   public void writeConfig(File outputfolder, ResolvedCCDConfig config) {
@@ -98,6 +100,7 @@ public class ConfigGenerator {
             config.builder);
     generateJurisdiction(outputfolder, config.builder);
     FixedListGenerator.generate(outputfolder, config.types);
+    StateGenerator.generate(outputfolder, config.builder.caseType, config.stateArg);
     CaseTypeTabGenerator.generate(outputfolder, config.builder.caseType, config.builder);
     AuthorisationCaseStateGenerator.generate(outputfolder, config.builder.caseType, config.events,
         eventPermissions);

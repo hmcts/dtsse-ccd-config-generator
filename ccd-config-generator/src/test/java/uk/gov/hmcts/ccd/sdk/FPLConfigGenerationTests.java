@@ -26,6 +26,7 @@ import org.reflections.util.ConfigurationBuilder;
 import org.skyscreamer.jsonassert.JSONCompare;
 import org.skyscreamer.jsonassert.JSONCompareMode;
 import org.skyscreamer.jsonassert.JSONCompareResult;
+import uk.gov.hmcts.reform.fpl.enums.State;
 
 import java.io.File;
 import java.io.IOException;
@@ -53,10 +54,9 @@ public class FPLConfigGenerationTests {
     @BeforeClass
     public static void before() throws IOException, URISyntaxException {
         prodConfig = tmp.getRoot().toPath().resolve("production");
-        Path resRoot = Paths.get(Resources.getResource("ccd-definition").toURI());
-
         reflections = new Reflections(new ConfigurationBuilder()
-                .setUrls(ClasspathHelper.forPackage("uk.gov.hmcts"))
+
+            .setUrls(ClasspathHelper.forPackage("uk.gov.hmcts"))
                 .setExpandSuperTypes(false));
 
         generator = new ConfigGenerator(reflections, "uk.gov.hmcts");
@@ -121,6 +121,11 @@ public class FPLConfigGenerationTests {
     @Test
     public void generatesJurisdiction() {
         assertEquals("Jurisdiction.json");
+    }
+
+    @Test
+    public void generatesState() {
+        assertEquals("State.json");
     }
 
     @Test
