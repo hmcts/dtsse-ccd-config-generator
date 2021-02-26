@@ -1,102 +1,102 @@
 [
   {
+    "TabDisplayOrder": 6,
     "LiveFrom": "01/01/2017",
     "CaseTypeID": "CARE_SUPERVISION_EPO",
-    "Channel": "CaseWorker",
-    "TabID": "LegalBasisTab",
-    "TabLabel": "Legal basis",
-    "TabDisplayOrder": 6,
     "CaseFieldID": "statementOfService",
-    "TabFieldDisplayOrder": 1
+    "Channel": "CaseWorker",
+    "TabFieldDisplayOrder": 1,
+    "TabLabel": "Legal basis",
+    "TabID": "LegalBasisTab"
   },
   {
+    "TabDisplayOrder": 6,
     "LiveFrom": "01/01/2017",
     "CaseTypeID": "CARE_SUPERVISION_EPO",
-    "Channel": "CaseWorker",
-    "TabID": "LegalBasisTab",
-    "TabLabel": "Legal basis",
-    "TabDisplayOrder": 6,
     "CaseFieldID": "groundsForEPO",
-    "TabFieldDisplayOrder": 2
+    "Channel": "CaseWorker",
+    "TabFieldDisplayOrder": 2,
+    "TabLabel": "Legal basis",
+    "TabID": "LegalBasisTab"
   },
   {
+    "TabDisplayOrder": 6,
     "LiveFrom": "01/01/2017",
     "CaseTypeID": "CARE_SUPERVISION_EPO",
-    "Channel": "CaseWorker",
-    "TabID": "LegalBasisTab",
-    "TabLabel": "Legal basis",
-    "TabDisplayOrder": 6,
     "CaseFieldID": "grounds",
-    "TabFieldDisplayOrder": 3
+    "Channel": "CaseWorker",
+    "TabFieldDisplayOrder": 3,
+    "TabLabel": "Legal basis",
+    "TabID": "LegalBasisTab"
   },
   {
+    "TabDisplayOrder": 6,
     "LiveFrom": "01/01/2017",
     "CaseTypeID": "CARE_SUPERVISION_EPO",
-    "Channel": "CaseWorker",
-    "TabID": "LegalBasisTab",
-    "TabLabel": "Legal basis",
-    "TabDisplayOrder": 6,
     "CaseFieldID": "risks",
-    "TabFieldDisplayOrder": 4
+    "Channel": "CaseWorker",
+    "TabFieldDisplayOrder": 4,
+    "TabLabel": "Legal basis",
+    "TabID": "LegalBasisTab"
   },
   {
+    "TabDisplayOrder": 6,
     "LiveFrom": "01/01/2017",
     "CaseTypeID": "CARE_SUPERVISION_EPO",
-    "Channel": "CaseWorker",
-    "TabID": "LegalBasisTab",
-    "TabLabel": "Legal basis",
-    "TabDisplayOrder": 6,
     "CaseFieldID": "factorsParenting",
-    "TabFieldDisplayOrder": 5
+    "Channel": "CaseWorker",
+    "TabFieldDisplayOrder": 5,
+    "TabLabel": "Legal basis",
+    "TabID": "LegalBasisTab"
   },
   {
+    "TabDisplayOrder": 6,
     "LiveFrom": "01/01/2017",
     "CaseTypeID": "CARE_SUPERVISION_EPO",
-    "Channel": "CaseWorker",
-    "TabID": "LegalBasisTab",
-    "TabLabel": "Legal basis",
-    "TabDisplayOrder": 6,
     "CaseFieldID": "internationalElement",
-    "TabFieldDisplayOrder": 6
+    "Channel": "CaseWorker",
+    "TabFieldDisplayOrder": 6,
+    "TabLabel": "Legal basis",
+    "TabID": "LegalBasisTab"
   },
   {
+    "TabDisplayOrder": 6,
     "LiveFrom": "01/01/2017",
     "CaseTypeID": "CARE_SUPERVISION_EPO",
-    "Channel": "CaseWorker",
-    "TabID": "LegalBasisTab",
-    "TabLabel": "Legal basis",
-    "TabDisplayOrder": 6,
     "CaseFieldID": "proceeding",
-    "TabFieldDisplayOrder": 7
+    "Channel": "CaseWorker",
+    "TabFieldDisplayOrder": 7,
+    "TabLabel": "Legal basis",
+    "TabID": "LegalBasisTab"
   },
   {
+    "TabDisplayOrder": 6,
     "LiveFrom": "01/01/2017",
     "CaseTypeID": "CARE_SUPERVISION_EPO",
-    "Channel": "CaseWorker",
-    "TabID": "LegalBasisTab",
-    "TabLabel": "Legal basis",
-    "TabDisplayOrder": 6,
     "CaseFieldID": "allocationDecision",
-    "TabFieldDisplayOrder": 8
+    "Channel": "CaseWorker",
+    "TabFieldDisplayOrder": 8,
+    "TabLabel": "Legal basis",
+    "TabID": "LegalBasisTab"
   },
   {
+    "TabDisplayOrder": 6,
     "LiveFrom": "01/01/2017",
     "CaseTypeID": "CARE_SUPERVISION_EPO",
-    "Channel": "CaseWorker",
-    "TabID": "LegalBasisTab",
-    "TabLabel": "Legal basis",
-    "TabDisplayOrder": 6,
     "CaseFieldID": "allocationProposal",
-    "TabFieldDisplayOrder": 9
+    "Channel": "CaseWorker",
+    "TabFieldDisplayOrder": 9,
+    "TabLabel": "Legal basis",
+    "TabID": "LegalBasisTab"
   },
   {
+    "TabDisplayOrder": 6,
     "LiveFrom": "01/01/2017",
     "CaseTypeID": "CARE_SUPERVISION_EPO",
-    "Channel": "CaseWorker",
-    "TabID": "LegalBasisTab",
-    "TabLabel": "Legal basis",
-    "TabDisplayOrder": 6,
     "CaseFieldID": "hearingPreferences",
-    "TabFieldDisplayOrder": 10
+    "Channel": "CaseWorker",
+    "TabFieldDisplayOrder": 10,
+    "TabLabel": "Legal basis",
+    "TabID": "LegalBasisTab"
   }
 ]

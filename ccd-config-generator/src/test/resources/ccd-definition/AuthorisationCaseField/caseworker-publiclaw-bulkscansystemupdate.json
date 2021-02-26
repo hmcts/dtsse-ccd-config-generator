@@ -1,16 +1,16 @@
 [
   {
-    "LiveFrom": "01/01/2017",
+    "CRUD": "CRUD",
     "CaseTypeID": "CARE_SUPERVISION_EPO",
-    "CaseFieldID": "scannedDocuments",
     "UserRole": "caseworker-publiclaw-bulkscansystemupdate",
-    "CRUD": "CRUD"
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "scannedDocuments"
   },
   {
-    "LiveFrom": "01/01/2017",
+    "CRUD": "CRU",
     "CaseTypeID": "CARE_SUPERVISION_EPO",
-    "CaseFieldID": "evidenceHandled",
     "UserRole": "caseworker-publiclaw-bulkscansystemupdate",
-    "CRUD": "CRU"
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "evidenceHandled"
   }
 ]

@@ -1,72 +1,72 @@
 [
   {
     "LiveFrom": "01/01/2017",
-    "ID": "OtherPartiesDirectionAssignee",
+    "DisplayOrder": 1,
     "ListElementCode": "OTHER_1",
     "ListElement": "Person 1",
-    "DisplayOrder": 1
+    "ID": "OtherPartiesDirectionAssignee"
   },
   {
     "LiveFrom": "01/01/2017",
-    "ID": "OtherPartiesDirectionAssignee",
+    "DisplayOrder": 2,
     "ListElementCode": "OTHER_2",
     "ListElement": "Other person 1",
-    "DisplayOrder": 2
+    "ID": "OtherPartiesDirectionAssignee"
   },
   {
     "LiveFrom": "01/01/2017",
-    "ID": "OtherPartiesDirectionAssignee",
+    "DisplayOrder": 3,
     "ListElementCode": "OTHER_3",
     "ListElement": "Other person 2",
-    "DisplayOrder": 3
+    "ID": "OtherPartiesDirectionAssignee"
   },
   {
     "LiveFrom": "01/01/2017",
-    "ID": "OtherPartiesDirectionAssignee",
+    "DisplayOrder": 4,
     "ListElementCode": "OTHER_4",
     "ListElement": "Other person 3",
-    "DisplayOrder": 4
+    "ID": "OtherPartiesDirectionAssignee"
   },
   {
     "LiveFrom": "01/01/2017",
-    "ID": "OtherPartiesDirectionAssignee",
+    "DisplayOrder": 5,
     "ListElementCode": "OTHER_5",
     "ListElement": "Other person 4",
-    "DisplayOrder": 5
+    "ID": "OtherPartiesDirectionAssignee"
   },
   {
     "LiveFrom": "01/01/2017",
-    "ID": "OtherPartiesDirectionAssignee",
+    "DisplayOrder": 6,
     "ListElementCode": "OTHER_6",
     "ListElement": "Other person 5",
-    "DisplayOrder": 6
+    "ID": "OtherPartiesDirectionAssignee"
   },
   {
     "LiveFrom": "01/01/2017",
-    "ID": "OtherPartiesDirectionAssignee",
+    "DisplayOrder": 7,
     "ListElementCode": "OTHER_7",
     "ListElement": "Other person 6",
-    "DisplayOrder": 7
+    "ID": "OtherPartiesDirectionAssignee"
   },
   {
     "LiveFrom": "01/01/2017",
-    "ID": "OtherPartiesDirectionAssignee",
+    "DisplayOrder": 8,
     "ListElementCode": "OTHER_8",
     "ListElement": "Other person 7",
-    "DisplayOrder": 8
+    "ID": "OtherPartiesDirectionAssignee"
   },
   {
     "LiveFrom": "01/01/2017",
-    "ID": "OtherPartiesDirectionAssignee",
+    "DisplayOrder": 9,
     "ListElementCode": "OTHER_9",
     "ListElement": "Other person 8",
-    "DisplayOrder": 9
+    "ID": "OtherPartiesDirectionAssignee"
   },
   {
     "LiveFrom": "01/01/2017",
-    "ID": "OtherPartiesDirectionAssignee",
+    "DisplayOrder": 10,
     "ListElementCode": "OTHER_10",
     "ListElement": "Other person 9",
-    "DisplayOrder": 10
+    "ID": "OtherPartiesDirectionAssignee"
   }
 ]

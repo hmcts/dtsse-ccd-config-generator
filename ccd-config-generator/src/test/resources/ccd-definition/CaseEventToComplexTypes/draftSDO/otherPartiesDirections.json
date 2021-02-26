@@ -1,55 +1,51 @@
 [
   {
-    "LiveFrom": "01/01/2017",
-    "CaseEventID": "draftSDO",
-    "CaseFieldID": "otherPartiesDirections",
-    "ListElementCode": "readOnly",
-    "EventElementLabel": " ",
-    "FieldDisplayOrder": 1,
-    "DisplayContext": "READONLY"
-  },
-  {
-    "LiveFrom": "01/01/2017",
-    "CaseEventID": "draftSDO",
-    "CaseFieldID": "otherPartiesDirections",
-    "ListElementCode": "directionRemovable",
-    "EventElementLabel": " ",
-    "FieldDisplayOrder": 2,
-    "DisplayContext": "READONLY"
-  },
-  {
-    "LiveFrom": "01/01/2017",
-    "CaseEventID": "draftSDO",
-    "CaseFieldID": "otherPartiesDirections",
-    "ListElementCode": "directionType",
-    "EventElementLabel": " ",
     "FieldDisplayOrder": 3,
-    "DisplayContext": "READONLY"
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "otherPartiesDirections",
+    "CaseEventID": "draftSDO",
+    "DisplayContext": "READONLY",
+    "ListElementCode": "readOnly"
   },
   {
-    "LiveFrom": "01/01/2017",
-    "CaseEventID": "draftSDO",
-    "CaseFieldID": "otherPartiesDirections",
-    "ListElementCode": "directionNeeded",
-    "EventElementLabel": " ",
     "FieldDisplayOrder": 4,
-    "DisplayContext": "OPTIONAL"
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "otherPartiesDirections",
+    "CaseEventID": "draftSDO",
+    "DisplayContext": "READONLY",
+    "ListElementCode": "directionRemovable"
   },
   {
-    "LiveFrom": "01/01/2017",
-    "CaseEventID": "draftSDO",
-    "CaseFieldID": "otherPartiesDirections",
-    "ListElementCode": "directionText",
     "FieldDisplayOrder": 5,
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "otherPartiesDirections",
+    "CaseEventID": "draftSDO",
+    "DisplayContext": "READONLY",
+    "ListElementCode": "directionType"
+  },
+  {
+    "FieldDisplayOrder": 6,
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "otherPartiesDirections",
+    "CaseEventID": "draftSDO",
     "DisplayContext": "OPTIONAL",
+    "ListElementCode": "directionNeeded"
+  },
+  {
+    "FieldDisplayOrder": 7,
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "otherPartiesDirections",
+    "CaseEventID": "draftSDO",
+    "DisplayContext": "OPTIONAL",
+    "ListElementCode": "directionText",
     "FieldShowCondition": "otherPartiesDirections.readOnly!=\"Yes\" AND otherPartiesDirections.directionNeeded!=\"No\""
   },
   {
+    "FieldDisplayOrder": 8,
     "LiveFrom": "01/01/2017",
-    "CaseEventID": "draftSDO",
     "CaseFieldID": "otherPartiesDirections",
-    "ListElementCode": "dateToBeCompletedBy",
-    "FieldDisplayOrder": 6,
-    "DisplayContext": "OPTIONAL"
+    "CaseEventID": "draftSDO",
+    "DisplayContext": "OPTIONAL",
+    "ListElementCode": "dateToBeCompletedBy"
   }
 ]

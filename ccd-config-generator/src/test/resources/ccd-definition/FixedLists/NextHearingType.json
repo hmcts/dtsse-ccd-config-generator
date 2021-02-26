@@ -1,23 +1,23 @@
 [
   {
     "LiveFrom": "01/01/2017",
-    "ID": "CMONextHearingType",
+    "DisplayOrder": 1,
     "ListElementCode": "FURTHER_CASE_MGMT_HEARING",
-    "ListElement": "Further case management hearing",
-    "DisplayOrder": 1
+    "ListElement": "FURTHER_CASE_MGMT_HEARING",
+    "ID": "NextHearingType"
   },
   {
     "LiveFrom": "01/01/2017",
-    "ID": "CMONextHearingType",
+    "DisplayOrder": 2,
     "ListElementCode": "ISSUES_RESOLUTION_HEARING",
-    "ListElement": "Issues resolution hearing",
-    "DisplayOrder": 2
+    "ListElement": "ISSUES_RESOLUTION_HEARING",
+    "ID": "NextHearingType"
   },
   {
     "LiveFrom": "01/01/2017",
-    "ID": "CMONextHearingType",
+    "DisplayOrder": 3,
     "ListElementCode": "FINAL_HEARING",
-    "ListElement": "Final hearing",
-    "DisplayOrder": 3
+    "ListElement": "FINAL_HEARING",
+    "ID": "NextHearingType"
   }
 ]

@@ -1,23 +1,23 @@
 [
   {
     "LiveFrom": "01/01/2017",
-    "ID": "RepresentativeServingPreferences",
+    "DisplayOrder": 1,
     "ListElementCode": "POST",
-    "ListElement": "By post",
-    "DisplayOrder": 1
+    "ListElement": "POST",
+    "ID": "RepresentativeServingPreferences"
   },
   {
     "LiveFrom": "01/01/2017",
-    "ID": "RepresentativeServingPreferences",
+    "DisplayOrder": 2,
     "ListElementCode": "EMAIL",
-    "ListElement": "By email",
-    "DisplayOrder": 2
+    "ListElement": "EMAIL",
+    "ID": "RepresentativeServingPreferences"
   },
   {
     "LiveFrom": "01/01/2017",
-    "ID": "RepresentativeServingPreferences",
+    "DisplayOrder": 3,
     "ListElementCode": "DIGITAL_SERVICE",
-    "ListElement": "Through the digital service",
-    "DisplayOrder": 3
+    "ListElement": "DIGITAL_SERVICE",
+    "ID": "RepresentativeServingPreferences"
   }
 ]

@@ -1,44 +1,44 @@
 [
   {
+    "TabDisplayOrder": 3,
     "LiveFrom": "01/01/2017",
     "CaseTypeID": "CARE_SUPERVISION_EPO",
-    "Channel": "CaseWorker",
-    "TabID": "DraftOrdersTab",
-    "TabLabel": "Draft orders",
-    "TabDisplayOrder": 3,
     "CaseFieldID": "standardDirectionOrder",
+    "Channel": "CaseWorker",
     "TabFieldDisplayOrder": 1,
-    "TabShowCondition": "standardDirectionOrder.orderStatus!=\"SEALED\" OR caseManagementOrder!=\"\" OR sharedDraftCMODocument!=\"\" OR cmoToAction!=\"\"",
-    "FieldShowCondition": "standardDirectionOrder.orderStatus!=\"SEALED\""
+    "TabLabel": "Draft orders",
+    "FieldShowCondition": "standardDirectionOrder.orderStatus!=\"SEALED\"",
+    "TabID": "DraftOrdersTab",
+    "TabShowCondition": "standardDirectionOrder.orderStatus!=\"SEALED\" OR caseManagementOrder!=\"\" OR sharedDraftCMODocument!=\"\" OR cmoToAction!=\"\""
   },
   {
+    "TabDisplayOrder": 3,
     "LiveFrom": "01/01/2017",
     "CaseTypeID": "CARE_SUPERVISION_EPO",
-    "Channel": "CaseWorker",
-    "TabID": "DraftOrdersTab",
-    "TabLabel": "Draft orders",
-    "TabDisplayOrder": 3,
     "CaseFieldID": "sharedDraftCMODocument",
-    "TabFieldDisplayOrder": 2
+    "Channel": "CaseWorker",
+    "TabFieldDisplayOrder": 2,
+    "TabLabel": "Draft orders",
+    "TabID": "DraftOrdersTab"
   },
   {
+    "TabDisplayOrder": 3,
     "LiveFrom": "01/01/2017",
     "CaseTypeID": "CARE_SUPERVISION_EPO",
-    "Channel": "CaseWorker",
-    "TabID": "DraftOrdersTab",
-    "TabLabel": "Draft orders",
-    "TabDisplayOrder": 3,
     "CaseFieldID": "cmoToAction",
-    "TabFieldDisplayOrder": 3
+    "Channel": "CaseWorker",
+    "TabFieldDisplayOrder": 3,
+    "TabLabel": "Draft orders",
+    "TabID": "DraftOrdersTab"
   },
   {
+    "TabDisplayOrder": 3,
     "LiveFrom": "01/01/2017",
     "CaseTypeID": "CARE_SUPERVISION_EPO",
-    "Channel": "CaseWorker",
-    "TabID": "DraftOrdersTab",
-    "TabLabel": "Draft orders",
-    "TabDisplayOrder": 3,
     "CaseFieldID": "caseManagementOrder",
-    "TabFieldDisplayOrder": 4
+    "Channel": "CaseWorker",
+    "TabFieldDisplayOrder": 4,
+    "TabLabel": "Draft orders",
+    "TabID": "DraftOrdersTab"
   }
 ]

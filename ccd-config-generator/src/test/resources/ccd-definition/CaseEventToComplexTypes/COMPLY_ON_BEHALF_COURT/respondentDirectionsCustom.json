@@ -1,115 +1,109 @@
 [
   {
+    "FieldDisplayOrder": 4,
     "LiveFrom": "01/01/2017",
-    "CaseEventID": "COMPLY_ON_BEHALF_COURT",
     "CaseFieldID": "respondentDirectionsCustom",
-    "ListElementCode": "directionType",
-    "EventElementLabel": " ",
-    "FieldDisplayOrder": 1,
-    "DisplayContext": "READONLY"
+    "CaseEventID": "COMPLY_ON_BEHALF_COURT",
+    "DisplayContext": "READONLY",
+    "ListElementCode": "directionType"
   },
   {
+    "FieldDisplayOrder": 5,
     "LiveFrom": "01/01/2017",
-    "CaseEventID": "COMPLY_ON_BEHALF_COURT",
     "CaseFieldID": "respondentDirectionsCustom",
-    "ListElementCode": "directionNeeded",
-    "FieldDisplayOrder": 2,
+    "CaseEventID": "COMPLY_ON_BEHALF_COURT",
     "DisplayContext": "READONLY",
+    "ListElementCode": "directionNeeded",
     "FieldShowCondition": "directionText = \"DO_NOT_SHOW\""
   },
   {
+    "FieldDisplayOrder": 6,
     "LiveFrom": "01/01/2017",
-    "CaseEventID": "COMPLY_ON_BEHALF_COURT",
     "CaseFieldID": "respondentDirectionsCustom",
-    "ListElementCode": "dateToBeCompletedBy",
-    "EventElementLabel": "Deadline",
-    "FieldDisplayOrder": 3,
-    "DisplayContext": "READONLY"
+    "CaseEventID": "COMPLY_ON_BEHALF_COURT",
+    "DisplayContext": "READONLY",
+    "ListElementCode": "dateToBeCompletedBy"
   },
   {
+    "FieldDisplayOrder": 7,
     "LiveFrom": "01/01/2017",
-    "CaseEventID": "COMPLY_ON_BEHALF_COURT",
     "CaseFieldID": "respondentDirectionsCustom",
+    "CaseEventID": "COMPLY_ON_BEHALF_COURT",
+    "DisplayContext": "READONLY",
     "ListElementCode": "parentsAndRespondentsAssignee",
-    "EventElementLabel": "For",
-    "FieldDisplayOrder": 4,
-    "DisplayContext": "READONLY",
-    "FieldShowCondition": "servedCaseManagementOrders != \"\" AND respondentDirectionsCustom.parentsAndRespondentsAssignee != \"\"",
-    "Comment": "cannot configure show hide condition to hide field for all parties directions as these are not assigned to one person"
+    "FieldShowCondition": "servedCaseManagementOrders != \"\" AND respondentDirectionsCustom.parentsAndRespondentsAssignee != \"\""
   },
   {
+    "FieldDisplayOrder": 8,
     "LiveFrom": "01/01/2017",
-    "CaseEventID": "COMPLY_ON_BEHALF_COURT",
     "CaseFieldID": "respondentDirectionsCustom",
-    "ListElementCode": "allParties_label",
-    "FieldDisplayOrder": 4,
+    "CaseEventID": "COMPLY_ON_BEHALF_COURT",
     "DisplayContext": "READONLY",
+    "ListElementCode": "allParties_label",
     "FieldShowCondition": "servedCaseManagementOrders != \"\" AND respondentDirectionsCustom.parentsAndRespondentsAssignee = \"\""
   },
   {
-    "LiveFrom": "01/01/2017",
-    "CaseEventID": "COMPLY_ON_BEHALF_COURT",
-    "CaseFieldID": "respondentDirectionsCustom",
-    "ListElementCode": "responses.respondingOnBehalfOfRespondent",
-    "FieldDisplayOrder": 5,
-    "DisplayContext": "MANDATORY"
-  },
-  {
-    "LiveFrom": "01/01/2017",
-    "CaseEventID": "COMPLY_ON_BEHALF_COURT",
-    "CaseFieldID": "respondentDirectionsCustom",
-    "ListElementCode": "responses.complied",
-    "EventElementLabel": "Have they complied with this direction?",
-    "FieldDisplayOrder": 6,
-    "DisplayContext": "OPTIONAL"
-  },
-  {
-    "LiveFrom": "01/01/2017",
-    "CaseEventID": "COMPLY_ON_BEHALF_COURT",
-    "CaseFieldID": "respondentDirectionsCustom",
-    "ListElementCode": "responses.documentDetails",
-    "FieldDisplayOrder": 7,
-    "DisplayContext": "OPTIONAL"
-  },
-  {
-    "LiveFrom": "01/01/2017",
-    "CaseEventID": "COMPLY_ON_BEHALF_COURT",
-    "CaseFieldID": "respondentDirectionsCustom",
-    "ListElementCode": "responses.file",
-    "FieldDisplayOrder": 8,
-    "DisplayContext": "OPTIONAL"
-  },
-  {
-    "LiveFrom": "01/01/2017",
-    "CaseEventID": "COMPLY_ON_BEHALF_COURT",
-    "CaseFieldID": "respondentDirectionsCustom",
-    "ListElementCode": "responses.cannotComplyTitle",
-    "EventElementLabel": "### Parties need to comply with directions to keep proceedings on track. ###\n\nIf they can't comply, you need to explain:\n\n- reasons why\n\n- impact on timetable and next hearing\n\n- proposed next actions",
     "FieldDisplayOrder": 9,
-    "DisplayContext": "OPTIONAL"
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "respondentDirectionsCustom",
+    "CaseEventID": "COMPLY_ON_BEHALF_COURT",
+    "DisplayContext": "MANDATORY",
+    "ListElementCode": "responses.respondingOnBehalfOfRespondent"
   },
   {
-    "LiveFrom": "01/01/2017",
-    "CaseEventID": "COMPLY_ON_BEHALF_COURT",
-    "CaseFieldID": "respondentDirectionsCustom",
-    "ListElementCode": "responses.cannotComplyReason",
     "FieldDisplayOrder": 10,
-    "DisplayContext": "MANDATORY"
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "respondentDirectionsCustom",
+    "CaseEventID": "COMPLY_ON_BEHALF_COURT",
+    "DisplayContext": "OPTIONAL",
+    "ListElementCode": "responses.complied"
   },
   {
-    "LiveFrom": "01/01/2017",
-    "CaseEventID": "COMPLY_ON_BEHALF_COURT",
-    "CaseFieldID": "respondentDirectionsCustom",
-    "ListElementCode": "responses.c2Uploaded",
     "FieldDisplayOrder": 11,
-    "DisplayContext": "OPTIONAL"
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "respondentDirectionsCustom",
+    "CaseEventID": "COMPLY_ON_BEHALF_COURT",
+    "DisplayContext": "OPTIONAL",
+    "ListElementCode": "responses.documentDetails"
   },
   {
-    "LiveFrom": "01/01/2017",
-    "CaseEventID": "COMPLY_ON_BEHALF_COURT",
-    "CaseFieldID": "respondentDirectionsCustom",
-    "ListElementCode": "responses.cannotComplyFile",
     "FieldDisplayOrder": 12,
-    "DisplayContext": "OPTIONAL"
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "respondentDirectionsCustom",
+    "CaseEventID": "COMPLY_ON_BEHALF_COURT",
+    "DisplayContext": "OPTIONAL",
+    "ListElementCode": "responses.file"
+  },
+  {
+    "FieldDisplayOrder": 13,
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "respondentDirectionsCustom",
+    "CaseEventID": "COMPLY_ON_BEHALF_COURT",
+    "DisplayContext": "OPTIONAL",
+    "ListElementCode": "responses.cannotComplyTitle"
+  },
+  {
+    "FieldDisplayOrder": 14,
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "respondentDirectionsCustom",
+    "CaseEventID": "COMPLY_ON_BEHALF_COURT",
+    "DisplayContext": "MANDATORY",
+    "ListElementCode": "responses.cannotComplyReason"
+  },
+  {
+    "FieldDisplayOrder": 15,
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "respondentDirectionsCustom",
+    "CaseEventID": "COMPLY_ON_BEHALF_COURT",
+    "DisplayContext": "OPTIONAL",
+    "ListElementCode": "responses.c2Uploaded"
+  },
+  {
+    "FieldDisplayOrder": 16,
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "respondentDirectionsCustom",
+    "CaseEventID": "COMPLY_ON_BEHALF_COURT",
+    "DisplayContext": "OPTIONAL",
+    "ListElementCode": "responses.cannotComplyFile"
   }
 ]

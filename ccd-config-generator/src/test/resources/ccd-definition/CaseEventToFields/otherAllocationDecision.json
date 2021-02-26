@@ -1,14 +1,14 @@
 [
   {
+    "PageID": 1,
     "LiveFrom": "01/01/2017",
     "CaseTypeID": "CARE_SUPERVISION_EPO",
-    "CaseEventID": "otherAllocationDecision",
     "CaseFieldID": "allocationDecision",
+    "CaseEventID": "otherAllocationDecision",
+    "PageColumnNumber": 1,
     "PageFieldDisplayOrder": 1,
     "DisplayContext": "MANDATORY",
-    "PageID": 1,
-    "PageDisplayOrder": 1,
-    "PageColumnNumber": 1,
-    "ShowSummaryChangeOption": "Y"
+    "ShowSummaryChangeOption": "Y",
+    "PageDisplayOrder": 1
   }
 ]

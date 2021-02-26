@@ -1,18 +1,18 @@
 [
   {
+    "FieldDisplayOrder": 3,
     "LiveFrom": "01/01/2017",
-    "CaseEventID": "otherProposal",
     "CaseFieldID": "allocationProposal",
-    "ListElementCode": "proposal",
-    "FieldDisplayOrder": 1,
-    "DisplayContext": "MANDATORY"
+    "CaseEventID": "otherProposal",
+    "DisplayContext": "MANDATORY",
+    "ListElementCode": "proposal"
   },
   {
+    "FieldDisplayOrder": 4,
     "LiveFrom": "01/01/2017",
-    "CaseEventID": "otherProposal",
     "CaseFieldID": "allocationProposal",
-    "ListElementCode": "proposalReason",
-    "FieldDisplayOrder": 2,
-    "DisplayContext": "OPTIONAL"
+    "CaseEventID": "otherProposal",
+    "DisplayContext": "OPTIONAL",
+    "ListElementCode": "proposalReason"
   }
 ]

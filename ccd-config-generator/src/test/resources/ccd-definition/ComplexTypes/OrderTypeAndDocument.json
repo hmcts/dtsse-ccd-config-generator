@@ -1,29 +1,25 @@
 [
   {
-    "LiveFrom": "01/01/2017",
     "ID": "OrderTypeAndDocument",
-    "ListElementCode": "type",
-    "FieldType": "FixedRadioList",
-    "FieldTypeParameter": "GeneratedOrderType",
-    "ElementLabel": "Select the order you want to make",
-    "SecurityClassification": "Public"
+    "FieldType": "Document",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "document"
   },
   {
-    "LiveFrom": "01/01/2017",
     "ID": "OrderTypeAndDocument",
-    "ListElementCode": "subtype",
     "FieldType": "FixedRadioList",
     "FieldTypeParameter": "GeneratedOrderSubtype",
-    "ElementLabel": " ",
-    "FieldShowCondition": "type=\"CARE_ORDER\" OR type=\"SUPERVISION_ORDER\"",
-    "SecurityClassification": "Public"
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "subtype"
   },
   {
-    "LiveFrom": "01/01/2017",
     "ID": "OrderTypeAndDocument",
-    "ListElementCode": "document",
-    "FieldType": "Document",
-    "ElementLabel": "Order document",
-    "SecurityClassification": "Public"
+    "FieldType": "FixedRadioList",
+    "FieldTypeParameter": "GeneratedOrderType",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "type"
   }
 ]

@@ -1,15 +1,15 @@
 [
   {
+    "PageID": 1,
     "LiveFrom": "01/01/2017",
     "CaseTypeID": "CARE_SUPERVISION_EPO",
-    "CaseEventID": "hearingBookingDetails-PREPARE_FOR_HEARING",
     "CaseFieldID": "hearingDetails",
+    "CallBackURLMidEvent": "${CCD_DEF_CASE_SERVICE_BASE_URL}/callback/add-hearing-bookings/mid-event",
+    "CaseEventID": "hearingBookingDetails-PREPARE_FOR_HEARING",
+    "PageColumnNumber": 1,
     "PageFieldDisplayOrder": 1,
     "DisplayContext": "COMPLEX",
-    "PageID": 1,
     "ShowSummaryChangeOption": "Y",
-    "PageDisplayOrder": 1,
-    "PageColumnNumber": 1,
-    "CallBackURLMidEvent": "${CCD_DEF_CASE_SERVICE_BASE_URL}/callback/add-hearing-bookings/mid-event"
+    "PageDisplayOrder": 1
   }
 ]

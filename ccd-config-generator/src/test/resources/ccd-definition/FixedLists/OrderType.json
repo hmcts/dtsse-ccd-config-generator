@@ -1,51 +1,51 @@
 [
   {
     "LiveFrom": "01/01/2017",
-    "ID": "OrderType",
+    "DisplayOrder": 1,
     "ListElementCode": "CARE_ORDER",
     "ListElement": "Care order",
-    "DisplayOrder": 1
+    "ID": "OrderType"
   },
   {
     "LiveFrom": "01/01/2017",
-    "ID": "OrderType",
+    "DisplayOrder": 2,
     "ListElementCode": "INTERIM_CARE_ORDER",
     "ListElement": "Interim care order",
-    "DisplayOrder": 2
+    "ID": "OrderType"
   },
   {
     "LiveFrom": "01/01/2017",
-    "ID": "OrderType",
+    "DisplayOrder": 3,
     "ListElementCode": "SUPERVISION_ORDER",
     "ListElement": "Supervision order",
-    "DisplayOrder": 3
+    "ID": "OrderType"
   },
   {
     "LiveFrom": "01/01/2017",
-    "ID": "OrderType",
+    "DisplayOrder": 4,
     "ListElementCode": "INTERIM_SUPERVISION_ORDER",
     "ListElement": "Interim supervision order",
-    "DisplayOrder": 4
+    "ID": "OrderType"
   },
   {
     "LiveFrom": "01/01/2017",
-    "ID": "OrderType",
+    "DisplayOrder": 5,
     "ListElementCode": "EDUCATION_SUPERVISION_ORDER",
     "ListElement": "Education supervision order",
-    "DisplayOrder": 5
+    "ID": "OrderType"
   },
   {
     "LiveFrom": "01/01/2017",
-    "ID": "OrderType",
+    "DisplayOrder": 6,
     "ListElementCode": "EMERGENCY_PROTECTION_ORDER",
     "ListElement": "Emergency protection order",
-    "DisplayOrder": 6
+    "ID": "OrderType"
   },
   {
     "LiveFrom": "01/01/2017",
-    "ID": "OrderType",
+    "DisplayOrder": 7,
     "ListElementCode": "OTHER",
     "ListElement": "Other order under part 4 of the Children Act 1989",
-    "DisplayOrder": 7
+    "ID": "OrderType"
   }
 ]

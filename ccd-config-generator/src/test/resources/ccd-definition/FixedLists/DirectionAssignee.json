@@ -1,44 +1,44 @@
 [
   {
     "LiveFrom": "01/01/2017",
-    "ID": "DirectionAssignee",
-    "ListElementCode": "LOCAL_AUTHORITY",
-    "ListElement": "Local Authority",
-    "DisplayOrder": 2
-  },
-  {
-    "LiveFrom": "01/01/2017",
-    "ID": "DirectionAssignee",
-    "ListElementCode": "CAFCASS",
-    "ListElement": "Cafcass",
-    "DisplayOrder": 4
-  },
-  {
-    "LiveFrom": "01/01/2017",
-    "ID": "DirectionAssignee",
+    "DisplayOrder": 1,
     "ListElementCode": "ALL_PARTIES",
-    "ListElement": "All parties",
-    "DisplayOrder": 1
+    "ListElement": "ALL_PARTIES",
+    "ID": "DirectionAssignee"
   },
   {
     "LiveFrom": "01/01/2017",
-    "ID": "DirectionAssignee",
+    "DisplayOrder": 2,
+    "ListElementCode": "LOCAL_AUTHORITY",
+    "ListElement": "LOCAL_AUTHORITY",
+    "ID": "DirectionAssignee"
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "DisplayOrder": 3,
     "ListElementCode": "PARENTS_AND_RESPONDENTS",
-    "ListElement": "Parents and other respondents",
-    "DisplayOrder": 3
+    "ListElement": "PARENTS_AND_RESPONDENTS",
+    "ID": "DirectionAssignee"
   },
   {
     "LiveFrom": "01/01/2017",
-    "ID": "DirectionAssignee",
+    "DisplayOrder": 4,
+    "ListElementCode": "CAFCASS",
+    "ListElement": "CAFCASS",
+    "ID": "DirectionAssignee"
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "DisplayOrder": 5,
     "ListElementCode": "OTHERS",
-    "ListElement": "Other parties",
-    "DisplayOrder": 5
+    "ListElement": "OTHERS",
+    "ID": "DirectionAssignee"
   },
   {
     "LiveFrom": "01/01/2017",
-    "ID": "DirectionAssignee",
+    "DisplayOrder": 6,
     "ListElementCode": "COURT",
-    "ListElement": "Court",
-    "DisplayOrder": 6
+    "ListElement": "COURT",
+    "ID": "DirectionAssignee"
   }
 ]

@@ -1,23 +1,23 @@
 [
   {
     "LiveFrom": "01/01/2017",
-    "ID": "CMOStatus",
+    "DisplayOrder": 1,
     "ListElementCode": "SEND_TO_JUDGE",
     "ListElement": "Yes, send this to the judge",
-    "DisplayOrder": 1
+    "ID": "CMOStatus"
   },
   {
     "LiveFrom": "01/01/2017",
-    "ID": "CMOStatus",
+    "DisplayOrder": 2,
     "ListElementCode": "PARTIES_REVIEW",
     "ListElement": "No, parties need to review it",
-    "DisplayOrder": 2
+    "ID": "CMOStatus"
   },
   {
     "LiveFrom": "01/01/2017",
-    "ID": "CMOStatus",
+    "DisplayOrder": 3,
     "ListElementCode": "SELF_REVIEW",
     "ListElement": "No, I need to make changes",
-    "DisplayOrder": 3
+    "ID": "CMOStatus"
   }
 ]

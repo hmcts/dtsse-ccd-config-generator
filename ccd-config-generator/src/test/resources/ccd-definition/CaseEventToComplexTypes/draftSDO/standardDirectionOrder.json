@@ -1,20 +1,19 @@
 [
   {
+    "FieldDisplayOrder": 2,
     "LiveFrom": "01/01/2017",
-    "CaseEventID": "draftSDO",
     "CaseFieldID": "standardDirectionOrder",
+    "CaseEventID": "draftSDO",
+    "DisplayContext": "READONLY",
     "ListElementCode": "orderDoc",
-    "EventElementLabel": "Check the order",
-    "FieldDisplayOrder": 1,
-    "DisplayContext": "READONLY"
+    "EventElementLabel": "Check the order"
   },
   {
+    "FieldDisplayOrder": 3,
     "LiveFrom": "01/01/2017",
-    "CaseEventID": "draftSDO",
     "CaseFieldID": "standardDirectionOrder",
-    "ListElementCode": "orderStatus",
-    "EventElementLabel": "Is this the final version?",
-    "FieldDisplayOrder": 2,
-    "DisplayContext": "MANDATORY"
+    "CaseEventID": "draftSDO",
+    "DisplayContext": "MANDATORY",
+    "ListElementCode": "orderStatus"
   }
 ]

@@ -1,27 +1,26 @@
 [
   {
+    "FieldDisplayOrder": 4,
     "LiveFrom": "01/01/2017",
-    "CaseEventID": "draftCMO",
     "CaseFieldID": "allPartiesCustomCMO",
-    "ListElementCode": "directionType",
-    "EventElementLabel": " ",
-    "FieldDisplayOrder": 1,
-    "DisplayContext": "MANDATORY"
+    "CaseEventID": "draftCMO",
+    "DisplayContext": "MANDATORY",
+    "ListElementCode": "directionType"
   },
   {
+    "FieldDisplayOrder": 5,
     "LiveFrom": "01/01/2017",
-    "CaseEventID": "draftCMO",
     "CaseFieldID": "allPartiesCustomCMO",
-    "ListElementCode": "directionText",
-    "FieldDisplayOrder": 2,
-    "DisplayContext": "MANDATORY"
+    "CaseEventID": "draftCMO",
+    "DisplayContext": "MANDATORY",
+    "ListElementCode": "directionText"
   },
   {
+    "FieldDisplayOrder": 6,
     "LiveFrom": "01/01/2017",
-    "CaseEventID": "draftCMO",
     "CaseFieldID": "allPartiesCustomCMO",
-    "ListElementCode": "dateToBeCompletedBy",
-    "FieldDisplayOrder": 3,
-    "DisplayContext": "OPTIONAL"
+    "CaseEventID": "draftCMO",
+    "DisplayContext": "OPTIONAL",
+    "ListElementCode": "dateToBeCompletedBy"
   }
 ]

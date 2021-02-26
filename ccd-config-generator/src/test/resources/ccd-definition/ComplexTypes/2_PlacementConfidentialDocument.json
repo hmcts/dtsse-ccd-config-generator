@@ -1,27 +1,24 @@
 [
   {
-    "LiveFrom": "01/01/2017",
     "ID": "PlacementConfidentialDocument",
-    "ListElementCode": "type",
-    "FieldType": "FixedList",
-    "FieldTypeParameter": "PlacementConfidentialDocumentType",
-    "ElementLabel": "Document type",
-    "SecurityClassification": "Public"
-  },
-  {
-    "LiveFrom": "01/01/2017",
-    "ID": "PlacementConfidentialDocument",
-    "ListElementCode": "document",
     "FieldType": "Document",
-    "ElementLabel": "Document",
-    "SecurityClassification": "Public"
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "document"
   },
   {
-    "LiveFrom": "01/01/2017",
     "ID": "PlacementConfidentialDocument",
-    "ListElementCode": "description",
-    "FieldType": "TextArea",
-    "ElementLabel": "Description",
-    "SecurityClassification": "Public"
+    "FieldType": "FixedRadioList",
+    "FieldTypeParameter": "PlacementDocumentType",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "type"
+  },
+  {
+    "ID": "PlacementConfidentialDocument",
+    "FieldType": "Text",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "description"
   }
 ]

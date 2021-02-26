@@ -1,124 +1,117 @@
 [
   {
+    "FieldDisplayOrder": 3,
     "LiveFrom": "01/01/2017",
-    "CaseEventID": "COMPLY_OTHERS",
     "CaseFieldID": "respondentDirectionsCustom",
-    "ListElementCode": "directionType",
-    "EventElementLabel": " ",
-    "FieldDisplayOrder": 1,
-    "DisplayContext": "READONLY"
+    "CaseEventID": "COMPLY_OTHERS",
+    "DisplayContext": "READONLY",
+    "ListElementCode": "directionType"
   },
   {
+    "FieldDisplayOrder": 4,
     "LiveFrom": "01/01/2017",
-    "CaseEventID": "COMPLY_OTHERS",
     "CaseFieldID": "respondentDirectionsCustom",
-    "ListElementCode": "directionNeeded",
-    "FieldDisplayOrder": 2,
+    "CaseEventID": "COMPLY_OTHERS",
     "DisplayContext": "READONLY",
+    "ListElementCode": "directionNeeded",
     "FieldShowCondition": "directionText = \"DO_NOT_SHOW\""
   },
   {
+    "FieldDisplayOrder": 5,
     "LiveFrom": "01/01/2017",
-    "CaseEventID": "COMPLY_OTHERS",
     "CaseFieldID": "respondentDirectionsCustom",
-    "ListElementCode": "dateToBeCompletedBy",
-    "EventElementLabel": "Deadline",
-    "FieldDisplayOrder": 3,
-    "DisplayContext": "READONLY"
+    "CaseEventID": "COMPLY_OTHERS",
+    "DisplayContext": "READONLY",
+    "ListElementCode": "dateToBeCompletedBy"
   },
   {
+    "FieldDisplayOrder": 6,
     "LiveFrom": "01/01/2017",
-    "CaseEventID": "COMPLY_OTHERS",
     "CaseFieldID": "respondentDirectionsCustom",
+    "CaseEventID": "COMPLY_OTHERS",
+    "DisplayContext": "READONLY",
     "ListElementCode": "parentsAndRespondentsAssignee",
-    "EventElementLabel": "For",
-    "FieldDisplayOrder": 4,
-    "DisplayContext": "READONLY",
-    "FieldShowCondition": "respondentDirectionsCustom.parentsAndRespondentsAssignee != \"\"",
-    "Comment": "cannot configure show hide condition to hide field for all parties directions as these are not assigned to one person"
+    "FieldShowCondition": "respondentDirectionsCustom.parentsAndRespondentsAssignee != \"\""
   },
   {
+    "FieldDisplayOrder": 7,
     "LiveFrom": "01/01/2017",
-    "CaseEventID": "COMPLY_OTHERS",
     "CaseFieldID": "respondentDirectionsCustom",
-    "ListElementCode": "allParties_label",
-    "FieldDisplayOrder": 4,
+    "CaseEventID": "COMPLY_OTHERS",
     "DisplayContext": "READONLY",
+    "ListElementCode": "allParties_label",
     "FieldShowCondition": "respondentDirectionsCustom.parentsAndRespondentsAssignee = \"\""
   },
   {
-    "LiveFrom": "01/01/2017",
-    "CaseEventID": "COMPLY_OTHERS",
-    "CaseFieldID": "respondentDirectionsCustom",
-    "ListElementCode": "responses.responder",
-    "FieldDisplayOrder": 5,
-    "DisplayContext": "READONLY",
-    "Comment": "Field is here so we do not have to persist data in callbacks"
-  },
-  {
-    "LiveFrom": "01/01/2017",
-    "CaseEventID": "COMPLY_OTHERS",
-    "CaseFieldID": "respondentDirectionsCustom",
-    "ListElementCode": "responses.respondingOnBehalfOfRespondent",
-    "FieldDisplayOrder": 6,
-    "DisplayContext": "MANDATORY"
-  },
-  {
-    "LiveFrom": "01/01/2017",
-    "CaseEventID": "COMPLY_OTHERS",
-    "CaseFieldID": "respondentDirectionsCustom",
-    "ListElementCode": "responses.complied",
-    "EventElementLabel": "Have they complied with this direction?",
-    "FieldDisplayOrder": 7,
-    "DisplayContext": "OPTIONAL"
-  },
-  {
-    "LiveFrom": "01/01/2017",
-    "CaseEventID": "COMPLY_OTHERS",
-    "CaseFieldID": "respondentDirectionsCustom",
-    "ListElementCode": "responses.documentDetails",
-    "FieldDisplayOrder": 8,
-    "DisplayContext": "OPTIONAL"
-  },
-  {
-    "LiveFrom": "01/01/2017",
-    "CaseEventID": "COMPLY_OTHERS",
-    "CaseFieldID": "respondentDirectionsCustom",
-    "ListElementCode": "responses.file",
     "FieldDisplayOrder": 9,
-    "DisplayContext": "OPTIONAL"
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "respondentDirectionsCustom",
+    "CaseEventID": "COMPLY_OTHERS",
+    "DisplayContext": "READONLY",
+    "ListElementCode": "responses.responder"
   },
   {
-    "LiveFrom": "01/01/2017",
-    "CaseEventID": "COMPLY_OTHERS",
-    "CaseFieldID": "respondentDirectionsCustom",
-    "ListElementCode": "responses.cannotComplyTitle",
-    "EventElementLabel": "### Parties need to comply with directions to keep proceedings on track. ###\n\nIf they can't comply, you need to explain:\n\n- reasons why\n\n- impact on timetable and next hearing\n\n- proposed next actions",
     "FieldDisplayOrder": 10,
-    "DisplayContext": "OPTIONAL"
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "respondentDirectionsCustom",
+    "CaseEventID": "COMPLY_OTHERS",
+    "DisplayContext": "MANDATORY",
+    "ListElementCode": "responses.respondingOnBehalfOfRespondent"
   },
   {
-    "LiveFrom": "01/01/2017",
-    "CaseEventID": "COMPLY_OTHERS",
-    "CaseFieldID": "respondentDirectionsCustom",
-    "ListElementCode": "responses.cannotComplyReason",
     "FieldDisplayOrder": 11,
-    "DisplayContext": "MANDATORY"
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "respondentDirectionsCustom",
+    "CaseEventID": "COMPLY_OTHERS",
+    "DisplayContext": "OPTIONAL",
+    "ListElementCode": "responses.complied"
   },
   {
-    "LiveFrom": "01/01/2017",
-    "CaseEventID": "COMPLY_OTHERS",
-    "CaseFieldID": "respondentDirectionsCustom",
-    "ListElementCode": "responses.c2Uploaded",
     "FieldDisplayOrder": 12,
-    "DisplayContext": "OPTIONAL"
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "respondentDirectionsCustom",
+    "CaseEventID": "COMPLY_OTHERS",
+    "DisplayContext": "OPTIONAL",
+    "ListElementCode": "responses.documentDetails"
   },
   {
-    "LiveFrom": "01/01/2017",
-    "CaseEventID": "COMPLY_OTHERS",
-    "CaseFieldID": "respondentDirectionsCustom",
-    "ListElementCode": "responses.cannotComplyFile",
     "FieldDisplayOrder": 13,
-    "DisplayContext": "OPTIONAL"
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "respondentDirectionsCustom",
+    "CaseEventID": "COMPLY_OTHERS",
+    "DisplayContext": "OPTIONAL",
+    "ListElementCode": "responses.file"
+  },
+  {
+    "FieldDisplayOrder": 14,
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "respondentDirectionsCustom",
+    "CaseEventID": "COMPLY_OTHERS",
+    "DisplayContext": "OPTIONAL",
+    "ListElementCode": "responses.cannotComplyTitle"
+  },
+  {
+    "FieldDisplayOrder": 15,
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "respondentDirectionsCustom",
+    "CaseEventID": "COMPLY_OTHERS",
+    "DisplayContext": "MANDATORY",
+    "ListElementCode": "responses.cannotComplyReason"
+  },
+  {
+    "FieldDisplayOrder": 16,
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "respondentDirectionsCustom",
+    "CaseEventID": "COMPLY_OTHERS",
+    "DisplayContext": "OPTIONAL",
+    "ListElementCode": "responses.c2Uploaded"
+  },
+  {
+    "FieldDisplayOrder": 17,
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "respondentDirectionsCustom",
+    "CaseEventID": "COMPLY_OTHERS",
+    "DisplayContext": "OPTIONAL",
+    "ListElementCode": "responses.cannotComplyFile"
   }
 ]

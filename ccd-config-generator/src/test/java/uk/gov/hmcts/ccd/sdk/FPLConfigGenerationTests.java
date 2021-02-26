@@ -54,17 +54,6 @@ public class FPLConfigGenerationTests {
     public static void before() throws IOException, URISyntaxException {
         prodConfig = tmp.getRoot().toPath().resolve("production");
         Path resRoot = Paths.get(Resources.getResource("ccd-definition").toURI());
-        FileUtils.copyDirectory(resRoot.resolve("ComplexTypes").toFile(), prodConfig.resolve("ComplexTypes").toFile());
-        FileUtils.copyDirectory(resRoot.resolve("FixedLists").toFile(), prodConfig.resolve("FixedLists").toFile());
-        FileUtils.copyDirectory(resRoot.resolve("CaseEventToComplexTypes/createOrder/child-selector").toFile(),
-            prodConfig.resolve("CaseEventToComplexTypes/createOrder/child-selector").toFile());
-        FileUtils.copyDirectory(resRoot.resolve("AuthorisationCaseField").toFile(), prodConfig.resolve("AuthorisationCaseField").toFile());
-
-        copyResourceToOutput("AuthorisationCaseState.json");
-        copyResourceToOutput("CaseField.json");
-        copyResourceToOutput("FixedLists/ProceedingType.json");
-        copyResourceToOutput("FixedLists/OrderStatus.json");
-        copyResourceToOutput("FixedLists/DirectionAssignee.json");
 
         reflections = new Reflections(new ConfigurationBuilder()
                 .setUrls(ClasspathHelper.forPackage("uk.gov.hmcts"))
@@ -112,16 +101,6 @@ public class FPLConfigGenerationTests {
     @Test
     public void generatesAuthorisationCaseFieldJudiciary() {
         assertEquals("AuthorisationCaseField/caseworker-publiclaw-judiciary.json");
-    }
-
-    @Test
-    public void ignoresAuthorisationCaseFieldLASOLICITOR() {
-        assertEquals("AuthorisationCaseField/LASOLICITOR.json");
-    }
-
-    @Test
-    public void ignoresAuthorisationCaseFieldSOLICITOR() {
-        assertEquals("AuthorisationCaseField/SOLICITOR.json");
     }
 
     @Test

@@ -1,20 +1,16 @@
 [
   {
-    "LiveFrom": "01/01/2017",
     "ID": "FurtherDirections",
-    "ListElementCode": "directionsNeeded",
-    "FieldType": "YesOrNo",
-    "ElementLabel": "Do you want to add further directions to the order?",
-    "SecurityClassification": "Public"
+    "FieldType": "Text",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "directionsNeeded"
   },
   {
-    "LiveFrom": "01/01/2017",
     "ID": "FurtherDirections",
-    "ListElementCode": "directions",
-    "FieldType": "TextArea",
-    "ElementLabel": "Enter directions",
-    "HintText": "These will be printed at the bottom of the order.",
+    "FieldType": "Text",
+    "LiveFrom": "01/01/2017",
     "SecurityClassification": "Public",
-    "FieldShowCondition": "directionsNeeded = \"Yes\""
+    "ListElementCode": "directions"
   }
 ]

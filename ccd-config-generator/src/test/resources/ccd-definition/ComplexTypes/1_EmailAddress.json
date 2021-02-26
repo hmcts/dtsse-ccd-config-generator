@@ -1,19 +1,16 @@
 [
   {
-    "LiveFrom": "01/01/2017",
     "ID": "EmailAddress",
-    "ListElementCode": "email",
     "FieldType": "Text",
-    "ElementLabel": "Email",
-    "HintText": "For example, joe.bloggs@la.gov.uk",
-    "SecurityClassification": "Public"
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "email"
   },
   {
-    "LiveFrom" : "01/01/2017",
-    "ElementLabel" : null,
-    "ListElementCode" : "emailUsageType",
-    "ID" : "EmailAddress",
-    "SecurityClassification" : "Public",
-    "FieldType" : "Text"
+    "ID": "EmailAddress",
+    "FieldType": "Text",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "emailUsageType"
   }
 ]

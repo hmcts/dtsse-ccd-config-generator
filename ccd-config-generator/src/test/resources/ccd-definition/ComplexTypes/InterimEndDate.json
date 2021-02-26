@@ -1,20 +1,17 @@
 [
   {
-    "LiveFrom": "01/01/2017",
     "ID": "InterimEndDate",
-    "ListElementCode": "type",
-    "FieldType": "FixedRadioList",
-    "FieldTypeParameter": "InterimEndDateType",
-    "ElementLabel": " ",
-    "SecurityClassification": "Public"
+    "FieldType": "Date",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "endDate"
   },
   {
-    "LiveFrom": "01/01/2017",
     "ID": "InterimEndDate",
-    "ListElementCode": "endDate",
-    "FieldType": "Date",
-    "ElementLabel": " ",
+    "FieldType": "FixedRadioList",
+    "FieldTypeParameter": "InterimEndDateType",
+    "LiveFrom": "01/01/2017",
     "SecurityClassification": "Public",
-    "FieldShowCondition": "type = \"NAMED_DATE\""
+    "ListElementCode": "type"
   }
 ]

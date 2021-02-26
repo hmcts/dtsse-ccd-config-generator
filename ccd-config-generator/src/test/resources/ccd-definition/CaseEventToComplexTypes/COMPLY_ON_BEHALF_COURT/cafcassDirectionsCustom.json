@@ -1,87 +1,83 @@
 [
   {
+    "FieldDisplayOrder": 3,
     "LiveFrom": "01/01/2017",
-    "CaseEventID": "COMPLY_ON_BEHALF_COURT",
     "CaseFieldID": "cafcassDirectionsCustom",
-    "ListElementCode": "directionType",
-    "EventElementLabel": " ",
-    "FieldDisplayOrder": 1,
-    "DisplayContext": "READONLY"
+    "CaseEventID": "COMPLY_ON_BEHALF_COURT",
+    "DisplayContext": "READONLY",
+    "ListElementCode": "directionType"
   },
   {
+    "FieldDisplayOrder": 4,
     "LiveFrom": "01/01/2017",
-    "CaseEventID": "COMPLY_ON_BEHALF_COURT",
     "CaseFieldID": "cafcassDirectionsCustom",
-    "ListElementCode": "directionNeeded",
-    "FieldDisplayOrder": 2,
+    "CaseEventID": "COMPLY_ON_BEHALF_COURT",
     "DisplayContext": "READONLY",
+    "ListElementCode": "directionNeeded",
     "FieldShowCondition": "directionText = \"DO_NOT_SHOW\""
   },
   {
-    "LiveFrom": "01/01/2017",
-    "CaseEventID": "COMPLY_ON_BEHALF_COURT",
-    "CaseFieldID": "cafcassDirectionsCustom",
-    "ListElementCode": "dateToBeCompletedBy",
-    "EventElementLabel": "Deadline",
-    "FieldDisplayOrder": 3,
-    "DisplayContext": "READONLY"
-  },
-  {
-    "LiveFrom": "01/01/2017",
-    "CaseEventID": "COMPLY_ON_BEHALF_COURT",
-    "CaseFieldID": "cafcassDirectionsCustom",
-    "ListElementCode": "response.complied",
-    "EventElementLabel": "Have they complied with this direction?",
-    "FieldDisplayOrder": 4,
-    "DisplayContext": "OPTIONAL"
-  },
-  {
-    "LiveFrom": "01/01/2017",
-    "CaseEventID": "COMPLY_ON_BEHALF_COURT",
-    "CaseFieldID": "cafcassDirectionsCustom",
-    "ListElementCode": "response.documentDetails",
     "FieldDisplayOrder": 5,
-    "DisplayContext": "OPTIONAL"
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "cafcassDirectionsCustom",
+    "CaseEventID": "COMPLY_ON_BEHALF_COURT",
+    "DisplayContext": "READONLY",
+    "ListElementCode": "dateToBeCompletedBy"
   },
   {
-    "LiveFrom": "01/01/2017",
-    "CaseEventID": "COMPLY_ON_BEHALF_COURT",
-    "CaseFieldID": "cafcassDirectionsCustom",
-    "ListElementCode": "response.file",
     "FieldDisplayOrder": 6,
-    "DisplayContext": "OPTIONAL"
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "cafcassDirectionsCustom",
+    "CaseEventID": "COMPLY_ON_BEHALF_COURT",
+    "DisplayContext": "OPTIONAL",
+    "ListElementCode": "response.complied"
   },
   {
-    "LiveFrom": "01/01/2017",
-    "CaseEventID": "COMPLY_ON_BEHALF_COURT",
-    "CaseFieldID": "cafcassDirectionsCustom",
-    "ListElementCode": "response.cannotComplyTitle",
-    "EventElementLabel": "### Parties need to comply with directions to keep proceedings on track. ###\n\nIf they can't comply, you need to explain:\n\n- reasons why\n\n- impact on timetable and next hearing\n\n- proposed next actions",
     "FieldDisplayOrder": 7,
-    "DisplayContext": "OPTIONAL"
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "cafcassDirectionsCustom",
+    "CaseEventID": "COMPLY_ON_BEHALF_COURT",
+    "DisplayContext": "OPTIONAL",
+    "ListElementCode": "response.documentDetails"
   },
   {
-    "LiveFrom": "01/01/2017",
-    "CaseEventID": "COMPLY_ON_BEHALF_COURT",
-    "CaseFieldID": "cafcassDirectionsCustom",
-    "ListElementCode": "response.cannotComplyReason",
     "FieldDisplayOrder": 8,
-    "DisplayContext": "MANDATORY"
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "cafcassDirectionsCustom",
+    "CaseEventID": "COMPLY_ON_BEHALF_COURT",
+    "DisplayContext": "OPTIONAL",
+    "ListElementCode": "response.file"
   },
   {
-    "LiveFrom": "01/01/2017",
-    "CaseEventID": "COMPLY_ON_BEHALF_COURT",
-    "CaseFieldID": "cafcassDirectionsCustom",
-    "ListElementCode": "response.c2Uploaded",
     "FieldDisplayOrder": 9,
-    "DisplayContext": "OPTIONAL"
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "cafcassDirectionsCustom",
+    "CaseEventID": "COMPLY_ON_BEHALF_COURT",
+    "DisplayContext": "OPTIONAL",
+    "ListElementCode": "response.cannotComplyTitle"
   },
   {
-    "LiveFrom": "01/01/2017",
-    "CaseEventID": "COMPLY_ON_BEHALF_COURT",
-    "CaseFieldID": "cafcassDirectionsCustom",
-    "ListElementCode": "response.cannotComplyFile",
     "FieldDisplayOrder": 10,
-    "DisplayContext": "OPTIONAL"
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "cafcassDirectionsCustom",
+    "CaseEventID": "COMPLY_ON_BEHALF_COURT",
+    "DisplayContext": "MANDATORY",
+    "ListElementCode": "response.cannotComplyReason"
+  },
+  {
+    "FieldDisplayOrder": 11,
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "cafcassDirectionsCustom",
+    "CaseEventID": "COMPLY_ON_BEHALF_COURT",
+    "DisplayContext": "OPTIONAL",
+    "ListElementCode": "response.c2Uploaded"
+  },
+  {
+    "FieldDisplayOrder": 12,
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "cafcassDirectionsCustom",
+    "CaseEventID": "COMPLY_ON_BEHALF_COURT",
+    "DisplayContext": "OPTIONAL",
+    "ListElementCode": "response.cannotComplyFile"
   }
 ]

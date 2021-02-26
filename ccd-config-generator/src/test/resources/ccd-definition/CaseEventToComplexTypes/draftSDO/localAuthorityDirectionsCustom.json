@@ -1,27 +1,26 @@
 [
   {
+    "FieldDisplayOrder": 4,
     "LiveFrom": "01/01/2017",
-    "CaseEventID": "draftSDO",
     "CaseFieldID": "localAuthorityDirectionsCustom",
-    "ListElementCode": "directionType",
-    "EventElementLabel": " ",
-    "FieldDisplayOrder": 1,
-    "DisplayContext": "MANDATORY"
+    "CaseEventID": "draftSDO",
+    "DisplayContext": "MANDATORY",
+    "ListElementCode": "directionType"
   },
   {
+    "FieldDisplayOrder": 5,
     "LiveFrom": "01/01/2017",
-    "CaseEventID": "draftSDO",
     "CaseFieldID": "localAuthorityDirectionsCustom",
-    "ListElementCode": "directionText",
-    "FieldDisplayOrder": 2,
-    "DisplayContext": "OPTIONAL"
+    "CaseEventID": "draftSDO",
+    "DisplayContext": "OPTIONAL",
+    "ListElementCode": "directionText"
   },
   {
+    "FieldDisplayOrder": 6,
     "LiveFrom": "01/01/2017",
-    "CaseEventID": "draftSDO",
     "CaseFieldID": "localAuthorityDirectionsCustom",
-    "ListElementCode": "dateToBeCompletedBy",
-    "FieldDisplayOrder": 3,
-    "DisplayContext": "OPTIONAL"
+    "CaseEventID": "draftSDO",
+    "DisplayContext": "OPTIONAL",
+    "ListElementCode": "dateToBeCompletedBy"
   }
 ]

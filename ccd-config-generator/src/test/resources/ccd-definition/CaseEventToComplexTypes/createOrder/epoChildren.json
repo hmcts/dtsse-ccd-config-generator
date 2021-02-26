@@ -1,20 +1,18 @@
 [
   {
+    "FieldDisplayOrder": 2,
     "LiveFrom": "01/01/2017",
-    "CaseEventID": "createOrder",
     "CaseFieldID": "epoChildren",
-    "ListElementCode": "descriptionNeeded",
-    "EventElementLabel": " ",
-    "FieldDisplayOrder": 1,
-    "DisplayContext": "MANDATORY"
+    "CaseEventID": "createOrder",
+    "DisplayContext": "MANDATORY",
+    "ListElementCode": "descriptionNeeded"
   },
   {
+    "FieldDisplayOrder": 3,
     "LiveFrom": "01/01/2017",
-    "CaseEventID": "createOrder",
     "CaseFieldID": "epoChildren",
-    "ListElementCode": "description",
-    "EventElementLabel": " ",
-    "FieldDisplayOrder": 2,
-    "DisplayContext": "OPTIONAL"
+    "CaseEventID": "createOrder",
+    "DisplayContext": "OPTIONAL",
+    "ListElementCode": "description"
   }
 ]

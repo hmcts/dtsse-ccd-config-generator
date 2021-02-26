@@ -1,37 +1,37 @@
 [
   {
     "LiveFrom": "01/01/2017",
-    "ID": "EmergencyProtectionOrderDirectionsType",
+    "DisplayOrder": 1,
     "ListElementCode": "CONTACT_WITH_NAMED_PERSON",
     "ListElement": "Contact with any named person",
-    "DisplayOrder": 1
+    "ID": "EmergencyProtectionOrderDirectionsType"
   },
   {
     "LiveFrom": "01/01/2017",
-    "ID": "EmergencyProtectionOrderDirectionsType",
+    "DisplayOrder": 2,
     "ListElementCode": "CHILD_MEDICAL_ASSESSMENT",
     "ListElement": "A medical or psychiatric examination, or another assessment of the child",
-    "DisplayOrder": 2
+    "ID": "EmergencyProtectionOrderDirectionsType"
   },
   {
     "LiveFrom": "01/01/2017",
-    "ID": "EmergencyProtectionOrderDirectionsType",
+    "DisplayOrder": 3,
     "ListElementCode": "MEDICAL_PRACTITIONER",
     "ListElement": "To be accompanied by a registered medical practitioner, nurse or midwife",
-    "DisplayOrder": 3
+    "ID": "EmergencyProtectionOrderDirectionsType"
   },
   {
     "LiveFrom": "01/01/2017",
-    "ID": "EmergencyProtectionOrderDirectionsType",
+    "DisplayOrder": 4,
     "ListElementCode": "EXCLUSION_REQUIREMENT",
     "ListElement": "An exclusion requirement",
-    "DisplayOrder": 4
+    "ID": "EmergencyProtectionOrderDirectionsType"
   },
   {
     "LiveFrom": "01/01/2017",
-    "ID": "EmergencyProtectionOrderDirectionsType",
+    "DisplayOrder": 5,
     "ListElementCode": "OTHER",
     "ListElement": "Other direction relating to an emergency protection order",
-    "DisplayOrder": 5
+    "ID": "EmergencyProtectionOrderDirectionsType"
   }
 ]

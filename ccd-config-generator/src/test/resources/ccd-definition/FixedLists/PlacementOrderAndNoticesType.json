@@ -1,37 +1,37 @@
 [
   {
     "LiveFrom": "01/01/2017",
-    "ID": "PlacementOrderAndNoticesType",
+    "DisplayOrder": 1,
     "ListElementCode": "PLACEMENT_ORDER",
-    "ListElement": "Placement order",
-    "DisplayOrder": 1
+    "ListElement": "PLACEMENT_ORDER",
+    "ID": "PlacementOrderAndNoticesType"
   },
   {
     "LiveFrom": "01/01/2017",
-    "ID": "PlacementOrderAndNoticesType",
+    "DisplayOrder": 2,
     "ListElementCode": "NOTICE_OF_PROCEEDINGS",
-    "ListElement": "Notice of proceedings",
-    "DisplayOrder": 2
+    "ListElement": "NOTICE_OF_PROCEEDINGS",
+    "ID": "PlacementOrderAndNoticesType"
   },
   {
     "LiveFrom": "01/01/2017",
-    "ID": "PlacementOrderAndNoticesType",
+    "DisplayOrder": 3,
     "ListElementCode": "NOTICE_OF_HEARING",
-    "ListElement": "Notice of hearing",
-    "DisplayOrder": 3
+    "ListElement": "NOTICE_OF_HEARING",
+    "ID": "PlacementOrderAndNoticesType"
   },
   {
     "LiveFrom": "01/01/2017",
-    "ID": "PlacementOrderAndNoticesType",
+    "DisplayOrder": 4,
     "ListElementCode": "OTHER",
-    "ListElement": "Other document",
-    "DisplayOrder": 4
+    "ListElement": "OTHER",
+    "ID": "PlacementOrderAndNoticesType"
   },
   {
     "LiveFrom": "01/01/2017",
-    "ID": "PlacementOrderAndNoticesType",
+    "DisplayOrder": 5,
     "ListElementCode": "NOTICE_OF_PLACEMENT_ORDER",
-    "ListElement": "Notice of placement order",
-    "DisplayOrder": 5
+    "ListElement": "NOTICE_OF_PLACEMENT_ORDER",
+    "ID": "PlacementOrderAndNoticesType"
   }
 ]

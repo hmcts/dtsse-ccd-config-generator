@@ -1,30 +1,30 @@
 [
   {
     "LiveFrom": "01/01/2017",
-    "ID": "GeneratedOrderType",
+    "DisplayOrder": 1,
     "ListElementCode": "BLANK_ORDER",
-    "ListElement": "Blank order (C21)",
-    "DisplayOrder": 1
+    "ListElement": "BLANK_ORDER",
+    "ID": "GeneratedOrderType"
   },
   {
     "LiveFrom": "01/01/2017",
-    "ID": "GeneratedOrderType",
+    "DisplayOrder": 2,
     "ListElementCode": "CARE_ORDER",
-    "ListElement": "Care order",
-    "DisplayOrder": 2
+    "ListElement": "CARE_ORDER",
+    "ID": "GeneratedOrderType"
   },
   {
     "LiveFrom": "01/01/2017",
-    "ID": "GeneratedOrderType",
+    "DisplayOrder": 3,
     "ListElementCode": "EMERGENCY_PROTECTION_ORDER",
-    "ListElement": "Emergency protection order",
-    "DisplayOrder": 3
+    "ListElement": "EMERGENCY_PROTECTION_ORDER",
+    "ID": "GeneratedOrderType"
   },
   {
     "LiveFrom": "01/01/2017",
-    "ID": "GeneratedOrderType",
+    "DisplayOrder": 4,
     "ListElementCode": "SUPERVISION_ORDER",
-    "ListElement": "Supervision order",
-    "DisplayOrder": 4
+    "ListElement": "SUPERVISION_ORDER",
+    "ID": "GeneratedOrderType"
   }
 ]

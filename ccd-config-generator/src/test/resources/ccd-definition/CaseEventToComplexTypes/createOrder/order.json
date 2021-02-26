@@ -1,30 +1,27 @@
 [
   {
-    "LiveFrom": "01/01/2017",
-    "CaseEventID": "createOrder",
-    "CaseFieldID": "order",
-    "ListElementCode": "title",
-    "EventElementLabel": "Order title",
-    "FieldDisplayOrder": 1,
-    "DisplayContext": "OPTIONAL"
-  },
-  {
-    "LiveFrom": "01/01/2017",
-    "CaseEventID": "createOrder",
-    "CaseFieldID": "order",
-    "ListElementCode": "details",
-    "EventElementLabel": "Order details",
     "FieldDisplayOrder": 2,
-    "DisplayContext": "MANDATORY"
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "order",
+    "CaseEventID": "createOrder",
+    "DisplayContext": "OPTIONAL",
+    "ListElementCode": "title"
   },
   {
-    "LiveFrom": "01/01/2017",
-    "CaseEventID": "createOrder",
-    "CaseFieldID": "order",
-    "ListElementCode": "date",
-    "EventElementLabel": "Date and time of upload",
     "FieldDisplayOrder": 3,
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "order",
+    "CaseEventID": "createOrder",
+    "DisplayContext": "MANDATORY",
+    "ListElementCode": "details"
+  },
+  {
+    "FieldDisplayOrder": 4,
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "order",
+    "CaseEventID": "createOrder",
     "DisplayContext": "READONLY",
+    "ListElementCode": "date",
     "FieldShowCondition": "document=\"DO_NOT_SHOW\""
   }
 ]

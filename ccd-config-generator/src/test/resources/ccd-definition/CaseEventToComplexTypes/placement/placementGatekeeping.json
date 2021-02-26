@@ -1,147 +1,132 @@
 [
   {
+    "FieldDisplayOrder": 4,
     "LiveFrom": "01/01/2017",
-    "CaseEventID": "placementGatekeeping",
     "CaseFieldID": "placement",
-    "ListElementCode": "placementChildId",
-    "ElementLabel": "Child id",
-    "SecurityClassification": "Public",
+    "CaseEventID": "placementGatekeeping",
     "DisplayContext": "READONLY",
+    "ListElementCode": "placementChildId",
     "FieldShowCondition": "placementChildName = \"DO NOT SHOW\""
   },
   {
+    "FieldDisplayOrder": 5,
     "LiveFrom": "01/01/2017",
-    "CaseEventID": "placementGatekeeping",
     "CaseFieldID": "placement",
-    "ListElementCode": "placementChildName",
-    "SecurityClassification": "Public",
+    "CaseEventID": "placementGatekeeping",
     "DisplayContext": "MANDATORY",
+    "ListElementCode": "placementChildName",
     "FieldShowCondition": "placementChildId = \"DO NOT SHOW\""
   },
   {
+    "FieldDisplayOrder": 6,
     "LiveFrom": "01/01/2017",
-    "CaseEventID": "placementGatekeeping",
     "CaseFieldID": "placement",
-    "ListElementCode": "placementApplication",
-    "EventElementLabel": "Add document",
-    "SecurityClassification": "Public",
-    "DisplayContext": "MANDATORY"
+    "CaseEventID": "placementGatekeeping",
+    "DisplayContext": "MANDATORY",
+    "ListElementCode": "placementApplication"
   },
   {
+    "FieldDisplayOrder": 7,
     "LiveFrom": "01/01/2017",
-    "CaseEventID": "placementGatekeeping",
     "CaseFieldID": "placement",
-    "ListElementCode": "placementSupportingDocuments",
-    "EventElementLabel": "Upload supporting documents",
-    "SecurityClassification": "Public",
-    "DisplayContext": "OPTIONAL"
+    "CaseEventID": "placementGatekeeping",
+    "DisplayContext": "OPTIONAL",
+    "ListElementCode": "placementSupportingDocuments"
   },
   {
+    "FieldDisplayOrder": 8,
     "LiveFrom": "01/01/2017",
-    "CaseEventID": "placementGatekeeping",
     "CaseFieldID": "placement",
-    "ListElementCode": "placementConfidentialDocuments",
-    "EventElementLabel": "Upload confidential documents",
-    "SecurityClassification": "Public",
-    "DisplayContext": "OPTIONAL"
+    "CaseEventID": "placementGatekeeping",
+    "DisplayContext": "OPTIONAL",
+    "ListElementCode": "placementConfidentialDocuments"
   },
   {
+    "FieldDisplayOrder": 9,
     "LiveFrom": "01/01/2017",
-    "CaseEventID": "placementGatekeeping",
     "CaseFieldID": "placement",
-    "ListElementCode": "placementOrderAndNotices",
-    "EventElementLabel": "Upload placement order and notices",
-    "SecurityClassification": "Public",
-    "DisplayContext": "OPTIONAL"
+    "CaseEventID": "placementGatekeeping",
+    "DisplayContext": "OPTIONAL",
+    "ListElementCode": "placementOrderAndNotices"
   },
   {
+    "FieldDisplayOrder": 12,
     "LiveFrom": "01/01/2017",
-    "CaseEventID": "placementGatekeeping",
     "CaseFieldID": "placement",
-    "ListElementCode": "placementConfidentialDocuments.type",
-    "EventElementLabel": "Document type",
-    "SecurityClassification": "Public",
-    "DisplayContext": "MANDATORY"
+    "CaseEventID": "placementGatekeeping",
+    "DisplayContext": "MANDATORY",
+    "ListElementCode": "placementConfidentialDocuments.type"
   },
   {
+    "FieldDisplayOrder": 13,
     "LiveFrom": "01/01/2017",
-    "CaseEventID": "placementGatekeeping",
     "CaseFieldID": "placement",
-    "ListElementCode": "placementConfidentialDocuments.document",
-    "EventElementLabel": "Add document",
-    "SecurityClassification": "Public",
-    "DisplayContext": "MANDATORY"
+    "CaseEventID": "placementGatekeeping",
+    "DisplayContext": "MANDATORY",
+    "ListElementCode": "placementConfidentialDocuments.document"
   },
   {
+    "FieldDisplayOrder": 14,
     "LiveFrom": "01/01/2017",
-    "CaseEventID": "placementGatekeeping",
     "CaseFieldID": "placement",
-    "ListElementCode": "placementConfidentialDocuments.description",
-    "EventElementLabel": "Description",
-    "SecurityClassification": "Public",
-    "DisplayContext": "OPTIONAL"
+    "CaseEventID": "placementGatekeeping",
+    "DisplayContext": "OPTIONAL",
+    "ListElementCode": "placementConfidentialDocuments.description"
   },
   {
+    "FieldDisplayOrder": 13,
     "LiveFrom": "01/01/2017",
-    "CaseEventID": "placementGatekeeping",
     "CaseFieldID": "placement",
-    "ListElementCode": "placementOrderAndNotices.type_label",
-    "EventElementLabel": "## For court official use only",
-    "SecurityClassification": "Public",
-    "DisplayContext": "MANDATORY"
+    "CaseEventID": "placementGatekeeping",
+    "DisplayContext": "MANDATORY",
+    "ListElementCode": "placementOrderAndNotices.type_label"
   },
   {
+    "FieldDisplayOrder": 14,
     "LiveFrom": "01/01/2017",
-    "CaseEventID": "placementGatekeeping",
     "CaseFieldID": "placement",
-    "ListElementCode": "placementOrderAndNotices.type",
-    "EventElementLabel": "Document type",
-    "SecurityClassification": "Public",
-    "DisplayContext": "MANDATORY"
+    "CaseEventID": "placementGatekeeping",
+    "DisplayContext": "MANDATORY",
+    "ListElementCode": "placementOrderAndNotices.type"
   },
   {
+    "FieldDisplayOrder": 15,
     "LiveFrom": "01/01/2017",
-    "CaseEventID": "placementGatekeeping",
     "CaseFieldID": "placement",
-    "ListElementCode": "placementOrderAndNotices.document",
-    "EventElementLabel": "Add PDF document",
-    "SecurityClassification": "Public",
-    "DisplayContext": "MANDATORY"
+    "CaseEventID": "placementGatekeeping",
+    "DisplayContext": "MANDATORY",
+    "ListElementCode": "placementOrderAndNotices.document"
   },
   {
+    "FieldDisplayOrder": 16,
     "LiveFrom": "01/01/2017",
-    "CaseEventID": "placementGatekeeping",
     "CaseFieldID": "placement",
-    "ListElementCode": "placementOrderAndNotices.description",
-    "EventElementLabel": "Description",
-    "SecurityClassification": "Public",
-    "DisplayContext": "OPTIONAL"
+    "CaseEventID": "placementGatekeeping",
+    "DisplayContext": "OPTIONAL",
+    "ListElementCode": "placementOrderAndNotices.description"
   },
   {
+    "FieldDisplayOrder": 15,
     "LiveFrom": "01/01/2017",
-    "CaseEventID": "placementGatekeeping",
     "CaseFieldID": "placement",
-    "ListElementCode": "placementSupportingDocuments.type",
-    "EventElementLabel": "Document type",
-    "SecurityClassification": "Public",
-    "DisplayContext": "MANDATORY"
+    "CaseEventID": "placementGatekeeping",
+    "DisplayContext": "MANDATORY",
+    "ListElementCode": "placementSupportingDocuments.type"
   },
   {
+    "FieldDisplayOrder": 16,
     "LiveFrom": "01/01/2017",
-    "CaseEventID": "placementGatekeeping",
     "CaseFieldID": "placement",
-    "ListElementCode": "placementSupportingDocuments.document",
-    "EventElementLabel": "Add document",
-    "SecurityClassification": "Public",
-    "DisplayContext": "MANDATORY"
+    "CaseEventID": "placementGatekeeping",
+    "DisplayContext": "MANDATORY",
+    "ListElementCode": "placementSupportingDocuments.document"
   },
   {
+    "FieldDisplayOrder": 17,
     "LiveFrom": "01/01/2017",
-    "CaseEventID": "placementGatekeeping",
     "CaseFieldID": "placement",
-    "ListElementCode": "placementSupportingDocuments.description",
-    "EventElementLabel": "Description",
-    "SecurityClassification": "Public",
-    "DisplayContext": "OPTIONAL"
+    "CaseEventID": "placementGatekeeping",
+    "DisplayContext": "OPTIONAL",
+    "ListElementCode": "placementSupportingDocuments.description"
   }
 ]
