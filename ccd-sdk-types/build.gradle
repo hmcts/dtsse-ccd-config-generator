@@ -1,7 +1,7 @@
 
 dependencies {
     testImplementation 'junit:junit:4.13.2'
-    annotationProcessor group: 'org.projectlombok', name: 'lombok', version: '1.18.10'
+    annotationProcessor group: 'org.projectlombok', name: 'lombok', version: '1.18.18'
     compileOnly group: 'org.projectlombok', name: 'lombok', version: '1.18.10'
 }
 
