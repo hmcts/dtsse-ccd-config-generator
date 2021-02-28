@@ -1,0 +1,49 @@
+[
+  {
+    "PageID": 1,
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "CaseFieldID": "submissionConsentLabel",
+    "CallBackURLMidEvent": "${CCD_DEF_CASE_SERVICE_BASE_URL}/callback/case-submission/mid-event",
+    "CaseEventID": "submitApplication",
+    "PageColumnNumber": 1,
+    "PageFieldDisplayOrder": 1,
+    "DisplayContext": "READONLY",
+    "PageDisplayOrder": 1
+  },
+  {
+    "PageID": 1,
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "CaseFieldID": "submissionConsent",
+    "CaseEventID": "submitApplication",
+    "PageColumnNumber": 1,
+    "PageFieldDisplayOrder": 2,
+    "DisplayContext": "MANDATORY",
+    "PageDisplayOrder": 1
+  },
+  {
+    "PageID": 1,
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "CaseFieldID": "displayAmountToPay",
+    "CaseEventID": "submitApplication",
+    "PageColumnNumber": 1,
+    "PageFieldDisplayOrder": 3,
+    "DisplayContext": "READONLY",
+    "FieldShowCondition": "submissionConsentLabel=\"DO_NOT_SHOW\"",
+    "PageDisplayOrder": 1
+  },
+  {
+    "PageID": 1,
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "CaseFieldID": "amountToPay",
+    "CaseEventID": "submitApplication",
+    "PageColumnNumber": 1,
+    "PageFieldDisplayOrder": 4,
+    "DisplayContext": "READONLY",
+    "FieldShowCondition": "displayAmountToPay=\"Yes\"",
+    "PageDisplayOrder": 1
+  }
+]

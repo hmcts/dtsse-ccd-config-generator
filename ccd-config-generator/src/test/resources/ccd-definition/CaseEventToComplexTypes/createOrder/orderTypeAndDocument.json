@@ -1,0 +1,27 @@
+[
+  {
+    "FieldDisplayOrder": 2,
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "orderTypeAndDocument",
+    "CaseEventID": "createOrder",
+    "DisplayContext": "MANDATORY",
+    "ListElementCode": "type"
+  },
+  {
+    "FieldDisplayOrder": 3,
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "orderTypeAndDocument",
+    "CaseEventID": "createOrder",
+    "DisplayContext": "MANDATORY",
+    "ListElementCode": "subtype"
+  },
+  {
+    "FieldDisplayOrder": 4,
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "orderTypeAndDocument",
+    "CaseEventID": "createOrder",
+    "DisplayContext": "READONLY",
+    "ListElementCode": "document",
+    "FieldShowCondition": "document=\"DO_NOT_SHOW\""
+  }
+]

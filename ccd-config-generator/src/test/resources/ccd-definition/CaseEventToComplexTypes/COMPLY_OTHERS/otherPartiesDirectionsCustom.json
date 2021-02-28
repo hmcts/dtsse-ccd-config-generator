@@ -1,0 +1,117 @@
+[
+  {
+    "FieldDisplayOrder": 3,
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "otherPartiesDirectionsCustom",
+    "CaseEventID": "COMPLY_OTHERS",
+    "DisplayContext": "READONLY",
+    "ListElementCode": "directionType"
+  },
+  {
+    "FieldDisplayOrder": 4,
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "otherPartiesDirectionsCustom",
+    "CaseEventID": "COMPLY_OTHERS",
+    "DisplayContext": "READONLY",
+    "ListElementCode": "directionNeeded",
+    "FieldShowCondition": "directionText = \"DO_NOT_SHOW\""
+  },
+  {
+    "FieldDisplayOrder": 5,
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "otherPartiesDirectionsCustom",
+    "CaseEventID": "COMPLY_OTHERS",
+    "DisplayContext": "READONLY",
+    "ListElementCode": "dateToBeCompletedBy"
+  },
+  {
+    "FieldDisplayOrder": 6,
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "otherPartiesDirectionsCustom",
+    "CaseEventID": "COMPLY_OTHERS",
+    "DisplayContext": "READONLY",
+    "ListElementCode": "otherPartiesAssignee",
+    "FieldShowCondition": "otherPartiesDirectionsCustom.otherPartiesAssignee=\"*\""
+  },
+  {
+    "FieldDisplayOrder": 7,
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "otherPartiesDirectionsCustom",
+    "CaseEventID": "COMPLY_OTHERS",
+    "DisplayContext": "READONLY",
+    "ListElementCode": "allParties_label",
+    "FieldShowCondition": "otherPartiesDirectionsCustom.otherPartiesAssignee = \"\""
+  },
+  {
+    "FieldDisplayOrder": 8,
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "otherPartiesDirectionsCustom",
+    "CaseEventID": "COMPLY_OTHERS",
+    "DisplayContext": "READONLY",
+    "ListElementCode": "responses.responder"
+  },
+  {
+    "FieldDisplayOrder": 9,
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "otherPartiesDirectionsCustom",
+    "CaseEventID": "COMPLY_OTHERS",
+    "DisplayContext": "MANDATORY",
+    "ListElementCode": "responses.respondingOnBehalfOfOthers"
+  },
+  {
+    "FieldDisplayOrder": 10,
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "otherPartiesDirectionsCustom",
+    "CaseEventID": "COMPLY_OTHERS",
+    "DisplayContext": "MANDATORY",
+    "ListElementCode": "responses.complied"
+  },
+  {
+    "FieldDisplayOrder": 11,
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "otherPartiesDirectionsCustom",
+    "CaseEventID": "COMPLY_OTHERS",
+    "DisplayContext": "OPTIONAL",
+    "ListElementCode": "responses.documentDetails"
+  },
+  {
+    "FieldDisplayOrder": 12,
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "otherPartiesDirectionsCustom",
+    "CaseEventID": "COMPLY_OTHERS",
+    "DisplayContext": "OPTIONAL",
+    "ListElementCode": "responses.file"
+  },
+  {
+    "FieldDisplayOrder": 13,
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "otherPartiesDirectionsCustom",
+    "CaseEventID": "COMPLY_OTHERS",
+    "DisplayContext": "OPTIONAL",
+    "ListElementCode": "responses.cannotComplyTitle"
+  },
+  {
+    "FieldDisplayOrder": 14,
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "otherPartiesDirectionsCustom",
+    "CaseEventID": "COMPLY_OTHERS",
+    "DisplayContext": "MANDATORY",
+    "ListElementCode": "responses.cannotComplyReason"
+  },
+  {
+    "FieldDisplayOrder": 15,
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "otherPartiesDirectionsCustom",
+    "CaseEventID": "COMPLY_OTHERS",
+    "DisplayContext": "OPTIONAL",
+    "ListElementCode": "responses.c2Uploaded"
+  },
+  {
+    "FieldDisplayOrder": 16,
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "otherPartiesDirectionsCustom",
+    "CaseEventID": "COMPLY_OTHERS",
+    "DisplayContext": "OPTIONAL",
+    "ListElementCode": "responses.cannotComplyFile"
+  }
+]

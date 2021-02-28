@@ -9,11 +9,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v1
-    - name: Checkout submodules
-      shell: bash
-      run: |
-        git submodule sync --recursive
-        git submodule update --init --force --depth=1 test-builds/fpl-ccd-configuration
     - name: Set up JDK
       uses: actions/setup-java@v1
       with:

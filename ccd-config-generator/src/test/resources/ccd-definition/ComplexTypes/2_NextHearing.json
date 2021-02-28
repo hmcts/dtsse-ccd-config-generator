@@ -1,0 +1,16 @@
+[
+  {
+    "ID": "NextHearing",
+    "FieldType": "UUID",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "id"
+  },
+  {
+    "ID": "NextHearing",
+    "FieldType": "Text",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "date"
+  }
+]

@@ -2,7 +2,9 @@ package uk.gov.hmcts.ccd.sdk;
 
 import com.google.common.base.Strings;
 import com.google.common.collect.HashBasedTable;
+import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Multimap;
 import com.google.common.collect.Table;
@@ -10,6 +12,8 @@ import java.io.File;
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
 import java.lang.reflect.ParameterizedType;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
@@ -30,6 +34,7 @@ import uk.gov.hmcts.ccd.sdk.generator.CaseFieldGenerator;
 import uk.gov.hmcts.ccd.sdk.generator.CaseTypeTabGenerator;
 import uk.gov.hmcts.ccd.sdk.generator.ComplexTypeGenerator;
 import uk.gov.hmcts.ccd.sdk.generator.FixedListGenerator;
+import uk.gov.hmcts.ccd.sdk.generator.StateGenerator;
 import uk.gov.hmcts.ccd.sdk.generator.WorkBasketGenerator;
 import uk.gov.hmcts.ccd.sdk.types.CCDConfig;
 import uk.gov.hmcts.ccd.sdk.types.Event;
@@ -71,7 +76,8 @@ public class ConfigGenerator {
     config.configure(builder);
     List<Event> events = builder.getEvents();
     Map<Class, Integer> types = resolve(typeArgs[0], basePackage);
-    return new ResolvedCCDConfig(typeArgs[0], builder, events, types, builder.environment);
+    return new ResolvedCCDConfig(typeArgs[0], typeArgs[1], builder, events, types,
+        builder.environment);
   }
 
   public void writeConfig(File outputfolder, ResolvedCCDConfig config) {
@@ -92,11 +98,25 @@ public class ConfigGenerator {
     CaseFieldGenerator
         .generateCaseFields(outputfolder, config.builder.caseType, config.typeArg, config.events,
             config.builder);
+    generateJurisdiction(outputfolder, config.builder);
     FixedListGenerator.generate(outputfolder, config.types);
+    StateGenerator.generate(outputfolder, config.builder.caseType, config.stateArg);
     CaseTypeTabGenerator.generate(outputfolder, config.builder.caseType, config.builder);
     AuthorisationCaseStateGenerator.generate(outputfolder, config.builder.caseType, config.events,
         eventPermissions);
     WorkBasketGenerator.generate(outputfolder, config.builder.caseType, config.builder);
+  }
+
+  private void generateJurisdiction(File outputfolder, ConfigBuilderImpl builder) {
+    List<Map<String, Object>> fields = Lists.newArrayList();
+    fields.add(ImmutableMap.of(
+        "LiveFrom", "01/01/2017",
+        "ID", builder.jurId,
+        "Name", builder.jurName,
+        "Description", builder.jurDesc
+    ));
+    Path output = Paths.get(outputfolder.getPath(),"Jurisdiction.json");
+    JsonUtils.mergeInto(output, fields, new JsonUtils.AddMissing(), "ID");
   }
 
   // Copied from jdk 9.

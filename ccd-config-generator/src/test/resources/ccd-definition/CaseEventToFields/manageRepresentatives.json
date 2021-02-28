@@ -1,0 +1,36 @@
+[
+  {
+    "PageID": 1,
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "CaseFieldID": "respondents_label",
+    "CallBackURLMidEvent": "${CCD_DEF_CASE_SERVICE_BASE_URL}/callback/manage-representatives/mid-event",
+    "CaseEventID": "manageRepresentatives",
+    "PageColumnNumber": 1,
+    "PageFieldDisplayOrder": 1,
+    "DisplayContext": "READONLY",
+    "PageDisplayOrder": 1
+  },
+  {
+    "PageID": 1,
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "CaseFieldID": "others_label",
+    "CaseEventID": "manageRepresentatives",
+    "PageColumnNumber": 1,
+    "PageFieldDisplayOrder": 2,
+    "DisplayContext": "READONLY",
+    "PageDisplayOrder": 1
+  },
+  {
+    "PageID": 1,
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "CaseFieldID": "representatives",
+    "CaseEventID": "manageRepresentatives",
+    "PageColumnNumber": 1,
+    "PageFieldDisplayOrder": 3,
+    "DisplayContext": "OPTIONAL",
+    "PageDisplayOrder": 1
+  }
+]

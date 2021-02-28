@@ -1,0 +1,13 @@
+[
+  {
+    "PageID": "CaseNote",
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "CaseFieldID": "caseNote",
+    "CaseEventID": "addCaseNote",
+    "PageColumnNumber": 1,
+    "PageFieldDisplayOrder": 1,
+    "DisplayContext": "MANDATORY",
+    "PageDisplayOrder": 1
+  }
+]

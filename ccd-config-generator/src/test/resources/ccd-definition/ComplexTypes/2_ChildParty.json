@@ -1,0 +1,213 @@
+[
+  {
+    "ID": "ChildParty",
+    "FieldType": "Text",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "keyDates"
+  },
+  {
+    "ID": "ChildParty",
+    "FieldType": "Text",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "livingSituation"
+  },
+  {
+    "ID": "ChildParty",
+    "FieldType": "Text",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "mothersName"
+  },
+  {
+    "ID": "ChildParty",
+    "FieldType": "Text",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "additionalNeeds"
+  },
+  {
+    "ID": "ChildParty",
+    "FieldType": "Address",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "address"
+  },
+  {
+    "ID": "ChildParty",
+    "FieldType": "Text",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "firstName"
+  },
+  {
+    "ID": "ChildParty",
+    "FieldType": "Text",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "fathersResponsibility"
+  },
+  {
+    "ID": "ChildParty",
+    "FieldType": "Date",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "dateOfBirth"
+  },
+  {
+    "ID": "ChildParty",
+    "FieldType": "Text",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "genderIdentification"
+  },
+  {
+    "ID": "ChildParty",
+    "FieldType": "Text",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "socialWorkerName"
+  },
+  {
+    "ID": "ChildParty",
+    "FieldType": "Date",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "datePowersEnd"
+  },
+  {
+    "ID": "ChildParty",
+    "FieldType": "Text",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "careAndContactPlan"
+  },
+  {
+    "ID": "ChildParty",
+    "FieldType": "Text",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "placementCourt"
+  },
+  {
+    "ID": "ChildParty",
+    "FieldType": "Text",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "litigationIssuesDetails"
+  },
+  {
+    "ID": "ChildParty",
+    "FieldType": "FixedRadioList",
+    "FieldTypeParameter": "PartyType",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "partyType"
+  },
+  {
+    "ID": "ChildParty",
+    "FieldType": "Date",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "addressChangeDate"
+  },
+  {
+    "ID": "ChildParty",
+    "FieldType": "Date",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "dischargeDate"
+  },
+  {
+    "ID": "ChildParty",
+    "FieldType": "Date",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "careStartDate"
+  },
+  {
+    "ID": "ChildParty",
+    "FieldType": "Text",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "adoption"
+  },
+  {
+    "ID": "ChildParty",
+    "FieldType": "Text",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "detailsHiddenReason"
+  },
+  {
+    "ID": "ChildParty",
+    "FieldType": "Text",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "litigationIssues"
+  },
+  {
+    "ID": "ChildParty",
+    "FieldType": "Text",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "livingSituationDetails"
+  },
+  {
+    "ID": "ChildParty",
+    "FieldType": "Text",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "partyId"
+  },
+  {
+    "ID": "ChildParty",
+    "FieldType": "Text",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "detailsHidden"
+  },
+  {
+    "ID": "ChildParty",
+    "FieldType": "Text",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "additionalNeedsDetails"
+  },
+  {
+    "ID": "ChildParty",
+    "FieldType": "Text",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "gender"
+  },
+  {
+    "ID": "ChildParty",
+    "FieldType": "Text",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "fathersName"
+  },
+  {
+    "ID": "ChildParty",
+    "FieldType": "Telephone",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "socialWorkerTelephoneNumber"
+  },
+  {
+    "ID": "ChildParty",
+    "FieldType": "Text",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "placementOrderApplication"
+  },
+  {
+    "ID": "ChildParty",
+    "FieldType": "Text",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "lastName"
+  }
+]

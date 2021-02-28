@@ -10,6 +10,8 @@ public interface ConfigBuilder<T, S, R extends HasRole> {
 
   void caseType(String caseType);
 
+  void jurisdiction(String id, String name, String description);
+
   void setEnvironment(String env);
 
   void grant(S state, String permissions, R role);

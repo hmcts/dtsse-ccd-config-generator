@@ -1,0 +1,107 @@
+[
+  {
+    "FieldDisplayOrder": 2,
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "hearingDetails",
+    "CaseEventID": "hearingBookingDetails-PREPARE_FOR_HEARING",
+    "DisplayContext": "MANDATORY",
+    "ListElementCode": "type"
+  },
+  {
+    "FieldDisplayOrder": 3,
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "hearingDetails",
+    "CaseEventID": "hearingBookingDetails-PREPARE_FOR_HEARING",
+    "DisplayContext": "MANDATORY",
+    "ListElementCode": "typeDetails",
+    "FieldShowCondition": "hearingDetails.type=\"OTHER\""
+  },
+  {
+    "FieldDisplayOrder": 4,
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "hearingDetails",
+    "CaseEventID": "hearingBookingDetails-PREPARE_FOR_HEARING",
+    "DisplayContext": "MANDATORY",
+    "ListElementCode": "venue"
+  },
+  {
+    "FieldDisplayOrder": 5,
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "hearingDetails",
+    "CaseEventID": "hearingBookingDetails-PREPARE_FOR_HEARING",
+    "HintText": "Use 24 hour format",
+    "DisplayContext": "MANDATORY",
+    "ListElementCode": "startDate",
+    "EventElementLabel": ""
+  },
+  {
+    "FieldDisplayOrder": 6,
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "hearingDetails",
+    "CaseEventID": "hearingBookingDetails-PREPARE_FOR_HEARING",
+    "HintText": "Use 24 hour format",
+    "DisplayContext": "MANDATORY",
+    "ListElementCode": "endDate",
+    "EventElementLabel": ""
+  },
+  {
+    "FieldDisplayOrder": 7,
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "hearingDetails",
+    "CaseEventID": "hearingBookingDetails-PREPARE_FOR_HEARING",
+    "DisplayContext": "MANDATORY",
+    "ListElementCode": "hearingNeedsBooked"
+  },
+  {
+    "FieldDisplayOrder": 8,
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "hearingDetails",
+    "CaseEventID": "hearingBookingDetails-PREPARE_FOR_HEARING",
+    "DisplayContext": "MANDATORY",
+    "ListElementCode": "hearingNeedsDetails",
+    "FieldShowCondition": "hearingDetails.hearingNeedsBooked!=\"NONE\""
+  },
+  {
+    "FieldDisplayOrder": 9,
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "hearingDetails",
+    "CaseEventID": "hearingBookingDetails-PREPARE_FOR_HEARING",
+    "DisplayContext": "MANDATORY",
+    "ListElementCode": "judgeAndLegalAdvisor.judgeTitle"
+  },
+  {
+    "FieldDisplayOrder": 10,
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "hearingDetails",
+    "CaseEventID": "hearingBookingDetails-PREPARE_FOR_HEARING",
+    "DisplayContext": "MANDATORY",
+    "ListElementCode": "judgeAndLegalAdvisor.otherTitle",
+    "FieldShowCondition": "hearingDetails.judgeAndLegalAdvisor.judgeTitle=\"OTHER\""
+  },
+  {
+    "FieldDisplayOrder": 11,
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "hearingDetails",
+    "CaseEventID": "hearingBookingDetails-PREPARE_FOR_HEARING",
+    "DisplayContext": "MANDATORY",
+    "ListElementCode": "judgeAndLegalAdvisor.judgeLastName",
+    "FieldShowCondition": "hearingDetails.judgeAndLegalAdvisor.judgeTitle!=\"MAGISTRATES\" AND hearingDetails.judgeAndLegalAdvisor.judgeTitle!=\"\""
+  },
+  {
+    "FieldDisplayOrder": 12,
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "hearingDetails",
+    "CaseEventID": "hearingBookingDetails-PREPARE_FOR_HEARING",
+    "DisplayContext": "OPTIONAL",
+    "ListElementCode": "judgeAndLegalAdvisor.judgeFullName",
+    "FieldShowCondition": "hearingDetails.judgeAndLegalAdvisor.judgeTitle=\"MAGISTRATES\""
+  },
+  {
+    "FieldDisplayOrder": 13,
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "hearingDetails",
+    "CaseEventID": "hearingBookingDetails-PREPARE_FOR_HEARING",
+    "DisplayContext": "OPTIONAL",
+    "ListElementCode": "judgeAndLegalAdvisor.legalAdvisorName"
+  }
+]

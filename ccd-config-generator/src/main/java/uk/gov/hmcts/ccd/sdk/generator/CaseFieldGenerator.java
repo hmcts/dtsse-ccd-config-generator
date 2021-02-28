@@ -15,6 +15,7 @@ import java.util.Collection;
 import java.util.Hashtable;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import net.jodah.typetools.TypeResolver;
 import org.reflections.ReflectionUtils;
 import uk.gov.hmcts.ccd.sdk.ConfigBuilderImpl;
@@ -79,9 +80,14 @@ public class CaseFieldGenerator {
       Map<String, Object> fieldInfo = getField(caseTypeId, id);
       fields.add(fieldInfo);
       if (null != cf) {
-        fieldInfo.put("Label", cf.label());
+        if (!Strings.isNullOrEmpty(cf.label())) {
+          fieldInfo.put("Label", cf.label());
+        }
         if (!Strings.isNullOrEmpty(cf.hint())) {
           fieldInfo.put("HintText", cf.hint());
+        }
+        if (!Strings.isNullOrEmpty(cf.regex())) {
+          fieldInfo.put("RegularExpression", cf.regex());
         }
         if (cf.showSummaryContent()) {
           fieldInfo.put("ShowSummaryContentOption", "Y");
@@ -126,10 +132,12 @@ public class CaseFieldGenerator {
       if (null != c && !Strings.isNullOrEmpty(c.name())) {
         info.put("FieldTypeParameter", c.name());
       } else {
-        if (null != cf && !Strings.isNullOrEmpty(cf.typeParameter())) {
+        info.put("FieldTypeParameter", typeClass.getSimpleName());
+      }
+
+      if (Set.class.isAssignableFrom(field.getType())) {
+        if (typeClass.isEnum()) {
           type = "MultiSelectList";
-        } else {
-          info.put("FieldTypeParameter", typeClass.getSimpleName());
         }
       }
     } else {

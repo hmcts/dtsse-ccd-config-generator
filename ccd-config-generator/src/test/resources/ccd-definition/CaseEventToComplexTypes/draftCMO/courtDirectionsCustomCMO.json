@@ -1,0 +1,26 @@
+[
+  {
+    "FieldDisplayOrder": 3,
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "courtDirectionsCustomCMO",
+    "CaseEventID": "draftCMO",
+    "DisplayContext": "MANDATORY",
+    "ListElementCode": "directionType"
+  },
+  {
+    "FieldDisplayOrder": 4,
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "courtDirectionsCustomCMO",
+    "CaseEventID": "draftCMO",
+    "DisplayContext": "MANDATORY",
+    "ListElementCode": "directionText"
+  },
+  {
+    "FieldDisplayOrder": 5,
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "courtDirectionsCustomCMO",
+    "CaseEventID": "draftCMO",
+    "DisplayContext": "OPTIONAL",
+    "ListElementCode": "dateToBeCompletedBy"
+  }
+]

@@ -1,0 +1,51 @@
+[
+  {
+    "LiveFrom": "01/01/2017",
+    "DisplayOrder": 1,
+    "ListElementCode": "CARE_ORDER",
+    "ListElement": "Care order",
+    "ID": "OrderType"
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "DisplayOrder": 2,
+    "ListElementCode": "INTERIM_CARE_ORDER",
+    "ListElement": "Interim care order",
+    "ID": "OrderType"
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "DisplayOrder": 3,
+    "ListElementCode": "SUPERVISION_ORDER",
+    "ListElement": "Supervision order",
+    "ID": "OrderType"
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "DisplayOrder": 4,
+    "ListElementCode": "INTERIM_SUPERVISION_ORDER",
+    "ListElement": "Interim supervision order",
+    "ID": "OrderType"
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "DisplayOrder": 5,
+    "ListElementCode": "EDUCATION_SUPERVISION_ORDER",
+    "ListElement": "Education supervision order",
+    "ID": "OrderType"
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "DisplayOrder": 6,
+    "ListElementCode": "EMERGENCY_PROTECTION_ORDER",
+    "ListElement": "Emergency protection order",
+    "ID": "OrderType"
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "DisplayOrder": 7,
+    "ListElementCode": "OTHER",
+    "ListElement": "Other order under part 4 of the Children Act 1989",
+    "ID": "OrderType"
+  }
+]

@@ -1,0 +1,34 @@
+[
+  {
+    "FieldDisplayOrder": 2,
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "orderAction",
+    "CaseEventID": "actionCMO",
+    "DisplayContext": "READONLY",
+    "ListElementCode": "document"
+  },
+  {
+    "FieldDisplayOrder": 3,
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "orderAction",
+    "CaseEventID": "actionCMO",
+    "DisplayContext": "MANDATORY",
+    "ListElementCode": "type"
+  },
+  {
+    "FieldDisplayOrder": 4,
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "orderAction",
+    "CaseEventID": "actionCMO",
+    "DisplayContext": "MANDATORY",
+    "ListElementCode": "nextHearingType"
+  },
+  {
+    "FieldDisplayOrder": 5,
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "orderAction",
+    "CaseEventID": "actionCMO",
+    "DisplayContext": "MANDATORY",
+    "ListElementCode": "changeRequestedByJudge"
+  }
+]

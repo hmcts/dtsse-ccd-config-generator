@@ -1,0 +1,310 @@
+[
+  {
+    "CRUD": "R",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "UserRole": "caseworker-publiclaw-cafcass",
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "proceeding"
+  },
+  {
+    "CRUD": "R",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "UserRole": "caseworker-publiclaw-cafcass",
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "children1"
+  },
+  {
+    "CRUD": "CRUD",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "UserRole": "caseworker-publiclaw-cafcass",
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "cafcassDirections"
+  },
+  {
+    "CRUD": "R",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "UserRole": "caseworker-publiclaw-cafcass",
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "standardDirectionOrder"
+  },
+  {
+    "CRUD": "R",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "UserRole": "caseworker-publiclaw-cafcass",
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "others"
+  },
+  {
+    "CRUD": "R",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "UserRole": "caseworker-publiclaw-cafcass",
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "respondents1"
+  },
+  {
+    "CRUD": "R",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "UserRole": "caseworker-publiclaw-cafcass",
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "applicants"
+  },
+  {
+    "CRUD": "R",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "UserRole": "caseworker-publiclaw-cafcass",
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "solicitor"
+  },
+  {
+    "CRUD": "R",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "UserRole": "caseworker-publiclaw-cafcass",
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "hearingPreferences"
+  },
+  {
+    "CRUD": "R",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "UserRole": "caseworker-publiclaw-cafcass",
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "documents_socialWorkChronology_document"
+  },
+  {
+    "CRUD": "R",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "UserRole": "caseworker-publiclaw-cafcass",
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "documents_socialWorkStatement_document"
+  },
+  {
+    "CRUD": "R",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "UserRole": "caseworker-publiclaw-cafcass",
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "documents_socialWorkAssessment_document"
+  },
+  {
+    "CRUD": "R",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "UserRole": "caseworker-publiclaw-cafcass",
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "documents_socialWorkCarePlan_document"
+  },
+  {
+    "CRUD": "R",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "UserRole": "caseworker-publiclaw-cafcass",
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "documents_socialWorkEvidenceTemplate_document"
+  },
+  {
+    "CRUD": "R",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "UserRole": "caseworker-publiclaw-cafcass",
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "documents_threshold_document"
+  },
+  {
+    "CRUD": "R",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "UserRole": "caseworker-publiclaw-cafcass",
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "documents_checklist_document"
+  },
+  {
+    "CRUD": "R",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "UserRole": "caseworker-publiclaw-cafcass",
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "courtBundle"
+  },
+  {
+    "CRUD": "R",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "UserRole": "caseworker-publiclaw-cafcass",
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "documents_socialWorkOther"
+  },
+  {
+    "CRUD": "R",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "UserRole": "caseworker-publiclaw-cafcass",
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "caseName"
+  },
+  {
+    "CRUD": "R",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "UserRole": "caseworker-publiclaw-cafcass",
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "standardDirectionsDocument"
+  },
+  {
+    "CRUD": "R",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "UserRole": "caseworker-publiclaw-cafcass",
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "otherCourtAdminDocuments"
+  },
+  {
+    "CRUD": "R",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "UserRole": "caseworker-publiclaw-cafcass",
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "allocatedJudge"
+  },
+  {
+    "CRUD": "R",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "UserRole": "caseworker-publiclaw-cafcass",
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "internationalElement"
+  },
+  {
+    "CRUD": "CRU",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "UserRole": "caseworker-publiclaw-cafcass",
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "displayAmountToPay"
+  },
+  {
+    "CRUD": "CRU",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "UserRole": "caseworker-publiclaw-cafcass",
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "amountToPay"
+  },
+  {
+    "CRUD": "CRU",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "UserRole": "caseworker-publiclaw-cafcass",
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "c2ApplicationType"
+  },
+  {
+    "CRUD": "CRU",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "UserRole": "caseworker-publiclaw-cafcass",
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "temporaryC2Document"
+  },
+  {
+    "CRUD": "R",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "UserRole": "caseworker-publiclaw-cafcass",
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "statementOfService"
+  },
+  {
+    "CRUD": "R",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "UserRole": "caseworker-publiclaw-cafcass",
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "risks"
+  },
+  {
+    "CRUD": "R",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "UserRole": "caseworker-publiclaw-cafcass",
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "familyManCaseNumber"
+  },
+  {
+    "CRUD": "R",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "UserRole": "caseworker-publiclaw-cafcass",
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "groundsForEPO"
+  },
+  {
+    "CRUD": "R",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "UserRole": "caseworker-publiclaw-cafcass",
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "grounds"
+  },
+  {
+    "CRUD": "R",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "UserRole": "caseworker-publiclaw-cafcass",
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "factorsParenting"
+  },
+  {
+    "CRUD": "R",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "UserRole": "caseworker-publiclaw-cafcass",
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "orders"
+  },
+  {
+    "CRUD": "R",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "UserRole": "caseworker-publiclaw-cafcass",
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "allocationDecision"
+  },
+  {
+    "CRUD": "R",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "UserRole": "caseworker-publiclaw-cafcass",
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "hearing"
+  },
+  {
+    "CRUD": "R",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "UserRole": "caseworker-publiclaw-cafcass",
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "allocationProposal"
+  },
+  {
+    "CRUD": "CRU",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "UserRole": "caseworker-publiclaw-cafcass",
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "caseHistory"
+  },
+  {
+    "CRUD": "R",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "UserRole": "caseworker-publiclaw-cafcass",
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "submittedForm"
+  },
+  {
+    "CRUD": "R",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "UserRole": "caseworker-publiclaw-cafcass",
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "c2DocumentBundle"
+  },
+  {
+    "CRUD": "R",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "UserRole": "caseworker-publiclaw-cafcass",
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "caseLocalAuthority"
+  },
+  {
+    "CRUD": "R",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "UserRole": "caseworker-publiclaw-cafcass",
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "dateSubmitted"
+  },
+  {
+    "CRUD": "R",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "UserRole": "caseworker-publiclaw-cafcass",
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "dateAndTimeSubmitted"
+  },
+  {
+    "CRUD": "R",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "UserRole": "caseworker-publiclaw-cafcass",
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "sharedDraftCMODocument"
+  }
+]

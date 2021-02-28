@@ -1,0 +1,13 @@
+[
+  {
+    "PageID": "AllocatedJudge",
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "CaseFieldID": "allocatedJudge",
+    "CaseEventID": "allocatedJudge",
+    "PageColumnNumber": 1,
+    "PageFieldDisplayOrder": 1,
+    "DisplayContext": "COMPLEX",
+    "PageDisplayOrder": 1
+  }
+]

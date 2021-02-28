@@ -1,0 +1,25 @@
+[
+  {
+    "ID": "OrderTypeAndDocument",
+    "FieldType": "Document",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "document"
+  },
+  {
+    "ID": "OrderTypeAndDocument",
+    "FieldType": "FixedRadioList",
+    "FieldTypeParameter": "GeneratedOrderSubtype",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "subtype"
+  },
+  {
+    "ID": "OrderTypeAndDocument",
+    "FieldType": "FixedRadioList",
+    "FieldTypeParameter": "GeneratedOrderType",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "type"
+  }
+]

@@ -1,0 +1,51 @@
+[
+  {
+    "FieldDisplayOrder": 3,
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "cafcassDirections",
+    "CaseEventID": "draftSDO",
+    "DisplayContext": "READONLY",
+    "ListElementCode": "readOnly"
+  },
+  {
+    "FieldDisplayOrder": 4,
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "cafcassDirections",
+    "CaseEventID": "draftSDO",
+    "DisplayContext": "READONLY",
+    "ListElementCode": "directionRemovable"
+  },
+  {
+    "FieldDisplayOrder": 5,
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "cafcassDirections",
+    "CaseEventID": "draftSDO",
+    "DisplayContext": "READONLY",
+    "ListElementCode": "directionType"
+  },
+  {
+    "FieldDisplayOrder": 6,
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "cafcassDirections",
+    "CaseEventID": "draftSDO",
+    "DisplayContext": "OPTIONAL",
+    "ListElementCode": "directionNeeded"
+  },
+  {
+    "FieldDisplayOrder": 7,
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "cafcassDirections",
+    "CaseEventID": "draftSDO",
+    "DisplayContext": "OPTIONAL",
+    "ListElementCode": "directionText",
+    "FieldShowCondition": "cafcassDirections.readOnly!=\"Yes\" AND cafcassDirections.directionNeeded!=\"No\""
+  },
+  {
+    "FieldDisplayOrder": 8,
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "cafcassDirections",
+    "CaseEventID": "draftSDO",
+    "DisplayContext": "OPTIONAL",
+    "ListElementCode": "dateToBeCompletedBy"
+  }
+]

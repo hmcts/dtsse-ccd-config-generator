@@ -1,0 +1,53 @@
+[
+  {
+    "ID": "Representative",
+    "FieldType": "Text",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "positionInACase"
+  },
+  {
+    "ID": "Representative",
+    "FieldType": "Text",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "email"
+  },
+  {
+    "ID": "Representative",
+    "FieldType": "Text",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "fullName"
+  },
+  {
+    "ID": "Representative",
+    "FieldType": "FixedRadioList",
+    "FieldTypeParameter": "RepresentativeServingPreferences",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "servingPreferences"
+  },
+  {
+    "ID": "Representative",
+    "FieldType": "Text",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "telephoneNumber"
+  },
+  {
+    "ID": "Representative",
+    "FieldType": "Address",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "address"
+  },
+  {
+    "ID": "Representative",
+    "FieldType": "FixedRadioList",
+    "FieldTypeParameter": "RepresentativeRole",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "role"
+  }
+]

@@ -1,0 +1,26 @@
+[
+  {
+    "FieldDisplayOrder": 4,
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "allPartiesCustomCMO",
+    "CaseEventID": "actionCMO",
+    "DisplayContext": "OPTIONAL",
+    "ListElementCode": "directionType"
+  },
+  {
+    "FieldDisplayOrder": 5,
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "allPartiesCustomCMO",
+    "CaseEventID": "actionCMO",
+    "DisplayContext": "MANDATORY",
+    "ListElementCode": "directionText"
+  },
+  {
+    "FieldDisplayOrder": 6,
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "allPartiesCustomCMO",
+    "CaseEventID": "actionCMO",
+    "DisplayContext": "OPTIONAL",
+    "ListElementCode": "dateToBeCompletedBy"
+  }
+]

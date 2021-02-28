@@ -1,0 +1,89 @@
+[
+  {
+    "PreConditionState(s)": "*",
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "PostConditionState": "*",
+    "Description": "Send document",
+    "DisplayOrder": 1,
+    "ID": "internal-change:SEND_DOCUMENT",
+    "SecurityClassification": "Public",
+    "Name": "Send document",
+    "CallBackURLAboutToSubmitEvent": "${CCD_DEF_CASE_SERVICE_BASE_URL}/callback/send-document/about-to-submit"
+  },
+  {
+    "PreConditionState(s)": "*",
+    "CallBackURLSubmittedEvent": "${CCD_DEF_CASE_SERVICE_BASE_URL}/callback/add-case-number/submitted",
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "PostConditionState": "*",
+    "Description": "Add case number",
+    "DisplayOrder": 2,
+    "EndButtonLabel": "Save and continue",
+    "ID": "addFamilyManCaseNumber",
+    "SecurityClassification": "Public",
+    "Name": "Add case number",
+    "CallBackURLAboutToSubmitEvent": "${CCD_DEF_CASE_SERVICE_BASE_URL}/callback/add-case-number/about-to-submit"
+  },
+  {
+    "ShowEventNotes": "Y",
+    "PreConditionState(s)": "*",
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "PostConditionState": "*",
+    "Description": "Handle supplementary evidence",
+    "DisplayOrder": 3,
+    "EndButtonLabel": "Save and continue",
+    "ID": "handleSupplementaryEvidence",
+    "SecurityClassification": "Public",
+    "Name": "Handle supplementary evidence"
+  },
+  {
+    "PreConditionState(s)": "*",
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "PostConditionState": "*",
+    "Description": "Attach scanned docs",
+    "DisplayOrder": 4,
+    "ID": "attachScannedDocs",
+    "SecurityClassification": "Public",
+    "Name": "Attach scanned docs"
+  },
+  {
+    "PreConditionState(s)": "*",
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "PostConditionState": "*",
+    "Description": "Add allocated judge to a case",
+    "DisplayOrder": 5,
+    "EndButtonLabel": "Save and continue",
+    "ID": "allocatedJudge",
+    "SecurityClassification": "Public",
+    "Name": "Allocated Judge"
+  },
+  {
+    "PreConditionState(s)": "*",
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "PostConditionState": "*",
+    "Description": "Add a case note",
+    "DisplayOrder": 6,
+    "EndButtonLabel": "Save and continue",
+    "ID": "addCaseNote",
+    "SecurityClassification": "Public",
+    "Name": "Add a case note",
+    "CallBackURLAboutToSubmitEvent": "${CCD_DEF_CASE_SERVICE_BASE_URL}/callback/add-note/about-to-submit"
+  },
+  {
+    "PreConditionState(s)": "*",
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "PostConditionState": "*",
+    "Description": "Upload documents",
+    "DisplayOrder": 14,
+    "EndButtonLabel": "Save and continue",
+    "ID": "uploadDocuments",
+    "SecurityClassification": "Public",
+    "Name": "Documents"
+  }
+]

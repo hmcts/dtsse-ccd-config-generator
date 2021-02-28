@@ -1,0 +1,84 @@
+[
+  {
+    "FieldDisplayOrder": 2,
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "courtDirectionsCustom",
+    "CaseEventID": "COMPLY_COURT",
+    "DisplayContext": "READONLY",
+    "ListElementCode": "directionType"
+  },
+  {
+    "FieldDisplayOrder": 3,
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "courtDirectionsCustom",
+    "CaseEventID": "COMPLY_COURT",
+    "DisplayContext": "READONLY",
+    "ListElementCode": "directionNeeded",
+    "FieldShowCondition": "directionText = \"DO_NOT_SHOW\""
+  },
+  {
+    "FieldDisplayOrder": 4,
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "courtDirectionsCustom",
+    "CaseEventID": "COMPLY_COURT",
+    "DisplayContext": "READONLY",
+    "ListElementCode": "dateToBeCompletedBy",
+    "EventElementLabel": "Deadline"
+  },
+  {
+    "FieldDisplayOrder": 5,
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "courtDirectionsCustom",
+    "CaseEventID": "COMPLY_COURT",
+    "DisplayContext": "OPTIONAL",
+    "ListElementCode": "response.complied"
+  },
+  {
+    "FieldDisplayOrder": 6,
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "courtDirectionsCustom",
+    "CaseEventID": "COMPLY_COURT",
+    "DisplayContext": "OPTIONAL",
+    "ListElementCode": "response.documentDetails"
+  },
+  {
+    "FieldDisplayOrder": 7,
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "courtDirectionsCustom",
+    "CaseEventID": "COMPLY_COURT",
+    "DisplayContext": "OPTIONAL",
+    "ListElementCode": "response.file"
+  },
+  {
+    "FieldDisplayOrder": 8,
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "courtDirectionsCustom",
+    "CaseEventID": "COMPLY_COURT",
+    "DisplayContext": "OPTIONAL",
+    "ListElementCode": "response.cannotComplyTitle"
+  },
+  {
+    "FieldDisplayOrder": 9,
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "courtDirectionsCustom",
+    "CaseEventID": "COMPLY_COURT",
+    "DisplayContext": "OPTIONAL",
+    "ListElementCode": "response.cannotComplyReason"
+  },
+  {
+    "FieldDisplayOrder": 10,
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "courtDirectionsCustom",
+    "CaseEventID": "COMPLY_COURT",
+    "DisplayContext": "OPTIONAL",
+    "ListElementCode": "response.c2Uploaded"
+  },
+  {
+    "FieldDisplayOrder": 11,
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "courtDirectionsCustom",
+    "CaseEventID": "COMPLY_COURT",
+    "DisplayContext": "OPTIONAL",
+    "ListElementCode": "response.cannotComplyFile"
+  }
+]

@@ -1,0 +1,86 @@
+[
+  {
+    "ID": "HearingPreferences",
+    "FieldType": "Text",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "disabilityAssistanceDetails"
+  },
+  {
+    "ID": "HearingPreferences",
+    "FieldType": "Text",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "disabilityAssistance"
+  },
+  {
+    "ID": "HearingPreferences",
+    "FieldType": "Text",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "somethingElse"
+  },
+  {
+    "ID": "HearingPreferences",
+    "FieldType": "Text",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "interpreter"
+  },
+  {
+    "ID": "HearingPreferences",
+    "FieldType": "Text",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "somethingElseDetails"
+  },
+  {
+    "ID": "HearingPreferences",
+    "FieldType": "Text",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "extraSecurityMeasuresDetails"
+  },
+  {
+    "ID": "HearingPreferences",
+    "FieldType": "Text",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "intermediaryDetails"
+  },
+  {
+    "ID": "HearingPreferences",
+    "FieldType": "Text",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "welsh"
+  },
+  {
+    "ID": "HearingPreferences",
+    "FieldType": "Text",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "interpreterDetails"
+  },
+  {
+    "ID": "HearingPreferences",
+    "FieldType": "Text",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "extraSecurityMeasures"
+  },
+  {
+    "ID": "HearingPreferences",
+    "FieldType": "Text",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "intermediary"
+  },
+  {
+    "ID": "HearingPreferences",
+    "FieldType": "Text",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "welshDetails"
+  }
+]

@@ -1,14 +1,15 @@
 package uk.gov.hmcts.ccd.sdk;
 
-import static org.assertj.core.api.Assertions.assertThat;
-
 import com.google.common.collect.Maps;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
 import org.assertj.core.util.Lists;
 import org.junit.Test;
 import uk.gov.hmcts.ccd.sdk.JsonUtils.OverwriteSpecific;
+
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+
+import static org.assertj.core.api.Assertions.assertThat;
 
 public class JsonUtilsTest {
 

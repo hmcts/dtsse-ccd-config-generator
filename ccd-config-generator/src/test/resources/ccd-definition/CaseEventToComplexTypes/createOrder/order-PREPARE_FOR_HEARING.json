@@ -1,0 +1,27 @@
+[
+  {
+    "FieldDisplayOrder": 2,
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "order",
+    "CaseEventID": "createOrder-PREPARE_FOR_HEARING",
+    "DisplayContext": "OPTIONAL",
+    "ListElementCode": "title"
+  },
+  {
+    "FieldDisplayOrder": 3,
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "order",
+    "CaseEventID": "createOrder-PREPARE_FOR_HEARING",
+    "DisplayContext": "MANDATORY",
+    "ListElementCode": "details"
+  },
+  {
+    "FieldDisplayOrder": 4,
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "order",
+    "CaseEventID": "createOrder-PREPARE_FOR_HEARING",
+    "DisplayContext": "READONLY",
+    "ListElementCode": "date",
+    "FieldShowCondition": "document=\"DO_NOT_SHOW\""
+  }
+]

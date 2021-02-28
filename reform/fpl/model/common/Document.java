@@ -10,7 +10,6 @@ import javax.validation.constraints.NotBlank;
 
 @Data
 @SuperBuilder
-@HasAttachedDocument(groups = UploadDocumentsGroup.class)
 @AllArgsConstructor
 @ComplexType(name = "UploadDocument")
 @NoArgsConstructor(force = true)

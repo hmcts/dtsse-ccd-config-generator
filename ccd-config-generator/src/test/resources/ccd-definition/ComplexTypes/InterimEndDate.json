@@ -1,0 +1,17 @@
+[
+  {
+    "ID": "InterimEndDate",
+    "FieldType": "Date",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "endDate"
+  },
+  {
+    "ID": "InterimEndDate",
+    "FieldType": "FixedRadioList",
+    "FieldTypeParameter": "InterimEndDateType",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "type"
+  }
+]

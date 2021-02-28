@@ -1,0 +1,15 @@
+[
+  {
+    "PageID": 1,
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "CaseFieldID": "hearingDetails",
+    "CallBackURLMidEvent": "${CCD_DEF_CASE_SERVICE_BASE_URL}/callback/add-hearing-bookings/mid-event",
+    "CaseEventID": "hearingBookingDetailsGatekeeping",
+    "PageColumnNumber": 1,
+    "PageFieldDisplayOrder": 1,
+    "DisplayContext": "COMPLEX",
+    "ShowSummaryChangeOption": "Y",
+    "PageDisplayOrder": 1
+  }
+]

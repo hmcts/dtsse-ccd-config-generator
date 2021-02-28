@@ -1,0 +1,44 @@
+[
+  {
+    "CRUD": "C",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "UserRole": "caseworker-publiclaw-systemupdate",
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "localAuthorityDirections"
+  },
+  {
+    "CRUD": "C",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "UserRole": "caseworker-publiclaw-systemupdate",
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "allParties"
+  },
+  {
+    "CRUD": "C",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "UserRole": "caseworker-publiclaw-systemupdate",
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "respondentDirections"
+  },
+  {
+    "CRUD": "C",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "UserRole": "caseworker-publiclaw-systemupdate",
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "cafcassDirections"
+  },
+  {
+    "CRUD": "C",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "UserRole": "caseworker-publiclaw-systemupdate",
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "otherPartiesDirections"
+  },
+  {
+    "CRUD": "C",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "UserRole": "caseworker-publiclaw-systemupdate",
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "courtDirections"
+  }
+]

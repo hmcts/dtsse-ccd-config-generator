@@ -1,0 +1,23 @@
+[
+  {
+    "ID": "Telephone",
+    "FieldType": "Text",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "telephoneUsageType"
+  },
+  {
+    "ID": "Telephone",
+    "FieldType": "Text",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "contactDirection"
+  },
+  {
+    "ID": "Telephone",
+    "FieldType": "Text",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "telephoneNumber"
+  }
+]

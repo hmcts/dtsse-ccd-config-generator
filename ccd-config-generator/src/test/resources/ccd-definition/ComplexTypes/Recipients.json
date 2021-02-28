@@ -1,0 +1,72 @@
+[
+  {
+    "ID": "Recipients",
+    "FieldType": "Address",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "address"
+  },
+  {
+    "ID": "Recipients",
+    "FieldType": "Date",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "date"
+  },
+  {
+    "ID": "Recipients",
+    "FieldType": "Text",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "documents"
+  },
+  {
+    "ID": "Recipients",
+    "FieldType": "Text",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "addressCheck"
+  },
+  {
+    "ID": "Recipients",
+    "FieldType": "Address",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "postOfficeAddress"
+  },
+  {
+    "ID": "Recipients",
+    "FieldType": "Text",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "name"
+  },
+  {
+    "ID": "Recipients",
+    "FieldType": "Text",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "timeSent"
+  },
+  {
+    "ID": "Recipients",
+    "FieldType": "Text",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "sentBy"
+  },
+  {
+    "ID": "Recipients",
+    "FieldType": "Text",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "email"
+  },
+  {
+    "ID": "Recipients",
+    "FieldType": "Address",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "givenInPerson"
+  }
+]
