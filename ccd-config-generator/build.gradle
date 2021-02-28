@@ -38,7 +38,7 @@ dependencies {
     compile group: 'de.cronn', name: 'reflection-util', version: '2.10.0'
     compile group: 'org.objenesis', name: 'objenesis', version: '3.1'
     compile group: 'cglib', name: 'cglib', version: '3.3.0'
-    compile group: 'net.jodah', name: 'typetools', version: '0.6.1'
+    compile group: 'net.jodah', name: 'typetools', version: '0.6.2'
     compile 'org.reflections:reflections:0.9.12'
     compile 'com.google.guava:guava:28.2-jre'
 
