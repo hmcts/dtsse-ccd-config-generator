@@ -131,11 +131,7 @@ public class CaseFieldGenerator {
       if (null != c && !Strings.isNullOrEmpty(c.name())) {
         info.put("FieldTypeParameter", c.name());
       } else {
-        if (null != cf && !Strings.isNullOrEmpty(cf.typeParameter())) {
-          type = "MultiSelectList";
-        } else {
-          info.put("FieldTypeParameter", typeClass.getSimpleName());
-        }
+        info.put("FieldTypeParameter", typeClass.getSimpleName());
       }
     } else {
       if (field.getType().isEnum()) {
