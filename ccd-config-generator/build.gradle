@@ -42,7 +42,7 @@ dependencies {
     compile 'org.reflections:reflections:0.9.12'
     compile 'com.google.guava:guava:28.2-jre'
 
-    compile 'com.fasterxml.jackson.core:jackson-databind:2.10.2'
+    compile 'com.fasterxml.jackson.core:jackson-databind:2.12.1'
     compile project(':ccd-sdk-types')
 }
 
