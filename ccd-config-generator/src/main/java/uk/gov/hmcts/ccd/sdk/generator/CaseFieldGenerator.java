@@ -15,6 +15,7 @@ import java.util.Collection;
 import java.util.Hashtable;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import net.jodah.typetools.TypeResolver;
 import org.reflections.ReflectionUtils;
 import uk.gov.hmcts.ccd.sdk.ConfigBuilderImpl;
@@ -132,6 +133,12 @@ public class CaseFieldGenerator {
         info.put("FieldTypeParameter", c.name());
       } else {
         info.put("FieldTypeParameter", typeClass.getSimpleName());
+      }
+
+      if (Set.class.isAssignableFrom(field.getType())) {
+        if (typeClass.isEnum()) {
+          type = "MultiSelectList";
+        }
       }
     } else {
       if (field.getType().isEnum()) {

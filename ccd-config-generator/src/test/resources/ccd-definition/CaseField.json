@@ -14,6 +14,14 @@
     "SecurityClassification": "Public"
   },
   {
+    "ID": "partyTypes",
+    "FieldType": "MultiSelectList",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "FieldTypeParameter": "RepresentativeRole"
+  },
+  {
     "ID": "noticeOfProceedings",
     "FieldType": "NoticeOfProceedings",
     "CaseTypeID": "CARE_SUPERVISION_EPO",
