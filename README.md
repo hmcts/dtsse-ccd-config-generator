@@ -13,6 +13,8 @@ The generator inspects your Java model and generates:
 * ComplexTypes
 * FixedLists
 * CaseField
+* Jurisdiction
+* State
 
 ## Installation
 
