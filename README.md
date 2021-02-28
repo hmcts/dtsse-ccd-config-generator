@@ -30,7 +30,7 @@ And set the destination folder for the generated config
 
 ```groovy
 ccd {
-  configDir = file('ccd-definition')
+  configDir = file('build/ccd-definition')
 }
 ```
 
