@@ -47,6 +47,8 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements ConfigBuilder
   public String jurId = "";
   public String jurName = "";
   public String jurDesc = "";
+  public String caseName = "";
+  public String caseDesc = "";
 
   private String defaultWebhookConvention(Webhook webhook, String eventId) {
     eventId = CaseFormat.LOWER_CAMEL.to(CaseFormat.LOWER_HYPHEN, eventId);
@@ -68,8 +70,10 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements ConfigBuilder
   }
 
   @Override
-  public void caseType(String caseType) {
+  public void caseType(String caseType, String name, String desc) {
     this.caseType = caseType;
+    this.caseName = name;
+    this.caseDesc = desc;
   }
 
   @Override

@@ -129,6 +129,11 @@ public class FPLConfigGenerationTests {
     }
 
     @Test
+    public void generatesCaseType() {
+        assertEquals("CaseType.json");
+    }
+
+    @Test
     public void generatesCaseTypeTab() {
         assertResourceFolderMatchesGenerated("CaseTypeTab");
         assertGeneratedFolderMatchesResource("CaseTypeTab");
