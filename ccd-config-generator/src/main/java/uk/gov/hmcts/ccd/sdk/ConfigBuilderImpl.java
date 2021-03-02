@@ -19,6 +19,8 @@ import uk.gov.hmcts.ccd.sdk.types.Field;
 import uk.gov.hmcts.ccd.sdk.types.Field.FieldBuilder;
 import uk.gov.hmcts.ccd.sdk.types.HasRole;
 import uk.gov.hmcts.ccd.sdk.types.RoleBuilder;
+import uk.gov.hmcts.ccd.sdk.types.Search;
+import uk.gov.hmcts.ccd.sdk.types.Search.SearchBuilder;
 import uk.gov.hmcts.ccd.sdk.types.Tab;
 import uk.gov.hmcts.ccd.sdk.types.Tab.TabBuilder;
 import uk.gov.hmcts.ccd.sdk.types.Webhook;
@@ -39,6 +41,8 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements ConfigBuilder
   public final List<TabBuilder> tabs = Lists.newArrayList();
   public final List<WorkBasketBuilder> workBasketResultFields = Lists.newArrayList();
   public final List<WorkBasketBuilder> workBasketInputFields = Lists.newArrayList();
+  public final List<SearchBuilder> searchResultFields = Lists.newArrayList();
+  public final List<SearchBuilder> searchInputFields = Lists.newArrayList();
   public final Map<String, String> roleHierarchy = new Hashtable<>();
 
   private Class caseData;
@@ -153,6 +157,16 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements ConfigBuilder
   }
 
   @Override
+  public SearchBuilder searchResultFields() {
+    return getSearchBuilder(searchResultFields);
+  }
+
+  @Override
+  public SearchBuilder searchInputFields() {
+    return getSearchBuilder(searchInputFields);
+  }
+
+  @Override
   public RoleBuilder<R> role(R... roles) {
     return new RoleBuilder<R>() {
       @Override
@@ -181,6 +195,12 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements ConfigBuilder
   private WorkBasketBuilder getWorkBasketBuilder(List<WorkBasketBuilder> workBasketInputFields) {
     WorkBasketBuilder result = WorkBasketBuilder.builder(caseData, new PropertyUtils());
     workBasketInputFields.add(result);
+    return result;
+  }
+
+  private SearchBuilder getSearchBuilder(List<SearchBuilder> searchInputFields) {
+    SearchBuilder result = SearchBuilder.builder(caseData, new PropertyUtils());
+    searchInputFields.add(result);
     return result;
   }
 
