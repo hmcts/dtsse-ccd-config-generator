@@ -93,10 +93,30 @@ public class CCDConfig extends BaseCCDConfig<CaseData, State, UserRole> {
         buildTabs();
         buildWorkBasketResultFields();
         buildWorkBasketInputFields();
+        buildSearchResultFields();
+        buildSearchInputFields();
 
         // Restrict specific fields for Cafcass and Local Authority.
         field("dateSubmitted").blacklist("R", LOCAL_AUTHORITY);
         field("evidenceHandled").blacklist(CAFCASS, LOCAL_AUTHORITY);
+    }
+
+    private void buildSearchResultFields() {
+        searchResultFields()
+                .field(CaseData::getCaseName, "Case name")
+                .field(CaseData::getFamilyManCaseNumber, "FamilyMan case number")
+                .stateField()
+                .field(CaseData::getCaseLocalAuthority, "Local authority")
+                .field("dateAndTimeSubmitted", "Date submitted");
+    }
+
+    private void buildSearchInputFields() {
+        searchInputFields()
+                .field(CaseData::getCaseLocalAuthority, "Local authority")
+                .field(CaseData::getCaseName, "Case name")
+                .field(CaseData::getFamilyManCaseNumber, "FamilyMan case number")
+                .caseReferenceField()
+                .field(CaseData::getDateSubmitted, "Date submitted");
     }
 
     private void buildWorkBasketResultFields() {
@@ -1300,5 +1320,4 @@ public class CCDConfig extends BaseCCDConfig<CaseData, State, UserRole> {
                 .fields()
                     .optional(CaseData::getCaseName);
     }
-
 }
