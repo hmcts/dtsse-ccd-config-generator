@@ -8,7 +8,7 @@ public interface ConfigBuilder<T, S, R extends HasRole> {
 
   EventTypeBuilder<T, R, S> event(String id);
 
-  void caseType(String caseType);
+  void caseType(String caseType, String name, String description);
 
   void jurisdiction(String id, String name, String description);
 

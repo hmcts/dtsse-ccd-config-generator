@@ -24,8 +24,8 @@ public abstract class BaseCCDConfig<Model, State,
   }
 
   @Override
-  public void caseType(String caseType) {
-    builder.caseType(caseType);
+  public void caseType(String caseType, String name, String description) {
+    builder.caseType(caseType, name, description);
   }
 
   @Override

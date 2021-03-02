@@ -99,12 +99,27 @@ public class ConfigGenerator {
         .generateCaseFields(outputfolder, config.builder.caseType, config.typeArg, config.events,
             config.builder);
     generateJurisdiction(outputfolder, config.builder);
+    generateCaseType(outputfolder, config.builder);
     FixedListGenerator.generate(outputfolder, config.types);
     StateGenerator.generate(outputfolder, config.builder.caseType, config.stateArg);
     CaseTypeTabGenerator.generate(outputfolder, config.builder.caseType, config.builder);
     AuthorisationCaseStateGenerator.generate(outputfolder, config.builder.caseType, config.events,
         eventPermissions);
     WorkBasketGenerator.generate(outputfolder, config.builder.caseType, config.builder);
+  }
+
+  private void generateCaseType(File outputfolder, ConfigBuilderImpl builder) {
+    List<Map<String, Object>> fields = Lists.newArrayList();
+    fields.add(Map.of(
+        "LiveFrom", "01/01/2017",
+        "ID", builder.caseType,
+        "Name", builder.caseName,
+        "Description", builder.caseDesc,
+        "JurisdictionID", builder.jurId,
+        "SecurityClassification", "Public"
+    ));
+    Path output = Paths.get(outputfolder.getPath(),"CaseType.json");
+    JsonUtils.mergeInto(output, fields, new JsonUtils.AddMissing(), "ID");
   }
 
   private void generateJurisdiction(File outputfolder, ConfigBuilderImpl builder) {
