@@ -107,8 +107,7 @@ public class CCDConfig extends BaseCCDConfig<CaseData, State, UserRole> {
                 .field(CaseData::getFamilyManCaseNumber, "FamilyMan case number")
                 .stateField()
                 .field(CaseData::getCaseLocalAuthority, "Local authority")
-                .field("dateAndTimeSubmitted", "Date submitted")
-                .field("evidenceHandled", "Supplementary evidence handled");
+                .field("dateAndTimeSubmitted", "Date submitted");
     }
 
     private void buildSearchInputFields() {
@@ -117,8 +116,7 @@ public class CCDConfig extends BaseCCDConfig<CaseData, State, UserRole> {
                 .field(CaseData::getCaseName, "Case name")
                 .field(CaseData::getFamilyManCaseNumber, "FamilyMan case number")
                 .caseReferenceField()
-                .field(CaseData::getDateSubmitted, "Date submitted")
-                .field("evidenceHandled", "Supplementary evidence handled");
+                .field(CaseData::getDateSubmitted, "Date submitted");
     }
 
     private void buildWorkBasketResultFields() {
