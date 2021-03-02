@@ -25,6 +25,9 @@ import uk.gov.hmcts.ccd.sdk.types.Event;
 import uk.gov.hmcts.ccd.sdk.types.Field;
 import uk.gov.hmcts.ccd.sdk.types.Field.FieldBuilder;
 import uk.gov.hmcts.ccd.sdk.types.HasRole;
+import uk.gov.hmcts.ccd.sdk.types.Search;
+import uk.gov.hmcts.ccd.sdk.types.Search.SearchBuilder;
+import uk.gov.hmcts.ccd.sdk.types.SearchField;
 import uk.gov.hmcts.ccd.sdk.types.Tab;
 import uk.gov.hmcts.ccd.sdk.types.Tab.TabBuilder;
 import uk.gov.hmcts.ccd.sdk.types.TabField;
@@ -37,7 +40,10 @@ public class AuthorisationCaseFieldGenerator {
   public static void generate(File root, String caseType, List<Event> events,
       Table<String, String, String> eventRolePermissions, List<TabBuilder> tabs,
       List<WorkBasketBuilder> workBasketInputFields,
-      List<WorkBasketBuilder> workBasketResultFields, Map<String, String> roleHierarchy,
+      List<WorkBasketBuilder> workBasketResultFields,
+                              List<SearchBuilder> searchInputFields,
+                              List<SearchBuilder> searchResultFields,
+                              Map<String, String> roleHierarchy,
       Set<String> apiOnlyRoles, List<FieldBuilder> explicitFields,
       Multimap<String, String> stateRoleHistoryAccess, Set excludeFieldAuthRoles) {
 
@@ -98,6 +104,17 @@ public class AuthorisationCaseFieldGenerator {
             Iterables.concat(workBasketInputFields, workBasketResultFields)) {
           WorkBasket basket = workBasketInputField.build();
           for (WorkBasketField field : basket.getFields()) {
+            if (!fieldRolePermissions.contains(field.getId(), role)) {
+              fieldRolePermissions.put(field.getId(), role, "R");
+            }
+          }
+        }
+
+        // Add read for Search Input fields
+        for (SearchBuilder searchInputField :
+                Iterables.concat(searchInputFields, searchResultFields)) {
+          Search search = searchInputField.build();
+          for (SearchField field : search.getFields()) {
             if (!fieldRolePermissions.contains(field.getId(), role)) {
               fieldRolePermissions.put(field.getId(), role, "R");
             }

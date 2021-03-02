@@ -34,6 +34,7 @@ import uk.gov.hmcts.ccd.sdk.generator.CaseFieldGenerator;
 import uk.gov.hmcts.ccd.sdk.generator.CaseTypeTabGenerator;
 import uk.gov.hmcts.ccd.sdk.generator.ComplexTypeGenerator;
 import uk.gov.hmcts.ccd.sdk.generator.FixedListGenerator;
+import uk.gov.hmcts.ccd.sdk.generator.SearchFieldAndResultGenerator;
 import uk.gov.hmcts.ccd.sdk.generator.StateGenerator;
 import uk.gov.hmcts.ccd.sdk.generator.WorkBasketGenerator;
 import uk.gov.hmcts.ccd.sdk.types.CCDConfig;
@@ -92,7 +93,8 @@ public class ConfigGenerator {
         config.builder.caseType);
     AuthorisationCaseFieldGenerator.generate(outputfolder, config.builder.caseType, config.events,
         eventPermissions, config.builder.tabs, config.builder.workBasketInputFields,
-        config.builder.workBasketResultFields, config.builder.roleHierarchy,
+        config.builder.workBasketResultFields, config.builder.searchInputFields,
+            config.builder.searchResultFields, config.builder.roleHierarchy,
         config.builder.apiOnlyRoles, config.builder.explicitFields,
         config.builder.stateRoleHistoryAccess, config.builder.noFieldAuthRoles);
     CaseFieldGenerator
@@ -106,6 +108,7 @@ public class ConfigGenerator {
     AuthorisationCaseStateGenerator.generate(outputfolder, config.builder.caseType, config.events,
         eventPermissions);
     WorkBasketGenerator.generate(outputfolder, config.builder.caseType, config.builder);
+    SearchFieldAndResultGenerator.generate(outputfolder, config.builder.caseType, config.builder);
   }
 
   private void generateCaseType(File outputfolder, ConfigBuilderImpl builder) {

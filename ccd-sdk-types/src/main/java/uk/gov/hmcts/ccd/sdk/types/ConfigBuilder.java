@@ -1,6 +1,7 @@
 package uk.gov.hmcts.ccd.sdk.types;
 
 import uk.gov.hmcts.ccd.sdk.types.Field.FieldBuilder;
+import uk.gov.hmcts.ccd.sdk.types.Search.SearchBuilder;
 import uk.gov.hmcts.ccd.sdk.types.Tab.TabBuilder;
 import uk.gov.hmcts.ccd.sdk.types.WorkBasket.WorkBasketBuilder;
 
@@ -36,6 +37,10 @@ public interface ConfigBuilder<T, S, R extends HasRole> {
   WorkBasketBuilder workBasketResultFields();
 
   WorkBasketBuilder workBasketInputFields();
+
+  SearchBuilder searchResultFields();
+
+  SearchBuilder searchInputFields();
 
   RoleBuilder<R> role(R... role);
 }

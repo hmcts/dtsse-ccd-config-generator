@@ -1,6 +1,7 @@
 package uk.gov.hmcts.ccd.sdk.types;
 
 import uk.gov.hmcts.ccd.sdk.types.Field.FieldBuilder;
+import uk.gov.hmcts.ccd.sdk.types.Search.SearchBuilder;
 import uk.gov.hmcts.ccd.sdk.types.Tab.TabBuilder;
 import uk.gov.hmcts.ccd.sdk.types.WorkBasket.WorkBasketBuilder;
 
@@ -91,6 +92,17 @@ public abstract class BaseCCDConfig<Model, State,
   @Override
   public WorkBasketBuilder<Model, Role> workBasketInputFields() {
     return builder.workBasketInputFields();
+  }
+
+
+  @Override
+  public SearchBuilder<Model, Role> searchResultFields() {
+    return builder.searchResultFields();
+  }
+
+  @Override
+  public SearchBuilder<Model, Role> searchInputFields() {
+    return builder.searchInputFields();
   }
 
   @Override

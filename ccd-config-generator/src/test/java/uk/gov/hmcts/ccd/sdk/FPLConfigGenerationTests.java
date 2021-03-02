@@ -150,6 +150,17 @@ public class FPLConfigGenerationTests {
     }
 
     @Test
+    public void generatesSearchResultFields() {
+        assertEquals("SearchResultFields.json");
+    }
+
+    @Test
+    public void generatesSearchInputFields() {
+        assertEquals("SearchInputFields.json");
+    }
+
+
+    @Test
     public void generatesAllComplexTypes() {
         assertResourceFolderMatchesGenerated("ComplexTypes");
         assertGeneratedFolderMatchesResource("ComplexTypes");
