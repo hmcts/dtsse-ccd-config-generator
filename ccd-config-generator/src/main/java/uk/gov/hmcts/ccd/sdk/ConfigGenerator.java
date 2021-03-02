@@ -8,7 +8,6 @@ import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Multimap;
 import com.google.common.collect.Table;
-
 import java.io.File;
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
@@ -20,7 +19,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
-
 import net.jodah.typetools.TypeResolver;
 import org.objenesis.Objenesis;
 import org.objenesis.ObjenesisStd;
@@ -123,7 +121,7 @@ public class ConfigGenerator {
                 "JurisdictionID", builder.jurId,
                 "SecurityClassification", "Public"
         ));
-        Path output = Paths.get(outputfolder.getPath(), "CaseType.json");
+        Path output = Paths.get(outputfolder.getPath(),"CaseType.json");
         JsonUtils.mergeInto(output, fields, new JsonUtils.AddMissing(), "ID");
     }
 
@@ -135,7 +133,7 @@ public class ConfigGenerator {
                 "Name", builder.jurName,
                 "Description", builder.jurDesc
         ));
-        Path output = Paths.get(outputfolder.getPath(), "Jurisdiction.json");
+        Path output = Paths.get(outputfolder.getPath(),"Jurisdiction.json");
         JsonUtils.mergeInto(output, fields, new JsonUtils.AddMissing(), "ID");
     }
 

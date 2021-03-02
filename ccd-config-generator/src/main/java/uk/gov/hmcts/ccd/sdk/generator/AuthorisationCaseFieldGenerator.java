@@ -9,7 +9,6 @@ import com.google.common.collect.Multimap;
 import com.google.common.collect.Sets;
 import com.google.common.collect.Table;
 import com.google.common.primitives.Chars;
-
 import java.io.File;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -20,7 +19,6 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
 import java.util.stream.Collectors;
-
 import uk.gov.hmcts.ccd.sdk.JsonUtils;
 import uk.gov.hmcts.ccd.sdk.JsonUtils.CRUDMerger;
 import uk.gov.hmcts.ccd.sdk.types.Event;
@@ -112,7 +110,7 @@ public class AuthorisationCaseFieldGenerator {
                     }
                 }
 
-                // Add read for WorkBaskets
+                // Add read for Search Input fields
                 for (SearchBuilder searchInputField :
                         Iterables.concat(searchInputFields, searchResultFields)) {
                     Search search = searchInputField.build();
