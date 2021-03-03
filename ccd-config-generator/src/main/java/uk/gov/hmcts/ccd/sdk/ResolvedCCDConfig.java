@@ -12,12 +12,14 @@ public class ResolvedCCDConfig {
   public final Map<Class, Integer> types;
   public final String environment;
   public final Class<?> stateArg;
+  public final Class<?> roleType;
 
-  public ResolvedCCDConfig(Class<?> typeArg, Class<?> stateArg, ConfigBuilderImpl builder,
-                           List<Event> events,
-      Map<Class, Integer> types, String environment) {
+  public ResolvedCCDConfig(Class<?> typeArg, Class<?> stateArg, Class<?> roleType,
+                           ConfigBuilderImpl builder, List<Event> events,
+                           Map<Class, Integer> types, String environment) {
     this.typeArg = typeArg;
     this.stateArg = stateArg;
+    this.roleType = roleType;
     this.builder = builder;
     this.events = events;
     this.types = types;

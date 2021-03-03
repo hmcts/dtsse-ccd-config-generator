@@ -79,6 +79,11 @@ public class FPLConfigGenerationTests {
     }
 
     @Test
+    public void generatesAuthorisationCaseType() {
+        assertEquals("AuthorisationCaseType.json");
+    }
+
+    @Test
     public void generatesAuthorisationCaseFieldBulkScan() {
         assertEquals("AuthorisationCaseField/caseworker-publiclaw-bulkscan.json");
     }
