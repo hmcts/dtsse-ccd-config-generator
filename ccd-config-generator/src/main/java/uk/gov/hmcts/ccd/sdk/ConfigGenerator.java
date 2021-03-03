@@ -27,6 +27,7 @@ import org.reflections.Reflections;
 import uk.gov.hmcts.ccd.sdk.generator.AuthorisationCaseEventGenerator;
 import uk.gov.hmcts.ccd.sdk.generator.AuthorisationCaseFieldGenerator;
 import uk.gov.hmcts.ccd.sdk.generator.AuthorisationCaseStateGenerator;
+import uk.gov.hmcts.ccd.sdk.generator.AuthorisationCaseTypeGenerator;
 import uk.gov.hmcts.ccd.sdk.generator.CaseEventGenerator;
 import uk.gov.hmcts.ccd.sdk.generator.CaseEventToComplexTypesGenerator;
 import uk.gov.hmcts.ccd.sdk.generator.CaseEventToFieldsGenerator;
@@ -77,7 +78,7 @@ public class ConfigGenerator {
     config.configure(builder);
     List<Event> events = builder.getEvents();
     Map<Class, Integer> types = resolve(typeArgs[0], basePackage);
-    return new ResolvedCCDConfig(typeArgs[0], typeArgs[1], builder, events, types,
+    return new ResolvedCCDConfig(typeArgs[0], typeArgs[1], typeArgs[2], builder, events, types,
         builder.environment);
   }
 
@@ -104,6 +105,7 @@ public class ConfigGenerator {
     generateCaseType(outputfolder, config.builder);
     FixedListGenerator.generate(outputfolder, config.types);
     StateGenerator.generate(outputfolder, config.builder.caseType, config.stateArg);
+    AuthorisationCaseTypeGenerator.generate(outputfolder, config.builder.caseType, config.roleType);
     CaseTypeTabGenerator.generate(outputfolder, config.builder.caseType, config.builder);
     AuthorisationCaseStateGenerator.generate(outputfolder, config.builder.caseType, config.events,
         eventPermissions);
