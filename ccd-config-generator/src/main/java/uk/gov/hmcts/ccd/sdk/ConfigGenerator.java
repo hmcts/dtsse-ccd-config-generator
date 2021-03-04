@@ -8,6 +8,7 @@ import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Multimap;
 import com.google.common.collect.Table;
+import com.google.common.io.MoreFiles;
 import java.io.File;
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
@@ -19,6 +20,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
+import lombok.SneakyThrows;
 import net.jodah.typetools.TypeResolver;
 import org.objenesis.Objenesis;
 import org.objenesis.ObjenesisStd;
@@ -61,6 +63,8 @@ public class ConfigGenerator {
           + "Scanned: " + basePackage);
     }
 
+    initOutputDirectory(outputFolder);
+
     for (Class<? extends CCDConfig> configType : configTypes) {
       Objenesis objenesis = new ObjenesisStd();
       CCDConfig config = objenesis.newInstance(configType);
@@ -82,7 +86,7 @@ public class ConfigGenerator {
         builder.environment);
   }
 
-  public void writeConfig(File outputfolder, ResolvedCCDConfig config) {
+  private void writeConfig(File outputfolder, ResolvedCCDConfig config) {
     outputfolder.mkdirs();
     CaseEventGenerator.writeEvents(outputfolder, config.builder.caseType, config.events);
     CaseEventToFieldsGenerator.writeEvents(outputfolder, config.events, config.builder.caseType);
@@ -111,6 +115,14 @@ public class ConfigGenerator {
         eventPermissions);
     WorkBasketGenerator.generate(outputfolder, config.builder.caseType, config.builder);
     SearchFieldAndResultGenerator.generate(outputfolder, config.builder.caseType, config.builder);
+  }
+
+  @SneakyThrows
+  private void initOutputDirectory(File outputfolder) {
+    if (outputfolder.exists() && outputfolder.isDirectory()) {
+      MoreFiles.deleteRecursively(outputfolder.toPath());
+    }
+    outputfolder.mkdirs();
   }
 
   private void generateCaseType(File outputfolder, ConfigBuilderImpl builder) {

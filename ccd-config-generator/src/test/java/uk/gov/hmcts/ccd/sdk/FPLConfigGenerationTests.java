@@ -311,10 +311,12 @@ public class FPLConfigGenerationTests {
             }
 
         } catch (Exception e) {
-            System.out.println("Generated files:");
-            for (Iterator<File> it = FileUtils.iterateFiles(prodConfig.toFile(), TrueFileFilter.INSTANCE, TrueFileFilter.INSTANCE); it.hasNext(); ) {
-                File f = it.next();
-                System.out.println(f.getPath());
+            if (prodConfig.toFile().exists()) {
+                System.out.println("Generated files:");
+                for (Iterator<File> it = FileUtils.iterateFiles(prodConfig.toFile(), TrueFileFilter.INSTANCE, TrueFileFilter.INSTANCE); it.hasNext(); ) {
+                    File f = it.next();
+                    System.out.println(f.getPath());
+                }
             }
             throw e;
         }
