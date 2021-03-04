@@ -9,6 +9,7 @@ import com.google.common.collect.Maps;
 import com.google.common.collect.Multimap;
 import com.google.common.collect.Table;
 import com.google.common.io.MoreFiles;
+import com.google.common.io.RecursiveDeleteOption;
 import java.io.File;
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
@@ -120,7 +121,7 @@ public class ConfigGenerator {
   @SneakyThrows
   private void initOutputDirectory(File outputfolder) {
     if (outputfolder.exists() && outputfolder.isDirectory()) {
-      MoreFiles.deleteRecursively(outputfolder.toPath());
+      MoreFiles.deleteRecursively(outputfolder.toPath(), RecursiveDeleteOption.ALLOW_INSECURE);
     }
     outputfolder.mkdirs();
   }
