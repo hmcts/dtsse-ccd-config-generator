@@ -16,7 +16,7 @@ import uk.gov.hmcts.ccd.sdk.types.FieldCollection;
 
 public class CaseEventToFieldsGenerator {
 
-  public static void writeEvents(File root, List<Event> events) {
+  public static void writeEvents(File root, List<Event> events, String caseType) {
 
     for (Event event : events) {
       FieldCollection collection = event.getFields().build();
@@ -28,7 +28,7 @@ public class CaseEventToFieldsGenerator {
           entries.add(info);
           info.put("LiveFrom", "01/01/2017");
           info.put("CaseEventID", event.getId());
-          info.put("CaseTypeID", "CARE_SUPERVISION_EPO");
+          info.put("CaseTypeID", caseType);
           Field field = fb.build();
           info.put("CaseFieldID", field.getId());
           String context =
