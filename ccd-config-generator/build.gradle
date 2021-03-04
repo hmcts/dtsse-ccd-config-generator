@@ -43,7 +43,6 @@ dependencies {
     compile 'com.google.guava:guava:30.1-jre'
 
     compile 'com.fasterxml.jackson.core:jackson-databind:2.12.2'
-    compile project(':ccd-sdk-types')
 }
 
 compileJava {

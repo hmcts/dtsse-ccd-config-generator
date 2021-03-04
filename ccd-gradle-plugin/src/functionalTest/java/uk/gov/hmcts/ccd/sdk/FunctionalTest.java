@@ -5,6 +5,7 @@ import static junit.framework.TestCase.assertTrue;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
+import org.apache.commons.io.FileUtils;
 import org.apache.groovy.util.Maps;
 import org.gradle.testkit.runner.BuildResult;
 import org.gradle.testkit.runner.GradleRunner;
@@ -26,22 +27,14 @@ public class FunctionalTest {
 
   @Test
   public void testEmptyProject() throws IOException {
-    String buildFileContent = "plugins {"
-        + "    id 'java' \n"
-        + "    id 'hmcts.ccd.sdk'"
-        + "}\n"
-        + "ccd {"
-        + "configDir file('ccd-definition')\n"
-        + "}";
-    Files.write(buildFile.toPath(), buildFileContent.getBytes());
-
-    BuildResult result = runner(testProjectDir.getRoot())
+    FileUtils.copyDirectory(new File("test-projects/java-library"),
+        testProjectDir.getRoot());
+    runner(testProjectDir.getRoot())
         .withGradleVersion("4.10.3")
-        .buildAndFail();
+        .build();
 
-    System.out.println(result.getOutput());
-    assertTrue(result.getOutput().contains("Expected at least one"));
-    assertTrue(result.getOutput().contains("Scanned: uk.gov.hmcts"));
+    File caseField = new File(testProjectDir.getRoot(), "build/ccd-definition/CaseField.json");
+    assertTrue(caseField.exists());
   }
 
   public static GradleRunner runner(File project) {
