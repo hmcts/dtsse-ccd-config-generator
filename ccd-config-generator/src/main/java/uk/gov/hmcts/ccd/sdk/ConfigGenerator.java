@@ -85,7 +85,7 @@ public class ConfigGenerator {
   public void writeConfig(File outputfolder, ResolvedCCDConfig config) {
     outputfolder.mkdirs();
     CaseEventGenerator.writeEvents(outputfolder, config.builder.caseType, config.events);
-    CaseEventToFieldsGenerator.writeEvents(outputfolder, config.events);
+    CaseEventToFieldsGenerator.writeEvents(outputfolder, config.events, config.builder.caseType);
     ComplexTypeGenerator.generate(outputfolder, config.builder.caseType, config.types);
     CaseEventToComplexTypesGenerator.writeEvents(outputfolder, config.events);
     Table<String, String, String> eventPermissions = buildEventPermissions(config.builder,
