@@ -83,6 +83,8 @@ task functionalTest(type: Test) {
     classpath = sourceSets.functionalTest.runtimeClasspath
 }
 
+functionalTest.inputs.dir file('test-projects')
+
 functionalTest.dependsOn(
         ":ccd-config-generator:publishMainPublicationToMavenLocal"
 )

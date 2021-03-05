@@ -27,24 +27,10 @@ import org.objenesis.Objenesis;
 import org.objenesis.ObjenesisStd;
 import org.reflections.ReflectionUtils;
 import org.reflections.Reflections;
-import uk.gov.hmcts.ccd.sdk.generator.AuthorisationCaseEventGenerator;
-import uk.gov.hmcts.ccd.sdk.generator.AuthorisationCaseFieldGenerator;
-import uk.gov.hmcts.ccd.sdk.generator.AuthorisationCaseStateGenerator;
-import uk.gov.hmcts.ccd.sdk.generator.AuthorisationCaseTypeGenerator;
-import uk.gov.hmcts.ccd.sdk.generator.CaseEventGenerator;
-import uk.gov.hmcts.ccd.sdk.generator.CaseEventToComplexTypesGenerator;
-import uk.gov.hmcts.ccd.sdk.generator.CaseEventToFieldsGenerator;
-import uk.gov.hmcts.ccd.sdk.generator.CaseFieldGenerator;
-import uk.gov.hmcts.ccd.sdk.generator.CaseTypeTabGenerator;
-import uk.gov.hmcts.ccd.sdk.generator.ComplexTypeGenerator;
-import uk.gov.hmcts.ccd.sdk.generator.FixedListGenerator;
-import uk.gov.hmcts.ccd.sdk.generator.SearchFieldAndResultGenerator;
-import uk.gov.hmcts.ccd.sdk.generator.StateGenerator;
-import uk.gov.hmcts.ccd.sdk.generator.WorkBasketGenerator;
-import uk.gov.hmcts.ccd.sdk.types.CCDConfig;
-import uk.gov.hmcts.ccd.sdk.types.Event;
+import uk.gov.hmcts.ccd.sdk.api.CCDConfig;
+import uk.gov.hmcts.ccd.sdk.api.Event;
 
-public class ConfigGenerator {
+class ConfigGenerator {
 
   private final Reflections reflections;
   private final String basePackage;

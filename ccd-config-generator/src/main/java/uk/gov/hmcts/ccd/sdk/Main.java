@@ -5,7 +5,7 @@ import org.reflections.Reflections;
 import org.reflections.util.ClasspathHelper;
 import org.reflections.util.ConfigurationBuilder;
 
-public class Main {
+class Main {
 
   public static void main(String[] args) {
     File outputDir = new File(args[0]);

@@ -1,6 +1,6 @@
 package uk.gov.hmcts.reform.fpl.enums;
 
-import uk.gov.hmcts.ccd.sdk.types.HasLabel;
+import uk.gov.hmcts.ccd.sdk.api.HasLabel;
 
 public enum C2ApplicationType implements HasLabel {
     WITH_NOTICE("Application with notice. The other party will be notified about this application, even if there is no hearing."),

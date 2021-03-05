@@ -1,6 +1,6 @@
 package uk.gov.hmcts.reform.fpl;
 
-import uk.gov.hmcts.ccd.sdk.types.Webhook;
+import uk.gov.hmcts.ccd.sdk.api.Webhook;
 
 public class CCDConfigDevelopment extends CCDConfig {
     @Override

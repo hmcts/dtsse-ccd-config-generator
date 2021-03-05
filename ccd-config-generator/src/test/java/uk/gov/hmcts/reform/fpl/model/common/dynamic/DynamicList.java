@@ -3,7 +3,7 @@ package uk.gov.hmcts.reform.fpl.model.common.dynamic;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Builder;
 import lombok.Data;
-import uk.gov.hmcts.ccd.sdk.types.ComplexType;
+import uk.gov.hmcts.ccd.sdk.api.ComplexType;
 
 import java.util.List;
 import java.util.UUID;

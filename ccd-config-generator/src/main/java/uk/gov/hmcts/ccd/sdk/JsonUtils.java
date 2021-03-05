@@ -22,7 +22,7 @@ import java.util.stream.Collectors;
 import lombok.AllArgsConstructor;
 import lombok.SneakyThrows;
 
-public class JsonUtils {
+class JsonUtils {
 
   @SneakyThrows
   private static void writeFile(Path path, String value) {

@@ -2,10 +2,10 @@ package uk.gov.hmcts.ccd.sdk;
 
 import org.junit.Test;
 import org.reflections.Reflections;
-import uk.gov.hmcts.ccd.sdk.types.CCDConfig;
-import uk.gov.hmcts.ccd.sdk.types.ConfigBuilder;
-import uk.gov.hmcts.ccd.sdk.types.Event;
-import uk.gov.hmcts.ccd.sdk.types.Webhook;
+import uk.gov.hmcts.ccd.sdk.api.CCDConfig;
+import uk.gov.hmcts.ccd.sdk.api.ConfigBuilder;
+import uk.gov.hmcts.ccd.sdk.api.Event;
+import uk.gov.hmcts.ccd.sdk.api.Webhook;
 import uk.gov.hmcts.example.missingcomplex.Applicant;
 import uk.gov.hmcts.example.missingcomplex.MissingComplex;
 import uk.gov.hmcts.reform.fpl.enums.State;

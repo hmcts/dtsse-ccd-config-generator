@@ -1,6 +1,6 @@
 package uk.gov.hmcts;
 
-import uk.gov.hmcts.ccd.sdk.types.HasRole;
+import uk.gov.hmcts.ccd.sdk.api.HasRole;
 
 public enum Role implements HasRole {
   Foo;

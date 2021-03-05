@@ -2,7 +2,7 @@ package uk.gov.hmcts.ccd.sdk;
 
 import java.util.List;
 import java.util.Map;
-import uk.gov.hmcts.ccd.sdk.types.Event;
+import uk.gov.hmcts.ccd.sdk.api.Event;
 
 public class ResolvedCCDConfig {
 

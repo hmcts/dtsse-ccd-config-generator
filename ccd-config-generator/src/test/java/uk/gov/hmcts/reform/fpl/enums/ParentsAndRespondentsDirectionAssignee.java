@@ -1,7 +1,7 @@
 package uk.gov.hmcts.reform.fpl.enums;
 
 import lombok.Getter;
-import uk.gov.hmcts.ccd.sdk.types.HasLabel;
+import uk.gov.hmcts.ccd.sdk.api.HasLabel;
 import uk.gov.hmcts.reform.fpl.enums.interfaces.Assignee;
 
 @Getter

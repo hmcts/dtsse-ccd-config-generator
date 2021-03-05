@@ -6,7 +6,7 @@ import de.cronn.reflection.util.TypedPropertyGetter;
 import java.beans.PropertyDescriptor;
 import java.lang.annotation.Annotation;
 
-public class PropertyUtils implements uk.gov.hmcts.ccd.sdk.types.PropertyUtils {
+class PropertyUtils implements uk.gov.hmcts.ccd.sdk.api.PropertyUtils {
 
   @Override
   public <T, A extends Annotation> A getAnnotationOfProperty(Class<T> entityType,
