@@ -9,7 +9,7 @@ import com.google.common.collect.ImmutableList;
 import lombok.Builder;
 import lombok.Data;
 import org.apache.commons.lang3.StringUtils;
-import uk.gov.hmcts.ccd.sdk.types.ComplexType;
+import uk.gov.hmcts.ccd.sdk.api.ComplexType;
 
 import javax.validation.constraints.NotBlank;
 import java.util.stream.Collectors;

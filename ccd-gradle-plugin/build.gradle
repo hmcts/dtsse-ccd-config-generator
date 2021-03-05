@@ -25,9 +25,10 @@ dependencies {
 
     // Ensure we run the plugin's tests when the libraries are modified.
     testCompile project(':ccd-config-generator')
-    testCompile project(':ccd-sdk-types')
+
 
     testImplementation 'junit:junit:4.13.2'
+    testImplementation group: 'commons-io', name: 'commons-io', version: '2.6'
     testCompile group: 'org.hamcrest', name: 'hamcrest-all', version: '1.3'
     testCompile group: 'org.assertj', name: 'assertj-core', version: '3.19.0'
 }
@@ -82,8 +83,9 @@ task functionalTest(type: Test) {
     classpath = sourceSets.functionalTest.runtimeClasspath
 }
 
+functionalTest.inputs.dir file('test-projects')
+
 functionalTest.dependsOn(
-        ":ccd-sdk-types:publishMainPublicationToMavenLocal",
         ":ccd-config-generator:publishMainPublicationToMavenLocal"
 )
 

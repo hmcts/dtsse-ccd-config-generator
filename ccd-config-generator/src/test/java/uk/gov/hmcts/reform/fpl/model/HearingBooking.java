@@ -3,7 +3,7 @@ package uk.gov.hmcts.reform.fpl.model;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
-import uk.gov.hmcts.ccd.sdk.types.CCD;
+import uk.gov.hmcts.ccd.sdk.api.CCD;
 import uk.gov.hmcts.reform.fpl.model.common.JudgeAndLegalAdvisor;
 
 import javax.validation.constraints.Future;

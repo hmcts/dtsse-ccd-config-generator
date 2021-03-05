@@ -1,6 +1,6 @@
 package uk.gov.hmcts.reform.fpl.enums;
 
-import uk.gov.hmcts.ccd.sdk.types.CCD;
+import uk.gov.hmcts.ccd.sdk.api.CCD;
 
 public enum State {
     @CCD(label = "Initial case state – create title as a minimum; add documents, etc.")

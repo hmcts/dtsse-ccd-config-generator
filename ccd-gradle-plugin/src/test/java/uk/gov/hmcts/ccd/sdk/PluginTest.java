@@ -8,7 +8,6 @@ import org.junit.Test;
 
 public class PluginTest {
   @Test public void pluginRegistersATask() {
-
     Project project = ProjectBuilder.builder().build();
     project.getPlugins().apply("hmcts.ccd.sdk");
 

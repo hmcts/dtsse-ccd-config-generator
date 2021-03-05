@@ -12,21 +12,21 @@ import java.util.Hashtable;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import uk.gov.hmcts.ccd.sdk.types.ConfigBuilder;
-import uk.gov.hmcts.ccd.sdk.types.Event;
-import uk.gov.hmcts.ccd.sdk.types.EventTypeBuilder;
-import uk.gov.hmcts.ccd.sdk.types.Field;
-import uk.gov.hmcts.ccd.sdk.types.Field.FieldBuilder;
-import uk.gov.hmcts.ccd.sdk.types.HasRole;
-import uk.gov.hmcts.ccd.sdk.types.RoleBuilder;
-import uk.gov.hmcts.ccd.sdk.types.Search.SearchBuilder;
-import uk.gov.hmcts.ccd.sdk.types.Tab;
-import uk.gov.hmcts.ccd.sdk.types.Tab.TabBuilder;
-import uk.gov.hmcts.ccd.sdk.types.Webhook;
-import uk.gov.hmcts.ccd.sdk.types.WebhookConvention;
-import uk.gov.hmcts.ccd.sdk.types.WorkBasket.WorkBasketBuilder;
+import uk.gov.hmcts.ccd.sdk.api.ConfigBuilder;
+import uk.gov.hmcts.ccd.sdk.api.Event;
+import uk.gov.hmcts.ccd.sdk.api.EventTypeBuilder;
+import uk.gov.hmcts.ccd.sdk.api.Field;
+import uk.gov.hmcts.ccd.sdk.api.Field.FieldBuilder;
+import uk.gov.hmcts.ccd.sdk.api.HasRole;
+import uk.gov.hmcts.ccd.sdk.api.RoleBuilder;
+import uk.gov.hmcts.ccd.sdk.api.Search.SearchBuilder;
+import uk.gov.hmcts.ccd.sdk.api.Tab;
+import uk.gov.hmcts.ccd.sdk.api.Tab.TabBuilder;
+import uk.gov.hmcts.ccd.sdk.api.Webhook;
+import uk.gov.hmcts.ccd.sdk.api.WebhookConvention;
+import uk.gov.hmcts.ccd.sdk.api.WorkBasket.WorkBasketBuilder;
 
-public class ConfigBuilderImpl<T, S, R extends HasRole> implements ConfigBuilder<T, S, R> {
+class ConfigBuilderImpl<T, S, R extends HasRole> implements ConfigBuilder<T, S, R> {
 
   public String caseType = "";
   public final Multimap<String, String> stateRoleHistoryAccess = ArrayListMultimap.create();

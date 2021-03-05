@@ -1,6 +1,6 @@
 package uk.gov.hmcts.reform.fpl.enums;
 
-import uk.gov.hmcts.ccd.sdk.types.HasLabel;
+import uk.gov.hmcts.ccd.sdk.api.HasLabel;
 
 public enum CMOStatus implements HasLabel {
     SEND_TO_JUDGE("Yes, send this to the judge"),

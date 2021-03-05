@@ -2,7 +2,7 @@ package uk.gov.hmcts.reform.fpl.enums;
 
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
-import uk.gov.hmcts.ccd.sdk.types.HasLabel;
+import uk.gov.hmcts.ccd.sdk.api.HasLabel;
 
 @Getter
 @RequiredArgsConstructor

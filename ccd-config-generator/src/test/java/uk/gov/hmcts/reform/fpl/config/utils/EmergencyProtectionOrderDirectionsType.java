@@ -1,6 +1,6 @@
 package uk.gov.hmcts.reform.fpl.config.utils;
 
-import uk.gov.hmcts.ccd.sdk.types.HasLabel;
+import uk.gov.hmcts.ccd.sdk.api.HasLabel;
 
 public enum EmergencyProtectionOrderDirectionsType implements HasLabel {
 
