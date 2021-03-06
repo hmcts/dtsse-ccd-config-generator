@@ -95,10 +95,10 @@ class CaseFieldGenerator {
         }
       }
 
-      if (cf != null && cf.type() != FieldType.Unspecified) {
-        fieldInfo.put("FieldType", cf.type().toString());
-        if (!Strings.isNullOrEmpty(cf.typeParameter())) {
-          fieldInfo.put("FieldTypeParameter", cf.typeParameter());
+      if (cf != null && cf.typeOverride() != FieldType.Unspecified) {
+        fieldInfo.put("FieldType", cf.typeOverride().toString());
+        if (!Strings.isNullOrEmpty(cf.typeParameterOverride())) {
+          fieldInfo.put("FieldTypeParameter", cf.typeParameterOverride());
         }
       } else {
         inferFieldType(dataClass, field, fieldInfo, cf);
@@ -112,8 +112,8 @@ class CaseFieldGenerator {
   private static void inferFieldType(Class dataClass, Field field, Map<String, Object> info,
       CCD cf) {
     String type = field.getType().getSimpleName();
-    if (null != cf && !Strings.isNullOrEmpty(cf.typeParameter())) {
-      info.put("FieldTypeParameter", cf.typeParameter());
+    if (null != cf && !Strings.isNullOrEmpty(cf.typeParameterOverride())) {
+      info.put("FieldTypeParameter", cf.typeParameterOverride());
     }
     if (Collection.class.isAssignableFrom(field.getType())) {
       type = "Collection";
@@ -146,7 +146,7 @@ class CaseFieldGenerator {
         switch (type) {
           case "String":
             type = "Text";
-            if (cf != null && !Strings.isNullOrEmpty(cf.typeParameter())) {
+            if (cf != null && !Strings.isNullOrEmpty(cf.typeParameterOverride())) {
               type = "FixedList";
             }
             break;
