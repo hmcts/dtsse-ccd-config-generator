@@ -7,6 +7,7 @@ import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Multimap;
+import com.google.common.collect.SetMultimap;
 import com.google.common.collect.Table;
 import com.google.common.io.MoreFiles;
 import com.google.common.io.RecursiveDeleteOption;
@@ -29,8 +30,10 @@ import org.reflections.ReflectionUtils;
 import org.reflections.Reflections;
 import uk.gov.hmcts.ccd.sdk.api.CCDConfig;
 import uk.gov.hmcts.ccd.sdk.api.Event;
+import uk.gov.hmcts.ccd.sdk.api.HasRole;
+import uk.gov.hmcts.ccd.sdk.api.Permission;
 
-class ConfigGenerator {
+class ConfigGenerator<T, S, R extends HasRole> {
 
   private final Reflections reflections;
   private final String basePackage;
@@ -55,7 +58,7 @@ class ConfigGenerator {
     for (Class<? extends CCDConfig> configType : configTypes) {
       Objenesis objenesis = new ObjenesisStd();
       CCDConfig config = objenesis.newInstance(configType);
-      ResolvedCCDConfig resolved = resolveConfig(config);
+      ResolvedCCDConfig resolved = resolveCCDConfig(config);
       File destination = Strings.isNullOrEmpty(resolved.environment) ? outputFolder
           : new File(outputFolder, resolved.environment);
       writeConfig(destination, resolved);
@@ -63,7 +66,7 @@ class ConfigGenerator {
   }
 
 
-  public ResolvedCCDConfig resolveConfig(CCDConfig config) {
+  public ResolvedCCDConfig<T, S, R> resolveCCDConfig(CCDConfig<T, S, R> config) {
     Class<?>[] typeArgs = TypeResolver.resolveRawArguments(CCDConfig.class, config.getClass());
     ConfigBuilderImpl builder = new ConfigBuilderImpl(typeArgs[0]);
     config.configure(builder);
@@ -190,11 +193,11 @@ class ConfigGenerator {
   }
 
   Table<String, String, String> buildEventPermissions(
-      ConfigBuilderImpl builder, List<Event> events) {
+      ConfigBuilderImpl builder, List<Event<T, R, S>> events) {
 
 
     Table<String, String, String> eventRolePermissions = HashBasedTable.create();
-    for (Event event : events) {
+    for (Event<T, R, S> event : events) {
       // Add any state based role permissions unless event permits only explicit grants.
       if (!event.isExplicitGrants()) {
         // If Event is for all states, then apply each state's state level permissions.
@@ -217,9 +220,10 @@ class ConfigGenerator {
         }
       }
       // Set event level permissions, overriding state level where set.
-      Map<String, String> grants = event.getGrants();
-      for (String role : grants.keySet()) {
-        eventRolePermissions.put(event.getId(), role, grants.get(role));
+      SetMultimap<R, Permission> grants = event.getGrants();
+      for (R role : grants.keySet()) {
+        eventRolePermissions.put(event.getId(), role.getRole(),
+            Permission.toCCDPerm(grants.get(role)));
       }
     }
     return eventRolePermissions;

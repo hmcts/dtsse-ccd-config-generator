@@ -79,9 +79,7 @@ class AuthorisationCaseStateGenerator {
     existingPermissions = Sets.newHashSet(Chars.asList(existingPermissions.toCharArray()))
         .stream().map(String::valueOf).collect(Collectors.joining());
 
-    if (existingPermissions != null) {
-      stateRolePermissions.put(state, role, existingPermissions);
-    }
+    stateRolePermissions.put(state, role, existingPermissions);
   }
 
 }

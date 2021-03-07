@@ -17,15 +17,15 @@ import static org.assertj.core.api.Assertions.assertThat;
 public class UnitTest {
 
     Reflections reflections = new Reflections("uk.gov.hmcts");
-    ConfigGenerator generator = new ConfigGenerator(reflections, "uk.gov.hmcts");
 
     @Test
     public void multipleStatesPerEvent() {
         CCDConfig<CaseData, State, UserRole> cfg =
                 builder -> builder.event("judgeDetails")
                         .forStates(State.PREPARE_FOR_HEARING, State.Open);
+        ConfigGenerator<CaseData, State, UserRole> generator = new ConfigGenerator<>(reflections, "uk.gov.hmcts");
 
-        ResolvedCCDConfig resolved = generator.resolveConfig(cfg);
+        ResolvedCCDConfig<CaseData, State, UserRole> resolved = generator.resolveCCDConfig(cfg);
         assertThat(resolved.events)
                 .extracting(Event::getId)
                 .contains("judgeDetails", "judgeDetailsOpen");
@@ -33,16 +33,18 @@ public class UnitTest {
 
     @Test
     public void handlesEmptyConfig() {
+        ConfigGenerator<CaseData, State, UserRole> generator = new ConfigGenerator<>(reflections, "uk.gov.hmcts");
         // Should not throw any exception.
-        generator.resolveConfig(x -> {});
+        generator.resolveCCDConfig(x -> {});
     }
 
     @Test
     public void webhookConvention() {
-        ResolvedCCDConfig resolved = generator.resolveConfig(x -> {
+        ConfigGenerator<CaseData, State, UserRole> generator = new ConfigGenerator<>(reflections, "uk.gov.hmcts");
+        ResolvedCCDConfig<CaseData, State, UserRole> resolved = generator.resolveCCDConfig(x -> {
             x.setWebhookConvention((webhookType, eventId) -> webhookType + "-" + eventId);
             x.event("eventId")
-                    .forState("state")
+                    .forState(State.Open)
                     .allWebhooks();
         });
 
@@ -51,7 +53,8 @@ public class UnitTest {
 
     @Test
     public void npeBug() {
-        generator.resolveConfig(new NPEBug());
+        ConfigGenerator<CaseData, State, UserRole> generator = new ConfigGenerator<>(reflections, "uk.gov.hmcts");
+        generator.resolveCCDConfig(new NPEBug());
     }
     class NPEBug implements CCDConfig<CaseData, State, UserRole> {
 
@@ -74,7 +77,8 @@ public class UnitTest {
             }
         }
 
-        ResolvedCCDConfig resolved = generator.resolveConfig(new MissingBug());
+        ConfigGenerator<MissingComplex, State, UserRole> generator = new ConfigGenerator<>(reflections, "uk.gov.hmcts");
+        ResolvedCCDConfig<MissingComplex, State, UserRole> resolved = generator.resolveCCDConfig(new MissingBug());
         assertThat(resolved.types).containsKeys(Applicant.class);
     }
 }

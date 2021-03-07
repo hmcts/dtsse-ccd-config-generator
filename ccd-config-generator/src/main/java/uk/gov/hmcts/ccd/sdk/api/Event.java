@@ -1,6 +1,9 @@
 package uk.gov.hmcts.ccd.sdk.api;
 
+import com.google.common.collect.HashMultimap;
+import com.google.common.collect.SetMultimap;
 import java.util.Arrays;
+import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
@@ -60,12 +63,8 @@ public class Event<T, R extends HasRole, S> {
   @Builder.Default
   private int displayOrder = -1;
 
-  private Map<String, String> grants;
+  private SetMultimap<R, Permission> grants;
   private Set<String> historyOnlyRoles;
-
-  public Map<String, String> getGrants() {
-    return grants;
-  }
 
   public Set<String> getHistoryOnlyRoles() {
     return historyOnlyRoles;
@@ -86,7 +85,7 @@ public class Event<T, R extends HasRole, S> {
         WebhookConvention convention, PropertyUtils propertyUtils) {
       EventBuilder<T, R, S> result = new EventBuilder<T, R, S>();
       result.dataClass = dataClass;
-      result.grants = new HashMap<>();
+      result.grants = HashMultimap.create();
       result.historyOnlyRoles = new HashSet<>();
       result.fields = FieldCollection.FieldCollectionBuilder
           .builder(result, result, dataClass, propertyUtils);
@@ -151,14 +150,22 @@ public class Event<T, R extends HasRole, S> {
       for (R role : roles) {
         historyOnlyRoles.add(role.getRole());
       }
-      grant("R", roles);
+      grant(EnumSet.of(Permission.R), roles);
 
       return this;
     }
 
     public EventBuilder<T, R, S> grant(String crud, R... roles) {
       for (R role : roles) {
-        grants.put(role.getRole(), crud);
+        grants.putAll(role, Permission.fromCCDPerm(crud));
+      }
+
+      return this;
+    }
+
+    public EventBuilder<T, R, S> grant(EnumSet<Permission> crud, R... roles) {
+      for (R role : roles) {
+        grants.putAll(role, crud);
       }
 
       return this;
