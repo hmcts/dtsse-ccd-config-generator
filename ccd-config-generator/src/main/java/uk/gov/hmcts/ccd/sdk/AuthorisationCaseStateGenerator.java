@@ -26,7 +26,6 @@ class AuthorisationCaseStateGenerator {
 
     Table<String, String, String> stateRolePermissions = HashBasedTable.create();
     for (Event event : events) {
-      String state = event.getPreState() == null ? event.getPostState() : event.getPreState();
       Map<String, String> rolePermissions = eventRolePermissions.row(event.getEventID());
       for (Entry<String, String> rolePermission : rolePermissions.entrySet()) {
         // For state transitions if you have C then you get both states.
