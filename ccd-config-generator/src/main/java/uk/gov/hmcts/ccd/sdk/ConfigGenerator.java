@@ -141,28 +141,10 @@ class ConfigGenerator<T, S, R extends HasRole> {
     JsonUtils.mergeInto(output, fields, new JsonUtils.AddMissing(), "ID");
   }
 
-  // Copied from jdk 9.
-  public static String getPackageName(Class<?> c) {
-    String pn;
-    while (c.isArray()) {
-      c = c.getComponentType();
-    }
-    if (c.isPrimitive()) {
-      pn = "java.lang";
-    } else {
-      String cn = c.getName();
-      int dot = cn.lastIndexOf('.');
-      pn = (dot != -1) ? cn.substring(0, dot).intern() : "";
-    }
-    return pn;
-  }
-
   public static Map<Class, Integer> resolve(Class dataClass, String basePackage) {
     Map<Class, Integer> result = Maps.newHashMap();
     resolve(dataClass, result, 0);
-    System.out.println(result.size());
-    System.out.println(basePackage);
-    result = Maps.filterKeys(result, x -> getPackageName(x).startsWith(basePackage));
+    result = Maps.filterKeys(result, x -> x.getPackageName().startsWith(basePackage));
     return result;
   }
 
