@@ -14,6 +14,30 @@
     "SecurityClassification": "Public"
   },
   {
+    "CaseTypeID" : "CARE_SUPERVISION_EPO",
+    "FieldType" : "Document",
+    "ID" : "documentField",
+    "LiveFrom" : "01/01/2017"
+  },
+  {
+    "CaseTypeID" : "CARE_SUPERVISION_EPO",
+    "FieldType" : "Address",
+    "ID" : "addressField",
+    "LiveFrom" : "01/01/2017"
+  },
+  {
+    "CaseTypeID" : "CARE_SUPERVISION_EPO",
+    "FieldType" : "CaseLink",
+    "ID" : "caseLinkField",
+    "LiveFrom" : "01/01/2017"
+  },
+  {
+    "CaseTypeID" : "CARE_SUPERVISION_EPO",
+    "FieldType" : "OrderSummary",
+    "ID" : "orderSummaryField",
+    "LiveFrom" : "01/01/2017"
+  },
+  {
     "ID": "partyTypes",
     "FieldType": "MultiSelectList",
     "CaseTypeID": "CARE_SUPERVISION_EPO",
