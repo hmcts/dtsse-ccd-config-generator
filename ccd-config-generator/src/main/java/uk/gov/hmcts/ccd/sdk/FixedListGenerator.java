@@ -8,6 +8,7 @@ import java.nio.file.Paths;
 import java.util.List;
 import java.util.Map;
 import uk.gov.hmcts.ccd.sdk.JsonUtils.AddMissing;
+import uk.gov.hmcts.ccd.sdk.api.ComplexType;
 import uk.gov.hmcts.ccd.sdk.api.HasLabel;
 
 class FixedListGenerator {
@@ -17,7 +18,8 @@ class FixedListGenerator {
     dir.mkdir();
 
     for (Class c : types.keySet()) {
-      if (c.isEnum()) {
+      ComplexType complexType = (ComplexType) c.getAnnotation(ComplexType.class);
+      if (c.isEnum() && (complexType == null || complexType.generate())) {
         List<Map<String, Object>> fields = Lists.newArrayList();
 
         int order = 1;
