@@ -32,6 +32,8 @@ public class CcdSdkPlugin implements Plugin<Project> {
     generatorConfiguration.getDependencies().add(generator);
     project.getDependencies().add("compileOnly", "uk.gov.hmcts.reform:ccd-config-generator:"
         + version);
+    project.getDependencies().add("testImplementation", "uk.gov.hmcts.reform:ccd-config-generator:"
+        + version);
 
     JavaExec generate = project.getTasks().create("generateCCDConfig", JavaExec.class);
     generate.setGroup("CCD tasks");

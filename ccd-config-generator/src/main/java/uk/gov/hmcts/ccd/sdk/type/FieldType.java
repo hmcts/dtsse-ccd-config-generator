@@ -1,4 +1,4 @@
-package uk.gov.hmcts.ccd.sdk.api;
+package uk.gov.hmcts.ccd.sdk.type;
 
 public enum FieldType {
   Unspecified,
@@ -10,5 +10,8 @@ public enum FieldType {
   TextArea,
   FixedList,
   FixedRadioList,
-  YesOrNo
+  YesOrNo,
+  Address,
+  CaseLink,
+  OrderSummary
 }

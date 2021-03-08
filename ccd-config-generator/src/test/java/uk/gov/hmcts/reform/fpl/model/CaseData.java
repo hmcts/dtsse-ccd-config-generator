@@ -85,6 +85,11 @@ public class CaseData {
         return findRespondent(0);
     }
 
+    private final uk.gov.hmcts.ccd.sdk.type.Address addressField;
+    private final uk.gov.hmcts.ccd.sdk.type.Document documentField;
+    private final uk.gov.hmcts.ccd.sdk.type.OrderSummary orderSummaryField;
+    private final uk.gov.hmcts.ccd.sdk.type.CaseLink caseLinkField;
+
     private final Proceeding proceeding;
 
     @NotNull(message = "You need to add details to solicitor")
