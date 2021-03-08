@@ -23,8 +23,8 @@ import uk.gov.hmcts.ccd.sdk.api.CCD;
 import uk.gov.hmcts.ccd.sdk.api.ComplexType;
 import uk.gov.hmcts.ccd.sdk.api.Event;
 import uk.gov.hmcts.ccd.sdk.api.Field.FieldBuilder;
-import uk.gov.hmcts.ccd.sdk.api.FieldType;
 import uk.gov.hmcts.ccd.sdk.api.Label;
+import uk.gov.hmcts.ccd.sdk.type.FieldType;
 
 class CaseFieldGenerator {
 
