@@ -117,15 +117,7 @@ class CaseFieldGenerator {
     }
     if (Collection.class.isAssignableFrom(field.getType())) {
       type = "Collection";
-      ParameterizedType parameterizedType = (ParameterizedType) TypeResolver
-          .reify(field.getGenericType(), dataClass);
-      Class typeClass;
-      if (parameterizedType.getActualTypeArguments()[0] instanceof ParameterizedType) {
-        parameterizedType = (ParameterizedType) parameterizedType.getActualTypeArguments()[0];
-        typeClass = (Class) parameterizedType.getActualTypeArguments()[0];
-      } else {
-        typeClass = (Class) parameterizedType.getActualTypeArguments()[0];
-      }
+      Class typeClass = getTypeClass(dataClass, field);
       ComplexType c = (ComplexType) typeClass.getAnnotation(ComplexType.class);
       if (null != c && !Strings.isNullOrEmpty(c.name())) {
         info.put("FieldTypeParameter", c.name());
@@ -139,7 +131,8 @@ class CaseFieldGenerator {
         }
       }
     } else {
-      if (field.getType().isEnum()) {
+      ComplexType c = field.getType().getAnnotation(ComplexType.class);
+      if (field.getType().isEnum() && (c == null || c.generate())) {
         type = "FixedRadioList";
         info.putIfAbsent("FieldTypeParameter", field.getType().getSimpleName());
       } else {
@@ -174,6 +167,17 @@ class CaseFieldGenerator {
       type = c.name();
     }
     info.put("FieldType", type);
+  }
+
+  private static Class getTypeClass(Class dataClass, Field field) {
+    ParameterizedType parameterizedType = (ParameterizedType) TypeResolver
+        .reify(field.getGenericType(), dataClass);
+
+    if (parameterizedType.getActualTypeArguments()[0] instanceof ParameterizedType) {
+      parameterizedType = (ParameterizedType) parameterizedType.getActualTypeArguments()[0];
+    }
+
+    return (Class) parameterizedType.getActualTypeArguments()[0];
   }
 
   private static List<Map<String, Object>> getExplicitFields(String caseType, List<Event> events,
