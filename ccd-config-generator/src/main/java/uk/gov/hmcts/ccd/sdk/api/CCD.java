@@ -17,9 +17,9 @@ public @interface CCD {
 
   String regex() default "";
 
-  FieldType type() default FieldType.Unspecified;
+  FieldType typeOverride() default FieldType.Unspecified;
 
-  String typeParameter() default "";
+  String typeParameterOverride() default "";
 
   boolean showSummaryContent() default false;
 
