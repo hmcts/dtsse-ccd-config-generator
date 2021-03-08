@@ -32,15 +32,15 @@ public interface ConfigBuilder<T, S, R extends HasRole> {
   // Webhooks can follow a convention derived from the webhook type and event id.
   void setWebhookConvention(WebhookConvention convention);
 
-  TabBuilder tab(String tabId, String tabLabel);
+  TabBuilder<T, R> tab(String tabId, String tabLabel);
 
-  WorkBasketBuilder workBasketResultFields();
+  WorkBasketBuilder<T, R> workBasketResultFields();
 
-  WorkBasketBuilder workBasketInputFields();
+  WorkBasketBuilder<T, R> workBasketInputFields();
 
-  SearchBuilder searchResultFields();
+  SearchBuilder<T, R> searchResultFields();
 
-  SearchBuilder searchInputFields();
+  SearchBuilder<T, R> searchInputFields();
 
   RoleBuilder<R> role(R... role);
 }
