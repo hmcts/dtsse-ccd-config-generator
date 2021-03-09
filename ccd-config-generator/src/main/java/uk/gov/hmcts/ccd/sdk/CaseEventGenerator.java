@@ -20,11 +20,11 @@ class CaseEventGenerator {
   public static void writeEvents(File root, String caseType, List<Event> events) {
 
     ImmutableListMultimap<String, Event> eventsByState = Multimaps.index(events, x -> {
-      if (x.getPreState() == null) {
-        return x.getPostState();
+      if (x.getPreState().isEmpty()) {
+        return x.getPostState().iterator().next().toString();
       }
 
-      return Objects.equals(x.getPreState(), x.getPostState()) ? x.getPostState() : "StateChange";
+      return Objects.equals(x.getPreState(), x.getPostState()) ? x.getPostState().iterator().next().toString() : "StateChange";
     });
 
     File folder = new File(root.getPath(), "CaseEvent");

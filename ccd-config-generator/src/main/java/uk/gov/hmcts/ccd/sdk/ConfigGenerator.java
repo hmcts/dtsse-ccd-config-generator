@@ -65,15 +65,16 @@ class ConfigGenerator<T, S, R extends HasRole> {
     }
   }
 
-
+  @SneakyThrows
   public ResolvedCCDConfig<T, S, R> resolveCCDConfig(CCDConfig<T, S, R> config) {
     Class<?>[] typeArgs = TypeResolver.resolveRawArguments(CCDConfig.class, config.getClass());
-    ConfigBuilderImpl builder = new ConfigBuilderImpl(typeArgs[0]);
+    Set<S> allStates = Set.of(((Class<S>)typeArgs[1]).getEnumConstants());
+    ConfigBuilderImpl builder = new ConfigBuilderImpl(typeArgs[0], allStates);
     config.configure(builder);
     List<Event> events = builder.getEvents();
     Map<Class, Integer> types = resolve(typeArgs[0], basePackage);
     return new ResolvedCCDConfig(typeArgs[0], typeArgs[1], typeArgs[2], builder, events, types,
-        builder.environment);
+        builder.environment, allStates);
   }
 
   private void writeConfig(File outputfolder, ResolvedCCDConfig config) {
@@ -82,8 +83,8 @@ class ConfigGenerator<T, S, R extends HasRole> {
     CaseEventToFieldsGenerator.writeEvents(outputfolder, config.events, config.builder.caseType);
     ComplexTypeGenerator.generate(outputfolder, config.builder.caseType, config.types);
     CaseEventToComplexTypesGenerator.writeEvents(outputfolder, config.events);
-    Table<String, String, String> eventPermissions = buildEventPermissions(config.builder,
-        config.events);
+    Table<String, R, String> eventPermissions = buildEventPermissions(config.builder,
+        config.events, config.allStates);
     AuthorisationCaseEventGenerator.generate(outputfolder, eventPermissions,
         config.builder.caseType);
     AuthorisationCaseFieldGenerator.generate(outputfolder, config.builder.caseType, config.events,
@@ -174,37 +175,39 @@ class ConfigGenerator<T, S, R extends HasRole> {
     return field.getType();
   }
 
-  Table<String, String, String> buildEventPermissions(
-      ConfigBuilderImpl builder, List<Event<T, R, S>> events) {
+  Table<String, R, String> buildEventPermissions(
+      ConfigBuilderImpl<T, S, R> builder, List<Event<T, R, S>> events, Set<S> allStates) {
 
 
-    Table<String, String, String> eventRolePermissions = HashBasedTable.create();
+    Table<String, R, String> eventRolePermissions = HashBasedTable.create();
     for (Event<T, R, S> event : events) {
       // Add any state based role permissions unless event permits only explicit grants.
       if (!event.isExplicitGrants()) {
         // If Event is for all states, then apply each state's state level permissions.
-        Set<String> keys = event.isForAllStates()
+        Set<S> keys = event.getPreState().equals(allStates)
             ? builder.stateRolePermissions.rowKeySet()
-            : ImmutableSet.of(event.getPostState());
-        for (String key : keys) {
-          Map<String, String> roles = builder.stateRolePermissions.row(key);
-          for (String role : roles.keySet()) {
+            : event.getPostState();
+        for (S key : keys) {
+          Map<R, String> roles = builder.stateRolePermissions.row(key);
+          for (R role : roles.keySet()) {
             eventRolePermissions.put(event.getId(), role, roles.get(role));
           }
         }
 
         // Add any case history access
-        Multimap<String, String> stateRoleHistoryAccess = builder.stateRoleHistoryAccess;
-        if (stateRoleHistoryAccess.containsKey(event.getPostState())) {
-          for (String role : stateRoleHistoryAccess.get(event.getPostState())) {
-            eventRolePermissions.put(event.getId(), role, "R");
+        SetMultimap<S, R> stateRoleHistoryAccess = builder.stateRoleHistoryAccess;
+        for (S s : event.getPostState()) {
+          if (stateRoleHistoryAccess.containsKey(s)) {
+            for (R role : stateRoleHistoryAccess.get(s)) {
+              eventRolePermissions.put(event.getId(), role, "R");
+            }
           }
         }
       }
       // Set event level permissions, overriding state level where set.
       SetMultimap<R, Permission> grants = event.getGrants();
       for (R role : grants.keySet()) {
-        eventRolePermissions.put(event.getId(), role.getRole(),
+        eventRolePermissions.put(event.getId(), role,
             Permission.toCCDPerm(grants.get(role)));
       }
     }

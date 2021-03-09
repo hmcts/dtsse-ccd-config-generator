@@ -36,8 +36,8 @@ import uk.gov.hmcts.ccd.sdk.api.WorkBasketField;
 
 class AuthorisationCaseFieldGenerator {
 
-  public static void generate(File root, String caseType, List<Event> events,
-      Table<String, String, String> eventRolePermissions, List<TabBuilder> tabs,
+  public static <R extends HasRole> void generate(File root, String caseType, List<Event> events,
+      Table<String, R, String> eventRolePermissions, List<TabBuilder> tabs,
       List<WorkBasketBuilder> workBasketInputFields,
       List<WorkBasketBuilder> workBasketResultFields,
                               List<SearchBuilder> searchInputFields,
@@ -49,11 +49,11 @@ class AuthorisationCaseFieldGenerator {
     Table<String, String, String> fieldRolePermissions = HashBasedTable.create();
     // Add field permissions based on event permissions.
     for (Event event : events) {
-      Map<String, String> eventPermissions = eventRolePermissions.row(event.getEventID());
+      Map<R, String> eventPermissions = eventRolePermissions.row(event.getEventID());
       List<Field.FieldBuilder> fields = event.getFields().build().getFields();
       for (Field.FieldBuilder fb : fields) {
 
-        for (Entry<String, String> rolePermission : eventPermissions.entrySet()) {
+        for (Entry<R, String> rolePermission : eventPermissions.entrySet()) {
           if (event.getHistoryOnlyRoles().contains(rolePermission.getKey())) {
             continue;
           }
@@ -67,7 +67,7 @@ class AuthorisationCaseFieldGenerator {
           if (fb.build().isImmutable() || fb.build().isImmutableList()) {
             perm = perm.replaceAll("C", "");
           }
-          fieldRolePermissions.put(fb.build().getId(), rolePermission.getKey(),
+          fieldRolePermissions.put(fb.build().getId(), rolePermission.getKey().getRole(),
               perm);
         }
       }

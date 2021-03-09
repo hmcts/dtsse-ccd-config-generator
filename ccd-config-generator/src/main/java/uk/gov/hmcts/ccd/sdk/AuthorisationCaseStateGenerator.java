@@ -15,19 +15,21 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Set;
 import java.util.stream.Collectors;
 import uk.gov.hmcts.ccd.sdk.JsonUtils.CRUDMerger;
 import uk.gov.hmcts.ccd.sdk.api.Event;
+import uk.gov.hmcts.ccd.sdk.api.HasRole;
 
 class AuthorisationCaseStateGenerator {
 
-  public static void generate(File root, String caseType, List<Event> events,
-      Table<String, String, String> eventRolePermissions) {
+  public static <T, R extends HasRole, S> void generate(File root, String caseType, List<Event<T, R, S>> events,
+                                                     Table<String, R, String> eventRolePermissions) {
 
-    Table<String, String, String> stateRolePermissions = HashBasedTable.create();
-    for (Event event : events) {
-      Map<String, String> rolePermissions = eventRolePermissions.row(event.getEventID());
-      for (Entry<String, String> rolePermission : rolePermissions.entrySet()) {
+    Table<S, R, String> stateRolePermissions = HashBasedTable.create();
+    for (Event<T, R, S> event : events) {
+      Map<R, String> rolePermissions = eventRolePermissions.row(event.getEventID());
+      for (Entry<R, String> rolePermission : rolePermissions.entrySet()) {
         // For state transitions if you have C then you get both states.
         // Otherwise you only need permission for the destination state.
         if (event.getPreState() != event.getPostState()) {
@@ -46,11 +48,11 @@ class AuthorisationCaseStateGenerator {
     }
 
     List<Map<String, Object>> result = Lists.newArrayList();
-    for (Cell<String, String, String> stateRolePermission : stateRolePermissions.cellSet()) {
+    for (Cell<S, R, String> stateRolePermission : stateRolePermissions.cellSet()) {
       if (stateRolePermission.getRowKey().equals("*")) {
         continue;
       }
-      if (stateRolePermission.getColumnKey().matches("\\[.*?\\]")) {
+      if (stateRolePermission.getColumnKey().toString().matches("\\[.*?\\]")) {
         // Ignore CCD roles.
         continue;
       }
@@ -70,16 +72,17 @@ class AuthorisationCaseStateGenerator {
 
   }
 
-  private static void addPermissions(Table<String, String, String> stateRolePermissions,
-      String state, String role, String permissions) {
-    String existingPermissions = stateRolePermissions.get(state, role);
-    existingPermissions = existingPermissions == null ? "" : existingPermissions;
-    existingPermissions += permissions;
-    // Remove any dupes.
-    existingPermissions = Sets.newHashSet(Chars.asList(existingPermissions.toCharArray()))
+  private static <R extends HasRole, S> void addPermissions(Table<S, R, String> stateRolePermissions,
+                                         Set<S> states, R role, String permissions) {
+    for (S state : states) {
+      String existingPermissions = stateRolePermissions.get(state, role);
+      existingPermissions = existingPermissions == null ? "" : existingPermissions;
+      existingPermissions += permissions;
+      // Remove any dupes.
+      existingPermissions = Sets.newHashSet(Chars.asList(existingPermissions.toCharArray()))
         .stream().map(String::valueOf).collect(Collectors.joining());
 
-    stateRolePermissions.put(state, role, existingPermissions);
+      stateRolePermissions.put(state, role, existingPermissions);
+    }
   }
-
 }
