@@ -4,14 +4,14 @@
     "CaseTypeID": "CARE_SUPERVISION_EPO",
     "UserRole": "caseworker-publiclaw-systemupdate",
     "LiveFrom": "01/01/2017",
-    "CaseFieldID": "localAuthorityDirections"
+    "CaseFieldID": "allParties"
   },
   {
     "CRUD": "C",
     "CaseTypeID": "CARE_SUPERVISION_EPO",
     "UserRole": "caseworker-publiclaw-systemupdate",
     "LiveFrom": "01/01/2017",
-    "CaseFieldID": "allParties"
+    "CaseFieldID": "localAuthorityDirections"
   },
   {
     "CRUD": "C",

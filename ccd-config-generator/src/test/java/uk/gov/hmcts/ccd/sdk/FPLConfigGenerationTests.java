@@ -84,16 +84,6 @@ public class FPLConfigGenerationTests {
     }
 
     @Test
-    public void generatesAuthorisationCaseFieldBulkScan() {
-        assertEquals("AuthorisationCaseField/caseworker-publiclaw-bulkscan.json");
-    }
-
-    @Test
-    public void generatesAuthorisationCaseFieldBulkScanSystemUpdate() {
-        assertEquals("AuthorisationCaseField/caseworker-publiclaw-bulkscansystemupdate.json");
-    }
-
-    @Test
     public void generatesAuthorisationCaseFieldGatekeeper() {
         assertEquals("AuthorisationCaseField/caseworker-publiclaw-gatekeeper.json");
     }
@@ -116,11 +106,6 @@ public class FPLConfigGenerationTests {
     @Test
     public void generatesAuthorisationCaseFieldCafcass() {
         assertEquals("AuthorisationCaseField/caseworker-publiclaw-cafcass.json");
-    }
-
-    @Test
-    public void generatesAuthorisationCaseFieldSolicitor() {
-        assertEquals("AuthorisationCaseField/caseworker-publiclaw-solicitor.json");
     }
 
     @Test
