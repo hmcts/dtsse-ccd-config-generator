@@ -2,6 +2,27 @@
   {
     "LiveFrom": "01/01/2017",
     "DisplayOrder": 1,
+    "ListElementCode": "ANNEX_B",
+    "ListElement": "ANNEX_B",
+    "ID": "PlacementDocumentType"
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "DisplayOrder": 2,
+    "ListElementCode": "GUARDIANS_REPORT",
+    "ListElement": "GUARDIANS_REPORT",
+    "ID": "PlacementDocumentType"
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "DisplayOrder": 3,
+    "ListElementCode": "OTHER_CONFIDENTIAL_DOCUMENTS",
+    "ListElement": "OTHER_CONFIDENTIAL_DOCUMENTS",
+    "ID": "PlacementDocumentType"
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "DisplayOrder": 1,
     "ListElementCode": "BIRTH_ADOPTION_CERTIFICATE",
     "ListElement": "BIRTH_ADOPTION_CERTIFICATE",
     "ID": "PlacementDocumentType"
@@ -60,27 +81,6 @@
     "DisplayOrder": 9,
     "ListElementCode": "FINAL_REPORTS_RELATING_TO_SIBLINGS",
     "ListElement": "FINAL_REPORTS_RELATING_TO_SIBLINGS",
-    "ID": "PlacementDocumentType"
-  },
-  {
-    "LiveFrom": "01/01/2017",
-    "DisplayOrder": 1,
-    "ListElementCode": "ANNEX_B",
-    "ListElement": "ANNEX_B",
-    "ID": "PlacementDocumentType"
-  },
-  {
-    "LiveFrom": "01/01/2017",
-    "DisplayOrder": 2,
-    "ListElementCode": "GUARDIANS_REPORT",
-    "ListElement": "GUARDIANS_REPORT",
-    "ID": "PlacementDocumentType"
-  },
-  {
-    "LiveFrom": "01/01/2017",
-    "DisplayOrder": 3,
-    "ListElementCode": "OTHER_CONFIDENTIAL_DOCUMENTS",
-    "ListElement": "OTHER_CONFIDENTIAL_DOCUMENTS",
     "ID": "PlacementDocumentType"
   }
 ]
