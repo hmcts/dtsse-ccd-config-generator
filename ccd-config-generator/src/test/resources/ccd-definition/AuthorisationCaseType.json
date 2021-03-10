@@ -1,50 +1,50 @@
 [
   {
+    "CRUD": "CRU",
     "UserRole": "caseworker-publiclaw-solicitor",
-    "CRUD": "CRU",
-    "LiveFrom": "01/01/2017",
-    "CaseTypeID": "CARE_SUPERVISION_EPO"
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "LiveFrom": "01/01/2017"
   },
   {
+    "CRUD": "CRU",
     "UserRole": "caseworker-publiclaw-courtadmin",
-    "CRUD": "CRU",
-    "LiveFrom": "01/01/2017",
-    "CaseTypeID": "CARE_SUPERVISION_EPO"
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "LiveFrom": "01/01/2017"
   },
   {
+    "CRUD": "CRU",
     "UserRole": "caseworker-publiclaw-cafcass",
-    "CRUD": "CRU",
-    "LiveFrom": "01/01/2017",
-    "CaseTypeID": "CARE_SUPERVISION_EPO"
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "LiveFrom": "01/01/2017"
   },
   {
+    "CRUD": "CRU",
     "UserRole": "caseworker-publiclaw-gatekeeper",
-    "CRUD": "CRU",
-    "LiveFrom": "01/01/2017",
-    "CaseTypeID": "CARE_SUPERVISION_EPO"
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "LiveFrom": "01/01/2017"
   },
   {
+    "CRUD": "CRU",
     "UserRole": "caseworker-publiclaw-judiciary",
-    "CRUD": "CRU",
-    "LiveFrom": "01/01/2017",
-    "CaseTypeID": "CARE_SUPERVISION_EPO"
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "LiveFrom": "01/01/2017"
   },
   {
+    "CRUD": "CRU",
     "UserRole": "caseworker-publiclaw-systemupdate",
-    "CRUD": "CRU",
-    "LiveFrom": "01/01/2017",
-    "CaseTypeID": "CARE_SUPERVISION_EPO"
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "LiveFrom": "01/01/2017"
   },
   {
-    "UserRole": "caseworker-publiclaw-bulkscan",
     "CRUD": "R",
-    "LiveFrom": "01/01/2017",
-    "CaseTypeID": "CARE_SUPERVISION_EPO"
+    "UserRole": "caseworker-publiclaw-bulkscan",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "LiveFrom": "01/01/2017"
   },
   {
-    "UserRole": "caseworker-publiclaw-bulkscansystemupdate",
     "CRUD": "CRU",
-    "LiveFrom": "01/01/2017",
-    "CaseTypeID": "CARE_SUPERVISION_EPO"
+    "UserRole": "caseworker-publiclaw-bulkscansystemupdate",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "LiveFrom": "01/01/2017"
   }
 ]

@@ -12,17 +12,5 @@
     "SecurityClassification": "Public",
     "Name": "Add case number",
     "CallBackURLAboutToSubmitEvent": "${CCD_DEF_CASE_SERVICE_BASE_URL}/callback/add-case-number/about-to-submit"
-  },
-  {
-    "PreConditionState(s)": "*",
-    "LiveFrom": "01/01/2017",
-    "CaseTypeID": "CARE_SUPERVISION_EPO",
-    "PostConditionState": "*",
-    "Description": "Add allocated judge to a case",
-    "DisplayOrder": 2,
-    "EndButtonLabel": "Save and continue",
-    "ID": "allocatedJudge",
-    "SecurityClassification": "Public",
-    "Name": "Allocated Judge"
   }
 ]
