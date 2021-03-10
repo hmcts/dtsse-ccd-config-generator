@@ -18,7 +18,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
-import org.checkerframework.checker.nullness.qual.Nullable;
 import uk.gov.hmcts.ccd.sdk.JsonUtils.CRUDMerger;
 import uk.gov.hmcts.ccd.sdk.api.Event;
 import uk.gov.hmcts.ccd.sdk.api.Field;
@@ -128,7 +127,7 @@ class AuthorisationCaseFieldGenerator {
         Field field = fb.build();
         Map<String, Set<Permission>> entries = field.getBlacklistedRolePermissions();
         for (Entry<String, Set<Permission>> roleBlacklist : entries.entrySet()) {
-          @Nullable Set<Permission> perm = fieldRolePermissions.get(field.getId(),
+          Set<Permission> perm = fieldRolePermissions.get(field.getId(),
               roleBlacklist.getKey());
           if (null != perm) {
             perm.removeAll(roleBlacklist.getValue());
@@ -144,7 +143,7 @@ class AuthorisationCaseFieldGenerator {
       Field field = fb.build();
       Map<String, Set<Permission>> entries = field.getBlacklistedRolePermissions();
       for (Entry<String, Set<Permission>> roleBlacklist : entries.entrySet()) {
-        @Nullable Set<Permission> perm = fieldRolePermissions.get(field.getId(),
+        Set<Permission> perm = fieldRolePermissions.get(field.getId(),
             roleBlacklist.getKey());
         if (null != perm) {
           perm.removeAll(roleBlacklist.getValue());

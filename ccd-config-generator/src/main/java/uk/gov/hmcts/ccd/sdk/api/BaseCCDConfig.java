@@ -41,8 +41,8 @@ public abstract class BaseCCDConfig<Model, State,
   }
 
   @Override
-  public void grant(State state, Set<Permission> permissions, Role role) {
-    builder.grant(state, permissions, role);
+  public void grant(State state, Set<Permission> permissions, Role... roles) {
+    builder.grant(state, permissions, roles);
   }
 
   @Override

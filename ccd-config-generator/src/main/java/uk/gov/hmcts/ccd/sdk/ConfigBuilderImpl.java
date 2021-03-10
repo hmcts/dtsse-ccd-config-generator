@@ -125,8 +125,10 @@ class ConfigBuilderImpl<T, S, R extends HasRole> implements ConfigBuilder<T, S, 
   }
 
   @Override
-  public void grant(S state, Set<Permission> permissions, R role) {
-    stateRolePermissions.put(state, role, permissions);
+  public void grant(S state, Set<Permission> permissions, R... roles) {
+    for (R role : roles) {
+      stateRolePermissions.put(state, role, permissions);
+    }
   }
 
   @Override

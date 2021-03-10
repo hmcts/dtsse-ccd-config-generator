@@ -6,7 +6,6 @@ import static uk.gov.hmcts.ccd.sdk.api.Permission.C;
 import static uk.gov.hmcts.ccd.sdk.api.Permission.R;
 import static uk.gov.hmcts.reform.fpl.enums.State.Gatekeeping;
 import static uk.gov.hmcts.reform.fpl.enums.State.Open;
-import static uk.gov.hmcts.reform.fpl.enums.State.PREPARE_FOR_HEARING;
 import static uk.gov.hmcts.reform.fpl.enums.State.Submitted;
 import static uk.gov.hmcts.reform.fpl.enums.UserRole.BULK_SCAN;
 import static uk.gov.hmcts.reform.fpl.enums.UserRole.BULK_SCAN_SYSTEM_UPDATE;
@@ -50,8 +49,11 @@ public class CCDConfig extends BaseCCDConfig<CaseData, State, UserRole> {
         setEnvironment(environment());
         setWebhookConvention(this::webhookConvention);
 
-        // Admin gets CRU on everything in Gatekeeping state.
+        // Admin gets CRU on everything in Open state.
         grant(Open, CRU, HMCTS_ADMIN);
+
+        // Local Authority can view the history of all events in the Open state.
+        grantHistory(Open, LOCAL_AUTHORITY);
 
         // Describe the hierarchy of which roles go together.
         role(CCD_SOLICITOR, CCD_LASOLICITOR).has(LOCAL_AUTHORITY);
@@ -70,6 +72,11 @@ public class CCDConfig extends BaseCCDConfig<CaseData, State, UserRole> {
         buildSearchResultFields();
         buildSearchInputFields();
 
+        event("addNotes")
+            .forStates(Gatekeeping, Submitted)
+            .name("Add case notes")
+            .fields()
+            .optional(CaseData::getCaseNotes);
     }
 
     private void buildSearchResultFields() {
@@ -226,7 +233,6 @@ public class CCDConfig extends BaseCCDConfig<CaseData, State, UserRole> {
         event("populateSDO")
                 .forStateTransition(Submitted, Gatekeeping)
                 .name("Populate standard directions")
-                .displayOrder(14) // TODO - necessary?
                 .explicitGrants()
                 .grant(C, UserRole.SYSTEM_UPDATE)
                 .fields()
@@ -239,8 +245,6 @@ public class CCDConfig extends BaseCCDConfig<CaseData, State, UserRole> {
     }
 
     private void buildOpen() {
-        // Local Authority can view the history of all events in the Open state.
-        grantHistory(Open,LOCAL_AUTHORITY);
         event("openCase")
                 .initialState(Open)
                 .name("Start application")

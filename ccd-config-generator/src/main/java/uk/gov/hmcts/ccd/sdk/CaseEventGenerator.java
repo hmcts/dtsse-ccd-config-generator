@@ -7,7 +7,9 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
+import java.util.stream.Collectors;
 import uk.gov.hmcts.ccd.sdk.JsonUtils.AddMissing;
 import uk.gov.hmcts.ccd.sdk.api.Event;
 import uk.gov.hmcts.ccd.sdk.api.HasRole;
@@ -92,6 +94,10 @@ class CaseEventGenerator<T, S, R extends HasRole> {
   }
 
   private String toCCDStateString(Set<S> states, Set<S> allStates) {
-    return states.equals(allStates) ? "*" : states.iterator().next().toString();
+    return states.equals(allStates)
+        ? "*"
+        : states.stream().map(Objects::toString)
+        .sorted()
+        .collect(Collectors.joining(";"));
   }
 }

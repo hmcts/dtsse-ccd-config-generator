@@ -16,7 +16,7 @@ public interface ConfigBuilder<T, S, R extends HasRole> {
 
   void setEnvironment(String env);
 
-  void grant(S state, Set<Permission> permissions, R role);
+  void grant(S state, Set<Permission> permissions, R... role);
 
   void grantHistory(S state, R... role);
 

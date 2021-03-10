@@ -67,7 +67,6 @@ class AuthorisationCaseStateGenerator {
 
     Path output = Paths.get(root.getPath(), "AuthorisationCaseState.json");
     JsonUtils.mergeInto(output, result, new CRUDMerger(), "CaseStateID", "UserRole");
-
   }
 
   private static <R extends HasRole, S> void addPermissions(
