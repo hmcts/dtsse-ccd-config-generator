@@ -1,7 +1,10 @@
 package uk.gov.hmcts.ccd.sdk.api;
 
+import static uk.gov.hmcts.ccd.sdk.api.Permission.CRUD;
+
 import java.util.Hashtable;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.Consumer;
 import lombok.Builder;
 import lombok.Data;
@@ -31,7 +34,7 @@ public class Field<Type, Parent, Grandparent> {
   boolean immutableList;
   boolean immutable;
   boolean readOnly;
-  private Map<String, String> blacklistedRolePermissions;
+  private Map<String, Set<Permission>> blacklistedRolePermissions;
 
   Class<Type> clazz;
   @ToString.Exclude
@@ -61,7 +64,8 @@ public class Field<Type, Parent, Grandparent> {
       return this;
     }
 
-    public FieldBuilder<Type, Parent, Grandparent> blacklist(String crud, HasRole... roles) {
+    public FieldBuilder<Type, Parent, Grandparent> blacklist(Set<Permission> crud,
+                                                             HasRole... roles) {
       for (HasRole role : roles) {
         blacklistedRolePermissions.put(role.getRole(), crud);
       }
@@ -70,7 +74,7 @@ public class Field<Type, Parent, Grandparent> {
     }
 
     public FieldBuilder<Type, Parent, Grandparent> blacklist(HasRole... roles) {
-      return blacklist("CRUD", roles);
+      return blacklist(CRUD, roles);
     }
 
     public FieldBuilder<Type, Parent, Grandparent> type(String t) {

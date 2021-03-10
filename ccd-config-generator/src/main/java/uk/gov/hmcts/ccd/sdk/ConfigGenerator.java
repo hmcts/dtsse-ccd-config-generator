@@ -16,6 +16,7 @@ import java.lang.reflect.ParameterizedType;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -81,7 +82,7 @@ class ConfigGenerator<T, S, R extends HasRole> {
     CaseEventToFieldsGenerator.writeEvents(outputfolder, config.events, config.builder.caseType);
     ComplexTypeGenerator.generate(outputfolder, config.builder.caseType, config.types);
     CaseEventToComplexTypesGenerator.writeEvents(outputfolder, config.events);
-    Table<String, R, String> eventPermissions = buildEventPermissions(config.builder,
+    Table<String, R, Set<Permission>> eventPermissions = buildEventPermissions(config.builder,
         config.events, config.allStates);
     AuthorisationCaseEventGenerator.generate(outputfolder, eventPermissions,
         config.builder.caseType);
@@ -165,11 +166,11 @@ class ConfigGenerator<T, S, R extends HasRole> {
     return field.getType();
   }
 
-  Table<String, R, String> buildEventPermissions(
+  Table<String, R, Set<Permission>> buildEventPermissions(
       ConfigBuilderImpl<T, S, R> builder, List<Event<T, R, S>> events, Set<S> allStates) {
 
 
-    Table<String, R, String> eventRolePermissions = HashBasedTable.create();
+    Table<String, R, Set<Permission>> eventRolePermissions = HashBasedTable.create();
     for (Event<T, R, S> event : events) {
       // Add any state based role permissions unless event permits only explicit grants.
       if (!event.isExplicitGrants()) {
@@ -178,7 +179,7 @@ class ConfigGenerator<T, S, R extends HasRole> {
             ? builder.stateRolePermissions.rowKeySet()
             : event.getPostState();
         for (S key : keys) {
-          Map<R, String> roles = builder.stateRolePermissions.row(key);
+          Map<R, Set<Permission>> roles = builder.stateRolePermissions.row(key);
           for (R role : roles.keySet()) {
             eventRolePermissions.put(event.getId(), role, roles.get(role));
           }
@@ -189,7 +190,7 @@ class ConfigGenerator<T, S, R extends HasRole> {
         for (S s : event.getPostState()) {
           if (stateRoleHistoryAccess.containsKey(s)) {
             for (R role : stateRoleHistoryAccess.get(s)) {
-              eventRolePermissions.put(event.getId(), role, "R");
+              eventRolePermissions.put(event.getId(), role, Collections.singleton(Permission.R));
             }
           }
         }
@@ -198,7 +199,7 @@ class ConfigGenerator<T, S, R extends HasRole> {
       SetMultimap<R, Permission> grants = event.getGrants();
       for (R role : grants.keySet()) {
         eventRolePermissions.put(event.getId(), role,
-            Permission.toCCDPerm(grants.get(role)));
+            grants.get(role));
       }
     }
     return eventRolePermissions;

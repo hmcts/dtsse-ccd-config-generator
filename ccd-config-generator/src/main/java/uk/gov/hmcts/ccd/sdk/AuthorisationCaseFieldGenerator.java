@@ -1,28 +1,30 @@
 package uk.gov.hmcts.ccd.sdk;
 
-import com.google.common.base.Strings;
+import static uk.gov.hmcts.ccd.sdk.api.Permission.CRU;
+
 import com.google.common.collect.HashBasedTable;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
 import com.google.common.collect.Table;
-import com.google.common.primitives.Chars;
 import java.io.File;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.Hashtable;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
-import java.util.stream.Collectors;
+import org.checkerframework.checker.nullness.qual.Nullable;
 import uk.gov.hmcts.ccd.sdk.JsonUtils.CRUDMerger;
 import uk.gov.hmcts.ccd.sdk.api.Event;
 import uk.gov.hmcts.ccd.sdk.api.Field;
 import uk.gov.hmcts.ccd.sdk.api.Field.FieldBuilder;
 import uk.gov.hmcts.ccd.sdk.api.HasRole;
+import uk.gov.hmcts.ccd.sdk.api.Permission;
 import uk.gov.hmcts.ccd.sdk.api.Search;
 import uk.gov.hmcts.ccd.sdk.api.Search.SearchBuilder;
 import uk.gov.hmcts.ccd.sdk.api.SearchField;
@@ -36,16 +38,17 @@ import uk.gov.hmcts.ccd.sdk.api.WorkBasketField;
 class AuthorisationCaseFieldGenerator {
 
   public static <T, S, R extends HasRole> void generate(
-      File root, ResolvedCCDConfig<T, S, R> config, Table<String, R, String> eventRolePermissions) {
+      File root, ResolvedCCDConfig<T, S, R> config, Table<String, R,
+      Set<Permission>> eventRolePermissions) {
 
-    Table<String, String, String> fieldRolePermissions = HashBasedTable.create();
+    Table<String, String, Set<Permission>> fieldRolePermissions = HashBasedTable.create();
     // Add field permissions based on event permissions.
     for (Event event : config.events) {
-      Map<R, String> eventPermissions = eventRolePermissions.row(event.getEventID());
+      Map<R, Set<Permission>> eventPermissions = eventRolePermissions.row(event.getEventID());
       List<Field.FieldBuilder> fields = event.getFields().build().getFields();
       for (Field.FieldBuilder fb : fields) {
 
-        for (Entry<R, String> rolePermission : eventPermissions.entrySet()) {
+        for (Entry<R, Set<Permission>> rolePermission : eventPermissions.entrySet()) {
           if (event.getHistoryOnlyRoles().contains(rolePermission.getKey())) {
             continue;
           }
@@ -53,12 +56,14 @@ class AuthorisationCaseFieldGenerator {
               rolePermission.getKey())) {
             continue;
           }
-          String perm = fb.build().isImmutable() ? "R" : rolePermission.getValue();
-          if (!perm.contains("D") && fb.build().isMutableList()) {
-            perm += "D";
+          Set<Permission> perm = fb.build().isImmutable()
+              ? Collections.singleton(Permission.R)
+              : rolePermission.getValue();
+          if (!perm.contains(Permission.D) && fb.build().isMutableList()) {
+            perm.add(Permission.D);
           }
           if (fb.build().isImmutable() || fb.build().isImmutableList()) {
-            perm = perm.replaceAll("C", "");
+            perm.remove(Permission.C);
           }
           fieldRolePermissions.put(fb.build().getId(), rolePermission.getKey().getRole(),
               perm);
@@ -70,7 +75,7 @@ class AuthorisationCaseFieldGenerator {
     for (String role : ImmutableSet.copyOf(fieldRolePermissions.columnKeySet())) {
 
       if (!config.builder.apiOnlyRoles.contains(role)) {
-        fieldRolePermissions.put("caseHistory", role, "CRU");
+        fieldRolePermissions.put("caseHistory", role, CRU);
 
         // Add read for any tab fields
         for (TabBuilder tb : config.builder.tabs) {
@@ -85,7 +90,7 @@ class AuthorisationCaseFieldGenerator {
                 }
               }
               if (!fieldRolePermissions.contains(field.getId(), role)) {
-                fieldRolePermissions.put(field.getId(), role, "R");
+                fieldRolePermissions.put(field.getId(), role, Collections.singleton(Permission.R));
               }
             }
           }
@@ -98,7 +103,7 @@ class AuthorisationCaseFieldGenerator {
           WorkBasket basket = workBasketInputField.build();
           for (WorkBasketField field : basket.getFields()) {
             if (!fieldRolePermissions.contains(field.getId(), role)) {
-              fieldRolePermissions.put(field.getId(), role, "R");
+              fieldRolePermissions.put(field.getId(), role, Collections.singleton(Permission.R));
             }
           }
         }
@@ -110,7 +115,7 @@ class AuthorisationCaseFieldGenerator {
           Search search = searchInputField.build();
           for (SearchField field : search.getFields()) {
             if (!fieldRolePermissions.contains(field.getId(), role)) {
-              fieldRolePermissions.put(field.getId(), role, "R");
+              fieldRolePermissions.put(field.getId(), role, Collections.singleton(Permission.R));
             }
           }
         }
@@ -118,15 +123,15 @@ class AuthorisationCaseFieldGenerator {
     }
 
     // Subtract any blacklisted permissions
-    for (Event event : config.events) {
-      for (FieldBuilder fb : (List<Field.FieldBuilder>) event.getFields().build().getFields()) {
+    for (Event<T, R, S> event : config.events) {
+      for (FieldBuilder fb : event.getFields().build().getFields()) {
         Field field = fb.build();
-        Map<String, String> entries = field.getBlacklistedRolePermissions();
-        for (Map.Entry<String, String> roleBlacklist : entries.entrySet()) {
-          String perm = fieldRolePermissions.get(field.getId(), roleBlacklist.getKey());
+        Map<String, Set<Permission>> entries = field.getBlacklistedRolePermissions();
+        for (Entry<String, Set<Permission>> roleBlacklist : entries.entrySet()) {
+          @Nullable Set<Permission> perm = fieldRolePermissions.get(field.getId(),
+              roleBlacklist.getKey());
           if (null != perm) {
-            String regex = "[" + roleBlacklist.getValue() + "]";
-            perm = perm.replaceAll(regex, "");
+            perm.removeAll(roleBlacklist.getValue());
             fieldRolePermissions.put(field.getId(), roleBlacklist.getKey(), perm);
           }
         }
@@ -137,12 +142,12 @@ class AuthorisationCaseFieldGenerator {
     // TODO: refactor!
     for (FieldBuilder fb : config.builder.explicitFields) {
       Field field = fb.build();
-      Map<String, String> entries = field.getBlacklistedRolePermissions();
-      for (Map.Entry<String, String> roleBlacklist : entries.entrySet()) {
-        String perm = fieldRolePermissions.get(field.getId(), roleBlacklist.getKey());
+      Map<String, Set<Permission>> entries = field.getBlacklistedRolePermissions();
+      for (Entry<String, Set<Permission>> roleBlacklist : entries.entrySet()) {
+        @Nullable Set<Permission> perm = fieldRolePermissions.get(field.getId(),
+            roleBlacklist.getKey());
         if (null != perm) {
-          String regex = "[" + roleBlacklist.getValue() + "]";
-          perm = perm.replaceAll(regex, "");
+          perm.removeAll(roleBlacklist.getValue());
           fieldRolePermissions.put(field.getId(), roleBlacklist.getKey(), perm);
         }
       }
@@ -152,27 +157,23 @@ class AuthorisationCaseFieldGenerator {
     folder.mkdir();
     for (String role : fieldRolePermissions.columnKeySet()) {
       List<Map<String, Object>> permissions = Lists.newArrayList();
-      Map<String, String> rolePermissions = fieldRolePermissions.column(role);
+      Map<String, Set<Permission>> rolePermissions = fieldRolePermissions.column(role);
 
-      for (Entry<String, String> fieldPerm : rolePermissions.entrySet()) {
+      for (Entry<String, Set<Permission>> fieldPerm : rolePermissions.entrySet()) {
         if (fieldPerm.getKey().equals("[STATE]")) {
           continue;
         }
 
         String field = fieldPerm.getKey();
-        String inheritedPermission = getInheritedPermission(fieldRolePermissions,
+        Set<Permission> inheritedPermission = getInheritedPermission(fieldRolePermissions,
             config.builder.roleHierarchy, role, field);
-        String fieldPermission = fieldPerm.getValue();
+        Set<Permission> fieldPermission = fieldPerm.getValue();
         if (inheritedPermission != null) {
-          Set<Character> newPermissions = Sets
-              .newHashSet(Chars.asList(fieldPerm.getValue().toCharArray()));
-          Set<Character> existingPermissions = Sets
-              .newHashSet(Chars.asList(inheritedPermission.toCharArray()));
-          newPermissions.removeAll(existingPermissions);
-          fieldPermission = newPermissions.stream().map(String::valueOf)
-              .collect(Collectors.joining());
+          Set<Permission> newPermissions = Sets.newHashSet(fieldPerm.getValue());
+          newPermissions.removeAll(inheritedPermission);
+          fieldPermission = newPermissions;
         }
-        if (!Strings.isNullOrEmpty(fieldPermission)) {
+        if (!fieldPermission.isEmpty()) {
           // Don't export metadata fields.
           if (field.matches("\\[.+\\]")) {
             continue;
@@ -183,18 +184,19 @@ class AuthorisationCaseFieldGenerator {
           permission.put("LiveFrom", "01/01/2017");
           permission.put("UserRole", role);
           permission.put("CaseFieldID", field);
-          permission.put("CRUD", fieldPermission);
+          permission.put("CRUD", Permission.toString(fieldPermission));
         }
       }
 
       String filename = role.replace("[", "").replace("]", "");
       Path output = Paths.get(folder.getPath(), filename + ".json");
-      JsonUtils.mergeInto(output, permissions, new CRUDMerger(), "CaseFieldID", "UserRole");
+      JsonUtils.mergeInto(output, permissions, new CRUDMerger(), "CaseFieldID",
+          "UserRole");
     }
   }
 
-  private static String getInheritedPermission(
-      Table<String, String, String> fieldRolePermissions,
+  private static Set<Permission> getInheritedPermission(
+      Table<String, String, Set<Permission>> fieldRolePermissions,
       Map<String, String> roleHierarchy, String role,
       String field) {
     if (roleHierarchy.containsKey(role)) {

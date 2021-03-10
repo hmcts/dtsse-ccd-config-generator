@@ -1,5 +1,6 @@
 package uk.gov.hmcts.ccd.sdk.api;
 
+import java.util.Set;
 import uk.gov.hmcts.ccd.sdk.api.Field.FieldBuilder;
 import uk.gov.hmcts.ccd.sdk.api.Search.SearchBuilder;
 import uk.gov.hmcts.ccd.sdk.api.Tab.TabBuilder;
@@ -15,7 +16,7 @@ public interface ConfigBuilder<T, S, R extends HasRole> {
 
   void setEnvironment(String env);
 
-  void grant(S state, String permissions, R role);
+  void grant(S state, Set<Permission> permissions, R role);
 
   void grantHistory(S state, R... role);
 

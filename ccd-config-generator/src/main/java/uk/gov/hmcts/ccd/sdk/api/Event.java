@@ -4,7 +4,6 @@ import com.google.common.collect.HashMultimap;
 import com.google.common.collect.SetMultimap;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
@@ -164,20 +163,16 @@ public class Event<T, R extends HasRole, S> {
       for (R role : roles) {
         historyOnlyRoles.add(role.getRole());
       }
-      grant(EnumSet.of(Permission.R), roles);
+      grant(Set.of(Permission.R), roles);
 
       return this;
     }
 
-    public EventBuilder<T, R, S> grant(String crud, R... roles) {
-      for (R role : roles) {
-        grants.putAll(role, Permission.fromCCDPerm(crud));
-      }
-
-      return this;
+    public EventBuilder<T, R, S> grant(Permission permission, R... roles) {
+      return grant(Set.of(permission), roles);
     }
 
-    public EventBuilder<T, R, S> grant(EnumSet<Permission> crud, R... roles) {
+    public EventBuilder<T, R, S> grant(Set<Permission> crud, R... roles) {
       for (R role : roles) {
         grants.putAll(role, crud);
       }

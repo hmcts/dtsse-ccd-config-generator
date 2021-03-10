@@ -64,14 +64,6 @@ public class FPLConfigGenerationTests {
         generator.resolveConfig(tmp.getRoot());
     }
 
-    @SneakyThrows
-    static void copyResourceToOutput(String path) {
-        Path resRoot = Paths.get(Resources.getResource("ccd-definition").toURI());
-        File dest = prodConfig.resolve(path).toFile();
-        Files.createParentDirs(dest);
-        FileUtils.copyFile(resRoot.resolve(path).toFile(), dest);
-    }
-
     @Test
     public void generatesAuthorisationCaseState() {
         assertEquals("AuthorisationCaseState.json");
@@ -120,6 +112,12 @@ public class FPLConfigGenerationTests {
     @Test
     public void generatesCaseType() {
         assertEquals("CaseType.json");
+    }
+
+    @Test
+    public void generatesAllAuthorisationCaseField() {
+        assertResourceFolderMatchesGenerated("AuthorisationCaseField");
+        assertGeneratedFolderMatchesResource("AuthorisationCaseField");
     }
 
     @Test

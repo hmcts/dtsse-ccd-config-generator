@@ -19,6 +19,7 @@ import uk.gov.hmcts.ccd.sdk.api.EventTypeBuilder;
 import uk.gov.hmcts.ccd.sdk.api.Field;
 import uk.gov.hmcts.ccd.sdk.api.Field.FieldBuilder;
 import uk.gov.hmcts.ccd.sdk.api.HasRole;
+import uk.gov.hmcts.ccd.sdk.api.Permission;
 import uk.gov.hmcts.ccd.sdk.api.RoleBuilder;
 import uk.gov.hmcts.ccd.sdk.api.Search.SearchBuilder;
 import uk.gov.hmcts.ccd.sdk.api.Tab;
@@ -32,7 +33,7 @@ class ConfigBuilderImpl<T, S, R extends HasRole> implements ConfigBuilder<T, S, 
   private final ImmutableSet<S> allStates;
   public String caseType = "";
   public final SetMultimap<S, R> stateRoleHistoryAccess = HashMultimap.create();
-  public final Table<S, R, String> stateRolePermissions = HashBasedTable.create();
+  public final Table<S, R, Set<Permission>> stateRolePermissions = HashBasedTable.create();
   public final Map<String, String> statePrefixes = Maps.newHashMap();
   public final Set<String> apiOnlyRoles = Sets.newHashSet();
   public final Map<String, List<Event.EventBuilder<T, R, S>>> events = Maps.newHashMap();
@@ -124,7 +125,7 @@ class ConfigBuilderImpl<T, S, R extends HasRole> implements ConfigBuilder<T, S, 
   }
 
   @Override
-  public void grant(S state, String permissions, R role) {
+  public void grant(S state, Set<Permission> permissions, R role) {
     stateRolePermissions.put(state, role, permissions);
   }
 
