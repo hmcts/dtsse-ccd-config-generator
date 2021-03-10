@@ -5,7 +5,6 @@ import com.google.common.collect.HashBasedTable;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
-import com.google.common.collect.Multimap;
 import com.google.common.collect.Sets;
 import com.google.common.collect.Table;
 import com.google.common.primitives.Chars;
@@ -36,28 +35,22 @@ import uk.gov.hmcts.ccd.sdk.api.WorkBasketField;
 
 class AuthorisationCaseFieldGenerator {
 
-  public static void generate(File root, String caseType, List<Event> events,
-      Table<String, String, String> eventRolePermissions, List<TabBuilder> tabs,
-      List<WorkBasketBuilder> workBasketInputFields,
-      List<WorkBasketBuilder> workBasketResultFields,
-                              List<SearchBuilder> searchInputFields,
-                              List<SearchBuilder> searchResultFields,
-                              Map<String, String> roleHierarchy,
-      Set<String> apiOnlyRoles, List<FieldBuilder> explicitFields,
-      Multimap<String, String> stateRoleHistoryAccess) {
+  public static <T, S, R extends HasRole> void generate(
+      File root, ResolvedCCDConfig<T, S, R> config, Table<String, R, String> eventRolePermissions) {
 
     Table<String, String, String> fieldRolePermissions = HashBasedTable.create();
     // Add field permissions based on event permissions.
-    for (Event event : events) {
-      Map<String, String> eventPermissions = eventRolePermissions.row(event.getEventID());
+    for (Event event : config.events) {
+      Map<R, String> eventPermissions = eventRolePermissions.row(event.getEventID());
       List<Field.FieldBuilder> fields = event.getFields().build().getFields();
       for (Field.FieldBuilder fb : fields) {
 
-        for (Entry<String, String> rolePermission : eventPermissions.entrySet()) {
+        for (Entry<R, String> rolePermission : eventPermissions.entrySet()) {
           if (event.getHistoryOnlyRoles().contains(rolePermission.getKey())) {
             continue;
           }
-          if (stateRoleHistoryAccess.containsEntry(event.getPostState(), rolePermission.getKey())) {
+          if (config.builder.stateRoleHistoryAccess.containsEntry(event.getPostState(),
+              rolePermission.getKey())) {
             continue;
           }
           String perm = fb.build().isImmutable() ? "R" : rolePermission.getValue();
@@ -67,7 +60,7 @@ class AuthorisationCaseFieldGenerator {
           if (fb.build().isImmutable() || fb.build().isImmutableList()) {
             perm = perm.replaceAll("C", "");
           }
-          fieldRolePermissions.put(fb.build().getId(), rolePermission.getKey(),
+          fieldRolePermissions.put(fb.build().getId(), rolePermission.getKey().getRole(),
               perm);
         }
       }
@@ -76,11 +69,11 @@ class AuthorisationCaseFieldGenerator {
     // Add Permissions for all tabs.
     for (String role : ImmutableSet.copyOf(fieldRolePermissions.columnKeySet())) {
 
-      if (!apiOnlyRoles.contains(role)) {
+      if (!config.builder.apiOnlyRoles.contains(role)) {
         fieldRolePermissions.put("caseHistory", role, "CRU");
 
         // Add read for any tab fields
-        for (TabBuilder tb : tabs) {
+        for (TabBuilder tb : config.builder.tabs) {
           Tab tab = tb.build();
           if (!tab.getExcludedRoles().contains(role)) {
             for (TabField field : tab.getFields()) {
@@ -100,7 +93,8 @@ class AuthorisationCaseFieldGenerator {
 
         // Add read for WorkBaskets
         for (WorkBasketBuilder workBasketInputField :
-            Iterables.concat(workBasketInputFields, workBasketResultFields)) {
+            Iterables.concat(config.builder.workBasketInputFields,
+                config.builder.workBasketResultFields)) {
           WorkBasket basket = workBasketInputField.build();
           for (WorkBasketField field : basket.getFields()) {
             if (!fieldRolePermissions.contains(field.getId(), role)) {
@@ -111,7 +105,8 @@ class AuthorisationCaseFieldGenerator {
 
         // Add read for Search Input fields
         for (SearchBuilder searchInputField :
-                Iterables.concat(searchInputFields, searchResultFields)) {
+                Iterables.concat(config.builder.searchInputFields,
+                    config.builder.searchResultFields)) {
           Search search = searchInputField.build();
           for (SearchField field : search.getFields()) {
             if (!fieldRolePermissions.contains(field.getId(), role)) {
@@ -123,7 +118,7 @@ class AuthorisationCaseFieldGenerator {
     }
 
     // Subtract any blacklisted permissions
-    for (Event event : events) {
+    for (Event event : config.events) {
       for (FieldBuilder fb : (List<Field.FieldBuilder>) event.getFields().build().getFields()) {
         Field field = fb.build();
         Map<String, String> entries = field.getBlacklistedRolePermissions();
@@ -140,7 +135,7 @@ class AuthorisationCaseFieldGenerator {
 
     // Plus explicit field blacklists.
     // TODO: refactor!
-    for (FieldBuilder fb : explicitFields) {
+    for (FieldBuilder fb : config.builder.explicitFields) {
       Field field = fb.build();
       Map<String, String> entries = field.getBlacklistedRolePermissions();
       for (Map.Entry<String, String> roleBlacklist : entries.entrySet()) {
@@ -165,8 +160,8 @@ class AuthorisationCaseFieldGenerator {
         }
 
         String field = fieldPerm.getKey();
-        String inheritedPermission = getInheritedPermission(fieldRolePermissions, roleHierarchy,
-            role, field);
+        String inheritedPermission = getInheritedPermission(fieldRolePermissions,
+            config.builder.roleHierarchy, role, field);
         String fieldPermission = fieldPerm.getValue();
         if (inheritedPermission != null) {
           Set<Character> newPermissions = Sets
@@ -184,7 +179,7 @@ class AuthorisationCaseFieldGenerator {
           }
           Map<String, Object> permission = new Hashtable<>();
           permissions.add(permission);
-          permission.put("CaseTypeID", caseType);
+          permission.put("CaseTypeID", config.builder.caseType);
           permission.put("LiveFrom", "01/01/2017");
           permission.put("UserRole", role);
           permission.put("CaseFieldID", field);

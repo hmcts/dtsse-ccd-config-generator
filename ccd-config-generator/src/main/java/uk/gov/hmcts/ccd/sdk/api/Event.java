@@ -1,6 +1,10 @@
 package uk.gov.hmcts.ccd.sdk.api;
 
+import com.google.common.collect.HashMultimap;
+import com.google.common.collect.SetMultimap;
 import java.util.Arrays;
+import java.util.Collections;
+import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
@@ -21,8 +25,8 @@ public class Event<T, R extends HasRole, S> {
   private String eventId;
 
   private String name;
-  private String preState;
-  private String postState;
+  private Set<S> preState;
+  private Set<S> postState;
   private String description;
   private String aboutToStartURL;
   private String aboutToSubmitURL;
@@ -60,12 +64,8 @@ public class Event<T, R extends HasRole, S> {
   @Builder.Default
   private int displayOrder = -1;
 
-  private Map<String, String> grants;
+  private SetMultimap<R, Permission> grants;
   private Set<String> historyOnlyRoles;
-
-  public Map<String, String> getGrants() {
-    return grants;
-  }
 
   public Set<String> getHistoryOnlyRoles() {
     return historyOnlyRoles;
@@ -74,19 +74,20 @@ public class Event<T, R extends HasRole, S> {
   private Class dataClass;
   private static int eventCount;
 
-  public boolean isForAllStates() {
-    return "*".equals(preState);
-  }
-
   public static class EventBuilder<T, R extends HasRole, S> {
 
     private WebhookConvention webhookConvention;
 
-    public static <T, R extends HasRole, S> EventBuilder<T, R, S> builder(Class dataClass,
-        WebhookConvention convention, PropertyUtils propertyUtils) {
+    public static <T, R extends HasRole, S> EventBuilder<T, R, S> builder(
+        String id, Class dataClass, WebhookConvention convention, PropertyUtils propertyUtils,
+        Set<S> preStates, Set<S> postStates) {
       EventBuilder<T, R, S> result = new EventBuilder<T, R, S>();
+      result.id(id);
+      result.eventId(id);
+      result.preState = preStates;
+      result.postState = postStates;
       result.dataClass = dataClass;
-      result.grants = new HashMap<>();
+      result.grants = HashMultimap.create();
       result.historyOnlyRoles = new HashSet<>();
       result.fields = FieldCollection.FieldCollectionBuilder
           .builder(result, result, dataClass, propertyUtils);
@@ -99,6 +100,18 @@ public class Event<T, R extends HasRole, S> {
 
     public FieldCollection.FieldCollectionBuilder<T, EventBuilder<T, R, S>> fields() {
       return fields;
+    }
+
+    public String getEventId() {
+      return this.eventId;
+    }
+
+    public Set<S> getPreState() {
+      return this.preState;
+    }
+
+    public Set<S> getPostState() {
+      return this.postState;
     }
 
     public EventBuilder<T, R, S> name(String n) {
@@ -141,8 +154,8 @@ public class Event<T, R extends HasRole, S> {
     }
 
     EventBuilder<T, R, S> forState(S state) {
-      this.preState = state.toString();
-      this.postState = state.toString();
+      this.preState = Collections.singleton(state);
+      this.postState = Collections.singleton(state);
       return this;
     }
 
@@ -151,14 +164,22 @@ public class Event<T, R extends HasRole, S> {
       for (R role : roles) {
         historyOnlyRoles.add(role.getRole());
       }
-      grant("R", roles);
+      grant(EnumSet.of(Permission.R), roles);
 
       return this;
     }
 
     public EventBuilder<T, R, S> grant(String crud, R... roles) {
       for (R role : roles) {
-        grants.put(role.getRole(), crud);
+        grants.putAll(role, Permission.fromCCDPerm(crud));
+      }
+
+      return this;
+    }
+
+    public EventBuilder<T, R, S> grant(EnumSet<Permission> crud, R... roles) {
+      for (R role : roles) {
+        grants.putAll(role, crud);
       }
 
       return this;

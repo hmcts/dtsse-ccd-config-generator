@@ -12,12 +12,14 @@ import uk.gov.hmcts.ccd.sdk.JsonUtils.AddMissing;
 import uk.gov.hmcts.ccd.sdk.api.Event;
 import uk.gov.hmcts.ccd.sdk.api.Field;
 import uk.gov.hmcts.ccd.sdk.api.FieldCollection;
+import uk.gov.hmcts.ccd.sdk.api.HasRole;
 
 class CaseEventToFieldsGenerator {
 
-  public static void writeEvents(File root, List<Event> events, String caseType) {
+  public static <T, R extends HasRole, S> void writeEvents(File root, List<Event<T, R, S>> events,
+                                                           String caseType) {
 
-    for (Event event : events) {
+    for (Event<T, R, S> event : events) {
       FieldCollection collection = event.getFields().build();
       if (collection.getFields().size() > 0) {
         List<Map<String, Object>> entries = Lists.newArrayList();

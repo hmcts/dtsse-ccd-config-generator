@@ -26,7 +26,6 @@ import org.reflections.util.ConfigurationBuilder;
 import org.skyscreamer.jsonassert.JSONCompare;
 import org.skyscreamer.jsonassert.JSONCompareMode;
 import org.skyscreamer.jsonassert.JSONCompareResult;
-import uk.gov.hmcts.reform.fpl.enums.State;
 
 import java.io.File;
 import java.io.IOException;

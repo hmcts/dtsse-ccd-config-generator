@@ -7,25 +7,28 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import uk.gov.hmcts.ccd.sdk.JsonUtils.AddMissing;
 import uk.gov.hmcts.ccd.sdk.api.Event;
+import uk.gov.hmcts.ccd.sdk.api.HasRole;
 import uk.gov.hmcts.ccd.sdk.api.Webhook;
 
-class CaseEventGenerator {
+class CaseEventGenerator<T, S, R extends HasRole> {
 
-  public static void writeEvents(File root, String caseType, List<Event> events) {
+  public void writeEvents(File root, ResolvedCCDConfig<T, S, R> config) {
 
     File folder = new File(root.getPath(), "CaseEvent");
     folder.mkdir();
-    for (Event event : events) {
+    for (Event event : config.events) {
       Path output = Paths.get(folder.getPath(), event.getId() + ".json");
 
-      JsonUtils.mergeInto(output, serialise(caseType, event),
+      JsonUtils.mergeInto(output, serialise(config.builder.caseType, event, config.allStates),
           new AddMissing(), "ID");
     }
   }
 
-  private static List<Map<String, Object>> serialise(String caseTypeId, Event event) {
+  private List<Map<String, Object>> serialise(String caseTypeId, Event<T, R, S> event,
+                                              Set<S> allStates) {
     int t = 1;
     List result = Lists.newArrayList();
     Map<String, Object> data = JsonUtils.getField(event.getId());
@@ -53,10 +56,14 @@ class CaseEventGenerator {
       data.put("EndButtonLabel", event.getEndButtonLabel());
     }
 
-    if (event.getPreState() != null) {
-      data.put("PreConditionState(s)", event.getPreState());
+    if (!event.getPreState().isEmpty()) {
+      data.put("PreConditionState(s)", toCCDStateString(event.getPreState(), allStates));
     }
-    data.put("PostConditionState", event.getPostState());
+    // Event must target either on or all states
+    boolean isToAllStates = event.getPostState().equals(allStates);
+    // Events can either target a specific state or can be overridden to all.
+    assert event.getPostState().size() == 1 || isToAllStates;
+    data.put("PostConditionState", toCCDStateString(event.getPostState(), allStates));
     data.put("SecurityClassification", "Public");
 
     if (event.getAboutToStartURL() != null) {
@@ -82,5 +89,9 @@ class CaseEventGenerator {
     }
 
     return result;
+  }
+
+  private String toCCDStateString(Set<S> states, Set<S> allStates) {
+    return states.equals(allStates) ? "*" : states.iterator().next().toString();
   }
 }
