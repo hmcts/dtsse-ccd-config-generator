@@ -88,7 +88,7 @@ class ConfigGenerator {
         config.builder.workBasketResultFields, config.builder.searchInputFields,
             config.builder.searchResultFields, config.builder.roleHierarchy,
         config.builder.apiOnlyRoles, config.builder.explicitFields,
-        config.builder.stateRoleHistoryAccess, config.builder.noFieldAuthRoles);
+        config.builder.stateRoleHistoryAccess);
     CaseFieldGenerator
         .generateCaseFields(outputfolder, config.builder.caseType, config.typeArg, config.events,
             config.builder);
