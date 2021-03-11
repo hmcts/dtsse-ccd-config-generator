@@ -1,5 +1,6 @@
 package uk.gov.hmcts.ccd.sdk.api;
 
+import java.util.Set;
 import uk.gov.hmcts.ccd.sdk.api.Field.FieldBuilder;
 import uk.gov.hmcts.ccd.sdk.api.Search.SearchBuilder;
 import uk.gov.hmcts.ccd.sdk.api.Tab.TabBuilder;
@@ -40,8 +41,8 @@ public abstract class BaseCCDConfig<Model, State,
   }
 
   @Override
-  public void grant(State state, String permissions, Role role) {
-    builder.grant(state, permissions, role);
+  public void grant(State state, Set<Permission> permissions, Role... roles) {
+    builder.grant(state, permissions, roles);
   }
 
   @Override

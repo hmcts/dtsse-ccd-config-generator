@@ -8,25 +8,26 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.List;
 import java.util.Map;
-import uk.gov.hmcts.ccd.sdk.JsonUtils;
+import java.util.Set;
 import uk.gov.hmcts.ccd.sdk.JsonUtils.AddMissing;
+import uk.gov.hmcts.ccd.sdk.api.HasRole;
+import uk.gov.hmcts.ccd.sdk.api.Permission;
 
 class AuthorisationCaseEventGenerator {
 
-  public static void generate(File root,
-      Table<String, String, String> eventRolePermissions,
-      String caseType) {
+  public static <R extends HasRole> void generate(
+      File root, Table<String, R, Set<Permission>> eventRolePermissions, String caseType) {
     List<Map<String, Object>> entries = Lists.newArrayList();
 
-    for (Table.Cell<String, String, String> cell : eventRolePermissions.cellSet()) {
-      if (cell.getValue().length() > 0) {
+    for (Table.Cell<String, R, Set<Permission>> cell : eventRolePermissions.cellSet()) {
+      if (!cell.getValue().isEmpty()) {
         Map<String, Object> entry = Maps.newHashMap();
         entries.add(entry);
         entry.put("LiveFrom", "01/01/2017");
         entry.put("CaseTypeID", caseType);
         entry.put("CaseEventID", cell.getRowKey());
-        entry.put("UserRole", cell.getColumnKey());
-        entry.put("CRUD", cell.getValue());
+        entry.put("UserRole", cell.getColumnKey().getRole());
+        entry.put("CRUD", Permission.toString(cell.getValue()));
       }
     }
 

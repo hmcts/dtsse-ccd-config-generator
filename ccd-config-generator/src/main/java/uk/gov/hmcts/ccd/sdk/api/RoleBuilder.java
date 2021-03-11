@@ -7,5 +7,4 @@ public interface RoleBuilder<Role extends HasRole> {
   // Access will not be granted to fields in UI tabs.
   void setApiOnly();
 
-  void noCaseEventToField();
 }

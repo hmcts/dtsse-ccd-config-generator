@@ -1,0 +1,72 @@
+[
+  {
+    "CRUD": "R",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "UserRole": "caseworker-publiclaw-solicitor",
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "familyManCaseNumber"
+  },
+  {
+    "CRUD": "CRU",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "UserRole": "caseworker-publiclaw-solicitor",
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "caseName"
+  },
+  {
+    "CRUD": "R",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "UserRole": "caseworker-publiclaw-solicitor",
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "allocatedJudge"
+  },
+  {
+    "CRUD": "CRU",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "UserRole": "caseworker-publiclaw-solicitor",
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "caseHistory"
+  },
+  {
+    "CRUD": "R",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "UserRole": "caseworker-publiclaw-solicitor",
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "hearingDetails"
+  },
+  {
+    "CRUD": "R",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "UserRole": "caseworker-publiclaw-solicitor",
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "caseLocalAuthority"
+  },
+  {
+    "CRUD": "R",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "UserRole": "caseworker-publiclaw-solicitor",
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "dateSubmitted"
+  },
+  {
+    "CRUD": "R",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "UserRole": "caseworker-publiclaw-solicitor",
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "evidenceHandled"
+  },
+  {
+    "CRUD": "R",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "UserRole": "caseworker-publiclaw-solicitor",
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "dateAndTimeSubmitted"
+  },
+  {
+    "CRUD" : "R",
+    "CaseFieldID" : "caseNotes",
+    "CaseTypeID" : "CARE_SUPERVISION_EPO",
+    "LiveFrom" : "01/01/2017",
+    "UserRole" : "caseworker-publiclaw-solicitor"
+  }
+]

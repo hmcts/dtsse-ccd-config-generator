@@ -26,7 +26,6 @@ import org.reflections.util.ConfigurationBuilder;
 import org.skyscreamer.jsonassert.JSONCompare;
 import org.skyscreamer.jsonassert.JSONCompareMode;
 import org.skyscreamer.jsonassert.JSONCompareResult;
-import uk.gov.hmcts.reform.fpl.enums.State;
 
 import java.io.File;
 import java.io.IOException;
@@ -63,14 +62,6 @@ public class FPLConfigGenerationTests {
         generator.resolveConfig(tmp.getRoot());
         // Generate a second time to ensure existing config is correctly merged.
         generator.resolveConfig(tmp.getRoot());
-    }
-
-    @SneakyThrows
-    static void copyResourceToOutput(String path) {
-        Path resRoot = Paths.get(Resources.getResource("ccd-definition").toURI());
-        File dest = prodConfig.resolve(path).toFile();
-        Files.createParentDirs(dest);
-        FileUtils.copyFile(resRoot.resolve(path).toFile(), dest);
     }
 
     @Test
@@ -121,6 +112,12 @@ public class FPLConfigGenerationTests {
     @Test
     public void generatesCaseType() {
         assertEquals("CaseType.json");
+    }
+
+    @Test
+    public void generatesAllAuthorisationCaseField() {
+        assertResourceFolderMatchesGenerated("AuthorisationCaseField");
+        assertGeneratedFolderMatchesResource("AuthorisationCaseField");
     }
 
     @Test

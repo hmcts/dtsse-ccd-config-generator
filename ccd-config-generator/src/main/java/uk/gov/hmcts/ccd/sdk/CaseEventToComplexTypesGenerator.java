@@ -14,10 +14,11 @@ import uk.gov.hmcts.ccd.sdk.JsonUtils.AddMissing;
 import uk.gov.hmcts.ccd.sdk.api.Event;
 import uk.gov.hmcts.ccd.sdk.api.Field;
 import uk.gov.hmcts.ccd.sdk.api.FieldCollection;
+import uk.gov.hmcts.ccd.sdk.api.HasRole;
 
 class CaseEventToComplexTypesGenerator {
 
-  public static void writeEvents(File root, List<Event> events) {
+  public static <T, R extends HasRole, S> void writeEvents(File root, List<Event<T, R, S>> events) {
     for (Event event : events) {
       FieldCollection collection = event.getFields().build();
       List<Map<String, Object>> entries = Lists.newArrayList();

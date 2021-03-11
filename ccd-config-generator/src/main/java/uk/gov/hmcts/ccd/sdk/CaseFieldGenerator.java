@@ -23,6 +23,7 @@ import uk.gov.hmcts.ccd.sdk.api.CCD;
 import uk.gov.hmcts.ccd.sdk.api.ComplexType;
 import uk.gov.hmcts.ccd.sdk.api.Event;
 import uk.gov.hmcts.ccd.sdk.api.Field.FieldBuilder;
+import uk.gov.hmcts.ccd.sdk.api.HasRole;
 import uk.gov.hmcts.ccd.sdk.api.Label;
 import uk.gov.hmcts.ccd.sdk.type.FieldType;
 
@@ -32,16 +33,16 @@ class CaseFieldGenerator {
   // so eg. if a field changes type it gets updated.
   private static final ImmutableSet<String> OVERWRITES_FIELDS = ImmutableSet.of();
 
-  public static void generateCaseFields(File outputFolder, String caseTypeId, Class dataClass,
-      List<Event> events, ConfigBuilderImpl builder) {
-    List<Map<String, Object>> fields = toComplex(dataClass, caseTypeId);
+  public static <T, S, R extends HasRole> void generateCaseFields(
+      File outputFolder, ResolvedCCDConfig<T, S, R> config) {
+    List<Map<String, Object>> fields = toComplex(config.typeArg, config.builder.caseType);
 
-    Map<String, Object> history = getField(caseTypeId, "caseHistory");
+    Map<String, Object> history = getField(config.builder.caseType, "caseHistory");
     history.put("Label", " ");
     history.put("FieldType", "CaseHistoryViewer");
     fields.add(history);
 
-    fields.addAll(getExplicitFields(caseTypeId, events, builder));
+    fields.addAll(getExplicitFields(config.builder.caseType, config.events, config.builder));
 
     Path path = Paths.get(outputFolder.getPath(), "CaseField.json");
     JsonUtils.mergeInto(path, fields, new OverwriteSpecific(OVERWRITES_FIELDS), "ID");
@@ -180,8 +181,8 @@ class CaseFieldGenerator {
     return (Class) parameterizedType.getActualTypeArguments()[0];
   }
 
-  private static List<Map<String, Object>> getExplicitFields(String caseType, List<Event> events,
-      ConfigBuilderImpl builder) {
+  private static <T, S, R extends HasRole> List<Map<String, Object>> getExplicitFields(
+      String caseType, List<Event<T, R, S>> events, ConfigBuilderImpl<T, S, R> builder) {
     Map<String, uk.gov.hmcts.ccd.sdk.api.Field> explicitFields = Maps.newHashMap();
     for (Event event : events) {
       List<uk.gov.hmcts.ccd.sdk.api.Field.FieldBuilder> fc = event.getFields().build()
