@@ -14,5 +14,5 @@ public enum FieldType {
   Address,
   CaseLink,
   OrderSummary,
-  MultiselectList
+  MultiSelectList
 }
