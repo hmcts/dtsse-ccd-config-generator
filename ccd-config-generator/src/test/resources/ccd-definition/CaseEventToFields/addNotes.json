@@ -8,6 +8,7 @@
     "PageColumnNumber": 1,
     "PageFieldDisplayOrder": 1,
     "DisplayContext": "OPTIONAL",
-    "PageDisplayOrder": 1
+    "PageDisplayOrder": 1,
+    "ShowSummaryChangeOption" : "Y"
   }
 ]

@@ -68,29 +68,56 @@ public class FieldCollection {
 
     public FieldCollectionBuilder<Type, Parent> optional(TypedPropertyGetter<Type, ?> getter,
         String showCondition) {
-      return field(getter, DisplayContext.Optional, showCondition);
+      return field(getter, DisplayContext.Optional, showCondition, true);
     }
 
     public FieldCollectionBuilder<Type, Parent> optional(TypedPropertyGetter<Type, ?> getter) {
-      return field(getter, DisplayContext.Optional);
+      return field(getter, DisplayContext.Optional, true);
+    }
+
+    public FieldCollectionBuilder<Type, Parent> optionalNoSummary(TypedPropertyGetter<Type, ?> getter,
+        String showCondition) {
+      return field(getter, DisplayContext.Optional, showCondition, false);
+    }
+
+    public FieldCollectionBuilder<Type, Parent> optionalNoSummary(TypedPropertyGetter<Type, ?> getter) {
+      return field(getter, DisplayContext.Optional, false);
     }
 
     public FieldCollectionBuilder<Type, Parent> mandatory(TypedPropertyGetter<Type, ?> getter,
         String showCondition) {
-      return field(getter, DisplayContext.Mandatory, showCondition);
+      return field(getter, DisplayContext.Mandatory, showCondition, true);
     }
 
     public FieldCollectionBuilder<Type, Parent> mandatory(TypedPropertyGetter<Type, ?> getter) {
-      return field(getter, DisplayContext.Mandatory);
+      return field(getter, DisplayContext.Mandatory, true);
+    }
+
+    public FieldCollectionBuilder<Type, Parent> mandatoryNoSummary(TypedPropertyGetter<Type, ?> getter,
+        String showCondition) {
+      return field(getter, DisplayContext.Mandatory, showCondition, false);
+    }
+
+    public FieldCollectionBuilder<Type, Parent> mandatoryNoSummary(TypedPropertyGetter<Type, ?> getter) {
+      return field(getter, DisplayContext.Mandatory, false);
     }
 
     public FieldCollectionBuilder<Type, Parent> readonly(TypedPropertyGetter<Type, ?> getter,
         String showCondition) {
-      return field(getter, DisplayContext.ReadOnly, showCondition);
+      return field(getter, DisplayContext.ReadOnly, showCondition, true);
     }
 
     public FieldCollectionBuilder<Type, Parent> readonly(TypedPropertyGetter<Type, ?> getter) {
-      return field(getter, DisplayContext.ReadOnly);
+      return field(getter, DisplayContext.ReadOnly, true);
+    }
+
+    public FieldCollectionBuilder<Type, Parent> readonlyNoSummary(TypedPropertyGetter<Type, ?> getter,
+        String showCondition) {
+      return field(getter, DisplayContext.ReadOnly, showCondition, false);
+    }
+
+    public FieldCollectionBuilder<Type, Parent> readonlyNoSummary(TypedPropertyGetter<Type, ?> getter) {
+      return field(getter, DisplayContext.ReadOnly, false);
     }
 
     public FieldBuilder<?, Type, Parent> list(String id) {
@@ -134,6 +161,15 @@ public class FieldCollection {
     public FieldCollectionBuilder<Type, Parent> field(TypedPropertyGetter<Type, ?> getter,
         DisplayContext context) {
       return field(getter, context, false);
+    }
+
+    public FieldCollectionBuilder<Type, Parent> field(TypedPropertyGetter<Type, ?> getter,
+        DisplayContext context, String showCondition, boolean showSummary) {
+      if (null != showCondition && null != rootFieldname) {
+        showCondition = showCondition.replace("{{FIELD_NAME}}", rootFieldname);
+      }
+      field(getter).context(context).showCondition(showCondition).showSummary(showSummary);
+      return this;
     }
 
     public FieldCollectionBuilder<Type, Parent> field(TypedPropertyGetter<Type, ?> getter,
@@ -252,7 +288,17 @@ public class FieldCollection {
     }
 
     public FieldCollectionBuilder<Type, Parent> label(String id, String value) {
-      explicitFields.add(field(id).context(DisplayContext.ReadOnly).label(value).immutable());
+      explicitFields.add(field(id).context(DisplayContext.ReadOnly).label(value).showSummary(false).immutable());
+      return this;
+    }
+
+    public FieldCollectionBuilder<Type, Parent> label(String id, String value, String showCondition) {
+      explicitFields.add(field(id)
+          .context(DisplayContext.ReadOnly)
+          .label(value)
+          .showCondition(showCondition)
+          .showSummary(false)
+          .immutable());
       return this;
     }
 

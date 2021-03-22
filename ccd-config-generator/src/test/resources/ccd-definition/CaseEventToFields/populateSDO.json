@@ -8,7 +8,8 @@
     "PageColumnNumber": 1,
     "PageFieldDisplayOrder": 1,
     "DisplayContext": "OPTIONAL",
-    "PageDisplayOrder": 1
+    "PageDisplayOrder": 1,
+    "ShowSummaryChangeOption" : "Y"
   },
   {
     "PageID": 1,
@@ -19,7 +20,8 @@
     "PageColumnNumber": 1,
     "PageFieldDisplayOrder": 2,
     "DisplayContext": "OPTIONAL",
-    "PageDisplayOrder": 1
+    "PageDisplayOrder": 1,
+    "ShowSummaryChangeOption" : "Y"
   },
   {
     "PageID": 1,
@@ -30,7 +32,8 @@
     "PageColumnNumber": 1,
     "PageFieldDisplayOrder": 3,
     "DisplayContext": "OPTIONAL",
-    "PageDisplayOrder": 1
+    "PageDisplayOrder": 1,
+    "ShowSummaryChangeOption" : "Y"
   },
   {
     "PageID": 1,
@@ -41,7 +44,8 @@
     "PageColumnNumber": 1,
     "PageFieldDisplayOrder": 4,
     "DisplayContext": "OPTIONAL",
-    "PageDisplayOrder": 1
+    "PageDisplayOrder": 1,
+    "ShowSummaryChangeOption" : "Y"
   },
   {
     "PageID": 1,
@@ -52,7 +56,8 @@
     "PageColumnNumber": 1,
     "PageFieldDisplayOrder": 5,
     "DisplayContext": "OPTIONAL",
-    "PageDisplayOrder": 1
+    "PageDisplayOrder": 1,
+    "ShowSummaryChangeOption" : "Y"
   },
   {
     "PageID": 1,
@@ -63,6 +68,7 @@
     "PageColumnNumber": 1,
     "PageFieldDisplayOrder": 6,
     "DisplayContext": "OPTIONAL",
-    "PageDisplayOrder": 1
+    "PageDisplayOrder": 1,
+    "ShowSummaryChangeOption" : "Y"
   }
 ]
