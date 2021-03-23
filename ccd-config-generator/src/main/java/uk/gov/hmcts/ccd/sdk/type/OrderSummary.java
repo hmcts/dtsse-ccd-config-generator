@@ -2,11 +2,13 @@ package uk.gov.hmcts.ccd.sdk.type;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import java.util.List;
+import lombok.Builder;
 import lombok.Data;
 import uk.gov.hmcts.ccd.sdk.api.ComplexType;
 
 @Data
 @ComplexType(name = "OrderSummary", generate = false)
+@Builder
 public class OrderSummary {
 
   @JsonProperty("PaymentReference")

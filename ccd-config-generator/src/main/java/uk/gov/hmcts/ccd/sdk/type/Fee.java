@@ -1,11 +1,14 @@
 package uk.gov.hmcts.ccd.sdk.type;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
+import java.math.BigDecimal;
+import lombok.Builder;
 import lombok.Data;
 import uk.gov.hmcts.ccd.sdk.api.ComplexType;
 
 @Data
 @ComplexType(name = "Fee", generate = false)
+@Builder
 public class Fee {
 
   @JsonProperty("FeeAmount")
@@ -20,4 +23,7 @@ public class Fee {
   @JsonProperty("FeeVersion")
   private final String version;
 
+  public static String getValueInPence(double value) {
+    return BigDecimal.valueOf(value).movePointRight(2).toPlainString();
+  }
 }
