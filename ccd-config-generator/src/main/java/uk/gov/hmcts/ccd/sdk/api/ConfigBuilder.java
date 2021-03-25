@@ -44,4 +44,6 @@ public interface ConfigBuilder<T, S, R extends HasRole> {
   SearchBuilder<T, R> searchInputFields();
 
   RoleBuilder<R> role(R... role);
+
+  void add(Set<CaseRole.CaseRoleBuilder> caseRoleBuilder);
 }

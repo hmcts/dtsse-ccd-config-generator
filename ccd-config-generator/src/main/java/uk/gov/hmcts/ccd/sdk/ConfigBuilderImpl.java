@@ -13,6 +13,7 @@ import java.util.Hashtable;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import uk.gov.hmcts.ccd.sdk.api.CaseRole;
 import uk.gov.hmcts.ccd.sdk.api.ConfigBuilder;
 import uk.gov.hmcts.ccd.sdk.api.Event;
 import uk.gov.hmcts.ccd.sdk.api.EventTypeBuilder;
@@ -44,6 +45,7 @@ class ConfigBuilderImpl<T, S, R extends HasRole> implements ConfigBuilder<T, S, 
   public final List<SearchBuilder> searchResultFields = Lists.newArrayList();
   public final List<SearchBuilder> searchInputFields = Lists.newArrayList();
   public final Map<String, String> roleHierarchy = new Hashtable<>();
+  public final Set<CaseRole.CaseRoleBuilder> caseRoles = Sets.newHashSet();
 
   private Class caseData;
   private WebhookConvention webhookConvention = this::defaultWebhookConvention;
@@ -153,7 +155,7 @@ class ConfigBuilderImpl<T, S, R extends HasRole> implements ConfigBuilder<T, S, 
 
   @Override
   public void caseField(String id, String showCondition, String type, String typeParam,
-      String label) {
+                        String label) {
     field(id).label(label).type(type).fieldTypeParameter(typeParam);
   }
 
@@ -218,6 +220,11 @@ class ConfigBuilderImpl<T, S, R extends HasRole> implements ConfigBuilder<T, S, 
         }
       }
     };
+  }
+
+  @Override
+  public void add(Set<CaseRole.CaseRoleBuilder> caseRoleBuilders) {
+    caseRoles.addAll(caseRoleBuilders);
   }
 
   private WorkBasketBuilder getWorkBasketBuilder(List<WorkBasketBuilder> workBasketInputFields) {
