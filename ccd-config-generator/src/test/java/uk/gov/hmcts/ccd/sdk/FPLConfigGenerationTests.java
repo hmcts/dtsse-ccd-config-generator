@@ -186,6 +186,11 @@ public class FPLConfigGenerationTests {
         assertGeneratedFolderMatchesResource("FixedLists");
     }
 
+    @Test
+    public void shouldGenerateCaseRoles() {
+      assertEquals("CaseRoles.json");
+    }
+
     private void assertGeneratedFolderMatchesResource(String folder) {
         URL u = Resources.getResource("ccd-definition/" + folder);
         File resourceDir = new File(u.getPath());

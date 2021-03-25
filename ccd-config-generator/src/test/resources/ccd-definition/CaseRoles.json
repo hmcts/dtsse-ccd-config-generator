@@ -1,0 +1,9 @@
+[
+  {
+    "Name": "Creator role",
+    "ID": "[CREATOR]",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "LiveFrom": "01/01/2017",
+    "Description": "Creator description"
+  }
+]
