@@ -12,12 +12,13 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import uk.gov.hmcts.ccd.sdk.JsonUtils.AddMissing;
 import uk.gov.hmcts.ccd.sdk.api.Event;
-import uk.gov.hmcts.ccd.sdk.api.HasRole;
+import uk.gov.hmcts.ccd.sdk.api.HasCaseRole;
+import uk.gov.hmcts.ccd.sdk.api.HasCaseTypePerm;
 import uk.gov.hmcts.ccd.sdk.api.Webhook;
 
-class CaseEventGenerator<T, S, R extends HasRole> {
+class CaseEventGenerator<T, S, R extends HasCaseTypePerm, C extends HasCaseRole> {
 
-  public void writeEvents(File root, ResolvedCCDConfig<T, S, R> config) {
+  public void writeEvents(File root, ResolvedCCDConfig<T, S, R, C> config) {
 
     File folder = new File(root.getPath(), "CaseEvent");
     folder.mkdir();

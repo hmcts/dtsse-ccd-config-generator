@@ -29,10 +29,11 @@ import org.reflections.ReflectionUtils;
 import org.reflections.Reflections;
 import uk.gov.hmcts.ccd.sdk.api.CCDConfig;
 import uk.gov.hmcts.ccd.sdk.api.Event;
-import uk.gov.hmcts.ccd.sdk.api.HasRole;
+import uk.gov.hmcts.ccd.sdk.api.HasCaseRole;
+import uk.gov.hmcts.ccd.sdk.api.HasCaseTypePerm;
 import uk.gov.hmcts.ccd.sdk.api.Permission;
 
-class ConfigGenerator<T, S, R extends HasRole> {
+class ConfigGenerator<T, S, R extends HasCaseTypePerm, C extends HasCaseRole> {
 
   private final Reflections reflections;
   private final String basePackage;
@@ -65,20 +66,20 @@ class ConfigGenerator<T, S, R extends HasRole> {
   }
 
   @SneakyThrows
-  public ResolvedCCDConfig<T, S, R> resolveCCDConfig(CCDConfig<T, S, R> config) {
+  public ResolvedCCDConfig<T, S, R, C> resolveCCDConfig(CCDConfig<T, S, R, C> config) {
     Class<?>[] typeArgs = TypeResolver.resolveRawArguments(CCDConfig.class, config.getClass());
     Set<S> allStates = Set.of(((Class<S>)typeArgs[1]).getEnumConstants());
     ConfigBuilderImpl builder = new ConfigBuilderImpl(typeArgs[0], allStates);
     config.configure(builder);
     List<Event> events = builder.getEvents();
     Map<Class, Integer> types = resolve(typeArgs[0], basePackage);
-    return new ResolvedCCDConfig(typeArgs[0], typeArgs[1], typeArgs[2], builder, events, types,
+    return new ResolvedCCDConfig(typeArgs[0], typeArgs[1], typeArgs[2], typeArgs[3], builder, events, types,
         builder.environment, allStates);
   }
 
-  private void writeConfig(File outputfolder, ResolvedCCDConfig<T, S, R> config) {
+  private void writeConfig(File outputfolder, ResolvedCCDConfig<T, S, R, C> config) {
     outputfolder.mkdirs();
-    new CaseEventGenerator<T, S, R>().writeEvents(outputfolder, config);
+    new CaseEventGenerator<T, S, R, C>().writeEvents(outputfolder, config);
     CaseEventToFieldsGenerator.writeEvents(outputfolder, config.events, config.builder.caseType);
     ComplexTypeGenerator.generate(outputfolder, config.builder.caseType, config.types);
     CaseEventToComplexTypesGenerator.writeEvents(outputfolder, config.events);
@@ -97,7 +98,7 @@ class ConfigGenerator<T, S, R extends HasRole> {
     AuthorisationCaseStateGenerator.generate(outputfolder, config, eventPermissions);
     WorkBasketGenerator.generate(outputfolder, config.builder.caseType, config.builder);
     SearchFieldAndResultGenerator.generate(outputfolder, config.builder.caseType, config.builder);
-    CaseRoleGenerator.generate(outputfolder, config.builder);
+    CaseRoleGenerator.generate(outputfolder, config);
   }
 
   @SneakyThrows
@@ -168,7 +169,7 @@ class ConfigGenerator<T, S, R extends HasRole> {
   }
 
   Table<String, R, Set<Permission>> buildEventPermissions(
-      ConfigBuilderImpl<T, S, R> builder, List<Event<T, R, S>> events, Set<S> allStates) {
+      ConfigBuilderImpl<T, S, R, C> builder, List<Event<T, R, S>> events, Set<S> allStates) {
 
 
     Table<String, R, Set<Permission>> eventRolePermissions = HashBasedTable.create();

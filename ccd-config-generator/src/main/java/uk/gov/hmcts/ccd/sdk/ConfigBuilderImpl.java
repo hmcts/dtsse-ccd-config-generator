@@ -13,13 +13,13 @@ import java.util.Hashtable;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import uk.gov.hmcts.ccd.sdk.api.CaseRole;
 import uk.gov.hmcts.ccd.sdk.api.ConfigBuilder;
 import uk.gov.hmcts.ccd.sdk.api.Event;
 import uk.gov.hmcts.ccd.sdk.api.EventTypeBuilder;
 import uk.gov.hmcts.ccd.sdk.api.Field;
 import uk.gov.hmcts.ccd.sdk.api.Field.FieldBuilder;
-import uk.gov.hmcts.ccd.sdk.api.HasRole;
+import uk.gov.hmcts.ccd.sdk.api.HasCaseRole;
+import uk.gov.hmcts.ccd.sdk.api.HasCaseTypePerm;
 import uk.gov.hmcts.ccd.sdk.api.Permission;
 import uk.gov.hmcts.ccd.sdk.api.RoleBuilder;
 import uk.gov.hmcts.ccd.sdk.api.Search.SearchBuilder;
@@ -29,7 +29,7 @@ import uk.gov.hmcts.ccd.sdk.api.Webhook;
 import uk.gov.hmcts.ccd.sdk.api.WebhookConvention;
 import uk.gov.hmcts.ccd.sdk.api.WorkBasket.WorkBasketBuilder;
 
-class ConfigBuilderImpl<T, S, R extends HasRole> implements ConfigBuilder<T, S, R> {
+class ConfigBuilderImpl<T, S, R extends HasCaseTypePerm, C extends HasCaseRole> implements ConfigBuilder<T, S, R, C> {
 
   private final ImmutableSet<S> allStates;
   public String caseType = "";
@@ -45,7 +45,6 @@ class ConfigBuilderImpl<T, S, R extends HasRole> implements ConfigBuilder<T, S, 
   public final List<SearchBuilder> searchResultFields = Lists.newArrayList();
   public final List<SearchBuilder> searchInputFields = Lists.newArrayList();
   public final Map<String, String> roleHierarchy = new Hashtable<>();
-  public final Set<CaseRole.CaseRoleBuilder> caseRoles = Sets.newHashSet();
 
   private Class caseData;
   private WebhookConvention webhookConvention = this::defaultWebhookConvention;
@@ -220,11 +219,6 @@ class ConfigBuilderImpl<T, S, R extends HasRole> implements ConfigBuilder<T, S, 
         }
       }
     };
-  }
-
-  @Override
-  public void add(Set<CaseRole.CaseRoleBuilder> caseRoleBuilders) {
-    caseRoles.addAll(caseRoleBuilders);
   }
 
   private WorkBasketBuilder getWorkBasketBuilder(List<WorkBasketBuilder> workBasketInputFields) {

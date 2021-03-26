@@ -1,6 +1,6 @@
 package uk.gov.hmcts.ccd.sdk.api;
 
-public interface EventTypeBuilder<T, R extends HasRole, S> {
+public interface EventTypeBuilder<T, R extends HasCaseTypePerm, S> {
 
   Event.EventBuilder<T, R, S> forState(S state);
 

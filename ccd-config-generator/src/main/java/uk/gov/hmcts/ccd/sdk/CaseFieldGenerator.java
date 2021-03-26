@@ -23,7 +23,8 @@ import uk.gov.hmcts.ccd.sdk.api.CCD;
 import uk.gov.hmcts.ccd.sdk.api.ComplexType;
 import uk.gov.hmcts.ccd.sdk.api.Event;
 import uk.gov.hmcts.ccd.sdk.api.Field.FieldBuilder;
-import uk.gov.hmcts.ccd.sdk.api.HasRole;
+import uk.gov.hmcts.ccd.sdk.api.HasCaseRole;
+import uk.gov.hmcts.ccd.sdk.api.HasCaseTypePerm;
 import uk.gov.hmcts.ccd.sdk.api.Label;
 import uk.gov.hmcts.ccd.sdk.type.FieldType;
 
@@ -33,8 +34,8 @@ class CaseFieldGenerator {
   // so eg. if a field changes type it gets updated.
   private static final ImmutableSet<String> OVERWRITES_FIELDS = ImmutableSet.of();
 
-  public static <T, S, R extends HasRole> void generateCaseFields(
-      File outputFolder, ResolvedCCDConfig<T, S, R> config) {
+  public static <T, S, R extends HasCaseTypePerm, C extends HasCaseRole> void generateCaseFields(
+      File outputFolder, ResolvedCCDConfig<T, S, R, C> config) {
     List<Map<String, Object>> fields = toComplex(config.typeArg, config.builder.caseType);
 
     Map<String, Object> history = getField(config.builder.caseType, "caseHistory");
@@ -181,8 +182,8 @@ class CaseFieldGenerator {
     return (Class) parameterizedType.getActualTypeArguments()[0];
   }
 
-  private static <T, S, R extends HasRole> List<Map<String, Object>> getExplicitFields(
-      String caseType, List<Event<T, R, S>> events, ConfigBuilderImpl<T, S, R> builder) {
+  private static <T, S, R extends HasCaseTypePerm, C extends HasCaseRole> List<Map<String, Object>> getExplicitFields(
+      String caseType, List<Event<T, R, S>> events, ConfigBuilderImpl<T, S, R, C> builder) {
     Map<String, uk.gov.hmcts.ccd.sdk.api.Field> explicitFields = Maps.newHashMap();
     for (Event event : events) {
       List<uk.gov.hmcts.ccd.sdk.api.Field.FieldBuilder> fc = event.getFields().build()

@@ -8,15 +8,18 @@ import java.nio.file.Paths;
 import java.util.List;
 import java.util.Map;
 import uk.gov.hmcts.ccd.sdk.JsonUtils.AddMissing;
-import uk.gov.hmcts.ccd.sdk.api.HasRole;
+import uk.gov.hmcts.ccd.sdk.api.HasCaseRole;
+import uk.gov.hmcts.ccd.sdk.api.HasCaseTypePerm;
 import uk.gov.hmcts.ccd.sdk.api.Tab;
 import uk.gov.hmcts.ccd.sdk.api.Tab.TabBuilder;
 import uk.gov.hmcts.ccd.sdk.api.TabField;
 
 class CaseTypeTabGenerator {
 
-  public static <T, R extends HasRole, S> void generate(File root, String caseType,
-      ConfigBuilderImpl<T, S, R> builder) {
+  public static <T, R extends HasCaseTypePerm, S, C extends HasCaseRole> void generate(
+      File root,
+      String caseType,
+      ConfigBuilderImpl<T, S, R, C> builder) {
 
     List<Map<String, Object>> result = Lists.newArrayList();
     result.add(buildField(caseType, "CaseHistory", "caseHistory",

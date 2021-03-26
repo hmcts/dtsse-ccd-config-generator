@@ -6,7 +6,7 @@ import uk.gov.hmcts.ccd.sdk.api.Search.SearchBuilder;
 import uk.gov.hmcts.ccd.sdk.api.Tab.TabBuilder;
 import uk.gov.hmcts.ccd.sdk.api.WorkBasket.WorkBasketBuilder;
 
-public interface ConfigBuilder<T, S, R extends HasRole> {
+public interface ConfigBuilder<T, S, R extends HasCaseTypePerm, C extends HasCaseRole> {
 
   EventTypeBuilder<T, R, S> event(String id);
 
@@ -44,6 +44,4 @@ public interface ConfigBuilder<T, S, R extends HasRole> {
   SearchBuilder<T, R> searchInputFields();
 
   RoleBuilder<R> role(R... role);
-
-  void add(Set<CaseRole.CaseRoleBuilder> caseRoleBuilder);
 }

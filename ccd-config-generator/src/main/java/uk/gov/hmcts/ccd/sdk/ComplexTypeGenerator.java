@@ -11,7 +11,7 @@ import uk.gov.hmcts.ccd.sdk.api.ComplexType;
 
 class ComplexTypeGenerator {
 
-  public static void generate(File root, String caseType, Map<Class, Integer> types) {
+  public static void generate(File root, String caseType, Map<Class<?>, Integer> types) {
     File complexTypes = new File(root, "ComplexTypes");
     complexTypes.mkdir();
     types = types.entrySet().stream().filter(x -> !x.getKey().isEnum())

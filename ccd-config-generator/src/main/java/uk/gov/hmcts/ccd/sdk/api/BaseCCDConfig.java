@@ -7,13 +7,13 @@ import uk.gov.hmcts.ccd.sdk.api.Tab.TabBuilder;
 import uk.gov.hmcts.ccd.sdk.api.WorkBasket.WorkBasketBuilder;
 
 public abstract class BaseCCDConfig<Model, State,
-    Role extends HasRole> implements
-    CCDConfig<Model, State, Role>, ConfigBuilder<Model, State, Role> {
+    Role extends HasCaseTypePerm, CaseRole extends HasCaseRole> implements
+    CCDConfig<Model, State, Role, CaseRole>, ConfigBuilder<Model, State, Role, CaseRole> {
 
-  private ConfigBuilder<Model, State, Role> builder;
+  private ConfigBuilder<Model, State, Role, CaseRole> builder;
 
   @Override
-  public void configure(ConfigBuilder<Model, State, Role> builder) {
+  public void configure(ConfigBuilder<Model, State, Role, CaseRole> builder) {
     this.builder = builder;
     configure();
   }
@@ -109,11 +109,6 @@ public abstract class BaseCCDConfig<Model, State,
   @Override
   public RoleBuilder<Role> role(Role... roles) {
     return builder.role(roles);
-  }
-
-  @Override
-  public void add(Set<CaseRole.CaseRoleBuilder> caseRoleBuilders) {
-    builder.add(caseRoleBuilders);
   }
 }
 

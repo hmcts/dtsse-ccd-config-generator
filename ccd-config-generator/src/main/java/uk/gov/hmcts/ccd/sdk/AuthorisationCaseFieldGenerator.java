@@ -22,6 +22,8 @@ import uk.gov.hmcts.ccd.sdk.JsonUtils.CRUDMerger;
 import uk.gov.hmcts.ccd.sdk.api.Event;
 import uk.gov.hmcts.ccd.sdk.api.Field;
 import uk.gov.hmcts.ccd.sdk.api.Field.FieldBuilder;
+import uk.gov.hmcts.ccd.sdk.api.HasCaseRole;
+import uk.gov.hmcts.ccd.sdk.api.HasCaseTypePerm;
 import uk.gov.hmcts.ccd.sdk.api.HasRole;
 import uk.gov.hmcts.ccd.sdk.api.Permission;
 import uk.gov.hmcts.ccd.sdk.api.Search;
@@ -36,8 +38,8 @@ import uk.gov.hmcts.ccd.sdk.api.WorkBasketField;
 
 class AuthorisationCaseFieldGenerator {
 
-  public static <T, S, R extends HasRole> void generate(
-      File root, ResolvedCCDConfig<T, S, R> config, Table<String, R,
+  public static <T, S, R extends HasCaseTypePerm, C extends HasCaseRole> void generate(
+      File root, ResolvedCCDConfig<T, S, R, C> config, Table<String, R,
       Set<Permission>> eventRolePermissions) {
 
     Table<String, String, Set<Permission>> fieldRolePermissions = HashBasedTable.create();

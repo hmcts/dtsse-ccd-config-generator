@@ -16,13 +16,15 @@ import java.util.Map.Entry;
 import java.util.Set;
 import uk.gov.hmcts.ccd.sdk.JsonUtils.CRUDMerger;
 import uk.gov.hmcts.ccd.sdk.api.Event;
+import uk.gov.hmcts.ccd.sdk.api.HasCaseRole;
+import uk.gov.hmcts.ccd.sdk.api.HasCaseTypePerm;
 import uk.gov.hmcts.ccd.sdk.api.HasRole;
 import uk.gov.hmcts.ccd.sdk.api.Permission;
 
 class AuthorisationCaseStateGenerator {
 
-  public static <T, S, R extends HasRole> void generate(
-      File root, ResolvedCCDConfig<T, S, R> config, Table<String, R,
+  public static <T, S, R extends HasCaseTypePerm, C extends HasCaseRole> void generate(
+      File root, ResolvedCCDConfig<T, S, R, C> config, Table<String, R,
       Set<Permission>> eventRolePermissions) {
 
     Table<S, R, Set<Permission>> stateRolePermissions = HashBasedTable.create();

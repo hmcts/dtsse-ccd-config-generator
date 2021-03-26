@@ -21,10 +21,10 @@ import static uk.gov.hmcts.reform.fpl.enums.UserRole.SYSTEM_UPDATE;
 
 
 import com.google.common.base.CaseFormat;
-import com.google.common.collect.Sets;
+import java.util.EnumSet;
 import uk.gov.hmcts.ccd.sdk.api.BaseCCDConfig;
-import uk.gov.hmcts.ccd.sdk.api.CaseRole;
 import uk.gov.hmcts.ccd.sdk.api.Webhook;
+import uk.gov.hmcts.reform.fpl.enums.CaseRoles;
 import uk.gov.hmcts.reform.fpl.enums.State;
 import uk.gov.hmcts.reform.fpl.enums.UserRole;
 import uk.gov.hmcts.reform.fpl.model.CaseData;
@@ -32,7 +32,7 @@ import uk.gov.hmcts.reform.fpl.model.Judge;
 
 // Found and invoked by the config generator.
 // The CaseData type parameter tells the generator which class represents your case model.
-public class CCDConfig extends BaseCCDConfig<CaseData, State, UserRole> {
+public class CCDConfig extends BaseCCDConfig<CaseData, State, UserRole, CaseRoles> {
 
     protected String environment() {
         return "production";
@@ -54,11 +54,6 @@ public class CCDConfig extends BaseCCDConfig<CaseData, State, UserRole> {
 
         // Admin gets CRU on everything in Open state.
         grant(Open, CRU, HMCTS_ADMIN);
-
-        add(newHashSet(CaseRole.builder()
-            .id("[CREATOR]")
-            .name("Creator role")
-            .description("Creator description")));
 
         // Local Authority can view the history of all events in the Open state.
         grantHistory(Open, LOCAL_AUTHORITY);
