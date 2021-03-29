@@ -21,6 +21,8 @@ public @interface CCD {
 
   String typeParameterOverride() default "";
 
+  Class<? extends HasAccessControl>[] access() default {};
+
   boolean showSummaryContent() default false;
 
   boolean ignore() default false;
