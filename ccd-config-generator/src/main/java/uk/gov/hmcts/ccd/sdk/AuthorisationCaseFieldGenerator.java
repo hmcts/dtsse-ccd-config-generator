@@ -24,7 +24,7 @@ import org.objenesis.Objenesis;
 import org.objenesis.ObjenesisStd;
 import org.reflections.ReflectionUtils;
 import uk.gov.hmcts.ccd.sdk.JsonUtils.CRUDMerger;
-import uk.gov.hmcts.ccd.sdk.api.Access;
+import uk.gov.hmcts.ccd.sdk.api.CCD;
 import uk.gov.hmcts.ccd.sdk.api.Event;
 import uk.gov.hmcts.ccd.sdk.api.Field;
 import uk.gov.hmcts.ccd.sdk.api.Field.FieldBuilder;
@@ -132,13 +132,13 @@ class AuthorisationCaseFieldGenerator {
 
     // Add permissions added to the model with @Access annotation
     for (java.lang.reflect.Field fieldWithAccess : ReflectionUtils.getAllFields(config.typeArg)) {
-      Access access = fieldWithAccess.getAnnotation(Access.class);
-      if (null != access) {
+      CCD ccdAnnotation = fieldWithAccess.getAnnotation(CCD.class);
+      if (null != ccdAnnotation) {
         JsonProperty j = fieldWithAccess.getAnnotation(JsonProperty.class);
         String id = j != null ? j.value() : fieldWithAccess.getName();
 
         Objenesis objenesis = new ObjenesisStd();
-        for (Class<? extends HasAccessControl> klass : access.value()) {
+        for (Class<? extends HasAccessControl> klass : ccdAnnotation.access()) {
           HasAccessControl accessHolder = objenesis.newInstance(klass);
           SetMultimap<HasRole, Permission> roleGrants = accessHolder.getGrants();
 
