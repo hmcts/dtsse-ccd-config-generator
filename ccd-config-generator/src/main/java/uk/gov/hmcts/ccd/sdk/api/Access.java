@@ -5,5 +5,5 @@ import java.lang.annotation.RetentionPolicy;
 
 @Retention(RetentionPolicy.RUNTIME)
 public @interface Access {
-  Class<? extends HasAccessControl> value();
+  Class<? extends HasAccessControl>[] value();
 }

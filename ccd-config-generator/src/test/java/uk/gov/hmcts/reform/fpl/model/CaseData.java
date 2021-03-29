@@ -61,7 +61,7 @@ public class CaseData {
     @NotBlank(message = "Enter a case name")
     private final String caseName;
     @CCD(regex = ".*")
-    @Access(BulkScan.class)
+    @Access({ BulkScan.class })
     private final String gatekeeperEmail;
     private final String caseLocalAuthority;
     private final Set<RepresentativeRole> partyTypes;
