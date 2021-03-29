@@ -2,10 +2,12 @@ package uk.gov.hmcts.ccd.sdk;
 
 import static uk.gov.hmcts.ccd.sdk.api.Permission.CRU;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.google.common.collect.HashBasedTable;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
+import com.google.common.collect.SetMultimap;
 import com.google.common.collect.Sets;
 import com.google.common.collect.Table;
 import java.io.File;
@@ -18,10 +20,15 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
+import org.objenesis.Objenesis;
+import org.objenesis.ObjenesisStd;
+import org.reflections.ReflectionUtils;
 import uk.gov.hmcts.ccd.sdk.JsonUtils.CRUDMerger;
+import uk.gov.hmcts.ccd.sdk.api.CCD;
 import uk.gov.hmcts.ccd.sdk.api.Event;
 import uk.gov.hmcts.ccd.sdk.api.Field;
 import uk.gov.hmcts.ccd.sdk.api.Field.FieldBuilder;
+import uk.gov.hmcts.ccd.sdk.api.HasAccessControl;
 import uk.gov.hmcts.ccd.sdk.api.HasRole;
 import uk.gov.hmcts.ccd.sdk.api.Permission;
 import uk.gov.hmcts.ccd.sdk.api.Search;
@@ -116,6 +123,25 @@ class AuthorisationCaseFieldGenerator {
             if (!fieldRolePermissions.contains(field.getId(), role)) {
               fieldRolePermissions.put(field.getId(), role, Collections.singleton(Permission.R));
             }
+          }
+        }
+      }
+    }
+
+    // Add permissions added to the case model with the @CCD annotation
+    for (java.lang.reflect.Field fieldWithAccess : ReflectionUtils.getAllFields(config.typeArg)) {
+      CCD ccdAnnotation = fieldWithAccess.getAnnotation(CCD.class);
+      if (null != ccdAnnotation) {
+        JsonProperty j = fieldWithAccess.getAnnotation(JsonProperty.class);
+        String id = j != null ? j.value() : fieldWithAccess.getName();
+
+        Objenesis objenesis = new ObjenesisStd();
+        for (Class<? extends HasAccessControl> klass : ccdAnnotation.access()) {
+          HasAccessControl accessHolder = objenesis.newInstance(klass);
+          SetMultimap<HasRole, Permission> roleGrants = accessHolder.getGrants();
+
+          for (HasRole key : roleGrants.keys()) {
+            fieldRolePermissions.put(id, key.getRole(), roleGrants.get(key));
           }
         }
       }
