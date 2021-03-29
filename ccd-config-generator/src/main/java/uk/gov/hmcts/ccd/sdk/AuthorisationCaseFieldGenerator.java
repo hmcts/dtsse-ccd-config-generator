@@ -47,7 +47,7 @@ class AuthorisationCaseFieldGenerator {
 
   public static <T, S, R extends HasCaseTypePerm, C extends HasCaseRole> void generate(
       File root, ResolvedCCDConfig<T, S, R, C> config, Table<String, R,
-            Set<Permission>> eventRolePermissions) {
+      Set<Permission>> eventRolePermissions) {
 
     Table<String, String, Set<Permission>> fieldRolePermissions = HashBasedTable.create();
     // Add field permissions based on event permissions.
