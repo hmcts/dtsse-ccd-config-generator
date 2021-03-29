@@ -9,6 +9,6 @@ import uk.gov.hmcts.ccd.sdk.api.CCDConfig;
 
 public class AppTest {
     @Test public void testGenerateConfigCompiles() {
-      CCDConfig<?, ?, ?> config;
+      CCDConfig<?, ?, ?, ?> config;
     }
 }

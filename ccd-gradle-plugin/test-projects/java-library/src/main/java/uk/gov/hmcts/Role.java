@@ -1,8 +1,8 @@
 package uk.gov.hmcts;
 
-import uk.gov.hmcts.ccd.sdk.api.HasRole;
+import uk.gov.hmcts.ccd.sdk.api.HasCaseTypePerm;
 
-public enum Role implements HasRole {
+public enum Role implements HasCaseTypePerm {
   Foo;
 
   @Override

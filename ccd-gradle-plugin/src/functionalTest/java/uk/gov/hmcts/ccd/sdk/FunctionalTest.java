@@ -27,7 +27,6 @@ public class FunctionalTest {
   }
 
   @Test
-  @Ignore //TODO: The classes being used for this test need to be recompiled for the latest changes
   public void testEmptyProject() throws IOException {
     FileUtils.copyDirectory(new File("test-projects/java-library"),
         testProjectDir.getRoot());

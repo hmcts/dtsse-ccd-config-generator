@@ -1,4 +1,4 @@
-package uk.gov.hmcts.reform.fpl.enums;
+package uk.gov.hmcts;
 
 import uk.gov.hmcts.ccd.sdk.api.HasCaseRole;
 
