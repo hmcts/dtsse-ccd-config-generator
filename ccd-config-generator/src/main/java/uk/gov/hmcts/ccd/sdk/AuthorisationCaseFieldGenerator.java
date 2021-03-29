@@ -138,11 +138,13 @@ class AuthorisationCaseFieldGenerator {
         String id = j != null ? j.value() : fieldWithAccess.getName();
 
         Objenesis objenesis = new ObjenesisStd();
-        HasAccessControl<HasRole> accessHolder = objenesis.newInstance(access.value());
-        SetMultimap<HasRole, Permission> roleGrants = accessHolder.getGrants();
+        for (Class<? extends HasAccessControl> klass : access.value()) {
+          HasAccessControl accessHolder = objenesis.newInstance(klass);
+          SetMultimap<HasRole, Permission> roleGrants = accessHolder.getGrants();
 
-        for (HasRole key : roleGrants.keys()) {
-          fieldRolePermissions.put(id, key.getRole(), roleGrants.get(key));
+          for (HasRole key : roleGrants.keys()) {
+            fieldRolePermissions.put(id, key.getRole(), roleGrants.get(key));
+          }
         }
       }
     }
