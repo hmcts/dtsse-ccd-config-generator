@@ -9,7 +9,9 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import uk.gov.hmcts.ccd.sdk.api.CCD;
+import uk.gov.hmcts.ccd.sdk.api.Access;
 import uk.gov.hmcts.ccd.sdk.type.DynamicList;
+import uk.gov.hmcts.reform.fpl.access.BulkScan;
 import uk.gov.hmcts.reform.fpl.enums.C2ApplicationType;
 import uk.gov.hmcts.reform.fpl.enums.EPOType;
 import uk.gov.hmcts.reform.fpl.enums.RepresentativeRole;
@@ -59,6 +61,7 @@ public class CaseData {
     @NotBlank(message = "Enter a case name")
     private final String caseName;
     @CCD(regex = ".*")
+    @Access(BulkScan.class)
     private final String gatekeeperEmail;
     private final String caseLocalAuthority;
     private final Set<RepresentativeRole> partyTypes;
