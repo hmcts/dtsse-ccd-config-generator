@@ -3,8 +3,13 @@ package uk.gov.hmcts.ccd.sdk;
 import static uk.gov.hmcts.ccd.sdk.api.Permission.CRU;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
-import com.google.common.collect.*;
-
+import com.google.common.collect.HashBasedTable;
+import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.Iterables;
+import com.google.common.collect.Lists;
+import com.google.common.collect.SetMultimap;
+import com.google.common.collect.Sets;
+import com.google.common.collect.Table;
 import java.io.File;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -15,22 +20,34 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
-
 import org.objenesis.Objenesis;
 import org.objenesis.ObjenesisStd;
 import org.reflections.ReflectionUtils;
 import uk.gov.hmcts.ccd.sdk.JsonUtils.CRUDMerger;
-import uk.gov.hmcts.ccd.sdk.api.*;
+import uk.gov.hmcts.ccd.sdk.api.Access;
+import uk.gov.hmcts.ccd.sdk.api.Event;
+import uk.gov.hmcts.ccd.sdk.api.Field;
 import uk.gov.hmcts.ccd.sdk.api.Field.FieldBuilder;
+import uk.gov.hmcts.ccd.sdk.api.HasAccessControl;
+import uk.gov.hmcts.ccd.sdk.api.HasCaseRole;
+import uk.gov.hmcts.ccd.sdk.api.HasCaseTypePerm;
+import uk.gov.hmcts.ccd.sdk.api.HasRole;
+import uk.gov.hmcts.ccd.sdk.api.Permission;
+import uk.gov.hmcts.ccd.sdk.api.Search;
 import uk.gov.hmcts.ccd.sdk.api.Search.SearchBuilder;
+import uk.gov.hmcts.ccd.sdk.api.SearchField;
+import uk.gov.hmcts.ccd.sdk.api.Tab;
 import uk.gov.hmcts.ccd.sdk.api.Tab.TabBuilder;
+import uk.gov.hmcts.ccd.sdk.api.TabField;
+import uk.gov.hmcts.ccd.sdk.api.WorkBasket;
 import uk.gov.hmcts.ccd.sdk.api.WorkBasket.WorkBasketBuilder;
+import uk.gov.hmcts.ccd.sdk.api.WorkBasketField;
 
 class AuthorisationCaseFieldGenerator {
 
   public static <T, S, R extends HasCaseTypePerm, C extends HasCaseRole> void generate(
       File root, ResolvedCCDConfig<T, S, R, C> config, Table<String, R,
-      Set<Permission>> eventRolePermissions) {
+            Set<Permission>> eventRolePermissions) {
 
     Table<String, String, Set<Permission>> fieldRolePermissions = HashBasedTable.create();
     // Add field permissions based on event permissions.
