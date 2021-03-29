@@ -304,6 +304,8 @@ public class FPLConfigGenerationTests {
                     File f = it.next();
                     System.out.println(f.getPath());
                 }
+            } else if (!actual.exists()) {
+              System.out.println(actual.getName() + "Does not exist");
             }
             throw e;
         }

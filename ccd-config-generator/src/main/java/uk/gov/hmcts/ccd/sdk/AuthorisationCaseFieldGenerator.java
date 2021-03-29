@@ -2,12 +2,9 @@ package uk.gov.hmcts.ccd.sdk;
 
 import static uk.gov.hmcts.ccd.sdk.api.Permission.CRU;
 
-import com.google.common.collect.HashBasedTable;
-import com.google.common.collect.ImmutableSet;
-import com.google.common.collect.Iterables;
-import com.google.common.collect.Lists;
-import com.google.common.collect.Sets;
-import com.google.common.collect.Table;
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.google.common.collect.*;
+
 import java.io.File;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -18,21 +15,19 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
+
+import org.objenesis.Objenesis;
+import org.objenesis.ObjenesisStd;
+import org.reflections.ReflectionUtils;
 import uk.gov.hmcts.ccd.sdk.JsonUtils.CRUDMerger;
-import uk.gov.hmcts.ccd.sdk.api.Event;
-import uk.gov.hmcts.ccd.sdk.api.Field;
+import uk.gov.hmcts.ccd.sdk.api.*;
 import uk.gov.hmcts.ccd.sdk.api.Field.FieldBuilder;
 import uk.gov.hmcts.ccd.sdk.api.HasRole;
 import uk.gov.hmcts.ccd.sdk.api.Permission;
 import uk.gov.hmcts.ccd.sdk.api.Search;
 import uk.gov.hmcts.ccd.sdk.api.Search.SearchBuilder;
-import uk.gov.hmcts.ccd.sdk.api.SearchField;
-import uk.gov.hmcts.ccd.sdk.api.Tab;
 import uk.gov.hmcts.ccd.sdk.api.Tab.TabBuilder;
-import uk.gov.hmcts.ccd.sdk.api.TabField;
-import uk.gov.hmcts.ccd.sdk.api.WorkBasket;
 import uk.gov.hmcts.ccd.sdk.api.WorkBasket.WorkBasketBuilder;
-import uk.gov.hmcts.ccd.sdk.api.WorkBasketField;
 
 class AuthorisationCaseFieldGenerator {
 
@@ -117,6 +112,23 @@ class AuthorisationCaseFieldGenerator {
               fieldRolePermissions.put(field.getId(), role, Collections.singleton(Permission.R));
             }
           }
+        }
+      }
+    }
+
+    // Add permissions added to the model with @Access annotation
+    for (java.lang.reflect.Field fieldWithAccess : ReflectionUtils.getAllFields(config.typeArg)) {
+      Access access = fieldWithAccess.getAnnotation(Access.class);
+      if (null != access) {
+        JsonProperty j = fieldWithAccess.getAnnotation(JsonProperty.class);
+        String id = j != null ? j.value() : fieldWithAccess.getName();
+
+        Objenesis objenesis = new ObjenesisStd();
+        HasAccessControl<HasRole> accessHolder = objenesis.newInstance(access.value());
+        SetMultimap<HasRole, Permission> roleGrants = accessHolder.getGrants();
+
+        for (HasRole key : roleGrants.keys()) {
+          fieldRolePermissions.put(id, key.getRole(), roleGrants.get(key));
         }
       }
     }
