@@ -128,7 +128,7 @@ class AuthorisationCaseFieldGenerator {
       }
     }
 
-    // Add permissions added to the model with @Access annotation
+    // Add permissions added to the case model with the @CCD annotation
     for (java.lang.reflect.Field fieldWithAccess : ReflectionUtils.getAllFields(config.typeArg)) {
       CCD ccdAnnotation = fieldWithAccess.getAnnotation(CCD.class);
       if (null != ccdAnnotation) {
