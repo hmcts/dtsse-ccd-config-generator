@@ -139,13 +139,15 @@ class AuthorisationCaseFieldGenerator {
         for (Class<? extends HasAccessControl> klass : ccdAnnotation.access()) {
           HasAccessControl accessHolder = objenesis.newInstance(klass);
           SetMultimap<HasRole, Permission> roleGrants = accessHolder.getGrants();
-
           for (HasRole key : roleGrants.keys()) {
+            Set<Permission> perms = Sets.newHashSet();
+            perms.addAll(roleGrants.get(key));
+
             if (fieldRolePermissions.contains(id, key.getRole())) {
-              fieldRolePermissions.get(id, key.getRole()).addAll(roleGrants.get(key));
-            } else {
-              fieldRolePermissions.put(id, key.getRole(), roleGrants.get(key));
+              perms.addAll(fieldRolePermissions.get(id, key.getRole()));
             }
+
+            fieldRolePermissions.put(id, key.getRole(), perms);
           }
         }
       }
