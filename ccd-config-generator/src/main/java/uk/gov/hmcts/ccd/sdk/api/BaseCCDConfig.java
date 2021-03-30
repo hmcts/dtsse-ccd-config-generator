@@ -111,9 +111,5 @@ public abstract class BaseCCDConfig<Model, State,
     return builder.role(roles);
   }
 
-  @Override
-  public void add(Set<CaseRole.CaseRoleBuilder> caseRoleBuilders) {
-    builder.add(caseRoleBuilders);
-  }
 }
 
