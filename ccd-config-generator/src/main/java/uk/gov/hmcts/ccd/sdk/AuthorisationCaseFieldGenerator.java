@@ -141,7 +141,11 @@ class AuthorisationCaseFieldGenerator {
           SetMultimap<HasRole, Permission> roleGrants = accessHolder.getGrants();
 
           for (HasRole key : roleGrants.keys()) {
-            fieldRolePermissions.put(id, key.getRole(), roleGrants.get(key));
+            if (fieldRolePermissions.contains(id, key.getRole())) {
+              fieldRolePermissions.get(id, key.getRole()).addAll(roleGrants.get(key));
+            } else {
+              fieldRolePermissions.put(id, key.getRole(), roleGrants.get(key));
+            }
           }
         }
       }
