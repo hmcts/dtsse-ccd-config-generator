@@ -19,23 +19,32 @@ class StateGenerator {
     int i = 1;
     if (statetype.isEnum()) {
       for (Object enumConstant : statetype.getEnumConstants()) {
-        Map<String, Object> field = Maps.newHashMap();
-        result.add(field);
-        field.put("LiveFrom", "01/01/2017");
-        field.put("CaseTypeID", caseType);
-        field.put("ID", enumConstant);
-
-        CCD ccd = statetype.getField(enumConstant.toString()).getAnnotation(CCD.class);
-        String name = ccd != null && !Strings.isNullOrEmpty(ccd.name()) ? ccd.name() :
-            enumConstant.toString();
-        String desc = ccd != null ? ccd.label() : "";
-        field.put("Name", name);
-        field.put("Description", desc);
+        Map<String, Object> field = enumToJsonMap(caseType, statetype, enumConstant,
+            enumConstant.toString());
         field.put("DisplayOrder", i++);
+        result.add(field);
       }
     }
 
     Path output = Paths.get(root.getPath(), "State.json");
     JsonUtils.mergeInto(output, result, new JsonUtils.AddMissing(), "ID");
+  }
+
+  @SneakyThrows
+  public static Map<String, Object> enumToJsonMap(String caseType, Class<?> enumType,
+                                                  Object enumConstant, String id) {
+    Map<String, Object> field = Maps.newHashMap();
+    field.put("LiveFrom", "01/01/2017");
+    field.put("CaseTypeID", caseType);
+    field.put("ID", id);
+
+    CCD ccd = enumType.getField(enumConstant.toString()).getAnnotation(CCD.class);
+    String name = ccd != null && !Strings.isNullOrEmpty(ccd.name()) ? ccd.name() :
+        enumConstant.toString();
+    String desc = ccd != null ? ccd.label() : "";
+    field.put("Name", name);
+    field.put("Description", desc);
+
+    return field;
   }
 }

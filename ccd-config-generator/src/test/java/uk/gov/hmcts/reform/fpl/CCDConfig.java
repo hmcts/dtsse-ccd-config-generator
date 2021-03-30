@@ -21,9 +21,7 @@ import static uk.gov.hmcts.reform.fpl.enums.UserRole.SYSTEM_UPDATE;
 
 
 import com.google.common.base.CaseFormat;
-import com.google.common.collect.Sets;
 import uk.gov.hmcts.ccd.sdk.api.BaseCCDConfig;
-import uk.gov.hmcts.ccd.sdk.api.CaseRole;
 import uk.gov.hmcts.ccd.sdk.api.Webhook;
 import uk.gov.hmcts.reform.fpl.enums.State;
 import uk.gov.hmcts.reform.fpl.enums.UserRole;
@@ -54,11 +52,6 @@ public class CCDConfig extends BaseCCDConfig<CaseData, State, UserRole> {
 
         // Admin gets CRU on everything in Open state.
         grant(Open, CRU, HMCTS_ADMIN);
-
-        add(newHashSet(CaseRole.builder()
-            .id("[CREATOR]")
-            .name("Creator role")
-            .description("Creator description")));
 
         // Local Authority can view the history of all events in the Open state.
         grantHistory(Open, LOCAL_AUTHORITY);

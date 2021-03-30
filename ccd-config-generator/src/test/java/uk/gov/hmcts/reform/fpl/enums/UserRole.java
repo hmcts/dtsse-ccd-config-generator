@@ -1,6 +1,7 @@
 package uk.gov.hmcts.reform.fpl.enums;
 
 import com.google.common.collect.ImmutableList;
+import uk.gov.hmcts.ccd.sdk.api.CCD;
 import uk.gov.hmcts.ccd.sdk.api.HasRole;
 
 import java.util.List;
@@ -14,7 +15,9 @@ public enum UserRole implements HasRole {
     SYSTEM_UPDATE("caseworker-publiclaw-systemupdate"),
     BULK_SCAN("caseworker-publiclaw-bulkscan", "R"),
     BULK_SCAN_SYSTEM_UPDATE("caseworker-publiclaw-bulkscansystemupdate"),
+    @CCD(name = "Solicitor", label = "Solicitor role")
     CCD_SOLICITOR("[SOLICITOR]"),
+    @CCD(name = "LA Solicitor", label = "La Solicitor role")
     CCD_LASOLICITOR("[LASOLICITOR]");
 
 
