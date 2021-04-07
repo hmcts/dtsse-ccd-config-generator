@@ -17,13 +17,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 public class UnitTest {
 
-    Reflections reflections;
-
-    @Before
-    public void setup() {
-      reflections = new Reflections("uk.gov.hmcts");
-    }
-
   @Test
   public void npeBug() {
     class NPEBug implements CCDConfig<CaseData, State, UserRole> {
@@ -38,9 +31,7 @@ public class UnitTest {
       }
     }
 
-    reflections = new Reflections("uk.gov.hmcts");
-
-    ConfigGenerator<CaseData, State, UserRole> generator = new ConfigGenerator<>(reflections, "uk.gov.hmcts");
+    ConfigGenerator<CaseData, State, UserRole> generator = new ConfigGenerator<>("uk.gov.hmcts");
     generator.resolveCCDConfig(new NPEBug());
   }
 
@@ -52,8 +43,7 @@ public class UnitTest {
       }
     }
 
-    reflections = new Reflections("uk.gov.hmcts");
-    ConfigGenerator<MissingComplex, State, UserRole> generator = new ConfigGenerator<>(reflections, "uk.gov.hmcts");
+    ConfigGenerator<MissingComplex, State, UserRole> generator = new ConfigGenerator<>("uk.gov.hmcts");
     ResolvedCCDConfig<MissingComplex, State, UserRole> resolved = generator.resolveCCDConfig(new MissingBug());
     assertThat(resolved.types).containsKeys(Applicant.class);
   }

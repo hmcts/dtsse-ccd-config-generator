@@ -53,12 +53,7 @@ public class FPLConfigGenerationTests {
     @BeforeClass
     public static void before() throws IOException, URISyntaxException {
         prodConfig = tmp.getRoot().toPath().resolve("production");
-        reflections = new Reflections(new ConfigurationBuilder()
-
-            .setUrls(ClasspathHelper.forPackage("uk.gov.hmcts"))
-                .setExpandSuperTypes(false));
-
-        generator = new ConfigGenerator(reflections, "uk.gov.hmcts");
+        generator = new ConfigGenerator("uk.gov.hmcts");
         generator.resolveConfig(tmp.getRoot());
         // Generate a second time to ensure existing config is correctly merged.
         generator.resolveConfig(tmp.getRoot());

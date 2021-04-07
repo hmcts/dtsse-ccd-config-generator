@@ -9,6 +9,8 @@ repositories {
     }
 }
 
+def springBootVersion = '2.4.3'
+
 dependencies {
     // Use JUnit test framework for unit tests
     testImplementation 'junit:junit:4.13.2'
@@ -16,7 +18,7 @@ dependencies {
     compileOnly group: 'org.projectlombok', name: 'lombok', version: '1.18.20'
 
     testAnnotationProcessor group: 'org.projectlombok', name: 'lombok', version: '1.18.10'
-    testCompileOnly group: 'org.projectlombok', name: 'lombok', version: '1.18.10'
+    testCompileOnly group: 'org.projectlombok', name: 'lombok', version: '1.18.20'
     testCompile group: 'javax.validation', name: 'validation-api', version: '2.0.1.Final'
     testCompile 'org.skyscreamer:jsonassert:1.5.0'
     testCompile 'com.google.guava:guava:30.1.1-jre'
@@ -24,6 +26,7 @@ dependencies {
     testCompile group: 'commons-lang', name: 'commons-lang', version: '2.6'
     testCompile group: 'commons-io', name: 'commons-io', version: '2.8.0'
     testCompile group: 'org.assertj', name: 'assertj-core', version: '3.19.0'
+    testImplementation group: 'org.springframework.boot', name: 'spring-boot-starter-test', version: springBootVersion
 
 
     testCompile group: 'org.springframework.boot', name: 'spring-boot-starter-mail', version: '2.4.4'
@@ -37,6 +40,8 @@ dependencies {
     compile 'com.google.guava:guava:30.1-jre'
 
     compile 'com.fasterxml.jackson.core:jackson-databind:2.12.2'
+
+
 }
 
 compileJava {
@@ -49,4 +54,3 @@ tasks.compileTestJava.inputs.files(
         rootProject.file('test-builds/fpl-ccd-configuration/service/src'),
         rootProject.file('test-builds/fpl-ccd-configuration/ccd-definition')
 )
-

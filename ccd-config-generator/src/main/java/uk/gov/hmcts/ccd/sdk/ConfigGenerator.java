@@ -27,6 +27,8 @@ import org.objenesis.Objenesis;
 import org.objenesis.ObjenesisStd;
 import org.reflections.ReflectionUtils;
 import org.reflections.Reflections;
+import org.reflections.util.ClasspathHelper;
+import org.reflections.util.ConfigurationBuilder;
 import uk.gov.hmcts.ccd.sdk.api.CCDConfig;
 import uk.gov.hmcts.ccd.sdk.api.Event;
 import uk.gov.hmcts.ccd.sdk.api.HasRole;
@@ -37,8 +39,10 @@ class ConfigGenerator<T, S, R extends HasRole> {
   private final Reflections reflections;
   private final String basePackage;
 
-  public ConfigGenerator(Reflections reflections, String basePackage) {
-    this.reflections = reflections;
+  public ConfigGenerator(String basePackage) {
+    this.reflections = new Reflections(new ConfigurationBuilder()
+        .setUrls(ClasspathHelper.forPackage(basePackage))
+        .setExpandSuperTypes(false));
     this.basePackage = basePackage;
   }
 
