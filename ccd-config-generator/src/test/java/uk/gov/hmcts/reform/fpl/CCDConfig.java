@@ -1,7 +1,6 @@
 package uk.gov.hmcts.reform.fpl;
 
 
-import static com.google.common.collect.Sets.newHashSet;
 import static uk.gov.hmcts.ccd.sdk.api.Permission.CRU;
 import static uk.gov.hmcts.ccd.sdk.api.Permission.C;
 import static uk.gov.hmcts.ccd.sdk.api.Permission.R;
@@ -23,10 +22,14 @@ import static uk.gov.hmcts.reform.fpl.enums.UserRole.SYSTEM_UPDATE;
 import com.google.common.base.CaseFormat;
 import uk.gov.hmcts.ccd.sdk.api.BaseCCDConfig;
 import uk.gov.hmcts.ccd.sdk.api.Webhook;
+import uk.gov.hmcts.ccd.sdk.type.OrganisationPolicy;
+import uk.gov.hmcts.ccd.sdk.type.Organisation;
 import uk.gov.hmcts.reform.fpl.enums.State;
 import uk.gov.hmcts.reform.fpl.enums.UserRole;
 import uk.gov.hmcts.reform.fpl.model.CaseData;
 import uk.gov.hmcts.reform.fpl.model.Judge;
+
+import java.util.Collections;
 
 // Found and invoked by the config generator.
 // The CaseData type parameter tells the generator which class represents your case model.
@@ -222,11 +225,18 @@ public class CCDConfig extends BaseCCDConfig<CaseData, State, UserRole> {
             .grant(R, CAFCASS)
             .fields()
             .page("AllocatedJudge")
-                .field(CaseData::getAllocatedJudge).complex()
-                    .mandatory(Judge::getJudgeTitle)
-                    .mandatory(Judge::getOtherTitle)
-                    .mandatory(Judge::getJudgeLastName)
-                    .mandatory(Judge::getJudgeFullName);
+            .complex(CaseData::getOrganisationPolicy)
+              .complex(OrganisationPolicy::getOrganisation)
+                .mandatory(Organisation::getOrganisationId)
+                .done()
+              .optional(OrganisationPolicy::getOrgPolicyCaseAssignedRole, null, CCD_SOLICITOR)
+              .optional(OrganisationPolicy::getOrgPolicyReference)
+              .done()
+            .field(CaseData::getAllocatedJudge).complex()
+              .mandatory(Judge::getJudgeTitle)
+              .mandatory(Judge::getOtherTitle)
+              .mandatory(Judge::getJudgeLastName)
+              .mandatory(Judge::getJudgeFullName);
 
     }
 

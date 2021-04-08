@@ -37,7 +37,7 @@ class CaseEventToComplexTypesGenerator {
           JsonUtils.mergeInto(output, entriesByCaseField.get(fieldID),
               // TODO: remove show condition primary key.
               new AddMissing(), "CaseEventID", "CaseFieldID", "ListElementCode",
-              "FieldShowCondition");
+              "FieldShowCondition", "DefaultValue");
         }
       }
     }
@@ -77,6 +77,12 @@ class CaseEventToComplexTypesGenerator {
           }
           if (null != field.getShowCondition()) {
             data.put("FieldShowCondition", field.getShowCondition());
+          }
+          if (null != field.getDefaultValue()) {
+            String value = field.getDefaultValue() instanceof HasRole
+                             ? ((HasRole) field.getDefaultValue()).getRole()
+                             : field.getDefaultValue().toString();
+            data.put("DefaultValue", value);
           }
         }
         if (null != complex.getComplexFields()) {

@@ -66,6 +66,11 @@ public class FieldCollection {
       return result;
     }
 
+    public <Value> FieldCollectionBuilder<Type, Parent> optional(TypedPropertyGetter<Type, Value> getter,
+        String showCondition, Value defaultValue) {
+      return field(getter, DisplayContext.Optional, showCondition, true, defaultValue);
+    }
+
     public FieldCollectionBuilder<Type, Parent> optional(TypedPropertyGetter<Type, ?> getter,
         String showCondition) {
       return field(getter, DisplayContext.Optional, showCondition, true);
@@ -82,6 +87,11 @@ public class FieldCollection {
 
     public FieldCollectionBuilder<Type, Parent> optionalNoSummary(TypedPropertyGetter<Type, ?> getter) {
       return field(getter, DisplayContext.Optional, false);
+    }
+
+    public <Value> FieldCollectionBuilder<Type, Parent> mandatory(TypedPropertyGetter<Type, Value> getter,
+                                                                  String showCondition, Value defaultValue) {
+      return field(getter, DisplayContext.Mandatory, showCondition, true, defaultValue);
     }
 
     public FieldCollectionBuilder<Type, Parent> mandatory(TypedPropertyGetter<Type, ?> getter,
@@ -161,6 +171,15 @@ public class FieldCollection {
     public FieldCollectionBuilder<Type, Parent> field(TypedPropertyGetter<Type, ?> getter,
         DisplayContext context) {
       return field(getter, context, false);
+    }
+
+    public <Value> FieldCollectionBuilder<Type, Parent> field(TypedPropertyGetter<Type, Value> getter,
+        DisplayContext context, String showCondition, boolean showSummary, Value defaultValue) {
+      if (null != showCondition && null != rootFieldname) {
+        showCondition = showCondition.replace("{{FIELD_NAME}}", rootFieldname);
+      }
+      field(getter).context(context).showCondition(showCondition).showSummary(showSummary).defaultValue(defaultValue);
+      return this;
     }
 
     public FieldCollectionBuilder<Type, Parent> field(TypedPropertyGetter<Type, ?> getter,
