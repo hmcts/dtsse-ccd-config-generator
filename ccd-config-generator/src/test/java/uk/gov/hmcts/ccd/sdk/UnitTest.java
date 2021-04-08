@@ -31,7 +31,7 @@ public class UnitTest {
       }
     }
 
-    ConfigGenerator<CaseData, State, UserRole> generator = new ConfigGenerator<>("uk.gov.hmcts");
+    ConfigGenerator<CaseData, State, UserRole> generator = new ConfigGenerator<>();
     generator.resolveCCDConfig(new NPEBug());
   }
 
@@ -43,7 +43,7 @@ public class UnitTest {
       }
     }
 
-    ConfigGenerator<MissingComplex, State, UserRole> generator = new ConfigGenerator<>("uk.gov.hmcts");
+    ConfigGenerator<MissingComplex, State, UserRole> generator = new ConfigGenerator<>();
     ResolvedCCDConfig<MissingComplex, State, UserRole> resolved = generator.resolveCCDConfig(new MissingBug());
     assertThat(resolved.types).containsKeys(Applicant.class);
   }

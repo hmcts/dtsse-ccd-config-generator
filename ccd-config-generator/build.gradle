@@ -16,6 +16,7 @@ dependencies {
     testImplementation 'junit:junit:4.13.2'
     annotationProcessor group: 'org.projectlombok', name: 'lombok', version: '1.18.20'
     compileOnly group: 'org.projectlombok', name: 'lombok', version: '1.18.20'
+    implementation "org.springframework.boot:spring-boot-autoconfigure:${springBootVersion}"
 
     testAnnotationProcessor group: 'org.projectlombok', name: 'lombok', version: '1.18.10'
     testCompileOnly group: 'org.projectlombok', name: 'lombok', version: '1.18.20'

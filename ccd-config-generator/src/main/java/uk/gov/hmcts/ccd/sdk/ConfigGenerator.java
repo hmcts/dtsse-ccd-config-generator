@@ -29,21 +29,24 @@ import org.reflections.ReflectionUtils;
 import org.reflections.Reflections;
 import org.reflections.util.ClasspathHelper;
 import org.reflections.util.ConfigurationBuilder;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Component;
 import uk.gov.hmcts.ccd.sdk.api.CCDConfig;
 import uk.gov.hmcts.ccd.sdk.api.Event;
 import uk.gov.hmcts.ccd.sdk.api.HasRole;
 import uk.gov.hmcts.ccd.sdk.api.Permission;
 
+@Component
 class ConfigGenerator<T, S, R extends HasRole> {
 
   private final Reflections reflections;
-  private final String basePackage;
+  private static final String basePackage = "uk.gov.hmcts";
 
-  public ConfigGenerator(String basePackage) {
+  @Autowired
+  public ConfigGenerator() {
     this.reflections = new Reflections(new ConfigurationBuilder()
         .setUrls(ClasspathHelper.forPackage(basePackage))
         .setExpandSuperTypes(false));
-    this.basePackage = basePackage;
   }
 
   public void resolveConfig(File outputFolder) {

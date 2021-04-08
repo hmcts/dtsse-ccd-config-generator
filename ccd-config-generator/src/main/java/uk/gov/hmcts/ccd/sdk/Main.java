@@ -1,13 +1,32 @@
 package uk.gov.hmcts.ccd.sdk;
 
 import java.io.File;
+import java.util.Set;
+import org.reflections.Reflections;
+import org.reflections.util.ClasspathHelper;
+import org.reflections.util.ConfigurationBuilder;
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.context.ConfigurableApplicationContext;
 
 class Main {
 
   public static void main(String[] args) {
+    Reflections reflections = new Reflections(new ConfigurationBuilder()
+        .setUrls(ClasspathHelper.forPackage(args[1]))
+        .setExpandSuperTypes(false));
+
+    Set<Class<?>> types =
+        reflections.getTypesAnnotatedWith(SpringBootApplication.class);
+    if (types.size() != 1) {
+      throw new RuntimeException("Expected a single SpringBootApplication but found "
+          + types.size());
+    }
+    ConfigurableApplicationContext context =
+        SpringApplication.run(types.iterator().next(), args);
+
     File outputDir = new File(args[0]);
-    new ConfigGenerator(args[1]).resolveConfig(outputDir);
-    // Required on Gradle 4.X or build task hangs.
-    System.exit(0);
+    context.getBean(ConfigGenerator.class).resolveConfig(outputDir);
+    context.stop();
   }
 }
