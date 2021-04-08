@@ -63,13 +63,10 @@ class AuthorisationCaseFieldGenerator {
             continue;
           }
           Set<Permission> perm = fb.build().isImmutable()
-              ? Collections.singleton(Permission.R)
+              ? Permission.CR
               : rolePermission.getValue();
           if (!perm.contains(Permission.D) && fb.build().isMutableList()) {
             perm.add(Permission.D);
-          }
-          if (fb.build().isImmutable() || fb.build().isImmutableList()) {
-            perm.remove(Permission.C);
           }
           fieldRolePermissions.put(fb.build().getId(), rolePermission.getKey().getRole(),
               perm);
