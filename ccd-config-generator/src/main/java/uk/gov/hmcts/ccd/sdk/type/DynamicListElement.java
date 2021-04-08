@@ -1,7 +1,6 @@
 package uk.gov.hmcts.ccd.sdk.type;
 
 import java.util.UUID;
-
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;

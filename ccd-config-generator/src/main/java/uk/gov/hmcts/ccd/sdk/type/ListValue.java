@@ -1,7 +1,6 @@
 package uk.gov.hmcts.ccd.sdk.type;
 
 import javax.annotation.Nullable;
-
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
