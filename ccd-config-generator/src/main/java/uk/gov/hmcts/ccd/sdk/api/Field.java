@@ -24,6 +24,7 @@ public class Field<Type, Parent, Grandparent> {
   String showCondition;
   String page;
   String caseEventFieldLabel;
+  Type defaultValue;
   boolean showSummary;
   int fieldDisplayOrder;
   int pageFieldDisplayOrder;

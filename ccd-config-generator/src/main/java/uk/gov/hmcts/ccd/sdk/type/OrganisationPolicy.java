@@ -4,11 +4,12 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Builder;
 import lombok.Data;
 import uk.gov.hmcts.ccd.sdk.api.ComplexType;
+import uk.gov.hmcts.ccd.sdk.api.HasRole;
 
 @Data
 @ComplexType(name = "OrganisationPolicy", generate = false)
 @Builder
-public class OrganisationPolicy<R> {
+public class OrganisationPolicy<R extends HasRole> {
 
   @JsonProperty("Organisation")
   private final Organisation organisation;
