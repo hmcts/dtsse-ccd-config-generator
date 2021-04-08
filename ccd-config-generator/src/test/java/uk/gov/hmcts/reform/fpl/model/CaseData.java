@@ -9,7 +9,6 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import uk.gov.hmcts.ccd.sdk.api.CCD;
-import uk.gov.hmcts.ccd.sdk.api.DefaultValue;
 import uk.gov.hmcts.ccd.sdk.type.DynamicList;
 import uk.gov.hmcts.ccd.sdk.type.OrganisationPolicy;
 import uk.gov.hmcts.reform.fpl.access.BulkScan;
@@ -339,11 +338,5 @@ public class CaseData {
 
     private final String caseNote;
     private final List<Element<CaseNote>> caseNotes;
-
-    @CCD(
-      defaultValues = {
-        @DefaultValue(field = "OrgPolicyCaseAssignedRole", value = "[RESPSOLICITOR]")
-      }
-    )
     private final OrganisationPolicy<UserRole> organisationPolicy;
 }
