@@ -4,11 +4,13 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import java.util.List;
 import lombok.Builder;
 import lombok.Data;
+import lombok.extern.jackson.Jacksonized;
 import uk.gov.hmcts.ccd.sdk.api.ComplexType;
 
-@Data
-@ComplexType(name = "OrderSummary", generate = false)
 @Builder
+@Data
+@Jacksonized
+@ComplexType(name = "OrderSummary", generate = false)
 public class OrderSummary {
 
   @JsonProperty("PaymentReference")

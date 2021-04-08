@@ -6,13 +6,15 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 import lombok.Builder;
 import lombok.Data;
+import lombok.extern.jackson.Jacksonized;
 import uk.gov.hmcts.ccd.sdk.api.ComplexType;
 
 /**
  * Representation of a CCD Dynamic List which is then converted to a select dropdown list.
  */
-@Data
 @Builder
+@Data
+@Jacksonized
 @ComplexType(generate = false)
 public class DynamicList {
 
