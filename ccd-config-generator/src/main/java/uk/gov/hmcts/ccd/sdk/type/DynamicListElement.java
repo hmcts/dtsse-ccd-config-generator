@@ -1,6 +1,8 @@
 package uk.gov.hmcts.ccd.sdk.type;
 
 import java.util.UUID;
+
+import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.extern.jackson.Jacksonized;
@@ -11,6 +13,7 @@ import uk.gov.hmcts.ccd.sdk.api.ComplexType;
  *
  * <p>There are two properties which map to the relevant items of an option html tag.
  */
+@AllArgsConstructor
 @Builder
 @Data
 @Jacksonized
