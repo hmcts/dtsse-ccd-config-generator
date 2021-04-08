@@ -27,4 +27,6 @@ public @interface CCD {
 
   boolean ignore() default false;
 
+  DefaultValue[] defaultValues() default {};
+
 }

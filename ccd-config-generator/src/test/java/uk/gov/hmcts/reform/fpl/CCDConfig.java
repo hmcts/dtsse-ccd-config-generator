@@ -1,7 +1,6 @@
 package uk.gov.hmcts.reform.fpl;
 
 
-import static com.google.common.collect.Sets.newHashSet;
 import static uk.gov.hmcts.ccd.sdk.api.Permission.CRU;
 import static uk.gov.hmcts.ccd.sdk.api.Permission.C;
 import static uk.gov.hmcts.ccd.sdk.api.Permission.R;
@@ -23,6 +22,8 @@ import static uk.gov.hmcts.reform.fpl.enums.UserRole.SYSTEM_UPDATE;
 import com.google.common.base.CaseFormat;
 import uk.gov.hmcts.ccd.sdk.api.BaseCCDConfig;
 import uk.gov.hmcts.ccd.sdk.api.Webhook;
+import uk.gov.hmcts.ccd.sdk.type.OrganisationPolicy;
+import uk.gov.hmcts.ccd.sdk.type.Organisation;
 import uk.gov.hmcts.reform.fpl.enums.State;
 import uk.gov.hmcts.reform.fpl.enums.UserRole;
 import uk.gov.hmcts.reform.fpl.model.CaseData;
@@ -222,6 +223,13 @@ public class CCDConfig extends BaseCCDConfig<CaseData, State, UserRole> {
             .grant(R, CAFCASS)
             .fields()
             .page("AllocatedJudge")
+                .field(CaseData::getOrganisationPolicy).complexWithParent(Organisation.class)
+                    .mandatory(Organisation::getOrganisationId)
+                    .done()
+                .field(CaseData::getOrganisationPolicy).complex()
+                    .optional(OrganisationPolicy::getOrgPolicyCaseAssignedRole)
+                    .optional(OrganisationPolicy::getOrgPolicyReference)
+                    .done()
                 .field(CaseData::getAllocatedJudge).complex()
                     .mandatory(Judge::getJudgeTitle)
                     .mandatory(Judge::getOtherTitle)

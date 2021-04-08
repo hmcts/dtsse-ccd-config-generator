@@ -19,9 +19,4 @@ public class OrganisationPolicy<R> {
   @JsonProperty("OrgPolicyCaseAssignedRole")
   private final R orgPolicyCaseAssignedRole;
 
-  @Data
-  public static class Organisation {
-    @JsonProperty("OrganisationID")
-    private final String organisationID;
-  }
 }
