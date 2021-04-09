@@ -2,4 +2,4 @@ jdk:
   - openjdk11
 
 install:
-  - ./gradlew install
+  - ./gradlew assemble
