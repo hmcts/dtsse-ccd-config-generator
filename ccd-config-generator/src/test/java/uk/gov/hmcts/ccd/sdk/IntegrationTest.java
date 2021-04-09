@@ -19,6 +19,7 @@ public class IntegrationTest {
         tmp.getRoot().getAbsolutePath(),
         "uk.gov.hmcts"
     });
-    assertThat(new File(tmp.getRoot(), "CaseField.json")).exists();
+    File expected = new File(new File(tmp.getRoot(), "production"), "CaseField.json");
+    assertThat(expected).exists();
   }
 }

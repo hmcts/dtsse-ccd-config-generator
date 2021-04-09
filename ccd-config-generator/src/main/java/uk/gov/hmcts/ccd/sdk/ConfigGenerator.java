@@ -20,15 +20,9 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.stream.Collectors;
 import lombok.SneakyThrows;
 import net.jodah.typetools.TypeResolver;
-import org.objenesis.Objenesis;
-import org.objenesis.ObjenesisStd;
 import org.reflections.ReflectionUtils;
-import org.reflections.Reflections;
-import org.reflections.util.ClasspathHelper;
-import org.reflections.util.ConfigurationBuilder;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import uk.gov.hmcts.ccd.sdk.api.CCDConfig;
@@ -39,44 +33,36 @@ import uk.gov.hmcts.ccd.sdk.api.Permission;
 @Component
 class ConfigGenerator<T, S, R extends HasRole> {
 
-  private final Reflections reflections;
   private static final String basePackage = "uk.gov.hmcts";
 
+  private List<CCDConfig<T, S, R>> configs;
+
   @Autowired
-  public ConfigGenerator() {
-    this.reflections = new Reflections(new ConfigurationBuilder()
-        .setUrls(ClasspathHelper.forPackage(basePackage))
-        .setExpandSuperTypes(false));
+  public ConfigGenerator(List<CCDConfig<T, S, R>> configs) {
+    if (configs.isEmpty()) {
+      throw new RuntimeException("Expected at least one CCDConfig implementation but none found.");
+    }
+    this.configs = configs;
   }
 
   public void resolveConfig(File outputFolder) {
-    Set<Class<? extends CCDConfig>> configTypes =
-        reflections.getSubTypesOf(CCDConfig.class).stream()
-            .filter(x -> !Modifier.isAbstract(x.getModifiers())).collect(Collectors.toSet());
-
-    if (configTypes.isEmpty()) {
-      throw new RuntimeException("Expected at least one CCDConfig implementation but none found. "
-          + "Scanned: " + basePackage);
-    }
-
     initOutputDirectory(outputFolder);
-
-    for (Class<? extends CCDConfig> configType : configTypes) {
-      Objenesis objenesis = new ObjenesisStd();
-      CCDConfig config = objenesis.newInstance(configType);
-      ResolvedCCDConfig resolved = resolveCCDConfig(config);
-      File destination = Strings.isNullOrEmpty(resolved.environment) ? outputFolder
-          : new File(outputFolder, resolved.environment);
-      writeConfig(destination, resolved);
-    }
+    ResolvedCCDConfig resolved = resolveCCDConfig();
+    File destination = Strings.isNullOrEmpty(resolved.environment) ? outputFolder
+        : new File(outputFolder, resolved.environment);
+    writeConfig(destination, resolved);
   }
 
   @SneakyThrows
-  public ResolvedCCDConfig<T, S, R> resolveCCDConfig(CCDConfig<T, S, R> config) {
+  public ResolvedCCDConfig<T, S, R> resolveCCDConfig() {
+    CCDConfig<T, S, R> config = this.configs.iterator().next();
     Class<?>[] typeArgs = TypeResolver.resolveRawArguments(CCDConfig.class, config.getClass());
     Set<S> allStates = Set.of(((Class<S>)typeArgs[1]).getEnumConstants());
     ConfigBuilderImpl builder = new ConfigBuilderImpl(typeArgs[0], allStates);
-    config.configure(builder);
+    for (CCDConfig<T, S, R> c : configs) {
+      c.configure(builder);
+    }
+
     List<Event> events = builder.getEvents();
     Map<Class, Integer> types = resolve(typeArgs[0], basePackage);
     return new ResolvedCCDConfig(typeArgs[0], typeArgs[1], typeArgs[2], builder, events, types,

@@ -53,7 +53,6 @@ import static org.apache.commons.lang3.ObjectUtils.isEmpty;
 import static uk.gov.hmcts.reform.fpl.enums.CMOStatus.SEND_TO_JUDGE;
 
 @Data
-@Builder(toBuilder = true)
 @AllArgsConstructor
 public class CaseData {
 
@@ -164,8 +163,9 @@ public class CaseData {
     @NotNull(message = "You need to add details to children")
     @Valid
     private final List<@NotNull(message = "You need to add details to children") Element<Child>> children1;
+
     @NotBlank(message = "Enter Familyman case number")
-    private final String familyManCaseNumber;
+    private String familyManCaseNumber;
     private final NoticeOfProceedings noticeOfProceedings;
 
     @JsonIgnore

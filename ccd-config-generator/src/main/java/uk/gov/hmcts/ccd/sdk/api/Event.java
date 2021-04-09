@@ -206,6 +206,10 @@ public class Event<T, R extends HasRole, S> {
       return this;
     }
 
+    public EventBuilder<T, R, S> aboutToSubmitWebhook(CallbackHandler<T, S> handler) {
+      return this;
+    }
+
     public EventBuilder<T, R, S> aboutToSubmitWebhook(String eventId, int... retries) {
       this.customWebhookName = eventId;
       aboutToSubmitURL = getWebhookPathByConvention(Webhook.AboutToSubmit);

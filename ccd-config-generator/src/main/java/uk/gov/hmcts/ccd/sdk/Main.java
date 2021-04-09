@@ -22,11 +22,11 @@ class Main {
       throw new RuntimeException("Expected a single SpringBootApplication but found "
           + types.size());
     }
-    ConfigurableApplicationContext context =
-        SpringApplication.run(types.iterator().next(), args);
+    try (ConfigurableApplicationContext context =
+        SpringApplication.run(types.iterator().next(), args)) {
 
-    File outputDir = new File(args[0]);
-    context.getBean(ConfigGenerator.class).resolveConfig(outputDir);
-    context.stop();
+      File outputDir = new File(args[0]);
+      context.getBean(ConfigGenerator.class).resolveConfig(outputDir);
+    }
   }
 }

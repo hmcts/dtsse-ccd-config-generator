@@ -20,6 +20,7 @@ import static uk.gov.hmcts.reform.fpl.enums.UserRole.SYSTEM_UPDATE;
 
 
 import com.google.common.base.CaseFormat;
+import org.springframework.stereotype.Component;
 import uk.gov.hmcts.ccd.sdk.api.CCDConfig;
 import uk.gov.hmcts.ccd.sdk.api.ConfigBuilder;
 import uk.gov.hmcts.ccd.sdk.api.Webhook;
@@ -30,6 +31,7 @@ import uk.gov.hmcts.reform.fpl.model.Judge;
 
 // Found and invoked by the config generator.
 // The CaseData type parameter tells the generator which class represents your case model.
+@Component
 public class FPLConfig implements CCDConfig<CaseData, State, UserRole> {
 
   private ConfigBuilder<CaseData, State, UserRole> builder;
@@ -205,16 +207,6 @@ public class FPLConfig implements CCDConfig<CaseData, State, UserRole> {
   }
 
   private void buildUniversalEvents() {
-    builder.event("addFamilyManCaseNumber")
-        .forAllStates()
-        .name("Add case number")
-        .explicitGrants()
-        .grant(CRU, HMCTS_ADMIN)
-        .aboutToSubmitWebhook("add-case-number")
-        .submittedWebhook()
-        .fields()
-        .optional(CaseData::getFamilyManCaseNumber);
-
     builder.event("allocatedJudge")
         .forAllStates()
         .name("Allocated Judge")

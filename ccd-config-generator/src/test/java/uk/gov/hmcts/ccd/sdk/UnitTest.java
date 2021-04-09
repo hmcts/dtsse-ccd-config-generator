@@ -1,5 +1,6 @@
 package uk.gov.hmcts.ccd.sdk;
 
+import java.util.List;
 import org.junit.Before;
 import org.junit.Test;
 import org.reflections.Reflections;
@@ -31,8 +32,8 @@ public class UnitTest {
       }
     }
 
-    ConfigGenerator<CaseData, State, UserRole> generator = new ConfigGenerator<>();
-    generator.resolveCCDConfig(new NPEBug());
+    ConfigGenerator<CaseData, State, UserRole> generator = new ConfigGenerator<>(List.of(new NPEBug()));
+    generator.resolveCCDConfig();
   }
 
   @Test
@@ -43,8 +44,8 @@ public class UnitTest {
       }
     }
 
-    ConfigGenerator<MissingComplex, State, UserRole> generator = new ConfigGenerator<>();
-    ResolvedCCDConfig<MissingComplex, State, UserRole> resolved = generator.resolveCCDConfig(new MissingBug());
+    ConfigGenerator<MissingComplex, State, UserRole> generator = new ConfigGenerator<>(List.of(new MissingBug()));
+    ResolvedCCDConfig<MissingComplex, State, UserRole> resolved = generator.resolveCCDConfig();
     assertThat(resolved.types).containsKeys(Applicant.class);
   }
 }

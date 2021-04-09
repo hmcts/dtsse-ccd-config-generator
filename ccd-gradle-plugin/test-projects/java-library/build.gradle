@@ -27,7 +27,7 @@ repositories {
 dependencies {
     // This dependency is used by the application.
     implementation 'com.google.guava:guava:28.2-jre'
-    implementation 'org.springframework.boot:spring-boot-autoconfigure:2.4.3'
+    implementation 'org.springframework.boot:spring-boot-autoconfigure:2.3.5.RELEASE'
 
     // Use JUnit test framework
     testImplementation 'junit:junit:4.12'
