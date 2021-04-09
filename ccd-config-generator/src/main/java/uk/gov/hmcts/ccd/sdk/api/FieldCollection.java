@@ -269,6 +269,12 @@ public class FieldCollection {
     }
 
     public <U> FieldCollectionBuilder<U, FieldCollectionBuilder<Type, Parent>> complex(
+        TypedPropertyGetter<Type, U> getter, String showCondition) {
+      Class<U> c = propertyUtils.getPropertyType(dataClass, getter);
+      return complex(getter, c, showCondition);
+    }
+
+    public <U> FieldCollectionBuilder<U, FieldCollectionBuilder<Type, Parent>> complex(
         TypedPropertyGetter<Type, ?> getter, Class<U> c, boolean summary) {
       String fieldName = propertyUtils.getPropertyName(dataClass, getter);
       if (null == this.rootFieldname) {
@@ -279,8 +285,23 @@ public class FieldCollection {
     }
 
     public <U> FieldCollectionBuilder<U, FieldCollectionBuilder<Type, Parent>> complex(
+        TypedPropertyGetter<Type, ?> getter, Class<U> c, boolean summary, String showCondition) {
+      String fieldName = propertyUtils.getPropertyName(dataClass, getter);
+      if (null == this.rootFieldname) {
+        // Register only the root complex as a field
+        field(fieldName).context(DisplayContext.Complex).showSummary(summary).showCondition(showCondition);
+      }
+      return complex(fieldName, c);
+    }
+
+    public <U> FieldCollectionBuilder<U, FieldCollectionBuilder<Type, Parent>> complex(
         TypedPropertyGetter<Type, ?> getter, Class<U> c) {
       return complex(getter, c, true);
+    }
+
+    public <U> FieldCollectionBuilder<U, FieldCollectionBuilder<Type, Parent>> complex(
+        TypedPropertyGetter<Type, ?> getter, Class<U> c, String showCondition) {
+      return complex(getter, c, true, showCondition);
     }
 
     <U> FieldCollectionBuilder<U, FieldCollectionBuilder<Type, Parent>> complex(String fieldName,
