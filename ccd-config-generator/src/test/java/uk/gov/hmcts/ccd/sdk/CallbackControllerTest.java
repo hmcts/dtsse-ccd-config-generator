@@ -5,6 +5,8 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.google.common.collect.Maps;
 import lombok.SneakyThrows;
 import org.junit.Ignore;
 import org.junit.Test;
@@ -15,6 +17,8 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.junit4.SpringRunner;
 import org.springframework.test.web.servlet.MockMvc;
+import uk.gov.hmcts.reform.ccd.client.model.CallbackRequest;
+import uk.gov.hmcts.reform.ccd.client.model.CaseDetails;
 
 @RunWith(SpringRunner.class)
 @SpringBootTest
@@ -26,10 +30,15 @@ public class CallbackControllerTest {
 
   @SneakyThrows
   @Test
-  @Ignore
   public void testAddFamilyManCaseNumber() {
+    CallbackRequest req = CallbackRequest.builder()
+        .eventId("addFamilyManCaseNumber")
+        .caseDetails(CaseDetails.builder()
+            .data(Maps.newHashMap())
+            .build())
+        .build();
     this.mockMvc.perform(post("/callbacks/about-to-start?event=addFamilyManCaseNumber")
-        .contentType(MediaType.APPLICATION_JSON).content("{}"))
+        .contentType(MediaType.APPLICATION_JSON).content(new ObjectMapper().writeValueAsString(req)))
         .andExpect(status().isOk());
   }
 }

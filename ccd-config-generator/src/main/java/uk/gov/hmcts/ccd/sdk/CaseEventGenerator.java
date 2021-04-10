@@ -24,13 +24,14 @@ class CaseEventGenerator<T, S, R extends HasRole> {
     for (Event event : config.events) {
       Path output = Paths.get(folder.getPath(), event.getId() + ".json");
 
-      JsonUtils.mergeInto(output, serialise(config.builder.caseType, event, config.allStates),
+      JsonUtils.mergeInto(output, serialise(config.builder.caseType, event, config.allStates,
+          config.builder.callbackHost),
           new AddMissing(), "ID");
     }
   }
 
   private List<Map<String, Object>> serialise(String caseTypeId, Event<T, R, S> event,
-                                              Set<S> allStates) {
+                                              Set<S> allStates, String callbackHost) {
     int t = 1;
     List result = Lists.newArrayList();
     Map<String, Object> data = JsonUtils.getField(event.getId());
@@ -81,6 +82,11 @@ class CaseEventGenerator<T, S, R extends HasRole> {
         data.put("RetriesTimeoutURLAboutToSubmitEvent",
             event.getRetries().get(Webhook.AboutToSubmit));
       }
+    }
+
+    if (event.getAboutToSubmitCallback() != null) {
+      String url = callbackHost + "/callbacks/about-to-submit";
+      data.put("CallBackURLAboutToSubmitEvent", url);
     }
 
     if (event.getSubmittedURL() != null) {

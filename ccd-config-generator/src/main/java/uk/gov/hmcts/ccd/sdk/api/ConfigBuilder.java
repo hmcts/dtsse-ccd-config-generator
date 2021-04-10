@@ -45,4 +45,5 @@ public interface ConfigBuilder<T, S, R extends HasRole> {
 
   RoleBuilder<R> role(R... role);
 
+  void setCallbackHost(String s);
 }

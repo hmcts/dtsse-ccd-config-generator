@@ -53,6 +53,7 @@ class ConfigBuilderImpl<T, S, R extends HasRole> implements ConfigBuilder<T, S, 
   public String jurDesc = "";
   public String caseName = "";
   public String caseDesc = "";
+  public String callbackHost;
 
   private String defaultWebhookConvention(Webhook webhook, String eventId) {
     eventId = CaseFormat.LOWER_CAMEL.to(CaseFormat.LOWER_HYPHEN, eventId);
@@ -218,6 +219,11 @@ class ConfigBuilderImpl<T, S, R extends HasRole> implements ConfigBuilder<T, S, 
         }
       }
     };
+  }
+
+  @Override
+  public void setCallbackHost(String s) {
+    this.callbackHost = s;
   }
 
   private WorkBasketBuilder getWorkBasketBuilder(List<WorkBasketBuilder> workBasketInputFields) {

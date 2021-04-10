@@ -38,6 +38,7 @@ public class Event<T, R extends HasRole, S> {
   private int eventNumber;
   @Builder.Default
   private String namespace = "";
+  private CallbackHandler<T, S> aboutToSubmitCallback;
 
   public void setEventID(String eventId) {
     this.eventId = eventId;
@@ -207,6 +208,7 @@ public class Event<T, R extends HasRole, S> {
     }
 
     public EventBuilder<T, R, S> aboutToSubmitWebhook(CallbackHandler<T, S> handler) {
+      this.aboutToSubmitCallback = handler;
       return this;
     }
 

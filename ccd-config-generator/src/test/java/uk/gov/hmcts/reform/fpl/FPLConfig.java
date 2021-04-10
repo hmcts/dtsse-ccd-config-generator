@@ -49,6 +49,7 @@ public class FPLConfig implements CCDConfig<CaseData, State, UserRole> {
 
   public void configure(ConfigBuilder<CaseData, State, UserRole> builder) {
     this.builder = builder;
+    builder.setCallbackHost("${CCD_DEF_CASE_SERVICE_BASE_URL}");
     builder.setEnvironment(environment());
     builder.setWebhookConvention(this::webhookConvention);
     builder.jurisdiction("PUBLICLAW", "Family Public Law", "Family Public Law desc");

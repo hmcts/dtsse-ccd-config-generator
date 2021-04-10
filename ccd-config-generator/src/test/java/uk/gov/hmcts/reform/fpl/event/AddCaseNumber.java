@@ -23,8 +23,8 @@ public class AddCaseNumber implements CCDConfig<CaseData, State, UserRole> {
         .name("Add case number")
         .explicitGrants()
         .grant(CRU, HMCTS_ADMIN)
-        .aboutToSubmitWebhook("add-case-number")
-        .submittedWebhook()
+        .aboutToSubmitWebhook(this::aboutToSubmit)
+        .submittedWebhook("add-case-number")
         .fields()
         .optional(CaseData::getFamilyManCaseNumber);
   }
