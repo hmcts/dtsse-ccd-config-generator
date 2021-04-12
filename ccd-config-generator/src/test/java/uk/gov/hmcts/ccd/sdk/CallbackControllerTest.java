@@ -30,15 +30,48 @@ public class CallbackControllerTest {
 
   @SneakyThrows
   @Test
-  public void testAddFamilyManCaseNumber() {
-    CallbackRequest req = CallbackRequest.builder()
+  public void testAboutToStart() {
+    this.mockMvc.perform(post("/callbacks/about-to-start")
+        .contentType(MediaType.APPLICATION_JSON)
+        .content(new ObjectMapper().writeValueAsString(buildRequest())))
+        .andExpect(status().isOk());
+  }
+
+  @SneakyThrows
+  @Test
+  public void testAboutToSubmit() {
+    this.mockMvc.perform(post("/callbacks/about-to-submit")
+        .contentType(MediaType.APPLICATION_JSON)
+        .content(new ObjectMapper().writeValueAsString(buildRequest())))
+        .andExpect(status().isOk());
+  }
+
+  @SneakyThrows
+  @Test
+  public void testSubmitted() {
+    this.mockMvc.perform(post("/callbacks/submitted")
+        .contentType(MediaType.APPLICATION_JSON)
+        .content(new ObjectMapper().writeValueAsString(buildRequest())))
+        .andExpect(status().isOk());
+  }
+
+  @SneakyThrows
+  @Test
+  public void testNoCallbackReturns404() {
+    CallbackRequest req = buildRequest();
+    req.setEventId("does-not-exist");
+    this.mockMvc.perform(post("/callbacks/submitted")
+        .contentType(MediaType.APPLICATION_JSON)
+        .content(new ObjectMapper().writeValueAsString(req)))
+        .andExpect(status().is4xxClientError());
+  }
+
+  CallbackRequest buildRequest() {
+    return CallbackRequest.builder()
         .eventId("addFamilyManCaseNumber")
         .caseDetails(CaseDetails.builder()
             .data(Maps.newHashMap())
             .build())
         .build();
-    this.mockMvc.perform(post("/callbacks/about-to-submit")
-        .contentType(MediaType.APPLICATION_JSON).content(new ObjectMapper().writeValueAsString(req)))
-        .andExpect(status().isOk());
   }
 }

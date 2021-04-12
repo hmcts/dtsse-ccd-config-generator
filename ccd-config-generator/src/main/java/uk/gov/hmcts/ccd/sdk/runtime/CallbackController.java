@@ -5,10 +5,12 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.Map;
 import lombok.SneakyThrows;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.server.ResponseStatusException;
 import uk.gov.hmcts.ccd.sdk.ResolvedCCDConfig;
 import uk.gov.hmcts.ccd.sdk.api.CaseDetails;
 import uk.gov.hmcts.ccd.sdk.api.callback.AboutToStartOrSubmitResponse;
@@ -54,6 +56,9 @@ public class CallbackController {
   }
 
   <T> T findCallback(Map<String, T> callbacks, String eventId) {
+    if (!callbacks.containsKey(eventId)) {
+      throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Handler not found for " + eventId);
+    }
     return callbacks.get(eventId);
   }
 

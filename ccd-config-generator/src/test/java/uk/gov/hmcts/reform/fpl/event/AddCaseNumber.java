@@ -24,6 +24,7 @@ public class AddCaseNumber implements CCDConfig<CaseData, State, UserRole> {
         .name("Add case number")
         .explicitGrants()
         .grant(CRU, HMCTS_ADMIN)
+        .aboutToStartCallback(this::aboutToStart)
         .aboutToSubmitCallback(this::aboutToSubmit)
         .submittedCallback(this::submitted)
         .fields()
@@ -32,7 +33,16 @@ public class AddCaseNumber implements CCDConfig<CaseData, State, UserRole> {
 
   private SubmittedCallbackResponse submitted(CaseDetails<CaseData, State> caseDataStateCaseDetails,
                                               CaseDetails<CaseData, State> caseDataStateCaseDetails1) {
-    throw new RuntimeException();
+    return SubmittedCallbackResponse.builder().build();
+  }
+
+  private AboutToStartOrSubmitResponse<CaseData, State> aboutToStart(
+      CaseDetails<CaseData, State> details) {
+    CaseData data = details.getData();
+    data.setFamilyManCaseNumber("start-12345");
+    return AboutToStartOrSubmitResponse.<CaseData, State>builder()
+        .data(data)
+        .build();
   }
 
   private AboutToStartOrSubmitResponse<CaseData, State> aboutToSubmit(
