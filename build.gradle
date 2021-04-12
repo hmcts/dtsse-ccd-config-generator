@@ -11,7 +11,7 @@ subprojects {
     def buildNumber = System.getenv("RELEASE_VERSION")?.replace("refs/tags/", "") ?: "DEV-SNAPSHOT"
 
     group 'uk.gov.hmcts.reform'
-    version buildNumber
+    version '0.17.5'
 
     compileJava   {
         sourceCompatibility = 11
@@ -40,7 +40,7 @@ configure(libraries) {
     apply plugin: 'com.jfrog.bintray'
 
     repositories {
-        jcenter()
+        mavenCentral()
     }
 
     def gitRepo = "https://github.com/hmcts/ccd-config-generator"
