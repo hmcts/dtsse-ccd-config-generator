@@ -21,7 +21,6 @@ import static uk.gov.hmcts.reform.fpl.enums.UserRole.SYSTEM_UPDATE;
 
 import org.springframework.stereotype.Component;
 import uk.gov.hmcts.ccd.sdk.api.callback.AboutToStartOrSubmitResponse;
-import uk.gov.hmcts.ccd.sdk.api.CCDConfig;
 import uk.gov.hmcts.ccd.sdk.api.CaseDetails;
 import uk.gov.hmcts.ccd.sdk.api.ConfigBuilder;
 import uk.gov.hmcts.reform.ccd.client.model.SubmittedCallbackResponse;
@@ -33,7 +32,7 @@ import uk.gov.hmcts.reform.fpl.model.Judge;
 // Found and invoked by the config generator.
 // The CaseData type parameter tells the generator which class represents your case model.
 @Component
-public class FPLConfig implements CCDConfig<CaseData, State, UserRole> {
+public class CCDConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<CaseData, State, UserRole> {
 
   private ConfigBuilder<CaseData, State, UserRole> builder;
 
