@@ -1,4 +1,4 @@
-package uk.gov.hmcts;
+package uk.gov.hmcts.test.library;
 
 import uk.gov.hmcts.ccd.sdk.api.ConfigBuilder;
 import org.springframework.stereotype.Component;
