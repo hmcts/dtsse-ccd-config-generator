@@ -224,6 +224,7 @@ public class FPLConfig implements CCDConfig<CaseData, State, UserRole> {
         .name("Populate standard directions")
         .explicitGrants()
         .grant(C, UserRole.SYSTEM_UPDATE)
+        .midEventCallback(this::sdoMidEvent)
         .fields()
         .optional(CaseData::getAllParties)
         .optional(CaseData::getLocalAuthorityDirections)
@@ -231,6 +232,12 @@ public class FPLConfig implements CCDConfig<CaseData, State, UserRole> {
         .optional(CaseData::getCafcassDirections)
         .optional(CaseData::getOtherPartiesDirections)
         .optional(CaseData::getCourtDirections);
+  }
+
+  private AboutToStartOrSubmitResponse<CaseData, State> sdoMidEvent(
+      CaseDetails<CaseData, State> caseDataStateCaseDetails,
+      CaseDetails<CaseData, State> caseDataStateCaseDetails1) {
+    return AboutToStartOrSubmitResponse.<CaseData, State>builder().build();
   }
 
   private void buildOpen() {
