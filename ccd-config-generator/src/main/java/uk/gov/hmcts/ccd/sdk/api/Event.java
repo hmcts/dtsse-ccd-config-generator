@@ -31,9 +31,6 @@ public class Event<T, R extends HasRole, S> {
   private Set<S> preState;
   private Set<S> postState;
   private String description;
-  private String aboutToStartURL;
-  private String aboutToSubmitURL;
-  private String submittedURL;
   private Map<Webhook, String> retries;
   private boolean explicitGrants;
   private boolean showSummary;

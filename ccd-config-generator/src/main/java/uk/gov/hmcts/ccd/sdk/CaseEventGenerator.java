@@ -69,21 +69,6 @@ class CaseEventGenerator<T, S, R extends HasRole> {
     data.put("PostConditionState", toCCDStateString(event.getPostState(), allStates));
     data.put("SecurityClassification", "Public");
 
-    if (event.getAboutToStartURL() != null) {
-      data.put("CallBackURLAboutToStartEvent", event.getAboutToStartURL());
-      if (event.getRetries().containsKey(Webhook.AboutToStart)) {
-        data.put("RetriesTimeoutAboutToStartEvent", event.getRetries().get(Webhook.AboutToStart));
-      }
-    }
-
-    if (event.getAboutToSubmitURL() != null) {
-      data.put("CallBackURLAboutToSubmitEvent", event.getAboutToSubmitURL());
-      if (event.getRetries().containsKey(Webhook.AboutToSubmit)) {
-        data.put("RetriesTimeoutURLAboutToSubmitEvent",
-            event.getRetries().get(Webhook.AboutToSubmit));
-      }
-    }
-
     if (event.getAboutToStartCallback() != null) {
       String url = callbackHost + "/callbacks/about-to-start";
       data.put("CallBackURLAboutToStartEvent", url);
@@ -108,13 +93,6 @@ class CaseEventGenerator<T, S, R extends HasRole> {
       if (event.getRetries().containsKey(Webhook.Submitted)) {
         data.put("RetriesTimeoutURLSubmittedEvent",
             event.getRetries().get(Webhook.Submitted));
-      }
-    }
-
-    if (event.getSubmittedURL() != null) {
-      data.put("CallBackURLSubmittedEvent", event.getSubmittedURL());
-      if (event.getRetries().containsKey(Webhook.Submitted)) {
-        data.put("RetriesTimeoutURLSubmittedEvent", event.getRetries().get(Webhook.Submitted));
       }
     }
 
