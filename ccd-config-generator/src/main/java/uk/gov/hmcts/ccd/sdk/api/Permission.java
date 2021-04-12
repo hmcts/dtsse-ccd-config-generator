@@ -11,6 +11,7 @@ public enum Permission {
   R,
   U,
   D;
+  public static final ImmutableSet<Permission> CR = Sets.immutableEnumSet(C, R);
   public static final ImmutableSet<Permission> CRU = Sets.immutableEnumSet(C, R, U);
   public static final ImmutableSet<Permission> CRUD = Sets.immutableEnumSet(C, R, U, D);
 

@@ -681,5 +681,11 @@
     "LiveFrom": "01/01/2017",
     "Label": " ",
     "SecurityClassification": "Public"
+  },
+  {
+    "CaseTypeID" : "CARE_SUPERVISION_EPO",
+    "FieldType" : "OrganisationPolicy",
+    "ID" : "organisationPolicy",
+    "LiveFrom" : "01/01/2017"
   }
 ]

@@ -62,6 +62,11 @@ public class FieldCollection {
       return result;
     }
 
+    public <Value> FieldCollectionBuilder<Type, Parent> optional(TypedPropertyGetter<Type, Value> getter,
+        String showCondition, Value defaultValue) {
+      return field(getter, DisplayContext.Optional, showCondition, true, defaultValue);
+    }
+
     public FieldCollectionBuilder<Type, Parent> optional(TypedPropertyGetter<Type, ?> getter,
         String showCondition) {
       return field(getter, DisplayContext.Optional, showCondition, true);
@@ -78,6 +83,11 @@ public class FieldCollection {
 
     public FieldCollectionBuilder<Type, Parent> optionalNoSummary(TypedPropertyGetter<Type, ?> getter) {
       return field(getter, DisplayContext.Optional, false);
+    }
+
+    public <Value> FieldCollectionBuilder<Type, Parent> mandatory(TypedPropertyGetter<Type, Value> getter,
+                                                                  String showCondition, Value defaultValue) {
+      return field(getter, DisplayContext.Mandatory, showCondition, true, defaultValue);
     }
 
     public FieldCollectionBuilder<Type, Parent> mandatory(TypedPropertyGetter<Type, ?> getter,
@@ -159,6 +169,15 @@ public class FieldCollection {
       return field(getter, context, false);
     }
 
+    public <Value> FieldCollectionBuilder<Type, Parent> field(TypedPropertyGetter<Type, Value> getter,
+        DisplayContext context, String showCondition, boolean showSummary, Value defaultValue) {
+      if (null != showCondition && null != rootFieldname) {
+        showCondition = showCondition.replace("{{FIELD_NAME}}", rootFieldname);
+      }
+      field(getter).context(context).showCondition(showCondition).showSummary(showSummary).defaultValue(defaultValue);
+      return this;
+    }
+
     public FieldCollectionBuilder<Type, Parent> field(TypedPropertyGetter<Type, ?> getter,
         DisplayContext context, String showCondition, boolean showSummary) {
       if (null != showCondition && null != rootFieldname) {
@@ -233,6 +252,12 @@ public class FieldCollection {
     }
 
     public <U> FieldCollectionBuilder<U, FieldCollectionBuilder<Type, Parent>> complex(
+        TypedPropertyGetter<Type, U> getter, String showCondition) {
+      Class<U> c = propertyUtils.getPropertyType(dataClass, getter);
+      return complex(getter, c, showCondition);
+    }
+
+    public <U> FieldCollectionBuilder<U, FieldCollectionBuilder<Type, Parent>> complex(
         TypedPropertyGetter<Type, ?> getter, Class<U> c, boolean summary) {
       String fieldName = propertyUtils.getPropertyName(dataClass, getter);
       if (null == this.rootFieldname) {
@@ -243,8 +268,23 @@ public class FieldCollection {
     }
 
     public <U> FieldCollectionBuilder<U, FieldCollectionBuilder<Type, Parent>> complex(
+        TypedPropertyGetter<Type, ?> getter, Class<U> c, boolean summary, String showCondition) {
+      String fieldName = propertyUtils.getPropertyName(dataClass, getter);
+      if (null == this.rootFieldname) {
+        // Register only the root complex as a field
+        field(fieldName).context(DisplayContext.Complex).showSummary(summary).showCondition(showCondition);
+      }
+      return complex(fieldName, c);
+    }
+
+    public <U> FieldCollectionBuilder<U, FieldCollectionBuilder<Type, Parent>> complex(
         TypedPropertyGetter<Type, ?> getter, Class<U> c) {
       return complex(getter, c, true);
+    }
+
+    public <U> FieldCollectionBuilder<U, FieldCollectionBuilder<Type, Parent>> complex(
+        TypedPropertyGetter<Type, ?> getter, Class<U> c, String showCondition) {
+      return complex(getter, c, true, showCondition);
     }
 
     <U> FieldCollectionBuilder<U, FieldCollectionBuilder<Type, Parent>> complex(String fieldName,

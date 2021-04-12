@@ -18,11 +18,12 @@ import static uk.gov.hmcts.reform.fpl.enums.UserRole.JUDICIARY;
 import static uk.gov.hmcts.reform.fpl.enums.UserRole.LOCAL_AUTHORITY;
 import static uk.gov.hmcts.reform.fpl.enums.UserRole.SYSTEM_UPDATE;
 
-
 import org.springframework.stereotype.Component;
 import uk.gov.hmcts.ccd.sdk.api.callback.AboutToStartOrSubmitResponse;
 import uk.gov.hmcts.ccd.sdk.api.CaseDetails;
 import uk.gov.hmcts.ccd.sdk.api.ConfigBuilder;
+import uk.gov.hmcts.ccd.sdk.type.Organisation;
+import uk.gov.hmcts.ccd.sdk.type.OrganisationPolicy;
 import uk.gov.hmcts.reform.ccd.client.model.SubmittedCallbackResponse;
 import uk.gov.hmcts.reform.fpl.enums.State;
 import uk.gov.hmcts.reform.fpl.enums.UserRole;
@@ -209,6 +210,13 @@ public class CCDConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<CaseData, S
         .grant(R, CAFCASS)
         .fields()
         .page("AllocatedJudge")
+        .complex(CaseData::getOrganisationPolicy)
+          .complex(OrganisationPolicy::getOrganisation)
+            .mandatory(Organisation::getOrganisationId)
+          .done()
+          .optional(OrganisationPolicy::getOrgPolicyCaseAssignedRole, null, CCD_SOLICITOR)
+          .optional(OrganisationPolicy::getOrgPolicyReference)
+        .done()
         .field(CaseData::getAllocatedJudge).complex()
         .mandatory(Judge::getJudgeTitle)
         .mandatory(Judge::getOtherTitle)

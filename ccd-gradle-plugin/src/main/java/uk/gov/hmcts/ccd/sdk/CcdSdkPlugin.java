@@ -56,7 +56,7 @@ public class CcdSdkPlugin implements Plugin<Project> {
     if (System.getenv("GRADLE_FUNCTIONAL_TEST") != null) {
       project.getRepositories().mavenLocal();
     } else {
-      project.getRepositories().maven(x -> x.setUrl("https://dl.bintray.com/hmcts/hmcts-maven"));
+      project.getRepositories().maven(x -> x.setUrl("https://jitpack.io"));
     }
     project.getRepositories().jcenter();
   }

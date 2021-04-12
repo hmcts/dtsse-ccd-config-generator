@@ -1,0 +1,24 @@
+[
+  {
+    "DefaultValue": "[SOLICITOR]",
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "organisationPolicy",
+    "CaseEventID": "allocatedJudge",
+    "DisplayContext": "OPTIONAL",
+    "ListElementCode": "OrgPolicyCaseAssignedRole"
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "organisationPolicy",
+    "CaseEventID": "allocatedJudge",
+    "DisplayContext": "OPTIONAL",
+    "ListElementCode": "OrgPolicyReference"
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "organisationPolicy",
+    "CaseEventID": "allocatedJudge",
+    "DisplayContext": "MANDATORY",
+    "ListElementCode": "Organisation.OrganisationID"
+  }
+]
