@@ -41,6 +41,7 @@ configure(libraries) {
 
     repositories {
         mavenCentral()
+        maven{url 'https://jitpack.io'}
     }
 
     def gitRepo = "https://github.com/hmcts/ccd-config-generator"
