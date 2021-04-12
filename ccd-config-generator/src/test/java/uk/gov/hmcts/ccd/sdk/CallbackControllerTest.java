@@ -37,7 +37,7 @@ public class CallbackControllerTest {
             .data(Maps.newHashMap())
             .build())
         .build();
-    this.mockMvc.perform(post("/callbacks/about-to-start?event=addFamilyManCaseNumber")
+    this.mockMvc.perform(post("/callbacks/about-to-submit")
         .contentType(MediaType.APPLICATION_JSON).content(new ObjectMapper().writeValueAsString(req)))
         .andExpect(status().isOk());
   }

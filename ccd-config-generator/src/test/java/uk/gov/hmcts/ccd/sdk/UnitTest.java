@@ -25,7 +25,6 @@ public class UnitTest {
       public void configure(ConfigBuilder<CaseData, State, UserRole> builder) {
         builder.event("addNotes")
           .forStates(State.Submitted, State.Open, State.Deleted)
-          .allWebhooks()
           .fields()
           .readonly(CaseData::getProceeding)
           .complex(CaseData::getJudgeAndLegalAdvisor);

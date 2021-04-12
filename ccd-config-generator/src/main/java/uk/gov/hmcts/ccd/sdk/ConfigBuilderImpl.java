@@ -25,7 +25,6 @@ import uk.gov.hmcts.ccd.sdk.api.Search.SearchBuilder;
 import uk.gov.hmcts.ccd.sdk.api.Tab;
 import uk.gov.hmcts.ccd.sdk.api.Tab.TabBuilder;
 import uk.gov.hmcts.ccd.sdk.api.Webhook;
-import uk.gov.hmcts.ccd.sdk.api.WebhookConvention;
 import uk.gov.hmcts.ccd.sdk.api.WorkBasket.WorkBasketBuilder;
 
 class ConfigBuilderImpl<T, S, R extends HasRole> implements ConfigBuilder<T, S, R> {
@@ -46,7 +45,6 @@ class ConfigBuilderImpl<T, S, R extends HasRole> implements ConfigBuilder<T, S, 
   public final Map<String, String> roleHierarchy = new Hashtable<>();
 
   private Class caseData;
-  private WebhookConvention webhookConvention = this::defaultWebhookConvention;
   public String environment;
   public String jurId = "";
   public String jurName = "";
@@ -96,7 +94,7 @@ class ConfigBuilderImpl<T, S, R extends HasRole> implements ConfigBuilder<T, S, 
 
       private Event.EventBuilder<T, R, S> build(Set<S> preStates, Set<S> postStates) {
         Event.EventBuilder<T, R, S> result = Event.EventBuilder
-            .builder(id, caseData, webhookConvention, new PropertyUtils(), preStates, postStates);
+            .builder(id, caseData, new PropertyUtils(), preStates, postStates);
         if (!events.containsKey(id)) {
           events.put(id, Lists.newArrayList());
         }
@@ -166,11 +164,6 @@ class ConfigBuilderImpl<T, S, R extends HasRole> implements ConfigBuilder<T, S, 
   @Override
   public void caseField(String id, String label, String type) {
     caseField(id, label, type, null);
-  }
-
-  @Override
-  public void setWebhookConvention(WebhookConvention convention) {
-    this.webhookConvention = convention;
   }
 
   @Override

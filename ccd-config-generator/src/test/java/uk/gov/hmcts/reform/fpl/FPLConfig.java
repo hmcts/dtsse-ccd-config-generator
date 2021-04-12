@@ -19,11 +19,12 @@ import static uk.gov.hmcts.reform.fpl.enums.UserRole.LOCAL_AUTHORITY;
 import static uk.gov.hmcts.reform.fpl.enums.UserRole.SYSTEM_UPDATE;
 
 
-import com.google.common.base.CaseFormat;
 import org.springframework.stereotype.Component;
+import uk.gov.hmcts.ccd.sdk.api.callback.AboutToStartOrSubmitResponse;
 import uk.gov.hmcts.ccd.sdk.api.CCDConfig;
+import uk.gov.hmcts.ccd.sdk.api.CaseDetails;
 import uk.gov.hmcts.ccd.sdk.api.ConfigBuilder;
-import uk.gov.hmcts.ccd.sdk.api.Webhook;
+import uk.gov.hmcts.reform.ccd.client.model.SubmittedCallbackResponse;
 import uk.gov.hmcts.reform.fpl.enums.State;
 import uk.gov.hmcts.reform.fpl.enums.UserRole;
 import uk.gov.hmcts.reform.fpl.model.CaseData;
@@ -40,18 +41,10 @@ public class FPLConfig implements CCDConfig<CaseData, State, UserRole> {
         return "production";
     }
 
-  // Builds the URL for a webhook based on the event.
-  protected String webhookConvention(Webhook webhook, String eventId) {
-    eventId = CaseFormat.LOWER_CAMEL.to(CaseFormat.LOWER_HYPHEN, eventId);
-    String path = CaseFormat.LOWER_CAMEL.to(CaseFormat.LOWER_HYPHEN, webhook.toString());
-    return "${CCD_DEF_CASE_SERVICE_BASE_URL}/callback/" + eventId + "/" + path;
-  }
-
   public void configure(ConfigBuilder<CaseData, State, UserRole> builder) {
     this.builder = builder;
     builder.setCallbackHost("${CCD_DEF_CASE_SERVICE_BASE_URL}");
     builder.setEnvironment(environment());
-    builder.setWebhookConvention(this::webhookConvention);
     builder.jurisdiction("PUBLICLAW", "Family Public Law", "Family Public Law desc");
     builder.caseType("CARE_SUPERVISION_EPO", "Care, supervision and EPOs", "Care, supervision and emergency protection orders");
 
@@ -246,10 +239,21 @@ public class FPLConfig implements CCDConfig<CaseData, State, UserRole> {
         .name("Start application")
         .description("Create a new case – add a title")
         .grant(CRU, LOCAL_AUTHORITY)
-        .aboutToSubmitWebhook("case-initiation")
-        .submittedWebhook()
+        .aboutToSubmitCallback(this::aboutToSubmit)
+        .submittedCallback(this::submitted)
         .retries(1,2,3,4,5)
         .fields()
         .optional(CaseData::getCaseName);
+  }
+
+  private AboutToStartOrSubmitResponse<CaseData, State> aboutToSubmit(
+      CaseDetails<CaseData, State> caseDataStateCaseDetails,
+      CaseDetails<CaseData, State> caseDataStateCaseDetails1) {
+    throw new RuntimeException();
+  }
+
+  private SubmittedCallbackResponse submitted(CaseDetails<CaseData, State> caseDataStateCaseDetails,
+                                              CaseDetails<CaseData, State> caseDataStateCaseDetails1) {
+    throw new RuntimeException();
   }
 }

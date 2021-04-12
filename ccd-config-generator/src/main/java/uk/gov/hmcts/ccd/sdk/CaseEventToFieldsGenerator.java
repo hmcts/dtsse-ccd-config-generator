@@ -52,11 +52,6 @@ class CaseEventToFieldsGenerator {
             info.put("FieldShowCondition", field.getShowCondition());
           }
 
-          if (collection.getMidEventWebhooks().containsKey(field.getPage())) {
-            info.put("CallBackURLMidEvent",
-                collection.getMidEventWebhooks().remove(field.getPage()));
-          }
-
           if (collection.getPageShowConditions().containsKey(field.getPage())) {
             info.put("PageShowCondition",
                 collection.getPageShowConditions().remove(field.getPage()));

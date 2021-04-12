@@ -84,9 +84,31 @@ class CaseEventGenerator<T, S, R extends HasRole> {
       }
     }
 
+    if (event.getAboutToStartCallback() != null) {
+      String url = callbackHost + "/callbacks/about-to-start";
+      data.put("CallBackURLAboutToStartEvent", url);
+      if (event.getRetries().containsKey(Webhook.AboutToStart)) {
+        data.put("RetriesTimeoutURLAboutToStartEvent",
+            event.getRetries().get(Webhook.AboutToStart));
+      }
+    }
+
     if (event.getAboutToSubmitCallback() != null) {
       String url = callbackHost + "/callbacks/about-to-submit";
       data.put("CallBackURLAboutToSubmitEvent", url);
+      if (event.getRetries().containsKey(Webhook.AboutToSubmit)) {
+        data.put("RetriesTimeoutURLAboutToSubmitEvent",
+            event.getRetries().get(Webhook.AboutToSubmit));
+      }
+    }
+
+    if (event.getSubmittedCallback() != null) {
+      String url = callbackHost + "/callbacks/submitted";
+      data.put("CallBackURLSubmittedEvent", url);
+      if (event.getRetries().containsKey(Webhook.Submitted)) {
+        data.put("RetriesTimeoutURLSubmittedEvent",
+            event.getRetries().get(Webhook.Submitted));
+      }
     }
 
     if (event.getSubmittedURL() != null) {
