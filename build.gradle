@@ -8,7 +8,7 @@ subprojects {
     apply plugin: 'maven-publish'
     apply plugin: 'jacoco'
 
-    def buildNumber = System.getenv("RELEASE_VERSION")?.replace("refs/tags/", "") ?: "DEV-SNAPSHOT"
+    def buildNumber = System.getenv("VERSION")?.replace("refs/tags/", "") ?: "DEV-SNAPSHOT"
 
     group 'uk.gov.hmcts.reform'
     version buildNumber
