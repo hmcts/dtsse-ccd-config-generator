@@ -1,12 +1,13 @@
 
 repositories {
+    jcenter()
     mavenCentral()
     maven {
         url  "http://repo.spring.io/milestone"
     }
 }
 
-def springBootVersion = '2.3.5.RELEASE'
+def springBootVersion = '2.4.4'
 
 dependencies {
     // Use JUnit test framework for unit tests
