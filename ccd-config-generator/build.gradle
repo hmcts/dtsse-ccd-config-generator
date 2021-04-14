@@ -4,7 +4,6 @@ plugins {
 }
 
 group = 'com.github.hmcts'
-version = 1.0
 
 repositories {
     jcenter()
@@ -88,9 +87,4 @@ publishing {
             }
         }
     }
-}
-
-artifacts {
-    archives sourcesJar
-    archives javadocJar
 }
