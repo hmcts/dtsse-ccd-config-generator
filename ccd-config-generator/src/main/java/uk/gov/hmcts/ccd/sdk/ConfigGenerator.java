@@ -20,66 +20,80 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.stream.Collectors;
 import lombok.SneakyThrows;
 import net.jodah.typetools.TypeResolver;
-import org.objenesis.Objenesis;
-import org.objenesis.ObjenesisStd;
 import org.reflections.ReflectionUtils;
-import org.reflections.Reflections;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
 import uk.gov.hmcts.ccd.sdk.api.CCDConfig;
 import uk.gov.hmcts.ccd.sdk.api.Event;
 import uk.gov.hmcts.ccd.sdk.api.HasRole;
 import uk.gov.hmcts.ccd.sdk.api.Permission;
+import uk.gov.hmcts.ccd.sdk.api.callback.AboutToStart;
+import uk.gov.hmcts.ccd.sdk.api.callback.AboutToSubmit;
+import uk.gov.hmcts.ccd.sdk.api.callback.Submitted;
 
+@Configuration
 class ConfigGenerator<T, S, R extends HasRole> {
 
-  private final Reflections reflections;
-  private final String basePackage;
+  private static final String basePackage = "uk.gov.hmcts";
 
-  public ConfigGenerator(Reflections reflections, String basePackage) {
-    this.reflections = reflections;
-    this.basePackage = basePackage;
+  private List<CCDConfig<T, S, R>> configs;
+
+  @Autowired
+  public ConfigGenerator(List<CCDConfig<T, S, R>> configs) {
+    if (configs.isEmpty()) {
+      throw new RuntimeException("Expected at least one CCDConfig implementation but none found.");
+    }
+    this.configs = configs;
   }
 
   public void resolveConfig(File outputFolder) {
-    Set<Class<? extends CCDConfig>> configTypes =
-        reflections.getSubTypesOf(CCDConfig.class).stream()
-            .filter(x -> !Modifier.isAbstract(x.getModifiers())).collect(Collectors.toSet());
-
-    if (configTypes.isEmpty()) {
-      throw new RuntimeException("Expected at least one CCDConfig implementation but none found. "
-          + "Scanned: " + basePackage);
-    }
-
     initOutputDirectory(outputFolder);
-
-    for (Class<? extends CCDConfig> configType : configTypes) {
-      Objenesis objenesis = new ObjenesisStd();
-      CCDConfig config = objenesis.newInstance(configType);
-      ResolvedCCDConfig resolved = resolveCCDConfig(config);
-      File destination = Strings.isNullOrEmpty(resolved.environment) ? outputFolder
-          : new File(outputFolder, resolved.environment);
-      writeConfig(destination, resolved);
-    }
+    ResolvedCCDConfig resolved = resolveCCDConfig();
+    File destination = Strings.isNullOrEmpty(resolved.environment) ? outputFolder
+        : new File(outputFolder, resolved.environment);
+    writeConfig(destination, resolved);
   }
 
   @SneakyThrows
-  public ResolvedCCDConfig<T, S, R> resolveCCDConfig(CCDConfig<T, S, R> config) {
+  @Bean
+  public ResolvedCCDConfig<T, S, R> resolveCCDConfig() {
+    CCDConfig<T, S, R> config = this.configs.iterator().next();
     Class<?>[] typeArgs = TypeResolver.resolveRawArguments(CCDConfig.class, config.getClass());
     Set<S> allStates = Set.of(((Class<S>)typeArgs[1]).getEnumConstants());
     ConfigBuilderImpl builder = new ConfigBuilderImpl(typeArgs[0], allStates);
-    config.configure(builder);
+    for (CCDConfig<T, S, R> c : configs) {
+      c.configure(builder);
+    }
+
     List<Event> events = builder.getEvents();
+    Map<String, AboutToStart> aboutToStartCallbacks = Maps.newHashMap();
+    Map<String, AboutToSubmit> aboutToSubmitCallbacks = Maps.newHashMap();
+    Map<String, Submitted> submittedCallbacks = Maps.newHashMap();
+    for (Event event : events) {
+      if (event.getAboutToStartCallback() != null) {
+        aboutToStartCallbacks.put(event.getId(), event.getAboutToStartCallback());
+      }
+      if (event.getAboutToSubmitCallback() != null) {
+        aboutToSubmitCallbacks.put(event.getId(), event.getAboutToSubmitCallback());
+      }
+      if (event.getSubmittedCallback() != null) {
+        submittedCallbacks.put(event.getId(), event.getSubmittedCallback());
+      }
+    }
+
     Map<Class, Integer> types = resolve(typeArgs[0], basePackage);
     return new ResolvedCCDConfig(typeArgs[0], typeArgs[1], typeArgs[2], builder, events, types,
-        builder.environment, allStates);
+        builder.environment, allStates, aboutToStartCallbacks, aboutToSubmitCallbacks, submittedCallbacks);
   }
 
   private void writeConfig(File outputfolder, ResolvedCCDConfig<T, S, R> config) {
     outputfolder.mkdirs();
     new CaseEventGenerator<T, S, R>().writeEvents(outputfolder, config);
-    CaseEventToFieldsGenerator.writeEvents(outputfolder, config.events, config.builder.caseType);
+    CaseEventToFieldsGenerator.writeEvents(outputfolder, config.events, config.builder.caseType,
+        config.builder.callbackHost);
     ComplexTypeGenerator.generate(outputfolder, config.builder.caseType, config.types);
     CaseEventToComplexTypesGenerator.writeEvents(outputfolder, config.events);
     Table<String, R, Set<Permission>> eventPermissions = buildEventPermissions(config.builder,

@@ -30,7 +30,7 @@ public class CcdSdkPlugin implements Plugin<Project> {
     Configuration generatorConfiguration = project.getConfigurations()
         .create("ccd-config-generator");
     generatorConfiguration.getDependencies().add(generator);
-    project.getDependencies().add("compileOnly", "uk.gov.hmcts.reform:ccd-config-generator:"
+    project.getDependencies().add("implementation", "uk.gov.hmcts.reform:ccd-config-generator:"
         + version);
     project.getDependencies().add("testImplementation", "uk.gov.hmcts.reform:ccd-config-generator:"
         + version);

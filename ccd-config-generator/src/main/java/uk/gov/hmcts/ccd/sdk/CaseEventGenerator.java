@@ -24,13 +24,14 @@ class CaseEventGenerator<T, S, R extends HasRole> {
     for (Event event : config.events) {
       Path output = Paths.get(folder.getPath(), event.getId() + ".json");
 
-      JsonUtils.mergeInto(output, serialise(config.builder.caseType, event, config.allStates),
+      JsonUtils.mergeInto(output, serialise(config.builder.caseType, event, config.allStates,
+          config.builder.callbackHost),
           new AddMissing(), "ID");
     }
   }
 
   private List<Map<String, Object>> serialise(String caseTypeId, Event<T, R, S> event,
-                                              Set<S> allStates) {
+                                              Set<S> allStates, String callbackHost) {
     int t = 1;
     List result = Lists.newArrayList();
     Map<String, Object> data = JsonUtils.getField(event.getId());
@@ -68,25 +69,30 @@ class CaseEventGenerator<T, S, R extends HasRole> {
     data.put("PostConditionState", toCCDStateString(event.getPostState(), allStates));
     data.put("SecurityClassification", "Public");
 
-    if (event.getAboutToStartURL() != null) {
-      data.put("CallBackURLAboutToStartEvent", event.getAboutToStartURL());
+    if (event.getAboutToStartCallback() != null) {
+      String url = callbackHost + "/callbacks/about-to-start";
+      data.put("CallBackURLAboutToStartEvent", url);
       if (event.getRetries().containsKey(Webhook.AboutToStart)) {
-        data.put("RetriesTimeoutAboutToStartEvent", event.getRetries().get(Webhook.AboutToStart));
+        data.put("RetriesTimeoutURLAboutToStartEvent",
+            event.getRetries().get(Webhook.AboutToStart));
       }
     }
 
-    if (event.getAboutToSubmitURL() != null) {
-      data.put("CallBackURLAboutToSubmitEvent", event.getAboutToSubmitURL());
+    if (event.getAboutToSubmitCallback() != null) {
+      String url = callbackHost + "/callbacks/about-to-submit";
+      data.put("CallBackURLAboutToSubmitEvent", url);
       if (event.getRetries().containsKey(Webhook.AboutToSubmit)) {
         data.put("RetriesTimeoutURLAboutToSubmitEvent",
             event.getRetries().get(Webhook.AboutToSubmit));
       }
     }
 
-    if (event.getSubmittedURL() != null) {
-      data.put("CallBackURLSubmittedEvent", event.getSubmittedURL());
+    if (event.getSubmittedCallback() != null) {
+      String url = callbackHost + "/callbacks/submitted";
+      data.put("CallBackURLSubmittedEvent", url);
       if (event.getRetries().containsKey(Webhook.Submitted)) {
-        data.put("RetriesTimeoutURLSubmittedEvent", event.getRetries().get(Webhook.Submitted));
+        data.put("RetriesTimeoutURLSubmittedEvent",
+            event.getRetries().get(Webhook.Submitted));
       }
     }
 

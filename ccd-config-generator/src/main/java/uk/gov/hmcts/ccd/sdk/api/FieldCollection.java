@@ -24,9 +24,6 @@ public class FieldCollection {
   private List<Field.FieldBuilder> explicitFields;
 
   @ToString.Exclude
-  private Map<String, String> midEventWebhooks;
-
-  @ToString.Exclude
   private Map<String, String> pageShowConditions;
 
   @ToString.Exclude
@@ -59,7 +56,6 @@ public class FieldCollection {
       result.fields = new ArrayList<>();
       result.complexFields = new ArrayList<>();
       result.explicitFields = new ArrayList<>();
-      result.midEventWebhooks = new Hashtable<>();
       result.pageShowConditions = new Hashtable<>();
       result.pageLabels = new Hashtable<>();
       result.propertyUtils = propertyUtils;
@@ -234,19 +230,6 @@ public class FieldCollection {
 
     public FieldCollectionBuilder<Type, Parent> showCondition(String condition) {
       pageShowConditions.put(this.pageId.toString(), condition);
-      return this;
-    }
-
-    public FieldCollectionBuilder<Type, Parent> midEventWebhook(String eventId) {
-      event.customWebhookName = eventId;
-      String url = event.getWebhookPathByConvention(Webhook.MidEvent);
-      midEventWebhooks.put(this.pageId.toString(), url);
-      return this;
-    }
-
-    public FieldCollectionBuilder<Type, Parent> midEventWebhook() {
-      String url = event.getWebhookPathByConvention(Webhook.MidEvent);
-      midEventWebhooks.put(this.pageId.toString(), url);
       return this;
     }
 

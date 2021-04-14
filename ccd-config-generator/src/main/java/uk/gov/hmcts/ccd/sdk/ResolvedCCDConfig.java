@@ -6,6 +6,9 @@ import java.util.Map;
 import java.util.Set;
 import uk.gov.hmcts.ccd.sdk.api.Event;
 import uk.gov.hmcts.ccd.sdk.api.HasRole;
+import uk.gov.hmcts.ccd.sdk.api.callback.AboutToStart;
+import uk.gov.hmcts.ccd.sdk.api.callback.AboutToSubmit;
+import uk.gov.hmcts.ccd.sdk.api.callback.Submitted;
 
 public class ResolvedCCDConfig<T, S, R extends HasRole> {
 
@@ -17,11 +20,17 @@ public class ResolvedCCDConfig<T, S, R extends HasRole> {
   public final Class<?> stateArg;
   public final Class<?> roleType;
   public final ImmutableSet<S> allStates;
+  public final Map<String, AboutToStart<T, S>> aboutToStartCallbacks;
+  public final Map<String, AboutToSubmit<T, S>> aboutToSubmitCallbacks;
+  public final Map<String, Submitted<T, S>> submittedCallbacks;
 
   public ResolvedCCDConfig(Class<?> typeArg, Class<?> stateArg, Class<?> roleType,
                            ConfigBuilderImpl<T, S, R> builder, List<Event<T, R, S>> events,
                            Map<Class, Integer> types, String environment,
-                           Set<S> allStates) {
+                           Set<S> allStates,
+                           Map<String, AboutToStart<T, S>> aboutToStartCallbacks,
+                           Map<String, AboutToSubmit<T, S>> aboutToSubmitCallbacks,
+                           Map<String, Submitted<T, S>> submittedCallbacks) {
     this.typeArg = typeArg;
     this.stateArg = stateArg;
     this.roleType = roleType;
@@ -30,5 +39,8 @@ public class ResolvedCCDConfig<T, S, R extends HasRole> {
     this.types = types;
     this.environment = environment;
     this.allStates = ImmutableSet.copyOf(allStates);
+    this.aboutToStartCallbacks = aboutToStartCallbacks;
+    this.aboutToSubmitCallbacks = aboutToSubmitCallbacks;
+    this.submittedCallbacks = submittedCallbacks;
   }
 }

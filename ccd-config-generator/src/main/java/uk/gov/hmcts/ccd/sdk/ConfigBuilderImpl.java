@@ -25,10 +25,9 @@ import uk.gov.hmcts.ccd.sdk.api.Search.SearchBuilder;
 import uk.gov.hmcts.ccd.sdk.api.Tab;
 import uk.gov.hmcts.ccd.sdk.api.Tab.TabBuilder;
 import uk.gov.hmcts.ccd.sdk.api.Webhook;
-import uk.gov.hmcts.ccd.sdk.api.WebhookConvention;
 import uk.gov.hmcts.ccd.sdk.api.WorkBasket.WorkBasketBuilder;
 
-class ConfigBuilderImpl<T, S, R extends HasRole> implements ConfigBuilder<T, S, R> {
+public class ConfigBuilderImpl<T, S, R extends HasRole> implements ConfigBuilder<T, S, R> {
 
   private final ImmutableSet<S> allStates;
   public String caseType = "";
@@ -46,13 +45,13 @@ class ConfigBuilderImpl<T, S, R extends HasRole> implements ConfigBuilder<T, S, 
   public final Map<String, String> roleHierarchy = new Hashtable<>();
 
   private Class caseData;
-  private WebhookConvention webhookConvention = this::defaultWebhookConvention;
   public String environment;
   public String jurId = "";
   public String jurName = "";
   public String jurDesc = "";
   public String caseName = "";
   public String caseDesc = "";
+  public String callbackHost;
 
   private String defaultWebhookConvention(Webhook webhook, String eventId) {
     eventId = CaseFormat.LOWER_CAMEL.to(CaseFormat.LOWER_HYPHEN, eventId);
@@ -95,7 +94,7 @@ class ConfigBuilderImpl<T, S, R extends HasRole> implements ConfigBuilder<T, S, 
 
       private Event.EventBuilder<T, R, S> build(Set<S> preStates, Set<S> postStates) {
         Event.EventBuilder<T, R, S> result = Event.EventBuilder
-            .builder(id, caseData, webhookConvention, new PropertyUtils(), preStates, postStates);
+            .builder(id, caseData, new PropertyUtils(), preStates, postStates);
         if (!events.containsKey(id)) {
           events.put(id, Lists.newArrayList());
         }
@@ -168,11 +167,6 @@ class ConfigBuilderImpl<T, S, R extends HasRole> implements ConfigBuilder<T, S, 
   }
 
   @Override
-  public void setWebhookConvention(WebhookConvention convention) {
-    this.webhookConvention = convention;
-  }
-
-  @Override
   public TabBuilder<T, R> tab(String tabId, String tabLabel) {
     TabBuilder<T, R> result = Tab.TabBuilder.builder(caseData,
         new PropertyUtils()).tabID(tabId).label(tabLabel);
@@ -218,6 +212,11 @@ class ConfigBuilderImpl<T, S, R extends HasRole> implements ConfigBuilder<T, S, 
         }
       }
     };
+  }
+
+  @Override
+  public void setCallbackHost(String s) {
+    this.callbackHost = s;
   }
 
   private WorkBasketBuilder getWorkBasketBuilder(List<WorkBasketBuilder> workBasketInputFields) {

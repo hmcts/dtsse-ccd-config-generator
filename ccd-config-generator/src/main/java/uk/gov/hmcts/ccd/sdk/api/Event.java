@@ -13,6 +13,10 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.ToString;
 import lombok.With;
+import uk.gov.hmcts.ccd.sdk.api.callback.AboutToStart;
+import uk.gov.hmcts.ccd.sdk.api.callback.AboutToSubmit;
+import uk.gov.hmcts.ccd.sdk.api.callback.MidEvent;
+import uk.gov.hmcts.ccd.sdk.api.callback.Submitted;
 
 @Builder
 @Data
@@ -27,9 +31,6 @@ public class Event<T, R extends HasRole, S> {
   private Set<S> preState;
   private Set<S> postState;
   private String description;
-  private String aboutToStartURL;
-  private String aboutToSubmitURL;
-  private String submittedURL;
   private Map<Webhook, String> retries;
   private boolean explicitGrants;
   private boolean showSummary;
@@ -38,6 +39,10 @@ public class Event<T, R extends HasRole, S> {
   private int eventNumber;
   @Builder.Default
   private String namespace = "";
+  private AboutToStart<T, S> aboutToStartCallback;
+  private AboutToSubmit<T, S> aboutToSubmitCallback;
+  private Submitted<T, S> submittedCallback;
+  private MidEvent<T, S> midEventCallback;
 
   public void setEventID(String eventId) {
     this.eventId = eventId;
@@ -75,10 +80,8 @@ public class Event<T, R extends HasRole, S> {
 
   public static class EventBuilder<T, R extends HasRole, S> {
 
-    private WebhookConvention webhookConvention;
-
     public static <T, R extends HasRole, S> EventBuilder<T, R, S> builder(
-        String id, Class dataClass, WebhookConvention convention, PropertyUtils propertyUtils,
+        String id, Class dataClass, PropertyUtils propertyUtils,
         Set<S> preStates, Set<S> postStates) {
       EventBuilder<T, R, S> result = new EventBuilder<T, R, S>();
       result.id(id);
@@ -91,7 +94,6 @@ public class Event<T, R extends HasRole, S> {
       result.fields = FieldCollection.FieldCollectionBuilder
           .builder(result, result, dataClass, propertyUtils);
       result.eventNumber = eventCount++;
-      result.webhookConvention = convention;
       result.retries = new HashMap<>();
 
       return result;
@@ -180,57 +182,6 @@ public class Event<T, R extends HasRole, S> {
       return this;
     }
 
-    String customWebhookName;
-
-    public EventBuilder<T, R, S> allWebhooks() {
-      return allWebhooks(this.customWebhookName);
-    }
-
-    public EventBuilder<T, R, S> allWebhooks(String convention) {
-      this.customWebhookName = convention;
-      aboutToStartWebhook();
-      aboutToSubmitWebhook();
-      submittedWebhook();
-      return this;
-    }
-
-    public EventBuilder<T, R, S> aboutToStartWebhook(String eventId, int... retries) {
-      this.customWebhookName = eventId;
-      return aboutToStartWebhook(retries);
-    }
-
-    public EventBuilder<T, R, S> aboutToStartWebhook(int... retries) {
-      // Use snake case event ID by convention
-      aboutToStartURL = getWebhookPathByConvention(Webhook.AboutToStart);
-      setRetries(Webhook.AboutToStart, retries);
-      return this;
-    }
-
-    public EventBuilder<T, R, S> aboutToSubmitWebhook(String eventId, int... retries) {
-      this.customWebhookName = eventId;
-      aboutToSubmitURL = getWebhookPathByConvention(Webhook.AboutToSubmit);
-      setRetries(Webhook.AboutToSubmit, retries);
-      return this;
-    }
-
-    public EventBuilder<T, R, S> aboutToSubmitWebhook(int... retries) {
-      aboutToSubmitURL = getWebhookPathByConvention(Webhook.AboutToSubmit);
-      setRetries(Webhook.AboutToSubmit, retries);
-      return this;
-    }
-
-    public EventBuilder<T, R, S> submittedWebhook(String eventId) {
-      customWebhookName = eventId;
-      submittedURL = getWebhookPathByConvention(Webhook.Submitted);
-      return this;
-    }
-
-    public EventBuilder<T, R, S> submittedWebhook(int... retries) {
-      submittedURL = getWebhookPathByConvention(Webhook.Submitted);
-      setRetries(Webhook.Submitted, retries);
-      return this;
-    }
-
     public EventBuilder<T, R, S> retries(int... retries) {
       for (Webhook value : Webhook.values()) {
         setRetries(value, retries);
@@ -245,12 +196,6 @@ public class Event<T, R extends HasRole, S> {
             Collectors.toList()));
         this.retries.put(hook, val);
       }
-    }
-
-    String getWebhookPathByConvention(Webhook hook) {
-      String id = customWebhookName != null ? customWebhookName
-          : eventId;
-      return webhookConvention.buildUrl(hook, id);
     }
   }
 }

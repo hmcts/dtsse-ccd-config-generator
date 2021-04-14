@@ -1,5 +1,6 @@
 package uk.gov.hmcts.ccd.sdk;
 
+import java.util.List;
 import org.junit.Before;
 import org.junit.Test;
 import org.reflections.Reflections;
@@ -17,13 +18,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 public class UnitTest {
 
-    Reflections reflections;
-
-    @Before
-    public void setup() {
-      reflections = new Reflections("uk.gov.hmcts");
-    }
-
   @Test
   public void npeBug() {
     class NPEBug implements CCDConfig<CaseData, State, UserRole> {
@@ -31,17 +25,14 @@ public class UnitTest {
       public void configure(ConfigBuilder<CaseData, State, UserRole> builder) {
         builder.event("addNotes")
           .forStates(State.Submitted, State.Open, State.Deleted)
-          .allWebhooks()
           .fields()
           .readonly(CaseData::getProceeding)
           .complex(CaseData::getJudgeAndLegalAdvisor);
       }
     }
 
-    reflections = new Reflections("uk.gov.hmcts");
-
-    ConfigGenerator<CaseData, State, UserRole> generator = new ConfigGenerator<>(reflections, "uk.gov.hmcts");
-    generator.resolveCCDConfig(new NPEBug());
+    ConfigGenerator<CaseData, State, UserRole> generator = new ConfigGenerator<>(List.of(new NPEBug()));
+    generator.resolveCCDConfig();
   }
 
   @Test
@@ -52,9 +43,8 @@ public class UnitTest {
       }
     }
 
-    reflections = new Reflections("uk.gov.hmcts");
-    ConfigGenerator<MissingComplex, State, UserRole> generator = new ConfigGenerator<>(reflections, "uk.gov.hmcts");
-    ResolvedCCDConfig<MissingComplex, State, UserRole> resolved = generator.resolveCCDConfig(new MissingBug());
+    ConfigGenerator<MissingComplex, State, UserRole> generator = new ConfigGenerator<>(List.of(new MissingBug()));
+    ResolvedCCDConfig<MissingComplex, State, UserRole> resolved = generator.resolveCCDConfig();
     assertThat(resolved.types).containsKeys(Applicant.class);
   }
 }

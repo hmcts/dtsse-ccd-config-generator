@@ -30,9 +30,6 @@ public interface ConfigBuilder<T, S, R extends HasRole> {
 
   void caseField(String id, String label, String type);
 
-  // Webhooks can follow a convention derived from the webhook type and event id.
-  void setWebhookConvention(WebhookConvention convention);
-
   TabBuilder<T, R> tab(String tabId, String tabLabel);
 
   WorkBasketBuilder<T, R> workBasketResultFields();
@@ -45,4 +42,5 @@ public interface ConfigBuilder<T, S, R extends HasRole> {
 
   RoleBuilder<R> role(R... role);
 
+  void setCallbackHost(String s);
 }

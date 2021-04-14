@@ -1,5 +1,6 @@
 package uk.gov.hmcts.reform.fpl.model;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonGetter;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
@@ -8,6 +9,8 @@ import java.util.Set;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
+import lombok.NoArgsConstructor;
+import lombok.Value;
 import uk.gov.hmcts.ccd.sdk.api.CCD;
 import uk.gov.hmcts.ccd.sdk.type.DynamicList;
 import uk.gov.hmcts.ccd.sdk.type.OrganisationPolicy;
@@ -55,8 +58,8 @@ import static org.apache.commons.lang3.ObjectUtils.isEmpty;
 import static uk.gov.hmcts.reform.fpl.enums.CMOStatus.SEND_TO_JUDGE;
 
 @Data
-@Builder(toBuilder = true)
 @AllArgsConstructor
+@NoArgsConstructor(force = true)
 public class CaseData {
 
     @NotBlank(message = "Enter a case name")
@@ -166,8 +169,9 @@ public class CaseData {
     @NotNull(message = "You need to add details to children")
     @Valid
     private final List<@NotNull(message = "You need to add details to children") Element<Child>> children1;
+
     @NotBlank(message = "Enter Familyman case number")
-    private final String familyManCaseNumber;
+    private String familyManCaseNumber;
     private final NoticeOfProceedings noticeOfProceedings;
 
     @JsonIgnore

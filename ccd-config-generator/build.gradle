@@ -1,19 +1,25 @@
 
 repositories {
+    jcenter()
     mavenCentral()
     maven {
         url  "http://repo.spring.io/milestone"
     }
 }
 
+def springBootVersion = '2.3.9.RELEASE'
+
 dependencies {
     // Use JUnit test framework for unit tests
     testImplementation 'junit:junit:4.13.2'
     annotationProcessor group: 'org.projectlombok', name: 'lombok', version: '1.18.20'
     compileOnly group: 'org.projectlombok', name: 'lombok', version: '1.18.20'
+    implementation "org.springframework.boot:spring-boot-autoconfigure:${springBootVersion}"
+    implementation "org.springframework.boot:spring-boot-starter-web:${springBootVersion}"
+    implementation group: 'uk.gov.hmcts.reform', name: 'core-case-data-store-client', version: '4.7.6'
 
     testAnnotationProcessor group: 'org.projectlombok', name: 'lombok', version: '1.18.10'
-    testCompileOnly group: 'org.projectlombok', name: 'lombok', version: '1.18.10'
+    testCompileOnly group: 'org.projectlombok', name: 'lombok', version: '1.18.20'
     testCompile group: 'javax.validation', name: 'validation-api', version: '2.0.1.Final'
     testCompile 'org.skyscreamer:jsonassert:1.5.0'
     testCompile 'com.google.guava:guava:30.1.1-jre'
@@ -21,9 +27,8 @@ dependencies {
     testCompile group: 'commons-lang', name: 'commons-lang', version: '2.6'
     testCompile group: 'commons-io', name: 'commons-io', version: '2.8.0'
     testCompile group: 'org.assertj', name: 'assertj-core', version: '3.19.0'
+    testImplementation group: 'org.springframework.boot', name: 'spring-boot-starter-test', version: springBootVersion
 
-
-    testCompile group: 'org.springframework.boot', name: 'spring-boot-starter-mail', version: '2.4.4'
 
     compile group: 'org.apache.commons', name: 'commons-lang3', version: '3.12.0'
     compile group: 'de.cronn', name: 'reflection-util', version: '2.10.0'
@@ -46,4 +51,3 @@ tasks.compileTestJava.inputs.files(
         rootProject.file('test-builds/fpl-ccd-configuration/service/src'),
         rootProject.file('test-builds/fpl-ccd-configuration/ccd-definition')
 )
-

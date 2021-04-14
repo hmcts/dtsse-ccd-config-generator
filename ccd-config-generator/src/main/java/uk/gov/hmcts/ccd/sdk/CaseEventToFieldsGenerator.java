@@ -17,13 +17,14 @@ import uk.gov.hmcts.ccd.sdk.api.HasRole;
 class CaseEventToFieldsGenerator {
 
   public static <T, R extends HasRole, S> void writeEvents(File root, List<Event<T, R, S>> events,
-                                                           String caseType) {
+                                                           String caseType, String baseUrl) {
 
     for (Event<T, R, S> event : events) {
       FieldCollection collection = event.getFields().build();
       if (collection.getFields().size() > 0) {
         List<Map<String, Object>> entries = Lists.newArrayList();
         List<Field.FieldBuilder> fields = collection.getFields();
+        boolean firstField = true;
         for (Field.FieldBuilder fb : fields) {
           Map<String, Object> info = Maps.newHashMap();
           entries.add(info);
@@ -51,10 +52,9 @@ class CaseEventToFieldsGenerator {
           if (field.getShowCondition() != null) {
             info.put("FieldShowCondition", field.getShowCondition());
           }
-
-          if (collection.getMidEventWebhooks().containsKey(field.getPage())) {
-            info.put("CallBackURLMidEvent",
-                collection.getMidEventWebhooks().remove(field.getPage()));
+          if (firstField && event.getMidEventCallback() != null) {
+            firstField = false;
+            info.put("CallBackURLMidEvent", baseUrl + "/callbacks/mid-event");
           }
 
           if (collection.getPageShowConditions().containsKey(field.getPage())) {
