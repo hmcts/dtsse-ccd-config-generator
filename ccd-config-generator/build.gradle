@@ -3,6 +3,8 @@ plugins {
     id 'maven-publish'
 }
 
+group = 'com.github.hmcts'
+
 repositories {
     jcenter()
     mavenCentral()
