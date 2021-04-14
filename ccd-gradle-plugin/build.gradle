@@ -12,6 +12,8 @@ plugins {
     id 'com.gradle.plugin-publish' version '0.14.0'
 }
 
+version System.getenv('RELEASE_VERSION')?.replace('refs/tags/', '') ?: 'DEV-SNAPSHOT'
+
 repositories {
   jcenter()
   mavenCentral()

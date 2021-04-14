@@ -4,6 +4,7 @@ plugins {
 }
 
 group = 'com.github.hmcts'
+version System.getenv('VERSION') ?: 'DEV-SNAPSHOT' // Version set by Jitpack
 
 repositories {
     jcenter()
@@ -76,7 +77,7 @@ publishing {
             from components.java
             groupId 'com.github.hmcts'
             artifactId project.name
-            version project.version
+            version version
 
             pom.withXml {
                 def root = asNode()
