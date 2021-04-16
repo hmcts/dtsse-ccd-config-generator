@@ -1,30 +1,43 @@
 package uk.gov.hmcts.ccd.sdk;
 
 import java.io.File;
+import java.io.InputStream;
+import java.nio.file.Files;
 import java.util.Arrays;
-import java.util.Properties;
 import lombok.Data;
 import lombok.SneakyThrows;
 import org.gradle.api.Plugin;
 import org.gradle.api.Project;
+import org.gradle.api.Task;
+import org.gradle.api.file.Directory;
 import org.gradle.api.plugins.JavaPlugin;
 import org.gradle.api.plugins.JavaPluginConvention;
+import org.gradle.api.provider.Provider;
 import org.gradle.api.tasks.JavaExec;
 import org.gradle.api.tasks.SourceSet;
 import org.gradle.api.tasks.SourceSetContainer;
 
-/**
- * A simple 'hello world' plugin.
- */
 public class CcdSdkPlugin implements Plugin<Project> {
 
   public void apply(Project project) {
     project.getPlugins().apply(JavaPlugin.class);
 
-    String version = getVersion();
-    String coordinates = "com.github.hmcts:ccd-config-generator:" + version;
+    // Add the config generator's dependencies to the project.
+    PomParser.getGeneratorDependencies().asMap().forEach((configuration, deps) -> {
+      for (String dep : deps) {
+        project.getDependencies().add(configuration, dep);
+      }
+    });
 
-    project.getDependencies().add("implementation", coordinates);
+    // Extract the generator jar and add it to the project's dependencies.
+    Provider<Directory> generatorDir =
+        project.getLayout().getBuildDirectory().dir("generator");
+    Task extractor = project.getTasks().create("extractGenerator").doLast((x) -> {
+      extractGeneratorJar(generatorDir.get().file("generator.jar").getAsFile());
+    });
+    project.getDependencies().add("implementation",
+        project.fileTree(generatorDir)
+            .builtBy(extractor));
 
     JavaExec generate = project.getTasks().create("generateCCDConfig", JavaExec.class);
     generate.setGroup("CCD tasks");
@@ -44,19 +57,18 @@ public class CcdSdkPlugin implements Plugin<Project> {
         config.caseType
     )));
 
-    if (System.getenv("GRADLE_FUNCTIONAL_TEST") != null) {
-      project.getRepositories().mavenLocal();
-    } else {
-      project.getRepositories().maven(x -> x.setUrl("https://jitpack.io"));
-    }
     project.getRepositories().jcenter();
   }
 
   @SneakyThrows
-  private String getVersion() {
-    Properties properties = new Properties();
-    properties.load(getClass().getClassLoader().getResourceAsStream("application.properties"));
-    return properties.getProperty("types.version");
+  private void extractGeneratorJar(File to) {
+    try (InputStream is = CcdSdkPlugin.class.getClassLoader()
+        .getResourceAsStream("generator/ccd-config-generator-DEV-SNAPSHOT.jar")) {
+      byte[] buffer = new byte[is.available()];
+      is.read(buffer);
+      com.google.common.io.Files.createParentDirs(to);
+      Files.write(to.toPath(), buffer);
+    }
   }
 
   @Data

@@ -8,6 +8,7 @@
 
 plugins {
     // Apply the Java Gradle plugin development plugin to add support for developing Gradle plugins
+    id 'groovy'
     id 'java-gradle-plugin'
     id 'com.gradle.plugin-publish' version '0.14.0'
 }
@@ -24,6 +25,7 @@ dependencies {
     // Use JUnit test framework for unit tests
     annotationProcessor group: 'org.projectlombok', name: 'lombok', version: '1.18.20'
     compileOnly group: 'org.projectlombok', name: 'lombok', version: '1.18.20'
+    implementation 'com.google.guava:guava:30.1.1-jre'
 
     // Ensure we run the plugin's tests when the libraries are modified.
     testCompile project(':ccd-config-generator')
@@ -35,6 +37,15 @@ dependencies {
     testCompile group: 'org.assertj', name: 'assertj-core', version: '3.19.0'
 }
 
+// Pack the generator into the plugin JAR,
+// along with the POM describing its dependencies,
+// for use by the plugin at runtime.
+processResources {
+    into("generator") {
+        from project(':ccd-config-generator').tasks.jar
+        from project(':ccd-config-generator').tasks.generatePomFileForMainPublication
+    }
+}
 pluginBundle {
     website = 'https://github.com/hmcts/ccd-config-generator'
     vcsUrl = 'https://github.com/hmcts/ccd-config-generator'
@@ -65,17 +76,6 @@ sourceSets {
   }
 }
 
-task setVersion {
-    doLast {
-        def resources = file('src/main/resources')
-        resources.mkdirs()
-        def props = new File(resources, 'application.properties')
-        props.text = "types.version=${version}"
-    }
-}
-
-compileJava.dependsOn setVersion
-
 gradlePlugin.testSourceSets(sourceSets.functionalTest)
 configurations.functionalTestImplementation.extendsFrom(configurations.testImplementation)
 
@@ -86,10 +86,6 @@ task functionalTest(type: Test) {
 }
 
 functionalTest.inputs.dir file('test-projects')
-
-functionalTest.dependsOn(
-        ":ccd-config-generator:publishMainPublicationToMavenLocal"
-)
 
 check {
     // Run the functional tests as part of `check`

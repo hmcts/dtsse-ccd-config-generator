@@ -4,7 +4,7 @@ plugins {
 }
 
 group = 'com.github.hmcts'
-version System.getenv('VERSION') ?: 'DEV-SNAPSHOT' // Version set by Jitpack
+version 'DEV-SNAPSHOT'
 
 repositories {
     jcenter()
@@ -37,33 +37,19 @@ dependencies {
     testImplementation group: 'org.springframework.boot', name: 'spring-boot-starter-test', version: springBootVersion
 
 
-    compile group: 'org.apache.commons', name: 'commons-lang3', version: '3.12.0'
-    compile group: 'de.cronn', name: 'reflection-util', version: '2.10.0'
-    compile group: 'org.objenesis', name: 'objenesis', version: '3.2'
-    compile group: 'cglib', name: 'cglib', version: '3.3.0'
-    compile group: 'net.jodah', name: 'typetools', version: '0.6.3'
-    compile 'org.reflections:reflections:0.9.12'
-    compile 'com.google.guava:guava:30.1-jre'
+    implementation group: 'org.apache.commons', name: 'commons-lang3', version: '3.12.0'
+    implementation group: 'de.cronn', name: 'reflection-util', version: '2.10.0'
+    implementation group: 'org.objenesis', name: 'objenesis', version: '3.2'
+    implementation group: 'cglib', name: 'cglib', version: '3.3.0'
+    implementation group: 'net.jodah', name: 'typetools', version: '0.6.3'
+    implementation 'org.reflections:reflections:0.9.12'
+    implementation 'com.google.guava:guava:30.1-jre'
 
-    compile 'com.fasterxml.jackson.core:jackson-databind:2.12.3'
+    implementation 'com.fasterxml.jackson.core:jackson-databind:2.12.3'
 }
 
 compileJava {
     options.compilerArgs += ["-Werror"]
-}
-
-def pomConfig = {
-    licenses {
-        license {
-            name "MIT License"
-            url "http://www.opensource.org/licenses/mit-license.php"
-            distribution "repo"
-        }
-    }
-
-    scm {
-        url "https://github.com/hmcts/ccd-config-generator"
-    }
 }
 
 java {
@@ -84,7 +70,6 @@ publishing {
                 root.appendNode('description', 'Generate CCD Configuration from code')
                 root.appendNode('name', 'CCD Config generator')
                 root.appendNode('url', 'https://github.com/hmcts/ccd-config-generator')
-                root.children().last() + pomConfig
             }
         }
     }

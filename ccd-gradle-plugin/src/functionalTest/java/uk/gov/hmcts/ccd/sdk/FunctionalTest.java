@@ -42,8 +42,7 @@ public class FunctionalTest {
         .forwardOutput()
         .withPluginClasspath()
         .withProjectDir(project)
-        .withArguments("generateCCDConfig", "test", "-si")
-        .withEnvironment(Maps.of("GRADLE_FUNCTIONAL_TEST", "true"));
+        .withArguments("generateCCDConfig", "test", "-si");
   }
 }
 
