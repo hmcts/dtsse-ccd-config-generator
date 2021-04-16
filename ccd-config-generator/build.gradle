@@ -14,7 +14,7 @@ repositories {
     }
 }
 
-def springBootVersion = '2.3.9.RELEASE'
+def springBootVersion = '2.4.5'
 
 dependencies {
     // Use JUnit test framework for unit tests
