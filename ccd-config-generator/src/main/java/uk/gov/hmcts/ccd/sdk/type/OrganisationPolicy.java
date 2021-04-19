@@ -21,6 +21,9 @@ public class OrganisationPolicy<R extends HasRole> {
   @JsonProperty("OrgPolicyReference")
   private final String orgPolicyReference;
 
+  @JsonProperty("PrepopulateToUsersOrganisation")
+  private final YesOrNo prepopulateToUsersOrganisation;
+
   @JsonProperty("OrgPolicyCaseAssignedRole")
   private final R orgPolicyCaseAssignedRole;
 
