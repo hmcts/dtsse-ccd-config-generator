@@ -37,9 +37,8 @@ dependencies {
     testCompile group: 'org.assertj', name: 'assertj-core', version: '3.19.0'
 }
 
-// Pack the generator into the plugin JAR,
-// along with the POM describing its dependencies,
-// for use by the plugin at runtime.
+// Pack the generator into the plugin JAR
+// for the plugin to add to the consuming project's build.
 processResources {
     into("generator") {
         from project(':ccd-config-generator').tasks.zipGenerator

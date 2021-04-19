@@ -3,6 +3,7 @@ package uk.gov.hmcts.ccd.sdk;
 import java.io.File;
 import java.io.InputStream;
 import java.nio.file.Files;
+import java.nio.file.StandardCopyOption;
 import java.util.Arrays;
 import lombok.Data;
 import lombok.SneakyThrows;
@@ -72,7 +73,7 @@ public class CcdSdkPlugin implements Plugin<Project> {
     try (InputStream is = CcdSdkPlugin.class.getClassLoader()
         .getResourceAsStream("generator/generator.zip")) {
       com.google.common.io.Files.createParentDirs(to);
-      Files.copy(is, to.toPath());
+      Files.copy(is, to.toPath(), StandardCopyOption.REPLACE_EXISTING);
     }
   }
 
