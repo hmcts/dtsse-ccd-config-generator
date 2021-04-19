@@ -57,7 +57,7 @@ public class CcdSdkPlugin implements Plugin<Project> {
     project.getRepositories().maven(x -> x.setUrl(generatorDir.get().getAsFile()));
 
     // Add the dependency on the generator which will be fetched from the local maven repo.
-    project.getDependencies().add("implementation", "com.github.hmcts:ccd-config-generator:DEV-SNAPSHOT");
+    project.getDependencies().add("implementation", "com.github.hmcts:ccd-config-generator:LATEST");
 
     // Create the task to generate CCD config.
     JavaExec generate = project.getTasks().create("generateCCDConfig", JavaExec.class);
