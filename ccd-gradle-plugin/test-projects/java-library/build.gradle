@@ -20,10 +20,6 @@ ccd {
     configDir = file('build/ccd-definition')
 }
 
-repositories {
-    mavenLocal()
-}
-
 dependencies {
     // This dependency is used by the application.
     implementation 'com.google.guava:guava:28.2-jre'

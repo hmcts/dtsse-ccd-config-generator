@@ -29,11 +29,12 @@ public class FunctionalTest {
   public void testEmptyProject() throws IOException {
     FileUtils.copyDirectory(new File("test-projects/java-library"),
         testProjectDir.getRoot());
-    runner(testProjectDir.getRoot())
-        .withGradleVersion("4.10.3")
-        .build();
-
+    GradleRunner r = runner(testProjectDir.getRoot())
+        .withGradleVersion("4.10.3");
+    r.build();
     File caseField = new File(testProjectDir.getRoot(), "build/ccd-definition/CaseField.json");
+    assertTrue(caseField.exists());
+    r.build(); // Run a second time to ensure a non-clean build succeeds.
     assertTrue(caseField.exists());
   }
 
