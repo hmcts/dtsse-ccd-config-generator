@@ -10,9 +10,11 @@ import org.gradle.api.Plugin;
 import org.gradle.api.Project;
 import org.gradle.api.Task;
 import org.gradle.api.file.Directory;
+import org.gradle.api.file.DirectoryProperty;
 import org.gradle.api.plugins.JavaPlugin;
 import org.gradle.api.plugins.JavaPluginConvention;
 import org.gradle.api.provider.Provider;
+import org.gradle.api.tasks.Copy;
 import org.gradle.api.tasks.JavaExec;
 import org.gradle.api.tasks.SourceSet;
 import org.gradle.api.tasks.SourceSetContainer;
@@ -22,23 +24,26 @@ public class CcdSdkPlugin implements Plugin<Project> {
   public void apply(Project project) {
     project.getPlugins().apply(JavaPlugin.class);
 
-    // Add the config generator's dependencies to the project.
-    PomParser.getGeneratorDependencies().asMap().forEach((configuration, deps) -> {
-      for (String dep : deps) {
-        project.getDependencies().add(configuration, dep);
-      }
-    });
-
-    // Extract the generator jar and add it to the project's dependencies.
+    // Extract the generator maven repository
+    Task writeZip = project.getTasks().create("writeGenerator").doLast(this::writeGeneratorZip);
+    Copy unpackZip = project.getTasks().create("unpackGenerator", Copy.class);
+    unpackZip.dependsOn(writeZip);
+    DirectoryProperty buildDir = project.getLayout().getBuildDirectory();
+    File archive = buildDir.file("generator.zip").get().getAsFile();
+    unpackZip.from(project.zipTree(archive));
     Provider<Directory> generatorDir =
-        project.getLayout().getBuildDirectory().dir("generator");
-    Task extractor = project.getTasks().create("extractGenerator").doLast((x) -> {
-      extractGeneratorJar(generatorDir.get().file("generator.jar").getAsFile());
-    });
-    project.getDependencies().add("implementation",
-        project.fileTree(generatorDir)
-            .builtBy(extractor));
+        buildDir.dir("generator");
+    unpackZip.into(generatorDir.get().getAsFile());
 
+    project.getTasks().getByName("compileJava").dependsOn(unpackZip);
+
+    // Add the repo to the project's repositories.
+    project.getRepositories().maven(x -> x.setUrl(generatorDir.get().getAsFile()));
+
+    // Add the dependency on the generator which will be fetched from the local maven repo.
+    project.getDependencies().add("implementation", "com.github.hmcts:ccd-config-generator:DEV-SNAPSHOT");
+
+    // Create the task to generate CCD config.
     JavaExec generate = project.getTasks().create("generateCCDConfig", JavaExec.class);
     generate.setGroup("CCD tasks");
     generate.setMain("uk.gov.hmcts.ccd.sdk.Main");
@@ -61,13 +66,13 @@ public class CcdSdkPlugin implements Plugin<Project> {
   }
 
   @SneakyThrows
-  private void extractGeneratorJar(File to) {
+  private void writeGeneratorZip(Task task) {
+    File to = task.getProject().getLayout().getBuildDirectory().file("generator.zip").get()
+        .getAsFile();
     try (InputStream is = CcdSdkPlugin.class.getClassLoader()
-        .getResourceAsStream("generator/ccd-config-generator-DEV-SNAPSHOT.jar")) {
-      byte[] buffer = new byte[is.available()];
-      is.read(buffer);
+        .getResourceAsStream("generator/generator.zip")) {
       com.google.common.io.Files.createParentDirs(to);
-      Files.write(to.toPath(), buffer);
+      Files.copy(is, to.toPath());
     }
   }
 

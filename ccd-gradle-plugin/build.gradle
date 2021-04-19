@@ -42,10 +42,11 @@ dependencies {
 // for use by the plugin at runtime.
 processResources {
     into("generator") {
-        from project(':ccd-config-generator').tasks.jar
-        from project(':ccd-config-generator').tasks.generatePomFileForMainPublication
+        from project(':ccd-config-generator').tasks.zipGenerator
     }
 }
+
+
 pluginBundle {
     website = 'https://github.com/hmcts/ccd-config-generator'
     vcsUrl = 'https://github.com/hmcts/ccd-config-generator'

@@ -57,6 +57,7 @@ java {
     withSourcesJar()
 }
 
+def mavenFolder = layout.buildDirectory.dir('config-generator')
 publishing {
     publications {
         Main(MavenPublication) {
@@ -73,4 +74,16 @@ publishing {
             }
         }
     }
+    repositories {
+        maven {
+            url = mavenFolder
+            name = 'generator'
+        }
+    }
+}
+
+task zipGenerator(type: Zip, dependsOn: publishMainPublicationToGeneratorRepository) {
+    from mavenFolder
+    archiveName 'generator.zip'
+    destinationDir buildDir
 }
