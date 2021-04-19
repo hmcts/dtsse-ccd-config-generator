@@ -7,6 +7,7 @@ import java.nio.file.StandardCopyOption;
 import java.util.Arrays;
 import lombok.Data;
 import lombok.SneakyThrows;
+import org.gradle.api.Action;
 import org.gradle.api.Plugin;
 import org.gradle.api.Project;
 import org.gradle.api.Task;
@@ -25,12 +26,26 @@ public class CcdSdkPlugin implements Plugin<Project> {
   public void apply(Project project) {
     project.getPlugins().apply(JavaPlugin.class);
 
-    // Extract the generator maven repository
-    Task writeZip = project.getTasks().create("writeGenerator").doLast(this::writeGeneratorZip);
-    Copy unpackZip = project.getTasks().create("unpackGenerator", Copy.class);
-    unpackZip.dependsOn(writeZip);
+    // Write the zipped maven repo containing the generator to disk.
     DirectoryProperty buildDir = project.getLayout().getBuildDirectory();
     File archive = buildDir.file("generator.zip").get().getAsFile();
+    // Using a lambda here break's Gradle's up-to-date checks.
+    Task writeZip = project.getTasks().create("writeGenerator").doLast(new Action<Task>() {
+      @Override
+      @SneakyThrows
+      public void execute(Task task) {
+        try (InputStream is = CcdSdkPlugin.class.getClassLoader()
+            .getResourceAsStream("generator/generator.zip")) {
+          com.google.common.io.Files.createParentDirs(archive);
+          Files.copy(is, archive.toPath(), StandardCopyOption.REPLACE_EXISTING);
+        }
+      }
+    });
+    writeZip.getOutputs().file(archive);
+
+    // Extract the local maven repo.
+    Copy unpackZip = project.getTasks().create("unpackGenerator", Copy.class);
+    unpackZip.dependsOn(writeZip);
     unpackZip.from(project.zipTree(archive));
     Provider<Directory> generatorDir =
         buildDir.dir("generator");
@@ -64,17 +79,6 @@ public class CcdSdkPlugin implements Plugin<Project> {
     )));
 
     project.getRepositories().jcenter();
-  }
-
-  @SneakyThrows
-  private void writeGeneratorZip(Task task) {
-    File to = task.getProject().getLayout().getBuildDirectory().file("generator.zip").get()
-        .getAsFile();
-    try (InputStream is = CcdSdkPlugin.class.getClassLoader()
-        .getResourceAsStream("generator/generator.zip")) {
-      com.google.common.io.Files.createParentDirs(to);
-      Files.copy(is, to.toPath(), StandardCopyOption.REPLACE_EXISTING);
-    }
   }
 
   @Data
