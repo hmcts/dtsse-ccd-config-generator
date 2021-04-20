@@ -11,11 +11,18 @@ import uk.gov.hmcts.ccd.sdk.api.ComplexType;
 @Builder
 @Data
 @Jacksonized
-@ComplexType(name = "Organisation", generate = false)
-public class Organisation {
-  @JsonProperty("OrganisationID")
-  private final String organisationId;
+@ComplexType(name = "PreviousOrganisation", generate = false)
+public class PreviousOrganisation {
+
+  @JsonProperty("FromTimeStamp")
+  private final String fromTimeStamp;
+
+  @JsonProperty("ToTimeStamp")
+  private final String toTimeStamp;
 
   @JsonProperty("OrganisationName")
   private final String organisationName;
+
+  @JsonProperty("OrganisationAddress")
+  private final String organisationAddress;
 }
