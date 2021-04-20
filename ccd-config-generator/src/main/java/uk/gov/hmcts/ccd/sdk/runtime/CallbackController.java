@@ -10,11 +10,13 @@ import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 import uk.gov.hmcts.ccd.sdk.ResolvedCCDConfig;
 import uk.gov.hmcts.ccd.sdk.api.CaseDetails;
 import uk.gov.hmcts.ccd.sdk.api.callback.AboutToStartOrSubmitResponse;
+import uk.gov.hmcts.ccd.sdk.api.callback.MidEvent;
 import uk.gov.hmcts.reform.ccd.client.model.CallbackRequest;
 import uk.gov.hmcts.reform.ccd.client.model.SubmittedCallbackResponse;
 
@@ -61,6 +63,20 @@ public class CallbackController {
     log.info("Submitted event ID: " + request.getEventId());
     return findCallback(ccdConfig.submittedCallbacks, request.getEventId())
         .handle(convertCaseDetails(request.getCaseDetails()), convertCaseDetails(request.getCaseDetailsBefore()));
+  }
+
+  @SneakyThrows
+  @PostMapping("/mid-event")
+  public AboutToStartOrSubmitResponse midEvent(@RequestBody CallbackRequest request,
+                                            @RequestParam(name = "page") String page) {
+    log.info("Mid event callback: {} for page {} ", request.getEventId(), page);
+    MidEvent m = ccdConfig.midEventCallbacks.get(request.getEventId(), page);
+    if (null == m) {
+      throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Handler not found for "
+          + request.getEventId() + " for page " + page);
+    }
+    return m.handle(convertCaseDetails(request.getCaseDetails()),
+        convertCaseDetails(request.getCaseDetailsBefore()));
   }
 
   <T> T findCallback(Map<String, T> callbacks, String eventId) {

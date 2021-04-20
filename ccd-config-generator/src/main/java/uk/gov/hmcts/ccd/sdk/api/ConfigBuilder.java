@@ -22,7 +22,7 @@ public interface ConfigBuilder<T, S, R extends HasRole> {
 
   void prefix(S state, String prefix);
 
-  FieldBuilder<?, ?, ?> field(String id);
+  FieldBuilder<?, ?, ?, ?> field(String id);
 
   void caseField(String id, String showCondition, String type, String typeParam, String label);
 

@@ -19,6 +19,8 @@ import static uk.gov.hmcts.reform.fpl.enums.UserRole.LOCAL_AUTHORITY;
 import static uk.gov.hmcts.reform.fpl.enums.UserRole.SYSTEM_UPDATE;
 
 import org.springframework.stereotype.Component;
+import uk.gov.hmcts.ccd.sdk.api.Event;
+import uk.gov.hmcts.ccd.sdk.api.FieldCollection;
 import uk.gov.hmcts.ccd.sdk.api.callback.AboutToStartOrSubmitResponse;
 import uk.gov.hmcts.ccd.sdk.api.CaseDetails;
 import uk.gov.hmcts.ccd.sdk.api.ConfigBuilder;
@@ -218,11 +220,19 @@ public class CCDConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<CaseData, S
           .optional(OrganisationPolicy::getOrgPolicyReference)
         .done()
         .field(CaseData::getAllocatedJudge).complex()
-        .mandatory(Judge::getJudgeTitle)
-        .mandatory(Judge::getOtherTitle)
-        .mandatory(Judge::getJudgeLastName)
-        .mandatory(Judge::getJudgeFullName);
+          .mandatory(Judge::getJudgeTitle)
+          .mandatory(Judge::getOtherTitle)
+          .mandatory(Judge::getJudgeLastName)
+          .mandatory(Judge::getJudgeFullName)
+        .done()
+        .page("<Notes>", this::checkCaseNotes)
+          .mandatory(CaseData::getCaseNotes);
+  }
 
+  private AboutToStartOrSubmitResponse<CaseData, State> checkCaseNotes(
+      CaseDetails<CaseData, State> caseDataStateCaseDetails,
+      CaseDetails<CaseData, State> caseDataStateCaseDetailsBefore) {
+    throw new RuntimeException();
   }
 
   private void buildTransitions() {
@@ -231,8 +241,8 @@ public class CCDConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<CaseData, S
         .name("Populate standard directions")
         .explicitGrants()
         .grant(C, UserRole.SYSTEM_UPDATE)
-        .midEventCallback(this::sdoMidEvent)
         .fields()
+        .page("1", this::sdoMidEvent)
         .optional(CaseData::getAllParties)
         .optional(CaseData::getLocalAuthorityDirections)
         .optional(CaseData::getRespondentDirections)
