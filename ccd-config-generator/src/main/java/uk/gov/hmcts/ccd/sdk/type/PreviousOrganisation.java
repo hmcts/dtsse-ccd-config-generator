@@ -1,6 +1,11 @@
 package uk.gov.hmcts.ccd.sdk.type;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
+import com.fasterxml.jackson.databind.annotation.JsonSerialize;
+import com.fasterxml.jackson.datatype.jsr310.deser.LocalDateTimeDeserializer;
+import com.fasterxml.jackson.datatype.jsr310.ser.LocalDateTimeSerializer;
+import java.time.LocalDateTime;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -15,10 +20,14 @@ import uk.gov.hmcts.ccd.sdk.api.ComplexType;
 public class PreviousOrganisation {
 
   @JsonProperty("FromTimeStamp")
-  private final String fromTimeStamp;
+  @JsonSerialize(using = LocalDateTimeSerializer.class)
+  @JsonDeserialize(using = LocalDateTimeDeserializer.class)
+  private final LocalDateTime fromTimeStamp;
 
   @JsonProperty("ToTimeStamp")
-  private final String toTimeStamp;
+  @JsonSerialize(using = LocalDateTimeSerializer.class)
+  @JsonDeserialize(using = LocalDateTimeDeserializer.class)
+  private final LocalDateTime toTimeStamp;
 
   @JsonProperty("OrganisationName")
   private final String organisationName;
