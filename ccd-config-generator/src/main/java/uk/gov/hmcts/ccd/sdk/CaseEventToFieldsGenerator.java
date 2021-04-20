@@ -6,6 +6,8 @@ import com.google.common.collect.Maps;
 import com.google.common.collect.Table;
 import com.google.common.primitives.Ints;
 import java.io.File;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.List;
@@ -58,7 +60,8 @@ class CaseEventToFieldsGenerator {
           }
 
           if (midEventCallbacks.contains(event.getEventID(), pageId.toString())) {
-            info.put("CallBackURLMidEvent", baseUrl + "/callbacks/mid-event?page=" + pageId);
+            info.put("CallBackURLMidEvent", baseUrl + "/callbacks/mid-event?page="
+                + URLEncoder.encode(pageId.toString(), StandardCharsets.UTF_8));
             midEventCallbacks.remove(event.getEventID(), pageId.toString());
           }
 

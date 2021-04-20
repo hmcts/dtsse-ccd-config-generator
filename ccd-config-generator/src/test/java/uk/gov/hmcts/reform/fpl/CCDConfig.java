@@ -225,7 +225,7 @@ public class CCDConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<CaseData, S
           .mandatory(Judge::getJudgeLastName)
           .mandatory(Judge::getJudgeFullName)
         .done()
-        .page("Notes", this::checkCaseNotes)
+        .page("<Notes>", this::checkCaseNotes)
           .mandatory(CaseData::getCaseNotes);
   }
 
