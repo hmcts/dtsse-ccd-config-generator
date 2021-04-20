@@ -10,7 +10,7 @@
     "DisplayContext": "OPTIONAL",
     "PageDisplayOrder": 1,
     "ShowSummaryChangeOption" : "Y",
-    "CallBackURLMidEvent": "${CCD_DEF_CASE_SERVICE_BASE_URL}/callbacks/mid-event"
+    "CallBackURLMidEvent": "${CCD_DEF_CASE_SERVICE_BASE_URL}/callbacks/mid-event?page=1"
   },
   {
     "PageID": 1,

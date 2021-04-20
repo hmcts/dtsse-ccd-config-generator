@@ -32,6 +32,7 @@ import uk.gov.hmcts.ccd.sdk.api.HasRole;
 import uk.gov.hmcts.ccd.sdk.api.Permission;
 import uk.gov.hmcts.ccd.sdk.api.callback.AboutToStart;
 import uk.gov.hmcts.ccd.sdk.api.callback.AboutToSubmit;
+import uk.gov.hmcts.ccd.sdk.api.callback.MidEvent;
 import uk.gov.hmcts.ccd.sdk.api.callback.Submitted;
 
 @Configuration
@@ -72,6 +73,7 @@ class ConfigGenerator<T, S, R extends HasRole> {
     Map<String, AboutToStart> aboutToStartCallbacks = Maps.newHashMap();
     Map<String, AboutToSubmit> aboutToSubmitCallbacks = Maps.newHashMap();
     Map<String, Submitted> submittedCallbacks = Maps.newHashMap();
+    Table<String, String, MidEvent> midEventCallbacks = HashBasedTable.create();
     for (Event event : events) {
       if (event.getAboutToStartCallback() != null) {
         aboutToStartCallbacks.put(event.getId(), event.getAboutToStartCallback());
@@ -82,18 +84,23 @@ class ConfigGenerator<T, S, R extends HasRole> {
       if (event.getSubmittedCallback() != null) {
         submittedCallbacks.put(event.getId(), event.getSubmittedCallback());
       }
+      for (Map.Entry<String, MidEvent> midEvent : event.getFields().build()
+          .getPagesToMidEvent().entrySet()) {
+        midEventCallbacks.put(event.getEventID(), midEvent.getKey(), midEvent.getValue());
+      }
     }
 
     Map<Class, Integer> types = resolve(typeArgs[0], basePackage);
     return new ResolvedCCDConfig(typeArgs[0], typeArgs[1], typeArgs[2], builder, events, types,
-        builder.environment, allStates, aboutToStartCallbacks, aboutToSubmitCallbacks, submittedCallbacks);
+        builder.environment, allStates, aboutToStartCallbacks, aboutToSubmitCallbacks, submittedCallbacks,
+        midEventCallbacks);
   }
 
   private void writeConfig(File outputfolder, ResolvedCCDConfig<T, S, R> config) {
     outputfolder.mkdirs();
     new CaseEventGenerator<T, S, R>().writeEvents(outputfolder, config);
     CaseEventToFieldsGenerator.writeEvents(outputfolder, config.events, config.builder.caseType,
-        config.builder.callbackHost);
+        config.builder.callbackHost, config.midEventCallbacks);
     ComplexTypeGenerator.generate(outputfolder, config.builder.caseType, config.types);
     CaseEventToComplexTypesGenerator.writeEvents(outputfolder, config.events);
     Table<String, R, Set<Permission>> eventPermissions = buildEventPermissions(config.builder,

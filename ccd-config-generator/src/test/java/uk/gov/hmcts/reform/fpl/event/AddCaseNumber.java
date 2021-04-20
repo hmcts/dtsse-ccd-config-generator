@@ -28,8 +28,19 @@ public class AddCaseNumber implements CCDConfig<CaseData, State, UserRole> {
         .aboutToSubmitCallback(this::aboutToSubmit)
         .submittedCallback(this::submitted)
         .fields()
+        .page("1", this::setNumber)
         .optional(CaseData::getFamilyManCaseNumber)
         .optional(CaseData::getCaseNotes);
+  }
+
+  private AboutToStartOrSubmitResponse<CaseData, State> setNumber(
+      CaseDetails<CaseData, State> details,
+      CaseDetails<CaseData, State> detailsBefore) {
+    CaseData data = details.getData();
+    data.setFamilyManCaseNumber("PLACEHOLDER");
+    return AboutToStartOrSubmitResponse.<CaseData, State>builder()
+        .data(data)
+        .build();
   }
 
   private SubmittedCallbackResponse submitted(CaseDetails<CaseData, State> caseDataStateCaseDetails,

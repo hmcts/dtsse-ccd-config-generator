@@ -1,7 +1,9 @@
 package uk.gov.hmcts.ccd.sdk;
 
+import com.google.common.collect.HashBasedTable;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
+import com.google.common.collect.Table;
 import com.google.common.primitives.Ints;
 import java.io.File;
 import java.nio.file.Path;
@@ -13,18 +15,20 @@ import uk.gov.hmcts.ccd.sdk.api.Event;
 import uk.gov.hmcts.ccd.sdk.api.Field;
 import uk.gov.hmcts.ccd.sdk.api.FieldCollection;
 import uk.gov.hmcts.ccd.sdk.api.HasRole;
+import uk.gov.hmcts.ccd.sdk.api.callback.MidEvent;
 
 class CaseEventToFieldsGenerator {
 
   public static <T, R extends HasRole, S> void writeEvents(File root, List<Event<T, R, S>> events,
-                                                           String caseType, String baseUrl) {
-
+                                                           String caseType, String baseUrl,
+                                                           Table<String, String, MidEvent<T, S>> midEventCallbacks) {
+    // Make a copy for use in tracking which callbacks have been written.
+    midEventCallbacks = HashBasedTable.create(midEventCallbacks);
     for (Event<T, R, S> event : events) {
       FieldCollection collection = event.getFields().build();
       if (collection.getFields().size() > 0) {
         List<Map<String, Object>> entries = Lists.newArrayList();
         List<Field.FieldBuilder> fields = collection.getFields();
-        boolean firstField = true;
         for (Field.FieldBuilder fb : fields) {
           Map<String, Object> info = Maps.newHashMap();
           entries.add(info);
@@ -52,9 +56,10 @@ class CaseEventToFieldsGenerator {
           if (field.getShowCondition() != null) {
             info.put("FieldShowCondition", field.getShowCondition());
           }
-          if (firstField && event.getMidEventCallback() != null) {
-            firstField = false;
-            info.put("CallBackURLMidEvent", baseUrl + "/callbacks/mid-event");
+
+          if (midEventCallbacks.contains(event.getEventID(), pageId.toString())) {
+            info.put("CallBackURLMidEvent", baseUrl + "/callbacks/mid-event?page=" + pageId);
+            midEventCallbacks.remove(event.getEventID(), pageId.toString());
           }
 
           if (collection.getPageShowConditions().containsKey(field.getPage())) {

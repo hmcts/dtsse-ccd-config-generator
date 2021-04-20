@@ -143,7 +143,7 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements ConfigBuilder
   }
 
   @Override
-  public FieldBuilder<?, ?, ?> field(String id) {
+  public FieldBuilder<?, ?, ?, ?> field(String id) {
     FieldBuilder builder = FieldBuilder
         .builder(caseData, null, id);
     explicitFields.add(builder);

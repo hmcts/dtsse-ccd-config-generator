@@ -15,7 +15,6 @@ import lombok.ToString;
 import lombok.With;
 import uk.gov.hmcts.ccd.sdk.api.callback.AboutToStart;
 import uk.gov.hmcts.ccd.sdk.api.callback.AboutToSubmit;
-import uk.gov.hmcts.ccd.sdk.api.callback.MidEvent;
 import uk.gov.hmcts.ccd.sdk.api.callback.Submitted;
 
 @Builder
@@ -42,7 +41,6 @@ public class Event<T, R extends HasRole, S> {
   private AboutToStart<T, S> aboutToStartCallback;
   private AboutToSubmit<T, S> aboutToSubmitCallback;
   private Submitted<T, S> submittedCallback;
-  private MidEvent<T, S> midEventCallback;
 
   public void setEventID(String eventId) {
     this.eventId = eventId;
@@ -60,7 +58,7 @@ public class Event<T, R extends HasRole, S> {
   }
 
   @ToString.Exclude
-  private FieldCollection.FieldCollectionBuilder<T, EventBuilder<T, R, S>> fields;
+  private FieldCollection.FieldCollectionBuilder<T, S, EventBuilder<T, R, S>> fields;
 
   @Builder.Default
   // TODO: don't always add.
@@ -99,7 +97,7 @@ public class Event<T, R extends HasRole, S> {
       return result;
     }
 
-    public FieldCollection.FieldCollectionBuilder<T, EventBuilder<T, R, S>> fields() {
+    public FieldCollection.FieldCollectionBuilder<T, S, EventBuilder<T, R, S>> fields() {
       return fields;
     }
 
