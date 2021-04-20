@@ -15,4 +15,7 @@ import uk.gov.hmcts.ccd.sdk.api.ComplexType;
 public class Organisation {
   @JsonProperty("OrganisationID")
   private final String organisationId;
+
+  @JsonProperty("OrganisationName")
+  private final String organisationName;
 }
