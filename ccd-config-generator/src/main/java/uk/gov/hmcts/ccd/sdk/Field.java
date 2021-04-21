@@ -1,10 +1,8 @@
 package uk.gov.hmcts.ccd.sdk;
 
-import java.util.function.Consumer;
 import lombok.Builder;
 import lombok.Data;
 import lombok.ToString;
-import uk.gov.hmcts.ccd.sdk.FieldCollection;
 import uk.gov.hmcts.ccd.sdk.FieldCollection.FieldCollectionBuilder;
 import uk.gov.hmcts.ccd.sdk.api.DisplayContext;
 import uk.gov.hmcts.ccd.sdk.api.callback.MidEvent;
@@ -104,12 +102,6 @@ public class Field<Type, StateType, Parent, Grandparent> {
     public <U> FieldCollectionBuilder<U, StateType, FieldCollectionBuilder<Parent, StateType, Grandparent>> complex(
         Class<U> c) {
       return parent.complex(this.id, c);
-    }
-
-    public <U> FieldCollectionBuilder<Parent, StateType, Grandparent> complex(Class<U> c,
-        Consumer<FieldCollectionBuilder<U, ?, ?>> renderer) {
-      renderer.accept(parent.complex(this.id, c));
-      return parent;
     }
 
     public FieldCollection.FieldCollectionBuilder<Parent, StateType, Grandparent> done() {
