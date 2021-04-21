@@ -4,6 +4,7 @@ package uk.gov.hmcts.reform.fpl;
 import static uk.gov.hmcts.ccd.sdk.api.Permission.C;
 import static uk.gov.hmcts.ccd.sdk.api.Permission.CRU;
 import static uk.gov.hmcts.ccd.sdk.api.Permission.R;
+import static uk.gov.hmcts.reform.fpl.enums.State.Deleted;
 import static uk.gov.hmcts.reform.fpl.enums.State.Gatekeeping;
 import static uk.gov.hmcts.reform.fpl.enums.State.Open;
 import static uk.gov.hmcts.reform.fpl.enums.State.Submitted;
@@ -268,6 +269,10 @@ public class CCDConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<CaseData, S
         .retries(1,2,3,4,5)
         .fields()
         .optional(CaseData::getCaseName);
+
+    builder.event("deleted")
+        .forState(Deleted)
+        .name("Deleted only");
   }
 
   private AboutToStartOrSubmitResponse<CaseData, State> aboutToSubmit(

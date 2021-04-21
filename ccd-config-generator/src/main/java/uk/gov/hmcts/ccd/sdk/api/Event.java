@@ -101,18 +101,6 @@ public class Event<T, R extends HasRole, S> {
       return fields;
     }
 
-    public String getEventId() {
-      return this.eventId;
-    }
-
-    public Set<S> getPreState() {
-      return this.preState;
-    }
-
-    public Set<S> getPostState() {
-      return this.postState;
-    }
-
     public EventBuilder<T, R, S> name(String n) {
       this.name = n;
       if (description == null) {

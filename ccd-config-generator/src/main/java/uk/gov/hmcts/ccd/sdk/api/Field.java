@@ -1,10 +1,5 @@
 package uk.gov.hmcts.ccd.sdk.api;
 
-import static uk.gov.hmcts.ccd.sdk.api.Permission.CRUD;
-
-import java.util.Hashtable;
-import java.util.Map;
-import java.util.Set;
 import java.util.function.Consumer;
 import lombok.Builder;
 import lombok.Data;
@@ -36,7 +31,6 @@ public class Field<Type, StateType, Parent, Grandparent> {
   boolean immutableList;
   boolean immutable;
   boolean readOnly;
-  private Map<String, Set<Permission>> blacklistedRolePermissions;
   private MidEvent midEventCallback;
 
   Class<Type> clazz;
@@ -52,7 +46,6 @@ public class Field<Type, StateType, Parent, Grandparent> {
       result.clazz = clazz;
       result.parent = parent;
       result.context = DisplayContext.Complex;
-      result.blacklistedRolePermissions = new Hashtable<>();
       result.id = id;
       return result;
     }
@@ -66,19 +59,6 @@ public class Field<Type, StateType, Parent, Grandparent> {
     public FieldBuilder<Type, StateType, Parent, Grandparent> mandatory() {
       context = DisplayContext.Mandatory;
       return this;
-    }
-
-    public FieldBuilder<Type, StateType, Parent, Grandparent> blacklist(Set<Permission> crud,
-                                                             HasRole... roles) {
-      for (HasRole role : roles) {
-        blacklistedRolePermissions.put(role.getRole(), crud);
-      }
-
-      return this;
-    }
-
-    public FieldBuilder<Type, StateType, Parent, Grandparent> blacklist(HasRole... roles) {
-      return blacklist(CRUD, roles);
     }
 
     public FieldBuilder<Type, StateType, Parent, Grandparent> type(String t) {
@@ -128,11 +108,6 @@ public class Field<Type, StateType, Parent, Grandparent> {
         Consumer<FieldCollectionBuilder<U, ?, ?>> renderer) {
       renderer.accept(parent.complex(this.id, c));
       return parent;
-    }
-
-    public <U> FieldCollectionBuilder<U, StateType,
-        FieldCollectionBuilder<Parent, StateType, Grandparent>> complexWithParent(Class<U> c) {
-      return parent.complex(this.id, c, false);
     }
 
     public FieldCollection.FieldCollectionBuilder<Parent, StateType, Grandparent> done() {
