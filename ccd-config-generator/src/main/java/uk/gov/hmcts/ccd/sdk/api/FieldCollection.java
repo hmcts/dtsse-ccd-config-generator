@@ -145,36 +145,36 @@ public class FieldCollection {
       return field(getter).immutableList();
     }
 
-    public FieldCollectionBuilder<Type, StateType, Parent> field(String id, DisplayContext context,
+    FieldCollectionBuilder<Type, StateType, Parent> field(String id, DisplayContext context,
         String showCondition, String type, String typeParam, String label) {
       explicitFields.add(field(id).context(context).showCondition(showCondition).type(type)
           .fieldTypeParameter(typeParam).label(label));
       return this;
     }
 
-    public FieldCollectionBuilder<Type, StateType, Parent> field(String id, DisplayContext context,
+    FieldCollectionBuilder<Type, StateType, Parent> field(String id, DisplayContext context,
         String showCondition) {
       explicitFields.add(field(id).context(context).showCondition(showCondition));
       return this;
     }
 
-    public FieldCollectionBuilder<Type, StateType, Parent> field(String fieldName, DisplayContext context) {
+    FieldCollectionBuilder<Type, StateType, Parent> field(String fieldName, DisplayContext context) {
       explicitFields.add(field(fieldName).context(context));
       return this;
     }
 
-    public FieldBuilder<?, StateType, Type, Parent> field(String id) {
+    FieldBuilder<?, StateType, Type, Parent> field(String id) {
       FieldBuilder<?, StateType, Type, Parent> result = createField(id, null);
       explicitFields.add(result);
       return result;
     }
 
-    public FieldCollectionBuilder<Type, StateType, Parent> field(TypedPropertyGetter<Type, ?> getter,
+    FieldCollectionBuilder<Type, StateType, Parent> field(TypedPropertyGetter<Type, ?> getter,
         DisplayContext context) {
       return field(getter, context, false);
     }
 
-    public <Value> FieldCollectionBuilder<Type, StateType, Parent> field(TypedPropertyGetter<Type, Value> getter,
+    <Value> FieldCollectionBuilder<Type, StateType, Parent> field(TypedPropertyGetter<Type, Value> getter,
         DisplayContext context, String showCondition, boolean showSummary, Value defaultValue) {
       if (null != showCondition && null != rootFieldname) {
         showCondition = showCondition.replace("{{FIELD_NAME}}", rootFieldname);
@@ -183,7 +183,7 @@ public class FieldCollection {
       return this;
     }
 
-    public FieldCollectionBuilder<Type, StateType, Parent> field(TypedPropertyGetter<Type, ?> getter,
+    FieldCollectionBuilder<Type, StateType, Parent> field(TypedPropertyGetter<Type, ?> getter,
         DisplayContext context, String showCondition, boolean showSummary) {
       if (null != showCondition && null != rootFieldname) {
         showCondition = showCondition.replace("{{FIELD_NAME}}", rootFieldname);
@@ -192,7 +192,7 @@ public class FieldCollection {
       return this;
     }
 
-    public FieldCollectionBuilder<Type, StateType, Parent> field(TypedPropertyGetter<Type, ?> getter,
+    FieldCollectionBuilder<Type, StateType, Parent> field(TypedPropertyGetter<Type, ?> getter,
         DisplayContext context, String showCondition) {
       if (null != showCondition && null != rootFieldname) {
         showCondition = showCondition.replace("{{FIELD_NAME}}", rootFieldname);
@@ -201,13 +201,13 @@ public class FieldCollection {
       return this;
     }
 
-    public FieldCollectionBuilder<Type, StateType, Parent> field(TypedPropertyGetter<Type, ?> getter,
+    FieldCollectionBuilder<Type, StateType, Parent> field(TypedPropertyGetter<Type, ?> getter,
         DisplayContext context, boolean showSummary) {
       field(getter).context(context).showSummary(showSummary);
       return this;
     }
 
-    public <U> Field.FieldBuilder<U, StateType, Type, Parent> field(TypedPropertyGetter<Type, U> getter) {
+    <U> Field.FieldBuilder<U, StateType, Type, Parent> field(TypedPropertyGetter<Type, U> getter) {
       String id = propertyUtils.getPropertyName(dataClass, getter);
       Class<U> clazz = propertyUtils.getPropertyType(dataClass, getter);
       FieldBuilder<U, StateType, Type, Parent> f = createField(id, clazz);
@@ -255,6 +255,13 @@ public class FieldCollection {
       Class<U> c = propertyUtils.getPropertyType(dataClass, getter);
       return complex(getter, c);
     }
+
+    public <U> FieldCollectionBuilder<U, StateType, FieldCollectionBuilder<Type, StateType, Parent>> complex(
+        TypedPropertyGetter<Type, U> getter, boolean showSummaryChangeOption) {
+      Class<U> c = propertyUtils.getPropertyType(dataClass, getter);
+      return complex(getter, c, showSummaryChangeOption);
+    }
+
 
     public <U> FieldCollectionBuilder<U, StateType, FieldCollectionBuilder<Type, StateType, Parent>> complex(
         TypedPropertyGetter<Type, U> getter, String showCondition) {
