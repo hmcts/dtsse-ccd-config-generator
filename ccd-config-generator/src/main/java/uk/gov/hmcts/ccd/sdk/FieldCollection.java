@@ -1,4 +1,4 @@
-package uk.gov.hmcts.ccd.sdk.api;
+package uk.gov.hmcts.ccd.sdk;
 
 import de.cronn.reflection.util.TypedPropertyGetter;
 import java.util.ArrayList;
@@ -6,23 +6,29 @@ import java.util.HashMap;
 import java.util.Hashtable;
 import java.util.List;
 import java.util.Map;
+import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Data;
+import lombok.Setter;
 import lombok.ToString;
+import uk.gov.hmcts.ccd.sdk.Field.FieldBuilder;
+import uk.gov.hmcts.ccd.sdk.api.CCD;
+import uk.gov.hmcts.ccd.sdk.api.DisplayContext;
 import uk.gov.hmcts.ccd.sdk.api.Event.EventBuilder;
-import uk.gov.hmcts.ccd.sdk.api.Field.FieldBuilder;
+import uk.gov.hmcts.ccd.sdk.api.PropertyUtils;
 import uk.gov.hmcts.ccd.sdk.api.callback.MidEvent;
 
-@Builder
+@Builder(access = AccessLevel.PACKAGE)
 @Data
 public class FieldCollection {
 
   @ToString.Exclude
-  private List<Field.FieldBuilder> fields;
+  @Setter(AccessLevel.NONE)
+  private List<FieldBuilder> fields;
   @ToString.Exclude
   private List<FieldCollectionBuilder> complexFields;
   @ToString.Exclude
-  private List<Field.FieldBuilder> explicitFields;
+  private List<FieldBuilder> explicitFields;
 
   @ToString.Exclude
   private Map<String, String> pageShowConditions;
@@ -45,7 +51,7 @@ public class FieldCollection {
     private String pageLabel;
     @ToString.Exclude
     private Parent parent;
-    private PropertyUtils propertyUtils;
+    private uk.gov.hmcts.ccd.sdk.api.PropertyUtils propertyUtils;
     private EventBuilder event;
 
     public static <Type, StateType, Parent> FieldCollectionBuilder<Type, StateType, Parent> builder(EventBuilder event,
@@ -206,7 +212,7 @@ public class FieldCollection {
       return this;
     }
 
-    <U> Field.FieldBuilder<U, StateType, Type, Parent> field(TypedPropertyGetter<Type, U> getter) {
+    <U> FieldBuilder<U, StateType, Type, Parent> field(TypedPropertyGetter<Type, U> getter) {
       String id = propertyUtils.getPropertyName(dataClass, getter);
       Class<U> clazz = propertyUtils.getPropertyType(dataClass, getter);
       FieldBuilder<U, StateType, Type, Parent> f = createField(id, clazz);

@@ -18,11 +18,11 @@ import java.util.Map;
 import java.util.Set;
 import net.jodah.typetools.TypeResolver;
 import org.reflections.ReflectionUtils;
+import uk.gov.hmcts.ccd.sdk.Field.FieldBuilder;
 import uk.gov.hmcts.ccd.sdk.JsonUtils.OverwriteSpecific;
 import uk.gov.hmcts.ccd.sdk.api.CCD;
 import uk.gov.hmcts.ccd.sdk.api.ComplexType;
 import uk.gov.hmcts.ccd.sdk.api.Event;
-import uk.gov.hmcts.ccd.sdk.api.Field.FieldBuilder;
 import uk.gov.hmcts.ccd.sdk.api.HasRole;
 import uk.gov.hmcts.ccd.sdk.api.Label;
 import uk.gov.hmcts.ccd.sdk.type.FieldType;
@@ -183,26 +183,26 @@ class CaseFieldGenerator {
 
   private static <T, S, R extends HasRole> List<Map<String, Object>> getExplicitFields(
       String caseType, List<Event<T, R, S>> events, ConfigBuilderImpl<T, S, R> builder) {
-    Map<String, uk.gov.hmcts.ccd.sdk.api.Field> explicitFields = Maps.newHashMap();
+    Map<String, uk.gov.hmcts.ccd.sdk.Field> explicitFields = Maps.newHashMap();
     for (Event event : events) {
-      List<uk.gov.hmcts.ccd.sdk.api.Field.FieldBuilder> fc = event.getFields().build()
+      List<uk.gov.hmcts.ccd.sdk.Field.FieldBuilder> fc = event.getFields().build()
           .getExplicitFields();
 
-      for (uk.gov.hmcts.ccd.sdk.api.Field.FieldBuilder fieldBuilder : fc) {
-        uk.gov.hmcts.ccd.sdk.api.Field field = fieldBuilder.build();
+      for (uk.gov.hmcts.ccd.sdk.Field.FieldBuilder fieldBuilder : fc) {
+        uk.gov.hmcts.ccd.sdk.Field field = fieldBuilder.build();
         explicitFields.put(field.getId(), field);
       }
     }
 
-    List<uk.gov.hmcts.ccd.sdk.api.Field.FieldBuilder> fs = builder.explicitFields;
+    List<uk.gov.hmcts.ccd.sdk.Field.FieldBuilder> fs = builder.explicitFields;
     for (FieldBuilder explicitField : fs) {
-      uk.gov.hmcts.ccd.sdk.api.Field field = explicitField.build();
+      uk.gov.hmcts.ccd.sdk.Field field = explicitField.build();
       explicitFields.put(field.getId(), field);
     }
 
     List<Map<String, Object>> result = Lists.newArrayList();
     for (String fieldId : explicitFields.keySet()) {
-      uk.gov.hmcts.ccd.sdk.api.Field field = explicitFields.get(fieldId);
+      uk.gov.hmcts.ccd.sdk.Field field = explicitFields.get(fieldId);
       Map<String, Object> fieldData = getField(caseType, fieldId);
       // Don't export inbuilt metadata fields.
       if (fieldId.matches("\\[.+\\]")) {
