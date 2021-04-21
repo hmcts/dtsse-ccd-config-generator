@@ -27,7 +27,6 @@ import uk.gov.hmcts.ccd.sdk.JsonUtils.CRUDMerger;
 import uk.gov.hmcts.ccd.sdk.api.CCD;
 import uk.gov.hmcts.ccd.sdk.api.Event;
 import uk.gov.hmcts.ccd.sdk.api.Field;
-import uk.gov.hmcts.ccd.sdk.api.Field.FieldBuilder;
 import uk.gov.hmcts.ccd.sdk.api.HasAccessControl;
 import uk.gov.hmcts.ccd.sdk.api.HasRole;
 import uk.gov.hmcts.ccd.sdk.api.Permission;
@@ -146,37 +145,6 @@ class AuthorisationCaseFieldGenerator {
 
             fieldRolePermissions.put(id, key.getRole(), perms);
           }
-        }
-      }
-    }
-
-    // Subtract any blacklisted permissions
-    for (Event<T, R, S> event : config.events) {
-      for (FieldBuilder fb : event.getFields().build().getFields()) {
-        Field field = fb.build();
-        Map<String, Set<Permission>> entries = field.getBlacklistedRolePermissions();
-        for (Entry<String, Set<Permission>> roleBlacklist : entries.entrySet()) {
-          Set<Permission> perm = fieldRolePermissions.get(field.getId(),
-              roleBlacklist.getKey());
-          if (null != perm) {
-            perm.removeAll(roleBlacklist.getValue());
-            fieldRolePermissions.put(field.getId(), roleBlacklist.getKey(), perm);
-          }
-        }
-      }
-    }
-
-    // Plus explicit field blacklists.
-    // TODO: refactor!
-    for (FieldBuilder fb : config.builder.explicitFields) {
-      Field field = fb.build();
-      Map<String, Set<Permission>> entries = field.getBlacklistedRolePermissions();
-      for (Entry<String, Set<Permission>> roleBlacklist : entries.entrySet()) {
-        Set<Permission> perm = fieldRolePermissions.get(field.getId(),
-            roleBlacklist.getKey());
-        if (null != perm) {
-          perm.removeAll(roleBlacklist.getValue());
-          fieldRolePermissions.put(field.getId(), roleBlacklist.getKey(), perm);
         }
       }
     }

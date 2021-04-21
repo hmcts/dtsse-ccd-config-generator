@@ -4,6 +4,7 @@ package uk.gov.hmcts.reform.fpl;
 import static uk.gov.hmcts.ccd.sdk.api.Permission.C;
 import static uk.gov.hmcts.ccd.sdk.api.Permission.CRU;
 import static uk.gov.hmcts.ccd.sdk.api.Permission.R;
+import static uk.gov.hmcts.reform.fpl.enums.State.Deleted;
 import static uk.gov.hmcts.reform.fpl.enums.State.Gatekeeping;
 import static uk.gov.hmcts.reform.fpl.enums.State.Open;
 import static uk.gov.hmcts.reform.fpl.enums.State.Submitted;
@@ -19,8 +20,6 @@ import static uk.gov.hmcts.reform.fpl.enums.UserRole.LOCAL_AUTHORITY;
 import static uk.gov.hmcts.reform.fpl.enums.UserRole.SYSTEM_UPDATE;
 
 import org.springframework.stereotype.Component;
-import uk.gov.hmcts.ccd.sdk.api.Event;
-import uk.gov.hmcts.ccd.sdk.api.FieldCollection;
 import uk.gov.hmcts.ccd.sdk.api.callback.AboutToStartOrSubmitResponse;
 import uk.gov.hmcts.ccd.sdk.api.CaseDetails;
 import uk.gov.hmcts.ccd.sdk.api.ConfigBuilder;
@@ -219,7 +218,7 @@ public class CCDConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<CaseData, S
           .optional(OrganisationPolicy::getOrgPolicyCaseAssignedRole, null, CCD_SOLICITOR)
           .optional(OrganisationPolicy::getOrgPolicyReference)
         .done()
-        .field(CaseData::getAllocatedJudge).complex()
+        .complex(CaseData::getAllocatedJudge, false)
           .mandatory(Judge::getJudgeTitle)
           .mandatory(Judge::getOtherTitle)
           .mandatory(Judge::getJudgeLastName)
@@ -268,6 +267,10 @@ public class CCDConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<CaseData, S
         .retries(1,2,3,4,5)
         .fields()
         .optional(CaseData::getCaseName);
+
+    builder.event("deleted")
+        .forState(Deleted)
+        .name("Deleted only");
   }
 
   private AboutToStartOrSubmitResponse<CaseData, State> aboutToSubmit(
