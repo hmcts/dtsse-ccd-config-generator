@@ -3,12 +3,14 @@ package uk.gov.hmcts.ccd.sdk.api;
 import com.fasterxml.jackson.annotation.JsonAlias;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import java.time.LocalDateTime;
+import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import uk.gov.hmcts.reform.ccd.client.model.Classification;
 
 @Data
 @Builder
+@AllArgsConstructor
 public class CaseDetails<T, S> {
   private Long id;
 
