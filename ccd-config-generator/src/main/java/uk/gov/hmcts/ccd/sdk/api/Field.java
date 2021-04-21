@@ -1,10 +1,9 @@
-package uk.gov.hmcts.ccd.sdk;
+package uk.gov.hmcts.ccd.sdk.api;
 
 import lombok.Builder;
 import lombok.Data;
 import lombok.ToString;
-import uk.gov.hmcts.ccd.sdk.FieldCollection.FieldCollectionBuilder;
-import uk.gov.hmcts.ccd.sdk.api.DisplayContext;
+import uk.gov.hmcts.ccd.sdk.api.FieldCollection.FieldCollectionBuilder;
 import uk.gov.hmcts.ccd.sdk.api.callback.MidEvent;
 
 @Builder

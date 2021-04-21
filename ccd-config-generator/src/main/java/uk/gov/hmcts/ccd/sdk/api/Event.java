@@ -13,7 +13,6 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.ToString;
 import lombok.With;
-import uk.gov.hmcts.ccd.sdk.FieldCollection;
 import uk.gov.hmcts.ccd.sdk.api.callback.AboutToStart;
 import uk.gov.hmcts.ccd.sdk.api.callback.AboutToSubmit;
 import uk.gov.hmcts.ccd.sdk.api.callback.Submitted;
