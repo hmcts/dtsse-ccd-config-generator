@@ -6,7 +6,6 @@ import java.util.HashMap;
 import java.util.Hashtable;
 import java.util.List;
 import java.util.Map;
-import java.util.function.Consumer;
 import lombok.Builder;
 import lombok.Data;
 import lombok.ToString;
@@ -238,39 +237,14 @@ public class FieldCollection {
       return this;
     }
 
-    public <U> FieldCollectionBuilder<Type, StateType, Parent> complex(TypedPropertyGetter<Type, ?> getter,
-        Class<U> c, Consumer<FieldCollectionBuilder<U, ?, ?>> renderer, boolean showSummary) {
-      renderer.accept(complex(getter, c, showSummary));
-      return this;
-    }
-
-    public <U> FieldCollectionBuilder<Type, StateType, Parent> complex(TypedPropertyGetter<Type, ?> getter,
-        Class<U> c, Consumer<FieldCollectionBuilder<U, ?, ?>> renderer) {
-      renderer.accept(complex(getter, c));
-      return this;
-    }
-
-    public <U> FieldCollectionBuilder<U, StateType, FieldCollectionBuilder<Type, StateType, Parent>> complex(
-        TypedPropertyGetter<Type, U> getter) {
-      Class<U> c = propertyUtils.getPropertyType(dataClass, getter);
-      return complex(getter, c);
-    }
-
-    public <U> FieldCollectionBuilder<U, StateType, FieldCollectionBuilder<Type, StateType, Parent>> complex(
-        TypedPropertyGetter<Type, U> getter, boolean showSummaryChangeOption) {
-      Class<U> c = propertyUtils.getPropertyType(dataClass, getter);
-      return complex(getter, c, showSummaryChangeOption);
-    }
-
-
     public <U> FieldCollectionBuilder<U, StateType, FieldCollectionBuilder<Type, StateType, Parent>> complex(
         TypedPropertyGetter<Type, U> getter, String showCondition) {
-      Class<U> c = propertyUtils.getPropertyType(dataClass, getter);
-      return complex(getter, c, showCondition);
+      return complex(getter, showCondition);
     }
 
     public <U> FieldCollectionBuilder<U, StateType, FieldCollectionBuilder<Type, StateType, Parent>> complex(
-        TypedPropertyGetter<Type, ?> getter, Class<U> c, boolean summary) {
+        TypedPropertyGetter<Type, U> getter, boolean summary) {
+      Class<U> c = propertyUtils.getPropertyType(dataClass, getter);
       String fieldName = propertyUtils.getPropertyName(dataClass, getter);
       if (null == this.rootFieldname) {
         // Register only the root complex as a field
@@ -290,8 +264,8 @@ public class FieldCollection {
     }
 
     public <U> FieldCollectionBuilder<U, StateType, FieldCollectionBuilder<Type, StateType, Parent>> complex(
-        TypedPropertyGetter<Type, ?> getter, Class<U> c) {
-      return complex(getter, c, true);
+        TypedPropertyGetter<Type, U> getter) {
+      return complex(getter, true);
     }
 
     public <U> FieldCollectionBuilder<U, StateType, FieldCollectionBuilder<Type, StateType, Parent>> complex(

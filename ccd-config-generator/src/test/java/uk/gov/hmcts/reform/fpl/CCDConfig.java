@@ -20,8 +20,6 @@ import static uk.gov.hmcts.reform.fpl.enums.UserRole.LOCAL_AUTHORITY;
 import static uk.gov.hmcts.reform.fpl.enums.UserRole.SYSTEM_UPDATE;
 
 import org.springframework.stereotype.Component;
-import uk.gov.hmcts.ccd.sdk.api.Event;
-import uk.gov.hmcts.ccd.sdk.api.FieldCollection;
 import uk.gov.hmcts.ccd.sdk.api.callback.AboutToStartOrSubmitResponse;
 import uk.gov.hmcts.ccd.sdk.api.CaseDetails;
 import uk.gov.hmcts.ccd.sdk.api.ConfigBuilder;
