@@ -239,7 +239,7 @@ public class FieldCollection {
 
     public <U> FieldCollectionBuilder<U, StateType, FieldCollectionBuilder<Type, StateType, Parent>> complex(
         TypedPropertyGetter<Type, U> getter, String showCondition) {
-      return complex(getter, showCondition);
+      return complex(getter, true, showCondition);
     }
 
     public <U> FieldCollectionBuilder<U, StateType, FieldCollectionBuilder<Type, StateType, Parent>> complex(
@@ -254,7 +254,8 @@ public class FieldCollection {
     }
 
     public <U> FieldCollectionBuilder<U, StateType, FieldCollectionBuilder<Type, StateType, Parent>> complex(
-        TypedPropertyGetter<Type, ?> getter, Class<U> c, boolean summary, String showCondition) {
+        TypedPropertyGetter<Type, ?> getter, boolean summary, String showCondition) {
+      Class<U> c = propertyUtils.getPropertyType(dataClass, getter);
       String fieldName = propertyUtils.getPropertyName(dataClass, getter);
       if (null == this.rootFieldname) {
         // Register only the root complex as a field
@@ -266,11 +267,6 @@ public class FieldCollection {
     public <U> FieldCollectionBuilder<U, StateType, FieldCollectionBuilder<Type, StateType, Parent>> complex(
         TypedPropertyGetter<Type, U> getter) {
       return complex(getter, true);
-    }
-
-    public <U> FieldCollectionBuilder<U, StateType, FieldCollectionBuilder<Type, StateType, Parent>> complex(
-        TypedPropertyGetter<Type, ?> getter, Class<U> c, String showCondition) {
-      return complex(getter, c, true, showCondition);
     }
 
     <U> FieldCollectionBuilder<U, StateType, FieldCollectionBuilder<Type, StateType, Parent>> complex(String fieldName,
