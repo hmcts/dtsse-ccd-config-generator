@@ -14,7 +14,6 @@ plugins {
 }
 
 group 'uk.gov.hmcts.reform'
-version System.getenv('RELEASE_VERSION')?.replace('refs/tags/', '') ?: 'DEV-SNAPSHOT'
 
 repositories {
   jcenter()
@@ -75,6 +74,17 @@ sourceSets {
   functionalTest {
   }
 }
+
+task setVersion {
+    doLast {
+        def resources = file('src/main/resources')
+        resources.mkdirs()
+        def props = new File(resources, 'application.properties')
+        props.text = "types.version=${version}"
+    }
+}
+
+compileJava.dependsOn setVersion
 
 gradlePlugin.testSourceSets(sourceSets.functionalTest)
 configurations.functionalTestImplementation.extendsFrom(configurations.testImplementation)
