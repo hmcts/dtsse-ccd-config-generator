@@ -4,7 +4,6 @@ plugins {
 }
 
 group = 'com.github.hmcts'
-version = 'LATEST'
 
 repositories {
     jcenter()
@@ -82,6 +81,12 @@ publishing {
         }
     }
 }
+
+task cleanMaven(type: Delete) {
+    delete mavenFolder
+}
+
+publishMainPublicationToGeneratorRepository.dependsOn cleanMaven
 
 task zipGenerator(type: Zip, dependsOn: publishMainPublicationToGeneratorRepository) {
     from mavenFolder

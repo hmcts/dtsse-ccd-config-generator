@@ -5,6 +5,7 @@ import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
 import java.util.Arrays;
+import java.util.Properties;
 import lombok.Data;
 import lombok.SneakyThrows;
 import org.gradle.api.Action;
@@ -57,7 +58,8 @@ public class CcdSdkPlugin implements Plugin<Project> {
     project.getRepositories().maven(x -> x.setUrl(generatorDir.get().getAsFile()));
 
     // Add the dependency on the generator which will be fetched from the local maven repo.
-    project.getDependencies().add("implementation", "com.github.hmcts:ccd-config-generator:LATEST");
+    project.getDependencies().add("implementation", "com.github.hmcts:ccd-config-generator:"
+        + getVersion());
 
     // Create the task to generate CCD config.
     JavaExec generate = project.getTasks().create("generateCCDConfig", JavaExec.class);
@@ -79,6 +81,13 @@ public class CcdSdkPlugin implements Plugin<Project> {
     )));
 
     project.getRepositories().jcenter();
+  }
+
+  @SneakyThrows
+  private String getVersion() {
+    Properties properties = new Properties();
+    properties.load(getClass().getClassLoader().getResourceAsStream("application.properties"));
+    return properties.getProperty("types.version");
   }
 
   @Data
