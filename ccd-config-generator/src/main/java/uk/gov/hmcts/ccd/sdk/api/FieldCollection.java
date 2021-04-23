@@ -99,6 +99,11 @@ public class FieldCollection {
       return field(getter, DisplayContext.Mandatory, showCondition, true);
     }
 
+    public FieldCollectionBuilder<Type, StateType, Parent> mandatory(TypedPropertyGetter<Type, ?> getter,
+               String showFirstCondition, String showSecondCondition) {
+      return field(getter, DisplayContext.Mandatory, showFirstCondition, showSecondCondition, true);
+    }
+
     public FieldCollectionBuilder<Type, StateType, Parent> mandatory(TypedPropertyGetter<Type, ?> getter) {
       return field(getter, DisplayContext.Mandatory, true);
     }
@@ -188,6 +193,19 @@ public class FieldCollection {
         showCondition = showCondition.replace("{{FIELD_NAME}}", rootFieldname);
       }
       field(getter).context(context).showCondition(showCondition).showSummary(showSummary);
+      return this;
+    }
+
+    FieldCollectionBuilder<Type, StateType, Parent> field(TypedPropertyGetter<Type, ?> getter,
+        DisplayContext context, String showFirstCondition, String showSecondCondition, boolean showSummary) {
+      if (null != showFirstCondition && null != rootFieldname) {
+        showFirstCondition = showFirstCondition.replace("{{FIELD_NAME}}", rootFieldname);
+      }
+      if (null != showSecondCondition && null != rootFieldname) {
+        showSecondCondition = showSecondCondition.replace("{{FIELD_NAME}}", rootFieldname);
+      }
+      field(getter).context(context).showCondition(showFirstCondition).showCondition(showSecondCondition)
+        .showSummary(showSummary);
       return this;
     }
 
