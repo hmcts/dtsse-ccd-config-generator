@@ -1,5 +1,6 @@
 package uk.gov.hmcts.ccd.sdk.type;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.annotation.JsonSerialize;
@@ -22,11 +23,13 @@ public class PreviousOrganisation {
   @JsonProperty("FromTimeStamp")
   @JsonSerialize(using = LocalDateTimeSerializer.class)
   @JsonDeserialize(using = LocalDateTimeDeserializer.class)
+  @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss.SSS")
   private final LocalDateTime fromTimeStamp;
 
   @JsonProperty("ToTimeStamp")
   @JsonSerialize(using = LocalDateTimeSerializer.class)
   @JsonDeserialize(using = LocalDateTimeDeserializer.class)
+  @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss.SSS")
   private final LocalDateTime toTimeStamp;
 
   @JsonProperty("OrganisationName")
