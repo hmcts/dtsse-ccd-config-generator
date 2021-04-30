@@ -2,13 +2,13 @@ package uk.gov.hmcts.ccd.sdk.type;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.AllArgsConstructor;
-import lombok.Builder;
 import lombok.Data;
+import lombok.experimental.SuperBuilder;
 import lombok.extern.jackson.Jacksonized;
 import uk.gov.hmcts.ccd.sdk.api.ComplexType;
 
 @AllArgsConstructor
-@Builder
+@SuperBuilder
 @Data
 @Jacksonized
 @ComplexType(name = "Address", generate = false)
