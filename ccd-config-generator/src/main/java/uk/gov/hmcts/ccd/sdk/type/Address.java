@@ -12,7 +12,6 @@ import uk.gov.hmcts.ccd.sdk.api.ComplexType;
 @Data
 @Jacksonized
 @ComplexType(name = "Address", generate = false)
-@Deprecated
 public class Address {
 
   @JsonProperty("AddressLine1")
