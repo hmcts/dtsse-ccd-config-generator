@@ -14,4 +14,8 @@ import uk.gov.hmcts.ccd.sdk.api.ComplexType;
 public class MoneyGBP {
 
   private final String amount;
+
+  public int toInt() {
+    return Integer.parseInt(amount);
+  }
 }
