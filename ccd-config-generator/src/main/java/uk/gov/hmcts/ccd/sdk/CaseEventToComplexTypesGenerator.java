@@ -30,7 +30,7 @@ class CaseEventToComplexTypesGenerator {
 
       if (entriesByCaseField.size() > 0) {
         File folder = new File(String
-            .valueOf(Paths.get(root.getPath(), "CaseEventToComplexTypes", event.getEventID())));
+            .valueOf(Paths.get(root.getPath(), "CaseEventToComplexTypes", event.getId())));
         folder.mkdirs();
         for (String fieldID : entriesByCaseField.keySet()) {
           Path output = Paths.get(folder.getPath(), fieldID + event.getNamespace() + ".json");

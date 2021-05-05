@@ -3,7 +3,6 @@ package uk.gov.hmcts.ccd.sdk.api;
 import com.google.common.collect.HashMultimap;
 import com.google.common.collect.SetMultimap;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
@@ -12,7 +11,6 @@ import java.util.stream.Collectors;
 import lombok.Builder;
 import lombok.Data;
 import lombok.ToString;
-import lombok.With;
 import uk.gov.hmcts.ccd.sdk.api.callback.AboutToStart;
 import uk.gov.hmcts.ccd.sdk.api.callback.AboutToSubmit;
 import uk.gov.hmcts.ccd.sdk.api.callback.Submitted;
@@ -21,10 +19,7 @@ import uk.gov.hmcts.ccd.sdk.api.callback.Submitted;
 @Data
 public class Event<T, R extends HasRole, S> {
 
-  @With
   private String id;
-  // The same event can have a different ID if on different states.
-  private String eventId;
 
   private String name;
   private Set<S> preState;
@@ -41,14 +36,6 @@ public class Event<T, R extends HasRole, S> {
   private AboutToStart<T, S> aboutToStartCallback;
   private AboutToSubmit<T, S> aboutToSubmitCallback;
   private Submitted<T, S> submittedCallback;
-
-  public void setEventID(String eventId) {
-    this.eventId = eventId;
-  }
-
-  public String getEventID() {
-    return this.eventId != null ? this.eventId : this.id;
-  }
 
   public void name(String s) {
     name = s;
@@ -83,7 +70,6 @@ public class Event<T, R extends HasRole, S> {
         Set<S> preStates, Set<S> postStates) {
       EventBuilder<T, R, S> result = new EventBuilder<T, R, S>();
       result.id(id);
-      result.eventId(id);
       result.preState = preStates;
       result.postState = postStates;
       result.dataClass = dataClass;
@@ -139,13 +125,6 @@ public class Event<T, R extends HasRole, S> {
       this.explicitGrants = true;
       return this;
     }
-
-    EventBuilder<T, R, S> forState(S state) {
-      this.preState = Collections.singleton(state);
-      this.postState = Collections.singleton(state);
-      return this;
-    }
-
 
     public EventBuilder<T, R, S> grantHistoryOnly(R... roles) {
       for (R role : roles) {

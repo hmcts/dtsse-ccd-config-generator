@@ -86,7 +86,7 @@ class ConfigGenerator<T, S, R extends HasRole> {
       }
       for (Map.Entry<String, MidEvent> midEvent : event.getFields().build()
           .getPagesToMidEvent().entrySet()) {
-        midEventCallbacks.put(event.getEventID(), midEvent.getKey(), midEvent.getValue());
+        midEventCallbacks.put(event.getId(), midEvent.getKey(), midEvent.getValue());
       }
     }
 
