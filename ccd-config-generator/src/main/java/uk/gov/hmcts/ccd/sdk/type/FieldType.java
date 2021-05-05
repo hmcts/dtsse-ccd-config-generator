@@ -15,6 +15,5 @@ public enum FieldType {
   CaseLink,
   OrderSummary,
   MultiSelectList,
-  Collection,
-  MoneyGBP
+  Collection
 }
