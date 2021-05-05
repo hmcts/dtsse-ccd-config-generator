@@ -3,7 +3,6 @@ package uk.gov.hmcts.ccd.sdk.api;
 import com.google.common.collect.HashMultimap;
 import com.google.common.collect.SetMultimap;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
@@ -126,13 +125,6 @@ public class Event<T, R extends HasRole, S> {
       this.explicitGrants = true;
       return this;
     }
-
-    EventBuilder<T, R, S> forState(S state) {
-      this.preState = Collections.singleton(state);
-      this.postState = Collections.singleton(state);
-      return this;
-    }
-
 
     public EventBuilder<T, R, S> grantHistoryOnly(R... roles) {
       for (R role : roles) {
