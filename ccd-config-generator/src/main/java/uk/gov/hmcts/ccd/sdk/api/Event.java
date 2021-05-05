@@ -30,9 +30,6 @@ public class Event<T, R extends HasRole, S> {
   private boolean showSummary;
   private boolean showEventNotes;
   private boolean showSummaryChangeOption;
-  private int eventNumber;
-  @Builder.Default
-  private String namespace = "";
   private AboutToStart<T, S> aboutToStartCallback;
   private AboutToSubmit<T, S> aboutToSubmitCallback;
   private Submitted<T, S> submittedCallback;
@@ -77,7 +74,6 @@ public class Event<T, R extends HasRole, S> {
       result.historyOnlyRoles = new HashSet<>();
       result.fields = FieldCollection.FieldCollectionBuilder
           .builder(result, result, dataClass, propertyUtils);
-      result.eventNumber = eventCount++;
       result.retries = new HashMap<>();
 
       return result;
