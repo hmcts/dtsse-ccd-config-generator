@@ -76,17 +76,17 @@ class ConfigGenerator<T, S, R extends HasRole> {
     Table<String, String, MidEvent> midEventCallbacks = HashBasedTable.create();
     for (Event event : events) {
       if (event.getAboutToStartCallback() != null) {
-        aboutToStartCallbacks.put(event.getEventId(), event.getAboutToStartCallback());
+        aboutToStartCallbacks.put(event.getId(), event.getAboutToStartCallback());
       }
       if (event.getAboutToSubmitCallback() != null) {
-        aboutToSubmitCallbacks.put(event.getEventId(), event.getAboutToSubmitCallback());
+        aboutToSubmitCallbacks.put(event.getId(), event.getAboutToSubmitCallback());
       }
       if (event.getSubmittedCallback() != null) {
-        submittedCallbacks.put(event.getEventId(), event.getSubmittedCallback());
+        submittedCallbacks.put(event.getId(), event.getSubmittedCallback());
       }
       for (Map.Entry<String, MidEvent> midEvent : event.getFields().build()
           .getPagesToMidEvent().entrySet()) {
-        midEventCallbacks.put(event.getEventId(), midEvent.getKey(), midEvent.getValue());
+        midEventCallbacks.put(event.getId(), midEvent.getKey(), midEvent.getValue());
       }
     }
 
@@ -203,7 +203,7 @@ class ConfigGenerator<T, S, R extends HasRole> {
         for (S key : keys) {
           Map<R, Set<Permission>> roles = builder.stateRolePermissions.row(key);
           for (R role : roles.keySet()) {
-            eventRolePermissions.put(event.getEventId(), role, roles.get(role));
+            eventRolePermissions.put(event.getId(), role, roles.get(role));
           }
         }
 
@@ -212,7 +212,7 @@ class ConfigGenerator<T, S, R extends HasRole> {
         for (S s : event.getPostState()) {
           if (stateRoleHistoryAccess.containsKey(s)) {
             for (R role : stateRoleHistoryAccess.get(s)) {
-              eventRolePermissions.put(event.getEventId(), role, Collections.singleton(Permission.R));
+              eventRolePermissions.put(event.getId(), role, Collections.singleton(Permission.R));
             }
           }
         }
@@ -220,7 +220,7 @@ class ConfigGenerator<T, S, R extends HasRole> {
       // Set event level permissions, overriding state level where set.
       SetMultimap<R, Permission> grants = event.getGrants();
       for (R role : grants.keySet()) {
-        eventRolePermissions.put(event.getEventId(), role,
+        eventRolePermissions.put(event.getId(), role,
             grants.get(role));
       }
     }

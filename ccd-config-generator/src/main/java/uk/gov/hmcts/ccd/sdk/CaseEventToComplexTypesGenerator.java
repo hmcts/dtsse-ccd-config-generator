@@ -23,14 +23,14 @@ class CaseEventToComplexTypesGenerator {
       FieldCollection collection = event.getFields().build();
       List<Map<String, Object>> entries = Lists.newArrayList();
       List<FieldCollection.FieldCollectionBuilder> complexFields = collection.getComplexFields();
-      expand(complexFields, entries, event.getEventId(), null, "");
+      expand(complexFields, entries, event.getId(), null, "");
 
       ImmutableListMultimap<String, Map<String, Object>> entriesByCaseField = Multimaps
           .index(entries, x -> x.get("CaseFieldID").toString());
 
       if (entriesByCaseField.size() > 0) {
         File folder = new File(String
-            .valueOf(Paths.get(root.getPath(), "CaseEventToComplexTypes", event.getEventId())));
+            .valueOf(Paths.get(root.getPath(), "CaseEventToComplexTypes", event.getId())));
         folder.mkdirs();
         for (String fieldID : entriesByCaseField.keySet()) {
           Path output = Paths.get(folder.getPath(), fieldID + event.getNamespace() + ".json");

@@ -20,7 +20,7 @@ import uk.gov.hmcts.ccd.sdk.api.callback.Submitted;
 @Data
 public class Event<T, R extends HasRole, S> {
 
-  private String eventId;
+  private String id;
 
   private String name;
   private Set<S> preState;
@@ -70,7 +70,7 @@ public class Event<T, R extends HasRole, S> {
         String id, Class dataClass, PropertyUtils propertyUtils,
         Set<S> preStates, Set<S> postStates) {
       EventBuilder<T, R, S> result = new EventBuilder<T, R, S>();
-      result.eventId(id);
+      result.id(id);
       result.preState = preStates;
       result.postState = postStates;
       result.dataClass = dataClass;
