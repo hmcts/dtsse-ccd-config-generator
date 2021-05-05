@@ -151,6 +151,31 @@ public class Event<T, R extends HasRole, S> {
       return this;
     }
 
+    // Hide lombok's generated builder methods for these fields to stop them polluting the public API.
+    private void id(String value) {
+      this.id = value;
+    }
+
+    private void preState(Set<S> value) {
+      this.preState = value;
+    }
+
+    private void postState(Set<S> value) {
+      this.postState = value;
+    }
+
+    private void dataClass(Class value) {
+      this.dataClass = value;
+    }
+
+    private void grants(SetMultimap<R, Permission> value) {
+      this.grants = value;
+    }
+
+    private void historyOnlyRoles(Set<String> value) {
+      this.historyOnlyRoles = value;
+    }
+
     private void setRetries(Webhook hook, int... retries) {
       if (retries.length > 0) {
         String val = String.join(",", Arrays.stream(retries).mapToObj(String::valueOf).collect(
