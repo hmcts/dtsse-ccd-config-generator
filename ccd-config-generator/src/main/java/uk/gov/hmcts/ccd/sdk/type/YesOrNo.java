@@ -17,7 +17,7 @@ public enum YesOrNo {
     return val ? YES : NO;
   }
 
-  public boolean toBoolean(YesOrNo val) {
+  public boolean toBoolean() {
     return this.equals(YES);
   }
 }
