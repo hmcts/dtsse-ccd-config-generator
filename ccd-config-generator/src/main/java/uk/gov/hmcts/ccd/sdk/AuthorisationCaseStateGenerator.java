@@ -31,7 +31,7 @@ class AuthorisationCaseStateGenerator {
         continue;
       }
 
-      Map<R, Set<Permission>> rolePermissions = eventRolePermissions.row(event.getEventID());
+      Map<R, Set<Permission>> rolePermissions = eventRolePermissions.row(event.getId());
       for (Entry<R, Set<Permission>> rolePermission : rolePermissions.entrySet()) {
         // For state transitions if you have C then you get both states.
         // Otherwise you only need permission for the destination state.
