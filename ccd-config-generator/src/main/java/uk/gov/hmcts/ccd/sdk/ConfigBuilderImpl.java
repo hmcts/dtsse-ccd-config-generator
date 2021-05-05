@@ -197,7 +197,7 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements ConfigBuilder
     for (Map.Entry<String, List<Event.EventBuilder<T, R, S>>> cell : events.entrySet()) {
       for (Event.EventBuilder<T, R, S> builder : cell.getValue()) {
         Event<T, R, S> event = builder.build();
-        result.put(event.getId(), event);
+        result.put(event.getEventId(), event);
       }
     }
 

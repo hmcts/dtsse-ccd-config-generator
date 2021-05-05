@@ -49,7 +49,7 @@ class AuthorisationCaseFieldGenerator {
     Table<String, String, Set<Permission>> fieldRolePermissions = HashBasedTable.create();
     // Add field permissions based on event permissions.
     for (Event event : config.events) {
-      Map<R, Set<Permission>> eventPermissions = eventRolePermissions.row(event.getEventID());
+      Map<R, Set<Permission>> eventPermissions = eventRolePermissions.row(event.getEventId());
       List<Field.FieldBuilder> fields = event.getFields().build().getFields();
       for (Field.FieldBuilder fb : fields) {
 

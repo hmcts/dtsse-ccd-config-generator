@@ -22,7 +22,7 @@ class CaseEventGenerator<T, S, R extends HasRole> {
     File folder = new File(root.getPath(), "CaseEvent");
     folder.mkdir();
     for (Event event : config.events) {
-      Path output = Paths.get(folder.getPath(), event.getId() + ".json");
+      Path output = Paths.get(folder.getPath(), event.getEventId() + ".json");
 
       JsonUtils.mergeInto(output, serialise(config.builder.caseType, event, config.allStates,
           config.builder.callbackHost),
@@ -34,7 +34,7 @@ class CaseEventGenerator<T, S, R extends HasRole> {
                                               Set<S> allStates, String callbackHost) {
     int t = 1;
     List result = Lists.newArrayList();
-    Map<String, Object> data = JsonUtils.getField(event.getId());
+    Map<String, Object> data = JsonUtils.getField(event.getEventId());
     result.add(data);
     data.put("Name", event.getName());
     data.put("Description", event.getDescription());

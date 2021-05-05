@@ -35,7 +35,7 @@ class CaseEventToFieldsGenerator {
           Map<String, Object> info = Maps.newHashMap();
           entries.add(info);
           info.put("LiveFrom", "01/01/2017");
-          info.put("CaseEventID", event.getId());
+          info.put("CaseEventID", event.getEventId());
           info.put("CaseTypeID", caseType);
           Field field = fb.build();
           info.put("CaseFieldID", field.getId());
@@ -59,10 +59,10 @@ class CaseEventToFieldsGenerator {
             info.put("FieldShowCondition", field.getShowCondition());
           }
 
-          if (midEventCallbacks.contains(event.getEventID(), pageId.toString())) {
+          if (midEventCallbacks.contains(event.getEventId(), pageId.toString())) {
             info.put("CallBackURLMidEvent", baseUrl + "/callbacks/mid-event?page="
                 + URLEncoder.encode(pageId.toString(), StandardCharsets.UTF_8));
-            midEventCallbacks.remove(event.getEventID(), pageId.toString());
+            midEventCallbacks.remove(event.getEventId(), pageId.toString());
           }
 
           if (collection.getPageShowConditions().containsKey(field.getPage())) {
@@ -86,7 +86,7 @@ class CaseEventToFieldsGenerator {
         File folder = new File(root.getPath(), "CaseEventToFields");
         folder.mkdir();
 
-        Path output = Paths.get(folder.getPath(), event.getId() + ".json");
+        Path output = Paths.get(folder.getPath(), event.getEventId() + ".json");
         JsonUtils.mergeInto(output, entries, new AddMissing(), "CaseFieldID");
       }
     }
