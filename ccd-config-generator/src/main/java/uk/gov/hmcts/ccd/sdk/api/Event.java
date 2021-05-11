@@ -30,9 +30,6 @@ public class Event<T, R extends HasRole, S> {
   private boolean showSummary;
   private boolean showEventNotes;
   private boolean showSummaryChangeOption;
-  private int eventNumber;
-  @Builder.Default
-  private String namespace = "";
   private AboutToStart<T, S> aboutToStartCallback;
   private AboutToSubmit<T, S> aboutToSubmitCallback;
   private Submitted<T, S> submittedCallback;
@@ -77,7 +74,6 @@ public class Event<T, R extends HasRole, S> {
       result.historyOnlyRoles = new HashSet<>();
       result.fields = FieldCollection.FieldCollectionBuilder
           .builder(result, result, dataClass, propertyUtils);
-      result.eventNumber = eventCount++;
       result.retries = new HashMap<>();
 
       return result;
@@ -153,6 +149,31 @@ public class Event<T, R extends HasRole, S> {
       }
 
       return this;
+    }
+
+    // Hide lombok's generated builder methods for these fields to stop them polluting the public API.
+    private void id(String value) {
+      this.id = value;
+    }
+
+    private void preState(Set<S> value) {
+      this.preState = value;
+    }
+
+    private void postState(Set<S> value) {
+      this.postState = value;
+    }
+
+    private void dataClass(Class value) {
+      this.dataClass = value;
+    }
+
+    private void grants(SetMultimap<R, Permission> value) {
+      this.grants = value;
+    }
+
+    private void historyOnlyRoles(Set<String> value) {
+      this.historyOnlyRoles = value;
     }
 
     private void setRetries(Webhook hook, int... retries) {
