@@ -17,8 +17,6 @@ public interface ConfigBuilder<T, S, R extends HasRole> {
 
   void grant(S state, Set<Permission> permissions, R... role);
 
-  void grantHistory(S state, R... role);
-
   TabBuilder<T, R> tab(String tabId, String tabLabel);
 
   WorkBasketBuilder<T, R> workBasketResultFields();

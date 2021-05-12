@@ -52,9 +52,6 @@ public class CCDConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<CaseData, S
     // Admin gets CRU on everything in Open state.
     builder.grant(Open, CRU, HMCTS_ADMIN);
 
-    // Local Authority can view the history of all events in the Open state.
-    builder.grantHistory(Open, LOCAL_AUTHORITY);
-
     // Describe the hierarchy of which roles go together.
     builder.role(CCD_SOLICITOR, CCD_LASOLICITOR).has(LOCAL_AUTHORITY);
     builder.role(JUDICIARY, GATEKEEPER).has(HMCTS_ADMIN);
@@ -76,6 +73,7 @@ public class CCDConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<CaseData, S
         .forStates(Gatekeeping, Submitted)
         .name("Add case notes")
         .grant(CRU, HMCTS_ADMIN)
+        .grant(R, LOCAL_AUTHORITY)
         .fields()
         .optional(CaseData::getCaseNotes);
   }

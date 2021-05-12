@@ -16,7 +16,6 @@ import java.lang.reflect.ParameterizedType;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -103,8 +102,7 @@ class ConfigGenerator<T, S, R extends HasRole> {
         config.builder.callbackHost, config.midEventCallbacks);
     ComplexTypeGenerator.generate(outputfolder, config.builder.caseType, config.types);
     CaseEventToComplexTypesGenerator.writeEvents(outputfolder, config.events);
-    Table<String, R, Set<Permission>> eventPermissions = buildEventPermissions(config.builder,
-        config.events, config.allStates);
+    Table<String, R, Set<Permission>> eventPermissions = buildEventRolePermissions(config.events);
     AuthorisationCaseEventGenerator.generate(outputfolder, eventPermissions,
         config.builder.caseType);
     AuthorisationCaseFieldGenerator.generate(outputfolder, config, eventPermissions);
@@ -188,29 +186,12 @@ class ConfigGenerator<T, S, R extends HasRole> {
     return field.getType();
   }
 
-  Table<String, R, Set<Permission>> buildEventPermissions(
-      ConfigBuilderImpl<T, S, R> builder, List<Event<T, R, S>> events, Set<S> allStates) {
-
-
+  Table<String, R, Set<Permission>> buildEventRolePermissions(List<Event<T, R, S>> events) {
     Table<String, R, Set<Permission>> eventRolePermissions = HashBasedTable.create();
     for (Event<T, R, S> event : events) {
-      // Add any state based role permissions unless event permits only explicit grants.
-      if (!event.isExplicitGrants()) {
-        // Add any case history access
-        SetMultimap<S, R> stateRoleHistoryAccess = builder.stateRoleHistoryAccess;
-        for (S s : event.getPostState()) {
-          if (stateRoleHistoryAccess.containsKey(s)) {
-            for (R role : stateRoleHistoryAccess.get(s)) {
-              eventRolePermissions.put(event.getId(), role, Collections.singleton(Permission.R));
-            }
-          }
-        }
-      }
-      // Set event level permissions, overriding state level where set.
       SetMultimap<R, Permission> grants = event.getGrants();
       for (R role : grants.keySet()) {
-        eventRolePermissions.put(event.getId(), role,
-            grants.get(role));
+        eventRolePermissions.put(event.getId(), role, grants.get(role));
       }
     }
     return eventRolePermissions;
