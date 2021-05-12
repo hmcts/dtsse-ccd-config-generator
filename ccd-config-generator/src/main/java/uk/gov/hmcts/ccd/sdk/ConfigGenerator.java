@@ -196,17 +196,6 @@ class ConfigGenerator<T, S, R extends HasRole> {
     for (Event<T, R, S> event : events) {
       // Add any state based role permissions unless event permits only explicit grants.
       if (!event.isExplicitGrants()) {
-        // If Event is for all states, then apply each state's state level permissions.
-        Set<S> keys = event.getPreState().equals(allStates)
-            ? builder.stateRolePermissions.rowKeySet()
-            : event.getPostState();
-        for (S key : keys) {
-          Map<R, Set<Permission>> roles = builder.stateRolePermissions.row(key);
-          for (R role : roles.keySet()) {
-            eventRolePermissions.put(event.getId(), role, roles.get(role));
-          }
-        }
-
         // Add any case history access
         SetMultimap<S, R> stateRoleHistoryAccess = builder.stateRoleHistoryAccess;
         for (S s : event.getPostState()) {

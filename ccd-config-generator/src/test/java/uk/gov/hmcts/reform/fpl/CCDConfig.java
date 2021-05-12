@@ -75,6 +75,7 @@ public class CCDConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<CaseData, S
     builder.event("addNotes")
         .forStates(Gatekeeping, Submitted)
         .name("Add case notes")
+        .grant(CRU, HMCTS_ADMIN)
         .fields()
         .optional(CaseData::getCaseNotes);
   }
@@ -261,7 +262,7 @@ public class CCDConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<CaseData, S
         .initialState(Open)
         .name("Start application")
         .description("Create a new case – add a title")
-        .grant(CRU, LOCAL_AUTHORITY)
+        .grant(CRU, LOCAL_AUTHORITY, HMCTS_ADMIN)
         .aboutToSubmitCallback(this::aboutToSubmit)
         .submittedCallback(this::submitted)
         .retries(1,2,3,4,5)
