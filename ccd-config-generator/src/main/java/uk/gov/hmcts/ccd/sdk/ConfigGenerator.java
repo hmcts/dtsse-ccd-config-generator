@@ -113,7 +113,8 @@ class ConfigGenerator<T, S, R extends HasRole> {
     StateGenerator.generate(outputfolder, config.builder.caseType, config.stateArg);
     AuthorisationCaseTypeGenerator.generate(outputfolder, config.builder.caseType, config.roleType);
     CaseTypeTabGenerator.generate(outputfolder, config.builder.caseType, config.builder);
-    AuthorisationCaseStateGenerator.generate(outputfolder, config, eventPermissions);
+    AuthorisationCaseStateGenerator.generate(outputfolder, config, eventPermissions,
+        config.builder.stateRolePermissions);
     WorkBasketGenerator.generate(outputfolder, config.builder.caseType, config.builder);
     SearchFieldAndResultGenerator.generate(outputfolder, config.builder.caseType, config.builder);
     CaseRoleGenerator.generate(outputfolder, config.builder.caseType, config.roleType);

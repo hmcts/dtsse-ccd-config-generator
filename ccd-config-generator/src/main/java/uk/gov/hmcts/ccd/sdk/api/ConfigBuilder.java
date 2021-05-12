@@ -15,6 +15,14 @@ public interface ConfigBuilder<T, S, R extends HasRole> {
 
   void setEnvironment(String env);
 
+  /**
+   * Set AuthorisationCaseState explicitly.
+   * Note that additional AuthorisationCaseState permissions are inferred based on grants of
+   * event-level permissions.
+   * @param state state
+   * @param permissions permissions
+   * @param role One or more roles
+   */
   void grant(S state, Set<Permission> permissions, R... role);
 
   TabBuilder<T, R> tab(String tabId, String tabLabel);
