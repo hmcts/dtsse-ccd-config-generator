@@ -19,6 +19,8 @@ import static uk.gov.hmcts.reform.fpl.enums.UserRole.JUDICIARY;
 import static uk.gov.hmcts.reform.fpl.enums.UserRole.LOCAL_AUTHORITY;
 import static uk.gov.hmcts.reform.fpl.enums.UserRole.SYSTEM_UPDATE;
 
+
+import java.util.Set;
 import org.springframework.stereotype.Component;
 import uk.gov.hmcts.ccd.sdk.api.callback.AboutToStartOrSubmitResponse;
 import uk.gov.hmcts.ccd.sdk.api.CaseDetails;
@@ -49,11 +51,7 @@ public class CCDConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<CaseData, S
     builder.jurisdiction("PUBLICLAW", "Family Public Law", "Family Public Law desc");
     builder.caseType("CARE_SUPERVISION_EPO", "Care, supervision and EPOs", "Care, supervision and emergency protection orders");
 
-    // Admin gets CRU on everything in Open state.
-    builder.grant(Open, CRU, HMCTS_ADMIN);
-
-    // Local Authority can view the history of all events in the Open state.
-    builder.grantHistory(Open, LOCAL_AUTHORITY);
+    builder.grant(Open, Set.of(R), LOCAL_AUTHORITY);
 
     // Describe the hierarchy of which roles go together.
     builder.role(CCD_SOLICITOR, CCD_LASOLICITOR).has(LOCAL_AUTHORITY);
@@ -75,6 +73,8 @@ public class CCDConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<CaseData, S
     builder.event("addNotes")
         .forStates(Gatekeeping, Submitted)
         .name("Add case notes")
+        .grant(CRU, HMCTS_ADMIN)
+        .grant(R, LOCAL_AUTHORITY)
         .fields()
         .optional(CaseData::getCaseNotes);
   }
@@ -261,7 +261,7 @@ public class CCDConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<CaseData, S
         .initialState(Open)
         .name("Start application")
         .description("Create a new case – add a title")
-        .grant(CRU, LOCAL_AUTHORITY)
+        .grant(CRU, LOCAL_AUTHORITY, HMCTS_ADMIN)
         .aboutToSubmitCallback(this::aboutToSubmit)
         .submittedCallback(this::submitted)
         .retries(1,2,3,4,5)

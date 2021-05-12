@@ -1,6 +1,5 @@
 package uk.gov.hmcts.ccd.sdk;
 
-import com.google.common.collect.HashBasedTable;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
@@ -22,10 +21,10 @@ import uk.gov.hmcts.ccd.sdk.api.Permission;
 class AuthorisationCaseStateGenerator {
 
   public static <T, S, R extends HasRole> void generate(
-      File root, ResolvedCCDConfig<T, S, R> config, Table<String, R,
-      Set<Permission>> eventRolePermissions) {
+      File root, ResolvedCCDConfig<T, S, R> config,
+      Table<String, R, Set<Permission>> eventRolePermissions,
+      Table<S, R, Set<Permission>> stateRolePermissions) {
 
-    Table<S, R, Set<Permission>> stateRolePermissions = HashBasedTable.create();
     for (Event<T, R, S> event : config.events) {
       if (event.getPreState().equals(config.allStates)) {
         continue;

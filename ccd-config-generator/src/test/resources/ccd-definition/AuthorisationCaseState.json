@@ -47,5 +47,12 @@
     "LiveFrom": "01/01/2017",
     "UserRole": "caseworker-publiclaw-courtadmin",
     "CaseStateID": "PREPARE_FOR_HEARING"
+  },
+  {
+    "CRUD" : "R",
+    "CaseStateID" : "Open",
+    "CaseTypeID" : "CARE_SUPERVISION_EPO",
+    "LiveFrom" : "01/01/2017",
+    "UserRole" : "caseworker-publiclaw-solicitor"
   }
 ]

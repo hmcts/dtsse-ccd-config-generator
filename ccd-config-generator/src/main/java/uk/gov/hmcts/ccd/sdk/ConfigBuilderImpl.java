@@ -1,11 +1,9 @@
 package uk.gov.hmcts.ccd.sdk;
 
 import com.google.common.collect.HashBasedTable;
-import com.google.common.collect.HashMultimap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
-import com.google.common.collect.SetMultimap;
 import com.google.common.collect.Sets;
 import com.google.common.collect.Table;
 import java.util.Hashtable;
@@ -28,7 +26,6 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements ConfigBuilder
 
   private final ImmutableSet<S> allStates;
   public String caseType = "";
-  public final SetMultimap<S, R> stateRoleHistoryAccess = HashMultimap.create();
   public final Table<S, R, Set<Permission>> stateRolePermissions = HashBasedTable.create();
   public final Set<String> apiOnlyRoles = Sets.newHashSet();
   public final Map<String, List<Event.EventBuilder<T, R, S>>> events = Maps.newHashMap();
@@ -117,13 +114,6 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements ConfigBuilder
   public void grant(S state, Set<Permission> permissions, R... roles) {
     for (R role : roles) {
       stateRolePermissions.put(state, role, permissions);
-    }
-  }
-
-  @Override
-  public void grantHistory(S state, R... roles) {
-    for (R role : roles) {
-      stateRoleHistoryAccess.put(state, role);
     }
   }
 

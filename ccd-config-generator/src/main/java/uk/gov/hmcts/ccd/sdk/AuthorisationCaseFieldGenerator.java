@@ -57,10 +57,6 @@ class AuthorisationCaseFieldGenerator {
           if (event.getHistoryOnlyRoles().contains(rolePermission.getKey())) {
             continue;
           }
-          if (config.builder.stateRoleHistoryAccess.containsEntry(event.getPostState(),
-              rolePermission.getKey())) {
-            continue;
-          }
           Set<Permission> perm = fb.build().isImmutable()
               ? Permission.CR
               : rolePermission.getValue();
