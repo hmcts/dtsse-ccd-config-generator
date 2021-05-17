@@ -1,6 +1,6 @@
 package uk.gov.hmcts.ccd.sdk;
 
-import static uk.gov.hmcts.ccd.sdk.CaseEventToFieldsGenerator.isUnwrappedField;
+import static uk.gov.hmcts.ccd.sdk.FieldUtils.isUnwrappedField;
 
 import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableListMultimap;

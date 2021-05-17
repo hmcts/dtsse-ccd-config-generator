@@ -1,10 +1,9 @@
 package uk.gov.hmcts.ccd.sdk;
 
-import static org.apache.commons.lang3.StringUtils.capitalize;
-import static uk.gov.hmcts.ccd.sdk.CaseEventToFieldsGenerator.isUnwrappedField;
 import static uk.gov.hmcts.ccd.sdk.FieldUtils.getCaseFields;
+import static uk.gov.hmcts.ccd.sdk.FieldUtils.getFieldId;
+import static uk.gov.hmcts.ccd.sdk.FieldUtils.isUnwrappedField;
 
-import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonUnwrapped;
 import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableSet;
@@ -68,9 +67,7 @@ class CaseFieldGenerator {
         continue;
       }
 
-      JsonProperty j = field.getAnnotation(JsonProperty.class);
-      String name = j != null ? j.value() : field.getName();
-      String id = idPrefix.isEmpty() ? name : idPrefix.concat(capitalize(name));
+      String id = getFieldId(field, idPrefix);
 
       Label label = field.getAnnotation(Label.class);
       if (null != label) {
@@ -213,7 +210,6 @@ class CaseFieldGenerator {
       Map<String, Object> fieldData = getField(config.builder.caseType, fieldId);
       Optional<JsonUnwrapped> unwrapped = isUnwrappedField(config.typeArg, fieldId);
       // Don't export inbuilt metadata fields. Ignore unwrapped complex types
-      // TODO how does this work? How can a field be on an event but not on CaseData
       if (fieldId.matches("\\[.+\\]") || unwrapped.isPresent()) {
         continue;
       }

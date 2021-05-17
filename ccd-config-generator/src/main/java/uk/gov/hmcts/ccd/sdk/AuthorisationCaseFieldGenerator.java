@@ -1,11 +1,10 @@
 package uk.gov.hmcts.ccd.sdk;
 
-import static org.apache.commons.lang3.StringUtils.capitalize;
 import static org.reflections.ReflectionUtils.withName;
 import static uk.gov.hmcts.ccd.sdk.FieldUtils.getCaseFields;
+import static uk.gov.hmcts.ccd.sdk.FieldUtils.getFieldId;
 import static uk.gov.hmcts.ccd.sdk.api.Permission.CRU;
 
-import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonUnwrapped;
 import com.google.common.collect.HashBasedTable;
 import com.google.common.collect.ImmutableSet;
@@ -129,8 +128,7 @@ class AuthorisationCaseFieldGenerator {
     for (java.lang.reflect.Field fieldWithAccess : ReflectionUtils.getAllFields(config.typeArg)) {
       CCD ccdAnnotation = fieldWithAccess.getAnnotation(CCD.class);
       if (null != ccdAnnotation) {
-        JsonProperty j = fieldWithAccess.getAnnotation(JsonProperty.class);
-        String id = j != null ? j.value() : fieldWithAccess.getName();
+        String id = getFieldId(fieldWithAccess);
 
         Objenesis objenesis = new ObjenesisStd();
         for (Class<? extends HasAccessControl> klass : ccdAnnotation.access()) {
@@ -189,9 +187,7 @@ class AuthorisationCaseFieldGenerator {
 
           if (fieldDef.isPresent() && unwrapped.isPresent()) {
             for (java.lang.reflect.Field nestedField : getCaseFields(fieldDef.get().getType())) {
-              String nestedFieldId = unwrapped.get().prefix().isEmpty()
-                  ? nestedField.getName()
-                  : unwrapped.get().prefix().concat(capitalize(nestedField.getName()));
+              String nestedFieldId = getFieldId(nestedField, unwrapped.get().prefix());
               Map<String, Object> nestedPermission = new Hashtable<>(permission);
               nestedPermission.put("CaseFieldID", nestedFieldId);
               permissions.add(nestedPermission);

@@ -1,7 +1,7 @@
 package uk.gov.hmcts.ccd.sdk;
 
 import static org.apache.commons.lang3.StringUtils.capitalize;
-import static org.reflections.ReflectionUtils.withName;
+import static uk.gov.hmcts.ccd.sdk.FieldUtils.isUnwrappedField;
 
 import com.fasterxml.jackson.annotation.JsonUnwrapped;
 import com.google.common.collect.HashBasedTable;
@@ -17,7 +17,6 @@ import java.nio.file.Paths;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import org.reflections.ReflectionUtils;
 import uk.gov.hmcts.ccd.sdk.JsonUtils.AddMissing;
 import uk.gov.hmcts.ccd.sdk.api.Event;
 import uk.gov.hmcts.ccd.sdk.api.Field;
@@ -74,15 +73,6 @@ class CaseEventToFieldsGenerator {
       Path output = Paths.get(folder.getPath(), event.getId() + ".json");
       JsonUtils.mergeInto(output, entries, new AddMissing(), "CaseFieldID");
     }
-  }
-
-  // TODO find a better home
-  public static <T> Optional<JsonUnwrapped> isUnwrappedField(Class<T> caseDataClass, String fieldName) {
-    return ReflectionUtils
-      .getFields(caseDataClass, withName(fieldName))
-      .stream()
-      .findFirst()
-      .map(f -> f.getAnnotation(JsonUnwrapped.class));
   }
 
   private static <T, R extends HasRole, S> Map<String, Object> createField(
