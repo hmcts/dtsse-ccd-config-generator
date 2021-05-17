@@ -323,8 +323,16 @@
     "SecurityClassification": "Public"
   },
   {
-    "ID": "hearingPreferences",
-    "FieldType": "HearingPreferences",
+    "ID": "hearingPreferencesWelsh",
+    "FieldType": "Text",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "LiveFrom": "01/01/2017",
+    "Label" : "Do you want some Welsh?",
+    "SecurityClassification": "Public"
+  },
+  {
+    "ID": "hearingPreferencesInterpreter",
+    "FieldType": "Text",
     "CaseTypeID": "CARE_SUPERVISION_EPO",
     "LiveFrom": "01/01/2017",
     "SecurityClassification": "Public"

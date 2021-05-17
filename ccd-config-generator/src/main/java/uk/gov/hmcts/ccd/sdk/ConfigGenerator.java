@@ -1,5 +1,6 @@
 package uk.gov.hmcts.ccd.sdk;
 
+import com.fasterxml.jackson.annotation.JsonUnwrapped;
 import com.google.common.base.Strings;
 import com.google.common.collect.HashBasedTable;
 import com.google.common.collect.ImmutableMap;
@@ -98,10 +99,9 @@ class ConfigGenerator<T, S, R extends HasRole> {
   private void writeConfig(File outputfolder, ResolvedCCDConfig<T, S, R> config) {
     outputfolder.mkdirs();
     new CaseEventGenerator<T, S, R>().writeEvents(outputfolder, config);
-    CaseEventToFieldsGenerator.writeEvents(outputfolder, config.events, config.builder.caseType,
-        config.builder.callbackHost, config.midEventCallbacks);
+    CaseEventToFieldsGenerator.writeEvents(outputfolder, config);
     ComplexTypeGenerator.generate(outputfolder, config.builder.caseType, config.types);
-    CaseEventToComplexTypesGenerator.writeEvents(outputfolder, config.events);
+    CaseEventToComplexTypesGenerator.writeEvents(outputfolder, config.events, config.typeArg);
     Table<String, R, Set<Permission>> eventPermissions = buildEventRolePermissions(config.events);
     AuthorisationCaseEventGenerator.generate(outputfolder, eventPermissions,
         config.builder.caseType);
@@ -177,6 +177,12 @@ class ConfigGenerator<T, S, R extends HasRole> {
   }
 
   public static Class getComplexType(Class c, Field field) {
+    // unwrapped properties are automatically ignored as complex types
+    JsonUnwrapped unwrapped = field.getAnnotation(JsonUnwrapped.class);
+    if (null != unwrapped) {
+      return null;
+    }
+
     if (Collection.class.isAssignableFrom(field.getType())) {
       ParameterizedType type = (ParameterizedType) TypeResolver.reify(field.getGenericType(), c);
       if (type.getActualTypeArguments()[0] instanceof ParameterizedType) {

@@ -39,6 +39,20 @@
     "CaseTypeID": "CARE_SUPERVISION_EPO",
     "UserRole": "caseworker-publiclaw-solicitor",
     "LiveFrom": "01/01/2017",
+    "CaseFieldID": "hearingPreferencesWelsh"
+  },
+  {
+    "CRUD": "CRU",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "UserRole": "caseworker-publiclaw-solicitor",
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "hearingPreferencesInterpreter"
+  },
+  {
+    "CRUD": "R",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "UserRole": "caseworker-publiclaw-solicitor",
+    "LiveFrom": "01/01/2017",
     "CaseFieldID": "caseLocalAuthority"
   },
   {

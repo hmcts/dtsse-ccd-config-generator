@@ -1,7 +1,10 @@
 package uk.gov.hmcts.ccd.sdk;
 
-import com.fasterxml.jackson.annotation.JsonIgnore;
-import com.fasterxml.jackson.annotation.JsonProperty;
+import static uk.gov.hmcts.ccd.sdk.FieldUtils.getCaseFields;
+import static uk.gov.hmcts.ccd.sdk.FieldUtils.getFieldId;
+import static uk.gov.hmcts.ccd.sdk.FieldUtils.isUnwrappedField;
+
+import com.fasterxml.jackson.annotation.JsonUnwrapped;
 import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Lists;
@@ -15,9 +18,9 @@ import java.util.Collection;
 import java.util.Hashtable;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import net.jodah.typetools.TypeResolver;
-import org.reflections.ReflectionUtils;
 import uk.gov.hmcts.ccd.sdk.JsonUtils.OverwriteSpecific;
 import uk.gov.hmcts.ccd.sdk.api.CCD;
 import uk.gov.hmcts.ccd.sdk.api.ComplexType;
@@ -42,30 +45,29 @@ class CaseFieldGenerator {
     history.put("FieldType", "CaseHistoryViewer");
     fields.add(history);
 
-    fields.addAll(getExplicitFields(config.builder.caseType, config.events, config.builder));
+    fields.addAll(getExplicitFields(config));
 
     Path path = Paths.get(outputFolder.getPath(), "CaseField.json");
     JsonUtils.mergeInto(path, fields, new OverwriteSpecific(OVERWRITES_FIELDS), "ID");
   }
 
   public static List<Map<String, Object>> toComplex(Class dataClass, String caseTypeId) {
+    return toComplex(dataClass, caseTypeId, "");
+  }
+
+  public static List<Map<String, Object>> toComplex(Class dataClass, String caseTypeId, String idPrefix) {
     List<Map<String, Object>> fields = Lists.newArrayList();
 
-    for (Field field : ReflectionUtils.getAllFields(dataClass)) {
+    for (Field field : getCaseFields(dataClass)) {
+      JsonUnwrapped unwrapped = field.getAnnotation(JsonUnwrapped.class);
+      if (null != unwrapped) {
+        List<Map<String, Object>> nestedObjectFields = toComplex(field.getType(), caseTypeId, unwrapped.prefix());
+        fields.addAll(nestedObjectFields);
 
-      CCD cf = field.getAnnotation(CCD.class);
-      if (null != cf) {
-        if (cf.ignore()) {
-          continue;
-        }
-      }
-
-      if (field.getAnnotation(JsonIgnore.class) != null) {
         continue;
       }
 
-      JsonProperty j = field.getAnnotation(JsonProperty.class);
-      String id = j != null ? j.value() : field.getName();
+      String id = getFieldId(field, idPrefix);
 
       Label label = field.getAnnotation(Label.class);
       if (null != label) {
@@ -78,6 +80,8 @@ class CaseFieldGenerator {
 
       Map<String, Object> fieldInfo = getField(caseTypeId, id);
       fields.add(fieldInfo);
+      CCD cf = field.getAnnotation(CCD.class);
+
       if (null != cf) {
         if (!Strings.isNullOrEmpty(cf.label())) {
           fieldInfo.put("Label", cf.label());
@@ -182,9 +186,9 @@ class CaseFieldGenerator {
   }
 
   private static <T, S, R extends HasRole> List<Map<String, Object>> getExplicitFields(
-      String caseType, List<Event<T, R, S>> events, ConfigBuilderImpl<T, S, R> builder) {
+      ResolvedCCDConfig<T, S, R> config) {
     Map<String, uk.gov.hmcts.ccd.sdk.api.Field> explicitFields = Maps.newHashMap();
-    for (Event event : events) {
+    for (Event event : config.events) {
       List<uk.gov.hmcts.ccd.sdk.api.Field.FieldBuilder> fc = event.getFields().build()
           .getExplicitFields();
 
@@ -194,7 +198,7 @@ class CaseFieldGenerator {
       }
     }
 
-    List<uk.gov.hmcts.ccd.sdk.api.Field.FieldBuilder> fs = builder.explicitFields;
+    List<uk.gov.hmcts.ccd.sdk.api.Field.FieldBuilder> fs = config.builder.explicitFields;
     for (FieldBuilder explicitField : fs) {
       uk.gov.hmcts.ccd.sdk.api.Field field = explicitField.build();
       explicitFields.put(field.getId(), field);
@@ -203,9 +207,10 @@ class CaseFieldGenerator {
     List<Map<String, Object>> result = Lists.newArrayList();
     for (String fieldId : explicitFields.keySet()) {
       uk.gov.hmcts.ccd.sdk.api.Field field = explicitFields.get(fieldId);
-      Map<String, Object> fieldData = getField(caseType, fieldId);
-      // Don't export inbuilt metadata fields.
-      if (fieldId.matches("\\[.+\\]")) {
+      Map<String, Object> fieldData = getField(config.builder.caseType, fieldId);
+      Optional<JsonUnwrapped> unwrapped = isUnwrappedField(config.typeArg, fieldId);
+      // Don't export inbuilt metadata fields. Ignore unwrapped complex types
+      if (fieldId.matches("\\[.+\\]") || unwrapped.isPresent()) {
         continue;
       }
       result.add(fieldData);

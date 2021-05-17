@@ -31,6 +31,7 @@ import uk.gov.hmcts.reform.ccd.client.model.SubmittedCallbackResponse;
 import uk.gov.hmcts.reform.fpl.enums.State;
 import uk.gov.hmcts.reform.fpl.enums.UserRole;
 import uk.gov.hmcts.reform.fpl.model.CaseData;
+import uk.gov.hmcts.reform.fpl.model.HearingPreferences;
 import uk.gov.hmcts.reform.fpl.model.Judge;
 
 // Found and invoked by the config generator.
@@ -76,13 +77,17 @@ public class CCDConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<CaseData, S
         .grant(CRU, HMCTS_ADMIN)
         .grant(R, LOCAL_AUTHORITY)
         .fields()
-        .optional(CaseData::getCaseNotes);
+        .optional(CaseData::getCaseNotes)
+        .complex(CaseData::getHearingPreferences)
+          .optional(HearingPreferences::getWelsh)
+          .done();
   }
 
   private void buildSearchResultFields() {
     builder.searchResultFields()
         .field(CaseData::getCaseName, "Case name")
         .field(CaseData::getFamilyManCaseNumber, "FamilyMan case number")
+        .field("hearingPreferencesWelsh", "Is in Welsh")
         .stateField()
         .field(CaseData::getCaseLocalAuthority, "Local authority")
         .field("dateAndTimeSubmitted", "Date submitted");
@@ -93,6 +98,7 @@ public class CCDConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<CaseData, S
         .field(CaseData::getCaseLocalAuthority, "Local authority")
         .field(CaseData::getCaseName, "Case name")
         .field(CaseData::getFamilyManCaseNumber, "FamilyMan case number")
+        .field("hearingPreferencesWelsh", "Is in Welsh")
         .caseReferenceField()
         .field(CaseData::getDateSubmitted, "Date submitted");
   }
@@ -101,6 +107,7 @@ public class CCDConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<CaseData, S
     builder.workBasketResultFields()
         .field(CaseData::getCaseName, "Case name")
         .field(CaseData::getFamilyManCaseNumber, "FamilyMan case number")
+        .field("hearingPreferencesWelsh", "Is in Welsh")
         .stateField()
         .field(CaseData::getCaseLocalAuthority, "Local authority")
         .field("dateAndTimeSubmitted", "Date submitted")
@@ -112,6 +119,7 @@ public class CCDConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<CaseData, S
         .field(CaseData::getCaseLocalAuthority, "Local authority")
         .field(CaseData::getCaseName, "Case name")
         .field(CaseData::getFamilyManCaseNumber, "FamilyMan case number")
+        .field("hearingPreferencesWelsh", "Is in Welsh")
         .caseReferenceField()
         .field(CaseData::getDateSubmitted, "Date submitted")
         .field("evidenceHandled", "Supplementary evidence handled");

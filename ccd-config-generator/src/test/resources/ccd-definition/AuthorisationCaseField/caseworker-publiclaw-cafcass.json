@@ -144,7 +144,14 @@
     "CaseTypeID": "CARE_SUPERVISION_EPO",
     "UserRole": "caseworker-publiclaw-cafcass",
     "LiveFrom": "01/01/2017",
-    "CaseFieldID": "hearingPreferences"
+    "CaseFieldID": "hearingPreferencesWelsh"
+  },
+  {
+    "CRUD": "R",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "UserRole": "caseworker-publiclaw-cafcass",
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "hearingPreferencesInterpreter"
   },
   {
     "CRUD": "R",
