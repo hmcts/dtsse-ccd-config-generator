@@ -2,9 +2,9 @@ package uk.gov.hmcts.ccd.sdk;
 
 import static org.apache.commons.lang3.StringUtils.capitalize;
 import static org.reflections.ReflectionUtils.withName;
+import static uk.gov.hmcts.ccd.sdk.FieldUtils.getCaseFields;
 import static uk.gov.hmcts.ccd.sdk.api.Permission.CRU;
 
-import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonUnwrapped;
 import com.google.common.collect.HashBasedTable;
@@ -188,19 +188,7 @@ class AuthorisationCaseFieldGenerator {
           Optional<JsonUnwrapped> unwrapped = fieldDef.map(f -> f.getAnnotation(JsonUnwrapped.class));
 
           if (fieldDef.isPresent() && unwrapped.isPresent()) {
-            for (java.lang.reflect.Field nestedField : ReflectionUtils.getAllFields(fieldDef.get().getType())) {
-              // TODO share this type of code with CaseFieldGenerator
-              CCD cf = nestedField.getAnnotation(CCD.class);
-              if (null != cf) {
-                if (cf.ignore()) {
-                  continue;
-                }
-              }
-
-              if (nestedField.getAnnotation(JsonIgnore.class) != null) {
-                continue;
-              }
-
+            for (java.lang.reflect.Field nestedField : getCaseFields(fieldDef.get().getType())) {
               String nestedFieldId = unwrapped.get().prefix().isEmpty()
                   ? nestedField.getName()
                   : unwrapped.get().prefix().concat(capitalize(nestedField.getName()));

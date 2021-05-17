@@ -2,8 +2,8 @@ package uk.gov.hmcts.ccd.sdk;
 
 import static org.apache.commons.lang3.StringUtils.capitalize;
 import static uk.gov.hmcts.ccd.sdk.CaseEventToFieldsGenerator.isUnwrappedField;
+import static uk.gov.hmcts.ccd.sdk.FieldUtils.getCaseFields;
 
-import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonUnwrapped;
 import com.google.common.base.Strings;
@@ -22,7 +22,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import net.jodah.typetools.TypeResolver;
-import org.reflections.ReflectionUtils;
 import uk.gov.hmcts.ccd.sdk.JsonUtils.OverwriteSpecific;
 import uk.gov.hmcts.ccd.sdk.api.CCD;
 import uk.gov.hmcts.ccd.sdk.api.ComplexType;
@@ -60,19 +59,7 @@ class CaseFieldGenerator {
   public static List<Map<String, Object>> toComplex(Class dataClass, String caseTypeId, String idPrefix) {
     List<Map<String, Object>> fields = Lists.newArrayList();
 
-    for (Field field : ReflectionUtils.getAllFields(dataClass)) {
-
-      CCD cf = field.getAnnotation(CCD.class);
-      if (null != cf) {
-        if (cf.ignore()) {
-          continue;
-        }
-      }
-
-      if (field.getAnnotation(JsonIgnore.class) != null) {
-        continue;
-      }
-
+    for (Field field : getCaseFields(dataClass)) {
       JsonUnwrapped unwrapped = field.getAnnotation(JsonUnwrapped.class);
       if (null != unwrapped) {
         List<Map<String, Object>> nestedObjectFields = toComplex(field.getType(), caseTypeId, unwrapped.prefix());
@@ -96,6 +83,8 @@ class CaseFieldGenerator {
 
       Map<String, Object> fieldInfo = getField(caseTypeId, id);
       fields.add(fieldInfo);
+      CCD cf = field.getAnnotation(CCD.class);
+
       if (null != cf) {
         if (!Strings.isNullOrEmpty(cf.label())) {
           fieldInfo.put("Label", cf.label());
