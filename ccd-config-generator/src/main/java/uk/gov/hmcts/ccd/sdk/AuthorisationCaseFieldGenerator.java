@@ -1,5 +1,6 @@
 package uk.gov.hmcts.ccd.sdk;
 
+import static org.apache.commons.lang3.StringUtils.capitalize;
 import static org.reflections.ReflectionUtils.withName;
 import static uk.gov.hmcts.ccd.sdk.FieldUtils.getCaseFields;
 import static uk.gov.hmcts.ccd.sdk.FieldUtils.getFieldId;
@@ -124,29 +125,7 @@ class AuthorisationCaseFieldGenerator {
       }
     }
 
-    // Add permissions added to the case model with the @CCD annotation
-    for (java.lang.reflect.Field fieldWithAccess : ReflectionUtils.getAllFields(config.typeArg)) {
-      CCD ccdAnnotation = fieldWithAccess.getAnnotation(CCD.class);
-      if (null != ccdAnnotation) {
-        String id = getFieldId(fieldWithAccess);
-
-        Objenesis objenesis = new ObjenesisStd();
-        for (Class<? extends HasAccessControl> klass : ccdAnnotation.access()) {
-          HasAccessControl accessHolder = objenesis.newInstance(klass);
-          SetMultimap<HasRole, Permission> roleGrants = accessHolder.getGrants();
-          for (HasRole key : roleGrants.keys()) {
-            Set<Permission> perms = Sets.newHashSet();
-            perms.addAll(roleGrants.get(key));
-
-            if (fieldRolePermissions.contains(id, key.getRole())) {
-              perms.addAll(fieldRolePermissions.get(id, key.getRole()));
-            }
-
-            fieldRolePermissions.put(id, key.getRole(), perms);
-          }
-        }
-      }
-    }
+    addPermissionsFromFields(fieldRolePermissions, config.typeArg, null, null);
 
     File folder = new File(root.getPath(), "AuthorisationCaseField");
     folder.mkdir();
@@ -202,6 +181,46 @@ class AuthorisationCaseFieldGenerator {
       Path output = Paths.get(folder.getPath(), filename + ".json");
       JsonUtils.mergeInto(output, permissions, new CRUDMerger(), "CaseFieldID",
           "UserRole");
+    }
+  }
+
+  private static void addPermissionsFromFields(
+      Table<String, String, Set<Permission>> fieldRolePermissions,
+      Class parent,
+      String prefix,
+      Class<? extends HasAccessControl>[] defaultAccessControl
+  ) {
+
+    for (java.lang.reflect.Field field : getCaseFields(parent)) {
+      CCD ccdAnnotation = field.getAnnotation(CCD.class);
+      Class<? extends HasAccessControl>[] access = null != ccdAnnotation
+          ? ccdAnnotation.access()
+          : defaultAccessControl;
+      JsonUnwrapped unwrapped = field.getAnnotation(JsonUnwrapped.class);
+
+      if (null != unwrapped) {
+        Class<? extends HasAccessControl>[] defaultAccess = null == ccdAnnotation ? null : ccdAnnotation.access();
+        String newPrefix = null == prefix ? unwrapped.prefix() : prefix.concat(capitalize(unwrapped.prefix()));
+        addPermissionsFromFields(fieldRolePermissions, field.getType(), newPrefix, defaultAccess);
+      } else if (null != access) {
+        String id = getFieldId(field, prefix);
+
+        Objenesis objenesis = new ObjenesisStd();
+        for (Class<? extends HasAccessControl> klass : access) {
+          HasAccessControl accessHolder = objenesis.newInstance(klass);
+          SetMultimap<HasRole, Permission> roleGrants = accessHolder.getGrants();
+          for (HasRole key : roleGrants.keys()) {
+            Set<Permission> perms = Sets.newHashSet();
+            perms.addAll(roleGrants.get(key));
+
+            if (fieldRolePermissions.contains(id, key.getRole())) {
+              perms.addAll(fieldRolePermissions.get(id, key.getRole()));
+            }
+
+            fieldRolePermissions.put(id, key.getRole(), perms);
+          }
+        }
+      }
     }
   }
 
