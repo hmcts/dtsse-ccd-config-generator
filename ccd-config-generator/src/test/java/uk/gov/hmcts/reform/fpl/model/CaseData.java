@@ -6,6 +6,8 @@ import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonSetter;
 import java.util.Set;
+
+import com.fasterxml.jackson.annotation.JsonUnwrapped;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -135,6 +137,7 @@ public class CaseData {
     @NotNull(message = "You need to add details to hearing needed")
     @Valid
     private final Hearing hearing;
+    @JsonUnwrapped(prefix = "hearingPreferences")
     private final HearingPreferences hearingPreferences;
     private final InternationalElement internationalElement;
     @JsonProperty("documents_socialWorkOther")

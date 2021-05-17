@@ -1,7 +1,11 @@
 package uk.gov.hmcts.ccd.sdk;
 
+import static org.apache.commons.lang3.StringUtils.capitalize;
+import static uk.gov.hmcts.ccd.sdk.CaseEventToFieldsGenerator.isUnwrappedField;
+
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonUnwrapped;
 import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Lists;
@@ -15,6 +19,7 @@ import java.util.Collection;
 import java.util.Hashtable;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import net.jodah.typetools.TypeResolver;
 import org.reflections.ReflectionUtils;
@@ -42,13 +47,17 @@ class CaseFieldGenerator {
     history.put("FieldType", "CaseHistoryViewer");
     fields.add(history);
 
-    fields.addAll(getExplicitFields(config.builder.caseType, config.events, config.builder));
+    fields.addAll(getExplicitFields(config));
 
     Path path = Paths.get(outputFolder.getPath(), "CaseField.json");
     JsonUtils.mergeInto(path, fields, new OverwriteSpecific(OVERWRITES_FIELDS), "ID");
   }
 
   public static List<Map<String, Object>> toComplex(Class dataClass, String caseTypeId) {
+    return toComplex(dataClass, caseTypeId, "");
+  }
+
+  public static List<Map<String, Object>> toComplex(Class dataClass, String caseTypeId, String idPrefix) {
     List<Map<String, Object>> fields = Lists.newArrayList();
 
     for (Field field : ReflectionUtils.getAllFields(dataClass)) {
@@ -64,8 +73,17 @@ class CaseFieldGenerator {
         continue;
       }
 
+      JsonUnwrapped unwrapped = field.getAnnotation(JsonUnwrapped.class);
+      if (null != unwrapped) {
+        List<Map<String, Object>> nestedObjectFields = toComplex(field.getType(), caseTypeId, unwrapped.prefix());
+        fields.addAll(nestedObjectFields);
+
+        continue;
+      }
+
       JsonProperty j = field.getAnnotation(JsonProperty.class);
-      String id = j != null ? j.value() : field.getName();
+      String name = j != null ? j.value() : field.getName();
+      String id = idPrefix.isEmpty() ? name : idPrefix.concat(capitalize(name));
 
       Label label = field.getAnnotation(Label.class);
       if (null != label) {
@@ -182,9 +200,9 @@ class CaseFieldGenerator {
   }
 
   private static <T, S, R extends HasRole> List<Map<String, Object>> getExplicitFields(
-      String caseType, List<Event<T, R, S>> events, ConfigBuilderImpl<T, S, R> builder) {
+      ResolvedCCDConfig<T, S, R> config) {
     Map<String, uk.gov.hmcts.ccd.sdk.api.Field> explicitFields = Maps.newHashMap();
-    for (Event event : events) {
+    for (Event event : config.events) {
       List<uk.gov.hmcts.ccd.sdk.api.Field.FieldBuilder> fc = event.getFields().build()
           .getExplicitFields();
 
@@ -194,7 +212,7 @@ class CaseFieldGenerator {
       }
     }
 
-    List<uk.gov.hmcts.ccd.sdk.api.Field.FieldBuilder> fs = builder.explicitFields;
+    List<uk.gov.hmcts.ccd.sdk.api.Field.FieldBuilder> fs = config.builder.explicitFields;
     for (FieldBuilder explicitField : fs) {
       uk.gov.hmcts.ccd.sdk.api.Field field = explicitField.build();
       explicitFields.put(field.getId(), field);
@@ -203,9 +221,11 @@ class CaseFieldGenerator {
     List<Map<String, Object>> result = Lists.newArrayList();
     for (String fieldId : explicitFields.keySet()) {
       uk.gov.hmcts.ccd.sdk.api.Field field = explicitFields.get(fieldId);
-      Map<String, Object> fieldData = getField(caseType, fieldId);
-      // Don't export inbuilt metadata fields.
-      if (fieldId.matches("\\[.+\\]")) {
+      Map<String, Object> fieldData = getField(config.builder.caseType, fieldId);
+      Optional<JsonUnwrapped> unwrapped = isUnwrappedField(config.typeArg, fieldId);
+      // Don't export inbuilt metadata fields. Ignore unwrapped complex types
+      // TODO how does this work? How can a field be on an event but not on CaseData
+      if (fieldId.matches("\\[.+\\]") || unwrapped.isPresent()) {
         continue;
       }
       result.add(fieldData);

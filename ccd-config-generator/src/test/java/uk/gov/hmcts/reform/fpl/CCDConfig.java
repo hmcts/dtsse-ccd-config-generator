@@ -31,6 +31,7 @@ import uk.gov.hmcts.reform.ccd.client.model.SubmittedCallbackResponse;
 import uk.gov.hmcts.reform.fpl.enums.State;
 import uk.gov.hmcts.reform.fpl.enums.UserRole;
 import uk.gov.hmcts.reform.fpl.model.CaseData;
+import uk.gov.hmcts.reform.fpl.model.HearingPreferences;
 import uk.gov.hmcts.reform.fpl.model.Judge;
 
 // Found and invoked by the config generator.
@@ -76,7 +77,10 @@ public class CCDConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<CaseData, S
         .grant(CRU, HMCTS_ADMIN)
         .grant(R, LOCAL_AUTHORITY)
         .fields()
-        .optional(CaseData::getCaseNotes);
+        .optional(CaseData::getCaseNotes)
+        .complex(CaseData::getHearingPreferences)
+          .optional(HearingPreferences::getWelsh)
+          .done();
   }
 
   private void buildSearchResultFields() {

@@ -1,8 +1,12 @@
 package uk.gov.hmcts.ccd.sdk;
 
+import static org.apache.commons.lang3.StringUtils.capitalize;
+import static org.reflections.ReflectionUtils.withName;
 import static uk.gov.hmcts.ccd.sdk.api.Permission.CRU;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonUnwrapped;
 import com.google.common.collect.HashBasedTable;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
@@ -19,6 +23,7 @@ import java.util.Hashtable;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Optional;
 import java.util.Set;
 import org.objenesis.Objenesis;
 import org.objenesis.ObjenesisStd;
@@ -171,12 +176,41 @@ class AuthorisationCaseFieldGenerator {
             continue;
           }
           Map<String, Object> permission = new Hashtable<>();
-          permissions.add(permission);
           permission.put("CaseTypeID", config.builder.caseType);
           permission.put("LiveFrom", "01/01/2017");
           permission.put("UserRole", role);
           permission.put("CaseFieldID", field);
           permission.put("CRUD", Permission.toString(fieldPermission));
+
+          Optional<java.lang.reflect.Field> fieldDef = ReflectionUtils.getFields(config.typeArg, withName(field))
+              .stream()
+              .findFirst();
+          Optional<JsonUnwrapped> unwrapped = fieldDef.map(f -> f.getAnnotation(JsonUnwrapped.class));
+
+          if (fieldDef.isPresent() && unwrapped.isPresent()) {
+            for (java.lang.reflect.Field nestedField : ReflectionUtils.getAllFields(fieldDef.get().getType())) {
+              // TODO share this type of code with CaseFieldGenerator
+              CCD cf = nestedField.getAnnotation(CCD.class);
+              if (null != cf) {
+                if (cf.ignore()) {
+                  continue;
+                }
+              }
+
+              if (nestedField.getAnnotation(JsonIgnore.class) != null) {
+                continue;
+              }
+
+              String nestedFieldId = unwrapped.get().prefix().isEmpty()
+                  ? nestedField.getName()
+                  : unwrapped.get().prefix().concat(capitalize(nestedField.getName()));
+              Map<String, Object> nestedPermission = new Hashtable<>(permission);
+              nestedPermission.put("CaseFieldID", nestedFieldId);
+              permissions.add(nestedPermission);
+            }
+          } else {
+            permissions.add(permission);
+          }
         }
       }
 
