@@ -35,7 +35,7 @@
   },
   {
     "CaseEventFieldLabel" : "Allocated case name",
-    "CaseEventHintText" : "A hint",
+    "CaseEventFieldHint" : "A hint",
     "CaseEventID" : "allocatedJudge",
     "CaseFieldID" : "caseName",
     "CaseTypeID" : "CARE_SUPERVISION_EPO",

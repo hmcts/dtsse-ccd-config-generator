@@ -19,7 +19,7 @@ public class Field<Type, StateType, Parent, Grandparent> {
   String showCondition;
   String page;
   String caseEventFieldLabel;
-  String caseEventHintText;
+  String caseEventFieldHint;
   Type defaultValue;
   boolean showSummary;
   int fieldDisplayOrder;

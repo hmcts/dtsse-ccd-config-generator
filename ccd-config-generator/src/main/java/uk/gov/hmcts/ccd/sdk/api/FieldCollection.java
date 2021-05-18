@@ -67,9 +67,9 @@ public class FieldCollection {
     }
 
     public <Value> FieldCollectionBuilder<Type, StateType, Parent> optional(TypedPropertyGetter<Type, Value> getter,
-        String showCondition, Value defaultValue, String caseEventFieldLabel, String caseEventHintText) {
+        String showCondition, Value defaultValue, String caseEventFieldLabel, String caseEventFieldHint) {
       return field(
-        getter, DisplayContext.Optional, showCondition, true, defaultValue, caseEventFieldLabel, caseEventHintText);
+        getter, DisplayContext.Optional, showCondition, true, defaultValue, caseEventFieldLabel, caseEventFieldHint);
     }
 
     public <Value> FieldCollectionBuilder<Type, StateType, Parent> optional(TypedPropertyGetter<Type, Value> getter,
@@ -101,9 +101,9 @@ public class FieldCollection {
     }
 
     public <Value> FieldCollectionBuilder<Type, StateType, Parent> mandatory(TypedPropertyGetter<Type, Value> getter,
-        String showCondition, Value defaultValue, String caseEventFieldLabel, String caseEventHintText) {
+        String showCondition, Value defaultValue, String caseEventFieldLabel, String caseEventFieldHint) {
       return field(
-        getter, DisplayContext.Mandatory, showCondition, true, defaultValue, caseEventFieldLabel, caseEventHintText);
+        getter, DisplayContext.Mandatory, showCondition, true, defaultValue, caseEventFieldLabel, caseEventFieldHint);
     }
 
     public <Value> FieldCollectionBuilder<Type, StateType, Parent> mandatory(TypedPropertyGetter<Type, Value> getter,
@@ -198,7 +198,7 @@ public class FieldCollection {
 
     <Value> FieldCollectionBuilder<Type, StateType, Parent> field(TypedPropertyGetter<Type, Value> getter,
         DisplayContext context, String showCondition, boolean showSummary, Value defaultValue,
-        String caseEventFieldLabel, String caseEventHintText) {
+        String caseEventFieldLabel, String caseEventFieldHint) {
       if (null != showCondition && null != rootFieldname) {
         showCondition = showCondition.replace("{{FIELD_NAME}}", rootFieldname);
       }
@@ -208,7 +208,7 @@ public class FieldCollection {
           .showSummary(showSummary)
           .defaultValue(defaultValue)
           .caseEventFieldLabel(caseEventFieldLabel)
-          .caseEventHintText(caseEventHintText);
+          .caseEventFieldHint(caseEventFieldHint);
       return this;
     }
 
