@@ -67,8 +67,19 @@ public class FieldCollection {
     }
 
     public <Value> FieldCollectionBuilder<Type, StateType, Parent> optional(TypedPropertyGetter<Type, Value> getter,
+        String showCondition, Value defaultValue, String caseEventFieldLabel, String caseEventHintText) {
+      return field(
+        getter, DisplayContext.Optional, showCondition, true, defaultValue, caseEventFieldLabel, caseEventHintText);
+    }
+
+    public <Value> FieldCollectionBuilder<Type, StateType, Parent> optional(TypedPropertyGetter<Type, Value> getter,
+        String showCondition, Value defaultValue, String caseEventFieldLabel) {
+      return field(getter, DisplayContext.Optional, showCondition, true, defaultValue, caseEventFieldLabel, null);
+    }
+
+    public <Value> FieldCollectionBuilder<Type, StateType, Parent> optional(TypedPropertyGetter<Type, Value> getter,
         String showCondition, Value defaultValue) {
-      return field(getter, DisplayContext.Optional, showCondition, true, defaultValue);
+      return field(getter, DisplayContext.Optional, showCondition, true, defaultValue, null, null);
     }
 
     public FieldCollectionBuilder<Type, StateType, Parent> optional(TypedPropertyGetter<Type, ?> getter,
@@ -90,8 +101,20 @@ public class FieldCollection {
     }
 
     public <Value> FieldCollectionBuilder<Type, StateType, Parent> mandatory(TypedPropertyGetter<Type, Value> getter,
+        String showCondition, Value defaultValue, String caseEventFieldLabel, String caseEventHintText) {
+      return field(
+        getter, DisplayContext.Mandatory, showCondition, true, defaultValue, caseEventFieldLabel, caseEventHintText);
+    }
+
+    public <Value> FieldCollectionBuilder<Type, StateType, Parent> mandatory(TypedPropertyGetter<Type, Value> getter,
+        String showCondition, Value defaultValue, String caseEventFieldLabel) {
+      return field(
+        getter, DisplayContext.Mandatory, showCondition, true, defaultValue, caseEventFieldLabel, null);
+    }
+
+    public <Value> FieldCollectionBuilder<Type, StateType, Parent> mandatory(TypedPropertyGetter<Type, Value> getter,
                                                                   String showCondition, Value defaultValue) {
-      return field(getter, DisplayContext.Mandatory, showCondition, true, defaultValue);
+      return field(getter, DisplayContext.Mandatory, showCondition, true, defaultValue, null, null);
     }
 
     public FieldCollectionBuilder<Type, StateType, Parent> mandatory(TypedPropertyGetter<Type, ?> getter,
@@ -174,11 +197,18 @@ public class FieldCollection {
     }
 
     <Value> FieldCollectionBuilder<Type, StateType, Parent> field(TypedPropertyGetter<Type, Value> getter,
-        DisplayContext context, String showCondition, boolean showSummary, Value defaultValue) {
+        DisplayContext context, String showCondition, boolean showSummary, Value defaultValue,
+        String caseEventFieldLabel, String caseEventHintText) {
       if (null != showCondition && null != rootFieldname) {
         showCondition = showCondition.replace("{{FIELD_NAME}}", rootFieldname);
       }
-      field(getter).context(context).showCondition(showCondition).showSummary(showSummary).defaultValue(defaultValue);
+      field(getter)
+          .context(context)
+          .showCondition(showCondition)
+          .showSummary(showSummary)
+          .defaultValue(defaultValue)
+          .caseEventFieldLabel(caseEventFieldLabel)
+          .caseEventHintText(caseEventHintText);
       return this;
     }
 

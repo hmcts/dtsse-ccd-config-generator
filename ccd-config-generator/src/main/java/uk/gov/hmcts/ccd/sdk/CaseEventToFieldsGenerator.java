@@ -144,6 +144,10 @@ class CaseEventToFieldsGenerator {
       info.put("CaseEventFieldLabel", field.getCaseEventFieldLabel());
     }
 
+    if (null != field.getCaseEventHintText()) {
+      info.put("CaseEventHintText", field.getCaseEventHintText());
+    }
+
     return info;
   }
 }
