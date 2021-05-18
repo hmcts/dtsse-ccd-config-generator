@@ -168,7 +168,10 @@ class ConfigGenerator<T, S, R extends HasRole> {
       }
       Class c = getComplexType(dataClass, field);
       if (null != c && !c.equals(dataClass)) {
-        if (!result.containsKey(c) || result.get(c) < level) {
+        JsonUnwrapped unwrapped = field.getAnnotation(JsonUnwrapped.class);
+
+        // unwrapped properties are automatically ignored as complex types
+        if (null == unwrapped && (!result.containsKey(c) || result.get(c) < level)) {
           result.put(c, level);
         }
         resolve(c, result, level + 1);
@@ -177,12 +180,6 @@ class ConfigGenerator<T, S, R extends HasRole> {
   }
 
   public static Class getComplexType(Class c, Field field) {
-    // unwrapped properties are automatically ignored as complex types
-    JsonUnwrapped unwrapped = field.getAnnotation(JsonUnwrapped.class);
-    if (null != unwrapped) {
-      return null;
-    }
-
     if (Collection.class.isAssignableFrom(field.getType())) {
       ParameterizedType type = (ParameterizedType) TypeResolver.reify(field.getGenericType(), c);
       if (type.getActualTypeArguments()[0] instanceof ParameterizedType) {

@@ -338,6 +338,13 @@
     "SecurityClassification": "Public"
   },
   {
+    "CaseTypeID" : "CARE_SUPERVISION_EPO",
+    "FieldType" : "MultiSelectList",
+    "FieldTypeParameter" : "Refreshment",
+    "ID" : "hearingPreferencesRefreshments",
+    "LiveFrom" : "01/01/2017"
+  },
+  {
     "ID": "childSelector",
     "FieldType": "ChildSelector",
     "CaseTypeID": "CARE_SUPERVISION_EPO",
