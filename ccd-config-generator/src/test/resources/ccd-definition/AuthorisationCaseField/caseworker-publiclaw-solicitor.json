@@ -7,7 +7,7 @@
     "CaseFieldID": "familyManCaseNumber"
   },
   {
-    "CRUD": "CRU",
+    "CRUD": "R",
     "CaseTypeID": "CARE_SUPERVISION_EPO",
     "UserRole": "caseworker-publiclaw-solicitor",
     "LiveFrom": "01/01/2017",
