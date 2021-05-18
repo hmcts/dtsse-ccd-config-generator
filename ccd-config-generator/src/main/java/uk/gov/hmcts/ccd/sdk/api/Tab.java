@@ -37,12 +37,16 @@ public class Tab {
       return result;
     }
 
-    public TabBuilder<T, R> field(TypedPropertyGetter<T, ?> getter, String showCondition) {
+    public TabBuilder<T, R> field(TypedPropertyGetter<T, ?> getter, String showCondition, String displayContext) {
       String name = propertyUtils.getPropertyName(model, getter);
-      fields.add(TabField.builder().id(name).showCondition(showCondition).build());
+      fields.add(
+          TabField.builder().id(name).showCondition(showCondition).displayContextParameter(displayContext).build());
       return this;
     }
 
+    public TabBuilder<T, R> field(TypedPropertyGetter<T, ?> getter, String showCondition) {
+      return field(getter, showCondition, null);
+    }
 
     public TabBuilder<T, R> field(TypedPropertyGetter<T, ?> getter) {
       return field(getter, null);
