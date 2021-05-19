@@ -76,8 +76,8 @@ class CaseEventToComplexTypesGenerator {
           data.put("CaseFieldID", rfn);
           data.put("DisplayContext", field.getContext().toString().toUpperCase());
           data.put("ListElementCode", locator + field.getId());
-          if (field.getLabel() != null) {
-            data.put("EventElementLabel", field.getLabel());
+          if (null != field.getCaseEventFieldLabel()) {
+            data.put("EventElementLabel", field.getCaseEventFieldLabel());
           }
           data.put("FieldDisplayOrder", field.getFieldDisplayOrder());
           if (!Strings.isNullOrEmpty(field.getHint())) {
@@ -91,6 +91,9 @@ class CaseEventToComplexTypesGenerator {
                              ? ((HasRole) field.getDefaultValue()).getRole()
                              : field.getDefaultValue().toString();
             data.put("DefaultValue", value);
+          }
+          if (null != field.getCaseEventFieldHint()) {
+            data.put("EventHintText", field.getCaseEventFieldHint());
           }
         }
         if (null != complex.getComplexFields()) {

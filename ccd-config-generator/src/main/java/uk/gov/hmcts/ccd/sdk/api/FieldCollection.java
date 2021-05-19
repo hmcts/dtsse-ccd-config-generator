@@ -268,8 +268,18 @@ public class FieldCollection {
     }
 
     public <U> FieldCollectionBuilder<U, StateType, FieldCollectionBuilder<Type, StateType, Parent>> complex(
+        TypedPropertyGetter<Type, U> getter, String showCondition, String eventFieldLabel, String eventFieldHint) {
+      return complex(getter, true, showCondition, eventFieldLabel, eventFieldHint);
+    }
+
+    public <U> FieldCollectionBuilder<U, StateType, FieldCollectionBuilder<Type, StateType, Parent>> complex(
+        TypedPropertyGetter<Type, U> getter, String showCondition, String eventFieldLabel) {
+      return complex(getter, true, showCondition, eventFieldLabel, null);
+    }
+
+    public <U> FieldCollectionBuilder<U, StateType, FieldCollectionBuilder<Type, StateType, Parent>> complex(
         TypedPropertyGetter<Type, U> getter, String showCondition) {
-      return complex(getter, true, showCondition);
+      return complex(getter, true, showCondition, null, null);
     }
 
     public <U> FieldCollectionBuilder<U, StateType, FieldCollectionBuilder<Type, StateType, Parent>> complex(
@@ -284,12 +294,17 @@ public class FieldCollection {
     }
 
     public <U> FieldCollectionBuilder<U, StateType, FieldCollectionBuilder<Type, StateType, Parent>> complex(
-        TypedPropertyGetter<Type, ?> getter, boolean summary, String showCondition) {
+        TypedPropertyGetter<Type, ?> getter, boolean summary, String showCondition, String label, String hint) {
       Class<U> c = propertyUtils.getPropertyType(dataClass, getter);
       String fieldName = propertyUtils.getPropertyName(dataClass, getter);
       if (null == this.rootFieldname) {
         // Register only the root complex as a field
-        field(fieldName).context(DisplayContext.Complex).showSummary(summary).showCondition(showCondition);
+        field(fieldName)
+            .context(DisplayContext.Complex)
+            .showSummary(summary)
+            .showCondition(showCondition)
+            .caseEventFieldLabel(label)
+            .caseEventFieldHint(hint);
       }
       return complex(fieldName, c);
     }
