@@ -310,6 +310,7 @@ public class FieldCollection {
       }
       complexFields.add(result);
       result.rootFieldname = fieldName;
+      result.pageId = this.pageId;
       // Nested builders inherit ordering state.
       if (null != parent) {
         result.fieldDisplayOrder = this.fieldDisplayOrder;
