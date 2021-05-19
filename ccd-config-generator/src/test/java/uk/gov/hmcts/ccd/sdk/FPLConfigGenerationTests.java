@@ -315,7 +315,6 @@ public class FPLConfigGenerationTests {
             entry.remove("DisplayOrder");
             entry.remove("PageFieldDisplayOrder");
             entry.remove("FieldDisplayOrder");
-            entry.remove("EventElementLabel");
             entry.remove("ElementLabel");
             if (stripID) {
                entry.remove("ID");
