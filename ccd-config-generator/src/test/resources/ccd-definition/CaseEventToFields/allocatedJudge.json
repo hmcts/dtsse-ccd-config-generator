@@ -8,7 +8,9 @@
     "PageColumnNumber": 1,
     "DisplayContext": "COMPLEX",
     "ShowSummaryChangeOption": "Y",
-    "PageDisplayOrder": 1
+    "PageDisplayOrder": 1,
+    "CaseEventFieldHint" : "Event hint",
+    "CaseEventFieldLabel" : "Event label"
   },
   {
     "PageID": "AllocatedJudge",

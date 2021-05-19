@@ -220,7 +220,7 @@ public class CCDConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<CaseData, S
         .grant(R, CAFCASS)
         .fields()
         .page("AllocatedJudge")
-        .complex(CaseData::getOrganisationPolicy)
+        .complex(CaseData::getOrganisationPolicy, null, "Event label", "Event hint")
           .complex(OrganisationPolicy::getOrganisation)
             .mandatory(Organisation::getOrganisationId)
           .done()
