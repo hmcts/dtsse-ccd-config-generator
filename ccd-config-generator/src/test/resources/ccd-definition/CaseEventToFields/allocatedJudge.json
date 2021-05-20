@@ -6,6 +6,7 @@
     "CaseFieldID": "organisationPolicy",
     "CaseEventID": "allocatedJudge",
     "PageColumnNumber": 1,
+    "PageFieldDisplayOrder": 1,
     "DisplayContext": "COMPLEX",
     "ShowSummaryChangeOption": "Y",
     "PageDisplayOrder": 1,
@@ -19,7 +20,7 @@
     "CaseFieldID": "allocatedJudge",
     "CaseEventID": "allocatedJudge",
     "PageColumnNumber": 1,
-    "PageFieldDisplayOrder": 1,
+    "PageFieldDisplayOrder": 2,
     "DisplayContext": "COMPLEX",
     "PageDisplayOrder": 1
   },
@@ -31,6 +32,7 @@
     "LiveFrom" : "01/01/2017",
     "PageColumnNumber" : 1,
     "PageDisplayOrder" : 2,
+    "PageFieldDisplayOrder": 1,
     "PageID" : "<Notes>",
     "CallBackURLMidEvent": "${CCD_DEF_CASE_SERVICE_BASE_URL}/callbacks/mid-event?page=%3CNotes%3E",
     "ShowSummaryChangeOption" : "Y"
@@ -44,6 +46,7 @@
     "DisplayContext" : "OPTIONAL",
     "LiveFrom" : "01/01/2017",
     "PageColumnNumber" : 1,
+    "PageFieldDisplayOrder": 3,
     "PageDisplayOrder" : 1,
     "PageID" : "AllocatedJudge",
     "ShowSummaryChangeOption" : "Y"

@@ -80,7 +80,8 @@ public class CCDConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<CaseData, S
         .optional(CaseData::getCaseNotes)
         .complex(CaseData::getHearingPreferences)
           .optional(HearingPreferences::getWelsh)
-          .done();
+          .done()
+        .optional(CaseData::getCaseName);
   }
 
   private void buildSearchResultFields() {

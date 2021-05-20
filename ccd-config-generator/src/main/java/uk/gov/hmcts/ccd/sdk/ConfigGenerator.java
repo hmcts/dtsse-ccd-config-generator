@@ -99,7 +99,8 @@ class ConfigGenerator<T, S, R extends HasRole> {
   private void writeConfig(File outputfolder, ResolvedCCDConfig<T, S, R> config) {
     outputfolder.mkdirs();
     new CaseEventGenerator<T, S, R>().writeEvents(outputfolder, config);
-    CaseEventToFieldsGenerator.writeEvents(outputfolder, config);
+    CaseEventToFieldsGenerator.writeEvents(outputfolder, config.events, config.builder.caseType,
+        config.builder.callbackHost, config.midEventCallbacks);
     ComplexTypeGenerator.generate(outputfolder, config.builder.caseType, config.types);
     CaseEventToComplexTypesGenerator.writeEvents(outputfolder, config.events, config.typeArg);
     Table<String, R, Set<Permission>> eventPermissions = buildEventRolePermissions(config.events);
