@@ -1,11 +1,16 @@
 package uk.gov.hmcts.ccd.sdk.api;
 
+import static org.apache.commons.lang3.StringUtils.capitalize;
+import static uk.gov.hmcts.ccd.sdk.FieldUtils.isUnwrappedField;
+
+import com.fasterxml.jackson.annotation.JsonUnwrapped;
 import de.cronn.reflection.util.TypedPropertyGetter;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Hashtable;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import lombok.Builder;
 import lombok.Data;
 import lombok.ToString;
@@ -34,14 +39,16 @@ public class FieldCollection {
 
   private String rootFieldname;
 
+  private String unwrappedParentPrefix;
+
   public static class FieldCollectionBuilder<Type, StateType, Parent> {
 
     Class dataClass;
 
     private String pageId;
-    private int order;
-    private int pageDisplayOrder;
-    private int fieldDisplayOrder;
+    private IntRef order = new IntRef();
+    private IntRef pageDisplayOrder = new IntRef();
+    private IntRef fieldDisplayOrder = new IntRef();
     private String pageLabel;
     @ToString.Exclude
     private Parent parent;
@@ -249,12 +256,16 @@ public class FieldCollection {
     }
 
     private <U> FieldBuilder<U, StateType, Type, Parent> createField(String id, Class<U> clazz) {
-      FieldBuilder<U, StateType, Type, Parent> f = FieldBuilder.builder(clazz, this, id);
+      String fieldId = null != unwrappedParentPrefix && !unwrappedParentPrefix.isEmpty()
+          ? unwrappedParentPrefix.concat(capitalize(id))
+          : id;
+
+      FieldBuilder<U, StateType, Type, Parent> f = FieldBuilder.builder(clazz, this, fieldId);
       f.page(this.pageId);
       fields.add(f);
-      f.fieldDisplayOrder(++fieldDisplayOrder);
-      f.pageFieldDisplayOrder(++order);
-      f.pageDisplayOrder(Math.max(1, this.pageDisplayOrder));
+      f.fieldDisplayOrder(fieldDisplayOrder.increment());
+      f.pageFieldDisplayOrder(order.increment());
+      f.pageDisplayOrder(Math.max(1, pageDisplayOrder.get()));
       return f;
     }
 
@@ -284,20 +295,16 @@ public class FieldCollection {
 
     public <U> FieldCollectionBuilder<U, StateType, FieldCollectionBuilder<Type, StateType, Parent>> complex(
         TypedPropertyGetter<Type, U> getter, boolean summary) {
-      Class<U> c = propertyUtils.getPropertyType(dataClass, getter);
-      String fieldName = propertyUtils.getPropertyName(dataClass, getter);
-      if (null == this.rootFieldname) {
-        // Register only the root complex as a field
-        field(fieldName).context(DisplayContext.Complex).showSummary(summary);
-      }
-      return complex(fieldName, c);
+      return complex(getter, summary, null, null, null);
     }
 
     public <U> FieldCollectionBuilder<U, StateType, FieldCollectionBuilder<Type, StateType, Parent>> complex(
         TypedPropertyGetter<Type, ?> getter, boolean summary, String showCondition, String label, String hint) {
       Class<U> c = propertyUtils.getPropertyType(dataClass, getter);
       String fieldName = propertyUtils.getPropertyName(dataClass, getter);
-      if (null == this.rootFieldname) {
+      Optional<JsonUnwrapped> isUnwrapped = isUnwrappedField(dataClass, fieldName);
+
+      if (null == this.rootFieldname && isUnwrapped.isEmpty()) {
         // Register only the root complex as a field
         field(fieldName)
             .context(DisplayContext.Complex)
@@ -306,7 +313,21 @@ public class FieldCollection {
             .caseEventFieldLabel(label)
             .caseEventFieldHint(hint);
       }
-      return complex(fieldName, c);
+
+      FieldCollectionBuilder<U, StateType, FieldCollectionBuilder<Type, StateType, Parent>> builder =
+          complex(fieldName, c);
+
+      if (isUnwrapped.isPresent()) {
+        builder.fields = fields;
+        builder.rootFieldname = null;
+        builder.unwrappedParentPrefix = isUnwrapped.get().prefix();
+        builder.order = order;
+        builder.pageDisplayOrder = pageDisplayOrder;
+        builder.fieldDisplayOrder = fieldDisplayOrder;
+        complexFields.remove(builder);
+      }
+
+      return builder;
     }
 
     public <U> FieldCollectionBuilder<U, StateType, FieldCollectionBuilder<Type, StateType, Parent>> complex(
@@ -326,9 +347,10 @@ public class FieldCollection {
       complexFields.add(result);
       result.rootFieldname = fieldName;
       result.pageId = this.pageId;
-      result.pageDisplayOrder = this.pageDisplayOrder;
-      result.fieldDisplayOrder = this.fieldDisplayOrder;
-      result.order = this.order;
+      // Nested builders inherit ordering state.
+      if (null != parent) {
+        result.fieldDisplayOrder = this.fieldDisplayOrder;
+      }
       return result;
     }
 
@@ -363,9 +385,9 @@ public class FieldCollection {
 
     private FieldCollectionBuilder<Type, StateType, Parent> pageObj(String id) {
       this.pageId = id;
-      this.order = 0;
-      this.fieldDisplayOrder = 0;
-      this.pageDisplayOrder++;
+      this.order = new IntRef();
+      this.fieldDisplayOrder = new IntRef();
+      this.pageDisplayOrder.increment();
       return this;
     }
 

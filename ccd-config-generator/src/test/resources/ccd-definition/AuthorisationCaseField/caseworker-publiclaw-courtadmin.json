@@ -175,14 +175,14 @@
     "CaseFieldID": "hearingPreferencesWelsh"
   },
   {
-    "CRUD": "CRU",
+    "CRUD": "R",
     "CaseTypeID": "CARE_SUPERVISION_EPO",
     "UserRole": "caseworker-publiclaw-courtadmin",
     "LiveFrom": "01/01/2017",
     "CaseFieldID": "hearingPreferencesInterpreter"
   },
   {
-    "CRUD" : "CRU",
+    "CRUD" : "R",
     "CaseFieldID" : "hearingPreferencesRefreshments",
     "CaseTypeID" : "CARE_SUPERVISION_EPO",
     "LiveFrom" : "01/01/2017",

@@ -290,7 +290,7 @@ public class FPLConfigGenerationTests {
 
                 System.out.println("ACTUAL count:" + actualValues.size());
                 System.out.println("ACTUAL:");
-                System.out.println(actualString);
+                System.out.println(FileUtils.readFileToString(actual, Charset.defaultCharset()));
                 throw new RuntimeException("Compare failed for " + expected.getPath());
             }
 
@@ -313,7 +313,6 @@ public class FPLConfigGenerationTests {
         for (Map<String, Object> entry : entries) {
             entry.remove("Comment");
             entry.remove("DisplayOrder");
-            entry.remove("PageFieldDisplayOrder");
             entry.remove("FieldDisplayOrder");
             entry.remove("ElementLabel");
             if (stripID) {
