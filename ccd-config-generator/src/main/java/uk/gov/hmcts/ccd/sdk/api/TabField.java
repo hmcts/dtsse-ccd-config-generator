@@ -10,4 +10,5 @@ public class TabField {
   private String id;
   private String showCondition;
   private String displayContextParameter;
+  private String label;
 }
