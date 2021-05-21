@@ -41,9 +41,13 @@ class StateGenerator {
     CCD ccd = enumType.getField(enumConstant.toString()).getAnnotation(CCD.class);
     String name = ccd != null && !Strings.isNullOrEmpty(ccd.name()) ? ccd.name() :
         enumConstant.toString();
-    String desc = ccd != null ? ccd.label() : "";
     field.put("Name", name);
-    field.put("Description", desc);
+    field.put("Description", name);
+    String desc = ccd != null ? ccd.label() : "";
+
+    if (!Strings.isNullOrEmpty(desc)) {
+      field.put("TitleDisplay", desc);
+    }
 
     return field;
   }
