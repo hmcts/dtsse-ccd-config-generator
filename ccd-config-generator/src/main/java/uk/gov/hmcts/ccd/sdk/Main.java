@@ -1,38 +1,32 @@
 package uk.gov.hmcts.ccd.sdk;
 
 import java.io.File;
-import java.util.List;
-import java.util.Optional;
-import java.util.stream.Collectors;
-import lombok.SneakyThrows;
+import java.util.Set;
 import org.reflections.Reflections;
-import uk.gov.hmcts.ccd.sdk.api.CCDConfig;
+import org.reflections.util.ClasspathHelper;
+import org.reflections.util.ConfigurationBuilder;
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.context.ConfigurableApplicationContext;
 
 class Main {
 
   public static void main(String[] args) {
-    File outputDir = new File(args[0]);
+    Reflections reflections = new Reflections(new ConfigurationBuilder()
+        .setUrls(ClasspathHelper.forPackage(args[1]))
+        .setExpandSuperTypes(false));
 
-    Reflections reflections = new Reflections(args[1]);
-    List<CCDConfig> configs = reflections
-        .getSubTypesOf(CCDConfig.class)
-        .stream()
-        .map(configClass -> getCcdConfig(configClass))
-        .flatMap(Optional::stream)
-        .collect(Collectors.toList());
+    Set<Class<?>> types =
+        reflections.getTypesAnnotatedWith(SpringBootApplication.class);
+    if (types.size() != 1) {
+      throw new RuntimeException("Expected a single SpringBootApplication but found "
+          + types.size());
+    }
+    try (ConfigurableApplicationContext context =
+        SpringApplication.run(types.iterator().next(), args)) {
 
-    ConfigGenerator generator = new ConfigGenerator(configs);
-    generator.resolveConfig(outputDir);
-    // Required on Gradle 4.X or build task hangs.
-    System.exit(0);
-  }
-
-  @SneakyThrows
-  private static Optional<CCDConfig> getCcdConfig(Class<? extends CCDConfig> configClass) {
-    try {
-      return Optional.of(configClass.getDeclaredConstructor().newInstance());
-    } catch (NoSuchMethodException e) {
-      return Optional.empty();
+      File outputDir = new File(args[0]);
+      context.getBean(ConfigGenerator.class).resolveConfig(outputDir);
     }
   }
 }

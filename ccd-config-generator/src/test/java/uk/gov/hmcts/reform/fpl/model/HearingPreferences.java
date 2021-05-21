@@ -1,23 +1,20 @@
 package uk.gov.hmcts.reform.fpl.model;
 
+import java.util.Set;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
+import lombok.NoArgsConstructor;
+import uk.gov.hmcts.ccd.sdk.api.CCD;
+import uk.gov.hmcts.reform.fpl.access.BulkScan;
 
 @Data
 @Builder
 @AllArgsConstructor
+@NoArgsConstructor
 public class HearingPreferences {
-    private final String welsh;
-    private final String interpreter;
-    private final String intermediary;
-    private final String welshDetails;
-    private final String interpreterDetails;
-    private final String disabilityAssistance;
-    private final String intermediaryDetails;
-    private final String extraSecurityMeasures;
-    private final String disabilityAssistanceDetails;
-    private final String extraSecurityMeasuresDetails;
-    private final String somethingElse;
-    private final String somethingElseDetails;
+    @CCD(label = "Do you want some Welsh?", access = {BulkScan.class})
+    private String welsh;
+    private String interpreter;
+    private Set<Refreshment> refreshments;
 }

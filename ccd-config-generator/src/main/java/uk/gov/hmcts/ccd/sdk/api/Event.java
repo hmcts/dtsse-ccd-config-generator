@@ -3,7 +3,6 @@ package uk.gov.hmcts.ccd.sdk.api;
 import com.google.common.collect.HashMultimap;
 import com.google.common.collect.SetMultimap;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
@@ -12,7 +11,6 @@ import java.util.stream.Collectors;
 import lombok.Builder;
 import lombok.Data;
 import lombok.ToString;
-import lombok.With;
 import uk.gov.hmcts.ccd.sdk.api.callback.AboutToStart;
 import uk.gov.hmcts.ccd.sdk.api.callback.AboutToSubmit;
 import uk.gov.hmcts.ccd.sdk.api.callback.Submitted;
@@ -21,10 +19,7 @@ import uk.gov.hmcts.ccd.sdk.api.callback.Submitted;
 @Data
 public class Event<T, R extends HasRole, S> {
 
-  @With
   private String id;
-  // The same event can have a different ID if on different states.
-  private String eventId;
 
   private String name;
   private Set<S> preState;
@@ -35,20 +30,9 @@ public class Event<T, R extends HasRole, S> {
   private boolean showSummary;
   private boolean showEventNotes;
   private boolean showSummaryChangeOption;
-  private int eventNumber;
-  @Builder.Default
-  private String namespace = "";
   private AboutToStart<T, S> aboutToStartCallback;
   private AboutToSubmit<T, S> aboutToSubmitCallback;
   private Submitted<T, S> submittedCallback;
-
-  public void setEventID(String eventId) {
-    this.eventId = eventId;
-  }
-
-  public String getEventID() {
-    return this.eventId != null ? this.eventId : this.id;
-  }
 
   public void name(String s) {
     name = s;
@@ -83,7 +67,6 @@ public class Event<T, R extends HasRole, S> {
         Set<S> preStates, Set<S> postStates) {
       EventBuilder<T, R, S> result = new EventBuilder<T, R, S>();
       result.id(id);
-      result.eventId(id);
       result.preState = preStates;
       result.postState = postStates;
       result.dataClass = dataClass;
@@ -91,7 +74,6 @@ public class Event<T, R extends HasRole, S> {
       result.historyOnlyRoles = new HashSet<>();
       result.fields = FieldCollection.FieldCollectionBuilder
           .builder(result, result, dataClass, propertyUtils);
-      result.eventNumber = eventCount++;
       result.retries = new HashMap<>();
 
       return result;
@@ -140,13 +122,6 @@ public class Event<T, R extends HasRole, S> {
       return this;
     }
 
-    EventBuilder<T, R, S> forState(S state) {
-      this.preState = Collections.singleton(state);
-      this.postState = Collections.singleton(state);
-      return this;
-    }
-
-
     public EventBuilder<T, R, S> grantHistoryOnly(R... roles) {
       for (R role : roles) {
         historyOnlyRoles.add(role.getRole());
@@ -174,6 +149,31 @@ public class Event<T, R extends HasRole, S> {
       }
 
       return this;
+    }
+
+    // Hide lombok's generated builder methods for these fields to stop them polluting the public API.
+    private void id(String value) {
+      this.id = value;
+    }
+
+    private void preState(Set<S> value) {
+      this.preState = value;
+    }
+
+    private void postState(Set<S> value) {
+      this.postState = value;
+    }
+
+    private void dataClass(Class value) {
+      this.dataClass = value;
+    }
+
+    private void grants(SetMultimap<R, Permission> value) {
+      this.grants = value;
+    }
+
+    private void historyOnlyRoles(Set<String> value) {
+      this.historyOnlyRoles = value;
     }
 
     private void setRetries(Webhook hook, int... retries) {

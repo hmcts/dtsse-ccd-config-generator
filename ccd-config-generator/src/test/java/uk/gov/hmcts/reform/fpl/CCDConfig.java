@@ -19,6 +19,8 @@ import static uk.gov.hmcts.reform.fpl.enums.UserRole.JUDICIARY;
 import static uk.gov.hmcts.reform.fpl.enums.UserRole.LOCAL_AUTHORITY;
 import static uk.gov.hmcts.reform.fpl.enums.UserRole.SYSTEM_UPDATE;
 
+
+import java.util.Set;
 import org.springframework.stereotype.Component;
 import uk.gov.hmcts.ccd.sdk.api.callback.AboutToStartOrSubmitResponse;
 import uk.gov.hmcts.ccd.sdk.api.CaseDetails;
@@ -29,6 +31,7 @@ import uk.gov.hmcts.reform.ccd.client.model.SubmittedCallbackResponse;
 import uk.gov.hmcts.reform.fpl.enums.State;
 import uk.gov.hmcts.reform.fpl.enums.UserRole;
 import uk.gov.hmcts.reform.fpl.model.CaseData;
+import uk.gov.hmcts.reform.fpl.model.HearingPreferences;
 import uk.gov.hmcts.reform.fpl.model.Judge;
 
 // Found and invoked by the config generator.
@@ -49,11 +52,7 @@ public class CCDConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<CaseData, S
     builder.jurisdiction("PUBLICLAW", "Family Public Law", "Family Public Law desc");
     builder.caseType("CARE_SUPERVISION_EPO", "Care, supervision and EPOs", "Care, supervision and emergency protection orders");
 
-    // Admin gets CRU on everything in Open state.
-    builder.grant(Open, CRU, HMCTS_ADMIN);
-
-    // Local Authority can view the history of all events in the Open state.
-    builder.grantHistory(Open, LOCAL_AUTHORITY);
+    builder.grant(Open, Set.of(R), LOCAL_AUTHORITY);
 
     // Describe the hierarchy of which roles go together.
     builder.role(CCD_SOLICITOR, CCD_LASOLICITOR).has(LOCAL_AUTHORITY);
@@ -75,14 +74,21 @@ public class CCDConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<CaseData, S
     builder.event("addNotes")
         .forStates(Gatekeeping, Submitted)
         .name("Add case notes")
+        .grant(CRU, HMCTS_ADMIN)
+        .grant(R, LOCAL_AUTHORITY)
         .fields()
-        .optional(CaseData::getCaseNotes);
+        .optional(CaseData::getCaseNotes)
+        .complex(CaseData::getHearingPreferences)
+          .optional(HearingPreferences::getWelsh)
+          .done()
+        .optional(CaseData::getCaseName);
   }
 
   private void buildSearchResultFields() {
     builder.searchResultFields()
         .field(CaseData::getCaseName, "Case name")
         .field(CaseData::getFamilyManCaseNumber, "FamilyMan case number")
+        .field("hearingPreferencesWelsh", "Is in Welsh")
         .stateField()
         .field(CaseData::getCaseLocalAuthority, "Local authority")
         .field("dateAndTimeSubmitted", "Date submitted");
@@ -93,6 +99,7 @@ public class CCDConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<CaseData, S
         .field(CaseData::getCaseLocalAuthority, "Local authority")
         .field(CaseData::getCaseName, "Case name")
         .field(CaseData::getFamilyManCaseNumber, "FamilyMan case number")
+        .field("hearingPreferencesWelsh", "Is in Welsh")
         .caseReferenceField()
         .field(CaseData::getDateSubmitted, "Date submitted");
   }
@@ -101,6 +108,7 @@ public class CCDConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<CaseData, S
     builder.workBasketResultFields()
         .field(CaseData::getCaseName, "Case name")
         .field(CaseData::getFamilyManCaseNumber, "FamilyMan case number")
+        .field("hearingPreferencesWelsh", "Is in Welsh")
         .stateField()
         .field(CaseData::getCaseLocalAuthority, "Local authority")
         .field("dateAndTimeSubmitted", "Date submitted")
@@ -112,6 +120,7 @@ public class CCDConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<CaseData, S
         .field(CaseData::getCaseLocalAuthority, "Local authority")
         .field(CaseData::getCaseName, "Case name")
         .field(CaseData::getFamilyManCaseNumber, "FamilyMan case number")
+        .field("hearingPreferencesWelsh", "Is in Welsh")
         .caseReferenceField()
         .field(CaseData::getDateSubmitted, "Date submitted")
         .field("evidenceHandled", "Supplementary evidence handled");
@@ -127,6 +136,7 @@ public class CCDConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<CaseData, S
         .showCondition("standardDirectionOrder.orderStatus!=\"SEALED\" OR caseManagementOrder!=\"\" OR sharedDraftCMODocument!=\"\" OR cmoToAction!=\"\"")
         .field(CaseData::getStandardDirectionOrder, "standardDirectionOrder.orderStatus!=\"SEALED\"")
         .field(CaseData::getSharedDraftCMODocument)
+        .field(CaseData::getDateSubmitted, null, "#DATETIMEDISPLAY(d  MMMM yyyy)")
         .restrictedField(CaseData::getCaseManagementOrder_Judiciary).exclude(CAFCASS)
         .restrictedField(CaseData::getCaseManagementOrder).exclude(CAFCASS);
 
@@ -211,12 +221,12 @@ public class CCDConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<CaseData, S
         .grant(R, CAFCASS)
         .fields()
         .page("AllocatedJudge")
-        .complex(CaseData::getOrganisationPolicy)
+        .complex(CaseData::getOrganisationPolicy, null, "Event label", "Event hint")
           .complex(OrganisationPolicy::getOrganisation)
             .mandatory(Organisation::getOrganisationId)
           .done()
           .optional(OrganisationPolicy::getOrgPolicyCaseAssignedRole, null, CCD_SOLICITOR)
-          .optional(OrganisationPolicy::getOrgPolicyReference)
+          .optional(OrganisationPolicy::getOrgPolicyReference, null, null, "Org ref", "Sol org ref")
         .done()
         .complex(CaseData::getAllocatedJudge, false)
           .mandatory(Judge::getJudgeTitle)
@@ -224,6 +234,7 @@ public class CCDConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<CaseData, S
           .mandatory(Judge::getJudgeLastName)
           .mandatory(Judge::getJudgeFullName)
         .done()
+        .optional(CaseData::getCaseName, null, null, "Allocated case name", "A hint")
         .page("<Notes>", this::checkCaseNotes)
           .mandatory(CaseData::getCaseNotes);
   }
@@ -261,7 +272,7 @@ public class CCDConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<CaseData, S
         .initialState(Open)
         .name("Start application")
         .description("Create a new case – add a title")
-        .grant(CRU, LOCAL_AUTHORITY)
+        .grant(CRU, LOCAL_AUTHORITY, HMCTS_ADMIN)
         .aboutToSubmitCallback(this::aboutToSubmit)
         .submittedCallback(this::submitted)
         .retries(1,2,3,4,5)

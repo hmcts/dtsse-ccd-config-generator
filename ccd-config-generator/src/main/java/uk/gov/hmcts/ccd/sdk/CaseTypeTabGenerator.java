@@ -37,6 +37,9 @@ class CaseTypeTabGenerator {
         if (tabField.getShowCondition() != null) {
           field.put("FieldShowCondition", tabField.getShowCondition());
         }
+        if (tabField.getDisplayContextParameter() != null) {
+          field.put("DisplayContextParameter", tabField.getDisplayContextParameter());
+        }
         result.add(field);
       }
       ++tabDisplayOrder;

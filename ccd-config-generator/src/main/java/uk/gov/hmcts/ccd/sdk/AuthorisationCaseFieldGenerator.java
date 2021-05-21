@@ -1,8 +1,12 @@
 package uk.gov.hmcts.ccd.sdk;
 
+import static org.apache.commons.lang3.StringUtils.capitalize;
+import static org.reflections.ReflectionUtils.withName;
+import static uk.gov.hmcts.ccd.sdk.FieldUtils.getCaseFields;
+import static uk.gov.hmcts.ccd.sdk.FieldUtils.getFieldId;
 import static uk.gov.hmcts.ccd.sdk.api.Permission.CRU;
 
-import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonUnwrapped;
 import com.google.common.collect.HashBasedTable;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
@@ -19,6 +23,7 @@ import java.util.Hashtable;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Optional;
 import java.util.Set;
 import org.objenesis.Objenesis;
 import org.objenesis.ObjenesisStd;
@@ -49,16 +54,12 @@ class AuthorisationCaseFieldGenerator {
     Table<String, String, Set<Permission>> fieldRolePermissions = HashBasedTable.create();
     // Add field permissions based on event permissions.
     for (Event event : config.events) {
-      Map<R, Set<Permission>> eventPermissions = eventRolePermissions.row(event.getEventID());
+      Map<R, Set<Permission>> eventPermissions = eventRolePermissions.row(event.getId());
       List<Field.FieldBuilder> fields = event.getFields().build().getFields();
       for (Field.FieldBuilder fb : fields) {
 
         for (Entry<R, Set<Permission>> rolePermission : eventPermissions.entrySet()) {
           if (event.getHistoryOnlyRoles().contains(rolePermission.getKey())) {
-            continue;
-          }
-          if (config.builder.stateRoleHistoryAccess.containsEntry(event.getPostState(),
-              rolePermission.getKey())) {
             continue;
           }
           Set<Permission> perm = fb.build().isImmutable()
@@ -124,30 +125,7 @@ class AuthorisationCaseFieldGenerator {
       }
     }
 
-    // Add permissions added to the case model with the @CCD annotation
-    for (java.lang.reflect.Field fieldWithAccess : ReflectionUtils.getAllFields(config.typeArg)) {
-      CCD ccdAnnotation = fieldWithAccess.getAnnotation(CCD.class);
-      if (null != ccdAnnotation) {
-        JsonProperty j = fieldWithAccess.getAnnotation(JsonProperty.class);
-        String id = j != null ? j.value() : fieldWithAccess.getName();
-
-        Objenesis objenesis = new ObjenesisStd();
-        for (Class<? extends HasAccessControl> klass : ccdAnnotation.access()) {
-          HasAccessControl accessHolder = objenesis.newInstance(klass);
-          SetMultimap<HasRole, Permission> roleGrants = accessHolder.getGrants();
-          for (HasRole key : roleGrants.keys()) {
-            Set<Permission> perms = Sets.newHashSet();
-            perms.addAll(roleGrants.get(key));
-
-            if (fieldRolePermissions.contains(id, key.getRole())) {
-              perms.addAll(fieldRolePermissions.get(id, key.getRole()));
-            }
-
-            fieldRolePermissions.put(id, key.getRole(), perms);
-          }
-        }
-      }
-    }
+    addPermissionsFromFields(fieldRolePermissions, config.typeArg, null, null);
 
     File folder = new File(root.getPath(), "AuthorisationCaseField");
     folder.mkdir();
@@ -175,12 +153,27 @@ class AuthorisationCaseFieldGenerator {
             continue;
           }
           Map<String, Object> permission = new Hashtable<>();
-          permissions.add(permission);
           permission.put("CaseTypeID", config.builder.caseType);
           permission.put("LiveFrom", "01/01/2017");
           permission.put("UserRole", role);
           permission.put("CaseFieldID", field);
           permission.put("CRUD", Permission.toString(fieldPermission));
+
+          Optional<java.lang.reflect.Field> fieldDef = ReflectionUtils.getFields(config.typeArg, withName(field))
+              .stream()
+              .findFirst();
+          Optional<JsonUnwrapped> unwrapped = fieldDef.map(f -> f.getAnnotation(JsonUnwrapped.class));
+
+          if (fieldDef.isPresent() && unwrapped.isPresent()) {
+            for (java.lang.reflect.Field nestedField : getCaseFields(fieldDef.get().getType())) {
+              String nestedFieldId = getFieldId(nestedField, unwrapped.get().prefix());
+              Map<String, Object> nestedPermission = new Hashtable<>(permission);
+              nestedPermission.put("CaseFieldID", nestedFieldId);
+              permissions.add(nestedPermission);
+            }
+          } else {
+            permissions.add(permission);
+          }
         }
       }
 
@@ -188,6 +181,46 @@ class AuthorisationCaseFieldGenerator {
       Path output = Paths.get(folder.getPath(), filename + ".json");
       JsonUtils.mergeInto(output, permissions, new CRUDMerger(), "CaseFieldID",
           "UserRole");
+    }
+  }
+
+  private static void addPermissionsFromFields(
+      Table<String, String, Set<Permission>> fieldRolePermissions,
+      Class parent,
+      String prefix,
+      Class<? extends HasAccessControl>[] defaultAccessControl
+  ) {
+
+    for (java.lang.reflect.Field field : getCaseFields(parent)) {
+      CCD ccdAnnotation = field.getAnnotation(CCD.class);
+      Class<? extends HasAccessControl>[] access = null != ccdAnnotation
+          ? ccdAnnotation.access()
+          : defaultAccessControl;
+      JsonUnwrapped unwrapped = field.getAnnotation(JsonUnwrapped.class);
+
+      if (null != unwrapped) {
+        Class<? extends HasAccessControl>[] defaultAccess = null == ccdAnnotation ? null : ccdAnnotation.access();
+        String newPrefix = null == prefix ? unwrapped.prefix() : prefix.concat(capitalize(unwrapped.prefix()));
+        addPermissionsFromFields(fieldRolePermissions, field.getType(), newPrefix, defaultAccess);
+      } else if (null != access) {
+        String id = getFieldId(field, prefix);
+
+        Objenesis objenesis = new ObjenesisStd();
+        for (Class<? extends HasAccessControl> klass : access) {
+          HasAccessControl accessHolder = objenesis.newInstance(klass);
+          SetMultimap<HasRole, Permission> roleGrants = accessHolder.getGrants();
+          for (HasRole key : roleGrants.keys()) {
+            Set<Permission> perms = Sets.newHashSet();
+            perms.addAll(roleGrants.get(key));
+
+            if (fieldRolePermissions.contains(id, key.getRole())) {
+              perms.addAll(fieldRolePermissions.get(id, key.getRole()));
+            }
+
+            fieldRolePermissions.put(id, key.getRole(), perms);
+          }
+        }
+      }
     }
   }
 

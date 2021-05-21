@@ -59,10 +59,10 @@ class CaseEventToFieldsGenerator {
             info.put("FieldShowCondition", field.getShowCondition());
           }
 
-          if (midEventCallbacks.contains(event.getEventID(), pageId.toString())) {
+          if (midEventCallbacks.contains(event.getId(), pageId.toString())) {
             info.put("CallBackURLMidEvent", baseUrl + "/callbacks/mid-event?page="
                 + URLEncoder.encode(pageId.toString(), StandardCharsets.UTF_8));
-            midEventCallbacks.remove(event.getEventID(), pageId.toString());
+            midEventCallbacks.remove(event.getId(), pageId.toString());
           }
 
           if (collection.getPageShowConditions().containsKey(field.getPage())) {
@@ -80,6 +80,10 @@ class CaseEventToFieldsGenerator {
 
           if (null != field.getCaseEventFieldLabel()) {
             info.put("CaseEventFieldLabel", field.getCaseEventFieldLabel());
+          }
+
+          if (null != field.getCaseEventFieldHint()) {
+            info.put("CaseEventFieldHint", field.getCaseEventFieldHint());
           }
         }
 

@@ -7,7 +7,7 @@
     "CaseFieldID": "familyManCaseNumber"
   },
   {
-    "CRUD": "CRU",
+    "CRUD": "R",
     "CaseTypeID": "CARE_SUPERVISION_EPO",
     "UserRole": "caseworker-publiclaw-solicitor",
     "LiveFrom": "01/01/2017",
@@ -33,6 +33,27 @@
     "UserRole": "caseworker-publiclaw-solicitor",
     "LiveFrom": "01/01/2017",
     "CaseFieldID": "hearingDetails"
+  },
+  {
+    "CRUD": "R",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "UserRole": "caseworker-publiclaw-solicitor",
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "hearingPreferencesWelsh"
+  },
+  {
+    "CRUD": "CRU",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "UserRole": "caseworker-publiclaw-solicitor",
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "hearingPreferencesInterpreter"
+  },
+  {
+    "CRUD" : "CRU",
+    "CaseFieldID" : "hearingPreferencesRefreshments",
+    "CaseTypeID" : "CARE_SUPERVISION_EPO",
+    "LiveFrom" : "01/01/2017",
+    "UserRole" : "caseworker-publiclaw-solicitor"
   },
   {
     "CRUD": "R",

@@ -1,5 +1,6 @@
 package uk.gov.hmcts.ccd.sdk;
 
+import com.fasterxml.jackson.annotation.JsonUnwrapped;
 import com.google.common.base.Strings;
 import com.google.common.collect.HashBasedTable;
 import com.google.common.collect.ImmutableMap;
@@ -16,7 +17,6 @@ import java.lang.reflect.ParameterizedType;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -86,7 +86,7 @@ class ConfigGenerator<T, S, R extends HasRole> {
       }
       for (Map.Entry<String, MidEvent> midEvent : event.getFields().build()
           .getPagesToMidEvent().entrySet()) {
-        midEventCallbacks.put(event.getEventID(), midEvent.getKey(), midEvent.getValue());
+        midEventCallbacks.put(event.getId(), midEvent.getKey(), midEvent.getValue());
       }
     }
 
@@ -102,9 +102,8 @@ class ConfigGenerator<T, S, R extends HasRole> {
     CaseEventToFieldsGenerator.writeEvents(outputfolder, config.events, config.builder.caseType,
         config.builder.callbackHost, config.midEventCallbacks);
     ComplexTypeGenerator.generate(outputfolder, config.builder.caseType, config.types);
-    CaseEventToComplexTypesGenerator.writeEvents(outputfolder, config.events);
-    Table<String, R, Set<Permission>> eventPermissions = buildEventPermissions(config.builder,
-        config.events, config.allStates);
+    CaseEventToComplexTypesGenerator.writeEvents(outputfolder, config.events, config.typeArg);
+    Table<String, R, Set<Permission>> eventPermissions = buildEventRolePermissions(config.events);
     AuthorisationCaseEventGenerator.generate(outputfolder, eventPermissions,
         config.builder.caseType);
     AuthorisationCaseFieldGenerator.generate(outputfolder, config, eventPermissions);
@@ -115,7 +114,8 @@ class ConfigGenerator<T, S, R extends HasRole> {
     StateGenerator.generate(outputfolder, config.builder.caseType, config.stateArg);
     AuthorisationCaseTypeGenerator.generate(outputfolder, config.builder.caseType, config.roleType);
     CaseTypeTabGenerator.generate(outputfolder, config.builder.caseType, config.builder);
-    AuthorisationCaseStateGenerator.generate(outputfolder, config, eventPermissions);
+    AuthorisationCaseStateGenerator.generate(outputfolder, config, eventPermissions,
+        config.builder.stateRolePermissions);
     WorkBasketGenerator.generate(outputfolder, config.builder.caseType, config.builder);
     SearchFieldAndResultGenerator.generate(outputfolder, config.builder.caseType, config.builder);
     CaseRoleGenerator.generate(outputfolder, config.builder.caseType, config.roleType);
@@ -169,7 +169,10 @@ class ConfigGenerator<T, S, R extends HasRole> {
       }
       Class c = getComplexType(dataClass, field);
       if (null != c && !c.equals(dataClass)) {
-        if (!result.containsKey(c) || result.get(c) < level) {
+        JsonUnwrapped unwrapped = field.getAnnotation(JsonUnwrapped.class);
+
+        // unwrapped properties are automatically ignored as complex types
+        if (null == unwrapped && (!result.containsKey(c) || result.get(c) < level)) {
           result.put(c, level);
         }
         resolve(c, result, level + 1);
@@ -188,40 +191,12 @@ class ConfigGenerator<T, S, R extends HasRole> {
     return field.getType();
   }
 
-  Table<String, R, Set<Permission>> buildEventPermissions(
-      ConfigBuilderImpl<T, S, R> builder, List<Event<T, R, S>> events, Set<S> allStates) {
-
-
+  Table<String, R, Set<Permission>> buildEventRolePermissions(List<Event<T, R, S>> events) {
     Table<String, R, Set<Permission>> eventRolePermissions = HashBasedTable.create();
     for (Event<T, R, S> event : events) {
-      // Add any state based role permissions unless event permits only explicit grants.
-      if (!event.isExplicitGrants()) {
-        // If Event is for all states, then apply each state's state level permissions.
-        Set<S> keys = event.getPreState().equals(allStates)
-            ? builder.stateRolePermissions.rowKeySet()
-            : event.getPostState();
-        for (S key : keys) {
-          Map<R, Set<Permission>> roles = builder.stateRolePermissions.row(key);
-          for (R role : roles.keySet()) {
-            eventRolePermissions.put(event.getId(), role, roles.get(role));
-          }
-        }
-
-        // Add any case history access
-        SetMultimap<S, R> stateRoleHistoryAccess = builder.stateRoleHistoryAccess;
-        for (S s : event.getPostState()) {
-          if (stateRoleHistoryAccess.containsKey(s)) {
-            for (R role : stateRoleHistoryAccess.get(s)) {
-              eventRolePermissions.put(event.getId(), role, Collections.singleton(Permission.R));
-            }
-          }
-        }
-      }
-      // Set event level permissions, overriding state level where set.
       SetMultimap<R, Permission> grants = event.getGrants();
       for (R role : grants.keySet()) {
-        eventRolePermissions.put(event.getId(), role,
-            grants.get(role));
+        eventRolePermissions.put(event.getId(), role, grants.get(role));
       }
     }
     return eventRolePermissions;

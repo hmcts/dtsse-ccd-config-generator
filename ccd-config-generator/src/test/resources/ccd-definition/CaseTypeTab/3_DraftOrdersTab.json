@@ -25,9 +25,20 @@
     "TabDisplayOrder": 3,
     "LiveFrom": "01/01/2017",
     "CaseTypeID": "CARE_SUPERVISION_EPO",
-    "CaseFieldID": "cmoToAction",
+    "CaseFieldID": "dateSubmitted",
     "Channel": "CaseWorker",
     "TabFieldDisplayOrder": 3,
+    "DisplayContextParameter": "#DATETIMEDISPLAY(d  MMMM yyyy)",
+    "TabLabel": "Draft orders",
+    "TabID": "DraftOrdersTab"
+  },
+  {
+    "TabDisplayOrder": 3,
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "CaseFieldID": "cmoToAction",
+    "Channel": "CaseWorker",
+    "TabFieldDisplayOrder": 4,
     "TabLabel": "Draft orders",
     "TabID": "DraftOrdersTab"
   },
@@ -37,7 +48,7 @@
     "CaseTypeID": "CARE_SUPERVISION_EPO",
     "CaseFieldID": "caseManagementOrder",
     "Channel": "CaseWorker",
-    "TabFieldDisplayOrder": 4,
+    "TabFieldDisplayOrder": 5,
     "TabLabel": "Draft orders",
     "TabID": "DraftOrdersTab"
   }
