@@ -1,10 +1,12 @@
 package uk.gov.hmcts.ccd.sdk;
 
+import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import java.io.File;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.Hashtable;
 import java.util.List;
 import java.util.Map;
 import uk.gov.hmcts.ccd.sdk.JsonUtils.AddMissing;
@@ -15,12 +17,18 @@ import uk.gov.hmcts.ccd.sdk.api.TabField;
 
 class CaseTypeTabGenerator {
 
+  // The field type set from code always takes precedence,
+  // so eg. if a field changes type it gets updated.
+  private static final ImmutableSet<String> OVERWRITES_FIELDS = ImmutableSet.of();
+
   public static <T, R extends HasRole, S> void generate(File root, String caseType,
       ConfigBuilderImpl<T, S, R> builder) {
 
     List<Map<String, Object>> result = Lists.newArrayList();
     result.add(buildField(caseType, "CaseHistory", "caseHistory",
         "History", 1, 1));
+
+    List<Map<String, Object>> caseFields = Lists.newArrayList();
 
     int tabDisplayOrder = 2;
     for (TabBuilder tb : builder.tabs) {
@@ -40,6 +48,12 @@ class CaseTypeTabGenerator {
         if (tabField.getDisplayContextParameter() != null) {
           field.put("DisplayContextParameter", tabField.getDisplayContextParameter());
         }
+        if (tabField.getLabel() != null) {
+          Map<String, Object> fieldInfo = buildLabelField(caseType, tabField.getId());
+          fieldInfo.put("FieldType", "Label");
+          fieldInfo.put("Label", tabField.getLabel());
+          caseFields.add(fieldInfo);
+        }
         result.add(field);
       }
       ++tabDisplayOrder;
@@ -52,6 +66,8 @@ class CaseTypeTabGenerator {
       JsonUtils.mergeInto(output, Lists.newArrayList(tab), new AddMissing(),
           "TabID", "CaseFieldID");
     }
+    Path path = Paths.get(root.getPath(), "CaseField.json");
+    JsonUtils.mergeInto(path, caseFields, new JsonUtils.OverwriteSpecific(OVERWRITES_FIELDS), "ID");
   }
 
   private static Map<String, Object> buildField(String caseType, String tabId, String fieldId,
@@ -66,6 +82,15 @@ class CaseTypeTabGenerator {
     field.put("TabFieldDisplayOrder", tabFieldDisplayOrder);
     field.put("CaseFieldID", fieldId);
     return field;
+  }
+
+  public static Map<String, Object> buildLabelField(String caseType, String id) {
+    Map<String, Object> result = new Hashtable<>();
+    result.put("LiveFrom", "01/01/2017");
+    result.put("CaseTypeID", caseType);
+    result.put("ID", id);
+    result.put("SecurityClassification", "Public");
+    return result;
   }
 }
 

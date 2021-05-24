@@ -62,6 +62,11 @@ public class Tab {
       return this;
     }
 
+    public TabBuilder<T, R> field(String fieldName, String showCondition, String label) {
+      fields.add(TabField.builder().id(fieldName).showCondition(showCondition).label(label).build());
+      return this;
+    }
+
     public RestrictedFieldBuilder<T, R> restrictedField(String id) {
       fields.add(TabField.builder().id(id).build());
       return (roles) -> {
