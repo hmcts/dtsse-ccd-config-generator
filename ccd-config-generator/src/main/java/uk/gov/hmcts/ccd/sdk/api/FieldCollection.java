@@ -354,8 +354,8 @@ public class FieldCollection {
       return result;
     }
 
-    public <U> FieldCollectionBuilder<U, StateType, FieldCollectionBuilder<Type, StateType, Parent>> complex(String fieldName,
-        Class<U> c) {
+    public <U> FieldCollectionBuilder<U, StateType, FieldCollectionBuilder<Type, StateType, Parent>> complex(
+        String fieldName, Class<U> c) {
       return complex(fieldName, c, true);
     }
 
