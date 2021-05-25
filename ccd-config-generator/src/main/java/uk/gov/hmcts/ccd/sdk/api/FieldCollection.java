@@ -187,7 +187,7 @@ public class FieldCollection {
       return this;
     }
 
-    FieldCollectionBuilder<Type, StateType, Parent> field(String fieldName, DisplayContext context) {
+    public FieldCollectionBuilder<Type, StateType, Parent> field(String fieldName, DisplayContext context) {
       explicitFields.add(field(fieldName).context(context));
       return this;
     }
@@ -354,7 +354,7 @@ public class FieldCollection {
       return result;
     }
 
-    <U> FieldCollectionBuilder<U, StateType, FieldCollectionBuilder<Type, StateType, Parent>> complex(String fieldName,
+    public <U> FieldCollectionBuilder<U, StateType, FieldCollectionBuilder<Type, StateType, Parent>> complex(String fieldName,
         Class<U> c) {
       return complex(fieldName, c, true);
     }
