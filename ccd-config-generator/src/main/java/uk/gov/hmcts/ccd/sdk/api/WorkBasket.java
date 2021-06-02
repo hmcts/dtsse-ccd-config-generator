@@ -35,6 +35,22 @@ public class WorkBasket {
       return this;
     }
 
+    public WorkBasketBuilder<T, R> field(String fieldName, String label, String listElementCode) {
+      fields.add(WorkBasketField.builder().id(fieldName).label(label).listElementCode(listElementCode).build());
+      return this;
+    }
+
+    public WorkBasketBuilder<T, R> field(String fieldName, String label, String listElementCode, String showCondition) {
+      fields.add(WorkBasketField.builder()
+          .id(fieldName)
+          .label(label)
+          .listElementCode(listElementCode)
+          .showCondition(showCondition)
+          .build());
+
+      return this;
+    }
+
     public WorkBasketBuilder<T, R> caseReferenceField() {
       fields.add(WorkBasketField.builder().id("[CASE_REFERENCE]").label("CCD Case Number").build());
       return this;

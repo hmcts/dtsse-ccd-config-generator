@@ -1,5 +1,6 @@
 package uk.gov.hmcts.ccd.sdk;
 
+import com.google.common.base.Strings;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import java.io.File;
@@ -11,6 +12,8 @@ import uk.gov.hmcts.ccd.sdk.JsonUtils.AddMissing;
 import uk.gov.hmcts.ccd.sdk.api.WorkBasket;
 import uk.gov.hmcts.ccd.sdk.api.WorkBasket.WorkBasketBuilder;
 import uk.gov.hmcts.ccd.sdk.api.WorkBasketField;
+
+import static com.google.common.base.Strings.isNullOrEmpty;
 
 class WorkBasketGenerator {
 
@@ -29,7 +32,7 @@ class WorkBasketGenerator {
 
       for (WorkBasketField field : workBasket.getFields()) {
         Map<String, Object> map = buildField(caseType, field.getId(), field.getLabel(),
-            displayOrder++);
+            displayOrder++, field.getListElementCode(), field.getShowCondition());
 
         result.add(map);
       }
@@ -39,12 +42,20 @@ class WorkBasketGenerator {
   }
 
   private static Map<String, Object> buildField(String caseType, String fieldId, String label,
-      int displayOrder) {
+      int displayOrder, String listElementCode, String showCondition) {
     Map<String, Object> field = Maps.newHashMap();
     field.put("LiveFrom", "01/01/2017");
     field.put("CaseTypeID", caseType);
     field.put("CaseFieldID", fieldId);
     field.put("Label", label);
+
+    if (!isNullOrEmpty(listElementCode)) {
+      field.put("ListElementCode", listElementCode);
+    }
+    if (!isNullOrEmpty(showCondition)) {
+      field.put("FieldShowCondition", showCondition);
+    }
+
     field.put("DisplayOrder", displayOrder);
     return field;
   }
