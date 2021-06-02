@@ -8,4 +8,6 @@ import lombok.Data;
 public class WorkBasketField {
   private String id;
   private String label;
+  private String listElementCode;
+  private String showCondition;
 }

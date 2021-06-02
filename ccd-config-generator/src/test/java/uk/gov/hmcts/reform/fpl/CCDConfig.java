@@ -123,7 +123,8 @@ public class CCDConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<CaseData, S
         .field("hearingPreferencesWelsh", "Is in Welsh")
         .caseReferenceField()
         .field(CaseData::getDateSubmitted, "Date submitted")
-        .field("evidenceHandled", "Supplementary evidence handled");
+        .field("evidenceHandled", "Supplementary evidence handled")
+        .field("internationalElement", "int el", "issues", "hearingPreferencesWelsh=\"no\"");
   }
 
   private void buildTabs() {
