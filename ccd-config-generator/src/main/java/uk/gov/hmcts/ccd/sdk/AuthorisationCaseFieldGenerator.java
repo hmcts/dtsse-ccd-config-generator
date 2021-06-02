@@ -19,6 +19,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.Hashtable;
 import java.util.List;
 import java.util.Map;
@@ -68,8 +69,15 @@ class AuthorisationCaseFieldGenerator {
           if (!perm.contains(Permission.D) && fb.build().isMutableList()) {
             perm.add(Permission.D);
           }
-          fieldRolePermissions.put(fb.build().getId(), rolePermission.getKey().getRole(),
-              perm);
+
+          String id = fb.build().getId();
+          String role = rolePermission.getKey().getRole();
+
+          if (fieldRolePermissions.contains(id, role)) {
+            fieldRolePermissions.get(id, role).addAll(perm);
+          } else {
+            fieldRolePermissions.put(id, role, new HashSet<>(perm));
+          }
         }
       }
     }
