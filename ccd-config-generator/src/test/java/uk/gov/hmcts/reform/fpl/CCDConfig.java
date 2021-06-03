@@ -79,6 +79,7 @@ public class CCDConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<CaseData, S
         .fields()
         .optional(CaseData::getCaseNotes)
         .complex(CaseData::getHearingPreferences)
+          .label("hearingPrefs", "Hearing Preferences")
           .optional(HearingPreferences::getWelsh)
           .done()
         .optional(CaseData::getCaseName);
@@ -229,6 +230,7 @@ public class CCDConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<CaseData, S
           .optional(OrganisationPolicy::getOrgPolicyCaseAssignedRole, null, CCD_SOLICITOR)
           .optional(OrganisationPolicy::getOrgPolicyReference, null, null, "Org ref", "Sol org ref")
         .done()
+        .label("allocatedJudgeLabel", "Allocated Judge")
         .complex(CaseData::getAllocatedJudge, false)
           .mandatory(Judge::getJudgeTitle)
           .mandatory(Judge::getOtherTitle)

@@ -189,6 +189,20 @@
     "UserRole" : "caseworker-publiclaw-courtadmin"
   },
   {
+    "CRUD" : "CR",
+    "CaseFieldID" : "hearingPreferencesHearingPrefs",
+    "CaseTypeID" : "CARE_SUPERVISION_EPO",
+    "LiveFrom" : "01/01/2017",
+    "UserRole" : "caseworker-publiclaw-courtadmin"
+  },
+  {
+    "CRUD" : "CR",
+    "CaseFieldID" : "allocatedJudgeLabel",
+    "CaseTypeID" : "CARE_SUPERVISION_EPO",
+    "LiveFrom" : "01/01/2017",
+    "UserRole" : "caseworker-publiclaw-courtadmin"
+  },
+  {
     "CRUD": "R",
     "CaseTypeID": "CARE_SUPERVISION_EPO",
     "UserRole": "caseworker-publiclaw-courtadmin",

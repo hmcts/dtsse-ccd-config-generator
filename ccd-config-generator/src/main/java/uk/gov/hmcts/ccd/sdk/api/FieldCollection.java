@@ -319,6 +319,7 @@ public class FieldCollection {
 
       if (isUnwrapped.isPresent()) {
         builder.fields = fields;
+        builder.explicitFields = explicitFields;
         builder.rootFieldname = null;
         builder.unwrappedParentPrefix = isUnwrapped.get().prefix();
         builder.order = order;
