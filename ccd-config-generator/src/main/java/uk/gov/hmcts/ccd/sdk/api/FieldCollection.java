@@ -1,5 +1,6 @@
 package uk.gov.hmcts.ccd.sdk.api;
 
+import static com.google.common.base.Strings.isNullOrEmpty;
 import static org.apache.commons.lang3.StringUtils.capitalize;
 import static uk.gov.hmcts.ccd.sdk.FieldUtils.isUnwrappedField;
 
@@ -187,7 +188,7 @@ public class FieldCollection {
       return this;
     }
 
-    FieldCollectionBuilder<Type, StateType, Parent> field(String fieldName, DisplayContext context) {
+    public FieldCollectionBuilder<Type, StateType, Parent> field(String fieldName, DisplayContext context) {
       explicitFields.add(field(fieldName).context(context));
       return this;
     }
@@ -318,9 +319,13 @@ public class FieldCollection {
           complex(fieldName, c);
 
       if (isUnwrapped.isPresent()) {
+        String prefix = isUnwrapped.get().prefix();
+        builder.unwrappedParentPrefix = isNullOrEmpty(unwrappedParentPrefix)
+            ? prefix
+            : unwrappedParentPrefix.concat(capitalize(prefix));
         builder.fields = fields;
+        builder.explicitFields = explicitFields;
         builder.rootFieldname = null;
-        builder.unwrappedParentPrefix = isUnwrapped.get().prefix();
         builder.order = order;
         builder.pageDisplayOrder = pageDisplayOrder;
         builder.fieldDisplayOrder = fieldDisplayOrder;
@@ -354,8 +359,8 @@ public class FieldCollection {
       return result;
     }
 
-    <U> FieldCollectionBuilder<U, StateType, FieldCollectionBuilder<Type, StateType, Parent>> complex(String fieldName,
-        Class<U> c) {
+    public <U> FieldCollectionBuilder<U, StateType, FieldCollectionBuilder<Type, StateType, Parent>> complex(
+        String fieldName, Class<U> c) {
       return complex(fieldName, c, true);
     }
 

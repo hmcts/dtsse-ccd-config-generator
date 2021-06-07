@@ -33,6 +33,7 @@ import uk.gov.hmcts.reform.fpl.enums.UserRole;
 import uk.gov.hmcts.reform.fpl.model.CaseData;
 import uk.gov.hmcts.reform.fpl.model.HearingPreferences;
 import uk.gov.hmcts.reform.fpl.model.Judge;
+import uk.gov.hmcts.reform.fpl.model.LocationPreferences;
 
 // Found and invoked by the config generator.
 // The CaseData type parameter tells the generator which class represents your case model.
@@ -79,7 +80,11 @@ public class CCDConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<CaseData, S
         .fields()
         .optional(CaseData::getCaseNotes)
         .complex(CaseData::getHearingPreferences)
+          .label("hearingPrefs", "Hearing Preferences")
           .optional(HearingPreferences::getWelsh)
+          .complex(HearingPreferences::getLocationPreferences)
+            .optional(LocationPreferences::getLocal)
+            .done()
           .done()
         .optional(CaseData::getCaseName);
   }
@@ -123,7 +128,8 @@ public class CCDConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<CaseData, S
         .field("hearingPreferencesWelsh", "Is in Welsh")
         .caseReferenceField()
         .field(CaseData::getDateSubmitted, "Date submitted")
-        .field("evidenceHandled", "Supplementary evidence handled");
+        .field("evidenceHandled", "Supplementary evidence handled")
+        .field("internationalElement", "int el", "issues", "hearingPreferencesWelsh=\"no\"");
   }
 
   private void buildTabs() {
@@ -228,6 +234,7 @@ public class CCDConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<CaseData, S
           .optional(OrganisationPolicy::getOrgPolicyCaseAssignedRole, null, CCD_SOLICITOR)
           .optional(OrganisationPolicy::getOrgPolicyReference, null, null, "Org ref", "Sol org ref")
         .done()
+        .label("allocatedJudgeLabel", "Allocated Judge")
         .complex(CaseData::getAllocatedJudge, false)
           .mandatory(Judge::getJudgeTitle)
           .mandatory(Judge::getOtherTitle)

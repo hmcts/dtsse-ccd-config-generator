@@ -15,12 +15,35 @@
     "PageID": 1,
     "LiveFrom": "01/01/2017",
     "CaseTypeID": "CARE_SUPERVISION_EPO",
-    "CaseFieldID": "hearingPreferencesWelsh",
+    "CaseFieldID": "hearingPreferencesHearingPrefs",
     "CaseEventID": "addNotes",
     "PageColumnNumber": 1,
     "PageFieldDisplayOrder": 2,
+    "DisplayContext": "READONLY",
+    "PageDisplayOrder": 1
+  },
+  {
+    "PageID": 1,
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "CaseFieldID": "hearingPreferencesWelsh",
+    "CaseEventID": "addNotes",
+    "PageColumnNumber": 1,
+    "PageFieldDisplayOrder": 3,
     "DisplayContext": "OPTIONAL",
-    "PageDisplayOrder": 1,
+    "ShowSummaryChangeOption": "Y",
+    "PageDisplayOrder": 1
+  },
+  {
+    "CaseEventID" : "addNotes",
+    "CaseFieldID" : "hearingPreferencesLocationPreferencesLocal",
+    "CaseTypeID" : "CARE_SUPERVISION_EPO",
+    "DisplayContext" : "OPTIONAL",
+    "LiveFrom" : "01/01/2017",
+    "PageColumnNumber" : 1,
+    "PageDisplayOrder" : 1,
+    "PageFieldDisplayOrder" : 4,
+    "PageID" : 1,
     "ShowSummaryChangeOption" : "Y"
   },
   {
@@ -30,7 +53,7 @@
     "CaseFieldID": "caseName",
     "CaseEventID": "addNotes",
     "PageColumnNumber": 1,
-    "PageFieldDisplayOrder": 3,
+    "PageFieldDisplayOrder": 5,
     "DisplayContext": "OPTIONAL",
     "PageDisplayOrder": 1,
     "ShowSummaryChangeOption" : "Y"

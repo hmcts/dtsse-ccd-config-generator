@@ -1,5 +1,6 @@
 package uk.gov.hmcts.ccd.sdk;
 
+import static org.apache.commons.lang3.StringUtils.capitalize;
 import static uk.gov.hmcts.ccd.sdk.FieldUtils.getCaseFields;
 import static uk.gov.hmcts.ccd.sdk.FieldUtils.getFieldId;
 import static uk.gov.hmcts.ccd.sdk.FieldUtils.isUnwrappedField;
@@ -61,7 +62,8 @@ class CaseFieldGenerator {
     for (Field field : getCaseFields(dataClass)) {
       JsonUnwrapped unwrapped = field.getAnnotation(JsonUnwrapped.class);
       if (null != unwrapped) {
-        List<Map<String, Object>> nestedObjectFields = toComplex(field.getType(), caseTypeId, unwrapped.prefix());
+        String prefix = idPrefix.isEmpty() ? unwrapped.prefix() : idPrefix.concat(capitalize(unwrapped.prefix()));
+        List<Map<String, Object>> nestedObjectFields = toComplex(field.getType(), caseTypeId, prefix);
         fields.addAll(nestedObjectFields);
 
         continue;

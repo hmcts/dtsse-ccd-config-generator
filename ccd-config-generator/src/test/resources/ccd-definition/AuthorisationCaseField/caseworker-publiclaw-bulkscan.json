@@ -12,5 +12,19 @@
     "CaseTypeID" : "CARE_SUPERVISION_EPO",
     "LiveFrom" : "01/01/2017",
     "UserRole" : "caseworker-publiclaw-bulkscan"
+  },
+  {
+    "CRUD" : "CRU",
+    "CaseFieldID" : "hearingPreferencesLocationPreferencesLocal",
+    "CaseTypeID" : "CARE_SUPERVISION_EPO",
+    "LiveFrom" : "01/01/2017",
+    "UserRole" : "caseworker-publiclaw-bulkscan"
+  },
+  {
+    "CRUD" : "CRU",
+    "CaseFieldID" : "hearingPreferencesLocationPreferencesOnline",
+    "CaseTypeID" : "CARE_SUPERVISION_EPO",
+    "LiveFrom" : "01/01/2017",
+    "UserRole" : "caseworker-publiclaw-bulkscan"
   }
 ]

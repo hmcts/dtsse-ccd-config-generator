@@ -47,5 +47,14 @@
     "CaseFieldID": "hearingPreferencesWelsh",
     "DisplayOrder": 7,
     "Label": "Is in Welsh"
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "CaseFieldID": "internationalElement",
+    "ListElementCode": "issues",
+    "FieldShowCondition": "hearingPreferencesWelsh=\"no\"",
+    "DisplayOrder": 8,
+    "Label": "int el"
   }
 ]
