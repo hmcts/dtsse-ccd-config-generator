@@ -1,6 +1,8 @@
 package uk.gov.hmcts.reform.fpl.model;
 
 import java.util.Set;
+
+import com.fasterxml.jackson.annotation.JsonUnwrapped;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -17,4 +19,7 @@ public class HearingPreferences {
     private String welsh;
     private String interpreter;
     private Set<Refreshment> refreshments;
+
+    @JsonUnwrapped(prefix = "locationPreferences")
+    private LocationPreferences locationPreferences;
 }

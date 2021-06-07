@@ -1,9 +1,9 @@
 package uk.gov.hmcts.ccd.sdk;
 
 import static org.apache.commons.lang3.StringUtils.capitalize;
-import static org.reflections.ReflectionUtils.withName;
 import static uk.gov.hmcts.ccd.sdk.FieldUtils.getCaseFields;
 import static uk.gov.hmcts.ccd.sdk.FieldUtils.getFieldId;
+import static uk.gov.hmcts.ccd.sdk.FieldUtils.isUnwrappedField;
 import static uk.gov.hmcts.ccd.sdk.api.Permission.CRU;
 
 import com.fasterxml.jackson.annotation.JsonUnwrapped;
@@ -28,7 +28,6 @@ import java.util.Optional;
 import java.util.Set;
 import org.objenesis.Objenesis;
 import org.objenesis.ObjenesisStd;
-import org.reflections.ReflectionUtils;
 import uk.gov.hmcts.ccd.sdk.JsonUtils.CRUDMerger;
 import uk.gov.hmcts.ccd.sdk.api.CCD;
 import uk.gov.hmcts.ccd.sdk.api.Event;
@@ -167,19 +166,9 @@ class AuthorisationCaseFieldGenerator {
           permission.put("CaseFieldID", field);
           permission.put("CRUD", Permission.toString(fieldPermission));
 
-          Optional<java.lang.reflect.Field> fieldDef = ReflectionUtils.getFields(config.typeArg, withName(field))
-              .stream()
-              .findFirst();
-          Optional<JsonUnwrapped> unwrapped = fieldDef.map(f -> f.getAnnotation(JsonUnwrapped.class));
+          Optional<JsonUnwrapped> unwrapped = isUnwrappedField(config.typeArg, field);
 
-          if (fieldDef.isPresent() && unwrapped.isPresent()) {
-            for (java.lang.reflect.Field nestedField : getCaseFields(fieldDef.get().getType())) {
-              String nestedFieldId = getFieldId(nestedField, unwrapped.get().prefix());
-              Map<String, Object> nestedPermission = new Hashtable<>(permission);
-              nestedPermission.put("CaseFieldID", nestedFieldId);
-              permissions.add(nestedPermission);
-            }
-          } else {
+          if (unwrapped.isEmpty()) {
             permissions.add(permission);
           }
         }
@@ -201,7 +190,7 @@ class AuthorisationCaseFieldGenerator {
 
     for (java.lang.reflect.Field field : getCaseFields(parent)) {
       CCD ccdAnnotation = field.getAnnotation(CCD.class);
-      Class<? extends HasAccessControl>[] access = null != ccdAnnotation
+      Class<? extends HasAccessControl>[] access = null != ccdAnnotation && ccdAnnotation.access().length > 0
           ? ccdAnnotation.access()
           : defaultAccessControl;
       JsonUnwrapped unwrapped = field.getAnnotation(JsonUnwrapped.class);
