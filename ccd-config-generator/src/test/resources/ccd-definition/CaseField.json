@@ -716,5 +716,19 @@
     "ID" : "hearingPreferencesHearingPrefs",
     "Label" : "Hearing Preferences",
     "LiveFrom" : "01/01/2017"
-  }
+  },
+  {
+    "CaseTypeID" : "CARE_SUPERVISION_EPO",
+    "FieldType" : "YesOrNo",
+    "ID" : "hearingPreferencesLocationPreferencesLocal",
+    "Label" : "Preference for local hearing",
+    "LiveFrom" : "01/01/2017"
+  },
+  {
+  "CaseTypeID" : "CARE_SUPERVISION_EPO",
+  "FieldType" : "YesOrNo",
+  "ID" : "hearingPreferencesLocationPreferencesOnline",
+  "Label" : "Preference for online hearing",
+  "LiveFrom" : "01/01/2017"
+}
 ]

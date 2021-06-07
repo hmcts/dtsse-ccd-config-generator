@@ -1,5 +1,6 @@
 package uk.gov.hmcts.ccd.sdk.api;
 
+import static com.google.common.base.Strings.isNullOrEmpty;
 import static org.apache.commons.lang3.StringUtils.capitalize;
 import static uk.gov.hmcts.ccd.sdk.FieldUtils.isUnwrappedField;
 
@@ -318,10 +319,13 @@ public class FieldCollection {
           complex(fieldName, c);
 
       if (isUnwrapped.isPresent()) {
+        String prefix = isUnwrapped.get().prefix();
+        builder.unwrappedParentPrefix = isNullOrEmpty(unwrappedParentPrefix)
+            ? prefix
+            : unwrappedParentPrefix.concat(capitalize(prefix));
         builder.fields = fields;
         builder.explicitFields = explicitFields;
         builder.rootFieldname = null;
-        builder.unwrappedParentPrefix = isUnwrapped.get().prefix();
         builder.order = order;
         builder.pageDisplayOrder = pageDisplayOrder;
         builder.fieldDisplayOrder = fieldDisplayOrder;
