@@ -1,38 +1,55 @@
 package uk.gov.hmcts.ccd.sdk.type;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import lombok.AllArgsConstructor;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 import lombok.experimental.SuperBuilder;
-import lombok.extern.jackson.Jacksonized;
 import uk.gov.hmcts.ccd.sdk.api.ComplexType;
 
-@AllArgsConstructor
+@NoArgsConstructor
 @SuperBuilder
 @Data
-@Jacksonized
 @ComplexType(name = "Address", generate = false)
 public class Address {
 
   @JsonProperty("AddressLine1")
-  private final String addressLine1;
+  protected String addressLine1;
 
   @JsonProperty("AddressLine2")
-  private final String addressLine2;
+  protected String addressLine2;
 
   @JsonProperty("AddressLine3")
-  private final String addressLine3;
+  protected String addressLine3;
 
   @JsonProperty("PostTown")
-  private final String postTown;
+  protected String postTown;
 
   @JsonProperty("County")
-  private final String county;
+  protected String county;
 
   @JsonProperty("PostCode")
-  private final String postCode;
+  protected String postCode;
 
   @JsonProperty("Country")
-  private final String country;
+  protected String country;
 
+  @JsonCreator
+  public Address(
+      @JsonProperty("AddressLine1") String addressLine1,
+      @JsonProperty("AddressLine2") String addressLine2,
+      @JsonProperty("AddressLine3") String addressLine3,
+      @JsonProperty("PostTown") String postTown,
+      @JsonProperty("County") String county,
+      @JsonProperty("PostCode") String postCode,
+      @JsonProperty("Country") String country
+  ) {
+    this.addressLine1 = addressLine1;
+    this.addressLine2 = addressLine2;
+    this.addressLine3 = addressLine3;
+    this.postTown = postTown;
+    this.county = county;
+    this.postCode = postCode;
+    this.country = country;
+  }
 }

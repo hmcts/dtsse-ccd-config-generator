@@ -1,12 +1,34 @@
 package uk.gov.hmcts.ccd.sdk.type;
 
 
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonProperty;
+import lombok.NoArgsConstructor;
 import lombok.experimental.SuperBuilder;
-import lombok.extern.jackson.Jacksonized;
 import uk.gov.hmcts.ccd.sdk.api.ComplexType;
 
+@NoArgsConstructor
 @SuperBuilder
-@Jacksonized
 @ComplexType(name = "AddressUK", generate = false)
 public class AddressUK extends Address {
+
+  @JsonCreator
+  public AddressUK(
+      @JsonProperty("AddressLine1") String addressLine1,
+      @JsonProperty("AddressLine2") String addressLine2,
+      @JsonProperty("AddressLine3") String addressLine3,
+      @JsonProperty("PostTown") String postTown,
+      @JsonProperty("County") String county,
+      @JsonProperty("PostCode") String postCode,
+      @JsonProperty("Country") String country
+  ) {
+    this.addressLine1 = addressLine1;
+    this.addressLine2 = addressLine2;
+    this.addressLine3 = addressLine3;
+    this.postTown = postTown;
+    this.county = county;
+    this.postCode = postCode;
+    this.country = country;
+  }
+
 }

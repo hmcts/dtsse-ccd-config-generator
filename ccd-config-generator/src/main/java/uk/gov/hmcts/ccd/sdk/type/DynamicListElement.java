@@ -1,10 +1,11 @@
 package uk.gov.hmcts.ccd.sdk.type;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import java.util.UUID;
-import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
-import lombok.extern.jackson.Jacksonized;
+import lombok.NoArgsConstructor;
 import uk.gov.hmcts.ccd.sdk.api.ComplexType;
 
 /**
@@ -12,10 +13,9 @@ import uk.gov.hmcts.ccd.sdk.api.ComplexType;
  *
  * <p>There are two properties which map to the relevant items of an option html tag.
  */
-@AllArgsConstructor
+@NoArgsConstructor
 @Builder
 @Data
-@Jacksonized
 @ComplexType(generate = false)
 public class DynamicListElement {
   public static final String DEFAULT_CODE = "-1";
@@ -25,10 +25,19 @@ public class DynamicListElement {
   /**
    * Property that maps to the value attribute of the option tag.
    */
-  private final UUID code;
+  private UUID code;
 
   /**
    * Property that maps to the label attribute of the option tag.
    */
-  private final String label;
+  private String label;
+
+  @JsonCreator
+  public DynamicListElement(
+      @JsonProperty("code") UUID code,
+      @JsonProperty("label") String label
+  ) {
+    this.code = code;
+    this.label = label;
+  }
 }

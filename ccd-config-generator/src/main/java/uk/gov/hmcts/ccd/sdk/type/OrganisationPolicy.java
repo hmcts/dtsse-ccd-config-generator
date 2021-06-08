@@ -1,33 +1,47 @@
 package uk.gov.hmcts.ccd.sdk.type;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import java.util.Set;
-import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
-import lombok.extern.jackson.Jacksonized;
+import lombok.NoArgsConstructor;
 import uk.gov.hmcts.ccd.sdk.api.ComplexType;
 import uk.gov.hmcts.ccd.sdk.api.HasRole;
 
-@AllArgsConstructor
+@NoArgsConstructor
 @Builder
 @Data
-@Jacksonized
 @ComplexType(name = "OrganisationPolicy", generate = false)
 public class OrganisationPolicy<R extends HasRole> {
 
   @JsonProperty("Organisation")
-  private final Organisation organisation;
+  private Organisation organisation;
 
   @JsonProperty("PreviousOrganisations")
-  private final Set<PreviousOrganisation> previousOrganisations;
+  private Set<PreviousOrganisation> previousOrganisations;
 
   @JsonProperty("OrgPolicyReference")
-  private final String orgPolicyReference;
+  private String orgPolicyReference;
 
   @JsonProperty("PrepopulateToUsersOrganisation")
-  private final YesOrNo prepopulateToUsersOrganisation;
+  private YesOrNo prepopulateToUsersOrganisation;
 
   @JsonProperty("OrgPolicyCaseAssignedRole")
-  private final R orgPolicyCaseAssignedRole;
+  private R orgPolicyCaseAssignedRole;
+
+  @JsonCreator
+  public OrganisationPolicy(
+      @JsonProperty("Organisation") Organisation organisation,
+      @JsonProperty("PreviousOrganisations") Set<PreviousOrganisation> previousOrganisations,
+      @JsonProperty("OrgPolicyReference") String orgPolicyReference,
+      @JsonProperty("PrepopulateToUsersOrganisation") YesOrNo prepopulateToUsersOrganisation,
+      @JsonProperty("OrgPolicyCaseAssignedRole") R orgPolicyCaseAssignedRole
+  ) {
+    this.organisation = organisation;
+    this.previousOrganisations = previousOrganisations;
+    this.orgPolicyReference = orgPolicyReference;
+    this.prepopulateToUsersOrganisation = prepopulateToUsersOrganisation;
+    this.orgPolicyCaseAssignedRole = orgPolicyCaseAssignedRole;
+  }
 }

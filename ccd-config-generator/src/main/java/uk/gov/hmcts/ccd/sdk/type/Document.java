@@ -1,26 +1,35 @@
 package uk.gov.hmcts.ccd.sdk.type;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
-import lombok.extern.jackson.Jacksonized;
+import lombok.NoArgsConstructor;
 import uk.gov.hmcts.ccd.sdk.api.ComplexType;
 
-@AllArgsConstructor
+@NoArgsConstructor
 @Builder
 @Data
-@Jacksonized
 @ComplexType(name = "Document", generate = false)
 public class Document {
 
   @JsonProperty("document_url")
-  private final String url;
+  private String url;
 
   @JsonProperty("document_filename")
-  private final String filename;
+  private String filename;
 
   @JsonProperty("document_binary_url")
-  private final String binaryUrl;
+  private String binaryUrl;
 
+  @JsonCreator
+  public Document(
+      @JsonProperty("document_url") String url,
+      @JsonProperty("document_filename") String filename,
+      @JsonProperty("document_binary_url") String binaryUrl
+  ) {
+    this.url = url;
+    this.filename = filename;
+    this.binaryUrl = binaryUrl;
+  }
 }

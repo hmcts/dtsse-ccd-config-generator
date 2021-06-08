@@ -1,19 +1,28 @@
 package uk.gov.hmcts.ccd.sdk.type;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import javax.annotation.Nullable;
-import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
-import lombok.extern.jackson.Jacksonized;
+import lombok.NoArgsConstructor;
 
-@AllArgsConstructor
+@NoArgsConstructor
 @Builder
 @Data
-@Jacksonized
 public class ListValue<T> {
 
   @Nullable
-  private final String id;
+  private String id;
 
-  private final T value;
+  private T value;
+
+  @JsonCreator
+  public ListValue(
+      @JsonProperty("id") String id,
+      @JsonProperty("value") T value
+  ) {
+    this.id = id;
+    this.value = value;
+  }
 }
