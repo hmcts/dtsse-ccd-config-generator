@@ -325,6 +325,7 @@ public class FieldCollection {
             : unwrappedParentPrefix.concat(capitalize(prefix));
         builder.fields = fields;
         builder.explicitFields = explicitFields;
+        builder.complexFields = complexFields;
         builder.rootFieldname = null;
         builder.order = order;
         builder.pageDisplayOrder = pageDisplayOrder;
@@ -350,7 +351,9 @@ public class FieldCollection {
         fields.removeIf(x -> x.build().getId().equals(fieldName));
       }
       complexFields.add(result);
-      result.rootFieldname = fieldName;
+      result.rootFieldname = !isNullOrEmpty(unwrappedParentPrefix)
+          ? unwrappedParentPrefix.concat(capitalize(fieldName))
+          : fieldName;
       result.pageId = this.pageId;
       // Nested builders inherit ordering state.
       if (null != parent) {

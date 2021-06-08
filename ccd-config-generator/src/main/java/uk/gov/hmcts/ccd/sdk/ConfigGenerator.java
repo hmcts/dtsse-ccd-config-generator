@@ -102,7 +102,7 @@ class ConfigGenerator<T, S, R extends HasRole> {
     CaseEventToFieldsGenerator.writeEvents(outputfolder, config.events, config.builder.caseType,
         config.builder.callbackHost, config.midEventCallbacks);
     ComplexTypeGenerator.generate(outputfolder, config.builder.caseType, config.types);
-    CaseEventToComplexTypesGenerator.writeEvents(outputfolder, config.events, config.typeArg);
+    CaseEventToComplexTypesGenerator.writeEvents(outputfolder, config.events);
     Table<String, R, Set<Permission>> eventPermissions = buildEventRolePermissions(config.events);
     AuthorisationCaseEventGenerator.generate(outputfolder, eventPermissions,
         config.builder.caseType);
