@@ -84,6 +84,13 @@
     "UserRole" : "caseworker-publiclaw-solicitor"
   },
   {
+    "CRUD" : "CRU",
+    "CaseFieldID" : "hearingPreferencesOrganisationPolicy",
+    "CaseTypeID" : "CARE_SUPERVISION_EPO",
+    "LiveFrom" : "01/01/2017",
+    "UserRole" : "caseworker-publiclaw-solicitor"
+  },
+  {
     "CRUD": "R",
     "CaseTypeID": "CARE_SUPERVISION_EPO",
     "UserRole": "caseworker-publiclaw-solicitor",
