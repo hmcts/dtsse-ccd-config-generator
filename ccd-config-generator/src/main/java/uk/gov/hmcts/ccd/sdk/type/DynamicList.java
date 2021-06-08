@@ -1,22 +1,21 @@
 package uk.gov.hmcts.ccd.sdk.type;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
-import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
-import lombok.extern.jackson.Jacksonized;
+import lombok.NoArgsConstructor;
 import uk.gov.hmcts.ccd.sdk.api.ComplexType;
 
 /**
  * Representation of a CCD Dynamic List which is then converted to a select dropdown list.
  */
-@AllArgsConstructor
+@NoArgsConstructor
 @Builder
 @Data
-@Jacksonized
 @ComplexType(generate = false)
 public class DynamicList {
 
@@ -30,6 +29,15 @@ public class DynamicList {
    */
   @JsonProperty("list_items")
   private List<DynamicListElement> listItems;
+
+  @JsonCreator
+  public DynamicList(
+      @JsonProperty("value") DynamicListElement value,
+      @JsonProperty("list_items") List<DynamicListElement> listItems
+  ) {
+    this.value = value;
+    this.listItems = listItems;
+  }
 
   /**
    * Converts a list of elements to the appropriate structure to then be handled correctly by CCD.
