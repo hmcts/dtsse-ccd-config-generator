@@ -1,5 +1,7 @@
 package uk.gov.hmcts.ccd.sdk;
 
+import static java.util.Comparator.nullsLast;
+import static java.util.stream.Collectors.toList;
 import static org.apache.commons.lang3.StringUtils.capitalize;
 import static uk.gov.hmcts.ccd.sdk.FieldUtils.getCaseFields;
 import static uk.gov.hmcts.ccd.sdk.FieldUtils.getFieldId;
@@ -100,6 +102,7 @@ class CaseFieldGenerator {
         if (!Strings.isNullOrEmpty(cf.showCondition())) {
           fieldInfo.put("FieldShowCondition", cf.showCondition());
         }
+        fieldInfo.put("DisplayOrder", cf.displayOrder());
       }
 
       if (cf != null && cf.typeOverride() != FieldType.Unspecified) {
@@ -113,7 +116,10 @@ class CaseFieldGenerator {
 
     }
 
-    return fields;
+    return fields.stream()
+      .sorted((o1, o2) -> nullsLast(Integer::compare)
+        .compare((Integer) o1.get("DisplayOrder"), (Integer) o2.get("DisplayOrder")))
+      .collect(toList());
   }
 
   private static void inferFieldType(Class dataClass, Field field, Map<String, Object> info,
