@@ -20,12 +20,12 @@ import uk.gov.hmcts.ccd.sdk.api.HasRole;
 
 class CaseEventToComplexTypesGenerator {
 
-  public static <T, R extends HasRole, S> void writeEvents(File root, List<Event<T, R, S>> events, Class<?> typeArg) {
+  public static <T, R extends HasRole, S> void writeEvents(File root, List<Event<T, R, S>> events) {
     for (Event event : events) {
       FieldCollection collection = event.getFields().build();
       List<Map<String, Object>> entries = Lists.newArrayList();
       List<FieldCollection.FieldCollectionBuilder> complexFields = collection.getComplexFields();
-      expand(complexFields, entries, event.getId(), null, "", typeArg);
+      expand(complexFields, entries, event.getId(), null, "");
 
       ImmutableListMultimap<String, Map<String, Object>> entriesByCaseField = Multimaps
           .index(entries, x -> x.get("CaseFieldID").toString());
@@ -47,7 +47,7 @@ class CaseEventToComplexTypesGenerator {
 
   private static void expand(List<FieldCollection.FieldCollectionBuilder> complexFieldsCollection,
       List<Map<String, Object>> entries, String eventId, final String rootFieldName,
-      final String fieldLocator, Class<?> typeArg) {
+      final String fieldLocator) {
     if (null != complexFieldsCollection) {
       for (FieldCollection.FieldCollectionBuilder complexFields : complexFieldsCollection) {
         FieldCollection complex = complexFields.build();
@@ -65,7 +65,7 @@ class CaseEventToComplexTypesGenerator {
           Field field = complexField.build();
 
           // unwrapped complex type fields are added to CaseEventToFields as they are actually on the CaseData
-          if (isUnwrappedField(typeArg, field.getParent().build().getRootFieldname()).isPresent()) {
+          if (isUnwrappedField(field.getClazz(), field.getParent().build().getRootFieldname()).isPresent()) {
             continue;
           }
 
@@ -97,7 +97,7 @@ class CaseEventToComplexTypesGenerator {
           }
         }
         if (null != complex.getComplexFields()) {
-          expand(complex.getComplexFields(), entries, eventId, rfn, locator, typeArg);
+          expand(complex.getComplexFields(), entries, eventId, rfn, locator);
         }
       }
     }

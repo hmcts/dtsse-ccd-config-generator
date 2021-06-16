@@ -1,5 +1,6 @@
 package uk.gov.hmcts.ccd.sdk.type;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import uk.gov.hmcts.ccd.sdk.api.ComplexType;
@@ -8,7 +9,11 @@ import uk.gov.hmcts.ccd.sdk.api.ComplexType;
 @RequiredArgsConstructor
 @ComplexType(name = "YesOrNo", generate = false)
 public enum YesOrNo {
+
+  @JsonProperty("Yes")
   YES("Yes"),
+
+  @JsonProperty("No")
   NO("No");
 
   private final String value;
@@ -18,6 +23,6 @@ public enum YesOrNo {
   }
 
   public boolean toBoolean() {
-    return this.equals(YES);
+    return YES.name().equalsIgnoreCase(this.name());
   }
 }

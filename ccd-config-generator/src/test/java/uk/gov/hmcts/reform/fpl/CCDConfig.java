@@ -85,6 +85,13 @@ public class CCDConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<CaseData, S
           .complex(HearingPreferences::getLocationPreferences)
             .optional(LocationPreferences::getLocal)
             .done()
+          .complex(HearingPreferences::getOrganisationPolicy, null, "Event label", "Event hint")
+            .complex(OrganisationPolicy::getOrganisation)
+              .mandatory(Organisation::getOrganisationId)
+              .done()
+            .optional(OrganisationPolicy::getOrgPolicyCaseAssignedRole, null, CCD_SOLICITOR)
+            .optional(OrganisationPolicy::getOrgPolicyReference, null, null, "Org ref", "Sol org ref")
+            .done()
           .done()
         .optional(CaseData::getCaseName);
   }
