@@ -6,6 +6,7 @@ import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
 import com.google.common.collect.Table;
+import java.util.EnumSet;
 import java.util.Hashtable;
 import java.util.List;
 import java.util.Map;
@@ -67,6 +68,11 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements ConfigBuilder
       @Override
       public Event.EventBuilder<T, R, S> forStateTransition(S from, S to) {
         return build(Set.of(from), Set.of(to));
+      }
+
+      @Override
+      public Event.EventBuilder<T, R, S> forStateTransition(EnumSet from, S to) {
+        return build(from, Set.of(to));
       }
 
       @Override
