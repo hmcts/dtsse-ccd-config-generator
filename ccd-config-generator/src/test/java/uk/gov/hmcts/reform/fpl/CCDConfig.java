@@ -71,7 +71,7 @@ public class CCDConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<CaseData, S
     buildWorkBasketInputFields();
     buildSearchResultFields();
     buildSearchInputFields();
-
+    
     builder.event("addNotes")
         .forStates(Gatekeeping, Submitted)
         .name("Add case notes")

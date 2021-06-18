@@ -2,6 +2,7 @@ package uk.gov.hmcts.ccd.sdk;
 
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
+import com.google.common.collect.SetMultimap;
 import com.google.common.collect.Sets;
 import com.google.common.collect.Table;
 import com.google.common.collect.Table.Cell;
@@ -13,13 +14,19 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
+import lombok.SneakyThrows;
+import org.objenesis.Objenesis;
+import org.objenesis.ObjenesisStd;
 import uk.gov.hmcts.ccd.sdk.JsonUtils.CRUDMerger;
+import uk.gov.hmcts.ccd.sdk.api.CCD;
 import uk.gov.hmcts.ccd.sdk.api.Event;
+import uk.gov.hmcts.ccd.sdk.api.HasAccessControl;
 import uk.gov.hmcts.ccd.sdk.api.HasRole;
 import uk.gov.hmcts.ccd.sdk.api.Permission;
 
 class AuthorisationCaseStateGenerator {
 
+  @SneakyThrows
   public static <T, S, R extends HasRole> void generate(
       File root, ResolvedCCDConfig<T, S, R> config,
       Table<String, R, Set<Permission>> eventRolePermissions,
@@ -45,6 +52,22 @@ class AuthorisationCaseStateGenerator {
         } else {
           addPermissions(stateRolePermissions, event.getPostState(), rolePermission.getKey(),
               rolePermission.getValue());
+        }
+      }
+    }
+
+    Objenesis objenesis = new ObjenesisStd();
+    for (S state : config.stateArg.getEnumConstants()) {
+      String enumFieldName = ((Enum)state).name();
+      CCD ccd = config.stateArg.getField(enumFieldName).getAnnotation(CCD.class);
+
+      if (null != ccd) {
+        for (var klass : ccd.access()) {
+          HasAccessControl accessHolder = objenesis.newInstance(klass);
+          SetMultimap<HasRole, Permission> roleGrants = accessHolder.getGrants();
+          for (HasRole key : roleGrants.keys()) {
+            addPermissions(stateRolePermissions, Set.of(state), (R)key, roleGrants.get(key));
+          }
         }
       }
     }

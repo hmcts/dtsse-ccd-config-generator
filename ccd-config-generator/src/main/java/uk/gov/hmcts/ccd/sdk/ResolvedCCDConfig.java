@@ -19,7 +19,7 @@ public class ResolvedCCDConfig<T, S, R extends HasRole> {
   public final List<Event<T, R, S>> events;
   public final Map<Class, Integer> types;
   public final String environment;
-  public final Class<?> stateArg;
+  public final Class<S> stateArg;
   public final Class<?> roleType;
   public final ImmutableSet<S> allStates;
   public final Map<String, AboutToStart<T, S>> aboutToStartCallbacks;
@@ -28,7 +28,7 @@ public class ResolvedCCDConfig<T, S, R extends HasRole> {
   // Maps event ID and page ID to mid-event callbacks
   public final Table<String, String, MidEvent<T, S>> midEventCallbacks;
 
-  public ResolvedCCDConfig(Class<?> typeArg, Class<?> stateArg, Class<?> roleType,
+  public ResolvedCCDConfig(Class<?> typeArg, Class<S> stateArg, Class<?> roleType,
                            ConfigBuilderImpl<T, S, R> builder, List<Event<T, R, S>> events,
                            Map<Class, Integer> types, String environment,
                            Set<S> allStates,
