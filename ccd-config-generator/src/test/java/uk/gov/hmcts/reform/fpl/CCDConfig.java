@@ -71,7 +71,8 @@ public class CCDConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<CaseData, S
     buildWorkBasketInputFields();
     buildSearchResultFields();
     buildSearchInputFields();
-    
+    buildSearchCasesFields();
+
     builder.event("addNotes")
         .forStates(Gatekeeping, Submitted)
         .name("Add case notes")
@@ -114,6 +115,12 @@ public class CCDConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<CaseData, S
         .field("hearingPreferencesWelsh", "Is in Welsh")
         .caseReferenceField()
         .field(CaseData::getDateSubmitted, "Date submitted");
+  }
+
+  private void buildSearchCasesFields() {
+    builder.searchCasesFields()
+      .field(CaseData::getAllocatedJudge, "Allocated Judge")
+      .field("[CASE_REFERENCE]", "Case reference");
   }
 
   private void buildWorkBasketResultFields() {

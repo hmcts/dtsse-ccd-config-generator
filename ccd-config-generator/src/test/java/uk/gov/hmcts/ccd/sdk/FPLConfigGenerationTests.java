@@ -179,6 +179,11 @@ public class FPLConfigGenerationTests {
     }
 
     @Test
+    public void generatesSearchCasesResultFields() {
+        assertEquals("SearchCasesResultFields/SearchCasesResultFields.json");
+    }
+
+    @Test
     public void generatesFixedLists() {
         assertGeneratedFolderMatchesResource("FixedLists");
     }
