@@ -1,0 +1,20 @@
+[
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "CaseFieldID": "allocatedJudge",
+    "DisplayOrder": 1,
+    "UserRole": "",
+    "Label": "Allocated Judge",
+    "UseCase": "orgcases"
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "CaseFieldID": "[CASE_REFERENCE]",
+    "DisplayOrder": 2,
+    "UserRole": "",
+    "Label": "CCD Case Number",
+    "UseCase": "orgcases"
+  }
+]
