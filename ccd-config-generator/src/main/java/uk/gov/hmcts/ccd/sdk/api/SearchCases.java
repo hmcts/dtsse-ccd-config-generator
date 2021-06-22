@@ -67,5 +67,26 @@ public class SearchCases {
       String name = propertyUtils.getPropertyName(model, getter);
       return field(name, label, null, null, null);
     }
+
+    public SearchCasesBuilder<T> caseReferenceField() {
+      fields.add(SearchCasesResultField.builder().id("[CASE_REFERENCE]").label("CCD Case Number").build());
+      return this;
+    }
+
+    public SearchCasesBuilder<T> stateField() {
+      fields.add(SearchCasesResultField.builder().id("[STATE]").label("State").build());
+      return this;
+    }
+
+    public SearchCasesBuilder<T> createdDateField() {
+      fields.add(SearchCasesResultField.builder().id("[CREATED_DATE]").label("Created date").build());
+      return this;
+    }
+
+    public SearchCasesBuilder<T> lastModifiedDate() {
+      fields.add(SearchCasesResultField.builder().id("[LAST_MODIFIED_DATE]").label("Last modified date").build());
+      return this;
+    }
+
   }
 }

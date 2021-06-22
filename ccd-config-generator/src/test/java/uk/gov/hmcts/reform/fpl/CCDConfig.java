@@ -120,7 +120,7 @@ public class CCDConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<CaseData, S
   private void buildSearchCasesFields() {
     builder.searchCasesFields()
       .field(CaseData::getAllocatedJudge, "Allocated Judge")
-      .field("[CASE_REFERENCE]", "Case reference");
+      .caseReferenceField();
   }
 
   private void buildWorkBasketResultFields() {
