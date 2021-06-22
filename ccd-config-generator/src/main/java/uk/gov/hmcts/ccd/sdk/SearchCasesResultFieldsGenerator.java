@@ -34,7 +34,7 @@ class SearchCasesResultFieldsGenerator {
 
   private static Map<String, Object> buildField(String caseType, SearchCasesResultField field, int order) {
     Map<String, Object> object = Maps.newHashMap();
-    object.put("LiveFrom", "01/01/2017");
+    object.put("LiveFrom", "03/02/2021");
     object.put("CaseTypeID", caseType);
     object.put("UserRole", "");
     object.put("CaseFieldID", field.getId());
