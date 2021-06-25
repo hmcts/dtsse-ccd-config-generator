@@ -10,7 +10,7 @@ repositories {
     mavenCentral()
 }
 
-def springBootVersion = '2.5.1'
+def springBootVersion = '2.5.2'
 
 dependencies {
     // Use JUnit test framework for unit tests
