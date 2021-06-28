@@ -151,7 +151,7 @@ public class FieldCollection {
 
     public FieldCollectionBuilder<Type, StateType, Parent> mandatoryNoSummary(TypedPropertyGetter<Type, ?> getter,
         String showCondition, String caseEventFieldLabel) {
-      return field(getter, DisplayContext.Mandatory, showCondition, true, null,
+      return field(getter, DisplayContext.Mandatory, showCondition, false, null,
         caseEventFieldLabel, null);
     }
 
