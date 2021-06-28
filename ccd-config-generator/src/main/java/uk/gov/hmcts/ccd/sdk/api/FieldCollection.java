@@ -224,7 +224,7 @@ public class FieldCollection {
       }
       field(getter)
           .context(context)
-          //.showCondition(showCondition)
+          .showCondition(showCondition)
           .showSummary(showSummary)
           .defaultValue(defaultValue)
           .caseEventFieldLabel(caseEventFieldLabel)
