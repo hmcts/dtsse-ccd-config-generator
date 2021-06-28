@@ -244,6 +244,7 @@ public class CCDConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<CaseData, S
         .complex(CaseData::getOrganisationPolicy, null, "Event label", "Event hint")
           .complex(OrganisationPolicy::getOrganisation)
             .mandatory(Organisation::getOrganisationId)
+            .mandatoryNoSummary(Organisation::getOrganisationName, null, "Organisation Name")
           .done()
           .optional(OrganisationPolicy::getOrgPolicyCaseAssignedRole, null, CCD_SOLICITOR)
           .optional(OrganisationPolicy::getOrgPolicyReference, null, null, "Org ref", "Sol org ref")

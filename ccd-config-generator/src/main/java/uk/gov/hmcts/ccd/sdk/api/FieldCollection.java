@@ -143,6 +143,12 @@ public class FieldCollection {
       return field(getter, DisplayContext.Mandatory, false);
     }
 
+    public FieldCollectionBuilder<Type, StateType, Parent> mandatoryNoSummary(TypedPropertyGetter<Type, ?> getter,
+        String showCondition, String caseEventFieldLabel) {
+      return field(getter, DisplayContext.Mandatory, showCondition, false, null,
+        caseEventFieldLabel, null);
+    }
+
     public FieldCollectionBuilder<Type, StateType, Parent> readonly(TypedPropertyGetter<Type, ?> getter,
         String showCondition) {
       return field(getter, DisplayContext.ReadOnly, showCondition, true);
