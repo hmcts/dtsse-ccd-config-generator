@@ -255,6 +255,7 @@ public class CCDConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<CaseData, S
           .mandatory(Judge::getOtherTitle)
           .mandatory(Judge::getJudgeLastName)
           .mandatory(Judge::getJudgeFullName)
+          .optionalNoSummary(Judge::getJudgeEmailId, null, "Judge email id")
         .done()
         .optional(CaseData::getCaseName, null, null, "Allocated case name", "A hint")
         .page("<Notes>", this::checkCaseNotes)
