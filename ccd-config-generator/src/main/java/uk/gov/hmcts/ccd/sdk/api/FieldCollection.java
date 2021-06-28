@@ -108,6 +108,12 @@ public class FieldCollection {
       return field(getter, DisplayContext.Optional, false);
     }
 
+    public FieldCollectionBuilder<Type, StateType, Parent> optionalNoSummary(TypedPropertyGetter<Type, ?> getter,
+         String showCondition, String caseEventFieldLabel) {
+      return field(getter, DisplayContext.Optional, showCondition, false,
+        null, caseEventFieldLabel, null);
+    }
+
     public <Value> FieldCollectionBuilder<Type, StateType, Parent> mandatory(TypedPropertyGetter<Type, Value> getter,
         String showCondition, Value defaultValue, String caseEventFieldLabel, String caseEventFieldHint) {
       return field(
