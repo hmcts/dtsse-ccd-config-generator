@@ -22,5 +22,13 @@
     "CaseEventID": "allocatedJudge",
     "DisplayContext": "MANDATORY",
     "ListElementCode": "Organisation.OrganisationID"
+  },
+  {
+    "CaseEventID" : "allocatedJudge",
+    "CaseFieldID" : "organisationPolicy",
+    "DisplayContext" : "MANDATORY",
+    "EventElementLabel" : "Organisation Name",
+    "ListElementCode" : "Organisation.OrganisationName",
+    "LiveFrom" : "01/01/2017"
   }
 ]
