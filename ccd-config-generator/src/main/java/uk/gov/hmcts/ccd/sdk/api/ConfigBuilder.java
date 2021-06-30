@@ -2,6 +2,7 @@ package uk.gov.hmcts.ccd.sdk.api;
 
 import java.util.Set;
 import uk.gov.hmcts.ccd.sdk.api.Search.SearchBuilder;
+import uk.gov.hmcts.ccd.sdk.api.SearchCases.SearchCasesBuilder;
 import uk.gov.hmcts.ccd.sdk.api.Tab.TabBuilder;
 import uk.gov.hmcts.ccd.sdk.api.WorkBasket.WorkBasketBuilder;
 
@@ -34,6 +35,8 @@ public interface ConfigBuilder<T, S, R extends HasRole> {
   SearchBuilder<T, R> searchResultFields();
 
   SearchBuilder<T, R> searchInputFields();
+
+  SearchCasesBuilder<T> searchCasesFields();
 
   RoleBuilder<R> role(R... role);
 

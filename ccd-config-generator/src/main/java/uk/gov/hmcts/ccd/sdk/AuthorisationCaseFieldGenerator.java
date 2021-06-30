@@ -1,5 +1,6 @@
 package uk.gov.hmcts.ccd.sdk;
 
+import static com.google.common.base.Strings.isNullOrEmpty;
 import static org.apache.commons.lang3.StringUtils.capitalize;
 import static uk.gov.hmcts.ccd.sdk.FieldUtils.getCaseFields;
 import static uk.gov.hmcts.ccd.sdk.FieldUtils.getFieldId;
@@ -197,7 +198,7 @@ class AuthorisationCaseFieldGenerator {
 
       if (null != unwrapped) {
         Class<? extends HasAccessControl>[] defaultAccess = null == ccdAnnotation ? null : ccdAnnotation.access();
-        String newPrefix = null == prefix ? unwrapped.prefix() : prefix.concat(capitalize(unwrapped.prefix()));
+        String newPrefix = isNullOrEmpty(prefix) ? unwrapped.prefix() : prefix.concat(capitalize(unwrapped.prefix()));
         addPermissionsFromFields(fieldRolePermissions, field.getType(), newPrefix, defaultAccess);
       } else if (null != access) {
         String id = getFieldId(field, prefix);

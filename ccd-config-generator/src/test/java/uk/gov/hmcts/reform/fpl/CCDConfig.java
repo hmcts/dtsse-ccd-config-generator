@@ -71,6 +71,7 @@ public class CCDConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<CaseData, S
     buildWorkBasketInputFields();
     buildSearchResultFields();
     buildSearchInputFields();
+    buildSearchCasesFields();
 
     builder.event("addNotes")
         .forStates(Gatekeeping, Submitted)
@@ -114,6 +115,12 @@ public class CCDConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<CaseData, S
         .field("hearingPreferencesWelsh", "Is in Welsh")
         .caseReferenceField()
         .field(CaseData::getDateSubmitted, "Date submitted");
+  }
+
+  private void buildSearchCasesFields() {
+    builder.searchCasesFields()
+      .field(CaseData::getAllocatedJudge, "Allocated Judge")
+      .caseReferenceField();
   }
 
   private void buildWorkBasketResultFields() {
@@ -237,6 +244,7 @@ public class CCDConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<CaseData, S
         .complex(CaseData::getOrganisationPolicy, null, "Event label", "Event hint")
           .complex(OrganisationPolicy::getOrganisation)
             .mandatory(Organisation::getOrganisationId)
+            .mandatoryNoSummary(Organisation::getOrganisationName, null, "Organisation Name")
           .done()
           .optional(OrganisationPolicy::getOrgPolicyCaseAssignedRole, null, CCD_SOLICITOR)
           .optional(OrganisationPolicy::getOrgPolicyReference, null, null, "Org ref", "Sol org ref")
@@ -247,6 +255,7 @@ public class CCDConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<CaseData, S
           .mandatory(Judge::getOtherTitle)
           .mandatory(Judge::getJudgeLastName)
           .mandatory(Judge::getJudgeFullName)
+          .optionalNoSummary(Judge::getJudgeEmailId, null, "Judge email id")
         .done()
         .optional(CaseData::getCaseName, null, null, "Allocated case name", "A hint")
         .page("<Notes>", this::checkCaseNotes)

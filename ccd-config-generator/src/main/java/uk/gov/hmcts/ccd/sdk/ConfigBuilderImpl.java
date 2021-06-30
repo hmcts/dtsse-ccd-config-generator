@@ -6,6 +6,7 @@ import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
 import com.google.common.collect.Table;
+import java.util.EnumSet;
 import java.util.Hashtable;
 import java.util.List;
 import java.util.Map;
@@ -18,6 +19,7 @@ import uk.gov.hmcts.ccd.sdk.api.HasRole;
 import uk.gov.hmcts.ccd.sdk.api.Permission;
 import uk.gov.hmcts.ccd.sdk.api.RoleBuilder;
 import uk.gov.hmcts.ccd.sdk.api.Search.SearchBuilder;
+import uk.gov.hmcts.ccd.sdk.api.SearchCases.SearchCasesBuilder;
 import uk.gov.hmcts.ccd.sdk.api.Tab;
 import uk.gov.hmcts.ccd.sdk.api.Tab.TabBuilder;
 import uk.gov.hmcts.ccd.sdk.api.WorkBasket.WorkBasketBuilder;
@@ -35,6 +37,7 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements ConfigBuilder
   public final List<WorkBasketBuilder> workBasketInputFields = Lists.newArrayList();
   public final List<SearchBuilder> searchResultFields = Lists.newArrayList();
   public final List<SearchBuilder> searchInputFields = Lists.newArrayList();
+  public final List<SearchCasesBuilder> searchCaseResultFields = Lists.newArrayList();
   public final Map<String, String> roleHierarchy = new Hashtable<>();
 
   private Class caseData;
@@ -67,6 +70,11 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements ConfigBuilder
       @Override
       public Event.EventBuilder<T, R, S> forStateTransition(S from, S to) {
         return build(Set.of(from), Set.of(to));
+      }
+
+      @Override
+      public Event.EventBuilder<T, R, S> forStateTransition(EnumSet from, S to) {
+        return build(from, Set.of(to));
       }
 
       @Override
@@ -145,6 +153,11 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements ConfigBuilder
     return getSearchBuilder(searchInputFields);
   }
 
+  @Override
+  public SearchCasesBuilder searchCasesFields() {
+    return getSearchCasesBuilder(searchCaseResultFields);
+  }
+
 
   @Override
   public RoleBuilder<R> role(R... roles) {
@@ -178,6 +191,12 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements ConfigBuilder
 
   private SearchBuilder getSearchBuilder(List<SearchBuilder> searchInputFields) {
     SearchBuilder result = SearchBuilder.builder(caseData, new PropertyUtils());
+    searchInputFields.add(result);
+    return result;
+  }
+
+  private SearchCasesBuilder getSearchCasesBuilder(List<SearchCasesBuilder> searchInputFields) {
+    SearchCasesBuilder result = SearchCasesBuilder.builder(caseData, new PropertyUtils());
     searchInputFields.add(result);
     return result;
   }
