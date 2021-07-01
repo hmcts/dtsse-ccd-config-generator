@@ -20,7 +20,7 @@ public class IntegrationTest {
         tmp.getRoot().getAbsolutePath(),
         "uk.gov.hmcts"
     });
-    File expected = new File(new File(tmp.getRoot(), CaseData.class.getSimpleName()), "CaseField.json");
+    File expected = new File(new File(tmp.getRoot(), "CARE_SUPERVISION_EPO"), "CaseField.json");
     assertThat(expected).exists();
   }
 }

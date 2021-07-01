@@ -54,7 +54,7 @@ public class FPLConfigGenerationTests {
     @Before
     public void before() {
       if (!configGenerated) {
-          prodConfig = tmp.getRoot().toPath().resolve(CaseData.class.getSimpleName());
+          prodConfig = tmp.getRoot().toPath().resolve("CARE_SUPERVISION_EPO");
           generator.generateCaseTypes(tmp.getRoot());
           // Generate a second time to ensure existing config is correctly merged.
           generator.generateCaseTypes(tmp.getRoot());

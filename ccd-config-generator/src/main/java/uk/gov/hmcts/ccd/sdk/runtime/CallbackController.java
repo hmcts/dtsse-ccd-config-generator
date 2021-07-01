@@ -2,6 +2,9 @@ package uk.gov.hmcts.ccd.sdk.runtime;
 
 import com.fasterxml.jackson.databind.JavaType;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.Maps;
+import java.util.Collection;
 import java.util.Map;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
@@ -25,27 +28,27 @@ import uk.gov.hmcts.reform.ccd.client.model.SubmittedCallbackResponse;
 @RequestMapping("/callbacks")
 public class CallbackController {
 
-  @Autowired
-  private ResolvedCCDConfig<?, ?, ?> ccdConfig;
+  private final ImmutableMap<String, ResolvedCCDConfig<?, ?, ?>> caseTypeToConfig;
 
-  @Autowired
   private ObjectMapper mapper;
 
-  private final JavaType caseDetailsType;
+  private final Map<String, JavaType> caseTypeToJavaType = Maps.newHashMap();
 
   @Autowired
-  public CallbackController(ResolvedCCDConfig<?, ?, ?> ccdConfig, ObjectMapper mapper) {
-    this.ccdConfig = ccdConfig;
+  public CallbackController(Collection<ResolvedCCDConfig<?, ?, ?>> configs, ObjectMapper mapper) {
+    this.caseTypeToConfig = Maps.uniqueIndex(configs, x -> x.caseType);
     this.mapper = mapper;
-    this.caseDetailsType = mapper.getTypeFactory()
-        .constructParametricType(CaseDetails.class, ccdConfig.typeArg, ccdConfig.stateArg);
+    for (ResolvedCCDConfig<?, ?, ?> config : configs) {
+      this.caseTypeToJavaType.put(config.caseType,
+          mapper.getTypeFactory().constructParametricType(CaseDetails.class, config.typeArg, config.stateArg));
+    }
   }
 
   @SneakyThrows
   @PostMapping("/about-to-start")
   public AboutToStartOrSubmitResponse aboutToStart(@RequestBody CallbackRequest request) {
     log.info("About to start event ID: " + request.getEventId());
-    return findCallback(ccdConfig.aboutToStartCallbacks, request.getEventId())
+    return findCallback(findCaseType(request).aboutToStartCallbacks, request.getEventId())
         .handle(convertCaseDetails(request.getCaseDetails()));
   }
 
@@ -53,16 +56,18 @@ public class CallbackController {
   @PostMapping("/about-to-submit")
   public AboutToStartOrSubmitResponse aboutToSubmit(@RequestBody CallbackRequest request) {
     log.info("About to submit event ID: " + request.getEventId());
-    return findCallback(ccdConfig.aboutToSubmitCallbacks, request.getEventId())
-        .handle(convertCaseDetails(request.getCaseDetails()), convertCaseDetails(request.getCaseDetailsBefore()));
+    return findCallback(findCaseType(request).aboutToSubmitCallbacks, request.getEventId())
+        .handle(convertCaseDetails(request.getCaseDetails()),
+            convertCaseDetails(request.getCaseDetailsBefore(), request.getCaseDetails().getCaseTypeId()));
   }
 
   @SneakyThrows
   @PostMapping("/submitted")
   public SubmittedCallbackResponse submitted(@RequestBody CallbackRequest request) {
     log.info("Submitted event ID: " + request.getEventId());
-    return findCallback(ccdConfig.submittedCallbacks, request.getEventId())
-        .handle(convertCaseDetails(request.getCaseDetails()), convertCaseDetails(request.getCaseDetailsBefore()));
+    return findCallback(findCaseType(request).submittedCallbacks, request.getEventId())
+        .handle(convertCaseDetails(request.getCaseDetails()), convertCaseDetails(request.getCaseDetailsBefore(),
+            request.getCaseDetails().getCaseTypeId()));
   }
 
   @SneakyThrows
@@ -70,13 +75,24 @@ public class CallbackController {
   public AboutToStartOrSubmitResponse midEvent(@RequestBody CallbackRequest request,
                                             @RequestParam(name = "page") String page) {
     log.info("Mid event callback: {} for page {} ", request.getEventId(), page);
-    MidEvent m = ccdConfig.midEventCallbacks.get(request.getEventId(), page);
+    MidEvent m = findCaseType(request).midEventCallbacks.get(request.getEventId(), page);
     if (null == m) {
       throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Handler not found for "
           + request.getEventId() + " for page " + page);
     }
     return m.handle(convertCaseDetails(request.getCaseDetails()),
-        convertCaseDetails(request.getCaseDetailsBefore()));
+        convertCaseDetails(request.getCaseDetailsBefore(),
+            request.getCaseDetails().getCaseTypeId()));
+  }
+
+  ResolvedCCDConfig<?, ?, ?> findCaseType(CallbackRequest request) {
+    String caseType = request.getCaseDetails().getCaseTypeId();
+    if (!caseTypeToConfig.containsKey(caseType)) {
+      log.warn("No configuration found for case type " + caseType);
+      throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Case type not found: " + caseType);
+    }
+
+    return this.caseTypeToConfig.get(caseType);
   }
 
   <T> T findCallback(Map<String, T> callbacks, String eventId) {
@@ -87,9 +103,20 @@ public class CallbackController {
     return callbacks.get(eventId);
   }
 
-  @SneakyThrows
   CaseDetails convertCaseDetails(uk.gov.hmcts.reform.ccd.client.model.CaseDetails ccdDetails) {
+    return convertCaseDetails(ccdDetails, ccdDetails.getCaseTypeId());
+  }
+
+  // Allow the case type to be specified seperately since we will need to
+  // deserialize null values to an instance of the correct class.
+  @SneakyThrows
+  CaseDetails convertCaseDetails(uk.gov.hmcts.reform.ccd.client.model.CaseDetails ccdDetails,
+                                 String caseType) {
     String json = mapper.writeValueAsString(ccdDetails);
-    return mapper.readValue(json, caseDetailsType);
+    if (!caseTypeToJavaType.containsKey(caseType)) {
+      log.warn("Handler not found for " + caseType);
+      throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Handler not found for " + caseType);
+    }
+    return mapper.readValue(json, caseTypeToJavaType.get(caseType));
   }
 }

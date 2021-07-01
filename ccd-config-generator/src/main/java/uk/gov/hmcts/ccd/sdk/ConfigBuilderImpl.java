@@ -27,7 +27,7 @@ import uk.gov.hmcts.ccd.sdk.api.WorkBasket.WorkBasketBuilder;
 public class ConfigBuilderImpl<T, S, R extends HasRole> implements ConfigBuilder<T, S, R> {
 
   private final ImmutableSet<S> allStates;
-  public String caseType = "";
+  public String caseType = "default";
   public final Table<S, R, Set<Permission>> stateRolePermissions = HashBasedTable.create();
   public final Set<String> apiOnlyRoles = Sets.newHashSet();
   public final Map<String, List<Event.EventBuilder<T, R, S>>> events = Maps.newHashMap();

@@ -21,13 +21,14 @@ public class ResolvedCCDConfig<T, S, R extends HasRole> {
   public final Class<S> stateArg;
   public final Class<?> roleType;
   public final ImmutableSet<S> allStates;
+  public final String caseType;
   public final Map<String, AboutToStart<T, S>> aboutToStartCallbacks;
   public final Map<String, AboutToSubmit<T, S>> aboutToSubmitCallbacks;
   public final Map<String, Submitted<T, S>> submittedCallbacks;
   // Maps event ID and page ID to mid-event callbacks
   public final Table<String, String, MidEvent<T, S>> midEventCallbacks;
 
-  public ResolvedCCDConfig(Class<?> typeArg, Class<S> stateArg, Class<?> roleType,
+  public ResolvedCCDConfig(String caseType, Class<?> typeArg, Class<S> stateArg, Class<?> roleType,
                            ConfigBuilderImpl<T, S, R> builder, List<Event<T, R, S>> events,
                            Map<Class, Integer> types,
                            Set<S> allStates,
@@ -35,6 +36,7 @@ public class ResolvedCCDConfig<T, S, R extends HasRole> {
                            Map<String, AboutToSubmit<T, S>> aboutToSubmitCallbacks,
                            Map<String, Submitted<T, S>> submittedCallbacks,
                            Table<String, String, MidEvent<T, S>> midEventCallbacks) {
+    this.caseType = caseType;
     this.typeArg = typeArg;
     this.stateArg = stateArg;
     this.roleType = roleType;

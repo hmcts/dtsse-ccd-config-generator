@@ -5,6 +5,7 @@ import static uk.gov.hmcts.reform.fpl.enums.UserRole.HMCTS_ADMIN;
 
 
 import lombok.Data;
+import org.springframework.stereotype.Component;
 import uk.gov.hmcts.ccd.sdk.api.CaseDetails;
 import uk.gov.hmcts.ccd.sdk.api.ConfigBuilder;
 import uk.gov.hmcts.ccd.sdk.api.callback.AboutToStartOrSubmitResponse;
@@ -12,11 +13,12 @@ import uk.gov.hmcts.reform.fpl.enums.State;
 import uk.gov.hmcts.reform.fpl.enums.UserRole;
 import uk.gov.hmcts.reform.fpl.model.CaseData;
 
-
+@Component
 public class BulkCaseConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<BulkCaseConfig.BulkCase, State, UserRole> {
 
   @Override
   public void configure(ConfigBuilder<BulkCase, State, UserRole> builder) {
+    builder.caseType("bulk", "Bulk case", "Bulk case desc");
     // Duplicates event on the main CaseData class.
     // Callback handler should route correctly based on case type.
     builder.event("addFamilyManCaseNumber")
@@ -33,12 +35,15 @@ public class BulkCaseConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<BulkCa
   }
 
   private AboutToStartOrSubmitResponse<BulkCase, State> aboutToStart(
-      CaseDetails<BulkCase, State> bulkCaseStateCaseDetails) {
-    return null;
+      CaseDetails<BulkCase, State> details) {
+    details.getData().setFamilyManCaseNumber("bulk-about-to-start");
+    return AboutToStartOrSubmitResponse.<BulkCase, State>builder()
+        .data(details.getData())
+        .build();
   }
 
   @Data
-  static class BulkCase {
+  public static class BulkCase {
     private String familyManCaseNumber;
     private String caseNotes;
   }
