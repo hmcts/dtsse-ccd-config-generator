@@ -1,7 +1,6 @@
 package uk.gov.hmcts.ccd.sdk;
 
 import com.fasterxml.jackson.annotation.JsonUnwrapped;
-import com.google.common.base.Strings;
 import com.google.common.collect.HashBasedTable;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Lists;
@@ -40,10 +39,10 @@ class ConfigGenerator<T, S, R extends HasRole> {
 
   private static final String basePackage = "uk.gov.hmcts";
 
-  private List<CCDConfig<T, S, R>> configs;
+  private Collection<CCDConfig<T, S, R>> configs;
 
   @Autowired
-  public ConfigGenerator(List<CCDConfig<T, S, R>> configs) {
+  public ConfigGenerator(Collection<CCDConfig<T, S, R>> configs) {
     if (configs.isEmpty()) {
       throw new RuntimeException("Expected at least one CCDConfig implementation but none found.");
     }
@@ -53,9 +52,7 @@ class ConfigGenerator<T, S, R extends HasRole> {
   public void resolveConfig(File outputFolder) {
     initOutputDirectory(outputFolder);
     ResolvedCCDConfig resolved = resolveCCDConfig();
-    File destination = Strings.isNullOrEmpty(resolved.environment) ? outputFolder
-        : new File(outputFolder, resolved.environment);
-    writeConfig(destination, resolved);
+    writeConfig(outputFolder, resolved);
   }
 
   @SneakyThrows
@@ -92,7 +89,7 @@ class ConfigGenerator<T, S, R extends HasRole> {
 
     Map<Class, Integer> types = resolve(typeArgs[0], basePackage);
     return new ResolvedCCDConfig(typeArgs[0], typeArgs[1], typeArgs[2], builder, events, types,
-        builder.environment, allStates, aboutToStartCallbacks, aboutToSubmitCallbacks, submittedCallbacks,
+        allStates, aboutToStartCallbacks, aboutToSubmitCallbacks, submittedCallbacks,
         midEventCallbacks);
   }
 

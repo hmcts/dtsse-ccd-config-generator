@@ -8,6 +8,7 @@ import java.io.File;
 import org.junit.ClassRule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
+import uk.gov.hmcts.reform.fpl.model.CaseData;
 
 public class IntegrationTest {
   @ClassRule
@@ -19,7 +20,7 @@ public class IntegrationTest {
         tmp.getRoot().getAbsolutePath(),
         "uk.gov.hmcts"
     });
-    File expected = new File(new File(tmp.getRoot(), "production"), "CaseField.json");
+    File expected = new File(new File(tmp.getRoot(), CaseData.class.getSimpleName()), "CaseField.json");
     assertThat(expected).exists();
   }
 }

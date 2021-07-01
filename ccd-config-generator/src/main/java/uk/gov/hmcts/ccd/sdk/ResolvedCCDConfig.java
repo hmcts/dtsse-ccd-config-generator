@@ -18,7 +18,6 @@ public class ResolvedCCDConfig<T, S, R extends HasRole> {
   public final ConfigBuilderImpl<T, S, R> builder;
   public final List<Event<T, R, S>> events;
   public final Map<Class, Integer> types;
-  public final String environment;
   public final Class<S> stateArg;
   public final Class<?> roleType;
   public final ImmutableSet<S> allStates;
@@ -30,7 +29,7 @@ public class ResolvedCCDConfig<T, S, R extends HasRole> {
 
   public ResolvedCCDConfig(Class<?> typeArg, Class<S> stateArg, Class<?> roleType,
                            ConfigBuilderImpl<T, S, R> builder, List<Event<T, R, S>> events,
-                           Map<Class, Integer> types, String environment,
+                           Map<Class, Integer> types,
                            Set<S> allStates,
                            Map<String, AboutToStart<T, S>> aboutToStartCallbacks,
                            Map<String, AboutToSubmit<T, S>> aboutToSubmitCallbacks,
@@ -42,7 +41,6 @@ public class ResolvedCCDConfig<T, S, R extends HasRole> {
     this.builder = builder;
     this.events = events;
     this.types = types;
-    this.environment = environment;
     this.allStates = ImmutableSet.copyOf(allStates);
     this.aboutToStartCallbacks = aboutToStartCallbacks;
     this.aboutToSubmitCallbacks = aboutToSubmitCallbacks;

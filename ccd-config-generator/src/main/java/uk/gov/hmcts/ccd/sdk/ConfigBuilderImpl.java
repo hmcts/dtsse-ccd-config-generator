@@ -41,7 +41,6 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements ConfigBuilder
   public final Map<String, String> roleHierarchy = new Hashtable<>();
 
   private Class caseData;
-  public String environment;
   public String jurId = "";
   public String jurName = "";
   public String jurDesc = "";
@@ -111,11 +110,6 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements ConfigBuilder
     this.jurId = id;
     this.jurName = name;
     this.jurDesc = description;
-  }
-
-  @Override
-  public void setEnvironment(String env) {
-    this.environment = env;
   }
 
   @Override
