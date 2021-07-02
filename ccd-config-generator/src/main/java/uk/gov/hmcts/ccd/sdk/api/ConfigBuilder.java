@@ -14,8 +14,6 @@ public interface ConfigBuilder<T, S, R extends HasRole> {
 
   void jurisdiction(String id, String name, String description);
 
-  void setEnvironment(String env);
-
   /**
    * Set AuthorisationCaseState explicitly.
    * Note that additional AuthorisationCaseState permissions are inferred based on grants of

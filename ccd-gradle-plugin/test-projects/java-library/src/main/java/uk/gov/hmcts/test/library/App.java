@@ -4,8 +4,10 @@
 package uk.gov.hmcts.test.library;
 
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.context.annotation.ComponentScan;
 
 @SpringBootApplication
+@ComponentScan(basePackages = "uk.gov.hmcts")
 public class App {
     public String getGreeting() {
         return "Hello world.";

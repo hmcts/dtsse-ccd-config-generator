@@ -27,7 +27,7 @@ import uk.gov.hmcts.ccd.sdk.api.WorkBasket.WorkBasketBuilder;
 public class ConfigBuilderImpl<T, S, R extends HasRole> implements ConfigBuilder<T, S, R> {
 
   private final ImmutableSet<S> allStates;
-  public String caseType = "";
+  public String caseType = "default";
   public final Table<S, R, Set<Permission>> stateRolePermissions = HashBasedTable.create();
   public final Set<String> apiOnlyRoles = Sets.newHashSet();
   public final Map<String, List<Event.EventBuilder<T, R, S>>> events = Maps.newHashMap();
@@ -41,7 +41,6 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements ConfigBuilder
   public final Map<String, String> roleHierarchy = new Hashtable<>();
 
   private Class caseData;
-  public String environment;
   public String jurId = "";
   public String jurName = "";
   public String jurDesc = "";
@@ -111,11 +110,6 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements ConfigBuilder
     this.jurId = id;
     this.jurName = name;
     this.jurDesc = description;
-  }
-
-  @Override
-  public void setEnvironment(String env) {
-    this.environment = env;
   }
 
   @Override
