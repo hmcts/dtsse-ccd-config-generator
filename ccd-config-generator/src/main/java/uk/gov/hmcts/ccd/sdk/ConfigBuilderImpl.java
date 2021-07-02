@@ -128,6 +128,14 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements ConfigBuilder
   }
 
   @Override
+  public TabBuilder<T, R> tab(String tabId, String tabLabel, String showCondition) {
+    TabBuilder<T, R> result = Tab.TabBuilder.builder(caseData,
+        new PropertyUtils()).tabID(tabId).label(tabLabel).showCondition(showCondition);
+    tabs.add(result);
+    return result;
+  }
+
+  @Override
   public WorkBasketBuilder workBasketResultFields() {
     return getWorkBasketBuilder(workBasketResultFields);
   }
