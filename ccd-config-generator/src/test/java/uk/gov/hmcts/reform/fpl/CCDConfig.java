@@ -228,6 +228,9 @@ public class CCDConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<CaseData, S
 
     builder.tab("Notes", "Notes")
         .restrictedField(CaseData::getCaseNotes).exclude(CAFCASS, LOCAL_AUTHORITY);
+
+    builder.tab("ConfidentialAddress", "Confidential Address", "Country=\"UK\"")
+      .field(CaseData::getAddressField);
   }
 
   private void buildUniversalEvents() {

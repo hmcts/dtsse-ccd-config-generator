@@ -1,0 +1,13 @@
+[
+  {
+    "CaseFieldID" : "addressField",
+    "CaseTypeID" : "CARE_SUPERVISION_EPO",
+    "Channel" : "CaseWorker",
+    "LiveFrom" : "01/01/2017",
+    "TabDisplayOrder" : 13,
+    "TabFieldDisplayOrder" : 1,
+    "TabID" : "ConfidentialAddress",
+    "TabLabel" : "Confidential Address",
+    "TabShowCondition" : "Country=\"UK\""
+  }
+]
