@@ -26,8 +26,6 @@ public interface ConfigBuilder<T, S, R extends HasRole> {
 
   TabBuilder<T, R> tab(String tabId, String tabLabel);
 
-  TabBuilder<T, R> tab(String tabId, String tabLabel, String showCondition);
-
   WorkBasketBuilder<T, R> workBasketResultFields();
 
   WorkBasketBuilder<T, R> workBasketInputFields();
