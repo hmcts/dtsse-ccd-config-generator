@@ -25,27 +25,6 @@
     "CaseTypeID": "CARE_SUPERVISION_EPO",
     "UserRole": "caseworker-publiclaw-courtadmin",
     "LiveFrom": "01/01/2017",
-    "CaseFieldID": "hearingDetails"
-  },
-  {
-    "CRUD": "R",
-    "CaseTypeID": "CARE_SUPERVISION_EPO",
-    "UserRole": "caseworker-publiclaw-courtadmin",
-    "LiveFrom": "01/01/2017",
-    "CaseFieldID": "hearing"
-  },
-  {
-    "CRUD": "R",
-    "CaseTypeID": "CARE_SUPERVISION_EPO",
-    "UserRole": "caseworker-publiclaw-courtadmin",
-    "LiveFrom": "01/01/2017",
-    "CaseFieldID": "servedCaseManagementOrders"
-  },
-  {
-    "CRUD": "R",
-    "CaseTypeID": "CARE_SUPERVISION_EPO",
-    "UserRole": "caseworker-publiclaw-courtadmin",
-    "LiveFrom": "01/01/2017",
     "CaseFieldID": "standardDirectionOrder"
   },
   {
@@ -60,7 +39,7 @@
     "CaseTypeID": "CARE_SUPERVISION_EPO",
     "UserRole": "caseworker-publiclaw-courtadmin",
     "LiveFrom": "01/01/2017",
-    "CaseFieldID": "orderCollection"
+    "CaseFieldID": "placements"
   },
   {
     "CRUD": "R",
@@ -96,13 +75,6 @@
     "UserRole": "caseworker-publiclaw-courtadmin",
     "LiveFrom": "01/01/2017",
     "CaseFieldID": "others"
-  },
-  {
-    "CRUD": "R",
-    "CaseTypeID": "CARE_SUPERVISION_EPO",
-    "UserRole": "caseworker-publiclaw-courtadmin",
-    "LiveFrom": "01/01/2017",
-    "CaseFieldID": "representatives"
   },
   {
     "CRUD": "R",
@@ -291,7 +263,7 @@
     "CaseTypeID": "CARE_SUPERVISION_EPO",
     "UserRole": "caseworker-publiclaw-courtadmin",
     "LiveFrom": "01/01/2017",
-    "CaseFieldID": "noticeOfProceedingsBundle"
+    "CaseFieldID": "confidentialPlacements"
   },
   {
     "CRUD": "R",
@@ -305,7 +277,7 @@
     "CaseTypeID": "CARE_SUPERVISION_EPO",
     "UserRole": "caseworker-publiclaw-courtadmin",
     "LiveFrom": "01/01/2017",
-    "CaseFieldID": "scannedDocuments"
+    "CaseFieldID": "placementsWithoutPlacementOrder"
   },
   {
     "CRUD": "R",
@@ -340,7 +312,7 @@
     "CaseTypeID": "CARE_SUPERVISION_EPO",
     "UserRole": "caseworker-publiclaw-courtadmin",
     "LiveFrom": "01/01/2017",
-    "CaseFieldID": "paymentHistory"
+    "CaseFieldID": "sharedDraftCMODocument"
   },
   {
     "CRUD": "CRU",

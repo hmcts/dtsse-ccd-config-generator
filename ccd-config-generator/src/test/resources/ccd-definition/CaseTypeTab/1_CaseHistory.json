@@ -5,6 +5,7 @@
     "CaseTypeID": "CARE_SUPERVISION_EPO",
     "CaseFieldID": "caseHistory",
     "Channel": "CaseWorker",
+    "UserRole": "",
     "TabFieldDisplayOrder": 1,
     "TabLabel": "History",
     "TabID": "CaseHistory"

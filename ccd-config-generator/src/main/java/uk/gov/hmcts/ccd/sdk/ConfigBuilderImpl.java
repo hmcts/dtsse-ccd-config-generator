@@ -32,7 +32,7 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements ConfigBuilder
   public final Set<String> apiOnlyRoles = Sets.newHashSet();
   public final Map<String, List<Event.EventBuilder<T, R, S>>> events = Maps.newHashMap();
   public final List<Field.FieldBuilder> explicitFields = Lists.newArrayList();
-  public final List<TabBuilder> tabs = Lists.newArrayList();
+  public final List<TabBuilder<T, R>> tabs = Lists.newArrayList();
   public final List<WorkBasketBuilder> workBasketResultFields = Lists.newArrayList();
   public final List<WorkBasketBuilder> workBasketInputFields = Lists.newArrayList();
   public final List<SearchBuilder> searchResultFields = Lists.newArrayList();
