@@ -25,14 +25,56 @@
     "CaseTypeID": "CARE_SUPERVISION_EPO",
     "UserRole": "caseworker-publiclaw-cafcass",
     "LiveFrom": "01/01/2017",
-    "CaseFieldID": "hearing"
+    "CaseFieldID": "standardDirectionOrder"
   },
   {
     "CRUD": "R",
     "CaseTypeID": "CARE_SUPERVISION_EPO",
     "UserRole": "caseworker-publiclaw-cafcass",
     "LiveFrom": "01/01/2017",
-    "CaseFieldID": "standardDirectionOrder"
+    "CaseFieldID": "confidentialChildren"
+  },
+  {
+    "CRUD": "R",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "UserRole": "caseworker-publiclaw-cafcass",
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "confidentialOthers"
+  },
+  {
+    "CRUD": "R",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "UserRole": "caseworker-publiclaw-cafcass",
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "confidentialPlacements"
+  },
+  {
+    "CRUD": "R",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "UserRole": "caseworker-publiclaw-cafcass",
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "confidentialRespondents"
+  },
+  {
+    "CRUD": "R",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "UserRole": "caseworker-publiclaw-cafcass",
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "documentsSentToParties"
+  },
+  {
+    "CRUD": "R",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "UserRole": "caseworker-publiclaw-cafcass",
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "placements"
+  },
+  {
+    "CRUD": "R",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "UserRole": "caseworker-publiclaw-cafcass",
+    "LiveFrom": "01/01/2017",
+    "CaseFieldID": "placementsWithoutPlacementOrder"
   },
   {
     "CRUD": "R",

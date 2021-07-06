@@ -18,7 +18,6 @@ import com.google.common.collect.Table;
 import java.io.File;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Hashtable;
@@ -89,20 +88,12 @@ class AuthorisationCaseFieldGenerator {
         fieldRolePermissions.put("caseHistory", role, CRU);
 
         // Add read for any tab fields
-        for (TabBuilder tb : config.builder.tabs) {
-          Tab tab = tb.build();
-          if (!tab.getExcludedRoles().contains(role)) {
-            for (TabField field : tab.getFields()) {
-
-              HasRole[] roles = tab.getFieldsExcludedByRole().get(field.getId());
-              if (roles != null) {
-                if (Arrays.stream(roles).anyMatch(x -> x.getRole().equals(role))) {
-                  continue;
-                }
-              }
-              if (!fieldRolePermissions.contains(field.getId(), role)) {
-                fieldRolePermissions.put(field.getId(), role, Collections.singleton(Permission.R));
-              }
+        for (TabBuilder<T, R> tb : config.builder.tabs) {
+          Tab<T, R> tab = tb.build();
+          for (TabField field : tab.getFields()) {
+            boolean giveReadPermission = tab.getRorRolesAsString().contains(role) || tab.getForRoles().isEmpty();
+            if (giveReadPermission && !fieldRolePermissions.contains(field.getId(), role)) {
+              fieldRolePermissions.put(field.getId(), role, Collections.singleton(Permission.R));
             }
           }
         }
