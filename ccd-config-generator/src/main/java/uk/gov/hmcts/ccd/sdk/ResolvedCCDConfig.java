@@ -18,31 +18,31 @@ public class ResolvedCCDConfig<T, S, R extends HasRole> {
   public final ConfigBuilderImpl<T, S, R> builder;
   public final List<Event<T, R, S>> events;
   public final Map<Class, Integer> types;
-  public final String environment;
   public final Class<S> stateArg;
   public final Class<?> roleType;
   public final ImmutableSet<S> allStates;
+  public final String caseType;
   public final Map<String, AboutToStart<T, S>> aboutToStartCallbacks;
   public final Map<String, AboutToSubmit<T, S>> aboutToSubmitCallbacks;
   public final Map<String, Submitted<T, S>> submittedCallbacks;
   // Maps event ID and page ID to mid-event callbacks
   public final Table<String, String, MidEvent<T, S>> midEventCallbacks;
 
-  public ResolvedCCDConfig(Class<?> typeArg, Class<S> stateArg, Class<?> roleType,
+  public ResolvedCCDConfig(String caseType, Class<?> typeArg, Class<S> stateArg, Class<?> roleType,
                            ConfigBuilderImpl<T, S, R> builder, List<Event<T, R, S>> events,
-                           Map<Class, Integer> types, String environment,
+                           Map<Class, Integer> types,
                            Set<S> allStates,
                            Map<String, AboutToStart<T, S>> aboutToStartCallbacks,
                            Map<String, AboutToSubmit<T, S>> aboutToSubmitCallbacks,
                            Map<String, Submitted<T, S>> submittedCallbacks,
                            Table<String, String, MidEvent<T, S>> midEventCallbacks) {
+    this.caseType = caseType;
     this.typeArg = typeArg;
     this.stateArg = stateArg;
     this.roleType = roleType;
     this.builder = builder;
     this.events = events;
     this.types = types;
-    this.environment = environment;
     this.allStates = ImmutableSet.copyOf(allStates);
     this.aboutToStartCallbacks = aboutToStartCallbacks;
     this.aboutToSubmitCallbacks = aboutToSubmitCallbacks;

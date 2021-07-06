@@ -1,13 +1,9 @@
 package uk.gov.hmcts.ccd.sdk;
 
 import java.util.List;
-import org.junit.Before;
 import org.junit.Test;
-import org.reflections.Reflections;
 import uk.gov.hmcts.ccd.sdk.api.CCDConfig;
 import uk.gov.hmcts.ccd.sdk.api.ConfigBuilder;
-import uk.gov.hmcts.ccd.sdk.api.Event;
-import uk.gov.hmcts.ccd.sdk.api.Webhook;
 import uk.gov.hmcts.example.missingcomplex.Applicant;
 import uk.gov.hmcts.example.missingcomplex.MissingComplex;
 import uk.gov.hmcts.reform.fpl.enums.State;
@@ -31,7 +27,7 @@ public class UnitTest {
       }
     }
 
-    ConfigGenerator<CaseData, State, UserRole> generator = new ConfigGenerator<>(List.of(new NPEBug()));
+    ConfigResolver<CaseData, State, UserRole> generator = new ConfigResolver<>(List.of(new NPEBug()));
     generator.resolveCCDConfig();
   }
 
@@ -43,7 +39,7 @@ public class UnitTest {
       }
     }
 
-    ConfigGenerator<MissingComplex, State, UserRole> generator = new ConfigGenerator<>(List.of(new MissingBug()));
+    ConfigResolver<MissingComplex, State, UserRole> generator = new ConfigResolver<>(List.of(new MissingBug()));
     ResolvedCCDConfig<MissingComplex, State, UserRole> resolved = generator.resolveCCDConfig();
     assertThat(resolved.types).containsKeys(Applicant.class);
   }
