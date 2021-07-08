@@ -62,11 +62,9 @@ class CaseTypeTabGenerator {
     int tabFieldDisplayOrder = 1;
     for (TabField tabField : tab.getFields()) {
       Map<String, Object> field = buildField(caseType, tab.getTabID() + role, tabField.getId(),
-          tab.getLabel(), tabDisplayOrder, tabFieldDisplayOrder++, role);
-      if (tab.getShowCondition() != null) {
+          tab.getLabel(), tabDisplayOrder, tabFieldDisplayOrder, role);
+      if (tab.getShowCondition() != null && tabFieldDisplayOrder == 1) {
         field.put("TabShowCondition", tab.getShowCondition());
-        // Only set tab show condition on first field.
-        tab.setShowCondition(null);
       }
       if (tabField.getShowCondition() != null) {
         field.put("FieldShowCondition", tabField.getShowCondition());
@@ -81,6 +79,7 @@ class CaseTypeTabGenerator {
         caseFields.add(fieldInfo);
       }
       result.add(field);
+      tabFieldDisplayOrder++;
     }
   }
 
