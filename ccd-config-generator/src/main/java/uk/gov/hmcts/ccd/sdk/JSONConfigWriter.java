@@ -38,8 +38,6 @@ public class JSONConfigWriter<T, S, R extends HasRole> {
     }
 
     Table<String, R, Set<Permission>> eventPermissions = buildEventRolePermissions(config.events);
-    AuthorisationCaseEventGenerator.generate(outputfolder, eventPermissions,
-        config.builder.caseType);
     AuthorisationCaseFieldGenerator.generate(outputfolder, config, eventPermissions);
 
     generateJurisdiction(outputfolder, config.builder);
