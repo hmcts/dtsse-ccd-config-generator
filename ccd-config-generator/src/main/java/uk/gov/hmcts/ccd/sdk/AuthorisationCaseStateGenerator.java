@@ -12,11 +12,11 @@ import java.nio.file.Paths;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import java.util.Map.Entry;
 import java.util.Set;
 import lombok.SneakyThrows;
 import org.objenesis.Objenesis;
 import org.objenesis.ObjenesisStd;
+import org.springframework.stereotype.Component;
 import uk.gov.hmcts.ccd.sdk.JsonUtils.CRUDMerger;
 import uk.gov.hmcts.ccd.sdk.api.CCD;
 import uk.gov.hmcts.ccd.sdk.api.Event;
@@ -24,34 +24,32 @@ import uk.gov.hmcts.ccd.sdk.api.HasAccessControl;
 import uk.gov.hmcts.ccd.sdk.api.HasRole;
 import uk.gov.hmcts.ccd.sdk.api.Permission;
 
-class AuthorisationCaseStateGenerator {
+@Component
+class AuthorisationCaseStateGenerator<T, S, R extends HasRole> implements ConfigWriter<T, S, R> {
 
   @SneakyThrows
-  public static <T, S, R extends HasRole> void generate(
-      File root, ResolvedCCDConfig<T, S, R> config,
-      Table<String, R, Set<Permission>> eventRolePermissions,
-      Table<S, R, Set<Permission>> stateRolePermissions) {
+  public void write(File root, ResolvedCCDConfig<T, S, R> config) {
 
     for (Event<T, R, S> event : config.events) {
       if (event.getPreState().equals(config.allStates)) {
         continue;
       }
 
-      Map<R, Set<Permission>> rolePermissions = eventRolePermissions.row(event.getId());
-      for (Entry<R, Set<Permission>> rolePermission : rolePermissions.entrySet()) {
+      SetMultimap<R, Permission> grants = event.getGrants();
+      for (R role : event.getGrants().keys()) {
         // For state transitions if you have C then you get both states.
         // Otherwise you only need permission for the destination state.
         if (event.getPreState() != event.getPostState()) {
-          if (rolePermission.getValue().contains(Permission.C) && !event.getPreState().isEmpty()) {
-            addPermissions(stateRolePermissions, event.getPreState(), rolePermission.getKey(),
-                rolePermission.getValue());
+          if (grants.get(role).contains(Permission.C) && !event.getPreState().isEmpty()) {
+            addPermissions(config.builder.stateRolePermissions, event.getPreState(), role,
+                grants.get(role));
             // They get R only on the destination state.
-            addPermissions(stateRolePermissions, event.getPostState(), rolePermission.getKey(),
+            addPermissions(config.builder.stateRolePermissions, event.getPostState(), role,
                 Collections.singleton(Permission.R));
           }
         } else {
-          addPermissions(stateRolePermissions, event.getPostState(), rolePermission.getKey(),
-              rolePermission.getValue());
+          addPermissions(config.builder.stateRolePermissions, event.getPostState(), role,
+              grants.get(role));
         }
       }
     }
@@ -66,14 +64,14 @@ class AuthorisationCaseStateGenerator {
           HasAccessControl accessHolder = objenesis.newInstance(klass);
           SetMultimap<HasRole, Permission> roleGrants = accessHolder.getGrants();
           for (HasRole key : roleGrants.keys()) {
-            addPermissions(stateRolePermissions, Set.of(state), (R)key, roleGrants.get(key));
+            addPermissions(config.builder.stateRolePermissions, Set.of(state), (R)key, roleGrants.get(key));
           }
         }
       }
     }
 
     List<Map<String, Object>> result = Lists.newArrayList();
-    for (Cell<S, R, Set<Permission>> stateRolePermission : stateRolePermissions.cellSet()) {
+    for (Cell<S, R, Set<Permission>> stateRolePermission : config.builder.stateRolePermissions.cellSet()) {
       if (stateRolePermission.getColumnKey().toString().matches("\\[.*?\\]")) {
         // Ignore CCD roles.
         continue;

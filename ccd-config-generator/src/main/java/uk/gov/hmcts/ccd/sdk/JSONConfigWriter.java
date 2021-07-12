@@ -1,10 +1,7 @@
 package uk.gov.hmcts.ccd.sdk;
 
-import com.google.common.collect.HashBasedTable;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Lists;
-import com.google.common.collect.SetMultimap;
-import com.google.common.collect.Table;
 import com.google.common.io.MoreFiles;
 import com.google.common.io.RecursiveDeleteOption;
 import java.io.File;
@@ -13,12 +10,9 @@ import java.nio.file.Paths;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import lombok.SneakyThrows;
 import org.springframework.stereotype.Component;
-import uk.gov.hmcts.ccd.sdk.api.Event;
 import uk.gov.hmcts.ccd.sdk.api.HasRole;
-import uk.gov.hmcts.ccd.sdk.api.Permission;
 
 @Component
 public class JSONConfigWriter<T, S, R extends HasRole> {
@@ -45,9 +39,6 @@ public class JSONConfigWriter<T, S, R extends HasRole> {
     CaseTypeTabGenerator.generate(outputfolder, config.builder.caseType, config.builder);
     SearchCasesResultFieldsGenerator.generate(
         outputfolder, config.builder.caseType, config.builder.searchCaseResultFields);
-    Table<String, R, Set<Permission>> eventPermissions = buildEventRolePermissions(config.events);
-    AuthorisationCaseStateGenerator.generate(outputfolder, config, eventPermissions,
-        config.builder.stateRolePermissions);
     WorkBasketGenerator.generate(outputfolder, config.builder.caseType, config.builder);
     SearchFieldAndResultGenerator.generate(outputfolder, config.builder.caseType, config.builder);
     CaseRoleGenerator.generate(outputfolder, config.builder.caseType, config.roleType);
@@ -85,16 +76,5 @@ public class JSONConfigWriter<T, S, R extends HasRole> {
     ));
     Path output = Paths.get(outputfolder.getPath(),"Jurisdiction.json");
     JsonUtils.mergeInto(output, fields, new JsonUtils.AddMissing(), "ID");
-  }
-
-  Table<String, R, Set<Permission>> buildEventRolePermissions(List<Event<T, R, S>> events) {
-    Table<String, R, Set<Permission>> eventRolePermissions = HashBasedTable.create();
-    for (Event<T, R, S> event : events) {
-      SetMultimap<R, Permission> grants = event.getGrants();
-      for (R role : grants.keySet()) {
-        eventRolePermissions.put(event.getId(), role, grants.get(role));
-      }
-    }
-    return eventRolePermissions;
   }
 }
