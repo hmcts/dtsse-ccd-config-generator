@@ -143,6 +143,16 @@ public class Event<T, R extends HasRole, S> {
       return this;
     }
 
+    public EventBuilder<T, R, S> grant(HasAccessControl... accessControls) {
+      for (HasAccessControl accessControl : accessControls) {
+        for (var entry : accessControl.getGrants().entries()) {
+          grants.put((R)entry.getKey(), entry.getValue());
+        }
+      }
+
+      return this;
+    }
+
     public EventBuilder<T, R, S> retries(int... retries) {
       for (Webhook value : Webhook.values()) {
         setRetries(value, retries);

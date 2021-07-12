@@ -1,31 +1,10 @@
 [
   {
-    "CRUD": "CRU",
-    "CaseTypeID": "CARE_SUPERVISION_EPO",
-    "LiveFrom": "01/01/2017",
-    "UserRole": "caseworker-publiclaw-courtadmin",
-    "CaseStateID": "Gatekeeping"
-  },
-  {
     "CRUD": "R",
     "CaseTypeID": "CARE_SUPERVISION_EPO",
     "LiveFrom": "01/01/2017",
-    "UserRole": "caseworker-publiclaw-systemupdate",
-    "CaseStateID": "Gatekeeping"
-  },
-  {
-    "CRUD": "CRU",
-    "CaseTypeID": "CARE_SUPERVISION_EPO",
-    "LiveFrom": "01/01/2017",
-    "UserRole": "caseworker-publiclaw-courtadmin",
-    "CaseStateID": "Submitted"
-  },
-  {
-    "CRUD": "C",
-    "CaseTypeID": "CARE_SUPERVISION_EPO",
-    "LiveFrom": "01/01/2017",
-    "UserRole": "caseworker-publiclaw-systemupdate",
-    "CaseStateID": "Submitted"
+    "UserRole": "caseworker-publiclaw-solicitor",
+    "CaseStateID": "Open"
   },
   {
     "CRUD": "R",
@@ -49,11 +28,53 @@
     "CaseStateID": "Open"
   },
   {
-    "CRUD": "R",
+    "CRUD": "CRU",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "LiveFrom": "01/01/2017",
+    "UserRole": "caseworker-publiclaw-solicitor",
+    "CaseStateID": "Gatekeeping"
+  },
+  {
+    "CRUD": "CRU",
     "CaseTypeID": "CARE_SUPERVISION_EPO",
     "LiveFrom": "01/01/2017",
     "UserRole": "caseworker-publiclaw-courtadmin",
-    "CaseStateID": "Deleted"
+    "CaseStateID": "Gatekeeping"
+  },
+  {
+    "CRUD": "R",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "LiveFrom": "01/01/2017",
+    "UserRole": "caseworker-publiclaw-systemupdate",
+    "CaseStateID": "Gatekeeping"
+  },
+  {
+    "CRUD": "CRU",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "LiveFrom": "01/01/2017",
+    "UserRole": "caseworker-publiclaw-solicitor",
+    "CaseStateID": "Submitted"
+  },
+  {
+    "CRUD": "CRU",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "LiveFrom": "01/01/2017",
+    "UserRole": "caseworker-publiclaw-courtadmin",
+    "CaseStateID": "Submitted"
+  },
+  {
+    "CRUD": "C",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "LiveFrom": "01/01/2017",
+    "UserRole": "caseworker-publiclaw-systemupdate",
+    "CaseStateID": "Submitted"
+  },
+  {
+    "CRUD": "R",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "LiveFrom": "01/01/2017",
+    "UserRole": "caseworker-publiclaw-solicitor",
+    "CaseStateID": "PREPARE_FOR_HEARING"
   },
   {
     "CRUD": "R",
@@ -63,10 +84,17 @@
     "CaseStateID": "PREPARE_FOR_HEARING"
   },
   {
-    "CRUD" : "R",
-    "CaseStateID" : "Open",
-    "CaseTypeID" : "CARE_SUPERVISION_EPO",
-    "LiveFrom" : "01/01/2017",
-    "UserRole" : "caseworker-publiclaw-solicitor"
+    "CRUD": "R",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "LiveFrom": "01/01/2017",
+    "UserRole": "caseworker-publiclaw-solicitor",
+    "CaseStateID": "Deleted"
+  },
+  {
+    "CRUD": "R",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "LiveFrom": "01/01/2017",
+    "UserRole": "caseworker-publiclaw-courtadmin",
+    "CaseStateID": "Deleted"
   }
 ]
