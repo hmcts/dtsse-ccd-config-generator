@@ -10,14 +10,15 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import uk.gov.hmcts.ccd.sdk.api.CCDConfig;
+import uk.gov.hmcts.ccd.sdk.generator.JSONConfigGenerator;
 
 @Configuration
-class MultiCaseTypeGenerator {
+class MultiCaseTypeResolver {
   private final List<CCDConfig<?, ?, ?>> configs;
-  private final JSONConfigWriter writer;
+  private final JSONConfigGenerator writer;
 
   @Autowired
-  public MultiCaseTypeGenerator(List<CCDConfig<?, ?, ?>> configs, JSONConfigWriter writer) {
+  public MultiCaseTypeResolver(List<CCDConfig<?, ?, ?>> configs, JSONConfigGenerator writer) {
     this.configs = configs;
     this.writer = writer;
   }

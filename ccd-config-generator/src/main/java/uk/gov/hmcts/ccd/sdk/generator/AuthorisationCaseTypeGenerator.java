@@ -1,4 +1,4 @@
-package uk.gov.hmcts.ccd.sdk;
+package uk.gov.hmcts.ccd.sdk.generator;
 
 import com.google.common.collect.Lists;
 import java.io.File;
@@ -7,10 +7,11 @@ import java.nio.file.Paths;
 import java.util.List;
 import java.util.Map;
 import org.springframework.stereotype.Component;
+import uk.gov.hmcts.ccd.sdk.ResolvedCCDConfig;
 import uk.gov.hmcts.ccd.sdk.api.HasRole;
 
 @Component
-class AuthorisationCaseTypeGenerator<T, S, R extends HasRole> implements ConfigWriter<T, S, R> {
+class AuthorisationCaseTypeGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, S, R> {
   public void write(File root, ResolvedCCDConfig<T, S, R> config) {
 
     Class<?> roleEnum = config.roleType;

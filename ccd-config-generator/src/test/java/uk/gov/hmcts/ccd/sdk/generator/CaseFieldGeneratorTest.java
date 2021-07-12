@@ -1,4 +1,4 @@
-package uk.gov.hmcts.ccd.sdk;
+package uk.gov.hmcts.ccd.sdk.generator;
 
 import org.assertj.core.api.Condition;
 import org.junit.Test;
@@ -10,7 +10,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import uk.gov.hmcts.ccd.sdk.CaseFieldGenerator;
+import uk.gov.hmcts.ccd.sdk.generator.CaseFieldGenerator;
 
 
 import static org.assertj.core.api.Assertions.assertThat;

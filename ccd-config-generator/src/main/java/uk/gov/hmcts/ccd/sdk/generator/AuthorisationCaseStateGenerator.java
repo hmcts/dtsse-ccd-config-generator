@@ -1,4 +1,4 @@
-package uk.gov.hmcts.ccd.sdk;
+package uk.gov.hmcts.ccd.sdk.generator;
 
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
@@ -17,7 +17,7 @@ import lombok.SneakyThrows;
 import org.objenesis.Objenesis;
 import org.objenesis.ObjenesisStd;
 import org.springframework.stereotype.Component;
-import uk.gov.hmcts.ccd.sdk.JsonUtils.CRUDMerger;
+import uk.gov.hmcts.ccd.sdk.ResolvedCCDConfig;
 import uk.gov.hmcts.ccd.sdk.api.CCD;
 import uk.gov.hmcts.ccd.sdk.api.Event;
 import uk.gov.hmcts.ccd.sdk.api.HasAccessControl;
@@ -25,7 +25,7 @@ import uk.gov.hmcts.ccd.sdk.api.HasRole;
 import uk.gov.hmcts.ccd.sdk.api.Permission;
 
 @Component
-class AuthorisationCaseStateGenerator<T, S, R extends HasRole> implements ConfigWriter<T, S, R> {
+class AuthorisationCaseStateGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, S, R> {
 
   @SneakyThrows
   public void write(File root, ResolvedCCDConfig<T, S, R> config) {
@@ -86,7 +86,7 @@ class AuthorisationCaseStateGenerator<T, S, R extends HasRole> implements Config
     }
 
     Path output = Paths.get(root.getPath(), "AuthorisationCaseState.json");
-    JsonUtils.mergeInto(output, result, new CRUDMerger(), "CaseStateID", "UserRole");
+    JsonUtils.mergeInto(output, result, new JsonUtils.CRUDMerger(), "CaseStateID", "UserRole");
   }
 
   private static <R extends HasRole, S> void addPermissions(

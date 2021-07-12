@@ -37,7 +37,7 @@ import java.util.stream.Collectors;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.junit4.SpringRunner;
-import uk.gov.hmcts.reform.fpl.model.CaseData;
+import uk.gov.hmcts.ccd.sdk.generator.JsonUtils;
 
 @SpringBootTest(properties = { "config-generator.basePackage=uk.gov.hmcts" })
 @RunWith(SpringRunner.class)
@@ -48,7 +48,7 @@ public class FPLConfigGenerationTests {
     private static Path prodConfig;
 
     @Autowired
-    private MultiCaseTypeGenerator generator;
+    private MultiCaseTypeResolver generator;
     private static boolean configGenerated;
 
     @Before

@@ -1,4 +1,4 @@
-package uk.gov.hmcts.ccd.sdk;
+package uk.gov.hmcts.ccd.sdk.generator;
 
 import static com.google.common.base.Strings.isNullOrEmpty;
 
@@ -10,14 +10,15 @@ import java.nio.file.Paths;
 import java.util.List;
 import java.util.Map;
 import org.springframework.stereotype.Component;
-import uk.gov.hmcts.ccd.sdk.JsonUtils.AddMissing;
+import uk.gov.hmcts.ccd.sdk.ResolvedCCDConfig;
 import uk.gov.hmcts.ccd.sdk.api.HasRole;
 import uk.gov.hmcts.ccd.sdk.api.WorkBasket;
 import uk.gov.hmcts.ccd.sdk.api.WorkBasket.WorkBasketBuilder;
 import uk.gov.hmcts.ccd.sdk.api.WorkBasketField;
+import uk.gov.hmcts.ccd.sdk.generator.JsonUtils.AddMissing;
 
 @Component
-class WorkBasketGenerator<T, S, R extends HasRole> implements ConfigWriter<T, S, R> {
+class WorkBasketGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, S, R> {
 
   public void write(File root, ResolvedCCDConfig<T, S, R> config) {
     generateFields(root, config.caseType, config.builder.workBasketInputFields, "WorkBasketInputFields");

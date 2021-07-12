@@ -1,4 +1,4 @@
-package uk.gov.hmcts.ccd.sdk;
+package uk.gov.hmcts.ccd.sdk.generator;
 
 import com.google.common.base.Strings;
 import com.google.common.collect.Lists;
@@ -10,11 +10,12 @@ import java.util.List;
 import java.util.Map;
 import lombok.SneakyThrows;
 import org.springframework.stereotype.Component;
+import uk.gov.hmcts.ccd.sdk.ResolvedCCDConfig;
 import uk.gov.hmcts.ccd.sdk.api.CCD;
 import uk.gov.hmcts.ccd.sdk.api.HasRole;
 
 @Component
-class StateGenerator<T, S, R extends HasRole> implements ConfigWriter<T, S, R> {
+class StateGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, S, R> {
 
   @SneakyThrows
   public void write(File root, ResolvedCCDConfig<T, S, R> config) {

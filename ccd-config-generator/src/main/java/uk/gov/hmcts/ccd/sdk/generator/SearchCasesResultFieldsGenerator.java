@@ -1,4 +1,4 @@
-package uk.gov.hmcts.ccd.sdk;
+package uk.gov.hmcts.ccd.sdk.generator;
 
 import com.google.common.collect.Maps;
 import java.io.File;
@@ -9,12 +9,14 @@ import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import org.springframework.stereotype.Component;
-import uk.gov.hmcts.ccd.sdk.JsonUtils.AddMissing;
+import uk.gov.hmcts.ccd.sdk.ResolvedCCDConfig;
 import uk.gov.hmcts.ccd.sdk.api.HasRole;
 import uk.gov.hmcts.ccd.sdk.api.SearchCasesResultField;
+import uk.gov.hmcts.ccd.sdk.generator.JsonUtils.AddMissing;
 
 @Component
-class SearchCasesResultFieldsGenerator<T, S, R extends HasRole> implements ConfigWriter<T, S, R> {
+class SearchCasesResultFieldsGenerator<T, S, R extends HasRole> implements
+    ConfigGenerator<T, S, R> {
 
   public void write(File root, ResolvedCCDConfig<T, S, R> config) {
     List<SearchCasesResultField> fields = config.builder.searchCaseResultFields.stream()

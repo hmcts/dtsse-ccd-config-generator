@@ -1,4 +1,4 @@
-package uk.gov.hmcts.ccd.sdk;
+package uk.gov.hmcts.ccd.sdk.generator;
 
 import static org.apache.commons.lang3.StringUtils.capitalize;
 import static uk.gov.hmcts.ccd.sdk.FieldUtils.getCaseFields;
@@ -23,7 +23,7 @@ import java.util.Optional;
 import java.util.Set;
 import net.jodah.typetools.TypeResolver;
 import org.springframework.stereotype.Component;
-import uk.gov.hmcts.ccd.sdk.JsonUtils.OverwriteSpecific;
+import uk.gov.hmcts.ccd.sdk.ResolvedCCDConfig;
 import uk.gov.hmcts.ccd.sdk.api.CCD;
 import uk.gov.hmcts.ccd.sdk.api.ComplexType;
 import uk.gov.hmcts.ccd.sdk.api.Event;
@@ -33,7 +33,7 @@ import uk.gov.hmcts.ccd.sdk.api.Label;
 import uk.gov.hmcts.ccd.sdk.type.FieldType;
 
 @Component
-class CaseFieldGenerator<T, S, R extends HasRole> implements ConfigWriter<T, S, R> {
+class CaseFieldGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, S, R> {
 
   // The field type set from code always takes precedence,
   // so eg. if a field changes type it gets updated.
@@ -52,7 +52,7 @@ class CaseFieldGenerator<T, S, R extends HasRole> implements ConfigWriter<T, S, 
     fields.addAll(getExplicitFields(config));
 
     Path path = Paths.get(outputFolder.getPath(), "CaseField.json");
-    JsonUtils.mergeInto(path, fields, new OverwriteSpecific(OVERWRITES_FIELDS), "ID");
+    JsonUtils.mergeInto(path, fields, new JsonUtils.OverwriteSpecific(OVERWRITES_FIELDS), "ID");
   }
 
   public static List<Map<String, Object>> toComplex(Class dataClass, String caseTypeId) {

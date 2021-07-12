@@ -1,4 +1,4 @@
-package uk.gov.hmcts.ccd.sdk;
+package uk.gov.hmcts.ccd.sdk.generator;
 
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Lists;
@@ -12,25 +12,26 @@ import java.util.List;
 import java.util.Map;
 import lombok.SneakyThrows;
 import org.springframework.stereotype.Component;
+import uk.gov.hmcts.ccd.sdk.ConfigBuilderImpl;
+import uk.gov.hmcts.ccd.sdk.ResolvedCCDConfig;
 import uk.gov.hmcts.ccd.sdk.api.HasRole;
 
 @Component
-public class JSONConfigWriter<T, S, R extends HasRole> {
+public class JSONConfigGenerator<T, S, R extends HasRole> {
 
-  private final Collection<ConfigWriter<T, S, R>> writers;
+  private final Collection<ConfigGenerator<T, S, R>> writers;
 
-  public JSONConfigWriter(Collection<ConfigWriter<T, S, R>> writers) {
+  public JSONConfigGenerator(Collection<ConfigGenerator<T, S, R>> writers) {
     this.writers = writers;
   }
 
-  void writeConfig(File outputfolder, ResolvedCCDConfig<T, S, R> config) {
+  public void writeConfig(File outputfolder, ResolvedCCDConfig<T, S, R> config) {
     initOutputDirectory(outputfolder);
     outputfolder.mkdirs();
 
-    for (ConfigWriter<T, S, R> writer : this.writers) {
+    for (ConfigGenerator<T, S, R> writer : this.writers) {
       writer.write(outputfolder, config);
     }
-
 
     generateJurisdiction(outputfolder, config.builder);
     generateCaseType(outputfolder, config.builder);

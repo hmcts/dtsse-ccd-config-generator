@@ -1,7 +1,7 @@
-package uk.gov.hmcts.ccd.sdk;
+package uk.gov.hmcts.ccd.sdk.generator;
 
 import static java.util.stream.Collectors.toList;
-import static uk.gov.hmcts.ccd.sdk.JsonUtils.mergeInto;
+import static uk.gov.hmcts.ccd.sdk.generator.JsonUtils.mergeInto;
 
 import com.google.common.base.Strings;
 import com.google.common.collect.Maps;
@@ -13,12 +13,13 @@ import java.util.List;
 import java.util.Map;
 import lombok.SneakyThrows;
 import org.springframework.stereotype.Component;
-import uk.gov.hmcts.ccd.sdk.JsonUtils.AddMissing;
+import uk.gov.hmcts.ccd.sdk.ResolvedCCDConfig;
 import uk.gov.hmcts.ccd.sdk.api.CCD;
 import uk.gov.hmcts.ccd.sdk.api.HasRole;
+import uk.gov.hmcts.ccd.sdk.generator.JsonUtils.AddMissing;
 
 @Component
-public class CaseRoleGenerator<T, S, R extends HasRole> implements ConfigWriter<T, S, R> {
+public class CaseRoleGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, S, R> {
 
   @SneakyThrows
   public void write(final File rootOutputfolder, ResolvedCCDConfig<T, S, R> config) {

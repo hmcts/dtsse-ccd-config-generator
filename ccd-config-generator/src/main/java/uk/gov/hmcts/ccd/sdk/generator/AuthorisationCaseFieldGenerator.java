@@ -1,4 +1,4 @@
-package uk.gov.hmcts.ccd.sdk;
+package uk.gov.hmcts.ccd.sdk.generator;
 
 import static com.google.common.base.Strings.isNullOrEmpty;
 import static org.apache.commons.lang3.StringUtils.capitalize;
@@ -29,7 +29,7 @@ import java.util.Set;
 import org.objenesis.Objenesis;
 import org.objenesis.ObjenesisStd;
 import org.springframework.stereotype.Component;
-import uk.gov.hmcts.ccd.sdk.JsonUtils.CRUDMerger;
+import uk.gov.hmcts.ccd.sdk.ResolvedCCDConfig;
 import uk.gov.hmcts.ccd.sdk.api.CCD;
 import uk.gov.hmcts.ccd.sdk.api.Event;
 import uk.gov.hmcts.ccd.sdk.api.Field;
@@ -47,7 +47,7 @@ import uk.gov.hmcts.ccd.sdk.api.WorkBasket.WorkBasketBuilder;
 import uk.gov.hmcts.ccd.sdk.api.WorkBasketField;
 
 @Component
-class AuthorisationCaseFieldGenerator<T, S, R extends HasRole> implements ConfigWriter<T, S, R> {
+class AuthorisationCaseFieldGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, S, R> {
 
   public void write(
       File root, ResolvedCCDConfig<T, S, R> config) {
@@ -167,7 +167,7 @@ class AuthorisationCaseFieldGenerator<T, S, R extends HasRole> implements Config
 
       String filename = role.replace("[", "").replace("]", "");
       Path output = Paths.get(folder.getPath(), filename + ".json");
-      JsonUtils.mergeInto(output, permissions, new CRUDMerger(), "CaseFieldID",
+      JsonUtils.mergeInto(output, permissions, new JsonUtils.CRUDMerger(), "CaseFieldID",
           "UserRole");
     }
   }
