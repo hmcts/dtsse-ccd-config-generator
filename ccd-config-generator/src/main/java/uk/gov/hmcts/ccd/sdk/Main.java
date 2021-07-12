@@ -26,7 +26,7 @@ class Main {
         SpringApplication.run(types.iterator().next(), args)) {
 
       File outputDir = new File(args[0]);
-      context.getBean(MultiCaseTypeGenerator.class).generateCaseTypes(outputDir);
+      context.getBean(MultiCaseTypeResolver.class).generateCaseTypes(outputDir);
     }
   }
 }

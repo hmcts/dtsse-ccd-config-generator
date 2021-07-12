@@ -1,9 +1,10 @@
-package uk.gov.hmcts.ccd.sdk;
+package uk.gov.hmcts.ccd.sdk.generator;
 
 import com.google.common.collect.Maps;
 import org.assertj.core.util.Lists;
 import org.junit.Test;
-import uk.gov.hmcts.ccd.sdk.JsonUtils.OverwriteSpecific;
+import uk.gov.hmcts.ccd.sdk.generator.JsonUtils;
+import uk.gov.hmcts.ccd.sdk.generator.JsonUtils.OverwriteSpecific;
 
 import java.util.List;
 import java.util.Map;

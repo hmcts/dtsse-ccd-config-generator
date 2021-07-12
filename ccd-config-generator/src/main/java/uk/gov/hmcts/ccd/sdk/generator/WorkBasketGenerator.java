@@ -1,4 +1,4 @@
-package uk.gov.hmcts.ccd.sdk;
+package uk.gov.hmcts.ccd.sdk.generator;
 
 import static com.google.common.base.Strings.isNullOrEmpty;
 
@@ -9,16 +9,20 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.List;
 import java.util.Map;
-import uk.gov.hmcts.ccd.sdk.JsonUtils.AddMissing;
+import org.springframework.stereotype.Component;
+import uk.gov.hmcts.ccd.sdk.ResolvedCCDConfig;
+import uk.gov.hmcts.ccd.sdk.api.HasRole;
 import uk.gov.hmcts.ccd.sdk.api.WorkBasket;
 import uk.gov.hmcts.ccd.sdk.api.WorkBasket.WorkBasketBuilder;
 import uk.gov.hmcts.ccd.sdk.api.WorkBasketField;
+import uk.gov.hmcts.ccd.sdk.generator.JsonUtils.AddMissing;
 
-class WorkBasketGenerator {
+@Component
+class WorkBasketGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, S, R> {
 
-  public static void generate(File root, String caseType, ConfigBuilderImpl builder) {
-    generateFields(root, caseType, builder.workBasketInputFields, "WorkBasketInputFields");
-    generateFields(root, caseType, builder.workBasketResultFields, "WorkBasketResultFields");
+  public void write(File root, ResolvedCCDConfig<T, S, R> config) {
+    generateFields(root, config.caseType, config.builder.workBasketInputFields, "WorkBasketInputFields");
+    generateFields(root, config.caseType, config.builder.workBasketResultFields, "WorkBasketResultFields");
   }
 
   private static void generateFields(File root, String caseType,

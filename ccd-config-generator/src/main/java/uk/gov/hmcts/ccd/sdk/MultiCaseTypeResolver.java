@@ -10,14 +10,17 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import uk.gov.hmcts.ccd.sdk.api.CCDConfig;
+import uk.gov.hmcts.ccd.sdk.generator.JSONConfigGenerator;
 
 @Configuration
-class MultiCaseTypeGenerator {
+class MultiCaseTypeResolver {
   private final List<CCDConfig<?, ?, ?>> configs;
+  private final JSONConfigGenerator writer;
 
   @Autowired
-  public MultiCaseTypeGenerator(List<CCDConfig<?, ?, ?>> configs) {
+  public MultiCaseTypeResolver(List<CCDConfig<?, ?, ?>> configs, JSONConfigGenerator writer) {
     this.configs = configs;
+    this.writer = writer;
   }
 
   @Bean
@@ -38,7 +41,7 @@ class MultiCaseTypeGenerator {
     for (ResolvedCCDConfig<?, ?, ?> c : loadConfigs()) {
       File f = new File(outFolder, c.caseType);
       f.mkdirs();
-      new JSONConfigWriter().writeConfig(f, c);
+      writer.writeConfig(f, c);
     }
   }
 

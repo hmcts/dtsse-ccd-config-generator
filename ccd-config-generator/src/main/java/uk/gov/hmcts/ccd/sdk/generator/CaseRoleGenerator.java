@@ -1,7 +1,7 @@
-package uk.gov.hmcts.ccd.sdk;
+package uk.gov.hmcts.ccd.sdk.generator;
 
 import static java.util.stream.Collectors.toList;
-import static uk.gov.hmcts.ccd.sdk.JsonUtils.mergeInto;
+import static uk.gov.hmcts.ccd.sdk.generator.JsonUtils.mergeInto;
 
 import com.google.common.base.Strings;
 import com.google.common.collect.Maps;
@@ -12,21 +12,23 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import lombok.SneakyThrows;
-import uk.gov.hmcts.ccd.sdk.JsonUtils.AddMissing;
+import org.springframework.stereotype.Component;
+import uk.gov.hmcts.ccd.sdk.ResolvedCCDConfig;
 import uk.gov.hmcts.ccd.sdk.api.CCD;
 import uk.gov.hmcts.ccd.sdk.api.HasRole;
+import uk.gov.hmcts.ccd.sdk.generator.JsonUtils.AddMissing;
 
-public class CaseRoleGenerator {
+@Component
+public class CaseRoleGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, S, R> {
 
   @SneakyThrows
-  public static void generate(final File rootOutputfolder, String caseType,
-                              final Class<?> roleClass) {
+  public void write(final File rootOutputfolder, ResolvedCCDConfig<T, S, R> config) {
 
     final Path path = Paths.get(rootOutputfolder.getPath(), "CaseRoles.json");
 
-    final List<Map<String, Object>> caseRoles = Arrays.stream(roleClass.getEnumConstants())
+    final List<Map<String, Object>> caseRoles = Arrays.stream(config.roleType.getEnumConstants())
         .filter(x -> ((HasRole)x).getRole().matches("^\\[.+\\]$"))
-        .map(o -> enumToJsonMap(caseType, roleClass, o, ((HasRole) o).getRole()))
+        .map(o -> enumToJsonMap(config.caseType, config.roleType, o, ((HasRole) o).getRole()))
         .collect(toList());
 
     mergeInto(path, caseRoles, new AddMissing(), "ID");

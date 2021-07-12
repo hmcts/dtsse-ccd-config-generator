@@ -1,4 +1,4 @@
-package uk.gov.hmcts.ccd.sdk;
+package uk.gov.hmcts.ccd.sdk.generator;
 
 import static uk.gov.hmcts.ccd.sdk.FieldUtils.isUnwrappedField;
 
@@ -12,16 +12,20 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.List;
 import java.util.Map;
-import uk.gov.hmcts.ccd.sdk.JsonUtils.AddMissing;
+import org.springframework.stereotype.Component;
+import uk.gov.hmcts.ccd.sdk.ResolvedCCDConfig;
 import uk.gov.hmcts.ccd.sdk.api.Event;
 import uk.gov.hmcts.ccd.sdk.api.Field;
 import uk.gov.hmcts.ccd.sdk.api.FieldCollection;
 import uk.gov.hmcts.ccd.sdk.api.HasRole;
+import uk.gov.hmcts.ccd.sdk.generator.JsonUtils.AddMissing;
 
-class CaseEventToComplexTypesGenerator {
+@Component
+class CaseEventToComplexTypesGenerator<T, S, R extends HasRole> implements
+    ConfigGenerator<T, S, R> {
 
-  public static <T, R extends HasRole, S> void writeEvents(File root, List<Event<T, R, S>> events) {
-    for (Event event : events) {
+  public void write(File root, ResolvedCCDConfig<T, S, R> config) {
+    for (Event event : config.events) {
       FieldCollection collection = event.getFields().build();
       List<Map<String, Object>> entries = Lists.newArrayList();
       List<FieldCollection.FieldCollectionBuilder> complexFields = collection.getComplexFields();

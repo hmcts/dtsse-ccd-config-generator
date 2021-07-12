@@ -43,10 +43,6 @@ public class CCDConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<CaseData, S
 
   private ConfigBuilder<CaseData, State, UserRole> builder;
 
-  protected String environment() {
-        return "production";
-    }
-
   public void configure(ConfigBuilder<CaseData, State, UserRole> builder) {
     this.builder = builder;
     builder.setCallbackHost("${CCD_DEF_CASE_SERVICE_BASE_URL}");

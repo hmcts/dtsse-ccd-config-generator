@@ -1,4 +1,4 @@
-package uk.gov.hmcts.ccd.sdk;
+package uk.gov.hmcts.ccd.sdk.generator;
 
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
@@ -7,17 +7,21 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.List;
 import java.util.Map;
-import uk.gov.hmcts.ccd.sdk.JsonUtils.AddMissing;
+import org.springframework.stereotype.Component;
+import uk.gov.hmcts.ccd.sdk.ResolvedCCDConfig;
 import uk.gov.hmcts.ccd.sdk.api.ComplexType;
 import uk.gov.hmcts.ccd.sdk.api.HasLabel;
+import uk.gov.hmcts.ccd.sdk.api.HasRole;
+import uk.gov.hmcts.ccd.sdk.generator.JsonUtils.AddMissing;
 
-class FixedListGenerator {
+@Component
+class FixedListGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, S, R> {
 
-  public static void generate(File root, Map<Class, Integer> types) {
+  public void write(File root, ResolvedCCDConfig<T, S, R> config) {
     File dir = root.toPath().resolve("FixedLists").toFile();
     dir.mkdir();
 
-    for (Class c : types.keySet()) {
+    for (Class c : config.types.keySet()) {
       ComplexType complexType = (ComplexType) c.getAnnotation(ComplexType.class);
       if (c.isEnum() && (complexType == null || complexType.generate())) {
         List<Map<String, Object>> fields = Lists.newArrayList();

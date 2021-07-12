@@ -1,4 +1,4 @@
-package uk.gov.hmcts.ccd.sdk;
+package uk.gov.hmcts.ccd.sdk.generator;
 
 import com.google.common.collect.Maps;
 import java.io.File;
@@ -8,20 +8,24 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
-import uk.gov.hmcts.ccd.sdk.JsonUtils.AddMissing;
-import uk.gov.hmcts.ccd.sdk.api.SearchCases.SearchCasesBuilder;
+import org.springframework.stereotype.Component;
+import uk.gov.hmcts.ccd.sdk.ResolvedCCDConfig;
+import uk.gov.hmcts.ccd.sdk.api.HasRole;
 import uk.gov.hmcts.ccd.sdk.api.SearchCasesResultField;
+import uk.gov.hmcts.ccd.sdk.generator.JsonUtils.AddMissing;
 
-class SearchCasesResultFieldsGenerator {
+@Component
+class SearchCasesResultFieldsGenerator<T, S, R extends HasRole> implements
+    ConfigGenerator<T, S, R> {
 
-  public static void generate(File root, String caseType, List<SearchCasesBuilder> searchCasesBuilders) {
-    List<SearchCasesResultField> fields = searchCasesBuilders.stream()
+  public void write(File root, ResolvedCCDConfig<T, S, R> config) {
+    List<SearchCasesResultField> fields = config.builder.searchCaseResultFields.stream()
         .flatMap(builder -> builder.build().getFields().stream())
         .collect(Collectors.toList());
 
     List<Map<String, Object>> jsonFields = IntStream
         .range(0, fields.size())
-        .mapToObj(i -> buildField(caseType, fields.get(i), i + 1))
+        .mapToObj(i -> buildField(config.caseType, fields.get(i), i + 1))
         .collect(Collectors.toList());
 
     if (!jsonFields.isEmpty()) {
