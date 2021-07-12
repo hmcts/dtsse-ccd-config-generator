@@ -7,17 +7,19 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.List;
 import java.util.Map;
+import org.springframework.stereotype.Component;
 import uk.gov.hmcts.ccd.sdk.JsonUtils.AddMissing;
+import uk.gov.hmcts.ccd.sdk.api.HasRole;
 import uk.gov.hmcts.ccd.sdk.api.Search;
 import uk.gov.hmcts.ccd.sdk.api.Search.SearchBuilder;
 import uk.gov.hmcts.ccd.sdk.api.SearchField;
 
+@Component
+class SearchFieldAndResultGenerator<T, S, R extends HasRole> implements ConfigWriter<T, S, R> {
 
-class SearchFieldAndResultGenerator {
-
-  public static void generate(File root, String caseType, ConfigBuilderImpl builder) {
-    generateFields(root, caseType, builder.searchInputFields, "SearchInputFields");
-    generateFields(root, caseType, builder.searchResultFields, "SearchResultFields");
+  public void write(File root, ResolvedCCDConfig<T, S, R> config) {
+    generateFields(root, config.caseType, config.builder.searchInputFields, "SearchInputFields");
+    generateFields(root, config.caseType, config.builder.searchResultFields, "SearchResultFields");
   }
 
   private static void generateFields(

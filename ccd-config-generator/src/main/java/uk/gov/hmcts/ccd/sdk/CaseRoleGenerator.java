@@ -12,21 +12,22 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import lombok.SneakyThrows;
+import org.springframework.stereotype.Component;
 import uk.gov.hmcts.ccd.sdk.JsonUtils.AddMissing;
 import uk.gov.hmcts.ccd.sdk.api.CCD;
 import uk.gov.hmcts.ccd.sdk.api.HasRole;
 
-public class CaseRoleGenerator {
+@Component
+public class CaseRoleGenerator<T, S, R extends HasRole> implements ConfigWriter<T, S, R> {
 
   @SneakyThrows
-  public static void generate(final File rootOutputfolder, String caseType,
-                              final Class<?> roleClass) {
+  public void write(final File rootOutputfolder, ResolvedCCDConfig<T, S, R> config) {
 
     final Path path = Paths.get(rootOutputfolder.getPath(), "CaseRoles.json");
 
-    final List<Map<String, Object>> caseRoles = Arrays.stream(roleClass.getEnumConstants())
+    final List<Map<String, Object>> caseRoles = Arrays.stream(config.roleType.getEnumConstants())
         .filter(x -> ((HasRole)x).getRole().matches("^\\[.+\\]$"))
-        .map(o -> enumToJsonMap(caseType, roleClass, o, ((HasRole) o).getRole()))
+        .map(o -> enumToJsonMap(config.caseType, config.roleType, o, ((HasRole) o).getRole()))
         .collect(toList());
 
     mergeInto(path, caseRoles, new AddMissing(), "ID");
