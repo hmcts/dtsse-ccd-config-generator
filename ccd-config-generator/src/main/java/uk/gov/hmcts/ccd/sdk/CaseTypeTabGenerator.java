@@ -9,29 +9,30 @@ import java.nio.file.Paths;
 import java.util.Hashtable;
 import java.util.List;
 import java.util.Map;
+import org.springframework.stereotype.Component;
 import uk.gov.hmcts.ccd.sdk.JsonUtils.AddMissing;
 import uk.gov.hmcts.ccd.sdk.api.HasRole;
 import uk.gov.hmcts.ccd.sdk.api.Tab;
 import uk.gov.hmcts.ccd.sdk.api.Tab.TabBuilder;
 import uk.gov.hmcts.ccd.sdk.api.TabField;
 
-class CaseTypeTabGenerator {
+@Component
+class CaseTypeTabGenerator<T, S, R extends HasRole> implements ConfigWriter<T, S, R> {
 
   // The field type set from code always takes precedence,
   // so eg. if a field changes type it gets updated.
   private static final ImmutableSet<String> OVERWRITES_FIELDS = ImmutableSet.of();
 
-  public static <T, R extends HasRole, S> void generate(File root, String caseType,
-      ConfigBuilderImpl<T, S, R> builder) {
+  public void write(File root, ResolvedCCDConfig<T, S, R> config) {
 
     List<Map<String, Object>> result = Lists.newArrayList();
-    result.add(buildField(caseType, "CaseHistory", "caseHistory", "History", 1, 1, ""));
+    result.add(buildField(config.caseType, "CaseHistory", "caseHistory", "History", 1, 1, ""));
 
     List<Map<String, Object>> caseFields = Lists.newArrayList();
 
     int tabDisplayOrder = 2;
 
-    for (TabBuilder<T, R> tb : builder.tabs) {
+    for (TabBuilder<T, R> tb : config.builder.tabs) {
       Tab<T, R> tab = tb.build();
       List<String> roles = tab.getRorRolesAsString();
 
@@ -41,7 +42,7 @@ class CaseTypeTabGenerator {
       }
 
       for (String role : roles) {
-        addTab(caseType, result, caseFields, tabDisplayOrder++, tab, role);
+        addTab(config.caseType, result, caseFields, tabDisplayOrder++, tab, role);
       }
     }
 

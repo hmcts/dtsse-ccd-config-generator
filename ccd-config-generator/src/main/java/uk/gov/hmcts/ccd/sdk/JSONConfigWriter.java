@@ -34,7 +34,6 @@ public class JSONConfigWriter<T, S, R extends HasRole> {
 
     generateJurisdiction(outputfolder, config.builder);
     generateCaseType(outputfolder, config.builder);
-    CaseTypeTabGenerator.generate(outputfolder, config.builder.caseType, config.builder);
     SearchCasesResultFieldsGenerator.generate(
         outputfolder, config.builder.caseType, config.builder.searchCaseResultFields);
     WorkBasketGenerator.generate(outputfolder, config.builder.caseType, config.builder);
