@@ -9,17 +9,20 @@ import java.nio.file.Paths;
 import java.util.List;
 import java.util.Map;
 import lombok.SneakyThrows;
+import org.springframework.stereotype.Component;
 import uk.gov.hmcts.ccd.sdk.api.CCD;
+import uk.gov.hmcts.ccd.sdk.api.HasRole;
 
-class StateGenerator {
+@Component
+class StateGenerator<T, S, R extends HasRole> implements ConfigWriter<T, S, R> {
 
   @SneakyThrows
-  public static void generate(File root, String caseType, Class<?> statetype) {
+  public void write(File root, ResolvedCCDConfig<T, S, R> config) {
     List<Map<String, Object>> result = Lists.newArrayList();
     int i = 1;
-    if (statetype.isEnum()) {
-      for (Object enumConstant : statetype.getEnumConstants()) {
-        Map<String, Object> field = enumToJsonMap(caseType, statetype, enumConstant,
+    if (config.stateArg.isEnum()) {
+      for (Object enumConstant : config.stateArg.getEnumConstants()) {
+        Map<String, Object> field = enumToJsonMap(config.caseType, config.stateArg, enumConstant,
             enumConstant.toString());
         field.put("DisplayOrder", i++);
         result.add(field);
