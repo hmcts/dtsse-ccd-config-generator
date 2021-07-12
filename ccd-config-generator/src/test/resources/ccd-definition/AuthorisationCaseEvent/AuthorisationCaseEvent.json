@@ -70,7 +70,7 @@
     "UserRole" : "caseworker-publiclaw-courtadmin"
   },
   {
-    "CRUD" : "R",
+    "CRUD" : "CRU",
     "CaseEventID" : "addNotes",
     "CaseTypeID" : "CARE_SUPERVISION_EPO",
     "LiveFrom" : "01/01/2017",
