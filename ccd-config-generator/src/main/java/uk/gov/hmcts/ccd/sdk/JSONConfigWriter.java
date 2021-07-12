@@ -37,8 +37,6 @@ public class JSONConfigWriter<T, S, R extends HasRole> {
       writer.write(outputfolder, config);
     }
 
-    Table<String, R, Set<Permission>> eventPermissions = buildEventRolePermissions(config.events);
-    AuthorisationCaseFieldGenerator.generate(outputfolder, config, eventPermissions);
 
     generateJurisdiction(outputfolder, config.builder);
     generateCaseType(outputfolder, config.builder);
@@ -47,6 +45,7 @@ public class JSONConfigWriter<T, S, R extends HasRole> {
     CaseTypeTabGenerator.generate(outputfolder, config.builder.caseType, config.builder);
     SearchCasesResultFieldsGenerator.generate(
         outputfolder, config.builder.caseType, config.builder.searchCaseResultFields);
+    Table<String, R, Set<Permission>> eventPermissions = buildEventRolePermissions(config.events);
     AuthorisationCaseStateGenerator.generate(outputfolder, config, eventPermissions,
         config.builder.stateRolePermissions);
     WorkBasketGenerator.generate(outputfolder, config.builder.caseType, config.builder);

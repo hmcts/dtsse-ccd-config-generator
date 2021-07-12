@@ -28,6 +28,7 @@ import java.util.Optional;
 import java.util.Set;
 import org.objenesis.Objenesis;
 import org.objenesis.ObjenesisStd;
+import org.springframework.stereotype.Component;
 import uk.gov.hmcts.ccd.sdk.JsonUtils.CRUDMerger;
 import uk.gov.hmcts.ccd.sdk.api.CCD;
 import uk.gov.hmcts.ccd.sdk.api.Event;
@@ -45,37 +46,35 @@ import uk.gov.hmcts.ccd.sdk.api.WorkBasket;
 import uk.gov.hmcts.ccd.sdk.api.WorkBasket.WorkBasketBuilder;
 import uk.gov.hmcts.ccd.sdk.api.WorkBasketField;
 
-class AuthorisationCaseFieldGenerator {
+@Component
+class AuthorisationCaseFieldGenerator<T, S, R extends HasRole> implements ConfigWriter<T, S, R> {
 
-  public static <T, S, R extends HasRole> void generate(
-      File root, ResolvedCCDConfig<T, S, R> config, Table<String, R,
-      Set<Permission>> eventRolePermissions) {
+  public void write(
+      File root, ResolvedCCDConfig<T, S, R> config) {
 
     Table<String, String, Set<Permission>> fieldRolePermissions = HashBasedTable.create();
     // Add field permissions based on event permissions.
-    for (Event event : config.events) {
-      Map<R, Set<Permission>> eventPermissions = eventRolePermissions.row(event.getId());
+    for (Event<T, R, S> event : config.events) {
       List<Field.FieldBuilder> fields = event.getFields().build().getFields();
       for (Field.FieldBuilder fb : fields) {
 
-        for (Entry<R, Set<Permission>> rolePermission : eventPermissions.entrySet()) {
-          if (event.getHistoryOnlyRoles().contains(rolePermission.getKey())) {
+        for (R role : event.getGrants().keys()) {
+          if (event.getHistoryOnlyRoles().contains(role)) {
             continue;
           }
           Set<Permission> perm = fb.build().isImmutable()
               ? Permission.CR
-              : rolePermission.getValue();
+              : event.getGrants().get(role);
           if (!perm.contains(Permission.D) && fb.build().isMutableList()) {
             perm.add(Permission.D);
           }
 
           String id = fb.build().getId();
-          String role = rolePermission.getKey().getRole();
 
-          if (fieldRolePermissions.contains(id, role)) {
-            fieldRolePermissions.get(id, role).addAll(perm);
+          if (fieldRolePermissions.contains(id, role.getRole())) {
+            fieldRolePermissions.get(id, role.getRole()).addAll(perm);
           } else {
-            fieldRolePermissions.put(id, role, new HashSet<>(perm));
+            fieldRolePermissions.put(id, role.getRole(), new HashSet<>(perm));
           }
         }
       }
