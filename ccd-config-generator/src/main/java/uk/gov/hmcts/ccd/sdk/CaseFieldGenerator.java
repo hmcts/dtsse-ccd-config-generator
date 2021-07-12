@@ -22,6 +22,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import net.jodah.typetools.TypeResolver;
+import org.springframework.stereotype.Component;
 import uk.gov.hmcts.ccd.sdk.JsonUtils.OverwriteSpecific;
 import uk.gov.hmcts.ccd.sdk.api.CCD;
 import uk.gov.hmcts.ccd.sdk.api.ComplexType;
@@ -31,13 +32,15 @@ import uk.gov.hmcts.ccd.sdk.api.HasRole;
 import uk.gov.hmcts.ccd.sdk.api.Label;
 import uk.gov.hmcts.ccd.sdk.type.FieldType;
 
-class CaseFieldGenerator {
+@Component
+class CaseFieldGenerator<T, S, R extends HasRole> implements ConfigWriter<T, S, R> {
 
   // The field type set from code always takes precedence,
   // so eg. if a field changes type it gets updated.
   private static final ImmutableSet<String> OVERWRITES_FIELDS = ImmutableSet.of();
 
-  public static <T, S, R extends HasRole> void generateCaseFields(
+  @Override
+  public void write(
       File outputFolder, ResolvedCCDConfig<T, S, R> config) {
     List<Map<String, Object>> fields = toComplex(config.typeArg, config.builder.caseType);
 
@@ -238,4 +241,5 @@ class CaseFieldGenerator {
     result.put("SecurityClassification", "Public");
     return result;
   }
+
 }

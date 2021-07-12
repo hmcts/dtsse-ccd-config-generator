@@ -14,10 +14,12 @@ import uk.gov.hmcts.ccd.sdk.api.CCDConfig;
 @Configuration
 class MultiCaseTypeGenerator {
   private final List<CCDConfig<?, ?, ?>> configs;
+  private final JSONConfigWriter writer;
 
   @Autowired
-  public MultiCaseTypeGenerator(List<CCDConfig<?, ?, ?>> configs) {
+  public MultiCaseTypeGenerator(List<CCDConfig<?, ?, ?>> configs, JSONConfigWriter writer) {
     this.configs = configs;
+    this.writer = writer;
   }
 
   @Bean
@@ -38,7 +40,7 @@ class MultiCaseTypeGenerator {
     for (ResolvedCCDConfig<?, ?, ?> c : loadConfigs()) {
       File f = new File(outFolder, c.caseType);
       f.mkdirs();
-      new JSONConfigWriter().writeConfig(f, c);
+      writer.writeConfig(f, c);
     }
   }
 

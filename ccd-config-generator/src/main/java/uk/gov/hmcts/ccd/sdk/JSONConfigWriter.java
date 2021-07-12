@@ -10,19 +10,33 @@ import com.google.common.io.RecursiveDeleteOption;
 import java.io.File;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import lombok.SneakyThrows;
+import org.springframework.stereotype.Component;
 import uk.gov.hmcts.ccd.sdk.api.Event;
 import uk.gov.hmcts.ccd.sdk.api.HasRole;
 import uk.gov.hmcts.ccd.sdk.api.Permission;
 
+@Component
 public class JSONConfigWriter<T, S, R extends HasRole> {
+
+  private final Collection<ConfigWriter<T, S, R>> writers;
+
+  public JSONConfigWriter(Collection<ConfigWriter<T, S, R>> writers) {
+    this.writers = writers;
+  }
 
   void writeConfig(File outputfolder, ResolvedCCDConfig<T, S, R> config) {
     initOutputDirectory(outputfolder);
     outputfolder.mkdirs();
+
+    for (ConfigWriter<T, S, R> writer : this.writers) {
+      writer.write(outputfolder, config);
+    }
+
     new CaseEventGenerator<T, S, R>().writeEvents(outputfolder, config);
     CaseEventToFieldsGenerator.writeEvents(outputfolder, config.events, config.builder.caseType,
         config.builder.callbackHost, config.midEventCallbacks);
@@ -32,7 +46,7 @@ public class JSONConfigWriter<T, S, R extends HasRole> {
     AuthorisationCaseEventGenerator.generate(outputfolder, eventPermissions,
         config.builder.caseType);
     AuthorisationCaseFieldGenerator.generate(outputfolder, config, eventPermissions);
-    CaseFieldGenerator.generateCaseFields(outputfolder, config);
+
     generateJurisdiction(outputfolder, config.builder);
     generateCaseType(outputfolder, config.builder);
     FixedListGenerator.generate(outputfolder, config.types);
