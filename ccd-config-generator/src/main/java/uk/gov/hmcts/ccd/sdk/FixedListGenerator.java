@@ -7,17 +7,20 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.List;
 import java.util.Map;
+import org.springframework.stereotype.Component;
 import uk.gov.hmcts.ccd.sdk.JsonUtils.AddMissing;
 import uk.gov.hmcts.ccd.sdk.api.ComplexType;
 import uk.gov.hmcts.ccd.sdk.api.HasLabel;
+import uk.gov.hmcts.ccd.sdk.api.HasRole;
 
-class FixedListGenerator {
+@Component
+class FixedListGenerator<T, S, R extends HasRole> implements ConfigWriter<T, S, R> {
 
-  public static void generate(File root, Map<Class, Integer> types) {
+  public void write(File root, ResolvedCCDConfig<T, S, R> config) {
     File dir = root.toPath().resolve("FixedLists").toFile();
     dir.mkdir();
 
-    for (Class c : types.keySet()) {
+    for (Class c : config.types.keySet()) {
       ComplexType complexType = (ComplexType) c.getAnnotation(ComplexType.class);
       if (c.isEnum() && (complexType == null || complexType.generate())) {
         List<Map<String, Object>> fields = Lists.newArrayList();

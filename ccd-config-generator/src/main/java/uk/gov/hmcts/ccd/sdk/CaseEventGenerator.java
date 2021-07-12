@@ -10,14 +10,16 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
+import org.springframework.stereotype.Component;
 import uk.gov.hmcts.ccd.sdk.JsonUtils.AddMissing;
 import uk.gov.hmcts.ccd.sdk.api.Event;
 import uk.gov.hmcts.ccd.sdk.api.HasRole;
 import uk.gov.hmcts.ccd.sdk.api.Webhook;
 
-class CaseEventGenerator<T, S, R extends HasRole> {
+@Component
+class CaseEventGenerator<T, S, R extends HasRole> implements ConfigWriter<T, S, R> {
 
-  public void writeEvents(File root, ResolvedCCDConfig<T, S, R> config) {
+  public void write(File root, ResolvedCCDConfig<T, S, R> config) {
 
     File folder = new File(root.getPath(), "CaseEvent");
     folder.mkdir();

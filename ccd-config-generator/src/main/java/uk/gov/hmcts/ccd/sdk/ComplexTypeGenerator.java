@@ -6,15 +6,18 @@ import java.nio.file.Paths;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+import org.springframework.stereotype.Component;
 import uk.gov.hmcts.ccd.sdk.JsonUtils.AddMissing;
 import uk.gov.hmcts.ccd.sdk.api.ComplexType;
+import uk.gov.hmcts.ccd.sdk.api.HasRole;
 
-class ComplexTypeGenerator {
+@Component
+class ComplexTypeGenerator<T, S, R extends HasRole> implements ConfigWriter<T, S, R> {
 
-  public static void generate(File root, String caseType, Map<Class, Integer> types) {
+  public void write(File root, ResolvedCCDConfig<T, S, R> config) {
     File complexTypes = new File(root, "ComplexTypes");
     complexTypes.mkdir();
-    types = types.entrySet().stream().filter(x -> !x.getKey().isEnum())
+    Map<Class, Integer> types = config.types.entrySet().stream().filter(x -> !x.getKey().isEnum())
         .collect(Collectors.toMap(x -> x.getKey(), x -> x.getValue()));
 
     if (types.isEmpty()) {
@@ -31,7 +34,7 @@ class ComplexTypeGenerator {
         continue;
       }
 
-      List<Map<String, Object>> fields = CaseFieldGenerator.toComplex(c, caseType);
+      List<Map<String, Object>> fields = CaseFieldGenerator.toComplex(c, config.caseType);
 
       for (Map<String, Object> info : fields) {
         info.put("ListElementCode", info.get("ID"));

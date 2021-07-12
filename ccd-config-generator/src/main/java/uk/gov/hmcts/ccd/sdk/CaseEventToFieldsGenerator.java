@@ -12,6 +12,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.List;
 import java.util.Map;
+import org.springframework.stereotype.Component;
 import uk.gov.hmcts.ccd.sdk.JsonUtils.AddMissing;
 import uk.gov.hmcts.ccd.sdk.api.Event;
 import uk.gov.hmcts.ccd.sdk.api.Field;
@@ -19,14 +20,14 @@ import uk.gov.hmcts.ccd.sdk.api.FieldCollection;
 import uk.gov.hmcts.ccd.sdk.api.HasRole;
 import uk.gov.hmcts.ccd.sdk.api.callback.MidEvent;
 
-class CaseEventToFieldsGenerator {
+@Component
+class CaseEventToFieldsGenerator<T, S, R extends HasRole> implements ConfigWriter<T, S, R> {
 
-  public static <T, R extends HasRole, S> void writeEvents(File root, List<Event<T, R, S>> events,
-                                                           String caseType, String baseUrl,
-                                                           Table<String, String, MidEvent<T, S>> midEventCallbacks) {
+  public void write(File root, ResolvedCCDConfig<T, S, R> config) {
     // Make a copy for use in tracking which callbacks have been written.
-    midEventCallbacks = HashBasedTable.create(midEventCallbacks);
-    for (Event<T, R, S> event : events) {
+    Table<String, String, MidEvent<T, S>> midEventCallbacks =
+        HashBasedTable.create(config.midEventCallbacks);
+    for (Event<T, R, S> event : config.events) {
       FieldCollection collection = event.getFields().build();
       if (collection.getFields().size() > 0) {
         List<Map<String, Object>> entries = Lists.newArrayList();
@@ -36,7 +37,7 @@ class CaseEventToFieldsGenerator {
           entries.add(info);
           info.put("LiveFrom", "01/01/2017");
           info.put("CaseEventID", event.getId());
-          info.put("CaseTypeID", caseType);
+          info.put("CaseTypeID", config.caseType);
           Field field = fb.build();
           info.put("CaseFieldID", field.getId());
           String context =
@@ -60,7 +61,7 @@ class CaseEventToFieldsGenerator {
           }
 
           if (midEventCallbacks.contains(event.getId(), pageId.toString())) {
-            info.put("CallBackURLMidEvent", baseUrl + "/callbacks/mid-event?page="
+            info.put("CallBackURLMidEvent", config.builder.callbackHost + "/callbacks/mid-event?page="
                 + URLEncoder.encode(pageId.toString(), StandardCharsets.UTF_8));
             midEventCallbacks.remove(event.getId(), pageId.toString());
           }
