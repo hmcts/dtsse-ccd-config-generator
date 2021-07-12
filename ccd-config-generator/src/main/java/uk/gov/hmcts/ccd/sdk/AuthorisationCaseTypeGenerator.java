@@ -6,11 +6,14 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.List;
 import java.util.Map;
+import org.springframework.stereotype.Component;
 import uk.gov.hmcts.ccd.sdk.api.HasRole;
 
-class AuthorisationCaseTypeGenerator {
-  public static void generate(File root, String caseType, Class roleEnum) {
+@Component
+class AuthorisationCaseTypeGenerator<T, S, R extends HasRole> implements ConfigWriter<T, S, R> {
+  public void write(File root, ResolvedCCDConfig<T, S, R> config) {
 
+    Class<?> roleEnum = config.roleType;
     List<Map<String, Object>> result = Lists.newArrayList();
     if (roleEnum.isEnum()) {
       for (Object enumConstant : roleEnum.getEnumConstants()) {
@@ -20,7 +23,7 @@ class AuthorisationCaseTypeGenerator {
           if (!r.getRole().matches("\\[.+\\]")) {
             result.add(Map.of(
                 "LiveFrom", "01/01/2017",
-                "CaseTypeID", caseType,
+                "CaseTypeID", config.caseType,
                 "UserRole", r.getRole(),
                 "CRUD", r.getCaseTypePermissions()
             ));
