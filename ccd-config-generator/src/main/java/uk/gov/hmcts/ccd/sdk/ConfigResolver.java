@@ -11,12 +11,16 @@ import java.lang.reflect.ParameterizedType;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 import lombok.SneakyThrows;
 import net.jodah.typetools.TypeResolver;
 import org.reflections.ReflectionUtils;
 import uk.gov.hmcts.ccd.sdk.api.CCDConfig;
 import uk.gov.hmcts.ccd.sdk.api.Event;
 import uk.gov.hmcts.ccd.sdk.api.HasRole;
+import uk.gov.hmcts.ccd.sdk.api.Search;
+import uk.gov.hmcts.ccd.sdk.api.Tab;
+import uk.gov.hmcts.ccd.sdk.api.WorkBasket;
 import uk.gov.hmcts.ccd.sdk.api.callback.AboutToStart;
 import uk.gov.hmcts.ccd.sdk.api.callback.AboutToSubmit;
 import uk.gov.hmcts.ccd.sdk.api.callback.MidEvent;
@@ -41,12 +45,12 @@ class ConfigResolver<T, S, R extends HasRole> {
     CCDConfig<T, S, R> config = this.configs.iterator().next();
     Class<?>[] typeArgs = TypeResolver.resolveRawArguments(CCDConfig.class, config.getClass());
     ImmutableSet<S> allStates = ImmutableSet.copyOf(((Class<S>)typeArgs[1]).getEnumConstants());
-    ConfigBuilderImpl builder = new ConfigBuilderImpl(typeArgs[0], allStates);
+    ConfigBuilderImpl<T, S, R> builder = new ConfigBuilderImpl(typeArgs[0], allStates);
     for (CCDConfig<T, S, R> c : configs) {
       c.configure(builder);
     }
 
-    List<Event> events = builder.getEvents();
+    List<Event<T, R, S>> events = builder.getEvents();
     Map<String, AboutToStart> aboutToStartCallbacks = Maps.newHashMap();
     Map<String, AboutToSubmit> aboutToSubmitCallbacks = Maps.newHashMap();
     Map<String, Submitted> submittedCallbacks = Maps.newHashMap();
@@ -70,7 +74,17 @@ class ConfigResolver<T, S, R extends HasRole> {
     Map<Class, Integer> types = resolve(typeArgs[0], basePackage);
     return new ResolvedCCDConfig(builder.caseType, typeArgs[0], typeArgs[1], typeArgs[2], builder, events, types,
         allStates, aboutToStartCallbacks, aboutToSubmitCallbacks, submittedCallbacks,
-        midEventCallbacks, builder.stateRolePermissions);
+        midEventCallbacks, builder.stateRolePermissions,
+        builder.tabs.stream().map(Tab.TabBuilder::build).collect(Collectors.toList()),
+        builder.workBasketResultFields.stream().map(WorkBasket.WorkBasketBuilder::build).collect(
+            Collectors.toList()),
+        builder.workBasketInputFields.stream().map(WorkBasket.WorkBasketBuilder::build).collect(
+            Collectors.toList()),
+        builder.searchResultFields.stream().map(Search.SearchBuilder::build).collect(
+            Collectors.toList()),
+        builder.searchInputFields.stream().map(Search.SearchBuilder::build).collect(
+            Collectors.toList())
+        );
   }
 
 

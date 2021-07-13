@@ -37,13 +37,10 @@ import uk.gov.hmcts.ccd.sdk.api.HasAccessControl;
 import uk.gov.hmcts.ccd.sdk.api.HasRole;
 import uk.gov.hmcts.ccd.sdk.api.Permission;
 import uk.gov.hmcts.ccd.sdk.api.Search;
-import uk.gov.hmcts.ccd.sdk.api.Search.SearchBuilder;
 import uk.gov.hmcts.ccd.sdk.api.SearchField;
 import uk.gov.hmcts.ccd.sdk.api.Tab;
-import uk.gov.hmcts.ccd.sdk.api.Tab.TabBuilder;
 import uk.gov.hmcts.ccd.sdk.api.TabField;
 import uk.gov.hmcts.ccd.sdk.api.WorkBasket;
-import uk.gov.hmcts.ccd.sdk.api.WorkBasket.WorkBasketBuilder;
 import uk.gov.hmcts.ccd.sdk.api.WorkBasketField;
 
 @Component
@@ -86,8 +83,7 @@ class AuthorisationCaseFieldGenerator<T, S, R extends HasRole> implements Config
       fieldRolePermissions.put("caseHistory", role, CRU);
 
       // Add read for any tab fields
-      for (TabBuilder<T, R> tb : config.builder.tabs) {
-        Tab<T, R> tab = tb.build();
+      for (Tab<T, R> tab : config.tabs) {
         for (TabField field : tab.getFields()) {
           boolean giveReadPermission = tab.getRorRolesAsString().contains(role) || tab.getForRoles().isEmpty();
           if (giveReadPermission && !fieldRolePermissions.contains(field.getId(), role)) {
@@ -97,10 +93,9 @@ class AuthorisationCaseFieldGenerator<T, S, R extends HasRole> implements Config
       }
 
       // Add read for WorkBaskets
-      for (WorkBasketBuilder workBasketInputField :
-          Iterables.concat(config.builder.workBasketInputFields,
-              config.builder.workBasketResultFields)) {
-        WorkBasket basket = workBasketInputField.build();
+      for (WorkBasket basket :
+          Iterables.concat(config.workBasketInputFields,
+              config.workBasketResultFields)) {
         for (WorkBasketField field : basket.getFields()) {
           if (!fieldRolePermissions.contains(field.getId(), role)) {
             fieldRolePermissions.put(field.getId(), role, Collections.singleton(Permission.R));
@@ -109,10 +104,9 @@ class AuthorisationCaseFieldGenerator<T, S, R extends HasRole> implements Config
       }
 
       // Add read for Search Input fields
-      for (SearchBuilder searchInputField :
-          Iterables.concat(config.builder.searchInputFields,
-              config.builder.searchResultFields)) {
-        Search search = searchInputField.build();
+      for (Search search :
+          Iterables.concat(config.searchInputFields,
+              config.searchResultFields)) {
         for (SearchField field : search.getFields()) {
           if (!fieldRolePermissions.contains(field.getId(), role)) {
             fieldRolePermissions.put(field.getId(), role, Collections.singleton(Permission.R));
@@ -149,7 +143,7 @@ class AuthorisationCaseFieldGenerator<T, S, R extends HasRole> implements Config
             continue;
           }
           Map<String, Object> permission = new Hashtable<>();
-          permission.put("CaseTypeID", config.builder.caseType);
+          permission.put("CaseTypeID", config.caseType);
           permission.put("LiveFrom", "01/01/2017");
           permission.put("UserRole", role);
           permission.put("CaseFieldID", field);

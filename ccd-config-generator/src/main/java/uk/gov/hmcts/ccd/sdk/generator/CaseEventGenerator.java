@@ -27,7 +27,7 @@ class CaseEventGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
     for (Event event : config.events) {
       Path output = Paths.get(folder.getPath(), event.getId() + ".json");
 
-      JsonUtils.mergeInto(output, serialise(config.builder.caseType, event, config.allStates,
+      JsonUtils.mergeInto(output, serialise(config.caseType, event, config.allStates,
           config.builder.callbackHost),
           new AddMissing(), "ID");
     }

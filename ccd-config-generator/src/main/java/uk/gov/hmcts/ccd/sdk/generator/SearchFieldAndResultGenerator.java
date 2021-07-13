@@ -11,7 +11,6 @@ import org.springframework.stereotype.Component;
 import uk.gov.hmcts.ccd.sdk.ResolvedCCDConfig;
 import uk.gov.hmcts.ccd.sdk.api.HasRole;
 import uk.gov.hmcts.ccd.sdk.api.Search;
-import uk.gov.hmcts.ccd.sdk.api.Search.SearchBuilder;
 import uk.gov.hmcts.ccd.sdk.api.SearchField;
 import uk.gov.hmcts.ccd.sdk.generator.JsonUtils.AddMissing;
 
@@ -19,22 +18,20 @@ import uk.gov.hmcts.ccd.sdk.generator.JsonUtils.AddMissing;
 class SearchFieldAndResultGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, S, R> {
 
   public void write(File root, ResolvedCCDConfig<T, S, R> config) {
-    generateFields(root, config.caseType, config.builder.searchInputFields, "SearchInputFields");
-    generateFields(root, config.caseType, config.builder.searchResultFields, "SearchResultFields");
+    generateFields(root, config.caseType, config.searchInputFields, "SearchInputFields");
+    generateFields(root, config.caseType, config.searchResultFields, "SearchResultFields");
   }
 
   private static void generateFields(
           File root,
           String caseType,
-          List<SearchBuilder> searchFields,
+          List<Search> searchFields,
           String fileName
   ) {
     List<Map<String, Object>> result = Lists.newArrayList();
 
     int displayOrder = 1;
-    for (SearchBuilder wb : searchFields) {
-      Search search = wb.build();
-
+    for (Search search : searchFields) {
       for (SearchField field : search.getFields()) {
         Map<String, Object> map = buildField(caseType, field.getId(), field.getLabel(),
                 displayOrder++);

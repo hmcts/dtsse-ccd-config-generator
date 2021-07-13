@@ -9,6 +9,9 @@ import lombok.RequiredArgsConstructor;
 import uk.gov.hmcts.ccd.sdk.api.Event;
 import uk.gov.hmcts.ccd.sdk.api.HasRole;
 import uk.gov.hmcts.ccd.sdk.api.Permission;
+import uk.gov.hmcts.ccd.sdk.api.Search;
+import uk.gov.hmcts.ccd.sdk.api.Tab;
+import uk.gov.hmcts.ccd.sdk.api.WorkBasket;
 import uk.gov.hmcts.ccd.sdk.api.callback.AboutToStart;
 import uk.gov.hmcts.ccd.sdk.api.callback.AboutToSubmit;
 import uk.gov.hmcts.ccd.sdk.api.callback.MidEvent;
@@ -31,4 +34,9 @@ public class ResolvedCCDConfig<T, S, R extends HasRole> {
   // Maps event ID and page ID to mid-event callbacks
   public final Table<String, String, MidEvent<T, S>> midEventCallbacks;
   public final Table<S, R, Set<Permission>> stateRolePermissions;
+  public final List<Tab<T, R>> tabs;
+  public final List<WorkBasket> workBasketResultFields;
+  public final List<WorkBasket> workBasketInputFields;
+  public final List<Search> searchResultFields;
+  public final List<Search> searchInputFields;
 }
