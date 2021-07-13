@@ -4,7 +4,6 @@ import com.google.common.collect.HashBasedTable;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
-import com.google.common.collect.Sets;
 import com.google.common.collect.Table;
 import java.util.EnumSet;
 import java.util.Hashtable;
@@ -29,7 +28,6 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements ConfigBuilder
   private final ImmutableSet<S> allStates;
   public String caseType = "default";
   public final Table<S, R, Set<Permission>> stateRolePermissions = HashBasedTable.create();
-  public final Set<String> apiOnlyRoles = Sets.newHashSet();
   public final Map<String, List<Event.EventBuilder<T, R, S>>> events = Maps.newHashMap();
   public final List<Field.FieldBuilder> explicitFields = Lists.newArrayList();
   public final List<TabBuilder<T, R>> tabs = Lists.newArrayList();
@@ -160,13 +158,6 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements ConfigBuilder
       public void has(R parent) {
         for (R role : roles) {
           roleHierarchy.put(role.getRole(), parent.getRole());
-        }
-      }
-
-      @Override
-      public void setApiOnly() {
-        for (R role : roles) {
-          apiOnlyRoles.add(role.getRole());
         }
       }
     };

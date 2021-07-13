@@ -83,41 +83,39 @@ class AuthorisationCaseFieldGenerator<T, S, R extends HasRole> implements Config
     // Add Permissions for all tabs.
     for (String role : ImmutableSet.copyOf(fieldRolePermissions.columnKeySet())) {
 
-      if (!config.builder.apiOnlyRoles.contains(role)) {
-        fieldRolePermissions.put("caseHistory", role, CRU);
+      fieldRolePermissions.put("caseHistory", role, CRU);
 
-        // Add read for any tab fields
-        for (TabBuilder<T, R> tb : config.builder.tabs) {
-          Tab<T, R> tab = tb.build();
-          for (TabField field : tab.getFields()) {
-            boolean giveReadPermission = tab.getRorRolesAsString().contains(role) || tab.getForRoles().isEmpty();
-            if (giveReadPermission && !fieldRolePermissions.contains(field.getId(), role)) {
-              fieldRolePermissions.put(field.getId(), role, Collections.singleton(Permission.R));
-            }
+      // Add read for any tab fields
+      for (TabBuilder<T, R> tb : config.builder.tabs) {
+        Tab<T, R> tab = tb.build();
+        for (TabField field : tab.getFields()) {
+          boolean giveReadPermission = tab.getRorRolesAsString().contains(role) || tab.getForRoles().isEmpty();
+          if (giveReadPermission && !fieldRolePermissions.contains(field.getId(), role)) {
+            fieldRolePermissions.put(field.getId(), role, Collections.singleton(Permission.R));
           }
         }
+      }
 
-        // Add read for WorkBaskets
-        for (WorkBasketBuilder workBasketInputField :
-            Iterables.concat(config.builder.workBasketInputFields,
-                config.builder.workBasketResultFields)) {
-          WorkBasket basket = workBasketInputField.build();
-          for (WorkBasketField field : basket.getFields()) {
-            if (!fieldRolePermissions.contains(field.getId(), role)) {
-              fieldRolePermissions.put(field.getId(), role, Collections.singleton(Permission.R));
-            }
+      // Add read for WorkBaskets
+      for (WorkBasketBuilder workBasketInputField :
+          Iterables.concat(config.builder.workBasketInputFields,
+              config.builder.workBasketResultFields)) {
+        WorkBasket basket = workBasketInputField.build();
+        for (WorkBasketField field : basket.getFields()) {
+          if (!fieldRolePermissions.contains(field.getId(), role)) {
+            fieldRolePermissions.put(field.getId(), role, Collections.singleton(Permission.R));
           }
         }
+      }
 
-        // Add read for Search Input fields
-        for (SearchBuilder searchInputField :
-                Iterables.concat(config.builder.searchInputFields,
-                    config.builder.searchResultFields)) {
-          Search search = searchInputField.build();
-          for (SearchField field : search.getFields()) {
-            if (!fieldRolePermissions.contains(field.getId(), role)) {
-              fieldRolePermissions.put(field.getId(), role, Collections.singleton(Permission.R));
-            }
+      // Add read for Search Input fields
+      for (SearchBuilder searchInputField :
+          Iterables.concat(config.builder.searchInputFields,
+              config.builder.searchResultFields)) {
+        Search search = searchInputField.build();
+        for (SearchField field : search.getFields()) {
+          if (!fieldRolePermissions.contains(field.getId(), role)) {
+            fieldRolePermissions.put(field.getId(), role, Collections.singleton(Permission.R));
           }
         }
       }
