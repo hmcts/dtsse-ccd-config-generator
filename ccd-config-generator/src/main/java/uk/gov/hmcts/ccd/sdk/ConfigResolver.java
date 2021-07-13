@@ -70,7 +70,7 @@ class ConfigResolver<T, S, R extends HasRole> {
     Map<Class, Integer> types = resolve(typeArgs[0], basePackage);
     return new ResolvedCCDConfig(builder.caseType, typeArgs[0], typeArgs[1], typeArgs[2], builder, events, types,
         allStates, aboutToStartCallbacks, aboutToSubmitCallbacks, submittedCallbacks,
-        midEventCallbacks);
+        midEventCallbacks, builder.stateRolePermissions);
   }
 
 

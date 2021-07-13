@@ -4,9 +4,11 @@ import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Table;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import uk.gov.hmcts.ccd.sdk.api.Event;
 import uk.gov.hmcts.ccd.sdk.api.HasRole;
+import uk.gov.hmcts.ccd.sdk.api.Permission;
 import uk.gov.hmcts.ccd.sdk.api.callback.AboutToStart;
 import uk.gov.hmcts.ccd.sdk.api.callback.AboutToSubmit;
 import uk.gov.hmcts.ccd.sdk.api.callback.MidEvent;
@@ -28,4 +30,5 @@ public class ResolvedCCDConfig<T, S, R extends HasRole> {
   public final Map<String, Submitted<T, S>> submittedCallbacks;
   // Maps event ID and page ID to mid-event callbacks
   public final Table<String, String, MidEvent<T, S>> midEventCallbacks;
+  public final Table<S, R, Set<Permission>> stateRolePermissions;
 }
