@@ -2,6 +2,7 @@ package uk.gov.hmcts.ccd.sdk;
 
 import com.fasterxml.jackson.annotation.JsonUnwrapped;
 import com.google.common.collect.HashBasedTable;
+import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Table;
 import java.lang.reflect.Field;
@@ -10,7 +11,6 @@ import java.lang.reflect.ParameterizedType;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import lombok.SneakyThrows;
 import net.jodah.typetools.TypeResolver;
 import org.reflections.ReflectionUtils;
@@ -40,7 +40,7 @@ class ConfigResolver<T, S, R extends HasRole> {
   public ResolvedCCDConfig<T, S, R> resolveCCDConfig() {
     CCDConfig<T, S, R> config = this.configs.iterator().next();
     Class<?>[] typeArgs = TypeResolver.resolveRawArguments(CCDConfig.class, config.getClass());
-    Set<S> allStates = Set.of(((Class<S>)typeArgs[1]).getEnumConstants());
+    ImmutableSet<S> allStates = ImmutableSet.copyOf(((Class<S>)typeArgs[1]).getEnumConstants());
     ConfigBuilderImpl builder = new ConfigBuilderImpl(typeArgs[0], allStates);
     for (CCDConfig<T, S, R> c : configs) {
       c.configure(builder);
