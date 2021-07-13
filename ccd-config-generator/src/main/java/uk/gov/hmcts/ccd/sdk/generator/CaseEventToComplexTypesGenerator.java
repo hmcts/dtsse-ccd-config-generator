@@ -25,8 +25,8 @@ class CaseEventToComplexTypesGenerator<T, S, R extends HasRole> implements
     ConfigGenerator<T, S, R> {
 
   public void write(File root, ResolvedCCDConfig<T, S, R> config) {
-    for (Event event : config.events) {
-      FieldCollection collection = event.getFields().build();
+    for (Event event : config.events.values()) {
+      FieldCollection collection = event.getFields();
       List<Map<String, Object>> entries = Lists.newArrayList();
       List<FieldCollection.FieldCollectionBuilder> complexFields = collection.getComplexFields();
       expand(complexFields, entries, event.getId(), null, "");

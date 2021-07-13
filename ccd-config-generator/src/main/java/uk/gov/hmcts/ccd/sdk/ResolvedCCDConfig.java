@@ -15,10 +15,6 @@ import uk.gov.hmcts.ccd.sdk.api.Search;
 import uk.gov.hmcts.ccd.sdk.api.SearchCases;
 import uk.gov.hmcts.ccd.sdk.api.Tab;
 import uk.gov.hmcts.ccd.sdk.api.WorkBasket;
-import uk.gov.hmcts.ccd.sdk.api.callback.AboutToStart;
-import uk.gov.hmcts.ccd.sdk.api.callback.AboutToSubmit;
-import uk.gov.hmcts.ccd.sdk.api.callback.MidEvent;
-import uk.gov.hmcts.ccd.sdk.api.callback.Submitted;
 
 @RequiredArgsConstructor
 public class ResolvedCCDConfig<T, S, R extends HasRole> {
@@ -33,14 +29,10 @@ public class ResolvedCCDConfig<T, S, R extends HasRole> {
   public final Class<?> typeArg;
   public final Class<S> stateArg;
   public final Class<?> roleType;
-  public final List<Event<T, R, S>> events;
+  // Events by id
+  public final ImmutableMap<String, Event<T, R, S>> events;
   public final Map<Class, Integer> types;
   public final ImmutableSet<S> allStates;
-  public final Map<String, AboutToStart<T, S>> aboutToStartCallbacks;
-  public final Map<String, AboutToSubmit<T, S>> aboutToSubmitCallbacks;
-  public final Map<String, Submitted<T, S>> submittedCallbacks;
-  // Maps event ID and page ID to mid-event callbacks
-  public final Table<String, String, MidEvent<T, S>> midEventCallbacks;
   public final Table<S, R, Set<Permission>> stateRolePermissions;
   public final List<Tab<T, R>> tabs;
   public final List<WorkBasket> workBasketResultFields;

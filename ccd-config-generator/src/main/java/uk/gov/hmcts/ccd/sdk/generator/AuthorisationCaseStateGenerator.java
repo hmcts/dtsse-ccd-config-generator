@@ -30,7 +30,7 @@ class AuthorisationCaseStateGenerator<T, S, R extends HasRole> implements Config
   @SneakyThrows
   public void write(File root, ResolvedCCDConfig<T, S, R> config) {
 
-    for (Event<T, R, S> event : config.events) {
+    for (Event<T, R, S> event : config.events.values()) {
       if (event.getPreState().equals(config.allStates)) {
         continue;
       }

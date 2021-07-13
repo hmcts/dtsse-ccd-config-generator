@@ -190,7 +190,7 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements ConfigBuilder
     Map<String, Event<T, R, S>> result = Maps.newHashMap();
     for (Map.Entry<String, List<Event.EventBuilder<T, R, S>>> cell : events.entrySet()) {
       for (Event.EventBuilder<T, R, S> builder : cell.getValue()) {
-        Event<T, R, S> event = builder.build();
+        Event<T, R, S> event = builder.doBuild();
         result.put(event.getId(), event);
       }
     }

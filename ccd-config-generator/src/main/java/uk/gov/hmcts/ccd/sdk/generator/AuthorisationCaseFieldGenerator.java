@@ -51,8 +51,8 @@ class AuthorisationCaseFieldGenerator<T, S, R extends HasRole> implements Config
 
     Table<String, String, Set<Permission>> fieldRolePermissions = HashBasedTable.create();
     // Add field permissions based on event permissions.
-    for (Event<T, R, S> event : config.events) {
-      List<Field.FieldBuilder> fields = event.getFields().build().getFields();
+    for (Event<T, R, S> event : config.events.values()) {
+      List<Field.FieldBuilder> fields = event.getFields().getFields();
       for (Field.FieldBuilder fb : fields) {
 
         for (R role : event.getGrants().keys()) {

@@ -1,16 +1,13 @@
 package uk.gov.hmcts.ccd.sdk;
 
 import com.fasterxml.jackson.annotation.JsonUnwrapped;
-import com.google.common.collect.HashBasedTable;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Maps;
-import com.google.common.collect.Table;
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
 import java.lang.reflect.ParameterizedType;
 import java.util.Collection;
-import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 import lombok.SneakyThrows;
@@ -23,10 +20,6 @@ import uk.gov.hmcts.ccd.sdk.api.Search;
 import uk.gov.hmcts.ccd.sdk.api.SearchCases;
 import uk.gov.hmcts.ccd.sdk.api.Tab;
 import uk.gov.hmcts.ccd.sdk.api.WorkBasket;
-import uk.gov.hmcts.ccd.sdk.api.callback.AboutToStart;
-import uk.gov.hmcts.ccd.sdk.api.callback.AboutToSubmit;
-import uk.gov.hmcts.ccd.sdk.api.callback.MidEvent;
-import uk.gov.hmcts.ccd.sdk.api.callback.Submitted;
 
 class ConfigResolver<T, S, R extends HasRole> {
 
@@ -52,33 +45,11 @@ class ConfigResolver<T, S, R extends HasRole> {
       c.configure(builder);
     }
 
-    List<Event<T, R, S>> events = builder.getEvents();
-    Map<String, AboutToStart> aboutToStartCallbacks = Maps.newHashMap();
-    Map<String, AboutToSubmit> aboutToSubmitCallbacks = Maps.newHashMap();
-    Map<String, Submitted> submittedCallbacks = Maps.newHashMap();
-    Table<String, String, MidEvent> midEventCallbacks = HashBasedTable.create();
-    for (Event event : events) {
-      if (event.getAboutToStartCallback() != null) {
-        aboutToStartCallbacks.put(event.getId(), event.getAboutToStartCallback());
-      }
-      if (event.getAboutToSubmitCallback() != null) {
-        aboutToSubmitCallbacks.put(event.getId(), event.getAboutToSubmitCallback());
-      }
-      if (event.getSubmittedCallback() != null) {
-        submittedCallbacks.put(event.getId(), event.getSubmittedCallback());
-      }
-      for (Map.Entry<String, MidEvent> midEvent : event.getFields().build()
-          .getPagesToMidEvent().entrySet()) {
-        midEventCallbacks.put(event.getId(), midEvent.getKey(), midEvent.getValue());
-      }
-    }
-
     Map<Class, Integer> types = resolve(typeArgs[0], basePackage);
     return new ResolvedCCDConfig(builder.caseType, builder.callbackHost, builder.caseName,
         builder.caseDesc, builder.jurId, builder.jurName, builder.jurDesc,
-        typeArgs[0], typeArgs[1], typeArgs[2], events, types,
-        allStates, aboutToStartCallbacks, aboutToSubmitCallbacks, submittedCallbacks,
-        midEventCallbacks, builder.stateRolePermissions,
+        typeArgs[0], typeArgs[1], typeArgs[2], Maps.uniqueIndex(builder.getEvents(), Event::getId), types,
+        allStates, builder.stateRolePermissions,
         builder.tabs.stream().map(Tab.TabBuilder::build).collect(Collectors.toList()),
         builder.workBasketResultFields.stream().map(WorkBasket.WorkBasketBuilder::build).collect(
             Collectors.toList()),
