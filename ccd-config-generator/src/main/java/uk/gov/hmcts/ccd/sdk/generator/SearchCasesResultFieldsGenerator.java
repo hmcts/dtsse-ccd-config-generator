@@ -19,8 +19,8 @@ class SearchCasesResultFieldsGenerator<T, S, R extends HasRole> implements
     ConfigGenerator<T, S, R> {
 
   public void write(File root, ResolvedCCDConfig<T, S, R> config) {
-    List<SearchCasesResultField> fields = config.builder.searchCaseResultFields.stream()
-        .flatMap(builder -> builder.build().getFields().stream())
+    List<SearchCasesResultField> fields = config.searchCaseResultFields.stream()
+        .flatMap(x -> x.getFields().stream())
         .collect(Collectors.toList());
 
     List<Map<String, Object>> jsonFields = IntStream

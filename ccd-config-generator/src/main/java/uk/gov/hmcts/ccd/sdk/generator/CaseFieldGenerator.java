@@ -27,7 +27,6 @@ import uk.gov.hmcts.ccd.sdk.ResolvedCCDConfig;
 import uk.gov.hmcts.ccd.sdk.api.CCD;
 import uk.gov.hmcts.ccd.sdk.api.ComplexType;
 import uk.gov.hmcts.ccd.sdk.api.Event;
-import uk.gov.hmcts.ccd.sdk.api.Field.FieldBuilder;
 import uk.gov.hmcts.ccd.sdk.api.HasRole;
 import uk.gov.hmcts.ccd.sdk.api.Label;
 import uk.gov.hmcts.ccd.sdk.type.FieldType;
@@ -203,9 +202,8 @@ class CaseFieldGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
       }
     }
 
-    List<uk.gov.hmcts.ccd.sdk.api.Field.FieldBuilder> fs = config.builder.explicitFields;
-    for (FieldBuilder explicitField : fs) {
-      uk.gov.hmcts.ccd.sdk.api.Field field = explicitField.build();
+    List<uk.gov.hmcts.ccd.sdk.api.Field> fs = config.explicitFields;
+    for (uk.gov.hmcts.ccd.sdk.api.Field field : fs) {
       explicitFields.put(field.getId(), field);
     }
 

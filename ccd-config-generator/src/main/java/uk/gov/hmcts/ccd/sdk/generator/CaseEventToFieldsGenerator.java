@@ -62,7 +62,7 @@ class CaseEventToFieldsGenerator<T, S, R extends HasRole> implements ConfigGener
           }
 
           if (midEventCallbacks.contains(event.getId(), pageId.toString())) {
-            info.put("CallBackURLMidEvent", config.builder.callbackHost + "/callbacks/mid-event?page="
+            info.put("CallBackURLMidEvent", config.callbackHost + "/callbacks/mid-event?page="
                 + URLEncoder.encode(pageId.toString(), StandardCharsets.UTF_8));
             midEventCallbacks.remove(event.getId(), pageId.toString());
           }

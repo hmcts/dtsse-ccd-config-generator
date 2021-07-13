@@ -13,7 +13,6 @@ import org.springframework.stereotype.Component;
 import uk.gov.hmcts.ccd.sdk.ResolvedCCDConfig;
 import uk.gov.hmcts.ccd.sdk.api.HasRole;
 import uk.gov.hmcts.ccd.sdk.api.Tab;
-import uk.gov.hmcts.ccd.sdk.api.Tab.TabBuilder;
 import uk.gov.hmcts.ccd.sdk.api.TabField;
 import uk.gov.hmcts.ccd.sdk.generator.JsonUtils.AddMissing;
 
@@ -33,8 +32,7 @@ class CaseTypeTabGenerator<T, S, R extends HasRole> implements ConfigGenerator<T
 
     int tabDisplayOrder = 2;
 
-    for (TabBuilder<T, R> tb : config.builder.tabs) {
-      Tab<T, R> tab = tb.build();
+    for (Tab<T, R> tab : config.tabs) {
       List<String> roles = tab.getRorRolesAsString();
 
       // if no roles have been specified leave UserRole empty

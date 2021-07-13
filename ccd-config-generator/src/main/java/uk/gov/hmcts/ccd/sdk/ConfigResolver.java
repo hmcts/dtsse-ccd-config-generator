@@ -2,6 +2,7 @@ package uk.gov.hmcts.ccd.sdk;
 
 import com.fasterxml.jackson.annotation.JsonUnwrapped;
 import com.google.common.collect.HashBasedTable;
+import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Table;
@@ -19,6 +20,7 @@ import uk.gov.hmcts.ccd.sdk.api.CCDConfig;
 import uk.gov.hmcts.ccd.sdk.api.Event;
 import uk.gov.hmcts.ccd.sdk.api.HasRole;
 import uk.gov.hmcts.ccd.sdk.api.Search;
+import uk.gov.hmcts.ccd.sdk.api.SearchCases;
 import uk.gov.hmcts.ccd.sdk.api.Tab;
 import uk.gov.hmcts.ccd.sdk.api.WorkBasket;
 import uk.gov.hmcts.ccd.sdk.api.callback.AboutToStart;
@@ -72,7 +74,9 @@ class ConfigResolver<T, S, R extends HasRole> {
     }
 
     Map<Class, Integer> types = resolve(typeArgs[0], basePackage);
-    return new ResolvedCCDConfig(builder.caseType, typeArgs[0], typeArgs[1], typeArgs[2], builder, events, types,
+    return new ResolvedCCDConfig(builder.caseType, builder.callbackHost, builder.caseName,
+        builder.caseDesc, builder.jurId, builder.jurName, builder.jurDesc,
+        typeArgs[0], typeArgs[1], typeArgs[2], events, types,
         allStates, aboutToStartCallbacks, aboutToSubmitCallbacks, submittedCallbacks,
         midEventCallbacks, builder.stateRolePermissions,
         builder.tabs.stream().map(Tab.TabBuilder::build).collect(Collectors.toList()),
@@ -83,6 +87,11 @@ class ConfigResolver<T, S, R extends HasRole> {
         builder.searchResultFields.stream().map(Search.SearchBuilder::build).collect(
             Collectors.toList()),
         builder.searchInputFields.stream().map(Search.SearchBuilder::build).collect(
+            Collectors.toList()),
+        builder.searchCaseResultFields.stream().map(SearchCases.SearchCasesBuilder::build).collect(
+            Collectors.toList()),
+        ImmutableMap.copyOf(builder.roleHierarchy),
+        builder.explicitFields.stream().map(uk.gov.hmcts.ccd.sdk.api.Field.FieldBuilder::build).collect(
             Collectors.toList())
         );
   }

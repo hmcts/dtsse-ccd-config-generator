@@ -130,7 +130,7 @@ class AuthorisationCaseFieldGenerator<T, S, R extends HasRole> implements Config
 
         String field = fieldPerm.getKey();
         Set<Permission> inheritedPermission = getInheritedPermission(fieldRolePermissions,
-            config.builder.roleHierarchy, role, field);
+            config.roleHierarchy, role, field);
         Set<Permission> fieldPermission = fieldPerm.getValue();
         if (inheritedPermission != null) {
           Set<Permission> newPermissions = Sets.newHashSet(fieldPerm.getValue());
