@@ -54,7 +54,6 @@ public class CCDConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<CaseData, S
     // Describe the hierarchy of which roles go together.
     builder.role(CCD_SOLICITOR, CCD_LASOLICITOR).has(LOCAL_AUTHORITY);
     builder.role(JUDICIARY, GATEKEEPER).has(HMCTS_ADMIN);
-    builder.role(SYSTEM_UPDATE, BULK_SCAN, BULK_SCAN_SYSTEM_UPDATE).setApiOnly();
 
     // Events
     buildUniversalEvents();
