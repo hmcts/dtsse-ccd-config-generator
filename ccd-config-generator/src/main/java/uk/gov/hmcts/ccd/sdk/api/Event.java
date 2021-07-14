@@ -81,6 +81,7 @@ public class Event<T, R extends HasRole, S> {
 
     public Event<T, R, S> doBuild() {
       Event<T, R, S> result = build();
+      // Complete the building of the nested builder.
       result.fields = fieldsBuilder.build();
       return result;
     }
