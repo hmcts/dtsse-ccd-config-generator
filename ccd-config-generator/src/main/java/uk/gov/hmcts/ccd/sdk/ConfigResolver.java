@@ -1,7 +1,6 @@
 package uk.gov.hmcts.ccd.sdk;
 
 import com.fasterxml.jackson.annotation.JsonUnwrapped;
-import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Maps;
 import java.lang.reflect.Field;
@@ -9,17 +8,11 @@ import java.lang.reflect.Modifier;
 import java.lang.reflect.ParameterizedType;
 import java.util.Collection;
 import java.util.Map;
-import java.util.stream.Collectors;
 import lombok.SneakyThrows;
 import net.jodah.typetools.TypeResolver;
 import org.reflections.ReflectionUtils;
 import uk.gov.hmcts.ccd.sdk.api.CCDConfig;
-import uk.gov.hmcts.ccd.sdk.api.Event;
 import uk.gov.hmcts.ccd.sdk.api.HasRole;
-import uk.gov.hmcts.ccd.sdk.api.Search;
-import uk.gov.hmcts.ccd.sdk.api.SearchCases;
-import uk.gov.hmcts.ccd.sdk.api.Tab;
-import uk.gov.hmcts.ccd.sdk.api.WorkBasket;
 
 class ConfigResolver<T, S, R extends HasRole> {
 
@@ -40,31 +33,16 @@ class ConfigResolver<T, S, R extends HasRole> {
     CCDConfig<T, S, R> config = this.configs.iterator().next();
     Class<?>[] typeArgs = TypeResolver.resolveRawArguments(CCDConfig.class, config.getClass());
     ImmutableSet<S> allStates = ImmutableSet.copyOf(((Class<S>)typeArgs[1]).getEnumConstants());
-    ConfigBuilderImpl<T, S, R> builder = new ConfigBuilderImpl(typeArgs[0], allStates);
+    Map<Class, Integer> types = resolve(typeArgs[0], basePackage);
+    ConfigBuilderImpl<T, S, R> builder = new ConfigBuilderImpl(
+        new ResolvedCCDConfig(typeArgs[0], typeArgs[1], typeArgs[2], types, allStates)
+    );
+
     for (CCDConfig<T, S, R> c : configs) {
       c.configure(builder);
     }
 
-    Map<Class, Integer> types = resolve(typeArgs[0], basePackage);
-    return new ResolvedCCDConfig(builder.caseType, builder.callbackHost, builder.caseName,
-        builder.caseDesc, builder.jurId, builder.jurName, builder.jurDesc,
-        typeArgs[0], typeArgs[1], typeArgs[2], Maps.uniqueIndex(builder.getEvents(), Event::getId), types,
-        allStates, builder.stateRolePermissions,
-        builder.tabs.stream().map(Tab.TabBuilder::build).collect(Collectors.toList()),
-        builder.workBasketResultFields.stream().map(WorkBasket.WorkBasketBuilder::build).collect(
-            Collectors.toList()),
-        builder.workBasketInputFields.stream().map(WorkBasket.WorkBasketBuilder::build).collect(
-            Collectors.toList()),
-        builder.searchResultFields.stream().map(Search.SearchBuilder::build).collect(
-            Collectors.toList()),
-        builder.searchInputFields.stream().map(Search.SearchBuilder::build).collect(
-            Collectors.toList()),
-        builder.searchCaseResultFields.stream().map(SearchCases.SearchCasesBuilder::build).collect(
-            Collectors.toList()),
-        ImmutableMap.copyOf(builder.roleHierarchy),
-        builder.explicitFields.stream().map(uk.gov.hmcts.ccd.sdk.api.Field.FieldBuilder::build).collect(
-            Collectors.toList())
-        );
+    return builder.build();
   }
 
 

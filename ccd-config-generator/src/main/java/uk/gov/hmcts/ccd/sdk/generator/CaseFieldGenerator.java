@@ -202,11 +202,6 @@ class CaseFieldGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
       }
     }
 
-    List<uk.gov.hmcts.ccd.sdk.api.Field> fs = config.explicitFields;
-    for (uk.gov.hmcts.ccd.sdk.api.Field field : fs) {
-      explicitFields.put(field.getId(), field);
-    }
-
     List<Map<String, Object>> result = Lists.newArrayList();
     for (String fieldId : explicitFields.keySet()) {
       uk.gov.hmcts.ccd.sdk.api.Field field = explicitFields.get(fieldId);
