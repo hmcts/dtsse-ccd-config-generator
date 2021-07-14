@@ -20,12 +20,12 @@ class AuthorisationCaseEventGenerator<T, S, R extends HasRole> implements Config
   public void write(File root, ResolvedCCDConfig<T, S, R> config) {
     List<Map<String, Object>> entries = Lists.newArrayList();
 
-    for (Event<T, R, S> event : config.events) {
+    for (Event<T, R, S> event : config.getEvents().values()) {
       for (R role : event.getGrants().keys()) {
         Map<String, Object> entry = Maps.newHashMap();
         entries.add(entry);
         entry.put("LiveFrom", "01/01/2017");
-        entry.put("CaseTypeID", config.caseType);
+        entry.put("CaseTypeID", config.getCaseType());
         entry.put("CaseEventID", event.getId());
         entry.put("UserRole", role.getRole());
         entry.put("CRUD", Permission.toString(event.getGrants().get(role)));

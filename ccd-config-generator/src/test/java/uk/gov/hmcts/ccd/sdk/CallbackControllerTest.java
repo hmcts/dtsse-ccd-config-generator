@@ -57,9 +57,16 @@ public class CallbackControllerTest {
 
   @SneakyThrows
   @Test
-  public void testNoCallbackReturns404() {
+  public void testUnknownEventReturns404() {
     this.makeRequest("submitted", "does-not-exist")
-        .andExpect(status().is4xxClientError());
+        .andExpect(status().is(404));
+  }
+
+  @SneakyThrows
+  @Test
+  public void testMissingCallbackReturns404() {
+    this.makeRequest("submitted", "addNotes")
+        .andExpect(status().is(404));
   }
 
   @SneakyThrows

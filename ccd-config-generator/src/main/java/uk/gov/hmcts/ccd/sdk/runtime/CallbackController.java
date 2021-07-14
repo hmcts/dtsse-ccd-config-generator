@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JavaType;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Maps;
+import de.cronn.reflection.util.TypedPropertyGetter;
 import java.util.Collection;
 import java.util.Map;
 import lombok.SneakyThrows;
@@ -18,6 +19,7 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 import uk.gov.hmcts.ccd.sdk.ResolvedCCDConfig;
 import uk.gov.hmcts.ccd.sdk.api.CaseDetails;
+import uk.gov.hmcts.ccd.sdk.api.Event;
 import uk.gov.hmcts.ccd.sdk.api.callback.AboutToStartOrSubmitResponse;
 import uk.gov.hmcts.ccd.sdk.api.callback.MidEvent;
 import uk.gov.hmcts.reform.ccd.client.model.CallbackRequest;
@@ -36,11 +38,12 @@ public class CallbackController {
 
   @Autowired
   public CallbackController(Collection<ResolvedCCDConfig<?, ?, ?>> configs, ObjectMapper mapper) {
-    this.caseTypeToConfig = Maps.uniqueIndex(configs, x -> x.caseType);
+    this.caseTypeToConfig = Maps.uniqueIndex(configs, x -> x.getCaseType());
     this.mapper = mapper;
     for (ResolvedCCDConfig<?, ?, ?> config : configs) {
-      this.caseTypeToJavaType.put(config.caseType,
-          mapper.getTypeFactory().constructParametricType(CaseDetails.class, config.typeArg, config.stateArg));
+      this.caseTypeToJavaType.put(config.getCaseType(),
+          mapper.getTypeFactory().constructParametricType(CaseDetails.class, config.getCaseClass(),
+              config.getStateClass()));
     }
   }
 
@@ -48,7 +51,7 @@ public class CallbackController {
   @PostMapping("/about-to-start")
   public AboutToStartOrSubmitResponse aboutToStart(@RequestBody CallbackRequest request) {
     log.info("About to start event ID: " + request.getEventId());
-    return findCallback(findCaseType(request).aboutToStartCallbacks, request.getEventId())
+    return findCallback(request, Event::getAboutToStartCallback)
         .handle(convertCaseDetails(request.getCaseDetails()));
   }
 
@@ -56,7 +59,7 @@ public class CallbackController {
   @PostMapping("/about-to-submit")
   public AboutToStartOrSubmitResponse aboutToSubmit(@RequestBody CallbackRequest request) {
     log.info("About to submit event ID: " + request.getEventId());
-    return findCallback(findCaseType(request).aboutToSubmitCallbacks, request.getEventId())
+    return findCallback(request, Event::getAboutToSubmitCallback)
         .handle(convertCaseDetails(request.getCaseDetails()),
             convertCaseDetails(request.getCaseDetailsBefore(), request.getCaseDetails().getCaseTypeId()));
   }
@@ -65,7 +68,7 @@ public class CallbackController {
   @PostMapping("/submitted")
   public SubmittedCallbackResponse submitted(@RequestBody CallbackRequest request) {
     log.info("Submitted event ID: " + request.getEventId());
-    return findCallback(findCaseType(request).submittedCallbacks, request.getEventId())
+    return findCallback(request, Event::getSubmittedCallback)
         .handle(convertCaseDetails(request.getCaseDetails()), convertCaseDetails(request.getCaseDetailsBefore(),
             request.getCaseDetails().getCaseTypeId()));
   }
@@ -75,32 +78,40 @@ public class CallbackController {
   public AboutToStartOrSubmitResponse midEvent(@RequestBody CallbackRequest request,
                                             @RequestParam(name = "page") String page) {
     log.info("Mid event callback: {} for page {} ", request.getEventId(), page);
-    MidEvent m = findCaseType(request).midEventCallbacks.get(request.getEventId(), page);
-    if (null == m) {
+    MidEvent<?, ?> callback = findCaseEvent(request).getFields().getPagesToMidEvent().get(page);
+
+    if (null == callback) {
       throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Handler not found for "
           + request.getEventId() + " for page " + page);
     }
-    return m.handle(convertCaseDetails(request.getCaseDetails()),
+    return callback.handle(convertCaseDetails(request.getCaseDetails()),
         convertCaseDetails(request.getCaseDetailsBefore(),
             request.getCaseDetails().getCaseTypeId()));
   }
 
-  ResolvedCCDConfig<?, ?, ?> findCaseType(CallbackRequest request) {
+  <T> T findCallback(CallbackRequest request, TypedPropertyGetter<Event<?, ?, ?>, T> getter) {
+    T result = getter.get(findCaseEvent(request));
+    if (result == null) {
+      log.warn("No callback for event " + request.getEventId());
+      throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Callback not found: " + request.getEventId());
+    }
+    return result;
+  }
+
+  <T> Event<?, ?, ?> findCaseEvent(CallbackRequest request) {
     String caseType = request.getCaseDetails().getCaseTypeId();
     if (!caseTypeToConfig.containsKey(caseType)) {
       log.warn("No configuration found for case type " + caseType);
       throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Case type not found: " + caseType);
     }
 
-    return this.caseTypeToConfig.get(caseType);
-  }
-
-  <T> T findCallback(Map<String, T> callbacks, String eventId) {
-    if (!callbacks.containsKey(eventId)) {
-      log.warn("Handler not found for " + eventId);
-      throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Handler not found for " + eventId);
+    Event<?, ?, ?> result = caseTypeToConfig.get(caseType).getEvents().get(request.getEventId());
+    if (result == null) {
+      log.warn("Unknown event " + request.getEventId());
+      throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Case event not found: " + request.getEventId());
     }
-    return callbacks.get(eventId);
+
+    return result;
   }
 
   CaseDetails convertCaseDetails(uk.gov.hmcts.reform.ccd.client.model.CaseDetails ccdDetails) {
@@ -119,4 +130,5 @@ public class CallbackController {
     }
     return mapper.readValue(json, caseTypeToJavaType.get(caseType));
   }
+
 }

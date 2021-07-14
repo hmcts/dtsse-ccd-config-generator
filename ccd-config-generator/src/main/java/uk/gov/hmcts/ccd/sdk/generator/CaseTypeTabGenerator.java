@@ -13,7 +13,6 @@ import org.springframework.stereotype.Component;
 import uk.gov.hmcts.ccd.sdk.ResolvedCCDConfig;
 import uk.gov.hmcts.ccd.sdk.api.HasRole;
 import uk.gov.hmcts.ccd.sdk.api.Tab;
-import uk.gov.hmcts.ccd.sdk.api.Tab.TabBuilder;
 import uk.gov.hmcts.ccd.sdk.api.TabField;
 import uk.gov.hmcts.ccd.sdk.generator.JsonUtils.AddMissing;
 
@@ -27,14 +26,13 @@ class CaseTypeTabGenerator<T, S, R extends HasRole> implements ConfigGenerator<T
   public void write(File root, ResolvedCCDConfig<T, S, R> config) {
 
     List<Map<String, Object>> result = Lists.newArrayList();
-    result.add(buildField(config.caseType, "CaseHistory", "caseHistory", "History", 1, 1, ""));
+    result.add(buildField(config.getCaseType(), "CaseHistory", "caseHistory", "History", 1, 1, ""));
 
     List<Map<String, Object>> caseFields = Lists.newArrayList();
 
     int tabDisplayOrder = 2;
 
-    for (TabBuilder<T, R> tb : config.builder.tabs) {
-      Tab<T, R> tab = tb.build();
+    for (Tab<T, R> tab : config.getTabs()) {
       List<String> roles = tab.getRorRolesAsString();
 
       // if no roles have been specified leave UserRole empty
@@ -43,7 +41,7 @@ class CaseTypeTabGenerator<T, S, R extends HasRole> implements ConfigGenerator<T
       }
 
       for (String role : roles) {
-        addTab(config.caseType, result, caseFields, tabDisplayOrder++, tab, role);
+        addTab(config.getCaseType(), result, caseFields, tabDisplayOrder++, tab, role);
       }
     }
 

@@ -13,7 +13,6 @@ import org.springframework.stereotype.Component;
 import uk.gov.hmcts.ccd.sdk.ResolvedCCDConfig;
 import uk.gov.hmcts.ccd.sdk.api.HasRole;
 import uk.gov.hmcts.ccd.sdk.api.WorkBasket;
-import uk.gov.hmcts.ccd.sdk.api.WorkBasket.WorkBasketBuilder;
 import uk.gov.hmcts.ccd.sdk.api.WorkBasketField;
 import uk.gov.hmcts.ccd.sdk.generator.JsonUtils.AddMissing;
 
@@ -21,18 +20,16 @@ import uk.gov.hmcts.ccd.sdk.generator.JsonUtils.AddMissing;
 class WorkBasketGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, S, R> {
 
   public void write(File root, ResolvedCCDConfig<T, S, R> config) {
-    generateFields(root, config.caseType, config.builder.workBasketInputFields, "WorkBasketInputFields");
-    generateFields(root, config.caseType, config.builder.workBasketResultFields, "WorkBasketResultFields");
+    generateFields(root, config.getCaseType(), config.getWorkBasketInputFields(), "WorkBasketInputFields");
+    generateFields(root, config.getCaseType(), config.getWorkBasketResultFields(), "WorkBasketResultFields");
   }
 
   private static void generateFields(File root, String caseType,
-      List<WorkBasketBuilder> workBasketFields, String fileName) {
+      List<WorkBasket> workBasketFields, String fileName) {
     List<Map<String, Object>> result = Lists.newArrayList();
 
     int displayOrder = 1;
-    for (WorkBasketBuilder wb : workBasketFields) {
-      WorkBasket workBasket = wb.build();
-
+    for (WorkBasket workBasket : workBasketFields) {
       for (WorkBasketField field : workBasket.getFields()) {
         Map<String, Object> map = buildField(caseType, field.getId(), field.getLabel(),
             displayOrder++, field.getListElementCode(), field.getShowCondition());

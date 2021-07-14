@@ -37,13 +37,10 @@ import uk.gov.hmcts.ccd.sdk.api.HasAccessControl;
 import uk.gov.hmcts.ccd.sdk.api.HasRole;
 import uk.gov.hmcts.ccd.sdk.api.Permission;
 import uk.gov.hmcts.ccd.sdk.api.Search;
-import uk.gov.hmcts.ccd.sdk.api.Search.SearchBuilder;
 import uk.gov.hmcts.ccd.sdk.api.SearchField;
 import uk.gov.hmcts.ccd.sdk.api.Tab;
-import uk.gov.hmcts.ccd.sdk.api.Tab.TabBuilder;
 import uk.gov.hmcts.ccd.sdk.api.TabField;
 import uk.gov.hmcts.ccd.sdk.api.WorkBasket;
-import uk.gov.hmcts.ccd.sdk.api.WorkBasket.WorkBasketBuilder;
 import uk.gov.hmcts.ccd.sdk.api.WorkBasketField;
 
 @Component
@@ -54,8 +51,8 @@ class AuthorisationCaseFieldGenerator<T, S, R extends HasRole> implements Config
 
     Table<String, String, Set<Permission>> fieldRolePermissions = HashBasedTable.create();
     // Add field permissions based on event permissions.
-    for (Event<T, R, S> event : config.events) {
-      List<Field.FieldBuilder> fields = event.getFields().build().getFields();
+    for (Event<T, R, S> event : config.getEvents().values()) {
+      List<Field.FieldBuilder> fields = event.getFields().getFields();
       for (Field.FieldBuilder fb : fields) {
 
         for (R role : event.getGrants().keys()) {
@@ -86,8 +83,7 @@ class AuthorisationCaseFieldGenerator<T, S, R extends HasRole> implements Config
       fieldRolePermissions.put("caseHistory", role, CRU);
 
       // Add read for any tab fields
-      for (TabBuilder<T, R> tb : config.builder.tabs) {
-        Tab<T, R> tab = tb.build();
+      for (Tab<T, R> tab : config.getTabs()) {
         for (TabField field : tab.getFields()) {
           boolean giveReadPermission = tab.getRorRolesAsString().contains(role) || tab.getForRoles().isEmpty();
           if (giveReadPermission && !fieldRolePermissions.contains(field.getId(), role)) {
@@ -97,10 +93,9 @@ class AuthorisationCaseFieldGenerator<T, S, R extends HasRole> implements Config
       }
 
       // Add read for WorkBaskets
-      for (WorkBasketBuilder workBasketInputField :
-          Iterables.concat(config.builder.workBasketInputFields,
-              config.builder.workBasketResultFields)) {
-        WorkBasket basket = workBasketInputField.build();
+      for (WorkBasket basket :
+          Iterables.concat(config.getWorkBasketInputFields(),
+              config.getWorkBasketResultFields())) {
         for (WorkBasketField field : basket.getFields()) {
           if (!fieldRolePermissions.contains(field.getId(), role)) {
             fieldRolePermissions.put(field.getId(), role, Collections.singleton(Permission.R));
@@ -109,10 +104,9 @@ class AuthorisationCaseFieldGenerator<T, S, R extends HasRole> implements Config
       }
 
       // Add read for Search Input fields
-      for (SearchBuilder searchInputField :
-          Iterables.concat(config.builder.searchInputFields,
-              config.builder.searchResultFields)) {
-        Search search = searchInputField.build();
+      for (Search search :
+          Iterables.concat(config.getSearchInputFields(),
+              config.getSearchResultFields())) {
         for (SearchField field : search.getFields()) {
           if (!fieldRolePermissions.contains(field.getId(), role)) {
             fieldRolePermissions.put(field.getId(), role, Collections.singleton(Permission.R));
@@ -121,7 +115,7 @@ class AuthorisationCaseFieldGenerator<T, S, R extends HasRole> implements Config
       }
     }
 
-    addPermissionsFromFields(fieldRolePermissions, config.typeArg, null, null);
+    addPermissionsFromFields(fieldRolePermissions, config.getCaseClass(), null, null);
 
     File folder = new File(root.getPath(), "AuthorisationCaseField");
     folder.mkdir();
@@ -136,7 +130,7 @@ class AuthorisationCaseFieldGenerator<T, S, R extends HasRole> implements Config
 
         String field = fieldPerm.getKey();
         Set<Permission> inheritedPermission = getInheritedPermission(fieldRolePermissions,
-            config.builder.roleHierarchy, role, field);
+            config.getRoleHierarchy(), role, field);
         Set<Permission> fieldPermission = fieldPerm.getValue();
         if (inheritedPermission != null) {
           Set<Permission> newPermissions = Sets.newHashSet(fieldPerm.getValue());
@@ -149,13 +143,13 @@ class AuthorisationCaseFieldGenerator<T, S, R extends HasRole> implements Config
             continue;
           }
           Map<String, Object> permission = new Hashtable<>();
-          permission.put("CaseTypeID", config.builder.caseType);
+          permission.put("CaseTypeID", config.getCaseType());
           permission.put("LiveFrom", "01/01/2017");
           permission.put("UserRole", role);
           permission.put("CaseFieldID", field);
           permission.put("CRUD", Permission.toString(fieldPermission));
 
-          Optional<JsonUnwrapped> unwrapped = isUnwrappedField(config.typeArg, field);
+          Optional<JsonUnwrapped> unwrapped = isUnwrappedField(config.getCaseClass(), field);
 
           if (unwrapped.isEmpty()) {
             permissions.add(permission);

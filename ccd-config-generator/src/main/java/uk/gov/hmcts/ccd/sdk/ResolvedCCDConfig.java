@@ -1,31 +1,50 @@
 package uk.gov.hmcts.ccd.sdk;
 
+import com.google.common.collect.HashBasedTable;
+import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.Maps;
 import com.google.common.collect.Table;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import uk.gov.hmcts.ccd.sdk.api.Event;
 import uk.gov.hmcts.ccd.sdk.api.HasRole;
-import uk.gov.hmcts.ccd.sdk.api.callback.AboutToStart;
-import uk.gov.hmcts.ccd.sdk.api.callback.AboutToSubmit;
-import uk.gov.hmcts.ccd.sdk.api.callback.MidEvent;
-import uk.gov.hmcts.ccd.sdk.api.callback.Submitted;
+import uk.gov.hmcts.ccd.sdk.api.Permission;
+import uk.gov.hmcts.ccd.sdk.api.Search;
+import uk.gov.hmcts.ccd.sdk.api.SearchCases;
+import uk.gov.hmcts.ccd.sdk.api.Tab;
+import uk.gov.hmcts.ccd.sdk.api.WorkBasket;
 
 @RequiredArgsConstructor
+@Getter
 public class ResolvedCCDConfig<T, S, R extends HasRole> {
 
-  public final String caseType;
-  public final Class<?> typeArg;
-  public final Class<S> stateArg;
-  public final Class<?> roleType;
-  public final ConfigBuilderImpl<T, S, R> builder;
-  public final List<Event<T, R, S>> events;
-  public final Map<Class, Integer> types;
-  public final ImmutableSet<S> allStates;
-  public final Map<String, AboutToStart<T, S>> aboutToStartCallbacks;
-  public final Map<String, AboutToSubmit<T, S>> aboutToSubmitCallbacks;
-  public final Map<String, Submitted<T, S>> submittedCallbacks;
-  // Maps event ID and page ID to mid-event callbacks
-  public final Table<String, String, MidEvent<T, S>> midEventCallbacks;
+  final Class<T> caseClass;
+  final Class<S> stateClass;
+  final Class<R> roleClass;
+  final Map<Class, Integer> types;
+  final ImmutableSet<S> allStates;
+
+  String caseType = "";
+  String callbackHost = "";
+  String caseName = "";
+  String caseDesc = "";
+  String jurId = "";
+  String jurName = "";
+  String jurDesc = "";
+
+  Table<S, R, Set<Permission>> stateRolePermissions = HashBasedTable.create();
+  Map<String, String> roleHierarchy = Maps.newHashMap();
+
+  // Events by id
+  ImmutableMap<String, Event<T, R, S>> events;
+  List<Tab<T, R>> tabs;
+  List<WorkBasket> workBasketResultFields;
+  List<WorkBasket> workBasketInputFields;
+  List<Search> searchResultFields;
+  List<Search> searchInputFields;
+  List<SearchCases> searchCaseResultFields;
 }

@@ -1,54 +1,56 @@
 package uk.gov.hmcts.ccd.sdk;
 
-import com.google.common.collect.HashBasedTable;
-import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
-import com.google.common.collect.Table;
+import java.util.Collection;
 import java.util.EnumSet;
-import java.util.Hashtable;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 import uk.gov.hmcts.ccd.sdk.api.ConfigBuilder;
 import uk.gov.hmcts.ccd.sdk.api.Event;
 import uk.gov.hmcts.ccd.sdk.api.EventTypeBuilder;
-import uk.gov.hmcts.ccd.sdk.api.Field;
 import uk.gov.hmcts.ccd.sdk.api.HasRole;
 import uk.gov.hmcts.ccd.sdk.api.Permission;
 import uk.gov.hmcts.ccd.sdk.api.RoleBuilder;
 import uk.gov.hmcts.ccd.sdk.api.Search.SearchBuilder;
 import uk.gov.hmcts.ccd.sdk.api.SearchCases.SearchCasesBuilder;
-import uk.gov.hmcts.ccd.sdk.api.Tab;
 import uk.gov.hmcts.ccd.sdk.api.Tab.TabBuilder;
 import uk.gov.hmcts.ccd.sdk.api.WorkBasket.WorkBasketBuilder;
 
-public class ConfigBuilderImpl<T, S, R extends HasRole> implements ConfigBuilder<T, S, R> {
+class ConfigBuilderImpl<T, S, R extends HasRole> implements ConfigBuilder<T, S, R> {
 
-  private final ImmutableSet<S> allStates;
-  public String caseType = "default";
-  public final Table<S, R, Set<Permission>> stateRolePermissions = HashBasedTable.create();
-  public final Map<String, List<Event.EventBuilder<T, R, S>>> events = Maps.newHashMap();
-  public final List<Field.FieldBuilder> explicitFields = Lists.newArrayList();
-  public final List<TabBuilder<T, R>> tabs = Lists.newArrayList();
-  public final List<WorkBasketBuilder> workBasketResultFields = Lists.newArrayList();
-  public final List<WorkBasketBuilder> workBasketInputFields = Lists.newArrayList();
-  public final List<SearchBuilder> searchResultFields = Lists.newArrayList();
-  public final List<SearchBuilder> searchInputFields = Lists.newArrayList();
-  public final List<SearchCasesBuilder> searchCaseResultFields = Lists.newArrayList();
-  public final Map<String, String> roleHierarchy = new Hashtable<>();
+  private final ResolvedCCDConfig<T, S, R> config;
 
-  private Class caseData;
-  public String jurId = "";
-  public String jurName = "";
-  public String jurDesc = "";
-  public String caseName = "";
-  public String caseDesc = "";
-  public String callbackHost;
+  final Map<String, List<Event.EventBuilder<T, R, S>>> events = Maps.newHashMap();
+  final List<TabBuilder<T, R>> tabs = Lists.newArrayList();
+  final List<WorkBasketBuilder> workBasketResultFields = Lists.newArrayList();
+  final List<WorkBasketBuilder> workBasketInputFields = Lists.newArrayList();
+  final List<SearchBuilder> searchResultFields = Lists.newArrayList();
+  final List<SearchBuilder> searchInputFields = Lists.newArrayList();
+  final List<SearchCasesBuilder> searchCaseResultFields = Lists.newArrayList();
 
-  public ConfigBuilderImpl(Class caseData, Set<S> allStates) {
-    this.caseData = caseData;
-    this.allStates = ImmutableSet.copyOf(allStates);
+  public ConfigBuilderImpl(ResolvedCCDConfig<T, S, R> config) {
+    this.config = config;
+  }
+
+  <X, Y> List<Y> buildBuilders(Collection<X> c, Function<X, Y> f) {
+    return c.stream().map(f).collect(Collectors.toList());
+  }
+
+  public ResolvedCCDConfig<T, S, R> build() {
+    config.events = getEvents();
+    config.tabs = buildBuilders(tabs, TabBuilder::build);
+    config.workBasketResultFields = buildBuilders(workBasketResultFields, WorkBasketBuilder::build);
+    config.workBasketInputFields = buildBuilders(workBasketInputFields, WorkBasketBuilder::build);
+    config.searchResultFields = buildBuilders(searchResultFields, SearchBuilder::build);
+    config.searchInputFields = buildBuilders(searchInputFields, SearchBuilder::build);
+    config.searchCaseResultFields = buildBuilders(searchCaseResultFields, SearchCasesBuilder::build);
+
+    return config;
   }
 
   @Override
@@ -76,17 +78,17 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements ConfigBuilder
 
       @Override
       public Event.EventBuilder<T, R, S> forAllStates() {
-        return build(allStates, allStates);
+        return build(config.allStates, config.allStates);
       }
 
       @Override
       public Event.EventBuilder<T, R, S> forStates(S... states) {
-        return build(Set.of(states), allStates);
+        return build(Set.of(states), config.allStates);
       }
 
       private Event.EventBuilder<T, R, S> build(Set<S> preStates, Set<S> postStates) {
         Event.EventBuilder<T, R, S> result = Event.EventBuilder
-            .builder(id, caseData, new PropertyUtils(), preStates, postStates);
+            .builder(id, config.caseClass, new PropertyUtils(), preStates, postStates);
         if (!events.containsKey(id)) {
           events.put(id, Lists.newArrayList());
         }
@@ -98,28 +100,28 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements ConfigBuilder
 
   @Override
   public void caseType(String caseType, String name, String desc) {
-    this.caseType = caseType;
-    this.caseName = name;
-    this.caseDesc = desc;
+    config.caseType = caseType;
+    config.caseName = name;
+    config.caseDesc = desc;
   }
 
   @Override
   public void jurisdiction(String id, String name, String description) {
-    this.jurId = id;
-    this.jurName = name;
-    this.jurDesc = description;
+    config.jurId = id;
+    config.jurName = name;
+    config.jurDesc = description;
   }
 
   @Override
   public void grant(S state, Set<Permission> permissions, R... roles) {
     for (R role : roles) {
-      stateRolePermissions.put(state, role, permissions);
+      config.stateRolePermissions.put(state, role, permissions);
     }
   }
 
   @Override
   public TabBuilder<T, R> tab(String tabId, String tabLabel) {
-    TabBuilder<T, R> result = Tab.TabBuilder.builder(caseData,
+    TabBuilder<T, R> result = (TabBuilder<T, R>) TabBuilder.builder(config.caseClass,
         new PropertyUtils()).tabID(tabId).label(tabLabel);
     tabs.add(result);
     return result;
@@ -157,7 +159,7 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements ConfigBuilder
       @Override
       public void has(R parent) {
         for (R role : roles) {
-          roleHierarchy.put(role.getRole(), parent.getRole());
+          config.roleHierarchy.put(role.getRole(), parent.getRole());
         }
       }
     };
@@ -165,37 +167,37 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements ConfigBuilder
 
   @Override
   public void setCallbackHost(String s) {
-    this.callbackHost = s;
+    config.callbackHost = s;
   }
 
   private WorkBasketBuilder getWorkBasketBuilder(List<WorkBasketBuilder> workBasketInputFields) {
-    WorkBasketBuilder result = WorkBasketBuilder.builder(caseData, new PropertyUtils());
+    WorkBasketBuilder result = WorkBasketBuilder.builder(config.caseClass, new PropertyUtils());
     workBasketInputFields.add(result);
     return result;
   }
 
   private SearchBuilder getSearchBuilder(List<SearchBuilder> searchInputFields) {
-    SearchBuilder result = SearchBuilder.builder(caseData, new PropertyUtils());
+    SearchBuilder result = SearchBuilder.builder(config.caseClass, new PropertyUtils());
     searchInputFields.add(result);
     return result;
   }
 
   private SearchCasesBuilder getSearchCasesBuilder(List<SearchCasesBuilder> searchInputFields) {
-    SearchCasesBuilder result = SearchCasesBuilder.builder(caseData, new PropertyUtils());
+    SearchCasesBuilder result = SearchCasesBuilder.builder(config.caseClass, new PropertyUtils());
     searchInputFields.add(result);
     return result;
   }
 
-  public List<Event<T, R, S>> getEvents() {
+  ImmutableMap<String, Event<T, R, S>> getEvents() {
     Map<String, Event<T, R, S>> result = Maps.newHashMap();
     for (Map.Entry<String, List<Event.EventBuilder<T, R, S>>> cell : events.entrySet()) {
       for (Event.EventBuilder<T, R, S> builder : cell.getValue()) {
-        Event<T, R, S> event = builder.build();
+        Event<T, R, S> event = builder.doBuild();
         result.put(event.getId(), event);
       }
     }
 
-    return Lists.newArrayList(result.values());
+    return ImmutableMap.copyOf(result);
   }
 
 }
