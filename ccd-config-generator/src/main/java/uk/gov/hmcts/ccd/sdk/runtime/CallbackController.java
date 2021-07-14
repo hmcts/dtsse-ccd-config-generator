@@ -89,7 +89,12 @@ public class CallbackController {
   }
 
   <T> T findCallback(CallbackRequest request, TypedPropertyGetter<Event<?, ?, ?>, T> getter) {
-    return getter.get(findCaseEvent(request));
+    T result = getter.get(findCaseEvent(request));
+    if (result == null) {
+      log.warn("No callback for event " + request.getEventId());
+      throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Callback not found: " + request.getEventId());
+    }
+    return result;
   }
 
   <T> Event<?, ?, ?> findCaseEvent(CallbackRequest request) {
