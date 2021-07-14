@@ -42,7 +42,7 @@ public class CallbackController {
     this.mapper = mapper;
     for (ResolvedCCDConfig<?, ?, ?> config : configs) {
       this.caseTypeToJavaType.put(config.caseType,
-          mapper.getTypeFactory().constructParametricType(CaseDetails.class, config.typeArg, config.stateArg));
+          mapper.getTypeFactory().constructParametricType(CaseDetails.class, config.caseClass, config.stateClass));
     }
   }
 

@@ -21,9 +21,9 @@ class StateGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, S, R
   public void write(File root, ResolvedCCDConfig<T, S, R> config) {
     List<Map<String, Object>> result = Lists.newArrayList();
     int i = 1;
-    if (config.stateArg.isEnum()) {
-      for (Object enumConstant : config.stateArg.getEnumConstants()) {
-        Map<String, Object> field = enumToJsonMap(config.caseType, config.stateArg, enumConstant,
+    if (config.stateClass.isEnum()) {
+      for (Object enumConstant : config.stateClass.getEnumConstants()) {
+        Map<String, Object> field = enumToJsonMap(config.caseType, config.stateClass, enumConstant,
             enumConstant.toString());
         field.put("DisplayOrder", i++);
         result.add(field);

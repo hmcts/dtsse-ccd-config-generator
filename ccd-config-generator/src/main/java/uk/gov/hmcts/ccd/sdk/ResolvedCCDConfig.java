@@ -23,9 +23,9 @@ import uk.gov.hmcts.ccd.sdk.api.WorkBasket;
 @FieldDefaults(level = AccessLevel.PUBLIC)
 public class ResolvedCCDConfig<T, S, R extends HasRole> {
 
-  final Class<?> typeArg;
-  final Class<S> stateArg;
-  final Class<?> roleType;
+  final Class<T> caseClass;
+  final Class<S> stateClass;
+  final Class<R> roleClass;
   final Map<Class, Integer> types;
   final ImmutableSet<S> allStates;
 

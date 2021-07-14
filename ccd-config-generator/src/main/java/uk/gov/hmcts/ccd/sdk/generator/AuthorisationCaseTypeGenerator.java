@@ -14,7 +14,7 @@ import uk.gov.hmcts.ccd.sdk.api.HasRole;
 class AuthorisationCaseTypeGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, S, R> {
   public void write(File root, ResolvedCCDConfig<T, S, R> config) {
 
-    Class<?> roleEnum = config.roleType;
+    Class<?> roleEnum = config.roleClass;
     List<Map<String, Object>> result = Lists.newArrayList();
     if (roleEnum.isEnum()) {
       for (Object enumConstant : roleEnum.getEnumConstants()) {

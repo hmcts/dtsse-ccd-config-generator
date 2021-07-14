@@ -88,7 +88,7 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements ConfigBuilder
 
       private Event.EventBuilder<T, R, S> build(Set<S> preStates, Set<S> postStates) {
         Event.EventBuilder<T, R, S> result = Event.EventBuilder
-            .builder(id, config.typeArg, new PropertyUtils(), preStates, postStates);
+            .builder(id, config.caseClass, new PropertyUtils(), preStates, postStates);
         if (!events.containsKey(id)) {
           events.put(id, Lists.newArrayList());
         }
@@ -121,7 +121,7 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements ConfigBuilder
 
   @Override
   public TabBuilder<T, R> tab(String tabId, String tabLabel) {
-    TabBuilder<T, R> result = (TabBuilder<T, R>) TabBuilder.builder(config.typeArg,
+    TabBuilder<T, R> result = (TabBuilder<T, R>) TabBuilder.builder(config.caseClass,
         new PropertyUtils()).tabID(tabId).label(tabLabel);
     tabs.add(result);
     return result;
@@ -171,19 +171,19 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements ConfigBuilder
   }
 
   private WorkBasketBuilder getWorkBasketBuilder(List<WorkBasketBuilder> workBasketInputFields) {
-    WorkBasketBuilder result = WorkBasketBuilder.builder(config.typeArg, new PropertyUtils());
+    WorkBasketBuilder result = WorkBasketBuilder.builder(config.caseClass, new PropertyUtils());
     workBasketInputFields.add(result);
     return result;
   }
 
   private SearchBuilder getSearchBuilder(List<SearchBuilder> searchInputFields) {
-    SearchBuilder result = SearchBuilder.builder(config.typeArg, new PropertyUtils());
+    SearchBuilder result = SearchBuilder.builder(config.caseClass, new PropertyUtils());
     searchInputFields.add(result);
     return result;
   }
 
   private SearchCasesBuilder getSearchCasesBuilder(List<SearchCasesBuilder> searchInputFields) {
-    SearchCasesBuilder result = SearchCasesBuilder.builder(config.typeArg, new PropertyUtils());
+    SearchCasesBuilder result = SearchCasesBuilder.builder(config.caseClass, new PropertyUtils());
     searchInputFields.add(result);
     return result;
   }

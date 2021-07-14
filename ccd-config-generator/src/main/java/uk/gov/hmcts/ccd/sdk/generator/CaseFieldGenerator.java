@@ -41,7 +41,7 @@ class CaseFieldGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
   @Override
   public void write(
       File outputFolder, ResolvedCCDConfig<T, S, R> config) {
-    List<Map<String, Object>> fields = toComplex(config.typeArg, config.caseType);
+    List<Map<String, Object>> fields = toComplex(config.caseClass, config.caseType);
 
     Map<String, Object> history = getField(config.caseType, "caseHistory");
     history.put("Label", " ");
@@ -206,7 +206,7 @@ class CaseFieldGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
     for (String fieldId : explicitFields.keySet()) {
       uk.gov.hmcts.ccd.sdk.api.Field field = explicitFields.get(fieldId);
       Map<String, Object> fieldData = getField(config.caseType, fieldId);
-      Optional<JsonUnwrapped> unwrapped = isUnwrappedField(config.typeArg, fieldId);
+      Optional<JsonUnwrapped> unwrapped = isUnwrappedField(config.caseClass, fieldId);
       // Don't export inbuilt metadata fields. Ignore unwrapped complex types
       if (fieldId.matches("\\[.+\\]") || unwrapped.isPresent()) {
         continue;

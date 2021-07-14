@@ -115,7 +115,7 @@ class AuthorisationCaseFieldGenerator<T, S, R extends HasRole> implements Config
       }
     }
 
-    addPermissionsFromFields(fieldRolePermissions, config.typeArg, null, null);
+    addPermissionsFromFields(fieldRolePermissions, config.caseClass, null, null);
 
     File folder = new File(root.getPath(), "AuthorisationCaseField");
     folder.mkdir();
@@ -149,7 +149,7 @@ class AuthorisationCaseFieldGenerator<T, S, R extends HasRole> implements Config
           permission.put("CaseFieldID", field);
           permission.put("CRUD", Permission.toString(fieldPermission));
 
-          Optional<JsonUnwrapped> unwrapped = isUnwrappedField(config.typeArg, field);
+          Optional<JsonUnwrapped> unwrapped = isUnwrappedField(config.caseClass, field);
 
           if (unwrapped.isEmpty()) {
             permissions.add(permission);

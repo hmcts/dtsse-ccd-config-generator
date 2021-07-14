@@ -55,9 +55,9 @@ class AuthorisationCaseStateGenerator<T, S, R extends HasRole> implements Config
     }
 
     Objenesis objenesis = new ObjenesisStd();
-    for (S state : config.stateArg.getEnumConstants()) {
+    for (S state : config.stateClass.getEnumConstants()) {
       String enumFieldName = ((Enum)state).name();
-      CCD ccd = config.stateArg.getField(enumFieldName).getAnnotation(CCD.class);
+      CCD ccd = config.stateClass.getField(enumFieldName).getAnnotation(CCD.class);
 
       if (null != ccd) {
         for (var klass : ccd.access()) {
