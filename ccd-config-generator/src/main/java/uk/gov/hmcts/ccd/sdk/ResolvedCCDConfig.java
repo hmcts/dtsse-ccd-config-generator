@@ -6,7 +6,9 @@ import com.google.common.collect.Table;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
+import lombok.experimental.FieldDefaults;
 import uk.gov.hmcts.ccd.sdk.api.Event;
 import uk.gov.hmcts.ccd.sdk.api.Field;
 import uk.gov.hmcts.ccd.sdk.api.HasRole;
@@ -17,29 +19,30 @@ import uk.gov.hmcts.ccd.sdk.api.Tab;
 import uk.gov.hmcts.ccd.sdk.api.WorkBasket;
 
 @RequiredArgsConstructor
+@FieldDefaults(makeFinal = true, level = AccessLevel.PUBLIC)
 public class ResolvedCCDConfig<T, S, R extends HasRole> {
 
-  public final String caseType;
-  public final String callbackHost;
-  public final String caseName;
-  public final String caseDesc;
-  public final String jurId;
-  public final String jurName;
-  public final String jurDesc;
-  public final Class<?> typeArg;
-  public final Class<S> stateArg;
-  public final Class<?> roleType;
+  String caseType;
+  String callbackHost;
+  String caseName;
+  String caseDesc;
+  String jurId;
+  String jurName;
+  String jurDesc;
+  Class<?> typeArg;
+  Class<S> stateArg;
+  Class<?> roleType;
   // Events by id
-  public final ImmutableMap<String, Event<T, R, S>> events;
-  public final Map<Class, Integer> types;
-  public final ImmutableSet<S> allStates;
-  public final Table<S, R, Set<Permission>> stateRolePermissions;
-  public final List<Tab<T, R>> tabs;
-  public final List<WorkBasket> workBasketResultFields;
-  public final List<WorkBasket> workBasketInputFields;
-  public final List<Search> searchResultFields;
-  public final List<Search> searchInputFields;
-  public final List<SearchCases> searchCaseResultFields;
-  public final ImmutableMap<String, String> roleHierarchy;
-  public final List<Field> explicitFields;
+  ImmutableMap<String, Event<T, R, S>> events;
+  Map<Class, Integer> types;
+  ImmutableSet<S> allStates;
+  Table<S, R, Set<Permission>> stateRolePermissions;
+  List<Tab<T, R>> tabs;
+  List<WorkBasket> workBasketResultFields;
+  List<WorkBasket> workBasketInputFields;
+  List<Search> searchResultFields;
+  List<Search> searchInputFields;
+  List<SearchCases> searchCaseResultFields;
+  ImmutableMap<String, String> roleHierarchy;
+  List<Field> explicitFields;
 }
