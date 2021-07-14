@@ -8,9 +8,8 @@ import com.google.common.collect.Table;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import lombok.AccessLevel;
+import lombok.Getter;
 import lombok.RequiredArgsConstructor;
-import lombok.experimental.FieldDefaults;
 import uk.gov.hmcts.ccd.sdk.api.Event;
 import uk.gov.hmcts.ccd.sdk.api.HasRole;
 import uk.gov.hmcts.ccd.sdk.api.Permission;
@@ -20,7 +19,7 @@ import uk.gov.hmcts.ccd.sdk.api.Tab;
 import uk.gov.hmcts.ccd.sdk.api.WorkBasket;
 
 @RequiredArgsConstructor
-@FieldDefaults(level = AccessLevel.PUBLIC)
+@Getter
 public class ResolvedCCDConfig<T, S, R extends HasRole> {
 
   final Class<T> caseClass;

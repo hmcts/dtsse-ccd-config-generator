@@ -18,8 +18,8 @@ import uk.gov.hmcts.ccd.sdk.generator.JsonUtils.AddMissing;
 class SearchFieldAndResultGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, S, R> {
 
   public void write(File root, ResolvedCCDConfig<T, S, R> config) {
-    generateFields(root, config.caseType, config.searchInputFields, "SearchInputFields");
-    generateFields(root, config.caseType, config.searchResultFields, "SearchResultFields");
+    generateFields(root, config.getCaseType(), config.getSearchInputFields(), "SearchInputFields");
+    generateFields(root, config.getCaseType(), config.getSearchResultFields(), "SearchResultFields");
   }
 
   private static void generateFields(

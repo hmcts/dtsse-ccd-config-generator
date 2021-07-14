@@ -26,13 +26,13 @@ class CaseTypeTabGenerator<T, S, R extends HasRole> implements ConfigGenerator<T
   public void write(File root, ResolvedCCDConfig<T, S, R> config) {
 
     List<Map<String, Object>> result = Lists.newArrayList();
-    result.add(buildField(config.caseType, "CaseHistory", "caseHistory", "History", 1, 1, ""));
+    result.add(buildField(config.getCaseType(), "CaseHistory", "caseHistory", "History", 1, 1, ""));
 
     List<Map<String, Object>> caseFields = Lists.newArrayList();
 
     int tabDisplayOrder = 2;
 
-    for (Tab<T, R> tab : config.tabs) {
+    for (Tab<T, R> tab : config.getTabs()) {
       List<String> roles = tab.getRorRolesAsString();
 
       // if no roles have been specified leave UserRole empty
@@ -41,7 +41,7 @@ class CaseTypeTabGenerator<T, S, R extends HasRole> implements ConfigGenerator<T
       }
 
       for (String role : roles) {
-        addTab(config.caseType, result, caseFields, tabDisplayOrder++, tab, role);
+        addTab(config.getCaseType(), result, caseFields, tabDisplayOrder++, tab, role);
       }
     }
 

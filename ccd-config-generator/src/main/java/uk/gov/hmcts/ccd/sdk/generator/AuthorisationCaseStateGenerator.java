@@ -30,8 +30,8 @@ class AuthorisationCaseStateGenerator<T, S, R extends HasRole> implements Config
   @SneakyThrows
   public void write(File root, ResolvedCCDConfig<T, S, R> config) {
 
-    for (Event<T, R, S> event : config.events.values()) {
-      if (event.getPreState().equals(config.allStates)) {
+    for (Event<T, R, S> event : config.getEvents().values()) {
+      if (event.getPreState().equals(config.getAllStates())) {
         continue;
       }
 
@@ -41,44 +41,44 @@ class AuthorisationCaseStateGenerator<T, S, R extends HasRole> implements Config
         // Otherwise you only need permission for the destination state.
         if (event.getPreState() != event.getPostState()) {
           if (grants.get(role).contains(Permission.C) && !event.getPreState().isEmpty()) {
-            addPermissions(config.stateRolePermissions, event.getPreState(), role,
+            addPermissions(config.getStateRolePermissions(), event.getPreState(), role,
                 grants.get(role));
             // They get R only on the destination state.
-            addPermissions(config.stateRolePermissions, event.getPostState(), role,
+            addPermissions(config.getStateRolePermissions(), event.getPostState(), role,
                 Collections.singleton(Permission.R));
           }
         } else {
-          addPermissions(config.stateRolePermissions, event.getPostState(), role,
+          addPermissions(config.getStateRolePermissions(), event.getPostState(), role,
               grants.get(role));
         }
       }
     }
 
     Objenesis objenesis = new ObjenesisStd();
-    for (S state : config.stateClass.getEnumConstants()) {
+    for (S state : config.getStateClass().getEnumConstants()) {
       String enumFieldName = ((Enum)state).name();
-      CCD ccd = config.stateClass.getField(enumFieldName).getAnnotation(CCD.class);
+      CCD ccd = config.getStateClass().getField(enumFieldName).getAnnotation(CCD.class);
 
       if (null != ccd) {
         for (var klass : ccd.access()) {
           HasAccessControl accessHolder = objenesis.newInstance(klass);
           SetMultimap<HasRole, Permission> roleGrants = accessHolder.getGrants();
           for (HasRole key : roleGrants.keys()) {
-            addPermissions(config.stateRolePermissions, Set.of(state), (R)key, roleGrants.get(key));
+            addPermissions(config.getStateRolePermissions(), Set.of(state), (R)key, roleGrants.get(key));
           }
         }
       }
     }
 
     List<Map<String, Object>> result = Lists.newArrayList();
-    for (Cell<S, R, Set<Permission>> stateRolePermission : config.stateRolePermissions.cellSet()) {
+    for (Cell<S, R, Set<Permission>> stateRolePermission : config.getStateRolePermissions().cellSet()) {
       if (stateRolePermission.getColumnKey().toString().matches("\\[.*?\\]")) {
         // Ignore CCD roles.
         continue;
       }
       Map<String, Object> permission = Maps.newHashMap();
       result.add(permission);
-      permission.put("CaseTypeID", config.caseType);
+      permission.put("CaseTypeID", config.getCaseType());
       permission.put("LiveFrom", "01/01/2017");
       permission.put("CaseStateID", stateRolePermission.getRowKey());
       permission.put("UserRole", stateRolePermission.getColumnKey().getRole());

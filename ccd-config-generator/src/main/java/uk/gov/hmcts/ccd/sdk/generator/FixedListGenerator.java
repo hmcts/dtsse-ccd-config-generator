@@ -21,7 +21,7 @@ class FixedListGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
     File dir = root.toPath().resolve("FixedLists").toFile();
     dir.mkdir();
 
-    for (Class c : config.types.keySet()) {
+    for (Class c : config.getTypes().keySet()) {
       ComplexType complexType = (ComplexType) c.getAnnotation(ComplexType.class);
       if (c.isEnum() && (complexType == null || complexType.generate())) {
         List<Map<String, Object>> fields = Lists.newArrayList();

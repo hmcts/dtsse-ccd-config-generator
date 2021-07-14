@@ -41,9 +41,9 @@ class CaseFieldGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
   @Override
   public void write(
       File outputFolder, ResolvedCCDConfig<T, S, R> config) {
-    List<Map<String, Object>> fields = toComplex(config.caseClass, config.caseType);
+    List<Map<String, Object>> fields = toComplex(config.getCaseClass(), config.getCaseType());
 
-    Map<String, Object> history = getField(config.caseType, "caseHistory");
+    Map<String, Object> history = getField(config.getCaseType(), "caseHistory");
     history.put("Label", " ");
     history.put("FieldType", "CaseHistoryViewer");
     fields.add(history);
@@ -192,7 +192,7 @@ class CaseFieldGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
   private static <T, S, R extends HasRole> List<Map<String, Object>> getExplicitFields(
       ResolvedCCDConfig<T, S, R> config) {
     Map<String, uk.gov.hmcts.ccd.sdk.api.Field> explicitFields = Maps.newHashMap();
-    for (Event event : config.events.values()) {
+    for (Event event : config.getEvents().values()) {
       List<uk.gov.hmcts.ccd.sdk.api.Field.FieldBuilder> fc = event.getFields()
           .getExplicitFields();
 
@@ -205,8 +205,8 @@ class CaseFieldGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
     List<Map<String, Object>> result = Lists.newArrayList();
     for (String fieldId : explicitFields.keySet()) {
       uk.gov.hmcts.ccd.sdk.api.Field field = explicitFields.get(fieldId);
-      Map<String, Object> fieldData = getField(config.caseType, fieldId);
-      Optional<JsonUnwrapped> unwrapped = isUnwrappedField(config.caseClass, fieldId);
+      Map<String, Object> fieldData = getField(config.getCaseType(), fieldId);
+      Optional<JsonUnwrapped> unwrapped = isUnwrappedField(config.getCaseClass(), fieldId);
       // Don't export inbuilt metadata fields. Ignore unwrapped complex types
       if (fieldId.matches("\\[.+\\]") || unwrapped.isPresent()) {
         continue;

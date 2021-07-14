@@ -18,7 +18,7 @@ class ComplexTypeGenerator<T, S, R extends HasRole> implements ConfigGenerator<T
   public void write(File root, ResolvedCCDConfig<T, S, R> config) {
     File complexTypes = new File(root, "ComplexTypes");
     complexTypes.mkdir();
-    Map<Class, Integer> types = config.types.entrySet().stream().filter(x -> !x.getKey().isEnum())
+    Map<Class, Integer> types = config.getTypes().entrySet().stream().filter(x -> !x.getKey().isEnum())
         .collect(Collectors.toMap(x -> x.getKey(), x -> x.getValue()));
 
     if (types.isEmpty()) {
@@ -35,7 +35,7 @@ class ComplexTypeGenerator<T, S, R extends HasRole> implements ConfigGenerator<T
         continue;
       }
 
-      List<Map<String, Object>> fields = CaseFieldGenerator.toComplex(c, config.caseType);
+      List<Map<String, Object>> fields = CaseFieldGenerator.toComplex(c, config.getCaseType());
 
       for (Map<String, Object> info : fields) {
         info.put("ListElementCode", info.get("ID"));

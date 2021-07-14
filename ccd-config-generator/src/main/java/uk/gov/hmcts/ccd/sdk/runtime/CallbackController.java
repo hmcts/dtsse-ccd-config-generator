@@ -38,11 +38,12 @@ public class CallbackController {
 
   @Autowired
   public CallbackController(Collection<ResolvedCCDConfig<?, ?, ?>> configs, ObjectMapper mapper) {
-    this.caseTypeToConfig = Maps.uniqueIndex(configs, x -> x.caseType);
+    this.caseTypeToConfig = Maps.uniqueIndex(configs, x -> x.getCaseType());
     this.mapper = mapper;
     for (ResolvedCCDConfig<?, ?, ?> config : configs) {
-      this.caseTypeToJavaType.put(config.caseType,
-          mapper.getTypeFactory().constructParametricType(CaseDetails.class, config.caseClass, config.stateClass));
+      this.caseTypeToJavaType.put(config.getCaseType(),
+          mapper.getTypeFactory().constructParametricType(CaseDetails.class, config.getCaseClass(),
+              config.getStateClass()));
     }
   }
 
@@ -104,7 +105,7 @@ public class CallbackController {
       throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Case type not found: " + caseType);
     }
 
-    Event<?, ?, ?> result = caseTypeToConfig.get(caseType).events.get(request.getEventId());
+    Event<?, ?, ?> result = caseTypeToConfig.get(caseType).getEvents().get(request.getEventId());
     if (result == null) {
       log.warn("Unknown event " + request.getEventId());
       throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Case event not found: " + request.getEventId());

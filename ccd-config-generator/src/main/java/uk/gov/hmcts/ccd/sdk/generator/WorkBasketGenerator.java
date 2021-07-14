@@ -20,8 +20,8 @@ import uk.gov.hmcts.ccd.sdk.generator.JsonUtils.AddMissing;
 class WorkBasketGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, S, R> {
 
   public void write(File root, ResolvedCCDConfig<T, S, R> config) {
-    generateFields(root, config.caseType, config.workBasketInputFields, "WorkBasketInputFields");
-    generateFields(root, config.caseType, config.workBasketResultFields, "WorkBasketResultFields");
+    generateFields(root, config.getCaseType(), config.getWorkBasketInputFields(), "WorkBasketInputFields");
+    generateFields(root, config.getCaseType(), config.getWorkBasketResultFields(), "WorkBasketResultFields");
   }
 
   private static void generateFields(File root, String caseType,

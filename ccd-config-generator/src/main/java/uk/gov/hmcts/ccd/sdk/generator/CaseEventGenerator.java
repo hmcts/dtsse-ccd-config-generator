@@ -24,11 +24,11 @@ class CaseEventGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
 
     File folder = new File(root.getPath(), "CaseEvent");
     folder.mkdir();
-    for (Event event : config.events.values()) {
+    for (Event event : config.getEvents().values()) {
       Path output = Paths.get(folder.getPath(), event.getId() + ".json");
 
-      JsonUtils.mergeInto(output, serialise(config.caseType, event, config.allStates,
-          config.callbackHost),
+      JsonUtils.mergeInto(output, serialise(config.getCaseType(), event, config.getAllStates(),
+          config.getCallbackHost()),
           new AddMissing(), "ID");
     }
   }

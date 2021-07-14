@@ -14,7 +14,7 @@ import uk.gov.hmcts.ccd.sdk.api.HasRole;
 class AuthorisationCaseTypeGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, S, R> {
   public void write(File root, ResolvedCCDConfig<T, S, R> config) {
 
-    Class<?> roleEnum = config.roleClass;
+    Class<?> roleEnum = config.getRoleClass();
     List<Map<String, Object>> result = Lists.newArrayList();
     if (roleEnum.isEnum()) {
       for (Object enumConstant : roleEnum.getEnumConstants()) {
@@ -24,7 +24,7 @@ class AuthorisationCaseTypeGenerator<T, S, R extends HasRole> implements ConfigG
           if (!r.getRole().matches("\\[.+\\]")) {
             result.add(Map.of(
                 "LiveFrom", "01/01/2017",
-                "CaseTypeID", config.caseType,
+                "CaseTypeID", config.getCaseType(),
                 "UserRole", r.getRole(),
                 "CRUD", r.getCaseTypePermissions()
             ));

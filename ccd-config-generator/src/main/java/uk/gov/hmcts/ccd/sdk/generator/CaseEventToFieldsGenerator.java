@@ -24,7 +24,7 @@ import uk.gov.hmcts.ccd.sdk.generator.JsonUtils.AddMissing;
 class CaseEventToFieldsGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, S, R> {
 
   public void write(File root, ResolvedCCDConfig<T, S, R> config) {
-    for (Event<T, R, S> event : config.events.values()) {
+    for (Event<T, R, S> event : config.getEvents().values()) {
       // For use in tracking which callbacks have been written.
       Multimap<String, String> writtenCallbacks = HashMultimap.create();
       FieldCollection collection = event.getFields();
@@ -36,7 +36,7 @@ class CaseEventToFieldsGenerator<T, S, R extends HasRole> implements ConfigGener
           entries.add(info);
           info.put("LiveFrom", "01/01/2017");
           info.put("CaseEventID", event.getId());
-          info.put("CaseTypeID", config.caseType);
+          info.put("CaseTypeID", config.getCaseType());
           Field field = fb.build();
           info.put("CaseFieldID", field.getId());
           String context =
@@ -62,7 +62,7 @@ class CaseEventToFieldsGenerator<T, S, R extends HasRole> implements ConfigGener
           // Include any mid-event callbacks only on the first page's entry
           if (collection.getPagesToMidEvent().containsKey(pageId.toString())
               && !writtenCallbacks.containsEntry(event.getId(), pageId.toString())) {
-            info.put("CallBackURLMidEvent", config.callbackHost + "/callbacks/mid-event?page="
+            info.put("CallBackURLMidEvent", config.getCallbackHost() + "/callbacks/mid-event?page="
                 + URLEncoder.encode(pageId.toString(), StandardCharsets.UTF_8));
             writtenCallbacks.put(event.getId(), pageId.toString());
           }
