@@ -1,5 +1,7 @@
 package uk.gov.hmcts.ccd.sdk.generator;
 
+import static uk.gov.hmcts.ccd.sdk.generator.GeneratorUtils.sortDisplayOrderByEventName;
+
 import com.google.common.base.Strings;
 import com.google.common.collect.Lists;
 import java.io.File;
@@ -24,7 +26,10 @@ class CaseEventGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
 
     File folder = new File(root.getPath(), "CaseEvent");
     folder.mkdir();
-    for (Event event : config.getEvents().values()) {
+
+    List<Event<T, R, S>> events = sortDisplayOrderByEventName(config.getEvents().values());
+
+    for (Event event : events) {
       Path output = Paths.get(folder.getPath(), event.getId() + ".json");
 
       JsonUtils.mergeInto(output, serialise(config.getCaseType(), event, config.getAllStates(),
@@ -35,17 +40,12 @@ class CaseEventGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
 
   private List<Map<String, Object>> serialise(String caseTypeId, Event<T, R, S> event,
                                               Set<S> allStates, String callbackHost) {
-    int t = 1;
     List result = Lists.newArrayList();
     Map<String, Object> data = JsonUtils.getField(event.getId());
     result.add(data);
     data.put("Name", event.getName());
     data.put("Description", event.getDescription());
-    if (event.getDisplayOrder() != -1) {
-      data.put("DisplayOrder", event.getDisplayOrder());
-    } else {
-      data.put("DisplayOrder", t++);
-    }
+    data.put("DisplayOrder", event.getDisplayOrder());
     data.put("CaseTypeID", caseTypeId);
     if (event.isShowSummary()) {
       data.put("ShowSummary", "Y");

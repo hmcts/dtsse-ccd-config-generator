@@ -62,7 +62,7 @@ class CaseTypeTabGenerator<T, S, R extends HasRole> implements ConfigGenerator<T
     int tabFieldDisplayOrder = 1;
     for (TabField tabField : tab.getFields()) {
       Map<String, Object> field = buildField(caseType, tab.getTabID() + role, tabField.getId(),
-          tab.getLabel(), tabDisplayOrder, tabFieldDisplayOrder, role);
+          tab.getLabelText(), tabDisplayOrder, tabFieldDisplayOrder, role);
       if (tab.getShowCondition() != null && tabFieldDisplayOrder == 1) {
         field.put("TabShowCondition", tab.getShowCondition());
       }

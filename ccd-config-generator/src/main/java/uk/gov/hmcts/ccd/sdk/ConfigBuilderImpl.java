@@ -21,7 +21,7 @@ import uk.gov.hmcts.ccd.sdk.api.SearchCases.SearchCasesBuilder;
 import uk.gov.hmcts.ccd.sdk.api.Tab.TabBuilder;
 import uk.gov.hmcts.ccd.sdk.api.WorkBasket.WorkBasketBuilder;
 
-class ConfigBuilderImpl<T, S, R extends HasRole> implements ConfigBuilder<T, S, R> {
+public class ConfigBuilderImpl<T, S, R extends HasRole> implements ConfigBuilder<T, S, R> {
 
   private final ResolvedCCDConfig<T, S, R> config;
 
@@ -122,7 +122,7 @@ class ConfigBuilderImpl<T, S, R extends HasRole> implements ConfigBuilder<T, S, 
   @Override
   public TabBuilder<T, R> tab(String tabId, String tabLabel) {
     TabBuilder<T, R> result = (TabBuilder<T, R>) TabBuilder.builder(config.caseClass,
-        new PropertyUtils()).tabID(tabId).label(tabLabel);
+        new PropertyUtils()).tabID(tabId).labelText(tabLabel);
     tabs.add(result);
     return result;
   }
