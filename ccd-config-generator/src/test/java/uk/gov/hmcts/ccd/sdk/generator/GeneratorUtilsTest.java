@@ -3,6 +3,8 @@ package uk.gov.hmcts.ccd.sdk.generator;
 import static java.util.Arrays.asList;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.groups.Tuple.tuple;
+import static uk.gov.hmcts.ccd.sdk.generator.GeneratorUtils.hasAnyDisplayOrder;
+import static uk.gov.hmcts.ccd.sdk.generator.GeneratorUtils.sortDisplayOrderByEventName;
 
 import java.util.List;
 import org.junit.Test;
@@ -21,7 +23,7 @@ public class GeneratorUtilsTest {
 
     List<Event<Object, HasRole, Object>> events = asList(event1, event2, event3, event4);
 
-    List<Event<Object, HasRole, Object>> results = GeneratorUtils.sortDisplayOrderByEventName(events);
+    List<Event<Object, HasRole, Object>> results = sortDisplayOrderByEventName(events);
 
     assertThat(results)
       .hasSize(4)
@@ -32,5 +34,31 @@ public class GeneratorUtilsTest {
         tuple(3, "h"),
         tuple(4, "t")
       );
+  }
+
+  @Test
+  public void shouldReturnTrueIfAnyDisplayOrderIsSet() {
+
+    Event<Object, HasRole, Object> event1 = Event.builder().build();
+    Event<Object, HasRole, Object> event2 = Event.builder().build();
+    Event<Object, HasRole, Object> event3 = Event.builder().displayOrder(1).build();
+    Event<Object, HasRole, Object> event4 = Event.builder().build();
+
+    List<Event<Object, HasRole, Object>> events = asList(event1, event2, event3, event4);
+
+    assertThat(hasAnyDisplayOrder(events)).isTrue();
+  }
+
+  @Test
+  public void shouldReturnFalseIfDisplayOrderIsNotSet() {
+
+    Event<Object, HasRole, Object> event1 = Event.builder().build();
+    Event<Object, HasRole, Object> event2 = Event.builder().build();
+    Event<Object, HasRole, Object> event3 = Event.builder().build();
+    Event<Object, HasRole, Object> event4 = Event.builder().build();
+
+    List<Event<Object, HasRole, Object>> events = asList(event1, event2, event3, event4);
+
+    assertThat(hasAnyDisplayOrder(events)).isFalse();
   }
 }

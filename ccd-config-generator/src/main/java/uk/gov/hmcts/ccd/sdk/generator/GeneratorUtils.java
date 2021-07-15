@@ -26,4 +26,8 @@ public final class GeneratorUtils {
       })
       .collect(toList());
   }
+
+  public static <T, R extends HasRole, S> boolean hasAnyDisplayOrder(final Collection<Event<T, R, S>> events) {
+    return events.stream().anyMatch(event -> event.getDisplayOrder() != -1);
+  }
 }
