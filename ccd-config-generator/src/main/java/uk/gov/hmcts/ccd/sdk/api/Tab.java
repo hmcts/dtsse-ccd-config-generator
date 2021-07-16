@@ -16,7 +16,7 @@ import lombok.Data;
 @Data
 public class Tab<T, R extends HasRole> {
   private String tabID;
-  private String label;
+  private String labelText;
   private String showCondition;
   private int displayOrder;
   private List<TabField> fields;
@@ -65,7 +65,7 @@ public class Tab<T, R extends HasRole> {
       return this;
     }
 
-    public TabBuilder<T, R> field(String fieldName, String showCondition, String label) {
+    public TabBuilder<T, R> label(String fieldName, String showCondition, String label) {
       fields.add(TabField.builder().id(fieldName).showCondition(showCondition).label(label).build());
       return this;
     }

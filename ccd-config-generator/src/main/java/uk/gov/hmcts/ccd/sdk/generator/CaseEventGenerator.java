@@ -1,10 +1,15 @@
 package uk.gov.hmcts.ccd.sdk.generator;
 
+import static uk.gov.hmcts.ccd.sdk.generator.GeneratorUtils.hasAnyDisplayOrder;
+import static uk.gov.hmcts.ccd.sdk.generator.GeneratorUtils.sortDisplayOrderByEventName;
+
 import com.google.common.base.Strings;
+import com.google.common.collect.ImmutableCollection;
 import com.google.common.collect.Lists;
 import java.io.File;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -24,13 +29,23 @@ class CaseEventGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
 
     File folder = new File(root.getPath(), "CaseEvent");
     folder.mkdir();
-    for (Event event : config.getEvents().values()) {
+
+    List<Event<T, R, S>> events = getOrderedEvents(config.getEvents().values());
+
+    for (Event event : events) {
       Path output = Paths.get(folder.getPath(), event.getId() + ".json");
 
       JsonUtils.mergeInto(output, serialise(config.getCaseType(), event, config.getAllStates(),
           config.getCallbackHost()),
           new AddMissing(), "ID");
     }
+  }
+
+  private List<Event<T, R, S>> getOrderedEvents(ImmutableCollection<Event<T, R, S>> originalEvents) {
+    if (hasAnyDisplayOrder(originalEvents)) {
+      return new ArrayList<>(originalEvents);
+    }
+    return sortDisplayOrderByEventName(originalEvents);
   }
 
   private List<Map<String, Object>> serialise(String caseTypeId, Event<T, R, S> event,
