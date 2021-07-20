@@ -99,6 +99,13 @@ public class FieldCollection {
       return field(getter, DisplayContext.Optional, true);
     }
 
+    public <Value> FieldCollectionBuilder<Type, StateType, Parent> optionalWithoutDefaultValue(
+        TypedPropertyGetter<Type, Value> getter,
+        String showCondition,
+        String caseEventFieldLabe) {
+      return field(getter, DisplayContext.Optional, showCondition, true, null, caseEventFieldLabe, null);
+    }
+
     public FieldCollectionBuilder<Type, StateType, Parent> optionalNoSummary(TypedPropertyGetter<Type, ?> getter,
         String showCondition) {
       return field(getter, DisplayContext.Optional, showCondition, false);
