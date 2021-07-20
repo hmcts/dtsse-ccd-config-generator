@@ -376,5 +376,12 @@
     "UserRole": "caseworker-publiclaw-solicitor",
     "LiveFrom": "01/01/2017",
     "CaseFieldID": "hearingPreferencesInterpreter"
+  },
+  {
+    "CRUD" : "CRU",
+    "CaseFieldID" : "gatekeeperEmail",
+    "CaseTypeID" : "CARE_SUPERVISION_EPO",
+    "LiveFrom" : "01/01/2017",
+    "UserRole" : "caseworker-publiclaw-solicitor"
   }
 ]
