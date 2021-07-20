@@ -28,6 +28,7 @@ import uk.gov.hmcts.ccd.sdk.api.ConfigBuilder;
 import uk.gov.hmcts.ccd.sdk.type.Organisation;
 import uk.gov.hmcts.ccd.sdk.type.OrganisationPolicy;
 import uk.gov.hmcts.reform.ccd.client.model.SubmittedCallbackResponse;
+import uk.gov.hmcts.reform.fpl.access.SolicitorAccess;
 import uk.gov.hmcts.reform.fpl.enums.State;
 import uk.gov.hmcts.reform.fpl.enums.UserRole;
 import uk.gov.hmcts.reform.fpl.model.CaseData;
@@ -42,14 +43,9 @@ public class CCDConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<CaseData, S
 
   private ConfigBuilder<CaseData, State, UserRole> builder;
 
-  protected String environment() {
-        return "production";
-    }
-
   public void configure(ConfigBuilder<CaseData, State, UserRole> builder) {
     this.builder = builder;
     builder.setCallbackHost("${CCD_DEF_CASE_SERVICE_BASE_URL}");
-    builder.setEnvironment(environment());
     builder.jurisdiction("PUBLICLAW", "Family Public Law", "Family Public Law desc");
     builder.caseType("CARE_SUPERVISION_EPO", "Care, supervision and EPOs", "Care, supervision and emergency protection orders");
 
@@ -58,7 +54,6 @@ public class CCDConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<CaseData, S
     // Describe the hierarchy of which roles go together.
     builder.role(CCD_SOLICITOR, CCD_LASOLICITOR).has(LOCAL_AUTHORITY);
     builder.role(JUDICIARY, GATEKEEPER).has(HMCTS_ADMIN);
-    builder.role(SYSTEM_UPDATE, BULK_SCAN, BULK_SCAN_SYSTEM_UPDATE).setApiOnly();
 
     // Events
     buildUniversalEvents();
@@ -78,6 +73,7 @@ public class CCDConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<CaseData, S
         .name("Add case notes")
         .grant(CRU, HMCTS_ADMIN)
         .grant(R, LOCAL_AUTHORITY)
+        .grant(new SolicitorAccess())
         .fields()
         .optional(CaseData::getCaseNotes)
         .complex(CaseData::getHearingPreferences)
@@ -147,38 +143,25 @@ public class CCDConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<CaseData, S
   }
 
   private void buildTabs() {
-    builder.tab("HearingTab", "Hearings")
-        .restrictedField(CaseData::getHearingDetails).exclude(CAFCASS)
-        .restrictedField(CaseData::getHearing).exclude(LOCAL_AUTHORITY);
-
     builder.tab("DraftOrdersTab", "Draft orders")
-        .exclude(LOCAL_AUTHORITY, HMCTS_ADMIN, GATEKEEPER, JUDICIARY)
         .showCondition("standardDirectionOrder.orderStatus!=\"SEALED\" OR caseManagementOrder!=\"\" OR sharedDraftCMODocument!=\"\" OR cmoToAction!=\"\"")
         .field(CaseData::getStandardDirectionOrder, "standardDirectionOrder.orderStatus!=\"SEALED\"")
         .field(CaseData::getSharedDraftCMODocument)
-        .field(CaseData::getDateSubmitted, null, "#DATETIMEDISPLAY(d  MMMM yyyy)")
-        .restrictedField(CaseData::getCaseManagementOrder_Judiciary).exclude(CAFCASS)
-        .restrictedField(CaseData::getCaseManagementOrder).exclude(CAFCASS);
+        .field(CaseData::getDateSubmitted, null, "#DATETIMEDISPLAY(d  MMMM yyyy)");
 
     builder.tab("OrdersTab", "Orders")
-        .exclude(LOCAL_AUTHORITY)
-        .restrictedField(CaseData::getServedCaseManagementOrders).exclude(CAFCASS)
         .field(CaseData::getStandardDirectionOrder, "standardDirectionOrder.orderStatus=\"SEALED\"")
-        .field(CaseData::getOrders)
-        .restrictedField(CaseData::getOrderCollection).exclude(CAFCASS);
+        .field(CaseData::getOrders);
 
     builder.tab("CasePeopleTab", "People in the case")
-        .exclude(LOCAL_AUTHORITY)
         .field(CaseData::getAllocatedJudge)
         .field(CaseData::getChildren1)
         .field(CaseData::getRespondents1)
         .field(CaseData::getApplicants)
         .field(CaseData::getSolicitor)
-        .field(CaseData::getOthers)
-        .restrictedField(CaseData::getRepresentatives).exclude(CAFCASS, LOCAL_AUTHORITY);
+        .field(CaseData::getOthers);
 
     builder.tab("LegalBasisTab", "Legal basis")
-        .exclude(LOCAL_AUTHORITY)
         .field(CaseData::getStatementOfService)
         .field(CaseData::getGroundsForEPO)
         .field(CaseData::getGrounds)
@@ -191,7 +174,6 @@ public class CCDConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<CaseData, S
         .field(CaseData::getHearingPreferences);
 
     builder.tab("DocumentsTab", "Documents")
-        .exclude(LOCAL_AUTHORITY)
         .field(CaseData::getSocialWorkChronologyDocument)
         .field(CaseData::getSocialWorkStatementDocument)
         .field(CaseData::getSocialWorkAssessmentDocument)
@@ -204,31 +186,25 @@ public class CCDConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<CaseData, S
         .field("courtBundle")
         .field(CaseData::getOtherSocialWorkDocuments)
         .field("submittedForm")
-        .restrictedField(CaseData::getNoticeOfProceedingsBundle).exclude(CAFCASS)
-        .field(CaseData::getC2DocumentBundle)
-        .restrictedField("scannedDocuments").exclude(CAFCASS);
+        .field(CaseData::getC2DocumentBundle);
 
     builder.tab("Confidential", "Confidential")
-        .exclude(CAFCASS, LOCAL_AUTHORITY)
         .field(CaseData::getConfidentialChildren)
         .field(CaseData::getConfidentialRespondents)
         .field(CaseData::getConfidentialOthers);
 
     builder.tab("PlacementTab", "Placement")
-        .exclude(CAFCASS, LOCAL_AUTHORITY, HMCTS_ADMIN, GATEKEEPER, JUDICIARY)
         .field("placements")
         .field(CaseData::getPlacements)
         .field("placementsWithoutPlacementOrder");
 
     builder.tab("SentDocumentsTab", "Documents sent to parties")
-        .exclude(CAFCASS, LOCAL_AUTHORITY)
         .field("documentsSentToParties");
 
-    builder.tab("PaymentsTab", "Payment History")
-        .restrictedField("paymentHistory").exclude(CAFCASS, LOCAL_AUTHORITY);
-
-    builder.tab("Notes", "Notes")
-        .restrictedField(CaseData::getCaseNotes).exclude(CAFCASS, LOCAL_AUTHORITY);
+    builder.tab("TabWithUserRoles", "Test multiple tabs get created for each user")
+        .forRoles(BULK_SCAN, BULK_SCAN_SYSTEM_UPDATE)
+        .field("hearingPreferencesLocationPreferencesLocal")
+        .field("hearingPreferencesLocationPreferencesOnline");
   }
 
   private void buildUniversalEvents() {

@@ -32,7 +32,7 @@ public class FunctionalTest {
     GradleRunner r = runner(testProjectDir.getRoot())
         .withGradleVersion("4.10.3");
     r.build();
-    File caseField = new File(testProjectDir.getRoot(), "build/ccd-definition/CaseField.json");
+    File caseField = new File(testProjectDir.getRoot(), "build/ccd-definition/test/CaseField.json");
     assertTrue(caseField.exists());
     r.build(); // Run a second time to ensure a non-clean build succeeds.
     assertTrue(caseField.exists());

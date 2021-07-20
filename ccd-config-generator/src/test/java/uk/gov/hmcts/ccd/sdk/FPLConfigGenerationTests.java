@@ -37,6 +37,7 @@ import java.util.stream.Collectors;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.junit4.SpringRunner;
+import uk.gov.hmcts.ccd.sdk.generator.JsonUtils;
 
 @SpringBootTest(properties = { "config-generator.basePackage=uk.gov.hmcts" })
 @RunWith(SpringRunner.class)
@@ -47,16 +48,16 @@ public class FPLConfigGenerationTests {
     private static Path prodConfig;
 
     @Autowired
-    private ConfigGenerator generator;
+    private MultiCaseTypeResolver generator;
     private static boolean configGenerated;
 
     @Before
     public void before() {
       if (!configGenerated) {
-          prodConfig = tmp.getRoot().toPath().resolve("production");
-          generator.resolveConfig(tmp.getRoot());
+          prodConfig = tmp.getRoot().toPath().resolve("CARE_SUPERVISION_EPO");
+          generator.generateCaseTypes(tmp.getRoot());
           // Generate a second time to ensure existing config is correctly merged.
-          generator.resolveConfig(tmp.getRoot());
+          generator.generateCaseTypes(tmp.getRoot());
           configGenerated = true;
       }
     }

@@ -10,7 +10,6 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import lombok.Builder;
 import lombok.Data;
-import lombok.ToString;
 import uk.gov.hmcts.ccd.sdk.api.callback.AboutToStart;
 import uk.gov.hmcts.ccd.sdk.api.callback.AboutToSubmit;
 import uk.gov.hmcts.ccd.sdk.api.callback.Submitted;
@@ -33,6 +32,7 @@ public class Event<T, R extends HasRole, S> {
   private AboutToStart<T, S> aboutToStartCallback;
   private AboutToSubmit<T, S> aboutToSubmitCallback;
   private Submitted<T, S> submittedCallback;
+  private FieldCollection fields;
 
   public void name(String s) {
     name = s;
@@ -41,8 +41,6 @@ public class Event<T, R extends HasRole, S> {
     }
   }
 
-  @ToString.Exclude
-  private FieldCollection.FieldCollectionBuilder<T, S, EventBuilder<T, R, S>> fields;
 
   @Builder.Default
   // TODO: don't always add.
@@ -62,6 +60,8 @@ public class Event<T, R extends HasRole, S> {
 
   public static class EventBuilder<T, R extends HasRole, S> {
 
+    private FieldCollection.FieldCollectionBuilder<T, S, EventBuilder<T, R, S>> fieldsBuilder;
+
     public static <T, R extends HasRole, S> EventBuilder<T, R, S> builder(
         String id, Class dataClass, PropertyUtils propertyUtils,
         Set<S> preStates, Set<S> postStates) {
@@ -72,15 +72,22 @@ public class Event<T, R extends HasRole, S> {
       result.dataClass = dataClass;
       result.grants = HashMultimap.create();
       result.historyOnlyRoles = new HashSet<>();
-      result.fields = FieldCollection.FieldCollectionBuilder
+      result.fieldsBuilder = FieldCollection.FieldCollectionBuilder
           .builder(result, result, dataClass, propertyUtils);
       result.retries = new HashMap<>();
 
       return result;
     }
 
+    public Event<T, R, S> doBuild() {
+      Event<T, R, S> result = build();
+      // Complete the building of the nested builder.
+      result.fields = fieldsBuilder.build();
+      return result;
+    }
+
     public FieldCollection.FieldCollectionBuilder<T, S, EventBuilder<T, R, S>> fields() {
-      return fields;
+      return fieldsBuilder;
     }
 
     public EventBuilder<T, R, S> name(String n) {
@@ -138,6 +145,16 @@ public class Event<T, R extends HasRole, S> {
     public EventBuilder<T, R, S> grant(Set<Permission> crud, R... roles) {
       for (R role : roles) {
         grants.putAll(role, crud);
+      }
+
+      return this;
+    }
+
+    public EventBuilder<T, R, S> grant(HasAccessControl... accessControls) {
+      for (HasAccessControl accessControl : accessControls) {
+        for (var entry : accessControl.getGrants().entries()) {
+          grants.put((R)entry.getKey(), entry.getValue());
+        }
       }
 
       return this;
