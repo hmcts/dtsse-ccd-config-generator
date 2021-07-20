@@ -79,6 +79,7 @@ public class CCDConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<CaseData, S
         .complex(CaseData::getHearingPreferences)
           .label("hearingPrefs", "Hearing Preferences")
           .optional(HearingPreferences::getWelsh)
+          .optionalWithoutDefaultValue(HearingPreferences::getInterpreter, "hearingPreferencesWelsh=\"yes\"", "Interpreter required")
           .complex(HearingPreferences::getLocationPreferences)
             .optional(LocationPreferences::getLocal)
             .done()

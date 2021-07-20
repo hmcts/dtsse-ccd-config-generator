@@ -90,11 +90,6 @@ public class FieldCollection {
       return field(getter, DisplayContext.Optional, showCondition, true, defaultValue, null, null);
     }
 
-    public <Value> FieldCollectionBuilder<Type, StateType, Parent> optional(TypedPropertyGetter<Type, Value> getter,
-        String showCondition, String caseEventFieldLabel) {
-      return field(getter, DisplayContext.Optional, showCondition, true, null, caseEventFieldLabel, null);
-    }
-
     public FieldCollectionBuilder<Type, StateType, Parent> optional(TypedPropertyGetter<Type, ?> getter,
         String showCondition) {
       return field(getter, DisplayContext.Optional, showCondition, true);
@@ -102,6 +97,13 @@ public class FieldCollection {
 
     public FieldCollectionBuilder<Type, StateType, Parent> optional(TypedPropertyGetter<Type, ?> getter) {
       return field(getter, DisplayContext.Optional, true);
+    }
+
+    public <Value> FieldCollectionBuilder<Type, StateType, Parent> optionalWithoutDefaultValue(
+        TypedPropertyGetter<Type, Value> getter,
+        String showCondition,
+        String caseEventFieldLabe) {
+      return field(getter, DisplayContext.Optional, showCondition, true, null, caseEventFieldLabe, null);
     }
 
     public FieldCollectionBuilder<Type, StateType, Parent> optionalNoSummary(TypedPropertyGetter<Type, ?> getter,
