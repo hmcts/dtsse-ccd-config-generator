@@ -91,7 +91,8 @@ public class CCDConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<CaseData, S
             .optional(OrganisationPolicy::getOrgPolicyReference, null, null, "Org ref", "Sol org ref")
             .done()
           .done()
-        .optional(CaseData::getCaseName);
+        .optional(CaseData::getCaseName)
+        .optionalWithLabel(CaseData::getGatekeeperEmail, "Gate keeper email");
   }
 
   private void buildSearchResultFields() {

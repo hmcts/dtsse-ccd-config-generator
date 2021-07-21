@@ -85,5 +85,18 @@
     "DisplayContext": "OPTIONAL",
     "PageDisplayOrder": 1,
     "ShowSummaryChangeOption" : "Y"
+  },
+  {
+    "CaseEventFieldLabel" : "Gate keeper email",
+    "CaseEventID" : "addNotes",
+    "CaseFieldID" : "gatekeeperEmail",
+    "CaseTypeID" : "CARE_SUPERVISION_EPO",
+    "DisplayContext" : "OPTIONAL",
+    "LiveFrom" : "01/01/2017",
+    "PageColumnNumber" : 1,
+    "PageDisplayOrder" : 1,
+    "PageFieldDisplayOrder" : 8,
+    "PageID" : 1,
+    "ShowSummaryChangeOption" : "Y"
   }
 ]
