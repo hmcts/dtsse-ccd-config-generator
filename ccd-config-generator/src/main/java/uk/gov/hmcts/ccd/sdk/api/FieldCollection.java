@@ -101,8 +101,8 @@ public class FieldCollection {
 
     public <Value> FieldCollectionBuilder<Type, StateType, Parent> optionalWithLabel(
         TypedPropertyGetter<Type, Value> getter,
-        String caseEventFieldLabe) {
-      return field(getter, DisplayContext.Optional, null, true, null, caseEventFieldLabe, null);
+        String caseEventFieldLabel) {
+      return field(getter, DisplayContext.Optional, null, true, null, caseEventFieldLabel, null);
     }
 
     public <Value> FieldCollectionBuilder<Type, StateType, Parent> optionalWithoutDefaultValue(
