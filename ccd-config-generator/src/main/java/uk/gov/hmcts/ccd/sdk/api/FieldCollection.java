@@ -153,6 +153,21 @@ public class FieldCollection {
       return field(getter, DisplayContext.Mandatory, true);
     }
 
+    public <Value> FieldCollectionBuilder<Type, StateType, Parent> mandatoryWithLabel(
+        TypedPropertyGetter<Type, Value> getter,
+        String caseEventFieldLabel) {
+      return field(
+        getter, DisplayContext.Mandatory, null, true, null, caseEventFieldLabel, null);
+    }
+
+    public <Value> FieldCollectionBuilder<Type, StateType, Parent> mandatoryWithoutDefaultValue(
+        TypedPropertyGetter<Type, Value> getter,
+        String showCondition,
+        String caseEventFieldLabel) {
+      return field(
+        getter, DisplayContext.Mandatory, showCondition, true, null, caseEventFieldLabel, null);
+    }
+
     public FieldCollectionBuilder<Type, StateType, Parent> mandatoryNoSummary(TypedPropertyGetter<Type, ?> getter,
         String showCondition) {
       return field(getter, DisplayContext.Mandatory, showCondition, false);
