@@ -92,7 +92,9 @@ public class CCDConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<CaseData, S
             .done()
           .done()
         .optional(CaseData::getCaseName)
-        .optionalWithLabel(CaseData::getGatekeeperEmail, "Gate keeper email");
+        .optionalWithLabel(CaseData::getGatekeeperEmail, "Gate keeper email")
+        .mandatoryWithoutDefaultValue(CaseData::getAllocatedJudge, "hearingPreferencesWelsh=\"yes\"", "Judge is bilingual")
+        .mandatoryWithLabel(CaseData::getCaseLocalAuthority, "Please enter a case local authority");
   }
 
   private void buildSearchResultFields() {

@@ -98,5 +98,32 @@
     "PageFieldDisplayOrder" : 8,
     "PageID" : 1,
     "ShowSummaryChangeOption" : "Y"
+  },
+  {
+    "CaseEventFieldLabel" : "Judge is bilingual",
+    "CaseEventID" : "addNotes",
+    "CaseFieldID" : "allocatedJudge",
+    "CaseTypeID" : "CARE_SUPERVISION_EPO",
+    "DisplayContext" : "MANDATORY",
+    "FieldShowCondition" : "hearingPreferencesWelsh=\"yes\"",
+    "LiveFrom" : "01/01/2017",
+    "PageColumnNumber" : 1,
+    "PageDisplayOrder" : 1,
+    "PageFieldDisplayOrder" : 9,
+    "PageID" : 1,
+    "ShowSummaryChangeOption" : "Y"
+  },
+  {
+    "CaseEventFieldLabel" : "Please enter a case local authority",
+    "CaseEventID" : "addNotes",
+    "CaseFieldID" : "caseLocalAuthority",
+    "CaseTypeID" : "CARE_SUPERVISION_EPO",
+    "DisplayContext" : "MANDATORY",
+    "LiveFrom" : "01/01/2017",
+    "PageColumnNumber" : 1,
+    "PageDisplayOrder" : 1,
+    "PageFieldDisplayOrder" : 10,
+    "PageID" : 1,
+    "ShowSummaryChangeOption" : "Y"
   }
 ]
