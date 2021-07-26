@@ -5,6 +5,8 @@ import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import java.util.Collection;
 import java.util.EnumSet;
+import java.util.HashSet;
+import java.util.Hashtable;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -32,6 +34,7 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements ConfigBuilder
   final List<SearchBuilder> searchResultFields = Lists.newArrayList();
   final List<SearchBuilder> searchInputFields = Lists.newArrayList();
   final List<SearchCasesBuilder> searchCaseResultFields = Lists.newArrayList();
+  final Set<R> omitHistoryForRoles = new HashSet<>();
 
   public ConfigBuilderImpl(ResolvedCCDConfig<T, S, R> config) {
     this.config = config;
@@ -49,6 +52,7 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements ConfigBuilder
     config.searchResultFields = buildBuilders(searchResultFields, SearchBuilder::build);
     config.searchInputFields = buildBuilders(searchInputFields, SearchBuilder::build);
     config.searchCaseResultFields = buildBuilders(searchCaseResultFields, SearchCasesBuilder::build);
+    config.rolesWithNoHistory = omitHistoryForRoles.stream().map(HasRole::getRole).collect(Collectors.toSet());
 
     return config;
   }
@@ -110,6 +114,11 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements ConfigBuilder
     config.jurId = id;
     config.jurName = name;
     config.jurDesc = description;
+  }
+
+  @Override
+  public void omitHistoryForRoles(R... roles) {
+    omitHistoryForRoles.addAll(Set.of(roles));
   }
 
   @Override

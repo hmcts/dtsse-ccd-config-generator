@@ -14,6 +14,8 @@ public interface ConfigBuilder<T, S, R extends HasRole> {
 
   void jurisdiction(String id, String name, String description);
 
+  void omitHistoryForRoles(R ...roles);
+
   /**
    * Set AuthorisationCaseState explicitly.
    * Note that additional AuthorisationCaseState permissions are inferred based on grants of

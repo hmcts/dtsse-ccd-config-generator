@@ -5,6 +5,8 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Table;
+
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -28,6 +30,7 @@ public class ResolvedCCDConfig<T, S, R extends HasRole> {
   final Map<Class, Integer> types;
   final ImmutableSet<S> allStates;
 
+  Set<String> rolesWithNoHistory;
   String caseType = "";
   String callbackHost = "";
   String caseName = "";
