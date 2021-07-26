@@ -18,6 +18,7 @@ import com.google.common.collect.Table;
 import java.io.File;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Hashtable;
@@ -26,8 +27,10 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Stream;
 import org.objenesis.Objenesis;
 import org.objenesis.ObjenesisStd;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import uk.gov.hmcts.ccd.sdk.ResolvedCCDConfig;
 import uk.gov.hmcts.ccd.sdk.api.CCD;
@@ -45,6 +48,9 @@ import uk.gov.hmcts.ccd.sdk.api.WorkBasketField;
 
 @Component
 class AuthorisationCaseFieldGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, S, R> {
+
+  @Value("${CASE_HISTORY_ACCESS_ROLES:#{null}}")
+  private String caseHistoryAccessRoles;
 
   public void write(
       File root, ResolvedCCDConfig<T, S, R> config) {
@@ -77,10 +83,13 @@ class AuthorisationCaseFieldGenerator<T, S, R extends HasRole> implements Config
       }
     }
 
+    addCaseHistoryAccessRoles(fieldRolePermissions, caseHistoryAccessRoles);
+
     // Add Permissions for all tabs.
     for (String role : ImmutableSet.copyOf(fieldRolePermissions.columnKeySet())) {
-
-      fieldRolePermissions.put("caseHistory", role, CRU);
+      if (caseHistoryAccessRoles == null) {
+        fieldRolePermissions.put("caseHistory", role, CRU);
+      }
 
       // Add read for any tab fields
       for (Tab<T, R> tab : config.getTabs()) {
@@ -162,6 +171,17 @@ class AuthorisationCaseFieldGenerator<T, S, R extends HasRole> implements Config
       JsonUtils.mergeInto(output, permissions, new JsonUtils.CRUDMerger(), "CaseFieldID",
           "UserRole");
     }
+  }
+
+  private void addCaseHistoryAccessRoles(
+      Table<String, String, Set<Permission>> fieldRolePermissions,
+      String caseHistoryAccessRoles) {
+
+    Optional.ofNullable(caseHistoryAccessRoles)
+        .map(value -> Arrays.stream(value.split(",")))
+        .orElse(Stream.empty())
+        .map(String::trim)
+        .forEach(role -> fieldRolePermissions.put("caseHistory", role, CRU));
   }
 
   private static void addPermissionsFromFields(
