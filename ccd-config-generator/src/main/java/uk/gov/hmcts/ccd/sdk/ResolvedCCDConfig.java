@@ -28,6 +28,7 @@ public class ResolvedCCDConfig<T, S, R extends HasRole> {
   final Map<Class, Integer> types;
   final ImmutableSet<S> allStates;
 
+  Set<String> rolesWithNoHistory;
   String caseType = "";
   String callbackHost = "";
   String caseName = "";
