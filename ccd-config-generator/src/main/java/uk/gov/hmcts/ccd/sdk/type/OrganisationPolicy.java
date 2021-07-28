@@ -1,6 +1,7 @@
 package uk.gov.hmcts.ccd.sdk.type;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import java.util.Set;
 import lombok.Builder;
@@ -13,6 +14,7 @@ import uk.gov.hmcts.ccd.sdk.api.HasRole;
 @Builder
 @Data
 @ComplexType(name = "OrganisationPolicy", generate = false)
+@JsonInclude(JsonInclude.Include.NON_NULL)
 public class OrganisationPolicy<R extends HasRole> {
 
   @JsonProperty("Organisation")
