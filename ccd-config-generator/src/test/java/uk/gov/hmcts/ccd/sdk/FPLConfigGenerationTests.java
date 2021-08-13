@@ -73,31 +73,6 @@ public class FPLConfigGenerationTests {
     }
 
     @Test
-    public void generatesAuthorisationCaseFieldGatekeeper() {
-        assertEquals("AuthorisationCaseField/caseworker-publiclaw-gatekeeper.json");
-    }
-
-    @Test
-    public void generatesAuthorisationCaseFieldSystem() {
-        assertEquals("AuthorisationCaseField/caseworker-publiclaw-systemupdate.json");
-    }
-
-    @Test
-    public void generatesAuthorisationCaseFieldJudiciary() {
-        assertEquals("AuthorisationCaseField/caseworker-publiclaw-judiciary.json");
-    }
-
-    @Test
-    public void generatesAuthorisationCaseFieldCourtAdmin() {
-        assertEquals("AuthorisationCaseField/caseworker-publiclaw-courtadmin.json");
-    }
-
-    @Test
-    public void generatesAuthorisationCaseFieldCafcass() {
-        assertEquals("AuthorisationCaseField/caseworker-publiclaw-cafcass.json");
-    }
-
-    @Test
     public void generatesJurisdiction() {
         assertEquals("Jurisdiction.json");
     }

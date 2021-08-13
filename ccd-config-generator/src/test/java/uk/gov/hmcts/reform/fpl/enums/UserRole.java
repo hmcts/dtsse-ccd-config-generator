@@ -10,15 +10,11 @@ public enum UserRole implements HasRole {
     LOCAL_AUTHORITY("caseworker-publiclaw-solicitor"),
     HMCTS_ADMIN("caseworker-publiclaw-courtadmin"),
     CAFCASS("caseworker-publiclaw-cafcass"),
-    GATEKEEPER("caseworker-publiclaw-gatekeeper"),
-    JUDICIARY("caseworker-publiclaw-judiciary"),
     SYSTEM_UPDATE("caseworker-publiclaw-systemupdate"),
     BULK_SCAN("caseworker-publiclaw-bulkscan", "R"),
     BULK_SCAN_SYSTEM_UPDATE("caseworker-publiclaw-bulkscansystemupdate"),
     @CCD(name = "Solicitor", label = "Solicitor role")
-    CCD_SOLICITOR("[SOLICITOR]"),
-    @CCD(name = "LA Solicitor", label = "La Solicitor role")
-    CCD_LASOLICITOR("[LASOLICITOR]");
+    CCD_SOLICITOR("[SOLICITOR]");
 
 
     private final String role;

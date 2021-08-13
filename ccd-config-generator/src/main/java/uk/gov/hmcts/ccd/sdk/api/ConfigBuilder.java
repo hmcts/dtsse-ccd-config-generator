@@ -38,7 +38,5 @@ public interface ConfigBuilder<T, S, R extends HasRole> {
 
   SearchCasesBuilder<T> searchCasesFields();
 
-  RoleBuilder<R> role(R... role);
-
   void setCallbackHost(String s);
 }

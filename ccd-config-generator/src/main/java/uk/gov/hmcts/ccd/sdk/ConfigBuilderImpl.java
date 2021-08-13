@@ -16,7 +16,6 @@ import uk.gov.hmcts.ccd.sdk.api.Event;
 import uk.gov.hmcts.ccd.sdk.api.EventTypeBuilder;
 import uk.gov.hmcts.ccd.sdk.api.HasRole;
 import uk.gov.hmcts.ccd.sdk.api.Permission;
-import uk.gov.hmcts.ccd.sdk.api.RoleBuilder;
 import uk.gov.hmcts.ccd.sdk.api.Search.SearchBuilder;
 import uk.gov.hmcts.ccd.sdk.api.SearchCases.SearchCasesBuilder;
 import uk.gov.hmcts.ccd.sdk.api.Tab.TabBuilder;
@@ -160,18 +159,6 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements ConfigBuilder
     return getSearchCasesBuilder(searchCaseResultFields);
   }
 
-
-  @Override
-  public RoleBuilder<R> role(R... roles) {
-    return new RoleBuilder<R>() {
-      @Override
-      public void has(R parent) {
-        for (R role : roles) {
-          config.roleHierarchy.put(role.getRole(), parent.getRole());
-        }
-      }
-    };
-  }
 
   @Override
   public void setCallbackHost(String s) {

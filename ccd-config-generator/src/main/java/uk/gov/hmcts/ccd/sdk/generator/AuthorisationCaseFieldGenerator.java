@@ -130,14 +130,7 @@ class AuthorisationCaseFieldGenerator<T, S, R extends HasRole> implements Config
         }
 
         String field = fieldPerm.getKey();
-        Set<Permission> inheritedPermission = getInheritedPermission(fieldRolePermissions,
-            config.getRoleHierarchy(), role, field);
         Set<Permission> fieldPermission = fieldPerm.getValue();
-        if (inheritedPermission != null) {
-          Set<Permission> newPermissions = Sets.newHashSet(fieldPerm.getValue());
-          newPermissions.removeAll(inheritedPermission);
-          fieldPermission = newPermissions;
-        }
         if (!fieldPermission.isEmpty()) {
           // Don't export metadata fields.
           if (field.matches("\\[.+\\]")) {
@@ -203,19 +196,5 @@ class AuthorisationCaseFieldGenerator<T, S, R extends HasRole> implements Config
         }
       }
     }
-  }
-
-  private static Set<Permission> getInheritedPermission(
-      Table<String, String, Set<Permission>> fieldRolePermissions,
-      Map<String, String> roleHierarchy, String role,
-      String field) {
-    if (roleHierarchy.containsKey(role)) {
-      String parentRole = roleHierarchy.get(role);
-      if (fieldRolePermissions.contains(field, parentRole)) {
-        return fieldRolePermissions.get(field, parentRole);
-      }
-      return getInheritedPermission(fieldRolePermissions, roleHierarchy, parentRole, field);
-    }
-    return null;
   }
 }
