@@ -21,7 +21,7 @@ public interface CCDConfig<Case, State, Role extends HasRole> {
   /**
    * Invoked during config generation.
    *
-   * @param builder Use this to describe CCD your configuration.
+   * @param builder Use to declare your CCD configuration.
    */
   void configure(ConfigBuilder<Case, State, Role> builder);
 }

@@ -41,7 +41,7 @@ or
 
 The generator is configured by providing one or more implementations of the [CCDConfig](https://github.com/hmcts/ccd-config-generator/blob/master/ccd-config-generator/src/main/java/uk/gov/hmcts/ccd/sdk/api/CCDConfig.java) interface:
 
-Implementations should be defined as spring @Components for autowiring at runtime.
+Implementations should be defined as spring @Components which will be autowired at runtime.
 
 ```java
 @org.springframework.stereotype.Component
