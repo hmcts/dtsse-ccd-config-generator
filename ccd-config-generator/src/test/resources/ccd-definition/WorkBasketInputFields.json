@@ -25,7 +25,7 @@
     "CaseTypeID": "CARE_SUPERVISION_EPO",
     "CaseFieldID": "[CASE_REFERENCE]",
     "DisplayOrder": 4,
-    "Label": "CCD Case Number"
+    "Label": "Case Number"
   },
   {
     "LiveFrom": "01/01/2017",
