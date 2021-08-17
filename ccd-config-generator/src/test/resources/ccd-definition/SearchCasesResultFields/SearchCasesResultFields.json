@@ -14,7 +14,7 @@
     "CaseFieldID": "[CASE_REFERENCE]",
     "DisplayOrder": 2,
     "UserRole": "",
-    "Label": "CCD Case Number",
+    "Label": "Case Number",
     "UseCase": "orgcases"
   }
 ]
