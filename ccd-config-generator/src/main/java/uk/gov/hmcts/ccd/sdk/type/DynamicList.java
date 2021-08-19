@@ -1,6 +1,7 @@
 package uk.gov.hmcts.ccd.sdk.type;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import java.util.List;
 import java.util.UUID;
@@ -17,6 +18,7 @@ import uk.gov.hmcts.ccd.sdk.api.ComplexType;
 @Builder
 @Data
 @ComplexType(generate = false)
+@JsonIgnoreProperties(ignoreUnknown = true)
 public class DynamicList {
 
   /**
