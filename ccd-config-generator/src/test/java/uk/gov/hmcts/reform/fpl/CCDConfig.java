@@ -11,11 +11,8 @@ import static uk.gov.hmcts.reform.fpl.enums.State.Submitted;
 import static uk.gov.hmcts.reform.fpl.enums.UserRole.BULK_SCAN;
 import static uk.gov.hmcts.reform.fpl.enums.UserRole.BULK_SCAN_SYSTEM_UPDATE;
 import static uk.gov.hmcts.reform.fpl.enums.UserRole.CAFCASS;
-import static uk.gov.hmcts.reform.fpl.enums.UserRole.CCD_LASOLICITOR;
 import static uk.gov.hmcts.reform.fpl.enums.UserRole.CCD_SOLICITOR;
-import static uk.gov.hmcts.reform.fpl.enums.UserRole.GATEKEEPER;
 import static uk.gov.hmcts.reform.fpl.enums.UserRole.HMCTS_ADMIN;
-import static uk.gov.hmcts.reform.fpl.enums.UserRole.JUDICIARY;
 import static uk.gov.hmcts.reform.fpl.enums.UserRole.LOCAL_AUTHORITY;
 import static uk.gov.hmcts.reform.fpl.enums.UserRole.SYSTEM_UPDATE;
 
@@ -47,13 +44,10 @@ public class CCDConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<CaseData, S
     this.builder = builder;
     builder.setCallbackHost("${CCD_DEF_CASE_SERVICE_BASE_URL}");
     builder.jurisdiction("PUBLICLAW", "Family Public Law", "Family Public Law desc");
+    builder.omitHistoryForRoles(SYSTEM_UPDATE);
     builder.caseType("CARE_SUPERVISION_EPO", "Care, supervision and EPOs", "Care, supervision and emergency protection orders");
 
     builder.grant(Open, Set.of(R), LOCAL_AUTHORITY);
-
-    // Describe the hierarchy of which roles go together.
-    builder.role(CCD_SOLICITOR, CCD_LASOLICITOR).has(LOCAL_AUTHORITY);
-    builder.role(JUDICIARY, GATEKEEPER).has(HMCTS_ADMIN);
 
     // Events
     buildUniversalEvents();
@@ -79,6 +73,7 @@ public class CCDConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<CaseData, S
         .complex(CaseData::getHearingPreferences)
           .label("hearingPrefs", "Hearing Preferences")
           .optional(HearingPreferences::getWelsh)
+          .optionalWithoutDefaultValue(HearingPreferences::getInterpreter, "hearingPreferencesWelsh=\"yes\"", "Interpreter required")
           .complex(HearingPreferences::getLocationPreferences)
             .optional(LocationPreferences::getLocal)
             .done()
@@ -90,7 +85,10 @@ public class CCDConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<CaseData, S
             .optional(OrganisationPolicy::getOrgPolicyReference, null, null, "Org ref", "Sol org ref")
             .done()
           .done()
-        .optional(CaseData::getCaseName);
+        .optional(CaseData::getCaseName)
+        .optionalWithLabel(CaseData::getGatekeeperEmail, "Gate keeper email")
+        .mandatoryWithoutDefaultValue(CaseData::getAllocatedJudge, "hearingPreferencesWelsh=\"yes\"", "Judge is bilingual")
+        .mandatoryWithLabel(CaseData::getCaseLocalAuthority, "Please enter a case local authority");
   }
 
   private void buildSearchResultFields() {
@@ -213,7 +211,7 @@ public class CCDConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<CaseData, S
         .name("Allocated Judge")
         .description("Add allocated judge to a case")
         .grantHistoryOnly(LOCAL_AUTHORITY)
-        .grant(CRU, JUDICIARY, HMCTS_ADMIN, GATEKEEPER)
+        .grant(CRU, HMCTS_ADMIN)
         .grant(R, CAFCASS)
         .fields()
         .page("AllocatedJudge")

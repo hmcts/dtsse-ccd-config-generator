@@ -322,7 +322,7 @@
     "CaseFieldID": "caseNotes"
   },
   {
-    "CRUD": "R",
+    "CRUD": "CRU",
     "CaseTypeID": "CARE_SUPERVISION_EPO",
     "UserRole": "caseworker-publiclaw-courtadmin",
     "LiveFrom": "01/01/2017",
@@ -359,6 +359,20 @@
   {
     "CRUD" : "CRU",
     "CaseFieldID" : "organisationPolicy",
+    "CaseTypeID" : "CARE_SUPERVISION_EPO",
+    "LiveFrom" : "01/01/2017",
+    "UserRole" : "caseworker-publiclaw-courtadmin"
+  },
+  {
+    "CRUD" : "CRU",
+    "CaseFieldID" : "hearingPreferencesInterpreter",
+    "CaseTypeID" : "CARE_SUPERVISION_EPO",
+    "LiveFrom" : "01/01/2017",
+    "UserRole" : "caseworker-publiclaw-courtadmin"
+  },
+  {
+    "CRUD" : "CRU",
+    "CaseFieldID" : "gatekeeperEmail",
     "CaseTypeID" : "CARE_SUPERVISION_EPO",
     "LiveFrom" : "01/01/2017",
     "UserRole" : "caseworker-publiclaw-courtadmin"

@@ -5,6 +5,7 @@ import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import java.util.Collection;
 import java.util.EnumSet;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -15,7 +16,6 @@ import uk.gov.hmcts.ccd.sdk.api.Event;
 import uk.gov.hmcts.ccd.sdk.api.EventTypeBuilder;
 import uk.gov.hmcts.ccd.sdk.api.HasRole;
 import uk.gov.hmcts.ccd.sdk.api.Permission;
-import uk.gov.hmcts.ccd.sdk.api.RoleBuilder;
 import uk.gov.hmcts.ccd.sdk.api.Search.SearchBuilder;
 import uk.gov.hmcts.ccd.sdk.api.SearchCases.SearchCasesBuilder;
 import uk.gov.hmcts.ccd.sdk.api.Tab.TabBuilder;
@@ -32,6 +32,7 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements ConfigBuilder
   final List<SearchBuilder> searchResultFields = Lists.newArrayList();
   final List<SearchBuilder> searchInputFields = Lists.newArrayList();
   final List<SearchCasesBuilder> searchCaseResultFields = Lists.newArrayList();
+  final Set<R> omitHistoryForRoles = new HashSet<>();
 
   public ConfigBuilderImpl(ResolvedCCDConfig<T, S, R> config) {
     this.config = config;
@@ -49,6 +50,7 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements ConfigBuilder
     config.searchResultFields = buildBuilders(searchResultFields, SearchBuilder::build);
     config.searchInputFields = buildBuilders(searchInputFields, SearchBuilder::build);
     config.searchCaseResultFields = buildBuilders(searchCaseResultFields, SearchCasesBuilder::build);
+    config.rolesWithNoHistory = omitHistoryForRoles.stream().map(HasRole::getRole).collect(Collectors.toSet());
 
     return config;
   }
@@ -113,6 +115,11 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements ConfigBuilder
   }
 
   @Override
+  public void omitHistoryForRoles(R... roles) {
+    omitHistoryForRoles.addAll(Set.of(roles));
+  }
+
+  @Override
   public void grant(S state, Set<Permission> permissions, R... roles) {
     for (R role : roles) {
       config.stateRolePermissions.put(state, role, permissions);
@@ -152,18 +159,6 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements ConfigBuilder
     return getSearchCasesBuilder(searchCaseResultFields);
   }
 
-
-  @Override
-  public RoleBuilder<R> role(R... roles) {
-    return new RoleBuilder<R>() {
-      @Override
-      public void has(R parent) {
-        for (R role : roles) {
-          config.roleHierarchy.put(role.getRole(), parent.getRole());
-        }
-      }
-    };
-  }
 
   @Override
   public void setCallbackHost(String s) {

@@ -52,7 +52,7 @@ public class WorkBasket {
     }
 
     public WorkBasketBuilder<T, R> caseReferenceField() {
-      fields.add(WorkBasketField.builder().id("[CASE_REFERENCE]").label("CCD Case Number").build());
+      fields.add(WorkBasketField.builder().id("[CASE_REFERENCE]").label("Case Number").build());
       return this;
     }
 

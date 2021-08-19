@@ -3,7 +3,6 @@ package uk.gov.hmcts.ccd.sdk;
 import com.google.common.collect.HashBasedTable;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
-import com.google.common.collect.Maps;
 import com.google.common.collect.Table;
 import java.util.List;
 import java.util.Map;
@@ -28,6 +27,7 @@ public class ResolvedCCDConfig<T, S, R extends HasRole> {
   final Map<Class, Integer> types;
   final ImmutableSet<S> allStates;
 
+  Set<String> rolesWithNoHistory;
   String caseType = "";
   String callbackHost = "";
   String caseName = "";
@@ -37,7 +37,6 @@ public class ResolvedCCDConfig<T, S, R extends HasRole> {
   String jurDesc = "";
 
   Table<S, R, Set<Permission>> stateRolePermissions = HashBasedTable.create();
-  Map<String, String> roleHierarchy = Maps.newHashMap();
 
   // Events by id
   ImmutableMap<String, Event<T, R, S>> events;

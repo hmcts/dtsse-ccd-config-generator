@@ -99,6 +99,19 @@ public class FieldCollection {
       return field(getter, DisplayContext.Optional, true);
     }
 
+    public <Value> FieldCollectionBuilder<Type, StateType, Parent> optionalWithLabel(
+        TypedPropertyGetter<Type, Value> getter,
+        String caseEventFieldLabel) {
+      return field(getter, DisplayContext.Optional, null, true, null, caseEventFieldLabel, null);
+    }
+
+    public <Value> FieldCollectionBuilder<Type, StateType, Parent> optionalWithoutDefaultValue(
+        TypedPropertyGetter<Type, Value> getter,
+        String showCondition,
+        String caseEventFieldLabe) {
+      return field(getter, DisplayContext.Optional, showCondition, true, null, caseEventFieldLabe, null);
+    }
+
     public FieldCollectionBuilder<Type, StateType, Parent> optionalNoSummary(TypedPropertyGetter<Type, ?> getter,
         String showCondition) {
       return field(getter, DisplayContext.Optional, showCondition, false);
@@ -138,6 +151,21 @@ public class FieldCollection {
 
     public FieldCollectionBuilder<Type, StateType, Parent> mandatory(TypedPropertyGetter<Type, ?> getter) {
       return field(getter, DisplayContext.Mandatory, true);
+    }
+
+    public <Value> FieldCollectionBuilder<Type, StateType, Parent> mandatoryWithLabel(
+        TypedPropertyGetter<Type, Value> getter,
+        String caseEventFieldLabel) {
+      return field(
+        getter, DisplayContext.Mandatory, null, true, null, caseEventFieldLabel, null);
+    }
+
+    public <Value> FieldCollectionBuilder<Type, StateType, Parent> mandatoryWithoutDefaultValue(
+        TypedPropertyGetter<Type, Value> getter,
+        String showCondition,
+        String caseEventFieldLabel) {
+      return field(
+        getter, DisplayContext.Mandatory, showCondition, true, null, caseEventFieldLabel, null);
     }
 
     public FieldCollectionBuilder<Type, StateType, Parent> mandatoryNoSummary(TypedPropertyGetter<Type, ?> getter,

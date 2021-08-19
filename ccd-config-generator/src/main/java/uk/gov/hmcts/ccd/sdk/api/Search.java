@@ -36,7 +36,7 @@ public class Search {
     }
 
     public SearchBuilder<T, R> caseReferenceField() {
-      fields.add(SearchField.builder().id("[CASE_REFERENCE]").label("CCD Case Number").build());
+      fields.add(SearchField.builder().id("[CASE_REFERENCE]").label("Case Number").build());
       return this;
     }
 
