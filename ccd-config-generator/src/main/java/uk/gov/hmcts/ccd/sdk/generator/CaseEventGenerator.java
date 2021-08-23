@@ -64,13 +64,14 @@ class CaseEventGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
     data.put("CaseTypeID", caseTypeId);
     if (event.isShowSummary()) {
       data.put("ShowSummary", "Y");
+    } else {
+      data.put("ShowSummary", "N");
     }
 
     if (event.isShowEventNotes()) {
       data.put("ShowEventNotes", "Y");
-    }
-    if (event.isShowSummaryChangeOption()) {
-      data.put("ShowSummaryChangeOption", "Y");
+    } else {
+      data.put("ShowEventNotes", "N");
     }
 
     if (!Strings.isNullOrEmpty(event.getEndButtonLabel())) {
