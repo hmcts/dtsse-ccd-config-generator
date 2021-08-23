@@ -28,7 +28,6 @@ public class Event<T, R extends HasRole, S> {
   private boolean explicitGrants;
   private boolean showSummary;
   private boolean showEventNotes;
-  private boolean showSummaryChangeOption;
   private AboutToStart<T, S> aboutToStartCallback;
   private AboutToSubmit<T, S> aboutToSubmitCallback;
   private Submitted<T, S> submittedCallback;
@@ -95,16 +94,6 @@ public class Event<T, R extends HasRole, S> {
       if (description == null) {
         description = n;
       }
-      return this;
-    }
-
-    public EventBuilder<T, R, S> showSummaryChangeOption(boolean b) {
-      this.showSummaryChangeOption = b;
-      return this;
-    }
-
-    public EventBuilder<T, R, S> showSummaryChangeOption() {
-      this.showSummaryChangeOption = true;
       return this;
     }
 
