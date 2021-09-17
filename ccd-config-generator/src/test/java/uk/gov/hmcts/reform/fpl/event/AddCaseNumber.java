@@ -63,6 +63,13 @@ public class AddCaseNumber implements CCDConfig<CaseData, State, UserRole> {
       CaseData d = details.getData();
     d.setFamilyManCaseNumber("12345");
 
+    if (null != d.getRetiredFields().getOrderAppliesToAllChildren()) {
+      throw new RuntimeException("Retired field set");
+    }
+    if (null == d.getCaseLocalAuthority()) {
+      throw new RuntimeException("Migration did not run");
+    }
+
     return AboutToStartOrSubmitResponse.<CaseData, State>builder()
         .data(d)
         .build();

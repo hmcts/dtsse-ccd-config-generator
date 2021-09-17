@@ -26,6 +26,8 @@ import uk.gov.hmcts.reform.ccd.client.model.CaseDetails;
 import uk.gov.hmcts.reform.fpl.BulkCaseConfig;
 import uk.gov.hmcts.reform.fpl.model.CaseData;
 
+import java.util.Map;
+
 @RunWith(SpringRunner.class)
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -43,9 +45,12 @@ public class CallbackControllerTest {
 
   @SneakyThrows
   @Test
-  public void testAboutToSubmit() {
-    this.makeRequest("about-to-submit", "addFamilyManCaseNumber")
-        .andExpect(status().isOk());
+  public void testAboutToSubmitWithMigration() {
+    Map<String, Object> data = Maps.newHashMap();
+    data.put("orderAppliesToAllChildren", "test");
+
+    this.makeRequest("about-to-submit", "CARE_SUPERVISION_EPO", "addFamilyManCaseNumber", data)
+      .andExpect(status().isOk());
   }
 
   @SneakyThrows
@@ -105,9 +110,14 @@ public class CallbackControllerTest {
 
   @SneakyThrows
   ResultActions makeRequest(String callback, String caseType, String eventId) {
+    return makeRequest(callback, caseType, eventId, Maps.newHashMap());
+  }
+
+  @SneakyThrows
+  ResultActions makeRequest(String callback, String caseType, String eventId, Map<String, Object> data) {
     return this.mockMvc.perform(post("/callbacks/" + callback)
         .contentType(MediaType.APPLICATION_JSON)
-        .content(new ObjectMapper().writeValueAsString(buildRequest(caseType, eventId))));
+        .content(new ObjectMapper().writeValueAsString(buildRequest(caseType, eventId, data))));
   }
 
   @SneakyThrows
@@ -121,11 +131,11 @@ public class CallbackControllerTest {
     return mapper.readValue(json, c);
   }
 
-  CallbackRequest buildRequest(String caseType, String eventId) {
+  CallbackRequest buildRequest(String caseType, String eventId, Map<String, Object> data) {
     return CallbackRequest.builder()
         .eventId(eventId)
         .caseDetails(CaseDetails.builder()
-            .data(Maps.newHashMap())
+            .data(data)
             .caseTypeId(caseType)
             .build())
         .build();

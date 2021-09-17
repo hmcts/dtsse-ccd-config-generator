@@ -42,6 +42,7 @@ public class CCDConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<CaseData, S
 
   public void configure(ConfigBuilder<CaseData, State, UserRole> builder) {
     this.builder = builder;
+    builder.addPreEventHook(RetiredFields::migrate);
     builder.setCallbackHost("${CCD_DEF_CASE_SERVICE_BASE_URL}");
     builder.jurisdiction("PUBLICLAW", "Family Public Law", "Family Public Law desc");
     builder.omitHistoryForRoles(SYSTEM_UPDATE);

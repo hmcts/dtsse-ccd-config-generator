@@ -1,5 +1,7 @@
 package uk.gov.hmcts.ccd.sdk.runtime;
 
+import static java.util.function.Function.identity;
+
 import com.fasterxml.jackson.databind.JavaType;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.ImmutableMap;
@@ -7,6 +9,7 @@ import com.google.common.collect.Maps;
 import de.cronn.reflection.util.TypedPropertyGetter;
 import java.util.Collection;
 import java.util.Map;
+import java.util.function.Function;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -123,11 +126,22 @@ public class CallbackController {
   @SneakyThrows
   CaseDetails convertCaseDetails(uk.gov.hmcts.reform.ccd.client.model.CaseDetails ccdDetails,
                                  String caseType) {
-    String json = mapper.writeValueAsString(ccdDetails);
+
     if (!caseTypeToJavaType.containsKey(caseType)) {
       log.warn("Handler not found for " + caseType);
       throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Handler not found for " + caseType);
     }
+
+    if (null != ccdDetails) {
+      Map<String, Object> migratedData = caseTypeToConfig.get(caseType).getPreEventHooks()
+          .stream()
+          .reduce(identity(), Function::andThen)
+          .apply(ccdDetails.getData());
+
+      ccdDetails.setData(migratedData);
+    }
+
+    String json = mapper.writeValueAsString(ccdDetails);
     return mapper.readValue(json, caseTypeToJavaType.get(caseType));
   }
 
