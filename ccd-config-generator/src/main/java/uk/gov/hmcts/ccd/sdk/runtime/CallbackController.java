@@ -133,12 +133,16 @@ public class CallbackController {
     }
 
     if (null != ccdDetails) {
-      Map<String, Object> migratedData = caseTypeToConfig.get(caseType).getPreEventHooks()
-          .stream()
-          .reduce(identity(), Function::andThen)
-          .apply(ccdDetails.getData());
+      try {
+        Map<String, Object> migratedData = caseTypeToConfig.get(caseType).getPreEventHooks()
+            .stream()
+            .reduce(identity(), Function::andThen)
+            .apply(ccdDetails.getData());
 
-      ccdDetails.setData(migratedData);
+        ccdDetails.setData(migratedData);
+      } catch (Exception e) {
+        log.error("Error running pre-event hooks", e);
+      }
     }
 
     String json = mapper.writeValueAsString(ccdDetails);
