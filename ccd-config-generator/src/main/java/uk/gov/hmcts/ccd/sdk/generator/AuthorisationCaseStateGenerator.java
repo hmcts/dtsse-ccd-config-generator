@@ -31,9 +31,6 @@ class AuthorisationCaseStateGenerator<T, S, R extends HasRole> implements Config
   public void write(File root, ResolvedCCDConfig<T, S, R> config) {
 
     for (Event<T, R, S> event : config.getEvents().values()) {
-      if (event.getPreState().equals(config.getAllStates())) {
-        continue;
-      }
 
       SetMultimap<R, Permission> grants = event.getGrants();
       for (R role : event.getGrants().keys()) {
