@@ -22,7 +22,7 @@ repositories {
 
 dependencies {
     // Use JUnit test framework for unit tests
-    annotationProcessor group: 'org.projectlombok', name: 'lombok', version: '1.18.20'
+    annotationProcessor group: 'org.projectlombok', name: 'lombok', version: '1.18.22'
     compileOnly group: 'org.projectlombok', name: 'lombok', version: '1.18.20'
     implementation 'com.google.guava:guava:31.0.1-jre'
 

@@ -15,7 +15,7 @@ def springBootVersion = '2.5.5'
 dependencies {
     // Use JUnit test framework for unit tests
     testImplementation 'junit:junit:4.13.2'
-    annotationProcessor group: 'org.projectlombok', name: 'lombok', version: '1.18.20'
+    annotationProcessor group: 'org.projectlombok', name: 'lombok', version: '1.18.22'
     compileOnly group: 'org.projectlombok', name: 'lombok', version: '1.18.20'
     implementation "org.springframework.boot:spring-boot-autoconfigure:${springBootVersion}"
     implementation "org.springframework.boot:spring-boot-starter-web:${springBootVersion}"
@@ -25,7 +25,7 @@ dependencies {
         transitive = false
     }
 
-    testAnnotationProcessor group: 'org.projectlombok', name: 'lombok', version: '1.18.10'
+    testAnnotationProcessor group: 'org.projectlombok', name: 'lombok', version: '1.18.22'
     testCompileOnly group: 'org.projectlombok', name: 'lombok', version: '1.18.20'
     testImplementation group: 'javax.validation', name: 'validation-api', version: '2.0.1.Final'
     testImplementation 'org.skyscreamer:jsonassert:1.5.0'
