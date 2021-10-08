@@ -43,7 +43,7 @@ dependencies {
     implementation group: 'org.objenesis', name: 'objenesis', version: '3.2'
     implementation group: 'cglib', name: 'cglib', version: '3.3.0'
     implementation group: 'net.jodah', name: 'typetools', version: '0.6.3'
-    implementation 'org.reflections:reflections:0.10'
+    implementation 'org.reflections:reflections:0.10.1'
     implementation 'com.google.guava:guava:31.0-jre'
 
     implementation 'com.fasterxml.jackson.core:jackson-databind:2.13.0'
