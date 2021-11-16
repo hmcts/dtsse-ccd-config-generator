@@ -17,7 +17,7 @@ public @interface CCD {
 
   String regex() default "";
 
-  String listDisplayOrder() default "";
+  String displayOrder() default "";
 
   FieldType typeOverride() default FieldType.Unspecified;
 
