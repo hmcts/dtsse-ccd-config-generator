@@ -292,6 +292,10 @@ public class FieldCollection {
       if (null != cf) {
         f.label(cf.label());
         f.hint(cf.hint());
+
+        try {
+          f.fieldDisplayOrder(Integer.parseUnsignedInt(cf.listDisplayOrder()));
+        } catch (NumberFormatException ex) {}
       }
       return f;
     }
