@@ -295,7 +295,9 @@ public class FieldCollection {
 
         try {
           f.fieldDisplayOrder(Integer.parseUnsignedInt(cf.listDisplayOrder()));
-        } catch (NumberFormatException ex) {}
+        } catch (NumberFormatException ex) {
+          // If the optional listDisplayOrder is empty or an invalid number just do not set field value
+        }
       }
       return f;
     }
