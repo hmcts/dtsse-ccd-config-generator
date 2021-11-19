@@ -64,10 +64,6 @@ public class ComplexTypeGeneratorTest {
     complexTypeGenerator = new ComplexTypeGenerator<>();
     complexTypeGenerator.sortComplexTypesByDisplayOrder(generatedFromCCDTestClass);
 
-    for(Map<String, Object> fieldMap : generatedFromCCDTestClass){
-      System.out.println(fieldMap.get("DisplayOrder"));
-    }
-
     assertThat(generatedFromCCDTestClass.get(0).get("DisplayOrder")).isEqualTo("1");
     assertThat(generatedFromCCDTestClass.get(5).get("DisplayOrder")).isEqualTo("6");
     assertThat(generatedFromCCDTestClass.get(6).get("DisplayOrder")).isNull();
