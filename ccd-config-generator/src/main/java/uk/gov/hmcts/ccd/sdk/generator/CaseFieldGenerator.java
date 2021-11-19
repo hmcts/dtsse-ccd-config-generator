@@ -102,6 +102,9 @@ class CaseFieldGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
         if (!Strings.isNullOrEmpty(cf.showCondition())) {
           fieldInfo.put("FieldShowCondition", cf.showCondition());
         }
+        if (!Strings.isNullOrEmpty(cf.displayOrder())) {
+          fieldInfo.put("DisplayOrder", cf.displayOrder());
+        }
       }
 
       if (cf != null && cf.typeOverride() != FieldType.Unspecified) {
