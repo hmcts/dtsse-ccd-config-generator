@@ -24,6 +24,7 @@ import java.util.Hashtable;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import org.objenesis.Objenesis;
@@ -66,16 +67,12 @@ class AuthorisationCaseFieldGenerator<T, S, R extends HasRole> implements Config
             perm.add(Permission.D);
           }
 
-          // if explicit grants is enabled field permissions will be derived from ccd annotation on case field
-          // and not the event permissions
-          if (!event.isExplicitGrants()) {
-            String id = fb.build().getId();
+          String id = fb.build().getId();
 
-            if (fieldRolePermissions.contains(id, role.getRole())) {
-              fieldRolePermissions.get(id, role.getRole()).addAll(perm);
-            } else {
-              fieldRolePermissions.put(id, role.getRole(), new HashSet<>(perm));
-            }
+          if (fieldRolePermissions.contains(id, role.getRole())) {
+            fieldRolePermissions.get(id, role.getRole()).addAll(perm);
+          } else {
+            fieldRolePermissions.put(id, role.getRole(), new HashSet<>(perm));
           }
         }
       }
@@ -191,8 +188,10 @@ class AuthorisationCaseFieldGenerator<T, S, R extends HasRole> implements Config
             Set<Permission> perms = Sets.newHashSet();
             perms.addAll(roleGrants.get(key));
 
-            if (fieldRolePermissions.contains(id, key.getRole())) {
-              perms.addAll(fieldRolePermissions.get(id, key.getRole()));
+            if (fieldRolePermissions.contains(id, key.getRole())
+                && !Objects.equals(fieldRolePermissions.get(id, key.getRole()), perms)
+            ) {
+              fieldRolePermissions.remove(id, key.getRole());
             }
 
             fieldRolePermissions.put(id, key.getRole(), perms);
