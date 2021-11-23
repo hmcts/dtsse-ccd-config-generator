@@ -247,7 +247,6 @@ public class CCDConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<CaseData, S
     builder.event("populateSDO")
         .forStateTransition(Submitted, Gatekeeping)
         .name("Populate standard directions")
-        .explicitGrants()
         .grant(C, UserRole.SYSTEM_UPDATE)
         .fields()
         .page("1", this::sdoMidEvent)

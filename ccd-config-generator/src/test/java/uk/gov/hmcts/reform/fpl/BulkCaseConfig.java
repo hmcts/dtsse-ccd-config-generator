@@ -24,7 +24,6 @@ public class BulkCaseConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<BulkCa
     builder.event("addFamilyManCaseNumber")
         .forAllStates()
         .name("Add case number")
-        .explicitGrants()
         .grant(CRU, HMCTS_ADMIN)
         .aboutToStartCallback(this::aboutToStart)
         .fields()

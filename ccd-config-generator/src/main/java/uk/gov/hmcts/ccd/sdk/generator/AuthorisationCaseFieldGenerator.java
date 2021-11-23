@@ -66,12 +66,16 @@ class AuthorisationCaseFieldGenerator<T, S, R extends HasRole> implements Config
             perm.add(Permission.D);
           }
 
-          String id = fb.build().getId();
+          // if explicit grants is enabled field permissions will be derived from ccd annotation on case field
+          // and not the event permissions
+          if (!event.isExplicitGrants()) {
+            String id = fb.build().getId();
 
-          if (fieldRolePermissions.contains(id, role.getRole())) {
-            fieldRolePermissions.get(id, role.getRole()).addAll(perm);
-          } else {
-            fieldRolePermissions.put(id, role.getRole(), new HashSet<>(perm));
+            if (fieldRolePermissions.contains(id, role.getRole())) {
+              fieldRolePermissions.get(id, role.getRole()).addAll(perm);
+            } else {
+              fieldRolePermissions.put(id, role.getRole(), new HashSet<>(perm));
+            }
           }
         }
       }
