@@ -214,6 +214,7 @@ public class CCDConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<CaseData, S
         .grantHistoryOnly(LOCAL_AUTHORITY)
         .grant(CRU, HMCTS_ADMIN)
         .grant(R, CAFCASS)
+        .showCondition("allocatedJudge=\"\"")
         .fields()
         .page("AllocatedJudge")
         .complex(CaseData::getOrganisationPolicy, null, "Event label", "Event hint")
