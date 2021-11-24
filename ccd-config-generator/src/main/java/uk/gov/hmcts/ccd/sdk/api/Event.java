@@ -24,6 +24,7 @@ public class Event<T, R extends HasRole, S> {
   private Set<S> preState;
   private Set<S> postState;
   private String description;
+  private String showCondition;
   private Map<Webhook, String> retries;
   private boolean explicitGrants;
   private boolean showSummary;

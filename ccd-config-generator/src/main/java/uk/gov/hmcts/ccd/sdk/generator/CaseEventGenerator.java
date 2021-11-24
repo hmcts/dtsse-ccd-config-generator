@@ -78,6 +78,10 @@ class CaseEventGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
       data.put("EndButtonLabel", event.getEndButtonLabel());
     }
 
+    if (!Strings.isNullOrEmpty(event.getShowCondition())) {
+      data.put("EventEnablingCondition", event.getShowCondition());
+    }
+
     if (!event.getPreState().isEmpty()) {
       data.put("PreConditionState(s)", toCCDStateString(event.getPreState(), allStates));
     }
