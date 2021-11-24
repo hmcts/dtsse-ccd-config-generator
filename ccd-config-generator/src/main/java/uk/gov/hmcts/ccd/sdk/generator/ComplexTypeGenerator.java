@@ -37,7 +37,6 @@ class ComplexTypeGenerator<T, S, R extends HasRole> implements ConfigGenerator<T
         continue;
       }
 
-      System.out.println("In ComplexTypeGenerator for <" + c.getName() + ">");
       List<Map<String, Object>> fields = CaseFieldGenerator.toComplex(c, config.getCaseType());
 
       for (Map<String, Object> info : fields) {
@@ -69,13 +68,8 @@ class ComplexTypeGenerator<T, S, R extends HasRole> implements ConfigGenerator<T
       @Override
       public int compare(Map<String,Object> o1, Map<String,Object> o2) {
 
-        System.out.println("comparing... " + o1.get("ElementLabel") + " with " + o2.get("ElementLabel"));
-
         Integer listOrder1 = (Integer)o1.get("DisplayOrder");
         Integer listOrder2 = (Integer)o2.get("DisplayOrder");
-
-        System.out.println("o1 DisplayOrder <" + listOrder1 + ">");
-        System.out.println("o2 DisplayOrder <" + listOrder2 + ">");
 
         if (listOrder1 == null) {
           return listOrder2 == null ? 0 : 1;

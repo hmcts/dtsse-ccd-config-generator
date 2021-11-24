@@ -103,7 +103,6 @@ class CaseFieldGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
           fieldInfo.put("FieldShowCondition", cf.showCondition());
         }
         if (cf.displayOrder() > 0) {
-          System.out.println("Adding DisplayOrder for " + cf.label());
           fieldInfo.put("DisplayOrder", cf.displayOrder());
         }
       }
