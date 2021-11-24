@@ -15,30 +15,30 @@ import static org.assertj.core.api.Assertions.assertThat;
 public class ComplexTypeGeneratorTest {
 
   public static class CCDDisplayOrderClass {
-    @CCD(displayOrder = "2")
+    @CCD(displayOrder = 2)
     private String stringField2;
 
-    @CCD(displayOrder = "6")
+    @CCD(displayOrder = 6)
     private String stringField6;
 
-    @CCD(displayOrder = "4")
+    @CCD(displayOrder = 4)
     private String stringField4;
 
     @CCD(label = "No DisplayOrder")
     private String displayOrder;
 
-    @CCD(displayOrder = "3")
+    @CCD(displayOrder = 3)
     private String stringField3;
 
-    @CCD(displayOrder = "5")
+    @CCD(displayOrder = 5)
     private String stringField5;
 
-    @CCD(displayOrder = "1")
+    @CCD(displayOrder = 1)
     private String stringField1;
   }
 
   public static class CCDInvalidClass {
-    @CCD(displayOrder = "a")
+    @CCD(displayOrder = -1)
     private String stringField1;
   }
 
@@ -64,8 +64,8 @@ public class ComplexTypeGeneratorTest {
     complexTypeGenerator = new ComplexTypeGenerator<>();
     complexTypeGenerator.sortComplexTypesByDisplayOrder(generatedFromCCDTestClass);
 
-    assertThat(generatedFromCCDTestClass.get(0).get("DisplayOrder")).isEqualTo("1");
-    assertThat(generatedFromCCDTestClass.get(5).get("DisplayOrder")).isEqualTo("6");
+    assertThat(generatedFromCCDTestClass.get(0).get("DisplayOrder")).isEqualTo(1);
+    assertThat(generatedFromCCDTestClass.get(5).get("DisplayOrder")).isEqualTo(6);
     assertThat(generatedFromCCDTestClass.get(6).get("DisplayOrder")).isNull();
   }
 
@@ -88,11 +88,4 @@ public class ComplexTypeGeneratorTest {
       counter++;
     }
   }
-
-  @Ignore
-  public void shouldPreventInvalidDisplayOrder() {
-    List<Map<String, Object>> generatedFromCCDTestClass = CaseFieldGenerator
-      .toComplex(CCDInvalidClass.class, "CCDInvalidClass");
-  }
-
 }

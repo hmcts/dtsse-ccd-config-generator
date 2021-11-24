@@ -5,7 +5,6 @@ import static org.apache.commons.lang3.StringUtils.capitalize;
 import static uk.gov.hmcts.ccd.sdk.FieldUtils.isUnwrappedField;
 
 import com.fasterxml.jackson.annotation.JsonUnwrapped;
-import com.google.common.base.Strings;
 import de.cronn.reflection.util.TypedPropertyGetter;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -293,20 +292,8 @@ public class FieldCollection {
       if (null != cf) {
         f.label(cf.label());
         f.hint(cf.hint());
-
-        if (!Strings.isNullOrEmpty(cf.displayOrder())) {
-          f.fieldDisplayOrder(updateFieldDisplayOrder(cf));
-        }
       }
       return f;
-    }
-
-    private int updateFieldDisplayOrder(CCD cf) {
-      try {
-        return Integer.parseUnsignedInt(cf.displayOrder());
-      } catch (NumberFormatException ex) {
-        throw new RuntimeException("Invalid displayOrder value in CCD annotation for " + cf.name());
-      }
     }
 
     private <U> FieldBuilder<U, StateType, Type, Parent> createField(String id, Class<U> clazz) {

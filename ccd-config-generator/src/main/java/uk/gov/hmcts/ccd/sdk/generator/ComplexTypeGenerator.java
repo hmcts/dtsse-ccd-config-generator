@@ -67,15 +67,16 @@ class ComplexTypeGenerator<T, S, R extends HasRole> implements ConfigGenerator<T
     Collections.sort(fields, new Comparator<Map<String,Object>>() {
       @Override
       public int compare(Map<String,Object> o1, Map<String,Object> o2) {
-        String listOrder1 = (String)o1.get("DisplayOrder");
-        String listOrder2 = (String)o2.get("DisplayOrder");
+
+        Integer listOrder1 = (Integer)o1.get("DisplayOrder");
+        Integer listOrder2 = (Integer)o2.get("DisplayOrder");
 
         if (listOrder1 == null) {
           return listOrder2 == null ? 0 : 1;
         } else if (listOrder2 == null) {
           return -1;
         }
-        return Integer.parseInt(listOrder1) - Integer.parseInt(listOrder2);
+        return listOrder1 - listOrder2;
       }
     });
 
