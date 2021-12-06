@@ -11,10 +11,12 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import uk.gov.hmcts.ccd.sdk.api.CCD;
+import uk.gov.hmcts.ccd.sdk.type.ChangeOrganisationRequest;
 import uk.gov.hmcts.ccd.sdk.type.DynamicList;
 import uk.gov.hmcts.ccd.sdk.type.OrganisationPolicy;
 import uk.gov.hmcts.reform.fpl.RetiredFields;
 import uk.gov.hmcts.reform.fpl.access.BulkScan;
+import uk.gov.hmcts.reform.fpl.access.NoticeOfChangeAccess;
 import uk.gov.hmcts.reform.fpl.access.SolicitorAccess;
 import uk.gov.hmcts.reform.fpl.enums.C2ApplicationType;
 import uk.gov.hmcts.reform.fpl.enums.EPOType;
@@ -348,5 +350,8 @@ public class CaseData {
 
     @JsonUnwrapped()
     private final RetiredFields retiredFields;
+
+    @CCD(access = {NoticeOfChangeAccess.class})
+    private final ChangeOrganisationRequest<UserRole> changeOrganisationRequest;
 
 }
