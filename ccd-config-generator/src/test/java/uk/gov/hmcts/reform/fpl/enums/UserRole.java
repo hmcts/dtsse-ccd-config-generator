@@ -13,6 +13,8 @@ public enum UserRole implements HasRole {
     SYSTEM_UPDATE("caseworker-publiclaw-systemupdate"),
     BULK_SCAN("caseworker-publiclaw-bulkscan", "R"),
     BULK_SCAN_SYSTEM_UPDATE("caseworker-publiclaw-bulkscansystemupdate"),
+    CASE_ACCESS_ADMINISTRATOR("caseworker-caa"),
+    CASE_ACCESS_APPROVER("caseworker-approver"),
     @CCD(name = "Solicitor", label = "Solicitor role")
     CCD_SOLICITOR("[SOLICITOR]");
 
