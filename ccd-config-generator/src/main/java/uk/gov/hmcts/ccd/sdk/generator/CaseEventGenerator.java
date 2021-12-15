@@ -93,7 +93,7 @@ class CaseEventGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
     data.put("SecurityClassification", "Public");
 
     if (event.getAboutToStartCallback() != null) {
-      String url = callbackHost + "/callbacks/about-to-start";
+      String url = callbackHost + "/callbacks/about-to-start?eventId=" + event.getId();
       data.put("CallBackURLAboutToStartEvent", url);
       if (event.getRetries().containsKey(Webhook.AboutToStart)) {
         data.put("RetriesTimeoutURLAboutToStartEvent",
@@ -102,7 +102,7 @@ class CaseEventGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
     }
 
     if (event.getAboutToSubmitCallback() != null) {
-      String url = callbackHost + "/callbacks/about-to-submit";
+      String url = callbackHost + "/callbacks/about-to-submit?eventId=" + event.getId();
       data.put("CallBackURLAboutToSubmitEvent", url);
       if (event.getRetries().containsKey(Webhook.AboutToSubmit)) {
         data.put("RetriesTimeoutURLAboutToSubmitEvent",
@@ -111,7 +111,7 @@ class CaseEventGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
     }
 
     if (event.getSubmittedCallback() != null) {
-      String url = callbackHost + "/callbacks/submitted";
+      String url = callbackHost + "/callbacks/submitted?eventId=" + event.getId();
       data.put("CallBackURLSubmittedEvent", url);
       if (event.getRetries().containsKey(Webhook.Submitted)) {
         data.put("RetriesTimeoutURLSubmittedEvent",
