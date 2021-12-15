@@ -45,7 +45,7 @@
     "PageDisplayOrder" : 2,
     "PageFieldDisplayOrder": 1,
     "PageID" : "<Notes>",
-    "CallBackURLMidEvent": "${CCD_DEF_CASE_SERVICE_BASE_URL}/callbacks/mid-event?page=%3CNotes%3E",
+    "CallBackURLMidEvent": "${CCD_DEF_CASE_SERVICE_BASE_URL}/callbacks/mid-event?page=%3CNotes%3E&eventId=allocatedJudge",
     "ShowSummaryChangeOption" : "Y"
   },
   {
