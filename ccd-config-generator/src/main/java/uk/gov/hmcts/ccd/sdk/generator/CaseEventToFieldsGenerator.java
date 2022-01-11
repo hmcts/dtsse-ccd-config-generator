@@ -39,8 +39,7 @@ class CaseEventToFieldsGenerator<T, S, R extends HasRole> implements ConfigGener
           info.put("CaseTypeID", config.getCaseType());
           Field field = fb.build();
           info.put("CaseFieldID", field.getId());
-          String context =
-              field.getContext() == null ? "COMPLEX" : field.getContext().toString().toUpperCase();
+          String context = field.getContext().toString().toUpperCase();
           info.put("DisplayContext", context);
           info.put("PageFieldDisplayOrder", field.getPageFieldDisplayOrder());
 
