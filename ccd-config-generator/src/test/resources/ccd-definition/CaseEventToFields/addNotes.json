@@ -61,13 +61,27 @@
     "ShowSummaryChangeOption" : "Y"
   },
   {
+    "CaseEventFieldHint" : "Event hint",
+    "CaseEventFieldLabel" : "Event label",
+    "CaseEventID" : "addNotes",
+    "CaseFieldID" : "hearingPreferencesOrganisationPolicy",
+    "CaseTypeID" : "CARE_SUPERVISION_EPO",
+    "DisplayContext" : "COMPLEX",
+    "LiveFrom" : "01/01/2017",
+    "PageColumnNumber" : 1,
+    "PageDisplayOrder" : 1,
+    "PageFieldDisplayOrder" : 6,
+    "PageID" : 1,
+    "ShowSummaryChangeOption" : "Y"
+  },
+  {
     "PageID": 1,
     "LiveFrom": "01/01/2017",
     "CaseTypeID": "CARE_SUPERVISION_EPO",
     "CaseFieldID": "caseName",
     "CaseEventID": "addNotes",
     "PageColumnNumber": 1,
-    "PageFieldDisplayOrder": 6,
+    "PageFieldDisplayOrder": 7,
     "DisplayContext": "OPTIONAL",
     "PageDisplayOrder": 1,
     "ShowSummaryChangeOption" : "Y"
@@ -81,7 +95,7 @@
     "LiveFrom" : "01/01/2017",
     "PageColumnNumber" : 1,
     "PageDisplayOrder" : 1,
-    "PageFieldDisplayOrder" : 7,
+    "PageFieldDisplayOrder" : 8,
     "PageID" : 1,
     "ShowSummaryChangeOption" : "Y"
   },
@@ -95,7 +109,7 @@
     "LiveFrom" : "01/01/2017",
     "PageColumnNumber" : 1,
     "PageDisplayOrder" : 1,
-    "PageFieldDisplayOrder" : 8,
+    "PageFieldDisplayOrder" : 9,
     "PageID" : 1,
     "ShowSummaryChangeOption" : "Y"
   },
@@ -108,7 +122,7 @@
     "LiveFrom" : "01/01/2017",
     "PageColumnNumber" : 1,
     "PageDisplayOrder" : 1,
-    "PageFieldDisplayOrder" : 9,
+    "PageFieldDisplayOrder" : 10,
     "PageID" : 1,
     "ShowSummaryChangeOption" : "Y"
   }
