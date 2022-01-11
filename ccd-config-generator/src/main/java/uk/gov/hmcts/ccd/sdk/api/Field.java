@@ -45,7 +45,7 @@ public class Field<Type, StateType, Parent, Grandparent> {
       FieldBuilder result = new FieldBuilder();
       result.clazz = clazz;
       result.parent = parent;
-      result.context = DisplayContext.ReadOnly;
+      result.context = DisplayContext.Complex;
       result.id = id;
       return result;
     }
