@@ -345,16 +345,6 @@ public class FieldCollection {
       String fieldName = propertyUtils.getPropertyName(dataClass, getter);
       Optional<JsonUnwrapped> isUnwrapped = isUnwrappedField(dataClass, fieldName);
 
-      if (null == this.rootFieldname && isUnwrapped.isEmpty()) {
-        // Register only the root complex as a field
-        field(fieldName)
-            .context(DisplayContext.Complex)
-            .showSummary(summary)
-            .showCondition(showCondition)
-            .caseEventFieldLabel(label)
-            .caseEventFieldHint(hint);
-      }
-
       FieldCollectionBuilder<U, StateType, FieldCollectionBuilder<Type, StateType, Parent>> builder =
           complex(fieldName, c);
 

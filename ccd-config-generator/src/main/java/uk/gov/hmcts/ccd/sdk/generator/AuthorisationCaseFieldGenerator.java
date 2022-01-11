@@ -33,6 +33,7 @@ import uk.gov.hmcts.ccd.sdk.ResolvedCCDConfig;
 import uk.gov.hmcts.ccd.sdk.api.CCD;
 import uk.gov.hmcts.ccd.sdk.api.Event;
 import uk.gov.hmcts.ccd.sdk.api.Field;
+import uk.gov.hmcts.ccd.sdk.api.FieldCollection;
 import uk.gov.hmcts.ccd.sdk.api.HasAccessControl;
 import uk.gov.hmcts.ccd.sdk.api.HasRole;
 import uk.gov.hmcts.ccd.sdk.api.Permission;
@@ -52,43 +53,15 @@ class AuthorisationCaseFieldGenerator<T, S, R extends HasRole> implements Config
     Table<String, String, Set<Permission>> fieldRolePermissions = HashBasedTable.create();
     // Add field permissions based on event permissions.
     for (Event<T, R, S> event : config.getEvents().values()) {
-      List<Field.FieldBuilder> fields = event.getFields().getFields();
-      for (Field.FieldBuilder fb : fields) {
+      for (Field.FieldBuilder fb : event.getFields().getFields()) {
+        Field field = fb.build();
+        addPermissionsForEventField(
+            fieldRolePermissions, event, field.getId(), field.isImmutable(), field.isMutableList());
+      }
 
-        for (R role : event.getGrants().keys()) {
-          if (event.getHistoryOnlyRoles().contains(role)) {
-            continue;
-          }
-          Set<Permission> perm = fb.build().isImmutable()
-              ? Permission.CR
-              : event.getGrants().get(role);
-          if (!perm.contains(Permission.D) && fb.build().isMutableList()) {
-            perm.add(Permission.D);
-          }
-
-          String id = fb.build().getId();
-
-          // if explicit grants is enabled field permissions will be derived from ccd annotation on case field
-          // and not the event permissions
-          if (event.isExplicitGrants()) {
-            // deal with immutable fields such as labels
-            if (fb.build().isImmutable()) {
-              if (fieldRolePermissions.contains(id, role.getRole())) {
-                fieldRolePermissions.get(id, role.getRole()).addAll(perm);
-              } else {
-                fieldRolePermissions.put(id, role.getRole(), new HashSet<>(perm));
-              }
-            } else {
-              fieldRolePermissions.put(id, role.getRole(), new HashSet<>());
-            }
-          } else {
-            if (fieldRolePermissions.contains(id, role.getRole())) {
-              fieldRolePermissions.get(id, role.getRole()).addAll(perm);
-            } else {
-              fieldRolePermissions.put(id, role.getRole(), new HashSet<>(perm));
-            }
-          }
-        }
+      for (FieldCollection.FieldCollectionBuilder cfb : event.getFields().getComplexFields()) {
+        FieldCollection field = cfb.build();
+        addPermissionsForEventField(fieldRolePermissions, event, field.getRootFieldname(), false, false);
       }
     }
     // Add Permissions for all tabs.
@@ -169,6 +142,43 @@ class AuthorisationCaseFieldGenerator<T, S, R extends HasRole> implements Config
       Path output = Paths.get(folder.getPath(), filename + ".json");
       JsonUtils.mergeInto(output, permissions, new JsonUtils.CRUDMerger(), "CaseFieldID",
           "UserRole");
+    }
+  }
+
+  private void addPermissionsForEventField(
+      Table<String, String, Set<Permission>> fieldRolePermissions, Event<T, R, S> event,
+      String id, boolean isImmutable, boolean isMutableList) {
+    for (R role : event.getGrants().keys()) {
+      if (event.getHistoryOnlyRoles().contains(role)) {
+        continue;
+      }
+      Set<Permission> perm = isImmutable
+          ? Permission.CR
+          : event.getGrants().get(role);
+      if (!perm.contains(Permission.D) && isMutableList) {
+        perm.add(Permission.D);
+      }
+
+      // if explicit grants is enabled field permissions will be derived from ccd annotation on case field
+      // and not the event permissions
+      if (event.isExplicitGrants()) {
+        // deal with immutable fields such as labels
+        if (isImmutable) {
+          if (fieldRolePermissions.contains(id, role.getRole())) {
+            fieldRolePermissions.get(id, role.getRole()).addAll(perm);
+          } else {
+            fieldRolePermissions.put(id, role.getRole(), new HashSet<>(perm));
+          }
+        } else {
+          fieldRolePermissions.put(id, role.getRole(), new HashSet<>());
+        }
+      } else {
+        if (fieldRolePermissions.contains(id, role.getRole())) {
+          fieldRolePermissions.get(id, role.getRole()).addAll(perm);
+        } else {
+          fieldRolePermissions.put(id, role.getRole(), new HashSet<>(perm));
+        }
+      }
     }
   }
 
