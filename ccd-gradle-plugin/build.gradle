@@ -16,8 +16,8 @@ plugins {
 group 'uk.gov.hmcts.reform'
 
 repositories {
-  jcenter()
   mavenCentral()
+  maven { url 'https://jitpack.io' }
 }
 
 dependencies {
