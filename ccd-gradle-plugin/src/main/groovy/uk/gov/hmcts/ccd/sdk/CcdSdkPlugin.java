@@ -47,6 +47,7 @@ public class CcdSdkPlugin implements Plugin<Project> {
         config.rootPackage,
         config.caseType
     )));
+    project.getRepositories().mavenCentral();
   }
 
   @SneakyThrows
