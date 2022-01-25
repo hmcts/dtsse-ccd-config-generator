@@ -13,7 +13,10 @@ import lombok.NoArgsConstructor;
 import uk.gov.hmcts.ccd.sdk.api.CCD;
 import uk.gov.hmcts.ccd.sdk.type.ChangeOrganisationRequest;
 import uk.gov.hmcts.ccd.sdk.type.DynamicList;
+import uk.gov.hmcts.ccd.sdk.type.ListValue;
 import uk.gov.hmcts.ccd.sdk.type.OrganisationPolicy;
+import uk.gov.hmcts.ccd.sdk.type.ScannedDocument;
+import uk.gov.hmcts.ccd.sdk.type.YesOrNo;
 import uk.gov.hmcts.reform.fpl.RetiredFields;
 import uk.gov.hmcts.reform.fpl.access.BulkScan;
 import uk.gov.hmcts.reform.fpl.access.NoticeOfChangeAccess;
@@ -58,6 +61,7 @@ import static java.util.Optional.ofNullable;
 import static java.util.stream.Collectors.toList;
 import static org.apache.commons.lang3.ObjectUtils.defaultIfNull;
 import static org.apache.commons.lang3.ObjectUtils.isEmpty;
+import static uk.gov.hmcts.ccd.sdk.type.FieldType.Collection;
 import static uk.gov.hmcts.reform.fpl.enums.CMOStatus.SEND_TO_JUDGE;
 
 @Data
@@ -354,4 +358,14 @@ public class CaseData {
     @CCD(access = {NoticeOfChangeAccess.class})
     private final ChangeOrganisationRequest<UserRole> changeOrganisationRequest;
 
+    @CCD(
+      label = "Scanned documents",
+      typeParameterOverride = "ScannedDocument"
+    )
+    private List<ListValue<ScannedDocument>> scannedDocuments;
+
+    @CCD(
+      label = "Supplementary evidence handled"
+    )
+    private YesOrNo evidenceHandled;
 }

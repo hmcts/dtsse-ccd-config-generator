@@ -1,5 +1,8 @@
 package uk.gov.hmcts.ccd.sdk;
 
+import static uk.gov.hmcts.ccd.sdk.api.Event.ATTACH_SCANNED_DOCS;
+import static uk.gov.hmcts.ccd.sdk.api.Event.HANDLE_EVIDENCE;
+
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
@@ -11,6 +14,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import uk.gov.hmcts.ccd.sdk.api.BulkScanEventTypeBuilder;
 import uk.gov.hmcts.ccd.sdk.api.ConfigBuilder;
 import uk.gov.hmcts.ccd.sdk.api.Event;
 import uk.gov.hmcts.ccd.sdk.api.EventTypeBuilder;
@@ -90,11 +94,61 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements ConfigBuilder
 
       private Event.EventBuilder<T, R, S> build(Set<S> preStates, Set<S> postStates) {
         Event.EventBuilder<T, R, S> result = Event.EventBuilder
-            .builder(id, config.caseClass, new PropertyUtils(), preStates, postStates);
+                .builder(id, config.caseClass, new PropertyUtils(), preStates, postStates);
         if (!events.containsKey(id)) {
           events.put(id, Lists.newArrayList());
         }
         events.get(id).add(result);
+        return result;
+      }
+    };
+  }
+
+  @Override
+  public BulkScanEventTypeBuilder<T, R, S> attachScannedDocEvent() {
+    return new BulkScanEventTypeBuilder<>() {
+
+      @Override
+      public Event.EventBuilder<T, R, S> forAllStates() {
+        return build(config.allStates, config.allStates);
+      }
+
+      private Event.EventBuilder<T, R, S> build(Set<S> preStates, Set<S> postStates) {
+        Event.EventBuilder<T, R, S> result = Event.EventBuilder
+                .builder(ATTACH_SCANNED_DOCS, config.caseClass, new PropertyUtils(), preStates, postStates);
+        if (!events.containsKey(ATTACH_SCANNED_DOCS)) {
+          events.put(ATTACH_SCANNED_DOCS, Lists.newArrayList());
+        }
+        events.get(ATTACH_SCANNED_DOCS).add(result);
+
+        result.name("Attach scanned docs");
+        result.description("Attach scanned docs");
+        result.endButtonLabel(null);
+        return result;
+      }
+    };
+  }
+
+  @Override
+  public BulkScanEventTypeBuilder<T, R, S> handleSupplementaryEvent() {
+    return new BulkScanEventTypeBuilder<>() {
+
+      @Override
+      public Event.EventBuilder<T, R, S> forAllStates() {
+        return build(config.allStates, config.allStates);
+      }
+
+      private Event.EventBuilder<T, R, S> build(Set<S> preStates, Set<S> postStates) {
+        Event.EventBuilder<T, R, S> result = Event.EventBuilder
+                .builder(HANDLE_EVIDENCE, config.caseClass, new PropertyUtils(), preStates, postStates);
+        if (!events.containsKey(HANDLE_EVIDENCE)) {
+          events.put(HANDLE_EVIDENCE, Lists.newArrayList());
+        }
+        events.get(HANDLE_EVIDENCE).add(result);
+
+        result.name("Handle supplementary evidence");
+        result.description("Handle supplementary evidence");
+        result.endButtonLabel(null);
         return result;
       }
     };
@@ -129,7 +183,7 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements ConfigBuilder
   @Override
   public TabBuilder<T, R> tab(String tabId, String tabLabel) {
     TabBuilder<T, R> result = (TabBuilder<T, R>) TabBuilder.builder(config.caseClass,
-        new PropertyUtils()).tabID(tabId).labelText(tabLabel);
+            new PropertyUtils()).tabID(tabId).labelText(tabLabel);
     tabs.add(result);
     return result;
   }
@@ -167,7 +221,7 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements ConfigBuilder
 
   @Override
   public void addPreEventHook(
-      Function<Map<String, Object>, Map<String, Object>> hook) {
+          Function<Map<String, Object>, Map<String, Object>> hook) {
     config.preEventHooks.add(hook);
   }
 

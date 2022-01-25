@@ -52,6 +52,8 @@ public class CCDConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<CaseData, S
 
     // Events
     buildUniversalEvents();
+    buildAttachScannedDocEvent();
+    buildHandleEvidenceEvent();
     buildOpen();
     buildTransitions();
 
@@ -237,6 +239,28 @@ public class CCDConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<CaseData, S
         .page("<Notes>", this::checkCaseNotes)
           .mandatory(CaseData::getCaseNotes);
   }
+
+  private void buildAttachScannedDocEvent() {
+    builder.attachScannedDocEvent()
+      .forAllStates()
+      .grant(CRU, SYSTEM_UPDATE)
+      .fields()
+      .page("attachScannedDocs")
+      .pageLabel("Correspondence")
+      .mandatory(CaseData::getScannedDocuments)
+      .mandatory(CaseData::getEvidenceHandled);
+  }
+
+  private void buildHandleEvidenceEvent() {
+    builder.handleSupplementaryEvent()
+      .forAllStates()
+      .grant(CRU, SYSTEM_UPDATE)
+      .fields()
+      .page("handleEvidence")
+      .pageLabel("Correspondence")
+      .mandatory(CaseData::getEvidenceHandled);
+  }
+
 
   private AboutToStartOrSubmitResponse<CaseData, State> checkCaseNotes(
       CaseDetails<CaseData, State> caseDataStateCaseDetails,
