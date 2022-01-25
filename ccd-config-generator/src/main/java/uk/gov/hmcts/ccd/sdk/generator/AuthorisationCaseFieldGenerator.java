@@ -68,15 +68,29 @@ class AuthorisationCaseFieldGenerator<T, S, R extends HasRole> implements Config
 
           String id = fb.build().getId();
 
-          if (fieldRolePermissions.contains(id, role.getRole())) {
-            fieldRolePermissions.get(id, role.getRole()).addAll(perm);
+          // if explicit grants is enabled field permissions will be derived from ccd annotation on case field
+          // and not the event permissions
+          if (event.isExplicitGrants()) {
+            // deal with immutable fields such as labels
+            if (fb.build().isImmutable()) {
+              if (fieldRolePermissions.contains(id, role.getRole())) {
+                fieldRolePermissions.get(id, role.getRole()).addAll(perm);
+              } else {
+                fieldRolePermissions.put(id, role.getRole(), new HashSet<>(perm));
+              }
+            } else {
+              fieldRolePermissions.put(id, role.getRole(), new HashSet<>());
+            }
           } else {
-            fieldRolePermissions.put(id, role.getRole(), new HashSet<>(perm));
+            if (fieldRolePermissions.contains(id, role.getRole())) {
+              fieldRolePermissions.get(id, role.getRole()).addAll(perm);
+            } else {
+              fieldRolePermissions.put(id, role.getRole(), new HashSet<>(perm));
+            }
           }
         }
       }
     }
-
     // Add Permissions for all tabs.
     for (String role : ImmutableSet.copyOf(fieldRolePermissions.columnKeySet())) {
       if (!config.getRolesWithNoHistory().contains(role)) {

@@ -9,6 +9,7 @@
     "EndButtonLabel": "Save and continue",
     "ID": "allocatedJudge",
     "SecurityClassification": "Public",
-    "Name": "Allocated Judge"
+    "Name": "Allocated Judge",
+    "EventEnablingCondition": "allocatedJudge=\"\""
   }
 ]

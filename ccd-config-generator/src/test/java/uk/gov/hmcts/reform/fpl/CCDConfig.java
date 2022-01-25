@@ -42,6 +42,7 @@ public class CCDConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<CaseData, S
 
   public void configure(ConfigBuilder<CaseData, State, UserRole> builder) {
     this.builder = builder;
+    builder.addPreEventHook(RetiredFields::migrate);
     builder.setCallbackHost("${CCD_DEF_CASE_SERVICE_BASE_URL}");
     builder.jurisdiction("PUBLICLAW", "Family Public Law", "Family Public Law desc");
     builder.omitHistoryForRoles(SYSTEM_UPDATE);
@@ -213,6 +214,7 @@ public class CCDConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<CaseData, S
         .grantHistoryOnly(LOCAL_AUTHORITY)
         .grant(CRU, HMCTS_ADMIN)
         .grant(R, CAFCASS)
+        .showCondition("allocatedJudge=\"\"")
         .fields()
         .page("AllocatedJudge")
         .complex(CaseData::getOrganisationPolicy, null, "Event label", "Event hint")
@@ -246,7 +248,6 @@ public class CCDConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<CaseData, S
     builder.event("populateSDO")
         .forStateTransition(Submitted, Gatekeeping)
         .name("Populate standard directions")
-        .explicitGrants()
         .grant(C, UserRole.SYSTEM_UPDATE)
         .fields()
         .page("1", this::sdoMidEvent)

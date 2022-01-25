@@ -22,7 +22,6 @@ public class AddCaseNumber implements CCDConfig<CaseData, State, UserRole> {
     builder.event("addFamilyManCaseNumber")
         .forAllStates()
         .name("Add case number")
-        .explicitGrants()
         .grant(CRU, HMCTS_ADMIN)
         .aboutToStartCallback(this::aboutToStart)
         .aboutToSubmitCallback(this::aboutToSubmit)
@@ -62,6 +61,13 @@ public class AddCaseNumber implements CCDConfig<CaseData, State, UserRole> {
     CaseDetails<CaseData, State> detailsBefore) {
       CaseData d = details.getData();
     d.setFamilyManCaseNumber("12345");
+
+    if (null != d.getRetiredFields().getOrderAppliesToAllChildren()) {
+      throw new RuntimeException("Retired field set");
+    }
+    if (null == d.getCaseLocalAuthority()) {
+      throw new RuntimeException("Migration did not run");
+    }
 
     return AboutToStartOrSubmitResponse.<CaseData, State>builder()
         .data(d)

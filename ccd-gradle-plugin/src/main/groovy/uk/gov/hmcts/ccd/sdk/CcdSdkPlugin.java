@@ -48,7 +48,8 @@ public class CcdSdkPlugin implements Plugin<Project> {
         config.caseType
     )));
 
-    project.getRepositories().jcenter();
+    project.getRepositories().mavenCentral();
+    project.getRepositories().maven(x -> x.setUrl("https://jitpack.io"));
   }
 
   @SneakyThrows

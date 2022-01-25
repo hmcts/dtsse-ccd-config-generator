@@ -3,6 +3,8 @@ package uk.gov.hmcts.ccd.sdk.generator;
 import java.io.File;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -54,8 +56,30 @@ class ComplexTypeGenerator<T, S, R extends HasRole> implements ConfigGenerator<T
         String prefix = maxDepth - depth + "_";
         path = Paths.get(complexTypes.getPath(), prefix + id + ".json");
       }
+
+      sortComplexTypesByDisplayOrder(fields);
       JsonUtils.mergeInto(path, fields, new AddMissing(), "ListElementCode");
     }
+  }
+
+  public void sortComplexTypesByDisplayOrder(List<Map<String, Object>> fields) {
+
+    Collections.sort(fields, new Comparator<Map<String,Object>>() {
+      @Override
+      public int compare(Map<String,Object> o1, Map<String,Object> o2) {
+
+        Integer listOrder1 = (Integer)o1.get("DisplayOrder");
+        Integer listOrder2 = (Integer)o2.get("DisplayOrder");
+
+        if (listOrder1 == null) {
+          return listOrder2 == null ? 0 : 1;
+        } else if (listOrder2 == null) {
+          return -1;
+        }
+        return listOrder1 - listOrder2;
+      }
+    });
+
   }
 
 }

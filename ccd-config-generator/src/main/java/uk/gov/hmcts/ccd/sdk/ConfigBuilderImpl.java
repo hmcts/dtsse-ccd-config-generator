@@ -165,6 +165,12 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements ConfigBuilder
     config.callbackHost = s;
   }
 
+  @Override
+  public void addPreEventHook(
+      Function<Map<String, Object>, Map<String, Object>> hook) {
+    config.preEventHooks.add(hook);
+  }
+
   private WorkBasketBuilder getWorkBasketBuilder(List<WorkBasketBuilder> workBasketInputFields) {
     WorkBasketBuilder result = WorkBasketBuilder.builder(config.caseClass, new PropertyUtils());
     workBasketInputFields.add(result);

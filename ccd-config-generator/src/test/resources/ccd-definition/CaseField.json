@@ -736,5 +736,11 @@
   "ID" : "hearingPreferencesLocationPreferencesOnline",
   "Label" : "Preference for online hearing",
   "LiveFrom" : "01/01/2017"
-}
+  },
+  {
+    "CaseTypeID" : "CARE_SUPERVISION_EPO",
+    "FieldType" : "ChangeOrganisationRequest",
+    "ID" : "changeOrganisationRequest",
+    "LiveFrom" : "01/01/2017"
+  }
 ]

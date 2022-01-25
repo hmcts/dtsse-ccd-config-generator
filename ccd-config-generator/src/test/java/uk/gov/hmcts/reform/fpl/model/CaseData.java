@@ -11,9 +11,12 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import uk.gov.hmcts.ccd.sdk.api.CCD;
+import uk.gov.hmcts.ccd.sdk.type.ChangeOrganisationRequest;
 import uk.gov.hmcts.ccd.sdk.type.DynamicList;
 import uk.gov.hmcts.ccd.sdk.type.OrganisationPolicy;
+import uk.gov.hmcts.reform.fpl.RetiredFields;
 import uk.gov.hmcts.reform.fpl.access.BulkScan;
+import uk.gov.hmcts.reform.fpl.access.NoticeOfChangeAccess;
 import uk.gov.hmcts.reform.fpl.access.SolicitorAccess;
 import uk.gov.hmcts.reform.fpl.enums.C2ApplicationType;
 import uk.gov.hmcts.reform.fpl.enums.EPOType;
@@ -218,7 +221,6 @@ public class CaseData {
     private final Integer orderMonths;
     private final InterimEndDate interimEndDate;
     private final ChildSelector childSelector;
-    private final String orderAppliesToAllChildren;
     @PastOrPresent(message = "Date of issue cannot be in the future")
     private final LocalDate dateOfIssue;
     private final List<Element<GeneratedOrder>> orderCollection;
@@ -345,4 +347,11 @@ public class CaseData {
     private final String caseNote;
     private final List<Element<CaseNote>> caseNotes;
     private final OrganisationPolicy<UserRole> organisationPolicy;
+
+    @JsonUnwrapped()
+    private final RetiredFields retiredFields;
+
+    @CCD(access = {NoticeOfChangeAccess.class})
+    private final ChangeOrganisationRequest<UserRole> changeOrganisationRequest;
+
 }

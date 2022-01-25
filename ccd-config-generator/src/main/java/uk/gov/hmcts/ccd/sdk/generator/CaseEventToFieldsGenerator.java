@@ -63,7 +63,9 @@ class CaseEventToFieldsGenerator<T, S, R extends HasRole> implements ConfigGener
           if (collection.getPagesToMidEvent().containsKey(pageId.toString())
               && !writtenCallbacks.containsEntry(event.getId(), pageId.toString())) {
             info.put("CallBackURLMidEvent", config.getCallbackHost() + "/callbacks/mid-event?page="
-                + URLEncoder.encode(pageId.toString(), StandardCharsets.UTF_8));
+                + URLEncoder.encode(pageId.toString(), StandardCharsets.UTF_8)
+                + "&eventId="
+                + event.getId());
             writtenCallbacks.put(event.getId(), pageId.toString());
           }
 

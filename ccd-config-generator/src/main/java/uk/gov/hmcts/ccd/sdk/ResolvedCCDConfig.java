@@ -4,9 +4,11 @@ import com.google.common.collect.HashBasedTable;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Table;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Function;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import uk.gov.hmcts.ccd.sdk.api.Event;
@@ -40,6 +42,7 @@ public class ResolvedCCDConfig<T, S, R extends HasRole> {
 
   // Events by id
   ImmutableMap<String, Event<T, R, S>> events;
+  List<Function<Map<String, Object>, Map<String, Object>>> preEventHooks = new ArrayList<>();
   List<Tab<T, R>> tabs;
   List<WorkBasket> workBasketResultFields;
   List<WorkBasket> workBasketInputFields;
