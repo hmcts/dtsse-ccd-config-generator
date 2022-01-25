@@ -18,6 +18,9 @@ import uk.gov.hmcts.ccd.sdk.api.callback.Submitted;
 @Data
 public class Event<T, R extends HasRole, S> {
 
+  public static final String ATTACH_SCANNED_DOCS = "attachScannedDocs";
+  public static final String HANDLE_EVIDENCE = "handleEvidence";
+
   private String id;
 
   private String name;

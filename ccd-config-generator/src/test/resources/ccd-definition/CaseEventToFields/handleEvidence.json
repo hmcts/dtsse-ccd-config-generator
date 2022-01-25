@@ -1,0 +1,14 @@
+[
+  {
+    "CaseEventID" : "handleEvidence",
+    "CaseFieldID" : "evidenceHandled",
+    "CaseTypeID" : "CARE_SUPERVISION_EPO",
+    "DisplayContext" : "MANDATORY",
+    "LiveFrom" : "01/01/2017",
+    "PageColumnNumber" : 1,
+    "PageDisplayOrder" : 1,
+    "PageFieldDisplayOrder" : 1,
+    "PageID" : "handleEvidence",
+    "ShowSummaryChangeOption" : "Y"
+  }
+]

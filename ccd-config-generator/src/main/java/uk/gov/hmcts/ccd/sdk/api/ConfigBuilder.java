@@ -12,6 +12,10 @@ public interface ConfigBuilder<T, S, R extends HasRole> {
 
   EventTypeBuilder<T, R, S> event(String id);
 
+  BulkScanEventTypeBuilder<T, R, S> attachScannedDocEvent();
+
+  BulkScanEventTypeBuilder<T, R, S> handleSupplementaryEvent();
+
   void caseType(String caseType, String name, String description);
 
   void jurisdiction(String id, String name, String description);
