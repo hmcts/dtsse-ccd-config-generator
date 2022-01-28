@@ -742,5 +742,20 @@
     "FieldType" : "ChangeOrganisationRequest",
     "ID" : "changeOrganisationRequest",
     "LiveFrom" : "01/01/2017"
+  },
+  {
+    "CaseTypeID" : "CARE_SUPERVISION_EPO",
+    "FieldType" : "Collection",
+    "FieldTypeParameter" : "ScannedDocument",
+    "ID" : "scannedDocuments",
+    "Label" : "Scanned documents",
+    "LiveFrom" : "01/01/2017"
+  },
+  {
+    "CaseTypeID" : "CARE_SUPERVISION_EPO",
+    "FieldType" : "YesOrNo",
+    "ID" : "evidenceHandled",
+    "Label" : "Supplementary evidence handled",
+    "LiveFrom" : "01/01/2017"
   }
 ]
