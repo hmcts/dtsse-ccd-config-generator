@@ -54,12 +54,12 @@ public class ExceptionRecordScannedDocument {
   @CCD(
           label = "Scanned date"
   )
-  @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss.SSS")
+  @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
   private LocalDateTime scannedDate;
 
   @CCD(
           label = "Delivery date"
   )
-  @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss.SSS")
+  @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
   private LocalDateTime deliveryDate;
 }
