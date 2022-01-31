@@ -2,6 +2,7 @@ package uk.gov.hmcts.ccd.sdk.type;
 
 import static uk.gov.hmcts.ccd.sdk.type.FieldType.FixedList;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
 import java.time.LocalDateTime;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -45,11 +46,13 @@ public class ScannedDocument {
   @CCD(
           label = "Scanned date"
   )
+  @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd'T'HH:mm:ss.SSSXXX")
   private LocalDateTime scannedDate;
 
   @CCD(
           label = "Delivery date"
   )
+  @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd'T'HH:mm:ss.SSSXXX")
   private LocalDateTime deliveryDate;
 
   @CCD(
