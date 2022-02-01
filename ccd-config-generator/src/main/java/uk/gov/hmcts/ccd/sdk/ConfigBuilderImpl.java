@@ -109,6 +109,11 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements ConfigBuilder
     return new BulkScanEventTypeBuilder<>() {
 
       @Override
+      public Event.EventBuilder<T, R, S> forStateTransition(EnumSet from, S to) {
+        return build(from, Set.of(to));
+      }
+
+      @Override
       public Event.EventBuilder<T, R, S> forAllStates() {
         return build(config.allStates, config.allStates);
       }
@@ -132,6 +137,11 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements ConfigBuilder
   @Override
   public BulkScanEventTypeBuilder<T, R, S> handleSupplementaryEvent() {
     return new BulkScanEventTypeBuilder<>() {
+
+      @Override
+      public Event.EventBuilder<T, R, S> forStateTransition(EnumSet from, S to) {
+        return build(from, Set.of(to));
+      }
 
       @Override
       public Event.EventBuilder<T, R, S> forAllStates() {
