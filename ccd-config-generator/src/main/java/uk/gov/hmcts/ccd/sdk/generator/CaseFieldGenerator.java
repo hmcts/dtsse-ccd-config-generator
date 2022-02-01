@@ -1,6 +1,7 @@
 package uk.gov.hmcts.ccd.sdk.generator;
 
 import static org.apache.commons.lang3.StringUtils.capitalize;
+import static org.apache.commons.lang3.StringUtils.defaultIfEmpty;
 import static uk.gov.hmcts.ccd.sdk.FieldUtils.getCaseFields;
 import static uk.gov.hmcts.ccd.sdk.FieldUtils.getFieldId;
 import static uk.gov.hmcts.ccd.sdk.FieldUtils.isUnwrappedField;
@@ -87,8 +88,8 @@ class CaseFieldGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
       CCD cf = field.getAnnotation(CCD.class);
 
       if (null != cf) {
-        if (!Strings.isNullOrEmpty(cf.label())) {
-          fieldInfo.put("Label", cf.label());
+        if (!fieldInfo.containsKey("Label")) {
+          fieldInfo.put("Label", defaultIfEmpty(cf.label(), " "));
         }
         if (!Strings.isNullOrEmpty(cf.hint())) {
           fieldInfo.put("HintText", cf.hint());
@@ -105,6 +106,10 @@ class CaseFieldGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
         if (cf.displayOrder() > 0) {
           fieldInfo.put("DisplayOrder", cf.displayOrder());
         }
+      }
+
+      if (!fieldInfo.containsKey("Label")) {
+        fieldInfo.put("Label", " ");
       }
 
       if (cf != null && cf.typeOverride() != FieldType.Unspecified) {
@@ -215,9 +220,7 @@ class CaseFieldGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
         continue;
       }
       result.add(fieldData);
-      if (field.getLabel() != null) {
-        fieldData.put("Label", field.getLabel());
-      }
+      fieldData.put("Label", defaultIfEmpty(field.getLabel(), " "));
       String type = field.getType() == null ? "Label" : field.getType();
       fieldData.put("FieldType", type);
       if (field.getFieldTypeParameter() != null) {
