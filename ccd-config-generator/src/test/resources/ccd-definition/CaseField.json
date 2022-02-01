@@ -1,368 +1,10 @@
 [
   {
-    "ID": "epoEndDate",
-    "FieldType": "DateTime",
-    "CaseTypeID": "CARE_SUPERVISION_EPO",
-    "LiveFrom": "01/01/2017",
-    "SecurityClassification": "Public"
-  },
-  {
-    "ID": "documents_socialWorkCarePlan_document",
-    "FieldType": "UploadDocuments",
-    "CaseTypeID": "CARE_SUPERVISION_EPO",
-    "LiveFrom": "01/01/2017",
-    "SecurityClassification": "Public"
-  },
-  {
-    "ID": "noticeOfProceedings",
-    "FieldType": "NoticeOfProceedings",
-    "CaseTypeID": "CARE_SUPERVISION_EPO",
-    "LiveFrom": "01/01/2017",
-    "SecurityClassification": "Public"
-  },
-  {
-    "ID": "c2ApplicationType",
-    "FieldType": "Map",
-    "CaseTypeID": "CARE_SUPERVISION_EPO",
-    "LiveFrom": "01/01/2017",
-    "SecurityClassification": "Public"
-  },
-  {
-    "ID": "groundsForEPO",
-    "FieldType": "GroundsForEPO",
-    "CaseTypeID": "CARE_SUPERVISION_EPO",
-    "LiveFrom": "01/01/2017",
-    "SecurityClassification": "Public"
-  },
-  {
-    "ID": "allocatedJudge",
-    "FieldType": "JudgeAndLegalAdvisor",
-    "CaseTypeID": "CARE_SUPERVISION_EPO",
-    "LiveFrom": "01/01/2017",
-    "SecurityClassification": "Public"
-  },
-  {
-    "ID": "order",
-    "FieldType": "GeneratedOrder",
-    "CaseTypeID": "CARE_SUPERVISION_EPO",
-    "LiveFrom": "01/01/2017",
-    "SecurityClassification": "Public"
-  },
-  {
-    "ID": "others",
-    "FieldType": "Person",
-    "CaseTypeID": "CARE_SUPERVISION_EPO",
-    "LiveFrom": "01/01/2017",
-    "SecurityClassification": "Public"
-  },
-  {
     "ID": "caseName",
     "FieldType": "Text",
     "CaseTypeID": "CARE_SUPERVISION_EPO",
     "LiveFrom": "01/01/2017",
-    "SecurityClassification": "Public"
-  },
-  {
-    "ID": "otherPartiesDirectionsCustom",
-    "FieldType": "Collection",
-    "FieldTypeParameter": "Direction",
-    "CaseTypeID": "CARE_SUPERVISION_EPO",
-    "LiveFrom": "01/01/2017",
-    "SecurityClassification": "Public"
-  },
-  {
-    "ID": "familyManCaseNumber",
-    "FieldType": "Text",
-    "CaseTypeID": "CARE_SUPERVISION_EPO",
-    "LiveFrom": "01/01/2017",
-    "SecurityClassification": "Public"
-  },
-  {
-    "ID": "orderTypeAndDocument",
-    "FieldType": "OrderTypeAndDocument",
-    "CaseTypeID": "CARE_SUPERVISION_EPO",
-    "LiveFrom": "01/01/2017",
-    "SecurityClassification": "Public"
-  },
-  {
-    "ID": "allPartiesCustomCMO",
-    "FieldType": "Collection",
-    "FieldTypeParameter": "Direction",
-    "CaseTypeID": "CARE_SUPERVISION_EPO",
-    "LiveFrom": "01/01/2017",
-    "SecurityClassification": "Public"
-  },
-  {
-    "ID": "recitals",
-    "FieldType": "Collection",
-    "FieldTypeParameter": "Recitals",
-    "CaseTypeID": "CARE_SUPERVISION_EPO",
-    "LiveFrom": "01/01/2017",
-    "SecurityClassification": "Public"
-  },
-  {
-    "ID": "allParties",
-    "FieldType": "Collection",
-    "FieldTypeParameter": "Direction",
-    "CaseTypeID": "CARE_SUPERVISION_EPO",
-    "LiveFrom": "01/01/2017",
-    "SecurityClassification": "Public"
-  },
-  {
-    "ID": "noticeOfProceedingsBundle",
-    "FieldType": "Collection",
-    "FieldTypeParameter": "NoticeOfProceedingsBundle",
-    "CaseTypeID": "CARE_SUPERVISION_EPO",
-    "LiveFrom": "01/01/2017",
-    "SecurityClassification": "Public"
-  },
-  {
-    "ID": "applicants",
-    "FieldType": "Collection",
-    "FieldTypeParameter": "Applicants",
-    "CaseTypeID": "CARE_SUPERVISION_EPO",
-    "LiveFrom": "01/01/2017",
-    "SecurityClassification": "Public"
-  },
-  {
-    "ID": "orderCollection",
-    "FieldType": "Collection",
-    "FieldTypeParameter": "GeneratedOrder",
-    "CaseTypeID": "CARE_SUPERVISION_EPO",
-    "LiveFrom": "01/01/2017",
-    "SecurityClassification": "Public"
-  },
-  {
-    "ID": "interimEndDate",
-    "FieldType": "InterimEndDate",
-    "CaseTypeID": "CARE_SUPERVISION_EPO",
-    "LiveFrom": "01/01/2017",
-    "SecurityClassification": "Public"
-  },
-  {
-    "ID": "yesOrNoField",
-    "FieldType": "YesOrNo",
-    "CaseTypeID": "CARE_SUPERVISION_EPO",
-    "LiveFrom": "01/01/2017",
-    "SecurityClassification": "Public"
-  },
-  {
-    "ID": "caseNote",
-    "FieldType": "Text",
-    "CaseTypeID": "CARE_SUPERVISION_EPO",
-    "LiveFrom": "01/01/2017",
-    "SecurityClassification": "Public"
-  },
-  {
-    "ID": "documentField",
-    "FieldType": "Document",
-    "CaseTypeID": "CARE_SUPERVISION_EPO",
-    "LiveFrom": "01/01/2017",
-    "SecurityClassification": "Public"
-  },
-  {
-    "ID": "respondentDirections",
-    "FieldType": "Collection",
-    "FieldTypeParameter": "Direction",
-    "CaseTypeID": "CARE_SUPERVISION_EPO",
-    "LiveFrom": "01/01/2017",
-    "SecurityClassification": "Public"
-  },
-  {
-    "ID": "courtDirectionsCustom",
-    "FieldType": "Collection",
-    "FieldTypeParameter": "Direction",
-    "CaseTypeID": "CARE_SUPERVISION_EPO",
-    "LiveFrom": "01/01/2017",
-    "SecurityClassification": "Public"
-  },
-  {
-    "ID": "epoChildren",
-    "FieldType": "EPOChildren",
-    "CaseTypeID": "CARE_SUPERVISION_EPO",
-    "LiveFrom": "01/01/2017",
-    "SecurityClassification": "Public"
-  },
-  {
-    "ID": "judgeAndLegalAdvisor",
-    "FieldType": "JudgeAndLegalAdvisor",
-    "CaseTypeID": "CARE_SUPERVISION_EPO",
-    "LiveFrom": "01/01/2017",
-    "SecurityClassification": "Public"
-  },
-  {
-    "ID": "otherPartiesDirectionsCustomCMO",
-    "FieldType": "Collection",
-    "FieldTypeParameter": "Direction",
-    "CaseTypeID": "CARE_SUPERVISION_EPO",
-    "LiveFrom": "01/01/2017",
-    "SecurityClassification": "Public"
-  },
-  {
-    "ID": "respondentDirectionsCustomCMO",
-    "FieldType": "Collection",
-    "FieldTypeParameter": "Direction",
-    "CaseTypeID": "CARE_SUPERVISION_EPO",
-    "LiveFrom": "01/01/2017",
-    "SecurityClassification": "Public"
-  },
-  {
-    "ID": "documents_socialWorkEvidenceTemplate_document",
-    "FieldType": "UploadDocuments",
-    "CaseTypeID": "CARE_SUPERVISION_EPO",
-    "LiveFrom": "01/01/2017",
-    "SecurityClassification": "Public"
-  },
-  {
-    "ID": "localAuthorityDirectionsCustomCMO",
-    "FieldType": "Collection",
-    "FieldTypeParameter": "Direction",
-    "CaseTypeID": "CARE_SUPERVISION_EPO",
-    "LiveFrom": "01/01/2017",
-    "SecurityClassification": "Public"
-  },
-  {
-    "ID": "epoRemovalAddress",
-    "FieldType": "Address",
-    "CaseTypeID": "CARE_SUPERVISION_EPO",
-    "LiveFrom": "01/01/2017",
-    "SecurityClassification": "Public"
-  },
-  {
-    "ID": "epoPhrase",
-    "FieldType": "EPOPhrase",
-    "CaseTypeID": "CARE_SUPERVISION_EPO",
-    "LiveFrom": "01/01/2017",
-    "SecurityClassification": "Public"
-  },
-  {
-    "ID": "documents_socialWorkAssessment_document",
-    "FieldType": "UploadDocuments",
-    "CaseTypeID": "CARE_SUPERVISION_EPO",
-    "LiveFrom": "01/01/2017",
-    "SecurityClassification": "Public"
-  },
-  {
-    "ID": "grounds",
-    "FieldType": "Grounds",
-    "CaseTypeID": "CARE_SUPERVISION_EPO",
-    "LiveFrom": "01/01/2017",
-    "SecurityClassification": "Public"
-  },
-  {
-    "ID": "cmoHearingDateList",
-    "FieldType": "DynamicList",
-    "CaseTypeID": "CARE_SUPERVISION_EPO",
-    "LiveFrom": "01/01/2017",
-    "SecurityClassification": "Public"
-  },
-  {
-    "ID": "allocationProposal",
-    "FieldType": "AllocationDecision",
-    "CaseTypeID": "CARE_SUPERVISION_EPO",
-    "LiveFrom": "01/01/2017",
-    "SecurityClassification": "Public"
-  },
-  {
-    "ID": "addressField",
-    "FieldType": "Address",
-    "CaseTypeID": "CARE_SUPERVISION_EPO",
-    "LiveFrom": "01/01/2017",
-    "SecurityClassification": "Public"
-  },
-  {
-    "ID": "caseLinkField",
-    "FieldType": "CaseLink",
-    "CaseTypeID": "CARE_SUPERVISION_EPO",
-    "LiveFrom": "01/01/2017",
-    "SecurityClassification": "Public"
-  },
-  {
-    "ID": "respondentDirectionsCustom",
-    "FieldType": "Collection",
-    "FieldTypeParameter": "Direction",
-    "CaseTypeID": "CARE_SUPERVISION_EPO",
-    "LiveFrom": "01/01/2017",
-    "SecurityClassification": "Public"
-  },
-  {
-    "ID": "dateSubmitted",
-    "FieldType": "Date",
-    "CaseTypeID": "CARE_SUPERVISION_EPO",
-    "LiveFrom": "01/01/2017",
-    "SecurityClassification": "Public"
-  },
-  {
-    "ID": "localAuthorityDirections",
-    "FieldType": "Collection",
-    "FieldTypeParameter": "Direction",
-    "CaseTypeID": "CARE_SUPERVISION_EPO",
-    "LiveFrom": "01/01/2017",
-    "SecurityClassification": "Public"
-  },
-  {
-    "ID": "localAuthorityDirectionsCustom",
-    "FieldType": "Collection",
-    "FieldTypeParameter": "Direction",
-    "CaseTypeID": "CARE_SUPERVISION_EPO",
-    "LiveFrom": "01/01/2017",
-    "SecurityClassification": "Public"
-  },
-  {
-    "ID": "orders",
-    "FieldType": "Orders",
-    "CaseTypeID": "CARE_SUPERVISION_EPO",
-    "LiveFrom": "01/01/2017",
-    "SecurityClassification": "Public"
-  },
-  {
-    "ID": "orderAppliesToAllChildren",
-    "FieldType": "Text",
-    "CaseTypeID": "CARE_SUPERVISION_EPO",
-    "LiveFrom": "01/01/2017",
-    "SecurityClassification": "Public"
-  },
-  {
-    "ID": "hearingPreferencesWelsh",
-    "FieldType": "Text",
-    "CaseTypeID": "CARE_SUPERVISION_EPO",
-    "LiveFrom": "01/01/2017",
-    "Label" : "Do you want some Welsh?",
-    "SecurityClassification": "Public"
-  },
-  {
-    "ID": "hearingPreferencesInterpreter",
-    "FieldType": "Text",
-    "CaseTypeID": "CARE_SUPERVISION_EPO",
-    "LiveFrom": "01/01/2017",
-    "SecurityClassification": "Public"
-  },
-  {
-    "CaseTypeID" : "CARE_SUPERVISION_EPO",
-    "FieldType" : "MultiSelectList",
-    "FieldTypeParameter" : "Refreshment",
-    "ID" : "hearingPreferencesRefreshments",
-    "LiveFrom" : "01/01/2017"
-  },
-  {
-    "ID": "childSelector",
-    "FieldType": "ChildSelector",
-    "CaseTypeID": "CARE_SUPERVISION_EPO",
-    "LiveFrom": "01/01/2017",
-    "SecurityClassification": "Public"
-  },
-  {
-    "ID": "orderAction",
-    "FieldType": "OrderAction",
-    "CaseTypeID": "CARE_SUPERVISION_EPO",
-    "LiveFrom": "01/01/2017",
-    "SecurityClassification": "Public"
-  },
-  {
-    "ID": "documents_threshold_document",
-    "FieldType": "UploadDocuments",
-    "CaseTypeID": "CARE_SUPERVISION_EPO",
-    "LiveFrom": "01/01/2017",
+    "Label": " ",
     "SecurityClassification": "Public"
   },
   {
@@ -371,6 +13,7 @@
     "RegularExpression": ".*",
     "CaseTypeID": "CARE_SUPERVISION_EPO",
     "LiveFrom": "01/01/2017",
+    "Label": " ",
     "SecurityClassification": "Public"
   },
   {
@@ -378,127 +21,7 @@
     "FieldType": "Text",
     "CaseTypeID": "CARE_SUPERVISION_EPO",
     "LiveFrom": "01/01/2017",
-    "SecurityClassification": "Public"
-  },
-  {
-    "ID": "proceeding",
-    "FieldType": "Proceeding",
-    "CaseTypeID": "CARE_SUPERVISION_EPO",
-    "LiveFrom": "01/01/2017",
-    "SecurityClassification": "Public"
-  },
-  {
-    "ID": "solicitor",
-    "FieldType": "Solicitor",
-    "CaseTypeID": "CARE_SUPERVISION_EPO",
-    "LiveFrom": "01/01/2017",
-    "SecurityClassification": "Public"
-  },
-  {
-    "ID": "confidentialOthers",
-    "FieldType": "Collection",
-    "FieldTypeParameter": "Others",
-    "CaseTypeID": "CARE_SUPERVISION_EPO",
-    "LiveFrom": "01/01/2017",
-    "SecurityClassification": "Public"
-  },
-  {
-    "ID": "servedCaseManagementOrders",
-    "FieldType": "Collection",
-    "FieldTypeParameter": "CaseManagementOrder",
-    "CaseTypeID": "CARE_SUPERVISION_EPO",
-    "LiveFrom": "01/01/2017",
-    "SecurityClassification": "Public"
-  },
-  {
-    "ID": "cafcassDirectionsCustomCMO",
-    "FieldType": "Collection",
-    "FieldTypeParameter": "Direction",
-    "CaseTypeID": "CARE_SUPERVISION_EPO",
-    "LiveFrom": "01/01/2017",
-    "SecurityClassification": "Public"
-  },
-  {
-    "ID": "statementOfService",
-    "FieldType": "Collection",
-    "FieldTypeParameter": "Recipients",
-    "CaseTypeID": "CARE_SUPERVISION_EPO",
-    "LiveFrom": "01/01/2017",
-    "SecurityClassification": "Public"
-  },
-  {
-    "ID": "c2DocumentBundle",
-    "FieldType": "Collection",
-    "FieldTypeParameter": "C2DocumentBundle",
-    "CaseTypeID": "CARE_SUPERVISION_EPO",
-    "LiveFrom": "01/01/2017",
-    "SecurityClassification": "Public"
-  },
-  {
-    "ID": "hearing",
-    "FieldType": "Hearing",
-    "CaseTypeID": "CARE_SUPERVISION_EPO",
-    "LiveFrom": "01/01/2017",
-    "SecurityClassification": "Public"
-  },
-  {
-    "ID": "documents_socialWorkChronology_document",
-    "FieldType": "UploadDocuments",
-    "CaseTypeID": "CARE_SUPERVISION_EPO",
-    "LiveFrom": "01/01/2017",
-    "SecurityClassification": "Public"
-  },
-  {
-    "ID": "orderFurtherDirections",
-    "FieldType": "FurtherDirections",
-    "CaseTypeID": "CARE_SUPERVISION_EPO",
-    "LiveFrom": "01/01/2017",
-    "SecurityClassification": "Public"
-  },
-  {
-    "ID": "nextHearingDateList",
-    "FieldType": "DynamicList",
-    "CaseTypeID": "CARE_SUPERVISION_EPO",
-    "LiveFrom": "01/01/2017",
-    "SecurityClassification": "Public"
-  },
-  {
-    "ID": "epoType",
-    "FieldType": "FixedRadioList",
-    "FieldTypeParameter": "EPOType",
-    "CaseTypeID": "CARE_SUPERVISION_EPO",
-    "LiveFrom": "01/01/2017",
-    "SecurityClassification": "Public"
-  },
-  {
-    "ID": "courtDirectionsCustomCMO",
-    "FieldType": "Collection",
-    "FieldTypeParameter": "Direction",
-    "CaseTypeID": "CARE_SUPERVISION_EPO",
-    "LiveFrom": "01/01/2017",
-    "SecurityClassification": "Public"
-  },
-  {
-    "ID": "otherPartiesDirections",
-    "FieldType": "Collection",
-    "FieldTypeParameter": "Direction",
-    "CaseTypeID": "CARE_SUPERVISION_EPO",
-    "LiveFrom": "01/01/2017",
-    "SecurityClassification": "Public"
-  },
-  {
-    "ID": "factorsParenting",
-    "FieldType": "FactorsParenting",
-    "CaseTypeID": "CARE_SUPERVISION_EPO",
-    "LiveFrom": "01/01/2017",
-    "SecurityClassification": "Public"
-  },
-  {
-    "ID": "confidentialChildren",
-    "FieldType": "Collection",
-    "FieldTypeParameter": "ChildrenNew",
-    "CaseTypeID": "CARE_SUPERVISION_EPO",
-    "LiveFrom": "01/01/2017",
+    "Label": " ",
     "SecurityClassification": "Public"
   },
   {
@@ -507,59 +30,7 @@
     "FieldTypeParameter": "RepresentativeRole",
     "CaseTypeID": "CARE_SUPERVISION_EPO",
     "LiveFrom": "01/01/2017",
-    "SecurityClassification": "Public"
-  },
-  {
-    "ID": "cafcassDirectionsCustom",
-    "FieldType": "Collection",
-    "FieldTypeParameter": "Direction",
-    "CaseTypeID": "CARE_SUPERVISION_EPO",
-    "LiveFrom": "01/01/2017",
-    "SecurityClassification": "Public"
-  },
-  {
-    "ID": "placements",
-    "FieldType": "Collection",
-    "FieldTypeParameter": "Placement",
-    "CaseTypeID": "CARE_SUPERVISION_EPO",
-    "LiveFrom": "01/01/2017",
-    "SecurityClassification": "Public"
-  },
-  {
-    "ID": "hearingDetails",
-    "FieldType": "Collection",
-    "FieldTypeParameter": "HearingBooking",
-    "CaseTypeID": "CARE_SUPERVISION_EPO",
-    "LiveFrom": "01/01/2017",
-    "SecurityClassification": "Public"
-  },
-  {
-    "ID": "orderMonths",
-    "FieldType": "Number",
-    "CaseTypeID": "CARE_SUPERVISION_EPO",
-    "LiveFrom": "01/01/2017",
-    "SecurityClassification": "Public"
-  },
-  {
-    "ID": "confidentialRespondents",
-    "FieldType": "Collection",
-    "FieldTypeParameter": "RespondentNew",
-    "CaseTypeID": "CARE_SUPERVISION_EPO",
-    "LiveFrom": "01/01/2017",
-    "SecurityClassification": "Public"
-  },
-  {
-    "ID": "internationalElement",
-    "FieldType": "InternationalElement",
-    "CaseTypeID": "CARE_SUPERVISION_EPO",
-    "LiveFrom": "01/01/2017",
-    "SecurityClassification": "Public"
-  },
-  {
-    "ID": "schedule",
-    "FieldType": "Schedule",
-    "CaseTypeID": "CARE_SUPERVISION_EPO",
-    "LiveFrom": "01/01/2017",
+    "Label": " ",
     "SecurityClassification": "Public"
   },
   {
@@ -567,103 +38,40 @@
     "FieldType": "RiskAndHarm",
     "CaseTypeID": "CARE_SUPERVISION_EPO",
     "LiveFrom": "01/01/2017",
+    "Label": " ",
     "SecurityClassification": "Public"
   },
   {
-    "ID": "cafcassDirections",
+    "ID": "orders",
+    "FieldType": "Orders",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "LiveFrom": "01/01/2017",
+    "Label": " ",
+    "SecurityClassification": "Public"
+  },
+  {
+    "ID": "grounds",
+    "FieldType": "Grounds",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "LiveFrom": "01/01/2017",
+    "Label": " ",
+    "SecurityClassification": "Public"
+  },
+  {
+    "ID": "groundsForEPO",
+    "FieldType": "GroundsForEPO",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "LiveFrom": "01/01/2017",
+    "Label": " ",
+    "SecurityClassification": "Public"
+  },
+  {
+    "ID": "applicants",
     "FieldType": "Collection",
-    "FieldTypeParameter": "Direction",
+    "FieldTypeParameter": "Applicants",
     "CaseTypeID": "CARE_SUPERVISION_EPO",
     "LiveFrom": "01/01/2017",
-    "SecurityClassification": "Public"
-  },
-  {
-    "ID": "children1",
-    "FieldType": "Collection",
-    "FieldTypeParameter": "ChildrenNew",
-    "CaseTypeID": "CARE_SUPERVISION_EPO",
-    "LiveFrom": "01/01/2017",
-    "SecurityClassification": "Public"
-  },
-  {
-    "ID": "orderSummaryField",
-    "FieldType": "OrderSummary",
-    "CaseTypeID": "CARE_SUPERVISION_EPO",
-    "LiveFrom": "01/01/2017",
-    "SecurityClassification": "Public"
-  },
-  {
-    "ID": "representatives",
-    "FieldType": "Collection",
-    "FieldTypeParameter": "Representative",
-    "CaseTypeID": "CARE_SUPERVISION_EPO",
-    "LiveFrom": "01/01/2017",
-    "SecurityClassification": "Public"
-  },
-  {
-    "ID": "caseNotes",
-    "FieldType": "Collection",
-    "FieldTypeParameter": "CaseNote",
-    "CaseTypeID": "CARE_SUPERVISION_EPO",
-    "LiveFrom": "01/01/2017",
-    "SecurityClassification": "Public"
-  },
-  {
-    "ID": "documents_socialWorkStatement_document",
-    "FieldType": "UploadDocuments",
-    "CaseTypeID": "CARE_SUPERVISION_EPO",
-    "LiveFrom": "01/01/2017",
-    "SecurityClassification": "Public"
-  },
-  {
-    "ID": "allocationDecision",
-    "FieldType": "AllocationDecision",
-    "CaseTypeID": "CARE_SUPERVISION_EPO",
-    "LiveFrom": "01/01/2017",
-    "SecurityClassification": "Public"
-  },
-  {
-    "ID": "allPartiesCustom",
-    "FieldType": "Collection",
-    "FieldTypeParameter": "Direction",
-    "CaseTypeID": "CARE_SUPERVISION_EPO",
-    "LiveFrom": "01/01/2017",
-    "SecurityClassification": "Public"
-  },
-  {
-    "ID": "documents_checklist_document",
-    "FieldType": "UploadDocuments",
-    "CaseTypeID": "CARE_SUPERVISION_EPO",
-    "LiveFrom": "01/01/2017",
-    "SecurityClassification": "Public"
-  },
-  {
-    "ID": "sharedDraftCMODocument",
-    "FieldType": "Document",
-    "CaseTypeID": "CARE_SUPERVISION_EPO",
-    "LiveFrom": "01/01/2017",
-    "SecurityClassification": "Public"
-  },
-  {
-    "ID": "dateOfIssue",
-    "FieldType": "Date",
-    "CaseTypeID": "CARE_SUPERVISION_EPO",
-    "LiveFrom": "01/01/2017",
-    "SecurityClassification": "Public"
-  },
-  {
-    "ID": "temporaryC2Document",
-    "FieldType": "C2DocumentBundle",
-    "CaseTypeID": "CARE_SUPERVISION_EPO",
-    "LiveFrom": "01/01/2017",
-    "SecurityClassification": "Public"
-  },
-  {
-    "ID": "documents_socialWorkOther",
-    "FieldType": "Collection",
-    "FieldTypeParameter": "OtherDocument",
-    "CaseTypeID": "CARE_SUPERVISION_EPO",
-    "LiveFrom": "01/01/2017",
+    "Label": " ",
     "SecurityClassification": "Public"
   },
   {
@@ -672,13 +80,141 @@
     "FieldTypeParameter": "RespondentNew",
     "CaseTypeID": "CARE_SUPERVISION_EPO",
     "LiveFrom": "01/01/2017",
+    "Label": " ",
     "SecurityClassification": "Public"
   },
   {
-    "ID": "standardDirectionOrder",
-    "FieldType": "StandardDirectionOrder",
+    "ID": "addressField",
+    "FieldType": "Address",
     "CaseTypeID": "CARE_SUPERVISION_EPO",
     "LiveFrom": "01/01/2017",
+    "Label": " ",
+    "SecurityClassification": "Public"
+  },
+  {
+    "ID": "documentField",
+    "FieldType": "Document",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "LiveFrom": "01/01/2017",
+    "Label": " ",
+    "SecurityClassification": "Public"
+  },
+  {
+    "ID": "orderSummaryField",
+    "FieldType": "OrderSummary",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "LiveFrom": "01/01/2017",
+    "Label": " ",
+    "SecurityClassification": "Public"
+  },
+  {
+    "ID": "caseLinkField",
+    "FieldType": "CaseLink",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "LiveFrom": "01/01/2017",
+    "Label": " ",
+    "SecurityClassification": "Public"
+  },
+  {
+    "ID": "yesOrNoField",
+    "FieldType": "YesOrNo",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "LiveFrom": "01/01/2017",
+    "Label": " ",
+    "SecurityClassification": "Public"
+  },
+  {
+    "ID": "proceeding",
+    "FieldType": "Proceeding",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "LiveFrom": "01/01/2017",
+    "Label": " ",
+    "SecurityClassification": "Public"
+  },
+  {
+    "ID": "solicitor",
+    "FieldType": "Solicitor",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "LiveFrom": "01/01/2017",
+    "Label": " ",
+    "SecurityClassification": "Public"
+  },
+  {
+    "ID": "factorsParenting",
+    "FieldType": "FactorsParenting",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "LiveFrom": "01/01/2017",
+    "Label": " ",
+    "SecurityClassification": "Public"
+  },
+  {
+    "ID": "allocationProposal",
+    "FieldType": "AllocationDecision",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "LiveFrom": "01/01/2017",
+    "Label": " ",
+    "SecurityClassification": "Public"
+  },
+  {
+    "ID": "allocationDecision",
+    "FieldType": "AllocationDecision",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "LiveFrom": "01/01/2017",
+    "Label": " ",
+    "SecurityClassification": "Public"
+  },
+  {
+    "ID": "allParties",
+    "FieldType": "Collection",
+    "FieldTypeParameter": "Direction",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "LiveFrom": "01/01/2017",
+    "Label": " ",
+    "SecurityClassification": "Public"
+  },
+  {
+    "ID": "allPartiesCustom",
+    "FieldType": "Collection",
+    "FieldTypeParameter": "Direction",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "LiveFrom": "01/01/2017",
+    "Label": " ",
+    "SecurityClassification": "Public"
+  },
+  {
+    "ID": "allPartiesCustomCMO",
+    "FieldType": "Collection",
+    "FieldTypeParameter": "Direction",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "LiveFrom": "01/01/2017",
+    "Label": " ",
+    "SecurityClassification": "Public"
+  },
+  {
+    "ID": "localAuthorityDirections",
+    "FieldType": "Collection",
+    "FieldTypeParameter": "Direction",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "LiveFrom": "01/01/2017",
+    "Label": " ",
+    "SecurityClassification": "Public"
+  },
+  {
+    "ID": "localAuthorityDirectionsCustom",
+    "FieldType": "Collection",
+    "FieldTypeParameter": "Direction",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "LiveFrom": "01/01/2017",
+    "Label": " ",
+    "SecurityClassification": "Public"
+  },
+  {
+    "ID": "localAuthorityDirectionsCustomCMO",
+    "FieldType": "Collection",
+    "FieldTypeParameter": "Direction",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "LiveFrom": "01/01/2017",
+    "Label": " ",
     "SecurityClassification": "Public"
   },
   {
@@ -687,6 +223,620 @@
     "FieldTypeParameter": "Direction",
     "CaseTypeID": "CARE_SUPERVISION_EPO",
     "LiveFrom": "01/01/2017",
+    "Label": " ",
+    "SecurityClassification": "Public"
+  },
+  {
+    "ID": "courtDirectionsCustom",
+    "FieldType": "Collection",
+    "FieldTypeParameter": "Direction",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "LiveFrom": "01/01/2017",
+    "Label": " ",
+    "SecurityClassification": "Public"
+  },
+  {
+    "ID": "courtDirectionsCustomCMO",
+    "FieldType": "Collection",
+    "FieldTypeParameter": "Direction",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "LiveFrom": "01/01/2017",
+    "Label": " ",
+    "SecurityClassification": "Public"
+  },
+  {
+    "ID": "cafcassDirections",
+    "FieldType": "Collection",
+    "FieldTypeParameter": "Direction",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "LiveFrom": "01/01/2017",
+    "Label": " ",
+    "SecurityClassification": "Public"
+  },
+  {
+    "ID": "cafcassDirectionsCustom",
+    "FieldType": "Collection",
+    "FieldTypeParameter": "Direction",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "LiveFrom": "01/01/2017",
+    "Label": " ",
+    "SecurityClassification": "Public"
+  },
+  {
+    "ID": "cafcassDirectionsCustomCMO",
+    "FieldType": "Collection",
+    "FieldTypeParameter": "Direction",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "LiveFrom": "01/01/2017",
+    "Label": " ",
+    "SecurityClassification": "Public"
+  },
+  {
+    "ID": "otherPartiesDirections",
+    "FieldType": "Collection",
+    "FieldTypeParameter": "Direction",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "LiveFrom": "01/01/2017",
+    "Label": " ",
+    "SecurityClassification": "Public"
+  },
+  {
+    "ID": "otherPartiesDirectionsCustom",
+    "FieldType": "Collection",
+    "FieldTypeParameter": "Direction",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "LiveFrom": "01/01/2017",
+    "Label": " ",
+    "SecurityClassification": "Public"
+  },
+  {
+    "ID": "otherPartiesDirectionsCustomCMO",
+    "FieldType": "Collection",
+    "FieldTypeParameter": "Direction",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "LiveFrom": "01/01/2017",
+    "Label": " ",
+    "SecurityClassification": "Public"
+  },
+  {
+    "ID": "respondentDirections",
+    "FieldType": "Collection",
+    "FieldTypeParameter": "Direction",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "LiveFrom": "01/01/2017",
+    "Label": " ",
+    "SecurityClassification": "Public"
+  },
+  {
+    "ID": "respondentDirectionsCustom",
+    "FieldType": "Collection",
+    "FieldTypeParameter": "Direction",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "LiveFrom": "01/01/2017",
+    "Label": " ",
+    "SecurityClassification": "Public"
+  },
+  {
+    "ID": "respondentDirectionsCustomCMO",
+    "FieldType": "Collection",
+    "FieldTypeParameter": "Direction",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "LiveFrom": "01/01/2017",
+    "Label": " ",
+    "SecurityClassification": "Public"
+  },
+  {
+    "ID": "placements",
+    "FieldType": "Collection",
+    "FieldTypeParameter": "Placement",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "LiveFrom": "01/01/2017",
+    "Label": " ",
+    "SecurityClassification": "Public"
+  },
+  {
+    "ID": "standardDirectionOrder",
+    "FieldType": "StandardDirectionOrder",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "LiveFrom": "01/01/2017",
+    "Label": " ",
+    "SecurityClassification": "Public"
+  },
+  {
+    "ID": "allocatedJudge",
+    "FieldType": "JudgeAndLegalAdvisor",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "LiveFrom": "01/01/2017",
+    "Label": " ",
+    "SecurityClassification": "Public"
+  },
+  {
+    "ID": "hearing",
+    "FieldType": "Hearing",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "LiveFrom": "01/01/2017",
+    "Label": " ",
+    "SecurityClassification": "Public"
+  },
+  {
+    "ID": "hearingPreferencesWelsh",
+    "FieldType": "Text",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "LiveFrom": "01/01/2017",
+    "Label": "Do you want some Welsh?",
+    "SecurityClassification": "Public"
+  },
+  {
+    "ID": "hearingPreferencesInterpreter",
+    "FieldType": "Text",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "LiveFrom": "01/01/2017",
+    "Label": " ",
+    "SecurityClassification": "Public"
+  },
+  {
+    "ID": "hearingPreferencesRefreshments",
+    "FieldType": "MultiSelectList",
+    "FieldTypeParameter": "Refreshment",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "LiveFrom": "01/01/2017",
+    "Label": " ",
+    "SecurityClassification": "Public"
+  },
+  {
+    "ID": "hearingPreferencesLocationPreferencesLocal",
+    "FieldType": "YesOrNo",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "LiveFrom": "01/01/2017",
+    "Label": "Preference for local hearing",
+    "SecurityClassification": "Public"
+  },
+  {
+    "ID": "hearingPreferencesLocationPreferencesOnline",
+    "FieldType": "YesOrNo",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "LiveFrom": "01/01/2017",
+    "Label": "Preference for online hearing",
+    "SecurityClassification": "Public"
+  },
+  {
+    "ID": "hearingPreferencesOrganisationPolicy",
+    "FieldType": "OrganisationPolicy",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "LiveFrom": "01/01/2017",
+    "Label": " ",
+    "SecurityClassification": "Public"
+  },
+  {
+    "ID": "internationalElement",
+    "FieldType": "InternationalElement",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "LiveFrom": "01/01/2017",
+    "Label": " ",
+    "SecurityClassification": "Public"
+  },
+  {
+    "ID": "documents_socialWorkOther",
+    "FieldType": "Collection",
+    "FieldTypeParameter": "OtherDocument",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "LiveFrom": "01/01/2017",
+    "Label": " ",
+    "SecurityClassification": "Public"
+  },
+  {
+    "ID": "documents_socialWorkCarePlan_document",
+    "FieldType": "UploadDocuments",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "LiveFrom": "01/01/2017",
+    "Label": " ",
+    "SecurityClassification": "Public"
+  },
+  {
+    "ID": "documents_socialWorkStatement_document",
+    "FieldType": "UploadDocuments",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "LiveFrom": "01/01/2017",
+    "Label": " ",
+    "SecurityClassification": "Public"
+  },
+  {
+    "ID": "documents_socialWorkAssessment_document",
+    "FieldType": "UploadDocuments",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "LiveFrom": "01/01/2017",
+    "Label": " ",
+    "SecurityClassification": "Public"
+  },
+  {
+    "ID": "documents_socialWorkChronology_document",
+    "FieldType": "UploadDocuments",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "LiveFrom": "01/01/2017",
+    "Label": " ",
+    "SecurityClassification": "Public"
+  },
+  {
+    "ID": "documents_checklist_document",
+    "FieldType": "UploadDocuments",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "LiveFrom": "01/01/2017",
+    "Label": " ",
+    "SecurityClassification": "Public"
+  },
+  {
+    "ID": "documents_threshold_document",
+    "FieldType": "UploadDocuments",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "LiveFrom": "01/01/2017",
+    "Label": " ",
+    "SecurityClassification": "Public"
+  },
+  {
+    "ID": "documents_socialWorkEvidenceTemplate_document",
+    "FieldType": "UploadDocuments",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "LiveFrom": "01/01/2017",
+    "Label": " ",
+    "SecurityClassification": "Public"
+  },
+  {
+    "ID": "children1",
+    "FieldType": "Collection",
+    "FieldTypeParameter": "ChildrenNew",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "LiveFrom": "01/01/2017",
+    "Label": " ",
+    "SecurityClassification": "Public"
+  },
+  {
+    "ID": "familyManCaseNumber",
+    "FieldType": "Text",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "LiveFrom": "01/01/2017",
+    "Label": " ",
+    "SecurityClassification": "Public"
+  },
+  {
+    "ID": "noticeOfProceedings",
+    "FieldType": "NoticeOfProceedings",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "LiveFrom": "01/01/2017",
+    "Label": " ",
+    "SecurityClassification": "Public"
+  },
+  {
+    "ID": "hearingDetails",
+    "FieldType": "Collection",
+    "FieldTypeParameter": "HearingBooking",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "LiveFrom": "01/01/2017",
+    "Label": " ",
+    "SecurityClassification": "Public"
+  },
+  {
+    "ID": "dateSubmitted",
+    "FieldType": "Date",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "LiveFrom": "01/01/2017",
+    "Label": " ",
+    "SecurityClassification": "Public"
+  },
+  {
+    "ID": "noticeOfProceedingsBundle",
+    "FieldType": "Collection",
+    "FieldTypeParameter": "NoticeOfProceedingsBundle",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "LiveFrom": "01/01/2017",
+    "Label": " ",
+    "SecurityClassification": "Public"
+  },
+  {
+    "ID": "statementOfService",
+    "FieldType": "Collection",
+    "FieldTypeParameter": "Recipients",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "LiveFrom": "01/01/2017",
+    "Label": " ",
+    "SecurityClassification": "Public"
+  },
+  {
+    "ID": "judgeAndLegalAdvisor",
+    "FieldType": "JudgeAndLegalAdvisor",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "LiveFrom": "01/01/2017",
+    "Label": " ",
+    "SecurityClassification": "Public"
+  },
+  {
+    "ID": "temporaryC2Document",
+    "FieldType": "C2DocumentBundle",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "LiveFrom": "01/01/2017",
+    "Label": " ",
+    "SecurityClassification": "Public"
+  },
+  {
+    "ID": "c2DocumentBundle",
+    "FieldType": "Collection",
+    "FieldTypeParameter": "C2DocumentBundle",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "LiveFrom": "01/01/2017",
+    "Label": " ",
+    "SecurityClassification": "Public"
+  },
+  {
+    "ID": "c2ApplicationType",
+    "FieldType": "Map",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "LiveFrom": "01/01/2017",
+    "Label": " ",
+    "SecurityClassification": "Public"
+  },
+  {
+    "ID": "orderTypeAndDocument",
+    "FieldType": "OrderTypeAndDocument",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "LiveFrom": "01/01/2017",
+    "Label": " ",
+    "SecurityClassification": "Public"
+  },
+  {
+    "ID": "orderFurtherDirections",
+    "FieldType": "FurtherDirections",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "LiveFrom": "01/01/2017",
+    "Label": " ",
+    "SecurityClassification": "Public"
+  },
+  {
+    "ID": "order",
+    "FieldType": "GeneratedOrder",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "LiveFrom": "01/01/2017",
+    "Label": " ",
+    "SecurityClassification": "Public"
+  },
+  {
+    "ID": "orderMonths",
+    "FieldType": "Number",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "LiveFrom": "01/01/2017",
+    "Label": " ",
+    "SecurityClassification": "Public"
+  },
+  {
+    "ID": "interimEndDate",
+    "FieldType": "InterimEndDate",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "LiveFrom": "01/01/2017",
+    "Label": " ",
+    "SecurityClassification": "Public"
+  },
+  {
+    "ID": "childSelector",
+    "FieldType": "ChildSelector",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "LiveFrom": "01/01/2017",
+    "Label": " ",
+    "SecurityClassification": "Public"
+  },
+  {
+    "ID": "dateOfIssue",
+    "FieldType": "Date",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "LiveFrom": "01/01/2017",
+    "Label": " ",
+    "SecurityClassification": "Public"
+  },
+  {
+    "ID": "orderCollection",
+    "FieldType": "Collection",
+    "FieldTypeParameter": "GeneratedOrder",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "LiveFrom": "01/01/2017",
+    "Label": " ",
+    "SecurityClassification": "Public"
+  },
+  {
+    "ID": "orderAction",
+    "FieldType": "OrderAction",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "LiveFrom": "01/01/2017",
+    "Label": " ",
+    "SecurityClassification": "Public"
+  },
+  {
+    "ID": "cmoHearingDateList",
+    "FieldType": "DynamicList",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "LiveFrom": "01/01/2017",
+    "Label": " ",
+    "SecurityClassification": "Public"
+  },
+  {
+    "ID": "schedule",
+    "FieldType": "Schedule",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "LiveFrom": "01/01/2017",
+    "Label": " ",
+    "SecurityClassification": "Public"
+  },
+  {
+    "ID": "recitals",
+    "FieldType": "Collection",
+    "FieldTypeParameter": "Recitals",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "LiveFrom": "01/01/2017",
+    "Label": " ",
+    "SecurityClassification": "Public"
+  },
+  {
+    "ID": "sharedDraftCMODocument",
+    "FieldType": "Document",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "LiveFrom": "01/01/2017",
+    "Label": " ",
+    "SecurityClassification": "Public"
+  },
+  {
+    "ID": "servedCaseManagementOrders",
+    "FieldType": "Collection",
+    "FieldTypeParameter": "CaseManagementOrder",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "LiveFrom": "01/01/2017",
+    "Label": " ",
+    "SecurityClassification": "Public"
+  },
+  {
+    "ID": "others",
+    "FieldType": "Person",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "LiveFrom": "01/01/2017",
+    "Label": " ",
+    "SecurityClassification": "Public"
+  },
+  {
+    "ID": "nextHearingDateList",
+    "FieldType": "DynamicList",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "LiveFrom": "01/01/2017",
+    "Label": " ",
+    "SecurityClassification": "Public"
+  },
+  {
+    "ID": "representatives",
+    "FieldType": "Collection",
+    "FieldTypeParameter": "Representative",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "LiveFrom": "01/01/2017",
+    "Label": " ",
+    "SecurityClassification": "Public"
+  },
+  {
+    "ID": "epoChildren",
+    "FieldType": "EPOChildren",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "LiveFrom": "01/01/2017",
+    "Label": " ",
+    "SecurityClassification": "Public"
+  },
+  {
+    "ID": "epoEndDate",
+    "FieldType": "DateTime",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "LiveFrom": "01/01/2017",
+    "Label": " ",
+    "SecurityClassification": "Public"
+  },
+  {
+    "ID": "epoPhrase",
+    "FieldType": "EPOPhrase",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "LiveFrom": "01/01/2017",
+    "Label": " ",
+    "SecurityClassification": "Public"
+  },
+  {
+    "ID": "epoType",
+    "FieldType": "FixedRadioList",
+    "FieldTypeParameter": "EPOType",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "LiveFrom": "01/01/2017",
+    "Label": " ",
+    "SecurityClassification": "Public"
+  },
+  {
+    "ID": "epoRemovalAddress",
+    "FieldType": "Address",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "LiveFrom": "01/01/2017",
+    "Label": " ",
+    "SecurityClassification": "Public"
+  },
+  {
+    "ID": "confidentialChildren",
+    "FieldType": "Collection",
+    "FieldTypeParameter": "ChildrenNew",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "LiveFrom": "01/01/2017",
+    "Label": " ",
+    "SecurityClassification": "Public"
+  },
+  {
+    "ID": "confidentialRespondents",
+    "FieldType": "Collection",
+    "FieldTypeParameter": "RespondentNew",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "LiveFrom": "01/01/2017",
+    "Label": " ",
+    "SecurityClassification": "Public"
+  },
+  {
+    "ID": "confidentialOthers",
+    "FieldType": "Collection",
+    "FieldTypeParameter": "Others",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "LiveFrom": "01/01/2017",
+    "Label": " ",
+    "SecurityClassification": "Public"
+  },
+  {
+    "ID": "caseNote",
+    "FieldType": "Text",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "LiveFrom": "01/01/2017",
+    "Label": " ",
+    "SecurityClassification": "Public"
+  },
+  {
+    "ID": "caseNotes",
+    "FieldType": "Collection",
+    "FieldTypeParameter": "CaseNote",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "LiveFrom": "01/01/2017",
+    "Label": " ",
+    "SecurityClassification": "Public"
+  },
+  {
+    "ID": "organisationPolicy",
+    "FieldType": "OrganisationPolicy",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "LiveFrom": "01/01/2017",
+    "Label": " ",
+    "SecurityClassification": "Public"
+  },
+  {
+    "ID": "orderAppliesToAllChildren",
+    "FieldType": "Text",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "LiveFrom": "01/01/2017",
+    "Label": " ",
+    "SecurityClassification": "Public"
+  },
+  {
+    "ID": "changeOrganisationRequest",
+    "FieldType": "ChangeOrganisationRequest",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "LiveFrom": "01/01/2017",
+    "Label": " ",
+    "SecurityClassification": "Public"
+  },
+  {
+    "ID": "scannedDocuments",
+    "FieldType": "Collection",
+    "FieldTypeParameter": "ScannedDocument",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "LiveFrom": "01/01/2017",
+    "Label": "Scanned documents",
+    "SecurityClassification": "Public"
+  },
+  {
+    "ID": "evidenceHandled",
+    "FieldType": "YesOrNo",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "LiveFrom": "01/01/2017",
+    "Label": "Supplementary evidence handled",
     "SecurityClassification": "Public"
   },
   {
@@ -698,64 +848,19 @@
     "SecurityClassification": "Public"
   },
   {
-    "CaseTypeID" : "CARE_SUPERVISION_EPO",
-    "FieldType" : "OrganisationPolicy",
-    "ID" : "organisationPolicy",
-    "LiveFrom" : "01/01/2017"
+    "ID": "allocatedJudgeLabel",
+    "FieldType": "Label",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "LiveFrom": "01/01/2017",
+    "Label": "Allocated Judge",
+    "SecurityClassification": "Public"
   },
   {
-    "CaseTypeID" : "CARE_SUPERVISION_EPO",
-    "FieldType" : "Label",
-    "ID" : "allocatedJudgeLabel",
-    "Label" : "Allocated Judge",
-    "LiveFrom" : "01/01/2017"
-  },
-  {
-    "CaseTypeID" : "CARE_SUPERVISION_EPO",
-    "FieldType" : "Label",
-    "ID" : "hearingPreferencesHearingPrefs",
-    "Label" : "Hearing Preferences",
-    "LiveFrom" : "01/01/2017"
-  },
-  {
-    "CaseTypeID" : "CARE_SUPERVISION_EPO",
-    "FieldType" : "YesOrNo",
-    "ID" : "hearingPreferencesLocationPreferencesLocal",
-    "Label" : "Preference for local hearing",
-    "LiveFrom" : "01/01/2017"
-  },
-  {
-    "CaseTypeID" : "CARE_SUPERVISION_EPO",
-    "FieldType" : "OrganisationPolicy",
-    "ID" : "hearingPreferencesOrganisationPolicy",
-    "LiveFrom" : "01/01/2017"
-  },
-  {
-  "CaseTypeID" : "CARE_SUPERVISION_EPO",
-  "FieldType" : "YesOrNo",
-  "ID" : "hearingPreferencesLocationPreferencesOnline",
-  "Label" : "Preference for online hearing",
-  "LiveFrom" : "01/01/2017"
-  },
-  {
-    "CaseTypeID" : "CARE_SUPERVISION_EPO",
-    "FieldType" : "ChangeOrganisationRequest",
-    "ID" : "changeOrganisationRequest",
-    "LiveFrom" : "01/01/2017"
-  },
-  {
-    "CaseTypeID" : "CARE_SUPERVISION_EPO",
-    "FieldType" : "Collection",
-    "FieldTypeParameter" : "ScannedDocument",
-    "ID" : "scannedDocuments",
-    "Label" : "Scanned documents",
-    "LiveFrom" : "01/01/2017"
-  },
-  {
-    "CaseTypeID" : "CARE_SUPERVISION_EPO",
-    "FieldType" : "YesOrNo",
-    "ID" : "evidenceHandled",
-    "Label" : "Supplementary evidence handled",
-    "LiveFrom" : "01/01/2017"
+    "ID": "hearingPreferencesHearingPrefs",
+    "FieldType": "Label",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "LiveFrom": "01/01/2017",
+    "Label": "Hearing Preferences",
+    "SecurityClassification": "Public"
   }
 ]
