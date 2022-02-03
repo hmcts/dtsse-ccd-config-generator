@@ -8,8 +8,10 @@ import java.util.Arrays;
 import java.util.Properties;
 import lombok.Data;
 import lombok.SneakyThrows;
+import org.gradle.api.Action;
 import org.gradle.api.Plugin;
 import org.gradle.api.Project;
+import org.gradle.api.Task;
 import org.gradle.api.file.DirectoryProperty;
 import org.gradle.api.plugins.JavaPlugin;
 import org.gradle.api.plugins.JavaPluginConvention;
@@ -40,13 +42,23 @@ public class CcdSdkPlugin implements Plugin<Project> {
     generate.setClasspath(main.getRuntimeClasspath());
 
     CCDConfig config = project.getExtensions().create("ccd", CCDConfig.class);
-    config.configDir = project.getBuildDir();
+    config.configDir = project.getObjects().directoryProperty();
+    config.configDir.set(project.getBuildDir());
+    // Register the config directory as a task output to use Gradle's up-to-date checking.
+    generate.getOutputs().dir(config.configDir);
 
-    generate.doFirst(x -> generate.setArgs(Arrays.asList(
-        config.configDir.getAbsolutePath(),
-        config.rootPackage,
-        config.caseType
-    )));
+    // We must use an anonymous class here for Gradle's up to date checks to work.
+    generate.doFirst(new Action<Task>() {
+      @Override
+      public void execute(Task task) {
+        generate.setArgs(Arrays.asList(
+            config.configDir.getAsFile().get().getAbsolutePath(),
+            config.rootPackage,
+            config.caseType
+        ));
+      }
+    });
+
 
     project.getRepositories().mavenCentral();
     project.getRepositories().maven(x -> x.setUrl("https://jitpack.io"));
@@ -81,7 +93,7 @@ public class CcdSdkPlugin implements Plugin<Project> {
   @Data
   static class CCDConfig {
 
-    private File configDir;
+    private DirectoryProperty configDir;
     private String rootPackage = "uk.gov.hmcts";
     private String caseType = "";
 
