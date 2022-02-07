@@ -65,5 +65,10 @@ public class WorkBasket {
       fields.add(WorkBasketField.builder().id("[CREATED_DATE]").label("Created date").build());
       return this;
     }
+
+    public WorkBasketBuilder<T, R> lastModifiedDate() {
+      fields.add(WorkBasketField.builder().id("[LAST_MODIFIED_DATE]").label("Last modified date").build());
+      return this;
+    }
   }
 }
