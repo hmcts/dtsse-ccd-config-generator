@@ -139,10 +139,11 @@ public class FieldCollection {
     }
 
     public <Value> FieldCollectionBuilder<Type, StateType, Parent> optionalWithoutDefaultValue(
-      TypedPropertyGetter<Type, Value> getter,
-      String showCondition,
-      String caseEventFieldLabe, boolean retainHiddenValue) {
-      return field(getter, DisplayContext.Optional, showCondition, true, null, caseEventFieldLabe, null, retainHiddenValue);
+        TypedPropertyGetter<Type, Value> getter,
+        String showCondition,
+        String caseEventFieldLabe, boolean retainHiddenValue) {
+      return field(getter, DisplayContext.Optional, showCondition, true, null, caseEventFieldLabe,
+        null, retainHiddenValue);
     }
 
     public FieldCollectionBuilder<Type, StateType, Parent> optionalNoSummary(TypedPropertyGetter<Type, ?> getter,
@@ -166,7 +167,8 @@ public class FieldCollection {
 
     public FieldCollectionBuilder<Type, StateType, Parent> optionalNoSummary(TypedPropertyGetter<Type, ?> getter,
         String showCondition, String caseEventFieldLabel, boolean retainHiddenValue) {
-      return field(getter, DisplayContext.Optional, showCondition, false, null, caseEventFieldLabel, null, retainHiddenValue);
+      return field(getter, DisplayContext.Optional, showCondition, false, null, caseEventFieldLabel,
+        null, retainHiddenValue);
     }
 
     public <Value> FieldCollectionBuilder<Type, StateType, Parent> mandatory(TypedPropertyGetter<Type, Value> getter,
@@ -193,17 +195,20 @@ public class FieldCollection {
     public <Value> FieldCollectionBuilder<Type, StateType, Parent> mandatory(TypedPropertyGetter<Type, Value> getter,
          String showCondition, Value defaultValue, String caseEventFieldLabel, boolean retainHiddenValue) {
       return field(
-        getter, DisplayContext.Mandatory, showCondition, true, defaultValue, caseEventFieldLabel, null, retainHiddenValue);
+        getter, DisplayContext.Mandatory, showCondition, true, defaultValue, caseEventFieldLabel,
+        null, retainHiddenValue);
     }
 
     public <Value> FieldCollectionBuilder<Type, StateType, Parent> mandatory(TypedPropertyGetter<Type, Value> getter,
                                                                   String showCondition, Value defaultValue) {
-      return field(getter, DisplayContext.Mandatory, showCondition, true, defaultValue, null, null, false);
+      return field(getter, DisplayContext.Mandatory, showCondition, true, defaultValue, null,
+        null, false);
     }
 
     public <Value> FieldCollectionBuilder<Type, StateType, Parent> mandatory(TypedPropertyGetter<Type, Value> getter,
          String showCondition, Value defaultValue, boolean retainHiddenValue) {
-      return field(getter, DisplayContext.Mandatory, showCondition, true, defaultValue, null, null, retainHiddenValue);
+      return field(getter, DisplayContext.Mandatory, showCondition, true, defaultValue, null, null,
+        retainHiddenValue);
     }
 
     public FieldCollectionBuilder<Type, StateType, Parent> mandatory(TypedPropertyGetter<Type, ?> getter,
@@ -236,10 +241,10 @@ public class FieldCollection {
     }
 
     public <Value> FieldCollectionBuilder<Type, StateType, Parent> mandatoryWithoutDefaultValue(
-      TypedPropertyGetter<Type, Value> getter,
-      String showCondition,
-      String caseEventFieldLabel,
-      boolean retainHiddenValue) {
+        TypedPropertyGetter<Type, Value> getter,
+        String showCondition,
+        String caseEventFieldLabel,
+        boolean retainHiddenValue) {
       return field(
         getter, DisplayContext.Mandatory, showCondition, true, null, caseEventFieldLabel, null, retainHiddenValue);
     }
@@ -364,10 +369,10 @@ public class FieldCollection {
         showCondition = showCondition.replace("{{FIELD_NAME}}", rootFieldname);
       }
       field(getter)
-        .context(context)
-        .showCondition(showCondition)
-        .showSummary(showSummary)
-        .retainHiddenValue(retainHiddenValue);
+          .context(context)
+          .showCondition(showCondition)
+          .showSummary(showSummary)
+          .retainHiddenValue(retainHiddenValue);
       return this;
     }
 
