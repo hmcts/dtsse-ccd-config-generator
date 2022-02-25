@@ -76,7 +76,7 @@ public class CCDConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<CaseData, S
         .complex(CaseData::getHearingPreferences)
           .label("hearingPrefs", "Hearing Preferences")
           .optional(HearingPreferences::getWelsh)
-          .optionalWithoutDefaultValue(HearingPreferences::getInterpreter, "hearingPreferencesWelsh=\"yes\"", "Interpreter required")
+          .optionalWithoutDefaultValue(HearingPreferences::getInterpreter, "hearingPreferencesWelsh=\"yes\"", "Interpreter required", true)
           .complex(HearingPreferences::getLocationPreferences)
             .optional(LocationPreferences::getLocal)
             .done()
@@ -90,7 +90,7 @@ public class CCDConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<CaseData, S
           .done()
         .optional(CaseData::getCaseName)
         .optionalWithLabel(CaseData::getGatekeeperEmail, "Gate keeper email")
-        .mandatoryWithoutDefaultValue(CaseData::getAllocatedJudge, "hearingPreferencesWelsh=\"yes\"", "Judge is bilingual")
+        .mandatoryWithoutDefaultValue(CaseData::getAllocatedJudge, "hearingPreferencesWelsh=\"yes\"", "Judge is bilingual", true)
         .mandatoryWithLabel(CaseData::getCaseLocalAuthority, "Please enter a case local authority");
   }
 

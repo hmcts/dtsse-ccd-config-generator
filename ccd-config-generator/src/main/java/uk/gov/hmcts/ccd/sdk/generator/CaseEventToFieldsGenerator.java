@@ -89,6 +89,10 @@ class CaseEventToFieldsGenerator<T, S, R extends HasRole> implements ConfigGener
           if (null != field.getCaseEventFieldHint()) {
             info.put("CaseEventFieldHint", field.getCaseEventFieldHint());
           }
+
+          if (field.isRetainHiddenValue()) {
+            info.put("RetainHiddenValue", "Y");
+          }
         }
 
         File folder = new File(root.getPath(), "CaseEventToFields");
