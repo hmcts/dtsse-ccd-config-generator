@@ -1,13 +1,14 @@
 package uk.gov.hmcts.ccd.sdk.api;
 
-import lombok.Builder;
 import lombok.Data;
+import lombok.experimental.SuperBuilder;
 
 @Data
-@Builder
-public class WorkBasketField {
-  private String id;
-  private String label;
-  private String listElementCode;
-  private String showCondition;
+@SuperBuilder
+public class WorkBasketField<R> {
+  protected String id;
+  protected String label;
+  protected String listElementCode;
+  protected String showCondition;
+  protected R userRole;
 }

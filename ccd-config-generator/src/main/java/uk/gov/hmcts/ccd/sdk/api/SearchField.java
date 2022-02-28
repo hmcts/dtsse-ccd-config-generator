@@ -1,11 +1,6 @@
 package uk.gov.hmcts.ccd.sdk.api;
 
-import lombok.Builder;
-import lombok.Data;
+import lombok.experimental.SuperBuilder;
 
-@Data
-@Builder
-public class SearchField {
-  private String id;
-  private String label;
-}
+@SuperBuilder
+public class SearchField<R> extends WorkBasketField<R> {}
