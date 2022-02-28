@@ -1,5 +1,7 @@
 package uk.gov.hmcts.ccd.sdk.generator;
 
+import static com.google.common.base.Strings.isNullOrEmpty;
+
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import java.io.File;
@@ -22,19 +24,19 @@ class SearchFieldAndResultGenerator<T, S, R extends HasRole> implements ConfigGe
     generateFields(root, config.getCaseType(), config.getSearchResultFields(), "SearchResultFields");
   }
 
-  private static void generateFields(
+  protected static <T, R extends HasRole> void generateFields(
           File root,
           String caseType,
-          List<Search> searchFields,
+          List<Search<T, R>> searchFields,
           String fileName
   ) {
     List<Map<String, Object>> result = Lists.newArrayList();
 
     int displayOrder = 1;
-    for (Search search : searchFields) {
-      for (SearchField field : search.getFields()) {
+    for (Search<T, R> search : searchFields) {
+      for (SearchField<R> field : search.getFields()) {
         Map<String, Object> map = buildField(caseType, field.getId(), field.getLabel(),
-                displayOrder++);
+                displayOrder++, field.getListElementCode(), field.getShowCondition(), field.getUserRole());
 
         result.add(map);
       }
@@ -43,13 +45,24 @@ class SearchFieldAndResultGenerator<T, S, R extends HasRole> implements ConfigGe
     JsonUtils.mergeInto(output, result, new AddMissing(), "CaseFieldID");
   }
 
-  private static Map<String, Object> buildField(String caseType, String fieldId, String label,
-                                                int displayOrder) {
+  protected static Map<String, Object> buildField(String caseType, String fieldId, String label, int displayOrder,
+                                                String listElementCode, String showCondition, HasRole userRole) {
     Map<String, Object> field = Maps.newHashMap();
     field.put("LiveFrom", "01/01/2017");
     field.put("CaseTypeID", caseType);
     field.put("CaseFieldID", fieldId);
     field.put("Label", label);
+
+    if (!isNullOrEmpty(listElementCode)) {
+      field.put("ListElementCode", listElementCode);
+    }
+    if (!isNullOrEmpty(showCondition)) {
+      field.put("FieldShowCondition", showCondition);
+    }
+    if (userRole != null) {
+      field.put("UserRole", userRole.getRole());
+    }
+
     field.put("DisplayOrder", displayOrder);
     return field;
   }

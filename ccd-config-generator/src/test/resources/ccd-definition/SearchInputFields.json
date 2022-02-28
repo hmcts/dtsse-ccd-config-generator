@@ -23,22 +23,31 @@
   {
     "LiveFrom": "01/01/2017",
     "CaseTypeID": "CARE_SUPERVISION_EPO",
-    "CaseFieldID": "[CASE_REFERENCE]",
+    "CaseFieldID": "hearingPreferencesWelsh",
     "DisplayOrder": 4,
+    "Label": "Is in Welsh"
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "CaseFieldID": "[CASE_REFERENCE]",
+    "DisplayOrder": 5,
     "Label": "Case Number"
   },
   {
     "LiveFrom": "01/01/2017",
     "CaseTypeID": "CARE_SUPERVISION_EPO",
-    "CaseFieldID": "dateSubmitted",
-    "DisplayOrder": 5,
-    "Label": "Date submitted"
+    "CaseFieldID": "allocatedJudge",
+    "DisplayOrder": 6,
+    "Label": "Allocated Judge",
+    "ListElementCode": "judgeTitle",
+    "FieldShowCondition": "hearingPreferencesWelsh=\"no\""
   },
   {
     "LiveFrom": "01/01/2017",
     "CaseTypeID": "CARE_SUPERVISION_EPO",
-    "CaseFieldID": "hearingPreferencesWelsh",
-    "DisplayOrder": 6,
-    "Label": "Is in Welsh"
+    "CaseFieldID": "dateSubmitted",
+    "DisplayOrder": 7,
+    "Label": "Date submitted"
   }
 ]

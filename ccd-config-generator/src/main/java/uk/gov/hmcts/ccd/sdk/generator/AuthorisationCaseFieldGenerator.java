@@ -40,8 +40,6 @@ import uk.gov.hmcts.ccd.sdk.api.Search;
 import uk.gov.hmcts.ccd.sdk.api.SearchField;
 import uk.gov.hmcts.ccd.sdk.api.Tab;
 import uk.gov.hmcts.ccd.sdk.api.TabField;
-import uk.gov.hmcts.ccd.sdk.api.WorkBasket;
-import uk.gov.hmcts.ccd.sdk.api.WorkBasketField;
 
 @Component
 class AuthorisationCaseFieldGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, S, R> {
@@ -108,10 +106,10 @@ class AuthorisationCaseFieldGenerator<T, S, R extends HasRole> implements Config
       }
 
       // Add read for WorkBaskets
-      for (WorkBasket basket :
+      for (Search<T, R> basket :
           Iterables.concat(config.getWorkBasketInputFields(),
               config.getWorkBasketResultFields())) {
-        for (WorkBasketField field : basket.getFields()) {
+        for (SearchField<R> field : basket.getFields()) {
           if (!fieldRolePermissions.contains(field.getId(), role)) {
             fieldRolePermissions.put(field.getId(), role, Collections.singleton(Permission.R));
           }
@@ -119,10 +117,10 @@ class AuthorisationCaseFieldGenerator<T, S, R extends HasRole> implements Config
       }
 
       // Add read for Search Input fields
-      for (Search search :
+      for (Search<T, R> search :
           Iterables.concat(config.getSearchInputFields(),
               config.getSearchResultFields())) {
-        for (SearchField field : search.getFields()) {
+        for (SearchField<R> field : search.getFields()) {
           if (!fieldRolePermissions.contains(field.getId(), role)) {
             fieldRolePermissions.put(field.getId(), role, Collections.singleton(Permission.R));
           }
