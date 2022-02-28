@@ -46,7 +46,8 @@
     "PageDisplayOrder" : 1,
     "PageFieldDisplayOrder" : 4,
     "PageID" : 1,
-    "ShowSummaryChangeOption" : "Y"
+    "ShowSummaryChangeOption" : "Y",
+    "RetainHiddenValue" : "Y"
   },
   {
     "CaseEventID" : "addNotes",
@@ -111,7 +112,8 @@
     "PageDisplayOrder" : 1,
     "PageFieldDisplayOrder" : 9,
     "PageID" : 1,
-    "ShowSummaryChangeOption" : "Y"
+    "ShowSummaryChangeOption" : "Y",
+    "RetainHiddenValue" : "Y"
   },
   {
     "CaseEventFieldLabel" : "Please enter a case local authority",

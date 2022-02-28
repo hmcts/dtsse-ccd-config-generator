@@ -32,6 +32,7 @@ public class Field<Type, StateType, Parent, Grandparent> {
   boolean immutable;
   boolean readOnly;
   private MidEvent midEventCallback;
+  boolean retainHiddenValue;
 
   Class<Type> clazz;
   @ToString.Exclude
