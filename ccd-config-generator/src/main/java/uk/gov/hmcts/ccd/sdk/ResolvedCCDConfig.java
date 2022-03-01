@@ -17,7 +17,6 @@ import uk.gov.hmcts.ccd.sdk.api.Permission;
 import uk.gov.hmcts.ccd.sdk.api.Search;
 import uk.gov.hmcts.ccd.sdk.api.SearchCases;
 import uk.gov.hmcts.ccd.sdk.api.Tab;
-import uk.gov.hmcts.ccd.sdk.api.WorkBasket;
 
 @RequiredArgsConstructor
 @Getter
@@ -44,9 +43,9 @@ public class ResolvedCCDConfig<T, S, R extends HasRole> {
   ImmutableMap<String, Event<T, R, S>> events;
   List<Function<Map<String, Object>, Map<String, Object>>> preEventHooks = new ArrayList<>();
   List<Tab<T, R>> tabs;
-  List<WorkBasket> workBasketResultFields;
-  List<WorkBasket> workBasketInputFields;
-  List<Search> searchResultFields;
-  List<Search> searchInputFields;
+  List<Search<T, R>> workBasketResultFields;
+  List<Search<T, R>> workBasketInputFields;
+  List<Search<T, R>> searchResultFields;
+  List<Search<T, R>> searchInputFields;
   List<SearchCases> searchCaseResultFields;
 }

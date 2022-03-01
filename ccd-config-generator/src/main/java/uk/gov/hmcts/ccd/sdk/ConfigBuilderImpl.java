@@ -23,7 +23,6 @@ import uk.gov.hmcts.ccd.sdk.api.Permission;
 import uk.gov.hmcts.ccd.sdk.api.Search.SearchBuilder;
 import uk.gov.hmcts.ccd.sdk.api.SearchCases.SearchCasesBuilder;
 import uk.gov.hmcts.ccd.sdk.api.Tab.TabBuilder;
-import uk.gov.hmcts.ccd.sdk.api.WorkBasket.WorkBasketBuilder;
 
 public class ConfigBuilderImpl<T, S, R extends HasRole> implements ConfigBuilder<T, S, R> {
 
@@ -31,11 +30,11 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements ConfigBuilder
 
   final Map<String, List<Event.EventBuilder<T, R, S>>> events = Maps.newHashMap();
   final List<TabBuilder<T, R>> tabs = Lists.newArrayList();
-  final List<WorkBasketBuilder> workBasketResultFields = Lists.newArrayList();
-  final List<WorkBasketBuilder> workBasketInputFields = Lists.newArrayList();
-  final List<SearchBuilder> searchResultFields = Lists.newArrayList();
-  final List<SearchBuilder> searchInputFields = Lists.newArrayList();
-  final List<SearchCasesBuilder> searchCaseResultFields = Lists.newArrayList();
+  final List<SearchBuilder<T, R>> workBasketResultFields = Lists.newArrayList();
+  final List<SearchBuilder<T, R>> workBasketInputFields = Lists.newArrayList();
+  final List<SearchBuilder<T, R>> searchResultFields = Lists.newArrayList();
+  final List<SearchBuilder<T, R>> searchInputFields = Lists.newArrayList();
+  final List<SearchCasesBuilder<T>> searchCaseResultFields = Lists.newArrayList();
   final Set<R> omitHistoryForRoles = new HashSet<>();
 
   public ConfigBuilderImpl(ResolvedCCDConfig<T, S, R> config) {
@@ -49,8 +48,8 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements ConfigBuilder
   public ResolvedCCDConfig<T, S, R> build() {
     config.events = getEvents();
     config.tabs = buildBuilders(tabs, TabBuilder::build);
-    config.workBasketResultFields = buildBuilders(workBasketResultFields, WorkBasketBuilder::build);
-    config.workBasketInputFields = buildBuilders(workBasketInputFields, WorkBasketBuilder::build);
+    config.workBasketResultFields = buildBuilders(workBasketResultFields, SearchBuilder::build);
+    config.workBasketInputFields = buildBuilders(workBasketInputFields, SearchBuilder::build);
     config.searchResultFields = buildBuilders(searchResultFields, SearchBuilder::build);
     config.searchInputFields = buildBuilders(searchInputFields, SearchBuilder::build);
     config.searchCaseResultFields = buildBuilders(searchCaseResultFields, SearchCasesBuilder::build);
@@ -199,27 +198,27 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements ConfigBuilder
   }
 
   @Override
-  public WorkBasketBuilder workBasketResultFields() {
+  public SearchBuilder<T, R> workBasketResultFields() {
     return getWorkBasketBuilder(workBasketResultFields);
   }
 
   @Override
-  public WorkBasketBuilder workBasketInputFields() {
+  public SearchBuilder<T, R> workBasketInputFields() {
     return getWorkBasketBuilder(workBasketInputFields);
   }
 
   @Override
-  public SearchBuilder searchResultFields() {
+  public SearchBuilder<T, R> searchResultFields() {
     return getSearchBuilder(searchResultFields);
   }
 
   @Override
-  public SearchBuilder searchInputFields() {
+  public SearchBuilder<T, R> searchInputFields() {
     return getSearchBuilder(searchInputFields);
   }
 
   @Override
-  public SearchCasesBuilder searchCasesFields() {
+  public SearchCasesBuilder<T> searchCasesFields() {
     return getSearchCasesBuilder(searchCaseResultFields);
   }
 
@@ -235,20 +234,20 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements ConfigBuilder
     config.preEventHooks.add(hook);
   }
 
-  private WorkBasketBuilder getWorkBasketBuilder(List<WorkBasketBuilder> workBasketInputFields) {
-    WorkBasketBuilder result = WorkBasketBuilder.builder(config.caseClass, new PropertyUtils());
+  private SearchBuilder<T, R> getWorkBasketBuilder(List<SearchBuilder<T, R>> workBasketInputFields) {
+    SearchBuilder<T, R> result = SearchBuilder.builder(config.caseClass, new PropertyUtils());
     workBasketInputFields.add(result);
     return result;
   }
 
-  private SearchBuilder getSearchBuilder(List<SearchBuilder> searchInputFields) {
-    SearchBuilder result = SearchBuilder.builder(config.caseClass, new PropertyUtils());
+  private SearchBuilder<T, R> getSearchBuilder(List<SearchBuilder<T, R>> searchInputFields) {
+    SearchBuilder<T, R> result = SearchBuilder.builder(config.caseClass, new PropertyUtils());
     searchInputFields.add(result);
     return result;
   }
 
-  private SearchCasesBuilder getSearchCasesBuilder(List<SearchCasesBuilder> searchInputFields) {
-    SearchCasesBuilder result = SearchCasesBuilder.builder(config.caseClass, new PropertyUtils());
+  private SearchCasesBuilder<T> getSearchCasesBuilder(List<SearchCasesBuilder<T>> searchInputFields) {
+    SearchCasesBuilder<T> result = SearchCasesBuilder.builder(config.caseClass, new PropertyUtils());
     searchInputFields.add(result);
     return result;
   }

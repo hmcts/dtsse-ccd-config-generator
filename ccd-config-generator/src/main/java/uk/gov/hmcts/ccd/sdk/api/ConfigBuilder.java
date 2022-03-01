@@ -6,7 +6,6 @@ import java.util.function.Function;
 import uk.gov.hmcts.ccd.sdk.api.Search.SearchBuilder;
 import uk.gov.hmcts.ccd.sdk.api.SearchCases.SearchCasesBuilder;
 import uk.gov.hmcts.ccd.sdk.api.Tab.TabBuilder;
-import uk.gov.hmcts.ccd.sdk.api.WorkBasket.WorkBasketBuilder;
 
 public interface ConfigBuilder<T, S, R extends HasRole> {
 
@@ -34,9 +33,9 @@ public interface ConfigBuilder<T, S, R extends HasRole> {
 
   TabBuilder<T, R> tab(String tabId, String tabLabel);
 
-  WorkBasketBuilder<T, R> workBasketResultFields();
+  SearchBuilder<T, R> workBasketResultFields();
 
-  WorkBasketBuilder<T, R> workBasketInputFields();
+  SearchBuilder<T, R> workBasketInputFields();
 
   SearchBuilder<T, R> searchResultFields();
 
