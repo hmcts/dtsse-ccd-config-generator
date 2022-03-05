@@ -290,8 +290,7 @@ public class FieldCollection {
     }
 
     public <Value> FieldCollectionBuilder<Type, StateType, Parent> readonlyWithLabel(
-      TypedPropertyGetter<Type, Value> getter,
-      String caseEventFieldLabel) {
+        TypedPropertyGetter<Type, Value> getter, String caseEventFieldLabel) {
       return field(
         getter, DisplayContext.ReadOnly, null, true, null, caseEventFieldLabel, null, false);
     }
