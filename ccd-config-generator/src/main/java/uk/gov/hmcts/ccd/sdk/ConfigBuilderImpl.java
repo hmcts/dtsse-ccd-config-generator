@@ -7,6 +7,7 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.EnumSet;
 import java.util.HashSet;
 import java.util.List;
@@ -82,13 +83,23 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements ConfigBuilder
       }
 
       @Override
+      public Event.EventBuilder<T, R, S> forStateTransition(S from, EnumSet to) {
+        return build(Set.of(from), to);
+      }
+
+      @Override
+      public Event.EventBuilder<T, R, S> forStateTransition(EnumSet from, EnumSet to) {
+        return build(from, to);
+      }
+
+      @Override
       public Event.EventBuilder<T, R, S> forAllStates() {
-        return build(config.allStates, config.allStates);
+        return build(config.allStates, Collections.emptySet());
       }
 
       @Override
       public Event.EventBuilder<T, R, S> forStates(S... states) {
-        return build(Set.of(states), config.allStates);
+        return build(Set.of(states), Set.of(states));
       }
 
       private Event.EventBuilder<T, R, S> build(Set<S> preStates, Set<S> postStates) {
@@ -144,7 +155,7 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements ConfigBuilder
 
       @Override
       public Event.EventBuilder<T, R, S> forAllStates() {
-        return build(config.allStates, config.allStates);
+        return build(config.allStates, Collections.emptySet());
       }
 
       private Event.EventBuilder<T, R, S> build(Set<S> preStates, Set<S> postStates) {

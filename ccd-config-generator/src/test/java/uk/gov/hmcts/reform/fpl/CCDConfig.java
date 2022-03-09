@@ -17,6 +17,7 @@ import static uk.gov.hmcts.reform.fpl.enums.UserRole.LOCAL_AUTHORITY;
 import static uk.gov.hmcts.reform.fpl.enums.UserRole.SYSTEM_UPDATE;
 
 
+import java.util.EnumSet;
 import java.util.Set;
 import org.springframework.stereotype.Component;
 import uk.gov.hmcts.ccd.sdk.api.callback.AboutToStartOrSubmitResponse;
@@ -65,6 +66,13 @@ public class CCDConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<CaseData, S
     buildSearchInputFields();
     buildSearchCasesFields();
 
+    builder.event("checkReady")
+      .forStateTransition(EnumSet.allOf(State.class), EnumSet.of(Gatekeeping, Submitted))
+      .name("Add case notes")
+      .grant(CRU, CAFCASS)
+      .grant(R, LOCAL_AUTHORITY)
+        .aboutToSubmitCallback(this::checkReadyAboutToSubmit);
+
     builder.event("addNotes")
         .forStates(Gatekeeping, Submitted)
         .name("Add case notes")
@@ -92,6 +100,14 @@ public class CCDConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<CaseData, S
         .optionalWithLabel(CaseData::getGatekeeperEmail, "Gate keeper email")
         .mandatoryWithoutDefaultValue(CaseData::getAllocatedJudge, "hearingPreferencesWelsh=\"yes\"", "Judge is bilingual", true)
         .mandatoryWithLabel(CaseData::getCaseLocalAuthority, "Please enter a case local authority");
+  }
+
+  private AboutToStartOrSubmitResponse<CaseData, State> checkReadyAboutToSubmit(CaseDetails<CaseData, State> details,
+                                                                                CaseDetails<CaseData, State> beforeDetails) {
+    return AboutToStartOrSubmitResponse.<CaseData, State>builder()
+        .state(details.getData().getAllocatedJudge().getJudgeFullName().equals("judge") ? Submitted : Gatekeeping)
+        .data(details.getData())
+        .build();
   }
 
   private void buildSearchResultFields() {

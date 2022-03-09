@@ -83,13 +83,10 @@ class CaseEventGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
     }
 
     if (!event.getPreState().isEmpty()) {
-      data.put("PreConditionState(s)", toCCDStateString(event.getPreState(), allStates));
+      data.put("PreConditionState(s)", getPreStateString(event.getPreState(), allStates));
     }
-    // Event must target either on or all states
-    boolean isToAllStates = event.getPostState().equals(allStates);
-    // Events can either target a specific state or can be overridden to all.
-    assert event.getPostState().size() == 1 || isToAllStates;
-    data.put("PostConditionState", toCCDStateString(event.getPostState(), allStates));
+
+    data.put("PostConditionState", getPostStateString(event.getPostState()));
     data.put("SecurityClassification", "Public");
 
     if (event.getAboutToStartCallback() != null) {
@@ -122,11 +119,18 @@ class CaseEventGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
     return result;
   }
 
-  private String toCCDStateString(Set<S> states, Set<S> allStates) {
+  private String getPreStateString(Set<S> states, Set<S> allStates) {
     return states.equals(allStates)
         ? "*"
         : states.stream().map(Objects::toString)
         .sorted()
         .collect(Collectors.joining(";"));
   }
+
+  private String getPostStateString(Set<S> states) {
+    return states.size() != 1
+      ? "*"
+      : states.stream().findFirst().map(Objects::toString).orElse("");
+  }
+
 }

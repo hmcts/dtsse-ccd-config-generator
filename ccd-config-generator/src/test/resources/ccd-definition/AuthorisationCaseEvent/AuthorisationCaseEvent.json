@@ -75,5 +75,19 @@
     "CaseTypeID" : "CARE_SUPERVISION_EPO",
     "LiveFrom" : "01/01/2017",
     "UserRole" : "caseworker-publiclaw-systemupdate"
+  },
+  {
+    "CRUD" : "R",
+    "CaseEventID" : "checkReady",
+    "CaseTypeID" : "CARE_SUPERVISION_EPO",
+    "LiveFrom" : "01/01/2017",
+    "UserRole" : "caseworker-publiclaw-solicitor"
+  },
+  {
+    "CRUD" : "CRU",
+    "CaseEventID" : "checkReady",
+    "CaseTypeID" : "CARE_SUPERVISION_EPO",
+    "LiveFrom" : "01/01/2017",
+    "UserRole" : "caseworker-publiclaw-cafcass"
   }
 ]
