@@ -7,18 +7,14 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import java.util.Collection;
-import java.util.Collections;
-import java.util.EnumSet;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
-import uk.gov.hmcts.ccd.sdk.api.BulkScanEventTypeBuilder;
 import uk.gov.hmcts.ccd.sdk.api.ConfigBuilder;
 import uk.gov.hmcts.ccd.sdk.api.Event;
-import uk.gov.hmcts.ccd.sdk.api.EventTypeBuilder;
 import uk.gov.hmcts.ccd.sdk.api.HasRole;
 import uk.gov.hmcts.ccd.sdk.api.Permission;
 import uk.gov.hmcts.ccd.sdk.api.Search.SearchBuilder;
@@ -60,123 +56,19 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements ConfigBuilder
   }
 
   @Override
-  public EventTypeBuilder<T, R, S> event(final String id) {
-    return new EventTypeBuilder<>() {
-      @Override
-      public Event.EventBuilder<T, R, S> forState(S state) {
-        return build(Set.of(state), Set.of(state));
-      }
 
-      @Override
-      public Event.EventBuilder<T, R, S> initialState(S state) {
-        return build(Set.of(), Set.of(state));
-      }
-
-      @Override
-      public Event.EventBuilder<T, R, S> forStateTransition(S from, S to) {
-        return build(Set.of(from), Set.of(to));
-      }
-
-      @Override
-      public Event.EventBuilder<T, R, S> forStateTransition(EnumSet from, S to) {
-        return build(from, Set.of(to));
-      }
-
-      @Override
-      public Event.EventBuilder<T, R, S> forStateTransition(S from, EnumSet to) {
-        return build(Set.of(from), to);
-      }
-
-      @Override
-      public Event.EventBuilder<T, R, S> forStateTransition(EnumSet from, EnumSet to) {
-        return build(from, to);
-      }
-
-      @Override
-      public Event.EventBuilder<T, R, S> forAllStates() {
-        return build(config.allStates, config.allStates);
-      }
-
-      @Override
-      public Event.EventBuilder<T, R, S> forStates(EnumSet states) {
-        return build(states, states);
-      }
-
-      @Override
-      public Event.EventBuilder<T, R, S> forStates(S... states) {
-        return build(Set.of(states), Set.of(states));
-      }
-
-      private Event.EventBuilder<T, R, S> build(Set<S> preStates, Set<S> postStates) {
-        Event.EventBuilder<T, R, S> result = Event.EventBuilder
-                .builder(id, config.caseClass, new PropertyUtils(), preStates, postStates);
-        if (!events.containsKey(id)) {
-          events.put(id, Lists.newArrayList());
-        }
-        events.get(id).add(result);
-        return result;
-      }
-    };
+  public EventTypeBuilderImpl<T, R, S> event(final String id) {
+    return new EventTypeBuilderImpl<>(config, events, id);
   }
 
   @Override
-  public BulkScanEventTypeBuilder<T, R, S> attachScannedDocEvent() {
-    return new BulkScanEventTypeBuilder<>() {
-
-      @Override
-      public Event.EventBuilder<T, R, S> forStateTransition(EnumSet from, S to) {
-        return build(from, Set.of(to));
-      }
-
-      @Override
-      public Event.EventBuilder<T, R, S> forAllStates() {
-        return build(config.allStates, config.allStates);
-      }
-
-      private Event.EventBuilder<T, R, S> build(Set<S> preStates, Set<S> postStates) {
-        Event.EventBuilder<T, R, S> result = Event.EventBuilder
-                .builder(ATTACH_SCANNED_DOCS, config.caseClass, new PropertyUtils(), preStates, postStates);
-        if (!events.containsKey(ATTACH_SCANNED_DOCS)) {
-          events.put(ATTACH_SCANNED_DOCS, Lists.newArrayList());
-        }
-        events.get(ATTACH_SCANNED_DOCS).add(result);
-
-        result.name("Attach scanned docs");
-        result.description("Attach scanned docs");
-        result.endButtonLabel(null);
-        return result;
-      }
-    };
+  public EventTypeBuilderImpl<T, R, S> attachScannedDocEvent() {
+    return new BulkScanEventTypeBuilderImpl<>(config, events, ATTACH_SCANNED_DOCS, "Attach scanned docs");
   }
 
   @Override
-  public BulkScanEventTypeBuilder<T, R, S> handleSupplementaryEvent() {
-    return new BulkScanEventTypeBuilder<>() {
-
-      @Override
-      public Event.EventBuilder<T, R, S> forStateTransition(EnumSet from, S to) {
-        return build(from, Set.of(to));
-      }
-
-      @Override
-      public Event.EventBuilder<T, R, S> forAllStates() {
-        return build(config.allStates, Collections.emptySet());
-      }
-
-      private Event.EventBuilder<T, R, S> build(Set<S> preStates, Set<S> postStates) {
-        Event.EventBuilder<T, R, S> result = Event.EventBuilder
-                .builder(HANDLE_EVIDENCE, config.caseClass, new PropertyUtils(), preStates, postStates);
-        if (!events.containsKey(HANDLE_EVIDENCE)) {
-          events.put(HANDLE_EVIDENCE, Lists.newArrayList());
-        }
-        events.get(HANDLE_EVIDENCE).add(result);
-
-        result.name("Handle supplementary evidence");
-        result.description("Handle supplementary evidence");
-        result.endButtonLabel(null);
-        return result;
-      }
-    };
+  public EventTypeBuilderImpl<T, R, S> handleSupplementaryEvent() {
+    return new BulkScanEventTypeBuilderImpl<>(config, events, HANDLE_EVIDENCE, "Handle supplementary evidence");
   }
 
   @Override
