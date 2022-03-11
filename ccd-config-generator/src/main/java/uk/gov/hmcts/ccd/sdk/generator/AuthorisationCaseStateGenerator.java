@@ -34,6 +34,10 @@ class AuthorisationCaseStateGenerator<T, S, R extends HasRole> implements Config
 
       SetMultimap<R, Permission> grants = event.getGrants();
       for (R role : event.getGrants().keys()) {
+        // Don't add state access to history only roles
+        if (event.getHistoryOnlyRoles().contains(role.getRole())) {
+          continue;
+        }
         // For state transitions if you have C then you get both states.
         // Otherwise you only need permission for the destination state.
         if (event.getPreState() != event.getPostState()) {
