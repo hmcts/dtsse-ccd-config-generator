@@ -3,6 +3,7 @@ package uk.gov.hmcts.ccd.sdk.api;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.Function;
+import uk.gov.hmcts.ccd.sdk.EventTypeBuilderImpl;
 import uk.gov.hmcts.ccd.sdk.api.Search.SearchBuilder;
 import uk.gov.hmcts.ccd.sdk.api.SearchCases.SearchCasesBuilder;
 import uk.gov.hmcts.ccd.sdk.api.Tab.TabBuilder;
@@ -11,9 +12,9 @@ public interface ConfigBuilder<T, S, R extends HasRole> {
 
   EventTypeBuilder<T, R, S> event(String id);
 
-  BulkScanEventTypeBuilder<T, R, S> attachScannedDocEvent();
+  EventTypeBuilderImpl<T, R, S> attachScannedDocEvent();
 
-  BulkScanEventTypeBuilder<T, R, S> handleSupplementaryEvent();
+  EventTypeBuilderImpl<T, R, S> handleSupplementaryEvent();
 
   void caseType(String caseType, String name, String description);
 
