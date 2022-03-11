@@ -52,14 +52,14 @@
     "CRUD": "CRU",
     "CaseTypeID": "CARE_SUPERVISION_EPO",
     "LiveFrom": "01/01/2017",
-    "UserRole": "caseworker-publiclaw-courtadmin",
+    "UserRole": "caseworker-publiclaw-solicitor",
     "CaseStateID": "Submitted"
   },
   {
     "CRUD": "CRU",
     "CaseTypeID": "CARE_SUPERVISION_EPO",
     "LiveFrom": "01/01/2017",
-    "UserRole": "caseworker-publiclaw-solicitor",
+    "UserRole": "caseworker-publiclaw-courtadmin",
     "CaseStateID": "Submitted"
   },
   {
@@ -80,14 +80,14 @@
     "CRUD": "CRU",
     "CaseTypeID": "CARE_SUPERVISION_EPO",
     "LiveFrom": "01/01/2017",
-    "UserRole": "caseworker-publiclaw-courtadmin",
+    "UserRole": "caseworker-publiclaw-solicitor",
     "CaseStateID": "Gatekeeping"
   },
   {
     "CRUD": "CRU",
     "CaseTypeID": "CARE_SUPERVISION_EPO",
     "LiveFrom": "01/01/2017",
-    "UserRole": "caseworker-publiclaw-solicitor",
+    "UserRole": "caseworker-publiclaw-courtadmin",
     "CaseStateID": "Gatekeeping"
   },
   {
@@ -116,13 +116,6 @@
     "CaseTypeID": "CARE_SUPERVISION_EPO",
     "LiveFrom": "01/01/2017",
     "UserRole": "caseworker-publiclaw-cafcass",
-    "CaseStateID": "PREPARE_FOR_HEARING"
-  },
-  {
-    "CRUD": "R",
-    "CaseTypeID": "CARE_SUPERVISION_EPO",
-    "LiveFrom": "01/01/2017",
-    "UserRole": "caseworker-publiclaw-solicitor",
     "CaseStateID": "PREPARE_FOR_HEARING"
   },
   {
@@ -144,13 +137,6 @@
     "CaseTypeID": "CARE_SUPERVISION_EPO",
     "LiveFrom": "01/01/2017",
     "UserRole": "caseworker-publiclaw-cafcass",
-    "CaseStateID": "Deleted"
-  },
-  {
-    "CRUD": "R",
-    "CaseTypeID": "CARE_SUPERVISION_EPO",
-    "LiveFrom": "01/01/2017",
-    "UserRole": "caseworker-publiclaw-solicitor",
     "CaseStateID": "Deleted"
   }
 ]
