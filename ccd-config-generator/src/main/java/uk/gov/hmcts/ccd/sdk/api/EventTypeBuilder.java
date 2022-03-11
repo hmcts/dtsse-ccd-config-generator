@@ -18,5 +18,7 @@ public interface EventTypeBuilder<T, R extends HasRole, S> {
 
   Event.EventBuilder<T, R, S> forAllStates();
 
+  Event.EventBuilder<T, R, S> forStates(EnumSet states);
+
   Event.EventBuilder<T, R, S> forStates(S... states);
 }

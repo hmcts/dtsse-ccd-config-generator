@@ -94,7 +94,12 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements ConfigBuilder
 
       @Override
       public Event.EventBuilder<T, R, S> forAllStates() {
-        return build(config.allStates, Collections.emptySet());
+        return build(config.allStates, config.allStates);
+      }
+
+      @Override
+      public Event.EventBuilder<T, R, S> forStates(EnumSet states) {
+        return build(states, states);
       }
 
       @Override
