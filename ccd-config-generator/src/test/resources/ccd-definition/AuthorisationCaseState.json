@@ -17,14 +17,14 @@
     "CRUD": "CRU",
     "CaseTypeID": "CARE_SUPERVISION_EPO",
     "LiveFrom": "01/01/2017",
-    "UserRole": "caseworker-publiclaw-cafcass",
+    "UserRole": "caseworker-publiclaw-courtadmin",
     "CaseStateID": "Open"
   },
   {
     "CRUD": "CRU",
     "CaseTypeID": "CARE_SUPERVISION_EPO",
     "LiveFrom": "01/01/2017",
-    "UserRole": "caseworker-publiclaw-bulkscansystemupdate",
+    "UserRole": "caseworker-publiclaw-cafcass",
     "CaseStateID": "Open"
   },
   {
@@ -38,6 +38,13 @@
     "CRUD": "CRU",
     "CaseTypeID": "CARE_SUPERVISION_EPO",
     "LiveFrom": "01/01/2017",
+    "UserRole": "caseworker-publiclaw-bulkscansystemupdate",
+    "CaseStateID": "Open"
+  },
+  {
+    "CRUD": "CRU",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "LiveFrom": "01/01/2017",
     "UserRole": "caseworker-publiclaw-systemupdate",
     "CaseStateID": "Submitted"
   },
@@ -101,7 +108,21 @@
     "CRUD": "CRU",
     "CaseTypeID": "CARE_SUPERVISION_EPO",
     "LiveFrom": "01/01/2017",
+    "UserRole": "caseworker-publiclaw-courtadmin",
+    "CaseStateID": "PREPARE_FOR_HEARING"
+  },
+  {
+    "CRUD": "CRU",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "LiveFrom": "01/01/2017",
     "UserRole": "caseworker-publiclaw-cafcass",
+    "CaseStateID": "PREPARE_FOR_HEARING"
+  },
+  {
+    "CRUD": "R",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "LiveFrom": "01/01/2017",
+    "UserRole": "caseworker-publiclaw-solicitor",
     "CaseStateID": "PREPARE_FOR_HEARING"
   },
   {
@@ -115,7 +136,21 @@
     "CRUD": "CRU",
     "CaseTypeID": "CARE_SUPERVISION_EPO",
     "LiveFrom": "01/01/2017",
+    "UserRole": "caseworker-publiclaw-courtadmin",
+    "CaseStateID": "Deleted"
+  },
+  {
+    "CRUD": "CRU",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "LiveFrom": "01/01/2017",
     "UserRole": "caseworker-publiclaw-cafcass",
+    "CaseStateID": "Deleted"
+  },
+  {
+    "CRUD": "R",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "LiveFrom": "01/01/2017",
+    "UserRole": "caseworker-publiclaw-solicitor",
     "CaseStateID": "Deleted"
   }
 ]

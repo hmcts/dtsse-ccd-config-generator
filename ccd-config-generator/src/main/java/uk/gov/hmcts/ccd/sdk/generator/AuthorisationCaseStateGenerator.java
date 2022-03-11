@@ -37,8 +37,7 @@ class AuthorisationCaseStateGenerator<T, S, R extends HasRole> implements Config
         // For state transitions if you have C then you get both states.
         // Otherwise you only need permission for the destination state.
         if (event.getPreState() != event.getPostState()) {
-          if (grants.get(role).contains(Permission.C) && !event.getPreState().isEmpty()
-              && !event.getPostState().isEmpty()) {
+          if (grants.get(role).contains(Permission.C) && !event.getPreState().isEmpty()) {
             addPermissions(config.getStateRolePermissions(), event.getPreState(), role,
                 grants.get(role));
             // They get R only on the destination state.
