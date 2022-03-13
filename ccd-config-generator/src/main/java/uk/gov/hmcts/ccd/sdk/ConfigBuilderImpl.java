@@ -56,7 +56,6 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements ConfigBuilder
   }
 
   @Override
-
   public EventTypeBuilderImpl<T, R, S> event(final String id) {
     return new EventTypeBuilderImpl<>(config, events, id);
   }
@@ -83,6 +82,11 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements ConfigBuilder
     config.jurId = id;
     config.jurName = name;
     config.jurDesc = description;
+  }
+
+  @Override
+  public void shutterService() {
+    config.shutterService = true;
   }
 
   @Override

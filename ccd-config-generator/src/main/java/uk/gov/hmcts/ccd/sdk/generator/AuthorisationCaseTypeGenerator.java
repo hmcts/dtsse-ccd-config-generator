@@ -26,7 +26,7 @@ class AuthorisationCaseTypeGenerator<T, S, R extends HasRole> implements ConfigG
                 "LiveFrom", "01/01/2017",
                 "CaseTypeID", config.getCaseType(),
                 "UserRole", r.getRole(),
-                "CRUD", r.getCaseTypePermissions()
+                "CRUD", config.isShutterService() ? "D" : r.getCaseTypePermissions()
             ));
           }
         }
