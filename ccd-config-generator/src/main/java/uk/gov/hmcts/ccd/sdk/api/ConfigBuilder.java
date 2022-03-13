@@ -20,6 +20,8 @@ public interface ConfigBuilder<T, S, R extends HasRole> {
 
   void jurisdiction(String id, String name, String description);
 
+  void shutterService();
+
   void omitHistoryForRoles(R... roles);
 
   /**
