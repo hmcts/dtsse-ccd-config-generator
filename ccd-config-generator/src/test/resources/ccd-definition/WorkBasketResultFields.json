@@ -32,14 +32,16 @@
     "CaseTypeID": "CARE_SUPERVISION_EPO",
     "CaseFieldID": "dateAndTimeSubmitted",
     "DisplayOrder": 5,
-    "Label": "Date submitted"
+    "Label": "Date submitted",
+    "ResultsOrdering" : "1:DESC"
   },
   {
     "LiveFrom": "01/01/2017",
     "CaseTypeID": "CARE_SUPERVISION_EPO",
     "CaseFieldID": "evidenceHandled",
     "DisplayOrder": 6,
-    "Label": "Supplementary evidence handled"
+    "Label": "Supplementary evidence handled",
+    "ResultsOrdering" : "2:ASC"
   },
   {
     "LiveFrom": "01/01/2017",

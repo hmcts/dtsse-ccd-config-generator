@@ -30,8 +30,19 @@ public class Search<T, R extends HasRole> {
       return this;
     }
 
+    public SearchBuilder<T, R> field(TypedPropertyGetter<T, ?> getter, String label, SortOrder order) {
+      String name = propertyUtils.getPropertyName(model, getter);
+      fields.add(SearchField.<R>builder().id(name).label(label).order(order).build());
+      return this;
+    }
+
     public SearchBuilder<T, R> field(String fieldName, String label) {
       fields.add(SearchField.<R>builder().id(fieldName).label(label).build());
+      return this;
+    }
+
+    public SearchBuilder<T, R> field(String fieldName, String label, SortOrder order) {
+      fields.add(SearchField.<R>builder().id(fieldName).label(label).order(order).build());
       return this;
     }
 
@@ -56,6 +67,43 @@ public class Search<T, R extends HasRole> {
       fields.add(SearchField.<R>builder()
           .id(fieldName)
           .label(label)
+          .listElementCode(listElementCode)
+          .showCondition(showCondition)
+          .userRole(role)
+          .build());
+
+      return this;
+    }
+
+    public SearchBuilder<T, R> field(String fieldName, String label, String listElementCode, SortOrder order) {
+      fields.add(SearchField.<R>builder()
+          .id(fieldName)
+          .label(label)
+          .order(order)
+          .listElementCode(listElementCode)
+          .build());
+      return this;
+    }
+
+    public SearchBuilder<T, R> field(String fieldName, String label, String listElementCode, String showCondition,
+                                     SortOrder order) {
+      fields.add(SearchField.<R>builder()
+          .id(fieldName)
+          .label(label)
+          .order(order)
+          .listElementCode(listElementCode)
+          .showCondition(showCondition)
+          .build());
+
+      return this;
+    }
+
+    public SearchBuilder<T, R> field(String fieldName, String label, String listElementCode,
+                                                    String showCondition, R role, SortOrder order) {
+      fields.add(SearchField.<R>builder()
+          .id(fieldName)
+          .label(label)
+          .order(order)
           .listElementCode(listElementCode)
           .showCondition(showCondition)
           .userRole(role)
