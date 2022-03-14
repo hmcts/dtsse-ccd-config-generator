@@ -44,15 +44,15 @@ public class ScannedDocument {
   private String fileName;
 
   @CCD(
-          label = "Scanned date"
+    label = "Scanned date"
   )
-  @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'")
+  @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd'T'HH:mm:ss[.SSS][.SS][.S]")
   private LocalDateTime scannedDate;
 
   @CCD(
-          label = "Delivery date"
+    label = "Delivery date"
   )
-  @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'")
+  @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd'T'HH:mm:ss[.SSS][.SS][.S]")
   private LocalDateTime deliveryDate;
 
   @CCD(
