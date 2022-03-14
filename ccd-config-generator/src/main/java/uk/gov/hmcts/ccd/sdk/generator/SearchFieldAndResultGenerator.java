@@ -14,6 +14,7 @@ import uk.gov.hmcts.ccd.sdk.ResolvedCCDConfig;
 import uk.gov.hmcts.ccd.sdk.api.HasRole;
 import uk.gov.hmcts.ccd.sdk.api.Search;
 import uk.gov.hmcts.ccd.sdk.api.SearchField;
+import uk.gov.hmcts.ccd.sdk.api.SortOrder;
 import uk.gov.hmcts.ccd.sdk.generator.JsonUtils.AddMissing;
 
 @Component
@@ -36,7 +37,8 @@ class SearchFieldAndResultGenerator<T, S, R extends HasRole> implements ConfigGe
     for (Search<T, R> search : searchFields) {
       for (SearchField<R> field : search.getFields()) {
         Map<String, Object> map = buildField(caseType, field.getId(), field.getLabel(),
-                displayOrder++, field.getListElementCode(), field.getShowCondition(), field.getUserRole());
+                displayOrder++, field.getListElementCode(), field.getShowCondition(),
+                field.getUserRole(), field.getOrder());
 
         result.add(map);
       }
@@ -46,7 +48,8 @@ class SearchFieldAndResultGenerator<T, S, R extends HasRole> implements ConfigGe
   }
 
   protected static Map<String, Object> buildField(String caseType, String fieldId, String label, int displayOrder,
-                                                String listElementCode, String showCondition, HasRole userRole) {
+                                                  String listElementCode, String showCondition, HasRole userRole,
+                                                  SortOrder order) {
     Map<String, Object> field = Maps.newHashMap();
     field.put("LiveFrom", "01/01/2017");
     field.put("CaseTypeID", caseType);
@@ -61,6 +64,9 @@ class SearchFieldAndResultGenerator<T, S, R extends HasRole> implements ConfigGe
     }
     if (userRole != null) {
       field.put("UserRole", userRole.getRole());
+    }
+    if (order != null) {
+      field.put("ResultsOrdering", order.getValue());
     }
 
     field.put("DisplayOrder", displayOrder);

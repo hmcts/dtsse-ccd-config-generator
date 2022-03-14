@@ -4,6 +4,7 @@ package uk.gov.hmcts.reform.fpl;
 import static uk.gov.hmcts.ccd.sdk.api.Permission.C;
 import static uk.gov.hmcts.ccd.sdk.api.Permission.CRU;
 import static uk.gov.hmcts.ccd.sdk.api.Permission.R;
+import static uk.gov.hmcts.ccd.sdk.api.SortOrder.*;
 import static uk.gov.hmcts.reform.fpl.enums.State.Deleted;
 import static uk.gov.hmcts.reform.fpl.enums.State.Gatekeeping;
 import static uk.gov.hmcts.reform.fpl.enums.State.Open;
@@ -144,8 +145,8 @@ public class CCDConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<CaseData, S
         .field("hearingPreferencesWelsh", "Is in Welsh")
         .stateField()
         .field(CaseData::getCaseLocalAuthority, "Local authority")
-        .field("dateAndTimeSubmitted", "Date submitted")
-        .field("evidenceHandled", "Supplementary evidence handled");
+        .field("dateAndTimeSubmitted", "Date submitted", FIRST.DESCENDING)
+        .field("evidenceHandled", "Supplementary evidence handled", SECOND.ASCENDING);
   }
 
   private void buildWorkBasketInputFields() {
