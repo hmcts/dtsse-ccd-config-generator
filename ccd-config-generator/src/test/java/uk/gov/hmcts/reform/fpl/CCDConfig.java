@@ -21,7 +21,6 @@ import static uk.gov.hmcts.reform.fpl.enums.UserRole.SYSTEM_UPDATE;
 import java.util.EnumSet;
 import java.util.Set;
 import org.springframework.stereotype.Component;
-import uk.gov.hmcts.ccd.sdk.api.SortOrder;
 import uk.gov.hmcts.ccd.sdk.api.callback.AboutToStartOrSubmitResponse;
 import uk.gov.hmcts.ccd.sdk.api.CaseDetails;
 import uk.gov.hmcts.ccd.sdk.api.ConfigBuilder;
