@@ -862,5 +862,12 @@
     "LiveFrom": "01/01/2017",
     "Label": "Hearing Preferences",
     "SecurityClassification": "Public"
+  },
+  {
+    "CaseTypeID" : "CARE_SUPERVISION_EPO",
+    "FieldType" : "CasePaymentHistoryViewer",
+    "ID" : "paymentHistoryField",
+    "Label" : " ",
+    "LiveFrom" : "01/01/2017"
   }
 ]

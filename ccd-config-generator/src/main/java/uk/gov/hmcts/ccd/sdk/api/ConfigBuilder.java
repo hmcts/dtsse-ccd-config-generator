@@ -36,6 +36,8 @@ public interface ConfigBuilder<T, S, R extends HasRole> {
 
   TabBuilder<T, R> tab(String tabId, String tabLabel);
 
+  void addPaymentHistoryTab(String tabLabel);
+
   SearchBuilder<T, R> workBasketResultFields();
 
   SearchBuilder<T, R> workBasketInputFields();

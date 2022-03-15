@@ -98,7 +98,7 @@ class AuthorisationCaseFieldGenerator<T, S, R extends HasRole> implements Config
       // Add read for any tab fields
       for (Tab<T, R> tab : config.getTabs()) {
         for (TabField field : tab.getFields()) {
-          boolean giveReadPermission = tab.getRorRolesAsString().contains(role) || tab.getForRoles().isEmpty();
+          boolean giveReadPermission = tab.getForRolesAsString().contains(role) || tab.getForRoles().isEmpty();
           if (giveReadPermission && !fieldRolePermissions.contains(field.getId(), role)) {
             fieldRolePermissions.put(field.getId(), role, Collections.singleton(Permission.R));
           }

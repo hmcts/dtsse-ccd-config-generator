@@ -33,7 +33,7 @@ class CaseTypeTabGenerator<T, S, R extends HasRole> implements ConfigGenerator<T
     int tabDisplayOrder = 2;
 
     for (Tab<T, R> tab : config.getTabs()) {
-      List<String> roles = tab.getRorRolesAsString();
+      List<String> roles = tab.getForRolesAsString();
 
       // if no roles have been specified leave UserRole empty
       if (roles.isEmpty()) {
