@@ -22,7 +22,7 @@ public class Tab<T, R extends HasRole> {
   private List<TabField> fields;
   private Set<R> forRoles;
 
-  public List<String> getRorRolesAsString() {
+  public List<String> getForRolesAsString() {
     return forRoles.stream().map(HasRole::getRole).sorted().collect(toList());
   }
 

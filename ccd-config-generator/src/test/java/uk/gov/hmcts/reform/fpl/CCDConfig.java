@@ -66,6 +66,7 @@ public class CCDConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<CaseData, S
     buildSearchResultFields();
     buildSearchInputFields();
     buildSearchCasesFields();
+    builder.addPaymentHistoryTab("Payment History");
 
     builder.event("checkReady")
       .forStateTransition(EnumSet.allOf(State.class), EnumSet.of(Gatekeeping, Submitted))

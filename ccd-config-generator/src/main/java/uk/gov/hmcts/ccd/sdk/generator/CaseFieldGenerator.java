@@ -51,6 +51,13 @@ class CaseFieldGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
 
     fields.addAll(getExplicitFields(config));
 
+    if (config.getTabs().stream().anyMatch(t -> t.getTabID().equals("PaymentHistory"))) {
+      Map<String, Object> payment = getField(config.getCaseType(), "paymentHistoryField");
+      payment.put("Label", " ");
+      payment.put("FieldType", "CasePaymentHistoryViewer");
+      fields.add(payment);
+    }
+
     Path path = Paths.get(outputFolder.getPath(), "CaseField.json");
     JsonUtils.mergeInto(path, fields, new JsonUtils.OverwriteSpecific(OVERWRITES_FIELDS), "ID");
   }

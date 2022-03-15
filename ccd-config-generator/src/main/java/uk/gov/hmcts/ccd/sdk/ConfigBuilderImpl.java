@@ -110,6 +110,15 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements ConfigBuilder
   }
 
   @Override
+  public void addPaymentHistoryTab(String tabLabel) {
+    TabBuilder<T, R> result = (TabBuilder<T, R>) TabBuilder.builder(config.caseClass,
+            new PropertyUtils()).tabID("PaymentHistory").labelText(tabLabel);
+    tabs.add(result);
+
+    result.field("paymentHistoryField");
+  }
+
+  @Override
   public SearchBuilder<T, R> workBasketResultFields() {
     return getWorkBasketBuilder(workBasketResultFields);
   }
