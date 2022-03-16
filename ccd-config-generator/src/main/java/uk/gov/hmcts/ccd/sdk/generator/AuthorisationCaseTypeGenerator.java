@@ -22,11 +22,12 @@ class AuthorisationCaseTypeGenerator<T, S, R extends HasRole> implements ConfigG
           HasRole r = (HasRole) enumConstant;
           // Add non case roles.
           if (!r.getRole().matches("\\[.+\\]")) {
+            boolean shuttered = config.isShutterService() || config.getShutterServiceForRoles().contains(r);
             result.add(Map.of(
                 "LiveFrom", "01/01/2017",
                 "CaseTypeID", config.getCaseType(),
                 "UserRole", r.getRole(),
-                "CRUD", config.isShutterService() ? "D" : r.getCaseTypePermissions()
+                "CRUD", shuttered ? "D" : r.getCaseTypePermissions()
             ));
           }
         }
