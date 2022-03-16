@@ -36,7 +36,9 @@ class CaseTypeTabGenerator<T, S, R extends HasRole> implements ConfigGenerator<T
       List<String> roles = tab.getForRolesAsString();
 
       // if no roles have been specified leave UserRole empty
-      if (roles.isEmpty()) {
+      if (tab.getTabID().equals("PaymentHistory")) {
+        roles = List.of("payments");
+      } else if (roles.isEmpty()) {
         roles.add("");
       }
 
