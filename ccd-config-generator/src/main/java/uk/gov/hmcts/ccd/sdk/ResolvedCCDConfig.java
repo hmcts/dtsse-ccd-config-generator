@@ -5,6 +5,7 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Table;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -29,6 +30,7 @@ public class ResolvedCCDConfig<T, S, R extends HasRole> {
   final ImmutableSet<S> allStates;
 
   Set<String> rolesWithNoHistory;
+  Set<R> shutterServiceForRoles = new HashSet<>();
   String caseType = "";
   String callbackHost = "";
   String caseName = "";

@@ -22,6 +22,8 @@ public interface ConfigBuilder<T, S, R extends HasRole> {
 
   void shutterService();
 
+  void shutterService(R... roles);
+
   void omitHistoryForRoles(R... roles);
 
   /**

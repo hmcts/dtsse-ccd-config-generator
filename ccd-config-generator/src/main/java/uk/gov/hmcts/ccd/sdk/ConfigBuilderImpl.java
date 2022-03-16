@@ -90,6 +90,11 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements ConfigBuilder
   }
 
   @Override
+  public void shutterService(R... roles) {
+    config.shutterServiceForRoles.addAll(Set.of(roles));
+  }
+
+  @Override
   public void omitHistoryForRoles(R... roles) {
     omitHistoryForRoles.addAll(Set.of(roles));
   }

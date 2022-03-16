@@ -12,6 +12,7 @@ import static uk.gov.hmcts.reform.fpl.enums.State.Submitted;
 import static uk.gov.hmcts.reform.fpl.enums.UserRole.BULK_SCAN;
 import static uk.gov.hmcts.reform.fpl.enums.UserRole.BULK_SCAN_SYSTEM_UPDATE;
 import static uk.gov.hmcts.reform.fpl.enums.UserRole.CAFCASS;
+import static uk.gov.hmcts.reform.fpl.enums.UserRole.CASE_ACCESS_APPROVER;
 import static uk.gov.hmcts.reform.fpl.enums.UserRole.CCD_SOLICITOR;
 import static uk.gov.hmcts.reform.fpl.enums.UserRole.HMCTS_ADMIN;
 import static uk.gov.hmcts.reform.fpl.enums.UserRole.LOCAL_AUTHORITY;
@@ -51,6 +52,7 @@ public class CCDConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<CaseData, S
     builder.caseType("CARE_SUPERVISION_EPO", "Care, supervision and EPOs", "Care, supervision and emergency protection orders");
 
     builder.grant(Open, Set.of(R), LOCAL_AUTHORITY);
+    builder.shutterService(CASE_ACCESS_APPROVER);
 
     // Events
     buildUniversalEvents();
