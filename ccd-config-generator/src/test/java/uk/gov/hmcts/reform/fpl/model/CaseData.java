@@ -61,6 +61,7 @@ import static java.util.Optional.ofNullable;
 import static java.util.stream.Collectors.toList;
 import static org.apache.commons.lang3.ObjectUtils.defaultIfNull;
 import static org.apache.commons.lang3.ObjectUtils.isEmpty;
+import static uk.gov.hmcts.ccd.sdk.type.FieldType.CasePaymentHistoryViewer;
 import static uk.gov.hmcts.ccd.sdk.type.FieldType.Collection;
 import static uk.gov.hmcts.reform.fpl.enums.CMOStatus.SEND_TO_JUDGE;
 
@@ -368,4 +369,10 @@ public class CaseData {
       label = "Supplementary evidence handled"
     )
     private YesOrNo evidenceHandled;
+
+    @CCD(
+      typeOverride = CasePaymentHistoryViewer
+    )
+    private String paymentHistoryField;
+
 }

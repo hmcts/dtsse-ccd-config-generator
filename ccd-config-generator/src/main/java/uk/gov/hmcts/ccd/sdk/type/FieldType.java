@@ -16,5 +16,6 @@ public enum FieldType {
   OrderSummary,
   MultiSelectList,
   Collection,
-  Label
+  Label,
+  CasePaymentHistoryViewer
 }
