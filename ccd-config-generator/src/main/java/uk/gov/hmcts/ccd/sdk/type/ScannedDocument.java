@@ -2,9 +2,10 @@ package uk.gov.hmcts.ccd.sdk.type;
 
 import static uk.gov.hmcts.ccd.sdk.type.FieldType.FixedList;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonFormat;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import java.time.LocalDateTime;
-import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -12,7 +13,6 @@ import uk.gov.hmcts.ccd.sdk.api.CCD;
 
 @Data
 @NoArgsConstructor
-@AllArgsConstructor
 @Builder
 public class ScannedDocument {
 
@@ -60,4 +60,22 @@ public class ScannedDocument {
   )
   private String exceptionRecordReference;
 
+  @JsonCreator
+  public ScannedDocument(@JsonProperty("type") ScannedDocumentType type,
+                         @JsonProperty("subtype") String subtype,
+                         @JsonProperty("url") Document url,
+                         @JsonProperty("controlNumber") String controlNumber,
+                         @JsonProperty("fileName") String fileName,
+                         @JsonProperty("scannedDate") LocalDateTime scannedDate,
+                         @JsonProperty("deliveryDate") LocalDateTime deliveryDate,
+                         @JsonProperty("exceptionRecordReference") String exceptionRecordReference) {
+    this.type = type;
+    this.subtype = subtype;
+    this.url = url;
+    this.controlNumber = controlNumber;
+    this.fileName = fileName;
+    this.scannedDate = scannedDate;
+    this.deliveryDate = deliveryDate;
+    this.exceptionRecordReference = exceptionRecordReference;
+  }
 }
