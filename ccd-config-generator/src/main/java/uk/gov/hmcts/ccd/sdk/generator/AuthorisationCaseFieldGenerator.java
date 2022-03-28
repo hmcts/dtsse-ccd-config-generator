@@ -185,9 +185,8 @@ class AuthorisationCaseFieldGenerator<T, S, R extends HasRole> implements Config
       JsonUnwrapped unwrapped = field.getAnnotation(JsonUnwrapped.class);
 
       if (null != unwrapped) {
-        Class<? extends HasAccessControl>[] defaultAccess = null == ccdAnnotation ? null : ccdAnnotation.access();
         String newPrefix = isNullOrEmpty(prefix) ? unwrapped.prefix() : prefix.concat(capitalize(unwrapped.prefix()));
-        addPermissionsFromFields(fieldRolePermissions, field.getType(), newPrefix, defaultAccess);
+        addPermissionsFromFields(fieldRolePermissions, field.getType(), newPrefix, access);
       } else if (null != access) {
         String id = getFieldId(field, prefix);
 
