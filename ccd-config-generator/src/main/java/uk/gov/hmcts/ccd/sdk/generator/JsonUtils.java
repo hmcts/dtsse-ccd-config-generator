@@ -58,11 +58,9 @@ public class JsonUtils {
       return chain.result();
     });
 
-    CustomPrinter printer = new CustomPrinter();
-    var mapper = new ObjectMapper();
-    mapper.writer(printer);
-    mapper.configure(SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS, true);
-    return mapper.writeValueAsString(data) + "\n";
+    return new ObjectMapper()
+      .configure(SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS, true)
+      .writer(new CustomPrinter()).writeValueAsString(data) + "\n";
   }
 
   public static Map<String, Object> getField(String id) {
