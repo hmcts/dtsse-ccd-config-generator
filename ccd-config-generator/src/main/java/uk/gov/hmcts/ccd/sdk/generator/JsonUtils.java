@@ -4,7 +4,9 @@ import com.fasterxml.jackson.core.JsonGenerator;
 import com.fasterxml.jackson.core.util.DefaultIndenter;
 import com.fasterxml.jackson.core.util.DefaultPrettyPrinter;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.databind.type.CollectionType;
+import com.google.common.collect.ComparisonChain;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Ordering;
@@ -30,7 +32,7 @@ public class JsonUtils {
   }
 
   @SneakyThrows
-  public static String serialise(List data) {
+  public static String serialise(List<Map<String, Object>> data, String... primaryKeys) {
     class CustomPrinter extends DefaultPrettyPrinter {
       @Override
       public DefaultPrettyPrinter createInstance() {
@@ -45,8 +47,22 @@ public class JsonUtils {
       }
     }
 
+    // Emit deterministic JSON so we get exactly the same json output for a given configuration.
+    // This allows Gradle to skip converting it to xlsx if unchanged (eg. if we only changed a callback).
+    // We make the json deterministic by sorting the maps by their primary keys and sorting the keys in each map.
+    data.sort((a, b) -> {
+      var chain = ComparisonChain.start();
+      for (String primaryKey : primaryKeys) {
+        chain = chain.compare(String.valueOf(a.get(primaryKey)), String.valueOf(b.get(primaryKey)));
+      }
+      return chain.result();
+    });
+
     CustomPrinter printer = new CustomPrinter();
-    return new ObjectMapper().writer(printer).writeValueAsString(data) + "\n";
+    var mapper = new ObjectMapper();
+    mapper.writer(printer);
+    mapper.configure(SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS, true);
+    return mapper.writeValueAsString(data) + "\n";
   }
 
   public static Map<String, Object> getField(String id) {
@@ -111,7 +127,8 @@ public class JsonUtils {
 
     mergeInto(existing, fields, merger, primaryKeys);
 
-    writeFile(path, serialise(existing));
+
+    writeFile(path, serialise(existing, primaryKeys));
   }
 
   @FunctionalInterface
