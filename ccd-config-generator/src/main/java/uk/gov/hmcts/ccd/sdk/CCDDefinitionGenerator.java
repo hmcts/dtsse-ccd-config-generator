@@ -12,13 +12,16 @@ import org.springframework.context.annotation.Configuration;
 import uk.gov.hmcts.ccd.sdk.api.CCDConfig;
 import uk.gov.hmcts.ccd.sdk.generator.JSONConfigGenerator;
 
+/**
+ * Public API for programmatically generating and exporting definitions.
+ */
 @Configuration
-class MultiCaseTypeResolver {
+public class CCDDefinitionGenerator {
   private final List<CCDConfig<?, ?, ?>> configs;
   private final JSONConfigGenerator writer;
 
   @Autowired
-  public MultiCaseTypeResolver(List<CCDConfig<?, ?, ?>> configs, JSONConfigGenerator writer) {
+  public CCDDefinitionGenerator(List<CCDConfig<?, ?, ?>> configs, JSONConfigGenerator writer) {
     this.configs = configs;
     this.writer = writer;
   }
@@ -37,9 +40,12 @@ class MultiCaseTypeResolver {
     return result;
   }
 
-  public void generateCaseTypes(File outFolder) {
+  /**
+   * Export all case types to the specified folder.
+   */
+  public void generateAllCaseTypesToJSON(File destinationFolder) {
     for (ResolvedCCDConfig<?, ?, ?> c : loadConfigs()) {
-      File f = new File(outFolder, c.caseType);
+      File f = new File(destinationFolder, c.caseType);
       f.mkdirs();
       writer.writeConfig(f, c);
     }
