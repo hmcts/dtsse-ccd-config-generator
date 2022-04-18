@@ -15,8 +15,8 @@ def springBootVersion = '2.6.6'
 dependencies {
     // Use JUnit test framework for unit tests
     testImplementation 'junit:junit:4.13.2'
-    annotationProcessor group: 'org.projectlombok', name: 'lombok', version: '1.18.22'
-    compileOnly group: 'org.projectlombok', name: 'lombok', version: '1.18.20'
+    annotationProcessor group: 'org.projectlombok', name: 'lombok', version: '1.18.24'
+    compileOnly group: 'org.projectlombok', name: 'lombok', version: '1.18.24'
     implementation "org.springframework.boot:spring-boot-autoconfigure:${springBootVersion}"
     implementation "org.springframework.boot:spring-boot-starter-web:${springBootVersion}"
     implementation(group: 'com.github.hmcts', name: 'core-case-data-store-client', version: '4.8.6') {
