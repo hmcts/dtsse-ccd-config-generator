@@ -17,5 +17,6 @@ public enum FieldType {
   MultiSelectList,
   Collection,
   Label,
-  CasePaymentHistoryViewer
+  CasePaymentHistoryViewer,
+  DynamicRadioList
 }
