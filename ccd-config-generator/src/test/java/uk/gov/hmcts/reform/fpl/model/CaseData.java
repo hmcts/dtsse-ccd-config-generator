@@ -63,6 +63,7 @@ import static org.apache.commons.lang3.ObjectUtils.defaultIfNull;
 import static org.apache.commons.lang3.ObjectUtils.isEmpty;
 import static uk.gov.hmcts.ccd.sdk.type.FieldType.CasePaymentHistoryViewer;
 import static uk.gov.hmcts.ccd.sdk.type.FieldType.Collection;
+import static uk.gov.hmcts.ccd.sdk.type.FieldType.DynamicRadioList;
 import static uk.gov.hmcts.reform.fpl.enums.CMOStatus.SEND_TO_JUDGE;
 
 @Data
@@ -375,4 +376,9 @@ public class CaseData {
     )
     private String paymentHistoryField;
 
+    @CCD(
+      label = "Select the solicitor PBA number you wish to use",
+      typeOverride = DynamicRadioList
+    )
+    private DynamicList solicitorPbaNumber;
 }
