@@ -876,5 +876,13 @@
     "ID" : "solicitorPbaNumber",
     "Label" : "Select the solicitor PBA number you wish to use",
     "LiveFrom" : "01/01/2017"
+  },
+  {
+    "CaseTypeID" : "CARE_SUPERVISION_EPO",
+    "FieldType" : "FixedList",
+    "FieldTypeParameter" : "ChildGender",
+    "ID" : "childGender",
+    "Label" : " ",
+    "LiveFrom" : "01/01/2017"
   }
 ]

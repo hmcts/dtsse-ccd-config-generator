@@ -22,6 +22,7 @@ import uk.gov.hmcts.reform.fpl.access.BulkScan;
 import uk.gov.hmcts.reform.fpl.access.NoticeOfChangeAccess;
 import uk.gov.hmcts.reform.fpl.access.SolicitorAccess;
 import uk.gov.hmcts.reform.fpl.enums.C2ApplicationType;
+import uk.gov.hmcts.reform.fpl.enums.ChildGender;
 import uk.gov.hmcts.reform.fpl.enums.EPOType;
 import uk.gov.hmcts.reform.fpl.enums.RepresentativeRole;
 import uk.gov.hmcts.reform.fpl.enums.UserRole;
@@ -62,8 +63,8 @@ import static java.util.stream.Collectors.toList;
 import static org.apache.commons.lang3.ObjectUtils.defaultIfNull;
 import static org.apache.commons.lang3.ObjectUtils.isEmpty;
 import static uk.gov.hmcts.ccd.sdk.type.FieldType.CasePaymentHistoryViewer;
-import static uk.gov.hmcts.ccd.sdk.type.FieldType.Collection;
 import static uk.gov.hmcts.ccd.sdk.type.FieldType.DynamicRadioList;
+import static uk.gov.hmcts.ccd.sdk.type.FieldType.FixedList;
 import static uk.gov.hmcts.reform.fpl.enums.CMOStatus.SEND_TO_JUDGE;
 
 @Data
@@ -381,4 +382,11 @@ public class CaseData {
       typeOverride = DynamicRadioList
     )
     private DynamicList solicitorPbaNumber;
+
+    @CCD(
+      typeOverride = FixedList,
+      typeParameterOverride = "ChildGender"
+    )
+    private ChildGender childGender;
+
 }

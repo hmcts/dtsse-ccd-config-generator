@@ -1,13 +1,23 @@
 package uk.gov.hmcts.reform.fpl.enums;
 
 import lombok.RequiredArgsConstructor;
+import uk.gov.hmcts.ccd.sdk.api.CCD;
 
 import java.util.stream.Stream;
 
 @RequiredArgsConstructor
 public enum ChildGender {
 
-    BOY("Boy"), GIRL("Girl"), OTHER("They identify in another way");
+    @CCD(name = "boy", label = "something")
+    BOY("Boy"),
+
+    @CCD(label = "girl")
+    GIRL("Girl"),
+
+    @CCD
+    OTHER("They identify in another way"),
+
+    MULTI("Multiple genders");
 
     private final String label;
 

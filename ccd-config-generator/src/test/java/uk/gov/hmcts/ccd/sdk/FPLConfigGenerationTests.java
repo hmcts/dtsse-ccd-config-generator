@@ -174,11 +174,11 @@ public class FPLConfigGenerationTests {
         File resourceDir = new File(u.getPath());
         File dir = prodConfig.resolve(folder).toFile();
         for (Iterator<File> it = FileUtils.iterateFiles(dir, TrueFileFilter.INSTANCE, TrueFileFilter.INSTANCE); it.hasNext(); ) {
-            File expected = it.next();
-            if (expected.getName().endsWith(".json")) {
-                Path path = dir.toPath().relativize(expected.toPath());
-                Path actual = resourceDir.toPath().resolve(path);
-                assertEquals(expected, actual.toFile());
+            File actual = it.next();
+            if (actual.getName().endsWith(".json")) {
+                Path path = dir.toPath().relativize(actual.toPath());
+                Path expected = resourceDir.toPath().resolve(path);
+                assertEquals(expected.toFile(), actual);
             }
         }
     }
