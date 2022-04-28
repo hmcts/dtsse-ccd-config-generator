@@ -25,6 +25,8 @@ public @interface CCD {
 
   Class<? extends HasAccessControl>[] access() default {};
 
+  boolean inheritAccessFromParent() default true;
+
   boolean showSummaryContent() default false;
 
   boolean ignore() default false;

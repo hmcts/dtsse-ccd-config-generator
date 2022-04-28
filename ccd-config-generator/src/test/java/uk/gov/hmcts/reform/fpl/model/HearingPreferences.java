@@ -20,6 +20,8 @@ public class HearingPreferences {
     @CCD(label = "Do you want some Welsh?", access = {BulkScan.class})
     private String welsh;
     private String interpreter;
+
+    @CCD(access = {BulkScan.class}, inheritAccessFromParent = false)
     private Set<Refreshment> refreshments;
 
     @JsonUnwrapped(prefix = "locationPreferences")
