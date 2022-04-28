@@ -26,6 +26,7 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Optional;
 import java.util.Set;
+import org.apache.commons.lang3.ArrayUtils;
 import org.objenesis.Objenesis;
 import org.objenesis.ObjenesisStd;
 import org.springframework.stereotype.Component;
@@ -179,9 +180,7 @@ class AuthorisationCaseFieldGenerator<T, S, R extends HasRole> implements Config
 
     for (java.lang.reflect.Field field : getCaseFields(parent)) {
       CCD ccdAnnotation = field.getAnnotation(CCD.class);
-      Class<? extends HasAccessControl>[] access = null != ccdAnnotation && ccdAnnotation.access().length > 0
-          ? ccdAnnotation.access()
-          : defaultAccessControl;
+      Class<? extends HasAccessControl>[] access = mergeAccess(defaultAccessControl, ccdAnnotation);
       JsonUnwrapped unwrapped = field.getAnnotation(JsonUnwrapped.class);
 
       if (null != unwrapped) {
@@ -207,5 +206,14 @@ class AuthorisationCaseFieldGenerator<T, S, R extends HasRole> implements Config
         }
       }
     }
+  }
+
+  private static Class<? extends HasAccessControl>[] mergeAccess(
+      Class<? extends HasAccessControl>[] defaultAccessControl, CCD ccdAnnotation) {
+    return null == ccdAnnotation || ccdAnnotation.access().length == 0
+        ? defaultAccessControl
+        : ccdAnnotation.inheritAccessFromParent()
+            ? ArrayUtils.addAll(defaultAccessControl, ccdAnnotation.access())
+            : ccdAnnotation.access();
   }
 }
