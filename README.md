@@ -2,6 +2,7 @@
 
 Write CCD configuration in Java.
 
+## Table of contents
 * [Why](#why)
 * [Installation](#installation)
   + [Config generation](#config-generation)
@@ -23,15 +24,16 @@ Write CCD configuration in Java.
 * [Reference projects](#reference-projects)
 * [Where to get help](#where-to-get-help)
 * [Contributing](#contributing)
-* [Local development](#local-development)
-* [Testing](#testing)
+  + [Local development](#local-development)
+  + [Testing](#testing)
 
-##### Why
+## Why
 
 * Compile-time type checking & auto-refactoring for CCD configuration
 * Auto-generation of CCD schema based on your existing Java domain model (CaseField, ComplexType, FixedList etc)
 * Avoid common CCD configuration mistakes with a simplified API
 * Your application's code as the single source of truth
+* Less boilerplate code with inline event callbacks
 
 ## Installation
 
@@ -487,8 +489,8 @@ public class HasRoleDeserializer extends StdDeserializer<HasRole> {
 ## Reference projects
 ## Where to get help
 ## Contributing
-## Local development
-## Testing
+### Local development
+### Testing
 
 
 
