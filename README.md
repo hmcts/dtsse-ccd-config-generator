@@ -128,13 +128,12 @@ public enum ApplicationType implements HasLabel {
   JOINT_APPLICATION("Joint Application");
 
   private final String label;
-}
 ```
 
 It is possible to add your own Java models as complex types:
 
 ```java
-    private Application application;
+  private Application application;
 ```
 
 Note that the property definition doesn't always require the `@CCD` annotation. All fields in the CaseData class will be added to the definition.
