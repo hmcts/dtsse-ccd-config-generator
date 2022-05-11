@@ -321,8 +321,151 @@ Individual roles can be shuttered with:
 ```
 
 ## Unwrapped types
+
+In some cases you might want to use a Java class for a property but not have it mapped to a complex type. Jackson provides an annotation `@JsonUnwrapped` that will flatten properties in a child class to the parent class. The CCD config generator treats the `@JsonUnwrapped` annotation as a sign that the class should be flattened into fields rather than a complex type.
+
+In our earlier example we had separate fields for `applicant1Name` and `applicant1Email`, but it would be more idiomatic to move those fields into an `Applicant` class.
+
+
+```java
+  @JsonUnwrapped(prefix = "applicant1")
+  @CCD(access = {CaseworkerAccess.class})
+  private Applicant applicant1;
+```
+
+Then defined the properties inside the new model:
+
+```java
+@JsonNaming(PropertyNamingStrategies.UpperCamelCaseStrategy.class)
+public class Applicant {
+  @CCD(
+    label = "First name",
+    access = {SolicitorAccess.class}
+  )
+  private String name;
+
+  @CCD(
+    label = "Email address",
+    typeOverride = Email
+  )
+  private String email;
+}
+```
+
+The `applicant1` property can be giving a prefix that is appended to every field name. In this case the fields would be `applicant1Name` and `applicant1Email`, just as they were before. When a prefix is used the `@JsonNaming(PropertyNamingStrategies.UpperCamelCaseStrategy.class)` is mandatory.
+
+### Permissions
+
+When an unwrapped property is paired with an explicit permission (`@CCD(access = {CaseworkerAccess.class})`) that permission will be applied to the unwrapped properties.
+
+Any permissions defined on an unwrapped field will be added to the parent. In the example above `applicant1Name` will have both `CaseworkerAccess.class` (from the `applicant1` property) and `SolicitorAccess.class` (from the `name` property).
+
+In order to replace the access defined by the parent class use the `inheritAccessFromParent` option:
+
+```java
+  @CCD(
+    label = "First name",
+    access = {SolicitorAccess.class},
+    inheritAccessFromParent = false
+  )
+  private String name;
+```
+
+Now `applicant1Name` will only have `SolicitorAccess.class`.
+
 ### Lombok
 
-## Callback preprocessing
+I'm almost all cases there are no issues combining the CCD config generator with Lombok generated code. However, it is necessary to add an explicit constructor with `@JsonCreator` to classes inside an unwrapped class.
+
+For example, adding a `Document` to the `Applicant` class would require it to have an explicit constructor:
+
+```java
+public class Document {
+
+  @JsonProperty("document_url")
+  private String url;
+
+  @JsonProperty("document_filename")
+  private String filename;
+
+  @JsonProperty("document_binary_url")
+  private String binaryUrl;
+
+  @JsonCreator
+  public Document(
+      @JsonProperty("document_url") String url,
+      @JsonProperty("document_filename") String filename,
+      @JsonProperty("document_binary_url") String binaryUrl
+  ) {
+    this.url = url;
+    this.filename = filename;
+    this.binaryUrl = binaryUrl;
+  }
+}
+```
+
+### Jackson configuration
+
+Jackson does require some configuration in order to handle dates and the `HasRole` enum:
+
+```java
+@Configuration
+public class JacksonConfiguration {
+
+  @Primary
+  @Bean
+  public ObjectMapper getMapper() {
+    ObjectMapper mapper = JsonMapper.builder()
+      .configure(ACCEPT_CASE_INSENSITIVE_ENUMS, true)
+      .enable(INFER_BUILDER_TYPE_BINDINGS)
+      .serializationInclusion(JsonInclude.Include.NON_NULL)
+      .build();
+
+    SimpleModule deserialization = new SimpleModule();
+    deserialization.addDeserializer(HasRole.class, new HasRoleDeserializer());
+    mapper.registerModule(deserialization);
+
+    JavaTimeModule datetime = new JavaTimeModule();
+    datetime.addSerializer(LocalDateSerializer.INSTANCE);
+    mapper.registerModule(datetime);
+
+    return mapper;
+  }
+}
+```
+
+Where `HasRoleDeserializer` is:
+
+```java
+public class HasRoleDeserializer extends StdDeserializer<HasRole> {
+  static final long serialVersionUID = 1L;
+
+  public HasRoleDeserializer() {
+    this(null);
+  }
+
+  protected HasRoleDeserializer(Class<?> vc) {
+    super(vc);
+  }
+
+  @Override
+  public HasRole deserialize(JsonParser parser, DeserializationContext context) throws IOException {
+    JsonNode node = parser.readValueAsTree();
+
+    return Arrays
+      .stream(UserRole.values())
+      .filter(r -> r.getRole().equals(node.asText()))
+      .findFirst()
+      .get();
+  }
+}
+```
+
+## Reference projects
+## Where to get help
+## Contributing
+## Local development
+## Testing
+
 
 
