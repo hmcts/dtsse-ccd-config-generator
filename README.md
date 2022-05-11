@@ -2,7 +2,7 @@
 
 Write CCD configuration in Java.
 
-## Table of contents
+### Table of contents
 * [Why](#why)
 * [Installation](#installation)
   + [Config generation](#config-generation)
