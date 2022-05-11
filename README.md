@@ -58,9 +58,9 @@ public class MyConfig implements CCDConfig<CaseData, State, UserRole> {
 
   @Override
   public void configure(ConfigBuilder<CaseData, State, UserRole> builder) {
-    configBuilder.caseType("MY_CASE_TYPE", "My Case Type", "Case type description");
-    configBuilder.jurisdiction("MY_JURISDICTION", "Jurisdiction", "Jurisdiction description");
-    configBuilder.setCallbackHost(System.getenv().getOrDefault("CASE_API_URL", "http://localhost:4013"));
+    builder.caseType("MY_CASE_TYPE", "My Case Type", "Case type description");
+    builder.jurisdiction("MY_JURISDICTION", "Jurisdiction", "Jurisdiction description");
+    builder.setCallbackHost(System.getenv().getOrDefault("API_URL", "http://localhost:4013"));
   }
 
 }
