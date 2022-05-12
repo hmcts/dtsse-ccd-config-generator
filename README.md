@@ -62,7 +62,7 @@ or
 ./gradlew gCC
 ```
 
-Once the JSON definition has been created an XSLX file can be generated using the [ccd-definition-processor](https://github.com/hmcts/ccd-definition-processor/):
+Once created it can be converted to an XLSX by using the [ccd-definition-processor](https://github.com/hmcts/ccd-definition-processor/):
 
 ```shell
 docker run --pull always --user $UID --rm \
@@ -219,7 +219,7 @@ The `caseTypePermissions` determine the user's access to the case type and can b
 
 ### Adding events
 
-Can be added by any class that implements `CCDConfig` and they should be defined as spring @Components which will be autowired at runtime.
+Events can be added by any class that implements `CCDConfig` and they should be defined as spring @Components which will be autowired at runtime.
 
 ```java
 @org.springframework.stereotype.Component
