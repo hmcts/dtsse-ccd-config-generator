@@ -25,7 +25,6 @@ Write CCD configuration in Java.
 * [Where to get help](#where-to-get-help)
 * [Contributing](#contributing)
   + [Local development](#local-development)
-  + [Testing](#testing)
 
 ## Why
 
@@ -487,10 +486,29 @@ public class HasRoleDeserializer extends StdDeserializer<HasRole> {
 ```
 
 ## Reference projects
+
+To see a full working implementation of a CCD service using the CCD config generator check one of these projects:
+
+- https://github.com/hmcts/nfdiv-case-api
+- https://github.com/hmcts/adoption-cos-api
+
 ## Where to get help
+
+If you are interested in using the CCD config generator or have a question the best place to ask is on [DTS slack](https://hmcts-dts.slack.com/archives/C01MDKSFEL8)
+
 ## Contributing
+
+Pull requests are very welcome. Please ensure the tests have been updated to demonstrate the change.
+
 ### Local development
-### Testing
+
+In order to link a local version of CCD config generator to a project you can use the `publisTohMavenLocal` gradle task then add:
+
+```groovy
+  implementation group: 'com.github.hmcts', name: 'ccd-config-generator', version: 'DEV-SNAPSHOT'
+```
+
+To the project dependencies.
 
 
 
