@@ -12,6 +12,8 @@ Write CCD configuration in Java.
   + [Setting up case states](#setting-up-case-states)
   + [Setting up user roles](#setting-up-user-roles)
   + [Adding events](#adding-events)
+  + [Configuring the work basket and search fields](#configuring-the-work-basket-and-search-fields)
+  + [Adding tabs](#adding-tabs)
 * [Permissions](#permissions)
   + [Events](#events)
   + [Fields](#fields)
@@ -254,6 +256,43 @@ public class MyConfig implements CCDConfig<CaseData, State, UserRole> {
 Through the fields API it is possible to define optional and mandatory fields, fields from complex types, custom labels for events, show conditions and default values.
 
 Callbacks are references to methods. The CCD Config Generator runtime library will handle the routing and execution of event callbacks.
+
+### Configuring the work basket and search fields
+
+There are five methods on the `ConfigBuilder` that allow the configuration of work basket input, work basket results, search input, search results and search cases fields. They all follow the same API:
+
+```java
+  builder.searchInputFields()
+    .field(CaseData::getApplicationType, "Case type")
+    .field(CaseData::getAgreedToReceiveEmails, "Agreed to emails")
+    .caseReferenceField();
+```
+
+There are some convience methods for `caseReferenceField`, `stateField`, `createdDateField` and `lastModifiedDate`.
+
+On the work basket and search results fields a sort order can be specified using the `SortOrder` class:
+
+```java
+  builder.searchInputFields()
+    .field(CaseData::getApplicationType, "Case type", FIRST.DESCENDING)
+    .field(CaseData::getAgreedToReceiveEmails, "Agreed to emails", SECOND.ASCENDING)
+    .caseReferenceField();
+```
+
+### Adding tabs
+
+Tabs follow a similar API to events:
+
+```java
+  builder.tab("DraftTab", "Draft case tab")
+    .forRoles(UserRole.CASEWORKER, UserRole.SOLICITOR)
+    .showCondition("applicationType!=\"A\"")
+    .field(CaseData::getApplicationType)
+    .field(CaseData::getAgreedToReceiveEmails, ", "applicationType=\"C\"")
+    .field(CaseData::getDateSubmitted, null, "#DATETIMEDISPLAY(d  MMMM yyyy)");
+```
+
+Adding in multiple user roles will create multiple versions of the tab visible to each user role. If a user has both roles they will see the tab twice.
 
 ## Permissions
 
