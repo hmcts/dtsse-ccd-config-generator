@@ -9,6 +9,7 @@ import java.time.LocalDateTime;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.springframework.format.annotation.DateTimeFormat;
 import uk.gov.hmcts.ccd.sdk.api.CCD;
 
 @Data
@@ -46,6 +47,7 @@ public class ScannedDocument {
   @CCD(
           label = "Scanned date"
   )
+  @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME)
   @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss.SSS")
   private LocalDateTime scannedDate;
 
@@ -53,6 +55,7 @@ public class ScannedDocument {
           label = "Delivery date"
   )
   @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss.SSS")
+  @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME)
   private LocalDateTime deliveryDate;
 
   @CCD(
