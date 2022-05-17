@@ -87,11 +87,5 @@ public class SearchCases {
       fields.add(SearchCasesResultField.builder().id("[LAST_MODIFIED_DATE]").label("Last modified date").build());
       return this;
     }
-
-    public SearchCasesBuilder<T> lastStateModifiedDate() {
-      fields.add(SearchCasesResultField.builder().id("[LAST_STATE_MODIFIED_DATE]")
-        .label("Last state modified date").build());
-      return this;
-    }
   }
 }
