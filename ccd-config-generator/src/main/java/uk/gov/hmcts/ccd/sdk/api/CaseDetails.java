@@ -27,6 +27,9 @@ public class CaseDetails<T, S> {
   @JsonProperty("last_modified")
   private LocalDateTime lastModified;
 
+  @JsonProperty("last_state_modified_date")
+  private LocalDateTime lastStateModifiedDate;
+
   private S state;
 
   @JsonProperty("locked_by_user_id")
