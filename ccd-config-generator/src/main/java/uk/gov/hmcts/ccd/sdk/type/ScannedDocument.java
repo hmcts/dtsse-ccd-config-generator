@@ -48,7 +48,7 @@ public class ScannedDocument {
           label = "Scanned date"
   )
   @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME,
-    fallbackPatterns = {"yyyy-MM-dd'T'HH:mm:ss.SS", "yyyy-MM-dd'T'HH:mm:ss.S"})
+          fallbackPatterns = {"yyyy-MM-dd'T'HH:mm:ss.SS", "yyyy-MM-dd'T'HH:mm:ss.S"})
   @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss.SSS")
   private LocalDateTime scannedDate;
 
@@ -57,7 +57,7 @@ public class ScannedDocument {
   )
   @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss.SSS")
   @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME,
-    fallbackPatterns = {"yyyy-MM-dd'T'HH:mm:ss.SS", "yyyy-MM-dd'T'HH:mm:ss.S"})
+          fallbackPatterns = {"yyyy-MM-dd'T'HH:mm:ss.SS", "yyyy-MM-dd'T'HH:mm:ss.S"})
   private LocalDateTime deliveryDate;
 
   @CCD(
