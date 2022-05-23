@@ -5,12 +5,13 @@ import static uk.gov.hmcts.ccd.sdk.type.FieldType.FixedList;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import java.time.LocalDateTime;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-import org.springframework.format.annotation.DateTimeFormat;
 import uk.gov.hmcts.ccd.sdk.api.CCD;
+import uk.gov.hmcts.ccd.sdk.deserializer.LocalDateTimeDeserializer;
 
 @Data
 @NoArgsConstructor
@@ -47,15 +48,15 @@ public class ScannedDocument {
   @CCD(
           label = "Scanned date"
   )
-  @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME)
+  @JsonDeserialize(using = LocalDateTimeDeserializer.class)
   @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss.SSS")
   private LocalDateTime scannedDate;
 
   @CCD(
           label = "Delivery date"
   )
+  @JsonDeserialize(using = LocalDateTimeDeserializer.class)
   @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss.SSS")
-  @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME)
   private LocalDateTime deliveryDate;
 
   @CCD(
