@@ -17,13 +17,14 @@ public class LocalDateTimeDeserializer extends StdDeserializer<LocalDateTime> {
     super(LocalDateTime.class);
   }
 
-  
   @Override
   public LocalDateTime deserialize(JsonParser jp, DeserializationContext ctxt) throws IOException {
     var dateString = jp.readValueAs(String.class);
     DateTimeFormatter formatter = new DateTimeFormatterBuilder()
             .appendPattern("yyyy-MM-dd'T'HH:mm:ss")
-            .appendFraction(ChronoField.MILLI_OF_SECOND, 2, 3, true)
+            .optionalStart()
+                  .appendFraction(ChronoField.MILLI_OF_SECOND, 1, 3, true)
+            .optionalEnd()
             .toFormatter();
     return LocalDateTime.parse(dateString, formatter);
   }
