@@ -22,7 +22,7 @@ ccd {
 
 dependencies {
     // This dependency is used by the application.
-    implementation 'com.google.guava:guava:28.2-jre'
+    implementation 'com.google.guava:guava:31.1-jre'
     implementation 'org.springframework.boot:spring-boot-autoconfigure:2.7.0'
 
     // Use JUnit test framework
