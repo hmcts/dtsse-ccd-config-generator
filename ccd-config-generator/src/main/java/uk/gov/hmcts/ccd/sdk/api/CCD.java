@@ -7,8 +7,6 @@ import uk.gov.hmcts.ccd.sdk.type.FieldType;
 @Retention(RetentionPolicy.RUNTIME)
 public @interface CCD {
 
-  String name() default "";
-
   String label() default "";
 
   String hint() default "";

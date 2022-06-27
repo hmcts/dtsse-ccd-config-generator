@@ -7,7 +7,7 @@
   },
   {
     "ID" : "ChildGender",
-    "ListElement" : "girl",
+    "ListElement" : "GIRL",
     "ListElementCode" : "GIRL",
     "LiveFrom" : "01/01/2017"
   },
@@ -15,12 +15,6 @@
     "ID" : "ChildGender",
     "ListElement" : "OTHER",
     "ListElementCode" : "OTHER",
-    "LiveFrom" : "01/01/2017"
-  },
-  {
-    "ID" : "ChildGender",
-    "ListElement" : "MULTI",
-    "ListElementCode" : "MULTI",
     "LiveFrom" : "01/01/2017"
   }
 ]

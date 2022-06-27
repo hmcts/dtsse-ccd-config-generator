@@ -36,16 +36,14 @@ class FixedListGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
           String enumName = ((Enum<?>)enumConstant).name();
           CCD annotation = c.getField(enumName).getAnnotation(CCD.class);
 
-          // use the enum label field, or the @CCD name, or the @CCD label, or the enumConstant
+          // use the enum label field, or the @CCD label, or the enumConstant
           Object label = enumConstant instanceof HasLabel
               ? ((HasLabel) enumConstant).getLabel()
               : annotation == null
                   ? enumConstant
-                  : !isNullOrEmpty(annotation.name())
-                      ? annotation.name()
-                      : !isNullOrEmpty(annotation.label())
-                          ? annotation.label()
-                          : enumConstant;
+                  : !isNullOrEmpty(annotation.label())
+                      ? annotation.label()
+                      : enumConstant;
 
           Map<String, Object> value = Maps.newHashMap();
           fields.add(value);

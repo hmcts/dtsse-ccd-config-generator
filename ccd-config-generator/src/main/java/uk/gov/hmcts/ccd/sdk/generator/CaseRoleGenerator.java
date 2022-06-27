@@ -27,8 +27,8 @@ public class CaseRoleGenerator<T, S, R extends HasRole> implements ConfigGenerat
     final Path path = Paths.get(rootOutputfolder.getPath(), "CaseRoles.json");
 
     final List<Map<String, Object>> caseRoles = Arrays.stream(config.getRoleClass().getEnumConstants())
-        .filter(x -> ((HasRole)x).getRole().matches("^\\[.+\\]$"))
-        .map(o -> enumToJsonMap(config.getCaseType(), config.getRoleClass(), o, ((HasRole) o).getRole()))
+        .filter(x -> x.getRole().matches("^\\[.+\\]$"))
+        .map(o -> enumToJsonMap(config.getCaseType(), config.getRoleClass(), o, o.getRole()))
         .collect(toList());
 
     mergeInto(path, caseRoles, new AddMissing(), "ID");
@@ -44,9 +44,9 @@ public class CaseRoleGenerator<T, S, R extends HasRole> implements ConfigGenerat
     field.put("ID", id);
 
     CCD ccd = enumType.getField(enumConstant.toString()).getAnnotation(CCD.class);
-    String name = ccd != null && !Strings.isNullOrEmpty(ccd.name()) ? ccd.name() :
+    String name = ccd != null && !Strings.isNullOrEmpty(ccd.label()) ? ccd.label() :
         enumConstant.toString();
-    String desc = ccd != null ? ccd.label() : "";
+    String desc = ccd != null ? ccd.hint() : "";
     field.put("Name", name);
     field.put("Description", desc);
 
