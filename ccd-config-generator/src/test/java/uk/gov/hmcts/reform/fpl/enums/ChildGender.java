@@ -8,10 +8,10 @@ import java.util.stream.Stream;
 @RequiredArgsConstructor
 public enum ChildGender {
 
-    @CCD(name = "boy", label = "something")
+    @CCD(label = "boy", hint = "something")
     BOY("Boy"),
 
-    @CCD(label = "girl")
+    @CCD(hint = "girl")
     GIRL("Girl"),
 
     @CCD
