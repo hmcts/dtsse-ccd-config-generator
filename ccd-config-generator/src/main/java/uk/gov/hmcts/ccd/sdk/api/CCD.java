@@ -7,8 +7,22 @@ import uk.gov.hmcts.ccd.sdk.type.FieldType;
 @Retention(RetentionPolicy.RUNTIME)
 public @interface CCD {
 
+  /**
+   * Primary human readable description field. This property will populate different fields in different contexts:
+   * - FixedLists: ListElement
+   * - Fields: Label
+   * - CaseRoles: Name
+   * - States: Name and Description
+   */
   String label() default "";
 
+  /**
+   * Secondary human readable description field. This property will populate different fields in different contexts:
+   * - FixedLists: ListElementCode
+   * - Fields: HintText
+   * - CaseRoles: Description
+   * - States: TitleDisplay
+   */
   String hint() default "";
 
   String showCondition() default "";
