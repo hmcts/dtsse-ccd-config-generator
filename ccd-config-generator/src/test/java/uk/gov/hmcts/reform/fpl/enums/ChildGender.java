@@ -8,13 +8,16 @@ import java.util.stream.Stream;
 @RequiredArgsConstructor
 public enum ChildGender {
 
-    @CCD(label = "boy")
+    @CCD(label = "boy", hint = "something")
     BOY("Boy"),
 
-    @CCD
+    @CCD(hint = "girl")
     GIRL("Girl"),
 
-    OTHER("They identify in another way");
+    @CCD
+    OTHER("They identify in another way"),
+
+    MULTI("Multiple genders");
 
     private final String label;
 
