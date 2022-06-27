@@ -182,14 +182,14 @@ The case states are implemented by an enum:
 ```java
 public enum State {
   @CCD(
-    name = "Holding",
-    label = "### Case number: ${[CASE_REFERENCE]}\n ### ${applicant1Name}\n"
+    label = "Holding",
+    hint = "### Case number: ${[CASE_REFERENCE]}\n ### ${applicant1Name}\n"
   )
   Holding,
 
   @CCD(
-    name = "Submitted",
-    label = "### Case number: ${[CASE_REFERENCE]}\n ### ${applicant1Name}\n"
+    label = "Submitted",
+    hint = "### Case number: ${[CASE_REFERENCE]}\n ### ${applicant1Name}\n"
   )
   Submitted;
 }
@@ -354,15 +354,15 @@ As with fields state access can be manually defined:
 ```java
 public enum State {
   @CCD(
-    name = "Holding",
-    label = "### Case number: ${[CASE_REFERENCE]}\n ### ${applicant1Name}\n",
+    label = "Holding",
+    hint = "### Case number: ${[CASE_REFERENCE]}\n ### ${applicant1Name}\n",
     access = {CaseworkerAccess.class, Solicitor.class}
   )
   Holding,
 
   @CCD(
-    name = "Submitted",
-    label = "### Case number: ${[CASE_REFERENCE]}\n ### ${applicant1Name}\n",
+    label = "Submitted",
+    hint = "### Case number: ${[CASE_REFERENCE]}\n ### ${applicant1Name}\n",
     access = {CaseworkerAccess.class}
   )
   Submitted;
