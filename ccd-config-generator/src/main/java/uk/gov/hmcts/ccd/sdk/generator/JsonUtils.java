@@ -13,6 +13,7 @@ import com.google.common.collect.Ordering;
 import com.google.common.collect.Sets;
 import com.google.common.primitives.Chars;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Collections;
@@ -28,7 +29,7 @@ public class JsonUtils {
 
   @SneakyThrows
   private static void writeFile(Path path, String value) {
-    Files.write(path, value.getBytes());
+    Files.writeString(path, value, StandardCharsets.UTF_8);
   }
 
   @SneakyThrows
