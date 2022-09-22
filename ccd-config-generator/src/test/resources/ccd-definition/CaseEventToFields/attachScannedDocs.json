@@ -12,15 +12,43 @@
     "ShowSummaryChangeOption": "Y"
   },
   {
-    "PageID": "attachScannedDocs",
-    "LiveFrom": "01/01/2017",
-    "CaseTypeID": "CARE_SUPERVISION_EPO",
-    "CaseFieldID": "evidenceHandled",
     "CaseEventID": "attachScannedDocs",
-    "PageColumnNumber": 1,
-    "PageFieldDisplayOrder": 2,
+    "CaseFieldID": "evidenceHandled",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
     "DisplayContext": "MANDATORY",
-    "ShowSummaryChangeOption": "Y",
-    "PageDisplayOrder": 1
+    "LiveFrom": "01/01/2017",
+    "PageColumnNumber": 1,
+    "PageDisplayOrder": 1,
+    "PageFieldDisplayOrder": 2,
+    "PageID": "attachScannedDocs",
+    "ShowSummaryChangeOption": "Y"
+  },
+  {
+    "CaseEventFieldHint": "A hint",
+    "CaseEventFieldLabel": "Date of issue",
+    "CaseEventID": "attachScannedDocs",
+    "CaseFieldID": "dateOfIssue",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "DisplayContext": "MANDATORY",
+    "DisplayContextParameter": "#DATETIMEDISPLAY(d  MMMM yyyy)",
+    "LiveFrom": "01/01/2017",
+    "PageColumnNumber": 1,
+    "PageDisplayOrder": 1,
+    "PageFieldDisplayOrder": 3,
+    "PageID": "attachScannedDocs",
+    "ShowSummaryChangeOption": "Y"
+  },
+  {
+    "CaseEventID": "attachScannedDocs",
+    "CaseFieldID": "dateSubmitted",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "DisplayContext": "MANDATORY",
+    "DisplayContextParameter": "#DATETIMEDISPLAY(d  MMMM yyyy)",
+    "LiveFrom": "01/01/2017",
+    "PageColumnNumber": 1,
+    "PageDisplayOrder": 1,
+    "PageFieldDisplayOrder": 4,
+    "PageID": "attachScannedDocs",
+    "ShowSummaryChangeOption": "Y"
   }
 ]

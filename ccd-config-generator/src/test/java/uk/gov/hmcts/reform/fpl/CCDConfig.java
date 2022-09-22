@@ -147,7 +147,7 @@ public class CCDConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<CaseData, S
         .field("hearingPreferencesWelsh", "Is in Welsh")
         .stateField()
         .field(CaseData::getCaseLocalAuthority, "Local authority")
-        .field("dateAndTimeSubmitted", "Date submitted", FIRST.DESCENDING)
+        .field("dateAndTimeSubmitted", "Date submitted", null, null, "#DATETIMEDISPLAY(d  MMMM yyyy)", FIRST.DESCENDING)
         .field("evidenceHandled", "Supplementary evidence handled", SECOND.ASCENDING);
   }
 
@@ -158,7 +158,7 @@ public class CCDConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<CaseData, S
         .field(CaseData::getFamilyManCaseNumber, "FamilyMan case number")
         .field("hearingPreferencesWelsh", "Is in Welsh")
         .caseReferenceField()
-        .field(CaseData::getDateSubmitted, "Date submitted")
+        .field(CaseData::getDateSubmitted, "Date submitted", "", "#DATETIMEDISPLAY(d  MMMM yyyy)")
         .field("evidenceHandled", "Supplementary evidence handled")
         .field("internationalElement", "int el", "issues", "hearingPreferencesWelsh=\"no\"");
   }
@@ -271,7 +271,9 @@ public class CCDConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<CaseData, S
       .page("attachScannedDocs")
       .pageLabel("Correspondence")
       .mandatory(CaseData::getScannedDocuments)
-      .mandatory(CaseData::getEvidenceHandled);
+      .mandatory(CaseData::getEvidenceHandled)
+      .mandatory(CaseData::getDateOfIssue, null, null, "Date of issue", "A hint", "#DATETIMEDISPLAY(d  MMMM yyyy)")
+      .mandatoryWithDisplayContextParameter(CaseData::getDateSubmitted, null, "#DATETIMEDISPLAY(d  MMMM yyyy)");
   }
 
   private void buildHandleEvidenceEvent() {

@@ -16,6 +16,7 @@ public class Field<Type, StateType, Parent, Grandparent> {
   String label;
   String hint;
   DisplayContext context;
+  String displayContextParameter;
   String showCondition;
   String page;
   String caseEventFieldLabel;

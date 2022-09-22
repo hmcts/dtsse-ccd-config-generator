@@ -30,9 +30,55 @@ public class Search<T, R extends HasRole> {
       return this;
     }
 
+    public SearchBuilder<T, R> field(TypedPropertyGetter<T, ?> getter, String label, String showCondition) {
+      String name = propertyUtils.getPropertyName(model, getter);
+      fields.add(SearchField.<R>builder().id(name).label(label).showCondition(showCondition).build());
+      return this;
+    }
+
     public SearchBuilder<T, R> field(TypedPropertyGetter<T, ?> getter, String label, SortOrder order) {
       String name = propertyUtils.getPropertyName(model, getter);
       fields.add(SearchField.<R>builder().id(name).label(label).order(order).build());
+      return this;
+    }
+
+    public SearchBuilder<T, R> field(TypedPropertyGetter<T, ?> getter, String label, SortOrder order,
+                                     String displayContextParameter) {
+      String name = propertyUtils.getPropertyName(model, getter);
+      fields.add(SearchField.<R>builder()
+          .id(name)
+          .label(label)
+          .order(order)
+          .displayContextParameter(displayContextParameter)
+          .build()
+      );
+      return this;
+    }
+
+    public SearchBuilder<T, R> field(TypedPropertyGetter<T, ?> getter, String label, String showCondition,
+                                     SortOrder order, String displayContextParameter) {
+      String name = propertyUtils.getPropertyName(model, getter);
+      fields.add(SearchField.<R>builder()
+          .id(name)
+          .label(label)
+          .order(order)
+          .showCondition(showCondition)
+          .displayContextParameter(displayContextParameter)
+          .build()
+      );
+      return this;
+    }
+
+    public SearchBuilder<T, R> field(TypedPropertyGetter<T, ?> getter, String label, String showCondition,
+                                     String displayContextParameter) {
+      String name = propertyUtils.getPropertyName(model, getter);
+      fields.add(SearchField.<R>builder()
+          .id(name)
+          .label(label)
+          .showCondition(showCondition)
+          .displayContextParameter(displayContextParameter)
+          .build()
+      );
       return this;
     }
 
@@ -62,6 +108,19 @@ public class Search<T, R extends HasRole> {
       return this;
     }
 
+    public SearchBuilder<T, R> field(String fieldName, String label, String listElementCode, String showCondition,
+                                     String displayContextParameter) {
+      fields.add(SearchField.<R>builder()
+          .id(fieldName)
+          .label(label)
+          .listElementCode(listElementCode)
+          .showCondition(showCondition)
+          .displayContextParameter(displayContextParameter)
+          .build());
+
+      return this;
+    }
+
     public SearchBuilder<T, R> field(String fieldName, String label, String listElementCode,
                                                     String showCondition, R role) {
       fields.add(SearchField.<R>builder()
@@ -69,6 +128,20 @@ public class Search<T, R extends HasRole> {
           .label(label)
           .listElementCode(listElementCode)
           .showCondition(showCondition)
+          .userRole(role)
+          .build());
+
+      return this;
+    }
+
+    public SearchBuilder<T, R> field(String fieldName, String label, String listElementCode,
+                                     String showCondition, R role, String displayContextParameter) {
+      fields.add(SearchField.<R>builder()
+          .id(fieldName)
+          .label(label)
+          .listElementCode(listElementCode)
+          .showCondition(showCondition)
+          .displayContextParameter(displayContextParameter)
           .userRole(role)
           .build());
 
@@ -106,6 +179,35 @@ public class Search<T, R extends HasRole> {
           .order(order)
           .listElementCode(listElementCode)
           .showCondition(showCondition)
+          .userRole(role)
+          .build());
+
+      return this;
+    }
+
+    public SearchBuilder<T, R> field(String fieldName, String label, String listElementCode, String showCondition,
+                                     String displayContextParameter, SortOrder order) {
+      fields.add(SearchField.<R>builder()
+          .id(fieldName)
+          .label(label)
+          .order(order)
+          .listElementCode(listElementCode)
+          .showCondition(showCondition)
+          .displayContextParameter(displayContextParameter)
+          .build());
+
+      return this;
+    }
+
+    public SearchBuilder<T, R> field(String fieldName, String label, String listElementCode, String showCondition,
+                                     R role, String displayContextParameter, SortOrder order) {
+      fields.add(SearchField.<R>builder()
+          .id(fieldName)
+          .label(label)
+          .order(order)
+          .listElementCode(listElementCode)
+          .showCondition(showCondition)
+          .displayContextParameter(displayContextParameter)
           .userRole(role)
           .build());
 

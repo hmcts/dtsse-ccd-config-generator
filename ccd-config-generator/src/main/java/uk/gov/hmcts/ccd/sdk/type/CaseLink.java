@@ -16,8 +16,12 @@ public class CaseLink {
   @JsonProperty("CaseReference")
   private String caseReference;
 
+  @JsonProperty("CaseDerp")
+  private String caseDerp;
+
   @JsonCreator
-  public CaseLink(@JsonProperty("CaseReference") String caseReference) {
+  public CaseLink(@JsonProperty("CaseReference") String caseReference, @JsonProperty("CaseDerp") String caseDerp) {
     this.caseReference = caseReference;
+    this.caseDerp = caseDerp;
   }
 }

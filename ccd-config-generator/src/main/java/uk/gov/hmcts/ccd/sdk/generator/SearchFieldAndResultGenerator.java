@@ -38,7 +38,7 @@ class SearchFieldAndResultGenerator<T, S, R extends HasRole> implements ConfigGe
       for (SearchField<R> field : search.getFields()) {
         Map<String, Object> map = buildField(caseType, field.getId(), field.getLabel(),
                 displayOrder++, field.getListElementCode(), field.getShowCondition(),
-                field.getUserRole(), field.getOrder());
+                field.getUserRole(), field.getOrder(), field.getDisplayContextParameter());
 
         result.add(map);
       }
@@ -49,7 +49,7 @@ class SearchFieldAndResultGenerator<T, S, R extends HasRole> implements ConfigGe
 
   protected static Map<String, Object> buildField(String caseType, String fieldId, String label, int displayOrder,
                                                   String listElementCode, String showCondition, HasRole userRole,
-                                                  SortOrder order) {
+                                                  SortOrder order, String displayContextParameter) {
     Map<String, Object> field = Maps.newHashMap();
     field.put("LiveFrom", "01/01/2017");
     field.put("CaseTypeID", caseType);
@@ -67,6 +67,9 @@ class SearchFieldAndResultGenerator<T, S, R extends HasRole> implements ConfigGe
     }
     if (order != null) {
       field.put("ResultsOrdering", order.getValue());
+    }
+    if (!isNullOrEmpty(displayContextParameter)) {
+      field.put("DisplayContextParameter", displayContextParameter);
     }
 
     field.put("DisplayOrder", displayOrder);

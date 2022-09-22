@@ -32,6 +32,7 @@
     "CaseTypeID": "CARE_SUPERVISION_EPO",
     "CaseFieldID": "dateAndTimeSubmitted",
     "DisplayOrder": 5,
+    "DisplayContextParameter" : "#DATETIMEDISPLAY(d  MMMM yyyy)",
     "Label": "Date submitted",
     "ResultsOrdering" : "1:DESC"
   },

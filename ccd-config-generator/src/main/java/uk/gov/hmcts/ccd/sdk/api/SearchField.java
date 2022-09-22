@@ -10,6 +10,7 @@ public class SearchField<R extends HasRole> {
   protected String label;
   protected String listElementCode;
   protected String showCondition;
+  protected String displayContextParameter;
   protected R userRole;
   protected SortOrder order;
 }
