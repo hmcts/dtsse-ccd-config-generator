@@ -84,11 +84,18 @@
     "CaseFieldID": "sharedDraftCMODocument"
   },
   {
-    "CRUD": "R",
+    "CRUD": "CRU",
     "CaseTypeID": "CARE_SUPERVISION_EPO",
     "UserRole": "caseworker-publiclaw-systemupdate",
     "LiveFrom": "01/01/2017",
     "CaseFieldID": "dateSubmitted"
+  },
+  {
+    "CRUD" : "CRU",
+    "CaseFieldID" : "dateOfIssue",
+    "CaseTypeID" : "CARE_SUPERVISION_EPO",
+    "LiveFrom" : "01/01/2017",
+    "UserRole" : "caseworker-publiclaw-systemupdate"
   },
   {
     "CRUD": "R",

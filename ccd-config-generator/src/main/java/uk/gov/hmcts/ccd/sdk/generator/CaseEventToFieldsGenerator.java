@@ -82,6 +82,10 @@ class CaseEventToFieldsGenerator<T, S, R extends HasRole> implements ConfigGener
             info.put("PageLabel", collection.getPageLabels().remove(field.getPage()));
           }
 
+          if (null != field.getDisplayContextParameter()) {
+            info.put("DisplayContextParameter", field.getDisplayContextParameter());
+          }
+
           if (null != field.getCaseEventFieldLabel()) {
             info.put("CaseEventFieldLabel", field.getCaseEventFieldLabel());
           }
