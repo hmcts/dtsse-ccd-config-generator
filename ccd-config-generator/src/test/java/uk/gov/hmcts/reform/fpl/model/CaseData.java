@@ -105,6 +105,7 @@ public class CaseData {
     private final uk.gov.hmcts.ccd.sdk.type.Document documentField;
     private final uk.gov.hmcts.ccd.sdk.type.OrderSummary orderSummaryField;
     private final uk.gov.hmcts.ccd.sdk.type.CaseLink caseLinkField;
+    private final uk.gov.hmcts.ccd.sdk.type.Flags caseFlag;
     private final uk.gov.hmcts.ccd.sdk.type.YesOrNo yesOrNoField;
 
     private final Proceeding proceeding;
