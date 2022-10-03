@@ -119,6 +119,10 @@ public class FPLConfigGenerationTests {
         assertEquals("SearchInputFields.json");
     }
 
+    @Test
+    public void generatesRoleToAccessProfiles() {
+        assertEquals("RoleToAccessProfiles.json");
+    }
 
     @Test
     public void generatesAllComplexTypes() {

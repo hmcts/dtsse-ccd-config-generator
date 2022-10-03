@@ -1,0 +1,22 @@
+[
+  {
+    "AccessProfiles": "access-profile,access-profile2",
+    "Authorisation": "authorisation,authorisation2",
+    "CaseAccessCategories": "case-access-category,case-access-category2",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "Disabled": "N",
+    "LiveFrom": "01/01/2017",
+    "ReadOnly": "N",
+    "RoleName": "caseworker-approver"
+  },
+  {
+    "AccessProfiles": "access-profile",
+    "Authorisation": "authorisation",
+    "CaseAccessCategories": "case-access-category",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "Disabled": "Y",
+    "LiveFrom": "01/01/2017",
+    "ReadOnly": "Y",
+    "RoleName": "caseworker-caa"
+  }
+]
