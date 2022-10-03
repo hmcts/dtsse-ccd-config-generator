@@ -108,6 +108,14 @@
     "SecurityClassification": "Public"
   },
   {
+    "ID": "caseFlag",
+    "FieldType": "Flags",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "LiveFrom": "01/01/2017",
+    "Label": " ",
+    "SecurityClassification": "Public"
+},
+  {
     "ID": "caseLinkField",
     "FieldType": "CaseLink",
     "CaseTypeID": "CARE_SUPERVISION_EPO",

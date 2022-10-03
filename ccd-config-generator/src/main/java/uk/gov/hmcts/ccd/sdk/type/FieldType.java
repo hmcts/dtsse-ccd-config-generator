@@ -18,5 +18,9 @@ public enum FieldType {
   Collection,
   Label,
   CasePaymentHistoryViewer,
-  DynamicRadioList
+  DynamicRadioList,
+  Flags,
+  FlagLauncher,
+  FlagType,
+  FlagDetail
 }
