@@ -12,6 +12,7 @@ import static uk.gov.hmcts.reform.fpl.enums.State.Submitted;
 import static uk.gov.hmcts.reform.fpl.enums.UserRole.BULK_SCAN;
 import static uk.gov.hmcts.reform.fpl.enums.UserRole.BULK_SCAN_SYSTEM_UPDATE;
 import static uk.gov.hmcts.reform.fpl.enums.UserRole.CAFCASS;
+import static uk.gov.hmcts.reform.fpl.enums.UserRole.CASE_ACCESS_ADMINISTRATOR;
 import static uk.gov.hmcts.reform.fpl.enums.UserRole.CASE_ACCESS_APPROVER;
 import static uk.gov.hmcts.reform.fpl.enums.UserRole.CCD_SOLICITOR;
 import static uk.gov.hmcts.reform.fpl.enums.UserRole.HMCTS_ADMIN;
@@ -103,6 +104,18 @@ public class CCDConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<CaseData, S
         .optionalWithLabel(CaseData::getGatekeeperEmail, "Gate keeper email")
         .mandatoryWithoutDefaultValue(CaseData::getAllocatedJudge, "hearingPreferencesWelsh=\"yes\"", "Judge is bilingual", true)
         .mandatoryWithLabel(CaseData::getCaseLocalAuthority, "Please enter a case local authority");
+
+    builder.caseRoleToAccessProfile(CASE_ACCESS_APPROVER)
+      .accessProfiles("access-profile", "access-profile2")
+      .authorisation("authorisation", "authorisation2")
+      .caseAccessCategories("case-access-category", "case-access-category2");
+
+    builder.caseRoleToAccessProfile(CASE_ACCESS_ADMINISTRATOR)
+      .accessProfiles("access-profile")
+      .authorisation("authorisation")
+      .caseAccessCategories("case-access-category")
+      .readonly()
+      .disabled();
   }
 
   private AboutToStartOrSubmitResponse<CaseData, State> checkReadyAboutToSubmit(CaseDetails<CaseData, State> details,

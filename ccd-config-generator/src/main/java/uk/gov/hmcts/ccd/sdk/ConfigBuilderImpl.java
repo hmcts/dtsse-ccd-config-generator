@@ -13,6 +13,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import uk.gov.hmcts.ccd.sdk.api.CaseRoleToAccessProfile.CaseRoleToAccessProfileBuilder;
 import uk.gov.hmcts.ccd.sdk.api.ConfigBuilder;
 import uk.gov.hmcts.ccd.sdk.api.Event;
 import uk.gov.hmcts.ccd.sdk.api.HasRole;
@@ -32,6 +33,7 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements ConfigBuilder
   final List<SearchBuilder<T, R>> searchResultFields = Lists.newArrayList();
   final List<SearchBuilder<T, R>> searchInputFields = Lists.newArrayList();
   final List<SearchCasesBuilder<T>> searchCaseResultFields = Lists.newArrayList();
+  final List<CaseRoleToAccessProfileBuilder<R>> caseRoleToAccessProfiles = Lists.newArrayList();
   final Set<R> omitHistoryForRoles = new HashSet<>();
 
   public ConfigBuilderImpl(ResolvedCCDConfig<T, S, R> config) {
@@ -51,6 +53,7 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements ConfigBuilder
     config.searchInputFields = buildBuilders(searchInputFields, SearchBuilder::build);
     config.searchCaseResultFields = buildBuilders(searchCaseResultFields, SearchCasesBuilder::build);
     config.rolesWithNoHistory = omitHistoryForRoles.stream().map(HasRole::getRole).collect(Collectors.toSet());
+    config.caseRoleToAccessProfiles = buildBuilders(caseRoleToAccessProfiles, CaseRoleToAccessProfileBuilder::build);
 
     return config;
   }
@@ -149,6 +152,13 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements ConfigBuilder
   public void addPreEventHook(
           Function<Map<String, Object>, Map<String, Object>> hook) {
     config.preEventHooks.add(hook);
+  }
+
+  @Override
+  public CaseRoleToAccessProfileBuilder<R> caseRoleToAccessProfile(R caseRole) {
+    var builder = CaseRoleToAccessProfileBuilder.builder(caseRole);
+    caseRoleToAccessProfiles.add(builder);
+    return builder;
   }
 
   private SearchBuilder<T, R> getWorkBasketBuilder(List<SearchBuilder<T, R>> workBasketInputFields) {
