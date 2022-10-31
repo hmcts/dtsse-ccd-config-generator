@@ -159,6 +159,12 @@ public class FPLConfigGenerationTests {
     }
 
     @Test
+    public void respectsComplexTypeOrdering() {
+      assertEquals("ComplexTypes/HearingBooking.json", JSONCompareMode.STRICT);
+    }
+
+
+  @Test
     public void generatesSearchCasesResultFields() {
         assertEquals("SearchCasesResultFields/SearchCasesResultFields.json");
     }
@@ -182,7 +188,7 @@ public class FPLConfigGenerationTests {
             if (actual.getName().endsWith(".json")) {
                 Path path = dir.toPath().relativize(actual.toPath());
                 Path expected = resourceDir.toPath().resolve(path);
-                assertEquals(expected.toFile(), actual);
+                assertEquals(expected.toFile(), actual, JSONCompareMode.NON_EXTENSIBLE);
             }
         }
     }
@@ -198,7 +204,7 @@ public class FPLConfigGenerationTests {
                 Path path = dir.toPath().relativize(expected.toPath());
                 Path actual = prodConfig.resolve(folder).resolve(path);
 //            try {
-                assertEquals(expected, actual.toFile());
+                assertEquals(expected, actual.toFile(), JSONCompareMode.NON_EXTENSIBLE);
 //                succ++;
 //            } catch (Exception r) {
 //                failed++;
@@ -212,16 +218,19 @@ public class FPLConfigGenerationTests {
         }
     }
 
-    private void assertEquals(String jsonPath) {
+  private void assertEquals(String jsonPath) {
+    assertEquals(jsonPath, JSONCompareMode.NON_EXTENSIBLE);
+  }
+    private void assertEquals(String jsonPath, JSONCompareMode mode) {
         System.out.println("Comparing " + jsonPath);
         URL u = Resources.getResource("ccd-definition/" + jsonPath);
         File expected = new File(u.getPath());
         File actual = new File(prodConfig.toFile(), jsonPath);
-        assertEquals(expected, actual);
+        assertEquals(expected, actual, mode);
     }
 
     @SneakyThrows
-    private void assertEquals(File expected, File actual) {
+    private void assertEquals(File expected, File actual, JSONCompareMode mode) {
         if (expected.getName().contains("nonprod")) {
             return;
         }
@@ -232,7 +241,7 @@ public class FPLConfigGenerationTests {
             boolean stripID = expected.getAbsolutePath().contains("CaseEventToComplexTypes");
             expectedString = stripIrrelevant(expectedString, stripID);
             actualString = stripIrrelevant(actualString, stripID);
-            JSONCompareResult result = JSONCompare.compareJSON(expectedString, actualString, JSONCompareMode.NON_EXTENSIBLE);
+            JSONCompareResult result = JSONCompare.compareJSON(expectedString, actualString, mode);
             if (result.failed()) {
                 System.out.println("Failed comparing " + expected.getName() + " to " + actual.getName());
                 System.out.println(result.toString());
@@ -328,7 +337,7 @@ public class FPLConfigGenerationTests {
             }
         }
 
-        return JsonUtils.serialise(entries);
+        return JsonUtils.serialise(entries, true);
     }
 
     private void debugMissingValue(List<Map<String, Object>> actualValues,

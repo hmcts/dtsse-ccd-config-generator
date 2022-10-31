@@ -58,7 +58,7 @@ class ComplexTypeGenerator<T, S, R extends HasRole> implements ConfigGenerator<T
       }
 
       sortComplexTypesByDisplayOrder(fields);
-      JsonUtils.mergeInto(path, fields, new AddMissing(), "ListElementCode");
+      JsonUtils.mergeInto(path, fields, new AddMissing(), false, "ListElementCode");
     }
   }
 

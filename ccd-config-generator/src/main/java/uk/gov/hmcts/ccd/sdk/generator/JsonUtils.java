@@ -33,7 +33,7 @@ public class JsonUtils {
   }
 
   @SneakyThrows
-  public static String serialise(List<Map<String, Object>> data, String... primaryKeys) {
+  public static String serialise(List<Map<String, Object>> data, boolean sort, String... primaryKeys) {
     class CustomPrinter extends DefaultPrettyPrinter {
       @Override
       public DefaultPrettyPrinter createInstance() {
@@ -51,13 +51,15 @@ public class JsonUtils {
     // Emit deterministic JSON so we get exactly the same json output for a given configuration.
     // This allows Gradle to skip converting it to xlsx if unchanged (eg. if we only changed a callback).
     // We make the json deterministic by sorting the maps by their primary keys and sorting the keys in each map.
-    data.sort((a, b) -> {
-      var chain = ComparisonChain.start();
-      for (String primaryKey : primaryKeys) {
-        chain = chain.compare(String.valueOf(a.get(primaryKey)), String.valueOf(b.get(primaryKey)));
-      }
-      return chain.result();
-    });
+    if (sort) {
+      data.sort((a, b) -> {
+        var chain = ComparisonChain.start();
+        for (String primaryKey : primaryKeys) {
+          chain = chain.compare(String.valueOf(a.get(primaryKey)), String.valueOf(b.get(primaryKey)));
+        }
+        return chain.result();
+      });
+    }
 
     return new ObjectMapper()
       .configure(SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS, true)
@@ -113,7 +115,13 @@ public class JsonUtils {
 
   @SneakyThrows
   public static void mergeInto(Path path, List<Map<String, Object>> fields,
-      JsonMerger merger, String... primaryKeys) {
+                               JsonMerger merger, String... primaryKeys) {
+    mergeInto(path,fields, merger, true, primaryKeys);
+  }
+
+  @SneakyThrows
+  public static void mergeInto(Path path, List<Map<String, Object>> fields,
+      JsonMerger merger, boolean sort, String... primaryKeys) {
     ObjectMapper mapper = new ObjectMapper();
     List<Map<String, Object>> existing;
     if (path.toFile().exists()) {
@@ -127,7 +135,7 @@ public class JsonUtils {
     mergeInto(existing, fields, merger, primaryKeys);
 
 
-    writeFile(path, serialise(existing, primaryKeys));
+    writeFile(path, serialise(existing, sort, primaryKeys));
   }
 
   @FunctionalInterface
