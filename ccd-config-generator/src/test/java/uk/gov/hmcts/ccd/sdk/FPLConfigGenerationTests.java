@@ -158,10 +158,10 @@ public class FPLConfigGenerationTests {
         assertEquals("AuthorisationCaseEvent/AuthorisationCaseEvent.json");
     }
 
-//    @Test
-//    public void respectsComplexTypeOrdering() {
-//      assertEquals("AuthorisationCaseEvent/AuthorisationCaseEvent.json");
-//    }
+    @Test
+    public void respectsComplexTypeOrdering() {
+      assertEquals("ComplexTypes/HearingBooking.json", JSONCompareMode.STRICT);
+    }
 
 
   @Test
@@ -337,7 +337,7 @@ public class FPLConfigGenerationTests {
             }
         }
 
-        return JsonUtils.serialise(entries);
+        return JsonUtils.serialise(entries, true);
     }
 
     private void debugMissingValue(List<Map<String, Object>> actualValues,
