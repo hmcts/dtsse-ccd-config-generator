@@ -798,6 +798,13 @@
     "SecurityClassification": "Public"
   },
   {
+    "CaseTypeID" : "CARE_SUPERVISION_EPO",
+    "FieldType" : "Label",
+    "ID" : "caseNotesLabel1",
+    "Label" : "###Case notes",
+    "LiveFrom" : "01/01/2017"
+  },
+  {
     "ID": "caseNotes",
     "FieldType": "Collection",
     "FieldTypeParameter": "CaseNote",

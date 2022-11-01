@@ -273,6 +273,7 @@ public class CCDConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<CaseData, S
         .done()
         .optional(CaseData::getCaseName, null, null, "Allocated case name", "A hint")
         .page("<Notes>", this::checkCaseNotes)
+          .label("caseNotesLabel1","###Case notes",null,true)
           .mandatory(CaseData::getCaseNotes);
   }
 
