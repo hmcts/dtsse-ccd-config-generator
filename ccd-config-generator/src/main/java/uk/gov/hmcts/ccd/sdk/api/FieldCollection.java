@@ -584,6 +584,17 @@ public class FieldCollection {
       return this;
     }
 
+    public FieldCollectionBuilder<Type, StateType, Parent> label(String id, String value,
+                                                                 String showCondition, boolean showSummary) {
+      explicitFields.add(field(id)
+          .context(DisplayContext.ReadOnly)
+          .label(value)
+          .showCondition(showCondition)
+          .showSummary(showSummary)
+          .immutable());
+      return this;
+    }
+
     public FieldCollectionBuilder<Type, StateType, Parent> page(String id, MidEvent<Type, StateType> callback) {
       this.pagesToMidEvent.put(id, callback);
       return this.page(id);
