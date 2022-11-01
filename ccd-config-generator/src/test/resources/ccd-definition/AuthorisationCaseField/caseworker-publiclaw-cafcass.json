@@ -343,6 +343,13 @@
     "UserRole" : "caseworker-publiclaw-cafcass"
   },
   {
+    "CRUD" : "CR",
+    "CaseFieldID" : "caseNotesLabel1",
+    "CaseTypeID" : "CARE_SUPERVISION_EPO",
+    "LiveFrom" : "01/01/2017",
+    "UserRole" : "caseworker-publiclaw-cafcass"
+  },
+  {
     "CRUD" : "R",
     "CaseFieldID" : "paymentHistoryField",
     "CaseTypeID" : "CARE_SUPERVISION_EPO",
