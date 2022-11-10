@@ -177,13 +177,12 @@ public class FPLConfigGenerationTests {
     @Test
     public void generatesDerivedConfig() {
       var derivedConfig = tmp.getRoot().toPath().resolve("derived");
-      // Our derived ccd config doesn't declare any events but should export types.
+      // Our derived ccd config doesn't declare any events but should export the same types as our CaseData class.
       assertResourceFolderMatchesGenerated("ComplexTypes", derivedConfig);
       assertResourceFolderMatchesGenerated("FixedLists", derivedConfig);
     }
 
-
-  @Test
+    @Test
     public void shouldGenerateCaseRoles() {
       assertEquals("CaseRoles.json");
     }
