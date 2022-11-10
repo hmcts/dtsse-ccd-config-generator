@@ -41,7 +41,7 @@ public class CallbackController {
 
   @Autowired
   public CallbackController(Collection<ResolvedCCDConfig<?, ?, ?>> configs, ObjectMapper mapper) {
-    this.caseTypeToConfig = Maps.uniqueIndex(configs, x -> x.getCaseType());
+    this.caseTypeToConfig = Maps.uniqueIndex(configs, ResolvedCCDConfig::getCaseType);
     this.mapper = mapper;
     for (ResolvedCCDConfig<?, ?, ?> config : configs) {
       this.caseTypeToJavaType.put(config.getCaseType(),
