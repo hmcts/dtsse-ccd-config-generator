@@ -45,7 +45,7 @@ public class FPLConfigGenerationTests {
     @ClassRule
     public static TemporaryFolder tmp = new TemporaryFolder();
 
-    private static Path prodConfig;
+    private static Path careSupervisionEPO;
 
     @Autowired
     private CCDDefinitionGenerator generator;
@@ -54,7 +54,7 @@ public class FPLConfigGenerationTests {
     @Before
     public void before() {
       if (!configGenerated) {
-          prodConfig = tmp.getRoot().toPath().resolve("CARE_SUPERVISION_EPO");
+          careSupervisionEPO = tmp.getRoot().toPath().resolve("CARE_SUPERVISION_EPO");
           generator.generateAllCaseTypesToJSON(tmp.getRoot());
           // Generate a second time to ensure existing config is correctly merged.
           generator.generateAllCaseTypesToJSON(tmp.getRoot());
@@ -89,13 +89,13 @@ public class FPLConfigGenerationTests {
 
     @Test
     public void generatesAllAuthorisationCaseField() {
-        assertResourceFolderMatchesGenerated("AuthorisationCaseField");
+        assertResourceFolderMatchesGenerated("AuthorisationCaseField", careSupervisionEPO);
         assertGeneratedFolderMatchesResource("AuthorisationCaseField");
     }
 
     @Test
     public void generatesCaseTypeTab() {
-        assertResourceFolderMatchesGenerated("CaseTypeTab");
+        assertResourceFolderMatchesGenerated("CaseTypeTab", careSupervisionEPO);
         assertGeneratedFolderMatchesResource("CaseTypeTab");
     }
 
@@ -126,25 +126,25 @@ public class FPLConfigGenerationTests {
 
     @Test
     public void generatesAllComplexTypes() {
-        assertResourceFolderMatchesGenerated("ComplexTypes");
+        assertResourceFolderMatchesGenerated("ComplexTypes", careSupervisionEPO);
         assertGeneratedFolderMatchesResource("ComplexTypes");
     }
 
     @Test
     public void generatesAllCaseEventToField() {
-        assertResourceFolderMatchesGenerated("CaseEventToFields");
+        assertResourceFolderMatchesGenerated("CaseEventToFields", careSupervisionEPO);
         assertGeneratedFolderMatchesResource("CaseEventToFields");
     }
 
     @Test
     public void generatesAllCaseEvent() {
-        assertResourceFolderMatchesGenerated("CaseEvent");
+        assertResourceFolderMatchesGenerated("CaseEvent", careSupervisionEPO);
         assertGeneratedFolderMatchesResource("CaseEvent");
     }
 
     @Test
     public void generatesAllCaseEventToComplexTypes() {
-        assertResourceFolderMatchesGenerated("CaseEventToComplexTypes");
+        assertResourceFolderMatchesGenerated("CaseEventToComplexTypes", careSupervisionEPO);
         assertGeneratedFolderMatchesResource("CaseEventToComplexTypes");
     }
 
@@ -175,6 +175,14 @@ public class FPLConfigGenerationTests {
     }
 
     @Test
+    public void generatesDerivedConfig() {
+      var derivedConfig = tmp.getRoot().toPath().resolve("derived");
+      // Our derived ccd config doesn't declare any events but should export the same types as our CaseData class.
+      assertResourceFolderMatchesGenerated("ComplexTypes", derivedConfig);
+      assertResourceFolderMatchesGenerated("FixedLists", derivedConfig);
+    }
+
+    @Test
     public void shouldGenerateCaseRoles() {
       assertEquals("CaseRoles.json");
     }
@@ -182,7 +190,7 @@ public class FPLConfigGenerationTests {
     private void assertGeneratedFolderMatchesResource(String folder) {
         URL u = Resources.getResource("ccd-definition/" + folder);
         File resourceDir = new File(u.getPath());
-        File dir = prodConfig.resolve(folder).toFile();
+        File dir = careSupervisionEPO.resolve(folder).toFile();
         for (Iterator<File> it = FileUtils.iterateFiles(dir, TrueFileFilter.INSTANCE, TrueFileFilter.INSTANCE); it.hasNext(); ) {
             File actual = it.next();
             if (actual.getName().endsWith(".json")) {
@@ -193,7 +201,7 @@ public class FPLConfigGenerationTests {
         }
     }
 
-    private void assertResourceFolderMatchesGenerated(String folder) {
+    private void assertResourceFolderMatchesGenerated(String folder, Path generatedRoot) {
         URL u = Resources.getResource("ccd-definition/" + folder);
         File dir = new File(u.getPath());
         assert dir.exists();
@@ -202,7 +210,7 @@ public class FPLConfigGenerationTests {
             File expected = it.next();
             if (expected.getName().endsWith(".json")) {
                 Path path = dir.toPath().relativize(expected.toPath());
-                Path actual = prodConfig.resolve(folder).resolve(path);
+                Path actual = generatedRoot.resolve(folder).resolve(path);
 //            try {
                 assertEquals(expected, actual.toFile(), JSONCompareMode.NON_EXTENSIBLE);
 //                succ++;
@@ -225,7 +233,7 @@ public class FPLConfigGenerationTests {
         System.out.println("Comparing " + jsonPath);
         URL u = Resources.getResource("ccd-definition/" + jsonPath);
         File expected = new File(u.getPath());
-        File actual = new File(prodConfig.toFile(), jsonPath);
+        File actual = new File(careSupervisionEPO.toFile(), jsonPath);
         assertEquals(expected, actual, mode);
     }
 
@@ -289,9 +297,9 @@ public class FPLConfigGenerationTests {
             }
 
         } catch (Exception e) {
-            if (prodConfig.toFile().exists()) {
+            if (careSupervisionEPO.toFile().exists()) {
                 System.out.println("Generated files:");
-                for (Iterator<File> it = FileUtils.iterateFiles(prodConfig.toFile(), TrueFileFilter.INSTANCE, TrueFileFilter.INSTANCE); it.hasNext(); ) {
+                for (Iterator<File> it = FileUtils.iterateFiles(careSupervisionEPO.toFile(), TrueFileFilter.INSTANCE, TrueFileFilter.INSTANCE); it.hasNext(); ) {
                     File f = it.next();
                     System.out.println(f.getPath());
                 }

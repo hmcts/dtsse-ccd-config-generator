@@ -54,7 +54,7 @@ class ConfigResolver<T, S, R extends HasRole> {
   }
 
   private static void resolve(Class dataClass, Map<Class, Integer> result, int level) {
-    for (java.lang.reflect.Field field : ReflectionUtils.getFields(dataClass)) {
+    for (java.lang.reflect.Field field : ReflectionUtils.getAllFields(dataClass)) {
       if (Modifier.isStatic(field.getModifiers())) {
         continue;
       }
