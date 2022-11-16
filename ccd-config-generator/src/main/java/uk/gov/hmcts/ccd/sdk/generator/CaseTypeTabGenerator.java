@@ -52,8 +52,6 @@ class CaseTypeTabGenerator<T, S, R extends HasRole> implements ConfigGenerator<T
       JsonUtils.mergeInto(output, Lists.newArrayList(tab), new AddMissing(),
           "TabID", "CaseFieldID");
     }
-    Path path = Paths.get(root.getPath(), "CaseField.json");
-    JsonUtils.mergeInto(path, caseFields, new JsonUtils.OverwriteSpecific(OVERWRITES_FIELDS), "ID");
   }
 
   private static <T, R extends HasRole> void addTab(String caseType, List<Map<String, Object>> result,
