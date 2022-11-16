@@ -44,6 +44,11 @@ processResources {
     }
 }
 
+java {
+  toolchain {
+    languageVersion = JavaLanguageVersion.of(11)
+  }
+}
 
 pluginBundle {
     website = 'https://github.com/hmcts/ccd-config-generator'
