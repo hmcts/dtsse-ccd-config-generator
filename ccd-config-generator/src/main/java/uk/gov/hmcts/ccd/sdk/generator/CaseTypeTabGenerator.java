@@ -52,6 +52,7 @@ class CaseTypeTabGenerator<T, S, R extends HasRole> implements ConfigGenerator<T
       JsonUtils.mergeInto(output, Lists.newArrayList(tab), new AddMissing(),
           "TabID", "CaseFieldID");
     }
+    // Add any dynamically declared tab labels into our case fields
     Path path = Paths.get(root.getPath(), "CaseField.json");
     JsonUtils.mergeInto(path, caseFields, new JsonUtils.OverwriteSpecific(OVERWRITES_FIELDS), "ID");
   }
