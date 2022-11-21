@@ -34,5 +34,17 @@
     "DisplayContextParameter": "#DATETIMEDISPLAY(d  MMMM yyyy)",
     "TabLabel": "Draft orders",
     "TabID": "DraftOrdersTab"
+  },
+  {
+    "CaseFieldID": "test-label",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "Channel": "CaseWorker",
+    "FieldShowCondition": "",
+    "LiveFrom": "01/01/2017",
+    "TabDisplayOrder": 2,
+    "TabFieldDisplayOrder": 4,
+    "TabID": "DraftOrdersTab",
+    "TabLabel": "Draft orders",
+    "UserRole": ""
   }
 ]
