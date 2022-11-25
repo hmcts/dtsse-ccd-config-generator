@@ -41,7 +41,7 @@ public class FieldUtils {
 
   public static Optional<JsonUnwrapped> isUnwrappedField(Class caseDataClass, String fieldName) {
     return ReflectionUtils
-      .getFields(caseDataClass, withName(fieldName))
+      .getAllFields(caseDataClass, withName(fieldName))
       .stream()
       .findFirst()
       .map(f -> f.getAnnotation(JsonUnwrapped.class));
