@@ -10,7 +10,7 @@ repositories {
     maven { url 'https://jitpack.io' }
 }
 
-def springBootVersion = '2.7.6'
+def springBootVersion = '3.0.0'
 
 dependencies {
     // Use JUnit test framework for unit tests
