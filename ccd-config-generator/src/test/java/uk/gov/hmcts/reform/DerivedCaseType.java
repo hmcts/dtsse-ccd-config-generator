@@ -17,9 +17,9 @@ public class DerivedCaseType implements CCDConfig<DerivedCaseData, State, UserRo
   private List<CCDConfig<CaseData, State, UserRole>> cfgs;
 
   @Override
-  @SuppressWarnings("unchecked")
   public void configure(ConfigBuilder<DerivedCaseData, State, UserRole> builder) {
-    ConfigBuilder<CaseData, State, UserRole> upcast = (ConfigBuilder<CaseData, State, UserRole>)(Object) builder;
+    @SuppressWarnings("unchecked")
+    var upcast = (ConfigBuilder<CaseData, State, UserRole>)(Object) builder;
     for (CCDConfig<CaseData, State, UserRole> cfg : cfgs) {
       cfg.configure(upcast);
     }
