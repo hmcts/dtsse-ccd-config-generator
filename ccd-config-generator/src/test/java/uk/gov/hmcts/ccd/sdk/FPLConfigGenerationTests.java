@@ -179,9 +179,16 @@ public class FPLConfigGenerationTests {
     @Test
     public void generatesDerivedConfig() {
       var derivedConfig = tmp.getRoot().toPath().resolve("derived");
-      // Our derived ccd config doesn't declare any events but should export the same types as our CaseData class.
+      // TODO: refactor and simplify these tests.
       assertResourceFolderMatchesGenerated("ComplexTypes", derivedConfig);
       assertResourceFolderMatchesGenerated("FixedLists", derivedConfig);
+      assertResourceFolderMatchesGenerated("AuthorisationCaseEvent", derivedConfig, "CaseTypeID");
+      assertResourceFolderMatchesGenerated("AuthorisationCaseField", derivedConfig, "CaseTypeID");
+      assertResourceFolderMatchesGenerated("CaseEvent", derivedConfig, "CaseTypeID");
+      assertResourceFolderMatchesGenerated("CaseEventToComplexTypes", derivedConfig, "CaseTypeID");
+      assertResourceFolderMatchesGenerated("CaseEventToFields", derivedConfig, "CaseTypeID");
+      assertResourceFolderMatchesGenerated("CaseTypeTab", derivedConfig, "CaseTypeID");
+      assertResourceFolderMatchesGenerated("SearchCasesResultFields", derivedConfig, "CaseTypeID");
 
       URL u = Resources.getResource("ccd-definition/CaseField.json");
       var expected = new File(u.getPath());
@@ -208,7 +215,7 @@ public class FPLConfigGenerationTests {
         }
     }
 
-    private void assertResourceFolderMatchesGenerated(String folder, Path generatedRoot) {
+    private void assertResourceFolderMatchesGenerated(String folder, Path generatedRoot, String... ignore) {
         URL u = Resources.getResource("ccd-definition/" + folder);
         File dir = new File(u.getPath());
         assert dir.exists();
@@ -219,7 +226,7 @@ public class FPLConfigGenerationTests {
                 Path path = dir.toPath().relativize(expected.toPath());
                 Path actual = generatedRoot.resolve(folder).resolve(path);
 //            try {
-                assertEquals(expected, actual.toFile(), JSONCompareMode.NON_EXTENSIBLE);
+                assertEquals(expected, actual.toFile(), JSONCompareMode.NON_EXTENSIBLE, ignore);
 //                succ++;
 //            } catch (Exception r) {
 //                failed++;
