@@ -13,11 +13,14 @@ import java.util.List;
 
 @Component
 public class DerivedCaseType implements CCDConfig<DerivedCaseData, State, UserRole> {
+  // Inject the configuration from our base case type.
   @Autowired
   private List<CCDConfig<CaseData, State, UserRole>> cfgs;
 
   @Override
   public void configure(ConfigBuilder<DerivedCaseData, State, UserRole> builder) {
+    // Apply the configuration of our base case type to our derived type.
+    // TODO: Make CCDConfig APIs covariant to avoid this unchecked cast.
     @SuppressWarnings("unchecked")
     var upcast = (ConfigBuilder<CaseData, State, UserRole>)(Object) builder;
     for (var cfg : cfgs) {
