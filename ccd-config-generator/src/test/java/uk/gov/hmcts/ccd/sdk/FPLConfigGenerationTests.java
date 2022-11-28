@@ -219,24 +219,13 @@ public class FPLConfigGenerationTests {
         URL u = Resources.getResource("ccd-definition/" + folder);
         File dir = new File(u.getPath());
         assert dir.exists();
-        int succ = 0, failed = 0;
         for (Iterator<File> it = FileUtils.iterateFiles(dir, TrueFileFilter.INSTANCE, TrueFileFilter.INSTANCE); it.hasNext(); ) {
             File expected = it.next();
             if (expected.getName().endsWith(".json")) {
                 Path path = dir.toPath().relativize(expected.toPath());
                 Path actual = generatedRoot.resolve(folder).resolve(path);
-//            try {
                 assertEquals(expected, actual.toFile(), JSONCompareMode.NON_EXTENSIBLE, ignore);
-//                succ++;
-//            } catch (Exception r) {
-//                failed++;
-//            }
             }
-        }
-        System.out.println("DONE " + succ);
-        System.out.println("TODO " + failed);
-        if (failed > 0) {
-            throw new RuntimeException();
         }
     }
 
