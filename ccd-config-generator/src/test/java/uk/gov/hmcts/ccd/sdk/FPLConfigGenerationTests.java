@@ -20,13 +20,12 @@ import org.junit.ClassRule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
 import org.junit.runner.RunWith;
-import org.skyscreamer.jsonassert.JSONCompare;
-import org.skyscreamer.jsonassert.JSONCompareMode;
-import org.skyscreamer.jsonassert.JSONCompareResult;
+import org.skyscreamer.jsonassert.*;
 
 import java.io.File;
 import java.net.URL;
 import java.nio.charset.Charset;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Collection;
 import java.util.Iterator;
@@ -34,6 +33,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
+
+import org.skyscreamer.jsonassert.comparator.CustomComparator;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.junit4.SpringRunner;
@@ -174,12 +175,25 @@ public class FPLConfigGenerationTests {
         assertGeneratedFolderMatchesResource("FixedLists");
     }
 
+    @SneakyThrows
     @Test
     public void generatesDerivedConfig() {
       var derivedConfig = tmp.getRoot().toPath().resolve("derived");
-      // Our derived ccd config doesn't declare any events but should export the same types as our CaseData class.
+      // TODO: refactor and simplify these tests.
       assertResourceFolderMatchesGenerated("ComplexTypes", derivedConfig);
       assertResourceFolderMatchesGenerated("FixedLists", derivedConfig);
+      assertResourceFolderMatchesGenerated("AuthorisationCaseEvent", derivedConfig, "CaseTypeID");
+      assertResourceFolderMatchesGenerated("AuthorisationCaseField", derivedConfig, "CaseTypeID");
+      assertResourceFolderMatchesGenerated("CaseEvent", derivedConfig, "CaseTypeID");
+      assertResourceFolderMatchesGenerated("CaseEventToComplexTypes", derivedConfig, "CaseTypeID");
+      assertResourceFolderMatchesGenerated("CaseEventToFields", derivedConfig, "CaseTypeID");
+      assertResourceFolderMatchesGenerated("CaseTypeTab", derivedConfig, "CaseTypeID");
+      assertResourceFolderMatchesGenerated("SearchCasesResultFields", derivedConfig, "CaseTypeID");
+
+      URL u = Resources.getResource("ccd-definition/CaseField.json");
+      var expected = new File(u.getPath());
+      var actual = new File(derivedConfig.toFile(), "CaseField.json");
+      assertEquals(expected, actual, JSONCompareMode.NON_EXTENSIBLE, "CaseTypeID");
     }
 
     @Test
@@ -201,28 +215,17 @@ public class FPLConfigGenerationTests {
         }
     }
 
-    private void assertResourceFolderMatchesGenerated(String folder, Path generatedRoot) {
+    private void assertResourceFolderMatchesGenerated(String folder, Path generatedRoot, String... ignore) {
         URL u = Resources.getResource("ccd-definition/" + folder);
         File dir = new File(u.getPath());
         assert dir.exists();
-        int succ = 0, failed = 0;
         for (Iterator<File> it = FileUtils.iterateFiles(dir, TrueFileFilter.INSTANCE, TrueFileFilter.INSTANCE); it.hasNext(); ) {
             File expected = it.next();
             if (expected.getName().endsWith(".json")) {
                 Path path = dir.toPath().relativize(expected.toPath());
                 Path actual = generatedRoot.resolve(folder).resolve(path);
-//            try {
-                assertEquals(expected, actual.toFile(), JSONCompareMode.NON_EXTENSIBLE);
-//                succ++;
-//            } catch (Exception r) {
-//                failed++;
-//            }
+                assertEquals(expected, actual.toFile(), JSONCompareMode.NON_EXTENSIBLE, ignore);
             }
-        }
-        System.out.println("DONE " + succ);
-        System.out.println("TODO " + failed);
-        if (failed > 0) {
-            throw new RuntimeException();
         }
     }
 
@@ -238,7 +241,7 @@ public class FPLConfigGenerationTests {
     }
 
     @SneakyThrows
-    private void assertEquals(File expected, File actual, JSONCompareMode mode) {
+    private void assertEquals(File expected, File actual, JSONCompareMode mode, String... ignoring) {
         if (expected.getName().contains("nonprod")) {
             return;
         }
@@ -247,8 +250,8 @@ public class FPLConfigGenerationTests {
             String actualString = FileUtils.readFileToString(actual, Charset.defaultCharset());
             // ID irrelevant to this sheet.
             boolean stripID = expected.getAbsolutePath().contains("CaseEventToComplexTypes");
-            expectedString = stripIrrelevant(expectedString, stripID);
-            actualString = stripIrrelevant(actualString, stripID);
+            expectedString = stripIrrelevant(expectedString, stripID, ignoring);
+            actualString = stripIrrelevant(actualString, stripID, ignoring);
             JSONCompareResult result = JSONCompare.compareJSON(expectedString, actualString, mode);
             if (result.failed()) {
                 System.out.println("Failed comparing " + expected.getName() + " to " + actual.getName());
@@ -310,9 +313,13 @@ public class FPLConfigGenerationTests {
         }
     }
 
-    private String stripIrrelevant(String json, boolean stripID) {
+    private String stripIrrelevant(String json, boolean stripID, String... ignoring) {
         List<Map<String, Object>> entries = fromJSON(json);
         for (Map<String, Object> entry : entries) {
+            for (String s : ignoring) {
+              entry.remove(s);
+            }
+
             entry.remove("Comment");
             entry.remove("DisplayOrder");
             entry.remove("FieldDisplayOrder");
