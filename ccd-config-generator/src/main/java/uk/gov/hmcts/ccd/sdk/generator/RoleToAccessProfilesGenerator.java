@@ -37,8 +37,8 @@ public class RoleToAccessProfilesGenerator<T, S, R extends HasRole> implements C
     Map<String, Object> field = Maps.newHashMap();
     field.put("LiveFrom", "01/01/2017");
     field.put("CaseTypeID", caseType);
-    field.put("IDAM role", caseRoleToAccessProfile.isIdam_role() ? "Y" : "N");
-    if (caseRoleToAccessProfile.isIdam_role())
+    //field.put("IDAM role", caseRoleToAccessProfile.isIdam_role() ? "Y" : "N");
+    if (caseRoleToAccessProfile.isLegacyIdamRole())
       field.put("RoleName", "idam:" + caseRoleToAccessProfile.getRole().getRole());
     else
       field.put("RoleName", caseRoleToAccessProfile.getRole().getRole());
