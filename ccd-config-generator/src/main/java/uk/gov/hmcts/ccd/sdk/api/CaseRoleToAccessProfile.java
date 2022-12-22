@@ -57,7 +57,7 @@ public class CaseRoleToAccessProfile<R extends HasRole> {
       return this;
     }
 
-    public CaseRoleToAccessProfileBuilder<R> legacyIdamRole(){
+    public CaseRoleToAccessProfileBuilder<R> legacyIdamRole() {
       legacyIdamRole = true;
 
       return this;
