@@ -44,7 +44,7 @@ dependencies {
     implementation group: 'cglib', name: 'cglib', version: '3.3.0'
     implementation group: 'net.jodah', name: 'typetools', version: '0.6.3'
     implementation 'org.reflections:reflections:0.10.2'
-    implementation 'com.google.guava:guava:31.1-jre'
+    api 'com.google.guava:guava:31.1-jre'
 
     implementation 'com.fasterxml.jackson.core:jackson-databind:2.14.1'
 }
