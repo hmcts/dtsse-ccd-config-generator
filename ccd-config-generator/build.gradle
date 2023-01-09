@@ -19,7 +19,7 @@ dependencies {
     compileOnly group: 'org.projectlombok', name: 'lombok', version: '1.18.24'
     implementation "org.springframework.boot:spring-boot-autoconfigure:${springBootVersion}"
     implementation "org.springframework.boot:spring-boot-starter-web:${springBootVersion}"
-    implementation(group: 'com.github.hmcts', name: 'core-case-data-store-client', version: '4.9.1') {
+    api(group: 'com.github.hmcts', name: 'core-case-data-store-client', version: '4.9.1') {
         // The config generator needs only the types defined in the CCD client library,
         // not all the runtime spring dependencies used by the CCD client.
         transitive = false
