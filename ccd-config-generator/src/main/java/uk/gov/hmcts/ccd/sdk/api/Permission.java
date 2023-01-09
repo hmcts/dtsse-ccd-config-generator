@@ -1,6 +1,5 @@
 package uk.gov.hmcts.ccd.sdk.api;
 
-import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Ordering;
 import com.google.common.collect.Sets;
 import java.util.Set;
@@ -11,9 +10,9 @@ public enum Permission {
   R,
   U,
   D;
-  public static final ImmutableSet<Permission> CR = Sets.immutableEnumSet(C, R);
-  public static final ImmutableSet<Permission> CRU = Sets.immutableEnumSet(C, R, U);
-  public static final ImmutableSet<Permission> CRUD = Sets.immutableEnumSet(C, R, U, D);
+  public static final Set<Permission> CR = Sets.immutableEnumSet(C, R);
+  public static final Set<Permission> CRU = Sets.immutableEnumSet(C, R, U);
+  public static final Set<Permission> CRUD = Sets.immutableEnumSet(C, R, U, D);
 
   public static String toString(Set<Permission> perms) {
     return perms.stream()

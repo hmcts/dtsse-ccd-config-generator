@@ -12,9 +12,10 @@ public class CCDConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<CaseData, S
   @Override
   public void configure(ConfigBuilder<CaseData, State, Role> builder) {
     builder.caseType("test", "test", "test");
-      builder
-            .event("submit-case")
-        .forAllStates()
+    builder
+      .event("submit-case")
+      .forAllStates()
+      .grant(CRU, Role.Foo)
       .name("Submit case")
       .description("Submit case")
       .aboutToSubmitCallback(this::aboutToSubmit)
