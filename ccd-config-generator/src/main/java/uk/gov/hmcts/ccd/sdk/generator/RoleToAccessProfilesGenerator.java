@@ -26,9 +26,7 @@ public class RoleToAccessProfilesGenerator<T, S, R extends HasRole> implements C
     final Path path = Paths.get(outputFolder.getPath(), "RoleToAccessProfiles.json");
 
     final List<Map<String, Object>> rows = config.getCaseRoleToAccessProfiles().stream()
-        .map(o -> toJson(config.getCaseType(), o))
-        .collect(toList());
-
+        .map(o -> toJson(config.getCaseType(), o)).collect(toList());
     mergeInto(path, rows, new AddMissing(), "RoleName");
   }
 
@@ -37,15 +35,17 @@ public class RoleToAccessProfilesGenerator<T, S, R extends HasRole> implements C
     Map<String, Object> field = Maps.newHashMap();
     field.put("LiveFrom", "01/01/2017");
     field.put("CaseTypeID", caseType);
-    if (caseRoleToAccessProfile.isLegacyIdamRole())
+    if (caseRoleToAccessProfile.isLegacyIdamRole()) {
       field.put("RoleName", "idam:" + caseRoleToAccessProfile.getRole().getRole());
-    else
+    } else {
       field.put("RoleName", caseRoleToAccessProfile.getRole().getRole());
-    field.put("CaseAccessCategories", join(caseRoleToAccessProfile.getCaseAccessCategories(), ","));
-    field.put("Authorisation", join(caseRoleToAccessProfile.getAuthorisation(), ","));
-    field.put("ReadOnly", caseRoleToAccessProfile.isReadonly() ? "Y" : "N");
-    field.put("AccessProfiles", join(caseRoleToAccessProfile.getAccessProfiles(), ","));
-    field.put("Disabled", caseRoleToAccessProfile.isDisabled() ? "Y" : "N");
+      field.put("CaseAccessCategories", join(caseRoleToAccessProfile.getCaseAccessCategories(), ","));
+      field.put("Authorisation", join(caseRoleToAccessProfile.getAuthorisation(), ","));
+      field.put("ReadOnly", caseRoleToAccessProfile.isReadonly() ? "Y" : "N");
+      field.put("AccessProfiles", join(caseRoleToAccessProfile.getAccessProfiles(), ","));
+      field.put("Disabled", caseRoleToAccessProfile.isDisabled() ? "Y" : "N");
+    }
+
     return field;
   }
 
