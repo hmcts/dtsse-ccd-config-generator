@@ -81,6 +81,7 @@ The generator is configured by providing one or more implementations of the [CCD
 ### Setting up the case type
 
 ```java
+@Component
 public class MyConfig implements CCDConfig<CaseData, State, UserRole> {
 
   @Override
