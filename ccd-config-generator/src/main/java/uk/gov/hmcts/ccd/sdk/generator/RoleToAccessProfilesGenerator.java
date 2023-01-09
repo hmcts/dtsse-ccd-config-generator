@@ -39,12 +39,12 @@ public class RoleToAccessProfilesGenerator<T, S, R extends HasRole> implements C
       field.put("RoleName", "idam:" + caseRoleToAccessProfile.getRole().getRole());
     } else {
       field.put("RoleName", caseRoleToAccessProfile.getRole().getRole());
-      field.put("CaseAccessCategories", join(caseRoleToAccessProfile.getCaseAccessCategories(), ","));
-      field.put("Authorisation", join(caseRoleToAccessProfile.getAuthorisation(), ","));
-      field.put("ReadOnly", caseRoleToAccessProfile.isReadonly() ? "Y" : "N");
-      field.put("AccessProfiles", join(caseRoleToAccessProfile.getAccessProfiles(), ","));
-      field.put("Disabled", caseRoleToAccessProfile.isDisabled() ? "Y" : "N");
     }
+    field.put("CaseAccessCategories", join(caseRoleToAccessProfile.getCaseAccessCategories(), ","));
+    field.put("Authorisation", join(caseRoleToAccessProfile.getAuthorisation(), ","));
+    field.put("ReadOnly", caseRoleToAccessProfile.isReadonly() ? "Y" : "N");
+    field.put("AccessProfiles", join(caseRoleToAccessProfile.getAccessProfiles(), ","));
+    field.put("Disabled", caseRoleToAccessProfile.isDisabled() ? "Y" : "N");
 
     return field;
   }
