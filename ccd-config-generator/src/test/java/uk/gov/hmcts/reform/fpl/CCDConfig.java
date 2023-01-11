@@ -22,6 +22,7 @@ import static uk.gov.hmcts.reform.fpl.enums.UserRole.SYSTEM_UPDATE;
 
 import java.util.EnumSet;
 import java.util.Set;
+
 import org.springframework.stereotype.Component;
 import uk.gov.hmcts.ccd.sdk.api.callback.AboutToStartOrSubmitResponse;
 import uk.gov.hmcts.ccd.sdk.api.CaseDetails;
@@ -75,35 +76,35 @@ public class CCDConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<CaseData, S
       .name("Add case notes")
       .grant(CRU, CAFCASS)
       .grant(R, LOCAL_AUTHORITY)
-        .aboutToSubmitCallback(this::checkReadyAboutToSubmit);
+      .aboutToSubmitCallback(this::checkReadyAboutToSubmit);
 
     builder.event("addNotes")
-        .forStates(Gatekeeping, Submitted)
-        .name("Add case notes")
-        .grant(CRU, HMCTS_ADMIN)
-        .grant(R, LOCAL_AUTHORITY)
-        .grant(new SolicitorAccess())
-        .fields()
-        .optional(CaseData::getCaseNotes)
-        .complex(CaseData::getHearingPreferences)
-          .label("hearingPrefs", "Hearing Preferences")
-          .optional(HearingPreferences::getWelsh)
-          .optionalWithoutDefaultValue(HearingPreferences::getInterpreter, "hearingPreferencesWelsh=\"yes\"", "Interpreter required", true)
-          .complex(HearingPreferences::getLocationPreferences)
-            .optional(LocationPreferences::getLocal)
-            .done()
-          .complex(HearingPreferences::getOrganisationPolicy, null, "Event label", "Event hint")
-            .complex(OrganisationPolicy::getOrganisation)
-              .mandatory(Organisation::getOrganisationId)
-              .done()
-            .optional(OrganisationPolicy::getOrgPolicyCaseAssignedRole, null, CCD_SOLICITOR)
-            .optional(OrganisationPolicy::getOrgPolicyReference, null, null, "Org ref", "Sol org ref")
-            .done()
-          .done()
-        .optional(CaseData::getCaseName)
-        .optionalWithLabel(CaseData::getGatekeeperEmail, "Gate keeper email")
-        .mandatoryWithoutDefaultValue(CaseData::getAllocatedJudge, "hearingPreferencesWelsh=\"yes\"", "Judge is bilingual", true)
-        .mandatoryWithLabel(CaseData::getCaseLocalAuthority, "Please enter a case local authority");
+      .forStates(Gatekeeping, Submitted)
+      .name("Add case notes")
+      .grant(CRU, HMCTS_ADMIN)
+      .grant(R, LOCAL_AUTHORITY)
+      .grant(new SolicitorAccess())
+      .fields()
+      .optional(CaseData::getCaseNotes)
+      .complex(CaseData::getHearingPreferences)
+      .label("hearingPrefs", "Hearing Preferences")
+      .optional(HearingPreferences::getWelsh)
+      .optionalWithoutDefaultValue(HearingPreferences::getInterpreter, "hearingPreferencesWelsh=\"yes\"", "Interpreter required", true)
+      .complex(HearingPreferences::getLocationPreferences)
+      .optional(LocationPreferences::getLocal)
+      .done()
+      .complex(HearingPreferences::getOrganisationPolicy, null, "Event label", "Event hint")
+      .complex(OrganisationPolicy::getOrganisation)
+      .mandatory(Organisation::getOrganisationId)
+      .done()
+      .optional(OrganisationPolicy::getOrgPolicyCaseAssignedRole, null, CCD_SOLICITOR)
+      .optional(OrganisationPolicy::getOrgPolicyReference, null, null, "Org ref", "Sol org ref")
+      .done()
+      .done()
+      .optional(CaseData::getCaseName)
+      .optionalWithLabel(CaseData::getGatekeeperEmail, "Gate keeper email")
+      .mandatoryWithoutDefaultValue(CaseData::getAllocatedJudge, "hearingPreferencesWelsh=\"yes\"", "Judge is bilingual", true)
+      .mandatoryWithLabel(CaseData::getCaseLocalAuthority, "Please enter a case local authority");
 
     builder.caseRoleToAccessProfile(CASE_ACCESS_APPROVER)
       .accessProfiles("access-profile", "access-profile2")
@@ -122,30 +123,30 @@ public class CCDConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<CaseData, S
   private AboutToStartOrSubmitResponse<CaseData, State> checkReadyAboutToSubmit(CaseDetails<CaseData, State> details,
                                                                                 CaseDetails<CaseData, State> beforeDetails) {
     return AboutToStartOrSubmitResponse.<CaseData, State>builder()
-        .state(details.getData().getAllocatedJudge().getJudgeFullName().equals("judge") ? Submitted : Gatekeeping)
-        .data(details.getData())
-        .build();
+      .state(details.getData().getAllocatedJudge().getJudgeFullName().equals("judge") ? Submitted : Gatekeeping)
+      .data(details.getData())
+      .build();
   }
 
   private void buildSearchResultFields() {
     builder.searchResultFields()
-        .field(CaseData::getCaseName, "Case name")
-        .field(CaseData::getFamilyManCaseNumber, "FamilyMan case number")
-        .field("hearingPreferencesWelsh", "Is in Welsh")
-        .stateField()
-        .field(CaseData::getCaseLocalAuthority, "Local authority")
-        .field("dateAndTimeSubmitted", "Date submitted");
+      .field(CaseData::getCaseName, "Case name")
+      .field(CaseData::getFamilyManCaseNumber, "FamilyMan case number")
+      .field("hearingPreferencesWelsh", "Is in Welsh")
+      .stateField()
+      .field(CaseData::getCaseLocalAuthority, "Local authority")
+      .field("dateAndTimeSubmitted", "Date submitted");
   }
 
   private void buildSearchInputFields() {
     builder.searchInputFields()
-        .field(CaseData::getCaseLocalAuthority, "Local authority")
-        .field(CaseData::getCaseName, "Case name")
-        .field(CaseData::getFamilyManCaseNumber, "FamilyMan case number")
-        .field("hearingPreferencesWelsh", "Is in Welsh")
-        .caseReferenceField()
-        .field("allocatedJudge", "Allocated Judge", "judgeTitle", "hearingPreferencesWelsh=\"no\"")
-        .field(CaseData::getDateSubmitted, "Date submitted");
+      .field(CaseData::getCaseLocalAuthority, "Local authority")
+      .field(CaseData::getCaseName, "Case name")
+      .field(CaseData::getFamilyManCaseNumber, "FamilyMan case number")
+      .field("hearingPreferencesWelsh", "Is in Welsh")
+      .caseReferenceField()
+      .field("allocatedJudge", "Allocated Judge", "judgeTitle", "hearingPreferencesWelsh=\"no\"")
+      .field(CaseData::getDateSubmitted, "Date submitted");
   }
 
   private void buildSearchCasesFields() {
@@ -156,91 +157,91 @@ public class CCDConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<CaseData, S
 
   private void buildWorkBasketResultFields() {
     builder.workBasketResultFields()
-        .field(CaseData::getCaseName, "Case name")
-        .field(CaseData::getFamilyManCaseNumber, "FamilyMan case number")
-        .field("hearingPreferencesWelsh", "Is in Welsh")
-        .stateField()
-        .field(CaseData::getCaseLocalAuthority, "Local authority")
-        .field("dateAndTimeSubmitted", "Date submitted", null, null, "#DATETIMEDISPLAY(d  MMMM yyyy)", FIRST.DESCENDING)
-        .field("evidenceHandled", "Supplementary evidence handled", SECOND.ASCENDING);
+      .field(CaseData::getCaseName, "Case name")
+      .field(CaseData::getFamilyManCaseNumber, "FamilyMan case number")
+      .field("hearingPreferencesWelsh", "Is in Welsh")
+      .stateField()
+      .field(CaseData::getCaseLocalAuthority, "Local authority")
+      .field("dateAndTimeSubmitted", "Date submitted", null, null, "#DATETIMEDISPLAY(d  MMMM yyyy)", FIRST.DESCENDING)
+      .field("evidenceHandled", "Supplementary evidence handled", SECOND.ASCENDING);
   }
 
   private void buildWorkBasketInputFields() {
     builder.workBasketInputFields()
-        .field(CaseData::getCaseLocalAuthority, "Local authority")
-        .field(CaseData::getCaseName, "Case name")
-        .field(CaseData::getFamilyManCaseNumber, "FamilyMan case number")
-        .field("hearingPreferencesWelsh", "Is in Welsh")
-        .caseReferenceField()
-        .field(CaseData::getDateSubmitted, "Date submitted", "", "#DATETIMEDISPLAY(d  MMMM yyyy)")
-        .field("evidenceHandled", "Supplementary evidence handled")
-        .field("internationalElement", "int el", "issues", "hearingPreferencesWelsh=\"no\"");
+      .field(CaseData::getCaseLocalAuthority, "Local authority")
+      .field(CaseData::getCaseName, "Case name")
+      .field(CaseData::getFamilyManCaseNumber, "FamilyMan case number")
+      .field("hearingPreferencesWelsh", "Is in Welsh")
+      .caseReferenceField()
+      .field(CaseData::getDateSubmitted, "Date submitted", "", "#DATETIMEDISPLAY(d  MMMM yyyy)")
+      .field("evidenceHandled", "Supplementary evidence handled")
+      .field("internationalElement", "int el", "issues", "hearingPreferencesWelsh=\"no\"");
   }
 
   private void buildTabs() {
     builder.tab("DraftOrdersTab", "Draft orders")
-        .showCondition("standardDirectionOrder.orderStatus!=\"SEALED\" OR caseManagementOrder!=\"\" OR sharedDraftCMODocument!=\"\" OR cmoToAction!=\"\"")
-        .field(CaseData::getStandardDirectionOrder, "standardDirectionOrder.orderStatus!=\"SEALED\"")
-        .field(CaseData::getSharedDraftCMODocument)
-        .field(CaseData::getDateSubmitted, null, "#DATETIMEDISPLAY(d  MMMM yyyy)")
-        .label("test-label", "", "a label");
+      .showCondition("standardDirectionOrder.orderStatus!=\"SEALED\" OR caseManagementOrder!=\"\" OR sharedDraftCMODocument!=\"\" OR cmoToAction!=\"\"")
+      .field(CaseData::getStandardDirectionOrder, "standardDirectionOrder.orderStatus!=\"SEALED\"")
+      .field(CaseData::getSharedDraftCMODocument)
+      .field(CaseData::getDateSubmitted, null, "#DATETIMEDISPLAY(d  MMMM yyyy)")
+      .label("test-label", "", "a label");
 
     builder.tab("OrdersTab", "Orders")
-        .field(CaseData::getStandardDirectionOrder, "standardDirectionOrder.orderStatus=\"SEALED\"")
-        .field(CaseData::getOrders);
+      .field(CaseData::getStandardDirectionOrder, "standardDirectionOrder.orderStatus=\"SEALED\"")
+      .field(CaseData::getOrders);
 
     builder.tab("CasePeopleTab", "People in the case")
-        .field(CaseData::getAllocatedJudge)
-        .field(CaseData::getChildren1)
-        .field(CaseData::getRespondents1)
-        .field(CaseData::getApplicants)
-        .field(CaseData::getSolicitor)
-        .field(CaseData::getOthers);
+      .field(CaseData::getAllocatedJudge)
+      .field(CaseData::getChildren1)
+      .field(CaseData::getRespondents1)
+      .field(CaseData::getApplicants)
+      .field(CaseData::getSolicitor)
+      .field(CaseData::getOthers);
 
     builder.tab("LegalBasisTab", "Legal basis")
-        .field(CaseData::getStatementOfService)
-        .field(CaseData::getGroundsForEPO)
-        .field(CaseData::getGrounds)
-        .field(CaseData::getRisks)
-        .field(CaseData::getFactorsParenting)
-        .field(CaseData::getInternationalElement)
-        .field(CaseData::getProceeding)
-        .field(CaseData::getAllocationDecision)
-        .field(CaseData::getAllocationProposal)
-        .field(CaseData::getHearingPreferences);
+      .field(CaseData::getStatementOfService)
+      .field(CaseData::getGroundsForEPO)
+      .field(CaseData::getGrounds)
+      .field(CaseData::getRisks)
+      .field(CaseData::getFactorsParenting)
+      .field(CaseData::getInternationalElement)
+      .field(CaseData::getProceeding)
+      .field(CaseData::getAllocationDecision)
+      .field(CaseData::getAllocationProposal)
+      .field(CaseData::getHearingPreferences);
 
     builder.tab("DocumentsTab", "Documents")
-        .field(CaseData::getSocialWorkChronologyDocument)
-        .field(CaseData::getSocialWorkStatementDocument)
-        .field(CaseData::getSocialWorkAssessmentDocument)
-        .field(CaseData::getSocialWorkCarePlanDocument)
-        .field("standardDirectionsDocument")
-        .field("otherCourtAdminDocuments")
-        .field(CaseData::getSocialWorkEvidenceTemplateDocument)
-        .field(CaseData::getThresholdDocument)
-        .field(CaseData::getChecklistDocument)
-        .field("courtBundle")
-        .field(CaseData::getOtherSocialWorkDocuments)
-        .field("submittedForm")
-        .field(CaseData::getC2DocumentBundle);
+      .field(CaseData::getSocialWorkChronologyDocument)
+      .field(CaseData::getSocialWorkStatementDocument)
+      .field(CaseData::getSocialWorkAssessmentDocument)
+      .field(CaseData::getSocialWorkCarePlanDocument)
+      .field("standardDirectionsDocument")
+      .field("otherCourtAdminDocuments")
+      .field(CaseData::getSocialWorkEvidenceTemplateDocument)
+      .field(CaseData::getThresholdDocument)
+      .field(CaseData::getChecklistDocument)
+      .field("courtBundle")
+      .field(CaseData::getOtherSocialWorkDocuments)
+      .field("submittedForm")
+      .field(CaseData::getC2DocumentBundle);
 
     builder.tab("Confidential", "Confidential")
-        .field(CaseData::getConfidentialChildren)
-        .field(CaseData::getConfidentialRespondents)
-        .field(CaseData::getConfidentialOthers);
+      .field(CaseData::getConfidentialChildren)
+      .field(CaseData::getConfidentialRespondents)
+      .field(CaseData::getConfidentialOthers);
 
     builder.tab("PlacementTab", "Placement")
-        .field("placements")
-        .field(CaseData::getPlacements)
-        .field("placementsWithoutPlacementOrder");
+      .field("placements")
+      .field(CaseData::getPlacements)
+      .field("placementsWithoutPlacementOrder");
 
     builder.tab("SentDocumentsTab", "Documents sent to parties")
-        .field("documentsSentToParties");
+      .field("documentsSentToParties");
 
     builder.tab("TabWithUserRoles", "Test multiple tabs get created for each user")
-        .forRoles(BULK_SCAN, BULK_SCAN_SYSTEM_UPDATE)
-        .field("hearingPreferencesLocationPreferencesLocal")
-        .field("hearingPreferencesLocationPreferencesOnline");
+      .forRoles(BULK_SCAN, BULK_SCAN_SYSTEM_UPDATE)
+      .field("hearingPreferencesLocationPreferencesLocal")
+      .field("hearingPreferencesLocationPreferencesOnline");
 
     builder.tab("PaymentHistory", "Payment History")
       .field(CaseData::getPaymentHistoryField);
@@ -248,35 +249,35 @@ public class CCDConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<CaseData, S
 
   private void buildUniversalEvents() {
     builder.event("allocatedJudge")
-        .forAllStates()
-        .name("Allocated Judge")
-        .description("Add allocated judge to a case")
-        .grantHistoryOnly(LOCAL_AUTHORITY)
-        .grant(CRU, HMCTS_ADMIN)
-        .grant(R, CAFCASS)
-        .showCondition("allocatedJudge=\"\"")
-        .fields()
-        .page("AllocatedJudge")
-        .complex(CaseData::getOrganisationPolicy, null, "Event label", "Event hint")
-          .complex(OrganisationPolicy::getOrganisation)
-            .mandatory(Organisation::getOrganisationId)
-            .mandatoryNoSummary(Organisation::getOrganisationName, null, "Organisation Name")
-          .done()
-          .optional(OrganisationPolicy::getOrgPolicyCaseAssignedRole, null, CCD_SOLICITOR)
-          .optional(OrganisationPolicy::getOrgPolicyReference, null, null, "Org ref", "Sol org ref")
-        .done()
-        .label("allocatedJudgeLabel", "Allocated Judge")
-        .complex(CaseData::getAllocatedJudge, false)
-          .mandatory(Judge::getJudgeTitle)
-          .mandatory(Judge::getOtherTitle)
-          .mandatory(Judge::getJudgeLastName)
-          .mandatory(Judge::getJudgeFullName)
-          .optionalNoSummary(Judge::getJudgeEmailId, null, "Judge email id")
-        .done()
-        .optional(CaseData::getCaseName, null, null, "Allocated case name", "A hint")
-        .page("<Notes>", this::checkCaseNotes)
-          .label("caseNotesLabel1","###Case notes",null,true)
-          .mandatory(CaseData::getCaseNotes);
+      .forAllStates()
+      .name("Allocated Judge")
+      .description("Add allocated judge to a case")
+      .grantHistoryOnly(LOCAL_AUTHORITY)
+      .grant(CRU, HMCTS_ADMIN)
+      .grant(R, CAFCASS)
+      .showCondition("allocatedJudge=\"\"")
+      .fields()
+      .page("AllocatedJudge")
+      .complex(CaseData::getOrganisationPolicy, null, "Event label", "Event hint")
+      .complex(OrganisationPolicy::getOrganisation)
+      .mandatory(Organisation::getOrganisationId)
+      .mandatoryNoSummary(Organisation::getOrganisationName, null, "Organisation Name")
+      .done()
+      .optional(OrganisationPolicy::getOrgPolicyCaseAssignedRole, null, CCD_SOLICITOR)
+      .optional(OrganisationPolicy::getOrgPolicyReference, null, null, "Org ref", "Sol org ref")
+      .done()
+      .label("allocatedJudgeLabel", "Allocated Judge")
+      .complex(CaseData::getAllocatedJudge, false)
+      .mandatory(Judge::getJudgeTitle)
+      .mandatory(Judge::getOtherTitle)
+      .mandatory(Judge::getJudgeLastName)
+      .mandatory(Judge::getJudgeFullName)
+      .optionalNoSummary(Judge::getJudgeEmailId, null, "Judge email id")
+      .done()
+      .optional(CaseData::getCaseName, null, null, "Allocated case name", "A hint")
+      .page("<Notes>", this::checkCaseNotes)
+      .label("caseNotesLabel1", "###Case notes", null, true)
+      .mandatory(CaseData::getCaseNotes);
   }
 
   private void buildAttachScannedDocEvent() {
@@ -304,52 +305,52 @@ public class CCDConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<CaseData, S
 
 
   private AboutToStartOrSubmitResponse<CaseData, State> checkCaseNotes(
-      CaseDetails<CaseData, State> caseDataStateCaseDetails,
-      CaseDetails<CaseData, State> caseDataStateCaseDetailsBefore) {
+    CaseDetails<CaseData, State> caseDataStateCaseDetails,
+    CaseDetails<CaseData, State> caseDataStateCaseDetailsBefore) {
     throw new RuntimeException();
   }
 
   private void buildTransitions() {
     builder.event("populateSDO")
-        .forStateTransition(Submitted, Gatekeeping)
-        .name("Populate standard directions")
-        .grant(C, UserRole.SYSTEM_UPDATE)
-        .fields()
-        .page("1", this::sdoMidEvent)
-        .optional(CaseData::getAllParties)
-        .optional(CaseData::getLocalAuthorityDirections)
-        .optional(CaseData::getRespondentDirections)
-        .optional(CaseData::getCafcassDirections)
-        .optional(CaseData::getOtherPartiesDirections)
-        .optional(CaseData::getCourtDirections);
+      .forStateTransition(Submitted, Gatekeeping)
+      .name("Populate standard directions")
+      .grant(C, UserRole.SYSTEM_UPDATE)
+      .fields()
+      .page("1", this::sdoMidEvent)
+      .optional(CaseData::getAllParties)
+      .optional(CaseData::getLocalAuthorityDirections)
+      .optional(CaseData::getRespondentDirections)
+      .optional(CaseData::getCafcassDirections)
+      .optional(CaseData::getOtherPartiesDirections)
+      .optional(CaseData::getCourtDirections);
   }
 
   private AboutToStartOrSubmitResponse<CaseData, State> sdoMidEvent(
-      CaseDetails<CaseData, State> caseDataStateCaseDetails,
-      CaseDetails<CaseData, State> caseDataStateCaseDetails1) {
+    CaseDetails<CaseData, State> caseDataStateCaseDetails,
+    CaseDetails<CaseData, State> caseDataStateCaseDetails1) {
     return AboutToStartOrSubmitResponse.<CaseData, State>builder().build();
   }
 
   private void buildOpen() {
     builder.event("openCase")
-        .initialState(Open)
-        .name("Start application")
-        .description("Create a new case – add a title")
-        .grant(CRU, LOCAL_AUTHORITY, HMCTS_ADMIN)
-        .aboutToSubmitCallback(this::aboutToSubmit)
-        .submittedCallback(this::submitted)
-        .retries(1,2,3,4,5)
-        .fields()
-        .optional(CaseData::getCaseName);
+      .initialState(Open)
+      .name("Start application")
+      .description("Create a new case – add a title")
+      .grant(CRU, LOCAL_AUTHORITY, HMCTS_ADMIN)
+      .aboutToSubmitCallback(this::aboutToSubmit)
+      .submittedCallback(this::submitted)
+      .retries(1, 2, 3, 4, 5)
+      .fields()
+      .optional(CaseData::getCaseName);
 
     builder.event("deleted")
-        .forState(Deleted)
-        .name("Deleted only");
+      .forState(Deleted)
+      .name("Deleted only");
   }
 
   private AboutToStartOrSubmitResponse<CaseData, State> aboutToSubmit(
-      CaseDetails<CaseData, State> caseDataStateCaseDetails,
-      CaseDetails<CaseData, State> caseDataStateCaseDetails1) {
+    CaseDetails<CaseData, State> caseDataStateCaseDetails,
+    CaseDetails<CaseData, State> caseDataStateCaseDetails1) {
     throw new RuntimeException();
   }
 
