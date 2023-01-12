@@ -25,7 +25,6 @@ import org.skyscreamer.jsonassert.*;
 import java.io.File;
 import java.net.URL;
 import java.nio.charset.Charset;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Collection;
 import java.util.Iterator;
@@ -34,7 +33,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-import org.skyscreamer.jsonassert.comparator.CustomComparator;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.junit4.SpringRunner;
@@ -190,7 +188,7 @@ public class FPLConfigGenerationTests {
       assertResourceFolderMatchesGenerated("CaseTypeTab", derivedConfig, "CaseTypeID");
       assertResourceFolderMatchesGenerated("SearchCasesResultFields", derivedConfig, "CaseTypeID");
 
-      URL u = Resources.getResource("ccd-definition/CaseField.json");
+      URL u = Resources.getResource("fpl-ccd-definition/CaseField.json");
       var expected = new File(u.getPath());
       var actual = new File(derivedConfig.toFile(), "CaseField.json");
       assertEquals(expected, actual, JSONCompareMode.NON_EXTENSIBLE, "CaseTypeID");
@@ -202,7 +200,7 @@ public class FPLConfigGenerationTests {
     }
 
     private void assertGeneratedFolderMatchesResource(String folder) {
-        URL u = Resources.getResource("ccd-definition/" + folder);
+        URL u = Resources.getResource("fpl-ccd-definition/" + folder);
         File resourceDir = new File(u.getPath());
         File dir = careSupervisionEPO.resolve(folder).toFile();
         for (Iterator<File> it = FileUtils.iterateFiles(dir, TrueFileFilter.INSTANCE, TrueFileFilter.INSTANCE); it.hasNext(); ) {
@@ -216,7 +214,7 @@ public class FPLConfigGenerationTests {
     }
 
     private void assertResourceFolderMatchesGenerated(String folder, Path generatedRoot, String... ignore) {
-        URL u = Resources.getResource("ccd-definition/" + folder);
+        URL u = Resources.getResource("fpl-ccd-definition/" + folder);
         File dir = new File(u.getPath());
         assert dir.exists();
         for (Iterator<File> it = FileUtils.iterateFiles(dir, TrueFileFilter.INSTANCE, TrueFileFilter.INSTANCE); it.hasNext(); ) {
@@ -234,7 +232,7 @@ public class FPLConfigGenerationTests {
   }
     private void assertEquals(String jsonPath, JSONCompareMode mode) {
         System.out.println("Comparing " + jsonPath);
-        URL u = Resources.getResource("ccd-definition/" + jsonPath);
+        URL u = Resources.getResource("fpl-ccd-definition/" + jsonPath);
         File expected = new File(u.getPath());
         File actual = new File(careSupervisionEPO.toFile(), jsonPath);
         assertEquals(expected, actual, mode);
