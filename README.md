@@ -36,8 +36,6 @@ Write CCD configuration in Java.
 * Your application's code as the single source of truth
 * Less boilerplate code with inline event callbacks
 
-##
-
 [Video guide](https://www.youtube.com/watch?v=sJfVXC6ihJU&list=PLrBWj5Zm4IGFwqewMqrMwQOkhMMDd5Tu4)
 
 ## Installation
