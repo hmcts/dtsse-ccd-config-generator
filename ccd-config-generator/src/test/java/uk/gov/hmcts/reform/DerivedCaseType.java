@@ -27,6 +27,6 @@ public class DerivedCaseType implements CCDConfig<DerivedCaseData, State, UserRo
       cfg.configure(upcast);
     }
 
-    builder.caseType("derived", "foo", "bar");
+    builder.caseType("derived", "Derived name", "Derived description");
   }
 }
