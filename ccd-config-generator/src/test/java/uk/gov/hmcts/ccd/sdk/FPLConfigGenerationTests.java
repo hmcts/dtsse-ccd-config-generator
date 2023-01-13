@@ -98,11 +98,12 @@ public class FPLConfigGenerationTests {
             File expected = it.next();
             if (expected.getName().endsWith(".json")) {
               Path path = dir.toPath().relativize(expected.toPath());
-                // Check if there is an expected override.
-                var override = new File(Resources.getResource(generatedFolder).getPath());
-                var foo = new File(override, path.toString());
-                if (foo.exists()) {
-                  expected = foo;
+                // Check if there is an overridden version of this resource
+                // which would be in resources/generatedFolder
+                var overrideResourceFolder = new File(Resources.getResource(generatedFolder).getPath());
+                var override = new File(overrideResourceFolder, path.toString());
+                if (override.exists()) {
+                  expected = override;
                 }
 
                 Path actual = tmp.getRoot().toPath().resolve(generatedFolder).resolve(path);
