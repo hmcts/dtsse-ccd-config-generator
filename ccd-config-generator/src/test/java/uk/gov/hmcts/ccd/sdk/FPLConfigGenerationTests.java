@@ -46,16 +46,11 @@ public class FPLConfigGenerationTests {
 
     @Autowired
     private CCDDefinitionGenerator generator;
-    private static boolean configGenerated;
-
     @Before
     public void before() {
-      if (!configGenerated) {
-          generator.generateAllCaseTypesToJSON(tmp.getRoot());
-          // Generate a second time to ensure existing config is correctly merged.
-          generator.generateAllCaseTypesToJSON(tmp.getRoot());
-          configGenerated = true;
-      }
+        generator.generateAllCaseTypesToJSON(tmp.getRoot());
+        // Generate a second time to ensure existing config is correctly merged.
+        generator.generateAllCaseTypesToJSON(tmp.getRoot());
     }
 
   @Test
