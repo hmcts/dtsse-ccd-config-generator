@@ -3,12 +3,8 @@ package uk.gov.hmcts.ccd.sdk;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.type.CollectionType;
 import com.google.common.base.Predicates;
-import com.google.common.collect.Collections2;
-import com.google.common.collect.ImmutableSortedMap;
-import com.google.common.collect.MapDifference;
+import com.google.common.collect.*;
 import com.google.common.collect.MapDifference.ValueDifference;
-import com.google.common.collect.Maps;
-import com.google.common.collect.Sets;
 import com.google.common.collect.Sets.SetView;
 import com.google.common.io.Resources;
 import lombok.SneakyThrows;
@@ -20,23 +16,21 @@ import org.junit.ClassRule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
 import org.junit.runner.RunWith;
-import org.skyscreamer.jsonassert.*;
-
-import java.io.File;
-import java.net.URL;
-import java.nio.charset.Charset;
-import java.nio.file.Path;
-import java.util.Collection;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.stream.Collectors;
-
+import org.skyscreamer.jsonassert.JSONCompare;
+import org.skyscreamer.jsonassert.JSONCompareMode;
+import org.skyscreamer.jsonassert.JSONCompareResult;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.junit4.SpringRunner;
 import uk.gov.hmcts.ccd.sdk.generator.JsonUtils;
+
+import java.io.File;
+import java.net.URL;
+import java.nio.charset.Charset;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.*;
+import java.util.stream.Collectors;
 
 @SpringBootTest(properties = { "config-generator.basePackage=uk.gov.hmcts" })
 @RunWith(SpringRunner.class)
@@ -67,8 +61,47 @@ public class FPLConfigGenerationTests {
     @SneakyThrows
     @Test
     public void generatesDerivedConfig() {
-      assertResourceFolderMatchesGenerated("CARE_SUPERVISION_EPO", "derived", "CaseTypeID");
-      assertGeneratedFolderMatchesResource("derived", "CaseTypeID");
+      var actual = dirToMap(new File(tmp.getRoot(), "derived"));
+      var expected = ImmutableMap.<String, File>builder()
+        .putAll(this.resourcesDirToMap("CARE_SUPERVISION_EPO"))
+        .putAll(this.resourcesDirToMap("derived"))
+        .buildKeepingLast();
+      assertEquivalent(expected, actual, "CaseTypeID");
+    }
+
+    private void assertEquivalent(Map<String, File> expected, Map<String, File> actual, String... ignoringFieldNames) {
+      var diff = Maps.difference(expected, actual);
+      var success = true;
+      for (var e : diff.entriesOnlyOnLeft().entrySet()) {
+        System.out.println("Missing " + e.getKey());
+        success = false;
+      }
+
+      for (var e : diff.entriesOnlyOnRight().entrySet()) {
+        System.out.println("Unexpected " + e.getKey());
+        success = false;
+      }
+
+      if (!success) {
+        throw new RuntimeException("Comparison failed!");
+      }
+
+      for (String key : expected.keySet()) {
+        assertEquals(expected.get(key), actual.get(key), JSONCompareMode.NON_EXTENSIBLE, ignoringFieldNames);
+      }
+    }
+
+    private Map<String, File> resourcesDirToMap(String resourcesFolderName) {
+      return dirToMap(new File(Resources.getResource(resourcesFolderName).getPath()));
+    }
+
+    @SneakyThrows
+    private Map<String, File> dirToMap(File dir) {
+      try (var stream = Files.walk(dir.toPath())) {
+        return stream
+          .filter(Files::isRegularFile)
+          .collect(Collectors.toUnmodifiableMap(x -> dir.toPath().relativize(x).toString(), Path::toFile));
+      }
     }
 
     @SneakyThrows
