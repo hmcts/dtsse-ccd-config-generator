@@ -73,10 +73,11 @@ public class FPLConfigGenerationTests {
     @Test
     public void generatesDerivedConfig() {
       assertResourceFolderMatchesGenerated("CARE_SUPERVISION_EPO", "derived", "CaseTypeID");
+      assertGeneratedFolderMatchesResource("derived", "CaseTypeID");
     }
 
     @SneakyThrows
-    private void assertGeneratedFolderMatchesResource(String folder) {
+    private void assertGeneratedFolderMatchesResource(String folder, String... ignore) {
         URL u = Resources.getResource(folder);
         File resourceDir = new File(u.getPath());
         File dir = new File(tmp.getRoot(), folder);
@@ -85,7 +86,14 @@ public class FPLConfigGenerationTests {
             if (actual.getName().endsWith(".json")) {
                 Path path = dir.toPath().relativize(actual.toPath());
                 Path expected = resourceDir.toPath().resolve(path);
-                assertEquals(expected.toFile(), actual, JSONCompareMode.NON_EXTENSIBLE);
+
+                if (!expected.toFile().exists()) {
+                  // If not found, look for it in the base configuration.
+                  var base = new File(Resources.getResource("CARE_SUPERVISION_EPO").getPath());
+                  expected = base.toPath().resolve(path);
+                }
+
+                assertEquals(expected.toFile(), actual, JSONCompareMode.NON_EXTENSIBLE, ignore);
             }
         }
     }
@@ -135,7 +143,7 @@ public class FPLConfigGenerationTests {
             actualString = stripIrrelevant(actualString, stripID, ignoring);
             JSONCompareResult result = JSONCompare.compareJSON(expectedString, actualString, mode);
             if (result.failed()) {
-                System.out.println("Failed comparing " + expected.getName() + " to " + actual.getName());
+                System.out.println("Failed comparing expected " + expected.getPath() + " to actual " + actual.getPath());
                 System.out.println(result.toString());
 
                 List<Map<String, Object>> expectedValues = fromJSON(expectedString);
