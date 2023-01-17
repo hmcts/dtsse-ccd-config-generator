@@ -34,7 +34,7 @@ import java.util.stream.Collectors;
 
 @SpringBootTest(properties = { "config-generator.basePackage=uk.gov.hmcts" })
 @RunWith(SpringRunner.class)
-public class FPLConfigGenerationTests {
+public class E2EConfigGenerationTests {
     @ClassRule
     public static TemporaryFolder tmp = new TemporaryFolder();
 
@@ -57,6 +57,13 @@ public class FPLConfigGenerationTests {
     @Test
     public void respectsComplexTypeOrdering() {
       assertEquals("CARE_SUPERVISION_EPO/ComplexTypes/HearingBooking.json", JSONCompareMode.STRICT);
+    }
+
+    @Test
+    public void testCustomHistoryTabOrder() {
+      var actual = dirToMap(new File(tmp.getRoot(), "CustomHistory/CaseTypeTab"));
+      var expected = resourcesDirToMap("CustomHistory/CaseTypeTab");
+      assertEquivalent(expected, actual);
     }
 
     @SneakyThrows
@@ -96,6 +103,7 @@ public class FPLConfigGenerationTests {
       return dirToMap(new File(Resources.getResource(resourcesFolderName).getPath()));
     }
 
+    // A map of all files in a directory indexed by their relative path.
     @SneakyThrows
     private Map<String, File> dirToMap(File dir) {
       try (var stream = Files.walk(dir.toPath())) {
