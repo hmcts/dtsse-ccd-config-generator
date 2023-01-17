@@ -49,8 +49,9 @@ public class FPLConfigGenerationTests {
 
   @Test
   public void generatesCareSupervisionEPO() {
-      assertResourceFolderMatchesGenerated("CARE_SUPERVISION_EPO", "CARE_SUPERVISION_EPO");
-      assertGeneratedFolderMatchesResource("CARE_SUPERVISION_EPO");
+    var actual = dirToMap(new File(tmp.getRoot(), "CARE_SUPERVISION_EPO"));
+    var expected = resourcesDirToMap("CARE_SUPERVISION_EPO");
+    assertEquivalent(expected, actual);
   }
 
     @Test
@@ -102,46 +103,6 @@ public class FPLConfigGenerationTests {
           .filter(Files::isRegularFile)
           .collect(Collectors.toUnmodifiableMap(x -> dir.toPath().relativize(x).toString(), Path::toFile));
       }
-    }
-
-    @SneakyThrows
-    private void assertGeneratedFolderMatchesResource(String folder, String... ignore) {
-        URL u = Resources.getResource(folder);
-        File resourceDir = new File(u.getPath());
-        File dir = new File(tmp.getRoot(), folder);
-        for (Iterator<File> it = FileUtils.iterateFiles(dir, TrueFileFilter.INSTANCE, TrueFileFilter.INSTANCE); it.hasNext(); ) {
-            File actual = it.next();
-            Path path = dir.toPath().relativize(actual.toPath());
-            Path expected = resourceDir.toPath().resolve(path);
-
-            if (!expected.toFile().exists()) {
-              // If not found, look for it in the base configuration.
-              var base = new File(Resources.getResource("CARE_SUPERVISION_EPO").getPath());
-              expected = base.toPath().resolve(path);
-            }
-
-            assertEquals(expected.toFile(), actual, JSONCompareMode.NON_EXTENSIBLE, ignore);
-        }
-    }
-
-    private void assertResourceFolderMatchesGenerated(String resourceFolder, String generatedFolder, String... ignore) {
-        URL u = Resources.getResource(resourceFolder);
-        File dir = new File(u.getPath());
-        assert dir.exists();
-        for (Iterator<File> it = FileUtils.iterateFiles(dir, TrueFileFilter.INSTANCE, TrueFileFilter.INSTANCE); it.hasNext(); ) {
-            File expected = it.next();
-            Path path = dir.toPath().relativize(expected.toPath());
-            // Check if there is an overridden version of this resource
-            // which would be in resources/generatedFolder
-            var overrideResourceFolder = new File(Resources.getResource(generatedFolder).getPath());
-            var override = new File(overrideResourceFolder, path.toString());
-            if (override.exists()) {
-              expected = override;
-            }
-
-            Path actual = tmp.getRoot().toPath().resolve(generatedFolder).resolve(path);
-            assertEquals(expected, actual.toFile(), JSONCompareMode.NON_EXTENSIBLE, ignore);
-        }
     }
 
     @SneakyThrows
