@@ -25,7 +25,6 @@ import org.skyscreamer.jsonassert.*;
 import java.io.File;
 import java.net.URL;
 import java.nio.charset.Charset;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Collection;
 import java.util.Iterator;
@@ -34,7 +33,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-import org.skyscreamer.jsonassert.comparator.CustomComparator;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.junit4.SpringRunner;
@@ -46,8 +44,6 @@ public class FPLConfigGenerationTests {
     @ClassRule
     public static TemporaryFolder tmp = new TemporaryFolder();
 
-    private static Path careSupervisionEPO;
-
     @Autowired
     private CCDDefinitionGenerator generator;
     private static boolean configGenerated;
@@ -55,7 +51,6 @@ public class FPLConfigGenerationTests {
     @Before
     public void before() {
       if (!configGenerated) {
-          careSupervisionEPO = tmp.getRoot().toPath().resolve("CARE_SUPERVISION_EPO");
           generator.generateAllCaseTypesToJSON(tmp.getRoot());
           // Generate a second time to ensure existing config is correctly merged.
           generator.generateAllCaseTypesToJSON(tmp.getRoot());
@@ -63,148 +58,28 @@ public class FPLConfigGenerationTests {
       }
     }
 
-    @Test
-    public void generatesAuthorisationCaseState() {
-        assertEquals("AuthorisationCaseState.json");
-    }
-
-    @Test
-    public void generatesAuthorisationCaseType() {
-        assertEquals("AuthorisationCaseType.json");
-    }
-
-    @Test
-    public void generatesJurisdiction() {
-        assertEquals("Jurisdiction.json");
-    }
-
-    @Test
-    public void generatesState() {
-        assertEquals("State.json");
-    }
-
-    @Test
-    public void generatesCaseType() {
-        assertEquals("CaseType.json");
-    }
-
-    @Test
-    public void generatesAllAuthorisationCaseField() {
-        assertResourceFolderMatchesGenerated("AuthorisationCaseField", careSupervisionEPO);
-        assertGeneratedFolderMatchesResource("AuthorisationCaseField");
-    }
-
-    @Test
-    public void generatesCaseTypeTab() {
-        assertResourceFolderMatchesGenerated("CaseTypeTab", careSupervisionEPO);
-        assertGeneratedFolderMatchesResource("CaseTypeTab");
-    }
-
-    @Test
-    public void generatesWorkBasketResultFields() {
-        assertEquals("WorkBasketResultFields.json");
-    }
-
-    @Test
-    public void generatesWorkBasketInputFields() {
-        assertEquals("WorkBasketInputFields.json");
-    }
-
-    @Test
-    public void generatesSearchResultFields() {
-        assertEquals("SearchResultFields.json");
-    }
-
-    @Test
-    public void generatesSearchInputFields() {
-        assertEquals("SearchInputFields.json");
-    }
-
-    @Test
-    public void generatesRoleToAccessProfiles() {
-        assertEquals("RoleToAccessProfiles.json");
-    }
-
-    @Test
-    public void generatesAllComplexTypes() {
-        assertResourceFolderMatchesGenerated("ComplexTypes", careSupervisionEPO);
-        assertGeneratedFolderMatchesResource("ComplexTypes");
-    }
-
-    @Test
-    public void generatesAllCaseEventToField() {
-        assertResourceFolderMatchesGenerated("CaseEventToFields", careSupervisionEPO);
-        assertGeneratedFolderMatchesResource("CaseEventToFields");
-    }
-
-    @Test
-    public void generatesAllCaseEvent() {
-        assertResourceFolderMatchesGenerated("CaseEvent", careSupervisionEPO);
-        assertGeneratedFolderMatchesResource("CaseEvent");
-    }
-
-    @Test
-    public void generatesAllCaseEventToComplexTypes() {
-        assertResourceFolderMatchesGenerated("CaseEventToComplexTypes", careSupervisionEPO);
-        assertGeneratedFolderMatchesResource("CaseEventToComplexTypes");
-    }
-
-    @Test
-    public void generatesCaseField() {
-        assertEquals("CaseField.json");
-    }
-
-    @Test
-    public void generatesAuthorisationCaseEvent() {
-        assertEquals("AuthorisationCaseEvent/AuthorisationCaseEvent.json");
-    }
+  @Test
+  public void generatesCareSupervisionEPO() {
+      assertResourceFolderMatchesGenerated("CARE_SUPERVISION_EPO", "CARE_SUPERVISION_EPO");
+      assertGeneratedFolderMatchesResource("CARE_SUPERVISION_EPO");
+  }
 
     @Test
     public void respectsComplexTypeOrdering() {
-      assertEquals("ComplexTypes/HearingBooking.json", JSONCompareMode.STRICT);
-    }
-
-
-  @Test
-    public void generatesSearchCasesResultFields() {
-        assertEquals("SearchCasesResultFields/SearchCasesResultFields.json");
-    }
-
-    @Test
-    public void generatesFixedLists() {
-        assertGeneratedFolderMatchesResource("FixedLists");
+      assertEquals("CARE_SUPERVISION_EPO/ComplexTypes/HearingBooking.json", JSONCompareMode.STRICT);
     }
 
     @SneakyThrows
     @Test
     public void generatesDerivedConfig() {
-      var derivedConfig = tmp.getRoot().toPath().resolve("derived");
-      // TODO: refactor and simplify these tests.
-      assertResourceFolderMatchesGenerated("ComplexTypes", derivedConfig);
-      assertResourceFolderMatchesGenerated("FixedLists", derivedConfig);
-      assertResourceFolderMatchesGenerated("AuthorisationCaseEvent", derivedConfig, "CaseTypeID");
-      assertResourceFolderMatchesGenerated("AuthorisationCaseField", derivedConfig, "CaseTypeID");
-      assertResourceFolderMatchesGenerated("CaseEvent", derivedConfig, "CaseTypeID");
-      assertResourceFolderMatchesGenerated("CaseEventToComplexTypes", derivedConfig, "CaseTypeID");
-      assertResourceFolderMatchesGenerated("CaseEventToFields", derivedConfig, "CaseTypeID");
-      assertResourceFolderMatchesGenerated("CaseTypeTab", derivedConfig, "CaseTypeID");
-      assertResourceFolderMatchesGenerated("SearchCasesResultFields", derivedConfig, "CaseTypeID");
-
-      URL u = Resources.getResource("ccd-definition/CaseField.json");
-      var expected = new File(u.getPath());
-      var actual = new File(derivedConfig.toFile(), "CaseField.json");
-      assertEquals(expected, actual, JSONCompareMode.NON_EXTENSIBLE, "CaseTypeID");
+      assertResourceFolderMatchesGenerated("CARE_SUPERVISION_EPO", "derived", "CaseTypeID");
     }
 
-    @Test
-    public void shouldGenerateCaseRoles() {
-      assertEquals("CaseRoles.json");
-    }
-
+    @SneakyThrows
     private void assertGeneratedFolderMatchesResource(String folder) {
-        URL u = Resources.getResource("ccd-definition/" + folder);
+        URL u = Resources.getResource(folder);
         File resourceDir = new File(u.getPath());
-        File dir = careSupervisionEPO.resolve(folder).toFile();
+        File dir = new File(tmp.getRoot(), folder);
         for (Iterator<File> it = FileUtils.iterateFiles(dir, TrueFileFilter.INSTANCE, TrueFileFilter.INSTANCE); it.hasNext(); ) {
             File actual = it.next();
             if (actual.getName().endsWith(".json")) {
@@ -215,28 +90,34 @@ public class FPLConfigGenerationTests {
         }
     }
 
-    private void assertResourceFolderMatchesGenerated(String folder, Path generatedRoot, String... ignore) {
-        URL u = Resources.getResource("ccd-definition/" + folder);
+    private void assertResourceFolderMatchesGenerated(String resourceFolder, String generatedFolder, String... ignore) {
+        URL u = Resources.getResource(resourceFolder);
         File dir = new File(u.getPath());
         assert dir.exists();
         for (Iterator<File> it = FileUtils.iterateFiles(dir, TrueFileFilter.INSTANCE, TrueFileFilter.INSTANCE); it.hasNext(); ) {
             File expected = it.next();
             if (expected.getName().endsWith(".json")) {
-                Path path = dir.toPath().relativize(expected.toPath());
-                Path actual = generatedRoot.resolve(folder).resolve(path);
+              Path path = dir.toPath().relativize(expected.toPath());
+                // Check if there is an overridden version of this resource
+                // which would be in resources/generatedFolder
+                var overrideResourceFolder = new File(Resources.getResource(generatedFolder).getPath());
+                var override = new File(overrideResourceFolder, path.toString());
+                if (override.exists()) {
+                  expected = override;
+                }
+
+                Path actual = tmp.getRoot().toPath().resolve(generatedFolder).resolve(path);
                 assertEquals(expected, actual.toFile(), JSONCompareMode.NON_EXTENSIBLE, ignore);
             }
         }
     }
 
-  private void assertEquals(String jsonPath) {
-    assertEquals(jsonPath, JSONCompareMode.NON_EXTENSIBLE);
-  }
+    @SneakyThrows
     private void assertEquals(String jsonPath, JSONCompareMode mode) {
         System.out.println("Comparing " + jsonPath);
-        URL u = Resources.getResource("ccd-definition/" + jsonPath);
+        URL u = Resources.getResource(jsonPath);
         File expected = new File(u.getPath());
-        File actual = new File(careSupervisionEPO.toFile(), jsonPath);
+        File actual = new File(tmp.getRoot(), jsonPath);
         assertEquals(expected, actual, mode);
     }
 
@@ -300,9 +181,9 @@ public class FPLConfigGenerationTests {
             }
 
         } catch (Exception e) {
-            if (careSupervisionEPO.toFile().exists()) {
+            if (tmp.getRoot().exists()) {
                 System.out.println("Generated files:");
-                for (Iterator<File> it = FileUtils.iterateFiles(careSupervisionEPO.toFile(), TrueFileFilter.INSTANCE, TrueFileFilter.INSTANCE); it.hasNext(); ) {
+                for (Iterator<File> it = FileUtils.iterateFiles(tmp.getRoot(), TrueFileFilter.INSTANCE, TrueFileFilter.INSTANCE); it.hasNext(); ) {
                     File f = it.next();
                     System.out.println(f.getPath());
                 }
@@ -414,12 +295,5 @@ public class FPLConfigGenerationTests {
     private String pretty(Object obj) {
         ObjectMapper mapper = new ObjectMapper();
         return mapper.writerWithDefaultPrettyPrinter().writeValueAsString(obj);
-    }
-
-    @SneakyThrows
-    private String pretty(String json) {
-        ObjectMapper mapper = new ObjectMapper();
-        Object o = mapper.readValue(json, Object.class);
-        return pretty(o);
     }
 }
