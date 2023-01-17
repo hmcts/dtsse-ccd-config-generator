@@ -14,6 +14,7 @@ public class CaseRoleToAccessProfile<R extends HasRole> {
   private List<String> accessProfiles;
   private boolean disabled;
   private List<String> caseAccessCategories;
+  private boolean legacyIdamRole;
 
   public static class CaseRoleToAccessProfileBuilder<R extends HasRole> {
 
@@ -52,6 +53,12 @@ public class CaseRoleToAccessProfile<R extends HasRole> {
 
     public CaseRoleToAccessProfileBuilder<R> disabled() {
       disabled = true;
+
+      return this;
+    }
+
+    public CaseRoleToAccessProfileBuilder<R> legacyIdamRole() {
+      legacyIdamRole = true;
 
       return this;
     }
