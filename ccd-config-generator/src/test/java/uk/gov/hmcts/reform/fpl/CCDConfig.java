@@ -115,6 +115,7 @@ public class CCDConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<CaseData, S
       .authorisation("authorisation")
       .caseAccessCategories("case-access-category")
       .readonly()
+      .legacyIdamRole()
       .disabled();
   }
 

@@ -17,6 +17,6 @@
     "Disabled": "Y",
     "LiveFrom": "01/01/2017",
     "ReadOnly": "Y",
-    "RoleName": "caseworker-caa"
+    "RoleName": "idam:caseworker-caa"
   }
 ]
