@@ -26,11 +26,16 @@ class CaseTypeTabGenerator<T, S, R extends HasRole> implements ConfigGenerator<T
   public void write(File root, ResolvedCCDConfig<T, S, R> config) {
 
     List<Map<String, Object>> result = Lists.newArrayList();
-    result.add(buildField(config.getCaseType(), "CaseHistory", "caseHistory", "History", 1, 1, ""));
+
+    int tabDisplayOrder = 1;
+    // For backwards compatibility we automatically define a history tab as the first tab if the app doesn't set one.
+    if (!config.getTabs().stream().anyMatch(x -> x.getTabID().equals("CaseHistory"))) {
+      result.add(buildField(config.getCaseType(), "CaseHistory", "caseHistory", "History", 1, 1, ""));
+      tabDisplayOrder = 2;
+    }
 
     List<Map<String, Object>> caseFields = Lists.newArrayList();
 
-    int tabDisplayOrder = 2;
 
     for (Tab<T, R> tab : config.getTabs()) {
       List<String> roles = tab.getForRolesAsString();

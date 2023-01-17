@@ -3,12 +3,8 @@ package uk.gov.hmcts.ccd.sdk;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.type.CollectionType;
 import com.google.common.base.Predicates;
-import com.google.common.collect.Collections2;
-import com.google.common.collect.ImmutableSortedMap;
-import com.google.common.collect.MapDifference;
+import com.google.common.collect.*;
 import com.google.common.collect.MapDifference.ValueDifference;
-import com.google.common.collect.Maps;
-import com.google.common.collect.Sets;
 import com.google.common.collect.Sets.SetView;
 import com.google.common.io.Resources;
 import lombok.SneakyThrows;
@@ -20,48 +16,42 @@ import org.junit.ClassRule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
 import org.junit.runner.RunWith;
-import org.skyscreamer.jsonassert.*;
-
-import java.io.File;
-import java.net.URL;
-import java.nio.charset.Charset;
-import java.nio.file.Path;
-import java.util.Collection;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.stream.Collectors;
-
+import org.skyscreamer.jsonassert.JSONCompare;
+import org.skyscreamer.jsonassert.JSONCompareMode;
+import org.skyscreamer.jsonassert.JSONCompareResult;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.junit4.SpringRunner;
 import uk.gov.hmcts.ccd.sdk.generator.JsonUtils;
 
+import java.io.File;
+import java.net.URL;
+import java.nio.charset.Charset;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.*;
+import java.util.stream.Collectors;
+
 @SpringBootTest(properties = { "config-generator.basePackage=uk.gov.hmcts" })
 @RunWith(SpringRunner.class)
-public class FPLConfigGenerationTests {
+public class E2EConfigGenerationTests {
     @ClassRule
     public static TemporaryFolder tmp = new TemporaryFolder();
 
     @Autowired
     private CCDDefinitionGenerator generator;
-    private static boolean configGenerated;
-
     @Before
     public void before() {
-      if (!configGenerated) {
-          generator.generateAllCaseTypesToJSON(tmp.getRoot());
-          // Generate a second time to ensure existing config is correctly merged.
-          generator.generateAllCaseTypesToJSON(tmp.getRoot());
-          configGenerated = true;
-      }
+        generator.generateAllCaseTypesToJSON(tmp.getRoot());
+        // Generate a second time to ensure existing config is correctly merged.
+        generator.generateAllCaseTypesToJSON(tmp.getRoot());
     }
 
   @Test
   public void generatesCareSupervisionEPO() {
-      assertResourceFolderMatchesGenerated("CARE_SUPERVISION_EPO", "CARE_SUPERVISION_EPO");
-      assertGeneratedFolderMatchesResource("CARE_SUPERVISION_EPO");
+    var actual = dirToMap(new File(tmp.getRoot(), "CARE_SUPERVISION_EPO"));
+    var expected = resourcesDirToMap("CARE_SUPERVISION_EPO");
+    assertEquivalent(expected, actual);
   }
 
     @Test
@@ -69,47 +59,58 @@ public class FPLConfigGenerationTests {
       assertEquals("CARE_SUPERVISION_EPO/ComplexTypes/HearingBooking.json", JSONCompareMode.STRICT);
     }
 
+    @Test
+    public void testCustomHistoryTabOrder() {
+      var actual = dirToMap(new File(tmp.getRoot(), "CustomHistory/CaseTypeTab"));
+      var expected = resourcesDirToMap("CustomHistory/CaseTypeTab");
+      assertEquivalent(expected, actual);
+    }
+
     @SneakyThrows
     @Test
     public void generatesDerivedConfig() {
-      assertResourceFolderMatchesGenerated("CARE_SUPERVISION_EPO", "derived", "CaseTypeID");
+      var actual = dirToMap(new File(tmp.getRoot(), "derived"));
+      var expected = ImmutableMap.<String, File>builder()
+        .putAll(this.resourcesDirToMap("CARE_SUPERVISION_EPO"))
+        .putAll(this.resourcesDirToMap("derived"))
+        .buildKeepingLast();
+      assertEquivalent(expected, actual, "CaseTypeID");
     }
 
+    private void assertEquivalent(Map<String, File> expected, Map<String, File> actual, String... ignoringFieldNames) {
+      var diff = Maps.difference(expected, actual);
+      var success = true;
+      for (var e : diff.entriesOnlyOnLeft().entrySet()) {
+        System.out.println("Missing " + e.getKey());
+        success = false;
+      }
+
+      for (var e : diff.entriesOnlyOnRight().entrySet()) {
+        System.out.println("Unexpected " + e.getKey());
+        success = false;
+      }
+
+      if (!success) {
+        throw new RuntimeException("Comparison failed!");
+      }
+
+      for (String key : expected.keySet()) {
+        assertEquals(expected.get(key), actual.get(key), JSONCompareMode.NON_EXTENSIBLE, ignoringFieldNames);
+      }
+    }
+
+    private Map<String, File> resourcesDirToMap(String resourcesFolderName) {
+      return dirToMap(new File(Resources.getResource(resourcesFolderName).getPath()));
+    }
+
+    // A map of all files in a directory indexed by their relative path.
     @SneakyThrows
-    private void assertGeneratedFolderMatchesResource(String folder) {
-        URL u = Resources.getResource(folder);
-        File resourceDir = new File(u.getPath());
-        File dir = new File(tmp.getRoot(), folder);
-        for (Iterator<File> it = FileUtils.iterateFiles(dir, TrueFileFilter.INSTANCE, TrueFileFilter.INSTANCE); it.hasNext(); ) {
-            File actual = it.next();
-            if (actual.getName().endsWith(".json")) {
-                Path path = dir.toPath().relativize(actual.toPath());
-                Path expected = resourceDir.toPath().resolve(path);
-                assertEquals(expected.toFile(), actual, JSONCompareMode.NON_EXTENSIBLE);
-            }
-        }
-    }
-
-    private void assertResourceFolderMatchesGenerated(String resourceFolder, String generatedFolder, String... ignore) {
-        URL u = Resources.getResource(resourceFolder);
-        File dir = new File(u.getPath());
-        assert dir.exists();
-        for (Iterator<File> it = FileUtils.iterateFiles(dir, TrueFileFilter.INSTANCE, TrueFileFilter.INSTANCE); it.hasNext(); ) {
-            File expected = it.next();
-            if (expected.getName().endsWith(".json")) {
-              Path path = dir.toPath().relativize(expected.toPath());
-                // Check if there is an overridden version of this resource
-                // which would be in resources/generatedFolder
-                var overrideResourceFolder = new File(Resources.getResource(generatedFolder).getPath());
-                var override = new File(overrideResourceFolder, path.toString());
-                if (override.exists()) {
-                  expected = override;
-                }
-
-                Path actual = tmp.getRoot().toPath().resolve(generatedFolder).resolve(path);
-                assertEquals(expected, actual.toFile(), JSONCompareMode.NON_EXTENSIBLE, ignore);
-            }
-        }
+    private Map<String, File> dirToMap(File dir) {
+      try (var stream = Files.walk(dir.toPath())) {
+        return stream
+          .filter(Files::isRegularFile)
+          .collect(Collectors.toUnmodifiableMap(x -> dir.toPath().relativize(x).toString(), Path::toFile));
+      }
     }
 
     @SneakyThrows
@@ -135,7 +136,7 @@ public class FPLConfigGenerationTests {
             actualString = stripIrrelevant(actualString, stripID, ignoring);
             JSONCompareResult result = JSONCompare.compareJSON(expectedString, actualString, mode);
             if (result.failed()) {
-                System.out.println("Failed comparing " + expected.getName() + " to " + actual.getName());
+                System.out.println("Failed comparing expected " + expected.getPath() + " to actual " + actual.getPath());
                 System.out.println(result.toString());
 
                 List<Map<String, Object>> expectedValues = fromJSON(expectedString);
