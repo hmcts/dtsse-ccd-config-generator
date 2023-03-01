@@ -106,6 +106,9 @@ class CaseFieldGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
         if (cf.displayOrder() > 0) {
           fieldInfo.put("DisplayOrder", cf.displayOrder());
         }
+        if (!Strings.isNullOrEmpty(cf.categoryID())) {
+          fieldInfo.put("CategoryID", cf.categoryID());
+        }
       }
 
       if (!fieldInfo.containsKey("Label")) {

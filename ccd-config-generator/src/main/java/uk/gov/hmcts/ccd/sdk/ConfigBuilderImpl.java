@@ -14,6 +14,8 @@ import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import uk.gov.hmcts.ccd.sdk.api.CaseRoleToAccessProfile.CaseRoleToAccessProfileBuilder;
+import uk.gov.hmcts.ccd.sdk.api.Categories;
+import uk.gov.hmcts.ccd.sdk.api.Categories.CategoriesBuilder;
 import uk.gov.hmcts.ccd.sdk.api.ConfigBuilder;
 import uk.gov.hmcts.ccd.sdk.api.Event;
 import uk.gov.hmcts.ccd.sdk.api.HasRole;
@@ -34,6 +36,7 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements ConfigBuilder
   final List<SearchBuilder<T, R>> searchInputFields = Lists.newArrayList();
   final List<SearchCasesBuilder<T>> searchCaseResultFields = Lists.newArrayList();
   final List<CaseRoleToAccessProfileBuilder<R>> caseRoleToAccessProfiles = Lists.newArrayList();
+  final List<CategoriesBuilder<R>> categories = Lists.newArrayList();
   final Set<R> omitHistoryForRoles = new HashSet<>();
 
   public ConfigBuilderImpl(ResolvedCCDConfig<T, S, R> config) {
@@ -54,6 +57,7 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements ConfigBuilder
     config.searchCaseResultFields = buildBuilders(searchCaseResultFields, SearchCasesBuilder::build);
     config.rolesWithNoHistory = omitHistoryForRoles.stream().map(HasRole::getRole).collect(Collectors.toSet());
     config.caseRoleToAccessProfiles = buildBuilders(caseRoleToAccessProfiles, CaseRoleToAccessProfileBuilder::build);
+    config.categories = buildBuilders(categories, CategoriesBuilder::build);
 
     return config;
   }
@@ -158,6 +162,13 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements ConfigBuilder
   public CaseRoleToAccessProfileBuilder<R> caseRoleToAccessProfile(R caseRole) {
     var builder = CaseRoleToAccessProfileBuilder.builder(caseRole);
     caseRoleToAccessProfiles.add(builder);
+    return builder;
+  }
+
+  @Override
+  public CategoriesBuilder<R> categories(R caseRole) {
+    var builder = CategoriesBuilder.builder(caseRole);
+    categories.add(builder);
     return builder;
   }
 
