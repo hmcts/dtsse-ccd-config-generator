@@ -3,10 +3,6 @@ package uk.gov.hmcts.ccd.sdk.api;
 import lombok.Builder;
 import lombok.Data;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.UUID;
-
 @Builder
 @Data
 public class Categories<R extends HasRole> {

@@ -30,13 +30,13 @@ public class CategoriesGenerator<T, S, R extends HasRole> implements ConfigGener
     final List<Map<String, Object>> rows = config.getCategories().stream()
         .map(o -> toJson(config.getCaseType(), o))
         .collect(toList());
-    mergeInto(path, rows, new AddMissing(), "RoleName");
+    mergeInto(path, rows, new AddMissing(), "CategoryID");
   }
 
   @SneakyThrows
   private static Map<String, Object> toJson(String caseType, Categories categories) {
     Map<String, Object> field = Maps.newHashMap();
-    field.put("LiveFrom", "01/01/2017");
+    field.put("LiveFrom", "01/10/2022");
     field.put("CaseTypeID", caseType);
     field.put("CategoryID", categories.getCategoryID());
     field.put("CategoryLabel", categories.getCategoryLabel());
