@@ -11,7 +11,7 @@ import uk.gov.hmcts.ccd.sdk.api.ComplexType;
 @NoArgsConstructor
 @Builder
 @Data
-//@JsonIgnoreProperties(ignoreUnknown = true) //added temporary to avoid draft doc failing mid events
+@JsonIgnoreProperties(ignoreUnknown = true) //added temporary to avoid draft doc failing mid events
 @ComplexType(name = "Document", generate = false)
 public class Document {
 
