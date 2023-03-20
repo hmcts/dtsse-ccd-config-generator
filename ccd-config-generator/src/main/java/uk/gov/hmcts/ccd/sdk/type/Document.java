@@ -24,14 +24,19 @@ public class Document {
   @JsonProperty("document_binary_url")
   private String binaryUrl;
 
+  @JsonProperty("category_id")
+  private String categoryId;
+
   @JsonCreator
   public Document(
       @JsonProperty("document_url") String url,
       @JsonProperty("document_filename") String filename,
-      @JsonProperty("document_binary_url") String binaryUrl
+      @JsonProperty("document_binary_url") String binaryUrl,
+      @JsonProperty("category_id") String categoryId
   ) {
     this.url = url;
     this.filename = filename;
     this.binaryUrl = binaryUrl;
+    this.categoryId = categoryId;
   }
 }
