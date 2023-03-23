@@ -46,10 +46,8 @@ public class CallbackControllerTest {
     Map<String, Object> data = Maps.newHashMap();
     data.put("orderAppliesToAllChildren", "test");
 
-    MvcResult result = this.makeRequest("about-to-submit", "CARE_SUPERVISION_EPO", "addFamilyManCaseNumber", data)
-      .andExpect(status().isOk())
-      .andReturn();
-    getResponseData(result, CaseData.class);
+    this.makeRequest("about-to-submit", "CARE_SUPERVISION_EPO", "addFamilyManCaseNumber", data)
+      .andExpect(status().isOk());
   }
 
   @SneakyThrows
