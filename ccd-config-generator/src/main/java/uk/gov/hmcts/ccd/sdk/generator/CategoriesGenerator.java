@@ -4,7 +4,6 @@ import com.google.common.collect.Maps;
 import lombok.SneakyThrows;
 import org.springframework.stereotype.Component;
 import uk.gov.hmcts.ccd.sdk.ResolvedCCDConfig;
-import uk.gov.hmcts.ccd.sdk.api.CaseRoleToAccessProfile;
 import uk.gov.hmcts.ccd.sdk.api.Categories;
 import uk.gov.hmcts.ccd.sdk.api.HasRole;
 import uk.gov.hmcts.ccd.sdk.generator.JsonUtils.AddMissing;
@@ -16,7 +15,6 @@ import java.util.List;
 import java.util.Map;
 
 import static java.util.stream.Collectors.toList;
-import static org.apache.commons.lang3.StringUtils.join;
 import static uk.gov.hmcts.ccd.sdk.generator.JsonUtils.mergeInto;
 
 @Component

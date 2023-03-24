@@ -14,7 +14,6 @@ import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import uk.gov.hmcts.ccd.sdk.api.CaseRoleToAccessProfile.CaseRoleToAccessProfileBuilder;
-import uk.gov.hmcts.ccd.sdk.api.Categories;
 import uk.gov.hmcts.ccd.sdk.api.Categories.CategoriesBuilder;
 import uk.gov.hmcts.ccd.sdk.api.ConfigBuilder;
 import uk.gov.hmcts.ccd.sdk.api.Event;
