@@ -55,5 +55,5 @@ public interface ConfigBuilder<T, S, R extends HasRole> {
 
   CaseRoleToAccessProfileBuilder<R> caseRoleToAccessProfile(R caseRole);
 
-  Categories.CategoriesBuilder categories(R caseRole);
+  CaseCategory.CaseCategoryBuilder categories(R caseRole);
 }

@@ -4,7 +4,7 @@ import com.google.common.collect.Maps;
 import lombok.SneakyThrows;
 import org.springframework.stereotype.Component;
 import uk.gov.hmcts.ccd.sdk.ResolvedCCDConfig;
-import uk.gov.hmcts.ccd.sdk.api.Categories;
+import uk.gov.hmcts.ccd.sdk.api.CaseCategory;
 import uk.gov.hmcts.ccd.sdk.api.HasRole;
 import uk.gov.hmcts.ccd.sdk.generator.JsonUtils.AddMissing;
 
@@ -32,7 +32,7 @@ public class CategoriesGenerator<T, S, R extends HasRole> implements ConfigGener
   }
 
   @SneakyThrows
-  private static Map<String, Object> toJson(String caseType, Categories categories) {
+  private static Map<String, Object> toJson(String caseType, CaseCategory categories) {
     Map<String, Object> field = Maps.newHashMap();
     field.put("LiveFrom", "01/10/2022");
     field.put("CaseTypeID", caseType);
