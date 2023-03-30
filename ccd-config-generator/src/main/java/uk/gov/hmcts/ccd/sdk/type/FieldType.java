@@ -22,5 +22,6 @@ public enum FieldType {
   Flags,
   FlagLauncher,
   FlagType,
-  FlagDetail
+  FlagDetail,
+  ComponentLauncher
 }
