@@ -52,13 +52,14 @@ public class CallbackControllerTest {
 
   @SneakyThrows
   @Test
-  public void testAboutToSubmitWithSecurityClassification() {
+  public void testAboutToSubmitWithDataAndSecurityClassification() {
     Map<String, Object> data = Maps.newHashMap();
 
-    MvcResult result = this.makeRequest("about-to-submit", "CARE_SUPERVISION_EPO", "setSecurityClassification", data)
+    MvcResult result = this.makeRequest("about-to-submit", "CARE_SUPERVISION_EPO", "setDataAndSecurityClassification", data)
       .andExpect(status().isOk())
       .andReturn();
     AboutToStartOrSubmitCallbackResponse response = getCallbackResponse(result);
+    assertThat(response.getDataClassification()).containsExactly(Map.entry("field1", "PUBLIC"));
     assertThat(response.getSecurityClassification()).isEqualTo("PRIVATE");
   }
 

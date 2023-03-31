@@ -9,6 +9,9 @@ import uk.gov.hmcts.reform.fpl.enums.State;
 import uk.gov.hmcts.reform.fpl.enums.UserRole;
 import uk.gov.hmcts.reform.fpl.model.CaseData;
 
+import java.util.HashMap;
+import java.util.Map;
+
 import static uk.gov.hmcts.ccd.sdk.api.Permission.CRU;
 import static uk.gov.hmcts.reform.fpl.enums.UserRole.HMCTS_ADMIN;
 
@@ -17,9 +20,9 @@ public class SetSecurityClassification implements CCDConfig<CaseData, State, Use
 
   @Override
   public void configure(ConfigBuilder<CaseData, State, UserRole> builder) {
-    builder.event("setSecurityClassification")
+    builder.event("setDataAndSecurityClassification")
       .forAllStates()
-      .name("Set security classification")
+      .name("Set data and security classification")
       .grant(CRU, HMCTS_ADMIN)
       .aboutToSubmitCallback(this::aboutToSubmit);
   }
@@ -28,10 +31,12 @@ public class SetSecurityClassification implements CCDConfig<CaseData, State, Use
     CaseDetails<CaseData, State> details,
     CaseDetails<CaseData, State> detailsBefore) {
     CaseData d = details.getData();
-
+    Map<String, Object> dataClassification = new HashMap<>();
+    dataClassification.put("field1", "PUBLIC");
 
     return AboutToStartOrSubmitResponse.<CaseData, State>builder()
       .data(d)
+      .dataClassification(dataClassification)
       .securityClassification("PRIVATE")
       .build();
   }
