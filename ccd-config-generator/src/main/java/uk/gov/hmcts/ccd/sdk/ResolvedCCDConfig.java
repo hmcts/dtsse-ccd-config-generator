@@ -12,6 +12,7 @@ import java.util.Set;
 import java.util.function.Function;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
+import uk.gov.hmcts.ccd.sdk.api.CaseCategory;
 import uk.gov.hmcts.ccd.sdk.api.CaseRoleToAccessProfile;
 import uk.gov.hmcts.ccd.sdk.api.Event;
 import uk.gov.hmcts.ccd.sdk.api.HasRole;
@@ -53,4 +54,5 @@ public class ResolvedCCDConfig<T, S, R extends HasRole> {
   List<Search<T, R>> searchInputFields;
   List<SearchCases> searchCaseResultFields;
   List<CaseRoleToAccessProfile> caseRoleToAccessProfiles;
+  List<CaseCategory> categories;
 }

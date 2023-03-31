@@ -117,6 +117,12 @@ public class CCDConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<CaseData, S
       .readonly()
       .legacyIdamRole()
       .disabled();
+
+    builder.categories(CASE_ACCESS_APPROVER)
+      .categoryID("TD")
+      .categoryLabel("Category Label")
+      .displayOrder(1)
+      .parentCategoryID("A");
   }
 
   private AboutToStartOrSubmitResponse<CaseData, State> checkReadyAboutToSubmit(CaseDetails<CaseData, State> details,

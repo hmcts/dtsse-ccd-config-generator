@@ -35,6 +35,8 @@ public @interface CCD {
 
   String typeParameterOverride() default "";
 
+  String categoryID() default "";
+
   Class<? extends HasAccessControl>[] access() default {};
 
   boolean inheritAccessFromParent() default true;

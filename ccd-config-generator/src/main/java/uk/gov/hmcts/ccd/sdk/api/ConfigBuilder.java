@@ -54,4 +54,6 @@ public interface ConfigBuilder<T, S, R extends HasRole> {
   void addPreEventHook(Function<Map<String, Object>, Map<String, Object>> hook);
 
   CaseRoleToAccessProfileBuilder<R> caseRoleToAccessProfile(R caseRole);
+
+  CaseCategory.CaseCategoryBuilder categories(R caseRole);
 }
