@@ -2,9 +2,7 @@ package uk.gov.hmcts.ccd.sdk;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
-
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.Maps;
@@ -19,8 +17,7 @@ import org.springframework.test.context.junit4.SpringRunner;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.ResultActions;
-import org.springframework.test.web.servlet.ResultMatcher;
-import uk.gov.hmcts.reform.ccd.client.model.AboutToStartOrSubmitCallbackResponse;
+import uk.gov.hmcts.ccd.sdk.model.AboutToStartOrSubmitCallbackResponse;
 import uk.gov.hmcts.reform.ccd.client.model.CallbackRequest;
 import uk.gov.hmcts.reform.ccd.client.model.CaseDetails;
 import uk.gov.hmcts.reform.fpl.BulkCaseConfig;
@@ -51,6 +48,19 @@ public class CallbackControllerTest {
 
     this.makeRequest("about-to-submit", "CARE_SUPERVISION_EPO", "addFamilyManCaseNumber", data)
       .andExpect(status().isOk());
+  }
+
+  @SneakyThrows
+  @Test
+  public void testAboutToSubmitWithDataAndSecurityClassification() {
+    Map<String, Object> data = Maps.newHashMap();
+
+    MvcResult result = this.makeRequest("about-to-submit", "CARE_SUPERVISION_EPO", "setDataAndSecurityClassification", data)
+      .andExpect(status().isOk())
+      .andReturn();
+    AboutToStartOrSubmitCallbackResponse response = getCallbackResponse(result);
+    assertThat(response.getDataClassification()).containsExactly(Map.entry("field1", "PUBLIC"));
+    assertThat(response.getSecurityClassification()).isEqualTo("PRIVATE");
   }
 
   @SneakyThrows
@@ -122,13 +132,18 @@ public class CallbackControllerTest {
 
   @SneakyThrows
   <T> T getResponseData(MvcResult result, Class<T> c) {
+    AboutToStartOrSubmitCallbackResponse r = getCallbackResponse(result);
     ObjectMapper mapper = new ObjectMapper();
-    AboutToStartOrSubmitCallbackResponse r =
-        mapper.readValue(result.getResponse().getContentAsString(),
-            AboutToStartOrSubmitCallbackResponse.class);
-
     String json = mapper.writeValueAsString(r.getData());
     return mapper.readValue(json, c);
+  }
+
+  @SneakyThrows
+  AboutToStartOrSubmitCallbackResponse getCallbackResponse(MvcResult result) {
+    ObjectMapper mapper = new ObjectMapper();
+    return
+      mapper.readValue(result.getResponse().getContentAsString(),
+        AboutToStartOrSubmitCallbackResponse.class);
   }
 
   CallbackRequest buildRequest(String caseType, String eventId, Map<String, Object> data) {
