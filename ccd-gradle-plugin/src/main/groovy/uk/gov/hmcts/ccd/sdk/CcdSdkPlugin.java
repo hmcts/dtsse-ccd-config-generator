@@ -34,7 +34,7 @@ public class CcdSdkPlugin implements Plugin<Project> {
     // Create the task to generate CCD config.
     JavaExec generate = project.getTasks().create("generateCCDConfig", JavaExec.class);
     generate.setGroup("CCD tasks");
-    generate.setMain("uk.gov.hmcts.ccd.sdk.Main");
+    generate.getMainClass().set("uk.gov.hmcts.ccd.sdk.Main");
 
     SourceSetContainer ssc = project.getConvention().getPlugin(JavaPluginConvention.class)
         .getSourceSets();

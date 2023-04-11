@@ -38,6 +38,10 @@ Write CCD configuration in Java.
 
 [Video guide](https://www.youtube.com/watch?v=sJfVXC6ihJU&list=PLrBWj5Zm4IGFwqewMqrMwQOkhMMDd5Tu4)
 
+## Requirements
+
+* Gradle 7 (minimum supported version)
+
 ## Installation
 
 Add the plugin to your `build.gradle` file in the project containing your Java domain model:

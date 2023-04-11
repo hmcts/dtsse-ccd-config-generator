@@ -5,11 +5,8 @@ import static junit.framework.TestCase.assertTrue;
 
 import java.io.File;
 import java.io.IOException;
-import java.nio.file.Files;
+
 import org.apache.commons.io.FileUtils;
-import org.apache.groovy.util.Maps;
-import org.gradle.api.Task;
-import org.gradle.testkit.runner.BuildResult;
 import org.gradle.testkit.runner.GradleRunner;
 import org.gradle.testkit.runner.TaskOutcome;
 import org.junit.Before;
@@ -21,33 +18,38 @@ public class FunctionalTest {
 
   @Rule
   public final TemporaryFolder testProjectDir = new TemporaryFolder();
-  private File buildFile;
 
   @Before
   public void setup() throws IOException {
-    buildFile = testProjectDir.newFile("build.gradle");
+    FileUtils.cleanDirectory(testProjectDir.getRoot());
+    FileUtils.copyDirectory(new File("test-projects/java-library"),
+      testProjectDir.getRoot());
   }
 
   @Test
-  public void testEmptyProject() throws IOException {
-    FileUtils.copyDirectory(new File("test-projects/java-library"),
-        testProjectDir.getRoot());
-    GradleRunner r = runner(testProjectDir.getRoot())
-        .withGradleVersion("5.6.4");
+  public void testGradle7() {
+    checkTestProject("7.0");
+  }
+
+  @Test
+  public void testGradle8() {
+    checkTestProject("8.0");
+  }
+
+  public void checkTestProject(String gradleVersion) {
+    var r = GradleRunner.create()
+        .forwardOutput()
+        .withPluginClasspath()
+        .withProjectDir(testProjectDir.getRoot())
+        .withArguments("generateCCDConfig", "test", "-si")
+      .withGradleVersion(gradleVersion);
+
     assertEquals(TaskOutcome.SUCCESS,r.build().task(":generateCCDConfig").getOutcome());
     File caseField = new File(testProjectDir.getRoot(), "build/ccd-definition/test/CaseField.json");
     assertTrue(caseField.exists());
 
     // Run a second time to ensure a non-clean build without changes is up to date.
     assertEquals(TaskOutcome.UP_TO_DATE,r.build().task(":generateCCDConfig").getOutcome());
-  }
-
-  public static GradleRunner runner(File project) {
-    return GradleRunner.create()
-        .forwardOutput()
-        .withPluginClasspath()
-        .withProjectDir(project)
-        .withArguments("generateCCDConfig", "test", "-si");
   }
 }
 
