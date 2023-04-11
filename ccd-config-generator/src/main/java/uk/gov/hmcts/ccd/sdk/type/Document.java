@@ -27,6 +27,16 @@ public class Document {
   @JsonProperty("category_id")
   private String categoryId;
 
+  public Document(
+      @JsonProperty("document_url") String url,
+      @JsonProperty("document_filename") String filename,
+      @JsonProperty("document_binary_url") String binaryUrl
+  ) {
+    this.url = url;
+    this.filename = filename;
+    this.binaryUrl = binaryUrl;
+  }
+
   @JsonCreator
   public Document(
       @JsonProperty("document_url") String url,
