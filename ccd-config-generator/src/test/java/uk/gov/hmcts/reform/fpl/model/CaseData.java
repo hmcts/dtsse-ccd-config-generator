@@ -14,6 +14,7 @@ import lombok.NoArgsConstructor;
 import uk.gov.hmcts.ccd.sdk.api.CCD;
 import uk.gov.hmcts.ccd.sdk.type.ChangeOrganisationRequest;
 import uk.gov.hmcts.ccd.sdk.type.DynamicList;
+import uk.gov.hmcts.ccd.sdk.type.DynamicMultiSelectList;
 import uk.gov.hmcts.ccd.sdk.type.ListValue;
 import uk.gov.hmcts.ccd.sdk.type.OrganisationPolicy;
 import uk.gov.hmcts.ccd.sdk.type.ScannedDocument;
@@ -394,6 +395,6 @@ public class CaseData {
     label = "Document List",
     typeOverride = DynamicMultiSelectList
   )
-  private DynamicList documentList;
+  private DynamicMultiSelectList documentList;
 
 }
