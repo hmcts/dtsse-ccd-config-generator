@@ -21,7 +21,7 @@ ccd {
 }
 
 dependencies {
-    implementation 'org.springframework.boot:spring-boot-autoconfigure:2.7.11'
+    implementation 'org.springframework.boot:spring-boot-autoconfigure:2.7.12'
 
     // Use JUnit test framework
     testImplementation 'junit:junit:4.13.2'
