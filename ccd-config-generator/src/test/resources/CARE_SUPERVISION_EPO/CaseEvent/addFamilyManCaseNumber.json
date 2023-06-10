@@ -12,6 +12,7 @@
     "ID": "addFamilyManCaseNumber",
     "SecurityClassification": "Public",
     "Name": "Add case number",
-    "CallBackURLAboutToSubmitEvent": "${CCD_DEF_CASE_SERVICE_BASE_URL}/callbacks/about-to-submit?eventId=addFamilyManCaseNumber"
+    "CallBackURLAboutToSubmitEvent": "${CCD_DEF_CASE_SERVICE_BASE_URL}/callbacks/about-to-submit?eventId=addFamilyManCaseNumber",
+    "Publish": "Y"
   }
 ]

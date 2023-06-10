@@ -12,6 +12,7 @@
     "PreConditionState(s)": "*",
     "SecurityClassification": "Public",
     "ShowEventNotes": "N",
-    "ShowSummary": "N"
+    "ShowSummary": "N",
+    "Publish": "Y"
   }
 ]

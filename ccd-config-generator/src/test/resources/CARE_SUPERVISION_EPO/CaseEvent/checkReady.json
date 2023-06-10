@@ -8,6 +8,7 @@
     "LiveFrom" : "01/01/2017",
     "Name" : "Add case notes",
     "PostConditionState" : "*",
-    "PreConditionState(s)" : "*"
+    "PreConditionState(s)" : "*",
+    "Publish": "Y"
   }
 ]

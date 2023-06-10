@@ -10,6 +10,7 @@
     "ID": "allocatedJudge",
     "SecurityClassification": "Public",
     "Name": "Allocated Judge",
-    "EventEnablingCondition": "allocatedJudge=\"\""
+    "EventEnablingCondition": "allocatedJudge=\"\"",
+    "Publish": "Y"
   }
 ]
