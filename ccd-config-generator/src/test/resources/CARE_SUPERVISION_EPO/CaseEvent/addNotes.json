@@ -10,6 +10,6 @@
     "ID": "addNotes",
     "SecurityClassification": "Public",
     "Name": "Add case notes",
-    "Publish": "Y"
+    "Publish": "N"
   }
 ]

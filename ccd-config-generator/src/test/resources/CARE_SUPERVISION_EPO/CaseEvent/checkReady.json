@@ -9,6 +9,6 @@
     "Name" : "Add case notes",
     "PostConditionState" : "*",
     "PreConditionState(s)" : "*",
-    "Publish": "Y"
+    "Publish": "N"
   }
 ]

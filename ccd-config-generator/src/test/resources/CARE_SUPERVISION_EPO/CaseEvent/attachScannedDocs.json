@@ -7,6 +7,6 @@
     "Name" : "Attach scanned docs",
     "PostConditionState" : "*",
     "PreConditionState(s)" : "*",
-    "Publish": "Y"
+    "Publish": "N"
   }
 ]

@@ -8,6 +8,6 @@
     "Name" : "Deleted only",
     "PostConditionState" : "Deleted",
     "PreConditionState(s)" : "Deleted",
-    "Publish": "Y"
+    "Publish": "N"
   }
 ]

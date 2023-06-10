@@ -11,6 +11,6 @@
     "SecurityClassification": "Public",
     "Name": "Allocated Judge",
     "EventEnablingCondition": "allocatedJudge=\"\"",
-    "Publish": "Y"
+    "Publish": "N"
   }
 ]

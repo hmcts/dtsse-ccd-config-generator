@@ -10,6 +10,6 @@
     "ID": "populateSDO",
     "SecurityClassification": "Public",
     "Name": "Populate standard directions",
-    "Publish": "Y"
+    "Publish": "N"
   }
 ]

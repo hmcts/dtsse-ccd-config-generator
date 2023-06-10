@@ -13,6 +13,6 @@
     "ID": "openCase",
     "RetriesTimeoutURLSubmittedEvent": "1,2,3,4,5",
     "CallBackURLAboutToSubmitEvent": "${CCD_DEF_CASE_SERVICE_BASE_URL}/callbacks/about-to-submit?eventId=openCase",
-    "Publish": "Y"
+    "Publish": "N"
   }
 ]
