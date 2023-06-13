@@ -32,6 +32,7 @@ public class Event<T, R extends HasRole, S> {
   private boolean explicitGrants;
   private boolean showSummary;
   private boolean showEventNotes;
+  private boolean publishToCamunda;
   private AboutToStart<T, S> aboutToStartCallback;
   private AboutToSubmit<T, S> aboutToSubmitCallback;
   private Submitted<T, S> submittedCallback;
@@ -113,6 +114,17 @@ public class Event<T, R extends HasRole, S> {
 
     public EventBuilder<T, R, S> showSummary() {
       this.showSummary = true;
+      return this;
+    }
+
+
+    public EventBuilder<T, R, S> publishToCamunda(boolean publishToCamunda) {
+      this.publishToCamunda = publishToCamunda;
+      return this;
+    }
+
+    public EventBuilder<T, R, S> publishToCamunda() {
+      this.publishToCamunda = true;
       return this;
     }
 

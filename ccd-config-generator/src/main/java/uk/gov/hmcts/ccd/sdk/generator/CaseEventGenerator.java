@@ -73,7 +73,11 @@ class CaseEventGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
     } else {
       data.put("ShowEventNotes", "N");
     }
-
+    if (event.isPublishToCamunda()) {
+      data.put("Publish", "Y");
+    } else {
+      data.put("Publish", "N");
+    }
     if (!Strings.isNullOrEmpty(event.getEndButtonLabel())) {
       data.put("EndButtonLabel", event.getEndButtonLabel());
     }

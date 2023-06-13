@@ -223,6 +223,9 @@ public class E2EConfigGenerationTests {
             if ("N".equals(entry.get("ShowSummary"))) {
                 entry.remove("ShowSummary");
             }
+          if ("N".equals(entry.get("Publish"))) {
+               entry.remove("Publish");
+          }
             if ("N".equals(entry.get("ShowEventNotes"))) {
                 entry.remove("ShowEventNotes");
             }

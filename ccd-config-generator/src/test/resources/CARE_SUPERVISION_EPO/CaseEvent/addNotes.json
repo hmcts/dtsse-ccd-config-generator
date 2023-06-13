@@ -9,6 +9,7 @@
     "EndButtonLabel": "Save and continue",
     "ID": "addNotes",
     "SecurityClassification": "Public",
-    "Name": "Add case notes"
+    "Name": "Add case notes",
+    "Publish": "N"
   }
 ]

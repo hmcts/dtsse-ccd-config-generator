@@ -9,6 +9,7 @@
     "EndButtonLabel": "Save and continue",
     "ID": "populateSDO",
     "SecurityClassification": "Public",
-    "Name": "Populate standard directions"
+    "Name": "Populate standard directions",
+    "Publish": "N"
   }
 ]
