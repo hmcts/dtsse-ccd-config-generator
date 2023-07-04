@@ -78,6 +78,10 @@ class CaseEventToFieldsGenerator<T, S, R extends HasRole> implements ConfigGener
             info.put("ShowSummaryChangeOption", "Y");
           }
 
+          if (field.isPublishToCamunda()) {
+            info.put("Publish", "Y");
+          }
+
           if (collection.getPageLabels().containsKey(field.getPage())) {
             info.put("PageLabel", collection.getPageLabels().remove(field.getPage()));
           }

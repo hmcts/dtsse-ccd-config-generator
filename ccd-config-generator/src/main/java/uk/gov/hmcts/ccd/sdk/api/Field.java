@@ -34,6 +34,7 @@ public class Field<Type, StateType, Parent, Grandparent> {
   boolean readOnly;
   private MidEvent midEventCallback;
   boolean retainHiddenValue;
+  boolean publishToCamunda;
 
   Class<Type> clazz;
   @ToString.Exclude
@@ -90,6 +91,16 @@ public class Field<Type, StateType, Parent, Grandparent> {
 
     public FieldBuilder<Type, StateType, Parent, Grandparent> showSummary(boolean b) {
       this.showSummary = b;
+      return this;
+    }
+
+    public FieldBuilder<Type, StateType, Parent, Grandparent> publishToCamunda() {
+      this.publishToCamunda = true;
+      return this;
+    }
+
+    public FieldBuilder<Type, StateType, Parent, Grandparent> publishToCamunda(boolean b) {
+      this.publishToCamunda = b;
       return this;
     }
 
