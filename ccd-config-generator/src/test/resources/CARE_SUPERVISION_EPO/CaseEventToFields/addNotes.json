@@ -9,7 +9,8 @@
     "PageFieldDisplayOrder": 1,
     "DisplayContext": "OPTIONAL",
     "PageDisplayOrder": 1,
-    "ShowSummaryChangeOption" : "Y"
+    "ShowSummaryChangeOption" : "Y",
+    "Publish": "Y"
   },
   {
     "PageID": 1,
@@ -20,7 +21,8 @@
     "PageColumnNumber": 1,
     "PageFieldDisplayOrder": 2,
     "DisplayContext": "READONLY",
-    "PageDisplayOrder": 1
+    "PageDisplayOrder": 1,
+    "Publish": "Y"
   },
   {
     "PageID": 1,
@@ -32,7 +34,8 @@
     "PageFieldDisplayOrder": 3,
     "DisplayContext": "OPTIONAL",
     "ShowSummaryChangeOption": "Y",
-    "PageDisplayOrder": 1
+    "PageDisplayOrder": 1,
+    "Publish": "Y"
   },
   {
     "CaseEventFieldLabel" : "Interpreter required",
@@ -47,7 +50,8 @@
     "PageFieldDisplayOrder" : 4,
     "PageID" : 1,
     "ShowSummaryChangeOption" : "Y",
-    "RetainHiddenValue" : "Y"
+    "RetainHiddenValue" : "Y",
+    "Publish": "Y"
   },
   {
     "CaseEventID" : "addNotes",
@@ -59,7 +63,8 @@
     "PageDisplayOrder" : 1,
     "PageFieldDisplayOrder" : 5,
     "PageID" : 1,
-    "ShowSummaryChangeOption" : "Y"
+    "ShowSummaryChangeOption" : "Y",
+    "Publish": "Y"
   },
   {
     "CaseEventFieldHint" : "Event hint",
@@ -73,7 +78,8 @@
     "PageDisplayOrder" : 1,
     "PageFieldDisplayOrder" : 6,
     "PageID" : 1,
-    "ShowSummaryChangeOption" : "Y"
+    "ShowSummaryChangeOption" : "Y",
+    "Publish": "Y"
   },
   {
     "PageID": 1,
@@ -99,7 +105,8 @@
     "PageDisplayOrder" : 1,
     "PageFieldDisplayOrder" : 8,
     "PageID" : 1,
-    "ShowSummaryChangeOption" : "Y"
+    "ShowSummaryChangeOption" : "Y",
+    "Publish": "Y"
   },
   {
     "CaseEventFieldLabel" : "Judge is bilingual",
@@ -114,7 +121,8 @@
     "PageFieldDisplayOrder" : 9,
     "PageID" : 1,
     "ShowSummaryChangeOption" : "Y",
-    "RetainHiddenValue" : "Y"
+    "RetainHiddenValue" : "Y",
+    "Publish": "Y"
   },
   {
     "CaseEventFieldLabel" : "Please enter a case local authority",
@@ -127,6 +135,7 @@
     "PageDisplayOrder" : 1,
     "PageFieldDisplayOrder" : 10,
     "PageID" : 1,
-    "ShowSummaryChangeOption" : "Y"
+    "ShowSummaryChangeOption" : "Y",
+    "Publish": "Y"
   }
 ]

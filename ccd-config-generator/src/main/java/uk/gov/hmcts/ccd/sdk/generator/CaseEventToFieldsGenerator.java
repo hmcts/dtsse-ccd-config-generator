@@ -1,5 +1,6 @@
 package uk.gov.hmcts.ccd.sdk.generator;
 
+
 import com.google.common.collect.HashMultimap;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
@@ -43,7 +44,9 @@ class CaseEventToFieldsGenerator<T, S, R extends HasRole> implements ConfigGener
               field.getContext() == null ? "COMPLEX" : field.getContext().toString().toUpperCase();
           info.put("DisplayContext", context);
           info.put("PageFieldDisplayOrder", field.getPageFieldDisplayOrder());
-
+          if (event.isPublishToCamunda()) {
+            info.put("Publish", "Y");
+          }
           Object pageId = field.getPage();
           if (pageId == null) {
             pageId = 1;
@@ -76,10 +79,6 @@ class CaseEventToFieldsGenerator<T, S, R extends HasRole> implements ConfigGener
 
           if (field.isShowSummary()) {
             info.put("ShowSummaryChangeOption", "Y");
-          }
-
-          if (field.isPublishToCamunda()) {
-            info.put("Publish", "Y");
           }
 
           if (collection.getPageLabels().containsKey(field.getPage())) {

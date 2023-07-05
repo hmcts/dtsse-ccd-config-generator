@@ -185,12 +185,6 @@ public class FieldCollection {
         null, retainHiddenValue);
     }
 
-    public FieldCollectionBuilder<Type, StateType, Parent> optionalPublishToCamunda(
-        TypedPropertyGetter<Type, ?> getter) {
-      field(getter).context(DisplayContext.Optional).showSummary(true).publishToCamunda();
-      return this;
-    }
-
     public <Value> FieldCollectionBuilder<Type, StateType, Parent> mandatory(TypedPropertyGetter<Type, Value> getter,
         String showCondition, Value defaultValue, String caseEventFieldLabel, String caseEventFieldHint,
         String displayContextParameter) {
@@ -309,12 +303,6 @@ public class FieldCollection {
         String showCondition, String caseEventFieldLabel, boolean retainHiddenValue) {
       return field(getter, DisplayContext.Mandatory, showCondition, false, null,
         caseEventFieldLabel, null, retainHiddenValue);
-    }
-
-    public FieldCollectionBuilder<Type, StateType, Parent> mandatoryPublishToCamunda(
-        TypedPropertyGetter<Type, ?> getter) {
-      field(getter).context(DisplayContext.Mandatory).showSummary(true).publishToCamunda();
-      return this;
     }
 
     public FieldCollectionBuilder<Type, StateType, Parent> readonly(TypedPropertyGetter<Type, ?> getter,

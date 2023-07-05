@@ -58,8 +58,7 @@
     "PageDisplayOrder" : 2,
     "PageFieldDisplayOrder": 2,
     "PageID" : "<Notes>",
-    "ShowSummaryChangeOption" : "Y",
-    "Publish": "Y"
+    "ShowSummaryChangeOption" : "Y"
   },
   {
     "CaseEventFieldLabel" : "Allocated case name",
