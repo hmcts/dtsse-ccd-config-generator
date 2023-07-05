@@ -85,7 +85,8 @@
     "PageFieldDisplayOrder": 7,
     "DisplayContext": "OPTIONAL",
     "PageDisplayOrder": 1,
-    "ShowSummaryChangeOption" : "Y"
+    "ShowSummaryChangeOption" : "Y",
+    "Publish": "Y"
   },
   {
     "CaseEventFieldLabel" : "Gate keeper email",

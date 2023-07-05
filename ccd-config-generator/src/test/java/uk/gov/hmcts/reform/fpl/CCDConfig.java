@@ -100,10 +100,12 @@ public class CCDConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<CaseData, S
             .optional(OrganisationPolicy::getOrgPolicyReference, null, null, "Org ref", "Sol org ref")
             .done()
           .done()
-        .optional(CaseData::getCaseName)
+        .optionalPublishToCamunda(CaseData::getCaseName)
         .optionalWithLabel(CaseData::getGatekeeperEmail, "Gate keeper email")
         .mandatoryWithoutDefaultValue(CaseData::getAllocatedJudge, "hearingPreferencesWelsh=\"yes\"", "Judge is bilingual", true)
         .mandatoryWithLabel(CaseData::getCaseLocalAuthority, "Please enter a case local authority");
+
+
 
     builder.caseRoleToAccessProfile(CASE_ACCESS_APPROVER)
       .accessProfiles("access-profile", "access-profile2")
@@ -282,7 +284,7 @@ public class CCDConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<CaseData, S
         .optional(CaseData::getCaseName, null, null, "Allocated case name", "A hint")
         .page("<Notes>", this::checkCaseNotes)
           .label("caseNotesLabel1","###Case notes",null,true)
-          .mandatory(CaseData::getCaseNotes);
+          .mandatoryPublishToCamunda(CaseData::getCaseNotes);
   }
 
   private void buildAttachScannedDocEvent() {
