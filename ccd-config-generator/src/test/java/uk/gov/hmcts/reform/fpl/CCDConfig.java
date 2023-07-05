@@ -83,6 +83,7 @@ public class CCDConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<CaseData, S
         .grant(CRU, HMCTS_ADMIN)
         .grant(R, LOCAL_AUTHORITY)
         .grant(new SolicitorAccess())
+        .publishToCamunda()
         .fields()
         .optional(CaseData::getCaseNotes)
         .complex(CaseData::getHearingPreferences)
@@ -104,6 +105,8 @@ public class CCDConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<CaseData, S
         .optionalWithLabel(CaseData::getGatekeeperEmail, "Gate keeper email")
         .mandatoryWithoutDefaultValue(CaseData::getAllocatedJudge, "hearingPreferencesWelsh=\"yes\"", "Judge is bilingual", true)
         .mandatoryWithLabel(CaseData::getCaseLocalAuthority, "Please enter a case local authority");
+
+
 
     builder.caseRoleToAccessProfile(CASE_ACCESS_APPROVER)
       .accessProfiles("access-profile", "access-profile2")
