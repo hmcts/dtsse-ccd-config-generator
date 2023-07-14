@@ -47,7 +47,9 @@ class ComplexTypeGenerator<T, S, R extends HasRole> implements ConfigGenerator<T
         info.put("ID", id);
         info.remove("CaseTypeID");
       }
-
+      // CCD requires Complex types to be declared in order.
+      // ie. if type A references type B, B must be declared first or import will fail.
+      // We therefore sort our complex types by depth from the root to ensure this ordering.
       int depth = types.get(c);
       Path path;
       if (0 == depth) {
