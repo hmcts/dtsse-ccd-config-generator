@@ -1,0 +1,16 @@
+[
+  {
+    "ID": "LinkReason",
+    "FieldType": "Text",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "Reason"
+  },
+  {
+    "ID": "LinkReason",
+    "FieldType": "Text",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "OtherDescription"
+  }
+]
