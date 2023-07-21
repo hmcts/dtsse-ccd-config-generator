@@ -19,7 +19,7 @@ public class CaseLink {
   private String caseReference;
 
   @JsonProperty("ReasonForLink")
-  private List<LinkReason> reasonForLink;
+  private List<ListValue<LinkReason>> reasonForLink;
 
   @JsonProperty("CreatedDateTime")
   private LocalDate createdDateTime;
@@ -31,7 +31,7 @@ public class CaseLink {
   @JsonCreator
   public CaseLink(
       @JsonProperty("CaseReference") String caseReference,
-      @JsonProperty("ReasonForLink") List<LinkReason> reasonForLink,
+      @JsonProperty("ReasonForLink") List<ListValue<LinkReason>> reasonForLink,
       @JsonProperty("CreatedDateTime") LocalDate createdDateTime,
       @JsonProperty("CaseType") String caseType
   ) {
