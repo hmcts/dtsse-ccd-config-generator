@@ -108,15 +108,39 @@
     "SecurityClassification": "Public"
   },
   {
-    "ID": "caseFlag",
+    "ID": "caseFlags",
     "FieldType": "Flags",
     "CaseTypeID": "CARE_SUPERVISION_EPO",
     "LiveFrom": "01/01/2017",
     "Label": " ",
     "SecurityClassification": "Public"
-},
+  },
   {
-    "ID": "caseLinkField",
+    "ID": "subjectFlags",
+    "FieldType": "Flags",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "LiveFrom": "01/01/2017",
+    "Label": " ",
+    "SecurityClassification": "Public"
+  },
+  {
+    "ID": "applicantFlags",
+    "FieldType": "Flags",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "LiveFrom": "01/01/2017",
+    "Label": " ",
+    "SecurityClassification": "Public"
+  },
+  {
+    "ID": "representativeFlags",
+    "FieldType": "Flags",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "LiveFrom": "01/01/2017",
+    "Label": " ",
+    "SecurityClassification": "Public"
+  },
+  {
+    "ID": "caseLinks",
     "FieldType": "CaseLink",
     "CaseTypeID": "CARE_SUPERVISION_EPO",
     "LiveFrom": "01/01/2017",
@@ -798,11 +822,11 @@
     "SecurityClassification": "Public"
   },
   {
-    "CaseTypeID" : "CARE_SUPERVISION_EPO",
-    "FieldType" : "Label",
-    "ID" : "caseNotesLabel1",
-    "Label" : "###Case notes",
-    "LiveFrom" : "01/01/2017"
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "FieldType": "Label",
+    "ID": "caseNotesLabel1",
+    "Label": "###Case notes",
+    "LiveFrom": "01/01/2017"
   },
   {
     "ID": "caseNotes",
@@ -879,39 +903,39 @@
     "SecurityClassification": "Public"
   },
   {
-    "CaseTypeID" : "CARE_SUPERVISION_EPO",
-    "FieldType" : "CasePaymentHistoryViewer",
-    "ID" : "paymentHistoryField",
-    "Label" : " ",
-    "LiveFrom" : "01/01/2017"
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "FieldType": "CasePaymentHistoryViewer",
+    "ID": "paymentHistoryField",
+    "Label": " ",
+    "LiveFrom": "01/01/2017"
   },
   {
-    "CaseTypeID" : "CARE_SUPERVISION_EPO",
-    "FieldType" : "DynamicRadioList",
-    "ID" : "solicitorPbaNumber",
-    "Label" : "Select the solicitor PBA number you wish to use",
-    "LiveFrom" : "01/01/2017"
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "FieldType": "DynamicRadioList",
+    "ID": "solicitorPbaNumber",
+    "Label": "Select the solicitor PBA number you wish to use",
+    "LiveFrom": "01/01/2017"
   },
   {
-    "CaseTypeID" : "CARE_SUPERVISION_EPO",
-    "FieldType" : "FixedList",
-    "FieldTypeParameter" : "ChildGender",
-    "ID" : "childGender",
-    "Label" : " ",
-    "LiveFrom" : "01/01/2017"
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "FieldType": "FixedList",
+    "FieldTypeParameter": "ChildGender",
+    "ID": "childGender",
+    "Label": " ",
+    "LiveFrom": "01/01/2017"
   },
   {
-    "CaseTypeID" : "CARE_SUPERVISION_EPO",
-    "FieldType" : "Label",
-    "ID" : "test-label",
-    "Label" : "a label",
-    "LiveFrom" : "01/01/2017"
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "FieldType": "Label",
+    "ID": "test-label",
+    "Label": "a label",
+    "LiveFrom": "01/01/2017"
   },
   {
-    "CaseTypeID" : "CARE_SUPERVISION_EPO",
-    "FieldType" : "DynamicMultiSelectList",
-    "ID" : "documentList",
-    "Label" : "Document List",
-    "LiveFrom" : "01/01/2017"
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "FieldType": "DynamicMultiSelectList",
+    "ID": "documentList",
+    "Label": "Document List",
+    "LiveFrom": "01/01/2017"
   }
 ]

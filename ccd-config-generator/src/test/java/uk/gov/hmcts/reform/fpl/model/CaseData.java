@@ -104,8 +104,11 @@ public class CaseData {
   private final uk.gov.hmcts.ccd.sdk.type.Address addressField;
   private final uk.gov.hmcts.ccd.sdk.type.Document documentField;
   private final uk.gov.hmcts.ccd.sdk.type.OrderSummary orderSummaryField;
-  private final uk.gov.hmcts.ccd.sdk.type.CaseLink caseLinkField;
-  private final uk.gov.hmcts.ccd.sdk.type.Flags caseFlag;
+  private final uk.gov.hmcts.ccd.sdk.type.CaseLink caseLinks;
+  private final uk.gov.hmcts.ccd.sdk.type.Flags caseFlags;
+  private final uk.gov.hmcts.ccd.sdk.type.Flags applicantFlags;
+  private final uk.gov.hmcts.ccd.sdk.type.Flags representativeFlags;
+  private final uk.gov.hmcts.ccd.sdk.type.Flags subjectFlags;
   private final uk.gov.hmcts.ccd.sdk.type.YesOrNo yesOrNoField;
 
   private final Proceeding proceeding;
