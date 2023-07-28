@@ -2,6 +2,7 @@ package uk.gov.hmcts.ccd.sdk.type;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonFormat;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.annotation.JsonSerialize;
@@ -17,6 +18,7 @@ import uk.gov.hmcts.ccd.sdk.api.ComplexType;
 @Builder
 @Data
 @ComplexType(name = "PreviousOrganisation", generate = false)
+@JsonIgnoreProperties(ignoreUnknown = true)
 public class PreviousOrganisation {
 
   @JsonProperty("FromTimeStamp")
