@@ -22,8 +22,8 @@ repositories {
 
 dependencies {
     // Use JUnit test framework for unit tests
-    annotationProcessor group: 'org.projectlombok', name: 'lombok', version: '1.18.28'
-    compileOnly group: 'org.projectlombok', name: 'lombok', version: '1.18.28'
+    annotationProcessor group: 'org.projectlombok', name: 'lombok', version: '1.18.30'
+    compileOnly group: 'org.projectlombok', name: 'lombok', version: '1.18.30'
     implementation 'com.google.guava:guava:32.1.2-jre'
 
     // Ensure we run the plugin's tests when the libraries are modified.
