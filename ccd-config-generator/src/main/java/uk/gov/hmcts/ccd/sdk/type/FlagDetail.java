@@ -3,13 +3,13 @@ package uk.gov.hmcts.ccd.sdk.type;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import java.time.LocalDateTime;
+import java.util.List;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import uk.gov.hmcts.ccd.sdk.api.ComplexType;
 
-import java.time.LocalDateTime;
-import java.util.List;
 
 @NoArgsConstructor
 @Builder
