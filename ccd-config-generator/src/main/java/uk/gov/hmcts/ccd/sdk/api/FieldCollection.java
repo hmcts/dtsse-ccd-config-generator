@@ -502,33 +502,33 @@ public class FieldCollection {
     }
 
     public <U> FieldCollectionBuilder<U, StateType, FieldCollectionBuilder<Type, StateType, Parent>> complex(
-      TypedPropertyGetter<Type, U> getter, String showCondition, boolean retainHiddenValue) {
+        TypedPropertyGetter<Type, U> getter, String showCondition, boolean retainHiddenValue) {
       return complex(getter, true, showCondition, null, null, retainHiddenValue);
     }
 
     public <U> FieldCollectionBuilder<U, StateType, FieldCollectionBuilder<Type, StateType, Parent>> complex(
-      TypedPropertyGetter<Type, U> getter, String showCondition, String eventFieldLabel, boolean retainHiddenValue) {
+        TypedPropertyGetter<Type, U> getter, String showCondition, String eventFieldLabel, boolean retainHiddenValue) {
       return complex(getter, true, showCondition, eventFieldLabel, null, retainHiddenValue);
     }
 
     public <U> FieldCollectionBuilder<U, StateType, FieldCollectionBuilder<Type, StateType, Parent>> complex(
-      TypedPropertyGetter<Type, U> getter, String showCondition, String eventFieldLabel, String eventFieldHint,
-      boolean retainHiddenValue) {
+        TypedPropertyGetter<Type, U> getter, String showCondition, String eventFieldLabel, String eventFieldHint,
+        boolean retainHiddenValue) {
       return complex(getter, true, showCondition, eventFieldLabel, eventFieldHint, retainHiddenValue);
     }
 
     public <U> FieldCollectionBuilder<U, StateType, FieldCollectionBuilder<Type, StateType, Parent>> complex(
-      TypedPropertyGetter<Type, U> getter, boolean summary, boolean retainHiddenValue) {
+        TypedPropertyGetter<Type, U> getter, boolean summary, boolean retainHiddenValue) {
       return complex(getter, summary, null, null, null, retainHiddenValue);
     }
 
     public <U> FieldCollectionBuilder<U, StateType, FieldCollectionBuilder<Type, StateType, Parent>> complex(
-      TypedPropertyGetter<Type, ?> getter,
-      boolean summary,
-      String showCondition,
-      String label,
-      String hint,
-      boolean retainHiddenValue) {
+        TypedPropertyGetter<Type, ?> getter,
+        boolean summary,
+        String showCondition,
+        String label,
+        String hint,
+        boolean retainHiddenValue) {
 
       Class<U> c = propertyUtils.getPropertyType(dataClass, getter);
       String fieldName = propertyUtils.getPropertyName(dataClass, getter);
