@@ -99,6 +99,10 @@ class CaseEventToComplexTypesGenerator<T, S, R extends HasRole> implements
           if (null != field.getCaseEventFieldHint()) {
             data.put("EventHintText", field.getCaseEventFieldHint());
           }
+
+          if (field.isRetainHiddenValue()) {
+            data.put("RetainHiddenValue", "Y");
+          }
         }
         if (null != complex.getComplexFields()) {
           expand(complex.getComplexFields(), entries, eventId, rfn, locator);

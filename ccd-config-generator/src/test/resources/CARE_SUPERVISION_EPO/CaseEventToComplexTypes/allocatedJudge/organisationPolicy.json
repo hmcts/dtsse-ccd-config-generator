@@ -21,7 +21,9 @@
     "CaseFieldID": "organisationPolicy",
     "CaseEventID": "allocatedJudge",
     "DisplayContext": "MANDATORY",
-    "ListElementCode": "Organisation.OrganisationID"
+    "FieldShowCondition" : "allocatedJudge=\"*\"",
+    "ListElementCode": "Organisation.OrganisationID",
+    "RetainHiddenValue" : "Y"
   },
   {
     "CaseEventID" : "allocatedJudge",

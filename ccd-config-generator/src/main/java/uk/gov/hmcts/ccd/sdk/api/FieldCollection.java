@@ -483,26 +483,53 @@ public class FieldCollection {
 
     public <U> FieldCollectionBuilder<U, StateType, FieldCollectionBuilder<Type, StateType, Parent>> complex(
         TypedPropertyGetter<Type, U> getter, String showCondition, String eventFieldLabel, String eventFieldHint) {
-      return complex(getter, true, showCondition, eventFieldLabel, eventFieldHint);
+      return complex(getter, true, showCondition, eventFieldLabel, eventFieldHint, false);
     }
 
     public <U> FieldCollectionBuilder<U, StateType, FieldCollectionBuilder<Type, StateType, Parent>> complex(
         TypedPropertyGetter<Type, U> getter, String showCondition, String eventFieldLabel) {
-      return complex(getter, true, showCondition, eventFieldLabel, null);
+      return complex(getter, true, showCondition, eventFieldLabel, null, false);
     }
 
     public <U> FieldCollectionBuilder<U, StateType, FieldCollectionBuilder<Type, StateType, Parent>> complex(
         TypedPropertyGetter<Type, U> getter, String showCondition) {
-      return complex(getter, true, showCondition, null, null);
+      return complex(getter, true, showCondition, null, null, false);
     }
 
     public <U> FieldCollectionBuilder<U, StateType, FieldCollectionBuilder<Type, StateType, Parent>> complex(
         TypedPropertyGetter<Type, U> getter, boolean summary) {
-      return complex(getter, summary, null, null, null);
+      return complex(getter, summary, null, null, null, false);
     }
 
     public <U> FieldCollectionBuilder<U, StateType, FieldCollectionBuilder<Type, StateType, Parent>> complex(
-        TypedPropertyGetter<Type, ?> getter, boolean summary, String showCondition, String label, String hint) {
+        TypedPropertyGetter<Type, U> getter, String showCondition, boolean retainHiddenValue) {
+      return complex(getter, true, showCondition, null, null, retainHiddenValue);
+    }
+
+    public <U> FieldCollectionBuilder<U, StateType, FieldCollectionBuilder<Type, StateType, Parent>> complex(
+        TypedPropertyGetter<Type, U> getter, String showCondition, String eventFieldLabel, boolean retainHiddenValue) {
+      return complex(getter, true, showCondition, eventFieldLabel, null, retainHiddenValue);
+    }
+
+    public <U> FieldCollectionBuilder<U, StateType, FieldCollectionBuilder<Type, StateType, Parent>> complex(
+        TypedPropertyGetter<Type, U> getter, String showCondition, String eventFieldLabel, String eventFieldHint,
+        boolean retainHiddenValue) {
+      return complex(getter, true, showCondition, eventFieldLabel, eventFieldHint, retainHiddenValue);
+    }
+
+    public <U> FieldCollectionBuilder<U, StateType, FieldCollectionBuilder<Type, StateType, Parent>> complex(
+        TypedPropertyGetter<Type, U> getter, boolean summary, boolean retainHiddenValue) {
+      return complex(getter, summary, null, null, null, retainHiddenValue);
+    }
+
+    public <U> FieldCollectionBuilder<U, StateType, FieldCollectionBuilder<Type, StateType, Parent>> complex(
+        TypedPropertyGetter<Type, ?> getter,
+        boolean summary,
+        String showCondition,
+        String label,
+        String hint,
+        boolean retainHiddenValue) {
+
       Class<U> c = propertyUtils.getPropertyType(dataClass, getter);
       String fieldName = propertyUtils.getPropertyName(dataClass, getter);
       Optional<JsonUnwrapped> isUnwrapped = isUnwrappedField(dataClass, fieldName);
@@ -514,7 +541,8 @@ public class FieldCollection {
             .showSummary(summary)
             .showCondition(showCondition)
             .caseEventFieldLabel(label)
-            .caseEventFieldHint(hint);
+            .caseEventFieldHint(hint)
+            .retainHiddenValue(retainHiddenValue);
       }
 
       FieldCollectionBuilder<U, StateType, FieldCollectionBuilder<Type, StateType, Parent>> builder =
