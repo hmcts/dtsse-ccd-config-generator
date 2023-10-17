@@ -16,14 +16,14 @@ import uk.gov.hmcts.ccd.sdk.api.ComplexType;
 public class SearchCriteria {
 
   @JsonProperty("otherCaseReferences")
-  private List<ListValue<List>> otherCaseReferences;
+  private List<List> otherCaseReferences;
 
   @JsonProperty("parties")
-  private List<ListValue<SearchParty>> parties;
+  private List<SearchParty> parties;
 
   @JsonCreator
-  public SearchCriteria(@JsonProperty("otherCaseReferences") List<ListValue<List>> otherCaseReferences,
-                        @JsonProperty("roleOnCase") List<ListValue<SearchParty>> parties) {
+  public SearchCriteria(@JsonProperty("otherCaseReferences") List<List> otherCaseReferences,
+                        @JsonProperty("roleOnCase") List<SearchParty> parties) {
     this.otherCaseReferences = otherCaseReferences;
     this.parties = parties;
   }
