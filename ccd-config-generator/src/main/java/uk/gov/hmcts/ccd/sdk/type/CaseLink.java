@@ -1,6 +1,7 @@
 package uk.gov.hmcts.ccd.sdk.type;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonFormat;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -22,6 +23,7 @@ public class CaseLink {
   private List<ListValue<LinkReason>> reasonForLink;
 
   @JsonProperty("CreatedDateTime")
+  @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd'T'HH:mm:ss.SSS")
   private LocalDateTime createdDateTime;
 
   @JsonProperty("CaseType")
