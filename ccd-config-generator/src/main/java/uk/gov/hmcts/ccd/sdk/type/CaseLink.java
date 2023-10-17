@@ -1,8 +1,9 @@
 package uk.gov.hmcts.ccd.sdk.type;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonFormat;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 import lombok.Builder;
 import lombok.Data;
@@ -22,7 +23,8 @@ public class CaseLink {
   private List<ListValue<LinkReason>> reasonForLink;
 
   @JsonProperty("CreatedDateTime")
-  private LocalDate createdDateTime;
+  @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd'T'HH:mm:ss.SSS")
+  private LocalDateTime createdDateTime;
 
   @JsonProperty("CaseType")
   private String caseType;
@@ -32,7 +34,7 @@ public class CaseLink {
   public CaseLink(
       @JsonProperty("CaseReference") String caseReference,
       @JsonProperty("ReasonForLink") List<ListValue<LinkReason>> reasonForLink,
-      @JsonProperty("CreatedDateTime") LocalDate createdDateTime,
+      @JsonProperty("CreatedDateTime") LocalDateTime createdDateTime,
       @JsonProperty("CaseType") String caseType
   ) {
     this.reasonForLink = reasonForLink;
