@@ -110,6 +110,8 @@ public class CaseData {
   private final uk.gov.hmcts.ccd.sdk.type.Flags representativeFlags;
   private final uk.gov.hmcts.ccd.sdk.type.Flags subjectFlags;
   private final uk.gov.hmcts.ccd.sdk.type.YesOrNo yesOrNoField;
+  private final uk.gov.hmcts.ccd.sdk.type.SearchParty searchParty;
+  private final uk.gov.hmcts.ccd.sdk.type.SearchCriteria searchCriteria;
 
   private final Proceeding proceeding;
 
@@ -122,6 +124,7 @@ public class CaseData {
   @Valid
   private final Allocation allocationProposal;
 
+ // private final SearchCriteria sc;
   private final Allocation allocationDecision;
   private final List<Element<Direction>> allParties;
   private final List<Element<Direction>> allPartiesCustom;

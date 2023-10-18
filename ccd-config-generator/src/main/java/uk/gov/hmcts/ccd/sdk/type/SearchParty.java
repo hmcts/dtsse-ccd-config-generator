@@ -16,38 +16,38 @@ import uk.gov.hmcts.ccd.sdk.api.ComplexType;
 @ComplexType(name = "Search Party", generate = false)
 public class SearchParty {
   @JsonProperty("Name")
-  private String partyName;
+  private String name;
 
   @JsonProperty("EmailAddress")
-  private String partyEmailAddress;
+  private String emailAddress;
 
   @JsonProperty("AddressLine1")
-  private String partyAddressLine1;
+  private String addressLine1;
 
   @JsonProperty("PostCode")
-  private String partyPostcode;
+  private String postcode;
 
   @JsonProperty("DOB")
   @JsonFormat(pattern = "yyyy-MM-dd")
-  private LocalDate partyDateOfBirth;
+  private LocalDate dateOfBirth;
 
   @JsonProperty("DOD")
   @JsonFormat(pattern = "yyyy-MM-dd")
-  private LocalDate partyDateOfDeath;
+  private LocalDate dateOfDeath;
 
   @JsonCreator
-  public SearchParty(@JsonProperty("Name") String partyName,
-                     @JsonProperty("EmailAddress") String partyEmailAddress,
-                     @JsonProperty("AddressLine1") String partyAddressLine1,
-                     @JsonProperty("Postcode") String partyPostcode,
-                     @JsonProperty("DOB") LocalDate partyDateOfBirth,
-                     @JsonProperty("DOD") LocalDate partyDateOfDeath) {
-    this.partyName = partyName;
-    this.partyEmailAddress = partyEmailAddress;
-    this.partyAddressLine1 = partyAddressLine1;
-    this.partyPostcode = partyPostcode;
-    this.partyDateOfBirth = partyDateOfBirth;
-    this.partyDateOfDeath = partyDateOfDeath;
+  public SearchParty(@JsonProperty("Name") String name,
+                     @JsonProperty("EmailAddress") String emailAddress,
+                     @JsonProperty("AddressLine1") String addressLine1,
+                     @JsonProperty("Postcode") String postcode,
+                     @JsonProperty("DOB") LocalDate dateOfBirth,
+                     @JsonProperty("DOD") LocalDate dateOfDeath) {
+    this.name = name;
+    this.emailAddress = emailAddress;
+    this.addressLine1 = addressLine1;
+    this.postcode = postcode;
+    this.dateOfBirth = dateOfBirth;
+    this.dateOfDeath = dateOfDeath;
 
   }
 }

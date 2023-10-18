@@ -937,5 +937,19 @@
     "ID": "documentList",
     "Label": "Document List",
     "LiveFrom": "01/01/2017"
+  },
+  {
+    "CaseTypeID" : "CARE_SUPERVISION_EPO",
+    "FieldType" : "Search Party",
+    "ID" : "searchParty",
+    "Label" : " ",
+    "LiveFrom" : "01/01/2017"
+  },
+  {
+    "CaseTypeID" : "CARE_SUPERVISION_EPO",
+    "FieldType" : "Search criteria",
+    "ID" : "searchCriteria",
+    "Label" : " ",
+    "LiveFrom" : "01/01/2017"
   }
 ]
