@@ -110,6 +110,10 @@ public class CaseData {
   private final uk.gov.hmcts.ccd.sdk.type.Flags representativeFlags;
   private final uk.gov.hmcts.ccd.sdk.type.Flags subjectFlags;
   private final uk.gov.hmcts.ccd.sdk.type.YesOrNo yesOrNoField;
+  @JsonProperty("SearchParty")
+  private final uk.gov.hmcts.ccd.sdk.type.SearchParty searchParty;
+  @JsonProperty("SearchCriteria")
+  private final uk.gov.hmcts.ccd.sdk.type.SearchCriteria searchCriteria;
 
   private final Proceeding proceeding;
 
