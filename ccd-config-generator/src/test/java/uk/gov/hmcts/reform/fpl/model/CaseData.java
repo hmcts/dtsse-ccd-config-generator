@@ -126,7 +126,6 @@ public class CaseData {
   @Valid
   private final Allocation allocationProposal;
 
- // private final SearchCriteria sc;
   private final Allocation allocationDecision;
   private final List<Element<Direction>> allParties;
   private final List<Element<Direction>> allPartiesCustom;
