@@ -941,14 +941,14 @@
   {
     "CaseTypeID" : "CARE_SUPERVISION_EPO",
     "FieldType" : "Search Party",
-    "ID" : "searchParty",
+    "ID" : "SearchParty",
     "Label" : " ",
     "LiveFrom" : "01/01/2017"
   },
   {
     "CaseTypeID" : "CARE_SUPERVISION_EPO",
     "FieldType" : "Search criteria",
-    "ID" : "searchCriteria",
+    "ID" : "SearchCriteria",
     "Label" : " ",
     "LiveFrom" : "01/01/2017"
   }
