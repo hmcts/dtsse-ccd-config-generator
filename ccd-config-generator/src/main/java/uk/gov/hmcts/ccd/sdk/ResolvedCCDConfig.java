@@ -19,6 +19,7 @@ import uk.gov.hmcts.ccd.sdk.api.HasRole;
 import uk.gov.hmcts.ccd.sdk.api.Permission;
 import uk.gov.hmcts.ccd.sdk.api.Search;
 import uk.gov.hmcts.ccd.sdk.api.SearchCases;
+import uk.gov.hmcts.ccd.sdk.api.SearchParty;
 import uk.gov.hmcts.ccd.sdk.api.Tab;
 
 @RequiredArgsConstructor
@@ -55,4 +56,5 @@ public class ResolvedCCDConfig<T, S, R extends HasRole> {
   List<SearchCases> searchCaseResultFields;
   List<CaseRoleToAccessProfile> caseRoleToAccessProfiles;
   List<CaseCategory> categories;
+  List<SearchParty> searchParties;
 }

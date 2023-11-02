@@ -4,8 +4,8 @@ import com.google.common.collect.Maps;
 import lombok.SneakyThrows;
 import org.springframework.stereotype.Component;
 import uk.gov.hmcts.ccd.sdk.ResolvedCCDConfig;
-import uk.gov.hmcts.ccd.sdk.api.CaseCategory;
 import uk.gov.hmcts.ccd.sdk.api.HasRole;
+import uk.gov.hmcts.ccd.sdk.api.SearchParty;
 
 import java.io.File;
 import java.nio.file.Path;
@@ -23,21 +23,24 @@ public class SearchPartyGenerator<T, S, R extends HasRole> implements ConfigGene
   public void write(final File outputFolder, ResolvedCCDConfig<T, S, R> config) {
     final Path path = Paths.get(outputFolder.getPath(), "SearchParty.json");
 
-    final List<Map<String, Object>> rows = config.getCategories().stream()
+    final List<Map<String, Object>> rows = config.getSearchParties().stream()
       .map(o -> toJson(config.getCaseType(), o))
       .collect(toList());
-    mergeInto(path, rows, new JsonUtils.AddMissing(), "CategoryID");
+    mergeInto(path, rows, new JsonUtils.AddMissing());
   }
 
   @SneakyThrows
-  private static Map<String, Object> toJson(String caseType, CaseCategory categories) {
+  private static Map<String, Object> toJson(String caseType, SearchParty searchParty) {
     Map<String, Object> field = Maps.newHashMap();
     field.put("LiveFrom", "01/10/2022");
     field.put("CaseTypeID", caseType);
-    field.put("CategoryID", categories.getCategoryID());
-    field.put("SearchPartyCollectionFieldName", categories.getCategoryLabel());
-    field.put("DisplayOrder", categories.getDisplayOrder());
-    field.put("ParentCategoryID", categories.getParentCategoryID());
+    field.put("SearchPartyCollectionFieldName", "");
+    field.put("SearchPartyName", searchParty.getName());
+    field.put("SearchPartyEmailAddress", searchParty.getEmailAddress());
+    field.put("SearchPartyAddressLine1", searchParty.getAddressLine1());
+    field.put("SearchPartyPostCode", searchParty.getPostcode());
+    field.put("SearchPartyDOB", searchParty.getDateOfBirth());
+    field.put("SearchPartyDOD", searchParty.getDateOfDeath());
 
     return field;
   }
