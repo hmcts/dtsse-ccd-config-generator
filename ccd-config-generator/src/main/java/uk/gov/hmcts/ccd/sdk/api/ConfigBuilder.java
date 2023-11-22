@@ -5,9 +5,9 @@ import java.util.Set;
 import java.util.function.Function;
 import uk.gov.hmcts.ccd.sdk.EventTypeBuilderImpl;
 import uk.gov.hmcts.ccd.sdk.api.CaseRoleToAccessProfile.CaseRoleToAccessProfileBuilder;
-import uk.gov.hmcts.ccd.sdk.api.SearchParty.SearchPartyBuilder;
 import uk.gov.hmcts.ccd.sdk.api.Search.SearchBuilder;
 import uk.gov.hmcts.ccd.sdk.api.SearchCases.SearchCasesBuilder;
+import uk.gov.hmcts.ccd.sdk.api.SearchParty.SearchPartyBuilder;
 import uk.gov.hmcts.ccd.sdk.api.Tab.TabBuilder;
 
 public interface ConfigBuilder<T, S, R extends HasRole> {

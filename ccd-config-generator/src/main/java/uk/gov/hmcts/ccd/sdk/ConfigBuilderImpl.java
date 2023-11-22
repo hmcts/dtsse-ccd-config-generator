@@ -15,13 +15,13 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import uk.gov.hmcts.ccd.sdk.api.CaseCategory.CaseCategoryBuilder;
 import uk.gov.hmcts.ccd.sdk.api.CaseRoleToAccessProfile.CaseRoleToAccessProfileBuilder;
-import uk.gov.hmcts.ccd.sdk.api.SearchParty.SearchPartyBuilder;
 import uk.gov.hmcts.ccd.sdk.api.ConfigBuilder;
 import uk.gov.hmcts.ccd.sdk.api.Event;
 import uk.gov.hmcts.ccd.sdk.api.HasRole;
 import uk.gov.hmcts.ccd.sdk.api.Permission;
 import uk.gov.hmcts.ccd.sdk.api.Search.SearchBuilder;
 import uk.gov.hmcts.ccd.sdk.api.SearchCases.SearchCasesBuilder;
+import uk.gov.hmcts.ccd.sdk.api.SearchParty.SearchPartyBuilder;
 import uk.gov.hmcts.ccd.sdk.api.Tab.TabBuilder;
 
 public class ConfigBuilderImpl<T, S, R extends HasRole> implements ConfigBuilder<T, S, R> {
