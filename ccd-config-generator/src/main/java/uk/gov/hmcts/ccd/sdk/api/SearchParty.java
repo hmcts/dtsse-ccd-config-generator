@@ -3,8 +3,6 @@ package uk.gov.hmcts.ccd.sdk.api;
 import lombok.Builder;
 import lombok.Data;
 
-import java.time.LocalDate;
-
 @Builder
 @Data
 public class SearchParty<R extends HasRole> {
