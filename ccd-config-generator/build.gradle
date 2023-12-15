@@ -39,7 +39,7 @@ dependencies {
 
     implementation group: 'org.apache.commons', name: 'commons-lang3', version: '3.14.0'
     // Types from this library are used in the config generator's API
-    api group: 'de.cronn', name: 'reflection-util', version: '2.14.0'
+    api group: 'de.cronn', name: 'reflection-util', version: '2.15.0'
     implementation group: 'org.objenesis', name: 'objenesis', version: '3.3'
     implementation group: 'cglib', name: 'cglib', version: '3.3.0'
     implementation group: 'net.jodah', name: 'typetools', version: '0.6.3'
