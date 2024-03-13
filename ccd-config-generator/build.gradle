@@ -46,7 +46,7 @@ dependencies {
     implementation 'org.reflections:reflections:0.10.2'
     api 'com.google.guava:guava:33.0.0-jre'
 
-    implementation 'com.fasterxml.jackson.core:jackson-databind:2.16.2'
+    implementation 'com.fasterxml.jackson.core:jackson-databind:2.17.0'
 }
 
 compileJava {
