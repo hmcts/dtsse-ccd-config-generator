@@ -11,6 +11,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import lombok.SneakyThrows;
+import org.apache.commons.lang3.StringUtils;
 import org.springframework.stereotype.Component;
 import uk.gov.hmcts.ccd.sdk.ResolvedCCDConfig;
 import uk.gov.hmcts.ccd.sdk.api.HasRole;
@@ -34,6 +35,7 @@ public class JSONConfigGenerator<T, S, R extends HasRole> {
 
     generateJurisdiction(outputfolder, config);
     generateCaseType(outputfolder, config);
+    generateChallengeQuestion(outputfolder, config);
   }
 
   @SneakyThrows
@@ -68,5 +70,23 @@ public class JSONConfigGenerator<T, S, R extends HasRole> {
     ));
     Path output = Paths.get(outputfolder.getPath(),"Jurisdiction.json");
     JsonUtils.mergeInto(output, fields, new JsonUtils.AddMissing(), "ID");
+  }
+
+  private void generateChallengeQuestion(File outputfolder, ResolvedCCDConfig<T, S, R> builder) {
+    if (StringUtils.isNotEmpty(builder.getChallengeQuestionText())) {
+      List<Map<String, Object>> fields = Lists.newArrayList();
+      fields.add(ImmutableMap.of(
+        "LiveFrom", "01/01/2024",
+        "ID", "NoCChallenge",
+        "DisplayOrder", "1",
+        "QuestionText", builder.getChallengeQuestionText(),
+        "AnswerFieldType", "Text",
+        "Answer", builder.getChallengeAnswerField(),
+        "QuestionId", builder.getChallengeQuestionId(),
+        "CaseTypeID", builder.getCaseTypeId()
+      ));
+      Path output = Paths.get(outputfolder.getPath(), "ChallengeQuestion.json");
+      JsonUtils.mergeInto(output, fields, new JsonUtils.AddMissing(), "ID");
+    }
   }
 }

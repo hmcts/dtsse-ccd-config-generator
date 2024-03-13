@@ -545,10 +545,10 @@ If you are interested in using the CCD config generator or have a question the b
 ## Contributing
 
 Pull requests are very welcome. Please ensure the tests have been updated to demonstrate the change.
-
+This branch has ChallengeQuestion added to work as in adding Jurisdiction
 ### Local development
 
-In order to link a local version of CCD config generator to a project you can use the `publisTohMavenLocal` gradle task then add:
+In order to link a local version of CCD config generator to a project you can use the `publishToMavenLocal` gradle task then add:
 
 ```groovy
   implementation group: 'com.github.hmcts', name: 'ccd-config-generator', version: 'DEV-SNAPSHOT'
