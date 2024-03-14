@@ -76,15 +76,16 @@ public class JSONConfigGenerator<T, S, R extends HasRole> {
     if (StringUtils.isNotEmpty(builder.getChallengeQuestionText())) {
       List<Map<String, Object>> fields = Lists.newArrayList();
       fields.add(ImmutableMap.of(
-        "LiveFrom", "01/01/2024",
-        "ID", "NoCChallenge",
-        "DisplayOrder", "1",
-        "QuestionText", builder.getChallengeQuestionText(),
-        "AnswerFieldType", "Text",
-        "Answer", builder.getChallengeAnswerField(),
-        "QuestionId", builder.getChallengeQuestionId(),
-        "CaseTypeID", builder.getCaseTypeId()
+          "LiveFrom", "01/01/2024",
+          "ID", "NoCChallenge",
+          "DisplayOrder", "1",
+          "QuestionText", builder.getChallengeQuestionText(),
+          "AnswerFieldType", "Text",
+          "Answer", builder.getChallengeAnswerField(),
+          "QuestionId", builder.getChallengeQuestionId(),
+          "CaseTypeID", builder.getCaseTypeId()
       ));
+
       Path output = Paths.get(outputfolder.getPath(), "ChallengeQuestion.json");
       JsonUtils.mergeInto(output, fields, new JsonUtils.AddMissing(), "ID");
     }
