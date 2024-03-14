@@ -544,7 +544,7 @@ If you are interested in using the CCD config generator or have a question the b
 
 ## Contributing
 
-Pull requests are very welcome. Please ensure the tests have been updated to demonstrate the change.
+Pull requests are very welcome. Please ensure the [tests](https://github.com/hmcts/dtsse-ccd-config-generator/blob/master/ccd-config-generator/src/test/java/uk/gov/hmcts/ccd/sdk/E2EConfigGenerationTests.java) have been updated to cover any new or altered functionality. The tests are based on comparing generated to [expected]((https://github.com/hmcts/dtsse-ccd-config-generator/tree/master/ccd-config-generator/src/test/resources)) - expected output should be updated as necessary.
 
 ### Local development
 
