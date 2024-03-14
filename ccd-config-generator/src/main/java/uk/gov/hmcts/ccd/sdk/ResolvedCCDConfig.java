@@ -42,6 +42,11 @@ public class ResolvedCCDConfig<T, S, R extends HasRole> {
   String jurDesc = "";
   boolean shutterService = false;
 
+  String challengeQuestionText = "";
+  String challengeAnswerField = "";
+  String challengeQuestionId = "";
+  String caseTypeId = "";
+
   Table<S, R, Set<Permission>> stateRolePermissions = HashBasedTable.create();
 
   // Events by id

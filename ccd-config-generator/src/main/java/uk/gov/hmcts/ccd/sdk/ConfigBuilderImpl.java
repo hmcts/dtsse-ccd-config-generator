@@ -91,6 +91,14 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements ConfigBuilder
   }
 
   @Override
+  public void challengeQuestion(String caseTypeId, String questionText, String answerField, String questionId) {
+    config.challengeQuestionText = questionText;
+    config.challengeAnswerField = answerField;
+    config.challengeQuestionId = questionId;
+    config.caseTypeId = caseTypeId;
+  }
+
+  @Override
   public void shutterService() {
     config.shutterService = true;
   }

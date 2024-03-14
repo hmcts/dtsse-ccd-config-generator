@@ -1,0 +1,11 @@
+[
+  {
+    "Answer" : "Pertinent answer",
+    "AnswerFieldType" : "Text",
+    "CaseTypeID" : "CARE_SUPERVISION_EPO",
+    "ID" : "NoCChallenge",
+    "LiveFrom" : "01/01/2024",
+    "QuestionId" : "answerId",
+    "QuestionText" : "Pertinent question?"
+  }
+]

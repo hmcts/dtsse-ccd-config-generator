@@ -21,6 +21,8 @@ public interface ConfigBuilder<T, S, R extends HasRole> {
 
   void jurisdiction(String id, String name, String description);
 
+  void challengeQuestion(String caseTypeId, String questionText, String answerField, String questionId);
+
   void shutterService();
 
   void shutterService(R... roles);

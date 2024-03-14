@@ -49,6 +49,7 @@ public class CCDConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<CaseData, S
     builder.addPreEventHook(RetiredFields::migrate);
     builder.setCallbackHost("${CCD_DEF_CASE_SERVICE_BASE_URL}");
     builder.jurisdiction("PUBLICLAW", "Family Public Law", "Family Public Law desc");
+    builder.challengeQuestion("CARE_SUPERVISION_EPO", "Pertinent question?", "Pertinent answer", "answerId");
     builder.omitHistoryForRoles(SYSTEM_UPDATE);
     builder.caseType("CARE_SUPERVISION_EPO", "Care, supervision and EPOs", "Care, supervision and emergency protection orders");
 
