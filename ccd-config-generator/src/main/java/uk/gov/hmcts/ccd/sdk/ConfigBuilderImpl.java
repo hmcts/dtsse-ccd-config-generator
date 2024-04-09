@@ -59,7 +59,6 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements ConfigBuilder
     config.rolesWithNoHistory = omitHistoryForRoles.stream().map(HasRole::getRole).collect(Collectors.toSet());
     config.caseRoleToAccessProfiles = buildBuilders(caseRoleToAccessProfiles, CaseRoleToAccessProfileBuilder::build);
     config.categories = buildBuilders(categories, CaseCategoryBuilder::build);
-    config.challengeQuestions = challengeQuestions;
     return config;
   }
 

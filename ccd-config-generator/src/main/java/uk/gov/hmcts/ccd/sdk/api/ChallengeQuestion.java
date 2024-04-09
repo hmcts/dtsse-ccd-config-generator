@@ -17,8 +17,9 @@ public class ChallengeQuestion {
   private int displayOrder;
   @JsonProperty("QuestionText")
   private String questionText;
+  @Builder.Default
   @JsonProperty("AnswerFieldType")
-  private String answerFieldType;
+  private String answerFieldType = "Text";
   @JsonProperty("Answer")
   private String answer;
   @JsonProperty("QuestionId")

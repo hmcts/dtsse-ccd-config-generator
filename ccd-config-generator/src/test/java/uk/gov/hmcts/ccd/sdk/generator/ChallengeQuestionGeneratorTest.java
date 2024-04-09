@@ -4,12 +4,9 @@ package uk.gov.hmcts.ccd.sdk.generator;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.junit.jupiter.api.io.TempDir;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
-import org.mockito.MockedStatic;
 import org.mockito.MockitoAnnotations;
 import org.mockito.junit.jupiter.MockitoExtension;
 import uk.gov.hmcts.ccd.sdk.ResolvedCCDConfig;
@@ -18,11 +15,9 @@ import uk.gov.hmcts.ccd.sdk.api.HasRole;
 
 import java.io.File;
 import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 
-import static org.apache.commons.lang3.StringUtils.trim;
 import static org.junit.Assert.assertEquals;
 import static org.mockito.Mockito.*;
 
