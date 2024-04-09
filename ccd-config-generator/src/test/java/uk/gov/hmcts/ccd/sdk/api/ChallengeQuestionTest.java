@@ -17,7 +17,7 @@ public class ChallengeQuestionTest {
       .build();
 
     assertEquals("01/04/24", question.getLiveFrom());
-    assertEquals("NoCChallenge", question.getID());
+    assertEquals("NoCChallenge", question.getId());
     assertEquals(1, question.getDisplayOrder());
     assertEquals("Test Question", question.getQuestionText());
     assertEquals("Text", question.getAnswerFieldType());
