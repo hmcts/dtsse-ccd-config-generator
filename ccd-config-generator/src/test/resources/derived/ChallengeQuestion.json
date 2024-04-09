@@ -1,20 +1,20 @@
 [
   {
-    "Answer": "A1",
+    "Answer": "Answer 1",
     "AnswerFieldType": "Text",
-    "CaseTypeID": null,
+    "CaseTypeID": "derived",
     "ID": "NoCChallenge",
     "LiveFrom": "01/04/2024",
-    "QuestionId": "QID1",
-    "QuestionText": "Q1"
+    "QuestionId": "question1Id",
+    "QuestionText": "Question 1"
   },
   {
-    "Answer": "A2",
+    "Answer": "Answer 2",
     "AnswerFieldType": "Text",
-    "CaseTypeID": null,
+    "CaseTypeID": "derived",
     "ID": "NoCChallenge",
     "LiveFrom": "01/04/2024",
-    "QuestionId": "QID2",
-    "QuestionText": "Q2"
+    "QuestionId": "question2Id",
+    "QuestionText": "Question 2"
   }
 ]
