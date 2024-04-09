@@ -20,9 +20,11 @@ import static uk.gov.hmcts.reform.fpl.enums.UserRole.LOCAL_AUTHORITY;
 import static uk.gov.hmcts.reform.fpl.enums.UserRole.SYSTEM_UPDATE;
 
 
+import java.util.Arrays;
 import java.util.EnumSet;
 import java.util.Set;
 import org.springframework.stereotype.Component;
+import uk.gov.hmcts.ccd.sdk.api.ChallengeQuestion;
 import uk.gov.hmcts.ccd.sdk.api.callback.AboutToStartOrSubmitResponse;
 import uk.gov.hmcts.ccd.sdk.api.CaseDetails;
 import uk.gov.hmcts.ccd.sdk.api.ConfigBuilder;
@@ -49,7 +51,19 @@ public class CCDConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<CaseData, S
     builder.addPreEventHook(RetiredFields::migrate);
     builder.setCallbackHost("${CCD_DEF_CASE_SERVICE_BASE_URL}");
     builder.jurisdiction("PUBLICLAW", "Family Public Law", "Family Public Law desc");
-    builder.challengeQuestion("CARE_SUPERVISION_EPO", "Pertinent question?", "Pertinent answer", "answerId");
+    builder.challengeQuestions(Arrays.asList(
+      ChallengeQuestion.builder()
+        .caseTypeID("CARE_SUPERVISION_EPO")
+        .questionText("Question 1")
+        .answer("Answer 1")
+        .questionId("question1Id")
+        .build(),
+      ChallengeQuestion.builder()
+        .caseTypeID("CARE_SUPERVISION_EPO")
+        .questionText("Question 2")
+        .answer("Answer 2")
+        .questionId("question2Id")
+        .build()));
     builder.omitHistoryForRoles(SYSTEM_UPDATE);
     builder.caseType("CARE_SUPERVISION_EPO", "Care, supervision and EPOs", "Care, supervision and emergency protection orders");
 

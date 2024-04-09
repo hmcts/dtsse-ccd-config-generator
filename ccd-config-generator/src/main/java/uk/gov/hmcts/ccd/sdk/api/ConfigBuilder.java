@@ -1,5 +1,6 @@
 package uk.gov.hmcts.ccd.sdk.api;
 
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.Function;
@@ -21,7 +22,7 @@ public interface ConfigBuilder<T, S, R extends HasRole> {
 
   void jurisdiction(String id, String name, String description);
 
-  void challengeQuestion(String caseTypeId, String questionText, String answerField, String questionId);
+  void challengeQuestions(List<ChallengeQuestion> challengeQuestions);
 
   void shutterService();
 

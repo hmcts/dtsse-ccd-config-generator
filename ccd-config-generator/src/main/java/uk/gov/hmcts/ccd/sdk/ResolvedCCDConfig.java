@@ -12,8 +12,10 @@ import java.util.Set;
 import java.util.function.Function;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
+import lombok.Setter;
 import uk.gov.hmcts.ccd.sdk.api.CaseCategory;
 import uk.gov.hmcts.ccd.sdk.api.CaseRoleToAccessProfile;
+import uk.gov.hmcts.ccd.sdk.api.ChallengeQuestion;
 import uk.gov.hmcts.ccd.sdk.api.Event;
 import uk.gov.hmcts.ccd.sdk.api.HasRole;
 import uk.gov.hmcts.ccd.sdk.api.Permission;
@@ -23,6 +25,7 @@ import uk.gov.hmcts.ccd.sdk.api.Tab;
 
 @RequiredArgsConstructor
 @Getter
+@Setter
 public class ResolvedCCDConfig<T, S, R extends HasRole> {
 
   final Class<T> caseClass;
@@ -42,11 +45,6 @@ public class ResolvedCCDConfig<T, S, R extends HasRole> {
   String jurDesc = "";
   boolean shutterService = false;
 
-  String challengeQuestionText = "";
-  String challengeAnswerField = "";
-  String challengeQuestionId = "";
-  String caseTypeId = "";
-
   Table<S, R, Set<Permission>> stateRolePermissions = HashBasedTable.create();
 
   // Events by id
@@ -60,4 +58,5 @@ public class ResolvedCCDConfig<T, S, R extends HasRole> {
   List<SearchCases> searchCaseResultFields;
   List<CaseRoleToAccessProfile> caseRoleToAccessProfiles;
   List<CaseCategory> categories;
+  List<ChallengeQuestion> challengeQuestions;
 }

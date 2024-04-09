@@ -1,11 +1,20 @@
 [
   {
-    "Answer" : "Pertinent answer",
+    "Answer" : "Answer 1",
     "AnswerFieldType" : "Text",
     "CaseTypeID" : "CARE_SUPERVISION_EPO",
     "ID" : "NoCChallenge",
-    "LiveFrom" : "01/01/2024",
-    "QuestionId" : "answerId",
-    "QuestionText" : "Pertinent question?"
+    "LiveFrom" : "01/04/2024",
+    "QuestionId" : "question1Id",
+    "QuestionText" : "Question 1"
+  },
+  {
+    "Answer" : "Answer 2",
+    "AnswerFieldType" : "Text",
+    "CaseTypeID" : "CARE_SUPERVISION_EPO",
+    "ID" : "NoCChallenge",
+    "LiveFrom" : "01/04/2024",
+    "QuestionId" : "question2Id",
+    "QuestionText" : "Question 2"
   }
 ]

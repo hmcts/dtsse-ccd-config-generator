@@ -15,6 +15,7 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import uk.gov.hmcts.ccd.sdk.api.CaseCategory.CaseCategoryBuilder;
 import uk.gov.hmcts.ccd.sdk.api.CaseRoleToAccessProfile.CaseRoleToAccessProfileBuilder;
+import uk.gov.hmcts.ccd.sdk.api.ChallengeQuestion;
 import uk.gov.hmcts.ccd.sdk.api.ConfigBuilder;
 import uk.gov.hmcts.ccd.sdk.api.Event;
 import uk.gov.hmcts.ccd.sdk.api.HasRole;
@@ -37,6 +38,7 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements ConfigBuilder
   final List<CaseRoleToAccessProfileBuilder<R>> caseRoleToAccessProfiles = Lists.newArrayList();
   final List<CaseCategoryBuilder<R>> categories = Lists.newArrayList();
   final Set<R> omitHistoryForRoles = new HashSet<>();
+  final List<ChallengeQuestion> challengeQuestions = Lists.newArrayList();
 
   public ConfigBuilderImpl(ResolvedCCDConfig<T, S, R> config) {
     this.config = config;
@@ -57,7 +59,7 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements ConfigBuilder
     config.rolesWithNoHistory = omitHistoryForRoles.stream().map(HasRole::getRole).collect(Collectors.toSet());
     config.caseRoleToAccessProfiles = buildBuilders(caseRoleToAccessProfiles, CaseRoleToAccessProfileBuilder::build);
     config.categories = buildBuilders(categories, CaseCategoryBuilder::build);
-
+    config.challengeQuestions = challengeQuestions;
     return config;
   }
 
@@ -91,11 +93,8 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements ConfigBuilder
   }
 
   @Override
-  public void challengeQuestion(String caseTypeId, String questionText, String answerField, String questionId) {
-    config.challengeQuestionText = questionText;
-    config.challengeAnswerField = answerField;
-    config.challengeQuestionId = questionId;
-    config.caseTypeId = caseTypeId;
+  public void challengeQuestions(List<ChallengeQuestion> challengeQuestions) {
+    config.challengeQuestions = challengeQuestions;
   }
 
   @Override
