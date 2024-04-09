@@ -2,7 +2,7 @@
   {
     "Answer": "Answer 1",
     "AnswerFieldType": "Text",
-    "CaseTypeID": "derived",
+    "CaseTypeID": null,
     "ID": "NoCChallenge",
     "LiveFrom": "01/04/2024",
     "QuestionId": "question1Id",
@@ -11,7 +11,7 @@
   {
     "Answer": "Answer 2",
     "AnswerFieldType": "Text",
-    "CaseTypeID": "derived",
+    "CaseTypeID": null,
     "ID": "NoCChallenge",
     "LiveFrom": "01/04/2024",
     "QuestionId": "question2Id",

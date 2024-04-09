@@ -57,13 +57,15 @@ public class ChallengeQuestionGeneratorTest {
   public void write_SuccessfullyWritesToFile() throws Exception {
     // Mock data
     List<ChallengeQuestion> mockQuestions = new ArrayList<>();
-    mockQuestions.add(ChallengeQuestion.builder().questionText("Q1").answer("A1").questionId("QID1").build());
-    mockQuestions.add(ChallengeQuestion.builder().questionText("Q2").answer("A2").questionId("QID2").build());
+    mockQuestions.add(ChallengeQuestion.builder()
+      .questionText("Question 1").answer("Answer 1").questionId("question1Id").build());
+    mockQuestions.add(ChallengeQuestion.builder()
+      .questionText("Question 2").answer("Answer 2").questionId("question2Id").build());
 
     // Mock config
     when(mockConfig.getChallengeQuestions()).thenReturn(mockQuestions);
     when(mockConfig.getCategories()).thenReturn(new ArrayList<>()); // Assuming this is mocked for simplicity
-
+    when(mockConfig.getCaseType()).thenReturn("derived");
     // Call write method
     File outputFolder = new File(OUTPUT_DIRECTORY);
     generator.write(outputFolder, mockConfig);
