@@ -1,18 +1,16 @@
 package uk.gov.hmcts.ccd.sdk.generator;
 
+import static java.util.stream.Collectors.toList;
+import static uk.gov.hmcts.ccd.sdk.generator.JsonUtils.mergeInto;
+
 import com.google.common.collect.Maps;
 import java.io.File;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.List;
 import java.util.Map;
-
 import lombok.SneakyThrows;
 import org.springframework.stereotype.Component;
-
-import static java.util.stream.Collectors.toList;
-import static uk.gov.hmcts.ccd.sdk.generator.JsonUtils.mergeInto;
-
 import uk.gov.hmcts.ccd.sdk.ResolvedCCDConfig;
 import uk.gov.hmcts.ccd.sdk.api.ChallengeQuestion;
 import uk.gov.hmcts.ccd.sdk.api.HasRole;
@@ -27,8 +25,8 @@ public class ChallengeQuestionGenerator<T, S, R extends HasRole> implements Conf
 
     if (null != challengeQuestions && !challengeQuestions.isEmpty()) {
       final List<Map<String, Object>> questions = config.getChallengeQuestions().stream()
-        .map(o -> toJson(config.getCaseType(), o))
-        .collect(toList());
+          .map(o -> toJson(config.getCaseType(), o))
+          .collect(toList());
       Path output = Paths.get(outputfolder.getPath(), "ChallengeQuestion.json");
       mergeInto(output, questions, new JsonUtils.AddMissing(), "QuestionId");
     }

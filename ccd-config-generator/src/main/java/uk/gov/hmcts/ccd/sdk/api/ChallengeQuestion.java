@@ -12,7 +12,7 @@ public class ChallengeQuestion {
   private String liveFrom = "01/04/24";
   @Builder.Default
   @JsonProperty("ID")
-  private String ID = "NoCChallenge";
+  private String id = "NoCChallenge";
   @JsonProperty("DisplayOrder")
   private int displayOrder;
   @JsonProperty("QuestionText")
