@@ -58,9 +58,9 @@ public class ChallengeQuestionGeneratorTest {
     // Mock data
     List<ChallengeQuestion> mockQuestions = new ArrayList<>();
     mockQuestions.add(ChallengeQuestion.builder()
-      .questionText("Question 1").answer("Answer 1").questionId("question1Id").build());
+      .questionText("Question 1").answer("Answer 1").displayOrder(1).questionId("question1Id").build());
     mockQuestions.add(ChallengeQuestion.builder()
-      .questionText("Question 2").answer("Answer 2").questionId("question2Id").build());
+      .questionText("Question 2").answer("Answer 2").displayOrder(2).questionId("question2Id").build());
 
     // Mock config
     when(mockConfig.getChallengeQuestions()).thenReturn(mockQuestions);

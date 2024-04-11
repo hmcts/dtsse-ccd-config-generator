@@ -43,6 +43,7 @@ public class ChallengeQuestionGenerator<T, S, R extends HasRole> implements Conf
     field.put("AnswerFieldType", "Text");
     field.put("Answer", question.getAnswer());
     field.put("QuestionId", question.getQuestionId());
+    field.put("DisplayOrder", question.getDisplayOrder());
 
     return field;
   }
