@@ -23,6 +23,7 @@ Write CCD configuration in Java.
   + [Permissions](#permissions-1)
   + [Lombok](#lombok)
   + [Jackson configuration](#jackson-configuration)
+* [Customising the generated JSON](#customising-the-generated-json)
 * [Reference projects](#reference-projects)
 * [Where to get help](#where-to-get-help)
 * [Contributing](#contributing)
@@ -445,7 +446,7 @@ Now `applicant1Name` will only have `SolicitorAccess.class`.
 
 ### Lombok
 
-I'm almost all cases there are no issues combining the CCD config generator with Lombok generated code. However, it is necessary to add an explicit constructor with `@JsonCreator` to classes inside an unwrapped class.
+In almost all cases there are no issues combining the CCD config generator with Lombok generated code. However, it is necessary to add an explicit constructor with `@JsonCreator` to classes inside an unwrapped class.
 
 For example, adding a `Document` to the `Applicant` class would require it to have an explicit constructor:
 
@@ -530,6 +531,22 @@ public class HasRoleDeserializer extends StdDeserializer<HasRole> {
   }
 }
 ```
+
+## Customising the generated JSON
+
+The output of the `generateCCDConfig` task is a folder containing JSON configuration, further customisation of which can be achieved using standard Gradle functionality.
+
+For example, the below task will combine the output of the config generator with JSON definitions stored in a 'static' directory.
+
+```groovy
+task generateCCDDefinition(type: Copy) {
+  from tasks.generateCCDConfig.outputs
+  from file('static')
+  into layout.buildDirectory.dir('json-definitions')
+}
+```
+
+This static directory can contain JSON configuration for CCD features not covered by the config generator (eg. Challenge Questions).
 
 ## Reference projects
 
