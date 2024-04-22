@@ -42,6 +42,9 @@ public class ChangeOrganisationRequest<R extends HasRole> {
   @JsonProperty("ApprovalRejectionTimestamp")
   private LocalDateTime approvalRejectionTimestamp;
 
+  @JsonProperty("CreatedBy")
+  private String createdBy;
+
   @JsonCreator
   public ChangeOrganisationRequest(
       @JsonProperty("OrganisationToAdd") Organisation organisationToAdd,
@@ -51,7 +54,8 @@ public class ChangeOrganisationRequest<R extends HasRole> {
       @JsonProperty("NotesReason") String notesReason,
       @JsonProperty("ApprovalStatus") ChangeOrganisationApprovalStatus approvalStatus,
       @JsonProperty("RequestTimestamp") LocalDateTime requestTimestamp,
-      @JsonProperty("ApprovalRejectionTimestamp") LocalDateTime approvalRejectionTimestamp
+      @JsonProperty("ApprovalRejectionTimestamp") LocalDateTime approvalRejectionTimestamp,
+      @JsonProperty("CreatedBy") String createdBy
   ) {
     this.organisationToAdd = organisationToAdd;
     this.organisationToRemove = organisationToRemove;
@@ -61,5 +65,6 @@ public class ChangeOrganisationRequest<R extends HasRole> {
     this.approvalStatus = approvalStatus;
     this.requestTimestamp = requestTimestamp;
     this.approvalRejectionTimestamp = approvalRejectionTimestamp;
+    this.createdBy = createdBy;
   }
 }
