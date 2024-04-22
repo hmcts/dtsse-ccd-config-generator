@@ -9,14 +9,13 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import uk.gov.hmcts.ccd.sdk.api.ComplexType;
-import uk.gov.hmcts.ccd.sdk.api.HasRole;
 
 @NoArgsConstructor
 @Builder
 @Data
 @ComplexType(name = "ChangeOrganisationRequest", generate = false)
 @JsonInclude(JsonInclude.Include.NON_NULL)
-public class ChangeOrganisationRequest<R extends HasRole> {
+public class ChangeOrganisationRequest {
 
   @JsonProperty("OrganisationToAdd")
   private Organisation organisationToAdd;
@@ -25,7 +24,7 @@ public class ChangeOrganisationRequest<R extends HasRole> {
   private Organisation organisationToRemove;
 
   @JsonProperty("CaseRoleId")
-  private R caseRoleId;
+  private DynamicList caseRoleId;
 
   @JsonProperty("Reason")
   private String reason;
@@ -46,7 +45,7 @@ public class ChangeOrganisationRequest<R extends HasRole> {
   public ChangeOrganisationRequest(
       @JsonProperty("OrganisationToAdd") Organisation organisationToAdd,
       @JsonProperty("OrganisationToRemove") Organisation organisationToRemove,
-      @JsonProperty("CaseRoleId") R caseRoleId,
+      @JsonProperty("CaseRoleId") DynamicList caseRoleId,
       @JsonProperty("Reason") String reason,
       @JsonProperty("NotesReason") String notesReason,
       @JsonProperty("ApprovalStatus") ChangeOrganisationApprovalStatus approvalStatus,
