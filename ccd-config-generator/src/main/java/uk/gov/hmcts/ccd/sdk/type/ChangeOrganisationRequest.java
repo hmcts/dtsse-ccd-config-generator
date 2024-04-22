@@ -67,4 +67,3 @@ public class ChangeOrganisationRequest<R> {
     this.createdBy = createdBy;
   }
 }
-
