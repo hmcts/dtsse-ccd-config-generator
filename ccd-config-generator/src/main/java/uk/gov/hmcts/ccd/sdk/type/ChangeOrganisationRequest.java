@@ -15,7 +15,7 @@ import uk.gov.hmcts.ccd.sdk.api.ComplexType;
 @Data
 @ComplexType(name = "ChangeOrganisationRequest", generate = false)
 @JsonInclude(JsonInclude.Include.NON_NULL)
-public class ChangeOrganisationRequest {
+public class ChangeOrganisationRequest<R> {
 
   @JsonProperty("OrganisationToAdd")
   private Organisation organisationToAdd;
@@ -24,7 +24,7 @@ public class ChangeOrganisationRequest {
   private Organisation organisationToRemove;
 
   @JsonProperty("CaseRoleId")
-  private DynamicList caseRoleId;
+  private R caseRoleId;
 
   @JsonProperty("Reason")
   private String reason;
@@ -45,7 +45,7 @@ public class ChangeOrganisationRequest {
   public ChangeOrganisationRequest(
       @JsonProperty("OrganisationToAdd") Organisation organisationToAdd,
       @JsonProperty("OrganisationToRemove") Organisation organisationToRemove,
-      @JsonProperty("CaseRoleId") DynamicList caseRoleId,
+      @JsonProperty("CaseRoleId") R caseRoleId,
       @JsonProperty("Reason") String reason,
       @JsonProperty("NotesReason") String notesReason,
       @JsonProperty("ApprovalStatus") ChangeOrganisationApprovalStatus approvalStatus,

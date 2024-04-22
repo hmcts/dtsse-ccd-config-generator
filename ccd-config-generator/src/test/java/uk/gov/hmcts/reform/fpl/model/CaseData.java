@@ -367,7 +367,7 @@ public class CaseData {
   private final RetiredFields retiredFields;
 
   @CCD(access = {NoticeOfChangeAccess.class})
-  private final ChangeOrganisationRequest changeOrganisationRequest;
+  private final ChangeOrganisationRequest<DynamicList> changeOrganisationRequest;
 
   @CCD(
     label = "Scanned documents",
