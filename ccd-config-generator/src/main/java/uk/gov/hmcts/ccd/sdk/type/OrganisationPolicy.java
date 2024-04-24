@@ -21,7 +21,7 @@ public class OrganisationPolicy<R extends HasRole> {
   private Organisation organisation;
 
   @JsonProperty("PreviousOrganisations")
-  private Set<PreviousOrganisation> previousOrganisations;
+  private Set<PreviousOrganisationCollectionItem> previousOrganisations;
 
   @JsonProperty("OrgPolicyReference")
   private String orgPolicyReference;
@@ -35,7 +35,7 @@ public class OrganisationPolicy<R extends HasRole> {
   @JsonCreator
   public OrganisationPolicy(
       @JsonProperty("Organisation") Organisation organisation,
-      @JsonProperty("PreviousOrganisations") Set<PreviousOrganisation> previousOrganisations,
+      @JsonProperty("PreviousOrganisations") Set<PreviousOrganisationCollectionItem> previousOrganisations,
       @JsonProperty("OrgPolicyReference") String orgPolicyReference,
       @JsonProperty("PrepopulateToUsersOrganisation") YesOrNo prepopulateToUsersOrganisation,
       @JsonProperty("OrgPolicyCaseAssignedRole") R orgPolicyCaseAssignedRole
