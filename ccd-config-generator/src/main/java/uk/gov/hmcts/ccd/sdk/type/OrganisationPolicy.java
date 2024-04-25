@@ -32,18 +32,23 @@ public class OrganisationPolicy<R extends HasRole> {
   @JsonProperty("OrgPolicyCaseAssignedRole")
   private R orgPolicyCaseAssignedRole;
 
+  @JsonProperty("LastNoCRequestedBy")
+  private String lastNoCRequestedBy;
+
   @JsonCreator
   public OrganisationPolicy(
       @JsonProperty("Organisation") Organisation organisation,
       @JsonProperty("PreviousOrganisations") Set<PreviousOrganisationCollectionItem> previousOrganisations,
       @JsonProperty("OrgPolicyReference") String orgPolicyReference,
       @JsonProperty("PrepopulateToUsersOrganisation") YesOrNo prepopulateToUsersOrganisation,
-      @JsonProperty("OrgPolicyCaseAssignedRole") R orgPolicyCaseAssignedRole
+      @JsonProperty("OrgPolicyCaseAssignedRole") R orgPolicyCaseAssignedRole,
+      @JsonProperty("LastNoCRequestedBy") String lastNoCRequestedBy
   ) {
     this.organisation = organisation;
     this.previousOrganisations = previousOrganisations;
     this.orgPolicyReference = orgPolicyReference;
     this.prepopulateToUsersOrganisation = prepopulateToUsersOrganisation;
     this.orgPolicyCaseAssignedRole = orgPolicyCaseAssignedRole;
+    this.lastNoCRequestedBy = lastNoCRequestedBy;
   }
 }
