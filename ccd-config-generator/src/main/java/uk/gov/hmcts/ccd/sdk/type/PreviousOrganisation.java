@@ -22,27 +22,30 @@ public class PreviousOrganisation {
   @JsonProperty("FromTimeStamp")
   @JsonSerialize(using = LocalDateTimeSerializer.class)
   @JsonDeserialize(using = LocalDateTimeDeserializer.class)
-  @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss.SSS")
+  @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss.SSS",
+          with = JsonFormat.Feature.ACCEPT_CASE_INSENSITIVE_PROPERTIES
+  )
   private LocalDateTime fromTimeStamp;
 
   @JsonProperty("ToTimeStamp")
   @JsonSerialize(using = LocalDateTimeSerializer.class)
   @JsonDeserialize(using = LocalDateTimeDeserializer.class)
-  @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss.SSS")
+  @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss.SSS",
+          with = JsonFormat.Feature.ACCEPT_CASE_INSENSITIVE_PROPERTIES)
   private LocalDateTime toTimeStamp;
 
   @JsonProperty("OrganisationName")
   private String organisationName;
 
   @JsonProperty("OrganisationAddress")
-  private String organisationAddress;
+  private AddressUK organisationAddress;
 
   @JsonCreator
   public PreviousOrganisation(
       @JsonProperty("FromTimeStamp") LocalDateTime fromTimeStamp,
       @JsonProperty("ToTimeStamp") LocalDateTime toTimeStamp,
       @JsonProperty("OrganisationName") String organisationName,
-      @JsonProperty("OrganisationAddress") String organisationAddress
+      @JsonProperty("OrganisationAddress") AddressUK organisationAddress
   ) {
     this.fromTimeStamp = fromTimeStamp;
     this.toTimeStamp = toTimeStamp;
