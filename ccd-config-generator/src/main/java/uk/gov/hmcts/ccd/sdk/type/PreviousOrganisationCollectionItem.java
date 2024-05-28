@@ -15,9 +15,6 @@ import uk.gov.hmcts.ccd.sdk.api.ComplexType;
 @ComplexType
 public class PreviousOrganisationCollectionItem {
 
-  @JsonProperty("id")
   private String id;
-
-  @JsonProperty("value")
   private PreviousOrganisation value;
 }
