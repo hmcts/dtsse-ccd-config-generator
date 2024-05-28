@@ -2,15 +2,17 @@ package uk.gov.hmcts.ccd.sdk.type;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import uk.gov.hmcts.ccd.sdk.api.ComplexType;
 
 @NoArgsConstructor
+@AllArgsConstructor
 @Builder
 @Data
-@ComplexType(name = "PreviousOrganisationCollectionItem", generate = false)
+@ComplexType
 public class PreviousOrganisationCollectionItem {
 
   @JsonProperty("id")
@@ -18,13 +20,4 @@ public class PreviousOrganisationCollectionItem {
 
   @JsonProperty("value")
   private PreviousOrganisation value;
-
-  @JsonCreator
-  public PreviousOrganisationCollectionItem(
-      @JsonProperty("id") String id,
-      @JsonProperty("value") PreviousOrganisation value
-  ) {
-    this.id = id;
-    this.value = value;
-  }
 }
