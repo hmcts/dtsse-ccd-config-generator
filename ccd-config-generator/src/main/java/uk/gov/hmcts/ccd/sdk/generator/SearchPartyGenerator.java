@@ -26,7 +26,7 @@ public class SearchPartyGenerator<T, S, R extends HasRole> implements ConfigGene
     final List<Map<String, Object>> rows = config.getSearchParties().stream()
         .map(o -> toJson(config.getCaseType(), o))
         .collect(toList());
-    mergeInto(path, rows, new AddMissing(), "CategoryID");//TODO update the primary keys
+    mergeInto(path, rows, new AddMissing(), "CaseTypeID", "SearchPartyCollectionFieldName");
   }
 
   @SneakyThrows

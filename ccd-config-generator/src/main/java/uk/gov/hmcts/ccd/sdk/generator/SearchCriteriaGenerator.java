@@ -26,7 +26,7 @@ public class SearchCriteriaGenerator<T, S, R extends HasRole> implements ConfigG
     final List<Map<String, Object>> rows = config.getSearchCriteria().stream()
         .map(o -> toJson(config.getCaseType(), o))
         .collect(toList());
-    mergeInto(path, rows, new AddMissing(), "CategoryID");//TODO update the primary keys
+    mergeInto(path, rows, new AddMissing(), "CaseTypeID", "OtherCaseReference");
   }
 
   @SneakyThrows
