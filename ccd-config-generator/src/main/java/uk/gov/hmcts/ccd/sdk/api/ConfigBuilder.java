@@ -56,4 +56,8 @@ public interface ConfigBuilder<T, S, R extends HasRole> {
   CaseRoleToAccessProfileBuilder<R> caseRoleToAccessProfile(R caseRole);
 
   CaseCategory.CaseCategoryBuilder categories(R caseRole);
+
+  SearchCriteria.SearchCriteriaBuilder searchCriteria();
+
+  SearchParty.SearchPartyBuilder searchParty();
 }
