@@ -21,6 +21,8 @@ import uk.gov.hmcts.ccd.sdk.api.HasRole;
 import uk.gov.hmcts.ccd.sdk.api.Permission;
 import uk.gov.hmcts.ccd.sdk.api.Search.SearchBuilder;
 import uk.gov.hmcts.ccd.sdk.api.SearchCases.SearchCasesBuilder;
+import uk.gov.hmcts.ccd.sdk.api.SearchCriteria.SearchCriteriaBuilder;
+import uk.gov.hmcts.ccd.sdk.api.SearchParty.SearchPartyBuilder;
 import uk.gov.hmcts.ccd.sdk.api.Tab.TabBuilder;
 
 public class ConfigBuilderImpl<T, S, R extends HasRole> implements ConfigBuilder<T, S, R> {
@@ -36,6 +38,8 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements ConfigBuilder
   final List<SearchCasesBuilder<T>> searchCaseResultFields = Lists.newArrayList();
   final List<CaseRoleToAccessProfileBuilder<R>> caseRoleToAccessProfiles = Lists.newArrayList();
   final List<CaseCategoryBuilder<R>> categories = Lists.newArrayList();
+  final List<SearchCriteriaBuilder> searchCriteria = Lists.newArrayList();
+  final List<SearchPartyBuilder> searchParty = Lists.newArrayList();
   final Set<R> omitHistoryForRoles = new HashSet<>();
 
   public ConfigBuilderImpl(ResolvedCCDConfig<T, S, R> config) {
@@ -57,6 +61,8 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements ConfigBuilder
     config.rolesWithNoHistory = omitHistoryForRoles.stream().map(HasRole::getRole).collect(Collectors.toSet());
     config.caseRoleToAccessProfiles = buildBuilders(caseRoleToAccessProfiles, CaseRoleToAccessProfileBuilder::build);
     config.categories = buildBuilders(categories, CaseCategoryBuilder::build);
+    config.searchCriteria = buildBuilders(searchCriteria, SearchCriteriaBuilder::build);
+    config.searchParties = buildBuilders(searchParty, SearchPartyBuilder::build);
 
     return config;
   }
@@ -168,6 +174,20 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements ConfigBuilder
   public CaseCategoryBuilder<R> categories(R caseRole) {
     var builder = CaseCategoryBuilder.builder(caseRole);
     categories.add(builder);
+    return builder;
+  }
+
+  @Override
+  public SearchCriteriaBuilder searchCriteria() {
+    var builder = SearchCriteriaBuilder.builder();
+    searchCriteria.add(builder);
+    return builder;
+  }
+
+  @Override
+  public SearchPartyBuilder searchParty() {
+    var builder = SearchPartyBuilder.builder();
+    searchParty.add(builder);
     return builder;
   }
 

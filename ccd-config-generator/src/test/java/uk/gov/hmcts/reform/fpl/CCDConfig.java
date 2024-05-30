@@ -126,6 +126,18 @@ public class CCDConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<CaseData, S
       .categoryLabel("Category Label")
       .displayOrder(1)
       .parentCategoryID("A");
+
+    builder.searchCriteria()
+      .otherCaseReference("legacyCaseReference");
+
+    builder.searchParty()
+      .searchPartyCollectionFieldName("respondents1")
+      .searchPartyName("party.firstName,party.lastName")
+      .searchPartyEmailAddress("party.firstName,party.email")
+      .searchPartyAddressLine1("party.address.AddressLine1")
+      .searchPartyPostCode("party.address.PostCode")
+      .searchPartyDOB("party.dateOfBirth")
+      .searchPartyDOD("party.dateOfDeath");
   }
 
   private AboutToStartOrSubmitResponse<CaseData, State> checkReadyAboutToSubmit(CaseDetails<CaseData, State> details,
