@@ -13,7 +13,7 @@ import uk.gov.hmcts.ccd.sdk.api.ComplexType;
 @NoArgsConstructor
 @Builder
 @Data
-@ComplexType(name = "Search Party", generate = false)
+@ComplexType(name = "SearchParty", generate = false)
 public class SearchParty {
   @JsonProperty("Name")
   private String name;
