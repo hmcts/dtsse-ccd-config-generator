@@ -12,7 +12,7 @@ import uk.gov.hmcts.ccd.sdk.api.ComplexType;
 @NoArgsConstructor
 @Builder
 @Data
-@ComplexType(name = "Search criteria", generate = false)
+@ComplexType(name = "SearchCriteria", generate = false)
 public class SearchCriteria {
 
   @JsonProperty("OtherCaseReferences")
