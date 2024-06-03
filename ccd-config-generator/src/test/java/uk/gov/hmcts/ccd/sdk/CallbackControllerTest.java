@@ -128,8 +128,6 @@ public class CallbackControllerTest {
             .andExpect(status().isOk())
             .andReturn();
 
-    ObjectMapper mapper = new ObjectMapper();
-
     CaseData caseData = getResponseData(result, CaseData.class);
 
     assertThat(caseData.getChangeOrganisationRequestField().getCaseRoleId().getRole()).isEqualTo("[APPONESOLICITOR]");
