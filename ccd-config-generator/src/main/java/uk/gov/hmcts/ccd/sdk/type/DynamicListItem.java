@@ -10,14 +10,14 @@ import lombok.ToString;
 @ToString
 public class DynamicListItem {
 
-    @JsonProperty("code")
-    private String code;
+  @JsonProperty("code")
+  private String code;
 
-    @JsonProperty("label")
-    private String label;
+  @JsonProperty("label")
+  private String label;
 
-    public DynamicListItem(@JsonProperty("code") String code, @JsonProperty("label") String label) {
-        this.code = code;
-        this.label = label;
-    }
+  public DynamicListItem(@JsonProperty("code") String code, @JsonProperty("label") String label) {
+    this.code = code;
+    this.label = label;
+  }
 }
