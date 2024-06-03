@@ -1,9 +1,6 @@
 package uk.gov.hmcts.ccd.sdk;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
-
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.Maps;
 import lombok.SneakyThrows;
@@ -18,18 +15,27 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.ResultActions;
 import uk.gov.hmcts.ccd.sdk.model.AboutToStartOrSubmitCallbackResponse;
+import uk.gov.hmcts.ccd.sdk.type.PreviousOrganisationCollectionItem;
 import uk.gov.hmcts.reform.ccd.client.model.CallbackRequest;
 import uk.gov.hmcts.reform.ccd.client.model.CaseDetails;
 import uk.gov.hmcts.reform.fpl.BulkCaseConfig;
 import uk.gov.hmcts.reform.fpl.model.CaseData;
 
+import java.io.InputStream;
+import java.io.IOException;
 import java.util.Map;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static uk.gov.hmcts.reform.fpl.enums.UserRole.CCD_SOLICITOR;
 
 @RunWith(SpringRunner.class)
 @SpringBootTest
 @AutoConfigureMockMvc
 public class CallbackControllerTest {
 
+  private static final String REQUEST  = "ccd-callback-casedata-notice-of-change-applied.json";
   @Autowired
   private MockMvc mockMvc;
 
@@ -114,6 +120,23 @@ public class CallbackControllerTest {
   }
 
   @SneakyThrows
+  @Test
+  public void testNoticeOfChangeAboutToStart() {
+    Map<String, Object> data = caseData();
+
+    MvcResult result = this.makeRequest("about-to-start", "CARE_SUPERVISION_EPO", "notice-of-change-applied", data)
+            .andExpect(status().isOk())
+            .andReturn();
+
+    ObjectMapper mapper = new ObjectMapper();
+
+    CaseData caseData = getResponseData(result, CaseData.class);
+
+    assertThat(caseData.getChangeOrganisationRequestField().getCaseRoleId().getRole()).isEqualTo("[APPONESOLICITOR]");
+    assertThat(caseData.getOrganisationPolicy().getOrgPolicyCaseAssignedRole()).isEqualTo(CCD_SOLICITOR);
+    assertThat(caseData.getOrganisationPolicy().getPreviousOrganisations().iterator().next()).isInstanceOf(PreviousOrganisationCollectionItem.class);
+  }
+  @SneakyThrows
   ResultActions makeRequest(String callback, String eventId) {
     return makeRequest(callback, "CARE_SUPERVISION_EPO", eventId);
   }
@@ -154,5 +177,16 @@ public class CallbackControllerTest {
             .caseTypeId(caseType)
             .build())
         .build();
+  }
+
+  private Map<String, Object> caseData() throws IOException {
+    ObjectMapper mapper = new ObjectMapper();
+
+    try (InputStream in = Thread.currentThread().getContextClassLoader().getResourceAsStream(REQUEST)) {
+      return mapper.readValue(in, new TypeReference<>() {
+      });
+    } catch (Exception e) {
+      throw new RuntimeException(e);
+    }
   }
 }
