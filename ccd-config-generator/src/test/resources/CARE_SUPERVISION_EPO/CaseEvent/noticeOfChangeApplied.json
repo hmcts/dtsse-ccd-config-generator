@@ -1,0 +1,16 @@
+[
+  {
+    "PreConditionState(s)": "*",
+    "CallBackURLAboutToStartEvent": "${CCD_DEF_CASE_SERVICE_BASE_URL}/callbacks/about-to-start?eventId=noticeOfChangeApplied",
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "PostConditionState": "*",
+    "Description": "noticeOfChangeApplied",
+    "DisplayOrder": 1,
+    "EndButtonLabel": "Save and continue",
+    "ID": "noticeOfChangeApplied",
+    "SecurityClassification": "Public",
+    "Name": "noticeOfChangeApplied",
+    "Publish": "N"
+  }
+]

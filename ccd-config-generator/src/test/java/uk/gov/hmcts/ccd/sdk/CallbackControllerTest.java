@@ -36,6 +36,7 @@ import static uk.gov.hmcts.reform.fpl.enums.UserRole.CCD_SOLICITOR;
 public class CallbackControllerTest {
 
   private static final String REQUEST  = "ccd-callback-casedata-notice-of-change-applied.json";
+
   @Autowired
   private MockMvc mockMvc;
 
@@ -124,7 +125,7 @@ public class CallbackControllerTest {
   public void testNoticeOfChangeAboutToStart() {
     Map<String, Object> data = caseData();
 
-    MvcResult result = this.makeRequest("about-to-start", "CARE_SUPERVISION_EPO", "notice-of-change-applied", data)
+    MvcResult result = this.makeRequest("about-to-start", "CARE_SUPERVISION_EPO", "noticeOfChangeApplied", data)
             .andExpect(status().isOk())
             .andReturn();
 
