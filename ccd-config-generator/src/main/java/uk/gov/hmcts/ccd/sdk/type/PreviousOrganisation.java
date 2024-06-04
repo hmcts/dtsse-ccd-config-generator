@@ -17,18 +17,17 @@ import uk.gov.hmcts.ccd.sdk.serializer.LocalDateTimeSerializer;
 @Builder
 @Data
 @ComplexType(name = "PreviousOrganisation", generate = false)
+@JsonFormat(with = JsonFormat.Feature.ACCEPT_CASE_INSENSITIVE_PROPERTIES)
 public class PreviousOrganisation {
 
   @JsonProperty("FromTimeStamp")
   @JsonSerialize(using = LocalDateTimeSerializer.class)
   @JsonDeserialize(using = LocalDateTimeDeserializer.class)
-  @JsonFormat(with = JsonFormat.Feature.ACCEPT_CASE_INSENSITIVE_PROPERTIES)
   private LocalDateTime fromTimeStamp;
 
   @JsonProperty("ToTimeStamp")
   @JsonSerialize(using = LocalDateTimeSerializer.class)
   @JsonDeserialize(using = LocalDateTimeDeserializer.class)
-  @JsonFormat(with = JsonFormat.Feature.ACCEPT_CASE_INSENSITIVE_PROPERTIES)
   private LocalDateTime toTimeStamp;
 
   @JsonProperty("OrganisationName")

@@ -178,7 +178,7 @@ public class CallbackControllerTest {
         .build();
   }
 
-  private Map<String, Object> caseData() throws IOException {
+  private Map<String, Object> caseData() {
     ObjectMapper mapper = new ObjectMapper();
 
     try (InputStream in = Thread.currentThread().getContextClassLoader().getResourceAsStream(REQUEST)) {
