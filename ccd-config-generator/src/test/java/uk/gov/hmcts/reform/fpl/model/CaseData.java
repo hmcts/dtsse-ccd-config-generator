@@ -2,6 +2,7 @@ package uk.gov.hmcts.reform.fpl.model;
 
 import com.fasterxml.jackson.annotation.JsonGetter;
 import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonSetter;
 
@@ -70,6 +71,7 @@ import static uk.gov.hmcts.reform.fpl.enums.CMOStatus.SEND_TO_JUDGE;
 @Data
 @AllArgsConstructor
 @NoArgsConstructor(force = true)
+@JsonInclude(JsonInclude.Include.NON_NULL)
 public class CaseData {
 
   @NotBlank(message = "Enter a case name")

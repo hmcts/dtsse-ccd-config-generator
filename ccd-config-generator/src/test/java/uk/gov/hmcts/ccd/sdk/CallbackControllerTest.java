@@ -3,7 +3,9 @@ package uk.gov.hmcts.ccd.sdk;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.Maps;
+import com.google.common.io.Resources;
 import lombok.SneakyThrows;
+import org.apache.commons.io.FileUtils;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -21,8 +23,9 @@ import uk.gov.hmcts.reform.ccd.client.model.CaseDetails;
 import uk.gov.hmcts.reform.fpl.BulkCaseConfig;
 import uk.gov.hmcts.reform.fpl.model.CaseData;
 
+import java.io.File;
 import java.io.InputStream;
-import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -36,7 +39,7 @@ import static uk.gov.hmcts.reform.fpl.enums.UserRole.CCD_SOLICITOR;
 public class CallbackControllerTest {
 
   private static final String REQUEST  = "ccd-callback-casedata-notice-of-change-applied.json";
-
+  private static final String RESPONSE  = "response-notice-of-change-applied.json";
   @Autowired
   private MockMvc mockMvc;
 
@@ -131,9 +134,38 @@ public class CallbackControllerTest {
 
     CaseData caseData = getResponseData(result, CaseData.class);
 
+    PreviousOrganisationCollectionItem previousOrganisations = caseData.getOrganisationPolicy().getPreviousOrganisations().iterator().next();
+
     assertThat(caseData.getChangeOrganisationRequestField().getCaseRoleId().getRole()).isEqualTo("[APPONESOLICITOR]");
     assertThat(caseData.getOrganisationPolicy().getOrgPolicyCaseAssignedRole()).isEqualTo(CCD_SOLICITOR);
-    assertThat(caseData.getOrganisationPolicy().getPreviousOrganisations().iterator().next()).isInstanceOf(PreviousOrganisationCollectionItem.class);
+    assertThat(previousOrganisations).isInstanceOf(PreviousOrganisationCollectionItem.class);
+    assertThat(previousOrganisations.getValue().getFromTimeStamp()).isNotNull();
+    assertThat(previousOrganisations.getValue().getToTimeStamp()).isNotNull();
+  }
+
+  @SneakyThrows
+  @Test
+  public void testNoticeOfChangeAboutToStartSerialisation() {
+    Map<String, Object> data = caseData();
+
+    MvcResult result = this.makeRequest("about-to-start",
+                    "CARE_SUPERVISION_EPO", "noticeOfChangeApplied", data)
+
+            .andExpect(status().isOk())
+            .andReturn();
+
+    CaseData caseData = getResponseData(result, CaseData.class);
+
+    PreviousOrganisationCollectionItem previousOrganisations = caseData.getOrganisationPolicy().getPreviousOrganisations().iterator().next();
+    String responseString = FileUtils.readFileToString(new File(Resources.getResource(RESPONSE).getPath()), StandardCharsets.UTF_8);
+
+    assertThat(caseData.getChangeOrganisationRequestField().getCaseRoleId().getRole()).isEqualTo("[APPONESOLICITOR]");
+    assertThat(caseData.getOrganisationPolicy().getOrgPolicyCaseAssignedRole()).isEqualTo(CCD_SOLICITOR);
+    assertThat(previousOrganisations).isInstanceOf(PreviousOrganisationCollectionItem.class);
+    assertThat(previousOrganisations.getValue().getFromTimeStamp()).isNotNull();
+    assertThat(previousOrganisations.getValue().getToTimeStamp()).isNotNull();
+
+    assertThat(new String(result.getResponse().getContentAsString().getBytes(StandardCharsets.UTF_8))).isEqualTo(responseString.trim());
   }
   @SneakyThrows
   ResultActions makeRequest(String callback, String eventId) {
