@@ -27,16 +27,6 @@ public class SystemApplyNoticeOfChange implements CCDConfig<CaseData, State, Use
         .fields();
   }
 
-  private AboutToStartOrSubmitResponse<CaseData, State> setNumber(
-      CaseDetails<CaseData, State> details,
-      CaseDetails<CaseData, State> detailsBefore) {
-    CaseData data = details.getData();
-
-    return AboutToStartOrSubmitResponse.<CaseData, State>builder()
-        .data(data)
-        .build();
-  }
-
   private AboutToStartOrSubmitResponse<CaseData, State> aboutToStart(
           CaseDetails<CaseData, State> details) {
     CaseData data = details.getData();
