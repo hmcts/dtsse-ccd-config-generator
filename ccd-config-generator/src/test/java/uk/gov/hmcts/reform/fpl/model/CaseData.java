@@ -404,4 +404,8 @@ public class CaseData {
   )
   private DynamicMultiSelectList documentList;
 
+  @CCD(
+          access = {NoticeOfChangeAccess.class}
+  )
+  private ChangeOrganisationRequest<CaseRoleID> changeOrganisationRequestField;
 }
