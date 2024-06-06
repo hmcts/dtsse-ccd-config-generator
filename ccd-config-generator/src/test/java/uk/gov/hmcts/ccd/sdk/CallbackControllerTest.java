@@ -38,10 +38,6 @@ import static uk.gov.hmcts.reform.fpl.enums.UserRole.CCD_SOLICITOR;
 @SpringBootTest
 @AutoConfigureMockMvc
 public class CallbackControllerTest {
-
-  private static final String REQUEST  = "request.casedata/ccd-callback-casedata-notice-of-change-applied.json";
-  private static final String RESPONSE  = "expected/response-notice-of-change-applied.json";
-
   @Autowired
   private MockMvc mockMvc;
 
@@ -144,9 +140,10 @@ public class CallbackControllerTest {
     assertThat(previousOrganisations.getValue().getFromTimeStamp()).isNotNull();
     assertThat(previousOrganisations.getValue().getToTimeStamp()).isNotNull();
 
-    String responseString = FileUtils.readFileToString(new File(Resources.getResource(RESPONSE).getPath()),
+    String responseString = FileUtils.readFileToString(new File
+                    (Resources.getResource("expected/response-notice-of-change-applied.json").getPath()),
             StandardCharsets.UTF_8);
-    JSONAssert.assertEquals(result.getResponse().getContentAsString(), responseString, false);
+    JSONAssert.assertEquals(responseString, result.getResponse().getContentAsString() , false);
   }
 
   @SneakyThrows
@@ -192,14 +189,13 @@ public class CallbackControllerTest {
         .build();
   }
 
+  @SneakyThrows
   private Map<String, Object> caseData() {
-    ObjectMapper mapper = new ObjectMapper();
-
-    try (InputStream in = Thread.currentThread().getContextClassLoader().getResourceAsStream(REQUEST)) {
-      return mapper.readValue(in, new TypeReference<>() {
-      });
-    } catch (Exception e) {
-      throw new RuntimeException(e);
-    }
+    return new ObjectMapper().readValue(
+            FileUtils.readFileToString(new File(
+                            Resources.getResource("request.casedata/ccd-callback-casedata-notice-of-change-applied.json").getPath()),
+                    StandardCharsets.UTF_8),
+            new TypeReference<>() {
+            });
   }
 }
