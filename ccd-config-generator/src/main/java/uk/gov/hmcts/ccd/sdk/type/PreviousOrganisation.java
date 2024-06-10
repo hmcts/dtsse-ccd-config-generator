@@ -1,7 +1,6 @@
 package uk.gov.hmcts.ccd.sdk.type;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
-import com.fasterxml.jackson.annotation.JsonFormat;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.annotation.JsonSerialize;
@@ -17,15 +16,14 @@ import uk.gov.hmcts.ccd.sdk.serializer.LocalDateTimeSerializer;
 @Builder
 @Data
 @ComplexType(name = "PreviousOrganisation", generate = false)
-@JsonFormat(with = JsonFormat.Feature.ACCEPT_CASE_INSENSITIVE_PROPERTIES)
 public class PreviousOrganisation {
 
-  @JsonProperty("FromTimeStamp")
+  @JsonProperty("FromTimestamp")
   @JsonSerialize(using = LocalDateTimeSerializer.class)
   @JsonDeserialize(using = LocalDateTimeDeserializer.class)
   private LocalDateTime fromTimeStamp;
 
-  @JsonProperty("ToTimeStamp")
+  @JsonProperty("ToTimestamp")
   @JsonSerialize(using = LocalDateTimeSerializer.class)
   @JsonDeserialize(using = LocalDateTimeDeserializer.class)
   private LocalDateTime toTimeStamp;
@@ -38,8 +36,8 @@ public class PreviousOrganisation {
 
   @JsonCreator
   public PreviousOrganisation(
-      @JsonProperty("FromTimeStamp") LocalDateTime fromTimeStamp,
-      @JsonProperty("ToTimeStamp") LocalDateTime toTimeStamp,
+      @JsonProperty("FromTimestamp") LocalDateTime fromTimeStamp,
+      @JsonProperty("ToTimestamp") LocalDateTime toTimeStamp,
       @JsonProperty("OrganisationName") String organisationName,
       @JsonProperty("OrganisationAddress") AddressUK organisationAddress
   ) {
