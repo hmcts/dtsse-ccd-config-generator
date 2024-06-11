@@ -105,6 +105,7 @@ public class CaseData {
   private final uk.gov.hmcts.ccd.sdk.type.Document documentField;
   private final uk.gov.hmcts.ccd.sdk.type.OrderSummary orderSummaryField;
   private final uk.gov.hmcts.ccd.sdk.type.CaseLink caseLinks;
+  private final uk.gov.hmcts.ccd.sdk.type.CaseLocation caseManagementLocation;
   private final uk.gov.hmcts.ccd.sdk.type.Flags caseFlags;
   private final uk.gov.hmcts.ccd.sdk.type.Flags applicantFlags;
   private final uk.gov.hmcts.ccd.sdk.type.Flags representativeFlags;

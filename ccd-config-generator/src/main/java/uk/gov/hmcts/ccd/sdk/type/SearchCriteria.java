@@ -8,11 +8,10 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import uk.gov.hmcts.ccd.sdk.api.ComplexType;
 
-
 @NoArgsConstructor
 @Builder
 @Data
-@ComplexType(name = "SearchCriteria", generate = false)
+@ComplexType(name = "SearchCriteria")
 public class SearchCriteria {
 
   @JsonProperty("OtherCaseReferences")

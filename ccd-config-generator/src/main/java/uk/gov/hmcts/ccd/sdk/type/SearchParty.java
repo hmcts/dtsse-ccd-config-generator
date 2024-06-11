@@ -9,11 +9,10 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import uk.gov.hmcts.ccd.sdk.api.ComplexType;
 
-
 @NoArgsConstructor
 @Builder
 @Data
-@ComplexType(name = "SearchParty", generate = false)
+@ComplexType(name = "SearchParty")
 public class SearchParty {
   @JsonProperty("Name")
   private String name;

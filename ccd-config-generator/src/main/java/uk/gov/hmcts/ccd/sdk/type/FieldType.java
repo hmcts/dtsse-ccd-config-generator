@@ -13,6 +13,7 @@ public enum FieldType {
   YesOrNo,
   Address,
   CaseLink,
+  CaseLocation,
   OrderSummary,
   MultiSelectList,
   Collection,
@@ -24,5 +25,6 @@ public enum FieldType {
   FlagLauncher,
   FlagType,
   FlagDetail,
-  ComponentLauncher
+  ComponentLauncher,
+  SearchCriteria
 }
