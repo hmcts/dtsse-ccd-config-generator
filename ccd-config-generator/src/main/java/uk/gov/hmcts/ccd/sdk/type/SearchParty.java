@@ -14,6 +14,10 @@ import uk.gov.hmcts.ccd.sdk.api.ComplexType;
 @Data
 @ComplexType(name = "SearchParty")
 public class SearchParty {
+
+  @JsonProperty("CollectionFieldName")
+  private String collectionFieldName;
+
   @JsonProperty("Name")
   private String name;
 
@@ -35,18 +39,20 @@ public class SearchParty {
   private LocalDate dateOfDeath;
 
   @JsonCreator
-  public SearchParty(@JsonProperty("Name") String name,
+  public SearchParty(@JsonProperty("CollectionFieldName") String collectionFieldName,
+                     @JsonProperty("Name") String name,
                      @JsonProperty("EmailAddress") String emailAddress,
                      @JsonProperty("AddressLine1") String addressLine1,
                      @JsonProperty("Postcode") String postcode,
                      @JsonProperty("DOB") LocalDate dateOfBirth,
                      @JsonProperty("DOD") LocalDate dateOfDeath) {
+    this.collectionFieldName = collectionFieldName;
     this.name = name;
     this.emailAddress = emailAddress;
     this.addressLine1 = addressLine1;
     this.postcode = postcode;
     this.dateOfBirth = dateOfBirth;
     this.dateOfDeath = dateOfDeath;
-
   }
+
 }
