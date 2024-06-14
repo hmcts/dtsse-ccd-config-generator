@@ -31,7 +31,7 @@ public class SearchPartyGenerator<T, S, R extends HasRole> implements ConfigGene
     }
 
     final Path path = Paths.get(outputFolder.getPath(), "SearchParty.json");
-    mergeInto(path, result, new AddMissing(), "CaseTypeID", "SearchPartyCollectionFieldName");
+    mergeInto(path, result, new AddMissing(), "CaseTypeID", "SearchPartyName");
   }
 
   @SneakyThrows
