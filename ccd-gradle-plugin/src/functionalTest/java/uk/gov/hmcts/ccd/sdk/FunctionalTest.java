@@ -26,9 +26,10 @@ public class FunctionalTest {
       testProjectDir.getRoot());
   }
 
+  //  https://docs.gradle.org/current/userguide/compatibility.html
   @Test
   public void testGradle7() {
-    checkTestProject("7.0");
+    checkTestProject("7.3");
   }
 
   @Test
