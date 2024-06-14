@@ -21,8 +21,10 @@ import static uk.gov.hmcts.reform.fpl.enums.UserRole.SYSTEM_UPDATE;
 
 
 import java.util.EnumSet;
+import java.util.List;
 import java.util.Set;
 import org.springframework.stereotype.Component;
+import uk.gov.hmcts.ccd.sdk.api.SearchPartyField;
 import uk.gov.hmcts.ccd.sdk.api.callback.AboutToStartOrSubmitResponse;
 import uk.gov.hmcts.ccd.sdk.api.CaseDetails;
 import uk.gov.hmcts.ccd.sdk.api.ConfigBuilder;
@@ -130,14 +132,29 @@ public class CCDConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<CaseData, S
     builder.searchCriteria()
       .otherCaseReference("legacyCaseReference");
 
+    SearchPartyField searchPartyField1 =
+      SearchPartyField.builder()
+        .searchPartyCollectionFieldName("respondents1")
+        .searchPartyName("party.firstName,party.lastName")
+        .searchPartyEmailAddress("party.firstName,party.email")
+        .searchPartyAddressLine1("party.address.AddressLine1")
+        .searchPartyPostCode("party.address.PostCode")
+        .searchPartyDOB("party.dateOfBirth")
+        .searchPartyDOD("party.dateOfDeath")
+        .build();
+    SearchPartyField searchPartyField2 =
+      SearchPartyField.builder()
+        .searchPartyCollectionFieldName("respondents2")
+        .searchPartyName("party.firstName,party.lastName")
+        .searchPartyEmailAddress("party.firstName,party.email")
+        .searchPartyAddressLine1("party.address.AddressLine1")
+        .searchPartyPostCode("party.address.PostCode")
+        .searchPartyDOB("party.dateOfBirth")
+        .searchPartyDOD("party.dateOfDeath")
+        .build();
+
     builder.searchParty()
-      .searchPartyCollectionFieldName("respondents1")
-      .searchPartyName("party.firstName,party.lastName")
-      .searchPartyEmailAddress("party.firstName,party.email")
-      .searchPartyAddressLine1("party.address.AddressLine1")
-      .searchPartyPostCode("party.address.PostCode")
-      .searchPartyDOB("party.dateOfBirth")
-      .searchPartyDOD("party.dateOfDeath");
+      .fields(List.of(searchPartyField1, searchPartyField2));
   }
 
   private AboutToStartOrSubmitResponse<CaseData, State> checkReadyAboutToSubmit(CaseDetails<CaseData, State> details,
