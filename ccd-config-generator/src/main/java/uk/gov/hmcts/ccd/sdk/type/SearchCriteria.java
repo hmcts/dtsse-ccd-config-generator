@@ -11,20 +11,15 @@ import uk.gov.hmcts.ccd.sdk.api.ComplexType;
 @NoArgsConstructor
 @Builder
 @Data
-@ComplexType(name = "SearchCriteria")
+@ComplexType(name = "SearchCriteria", generate = false)
 public class SearchCriteria {
 
   @JsonProperty("OtherCaseReferences")
   private List<ListValue<String>> otherCaseReferences;
 
-  @JsonProperty("SearchParties")
-  private List<ListValue<SearchParty>> parties;
-
   @JsonCreator
-  public SearchCriteria(@JsonProperty("OtherCaseReferences") List<ListValue<String>> otherCaseReferences,
-                        @JsonProperty("SearchParties") List<ListValue<SearchParty>> parties) {
+  public SearchCriteria(@JsonProperty("OtherCaseReferences") List<ListValue<String>> otherCaseReferences) {
     this.otherCaseReferences = otherCaseReferences;
-    this.parties = parties;
   }
 
 }

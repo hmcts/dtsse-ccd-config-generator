@@ -10,7 +10,7 @@ import uk.gov.hmcts.ccd.sdk.api.ComplexType;
 @NoArgsConstructor
 @Builder
 @Data
-@ComplexType(name = "CaseLocation")
+@ComplexType(name = "CaseLocation", generate = false)
 public class CaseLocation {
 
   @JsonProperty("Region")
