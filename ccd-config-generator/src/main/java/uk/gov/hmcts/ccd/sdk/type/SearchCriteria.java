@@ -14,12 +14,12 @@ import uk.gov.hmcts.ccd.sdk.api.ComplexType;
 @ComplexType(name = "SearchCriteria")
 public class SearchCriteria {
 
-  @JsonProperty("OtherCaseReferences")
-  private List<ListValue<String>> otherCaseReferences;
+  @JsonProperty("OtherCaseReference")
+  private List<ListValue<String>> otherCaseReference;
 
   @JsonCreator
-  public SearchCriteria(@JsonProperty("OtherCaseReferences") List<ListValue<String>> otherCaseReferences) {
-    this.otherCaseReferences = otherCaseReferences;
+  public SearchCriteria(@JsonProperty("OtherCaseReference") List<ListValue<String>> otherCaseReference) {
+    this.otherCaseReference = otherCaseReference;
   }
 
 }

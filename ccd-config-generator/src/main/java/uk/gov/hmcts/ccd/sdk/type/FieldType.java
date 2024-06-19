@@ -13,7 +13,6 @@ public enum FieldType {
   YesOrNo,
   Address,
   CaseLink,
-  CaseLocation,
   OrderSummary,
   MultiSelectList,
   Collection,
