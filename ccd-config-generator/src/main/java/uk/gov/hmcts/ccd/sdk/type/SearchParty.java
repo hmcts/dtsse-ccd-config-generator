@@ -15,37 +15,37 @@ import uk.gov.hmcts.ccd.sdk.api.ComplexType;
 @ComplexType(name = "SearchParty")
 public class SearchParty {
 
-  @JsonProperty("SearchPartyCollectionFieldName")
+  @JsonProperty("CollectionFieldName")
   private String collectionFieldName;
 
-  @JsonProperty("SearchPartyName")
+  @JsonProperty("Name")
   private String name;
 
-  @JsonProperty("SearchPartyEmailAddress")
+  @JsonProperty("EmailAddress")
   private String emailAddress;
 
-  @JsonProperty("SearchPartyAddressLine1")
+  @JsonProperty("AddressLine1")
   private String addressLine1;
 
-  @JsonProperty("SearchPartyPostCode")
+  @JsonProperty("PostCode")
   private String postcode;
 
-  @JsonProperty("SearchPartyDOB")
+  @JsonProperty("DOB")
   @JsonFormat(pattern = "yyyy-MM-dd")
   private LocalDate dateOfBirth;
 
-  @JsonProperty("SearchPartyDOD")
+  @JsonProperty("DOD")
   @JsonFormat(pattern = "yyyy-MM-dd")
   private LocalDate dateOfDeath;
 
   @JsonCreator
-  public SearchParty(@JsonProperty("SearchPartyCollectionFieldName") String collectionFieldName,
-                     @JsonProperty("SearchPartyName") String name,
-                     @JsonProperty("SearchPartyEmailAddress") String emailAddress,
-                     @JsonProperty("SearchPartyAddressLine1") String addressLine1,
-                     @JsonProperty("SearchPartyPostcode") String postcode,
-                     @JsonProperty("SearchPartyDOB") LocalDate dateOfBirth,
-                     @JsonProperty("SearchPartyDOD") LocalDate dateOfDeath) {
+  public SearchParty(@JsonProperty("CollectionFieldName") String collectionFieldName,
+                     @JsonProperty("Name") String name,
+                     @JsonProperty("EmailAddress") String emailAddress,
+                     @JsonProperty("AddressLine1") String addressLine1,
+                     @JsonProperty("Postcode") String postcode,
+                     @JsonProperty("DOB") LocalDate dateOfBirth,
+                     @JsonProperty("DOD") LocalDate dateOfDeath) {
     this.collectionFieldName = collectionFieldName;
     this.name = name;
     this.emailAddress = emailAddress;

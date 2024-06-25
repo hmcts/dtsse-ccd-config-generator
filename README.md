@@ -41,8 +41,8 @@ Write CCD configuration in Java.
 
 ## Requirements
 
-* Gradle 7.3 
-* Java 17 
+* Gradle 7.3
+* Java 17
 
 ## Installation
 
@@ -500,6 +500,7 @@ public class JacksonConfiguration {
     JavaTimeModule datetime = new JavaTimeModule();
     datetime.addSerializer(LocalDateSerializer.INSTANCE);
     mapper.registerModule(datetime);
+    mapper.registerModule(new ParameterNamesModule(JsonCreator.Mode.PROPERTIES));
 
     return mapper;
   }
