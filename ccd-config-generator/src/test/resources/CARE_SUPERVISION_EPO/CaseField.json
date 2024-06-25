@@ -148,6 +148,14 @@
     "SecurityClassification": "Public"
   },
   {
+    "ID": "caseManagementLocation",
+    "FieldType": "CaseLocation",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "LiveFrom": "01/01/2017",
+    "Label": " ",
+    "SecurityClassification": "Public"
+  },
+  {
     "ID": "yesOrNoField",
     "FieldType": "YesOrNo",
     "CaseTypeID": "CARE_SUPERVISION_EPO",
