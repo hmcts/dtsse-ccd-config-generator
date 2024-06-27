@@ -24,6 +24,7 @@ import java.util.EnumSet;
 import java.util.List;
 import java.util.Set;
 import org.springframework.stereotype.Component;
+import uk.gov.hmcts.ccd.sdk.api.SearchCriteriaField;
 import uk.gov.hmcts.ccd.sdk.api.SearchPartyField;
 import uk.gov.hmcts.ccd.sdk.api.callback.AboutToStartOrSubmitResponse;
 import uk.gov.hmcts.ccd.sdk.api.CaseDetails;
@@ -129,8 +130,17 @@ public class CCDConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<CaseData, S
       .displayOrder(1)
       .parentCategoryID("A");
 
+    SearchCriteriaField searchCriteriaField1 =
+      SearchCriteriaField.builder()
+          .otherCaseReference("legacyCaseReference")
+            .build();
+    SearchCriteriaField searchCriteriaField2 =
+      SearchCriteriaField.builder()
+        .otherCaseReference("legacyNonCcdReference")
+        .build();
+
     builder.searchCriteria()
-      .otherCaseReference("legacyCaseReference");
+      .fields(List.of(searchCriteriaField1, searchCriteriaField2));
 
     SearchPartyField searchPartyField1 =
       SearchPartyField.builder()
