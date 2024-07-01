@@ -6,6 +6,7 @@ import lombok.Data;
 @Data
 @Builder
 public class SearchPartyField {
+  private String caseTypeId;
   private String searchPartyCollectionFieldName;
   private String searchPartyName;
   private String searchPartyEmailAddress;

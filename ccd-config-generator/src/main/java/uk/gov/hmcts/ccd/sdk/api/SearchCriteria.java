@@ -1,5 +1,6 @@
 package uk.gov.hmcts.ccd.sdk.api;
 
+import java.util.List;
 import lombok.Builder;
 import lombok.Data;
 
@@ -7,7 +8,7 @@ import lombok.Data;
 @Data
 public class SearchCriteria {
 
-  private String otherCaseReference;
+  private List<SearchCriteriaField> fields;
 
   public static class SearchCriteriaBuilder {
 
@@ -15,8 +16,8 @@ public class SearchCriteria {
       return SearchCriteria.builder();
     }
 
-    public SearchCriteriaBuilder otherCaseReference(String otherCaseReference) {
-      this.otherCaseReference = otherCaseReference;
+    public SearchCriteriaBuilder fields(List<SearchCriteriaField> fields) {
+      this.fields = fields;
       return this;
     }
   }
