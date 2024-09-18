@@ -190,6 +190,7 @@ public class CCDConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<CaseData, S
         .field(CaseData::getCaseLocalAuthority, "Local authority")
         .field(CaseData::getCaseName, "Case name")
         .field(CaseData::getFamilyManCaseNumber, "FamilyMan case number")
+        .field(CaseData::getDateOfIssue, "Date of Issue", HMCTS_ADMIN)
         .field("hearingPreferencesWelsh", "Is in Welsh")
         .caseReferenceField()
         .field("allocatedJudge", "Allocated Judge", "judgeTitle", "hearingPreferencesWelsh=\"no\"")
