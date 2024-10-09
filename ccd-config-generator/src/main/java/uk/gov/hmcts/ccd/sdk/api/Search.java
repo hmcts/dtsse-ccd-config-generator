@@ -36,6 +36,12 @@ public class Search<T, R extends HasRole> {
       return this;
     }
 
+    public SearchBuilder<T, R> field(TypedPropertyGetter<T, ?> getter, String label, R role) {
+      String name = propertyUtils.getPropertyName(model, getter);
+      fields.add(SearchField.<R>builder().id(name).label(label).userRole(role).build());
+      return this;
+    }
+
     public SearchBuilder<T, R> field(TypedPropertyGetter<T, ?> getter, String label, SortOrder order) {
       String name = propertyUtils.getPropertyName(model, getter);
       fields.add(SearchField.<R>builder().id(name).label(label).order(order).build());

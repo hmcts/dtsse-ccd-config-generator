@@ -13,4 +13,8 @@ public class SearchField<R extends HasRole> {
   protected String displayContextParameter;
   protected R userRole;
   protected SortOrder order;
+
+  public boolean availableToRole(String role) {
+    return userRole == null || userRole.getRole().equals(role);
+  }
 }

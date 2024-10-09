@@ -110,9 +110,9 @@ class AuthorisationCaseFieldGenerator<T, S, R extends HasRole> implements Config
       for (Search<T, R> basket :
           Iterables.concat(config.getWorkBasketInputFields(),
               config.getWorkBasketResultFields())) {
-        for (SearchField<R> field : basket.getFields()) {
-          if (!fieldRolePermissions.contains(field.getId(), role)) {
-            fieldRolePermissions.put(field.getId(), role, Collections.singleton(Permission.R));
+        for (SearchField<R> searchField : basket.getFields()) {
+          if (searchField.availableToRole(role) && !fieldRolePermissions.contains(searchField.getId(), role)) {
+            fieldRolePermissions.put(searchField.getId(), role, Collections.singleton(Permission.R));
           }
         }
       }
@@ -121,9 +121,9 @@ class AuthorisationCaseFieldGenerator<T, S, R extends HasRole> implements Config
       for (Search<T, R> search :
           Iterables.concat(config.getSearchInputFields(),
               config.getSearchResultFields())) {
-        for (SearchField<R> field : search.getFields()) {
-          if (!fieldRolePermissions.contains(field.getId(), role)) {
-            fieldRolePermissions.put(field.getId(), role, Collections.singleton(Permission.R));
+        for (SearchField<R> searchField : search.getFields()) {
+          if (searchField.availableToRole(role) && !fieldRolePermissions.contains(searchField.getId(), role)) {
+            fieldRolePermissions.put(searchField.getId(), role, Collections.singleton(Permission.R));
           }
         }
       }
