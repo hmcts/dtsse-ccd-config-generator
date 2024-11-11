@@ -43,8 +43,9 @@ class SearchFieldAndResultGenerator<T, S, R extends HasRole> implements ConfigGe
         result.add(map);
       }
     }
+
     Path output = Paths.get(root.getPath(), fileName + ".json");
-    JsonUtils.mergeInto(output, result, new AddMissing(), "CaseFieldID");
+    JsonUtils.mergeInto(output, result, new AddMissing(), "CaseFieldID", "UserRole");
   }
 
   protected static Map<String, Object> buildField(String caseType, String fieldId, String label, int displayOrder,
