@@ -33,6 +33,7 @@ public class Event<T, R extends HasRole, S> {
   private boolean showSummary;
   private boolean showEventNotes;
   private boolean publishToCamunda;
+  private Integer ttlIncrement;
   private AboutToStart<T, S> aboutToStartCallback;
   private AboutToSubmit<T, S> aboutToSubmitCallback;
   private Submitted<T, S> submittedCallback;
@@ -127,6 +128,12 @@ public class Event<T, R extends HasRole, S> {
       this.publishToCamunda = true;
       return this;
     }
+
+    public EventBuilder<T, R, S> ttlIncrement(Integer ttlIncrement) {
+      this.ttlIncrement = ttlIncrement;
+      return this;
+    }
+
 
     // Do not inherit role permissions from states.
     public EventBuilder<T, R, S> explicitGrants() {
