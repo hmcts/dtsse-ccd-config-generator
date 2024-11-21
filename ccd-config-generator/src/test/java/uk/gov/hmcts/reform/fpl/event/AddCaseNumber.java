@@ -22,6 +22,7 @@ public class AddCaseNumber implements CCDConfig<CaseData, State, UserRole> {
     builder.event("addFamilyManCaseNumber")
         .forAllStates()
         .name("Add case number")
+        .ttlIncrement(100)
         .grant(CRU, HMCTS_ADMIN)
         .aboutToStartCallback(this::aboutToStart)
         .aboutToSubmitCallback(this::aboutToSubmit)
