@@ -15,6 +15,7 @@ import uk.gov.hmcts.ccd.sdk.api.CCD;
 import uk.gov.hmcts.ccd.sdk.type.ChangeOrganisationRequest;
 import uk.gov.hmcts.ccd.sdk.type.DynamicList;
 import uk.gov.hmcts.ccd.sdk.type.DynamicMultiSelectList;
+import uk.gov.hmcts.ccd.sdk.type.FieldType;
 import uk.gov.hmcts.ccd.sdk.type.ListValue;
 import uk.gov.hmcts.ccd.sdk.type.OrganisationPolicy;
 import uk.gov.hmcts.ccd.sdk.type.ScannedDocument;
@@ -411,5 +412,10 @@ public class CaseData {
   )
   private ChangeOrganisationRequest<CaseRoleID> changeOrganisationRequestField;
 
+  @JsonProperty("TTL")
+  @CCD(
+    typeOverride = TTL,
+    label = "Set up TTL"
+  )
   private TTL timeToLive;
 }

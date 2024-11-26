@@ -971,8 +971,8 @@
   {
     "CaseTypeID" : "CARE_SUPERVISION_EPO",
     "FieldType" : "TTL",
-    "ID" : "timeToLive",
-    "Label" : " ",
+    "ID" : "TTL",
+    "Label" : "Set up TTL",
     "LiveFrom" : "01/01/2017"
   }
 ]

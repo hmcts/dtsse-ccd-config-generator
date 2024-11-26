@@ -26,5 +26,6 @@ public enum FieldType {
   FlagType,
   FlagDetail,
   ComponentLauncher,
-  SearchCriteria
+  SearchCriteria,
+  TTL
 }
