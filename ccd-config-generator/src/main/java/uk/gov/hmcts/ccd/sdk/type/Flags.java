@@ -3,6 +3,7 @@ package uk.gov.hmcts.ccd.sdk.type;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import java.util.List;
+import java.util.UUID;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -23,12 +24,22 @@ public class Flags {
   @JsonProperty("details")
   private List<ListValue<FlagDetail>> details;
 
+  @JsonProperty("visibility")
+  private String visibility;
+
+  @JsonProperty("groupId")
+  private UUID groupId;
+
   @JsonCreator
   public Flags(@JsonProperty("partyName") String partyName,
                @JsonProperty("roleOnCase") String roleOnCase,
-               @JsonProperty("details") List<ListValue<FlagDetail>>  details) {
+               @JsonProperty("details") List<ListValue<FlagDetail>>  details,
+               @JsonProperty("visibility") String visibility,
+               @JsonProperty("groupId") UUID groupId) {
     this.details = details;
     this.partyName = partyName;
     this.roleOnCase = roleOnCase;
+    this.visibility = visibility;
+    this.groupId = groupId;
   }
 }
