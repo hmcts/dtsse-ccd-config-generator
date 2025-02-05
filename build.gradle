@@ -8,6 +8,7 @@ subprojects {
     compileJava   {
         sourceCompatibility = 17
         targetCompatibility = 17
+        options.compilerArgs += ["-Werror"]
     }
 
     checkstyle {
@@ -16,4 +17,53 @@ subprojects {
         sourceSets = [project.sourceSets.main]
     }
 
+    group = 'com.github.hmcts'
+    repositories {
+        mavenCentral()
+        maven { url 'https://jitpack.io' }
+    }
+
+    if (project.name in ['ccd-config-generator', 'data-runtime']) {
+        apply plugin: 'java-library'
+        apply plugin: 'maven-publish'
+
+        java {
+            withJavadocJar()
+            withSourcesJar()
+        }
+
+        def mavenFolder = rootProject.layout.buildDirectory.dir('config-generator')
+        publishing {
+            publications {
+                Main(MavenPublication) {
+                    from components.java
+                    groupId 'com.github.hmcts'
+                    artifactId project.name
+                    version version
+
+                    pom.withXml {
+                        def root = asNode()
+                        root.appendNode('description', 'Generate CCD Configuration from code')
+                        root.appendNode('name', 'CCD Config generator')
+                        root.appendNode('url', 'https://github.com/hmcts/ccd-config-generator')
+                    }
+                }
+            }
+            repositories {
+                maven {
+                    url = mavenFolder
+                    name = 'generator'
+                }
+            }
+        }
+    }
+}
+
+tasks.register('zipGenerator', Zip) {
+    from project(':ccd-config-generator').tasks.named('publishMainPublicationToGeneratorRepository')
+    from project(':data-runtime').tasks.named('publishMainPublicationToGeneratorRepository')
+    from layout.buildDirectory.dir('config-generator')
+
+    archiveFileName = 'generator.zip'
+    destinationDirectory = layout.buildDirectory
 }

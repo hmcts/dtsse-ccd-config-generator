@@ -40,7 +40,7 @@ dependencies {
 // for the plugin to add to the consuming project's build.
 processResources {
     into("generator") {
-        from project(':ccd-config-generator').tasks.zipGenerator
+        from rootProject.tasks.zipGenerator
     }
 }
 

@@ -1,14 +1,4 @@
-plugins {
-    id 'java-library'
-    id 'maven-publish'
-}
 
-group = 'com.github.hmcts'
-
-repositories {
-    mavenCentral()
-    maven { url 'https://jitpack.io' }
-}
 
 def springBootVersion = '2.7.18'
 
@@ -49,48 +39,7 @@ dependencies {
     implementation 'com.fasterxml.jackson.core:jackson-databind:2.18.2'
 }
 
-compileJava {
-    options.compilerArgs += ["-Werror"]
-}
 
-java {
-    withJavadocJar()
-    withSourcesJar()
-}
 
-def mavenFolder = layout.buildDirectory.dir('config-generator')
-publishing {
-    publications {
-        Main(MavenPublication) {
-            from components.java
-            groupId 'com.github.hmcts'
-            artifactId project.name
-            version version
 
-            pom.withXml {
-                def root = asNode()
-                root.appendNode('description', 'Generate CCD Configuration from code')
-                root.appendNode('name', 'CCD Config generator')
-                root.appendNode('url', 'https://github.com/hmcts/ccd-config-generator')
-            }
-        }
-    }
-    repositories {
-        maven {
-            url = mavenFolder
-            name = 'generator'
-        }
-    }
-}
 
-task cleanMaven(type: Delete) {
-    delete mavenFolder
-}
-
-publishMainPublicationToGeneratorRepository.dependsOn cleanMaven
-
-task zipGenerator(type: Zip, dependsOn: publishMainPublicationToGeneratorRepository) {
-    from mavenFolder
-    archiveFileName = 'generator.zip'
-    destinationDirectory = buildDir
-}

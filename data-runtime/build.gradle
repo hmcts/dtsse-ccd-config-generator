@@ -1,0 +1,8 @@
+dependencies {
+}
+
+compileJava {
+  options.compilerArgs += ["-Werror"]
+}
+
+
