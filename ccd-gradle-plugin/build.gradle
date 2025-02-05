@@ -50,16 +50,12 @@ java {
   }
 }
 
-pluginBundle {
-    website = 'https://github.com/hmcts/ccd-config-generator'
-    vcsUrl = 'https://github.com/hmcts/ccd-config-generator'
-    tags = ['hmcts']
-}
-
 ext['gradle.publish.key'] = System.getenv('GRADLE_PLUGIN_PORTAL_KEY')
 ext['gradle.publish.secret'] = System.getenv('GRADLE_PLUGIN_PORTAL_SECRET')
 
 gradlePlugin {
+    website = 'https://github.com/hmcts/ccd-config-generator'
+    vcsUrl = 'https://github.com/hmcts/ccd-config-generator'
     // Define the plugin
     plugins {
         greeting {
@@ -67,6 +63,7 @@ gradlePlugin {
             displayName = 'CCD Config Generator'
             description = 'Generate CCD Configuration from code'
             implementationClass = 'uk.gov.hmcts.ccd.sdk.CcdSdkPlugin'
+            tags = ['hmcts']
         }
     }
 }
