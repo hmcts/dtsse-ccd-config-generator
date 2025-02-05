@@ -2,7 +2,6 @@
 subprojects {
     apply plugin: 'checkstyle'
     apply plugin: 'java'
-    apply plugin: 'jacoco'
 
     version System.getenv('RELEASE_VERSION')?.replace('refs/tags/', '') ?: 'DEV-SNAPSHOT'
 
@@ -17,9 +16,4 @@ subprojects {
         sourceSets = [project.sourceSets.main]
     }
 
-    jacocoTestReport {
-        reports {
-            html.enabled true
-        }
-    }
 }

@@ -91,6 +91,6 @@ publishMainPublicationToGeneratorRepository.dependsOn cleanMaven
 
 task zipGenerator(type: Zip, dependsOn: publishMainPublicationToGeneratorRepository) {
     from mavenFolder
-    archiveName 'generator.zip'
-    destinationDir buildDir
+    archiveFileName = 'generator.zip'
+    destinationDirectory = buildDir
 }
