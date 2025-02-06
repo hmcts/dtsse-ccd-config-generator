@@ -56,13 +56,13 @@ subprojects {
                 }
             }
         }
+        tasks.publishMainPublicationToGeneratorRepository.outputs.dir(mavenFolder)
     }
 }
 
 tasks.register('zipGenerator', Zip) {
     from project(':ccd-config-generator').tasks.named('publishMainPublicationToGeneratorRepository')
     from project(':data-runtime').tasks.named('publishMainPublicationToGeneratorRepository')
-    from layout.buildDirectory.dir('config-generator')
 
     archiveFileName = 'generator.zip'
     destinationDirectory = layout.buildDirectory
