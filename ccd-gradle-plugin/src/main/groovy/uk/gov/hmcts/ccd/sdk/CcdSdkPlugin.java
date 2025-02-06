@@ -62,6 +62,14 @@ public class CcdSdkPlugin implements Plugin<Project> {
 
     project.getRepositories().mavenCentral();
     project.getRepositories().maven(x -> x.setUrl("https://jitpack.io"));
+
+    project.afterEvaluate(p -> {
+      if (config.decentralised) {
+        project.getDependencies().add("implementation", "com.github.hmcts:data-runtime:"
+          + getVersion());
+      }
+    });
+
   }
 
   @SneakyThrows
@@ -96,6 +104,7 @@ public class CcdSdkPlugin implements Plugin<Project> {
     private DirectoryProperty configDir;
     private String rootPackage = "uk.gov.hmcts";
     private String caseType = "";
+    private boolean decentralised = false;
 
     public CCDConfig() {
     }
