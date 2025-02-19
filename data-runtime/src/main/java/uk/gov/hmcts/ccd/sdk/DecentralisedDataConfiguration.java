@@ -16,7 +16,9 @@ import javax.sql.DataSource;
 /**
  * Based on https://github.com/spring-projects/spring-boot/blob/main/spring-boot-project/spring-boot-autoconfigure/src/main/java/org/springframework/boot/autoconfigure/flyway/FlywayAutoConfiguration.java
  */
-@AutoConfiguration
+@AutoConfiguration (
+  before = {FlywayAutoConfiguration.class}
+)
 @ConditionalOnClass(Flyway.class)
 @ConditionalOnProperty(prefix = "spring.flyway", name = "enabled", matchIfMissing = true)
 public class DecentralisedDataConfiguration {
