@@ -66,7 +66,7 @@ public class CcdSdkPlugin implements Plugin<Project> {
     project.afterEvaluate(p -> {
       if (config.decentralised) {
         project.getDependencies().add("implementation", "com.github.hmcts:data-runtime:"
-          + getVersion());
+            + getVersion());
       }
     });
 

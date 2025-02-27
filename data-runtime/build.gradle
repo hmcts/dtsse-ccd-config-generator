@@ -11,7 +11,6 @@ dependencies {
   implementation project(':ccd-config-generator')
   implementation group: 'org.springframework.boot', name: 'spring-boot-starter-web', version: '3.4.2'
   implementation group: 'org.springframework.boot', name: 'spring-boot-starter-jdbc', version: '3.4.2'
-  implementation 'com.github.hmcts:ccd-client:5.0.3'
   implementation ('com.github.hmcts:idam-java-client:3.0.3')  {
     transitive = false
   }

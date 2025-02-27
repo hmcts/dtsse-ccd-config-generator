@@ -1,6 +1,7 @@
 package uk.gov.hmcts.ccd.sdk;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.annotation.PreDestroy;
 import lombok.SneakyThrows;
 import org.apache.http.HttpHost;
 import org.elasticsearch.action.bulk.BulkRequest;
@@ -9,6 +10,7 @@ import org.elasticsearch.client.RequestOptions;
 import org.elasticsearch.client.RestClient;
 import org.elasticsearch.client.RestHighLevelClient;
 import org.elasticsearch.xcontent.XContentType;
+import org.springframework.beans.factory.DisposableBean;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
@@ -18,11 +20,12 @@ import java.util.Map;
 import java.util.Set;
 
 @Component
-public class DecentralisedESIndexer {
+public class DecentralisedESIndexer implements DisposableBean {
 
   private final DataSource dataSource;
+  private volatile boolean terminated;
 
-    @SneakyThrows
+  @SneakyThrows
     @Autowired
     public DecentralisedESIndexer(DataSource dataSource) {
       this.dataSource = dataSource;
@@ -44,11 +47,9 @@ public class DecentralisedESIndexer {
     private void index() {
         RestHighLevelClient client = new RestHighLevelClient(RestClient.builder(
                 new HttpHost("localhost", 9200)));
-
-        try (Connection c = dataSource.getConnection()) {
-            c.setAutoCommit(false);
-            while (true) {
-                Thread.sleep(250);
+          while (!terminated) {
+              try (Connection c = dataSource.getConnection()) {
+                c.setAutoCommit(false);
 
                 // Replicates the behaviour of the previous logstash configuration.
                 // https://github.com/hmcts/rse-cft-lib/blob/94aa0edeb0e1a4337a411ed8e6e20f170ed30bae/cftlib/lib/runtime/compose/logstash/logstash_conf.in#L3
@@ -116,6 +117,7 @@ public class DecentralisedESIndexer {
                 }
                 c.commit();
             }
+              Thread.sleep(250);
         }
     }
 
@@ -125,5 +127,10 @@ public class DecentralisedESIndexer {
             map.keySet().removeIf(k -> !keyset.contains(k));
         }
     }
+
+  @Override
+  public void destroy() {
+    this.terminated = true;
+  }
 }
 
