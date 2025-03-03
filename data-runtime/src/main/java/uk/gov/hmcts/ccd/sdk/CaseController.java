@@ -1,8 +1,10 @@
 package uk.gov.hmcts.ccd.sdk;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JavaType;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.micrometer.common.util.StringUtils;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -21,6 +23,7 @@ import net.jodah.typetools.TypeResolver;
 
 
 import java.util.Base64;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -114,13 +117,19 @@ public class CaseController {
         return ResponseEntity.ok(response);
     }
 
-    private RoleAssignments decodeHeader(String roleAssignments2) throws JsonProcessingException {
-        String roleAssignments = new String(Base64.getDecoder().decode(roleAssignments2));
-        log.info("roleAssignments: {}", roleAssignments);
-
-        RoleAssignments roleAssignments1 = getMapper.readValue(roleAssignments, RoleAssignments.class);
-        return roleAssignments1;
+  @SneakyThrows
+  private List<CaseAssignedUserRole> decodeHeader(String roles) throws JsonProcessingException {
+    if (StringUtils.isBlank(roles)) {
+      return List.of();
     }
+    log.info("roles: {}", roles);
+
+    String roleAssignments = new String(Base64.getDecoder().decode(roles));
+    log.info("roleAssignments: {}", roleAssignments);
+
+    return getMapper.readValue(roleAssignments, new TypeReference<List<CaseAssignedUserRole>>() {
+    });
+  }
 
     @SneakyThrows
     private void enqueueSubmittedCallback(long auditEventId, POCCaseEvent event, HttpHeaders headers) {
