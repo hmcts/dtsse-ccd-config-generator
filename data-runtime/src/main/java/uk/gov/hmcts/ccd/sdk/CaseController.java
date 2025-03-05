@@ -106,7 +106,7 @@ public class CaseController {
         transactionTemplate.execute( status -> {
                 dispatchAboutToSubmit(event);
                 var id = saveCaseReturningAuditId(event, roleAssignments);
-                if (eventListener.hasSubmittedCallbackForEvent(event.getEventDetails().getEventId())) {
+                if (eventListener.hasSubmittedCallbackForEvent(event.getEventDetails().getCaseType(), event.getEventDetails().getEventId())) {
                     enqueueSubmittedCallback(id, event, headers);
                 }
                 return status;
@@ -200,7 +200,7 @@ public class CaseController {
 
     @SneakyThrows
     private POCCaseEvent dispatchAboutToSubmit(POCCaseEvent event) {
-      if (eventListener.hasAboutToSubmitCallbackForEvent(event.getEventDetails().getEventId())) {
+      if (eventListener.hasAboutToSubmitCallbackForEvent(event.getEventDetails().getCaseType(), event.getEventDetails().getEventId())) {
             var req = CallbackRequest.builder()
                 .caseDetails(toCaseDetails(event.getCaseDetails()))
                 .caseDetailsBefore(toCaseDetails(event.getCaseDetailsBefore()))

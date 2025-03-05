@@ -6,6 +6,6 @@ import uk.gov.hmcts.reform.ccd.client.model.AboutToStartOrSubmitCallbackResponse
 
 public interface CCDEventListener {
   AboutToStartOrSubmitResponse aboutToSubmit(CallbackRequest request);
-  boolean hasSubmittedCallbackForEvent(String event);
-  boolean hasAboutToSubmitCallbackForEvent(String event);
+  boolean hasSubmittedCallbackForEvent(String caseType, String event);
+  boolean hasAboutToSubmitCallbackForEvent(String caseType, String event);
 }

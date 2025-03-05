@@ -149,4 +149,29 @@ public class CallbackController {
     return mapper.readValue(json, caseTypeToJavaType.get(caseType));
   }
 
+  public boolean hasAboutToSubmitCallback(String caseType, String event) {
+    if (!caseTypeToConfig.containsKey(caseType)) {
+      return false;
+    }
+
+    Event<?, ?, ?> result = caseTypeToConfig.get(caseType).getEvents().get(event);
+    if (result == null) {
+      return false;
+    }
+
+    return result.getAboutToSubmitCallback() != null;
+  }
+
+  public boolean hasSubmittedCallback(String caseType, String event) {
+    if (!caseTypeToConfig.containsKey(caseType)) {
+      return false;
+    }
+
+    Event<?, ?, ?> result = caseTypeToConfig.get(caseType).getEvents().get(event);
+    if (result == null) {
+      return false;
+    }
+
+    return result.getSubmittedCallback() != null;
+  }
 }
