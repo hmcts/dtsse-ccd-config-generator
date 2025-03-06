@@ -268,7 +268,7 @@ public class CaseController {
                 "a-first-name",
                 "a-last-name",
                 event.getEventName(),
-                event.getStateName(),
+                eventListener.nameForState(details.getEventDetails().getCaseType(), String.valueOf(currentView.get("state"))),
                 event.getSummary(),
                 event.getDescription(),
                 currentView.get("security_classification")

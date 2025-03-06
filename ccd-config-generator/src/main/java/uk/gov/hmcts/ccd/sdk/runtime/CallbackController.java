@@ -10,6 +10,8 @@ import de.cronn.reflection.util.TypedPropertyGetter;
 import java.util.Collection;
 import java.util.Map;
 import java.util.function.Function;
+
+import lombok.Getter;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -33,6 +35,7 @@ import uk.gov.hmcts.reform.ccd.client.model.SubmittedCallbackResponse;
 @RequestMapping("/callbacks")
 public class CallbackController {
 
+  @Getter
   private final ImmutableMap<String, ResolvedCCDConfig<?, ?, ?>> caseTypeToConfig;
 
   private ObjectMapper mapper;

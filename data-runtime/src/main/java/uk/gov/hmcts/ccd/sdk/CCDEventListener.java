@@ -8,4 +8,5 @@ public interface CCDEventListener {
   AboutToStartOrSubmitResponse aboutToSubmit(CallbackRequest request);
   boolean hasSubmittedCallbackForEvent(String caseType, String event);
   boolean hasAboutToSubmitCallbackForEvent(String caseType, String event);
+  String nameForState(String caseType, String stateId);
 }
