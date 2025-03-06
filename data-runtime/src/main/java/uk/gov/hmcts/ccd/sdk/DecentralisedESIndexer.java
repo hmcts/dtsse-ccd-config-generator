@@ -1,7 +1,6 @@
 package uk.gov.hmcts.ccd.sdk;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import jakarta.annotation.PreDestroy;
 import lombok.SneakyThrows;
 import org.apache.http.HttpHost;
 import org.elasticsearch.action.bulk.BulkRequest;
@@ -12,7 +11,7 @@ import org.elasticsearch.client.RestHighLevelClient;
 import org.elasticsearch.xcontent.XContentType;
 import org.springframework.beans.factory.DisposableBean;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.context.annotation.DependsOn;
+import org.springframework.boot.sql.init.dependency.DependsOnDatabaseInitialization;
 import org.springframework.stereotype.Component;
 
 import javax.sql.DataSource;
@@ -21,7 +20,7 @@ import java.util.Map;
 import java.util.Set;
 
 @Component
-@DependsOn("flyway")
+@DependsOnDatabaseInitialization
 public class DecentralisedESIndexer implements DisposableBean {
 
   private final DataSource dataSource;
