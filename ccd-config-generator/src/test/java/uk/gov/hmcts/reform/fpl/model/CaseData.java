@@ -295,6 +295,7 @@ public class CaseData {
   private final Others others;
   private final DynamicList nextHearingDateList;
 
+  @CCD(searchable = true)
   private final List<Element<Representative>> representatives;
 
   // EPO Order
@@ -363,8 +364,10 @@ public class CaseData {
   }
 
   private final String caseNote;
+
   @CCD(searchable = false)
   private final List<Element<CaseNote>> caseNotes;
+
   private final OrganisationPolicy<UserRole> organisationPolicy;
 
   @JsonUnwrapped()
