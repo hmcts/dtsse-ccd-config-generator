@@ -303,8 +303,13 @@ Tabs follow a similar API to events:
 
 Adding in multiple user roles will create multiple versions of the tab visible to each user role. If a user has both roles they will see the tab twice.
 
-The tab ID `"CaseHistory"` can be used to identify and configure the special History tab. If an app does not specify a tab with this ID
-then a default History tab will be automatically configured as the first tab.
+The tab ID `"CaseHistory"` can be used to identify and configure the special History tab and its order. If an app does
+not specify a tab with this ID then a default History tab will be automatically configured as the first tab.
+
+```java
+  builder.tab("CaseHistory", "History")
+    .field("caseHistory");
+```
 
 ## Permissions
 
