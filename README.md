@@ -277,7 +277,7 @@ There are five methods on the `ConfigBuilder` that allow the configuration of wo
     .caseReferenceField();
 ```
 
-There are some convience methods for `caseReferenceField`, `stateField`, `createdDateField` and `lastModifiedDate`.
+There are some convenience methods for `caseReferenceField`, `stateField`, `createdDateField` and `lastModifiedDate`.
 
 On the work basket and search results fields a sort order can be specified using the `SortOrder` class:
 
@@ -302,6 +302,9 @@ Tabs follow a similar API to events:
 ```
 
 Adding in multiple user roles will create multiple versions of the tab visible to each user role. If a user has both roles they will see the tab twice.
+
+The tab ID `"CaseHistory"` can be used to identify and configure the special History tab. If an app does not specify a tab with this ID
+then a default History tab will be automatically configured as the first tab.
 
 ## Permissions
 

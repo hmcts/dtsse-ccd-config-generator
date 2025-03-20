@@ -18,7 +18,6 @@ public class Tab<T, R extends HasRole> {
   private String tabID;
   private String labelText;
   private String showCondition;
-  private int displayOrder;
   private List<TabField> fields;
   private Set<R> forRoles;
 
