@@ -24,7 +24,7 @@ dependencies {
     // Use JUnit test framework for unit tests
     annotationProcessor group: 'org.projectlombok', name: 'lombok', version: '1.18.36'
     compileOnly group: 'org.projectlombok', name: 'lombok', version: '1.18.36'
-    implementation 'com.google.guava:guava:33.4.0-jre'
+    implementation 'com.google.guava:guava:33.4.5-jre'
 
     // Ensure we run the plugin's tests when the libraries are modified.
     testImplementation project(':ccd-config-generator')
