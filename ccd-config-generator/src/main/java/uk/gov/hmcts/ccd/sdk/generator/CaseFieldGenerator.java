@@ -100,6 +100,9 @@ class CaseFieldGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
         if (cf.showSummaryContent()) {
           fieldInfo.put("ShowSummaryContentOption", "Y");
         }
+        if (!cf.searchable()) {
+          fieldInfo.put("Searchable", "N");
+        }
         if (!Strings.isNullOrEmpty(cf.showCondition())) {
           fieldInfo.put("FieldShowCondition", cf.showCondition());
         }

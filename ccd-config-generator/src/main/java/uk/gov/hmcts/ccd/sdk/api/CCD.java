@@ -45,4 +45,5 @@ public @interface CCD {
 
   boolean ignore() default false;
 
+  boolean searchable() default true;
 }
