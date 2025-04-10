@@ -29,7 +29,7 @@ dependencies {
     testCompileOnly group: 'org.projectlombok', name: 'lombok', version: '1.18.38'
     testImplementation group: 'javax.validation', name: 'validation-api', version: '2.0.1.Final'
     testImplementation 'org.skyscreamer:jsonassert:1.5.3'
-    testImplementation 'com.google.guava:guava:33.4.7-android'
+    testImplementation 'com.google.guava:guava:33.4.7-jre'
     testImplementation group: 'org.hamcrest', name: 'hamcrest-all', version: '1.3'
     testImplementation group: 'commons-lang', name: 'commons-lang', version: '2.6'
     testImplementation group: 'commons-io', name: 'commons-io', version: '2.18.0'
@@ -44,7 +44,7 @@ dependencies {
     implementation group: 'cglib', name: 'cglib', version: '3.3.0'
     implementation group: 'net.jodah', name: 'typetools', version: '0.6.3'
     implementation 'org.reflections:reflections:0.10.2'
-    api 'com.google.guava:guava:33.4.7-android'
+    api 'com.google.guava:guava:33.4.7-jre'
 
     implementation 'com.fasterxml.jackson.core:jackson-databind:2.18.3'
 }
