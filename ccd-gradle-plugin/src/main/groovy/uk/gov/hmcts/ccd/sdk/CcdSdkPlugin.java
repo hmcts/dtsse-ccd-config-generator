@@ -12,6 +12,7 @@ import org.gradle.api.Action;
 import org.gradle.api.Plugin;
 import org.gradle.api.Project;
 import org.gradle.api.Task;
+import org.gradle.api.artifacts.repositories.MavenArtifactRepository;
 import org.gradle.api.file.DirectoryProperty;
 import org.gradle.api.plugins.JavaPlugin;
 import org.gradle.api.plugins.JavaPluginConvention;
@@ -61,7 +62,15 @@ public class CcdSdkPlugin implements Plugin<Project> {
 
 
     project.getRepositories().mavenCentral();
-    project.getRepositories().maven(x -> x.setUrl("https://pkgs.dev.azure.com/hmcts/Artifacts/_packaging/hmcts-lib/maven/v1"));
+    String azureUrl = "https://pkgs.dev.azure.com/hmcts/Artifacts/_packaging/hmcts-lib/maven/v1";
+
+    boolean azureRepoExists = project.getRepositories().stream()
+        .anyMatch(repo -> repo instanceof MavenArtifactRepository
+        && ((MavenArtifactRepository) repo).getUrl().toString().equals(azureUrl));
+
+    if (!azureRepoExists) {
+      project.getRepositories().maven(x -> x.setUrl(azureUrl));
+    }
   }
 
   @SneakyThrows
