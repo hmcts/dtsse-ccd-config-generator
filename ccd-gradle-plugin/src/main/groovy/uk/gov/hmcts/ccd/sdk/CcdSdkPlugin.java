@@ -61,7 +61,7 @@ public class CcdSdkPlugin implements Plugin<Project> {
 
 
     project.getRepositories().mavenCentral();
-    project.getRepositories().maven(x -> x.setUrl("https://jitpack.io"));
+    project.getRepositories().maven(x -> x.setUrl("https://pkgs.dev.azure.com/hmcts/Artifacts/_packaging/hmcts-lib/maven/v1"));
   }
 
   @SneakyThrows
