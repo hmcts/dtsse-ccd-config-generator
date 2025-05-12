@@ -13,6 +13,7 @@ import org.gradle.api.Plugin;
 import org.gradle.api.Project;
 import org.gradle.api.Task;
 import org.gradle.api.artifacts.repositories.MavenArtifactRepository;
+import org.gradle.api.artifacts.repositories.MavenRepositoryContentDescriptor;
 import org.gradle.api.file.DirectoryProperty;
 import org.gradle.api.plugins.JavaPlugin;
 import org.gradle.api.plugins.JavaPluginConvention;
@@ -73,6 +74,7 @@ public class CcdSdkPlugin implements Plugin<Project> {
         project.getRepositories().maven(x -> {
           x.setUrl(azureUrl);
           x.setName("HMCTS Azure artifacts dependency repository added by the CCD SDK plugin");
+          x.mavenContent(MavenRepositoryContentDescriptor::releasesOnly);
         });
       }
     });
