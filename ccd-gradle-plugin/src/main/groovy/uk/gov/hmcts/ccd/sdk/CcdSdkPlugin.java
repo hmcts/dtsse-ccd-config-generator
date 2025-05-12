@@ -27,7 +27,10 @@ public class CcdSdkPlugin implements Plugin<Project> {
     project.getPlugins().apply(JavaPlugin.class);
 
     // Extract the config generator maven repo and add to the project.
-    project.getRepositories().maven(x -> x.setUrl(extractGeneratorRepository(project)));
+    project.getRepositories().maven(x -> {
+      x.setUrl(extractGeneratorRepository(project));
+      x.setName("RSE CCD SDK maven repository");
+    });
 
     // Add the dependency on the generator which will be fetched from the local maven repo.
     project.getDependencies().add("implementation", "com.github.hmcts:ccd-config-generator:"
