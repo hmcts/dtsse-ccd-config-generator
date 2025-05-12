@@ -62,15 +62,20 @@ public class CcdSdkPlugin implements Plugin<Project> {
 
 
     project.getRepositories().mavenCentral();
-    String azureUrl = "https://pkgs.dev.azure.com/hmcts/Artifacts/_packaging/hmcts-lib/maven/v1";
+    project.afterEvaluate(p -> {
+      String azureUrl = "https://pkgs.dev.azure.com/hmcts/Artifacts/_packaging/hmcts-lib/maven/v1";
 
-    boolean azureRepoExists = project.getRepositories().stream()
+      boolean azureRepoExists = project.getRepositories().stream()
         .anyMatch(repo -> repo instanceof MavenArtifactRepository
-        && ((MavenArtifactRepository) repo).getUrl().toString().equals(azureUrl));
+          && ((MavenArtifactRepository) repo).getUrl().toString().equals(azureUrl));
 
-    if (!azureRepoExists) {
-      project.getRepositories().maven(x -> x.setUrl(azureUrl));
-    }
+      if (!azureRepoExists) {
+        project.getRepositories().maven(x -> {
+          x.setUrl(azureUrl);
+          x.setUrl("HMCTS Azure artifacts dependency repository added by the CCD SDK plugin");
+        });
+      }
+    });
   }
 
   @SneakyThrows
