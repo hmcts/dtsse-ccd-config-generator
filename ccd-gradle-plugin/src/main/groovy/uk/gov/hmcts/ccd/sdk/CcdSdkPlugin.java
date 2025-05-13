@@ -65,7 +65,6 @@ public class CcdSdkPlugin implements Plugin<Project> {
     });
 
 
-    project.getRepositories().mavenCentral();
     project.afterEvaluate(p -> {
       String azureUrl = "https://pkgs.dev.azure.com/hmcts/Artifacts/_packaging/hmcts-lib/maven/v1";
 
