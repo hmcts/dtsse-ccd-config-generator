@@ -50,12 +50,12 @@ class CaseEventGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
 
   private List<Map<String, Object>> serialise(String caseTypeId, Event<T, R, S> event,
                                               Set<S> allStates, String callbackHost) {
-    int t = 1;
     List result = Lists.newArrayList();
     Map<String, Object> data = JsonUtils.getField(event.getId());
     result.add(data);
     data.put("Name", event.getName());
     data.put("Description", event.getDescription());
+    int t = 1;
     if (event.getDisplayOrder() != -1) {
       data.put("DisplayOrder", event.getDisplayOrder());
     } else {
