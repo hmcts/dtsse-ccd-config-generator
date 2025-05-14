@@ -12,6 +12,8 @@ import org.gradle.api.Action;
 import org.gradle.api.Plugin;
 import org.gradle.api.Project;
 import org.gradle.api.Task;
+import org.gradle.api.artifacts.repositories.MavenArtifactRepository;
+import org.gradle.api.artifacts.repositories.MavenRepositoryContentDescriptor;
 import org.gradle.api.file.DirectoryProperty;
 import org.gradle.api.plugins.JavaPlugin;
 import org.gradle.api.plugins.JavaPluginConvention;
@@ -25,7 +27,10 @@ public class CcdSdkPlugin implements Plugin<Project> {
     project.getPlugins().apply(JavaPlugin.class);
 
     // Extract the config generator maven repo and add to the project.
-    project.getRepositories().maven(x -> x.setUrl(extractGeneratorRepository(project)));
+    project.getRepositories().maven(x -> {
+      x.setUrl(extractGeneratorRepository(project));
+      x.setName("RSE CCD SDK maven repository");
+    });
 
     // Add the dependency on the generator which will be fetched from the local maven repo.
     project.getDependencies().add("implementation", "com.github.hmcts:ccd-config-generator:"
@@ -60,24 +65,21 @@ public class CcdSdkPlugin implements Plugin<Project> {
     });
 
 
-    project.getRepositories().mavenCentral();
-    project.getRepositories().maven(x -> x.setUrl("https://jitpack.io"));
-
     project.afterEvaluate(p -> {
-      if (config.decentralised) {
-        project.getDependencies().add("implementation", "com.github.hmcts:data-runtime:"
-            + getVersion());
-        // Surface that we are decentralised to the spring boot apps.
-        // This is an env var since it needs to be read beyond the application's classpath
-        // to shut off the default cftlib elasticsearch indexer when decentralised)
-        project.getTasks().withType(JavaExec.class).configureEach(t -> {
-          if (t.getTaskIdentity().type.getName().equals("uk.gov.hmcts.rse.CftlibExec")) {
-            t.getEnvironment().put("CCD_SDK_DECENTRALISED", "true");
-          }
+      String azureUrl = "https://pkgs.dev.azure.com/hmcts/Artifacts/_packaging/hmcts-lib/maven/v1";
+
+      boolean azureRepoExists = project.getRepositories().stream()
+          .anyMatch(repo -> repo instanceof MavenArtifactRepository
+          && ((MavenArtifactRepository) repo).getUrl().toString().equals(azureUrl));
+
+      if (!azureRepoExists) {
+        project.getRepositories().maven(x -> {
+          x.setUrl(azureUrl);
+          x.setName("HMCTS Azure artifacts dependency repository added by the CCD SDK plugin");
+          x.mavenContent(MavenRepositoryContentDescriptor::releasesOnly);
         });
       }
     });
-
   }
 
   @SneakyThrows

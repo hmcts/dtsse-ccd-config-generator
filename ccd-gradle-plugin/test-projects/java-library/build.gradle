@@ -20,6 +20,10 @@ ccd {
     configDir = file('build/ccd-definition')
 }
 
+repositories {
+  mavenCentral()
+}
+
 dependencies {
     implementation 'org.springframework.boot:spring-boot-autoconfigure:2.7.18'
 

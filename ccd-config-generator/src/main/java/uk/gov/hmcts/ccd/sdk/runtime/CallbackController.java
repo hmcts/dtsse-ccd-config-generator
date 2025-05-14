@@ -10,7 +10,6 @@ import de.cronn.reflection.util.TypedPropertyGetter;
 import java.util.Collection;
 import java.util.Map;
 import java.util.function.Function;
-
 import lombok.Getter;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;

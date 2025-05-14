@@ -842,6 +842,7 @@
     "FieldTypeParameter": "CaseNote",
     "CaseTypeID": "CARE_SUPERVISION_EPO",
     "LiveFrom": "01/01/2017",
+    "Searchable": "N",
     "Label": " ",
     "SecurityClassification": "Public"
   },

@@ -3,6 +3,7 @@
     "ID": "EPOPhrase",
     "FieldType": "Text",
     "LiveFrom": "01/01/2017",
+    "Searchable": "N",
     "SecurityClassification": "Public",
     "ListElementCode": "includePhrase"
   }
