@@ -1,11 +1,10 @@
 package uk.gov.hmcts.ccd.sdk;
 
+import java.util.List;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-
-import java.util.List;
 
 @Builder
 @Data
@@ -13,5 +12,5 @@ import java.util.List;
 @AllArgsConstructor
 public class RoleAssignments {
 
-    private List<RoleAssignment> roleAssignments;
+  private List<RoleAssignment> roleAssignments;
 }

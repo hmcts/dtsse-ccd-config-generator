@@ -1,26 +1,26 @@
 plugins {
-  id 'org.springframework.boot' version '3.4.2'
+    id 'org.springframework.boot' version '3.4.2'
 }
 repositories {
-  maven {
-    url "https://jitpack.io"
-  }
+    maven {
+        url "https://jitpack.io"
+    }
 }
 
 dependencies {
-  implementation project(':ccd-config-generator')
-  implementation group: 'org.springframework.boot', name: 'spring-boot-starter-web', version: '3.4.2'
-  implementation group: 'org.springframework.boot', name: 'spring-boot-starter-jdbc', version: '3.4.2'
-  implementation ('com.github.hmcts:idam-java-client:3.0.3')  {
-    transitive = false
-  }
-  implementation group: 'net.jodah', name: 'typetools', version: '0.6.3'
-  compileOnly 'org.projectlombok:lombok:1.18.36'
+    implementation project(':ccd-config-generator')
+    implementation group: 'org.springframework.boot', name: 'spring-boot-starter-web', version: '3.4.2'
+    implementation group: 'org.springframework.boot', name: 'spring-boot-starter-jdbc', version: '3.4.2'
+    implementation('com.github.hmcts:idam-java-client:3.0.3') {
+        transitive = false
+    }
+    implementation group: 'net.jodah', name: 'typetools', version: '0.6.3'
+    compileOnly 'org.projectlombok:lombok:1.18.36'
 
-  annotationProcessor 'org.projectlombok:lombok:1.18.36'
+    annotationProcessor 'org.projectlombok:lombok:1.18.36'
 
-  implementation "org.springframework.boot:spring-boot-autoconfigure:3.4.2"
-  implementation "org.flywaydb:flyway-core:9.22.3"
-  implementation 'org.elasticsearch.client:elasticsearch-rest-high-level-client:7.17.27'
+    implementation "org.springframework.boot:spring-boot-autoconfigure:3.4.2"
+    implementation "org.flywaydb:flyway-core:9.22.3"
+    implementation 'org.elasticsearch.client:elasticsearch-rest-high-level-client:7.17.27'
 }
 

@@ -12,12 +12,12 @@ import lombok.ToString;
 @Getter
 public class CaseAssignedUserRole {
 
-    @JsonProperty("case_id")
-    private String caseDataId;
+  @JsonProperty("case_id")
+  private String caseDataId;
 
-    @JsonProperty("user_id")
-    private String userId;
+  @JsonProperty("user_id")
+  private String userId;
 
-    @JsonProperty("case_role")
-    private String caseRole;
+  @JsonProperty("case_role")
+  private String caseRole;
 }
