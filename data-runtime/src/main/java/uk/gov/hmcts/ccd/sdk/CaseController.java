@@ -1,10 +1,6 @@
 package uk.gov.hmcts.ccd.sdk;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.JavaType;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.micrometer.common.util.StringUtils;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -19,7 +15,6 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 
 import org.springframework.web.util.UriComponentsBuilder;
-import uk.gov.hmcts.ccd.sdk.api.EventPayload;
 import uk.gov.hmcts.reform.ccd.client.model.CallbackRequest;
 import uk.gov.hmcts.reform.ccd.client.model.CaseDetails;
 import net.jodah.typetools.TypeResolver;
@@ -27,7 +22,6 @@ import net.jodah.typetools.TypeResolver;
 
 import java.net.URI;
 import java.util.*;
-import java.util.stream.Collectors;
 
 @Slf4j
 @RestController
@@ -69,9 +63,7 @@ public class CaseController {
       produces = "application/json"
   )
   @SneakyThrows
-  public Map<String, Object> getCase(@PathVariable("caseRef") long caseRef,
-                                     @RequestHeader("roleAssignments") String roleAssignments) {
-    log.info("RoleAssignments: {}", decodeHeader(roleAssignments));
+  public Map<String, Object> getCase(@PathVariable("caseRef") long caseRef) {
     var result = db.queryForMap(
         """
             select
@@ -92,7 +84,7 @@ public class CaseController {
              where reference = ?
             """, caseRef);
     var data = defaultMapper.readValue((String) result.get("case_data"), caseDataType);
-    result.put("case_data", caseRepository.getCase(caseRef, data, roleAssignments));
+    result.put("case_data", caseRepository.getCase(caseRef, data));
     return result;
   }
 
@@ -102,9 +94,6 @@ public class CaseController {
       @RequestBody POCCaseEvent event,
       @RequestHeader HttpHeaders headers) {
     log.info("case Details: {}", event);
-    String roleAssignments = headers.get("roleAssignments").get(0);
-    log.info("roleAssignments size: {}", roleAssignments.getBytes().length);
-    log.info("RoleAssignments: {}", decodeHeader(roleAssignments));
 
     transactionTemplate.execute(status -> {
       var referer = Objects.requireNonNullElse(headers.getFirst(HttpHeaders.REFERER), "");
@@ -112,7 +101,7 @@ public class CaseController {
       var params = UriComponentsBuilder.fromUri(uri).build().getQueryParams();
 
       dispatchAboutToSubmit(event, params);
-      var id = saveCaseReturningAuditId(event, roleAssignments);
+      var id = saveCaseReturningAuditId(event);
       if (eventListener.hasSubmittedCallbackForEvent(event.getEventDetails().getCaseType(),
           event.getEventDetails().getEventId())) {
         enqueueSubmittedCallback(id, event, headers);
@@ -120,23 +109,9 @@ public class CaseController {
       return status;
     });
 
-    var response = getCase((Long) event.getCaseDetails().get("id"), roleAssignments);
+    var response = getCase((Long) event.getCaseDetails().get("id"));
     log.info("case response: {}", response);
     return ResponseEntity.ok(response);
-  }
-
-  @SneakyThrows
-  private List<CaseAssignedUserRole> decodeHeader(String roles) throws JsonProcessingException {
-    if (StringUtils.isBlank(roles)) {
-      return List.of();
-    }
-    log.info("roles: {}", roles);
-
-    String roleAssignments = new String(Base64.getDecoder().decode(roles));
-    log.info("roleAssignments: {}", roleAssignments);
-
-    return getMapper.readValue(roleAssignments, new TypeReference<List<CaseAssignedUserRole>>() {
-    });
   }
 
   @SneakyThrows
@@ -160,7 +135,7 @@ public class CaseController {
   }
 
   @SneakyThrows
-  private long saveCaseReturningAuditId(POCCaseEvent event, String roleAssignments) {
+  private long saveCaseReturningAuditId(POCCaseEvent event) {
     var caseData = defaultMapper.readValue(defaultMapper.writeValueAsString(event.getCaseDetails().get("case_data")),
         caseDataType);
 
@@ -204,7 +179,7 @@ public class CaseController {
       throw new ResponseStatusException(HttpStatus.CONFLICT, "Case was updated concurrently");
     }
 
-    return saveAuditRecord(event, 1, roleAssignments);
+    return saveAuditRecord(event, 1);
   }
 
   @SneakyThrows
@@ -234,8 +209,7 @@ public class CaseController {
       value = "/cases/{caseRef}/history",
       produces = "application/json"
   )
-  public String loadHistory(@PathVariable("caseRef") long caseRef,
-                            @RequestHeader("roleAssignments") String roleAssignments) {
+  public String loadHistory(@PathVariable("caseRef") long caseRef) {
     return db.queryForObject(
         """
              select jsonb_agg(to_jsonb(e) - 'case_reference' - 'event_id'
@@ -250,9 +224,9 @@ public class CaseController {
   }
 
   @SneakyThrows
-  private long saveAuditRecord(POCCaseEvent details, int version, String roleAssignments) {
+  private long saveAuditRecord(POCCaseEvent details, int version) {
     var event = details.getEventDetails();
-    var currentView = getCase((Long) details.getCaseDetails().get("id"), roleAssignments);
+    var currentView = getCase((Long) details.getCaseDetails().get("id"));
     var result = db.queryForMap(
         """
             insert into ccd.case_event (
