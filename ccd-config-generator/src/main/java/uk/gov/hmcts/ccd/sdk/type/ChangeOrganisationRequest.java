@@ -42,10 +42,10 @@ public class ChangeOrganisationRequest<R extends HasRole> {
 
   @JsonProperty("RequestTimestamp")
   @JsonSerialize(
-          using = LocalDateTimeSerializer.class
+      using = LocalDateTimeSerializer.class
   )
   @JsonDeserialize(
-          using = LocalDateTimeDeserializer.class
+      using = LocalDateTimeDeserializer.class
   )
   private LocalDateTime requestTimestamp;
 

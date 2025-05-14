@@ -12,6 +12,7 @@ import javax.validation.constraints.NotBlank;
 @AllArgsConstructor
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class Telephone {
+    private final long number;
     private final String telephoneNumber;
     private final String telephoneUsageType;
     @NotBlank(message = "Enter the contact's full name")

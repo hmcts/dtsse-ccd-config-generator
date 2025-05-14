@@ -8,16 +8,36 @@ import uk.gov.hmcts.ccd.sdk.api.CaseRoleToAccessProfile.CaseRoleToAccessProfileB
 import uk.gov.hmcts.ccd.sdk.api.Search.SearchBuilder;
 import uk.gov.hmcts.ccd.sdk.api.SearchCases.SearchCasesBuilder;
 import uk.gov.hmcts.ccd.sdk.api.Tab.TabBuilder;
+import uk.gov.hmcts.ccd.sdk.api.callback.Start;
+import uk.gov.hmcts.ccd.sdk.api.callback.Submit;
 
 public interface ConfigBuilder<T, S, R extends HasRole> {
 
   EventTypeBuilder<T, R, S> event(String id);
+
+  /**
+   * Event that replaces AboutToSubmit/Submitted callbacks
+   * with the mandatory submitHandler.
+   */
+  EventTypeBuilder<T, R, S> decentralisedEvent(String id, Submit<T, S> submitHandler);
+
+  /**
+   * Event that replaces AboutToSubmit/Submitted callbacks
+   * with the mandatory submitHandler and AboutToStart with the provided startHandler.
+   */
+  EventTypeBuilder<T, R, S> decentralisedEvent(String id, Submit<T, S> submitHandler, Start<T, S> startHandler);
+
 
   EventTypeBuilderImpl<T, R, S> attachScannedDocEvent();
 
   EventTypeBuilderImpl<T, R, S> handleSupplementaryEvent();
 
   void caseType(String caseType, String name, String description);
+
+  /**
+   * Drops all AboutToSubmit/Submitted callback URLs from the generated CCD definition.
+   */
+  void decentralisedCaseType(String caseType, String name, String description);
 
   void jurisdiction(String id, String name, String description);
 
@@ -31,9 +51,10 @@ public interface ConfigBuilder<T, S, R extends HasRole> {
    * Set AuthorisationCaseState explicitly.
    * Note that additional AuthorisationCaseState permissions are inferred based on grants of
    * event-level permissions.
-   * @param state state
+   *
+   * @param state       state
    * @param permissions permissions
-   * @param role One or more roles
+   * @param role        One or more roles
    */
   void grant(S state, Set<Permission> permissions, R... role);
 

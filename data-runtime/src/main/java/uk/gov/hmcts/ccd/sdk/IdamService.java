@@ -3,13 +3,15 @@ package uk.gov.hmcts.ccd.sdk;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
 import uk.gov.hmcts.reform.idam.client.IdamClient;
 import uk.gov.hmcts.reform.idam.client.models.UserInfo;
 
 public class IdamService {
-  private static final String BEARER_PREFIX = "Bearer" + " ";
   @Autowired
   private IdamClient idamClient;
+  private static final String BEARER_PREFIX = "Bearer" + " ";
+
 
   public User retrieveUser(String authorisation) {
     final String bearerToken = getBearerToken(authorisation);

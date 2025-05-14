@@ -10,7 +10,6 @@ import uk.gov.hmcts.ccd.sdk.api.CCD;
 @Builder
 @AllArgsConstructor(onConstructor_ = {@JsonCreator})
 public class EPOPhrase {
-
     @CCD(searchable = false)
     private String includePhrase;
 }

@@ -32,6 +32,7 @@ public class ResolvedCCDConfig<T, S, R extends HasRole> {
   final Class<R> roleClass;
   final Map<Class, Integer> types;
   final ImmutableSet<S> allStates;
+  public boolean decentralised;
 
   Set<String> rolesWithNoHistory;
   Set<R> shutterServiceForRoles = new HashSet<>();

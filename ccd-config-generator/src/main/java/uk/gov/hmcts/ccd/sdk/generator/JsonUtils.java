@@ -62,8 +62,8 @@ public class JsonUtils {
     }
 
     return new ObjectMapper()
-      .configure(SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS, true)
-      .writer(new CustomPrinter()).writeValueAsString(data) + "\n";
+        .configure(SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS, true)
+        .writer(new CustomPrinter()).writeValueAsString(data) + "\n";
   }
 
   public static Map<String, Object> getField(String id) {
@@ -75,7 +75,8 @@ public class JsonUtils {
   }
 
   static List<Map<String, Object>> mergeInto(List<Map<String, Object>> existing,
-      List<Map<String, Object>> generated, JsonMerger merger, String... primaryKeys) {
+                                             List<Map<String, Object>> generated, JsonMerger merger,
+                                             String... primaryKeys) {
     for (Map<String, Object> generatedField : generated) {
       Optional<Map<String, Object>> existingMatch = existing.stream().filter(x -> {
         for (String primaryKey : primaryKeys) {
@@ -116,12 +117,12 @@ public class JsonUtils {
   @SneakyThrows
   public static void mergeInto(Path path, List<Map<String, Object>> fields,
                                JsonMerger merger, String... primaryKeys) {
-    mergeInto(path,fields, merger, true, primaryKeys);
+    mergeInto(path, fields, merger, true, primaryKeys);
   }
 
   @SneakyThrows
   public static void mergeInto(Path path, List<Map<String, Object>> fields,
-      JsonMerger merger, boolean sort, String... primaryKeys) {
+                               JsonMerger merger, boolean sort, String... primaryKeys) {
     ObjectMapper mapper = new ObjectMapper();
     List<Map<String, Object>> existing;
     if (path.toFile().exists()) {
@@ -144,7 +145,7 @@ public class JsonUtils {
   }
 
   @AllArgsConstructor
-  public static  class OverwriteSpecific implements JsonMerger {
+  public static class OverwriteSpecific implements JsonMerger {
     private Set<String> overwriteKeys;
 
     @Override

@@ -1,12 +1,10 @@
 package uk.gov.hmcts.ccd.sdk;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import java.sql.Connection;
-import java.util.Map;
-import java.util.Set;
-import javax.sql.DataSource;
 import lombok.SneakyThrows;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.http.HttpHost;
+import org.elasticsearch.action.bulk.BulkItemResponse;
 import org.elasticsearch.action.bulk.BulkRequest;
 import org.elasticsearch.action.index.IndexRequest;
 import org.elasticsearch.client.RequestOptions;
@@ -16,20 +14,34 @@ import org.elasticsearch.xcontent.XContentType;
 import org.springframework.beans.factory.DisposableBean;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.sql.init.dependency.DependsOnDatabaseInitialization;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
+
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 @Component
-@DependsOnDatabaseInitialization
+@Slf4j
 public class DecentralisedESIndexer implements DisposableBean {
 
-  private final DataSource dataSource;
+  private final JdbcTemplate jdbcTemplate;
+  private final TransactionTemplate transactionTemplate;
   private volatile boolean terminated;
+  private final Thread t;
+  private final RestHighLevelClient client;
 
   @SneakyThrows
   @Autowired
-  public DecentralisedESIndexer(DataSource dataSource) {
-    this.dataSource = dataSource;
-    var t = new Thread(this::index);
+  public DecentralisedESIndexer(JdbcTemplate jdbcTemplate, TransactionTemplate transactionTemplate) {
+    this.jdbcTemplate = jdbcTemplate;
+    this.transactionTemplate = transactionTemplate;
+    this.client = new RestHighLevelClient(RestClient.builder(
+        new HttpHost("localhost", 9200)));
+
+    this.t = new Thread(this::index);
     t.setDaemon(true);
     t.setUncaughtExceptionHandler(this::failFast);
     t.setName("****Decentralised ElasticSearch indexer");
@@ -45,54 +57,58 @@ public class DecentralisedESIndexer implements DisposableBean {
 
   @SneakyThrows
   private void index() {
-    RestHighLevelClient client = new RestHighLevelClient(RestClient.builder(
-        new HttpHost("localhost", 9200)));
     while (!terminated) {
-      try (Connection c = dataSource.getConnection()) {
-        c.setAutoCommit(false);
+      pollForNewCases();
+      Thread.sleep(250);
+    }
+  }
 
-        // Replicates the behaviour of the previous logstash configuration.
-        // https://github.com/hmcts/rse-cft-lib/blob/94aa0edeb0e1a4337a411ed8e6e20f170ed30bae/cftlib/lib/runtime/compose/logstash/logstash_conf.in#L3
-        var results = c.prepareStatement("""
-            with updated as (
-              delete from ccd.es_queue es where id in (select id from ccd.es_queue limit 2000)
-              returning id
-            )
-              select reference as id, case_type_id, index_id, row_to_json(row)::jsonb as row
-              from (
-                select
-                  now() as "@timestamp",
-                  version::text as "@version",
-                  cd.case_type_id,
-                  cd.created_date,
-                  ce.data,
-                  jurisdiction,
-                  cd.reference,
-                  ce.created_date as last_modified,
-                  last_state_modified_date,
-                  supplementary_data,
-                  lower(cd.case_type_id) || '_cases' as index_id,
-                  cd.state,
-                  cd.security_classification
-               from updated
-                join ccd.case_event ce using(id)
-                join ccd.case_data cd on cd.reference = ce.case_reference
-            ) row
-            """).executeQuery();
+  private void pollForNewCases() {
+    transactionTemplate.execute(status -> {
+      // Replicates the behaviour of the previous logstash configuration.
+      // https://github.com/hmcts/rse-cft-lib/blob/94aa0edeb0e1a4337a411ed8e6e20f170ed30bae/cftlib/lib/runtime/compose/logstash/logstash_conf.in#L3
+      var results = jdbcTemplate.queryForList("""
+          with updated as (
+            delete from ccd.es_queue es where id in (select id from ccd.es_queue limit 2000)
+            returning id
+          )
+            select reference as id, case_type_id, index_id, row_to_json(row)::jsonb as row
+            from (
+              select
+                now() as "@timestamp",
+                version::text as "@version",
+                cd.case_type_id,
+                cd.created_date,
+                ce.data,
+                jurisdiction,
+                cd.reference,
+                ce.created_date as last_modified,
+                last_state_modified_date,
+                supplementary_data,
+                lower(cd.case_type_id) || '_cases' as index_id,
+                cd.state,
+                cd.security_classification
+             from updated
+              join ccd.case_event ce using(id)
+              join ccd.case_data cd on cd.reference = ce.case_reference
+          ) row
+          """);
 
+      try {
         BulkRequest request = new BulkRequest();
-        while (results.next()) {
-          var row = results.getString("row");
-          request.add(new IndexRequest(results.getString("index_id"))
-              .id(results.getString("id"))
-              .source(row, XContentType.JSON));
+        ObjectMapper mapper = new ObjectMapper();
+
+        for (Map<String, Object> row : results) {
+          var rowJson = row.get("row").toString();
+          request.add(new IndexRequest(row.get("index_id").toString())
+              .id(row.get("id").toString())
+              .source(rowJson, XContentType.JSON));
 
           // Replicate CCD's globalsearch logstash setup.
           // Where cases define a 'SearchCriteria' field we index certain fields into CCD's central
           // 'global search' index.
           // https://github.com/hmcts/cnp-flux-config/blob/master/apps/ccd/ccd-logstash/ccd-logstash.yaml#L99-L175
-          var mapper = new ObjectMapper();
-          Map<String, Object> map = mapper.readValue(row, Map.class);
+          Map<String, Object> map = mapper.readValue(rowJson, Map.class);
           var data = (Map<String, Object>) map.get("data");
           if (data.containsKey("SearchCriteria")) {
             filter(data, "SearchCriteria", "caseManagementLocation", "CaseAccessCategory",
@@ -104,21 +120,29 @@ public class DecentralisedESIndexer implements DisposableBean {
             map.put("index_id", "global_search");
 
             request.add(new IndexRequest("global_search")
-                .id(results.getString("id"))
+                .id(row.get("id").toString())
                 .source(mapper.writeValueAsString(map), XContentType.JSON));
           }
         }
+
         if (request.numberOfActions() > 0) {
           var r = client.bulk(request, RequestOptions.DEFAULT);
           if (r.hasFailures()) {
-            throw new RuntimeException("**** Cftlib elasticsearch indexing error(s): "
-                + r.buildFailureMessage());
+            // TODO: Track the failed cases in our database, monitoring, retries etc.
+            status.setRollbackOnly();
+            log.error("**** Cftlib elasticsearch indexing error(s): ");
+            r.buildFailureMessage();
+            for (BulkItemResponse item : r.getItems()) {
+              log.error(item.getFailureMessage());
+            }
+            return false;
           }
         }
-        c.commit();
+        return true;  // Transaction success
+      } catch (Exception e) {
+        throw new RuntimeException(e);
       }
-      Thread.sleep(250);
-    }
+    });
   }
 
   public void filter(Map<String, Object> map, String... forKeys) {
@@ -129,8 +153,10 @@ public class DecentralisedESIndexer implements DisposableBean {
   }
 
   @Override
-  public void destroy() {
+  public void destroy() throws InterruptedException {
     this.terminated = true;
+    // Wait for indexing to stop before allowing shutdown to continue.
+    this.t.join();
   }
 }
 

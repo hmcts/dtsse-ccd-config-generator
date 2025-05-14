@@ -128,7 +128,7 @@ public class Search<T, R extends HasRole> {
     }
 
     public SearchBuilder<T, R> field(String fieldName, String label, String listElementCode,
-                                                    String showCondition, R role) {
+                                     String showCondition, R role) {
       fields.add(SearchField.<R>builder()
           .id(fieldName)
           .label(label)
@@ -178,7 +178,7 @@ public class Search<T, R extends HasRole> {
     }
 
     public SearchBuilder<T, R> field(String fieldName, String label, String listElementCode,
-                                                    String showCondition, R role, SortOrder order) {
+                                     String showCondition, R role, SortOrder order) {
       fields.add(SearchField.<R>builder()
           .id(fieldName)
           .label(label)

@@ -8,6 +8,7 @@ public enum FieldType {
   Document,
   Schedule,
   TextArea,
+  Text,
   FixedList,
   FixedRadioList,
   YesOrNo,
@@ -27,5 +28,6 @@ public enum FieldType {
   FlagDetail,
   ComponentLauncher,
   SearchCriteria,
-  TTL
+  TTL,
+  MoneyGBP
 }

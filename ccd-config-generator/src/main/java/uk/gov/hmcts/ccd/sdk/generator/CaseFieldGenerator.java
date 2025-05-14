@@ -133,7 +133,7 @@ class CaseFieldGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
   }
 
   private static void inferFieldType(Class dataClass, Field field, Map<String, Object> info,
-      CCD cf) {
+                                     CCD cf) {
     String type = field.getType().getSimpleName();
     if (null != cf && !Strings.isNullOrEmpty(cf.typeParameterOverride())) {
       info.put("FieldTypeParameter", cf.typeParameterOverride());
@@ -178,6 +178,8 @@ class CaseFieldGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
           case "Integer":
           case "Float":
           case "Double":
+          case "Long":
+          case "long":
             type = "Number";
             break;
           default:

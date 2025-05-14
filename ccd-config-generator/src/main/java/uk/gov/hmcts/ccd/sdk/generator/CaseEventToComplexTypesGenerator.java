@@ -50,8 +50,8 @@ class CaseEventToComplexTypesGenerator<T, S, R extends HasRole> implements
   }
 
   private static void expand(List<FieldCollection.FieldCollectionBuilder> complexFieldsCollection,
-      List<Map<String, Object>> entries, String eventId, final String rootFieldName,
-      final String fieldLocator) {
+                             List<Map<String, Object>> entries, String eventId, final String rootFieldName,
+                             final String fieldLocator) {
     if (null != complexFieldsCollection) {
       for (FieldCollection.FieldCollectionBuilder complexFields : complexFieldsCollection) {
         FieldCollection complex = complexFields.build();
@@ -92,8 +92,8 @@ class CaseEventToComplexTypesGenerator<T, S, R extends HasRole> implements
           }
           if (null != field.getDefaultValue()) {
             String value = field.getDefaultValue() instanceof HasRole
-                             ? ((HasRole) field.getDefaultValue()).getRole()
-                             : field.getDefaultValue().toString();
+                ? ((HasRole) field.getDefaultValue()).getRole()
+                : field.getDefaultValue().toString();
             data.put("DefaultValue", value);
           }
           if (null != field.getCaseEventFieldHint()) {

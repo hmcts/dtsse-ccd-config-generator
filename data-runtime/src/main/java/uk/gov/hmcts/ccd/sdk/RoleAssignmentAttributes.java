@@ -2,11 +2,12 @@ package uk.gov.hmcts.ccd.sdk;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
-import java.util.Optional;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+
+import java.util.Optional;
 
 @Builder
 @Data

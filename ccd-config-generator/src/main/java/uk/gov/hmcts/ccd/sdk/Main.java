@@ -23,7 +23,7 @@ class Main {
           + types.size());
     }
     try (ConfigurableApplicationContext context =
-        SpringApplication.run(types.iterator().next(), args)) {
+             SpringApplication.run(types.iterator().next(), args)) {
 
       File outputDir = new File(args[0]);
       context.getBean(CCDDefinitionGenerator.class).generateAllCaseTypesToJSON(outputDir);

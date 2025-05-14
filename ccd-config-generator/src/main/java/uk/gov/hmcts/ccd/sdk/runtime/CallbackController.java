@@ -7,23 +7,29 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Maps;
 import de.cronn.reflection.util.TypedPropertyGetter;
+import java.net.URI;
 import java.util.Collection;
 import java.util.Map;
+import java.util.Objects;
 import java.util.function.Function;
 import lombok.Getter;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
+import org.springframework.web.util.UriComponentsBuilder;
 import uk.gov.hmcts.ccd.sdk.ResolvedCCDConfig;
 import uk.gov.hmcts.ccd.sdk.api.CaseDetails;
 import uk.gov.hmcts.ccd.sdk.api.Event;
+import uk.gov.hmcts.ccd.sdk.api.EventPayload;
 import uk.gov.hmcts.ccd.sdk.api.callback.AboutToStartOrSubmitResponse;
 import uk.gov.hmcts.ccd.sdk.api.callback.MidEvent;
 import uk.gov.hmcts.reform.ccd.client.model.CallbackRequest;
@@ -54,8 +60,26 @@ public class CallbackController {
 
   @SneakyThrows
   @PostMapping("/about-to-start")
-  public AboutToStartOrSubmitResponse aboutToStart(@RequestBody CallbackRequest request) {
+  public AboutToStartOrSubmitResponse aboutToStart(@RequestBody CallbackRequest request,
+                                                   @RequestHeader HttpHeaders headers) {
     log.info("About to start event ID: " + request.getEventId());
+
+    var r = findCaseEvent(request);
+
+    if (r.getStartHandler() != null) {
+      var referer = Objects.requireNonNullElse(headers.getFirst(HttpHeaders.REFERER), "");
+      URI uri = UriComponentsBuilder.fromUriString(referer).build().toUri();
+      var params = UriComponentsBuilder.fromUri(uri).build().getQueryParams();
+
+      var ct = getCaseTypeToConfig().get(request.getCaseDetails().getCaseTypeId());
+      String json = mapper.writeValueAsString(request.getCaseDetails().getData());
+      var domainClass = mapper.readValue(json, ct.getCaseClass());
+      EventPayload payload = new EventPayload<>(request.getCaseDetails().getId(), domainClass, params);
+
+      var res = r.getStartHandler().start(payload);
+      return AboutToStartOrSubmitResponse.builder().data(res).build();
+    }
+
     return findCallback(request, Event::getAboutToStartCallback)
         .handle(convertCaseDetails(request.getCaseDetails()));
   }
@@ -64,6 +88,7 @@ public class CallbackController {
   @PostMapping("/about-to-submit")
   public AboutToStartOrSubmitResponse aboutToSubmit(@RequestBody CallbackRequest request) {
     log.info("About to submit event ID: " + request.getEventId());
+
     return findCallback(request, Event::getAboutToSubmitCallback)
         .handle(convertCaseDetails(request.getCaseDetails()),
             convertCaseDetails(request.getCaseDetailsBefore(), request.getCaseDetails().getCaseTypeId()));
@@ -81,7 +106,7 @@ public class CallbackController {
   @SneakyThrows
   @PostMapping("/mid-event")
   public AboutToStartOrSubmitResponse midEvent(@RequestBody CallbackRequest request,
-                                            @RequestParam(name = "page") String page) {
+                                               @RequestParam(name = "page") String page) {
     log.info("Mid event callback: {} for page {} ", request.getEventId(), page);
     MidEvent<?, ?> callback = findCaseEvent(request).getFields().getPagesToMidEvent().get(page);
 

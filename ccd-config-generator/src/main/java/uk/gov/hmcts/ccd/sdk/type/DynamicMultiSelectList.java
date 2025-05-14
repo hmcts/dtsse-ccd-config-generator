@@ -35,7 +35,7 @@ public class DynamicMultiSelectList {
 
   @JsonCreator
   public DynamicMultiSelectList(
-      @JsonProperty("value")  List<DynamicListElement>  value,
+      @JsonProperty("value") List<DynamicListElement> value,
       @JsonProperty("list_items") List<DynamicListElement> listItems
   ) {
     this.value = value;

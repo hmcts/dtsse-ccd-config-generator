@@ -90,7 +90,8 @@ class CaseTypeTabGenerator<T, S, R extends HasRole> implements ConfigGenerator<T
   }
 
   private static Map<String, Object> buildField(String caseType, String tabId, String fieldId,
-      String tabLabel, int displayOrder, int tabFieldDisplayOrder, String role) {
+                                                String tabLabel, int displayOrder, int tabFieldDisplayOrder,
+                                                String role) {
     Map<String, Object> field = Maps.newHashMap();
     field.put("LiveFrom", "01/01/2017");
     field.put("CaseTypeID", caseType);

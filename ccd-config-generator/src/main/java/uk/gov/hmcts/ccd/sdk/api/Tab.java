@@ -30,7 +30,7 @@ public class Tab<T, R extends HasRole> {
     private PropertyUtils propertyUtils;
 
     public static <T, R extends HasRole> TabBuilder<T, R> builder(Class<T> model,
-        PropertyUtils propertyUtils) {
+                                                                  PropertyUtils propertyUtils) {
       TabBuilder<T, R> result = Tab.builder();
       result.model = model;
       result.propertyUtils = propertyUtils;

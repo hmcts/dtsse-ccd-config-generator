@@ -26,10 +26,10 @@ class SearchFieldAndResultGenerator<T, S, R extends HasRole> implements ConfigGe
   }
 
   protected static <T, R extends HasRole> void generateFields(
-          File root,
-          String caseType,
-          List<Search<T, R>> searchFields,
-          String fileName
+      File root,
+      String caseType,
+      List<Search<T, R>> searchFields,
+      String fileName
   ) {
     List<Map<String, Object>> result = Lists.newArrayList();
 
@@ -37,8 +37,8 @@ class SearchFieldAndResultGenerator<T, S, R extends HasRole> implements ConfigGe
     for (Search<T, R> search : searchFields) {
       for (SearchField<R> field : search.getFields()) {
         Map<String, Object> map = buildField(caseType, field.getId(), field.getLabel(),
-                displayOrder++, field.getListElementCode(), field.getShowCondition(),
-                field.getUserRole(), field.getOrder(), field.getDisplayContextParameter());
+            displayOrder++, field.getListElementCode(), field.getShowCondition(),
+            field.getUserRole(), field.getOrder(), field.getDisplayContextParameter());
 
         result.add(map);
       }

@@ -79,6 +79,19 @@ public class CcdSdkPlugin implements Plugin<Project> {
           x.mavenContent(MavenRepositoryContentDescriptor::releasesOnly);
         });
       }
+
+      if (config.decentralised) {
+        project.getDependencies().add("implementation", "com.github.hmcts:data-runtime:"
+            + getVersion());
+        // Surface that we are decentralised to the spring boot apps.
+        // This is an env var since it needs to be read beyond the application's classpath
+        // to shut off the default cftlib elasticsearch indexer when decentralised)
+        project.getTasks().withType(JavaExec.class).configureEach(t -> {
+          if (t.getTaskIdentity().type.getName().equals("uk.gov.hmcts.rse.CftlibExec")) {
+            t.getEnvironment().put("CCD_SDK_DECENTRALISED", "true");
+          }
+        });
+      }
     });
   }
 

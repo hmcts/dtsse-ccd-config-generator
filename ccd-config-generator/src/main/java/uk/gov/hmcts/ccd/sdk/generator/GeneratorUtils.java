@@ -19,12 +19,12 @@ public final class GeneratorUtils {
     final AtomicInteger displayOrder = new AtomicInteger();
 
     return events.stream()
-      .sorted((event1, event2) -> event1.getName().compareToIgnoreCase(event2.getName()))
-      .map(event -> {
-        event.setDisplayOrder(displayOrder.incrementAndGet());
-        return event;
-      })
-      .collect(toList());
+        .sorted((event1, event2) -> event1.getName().compareToIgnoreCase(event2.getName()))
+        .map(event -> {
+          event.setDisplayOrder(displayOrder.incrementAndGet());
+          return event;
+        })
+        .collect(toList());
   }
 
   public static <T, R extends HasRole, S> boolean hasAnyDisplayOrder(final Collection<Event<T, R, S>> events) {

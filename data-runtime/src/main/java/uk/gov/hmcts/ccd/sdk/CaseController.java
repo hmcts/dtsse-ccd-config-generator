@@ -2,15 +2,11 @@ package uk.gov.hmcts.ccd.sdk;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.JavaType;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.micrometer.common.util.StringUtils;
-import java.util.Base64;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
-import net.jodah.typetools.TypeResolver;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.HttpHeaders;
@@ -18,16 +14,20 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.support.TransactionTemplate;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestHeader;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.util.MultiValueMap;
+import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
+
+import org.springframework.web.util.UriComponentsBuilder;
+import uk.gov.hmcts.ccd.sdk.api.EventPayload;
 import uk.gov.hmcts.reform.ccd.client.model.CallbackRequest;
 import uk.gov.hmcts.reform.ccd.client.model.CaseDetails;
+import net.jodah.typetools.TypeResolver;
+
+
+import java.net.URI;
+import java.util.*;
+import java.util.stream.Collectors;
 
 @Slf4j
 @RestController
@@ -107,7 +107,11 @@ public class CaseController {
     log.info("RoleAssignments: {}", decodeHeader(roleAssignments));
 
     transactionTemplate.execute(status -> {
-      dispatchAboutToSubmit(event);
+      var referer = Objects.requireNonNullElse(headers.getFirst(HttpHeaders.REFERER), "");
+      URI uri = UriComponentsBuilder.fromUriString(referer).build().toUri();
+      var params = UriComponentsBuilder.fromUri(uri).build().getQueryParams();
+
+      dispatchAboutToSubmit(event, params);
       var id = saveCaseReturningAuditId(event, roleAssignments);
       if (eventListener.hasSubmittedCallbackForEvent(event.getEventDetails().getCaseType(),
           event.getEventDetails().getEventId())) {
@@ -157,9 +161,8 @@ public class CaseController {
 
   @SneakyThrows
   private long saveCaseReturningAuditId(POCCaseEvent event, String roleAssignments) {
-    var caseData =
-        defaultMapper.readValue(defaultMapper.writeValueAsString(event.getCaseDetails().get("case_data")),
-            caseDataType);
+    var caseData = defaultMapper.readValue(defaultMapper.writeValueAsString(event.getCaseDetails().get("case_data")),
+        caseDataType);
 
     var state = event.getEventDetails().getStateId() != null
         ? event.getEventDetails().getStateId()
@@ -169,8 +172,7 @@ public class CaseController {
     var data = filteredMapper.writeValueAsString(caseData);
     // Upsert the case - create if it doesn't exist, update if it does.
     var rowsAffected = db.update("""
-            insert into ccd.case_data (last_modified, jurisdiction, case_type_id, state, data, reference,
-             security_classification, version)
+            insert into ccd.case_data (last_modified, jurisdiction, case_type_id, state, data, reference, security_classification, version)
             values (now(), ?, ?, ?, (?::jsonb), ?, ?::ccd.securityclassification, ?)
             on conflict (reference)
             do update set
@@ -206,8 +208,11 @@ public class CaseController {
   }
 
   @SneakyThrows
-  private POCCaseEvent dispatchAboutToSubmit(POCCaseEvent event) {
-    if (eventListener.hasAboutToSubmitCallbackForEvent(event.getEventDetails().getCaseType(),
+  private POCCaseEvent dispatchAboutToSubmit(POCCaseEvent event, MultiValueMap<String, String> urlParams) {
+    if (eventListener.hasSubmitHandler(event.getEventDetails().getCaseType(), event.getEventDetails().getEventId())) {
+      eventListener.submit(event.getEventDetails().getCaseType(), event.getEventDetails().getEventId(), event,
+          urlParams);
+    } else if (eventListener.hasAboutToSubmitCallbackForEvent(event.getEventDetails().getCaseType(),
         event.getEventDetails().getEventId())) {
       var req = CallbackRequest.builder()
           .caseDetails(toCaseDetails(event.getCaseDetails()))
@@ -278,8 +283,7 @@ public class CaseController {
         "a-first-name",
         "a-last-name",
         event.getEventName(),
-        eventListener.nameForState(details.getEventDetails().getCaseType(),
-            String.valueOf(currentView.get("state"))),
+        eventListener.nameForState(details.getEventDetails().getCaseType(), String.valueOf(currentView.get("state"))),
         event.getSummary(),
         event.getDescription(),
         currentView.get("security_classification")

@@ -57,7 +57,7 @@ class AuthorisationCaseStateGenerator<T, S, R extends HasRole> implements Config
 
     Objenesis objenesis = new ObjenesisStd();
     for (S state : config.getStateClass().getEnumConstants()) {
-      String enumFieldName = ((Enum)state).name();
+      String enumFieldName = ((Enum) state).name();
       CCD ccd = config.getStateClass().getField(enumFieldName).getAnnotation(CCD.class);
 
       if (null != ccd) {
@@ -65,7 +65,7 @@ class AuthorisationCaseStateGenerator<T, S, R extends HasRole> implements Config
           HasAccessControl accessHolder = objenesis.newInstance(klass);
           SetMultimap<HasRole, Permission> roleGrants = accessHolder.getGrants();
           for (HasRole key : roleGrants.keys()) {
-            addPermissions(config.getStateRolePermissions(), Set.of(state), (R)key, roleGrants.get(key));
+            addPermissions(config.getStateRolePermissions(), Set.of(state), (R) key, roleGrants.get(key));
           }
         }
       }
