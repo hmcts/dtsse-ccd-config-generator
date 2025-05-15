@@ -2,7 +2,7 @@
 subprojects {
     apply plugin: 'java'
 
-    version System.getenv('RELEASE_VERSION')?.replace('refs/tags/', '') ?: 'DEV-SNAPSHOT'
+    version System.getenv('RELEASE_VERSION') ?: 'DEV-SNAPSHOT'
 
     compileJava   {
         sourceCompatibility = 17
