@@ -3,7 +3,7 @@ plugins {
 }
 repositories {
     maven {
-        url "https://jitpack.io"
+        url 'https://pkgs.dev.azure.com/hmcts/Artifacts/_packaging/hmcts-lib/maven/v1'
     }
 }
 
@@ -11,7 +11,7 @@ dependencies {
     implementation project(':ccd-config-generator')
     implementation group: 'org.springframework.boot', name: 'spring-boot-starter-web', version: '3.4.2'
     implementation group: 'org.springframework.boot', name: 'spring-boot-starter-jdbc', version: '3.4.2'
-    implementation('com.github.hmcts:idam-java-client:3.0.3') {
+    implementation('com.github.hmcts:idam-java-client:3.0.4') {
         transitive = false
     }
     implementation group: 'net.jodah', name: 'typetools', version: '0.6.3'

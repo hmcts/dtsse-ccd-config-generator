@@ -13,7 +13,6 @@ subprojects {
     group = 'com.github.hmcts'
     repositories {
         mavenCentral()
-        maven { url 'https://jitpack.io' }
     }
 
     if (project.name in ['ccd-config-generator', 'data-runtime']) {
