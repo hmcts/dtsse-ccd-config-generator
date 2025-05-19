@@ -13,6 +13,7 @@ import org.elasticsearch.client.RestHighLevelClient;
 import org.elasticsearch.xcontent.XContentType;
 import org.springframework.beans.factory.DisposableBean;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.sql.init.dependency.DependsOnDatabaseInitialization;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
@@ -23,6 +24,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+
+@ConditionalOnProperty(
+        name = "ccd.sdk.decentralised",
+        havingValue = "true")
 @Component
 @Slf4j
 public class DecentralisedESIndexer implements DisposableBean {
