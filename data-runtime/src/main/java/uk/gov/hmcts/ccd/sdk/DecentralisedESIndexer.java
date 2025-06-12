@@ -13,14 +13,12 @@ import org.elasticsearch.client.RestHighLevelClient;
 import org.elasticsearch.xcontent.XContentType;
 import org.springframework.beans.factory.DisposableBean;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.boot.sql.init.dependency.DependsOnDatabaseInitialization;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -38,13 +36,16 @@ public class DecentralisedESIndexer implements DisposableBean {
   private final Thread t;
   private final RestHighLevelClient client;
 
+
   @SneakyThrows
   @Autowired
-  public DecentralisedESIndexer(JdbcTemplate jdbcTemplate, TransactionTemplate transactionTemplate) {
+  public DecentralisedESIndexer(JdbcTemplate jdbcTemplate, TransactionTemplate transactionTemplate,
+                                @Value("${ELASTIC_SEARCH_HOSTS:http://localhost:9200}")
+                                String elasticSearchHost) {
     this.jdbcTemplate = jdbcTemplate;
     this.transactionTemplate = transactionTemplate;
     this.client = new RestHighLevelClient(RestClient.builder(
-        new HttpHost("localhost", 9200)));
+        HttpHost.create(elasticSearchHost)));
 
     this.t = new Thread(this::index);
     t.setDaemon(true);
