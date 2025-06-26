@@ -392,7 +392,8 @@ public class CCDConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<CaseData, S
         .submittedCallback(this::submitted)
         .retries(1,2,3,4,5)
         .fields()
-        .optional(CaseData::getCaseName);
+        .optional(CaseData::getCaseName)
+        .readonly(CaseData::getInterimEndDate);
 
     builder.event("deleted")
         .forState(Deleted)
