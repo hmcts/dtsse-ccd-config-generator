@@ -13,7 +13,7 @@ public class BulkScanEventTypeBuilderImpl<T, R extends HasRole, S> extends Event
 
   public BulkScanEventTypeBuilderImpl(ResolvedCCDConfig<T, S, R> config,
                                       Map<String, List<Event.EventBuilder<T, R, S>>> events, String id, String name) {
-    super(config, events, id, null, null);
+    super(config.caseClass, config.allStates, events, id, null, null);
     this.name = name;
   }
 
