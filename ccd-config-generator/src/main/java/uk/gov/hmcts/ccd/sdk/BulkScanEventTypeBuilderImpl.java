@@ -12,13 +12,13 @@ public class BulkScanEventTypeBuilderImpl<T, R extends HasRole, S> extends Event
   private final String name;
 
   public BulkScanEventTypeBuilderImpl(ResolvedCCDConfig<T, S, R> config,
-                                      Map<String, List<Event.EventBuilder<T, R, S>>> events, String id, String name) {
-    super(config.caseClass, config.allStates, events, id, null, null);
+                                      String id, String name) {
+    super(config.caseClass, config.allStates, id, null, null);
     this.name = name;
   }
 
   protected Event.EventBuilder<T, R, S> build(Set<S> preStates, Set<S> postStates) {
-    Event.EventBuilder<T, R, S> result = super.build(preStates, postStates);
+    this.result = super.build(preStates, postStates);
 
     result.name(name);
     result.description(name);

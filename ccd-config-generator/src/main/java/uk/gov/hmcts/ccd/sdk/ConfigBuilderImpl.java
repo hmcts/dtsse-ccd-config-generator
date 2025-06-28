@@ -32,7 +32,7 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements ConfigBuilder
 
   private final ResolvedCCDConfig<T, S, R> config;
 
-  final Map<String, List<Event.EventBuilder<T, R, S>>> events = Maps.newHashMap();
+  final Map<String, EventTypeBuilderImpl<T, R, S>> events = Maps.newHashMap();
   final List<TabBuilder<T, R>> tabs = Lists.newArrayList();
   final List<SearchBuilder<T, R>> workBasketResultFields = Lists.newArrayList();
   final List<SearchBuilder<T, R>> workBasketInputFields = Lists.newArrayList();
@@ -72,28 +72,41 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements ConfigBuilder
 
   @Override
   public EventTypeBuilderImpl<T, R, S> event(final String id) {
-    return new EventTypeBuilderImpl<>(config.caseClass, config.allStates, events, id, null, null);
+    EventTypeBuilderImpl<T, R, S> result = new EventTypeBuilderImpl<>(config.caseClass, config.allStates, id, null, null);
+    events.put(id, result);
+    return result;
   }
 
   @Override
   public EventTypeBuilder<T, R, S> decentralisedEvent(String id, Submit<T, S> submitHandler) {
-    return new EventTypeBuilderImpl<>(config.caseClass, config.allStates, events, id, submitHandler, null);
+    EventTypeBuilderImpl<T, R, S> result = new EventTypeBuilderImpl<>(config.caseClass, config.allStates, id, submitHandler, null);
+    events.put(id, result);
+    return result;
+
   }
 
   @Override
   public EventTypeBuilder<T, R, S> decentralisedEvent(String id, Submit<T, S> submitHandler, Start<T, S> startHandler) {
-    return new EventTypeBuilderImpl<>(config.caseClass, config.allStates, events, id, submitHandler, startHandler);
+    EventTypeBuilderImpl<T, R, S> result = new EventTypeBuilderImpl<>(config.caseClass, config.allStates, id, submitHandler, startHandler);
+    events.put(id, result);
+    return result;
+
   }
 
 
   @Override
   public EventTypeBuilderImpl<T, R, S> attachScannedDocEvent() {
-    return new BulkScanEventTypeBuilderImpl<>(config, events, ATTACH_SCANNED_DOCS, "Attach scanned docs");
+    EventTypeBuilderImpl<T, R, S> result = new BulkScanEventTypeBuilderImpl<>(config, ATTACH_SCANNED_DOCS, "Attach scanned docs");
+    events.put(ATTACH_SCANNED_DOCS, result);
+    return result;
+
   }
 
   @Override
   public EventTypeBuilderImpl<T, R, S> handleSupplementaryEvent() {
-    return new BulkScanEventTypeBuilderImpl<>(config, events, HANDLE_EVIDENCE, "Handle supplementary evidence");
+    EventTypeBuilderImpl<T, R, S> result = new BulkScanEventTypeBuilderImpl<>(config, HANDLE_EVIDENCE, "Handle supplementary evidence");
+    events.put(HANDLE_EVIDENCE, result);
+    return result;
   }
 
   @Override
@@ -231,13 +244,9 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements ConfigBuilder
 
   ImmutableMap<String, Event<T, R, S>> getEvents() {
     Map<String, Event<T, R, S>> result = Maps.newHashMap();
-    for (Map.Entry<String, List<Event.EventBuilder<T, R, S>>> cell : events.entrySet()) {
-      for (Event.EventBuilder<T, R, S> builder : cell.getValue()) {
-        Event<T, R, S> event = builder.doBuild();
-        result.put(event.getId(), event);
-      }
+    for (Map.Entry<String, EventTypeBuilderImpl<T, R, S>> e : this.events.entrySet()) {
+      result.put(e.getKey(), e.getValue().getResult().doBuild());
     }
-
     return ImmutableMap.copyOf(result);
   }
 

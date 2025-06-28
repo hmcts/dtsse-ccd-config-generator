@@ -1,27 +1,27 @@
 package uk.gov.hmcts.ccd.sdk;
 
 import com.google.common.collect.ImmutableSet;
-import com.google.common.collect.Lists;
 import java.util.EnumSet;
-import java.util.List;
-import java.util.Map;
 import java.util.Set;
-import lombok.AllArgsConstructor;
+
+import lombok.Getter;
+import lombok.RequiredArgsConstructor;
 import uk.gov.hmcts.ccd.sdk.api.Event;
 import uk.gov.hmcts.ccd.sdk.api.EventTypeBuilder;
 import uk.gov.hmcts.ccd.sdk.api.HasRole;
 import uk.gov.hmcts.ccd.sdk.api.callback.Start;
 import uk.gov.hmcts.ccd.sdk.api.callback.Submit;
 
-@AllArgsConstructor
+@RequiredArgsConstructor
 public class EventTypeBuilderImpl<T, R extends HasRole, S> implements EventTypeBuilder<T, R, S> {
 
   protected final Class<T> caseClass;
   protected final ImmutableSet<S> allStates;
-  protected final Map<String, List<Event.EventBuilder<T, R, S>>> events;
   protected final String id;
   protected final Submit<T, S> submitHandler;
   protected final Start<T, S> startHandler;
+  @Getter
+  protected Event.EventBuilder<T, R, S> result;
 
   @Override
   public Event.EventBuilder<T, R, S> forState(S state) {
@@ -69,14 +69,10 @@ public class EventTypeBuilderImpl<T, R extends HasRole, S> implements EventTypeB
   }
 
   protected Event.EventBuilder<T, R, S> build(Set<S> preStates, Set<S> postStates) {
-    Event.EventBuilder<T, R, S> result = Event.EventBuilder
+    this.result = Event.EventBuilder
         .builder(id, caseClass, new PropertyUtils(), preStates, postStates);
     result.submitHandler(this.submitHandler);
     result.startHandler(this.startHandler);
-    if (!events.containsKey(id)) {
-      events.put(id, Lists.newArrayList());
-    }
-    events.get(id).add(result);
     return result;
   }
 }
