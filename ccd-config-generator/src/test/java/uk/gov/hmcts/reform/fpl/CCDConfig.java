@@ -23,7 +23,11 @@ import static uk.gov.hmcts.reform.fpl.enums.UserRole.SYSTEM_UPDATE;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Set;
+
+import lombok.Data;
 import org.springframework.stereotype.Component;
+import uk.gov.hmcts.ccd.sdk.api.CCD;
+import uk.gov.hmcts.ccd.sdk.api.EventPayload;
 import uk.gov.hmcts.ccd.sdk.api.SearchCriteriaField;
 import uk.gov.hmcts.ccd.sdk.api.SearchPartyField;
 import uk.gov.hmcts.ccd.sdk.api.callback.AboutToStartOrSubmitResponse;
@@ -165,6 +169,27 @@ public class CCDConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<CaseData, S
 
     builder.searchParty()
       .fields(List.of(searchPartyField1, searchPartyField2));
+    builder.decentralisedEvent("foo", this::bar)
+        .forAllStates()
+        .fields()
+        .mandatory(MyDTO::getName);
+
+  }
+
+  private void bar(EventPayload<MyDTO, State> objectStateEventPayload) {
+  }
+
+  @Data
+  public static class MyDTO {
+    @CCD(label = "My name")
+    private String name;
+    @CCD(label = "My child")
+    private Nested child;
+  }
+
+  @Data
+  public static class Nested {
+    private String goat;
   }
 
   private AboutToStartOrSubmitResponse<CaseData, State> checkReadyAboutToSubmit(CaseDetails<CaseData, State> details,

@@ -19,7 +19,7 @@ public interface ConfigBuilder<T, S, R extends HasRole> {
    * Event that replaces AboutToSubmit/Submitted callbacks
    * with the mandatory submitHandler.
    */
-  EventTypeBuilder<T, R, S> decentralisedEvent(String id, Submit<T, S> submitHandler);
+  <DTO> EventTypeBuilder<DTO, R, S> decentralisedEvent(String id, Submit<DTO, S> submitHandler);
 
   /**
    * Event that replaces AboutToSubmit/Submitted callbacks
