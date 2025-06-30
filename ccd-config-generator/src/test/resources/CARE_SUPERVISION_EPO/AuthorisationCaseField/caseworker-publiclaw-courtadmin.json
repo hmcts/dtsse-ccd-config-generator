@@ -1,5 +1,12 @@
 [
   {
+    "CRUD" : "CR",
+    "CaseFieldID" : "interimEndDate",
+    "CaseTypeID" : "CARE_SUPERVISION_EPO",
+    "LiveFrom" : "01/01/2017",
+    "UserRole" : "caseworker-publiclaw-courtadmin"
+  },
+  {
     "CRUD": "CRU",
     "CaseTypeID": "CARE_SUPERVISION_EPO",
     "UserRole": "caseworker-publiclaw-courtadmin",

@@ -10,5 +10,17 @@
     "DisplayContext": "OPTIONAL",
     "PageDisplayOrder": 1,
     "ShowSummaryChangeOption" : "Y"
+  },
+  {
+    "CaseEventID" : "openCase",
+    "CaseFieldID" : "interimEndDate",
+    "CaseTypeID" : "CARE_SUPERVISION_EPO",
+    "DisplayContext" : "READONLY",
+    "LiveFrom" : "01/01/2017",
+    "PageColumnNumber" : 1,
+    "PageDisplayOrder" : 1,
+    "PageFieldDisplayOrder" : 2,
+    "PageID" : 1,
+    "ShowSummaryChangeOption" : "Y"
   }
 ]
