@@ -100,22 +100,22 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements ConfigBuilder
   @SneakyThrows
   @Override
   public <DTO> EventTypeBuilder<DTO, R, S> decentralisedEvent(String id, Submit<DTO, S> submitHandler) {
+    return decentralisedEvent(id, submitHandler, null);
+  }
 
-    // 1. Reflectively access the hidden 'writeReplace' method on the lambda.
+  @SneakyThrows
+  @Override
+  public <DTO> EventTypeBuilder<DTO, R, S> decentralisedEvent(String id, Submit<DTO, S> submitHandler, Start<DTO, S> startHandler) {
     Method writeReplace = submitHandler.getClass().getDeclaredMethod("writeReplace");
     writeReplace.setAccessible(true);
 
-    // 2. Invoke it to get the SerializedLambda object.
     SerializedLambda serializedLambda = (SerializedLambda) writeReplace.invoke(submitHandler);
 
-    // 3. Get the name of the class that implements the method.
     String implClassName = serializedLambda.getImplClass().replace('/', '.');
     Class<?> implClass = Class.forName(implClassName);
 
     Method rez = null;
 
-    // 4. Find the method on that class with the matching name.
-    //    This is more reliable than checking method signatures.
     for (Method method : implClass.getDeclaredMethods()) {
       if (Objects.equals(method.getName(), serializedLambda.getImplMethodName())) {
         rez = method;
@@ -132,18 +132,10 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements ConfigBuilder
     var dtoClass = (Class<DTO>) dtoType;
     decentralisedEventTypes.put(id, dtoClass);
 
-    EventTypeBuilderImpl<DTO, R, S> result = new EventTypeBuilderImpl<>(dtoClass, config.allStates, id, submitHandler, null);
+    EventTypeBuilderImpl<DTO, R, S> result = new EventTypeBuilderImpl<>(dtoClass, config.allStates, id, submitHandler, startHandler);
     decentralisedEvents.put(id, result);
+
     return result;
-
-  }
-
-  @Override
-  public EventTypeBuilder<T, R, S> decentralisedEvent(String id, Submit<T, S> submitHandler, Start<T, S> startHandler) {
-    EventTypeBuilderImpl<T, R, S> result = new EventTypeBuilderImpl<>(config.caseClass, config.allStates, id, submitHandler, startHandler);
-    events.put(id, result);
-    return result;
-
   }
 
 

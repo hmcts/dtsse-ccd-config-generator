@@ -21,9 +21,9 @@ public class GeneratorUtilsTest {
     Event<Object, HasRole, Object> event3 = Event.builder().name("ab").build();
     Event<Object, HasRole, Object> event4 = Event.builder().name("h").build();
 
-    List<Event<Object, HasRole, Object>> events = asList(event1, event2, event3, event4);
+    List<Event<?, HasRole, Object>> events = asList(event1, event2, event3, event4);
 
-    List<Event<Object, HasRole, Object>> results = sortDisplayOrderByEventName(events);
+    List<Event<?, HasRole, Object>> results = sortDisplayOrderByEventName(events);
 
     assertThat(results)
       .hasSize(4)
@@ -44,7 +44,7 @@ public class GeneratorUtilsTest {
     Event<Object, HasRole, Object> event3 = Event.builder().displayOrder(1).build();
     Event<Object, HasRole, Object> event4 = Event.builder().build();
 
-    List<Event<Object, HasRole, Object>> events = asList(event1, event2, event3, event4);
+    List<Event<?, HasRole, Object>> events = asList(event1, event2, event3, event4);
 
     assertThat(hasAnyDisplayOrder(events)).isTrue();
   }
@@ -57,7 +57,7 @@ public class GeneratorUtilsTest {
     Event<Object, HasRole, Object> event3 = Event.builder().build();
     Event<Object, HasRole, Object> event4 = Event.builder().build();
 
-    List<Event<Object, HasRole, Object>> events = asList(event1, event2, event3, event4);
+    List<Event<?, HasRole, Object>> events = asList(event1, event2, event3, event4);
 
     assertThat(hasAnyDisplayOrder(events)).isFalse();
   }

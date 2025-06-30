@@ -25,7 +25,7 @@ public interface ConfigBuilder<T, S, R extends HasRole> {
    * Event that replaces AboutToSubmit/Submitted callbacks
    * with the mandatory submitHandler and AboutToStart with the provided startHandler.
    */
-  EventTypeBuilder<T, R, S> decentralisedEvent(String id, Submit<T, S> submitHandler, Start<T, S> startHandler);
+  <DTO> EventTypeBuilder<DTO, R, S> decentralisedEvent(String id, Submit<DTO, S> submitHandler, Start<DTO, S> startHandler);
 
 
   EventTypeBuilderImpl<T, R, S> attachScannedDocEvent();

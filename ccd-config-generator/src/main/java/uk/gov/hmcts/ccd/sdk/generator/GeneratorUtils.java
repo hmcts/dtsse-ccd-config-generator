@@ -13,8 +13,8 @@ public final class GeneratorUtils {
   private GeneratorUtils() {
   }
 
-  public static <T, R extends HasRole, S> List<Event<T, R, S>> sortDisplayOrderByEventName(
-      final Collection<Event<T, R, S>> events) {
+  public static <R extends HasRole, S> List<Event<?, R, S>> sortDisplayOrderByEventName(
+      final Collection<Event<?, R, S>> events) {
 
     final AtomicInteger displayOrder = new AtomicInteger();
 
@@ -27,7 +27,7 @@ public final class GeneratorUtils {
         .collect(toList());
   }
 
-  public static <T, R extends HasRole, S> boolean hasAnyDisplayOrder(final Collection<Event<T, R, S>> events) {
+  public static <T, R extends HasRole, S> boolean hasAnyDisplayOrder(final Collection<Event<?, R, S>> events) {
     return events.stream().anyMatch(event -> event.getDisplayOrder() != -1);
   }
 }

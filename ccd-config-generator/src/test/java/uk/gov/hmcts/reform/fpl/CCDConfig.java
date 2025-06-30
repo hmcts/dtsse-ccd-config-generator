@@ -171,6 +171,7 @@ public class CCDConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<CaseData, S
       .fields(List.of(searchPartyField1, searchPartyField2));
     builder.decentralisedEvent("foo", this::bar)
         .forAllStates()
+        .name("foo")
         .fields()
         .mandatory(MyDTO::getName);
 

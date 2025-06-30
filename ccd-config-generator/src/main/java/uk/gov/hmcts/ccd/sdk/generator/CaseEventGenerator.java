@@ -15,6 +15,8 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
+
 import org.springframework.stereotype.Component;
 import uk.gov.hmcts.ccd.sdk.ResolvedCCDConfig;
 import uk.gov.hmcts.ccd.sdk.api.Event;
@@ -30,7 +32,11 @@ class CaseEventGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
     File folder = new File(root.getPath(), "CaseEvent");
     folder.mkdir();
 
-    List<Event<T, R, S>> events = getOrderedEvents(config.getEvents().values());
+    var vals = Stream.concat(config.getEvents().values().stream(),
+        config.getDecentralisedEvents().values().stream())
+        .collect(Collectors.toUnmodifiableList());
+
+    List<Event<?, R, S>> events = getOrderedEvents(vals);
 
     for (Event event : events) {
       Path output = Paths.get(folder.getPath(), event.getId() + ".json");
@@ -41,7 +47,7 @@ class CaseEventGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
     }
   }
 
-  private List<Event<T, R, S>> getOrderedEvents(ImmutableCollection<Event<T, R, S>> originalEvents) {
+  private List<Event<?, R, S>> getOrderedEvents(List<Event<?, R, S>> originalEvents) {
     if (hasAnyDisplayOrder(originalEvents)) {
       return new ArrayList<>(originalEvents);
     }
