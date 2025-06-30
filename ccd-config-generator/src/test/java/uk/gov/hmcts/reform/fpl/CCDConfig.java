@@ -397,7 +397,10 @@ public class CCDConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<CaseData, S
 
     builder.event("deleted")
         .forState(Deleted)
-        .name("Deleted only");
+        .name("Deleted only")
+        .grant(CRU, LOCAL_AUTHORITY)
+        .fields()
+        .optional(CaseData::getInterimEndDate);
   }
 
   private AboutToStartOrSubmitResponse<CaseData, State> aboutToSubmit(

@@ -1,6 +1,6 @@
 [
   {
-    "CRUD" : "CR",
+    "CRUD" : "CRU",
     "CaseFieldID" : "interimEndDate",
     "CaseTypeID" : "CARE_SUPERVISION_EPO",
     "LiveFrom" : "01/01/2017",
