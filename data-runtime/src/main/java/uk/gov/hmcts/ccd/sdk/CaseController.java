@@ -1,14 +1,17 @@
 package uk.gov.hmcts.ccd.sdk;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.google.common.collect.Maps;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.util.MultiValueMap;
 import org.springframework.web.bind.annotation.*;
@@ -29,6 +32,7 @@ import java.util.*;
 public class CaseController {
 
   private final JdbcTemplate db;
+  private final NamedParameterJdbcTemplate ndb;
 
   private final TransactionTemplate transactionTemplate;
 
@@ -43,11 +47,13 @@ public class CaseController {
   @Autowired
   public CaseController(JdbcTemplate db,
                         TransactionTemplate transactionTemplate,
+                        NamedParameterJdbcTemplate ndb,
                         CaseRepository<?> caseRepository,
                         CCDEventListener eventListener,
                         ObjectMapper mapper,
                         @Qualifier("getMapper") ObjectMapper getMapper) {
     this.db = db;
+    this.ndb = ndb;
     this.transactionTemplate = transactionTemplate;
     this.caseRepository = caseRepository;
     this.defaultMapper = mapper;
@@ -79,13 +85,59 @@ public class CaseController {
                   version,
                   to_json(last_state_modified_date)#>>'{}' as last_state_modified_date,
                   to_json(coalesce(c.last_modified, c.created_date))#>>'{}' as last_modified,
-                  supplementary_data::text
+                  supplementary_data::jsonb
              from ccd.case_data c
              where reference = ?
             """, caseRef);
     var data = defaultMapper.readValue((String) result.get("case_data"), caseDataType);
     result.put("case_data", caseRepository.getCase(caseRef, data));
     return result;
+  }
+
+  @PostMapping(
+      value = "/cases/{caseRef}/supplementary-data",
+      produces = "application/json"
+  )
+  @SneakyThrows
+  public String updateSupplementaryData(@PathVariable("caseRef") long caseRef, @RequestBody SupplementaryDataUpdateRequest request) {
+    Map<Long, String> result = Maps.newHashMap();
+    request.getRequestData()
+        .forEach((operationType, operationSet) -> {
+          operationSet.forEach((key, value) -> {
+            var path = key.split("\\.");
+            log.info("Updating supplementary data for caseRef: {}, operationType: {}, path: {}, value: {}", caseRef, operationType, path, value);
+            HashMap<String, Object> params = new HashMap<>(); // We need to be able to set nulls to indicate fields to erase
+            params.put("path", path);
+            params.put("value", value);
+            params.put("reference", caseRef);
+            params.put("op", operationType);
+            var updatedValue = ndb.queryForObject(
+                """
+                    UPDATE ccd.case_data SET supplementary_data = jsonb_set_lax(
+                            -- Create the top level entry as a map if it doesn't exist.
+                            jsonb_set(supplementary_data, (:path)[ 1 : 1 ], coalesce(supplementary_data #>> (:path)[1 : 1], '{}')::jsonb),
+                            :path,
+                            (
+                              case
+                                  when :op = '$inc' then (coalesce((supplementary_data #> :path)::integer, 0) + (:value)::integer)::text::jsonb
+                                  when :op = '$set' then to_jsonb(:value)
+                                  else null -- any other operation will raise an exception
+                              end
+                            ),
+                            true,
+                            'raise_exception' -- on setting a null value
+                        )
+                    where reference = :reference
+                    returning supplementary_data::text as supplementary_data
+                    """,
+                    params
+                    ,
+                String.class
+            );
+            result.put(caseRef, updatedValue);
+          });
+        });
+    return result.get(caseRef);
   }
 
   @SneakyThrows
