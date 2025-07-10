@@ -274,6 +274,23 @@ public class CaseController {
         new Object[] {caseRef}, String.class);
   }
 
+  @GetMapping(
+      value = "/cases/{caseRef}/history/{eventId}",
+      produces = "application/json"
+  )
+  public String loadHistoryEvent(@PathVariable("caseRef") long caseRef, @PathVariable("eventId") long eventId) {
+    return  db.queryForObject(
+        """
+              select to_jsonb(e) - 'case_reference' - 'event_id'
+              || jsonb_build_object('case_data_id', case_reference)
+              || jsonb_build_object('event_instance_id', id)
+              || jsonb_build_object('id', event_id)
+              from ccd.case_event e
+              where case_reference = ? and id = ?
+            """,
+        new Object[] {caseRef, eventId}, String.class);
+  }
+
   @SneakyThrows
   private long saveAuditRecord(POCCaseEvent details, int version) {
     var event = details.getEventDetails();
