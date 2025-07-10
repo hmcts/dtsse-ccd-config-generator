@@ -80,17 +80,18 @@ public class CaseController {
                   case_type_id,
                   state,
                   data::text as case_data,
-                  '{}'::jsonb as data_classification,
                   security_classification::text,
                   version,
                   to_json(last_state_modified_date)#>>'{}' as last_state_modified_date,
                   to_json(coalesce(c.last_modified, c.created_date))#>>'{}' as last_modified,
-                  supplementary_data::jsonb
+                  supplementary_data::text
              from ccd.case_data c
              where reference = ?
             """, caseRef);
     var data = defaultMapper.readValue((String) result.get("case_data"), caseDataType);
     result.put("case_data", caseRepository.getCase(caseRef, data));
+    result.put("supplementary_data", defaultMapper.readValue(result.get("supplementary_data").toString(), Map.class));
+    result.put("data_classification", Map.of());
     return result;
   }
 
@@ -106,16 +107,11 @@ public class CaseController {
           operationSet.forEach((key, value) -> {
             var path = key.split("\\.");
             log.info("Updating supplementary data for caseRef: {}, operationType: {}, path: {}, value: {}", caseRef, operationType, path, value);
-            HashMap<String, Object> params = new HashMap<>(); // We need to be able to set nulls to indicate fields to erase
-            params.put("path", path);
-            params.put("value", value);
-            params.put("reference", caseRef);
-            params.put("op", operationType);
             var updatedValue = ndb.queryForObject(
                 """
                     UPDATE ccd.case_data SET supplementary_data = jsonb_set_lax(
                             -- Create the top level entry as a map if it doesn't exist.
-                            jsonb_set(supplementary_data, (:path)[ 1 : 1 ], coalesce(supplementary_data #>> (:path)[1 : 1], '{}')::jsonb),
+                            jsonb_set(supplementary_data, (:path)[ 1 : 1 ], coalesce(supplementary_data #> (:path)[1 : 1], '{}')::jsonb),
                             :path,
                             (
                               case
@@ -130,8 +126,13 @@ public class CaseController {
                     where reference = :reference
                     returning supplementary_data::text as supplementary_data
                     """,
-                    params
-                    ,
+                Map.of(
+                    "path", path,
+                    "value", value,
+                    "reference", caseRef,
+                    "op", operationType
+                )
+                ,
                 String.class
             );
             result.put(caseRef, updatedValue);
@@ -207,8 +208,6 @@ public class CaseController {
                 data = excluded.data,
                 security_classification = excluded.security_classification,
                 last_modified = now(),
-                supplementary_data = excluded.supplementary_data,
-                resolved_ttl = excluded.resolved_ttl,
                 version = case
                             when case_data.data is distinct from excluded.data then case_data.version + 1
                             else case_data.version
