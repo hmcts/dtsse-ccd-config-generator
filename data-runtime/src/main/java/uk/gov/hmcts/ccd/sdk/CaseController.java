@@ -8,7 +8,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
@@ -43,6 +42,7 @@ public class CaseController {
   private final CaseRepository caseRepository;
   private final ObjectMapper getMapper;
   private final Class caseDataType;
+  private final IdempotencyEnforcer idempotencyEnforcer;
 
   @Autowired
   public CaseController(JdbcTemplate db,
@@ -51,6 +51,7 @@ public class CaseController {
                         CaseRepository<?> caseRepository,
                         CCDEventListener eventListener,
                         ObjectMapper mapper,
+                        IdempotencyEnforcer idempotencyEnforcer,
                         @Qualifier("getMapper") ObjectMapper getMapper) {
     this.db = db;
     this.ndb = ndb;
@@ -58,6 +59,7 @@ public class CaseController {
     this.caseRepository = caseRepository;
     this.defaultMapper = mapper;
     this.eventListener = eventListener;
+    this.idempotencyEnforcer = idempotencyEnforcer;
     this.filteredMapper = mapper.copy().setAnnotationIntrospector(new FilterExternalFieldsInspector());
     this.getMapper = getMapper;
     Class<?>[] typeArgs = TypeResolver.resolveRawArguments(CaseRepository.class, caseRepository.getClass());
@@ -149,6 +151,11 @@ public class CaseController {
     log.info("case Details: {}", event);
 
     transactionTemplate.execute(status -> {
+      if (idempotencyEnforcer.markProcessedReturningIsAlreadyProcessed(
+          headers.getFirst(IdempotencyEnforcer.IDEMPOTENCY_KEY_HEADER))) {
+        // TODO: Do we need to return the exact same response as before or are we ok to include subsequent changes.
+        return status;
+      }
       var referer = Objects.requireNonNullElse(headers.getFirst(HttpHeaders.REFERER), "");
       URI uri = UriComponentsBuilder.fromUriString(referer).build().toUri();
       var params = UriComponentsBuilder.fromUri(uri).build().getQueryParams();
