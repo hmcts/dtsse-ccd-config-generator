@@ -268,17 +268,22 @@ public class CaseController {
       produces = "application/json"
   )
   public String loadHistory(@PathVariable("caseRef") long caseRef) {
-    return db.queryForObject(
+    var result = db.queryForObject(
         """
-             select jsonb_agg(to_jsonb(e) - 'case_reference' - 'event_id'
-             || jsonb_build_object('case_data_id', case_reference)
-             || jsonb_build_object('event_instance_id', id)
-             || jsonb_build_object('id', event_id)
-              order by id desc)
+             select jsonb_agg(
+               jsonb_build_object('id', id) ||
+               jsonb_build_object('case_reference', case_reference) ||
+               jsonb_build_object('event', 
+                 to_jsonb(e) - 'case_reference' - 'event_id'
+                    || jsonb_build_object('id', event_id) -- See AuditEvent superclass
+              )
+              order by id desc
+           )
              from ccd.case_event e
              where case_reference = ?
             """,
         new Object[] {caseRef}, String.class);
+    return result;
   }
 
   @GetMapping(
@@ -288,10 +293,12 @@ public class CaseController {
   public String loadHistoryEvent(@PathVariable("caseRef") long caseRef, @PathVariable("eventId") long eventId) {
     return  db.queryForObject(
         """
-              select to_jsonb(e) - 'case_reference' - 'event_id'
-              || jsonb_build_object('case_data_id', case_reference)
-              || jsonb_build_object('event_instance_id', id)
-              || jsonb_build_object('id', event_id)
+           select jsonb_build_object('id', id) ||
+               jsonb_build_object('case_reference', case_reference) ||
+               jsonb_build_object('event', 
+                 to_jsonb(e) - 'case_reference' - 'event_id'
+                    || jsonb_build_object('id', event_id) -- See AuditEvent superclass
+              )
               from ccd.case_event e
               where case_reference = ? and id = ?
             """,
