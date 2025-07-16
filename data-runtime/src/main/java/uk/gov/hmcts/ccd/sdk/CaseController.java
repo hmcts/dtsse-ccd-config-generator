@@ -94,7 +94,7 @@ public class CaseController {
     result.put("case_data", caseRepository.getCase(caseRef, data));
     result.put("supplementary_data", defaultMapper.readValue(result.get("supplementary_data").toString(), Map.class));
     result.put("data_classification", Map.of());
-    return result;
+    return Map.of("case_details", result);
   }
 
   @PostMapping(
@@ -126,7 +126,9 @@ public class CaseController {
                             'raise_exception' -- on setting a null value
                         )
                     where reference = :reference
-                    returning supplementary_data::text as supplementary_data
+                    returning 
+                      jsonb_build_object('supplementary_data', supplementary_data)::text 
+                      as supplementary_data
                     """,
                 Map.of(
                     "path", path,
@@ -308,7 +310,7 @@ public class CaseController {
   @SneakyThrows
   private long saveAuditRecord(POCCaseEvent details, int version) {
     var event = details.getEventDetails();
-    var currentView = getCase((Long) details.getCaseDetails().get("id"));
+    var currentView = (Map) getCase((Long) details.getCaseDetails().get("id")).get("case_details");
     var result = db.queryForMap(
         """
             insert into ccd.case_event (
