@@ -106,7 +106,7 @@ class CaseEventToFieldsGenerator<T, S, R extends HasRole> implements ConfigGener
         folder.mkdir();
 
         Path output = Paths.get(folder.getPath(), event.getId() + ".json");
-        JsonUtils.mergeInto(output, entries, new AddMissing(), "CaseFieldID");
+        JsonUtils.mergeInto(output, entries, new AddMissing(), false, "CaseFieldID");
       }
     }
   }
