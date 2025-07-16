@@ -50,6 +50,7 @@ dependencies {
         transitive = false
     }
 
+
     implementation group: 'org.apache.commons', name: 'commons-lang3', version: '3.18.0'
     // Types from this library are used in the config generator's API
     api group: 'de.cronn', name: 'reflection-util', version: '2.17.0'
