@@ -24,6 +24,7 @@ import net.jodah.typetools.TypeResolver;
 
 import java.net.URI;
 import java.util.*;
+import java.util.stream.Collectors;
 
 @Slf4j
 @RestController
@@ -67,33 +68,59 @@ public class CaseController {
   }
 
   @GetMapping(
-      value = "/cases/{caseRef}",
+      value = "/cases", // Mapped to the root /cases endpoint
       produces = "application/json"
   )
   @SneakyThrows
-  public Map<String, Object> getCase(@PathVariable("caseRef") long caseRef) {
-    var result = db.queryForMap(
+  public List<Map<String, Object>> getCases(@RequestParam("case-refs") List<Long> caseRefs) {
+    var params = Map.of("caseRefs", caseRefs);
+
+    var results = ndb.queryForList(
         """
-            select
-                  reference as id,
-                  -- Format timestamp in iso 8601
-                  to_json(c.created_date)#>>'{}' as created_date,
-                  jurisdiction,
-                  case_type_id,
-                  state,
-                  data::text as case_data,
-                  security_classification::text,
-                  version,
-                  to_json(last_state_modified_date)#>>'{}' as last_state_modified_date,
-                  to_json(coalesce(c.last_modified, c.created_date))#>>'{}' as last_modified,
-                  supplementary_data::text
-             from ccd.case_data c
-             where reference = ?
-            """, caseRef);
+        select
+              reference as id,
+              -- Format timestamp in iso 8601
+              to_json(c.created_date)#>>'{}' as created_date,
+              jurisdiction,
+              case_type_id,
+              state,
+              data::text as case_data,
+              security_classification::text,
+              version,
+              to_json(last_state_modified_date)#>>'{}' as last_state_modified_date,
+              to_json(coalesce(c.last_modified, c.created_date))#>>'{}' as last_modified,
+              supplementary_data::text
+         from ccd.case_data c
+         where reference IN (:caseRefs) -- Use IN (:paramName) for list binding
+        """, params);
+
+    // Process each result row in the list
+    return results.stream()
+        .map(this::processCaseRow)
+        .collect(Collectors.toList());
+  }
+
+  public Map<String, Object> getCase(Long caseRef) {
+    return getCases(List.of(caseRef)).get(0);
+  }
+
+    /**
+     * Helper method to process a single row of case data from the database.
+     * This centralizes the transformation logic for both single and bulk endpoints.
+     */
+  @SneakyThrows
+  private Map<String, Object> processCaseRow(Map<String, Object> row) {
+    var result = new HashMap<>(row);
+
     var data = defaultMapper.readValue((String) result.get("case_data"), caseDataType);
-    result.put("case_data", caseRepository.getCase(caseRef, data));
-    result.put("supplementary_data", defaultMapper.readValue(result.get("supplementary_data").toString(), Map.class));
+    result.put("case_data", caseRepository.getCase((Long) row.get("id"), data));
+
+    var supplementaryDataJson = row.get("supplementary_data");
+    result.put("supplementary_data", defaultMapper.readValue(supplementaryDataJson.toString(), Map.class));
+
+    // Add the empty data_classification map as before
     result.put("data_classification", Map.of());
+
     return Map.of("case_details", result);
   }
 
@@ -150,7 +177,6 @@ public class CaseController {
   public ResponseEntity<Map<String, Object>> createEvent(
       @RequestBody POCCaseEvent event,
       @RequestHeader HttpHeaders headers) {
-    log.info("case Details: {}", event);
 
     transactionTemplate.execute(status -> {
       if (idempotencyEnforcer.markProcessedReturningIsAlreadyProcessed(
@@ -172,7 +198,6 @@ public class CaseController {
     });
 
     var response = getCase((Long) event.getCaseDetails().get("id"));
-    log.info("case response: {}", response);
     return ResponseEntity.ok(response);
   }
 
@@ -331,7 +356,7 @@ public class CaseController {
             values (?::jsonb,?,?,?,?,?,?,?,?,?,?,?,?,?::ccd.securityclassification)
             returning id
             """,
-        defaultMapper.writeValueAsString(currentView.get("case_data")),
+  defaultMapper.writeValueAsString(currentView.get("case_data")),
         event.getEventId(),
         "user-id",
         currentView.get("id"),
