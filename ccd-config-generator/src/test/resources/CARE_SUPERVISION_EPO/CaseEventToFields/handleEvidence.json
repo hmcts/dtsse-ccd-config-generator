@@ -9,6 +9,7 @@
     "PageDisplayOrder" : 1,
     "PageFieldDisplayOrder" : 1,
     "PageID" : "handleEvidence",
+    "PageLabel" : "Correspondence",
     "ShowSummaryChangeOption" : "Y"
   }
 ]
