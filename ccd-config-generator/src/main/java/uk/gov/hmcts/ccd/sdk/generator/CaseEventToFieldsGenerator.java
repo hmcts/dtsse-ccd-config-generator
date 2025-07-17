@@ -82,7 +82,7 @@ class CaseEventToFieldsGenerator<T, S, R extends HasRole> implements ConfigGener
           }
 
           if (collection.getPageLabels().containsKey(field.getPage())) {
-            info.put("PageLabel", collection.getPageLabels().remove(field.getPage()));
+            info.put("PageLabel", collection.getPageLabels().get(field.getPage()));
           }
 
           if (null != field.getDisplayContextParameter()) {

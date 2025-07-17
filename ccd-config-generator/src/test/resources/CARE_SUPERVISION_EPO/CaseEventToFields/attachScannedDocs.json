@@ -9,6 +9,7 @@
     "PageDisplayOrder": 1,
     "PageFieldDisplayOrder": 1,
     "PageID": "attachScannedDocs",
+    "PageLabel" : "Correspondence",
     "ShowSummaryChangeOption": "Y"
   },
   {
@@ -21,6 +22,7 @@
     "PageDisplayOrder": 1,
     "PageFieldDisplayOrder": 2,
     "PageID": "attachScannedDocs",
+    "PageLabel" : "Correspondence",
     "ShowSummaryChangeOption": "Y"
   },
   {
@@ -36,6 +38,7 @@
     "PageDisplayOrder": 1,
     "PageFieldDisplayOrder": 3,
     "PageID": "attachScannedDocs",
+    "PageLabel" : "Correspondence",
     "ShowSummaryChangeOption": "Y"
   },
   {
@@ -49,6 +52,7 @@
     "PageDisplayOrder": 1,
     "PageFieldDisplayOrder": 4,
     "PageID": "attachScannedDocs",
+    "PageLabel" : "Correspondence",
     "ShowSummaryChangeOption": "Y"
   }
 ]
