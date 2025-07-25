@@ -17,6 +17,7 @@ group 'com.github.hmcts.rse-cft-lib'
 
 repositories {
   mavenCentral()
+  maven { url 'https://pkgs.dev.azure.com/hmcts/Artifacts/_packaging/hmcts-lib/maven/v1' }
 }
 
 dependencies {
