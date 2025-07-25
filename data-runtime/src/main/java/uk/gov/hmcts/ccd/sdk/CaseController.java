@@ -28,7 +28,7 @@ import java.util.stream.Collectors;
 
 @Slf4j
 @RestController
-@RequestMapping(path = "/ccd")
+@RequestMapping(path = "/ccd-persistence")
 public class CaseController {
 
   private final JdbcTemplate db;
