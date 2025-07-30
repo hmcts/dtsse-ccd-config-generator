@@ -72,17 +72,17 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements ConfigBuilder
 
   @Override
   public EventTypeBuilderImpl<T, R, S> event(final String id) {
-    return new EventTypeBuilderImpl<>(config.caseClass, config.allStates, events, id, null, null);
+    return new EventTypeBuilderImpl<>(config, events, id, null, null);
   }
 
   @Override
   public EventTypeBuilder<T, R, S> decentralisedEvent(String id, Submit<T, S> submitHandler) {
-    return new EventTypeBuilderImpl<>(config.caseClass, config.allStates, events, id, submitHandler, null);
+    return new EventTypeBuilderImpl<>(config, events, id, submitHandler, null);
   }
 
   @Override
   public EventTypeBuilder<T, R, S> decentralisedEvent(String id, Submit<T, S> submitHandler, Start<T, S> startHandler) {
-    return new EventTypeBuilderImpl<>(config.caseClass, config.allStates, events, id, submitHandler, startHandler);
+    return new EventTypeBuilderImpl<>(config, events, id, submitHandler, startHandler);
   }
 
 

@@ -1,6 +1,5 @@
 package uk.gov.hmcts.ccd.sdk;
 
-import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Lists;
 import java.util.EnumSet;
 import java.util.List;
@@ -16,8 +15,7 @@ import uk.gov.hmcts.ccd.sdk.api.callback.Submit;
 @AllArgsConstructor
 public class EventTypeBuilderImpl<T, R extends HasRole, S> implements EventTypeBuilder<T, R, S> {
 
-  protected final Class<T> caseClass;
-  protected final ImmutableSet<S> allStates;
+  protected final ResolvedCCDConfig<T, S, R> config;
   protected final Map<String, List<Event.EventBuilder<T, R, S>>> events;
   protected final String id;
   protected final Submit<T, S> submitHandler;
@@ -55,7 +53,7 @@ public class EventTypeBuilderImpl<T, R extends HasRole, S> implements EventTypeB
 
   @Override
   public Event.EventBuilder<T, R, S> forAllStates() {
-    return build(allStates, allStates);
+    return build(config.allStates, config.allStates);
   }
 
   @Override
@@ -70,7 +68,7 @@ public class EventTypeBuilderImpl<T, R extends HasRole, S> implements EventTypeB
 
   protected Event.EventBuilder<T, R, S> build(Set<S> preStates, Set<S> postStates) {
     Event.EventBuilder<T, R, S> result = Event.EventBuilder
-        .builder(id, caseClass, new PropertyUtils(), preStates, postStates);
+        .builder(id, config.caseClass, new PropertyUtils(), preStates, postStates);
     result.submitHandler(this.submitHandler);
     result.startHandler(this.startHandler);
     if (!events.containsKey(id)) {
