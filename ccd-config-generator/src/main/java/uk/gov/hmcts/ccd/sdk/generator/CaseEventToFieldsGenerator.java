@@ -13,9 +13,6 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Stream;
-
-import org.apache.commons.lang3.StringUtils;
 import org.springframework.stereotype.Component;
 import uk.gov.hmcts.ccd.sdk.ResolvedCCDConfig;
 import uk.gov.hmcts.ccd.sdk.api.Event;
@@ -28,11 +25,7 @@ import uk.gov.hmcts.ccd.sdk.generator.JsonUtils.AddMissing;
 class CaseEventToFieldsGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, S, R> {
 
   public void write(File root, ResolvedCCDConfig<T, S, R> config) {
-    var eventStream = Stream.concat(
-        config.getEvents().values().stream(),
-        config.getDecentralisedEvents().values().stream());
-
-    eventStream.forEach(event -> {
+    for (Event<T, R, S> event : config.getEvents().values()) {
       // For use in tracking which callbacks have been written.
       Multimap<String, String> writtenCallbacks = HashMultimap.create();
       FieldCollection collection = event.getFields();
@@ -46,12 +39,7 @@ class CaseEventToFieldsGenerator<T, S, R extends HasRole> implements ConfigGener
           info.put("CaseEventID", event.getId());
           info.put("CaseTypeID", config.getCaseType());
           Field field = fb.build();
-          if (config.getDecentralisedEvents().containsKey(event.getId())) {
-            // TODO: unify naming
-            info.put("CaseFieldID", event.getId() + "_" + StringUtils.capitalize(field.getId()));
-          } else {
-            info.put("CaseFieldID", field.getId());
-          }
+          info.put("CaseFieldID", field.getId());
           String context =
               field.getContext() == null ? "COMPLEX" : field.getContext().toString().toUpperCase();
           info.put("DisplayContext", context);
@@ -120,6 +108,6 @@ class CaseEventToFieldsGenerator<T, S, R extends HasRole> implements ConfigGener
         Path output = Paths.get(folder.getPath(), event.getId() + ".json");
         JsonUtils.mergeInto(output, entries, new AddMissing(), "CaseFieldID");
       }
-    });
+    }
   }
 }
