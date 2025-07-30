@@ -43,10 +43,6 @@ class CaseFieldGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
   public void write(
       File outputFolder, ResolvedCCDConfig<T, S, R> config) {
     List<Map<String, Object>> fields = toComplex(config.getCaseClass(), config.getCaseType());
-    for (Map.Entry<String, Class<?>> e : config.getDecentralisedEventTypes().entrySet()) {
-      var tmp = toComplex(e.getValue(), config.getCaseType(), e.getKey());
-      fields.addAll(tmp);
-    }
 
     Map<String, Object> history = getField(config.getCaseType(), "caseHistory");
     history.put("Label", " ");

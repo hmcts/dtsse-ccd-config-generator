@@ -49,8 +49,6 @@ public class ResolvedCCDConfig<T, S, R extends HasRole> {
 
   // Events by id
   ImmutableMap<String, Event<T, R, S>> events;
-  ImmutableMap<String, Event<?, R, S>> decentralisedEvents;
-  ImmutableMap<String, Class<?>> decentralisedEventTypes;
   List<Function<Map<String, Object>, Map<String, Object>>> preEventHooks = new ArrayList<>();
   List<Tab<T, R>> tabs;
   List<Search<T, R>> workBasketResultFields;

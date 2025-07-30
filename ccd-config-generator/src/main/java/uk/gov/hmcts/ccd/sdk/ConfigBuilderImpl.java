@@ -6,21 +6,13 @@ import static uk.gov.hmcts.ccd.sdk.api.Event.HANDLE_EVIDENCE;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
-
-import java.lang.invoke.SerializedLambda;
-import java.lang.reflect.Method;
-import java.lang.reflect.ParameterizedType;
-import java.lang.reflect.Type;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
-
-import lombok.SneakyThrows;
 import uk.gov.hmcts.ccd.sdk.api.CaseCategory.CaseCategoryBuilder;
 import uk.gov.hmcts.ccd.sdk.api.CaseRoleToAccessProfile.CaseRoleToAccessProfileBuilder;
 import uk.gov.hmcts.ccd.sdk.api.ConfigBuilder;
@@ -41,8 +33,6 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements ConfigBuilder
   private final ResolvedCCDConfig<T, S, R> config;
 
   final Map<String, EventTypeBuilderImpl<T, R, S>> events = Maps.newHashMap();
-  final Map<String, EventTypeBuilderImpl<?, R, S>> decentralisedEvents = Maps.newHashMap();
-  final Map<String, Class<?>> decentralisedEventTypes = Maps.newHashMap();
   final List<TabBuilder<T, R>> tabs = Lists.newArrayList();
   final List<SearchBuilder<T, R>> workBasketResultFields = Lists.newArrayList();
   final List<SearchBuilder<T, R>> workBasketInputFields = Lists.newArrayList();
@@ -65,8 +55,6 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements ConfigBuilder
 
   public ResolvedCCDConfig<T, S, R> build() {
     config.events = getEvents();
-    config.decentralisedEvents = getDecentralisedEvents();
-    config.decentralisedEventTypes = ImmutableMap.copyOf(decentralisedEventTypes);
     config.tabs = buildBuilders(tabs, TabBuilder::build);
     config.workBasketResultFields = buildBuilders(workBasketResultFields, SearchBuilder::build);
     config.workBasketInputFields = buildBuilders(workBasketInputFields, SearchBuilder::build);
@@ -82,14 +70,6 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements ConfigBuilder
     return config;
   }
 
-  private ImmutableMap<String, Event<?, R, S>> getDecentralisedEvents() {
-    Map<String, Event<?, R, S>> result = Maps.newHashMap();
-    for (Map.Entry<String, EventTypeBuilderImpl<?, R, S>> e : this.decentralisedEvents.entrySet()) {
-      result.put(e.getKey(), e.getValue().getResult().doBuild());
-    }
-    return ImmutableMap.copyOf(result);
-  }
-
   @Override
   public EventTypeBuilderImpl<T, R, S> event(final String id) {
     EventTypeBuilderImpl<T, R, S> result = new EventTypeBuilderImpl<>(config.caseClass, config.allStates, id, null, null);
@@ -97,43 +77,10 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements ConfigBuilder
     return result;
   }
 
-  @SneakyThrows
   @Override
-  public <DTO> EventTypeBuilder<DTO, R, S> decentralisedEvent(String id, Submit<DTO, S> submitHandler) {
-
-    // 1. Reflectively access the hidden 'writeReplace' method on the lambda.
-    Method writeReplace = submitHandler.getClass().getDeclaredMethod("writeReplace");
-    writeReplace.setAccessible(true);
-
-    // 2. Invoke it to get the SerializedLambda object.
-    SerializedLambda serializedLambda = (SerializedLambda) writeReplace.invoke(submitHandler);
-
-    // 3. Get the name of the class that implements the method.
-    String implClassName = serializedLambda.getImplClass().replace('/', '.');
-    Class<?> implClass = Class.forName(implClassName);
-
-    Method rez = null;
-
-    // 4. Find the method on that class with the matching name.
-    //    This is more reliable than checking method signatures.
-    for (Method method : implClass.getDeclaredMethods()) {
-      if (Objects.equals(method.getName(), serializedLambda.getImplMethodName())) {
-        rez = method;
-      }
-    }
-
-    Type[] parameterTypes = rez.getGenericParameterTypes();
-
-    Type firstParam = parameterTypes[0];
-
-    ParameterizedType eventPayloadType = (ParameterizedType) firstParam;
-
-    Type dtoType = eventPayloadType.getActualTypeArguments()[0];
-    var dtoClass = (Class<DTO>) dtoType;
-    decentralisedEventTypes.put(id, dtoClass);
-
-    EventTypeBuilderImpl<DTO, R, S> result = new EventTypeBuilderImpl<>(dtoClass, config.allStates, id, submitHandler, null);
-    decentralisedEvents.put(id, result);
+  public EventTypeBuilder<T, R, S> decentralisedEvent(String id, Submit<T, S> submitHandler) {
+    EventTypeBuilderImpl<T, R, S> result = new EventTypeBuilderImpl<>(config.caseClass, config.allStates, id, submitHandler, null);
+    events.put(id, result);
     return result;
 
   }

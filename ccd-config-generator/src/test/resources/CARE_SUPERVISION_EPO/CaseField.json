@@ -989,19 +989,5 @@
     "ID" : "nativeLong",
     "Label" : " ",
     "LiveFrom" : "01/01/2017"
-  },
-  {
-    "CaseTypeID" : "CARE_SUPERVISION_EPO",
-    "FieldType" : "Nested",
-    "ID" : "fooChild",
-    "Label" : "My child",
-    "LiveFrom" : "01/01/2017"
-  },
-  {
-    "CaseTypeID" : "CARE_SUPERVISION_EPO",
-    "FieldType" : "Text",
-    "ID" : "fooName",
-    "Label" : "My name",
-    "LiveFrom" : "01/01/2017"
   }
 ]
