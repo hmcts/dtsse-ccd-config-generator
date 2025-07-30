@@ -1,15 +1,14 @@
 [
   {
-    "CaseEventID" : "handleEvidence",
-    "CaseFieldID" : "evidenceHandled",
+    "CaseEventID" : "deleted",
+    "CaseFieldID" : "interimEndDate",
     "CaseTypeID" : "CARE_SUPERVISION_EPO",
-    "DisplayContext" : "MANDATORY",
+    "DisplayContext" : "OPTIONAL",
     "LiveFrom" : "01/01/2017",
     "PageColumnNumber" : 1,
     "PageDisplayOrder" : 1,
     "PageFieldDisplayOrder" : 1,
-    "PageID" : "handleEvidence",
-    "PageLabel" : "Correspondence",
+    "PageID" : 1,
     "ShowSummaryChangeOption" : "Y"
   }
 ]

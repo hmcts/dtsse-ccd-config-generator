@@ -475,8 +475,11 @@ public class FieldCollection {
     }
 
     FieldCollectionBuilder<Type, StateType, Parent> field(TypedPropertyGetter<Type, ?> getter,
-                                                          DisplayContext context, boolean showSummary) {
-      field(getter).context(context).showSummary(showSummary);
+        DisplayContext context, boolean showSummary) {
+      var f = field(getter).context(context).showSummary(showSummary);
+      if (context == DisplayContext.ReadOnly) {
+        f.immutable();
+      }
       return this;
     }
 
