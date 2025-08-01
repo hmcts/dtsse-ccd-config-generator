@@ -89,8 +89,13 @@ public class CaseController {
               version,
               to_json(last_state_modified_date)#>>'{}' as last_state_modified_date,
               to_json(coalesce(c.last_modified, c.created_date))#>>'{}' as last_modified,
-              supplementary_data::text
+              supplementary_data::text,
+              coalesce(most_recent_event.id, 2) as global_version
          from ccd.case_data c
+             left join lateral (
+               select ce.id from ccd.case_event ce where ce.case_reference = c.reference
+               order by ce.id DESC limit 1
+             ) as most_recent_event on true
          where reference IN (:caseRefs) -- Use IN (:paramName) for list binding
         """, params);
 
@@ -118,10 +123,12 @@ public class CaseController {
     var supplementaryDataJson = row.get("supplementary_data");
     result.put("supplementary_data", defaultMapper.readValue(supplementaryDataJson.toString(), Map.class));
 
-    // Add the empty data_classification map as before
     result.put("data_classification", Map.of());
 
-    return Map.of("case_details", result);
+    return Map.of(
+        "case_details", result,
+        "version", result.remove("global_version")
+    );
   }
 
   @PostMapping(
@@ -174,7 +181,7 @@ public class CaseController {
 
   @SneakyThrows
   @PostMapping("/cases")
-  public ResponseEntity<Map<String, Object>> createEvent(
+  public ResponseEntity<Map> createEvent(
       @RequestBody POCCaseEvent event,
       @RequestHeader HttpHeaders headers) {
 
@@ -197,7 +204,8 @@ public class CaseController {
       return status;
     });
 
-    var response = getCase((Long) event.getCaseDetails().get("id"));
+    var details = getCase((Long) event.getCaseDetails().get("id"));
+    var response = Map.of("case_details", details);
     return ResponseEntity.ok(response);
   }
 
