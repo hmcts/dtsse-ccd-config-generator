@@ -185,48 +185,30 @@ public class CaseController {
       @RequestBody POCCaseEvent event,
       @RequestHeader HttpHeaders headers) {
 
+    var referer = Objects.requireNonNullElse(headers.getFirst(HttpHeaders.REFERER), "");
+    URI uri = UriComponentsBuilder.fromUriString(referer).build().toUri();
+    var params = UriComponentsBuilder.fromUri(uri).build().getQueryParams();
+
     transactionTemplate.execute(status -> {
       if (idempotencyEnforcer.markProcessedReturningIsAlreadyProcessed(
           headers.getFirst(IdempotencyEnforcer.IDEMPOTENCY_KEY_HEADER))) {
         // TODO: Do we need to return the exact same response as before or are we ok to include subsequent changes.
         return status;
       }
-      var referer = Objects.requireNonNullElse(headers.getFirst(HttpHeaders.REFERER), "");
-      URI uri = UriComponentsBuilder.fromUriString(referer).build().toUri();
-      var params = UriComponentsBuilder.fromUri(uri).build().getQueryParams();
 
       dispatchAboutToSubmit(event, params);
-      var id = saveCaseReturningAuditId(event);
-      if (eventListener.hasSubmittedCallbackForEvent(event.getEventDetails().getCaseType(),
-          event.getEventDetails().getEventId())) {
-        enqueueSubmittedCallback(id, event, headers);
-      }
+      saveCaseReturningAuditId(event);
       return status;
     });
+
+    if (eventListener.hasSubmittedCallbackForEvent(event.getEventDetails().getCaseType(),
+        event.getEventDetails().getEventId())) {
+      dispatchSubmitted(event);
+    }
 
     var details = getCase((Long) event.getCaseDetails().get("id"));
     var response = Map.of("case_details", details);
     return ResponseEntity.ok(response);
-  }
-
-  @SneakyThrows
-  private void enqueueSubmittedCallback(long auditEventId, POCCaseEvent event, HttpHeaders headers) {
-    var req = CallbackRequest.builder()
-        .caseDetails(toCaseDetails(event.getCaseDetails()))
-        .caseDetailsBefore(toCaseDetails(event.getCaseDetailsBefore()))
-        .eventId(event.getEventDetails().getEventId())
-        .build();
-
-    db.update(
-        """
-            insert into ccd.submitted_callback_queue (case_event_id, event_id, payload, headers)
-            values (?, ?, ?::jsonb, ?::jsonb)
-            """,
-        auditEventId,
-        event.getEventDetails().getEventId(),
-        defaultMapper.writeValueAsString(req),
-        defaultMapper.writeValueAsString(headers.toSingleValueMap())
-    );
   }
 
   @SneakyThrows
@@ -273,6 +255,19 @@ public class CaseController {
     }
 
     return saveAuditRecord(event, 1);
+  }
+
+  @SneakyThrows
+  private void dispatchSubmitted(POCCaseEvent event) {
+    if (eventListener.hasSubmittedCallbackForEvent(event.getEventDetails().getCaseType(),
+        event.getEventDetails().getEventId())) {
+      var req = CallbackRequest.builder()
+          .caseDetails(toCaseDetails(event.getCaseDetails()))
+          .caseDetailsBefore(toCaseDetails(event.getCaseDetailsBefore()))
+          .eventId(event.getEventDetails().getEventId())
+          .build();
+      eventListener.submitted(req);
+    }
   }
 
   @SneakyThrows

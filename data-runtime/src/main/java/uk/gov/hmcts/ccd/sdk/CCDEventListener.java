@@ -6,6 +6,7 @@ import uk.gov.hmcts.ccd.sdk.api.callback.AboutToStartOrSubmitResponse;
 import uk.gov.hmcts.ccd.sdk.api.callback.Submit;
 import uk.gov.hmcts.reform.ccd.client.model.CallbackRequest;
 import uk.gov.hmcts.reform.ccd.client.model.AboutToStartOrSubmitCallbackResponse;
+import uk.gov.hmcts.reform.ccd.client.model.SubmittedCallbackResponse;
 
 import java.util.Map;
 import java.util.Optional;
@@ -24,4 +25,6 @@ public interface CCDEventListener {
   void submit(String caseType, String event, POCCaseEvent payload, MultiValueMap<String, String> urlParams);
 
   String nameForState(String caseType, String stateId);
+
+  SubmittedCallbackResponse submitted(CallbackRequest request);
 }
