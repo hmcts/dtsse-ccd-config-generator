@@ -363,7 +363,7 @@ public class CaseController {
         event.getEventId(),
         "user-id",
         currentView.get("id"),
-        "NFD",
+        event.getCaseType(),
         version,
         currentView.get("state"),
         "a-first-name",
