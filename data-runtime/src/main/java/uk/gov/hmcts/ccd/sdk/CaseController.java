@@ -387,7 +387,7 @@ public class CaseController {
         event.getEventId(),
         user.getUserDetails().getUid(),
         currentView.get("id"),
-        "NFD",
+        details.getEventDetails().getCaseType(),
         1, // TODO: do we need to track definition version if it is our definition?
         currentView.get("state"),
         user.getUserDetails().getGivenName(),
