@@ -6,6 +6,7 @@ import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -44,6 +45,8 @@ public class CaseController {
   private final ObjectMapper getMapper;
   private final Class caseDataType;
   private final IdempotencyEnforcer idempotencyEnforcer;
+  private final MessagePublisher publisher;
+  private final IdamService idam;
 
   @Autowired
   public CaseController(JdbcTemplate db,
@@ -53,7 +56,9 @@ public class CaseController {
                         CCDEventListener eventListener,
                         ObjectMapper mapper,
                         IdempotencyEnforcer idempotencyEnforcer,
-                        @Qualifier("getMapper") ObjectMapper getMapper) {
+                        @Qualifier("getMapper") ObjectMapper getMapper,
+                        MessagePublisher publisher,
+                        IdamService idam) {
     this.db = db;
     this.ndb = ndb;
     this.transactionTemplate = transactionTemplate;
@@ -65,6 +70,8 @@ public class CaseController {
     this.getMapper = getMapper;
     Class<?>[] typeArgs = TypeResolver.resolveRawArguments(CaseRepository.class, caseRepository.getClass());
     this.caseDataType = typeArgs[0];
+    this.publisher = publisher;
+    this.idam = idam;
   }
 
   @GetMapping(
@@ -189,6 +196,7 @@ public class CaseController {
     URI uri = UriComponentsBuilder.fromUriString(referer).build().toUri();
     var params = UriComponentsBuilder.fromUri(uri).build().getQueryParams();
 
+    var user = idam.retrieveUser(headers.getFirst("Authorization"));
     transactionTemplate.execute(status -> {
       if (idempotencyEnforcer.markProcessedReturningIsAlreadyProcessed(
           headers.getFirst(IdempotencyEnforcer.IDEMPOTENCY_KEY_HEADER))) {
@@ -197,7 +205,7 @@ public class CaseController {
       }
 
       dispatchAboutToSubmit(event, params);
-      saveCaseReturningAuditId(event);
+      saveCaseReturningAuditId(event, user);
       return status;
     });
 
@@ -212,7 +220,7 @@ public class CaseController {
   }
 
   @SneakyThrows
-  private long saveCaseReturningAuditId(POCCaseEvent event) {
+  private long saveCaseReturningAuditId(POCCaseEvent event, IdamService.User user) {
     var caseData = defaultMapper.readValue(defaultMapper.writeValueAsString(event.getCaseDetails().get("case_data")),
         caseDataType);
 
@@ -222,6 +230,8 @@ public class CaseController {
     var caseDetails = event.getCaseDetails();
     int version = (int) Optional.ofNullable(event.getCaseDetails().get("version")).orElse(1);
     var data = filteredMapper.writeValueAsString(caseData);
+    var caseReference = caseDetails.get("id");
+    var oldState = getCurrentState((Long) caseReference);
     // Upsert the case - create if it doesn't exist, update if it does.
     var rowsAffected = db.update("""
             insert into ccd.case_data (last_modified, jurisdiction, case_type_id, state, data, reference, security_classification, version)
@@ -254,7 +264,21 @@ public class CaseController {
       throw new ResponseStatusException(HttpStatus.CONFLICT, "Case was updated concurrently");
     }
 
-    return saveAuditRecord(event, 1);
+    return saveAuditRecord(event, oldState, user);
+  }
+
+  private String getCurrentState(long caseReference) {
+    String oldState = null;
+    try {
+      oldState = db.queryForObject(
+          "SELECT state FROM ccd.case_data WHERE reference = ?",
+          String.class,
+          caseReference
+      );
+    } catch (EmptyResultDataAccessException e) {
+      // This is expected if the case does not exist yet
+    }
+    return oldState;
   }
 
   @SneakyThrows
@@ -336,7 +360,7 @@ public class CaseController {
   }
 
   @SneakyThrows
-  private long saveAuditRecord(POCCaseEvent details, int version) {
+  private long saveAuditRecord(POCCaseEvent details, String oldState, IdamService.User user) {
     var event = details.getEventDetails();
     var currentView = (Map) getCase((Long) details.getCaseDetails().get("id")).get("case_details");
     var result = db.queryForMap(
@@ -357,24 +381,35 @@ public class CaseController {
               description,
               security_classification)
             values (?::jsonb,?,?,?,?,?,?,?,?,?,?,?,?,?::ccd.securityclassification)
-            returning id
+            returning id, created_date
             """,
   defaultMapper.writeValueAsString(currentView.get("case_data")),
         event.getEventId(),
-        "user-id",
+        user.getUserDetails().getUid(),
         currentView.get("id"),
         "NFD",
-        version,
+        1, // TODO: do we need to track definition version if it is our definition?
         currentView.get("state"),
-        "a-first-name",
-        "a-last-name",
+        user.getUserDetails().getGivenName(),
+        user.getUserDetails().getFamilyName(),
         event.getEventName(),
         eventListener.nameForState(details.getEventDetails().getCaseType(), String.valueOf(currentView.get("state"))),
         event.getSummary(),
         event.getDescription(),
         currentView.get("security_classification")
     );
-    return (long) result.get("id");
+    var eventId = (long) result.get("id");
+    var timestamp = ((java.sql.Timestamp) result.get("created_date")).toLocalDateTime();
+    this.publisher.publishEvent(
+            (Long) currentView.get("id"),
+            user.getUserDetails().getUid(),
+            event.getEventId(),
+            oldState,
+            toCaseDetails(details.getCaseDetails()),
+            eventId,
+            timestamp
+            );
+    return eventId;
   }
 
   @SneakyThrows
