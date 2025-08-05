@@ -225,14 +225,15 @@ public class CaseController {
 
   @SneakyThrows
   private long saveCaseReturningAuditId(DecentralisedCaseEvent event, IdamService.User user) {
-    var caseData = defaultMapper.readValue(defaultMapper.writeValueAsString(event.getCaseDetails().getData()),
-        caseDataType);
+    var caseData = defaultMapper.convertValue(event.getCaseDetails().getData(), caseDataType);
 
     var state = event.getCaseDetails().getState();
     var caseDetails = event.getCaseDetails();
     int version = Optional.ofNullable(event.getCaseDetails().getVersion()).orElse(1);
     var data = filteredMapper.writeValueAsString(caseData);
-    var oldState = getCurrentState(event.getCaseDetails().getReference());
+    var oldState = event.getCaseDetailsBefore() != null
+        ? event.getCaseDetailsBefore().getState()
+        : null;
 
     // Upsert the case - create if it doesn't exist, update if it does.
     var sql = """
@@ -272,19 +273,6 @@ public class CaseController {
     return saveAuditRecord(event, oldState, user);
   }
 
-  private String getCurrentState(long caseReference) {
-    try {
-      return ndb.queryForObject(
-          "SELECT state FROM ccd.case_data WHERE reference = :reference",
-          Map.of("reference", caseReference),
-          String.class
-      );
-    } catch (EmptyResultDataAccessException e) {
-      // This is expected if the case does not exist yet
-      return null;
-    }
-  }
-
   @SneakyThrows
   private void dispatchSubmitted(DecentralisedCaseEvent event) {
     if (eventListener.hasSubmittedCallbackForEvent(event.getEventDetails().getCaseType(),
@@ -313,7 +301,7 @@ public class CaseController {
       var cb = eventListener.aboutToSubmit(req);
 
       event.getCaseDetails()
-          .setData(defaultMapper.readValue(defaultMapper.writeValueAsString(cb.getData()), Map.class));
+          .setData(defaultMapper.convertValue(cb.getData(), Map.class));
     }
     return event;
   }
