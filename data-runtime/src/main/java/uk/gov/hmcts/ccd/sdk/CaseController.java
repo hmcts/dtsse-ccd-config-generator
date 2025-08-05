@@ -4,27 +4,35 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.Maps;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
+import net.jodah.typetools.TypeResolver;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.util.MultiValueMap;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
-
 import org.springframework.web.util.UriComponentsBuilder;
 import uk.gov.hmcts.reform.ccd.client.model.CallbackRequest;
 import uk.gov.hmcts.reform.ccd.client.model.CaseDetails;
-import net.jodah.typetools.TypeResolver;
-
 
 import java.net.URI;
-import java.util.*;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -32,15 +40,11 @@ import java.util.stream.Collectors;
 @RequestMapping(path = "/ccd-persistence")
 public class CaseController {
 
-  private final JdbcTemplate db;
   private final NamedParameterJdbcTemplate ndb;
-
   private final TransactionTemplate transactionTemplate;
-
   private final ObjectMapper defaultMapper;
   private final ObjectMapper filteredMapper;
   private final CCDEventListener eventListener;
-
   private final CaseRepository caseRepository;
   private final ObjectMapper getMapper;
   private final Class caseDataType;
@@ -49,8 +53,7 @@ public class CaseController {
   private final IdamService idam;
 
   @Autowired
-  public CaseController(JdbcTemplate db,
-                        TransactionTemplate transactionTemplate,
+  public CaseController(TransactionTemplate transactionTemplate,
                         NamedParameterJdbcTemplate ndb,
                         CaseRepository<?> caseRepository,
                         CCDEventListener eventListener,
@@ -59,7 +62,6 @@ public class CaseController {
                         @Qualifier("getMapper") ObjectMapper getMapper,
                         MessagePublisher publisher,
                         IdamService idam) {
-    this.db = db;
     this.ndb = ndb;
     this.transactionTemplate = transactionTemplate;
     this.caseRepository = caseRepository;
@@ -116,10 +118,10 @@ public class CaseController {
     return getCases(List.of(caseRef)).get(0);
   }
 
-    /**
-     * Helper method to process a single row of case data from the database.
-     * This centralizes the transformation logic for both single and bulk endpoints.
-     */
+  /**
+   * Helper method to process a single row of case data from the database.
+   * This centralizes the transformation logic for both single and bulk endpoints.
+   */
   @SneakyThrows
   private Map<String, Object> processCaseRow(Map<String, Object> row) {
     var result = new HashMap<>(row);
@@ -232,10 +234,11 @@ public class CaseController {
     var data = filteredMapper.writeValueAsString(caseData);
     var caseReference = caseDetails.get("id");
     var oldState = getCurrentState((Long) caseReference);
+
     // Upsert the case - create if it doesn't exist, update if it does.
-    var rowsAffected = db.update("""
+    var sql = """
             insert into ccd.case_data (last_modified, jurisdiction, case_type_id, state, data, reference, security_classification, version)
-            values (now(), ?, ?, ?, (?::jsonb), ?, ?::ccd.securityclassification, ?)
+            values (now(), :jurisdiction, :case_type_id, :state, (:data::jsonb), :reference, :security_classification::ccd.securityclassification, :version)
             on conflict (reference)
             do update set
                 state = excluded.state,
@@ -251,15 +254,18 @@ public class CaseController {
                                              else case_data.last_state_modified_date
                                            end
                 WHERE case_data.version = EXCLUDED.version;
-            """,
-        caseDetails.get("jurisdiction"),
-        caseDetails.get("case_type_id"),
-        state,
-        data,
-        caseDetails.get("id"),
-        caseDetails.get("security_classification"),
-        version
+            """;
+    var params = Map.of(
+        "jurisdiction", caseDetails.get("jurisdiction"),
+        "case_type_id", caseDetails.get("case_type_id"),
+        "state", state,
+        "data", data,
+        "reference", caseDetails.get("id"),
+        "security_classification", caseDetails.get("security_classification"),
+        "version", version
     );
+
+    var rowsAffected = ndb.update(sql, params);
     if (rowsAffected != 1) {
       throw new ResponseStatusException(HttpStatus.CONFLICT, "Case was updated concurrently");
     }
@@ -268,17 +274,16 @@ public class CaseController {
   }
 
   private String getCurrentState(long caseReference) {
-    String oldState = null;
     try {
-      oldState = db.queryForObject(
-          "SELECT state FROM ccd.case_data WHERE reference = ?",
-          String.class,
-          caseReference
+      return ndb.queryForObject(
+          "SELECT state FROM ccd.case_data WHERE reference = :reference",
+          Map.of("reference", caseReference),
+          String.class
       );
     } catch (EmptyResultDataAccessException e) {
       // This is expected if the case does not exist yet
+      return null;
     }
-    return oldState;
   }
 
   @SneakyThrows
@@ -322,22 +327,21 @@ public class CaseController {
       produces = "application/json"
   )
   public String loadHistory(@PathVariable("caseRef") long caseRef) {
-    var result = db.queryForObject(
+    return ndb.queryForObject(
         """
              select jsonb_agg(
                jsonb_build_object('id', id) ||
                jsonb_build_object('case_reference', case_reference) ||
-               jsonb_build_object('event', 
+               jsonb_build_object('event',
                  to_jsonb(e) - 'case_reference' - 'event_id'
                     || jsonb_build_object('id', event_id) -- See AuditEvent superclass
               )
               order by id desc
            )
              from ccd.case_event e
-             where case_reference = ?
+             where case_reference = :caseRef
             """,
-        new Object[] {caseRef}, String.class);
-    return result;
+        Map.of("caseRef", caseRef), String.class);
   }
 
   @GetMapping(
@@ -345,26 +349,25 @@ public class CaseController {
       produces = "application/json"
   )
   public String loadHistoryEvent(@PathVariable("caseRef") long caseRef, @PathVariable("eventId") long eventId) {
-    return  db.queryForObject(
+    return  ndb.queryForObject(
         """
            select jsonb_build_object('id', id) ||
                jsonb_build_object('case_reference', case_reference) ||
-               jsonb_build_object('event', 
+               jsonb_build_object('event',
                  to_jsonb(e) - 'case_reference' - 'event_id'
                     || jsonb_build_object('id', event_id) -- See AuditEvent superclass
               )
               from ccd.case_event e
-              where case_reference = ? and id = ?
+              where case_reference = :caseRef and id = :eventId
             """,
-        new Object[] {caseRef, eventId}, String.class);
+        Map.of("caseRef", caseRef, "eventId", eventId), String.class);
   }
 
   @SneakyThrows
   private long saveAuditRecord(POCCaseEvent details, String oldState, IdamService.User user) {
     var event = details.getEventDetails();
     var currentView = (Map) getCase((Long) details.getCaseDetails().get("id")).get("case_details");
-    var result = db.queryForMap(
-        """
+    var sql = """
             insert into ccd.case_event (
               data,
               event_id,
@@ -380,35 +383,38 @@ public class CaseController {
               summary,
               description,
               security_classification)
-            values (?::jsonb,?,?,?,?,?,?,?,?,?,?,?,?,?::ccd.securityclassification)
+            values (:data::jsonb, :event_id, :user_id, :case_reference, :case_type_id, :case_type_version, :state_id, :user_first_name, :user_last_name, :event_name, :state_name, :summary, :description, :security_classification::ccd.securityclassification)
             returning id, created_date
-            """,
-  defaultMapper.writeValueAsString(currentView.get("case_data")),
-        event.getEventId(),
-        user.getUserDetails().getUid(),
-        currentView.get("id"),
-        event.getCaseType(),
-        1, // TODO: do we need to track definition version if it is our definition?
-        currentView.get("state"),
-        user.getUserDetails().getGivenName(),
-        user.getUserDetails().getFamilyName(),
-        event.getEventName(),
-        eventListener.nameForState(details.getEventDetails().getCaseType(), String.valueOf(currentView.get("state"))),
-        event.getSummary(),
-        event.getDescription(),
-        currentView.get("security_classification")
-    );
+            """;
+
+    var params = new HashMap<String, Object>();
+    params.put("data", defaultMapper.writeValueAsString(currentView.get("case_data")));
+    params.put("event_id", event.getEventId());
+    params.put("user_id", user.getUserDetails().getUid());
+    params.put("case_reference", currentView.get("id"));
+    params.put("case_type_id", event.getCaseType());
+    params.put("case_type_version", 1); // TODO: do we need to track definition version if it is our definition?
+    params.put("state_id", currentView.get("state"));
+    params.put("user_first_name", user.getUserDetails().getGivenName());
+    params.put("user_last_name", user.getUserDetails().getFamilyName());
+    params.put("event_name", event.getEventName());
+    params.put("state_name", eventListener.nameForState(details.getEventDetails().getCaseType(), String.valueOf(currentView.get("state"))));
+    params.put("summary", event.getSummary());
+    params.put("description", event.getDescription());
+    params.put("security_classification", currentView.get("security_classification"));
+
+    var result = ndb.queryForMap(sql, params);
     var eventId = (long) result.get("id");
     var timestamp = ((java.sql.Timestamp) result.get("created_date")).toLocalDateTime();
     this.publisher.publishEvent(
-            (Long) currentView.get("id"),
-            user.getUserDetails().getUid(),
-            event.getEventId(),
-            oldState,
-            toCaseDetails(details.getCaseDetails()),
-            eventId,
-            timestamp
-            );
+        (Long) currentView.get("id"),
+        user.getUserDetails().getUid(),
+        event.getEventId(),
+        oldState,
+        toCaseDetails(details.getCaseDetails()),
+        eventId,
+        timestamp
+    );
     return eventId;
   }
 
