@@ -7,6 +7,7 @@ import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.util.MultiValueMap;
+import uk.gov.hmcts.ccd.data.persistence.dto.DecentralisedCaseEvent;
 import uk.gov.hmcts.ccd.sdk.api.CCD;
 import uk.gov.hmcts.ccd.sdk.api.EventPayload;
 import uk.gov.hmcts.ccd.sdk.api.Webhook;
@@ -31,12 +32,12 @@ public class ConfigGeneratorCallbackDispatcher implements CCDEventListener {
 
   @SneakyThrows
   @Override
-  public void submit(String caseType, String event, POCCaseEvent e, MultiValueMap<String, String> urlParams) {
+  public void submit(String caseType, String event, DecentralisedCaseEvent e, MultiValueMap<String, String> urlParams) {
     var ct = controller.getCaseTypeToConfig().get(caseType);
-    String json = mapper.writeValueAsString(e.getCaseDetails().get("case_data"));
+    String json = mapper.writeValueAsString(e.getCaseDetails().getData());
     var domainClass = mapper.readValue(json, ct.getCaseClass());
 
-    long caseRef = (long) e.getCaseDetails().get("id");
+    long caseRef = (long) e.getCaseDetails().getReference();
     EventPayload payload = new EventPayload<>(caseRef, domainClass, urlParams);
     var handler = ct.getEvents().get(event).getSubmitHandler();
     handler.submit(payload);

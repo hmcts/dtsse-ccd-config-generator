@@ -23,6 +23,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.util.UriComponentsBuilder;
+import uk.gov.hmcts.ccd.data.persistence.dto.DecentralisedCaseEvent;
 import uk.gov.hmcts.ccd.data.persistence.dto.DecentralisedUpdateSupplementaryDataResponse;
 import uk.gov.hmcts.reform.ccd.client.model.CallbackRequest;
 import uk.gov.hmcts.reform.ccd.client.model.CaseDetails;
@@ -47,7 +48,6 @@ public class CaseController {
   private final ObjectMapper filteredMapper;
   private final CCDEventListener eventListener;
   private final CaseRepository caseRepository;
-  private final ObjectMapper getMapper;
   private final Class caseDataType;
   private final IdempotencyEnforcer idempotencyEnforcer;
   private final MessagePublisher publisher;
@@ -60,7 +60,6 @@ public class CaseController {
                         CCDEventListener eventListener,
                         ObjectMapper mapper,
                         IdempotencyEnforcer idempotencyEnforcer,
-                        @Qualifier("getMapper") ObjectMapper getMapper,
                         MessagePublisher publisher,
                         IdamService idam) {
     this.ndb = ndb;
@@ -70,7 +69,6 @@ public class CaseController {
     this.eventListener = eventListener;
     this.idempotencyEnforcer = idempotencyEnforcer;
     this.filteredMapper = mapper.copy().setAnnotationIntrospector(new FilterExternalFieldsInspector());
-    this.getMapper = getMapper;
     Class<?>[] typeArgs = TypeResolver.resolveRawArguments(CaseRepository.class, caseRepository.getClass());
     this.caseDataType = typeArgs[0];
     this.publisher = publisher;
@@ -195,7 +193,7 @@ public class CaseController {
   @SneakyThrows
   @PostMapping("/cases")
   public ResponseEntity<Map> createEvent(
-      @RequestBody POCCaseEvent event,
+      @RequestBody DecentralisedCaseEvent event,
       @RequestHeader HttpHeaders headers) {
 
     var referer = Objects.requireNonNullElse(headers.getFirst(HttpHeaders.REFERER), "");
@@ -220,24 +218,21 @@ public class CaseController {
       dispatchSubmitted(event);
     }
 
-    var details = getCase((Long) event.getCaseDetails().get("id"));
+    var details = getCase(event.getCaseDetails().getReference());
     var response = Map.of("case_details", details);
     return ResponseEntity.ok(response);
   }
 
   @SneakyThrows
-  private long saveCaseReturningAuditId(POCCaseEvent event, IdamService.User user) {
-    var caseData = defaultMapper.readValue(defaultMapper.writeValueAsString(event.getCaseDetails().get("case_data")),
+  private long saveCaseReturningAuditId(DecentralisedCaseEvent event, IdamService.User user) {
+    var caseData = defaultMapper.readValue(defaultMapper.writeValueAsString(event.getCaseDetails().getData()),
         caseDataType);
 
-    var state = event.getEventDetails().getStateId() != null
-        ? event.getEventDetails().getStateId()
-        : event.getCaseDetails().get("state");
+    var state = event.getCaseDetails().getState();
     var caseDetails = event.getCaseDetails();
-    int version = (int) Optional.ofNullable(event.getCaseDetails().get("version")).orElse(1);
+    int version = Optional.ofNullable(event.getCaseDetails().getVersion()).orElse(1);
     var data = filteredMapper.writeValueAsString(caseData);
-    var caseReference = caseDetails.get("id");
-    var oldState = getCurrentState((Long) caseReference);
+    var oldState = getCurrentState(event.getCaseDetails().getReference());
 
     // Upsert the case - create if it doesn't exist, update if it does.
     var sql = """
@@ -260,12 +255,12 @@ public class CaseController {
                 WHERE case_data.version = EXCLUDED.version;
             """;
     var params = Map.of(
-        "jurisdiction", caseDetails.get("jurisdiction"),
-        "case_type_id", caseDetails.get("case_type_id"),
+        "jurisdiction", caseDetails.getJurisdiction(),
+        "case_type_id", caseDetails.getCaseTypeId(),
         "state", state,
         "data", data,
-        "reference", caseDetails.get("id"),
-        "security_classification", caseDetails.get("security_classification"),
+        "reference", caseDetails.getReference(),
+        "security_classification", caseDetails.getSecurityClassification().toString(),
         "version", version
     );
 
@@ -291,7 +286,7 @@ public class CaseController {
   }
 
   @SneakyThrows
-  private void dispatchSubmitted(POCCaseEvent event) {
+  private void dispatchSubmitted(DecentralisedCaseEvent event) {
     if (eventListener.hasSubmittedCallbackForEvent(event.getEventDetails().getCaseType(),
         event.getEventDetails().getEventId())) {
       var req = CallbackRequest.builder()
@@ -304,7 +299,7 @@ public class CaseController {
   }
 
   @SneakyThrows
-  private POCCaseEvent dispatchAboutToSubmit(POCCaseEvent event, MultiValueMap<String, String> urlParams) {
+  private DecentralisedCaseEvent dispatchAboutToSubmit(DecentralisedCaseEvent event, MultiValueMap<String, String> urlParams) {
     if (eventListener.hasSubmitHandler(event.getEventDetails().getCaseType(), event.getEventDetails().getEventId())) {
       eventListener.submit(event.getEventDetails().getCaseType(), event.getEventDetails().getEventId(), event,
           urlParams);
@@ -318,10 +313,7 @@ public class CaseController {
       var cb = eventListener.aboutToSubmit(req);
 
       event.getCaseDetails()
-          .put("case_data", defaultMapper.readValue(defaultMapper.writeValueAsString(cb.getData()), Map.class));
-      if (cb.getState() != null) {
-        event.getEventDetails().setStateId(cb.getState().toString());
-      }
+          .setData(defaultMapper.readValue(defaultMapper.writeValueAsString(cb.getData()), Map.class));
     }
     return event;
   }
@@ -368,9 +360,9 @@ public class CaseController {
   }
 
   @SneakyThrows
-  private long saveAuditRecord(POCCaseEvent details, String oldState, IdamService.User user) {
+  private long saveAuditRecord(DecentralisedCaseEvent details, String oldState, IdamService.User user) {
     var event = details.getEventDetails();
-    var currentView = (Map) getCase((Long) details.getCaseDetails().get("id")).get("case_details");
+    var currentView = (Map) getCase(details.getCaseDetails().getReference()).get("case_details");
     var sql = """
             insert into ccd.case_event (
               data,
@@ -422,11 +414,8 @@ public class CaseController {
     return eventId;
   }
 
-  @SneakyThrows
-  private CaseDetails toCaseDetails(Map<String, Object> data) {
-    if (data == null) {
-      return null;
-    }
-    return defaultMapper.readValue(defaultMapper.writeValueAsString(data), CaseDetails.class);
+  private CaseDetails toCaseDetails(uk.gov.hmcts.ccd.domain.model.definition.CaseDetails data) {
+    return defaultMapper.convertValue(data, CaseDetails.class);
   }
+
 }
