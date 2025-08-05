@@ -1,7 +1,6 @@
 package uk.gov.hmcts.ccd.sdk;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.google.common.collect.Maps;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import net.jodah.typetools.TypeResolver;
@@ -24,6 +23,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.util.UriComponentsBuilder;
+import uk.gov.hmcts.ccd.data.persistence.dto.DecentralisedUpdateSupplementaryDataResponse;
 import uk.gov.hmcts.reform.ccd.client.model.CallbackRequest;
 import uk.gov.hmcts.reform.ccd.client.model.CaseDetails;
 
@@ -33,6 +33,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -145,8 +146,8 @@ public class CaseController {
       produces = "application/json"
   )
   @SneakyThrows
-  public String updateSupplementaryData(@PathVariable("caseRef") long caseRef, @RequestBody SupplementaryDataUpdateRequest request) {
-    Map<Long, String> result = Maps.newHashMap();
+  public DecentralisedUpdateSupplementaryDataResponse updateSupplementaryData(@PathVariable("caseRef") long caseRef, @RequestBody SupplementaryDataUpdateRequest request) {
+    final AtomicReference<String> result = new AtomicReference<>();
     request.getRequestData()
         .forEach((operationType, operationSet) -> {
           operationSet.forEach((key, value) -> {
@@ -170,7 +171,7 @@ public class CaseController {
                         )
                     where reference = :reference
                     returning 
-                      jsonb_build_object('supplementary_data', supplementary_data)::text 
+                      supplementary_data::text 
                       as supplementary_data
                     """,
                 Map.of(
@@ -182,10 +183,13 @@ public class CaseController {
                 ,
                 String.class
             );
-            result.put(caseRef, updatedValue);
+            result.set(updatedValue);
           });
         });
-    return result.get(caseRef);
+
+    var response = new DecentralisedUpdateSupplementaryDataResponse();
+    response.setSupplementaryData(defaultMapper.readTree(result.get()));
+    return response;
   }
 
   @SneakyThrows
