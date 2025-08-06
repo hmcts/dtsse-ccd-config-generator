@@ -5,6 +5,7 @@ import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.Map;
 
+import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
@@ -38,7 +39,7 @@ public class MessagePublisher {
                             NamedParameterJdbcTemplate db) {
             this.definitionBlockGenerator = new DefinitionBlockGenerator(messagingProperties);
             this.dataBlockGenerator = new DataBlockGenerator();
-            this.mapper = mapper;
+            this.mapper = mapper.copy().configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
             this.db = db;
             this.definitions = loadDefinitions();
         }
