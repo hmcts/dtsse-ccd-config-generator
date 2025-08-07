@@ -9,6 +9,7 @@ import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -24,6 +25,7 @@ import uk.gov.hmcts.reform.ccd.client.model.CaseDetails;
 
 @Slf4j
 @Service
+@ConditionalOnBean(MessagingProperties.class)
 public class MessagePublisher {
 
     private DefinitionBlockGenerator definitionBlockGenerator;

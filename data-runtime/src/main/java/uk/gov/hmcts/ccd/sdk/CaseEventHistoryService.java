@@ -2,7 +2,9 @@ package uk.gov.hmcts.ccd.sdk;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import lombok.RequiredArgsConstructor;
 import lombok.SneakyThrows;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -16,24 +18,17 @@ import java.sql.ResultSet;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
+@Slf4j
+@RequiredArgsConstructor
 @Service
 public class CaseEventHistoryService {
 
     private final NamedParameterJdbcTemplate ndb;
     private final ObjectMapper defaultMapper;
-    private final MessagePublisher publisher;
+    private final Optional<MessagePublisher> publisher;
     private final CCDEventListener eventListener;
-
-    public CaseEventHistoryService(NamedParameterJdbcTemplate ndb,
-                                       ObjectMapper defaultMapper,
-                                       MessagePublisher publisher,
-                                       CCDEventListener eventListener) {
-        this.ndb = ndb;
-        this.defaultMapper = defaultMapper;
-        this.publisher = publisher;
-        this.eventListener = eventListener;
-    }
 
     public List<DecentralisedAuditEvent> loadHistory(long caseRef) {
         final String sql = """
@@ -97,15 +92,20 @@ public class CaseEventHistoryService {
         var result = ndb.queryForMap(sql, params);
         var eventId = (long) result.get("id");
         var timestamp = ((java.sql.Timestamp) result.get("created_date")).toLocalDateTime();
-        this.publisher.publishEvent(
-            currentView.getReference(),
-            user.getUserDetails().getUid(),
-            event.getEventId(),
-            oldState,
-            toCaseDetails(details.getCaseDetails()),
-            eventId,
-            timestamp
-        );
+        if (this.publisher.isPresent()) {
+            log.info("Publishing event {} for case reference: {}", event.getEventId(), currentView.getReference());
+            this.publisher.get().publishEvent(
+                currentView.getReference(),
+                user.getUserDetails().getUid(),
+                event.getEventId(),
+                oldState,
+                toCaseDetails(details.getCaseDetails()),
+                eventId,
+                timestamp
+            );
+        } else {
+            log.info("Message publishing disabled, skipping event publication for case reference: {}", currentView.getReference());
+        }
         return eventId;
     }
 
