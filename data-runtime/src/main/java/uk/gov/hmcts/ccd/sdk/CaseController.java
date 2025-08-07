@@ -9,7 +9,6 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
-import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.util.MultiValueMap;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -55,6 +54,7 @@ public class CaseController {
   private final MessagePublisher publisher;
   private final IdamService idam;
   private final CaseEventHistoryService caseEventHistoryService;
+  private final SupplementaryDataService supplementaryDataService;
 
   @Autowired
   public CaseController(TransactionTemplate transactionTemplate,
@@ -65,7 +65,8 @@ public class CaseController {
                         IdempotencyEnforcer idempotencyEnforcer,
                         MessagePublisher publisher,
                         IdamService idam,
-                        CaseEventHistoryService caseEventHistoryService) {
+                        CaseEventHistoryService caseEventHistoryService,
+                        SupplementaryDataService supplementaryDataService) {
     this.ndb = ndb;
     this.transactionTemplate = transactionTemplate;
     this.caseRepository = caseRepository;
@@ -78,6 +79,7 @@ public class CaseController {
     this.publisher = publisher;
     this.idam = idam;
     this.caseEventHistoryService = caseEventHistoryService;
+    this.supplementaryDataService = supplementaryDataService;
   }
 
   @GetMapping(
@@ -148,52 +150,8 @@ public class CaseController {
       value = "/cases/{caseRef}/supplementary-data",
       produces = "application/json"
   )
-  @SneakyThrows
-  @Transactional
   public DecentralisedUpdateSupplementaryDataResponse updateSupplementaryData(@PathVariable("caseRef") long caseRef, @RequestBody SupplementaryDataUpdateRequest request) {
-    final AtomicReference<String> result = new AtomicReference<>();
-    request.getRequestData()
-        .forEach((operationType, operationSet) -> {
-          operationSet.forEach((key, value) -> {
-            var path = key.split("\\.");
-            log.info("Updating supplementary data for caseRef: {}, operationType: {}, path: {}, value: {}", caseRef, operationType, path, value);
-            var updatedValue = ndb.queryForObject(
-                """
-                    UPDATE ccd.case_data SET supplementary_data = jsonb_set_lax(
-                            -- Create the top level entry as a map if it doesn't exist.
-                            jsonb_set(supplementary_data, (:path)[ 1 : 1 ], coalesce(supplementary_data #> (:path)[1 : 1], '{}')::jsonb),
-                            :path,
-                            (
-                              case
-                                  when :op = '$inc' then (coalesce((supplementary_data #> :path)::integer, 0) + (:value)::integer)::text::jsonb
-                                  when :op = '$set' then to_jsonb(:value)
-                                  else null -- any other operation will raise an exception
-                              end
-                            ),
-                            true,
-                            'raise_exception' -- on setting a null value
-                        )
-                    where reference = :reference
-                    returning 
-                      supplementary_data::text 
-                      as supplementary_data
-                    """,
-                Map.of(
-                    "path", path,
-                    "value", value,
-                    "reference", caseRef,
-                    "op", operationType
-                )
-                ,
-                String.class
-            );
-            result.set(updatedValue);
-          });
-        });
-
-    var response = new DecentralisedUpdateSupplementaryDataResponse();
-    response.setSupplementaryData(defaultMapper.readTree(result.get()));
-    return response;
+    return supplementaryDataService.updateSupplementaryData(caseRef, request);
   }
 
   @SneakyThrows
