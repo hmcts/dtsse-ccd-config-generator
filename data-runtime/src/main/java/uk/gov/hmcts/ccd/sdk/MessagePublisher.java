@@ -5,8 +5,14 @@ import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.Map;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
+import com.fasterxml.jackson.datatype.jdk8.Jdk8Module;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import com.fasterxml.jackson.module.paramnames.ParameterNamesModule;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
@@ -37,14 +43,18 @@ public class MessagePublisher {
     @SneakyThrows
     public MessagePublisher(
         MessagingProperties messagingProperties,
-                            ObjectMapper mapper,
-                            NamedParameterJdbcTemplate db) {
-            this.definitionBlockGenerator = new DefinitionBlockGenerator(messagingProperties);
-            this.dataBlockGenerator = new DataBlockGenerator();
-            this.mapper = mapper.copy().configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
-            this.db = db;
-            this.definitions = loadDefinitions();
-        }
+        NamedParameterJdbcTemplate db) {
+        this.definitionBlockGenerator = new DefinitionBlockGenerator(messagingProperties);
+        this.dataBlockGenerator = new DataBlockGenerator();
+        this.mapper = new ObjectMapper()
+            .registerModule(new Jdk8Module())
+            .registerModule(new ParameterNamesModule(JsonCreator.Mode.PROPERTIES))
+            .registerModule(new JavaTimeModule()).disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)
+            .disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
+            .enable(JsonParser.Feature.STRICT_DUPLICATE_DETECTION);
+        this.db = db;
+        this.definitions = loadDefinitions();
+    }
 
     @SneakyThrows
     private synchronized Map<String, CaseTypeDefinition> loadDefinitions() {
@@ -86,10 +96,11 @@ public class MessagePublisher {
         // Convert the MessageInformation object to a JSON string
         String messageInformationJson = mapper.writeValueAsString(info);
 
-        final String SQL = "insert into ccd.message_queue_candidates (message_type, time_stamp, message_information) " +
-            "values (:messageType, :timestamp, :messageInformation::jsonb)";
+        final String SQL = "insert into ccd.message_queue_candidates (reference, message_type, time_stamp, message_information) " +
+            "values (:caseReference, :messageType, :timestamp, :messageInformation::jsonb)";
 
         MapSqlParameterSource params = new MapSqlParameterSource();
+        params.addValue("caseReference", caseReference);
         params.addValue("messageType", "CASE_EVENT");
         params.addValue("timestamp", timestamp);
         params.addValue("messageInformation", messageInformationJson);

@@ -21,6 +21,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.util.UriComponentsBuilder;
+import uk.gov.hmcts.ccd.data.casedetails.SecurityClassification;
 import uk.gov.hmcts.ccd.data.persistence.dto.DecentralisedAuditEvent;
 import uk.gov.hmcts.ccd.data.persistence.dto.DecentralisedCaseDetails;
 import uk.gov.hmcts.ccd.data.persistence.dto.DecentralisedCaseEvent;
@@ -278,8 +279,13 @@ public class CaseController {
           .build();
       var cb = eventListener.aboutToSubmit(req);
 
-      event.getCaseDetails()
-          .setData(defaultMapper.convertValue(cb.getData(), Map.class));
+      event.getCaseDetails().setData(defaultMapper.convertValue(cb.getData(), Map.class));
+      if (cb.getState() != null) {
+        event.getCaseDetails().setState(cb.getState().toString());
+      }
+      if (cb.getSecurityClassification() != null) {
+        event.getCaseDetails().setSecurityClassification(SecurityClassification.valueOf(cb.getSecurityClassification()));
+      }
 
       response.setErrors(cb.getErrors());
       response.setWarnings(cb.getWarnings());
