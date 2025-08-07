@@ -109,10 +109,9 @@ public class CaseController {
                select ce.id from ccd.case_event ce where ce.case_reference = c.reference
                order by ce.id DESC limit 1
              ) as most_recent_event on true
-         where reference IN (:caseRefs) -- Use IN (:paramName) for list binding
+         where reference IN (:caseRefs)
         """, params);
 
-    // Process each result row in the list
     return results.stream()
         .map(this::processCaseRow)
         .collect(Collectors.toList());
