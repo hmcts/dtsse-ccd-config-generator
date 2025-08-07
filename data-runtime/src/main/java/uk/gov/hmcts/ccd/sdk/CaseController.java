@@ -24,6 +24,7 @@ import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.util.UriComponentsBuilder;
 import uk.gov.hmcts.ccd.data.persistence.dto.DecentralisedCaseDetails;
 import uk.gov.hmcts.ccd.data.persistence.dto.DecentralisedCaseEvent;
+import uk.gov.hmcts.ccd.data.persistence.dto.DecentralisedSubmitEventResponse;
 import uk.gov.hmcts.ccd.data.persistence.dto.DecentralisedUpdateSupplementaryDataResponse;
 import uk.gov.hmcts.reform.ccd.client.model.CallbackRequest;
 import uk.gov.hmcts.reform.ccd.client.model.CaseDetails;
@@ -193,7 +194,7 @@ public class CaseController {
 
   @SneakyThrows
   @PostMapping("/cases")
-  public ResponseEntity<Map> createEvent(
+  public ResponseEntity<DecentralisedSubmitEventResponse> createEvent(
       @RequestBody DecentralisedCaseEvent event,
       @RequestHeader HttpHeaders headers) {
 
@@ -202,17 +203,28 @@ public class CaseController {
     var params = UriComponentsBuilder.fromUri(uri).build().getQueryParams();
 
     var user = idam.retrieveUser(headers.getFirst("Authorization"));
-    transactionTemplate.execute(status -> {
-      if (idempotencyEnforcer.markProcessedReturningIsAlreadyProcessed(
-          headers.getFirst(IdempotencyEnforcer.IDEMPOTENCY_KEY_HEADER))) {
-        // TODO: Do we need to return the exact same response as before or are we ok to include subsequent changes.
-        return status;
-      }
+    try {
+      transactionTemplate.execute(status -> {
+        if (idempotencyEnforcer.markProcessedReturningIsAlreadyProcessed(
+            headers.getFirst(IdempotencyEnforcer.IDEMPOTENCY_KEY_HEADER))) {
+          // TODO: Do we need to return the exact same response as before or are we ok to include subsequent changes.
+          return status;
+        }
 
-      dispatchAboutToSubmit(event, params);
-      saveCaseReturningAuditId(event, user);
-      return status;
-    });
+        var result = dispatchAboutToSubmit(event, params);
+        if (result.getErrors() != null && !result.getErrors().isEmpty()) {
+          throw new CallbackValidationException(result.getErrors(), result.getWarnings());
+        }
+
+        saveCaseReturningAuditId(event, user);
+        return status;
+      });
+    } catch (CallbackValidationException e) {
+      var response = new DecentralisedSubmitEventResponse();
+      response.setErrors(e.getErrors());
+      response.setWarnings(e.getWarnings());
+      return ResponseEntity.ok(response);
+    }
 
     if (eventListener.hasSubmittedCallbackForEvent(event.getEventDetails().getCaseType(),
         event.getEventDetails().getEventId())) {
@@ -220,7 +232,8 @@ public class CaseController {
     }
 
     var details = getCase(event.getCaseDetails().getReference());
-    var response = Map.of("case_details", details);
+    var response = new DecentralisedSubmitEventResponse();
+    response.setCaseDetails(details);
     return ResponseEntity.ok(response);
   }
 
@@ -288,7 +301,8 @@ public class CaseController {
   }
 
   @SneakyThrows
-  private DecentralisedCaseEvent dispatchAboutToSubmit(DecentralisedCaseEvent event, MultiValueMap<String, String> urlParams) {
+  private DecentralisedSubmitEventResponse dispatchAboutToSubmit(DecentralisedCaseEvent event, MultiValueMap<String, String> urlParams) {
+    var response = new DecentralisedSubmitEventResponse();
     if (eventListener.hasSubmitHandler(event.getEventDetails().getCaseType(), event.getEventDetails().getEventId())) {
       eventListener.submit(event.getEventDetails().getCaseType(), event.getEventDetails().getEventId(), event,
           urlParams);
@@ -303,8 +317,12 @@ public class CaseController {
 
       event.getCaseDetails()
           .setData(defaultMapper.convertValue(cb.getData(), Map.class));
+
+      var cd = new DecentralisedCaseDetails();
+      response.setErrors(cb.getErrors());
+      response.setWarnings(cb.getWarnings());
     }
-    return event;
+    return response;
   }
 
   @GetMapping(
