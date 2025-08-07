@@ -223,8 +223,15 @@ public class CaseController {
                 security_classification = excluded.security_classification,
                 last_modified = now(),
                 version = case
-                            when case_data.data is distinct from excluded.data then case_data.version + 1
-                            else case_data.version
+                            when
+                              -- We only bump the version if a mutable field actually changes
+                              case_data.data is distinct from excluded.data
+                              or case_data.state is distinct from excluded.state
+                              or case_data.security_classification is distinct from excluded.security_classification
+                            then
+                              case_data.version + 1
+                            else
+                              case_data.version
                           end,
                 last_state_modified_date = case
                                              when case_data.state is distinct from excluded.state then now()
