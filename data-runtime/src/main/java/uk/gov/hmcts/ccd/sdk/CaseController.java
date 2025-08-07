@@ -84,6 +84,7 @@ public class CaseController {
   )
   @SneakyThrows
   public List<DecentralisedCaseDetails> getCases(@RequestParam("case-refs") List<Long> caseRefs) {
+    log.info("Fetching cases for references: {}", caseRefs);
     var params = Map.of("caseRefs", caseRefs);
 
     var results = ndb.queryForList(
@@ -147,6 +148,7 @@ public class CaseController {
       produces = "application/json"
   )
   public DecentralisedUpdateSupplementaryDataResponse updateSupplementaryData(@PathVariable("caseRef") long caseRef, @RequestBody SupplementaryDataUpdateRequest request) {
+    log.info("Updating supplementary data for case reference: {}", caseRef);
     return supplementaryDataService.updateSupplementaryData(caseRef, request);
   }
 
@@ -156,6 +158,8 @@ public class CaseController {
       @RequestBody DecentralisedCaseEvent event,
       @RequestHeader HttpHeaders headers) {
 
+    log.info("Creating event '{}' for case reference: {}",
+        event.getEventDetails().getEventId(), event.getCaseDetails().getReference());
     var referer = Objects.requireNonNullElse(headers.getFirst(HttpHeaders.REFERER), "");
     URI uri = UriComponentsBuilder.fromUriString(referer).build().toUri();
     var params = UriComponentsBuilder.fromUri(uri).build().getQueryParams();
@@ -294,8 +298,8 @@ public class CaseController {
       produces = "application/json"
   )
   public ResponseEntity<List<DecentralisedAuditEvent>> loadHistory(@PathVariable("caseRef") long caseRef) {
-      List<DecentralisedAuditEvent> history = caseEventHistoryService.loadHistory(caseRef);
-      return ResponseEntity.ok(history);
+    log.info("Loading history for case reference: {}", caseRef);
+    return ResponseEntity.ok(caseEventHistoryService.loadHistory(caseRef));
   }
 
   /**
@@ -311,6 +315,7 @@ public class CaseController {
   )
   public ResponseEntity<DecentralisedAuditEvent> loadHistoryEvent(@PathVariable("caseRef") long caseRef,
                                                                   @PathVariable("eventId") long eventId) {
+    log.info("Loading history event ID {} for case reference: {}", eventId, caseRef);
     DecentralisedAuditEvent event = caseEventHistoryService.loadHistoryEvent(caseRef, eventId);
     return ResponseEntity.ok(event);
   }
