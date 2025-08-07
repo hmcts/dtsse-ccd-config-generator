@@ -1,5 +1,6 @@
 package uk.gov.hmcts.ccd.sdk;
 
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
@@ -8,6 +9,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.jdbc.core.RowMapper;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -22,14 +24,19 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.util.UriComponentsBuilder;
+import uk.gov.hmcts.ccd.data.casedetails.SecurityClassification;
+import uk.gov.hmcts.ccd.data.persistence.dto.DecentralisedAuditEvent;
 import uk.gov.hmcts.ccd.data.persistence.dto.DecentralisedCaseDetails;
 import uk.gov.hmcts.ccd.data.persistence.dto.DecentralisedCaseEvent;
 import uk.gov.hmcts.ccd.data.persistence.dto.DecentralisedSubmitEventResponse;
 import uk.gov.hmcts.ccd.data.persistence.dto.DecentralisedUpdateSupplementaryDataResponse;
+import uk.gov.hmcts.ccd.domain.model.std.AuditEvent;
 import uk.gov.hmcts.reform.ccd.client.model.CallbackRequest;
 import uk.gov.hmcts.reform.ccd.client.model.CaseDetails;
 
 import java.net.URI;
+import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -318,54 +325,99 @@ public class CaseController {
       event.getCaseDetails()
           .setData(defaultMapper.convertValue(cb.getData(), Map.class));
 
-      var cd = new DecentralisedCaseDetails();
       response.setErrors(cb.getErrors());
       response.setWarnings(cb.getWarnings());
     }
     return response;
   }
 
+  /**
+   * Retrieves the full event history for a given case.
+   *
+   * @param caseRef The case reference number.
+   * @return A list of audit events.
+   */
   @GetMapping(
       value = "/cases/{caseRef}/history",
       produces = "application/json"
   )
-  public String loadHistory(@PathVariable("caseRef") long caseRef) {
-    return ndb.queryForObject(
-        """
-             select jsonb_agg(
-               jsonb_build_object('id', id) ||
-               jsonb_build_object('case_reference', case_reference) ||
-               jsonb_build_object('event',
-                 to_jsonb(e) - 'case_reference' - 'event_id'
-                    || jsonb_build_object('id', event_id) -- See AuditEvent superclass
-              )
-              order by id desc
-           )
-             from ccd.case_event e
-             where case_reference = :caseRef
-            """,
-        Map.of("caseRef", caseRef), String.class);
+  public ResponseEntity<List<DecentralisedAuditEvent>> loadHistory(@PathVariable("caseRef") long caseRef) {
+    final String sql = """
+            select * from ccd.case_event
+            where case_reference = :caseRef
+            order by id desc
+            """;
+
+      List<DecentralisedAuditEvent> history =
+          ndb.query(sql, Map.of("caseRef", caseRef), new DecentralisedAuditEventRowMapper());
+      return ResponseEntity.ok(history);
   }
 
+  /**
+   * Retrieves a single event from the history of a given case.
+   *
+   * @param caseRef The case reference number.
+   * @param eventId The specific event ID.
+   * @return A single audit event.
+   */
   @GetMapping(
       value = "/cases/{caseRef}/history/{eventId}",
       produces = "application/json"
   )
-  public String loadHistoryEvent(@PathVariable("caseRef") long caseRef, @PathVariable("eventId") long eventId) {
-    return  ndb.queryForObject(
-        """
-           select jsonb_build_object('id', id) ||
-               jsonb_build_object('case_reference', case_reference) ||
-               jsonb_build_object('event',
-                 to_jsonb(e) - 'case_reference' - 'event_id'
-                    || jsonb_build_object('id', event_id) -- See AuditEvent superclass
-              )
-              from ccd.case_event e
-              where case_reference = :caseRef and id = :eventId
-            """,
-        Map.of("caseRef", caseRef, "eventId", eventId), String.class);
+  public ResponseEntity<DecentralisedAuditEvent> loadHistoryEvent(@PathVariable("caseRef") long caseRef,
+                                                                  @PathVariable("eventId") long eventId) {
+      final String sql = """
+          select * from ccd.case_event
+            where case_reference = :caseRef and id = :eventId
+         """;
+
+    DecentralisedAuditEvent event = ndb.queryForObject(sql, Map.of("caseRef", caseRef, "eventId",
+          eventId),
+        new DecentralisedAuditEventRowMapper());
+    return ResponseEntity.ok(event);
   }
 
+  /**
+   * Reusable component to map a row from the ccd.case_event table to our DTOs.
+   * This encapsulates the transformation logic in one place.
+   */
+  private class DecentralisedAuditEventRowMapper implements RowMapper<DecentralisedAuditEvent> {
+
+    @SneakyThrows
+    @Override
+    public DecentralisedAuditEvent mapRow(ResultSet rs, int rowNum) {
+      DecentralisedAuditEvent decentralisedAuditEvent = new DecentralisedAuditEvent();
+      decentralisedAuditEvent.setId(rs.getLong("id"));
+      decentralisedAuditEvent.setCaseReference(rs.getLong("case_reference"));
+
+      AuditEvent event = new AuditEvent();
+      event.setId(rs.getLong("id")); // AuditEvent's internal ID
+      event.setEventId(rs.getString("event_id")); // The event trigger ID
+      event.setEventName(rs.getString("event_name"));
+      event.setSummary(rs.getString("summary"));
+      event.setDescription(rs.getString("description"));
+      event.setUserId(rs.getString("user_id"));
+      event.setUserFirstName(rs.getString("user_first_name"));
+      event.setUserLastName(rs.getString("user_last_name"));
+      event.setCaseTypeId(rs.getString("case_type_id"));
+      event.setCaseTypeVersion(rs.getInt("case_type_version"));
+      event.setStateId(rs.getString("state_id"));
+      event.setStateName(rs.getString("state_name"));
+      event.setCreatedDate(rs.getTimestamp("created_date").toLocalDateTime());
+      event.setProxiedBy(rs.getString("proxied_by"));
+      event.setProxiedByFirstName(rs.getString("proxied_by_first_name"));
+      event.setProxiedByLastName(rs.getString("proxied_by_last_name"));
+      event.setSecurityClassification(SecurityClassification.valueOf(rs.getString("security_classification")));
+
+      String dataJson = rs.getString("data");
+      event.setData(defaultMapper.readValue(dataJson, new TypeReference<>() {}));
+
+      event.setDataClassification(Map.of());
+
+      decentralisedAuditEvent.setEvent(event);
+      return decentralisedAuditEvent;
+    }
+  }
   @SneakyThrows
   private long saveAuditRecord(DecentralisedCaseEvent details, String oldState, IdamService.User user) {
     var event = details.getEventDetails();
