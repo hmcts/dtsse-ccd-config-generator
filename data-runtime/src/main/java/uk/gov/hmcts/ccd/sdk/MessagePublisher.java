@@ -4,6 +4,7 @@ import java.io.File;
 import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Optional;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.core.JsonParser;
@@ -83,15 +84,15 @@ public class MessagePublisher {
             return;
         }
 
-        CaseEventDefinition caseEventDefinition = caseType.findCaseEvent(eventId).orElseThrow();
-        if (!caseEventDefinition.getPublish()) {
+        Optional<CaseEventDefinition> opt = caseType.findCaseEvent(eventId);
+        if (opt.isEmpty() || !opt.get().getPublish()) {
             log.info("Event {} is not marked for publishing, skipping message publication", eventId);
             return;
         }
 
         log.info("Publishing event {} for case {}", eventId, caseReference);
         var info = populateMessageInformation(instanceId, timestamp, caseReference, userId, caseDetails, caseType,
-            caseEventDefinition, oldState);
+            opt.get(), oldState);
 
         // Convert the MessageInformation object to a JSON string
         String messageInformationJson = mapper.writeValueAsString(info);
