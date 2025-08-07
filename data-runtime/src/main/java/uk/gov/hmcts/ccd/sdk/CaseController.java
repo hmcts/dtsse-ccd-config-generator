@@ -1,6 +1,5 @@
 package uk.gov.hmcts.ccd.sdk;
 
-import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
@@ -9,7 +8,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.jdbc.core.RowMapper;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -24,19 +22,15 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.util.UriComponentsBuilder;
-import uk.gov.hmcts.ccd.data.casedetails.SecurityClassification;
 import uk.gov.hmcts.ccd.data.persistence.dto.DecentralisedAuditEvent;
 import uk.gov.hmcts.ccd.data.persistence.dto.DecentralisedCaseDetails;
 import uk.gov.hmcts.ccd.data.persistence.dto.DecentralisedCaseEvent;
 import uk.gov.hmcts.ccd.data.persistence.dto.DecentralisedSubmitEventResponse;
 import uk.gov.hmcts.ccd.data.persistence.dto.DecentralisedUpdateSupplementaryDataResponse;
-import uk.gov.hmcts.ccd.domain.model.std.AuditEvent;
 import uk.gov.hmcts.reform.ccd.client.model.CallbackRequest;
 import uk.gov.hmcts.reform.ccd.client.model.CaseDetails;
 
 import java.net.URI;
-import java.sql.ResultSet;
-import java.sql.SQLException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -60,6 +54,7 @@ public class CaseController {
   private final IdempotencyEnforcer idempotencyEnforcer;
   private final MessagePublisher publisher;
   private final IdamService idam;
+  private final CaseEventHistoryService caseEventHistoryService;
 
   @Autowired
   public CaseController(TransactionTemplate transactionTemplate,
@@ -69,7 +64,8 @@ public class CaseController {
                         ObjectMapper mapper,
                         IdempotencyEnforcer idempotencyEnforcer,
                         MessagePublisher publisher,
-                        IdamService idam) {
+                        IdamService idam,
+                        CaseEventHistoryService caseEventHistoryService) {
     this.ndb = ndb;
     this.transactionTemplate = transactionTemplate;
     this.caseRepository = caseRepository;
@@ -81,6 +77,7 @@ public class CaseController {
     this.caseDataType = typeArgs[0];
     this.publisher = publisher;
     this.idam = idam;
+    this.caseEventHistoryService = caseEventHistoryService;
   }
 
   @GetMapping(
@@ -291,7 +288,8 @@ public class CaseController {
       throw new ResponseStatusException(HttpStatus.CONFLICT, "Case was updated concurrently");
     }
 
-    return saveAuditRecord(event, oldState, user);
+    var currentView = getCase(event.getCaseDetails().getReference()).getCaseDetails();
+    return caseEventHistoryService.saveAuditRecord(event, oldState, user, currentView);
   }
 
   @SneakyThrows
@@ -342,14 +340,7 @@ public class CaseController {
       produces = "application/json"
   )
   public ResponseEntity<List<DecentralisedAuditEvent>> loadHistory(@PathVariable("caseRef") long caseRef) {
-    final String sql = """
-            select * from ccd.case_event
-            where case_reference = :caseRef
-            order by id desc
-            """;
-
-      List<DecentralisedAuditEvent> history =
-          ndb.query(sql, Map.of("caseRef", caseRef), new DecentralisedAuditEventRowMapper());
+      List<DecentralisedAuditEvent> history = caseEventHistoryService.loadHistory(caseRef);
       return ResponseEntity.ok(history);
   }
 
@@ -366,112 +357,10 @@ public class CaseController {
   )
   public ResponseEntity<DecentralisedAuditEvent> loadHistoryEvent(@PathVariable("caseRef") long caseRef,
                                                                   @PathVariable("eventId") long eventId) {
-      final String sql = """
-          select * from ccd.case_event
-            where case_reference = :caseRef and id = :eventId
-         """;
-
-    DecentralisedAuditEvent event = ndb.queryForObject(sql, Map.of("caseRef", caseRef, "eventId",
-          eventId),
-        new DecentralisedAuditEventRowMapper());
+    DecentralisedAuditEvent event = caseEventHistoryService.loadHistoryEvent(caseRef, eventId);
     return ResponseEntity.ok(event);
   }
 
-  /**
-   * Reusable component to map a row from the ccd.case_event table to our DTOs.
-   * This encapsulates the transformation logic in one place.
-   */
-  private class DecentralisedAuditEventRowMapper implements RowMapper<DecentralisedAuditEvent> {
-
-    @SneakyThrows
-    @Override
-    public DecentralisedAuditEvent mapRow(ResultSet rs, int rowNum) {
-      DecentralisedAuditEvent decentralisedAuditEvent = new DecentralisedAuditEvent();
-      decentralisedAuditEvent.setId(rs.getLong("id"));
-      decentralisedAuditEvent.setCaseReference(rs.getLong("case_reference"));
-
-      AuditEvent event = new AuditEvent();
-      event.setId(rs.getLong("id")); // AuditEvent's internal ID
-      event.setEventId(rs.getString("event_id")); // The event trigger ID
-      event.setEventName(rs.getString("event_name"));
-      event.setSummary(rs.getString("summary"));
-      event.setDescription(rs.getString("description"));
-      event.setUserId(rs.getString("user_id"));
-      event.setUserFirstName(rs.getString("user_first_name"));
-      event.setUserLastName(rs.getString("user_last_name"));
-      event.setCaseTypeId(rs.getString("case_type_id"));
-      event.setCaseTypeVersion(rs.getInt("case_type_version"));
-      event.setStateId(rs.getString("state_id"));
-      event.setStateName(rs.getString("state_name"));
-      event.setCreatedDate(rs.getTimestamp("created_date").toLocalDateTime());
-      event.setProxiedBy(rs.getString("proxied_by"));
-      event.setProxiedByFirstName(rs.getString("proxied_by_first_name"));
-      event.setProxiedByLastName(rs.getString("proxied_by_last_name"));
-      event.setSecurityClassification(SecurityClassification.valueOf(rs.getString("security_classification")));
-
-      String dataJson = rs.getString("data");
-      event.setData(defaultMapper.readValue(dataJson, new TypeReference<>() {}));
-
-      event.setDataClassification(Map.of());
-
-      decentralisedAuditEvent.setEvent(event);
-      return decentralisedAuditEvent;
-    }
-  }
-  @SneakyThrows
-  private long saveAuditRecord(DecentralisedCaseEvent details, String oldState, IdamService.User user) {
-    var event = details.getEventDetails();
-    var currentView = getCase(details.getCaseDetails().getReference()).getCaseDetails();
-    var sql = """
-            insert into ccd.case_event (
-              data,
-              event_id,
-              user_id,
-              case_reference,
-              case_type_id,
-              case_type_version,
-              state_id,
-              user_first_name,
-              user_last_name,
-              event_name,
-              state_name,
-              summary,
-              description,
-              security_classification)
-            values (:data::jsonb, :event_id, :user_id, :case_reference, :case_type_id, :case_type_version, :state_id, :user_first_name, :user_last_name, :event_name, :state_name, :summary, :description, :security_classification::ccd.securityclassification)
-            returning id, created_date
-            """;
-
-    var params = new HashMap<String, Object>();
-    params.put("data", defaultMapper.writeValueAsString(currentView.getData()));
-    params.put("event_id", event.getEventId());
-    params.put("user_id", user.getUserDetails().getUid());
-    params.put("case_reference", currentView.getReference());
-    params.put("case_type_id", event.getCaseType());
-    params.put("case_type_version", 1); // TODO: do we need to track definition version if it is our definition?
-    params.put("state_id", currentView.getState());
-    params.put("user_first_name", user.getUserDetails().getGivenName());
-    params.put("user_last_name", user.getUserDetails().getFamilyName());
-    params.put("event_name", event.getEventName());
-    params.put("state_name", eventListener.nameForState(details.getEventDetails().getCaseType(), String.valueOf(currentView.getState())));
-    params.put("summary", event.getSummary());
-    params.put("description", event.getDescription());
-    params.put("security_classification", currentView.getSecurityClassification().toString());
-
-    var result = ndb.queryForMap(sql, params);
-    var eventId = (long) result.get("id");
-    var timestamp = ((java.sql.Timestamp) result.get("created_date")).toLocalDateTime();
-    this.publisher.publishEvent(
-        currentView.getReference(),
-        user.getUserDetails().getUid(),
-        event.getEventId(),
-        oldState,
-        toCaseDetails(details.getCaseDetails()),
-        eventId,
-        timestamp
-    );
-    return eventId;
-  }
 
   private CaseDetails toCaseDetails(uk.gov.hmcts.ccd.domain.model.definition.CaseDetails data) {
     return defaultMapper.convertValue(data, CaseDetails.class);
