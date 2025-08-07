@@ -35,7 +35,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -51,7 +50,6 @@ public class CaseController {
   private final CaseRepository caseRepository;
   private final Class caseDataType;
   private final IdempotencyEnforcer idempotencyEnforcer;
-  private final MessagePublisher publisher;
   private final IdamService idam;
   private final CaseEventHistoryService caseEventHistoryService;
   private final SupplementaryDataService supplementaryDataService;
@@ -63,7 +61,6 @@ public class CaseController {
                         CCDEventListener eventListener,
                         ObjectMapper mapper,
                         IdempotencyEnforcer idempotencyEnforcer,
-                        MessagePublisher publisher,
                         IdamService idam,
                         CaseEventHistoryService caseEventHistoryService,
                         SupplementaryDataService supplementaryDataService) {
@@ -76,7 +73,6 @@ public class CaseController {
     this.filteredMapper = mapper.copy().setAnnotationIntrospector(new FilterExternalFieldsInspector());
     Class<?>[] typeArgs = TypeResolver.resolveRawArguments(CaseRepository.class, caseRepository.getClass());
     this.caseDataType = typeArgs[0];
-    this.publisher = publisher;
     this.idam = idam;
     this.caseEventHistoryService = caseEventHistoryService;
     this.supplementaryDataService = supplementaryDataService;
