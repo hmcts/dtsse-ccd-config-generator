@@ -22,6 +22,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.util.UriComponentsBuilder;
+import uk.gov.hmcts.ccd.data.persistence.dto.DecentralisedCaseDetails;
 import uk.gov.hmcts.ccd.data.persistence.dto.DecentralisedCaseEvent;
 import uk.gov.hmcts.ccd.data.persistence.dto.DecentralisedUpdateSupplementaryDataResponse;
 import uk.gov.hmcts.reform.ccd.client.model.CallbackRequest;
@@ -79,7 +80,7 @@ public class CaseController {
       produces = "application/json"
   )
   @SneakyThrows
-  public List<Map<String, Object>> getCases(@RequestParam("case-refs") List<Long> caseRefs) {
+  public List<DecentralisedCaseDetails> getCases(@RequestParam("case-refs") List<Long> caseRefs) {
     var params = Map.of("caseRefs", caseRefs);
 
     var results = ndb.queryForList(
@@ -112,7 +113,7 @@ public class CaseController {
         .collect(Collectors.toList());
   }
 
-  public Map<String, Object> getCase(Long caseRef) {
+  public DecentralisedCaseDetails getCase(Long caseRef) {
     return getCases(List.of(caseRef)).get(0);
   }
 
@@ -121,7 +122,7 @@ public class CaseController {
    * This centralizes the transformation logic for both single and bulk endpoints.
    */
   @SneakyThrows
-  private Map<String, Object> processCaseRow(Map<String, Object> row) {
+  private DecentralisedCaseDetails processCaseRow(Map<String, Object> row) {
     var result = new HashMap<>(row);
 
     var data = defaultMapper.readValue((String) result.get("case_data"), caseDataType);
@@ -132,10 +133,10 @@ public class CaseController {
 
     result.put("data_classification", Map.of());
 
-    return Map.of(
-        "case_details", result,
-        "version", result.remove("global_version")
-    );
+    var response = new DecentralisedCaseDetails();
+    response.setVersion((Long) result.remove("global_version"));
+    response.setCaseDetails(defaultMapper.convertValue(result, uk.gov.hmcts.ccd.domain.model.definition.CaseDetails.class));
+    return response;
   }
 
   @PostMapping(
@@ -350,7 +351,7 @@ public class CaseController {
   @SneakyThrows
   private long saveAuditRecord(DecentralisedCaseEvent details, String oldState, IdamService.User user) {
     var event = details.getEventDetails();
-    var currentView = (Map) getCase(details.getCaseDetails().getReference()).get("case_details");
+    var currentView = getCase(details.getCaseDetails().getReference()).getCaseDetails();
     var sql = """
             insert into ccd.case_event (
               data,
@@ -372,26 +373,26 @@ public class CaseController {
             """;
 
     var params = new HashMap<String, Object>();
-    params.put("data", defaultMapper.writeValueAsString(currentView.get("case_data")));
+    params.put("data", defaultMapper.writeValueAsString(currentView.getData()));
     params.put("event_id", event.getEventId());
     params.put("user_id", user.getUserDetails().getUid());
-    params.put("case_reference", currentView.get("id"));
+    params.put("case_reference", currentView.getReference());
     params.put("case_type_id", event.getCaseType());
     params.put("case_type_version", 1); // TODO: do we need to track definition version if it is our definition?
-    params.put("state_id", currentView.get("state"));
+    params.put("state_id", currentView.getState());
     params.put("user_first_name", user.getUserDetails().getGivenName());
     params.put("user_last_name", user.getUserDetails().getFamilyName());
     params.put("event_name", event.getEventName());
-    params.put("state_name", eventListener.nameForState(details.getEventDetails().getCaseType(), String.valueOf(currentView.get("state"))));
+    params.put("state_name", eventListener.nameForState(details.getEventDetails().getCaseType(), String.valueOf(currentView.getState())));
     params.put("summary", event.getSummary());
     params.put("description", event.getDescription());
-    params.put("security_classification", currentView.get("security_classification"));
+    params.put("security_classification", currentView.getSecurityClassification().toString());
 
     var result = ndb.queryForMap(sql, params);
     var eventId = (long) result.get("id");
     var timestamp = ((java.sql.Timestamp) result.get("created_date")).toLocalDateTime();
     this.publisher.publishEvent(
-        (Long) currentView.get("id"),
+        currentView.getReference(),
         user.getUserDetails().getUid(),
         event.getEventId(),
         oldState,
