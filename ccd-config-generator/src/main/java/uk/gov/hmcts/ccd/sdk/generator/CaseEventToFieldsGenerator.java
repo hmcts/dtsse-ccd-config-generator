@@ -11,6 +11,7 @@ import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import org.springframework.stereotype.Component;
@@ -45,7 +46,12 @@ class CaseEventToFieldsGenerator<T, S, R extends HasRole> implements ConfigGener
           info.put("DisplayContext", context);
           info.put("PageFieldDisplayOrder", field.getPageFieldDisplayOrder());
           if (event.isPublishToCamunda()) {
-            info.put("Publish", "Y");
+            if (event.getUnpublishedFields() != null && !Arrays.asList(event.getUnpublishedFields()).isEmpty()
+                && Arrays.asList(event.getUnpublishedFields()).contains(field.getId())) {
+              info.put("Publish", "N");
+            } else {
+              info.put("Publish", "Y");
+            }
           }
           Object pageId = field.getPage();
           if (pageId == null) {
