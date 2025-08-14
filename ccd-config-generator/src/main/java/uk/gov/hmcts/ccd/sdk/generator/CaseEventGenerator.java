@@ -10,13 +10,13 @@ import java.io.File;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 import org.springframework.stereotype.Component;
-import org.springframework.util.CollectionUtils;
 import uk.gov.hmcts.ccd.sdk.ResolvedCCDConfig;
 import uk.gov.hmcts.ccd.sdk.api.Event;
 import uk.gov.hmcts.ccd.sdk.api.HasRole;
@@ -79,7 +79,7 @@ class CaseEventGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
     } else {
       data.put("Publish", "N");
     }
-    if (!CollectionUtils.isEmpty(event.getUnpublishedFields())) {
+    if (event.getUnpublishedFields() != null && !Arrays.asList(event.getUnpublishedFields()).isEmpty()) {
       data.put("UnpublishedFields", event.getUnpublishedFields());
     }
     if (!Strings.isNullOrEmpty(event.getEndButtonLabel())) {

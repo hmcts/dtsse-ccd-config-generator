@@ -11,10 +11,10 @@ import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import org.springframework.stereotype.Component;
-import org.springframework.util.CollectionUtils;
 import uk.gov.hmcts.ccd.sdk.ResolvedCCDConfig;
 import uk.gov.hmcts.ccd.sdk.api.Event;
 import uk.gov.hmcts.ccd.sdk.api.Field;
@@ -46,8 +46,8 @@ class CaseEventToFieldsGenerator<T, S, R extends HasRole> implements ConfigGener
           info.put("DisplayContext", context);
           info.put("PageFieldDisplayOrder", field.getPageFieldDisplayOrder());
           if (event.isPublishToCamunda()) {
-            if (!CollectionUtils.isEmpty(event.getUnpublishedFields())
-                && event.getUnpublishedFields().contains(field.getId())) {
+            if (event.getUnpublishedFields() != null && !Arrays.asList(event.getUnpublishedFields()).isEmpty()
+                && Arrays.asList(event.getUnpublishedFields()).contains(field.getId())) {
               info.put("Publish", "N");
             } else {
               info.put("Publish", "Y");
