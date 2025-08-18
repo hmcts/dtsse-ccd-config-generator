@@ -36,8 +36,7 @@
     "PageColumnNumber": 1,
     "PageFieldDisplayOrder": 3,
     "DisplayContext": "COMPLEX",
-    "PageDisplayOrder": 1,
-    "Publish": "N"
+    "PageDisplayOrder": 1
   },
   {
     "CaseEventID" : "allocatedJudge",
