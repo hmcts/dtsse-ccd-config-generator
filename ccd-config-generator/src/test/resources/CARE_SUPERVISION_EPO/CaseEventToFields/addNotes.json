@@ -78,8 +78,7 @@
     "PageDisplayOrder" : 1,
     "PageFieldDisplayOrder" : 6,
     "PageID" : 1,
-    "ShowSummaryChangeOption" : "Y",
-    "Publish": "Y"
+    "ShowSummaryChangeOption" : "Y"
   },
   {
     "PageID": 1,

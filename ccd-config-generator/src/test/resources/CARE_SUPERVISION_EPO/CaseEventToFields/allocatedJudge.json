@@ -12,8 +12,7 @@
     "PageDisplayOrder": 1,
     "CaseEventFieldHint" : "Event hint",
     "RetainHiddenValue" : "Y",
-    "CaseEventFieldLabel" : "Event label",
-    "Publish": "Y"
+    "CaseEventFieldLabel" : "Event label"
   },
   {
     "PageID": "AllocatedJudge",

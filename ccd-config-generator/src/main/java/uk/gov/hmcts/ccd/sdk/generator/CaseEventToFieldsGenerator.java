@@ -11,14 +11,11 @@ import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import org.springframework.stereotype.Component;
 import uk.gov.hmcts.ccd.sdk.ResolvedCCDConfig;
+import uk.gov.hmcts.ccd.sdk.api.DisplayContext;
 import uk.gov.hmcts.ccd.sdk.api.Event;
 import uk.gov.hmcts.ccd.sdk.api.Field;
 import uk.gov.hmcts.ccd.sdk.api.FieldCollection;
@@ -49,10 +46,7 @@ class CaseEventToFieldsGenerator<T, S, R extends HasRole> implements ConfigGener
           info.put("DisplayContext", context);
           info.put("PageFieldDisplayOrder", field.getPageFieldDisplayOrder());
           if (event.isPublishToCamunda()) {
-            Set<String> unpublished = event.getUnpublishedFields() != null
-                ? new HashSet<>(Arrays.asList(event.getUnpublishedFields()))
-                : Collections.emptySet();
-            if (!unpublished.contains(field.getId())) {
+            if (!context.equals(DisplayContext.Complex.toString().toUpperCase())) {
               info.put("Publish", "Y");
             }
           }
