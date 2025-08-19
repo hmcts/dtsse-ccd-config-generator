@@ -33,7 +33,6 @@ public class Event<T, R extends HasRole, S> {
   private boolean showSummary;
   private boolean showEventNotes;
   private boolean publishToCamunda;
-  private String[] unpublishedFields;
   private Integer ttlIncrement;
   private AboutToStart<T, S> aboutToStartCallback;
   private AboutToSubmit<T, S> aboutToSubmitCallback;
@@ -116,12 +115,6 @@ public class Event<T, R extends HasRole, S> {
 
     public EventBuilder<T, R, S> showSummary() {
       this.showSummary = true;
-      return this;
-    }
-
-    public EventBuilder<T, R, S> publishToCamundaWithoutFields(String... unpublishedFields) {
-      this.publishToCamunda = true;
-      this.unpublishedFields = unpublishedFields;
       return this;
     }
 
