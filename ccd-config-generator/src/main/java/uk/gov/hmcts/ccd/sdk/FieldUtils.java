@@ -46,4 +46,12 @@ public class FieldUtils {
       .findFirst()
       .map(f -> f.getAnnotation(JsonUnwrapped.class));
   }
+
+  public static boolean hasHistoryField(Class caseDataClass) {
+    return ReflectionUtils
+        .getAllFields(caseDataClass, withName("caseHistory"))
+        .stream()
+        .findFirst()
+        .isPresent();
+  }
 }

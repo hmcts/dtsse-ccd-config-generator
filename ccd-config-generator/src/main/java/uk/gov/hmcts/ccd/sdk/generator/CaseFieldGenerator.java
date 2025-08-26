@@ -4,6 +4,7 @@ import static org.apache.commons.lang3.StringUtils.capitalize;
 import static org.apache.commons.lang3.StringUtils.defaultIfEmpty;
 import static uk.gov.hmcts.ccd.sdk.FieldUtils.getCaseFields;
 import static uk.gov.hmcts.ccd.sdk.FieldUtils.getFieldId;
+import static uk.gov.hmcts.ccd.sdk.FieldUtils.hasHistoryField;
 import static uk.gov.hmcts.ccd.sdk.FieldUtils.isUnwrappedField;
 
 import com.fasterxml.jackson.annotation.JsonUnwrapped;
@@ -44,10 +45,13 @@ class CaseFieldGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
       File outputFolder, ResolvedCCDConfig<T, S, R> config) {
     List<Map<String, Object>> fields = toComplex(config.getCaseClass(), config.getCaseType());
 
-    Map<String, Object> history = getField(config.getCaseType(), "caseHistory");
-    history.put("Label", " ");
-    history.put("FieldType", "CaseHistoryViewer");
-    fields.add(history);
+    //allows services to explicitly define the history field for access control to history tab
+    if (!hasHistoryField(config.getCaseClass())) {
+      Map<String, Object> history = getField(config.getCaseType(), "caseHistory");
+      history.put("Label", " ");
+      history.put("FieldType", "CaseHistoryViewer");
+      fields.add(history);
+    }
 
     fields.addAll(getExplicitFields(config));
 
