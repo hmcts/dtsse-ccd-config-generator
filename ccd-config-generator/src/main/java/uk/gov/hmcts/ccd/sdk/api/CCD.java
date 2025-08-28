@@ -46,4 +46,8 @@ public @interface CCD {
   boolean ignore() default false;
 
   boolean searchable() default true;
+
+  int min() default 0;
+
+  int max() default Integer.MAX_VALUE;
 }
