@@ -112,7 +112,7 @@ class CaseFieldGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
         if (!Strings.isNullOrEmpty(cf.categoryID())) {
           fieldInfo.put("CategoryID", cf.categoryID());
         }
-        if (cf.min() > 0) {
+        if (cf.min() > Integer.MIN_VALUE) {
           fieldInfo.put("Min", cf.min());
         }
         if (cf.max() < Integer.MAX_VALUE) {
