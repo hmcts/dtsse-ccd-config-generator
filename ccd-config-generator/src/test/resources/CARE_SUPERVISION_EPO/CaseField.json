@@ -989,5 +989,15 @@
     "ID" : "nativeLong",
     "Label" : " ",
     "LiveFrom" : "01/01/2017"
+  },
+  {
+    "CaseTypeID" : "CARE_SUPERVISION_EPO",
+    "FieldType" : "TextArea",
+    "FieldTypeParameter" : "EPOType",
+    "ID" : "epoTypeCustom",
+    "Label" : "Type of EPO",
+    "LiveFrom" : "01/01/2017",
+    "Max" : 255,
+    "Min" : -255
   }
 ]

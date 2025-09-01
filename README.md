@@ -577,7 +577,7 @@ Pull requests are very welcome. Please ensure the [tests](https://github.com/hmc
 
 ### Local development
 
-In order to link a local version of CCD config generator to a project you can use the `publisTohMavenLocal` gradle task then add:
+In order to link a local version of CCD config generator to a project you can use the `publishToMavenLocal` gradle task then add:
 
 ```groovy
   implementation group: 'com.github.hmcts', name: 'ccd-config-generator', version: 'DEV-SNAPSHOT'

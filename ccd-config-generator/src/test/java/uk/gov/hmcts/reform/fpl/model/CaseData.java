@@ -413,6 +413,15 @@ public class CaseData {
   private DynamicMultiSelectList documentList;
 
   @CCD(
+          typeOverride = TextArea,
+          typeParameterOverride = "EPOType",
+          label = "Type of EPO",
+          min = -255,
+          max = 255
+  )
+  private String epoTypeCustom;
+
+  @CCD(
           access = {NoticeOfChangeAccess.class}
   )
   private ChangeOrganisationRequest<CaseRoleID> changeOrganisationRequestField;
