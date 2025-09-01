@@ -41,7 +41,6 @@ public class CaseController {
   private final CCDEventListener eventListener;
 
   private final CaseRepository caseRepository;
-  private final ObjectMapper getMapper;
   private final Class caseDataType;
   private final IdempotencyEnforcer idempotencyEnforcer;
 
@@ -52,8 +51,7 @@ public class CaseController {
                         CaseRepository<?> caseRepository,
                         CCDEventListener eventListener,
                         ObjectMapper mapper,
-                        IdempotencyEnforcer idempotencyEnforcer,
-                        @Qualifier("getMapper") ObjectMapper getMapper) {
+                        IdempotencyEnforcer idempotencyEnforcer) {
     this.db = db;
     this.ndb = ndb;
     this.transactionTemplate = transactionTemplate;
@@ -62,7 +60,6 @@ public class CaseController {
     this.eventListener = eventListener;
     this.idempotencyEnforcer = idempotencyEnforcer;
     this.filteredMapper = mapper.copy().setAnnotationIntrospector(new FilterExternalFieldsInspector());
-    this.getMapper = getMapper;
     Class<?>[] typeArgs = TypeResolver.resolveRawArguments(CaseRepository.class, caseRepository.getClass());
     this.caseDataType = typeArgs[0];
   }
@@ -118,7 +115,7 @@ public class CaseController {
     var result = new HashMap<>(row);
 
     var data = defaultMapper.readValue((String) result.get("case_data"), caseDataType);
-    result.put("case_data", caseRepository.getCase((Long) row.get("id"), data));
+    result.put("case_data", caseRepository.getCase((Long) row.get("id"), (String) row.get("state"), data));
 
     var supplementaryDataJson = row.get("supplementary_data");
     result.put("supplementary_data", defaultMapper.readValue(supplementaryDataJson.toString(), Map.class));
@@ -160,8 +157,8 @@ public class CaseController {
                             'raise_exception' -- on setting a null value
                         )
                     where reference = :reference
-                    returning 
-                      jsonb_build_object('supplementary_data', supplementary_data)::text 
+                    returning
+                      jsonb_build_object('supplementary_data', supplementary_data)::text
                       as supplementary_data
                     """,
                 Map.of(
@@ -303,7 +300,7 @@ public class CaseController {
              select jsonb_agg(
                jsonb_build_object('id', id) ||
                jsonb_build_object('case_reference', case_reference) ||
-               jsonb_build_object('event', 
+               jsonb_build_object('event',
                  to_jsonb(e) - 'case_reference' - 'event_id'
                     || jsonb_build_object('id', event_id) -- See AuditEvent superclass
               )
@@ -325,7 +322,7 @@ public class CaseController {
         """
            select jsonb_build_object('id', id) ||
                jsonb_build_object('case_reference', case_reference) ||
-               jsonb_build_object('event', 
+               jsonb_build_object('event',
                  to_jsonb(e) - 'case_reference' - 'event_id'
                     || jsonb_build_object('id', event_id) -- See AuditEvent superclass
               )
