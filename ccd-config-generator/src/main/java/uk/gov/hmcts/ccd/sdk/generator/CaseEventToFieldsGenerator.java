@@ -15,6 +15,7 @@ import java.util.List;
 import java.util.Map;
 import org.springframework.stereotype.Component;
 import uk.gov.hmcts.ccd.sdk.ResolvedCCDConfig;
+import uk.gov.hmcts.ccd.sdk.api.DisplayContext;
 import uk.gov.hmcts.ccd.sdk.api.Event;
 import uk.gov.hmcts.ccd.sdk.api.Field;
 import uk.gov.hmcts.ccd.sdk.api.FieldCollection;
@@ -45,7 +46,9 @@ class CaseEventToFieldsGenerator<T, S, R extends HasRole> implements ConfigGener
           info.put("DisplayContext", context);
           info.put("PageFieldDisplayOrder", field.getPageFieldDisplayOrder());
           if (event.isPublishToCamunda()) {
-            info.put("Publish", "Y");
+            if (!context.equals(DisplayContext.Complex.toString().toUpperCase())) {
+              info.put("Publish", "Y");
+            }
           }
           Object pageId = field.getPage();
           if (pageId == null) {

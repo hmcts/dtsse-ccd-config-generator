@@ -122,7 +122,6 @@ public class Event<T, R extends HasRole, S> {
       return this;
     }
 
-
     public EventBuilder<T, R, S> publishToCamunda(boolean publishToCamunda) {
       this.publishToCamunda = publishToCamunda;
       return this;
