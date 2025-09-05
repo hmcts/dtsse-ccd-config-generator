@@ -3,7 +3,6 @@ package uk.gov.hmcts.ccd.sdk;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
-import net.jodah.typetools.TypeResolver;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -31,12 +30,10 @@ import uk.gov.hmcts.reform.ccd.client.model.CallbackRequest;
 import uk.gov.hmcts.reform.ccd.client.model.CaseDetails;
 
 import java.net.URI;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.stream.Collectors;
 
 @Slf4j
 @RestController
@@ -46,19 +43,17 @@ public class CaseController {
   private final NamedParameterJdbcTemplate ndb;
   private final TransactionTemplate transactionTemplate;
   private final ObjectMapper defaultMapper;
-  private final ObjectMapper filteredMapper;
   private final CCDEventListener eventListener;
-  private final CaseRepository caseRepository;
-  private final Class caseDataType;
   private final IdempotencyEnforcer idempotencyEnforcer;
   private final IdamService idam;
   private final CaseEventHistoryService caseEventHistoryService;
   private final SupplementaryDataService supplementaryDataService;
+  private final CCDCaseRepository caseRepository;
 
   @Autowired
   public CaseController(TransactionTemplate transactionTemplate,
                         NamedParameterJdbcTemplate ndb,
-                        CaseRepository<?> caseRepository,
+                        CCDCaseRepository caseRepository,
                         CCDEventListener eventListener,
                         ObjectMapper mapper,
                         IdempotencyEnforcer idempotencyEnforcer,
@@ -71,9 +66,6 @@ public class CaseController {
     this.defaultMapper = mapper;
     this.eventListener = eventListener;
     this.idempotencyEnforcer = idempotencyEnforcer;
-    this.filteredMapper = mapper.copy().setAnnotationIntrospector(new FilterExternalFieldsInspector());
-    Class<?>[] typeArgs = TypeResolver.resolveRawArguments(CaseRepository.class, caseRepository.getClass());
-    this.caseDataType = typeArgs[0];
     this.idam = idam;
     this.caseEventHistoryService = caseEventHistoryService;
     this.supplementaryDataService = supplementaryDataService;
@@ -86,61 +78,7 @@ public class CaseController {
   @SneakyThrows
   public List<DecentralisedCaseDetails> getCases(@RequestParam("case-refs") List<Long> caseRefs) {
     log.info("Fetching cases for references: {}", caseRefs);
-    var params = Map.of("caseRefs", caseRefs);
-
-    var results = ndb.queryForList(
-        """
-        select
-              reference as id,
-              -- Format timestamp in iso 8601
-              to_json(c.created_date)#>>'{}' as created_date,
-              jurisdiction,
-              case_type_id,
-              state,
-              data::text as case_data,
-              security_classification::text,
-              version,
-              to_json(last_state_modified_date)#>>'{}' as last_state_modified_date,
-              to_json(coalesce(c.last_modified, c.created_date))#>>'{}' as last_modified,
-              supplementary_data::text,
-              coalesce(most_recent_event.id, 2) as global_version
-         from ccd.case_data c
-             left join lateral (
-               select ce.id from ccd.case_event ce where ce.case_reference = c.reference
-               order by ce.id DESC limit 1
-             ) as most_recent_event on true
-         where reference IN (:caseRefs)
-        """, params);
-
-    return results.stream()
-        .map(this::processCaseRow)
-        .collect(Collectors.toList());
-  }
-
-  public DecentralisedCaseDetails getCase(Long caseRef) {
-    return getCases(List.of(caseRef)).get(0);
-  }
-
-  /**
-   * Helper method to process a single row of case data from the database.
-   * This centralizes the transformation logic for both single and bulk endpoints.
-   */
-  @SneakyThrows
-  private DecentralisedCaseDetails processCaseRow(Map<String, Object> row) {
-    var result = new HashMap<>(row);
-
-    var data = defaultMapper.readValue((String) result.get("case_data"), caseDataType);
-    result.put("case_data", caseRepository.getCase((Long) row.get("id"), data));
-
-    var supplementaryDataJson = row.get("supplementary_data");
-    result.put("supplementary_data", defaultMapper.readValue(supplementaryDataJson.toString(), Map.class));
-
-    result.put("data_classification", Map.of());
-
-    var response = new DecentralisedCaseDetails();
-    response.setVersion((Long) result.remove("global_version"));
-    response.setCaseDetails(defaultMapper.convertValue(result, uk.gov.hmcts.ccd.domain.model.definition.CaseDetails.class));
-    return response;
+    return caseRepository.getCases(caseRefs);
   }
 
   @PostMapping(
@@ -193,7 +131,7 @@ public class CaseController {
       dispatchSubmitted(event);
     }
 
-    var details = getCase(event.getCaseDetails().getReference());
+    var details = caseRepository.getCase(event.getCaseDetails().getReference());
     var response = new DecentralisedSubmitEventResponse();
     response.setCaseDetails(details);
     return ResponseEntity.ok(response);
@@ -201,16 +139,10 @@ public class CaseController {
 
   @SneakyThrows
   private long saveCaseReturningAuditId(DecentralisedCaseEvent event, IdamService.User user) {
-    var caseData = defaultMapper.convertValue(event.getCaseDetails().getData(), caseDataType);
-
-    var state = event.getCaseDetails().getState();
-    var caseDetails = event.getCaseDetails();
     int version = Optional.ofNullable(event.getCaseDetails().getVersion()).orElse(1);
-    var data = filteredMapper.writeValueAsString(caseData);
-    var oldState = event.getCaseDetailsBefore() != null
-        ? event.getCaseDetailsBefore().getState()
-        : null;
 
+    String data = caseRepository.serialiseDataFilteringExternalFields(event.getCaseDetails());
+    var caseDetails = event.getCaseDetails();
     // Upsert the case - create if it doesn't exist, update if it does.
     var sql = """
             insert into ccd.case_data (last_modified, jurisdiction, case_type_id, state, data, reference, security_classification, version)
@@ -241,7 +173,7 @@ public class CaseController {
     var params = Map.of(
         "jurisdiction", caseDetails.getJurisdiction(),
         "case_type_id", caseDetails.getCaseTypeId(),
-        "state", state,
+        "state", event.getCaseDetails().getState(),
         "data", data,
         "reference", caseDetails.getReference(),
         "security_classification", caseDetails.getSecurityClassification().toString(),
@@ -253,8 +185,8 @@ public class CaseController {
       throw new ResponseStatusException(HttpStatus.CONFLICT, "Case was updated concurrently");
     }
 
-    var currentView = getCase(event.getCaseDetails().getReference()).getCaseDetails();
-    return caseEventHistoryService.saveAuditRecord(event, oldState, user, currentView);
+    var currentView = caseRepository.getCase(event.getCaseDetails().getReference()).getCaseDetails();
+    return caseEventHistoryService.saveAuditRecord(event, user, currentView);
   }
 
   @SneakyThrows

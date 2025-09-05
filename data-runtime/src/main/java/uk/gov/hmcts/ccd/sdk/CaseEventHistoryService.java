@@ -51,8 +51,11 @@ public class CaseEventHistoryService {
     }
 
     @SneakyThrows
-    public long saveAuditRecord(DecentralisedCaseEvent details, String oldState, IdamService.User user, uk.gov.hmcts.ccd.domain.model.definition.CaseDetails currentView) {
-        var event = details.getEventDetails();
+    public long saveAuditRecord(DecentralisedCaseEvent event, IdamService.User user, uk.gov.hmcts.ccd.domain.model.definition.CaseDetails currentView) {
+        var oldState = event.getCaseDetailsBefore() != null
+            ? event.getCaseDetailsBefore().getState()
+            : null;
+        var eventDetails = event.getEventDetails();
         var sql = """
                 insert into ccd.case_event (
                   data,
@@ -75,31 +78,31 @@ public class CaseEventHistoryService {
 
         var params = new HashMap<String, Object>();
         params.put("data", defaultMapper.writeValueAsString(currentView.getData()));
-        params.put("event_id", event.getEventId());
+        params.put("event_id", eventDetails.getEventId());
         params.put("user_id", user.getUserDetails().getUid());
         params.put("case_reference", currentView.getReference());
-        params.put("case_type_id", event.getCaseType());
+        params.put("case_type_id", eventDetails.getCaseType());
         params.put("case_type_version", 1);
         params.put("state_id", currentView.getState());
         params.put("user_first_name", user.getUserDetails().getGivenName());
         params.put("user_last_name", user.getUserDetails().getFamilyName());
-        params.put("event_name", event.getEventName());
-        params.put("state_name", eventListener.nameForState(details.getEventDetails().getCaseType(), String.valueOf(currentView.getState())));
-        params.put("summary", event.getSummary());
-        params.put("description", event.getDescription());
+        params.put("event_name", eventDetails.getEventName());
+        params.put("state_name", eventListener.nameForState(eventDetails.getCaseType(), String.valueOf(currentView.getState())));
+        params.put("summary", eventDetails.getSummary());
+        params.put("description", eventDetails.getDescription());
         params.put("security_classification", currentView.getSecurityClassification().toString());
 
         var result = ndb.queryForMap(sql, params);
         var eventId = (long) result.get("id");
         var timestamp = ((java.sql.Timestamp) result.get("created_date")).toLocalDateTime();
         if (this.publisher.isPresent()) {
-            log.info("Publishing event {} for case reference: {}", event.getEventId(), currentView.getReference());
+            log.info("Publishing event {} for case reference: {}", eventDetails.getEventId(), currentView.getReference());
             this.publisher.get().publishEvent(
                 currentView.getReference(),
                 user.getUserDetails().getUid(),
-                event.getEventId(),
+                eventDetails.getEventId(),
                 oldState,
-                toCaseDetails(details.getCaseDetails()),
+                toCaseDetails(event.getCaseDetails()),
                 eventId,
                 timestamp
             );
