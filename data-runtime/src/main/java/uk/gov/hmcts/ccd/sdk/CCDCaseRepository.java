@@ -58,7 +58,7 @@ public class CCDCaseRepository {
                   coalesce(most_recent_event.id, 2) as global_version
              from ccd.case_data c
                  left join lateral (
-                   select ce.id from ccd.case_event ce where ce.case_reference = c.reference
+                   select ce.id from ccd.case_event ce where ce.case_data_id = c.id
                    order by ce.id DESC limit 1
                  ) as most_recent_event on true
              where reference IN (:caseRefs)

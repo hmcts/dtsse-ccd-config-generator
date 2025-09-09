@@ -32,8 +32,11 @@ public class CaseEventHistoryService {
 
     public List<DecentralisedAuditEvent> loadHistory(long caseRef) {
         final String sql = """
-                select * from ccd.case_event
-                where case_reference = :caseRef
+                select ce.*,
+                   cd.reference as "case_reference"
+                from ccd.case_event ce
+                     join ccd.case_data cd on cd.id = ce.case_data_id
+                where cd.reference = :caseRef
                 order by id desc
                 """;
 
@@ -42,8 +45,11 @@ public class CaseEventHistoryService {
 
     public DecentralisedAuditEvent loadHistoryEvent(long caseRef, long eventId) {
         final String sql = """
-            select * from ccd.case_event
-              where case_reference = :caseRef and id = :eventId
+            select ce.*,
+                   cd.reference as "case_reference"
+            from ccd.case_event ce
+                 join ccd.case_data cd on cd.id = ce.case_data_id
+              where cd.reference = :caseRef and ce.id = :eventId
            """;
 
         return ndb.queryForObject(sql, Map.of("caseRef", caseRef, "eventId", eventId),
@@ -61,7 +67,7 @@ public class CaseEventHistoryService {
                   data,
                   event_id,
                   user_id,
-                  case_reference,
+                  case_data_id,
                   case_type_id,
                   case_type_version,
                   state_id,
@@ -72,7 +78,7 @@ public class CaseEventHistoryService {
                   summary,
                   description,
                   security_classification)
-                values (:data::jsonb, :event_id, :user_id, :case_reference, :case_type_id, :case_type_version, :state_id, :user_first_name, :user_last_name, :event_name, :state_name, :summary, :description, :security_classification::ccd.securityclassification)
+                values (:data::jsonb, :event_id, :user_id, :case_data_id, :case_type_id, :case_type_version, :state_id, :user_first_name, :user_last_name, :event_name, :state_name, :summary, :description, :security_classification::ccd.securityclassification)
                 returning id, created_date
                 """;
 
@@ -80,7 +86,7 @@ public class CaseEventHistoryService {
         params.put("data", defaultMapper.writeValueAsString(currentView.getData()));
         params.put("event_id", eventDetails.getEventId());
         params.put("user_id", user.getUserDetails().getUid());
-        params.put("case_reference", currentView.getReference());
+        params.put("case_data_id", event.getInternalCaseId());
         params.put("case_type_id", eventDetails.getCaseType());
         params.put("case_type_version", 1);
         params.put("state_id", currentView.getState());

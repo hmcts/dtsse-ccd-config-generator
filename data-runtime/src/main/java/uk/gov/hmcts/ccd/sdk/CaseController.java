@@ -145,8 +145,8 @@ public class CaseController {
     var caseDetails = event.getCaseDetails();
     // Upsert the case - create if it doesn't exist, update if it does.
     var sql = """
-            insert into ccd.case_data (last_modified, jurisdiction, case_type_id, state, data, reference, security_classification, version)
-            values (now(), :jurisdiction, :case_type_id, :state, (:data::jsonb), :reference, :security_classification::ccd.securityclassification, :version)
+            insert into ccd.case_data (last_modified, jurisdiction, case_type_id, state, data, reference, security_classification, version, id)
+            values (now(), :jurisdiction, :case_type_id, :state, (:data::jsonb), :reference, :security_classification::ccd.securityclassification, :version, :id)
             on conflict (reference)
             do update set
                 state = excluded.state,
@@ -177,7 +177,8 @@ public class CaseController {
         "data", data,
         "reference", caseDetails.getReference(),
         "security_classification", caseDetails.getSecurityClassification().toString(),
-        "version", version
+        "version", version,
+        "id", event.getInternalCaseId()
     );
 
     var rowsAffected = ndb.update(sql, params);
