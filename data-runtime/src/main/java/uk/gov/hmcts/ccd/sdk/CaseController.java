@@ -1,9 +1,9 @@
 package uk.gov.hmcts.ccd.sdk;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import lombok.RequiredArgsConstructor;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -38,6 +38,7 @@ import java.util.Optional;
 @Slf4j
 @RestController
 @RequestMapping(path = "/ccd-persistence")
+@RequiredArgsConstructor
 public class CaseController {
 
   private final NamedParameterJdbcTemplate ndb;
@@ -49,27 +50,6 @@ public class CaseController {
   private final CaseEventHistoryService caseEventHistoryService;
   private final SupplementaryDataService supplementaryDataService;
   private final CCDCaseRepository caseRepository;
-
-  @Autowired
-  public CaseController(TransactionTemplate transactionTemplate,
-                        NamedParameterJdbcTemplate ndb,
-                        CCDCaseRepository caseRepository,
-                        CCDEventListener eventListener,
-                        ObjectMapper mapper,
-                        IdempotencyEnforcer idempotencyEnforcer,
-                        IdamService idam,
-                        CaseEventHistoryService caseEventHistoryService,
-                        SupplementaryDataService supplementaryDataService) {
-    this.ndb = ndb;
-    this.transactionTemplate = transactionTemplate;
-    this.caseRepository = caseRepository;
-    this.defaultMapper = mapper;
-    this.eventListener = eventListener;
-    this.idempotencyEnforcer = idempotencyEnforcer;
-    this.idam = idam;
-    this.caseEventHistoryService = caseEventHistoryService;
-    this.supplementaryDataService = supplementaryDataService;
-  }
 
   @GetMapping(
       value = "/cases", // Mapped to the root /cases endpoint
