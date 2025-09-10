@@ -27,30 +27,16 @@ rename column case_reference to case_data_id;
 alter table ccd.case_event
 add constraint case_event_case_data_id_fkey foreign key (case_data_id) references ccd.case_data(id);
 
--- Update es_queue table to use case_data_id for consistency
--- First drop the existing foreign key constraint
+-- Use a similar approach to the revised CCD indexing strategy https://tools.hmcts.net/jira/browse/CCD-6024
+-- This allows the same case to be in the queue multiple times and avoids logstash indexing blocking case updates.
 alter table ccd.es_queue
-drop constraint es_queue_reference_fkey;
+drop column reference;
 
-delete from ccd.es_queue;
-
--- Rename the column from reference to case_data_id
-alter table ccd.es_queue
-rename column reference to case_data_id;
-
--- Add the new foreign key constraint
-alter table ccd.es_queue
-add constraint es_queue_case_data_id_fkey foreign key (case_data_id) references ccd.case_data(id);
-
--- Update the trigger function to use the new column name
 create or replace function add_to_es_queue() returns trigger
   language plpgsql
     as $$
 begin
-insert into ccd.es_queue (case_data_id, id)
-values (new.case_data_id, new.id)
-  on conflict (case_data_id)
-                do update set id = excluded.id
-                   where es_queue.id < excluded.id;
+insert into ccd.es_queue (id)
+values (new.id);
 return new;
 end $$;

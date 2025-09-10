@@ -9,7 +9,10 @@ repositories {
 
 dependencies {
     implementation project(':ccd-config-generator')
-    implementation 'com.github.hmcts.rse-cft-lib:ccd-lib:ccd-lib-0.4'
+    // A filtered set of useful CCD POJOs including DTOs and other utilities.
+    implementation ('com.github.hmcts.rse-cft-lib:ccd-lib:ccd-lib-0.4') {
+        transitive = false
+    }
     implementation group: 'org.springframework.boot', name: 'spring-boot-starter-web', version: '3.4.2'
     implementation group: 'org.springframework.boot', name: 'spring-boot-starter-jdbc', version: '3.5.3'
     implementation('com.github.hmcts:idam-java-client:3.0.4') {
