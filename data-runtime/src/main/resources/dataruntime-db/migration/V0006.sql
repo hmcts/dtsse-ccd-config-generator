@@ -1,0 +1,5 @@
+alter table case_data
+    alter column created_date set default (now() at time zone 'UTC');
+
+alter table case_event
+    alter column created_date set default (now() at time zone 'UTC');
