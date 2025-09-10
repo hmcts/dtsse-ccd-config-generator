@@ -13,13 +13,3 @@ alter table ccd.es_queue add constraint es_queue_reference_fkey foreign key (ref
 
 alter table ccd.es_queue drop constraint es_queue_id_fkey;
 alter table ccd.es_queue add constraint es_queue_id_fkey foreign key (id) references ccd.case_event(id) on delete cascade;
-
-create table ccd.message_queue_candidates (
-     id bigserial primary key,
-     message_type varchar(70) not null,
-     time_stamp timestamp without time zone not null default now(),
-     published timestamp without time zone,
-     message_information jsonb not null
-);
-
-create index on ccd.message_queue_candidates (time_stamp);

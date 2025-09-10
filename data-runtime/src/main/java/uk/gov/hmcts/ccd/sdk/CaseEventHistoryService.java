@@ -57,7 +57,7 @@ public class CaseEventHistoryService {
     }
 
     @SneakyThrows
-    public long saveAuditRecord(DecentralisedCaseEvent event, IdamService.User user, uk.gov.hmcts.ccd.domain.model.definition.CaseDetails currentView) {
+    public long saveAuditRecord(DecentralisedCaseEvent event, IdamService.User user, uk.gov.hmcts.ccd.domain.model.definition.CaseDetails currentView, long caseDataId) {
         var oldState = event.getCaseDetailsBefore() != null
             ? event.getCaseDetailsBefore().getState()
             : null;
@@ -86,7 +86,7 @@ public class CaseEventHistoryService {
         params.put("data", defaultMapper.writeValueAsString(currentView.getData()));
         params.put("event_id", eventDetails.getEventId());
         params.put("user_id", user.getUserDetails().getUid());
-        params.put("case_data_id", event.getInternalCaseId());
+        params.put("case_data_id", caseDataId);
         params.put("case_type_id", eventDetails.getCaseType());
         params.put("case_type_version", 1);
         params.put("state_id", currentView.getState());

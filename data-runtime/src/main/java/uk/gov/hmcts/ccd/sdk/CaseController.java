@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -148,7 +149,8 @@ public class CaseController {
                                              when case_data.state is distinct from excluded.state then now()
                                              else case_data.last_state_modified_date
                                            end
-                WHERE case_data.version = EXCLUDED.version;
+                where case_data.version = excluded.version
+                returning id;
             """;
     var params = Map.of(
         "jurisdiction", caseDetails.getJurisdiction(),
@@ -161,13 +163,13 @@ public class CaseController {
         "id", event.getInternalCaseId()
     );
 
-    var rowsAffected = ndb.update(sql, params);
-    if (rowsAffected != 1) {
+    try {
+      long caseDataId = ndb.queryForObject(sql, params, Long.class);
+      var currentView = caseRepository.getCase(event.getCaseDetails().getReference()).getCaseDetails();
+      return caseEventHistoryService.saveAuditRecord(event, user, currentView, caseDataId);
+    } catch (EmptyResultDataAccessException e) {
       throw new ResponseStatusException(HttpStatus.CONFLICT, "Case was updated concurrently");
     }
-
-    var currentView = caseRepository.getCase(event.getCaseDetails().getReference()).getCaseDetails();
-    return caseEventHistoryService.saveAuditRecord(event, user, currentView);
   }
 
   @SneakyThrows
