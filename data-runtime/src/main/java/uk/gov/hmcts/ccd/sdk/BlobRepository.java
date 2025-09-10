@@ -17,16 +17,16 @@ import uk.gov.hmcts.ccd.domain.model.definition.CaseDetails;
 
 @Slf4j
 @Service
-public class CCDCaseRepository {
+class BlobRepository {
     private final NamedParameterJdbcTemplate ndb;
     private final CaseRepository caseRepository;
     private final Class caseDataType;
     private final ObjectMapper defaultMapper;
     private final ObjectMapper filteredMapper;
 
-    public CCDCaseRepository(NamedParameterJdbcTemplate ndb,
-        CaseRepository caseRepository,
-                             ObjectMapper defaultMapper) {
+    public BlobRepository(NamedParameterJdbcTemplate ndb,
+                          CaseRepository caseRepository,
+                          ObjectMapper defaultMapper) {
         this.ndb = ndb;
         this.caseRepository = caseRepository;
         this.defaultMapper = defaultMapper;
@@ -88,7 +88,7 @@ public class CCDCaseRepository {
         var result = new HashMap<>(row);
 
         var data = defaultMapper.readValue((String) result.get("case_data"), caseDataType);
-        result.put("case_data", caseRepository.getCase((Long) row.get("id"), data));
+        result.put("case_data", caseRepository.getCase((Long) row.get("id"), (String) row.get("state"), data));
 
         var supplementaryDataJson = row.get("supplementary_data");
         result.put("supplementary_data", defaultMapper.readValue(supplementaryDataJson.toString(), Map.class));

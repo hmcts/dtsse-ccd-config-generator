@@ -49,7 +49,7 @@ public class CaseController {
   private final IdamService idam;
   private final CaseEventHistoryService caseEventHistoryService;
   private final SupplementaryDataService supplementaryDataService;
-  private final CCDCaseRepository caseRepository;
+  private final BlobRepository caseRepository;
 
   @GetMapping(
       value = "/cases", // Mapped to the root /cases endpoint
