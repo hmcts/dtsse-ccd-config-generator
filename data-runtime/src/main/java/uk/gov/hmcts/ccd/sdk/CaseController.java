@@ -126,14 +126,14 @@ public class CaseController {
     var caseDetails = event.getCaseDetails();
     // Upsert the case - create if it doesn't exist, update if it does.
     var sql = """
-            insert into ccd.case_data (last_modified, jurisdiction, case_type_id, state, data, reference, security_classification, version, id)
-            values (now(), :jurisdiction, :case_type_id, :state, (:data::jsonb), :reference, :security_classification::ccd.securityclassification, :version, :id)
+            insert into ccd.case_data (last_modified, last_state_modified_date, jurisdiction, case_type_id, state, data, reference, security_classification, version, id)
+            values ((now() at time zone 'UTC'), (now() at time zone 'UTC'), :jurisdiction, :case_type_id, :state, (:data::jsonb), :reference, :security_classification::ccd.securityclassification, :version, :id)
             on conflict (reference)
             do update set
                 state = excluded.state,
                 data = excluded.data,
                 security_classification = excluded.security_classification,
-                last_modified = now(),
+                last_modified = (now() at time zone 'UTC'),
                 version = case
                             when
                               -- We only bump the version if a mutable field actually changes
@@ -146,7 +146,7 @@ public class CaseController {
                               case_data.version
                           end,
                 last_state_modified_date = case
-                                             when case_data.state is distinct from excluded.state then now()
+                                             when case_data.state is distinct from excluded.state then (now() at time zone 'UTC')
                                              else case_data.last_state_modified_date
                                            end
                 where case_data.version = excluded.version
