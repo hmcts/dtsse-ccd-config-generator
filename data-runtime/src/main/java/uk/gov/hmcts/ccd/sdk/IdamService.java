@@ -7,6 +7,7 @@ import org.springframework.stereotype.Service;
 import uk.gov.hmcts.reform.idam.client.IdamClient;
 import uk.gov.hmcts.reform.idam.client.models.UserInfo;
 
+@Service("CcdSdkIdamService")
 public class IdamService {
   @Autowired
   private IdamClient idamClient;

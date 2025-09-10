@@ -9,7 +9,9 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.flyway.*;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.ComponentScan;
 import org.springframework.core.io.ResourceLoader;
+import uk.gov.hmcts.ccd.config.MessagingProperties;
 
 import javax.sql.DataSource;
 
@@ -19,6 +21,7 @@ import javax.sql.DataSource;
 @AutoConfiguration(
     before = {FlywayAutoConfiguration.class}
 )
+@ComponentScan(basePackageClasses = {MessagingProperties.class})
 @ConditionalOnClass(Flyway.class)
 @ConditionalOnProperty(prefix = "spring.flyway", name = "enabled", matchIfMissing = true)
 public class DecentralisedDataConfiguration {

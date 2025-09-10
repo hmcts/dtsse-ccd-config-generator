@@ -78,7 +78,7 @@ public class DecentralisedESIndexer implements DisposableBean {
             delete from ccd.es_queue es where id in (select id from ccd.es_queue limit 2000)
             returning id
           )
-            select reference as id, case_type_id, index_id, row_to_json(row)::jsonb as row
+            select id, case_type_id, index_id, row_to_json(row)::jsonb as row
             from (
               select
                 now() as "@timestamp",
@@ -87,6 +87,7 @@ public class DecentralisedESIndexer implements DisposableBean {
                 cd.created_date,
                 ce.data,
                 jurisdiction,
+                cd.id,
                 cd.reference,
                 ce.created_date as last_modified,
                 last_state_modified_date,
@@ -96,7 +97,7 @@ public class DecentralisedESIndexer implements DisposableBean {
                 cd.security_classification
              from updated
               join ccd.case_event ce using(id)
-              join ccd.case_data cd on cd.reference = ce.case_reference
+              join ccd.case_data cd on cd.id = ce.case_data_id
           ) row
           """);
 
