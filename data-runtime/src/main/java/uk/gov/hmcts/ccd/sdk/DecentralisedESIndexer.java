@@ -10,6 +10,7 @@ import org.elasticsearch.action.index.IndexRequest;
 import org.elasticsearch.client.RequestOptions;
 import org.elasticsearch.client.RestClient;
 import org.elasticsearch.client.RestHighLevelClient;
+import org.elasticsearch.index.VersionType;
 import org.elasticsearch.xcontent.XContentType;
 import org.springframework.beans.factory.DisposableBean;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -24,8 +25,8 @@ import java.util.Set;
 
 
 @ConditionalOnProperty(
-        name = "ccd.sdk.decentralised",
-        havingValue = "true")
+    name = "ccd.sdk.decentralised",
+    havingValue = "true")
 @Component
 @Slf4j
 public class DecentralisedESIndexer implements DisposableBean {
@@ -78,11 +79,11 @@ public class DecentralisedESIndexer implements DisposableBean {
             delete from ccd.es_queue es where id in (select id from ccd.es_queue limit 2000)
             returning id
           )
-            select id, case_type_id, index_id, row_to_json(row)::jsonb as row
+            select id, case_type_id, index_id, case_version, row_to_json(row)::jsonb as row
             from (
               select
                 now() as "@timestamp",
-                version::text as "@version",
+                cd.case_version,
                 cd.case_type_id,
                 cd.created_date,
                 ce.data,
@@ -107,9 +108,13 @@ public class DecentralisedESIndexer implements DisposableBean {
 
         for (Map<String, Object> row : results) {
           var rowJson = row.get("row").toString();
+          long version = ((Number) row.get("case_version")).longValue();
+
           request.add(new IndexRequest(row.get("index_id").toString())
               .id(row.get("id").toString())
-              .source(rowJson, XContentType.JSON));
+              .source(rowJson, XContentType.JSON)
+              .versionType(VersionType.EXTERNAL)
+              .version(version));
 
           // Replicate CCD's globalsearch logstash setup.
           // Where cases define a 'SearchCriteria' field we index certain fields into CCD's central
@@ -128,7 +133,9 @@ public class DecentralisedESIndexer implements DisposableBean {
 
             request.add(new IndexRequest("global_search")
                 .id(row.get("id").toString())
-                .source(mapper.writeValueAsString(map), XContentType.JSON));
+                .source(mapper.writeValueAsString(map), XContentType.JSON)
+                .versionType(VersionType.EXTERNAL)
+                .version(version));
           }
         }
 
@@ -166,4 +173,3 @@ public class DecentralisedESIndexer implements DisposableBean {
     this.t.join();
   }
 }
-
