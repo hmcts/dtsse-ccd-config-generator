@@ -55,12 +55,8 @@ class BlobRepository {
                   to_json(last_state_modified_date)#>>'{}' as last_state_modified_date,
                   to_json(coalesce(c.last_modified, c.created_date))#>>'{}' as last_modified,
                   supplementary_data::text,
-                  coalesce(most_recent_event.id, 2) as global_version
+                  case_version as global_version
              from ccd.case_data c
-                 left join lateral (
-                   select ce.id from ccd.case_event ce where ce.case_data_id = c.id
-                   order by ce.id DESC limit 1
-                 ) as most_recent_event on true
              where reference IN (:caseRefs)
             """, params);
 
