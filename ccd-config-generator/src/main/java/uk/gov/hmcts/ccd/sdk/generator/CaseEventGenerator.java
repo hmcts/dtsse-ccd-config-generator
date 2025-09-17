@@ -36,7 +36,7 @@ class CaseEventGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
       Path output = Paths.get(folder.getPath(), event.getId() + ".json");
 
       JsonUtils.mergeInto(output, serialise(config.getCaseType(), event, config.getAllStates(),
-              config.getCallbackHost(), config.decentralised),
+              config.getCallbackHost()),
           new AddMissing(), "ID");
     }
   }
@@ -49,7 +49,7 @@ class CaseEventGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
   }
 
   private List<Map<String, Object>> serialise(String caseTypeId, Event<T, R, S> event,
-                                              Set<S> allStates, String callbackHost, boolean decentralised) {
+                                              Set<S> allStates, String callbackHost) {
     List result = Lists.newArrayList();
     Map<String, Object> data = JsonUtils.getField(event.getId());
     result.add(data);
@@ -105,7 +105,7 @@ class CaseEventGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
       }
     }
 
-    if (event.getAboutToSubmitCallback() != null && !decentralised) {
+    if (event.getAboutToSubmitCallback() != null) {
       String url = callbackHost + "/callbacks/about-to-submit?eventId=" + event.getId();
       data.put("CallBackURLAboutToSubmitEvent", url);
       if (event.getRetries().containsKey(Webhook.AboutToSubmit)) {
@@ -114,7 +114,7 @@ class CaseEventGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
       }
     }
 
-    if (event.getSubmittedCallback() != null && !decentralised) {
+    if (event.getSubmittedCallback() != null) {
       String url = callbackHost + "/callbacks/submitted?eventId=" + event.getId();
       data.put("CallBackURLSubmittedEvent", url);
       if (event.getRetries().containsKey(Webhook.Submitted)) {

@@ -97,12 +97,6 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements ConfigBuilder
   }
 
   @Override
-  public void decentralisedCaseType(String caseType, String name, String desc) {
-    this.caseType(caseType, name, desc);
-    config.decentralised = true;
-  }
-
-  @Override
   public void caseType(String caseType, String name, String desc) {
     config.caseType = caseType;
     config.caseName = name;
