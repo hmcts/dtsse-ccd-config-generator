@@ -142,14 +142,30 @@ public class DecentralisedESIndexer implements DisposableBean {
         if (request.numberOfActions() > 0) {
           var r = client.bulk(request, RequestOptions.DEFAULT);
           if (r.hasFailures()) {
-            // TODO: Track the failed cases in our database, monitoring, retries etc.
-            status.setRollbackOnly();
-            log.error("**** Cftlib elasticsearch indexing error(s): ");
-            r.buildFailureMessage();
+            boolean hasGenuineFailure = false;
             for (BulkItemResponse item : r.getItems()) {
-              log.error(item.getFailureMessage());
+              if (item.isFailed()) {
+                BulkItemResponse.Failure failure = item.getFailure();
+                if (409 == failure.getStatus().getStatus()) {
+                  // This is a stale event. The version in ES is already higher.
+                  // We can safely ignore this and let the transaction commit,
+                  // which will remove the item from the es_queue.
+                  log.info("Stale event processing skipped due to version conflict for id {}: {}",
+                      failure.getId(), failure.getMessage());
+                } else {
+                  hasGenuineFailure = true;
+                  log.error("Cftlib elasticsearch indexing error for id {}: {}",
+                      failure.getId(), failure.getMessage());
+                }
+              }
             }
-            return false;
+
+            if (hasGenuineFailure) {
+              // Rollback the transaction only if we encountered a non-version-conflict error.
+              log.error("**** Cftlib elasticsearch indexing has genuine failures. Rolling back transaction.");
+              status.setRollbackOnly();
+              return false;
+            }
           }
         }
         return true;  // Transaction success
