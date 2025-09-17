@@ -8,13 +8,14 @@ repositories {
 }
 
 dependencies {
+    implementation platform("org.springframework.boot:spring-boot-dependencies:3.4.2")
     implementation project(':ccd-config-generator')
     // A filtered set of useful CCD POJOs including DTOs and other utilities.
     implementation ('com.github.hmcts.rse-cft-lib:ccd-lib:ccd-lib-0.4') {
         transitive = false
     }
-    implementation group: 'org.springframework.boot', name: 'spring-boot-starter-web', version: '3.4.2'
-    implementation group: 'org.springframework.boot', name: 'spring-boot-starter-jdbc', version: '3.5.3'
+    implementation group: 'org.springframework.boot', name: 'spring-boot-starter-web'
+    implementation group: 'org.springframework.boot', name: 'spring-boot-starter-jdbc'
     implementation('com.github.hmcts:idam-java-client:3.0.4') {
         transitive = false
     }
@@ -23,7 +24,7 @@ dependencies {
 
     annotationProcessor 'org.projectlombok:lombok:1.18.36'
 
-    implementation "org.springframework.boot:spring-boot-autoconfigure:3.4.2"
+    implementation "org.springframework.boot:spring-boot-autoconfigure"
     implementation "org.flywaydb:flyway-core:11.3.1"
     implementation 'org.elasticsearch.client:elasticsearch-rest-high-level-client:7.17.27'
 }
