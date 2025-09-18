@@ -39,7 +39,7 @@ class ConfigResolver<T, S, R extends HasRole> {
     );
 
     for (CCDConfig<T, S, R> c : configs) {
-      c.configure(builder);
+      c.configureDecentralised(builder);
     }
 
     return builder.build();

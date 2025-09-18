@@ -23,5 +23,17 @@ public interface CCDConfig<Case, State, Role extends HasRole> {
    *
    * @param builder Use to declare your CCD configuration.
    */
-  void configure(ConfigBuilder<Case, State, Role> builder);
+  default void configure(ConfigBuilder<Case, State, Role> builder) {
+    throw new UnsupportedOperationException(
+        "CCDConfig.configure is not implemented. Implement configureDecentralised(DecentralisedConfigBuilder) "
+            + "or override configure(ConfigBuilder) to provide centralised configuration.");
+  }
+
+  /**
+   * Optional hook for decentralised configuration. By default, delegates to {@link #configure(ConfigBuilder)}
+   * to preserve backwards compatibility. Implementors may override to access decentralised-only APIs.
+   */
+  default void configureDecentralised(DecentralisedConfigBuilder<Case, State, Role> builder) {
+    configure(builder);
+  }
 }
