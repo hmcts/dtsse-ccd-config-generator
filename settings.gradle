@@ -1,1 +1,1 @@
-include 'ccd-gradle-plugin', 'ccd-config-generator', 'data-runtime'
+include 'ccd-gradle-plugin', 'ccd-config-generator', 'decentralised-runtime'

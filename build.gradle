@@ -22,7 +22,7 @@ subprojects {
         mavenCentral()
     }
 
-    if (project.name in ['ccd-config-generator', 'data-runtime']) {
+    if (project.name in ['ccd-config-generator', 'decentralised-runtime']) {
         apply plugin: 'java-library'
         apply plugin: 'maven-publish'
 
@@ -61,7 +61,7 @@ subprojects {
 
 tasks.register('zipGenerator', Zip) {
     from project(':ccd-config-generator').tasks.named('publishMainPublicationToGeneratorRepository')
-    from project(':data-runtime').tasks.named('publishMainPublicationToGeneratorRepository')
+    from project(':decentralised-runtime').tasks.named('publishMainPublicationToGeneratorRepository')
 
     archiveFileName = 'generator.zip'
     destinationDirectory = layout.buildDirectory

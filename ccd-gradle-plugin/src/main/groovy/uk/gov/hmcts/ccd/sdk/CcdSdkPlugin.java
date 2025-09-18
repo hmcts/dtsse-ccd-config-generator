@@ -81,7 +81,7 @@ public class CcdSdkPlugin implements Plugin<Project> {
       }
 
       if (config.decentralised) {
-        project.getDependencies().add("implementation", "com.github.hmcts:data-runtime:"
+        project.getDependencies().add("implementation", "com.github.hmcts:decentralised-runtime:"
             + getVersion());
         // Surface that we are decentralised to the spring boot apps.
         // This is an env var since it needs to be read beyond the application's classpath
