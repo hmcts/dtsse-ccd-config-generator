@@ -1,6 +1,11 @@
 package uk.gov.hmcts.ccd.sdk;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.net.URI;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
@@ -29,12 +34,6 @@ import uk.gov.hmcts.ccd.data.persistence.dto.DecentralisedSubmitEventResponse;
 import uk.gov.hmcts.ccd.data.persistence.dto.DecentralisedUpdateSupplementaryDataResponse;
 import uk.gov.hmcts.reform.ccd.client.model.CallbackRequest;
 import uk.gov.hmcts.reform.ccd.client.model.CaseDetails;
-
-import java.net.URI;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Optional;
 
 @Slf4j
 @RestController
@@ -66,7 +65,10 @@ public class CaseController {
       value = "/cases/{caseRef}/supplementary-data",
       produces = "application/json"
   )
-  public DecentralisedUpdateSupplementaryDataResponse updateSupplementaryData(@PathVariable("caseRef") long caseRef, @RequestBody SupplementaryDataUpdateRequest request) {
+  public DecentralisedUpdateSupplementaryDataResponse updateSupplementaryData(
+      @PathVariable("caseRef") long caseRef,
+      @RequestBody SupplementaryDataUpdateRequest request
+  ) {
     log.info("Updating supplementary data for case reference: {}", caseRef);
     return supplementaryDataService.updateSupplementaryData(caseRef, request);
   }
@@ -107,8 +109,11 @@ public class CaseController {
       return ResponseEntity.ok(response);
     }
 
-    if (Boolean.TRUE.equals(newRequest) && eventListener.hasSubmittedCallbackForEvent(event.getEventDetails().getCaseType(),
-        event.getEventDetails().getEventId())) {
+    if (Boolean.TRUE.equals(newRequest)
+        && eventListener.hasSubmittedCallbackForEvent(
+            event.getEventDetails().getCaseType(),
+            event.getEventDetails().getEventId()
+        )) {
       dispatchSubmitted(event);
     }
 
@@ -126,8 +131,30 @@ public class CaseController {
     var caseDetails = event.getCaseDetails();
     // Upsert the case - create if it doesn't exist, update if it does.
     var sql = """
-            insert into ccd.case_data (last_modified, last_state_modified_date, jurisdiction, case_type_id, state, data, reference, security_classification, version, id)
-            values ((now() at time zone 'UTC'), (now() at time zone 'UTC'), :jurisdiction, :case_type_id, :state, (:data::jsonb), :reference, :security_classification::ccd.securityclassification, :version, :id)
+            insert into ccd.case_data (
+                last_modified,
+                last_state_modified_date,
+                jurisdiction,
+                case_type_id,
+                state,
+                data,
+                reference,
+                security_classification,
+                version,
+                id
+            )
+            values (
+                (now() at time zone 'UTC'),
+                (now() at time zone 'UTC'),
+                :jurisdiction,
+                :case_type_id,
+                :state,
+                (:data::jsonb),
+                :reference,
+                :security_classification::ccd.securityclassification,
+                :version,
+                :id
+            )
             on conflict (reference)
             do update set
                 state = excluded.state,
@@ -146,7 +173,8 @@ public class CaseController {
                               case_data.version
                           end,
                 last_state_modified_date = case
-                                             when case_data.state is distinct from excluded.state then (now() at time zone 'UTC')
+                                             when case_data.state is distinct from excluded.state then
+                                               (now() at time zone 'UTC')
                                              else case_data.last_state_modified_date
                                            end
                 where case_data.version = excluded.version
@@ -186,7 +214,10 @@ public class CaseController {
   }
 
   @SneakyThrows
-  private DecentralisedSubmitEventResponse dispatchAboutToSubmit(DecentralisedCaseEvent event, MultiValueMap<String, String> urlParams) {
+  private DecentralisedSubmitEventResponse dispatchAboutToSubmit(
+      DecentralisedCaseEvent event,
+      MultiValueMap<String, String> urlParams
+  ) {
     var response = new DecentralisedSubmitEventResponse();
     if (eventListener.hasSubmitHandler(event.getEventDetails().getCaseType(), event.getEventDetails().getEventId())) {
       eventListener.submit(event.getEventDetails().getCaseType(), event.getEventDetails().getEventId(), event,
@@ -205,7 +236,9 @@ public class CaseController {
         event.getCaseDetails().setState(cb.getState().toString());
       }
       if (cb.getSecurityClassification() != null) {
-        event.getCaseDetails().setSecurityClassification(SecurityClassification.valueOf(cb.getSecurityClassification()));
+        event.getCaseDetails().setSecurityClassification(
+            SecurityClassification.valueOf(cb.getSecurityClassification())
+        );
       }
 
       response.setErrors(cb.getErrors());

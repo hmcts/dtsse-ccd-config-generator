@@ -1,6 +1,8 @@
 package uk.gov.hmcts.ccd.sdk;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.util.Map;
+import java.util.Set;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.http.HttpHost;
@@ -20,9 +22,6 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.support.TransactionTemplate;
 
-import java.util.Map;
-import java.util.Set;
-
 
 @ConditionalOnProperty(
     name = "ccd.sdk.decentralised",
@@ -34,7 +33,7 @@ public class DecentralisedESIndexer implements DisposableBean {
   private final JdbcTemplate jdbcTemplate;
   private final TransactionTemplate transactionTemplate;
   private volatile boolean terminated;
-  private final Thread t;
+  private final Thread thread;
   private final RestHighLevelClient client;
 
 
@@ -48,11 +47,11 @@ public class DecentralisedESIndexer implements DisposableBean {
     this.client = new RestHighLevelClient(RestClient.builder(
         HttpHost.create(elasticSearchHost)));
 
-    this.t = new Thread(this::index);
-    t.setDaemon(true);
-    t.setUncaughtExceptionHandler(this::failFast);
-    t.setName("****Decentralised ElasticSearch indexer");
-    t.start();
+    this.thread = new Thread(this::index);
+    thread.setDaemon(true);
+    thread.setUncaughtExceptionHandler(this::failFast);
+    thread.setName("****Decentralised ElasticSearch indexer");
+    thread.start();
   }
 
   private void failFast(Thread thread, Throwable exception) {
@@ -186,6 +185,6 @@ public class DecentralisedESIndexer implements DisposableBean {
   public void destroy() throws InterruptedException {
     this.terminated = true;
     // Wait for indexing to stop before allowing shutdown to continue.
-    this.t.join();
+    this.thread.join();
   }
 }

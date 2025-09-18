@@ -8,8 +8,6 @@ import uk.gov.hmcts.ccd.sdk.api.CaseRoleToAccessProfile.CaseRoleToAccessProfileB
 import uk.gov.hmcts.ccd.sdk.api.Search.SearchBuilder;
 import uk.gov.hmcts.ccd.sdk.api.SearchCases.SearchCasesBuilder;
 import uk.gov.hmcts.ccd.sdk.api.Tab.TabBuilder;
-import uk.gov.hmcts.ccd.sdk.api.callback.Start;
-import uk.gov.hmcts.ccd.sdk.api.callback.Submit;
 
 public interface ConfigBuilder<T, S, R extends HasRole> {
 

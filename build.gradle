@@ -1,6 +1,7 @@
 
 subprojects {
     apply plugin: 'java'
+    apply plugin: 'checkstyle'
 
     version System.getenv('RELEASE_VERSION') ?: 'DEV-SNAPSHOT'
 
@@ -8,6 +9,12 @@ subprojects {
         sourceCompatibility = 17
         targetCompatibility = 17
         options.compilerArgs += ["-Werror"]
+    }
+
+    checkstyle {
+        maxWarnings = 0
+        toolVersion '10.23.1'
+        sourceSets = [project.sourceSets.main]
     }
 
     group = 'com.github.hmcts'
