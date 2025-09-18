@@ -21,10 +21,6 @@ public class IdamService {
     return new User(bearerToken, userDetails);
   }
 
-  private String getCachedIdamOauth2Token(String username, String password) {
-    return idamClient.getAccessToken(username, password);
-  }
-
   private String getBearerToken(String token) {
     if (token.isBlank()) {
       return token;
