@@ -84,12 +84,12 @@ public class CaseController {
     var params = UriComponentsBuilder.fromUri(uri).build().getQueryParams();
 
     var user = idam.retrieveUser(headers.getFirst("Authorization"));
+    var newRequest = Boolean.FALSE;
     try {
-      transactionTemplate.execute(status -> {
+      newRequest = transactionTemplate.execute(status -> {
         if (idempotencyEnforcer.markProcessedReturningIsAlreadyProcessed(
             headers.getFirst(IdempotencyEnforcer.IDEMPOTENCY_KEY_HEADER))) {
-          // TODO: Do we need to return the exact same response as before or are we ok to include subsequent changes.
-          return status;
+          return false;
         }
 
         var result = dispatchAboutToSubmit(event, params);
@@ -98,7 +98,7 @@ public class CaseController {
         }
 
         saveCaseReturningAuditId(event, user);
-        return status;
+        return true;
       });
     } catch (CallbackValidationException e) {
       var response = new DecentralisedSubmitEventResponse();
@@ -107,7 +107,7 @@ public class CaseController {
       return ResponseEntity.ok(response);
     }
 
-    if (eventListener.hasSubmittedCallbackForEvent(event.getEventDetails().getCaseType(),
+    if (Boolean.TRUE.equals(newRequest) && eventListener.hasSubmittedCallbackForEvent(event.getEventDetails().getCaseType(),
         event.getEventDetails().getEventId())) {
       dispatchSubmitted(event);
     }

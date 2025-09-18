@@ -1,0 +1,37 @@
+Data Runtime TODOs (relative to master)
+
+Priority 1 — Correctness and Stability
+- [x] Align Spring Boot versions: use a single Boot line (plugin + BOM), remove explicit starter versions, keep all Spring libs consistent (3.4.x or 3.5.x).
+- [ ] Idempotency: validate 'Idempotency-Key' (required UUID). Return 400 if missing/invalid. Short-circuit duplicates before callbacks/DB writes; do not re-run submitted callbacks. Consider persisting and returning the original response for strict idempotency.
+- [ ] Robust 404 handling: return 404 when a requested case is missing (single and bulk). Avoid 'IndexOutOfBoundsException' in 'BlobRepository.getCase'.
+- [ ] Supplementary data validation: reject empty requests; allow only '$inc' and '$set'; validate path format; ensure numeric input for '$inc'. Return 400 with clear messages.
+- [ ] Elasticsearch indexer resilience: remove 'Runtime.halt(-1)' fail-fast; add retry/backoff and graceful shutdown. Make batch size and poll interval configurable.
+- [ ] Security: ensure endpoints are protected with authn/authz (e.g., Spring Security). Add request validation ('@Validated') where applicable.
+
+Priority 2 — Data and Behavior Quality
+- [ ] Populate 'case_type_version' from definitions/config instead of hardcoded '1' in 'CaseEventHistoryService'.
+- [ ] Define behavior for missing refs in bulk 'GET /cases?case-refs=' (preserve order and include not-found markers, or document filtering behavior).
+- [ ] Return conflict details on optimistic locking (e.g., include current version in body) to aid clients.
+- [ ] MessagePublisher: handle missing 'build/cftlib/definition-snapshots' gracefully; document requirement; optionally allow path override and live reload.
+- [ ] External field filtering: add documentation and tests to ensure fields annotated with '@External' are excluded from persisted JSON.
+
+Priority 3 — Code Quality and Consistency
+- [ ] Switch 'IdamService' to constructor injection; remove 'getCachedIdamOauth2Token' and unused imports.
+- [ ] Extract SQL strings into constants or repository classes for readability and testability.
+- [ ] Normalize logging (levels and contextual fields); remove TODOs or implement them.
+- [ ] Add configuration properties (with sensible defaults) for indexer, messaging, and Flyway schema; surface via 'application.properties' and bind with '@ConfigurationProperties'.
+
+Priority 4 — Tests and Observability
+- [ ] Unit tests: idempotency flow, optimistic locking path, supplementary data ops, history mappers, 'BlobRepository' serialization/filtering, ES 'filter()' behavior, MessagePublisher payload construction.
+- [ ] Integration tests (Testcontainers): Postgres migrations + controller flows (create, update, history, supplementary), optional ES client mocked/spied.
+- [ ] Health/metrics: add Micrometer metrics for ES queue processed/failed, idempotency dedup hits, message publishes; add health indicators for DB and ES availability.
+
+Priority 5 — Migrations and Ops
+- [ ] Review Flyway migrations for re-runs/idempotency and environment safety (e.g., 'SET search_path' in V0001; ensure consistent schema qualification elsewhere).
+- [ ] Indexes: confirm indexes cover hot paths (case lookups, es_queue consumption); adjust as needed.
+- [ ] Timezone consistency: verify UTC handling in code and DB defaults post V0006.
+
+Nice to Have
+- [ ] Consider upgrading to the current Elasticsearch Java client compatible with the cluster version.
+- [ ] Provide README for this module: endpoints, payloads, configs, operational notes (ES, message publishing, migrations order).
+
