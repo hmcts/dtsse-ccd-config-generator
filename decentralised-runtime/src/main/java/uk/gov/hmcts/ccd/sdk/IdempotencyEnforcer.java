@@ -6,6 +6,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @RequiredArgsConstructor
@@ -16,6 +18,7 @@ public class IdempotencyEnforcer {
 
   private final NamedParameterJdbcTemplate db;
 
+  @Transactional(propagation = Propagation.MANDATORY)
   public boolean markProcessedReturningIsAlreadyProcessed(String idempotencyKey) {
     int rowsAffected = db.update(
         "insert into ccd.completed_events (id) values (:id) on conflict(id) do nothing",
