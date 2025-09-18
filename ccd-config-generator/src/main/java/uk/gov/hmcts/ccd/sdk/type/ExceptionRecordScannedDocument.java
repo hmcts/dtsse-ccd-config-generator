@@ -19,46 +19,46 @@ import uk.gov.hmcts.ccd.sdk.api.CCD;
 public class ExceptionRecordScannedDocument {
 
   @CCD(
-      label = "Scanned Records",
-      typeOverride = Label
+          label = "Scanned Records",
+          typeOverride = Label
   )
   private String recordMetaData;
 
   @CCD(
-      label = "Select document type",
-      typeOverride = FixedList,
-      typeParameterOverride = "ScannedDocumentType"
+          label = "Select document type",
+          typeOverride = FixedList,
+          typeParameterOverride = "ScannedDocumentType"
   )
   private ScannedDocumentType type;
 
   @CCD(
-      label = "Document subtype"
+          label = "Document subtype"
   )
   private String subtype;
 
   @CCD(
-      label = "Scanned document url"
+          label = "Scanned document url"
   )
   private Document url;
 
   @CCD(
-      label = "Document control number"
+          label = "Document control number"
   )
   private String controlNumber;
 
   @CCD(
-      label = "File Name"
+          label = "File Name"
   )
   private String fileName;
 
   @CCD(
-      label = "Scanned date"
+          label = "Scanned date"
   )
   @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd'T'HH:mm:ss[.SSS][.SS][.S]")
   private LocalDateTime scannedDate;
 
   @CCD(
-      label = "Delivery date"
+          label = "Delivery date"
   )
   @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd'T'HH:mm:ss[.SSS][.SS][.S]")
   private LocalDateTime deliveryDate;

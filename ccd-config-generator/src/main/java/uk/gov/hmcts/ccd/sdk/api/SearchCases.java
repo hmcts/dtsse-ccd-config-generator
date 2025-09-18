@@ -16,7 +16,7 @@ public class SearchCases {
     private PropertyUtils propertyUtils;
 
     public static <T> SearchCasesBuilder<T> builder(Class<T> model,
-                                                    PropertyUtils propertyUtils) {
+        PropertyUtils propertyUtils) {
       SearchCasesBuilder<T> result = SearchCases.builder();
       result.model = model;
       result.propertyUtils = propertyUtils;

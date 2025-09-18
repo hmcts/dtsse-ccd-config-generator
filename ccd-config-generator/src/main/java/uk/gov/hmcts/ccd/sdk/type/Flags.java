@@ -33,7 +33,7 @@ public class Flags {
   @JsonCreator
   public Flags(@JsonProperty("partyName") String partyName,
                @JsonProperty("roleOnCase") String roleOnCase,
-               @JsonProperty("details") List<ListValue<FlagDetail>> details,
+               @JsonProperty("details") List<ListValue<FlagDetail>>  details,
                @JsonProperty("visibility") FlagVisibility visibility,
                @JsonProperty("groupId") UUID groupId) {
     this.details = details;

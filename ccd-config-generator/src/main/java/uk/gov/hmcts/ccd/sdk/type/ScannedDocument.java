@@ -19,48 +19,48 @@ import uk.gov.hmcts.ccd.sdk.deserializer.LocalDateTimeDeserializer;
 public class ScannedDocument {
 
   @CCD(
-      label = "Select document type",
-      typeOverride = FixedList,
-      typeParameterOverride = "ScannedDocumentType"
+          label = "Select document type",
+          typeOverride = FixedList,
+          typeParameterOverride = "ScannedDocumentType"
   )
   private ScannedDocumentType type;
 
   @CCD(
-      label = "Document subtype"
+          label = "Document subtype"
   )
   private String subtype;
 
   @CCD(
-      label = "Scanned document url"
+          label = "Scanned document url"
   )
   private Document url;
 
   @CCD(
-      label = "Document control number"
+          label = "Document control number"
   )
   private String controlNumber;
 
   @CCD(
-      label = "File Name"
+          label = "File Name"
   )
   private String fileName;
 
   @CCD(
-      label = "Scanned date"
+          label = "Scanned date"
   )
   @JsonDeserialize(using = LocalDateTimeDeserializer.class)
   @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss.SSS")
   private LocalDateTime scannedDate;
 
   @CCD(
-      label = "Delivery date"
+          label = "Delivery date"
   )
   @JsonDeserialize(using = LocalDateTimeDeserializer.class)
   @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss.SSS")
   private LocalDateTime deliveryDate;
 
   @CCD(
-      label = "Exception record reference"
+          label = "Exception record reference"
   )
   private String exceptionRecordReference;
 

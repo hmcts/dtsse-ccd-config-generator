@@ -84,7 +84,7 @@ public class FlagDetail {
                     @JsonProperty("flagUpdateComment") String flagUpdateComment,
                     @JsonProperty("dateTimeModified") LocalDateTime dateTimeModified,
                     @JsonProperty("dateTimeCreated") LocalDateTime dateTimeCreated,
-                    @JsonProperty("path") List<ListValue<String>> path,
+                    @JsonProperty("path") List<ListValue<String>>  path,
                     @JsonProperty("hearingRelevant") YesOrNo hearingRelevant,
                     @JsonProperty("flagCode") String flagCode,
                     @JsonProperty("status") String status,

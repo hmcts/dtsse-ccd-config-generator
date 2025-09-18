@@ -213,7 +213,7 @@ class AuthorisationCaseFieldGenerator<T, S, R extends HasRole> implements Config
     return null == ccdAnnotation || ccdAnnotation.access().length == 0
         ? defaultAccessControl
         : ccdAnnotation.inheritAccessFromParent()
-        ? ArrayUtils.addAll(defaultAccessControl, ccdAnnotation.access())
-        : ccdAnnotation.access();
+            ? ArrayUtils.addAll(defaultAccessControl, ccdAnnotation.access())
+            : ccdAnnotation.access();
   }
 }

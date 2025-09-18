@@ -13,13 +13,13 @@ import uk.gov.hmcts.ccd.sdk.api.CCD;
 public class BulkScanEnvelope {
 
   @CCD(
-      label = "Envelope id"
+          label = "Envelope id"
   )
   private String id;
 
 
   @CCD(
-      label = "Action"
+          label = "Action"
   )
   private String action;
 

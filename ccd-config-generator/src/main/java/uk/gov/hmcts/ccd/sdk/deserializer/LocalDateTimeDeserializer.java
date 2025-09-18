@@ -21,11 +21,11 @@ public class LocalDateTimeDeserializer extends StdDeserializer<LocalDateTime> {
   public LocalDateTime deserialize(JsonParser jp, DeserializationContext ctxt) throws IOException {
     var dateString = jp.readValueAs(String.class);
     DateTimeFormatter formatter = new DateTimeFormatterBuilder()
-        .appendPattern("yyyy-MM-dd'T'HH:mm:ss")
-        .optionalStart()
-        .appendFraction(ChronoField.MILLI_OF_SECOND, 1, 3, true)
-        .optionalEnd()
-        .toFormatter();
+            .appendPattern("yyyy-MM-dd'T'HH:mm:ss")
+            .optionalStart()
+                  .appendFraction(ChronoField.MILLI_OF_SECOND, 1, 3, true)
+            .optionalEnd()
+            .toFormatter();
     return LocalDateTime.parse(dateString, formatter);
   }
 }

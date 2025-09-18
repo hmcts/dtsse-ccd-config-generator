@@ -54,7 +54,7 @@ public class JSONConfigGenerator<T, S, R extends HasRole> {
         "JurisdictionID", builder.getJurId(),
         "SecurityClassification", "Public"
     ));
-    Path output = Paths.get(outputfolder.getPath(), "CaseType.json");
+    Path output = Paths.get(outputfolder.getPath(),"CaseType.json");
     JsonUtils.mergeInto(output, fields, new JsonUtils.AddMissing(), "ID");
   }
 
@@ -66,7 +66,7 @@ public class JSONConfigGenerator<T, S, R extends HasRole> {
         "Name", builder.getJurName(),
         "Description", builder.getJurDesc()
     ));
-    Path output = Paths.get(outputfolder.getPath(), "Jurisdiction.json");
+    Path output = Paths.get(outputfolder.getPath(),"Jurisdiction.json");
     JsonUtils.mergeInto(output, fields, new JsonUtils.AddMissing(), "ID");
   }
 }

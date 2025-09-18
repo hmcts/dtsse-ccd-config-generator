@@ -21,7 +21,7 @@ ccd {
 }
 
 repositories {
-    mavenCentral()
+  mavenCentral()
 }
 
 dependencies {
