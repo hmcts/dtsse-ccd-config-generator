@@ -13,7 +13,6 @@ public interface ConfigBuilder<T, S, R extends HasRole> {
 
   EventTypeBuilder<T, R, S> event(String id);
 
-
   EventTypeBuilderImpl<T, R, S> attachScannedDocEvent();
 
   EventTypeBuilderImpl<T, R, S> handleSupplementaryEvent();
@@ -32,10 +31,9 @@ public interface ConfigBuilder<T, S, R extends HasRole> {
    * Set AuthorisationCaseState explicitly.
    * Note that additional AuthorisationCaseState permissions are inferred based on grants of
    * event-level permissions.
-   *
-   * @param state       state
+   * @param state state
    * @param permissions permissions
-   * @param role        One or more roles
+   * @param role One or more roles
    */
   void grant(S state, Set<Permission> permissions, R... role);
 

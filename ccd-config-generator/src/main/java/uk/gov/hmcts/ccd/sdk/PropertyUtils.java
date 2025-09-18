@@ -10,8 +10,7 @@ class PropertyUtils implements uk.gov.hmcts.ccd.sdk.api.PropertyUtils {
 
   @Override
   public <T, A extends Annotation> A getAnnotationOfProperty(Class<T> entityType,
-                                                             TypedPropertyGetter<T, ?> propertyGetter,
-                                                             Class<A> annotationClass) {
+      TypedPropertyGetter<T, ?> propertyGetter, Class<A> annotationClass) {
     return de.cronn.reflection.util.PropertyUtils
         .getAnnotationOfProperty(entityType, propertyGetter, annotationClass);
   }
