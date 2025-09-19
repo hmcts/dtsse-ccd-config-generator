@@ -17,3 +17,8 @@ subprojects {
     }
 
 }
+
+tasks.register('check') {
+    dependsOn(':ccd-config-generator:check')
+    dependsOn(':ccd-gradle-plugin:check')
+}
