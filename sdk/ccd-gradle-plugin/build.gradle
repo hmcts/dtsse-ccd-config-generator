@@ -22,8 +22,6 @@ repositories {
 
 dependencies {
     // Use JUnit test framework for unit tests
-    annotationProcessor group: 'org.projectlombok', name: 'lombok', version: '1.18.38'
-    compileOnly group: 'org.projectlombok', name: 'lombok', version: '1.18.38'
     implementation 'com.google.guava:guava:33.4.8-jre'
 
     // Ensure we run the plugin's tests when the libraries are modified.
@@ -105,16 +103,3 @@ check {
 }
 
 functionalTest.mustRunAfter test
-
-publishing {
-    repositories {
-        maven {
-            name = "AzureArtifacts"
-            url = uri("https://pkgs.dev.azure.com/hmcts/Artifacts/_packaging/hmcts-lib/maven/v1")
-            credentials {
-                username = System.getenv("AZURE_DEVOPS_ARTIFACT_USERNAME")
-                password = System.getenv("AZURE_DEVOPS_ARTIFACT_TOKEN")
-            }
-        }
-    }
-}

@@ -1,7 +1,11 @@
+plugins {
+    id("io.freefair.lombok") version "8.14.2" apply(false)
+}
 
 subprojects {
     apply plugin: 'java'
     apply plugin: 'checkstyle'
+    apply plugin: 'io.freefair.lombok'
 
     version System.getenv('RELEASE_VERSION') ?: 'DEV-SNAPSHOT'
 
@@ -66,3 +70,9 @@ tasks.register('zipGenerator', Zip) {
     archiveFileName = 'generator.zip'
     destinationDirectory = layout.buildDirectory
 }
+
+tasks.register('check') {
+    dependsOn(':ccd-config-generator:check')
+    dependsOn(':ccd-gradle-plugin:check')
+}
+

@@ -1,0 +1,5 @@
+tasks.register('check') {
+    gradle.includedBuilds.each { included ->
+        dependsOn(included.task(':check'))
+    }
+}
