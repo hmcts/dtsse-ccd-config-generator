@@ -1,0 +1,36 @@
+.gradle
+build/
+!gradle/wrapper/gradle-wrapper.jar
+*.class
+bin/main/application.yaml
+
+### STS ###
+.apt_generated
+.classpath
+.factorypath
+.project
+.settings
+.springBeans
+
+### IntelliJ IDEA ###
+.idea
+/out
+*.iws
+*.iml
+*.ipr
+
+.DS_Store
+applicationinsights-agent-*.jar
+*.log
+.vscode/
+node_modules/
+*.xls
+*.xlsx
+yarn-error.log
+
+### Generated CCD Json Definition ###
+ccd-definitions/definitions/development
+
+### aat env file ###
+.aat-env
+

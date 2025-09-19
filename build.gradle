@@ -3,3 +3,11 @@ tasks.register('check') {
         dependsOn(included.task(':check'))
     }
 }
+
+afterEvaluate {
+    subprojects.each { subproject ->
+        if (subproject.tasks.findByName('check')) {
+            tasks.check.dependsOn subproject.tasks.check
+        }
+    }
+}
