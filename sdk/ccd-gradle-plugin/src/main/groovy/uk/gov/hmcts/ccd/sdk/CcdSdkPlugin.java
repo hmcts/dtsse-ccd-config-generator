@@ -81,6 +81,9 @@ public class CcdSdkPlugin implements Plugin<Project> {
       }
 
       if (config.decentralised) {
+        // This is a signal to the cftlib to link in the feature branch
+        // TODO: remove on landing
+        project.getExtensions().getExtraProperties().set("cftlib.datastore", "decentralised");
         project.getDependencies().add("implementation", "com.github.hmcts:decentralised-runtime:"
             + getVersion());
         // Surface that we are decentralised to the spring boot apps.
