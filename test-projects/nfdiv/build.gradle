@@ -311,42 +311,6 @@ ext.libraries = [
 
 mainClassName = 'uk.gov.hmcts.divorce.CaseApiApplication'
 
-tasks.register('loadEnvSecrets') {
-  doLast {
-    if (!project.file('./.aat-env').exists()) {
-      new ByteArrayOutputStream().withStream { os ->
-        exec {
-          commandLine 'az', 'keyvault', 'secret', 'show', '--vault-name', 'nfdiv-aat', '-o', 'tsv', '--query', 'value', '--name', 'nfdiv-case-api-dot-env'
-          standardOutput = os
-        }
-        project.file('./.aat-env').write(new String(os.toString().replace('\n', '').decodeBase64(), java.nio.charset.StandardCharsets.UTF_8))
-      }
-    }
-  }
-}
-
-tasks.register('reloadEnvSecrets') {
-  dependsOn[loadEnvSecrets]
-  doFirst {
-    if (project.file('./.aat-env').exists()) {
-      project.file('./.aat-env').delete()
-    }
-  }
-}
-
-bootRun {
-  doFirst() {
-    if (project.file('./.aat-env').exists()) {
-      project.file('./.aat-env').readLines().each() {
-        def index = it.indexOf("=")
-        def key = it.substring(0, index)
-        def value = it.substring(index + 1)
-        environment key, value
-      }
-    }
-  }
-}
-
 bootJar {
   getArchiveFileName().set(provider {
     'nfdiv-case-api.jar'
@@ -400,7 +364,6 @@ tasks.withType(CftlibExec.class).configureEach {
 
 tasks.withType(CftlibExec).configureEach {
   group = 'ccd tasks'
-  dependsOn(loadEnvSecrets)
   authMode = AuthMode.Local
 
   doFirst() {
