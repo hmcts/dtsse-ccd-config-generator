@@ -11,3 +11,7 @@ includeBuild 'sdk'
 
 include 'nfdiv'
 project(':nfdiv').projectDir = file('test-projects/nfdiv')
+
+if (file('ccd-data-store-api')) {
+    include 'ccd-data-store-api'
+}

@@ -4,3 +4,4 @@
 build
 repository
 sdk/ccd-gradle-plugin/src/main/resources/application.properties
+ccd-data-store-api
