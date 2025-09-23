@@ -9,8 +9,8 @@ pluginManagement {
 
 includeBuild 'sdk'
 
-include 'nfdiv'
-project(':nfdiv').projectDir = file('test-projects/nfdiv')
+include 'e2e'
+project(':e2e').projectDir = file('test-projects/e2e')
 
 if (file('ccd-data-store-api')) {
     include 'ccd-data-store-api'
