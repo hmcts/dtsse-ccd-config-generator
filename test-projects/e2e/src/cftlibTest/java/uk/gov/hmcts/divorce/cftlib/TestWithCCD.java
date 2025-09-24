@@ -361,6 +361,21 @@ public class TestWithCCD extends CftlibTest {
     }
 
     @Test
+    @Order(10)
+    public void storedCaseDataFiltersExternalFields() throws Exception {
+        String sql = "select data::text from ccd.case_data where reference = :ref";
+        String storedJson = db.queryForObject(sql, Map.of("ref", caseRef), String.class);
+
+        assertThat("Stored case data should not be null", storedJson, is(notNullValue()));
+
+        var dataNode = mapper.readTree(storedJson);
+        assertThat("External field 'note' must be filtered out", dataNode.has("note"), is(false));
+        assertThat("External field 'notes' must be filtered out", dataNode.has("notes"), is(false));
+        assertThat("Non-external field 'applicationType' should remain",
+            dataNode.path("applicationType").asText(), equalTo("soleApplication"));
+    }
+
+    @Test
     @Order(11)
     @SneakyThrows
     void testUpdateFailsForUnsupportedOperator() {
@@ -813,6 +828,64 @@ public class TestWithCCD extends CftlibTest {
         String lastNoteSql = "SELECT note FROM case_notes WHERE reference = :ref ORDER BY id DESC LIMIT 1";
         String latestNote = db.queryForObject(lastNoteSql, Map.of("ref", caseRef), String.class);
         assertThat(latestNote, equalTo(noteText));
+    }
+
+    @SneakyThrows
+    @Order(100)
+    @Test
+    void casePointerRemainsImmutable() {
+        try (Connection connection = cftlib().getConnection(Database.Datastore);
+             PreparedStatement statement = connection.prepareStatement("""
+                SELECT state,
+                       data::text AS data,
+                       data_classification::text AS data_classification,
+                       supplementary_data::text AS supplementary_data,
+                       security_classification,
+                       last_state_modified_date,
+                       resolved_ttl,
+                       created_date,
+                       last_modified,
+                       version
+                   FROM case_data
+                  WHERE reference = ?
+                    AND security_classification = 'RESTRICTED'
+                 """)) {
+            statement.setLong(1, caseRef);
+
+            try (ResultSet rs = statement.executeQuery()) {
+                assertThat("Expected case pointer to exist for case " + caseRef, rs.next(), is(true));
+
+                assertThat("Case pointer state must remain blank", rs.getString("state"), equalTo(""));
+
+                var dataNode = mapper.readTree(rs.getString("data"));
+                assertThat("Case pointer data must remain empty", dataNode.isObject() && dataNode.isEmpty(), is(true));
+
+                var classificationNode = mapper.readTree(rs.getString("data_classification"));
+                assertThat("Case pointer data classification must remain empty",
+                    classificationNode.isObject() && classificationNode.isEmpty(), is(true));
+
+                assertThat("Case pointer must not record supplementary data",
+                    rs.getString("supplementary_data"), is(nullValue()));
+
+                assertThat("Case pointer security classification must remain RESTRICTED",
+                    rs.getString("security_classification"), equalTo("RESTRICTED"));
+
+                var createdTimestamp = rs.getTimestamp("created_date");
+                assertThat("Case pointer should report its creation timestamp", createdTimestamp, is(notNullValue()));
+
+                var lastStateModified = rs.getTimestamp("last_state_modified_date");
+                assertThat("Case pointer must not set last_state_modified_date", lastStateModified, is(nullValue()));
+
+                assertThat("Case pointer must not set a resolved TTL", rs.getDate("resolved_ttl"), is(nullValue()));
+
+                var lastModified = rs.getTimestamp("last_modified");
+                if (lastModified != null) {
+                    var delta = Duration.between(createdTimestamp.toInstant(), lastModified.toInstant()).abs();
+                    assertThat("Case pointer last_modified should remain at initial value",
+                        delta, lessThanOrEqualTo(Duration.ofSeconds(1)));
+                }
+            }
+        }
     }
 
 }

@@ -1,6 +1,11 @@
-# To run the tests
+# To run all tests
 
 ./gradlew check
+
+
+# To run the e2e tests
+
+./gradlew -i e2e:cftlibTest
 
 # Style
 
