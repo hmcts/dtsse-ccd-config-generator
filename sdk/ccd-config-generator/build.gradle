@@ -36,7 +36,7 @@ dependencies {
     testImplementation group: 'org.springframework.boot', name: 'spring-boot-starter-test', version: springBootVersion
 
 
-    implementation group: 'org.apache.commons', name: 'commons-lang3', version: '3.18.0'
+    implementation group: 'org.apache.commons', name: 'commons-lang3', version: '3.19.0'
     // Types from this library are used in the config generator's API
     api group: 'de.cronn', name: 'reflection-util', version: '2.18.0'
     implementation group: 'org.objenesis', name: 'objenesis', version: '3.4'
