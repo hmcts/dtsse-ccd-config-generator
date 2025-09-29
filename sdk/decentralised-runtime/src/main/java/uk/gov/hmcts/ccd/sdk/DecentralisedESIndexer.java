@@ -78,11 +78,11 @@ public class DecentralisedESIndexer implements DisposableBean {
             delete from ccd.es_queue es where id in (select id from ccd.es_queue limit 2000)
             returning id
           )
-            select id, case_type_id, index_id, case_version, event_id, row_to_json(row)::jsonb as row
+            select id, case_type_id, index_id, case_revision, event_id, row_to_json(row)::jsonb as row
             from (
               select
                 now() as "@timestamp",
-                cd.case_version,
+                cd.case_revision,
                 ce.id as event_id,
                 cd.case_type_id,
                 cd.created_date,

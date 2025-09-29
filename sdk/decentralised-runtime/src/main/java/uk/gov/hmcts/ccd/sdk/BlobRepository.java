@@ -56,7 +56,7 @@ class BlobRepository {
               to_json(last_state_modified_date)#>>'{}' as last_state_modified_date,
               to_json(coalesce(c.last_modified, c.created_date))#>>'{}' as last_modified,
               supplementary_data::text,
-              case_version as global_version
+              case_revision
          from ccd.case_data c
          where reference IN (:caseRefs)
         """, params);
@@ -92,14 +92,23 @@ class BlobRepository {
 
     result.put("data_classification", Map.of());
 
-    var response = new DecentralisedCaseDetails();
-    response.setVersion((Long) result.remove("global_version"));
-    response.setCaseDetails(
-        defaultMapper.convertValue(
-            result,
-            uk.gov.hmcts.ccd.domain.model.definition.CaseDetails.class
-        )
+    var revisionRaw = result.remove("case_revision");
+    Long revision = null;
+    if (revisionRaw instanceof Number number) {
+      revision = number.longValue();
+    }
+
+    var caseDetails = defaultMapper.convertValue(
+        result,
+        uk.gov.hmcts.ccd.domain.model.definition.CaseDetails.class
     );
+    if (revision != null) {
+      caseDetails.setRevision(revision);
+    }
+
+    var response = new DecentralisedCaseDetails();
+    response.setCaseDetails(caseDetails);
+    response.setRevision(revision);
     return response;
   }
 
