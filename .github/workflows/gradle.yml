@@ -16,10 +16,3 @@ jobs:
         java-version: 17
     - name: Build
       run: ./gradlew check -i
-    - name: Release
-      env:
-        GRADLE_PLUGIN_PORTAL_KEY: ${{ secrets.GRADLE_PLUGIN_PORTAL_KEY }}
-        GRADLE_PLUGIN_PORTAL_SECRET: ${{ secrets.GRADLE_PLUGIN_PORTAL_SECRET }}
-        RELEASE_VERSION: ${{ github.ref }}
-      run: ./gradlew :sdk:ccd-gradle-plugin:publishPlugins
-      if: startsWith(github.ref, 'refs/tags')
