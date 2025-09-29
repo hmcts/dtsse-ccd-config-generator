@@ -10,10 +10,12 @@ import de.cronn.reflection.util.TypedPropertyGetter;
 import java.util.Collection;
 import java.util.Map;
 import java.util.function.Function;
+import lombok.Getter;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
+import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -23,6 +25,7 @@ import org.springframework.web.server.ResponseStatusException;
 import uk.gov.hmcts.ccd.sdk.ResolvedCCDConfig;
 import uk.gov.hmcts.ccd.sdk.api.CaseDetails;
 import uk.gov.hmcts.ccd.sdk.api.Event;
+import uk.gov.hmcts.ccd.sdk.api.EventPayload;
 import uk.gov.hmcts.ccd.sdk.api.callback.AboutToStartOrSubmitResponse;
 import uk.gov.hmcts.ccd.sdk.api.callback.MidEvent;
 import uk.gov.hmcts.reform.ccd.client.model.CallbackRequest;
@@ -33,6 +36,7 @@ import uk.gov.hmcts.reform.ccd.client.model.SubmittedCallbackResponse;
 @RequestMapping("/callbacks")
 public class CallbackController {
 
+  @Getter
   private final ImmutableMap<String, ResolvedCCDConfig<?, ?, ?>> caseTypeToConfig;
 
   private ObjectMapper mapper;
@@ -54,6 +58,23 @@ public class CallbackController {
   @PostMapping("/about-to-start")
   public AboutToStartOrSubmitResponse aboutToStart(@RequestBody CallbackRequest request) {
     log.info("About to start event ID: " + request.getEventId());
+
+    var r = findCaseEvent(request);
+
+    if (r.getStartHandler() != null) {
+      var ct = getCaseTypeToConfig().get(request.getCaseDetails().getCaseTypeId());
+      String json = mapper.writeValueAsString(request.getCaseDetails().getData());
+      var domainClass = mapper.readValue(json, ct.getCaseClass());
+      EventPayload payload = new EventPayload<>(
+          request.getCaseDetails().getId(),
+          domainClass,
+          new LinkedMultiValueMap<>()
+      );
+
+      var res = r.getStartHandler().start(payload);
+      return AboutToStartOrSubmitResponse.builder().data(res).build();
+    }
+
     return findCallback(request, Event::getAboutToStartCallback)
         .handle(convertCaseDetails(request.getCaseDetails()));
   }
@@ -62,6 +83,7 @@ public class CallbackController {
   @PostMapping("/about-to-submit")
   public AboutToStartOrSubmitResponse aboutToSubmit(@RequestBody CallbackRequest request) {
     log.info("About to submit event ID: " + request.getEventId());
+
     return findCallback(request, Event::getAboutToSubmitCallback)
         .handle(convertCaseDetails(request.getCaseDetails()),
             convertCaseDetails(request.getCaseDetailsBefore(), request.getCaseDetails().getCaseTypeId()));
@@ -79,7 +101,7 @@ public class CallbackController {
   @SneakyThrows
   @PostMapping("/mid-event")
   public AboutToStartOrSubmitResponse midEvent(@RequestBody CallbackRequest request,
-                                            @RequestParam(name = "page") String page) {
+                                               @RequestParam(name = "page") String page) {
     log.info("Mid event callback: {} for page {} ", request.getEventId(), page);
     MidEvent<?, ?> callback = findCaseEvent(request).getFields().getPagesToMidEvent().get(page);
 
@@ -149,4 +171,29 @@ public class CallbackController {
     return mapper.readValue(json, caseTypeToJavaType.get(caseType));
   }
 
+  public boolean hasAboutToSubmitCallback(String caseType, String event) {
+    if (!caseTypeToConfig.containsKey(caseType)) {
+      return false;
+    }
+
+    Event<?, ?, ?> result = caseTypeToConfig.get(caseType).getEvents().get(event);
+    if (result == null) {
+      return false;
+    }
+
+    return result.getAboutToSubmitCallback() != null;
+  }
+
+  public boolean hasSubmittedCallback(String caseType, String event) {
+    if (!caseTypeToConfig.containsKey(caseType)) {
+      return false;
+    }
+
+    Event<?, ?, ?> result = caseTypeToConfig.get(caseType).getEvents().get(event);
+    if (result == null) {
+      return false;
+    }
+
+    return result.getSubmittedCallback() != null;
+  }
 }

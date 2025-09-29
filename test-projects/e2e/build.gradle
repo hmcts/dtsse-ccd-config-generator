@@ -1,0 +1,194 @@
+import uk.gov.hmcts.rse.AuthMode
+import uk.gov.hmcts.rse.CftlibExec
+
+plugins {
+  id 'org.springframework.boot' version '3.3.5'
+  id 'io.spring.dependency-management' version '1.1.6'
+  id 'hmcts.ccd.sdk'
+  id 'com.github.hmcts.rse-cft-lib' version '0.19.1877'
+}
+
+group = 'uk.gov.hmcts'
+version = '0.0.1'
+
+ccd {
+  configDir = file('build/definitions')
+  decentralised = true
+}
+
+java {
+  toolchain {
+    languageVersion = JavaLanguageVersion.of(21)
+  }
+}
+
+configurations {
+  cftlibTestImplementation.extendsFrom testImplementation
+  cftlibTestRuntime.extendsFrom testRuntime
+}
+
+repositories {
+  mavenLocal()
+  mavenCentral()
+  maven { url 'https://jitpack.io' }
+}
+
+def versions = [
+  jackson      : '2.18.0',
+  junit        : '5.11.3',
+  junitPlatform: '1.11.3',
+  lombok       : '1.18.34'
+]
+
+ext.libraries = [
+  junit5: [
+    "org.junit.jupiter:junit-jupiter-api:${versions.junit}",
+    "org.junit.jupiter:junit-jupiter-engine:${versions.junit}",
+    "org.junit.jupiter:junit-jupiter-params:${versions.junit}",
+    "org.junit.platform:junit-platform-commons:${versions.junitPlatform}",
+    "org.junit.platform:junit-platform-engine:${versions.junitPlatform}"
+  ]
+]
+
+dependencies {
+  implementation 'org.springframework.boot:spring-boot-starter-actuator'
+  implementation 'org.springframework.boot:spring-boot-starter-aop'
+  implementation 'org.springframework.boot:spring-boot-starter-jdbc'
+  implementation 'org.springframework.boot:spring-boot-starter-validation'
+  implementation 'org.springframework.boot:spring-boot-starter-web'
+
+  implementation 'org.springframework.retry:spring-retry'
+  implementation 'org.springframework.cloud:spring-cloud-starter-bootstrap:4.1.4'
+
+  implementation 'org.flywaydb:flyway-core:9.22.3'
+  implementation 'org.postgresql:postgresql:42.2.5'
+
+  implementation 'net.logstash.logback:logstash-logback-encoder:8.0'
+  implementation "com.fasterxml.jackson.core:jackson-annotations:${versions.jackson}"
+  implementation "com.fasterxml.jackson.core:jackson-core:${versions.jackson}"
+  implementation "com.fasterxml.jackson.core:jackson-databind:${versions.jackson}"
+
+  implementation 'com.github.hmcts:ccd-case-document-am-client:1.7.3'
+  implementation 'com.github.hmcts:ccd-client:5.0.3'
+  implementation 'com.github.hmcts:idam-java-client:3.0.3'
+  implementation 'com.github.hmcts:java-logging:6.1.7'
+  implementation 'com.github.hmcts:send-letter-client:4.0.4'
+  implementation 'com.github.hmcts:service-auth-provider-java-client:5.2.0'
+
+  implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.6.0'
+
+  implementation 'com.github.ben-manes.caffeine:caffeine:3.1.8'
+  implementation 'com.google.guava:guava:33.3.1-jre'
+
+  implementation "org.projectlombok:lombok:${versions.lombok}"
+  annotationProcessor "org.projectlombok:lombok:${versions.lombok}"
+  cftlibAnnotationProcessor "org.projectlombok:lombok:${versions.lombok}"
+  cftlibTestAnnotationProcessor "org.projectlombok:lombok:${versions.lombok}"
+
+  testImplementation libraries.junit5
+  testImplementation('org.springframework.boot:spring-boot-starter-test') {
+    exclude module: 'commons-logging'
+    exclude module: 'android-json'
+    exclude group: 'junit', module: 'junit'
+    exclude group: 'org.junit.vintage', module: 'junit-vintage-engine'
+  }
+
+  testImplementation 'com.google.code.gson:gson:2.11.0'
+  testImplementation 'org.apache.httpcomponents:httpclient:4.5.14'
+}
+
+springBoot {
+  mainClass = 'uk.gov.hmcts.divorce.CaseApiApplication'
+}
+
+tasks.withType(JavaCompile).configureEach {
+  options.compilerArgs << '-Xlint:unchecked' << '-Werror'
+}
+
+tasks.withType(JavaExec).configureEach {
+  javaLauncher.set(javaToolchains.launcherFor(java.toolchain))
+}
+
+tasks.withType(Test).configureEach {
+  useJUnitPlatform()
+  testLogging {
+    exceptionFormat = 'full'
+  }
+  maxParallelForks = Math.min(Runtime.runtime.availableProcessors().intdiv(2), 4) ?: 1
+  jvmArgs([
+    '--add-opens=java.base/java.lang=ALL-UNNAMED',
+    '--add-opens=java.base/java.util=ALL-UNNAMED'
+  ])
+}
+
+test {
+  failFast = true
+}
+
+bootJar {
+  archiveFileName.set('nfdiv-case-api.jar')
+  manifest {
+    attributes('Implementation-Version': project.version.toString())
+  }
+}
+
+generateCCDConfig.doLast {
+  copy {
+    from file('ccd-definitions')
+    into layout.buildDirectory.dir('definitions/NFD')
+  }
+}
+
+tasks.withType(CftlibExec).configureEach {
+  group = 'ccd tasks'
+  authMode = AuthMode.Local
+  environment 'CCD_DECENTRALISED_CASE-TYPE-SERVICE-URLS_NFD', 'http://localhost:4013'
+
+  doFirst {
+    environment 'CITIZEN_UPDATE_CASE_STATE_ENABLED', 'true'
+    environment 'LOGGING_LEVEL_UK_GOV_HMCTS_DIVORCE', 'info'
+    environment 'ROLE_ASSIGNMENT_URL', 'http://localhost:4096'
+    environment 'CASE_DATA_STORE_BASEURL', 'http://localhost:4452'
+    environment 'XUI_MO_PORT', '3009'
+    environment 'RSE_LIB_ADDITIONAL_DATABASES', 'nfd'
+    environment 'CCD_POCS_URL', 'http://localhost:4013'
+    environment 'CCD_DOCUMENT_URL_PATTERN', '.*'
+    environment 'ENABLE_PSEUDO_ROLE_ASSIGNMENTS_GENERATION', true
+    environment 'S2S_AUTHORISED_SERVICES', 'ccd_definition,ccd_data,xui_webapp,nfdiv_case_api,ccd_gw,divorce_frontend'
+    environment 'CCD_S2S_AUTHORISED_SERVICES_CASE_USER_ROLES', 'nfdiv_case_api'
+    environment 'ROLE_ASSIGNMENT_S2S_AUTHORISED_SERVICES', 'ccd_gw,am_role_assignment_service,am_org_role_mapping_service,xui_webapp,aac_manage_case_assignment,ccd_data,nfdiv_case_api'
+    environment 'DATA_STORE_S2S_AUTHORISED_SERVICES', 'ccd_gw,fpl_case_service,ccd_data,ccd_ps,divorce_frontend,payment-api,xui_webapp,nfdiv_case_api,ccd_case_document_am_api,am_role_assignment_service'
+  }
+}
+
+cftlibTest {
+  authMode = AuthMode.Local
+  group = 'verification'
+
+  systemProperties([
+    'junit.jupiter.execution.parallel.enabled'             : 'false',
+    'junit.jupiter.execution.parallel.mode.default'        : 'same_thread',
+    'junit.jupiter.execution.parallel.mode.classes.default': 'concurrent',
+  ])
+
+  environment 'RD_PROFESSIONAL_API_URL', 'http://host.docker.internal:8765'
+  environment 'PRD_API_BASEURL', 'http://localhost:8765'
+  environment 'DOC_ASSEMBLY_URL', 'http://localhost:8765'
+  environment 'FEE_API_URL', 'http://localhost:8765'
+  environment 'PAYMENT_API_BASEURL', 'http://localhost:8765'
+  environment 'CCD_DOCUMENT_URL_PATTERN', '.*'
+  environment 'DM_STORE_BASE_URL', 'http://localhost:8765'
+  environment 'CASE_DOCUMENT_AM_API_ATTACH_DOCUMENT_ENABLED', 'false'
+  environment 'CASE_DATA_STORE_BASEURL', 'http://localhost:4452'
+  environment 'ROLE_ASSIGNMENT_URL', 'http://localhost:4096'
+  environment 'CCD_S2S_AUTHORISED_SERVICES_CASE_USER_ROLES', 'nfdiv_case_api'
+  environment 'ROLE_ASSIGNMENT_S2S_AUTHORISED_SERVICES', 'ccd_gw,am_role_assignment_service,am_org_role_mapping_service,am_role_assignment_refresh_batch,xui_webapp,aac_manage_case_assignment,ccd_data,wa_workflow_api,wa_task_management_api,wa_task_monitor,wa_case_event_handler,iac,hmc_cft_hearing_service,ccd_case_disposer,sscs,fis_hmc_api,fpl_case_service,disposer-idam-user,civil_service,prl_cos_api,nfdiv_case_api'
+  environment 'DATA_STORE_S2S_AUTHORISED_SERVICES', 'ccd_gw,fpl_case_service,ccd_data,ccd_ps,divorce_frontend,payment-api,xui_webapp,nfdiv_case_api,ccd_case_document_am_api,am_role_assignment_service'
+  environment 'RSE_LIB_ADDITIONAL_DATABASES', 'nfd'
+}
+
+configurations.all {
+  exclude group: 'com.vaadin.external.google', module: 'android-json'
+}
+
+check.dependsOn 'cftlibTest'

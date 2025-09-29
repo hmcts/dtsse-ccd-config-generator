@@ -79,6 +79,22 @@ public class CcdSdkPlugin implements Plugin<Project> {
           x.mavenContent(MavenRepositoryContentDescriptor::releasesOnly);
         });
       }
+
+      if (config.decentralised) {
+        // This is a signal to the cftlib to link in the feature branch
+        // TODO: remove on landing
+        project.getExtensions().getExtraProperties().set("cftlib.datastore", "decentralised");
+        project.getDependencies().add("implementation", "com.github.hmcts:decentralised-runtime:"
+            + getVersion());
+        // Surface that we are decentralised to the spring boot apps.
+        // This is an env var since it needs to be read beyond the application's classpath
+        // to shut off the default cftlib elasticsearch indexer when decentralised)
+        project.getTasks().withType(JavaExec.class).configureEach(t -> {
+          if (t.getTaskIdentity().type.getName().equals("uk.gov.hmcts.rse.CftlibExec")) {
+            t.getEnvironment().put("CCD_SDK_DECENTRALISED", "true");
+          }
+        });
+      }
     });
   }
 
@@ -114,6 +130,7 @@ public class CcdSdkPlugin implements Plugin<Project> {
     private DirectoryProperty configDir;
     private String rootPackage = "uk.gov.hmcts";
     private String caseType = "";
+    private boolean decentralised = false;
 
     public CCDConfig() {
     }

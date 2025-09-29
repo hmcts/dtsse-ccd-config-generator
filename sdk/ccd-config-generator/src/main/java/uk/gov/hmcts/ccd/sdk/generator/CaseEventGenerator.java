@@ -36,7 +36,7 @@ class CaseEventGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
       Path output = Paths.get(folder.getPath(), event.getId() + ".json");
 
       JsonUtils.mergeInto(output, serialise(config.getCaseType(), event, config.getAllStates(),
-          config.getCallbackHost()),
+              config.getCallbackHost()),
           new AddMissing(), "ID");
     }
   }
@@ -96,7 +96,7 @@ class CaseEventGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
     data.put("PostConditionState", getPostStateString(event.getPostState()));
     data.put("SecurityClassification", "Public");
 
-    if (event.getAboutToStartCallback() != null) {
+    if (event.getAboutToStartCallback() != null || event.getStartHandler() != null) {
       String url = callbackHost + "/callbacks/about-to-start?eventId=" + event.getId();
       data.put("CallBackURLAboutToStartEvent", url);
       if (event.getRetries().containsKey(Webhook.AboutToStart)) {
@@ -136,8 +136,8 @@ class CaseEventGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
 
   private String getPostStateString(Set<S> states) {
     return states.size() != 1
-      ? "*"
-      : states.stream().findFirst().map(Objects::toString).orElse("");
+        ? "*"
+        : states.stream().findFirst().map(Objects::toString).orElse("");
   }
 
 }

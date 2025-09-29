@@ -6,6 +6,7 @@ import org.reflections.Reflections;
 import org.reflections.util.ClasspathHelper;
 import org.reflections.util.ConfigurationBuilder;
 import org.springframework.boot.SpringApplication;
+import org.springframework.boot.WebApplicationType;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.context.ConfigurableApplicationContext;
 
@@ -22,8 +23,10 @@ class Main {
       throw new RuntimeException("Expected a single SpringBootApplication but found "
           + types.size());
     }
-    try (ConfigurableApplicationContext context =
-        SpringApplication.run(types.iterator().next(), args)) {
+    SpringApplication application = new SpringApplication(types.iterator().next());
+    application.setWebApplicationType(WebApplicationType.NONE);
+
+    try (ConfigurableApplicationContext context = application.run(args)) {
 
       File outputDir = new File(args[0]);
       context.getBean(CCDDefinitionGenerator.class).generateAllCaseTypesToJSON(outputDir);

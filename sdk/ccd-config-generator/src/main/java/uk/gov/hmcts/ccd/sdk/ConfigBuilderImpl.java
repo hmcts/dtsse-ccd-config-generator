@@ -15,8 +15,9 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import uk.gov.hmcts.ccd.sdk.api.CaseCategory.CaseCategoryBuilder;
 import uk.gov.hmcts.ccd.sdk.api.CaseRoleToAccessProfile.CaseRoleToAccessProfileBuilder;
-import uk.gov.hmcts.ccd.sdk.api.ConfigBuilder;
+import uk.gov.hmcts.ccd.sdk.api.DecentralisedConfigBuilder;
 import uk.gov.hmcts.ccd.sdk.api.Event;
+import uk.gov.hmcts.ccd.sdk.api.EventTypeBuilder;
 import uk.gov.hmcts.ccd.sdk.api.HasRole;
 import uk.gov.hmcts.ccd.sdk.api.Permission;
 import uk.gov.hmcts.ccd.sdk.api.Search.SearchBuilder;
@@ -24,8 +25,10 @@ import uk.gov.hmcts.ccd.sdk.api.SearchCases.SearchCasesBuilder;
 import uk.gov.hmcts.ccd.sdk.api.SearchCriteria.SearchCriteriaBuilder;
 import uk.gov.hmcts.ccd.sdk.api.SearchParty.SearchPartyBuilder;
 import uk.gov.hmcts.ccd.sdk.api.Tab.TabBuilder;
+import uk.gov.hmcts.ccd.sdk.api.callback.Start;
+import uk.gov.hmcts.ccd.sdk.api.callback.Submit;
 
-public class ConfigBuilderImpl<T, S, R extends HasRole> implements ConfigBuilder<T, S, R> {
+public class ConfigBuilderImpl<T, S, R extends HasRole> implements DecentralisedConfigBuilder<T, S, R> {
 
   private final ResolvedCCDConfig<T, S, R> config;
 
@@ -69,8 +72,19 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements ConfigBuilder
 
   @Override
   public EventTypeBuilderImpl<T, R, S> event(final String id) {
-    return new EventTypeBuilderImpl<>(config, events, id);
+    return new EventTypeBuilderImpl<>(config, events, id, null, null);
   }
+
+  @Override
+  public EventTypeBuilder<T, R, S> decentralisedEvent(String id, Submit<T, S> submitHandler) {
+    return new EventTypeBuilderImpl<>(config, events, id, submitHandler, null);
+  }
+
+  @Override
+  public EventTypeBuilder<T, R, S> decentralisedEvent(String id, Submit<T, S> submitHandler, Start<T, S> startHandler) {
+    return new EventTypeBuilderImpl<>(config, events, id, submitHandler, startHandler);
+  }
+
 
   @Override
   public EventTypeBuilderImpl<T, R, S> attachScannedDocEvent() {
@@ -121,7 +135,7 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements ConfigBuilder
   @Override
   public TabBuilder<T, R> tab(String tabId, String tabLabel) {
     TabBuilder<T, R> result = (TabBuilder<T, R>) TabBuilder.builder(config.caseClass,
-            new PropertyUtils()).tabID(tabId).labelText(tabLabel);
+        new PropertyUtils()).tabID(tabId).labelText(tabLabel);
     tabs.add(result);
     return result;
   }
@@ -159,7 +173,7 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements ConfigBuilder
 
   @Override
   public void addPreEventHook(
-          Function<Map<String, Object>, Map<String, Object>> hook) {
+      Function<Map<String, Object>, Map<String, Object>> hook) {
     config.preEventHooks.add(hook);
   }
 

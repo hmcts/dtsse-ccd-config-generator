@@ -74,6 +74,9 @@ import static uk.gov.hmcts.reform.fpl.enums.CMOStatus.SEND_TO_JUDGE;
 @NoArgsConstructor(force = true)
 public class CaseData {
 
+  private final long nativeLong;
+  private final Long boxedLong;
+
   @NotBlank(message = "Enter a case name")
   private final String caseName;
   @CCD(regex = ".*", access = {BulkScan.class})
@@ -364,10 +367,8 @@ public class CaseData {
   }
 
   private final String caseNote;
-
   @CCD(searchable = false)
   private final List<Element<CaseNote>> caseNotes;
-
   private final OrganisationPolicy<UserRole> organisationPolicy;
 
   @JsonUnwrapped()

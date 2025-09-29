@@ -32,14 +32,14 @@ class ConfigResolver<T, S, R extends HasRole> {
   public ResolvedCCDConfig<T, S, R> resolveCCDConfig() {
     CCDConfig<T, S, R> config = this.configs.iterator().next();
     Class<?>[] typeArgs = TypeResolver.resolveRawArguments(CCDConfig.class, config.getClass());
-    ImmutableSet<S> allStates = ImmutableSet.copyOf(((Class<S>)typeArgs[1]).getEnumConstants());
+    ImmutableSet<S> allStates = ImmutableSet.copyOf(((Class<S>) typeArgs[1]).getEnumConstants());
     Map<Class, Integer> types = resolve(typeArgs[0], basePackage);
     ConfigBuilderImpl<T, S, R> builder = new ConfigBuilderImpl(
         new ResolvedCCDConfig(typeArgs[0], typeArgs[1], typeArgs[2], types, allStates)
     );
 
     for (CCDConfig<T, S, R> c : configs) {
-      c.configure(builder);
+      c.configureDecentralised(builder);
     }
 
     return builder.build();

@@ -3,3 +3,24 @@ tasks.register('check') {
         dependsOn(included.task(':check'))
     }
 }
+
+afterEvaluate {
+    subprojects.each { subproject ->
+        if (subproject.tasks.findByName('check')) {
+            tasks.check.dependsOn subproject.tasks.check
+        }
+    }
+}
+
+// Local dev setup; soft dependency on data store is used overriding cftlib version if present.
+if (project.findProject(':ccd-data-store-api')) {
+    subprojects.each { subproject ->
+        subproject.afterEvaluate {
+            it.tasks.each {
+                if (it.name.equals("writeManifestccd-data-store-api")) {
+                    it.dependsOn(':ccd-data-store-api:jar')
+                }
+            }
+        }
+    }
+}

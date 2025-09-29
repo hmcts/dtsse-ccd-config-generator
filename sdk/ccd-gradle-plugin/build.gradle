@@ -13,7 +13,7 @@ plugins {
     id 'com.gradle.plugin-publish' version '2.0.0'
 }
 
-group 'uk.gov.hmcts.reform'
+group 'com.github.hmcts.rse-cft-lib'
 
 repositories {
   mavenCentral()
@@ -22,8 +22,6 @@ repositories {
 
 dependencies {
     // Use JUnit test framework for unit tests
-    annotationProcessor group: 'org.projectlombok', name: 'lombok', version: '1.18.40'
-    compileOnly group: 'org.projectlombok', name: 'lombok', version: '1.18.40'
     implementation 'com.google.guava:guava:33.4.8-jre'
 
     // Ensure we run the plugin's tests when the libraries are modified.
@@ -40,7 +38,7 @@ dependencies {
 // for the plugin to add to the consuming project's build.
 processResources {
     into("generator") {
-        from project(':ccd-config-generator').tasks.zipGenerator
+        from rootProject.tasks.zipGenerator
     }
 }
 

@@ -19,5 +19,11 @@
     "LiveFrom": "01/01/2017",
     "SecurityClassification": "Public",
     "ListElementCode": "telephoneNumber"
+  },
+  {
+    "FieldType" : "Number",
+    "ID" : "Telephone",
+    "ListElementCode" : "number",
+    "LiveFrom" : "01/01/2017"
   }
 ]

@@ -1,1 +1,23 @@
+pluginManagement {
+    repositories {
+        gradlePluginPortal()
+        maven {
+            url 'https://pkgs.dev.azure.com/hmcts/Artifacts/_packaging/hmcts-lib/maven/v1'
+        }
+    }
+}
+
 includeBuild 'sdk'
+
+include 'e2e'
+project(':e2e').projectDir = file('test-projects/e2e')
+
+include 'pcs'
+project(':pcs').projectDir = file('test-projects/pcs-api')
+
+include 'nfdiv'
+project(':nfdiv').projectDir = file('test-projects/nfdiv-case-api')
+
+if (file('ccd-data-store-api').exists()) {
+    include 'ccd-data-store-api'
+}
