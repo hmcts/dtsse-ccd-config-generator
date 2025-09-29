@@ -20,9 +20,9 @@ dependencies {
         transitive = false
     }
     implementation group: 'net.jodah', name: 'typetools', version: '0.6.3'
-    compileOnly 'org.projectlombok:lombok:1.18.36'
+    compileOnly 'org.projectlombok:lombok:1.18.42'
 
-    annotationProcessor 'org.projectlombok:lombok:1.18.36'
+    annotationProcessor 'org.projectlombok:lombok:1.18.42'
 
     implementation "org.springframework.boot:spring-boot-autoconfigure"
     implementation "org.flywaydb:flyway-core:11.3.1"
