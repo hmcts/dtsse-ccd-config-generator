@@ -7,7 +7,7 @@ subprojects {
     apply plugin: 'checkstyle'
     apply plugin: 'io.freefair.lombok'
 
-    version System.getenv('RELEASE_VERSION') ?: 'DEV-SNAPSHOT'
+    version System.getenv('RELEASE_VERSION')?.replace('refs/tags/', '') ?: 'DEV-SNAPSHOT'
 
     compileJava   {
         sourceCompatibility = 17
