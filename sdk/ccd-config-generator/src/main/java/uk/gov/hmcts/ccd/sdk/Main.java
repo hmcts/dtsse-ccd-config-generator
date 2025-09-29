@@ -1,12 +1,13 @@
 package uk.gov.hmcts.ccd.sdk;
 
 import java.io.File;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Set;
 import org.reflections.Reflections;
 import org.reflections.util.ClasspathHelper;
 import org.reflections.util.ConfigurationBuilder;
 import org.springframework.boot.SpringApplication;
-import org.springframework.boot.WebApplicationType;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.context.ConfigurableApplicationContext;
 
@@ -24,7 +25,12 @@ class Main {
           + types.size());
     }
     SpringApplication application = new SpringApplication(types.iterator().next());
-    application.setWebApplicationType(WebApplicationType.NONE);
+
+    // Pick a random port to avoid conflicts
+    Map<String, Object> defaults = new HashMap<>();
+    defaults.putIfAbsent("server.port", "0");
+    defaults.putIfAbsent("server.address", "127.0.0.1");
+    application.setDefaultProperties(defaults);
 
     try (ConfigurableApplicationContext context = application.run(args)) {
 
