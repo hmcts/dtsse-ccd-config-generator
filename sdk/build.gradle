@@ -65,16 +65,16 @@ tasks.register('check') {
     dependsOn(':ccd-gradle-plugin:check')
 }
 
-tasks.register('publishToMavenLocal') {
+tasks.register('publishToMavenLocal') { task ->
     subprojects.each { subproject ->
-        subproject.tasks.matching { it.name == 'publishToMavenLocal' }
-            .configureEach { dependsOn(it) }
+        task.dependsOn(subproject.tasks.matching { it.name == 'publishToMavenLocal' })
     }
 }
 
-tasks.register('publishToAzureArtifacts') {
+tasks.register('publishToAzureArtifacts') { task ->
     subprojects.each { subproject ->
-        subproject.tasks.matching { it.name.endsWith('ToAzureArtifactsRepository') }
-            .configureEach { dependsOn(it) }
+        task.dependsOn(
+            subproject.tasks.matching { it.name.endsWith('ToAzureArtifactsRepository') }
+        )
     }
 }

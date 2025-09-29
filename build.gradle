@@ -4,23 +4,23 @@ tasks.register('check') {
     }
 }
 
-tasks.register('publishToMavenLocal') {
+tasks.register('publishToMavenLocal') { task ->
     gradle.includedBuilds.each { included ->
-        dependsOn(included.task(':publishToMavenLocal'))
+        task.dependsOn(included.task(':publishToMavenLocal'))
     }
     subprojects.each { subproject ->
-        subproject.tasks.matching { it.name == 'publishToMavenLocal' }
-            .configureEach { dependsOn(it) }
+        task.dependsOn(subproject.tasks.matching { it.name == 'publishToMavenLocal' })
     }
 }
 
-tasks.register('publishToAzureArtifacts') {
+tasks.register('publishToAzureArtifacts') { task ->
     gradle.includedBuilds.each { included ->
-        dependsOn(included.task(':publishToAzureArtifacts'))
+        task.dependsOn(included.task(':publishToAzureArtifacts'))
     }
     subprojects.each { subproject ->
-        subproject.tasks.matching { it.name.endsWith('ToAzureArtifactsRepository') }
-            .configureEach { dependsOn(it) }
+        task.dependsOn(
+            subproject.tasks.matching { it.name.endsWith('ToAzureArtifactsRepository') }
+        )
     }
 }
 
