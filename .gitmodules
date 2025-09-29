@@ -4,3 +4,7 @@
 [submodule "test-projects/pcs-api"]
 	path = test-projects/pcs-api
 	url = git@github.com:hmcts/pcs-api.git
+[submodule "test-projects/nfdiv-case-api"]
+	path = test-projects/nfdiv-case-api
+	url = git@github.com:hmcts/nfdiv-case-api.git
+	branch = path-fix
