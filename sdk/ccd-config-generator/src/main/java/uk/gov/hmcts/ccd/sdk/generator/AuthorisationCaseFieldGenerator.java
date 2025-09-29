@@ -129,8 +129,6 @@ class AuthorisationCaseFieldGenerator<T, S, R extends HasRole> implements Config
       }
     }
 
-    addPermissionsFromFields(fieldRolePermissions, config.getCaseClass(), null, null);
-
     File folder = new File(root.getPath(), "AuthorisationCaseField");
     folder.mkdir();
     for (String role : fieldRolePermissions.columnKeySet()) {
