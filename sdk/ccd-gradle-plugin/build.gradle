@@ -10,20 +10,16 @@ plugins {
     // Apply the Java Gradle plugin development plugin to add support for developing Gradle plugins
     id 'groovy'
     id 'java-gradle-plugin'
-    id 'com.gradle.plugin-publish' version '2.0.0'
+    id 'maven-publish'
 }
 
 group 'com.github.hmcts.rse-cft-lib'
 
 repositories {
   mavenCentral()
-  maven { url 'https://pkgs.dev.azure.com/hmcts/Artifacts/_packaging/hmcts-lib/maven/v1' }
 }
 
 dependencies {
-    // Use JUnit test framework for unit tests
-    implementation 'com.google.guava:guava:33.4.8-jre'
-
     // Ensure we run the plugin's tests when the libraries are modified.
     testImplementation project(':ccd-config-generator')
 
@@ -34,27 +30,15 @@ dependencies {
     testImplementation group: 'org.assertj', name: 'assertj-core', version: '3.27.4'
 }
 
-// Pack the generator into the plugin JAR
-// for the plugin to add to the consuming project's build.
-processResources {
-    into("generator") {
-        from rootProject.tasks.zipGenerator
-    }
-}
-
 java {
   toolchain {
     languageVersion = JavaLanguageVersion.of(17)
   }
 }
 
-ext['gradle.publish.key'] = System.getenv('GRADLE_PLUGIN_PORTAL_KEY')
-ext['gradle.publish.secret'] = System.getenv('GRADLE_PLUGIN_PORTAL_SECRET')
-
 gradlePlugin {
     website = 'https://github.com/hmcts/ccd-config-generator'
     vcsUrl = 'https://github.com/hmcts/ccd-config-generator'
-    // Define the plugin
     plugins {
         greeting {
             id = 'hmcts.ccd.sdk'
@@ -66,25 +50,10 @@ gradlePlugin {
     }
 }
 
-compileJava {
-    options.compilerArgs += ["-Werror"]
-}
-
 sourceSets {
   functionalTest {
   }
 }
-
-task setVersion {
-    doLast {
-        def resources = file('src/main/resources')
-        resources.mkdirs()
-        def props = new File(resources, 'application.properties')
-        props.text = "types.version=${version}"
-    }
-}
-
-compileJava.dependsOn setVersion
 
 gradlePlugin.testSourceSets(sourceSets.functionalTest)
 configurations.functionalTestImplementation.extendsFrom(configurations.testImplementation)
@@ -94,6 +63,11 @@ task functionalTest(type: Test) {
     testClassesDirs = sourceSets.functionalTest.output.classesDirs
     classpath = sourceSets.functionalTest.runtimeClasspath
 }
+
+functionalTest.dependsOn(
+    project(':ccd-config-generator').tasks.named('publishToMavenLocal'),
+    project(':decentralised-runtime').tasks.named('publishToMavenLocal')
+)
 
 functionalTest.inputs.dir file('test-projects')
 

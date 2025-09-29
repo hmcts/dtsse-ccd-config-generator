@@ -1,9 +1,5 @@
 package uk.gov.hmcts.ccd.sdk;
 
-import java.io.File;
-import java.io.InputStream;
-import java.nio.file.Files;
-import java.nio.file.StandardCopyOption;
 import java.util.Arrays;
 import java.util.Properties;
 import lombok.Data;
@@ -25,12 +21,6 @@ public class CcdSdkPlugin implements Plugin<Project> {
 
   public void apply(Project project) {
     project.getPlugins().apply(JavaPlugin.class);
-
-    // Extract the config generator maven repo and add to the project.
-    project.getRepositories().maven(x -> {
-      x.setUrl(extractGeneratorRepository(project));
-      x.setName("RSE CCD SDK maven repository");
-    });
 
     // Add the dependency on the generator which will be fetched from the local maven repo.
     project.getDependencies().add("implementation", "com.github.hmcts:ccd-config-generator:"
@@ -96,25 +86,6 @@ public class CcdSdkPlugin implements Plugin<Project> {
         });
       }
     });
-  }
-
-  @SneakyThrows
-  private File extractGeneratorRepository(Project project) {
-    DirectoryProperty buildDir = project.getLayout().getBuildDirectory();
-    File archive = buildDir.file("generator.zip").get().getAsFile();
-    try (InputStream is = CcdSdkPlugin.class.getClassLoader()
-        .getResourceAsStream("generator/generator.zip")) {
-      com.google.common.io.Files.createParentDirs(archive);
-      Files.copy(is, archive.toPath(), StandardCopyOption.REPLACE_EXISTING);
-    }
-
-    File generatorDir = buildDir.dir("config-generator-maven-repo").get().getAsFile();
-    project.copy(x -> {
-      x.from(project.zipTree(archive));
-      x.into(generatorDir);
-    });
-
-    return generatorDir;
   }
 
   @SneakyThrows

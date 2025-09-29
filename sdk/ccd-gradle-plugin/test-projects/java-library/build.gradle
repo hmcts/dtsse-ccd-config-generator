@@ -21,6 +21,7 @@ ccd {
 }
 
 repositories {
+  mavenLocal()
   mavenCentral()
 }
 
