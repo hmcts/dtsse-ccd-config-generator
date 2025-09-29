@@ -24,51 +24,40 @@ subprojects {
     group = 'com.github.hmcts'
     repositories {
         mavenCentral()
+        maven {
+            url 'https://pkgs.dev.azure.com/hmcts/Artifacts/_packaging/hmcts-lib/maven/v1'
+        }
     }
 
-    if (project.name in ['ccd-config-generator', 'decentralised-runtime']) {
-        apply plugin: 'java-library'
-        apply plugin: 'maven-publish'
+    apply plugin: 'java-library'
+    apply plugin: 'maven-publish'
 
-        java {
-            withJavadocJar()
-            withSourcesJar()
-        }
+    java {
+        withJavadocJar()
+        withSourcesJar()
+    }
 
-        def mavenFolder = rootProject.layout.buildDirectory.dir('config-generator')
-        publishing {
-            publications {
-                Main(MavenPublication) {
-                    from components.java
-                    groupId 'com.github.hmcts'
-                    artifactId project.name
-                    version version
-
-                    pom.withXml {
-                        def root = asNode()
-                        root.appendNode('description', 'Generate CCD Configuration from code')
-                        root.appendNode('name', 'CCD Config generator')
-                        root.appendNode('url', 'https://github.com/hmcts/ccd-config-generator')
-                    }
-                }
+    publishing {
+        publications {
+            Main(MavenPublication) {
+                from components.java
+                groupId 'com.github.hmcts'
+                artifactId project.name
+                version version
             }
-            repositories {
-                maven {
-                    url = mavenFolder
-                    name = 'generator'
+        }
+        repositories {
+            mavenLocal()
+            maven {
+                name = 'AzureArtifacts'
+                url = uri('https://pkgs.dev.azure.com/hmcts/Artifacts/_packaging/hmcts-lib/maven/v1')
+                credentials {
+                    username = System.getenv('AZURE_DEVOPS_ARTIFACT_USERNAME')
+                    password = System.getenv('AZURE_DEVOPS_ARTIFACT_TOKEN')
                 }
             }
         }
-        tasks.publishMainPublicationToGeneratorRepository.outputs.dir(mavenFolder)
     }
-}
-
-tasks.register('zipGenerator', Zip) {
-    from project(':ccd-config-generator').tasks.named('publishMainPublicationToGeneratorRepository')
-    from project(':decentralised-runtime').tasks.named('publishMainPublicationToGeneratorRepository')
-
-    archiveFileName = 'generator.zip'
-    destinationDirectory = layout.buildDirectory
 }
 
 tasks.register('check') {
@@ -76,3 +65,16 @@ tasks.register('check') {
     dependsOn(':ccd-gradle-plugin:check')
 }
 
+tasks.register('publishToMavenLocal') { task ->
+    subprojects.each { subproject ->
+        task.dependsOn(subproject.tasks.matching { it.name == 'publishToMavenLocal' })
+    }
+}
+
+tasks.register('publishToAzureArtifacts') { task ->
+    subprojects.each { subproject ->
+        task.dependsOn(
+            subproject.tasks.matching { it.name.endsWith('ToAzureArtifactsRepository') }
+        )
+    }
+}
