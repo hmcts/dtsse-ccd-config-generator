@@ -30,7 +30,6 @@ configurations {
 repositories {
   mavenLocal()
   mavenCentral()
-  maven { url 'https://jitpack.io' }
 }
 
 def versions = [
@@ -69,11 +68,11 @@ dependencies {
   implementation "com.fasterxml.jackson.core:jackson-databind:${versions.jackson}"
 
   implementation 'com.github.hmcts:ccd-case-document-am-client:1.7.3'
-  implementation 'com.github.hmcts:ccd-client:5.0.3'
+  implementation 'com.github.hmcts:core-case-data-store-client:5.2.0'
   implementation 'com.github.hmcts:idam-java-client:3.0.3'
-  implementation 'com.github.hmcts:java-logging:6.1.7'
-  implementation 'com.github.hmcts:send-letter-client:4.0.4'
-  implementation 'com.github.hmcts:service-auth-provider-java-client:5.2.0'
+  implementation 'com.github.hmcts.java-logging:logging:6.1.8'
+  implementation 'com.github.hmcts:send-letter-client:5.1.1'
+  implementation 'com.github.hmcts:service-auth-provider-java-client:5.1.2'
 
   implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.6.0'
 
@@ -119,6 +118,7 @@ tasks.withType(Test).configureEach {
     '--add-opens=java.base/java.lang=ALL-UNNAMED',
     '--add-opens=java.base/java.util=ALL-UNNAMED'
   ])
+  systemProperty 'spring.cloud.compatibility-verifier.enabled', 'false'
 }
 
 test {
@@ -143,6 +143,7 @@ tasks.withType(CftlibExec).configureEach {
   group = 'ccd tasks'
   authMode = AuthMode.Local
   environment 'CCD_DECENTRALISED_CASE-TYPE-SERVICE-URLS_NFD', 'http://localhost:4013'
+  environment 'SPRING_CLOUD_COMPATIBILITY_VERIFIER_ENABLED', 'false'
 
   doFirst {
     environment 'CITIZEN_UPDATE_CASE_STATE_ENABLED', 'true'
@@ -169,6 +170,7 @@ cftlibTest {
     'junit.jupiter.execution.parallel.enabled'             : 'false',
     'junit.jupiter.execution.parallel.mode.default'        : 'same_thread',
     'junit.jupiter.execution.parallel.mode.classes.default': 'concurrent',
+    'spring.cloud.compatibility-verifier.enabled'          : 'false',
   ])
 
   environment 'RD_PROFESSIONAL_API_URL', 'http://host.docker.internal:8765'
