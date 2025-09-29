@@ -36,6 +36,12 @@ java {
   }
 }
 
+jar {
+    manifest {
+        attributes('Implementation-Version': project.version)
+    }
+}
+
 gradlePlugin {
     website = 'https://github.com/hmcts/ccd-config-generator'
     vcsUrl = 'https://github.com/hmcts/ccd-config-generator'

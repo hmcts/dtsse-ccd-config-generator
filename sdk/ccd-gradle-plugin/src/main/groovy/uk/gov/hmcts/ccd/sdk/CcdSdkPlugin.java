@@ -1,9 +1,7 @@
 package uk.gov.hmcts.ccd.sdk;
 
 import java.util.Arrays;
-import java.util.Properties;
 import lombok.Data;
-import lombok.SneakyThrows;
 import org.gradle.api.Action;
 import org.gradle.api.Plugin;
 import org.gradle.api.Project;
@@ -22,7 +20,7 @@ public class CcdSdkPlugin implements Plugin<Project> {
   public void apply(Project project) {
     project.getPlugins().apply(JavaPlugin.class);
 
-    // Add the dependency on the generator which will be fetched from the local maven repo.
+    // Add the dependency on the generator
     project.getDependencies().add("implementation", "com.github.hmcts:ccd-config-generator:"
         + getVersion());
 
@@ -88,11 +86,9 @@ public class CcdSdkPlugin implements Plugin<Project> {
     });
   }
 
-  @SneakyThrows
   private String getVersion() {
-    Properties properties = new Properties();
-    properties.load(getClass().getClassLoader().getResourceAsStream("application.properties"));
-    return properties.getProperty("types.version");
+    String implementationVersion = getClass().getPackage().getImplementationVersion();
+    return implementationVersion != null ? implementationVersion : "DEV-SNAPSHOT";
   }
 
   @Data
