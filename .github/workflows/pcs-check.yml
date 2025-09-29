@@ -8,8 +8,24 @@ jobs:
   pcs-check:
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          submodules: recursive
+      - name: Set up JDK
+        uses: actions/setup-java@v5
+        with:
+          distribution: 'zulu'
+          java-version: 17
+      - name: Run pcs:check
+        run: ./gradlew pcs:check -i
+
+  pcs-semantic-diff:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
       - name: Checkout base branch
-        if: github.event_name == 'pull_request'
         uses: actions/checkout@v5
         with:
           ref: ${{ github.event.pull_request.base.sha }}
@@ -28,19 +44,14 @@ jobs:
           distribution: 'zulu'
           java-version: 17
       - name: Generate base CCD config
-        if: github.event_name == 'pull_request'
         working-directory: base
         run: ./gradlew pcs:generateCCDConfig -i
       - name: Generate PR CCD config
         working-directory: pr
         run: ./gradlew pcs:generateCCDConfig -i
       - name: Compare CCD configuration outputs
-        if: github.event_name == 'pull_request'
         working-directory: pr
         run: |
           python scripts/ccd_diff.py \
             ../base/test-projects/pcs-api/build/definitions \
             test-projects/pcs-api/build/definitions
-      - name: Run pcs:check
-        working-directory: pr
-        run: ./gradlew pcs:check -i
