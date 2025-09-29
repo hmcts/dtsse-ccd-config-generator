@@ -16,8 +16,6 @@ import uk.gov.hmcts.reform.ccd.client.model.Classification;
 public class CaseDetails<T, S> {
   private Long id;
 
-  private Long version;
-
   private String jurisdiction;
 
   @JsonProperty("case_type_id")

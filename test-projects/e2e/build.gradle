@@ -118,7 +118,6 @@ tasks.withType(Test).configureEach {
     '--add-opens=java.base/java.lang=ALL-UNNAMED',
     '--add-opens=java.base/java.util=ALL-UNNAMED'
   ])
-  systemProperty 'spring.cloud.compatibility-verifier.enabled', 'false'
 }
 
 test {
@@ -143,7 +142,6 @@ tasks.withType(CftlibExec).configureEach {
   group = 'ccd tasks'
   authMode = AuthMode.Local
   environment 'CCD_DECENTRALISED_CASE-TYPE-SERVICE-URLS_NFD', 'http://localhost:4013'
-  environment 'SPRING_CLOUD_COMPATIBILITY_VERIFIER_ENABLED', 'false'
 
   doFirst {
     environment 'CITIZEN_UPDATE_CASE_STATE_ENABLED', 'true'
@@ -170,7 +168,6 @@ cftlibTest {
     'junit.jupiter.execution.parallel.enabled'             : 'false',
     'junit.jupiter.execution.parallel.mode.default'        : 'same_thread',
     'junit.jupiter.execution.parallel.mode.classes.default': 'concurrent',
-    'spring.cloud.compatibility-verifier.enabled'          : 'false',
   ])
 
   environment 'RD_PROFESSIONAL_API_URL', 'http://host.docker.internal:8765'
