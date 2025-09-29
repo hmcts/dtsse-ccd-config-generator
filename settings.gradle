@@ -15,6 +15,6 @@ project(':e2e').projectDir = file('test-projects/e2e')
 include 'pcs'
 project(':pcs').projectDir = file('test-projects/pcs-api')
 
-if (file('ccd-data-store-api')) {
+if (file('ccd-data-store-api').exists()) {
     include 'ccd-data-store-api'
 }
