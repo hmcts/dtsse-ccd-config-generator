@@ -1,3 +1,6 @@
 [submodule "test-builds/fpl-ccd-configuration"]
 	path = test-builds/fpl-ccd-configuration
 	url = https://github.com/banderous/fpl-ccd-configuration.git
+[submodule "test-projects/pcs-api"]
+	path = test-projects/pcs-api
+	url = git@github.com:hmcts/pcs-api.git

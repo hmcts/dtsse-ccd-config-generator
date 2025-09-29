@@ -12,6 +12,9 @@ includeBuild 'sdk'
 include 'e2e'
 project(':e2e').projectDir = file('test-projects/e2e')
 
+include 'pcs'
+project(':pcs').projectDir = file('test-projects/pcs-api')
+
 if (file('ccd-data-store-api')) {
     include 'ccd-data-store-api'
 }

@@ -7,25 +7,21 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Maps;
 import de.cronn.reflection.util.TypedPropertyGetter;
-import java.net.URI;
 import java.util.Collection;
 import java.util.Map;
-import java.util.Objects;
 import java.util.function.Function;
 import lombok.Getter;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
-import org.springframework.web.util.UriComponentsBuilder;
 import uk.gov.hmcts.ccd.sdk.ResolvedCCDConfig;
 import uk.gov.hmcts.ccd.sdk.api.CaseDetails;
 import uk.gov.hmcts.ccd.sdk.api.Event;
@@ -60,21 +56,20 @@ public class CallbackController {
 
   @SneakyThrows
   @PostMapping("/about-to-start")
-  public AboutToStartOrSubmitResponse aboutToStart(@RequestBody CallbackRequest request,
-                                                   @RequestHeader HttpHeaders headers) {
+  public AboutToStartOrSubmitResponse aboutToStart(@RequestBody CallbackRequest request) {
     log.info("About to start event ID: " + request.getEventId());
 
     var r = findCaseEvent(request);
 
     if (r.getStartHandler() != null) {
-      var referer = Objects.requireNonNullElse(headers.getFirst(HttpHeaders.REFERER), "");
-      URI uri = UriComponentsBuilder.fromUriString(referer).build().toUri();
-      var params = UriComponentsBuilder.fromUri(uri).build().getQueryParams();
-
       var ct = getCaseTypeToConfig().get(request.getCaseDetails().getCaseTypeId());
       String json = mapper.writeValueAsString(request.getCaseDetails().getData());
       var domainClass = mapper.readValue(json, ct.getCaseClass());
-      EventPayload payload = new EventPayload<>(request.getCaseDetails().getId(), domainClass, params);
+      EventPayload payload = new EventPayload<>(
+          request.getCaseDetails().getId(),
+          domainClass,
+          new LinkedMultiValueMap<>()
+      );
 
       var res = r.getStartHandler().start(payload);
       return AboutToStartOrSubmitResponse.builder().data(res).build();
