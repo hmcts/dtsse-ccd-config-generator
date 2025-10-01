@@ -19,6 +19,9 @@ project(':pcs').projectDir = file('test-projects/pcs-api')
 include 'nfdiv'
 project(':nfdiv').projectDir = file('test-projects/nfdiv-case-api')
 
+include 'sptribs'
+project(':sptribs').projectDir = file('test-projects/sptribs-case-api')
+
 if (file('ccd-data-store-api').exists()) {
     include 'ccd-data-store-api'
 }

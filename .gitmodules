@@ -8,3 +8,7 @@
 	path = test-projects/nfdiv-case-api
 	url = git@github.com:hmcts/nfdiv-case-api.git
 	branch = path-fix
+[submodule "test-projects/sptribs-case-api"]
+	path = test-projects/sptribs-case-api
+	url = git@github.com:hmcts/sptribs-case-api.git
+	branch = DTSSTCI-1332-decentralisation
