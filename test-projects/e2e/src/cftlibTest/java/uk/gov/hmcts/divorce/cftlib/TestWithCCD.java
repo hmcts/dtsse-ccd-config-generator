@@ -11,6 +11,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
@@ -45,6 +46,7 @@ import uk.gov.hmcts.divorce.sow014.nfd.FailingSubmittedCallback;
 import uk.gov.hmcts.divorce.sow014.nfd.PublishedEvent;
 import uk.gov.hmcts.divorce.sow014.nfd.ReturnErrorWhenCreateTestCase;
 import uk.gov.hmcts.divorce.sow014.nfd.DecentralisedCaseworkerAddNote;
+import uk.gov.hmcts.divorce.sow014.nfd.SubmittedConfirmationCallback;
 import uk.gov.hmcts.reform.ccd.client.CoreCaseDataApi;
 import uk.gov.hmcts.reform.idam.client.IdamClient;
 import uk.gov.hmcts.rse.ccd.lib.Database;
@@ -399,6 +401,51 @@ public class TestWithCCD extends CftlibTest {
             response.getStatusLine().getStatusCode(), equalTo(400));
     }
 
+    @SneakyThrows
+    @Order(12)
+    @Test
+    public void submittedCallbackResponseIsPropagated() {
+        var token = ccdApi.startEvent(
+            getAuthorisation("TEST_CASE_WORKER_USER@mailinator.com"),
+            getServiceAuth(),
+            String.valueOf(caseRef),
+            SubmittedConfirmationCallback.EVENT_ID).getToken();
+
+        var body = Map.of(
+            "data", Collections.<String, Object>emptyMap(),
+            "event", Map.of(
+                "id", SubmittedConfirmationCallback.EVENT_ID,
+                "summary", "confirmation header test",
+                "description", "confirmation header test"
+            ),
+            "event_token", token,
+            "ignore_warning", false
+        );
+
+        var request = buildRequest(
+            "TEST_CASE_WORKER_USER@mailinator.com",
+            BASE_URL + "/cases/" + caseRef + "/events",
+            HttpPost::new);
+        withCcdAccept(request, ACCEPT_CREATE_EVENT);
+
+        request.setEntity(new StringEntity(new Gson().toJson(body), ContentType.APPLICATION_JSON));
+        var response = HttpClientBuilder.create().build().execute(request);
+        assertThat(response.getStatusLine().getStatusCode(), equalTo(201));
+
+        var responseBody = EntityUtils.toString(response.getEntity());
+        Map<String, Object> result = mapper.readValue(responseBody, new TypeReference<>() {});
+        assertThat("after_submit_callback_response should be present",
+            result.containsKey("after_submit_callback_response"), is(true));
+        @SuppressWarnings("unchecked")
+        Map<String, Object> afterSubmit = (Map<String, Object>) result.get("after_submit_callback_response");
+
+        assertThat(afterSubmit.get("confirmation_header"),
+            equalTo(SubmittedConfirmationCallback.CONFIRMATION_HEADER));
+        assertThat(afterSubmit.get("confirmation_body"),
+            equalTo(SubmittedConfirmationCallback.CONFIRMATION_BODY));
+        assertThat(result.get("callback_response_status_code"), equalTo(200));
+        assertThat(result.get("callback_response_status"), equalTo("CALLBACK_COMPLETED"));
+    }
 
     @Order(13)
     @Test
@@ -437,7 +484,7 @@ public class TestWithCCD extends CftlibTest {
         assertThat(response.getStatusLine().getStatusCode(), equalTo(200));
 
         List auditEvents = (List) result.get("events");
-        assertThat("Incorrect number of events found", auditEvents.size(), equalTo(7));
+        assertThat("Incorrect number of events found", auditEvents.size(), equalTo(8));
 
         // Get the oldest event (the creation event), which is the last in the list
         var firstEvent = (Map) auditEvents.get(auditEvents.size() - 1);

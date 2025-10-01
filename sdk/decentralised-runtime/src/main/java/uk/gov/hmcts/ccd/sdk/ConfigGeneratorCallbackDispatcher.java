@@ -87,7 +87,11 @@ public class ConfigGeneratorCallbackDispatcher implements CCDEventListener {
     int retries = r == null || r.isEmpty() ? 1 : 3;
     for (int i = 0; i < retries; i++) {
       try {
-        return controller.submitted(request);
+        var submitted = controller.submitted(request);
+        log.debug("Generator submitted callback returned header={} body={}",
+            submitted != null ? submitted.getConfirmationHeader() : null,
+            submitted != null ? submitted.getConfirmationBody() : null);
+        return submitted;
       } catch (Exception e) {
         log.warn("Unsuccessful submitted callback {}", e);
       }

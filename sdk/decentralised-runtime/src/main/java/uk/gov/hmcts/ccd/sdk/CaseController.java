@@ -32,8 +32,10 @@ import uk.gov.hmcts.ccd.data.persistence.dto.DecentralisedCaseDetails;
 import uk.gov.hmcts.ccd.data.persistence.dto.DecentralisedCaseEvent;
 import uk.gov.hmcts.ccd.data.persistence.dto.DecentralisedSubmitEventResponse;
 import uk.gov.hmcts.ccd.data.persistence.dto.DecentralisedUpdateSupplementaryDataResponse;
+import uk.gov.hmcts.ccd.domain.model.callbacks.AfterSubmitCallbackResponse;
 import uk.gov.hmcts.reform.ccd.client.model.CallbackRequest;
 import uk.gov.hmcts.reform.ccd.client.model.CaseDetails;
+import uk.gov.hmcts.reform.ccd.client.model.SubmittedCallbackResponse;
 
 @Slf4j
 @RestController
@@ -109,15 +111,24 @@ public class CaseController {
       return ResponseEntity.ok(response);
     }
 
+    SubmittedCallbackResponse submittedResponse = null;
     if (Boolean.TRUE.equals(newRequest)
         && eventListener.hasSubmittedCallbackForEvent(
             event.getEventDetails().getCaseType(),
             event.getEventDetails().getEventId()
         )) {
-      dispatchSubmitted(event);
+      submittedResponse = dispatchSubmitted(event);
     }
 
     var details = caseRepository.getCase(event.getCaseDetails().getReference());
+    if (submittedResponse != null) {
+      var afterSubmitResponse = new AfterSubmitCallbackResponse();
+      afterSubmitResponse.setConfirmationHeader(submittedResponse.getConfirmationHeader());
+      afterSubmitResponse.setConfirmationBody(submittedResponse.getConfirmationBody());
+      var responseEntity = ResponseEntity.ok(afterSubmitResponse);
+      details.getCaseDetails().setAfterSubmitCallbackResponseEntity(responseEntity);
+    }
+
     var response = new DecentralisedSubmitEventResponse();
     response.setCaseDetails(details);
     return ResponseEntity.ok(response);
@@ -201,7 +212,7 @@ public class CaseController {
   }
 
   @SneakyThrows
-  private void dispatchSubmitted(DecentralisedCaseEvent event) {
+  private SubmittedCallbackResponse dispatchSubmitted(DecentralisedCaseEvent event) {
     if (eventListener.hasSubmittedCallbackForEvent(event.getEventDetails().getCaseType(),
         event.getEventDetails().getEventId())) {
       var req = CallbackRequest.builder()
@@ -209,8 +220,13 @@ public class CaseController {
           .caseDetailsBefore(toCaseDetails(event.getCaseDetailsBefore()))
           .eventId(event.getEventDetails().getEventId())
           .build();
-      eventListener.submitted(req);
+      var submitted = eventListener.submitted(req);
+      log.debug("Submitted callback returned header={} body={}",
+          submitted != null ? submitted.getConfirmationHeader() : null,
+          submitted != null ? submitted.getConfirmationBody() : null);
+      return submitted;
     }
+    return null;
   }
 
   @SneakyThrows
@@ -279,7 +295,6 @@ public class CaseController {
     DecentralisedAuditEvent event = caseEventHistoryService.loadHistoryEvent(caseRef, eventId);
     return ResponseEntity.ok(event);
   }
-
 
   private CaseDetails toCaseDetails(uk.gov.hmcts.ccd.domain.model.definition.CaseDetails data) {
     return defaultMapper.convertValue(data, CaseDetails.class);
