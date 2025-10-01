@@ -10,3 +10,7 @@
 # Style
 
 Max line length 120 chars
+
+# Dirs
+
+/sdk - contains the CCD SDK tooling

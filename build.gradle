@@ -32,6 +32,17 @@ afterEvaluate {
     }
 }
 
+subprojects.each { subproject ->
+    subproject.afterEvaluate {
+        it.tasks.each {
+            if (it.name.equals("writeManifestRuntime")) {
+                it.dependsOn gradle.includedBuild('sdk').task(':ccd-config-generator:jar')
+                it.dependsOn gradle.includedBuild('sdk').task(':decentralised-runtime:jar')
+            }
+        }
+    }
+}
+
 // Local dev setup; soft dependency on data store is used overriding cftlib version if present.
 if (project.findProject(':ccd-data-store-api')) {
     subprojects.each { subproject ->
