@@ -8,6 +8,7 @@ import java.util.stream.Collectors;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import net.jodah.typetools.TypeResolver;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -19,21 +20,32 @@ import uk.gov.hmcts.ccd.domain.model.definition.CaseDetails;
 class BlobRepository {
   private final NamedParameterJdbcTemplate ndb;
   private final CaseRepository caseRepository;
-  private final Class caseDataType;
+  private final Class<?> caseDataType;
   private final ObjectMapper defaultMapper;
   private final ObjectMapper filteredMapper;
 
   public BlobRepository(
       NamedParameterJdbcTemplate ndb,
-      CaseRepository caseRepository,
+      ObjectProvider<CaseRepository> caseRepositoryProvider,
       ObjectMapper defaultMapper
   ) {
     this.ndb = ndb;
-    this.caseRepository = caseRepository;
     this.defaultMapper = defaultMapper;
     this.filteredMapper = defaultMapper.copy().setAnnotationIntrospector(new FilterExternalFieldsInspector());
-    Class<?>[] typeArgs = TypeResolver.resolveRawArguments(CaseRepository.class, caseRepository.getClass());
-    this.caseDataType = typeArgs[0];
+
+    var resolved = caseRepositoryProvider.getIfAvailable();
+    if (resolved == null) {
+      this.caseRepository = new DefaultCaseRepository();
+      this.caseDataType = Map.class;
+    } else {
+      this.caseRepository = resolved;
+      Class<?>[] typeArgs = TypeResolver.resolveRawArguments(CaseRepository.class, resolved.getClass());
+      if (typeArgs.length == 0 || typeArgs[0] == null || typeArgs[0] == Object.class) {
+        this.caseDataType = Map.class;
+      } else {
+        this.caseDataType = typeArgs[0];
+      }
+    }
   }
 
   @SneakyThrows
@@ -112,4 +124,10 @@ class BlobRepository {
     return response;
   }
 
+  private static final class DefaultCaseRepository implements CaseRepository<Map<String, Object>> {
+    @Override
+    public Map<String, Object> getCase(long caseRef, String state, Map<String, Object> data) {
+      return data;
+    }
+  }
 }
