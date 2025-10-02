@@ -11,9 +11,6 @@ plugins {
 group = 'uk.gov.hmcts'
 version = '0.0.1'
 
-def changeId = System.getenv('CHANGE_ID')
-def e2eCaseTypeId = changeId ? "NFD-${changeId}" : 'NFD'
-
 ccd {
   configDir = file('build/definitions')
   decentralised = true
@@ -140,14 +137,14 @@ bootJar {
 generateCCDConfig.doLast {
   copy {
     from file('ccd-definitions')
-    into layout.buildDirectory.dir("definitions/${e2eCaseTypeId}")
+    into layout.buildDirectory.dir('definitions/NFD')
   }
 }
 
 tasks.withType(CftlibExec).configureEach {
   group = 'ccd tasks'
   authMode = AuthMode.Local
-  environment "CCD_DECENTRALISED_CASE-TYPE-SERVICE-URLS_${e2eCaseTypeId}", 'http://localhost:4013'
+  environment 'CCD_DECENTRALISED_CASE-TYPE-SERVICE-URLS_NFD', 'http://localhost:4013'
   environment 'SPRING_CLOUD_COMPATIBILITY_VERIFIER_ENABLED', 'false'
 
   doFirst {
