@@ -18,6 +18,7 @@ import uk.gov.hmcts.ccd.sdk.api.CCDConfig;
 import uk.gov.hmcts.ccd.sdk.api.DecentralisedConfigBuilder;
 import uk.gov.hmcts.ccd.sdk.api.Event.EventBuilder;
 import uk.gov.hmcts.ccd.sdk.api.EventPayload;
+import uk.gov.hmcts.ccd.sdk.api.callback.SubmitResponse;
 import uk.gov.hmcts.divorce.common.ccd.PageBuilder;
 import uk.gov.hmcts.divorce.divorcecase.model.CaseData;
 import uk.gov.hmcts.divorce.divorcecase.model.State;
@@ -65,7 +66,7 @@ public class DecentralisedCaseworkerAddNote implements CCDConfig<CaseData, State
         return caseData;
     }
 
-    private void submit(EventPayload<CaseData, State> payload) {
+    private SubmitResponse submit(EventPayload<CaseData, State> payload) {
         // Persist the note to the case_notes table to verify the submit handler runs
         final Long reference = payload.caseReference();
         final CaseData caseData = payload.caseData();
@@ -82,5 +83,9 @@ public class DecentralisedCaseworkerAddNote implements CCDConfig<CaseData, State
         );
 
         log.info("Decentralised add note submitted for case {}", reference);
+        return SubmitResponse.builder()
+            .confirmationHeader("Decentralised submission complete")
+            .confirmationBody("Case note saved successfully.")
+            .build();
     }
 }

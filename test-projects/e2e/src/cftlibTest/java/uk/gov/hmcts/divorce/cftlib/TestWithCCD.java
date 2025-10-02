@@ -868,6 +868,11 @@ public class TestWithCCD extends CftlibTest {
 
         var response = HttpClientBuilder.create().build().execute(e);
         assertThat(response.getStatusLine().getStatusCode(), equalTo(201));
+        var responsePayload = mapper.readValue(EntityUtils.toString(response.getEntity()), Map.class);
+        var afterSubmit = (Map) responsePayload.get("after_submit_callback_response");
+        assertThat(afterSubmit, is(notNullValue()));
+        assertThat(afterSubmit.get("confirmation_header"), equalTo("Decentralised submission complete"));
+        assertThat(afterSubmit.get("confirmation_body"), equalTo("Case note saved successfully."));
 
         Integer after = db.queryForObject(sqlCount, Map.of(), Integer.class);
         assertThat(after, equalTo(before + 1));

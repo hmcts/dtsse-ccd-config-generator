@@ -121,6 +121,10 @@ public class CaseController {
     }
 
     var details = caseRepository.getCase(event.getCaseDetails().getReference());
+    if (submittedResponse == null) {
+      submittedResponse = toSubmittedCallbackResponse(
+          event.getCaseDetails().getAfterSubmitCallbackResponse());
+    }
     if (submittedResponse != null) {
       var afterSubmitResponse = new AfterSubmitCallbackResponse();
       afterSubmitResponse.setConfirmationHeader(submittedResponse.getConfirmationHeader());
@@ -236,8 +240,15 @@ public class CaseController {
   ) {
     var response = new DecentralisedSubmitEventResponse();
     if (eventListener.hasSubmitHandler(event.getEventDetails().getCaseType(), event.getEventDetails().getEventId())) {
-      eventListener.submit(event.getEventDetails().getCaseType(), event.getEventDetails().getEventId(), event,
-          urlParams);
+      var submitResponse = eventListener.submit(event.getEventDetails().getCaseType(),
+          event.getEventDetails().getEventId(), event, urlParams);
+      if (submitResponse != null && (submitResponse.getConfirmationHeader() != null
+          || submitResponse.getConfirmationBody() != null)) {
+        var afterSubmit = new AfterSubmitCallbackResponse();
+        afterSubmit.setConfirmationHeader(submitResponse.getConfirmationHeader());
+        afterSubmit.setConfirmationBody(submitResponse.getConfirmationBody());
+        event.getCaseDetails().setAfterSubmitCallbackResponseEntity(ResponseEntity.ok(afterSubmit));
+      }
     } else if (eventListener.hasAboutToSubmitCallbackForEvent(event.getEventDetails().getCaseType(),
         event.getEventDetails().getEventId())) {
       var req = CallbackRequest.builder()
@@ -294,6 +305,19 @@ public class CaseController {
     log.info("Loading history event ID {} for case reference: {}", eventId, caseRef);
     DecentralisedAuditEvent event = caseEventHistoryService.loadHistoryEvent(caseRef, eventId);
     return ResponseEntity.ok(event);
+  }
+
+  private SubmittedCallbackResponse toSubmittedCallbackResponse(AfterSubmitCallbackResponse response) {
+    if (response == null) {
+      return null;
+    }
+    if (response.getConfirmationHeader() == null && response.getConfirmationBody() == null) {
+      return null;
+    }
+    return SubmittedCallbackResponse.builder()
+        .confirmationHeader(response.getConfirmationHeader())
+        .confirmationBody(response.getConfirmationBody())
+        .build();
   }
 
   private CaseDetails toCaseDetails(uk.gov.hmcts.ccd.domain.model.definition.CaseDetails data) {
