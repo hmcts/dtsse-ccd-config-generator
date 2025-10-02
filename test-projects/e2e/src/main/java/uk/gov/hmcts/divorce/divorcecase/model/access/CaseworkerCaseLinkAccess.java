@@ -1,0 +1,27 @@
+package uk.gov.hmcts.divorce.divorcecase.model.access;
+
+import com.google.common.collect.HashMultimap;
+import com.google.common.collect.SetMultimap;
+import uk.gov.hmcts.ccd.sdk.api.HasRole;
+import uk.gov.hmcts.ccd.sdk.api.Permission;
+
+import static uk.gov.hmcts.divorce.divorcecase.model.UserRole.CASE_WORKER;
+import static uk.gov.hmcts.divorce.divorcecase.model.UserRole.JUDGE;
+import static uk.gov.hmcts.divorce.divorcecase.model.UserRole.LEGAL_ADVISOR;
+import static uk.gov.hmcts.divorce.divorcecase.model.UserRole.SUPER_USER;
+import static uk.gov.hmcts.divorce.divorcecase.model.UserRole.SYSTEMUPDATE;
+
+public class CaseworkerCaseLinkAccess extends CaseworkerAccess {
+
+    @Override
+    public SetMultimap<HasRole, Permission> getGrants() {
+        SetMultimap<HasRole, Permission> grants = HashMultimap.create(super.getGrants());
+
+        grants.putAll(CASE_WORKER, Permissions.CREATE_READ_UPDATE_DELETE);
+        grants.putAll(LEGAL_ADVISOR, Permissions.CREATE_READ_UPDATE_DELETE);
+        grants.putAll(JUDGE, Permissions.CREATE_READ_UPDATE_DELETE);
+        grants.putAll(SUPER_USER, Permissions.CREATE_READ_UPDATE_DELETE);
+        grants.putAll(SYSTEMUPDATE, Permissions.CREATE_READ_UPDATE_DELETE);
+        return grants;
+    }
+}

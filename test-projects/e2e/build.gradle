@@ -137,14 +137,14 @@ bootJar {
 generateCCDConfig.doLast {
   copy {
     from file('ccd-definitions')
-    into layout.buildDirectory.dir('definitions/NFD')
+    into layout.buildDirectory.dir('definitions/E2E')
   }
 }
 
 tasks.withType(CftlibExec).configureEach {
   group = 'ccd tasks'
   authMode = AuthMode.Local
-  environment 'CCD_DECENTRALISED_CASE-TYPE-SERVICE-URLS_NFD', 'http://localhost:4013'
+  environment 'CCD_DECENTRALISED_CASE-TYPE-SERVICE-URLS_E2E', 'http://localhost:4013'
   environment 'SPRING_CLOUD_COMPATIBILITY_VERIFIER_ENABLED', 'false'
 
   doFirst {

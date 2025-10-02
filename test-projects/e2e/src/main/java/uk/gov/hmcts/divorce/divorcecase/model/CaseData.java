@@ -3,6 +3,7 @@ package uk.gov.hmcts.divorce.divorcecase.model;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonUnwrapped;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -10,15 +11,19 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import uk.gov.hmcts.ccd.sdk.External;
 import uk.gov.hmcts.ccd.sdk.api.CCD;
+import uk.gov.hmcts.ccd.sdk.type.CaseLink;
+import uk.gov.hmcts.ccd.sdk.type.ComponentLauncher;
 import uk.gov.hmcts.ccd.sdk.type.FieldType;
 import uk.gov.hmcts.ccd.sdk.type.ListValue;
 import uk.gov.hmcts.divorce.caseworker.model.CaseNote;
 import uk.gov.hmcts.divorce.divorcecase.model.access.CaseworkerAccess;
+import uk.gov.hmcts.divorce.divorcecase.model.access.CaseworkerCaseLinkAccess;
 import uk.gov.hmcts.divorce.divorcecase.model.access.CaseworkerAndSuperUserAccess;
 import uk.gov.hmcts.divorce.divorcecase.model.access.CaseworkerWithCAAAccess;
 import uk.gov.hmcts.divorce.divorcecase.model.access.DefaultAccess;
 
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.List;
 
 @JsonIgnoreProperties(ignoreUnknown = true)
@@ -59,6 +64,22 @@ public class CaseData {
     private List<ListValue<CaseNote>> notes;
 
     @CCD(
+        label = "Linked cases",
+        typeOverride = FieldType.Collection,
+        typeParameterOverride = "CaseLink",
+        access = {CaseworkerCaseLinkAccess.class}
+    )
+    @Builder.Default
+    private List<ListValue<CaseLink>> caseLinks = new ArrayList<>();
+
+    @CCD(
+        label = "Component launcher for linked cases",
+        access = {CaseworkerCaseLinkAccess.class}
+    )
+    @JsonProperty("LinkedCasesComponentLauncher")
+    private ComponentLauncher linkedCasesComponentLauncher;
+
+    @CCD(
         label = "Add a case note",
         hint = "Enter note",
         typeOverride = FieldType.TextArea,
@@ -88,4 +109,3 @@ public class CaseData {
         );
     }
 }
-
