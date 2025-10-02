@@ -70,7 +70,7 @@ dependencies {
   implementation 'com.github.hmcts:ccd-case-document-am-client:1.7.3'
   implementation 'com.github.hmcts:core-case-data-store-client:5.2.0'
   implementation 'com.github.hmcts:idam-java-client:3.0.4'
-  implementation 'com.github.hmcts.java-logging:logging:6.1.8'
+  implementation 'com.github.hmcts.java-logging:logging:6.1.9'
   implementation 'com.github.hmcts:send-letter-client:5.1.1'
   implementation 'com.github.hmcts:service-auth-provider-java-client:5.1.2'
 
