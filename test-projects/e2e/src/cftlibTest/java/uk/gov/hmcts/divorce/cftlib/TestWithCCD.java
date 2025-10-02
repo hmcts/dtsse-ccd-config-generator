@@ -7,13 +7,19 @@ import com.google.gson.Gson;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
+import java.sql.Statement;
+import java.sql.SQLException;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
+import java.util.Arrays;
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.function.Function;
 
 import lombok.SneakyThrows;
@@ -42,12 +48,21 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import uk.gov.hmcts.divorce.divorcecase.model.CaseData;
+import uk.gov.hmcts.divorce.divorcecase.NoFaultDivorce;
+import uk.gov.hmcts.divorce.sow014.nfd.CaseworkerAddNote;
+import uk.gov.hmcts.divorce.sow014.nfd.CaseworkerMaintainCaseLink;
+import uk.gov.hmcts.divorce.sow014.nfd.DecentralisedCaseworkerAddNote;
 import uk.gov.hmcts.divorce.sow014.nfd.FailingSubmittedCallback;
 import uk.gov.hmcts.divorce.sow014.nfd.PublishedEvent;
 import uk.gov.hmcts.divorce.sow014.nfd.ReturnErrorWhenCreateTestCase;
-import uk.gov.hmcts.divorce.sow014.nfd.DecentralisedCaseworkerAddNote;
 import uk.gov.hmcts.divorce.sow014.nfd.SubmittedConfirmationCallback;
+import uk.gov.hmcts.ccd.sdk.type.CaseLink;
+import uk.gov.hmcts.ccd.sdk.type.ListValue;
 import uk.gov.hmcts.reform.ccd.client.CoreCaseDataApi;
+import uk.gov.hmcts.reform.ccd.client.model.CaseDataContent;
+import uk.gov.hmcts.reform.ccd.client.model.CaseDetails;
+import uk.gov.hmcts.reform.ccd.client.model.Event;
+import uk.gov.hmcts.reform.ccd.client.model.StartEventResponse;
 import uk.gov.hmcts.reform.idam.client.IdamClient;
 import uk.gov.hmcts.rse.ccd.lib.Database;
 import uk.gov.hmcts.rse.ccd.lib.test.CftlibTest;
@@ -776,6 +791,138 @@ public class TestWithCCD extends CftlibTest {
         return true;
     }
 
+    private long createAdditionalCase(String solicitorEmail) throws Exception {
+        var start = ccdApi.startCase(
+            getAuthorisation(solicitorEmail),
+            getServiceAuth(),
+            "NFD",
+            "create-test-application");
+
+        var body = Map.of(
+            "data", Map.of(
+                "applicationType", "soleApplication",
+                "applicant1SolicitorRepresented", "No",
+                "applicant2SolicitorRepresented", "No"
+            ),
+            "event", Map.of(
+                "id", "create-test-application",
+                "summary", "",
+                "description", ""
+            ),
+            "event_token", start.getToken(),
+            "ignore_warning", false,
+            "supplementary_data_request", Map.of(
+                "$set", Map.of(
+                    "orgs_assigned_users.organisationA", 22,
+                    "baz", "qux"
+                ),
+                "$inc", Map.of(
+                    "orgs_assigned_users.organisationB", -4,
+                    "foo", 5
+                )
+            )
+        );
+
+        var createCase = buildRequest(
+            solicitorEmail,
+            BASE_URL + "/data/case-types/NFD/cases?ignore-warning=false",
+            HttpPost::new);
+        withCcdAccept(createCase, ACCEPT_CREATE_CASE);
+        createCase.setEntity(new StringEntity(new Gson().toJson(body), ContentType.APPLICATION_JSON));
+
+        var response = HttpClientBuilder.create().build().execute(createCase);
+        assertThat(response.getStatusLine().getStatusCode(), equalTo(201));
+
+        var responseBody = EntityUtils.toString(response.getEntity());
+        Map<?, ?> createdCase = new Gson().fromJson(responseBody, Map.class);
+        return Long.parseLong((String) createdCase.get("id"));
+    }
+
+    private List<Map<String, Object>> buildCaseLinksPayload(long... caseReferences) {
+        return Arrays.stream(caseReferences)
+            .mapToObj(ref -> Map.<String, Object>of(
+                "id", UUID.randomUUID().toString(),
+                "value", Map.of(
+                    "CaseReference", formatCaseReference(ref),
+                    "CaseType", "NFD"
+                )
+            ))
+            .toList();
+    }
+
+    private void submitCaseLinksUpdate(List<Map<String, Object>> caseLinksPayload, String note) throws Exception {
+        String user = "TEST_CASE_WORKER_USER@mailinator.com";
+        String userToken = getAuthorisation(user);
+        String serviceToken = getServiceAuth();
+        String userId = idam.getUserInfo(userToken).getUid();
+
+        StartEventResponse start = ccdApi.startEventForCaseWorker(
+            userToken,
+            serviceToken,
+            userId,
+            NoFaultDivorce.JURISDICTION,
+            NoFaultDivorce.getCaseType(),
+            String.valueOf(caseRef),
+            CaseworkerMaintainCaseLink.CASEWORKER_MAINTAIN_CASE_LINK
+        );
+
+        Map<String, Object> data = new HashMap<>();
+        data.put("caseLinks", caseLinksPayload);
+
+        CaseDataContent content = CaseDataContent.builder()
+            .eventToken(start.getToken())
+            .event(Event.builder()
+                .id(CaseworkerMaintainCaseLink.CASEWORKER_MAINTAIN_CASE_LINK)
+                .summary(note)
+                .description(note)
+                .build())
+            .data(data)
+            .build();
+
+        CaseDetails response = ccdApi.submitEventForCaseWorker(
+            userToken,
+            serviceToken,
+            userId,
+            NoFaultDivorce.JURISDICTION,
+            NoFaultDivorce.getCaseType(),
+            String.valueOf(caseRef),
+            true,
+            content
+        );
+
+        assertThat(response.getState(), notNullValue());
+    }
+
+    private String formatCaseReference(long reference) {
+        return String.format("%016d", reference);
+    }
+
+    private List<CaseLinkRow> fetchCaseLinks(long caseReference) {
+        String sql = """
+            SELECT linked.reference AS linked_reference,
+                   link.standard_link
+              FROM case_link link
+              JOIN case_data linked ON linked.id = link.linked_case_id
+             WHERE link.case_id = (SELECT id FROM case_data WHERE reference = ?)
+            """;
+
+        List<CaseLinkRow> rows = new ArrayList<>();
+        try (Connection connection = cftlib().getConnection(Database.Datastore);
+             Statement schema = connection.createStatement()) {
+            schema.execute("SET search_path TO public");
+            try (PreparedStatement statement = connection.prepareStatement(sql)) {
+                statement.setLong(1, caseReference);
+                try (ResultSet rs = statement.executeQuery()) {
+                    while (rs.next()) {
+                        rows.add(new CaseLinkRow(rs.getLong("linked_reference"), rs.getBoolean("standard_link")));
+                    }
+                }
+            }
+        } catch (SQLException e) {
+            throw new RuntimeException("Failed to load case_link data", e);
+        }
+        return rows;
+    }
 
     private void updateDueDate() throws Exception {
         var e = prepareEventRequest(
@@ -798,6 +945,8 @@ public class TestWithCCD extends CftlibTest {
         var response = HttpClientBuilder.create().build().execute(e);
         assertThat(response.getStatusLine().getStatusCode(), equalTo(201));
     }
+
+    private record CaseLinkRow(long linkedReference, boolean standardLink) { }
 
     private String getAuthorisation(String user) {
         return idam.getAccessToken(user, "");
@@ -880,6 +1029,48 @@ public class TestWithCCD extends CftlibTest {
         String lastNoteSql = "SELECT note FROM case_notes WHERE reference = :ref ORDER BY id DESC LIMIT 1";
         String latestNote = db.queryForObject(lastNoteSql, Map.of("ref", caseRef), String.class);
         assertThat(latestNote, equalTo(noteText));
+    }
+
+    @Order(20)
+    @Test
+    public void shouldPersistCaseLinksAndUpdateDerivedTable() throws Exception {
+        long firstLinkedCase = createAdditionalCase("TEST_SOLICITOR2@mailinator.com");
+        long secondLinkedCase = createAdditionalCase("solicitora@gmail.com");
+
+        submitCaseLinksUpdate(buildCaseLinksPayload(firstLinkedCase, secondLinkedCase), "Initial linked cases");
+
+        var initialPersistedLinks = fetchCaseLinks(caseRef);
+        assertThat(initialPersistedLinks, hasSize(2));
+        assertThat(initialPersistedLinks.stream().map(CaseLinkRow::linkedReference).toList(),
+            containsInAnyOrder(firstLinkedCase, secondLinkedCase));
+        assertThat(initialPersistedLinks.stream().map(CaseLinkRow::standardLink).toList(), everyItem(is(true)));
+
+        var caseDetails = ccdApi.getCase(getAuthorisation("TEST_CASE_WORKER_USER@mailinator.com"),
+            getServiceAuth(), String.valueOf(caseRef));
+        var caseData = mapper.readValue(mapper.writeValueAsString(caseDetails.getData()), CaseData.class);
+        List<ListValue<CaseLink>> caseLinks = caseData.getCaseLinks();
+        assertThat(caseLinks, is(notNullValue()));
+        assertThat(caseLinks.size(), equalTo(2));
+        assertThat(caseLinks.stream()
+            .map(listValue -> listValue.getValue().getCaseReference())
+            .toList(), containsInAnyOrder(formatCaseReference(firstLinkedCase), formatCaseReference(secondLinkedCase)));
+
+        long replacementLinkedCase = createAdditionalCase("solicitorb@gmail.com");
+        submitCaseLinksUpdate(buildCaseLinksPayload(replacementLinkedCase), "Updated linked cases");
+
+        var updatedPersistedLinks = fetchCaseLinks(caseRef);
+        assertThat(updatedPersistedLinks, hasSize(1));
+        assertThat(updatedPersistedLinks.get(0).linkedReference(), equalTo(replacementLinkedCase));
+        assertThat(updatedPersistedLinks.get(0).standardLink(), is(true));
+
+        var refreshedCaseDetails = ccdApi.getCase(getAuthorisation("TEST_CASE_WORKER_USER@mailinator.com"),
+            getServiceAuth(), String.valueOf(caseRef));
+        var refreshedCaseData = mapper.readValue(mapper.writeValueAsString(refreshedCaseDetails.getData()), CaseData.class);
+        List<ListValue<CaseLink>> refreshedCaseLinks = refreshedCaseData.getCaseLinks();
+        assertThat(refreshedCaseLinks, is(notNullValue()));
+        assertThat(refreshedCaseLinks.size(), equalTo(1));
+        assertThat(refreshedCaseLinks.get(0).getValue().getCaseReference(),
+            equalTo(formatCaseReference(replacementLinkedCase)));
     }
 
     @SneakyThrows
