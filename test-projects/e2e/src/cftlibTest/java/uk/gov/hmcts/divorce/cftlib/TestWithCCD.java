@@ -107,7 +107,7 @@ public class TestWithCCD extends CftlibTest {
     public void caseCreation() throws Exception {
         var start = ccdApi.startCase(getAuthorisation("TEST_SOLICITOR@mailinator.com"),
             getServiceAuth(),
-            "NFD",
+            NoFaultDivorce.getCaseType(),
             "create-test-application");
 
         var startData = mapper.readValue(mapper.writeValueAsString(start.getCaseDetails().getData()), CaseData.class);
@@ -144,7 +144,7 @@ public class TestWithCCD extends CftlibTest {
 
         var createCase = buildRequest(
             "TEST_SOLICITOR@mailinator.com",
-            BASE_URL + "/data/case-types/NFD/cases?ignore-warning=false",
+            BASE_URL + "/data/case-types/" + NoFaultDivorce.getCaseType() + "/cases?ignore-warning=false",
             HttpPost::new);
         withCcdAccept(createCase, ACCEPT_CREATE_CASE);
 
@@ -698,7 +698,7 @@ public class TestWithCCD extends CftlibTest {
         // 2. Start the event to get a valid event token
         var start = ccdApi.startCase(getAuthorisation("TEST_SOLICITOR@mailinator.com"),
             getServiceAuth(),
-            "NFD",
+            NoFaultDivorce.getCaseType(),
             ReturnErrorWhenCreateTestCase.class.getSimpleName());
         var token = start.getToken();
 
@@ -719,7 +719,7 @@ public class TestWithCCD extends CftlibTest {
         // 4. Build and execute the POST request to submit the case
         var createCaseRequest = buildRequest(
             "TEST_SOLICITOR@mailinator.com",
-            BASE_URL + "/data/case-types/NFD/cases?ignore-warning=false",
+            BASE_URL + "/data/case-types/" + NoFaultDivorce.getCaseType() + "/cases?ignore-warning=false",
             HttpPost::new);
         withCcdAccept(createCaseRequest, ACCEPT_CREATE_CASE);
         createCaseRequest.setEntity(new StringEntity(new Gson().toJson(body), ContentType.APPLICATION_JSON));
@@ -756,7 +756,7 @@ public class TestWithCCD extends CftlibTest {
     private Boolean caseAppearsInSearch() {
         var request = buildRequest(
             "TEST_CASE_WORKER_USER@mailinator.com",
-            BASE_URL + "/data/internal/searchCases?ctid=NFD&page=1",
+            BASE_URL + "/data/internal/searchCases?ctid=" + NoFaultDivorce.getCaseType() + "&page=1",
             HttpPost::new);
         var query = String.format("""
             {
@@ -795,7 +795,7 @@ public class TestWithCCD extends CftlibTest {
         var start = ccdApi.startCase(
             getAuthorisation(solicitorEmail),
             getServiceAuth(),
-            "NFD",
+            NoFaultDivorce.getCaseType(),
             "create-test-application");
 
         var body = Map.of(
@@ -825,7 +825,7 @@ public class TestWithCCD extends CftlibTest {
 
         var createCase = buildRequest(
             solicitorEmail,
-            BASE_URL + "/data/case-types/NFD/cases?ignore-warning=false",
+            BASE_URL + "/data/case-types/" + NoFaultDivorce.getCaseType() + "/cases?ignore-warning=false",
             HttpPost::new);
         withCcdAccept(createCase, ACCEPT_CREATE_CASE);
         createCase.setEntity(new StringEntity(new Gson().toJson(body), ContentType.APPLICATION_JSON));
@@ -844,7 +844,7 @@ public class TestWithCCD extends CftlibTest {
                 "id", UUID.randomUUID().toString(),
                 "value", Map.of(
                     "CaseReference", formatCaseReference(ref),
-                    "CaseType", "NFD"
+                    "CaseType", NoFaultDivorce.getCaseType()
                 )
             ))
             .toList();
@@ -866,7 +866,7 @@ public class TestWithCCD extends CftlibTest {
             CaseworkerMaintainCaseLink.CASEWORKER_MAINTAIN_CASE_LINK
         );
 
-        Map<String, Object> data = new HashMap<>();
+        Map<String, Object> data = new HashMap<>(start.getCaseDetails().getData());
         data.put("caseLinks", caseLinksPayload);
 
         CaseDataContent content = CaseDataContent.builder()

@@ -55,8 +55,7 @@ public class CaseworkerAddNote implements CCDConfig<CaseData, State, UserRole> {
             .grantHistoryOnly(LEGAL_ADVISOR, JUDGE))
             .page("addCaseNotes")
             .pageLabel("Add case notes")
-            .optional(CaseData::getNote)
-            .optional(CaseData::getCaseLinks);
+            .optional(CaseData::getNote);
     }
 
     public AboutToStartOrSubmitResponse<CaseData, State> aboutToSubmit(

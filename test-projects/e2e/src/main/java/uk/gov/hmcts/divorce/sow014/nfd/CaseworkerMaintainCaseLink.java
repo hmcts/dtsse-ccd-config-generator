@@ -19,6 +19,7 @@ import static uk.gov.hmcts.divorce.divorcecase.model.access.Permissions.CREATE_R
 public class CaseworkerMaintainCaseLink implements CCDConfig<CaseData, State, UserRole> {
 
     public static final String CASEWORKER_MAINTAIN_CASE_LINK = "caseworker-maintain-case-link";
+    private static final String ALWAYS_HIDE = "LinkedCasesComponentLauncher = \"DONOTSHOW\"";
 
     @Override
     public void configure(final ConfigBuilder<CaseData, State, UserRole> configBuilder) {
@@ -31,6 +32,8 @@ public class CaseworkerMaintainCaseLink implements CCDConfig<CaseData, State, Us
             .grant(CREATE_READ_UPDATE_DELETE, SUPER_USER)
             .showEventNotes())
             .page("maintainCaseLinks")
-            .optional(CaseData::getCaseLinks);
+            .optional(CaseData::getCaseLinks, ALWAYS_HIDE, null, true)
+            .optional(CaseData::getLinkedCasesComponentLauncher,
+                null, null, null, null, "#ARGUMENT(UPDATE,LinkedCases)");
     }
 }
