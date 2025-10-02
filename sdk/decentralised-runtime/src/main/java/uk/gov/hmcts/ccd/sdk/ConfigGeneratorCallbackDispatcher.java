@@ -15,6 +15,7 @@ import uk.gov.hmcts.ccd.sdk.api.Event;
 import uk.gov.hmcts.ccd.sdk.api.EventPayload;
 import uk.gov.hmcts.ccd.sdk.api.Webhook;
 import uk.gov.hmcts.ccd.sdk.api.callback.AboutToStartOrSubmitResponse;
+import uk.gov.hmcts.ccd.sdk.api.callback.SubmitResponse;
 import uk.gov.hmcts.ccd.sdk.runtime.CallbackController;
 import uk.gov.hmcts.reform.ccd.client.model.CallbackRequest;
 import uk.gov.hmcts.reform.ccd.client.model.SubmittedCallbackResponse;
@@ -33,7 +34,8 @@ public class ConfigGeneratorCallbackDispatcher implements CCDEventListener {
 
   @SneakyThrows
   @Override
-  public void submit(String caseType, String event, DecentralisedCaseEvent e, MultiValueMap<String, String> urlParams) {
+  public SubmitResponse submit(String caseType, String event, DecentralisedCaseEvent e,
+                               MultiValueMap<String, String> urlParams) {
     var ct = controller.getCaseTypeToConfig().get(caseType);
     String json = mapper.writeValueAsString(e.getCaseDetails().getData());
     var domainClass = mapper.readValue(json, ct.getCaseClass());
@@ -41,7 +43,7 @@ public class ConfigGeneratorCallbackDispatcher implements CCDEventListener {
     long caseRef = e.getCaseDetails().getReference();
     EventPayload payload = new EventPayload<>(caseRef, domainClass, urlParams);
     var handler = ct.getEvents().get(event).getSubmitHandler();
-    handler.submit(payload);
+    return handler.submit(payload);
   }
 
   @Override
