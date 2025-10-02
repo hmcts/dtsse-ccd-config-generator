@@ -11,7 +11,7 @@ dependencies {
     implementation platform("org.springframework.boot:spring-boot-dependencies:3.4.2")
     implementation project(':ccd-config-generator')
     // A filtered set of useful CCD POJOs including DTOs and other utilities.
-    implementation ('com.github.hmcts.rse-cft-lib:ccd-lib:0.19.1877') {
+    implementation ('com.github.hmcts.rse-cft-lib:ccd-lib:0.19.1880') {
         transitive = false
     }
     implementation group: 'org.springframework.boot', name: 'spring-boot-starter-web'
