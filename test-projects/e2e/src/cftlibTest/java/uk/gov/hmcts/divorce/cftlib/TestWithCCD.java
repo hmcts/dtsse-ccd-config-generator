@@ -93,7 +93,8 @@ import uk.gov.hmcts.rse.ccd.lib.test.CftlibTest;
     "spring.jms.servicebus.enabled=true",
     "ccd.servicebus.destination=ccd-case-events-test",
     "ccd.servicebus.scheduler-enabled=true",
-    "ccd.servicebus.schedule=*/1 * * * * *"
+    "ccd.servicebus.schedule=*/1 * * * * *",
+    "spring.autoconfigure.exclude=com.azure.spring.cloud.autoconfigure.implementation.jms.ServiceBusJmsAutoConfiguration"
 })
 @Slf4j
 public class TestWithCCD extends CftlibTest {
