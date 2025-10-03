@@ -21,7 +21,6 @@ public class CcdCaseEventPublisher {
 
   private final CcdMessageQueueRepository repository;
   private final JmsTemplate jmsTemplate;
-  private final String destination;
   private final CcdServiceBusProperties properties;
 
   public CcdCaseEventPublisher(CcdMessageQueueRepository repository,
@@ -30,10 +29,10 @@ public class CcdCaseEventPublisher {
     this.repository = repository;
     this.jmsTemplate = jmsTemplate;
     this.properties = properties;
-    this.destination = properties.getDestination();
   }
 
   public void publishPendingCaseEvents() {
+    String destination = properties.getDestination();
     if (destination == null || destination.isBlank()) {
       log.warn("No CCD Service Bus destination configured; skipping publish run");
       return;
@@ -52,7 +51,7 @@ public class CcdCaseEventPublisher {
 
       List<Long> publishedIds = new ArrayList<>(candidates.size());
       for (MessageQueueCandidate candidate : candidates) {
-        if (sendToServiceBus(candidate)) {
+        if (sendToServiceBus(destination, candidate)) {
           publishedIds.add(candidate.id());
         }
       }
@@ -83,7 +82,7 @@ public class CcdCaseEventPublisher {
     }
   }
 
-  private boolean sendToServiceBus(MessageQueueCandidate candidate) {
+  private boolean sendToServiceBus(String destination, MessageQueueCandidate candidate) {
     try {
       jmsTemplate.convertAndSend(destination, candidate.payload(), applyProperties(candidate.payload()));
       return true;
