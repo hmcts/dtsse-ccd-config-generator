@@ -1,8 +1,12 @@
 package uk.gov.hmcts.divorce.cftlib;
 
 import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.gson.Gson;
+
+import jakarta.jms.ConnectionFactory;
+import jakarta.jms.Message;
 
 import java.sql.Connection;
 import java.sql.PreparedStatement;
@@ -16,11 +20,11 @@ import java.time.ZoneOffset;
 import java.util.Arrays;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.function.Function;
+import java.util.HashMap;
 
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
@@ -31,6 +35,7 @@ import org.apache.http.entity.ContentType;
 import org.apache.http.entity.StringEntity;
 import org.apache.http.impl.client.HttpClientBuilder;
 import org.apache.http.util.EntityUtils;
+import org.mockito.ArgumentCaptor;
 
 import static org.awaitility.Awaitility.await;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -38,6 +43,15 @@ import static org.hamcrest.Matchers.*;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.reset;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.atLeastOnce;
 
 import org.junit.jupiter.api.MethodOrderer;
 import org.junit.jupiter.api.Order;
@@ -46,7 +60,12 @@ import org.junit.jupiter.api.TestInstance;
 import org.junit.jupiter.api.TestMethodOrder;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.context.annotation.Bean;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
+import org.springframework.jms.core.JmsTemplate;
+import org.springframework.jms.core.MessagePostProcessor;
+import org.springframework.test.context.TestPropertySource;
 import uk.gov.hmcts.divorce.divorcecase.model.CaseData;
 import uk.gov.hmcts.divorce.divorcecase.NoFaultDivorce;
 import uk.gov.hmcts.divorce.sow014.nfd.CaseworkerAddNote;
@@ -70,6 +89,12 @@ import uk.gov.hmcts.rse.ccd.lib.test.CftlibTest;
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.DEFINED_PORT)
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
+@TestPropertySource(properties = {
+    "spring.jms.servicebus.enabled=true",
+    "ccd.servicebus.destination=ccd-case-events-test",
+    "ccd.servicebus.scheduler-enabled=true",
+    "ccd.servicebus.schedule=*/1 * * * * *"
+})
 @Slf4j
 public class TestWithCCD extends CftlibTest {
 
@@ -84,6 +109,9 @@ public class TestWithCCD extends CftlibTest {
 
     @Autowired
     NamedParameterJdbcTemplate db;
+
+    @Autowired
+    private JmsTemplate jmsTemplate;
 
     private long firstEventId;
     private static final String BASE_URL = "http://localhost:4452";
@@ -101,6 +129,20 @@ public class TestWithCCD extends CftlibTest {
         "application/vnd.uk.gov.hmcts.ccd-data-store-api.ui-event-view.v2+json;charset=UTF-8";
     private static final String ACCEPT_UI_START_EVENT =
         "application/vnd.uk.gov.hmcts.ccd-data-store-api.ui-start-event-trigger.v2+json;charset=UTF-8";
+
+    @TestConfiguration
+    static class ServiceBusTestConfiguration {
+
+        @Bean
+        JmsTemplate jmsTemplate() {
+            return mock(JmsTemplate.class);
+        }
+
+        @Bean
+        ConnectionFactory connectionFactory() {
+            return mock(ConnectionFactory.class);
+        }
+    }
 
     @Order(1)
     @Test
@@ -627,6 +669,8 @@ public class TestWithCCD extends CftlibTest {
     @Order(17)
     @Test
     public void testPublishingToMessageOutbox() {
+        db.update("DELETE FROM ccd.message_queue_candidates", Map.of());
+
         var token = ccdApi.startEvent(
             getAuthorisation("TEST_CASE_WORKER_USER@mailinator.com"),
             getServiceAuth(), String.valueOf(caseRef), PublishedEvent.class.getSimpleName()).getToken();
@@ -651,15 +695,11 @@ public class TestWithCCD extends CftlibTest {
         withCcdAccept(e, ACCEPT_CREATE_EVENT);
 
         e.setEntity(new StringEntity(new Gson().toJson(body), ContentType.APPLICATION_JSON));
-
-        String sql = "SELECT count(*) FROM ccd.message_queue_candidates";
-        Integer initialCount = db.queryForObject(sql, Map.of(), Integer.class);
-
         var response = HttpClientBuilder.create().build().execute(e);
         assertThat(response.getStatusLine().getStatusCode(), equalTo(201));
 
-        Integer secondCount = db.queryForObject(sql, Map.of(), Integer.class);
-        assertThat(secondCount - initialCount, equalTo(1));
+        Integer totalMessages = db.queryForObject("SELECT count(*) FROM ccd.message_queue_candidates", Map.of(), Integer.class);
+        assertThat(totalMessages, equalTo(1));
 
         String noteCheck = """
             SELECT message_information->'AdditionalData'->'Data'->>'note'
@@ -680,6 +720,38 @@ public class TestWithCCD extends CftlibTest {
         // Validate it's a parsable timestamp and it is recent
         LocalDateTime eventTimestamp = LocalDateTime.parse(retrievedTimestampStr);
         assertThat(eventTimestamp, is(greaterThan(LocalDateTime.now(ZoneOffset.UTC).minusMinutes(1))));
+
+        reset(jmsTemplate);
+
+        ArgumentCaptor<JsonNode> payloadCaptor = ArgumentCaptor.forClass(JsonNode.class);
+        ArgumentCaptor<MessagePostProcessor> postProcessorCaptor = ArgumentCaptor.forClass(MessagePostProcessor.class);
+
+        await().atMost(Duration.ofSeconds(10)).untilAsserted(() ->
+            verify(jmsTemplate, atLeastOnce()).convertAndSend(eq("ccd-case-events-test"), payloadCaptor.capture(), postProcessorCaptor.capture())
+        );
+
+        JsonNode payload = payloadCaptor.getValue();
+        assertThat(payload.path("AdditionalData").path("Data").path("note").asText(), equalTo("Test!"));
+
+        Map<String, String> capturedProperties = new HashMap<>();
+        Message jmsMessage = mock(Message.class);
+        doAnswer(invocation -> {
+            capturedProperties.put(invocation.getArgument(0), invocation.getArgument(1));
+            return null;
+        }).when(jmsMessage).setStringProperty(anyString(), anyString());
+
+        postProcessorCaptor.getValue().postProcessMessage(jmsMessage);
+
+        assertThat(capturedProperties.get("case_id"), equalTo(String.valueOf(caseRef)));
+        assertThat(capturedProperties.get("case_type_id"), equalTo(NoFaultDivorce.getCaseType()));
+        assertThat(capturedProperties.get("event_id"), equalTo(PublishedEvent.class.getSimpleName()));
+
+        var publishedTimestamp = db.queryForObject(
+            "SELECT published FROM ccd.message_queue_candidates WHERE reference = :caseReference ORDER BY id DESC LIMIT 1",
+            Map.of("caseReference", caseRef),
+            LocalDateTime.class
+        );
+        assertThat(publishedTimestamp, is(notNullValue()));
     }
 
     @SneakyThrows

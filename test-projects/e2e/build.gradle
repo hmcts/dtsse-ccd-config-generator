@@ -14,6 +14,7 @@ version = '0.0.1'
 ccd {
   configDir = file('build/definitions')
   decentralised = true
+  caseEventServiceBus = true
 }
 
 java {
@@ -96,6 +97,7 @@ dependencies {
   testImplementation 'org.apache.httpcomponents:httpclient:4.5.14'
 
   cftlibTestImplementation "org.junit.platform:junit-platform-console-standalone:${versions.junitPlatform}"
+  cftlibTestImplementation 'jakarta.jms:jakarta.jms-api:3.1.0'
 }
 
 springBoot {

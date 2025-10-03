@@ -83,6 +83,11 @@ public class CcdSdkPlugin implements Plugin<Project> {
           }
         });
       }
+
+      if (config.caseEventServiceBus) {
+        project.getDependencies().add("implementation", "com.github.hmcts:ccd-servicebus-support:"
+            + getVersion());
+      }
     });
   }
 
@@ -98,6 +103,7 @@ public class CcdSdkPlugin implements Plugin<Project> {
     private String rootPackage = "uk.gov.hmcts";
     private String caseType = "";
     private boolean decentralised = false;
+    private boolean caseEventServiceBus = false;
 
     public CCDConfig() {
     }
