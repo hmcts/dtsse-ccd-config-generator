@@ -1,0 +1,71 @@
+name: Adoption Check
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  adoption-check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          submodules: recursive
+      - name: Set up JDK
+        uses: actions/setup-java@v5
+        with:
+          distribution: 'zulu'
+          java-version: 17
+      - name: Run adoption:check
+        run: ./gradlew adoption:check -i
+
+  adoption-semantic-diff:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout base branch
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: base
+          fetch-depth: 0
+          submodules: recursive
+      - name: Check base adoption module
+        id: base-adoption
+        working-directory: base
+        run: |
+          if grep -q "project(':adoption')" settings.gradle; then
+            echo "has_adoption=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Base branch does not include adoption module; skipping semantic diff" >&2
+            echo "has_adoption=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          path: pr
+          fetch-depth: 0
+          submodules: recursive
+      - name: Set up JDK
+        uses: actions/setup-java@v5
+        with:
+          distribution: 'zulu'
+          java-version: 17
+      - name: Generate base CCD config
+        if: steps.base-adoption.outputs.has_adoption == 'true'
+        working-directory: base
+        run: ./gradlew adoption:generateCCDConfig -i
+      - name: Generate PR CCD config
+        id: generate-pr
+        continue-on-error: true
+        working-directory: pr
+        run: ./gradlew adoption:generateCCDConfig -i
+      - name: Compare CCD configuration outputs
+        if: steps.base-adoption.outputs.has_adoption == 'true' && steps.generate-pr.outcome == 'success'
+        working-directory: pr
+        run: |
+          python scripts/ccd_diff.py \
+            ../base/test-projects/adoption-cos-api/build/definitions \
+            test-projects/adoption-cos-api/build/definitions
