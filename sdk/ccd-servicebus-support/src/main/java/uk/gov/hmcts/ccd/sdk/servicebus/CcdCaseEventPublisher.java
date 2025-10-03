@@ -8,9 +8,7 @@ import jakarta.jms.Message;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Optional;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.jms.core.JmsTemplate;
 import org.springframework.jms.core.MessagePostProcessor;
@@ -28,14 +26,11 @@ public class CcdCaseEventPublisher {
 
   public CcdCaseEventPublisher(CcdMessageQueueRepository repository,
                                JmsTemplate jmsTemplate,
-                               @Value("${azure.servicebus.ccd-case-events.topic-name:}") String azureDestination,
                                CcdServiceBusProperties properties) {
     this.repository = repository;
     this.jmsTemplate = jmsTemplate;
     this.properties = properties;
-    this.destination = Optional.ofNullable(properties.getDestination())
-        .filter(value -> !value.isBlank())
-        .orElse(azureDestination);
+    this.destination = properties.getDestination();
   }
 
   public void publishPendingCaseEvents() {
