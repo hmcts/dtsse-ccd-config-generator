@@ -25,7 +25,6 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.function.Function;
 import java.util.HashMap;
-import java.util.concurrent.CompletableFuture;
 
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
@@ -52,6 +51,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.atLeastOnce;
 
 import org.junit.jupiter.api.MethodOrderer;
 import org.junit.jupiter.api.Order;
@@ -75,7 +75,6 @@ import uk.gov.hmcts.divorce.sow014.nfd.FailingSubmittedCallback;
 import uk.gov.hmcts.divorce.sow014.nfd.PublishedEvent;
 import uk.gov.hmcts.divorce.sow014.nfd.ReturnErrorWhenCreateTestCase;
 import uk.gov.hmcts.divorce.sow014.nfd.SubmittedConfirmationCallback;
-import uk.gov.hmcts.ccd.sdk.servicebus.CcdCaseEventPublisher;
 import uk.gov.hmcts.ccd.sdk.type.CaseLink;
 import uk.gov.hmcts.ccd.sdk.type.ListValue;
 import uk.gov.hmcts.reform.ccd.client.CoreCaseDataApi;
@@ -92,7 +91,9 @@ import uk.gov.hmcts.rse.ccd.lib.test.CftlibTest;
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 @TestPropertySource(properties = {
     "spring.jms.servicebus.enabled=true",
-    "ccd.servicebus.destination=ccd-case-events-test"
+    "ccd.servicebus.destination=ccd-case-events-test",
+    "ccd.servicebus.scheduler-enabled=true",
+    "ccd.servicebus.schedule=*/1 * * * * *"
 })
 @Slf4j
 public class TestWithCCD extends CftlibTest {
@@ -108,9 +109,6 @@ public class TestWithCCD extends CftlibTest {
 
     @Autowired
     NamedParameterJdbcTemplate db;
-
-    @Autowired
-    private CcdCaseEventPublisher ccdCaseEventPublisher;
 
     @Autowired
     private JmsTemplate jmsTemplate;
@@ -725,13 +723,11 @@ public class TestWithCCD extends CftlibTest {
 
         reset(jmsTemplate);
 
-        CompletableFuture.runAsync(ccdCaseEventPublisher::publishPendingCaseEvents);
-
         ArgumentCaptor<JsonNode> payloadCaptor = ArgumentCaptor.forClass(JsonNode.class);
         ArgumentCaptor<MessagePostProcessor> postProcessorCaptor = ArgumentCaptor.forClass(MessagePostProcessor.class);
 
-        await().atMost(Duration.ofSeconds(5)).untilAsserted(() ->
-            verify(jmsTemplate, times(1)).convertAndSend(eq("ccd-case-events-test"), payloadCaptor.capture(), postProcessorCaptor.capture())
+        await().atMost(Duration.ofSeconds(10)).untilAsserted(() ->
+            verify(jmsTemplate, atLeastOnce()).convertAndSend(eq("ccd-case-events-test"), payloadCaptor.capture(), postProcessorCaptor.capture())
         );
 
         JsonNode payload = payloadCaptor.getValue();

@@ -35,7 +35,7 @@ public class CcdCaseEventPublisher {
 
   public void publishPendingCaseEvents() {
     if (destination == null || destination.isBlank()) {
-      log.debug("No Service Bus destination configured; skipping publish");
+      log.warn("No CCD Service Bus destination configured; skipping publish run");
       return;
     }
 
@@ -48,6 +48,8 @@ public class CcdCaseEventPublisher {
         break;
       }
 
+      log.info("Preparing to publish {} message_queue_candidates record(s) to {}", candidates.size(), destination);
+
       List<Long> publishedIds = new ArrayList<>(candidates.size());
       for (MessageQueueCandidate candidate : candidates) {
         if (sendToServiceBus(candidate)) {
@@ -58,6 +60,7 @@ public class CcdCaseEventPublisher {
       if (!publishedIds.isEmpty()) {
         repository.markPublished(publishedIds, LocalDateTime.now());
         totalPublished += publishedIds.size();
+        log.info("Marked {} message_queue_candidates record(s) as published", publishedIds.size());
       }
 
       if (candidates.size() < properties.getBatchSize()) {
@@ -69,14 +72,14 @@ public class CcdCaseEventPublisher {
       LocalDateTime cutoff = LocalDateTime.now().minusDays(properties.getPublishedRetentionDays());
       int removed = repository.deletePublishedBefore(properties.getMessageType(), cutoff);
       if (removed > 0) {
-        log.debug("Removed {} published message_queue_candidates records older than {}", removed, cutoff);
+        log.info("Removed {} published message_queue_candidates record(s) older than {}", removed, cutoff);
       }
     }
 
     if (totalPublished > 0) {
       log.info("Published {} CCD case event message(s) to {}", totalPublished, destination);
     } else {
-      log.debug("No CCD case event messages published in this run");
+      log.info("No CCD case event messages published in this run");
     }
   }
 
