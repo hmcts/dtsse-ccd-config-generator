@@ -20,11 +20,12 @@ import java.time.ZoneOffset;
 import java.util.Arrays;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.function.Function;
+import java.util.HashMap;
+import java.util.concurrent.CompletableFuture;
 
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
@@ -724,12 +725,14 @@ public class TestWithCCD extends CftlibTest {
 
         reset(jmsTemplate);
 
-        ccdCaseEventPublisher.publishPendingCaseEvents();
+        CompletableFuture.runAsync(ccdCaseEventPublisher::publishPendingCaseEvents);
 
         ArgumentCaptor<JsonNode> payloadCaptor = ArgumentCaptor.forClass(JsonNode.class);
         ArgumentCaptor<MessagePostProcessor> postProcessorCaptor = ArgumentCaptor.forClass(MessagePostProcessor.class);
 
-        verify(jmsTemplate, times(1)).convertAndSend(eq("ccd-case-events-test"), payloadCaptor.capture(), postProcessorCaptor.capture());
+        await().atMost(Duration.ofSeconds(5)).untilAsserted(() ->
+            verify(jmsTemplate, times(1)).convertAndSend(eq("ccd-case-events-test"), payloadCaptor.capture(), postProcessorCaptor.capture())
+        );
 
         JsonNode payload = payloadCaptor.getValue();
         assertThat(payload.path("AdditionalData").path("Data").path("note").asText(), equalTo("Test!"));
