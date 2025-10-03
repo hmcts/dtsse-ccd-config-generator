@@ -36,7 +36,7 @@ def versions = [
   jackson      : '2.18.0',
   junit        : '5.12.2',
   junitPlatform: '1.12.2',
-  lombok       : '1.18.34'
+  lombok       : '1.18.42'
 ]
 
 ext.libraries = [
