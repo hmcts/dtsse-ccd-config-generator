@@ -68,7 +68,7 @@ dependencies {
   implementation "com.fasterxml.jackson.core:jackson-core:${versions.jackson}"
   implementation "com.fasterxml.jackson.core:jackson-databind:${versions.jackson}"
 
-  implementation 'com.github.hmcts:ccd-case-document-am-client:1.7.3'
+  implementation 'com.github.hmcts:ccd-case-document-am-client:1.59.2'
   implementation 'com.github.hmcts:core-case-data-store-client:5.2.0'
   implementation 'com.github.hmcts:idam-java-client:3.0.4'
   implementation 'com.github.hmcts.java-logging:logging:6.1.9'
