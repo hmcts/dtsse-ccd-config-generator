@@ -4,7 +4,8 @@ plugins {
 
 dependencyManagement {
     imports {
-        mavenBom 'org.springframework.boot:spring-boot-dependencies:3.4.3'
+        mavenBom 'org.springframework.boot:spring-boot-dependencies:3.5.5'
+        mavenBom 'com.azure.spring:spring-cloud-azure-dependencies:5.23.0'
     }
 }
 
@@ -13,9 +14,9 @@ dependencies {
     api 'org.springframework:spring-jdbc'
     api 'org.springframework:spring-context'
     api 'org.springframework:spring-web'
+    api 'com.azure.spring:spring-cloud-azure-starter-servicebus-jms:5.23.0'
 
     compileOnly 'org.springframework.boot:spring-boot-autoconfigure'
 
     implementation 'com.fasterxml.jackson.core:jackson-databind'
-    implementation 'org.apache.qpid:qpid-jms-client:2.5.0'
 }
