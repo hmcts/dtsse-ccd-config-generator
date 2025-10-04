@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.stream.Collectors;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
@@ -13,6 +14,7 @@ import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.web.bind.annotation.RequestParam;
 import uk.gov.hmcts.ccd.data.persistence.dto.DecentralisedCaseDetails;
+import uk.gov.hmcts.ccd.data.persistence.dto.DecentralisedCaseEvent;
 import uk.gov.hmcts.ccd.domain.model.definition.CaseDetails;
 
 @Slf4j
@@ -88,6 +90,74 @@ class BlobRepository {
     return filteredMapper.writeValueAsString(o);
   }
 
+  long upsertCase(DecentralisedCaseEvent event) {
+    int version = Optional.ofNullable(event.getCaseDetails().getVersion()).orElse(1);
+    String data = serialiseDataFilteringExternalFields(event.getCaseDetails());
+
+    var sql = """
+            insert into ccd.case_data (
+                last_modified,
+                last_state_modified_date,
+                jurisdiction,
+                case_type_id,
+                state,
+                data,
+                reference,
+                security_classification,
+                version,
+                id
+            )
+            values (
+                (now() at time zone 'UTC'),
+                (now() at time zone 'UTC'),
+                :jurisdiction,
+                :case_type_id,
+                :state,
+                (:data::jsonb),
+                :reference,
+                :security_classification::ccd.securityclassification,
+                :version,
+                :id
+            )
+            on conflict (reference)
+            do update set
+                state = excluded.state,
+                data = excluded.data,
+                security_classification = excluded.security_classification,
+                last_modified = (now() at time zone 'UTC'),
+                version = case
+                            when
+                              case_data.data is distinct from excluded.data
+                              or case_data.state is distinct from excluded.state
+                              or case_data.security_classification is distinct from excluded.security_classification
+                            then
+                              case_data.version + 1
+                            else
+                              case_data.version
+                          end,
+                last_state_modified_date = case
+                                             when case_data.state is distinct from excluded.state then
+                                               (now() at time zone 'UTC')
+                                             else case_data.last_state_modified_date
+                                           end
+                where case_data.version = excluded.version
+                returning id;
+        """;
+
+    var params = Map.of(
+        "jurisdiction", event.getCaseDetails().getJurisdiction(),
+        "case_type_id", event.getCaseDetails().getCaseTypeId(),
+        "state", event.getCaseDetails().getState(),
+        "data", data,
+        "reference", event.getCaseDetails().getReference(),
+        "security_classification", event.getCaseDetails().getSecurityClassification().toString(),
+        "version", version,
+        "id", event.getInternalCaseId()
+    );
+
+    return ndb.queryForObject(sql, params, Long.class);
+  }
+
   /**
    * Helper method to process a single row of case data from the database.
    * This centralizes the transformation logic for both single and bulk endpoints.
@@ -130,4 +200,5 @@ class BlobRepository {
       return data;
     }
   }
+
 }

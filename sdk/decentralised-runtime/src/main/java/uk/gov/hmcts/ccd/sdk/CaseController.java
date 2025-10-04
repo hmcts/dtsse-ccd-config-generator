@@ -1,11 +1,8 @@
 package uk.gov.hmcts.ccd.sdk;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import java.net.URI;
 import java.util.List;
-import java.util.Map;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.concurrent.atomic.AtomicReference;
 import lombok.RequiredArgsConstructor;
 import lombok.SneakyThrows;
@@ -14,9 +11,7 @@ import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.transaction.support.TransactionTemplate;
-import org.springframework.util.MultiValueMap;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -27,7 +22,6 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.util.UriComponentsBuilder;
-import uk.gov.hmcts.ccd.data.casedetails.SecurityClassification;
 import uk.gov.hmcts.ccd.data.persistence.dto.DecentralisedAuditEvent;
 import uk.gov.hmcts.ccd.data.persistence.dto.DecentralisedCaseDetails;
 import uk.gov.hmcts.ccd.data.persistence.dto.DecentralisedCaseEvent;
@@ -42,15 +36,13 @@ import uk.gov.hmcts.reform.ccd.client.model.SubmittedCallbackResponse;
 @RequiredArgsConstructor
 public class CaseController {
 
-  private final NamedParameterJdbcTemplate ndb;
   private final TransactionTemplate transactionTemplate;
-  private final ObjectMapper defaultMapper;
   private final ConfigGeneratorCallbackDispatcher dispatcher;
   private final IdempotencyEnforcer idempotencyEnforcer;
   private final IdamService idam;
   private final CaseEventHistoryService caseEventHistoryService;
   private final SupplementaryDataService supplementaryDataService;
-  private final BlobRepository caseRepository;
+  private final BlobRepository blobRepository;
 
   @GetMapping(
       value = "/cases", // Mapped to the root /cases endpoint
@@ -59,7 +51,7 @@ public class CaseController {
   @SneakyThrows
   public List<DecentralisedCaseDetails> getCases(@RequestParam("case-refs") List<Long> caseRefs) {
     log.info("Fetching cases for references: {}", caseRefs);
-    return caseRepository.getCases(caseRefs);
+    return blobRepository.getCases(caseRefs);
   }
 
   @PostMapping(
@@ -125,7 +117,7 @@ public class CaseController {
       submittedResponse = dispatcher.runSubmittedCallback(event).orElse(null);
     }
 
-    var details = caseRepository.getCase(event.getCaseDetails().getReference());
+    var details = blobRepository.getCase(event.getCaseDetails().getReference());
     if (submittedResponse == null) {
       submittedResponse = toSubmittedCallbackResponse(
           event.getCaseDetails().getAfterSubmitCallbackResponse());
@@ -145,75 +137,9 @@ public class CaseController {
 
   @SneakyThrows
   private long saveCaseReturningAuditId(DecentralisedCaseEvent event, IdamService.User user) {
-    int version = Optional.ofNullable(event.getCaseDetails().getVersion()).orElse(1);
-
-    String data = caseRepository.serialiseDataFilteringExternalFields(event.getCaseDetails());
-    var caseDetails = event.getCaseDetails();
-    // Upsert the case - create if it doesn't exist, update if it does.
-    var sql = """
-            insert into ccd.case_data (
-                last_modified,
-                last_state_modified_date,
-                jurisdiction,
-                case_type_id,
-                state,
-                data,
-                reference,
-                security_classification,
-                version,
-                id
-            )
-            values (
-                (now() at time zone 'UTC'),
-                (now() at time zone 'UTC'),
-                :jurisdiction,
-                :case_type_id,
-                :state,
-                (:data::jsonb),
-                :reference,
-                :security_classification::ccd.securityclassification,
-                :version,
-                :id
-            )
-            on conflict (reference)
-            do update set
-                state = excluded.state,
-                data = excluded.data,
-                security_classification = excluded.security_classification,
-                last_modified = (now() at time zone 'UTC'),
-                version = case
-                            when
-                              -- We only bump the version if a mutable field actually changes
-                              case_data.data is distinct from excluded.data
-                              or case_data.state is distinct from excluded.state
-                              or case_data.security_classification is distinct from excluded.security_classification
-                            then
-                              case_data.version + 1
-                            else
-                              case_data.version
-                          end,
-                last_state_modified_date = case
-                                             when case_data.state is distinct from excluded.state then
-                                               (now() at time zone 'UTC')
-                                             else case_data.last_state_modified_date
-                                           end
-                where case_data.version = excluded.version
-                returning id;
-            """;
-    var params = Map.of(
-        "jurisdiction", caseDetails.getJurisdiction(),
-        "case_type_id", caseDetails.getCaseTypeId(),
-        "state", event.getCaseDetails().getState(),
-        "data", data,
-        "reference", caseDetails.getReference(),
-        "security_classification", caseDetails.getSecurityClassification().toString(),
-        "version", version,
-        "id", event.getInternalCaseId()
-    );
-
     try {
-      long caseDataId = ndb.queryForObject(sql, params, Long.class);
-      var currentView = caseRepository.getCase(event.getCaseDetails().getReference()).getCaseDetails();
+      long caseDataId = blobRepository.upsertCase(event);
+      var currentView = blobRepository.getCase(event.getCaseDetails().getReference()).getCaseDetails();
       return caseEventHistoryService.saveAuditRecord(event, user, currentView, caseDataId);
     } catch (EmptyResultDataAccessException e) {
       throw new ResponseStatusException(HttpStatus.CONFLICT, "Case was updated concurrently");
