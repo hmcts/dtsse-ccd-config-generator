@@ -1,20 +1,22 @@
 package uk.gov.hmcts.ccd.sdk;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import java.util.HashMap;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.stream.Collectors;
-import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import net.jodah.typetools.TypeResolver;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.web.bind.annotation.RequestParam;
+import lombok.SneakyThrows;
 import uk.gov.hmcts.ccd.data.persistence.dto.DecentralisedCaseDetails;
 import uk.gov.hmcts.ccd.data.persistence.dto.DecentralisedCaseEvent;
+import uk.gov.hmcts.ccd.data.casedetails.SecurityClassification;
 import uk.gov.hmcts.ccd.domain.model.definition.CaseDetails;
 
 @Slf4j
@@ -50,38 +52,39 @@ class BlobRepository {
     }
   }
 
-  @SneakyThrows
   public List<DecentralisedCaseDetails> getCases(@RequestParam("case-refs") List<Long> caseRefs) {
     log.info("Fetching cases for references: {}", caseRefs);
     var params = Map.of("caseRefs", caseRefs);
 
-    var results = ndb.queryForList(
+    return ndb.query(
         """
         select
-              reference as id,
-              -- Format timestamp in iso 8601
-              to_json(c.created_date)#>>'{}' as created_date,
+              reference,
+              c.created_date as created_date,
               jurisdiction,
               case_type_id,
               state,
               data::text as case_data,
               security_classification::text,
               version,
-              to_json(last_state_modified_date)#>>'{}' as last_state_modified_date,
-              to_json(coalesce(c.last_modified, c.created_date))#>>'{}' as last_modified,
+              last_state_modified_date,
+              coalesce(c.last_modified, c.created_date) as last_modified,
               supplementary_data::text,
               case_revision
          from ccd.case_data c
          where reference IN (:caseRefs)
-        """, params);
-
-    return results.stream()
-        .map(this::processCaseRow)
-        .collect(Collectors.toList());
+        """,
+        params,
+        (rs, rowNum) -> mapCaseDetails(rs)
+    );
   }
 
   public DecentralisedCaseDetails getCase(Long caseRef) {
-    return getCases(List.of(caseRef)).get(0);
+    var cases = getCases(List.of(caseRef));
+    if (cases.isEmpty()) {
+      throw new IllegalStateException("Case reference " + caseRef + " not found");
+    }
+    return cases.get(0);
   }
 
   @SneakyThrows
@@ -158,40 +161,44 @@ class BlobRepository {
     return ndb.queryForObject(sql, params, Long.class);
   }
 
-  /**
-   * Helper method to process a single row of case data from the database.
-   * This centralizes the transformation logic for both single and bulk endpoints.
-   */
-  @SneakyThrows
-  private DecentralisedCaseDetails processCaseRow(Map<String, Object> row) {
-    var result = new HashMap<>(row);
+  private DecentralisedCaseDetails mapCaseDetails(ResultSet rs) throws SQLException {
+    try {
+      Long reference = rs.getObject("reference", Long.class);
+      String state = rs.getString("state");
 
-    var data = defaultMapper.readValue((String) result.get("case_data"), caseDataType);
-    result.put("case_data", caseRepository.getCase((Long) row.get("id"), (String) row.get("state"), data));
+      var caseDetails = new CaseDetails();
+      caseDetails.setReference(reference);
+      caseDetails.setId(String.valueOf(reference));
+      caseDetails.setJurisdiction(rs.getString("jurisdiction"));
+      caseDetails.setCaseTypeId(rs.getString("case_type_id"));
+      caseDetails.setState(state);
+      caseDetails.setVersion(rs.getObject("version", Integer.class));
+      caseDetails.setCreatedDate(rs.getObject("created_date", LocalDateTime.class));
+      caseDetails.setLastModified(rs.getObject("last_modified", LocalDateTime.class));
+      caseDetails.setLastStateModifiedDate(rs.getObject("last_state_modified_date", LocalDateTime.class));
 
-    var supplementaryDataJson = row.get("supplementary_data");
-    result.put("supplementary_data", defaultMapper.readValue(supplementaryDataJson.toString(), Map.class));
+      var caseDataJson = rs.getString("case_data");
+      var rawCaseData = defaultMapper.readValue(caseDataJson, caseDataType);
+      var projectedCaseData = caseRepository.getCase(reference, state, rawCaseData);
+      caseDetails.setData(defaultMapper.convertValue(projectedCaseData, Map.class));
+      caseDetails.setDataClassification(Map.of());
 
-    result.put("data_classification", Map.of());
+      var supplementaryDataJson = rs.getString("supplementary_data");
+      caseDetails.setSupplementaryData(defaultMapper.readValue(supplementaryDataJson, Map.class));
 
-    var revisionRaw = result.remove("case_revision");
-    Long revision = null;
-    if (revisionRaw instanceof Number number) {
-      revision = number.longValue();
-    }
+      var securityClassification = rs.getString("security_classification");
+      caseDetails.setSecurityClassification(SecurityClassification.valueOf(securityClassification));
 
-    var caseDetails = defaultMapper.convertValue(
-        result,
-        uk.gov.hmcts.ccd.domain.model.definition.CaseDetails.class
-    );
-    if (revision != null) {
+      Long revision = rs.getObject("case_revision", Long.class);
       caseDetails.setRevision(revision);
-    }
 
-    var response = new DecentralisedCaseDetails();
-    response.setCaseDetails(caseDetails);
-    response.setRevision(revision);
-    return response;
+      var response = new DecentralisedCaseDetails();
+      response.setCaseDetails(caseDetails);
+      response.setRevision(revision);
+      return response;
+    } catch (Exception exception) {
+      throw new SQLException("Failed to map case data", exception);
+    }
   }
 
   private static final class DefaultCaseRepository implements CaseRepository<Map<String, Object>> {
