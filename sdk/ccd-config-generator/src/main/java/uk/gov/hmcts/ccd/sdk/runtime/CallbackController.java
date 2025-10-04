@@ -1,16 +1,10 @@
 package uk.gov.hmcts.ccd.sdk.runtime;
 
-import static java.util.function.Function.identity;
-
 import com.fasterxml.jackson.databind.JavaType;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Maps;
 import de.cronn.reflection.util.TypedPropertyGetter;
-import java.util.Collection;
 import java.util.Map;
-import java.util.function.Function;
-import lombok.Getter;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -23,6 +17,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 import uk.gov.hmcts.ccd.sdk.ResolvedCCDConfig;
+import uk.gov.hmcts.ccd.sdk.ResolvedConfigRegistry;
 import uk.gov.hmcts.ccd.sdk.api.CaseDetails;
 import uk.gov.hmcts.ccd.sdk.api.Event;
 import uk.gov.hmcts.ccd.sdk.api.EventPayload;
@@ -36,18 +31,17 @@ import uk.gov.hmcts.reform.ccd.client.model.SubmittedCallbackResponse;
 @RequestMapping("/callbacks")
 public class CallbackController {
 
-  @Getter
-  private final ImmutableMap<String, ResolvedCCDConfig<?, ?, ?>> caseTypeToConfig;
+  private final ResolvedConfigRegistry registry;
 
   private ObjectMapper mapper;
 
   private final Map<String, JavaType> caseTypeToJavaType = Maps.newHashMap();
 
   @Autowired
-  public CallbackController(Collection<ResolvedCCDConfig<?, ?, ?>> configs, ObjectMapper mapper) {
-    this.caseTypeToConfig = Maps.uniqueIndex(configs, ResolvedCCDConfig::getCaseType);
+  public CallbackController(ResolvedConfigRegistry registry, ObjectMapper mapper) {
+    this.registry = registry;
     this.mapper = mapper;
-    for (ResolvedCCDConfig<?, ?, ?> config : configs) {
+    for (ResolvedCCDConfig<?, ?, ?> config : registry.getAll()) {
       this.caseTypeToJavaType.put(config.getCaseType(),
           mapper.getTypeFactory().constructParametricType(CaseDetails.class, config.getCaseClass(),
               config.getStateClass()));
@@ -62,7 +56,7 @@ public class CallbackController {
     var r = findCaseEvent(request);
 
     if (r.getStartHandler() != null) {
-      var ct = getCaseTypeToConfig().get(request.getCaseDetails().getCaseTypeId());
+      var ct = registry.getRequired(request.getCaseDetails().getCaseTypeId());
       String json = mapper.writeValueAsString(request.getCaseDetails().getData());
       var domainClass = mapper.readValue(json, ct.getCaseClass());
       EventPayload payload = new EventPayload<>(
@@ -125,12 +119,12 @@ public class CallbackController {
 
   <T> Event<?, ?, ?> findCaseEvent(CallbackRequest request) {
     String caseType = request.getCaseDetails().getCaseTypeId();
-    if (!caseTypeToConfig.containsKey(caseType)) {
+    if (registry.find(caseType).isEmpty()) {
       log.warn("No configuration found for case type " + caseType);
       throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Case type not found: " + caseType);
     }
 
-    Event<?, ?, ?> result = caseTypeToConfig.get(caseType).getEvents().get(request.getEventId());
+    Event<?, ?, ?> result = registry.getRequired(caseType).getEvents().get(request.getEventId());
     if (result == null) {
       log.warn("Unknown event " + request.getEventId());
       throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Case event not found: " + request.getEventId());
@@ -156,10 +150,7 @@ public class CallbackController {
 
     if (null != ccdDetails) {
       try {
-        Map<String, Object> migratedData = caseTypeToConfig.get(caseType).getPreEventHooks()
-            .stream()
-            .reduce(identity(), Function::andThen)
-            .apply(ccdDetails.getData());
+        Map<String, Object> migratedData = registry.applyPreEventHooks(caseType, ccdDetails.getData());
 
         ccdDetails.setData(migratedData);
       } catch (Exception e) {
@@ -172,11 +163,11 @@ public class CallbackController {
   }
 
   public boolean hasAboutToSubmitCallback(String caseType, String event) {
-    if (!caseTypeToConfig.containsKey(caseType)) {
+    if (registry.find(caseType).isEmpty()) {
       return false;
     }
 
-    Event<?, ?, ?> result = caseTypeToConfig.get(caseType).getEvents().get(event);
+    Event<?, ?, ?> result = registry.getRequired(caseType).getEvents().get(event);
     if (result == null) {
       return false;
     }
@@ -185,11 +176,11 @@ public class CallbackController {
   }
 
   public boolean hasSubmittedCallback(String caseType, String event) {
-    if (!caseTypeToConfig.containsKey(caseType)) {
+    if (registry.find(caseType).isEmpty()) {
       return false;
     }
 
-    Event<?, ?, ?> result = caseTypeToConfig.get(caseType).getEvents().get(event);
+    Event<?, ?, ?> result = registry.getRequired(caseType).getEvents().get(event);
     if (result == null) {
       return false;
     }

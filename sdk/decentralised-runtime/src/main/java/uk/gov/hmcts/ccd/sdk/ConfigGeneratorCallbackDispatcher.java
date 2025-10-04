@@ -1,16 +1,15 @@
 package uk.gov.hmcts.ccd.sdk;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.google.common.base.Strings;
-import java.util.Arrays;
-import java.util.Optional;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.util.MultiValueMap;
 import uk.gov.hmcts.ccd.data.persistence.dto.DecentralisedCaseEvent;
-import uk.gov.hmcts.ccd.sdk.api.CCD;
 import uk.gov.hmcts.ccd.sdk.api.Event;
 import uk.gov.hmcts.ccd.sdk.api.EventPayload;
 import uk.gov.hmcts.ccd.sdk.api.Webhook;
@@ -26,6 +25,7 @@ import uk.gov.hmcts.reform.ccd.client.model.SubmittedCallbackResponse;
 public class ConfigGeneratorCallbackDispatcher implements CCDEventListener {
 
   private final CallbackController controller;
+  private final ResolvedConfigRegistry registry;
   private final ObjectMapper mapper;
 
   public boolean hasAboutToSubmitCallbackForEvent(String caseType, String event) {
@@ -36,20 +36,32 @@ public class ConfigGeneratorCallbackDispatcher implements CCDEventListener {
   @Override
   public SubmitResponse submit(String caseType, String event, DecentralisedCaseEvent e,
                                MultiValueMap<String, String> urlParams) {
-    var ct = controller.getCaseTypeToConfig().get(caseType);
-    String json = mapper.writeValueAsString(e.getCaseDetails().getData());
-    var domainClass = mapper.readValue(json, ct.getCaseClass());
+    var config = registry.getRequired(caseType);
+    Map<String, Object> rawData = mapper.convertValue(
+        e.getCaseDetails().getData(),
+        new TypeReference<Map<String, Object>>() {}
+    );
+    if (rawData == null) {
+      rawData = Map.of();
+    }
+    Map<String, Object> migratedData = registry.applyPreEventHooks(caseType, rawData);
+    Map<String, JsonNode> normalisedData = mapper.convertValue(
+        migratedData,
+        new TypeReference<Map<String, JsonNode>>() {}
+    );
+    e.getCaseDetails().setData(normalisedData);
+    String json = mapper.writeValueAsString(migratedData);
+    var domainClass = mapper.readValue(json, config.getCaseClass());
 
     long caseRef = e.getCaseDetails().getReference();
     EventPayload payload = new EventPayload<>(caseRef, domainClass, urlParams);
-    var handler = ct.getEvents().get(event).getSubmitHandler();
+    var handler = config.getEvents().get(event).getSubmitHandler();
     return handler.submit(payload);
   }
 
   @Override
   public boolean hasSubmitHandler(String caseType, String event) {
-    return Optional.ofNullable(controller.getCaseTypeToConfig())
-        .map(configMap -> configMap.get(caseType))
+    return registry.find(caseType)
         .map(ResolvedCCDConfig::getEvents)
         .map(eventMap -> eventMap.get(event))
         .map(Event::getSubmitHandler)
@@ -59,14 +71,7 @@ public class ConfigGeneratorCallbackDispatcher implements CCDEventListener {
   @SneakyThrows
   @Override
   public String nameForState(String caseType, String stateId) {
-    // TODO: Refactor the config generator to reuse label extraction
-    var resolved = controller.getCaseTypeToConfig().get(caseType);
-    var clazz = resolved.getStateClass();
-    var enumType =
-        Arrays.stream(clazz.getEnumConstants()).filter(x -> x.toString().equals(stateId)).findFirst().orElseThrow();
-    CCD ccd = clazz.getField(enumType.toString()).getAnnotation(CCD.class);
-    return ccd != null && !Strings.isNullOrEmpty(ccd.label()) ? ccd.label() :
-        enumType.toString();
+    return registry.labelForState(caseType, stateId).orElse(stateId);
   }
 
   @Override
@@ -81,11 +86,9 @@ public class ConfigGeneratorCallbackDispatcher implements CCDEventListener {
 
   @Override
   public SubmittedCallbackResponse submitted(CallbackRequest request) {
-    var r = controller.getCaseTypeToConfig()
-        .get(request.getCaseDetails().getCaseTypeId())
-        .getEvents()
-        .get(request.getEventId())
-        .getRetries().get(Webhook.Submitted);
+    var resolved = registry.getRequired(request.getCaseDetails().getCaseTypeId());
+    var event = resolved.getEvents().get(request.getEventId());
+    var r = event.getRetries().get(Webhook.Submitted);
     int retries = r == null || r.isEmpty() ? 1 : 3;
     for (int i = 0; i < retries; i++) {
       try {
