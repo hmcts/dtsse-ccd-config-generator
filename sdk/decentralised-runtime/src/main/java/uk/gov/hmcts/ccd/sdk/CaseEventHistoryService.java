@@ -17,6 +17,7 @@ import uk.gov.hmcts.ccd.data.casedetails.SecurityClassification;
 import uk.gov.hmcts.ccd.data.persistence.dto.DecentralisedAuditEvent;
 import uk.gov.hmcts.ccd.data.persistence.dto.DecentralisedCaseEvent;
 import uk.gov.hmcts.ccd.domain.model.std.AuditEvent;
+import uk.gov.hmcts.ccd.sdk.ResolvedConfigRegistry;
 import uk.gov.hmcts.reform.ccd.client.model.CaseDetails;
 
 @Slf4j
@@ -27,7 +28,7 @@ public class CaseEventHistoryService {
   private final NamedParameterJdbcTemplate ndb;
   private final ObjectMapper defaultMapper;
   private final Optional<MessagePublisher> publisher;
-  private final CCDEventListener eventListener;
+  private final ResolvedConfigRegistry registry;
 
   public List<DecentralisedAuditEvent> loadHistory(long caseRef) {
     final String sql = """
@@ -115,13 +116,12 @@ public class CaseEventHistoryService {
     params.put("user_first_name", user.getUserDetails().getGivenName());
     params.put("user_last_name", user.getUserDetails().getFamilyName());
     params.put("event_name", eventDetails.getEventName());
-    params.put(
-        "state_name",
-        eventListener.nameForState(
+    String stateName = registry.labelForState(
             eventDetails.getCaseType(),
             String.valueOf(currentView.getState())
         )
-    );
+        .orElse(String.valueOf(currentView.getState()));
+    params.put("state_name", stateName);
     params.put("summary", eventDetails.getSummary());
     params.put("description", eventDetails.getDescription());
     params.put("security_classification", currentView.getSecurityClassification().toString());
