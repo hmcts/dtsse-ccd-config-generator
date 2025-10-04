@@ -155,8 +155,6 @@ public class CcdCallbackExecutor {
       throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Handler not found for " + caseType);
     }
 
-    boolean originalDataPresent = ccdDetails.getData() != null;
-
     if (ccdDetails != null) {
       try {
         Map<String, Object> migratedData = registry.applyPreEventHooks(caseType, ccdDetails.getData());
@@ -168,9 +166,6 @@ public class CcdCallbackExecutor {
 
     String json = mapper.writeValueAsString(ccdDetails);
     CaseDetails result = mapper.readValue(json, caseTypeToJavaType.get(caseType));
-    if (!originalDataPresent && result != null) {
-      result.setData(null);
-    }
     return result;
   }
 }
