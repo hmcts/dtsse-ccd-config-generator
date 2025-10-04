@@ -10,12 +10,6 @@ import uk.gov.hmcts.reform.ccd.client.model.SubmittedCallbackResponse;
 public interface CCDEventListener {
   AboutToStartOrSubmitResponse aboutToSubmit(CallbackRequest request);
 
-  boolean hasSubmittedCallbackForEvent(String caseType, String event);
-
-  boolean hasAboutToSubmitCallbackForEvent(String caseType, String event);
-
-  boolean hasSubmitHandler(String caseType, String event);
-
   SubmitResponse submit(String caseType, String event, DecentralisedCaseEvent payload,
                         MultiValueMap<String, String> urlParams);
 

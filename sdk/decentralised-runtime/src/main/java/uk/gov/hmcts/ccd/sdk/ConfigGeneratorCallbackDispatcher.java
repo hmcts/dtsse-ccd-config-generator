@@ -10,7 +10,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.util.MultiValueMap;
 import uk.gov.hmcts.ccd.data.persistence.dto.DecentralisedCaseEvent;
-import uk.gov.hmcts.ccd.sdk.api.Event;
 import uk.gov.hmcts.ccd.sdk.api.EventPayload;
 import uk.gov.hmcts.ccd.sdk.api.Webhook;
 import uk.gov.hmcts.ccd.sdk.api.callback.AboutToStartOrSubmitResponse;
@@ -27,10 +26,6 @@ public class ConfigGeneratorCallbackDispatcher implements CCDEventListener {
   private final CallbackController controller;
   private final ResolvedConfigRegistry registry;
   private final ObjectMapper mapper;
-
-  public boolean hasAboutToSubmitCallbackForEvent(String caseType, String event) {
-    return controller.hasAboutToSubmitCallback(caseType, event);
-  }
 
   @SneakyThrows
   @Override
@@ -59,15 +54,6 @@ public class ConfigGeneratorCallbackDispatcher implements CCDEventListener {
     return handler.submit(payload);
   }
 
-  @Override
-  public boolean hasSubmitHandler(String caseType, String event) {
-    return registry.find(caseType)
-        .map(ResolvedCCDConfig::getEvents)
-        .map(eventMap -> eventMap.get(event))
-        .map(Event::getSubmitHandler)
-        .isPresent();
-  }
-
   @SneakyThrows
   @Override
   public String nameForState(String caseType, String stateId) {
@@ -77,11 +63,6 @@ public class ConfigGeneratorCallbackDispatcher implements CCDEventListener {
   @Override
   public AboutToStartOrSubmitResponse aboutToSubmit(CallbackRequest request) {
     return controller.aboutToSubmit(request);
-  }
-
-  @Override
-  public boolean hasSubmittedCallbackForEvent(String caseType, String event) {
-    return controller.hasSubmittedCallback(caseType, event);
   }
 
   @Override

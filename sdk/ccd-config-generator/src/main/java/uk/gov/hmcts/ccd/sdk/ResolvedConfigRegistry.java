@@ -9,6 +9,7 @@ import java.util.Optional;
 import java.util.function.Function;
 import org.springframework.stereotype.Component;
 import uk.gov.hmcts.ccd.sdk.api.CCD;
+import uk.gov.hmcts.ccd.sdk.api.Event;
 
 /**
  * Simple catalogue for resolved CCD configurations so other components can access
@@ -45,6 +46,15 @@ public class ResolvedConfigRegistry {
         config.getPreEventHooks().stream().reduce(Function.identity(), Function::andThen);
     Map<String, Object> safeData = data == null ? Map.of() : data;
     return pipeline.apply(safeData);
+  }
+
+  public Event<?, ?, ?> getRequiredEvent(String caseType, String eventId) {
+    return find(caseType)
+        .map(ResolvedCCDConfig::getEvents)
+        .map(events -> events.get(eventId))
+        .orElseThrow(() -> new IllegalArgumentException(
+            "No event " + eventId + " defined for case type " + caseType
+        ));
   }
 
   public Optional<String> labelForState(String caseType, String stateId) {

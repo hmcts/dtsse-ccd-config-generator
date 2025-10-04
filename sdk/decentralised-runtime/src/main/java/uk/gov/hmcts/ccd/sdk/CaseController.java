@@ -33,6 +33,8 @@ import uk.gov.hmcts.ccd.data.persistence.dto.DecentralisedCaseEvent;
 import uk.gov.hmcts.ccd.data.persistence.dto.DecentralisedSubmitEventResponse;
 import uk.gov.hmcts.ccd.data.persistence.dto.DecentralisedUpdateSupplementaryDataResponse;
 import uk.gov.hmcts.ccd.domain.model.callbacks.AfterSubmitCallbackResponse;
+import uk.gov.hmcts.ccd.sdk.ResolvedConfigRegistry;
+import uk.gov.hmcts.ccd.sdk.api.Event;
 import uk.gov.hmcts.reform.ccd.client.model.CallbackRequest;
 import uk.gov.hmcts.reform.ccd.client.model.CaseDetails;
 import uk.gov.hmcts.reform.ccd.client.model.SubmittedCallbackResponse;
@@ -47,6 +49,7 @@ public class CaseController {
   private final TransactionTemplate transactionTemplate;
   private final ObjectMapper defaultMapper;
   private final CCDEventListener eventListener;
+  private final ResolvedConfigRegistry registry;
   private final IdempotencyEnforcer idempotencyEnforcer;
   private final IdamService idam;
   private final CaseEventHistoryService caseEventHistoryService;
@@ -88,6 +91,10 @@ public class CaseController {
     var params = UriComponentsBuilder.fromUri(uri).build().getQueryParams();
 
     var user = idam.retrieveUser(headers.getFirst("Authorization"));
+    var eventDefinition = registry.getRequiredEvent(
+        event.getEventDetails().getCaseType(),
+        event.getEventDetails().getEventId()
+    );
     var newRequest = Boolean.FALSE;
     try {
       newRequest = transactionTemplate.execute(status -> {
@@ -96,7 +103,7 @@ public class CaseController {
           return false;
         }
 
-        var result = dispatchAboutToSubmit(event, params);
+        var result = dispatchAboutToSubmit(event, params, eventDefinition);
         if (result.getErrors() != null && !result.getErrors().isEmpty()) {
           throw new CallbackValidationException(result.getErrors(), result.getWarnings());
         }
@@ -112,12 +119,10 @@ public class CaseController {
     }
 
     SubmittedCallbackResponse submittedResponse = null;
-    if (Boolean.TRUE.equals(newRequest)
-        && eventListener.hasSubmittedCallbackForEvent(
-            event.getEventDetails().getCaseType(),
-            event.getEventDetails().getEventId()
-        )) {
-      submittedResponse = dispatchSubmitted(event);
+    if (Boolean.TRUE.equals(newRequest)) {
+      submittedResponse = Optional.ofNullable(eventDefinition.getSubmittedCallback())
+          .map(cb -> dispatchSubmitted(event, eventDefinition))
+          .orElse(null);
     }
 
     var details = caseRepository.getCase(event.getCaseDetails().getReference());
@@ -216,30 +221,30 @@ public class CaseController {
   }
 
   @SneakyThrows
-  private SubmittedCallbackResponse dispatchSubmitted(DecentralisedCaseEvent event) {
-    if (eventListener.hasSubmittedCallbackForEvent(event.getEventDetails().getCaseType(),
-        event.getEventDetails().getEventId())) {
-      var req = CallbackRequest.builder()
-          .caseDetails(toCaseDetails(event.getCaseDetails()))
-          .caseDetailsBefore(toCaseDetails(event.getCaseDetailsBefore()))
-          .eventId(event.getEventDetails().getEventId())
-          .build();
-      var submitted = eventListener.submitted(req);
-      log.debug("Submitted callback returned header={} body={}",
-          submitted != null ? submitted.getConfirmationHeader() : null,
-          submitted != null ? submitted.getConfirmationBody() : null);
-      return submitted;
-    }
-    return null;
+  private SubmittedCallbackResponse dispatchSubmitted(DecentralisedCaseEvent event,
+                                                       Event<?, ?, ?> eventDefinition) {
+    log.debug("Dispatching submitted callback for event {}", eventDefinition.getId());
+    var req = CallbackRequest.builder()
+        .caseDetails(toCaseDetails(event.getCaseDetails()))
+        .caseDetailsBefore(toCaseDetails(event.getCaseDetailsBefore()))
+        .eventId(event.getEventDetails().getEventId())
+        .build();
+    var submitted = eventListener.submitted(req);
+    log.debug("Submitted callback returned header={} body={}",
+        submitted != null ? submitted.getConfirmationHeader() : null,
+        submitted != null ? submitted.getConfirmationBody() : null);
+    return submitted;
   }
 
   @SneakyThrows
   private DecentralisedSubmitEventResponse dispatchAboutToSubmit(
       DecentralisedCaseEvent event,
-      MultiValueMap<String, String> urlParams
+      MultiValueMap<String, String> urlParams,
+      Event<?, ?, ?> eventDefinition
   ) {
     var response = new DecentralisedSubmitEventResponse();
-    if (eventListener.hasSubmitHandler(event.getEventDetails().getCaseType(), event.getEventDetails().getEventId())) {
+
+    Optional.ofNullable(eventDefinition.getSubmitHandler()).ifPresent(handler -> {
       var submitResponse = eventListener.submit(event.getEventDetails().getCaseType(),
           event.getEventDetails().getEventId(), event, urlParams);
       if (submitResponse != null && (submitResponse.getConfirmationHeader() != null
@@ -249,27 +254,30 @@ public class CaseController {
         afterSubmit.setConfirmationBody(submitResponse.getConfirmationBody());
         event.getCaseDetails().setAfterSubmitCallbackResponseEntity(ResponseEntity.ok(afterSubmit));
       }
-    } else if (eventListener.hasAboutToSubmitCallbackForEvent(event.getEventDetails().getCaseType(),
-        event.getEventDetails().getEventId())) {
-      var req = CallbackRequest.builder()
-          .caseDetails(toCaseDetails(event.getCaseDetails()))
-          .caseDetailsBefore(toCaseDetails(event.getCaseDetailsBefore()))
-          .eventId(event.getEventDetails().getEventId())
-          .build();
-      var cb = eventListener.aboutToSubmit(req);
+    });
 
-      event.getCaseDetails().setData(defaultMapper.convertValue(cb.getData(), Map.class));
-      if (cb.getState() != null) {
-        event.getCaseDetails().setState(cb.getState().toString());
-      }
-      if (cb.getSecurityClassification() != null) {
-        event.getCaseDetails().setSecurityClassification(
-            SecurityClassification.valueOf(cb.getSecurityClassification())
-        );
-      }
+    if (eventDefinition.getSubmitHandler() == null) {
+      Optional.ofNullable(eventDefinition.getAboutToSubmitCallback()).ifPresent(callback -> {
+        var req = CallbackRequest.builder()
+            .caseDetails(toCaseDetails(event.getCaseDetails()))
+            .caseDetailsBefore(toCaseDetails(event.getCaseDetailsBefore()))
+            .eventId(event.getEventDetails().getEventId())
+            .build();
+        var cb = eventListener.aboutToSubmit(req);
 
-      response.setErrors(cb.getErrors());
-      response.setWarnings(cb.getWarnings());
+        event.getCaseDetails().setData(defaultMapper.convertValue(cb.getData(), Map.class));
+        if (cb.getState() != null) {
+          event.getCaseDetails().setState(cb.getState().toString());
+        }
+        if (cb.getSecurityClassification() != null) {
+          event.getCaseDetails().setSecurityClassification(
+              SecurityClassification.valueOf(cb.getSecurityClassification())
+          );
+        }
+
+        response.setErrors(cb.getErrors());
+        response.setWarnings(cb.getWarnings());
+      });
     }
     return response;
   }
