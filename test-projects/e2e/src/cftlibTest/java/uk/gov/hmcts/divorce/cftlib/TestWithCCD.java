@@ -671,6 +671,7 @@ public class TestWithCCD extends CftlibTest {
     @Test
     public void testPublishingToMessageOutbox() {
         db.update("DELETE FROM ccd.message_queue_candidates", Map.of());
+        reset(jmsTemplate);
 
         var token = ccdApi.startEvent(
             getAuthorisation("TEST_CASE_WORKER_USER@mailinator.com"),
@@ -721,8 +722,6 @@ public class TestWithCCD extends CftlibTest {
         // Validate it's a parsable timestamp and it is recent
         LocalDateTime eventTimestamp = LocalDateTime.parse(retrievedTimestampStr);
         assertThat(eventTimestamp, is(greaterThan(LocalDateTime.now(ZoneOffset.UTC).minusMinutes(1))));
-
-        reset(jmsTemplate);
 
         ArgumentCaptor<JsonNode> payloadCaptor = ArgumentCaptor.forClass(JsonNode.class);
         ArgumentCaptor<MessagePostProcessor> postProcessorCaptor = ArgumentCaptor.forClass(MessagePostProcessor.class);
