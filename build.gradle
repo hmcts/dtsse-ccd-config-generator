@@ -4,6 +4,22 @@ tasks.register('check') {
     }
 }
 
+tasks.register('allTests')
+
+gradle.afterProject { project, _ ->
+    def aggregate = project.rootProject.tasks.named('allTests')
+    ['test', 'integration', 'cftlibTest'].each { taskName ->
+        project.tasks.matching { it.name == taskName }.configureEach { task ->
+            if ((project.path == ':nfdiv' && taskName == 'cftlibTest')
+                || (project.path == ':sptribs' && taskName == 'cftlibTest')
+                || project.path == ':ccd-data-store-api') {
+                return
+            }
+            aggregate.configure { dependsOn(task) }
+        }
+    }
+}
+
 tasks.register('publishToMavenLocal') { task ->
     gradle.includedBuilds.each { included ->
         task.dependsOn(included.task(':publishToMavenLocal'))

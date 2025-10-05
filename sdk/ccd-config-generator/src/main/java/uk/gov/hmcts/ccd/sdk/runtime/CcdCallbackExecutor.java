@@ -137,19 +137,12 @@ public class CcdCallbackExecutor {
   }
 
   CaseDetails convertCaseDetails(uk.gov.hmcts.reform.ccd.client.model.CaseDetails ccdDetails) {
-    if (ccdDetails == null) {
-      return null;
-    }
     return convertCaseDetails(ccdDetails, ccdDetails.getCaseTypeId());
   }
 
   @SneakyThrows
   CaseDetails convertCaseDetails(uk.gov.hmcts.reform.ccd.client.model.CaseDetails ccdDetails,
                                  String caseType) {
-    if (ccdDetails == null) {
-      return null;
-    }
-
     if (!caseTypeToJavaType.containsKey(caseType)) {
       log.warn("Handler not found for {}", caseType);
       throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Handler not found for " + caseType);

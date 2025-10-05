@@ -7,6 +7,10 @@
 
 ./gradlew -i e2e:cftlibTest
 
+# To run all tests
+
+./gradlew -i allTests
+
 # Style
 
 Max line length 120 chars

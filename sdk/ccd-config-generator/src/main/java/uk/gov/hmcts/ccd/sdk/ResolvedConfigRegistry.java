@@ -44,8 +44,7 @@ public class ResolvedConfigRegistry {
     ResolvedCCDConfig<?, ?, ?> config = getRequired(caseType);
     Function<Map<String, Object>, Map<String, Object>> pipeline =
         config.getPreEventHooks().stream().reduce(Function.identity(), Function::andThen);
-    Map<String, Object> safeData = data == null ? Map.of() : data;
-    return pipeline.apply(safeData);
+    return pipeline.apply(data);
   }
 
   public Event<?, ?, ?> getRequiredEvent(String caseType, String eventId) {
