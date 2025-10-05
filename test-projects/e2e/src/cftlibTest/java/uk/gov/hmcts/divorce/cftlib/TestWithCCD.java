@@ -862,13 +862,15 @@ public class TestWithCCD extends CftlibTest {
             Long internalId = getCaseDataInternalId(caseRef);
             int queueEntries = internalId == null ? -1 : getEsQueueEntryCount(internalId);
             int queueSize = getEsQueueSize();
+            List<Long> queueSamples = getEsQueueSample();
             log.info(
-                "Search attempt {} returned no cases for reference {} (case_data id = {}, es_queue entries for id = {}, total es_queue size = {})",
+                "Search attempt {} returned no cases for reference {} (case_data id = {}, es_queue entries for id = {}, total es_queue size = {}, queue sample = {})",
                 attempt,
                 caseRef,
                 internalId,
                 queueEntries,
-                queueSize
+                queueSize,
+                queueSamples
             );
             return false;
         }
@@ -924,6 +926,19 @@ public class TestWithCCD extends CftlibTest {
             log.error("Failed to query total size of ccd.es_queue", exception);
         }
         return -1;
+    }
+
+    private List<Long> getEsQueueSample() {
+        try {
+            return db.queryForList(
+                "SELECT id FROM ccd.es_queue ORDER BY id DESC LIMIT 5",
+                Map.of(),
+                Long.class
+            );
+        } catch (Exception exception) {
+            log.error("Failed to sample ccd.es_queue", exception);
+        }
+        return List.of();
     }
 
     private long createAdditionalCase(String solicitorEmail) throws Exception {
