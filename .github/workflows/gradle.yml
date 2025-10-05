@@ -14,5 +14,5 @@ jobs:
       with:
         distribution: 'zulu'
         java-version: 17
-    - name: Build
-      run: ./gradlew check -i
+    - name: Run SDK checks and e2e test
+      run: ./gradlew :sdk:check e2e:cftlibTest -i
