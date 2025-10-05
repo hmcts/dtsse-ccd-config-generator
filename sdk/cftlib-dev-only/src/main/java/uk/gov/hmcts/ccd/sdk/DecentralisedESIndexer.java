@@ -1,8 +1,10 @@
 package uk.gov.hmcts.ccd.sdk;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.http.HttpHost;
@@ -73,6 +75,11 @@ public class DecentralisedESIndexer implements DisposableBean {
 
   private void pollForNewCases() {
     transactionTemplate.execute(status -> {
+      Integer queueSizeBefore = jdbcTemplate.queryForObject(
+          "SELECT COUNT(*) FROM ccd.es_queue",
+          Integer.class
+      );
+
       // Replicates the behaviour of the previous logstash configuration.
       // https://github.com/hmcts/rse-cft-lib/blob/94aa0edeb0e1a4337a411ed8e6e20f170ed30bae/cftlib/lib/runtime/compose/logstash/logstash_conf.in#L3
       var results = jdbcTemplate.queryForList("""
@@ -103,6 +110,16 @@ public class DecentralisedESIndexer implements DisposableBean {
               join ccd.case_data cd on cd.id = ce.case_data_id
           ) row
           """);
+
+      int polledCount = results.size();
+      if ((queueSizeBefore != null && queueSizeBefore > 0) || polledCount > 0) {
+        List<String> caseIds = results.stream()
+            .map(row -> String.valueOf(row.get("id")))
+            .limit(10)
+            .collect(Collectors.toList());
+        log.info("Decentralised indexer poll: queue before={}, polled={}, sampleIds={}",
+            queueSizeBefore, polledCount, caseIds);
+      }
 
       try {
         BulkRequest request = new BulkRequest();
@@ -170,6 +187,15 @@ public class DecentralisedESIndexer implements DisposableBean {
             }
           }
         }
+        Integer queueSizeAfter = jdbcTemplate.queryForObject(
+            "SELECT COUNT(*) FROM ccd.es_queue",
+            Integer.class
+        );
+        if ((queueSizeBefore != null && queueSizeBefore > 0) || polledCount > 0) {
+          log.info("Decentralised indexer after bulk: queue after={}, bulk actions={}",
+              queueSizeAfter, request.numberOfActions());
+        }
+
         return true;  // Transaction success
       } catch (Exception e) {
         throw new RuntimeException(e);
