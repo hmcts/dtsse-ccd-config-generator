@@ -931,7 +931,7 @@ public class TestWithCCD extends CftlibTest {
     private List<Long> getEsQueueSample() {
         try {
             return db.queryForList(
-                "SELECT id FROM ccd.es_queue ORDER BY id DESC LIMIT 5",
+                "SELECT id FROM ccd.es_queue ORDER BY id ASC LIMIT 5",
                 Map.of(),
                 Long.class
             );
