@@ -23,6 +23,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 import java.util.HashMap;
 
@@ -130,6 +131,8 @@ public class TestWithCCD extends CftlibTest {
         "application/vnd.uk.gov.hmcts.ccd-data-store-api.ui-event-view.v2+json;charset=UTF-8";
     private static final String ACCEPT_UI_START_EVENT =
         "application/vnd.uk.gov.hmcts.ccd-data-store-api.ui-start-event-trigger.v2+json;charset=UTF-8";
+
+    private final AtomicInteger caseSearchAttempts = new AtomicInteger();
 
     @TestConfiguration
     static class ServiceBusTestConfiguration {
@@ -316,7 +319,7 @@ public class TestWithCCD extends CftlibTest {
     void searchCases() {
         // Give some time to index the case created by the previous test
         await()
-            .timeout(Duration.ofSeconds(10))
+            .timeout(Duration.ofSeconds(30))
             .ignoreExceptions()
             .until(this::caseAppearsInSearch);
     }
@@ -826,6 +829,8 @@ public class TestWithCCD extends CftlibTest {
 
     @SneakyThrows
     private Boolean caseAppearsInSearch() {
+        int attempt = caseSearchAttempts.incrementAndGet();
+
         var request = buildRequest(
             "TEST_CASE_WORKER_USER@mailinator.com",
             BASE_URL + "/data/internal/searchCases?ctid=" + NoFaultDivorce.getCaseType() + "&page=1",
@@ -850,8 +855,17 @@ public class TestWithCCD extends CftlibTest {
         request.setEntity(new StringEntity(query, ContentType.APPLICATION_JSON));
         var response = HttpClientBuilder.create().build().execute(request);
         assertThat(response.getStatusLine().getStatusCode(), equalTo(200));
-        var r = mapper.readValue(EntityUtils.toString(response.getEntity()), Map.class);
-        var aCase = (Map) ((List)r.get("cases")).get(0);
+        var responseBody = EntityUtils.toString(response.getEntity());
+        var r = mapper.readValue(responseBody, Map.class);
+        var cases = (List) r.get("cases");
+        if (cases == null || cases.isEmpty()) {
+            int queueEntries = getEsQueueEntryCount(caseRef);
+            log.info("Search attempt {} returned no cases for reference {} (es_queue entries = {})",
+                attempt, caseRef, queueEntries);
+            return false;
+        }
+
+        var aCase = (Map) cases.get(0);
         var fields = (Map) aCase.get("fields");
         assertThat(fields.get("applicant1FirstName"), equalTo("app1_first_name"));
         assertThat(fields.get("applicant2FirstName"), equalTo("app2_first_name"));
@@ -861,6 +875,25 @@ public class TestWithCCD extends CftlibTest {
         assertThat(fields.get("[LAST_STATE_MODIFIED_DATE]"), notNullValue());
 
         return true;
+    }
+
+    private int getEsQueueEntryCount(long caseReference) {
+        String sql = "SELECT COUNT(*) FROM ccd.es_queue WHERE id = ?";
+
+        try (Connection dataStoredb = super.cftlib().getConnection(Database.Datastore);
+             PreparedStatement statement = dataStoredb.prepareStatement(sql)) {
+
+            statement.setLong(1, caseReference);
+
+            try (ResultSet rs = statement.executeQuery()) {
+                if (rs.next()) {
+                    return rs.getInt(1);
+                }
+            }
+        } catch (SQLException exception) {
+            log.error("Failed to query ccd.es_queue for case {}", caseReference, exception);
+        }
+        return -1;
     }
 
     private long createAdditionalCase(String solicitorEmail) throws Exception {
