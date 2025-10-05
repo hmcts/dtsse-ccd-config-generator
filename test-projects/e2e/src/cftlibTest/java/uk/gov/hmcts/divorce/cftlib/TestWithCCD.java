@@ -24,6 +24,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 import java.util.HashMap;
 
@@ -133,6 +134,7 @@ public class TestWithCCD extends CftlibTest {
         "application/vnd.uk.gov.hmcts.ccd-data-store-api.ui-start-event-trigger.v2+json;charset=UTF-8";
 
     private final AtomicInteger caseSearchAttempts = new AtomicInteger();
+    private final AtomicReference<String> esQueueTableName = new AtomicReference<>();
 
     @TestConfiguration
     static class ServiceBusTestConfiguration {
@@ -892,7 +894,7 @@ public class TestWithCCD extends CftlibTest {
     private int getEsQueueEntryCount(long caseDataId) {
         try {
             Integer count = db.queryForObject(
-                "SELECT COUNT(*) FROM ccd.es_queue WHERE id = :caseDataId",
+                "SELECT COUNT(*) FROM " + getEsQueueTableName() + " WHERE id = :caseDataId",
                 Map.of("caseDataId", caseDataId),
                 Integer.class
             );
@@ -919,7 +921,7 @@ public class TestWithCCD extends CftlibTest {
     private int getEsQueueSize() {
         try {
             Integer count = db.queryForObject(
-                "SELECT COUNT(*) FROM ccd.es_queue",
+                "SELECT COUNT(*) FROM " + getEsQueueTableName(),
                 Map.of(),
                 Integer.class
             );
@@ -933,7 +935,7 @@ public class TestWithCCD extends CftlibTest {
     private List<Long> getEsQueueSample() {
         try {
             return db.queryForList(
-                "SELECT id FROM ccd.es_queue ORDER BY id ASC LIMIT 5",
+                "SELECT id FROM " + getEsQueueTableName() + " ORDER BY id ASC LIMIT 5",
                 Map.of(),
                 Long.class
             );
@@ -952,6 +954,70 @@ public class TestWithCCD extends CftlibTest {
         } catch (Exception exception) {
             log.error("Failed to read case_data summary for id {}", caseDataId, exception);
             return Map.of();
+        }
+    }
+
+    private String getEsQueueTableName() {
+        String cached = esQueueTableName.get();
+        if (cached != null) {
+            return cached;
+        }
+
+        logDatabaseContext();
+
+        var candidates = new java.util.LinkedHashSet<String>();
+
+        try {
+            List<String> schemas = db.getJdbcTemplate().queryForList(
+                "SELECT DISTINCT table_schema FROM information_schema.tables WHERE table_name = 'es_queue'",
+                String.class
+            );
+            log.info("Discovered es_queue schemas: {}", schemas);
+            schemas.stream()
+                .sorted((left, right) -> left.equalsIgnoreCase("ccd") ? -1
+                    : right.equalsIgnoreCase("ccd") ? 1
+                    : left.compareToIgnoreCase(right))
+                .forEach(schema -> {
+                    if (schema.equalsIgnoreCase("public")) {
+                        candidates.add("es_queue");
+                    } else {
+                        candidates.add(schema + ".es_queue");
+                    }
+                });
+        } catch (Exception exception) {
+            log.info("Unable to interrogate information_schema for es_queue", exception);
+        }
+
+        candidates.add("ccd.es_queue");
+        candidates.add("public.es_queue");
+        candidates.add("es_queue");
+
+        for (String candidate : candidates) {
+            try {
+                Integer marker = db.getJdbcTemplate().queryForObject(
+                    "SELECT COUNT(*) FROM " + candidate,
+                    Integer.class
+                );
+                log.info("Resolved es_queue table candidate {} with current row count {}", candidate, marker);
+                esQueueTableName.set(candidate);
+                return candidate;
+            } catch (Exception attemptException) {
+                log.info("es_queue table candidate {} is not accessible: {}", candidate, attemptException.getMessage());
+            }
+        }
+
+        log.warn("Falling back to default es_queue table reference ccd.es_queue");
+        esQueueTableName.set("ccd.es_queue");
+        return esQueueTableName.get();
+    }
+
+    private void logDatabaseContext() {
+        try {
+            String database = db.getJdbcTemplate().queryForObject("SELECT current_database()", String.class);
+            String searchPath = db.getJdbcTemplate().queryForObject("SHOW search_path", String.class);
+            log.info("Database context - current_database: {}, search_path: {}", database, searchPath);
+        } catch (Exception exception) {
+            log.info("Unable to log database context", exception);
         }
     }
 

@@ -1,6 +1,7 @@
 package uk.gov.hmcts.ccd.sdk;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -38,6 +39,7 @@ public class DecentralisedESIndexer implements DisposableBean {
   private volatile boolean terminated;
   private final Thread thread;
   private final RestHighLevelClient client;
+  private final String esQueueTable;
 
 
   @SneakyThrows
@@ -50,7 +52,10 @@ public class DecentralisedESIndexer implements DisposableBean {
     this.client = new RestHighLevelClient(RestClient.builder(
         HttpHost.create(elasticSearchHost)));
 
+    this.esQueueTable = resolveEsQueueTable();
+
     log.info("Starting decentralised ES indexer targeting {}", elasticSearchHost);
+    log.info("Decentralised indexer will query es_queue table {}", esQueueTable);
     this.thread = new Thread(this::index);
     thread.setDaemon(true);
     thread.setUncaughtExceptionHandler(this::failFast);
@@ -76,7 +81,7 @@ public class DecentralisedESIndexer implements DisposableBean {
   private void pollForNewCases() {
     transactionTemplate.execute(status -> {
       Integer queueSizeBefore = jdbcTemplate.queryForObject(
-          "SELECT COUNT(*) FROM ccd.es_queue",
+          "SELECT COUNT(*) FROM " + esQueueTable,
           Integer.class
       );
 
@@ -84,7 +89,7 @@ public class DecentralisedESIndexer implements DisposableBean {
       // https://github.com/hmcts/rse-cft-lib/blob/94aa0edeb0e1a4337a411ed8e6e20f170ed30bae/cftlib/lib/runtime/compose/logstash/logstash_conf.in#L3
       var results = jdbcTemplate.queryForList("""
           with updated as (
-            delete from ccd.es_queue es where id in (select id from ccd.es_queue limit 2000)
+            delete from %1$s es where id in (select id from %1$s limit 2000)
             returning id
           )
             select id, case_type_id, index_id, case_revision, event_id, row_to_json(row)::jsonb as row
@@ -109,7 +114,7 @@ public class DecentralisedESIndexer implements DisposableBean {
               join ccd.case_event ce using(id)
               join ccd.case_data cd on cd.id = ce.case_data_id
           ) row
-          """);
+          """.formatted(esQueueTable));
 
       int polledCount = results.size();
       if ((queueSizeBefore != null && queueSizeBefore > 0) || polledCount > 0) {
@@ -188,7 +193,7 @@ public class DecentralisedESIndexer implements DisposableBean {
           }
         }
         Integer queueSizeAfter = jdbcTemplate.queryForObject(
-            "SELECT COUNT(*) FROM ccd.es_queue",
+            "SELECT COUNT(*) FROM " + esQueueTable,
             Integer.class
         );
         if ((queueSizeBefore != null && queueSizeBefore > 0) || polledCount > 0) {
@@ -201,6 +206,67 @@ public class DecentralisedESIndexer implements DisposableBean {
         throw new RuntimeException(e);
       }
     });
+  }
+
+  private String resolveEsQueueTable() {
+    logDatabaseContext();
+
+    var candidates = new LinkedHashSet<String>();
+
+    try {
+      List<String> schemas = jdbcTemplate.queryForList(
+          "SELECT DISTINCT table_schema FROM information_schema.tables WHERE table_name = 'es_queue'",
+          String.class
+      );
+      log.info("Indexer discovered es_queue schemas: {}", schemas);
+      schemas.stream()
+          .sorted((left, right) -> left.equalsIgnoreCase("ccd") ? -1
+              : right.equalsIgnoreCase("ccd") ? 1
+              : left.compareToIgnoreCase(right))
+          .forEach(schema -> {
+            if (schema.equalsIgnoreCase("public")) {
+              candidates.add("es_queue");
+            } else {
+              candidates.add(schema + ".es_queue");
+            }
+          });
+    } catch (Exception exception) {
+      log.info("Indexer unable to interrogate information_schema for es_queue", exception);
+    }
+
+    candidates.add("ccd.es_queue");
+    candidates.add("public.es_queue");
+    candidates.add("es_queue");
+
+    for (String candidate : candidates) {
+      try {
+        Integer marker = jdbcTemplate.queryForObject(
+            "SELECT COUNT(*) FROM " + candidate,
+            Integer.class
+        );
+        log.info("Indexer resolved es_queue table candidate {} with current row count {}", candidate, marker);
+        return candidate;
+      } catch (Exception attemptException) {
+        log.info(
+            "Indexer es_queue table candidate {} is not accessible: {}",
+            candidate,
+            attemptException.getMessage()
+        );
+      }
+    }
+
+    log.warn("Indexer falling back to default es_queue table reference ccd.es_queue");
+    return "ccd.es_queue";
+  }
+
+  private void logDatabaseContext() {
+    try {
+      String database = jdbcTemplate.queryForObject("SELECT current_database()", String.class);
+      String searchPath = jdbcTemplate.queryForObject("SHOW search_path", String.class);
+      log.info("Indexer database context - current_database: {}, search_path: {}", database, searchPath);
+    } catch (Exception exception) {
+      log.info("Indexer unable to log database context", exception);
+    }
   }
 
   public void filter(Map<String, Object> map, String... forKeys) {
