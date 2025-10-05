@@ -859,9 +859,17 @@ public class TestWithCCD extends CftlibTest {
         var r = mapper.readValue(responseBody, Map.class);
         var cases = (List) r.get("cases");
         if (cases == null || cases.isEmpty()) {
-            int queueEntries = getEsQueueEntryCount(caseRef);
-            log.info("Search attempt {} returned no cases for reference {} (es_queue entries = {})",
-                attempt, caseRef, queueEntries);
+            Long internalId = getCaseDataInternalId(caseRef);
+            int queueEntries = internalId == null ? -1 : getEsQueueEntryCount(internalId);
+            int queueSize = getEsQueueSize();
+            log.info(
+                "Search attempt {} returned no cases for reference {} (case_data id = {}, es_queue entries for id = {}, total es_queue size = {})",
+                attempt,
+                caseRef,
+                internalId,
+                queueEntries,
+                queueSize
+            );
             return false;
         }
 
@@ -877,16 +885,43 @@ public class TestWithCCD extends CftlibTest {
         return true;
     }
 
-    private int getEsQueueEntryCount(long caseReference) {
+    private int getEsQueueEntryCount(long caseDataId) {
         try {
             Integer count = db.queryForObject(
-                "SELECT COUNT(*) FROM ccd.es_queue WHERE id = :caseRef",
-                Map.of("caseRef", caseReference),
+                "SELECT COUNT(*) FROM ccd.es_queue WHERE id = :caseDataId",
+                Map.of("caseDataId", caseDataId),
                 Integer.class
             );
             return count == null ? 0 : count;
         } catch (Exception exception) {
-            log.error("Failed to query ccd.es_queue for case {}", caseReference, exception);
+            log.error("Failed to query ccd.es_queue for case id {}", caseDataId, exception);
+        }
+        return -1;
+    }
+
+    private Long getCaseDataInternalId(long caseReference) {
+        try {
+            return db.queryForObject(
+                "SELECT id FROM ccd.case_data WHERE reference = :caseRef",
+                Map.of("caseRef", caseReference),
+                Long.class
+            );
+        } catch (Exception exception) {
+            log.error("Failed to resolve case_data id for reference {}", caseReference, exception);
+            return null;
+        }
+    }
+
+    private int getEsQueueSize() {
+        try {
+            Integer count = db.queryForObject(
+                "SELECT COUNT(*) FROM ccd.es_queue",
+                Map.of(),
+                Integer.class
+            );
+            return count == null ? 0 : count;
+        } catch (Exception exception) {
+            log.error("Failed to query total size of ccd.es_queue", exception);
         }
         return -1;
     }
