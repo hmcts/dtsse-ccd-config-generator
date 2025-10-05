@@ -72,8 +72,12 @@ public class CcdSdkPlugin implements Plugin<Project> {
         // This is a signal to the cftlib to link in the feature branch
         // TODO: remove on landing
         project.getExtensions().getExtraProperties().set("cftlib.datastore", "decentralised");
+        String version = getVersion();
         project.getDependencies().add("implementation", "com.github.hmcts:decentralised-runtime:"
-            + getVersion());
+            + version);
+        project.getPluginManager().withPlugin("com.github.hmcts.rse-cft-lib", plugin ->
+            project.getDependencies().add("cftlibImplementation",
+                "com.github.hmcts:cftlib-dev-only:" + version));
         // Surface that we are decentralised to the spring boot apps.
         // This is an env var since it needs to be read beyond the application's classpath
         // to shut off the default cftlib elasticsearch indexer when decentralised)
