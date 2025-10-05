@@ -878,19 +878,14 @@ public class TestWithCCD extends CftlibTest {
     }
 
     private int getEsQueueEntryCount(long caseReference) {
-        String sql = "SELECT COUNT(*) FROM es_queue WHERE id = ?";
-
-        try (Connection dataStoredb = super.cftlib().getConnection(Database.Datastore);
-             PreparedStatement statement = dataStoredb.prepareStatement(sql)) {
-
-            statement.setLong(1, caseReference);
-
-            try (ResultSet rs = statement.executeQuery()) {
-                if (rs.next()) {
-                    return rs.getInt(1);
-                }
-            }
-        } catch (SQLException exception) {
+        try {
+            Integer count = db.queryForObject(
+                "SELECT COUNT(*) FROM ccd.es_queue WHERE id = :caseRef",
+                Map.of("caseRef", caseReference),
+                Integer.class
+            );
+            return count == null ? 0 : count;
+        } catch (Exception exception) {
             log.error("Failed to query ccd.es_queue for case {}", caseReference, exception);
         }
         return -1;
