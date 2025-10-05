@@ -863,14 +863,16 @@ public class TestWithCCD extends CftlibTest {
             int queueEntries = internalId == null ? -1 : getEsQueueEntryCount(internalId);
             int queueSize = getEsQueueSize();
             List<Long> queueSamples = getEsQueueSample();
+            Map<String, Object> caseSummary = internalId == null ? Map.of() : getCaseDataSummary(internalId);
             log.info(
-                "Search attempt {} returned no cases for reference {} (case_data id = {}, es_queue entries for id = {}, total es_queue size = {}, queue sample = {})",
+                "Search attempt {} returned no cases for reference {} (case_data id = {}, es_queue entries for id = {}, total es_queue size = {}, queue sample = {}, case_data summary = {})",
                 attempt,
                 caseRef,
                 internalId,
                 queueEntries,
                 queueSize,
-                queueSamples
+                queueSamples,
+                caseSummary
             );
             return false;
         }
@@ -939,6 +941,18 @@ public class TestWithCCD extends CftlibTest {
             log.error("Failed to sample ccd.es_queue", exception);
         }
         return List.of();
+    }
+
+    private Map<String, Object> getCaseDataSummary(long caseDataId) {
+        try {
+            return db.queryForMap(
+                "SELECT id, reference, case_type_id, state, case_revision FROM ccd.case_data WHERE id = :id",
+                Map.of("id", caseDataId)
+            );
+        } catch (Exception exception) {
+            log.error("Failed to read case_data summary for id {}", caseDataId, exception);
+            return Map.of();
+        }
     }
 
     private long createAdditionalCase(String solicitorEmail) throws Exception {
