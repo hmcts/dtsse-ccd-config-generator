@@ -878,7 +878,7 @@ public class TestWithCCD extends CftlibTest {
     }
 
     private int getEsQueueEntryCount(long caseReference) {
-        String sql = "SELECT COUNT(*) FROM ccd.es_queue WHERE id = ?";
+        String sql = "SELECT COUNT(*) FROM es_queue WHERE id = ?";
 
         try (Connection dataStoredb = super.cftlib().getConnection(Database.Datastore);
              PreparedStatement statement = dataStoredb.prepareStatement(sql)) {
