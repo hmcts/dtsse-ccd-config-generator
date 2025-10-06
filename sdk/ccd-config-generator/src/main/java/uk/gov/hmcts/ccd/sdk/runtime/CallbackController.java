@@ -43,12 +43,4 @@ public class CallbackController {
                                                @RequestParam(name = "page") String page) {
     return executor.midEvent(request, page);
   }
-
-  public boolean hasAboutToSubmitCallback(String caseType, String event) {
-    return executor.hasAboutToSubmitCallback(caseType, event);
-  }
-
-  public boolean hasSubmittedCallback(String caseType, String event) {
-    return executor.hasSubmittedCallback(caseType, event);
-  }
 }

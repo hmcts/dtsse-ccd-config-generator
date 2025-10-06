@@ -96,20 +96,6 @@ public class CcdCallbackExecutor {
             request.getCaseDetails().getCaseTypeId()));
   }
 
-  public boolean hasAboutToSubmitCallback(String caseType, String event) {
-    return registry.find(caseType)
-        .map(config -> config.getEvents().get(event))
-        .map(e -> e.getAboutToSubmitCallback() != null)
-        .orElse(false);
-  }
-
-  public boolean hasSubmittedCallback(String caseType, String event) {
-    return registry.find(caseType)
-        .map(config -> config.getEvents().get(event))
-        .map(e -> e.getSubmittedCallback() != null)
-        .orElse(false);
-  }
-
   private <T> T findCallback(CallbackRequest request, TypedPropertyGetter<Event<?, ?, ?>, T> getter) {
     T result = getter.get(findCaseEvent(request));
     if (result == null) {
