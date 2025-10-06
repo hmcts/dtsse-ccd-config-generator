@@ -48,7 +48,7 @@ public class CcdCaseEventPublisher {
 
       List<Long> publishedIds = new ArrayList<>(candidates.size());
       for (MessageQueueCandidate candidate : candidates) {
-        if (sendToServiceBus(destination, candidate)) {
+        if (sendToServiceBus(candidate)) {
           publishedIds.add(candidate.id());
         }
       }
@@ -79,7 +79,7 @@ public class CcdCaseEventPublisher {
     }
   }
 
-  private boolean sendToServiceBus(String destination, MessageQueueCandidate candidate) {
+  private boolean sendToServiceBus(MessageQueueCandidate candidate) {
     try {
       jmsTemplate.convertAndSend(destination, candidate.payload(), applyProperties(candidate.payload()));
       return true;
