@@ -35,14 +35,12 @@ dependencies {
     // Types from this library are used in the config generator's API
     api group: 'de.cronn', name: 'reflection-util', version: '2.18.0'
     implementation group: 'org.objenesis', name: 'objenesis', version: '3.4'
-    implementation group: 'cglib', name: 'cglib', version: '3.3.0'
     implementation group: 'net.jodah', name: 'typetools', version: '0.6.3'
     implementation 'org.reflections:reflections:0.10.2'
     api 'com.google.guava:guava:33.4.8-jre'
 
     implementation 'com.fasterxml.jackson.core:jackson-databind:2.20.0'
 }
-
 
 
 
