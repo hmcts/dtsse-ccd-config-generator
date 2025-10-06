@@ -23,8 +23,6 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 import java.util.HashMap;
 
@@ -132,9 +130,6 @@ public class TestWithCCD extends CftlibTest {
         "application/vnd.uk.gov.hmcts.ccd-data-store-api.ui-event-view.v2+json;charset=UTF-8";
     private static final String ACCEPT_UI_START_EVENT =
         "application/vnd.uk.gov.hmcts.ccd-data-store-api.ui-start-event-trigger.v2+json;charset=UTF-8";
-
-    private final AtomicInteger caseSearchAttempts = new AtomicInteger();
-    private final AtomicReference<String> esQueueTableName = new AtomicReference<>();
 
     @TestConfiguration
     static class ServiceBusTestConfiguration {
@@ -321,7 +316,7 @@ public class TestWithCCD extends CftlibTest {
     void searchCases() {
         // Give some time to index the case created by the previous test
         await()
-            .timeout(Duration.ofSeconds(30))
+            .timeout(Duration.ofSeconds(10))
             .ignoreExceptions()
             .until(this::caseAppearsInSearch);
     }
@@ -831,8 +826,6 @@ public class TestWithCCD extends CftlibTest {
 
     @SneakyThrows
     private Boolean caseAppearsInSearch() {
-        int attempt = caseSearchAttempts.incrementAndGet();
-
         var request = buildRequest(
             "TEST_CASE_WORKER_USER@mailinator.com",
             BASE_URL + "/data/internal/searchCases?ctid=" + NoFaultDivorce.getCaseType() + "&page=1",
@@ -857,29 +850,8 @@ public class TestWithCCD extends CftlibTest {
         request.setEntity(new StringEntity(query, ContentType.APPLICATION_JSON));
         var response = HttpClientBuilder.create().build().execute(request);
         assertThat(response.getStatusLine().getStatusCode(), equalTo(200));
-        var responseBody = EntityUtils.toString(response.getEntity());
-        var r = mapper.readValue(responseBody, Map.class);
-        var cases = (List) r.get("cases");
-        if (cases == null || cases.isEmpty()) {
-            Long internalId = getCaseDataInternalId(caseRef);
-            int queueEntries = internalId == null ? -1 : getEsQueueEntryCount(internalId);
-            int queueSize = getEsQueueSize();
-            List<Long> queueSamples = getEsQueueSample();
-            Map<String, Object> caseSummary = internalId == null ? Map.of() : getCaseDataSummary(internalId);
-            log.info(
-                "Search attempt {} returned no cases for reference {} (case_data id = {}, es_queue entries for id = {}, total es_queue size = {}, queue sample = {}, case_data summary = {})",
-                attempt,
-                caseRef,
-                internalId,
-                queueEntries,
-                queueSize,
-                queueSamples,
-                caseSummary
-            );
-            return false;
-        }
-
-        var aCase = (Map) cases.get(0);
+        var r = mapper.readValue(EntityUtils.toString(response.getEntity()), Map.class);
+        var aCase = (Map) ((List)r.get("cases")).get(0);
         var fields = (Map) aCase.get("fields");
         assertThat(fields.get("applicant1FirstName"), equalTo("app1_first_name"));
         assertThat(fields.get("applicant2FirstName"), equalTo("app2_first_name"));
@@ -889,136 +861,6 @@ public class TestWithCCD extends CftlibTest {
         assertThat(fields.get("[LAST_STATE_MODIFIED_DATE]"), notNullValue());
 
         return true;
-    }
-
-    private int getEsQueueEntryCount(long caseDataId) {
-        try {
-            Integer count = db.queryForObject(
-                "SELECT COUNT(*) FROM " + getEsQueueTableName() + " WHERE id = :caseDataId",
-                Map.of("caseDataId", caseDataId),
-                Integer.class
-            );
-            return count == null ? 0 : count;
-        } catch (Exception exception) {
-            log.error("Failed to query ccd.es_queue for case id {}", caseDataId, exception);
-        }
-        return -1;
-    }
-
-    private Long getCaseDataInternalId(long caseReference) {
-        try {
-            return db.queryForObject(
-                "SELECT id FROM ccd.case_data WHERE reference = :caseRef",
-                Map.of("caseRef", caseReference),
-                Long.class
-            );
-        } catch (Exception exception) {
-            log.error("Failed to resolve case_data id for reference {}", caseReference, exception);
-            return null;
-        }
-    }
-
-    private int getEsQueueSize() {
-        try {
-            Integer count = db.queryForObject(
-                "SELECT COUNT(*) FROM " + getEsQueueTableName(),
-                Map.of(),
-                Integer.class
-            );
-            return count == null ? 0 : count;
-        } catch (Exception exception) {
-            log.error("Failed to query total size of ccd.es_queue", exception);
-        }
-        return -1;
-    }
-
-    private List<Long> getEsQueueSample() {
-        try {
-            return db.queryForList(
-                "SELECT id FROM " + getEsQueueTableName() + " ORDER BY id ASC LIMIT 5",
-                Map.of(),
-                Long.class
-            );
-        } catch (Exception exception) {
-            log.error("Failed to sample ccd.es_queue", exception);
-        }
-        return List.of();
-    }
-
-    private Map<String, Object> getCaseDataSummary(long caseDataId) {
-        try {
-            return db.queryForMap(
-                "SELECT id, reference, case_type_id, state, case_revision FROM ccd.case_data WHERE id = :id",
-                Map.of("id", caseDataId)
-            );
-        } catch (Exception exception) {
-            log.error("Failed to read case_data summary for id {}", caseDataId, exception);
-            return Map.of();
-        }
-    }
-
-    private String getEsQueueTableName() {
-        String cached = esQueueTableName.get();
-        if (cached != null) {
-            return cached;
-        }
-
-        logDatabaseContext();
-
-        var candidates = new java.util.LinkedHashSet<String>();
-
-        try {
-            List<String> schemas = db.getJdbcTemplate().queryForList(
-                "SELECT DISTINCT table_schema FROM information_schema.tables WHERE table_name = 'es_queue'",
-                String.class
-            );
-            log.info("Discovered es_queue schemas: {}", schemas);
-            schemas.stream()
-                .sorted((left, right) -> left.equalsIgnoreCase("ccd") ? -1
-                    : right.equalsIgnoreCase("ccd") ? 1
-                    : left.compareToIgnoreCase(right))
-                .forEach(schema -> {
-                    if (schema.equalsIgnoreCase("public")) {
-                        candidates.add("es_queue");
-                    } else {
-                        candidates.add(schema + ".es_queue");
-                    }
-                });
-        } catch (Exception exception) {
-            log.info("Unable to interrogate information_schema for es_queue", exception);
-        }
-
-        candidates.add("ccd.es_queue");
-        candidates.add("public.es_queue");
-        candidates.add("es_queue");
-
-        for (String candidate : candidates) {
-            try {
-                Integer marker = db.getJdbcTemplate().queryForObject(
-                    "SELECT COUNT(*) FROM " + candidate,
-                    Integer.class
-                );
-                log.info("Resolved es_queue table candidate {} with current row count {}", candidate, marker);
-                esQueueTableName.set(candidate);
-                return candidate;
-            } catch (Exception attemptException) {
-                log.info("es_queue table candidate {} is not accessible: {}", candidate, attemptException.getMessage());
-            }
-        }
-
-        log.warn("Falling back to default es_queue table reference ccd.es_queue");
-        esQueueTableName.set("ccd.es_queue");
-        return esQueueTableName.get();
-    }
-
-    private void logDatabaseContext() {
-        try {
-            String database = db.getJdbcTemplate().queryForObject("SELECT current_database()", String.class);
-            String searchPath = db.getJdbcTemplate().queryForObject("SHOW search_path", String.class);
-            log.info("Database context - current_database: {}, search_path: {}", database, searchPath);
-        } catch (Exception exception) {
-            log.info("Unable to log database context", exception);
-        }
     }
 
     private long createAdditionalCase(String solicitorEmail) throws Exception {

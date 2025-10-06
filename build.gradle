@@ -51,7 +51,7 @@ afterEvaluate {
 subprojects.each { subproject ->
     subproject.afterEvaluate {
         it.tasks.configureEach { task ->
-            if (task.class.name == 'uk.gov.hmcts.rse.ManifestTask') {
+            if (task.name.equals("writeManifestRuntime")) {
                 // Ensure the local SDK projects are packaged so they appear on the manifest classpath
                 task.dependsOn gradle.includedBuild('sdk').task(':ccd-config-generator:jar')
                 task.dependsOn gradle.includedBuild('sdk').task(':decentralised-runtime:jar')
