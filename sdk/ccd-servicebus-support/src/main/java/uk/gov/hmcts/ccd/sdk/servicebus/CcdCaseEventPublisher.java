@@ -8,7 +8,9 @@ import jakarta.jms.Message;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.jms.core.JmsTemplate;
 import org.springframework.jms.core.MessagePostProcessor;
@@ -17,21 +19,15 @@ import org.springframework.stereotype.Component;
 @Component
 @Slf4j
 @ConditionalOnProperty(name = "spring.jms.servicebus.enabled", havingValue = "true")
+@RequiredArgsConstructor
 public class CcdCaseEventPublisher {
 
   private final CcdMessageQueueRepository repository;
   private final JmsTemplate jmsTemplate;
-  private final String destination;
   private final CcdServiceBusProperties properties;
 
-  public CcdCaseEventPublisher(CcdMessageQueueRepository repository,
-                               JmsTemplate jmsTemplate,
-                               CcdServiceBusProperties properties) {
-    this.repository = repository;
-    this.jmsTemplate = jmsTemplate;
-    this.properties = properties;
-    this.destination = properties.getDestination();
-  }
+  @Value("${ccd.servicebus.destination:}")
+  private String destination;
 
   public void publishPendingCaseEvents() {
     if (destination == null || destination.isBlank()) {

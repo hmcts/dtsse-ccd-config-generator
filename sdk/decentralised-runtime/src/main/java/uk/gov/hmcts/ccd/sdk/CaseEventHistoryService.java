@@ -1,22 +1,26 @@
 package uk.gov.hmcts.ccd.sdk;
 
 import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.sql.ResultSet;
-import java.util.HashMap;
+import java.sql.SQLException;
+import java.sql.Timestamp;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.jdbc.core.RowMapper;
+import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Service;
 import uk.gov.hmcts.ccd.data.casedetails.SecurityClassification;
 import uk.gov.hmcts.ccd.data.persistence.dto.DecentralisedAuditEvent;
 import uk.gov.hmcts.ccd.data.persistence.dto.DecentralisedCaseEvent;
 import uk.gov.hmcts.ccd.domain.model.std.AuditEvent;
+import uk.gov.hmcts.ccd.sdk.ResolvedConfigRegistry;
 import uk.gov.hmcts.reform.ccd.client.model.CaseDetails;
 
 @Slf4j
@@ -27,7 +31,7 @@ public class CaseEventHistoryService {
   private final NamedParameterJdbcTemplate ndb;
   private final ObjectMapper defaultMapper;
   private final Optional<MessagePublisher> publisher;
-  private final CCDEventListener eventListener;
+  private final ResolvedConfigRegistry registry;
 
   public List<DecentralisedAuditEvent> loadHistory(long caseRef) {
     final String sql = """
@@ -39,7 +43,7 @@ public class CaseEventHistoryService {
         order by id desc
         """;
 
-    return ndb.query(sql, Map.of("caseRef", caseRef), new DecentralisedAuditEventRowMapper());
+    return ndb.query(sql, Map.of("caseRef", caseRef), this::mapAuditEvent);
   }
 
   public DecentralisedAuditEvent loadHistoryEvent(long caseRef, long eventId) {
@@ -54,7 +58,7 @@ public class CaseEventHistoryService {
     return ndb.queryForObject(
         sql,
         Map.of("caseRef", caseRef, "eventId", eventId),
-        new DecentralisedAuditEventRowMapper()
+        this::mapAuditEvent
     );
   }
 
@@ -104,31 +108,30 @@ public class CaseEventHistoryService {
         returning id, created_date
         """;
 
-    var params = new HashMap<String, Object>();
-    params.put("data", defaultMapper.writeValueAsString(currentView.getData()));
-    params.put("event_id", eventDetails.getEventId());
-    params.put("user_id", user.getUserDetails().getUid());
-    params.put("case_data_id", caseDataId);
-    params.put("case_type_id", eventDetails.getCaseType());
-    params.put("case_type_version", 1);
-    params.put("state_id", currentView.getState());
-    params.put("user_first_name", user.getUserDetails().getGivenName());
-    params.put("user_last_name", user.getUserDetails().getFamilyName());
-    params.put("event_name", eventDetails.getEventName());
-    params.put(
-        "state_name",
-        eventListener.nameForState(
+    var stateName = registry.labelForState(
             eventDetails.getCaseType(),
             String.valueOf(currentView.getState())
         )
-    );
-    params.put("summary", eventDetails.getSummary());
-    params.put("description", eventDetails.getDescription());
-    params.put("security_classification", currentView.getSecurityClassification().toString());
+        .orElse(String.valueOf(currentView.getState()));
 
-    var result = ndb.queryForMap(sql, params);
-    var eventId = (long) result.get("id");
-    var timestamp = ((java.sql.Timestamp) result.get("created_date")).toLocalDateTime();
+    var params = new MapSqlParameterSource()
+        .addValue("data", defaultMapper.writeValueAsString(currentView.getData()))
+        .addValue("event_id", eventDetails.getEventId())
+        .addValue("user_id", user.getUserDetails().getUid())
+        .addValue("case_data_id", caseDataId)
+        .addValue("case_type_id", eventDetails.getCaseType())
+        .addValue("case_type_version", 1)
+        .addValue("state_id", currentView.getState())
+        .addValue("user_first_name", user.getUserDetails().getGivenName())
+        .addValue("user_last_name", user.getUserDetails().getFamilyName())
+        .addValue("event_name", eventDetails.getEventName())
+        .addValue("state_name", stateName)
+        .addValue("summary", eventDetails.getSummary())
+        .addValue("description", eventDetails.getDescription())
+        .addValue("security_classification", currentView.getSecurityClassification().toString());
+
+    var inserted = ndb.queryForObject(sql, params, this::mapInsertedAuditEvent);
+
     if (this.publisher.isPresent()) {
       log.info(
           "Publishing event {} for case reference: {}",
@@ -141,8 +144,8 @@ public class CaseEventHistoryService {
           eventDetails.getEventId(),
           oldState,
           toCaseDetails(event.getCaseDetails()),
-          eventId,
-          timestamp
+          inserted.id(),
+          inserted.createdDate()
       );
     } else {
       log.info(
@@ -150,50 +153,51 @@ public class CaseEventHistoryService {
           currentView.getReference()
       );
     }
-    return eventId;
+    return inserted.id();
   }
 
   private CaseDetails toCaseDetails(uk.gov.hmcts.ccd.domain.model.definition.CaseDetails data) {
     return defaultMapper.convertValue(data, CaseDetails.class);
   }
 
-  private class DecentralisedAuditEventRowMapper implements RowMapper<DecentralisedAuditEvent> {
+  @SneakyThrows
+  private DecentralisedAuditEvent mapAuditEvent(ResultSet rs, int rowNum) {
+    var auditEvent = new AuditEvent();
+    auditEvent.setId(rs.getLong("id"));
+    auditEvent.setEventId(rs.getString("event_id"));
+    auditEvent.setEventName(rs.getString("event_name"));
+    auditEvent.setSummary(rs.getString("summary"));
+    auditEvent.setDescription(rs.getString("description"));
+    auditEvent.setUserId(rs.getString("user_id"));
+    auditEvent.setUserFirstName(rs.getString("user_first_name"));
+    auditEvent.setUserLastName(rs.getString("user_last_name"));
+    auditEvent.setCaseTypeId(rs.getString("case_type_id"));
+    auditEvent.setCaseTypeVersion(rs.getInt("case_type_version"));
+    auditEvent.setStateId(rs.getString("state_id"));
+    auditEvent.setStateName(rs.getString("state_name"));
+    auditEvent.setCreatedDate(rs.getTimestamp("created_date").toLocalDateTime());
+    auditEvent.setProxiedBy(rs.getString("proxied_by"));
+    auditEvent.setProxiedByFirstName(rs.getString("proxied_by_first_name"));
+    auditEvent.setProxiedByLastName(rs.getString("proxied_by_last_name"));
+    auditEvent.setSecurityClassification(SecurityClassification.valueOf(rs.getString("security_classification")));
 
-    @SneakyThrows
-    @Override
-    public DecentralisedAuditEvent mapRow(ResultSet rs, int rowNum) {
-      DecentralisedAuditEvent decentralisedAuditEvent = new DecentralisedAuditEvent();
-      decentralisedAuditEvent.setId(rs.getLong("id"));
-      decentralisedAuditEvent.setCaseReference(rs.getLong("case_reference"));
+    auditEvent.setData(defaultMapper.readValue(rs.getString("data"), DATA_TYPE));
+    auditEvent.setDataClassification(Map.of());
 
-      AuditEvent event = new AuditEvent();
-      event.setId(rs.getLong("id"));
-      event.setEventId(rs.getString("event_id"));
-      event.setEventName(rs.getString("event_name"));
-      event.setSummary(rs.getString("summary"));
-      event.setDescription(rs.getString("description"));
-      event.setUserId(rs.getString("user_id"));
-      event.setUserFirstName(rs.getString("user_first_name"));
-      event.setUserLastName(rs.getString("user_last_name"));
-      event.setCaseTypeId(rs.getString("case_type_id"));
-      event.setCaseTypeVersion(rs.getInt("case_type_version"));
-      event.setStateId(rs.getString("state_id"));
-      event.setStateName(rs.getString("state_name"));
-      event.setCreatedDate(rs.getTimestamp("created_date").toLocalDateTime());
-      event.setProxiedBy(rs.getString("proxied_by"));
-      event.setProxiedByFirstName(rs.getString("proxied_by_first_name"));
-      event.setProxiedByLastName(rs.getString("proxied_by_last_name"));
-      event.setSecurityClassification(
-          SecurityClassification.valueOf(rs.getString("security_classification"))
-      );
-
-      String dataJson = rs.getString("data");
-      event.setData(defaultMapper.readValue(dataJson, new TypeReference<>() {}));
-
-      event.setDataClassification(Map.of());
-
-      decentralisedAuditEvent.setEvent(event);
-      return decentralisedAuditEvent;
-    }
+    var decentralisedEvent = new DecentralisedAuditEvent();
+    decentralisedEvent.setId(rs.getLong("id"));
+    decentralisedEvent.setCaseReference(rs.getLong("case_reference"));
+    decentralisedEvent.setEvent(auditEvent);
+    return decentralisedEvent;
   }
+
+  private InsertedAuditEvent mapInsertedAuditEvent(ResultSet rs, int rowNum) throws SQLException {
+    Timestamp created = rs.getTimestamp("created_date");
+    LocalDateTime createdDate = created.toLocalDateTime();
+    return new InsertedAuditEvent(rs.getLong("id"), createdDate);
+  }
+
+  private record InsertedAuditEvent(long id, LocalDateTime createdDate) {}
+
+  private static final TypeReference<Map<String, JsonNode>> DATA_TYPE = new TypeReference<>() {};
 }

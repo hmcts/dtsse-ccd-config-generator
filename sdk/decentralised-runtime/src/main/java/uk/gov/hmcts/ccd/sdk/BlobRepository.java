@@ -1,23 +1,31 @@
 package uk.gov.hmcts.ccd.sdk;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import java.util.HashMap;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
-import lombok.SneakyThrows;
+import java.util.Optional;
 import lombok.extern.slf4j.Slf4j;
 import net.jodah.typetools.TypeResolver;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.web.bind.annotation.RequestParam;
+import lombok.SneakyThrows;
 import uk.gov.hmcts.ccd.data.persistence.dto.DecentralisedCaseDetails;
+import uk.gov.hmcts.ccd.data.persistence.dto.DecentralisedCaseEvent;
+import uk.gov.hmcts.ccd.data.casedetails.SecurityClassification;
 import uk.gov.hmcts.ccd.domain.model.definition.CaseDetails;
 
 @Slf4j
 @Service
 class BlobRepository {
+  private static final TypeReference<Map<String, JsonNode>> JSON_NODE_MAP = new TypeReference<>() {};
+
   private final NamedParameterJdbcTemplate ndb;
   private final CaseRepository caseRepository;
   private final Class<?> caseDataType;
@@ -48,38 +56,39 @@ class BlobRepository {
     }
   }
 
-  @SneakyThrows
   public List<DecentralisedCaseDetails> getCases(@RequestParam("case-refs") List<Long> caseRefs) {
     log.info("Fetching cases for references: {}", caseRefs);
     var params = Map.of("caseRefs", caseRefs);
 
-    var results = ndb.queryForList(
+    return ndb.query(
         """
         select
-              reference as id,
-              -- Format timestamp in iso 8601
-              to_json(c.created_date)#>>'{}' as created_date,
+              reference,
+              c.created_date as created_date,
               jurisdiction,
               case_type_id,
               state,
               data::text as case_data,
               security_classification::text,
               version,
-              to_json(last_state_modified_date)#>>'{}' as last_state_modified_date,
-              to_json(coalesce(c.last_modified, c.created_date))#>>'{}' as last_modified,
+              last_state_modified_date,
+              coalesce(c.last_modified, c.created_date) as last_modified,
               supplementary_data::text,
               case_revision
          from ccd.case_data c
          where reference IN (:caseRefs)
-        """, params);
-
-    return results.stream()
-        .map(this::processCaseRow)
-        .collect(Collectors.toList());
+        """,
+        params,
+        (rs, rowNum) -> mapCaseDetails(rs)
+    );
   }
 
   public DecentralisedCaseDetails getCase(Long caseRef) {
-    return getCases(List.of(caseRef)).get(0);
+    var cases = getCases(List.of(caseRef));
+    if (cases.isEmpty()) {
+      throw new IllegalStateException("Case reference " + caseRef + " not found");
+    }
+    return cases.get(0);
   }
 
   @SneakyThrows
@@ -88,40 +97,113 @@ class BlobRepository {
     return filteredMapper.writeValueAsString(o);
   }
 
-  /**
-   * Helper method to process a single row of case data from the database.
-   * This centralizes the transformation logic for both single and bulk endpoints.
-   */
-  @SneakyThrows
-  private DecentralisedCaseDetails processCaseRow(Map<String, Object> row) {
-    var result = new HashMap<>(row);
+  long upsertCase(DecentralisedCaseEvent event) {
+    int version = Optional.ofNullable(event.getCaseDetails().getVersion()).orElse(1);
+    String data = serialiseDataFilteringExternalFields(event.getCaseDetails());
 
-    var data = defaultMapper.readValue((String) result.get("case_data"), caseDataType);
-    result.put("case_data", caseRepository.getCase((Long) row.get("id"), (String) row.get("state"), data));
+    var sql = """
+            insert into ccd.case_data (
+                last_modified,
+                last_state_modified_date,
+                jurisdiction,
+                case_type_id,
+                state,
+                data,
+                reference,
+                security_classification,
+                version,
+                id
+            )
+            values (
+                (now() at time zone 'UTC'),
+                (now() at time zone 'UTC'),
+                :jurisdiction,
+                :case_type_id,
+                :state,
+                (:data::jsonb),
+                :reference,
+                :security_classification::ccd.securityclassification,
+                :version,
+                :id
+            )
+            on conflict (reference)
+            do update set
+                state = excluded.state,
+                data = excluded.data,
+                security_classification = excluded.security_classification,
+                last_modified = (now() at time zone 'UTC'),
+                version = case
+                            when
+                              case_data.data is distinct from excluded.data
+                              or case_data.state is distinct from excluded.state
+                              or case_data.security_classification is distinct from excluded.security_classification
+                            then
+                              case_data.version + 1
+                            else
+                              case_data.version
+                          end,
+                last_state_modified_date = case
+                                             when case_data.state is distinct from excluded.state then
+                                               (now() at time zone 'UTC')
+                                             else case_data.last_state_modified_date
+                                           end
+                where case_data.version = excluded.version
+                returning id;
+        """;
 
-    var supplementaryDataJson = row.get("supplementary_data");
-    result.put("supplementary_data", defaultMapper.readValue(supplementaryDataJson.toString(), Map.class));
-
-    result.put("data_classification", Map.of());
-
-    var revisionRaw = result.remove("case_revision");
-    Long revision = null;
-    if (revisionRaw instanceof Number number) {
-      revision = number.longValue();
-    }
-
-    var caseDetails = defaultMapper.convertValue(
-        result,
-        uk.gov.hmcts.ccd.domain.model.definition.CaseDetails.class
+    var params = Map.of(
+        "jurisdiction", event.getCaseDetails().getJurisdiction(),
+        "case_type_id", event.getCaseDetails().getCaseTypeId(),
+        "state", event.getCaseDetails().getState(),
+        "data", data,
+        "reference", event.getCaseDetails().getReference(),
+        "security_classification", event.getCaseDetails().getSecurityClassification().toString(),
+        "version", version,
+        "id", event.getInternalCaseId()
     );
-    if (revision != null) {
-      caseDetails.setRevision(revision);
-    }
 
-    var response = new DecentralisedCaseDetails();
-    response.setCaseDetails(caseDetails);
-    response.setRevision(revision);
-    return response;
+    return ndb.queryForObject(sql, params, Long.class);
+  }
+
+  private DecentralisedCaseDetails mapCaseDetails(ResultSet rs) throws SQLException {
+    try {
+      Long reference = rs.getObject("reference", Long.class);
+      String state = rs.getString("state");
+
+      var caseDetails = new CaseDetails();
+      caseDetails.setReference(reference);
+      caseDetails.setId(String.valueOf(reference));
+      caseDetails.setJurisdiction(rs.getString("jurisdiction"));
+      caseDetails.setCaseTypeId(rs.getString("case_type_id"));
+      caseDetails.setState(state);
+      caseDetails.setVersion(rs.getObject("version", Integer.class));
+      caseDetails.setCreatedDate(rs.getObject("created_date", LocalDateTime.class));
+      caseDetails.setLastModified(rs.getObject("last_modified", LocalDateTime.class));
+      caseDetails.setLastStateModifiedDate(rs.getObject("last_state_modified_date", LocalDateTime.class));
+
+      var caseDataJson = rs.getString("case_data");
+      var rawCaseData = defaultMapper.readValue(caseDataJson, caseDataType);
+      var projectedCaseData = caseRepository.getCase(reference, state, rawCaseData);
+      Map<String, JsonNode> caseData = defaultMapper.convertValue(projectedCaseData, JSON_NODE_MAP);
+      caseDetails.setData(caseData);
+      caseDetails.setDataClassification(Map.of());
+
+      var supplementaryDataJson = rs.getString("supplementary_data");
+      caseDetails.setSupplementaryData(defaultMapper.readValue(supplementaryDataJson, JSON_NODE_MAP));
+
+      var securityClassification = rs.getString("security_classification");
+      caseDetails.setSecurityClassification(SecurityClassification.valueOf(securityClassification));
+
+      Long revision = rs.getObject("case_revision", Long.class);
+      caseDetails.setRevision(revision);
+
+      var response = new DecentralisedCaseDetails();
+      response.setCaseDetails(caseDetails);
+      response.setRevision(revision);
+      return response;
+    } catch (Exception exception) {
+      throw new SQLException("Failed to map case data", exception);
+    }
   }
 
   private static final class DefaultCaseRepository implements CaseRepository<Map<String, Object>> {
@@ -130,4 +212,5 @@ class BlobRepository {
       return data;
     }
   }
+
 }

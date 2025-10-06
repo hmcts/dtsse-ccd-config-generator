@@ -25,7 +25,8 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 @ConditionalOnProperty(
     name = "ccd.sdk.decentralised",
-    havingValue = "true")
+    havingValue = "true",
+    matchIfMissing = true)
 @Component
 @Slf4j
 public class DecentralisedESIndexer implements DisposableBean {
@@ -47,6 +48,7 @@ public class DecentralisedESIndexer implements DisposableBean {
     this.client = new RestHighLevelClient(RestClient.builder(
         HttpHost.create(elasticSearchHost)));
 
+    log.info("Starting decentralised ES indexer targeting {}", elasticSearchHost);
     this.thread = new Thread(this::index);
     thread.setDaemon(true);
     thread.setUncaughtExceptionHandler(this::failFast);
