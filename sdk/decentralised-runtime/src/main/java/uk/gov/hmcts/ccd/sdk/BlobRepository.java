@@ -1,5 +1,7 @@
 package uk.gov.hmcts.ccd.sdk;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -22,6 +24,8 @@ import uk.gov.hmcts.ccd.domain.model.definition.CaseDetails;
 @Slf4j
 @Service
 class BlobRepository {
+  private static final TypeReference<Map<String, JsonNode>> JSON_NODE_MAP = new TypeReference<>() {};
+
   private final NamedParameterJdbcTemplate ndb;
   private final CaseRepository caseRepository;
   private final Class<?> caseDataType;
@@ -180,11 +184,12 @@ class BlobRepository {
       var caseDataJson = rs.getString("case_data");
       var rawCaseData = defaultMapper.readValue(caseDataJson, caseDataType);
       var projectedCaseData = caseRepository.getCase(reference, state, rawCaseData);
-      caseDetails.setData(defaultMapper.convertValue(projectedCaseData, Map.class));
+      Map<String, JsonNode> caseData = defaultMapper.convertValue(projectedCaseData, JSON_NODE_MAP);
+      caseDetails.setData(caseData);
       caseDetails.setDataClassification(Map.of());
 
       var supplementaryDataJson = rs.getString("supplementary_data");
-      caseDetails.setSupplementaryData(defaultMapper.readValue(supplementaryDataJson, Map.class));
+      caseDetails.setSupplementaryData(defaultMapper.readValue(supplementaryDataJson, JSON_NODE_MAP));
 
       var securityClassification = rs.getString("security_classification");
       caseDetails.setSecurityClassification(SecurityClassification.valueOf(securityClassification));
