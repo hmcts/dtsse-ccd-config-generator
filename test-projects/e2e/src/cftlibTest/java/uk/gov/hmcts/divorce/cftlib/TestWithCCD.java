@@ -3,7 +3,6 @@ package uk.gov.hmcts.divorce.cftlib;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.google.gson.Gson;
 
 import jakarta.jms.ConnectionFactory;
 import jakarta.jms.Message;
@@ -191,9 +190,10 @@ public class TestWithCCD extends CftlibTest {
             HttpPost::new);
         withCcdAccept(createCase, ACCEPT_CREATE_CASE);
 
-        createCase.setEntity(new StringEntity(new Gson().toJson(body), ContentType.APPLICATION_JSON));
+        createCase.setEntity(new StringEntity(mapper.writeValueAsString(body), ContentType.APPLICATION_JSON));
         var response = HttpClientBuilder.create().build().execute(createCase);
-        var r = new Gson().fromJson(EntityUtils.toString(response.getEntity()), Map.class);
+        var responseBody = EntityUtils.toString(response.getEntity());
+        Map<String, Object> r = mapper.readValue(responseBody, new TypeReference<>() {});
         caseRef = Long.parseLong((String) r.get("id"));
         assertThat(response.getStatusLine().getStatusCode(), equalTo(201));
         assertThat(r.get("state"), equalTo("Submitted"));
@@ -486,7 +486,7 @@ public class TestWithCCD extends CftlibTest {
             HttpPost::new);
         withCcdAccept(request, ACCEPT_CREATE_EVENT);
 
-        request.setEntity(new StringEntity(new Gson().toJson(body), ContentType.APPLICATION_JSON));
+        request.setEntity(new StringEntity(mapper.writeValueAsString(body), ContentType.APPLICATION_JSON));
         var response = HttpClientBuilder.create().build().execute(request);
         assertThat(response.getStatusLine().getStatusCode(), equalTo(201));
 
@@ -610,7 +610,7 @@ public class TestWithCCD extends CftlibTest {
             HttpPost::new);
         withCcdAccept(e, ACCEPT_CREATE_EVENT);
 
-        e.setEntity(new StringEntity(new Gson().toJson(body), ContentType.APPLICATION_JSON));
+        e.setEntity(new StringEntity(mapper.writeValueAsString(body), ContentType.APPLICATION_JSON));
         var response = HttpClientBuilder.create().build().execute(e);
         assertThat(response.getStatusLine().getStatusCode(), equalTo(201));
         assertThat(FailingSubmittedCallback.callbackAttempts, equalTo(3));
@@ -647,7 +647,7 @@ public class TestWithCCD extends CftlibTest {
             HttpPost::new);
         withCcdAccept(req1, ACCEPT_CREATE_EVENT);
 
-        req1.setEntity(new StringEntity(new Gson().toJson(body), ContentType.APPLICATION_JSON));
+        req1.setEntity(new StringEntity(mapper.writeValueAsString(body), ContentType.APPLICATION_JSON));
         var resp1 = HttpClientBuilder.create().build().execute(req1);
         assertThat(resp1.getStatusLine().getStatusCode(), equalTo(201));
 
@@ -657,7 +657,7 @@ public class TestWithCCD extends CftlibTest {
             BASE_URL + "/cases/" + caseRef + "/events",
             HttpPost::new);
         withCcdAccept(req2, ACCEPT_CREATE_EVENT);
-        req2.setEntity(new StringEntity(new Gson().toJson(body), ContentType.APPLICATION_JSON));
+        req2.setEntity(new StringEntity(mapper.writeValueAsString(body), ContentType.APPLICATION_JSON));
         var resp2 = HttpClientBuilder.create().build().execute(req2);
         assertThat(resp2.getStatusLine().getStatusCode(), equalTo(201));
 
@@ -696,7 +696,7 @@ public class TestWithCCD extends CftlibTest {
             HttpPost::new);
         withCcdAccept(e, ACCEPT_CREATE_EVENT);
 
-        e.setEntity(new StringEntity(new Gson().toJson(body), ContentType.APPLICATION_JSON));
+        e.setEntity(new StringEntity(mapper.writeValueAsString(body), ContentType.APPLICATION_JSON));
         var response = HttpClientBuilder.create().build().execute(e);
         assertThat(response.getStatusLine().getStatusCode(), equalTo(201));
 
@@ -794,7 +794,7 @@ public class TestWithCCD extends CftlibTest {
             BASE_URL + "/data/case-types/" + NoFaultDivorce.getCaseType() + "/cases?ignore-warning=false",
             HttpPost::new);
         withCcdAccept(createCaseRequest, ACCEPT_CREATE_CASE);
-        createCaseRequest.setEntity(new StringEntity(new Gson().toJson(body), ContentType.APPLICATION_JSON));
+        createCaseRequest.setEntity(new StringEntity(mapper.writeValueAsString(body), ContentType.APPLICATION_JSON));
         var response = HttpClientBuilder.create().build().execute(createCaseRequest);
 
         // 5. Assert the response indicates failure with the correct error
@@ -900,13 +900,13 @@ public class TestWithCCD extends CftlibTest {
             BASE_URL + "/data/case-types/" + NoFaultDivorce.getCaseType() + "/cases?ignore-warning=false",
             HttpPost::new);
         withCcdAccept(createCase, ACCEPT_CREATE_CASE);
-        createCase.setEntity(new StringEntity(new Gson().toJson(body), ContentType.APPLICATION_JSON));
+        createCase.setEntity(new StringEntity(mapper.writeValueAsString(body), ContentType.APPLICATION_JSON));
 
         var response = HttpClientBuilder.create().build().execute(createCase);
         assertThat(response.getStatusLine().getStatusCode(), equalTo(201));
 
         var responseBody = EntityUtils.toString(response.getEntity());
-        Map<?, ?> createdCase = new Gson().fromJson(responseBody, Map.class);
+        Map<String, Object> createdCase = mapper.readValue(responseBody, new TypeReference<>() {});
         return Long.parseLong((String) createdCase.get("id"));
     }
 
@@ -1042,6 +1042,7 @@ public class TestWithCCD extends CftlibTest {
         request.addHeader("Accept", accept);
     }
 
+    @SneakyThrows
     private HttpPost prepareEventRequestWithToken(String user, String eventId, Map<String, ?> data, String token) {
         var body = Map.of(
             "data", data,
@@ -1056,7 +1057,7 @@ public class TestWithCCD extends CftlibTest {
 
         var e = buildRequest(user, BASE_URL + "/cases/" + caseRef + "/events", HttpPost::new);
         withCcdAccept(e, ACCEPT_CREATE_EVENT);
-        e.setEntity(new StringEntity(new Gson().toJson(body), ContentType.APPLICATION_JSON));
+        e.setEntity(new StringEntity(mapper.writeValueAsString(body), ContentType.APPLICATION_JSON));
         return e;
     }
 
