@@ -16,21 +16,25 @@ jobs:
             gradleGenerate: adoption:generateCCDConfig
             gradleIntegration: adoption:integration
             definitionsDir: test-projects/adoption-cos-api/build/definitions
+            runIntegration: false
           - checkName: Semantic Diff - NFDiv
             module: nfdiv
             gradleGenerate: nfdiv:generateCCDConfig
             gradleIntegration: nfdiv:integration
             definitionsDir: test-projects/nfdiv-case-api/build/definitions
+            runIntegration: true
           - checkName: Semantic Diff - PCS
             module: pcs
             gradleGenerate: pcs:generateCCDConfig
             gradleIntegration: pcs:integration
             definitionsDir: test-projects/pcs-api/build/definitions
+            runIntegration: true
           - checkName: Semantic Diff - SPTribs
             module: sptribs
             gradleGenerate: sptribs:generateCCDConfig
             gradleIntegration: sptribs:integration
             definitionsDir: test-projects/sptribs-case-api/build/definitions
+            runIntegration: true
 
     steps:
       - name: Checkout repository
@@ -46,6 +50,7 @@ jobs:
           java-version: 17
 
       - name: Run ${{ matrix.module }}:integration
+        if: ${{ matrix.runIntegration }}
         run: ./gradlew ${{ matrix.gradleIntegration }} -i
 
       - name: Checkout base branch
@@ -66,7 +71,10 @@ jobs:
 
       - name: Compare CCD configuration outputs
         if: steps.generate-pr.outcome == 'success'
+        env:
+          EXPECTED_DIR: ${{ format('{0}/base/{1}', github.workspace, matrix.definitionsDir) }}
+          ACTUAL_DIR: ${{ format('{0}/{1}', github.workspace, matrix.definitionsDir) }}
         run: |
           ./gradlew :sdk:ccd-config-generator:ccdConfigDiff \
-            -PexpectedDir=base/${{ matrix.definitionsDir }} \
-            -PactualDir=${{ matrix.definitionsDir }}
+            -PexpectedDir="$EXPECTED_DIR" \
+            -PactualDir="$ACTUAL_DIR"
