@@ -1,0 +1,72 @@
+name: Semantic Diff Checks
+
+on:
+  pull_request:
+
+jobs:
+  module:
+    name: ${{ matrix.checkName }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - checkName: Semantic Diff - Adoption
+            module: adoption
+            gradleGenerate: adoption:generateCCDConfig
+            gradleIntegration: adoption:integration
+            definitionsDir: test-projects/adoption-cos-api/build/definitions
+          - checkName: Semantic Diff - NFDiv
+            module: nfdiv
+            gradleGenerate: nfdiv:generateCCDConfig
+            gradleIntegration: nfdiv:integration
+            definitionsDir: test-projects/nfdiv-case-api/build/definitions
+          - checkName: Semantic Diff - PCS
+            module: pcs
+            gradleGenerate: pcs:generateCCDConfig
+            gradleIntegration: pcs:integration
+            definitionsDir: test-projects/pcs-api/build/definitions
+          - checkName: Semantic Diff - SPTribs
+            module: sptribs
+            gradleGenerate: sptribs:generateCCDConfig
+            gradleIntegration: sptribs:integration
+            definitionsDir: test-projects/sptribs-case-api/build/definitions
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+      - name: Set up JDK
+        uses: actions/setup-java@v5
+        with:
+          distribution: 'zulu'
+          java-version: 17
+
+      - name: Run ${{ matrix.module }}:integration
+        run: ./gradlew ${{ matrix.gradleIntegration }} -i
+
+      - name: Checkout base branch
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: base
+          fetch-depth: 0
+          submodules: recursive
+
+      - name: Generate base CCD config
+        working-directory: base
+        run: ./gradlew ${{ matrix.gradleGenerate }} -i
+
+      - name: Generate PR CCD config
+        id: generate-pr
+        run: ./gradlew ${{ matrix.gradleGenerate }} -i
+
+      - name: Compare CCD configuration outputs
+        if: steps.generate-pr.outcome == 'success'
+        run: |
+          ./gradlew :sdk:ccd-config-generator:ccdConfigDiff \
+            -PexpectedDir=base/${{ matrix.definitionsDir }} \
+            -PactualDir=${{ matrix.definitionsDir }}
