@@ -1,95 +1,55 @@
 package uk.gov.hmcts.divorce.cftlib;
 
-import org.apache.commons.io.FileUtils;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Component;
-import uk.gov.hmcts.ccd.sdk.CCDDefinitionGenerator;
-import uk.gov.hmcts.divorce.divorcecase.NoFaultDivorce;
-import uk.gov.hmcts.rse.ccd.lib.ControlPlane;
-import uk.gov.hmcts.rse.ccd.lib.Database;
 import uk.gov.hmcts.rse.ccd.lib.api.CFTLib;
 import uk.gov.hmcts.rse.ccd.lib.api.CFTLibConfigurer;
-
-import java.io.File;
-import java.io.IOException;
-import java.sql.Connection;
-import java.util.HashMap;
-import java.util.List;
 
 @Component
 public class CftLibConfig implements CFTLibConfigurer {
 
-    @Autowired
-    @Lazy
-    CCDDefinitionGenerator configWriter;
+    private static final String CASE_TYPE = "FT_Decentralisation";
+    private static final String JURISDICTION = "BEFTA_MASTER";
+    private static final String INITIAL_STATE = "CaseCreated";
+    private static final String CASEWORKER_EMAIL = "master.caseworker@gmail.com";
+    private static final String PRIVATE_CASEWORKER_EMAIL =
+        System.getenv().getOrDefault("CCD_PRIVATE_CASEWORKER_EMAIL", "ccd_private_caseworker_email@local");
+    private static final String CASEWORKER_AUTOTEST_EMAIL =
+        System.getenv().getOrDefault("CCD_CASEWORKER_AUTOTEST_EMAIL", "ccd_caseworker_autotest_email@local");
+    private static final String BEFTA_CASEWORKER_ONE_EMAIL =
+        System.getenv().getOrDefault("CCD_BEFTA_CASEWORKER_1_EMAIL", "befta.caseworker.1@gmail.com");
+    private static final String IMPORTER_EMAIL = "ccd.importer@local";
+    private static final String ROLE_ASSIGNMENT_EMAIL = "role.assignment.admin@local";
 
     @Override
-    public void configure(CFTLib lib) throws Exception {
-        HashMap<String, List<String>> users = new HashMap<>();
-        users.put("DivCaseWorkerUser@AAT.com", List.of("caseworker", "caseworker-divorce", "caseworker-divorce-courtadmin_beta"));
-        users.put("TEST_CASE_WORKER_USER@mailinator.com", List.of("caseworker", "caseworker-divorce", "caseworker-divorce-courtadmin_beta"));
-        users.put("TEST_SOLICITOR@mailinator.com", List.of("caseworker", "caseworker-divorce", "caseworker-divorce-solicitor"));
-        users.put("TEST_SOLICITOR2@mailinator.com", List.of("caseworker", "caseworker-divorce", "caseworker-divorce-solicitor"));
-        users.put("TEST_JUDGE@mailinator.com", List.of("caseworker", "caseworker-divorce", "caseworker-divorce-judge"));
-        users.put("dummysystemupdate@test.com", List.of("caseworker", "caseworker-divorce", "caseworker-divorce-systemupdate"));
-        users.put("role.assignment.admin@gmail.com", List.of("caseworker"));
-        users.put("data.store.idam.system.user@gmail.com", List.of("caseworker"));
-        users.put("applicant2@gmail.com", List.of("caseworker", "caseworker-divorce", "caseworker-divorce-solicitor"));
-        users.put("solicitora@gmail.com", List.of("caseworker", "caseworker-divorce", "caseworker-divorce-solicitor"));
-        users.put("solicitorb@gmail.com", List.of("caseworker", "caseworker-divorce", "caseworker-divorce-solicitor"));
-        users.put("solicitorc@gmail.com", List.of("caseworker", "caseworker-divorce", "caseworker-divorce-solicitor"));
-        users.put("solicitord@gmail.com", List.of("caseworker", "caseworker-divorce", "caseworker-divorce-solicitor"));
-        users.put("solicitore@gmail.com", List.of("caseworker", "caseworker-divorce", "caseworker-divorce-solicitor"));
-        users.put("solicitorf@gmail.com", List.of("caseworker", "caseworker-divorce", "caseworker-divorce-solicitor"));
-        users.put("solicitorg@gmail.com", List.of("caseworker", "caseworker-divorce", "caseworker-divorce-solicitor"));
-        users.put("solicitorh@gmail.com", List.of("caseworker", "caseworker-divorce", "caseworker-divorce-solicitor"));
-        users.put("solicitori@gmail.com", List.of("caseworker", "caseworker-divorce", "caseworker-divorce-solicitor"));
-        users.put("solicitorj@gmail.com", List.of("caseworker", "caseworker-divorce", "caseworker-divorce-solicitor"));
-        users.put("divorce_as_caseworker_admin@mailinator.com", List.of("caseworker-divorce", "caseworker-divorce-superuser"));
-        users.put("divorce_citizen@mailinator.com", List.of("citizen"));
-
-        for (var entry : users.entrySet()) {
-            lib.createIdamUser(entry.getKey(), entry.getValue().toArray(new String[0]));
-            lib.createProfile(entry.getKey(), "DIVORCE", NoFaultDivorce.getCaseType(), "Submitted");
-        }
-
+    public void configure(CFTLib lib) {
         lib.createRoles(
-            "caseworker-divorce-courtadmin_beta",
-            "caseworker-divorce-superuser",
-            "caseworker-divorce-courtadmin-la",
-            "caseworker-divorce-courtadmin",
-            "caseworker-divorce-solicitor",
-            "caseworker-divorce-judge",
-            "caseworker-divorce-pcqextractor",
-            "caseworker-divorce-systemupdate",
-            "caseworker-divorce-bulkscan",
-            "caseworker-caa",
-            "caseworker-approver",
-            "citizen",
-            "caseworker-divorce",
             "caseworker",
-            "payments",
-            "pui-case-manager",
-            "pui-finance-manager",
-            "pui-organisation-manager",
-            "pui-user-manager"
+            "caseworker-befta_master",
+            "caseworker-befta_jurisdiction_1",
+            "caseworker-caa",
+            "ccd-import"
         );
 
-        // Generate CCD definitions
-        configWriter.generateAllCaseTypesToJSON(new File("build/definitions"));
+        lib.createIdamUser(CASEWORKER_EMAIL, "caseworker", "caseworker-befta_master");
+        lib.createProfile(CASEWORKER_EMAIL, JURISDICTION, CASE_TYPE, INITIAL_STATE);
 
-        File source = new File("ccd-definitions");
-        File dest = new File("build/definitions/" + NoFaultDivorce.getCaseType());
-        try {
-            FileUtils.copyDirectory(source, dest);
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
+        lib.createIdamUser(PRIVATE_CASEWORKER_EMAIL, "caseworker", "caseworker-befta_master");
+        lib.createProfile(PRIVATE_CASEWORKER_EMAIL, JURISDICTION, CASE_TYPE, INITIAL_STATE);
 
-        // Import CCD definitions
-        lib.importJsonDefinition(new File("build/definitions/" + NoFaultDivorce.getCaseType()));
-//        lib.importJsonDefinition(new File("build/definitions/NO_FAULT_DIVORCE_BulkAction"));
-        lib.dumpDefinitionSnapshots();
+        lib.createIdamUser(CASEWORKER_AUTOTEST_EMAIL, "caseworker", "caseworker-befta_master");
+        lib.createProfile(CASEWORKER_AUTOTEST_EMAIL, JURISDICTION, CASE_TYPE, INITIAL_STATE);
+
+        lib.createIdamUser(BEFTA_CASEWORKER_ONE_EMAIL,
+            "caseworker",
+            "caseworker-befta_master",
+            "caseworker-befta_jurisdiction_1",
+            "caseworker-caa");
+        lib.createProfile(BEFTA_CASEWORKER_ONE_EMAIL, JURISDICTION, CASE_TYPE, INITIAL_STATE);
+
+        lib.createIdamUser(IMPORTER_EMAIL, "caseworker", "ccd-import");
+        lib.createProfile(IMPORTER_EMAIL, JURISDICTION, CASE_TYPE, INITIAL_STATE);
+
+        lib.createIdamUser(ROLE_ASSIGNMENT_EMAIL, "caseworker", "caseworker-befta_master");
+        lib.createProfile(ROLE_ASSIGNMENT_EMAIL, JURISDICTION, CASE_TYPE, INITIAL_STATE);
     }
 }
