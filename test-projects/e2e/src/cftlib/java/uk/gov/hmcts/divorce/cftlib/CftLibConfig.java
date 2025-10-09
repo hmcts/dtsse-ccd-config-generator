@@ -21,7 +21,7 @@ public class CftLibConfig implements CFTLibConfigurer {
     private static final String ROLE_ASSIGNMENT_EMAIL = "role.assignment.admin@local";
 
     @Override
-    public void configure(CFTLib lib) {
+    public void configure(CFTLib lib) throws Exception {
         lib.createRoles(
             "caseworker",
             "caseworker-befta_master",
@@ -51,5 +51,7 @@ public class CftLibConfig implements CFTLibConfigurer {
 
         lib.createIdamUser(ROLE_ASSIGNMENT_EMAIL, "caseworker", "caseworker-befta_master");
         lib.createProfile(ROLE_ASSIGNMENT_EMAIL, JURISDICTION, CASE_TYPE, INITIAL_STATE);
+
+        lib.dumpDefinitionSnapshots();
     }
 }
