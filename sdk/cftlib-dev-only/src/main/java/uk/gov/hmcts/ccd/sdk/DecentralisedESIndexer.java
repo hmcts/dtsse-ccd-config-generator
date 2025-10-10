@@ -29,7 +29,7 @@ import org.springframework.transaction.support.TransactionTemplate;
     matchIfMissing = true)
 @Component
 @Slf4j
-public class DecentralisedESIndexer implements DisposableBean {
+class DecentralisedESIndexer implements DisposableBean {
 
   private final JdbcTemplate jdbcTemplate;
   private final TransactionTemplate transactionTemplate;

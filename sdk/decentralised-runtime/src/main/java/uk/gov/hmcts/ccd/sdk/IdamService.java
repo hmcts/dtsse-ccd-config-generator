@@ -8,7 +8,7 @@ import uk.gov.hmcts.reform.idam.client.IdamClient;
 import uk.gov.hmcts.reform.idam.client.models.UserInfo;
 
 @Service("CcdSdkIdamService")
-public class IdamService {
+class IdamService {
   @Autowired
   private IdamClient idamClient;
   private static final String BEARER_PREFIX = "Bearer" + " ";

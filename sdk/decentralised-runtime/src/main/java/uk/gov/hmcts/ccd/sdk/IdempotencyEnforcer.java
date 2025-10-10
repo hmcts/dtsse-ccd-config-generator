@@ -12,7 +12,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @RequiredArgsConstructor
 @Slf4j
-public class IdempotencyEnforcer {
+class IdempotencyEnforcer {
 
   public static final String IDEMPOTENCY_KEY_HEADER = "Idempotency-Key";
 

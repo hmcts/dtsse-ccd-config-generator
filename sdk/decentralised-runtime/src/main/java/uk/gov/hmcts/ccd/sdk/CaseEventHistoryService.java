@@ -26,7 +26,7 @@ import uk.gov.hmcts.reform.ccd.client.model.CaseDetails;
 @Slf4j
 @RequiredArgsConstructor
 @Service
-public class CaseEventHistoryService {
+class CaseEventHistoryService {
 
   private final NamedParameterJdbcTemplate ndb;
   private final ObjectMapper defaultMapper;

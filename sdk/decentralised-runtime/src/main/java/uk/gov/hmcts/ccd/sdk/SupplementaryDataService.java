@@ -14,7 +14,7 @@ import uk.gov.hmcts.ccd.data.persistence.dto.DecentralisedUpdateSupplementaryDat
 @Slf4j
 @Service
 @RequiredArgsConstructor
-public class SupplementaryDataService {
+class SupplementaryDataService {
 
   private final NamedParameterJdbcTemplate ndb;
   private final ObjectMapper defaultMapper;
