@@ -42,6 +42,23 @@ dependencies {
     implementation 'com.fasterxml.jackson.core:jackson-databind:2.20.0'
 }
 
+tasks.register('ccdConfigDiff', JavaExec) {
+    group = 'verification'
+    description = 'Compare CCD configuration directories using the Java diff comparator.'
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass.set('uk.gov.hmcts.ccd.sdk.diff.CcdConfigDiffCli')
+
+    doFirst {
+        String expected = (project.findProperty('expectedDir') ?: project.findProperty('baseDir'))?.toString()
+        String actual = (project.findProperty('actualDir') ?: project.findProperty('headDir'))?.toString()
+        if (expected == null || actual == null) {
+            throw new GradleException('Provide -PexpectedDir (or -PbaseDir) and -PactualDir (or -PheadDir) when running ccdConfigDiff.')
+        }
+
+        setArgs([expected, actual])
+    }
+}
+
 
 
 
