@@ -11,7 +11,7 @@ import com.fasterxml.jackson.databind.introspect.JacksonAnnotationIntrospector;
  * (see usages in the repository) to ensure fields intended for external-only
  * consumption are stripped from the case_data.data blob.
  */
-public class FilterExternalFieldsInspector extends JacksonAnnotationIntrospector {
+class FilterExternalFieldsInspector extends JacksonAnnotationIntrospector {
 
   /**
    * Signals to Jackson that a property should be ignored when it is annotated

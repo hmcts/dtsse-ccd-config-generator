@@ -32,7 +32,7 @@ import uk.gov.hmcts.reform.ccd.client.model.CaseDetails;
 @Slf4j
 @Service
 @ConditionalOnBean(MessagingProperties.class)
-public class MessagePublisher {
+class MessagePublisher {
 
   private DefinitionBlockGenerator definitionBlockGenerator;
   private final DataBlockGenerator dataBlockGenerator;

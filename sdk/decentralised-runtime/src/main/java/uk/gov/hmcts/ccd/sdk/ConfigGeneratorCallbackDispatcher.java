@@ -26,7 +26,7 @@ import uk.gov.hmcts.reform.ccd.client.model.SubmittedCallbackResponse;
 @Slf4j
 @RequiredArgsConstructor
 @Configuration
-public class ConfigGeneratorCallbackDispatcher {
+class ConfigGeneratorCallbackDispatcher {
 
   private final CcdCallbackExecutor executor;
   private final ResolvedConfigRegistry registry;
