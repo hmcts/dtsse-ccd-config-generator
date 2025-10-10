@@ -25,7 +25,7 @@ dependencies {
     annotationProcessor 'org.projectlombok:lombok:1.18.42'
 
     implementation "org.springframework.boot:spring-boot-autoconfigure"
-    implementation "org.flywaydb:flyway-core:11.13.2"
+    implementation "org.flywaydb:flyway-core:11.14.0"
 }
 
 java {
