@@ -15,6 +15,7 @@ import uk.gov.hmcts.ccd.sdk.type.CaseLink;
 import uk.gov.hmcts.ccd.sdk.type.ComponentLauncher;
 import uk.gov.hmcts.ccd.sdk.type.FieldType;
 import uk.gov.hmcts.ccd.sdk.type.ListValue;
+import uk.gov.hmcts.ccd.sdk.type.Document;
 import uk.gov.hmcts.divorce.caseworker.model.CaseNote;
 import uk.gov.hmcts.divorce.divorcecase.model.access.CaseworkerAccess;
 import uk.gov.hmcts.divorce.divorcecase.model.access.CaseworkerCaseLinkAccess;
@@ -97,6 +98,12 @@ public class CaseData {
 
     @CCD(access = {CaseworkerAccess.class})
     private String hyphenatedCaseRef;
+
+    @CCD(
+        label = "Test document",
+        typeOverride = FieldType.Document
+    )
+    private Document testDocument;
 
     @JsonIgnore
     public static String formatCaseRef(long caseId) {
