@@ -3,6 +3,7 @@ package uk.gov.hmcts.divorce.cftlib;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 
 import jakarta.jms.ConnectionFactory;
 import jakarta.jms.Message;
@@ -30,6 +31,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.client.methods.HttpPost;
 import org.apache.http.client.methods.HttpRequestBase;
+import org.apache.http.client.methods.HttpPut;
 import org.apache.http.entity.ContentType;
 import org.apache.http.entity.StringEntity;
 import org.apache.http.impl.client.HttpClientBuilder;
@@ -74,6 +76,7 @@ import uk.gov.hmcts.divorce.sow014.nfd.FailingSubmittedCallback;
 import uk.gov.hmcts.divorce.sow014.nfd.PublishedEvent;
 import uk.gov.hmcts.divorce.sow014.nfd.ReturnErrorWhenCreateTestCase;
 import uk.gov.hmcts.divorce.sow014.nfd.SubmittedConfirmationCallback;
+import uk.gov.hmcts.divorce.sow014.nfd.CaseworkerUploadTestDocument;
 import uk.gov.hmcts.ccd.sdk.type.CaseLink;
 import uk.gov.hmcts.ccd.sdk.type.ListValue;
 import uk.gov.hmcts.reform.ccd.client.CoreCaseDataApi;
@@ -205,6 +208,51 @@ public class TestWithCCD extends CftlibTest {
         var caseData = mapper.readValue(mapper.writeValueAsString(c.getData()), CaseData.class);
         assertThat(caseData.getApplicant1().getFirstName(), equalTo("app1_first_name"));
         assertThat(caseData.getApplicant2().getFirstName(), equalTo("app2_first_name"));
+    }
+
+    @Order(21)
+    @Test
+    public void shouldUpdateDocumentMetadataViaCaseFileViewEndpoint() throws Exception {
+        setTestDocumentOnCase("test.pdf");
+
+        var currentCase = ccdApi.getCase(
+            getAuthorisation("TEST_CASE_WORKER_USER@mailinator.com"),
+            getServiceAuth(),
+            String.valueOf(caseRef)
+        );
+
+        Integer version = currentCase.getVersion();
+        if (version == null) {
+            version = db.queryForObject(
+                "SELECT version FROM ccd.case_data WHERE reference = :ref",
+                Map.of("ref", caseRef),
+                Integer.class
+            );
+        }
+        assertThat(version, is(notNullValue()));
+        System.out.println("DEBUG case version before document update: " + version);
+        ObjectNode body = mapper.createObjectNode();
+        body.put("attribute_path", "testDocument");
+        body.put("case_version", version);
+        body.putNull("category_id");
+
+        var request = buildRequest("TEST_CASE_WORKER_USER@mailinator.com",
+            BASE_URL + "/documentData/caseref/" + caseRef,
+            HttpPut::new);
+        request.setEntity(new StringEntity(body.toString(), ContentType.APPLICATION_JSON));
+
+        var response = HttpClientBuilder.create().build().execute(request);
+        var responseBody = EntityUtils.toString(response.getEntity());
+        int status = response.getStatusLine().getStatusCode();
+        assertThat("document update response: " + responseBody,
+            status, equalTo(200));
+        assertThat("document update response: " + responseBody,
+            responseBody, not(containsString("big test gap!!!!")));
+
+        if (status == 200) {
+            Map<String, Object> categoriesAndDocuments = mapper.readValue(responseBody, new TypeReference<>() {});
+            assertThat(categoriesAndDocuments.get("case_version"), equalTo(version));
+        }
     }
 
     private long caseRef;
@@ -1016,6 +1064,26 @@ public class TestWithCCD extends CftlibTest {
         );
         var response = HttpClientBuilder.create().build().execute(e);
         assertThat(response.getStatusLine().getStatusCode(), equalTo(201));
+    }
+
+    private void setTestDocumentOnCase(String filename) throws Exception {
+        String documentId = "12345678-1234-1234-1234-123456789012";
+        var data = Map.of(
+            "testDocument", Map.of(
+                "document_url", "http://localhost/documents/" + documentId,
+                "document_binary_url", "http://localhost/documents/" + documentId + "/binary",
+                "document_filename", filename
+            )
+        );
+        var request = prepareEventRequest(
+            "TEST_CASE_WORKER_USER@mailinator.com",
+            CaseworkerUploadTestDocument.DOCUMENT_UPDATED,
+            data
+        );
+
+        var response = HttpClientBuilder.create().build().execute(request);
+        assertThat(response.getStatusLine().getStatusCode(), equalTo(201));
+        EntityUtils.consume(response.getEntity());
     }
 
     private record CaseLinkRow(long linkedReference, boolean standardLink) { }

@@ -146,7 +146,7 @@ tasks.withType(CftlibExec).configureEach {
   group = 'ccd tasks'
   authMode = AuthMode.Local
   environment 'CCD_DECENTRALISED_CASE-TYPE-SERVICE-URLS_E2E', 'http://localhost:4013'
-  environment 'CCD_DECENTRALISED_CASE-TYPE-SERVICE-URLS_FT_DECENTRALISATION', 'http://localhost:5555'
+  environment 'SPRING_APPLICATION_JSON', '{"ccd":{"decentralised":{"case-type-service-urls":{"ft_decentralisation":"http://localhost:5555"}}}}'
   environment 'BEFTA_TEST_STUB_SERVICE_BASE_URL', 'http://localhost:5555'
   environment 'TEST_STUB_SERVICE_BASE_URL', 'http://localhost:5555'
   environment 'SPRING_CLOUD_COMPATIBILITY_VERIFIER_ENABLED', 'false'

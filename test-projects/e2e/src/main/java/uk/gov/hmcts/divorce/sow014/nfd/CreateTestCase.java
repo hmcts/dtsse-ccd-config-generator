@@ -100,6 +100,7 @@ public class CreateTestCase implements CCDConfig<CaseData, State, UserRole> {
             .grantHistoryOnly(SUPER_USER, CASE_WORKER, LEGAL_ADVISOR, SOLICITOR, CITIZEN, JUDGE))
             .page("Create test case")
             .mandatory(CaseData::getApplicationType)
+            .optional(CaseData::getTestDocument)
             .done();
     }
 
