@@ -21,7 +21,7 @@ BASE_DSN="postgresql://${PG_USER}:${PG_PASSWORD}@${PG_HOST}:${PG_PORT}"
 
 SUFFIX="$(date +%s%N)"
 SRC_DB="tmp_datastore_${SUFFIX}"
-DST_DB="tmp_sptribs_${SUFFIX}"
+DST_DB="tmp_nfd_${SUFFIX}"
 SRC_DSN="${BASE_DSN}/${SRC_DB}"
 DST_DSN="${BASE_DSN}/${DST_DB}"
 
@@ -44,8 +44,8 @@ $CREATEDB_BIN "${BASE_CONN_ARGS[@]}" "$DST_DB"
 echo "Cloning datastore schema into $SRC_DB"
 $PG_DUMP_BIN --schema-only "${BASE_DSN}/datastore" | $PSQL_BIN "$SRC_DSN" >/dev/null
 
-echo "Cloning sptribs schema into $DST_DB"
-$PG_DUMP_BIN --schema-only --schema=ccd "${BASE_DSN}/sptribs" | $PSQL_BIN "$DST_DSN" >/dev/null
+echo "Cloning nfd schema into $DST_DB"
+$PG_DUMP_BIN --schema-only --schema=ccd "${BASE_DSN}/nfd" | $PSQL_BIN "$DST_DSN" >/dev/null
 
 echo "Seeding source database with sample CIC data"
 $PSQL_BIN "$SRC_DSN" --set=ON_ERROR_STOP=on <<'SQL'
