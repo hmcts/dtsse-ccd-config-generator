@@ -24,3 +24,9 @@ java {
         languageVersion = JavaLanguageVersion.of(21)
     }
 }
+
+tasks.withType(Javadoc).configureEach {
+    // Module intentionally exposes no public API; allow empty javadoc output without breaking publishes.
+    failOnError = false
+    options.addBooleanOption("Xdoclint:none", true)
+}

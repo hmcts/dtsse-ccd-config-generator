@@ -76,7 +76,6 @@ import uk.gov.hmcts.divorce.sow014.nfd.FailingSubmittedCallback;
 import uk.gov.hmcts.divorce.sow014.nfd.PublishedEvent;
 import uk.gov.hmcts.divorce.sow014.nfd.ReturnErrorWhenCreateTestCase;
 import uk.gov.hmcts.divorce.sow014.nfd.SubmittedConfirmationCallback;
-import uk.gov.hmcts.divorce.sow014.nfd.CaseworkerUploadTestDocument;
 import uk.gov.hmcts.ccd.sdk.type.CaseLink;
 import uk.gov.hmcts.ccd.sdk.type.ListValue;
 import uk.gov.hmcts.reform.ccd.client.CoreCaseDataApi;
@@ -118,6 +117,7 @@ public class TestWithCCD extends CftlibTest {
 
     private long firstEventId;
     private static final String BASE_URL = "http://localhost:4452";
+    private static final String DOCUMENT_UPDATED_EVENT_ID = "DocumentUpdated";
     private static final String ACCEPT_CREATE_CASE =
         "application/vnd.uk.gov.hmcts.ccd-data-store-api.create-case.v2+json;charset=UTF-8";
     private static final String ACCEPT_CREATE_EVENT =
@@ -1077,7 +1077,7 @@ public class TestWithCCD extends CftlibTest {
         );
         var request = prepareEventRequest(
             "TEST_CASE_WORKER_USER@mailinator.com",
-            CaseworkerUploadTestDocument.DOCUMENT_UPDATED,
+            DOCUMENT_UPDATED_EVENT_ID,
             data
         );
 
