@@ -76,7 +76,6 @@ import uk.gov.hmcts.divorce.sow014.nfd.FailingSubmittedCallback;
 import uk.gov.hmcts.divorce.sow014.nfd.PublishedEvent;
 import uk.gov.hmcts.divorce.sow014.nfd.ReturnErrorWhenCreateTestCase;
 import uk.gov.hmcts.divorce.sow014.nfd.SubmittedConfirmationCallback;
-import uk.gov.hmcts.divorce.sow014.nfd.CaseworkerUploadTestDocument;
 import uk.gov.hmcts.ccd.sdk.type.CaseLink;
 import uk.gov.hmcts.ccd.sdk.type.ListValue;
 import uk.gov.hmcts.reform.ccd.client.CoreCaseDataApi;
@@ -161,11 +160,18 @@ public class TestWithCCD extends CftlibTest {
         start.getCaseDetails();
         var token = start.getToken();
 
+        var documentId = "12345678-1234-1234-1234-123456789012";
+        var documentBaseUrl = "http://localhost/documents/" + documentId;
         var body = Map.of(
-            "data", Map.of(
-                "applicationType", "soleApplication",
-                "applicant1SolicitorRepresented", "No",
-                "applicant2SolicitorRepresented", "No"
+            "data", Map.ofEntries(
+                Map.entry("applicationType", "soleApplication"),
+                Map.entry("applicant1SolicitorRepresented", "No"),
+                Map.entry("applicant2SolicitorRepresented", "No"),
+                Map.entry("testDocument", Map.of(
+                    "document_url", documentBaseUrl,
+                    "document_binary_url", documentBaseUrl + "/binary",
+                    "document_filename", "test.pdf"
+                ))
                 // applicant2@gmail.com  =  6e508b49-1fa8-3d3c-8b53-ec466637315b
             ),
             "event", Map.of(
@@ -208,13 +214,13 @@ public class TestWithCCD extends CftlibTest {
         var caseData = mapper.readValue(mapper.writeValueAsString(c.getData()), CaseData.class);
         assertThat(caseData.getApplicant1().getFirstName(), equalTo("app1_first_name"));
         assertThat(caseData.getApplicant2().getFirstName(), equalTo("app2_first_name"));
+        assertThat(caseData.getTestDocument(), is(notNullValue()));
+        assertThat(caseData.getTestDocument().getFilename(), equalTo("test.pdf"));
     }
 
     @Order(21)
     @Test
     public void shouldUpdateDocumentMetadataViaCaseFileViewEndpoint() throws Exception {
-        setTestDocumentOnCase("test.pdf");
-
         var currentCase = ccdApi.getCase(
             getAuthorisation("TEST_CASE_WORKER_USER@mailinator.com"),
             getServiceAuth(),
@@ -1064,26 +1070,6 @@ public class TestWithCCD extends CftlibTest {
         );
         var response = HttpClientBuilder.create().build().execute(e);
         assertThat(response.getStatusLine().getStatusCode(), equalTo(201));
-    }
-
-    private void setTestDocumentOnCase(String filename) throws Exception {
-        String documentId = "12345678-1234-1234-1234-123456789012";
-        var data = Map.of(
-            "testDocument", Map.of(
-                "document_url", "http://localhost/documents/" + documentId,
-                "document_binary_url", "http://localhost/documents/" + documentId + "/binary",
-                "document_filename", filename
-            )
-        );
-        var request = prepareEventRequest(
-            "TEST_CASE_WORKER_USER@mailinator.com",
-            CaseworkerUploadTestDocument.DOCUMENT_UPDATED,
-            data
-        );
-
-        var response = HttpClientBuilder.create().build().execute(request);
-        assertThat(response.getStatusLine().getStatusCode(), equalTo(201));
-        EntityUtils.consume(response.getEntity());
     }
 
     private record CaseLinkRow(long linkedReference, boolean standardLink) { }

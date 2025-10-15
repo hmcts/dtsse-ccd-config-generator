@@ -6,6 +6,7 @@ import java.lang.reflect.Field;
 import java.util.Collection;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.function.Function;
 import org.springframework.stereotype.Component;
 import uk.gov.hmcts.ccd.sdk.api.CCD;
@@ -17,6 +18,8 @@ import uk.gov.hmcts.ccd.sdk.api.Event;
  */
 @Component
 public class ResolvedConfigRegistry {
+
+  private static final String DOCUMENT_UPDATED_EVENT_ID = "DocumentUpdated";
 
   private final ImmutableMap<String, ResolvedCCDConfig<?, ?, ?>> configsByCaseType;
 
@@ -48,12 +51,18 @@ public class ResolvedConfigRegistry {
   }
 
   public Event<?, ?, ?> getRequiredEvent(String caseType, String eventId) {
-    return find(caseType)
-        .map(ResolvedCCDConfig::getEvents)
-        .map(events -> events.get(eventId))
-        .orElseThrow(() -> new IllegalArgumentException(
-            "No event " + eventId + " defined for case type " + caseType
-        ));
+    var config = getRequired(caseType);
+    var events = config.getEvents();
+    var resolved = events.get(eventId);
+    if (resolved != null) {
+      return resolved;
+    }
+
+    if (DOCUMENT_UPDATED_EVENT_ID.equals(eventId)) {
+      return synthesiseDocumentUpdatedEvent(config);
+    }
+
+    throw new IllegalArgumentException("No event " + eventId + " defined for case type " + caseType);
   }
 
   public Optional<String> labelForState(String caseType, String stateId) {
@@ -83,5 +92,22 @@ public class ResolvedConfigRegistry {
       }
     }
     return Optional.empty();
+  }
+
+  private Event<?, ?, ?> synthesiseDocumentUpdatedEvent(ResolvedCCDConfig<?, ?, ?> config) {
+    // CCD orchestrates DocumentUpdated as a system event; mirror that here so services
+    // do not need to declare it explicitly in decentralised runtimes.
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    Event.EventBuilder builder = Event.EventBuilder.builder(
+        DOCUMENT_UPDATED_EVENT_ID,
+        config.getCaseClass(),
+        new PropertyUtils(),
+        (Set) config.getAllStates(),
+        (Set) config.getAllStates()
+    );
+    builder.name("Document updated");
+    Event event = builder.doBuild();
+    event.setDescription("Synthetic system event handled automatically by the decentralised runtime.");
+    return event;
   }
 }
