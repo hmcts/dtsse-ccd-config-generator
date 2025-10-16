@@ -9,7 +9,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.util.MultiValueMap;
+import org.springframework.util.LinkedMultiValueMap;
 import uk.gov.hmcts.ccd.data.casedetails.SecurityClassification;
 import uk.gov.hmcts.ccd.data.persistence.dto.DecentralisedCaseEvent;
 import uk.gov.hmcts.ccd.data.persistence.dto.DecentralisedSubmitEventResponse;
@@ -33,8 +33,7 @@ class ConfigGeneratorCallbackDispatcher {
   private final ObjectMapper mapper;
 
   @SneakyThrows
-  public SubmitDispatchOutcome prepareSubmit(DecentralisedCaseEvent event,
-                                             MultiValueMap<String, String> urlParams) {
+  public SubmitDispatchOutcome prepareSubmit(DecentralisedCaseEvent event) {
     String caseType = event.getEventDetails().getCaseType();
     String eventId = event.getEventDetails().getEventId();
     Event<?, ?, ?> eventConfig = registry.getRequiredEvent(caseType, eventId);
@@ -51,6 +50,8 @@ class ConfigGeneratorCallbackDispatcher {
       );
       long caseRef = event.getCaseDetails().getReference();
 
+      // TODO: revisit when CCD resumes sending query params; referer header is absent at the moment.
+      var urlParams = new LinkedMultiValueMap<String, String>();
       SubmitResponse submitResponse = eventConfig.getSubmitHandler()
           .submit(new uk.gov.hmcts.ccd.sdk.api.EventPayload(caseRef, domainCaseData, urlParams));
 
