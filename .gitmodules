@@ -14,5 +14,5 @@
 	branch = DTSSTCI-1332-decentralisation
 [submodule "test-projects/adoption-cos-api"]
 	path = test-projects/adoption-cos-api
-	url = git@github.com:banderous/adoption-cos-api.git
+	url = git@github.com:hmcts/adoption-cos-api.git
 	branch = cftlib-integration
