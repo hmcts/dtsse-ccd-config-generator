@@ -1,8 +1,6 @@
 package uk.gov.hmcts.ccd.sdk;
 
-import java.net.URI;
 import java.util.List;
-import java.util.Objects;
 import java.util.concurrent.atomic.AtomicReference;
 import lombok.RequiredArgsConstructor;
 import lombok.SneakyThrows;
@@ -21,7 +19,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
-import org.springframework.web.util.UriComponentsBuilder;
 import uk.gov.hmcts.ccd.data.persistence.dto.DecentralisedAuditEvent;
 import uk.gov.hmcts.ccd.data.persistence.dto.DecentralisedCaseDetails;
 import uk.gov.hmcts.ccd.data.persistence.dto.DecentralisedCaseEvent;
@@ -74,9 +71,6 @@ public class CaseController {
 
     log.info("Creating event '{}' for case reference: {}",
         event.getEventDetails().getEventId(), event.getCaseDetails().getReference());
-    var referer = Objects.requireNonNullElse(headers.getFirst(HttpHeaders.REFERER), "");
-    URI uri = UriComponentsBuilder.fromUriString(referer).build().toUri();
-    var params = UriComponentsBuilder.fromUri(uri).build().getQueryParams();
 
     var user = idam.retrieveUser(headers.getFirst("Authorization"));
     AtomicReference<ConfigGeneratorCallbackDispatcher.SubmitDispatchOutcome> dispatchOutcome =
@@ -89,7 +83,7 @@ public class CaseController {
           return false;
         }
 
-        var outcome = dispatcher.prepareSubmit(event, params);
+        var outcome = dispatcher.prepareSubmit(event);
         dispatchOutcome.set(outcome);
 
         var submitResponse = outcome.response();
