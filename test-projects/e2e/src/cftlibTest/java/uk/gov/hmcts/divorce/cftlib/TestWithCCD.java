@@ -1258,4 +1258,15 @@ public class TestWithCCD extends CftlibTest {
         }
     }
 
+    @SneakyThrows
+    @Order(200)
+    @Test
+    void cascadingDeleteRemovesAllCaseData() {
+        db.getJdbcTemplate().execute("DELETE FROM ccd.case_data");
+
+        Integer caseDataCount = db.getJdbcTemplate()
+            .queryForObject("SELECT COUNT(*) FROM ccd.case_data", Integer.class);
+        assertThat("Case data table should be empty after delete", caseDataCount, equalTo(0));
+    }
+
 }
