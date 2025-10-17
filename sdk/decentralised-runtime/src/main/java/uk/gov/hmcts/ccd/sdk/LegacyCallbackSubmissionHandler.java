@@ -1,9 +1,6 @@
 package uk.gov.hmcts.ccd.sdk;
 
-import java.util.Optional;
 import java.util.UUID;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicReference;
 import lombok.RequiredArgsConstructor;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
@@ -11,7 +8,6 @@ import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.server.ResponseStatusException;
 import uk.gov.hmcts.ccd.data.persistence.dto.DecentralisedCaseEvent;
 import uk.gov.hmcts.ccd.data.persistence.dto.DecentralisedSubmitEventResponse;
@@ -28,67 +24,39 @@ import uk.gov.hmcts.reform.ccd.client.model.SubmittedCallbackResponse;
 @RequiredArgsConstructor
 class LegacyCallbackSubmissionHandler implements CaseSubmissionHandler {
 
-  private final TransactionTemplate transactionTemplate;
   private final ConfigGeneratorCallbackDispatcher dispatcher;
-  private final IdempotencyEnforcer idempotencyEnforcer;
   private final CaseEventHistoryService caseEventHistoryService;
   private final BlobRepository blobRepository;
 
   @Override
   @SneakyThrows
-  public CaseSubmissionResponse handle(DecentralisedCaseEvent event,
-                                       IdamService.User user,
-                                       String idempotencyKey) {
-
+  public CaseSubmissionOutcome apply(DecentralisedCaseEvent event,
+                                     IdamService.User user,
+                                     UUID idempotencyKey,
+                                     boolean alreadyProcessed) {
     log.info("[legacy] Creating event '{}' for case reference: {}",
         event.getEventDetails().getEventId(), event.getCaseDetails().getReference());
 
-    UUID idempotencyUuid = UUID.fromString(idempotencyKey);
-    AtomicReference<ConfigGeneratorCallbackDispatcher.SubmitDispatchOutcome> dispatchOutcome =
-        new AtomicReference<>();
-    AtomicBoolean alreadyProcessed = new AtomicBoolean(false);
-    boolean processed;
-
-    try {
-      processed = Boolean.TRUE.equals(transactionTemplate.execute(status -> {
-        if (idempotencyEnforcer.lockCaseAndCheckProcessed(
-            idempotencyUuid,
-            event.getCaseDetails().getReference()
-        )) {
-          alreadyProcessed.set(true);
-          return false;
-        }
-
-        var outcome = dispatcher.prepareSubmit(event);
-        dispatchOutcome.set(outcome);
-
-        var submitResponse = outcome.response();
-        if (submitResponse.getErrors() != null && !submitResponse.getErrors().isEmpty()) {
-          throw new CallbackValidationException(submitResponse.getErrors(), submitResponse.getWarnings());
-        }
-
-        outcome.afterSubmitResponse().ifPresent(afterSubmit ->
-            event.getCaseDetails().setAfterSubmitCallbackResponseEntity(ResponseEntity.ok(afterSubmit))
-        );
-
-        saveCaseReturningAuditId(event, user, idempotencyUuid);
-        return true;
-      }));
-    } catch (CallbackValidationException e) {
-      var response = new DecentralisedSubmitEventResponse();
-      response.setErrors(e.getErrors());
-      response.setWarnings(e.getWarnings());
-      return new CaseSubmissionResponse(response);
+    if (alreadyProcessed) {
+      return new CaseSubmissionOutcome(() -> buildResponse(event, null));
     }
 
-    if (alreadyProcessed.get()) {
-      return new CaseSubmissionResponse(buildResponse(event, (SubmittedCallbackResponse) null));
+    var outcome = dispatcher.prepareSubmit(event);
+
+    var submitResponse = outcome.response();
+    if (submitResponse.getErrors() != null && !submitResponse.getErrors().isEmpty()) {
+      throw new CallbackValidationException(submitResponse.getErrors(), submitResponse.getWarnings());
     }
 
-    var outcome = dispatchOutcome.get();
-    boolean runSubmitted = processed && outcome != null && outcome.hasSubmittedCallback();
-    var response = new DecentralisedSubmitEventResponse();
-    Runnable postCommit = () -> {
+    outcome.afterSubmitResponse().ifPresent(afterSubmit ->
+        event.getCaseDetails().setAfterSubmitCallbackResponseEntity(ResponseEntity.ok(afterSubmit))
+    );
+
+    saveCaseReturningAuditId(event, user, idempotencyKey);
+
+    boolean runSubmitted = outcome.hasSubmittedCallback();
+
+    return new CaseSubmissionOutcome(() -> {
       SubmittedCallbackResponse submittedResponse = null;
       if (runSubmitted) {
         submittedResponse = dispatcher.runSubmittedCallback(event).orElse(null);
@@ -99,10 +67,8 @@ class LegacyCallbackSubmissionHandler implements CaseSubmissionHandler {
             event.getCaseDetails().getAfterSubmitCallbackResponse());
       }
 
-      populateResponse(event, response, submittedResponse);
-    };
-
-    return new CaseSubmissionResponse(response, Optional.of(postCommit));
+      return buildResponse(event, submittedResponse);
+    });
   }
 
   @SneakyThrows

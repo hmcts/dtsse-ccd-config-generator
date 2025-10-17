@@ -1,7 +1,7 @@
 package uk.gov.hmcts.ccd.sdk;
 
+import java.util.UUID;
 import uk.gov.hmcts.ccd.data.persistence.dto.DecentralisedCaseEvent;
-import uk.gov.hmcts.ccd.data.persistence.dto.DecentralisedSubmitEventResponse;
 
 /**
  * Defines a single submission flow. Implementations decide how to apply an event
@@ -9,7 +9,8 @@ import uk.gov.hmcts.ccd.data.persistence.dto.DecentralisedSubmitEventResponse;
  */
 interface CaseSubmissionHandler {
 
-  CaseSubmissionResponse handle(DecentralisedCaseEvent event,
-                                          IdamService.User user,
-                                          String idempotencyKey);
+  CaseSubmissionOutcome apply(DecentralisedCaseEvent event,
+                              IdamService.User user,
+                              UUID idempotencyKey,
+                              boolean alreadyProcessed);
 }
