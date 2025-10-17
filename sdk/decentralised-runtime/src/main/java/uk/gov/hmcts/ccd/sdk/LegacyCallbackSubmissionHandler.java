@@ -2,10 +2,8 @@ package uk.gov.hmcts.ccd.sdk;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
-import org.springframework.web.server.ResponseStatusException;
 import uk.gov.hmcts.ccd.data.persistence.dto.DecentralisedCaseEvent;
 import uk.gov.hmcts.ccd.data.persistence.dto.DecentralisedSubmitEventResponse;
 import uk.gov.hmcts.ccd.domain.model.callbacks.AfterSubmitCallbackResponse;
@@ -39,8 +37,6 @@ class LegacyCallbackSubmissionHandler implements CaseSubmissionHandler {
     outcome.afterSubmitResponse().ifPresent(afterSubmit ->
         event.getCaseDetails().setAfterSubmitCallbackResponseEntity(ResponseEntity.ok(afterSubmit))
     );
-
-    upsertCase(event);
 
     boolean runSubmitted = outcome.hasSubmittedCallback();
 
@@ -91,13 +87,5 @@ class LegacyCallbackSubmissionHandler implements CaseSubmissionHandler {
         .confirmationHeader(response.getConfirmationHeader())
         .confirmationBody(response.getConfirmationBody())
         .build();
-  }
-
-  private long upsertCase(DecentralisedCaseEvent event) {
-    try {
-      return blobRepository.upsertCase(event);
-    } catch (org.springframework.dao.EmptyResultDataAccessException e) {
-      throw new ResponseStatusException(HttpStatus.CONFLICT, "Case was updated concurrently");
-    }
   }
 }

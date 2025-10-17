@@ -2,8 +2,11 @@ package uk.gov.hmcts.ccd.sdk;
 
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.EmptyResultDataAccessException;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
+import org.springframework.web.server.ResponseStatusException;
 import uk.gov.hmcts.ccd.data.persistence.dto.DecentralisedCaseEvent;
 import uk.gov.hmcts.ccd.data.persistence.dto.DecentralisedSubmitEventResponse;
 
@@ -45,6 +48,7 @@ public class CaseSubmissionService {
         }
 
         var responseSupplier = handler.apply(event);
+        upsertCase(event);
         var currentView = blobRepository.getCase(event.getCaseDetails().getReference()).getCaseDetails();
         caseEventHistoryService.saveAuditRecord(event, user, currentView, idempotencyUuid);
 
@@ -75,6 +79,14 @@ public class CaseSubmissionService {
     var response = new DecentralisedSubmitEventResponse();
     response.setCaseDetails(details);
     return response;
+  }
+
+  private void upsertCase(DecentralisedCaseEvent event) {
+    try {
+      blobRepository.upsertCase(event);
+    } catch (EmptyResultDataAccessException e) {
+      throw new ResponseStatusException(HttpStatus.CONFLICT, "Case was updated concurrently", e);
+    }
   }
 
   private record SubmissionTransactionResult(java.util.Optional<Long> existingEventId,
