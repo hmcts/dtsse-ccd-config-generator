@@ -17,6 +17,8 @@ public class CaseSubmissionService {
   private final IdamService idam;
   private final IdempotencyEnforcer idempotencyEnforcer;
   private final TransactionTemplate transactionTemplate;
+  private final CaseEventHistoryService caseEventHistoryService;
+  private final BlobRepository blobRepository;
 
   public DecentralisedSubmitEventResponse submit(DecentralisedCaseEvent event,
                                                  String authorisation,
@@ -37,10 +39,16 @@ public class CaseSubmissionService {
             idempotencyUuid,
             event.getCaseDetails().getReference()
         );
-        if (alreadyProcessed) {
-          return handler.alreadyProcessed(event, idempotencyUuid);
+        CaseSubmissionOutcome resolvedOutcome = alreadyProcessed
+            ? handler.alreadyProcessed(event, idempotencyUuid)
+            : handler.apply(event, user, idempotencyUuid);
+
+        if (resolvedOutcome.caseDataId() > 0) {
+          var currentView = blobRepository.getCase(event.getCaseDetails().getReference()).getCaseDetails();
+          caseEventHistoryService.saveAuditRecord(event, user, currentView, resolvedOutcome.caseDataId(), idempotencyUuid);
         }
-        return handler.apply(event, user, idempotencyUuid);
+
+        return resolvedOutcome;
       });
     } catch (CallbackValidationException e) {
       var response = new DecentralisedSubmitEventResponse();

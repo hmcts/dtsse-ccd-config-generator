@@ -2,9 +2,7 @@ package uk.gov.hmcts.ccd.sdk;
 
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
-import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
@@ -25,11 +23,9 @@ import uk.gov.hmcts.reform.ccd.client.model.SubmittedCallbackResponse;
 class LegacyCallbackSubmissionHandler implements CaseSubmissionHandler {
 
   private final ConfigGeneratorCallbackDispatcher dispatcher;
-  private final CaseEventHistoryService caseEventHistoryService;
   private final BlobRepository blobRepository;
 
   @Override
-  @SneakyThrows
   public CaseSubmissionOutcome apply(DecentralisedCaseEvent event,
                                      IdamService.User user,
                                      UUID idempotencyKey) {
@@ -47,11 +43,11 @@ class LegacyCallbackSubmissionHandler implements CaseSubmissionHandler {
         event.getCaseDetails().setAfterSubmitCallbackResponseEntity(ResponseEntity.ok(afterSubmit))
     );
 
-    saveCaseReturningAuditId(event, user, idempotencyKey);
+    long caseDataId = upsertCase(event);
 
     boolean runSubmitted = outcome.hasSubmittedCallback();
 
-    return new CaseSubmissionOutcome(() -> {
+    return new CaseSubmissionOutcome(caseDataId, () -> {
       SubmittedCallbackResponse submittedResponse = null;
       if (runSubmitted) {
         submittedResponse = dispatcher.runSubmittedCallback(event).orElse(null);
@@ -69,20 +65,7 @@ class LegacyCallbackSubmissionHandler implements CaseSubmissionHandler {
   @Override
   public CaseSubmissionOutcome alreadyProcessed(DecentralisedCaseEvent event,
                                                 UUID idempotencyKey) {
-    return new CaseSubmissionOutcome(() -> buildResponse(event, null));
-  }
-
-  @SneakyThrows
-  private long saveCaseReturningAuditId(DecentralisedCaseEvent event,
-                                        IdamService.User user,
-                                        UUID idempotencyKey) {
-    try {
-      long caseDataId = blobRepository.upsertCase(event);
-      var currentView = blobRepository.getCase(event.getCaseDetails().getReference()).getCaseDetails();
-      return caseEventHistoryService.saveAuditRecord(event, user, currentView, caseDataId, idempotencyKey);
-    } catch (EmptyResultDataAccessException e) {
-      throw new ResponseStatusException(HttpStatus.CONFLICT, "Case was updated concurrently");
-    }
+    return new CaseSubmissionOutcome(0L, () -> buildResponse(event, null));
   }
 
   private DecentralisedSubmitEventResponse buildResponse(DecentralisedCaseEvent event,
@@ -117,5 +100,13 @@ class LegacyCallbackSubmissionHandler implements CaseSubmissionHandler {
         .confirmationHeader(response.getConfirmationHeader())
         .confirmationBody(response.getConfirmationBody())
         .build();
+  }
+
+  private long upsertCase(DecentralisedCaseEvent event) {
+    try {
+      return blobRepository.upsertCase(event);
+    } catch (org.springframework.dao.EmptyResultDataAccessException e) {
+      throw new ResponseStatusException(HttpStatus.CONFLICT, "Case was updated concurrently");
+    }
   }
 }
