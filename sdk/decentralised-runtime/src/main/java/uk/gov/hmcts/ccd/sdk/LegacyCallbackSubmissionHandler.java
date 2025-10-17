@@ -1,5 +1,7 @@
 package uk.gov.hmcts.ccd.sdk;
 
+import java.util.Optional;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import lombok.RequiredArgsConstructor;
 import lombok.SneakyThrows;
@@ -33,20 +35,22 @@ class LegacyCallbackSubmissionHandler implements CaseSubmissionHandler {
 
   @Override
   @SneakyThrows
-  public DecentralisedSubmitEventResponse handle(DecentralisedCaseEvent event,
-                                                 IdamService.User user,
-                                                 String idempotencyKey) {
+  public CaseSubmissionResponse handle(DecentralisedCaseEvent event,
+                                       IdamService.User user,
+                                       String idempotencyKey) {
 
     log.info("[legacy] Creating event '{}' for case reference: {}",
         event.getEventDetails().getEventId(), event.getCaseDetails().getReference());
 
     AtomicReference<ConfigGeneratorCallbackDispatcher.SubmitDispatchOutcome> dispatchOutcome =
         new AtomicReference<>();
+    AtomicBoolean alreadyProcessed = new AtomicBoolean(false);
     boolean processed;
 
     try {
       processed = Boolean.TRUE.equals(transactionTemplate.execute(status -> {
         if (idempotencyEnforcer.markProcessedReturningIsAlreadyProcessed(idempotencyKey)) {
+          alreadyProcessed.set(true);
           return false;
         }
 
@@ -69,34 +73,31 @@ class LegacyCallbackSubmissionHandler implements CaseSubmissionHandler {
       var response = new DecentralisedSubmitEventResponse();
       response.setErrors(e.getErrors());
       response.setWarnings(e.getWarnings());
-      return response;
+      return new CaseSubmissionResponse(response);
+    }
+
+    if (alreadyProcessed.get()) {
+      return new CaseSubmissionResponse(buildResponse(event, (SubmittedCallbackResponse) null));
     }
 
     var outcome = dispatchOutcome.get();
     boolean runSubmitted = processed && outcome != null && outcome.hasSubmittedCallback();
-
-    // Post-transaction view mirrors existing behaviour.
-    SubmittedCallbackResponse submittedResponse = null;
-    if (runSubmitted) {
-      submittedResponse = dispatcher.runSubmittedCallback(event).orElse(null);
-    }
-
-    var details = blobRepository.getCase(event.getCaseDetails().getReference());
-    if (submittedResponse == null) {
-      submittedResponse = toSubmittedCallbackResponse(
-          event.getCaseDetails().getAfterSubmitCallbackResponse());
-    }
-    if (submittedResponse != null) {
-      var afterSubmitResponse = new AfterSubmitCallbackResponse();
-      afterSubmitResponse.setConfirmationHeader(submittedResponse.getConfirmationHeader());
-      afterSubmitResponse.setConfirmationBody(submittedResponse.getConfirmationBody());
-      var responseEntity = ResponseEntity.ok(afterSubmitResponse);
-      details.getCaseDetails().setAfterSubmitCallbackResponseEntity(responseEntity);
-    }
-
     var response = new DecentralisedSubmitEventResponse();
-    response.setCaseDetails(details);
-    return response;
+    Runnable postCommit = () -> {
+      SubmittedCallbackResponse submittedResponse = null;
+      if (runSubmitted) {
+        submittedResponse = dispatcher.runSubmittedCallback(event).orElse(null);
+      }
+
+      if (submittedResponse == null) {
+        submittedResponse = toSubmittedCallbackResponse(
+            event.getCaseDetails().getAfterSubmitCallbackResponse());
+      }
+
+      populateResponse(event, response, submittedResponse);
+    };
+
+    return new CaseSubmissionResponse(response, Optional.of(postCommit));
   }
 
   @SneakyThrows
@@ -108,6 +109,27 @@ class LegacyCallbackSubmissionHandler implements CaseSubmissionHandler {
     } catch (EmptyResultDataAccessException e) {
       throw new ResponseStatusException(HttpStatus.CONFLICT, "Case was updated concurrently");
     }
+  }
+
+  private DecentralisedSubmitEventResponse buildResponse(DecentralisedCaseEvent event,
+                                                         SubmittedCallbackResponse submittedResponse) {
+    var response = new DecentralisedSubmitEventResponse();
+    populateResponse(event, response, submittedResponse);
+    return response;
+  }
+
+  private void populateResponse(DecentralisedCaseEvent event,
+                                DecentralisedSubmitEventResponse response,
+                                SubmittedCallbackResponse submittedResponse) {
+    var details = blobRepository.getCase(event.getCaseDetails().getReference());
+    if (submittedResponse != null) {
+      var afterSubmitResponse = new AfterSubmitCallbackResponse();
+      afterSubmitResponse.setConfirmationHeader(submittedResponse.getConfirmationHeader());
+      afterSubmitResponse.setConfirmationBody(submittedResponse.getConfirmationBody());
+      var responseEntity = ResponseEntity.ok(afterSubmitResponse);
+      details.getCaseDetails().setAfterSubmitCallbackResponseEntity(responseEntity);
+    }
+    response.setCaseDetails(details);
   }
 
   private SubmittedCallbackResponse toSubmittedCallbackResponse(AfterSubmitCallbackResponse response) {

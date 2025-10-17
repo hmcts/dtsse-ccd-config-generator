@@ -23,10 +23,13 @@ public class CaseSubmissionService {
         eventDetails.getCaseType(), eventDetails.getEventId());
     var user = idam.retrieveUser(authorisation);
 
+    CaseSubmissionResponse response;
     if (eventConfig.getSubmitHandler() != null) {
-      return submitHandler.handle(event, user, idempotencyKey);
+      response = submitHandler.handle(event, user, idempotencyKey);
+    } else {
+      response = legacyHandler.handle(event, user, idempotencyKey);
     }
-
-    return legacyHandler.handle(event, user, idempotencyKey);
+    response.postCommit().ifPresent(Runnable::run);
+    return response.response();
   }
 }
