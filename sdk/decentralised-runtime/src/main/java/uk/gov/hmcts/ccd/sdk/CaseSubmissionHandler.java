@@ -1,6 +1,10 @@
 package uk.gov.hmcts.ccd.sdk;
 
+import java.util.List;
+import java.util.function.Supplier;
+
 import uk.gov.hmcts.ccd.data.persistence.dto.DecentralisedCaseEvent;
+import uk.gov.hmcts.ccd.sdk.api.callback.SubmitResponse;
 
 /**
  * Defines a single submission flow. Implementations decide how to apply an event
@@ -8,6 +12,7 @@ import uk.gov.hmcts.ccd.data.persistence.dto.DecentralisedCaseEvent;
  */
 interface CaseSubmissionHandler {
 
-  java.util.function.Supplier<uk.gov.hmcts.ccd.data.persistence.dto.DecentralisedSubmitEventResponse> apply(
+  Supplier<SubmitResponse> apply(
       DecentralisedCaseEvent event);
+
 }

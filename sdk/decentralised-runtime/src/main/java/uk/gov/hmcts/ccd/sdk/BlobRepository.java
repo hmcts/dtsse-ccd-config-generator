@@ -128,10 +128,9 @@ class BlobRepository {
     return filteredMapper.writeValueAsString(o);
   }
 
-  long upsertCase(DecentralisedCaseEvent event) {
+  long upsertCase(DecentralisedCaseEvent event, boolean updateBlob) {
     int version = Optional.ofNullable(event.getCaseDetails().getVersion()).orElse(1);
     String data = serialiseDataFilteringExternalFields(event.getCaseDetails());
-
     var sql = """
             insert into ccd.case_data (
                 last_modified,
@@ -160,12 +159,15 @@ class BlobRepository {
             on conflict (reference)
             do update set
                 state = excluded.state,
-                data = excluded.data,
+                data = case
+                         when :update_blob then excluded.data
+                         else case_data.data
+                       end,
                 security_classification = excluded.security_classification,
                 last_modified = (now() at time zone 'UTC'),
                 version = case
                             when
-                              case_data.data is distinct from excluded.data
+                              (:update_blob and case_data.data is distinct from excluded.data)
                               or case_data.state is distinct from excluded.state
                               or case_data.security_classification is distinct from excluded.security_classification
                             then
@@ -190,7 +192,8 @@ class BlobRepository {
         "reference", event.getCaseDetails().getReference(),
         "security_classification", event.getCaseDetails().getSecurityClassification().toString(),
         "version", version,
-        "id", event.getInternalCaseId()
+        "id", event.getInternalCaseId(),
+        "update_blob", updateBlob
     );
 
     return ndb.queryForObject(sql, params, Long.class);

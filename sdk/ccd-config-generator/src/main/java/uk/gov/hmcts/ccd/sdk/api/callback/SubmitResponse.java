@@ -16,4 +16,8 @@ public class SubmitResponse {
   private String confirmationBody;
 
   private List<String> errors;
+
+  private List<String> warnings;
+
+  private List<String> ignoreWarning;
 }

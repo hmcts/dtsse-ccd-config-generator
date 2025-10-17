@@ -1,14 +1,20 @@
 package uk.gov.hmcts.ccd.sdk;
 
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicReference;
+
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.server.ResponseStatusException;
+import uk.gov.hmcts.ccd.data.persistence.dto.DecentralisedCaseDetails;
 import uk.gov.hmcts.ccd.data.persistence.dto.DecentralisedCaseEvent;
 import uk.gov.hmcts.ccd.data.persistence.dto.DecentralisedSubmitEventResponse;
+import uk.gov.hmcts.ccd.domain.model.callbacks.AfterSubmitCallbackResponse;
+import uk.gov.hmcts.ccd.sdk.api.callback.SubmitResponse;
 
 @Service
 @RequiredArgsConstructor
@@ -30,10 +36,12 @@ public class CaseSubmissionService {
     var eventDetails = event.getEventDetails();
     var eventConfig = resolvedConfigRegistry.getRequiredEvent(
         eventDetails.getCaseType(), eventDetails.getEventId());
-    var handler = eventConfig.getSubmitHandler() != null ? submitHandler : legacyHandler;
+    boolean decentralisedFlow = eventConfig.getSubmitHandler() != null;
+    var handler = decentralisedFlow ? submitHandler : legacyHandler;
     var user = idam.retrieveUser(authorisation);
 
     UUID idempotencyUuid = UUID.fromString(idempotencyKey);
+    AtomicReference<DecentralisedCaseDetails> r = new AtomicReference<>();
 
     SubmissionTransactionResult txResult;
     try {
@@ -48,8 +56,9 @@ public class CaseSubmissionService {
         }
 
         var responseSupplier = handler.apply(event);
-        upsertCase(event);
-        var currentView = blobRepository.getCase(event.getCaseDetails().getReference()).getCaseDetails();
+        upsertCase(event, !decentralisedFlow);
+        r.set(blobRepository.getCase(event.getCaseDetails().getReference()));
+        var currentView = r.get().getCaseDetails();
         caseEventHistoryService.saveAuditRecord(event, user, currentView, idempotencyUuid);
 
         return new SubmissionTransactionResult(existingEventId, responseSupplier);
@@ -69,7 +78,21 @@ public class CaseSubmissionService {
       return replayProcessed(event, txResult.existingEventId().get());
     }
 
-    return txResult.responseSupplier().get();
+    var res = new DecentralisedSubmitEventResponse();
+    SubmitResponse txResponse = txResult.responseSupplier().get();
+    if (txResponse == null) {
+      txResponse = SubmitResponse.builder().build();
+    }
+    res.setCaseDetails(r.get());
+    res.setErrors(txResponse.getErrors());
+    res.setWarnings(txResponse.getWarnings());
+    var afterSubmitResponse = new AfterSubmitCallbackResponse();
+    afterSubmitResponse.setConfirmationHeader(txResponse.getConfirmationHeader());
+    afterSubmitResponse.setConfirmationBody(txResponse.getConfirmationBody());
+    var responseEntity = ResponseEntity.ok(afterSubmitResponse);
+    res.getCaseDetails().getCaseDetails().setAfterSubmitCallbackResponseEntity(responseEntity);
+
+    return res;
   }
 
   private DecentralisedSubmitEventResponse replayProcessed(DecentralisedCaseEvent event,
@@ -81,14 +104,14 @@ public class CaseSubmissionService {
     return response;
   }
 
-  private void upsertCase(DecentralisedCaseEvent event) {
+  private void upsertCase(DecentralisedCaseEvent event, boolean updateBlob) {
     try {
-      blobRepository.upsertCase(event);
+      blobRepository.upsertCase(event, updateBlob);
     } catch (EmptyResultDataAccessException e) {
       throw new ResponseStatusException(HttpStatus.CONFLICT, "Case was updated concurrently", e);
     }
   }
 
   private record SubmissionTransactionResult(java.util.Optional<Long> existingEventId,
-                                             java.util.function.Supplier<DecentralisedSubmitEventResponse> responseSupplier) {}
+                                             java.util.function.Supplier<SubmitResponse> responseSupplier) {}
 }
