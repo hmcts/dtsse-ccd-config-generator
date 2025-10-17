@@ -10,6 +10,6 @@ import uk.gov.hmcts.ccd.data.persistence.dto.DecentralisedSubmitEventResponse;
 public interface CaseSubmissionHandler {
 
   DecentralisedSubmitEventResponse handle(DecentralisedCaseEvent event,
-                                          String authorisation,
+                                          IdamService.User user,
                                           String idempotencyKey);
 }

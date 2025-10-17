@@ -28,20 +28,18 @@ class LegacyCallbackSubmissionHandler implements CaseSubmissionHandler {
   private final TransactionTemplate transactionTemplate;
   private final ConfigGeneratorCallbackDispatcher dispatcher;
   private final IdempotencyEnforcer idempotencyEnforcer;
-  private final IdamService idam;
   private final CaseEventHistoryService caseEventHistoryService;
   private final BlobRepository blobRepository;
 
   @Override
   @SneakyThrows
   public DecentralisedSubmitEventResponse handle(DecentralisedCaseEvent event,
-                                                 String authorisation,
+                                                 IdamService.User user,
                                                  String idempotencyKey) {
 
     log.info("[legacy] Creating event '{}' for case reference: {}",
         event.getEventDetails().getEventId(), event.getCaseDetails().getReference());
 
-    var user = idam.retrieveUser(authorisation);
     AtomicReference<ConfigGeneratorCallbackDispatcher.SubmitDispatchOutcome> dispatchOutcome =
         new AtomicReference<>();
     boolean processed;

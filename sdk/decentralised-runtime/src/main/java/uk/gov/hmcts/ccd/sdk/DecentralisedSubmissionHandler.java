@@ -26,7 +26,6 @@ class DecentralisedSubmissionHandler implements CaseSubmissionHandler {
 
   private final ConfigGeneratorCallbackDispatcher dispatcher;
   private final IdempotencyEnforcer idempotencyEnforcer;
-  private final IdamService idam;
   private final CaseEventHistoryService caseEventHistoryService;
   private final BlobRepository blobRepository;
 
@@ -34,7 +33,7 @@ class DecentralisedSubmissionHandler implements CaseSubmissionHandler {
   @SneakyThrows
   @Transactional
   public DecentralisedSubmitEventResponse handle(DecentralisedCaseEvent event,
-                                                 String authorisation,
+                                                 IdamService.User user,
                                                  String idempotencyKey) {
 
     log.info("[submit-handler] Creating event '{}' for case reference: {}",
@@ -43,8 +42,6 @@ class DecentralisedSubmissionHandler implements CaseSubmissionHandler {
     if (idempotencyEnforcer.markProcessedReturningIsAlreadyProcessed(idempotencyKey)) {
       return buildResponse(event, null);
     }
-
-    var user = idam.retrieveUser(authorisation);
 
     ConfigGeneratorCallbackDispatcher.SubmitDispatchOutcome outcome;
     try {
