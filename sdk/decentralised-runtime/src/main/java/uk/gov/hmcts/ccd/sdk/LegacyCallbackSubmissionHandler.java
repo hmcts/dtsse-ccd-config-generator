@@ -1,6 +1,5 @@
 package uk.gov.hmcts.ccd.sdk;
 
-import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -26,9 +25,7 @@ class LegacyCallbackSubmissionHandler implements CaseSubmissionHandler {
   private final BlobRepository blobRepository;
 
   @Override
-  public CaseSubmissionOutcome apply(DecentralisedCaseEvent event,
-                                     IdamService.User user,
-                                     UUID idempotencyKey) {
+  public CaseSubmissionOutcome apply(DecentralisedCaseEvent event) {
     log.info("[legacy] Creating event '{}' for case reference: {}",
         event.getEventDetails().getEventId(), event.getCaseDetails().getReference());
 

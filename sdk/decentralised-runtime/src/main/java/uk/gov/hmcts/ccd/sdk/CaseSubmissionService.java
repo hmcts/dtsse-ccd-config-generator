@@ -44,7 +44,7 @@ public class CaseSubmissionService {
           return new SubmissionTransactionResult(existingEventId, null);
         }
 
-        CaseSubmissionOutcome outcome = handler.apply(event, user, idempotencyUuid);
+        CaseSubmissionOutcome outcome = handler.apply(event);
         if (outcome.caseDataId() > 0) {
           var currentView = blobRepository.getCase(event.getCaseDetails().getReference()).getCaseDetails();
           caseEventHistoryService.saveAuditRecord(event, user, currentView, outcome.caseDataId(), idempotencyUuid);

@@ -1,6 +1,5 @@
 package uk.gov.hmcts.ccd.sdk;
 
-import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
@@ -27,9 +26,7 @@ class DecentralisedSubmissionHandler implements CaseSubmissionHandler {
 
   @Override
   @SneakyThrows
-  public CaseSubmissionOutcome apply(DecentralisedCaseEvent event,
-                                     IdamService.User user,
-                                     UUID idempotencyKey) {
+  public CaseSubmissionOutcome apply(DecentralisedCaseEvent event) {
     log.info("[submit-handler] Creating event '{}' for case reference: {}",
         event.getEventDetails().getEventId(), event.getCaseDetails().getReference());
 
