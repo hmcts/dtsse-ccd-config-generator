@@ -50,12 +50,6 @@ class DecentralisedSubmissionHandler implements CaseSubmissionHandler {
     return new CaseSubmissionOutcome(caseDataId, () -> finalResponse);
   }
 
-  @Override
-  public CaseSubmissionOutcome alreadyProcessed(DecentralisedCaseEvent event,
-                                                UUID idempotencyKey) {
-    return new CaseSubmissionOutcome(0L, () -> buildResponse(event, null));
-  }
-
   private DecentralisedSubmitEventResponse buildResponse(DecentralisedCaseEvent event,
                                                          AfterSubmitCallbackResponse afterSubmit) {
     SubmittedCallbackResponse submittedResponse = toSubmittedCallbackResponse(afterSubmit);

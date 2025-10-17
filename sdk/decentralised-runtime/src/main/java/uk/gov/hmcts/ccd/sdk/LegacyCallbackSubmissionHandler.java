@@ -62,12 +62,6 @@ class LegacyCallbackSubmissionHandler implements CaseSubmissionHandler {
     });
   }
 
-  @Override
-  public CaseSubmissionOutcome alreadyProcessed(DecentralisedCaseEvent event,
-                                                UUID idempotencyKey) {
-    return new CaseSubmissionOutcome(0L, () -> buildResponse(event, null));
-  }
-
   private DecentralisedSubmitEventResponse buildResponse(DecentralisedCaseEvent event,
                                                          SubmittedCallbackResponse submittedResponse) {
     var response = new DecentralisedSubmitEventResponse();

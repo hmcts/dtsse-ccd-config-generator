@@ -12,7 +12,4 @@ interface CaseSubmissionHandler {
   CaseSubmissionOutcome apply(DecentralisedCaseEvent event,
                               IdamService.User user,
                               UUID idempotencyKey);
-
-  CaseSubmissionOutcome alreadyProcessed(DecentralisedCaseEvent event,
-                                         UUID idempotencyKey);
 }

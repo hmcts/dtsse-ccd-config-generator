@@ -32,23 +32,25 @@ public class CaseSubmissionService {
 
     UUID idempotencyUuid = UUID.fromString(idempotencyKey);
 
-    CaseSubmissionOutcome outcome;
+    SubmissionTransactionResult txResult;
     try {
-      outcome = transactionTemplate.execute(status -> {
-        boolean alreadyProcessed = idempotencyEnforcer.lockCaseAndCheckProcessed(
+      txResult = transactionTemplate.execute(status -> {
+        var existingEventId = idempotencyEnforcer.lockCaseAndGetExistingEvent(
             idempotencyUuid,
             event.getCaseDetails().getReference()
         );
-        CaseSubmissionOutcome resolvedOutcome = alreadyProcessed
-            ? handler.alreadyProcessed(event, idempotencyUuid)
-            : handler.apply(event, user, idempotencyUuid);
 
-        if (resolvedOutcome.caseDataId() > 0) {
-          var currentView = blobRepository.getCase(event.getCaseDetails().getReference()).getCaseDetails();
-          caseEventHistoryService.saveAuditRecord(event, user, currentView, resolvedOutcome.caseDataId(), idempotencyUuid);
+        if (existingEventId.isPresent()) {
+          return new SubmissionTransactionResult(existingEventId, null);
         }
 
-        return resolvedOutcome;
+        CaseSubmissionOutcome outcome = handler.apply(event, user, idempotencyUuid);
+        if (outcome.caseDataId() > 0) {
+          var currentView = blobRepository.getCase(event.getCaseDetails().getReference()).getCaseDetails();
+          caseEventHistoryService.saveAuditRecord(event, user, currentView, outcome.caseDataId(), idempotencyUuid);
+        }
+
+        return new SubmissionTransactionResult(existingEventId, outcome);
       });
     } catch (CallbackValidationException e) {
       var response = new DecentralisedSubmitEventResponse();
@@ -57,10 +59,31 @@ public class CaseSubmissionService {
       return response;
     }
 
-    if (outcome == null) {
+    if (txResult == null) {
       throw new IllegalStateException("Submission outcome missing after transaction completion.");
+    }
+
+    if (txResult.existingEventId().isPresent()) {
+      return replayProcessed(event, txResult.existingEventId().get());
+    }
+
+    CaseSubmissionOutcome outcome = txResult.outcome();
+    if (outcome == null) {
+      throw new IllegalStateException("Submission outcome missing for non-processed path.");
     }
 
     return outcome.buildResponse();
   }
+
+  private DecentralisedSubmitEventResponse replayProcessed(DecentralisedCaseEvent event,
+                                                           long eventId) {
+    var details = blobRepository.caseDetailsAtEvent(event.getCaseDetails().getReference(), eventId)
+        .orElseGet(() -> blobRepository.getCase(event.getCaseDetails().getReference()));
+    var response = new DecentralisedSubmitEventResponse();
+    response.setCaseDetails(details);
+    return response;
+  }
+
+  private record SubmissionTransactionResult(java.util.Optional<Long> existingEventId,
+                                             CaseSubmissionOutcome outcome) {}
 }

@@ -91,6 +91,37 @@ class BlobRepository {
     return cases.get(0);
   }
 
+  Optional<DecentralisedCaseDetails> caseDetailsAtEvent(long caseRef, long eventId) {
+    var params = Map.of("caseRef", caseRef, "eventId", eventId);
+
+    var results = ndb.query(
+        """
+        select
+              cd.reference,
+              cd.created_date as created_date,
+              cd.jurisdiction,
+              ce.case_type_id,
+              ce.state_id as state,
+              ce.data::text as case_data,
+              cd.security_classification::text,
+              cd.version,
+              cd.last_state_modified_date,
+              coalesce(cd.last_modified, cd.created_date) as last_modified,
+              cd.supplementary_data::text,
+              cd.case_revision
+         from ccd.case_event ce
+         join ccd.case_data cd on cd.id = ce.case_data_id
+        where cd.reference = :caseRef
+          and ce.id = :eventId
+        limit 1
+        """,
+        params,
+        (rs, rowNum) -> mapCaseDetails(rs)
+    );
+
+    return results.stream().findFirst();
+  }
+
   @SneakyThrows
   public String serialiseDataFilteringExternalFields(CaseDetails caseDetails) {
     var o = defaultMapper.convertValue(caseDetails.getData(), caseDataType);

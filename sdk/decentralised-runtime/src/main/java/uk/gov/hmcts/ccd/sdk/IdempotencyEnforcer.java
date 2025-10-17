@@ -1,5 +1,6 @@
 package uk.gov.hmcts.ccd.sdk;
 
+import java.util.Optional;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -19,11 +20,11 @@ class IdempotencyEnforcer {
   private final NamedParameterJdbcTemplate db;
 
   @Transactional(propagation = Propagation.MANDATORY)
-  public boolean lockCaseAndCheckProcessed(UUID idempotencyKey, Long caseReference) {
+  public Optional<Long> lockCaseAndGetExistingEvent(UUID idempotencyKey, Long caseReference) {
     if (caseReference == null) {
       log.debug("No case reference supplied for idempotency key '{}'; assuming first-time submission.",
           idempotencyKey);
-      return false;
+      return Optional.empty();
     }
 
     var params = new MapSqlParameterSource()
@@ -35,7 +36,7 @@ class IdempotencyEnforcer {
      */
     var matches = db.query(
         """
-        select ce.idempotency_key
+        select ce.id as event_id
         from ccd.case_data cd
         left join ccd.case_event ce
           on ce.case_data_id = cd.id
@@ -44,21 +45,23 @@ class IdempotencyEnforcer {
         for update of cd
         """,
         params,
-        (rs, rowNum) -> (UUID) rs.getObject("idempotency_key")
+        (rs, rowNum) -> rs.getObject("event_id", Long.class)
     );
 
     if (matches.isEmpty()) {
       log.debug("Case reference {} not found while acquiring idempotency lock; proceeding.", caseReference);
-      return false;
+      return Optional.empty();
     }
 
-    boolean processed = matches.get(0) != null;
-    if (processed) {
-      log.info("Idempotency key '{}' already exists. Request previously processed.", idempotencyKey);
-    } else {
-      log.debug("Idempotency key '{}' not found; continuing processing (case reference {}).",
-          idempotencyKey, caseReference);
+    Long eventId = matches.get(0);
+    if (eventId != null) {
+      log.info("Idempotency key '{}' already exists (event id {}). Request previously processed.",
+          idempotencyKey, eventId);
+      return Optional.of(eventId);
     }
-    return processed;
+
+    log.debug("Idempotency key '{}' not found; continuing processing (case reference {}).",
+        idempotencyKey, caseReference);
+    return Optional.empty();
   }
 }
