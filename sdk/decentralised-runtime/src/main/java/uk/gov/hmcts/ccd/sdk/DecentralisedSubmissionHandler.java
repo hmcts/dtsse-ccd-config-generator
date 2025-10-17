@@ -1,5 +1,6 @@
 package uk.gov.hmcts.ccd.sdk;
 
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
@@ -39,7 +40,12 @@ class DecentralisedSubmissionHandler implements CaseSubmissionHandler {
     log.info("[submit-handler] Creating event '{}' for case reference: {}",
         event.getEventDetails().getEventId(), event.getCaseDetails().getReference());
 
-    if (idempotencyEnforcer.markProcessedReturningIsAlreadyProcessed(idempotencyKey)) {
+    UUID idempotencyUuid = UUID.fromString(idempotencyKey);
+    boolean alreadyProcessed = idempotencyEnforcer.lockCaseAndCheckProcessed(
+        idempotencyUuid,
+        event.getCaseDetails().getReference()
+    );
+    if (alreadyProcessed) {
       return new CaseSubmissionResponse(buildResponse(event, null));
     }
 
@@ -56,7 +62,7 @@ class DecentralisedSubmissionHandler implements CaseSubmissionHandler {
           event.getCaseDetails().setAfterSubmitCallbackResponseEntity(ResponseEntity.ok(afterSubmit))
       );
 
-      saveCaseReturningAuditId(event, user);
+      saveCaseReturningAuditId(event, user, idempotencyUuid);
     } catch (CallbackValidationException e) {
       TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();
       var response = new DecentralisedSubmitEventResponse();
@@ -88,11 +94,13 @@ class DecentralisedSubmissionHandler implements CaseSubmissionHandler {
   }
 
   @SneakyThrows
-  private long saveCaseReturningAuditId(DecentralisedCaseEvent event, IdamService.User user) {
+  private long saveCaseReturningAuditId(DecentralisedCaseEvent event,
+                                        IdamService.User user,
+                                        UUID idempotencyKey) {
     try {
       long caseDataId = blobRepository.upsertCase(event);
       var currentView = blobRepository.getCase(event.getCaseDetails().getReference()).getCaseDetails();
-      return caseEventHistoryService.saveAuditRecord(event, user, currentView, caseDataId);
+      return caseEventHistoryService.saveAuditRecord(event, user, currentView, caseDataId, idempotencyKey);
     } catch (EmptyResultDataAccessException e) {
       throw new ResponseStatusException(HttpStatus.CONFLICT, "Case was updated concurrently");
     }

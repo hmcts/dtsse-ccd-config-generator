@@ -1,6 +1,7 @@
 package uk.gov.hmcts.ccd.sdk;
 
 import java.util.Optional;
+import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import lombok.RequiredArgsConstructor;
@@ -42,6 +43,7 @@ class LegacyCallbackSubmissionHandler implements CaseSubmissionHandler {
     log.info("[legacy] Creating event '{}' for case reference: {}",
         event.getEventDetails().getEventId(), event.getCaseDetails().getReference());
 
+    UUID idempotencyUuid = UUID.fromString(idempotencyKey);
     AtomicReference<ConfigGeneratorCallbackDispatcher.SubmitDispatchOutcome> dispatchOutcome =
         new AtomicReference<>();
     AtomicBoolean alreadyProcessed = new AtomicBoolean(false);
@@ -49,7 +51,10 @@ class LegacyCallbackSubmissionHandler implements CaseSubmissionHandler {
 
     try {
       processed = Boolean.TRUE.equals(transactionTemplate.execute(status -> {
-        if (idempotencyEnforcer.markProcessedReturningIsAlreadyProcessed(idempotencyKey)) {
+        if (idempotencyEnforcer.lockCaseAndCheckProcessed(
+            idempotencyUuid,
+            event.getCaseDetails().getReference()
+        )) {
           alreadyProcessed.set(true);
           return false;
         }
@@ -66,7 +71,7 @@ class LegacyCallbackSubmissionHandler implements CaseSubmissionHandler {
             event.getCaseDetails().setAfterSubmitCallbackResponseEntity(ResponseEntity.ok(afterSubmit))
         );
 
-        saveCaseReturningAuditId(event, user);
+        saveCaseReturningAuditId(event, user, idempotencyUuid);
         return true;
       }));
     } catch (CallbackValidationException e) {
@@ -101,11 +106,13 @@ class LegacyCallbackSubmissionHandler implements CaseSubmissionHandler {
   }
 
   @SneakyThrows
-  private long saveCaseReturningAuditId(DecentralisedCaseEvent event, IdamService.User user) {
+  private long saveCaseReturningAuditId(DecentralisedCaseEvent event,
+                                        IdamService.User user,
+                                        UUID idempotencyKey) {
     try {
       long caseDataId = blobRepository.upsertCase(event);
       var currentView = blobRepository.getCase(event.getCaseDetails().getReference()).getCaseDetails();
-      return caseEventHistoryService.saveAuditRecord(event, user, currentView, caseDataId);
+      return caseEventHistoryService.saveAuditRecord(event, user, currentView, caseDataId, idempotencyKey);
     } catch (EmptyResultDataAccessException e) {
       throw new ResponseStatusException(HttpStatus.CONFLICT, "Case was updated concurrently");
     }

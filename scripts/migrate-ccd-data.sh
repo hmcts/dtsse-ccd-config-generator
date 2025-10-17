@@ -92,7 +92,8 @@ COPY (
       ce.state_name,
       ce.proxied_by,
       ce.proxied_by_first_name,
-      ce.proxied_by_last_name
+      ce.proxied_by_last_name,
+      gen_random_uuid() as idempotency_key
   FROM public.case_event ce
        JOIN public.case_data cd ON cd.id = ce.case_data_id
   WHERE cd.case_type_id = '${CASE_TYPE}'
@@ -120,7 +121,8 @@ COPY ccd.case_event (
     state_name,
     proxied_by,
     proxied_by_first_name,
-    proxied_by_last_name
+    proxied_by_last_name,
+    idempotency_key
 ) FROM STDIN WITH (FORMAT CSV);
 EOF
 )
@@ -165,4 +167,3 @@ main() {
 }
 
 main "$@"
-
