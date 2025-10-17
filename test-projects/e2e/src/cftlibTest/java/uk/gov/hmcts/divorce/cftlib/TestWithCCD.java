@@ -72,6 +72,7 @@ import uk.gov.hmcts.divorce.divorcecase.NoFaultDivorce;
 import uk.gov.hmcts.divorce.sow014.nfd.CaseworkerAddNote;
 import uk.gov.hmcts.divorce.sow014.nfd.CaseworkerMaintainCaseLink;
 import uk.gov.hmcts.divorce.sow014.nfd.DecentralisedCaseworkerAddNote;
+import uk.gov.hmcts.divorce.sow014.nfd.DecentralisedCaseworkerAddNoteFailure;
 import uk.gov.hmcts.divorce.sow014.nfd.FailingSubmittedCallback;
 import uk.gov.hmcts.divorce.sow014.nfd.PublishedEvent;
 import uk.gov.hmcts.divorce.sow014.nfd.ReturnErrorWhenCreateTestCase;
@@ -1159,6 +1160,40 @@ public class TestWithCCD extends CftlibTest {
     }
 
     @Order(20)
+    @Test
+    public void testDecentralisedSubmitHandlerErrorsAreRolledBack() throws Exception {
+        String sqlCountByCase = "SELECT count(*) FROM case_notes WHERE reference = :ref";
+        Integer before = db.queryForObject(sqlCountByCase, Map.of("ref", caseRef), Integer.class);
+
+        var start = ccdApi.startEvent(
+            getAuthorisation("TEST_CASE_WORKER_USER@mailinator.com"),
+            getServiceAuth(),
+            String.valueOf(caseRef),
+            DecentralisedCaseworkerAddNoteFailure.CASEWORKER_DECENTRALISED_ADD_NOTE_FAIL
+        );
+
+        String noteText = "Decentralised failing note";
+        var request = prepareEventRequestWithToken(
+            "TEST_CASE_WORKER_USER@mailinator.com",
+            DecentralisedCaseworkerAddNoteFailure.CASEWORKER_DECENTRALISED_ADD_NOTE_FAIL,
+            Map.of("note", noteText),
+            start.getToken()
+        );
+
+        var response = HttpClientBuilder.create().build().execute(request);
+        assertThat(response.getStatusLine().getStatusCode(), equalTo(422));
+
+        var payload = mapper.readValue(EntityUtils.toString(response.getEntity()), Map.class);
+        @SuppressWarnings("unchecked")
+        List<String> callbackErrors = (List<String>) payload.get("callbackErrors");
+        assertThat("callback errors should include simulated failure",
+            callbackErrors, contains("Simulated decentralised failure"));
+
+        Integer after = db.queryForObject(sqlCountByCase, Map.of("ref", caseRef), Integer.class);
+        assertThat(after, equalTo(before));
+    }
+
+    @Order(22)
     @Test
     public void shouldPersistCaseLinksAndUpdateDerivedTable() throws Exception {
         long firstLinkedCase = createAdditionalCase("TEST_SOLICITOR2@mailinator.com");
