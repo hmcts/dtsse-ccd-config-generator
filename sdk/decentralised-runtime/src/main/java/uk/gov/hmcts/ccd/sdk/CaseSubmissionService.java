@@ -44,13 +44,11 @@ public class CaseSubmissionService {
           return new SubmissionTransactionResult(existingEventId, null);
         }
 
-        CaseSubmissionOutcome outcome = handler.apply(event);
-        if (outcome.caseDataId() > 0) {
-          var currentView = blobRepository.getCase(event.getCaseDetails().getReference()).getCaseDetails();
-          caseEventHistoryService.saveAuditRecord(event, user, currentView, outcome.caseDataId(), idempotencyUuid);
-        }
+        var responseSupplier = handler.apply(event);
+        var currentView = blobRepository.getCase(event.getCaseDetails().getReference()).getCaseDetails();
+        caseEventHistoryService.saveAuditRecord(event, user, currentView, idempotencyUuid);
 
-        return new SubmissionTransactionResult(existingEventId, outcome);
+        return new SubmissionTransactionResult(existingEventId, responseSupplier);
       });
     } catch (CallbackValidationException e) {
       var response = new DecentralisedSubmitEventResponse();
@@ -67,12 +65,7 @@ public class CaseSubmissionService {
       return replayProcessed(event, txResult.existingEventId().get());
     }
 
-    CaseSubmissionOutcome outcome = txResult.outcome();
-    if (outcome == null) {
-      throw new IllegalStateException("Submission outcome missing for non-processed path.");
-    }
-
-    return outcome.buildResponse();
+    return txResult.responseSupplier().get();
   }
 
   private DecentralisedSubmitEventResponse replayProcessed(DecentralisedCaseEvent event,
@@ -85,5 +78,5 @@ public class CaseSubmissionService {
   }
 
   private record SubmissionTransactionResult(java.util.Optional<Long> existingEventId,
-                                             CaseSubmissionOutcome outcome) {}
+                                             java.util.function.Supplier<DecentralisedSubmitEventResponse> responseSupplier) {}
 }

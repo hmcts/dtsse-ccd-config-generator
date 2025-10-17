@@ -26,7 +26,7 @@ class DecentralisedSubmissionHandler implements CaseSubmissionHandler {
 
   @Override
   @SneakyThrows
-  public CaseSubmissionOutcome apply(DecentralisedCaseEvent event) {
+  public java.util.function.Supplier<DecentralisedSubmitEventResponse> apply(DecentralisedCaseEvent event) {
     log.info("[submit-handler] Creating event '{}' for case reference: {}",
         event.getEventDetails().getEventId(), event.getCaseDetails().getReference());
 
@@ -41,10 +41,9 @@ class DecentralisedSubmissionHandler implements CaseSubmissionHandler {
         event.getCaseDetails().setAfterSubmitCallbackResponseEntity(ResponseEntity.ok(afterSubmit))
     );
 
-    long caseDataId = upsertCase(event);
-
+    upsertCase(event);
     var finalResponse = buildResponse(event, event.getCaseDetails().getAfterSubmitCallbackResponse());
-    return new CaseSubmissionOutcome(caseDataId, () -> finalResponse);
+    return () -> finalResponse;
   }
 
   private DecentralisedSubmitEventResponse buildResponse(DecentralisedCaseEvent event,

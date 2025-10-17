@@ -8,5 +8,6 @@ import uk.gov.hmcts.ccd.data.persistence.dto.DecentralisedCaseEvent;
  */
 interface CaseSubmissionHandler {
 
-  CaseSubmissionOutcome apply(DecentralisedCaseEvent event);
+  java.util.function.Supplier<uk.gov.hmcts.ccd.data.persistence.dto.DecentralisedSubmitEventResponse> apply(
+      DecentralisedCaseEvent event);
 }

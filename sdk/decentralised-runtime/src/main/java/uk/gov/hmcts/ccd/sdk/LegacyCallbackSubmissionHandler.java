@@ -25,7 +25,7 @@ class LegacyCallbackSubmissionHandler implements CaseSubmissionHandler {
   private final BlobRepository blobRepository;
 
   @Override
-  public CaseSubmissionOutcome apply(DecentralisedCaseEvent event) {
+  public java.util.function.Supplier<DecentralisedSubmitEventResponse> apply(DecentralisedCaseEvent event) {
     log.info("[legacy] Creating event '{}' for case reference: {}",
         event.getEventDetails().getEventId(), event.getCaseDetails().getReference());
 
@@ -40,11 +40,11 @@ class LegacyCallbackSubmissionHandler implements CaseSubmissionHandler {
         event.getCaseDetails().setAfterSubmitCallbackResponseEntity(ResponseEntity.ok(afterSubmit))
     );
 
-    long caseDataId = upsertCase(event);
+    upsertCase(event);
 
     boolean runSubmitted = outcome.hasSubmittedCallback();
 
-    return new CaseSubmissionOutcome(caseDataId, () -> {
+    return () -> {
       SubmittedCallbackResponse submittedResponse = null;
       if (runSubmitted) {
         submittedResponse = dispatcher.runSubmittedCallback(event).orElse(null);
@@ -56,7 +56,7 @@ class LegacyCallbackSubmissionHandler implements CaseSubmissionHandler {
       }
 
       return buildResponse(event, submittedResponse);
-    });
+    };
   }
 
   private DecentralisedSubmitEventResponse buildResponse(DecentralisedCaseEvent event,

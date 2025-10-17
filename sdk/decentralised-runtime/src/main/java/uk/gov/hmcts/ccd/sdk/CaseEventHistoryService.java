@@ -68,7 +68,6 @@ class CaseEventHistoryService {
       DecentralisedCaseEvent event,
       IdamService.User user,
       uk.gov.hmcts.ccd.domain.model.definition.CaseDetails currentView,
-      long caseDataId,
       UUID idempotencyKey
   ) {
     final String oldState = event.getCaseDetailsBefore() != null
@@ -122,7 +121,7 @@ class CaseEventHistoryService {
         .addValue("data", defaultMapper.writeValueAsString(currentView.getData()))
         .addValue("event_id", eventDetails.getEventId())
         .addValue("user_id", user.getUserDetails().getUid())
-        .addValue("case_data_id", caseDataId)
+        .addValue("case_data_id", event.getInternalCaseId())
         .addValue("case_type_id", eventDetails.getCaseType())
         .addValue("case_type_version", 1)
         .addValue("state_id", currentView.getState())
