@@ -1,12 +1,25 @@
 package uk.gov.hmcts.ccd.sdk;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import java.util.Map;
+import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
+import uk.gov.hmcts.ccd.data.casedetails.SecurityClassification;
 import uk.gov.hmcts.ccd.data.persistence.dto.DecentralisedCaseEvent;
 import uk.gov.hmcts.ccd.data.persistence.dto.DecentralisedSubmitEventResponse;
 import uk.gov.hmcts.ccd.domain.model.callbacks.AfterSubmitCallbackResponse;
+import uk.gov.hmcts.ccd.sdk.ResolvedConfigRegistry;
+import uk.gov.hmcts.ccd.sdk.api.Event;
+import uk.gov.hmcts.ccd.sdk.api.Webhook;
+import uk.gov.hmcts.ccd.sdk.api.callback.AboutToStartOrSubmitResponse;
+import uk.gov.hmcts.ccd.sdk.runtime.CcdCallbackExecutor;
+import uk.gov.hmcts.reform.ccd.client.model.CallbackRequest;
+import uk.gov.hmcts.reform.ccd.client.model.CaseDetails;
 import uk.gov.hmcts.reform.ccd.client.model.SubmittedCallbackResponse;
 
 /**
@@ -19,7 +32,11 @@ import uk.gov.hmcts.reform.ccd.client.model.SubmittedCallbackResponse;
 @RequiredArgsConstructor
 class LegacyCallbackSubmissionHandler implements CaseSubmissionHandler {
 
-  private final ConfigGeneratorCallbackDispatcher dispatcher;
+  private static final TypeReference<Map<String, JsonNode>> JSON_NODE_MAP = new TypeReference<>() {};
+
+  private final ResolvedConfigRegistry registry;
+  private final CcdCallbackExecutor executor;
+  private final ObjectMapper mapper;
   private final BlobRepository blobRepository;
 
   @Override
@@ -27,23 +44,19 @@ class LegacyCallbackSubmissionHandler implements CaseSubmissionHandler {
     log.info("[legacy] Creating event '{}' for case reference: {}",
         event.getEventDetails().getEventId(), event.getCaseDetails().getReference());
 
-    var outcome = dispatcher.prepareSubmit(event);
+    var outcome = prepareLegacySubmit(event);
 
     var submitResponse = outcome.response();
     if (submitResponse.getErrors() != null && !submitResponse.getErrors().isEmpty()) {
       throw new CallbackValidationException(submitResponse.getErrors(), submitResponse.getWarnings());
     }
 
-    outcome.afterSubmitResponse().ifPresent(afterSubmit ->
-        event.getCaseDetails().setAfterSubmitCallbackResponseEntity(ResponseEntity.ok(afterSubmit))
-    );
-
-    boolean runSubmitted = outcome.hasSubmittedCallback();
+    boolean runSubmitted = outcome.runSubmittedCallback();
 
     return () -> {
       SubmittedCallbackResponse submittedResponse = null;
       if (runSubmitted) {
-        submittedResponse = dispatcher.runSubmittedCallback(event).orElse(null);
+        submittedResponse = runSubmittedCallback(event).orElse(null);
       }
 
       if (submittedResponse == null) {
@@ -53,6 +66,80 @@ class LegacyCallbackSubmissionHandler implements CaseSubmissionHandler {
 
       return buildResponse(event, submittedResponse);
     };
+  }
+
+  private LegacySubmitOutcome prepareLegacySubmit(DecentralisedCaseEvent event) {
+    String caseType = event.getEventDetails().getCaseType();
+    String eventId = event.getEventDetails().getEventId();
+    Event<?, ?, ?> eventConfig = registry.getRequiredEvent(caseType, eventId);
+
+    var response = new DecentralisedSubmitEventResponse();
+
+    if (eventConfig.getAboutToSubmitCallback() != null) {
+      CallbackRequest request = buildCallbackRequest(event);
+      AboutToStartOrSubmitResponse callbackResponse = executor.aboutToSubmit(request);
+
+      Map<String, JsonNode> normalisedData = callbackResponse.getData() == null
+          ? Map.of()
+          : mapper.convertValue(callbackResponse.getData(), JSON_NODE_MAP);
+      event.getCaseDetails().setData(normalisedData);
+
+      if (callbackResponse.getState() != null) {
+        event.getCaseDetails().setState(callbackResponse.getState().toString());
+      }
+      if (callbackResponse.getSecurityClassification() != null) {
+        event.getCaseDetails().setSecurityClassification(
+            SecurityClassification.valueOf(callbackResponse.getSecurityClassification())
+        );
+      }
+
+      response.setErrors(callbackResponse.getErrors());
+      response.setWarnings(callbackResponse.getWarnings());
+    }
+
+    boolean hasSubmitted = eventConfig.getSubmittedCallback() != null;
+    return new LegacySubmitOutcome(response, hasSubmitted);
+  }
+
+  private Optional<SubmittedCallbackResponse> runSubmittedCallback(DecentralisedCaseEvent event) {
+    String caseType = event.getEventDetails().getCaseType();
+    String eventId = event.getEventDetails().getEventId();
+    Event<?, ?, ?> eventConfig = registry.getRequiredEvent(caseType, eventId);
+
+    if (eventConfig.getSubmittedCallback() == null) {
+      return Optional.empty();
+    }
+
+    CallbackRequest request = buildCallbackRequest(event);
+    var retriesConfig = eventConfig.getRetries().get(Webhook.Submitted);
+    int retries = retriesConfig == null || retriesConfig.isEmpty() ? 1 : 3;
+
+    for (int attempt = 0; attempt < retries; attempt++) {
+      try {
+        SubmittedCallbackResponse submitted = executor.submitted(request);
+        log.debug("Submitted callback returned header={} body={}",
+            submitted != null ? submitted.getConfirmationHeader() : null,
+            submitted != null ? submitted.getConfirmationBody() : null);
+        return Optional.ofNullable(submitted);
+      } catch (Exception ex) {
+        log.warn("Unsuccessful submitted callback for caseType={} eventId={}", caseType, eventId, ex);
+      }
+    }
+
+    return Optional.of(SubmittedCallbackResponse.builder().build());
+  }
+
+  private CallbackRequest buildCallbackRequest(DecentralisedCaseEvent event) {
+    CaseDetails caseDetails = mapper.convertValue(event.getCaseDetails(), CaseDetails.class);
+    CaseDetails caseDetailsBefore = event.getCaseDetailsBefore() == null
+        ? null
+        : mapper.convertValue(event.getCaseDetailsBefore(), CaseDetails.class);
+
+    return CallbackRequest.builder()
+        .caseDetails(caseDetails)
+        .caseDetailsBefore(caseDetailsBefore)
+        .eventId(event.getEventDetails().getEventId())
+        .build();
   }
 
   private DecentralisedSubmitEventResponse buildResponse(DecentralisedCaseEvent event,
@@ -88,4 +175,7 @@ class LegacyCallbackSubmissionHandler implements CaseSubmissionHandler {
         .confirmationBody(response.getConfirmationBody())
         .build();
   }
+
+  private record LegacySubmitOutcome(DecentralisedSubmitEventResponse response,
+                                     boolean runSubmittedCallback) {}
 }
