@@ -59,12 +59,17 @@ class ConfigGeneratorCallbackDispatcher {
           : mapper.convertValue(domainCaseData, new TypeReference<Map<String, JsonNode>>() {});
       event.getCaseDetails().setData(normalisedData);
 
-      if (submitResponse != null
-          && (submitResponse.getConfirmationHeader() != null
-              || submitResponse.getConfirmationBody() != null)) {
-        afterSubmit = new AfterSubmitCallbackResponse();
-        afterSubmit.setConfirmationHeader(submitResponse.getConfirmationHeader());
-        afterSubmit.setConfirmationBody(submitResponse.getConfirmationBody());
+      if (submitResponse != null) {
+        if (submitResponse.getErrors() != null && !submitResponse.getErrors().isEmpty()) {
+          response.setErrors(submitResponse.getErrors());
+        }
+
+        if (submitResponse.getConfirmationHeader() != null
+            || submitResponse.getConfirmationBody() != null) {
+          afterSubmit = new AfterSubmitCallbackResponse();
+          afterSubmit.setConfirmationHeader(submitResponse.getConfirmationHeader());
+          afterSubmit.setConfirmationBody(submitResponse.getConfirmationBody());
+        }
       }
     } else if (eventConfig.getAboutToSubmitCallback() != null) {
       CallbackRequest request = buildCallbackRequest(event);
