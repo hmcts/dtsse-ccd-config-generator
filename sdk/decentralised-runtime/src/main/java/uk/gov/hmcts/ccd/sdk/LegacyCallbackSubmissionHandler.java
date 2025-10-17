@@ -32,14 +32,9 @@ class LegacyCallbackSubmissionHandler implements CaseSubmissionHandler {
   @SneakyThrows
   public CaseSubmissionOutcome apply(DecentralisedCaseEvent event,
                                      IdamService.User user,
-                                     UUID idempotencyKey,
-                                     boolean alreadyProcessed) {
+                                     UUID idempotencyKey) {
     log.info("[legacy] Creating event '{}' for case reference: {}",
         event.getEventDetails().getEventId(), event.getCaseDetails().getReference());
-
-    if (alreadyProcessed) {
-      return new CaseSubmissionOutcome(() -> buildResponse(event, null));
-    }
 
     var outcome = dispatcher.prepareSubmit(event);
 
@@ -69,6 +64,12 @@ class LegacyCallbackSubmissionHandler implements CaseSubmissionHandler {
 
       return buildResponse(event, submittedResponse);
     });
+  }
+
+  @Override
+  public CaseSubmissionOutcome alreadyProcessed(DecentralisedCaseEvent event,
+                                                UUID idempotencyKey) {
+    return new CaseSubmissionOutcome(() -> buildResponse(event, null));
   }
 
   @SneakyThrows

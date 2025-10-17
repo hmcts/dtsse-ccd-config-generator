@@ -37,7 +37,10 @@ public class CaseSubmissionService {
             idempotencyUuid,
             event.getCaseDetails().getReference()
         );
-        return handler.apply(event, user, idempotencyUuid, alreadyProcessed);
+        if (alreadyProcessed) {
+          return handler.alreadyProcessed(event, idempotencyUuid);
+        }
+        return handler.apply(event, user, idempotencyUuid);
       });
     } catch (CallbackValidationException e) {
       var response = new DecentralisedSubmitEventResponse();
