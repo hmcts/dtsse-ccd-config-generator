@@ -21,12 +21,6 @@ class IdempotencyEnforcer {
 
   @Transactional(propagation = Propagation.MANDATORY)
   public Optional<Long> lockCaseAndGetExistingEvent(UUID idempotencyKey, Long caseReference) {
-    if (caseReference == null) {
-      log.debug("No case reference supplied for idempotency key '{}'; assuming first-time submission.",
-          idempotencyKey);
-      return Optional.empty();
-    }
-
     var params = new MapSqlParameterSource()
         .addValue("reference", caseReference)
         .addValue("key", idempotencyKey);
