@@ -8,6 +8,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.interceptor.TransactionAspectSupport;
 import org.springframework.web.server.ResponseStatusException;
 import uk.gov.hmcts.ccd.data.persistence.dto.DecentralisedCaseEvent;
 import uk.gov.hmcts.ccd.data.persistence.dto.DecentralisedSubmitEventResponse;
@@ -60,6 +61,7 @@ class DecentralisedSubmissionHandler implements CaseSubmissionHandler {
 
       saveCaseReturningAuditId(event, user);
     } catch (CallbackValidationException e) {
+      TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();
       var response = new DecentralisedSubmitEventResponse();
       response.setErrors(e.getErrors());
       response.setWarnings(e.getWarnings());
