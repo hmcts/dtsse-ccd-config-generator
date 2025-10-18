@@ -147,6 +147,77 @@ public class TestWithCCD extends CftlibTest {
         }
     }
 
+    @Order(50)
+    @Test
+    public void replayedSubmissionShouldReturnOriginalSnapshot() throws Exception {
+        var noteText = "Snapshot note " + UUID.randomUUID();
+        Map<String, Object> eventData = Map.of("note", noteText);
+
+        var startEvent = ccdApi.startEvent(
+            getAuthorisation("TEST_CASE_WORKER_USER@mailinator.com"),
+            getServiceAuth(),
+            String.valueOf(caseRef),
+            "caseworker-add-note");
+
+        var initialRequest = prepareEventRequestWithToken(
+            "TEST_CASE_WORKER_USER@mailinator.com",
+            "caseworker-add-note",
+            eventData,
+            startEvent.getToken()
+        );
+
+        var initialResponse = HttpClientBuilder.create().build().execute(initialRequest);
+        assertThat(initialResponse.getStatusLine().getStatusCode(), equalTo(201));
+
+        String initialBody = EntityUtils.toString(initialResponse.getEntity());
+        JsonNode initialPayload = mapper.readTree(initialBody);
+        JsonNode initialCaseDataNode = initialPayload.get("data");
+        assertThat("case data should be present on first submission", initialCaseDataNode, is(notNullValue()));
+        Map<String, Object> initialCaseData =
+            mapper.convertValue(initialCaseDataNode, new TypeReference<Map<String, Object>>() {});
+
+        // mutate the case with a different event to simulate later activity
+        addNote();
+
+        var replayRequest = prepareEventRequestWithToken(
+            "TEST_CASE_WORKER_USER@mailinator.com",
+            "caseworker-add-note",
+            eventData,
+            startEvent.getToken()
+        );
+
+        var replayResponse = HttpClientBuilder.create().build().execute(replayRequest);
+        assertThat(replayResponse.getStatusLine().getStatusCode(), equalTo(201));
+
+        String replayBody = EntityUtils.toString(replayResponse.getEntity());
+        JsonNode replayPayload = mapper.readTree(replayBody);
+        JsonNode replayCaseDataNode = replayPayload.get("data");
+        assertThat("case data should be present on replay submission", replayCaseDataNode, is(notNullValue()));
+        Map<String, Object> replayCaseData =
+            mapper.convertValue(replayCaseDataNode, new TypeReference<Map<String, Object>>() {});
+
+        @SuppressWarnings("unchecked")
+        var initialNotes = (List<Map<String, Object>>) initialCaseData.get("notes");
+        @SuppressWarnings("unchecked")
+        var replayNotes = (List<Map<String, Object>>) replayCaseData.get("notes");
+
+        assertThat("Initial submission should include notes", initialNotes, is(notNullValue()));
+        assertThat("Replay response should include notes", replayNotes, is(notNullValue()));
+
+        assertThat(
+            String.format(
+                "Snapshot should have same note count as original submission (expected %d, got %d)",
+                initialNotes.size(),
+                replayNotes.size()
+            ),
+            replayNotes.size(),
+            equalTo(initialNotes.size())
+        );
+
+        assertThat("Entire case data payload should match the original event snapshot",
+            replayCaseData, equalTo(initialCaseData));
+    }
+
     @Order(1)
     @Test
     public void caseCreation() throws Exception {

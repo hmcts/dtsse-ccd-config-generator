@@ -79,7 +79,7 @@ class BlobRepository {
          where reference IN (:caseRefs)
         """,
         params,
-        (rs, rowNum) -> mapCaseDetails(rs)
+        (rs, rowNum) -> mapCaseDetails(rs, true)
     );
   }
 
@@ -103,10 +103,10 @@ class BlobRepository {
               ce.case_type_id,
               ce.state_id as state,
               ce.data::text as case_data,
-              cd.security_classification::text,
-              cd.version,
-              cd.last_state_modified_date,
-              coalesce(cd.last_modified, cd.created_date) as last_modified,
+              ce.security_classification::text,
+              cd.version as version,
+              ce.created_date as last_state_modified_date,
+              ce.created_date as last_modified,
               cd.supplementary_data::text,
               cd.case_revision
          from ccd.case_event ce
@@ -116,7 +116,7 @@ class BlobRepository {
         limit 1
         """,
         params,
-        (rs, rowNum) -> mapCaseDetails(rs)
+        (rs, rowNum) -> mapCaseDetails(rs, false)
     );
 
     return results.stream().findFirst();
@@ -199,7 +199,7 @@ class BlobRepository {
     return ndb.queryForObject(sql, params, Long.class);
   }
 
-  private DecentralisedCaseDetails mapCaseDetails(ResultSet rs) throws SQLException {
+  private DecentralisedCaseDetails mapCaseDetails(ResultSet rs, boolean applyProjection) throws SQLException {
     try {
       Long reference = rs.getObject("reference", Long.class);
       String state = rs.getString("state");
@@ -216,9 +216,14 @@ class BlobRepository {
       caseDetails.setLastStateModifiedDate(rs.getObject("last_state_modified_date", LocalDateTime.class));
 
       var caseDataJson = rs.getString("case_data");
-      var rawCaseData = defaultMapper.readValue(caseDataJson, caseDataType);
-      var projectedCaseData = caseRepository.getCase(reference, state, rawCaseData);
-      Map<String, JsonNode> caseData = defaultMapper.convertValue(projectedCaseData, JSON_NODE_MAP);
+      Map<String, JsonNode> caseData;
+      if (applyProjection) {
+        var rawCaseData = defaultMapper.readValue(caseDataJson, caseDataType);
+        var projectedCaseData = caseRepository.getCase(reference, state, rawCaseData);
+        caseData = defaultMapper.convertValue(projectedCaseData, JSON_NODE_MAP);
+      } else {
+        caseData = defaultMapper.readValue(caseDataJson, JSON_NODE_MAP);
+      }
       caseDetails.setData(caseData);
       caseDetails.setDataClassification(Map.of());
 
