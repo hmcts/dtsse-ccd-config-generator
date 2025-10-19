@@ -63,7 +63,9 @@ public class CaseSubmissionService {
 
         var handlerResult = handler.apply(event);
         var requestedState = handlerResult.state();
-        validateStateOverride(eventConfig, requestedState);
+        if (decentralisedFlow) {
+          validateStateOverride(eventConfig, requestedState);
+        }
         requestedState.ifPresent(event.getCaseDetails()::setState);
         handlerResult.securityClassification()
             .map(SecurityClassification::valueOf)
