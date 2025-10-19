@@ -66,7 +66,7 @@ public class DecentralisedCaseworkerAddNoteFailure implements CCDConfig<CaseData
         return caseData;
     }
 
-    private SubmitResponse submitAndFail(EventPayload<CaseData, State> payload) {
+    private SubmitResponse<State> submitAndFail(EventPayload<CaseData, State> payload) {
         final Long reference = payload.caseReference();
         final CaseData caseData = payload.caseData();
         final User caseworkerUser = idamService.retrieveUser(request.getHeader(AUTHORIZATION));
@@ -82,7 +82,7 @@ public class DecentralisedCaseworkerAddNoteFailure implements CCDConfig<CaseData
         );
 
         log.info("Decentralised add note (failure) submitted for case {}", reference);
-        return SubmitResponse.builder()
+        return SubmitResponse.<State>builder()
             .errors(List.of("Simulated decentralised failure"))
             .build();
     }

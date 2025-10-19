@@ -1,8 +1,8 @@
 package uk.gov.hmcts.ccd.sdk;
 
-import java.util.List;
+import com.fasterxml.jackson.databind.JsonNode;
+import java.util.Optional;
 import java.util.function.Supplier;
-
 import uk.gov.hmcts.ccd.data.persistence.dto.DecentralisedCaseEvent;
 import uk.gov.hmcts.ccd.sdk.api.callback.SubmitResponse;
 
@@ -12,7 +12,22 @@ import uk.gov.hmcts.ccd.sdk.api.callback.SubmitResponse;
  */
 interface CaseSubmissionHandler {
 
-  Supplier<SubmitResponse> apply(
-      DecentralisedCaseEvent event);
+  CaseSubmissionHandlerResult apply(DecentralisedCaseEvent event);
 
+  record CaseSubmissionHandlerResult(Optional<JsonNode> dataUpdate,
+                                     Optional<String> state,
+                                     Optional<String> securityClassification,
+                                     Supplier<SubmitResponse<?>> responseSupplier) {
+
+    public CaseSubmissionHandlerResult(Optional<JsonNode> dataUpdate,
+                                       Supplier<SubmitResponse<?>> responseSupplier) {
+      this(dataUpdate, Optional.empty(), Optional.empty(), responseSupplier);
+    }
+
+    public CaseSubmissionHandlerResult(Optional<JsonNode> dataUpdate,
+                                       Optional<String> state,
+                                       Supplier<SubmitResponse<?>> responseSupplier) {
+      this(dataUpdate, state, Optional.empty(), responseSupplier);
+    }
+  }
 }

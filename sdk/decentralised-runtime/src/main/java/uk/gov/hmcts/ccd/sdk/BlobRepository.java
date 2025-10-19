@@ -128,9 +128,12 @@ class BlobRepository {
     return filteredMapper.writeValueAsString(o);
   }
 
-  long upsertCase(DecentralisedCaseEvent event, boolean updateBlob) {
+  long upsertCase(DecentralisedCaseEvent event, Optional<JsonNode> dataUpdate) {
     int version = Optional.ofNullable(event.getCaseDetails().getVersion()).orElse(1);
-    String data = serialiseDataFilteringExternalFields(event.getCaseDetails());
+    boolean updateBlob = dataUpdate.isPresent();
+    String data = dataUpdate
+        .map(this::serialiseDataFilteringExternalFields)
+        .orElseGet(() -> serialiseDataFilteringExternalFields(event.getCaseDetails()));
     var sql = """
             insert into ccd.case_data (
                 last_modified,
@@ -197,6 +200,12 @@ class BlobRepository {
     );
 
     return ndb.queryForObject(sql, params, Long.class);
+  }
+
+  @SneakyThrows
+  private String serialiseDataFilteringExternalFields(JsonNode caseData) {
+    var domainData = defaultMapper.convertValue(caseData, caseDataType);
+    return filteredMapper.writeValueAsString(domainData);
   }
 
   private DecentralisedCaseDetails mapCaseDetails(ResultSet rs, boolean applyProjection) throws SQLException {

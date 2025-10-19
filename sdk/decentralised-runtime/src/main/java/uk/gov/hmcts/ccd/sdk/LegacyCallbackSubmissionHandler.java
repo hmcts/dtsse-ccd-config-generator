@@ -12,7 +12,6 @@ import uk.gov.hmcts.ccd.data.casedetails.SecurityClassification;
 import uk.gov.hmcts.ccd.data.persistence.dto.DecentralisedCaseEvent;
 import uk.gov.hmcts.ccd.data.persistence.dto.DecentralisedSubmitEventResponse;
 import uk.gov.hmcts.ccd.domain.model.callbacks.AfterSubmitCallbackResponse;
-import uk.gov.hmcts.ccd.sdk.ResolvedConfigRegistry;
 import uk.gov.hmcts.ccd.sdk.api.Event;
 import uk.gov.hmcts.ccd.sdk.api.Webhook;
 import uk.gov.hmcts.ccd.sdk.api.callback.AboutToStartOrSubmitResponse;
@@ -39,7 +38,7 @@ class LegacyCallbackSubmissionHandler implements CaseSubmissionHandler {
   private final ObjectMapper mapper;
 
   @Override
-  public java.util.function.Supplier<SubmitResponse> apply(DecentralisedCaseEvent event) {
+  public CaseSubmissionHandlerResult apply(DecentralisedCaseEvent event) {
     log.info("[legacy] Creating event '{}' for case reference: {}",
         event.getEventDetails().getEventId(), event.getCaseDetails().getReference());
 
@@ -54,8 +53,16 @@ class LegacyCallbackSubmissionHandler implements CaseSubmissionHandler {
 
     var errors = submitResponse.getErrors();
     var warnings = submitResponse.getWarnings();
+    JsonNode dataSnapshot = mapper.valueToTree(event.getCaseDetails().getData());
+    var state = Optional.ofNullable(event.getCaseDetails().getState());
+    var securityClassification = Optional.ofNullable(event.getCaseDetails().getSecurityClassification())
+        .map(SecurityClassification::name);
 
-    return () -> {
+    return new CaseSubmissionHandlerResult(
+        Optional.ofNullable(dataSnapshot),
+        state,
+        securityClassification,
+        () -> {
       var builder = SubmitResponse.builder()
           .errors(errors)
           .warnings(warnings);
@@ -75,7 +82,7 @@ class LegacyCallbackSubmissionHandler implements CaseSubmissionHandler {
         builder.confirmationBody(submittedResponse.getConfirmationBody());
       }
       return builder.build();
-    };
+    });
   }
 
   private LegacySubmitOutcome prepareLegacySubmit(DecentralisedCaseEvent event) {

@@ -4,6 +4,6 @@ import uk.gov.hmcts.ccd.sdk.api.EventPayload;
 
 @FunctionalInterface
 public interface Submit<T, S> {
-  SubmitResponse submit(EventPayload<T, S> payload);
+  SubmitResponse<S> submit(EventPayload<T, S> payload);
 
 }

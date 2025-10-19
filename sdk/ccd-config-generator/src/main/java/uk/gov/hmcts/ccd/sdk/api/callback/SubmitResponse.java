@@ -9,7 +9,7 @@ import lombok.Data;
  */
 @Builder
 @Data
-public class SubmitResponse {
+public class SubmitResponse<S> {
 
   private String confirmationHeader;
 
@@ -20,4 +20,8 @@ public class SubmitResponse {
   private List<String> warnings;
 
   private List<String> ignoreWarning;
+
+  private S state;
+
+  private String securityClassification;
 }

@@ -1,8 +1,7 @@
 package uk.gov.hmcts.ccd.sdk;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import java.util.function.Supplier;
-
+import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -24,7 +23,7 @@ class DecentralisedSubmissionHandler implements CaseSubmissionHandler {
   private final ObjectMapper mapper;
 
   @Override
-  public Supplier<SubmitResponse> apply(DecentralisedCaseEvent event) {
+  public CaseSubmissionHandlerResult apply(DecentralisedCaseEvent event) {
     log.info("[submit-handler] Creating event '{}' for case reference: {}",
         event.getEventDetails().getEventId(), event.getCaseDetails().getReference());
 
@@ -34,10 +33,13 @@ class DecentralisedSubmissionHandler implements CaseSubmissionHandler {
       throw new CallbackValidationException(outcome.getErrors(), outcome.getWarnings());
     }
 
-    return () -> outcome;
+    var state = Optional.ofNullable(outcome.getState()).map(Object::toString);
+    var securityClassification = Optional.ofNullable(outcome.getSecurityClassification());
+
+    return new CaseSubmissionHandlerResult(Optional.empty(), state, securityClassification, () -> outcome);
   }
 
-  private SubmitResponse prepareSubmitHandler(DecentralisedCaseEvent event) {
+  private SubmitResponse<?> prepareSubmitHandler(DecentralisedCaseEvent event) {
     String caseType = event.getEventDetails().getCaseType();
     String eventId = event.getEventDetails().getEventId();
     Event<?, ?, ?> eventConfig = registry.getRequiredEvent(caseType, eventId);
