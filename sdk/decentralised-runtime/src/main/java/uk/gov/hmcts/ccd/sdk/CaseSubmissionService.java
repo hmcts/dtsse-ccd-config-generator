@@ -1,9 +1,11 @@
 package uk.gov.hmcts.ccd.sdk;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.Objects;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.EmptyResultDataAccessException;
@@ -17,6 +19,7 @@ import uk.gov.hmcts.ccd.data.persistence.dto.DecentralisedCaseDetails;
 import uk.gov.hmcts.ccd.data.persistence.dto.DecentralisedCaseEvent;
 import uk.gov.hmcts.ccd.data.persistence.dto.DecentralisedSubmitEventResponse;
 import uk.gov.hmcts.ccd.domain.model.callbacks.AfterSubmitCallbackResponse;
+import uk.gov.hmcts.ccd.sdk.api.Event;
 import uk.gov.hmcts.ccd.sdk.api.callback.SubmitResponse;
 
 @Service
@@ -59,7 +62,9 @@ public class CaseSubmissionService {
         }
 
         var handlerResult = handler.apply(event);
-        handlerResult.state().ifPresent(event.getCaseDetails()::setState);
+        var requestedState = handlerResult.state();
+        validateStateOverride(eventConfig, requestedState);
+        requestedState.ifPresent(event.getCaseDetails()::setState);
         handlerResult.securityClassification()
             .map(SecurityClassification::valueOf)
             .ifPresent(event.getCaseDetails()::setSecurityClassification);
@@ -100,6 +105,29 @@ public class CaseSubmissionService {
     res.getCaseDetails().getCaseDetails().setAfterSubmitCallbackResponseEntity(responseEntity);
 
     return res;
+  }
+
+  private void validateStateOverride(Event<?, ?, ?> eventConfig, Optional<String> requestedState) {
+    if (requestedState.isEmpty()) {
+      return;
+    }
+
+    var allowedStates = eventConfig.getPostState();
+    if (allowedStates == null || allowedStates.isEmpty()) {
+      return;
+    }
+
+    String targetState = requestedState.get();
+    boolean permitted = allowedStates.stream()
+        .filter(Objects::nonNull)
+        .map(Object::toString)
+        .anyMatch(targetState::equals);
+
+    if (!permitted) {
+      throw new CallbackValidationException(
+          List.of(String.format("State '%s' is not permitted for event '%s'", targetState, eventConfig.getId())),
+          List.of());
+    }
   }
 
   private DecentralisedSubmitEventResponse replayProcessed(DecentralisedCaseEvent event,

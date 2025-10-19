@@ -19,14 +19,14 @@ import uk.gov.hmcts.divorce.divorcecase.model.UserRole;
 @Component
 public class DecentralisedInvalidStateTransition implements CCDConfig<CaseData, State, UserRole> {
 
-    public static final String CASEWORKER_DECENTRALISED_INVALID_STATE = "caseworker-decentralised-invalid-state";
+    public static final String CASEWORKER_DECENTRALISED_INVALID_STATE = "caseworker-decent-invalid";
 
     @Override
     public void configureDecentralised(final DecentralisedConfigBuilder<CaseData, State, UserRole> configBuilder) {
         configBuilder
             .decentralisedEvent(CASEWORKER_DECENTRALISED_INVALID_STATE, this::submit)
             .forStateTransition(State.Submitted, State.AwaitingFinalOrder)
-            .name("Decentralised invalid state transition")
+            .name("Decentralised invalid state")
             .grant(CREATE_READ_UPDATE, CASE_WORKER, JUDGE)
             .grant(CREATE_READ_UPDATE_DELETE, SUPER_USER)
             .grantHistoryOnly(LEGAL_ADVISOR, JUDGE);
