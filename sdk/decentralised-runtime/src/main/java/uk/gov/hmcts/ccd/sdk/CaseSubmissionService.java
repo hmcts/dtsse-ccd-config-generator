@@ -83,19 +83,12 @@ public class CaseSubmissionService {
       return response;
     }
 
-    if (txResult == null) {
-      throw new IllegalStateException("Submission outcome missing after transaction completion.");
-    }
-
     if (txResult.existingEventId().isPresent()) {
       return replayProcessed(event, txResult.existingEventId().get());
     }
 
     var res = new DecentralisedSubmitEventResponse();
     SubmitResponse<?> txResponse = txResult.responseSupplier().get();
-    if (txResponse == null) {
-      txResponse = SubmitResponse.builder().build();
-    }
     res.setCaseDetails(r.get());
     res.setErrors(txResponse.getErrors());
     res.setWarnings(txResponse.getWarnings());
