@@ -18,16 +18,5 @@ interface CaseSubmissionHandler {
                                      Optional<String> state,
                                      Optional<String> securityClassification,
                                      Supplier<SubmitResponse<?>> responseSupplier) {
-
-    public CaseSubmissionHandlerResult(Optional<JsonNode> dataUpdate,
-                                       Supplier<SubmitResponse<?>> responseSupplier) {
-      this(dataUpdate, Optional.empty(), Optional.empty(), responseSupplier);
-    }
-
-    public CaseSubmissionHandlerResult(Optional<JsonNode> dataUpdate,
-                                       Optional<String> state,
-                                       Supplier<SubmitResponse<?>> responseSupplier) {
-      this(dataUpdate, state, Optional.empty(), responseSupplier);
-    }
   }
 }

@@ -11,6 +11,10 @@ import lombok.Data;
 @Data
 public class SubmitResponse<S> {
 
+  public static <S> SubmitResponse<S> defaultResponse() {
+    return SubmitResponse.<S>builder().build();
+  }
+
   private String confirmationHeader;
 
   private String confirmationBody;
@@ -23,5 +27,5 @@ public class SubmitResponse<S> {
 
   private S state;
 
-  private String securityClassification;
+  private String caseSecurityClassification;
 }
