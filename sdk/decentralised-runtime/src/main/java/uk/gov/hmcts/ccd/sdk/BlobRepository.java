@@ -122,6 +122,7 @@ class BlobRepository {
             :jurisdiction,
             :case_type_id,
             :state,
+            -- On INSERT: if no data was provided, start with {}
             case when :has_data then :data::jsonb else '{}'::jsonb end,
             :reference,
             :security_classification::ccd.securityclassification,
@@ -131,7 +132,8 @@ class BlobRepository {
         on conflict (reference)
             do update set
                 state = excluded.state,
-                data = case when :has_data then excluded.data else case_data.data end,
+                -- Update safety: never touch `data` unless explicitly provided
+                data = case when :has_data then :data::jsonb else case_data.data end,
                 security_classification = excluded.security_classification,
             last_modified = (now() at time zone 'UTC'),
             version = case

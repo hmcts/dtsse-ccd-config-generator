@@ -50,10 +50,6 @@ class CaseViewLoader {
         .collect(Collectors.toList());
   }
 
-  DecentralisedCaseDetails loadAtEvent(long caseRef, long eventId) {
-    return blobRepository.caseDetailsAtEvent(caseRef, eventId);
-  }
-
   private DecentralisedCaseDetails applyProjection(DecentralisedCaseDetails raw) {
     var caseDetails = raw.getCaseDetails();
     long reference = caseDetails.getReference();
