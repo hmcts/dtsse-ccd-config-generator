@@ -1,10 +1,6 @@
 package uk.gov.hmcts.ccd.sdk;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import java.util.Optional;
-import java.util.UUID;
-import java.util.concurrent.atomic.AtomicReference;
-
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.http.HttpStatus;
@@ -17,8 +13,11 @@ import uk.gov.hmcts.ccd.data.persistence.dto.DecentralisedCaseDetails;
 import uk.gov.hmcts.ccd.data.persistence.dto.DecentralisedCaseEvent;
 import uk.gov.hmcts.ccd.data.persistence.dto.DecentralisedSubmitEventResponse;
 import uk.gov.hmcts.ccd.domain.model.callbacks.AfterSubmitCallbackResponse;
-import uk.gov.hmcts.ccd.sdk.api.Event;
 import uk.gov.hmcts.ccd.sdk.api.callback.SubmitResponse;
+
+import java.util.Optional;
+import java.util.UUID;
+import java.util.function.Supplier;
 
 @Service
 @RequiredArgsConstructor
@@ -36,78 +35,96 @@ public class CaseSubmissionService {
   public DecentralisedSubmitEventResponse submit(DecentralisedCaseEvent event,
                                                  String authorisation,
                                                  String idempotencyKey) {
-
-    var eventDetails = event.getEventDetails();
-    var eventConfig = resolvedConfigRegistry.getRequiredEvent(
-        eventDetails.getCaseType(), eventDetails.getEventId());
-    var handler = eventConfig.getSubmitHandler() != null ? submitHandler : legacyHandler;
-    var user = idam.retrieveUser(authorisation);
-
-    UUID idempotencyUuid = UUID.fromString(idempotencyKey);
-    AtomicReference<DecentralisedCaseDetails> r = new AtomicReference<>();
-
-    SubmissionTransactionResult txResult;
     try {
-      txResult = transactionTemplate.execute(status -> {
-        var existingEventId = idempotencyEnforcer.lockCaseAndGetExistingEvent(
-            idempotencyUuid,
-            event.getCaseDetails().getReference()
-        );
+      var eventConfig = resolvedConfigRegistry.getRequiredEvent(
+          event.getEventDetails().getCaseType(), event.getEventDetails().getEventId());
+      var user = idam.retrieveUser(authorisation);
+      var handler = eventConfig.getSubmitHandler() != null ? submitHandler : legacyHandler;
+      UUID idempotencyUuid = UUID.fromString(idempotencyKey);
 
-        if (existingEventId.isPresent()) {
-          return new SubmissionTransactionResult(existingEventId, null);
-        }
+      // The result of the transaction can be one of two things: an idempotency hit or a new submission.
+      TransactionResult transactionResult = transactionTemplate.execute(status ->
+          executeSubmissionInTransaction(event, user, handler, idempotencyUuid)
+      );
 
-        // Let the handler apply the change
-        var handlerResult = handler.apply(event);
-        // If the handler wishes to override state or security classification, apply those changes
-        var requestedState = handlerResult.state();
-        requestedState.ifPresent(event.getCaseDetails()::setState);
-        handlerResult.securityClassification()
-            .map(SecurityClassification::valueOf)
-            .ifPresent(event.getCaseDetails()::setSecurityClassification);
+      return transactionResult.existingEventId()
+          .map(eventId -> replayIdempotentRequest(event.getCaseDetails().getReference(), eventId))
+          .orElseGet(() -> buildSuccessResponse(transactionResult.submissionOutcome().orElseThrow()));
 
-        // Persist changes, including legacy blob changes where used
-        upsertCase(event, handlerResult.dataUpdate());
-
-        r.set(blobRepository.getCase(event.getCaseDetails().getReference()));
-        var currentView = r.get().getCaseDetails();
-        caseEventHistoryService.saveAuditRecord(event, user, currentView, idempotencyUuid);
-
-        return new SubmissionTransactionResult(existingEventId, handlerResult.responseSupplier());
-      });
     } catch (CallbackValidationException e) {
       var response = new DecentralisedSubmitEventResponse();
       response.setErrors(e.getErrors());
       response.setWarnings(e.getWarnings());
       return response;
     }
-
-    if (txResult.existingEventId().isPresent()) {
-      return replayProcessed(event, txResult.existingEventId().get());
-    }
-
-    var res = new DecentralisedSubmitEventResponse();
-    SubmitResponse<?> txResponse = txResult.responseSupplier().get();
-    res.setCaseDetails(r.get());
-    res.setErrors(txResponse.getErrors());
-    res.setWarnings(txResponse.getWarnings());
-    var afterSubmitResponse = new AfterSubmitCallbackResponse();
-    afterSubmitResponse.setConfirmationHeader(txResponse.getConfirmationHeader());
-    afterSubmitResponse.setConfirmationBody(txResponse.getConfirmationBody());
-    var responseEntity = ResponseEntity.ok(afterSubmitResponse);
-    res.getCaseDetails().getCaseDetails().setAfterSubmitCallbackResponseEntity(responseEntity);
-
-    return res;
   }
 
-  private DecentralisedSubmitEventResponse replayProcessed(DecentralisedCaseEvent event,
-                                                           long eventId) {
-    var details = blobRepository.caseDetailsAtEvent(event.getCaseDetails().getReference(), eventId)
-        .orElseGet(() -> blobRepository.getCase(event.getCaseDetails().getReference()));
+  /**
+   * Encapsulates all database operations that must run within a single transaction.
+   */
+  private TransactionResult executeSubmissionInTransaction(DecentralisedCaseEvent event,
+                                                           IdamService.User user,
+                                                           CaseSubmissionHandler handler,
+                                                           UUID idempotencyUuid) {
+    // Idempotency Check inside the transaction to ensure atomicity
+    Optional<Long> existingEventId = idempotencyEnforcer.lockCaseAndGetExistingEvent(
+        idempotencyUuid, event.getCaseDetails().getReference()
+    );
+
+    if (existingEventId.isPresent()) {
+      return new TransactionResult(existingEventId, Optional.empty());
+    }
+
+    // Delegate to the specific handler to apply the change
+    var handlerResult = handler.apply(event);
+    applyHandlerChanges(event, handlerResult);
+
+    // Bookkeeping: update case_data metadata and optionally the legacy json blob
+    upsertCase(event, handlerResult.dataUpdate());
+    DecentralisedCaseDetails savedCaseDetails = blobRepository.getCase(event.getCaseDetails().getReference());
+    caseEventHistoryService.saveAuditRecord(event, user, savedCaseDetails.getCaseDetails(), idempotencyUuid);
+
+    var outcome = new SubmissionOutcome(savedCaseDetails, handlerResult.responseSupplier());
+    return new TransactionResult(Optional.empty(), Optional.of(outcome));
+  }
+
+  /**
+   * Builds the final HTTP response DTO from a successful transaction outcome.
+   */
+  private DecentralisedSubmitEventResponse buildSuccessResponse(SubmissionOutcome outcome) {
+    DecentralisedSubmitEventResponse response = new DecentralisedSubmitEventResponse();
+    SubmitResponse<?> handlerResponse = outcome.responseSupplier().get();
+
+    response.setCaseDetails(outcome.savedCaseDetails());
+    response.setErrors(handlerResponse.getErrors());
+    response.setWarnings(handlerResponse.getWarnings());
+
+    AfterSubmitCallbackResponse afterSubmit = new AfterSubmitCallbackResponse();
+    afterSubmit.setConfirmationHeader(handlerResponse.getConfirmationHeader());
+    afterSubmit.setConfirmationBody(handlerResponse.getConfirmationBody());
+    ResponseEntity<AfterSubmitCallbackResponse> entity = ResponseEntity.ok(afterSubmit);
+    response.getCaseDetails().getCaseDetails().setAfterSubmitCallbackResponseEntity(entity);
+
+    return response;
+  }
+
+  /**
+   * Handles replaying a previous event in case of an idempotency hit.
+   */
+  private DecentralisedSubmitEventResponse replayIdempotentRequest(long caseReference, long eventId) {
+    var details = blobRepository.caseDetailsAtEvent(caseReference, eventId)
+        .orElseGet(() -> blobRepository.getCase(caseReference));
     var response = new DecentralisedSubmitEventResponse();
     response.setCaseDetails(details);
     return response;
+  }
+
+  private void applyHandlerChanges(DecentralisedCaseEvent event,
+                                   CaseSubmissionHandler.CaseSubmissionHandlerResult handlerResult) {
+    handlerResult.state().ifPresent(event.getCaseDetails()::setState);
+    handlerResult.securityClassification()
+        .map(SecurityClassification::valueOf)
+        .ifPresent(event.getCaseDetails()::setSecurityClassification);
   }
 
   private void upsertCase(DecentralisedCaseEvent event, Optional<JsonNode> dataUpdate) {
@@ -118,6 +135,18 @@ public class CaseSubmissionService {
     }
   }
 
-  private record SubmissionTransactionResult(java.util.Optional<Long> existingEventId,
-                                             java.util.function.Supplier<SubmitResponse<?>> responseSupplier) {}
+
+  private record SubmissionOutcome(
+      DecentralisedCaseDetails savedCaseDetails,
+      Supplier<SubmitResponse<?>> responseSupplier
+  ) {}
+
+  /**
+   * A wrapper that represents the two possible outcomes of the transactional block:
+   * either an idempotency hit (existingEventId is present) or a new submission (submissionOutcome is present).
+   */
+  private record TransactionResult(
+      Optional<Long> existingEventId,
+      Optional<SubmissionOutcome> submissionOutcome
+  ) {}
 }
