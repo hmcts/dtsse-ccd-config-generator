@@ -40,8 +40,7 @@ public class CaseSubmissionService {
     var eventDetails = event.getEventDetails();
     var eventConfig = resolvedConfigRegistry.getRequiredEvent(
         eventDetails.getCaseType(), eventDetails.getEventId());
-    boolean decentralisedFlow = eventConfig.getSubmitHandler() != null;
-    var handler = decentralisedFlow ? submitHandler : legacyHandler;
+    var handler = eventConfig.getSubmitHandler() != null ? submitHandler : legacyHandler;
     var user = idam.retrieveUser(authorisation);
 
     UUID idempotencyUuid = UUID.fromString(idempotencyKey);
@@ -59,13 +58,18 @@ public class CaseSubmissionService {
           return new SubmissionTransactionResult(existingEventId, null);
         }
 
+        // Let the handler apply the change
         var handlerResult = handler.apply(event);
+        // If the handler wishes to override state or security classification, apply those changes
         var requestedState = handlerResult.state();
         requestedState.ifPresent(event.getCaseDetails()::setState);
         handlerResult.securityClassification()
             .map(SecurityClassification::valueOf)
             .ifPresent(event.getCaseDetails()::setSecurityClassification);
+
+        // Persist changes, including legacy blob changes where used
         upsertCase(event, handlerResult.dataUpdate());
+
         r.set(blobRepository.getCase(event.getCaseDetails().getReference()));
         var currentView = r.get().getCaseDetails();
         caseEventHistoryService.saveAuditRecord(event, user, currentView, idempotencyUuid);
