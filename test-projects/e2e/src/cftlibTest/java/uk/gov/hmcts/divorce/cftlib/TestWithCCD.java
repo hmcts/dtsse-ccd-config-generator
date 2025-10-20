@@ -73,7 +73,6 @@ import uk.gov.hmcts.divorce.sow014.nfd.CaseworkerAddNote;
 import uk.gov.hmcts.divorce.sow014.nfd.CaseworkerMaintainCaseLink;
 import uk.gov.hmcts.divorce.sow014.nfd.DecentralisedCaseworkerAddNote;
 import uk.gov.hmcts.divorce.sow014.nfd.DecentralisedCaseworkerAddNoteFailure;
-import uk.gov.hmcts.divorce.sow014.nfd.DecentralisedInvalidStateTransition;
 import uk.gov.hmcts.divorce.sow014.nfd.FailingSubmittedCallback;
 import uk.gov.hmcts.divorce.sow014.nfd.PublishedEvent;
 import uk.gov.hmcts.divorce.sow014.nfd.ReturnErrorWhenCreateTestCase;
@@ -1266,33 +1265,6 @@ public class TestWithCCD extends CftlibTest {
     }
 
     @Order(21)
-    @Test
-    public void decentralisedSubmitHandlerRejectsInvalidStateOverride() throws Exception {
-        var start = ccdApi.startEvent(
-            getAuthorisation("TEST_CASE_WORKER_USER@mailinator.com"),
-            getServiceAuth(),
-            String.valueOf(caseRef),
-            DecentralisedInvalidStateTransition.CASEWORKER_DECENTRALISED_INVALID_STATE
-        );
-
-        var request = prepareEventRequestWithToken(
-            "TEST_CASE_WORKER_USER@mailinator.com",
-            DecentralisedInvalidStateTransition.CASEWORKER_DECENTRALISED_INVALID_STATE,
-            Map.of(),
-            start.getToken()
-        );
-
-        var response = HttpClientBuilder.create().build().execute(request);
-        assertThat(response.getStatusLine().getStatusCode(), equalTo(422));
-
-        var payload = mapper.readValue(EntityUtils.toString(response.getEntity()), Map.class);
-        @SuppressWarnings("unchecked")
-        var callbackErrors = (List<String>) payload.get("callbackErrors");
-        assertThat(callbackErrors, is(notNullValue()));
-        assertThat(callbackErrors, hasItem(containsString("State 'Withdrawn' is not permitted")));
-    }
-
-    @Order(22)
     @Test
     public void shouldPersistCaseLinksAndUpdateDerivedTable() throws Exception {
         long firstLinkedCase = createAdditionalCase("TEST_SOLICITOR2@mailinator.com");

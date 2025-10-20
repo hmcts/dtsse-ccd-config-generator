@@ -1,11 +1,9 @@
 package uk.gov.hmcts.ccd.sdk;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.Objects;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.EmptyResultDataAccessException;
@@ -63,9 +61,6 @@ public class CaseSubmissionService {
 
         var handlerResult = handler.apply(event);
         var requestedState = handlerResult.state();
-        if (decentralisedFlow) {
-          validateStateOverride(eventConfig, requestedState);
-        }
         requestedState.ifPresent(event.getCaseDetails()::setState);
         handlerResult.securityClassification()
             .map(SecurityClassification::valueOf)
@@ -107,29 +102,6 @@ public class CaseSubmissionService {
     res.getCaseDetails().getCaseDetails().setAfterSubmitCallbackResponseEntity(responseEntity);
 
     return res;
-  }
-
-  private void validateStateOverride(Event<?, ?, ?> eventConfig, Optional<String> requestedState) {
-    if (requestedState.isEmpty()) {
-      return;
-    }
-
-    var allowedStates = eventConfig.getPostState();
-    if (allowedStates == null || allowedStates.isEmpty()) {
-      return;
-    }
-
-    String targetState = requestedState.get();
-    boolean permitted = allowedStates.stream()
-        .filter(Objects::nonNull)
-        .map(Object::toString)
-        .anyMatch(targetState::equals);
-
-    if (!permitted) {
-      throw new CallbackValidationException(
-          List.of(String.format("State '%s' is not permitted for event '%s'", targetState, eventConfig.getId())),
-          List.of());
-    }
   }
 
   private DecentralisedSubmitEventResponse replayProcessed(DecentralisedCaseEvent event,
