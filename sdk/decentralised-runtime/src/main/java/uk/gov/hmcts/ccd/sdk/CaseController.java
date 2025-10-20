@@ -29,7 +29,7 @@ public class CaseController {
   private final CaseSubmissionService submissionService;
   private final CaseEventHistoryService caseEventHistoryService;
   private final SupplementaryDataService supplementaryDataService;
-  private final BlobRepository blobRepository;
+  private final CaseViewLoader caseViewLoader;
 
   @GetMapping(
       value = "/cases", // Mapped to the root /cases endpoint
@@ -37,7 +37,7 @@ public class CaseController {
   )
   public List<DecentralisedCaseDetails> getCases(@RequestParam("case-refs") List<Long> caseRefs) {
     log.info("Fetching cases for references: {}", caseRefs);
-    return blobRepository.getCases(caseRefs);
+    return caseViewLoader.load(caseRefs);
   }
 
   @PostMapping(

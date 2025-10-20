@@ -5,7 +5,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.Map;
 import java.util.Optional;
-import lombok.RequiredArgsConstructor;
+import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import uk.gov.hmcts.ccd.data.casedetails.SecurityClassification;
@@ -28,7 +28,6 @@ import uk.gov.hmcts.reform.ccd.client.model.SubmittedCallbackResponse;
  */
 @Slf4j
 @Component
-@RequiredArgsConstructor
 class LegacyCallbackSubmissionHandler implements CaseSubmissionHandler {
 
   private static final TypeReference<Map<String, JsonNode>> JSON_NODE_MAP = new TypeReference<>() {};
@@ -36,6 +35,16 @@ class LegacyCallbackSubmissionHandler implements CaseSubmissionHandler {
   private final ResolvedConfigRegistry registry;
   private final CcdCallbackExecutor executor;
   private final ObjectMapper mapper;
+  private final ObjectMapper filteredMapper;
+
+  LegacyCallbackSubmissionHandler(ResolvedConfigRegistry registry,
+                                  CcdCallbackExecutor executor,
+                                  ObjectMapper mapper) {
+    this.registry = registry;
+    this.executor = executor;
+    this.mapper = mapper;
+    this.filteredMapper = mapper.copy().setAnnotationIntrospector(new FilterExternalFieldsInspector());
+  }
 
   @Override
   public CaseSubmissionHandlerResult apply(DecentralisedCaseEvent event) {
@@ -53,7 +62,7 @@ class LegacyCallbackSubmissionHandler implements CaseSubmissionHandler {
 
     var errors = submitResponse.getErrors();
     var warnings = submitResponse.getWarnings();
-    JsonNode dataSnapshot = mapper.valueToTree(event.getCaseDetails().getData());
+    JsonNode dataSnapshot = snapshotWithFilteredFields(event);
     var state = Optional.ofNullable(event.getCaseDetails().getState());
     var securityClassification = Optional.ofNullable(event.getCaseDetails().getSecurityClassification())
         .map(SecurityClassification::name);
@@ -174,4 +183,17 @@ class LegacyCallbackSubmissionHandler implements CaseSubmissionHandler {
 
   private record LegacySubmitOutcome(DecentralisedSubmitEventResponse response,
                                      boolean runSubmittedCallback) {}
+
+  @SneakyThrows
+  private JsonNode snapshotWithFilteredFields(DecentralisedCaseEvent event) {
+    Map<String, JsonNode> currentData = event.getCaseDetails().getData();
+
+    var caseType = event.getEventDetails().getCaseType();
+    var caseClass = registry.getRequired(caseType).getCaseClass();
+
+    Object domainCaseData = mapper.convertValue(currentData, caseClass);
+
+    String filteredJson = filteredMapper.writeValueAsString(domainCaseData);
+    return mapper.readTree(filteredJson);
+  }
 }

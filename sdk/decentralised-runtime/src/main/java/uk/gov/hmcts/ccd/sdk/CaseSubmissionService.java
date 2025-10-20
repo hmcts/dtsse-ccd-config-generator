@@ -31,6 +31,7 @@ public class CaseSubmissionService {
   private final TransactionTemplate transactionTemplate;
   private final CaseEventHistoryService caseEventHistoryService;
   private final BlobRepository blobRepository;
+  private final CaseViewLoader caseViewLoader;
 
   public DecentralisedSubmitEventResponse submit(DecentralisedCaseEvent event,
                                                  String authorisation,
@@ -81,7 +82,7 @@ public class CaseSubmissionService {
 
     // Bookkeeping: update case_data metadata and optionally the legacy json blob
     upsertCase(event, handlerResult.dataUpdate());
-    DecentralisedCaseDetails savedCaseDetails = blobRepository.getCase(event.getCaseDetails().getReference());
+    DecentralisedCaseDetails savedCaseDetails = caseViewLoader.load(event.getCaseDetails().getReference());
     caseEventHistoryService.saveAuditRecord(event, user, savedCaseDetails.getCaseDetails(), idempotencyUuid);
 
     var outcome = new SubmissionOutcome(savedCaseDetails, handlerResult.responseSupplier());
@@ -112,8 +113,7 @@ public class CaseSubmissionService {
    * Handles replaying a previous event in case of an idempotency hit.
    */
   private DecentralisedSubmitEventResponse replayIdempotentRequest(long caseReference, long eventId) {
-    var details = blobRepository.caseDetailsAtEvent(caseReference, eventId)
-        .orElseGet(() -> blobRepository.getCase(caseReference));
+    var details = blobRepository.caseDetailsAtEvent(caseReference, eventId);
     var response = new DecentralisedSubmitEventResponse();
     response.setCaseDetails(details);
     return response;

@@ -1306,7 +1306,53 @@ public class TestWithCCD extends CftlibTest {
             equalTo(formatCaseReference(replacementLinkedCase)));
     }
 
-    @SneakyThrows
+    @Order(22)
+    @Test
+    public void decentralisedEventsDoNotIncrementCaseDataVersion() throws Exception {
+        var params = Map.of("ref", caseRef);
+        Integer versionBefore = db.queryForObject(
+            "SELECT version FROM ccd.case_data WHERE reference = :ref",
+            params,
+            Integer.class
+        );
+
+        assertThat("expected existing case version", versionBefore, is(notNullValue()));
+
+        var start = ccdApi.startEvent(
+            getAuthorisation("TEST_CASE_WORKER_USER@mailinator.com"),
+            getServiceAuth(),
+            String.valueOf(caseRef),
+            DecentralisedCaseworkerAddNote.CASEWORKER_DECENTRALISED_ADD_NOTE
+        );
+
+        var request = prepareEventRequestWithToken(
+            "TEST_CASE_WORKER_USER@mailinator.com",
+            DecentralisedCaseworkerAddNote.CASEWORKER_DECENTRALISED_ADD_NOTE,
+            Map.of("note", "Version guard"),
+            start.getToken()
+        );
+
+        var response = HttpClientBuilder.create().build().execute(request);
+        try {
+            assertThat(response.getStatusLine().getStatusCode(), equalTo(201));
+            EntityUtils.consumeQuietly(response.getEntity());
+        } finally {
+            response.close();
+        }
+
+        Integer versionAfter = db.queryForObject(
+            "SELECT version FROM ccd.case_data WHERE reference = :ref",
+            params,
+            Integer.class
+        );
+
+        assertThat("decentralised event should not bump case_data.version when no blob update supplied",
+            versionAfter, equalTo(versionBefore));
+
+    }
+
+
+        @SneakyThrows
     @Order(100)
     @Test
     void casePointerRemainsImmutable() {
