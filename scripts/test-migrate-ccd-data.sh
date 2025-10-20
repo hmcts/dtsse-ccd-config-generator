@@ -64,15 +64,15 @@ INSERT INTO case_data (
 INSERT INTO case_event (
     id, created_date, event_id, user_id, case_data_id, case_type_id, case_type_version,
     state_id, data, user_first_name, user_last_name, event_name, state_name,
-    security_classification, summary, description, idempotency_key
+    security_classification, summary, description
 ) VALUES (
     9101, now(), 'submit-case', 'user-1', 5601, 'CriminalInjuriesCompensation', 1,
     'Submitted', '{}'::jsonb, 'Case', 'Worker', 'Submit case', 'Submitted',
-    'PUBLIC', 'summary', 'description', '00000000-0000-0000-0000-000000000001'
+    'PUBLIC', 'summary', 'description'
 ), (
     9102, now(), 'caseworker-add-note', 'user-2', 5601, 'CriminalInjuriesCompensation', 1,
     'Submitted', '{"note":"test"}'::jsonb, 'Case', 'Worker', 'Add note', 'Submitted',
-    'PUBLIC', 'summary', 'description', '00000000-0000-0000-0000-000000000002'
+    'PUBLIC', 'summary', 'description'
 );
 SQL
 
