@@ -7,19 +7,19 @@ import org.springframework.jdbc.core.BeanPropertyRowMapper;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Component;
-import uk.gov.hmcts.ccd.sdk.LegacyJSONBlobCaseView;
+import uk.gov.hmcts.ccd.sdk.CaseView;
 import uk.gov.hmcts.ccd.sdk.type.ListValue;
 import uk.gov.hmcts.divorce.caseworker.model.CaseNote;
 import uk.gov.hmcts.divorce.divorcecase.model.CaseData;
 
 @Component
-public class NFDCaseView extends LegacyJSONBlobCaseView<CaseData> {
+public class NFDCaseView implements CaseView<CaseData> {
 
     @Autowired
     private NamedParameterJdbcTemplate db;
 
     @Override
-    protected CaseData projectCase(long caseRef, String state, CaseData caseData) {
+    public CaseData getCase(long caseRef, String state, CaseData caseData) {
         caseData.setNotes(loadNotes(caseRef));
         caseData.setHyphenatedCaseRef(CaseData.formatCaseRef(caseRef));
         return caseData;
