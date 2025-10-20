@@ -8,21 +8,23 @@ import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Component;
 import uk.gov.hmcts.ccd.sdk.CaseView;
+import uk.gov.hmcts.ccd.sdk.CaseViewRequest;
 import uk.gov.hmcts.ccd.sdk.type.ListValue;
 import uk.gov.hmcts.divorce.caseworker.model.CaseNote;
 import uk.gov.hmcts.divorce.divorcecase.model.CaseData;
+import uk.gov.hmcts.divorce.divorcecase.model.State;
 
 @Component
-public class NFDCaseView implements CaseView<CaseData> {
+public class NFDCaseView implements CaseView<CaseData, State> {
 
     @Autowired
     private NamedParameterJdbcTemplate db;
 
     @Override
-    public CaseData getCase(long caseRef, String state, CaseData caseData) {
-        caseData.setNotes(loadNotes(caseRef));
-        caseData.setHyphenatedCaseRef(CaseData.formatCaseRef(caseRef));
-        return caseData;
+    public CaseData getCase(CaseViewRequest<State> request, CaseData blobCase) {
+        blobCase.setNotes(loadNotes(request.caseRef()));
+        blobCase.setHyphenatedCaseRef(CaseData.formatCaseRef(request.caseRef()));
+        return blobCase;
     }
 
     private List<ListValue<CaseNote>> loadNotes(long caseRef) {

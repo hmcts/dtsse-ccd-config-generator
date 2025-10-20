@@ -3,40 +3,32 @@ package uk.gov.hmcts.ccd.sdk;
 /**
  * Projection hook that allows services to reshape CCD case data for the UI.
  * <p>
- * Decentralised services typically implement the two-parameter overload and ignore the JSON blob,
- * while legacy services can override the three-parameter overload to work directly with the blob.
+ * Decentralised services typically implement the request-only overload and ignore the JSON blob,
+ * while legacy services can override the request-plus-blob overload to work directly with the blob.
  *
- * @param <CaseType> the domain model returned to CCD
+ * @param <CaseType>  the domain model returned to CCD
+ * @param <StateType> the strongly-typed representation of the CCD state
  */
-public interface CaseView<CaseType> {
+public interface CaseView<CaseType, StateType extends Enum<StateType>> {
 
   /**
-   * Projection entry point used by the platform.
-   * <p>
-   * The default implementation simply delegates to {@link #getCase(long, String)}, which is suitable
-   * for decentralised services that rebuild the case from their own stores.
-   *
-   * @param caseRef the CCD case reference
-   * @param state the CCD state
-   * @param blobCase case data deserialised from the blob
+   * @param request encapsulated request information
    * @return the projected case data
    */
-  default CaseType getCase(long caseRef, String state, CaseType blobCase) {
-    return getCase(caseRef, state);
+  default CaseType getCase(CaseViewRequest<StateType> request) {
+    throw new UnsupportedOperationException(
+        "CaseView implementations must override getCase(CaseViewRequest) or "
+            + "getCase(CaseViewRequest, CaseType)");
   }
 
   /**
-   * Overload for services that do not need the legacy blob.
-   * <p>
-   * Implementors may ignore this and instead override the three-parameter method if they rely on the
-   * blob.
+   * Overload for services that wish to work with the deserialised blob.
    *
-   * @param caseRef the CCD case reference
-   * @param state the CCD state
+   * @param request encapsulated request information
+   * @param blobCase case data deserialised from the blob
    * @return the projected case data
    */
-  default CaseType getCase(long caseRef, String state) {
-    throw new UnsupportedOperationException(
-        "Implement either the two-argument or three-argument CaseView#getCase overload.");
+  default CaseType getCase(CaseViewRequest<StateType> request, CaseType blobCase) {
+    return getCase(request);
   }
 }
