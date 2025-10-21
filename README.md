@@ -77,6 +77,15 @@ ccd {
 }
 ```
 
+For decentralised services you can opt in to specialised runtime features:
+
+```groovy
+ccd {
+  decentralised = true
+  runtimeIndexing = true // brings the decentralised Elasticsearch indexer into the main runtime classpath
+}
+```
+
 ### Config generation
 
 The `generateCCDConfig` task generates the configuration in JSON format to the configured folder:
@@ -599,6 +608,5 @@ In order to link a local version of CCD config generator to a project you can us
 ```
 
 To the project dependencies.
-
 
 

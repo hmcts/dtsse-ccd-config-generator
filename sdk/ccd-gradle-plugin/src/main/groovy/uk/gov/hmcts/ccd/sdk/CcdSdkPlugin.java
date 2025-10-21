@@ -75,9 +75,13 @@ public class CcdSdkPlugin implements Plugin<Project> {
         String version = getVersion();
         project.getDependencies().add("implementation", "com.github.hmcts:decentralised-runtime:"
             + version);
-        project.getPluginManager().withPlugin("com.github.hmcts.rse-cft-lib", plugin ->
-            project.getDependencies().add("cftlibImplementation",
-                "com.github.hmcts:cftlib-dev-only:" + version));
+        String dependencyNotation = "com.github.hmcts:cftlib-dev-only:" + version;
+        if (config.runtimeIndexing) {
+          project.getDependencies().add("implementation", dependencyNotation);
+        } else {
+          project.getPluginManager().withPlugin("com.github.hmcts.rse-cft-lib", plugin ->
+              project.getDependencies().add("cftlibImplementation", dependencyNotation));
+        }
         // Surface that we are decentralised to the spring boot apps.
         // This is an env var since it needs to be read beyond the application's classpath
         // to shut off the default cftlib elasticsearch indexer when decentralised)
@@ -108,6 +112,7 @@ public class CcdSdkPlugin implements Plugin<Project> {
     private String caseType = "";
     private boolean decentralised = false;
     private boolean caseEventServiceBus = false;
+    private boolean runtimeIndexing = false;
 
     public CCDConfig() {
     }
