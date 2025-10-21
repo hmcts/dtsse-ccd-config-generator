@@ -3,7 +3,6 @@ package uk.gov.hmcts.ccd.sdk;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.Map;
 import java.util.Set;
-import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.http.HttpHost;
 import org.elasticsearch.action.bulk.BulkItemResponse;
@@ -19,9 +18,11 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.support.TransactionTemplate;
 
+import java.util.concurrent.atomic.AtomicBoolean;
 
 @ConditionalOnProperty(
     name = "ccd.sdk.decentralised",
@@ -33,12 +34,9 @@ class DecentralisedESIndexer implements DisposableBean {
 
   private final JdbcTemplate jdbcTemplate;
   private final TransactionTemplate transactionTemplate;
-  private volatile boolean terminated;
-  private final Thread thread;
+  private final AtomicBoolean terminated = new AtomicBoolean(false);
   private final RestHighLevelClient client;
 
-
-  @SneakyThrows
   @Autowired
   public DecentralisedESIndexer(JdbcTemplate jdbcTemplate, TransactionTemplate transactionTemplate,
                                 @Value("${ELASTIC_SEARCH_HOSTS:http://localhost:9200}")
@@ -49,25 +47,21 @@ class DecentralisedESIndexer implements DisposableBean {
         HttpHost.create(elasticSearchHost)));
 
     log.info("Starting decentralised ES indexer targeting {}", elasticSearchHost);
-    this.thread = new Thread(this::index);
-    thread.setDaemon(true);
-    thread.setUncaughtExceptionHandler(this::failFast);
-    thread.setName("****Decentralised ElasticSearch indexer");
-    thread.start();
   }
 
-  private void failFast(Thread thread, Throwable exception) {
-    exception.printStackTrace();
-    System.out.println("***  Decentralised ES indexer terminated with an unhandled exception ***");
-    System.out.println("For further support visit https://moj.enterprise.slack.com/archives/C033F1GDD6Z");
-    Runtime.getRuntime().halt(-1);
-  }
-
-  @SneakyThrows
-  private void index() {
-    while (!terminated) {
+  @Scheduled(fixedDelayString = "${ccd.sdk.decentralised.poll-interval-ms:250}")
+  public void runIndexer() {
+    if (terminated.get()) {
+      return;
+    }
+    try {
       pollForNewCases();
-      Thread.sleep(250);
+    } catch (Exception ex) {
+      if (terminated.get()) {
+        log.debug("Decentralised ES indexer stopped after shutdown signal", ex);
+      } else {
+        log.error("Decentralised ES indexer failed to poll for new cases", ex);
+      }
     }
   }
 
@@ -185,9 +179,8 @@ class DecentralisedESIndexer implements DisposableBean {
   }
 
   @Override
-  public void destroy() throws InterruptedException {
-    this.terminated = true;
-    // Wait for indexing to stop before allowing shutdown to continue.
-    this.thread.join();
+  public void destroy() throws Exception {
+    terminated.set(true);
+    client.close();
   }
 }
