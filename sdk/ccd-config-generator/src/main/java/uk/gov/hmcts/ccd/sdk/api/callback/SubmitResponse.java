@@ -3,6 +3,7 @@ package uk.gov.hmcts.ccd.sdk.api.callback;
 import java.util.List;
 import lombok.Builder;
 import lombok.Data;
+import uk.gov.hmcts.reform.ccd.client.model.Classification;
 
 /**
  * Response returned from decentralised submit handlers.
@@ -27,5 +28,5 @@ public class SubmitResponse<State> {
 
   private State state;
 
-  private String caseSecurityClassification;
+  private Classification caseSecurityClassification;
 }

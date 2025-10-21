@@ -123,7 +123,7 @@ public class CaseSubmissionService {
                                    CaseSubmissionHandler.CaseSubmissionHandlerResult handlerResult) {
     handlerResult.state().ifPresent(event.getCaseDetails()::setState);
     handlerResult.securityClassification()
-        .map(SecurityClassification::valueOf)
+        .map(classification -> SecurityClassification.valueOf(classification.name()))
         .ifPresent(event.getCaseDetails()::setSecurityClassification);
   }
 

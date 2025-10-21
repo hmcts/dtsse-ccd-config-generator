@@ -19,6 +19,7 @@ import uk.gov.hmcts.ccd.sdk.api.callback.SubmitResponse;
 import uk.gov.hmcts.ccd.sdk.runtime.CcdCallbackExecutor;
 import uk.gov.hmcts.reform.ccd.client.model.CallbackRequest;
 import uk.gov.hmcts.reform.ccd.client.model.CaseDetails;
+import uk.gov.hmcts.reform.ccd.client.model.Classification;
 import uk.gov.hmcts.reform.ccd.client.model.SubmittedCallbackResponse;
 
 /**
@@ -65,9 +66,10 @@ class LegacyCallbackSubmissionHandler implements CaseSubmissionHandler {
     JsonNode dataSnapshot = snapshotWithFilteredFields(event);
     var state = Optional.ofNullable(event.getCaseDetails().getState());
     var securityClassification = Optional.ofNullable(event.getCaseDetails().getSecurityClassification())
-        .map(SecurityClassification::name);
+        .map(SecurityClassification::name)
+        .map(Classification::valueOf);
 
-    return new CaseSubmissionHandlerResult(
+      return new CaseSubmissionHandlerResult(
         Optional.ofNullable(dataSnapshot),
         state,
         securityClassification,
@@ -90,6 +92,7 @@ class LegacyCallbackSubmissionHandler implements CaseSubmissionHandler {
         builder.confirmationHeader(submittedResponse.getConfirmationHeader());
         builder.confirmationBody(submittedResponse.getConfirmationBody());
       }
+      securityClassification.ifPresent(builder::caseSecurityClassification);
       return builder.build();
     });
   }

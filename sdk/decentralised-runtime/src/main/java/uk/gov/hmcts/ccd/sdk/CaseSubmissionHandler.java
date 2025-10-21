@@ -16,7 +16,7 @@ interface CaseSubmissionHandler {
 
   record CaseSubmissionHandlerResult(Optional<JsonNode> dataUpdate,
                                      Optional<String> state,
-                                     Optional<String> securityClassification,
+                                     Optional<uk.gov.hmcts.reform.ccd.client.model.Classification> securityClassification,
                                      Supplier<SubmitResponse<?>> responseSupplier) {
   }
 }
