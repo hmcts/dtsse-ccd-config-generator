@@ -9,10 +9,10 @@ import lombok.Data;
  */
 @Builder
 @Data
-public class SubmitResponse<S> {
+public class SubmitResponse<State> {
 
-  public static <S> SubmitResponse<S> defaultResponse() {
-    return SubmitResponse.<S>builder().build();
+  public static <State> SubmitResponse<State> defaultResponse() {
+    return SubmitResponse.<State>builder().build();
   }
 
   private String confirmationHeader;
@@ -25,7 +25,7 @@ public class SubmitResponse<S> {
 
   private List<String> ignoreWarning;
 
-  private S state;
+  private State state;
 
   private String caseSecurityClassification;
 }
