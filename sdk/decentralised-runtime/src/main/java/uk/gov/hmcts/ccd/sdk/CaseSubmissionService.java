@@ -36,14 +36,14 @@ public class CaseSubmissionService {
   public DecentralisedSubmitEventResponse submit(DecentralisedCaseEvent event,
                                                  String authorisation,
                                                  String idempotencyKey) {
-    try {
-      var eventConfig = resolvedConfigRegistry.getRequiredEvent(
-          event.getEventDetails().getCaseType(), event.getEventDetails().getEventId());
-      var user = idam.retrieveUser(authorisation);
-      var handler = eventConfig.getSubmitHandler() != null ? submitHandler : legacyHandler;
-      UUID idempotencyUuid = UUID.fromString(idempotencyKey);
+    var eventConfig = resolvedConfigRegistry.getRequiredEvent(
+        event.getEventDetails().getCaseType(), event.getEventDetails().getEventId());
+    var user = idam.retrieveUser(authorisation);
+    var handler = eventConfig.getSubmitHandler() != null ? submitHandler : legacyHandler;
+    UUID idempotencyUuid = UUID.fromString(idempotencyKey);
 
-      // The result of the transaction can be one of two things: an idempotency hit or a new submission.
+    try {
+      // The result of the transaction can be either an idempotency hit or a new submission.
       TransactionResult transactionResult = transactionTemplate.execute(status ->
           executeSubmissionInTransaction(event, user, handler, idempotencyUuid)
       );
