@@ -77,6 +77,17 @@ ccd {
 }
 ```
 
+For decentralised services you can opt in to specialised runtime features:
+
+```groovy
+ccd {
+  decentralised = true
+  runtimeIndexing = true // brings the decentralised Elasticsearch indexer into the main runtime classpath
+}
+```
+
+When `runtimeIndexing` is enabled the decentralised indexer now relies on Spring’s scheduling infrastructure. Ensure the application that boots the SDK is annotated with `@EnableScheduling` so the indexer starts and stops with the rest of the Spring context.
+
 ### Config generation
 
 The `generateCCDConfig` task generates the configuration in JSON format to the configured folder:
@@ -599,6 +610,4 @@ In order to link a local version of CCD config generator to a project you can us
 ```
 
 To the project dependencies.
-
-
 
