@@ -4,7 +4,7 @@ import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -56,12 +56,19 @@ public class CaseController {
   @PostMapping("/cases")
   public ResponseEntity<DecentralisedSubmitEventResponse> createEvent(
       @RequestBody DecentralisedCaseEvent event,
-      @RequestHeader HttpHeaders headers) {
+      @RequestHeader(value = "Authorization", required = false) String authorisation,
+      @RequestHeader(value = IdempotencyEnforcer.IDEMPOTENCY_KEY_HEADER, required = false) String idempotencyKey) {
+
+    if (authorisation == null || authorisation.isBlank()) {
+      var errorResponse = new DecentralisedSubmitEventResponse();
+      errorResponse.setErrors(List.of("Authorization header is required"));
+      return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(errorResponse);
+    }
 
     var response = submissionService.submit(
         event,
-        headers.getFirst("Authorization"),
-        headers.getFirst(IdempotencyEnforcer.IDEMPOTENCY_KEY_HEADER)
+        authorisation,
+        idempotencyKey
     );
     return ResponseEntity.ok(response);
   }

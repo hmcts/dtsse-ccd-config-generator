@@ -22,7 +22,7 @@ class IdamService {
   }
 
   private String getBearerToken(String token) {
-    if (token.isBlank()) {
+    if (token == null || token.isBlank()) {
       return token;
     }
     return token.startsWith(BEARER_PREFIX) ? token : BEARER_PREFIX.concat(token);
