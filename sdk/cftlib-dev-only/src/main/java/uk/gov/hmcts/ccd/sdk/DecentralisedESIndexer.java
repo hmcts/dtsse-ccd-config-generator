@@ -70,31 +70,53 @@ class DecentralisedESIndexer implements DisposableBean {
       // Replicates the behaviour of the previous logstash configuration.
       // https://github.com/hmcts/rse-cft-lib/blob/94aa0edeb0e1a4337a411ed8e6e20f170ed30bae/cftlib/lib/runtime/compose/logstash/logstash_conf.in#L3
       var results = jdbcTemplate.queryForList("""
-          with updated as (
-            delete from ccd.es_queue es where id in (select id from ccd.es_queue limit 2000)
-            returning id
+          with next_batch as (
+              select reference, case_revision
+              from ccd.es_queue
+              order by enqueued_at
+              limit 1000
+              for update skip locked
+          ),
+          deleted as (
+              delete from ccd.es_queue q
+              using next_batch nb
+              where q.reference = nb.reference
+                and q.case_revision = nb.case_revision
+              returning q.reference, q.case_revision
           )
-            select id, case_type_id, index_id, case_revision, event_id, row_to_json(row)::jsonb as row
-            from (
+          select
+              row_to_json(row)::jsonb as row,
+              row.reference,
+              row.case_revision,
+              row.case_data_id,
+              row.index_id
+          from (
               select
-                now() as "@timestamp",
-                cd.case_revision,
-                ce.id as event_id,
-                cd.case_type_id,
-                cd.created_date,
-                ce.data,
-                jurisdiction,
-                cd.id,
-                cd.reference,
-                ce.created_date as last_modified,
-                last_state_modified_date,
-                supplementary_data,
-                lower(cd.case_type_id) || '_cases' as index_id,
-                cd.state,
-                cd.security_classification
-             from updated
-              join ccd.case_event ce using(id)
-              join ccd.case_data cd on cd.id = ce.case_data_id
+                  now() as "@timestamp",
+                  cd.reference,
+                  cd.case_revision,
+                  cd.case_type_id,
+                  lower(cd.case_type_id) || '_cases' as index_id,
+                  cd.created_date,
+                  cd.jurisdiction,
+                  cd.id as case_data_id,
+                  cd.state,
+                  cd.security_classification,
+                  cd.last_state_modified_date,
+                  cd.supplementary_data,
+                  ce.id as event_id,
+                  ce.data,
+                  ce.created_date as last_modified
+              from deleted d
+              join ccd.case_data cd on cd.reference = d.reference
+              join lateral (
+                  select ce.*
+                  from ccd.case_event ce
+                  where ce.case_data_id = cd.id
+                  order by ce.id desc
+                  limit 1
+              ) ce on true
+              where cd.case_revision = d.case_revision
           ) row
           """);
 
@@ -104,10 +126,12 @@ class DecentralisedESIndexer implements DisposableBean {
 
         for (Map<String, Object> row : results) {
           var rowJson = row.get("row").toString();
-          long version = ((Number) row.get("event_id")).longValue();
+          long version = ((Number) row.get("case_revision")).longValue();
+          String indexId = row.get("index_id").toString();
+          String docId = row.get("case_data_id").toString();
 
-          request.add(new IndexRequest(row.get("index_id").toString())
-              .id(row.get("id").toString())
+          request.add(new IndexRequest(indexId)
+              .id(docId)
               .source(rowJson, XContentType.JSON)
               .versionType(VersionType.EXTERNAL)
               .version(version));
@@ -128,7 +152,7 @@ class DecentralisedESIndexer implements DisposableBean {
             map.put("index_id", "global_search");
 
             request.add(new IndexRequest("global_search")
-                .id(row.get("id").toString())
+                .id(docId)
                 .source(mapper.writeValueAsString(map), XContentType.JSON)
                 .versionType(VersionType.EXTERNAL)
                 .version(version));

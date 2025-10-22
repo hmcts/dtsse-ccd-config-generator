@@ -118,6 +118,7 @@ public class TestWithCCD extends CftlibTest {
 
     private long firstEventId;
     private static final String BASE_URL = "http://localhost:4452";
+    private static final String ELASTICSEARCH_BASE_URL = "http://localhost:9200";
     private static final String ACCEPT_CREATE_CASE =
         "application/vnd.uk.gov.hmcts.ccd-data-store-api.create-case.v2+json;charset=UTF-8";
     private static final String ACCEPT_CREATE_EVENT =
@@ -544,6 +545,63 @@ public class TestWithCCD extends CftlibTest {
         assertThat(orgsAssignedUsers.get("organisationB"), equalTo(-12));
         assertThat(supplementaryData.get("foo"), equalTo(8));
         assertThat(supplementaryData.get("baz"), equalTo("qux"));
+    }
+
+    @Test
+    @Order(199)
+    void shouldPropagateSupplementaryDataChangesToElasticSearch() throws Exception {
+        final int expectedFooValue = 123;
+
+        Long caseDataId = db.queryForObject(
+            "SELECT id FROM ccd.case_data WHERE reference = :ref",
+            Map.of("ref", caseRef),
+            Long.class);
+        assertThat("Case data id should not be null", caseDataId, is(notNullValue()));
+
+        var updateBody = """
+            {
+              "supplementary_data_updates": {
+                "$set": {
+                  "foo": 123
+                }
+              }
+            }""";
+
+        var updateRequest = buildRequest(
+            "TEST_CASE_WORKER_USER@mailinator.com",
+            BASE_URL + "/cases/" + caseRef + "/supplementary-data",
+            HttpPost::new);
+        updateRequest.setEntity(new StringEntity(updateBody, ContentType.APPLICATION_JSON));
+
+        var updateResponse = HttpClientBuilder.create().build().execute(updateRequest);
+        assertThat(updateResponse.getStatusLine().getStatusCode(), equalTo(200));
+
+        var payload = mapper.readTree(EntityUtils.toString(updateResponse.getEntity()));
+        var supplementaryData = payload.path("supplementary_data");
+        assertThat("Supplementary data response should contain foo", supplementaryData.path("foo").asInt(-1),
+            equalTo(expectedFooValue));
+
+        Integer fooInDb = db.queryForObject(
+            "SELECT (supplementary_data->>'foo')::integer FROM ccd.case_data WHERE reference = :ref",
+            Map.of("ref", caseRef),
+            Integer.class);
+        assertThat("Supplementary data in datastore should reflect update", fooInDb, equalTo(expectedFooValue));
+
+        await()
+            .pollInterval(Duration.ofSeconds(1))
+            .atMost(Duration.ofSeconds(15))
+            .untilAsserted(() -> {
+                var esRequest = new HttpGet(ELASTICSEARCH_BASE_URL + "/e2e_cases/_doc/" + caseDataId);
+                var esResponse = HttpClientBuilder.create().build().execute(esRequest);
+                assertThat(esResponse.getStatusLine().getStatusCode(), equalTo(200));
+
+                var esPayload = mapper.readTree(EntityUtils.toString(esResponse.getEntity()));
+                var source = esPayload.path("_source");
+                assertThat("Elasticsearch document should contain _source", source.isMissingNode(), is(false));
+                var fooValue = source.path("supplementary_data").path("foo").asInt(-1);
+                assertThat("Supplementary data in Elasticsearch should reflect latest value",
+                    fooValue, equalTo(expectedFooValue));
+            });
     }
 
     @Test
