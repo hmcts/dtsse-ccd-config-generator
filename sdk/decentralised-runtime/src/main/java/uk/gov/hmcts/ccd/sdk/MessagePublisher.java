@@ -87,7 +87,7 @@ class MessagePublisher {
   ) {
     var caseType = loadDefinitions().get(caseDetails.getCaseTypeId());
     if (null == caseType) {
-      log.error("Case type {} is not known", eventId);
+      log.error("Case type {} is not known", caseDetails.getCaseTypeId());
       return;
     }
 
