@@ -35,17 +35,16 @@ public class CaseSubmissionService {
 
   public DecentralisedSubmitEventResponse submit(DecentralisedCaseEvent event,
                                                  String authorisation,
-                                                 String idempotencyKey) {
+                                                 UUID idempotencyKey) {
     var eventConfig = resolvedConfigRegistry.getRequiredEvent(
         event.getEventDetails().getCaseType(), event.getEventDetails().getEventId());
     var user = idam.retrieveUser(authorisation);
     var handler = eventConfig.getSubmitHandler() != null ? submitHandler : legacyHandler;
-    UUID idempotencyUuid = UUID.fromString(idempotencyKey);
 
     try {
       // The result of the transaction can be either an idempotency hit or a new submission.
       TransactionResult transactionResult = transactionTemplate.execute(status ->
-          executeSubmissionInTransaction(event, user, handler, idempotencyUuid)
+          executeSubmissionInTransaction(event, user, handler, idempotencyKey)
       );
 
       return transactionResult.existingEventId()
@@ -66,10 +65,10 @@ public class CaseSubmissionService {
   private TransactionResult executeSubmissionInTransaction(DecentralisedCaseEvent event,
                                                            IdamService.User user,
                                                            CaseSubmissionHandler handler,
-                                                           UUID idempotencyUuid) {
+                                                           UUID idempotencyKey) {
     // Idempotency Check inside the transaction to ensure atomicity
     Optional<Long> existingEventId = idempotencyEnforcer.lockCaseAndGetExistingEvent(
-        idempotencyUuid, event.getCaseDetails().getReference()
+        idempotencyKey, event.getCaseDetails().getReference()
     );
 
     if (existingEventId.isPresent()) {
@@ -83,7 +82,7 @@ public class CaseSubmissionService {
     // Bookkeeping: update case_data metadata and optionally the legacy json blob
     upsertCase(event, handlerResult.dataUpdate());
     DecentralisedCaseDetails savedCaseDetails = caseViewLoader.load(event.getCaseDetails().getReference());
-    caseEventHistoryService.saveAuditRecord(event, user, savedCaseDetails.getCaseDetails(), idempotencyUuid);
+    caseEventHistoryService.saveAuditRecord(event, user, savedCaseDetails.getCaseDetails(), idempotencyKey);
 
     var outcome = new SubmissionOutcome(savedCaseDetails, handlerResult.responseSupplier());
     return new TransactionResult(Optional.empty(), Optional.of(outcome));

@@ -1,6 +1,7 @@
 package uk.gov.hmcts.ccd.sdk;
 
 import java.util.List;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
@@ -65,10 +66,25 @@ public class CaseController {
       return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(errorResponse);
     }
 
+    if (idempotencyKey == null || idempotencyKey.isBlank()) {
+      var errorResponse = new DecentralisedSubmitEventResponse();
+      errorResponse.setErrors(List.of("Idempotency-Key header is required"));
+      return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(errorResponse);
+    }
+
+    UUID parsedIdempotencyKey;
+    try {
+      parsedIdempotencyKey = UUID.fromString(idempotencyKey);
+    } catch (IllegalArgumentException ex) {
+      var errorResponse = new DecentralisedSubmitEventResponse();
+      errorResponse.setErrors(List.of("Idempotency-Key header must be a valid UUID"));
+      return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(errorResponse);
+    }
+
     var response = submissionService.submit(
         event,
         authorisation,
-        idempotencyKey
+        parsedIdempotencyKey
     );
     return ResponseEntity.ok(response);
   }

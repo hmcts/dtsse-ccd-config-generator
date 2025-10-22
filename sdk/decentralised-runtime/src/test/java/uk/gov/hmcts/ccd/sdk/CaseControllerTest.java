@@ -40,4 +40,40 @@ public class CaseControllerTest {
 
     verifyNoInteractions(submissionService);
   }
+
+  @Test
+  void createEventWithoutIdempotencyKeyReturnsBadRequest() {
+    DecentralisedCaseEvent event = mock(DecentralisedCaseEvent.class);
+
+    ResponseEntity<DecentralisedSubmitEventResponse> response = controller.createEvent(
+        event,
+        "Bearer token",
+        null
+    );
+
+    assertThat(response.getStatusCodeValue()).isEqualTo(400);
+    assertThat(response.getBody()).isNotNull();
+    assertThat(response.getBody().getErrors())
+        .containsExactly("Idempotency-Key header is required");
+
+    verifyNoInteractions(submissionService);
+  }
+
+  @Test
+  void createEventWithInvalidIdempotencyKeyReturnsBadRequest() {
+    DecentralisedCaseEvent event = mock(DecentralisedCaseEvent.class);
+
+    ResponseEntity<DecentralisedSubmitEventResponse> response = controller.createEvent(
+        event,
+        "Bearer token",
+        "not-a-uuid"
+    );
+
+    assertThat(response.getStatusCodeValue()).isEqualTo(400);
+    assertThat(response.getBody()).isNotNull();
+    assertThat(response.getBody().getErrors())
+        .containsExactly("Idempotency-Key header must be a valid UUID");
+
+    verifyNoInteractions(submissionService);
+  }
 }
