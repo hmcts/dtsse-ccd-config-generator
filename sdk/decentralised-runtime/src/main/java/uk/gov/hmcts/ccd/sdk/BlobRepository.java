@@ -9,10 +9,11 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+
+import com.google.common.collect.Maps;
+import lombok.RequiredArgsConstructor;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
-import net.jodah.typetools.TypeResolver;
-import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -23,38 +24,12 @@ import uk.gov.hmcts.ccd.domain.model.definition.CaseDetails;
 
 @Slf4j
 @Service
+@RequiredArgsConstructor
 class BlobRepository {
   private static final TypeReference<Map<String, JsonNode>> JSON_NODE_MAP = new TypeReference<>() {};
 
   private final NamedParameterJdbcTemplate ndb;
-  private final CaseRepository caseRepository;
-  private final Class<?> caseDataType;
   private final ObjectMapper defaultMapper;
-  private final ObjectMapper filteredMapper;
-
-  public BlobRepository(
-      NamedParameterJdbcTemplate ndb,
-      ObjectProvider<CaseRepository> caseRepositoryProvider,
-      ObjectMapper defaultMapper
-  ) {
-    this.ndb = ndb;
-    this.defaultMapper = defaultMapper;
-    this.filteredMapper = defaultMapper.copy().setAnnotationIntrospector(new FilterExternalFieldsInspector());
-
-    var resolved = caseRepositoryProvider.getIfAvailable();
-    if (resolved == null) {
-      this.caseRepository = new DefaultCaseRepository();
-      this.caseDataType = Map.class;
-    } else {
-      this.caseRepository = resolved;
-      Class<?>[] typeArgs = TypeResolver.resolveRawArguments(CaseRepository.class, resolved.getClass());
-      if (typeArgs.length == 0 || typeArgs[0] == null || typeArgs[0] == Object.class) {
-        this.caseDataType = Map.class;
-      } else {
-        this.caseDataType = typeArgs[0];
-      }
-    }
-  }
 
   public List<DecentralisedCaseDetails> getCases(@RequestParam("case-refs") List<Long> caseRefs) {
     log.info("Fetching cases for references: {}", caseRefs);
@@ -91,82 +66,116 @@ class BlobRepository {
     return cases.get(0);
   }
 
-  @SneakyThrows
-  public String serialiseDataFilteringExternalFields(CaseDetails caseDetails) {
-    var o = defaultMapper.convertValue(caseDetails.getData(), caseDataType);
-    return filteredMapper.writeValueAsString(o);
+  DecentralisedCaseDetails caseDetailsAtEvent(long caseRef, long eventId) {
+    var params = Map.of("caseRef", caseRef, "eventId", eventId);
+
+    var results = ndb.query(
+        """
+        select
+              cd.reference,
+              cd.created_date as created_date,
+              cd.jurisdiction,
+              ce.case_type_id,
+              ce.state_id as state,
+              ce.data::text as case_data,
+              ce.security_classification::text,
+              cd.version as version,
+              ce.created_date as last_state_modified_date,
+              ce.created_date as last_modified,
+              cd.supplementary_data::text,
+              cd.case_revision
+         from ccd.case_event ce
+         join ccd.case_data cd on cd.id = ce.case_data_id
+        where cd.reference = :caseRef
+          and ce.id = :eventId
+        limit 1
+        """,
+        params,
+        (rs, rowNum) -> mapCaseDetails(rs)
+    );
+
+    return results.stream()
+        .findFirst()
+        .orElseThrow(() -> new IllegalStateException(
+            "No case event found for caseRef=" + caseRef + " eventId=" + eventId
+        ));
   }
 
-  long upsertCase(DecentralisedCaseEvent event) {
-    int version = Optional.ofNullable(event.getCaseDetails().getVersion()).orElse(1);
-    String data = serialiseDataFilteringExternalFields(event.getCaseDetails());
-
+  @SneakyThrows
+  long upsertCase(DecentralisedCaseEvent event, Optional<JsonNode> dataUpdate) {
     var sql = """
-            insert into ccd.case_data (
-                last_modified,
-                last_state_modified_date,
-                jurisdiction,
-                case_type_id,
-                state,
-                data,
-                reference,
-                security_classification,
-                version,
-                id
-            )
-            values (
-                (now() at time zone 'UTC'),
-                (now() at time zone 'UTC'),
-                :jurisdiction,
-                :case_type_id,
-                :state,
-                (:data::jsonb),
-                :reference,
-                :security_classification::ccd.securityclassification,
-                :version,
-                :id
-            )
-            on conflict (reference)
+        insert into ccd.case_data (
+            last_modified,
+            last_state_modified_date,
+            jurisdiction,
+            case_type_id,
+            state,
+            data,
+            reference,
+            security_classification,
+            version,
+            id
+        )
+        values (
+            (now() at time zone 'UTC'),
+            (now() at time zone 'UTC'),
+            :jurisdiction,
+            :case_type_id,
+            :state,
+            -- On INSERT: if no data was provided, start with {}
+            case when :has_data then :data::jsonb else '{}'::jsonb end,
+            :reference,
+            :security_classification::ccd.securityclassification,
+            coalesce(:version, 2), -- We start at a higher version number than CCD's default 1, ensuring our write to ES wins
+            :id
+        )
+        on conflict (reference)
             do update set
                 state = excluded.state,
-                data = excluded.data,
+                -- Update safety: never touch `data` unless explicitly provided
+                data = case when :has_data then :data::jsonb else case_data.data end,
                 security_classification = excluded.security_classification,
-                last_modified = (now() at time zone 'UTC'),
-                version = case
-                            when
-                              case_data.data is distinct from excluded.data
-                              or case_data.state is distinct from excluded.state
-                              or case_data.security_classification is distinct from excluded.security_classification
-                            then
-                              case_data.version + 1
-                            else
-                              case_data.version
-                          end,
-                last_state_modified_date = case
-                                             when case_data.state is distinct from excluded.state then
-                                               (now() at time zone 'UTC')
-                                             else case_data.last_state_modified_date
-                                           end
-                where case_data.version = excluded.version
-                returning id;
-        """;
+            last_modified = (now() at time zone 'UTC'),
+            version = case
+                        when
+                          ((:has_data and case_data.data is distinct from excluded.data)
+                          or case_data.state is distinct from excluded.state
+                          or case_data.security_classification is distinct from excluded.security_classification)
+                        then
+                          case_data.version + 1
+                        else
+                          case_data.version
+                      end,
+            last_state_modified_date = case
+                                         when case_data.state is distinct from excluded.state then
+                                           (now() at time zone 'UTC')
+                                         else case_data.last_state_modified_date
+                                       end
+            where case_data.version = excluded.version
+            returning id;
+    """;
 
-    var params = Map.of(
-        "jurisdiction", event.getCaseDetails().getJurisdiction(),
-        "case_type_id", event.getCaseDetails().getCaseTypeId(),
-        "state", event.getCaseDetails().getState(),
-        "data", data,
-        "reference", event.getCaseDetails().getReference(),
-        "security_classification", event.getCaseDetails().getSecurityClassification().toString(),
-        "version", version,
-        "id", event.getInternalCaseId()
-    );
+      Map<String, Object> params = Maps.newHashMap();
+      params.put("jurisdiction", event.getCaseDetails().getJurisdiction());
+      params.put("case_type_id", event.getCaseDetails().getCaseTypeId());
+      params.put("state", event.getCaseDetails().getState());
+      params.put("data", dataUpdate.map(this::serialiseJsonNode).orElse(null));
+      params.put("has_data", dataUpdate.isPresent());
+      params.put("reference", event.getCaseDetails().getReference());
+      params.put("security_classification", event.getCaseDetails().getSecurityClassification().toString());
+      params.put("version", event.getCaseDetails().getVersion());
+      params.put("id", event.getInternalCaseId());
 
     return ndb.queryForObject(sql, params, Long.class);
   }
 
+  @SneakyThrows
+  private String serialiseJsonNode(JsonNode node) {
+      return defaultMapper.writeValueAsString(node);
+  }
+
+  @SneakyThrows
   private DecentralisedCaseDetails mapCaseDetails(ResultSet rs) throws SQLException {
-    try {
       Long reference = rs.getObject("reference", Long.class);
       String state = rs.getString("state");
 
@@ -182,10 +191,7 @@ class BlobRepository {
       caseDetails.setLastStateModifiedDate(rs.getObject("last_state_modified_date", LocalDateTime.class));
 
       var caseDataJson = rs.getString("case_data");
-      var rawCaseData = defaultMapper.readValue(caseDataJson, caseDataType);
-      var projectedCaseData = caseRepository.getCase(reference, state, rawCaseData);
-      Map<String, JsonNode> caseData = defaultMapper.convertValue(projectedCaseData, JSON_NODE_MAP);
-      caseDetails.setData(caseData);
+      caseDetails.setData(defaultMapper.readValue(caseDataJson, JSON_NODE_MAP));
       caseDetails.setDataClassification(Map.of());
 
       var supplementaryDataJson = rs.getString("supplementary_data");
@@ -201,16 +207,5 @@ class BlobRepository {
       response.setCaseDetails(caseDetails);
       response.setRevision(revision);
       return response;
-    } catch (Exception exception) {
-      throw new SQLException("Failed to map case data", exception);
-    }
   }
-
-  private static final class DefaultCaseRepository implements CaseRepository<Map<String, Object>> {
-    @Override
-    public Map<String, Object> getCase(long caseRef, String state, Map<String, Object> data) {
-      return data;
-    }
-  }
-
 }

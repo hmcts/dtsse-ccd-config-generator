@@ -26,10 +26,15 @@ dependencies {
 
     implementation "org.springframework.boot:spring-boot-autoconfigure"
     implementation "org.flywaydb:flyway-core:11.14.1"
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
 }
 
 java {
     toolchain {
         languageVersion = JavaLanguageVersion.of(21)
     }
+}
+
+tasks.withType(Test).configureEach {
+    useJUnitPlatform()
 }

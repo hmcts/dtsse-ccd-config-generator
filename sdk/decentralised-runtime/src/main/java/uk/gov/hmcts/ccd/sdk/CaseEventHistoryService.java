@@ -10,6 +10,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
@@ -67,7 +68,7 @@ class CaseEventHistoryService {
       DecentralisedCaseEvent event,
       IdamService.User user,
       uk.gov.hmcts.ccd.domain.model.definition.CaseDetails currentView,
-      long caseDataId
+      UUID idempotencyKey
   ) {
     final String oldState = event.getCaseDetailsBefore() != null
         ? event.getCaseDetailsBefore().getState()
@@ -88,7 +89,8 @@ class CaseEventHistoryService {
           state_name,
           summary,
           description,
-          security_classification)
+          security_classification,
+          idempotency_key)
         values (
           :data::jsonb,
           :event_id,
@@ -103,7 +105,8 @@ class CaseEventHistoryService {
           :state_name,
           :summary,
           :description,
-          :security_classification::ccd.securityclassification
+          :security_classification::ccd.securityclassification,
+          :idempotency_key
         )
         returning id, created_date
         """;
@@ -118,7 +121,7 @@ class CaseEventHistoryService {
         .addValue("data", defaultMapper.writeValueAsString(currentView.getData()))
         .addValue("event_id", eventDetails.getEventId())
         .addValue("user_id", user.getUserDetails().getUid())
-        .addValue("case_data_id", caseDataId)
+        .addValue("case_data_id", event.getInternalCaseId())
         .addValue("case_type_id", eventDetails.getCaseType())
         .addValue("case_type_version", 1)
         .addValue("state_id", currentView.getState())
@@ -128,7 +131,8 @@ class CaseEventHistoryService {
         .addValue("state_name", stateName)
         .addValue("summary", eventDetails.getSummary())
         .addValue("description", eventDetails.getDescription())
-        .addValue("security_classification", currentView.getSecurityClassification().toString());
+        .addValue("security_classification", currentView.getSecurityClassification().toString())
+        .addValue("idempotency_key", idempotencyKey);
 
     var inserted = ndb.queryForObject(sql, params, this::mapInsertedAuditEvent);
 

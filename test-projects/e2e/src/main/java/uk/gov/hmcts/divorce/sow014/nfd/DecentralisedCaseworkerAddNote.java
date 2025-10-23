@@ -66,7 +66,7 @@ public class DecentralisedCaseworkerAddNote implements CCDConfig<CaseData, State
         return caseData;
     }
 
-    private SubmitResponse submit(EventPayload<CaseData, State> payload) {
+    private SubmitResponse<State> submit(EventPayload<CaseData, State> payload) {
         // Persist the note to the case_notes table to verify the submit handler runs
         final Long reference = payload.caseReference();
         final CaseData caseData = payload.caseData();
@@ -83,7 +83,7 @@ public class DecentralisedCaseworkerAddNote implements CCDConfig<CaseData, State
         );
 
         log.info("Decentralised add note submitted for case {}", reference);
-        return SubmitResponse.builder()
+        return SubmitResponse.<State>builder()
             .confirmationHeader("Decentralised submission complete")
             .confirmationBody("Case note saved successfully.")
             .build();

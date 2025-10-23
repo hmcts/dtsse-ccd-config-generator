@@ -1,15 +1,12 @@
 package uk.gov.hmcts.ccd.sdk;
 
 import java.util.List;
-import java.util.concurrent.atomic.AtomicReference;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.dao.EmptyResultDataAccessException;
-import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -18,14 +15,11 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.server.ResponseStatusException;
 import uk.gov.hmcts.ccd.data.persistence.dto.DecentralisedAuditEvent;
 import uk.gov.hmcts.ccd.data.persistence.dto.DecentralisedCaseDetails;
 import uk.gov.hmcts.ccd.data.persistence.dto.DecentralisedCaseEvent;
 import uk.gov.hmcts.ccd.data.persistence.dto.DecentralisedSubmitEventResponse;
 import uk.gov.hmcts.ccd.data.persistence.dto.DecentralisedUpdateSupplementaryDataResponse;
-import uk.gov.hmcts.ccd.domain.model.callbacks.AfterSubmitCallbackResponse;
-import uk.gov.hmcts.reform.ccd.client.model.SubmittedCallbackResponse;
 
 @Slf4j
 @RestController
@@ -33,22 +27,18 @@ import uk.gov.hmcts.reform.ccd.client.model.SubmittedCallbackResponse;
 @RequiredArgsConstructor
 public class CaseController {
 
-  private final TransactionTemplate transactionTemplate;
-  private final ConfigGeneratorCallbackDispatcher dispatcher;
-  private final IdempotencyEnforcer idempotencyEnforcer;
-  private final IdamService idam;
+  private final CaseSubmissionService submissionService;
   private final CaseEventHistoryService caseEventHistoryService;
   private final SupplementaryDataService supplementaryDataService;
-  private final BlobRepository blobRepository;
+  private final CaseViewLoader caseViewLoader;
 
   @GetMapping(
       value = "/cases", // Mapped to the root /cases endpoint
       produces = "application/json"
   )
-  @SneakyThrows
   public List<DecentralisedCaseDetails> getCases(@RequestParam("case-refs") List<Long> caseRefs) {
     log.info("Fetching cases for references: {}", caseRefs);
-    return blobRepository.getCases(caseRefs);
+    return caseViewLoader.load(caseRefs);
   }
 
   @PostMapping(
@@ -67,77 +57,36 @@ public class CaseController {
   @PostMapping("/cases")
   public ResponseEntity<DecentralisedSubmitEventResponse> createEvent(
       @RequestBody DecentralisedCaseEvent event,
-      @RequestHeader HttpHeaders headers) {
+      @RequestHeader(value = "Authorization", required = false) String authorisation,
+      @RequestHeader(value = IdempotencyEnforcer.IDEMPOTENCY_KEY_HEADER, required = false) String idempotencyKey) {
 
-    log.info("Creating event '{}' for case reference: {}",
-        event.getEventDetails().getEventId(), event.getCaseDetails().getReference());
+    if (authorisation == null || authorisation.isBlank()) {
+      var errorResponse = new DecentralisedSubmitEventResponse();
+      errorResponse.setErrors(List.of("Authorization header is required"));
+      return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(errorResponse);
+    }
 
-    var user = idam.retrieveUser(headers.getFirst("Authorization"));
-    AtomicReference<ConfigGeneratorCallbackDispatcher.SubmitDispatchOutcome> dispatchOutcome =
-        new AtomicReference<>();
-    var newRequest = Boolean.FALSE;
+    if (idempotencyKey == null || idempotencyKey.isBlank()) {
+      var errorResponse = new DecentralisedSubmitEventResponse();
+      errorResponse.setErrors(List.of("Idempotency-Key header is required"));
+      return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(errorResponse);
+    }
+
+    UUID parsedIdempotencyKey;
     try {
-      newRequest = transactionTemplate.execute(status -> {
-        if (idempotencyEnforcer.markProcessedReturningIsAlreadyProcessed(
-            headers.getFirst(IdempotencyEnforcer.IDEMPOTENCY_KEY_HEADER))) {
-          return false;
-        }
-
-        var outcome = dispatcher.prepareSubmit(event);
-        dispatchOutcome.set(outcome);
-
-        var submitResponse = outcome.response();
-        if (submitResponse.getErrors() != null && !submitResponse.getErrors().isEmpty()) {
-          throw new CallbackValidationException(submitResponse.getErrors(), submitResponse.getWarnings());
-        }
-
-        outcome.afterSubmitResponse().ifPresent(afterSubmit ->
-            event.getCaseDetails().setAfterSubmitCallbackResponseEntity(ResponseEntity.ok(afterSubmit))
-        );
-
-        saveCaseReturningAuditId(event, user);
-        return true;
-      });
-    } catch (CallbackValidationException e) {
-      var response = new DecentralisedSubmitEventResponse();
-      response.setErrors(e.getErrors());
-      response.setWarnings(e.getWarnings());
-      return ResponseEntity.ok(response);
+      parsedIdempotencyKey = UUID.fromString(idempotencyKey);
+    } catch (IllegalArgumentException ex) {
+      var errorResponse = new DecentralisedSubmitEventResponse();
+      errorResponse.setErrors(List.of("Idempotency-Key header must be a valid UUID"));
+      return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(errorResponse);
     }
 
-    SubmittedCallbackResponse submittedResponse = null;
-    var outcome = dispatchOutcome.get();
-    if (Boolean.TRUE.equals(newRequest) && outcome != null && outcome.hasSubmittedCallback()) {
-      submittedResponse = dispatcher.runSubmittedCallback(event).orElse(null);
-    }
-
-    var details = blobRepository.getCase(event.getCaseDetails().getReference());
-    if (submittedResponse == null) {
-      submittedResponse = toSubmittedCallbackResponse(
-          event.getCaseDetails().getAfterSubmitCallbackResponse());
-    }
-    if (submittedResponse != null) {
-      var afterSubmitResponse = new AfterSubmitCallbackResponse();
-      afterSubmitResponse.setConfirmationHeader(submittedResponse.getConfirmationHeader());
-      afterSubmitResponse.setConfirmationBody(submittedResponse.getConfirmationBody());
-      var responseEntity = ResponseEntity.ok(afterSubmitResponse);
-      details.getCaseDetails().setAfterSubmitCallbackResponseEntity(responseEntity);
-    }
-
-    var response = new DecentralisedSubmitEventResponse();
-    response.setCaseDetails(details);
+    var response = submissionService.submit(
+        event,
+        authorisation,
+        parsedIdempotencyKey
+    );
     return ResponseEntity.ok(response);
-  }
-
-  @SneakyThrows
-  private long saveCaseReturningAuditId(DecentralisedCaseEvent event, IdamService.User user) {
-    try {
-      long caseDataId = blobRepository.upsertCase(event);
-      var currentView = blobRepository.getCase(event.getCaseDetails().getReference()).getCaseDetails();
-      return caseEventHistoryService.saveAuditRecord(event, user, currentView, caseDataId);
-    } catch (EmptyResultDataAccessException e) {
-      throw new ResponseStatusException(HttpStatus.CONFLICT, "Case was updated concurrently");
-    }
   }
 
   /**
@@ -171,19 +120,6 @@ public class CaseController {
     log.info("Loading history event ID {} for case reference: {}", eventId, caseRef);
     DecentralisedAuditEvent event = caseEventHistoryService.loadHistoryEvent(caseRef, eventId);
     return ResponseEntity.ok(event);
-  }
-
-  private SubmittedCallbackResponse toSubmittedCallbackResponse(AfterSubmitCallbackResponse response) {
-    if (response == null) {
-      return null;
-    }
-    if (response.getConfirmationHeader() == null && response.getConfirmationBody() == null) {
-      return null;
-    }
-    return SubmittedCallbackResponse.builder()
-        .confirmationHeader(response.getConfirmationHeader())
-        .confirmationBody(response.getConfirmationBody())
-        .build();
   }
 
 }
