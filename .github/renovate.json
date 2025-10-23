@@ -3,5 +3,13 @@
   "extends": [
     "local>hmcts/.github:renovate-config",
     "local>hmcts/.github//renovate/automerge-all"
+  ],
+  "packageRules": [
+    {
+      "matchPackageNames": [
+        "com.github.hmcts.rse-cft-lib:ccd-lib"
+      ],
+      "enabled": false
+    }
   ]
 }
