@@ -4,7 +4,7 @@ plugins {
 
 dependencyManagement {
     imports {
-        mavenBom 'org.springframework.boot:spring-boot-dependencies:3.5.6'
+        mavenBom 'org.springframework.boot:spring-boot-dependencies:3.5.7'
         mavenBom 'com.azure.spring:spring-cloud-azure-dependencies:6.0.0'
     }
 }
