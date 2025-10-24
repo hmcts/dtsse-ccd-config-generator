@@ -43,7 +43,7 @@ participant SDB as Service DB
     UI->>CCD: Trigger Event (caseId, event)
     CCD->>Svc: Read current case_data
     CCD->>Svc: POST /submit (JSON)
-    Note right of Svc: Validate & mutate JSON<br/>Side effects (emails, integrations)
+    Note right of Svc: Submit replaces existing AboutToSubmit/Submitted callbacks
     Svc->>SDB: Save case_data = ... 
     Svc-->>CCD: Return JSON' (for immediate UI/state)
     CCD-->>UI: response
