@@ -1,6 +1,6 @@
 # Decentralised Runtime
 
-The decentralised runtime implements CCD’s decentralised persistence APIs with opinionated infrastructure so service
+The decentralised runtime provides an out-of-the-box implementtion of CCD’s decentralised persistence APIs so service
 teams can shift case ownership without rebuilding everything from scratch.
 
 ## Onboarding
@@ -20,10 +20,10 @@ Setting `decentralised = true` adds the [decentralised-runtime](../sdk/decentral
 ## Case views
 
 Services must provide a [`CaseView<ViewType, StateEnum>`](../sdk/decentralised-runtime/src/main/java/uk/gov/hmcts/ccd/sdk/CaseView.java)
-implementation. CCD invokes the view whenever it needs to read case data, so this becomes the API surface your service
+implementation. This view is invoked whenever CCD needs to read case data for your case type, so this becomes the API surface your service
 exposes back to CCD.
 
-How a service structures its data is an implementation detail; it could be a JSON blob, enrich the blob, or be
+How a service structures its data is an implementation detail; it could be a JSON blob, enrich the existing blob, or be
 fully structured; the CaseView is now an API contract rather than a literal data model.
 
 Case views can also inject dynamically rendered HTML/Markdown at runtime, avoiding the need to store presentation
