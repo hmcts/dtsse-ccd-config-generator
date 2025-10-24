@@ -2,10 +2,10 @@
 
 TL;DR
 
-- Persist case data in a service-owned database while CCD continues to orchestrate callbacks and security controls.
+- Persist case data in a service-owned database while CCD continues to orchestrate callbacks and authorisation.
 - No big-bang rewrite: keep the familiar AboutToStart / MidEvent / AboutToSubmit / Submitted flow.
 - The JSON payload stays intact—only the storage location and responsibility boundaries change.
-- Service teams regain ownership of schema, performance tuning, and migration cadence.
+- Data ownership aligns with business domain ownership
 - The SDK supplies migrations, transaction orchestration, idempotency, and optional Elasticsearch sync to smooth onboarding.
 
 
