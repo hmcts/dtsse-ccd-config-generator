@@ -35,13 +35,13 @@ erDiagram
   }
 ```
 
-### Introducing concurrency (but not parallelism)
+### Introducing concurrency - but not parallelism
 
 All case events execute under a case-level lock wrapped in a database transaction.
 
 Viewers still get a coherent, monotonic history (“what happened, and in what order”), regardless of which tables an event touched.
 
-If, for example, a blob update and a case note insertion were to race, one acquires the case lock first. The other waits, then runs, and both succeed. The event log reflects the order they committed.
+If, for example, a blob update and a case note insertion were to race, one acquires the case lock first. The other waits, then runs, and both succeed. The event log reflects the order they committed and accurately reflects the changes each made.
 
 (Note that this is a tightening of CCD's current implementation which allows multiple event submissions to run in parallel, only one of which will commit.)
 
