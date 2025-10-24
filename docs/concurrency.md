@@ -12,7 +12,7 @@ A refinement is that the case_data version number is only incremented if the JSO
 
 ## New: Concurrent events
 
-It is now possible to build events that submit concurrently, eg. enabling multiple parties to upload evidence at the same time, or staff to add case notes without conflicts.
+It is now possible to implement events that submit concurrently, eg. enabling multiple parties to upload evidence at the same time, or staff to add case notes without causing conflicts to other users working on the case.
 
 Such scenarios are possible by managing portions of case data outside of the case_data json blob using an appropriate concurrency model (eg. dedicated tables and INSERTs.)
 
