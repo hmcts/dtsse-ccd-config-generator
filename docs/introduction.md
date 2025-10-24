@@ -11,6 +11,7 @@ TL;DR
 * Service teams can own their data, make effective use of databases and evolve at their own pace.
 * Updates to this SDK can help with onboarding
 
+
 ## As-is: centralised persistence
 
 CCD orchestrates events and invokes service callbacks.
@@ -53,3 +54,9 @@ participant SDB as Service DB
     Svc-->>CCD: Return JSON' (for immediate UI/state)
     CCD-->>UI: response
 ```
+
+## Links
+
+- [What this SDK provides](./decentralised-runtime.md)
+- Implications for [concurrency](./concurrency.md)
+- [Data migration for existing services](./data-migration-for-existing-services.md)

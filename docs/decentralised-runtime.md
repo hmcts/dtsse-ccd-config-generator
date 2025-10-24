@@ -24,9 +24,6 @@ provision a dedicated `ccd` schema within your application with the structures n
 - `es_queue` tracks cases that require elasticsearch indexing
 - `message_queue_candidates` mirrors CCD’s Service Bus transational outbox table. Published events are written here.
 
-## Elasticsearch indexing
-
-The SDK maintains a queue of cases requiring Elasticsearch indexing in `ccd.es_queue`.
 
 ## Idempotency
 
@@ -39,13 +36,17 @@ the new event.
 
 The SDK wraps every case event inside a database transaction covering:
 
-- idempotency check & case-level lock acquisition
-- Invocation of AboutToSubmit callback (if defined)
-- upsert of ccd.case_data,
-- insert into ccd.case_event (audit history)
-- insert into Elasticsearch queue table
+>- idempotency check & case-level lock acquisition
+>- Invocation of AboutToSubmit callback (if defined)
+>- upsert of ccd.case_data,
+>- insert into ccd.case_event (audit history)
+>- insert into Elasticsearch queue table
 
 If a concurrent update to ccd.case_data.data is detected a `409 CONFLICT` is returned and the transaction rolls back, aligning behaviour with CCD.
+
+## Elasticsearch indexing
+
+The SDK maintains a queue of cases requiring Elasticsearch indexing in `ccd.es_queue`.
 
 ## Supplementary data
 

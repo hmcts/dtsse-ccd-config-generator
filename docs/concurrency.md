@@ -1,10 +1,7 @@
-_Concurrency control
-
 ## Goals
 
-
-* Preserve CCD’s existing global optimistic lock around the legacy case_data JSON blob.
-* Concurrent event submissions are now achievable for service data managed outside of this blob
+* Preserve CCD’s global optimistic lock around the existing case_data JSON blobs.
+* Facilitate alternative concurrency models for service managed data
 
 
 ## Unchanged: Global optimistic lock on the case_data JSON blob
@@ -38,13 +35,13 @@ erDiagram
   }
 ```
 
-### Concurrency (but not parallelism)
+### Introducing concurrency (but not parallelism)
 
 All case events execute under a case-level lock wrapped in a database transaction.
 
-Consequently readers still get a coherent, monotonic history (“what happened, and in what order”), regardless of which tables an event touched.
+Viewers still get a coherent, monotonic history (“what happened, and in what order”), regardless of which tables an event touched.
 
 If, for example, a blob update and a case note insertion were to race, one acquires the case lock first. The other waits, then runs, and both succeed. The event log reflects the order they committed.
 
-(Note that this is a tightening of CCD's event model which allows multiple event submissions to run in parallel, only one of which will commit.)
+(Note that this is a tightening of CCD's current implementation which allows multiple event submissions to run in parallel, only one of which will commit.)
 
