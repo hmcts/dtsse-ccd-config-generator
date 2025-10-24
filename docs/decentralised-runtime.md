@@ -20,10 +20,12 @@ Setting `decentralised = true` adds the [decentralised-runtime](../sdk/decentral
 ## Case views
 
 Services must provide a [`CaseView<ViewType, StateEnum>`](../sdk/decentralised-runtime/src/main/java/uk/gov/hmcts/ccd/sdk/CaseView.java)
-implementation. This view is invoked whenever CCD needs to read case data for your case type.
+implementation.
 
-How a service structures its data is an implementation detail; it could be a JSON blob, enrich the existing blob, or be
-fully structured; the CaseView is now an API contract rather than a literal data model.
+Your view implementation is the mechanism by which CCD reads case data for your case type; CCD provides the case reference to retrieve and your view must return a result in the format defined by your CCD definition.
+
+How your view does this is an implementation detail; it could load a JSON blob, enrich the existing blob, or compose it from a
+fully structured set of tables; the CaseView is now an API contract rather than a literal data model.
 
 Case views can also inject dynamically rendered HTML/Markdown at runtime, avoiding the need to store presentation
 fragments in the database.
