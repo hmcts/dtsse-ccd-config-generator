@@ -92,7 +92,6 @@ class DecentralisedESIndexer implements DisposableBean {
               row.index_id
           from (
               select
-                  now() as "@timestamp",
                   cd.reference,
                   cd.case_revision,
                   cd.case_type_id,
