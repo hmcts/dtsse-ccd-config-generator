@@ -1,7 +1,5 @@
 # Decentralised Data Persistence — Conceptual Introduction
 
-TL;DR
-
 - Persist case data in a service-owned database while CCD continues to orchestrate callbacks and authorisation.
 - No big-bang rewrite: keep the familiar AboutToStart / MidEvent / AboutToSubmit / Submitted flow.
 - The JSON payload stays intact—only the storage location and responsibility boundaries change.
