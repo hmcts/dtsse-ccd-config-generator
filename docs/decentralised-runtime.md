@@ -15,8 +15,7 @@ ccd {
 }
 ```
 
-Setting `decentralised = true` brings in the runtime, applies the database migrations and flips the SDK into
-decentralised mode. Without this flag the build continues to target CCD’s centralised persistence.
+Setting `decentralised = true` adds the [decentralised-runtime](../sdk/decentralised-runtime) as a dependency to your project.
 
 ## Case views
 
@@ -24,8 +23,8 @@ Services must provide a [`CaseView<ViewType, StateEnum>`](../sdk/decentralised-r
 implementation. CCD invokes the view whenever it needs to read case data, so this becomes the API surface your service
 exposes back to CCD.
 
-**How** your service structures the data is now an implementation detail; it could be a JSON blob, enrich the blob, or be
-fully structured.
+How a service structures its data is an implementation detail; it could be a JSON blob, enrich the blob, or be
+fully structured; the CaseView is now an API contract rather than a literal data model.
 
 Case views can also inject dynamically rendered HTML/Markdown at runtime, avoiding the need to store presentation
 fragments in the database.
@@ -42,6 +41,61 @@ provision a dedicated `ccd` schema within your application with the structures n
 - `case_event` mirrors CCD’s `case_event` table and adds an idempotency key
 - `es_queue` tracks cases that require Elasticsearch indexing 
 - `message_queue_candidates` mirrors CCD’s Service Bus transactional outbox table.
+
+### SDK managed Schema overview
+
+The SDK managed database schema is illustrated here for reference. Note that it is created & maintained by the SDK automatically, serving as an 'out of the box' implementation for the new responsibilities your service assumes under decentralised persistence.
+
+```mermaid
+erDiagram
+    CASE_DATA {
+        bigint reference PK
+        bigint id
+        int version
+        timestamp created_date
+        varchar jurisdiction
+        varchar case_type_id
+        varchar state
+        jsonb data
+        jsonb supplementary_data
+        bigint case_revision
+    }
+    CASE_EVENT {
+        bigint id PK
+        bigint case_data_id FK
+        timestamp created_date
+        int case_type_version
+        varchar event_id
+        varchar state_id
+        varchar user_id
+        jsonb data
+        uuid idempotency_key
+    }
+    CASE_EVENT_AUDIT {
+        bigint id PK
+        bigint case_event_id FK
+        uuid user_id
+        jsonb data
+    }
+    ES_QUEUE {
+        bigint reference FK
+        bigint case_revision
+        timestamptz enqueued_at
+    }
+    MESSAGE_QUEUE_CANDIDATES {
+        bigint id PK
+        bigint reference FK
+        varchar message_type
+        timestamp time_stamp
+        timestamp published
+        jsonb message_information
+    }
+
+    CASE_DATA ||--o{ CASE_EVENT : "case_data_id"
+    CASE_EVENT ||--o{ CASE_EVENT_AUDIT : "case_event_id"
+    CASE_DATA ||--o{ ES_QUEUE : "reference"
+    CASE_DATA ||--o{ MESSAGE_QUEUE_CANDIDATES : "reference"
+```
 
 ## Elasticsearch indexing
 

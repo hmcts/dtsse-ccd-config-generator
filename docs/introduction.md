@@ -2,14 +2,11 @@
 
 TL;DR
 
-* You can store case data in a service‑owned database rather than CCD’s case_data table.
-
-* No big bang rewrite: your application can remain 'callback' driven (AboutToStart / MidEvent / AboutToSubmit / Submitted).
-
-* The same JSON blob flows through callbacks; the difference is where and how it is persisted
-
-* Service teams can own their data, make effective use of databases and evolve at their own pace.
-* Updates to this SDK can help with onboarding
+- Persist case data in a service-owned database while CCD continues to orchestrate callbacks and security controls.
+- No big-bang rewrite: keep the familiar AboutToStart / MidEvent / AboutToSubmit / Submitted flow.
+- The JSON payload stays intact—only the storage location and responsibility boundaries change.
+- Service teams regain ownership of schema, performance tuning, and migration cadence.
+- The SDK supplies migrations, transaction orchestration, idempotency, and optional Elasticsearch sync to smooth onboarding.
 
 
 ## As-is: centralised persistence
@@ -35,8 +32,7 @@ participant Svc as Service
 
 ## The decentralised option
 
-CCD continues to orchestrates events and invokes service callbacks, but the service becomes the source of truth for case data.
-
+CCD continues to orchestrate events and invokes service callbacks, but the service becomes the source of truth for case data.
 
 ```mermaid
 sequenceDiagram
@@ -55,8 +51,19 @@ participant SDB as Service DB
     CCD-->>UI: response
 ```
 
-## Links
+- CCD loads your case type's data from your service instead of its case_data table.
+- Your service persists both the authoritative case record and the event history inside your database (see schema overview).
+- CCD still enforces authorisation, event definitions, and callback sequencing; you take on data modelling, retention, and migrations.
 
-- [What this SDK provides](./decentralised-runtime.md)
-- Implications for [concurrency](./concurrency.md)
-- [Data migration for existing services](./data-migration-for-existing-services.md)
+### What changes for teams
+
+- **Database provisioning:** Allocate a PostgreSQL database for your service to persist its case data
+- **Schema migrations:** The SDK provides Flyway scripts to create and manage a 'ccd' schema that resides in your database.
+- **Read APIs:** Implement `CaseView<ViewType, StateEnum>` so CCD can read case data from your service
+- **Write to your database:** You can write to your database during the standard CCD event lifecycle callbacks
+
+## Read next
+
+- [Decentralised runtime in detail](./decentralised-runtime.md)
+- [Concurrency considerations](./concurrency.md)
+- [Migrating existing services](./data-migration-for-existing-services.md)
