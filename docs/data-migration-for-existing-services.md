@@ -11,8 +11,7 @@
 
 1. **Shutter the service (or make it read-only).**
 
-2. **Copy data.** For the target case type, copy `case_data` and `case_event` from CCD’s central database into the application’s `ccd.case_data` and `ccd.case_event` schema. 
-   3. Use the provided script: [migrate-ccd-data.sh](../scripts/migrate-ccd-data.sh)
+2. **Copy data.**  Use the provided script: [migrate-ccd-data.sh](../scripts/migrate-ccd-data.sh) to copy your case type's data from CCD’s central database into your application’s.
 
 3. **Tell CCD your case type is now decentralised with an ENV var configuration change:** 
 
