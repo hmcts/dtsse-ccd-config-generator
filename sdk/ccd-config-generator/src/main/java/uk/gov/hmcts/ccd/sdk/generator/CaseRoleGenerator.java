@@ -4,7 +4,6 @@ import static java.util.stream.Collectors.toList;
 import static uk.gov.hmcts.ccd.sdk.generator.JsonUtils.mergeInto;
 
 import com.google.common.base.Strings;
-import com.google.common.collect.Maps;
 import java.io.File;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -38,9 +37,7 @@ public class CaseRoleGenerator<T, S, R extends HasRole> implements ConfigGenerat
   @SneakyThrows
   private static Map<String, Object> enumToJsonMap(String caseType, Class<?> enumType,
                                                    Object enumConstant, String id) {
-    Map<String, Object> field = Maps.newHashMap();
-    field.put("LiveFrom", "01/01/2017");
-    field.put("CaseTypeID", caseType);
+    Map<String, Object> field = JsonUtils.caseRow(caseType);
     field.put("ID", id);
 
     CCD ccd = enumType.getField(enumConstant.toString()).getAnnotation(CCD.class);

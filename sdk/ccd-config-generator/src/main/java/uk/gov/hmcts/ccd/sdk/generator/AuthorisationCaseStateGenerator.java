@@ -1,7 +1,6 @@
 package uk.gov.hmcts.ccd.sdk.generator;
 
 import com.google.common.collect.Lists;
-import com.google.common.collect.Maps;
 import com.google.common.collect.SetMultimap;
 import com.google.common.collect.Sets;
 import com.google.common.collect.Table;
@@ -77,10 +76,8 @@ class AuthorisationCaseStateGenerator<T, S, R extends HasRole> implements Config
         // Ignore CCD roles.
         continue;
       }
-      Map<String, Object> permission = Maps.newHashMap();
+      Map<String, Object> permission = JsonUtils.caseRow(config.getCaseType());
       result.add(permission);
-      permission.put("CaseTypeID", config.getCaseType());
-      permission.put("LiveFrom", "01/01/2017");
       permission.put("CaseStateID", stateRolePermission.getRowKey());
       permission.put("UserRole", stateRolePermission.getColumnKey().getRole());
       permission.put("CRUD", Permission.toString(stateRolePermission.getValue()));

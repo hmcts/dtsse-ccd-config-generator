@@ -4,7 +4,6 @@ import static java.util.stream.Collectors.toList;
 import static org.apache.commons.lang3.StringUtils.join;
 import static uk.gov.hmcts.ccd.sdk.generator.JsonUtils.mergeInto;
 
-import com.google.common.collect.Maps;
 import java.io.File;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -33,9 +32,7 @@ public class RoleToAccessProfilesGenerator<T, S, R extends HasRole> implements C
 
   @SneakyThrows
   private static Map<String, Object> toJson(String caseType, CaseRoleToAccessProfile caseRoleToAccessProfile) {
-    Map<String, Object> field = Maps.newHashMap();
-    field.put("LiveFrom", "01/01/2017");
-    field.put("CaseTypeID", caseType);
+    Map<String, Object> field = JsonUtils.caseRow(caseType);
 
     if (caseRoleToAccessProfile.isLegacyIdamRole()) {
       field.put("RoleName", "idam:" + caseRoleToAccessProfile.getRole().getRole());
@@ -44,9 +41,9 @@ public class RoleToAccessProfilesGenerator<T, S, R extends HasRole> implements C
     }
     field.put("CaseAccessCategories", join(caseRoleToAccessProfile.getCaseAccessCategories(), ","));
     field.put("Authorisation", join(caseRoleToAccessProfile.getAuthorisation(), ","));
-    field.put("ReadOnly", caseRoleToAccessProfile.isReadonly() ? "Y" : "N");
+    field.put("ReadOnly", JsonUtils.yn(caseRoleToAccessProfile.isReadonly()));
     field.put("AccessProfiles", join(caseRoleToAccessProfile.getAccessProfiles(), ","));
-    field.put("Disabled", caseRoleToAccessProfile.isDisabled() ? "Y" : "N");
+    field.put("Disabled", JsonUtils.yn(caseRoleToAccessProfile.isDisabled()));
 
     return field;
   }

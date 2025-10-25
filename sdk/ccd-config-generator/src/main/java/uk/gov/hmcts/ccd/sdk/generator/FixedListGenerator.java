@@ -50,7 +50,7 @@ class FixedListGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
           Map<String, Object> value = Maps.newHashMap();
           fields.add(value);
           value.put("ListElement", label);
-          value.put("LiveFrom", "01/01/2017");
+          value.put("LiveFrom", JsonUtils.DEFAULT_LIVE_FROM);
           value.put("ID", c.getSimpleName());
           value.put("ListElementCode", enumConstant);
           value.put("DisplayOrder", order++);

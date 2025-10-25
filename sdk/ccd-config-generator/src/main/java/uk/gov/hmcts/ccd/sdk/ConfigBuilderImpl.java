@@ -32,6 +32,8 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements Decentralised
 
   private final ResolvedCCDConfig<T, S, R> config;
 
+  private final PropertyUtils propertyUtils = new PropertyUtils();
+
   final Map<String, List<Event.EventBuilder<T, R, S>>> events = Maps.newHashMap();
   final List<TabBuilder<T, R>> tabs = Lists.newArrayList();
   final List<SearchBuilder<T, R>> workBasketResultFields = Lists.newArrayList();
@@ -135,34 +137,34 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements Decentralised
   @Override
   public TabBuilder<T, R> tab(String tabId, String tabLabel) {
     TabBuilder<T, R> result = (TabBuilder<T, R>) TabBuilder.builder(config.caseClass,
-        new PropertyUtils()).tabID(tabId).labelText(tabLabel);
+        propertyUtils).tabID(tabId).labelText(tabLabel);
     tabs.add(result);
     return result;
   }
 
   @Override
   public SearchBuilder<T, R> workBasketResultFields() {
-    return getWorkBasketBuilder(workBasketResultFields);
+    return registerSearchBuilder(workBasketResultFields);
   }
 
   @Override
   public SearchBuilder<T, R> workBasketInputFields() {
-    return getWorkBasketBuilder(workBasketInputFields);
+    return registerSearchBuilder(workBasketInputFields);
   }
 
   @Override
   public SearchBuilder<T, R> searchResultFields() {
-    return getSearchBuilder(searchResultFields);
+    return registerSearchBuilder(searchResultFields);
   }
 
   @Override
   public SearchBuilder<T, R> searchInputFields() {
-    return getSearchBuilder(searchInputFields);
+    return registerSearchBuilder(searchInputFields);
   }
 
   @Override
   public SearchCasesBuilder<T> searchCasesFields() {
-    return getSearchCasesBuilder(searchCaseResultFields);
+    return registerSearchCasesBuilder(searchCaseResultFields);
   }
 
 
@@ -205,22 +207,16 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements Decentralised
     return builder;
   }
 
-  private SearchBuilder<T, R> getWorkBasketBuilder(List<SearchBuilder<T, R>> workBasketInputFields) {
-    SearchBuilder<T, R> result = SearchBuilder.builder(config.caseClass, new PropertyUtils());
-    workBasketInputFields.add(result);
-    return result;
+  private SearchBuilder<T, R> registerSearchBuilder(List<SearchBuilder<T, R>> target) {
+    SearchBuilder<T, R> builder = SearchBuilder.builder(config.caseClass, propertyUtils);
+    target.add(builder);
+    return builder;
   }
 
-  private SearchBuilder<T, R> getSearchBuilder(List<SearchBuilder<T, R>> searchInputFields) {
-    SearchBuilder<T, R> result = SearchBuilder.builder(config.caseClass, new PropertyUtils());
-    searchInputFields.add(result);
-    return result;
-  }
-
-  private SearchCasesBuilder<T> getSearchCasesBuilder(List<SearchCasesBuilder<T>> searchInputFields) {
-    SearchCasesBuilder<T> result = SearchCasesBuilder.builder(config.caseClass, new PropertyUtils());
-    searchInputFields.add(result);
-    return result;
+  private SearchCasesBuilder<T> registerSearchCasesBuilder(List<SearchCasesBuilder<T>> target) {
+    SearchCasesBuilder<T> builder = SearchCasesBuilder.builder(config.caseClass, propertyUtils);
+    target.add(builder);
+    return builder;
   }
 
   ImmutableMap<String, Event<T, R, S>> getEvents() {

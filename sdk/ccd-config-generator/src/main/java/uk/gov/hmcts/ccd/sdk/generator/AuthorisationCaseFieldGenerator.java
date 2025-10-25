@@ -20,7 +20,6 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Collections;
 import java.util.HashSet;
-import java.util.Hashtable;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -149,9 +148,7 @@ class AuthorisationCaseFieldGenerator<T, S, R extends HasRole> implements Config
           if (field.matches("\\[.+\\]")) {
             continue;
           }
-          Map<String, Object> permission = new Hashtable<>();
-          permission.put("CaseTypeID", config.getCaseType());
-          permission.put("LiveFrom", "01/01/2017");
+          Map<String, Object> permission = JsonUtils.caseRow(config.getCaseType());
           permission.put("UserRole", role);
           permission.put("CaseFieldID", field);
           permission.put("CRUD", Permission.toString(fieldPermission));
