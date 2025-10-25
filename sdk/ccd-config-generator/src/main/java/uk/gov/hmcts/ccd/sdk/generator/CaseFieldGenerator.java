@@ -1,6 +1,5 @@
 package uk.gov.hmcts.ccd.sdk.generator;
 
-import static org.apache.commons.lang3.StringUtils.capitalize;
 import static uk.gov.hmcts.ccd.sdk.FieldUtils.getCaseFields;
 import static uk.gov.hmcts.ccd.sdk.FieldUtils.getFieldId;
 import static uk.gov.hmcts.ccd.sdk.FieldUtils.isUnwrappedField;
@@ -22,8 +21,6 @@ import uk.gov.hmcts.ccd.sdk.ResolvedCCDConfig;
 import uk.gov.hmcts.ccd.sdk.api.CCD;
 import uk.gov.hmcts.ccd.sdk.api.Event;
 import uk.gov.hmcts.ccd.sdk.api.HasRole;
-import uk.gov.hmcts.ccd.sdk.api.Label;
-import uk.gov.hmcts.ccd.sdk.type.FieldType;
 
 @Component
 class CaseFieldGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, S, R> {
@@ -49,46 +46,11 @@ class CaseFieldGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
   }
 
   public static List<Map<String, Object>> toComplex(Class dataClass, String caseTypeId) {
-    return toComplex(dataClass, caseTypeId, "");
+    return CaseFieldComplexBuilder.build(dataClass, caseTypeId);
   }
 
   public static List<Map<String, Object>> toComplex(Class dataClass, String caseTypeId, String idPrefix) {
-    List<Map<String, Object>> fields = Lists.newArrayList();
-
-    for (Field field : getCaseFields(dataClass)) {
-      JsonUnwrapped unwrapped = field.getAnnotation(JsonUnwrapped.class);
-      if (null != unwrapped) {
-        String prefix = idPrefix.isEmpty() ? unwrapped.prefix() : idPrefix.concat(capitalize(unwrapped.prefix()));
-        List<Map<String, Object>> nestedObjectFields = toComplex(field.getType(), caseTypeId, prefix);
-        fields.addAll(nestedObjectFields);
-
-        continue;
-      }
-
-      String id = getFieldId(field, idPrefix);
-
-      Label label = field.getAnnotation(Label.class);
-      CaseFieldAnnotationApplier.applyLabelAnnotation(fields, caseTypeId, label);
-
-      Map<String, Object> fieldInfo = getField(caseTypeId, id);
-      fields.add(fieldInfo);
-      CCD cf = field.getAnnotation(CCD.class);
-
-      CaseFieldAnnotationApplier.applyCcdAnnotation(fieldInfo, cf);
-      CaseFieldAnnotationApplier.ensureDefaultLabel(fieldInfo);
-
-      if (cf != null && cf.typeOverride() != FieldType.Unspecified) {
-        fieldInfo.put("FieldType", cf.typeOverride().toString());
-        if (!Strings.isNullOrEmpty(cf.typeParameterOverride())) {
-          fieldInfo.put("FieldTypeParameter", cf.typeParameterOverride());
-        }
-      } else {
-        CaseFieldTypeResolver.applyFieldType(dataClass, field, fieldInfo, cf);
-      }
-
-    }
-
-    return fields;
+    return CaseFieldComplexBuilder.build(dataClass, caseTypeId, idPrefix);
   }
 
   private static <T, S, R extends HasRole> List<Map<String, Object>> getExplicitFields(
