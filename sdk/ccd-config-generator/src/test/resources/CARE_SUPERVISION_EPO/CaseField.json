@@ -17,6 +17,14 @@
     "SecurityClassification": "Public"
   },
   {
+    "ID": "aField",
+    "FieldType": "Text",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "LiveFrom": "01/01/2017",
+    "Label": "A Field",
+    "SecurityClassification": "Public"
+  },
+  {
     "ID": "caseLocalAuthority",
     "FieldType": "Text",
     "CaseTypeID": "CARE_SUPERVISION_EPO",

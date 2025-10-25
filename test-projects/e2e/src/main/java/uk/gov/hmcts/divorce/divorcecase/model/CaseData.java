@@ -45,6 +45,12 @@ public class CaseData {
     @CCD(access = {DefaultAccess.class})
     private String setInAboutToStart;
 
+    @CCD(
+        label = "A Field",
+        access = {DefaultAccess.class}
+    )
+    private String aField;
+
     @JsonUnwrapped(prefix = "applicant1")
     @Builder.Default
     @CCD(access = {DefaultAccess.class})
