@@ -58,15 +58,12 @@ class CaseEventToFieldsGenerator<T, S, R extends HasRole> implements ConfigGener
       row.put("PageID", pageId);
       row.put("PageDisplayOrder", field.getPageDisplayOrder());
       row.put("PageColumnNumber", 1);
-      applyFieldShowCondition(row, field);
+      CaseEventFieldMetadataApplier.apply(row, field, "CaseEventFieldLabel", "CaseEventFieldHint");
       applyMidEventCallback(row, event, config, collection, pageId, writtenCallbacks);
       applyPageShowCondition(row, collection, field);
       applySummaryFlag(row, field);
       applyPageLabel(row, collection, field);
       applyDisplayContextParameter(row, field);
-      applyFieldLabel(row, field);
-      applyFieldHint(row, field);
-      applyRetainHiddenValue(row, field);
     }
 
     return entries;
@@ -101,12 +98,6 @@ class CaseEventToFieldsGenerator<T, S, R extends HasRole> implements ConfigGener
     }
     Integer parsed = Ints.tryParse(rawPageId.toString());
     return parsed != null ? parsed : rawPageId;
-  }
-
-  private void applyFieldShowCondition(Map<String, Object> row, Field field) {
-    if (field.getShowCondition() != null) {
-      row.put("FieldShowCondition", field.getShowCondition());
-    }
   }
 
   private void applyMidEventCallback(Map<String, Object> row,
@@ -160,21 +151,4 @@ class CaseEventToFieldsGenerator<T, S, R extends HasRole> implements ConfigGener
     }
   }
 
-  private void applyFieldLabel(Map<String, Object> row, Field field) {
-    if (field.getCaseEventFieldLabel() != null) {
-      row.put("CaseEventFieldLabel", field.getCaseEventFieldLabel());
-    }
-  }
-
-  private void applyFieldHint(Map<String, Object> row, Field field) {
-    if (field.getCaseEventFieldHint() != null) {
-      row.put("CaseEventFieldHint", field.getCaseEventFieldHint());
-    }
-  }
-
-  private void applyRetainHiddenValue(Map<String, Object> row, Field field) {
-    if (field.isRetainHiddenValue()) {
-      row.put("RetainHiddenValue", "Y");
-    }
-  }
 }

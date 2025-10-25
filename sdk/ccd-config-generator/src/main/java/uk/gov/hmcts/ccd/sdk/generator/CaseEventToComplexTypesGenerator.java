@@ -80,28 +80,16 @@ class CaseEventToComplexTypesGenerator<T, S, R extends HasRole> implements
           data.put("CaseFieldID", rfn);
           data.put("DisplayContext", field.getContext().toString().toUpperCase());
           data.put("ListElementCode", locator + field.getId());
-          if (null != field.getCaseEventFieldLabel()) {
-            data.put("EventElementLabel", field.getCaseEventFieldLabel());
-          }
+          CaseEventFieldMetadataApplier.apply(data, field, "EventElementLabel", "EventHintText");
           data.put("FieldDisplayOrder", field.getFieldDisplayOrder());
           if (!Strings.isNullOrEmpty(field.getHint())) {
             data.put("HintText", field.getHint());
-          }
-          if (null != field.getShowCondition()) {
-            data.put("FieldShowCondition", field.getShowCondition());
           }
           if (null != field.getDefaultValue()) {
             String value = field.getDefaultValue() instanceof HasRole
                              ? ((HasRole) field.getDefaultValue()).getRole()
                              : field.getDefaultValue().toString();
             data.put("DefaultValue", value);
-          }
-          if (null != field.getCaseEventFieldHint()) {
-            data.put("EventHintText", field.getCaseEventFieldHint());
-          }
-
-          if (field.isRetainHiddenValue()) {
-            data.put("RetainHiddenValue", "Y");
           }
         }
         if (null != complex.getComplexFields()) {
