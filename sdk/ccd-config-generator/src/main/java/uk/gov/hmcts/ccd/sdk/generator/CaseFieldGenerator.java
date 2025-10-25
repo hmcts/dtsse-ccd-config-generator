@@ -1,7 +1,6 @@
 package uk.gov.hmcts.ccd.sdk.generator;
 
 import static org.apache.commons.lang3.StringUtils.capitalize;
-import static org.apache.commons.lang3.StringUtils.defaultIfEmpty;
 import static uk.gov.hmcts.ccd.sdk.FieldUtils.getCaseFields;
 import static uk.gov.hmcts.ccd.sdk.FieldUtils.getFieldId;
 import static uk.gov.hmcts.ccd.sdk.FieldUtils.isUnwrappedField;
@@ -107,17 +106,34 @@ class CaseFieldGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
 
     List<Map<String, Object>> result = Lists.newArrayList();
     for (String fieldId : explicitFields.keySet()) {
-      uk.gov.hmcts.ccd.sdk.api.Field field = explicitFields.get(fieldId);
-      Map<String, Object> fieldData = getField(config.getCaseType(), fieldId);
       Optional<JsonUnwrapped> unwrapped = isUnwrappedField(config.getCaseClass(), fieldId);
       // Don't export inbuilt metadata fields. Ignore unwrapped complex types
       if (fieldId.matches("\\[.+\\]") || unwrapped.isPresent()) {
         continue;
       }
+
+      final uk.gov.hmcts.ccd.sdk.api.Field field = explicitFields.get(fieldId);
+      Map<String, Object> fieldData = getField(config.getCaseType(), fieldId);
       result.add(fieldData);
-      fieldData.put("Label", defaultIfEmpty(field.getLabel(), " "));
-      String type = field.getType() == null ? "Label" : field.getType();
-      fieldData.put("FieldType", type);
+
+      Optional<Field> caseField = findCaseField(config.getCaseClass(), fieldId);
+      CCD annotation = caseField.map(candidate -> candidate.getAnnotation(CCD.class)).orElse(null);
+
+      CaseFieldAnnotationApplier.applyCcdAnnotation(fieldData, annotation);
+      CaseFieldAnnotationApplier.ensureDefaultLabel(fieldData);
+
+      if (!Strings.isNullOrEmpty(field.getLabel())) {
+        fieldData.put("Label", field.getLabel());
+      }
+
+      if (field.getType() != null) {
+        fieldData.put("FieldType", field.getType());
+      } else if (caseField.isPresent()) {
+        CaseFieldTypeResolver.applyFieldType(config.getCaseClass(), caseField.get(), fieldData, annotation);
+      } else {
+        fieldData.put("FieldType", "Label");
+      }
+
       if (field.getFieldTypeParameter() != null) {
         fieldData.put("FieldTypeParameter", field.getFieldTypeParameter());
       }
@@ -132,6 +148,13 @@ class CaseFieldGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
     result.put("ID", id);
     result.put("SecurityClassification", "Public");
     return result;
+  }
+
+  private static Optional<Field> findCaseField(Class<?> caseClass, String fieldId) {
+    return getCaseFields(caseClass)
+        .stream()
+        .filter(candidate -> getFieldId(candidate).equals(fieldId))
+        .findFirst();
   }
 
 }
