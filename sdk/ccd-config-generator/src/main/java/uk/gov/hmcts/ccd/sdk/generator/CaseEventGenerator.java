@@ -28,8 +28,7 @@ class CaseEventGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
 
   public void write(File root, ResolvedCCDConfig<T, S, R> config) {
 
-    File folder = new File(root.getPath(), "CaseEvent");
-    folder.mkdir();
+    File folder = GeneratorUtils.ensureDirectory(root, "CaseEvent");
 
     List<Event<T, R, S>> events = getOrderedEvents(config.getEvents().values());
 

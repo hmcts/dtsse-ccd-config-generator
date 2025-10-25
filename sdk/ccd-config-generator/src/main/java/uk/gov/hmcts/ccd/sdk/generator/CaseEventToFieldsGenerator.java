@@ -26,8 +26,7 @@ import uk.gov.hmcts.ccd.sdk.generator.JsonUtils.AddMissing;
 class CaseEventToFieldsGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, S, R> {
 
   public void write(File root, ResolvedCCDConfig<T, S, R> config) {
-    File folder = new File(root.getPath(), "CaseEventToFields");
-    folder.mkdir();
+    File folder = GeneratorUtils.ensureDirectory(root, "CaseEventToFields");
 
     for (Event<T, R, S> event : config.getEvents().values()) {
       List<Map<String, Object>> entries = buildEntries(config, event);

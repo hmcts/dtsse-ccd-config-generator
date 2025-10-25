@@ -35,9 +35,7 @@ class CaseEventToComplexTypesGenerator<T, S, R extends HasRole> implements
           .index(entries, x -> x.get("CaseFieldID").toString());
 
       if (entriesByCaseField.size() > 0) {
-        File folder = new File(String
-            .valueOf(Paths.get(root.getPath(), "CaseEventToComplexTypes", event.getId())));
-        folder.mkdirs();
+        File folder = GeneratorUtils.ensureDirectory(root, "CaseEventToComplexTypes", event.getId());
         for (String fieldID : entriesByCaseField.keySet()) {
           Path output = Paths.get(folder.getPath(), fieldID + ".json");
           JsonUtils.mergeInto(output, entriesByCaseField.get(fieldID),
