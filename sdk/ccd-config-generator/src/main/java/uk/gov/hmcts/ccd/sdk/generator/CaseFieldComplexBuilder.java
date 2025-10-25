@@ -54,19 +54,7 @@ final class CaseFieldComplexBuilder {
     Map<String, Object> fieldInfo = CaseFieldGenerator.getField(caseTypeId, id);
     fields.add(fieldInfo);
 
-    CCD annotation = field.getAnnotation(CCD.class);
-    CaseFieldAnnotationApplier.applyCcdAnnotation(fieldInfo, annotation);
-    CaseFieldAnnotationApplier.ensureDefaultLabel(fieldInfo);
-
-    if (annotation != null && annotation.typeOverride() != FieldType.Unspecified) {
-      fieldInfo.put("FieldType", annotation.typeOverride().toString());
-      if (!Strings.isNullOrEmpty(annotation.typeParameterOverride())) {
-        fieldInfo.put("FieldTypeParameter", annotation.typeParameterOverride());
-      }
-      return;
-    }
-
-    CaseFieldTypeResolver.applyFieldType(ownerClass, field, fieldInfo, annotation);
+    populateFieldMetadata(fieldInfo, ownerClass, field);
   }
 
   private void appendUnwrapped(Field field, String currentPrefix, JsonUnwrapped unwrapped) {
@@ -74,5 +62,22 @@ final class CaseFieldComplexBuilder {
         ? unwrapped.prefix()
         : currentPrefix.concat(StringUtils.capitalize(unwrapped.prefix()));
     appendFields(field.getType(), prefix);
+  }
+
+  static void populateFieldMetadata(
+      Map<String, Object> target, Class<?> ownerClass, Field field) {
+    CCD annotation = field.getAnnotation(CCD.class);
+    CaseFieldAnnotationApplier.applyCcdAnnotation(target, annotation);
+    CaseFieldAnnotationApplier.ensureDefaultLabel(target);
+
+    if (annotation != null && annotation.typeOverride() != FieldType.Unspecified) {
+      target.put("FieldType", annotation.typeOverride().toString());
+      if (!Strings.isNullOrEmpty(annotation.typeParameterOverride())) {
+        target.put("FieldTypeParameter", annotation.typeParameterOverride());
+      }
+      return;
+    }
+
+    CaseFieldTypeResolver.applyFieldType(ownerClass, field, target, annotation);
   }
 }

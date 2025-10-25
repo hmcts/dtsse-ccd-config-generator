@@ -18,7 +18,6 @@ import java.util.Map;
 import java.util.Optional;
 import org.springframework.stereotype.Component;
 import uk.gov.hmcts.ccd.sdk.ResolvedCCDConfig;
-import uk.gov.hmcts.ccd.sdk.api.CCD;
 import uk.gov.hmcts.ccd.sdk.api.Event;
 import uk.gov.hmcts.ccd.sdk.api.HasRole;
 
@@ -79,9 +78,8 @@ class CaseFieldGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
       result.add(fieldData);
 
       Optional<Field> caseField = findCaseField(config.getCaseClass(), fieldId);
-      CCD annotation = caseField.map(candidate -> candidate.getAnnotation(CCD.class)).orElse(null);
-
-      CaseFieldAnnotationApplier.applyCcdAnnotation(fieldData, annotation);
+      caseField.ifPresent(candidate ->
+          CaseFieldComplexBuilder.populateFieldMetadata(fieldData, config.getCaseClass(), candidate));
       CaseFieldAnnotationApplier.ensureDefaultLabel(fieldData);
 
       if (!Strings.isNullOrEmpty(field.getLabel())) {
@@ -90,9 +88,7 @@ class CaseFieldGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
 
       if (field.getType() != null) {
         fieldData.put("FieldType", field.getType());
-      } else if (caseField.isPresent()) {
-        CaseFieldTypeResolver.applyFieldType(config.getCaseClass(), caseField.get(), fieldData, annotation);
-      } else {
+      } else if (!caseField.isPresent()) {
         fieldData.put("FieldType", "Label");
       }
 
