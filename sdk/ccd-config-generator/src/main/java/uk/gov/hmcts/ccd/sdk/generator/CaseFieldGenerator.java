@@ -69,13 +69,7 @@ class CaseFieldGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
       String id = getFieldId(field, idPrefix);
 
       Label label = field.getAnnotation(Label.class);
-      if (null != label) {
-
-        Map<String, Object> fieldInfo = getField(caseTypeId, label.id());
-        fieldInfo.put("FieldType", "Label");
-        fieldInfo.put("Label", label.value());
-        fields.add(fieldInfo);
-      }
+      CaseFieldAnnotationApplier.applyLabelAnnotation(fields, caseTypeId, label);
 
       Map<String, Object> fieldInfo = getField(caseTypeId, id);
       fields.add(fieldInfo);
