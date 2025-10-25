@@ -47,7 +47,7 @@ public class JSONConfigGenerator<T, S, R extends HasRole> {
   private void generateCaseType(File outputfolder, ResolvedCCDConfig<T, S, R> builder) {
     List<Map<String, Object>> fields = Lists.newArrayList();
     fields.add(Map.of(
-        "LiveFrom", "01/01/2017",
+        "LiveFrom", JsonUtils.DEFAULT_LIVE_FROM,
         "ID", builder.getCaseType(),
         "Name", builder.getCaseName(),
         "Description", builder.getCaseDesc(),
@@ -61,7 +61,7 @@ public class JSONConfigGenerator<T, S, R extends HasRole> {
   private void generateJurisdiction(File outputfolder, ResolvedCCDConfig<T, S, R> builder) {
     List<Map<String, Object>> fields = Lists.newArrayList();
     fields.add(ImmutableMap.of(
-        "LiveFrom", "01/01/2017",
+        "LiveFrom", JsonUtils.DEFAULT_LIVE_FROM,
         "ID", builder.getJurId(),
         "Name", builder.getJurName(),
         "Description", builder.getJurDesc()

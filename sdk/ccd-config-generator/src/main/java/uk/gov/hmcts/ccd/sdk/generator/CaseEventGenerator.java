@@ -62,22 +62,9 @@ class CaseEventGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
       data.put("DisplayOrder", t++);
     }
     data.put("CaseTypeID", caseTypeId);
-    if (event.isShowSummary()) {
-      data.put("ShowSummary", "Y");
-    } else {
-      data.put("ShowSummary", "N");
-    }
-
-    if (event.isShowEventNotes()) {
-      data.put("ShowEventNotes", "Y");
-    } else {
-      data.put("ShowEventNotes", "N");
-    }
-    if (event.isPublishToCamunda()) {
-      data.put("Publish", "Y");
-    } else {
-      data.put("Publish", "N");
-    }
+    JsonUtils.putYn(data, "ShowSummary", event.isShowSummary());
+    JsonUtils.putYn(data, "ShowEventNotes", event.isShowEventNotes());
+    JsonUtils.putYn(data, "Publish", event.isPublishToCamunda());
     if (!Strings.isNullOrEmpty(event.getEndButtonLabel())) {
       data.put("EndButtonLabel", event.getEndButtonLabel());
     }

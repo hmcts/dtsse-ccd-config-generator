@@ -3,7 +3,6 @@ package uk.gov.hmcts.ccd.sdk.generator;
 import static java.util.stream.Collectors.toList;
 import static uk.gov.hmcts.ccd.sdk.generator.JsonUtils.mergeInto;
 
-import com.google.common.collect.Maps;
 import java.io.File;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -31,9 +30,7 @@ public class CategoriesGenerator<T, S, R extends HasRole> implements ConfigGener
 
   @SneakyThrows
   private static Map<String, Object> toJson(String caseType, CaseCategory categories) {
-    Map<String, Object> field = Maps.newHashMap();
-    field.put("LiveFrom", "01/10/2022");
-    field.put("CaseTypeID", caseType);
+    Map<String, Object> field = JsonUtils.caseRow(caseType, "01/10/2022");
     field.put("CategoryID", categories.getCategoryID());
     field.put("CategoryLabel", categories.getCategoryLabel());
     field.put("DisplayOrder", categories.getDisplayOrder());

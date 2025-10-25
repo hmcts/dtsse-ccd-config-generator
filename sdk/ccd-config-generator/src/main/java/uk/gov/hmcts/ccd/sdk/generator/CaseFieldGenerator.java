@@ -17,7 +17,6 @@ import java.lang.reflect.ParameterizedType;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Collection;
-import java.util.Hashtable;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -247,9 +246,7 @@ class CaseFieldGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
   }
 
   public static Map<String, Object> getField(String caseType, String id) {
-    Map<String, Object> result = new Hashtable<>();
-    result.put("LiveFrom", "01/01/2017");
-    result.put("CaseTypeID", caseType);
+    Map<String, Object> result = JsonUtils.caseRow(caseType);
     result.put("ID", id);
     result.put("SecurityClassification", "Public");
     return result;

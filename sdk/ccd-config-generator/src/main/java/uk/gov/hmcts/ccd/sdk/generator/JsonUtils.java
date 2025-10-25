@@ -27,6 +27,8 @@ import lombok.SneakyThrows;
 
 public class JsonUtils {
 
+  public static final String DEFAULT_LIVE_FROM = "01/01/2017";
+
   @SneakyThrows
   private static void writeFile(Path path, String value) {
     Files.writeString(path, value, StandardCharsets.UTF_8);
@@ -68,10 +70,29 @@ public class JsonUtils {
 
   public static Map<String, Object> getField(String id) {
     Map<String, Object> field = Maps.newHashMap();
-    field.put("LiveFrom", "01/01/2017");
+    field.put("LiveFrom", DEFAULT_LIVE_FROM);
     field.put("SecurityClassification", "Public");
     field.put("ID", id);
     return field;
+  }
+
+  public static Map<String, Object> caseRow(String caseTypeId) {
+    return caseRow(caseTypeId, DEFAULT_LIVE_FROM);
+  }
+
+  public static Map<String, Object> caseRow(String caseTypeId, String liveFrom) {
+    Map<String, Object> row = Maps.newHashMap();
+    row.put("LiveFrom", liveFrom);
+    row.put("CaseTypeID", caseTypeId);
+    return row;
+  }
+
+  public static void putYn(Map<String, Object> target, String key, boolean condition) {
+    target.put(key, condition ? "Y" : "N");
+  }
+
+  public static String yn(boolean condition) {
+    return condition ? "Y" : "N";
   }
 
   static List<Map<String, Object>> mergeInto(List<Map<String, Object>> existing,

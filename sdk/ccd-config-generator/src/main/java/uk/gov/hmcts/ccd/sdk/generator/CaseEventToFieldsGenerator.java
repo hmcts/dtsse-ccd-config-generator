@@ -3,7 +3,6 @@ package uk.gov.hmcts.ccd.sdk.generator;
 
 import com.google.common.collect.HashMultimap;
 import com.google.common.collect.Lists;
-import com.google.common.collect.Maps;
 import com.google.common.collect.Multimap;
 import com.google.common.primitives.Ints;
 import java.io.File;
@@ -34,11 +33,9 @@ class CaseEventToFieldsGenerator<T, S, R extends HasRole> implements ConfigGener
         List<Map<String, Object>> entries = Lists.newArrayList();
         List<Field.FieldBuilder> fields = collection.getFields();
         for (Field.FieldBuilder fb : fields) {
-          Map<String, Object> info = Maps.newHashMap();
+          Map<String, Object> info = JsonUtils.caseRow(config.getCaseType());
           entries.add(info);
-          info.put("LiveFrom", "01/01/2017");
           info.put("CaseEventID", event.getId());
-          info.put("CaseTypeID", config.getCaseType());
           Field field = fb.build();
           info.put("CaseFieldID", field.getId());
           String context =

@@ -23,12 +23,10 @@ class AuthorisationCaseTypeGenerator<T, S, R extends HasRole> implements ConfigG
           // Add non case roles.
           if (!r.getRole().matches("\\[.+\\]")) {
             boolean shuttered = config.isShutterService() || config.getShutterServiceForRoles().contains(r);
-            result.add(Map.of(
-                "LiveFrom", "01/01/2017",
-                "CaseTypeID", config.getCaseType(),
-                "UserRole", r.getRole(),
-                "CRUD", shuttered ? "D" : r.getCaseTypePermissions()
-            ));
+            Map<String, Object> entry = JsonUtils.caseRow(config.getCaseType());
+            entry.put("UserRole", r.getRole());
+            entry.put("CRUD", shuttered ? "D" : r.getCaseTypePermissions());
+            result.add(entry);
           }
         }
 

@@ -2,7 +2,6 @@ package uk.gov.hmcts.ccd.sdk.generator;
 
 import com.google.common.base.Strings;
 import com.google.common.collect.Lists;
-import com.google.common.collect.Maps;
 import java.io.File;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -37,9 +36,7 @@ class StateGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, S, R
   @SneakyThrows
   public static Map<String, Object> enumToJsonMap(String caseType, Class<?> enumType,
                                                   Object enumConstant, String id) {
-    Map<String, Object> field = Maps.newHashMap();
-    field.put("LiveFrom", "01/01/2017");
-    field.put("CaseTypeID", caseType);
+    Map<String, Object> field = JsonUtils.caseRow(caseType);
     field.put("ID", id);
 
     CCD ccd = enumType.getField(enumConstant.toString()).getAnnotation(CCD.class);

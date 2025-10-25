@@ -3,7 +3,6 @@ package uk.gov.hmcts.ccd.sdk.generator;
 import static com.google.common.base.Strings.isNullOrEmpty;
 
 import com.google.common.collect.Lists;
-import com.google.common.collect.Maps;
 import java.io.File;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -51,9 +50,7 @@ class SearchFieldAndResultGenerator<T, S, R extends HasRole> implements ConfigGe
   protected static Map<String, Object> buildField(String caseType, String fieldId, String label, int displayOrder,
                                                   String listElementCode, String showCondition, HasRole userRole,
                                                   SortOrder order, String displayContextParameter) {
-    Map<String, Object> field = Maps.newHashMap();
-    field.put("LiveFrom", "01/01/2017");
-    field.put("CaseTypeID", caseType);
+    Map<String, Object> field = JsonUtils.caseRow(caseType);
     field.put("CaseFieldID", fieldId);
     field.put("Label", label);
 

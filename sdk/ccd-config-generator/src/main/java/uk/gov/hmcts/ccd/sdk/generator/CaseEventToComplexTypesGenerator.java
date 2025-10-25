@@ -75,7 +75,7 @@ class CaseEventToComplexTypesGenerator<T, S, R extends HasRole> implements
 
           Map<String, Object> data = Maps.newHashMap();
           entries.add(data);
-          data.put("LiveFrom", "01/01/2017");
+          data.put("LiveFrom", JsonUtils.DEFAULT_LIVE_FROM);
           data.put("CaseEventID", eventId);
           data.put("CaseFieldID", rfn);
           data.put("DisplayContext", field.getContext().toString().toUpperCase());
