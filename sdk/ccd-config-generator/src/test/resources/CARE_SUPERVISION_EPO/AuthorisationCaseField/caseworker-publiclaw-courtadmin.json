@@ -1,6 +1,13 @@
 [
   {
     "CRUD": "CRU",
+    "CaseFieldID": "aField",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "LiveFrom": "01/01/2017",
+    "UserRole": "caseworker-publiclaw-courtadmin"
+  },
+  {
+    "CRUD": "CRU",
     "CaseFieldID": "allocatedJudge",
     "CaseTypeID": "CARE_SUPERVISION_EPO",
     "LiveFrom": "01/01/2017",

@@ -351,6 +351,15 @@ public class CCDConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<CaseData, S
         .page("<Notes>", this::checkCaseNotes)
           .label("caseNotesLabel1","###Case notes",null,true)
           .mandatory(CaseData::getCaseNotes);
+
+    builder.event("set-a-field")
+        .forAllStates()
+        .name("Set a field")
+        .description("Sets the new aField value")
+        .grant(CRU, HMCTS_ADMIN)
+        .fields()
+        .page("SetAField")
+        .optional(CaseData::getAField);
   }
 
   private void buildAttachScannedDocEvent() {

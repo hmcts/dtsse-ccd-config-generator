@@ -25,6 +25,14 @@
   },
   {
     "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "FieldType": "Text",
+    "ID": "aField",
+    "Label": "A Field",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public"
+  },
+  {
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
     "FieldType": "Address",
     "ID": "addressField",
     "Label": " ",
