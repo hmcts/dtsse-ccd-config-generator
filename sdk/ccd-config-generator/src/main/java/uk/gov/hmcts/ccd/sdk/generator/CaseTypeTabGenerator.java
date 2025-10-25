@@ -77,7 +77,7 @@ class CaseTypeTabGenerator<T, S, R extends HasRole> implements ConfigGenerator<T
         field.put("DisplayContextParameter", tabField.getDisplayContextParameter());
       }
       if (tabField.getLabel() != null) {
-        Map<String, Object> fieldInfo = buildLabelField(caseType, tabField.getId());
+        Map<String, Object> fieldInfo = CaseFieldGenerator.getField(caseType, tabField.getId());
         fieldInfo.put("FieldType", "Label");
         fieldInfo.put("Label", tabField.getLabel());
         caseFields.add(fieldInfo);
@@ -100,10 +100,4 @@ class CaseTypeTabGenerator<T, S, R extends HasRole> implements ConfigGenerator<T
     return field;
   }
 
-  public static Map<String, Object> buildLabelField(String caseType, String id) {
-    Map<String, Object> result = JsonUtils.caseRow(caseType);
-    result.put("ID", id);
-    result.put("SecurityClassification", "Public");
-    return result;
-  }
 }
