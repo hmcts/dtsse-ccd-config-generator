@@ -99,6 +99,13 @@
   },
   {
     "CRUD": "CRU",
+    "CaseEventID": "set-a-field",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "LiveFrom": "01/01/2017",
+    "UserRole": "caseworker-publiclaw-courtadmin"
+  },
+  {
+    "CRUD": "CRU",
     "CaseEventID": "setDataAndSecurityClassification",
     "CaseTypeID": "CARE_SUPERVISION_EPO",
     "LiveFrom": "01/01/2017",

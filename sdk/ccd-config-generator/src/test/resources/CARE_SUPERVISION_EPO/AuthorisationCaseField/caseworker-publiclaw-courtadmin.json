@@ -399,6 +399,13 @@
     "UserRole" : "caseworker-publiclaw-courtadmin"
   },
   {
+    "CRUD" : "CRU",
+    "CaseFieldID" : "aField",
+    "CaseTypeID" : "CARE_SUPERVISION_EPO",
+    "LiveFrom" : "01/01/2017",
+    "UserRole" : "caseworker-publiclaw-courtadmin"
+  },
+  {
     "CRUD" : "R",
     "CaseFieldID" : "paymentHistoryField",
     "CaseTypeID" : "CARE_SUPERVISION_EPO",

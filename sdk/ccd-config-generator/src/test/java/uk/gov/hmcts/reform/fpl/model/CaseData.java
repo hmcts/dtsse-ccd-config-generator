@@ -81,6 +81,8 @@ public class CaseData {
   private final String caseName;
   @CCD(regex = ".*", access = {BulkScan.class})
   private final String gatekeeperEmail;
+  @CCD(label = "A Field")
+  private final String aField;
   private final String caseLocalAuthority;
   private final Set<RepresentativeRole> partyTypes;
   private final Risks risks;
