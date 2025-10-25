@@ -1,3 +1,0 @@
-- [ ] Cache case field lookups in `sdk/ccd-config-generator/src/main/java/uk/gov/hmcts/ccd/sdk/generator/CaseFieldGenerator.java` so explicit field export stops re-scanning reflection for every id.
-- [x] Explore merging explicit event field export into `CaseFieldComplexBuilder` to eliminate duplicate map wiring and keep annotation/type handling in one place.
-- [ ] Make `CaseFieldComplexBuilder` accept a map factory (rather than calling `CaseFieldGenerator.getField` directly) to improve testability and decouple row creation.
