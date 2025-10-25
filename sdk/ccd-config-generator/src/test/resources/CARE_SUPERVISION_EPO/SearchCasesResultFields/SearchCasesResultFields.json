@@ -1,20 +1,62 @@
 [
   {
-    "LiveFrom": "03/02/2021",
+    "CaseFieldID": "[CASE_REFERENCE]",
     "CaseTypeID": "CARE_SUPERVISION_EPO",
-    "CaseFieldID": "allocatedJudge",
-    "DisplayOrder": 1,
-    "UserRole": "",
-    "Label": "Allocated Judge",
-    "UseCase": "orgcases"
+    "DisplayOrder": 5,
+    "Label": "Case Number",
+    "LiveFrom": "03/02/2021",
+    "UseCase": "orgcases",
+    "UserRole": ""
   },
   {
-    "LiveFrom": "03/02/2021",
+    "CaseFieldID": "[STATE]",
     "CaseTypeID": "CARE_SUPERVISION_EPO",
-    "CaseFieldID": "[CASE_REFERENCE]",
+    "DisplayOrder": 6,
+    "Label": "State",
+    "LiveFrom": "03/02/2021",
+    "UseCase": "orgcases",
+    "UserRole": ""
+  },
+  {
+    "CaseFieldID": "allocatedJudge",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "DisplayOrder": 1,
+    "Label": "Allocated Judge",
+    "LiveFrom": "03/02/2021",
+    "UseCase": "orgcases",
+    "UserRole": ""
+  },
+  {
+    "CaseFieldID": "dateSubmitted",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "DisplayContextParameter": null,
     "DisplayOrder": 2,
-    "UserRole": "",
-    "Label": "Case Number",
-    "UseCase": "orgcases"
+    "Label": "Date submitted",
+    "LiveFrom": "03/02/2021",
+    "UseCase": "orgcases",
+    "UserRole": ""
+  },
+  {
+    "CaseFieldID": "documentList",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "DisplayContextParameter": "documentList.value",
+    "DisplayOrder": 3,
+    "Label": "Document selection",
+    "ListElementCode": "documentList.value",
+    "LiveFrom": "03/02/2021",
+    "ResultsOrdering": "documentList.value",
+    "UseCase": "orgcases",
+    "UserRole": ""
+  },
+  {
+    "CaseFieldID": "organisationPolicy",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "DisplayContextParameter": "organisationPolicy.organisation.OrganisationID",
+    "DisplayOrder": 4,
+    "Label": "Organisation policy",
+    "ListElementCode": "organisationPolicy.organisation.OrganisationID",
+    "LiveFrom": "03/02/2021",
+    "UseCase": "orgcases",
+    "UserRole": ""
   }
 ]

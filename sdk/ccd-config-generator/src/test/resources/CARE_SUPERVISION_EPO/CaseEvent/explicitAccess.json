@@ -1,0 +1,17 @@
+[
+  {
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "Description": "Exercise explicit grants and summary flags",
+    "DisplayOrder": 7,
+    "EndButtonLabel": "Save and continue",
+    "ID": "explicitAccess",
+    "LiveFrom": "01/01/2017",
+    "Name": "Explicit grants coverage",
+    "PostConditionState": "Open",
+    "PreConditionState(s)": "Open",
+    "Publish": "N",
+    "SecurityClassification": "Public",
+    "ShowEventNotes": "Y",
+    "ShowSummary": "Y"
+  }
+]

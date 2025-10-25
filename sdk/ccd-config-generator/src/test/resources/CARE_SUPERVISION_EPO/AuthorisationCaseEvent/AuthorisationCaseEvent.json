@@ -1,12 +1,5 @@
 [
   {
-    "CRUD" : "CRU",
-    "CaseEventID" : "deleted",
-    "CaseTypeID" : "CARE_SUPERVISION_EPO",
-    "LiveFrom" : "01/01/2017",
-    "UserRole" : "caseworker-publiclaw-solicitor"
-  },
-  {
     "CRUD": "CRU",
     "CaseEventID": "addFamilyManCaseNumber",
     "CaseTypeID": "CARE_SUPERVISION_EPO",
@@ -71,10 +64,31 @@
   },
   {
     "CRUD": "CRU",
+    "CaseEventID": "deleted",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "LiveFrom": "01/01/2017",
+    "UserRole": "caseworker-publiclaw-solicitor"
+  },
+  {
+    "CRUD": "CRU",
+    "CaseEventID": "explicitAccess",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "LiveFrom": "01/01/2017",
+    "UserRole": "caseworker-publiclaw-courtadmin"
+  },
+  {
+    "CRUD": "CRU",
     "CaseEventID": "handleEvidence",
     "CaseTypeID": "CARE_SUPERVISION_EPO",
     "LiveFrom": "01/01/2017",
     "UserRole": "caseworker-publiclaw-systemupdate"
+  },
+  {
+    "CRUD": "CRU",
+    "CaseEventID": "noticeOfChangeApplied",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "LiveFrom": "01/01/2017",
+    "UserRole": "caseworker-publiclaw-courtadmin"
   },
   {
     "CRUD": "CRU",
@@ -100,13 +114,6 @@
   {
     "CRUD": "CRU",
     "CaseEventID": "setDataAndSecurityClassification",
-    "CaseTypeID": "CARE_SUPERVISION_EPO",
-    "LiveFrom": "01/01/2017",
-    "UserRole": "caseworker-publiclaw-courtadmin"
-  },
-  {
-    "CRUD": "CRU",
-    "CaseEventID": "noticeOfChangeApplied",
     "CaseTypeID": "CARE_SUPERVISION_EPO",
     "LiveFrom": "01/01/2017",
     "UserRole": "caseworker-publiclaw-courtadmin"
