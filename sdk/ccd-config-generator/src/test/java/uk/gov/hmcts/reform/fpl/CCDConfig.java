@@ -64,6 +64,7 @@ public class CCDConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<CaseData, S
     buildHandleEvidenceEvent();
     buildOpen();
     buildTransitions();
+    buildExplicitAccessEvent();
 
     // UI tabs and inputs.
     buildTabs();
@@ -201,7 +202,28 @@ public class CCDConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<CaseData, S
   private void buildSearchCasesFields() {
     builder.searchCasesFields()
       .field(CaseData::getAllocatedJudge, "Allocated Judge")
-      .caseReferenceField();
+      .field(CaseData::getDateSubmitted, "Date submitted", "#DATETIMEDISPLAY(d  MMMM yyyy)")
+      .field("documentList", "Document selection", "#COLLECTION_VIEW", "documentList.value", "Ascending")
+      .field(CaseData::getOrganisationPolicy, "Organisation policy", "#ACCESS_PROFILE",
+        "organisationPolicy.organisation.OrganisationID")
+      .caseReferenceField()
+      .stateField();
+  }
+
+  private void buildExplicitAccessEvent() {
+    builder.event("explicitAccess")
+        .forState(Open)
+        .name("Explicit grants coverage")
+        .description("Exercise explicit grants and summary flags")
+        .showSummary()
+        .showEventNotes()
+        .explicitGrants()
+        .grant(CRU, HMCTS_ADMIN)
+        .fields()
+        .page("ExplicitAccessPage")
+        .showCondition("caseName=\"\"")
+        .optionalWithLabel(CaseData::getGatekeeperEmail, "Gatekeeper email (explicit)")
+        .label("explicitAccessLabel", "Explicit access label");
   }
 
   private void buildWorkBasketResultFields() {
