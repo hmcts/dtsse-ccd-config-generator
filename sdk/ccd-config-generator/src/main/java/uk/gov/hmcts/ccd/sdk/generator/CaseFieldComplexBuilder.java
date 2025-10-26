@@ -49,7 +49,7 @@ final class CaseFieldComplexBuilder {
 
     String id = getFieldId(field, idPrefix);
     Label label = field.getAnnotation(Label.class);
-    CaseFieldAnnotationApplier.applyLabelAnnotation(fields, caseTypeId, label);
+    JsonUtils.applyLabelAnnotation(fields, caseTypeId, label);
 
     Map<String, Object> fieldInfo = CaseFieldGenerator.getField(caseTypeId, id);
     fields.add(fieldInfo);
@@ -67,8 +67,8 @@ final class CaseFieldComplexBuilder {
   static void populateFieldMetadata(
       Map<String, Object> target, Class<?> ownerClass, Field field) {
     CCD annotation = field.getAnnotation(CCD.class);
-    CaseFieldAnnotationApplier.applyCcdAnnotation(target, annotation);
-    CaseFieldAnnotationApplier.ensureDefaultLabel(target);
+    JsonUtils.applyCcdAnnotation(target, annotation);
+    JsonUtils.ensureDefaultLabel(target);
 
     if (annotation != null && annotation.typeOverride() != FieldType.Unspecified) {
       target.put("FieldType", annotation.typeOverride().toString());

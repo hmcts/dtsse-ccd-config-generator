@@ -48,10 +48,6 @@ class CaseFieldGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
     return CaseFieldComplexBuilder.build(dataClass, caseTypeId);
   }
 
-  public static List<Map<String, Object>> toComplex(Class dataClass, String caseTypeId, String idPrefix) {
-    return CaseFieldComplexBuilder.build(dataClass, caseTypeId, idPrefix);
-  }
-
   private static <T, S, R extends HasRole> List<Map<String, Object>> getExplicitFields(
       ResolvedCCDConfig<T, S, R> config) {
     Map<String, uk.gov.hmcts.ccd.sdk.api.Field> explicitFields = Maps.newHashMap();
@@ -80,7 +76,7 @@ class CaseFieldGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
       Optional<Field> caseField = findCaseField(config.getCaseClass(), fieldId);
       caseField.ifPresent(candidate ->
           CaseFieldComplexBuilder.populateFieldMetadata(fieldData, config.getCaseClass(), candidate));
-      CaseFieldAnnotationApplier.ensureDefaultLabel(fieldData);
+      JsonUtils.ensureDefaultLabel(fieldData);
 
       if (!Strings.isNullOrEmpty(field.getLabel())) {
         fieldData.put("Label", field.getLabel());
