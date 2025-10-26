@@ -2,23 +2,17 @@ package uk.gov.hmcts.ccd.sdk;
 
 import javax.sql.DataSource;
 import org.flywaydb.core.Flyway;
-import org.flywaydb.core.api.configuration.FluentConfiguration;
-import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.flyway.FlywayAutoConfiguration;
-import org.springframework.boot.autoconfigure.flyway.FlywayMigrationInitializer;
 import org.springframework.boot.autoconfigure.flyway.FlywayMigrationStrategy;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.ComponentScan;
 import org.springframework.core.io.ResourceLoader;
 import uk.gov.hmcts.ccd.config.MessagingProperties;
 
-/**
- * Based on <a href="https://github.com/spring-projects/spring-boot/blob/main/spring-boot-project/spring-boot-autoconfigure/src/main/java/org/springframework/boot/autoconfigure/flyway/FlywayAutoConfiguration.java">...</a>.
- */
 @AutoConfiguration(
     before = {FlywayAutoConfiguration.class}
 )
@@ -27,23 +21,24 @@ import uk.gov.hmcts.ccd.config.MessagingProperties;
 @ConditionalOnProperty(prefix = "spring.flyway", name = "enabled", matchIfMissing = true)
 public class DecentralisedDataConfiguration {
 
-
-  @Autowired
-  DecentralisedDataConfiguration(ResourceLoader resourceLoader,
-                                 DataSource dataSource) {
-    FluentConfiguration configuration = new FluentConfiguration(resourceLoader.getClassLoader());
-    configuration.locations("classpath:dataruntime-db/migration");
-    configuration.schemas("ccd");
-    configuration.dataSource(dataSource);
-    configuration.load().migrate();
-  }
-
   /**
-   * Delay spring boot's default flyway migration until after the decentralised data migration.
+   * Enforce ordering so SDK migrations always run before the application migrations.
    */
   @Bean
-  public FlywayMigrationInitializer flywayInitializer(Flyway flyway,
-                                                      ObjectProvider<FlywayMigrationStrategy> migrationStrategy) {
-    return new FlywayMigrationInitializer(flyway, migrationStrategy.getIfAvailable());
+  @ConditionalOnMissingBean(FlywayMigrationStrategy.class)
+  public FlywayMigrationStrategy orderedFlywayMigrationStrategy(
+      ResourceLoader resourceLoader,
+      DataSource dataSource) {
+    return (Flyway appFlyway) -> {
+      Flyway sdkFlyway = Flyway.configure(resourceLoader.getClassLoader())
+          .dataSource(dataSource)
+          .schemas("ccd")
+          .locations("classpath:dataruntime-db/migration")
+          .load();
+      sdkFlyway.migrate();
+      if (appFlyway != null) {
+        appFlyway.migrate();
+      }
+    };
   }
 }
