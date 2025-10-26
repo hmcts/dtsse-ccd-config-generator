@@ -1,6 +1,5 @@
 package uk.gov.hmcts.ccd.sdk.generator;
 
-import com.google.common.collect.Maps;
 import java.io.File;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -37,9 +36,7 @@ class SearchCasesResultFieldsGenerator<T, S, R extends HasRole> implements
   }
 
   private static Map<String, Object> buildField(String caseType, SearchCasesResultField field, int order) {
-    Map<String, Object> object = Maps.newHashMap();
-    object.put("LiveFrom", "03/02/2021");
-    object.put("CaseTypeID", caseType);
+    Map<String, Object> object = JsonUtils.caseRow(caseType, "03/02/2021");
     object.put("UserRole", "");
     object.put("CaseFieldID", field.getId());
     object.put("Label", field.getLabel());
@@ -58,4 +55,3 @@ class SearchCasesResultFieldsGenerator<T, S, R extends HasRole> implements
     return object;
   }
 }
-

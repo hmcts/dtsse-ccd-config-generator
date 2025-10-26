@@ -2,11 +2,9 @@ package uk.gov.hmcts.ccd.sdk.generator;
 
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Lists;
-import com.google.common.collect.Maps;
 import java.io.File;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.Hashtable;
 import java.util.List;
 import java.util.Map;
 import org.springframework.stereotype.Component;
@@ -79,7 +77,7 @@ class CaseTypeTabGenerator<T, S, R extends HasRole> implements ConfigGenerator<T
         field.put("DisplayContextParameter", tabField.getDisplayContextParameter());
       }
       if (tabField.getLabel() != null) {
-        Map<String, Object> fieldInfo = buildLabelField(caseType, tabField.getId());
+        Map<String, Object> fieldInfo = CaseFieldGenerator.getField(caseType, tabField.getId());
         fieldInfo.put("FieldType", "Label");
         fieldInfo.put("Label", tabField.getLabel());
         caseFields.add(fieldInfo);
@@ -91,9 +89,7 @@ class CaseTypeTabGenerator<T, S, R extends HasRole> implements ConfigGenerator<T
 
   private static Map<String, Object> buildField(String caseType, String tabId, String fieldId,
       String tabLabel, int displayOrder, int tabFieldDisplayOrder, String role) {
-    Map<String, Object> field = Maps.newHashMap();
-    field.put("LiveFrom", "01/01/2017");
-    field.put("CaseTypeID", caseType);
+    Map<String, Object> field = JsonUtils.caseRow(caseType);
     field.put("Channel", "CaseWorker");
     field.put("TabID", tabId);
     field.put("TabLabel", tabLabel);
@@ -104,13 +100,4 @@ class CaseTypeTabGenerator<T, S, R extends HasRole> implements ConfigGenerator<T
     return field;
   }
 
-  public static Map<String, Object> buildLabelField(String caseType, String id) {
-    Map<String, Object> result = new Hashtable<>();
-    result.put("LiveFrom", "01/01/2017");
-    result.put("CaseTypeID", caseType);
-    result.put("ID", id);
-    result.put("SecurityClassification", "Public");
-    return result;
-  }
 }
-

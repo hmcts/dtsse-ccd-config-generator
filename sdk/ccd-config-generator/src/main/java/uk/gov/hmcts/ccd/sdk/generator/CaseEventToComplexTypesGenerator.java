@@ -35,9 +35,7 @@ class CaseEventToComplexTypesGenerator<T, S, R extends HasRole> implements
           .index(entries, x -> x.get("CaseFieldID").toString());
 
       if (entriesByCaseField.size() > 0) {
-        File folder = new File(String
-            .valueOf(Paths.get(root.getPath(), "CaseEventToComplexTypes", event.getId())));
-        folder.mkdirs();
+        File folder = GeneratorUtils.ensureDirectory(root, "CaseEventToComplexTypes", event.getId());
         for (String fieldID : entriesByCaseField.keySet()) {
           Path output = Paths.get(folder.getPath(), fieldID + ".json");
           JsonUtils.mergeInto(output, entriesByCaseField.get(fieldID),
@@ -75,33 +73,21 @@ class CaseEventToComplexTypesGenerator<T, S, R extends HasRole> implements
 
           Map<String, Object> data = Maps.newHashMap();
           entries.add(data);
-          data.put("LiveFrom", "01/01/2017");
+          data.put("LiveFrom", JsonUtils.DEFAULT_LIVE_FROM);
           data.put("CaseEventID", eventId);
           data.put("CaseFieldID", rfn);
           data.put("DisplayContext", field.getContext().toString().toUpperCase());
           data.put("ListElementCode", locator + field.getId());
-          if (null != field.getCaseEventFieldLabel()) {
-            data.put("EventElementLabel", field.getCaseEventFieldLabel());
-          }
+          CaseEventToFieldsGenerator.applyMetadata(data, field, "EventElementLabel", "EventHintText");
           data.put("FieldDisplayOrder", field.getFieldDisplayOrder());
           if (!Strings.isNullOrEmpty(field.getHint())) {
             data.put("HintText", field.getHint());
-          }
-          if (null != field.getShowCondition()) {
-            data.put("FieldShowCondition", field.getShowCondition());
           }
           if (null != field.getDefaultValue()) {
             String value = field.getDefaultValue() instanceof HasRole
                              ? ((HasRole) field.getDefaultValue()).getRole()
                              : field.getDefaultValue().toString();
             data.put("DefaultValue", value);
-          }
-          if (null != field.getCaseEventFieldHint()) {
-            data.put("EventHintText", field.getCaseEventFieldHint());
-          }
-
-          if (field.isRetainHiddenValue()) {
-            data.put("RetainHiddenValue", "Y");
           }
         }
         if (null != complex.getComplexFields()) {

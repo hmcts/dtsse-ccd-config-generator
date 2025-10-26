@@ -3,7 +3,6 @@ package uk.gov.hmcts.ccd.sdk.generator;
 
 import com.google.common.collect.HashMultimap;
 import com.google.common.collect.Lists;
-import com.google.common.collect.Maps;
 import com.google.common.collect.Multimap;
 import com.google.common.primitives.Ints;
 import java.io.File;
@@ -13,6 +12,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import org.springframework.stereotype.Component;
 import uk.gov.hmcts.ccd.sdk.ResolvedCCDConfig;
 import uk.gov.hmcts.ccd.sdk.api.DisplayContext;
@@ -26,91 +26,149 @@ import uk.gov.hmcts.ccd.sdk.generator.JsonUtils.AddMissing;
 class CaseEventToFieldsGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, S, R> {
 
   public void write(File root, ResolvedCCDConfig<T, S, R> config) {
+    File folder = GeneratorUtils.ensureDirectory(root, "CaseEventToFields");
+
     for (Event<T, R, S> event : config.getEvents().values()) {
-      // For use in tracking which callbacks have been written.
-      Multimap<String, String> writtenCallbacks = HashMultimap.create();
-      FieldCollection collection = event.getFields();
-      if (collection.getFields().size() > 0) {
-        List<Map<String, Object>> entries = Lists.newArrayList();
-        List<Field.FieldBuilder> fields = collection.getFields();
-        for (Field.FieldBuilder fb : fields) {
-          Map<String, Object> info = Maps.newHashMap();
-          entries.add(info);
-          info.put("LiveFrom", "01/01/2017");
-          info.put("CaseEventID", event.getId());
-          info.put("CaseTypeID", config.getCaseType());
-          Field field = fb.build();
-          info.put("CaseFieldID", field.getId());
-          String context =
-              field.getContext() == null ? "COMPLEX" : field.getContext().toString().toUpperCase();
-          info.put("DisplayContext", context);
-          info.put("PageFieldDisplayOrder", field.getPageFieldDisplayOrder());
-          if (event.isPublishToCamunda()) {
-            if (!context.equals(DisplayContext.Complex.toString().toUpperCase())) {
-              info.put("Publish", "Y");
-            }
-          }
-          Object pageId = field.getPage();
-          if (pageId == null) {
-            pageId = 1;
-          } else {
-            Integer id = Ints
-                .tryParse(pageId.toString());
-            pageId = id != null ? id : pageId;
-          }
-          info.put("PageID", pageId);
-          info.put("PageDisplayOrder", field.getPageDisplayOrder());
-          info.put("PageColumnNumber", 1);
-          if (field.getShowCondition() != null) {
-            info.put("FieldShowCondition", field.getShowCondition());
-          }
-
-          // Include any mid-event callbacks only on the first page's entry
-          if (collection.getPagesToMidEvent().containsKey(pageId.toString())
-              && !writtenCallbacks.containsEntry(event.getId(), pageId.toString())) {
-            info.put("CallBackURLMidEvent", config.getCallbackHost() + "/callbacks/mid-event?page="
-                + URLEncoder.encode(pageId.toString(), StandardCharsets.UTF_8)
-                + "&eventId="
-                + event.getId());
-            writtenCallbacks.put(event.getId(), pageId.toString());
-          }
-
-          if (collection.getPageShowConditions().containsKey(field.getPage())) {
-            info.put("PageShowCondition",
-                collection.getPageShowConditions().remove(field.getPage()));
-          }
-
-          if (field.isShowSummary()) {
-            info.put("ShowSummaryChangeOption", "Y");
-          }
-
-          if (collection.getPageLabels().containsKey(field.getPage())) {
-            info.put("PageLabel", collection.getPageLabels().get(field.getPage()));
-          }
-
-          if (null != field.getDisplayContextParameter()) {
-            info.put("DisplayContextParameter", field.getDisplayContextParameter());
-          }
-
-          if (null != field.getCaseEventFieldLabel()) {
-            info.put("CaseEventFieldLabel", field.getCaseEventFieldLabel());
-          }
-
-          if (null != field.getCaseEventFieldHint()) {
-            info.put("CaseEventFieldHint", field.getCaseEventFieldHint());
-          }
-
-          if (field.isRetainHiddenValue()) {
-            info.put("RetainHiddenValue", "Y");
-          }
-        }
-
-        File folder = new File(root.getPath(), "CaseEventToFields");
-        folder.mkdir();
-
+      List<Map<String, Object>> entries = buildEntries(config, event);
+      if (!entries.isEmpty()) {
         Path output = Paths.get(folder.getPath(), event.getId() + ".json");
         JsonUtils.mergeInto(output, entries, new AddMissing(), "CaseFieldID");
       }
     }
   }
+
+  private List<Map<String, Object>> buildEntries(ResolvedCCDConfig<T, S, R> config,
+                                                 Event<T, R, S> event) {
+    FieldCollection collection = event.getFields();
+    if (collection.getFields().isEmpty()) {
+      return List.of();
+    }
+
+    Multimap<String, String> writtenCallbacks = HashMultimap.create();
+    List<Map<String, Object>> entries = Lists.newArrayList();
+    for (Field.FieldBuilder builder : collection.getFields()) {
+      Field field = builder.build();
+      Map<String, Object> row = JsonUtils.caseRow(config.getCaseType());
+      entries.add(row);
+      populateCoreColumns(row, event, field);
+      applyPublishFlag(row, event, field);
+
+      Object pageId = resolvePageId(field.getPage());
+      row.put("PageID", pageId);
+      row.put("PageDisplayOrder", field.getPageDisplayOrder());
+      row.put("PageColumnNumber", 1);
+      applyMetadata(row, field, "CaseEventFieldLabel", "CaseEventFieldHint");
+      applyMidEventCallback(row, event, config, collection, pageId, writtenCallbacks);
+      applyPageShowCondition(row, collection, field);
+      applySummaryFlag(row, field);
+      applyPageLabel(row, collection, field);
+      applyDisplayContextParameter(row, field);
+    }
+
+    return entries;
+  }
+
+  private void populateCoreColumns(Map<String, Object> row, Event<T, R, S> event, Field field) {
+    row.put("CaseEventID", event.getId());
+    row.put("CaseFieldID", field.getId());
+    row.put("DisplayContext", resolveDisplayContext(field));
+    row.put("PageFieldDisplayOrder", field.getPageFieldDisplayOrder());
+  }
+
+  private String resolveDisplayContext(Field field) {
+    return Optional.ofNullable(field.getContext())
+        .map(dc -> dc.toString().toUpperCase())
+        .orElse("COMPLEX");
+  }
+
+  private void applyPublishFlag(Map<String, Object> row, Event<T, R, S> event, Field field) {
+    if (!event.isPublishToCamunda()) {
+      return;
+    }
+    String context = row.get("DisplayContext").toString();
+    if (!context.equals(DisplayContext.Complex.toString().toUpperCase())) {
+      row.put("Publish", "Y");
+    }
+  }
+
+  private Object resolvePageId(Object rawPageId) {
+    if (rawPageId == null) {
+      return 1;
+    }
+    Integer parsed = Ints.tryParse(rawPageId.toString());
+    return parsed != null ? parsed : rawPageId;
+  }
+
+  static void applyMetadata(Map<String, Object> target,
+                            Field field,
+                            String labelColumn,
+                            String hintColumn) {
+    if (field.getShowCondition() != null) {
+      target.put("FieldShowCondition", field.getShowCondition());
+    }
+
+    if (labelColumn != null && field.getCaseEventFieldLabel() != null) {
+      target.put(labelColumn, field.getCaseEventFieldLabel());
+    }
+
+    if (hintColumn != null && field.getCaseEventFieldHint() != null) {
+      target.put(hintColumn, field.getCaseEventFieldHint());
+    }
+
+    if (field.isRetainHiddenValue()) {
+      target.put("RetainHiddenValue", "Y");
+    }
+  }
+
+  private void applyMidEventCallback(Map<String, Object> row,
+                                     Event<T, R, S> event,
+                                     ResolvedCCDConfig<T, S, R> config,
+                                     FieldCollection collection,
+                                     Object pageId,
+                                     Multimap<String, String> writtenCallbacks) {
+    String pageKey = pageId.toString();
+    if (!collection.getPagesToMidEvent().containsKey(pageKey)) {
+      return;
+    }
+    if (writtenCallbacks.containsEntry(event.getId(), pageKey)) {
+      return;
+    }
+
+    String url = config.getCallbackHost() + "/callbacks/mid-event?page="
+        + URLEncoder.encode(pageKey, StandardCharsets.UTF_8)
+        + "&eventId="
+        + event.getId();
+    row.put("CallBackURLMidEvent", url);
+    writtenCallbacks.put(event.getId(), pageKey);
+  }
+
+  private void applyPageShowCondition(Map<String, Object> row,
+                                      FieldCollection collection,
+                                      Field field) {
+    if (collection.getPageShowConditions().containsKey(field.getPage())) {
+      row.put("PageShowCondition",
+          collection.getPageShowConditions().remove(field.getPage()));
+    }
+  }
+
+  private void applySummaryFlag(Map<String, Object> row, Field field) {
+    if (field.isShowSummary()) {
+      row.put("ShowSummaryChangeOption", "Y");
+    }
+  }
+
+  private void applyPageLabel(Map<String, Object> row,
+                              FieldCollection collection,
+                              Field field) {
+    if (collection.getPageLabels().containsKey(field.getPage())) {
+      row.put("PageLabel", collection.getPageLabels().get(field.getPage()));
+    }
+  }
+
+  private void applyDisplayContextParameter(Map<String, Object> row, Field field) {
+    if (field.getDisplayContextParameter() != null) {
+      row.put("DisplayContextParameter", field.getDisplayContextParameter());
+    }
+  }
+
 }

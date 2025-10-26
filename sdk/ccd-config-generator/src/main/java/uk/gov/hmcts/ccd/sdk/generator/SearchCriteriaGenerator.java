@@ -3,7 +3,6 @@ package uk.gov.hmcts.ccd.sdk.generator;
 import static uk.gov.hmcts.ccd.sdk.generator.JsonUtils.mergeInto;
 
 import com.google.common.collect.Lists;
-import com.google.common.collect.Maps;
 import java.io.File;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -36,9 +35,7 @@ public class SearchCriteriaGenerator<T, S, R extends HasRole> implements ConfigG
 
   @SneakyThrows
   private static Map<String, Object> toJson(String caseType, SearchCriteriaField searchCriteria) {
-    Map<String, Object> field = Maps.newHashMap();
-    field.put("LiveFrom", "01/01/2017");
-    field.put("CaseTypeID", caseType);
+    Map<String, Object> field = JsonUtils.caseRow(caseType);
     field.put("OtherCaseReference", searchCriteria.getOtherCaseReference());
 
     return field;
