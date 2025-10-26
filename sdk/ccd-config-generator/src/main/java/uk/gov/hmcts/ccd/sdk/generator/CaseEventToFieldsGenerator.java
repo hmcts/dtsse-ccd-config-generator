@@ -57,7 +57,7 @@ class CaseEventToFieldsGenerator<T, S, R extends HasRole> implements ConfigGener
       row.put("PageID", pageId);
       row.put("PageDisplayOrder", field.getPageDisplayOrder());
       row.put("PageColumnNumber", 1);
-      CaseEventFieldMetadataApplier.apply(row, field, "CaseEventFieldLabel", "CaseEventFieldHint");
+      applyMetadata(row, field, "CaseEventFieldLabel", "CaseEventFieldHint");
       applyMidEventCallback(row, event, config, collection, pageId, writtenCallbacks);
       applyPageShowCondition(row, collection, field);
       applySummaryFlag(row, field);
@@ -97,6 +97,27 @@ class CaseEventToFieldsGenerator<T, S, R extends HasRole> implements ConfigGener
     }
     Integer parsed = Ints.tryParse(rawPageId.toString());
     return parsed != null ? parsed : rawPageId;
+  }
+
+  static void applyMetadata(Map<String, Object> target,
+                            Field field,
+                            String labelColumn,
+                            String hintColumn) {
+    if (field.getShowCondition() != null) {
+      target.put("FieldShowCondition", field.getShowCondition());
+    }
+
+    if (labelColumn != null && field.getCaseEventFieldLabel() != null) {
+      target.put(labelColumn, field.getCaseEventFieldLabel());
+    }
+
+    if (hintColumn != null && field.getCaseEventFieldHint() != null) {
+      target.put(hintColumn, field.getCaseEventFieldHint());
+    }
+
+    if (field.isRetainHiddenValue()) {
+      target.put("RetainHiddenValue", "Y");
+    }
   }
 
   private void applyMidEventCallback(Map<String, Object> row,
