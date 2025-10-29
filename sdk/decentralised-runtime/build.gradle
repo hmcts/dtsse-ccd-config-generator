@@ -1,6 +1,7 @@
 plugins {
     id 'org.springframework.boot' version '3.5.7'
 }
+
 repositories {
     maven {
         url 'https://pkgs.dev.azure.com/hmcts/Artifacts/_packaging/hmcts-lib/maven/v1'
@@ -25,7 +26,7 @@ dependencies {
     annotationProcessor 'org.projectlombok:lombok:1.18.42'
 
     implementation "org.springframework.boot:spring-boot-autoconfigure"
-    implementation "org.flywaydb:flyway-core:11.14.1"
+    implementation 'org.flywaydb:flyway-database-postgresql'
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
 }
 
