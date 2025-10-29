@@ -60,7 +60,7 @@ dependencies {
   implementation 'org.springframework.retry:spring-retry'
   implementation 'org.springframework.cloud:spring-cloud-starter-bootstrap:4.3.0'
 
-  implementation 'org.flywaydb:flyway-database-postgresql:11.15.0'
+  implementation 'org.flywaydb:flyway-database-postgresql'
   implementation 'org.postgresql:postgresql:42.7.8'
 
   implementation 'net.logstash.logback:logstash-logback-encoder:8.1'
