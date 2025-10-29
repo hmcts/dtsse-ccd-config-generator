@@ -21,6 +21,7 @@ dependencies {
         transitive = false
     }
     implementation group: 'net.jodah', name: 'typetools', version: '0.6.3'
+    implementation group: 'com.github.ben-manes.caffeine', name: 'caffeine'
     compileOnly 'org.projectlombok:lombok:1.18.42'
 
     annotationProcessor 'org.projectlombok:lombok:1.18.42'
