@@ -1,5 +1,6 @@
 package uk.gov.hmcts.ccd.sdk;
 
+import java.util.Properties;
 import javax.sql.DataSource;
 import org.flywaydb.core.Flyway;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
@@ -30,7 +31,13 @@ public class DecentralisedDataConfiguration {
       ResourceLoader resourceLoader,
       DataSource dataSource) {
     return (Flyway appFlyway) -> {
+      Properties flywayProperties = new Properties();
+      // We want to build indexes concurrently
+      // https://documentation.red-gate.com/fd/flyway-postgresql-transactional-lock-setting-277579114
+      flywayProperties.setProperty("flyway.postgresql.transactional.lock", "false");
+
       Flyway sdkFlyway = Flyway.configure(resourceLoader.getClassLoader())
+          .configuration(flywayProperties)
           .dataSource(dataSource)
           .schemas("ccd")
           .locations("classpath:dataruntime-db/migration")
