@@ -25,7 +25,7 @@ import uk.gov.hmcts.ccd.domain.model.definition.CaseDetails;
 @Slf4j
 @Service
 @RequiredArgsConstructor
-class BlobRepository {
+class CaseDataRepository {
   private static final TypeReference<Map<String, JsonNode>> JSON_NODE_MAP = new TypeReference<>() {};
 
   private final NamedParameterJdbcTemplate ndb;
