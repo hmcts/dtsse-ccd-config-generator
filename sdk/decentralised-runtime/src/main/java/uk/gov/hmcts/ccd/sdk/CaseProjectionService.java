@@ -17,7 +17,7 @@ import uk.gov.hmcts.ccd.data.persistence.dto.DecentralisedCaseDetails;
  * callers stay agnostic of how the raw data is sourced.
  */
 @Service
-class CaseViewLoader {
+class CaseProjectionService {
 
   private static final TypeReference<Map<String, JsonNode>> JSON_NODE_MAP = new TypeReference<>() {};
 
@@ -28,9 +28,9 @@ class CaseViewLoader {
   private final Class<?> caseDataType;
   private final Class<? extends Enum<?>> stateType;
 
-  CaseViewLoader(CaseDataRepository caseDataRepository,
-                 ObjectMapper mapper,
-                 CaseView<?, ?> caseView) {
+  CaseProjectionService(CaseDataRepository caseDataRepository,
+                        ObjectMapper mapper,
+                        CaseView<?, ?> caseView) {
     this.caseDataRepository = caseDataRepository;
     this.mapper = mapper;
     this.caseView = (CaseView) caseView;

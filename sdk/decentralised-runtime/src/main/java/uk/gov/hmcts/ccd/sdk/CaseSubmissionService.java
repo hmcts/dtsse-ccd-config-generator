@@ -31,7 +31,7 @@ public class CaseSubmissionService {
   private final TransactionTemplate transactionTemplate;
   private final AuditEventService auditEventService;
   private final CaseDataRepository caseDataRepository;
-  private final CaseViewLoader caseViewLoader;
+  private final CaseProjectionService caseProjectionService;
 
   public DecentralisedSubmitEventResponse submit(DecentralisedCaseEvent event,
                                                  String authorisation,
@@ -81,7 +81,7 @@ public class CaseSubmissionService {
 
     // Bookkeeping: update case_data metadata and optionally the legacy json blob
     upsertCase(event, handlerResult.dataUpdate());
-    DecentralisedCaseDetails savedCaseDetails = caseViewLoader.load(event.getCaseDetails().getReference());
+    DecentralisedCaseDetails savedCaseDetails = caseProjectionService.load(event.getCaseDetails().getReference());
     auditEventService.saveAuditRecord(event, user, savedCaseDetails.getCaseDetails(), idempotencyKey);
 
     var outcome = new SubmissionOutcome(savedCaseDetails, handlerResult.responseSupplier());

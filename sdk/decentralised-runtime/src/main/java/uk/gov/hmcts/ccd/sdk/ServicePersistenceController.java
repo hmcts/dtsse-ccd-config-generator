@@ -30,7 +30,7 @@ public class ServicePersistenceController {
   private final CaseSubmissionService submissionService;
   private final AuditEventService auditEventService;
   private final SupplementaryDataService supplementaryDataService;
-  private final CaseViewLoader caseViewLoader;
+  private final CaseProjectionService caseProjectionService;
 
   @GetMapping(
       value = "/cases", // Mapped to the root /cases endpoint
@@ -38,7 +38,7 @@ public class ServicePersistenceController {
   )
   public List<DecentralisedCaseDetails> getCases(@RequestParam("case-refs") List<Long> caseRefs) {
     log.info("Fetching cases for references: {}", caseRefs);
-    return caseViewLoader.load(caseRefs);
+    return caseProjectionService.load(caseRefs);
   }
 
   @PostMapping(

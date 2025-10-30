@@ -19,13 +19,13 @@ public class ServicePersistenceControllerTest {
   private final CaseSubmissionService submissionService = mock(CaseSubmissionService.class);
   private final AuditEventService auditEventService = mock(AuditEventService.class);
   private final SupplementaryDataService supplementaryDataService = mock(SupplementaryDataService.class);
-  private final CaseViewLoader caseViewLoader = mock(CaseViewLoader.class);
+  private final CaseProjectionService caseProjectionService = mock(CaseProjectionService.class);
 
   private final ServicePersistenceController controller = new ServicePersistenceController(
       submissionService,
       auditEventService,
       supplementaryDataService,
-      caseViewLoader
+      caseProjectionService
   );
 
   @Test
