@@ -11,13 +11,18 @@ import org.springframework.boot.autoconfigure.flyway.FlywayAutoConfiguration;
 import org.springframework.boot.autoconfigure.flyway.FlywayMigrationStrategy;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.ComponentScan;
+import org.springframework.context.annotation.FullyQualifiedAnnotationBeanNameGenerator;
 import org.springframework.core.io.ResourceLoader;
 import uk.gov.hmcts.ccd.config.MessagingProperties;
 
 @AutoConfiguration(
     before = {FlywayAutoConfiguration.class}
 )
-@ComponentScan(basePackageClasses = {MessagingProperties.class})
+@ComponentScan(
+    basePackageClasses = {MessagingProperties.class},
+    // Fully qualify our beans to avoid name clashes with application beans
+    nameGenerator = FullyQualifiedAnnotationBeanNameGenerator.class
+)
 @ConditionalOnClass(Flyway.class)
 @ConditionalOnProperty(prefix = "spring.flyway", name = "enabled", matchIfMissing = true)
 public class DecentralisedDataConfiguration {
