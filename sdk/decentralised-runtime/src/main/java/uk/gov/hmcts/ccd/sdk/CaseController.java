@@ -57,34 +57,18 @@ public class CaseController {
   @PostMapping("/cases")
   public ResponseEntity<DecentralisedSubmitEventResponse> createEvent(
       @RequestBody DecentralisedCaseEvent event,
-      @RequestHeader(value = "Authorization", required = false) String authorisation,
-      @RequestHeader(value = IdempotencyEnforcer.IDEMPOTENCY_KEY_HEADER, required = false) String idempotencyKey) {
+      @RequestHeader(value = "Authorization") String authorisation,
+      @RequestHeader(value = IdempotencyEnforcer.IDEMPOTENCY_KEY_HEADER) UUID idempotencyKey) {
 
-    if (authorisation == null || authorisation.isBlank()) {
+    if (authorisation.isBlank()) {
       var errorResponse = new DecentralisedSubmitEventResponse();
       errorResponse.setErrors(List.of("Authorization header is required"));
       return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(errorResponse);
     }
-
-    if (idempotencyKey == null || idempotencyKey.isBlank()) {
-      var errorResponse = new DecentralisedSubmitEventResponse();
-      errorResponse.setErrors(List.of("Idempotency-Key header is required"));
-      return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(errorResponse);
-    }
-
-    UUID parsedIdempotencyKey;
-    try {
-      parsedIdempotencyKey = UUID.fromString(idempotencyKey);
-    } catch (IllegalArgumentException ex) {
-      var errorResponse = new DecentralisedSubmitEventResponse();
-      errorResponse.setErrors(List.of("Idempotency-Key header must be a valid UUID"));
-      return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(errorResponse);
-    }
-
     var response = submissionService.submit(
         event,
         authorisation,
-        parsedIdempotencyKey
+        idempotencyKey
     );
     return ResponseEntity.ok(response);
   }
