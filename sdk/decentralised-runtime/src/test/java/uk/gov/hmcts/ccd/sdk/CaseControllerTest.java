@@ -2,12 +2,17 @@ package uk.gov.hmcts.ccd.sdk;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
+import static org.mockito.Mockito.when;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.http.ResponseEntity;
 import uk.gov.hmcts.ccd.data.persistence.dto.DecentralisedCaseEvent;
 import uk.gov.hmcts.ccd.data.persistence.dto.DecentralisedSubmitEventResponse;
+
+import java.util.UUID;
 
 public class CaseControllerTest {
 
@@ -30,7 +35,7 @@ public class CaseControllerTest {
     ResponseEntity<DecentralisedSubmitEventResponse> response = controller.createEvent(
         event,
         null,
-        "d65f3f1d-6b44-4fd8-a6ec-e4a7a7d5fd1e"
+        UUID.randomUUID()
     );
 
     assertThat(response.getStatusCodeValue()).isEqualTo(401);
@@ -42,38 +47,40 @@ public class CaseControllerTest {
   }
 
   @Test
-  void createEventWithoutIdempotencyKeyReturnsBadRequest() {
+  void createEventWithBlankAuthorizationReturnsUnauthorized() {
     DecentralisedCaseEvent event = mock(DecentralisedCaseEvent.class);
 
     ResponseEntity<DecentralisedSubmitEventResponse> response = controller.createEvent(
         event,
-        "Bearer token",
-        null
+        " ",
+        UUID.randomUUID()
     );
 
-    assertThat(response.getStatusCodeValue()).isEqualTo(400);
+    assertThat(response.getStatusCodeValue()).isEqualTo(401);
     assertThat(response.getBody()).isNotNull();
     assertThat(response.getBody().getErrors())
-        .containsExactly("Idempotency-Key header is required");
+        .containsExactly("Authorization header is required");
 
     verifyNoInteractions(submissionService);
   }
 
   @Test
-  void createEventWithInvalidIdempotencyKeyReturnsBadRequest() {
+  void createEventWithValidHeadersCallsSubmissionService() {
     DecentralisedCaseEvent event = mock(DecentralisedCaseEvent.class);
+    UUID idempotencyKey = UUID.randomUUID();
+    var expectedResponse = new DecentralisedSubmitEventResponse();
+    when(submissionService.submit(event, "Bearer token", idempotencyKey)).thenReturn(expectedResponse);
 
     ResponseEntity<DecentralisedSubmitEventResponse> response = controller.createEvent(
         event,
         "Bearer token",
-        "not-a-uuid"
+        idempotencyKey
     );
 
-    assertThat(response.getStatusCodeValue()).isEqualTo(400);
-    assertThat(response.getBody()).isNotNull();
-    assertThat(response.getBody().getErrors())
-        .containsExactly("Idempotency-Key header must be a valid UUID");
+    assertThat(response.getStatusCodeValue()).isEqualTo(200);
+    assertThat(response.getBody()).isSameAs(expectedResponse);
 
-    verifyNoInteractions(submissionService);
+    verify(submissionService).submit(event, "Bearer token", idempotencyKey);
+    verifyNoMoreInteractions(submissionService);
   }
 }
