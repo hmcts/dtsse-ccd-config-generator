@@ -18,7 +18,7 @@ import uk.gov.hmcts.reform.idam.client.IdamApi;
 import java.util.TimeZone;
 
 @SpringBootApplication(
-    scanBasePackages = {"uk.gov.hmcts.ccd.sdk", "uk.gov.hmcts.divorce", "uk.gov.hmcts.reform.idam.client",
+    scanBasePackages = {"uk.gov.hmcts.divorce", "uk.gov.hmcts.reform.idam.client",
         "uk.gov.hmcts.reform.sendletter", "uk.gov.hmcts.reform.ccd.document.am.feign"}
 )
 @EnableFeignClients(
