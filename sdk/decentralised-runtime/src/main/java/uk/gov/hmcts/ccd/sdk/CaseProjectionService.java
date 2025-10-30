@@ -33,7 +33,7 @@ class CaseProjectionService {
                         CaseView<?, ?> caseView) {
     this.caseDataRepository = caseDataRepository;
     this.mapper = mapper;
-    this.caseView = (CaseView) caseView;
+    this.caseView = caseView;
 
     Class<?>[] typeArgs = TypeResolver.resolveRawArguments(CaseView.class, caseView.getClass());
     this.caseDataType = typeArgs.length > 0 && typeArgs[0] != null ? typeArgs[0] : Map.class;
@@ -63,30 +63,14 @@ class CaseProjectionService {
     long reference = caseDetails.getReference();
     String state = caseDetails.getState();
 
-    Object blobCase = deserialise(caseDetails.getData());
-    Enum<?> typedState = convertState(state);
+    Object blobCase = mapper.convertValue(caseDetails.getData(), caseDataType);
+    Enum<?> typedState = Enum.valueOf((Class<? extends Enum>) stateType, state);
+
     @SuppressWarnings("rawtypes")
     CaseViewRequest request = new CaseViewRequest(reference, typedState);
     Object projected = caseView.getCase(request, blobCase);
-    Map<String, JsonNode> serialised = serialise(projected);
+    Map<String, JsonNode> serialised = mapper.convertValue(projected, JSON_NODE_MAP);
     caseDetails.setData(serialised);
     return raw;
-  }
-
-  private Object deserialise(Map<String, JsonNode> data) {
-    return mapper.convertValue(data, caseDataType);
-  }
-
-  private Enum<?> convertState(String state) {
-    if (state == null) {
-      return null;
-    }
-    @SuppressWarnings("unchecked")
-    Class<? extends Enum> enumType = (Class<? extends Enum>) stateType;
-    return Enum.valueOf(enumType, state);
-  }
-
-  private Map<String, JsonNode> serialise(Object projected) {
-    return mapper.convertValue(projected, JSON_NODE_MAP);
   }
 }
