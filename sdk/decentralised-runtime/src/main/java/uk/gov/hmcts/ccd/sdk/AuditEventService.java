@@ -25,7 +25,7 @@ import uk.gov.hmcts.reform.ccd.client.model.CaseDetails;
 
 @Slf4j
 @RequiredArgsConstructor
-@Service
+@Service(value = "uk.gov.hmcts.ccd.sdk.AuditEventService")
 class AuditEventService {
 
   private final NamedParameterJdbcTemplate ndb;
