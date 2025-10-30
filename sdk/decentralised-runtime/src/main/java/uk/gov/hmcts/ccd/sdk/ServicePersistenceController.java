@@ -25,7 +25,7 @@ import uk.gov.hmcts.ccd.data.persistence.dto.DecentralisedUpdateSupplementaryDat
 @RestController
 @RequestMapping(path = "/ccd-persistence")
 @RequiredArgsConstructor
-public class ServicePersistenceController {
+class ServicePersistenceController {
 
   private final CaseSubmissionService submissionService;
   private final AuditEventService auditEventService;
@@ -33,7 +33,7 @@ public class ServicePersistenceController {
   private final CaseProjectionService caseProjectionService;
 
   @GetMapping(
-      value = "/cases", // Mapped to the root /cases endpoint
+      value = "/cases",
       produces = "application/json"
   )
   public List<DecentralisedCaseDetails> getCases(@RequestParam("case-refs") List<Long> caseRefs) {
