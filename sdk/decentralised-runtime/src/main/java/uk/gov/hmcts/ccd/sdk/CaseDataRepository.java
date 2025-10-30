@@ -38,6 +38,7 @@ class CaseDataRepository {
     return ndb.query(
         """
         select
+              c.id,
               reference,
               c.created_date as created_date,
               jurisdiction,
@@ -72,6 +73,7 @@ class CaseDataRepository {
     var results = ndb.query(
         """
         select
+              cd.id,
               cd.reference,
               cd.created_date as created_date,
               cd.jurisdiction,
@@ -181,7 +183,7 @@ class CaseDataRepository {
 
       var caseDetails = new CaseDetails();
       caseDetails.setReference(reference);
-      caseDetails.setId(String.valueOf(reference));
+      caseDetails.setId(rs.getString("id"));
       caseDetails.setJurisdiction(rs.getString("jurisdiction"));
       caseDetails.setCaseTypeId(rs.getString("case_type_id"));
       caseDetails.setState(state);
