@@ -140,6 +140,9 @@ class LegacyCallbackSubmissionHandler implements CaseSubmissionHandler {
     }
 
     CallbackRequest request = buildCallbackRequest(event);
+    // Mirror CCD behaviour: any non-empty retry config equates to 3 attempts (initial call + 2 retries)
+    // CCD ignores the actual numbers specified in the ccd definition!
+    // https://github.com/hmcts/ccd-data-store-api/blob/master/src/main/java/uk/gov/hmcts/ccd/domain/service/callbacks/CallbackService.java#L41-L63
     var retriesConfig = eventConfig.getRetries().get(Webhook.Submitted);
     int retries = retriesConfig == null || retriesConfig.isEmpty() ? 1 : 3;
 

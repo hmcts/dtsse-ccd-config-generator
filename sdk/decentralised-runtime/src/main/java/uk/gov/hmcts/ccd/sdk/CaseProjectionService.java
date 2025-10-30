@@ -13,25 +13,25 @@ import uk.gov.hmcts.ccd.data.persistence.dto.DecentralisedCaseDetails;
 /**
  * Central place for loading {@link DecentralisedCaseDetails} with the
  * application-provided projection applied. Today this delegates to
- * {@link BlobRepository} for persistence, but the orchestration lives here so
+ * {@link CaseDataRepository} for persistence, but the orchestration lives here so
  * callers stay agnostic of how the raw data is sourced.
  */
 @Service
-class CaseViewLoader {
+class CaseProjectionService {
 
   private static final TypeReference<Map<String, JsonNode>> JSON_NODE_MAP = new TypeReference<>() {};
 
   @SuppressWarnings("rawtypes")
   private final CaseView caseView;
-  private final BlobRepository blobRepository;
+  private final CaseDataRepository caseDataRepository;
   private final ObjectMapper mapper;
   private final Class<?> caseDataType;
   private final Class<? extends Enum<?>> stateType;
 
-  CaseViewLoader(BlobRepository blobRepository,
-                 ObjectMapper mapper,
-                 CaseView<?, ?> caseView) {
-    this.blobRepository = blobRepository;
+  CaseProjectionService(CaseDataRepository caseDataRepository,
+                        ObjectMapper mapper,
+                        CaseView<?, ?> caseView) {
+    this.caseDataRepository = caseDataRepository;
     this.mapper = mapper;
     this.caseView = (CaseView) caseView;
 
@@ -48,12 +48,12 @@ class CaseViewLoader {
   }
 
   DecentralisedCaseDetails load(long caseRef) {
-    DecentralisedCaseDetails raw = blobRepository.getCase(caseRef);
+    DecentralisedCaseDetails raw = caseDataRepository.getCase(caseRef);
     return applyProjection(raw);
   }
 
   List<DecentralisedCaseDetails> load(List<Long> caseRefs) {
-    return blobRepository.getCases(caseRefs).stream()
+    return caseDataRepository.getCases(caseRefs).stream()
         .map(this::applyProjection)
         .collect(Collectors.toList());
   }

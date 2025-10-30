@@ -25,7 +25,7 @@ import uk.gov.hmcts.ccd.domain.model.definition.CaseDetails;
 @Slf4j
 @Service
 @RequiredArgsConstructor
-class BlobRepository {
+class CaseDataRepository {
   private static final TypeReference<Map<String, JsonNode>> JSON_NODE_MAP = new TypeReference<>() {};
 
   private final NamedParameterJdbcTemplate ndb;
@@ -38,6 +38,7 @@ class BlobRepository {
     return ndb.query(
         """
         select
+              c.id,
               reference,
               c.created_date as created_date,
               jurisdiction,
@@ -72,6 +73,7 @@ class BlobRepository {
     var results = ndb.query(
         """
         select
+              cd.id,
               cd.reference,
               cd.created_date as created_date,
               cd.jurisdiction,
@@ -181,7 +183,7 @@ class BlobRepository {
 
       var caseDetails = new CaseDetails();
       caseDetails.setReference(reference);
-      caseDetails.setId(String.valueOf(reference));
+      caseDetails.setId(rs.getString("id"));
       caseDetails.setJurisdiction(rs.getString("jurisdiction"));
       caseDetails.setCaseTypeId(rs.getString("case_type_id"));
       caseDetails.setState(state);

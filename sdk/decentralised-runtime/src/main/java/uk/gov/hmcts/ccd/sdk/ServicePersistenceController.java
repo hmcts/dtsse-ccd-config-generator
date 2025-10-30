@@ -25,12 +25,12 @@ import uk.gov.hmcts.ccd.data.persistence.dto.DecentralisedUpdateSupplementaryDat
 @RestController
 @RequestMapping(path = "/ccd-persistence")
 @RequiredArgsConstructor
-public class CaseController {
+public class ServicePersistenceController {
 
   private final CaseSubmissionService submissionService;
-  private final CaseEventHistoryService caseEventHistoryService;
+  private final AuditEventService auditEventService;
   private final SupplementaryDataService supplementaryDataService;
-  private final CaseViewLoader caseViewLoader;
+  private final CaseProjectionService caseProjectionService;
 
   @GetMapping(
       value = "/cases", // Mapped to the root /cases endpoint
@@ -38,7 +38,7 @@ public class CaseController {
   )
   public List<DecentralisedCaseDetails> getCases(@RequestParam("case-refs") List<Long> caseRefs) {
     log.info("Fetching cases for references: {}", caseRefs);
-    return caseViewLoader.load(caseRefs);
+    return caseProjectionService.load(caseRefs);
   }
 
   @PostMapping(
@@ -85,7 +85,7 @@ public class CaseController {
   )
   public ResponseEntity<List<DecentralisedAuditEvent>> loadHistory(@PathVariable("caseRef") long caseRef) {
     log.info("Loading history for case reference: {}", caseRef);
-    return ResponseEntity.ok(caseEventHistoryService.loadHistory(caseRef));
+    return ResponseEntity.ok(auditEventService.loadHistory(caseRef));
   }
 
   /**
@@ -102,7 +102,7 @@ public class CaseController {
   public ResponseEntity<DecentralisedAuditEvent> loadHistoryEvent(@PathVariable("caseRef") long caseRef,
                                                                   @PathVariable("eventId") long eventId) {
     log.info("Loading history event ID {} for case reference: {}", eventId, caseRef);
-    DecentralisedAuditEvent event = caseEventHistoryService.loadHistoryEvent(caseRef, eventId);
+    DecentralisedAuditEvent event = auditEventService.loadHistoryEvent(caseRef, eventId);
     return ResponseEntity.ok(event);
   }
 

@@ -14,18 +14,18 @@ import uk.gov.hmcts.ccd.data.persistence.dto.DecentralisedSubmitEventResponse;
 
 import java.util.UUID;
 
-public class CaseControllerTest {
+public class ServicePersistenceControllerTest {
 
   private final CaseSubmissionService submissionService = mock(CaseSubmissionService.class);
-  private final CaseEventHistoryService caseEventHistoryService = mock(CaseEventHistoryService.class);
+  private final AuditEventService auditEventService = mock(AuditEventService.class);
   private final SupplementaryDataService supplementaryDataService = mock(SupplementaryDataService.class);
-  private final CaseViewLoader caseViewLoader = mock(CaseViewLoader.class);
+  private final CaseProjectionService caseProjectionService = mock(CaseProjectionService.class);
 
-  private final CaseController controller = new CaseController(
+  private final ServicePersistenceController controller = new ServicePersistenceController(
       submissionService,
-      caseEventHistoryService,
+      auditEventService,
       supplementaryDataService,
-      caseViewLoader
+      caseProjectionService
   );
 
   @Test

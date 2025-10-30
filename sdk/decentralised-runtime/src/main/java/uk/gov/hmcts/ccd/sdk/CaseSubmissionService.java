@@ -29,9 +29,9 @@ public class CaseSubmissionService {
   private final IdamService idam;
   private final IdempotencyEnforcer idempotencyEnforcer;
   private final TransactionTemplate transactionTemplate;
-  private final CaseEventHistoryService caseEventHistoryService;
-  private final BlobRepository blobRepository;
-  private final CaseViewLoader caseViewLoader;
+  private final AuditEventService auditEventService;
+  private final CaseDataRepository caseDataRepository;
+  private final CaseProjectionService caseProjectionService;
 
   public DecentralisedSubmitEventResponse submit(DecentralisedCaseEvent event,
                                                  String authorisation,
@@ -81,8 +81,8 @@ public class CaseSubmissionService {
 
     // Bookkeeping: update case_data metadata and optionally the legacy json blob
     upsertCase(event, handlerResult.dataUpdate());
-    DecentralisedCaseDetails savedCaseDetails = caseViewLoader.load(event.getCaseDetails().getReference());
-    caseEventHistoryService.saveAuditRecord(event, user, savedCaseDetails.getCaseDetails(), idempotencyKey);
+    DecentralisedCaseDetails savedCaseDetails = caseProjectionService.load(event.getCaseDetails().getReference());
+    auditEventService.saveAuditRecord(event, user, savedCaseDetails.getCaseDetails(), idempotencyKey);
 
     var outcome = new SubmissionOutcome(savedCaseDetails, handlerResult.responseSupplier());
     return new TransactionResult(Optional.empty(), Optional.of(outcome));
@@ -112,7 +112,7 @@ public class CaseSubmissionService {
    * Handles replaying a previous event in case of an idempotency hit.
    */
   private DecentralisedSubmitEventResponse replayIdempotentRequest(long caseReference, long eventId) {
-    var details = blobRepository.caseDetailsAtEvent(caseReference, eventId);
+    var details = caseDataRepository.caseDetailsAtEvent(caseReference, eventId);
     var response = new DecentralisedSubmitEventResponse();
     response.setCaseDetails(details);
     return response;
@@ -128,7 +128,7 @@ public class CaseSubmissionService {
 
   private void upsertCase(DecentralisedCaseEvent event, Optional<JsonNode> dataUpdate) {
     try {
-      blobRepository.upsertCase(event, dataUpdate);
+      caseDataRepository.upsertCase(event, dataUpdate);
     } catch (EmptyResultDataAccessException e) {
       throw new ResponseStatusException(HttpStatus.CONFLICT, "Case was updated concurrently", e);
     }
