@@ -25,7 +25,7 @@ import uk.gov.hmcts.ccd.data.persistence.dto.DecentralisedUpdateSupplementaryDat
 @RestController
 @RequestMapping(path = "/ccd-persistence")
 @RequiredArgsConstructor
-public class CaseController {
+public class ServicePersistenceController {
 
   private final CaseSubmissionService submissionService;
   private final CaseEventHistoryService caseEventHistoryService;
