@@ -17,13 +17,13 @@ import java.util.UUID;
 public class ServicePersistenceControllerTest {
 
   private final CaseSubmissionService submissionService = mock(CaseSubmissionService.class);
-  private final CaseEventHistoryService caseEventHistoryService = mock(CaseEventHistoryService.class);
+  private final AuditEventService auditEventService = mock(AuditEventService.class);
   private final SupplementaryDataService supplementaryDataService = mock(SupplementaryDataService.class);
   private final CaseViewLoader caseViewLoader = mock(CaseViewLoader.class);
 
   private final ServicePersistenceController controller = new ServicePersistenceController(
       submissionService,
-      caseEventHistoryService,
+      auditEventService,
       supplementaryDataService,
       caseViewLoader
   );

@@ -28,7 +28,7 @@ import uk.gov.hmcts.ccd.data.persistence.dto.DecentralisedUpdateSupplementaryDat
 public class ServicePersistenceController {
 
   private final CaseSubmissionService submissionService;
-  private final CaseEventHistoryService caseEventHistoryService;
+  private final AuditEventService auditEventService;
   private final SupplementaryDataService supplementaryDataService;
   private final CaseViewLoader caseViewLoader;
 
@@ -85,7 +85,7 @@ public class ServicePersistenceController {
   )
   public ResponseEntity<List<DecentralisedAuditEvent>> loadHistory(@PathVariable("caseRef") long caseRef) {
     log.info("Loading history for case reference: {}", caseRef);
-    return ResponseEntity.ok(caseEventHistoryService.loadHistory(caseRef));
+    return ResponseEntity.ok(auditEventService.loadHistory(caseRef));
   }
 
   /**
@@ -102,7 +102,7 @@ public class ServicePersistenceController {
   public ResponseEntity<DecentralisedAuditEvent> loadHistoryEvent(@PathVariable("caseRef") long caseRef,
                                                                   @PathVariable("eventId") long eventId) {
     log.info("Loading history event ID {} for case reference: {}", eventId, caseRef);
-    DecentralisedAuditEvent event = caseEventHistoryService.loadHistoryEvent(caseRef, eventId);
+    DecentralisedAuditEvent event = auditEventService.loadHistoryEvent(caseRef, eventId);
     return ResponseEntity.ok(event);
   }
 

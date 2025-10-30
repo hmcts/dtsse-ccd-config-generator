@@ -29,7 +29,7 @@ public class CaseSubmissionService {
   private final IdamService idam;
   private final IdempotencyEnforcer idempotencyEnforcer;
   private final TransactionTemplate transactionTemplate;
-  private final CaseEventHistoryService caseEventHistoryService;
+  private final AuditEventService auditEventService;
   private final CaseDataRepository caseDataRepository;
   private final CaseViewLoader caseViewLoader;
 
@@ -82,7 +82,7 @@ public class CaseSubmissionService {
     // Bookkeeping: update case_data metadata and optionally the legacy json blob
     upsertCase(event, handlerResult.dataUpdate());
     DecentralisedCaseDetails savedCaseDetails = caseViewLoader.load(event.getCaseDetails().getReference());
-    caseEventHistoryService.saveAuditRecord(event, user, savedCaseDetails.getCaseDetails(), idempotencyKey);
+    auditEventService.saveAuditRecord(event, user, savedCaseDetails.getCaseDetails(), idempotencyKey);
 
     var outcome = new SubmissionOutcome(savedCaseDetails, handlerResult.responseSupplier());
     return new TransactionResult(Optional.empty(), Optional.of(outcome));
