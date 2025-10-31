@@ -19,7 +19,7 @@ class IdamServiceTest {
     var secondCall = idamService.retrieveUser("token");
 
     assertThat(firstCall).isSameAs(secondCall);
-    assertThat(firstCall.getUserDetails()).isEqualTo(userInfo);
+    assertThat(firstCall).isEqualTo(userInfo);
     assertThat(idamClient.callCount).isEqualTo(1);
     assertThat(idamClient.lastToken).isEqualTo("Bearer token");
   }

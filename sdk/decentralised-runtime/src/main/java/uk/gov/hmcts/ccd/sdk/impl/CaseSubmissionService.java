@@ -15,6 +15,7 @@ import uk.gov.hmcts.ccd.data.persistence.dto.DecentralisedSubmitEventResponse;
 import uk.gov.hmcts.ccd.domain.model.callbacks.AfterSubmitCallbackResponse;
 import uk.gov.hmcts.ccd.sdk.ResolvedConfigRegistry;
 import uk.gov.hmcts.ccd.sdk.api.callback.SubmitResponse;
+import uk.gov.hmcts.reform.idam.client.models.UserInfo;
 
 import java.util.Optional;
 import java.util.UUID;
@@ -64,7 +65,7 @@ public class CaseSubmissionService {
    * Encapsulates all database operations that must run within a single transaction.
    */
   private TransactionResult executeSubmissionInTransaction(DecentralisedCaseEvent event,
-                                                           IdamService.User user,
+                                                           UserInfo user,
                                                            CaseSubmissionHandler handler,
                                                            UUID idempotencyKey) {
     // Idempotency Check inside the transaction to ensure atomicity
