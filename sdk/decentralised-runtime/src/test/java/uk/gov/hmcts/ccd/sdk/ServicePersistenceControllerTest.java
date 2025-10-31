@@ -11,6 +11,11 @@ import org.junit.jupiter.api.Test;
 import org.springframework.http.ResponseEntity;
 import uk.gov.hmcts.ccd.data.persistence.dto.DecentralisedCaseEvent;
 import uk.gov.hmcts.ccd.data.persistence.dto.DecentralisedSubmitEventResponse;
+import uk.gov.hmcts.ccd.sdk.impl.AuditEventService;
+import uk.gov.hmcts.ccd.sdk.impl.CaseProjectionService;
+import uk.gov.hmcts.ccd.sdk.impl.CaseSubmissionService;
+import uk.gov.hmcts.ccd.sdk.impl.ServicePersistenceController;
+import uk.gov.hmcts.ccd.sdk.impl.SupplementaryDataService;
 
 import java.util.UUID;
 

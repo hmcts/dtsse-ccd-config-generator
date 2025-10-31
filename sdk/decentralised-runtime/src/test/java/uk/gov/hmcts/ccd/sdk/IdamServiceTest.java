@@ -1,6 +1,7 @@
 package uk.gov.hmcts.ccd.sdk;
 
 import org.junit.jupiter.api.Test;
+import uk.gov.hmcts.ccd.sdk.impl.IdamService;
 import uk.gov.hmcts.reform.idam.client.IdamClient;
 import uk.gov.hmcts.reform.idam.client.models.UserInfo;
 
