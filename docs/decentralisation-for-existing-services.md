@@ -1,7 +1,7 @@
 
 # CCD Event submission
 
-## As-is
+## As-is recap
 
 ```mermaid
 graph LR
@@ -14,20 +14,15 @@ graph LR
     CCDNode -. Save case data .-> CCDDatabase
 ```
 
-
-In the current CCD-hosted flow, CCD performs both callback invocations and persists the resulting case data snapshot directly into its own database.
-
 ### AboutToSubmit callbacks
 
-Upon event submission CCD invokes the service's AboutToSubmit callback (if defined).
+During event submission CCD invokes the service's AboutToSubmit callback (if defined).
 
-AboutToSubmit callbacks are passed the complete case data as payload and may return a modified response at will.
-
-The resulting modified case data is persisted verbatim by CCD to its database as a singular JSON document.
+The callback is passed the complete case data as payload and the modified response is returned verbatim.
 
 ### Submitted callbacks
 
-Submitted callbacks (if defined) are invoked by CCD after database transaction commit.
+Submitted callbacks (if defined) are invoked by CCD after CCD's database transaction commits.
 
 ## Decentralised
 
@@ -45,9 +40,8 @@ graph LR
 
 AboutToSubmit & Submitted callbacks are consolidated into a single 'Submit' operation.
 
-Since the service now owns the database transaction a two phase before/after model is unnecessary.
 
-Submit combines validation & persistence in a single step; services can validate the incoming event payload, reject or accept & persist it.
+Submit combines validation & persistence in a single step; services can validate the incoming event payload, rejecting or accepting & persisting it.
 
 
 ## Callback emulation

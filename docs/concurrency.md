@@ -12,9 +12,9 @@ A refinement is that the case_data version number is only incremented if the JSO
 
 ## New: Concurrent events
 
-It is now possible to implement events that submit concurrently, eg. enabling multiple parties to upload evidence at the same time, or staff to add case notes without causing conflicts to other users working on the case.
+It is now possible to implement events that submit concurrently, ie. enabling multiple parties to upload evidence at the same time, or staff to add case notes without causing conflicts to other users working on the case.
 
-Such scenarios are possible by managing portions of case data outside of the case_data json blob using an appropriate concurrency model (eg. dedicated tables and INSERTs.)
+Such scenarios are possible by managing portions of case data _outside_ of the case_data json blob using an appropriate concurrency model (eg. dedicated tables and INSERTs.)
 
 Such events must necessarily avoid modifying the case_data blob or 409 conflicts will continue to arise.
 
@@ -35,7 +35,7 @@ erDiagram
   }
 ```
 
-### Introducing concurrency - but not parallelism
+### Concurrency - but not parallelism
 
 All case events execute under a case-level lock wrapped in a database transaction.
 
@@ -43,5 +43,5 @@ Viewers still get a coherent, monotonic history (“what happened, and in what o
 
 If, for example, a blob update and a case note insertion were to race, one acquires the case lock first. The other waits, then runs, and both succeed. The event log reflects the order they committed and accurately reflects the changes each made.
 
-(Note that this is a tightening of CCD's current implementation which allows multiple event submissions to run in parallel, only one of which will commit.)
+Note that this is a tightening of CCD's current implementation which allows multiple event submissions to run in parallel, only one of which will commit.
 
