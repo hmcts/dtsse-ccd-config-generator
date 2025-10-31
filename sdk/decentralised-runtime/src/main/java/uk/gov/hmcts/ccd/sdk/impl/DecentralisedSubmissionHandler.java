@@ -46,7 +46,7 @@ class DecentralisedSubmissionHandler implements CaseSubmissionHandler {
     Event<?, ?, ?> eventConfig = registry.getRequiredEvent(caseType, eventId);
 
     if (eventConfig.getSubmitHandler() == null) {
-      throw new IllegalStateException("Submit handler not configured for event " + eventId);
+      throw new IllegalStateException("Submit handler not configured for event %s".formatted(eventId));
     }
 
     var config = registry.getRequired(caseType);

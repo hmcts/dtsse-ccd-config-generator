@@ -3,8 +3,6 @@ package uk.gov.hmcts.ccd.sdk.impl;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import java.time.Duration;
-import lombok.AllArgsConstructor;
-import lombok.Getter;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import uk.gov.hmcts.reform.idam.client.IdamClient;
@@ -13,7 +11,7 @@ import uk.gov.hmcts.reform.idam.client.models.UserInfo;
 @Service("CcdSdkIdamService")
 class IdamService {
 
-  private static final String BEARER_PREFIX = "Bearer" + " ";
+  private static final String BEARER_PREFIX = "Bearer ";
 
   private final IdamClient idamClient;
   private final Cache<String, User> userCache;
@@ -43,10 +41,5 @@ class IdamService {
     return token.startsWith(BEARER_PREFIX) ? token : BEARER_PREFIX.concat(token);
   }
 
-  @Getter
-  @AllArgsConstructor
-  public static class User {
-    private String authToken;
-    private UserInfo userDetails;
-  }
+  public record User(String authToken, UserInfo userDetails) {}
 }
