@@ -29,12 +29,12 @@ public class ServicePersistenceControllerTest {
   );
 
   @Test
-  void createEventWithoutAuthorizationReturnsUnauthorized() {
+  void createEventWithEmptyAuthorizationReturnsUnauthorized() {
     DecentralisedCaseEvent event = mock(DecentralisedCaseEvent.class);
 
     ResponseEntity<DecentralisedSubmitEventResponse> response = controller.createEvent(
         event,
-        null,
+        "",
         UUID.randomUUID()
     );
 

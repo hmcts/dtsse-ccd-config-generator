@@ -173,41 +173,41 @@ class CaseDataRepository {
 
   @SneakyThrows
   private String serialiseJsonNode(JsonNode node) {
-      return defaultMapper.writeValueAsString(node);
+    return defaultMapper.writeValueAsString(node);
   }
 
   @SneakyThrows
   private DecentralisedCaseDetails mapCaseDetails(ResultSet rs) throws SQLException {
-      Long reference = rs.getObject("reference", Long.class);
-      String state = rs.getString("state");
+    Long reference = rs.getObject("reference", Long.class);
+    String state = rs.getString("state");
 
-      var caseDetails = new CaseDetails();
-      caseDetails.setReference(reference);
-      caseDetails.setId(rs.getString("id"));
-      caseDetails.setJurisdiction(rs.getString("jurisdiction"));
-      caseDetails.setCaseTypeId(rs.getString("case_type_id"));
-      caseDetails.setState(state);
-      caseDetails.setVersion(rs.getObject("version", Integer.class));
-      caseDetails.setCreatedDate(rs.getObject("created_date", LocalDateTime.class));
-      caseDetails.setLastModified(rs.getObject("last_modified", LocalDateTime.class));
-      caseDetails.setLastStateModifiedDate(rs.getObject("last_state_modified_date", LocalDateTime.class));
+    var caseDetails = new CaseDetails();
+    caseDetails.setReference(reference);
+    caseDetails.setId(rs.getString("id"));
+    caseDetails.setJurisdiction(rs.getString("jurisdiction"));
+    caseDetails.setCaseTypeId(rs.getString("case_type_id"));
+    caseDetails.setState(state);
+    caseDetails.setVersion(rs.getObject("version", Integer.class));
+    caseDetails.setCreatedDate(rs.getObject("created_date", LocalDateTime.class));
+    caseDetails.setLastModified(rs.getObject("last_modified", LocalDateTime.class));
+    caseDetails.setLastStateModifiedDate(rs.getObject("last_state_modified_date", LocalDateTime.class));
 
-      var caseDataJson = rs.getString("case_data");
-      caseDetails.setData(defaultMapper.readValue(caseDataJson, JSON_NODE_MAP));
-      caseDetails.setDataClassification(Map.of());
+    var caseDataJson = rs.getString("case_data");
+    caseDetails.setData(defaultMapper.readValue(caseDataJson, JSON_NODE_MAP));
+    caseDetails.setDataClassification(Map.of());
 
-      var supplementaryDataJson = rs.getString("supplementary_data");
-      caseDetails.setSupplementaryData(defaultMapper.readValue(supplementaryDataJson, JSON_NODE_MAP));
+    var supplementaryDataJson = rs.getString("supplementary_data");
+    caseDetails.setSupplementaryData(defaultMapper.readValue(supplementaryDataJson, JSON_NODE_MAP));
 
-      var securityClassification = rs.getString("security_classification");
-      caseDetails.setSecurityClassification(SecurityClassification.valueOf(securityClassification));
+    var securityClassification = rs.getString("security_classification");
+    caseDetails.setSecurityClassification(SecurityClassification.valueOf(securityClassification));
 
-      Long revision = rs.getObject("case_revision", Long.class);
-      caseDetails.setRevision(revision);
+    Long revision = rs.getObject("case_revision", Long.class);
+    caseDetails.setRevision(revision);
 
-      var response = new DecentralisedCaseDetails();
-      response.setCaseDetails(caseDetails);
-      response.setRevision(revision);
-      return response;
+    var response = new DecentralisedCaseDetails();
+    response.setCaseDetails(caseDetails);
+    response.setRevision(revision);
+    return response;
   }
 }

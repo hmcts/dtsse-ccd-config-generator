@@ -2,6 +2,8 @@ plugins {
     id("io.freefair.lombok") version "9.0.0" apply(false)
 }
 
+def sdkCheck = tasks.register('check');
+
 subprojects {
     apply plugin: 'java'
     apply plugin: 'checkstyle'
@@ -58,11 +60,7 @@ subprojects {
             }
         }
     }
-}
-
-tasks.register('check') {
-    dependsOn(':ccd-config-generator:check')
-    dependsOn(':ccd-gradle-plugin:check')
+    sdkCheck.get().dependsOn(tasks.check)
 }
 
 tasks.register('publishToMavenLocal') { task ->
