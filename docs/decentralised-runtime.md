@@ -22,7 +22,7 @@ Setting `decentralised = true` adds the [decentralised-runtime](../sdk/decentral
 Services must provide a [`CaseView<ViewType, StateEnum>`](../sdk/decentralised-runtime/src/main/java/uk/gov/hmcts/ccd/sdk/CaseView.java)
 implementation.
 
-Your view implementation is the mechanism by which CCD reads case data for your case type; CCD provides the case reference to retrieve and your view must return a result in the format defined by your CCD definition.
+Your CaseView is the mechanism by which CCD access your case data; CCD provides a case reference and your view must return a result in the format defined by your CCD definition.
 
 How your view does this is an implementation detail; it could load a JSON blob, enrich the existing blob, or compose it from a
 fully structured set of tables; the CaseView is now an API contract rather than a literal data model.
@@ -33,19 +33,44 @@ fragments in the database.
 > **Mandatory:** decentralised services must expose exactly one Spring-managed `CaseView` bean. The application fails fast
 > at startup if no view is registered.
 
-## Database schema
+## Data persistence
 
-Flyway migrations under [`sdk/decentralised-runtime/src/main/resources/dataruntime-db`](../sdk/decentralised-runtime/src/main/resources/dataruntime-db)
-provision a dedicated `ccd` schema within your application with the structures needed to mirror existing CCD behaviour under the decentralised model:
+The runtime provides a data persistence layer to handle the functions previously performed centrally by CCD.
+
+### case_data & metadata persistence
+
+Case records are persisted and updated in the `ccd.case_data` table, including legacy JSON blobs and other case metadata.
+
+### Event history
+
+Snapshots are recorded in the `ccd.case_event` table upon conclusion of each case event.
+
+### Optimistic locking of legacy json blobs
+
+The SDK implements optimistic locking on the legacy JSON blob in `ccd.case_data` via the `version` column.
+
+Concurrent changes to these blobs will be rejected as they are now by centralised CCD.
+
+> decentralised services are responsible for implementing appropriate concurrency controls for data persisted outside of this blob
+
+
+### Idempotency
+
+The SDK implements the required idempotency model of CCD's persistence API.
+
+Completed requests are associated with their idempotency key in the `ccd.case_event.idempotency_key` column.
+
+If an incoming request has already been processed the runtime replays the stored response.
+
+### SDK managed database schema
+
+To fulfill the aforementioned the SDK provisions & manages a dedicated `ccd` schema within your application's database.
 
 - `case_data` mirrors CCD’s `case_data` table, including metadata such as state, security classification, TTL and the JSON payload.
 - `case_event` mirrors CCD’s `case_event` table and adds an idempotency key
 - `es_queue` tracks cases that require Elasticsearch indexing 
 - `message_queue_candidates` mirrors CCD’s Service Bus transactional outbox table.
 
-### SDK managed Schema overview
-
-The SDK managed database schema is illustrated here for reference. Note that it is created & maintained by the SDK automatically, serving as an 'out of the box' implementation for the new responsibilities your service assumes under decentralised persistence.
 
 ```mermaid
 erDiagram
@@ -102,13 +127,6 @@ erDiagram
 
 The SDK maintains a queue of cases requiring Elasticsearch indexing in `ccd.es_queue`.
 
-## Idempotency
-
-The SDK implements the required idempotency model of CCD's persistence API.
-
-If an incoming idempotency key has already been processed the runtime replays the stored response; otherwise the request continues and the ide
-mpotency key is persisted alongside
--the new event.
 
 ## Transaction control
 
