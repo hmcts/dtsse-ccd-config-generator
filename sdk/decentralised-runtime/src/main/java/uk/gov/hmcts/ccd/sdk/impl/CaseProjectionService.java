@@ -42,7 +42,7 @@ class CaseProjectionService {
     Class<?> resolvedState = typeArgs.length > 1 ? typeArgs[1] : null;
     if (resolvedState == null || !Enum.class.isAssignableFrom(resolvedState)) {
       throw new IllegalStateException(
-          "CaseView implementations must declare an enum state type. Found: " + resolvedState);
+          "CaseView implementations must declare an enum state type. Found: %s".formatted(resolvedState));
     }
     @SuppressWarnings("unchecked")
     Class<? extends Enum<?>> enumClass = (Class<? extends Enum<?>>) resolvedState;

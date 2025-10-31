@@ -120,13 +120,13 @@ class AuditEventService {
     var params = new MapSqlParameterSource()
         .addValue("data", defaultMapper.writeValueAsString(currentView.getData()))
         .addValue("event_id", eventDetails.getEventId())
-        .addValue("user_id", user.getUserDetails().getUid())
+        .addValue("user_id", user.userDetails().getUid())
         .addValue("case_data_id", event.getInternalCaseId())
         .addValue("case_type_id", eventDetails.getCaseType())
         .addValue("case_type_version", 1)
         .addValue("state_id", currentView.getState())
-        .addValue("user_first_name", user.getUserDetails().getGivenName())
-        .addValue("user_last_name", user.getUserDetails().getFamilyName())
+        .addValue("user_first_name", user.userDetails().getGivenName())
+        .addValue("user_last_name", user.userDetails().getFamilyName())
         .addValue("event_name", eventDetails.getEventName())
         .addValue("state_name", stateName)
         .addValue("summary", eventDetails.getSummary())
@@ -144,7 +144,7 @@ class AuditEventService {
       );
       this.publisher.get().publishEvent(
           currentView.getReference(),
-          user.getUserDetails().getUid(),
+          user.userDetails().getUid(),
           eventDetails.getEventId(),
           oldState,
           toCaseDetails(event.getCaseDetails()),

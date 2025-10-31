@@ -22,7 +22,7 @@ Setting `decentralised = true` adds the [decentralised-runtime](../sdk/decentral
 Services must provide a [`CaseView<ViewType, StateEnum>`](../sdk/decentralised-runtime/src/main/java/uk/gov/hmcts/ccd/sdk/CaseView.java)
 implementation.
 
-Your view implementation is the mechanism by which CCD reads case data for your case type; CCD provides the case reference to retrieve and your view must return a result in the format defined by your CCD definition.
+Your CaseView is the mechanism by which CCD access your case data; CCD provides a case reference and your view must return a result in the format defined by your CCD definition.
 
 How your view does this is an implementation detail; it could load a JSON blob, enrich the existing blob, or compose it from a
 fully structured set of tables; the CaseView is now an API contract rather than a literal data model.
@@ -33,19 +33,44 @@ fragments in the database.
 > **Mandatory:** decentralised services must expose exactly one Spring-managed `CaseView` bean. The application fails fast
 > at startup if no view is registered.
 
-## Database schema
+## Data persistence
 
-Flyway migrations under [`sdk/decentralised-runtime/src/main/resources/dataruntime-db`](../sdk/decentralised-runtime/src/main/resources/dataruntime-db)
-provision a dedicated `ccd` schema within your application with the structures needed to mirror existing CCD behaviour under the decentralised model:
+The runtime provides a data persistence layer to handle the functions previously performed centrally by CCD.
+
+### case_data & metadata persistence
+
+Case records are persisted and updated in the `ccd.case_data` table, including legacy JSON blobs and other case metadata.
+
+### Event history
+
+Snapshots are recorded in the `ccd.case_event` table upon conclusion of each case event.
+
+### Optimistic locking of legacy json blobs
+
+The SDK implements optimistic locking on the legacy JSON blob in `ccd.case_data` via the `version` column.
+
+Concurrent changes to these blobs will be rejected as they are now by centralised CCD.
+
+> decentralised services are responsible for implementing appropriate concurrency controls for data persisted outside of this blob
+
+
+### Idempotency
+
+The SDK implements the required idempotency model of CCD's persistence API.
+
+Completed requests are associated with their idempotency key in the `ccd.case_event.idempotency_key` column.
+
+If an incoming request has already been processed the runtime replays the stored response.
+
+### SDK managed database schema
+
+To fulfill the aforementioned the SDK provisions & manages a dedicated `ccd` schema within your application's database.
 
 - `case_data` mirrors CCD’s `case_data` table, including metadata such as state, security classification, TTL and the JSON payload.
 - `case_event` mirrors CCD’s `case_event` table and adds an idempotency key
 - `es_queue` tracks cases that require Elasticsearch indexing 
 - `message_queue_candidates` mirrors CCD’s Service Bus transactional outbox table.
 
-### SDK managed Schema overview
-
-The SDK managed database schema is illustrated here for reference. Note that it is created & maintained by the SDK automatically, serving as an 'out of the box' implementation for the new responsibilities your service assumes under decentralised persistence.
 
 ```mermaid
 erDiagram
@@ -102,13 +127,6 @@ erDiagram
 
 The SDK maintains a queue of cases requiring Elasticsearch indexing in `ccd.es_queue`.
 
-## Idempotency
-
-The SDK implements the required idempotency model of CCD's persistence API.
-
-If an incoming idempotency key has already been processed the runtime replays the stored response; otherwise the request continues and the ide
-mpotency key is persisted alongside
--the new event.
 
 ## Transaction control
 
@@ -129,3 +147,45 @@ Supplementary data operations are implemented and persisted in the `ccd.case_dat
 ## Message publishing to Azure Servicebus
 
 A transactional-outbox based `message_queue_candidates` table is maintained and written to based upon your CCD definition, mirroring CCD's implementation.
+
+## Event submission flow
+
+```mermaid
+flowchart TB
+  A["HTTP POST /ccd-persistence/cases<br/>ServicePersistenceController.createEvent"] --> LOCK["Acquire case-level UPDATE lock"]
+
+  subgraph TX [DB transaction]
+    LOCK --> LCK{Idempotency check<br/>Event already processed?}
+    LCK -->|Already processed| HIT[[Replay prior response]]
+    LCK -->|New request| HANDLER{Legacy or decentralised event?}
+
+    HANDLER -->|decentralised| NEW["Run app submitHandler(...)"]
+    HANDLER -->|legacy| LEG["run about-to-submit callback</br> (if defined)"]
+
+    LEG --> SNAP["Filter @External fields"]
+    SNAP --> BLOB["Update legacy case_data blob</br>(if changed)"]
+    NEW --> UPS
+    BLOB --> UPS["Upsert case<br/>update case metadata</br>increment case revision"]
+
+    UPS --> VIEW["Load CaseView</br>insert into ccd.case_event"]
+    VIEW --> BUS["enqueue message_queue_candidates</br>(optional)"]
+  end
+
+  HIT --> HTTP200[[200 OK]]
+  BUS -->|Legacy flow| SUBM["Run submitted callback (post-commit)"]
+  BUS -->|Decentralised flow| HTTP200
+  SUBM --> HTTP200
+
+  click A "https://github.com/hmcts/dtsse-ccd-config-generator/blob/master/sdk/decentralised-runtime/src/main/java/uk/gov/hmcts/ccd/sdk/impl/ServicePersistenceController.java#L58" "ServicePersistenceController.java" _blank
+  click C "https://github.com/hmcts/dtsse-ccd-config-generator/blob/master/sdk/decentralised-runtime/src/main/java/uk/gov/hmcts/ccd/sdk/impl/CaseSubmissionService.java#L36" "CaseSubmissionService.java" _blank
+  click LOCK "https://github.com/hmcts/dtsse-ccd-config-generator/blob/master/sdk/decentralised-runtime/src/main/java/uk/gov/hmcts/ccd/sdk/impl/IdempotencyEnforcer.java#L31" "Acquire lock" _blank
+  click LCK "https://github.com/hmcts/dtsse-ccd-config-generator/blob/master/sdk/decentralised-runtime/src/main/java/uk/gov/hmcts/ccd/sdk/impl/IdempotencyEnforcer.java#L22" "IdempotencyEnforcer.lockCaseAndGetExistingEvent" _blank
+  click NEW "https://github.com/hmcts/dtsse-ccd-config-generator/blob/master/sdk/decentralised-runtime/src/main/java/uk/gov/hmcts/ccd/sdk/impl/DecentralisedSubmissionHandler.java#L27" "DecentralisedSubmissionHandler.apply" _blank
+  click LEG "https://github.com/hmcts/dtsse-ccd-config-generator/blob/master/sdk/decentralised-runtime/src/main/java/uk/gov/hmcts/ccd/sdk/impl/LegacyCallbackSubmissionHandler.java#L51" "LegacyCallbackSubmissionHandler.apply" _blank
+  click SNAP "https://github.com/hmcts/dtsse-ccd-config-generator/blob/master/sdk/decentralised-runtime/src/main/java/uk/gov/hmcts/ccd/sdk/impl/LegacyCallbackSubmissionHandler.java#L195" "snapshotWithFilteredFields" _blank
+  click UPS "https://github.com/hmcts/dtsse-ccd-config-generator/blob/master/sdk/decentralised-runtime/src/main/java/uk/gov/hmcts/ccd/sdk/impl/CaseDataRepository.java#L105" "CaseDataRepository.upsertCase" _blank
+  click VIEW "https://github.com/hmcts/dtsse-ccd-config-generator/blob/master/sdk/decentralised-runtime/src/main/java/uk/gov/hmcts/ccd/sdk/impl/CaseProjectionService.java#L52" "CaseProjectionService.load" _blank
+  click AUD "https://github.com/hmcts/dtsse-ccd-config-generator/blob/master/sdk/decentralised-runtime/src/main/java/uk/gov/hmcts/ccd/sdk/impl/AuditEventService.java#L67" "AuditEventService.saveAuditRecord" _blank
+  click BUS "https://github.com/hmcts/dtsse-ccd-config-generator/blob/master/sdk/decentralised-runtime/src/main/java/uk/gov/hmcts/ccd/sdk/impl/MessagePublisher.java#L79" "MessagePublisher.publishEvent" _blank
+  click HANDLER "https://github.com/hmcts/dtsse-ccd-config-generator/blob/9fe79e8e30e98faf96dc3411d069b09a08a2a295/sdk/decentralised-runtime/src/main/java/uk/gov/hmcts/ccd/sdk/impl/CaseSubmissionService.java#L42" _blank
+```

@@ -64,4 +64,4 @@ participant SDB as Service DB
 
 - [Decentralised runtime in detail](./decentralised-runtime.md)
 - [Concurrency considerations](./concurrency.md)
-- [Migrating existing services](./data-migration-for-existing-services.md)
+- [Migrating existing services](./data-migration)

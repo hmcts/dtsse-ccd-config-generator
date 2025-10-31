@@ -3,10 +3,10 @@ package uk.gov.hmcts.ccd.sdk.impl;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.google.common.collect.Maps;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.LocalDateTime;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -158,7 +158,7 @@ class CaseDataRepository {
             returning id;
         """;
 
-    Map<String, Object> params = Maps.newHashMap();
+    Map<String, Object> params = new HashMap<>();
     params.put("jurisdiction", event.getCaseDetails().getJurisdiction());
     params.put("case_type_id", event.getCaseDetails().getCaseTypeId());
     params.put("state", event.getCaseDetails().getState());
