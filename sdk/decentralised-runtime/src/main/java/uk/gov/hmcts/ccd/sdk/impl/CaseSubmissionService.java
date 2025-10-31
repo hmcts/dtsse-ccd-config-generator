@@ -1,6 +1,9 @@
-package uk.gov.hmcts.ccd.sdk;
+package uk.gov.hmcts.ccd.sdk.impl;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import java.util.Optional;
+import java.util.UUID;
+import java.util.function.Supplier;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.http.HttpStatus;
@@ -13,11 +16,8 @@ import uk.gov.hmcts.ccd.data.persistence.dto.DecentralisedCaseDetails;
 import uk.gov.hmcts.ccd.data.persistence.dto.DecentralisedCaseEvent;
 import uk.gov.hmcts.ccd.data.persistence.dto.DecentralisedSubmitEventResponse;
 import uk.gov.hmcts.ccd.domain.model.callbacks.AfterSubmitCallbackResponse;
+import uk.gov.hmcts.ccd.sdk.ResolvedConfigRegistry;
 import uk.gov.hmcts.ccd.sdk.api.callback.SubmitResponse;
-
-import java.util.Optional;
-import java.util.UUID;
-import java.util.function.Supplier;
 
 @Service
 @RequiredArgsConstructor

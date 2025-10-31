@@ -1,4 +1,4 @@
-package uk.gov.hmcts.ccd.sdk;
+package uk.gov.hmcts.ccd.sdk.impl;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -9,6 +9,8 @@ import java.util.stream.Collectors;
 import net.jodah.typetools.TypeResolver;
 import org.springframework.stereotype.Service;
 import uk.gov.hmcts.ccd.data.persistence.dto.DecentralisedCaseDetails;
+import uk.gov.hmcts.ccd.sdk.CaseView;
+import uk.gov.hmcts.ccd.sdk.CaseViewRequest;
 
 /**
  * Central place for loading {@link DecentralisedCaseDetails} with the

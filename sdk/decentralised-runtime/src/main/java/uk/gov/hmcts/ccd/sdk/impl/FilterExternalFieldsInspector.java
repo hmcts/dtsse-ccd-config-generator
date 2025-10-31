@@ -1,7 +1,8 @@
-package uk.gov.hmcts.ccd.sdk;
+package uk.gov.hmcts.ccd.sdk.impl;
 
 import com.fasterxml.jackson.databind.introspect.AnnotatedMember;
 import com.fasterxml.jackson.databind.introspect.JacksonAnnotationIntrospector;
+import uk.gov.hmcts.ccd.sdk.External;
 
 /**
  * Jackson annotation inspector that filters out properties marked with

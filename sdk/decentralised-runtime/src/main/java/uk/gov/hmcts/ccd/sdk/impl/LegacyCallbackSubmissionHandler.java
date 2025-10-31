@@ -1,4 +1,4 @@
-package uk.gov.hmcts.ccd.sdk;
+package uk.gov.hmcts.ccd.sdk.impl;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -12,6 +12,7 @@ import uk.gov.hmcts.ccd.data.casedetails.SecurityClassification;
 import uk.gov.hmcts.ccd.data.persistence.dto.DecentralisedCaseEvent;
 import uk.gov.hmcts.ccd.data.persistence.dto.DecentralisedSubmitEventResponse;
 import uk.gov.hmcts.ccd.domain.model.callbacks.AfterSubmitCallbackResponse;
+import uk.gov.hmcts.ccd.sdk.ResolvedConfigRegistry;
 import uk.gov.hmcts.ccd.sdk.api.Event;
 import uk.gov.hmcts.ccd.sdk.api.Webhook;
 import uk.gov.hmcts.ccd.sdk.api.callback.AboutToStartOrSubmitResponse;
@@ -69,32 +70,32 @@ class LegacyCallbackSubmissionHandler implements CaseSubmissionHandler {
         .map(SecurityClassification::name)
         .map(Classification::valueOf);
 
-      return new CaseSubmissionHandlerResult(
+    return new CaseSubmissionHandlerResult(
         Optional.ofNullable(dataSnapshot),
         state,
         securityClassification,
         () -> {
-      var builder = SubmitResponse.builder()
-          .errors(errors)
-          .warnings(warnings);
+          var builder = SubmitResponse.builder()
+              .errors(errors)
+              .warnings(warnings);
 
-      SubmittedCallbackResponse submittedResponse = null;
-      if (runSubmitted) {
-        submittedResponse = runSubmittedCallback(event).orElse(null);
-      }
+          SubmittedCallbackResponse submittedResponse = null;
+          if (runSubmitted) {
+            submittedResponse = runSubmittedCallback(event).orElse(null);
+          }
 
-      if (submittedResponse == null) {
-        submittedResponse = toSubmittedCallbackResponse(
-            event.getCaseDetails().getAfterSubmitCallbackResponse());
-      }
+          if (submittedResponse == null) {
+            submittedResponse = toSubmittedCallbackResponse(
+                event.getCaseDetails().getAfterSubmitCallbackResponse());
+          }
 
-      if (submittedResponse != null) {
-        builder.confirmationHeader(submittedResponse.getConfirmationHeader());
-        builder.confirmationBody(submittedResponse.getConfirmationBody());
-      }
-      securityClassification.ifPresent(builder::caseSecurityClassification);
-      return builder.build();
-    });
+          if (submittedResponse != null) {
+            builder.confirmationHeader(submittedResponse.getConfirmationHeader());
+            builder.confirmationBody(submittedResponse.getConfirmationBody());
+          }
+          securityClassification.ifPresent(builder::caseSecurityClassification);
+          return builder.build();
+        });
   }
 
   private LegacySubmitOutcome prepareLegacySubmit(DecentralisedCaseEvent event) {

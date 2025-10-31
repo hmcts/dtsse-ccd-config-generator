@@ -1,4 +1,4 @@
-package uk.gov.hmcts.ccd.sdk;
+package uk.gov.hmcts.ccd.sdk.impl;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
@@ -29,12 +29,12 @@ public class ServicePersistenceControllerTest {
   );
 
   @Test
-  void createEventWithoutAuthorizationReturnsUnauthorized() {
+  void createEventWithEmptyAuthorizationReturnsUnauthorized() {
     DecentralisedCaseEvent event = mock(DecentralisedCaseEvent.class);
 
     ResponseEntity<DecentralisedSubmitEventResponse> response = controller.createEvent(
         event,
-        null,
+        "",
         UUID.randomUUID()
     );
 

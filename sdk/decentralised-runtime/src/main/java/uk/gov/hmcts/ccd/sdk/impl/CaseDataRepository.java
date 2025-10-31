@@ -1,16 +1,15 @@
-package uk.gov.hmcts.ccd.sdk;
+package uk.gov.hmcts.ccd.sdk.impl;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.google.common.collect.Maps;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-
-import com.google.common.collect.Maps;
 import lombok.RequiredArgsConstructor;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
@@ -105,7 +104,7 @@ class CaseDataRepository {
 
   @SneakyThrows
   long upsertCase(DecentralisedCaseEvent event, Optional<JsonNode> dataUpdate) {
-    var sql = """
+    final String sql = """
         insert into ccd.case_data (
             last_modified,
             last_state_modified_date,
@@ -128,7 +127,9 @@ class CaseDataRepository {
             case when :has_data then :data::jsonb else '{}'::jsonb end,
             :reference,
             :security_classification::ccd.securityclassification,
-            coalesce(:version, 2), -- We start at a higher version number than CCD's default 1, ensuring our write to ES wins
+            -- We start at a higher version number than CCD's default 1,
+            -- ensuring our write to ES wins
+            coalesce(:version, 2),
             :id
         )
         on conflict (reference)
@@ -155,59 +156,59 @@ class CaseDataRepository {
                                        end
             where case_data.version = excluded.version
             returning id;
-    """;
+        """;
 
-      Map<String, Object> params = Maps.newHashMap();
-      params.put("jurisdiction", event.getCaseDetails().getJurisdiction());
-      params.put("case_type_id", event.getCaseDetails().getCaseTypeId());
-      params.put("state", event.getCaseDetails().getState());
-      params.put("data", dataUpdate.map(this::serialiseJsonNode).orElse(null));
-      params.put("has_data", dataUpdate.isPresent());
-      params.put("reference", event.getCaseDetails().getReference());
-      params.put("security_classification", event.getCaseDetails().getSecurityClassification().toString());
-      params.put("version", event.getCaseDetails().getVersion());
-      params.put("id", event.getInternalCaseId());
+    Map<String, Object> params = Maps.newHashMap();
+    params.put("jurisdiction", event.getCaseDetails().getJurisdiction());
+    params.put("case_type_id", event.getCaseDetails().getCaseTypeId());
+    params.put("state", event.getCaseDetails().getState());
+    params.put("data", dataUpdate.map(this::serialiseJsonNode).orElse(null));
+    params.put("has_data", dataUpdate.isPresent());
+    params.put("reference", event.getCaseDetails().getReference());
+    params.put("security_classification", event.getCaseDetails().getSecurityClassification().toString());
+    params.put("version", event.getCaseDetails().getVersion());
+    params.put("id", event.getInternalCaseId());
 
     return ndb.queryForObject(sql, params, Long.class);
   }
 
   @SneakyThrows
   private String serialiseJsonNode(JsonNode node) {
-      return defaultMapper.writeValueAsString(node);
+    return defaultMapper.writeValueAsString(node);
   }
 
   @SneakyThrows
   private DecentralisedCaseDetails mapCaseDetails(ResultSet rs) throws SQLException {
-      Long reference = rs.getObject("reference", Long.class);
-      String state = rs.getString("state");
+    Long reference = rs.getObject("reference", Long.class);
+    String state = rs.getString("state");
 
-      var caseDetails = new CaseDetails();
-      caseDetails.setReference(reference);
-      caseDetails.setId(rs.getString("id"));
-      caseDetails.setJurisdiction(rs.getString("jurisdiction"));
-      caseDetails.setCaseTypeId(rs.getString("case_type_id"));
-      caseDetails.setState(state);
-      caseDetails.setVersion(rs.getObject("version", Integer.class));
-      caseDetails.setCreatedDate(rs.getObject("created_date", LocalDateTime.class));
-      caseDetails.setLastModified(rs.getObject("last_modified", LocalDateTime.class));
-      caseDetails.setLastStateModifiedDate(rs.getObject("last_state_modified_date", LocalDateTime.class));
+    var caseDetails = new CaseDetails();
+    caseDetails.setReference(reference);
+    caseDetails.setId(rs.getString("id"));
+    caseDetails.setJurisdiction(rs.getString("jurisdiction"));
+    caseDetails.setCaseTypeId(rs.getString("case_type_id"));
+    caseDetails.setState(state);
+    caseDetails.setVersion(rs.getObject("version", Integer.class));
+    caseDetails.setCreatedDate(rs.getObject("created_date", LocalDateTime.class));
+    caseDetails.setLastModified(rs.getObject("last_modified", LocalDateTime.class));
+    caseDetails.setLastStateModifiedDate(rs.getObject("last_state_modified_date", LocalDateTime.class));
 
-      var caseDataJson = rs.getString("case_data");
-      caseDetails.setData(defaultMapper.readValue(caseDataJson, JSON_NODE_MAP));
-      caseDetails.setDataClassification(Map.of());
+    var caseDataJson = rs.getString("case_data");
+    caseDetails.setData(defaultMapper.readValue(caseDataJson, JSON_NODE_MAP));
+    caseDetails.setDataClassification(Map.of());
 
-      var supplementaryDataJson = rs.getString("supplementary_data");
-      caseDetails.setSupplementaryData(defaultMapper.readValue(supplementaryDataJson, JSON_NODE_MAP));
+    var supplementaryDataJson = rs.getString("supplementary_data");
+    caseDetails.setSupplementaryData(defaultMapper.readValue(supplementaryDataJson, JSON_NODE_MAP));
 
-      var securityClassification = rs.getString("security_classification");
-      caseDetails.setSecurityClassification(SecurityClassification.valueOf(securityClassification));
+    var securityClassification = rs.getString("security_classification");
+    caseDetails.setSecurityClassification(SecurityClassification.valueOf(securityClassification));
 
-      Long revision = rs.getObject("case_revision", Long.class);
-      caseDetails.setRevision(revision);
+    Long revision = rs.getObject("case_revision", Long.class);
+    caseDetails.setRevision(revision);
 
-      var response = new DecentralisedCaseDetails();
-      response.setCaseDetails(caseDetails);
-      response.setRevision(revision);
-      return response;
+    var response = new DecentralisedCaseDetails();
+    response.setCaseDetails(caseDetails);
+    response.setRevision(revision);
+    return response;
   }
 }

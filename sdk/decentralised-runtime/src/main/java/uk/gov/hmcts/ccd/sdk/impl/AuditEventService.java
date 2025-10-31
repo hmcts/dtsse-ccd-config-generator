@@ -1,4 +1,4 @@
-package uk.gov.hmcts.ccd.sdk;
+package uk.gov.hmcts.ccd.sdk.impl;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -21,11 +21,12 @@ import uk.gov.hmcts.ccd.data.casedetails.SecurityClassification;
 import uk.gov.hmcts.ccd.data.persistence.dto.DecentralisedAuditEvent;
 import uk.gov.hmcts.ccd.data.persistence.dto.DecentralisedCaseEvent;
 import uk.gov.hmcts.ccd.domain.model.std.AuditEvent;
+import uk.gov.hmcts.ccd.sdk.ResolvedConfigRegistry;
 import uk.gov.hmcts.reform.ccd.client.model.CaseDetails;
 
 @Slf4j
 @RequiredArgsConstructor
-@Service(value = "uk.gov.hmcts.ccd.sdk.AuditEventService")
+@Service(value = "uk.gov.hmcts.ccd.sdk.impl.AuditEventService")
 class AuditEventService {
 
   private final NamedParameterJdbcTemplate ndb;

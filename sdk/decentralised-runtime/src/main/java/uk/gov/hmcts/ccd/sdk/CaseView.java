@@ -2,6 +2,7 @@ package uk.gov.hmcts.ccd.sdk;
 
 /**
  * Provides case data to CCD when CCD loads cases.
+ *
  * <p>
  * Decentralised services typically implement the request-only overload and ignore the JSON blob,
  * while legacy services can override the request-plus-blob overload to continue working with the blob.
@@ -12,6 +13,8 @@ package uk.gov.hmcts.ccd.sdk;
 public interface CaseView<ViewType, StateType extends Enum<StateType>> {
 
   /**
+   * Retrieve a case view for the given request.
+   *
    * @param request encapsulated request information
    * @return the projected case data
    */
