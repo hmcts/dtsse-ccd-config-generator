@@ -112,10 +112,10 @@ class MessagePublisher {
     // Convert the MessageInformation object to a JSON string
     String messageInformationJson = mapper.writeValueAsString(info);
 
-    final String SQL =
-        "insert into ccd.message_queue_candidates (reference, message_type, time_stamp, message_information) "
-            +
-            "values (:caseReference, :messageType, :timestamp, :messageInformation::jsonb)";
+    final String SQL = """
+        insert into ccd.message_queue_candidates (reference, message_type, time_stamp, message_information)
+        values (:caseReference, :messageType, :timestamp, :messageInformation::jsonb)
+        """;
 
     MapSqlParameterSource params = new MapSqlParameterSource();
     params.addValue("caseReference", caseReference);
