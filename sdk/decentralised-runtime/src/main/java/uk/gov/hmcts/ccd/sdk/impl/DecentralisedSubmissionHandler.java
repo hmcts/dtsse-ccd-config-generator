@@ -60,7 +60,7 @@ class DecentralisedSubmissionHandler implements CaseSubmissionHandler {
     // TODO: revisit when CCD resumes sending query params; referer header is absent at the moment.
     var urlParams = new LinkedMultiValueMap<String, String>();
 
-      return eventConfig.getSubmitHandler()
-          .submit(new uk.gov.hmcts.ccd.sdk.api.EventPayload(caseRef, domainCaseData, urlParams));
+    return eventConfig.getSubmitHandler()
+        .submit(new uk.gov.hmcts.ccd.sdk.api.EventPayload(caseRef, domainCaseData, urlParams));
   }
 }

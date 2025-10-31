@@ -3,14 +3,13 @@ package uk.gov.hmcts.ccd.sdk.impl;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.google.common.collect.Maps;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-
-import com.google.common.collect.Maps;
 import lombok.RequiredArgsConstructor;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
@@ -105,7 +104,7 @@ class CaseDataRepository {
 
   @SneakyThrows
   long upsertCase(DecentralisedCaseEvent event, Optional<JsonNode> dataUpdate) {
-    var sql = """
+    final String sql = """
         insert into ccd.case_data (
             last_modified,
             last_state_modified_date,
@@ -128,7 +127,9 @@ class CaseDataRepository {
             case when :has_data then :data::jsonb else '{}'::jsonb end,
             :reference,
             :security_classification::ccd.securityclassification,
-            coalesce(:version, 2), -- We start at a higher version number than CCD's default 1, ensuring our write to ES wins
+            -- We start at a higher version number than CCD's default 1,
+            -- ensuring our write to ES wins
+            coalesce(:version, 2),
             :id
         )
         on conflict (reference)
@@ -155,18 +156,18 @@ class CaseDataRepository {
                                        end
             where case_data.version = excluded.version
             returning id;
-    """;
+        """;
 
-      Map<String, Object> params = Maps.newHashMap();
-      params.put("jurisdiction", event.getCaseDetails().getJurisdiction());
-      params.put("case_type_id", event.getCaseDetails().getCaseTypeId());
-      params.put("state", event.getCaseDetails().getState());
-      params.put("data", dataUpdate.map(this::serialiseJsonNode).orElse(null));
-      params.put("has_data", dataUpdate.isPresent());
-      params.put("reference", event.getCaseDetails().getReference());
-      params.put("security_classification", event.getCaseDetails().getSecurityClassification().toString());
-      params.put("version", event.getCaseDetails().getVersion());
-      params.put("id", event.getInternalCaseId());
+    Map<String, Object> params = Maps.newHashMap();
+    params.put("jurisdiction", event.getCaseDetails().getJurisdiction());
+    params.put("case_type_id", event.getCaseDetails().getCaseTypeId());
+    params.put("state", event.getCaseDetails().getState());
+    params.put("data", dataUpdate.map(this::serialiseJsonNode).orElse(null));
+    params.put("has_data", dataUpdate.isPresent());
+    params.put("reference", event.getCaseDetails().getReference());
+    params.put("security_classification", event.getCaseDetails().getSecurityClassification().toString());
+    params.put("version", event.getCaseDetails().getVersion());
+    params.put("id", event.getInternalCaseId());
 
     return ndb.queryForObject(sql, params, Long.class);
   }

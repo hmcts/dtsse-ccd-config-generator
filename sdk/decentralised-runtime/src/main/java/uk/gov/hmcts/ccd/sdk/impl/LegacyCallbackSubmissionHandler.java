@@ -70,32 +70,32 @@ class LegacyCallbackSubmissionHandler implements CaseSubmissionHandler {
         .map(SecurityClassification::name)
         .map(Classification::valueOf);
 
-      return new CaseSubmissionHandlerResult(
+    return new CaseSubmissionHandlerResult(
         Optional.ofNullable(dataSnapshot),
         state,
         securityClassification,
         () -> {
-      var builder = SubmitResponse.builder()
-          .errors(errors)
-          .warnings(warnings);
+          var builder = SubmitResponse.builder()
+              .errors(errors)
+              .warnings(warnings);
 
-      SubmittedCallbackResponse submittedResponse = null;
-      if (runSubmitted) {
-        submittedResponse = runSubmittedCallback(event).orElse(null);
-      }
+          SubmittedCallbackResponse submittedResponse = null;
+          if (runSubmitted) {
+            submittedResponse = runSubmittedCallback(event).orElse(null);
+          }
 
-      if (submittedResponse == null) {
-        submittedResponse = toSubmittedCallbackResponse(
-            event.getCaseDetails().getAfterSubmitCallbackResponse());
-      }
+          if (submittedResponse == null) {
+            submittedResponse = toSubmittedCallbackResponse(
+                event.getCaseDetails().getAfterSubmitCallbackResponse());
+          }
 
-      if (submittedResponse != null) {
-        builder.confirmationHeader(submittedResponse.getConfirmationHeader());
-        builder.confirmationBody(submittedResponse.getConfirmationBody());
-      }
-      securityClassification.ifPresent(builder::caseSecurityClassification);
-      return builder.build();
-    });
+          if (submittedResponse != null) {
+            builder.confirmationHeader(submittedResponse.getConfirmationHeader());
+            builder.confirmationBody(submittedResponse.getConfirmationBody());
+          }
+          securityClassification.ifPresent(builder::caseSecurityClassification);
+          return builder.build();
+        });
   }
 
   private LegacySubmitOutcome prepareLegacySubmit(DecentralisedCaseEvent event) {

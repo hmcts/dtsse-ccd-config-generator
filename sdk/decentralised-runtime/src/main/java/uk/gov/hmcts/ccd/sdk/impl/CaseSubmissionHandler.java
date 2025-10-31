@@ -14,9 +14,10 @@ interface CaseSubmissionHandler {
 
   CaseSubmissionHandlerResult apply(DecentralisedCaseEvent event);
 
-  record CaseSubmissionHandlerResult(Optional<JsonNode> dataUpdate,
-                                     Optional<String> state,
-                                     Optional<uk.gov.hmcts.reform.ccd.client.model.Classification> securityClassification,
-                                     Supplier<SubmitResponse<?>> responseSupplier) {
+  record CaseSubmissionHandlerResult(
+      Optional<JsonNode> dataUpdate,
+      Optional<String> state,
+      Optional<uk.gov.hmcts.reform.ccd.client.model.Classification> securityClassification,
+      Supplier<SubmitResponse<?>> responseSupplier) {
   }
 }

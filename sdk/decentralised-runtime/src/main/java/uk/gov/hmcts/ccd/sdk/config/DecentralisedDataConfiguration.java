@@ -17,7 +17,7 @@ import uk.gov.hmcts.ccd.config.MessagingProperties;
 @AutoConfiguration(
     before = {FlywayAutoConfiguration.class}
 )
-@ComponentScan(basePackageClasses = {MessagingProperties.class} )
+@ComponentScan(basePackageClasses = {MessagingProperties.class})
 @ConditionalOnClass(Flyway.class)
 @ConditionalOnProperty(prefix = "spring.flyway", name = "enabled", matchIfMissing = true)
 public class DecentralisedDataConfiguration {

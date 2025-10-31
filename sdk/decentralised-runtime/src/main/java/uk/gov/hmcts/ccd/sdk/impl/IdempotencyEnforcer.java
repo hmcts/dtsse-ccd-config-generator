@@ -25,7 +25,7 @@ class IdempotencyEnforcer {
         .addValue("reference", caseReference)
         .addValue("key", idempotencyKey);
 
-    /**
+    /*
      * We establish a lock on the case and look up the idempotency key to see if we've processed this event before.
      */
     var matches = db.query(
