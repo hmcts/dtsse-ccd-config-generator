@@ -120,11 +120,11 @@ The SDK wraps every case event inside a database transaction covering:
 - insert into ccd.case_event (audit history)
 - insert into Elasticsearch queue table
 
-The orchestration lives in [`CaseSubmissionService`](../sdk/decentralised-runtime/src/main/java/uk/gov/hmcts/ccd/sdk/CaseSubmissionService.java). If a concurrent update to `ccd.case_data` is detected a `409 CONFLICT` is returned and the transaction rolls back, aligning behaviour with CCD.
+The orchestration lives in [`CaseSubmissionService`](../sdk/decentralised-runtime/src/main/java/uk/gov/hmcts/ccd/sdk/impl/CaseSubmissionService.java). If a concurrent update to `ccd.case_data` is detected a `409 CONFLICT` is returned and the transaction rolls back, aligning behaviour with CCD.
 
 ## Supplementary data
 
-Supplementary data operations are implemented and persisted in the `ccd.case_data` table via [`SupplementaryDataService`](../sdk/decentralised-runtime/src/main/java/uk/gov/hmcts/ccd/sdk/SupplementaryDataService.java), using PostgreSQL’s JSON functions to apply `$set`/`$inc` style updates atomically.
+Supplementary data operations are implemented and persisted in the `ccd.case_data` table via [`SupplementaryDataService`](../sdk/decentralised-runtime/src/main/java/uk/gov/hmcts/ccd/sdk/impl/SupplementaryDataService.java), using PostgreSQL’s JSON functions to apply `$set`/`$inc` style updates atomically.
 
 ## Message publishing to Azure Servicebus
 
