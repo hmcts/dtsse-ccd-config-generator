@@ -1,6 +1,6 @@
 # Decentralised Runtime
 
-The decentralised runtime provides an out-of-the-box implementtion of CCD’s decentralised persistence APIs so service
+The decentralised runtime provides an out-of-the-box implementation of CCD’s decentralised persistence APIs so service
 teams can shift case ownership without rebuilding everything from scratch.
 
 ## Onboarding
@@ -22,7 +22,7 @@ Setting `decentralised = true` adds the [decentralised-runtime](../sdk/decentral
 Services must provide a [`CaseView<ViewType, StateEnum>`](../sdk/decentralised-runtime/src/main/java/uk/gov/hmcts/ccd/sdk/CaseView.java)
 implementation.
 
-Your CaseView is the mechanism by which CCD access your case data; CCD provides a case reference and your view must return a result in the format defined by your CCD definition.
+Your CaseView is the mechanism through which CCD accesses your case data: CCD provides a case reference, and your view must return a result in the format defined by your CCD definition.
 
 How your view does this is an implementation detail; it could load a JSON blob, enrich the existing blob, or compose it from a
 fully structured set of tables; the CaseView is now an API contract rather than a literal data model.
@@ -30,7 +30,7 @@ fully structured set of tables; the CaseView is now an API contract rather than 
 Case views can also inject dynamically rendered HTML/Markdown at runtime, avoiding the need to store presentation
 fragments in the database.
 
-> **Mandatory:** decentralised services must expose exactly one Spring-managed `CaseView` bean. The application fails fast
+> **Mandatory:** Decentralised services must expose exactly one Spring-managed `CaseView` bean. The application fails fast
 > at startup if no view is registered.
 
 ## Data persistence
@@ -45,26 +45,26 @@ Case records are persisted and updated in the `ccd.case_data` table, including l
 
 Snapshots are recorded in the `ccd.case_event` table upon conclusion of each case event.
 
-### Optimistic locking of legacy json blobs
+### Optimistic locking of legacy JSON blobs
 
 The SDK implements optimistic locking on the legacy JSON blob in `ccd.case_data` via the `version` column.
 
 Concurrent changes to these blobs will be rejected as they are now by centralised CCD.
 
-> decentralised services are responsible for implementing appropriate concurrency controls for data persisted outside of this blob
+> Decentralised services are responsible for implementing appropriate concurrency controls for data persisted outside of this blob
 
 
 ### Idempotency
 
-The SDK implements the required idempotency model of CCD's persistence API.
+The SDK implements the required idempotency model for CCD's persistence API.
 
 Completed requests are associated with their idempotency key in the `ccd.case_event.idempotency_key` column.
 
-If an incoming request has already been processed the runtime replays the stored response.
+If an incoming request has already been processed, the runtime replays the stored response.
 
 ### SDK managed database schema
 
-To fulfill the aforementioned the SDK provisions & manages a dedicated `ccd` schema within your application's database.
+To fulfil the aforementioned responsibilities, the SDK provisions and manages a dedicated `ccd` schema within your application's database.
 
 - `case_data` mirrors CCD’s `case_data` table, including metadata such as state, security classification, TTL and the JSON payload.
 - `case_event` mirrors CCD’s `case_event` table and adds an idempotency key
@@ -132,21 +132,21 @@ The SDK maintains a queue of cases requiring Elasticsearch indexing in `ccd.es_q
 
 The SDK wraps every case event inside a database transaction covering:
 
-- idempotency check & case-level lock acquisition
-- Invocation of AboutToSubmit callback (if defined)
-- upsert of ccd.case_data,
-- insert into ccd.case_event (audit history)
-- insert into Elasticsearch queue table
+- idempotency check and case-level lock acquisition
+- Invocation of the AboutToSubmit callback (if defined)
+- upsert of `ccd.case_data`
+- insert into `ccd.case_event` (audit history)
+- insert into the Elasticsearch queue table
 
-The orchestration lives in [`CaseSubmissionService`](../sdk/decentralised-runtime/src/main/java/uk/gov/hmcts/ccd/sdk/impl/CaseSubmissionService.java). If a concurrent update to `ccd.case_data` is detected a `409 CONFLICT` is returned and the transaction rolls back, aligning behaviour with CCD.
+The orchestration lives in [`CaseSubmissionService`](../sdk/decentralised-runtime/src/main/java/uk/gov/hmcts/ccd/sdk/impl/CaseSubmissionService.java). If a concurrent update to `ccd.case_data` is detected, a `409 CONFLICT` is returned and the transaction rolls back, aligning behaviour with CCD.
 
 ## Supplementary data
 
 Supplementary data operations are implemented and persisted in the `ccd.case_data` table via [`SupplementaryDataService`](../sdk/decentralised-runtime/src/main/java/uk/gov/hmcts/ccd/sdk/impl/SupplementaryDataService.java), using PostgreSQL’s JSON functions to apply `$set`/`$inc` style updates atomically.
 
-## Message publishing to Azure Servicebus
+## Message publishing to Azure Service Bus
 
-A transactional-outbox based `message_queue_candidates` table is maintained and written to based upon your CCD definition, mirroring CCD's implementation.
+A transactional outbox-based `message_queue_candidates` table is maintained and written to based on your CCD definition, mirroring CCD's implementation.
 
 ## Event submission flow
 
@@ -172,7 +172,7 @@ flowchart TB
   end
 
   HIT --> HTTP200[[200 OK]]
-  BUS -->|Legacy flow| SUBM["Run submitted callback (post-commit)"]
+  BUS -->|Legacy flow| SUBM["Run submitted callback</br>(if-defined)"]
   BUS -->|Decentralised flow| HTTP200
   SUBM --> HTTP200
 

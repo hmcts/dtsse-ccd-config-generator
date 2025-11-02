@@ -11,18 +11,18 @@
 
 1. **Shutter the service (or make it read-only).**
 
-2. **Copy data.**  Use the provided script: [migrate-ccd-data.sh](../scripts/migrate-ccd-data.sh) to copy your case type's data from CCD’s central database into your application’s.
+2. **Copy data.** Use the provided script: [migrate-ccd-data.sh](../scripts/migrate-ccd-data.sh) to copy your case type's data from CCD’s central database into your application’s.
 
-3. **Tell CCD your case type is now decentralised with an ENV var configuration change:** 
+3. **Tell CCD your case type is now decentralised with an ENV var configuration change:**
 
    ```
-   # This tells CCD where it should go to fetch & persist cases of the 'nfd' case type
+   # This tells CCD where it should go to fetch and persist cases of the 'nfd' case type
    ccd.decentralised.case-type-service-urls[nfd]=https://nfd-case-service.platform.hmcts.net
    ```
 
 4. **Smoke test.** Verify:
 
-   * Viewing a migrated cases
+   * Viewing a migrated case
    * Editing a migrated case
    * Creation of a new case
    * Elasticsearch indexing
