@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
+import java.io.IOException;
 import jakarta.jms.ConnectionFactory;
 import jakarta.jms.Message;
 
@@ -1409,8 +1410,70 @@ public class TestWithCCD extends CftlibTest {
 
     }
 
+    @SneakyThrows
+    @Order(23)
+    @Test
+    void decentralisedRevisionBumpTriggersReindex() {
+        Long caseDataId = db.queryForObject(
+            "SELECT id FROM ccd.case_data WHERE reference = :ref",
+            Map.of("ref", caseRef),
+            Long.class
+        );
+        assertThat("Case data id should not be null", caseDataId, is(notNullValue()));
 
-        @SneakyThrows
+        Integer revisionBefore = db.queryForObject(
+            "SELECT case_revision FROM ccd.case_data WHERE reference = :ref",
+            Map.of("ref", caseRef),
+            Integer.class
+        );
+        assertThat("Existing revision should be available", revisionBefore, is(notNullValue()));
+
+        await()
+            .pollInterval(Duration.ofSeconds(1))
+            .atMost(Duration.ofSeconds(30))
+            .untilAsserted(() -> assertThat(
+                "Elasticsearch revision should match datastore before bump",
+                fetchRevisionFromElasticsearch(caseDataId),
+                equalTo(revisionBefore)
+            ));
+
+        int esRevisionBefore = fetchRevisionFromElasticsearch(caseDataId);
+        assertThat("Baseline Elasticsearch revision should equal datastore value",
+            esRevisionBefore, equalTo(revisionBefore));
+
+        int rowsUpdated = db.getJdbcTemplate().update("UPDATE ccd.case_data SET case_revision = case_revision + 1");
+        assertThat("Expected to bump revision for at least one case", rowsUpdated, greaterThan(0));
+
+        Integer revisionAfter = db.queryForObject(
+            "SELECT case_revision FROM ccd.case_data WHERE reference = :ref",
+            Map.of("ref", caseRef),
+            Integer.class
+        );
+        assertThat("Revision should increment in datastore", revisionAfter, equalTo(revisionBefore + 1));
+
+        await()
+            .pollInterval(Duration.ofSeconds(1))
+            .atMost(Duration.ofSeconds(30))
+            .untilAsserted(() -> {
+                int esRevision = fetchRevisionFromElasticsearch(caseDataId);
+                assertThat("Elasticsearch revision should eventually match datastore", esRevision, equalTo(revisionAfter));
+            });
+    }
+
+    private int fetchRevisionFromElasticsearch(long caseDataId) throws IOException {
+        var request = new HttpGet(ELASTICSEARCH_BASE_URL + "/e2e_cases/_doc/" + caseDataId);
+        try (var response = HttpClientBuilder.create().build().execute(request)) {
+            int statusCode = response.getStatusLine().getStatusCode();
+            assertThat("Elasticsearch document should exist for case " + caseDataId, statusCode, equalTo(200));
+
+            var payload = mapper.readTree(EntityUtils.toString(response.getEntity()));
+            var source = payload.path("_source");
+            assertThat("Elasticsearch document should contain _source", source.isMissingNode(), is(false));
+            return source.path("case_revision").asInt(-1);
+        }
+    }
+
+    @SneakyThrows
     @Order(100)
     @Test
     void casePointerRemainsImmutable() {
