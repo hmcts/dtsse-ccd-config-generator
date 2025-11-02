@@ -3,7 +3,7 @@
 - Persist case data in a service-owned database while CCD continues to orchestrate callbacks and authorisation.
 - No big-bang rewrite: keep the familiar AboutToStart / MidEvent / AboutToSubmit / Submitted flow.
 - The JSON payload stays intact—only the storage location and responsibility boundaries change.
-- Data ownership aligns with business domain ownership
+- Data ownership aligns with business domain ownership.
 - The SDK supplies migrations, transaction orchestration, idempotency, and optional Elasticsearch sync to smooth onboarding.
 
 
@@ -55,13 +55,13 @@ participant SDB as Service DB
 
 ### What changes for teams
 
-- **Database provisioning:** Allocate a PostgreSQL database for your service to persist its case data
+- **Database provisioning:** Allocate a PostgreSQL database for your service to persist its case data.
 - **Schema migrations:** The SDK provides Flyway scripts to create and manage a 'ccd' schema that resides in your database.
-- **Read APIs:** Implement `CaseView<ViewType, StateEnum>` so CCD can read case data from your service
-- **Write to your database:** You can write to your database during the standard CCD event lifecycle callbacks
+- **Read APIs:** Implement `CaseView<ViewType, StateEnum>` so CCD can read case data from your service.
+- **Write to your database:** You can write to your database during the standard CCD event lifecycle callbacks.
 
 ## Read next
 
 - [Decentralised runtime in detail](./decentralised-runtime.md)
 - [Concurrency considerations](./concurrency.md)
-- [Migrating existing services](./data-migration)
+- [Migrating existing services](./data-migration.md)
