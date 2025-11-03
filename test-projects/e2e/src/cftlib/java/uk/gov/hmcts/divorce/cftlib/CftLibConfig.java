@@ -133,6 +133,17 @@ public class CftLibConfig implements CFTLibConfigurer {
                 )
             ),
             entry(
+                "TEST_CAA@mailinator.com",
+                List.of(
+                    "caseworker",
+                    "caseworker-caa",
+                    "pui-case-manager",
+                    "caseworker-approver",
+                    "caseworker-divorce",
+                    "caseworker-divorce-solicitor"
+                )
+            ),
+            entry(
                 "TEST_SOLICITOR@mailinator.com",
                 List.of(
                     "caseworker",
