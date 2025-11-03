@@ -18,8 +18,7 @@ class AuthorisationCaseTypeGenerator<T, S, R extends HasRole> implements ConfigG
     List<Map<String, Object>> result = Lists.newArrayList();
     if (roleEnum.isEnum()) {
       for (Object enumConstant : roleEnum.getEnumConstants()) {
-        if (enumConstant instanceof HasRole) {
-          HasRole r = (HasRole) enumConstant;
+        if (enumConstant instanceof HasRole r) {
           // Add non case roles.
           if (!r.getRole().matches("\\[.+\\]")) {
             boolean shuttered = config.isShutterService() || config.getShutterServiceForRoles().contains(r);

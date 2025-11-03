@@ -5,7 +5,7 @@ public enum CaseRole {
     LASOLICITOR,
     SOLICITOR;
 
-    private String formattedName;
+    private final String formattedName;
 
     CaseRole() {
         this.formattedName = String.format("[%s]", name());

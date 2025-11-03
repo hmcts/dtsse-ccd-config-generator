@@ -32,9 +32,9 @@ public enum RepresentativeRole {
     REPRESENTING_OTHER_PERSON_8(Type.OTHER, 8, SOLICITOR),
     REPRESENTING_OTHER_PERSON_9(Type.OTHER, 9, SOLICITOR);
 
-    private Set<CaseRole> caseRoles = new HashSet<>();
-    private Type type;
-    private Integer sequenceNo;
+    private final Set<CaseRole> caseRoles = new HashSet<>();
+    private final Type type;
+    private final Integer sequenceNo;
 
     RepresentativeRole(Type type, Integer sequenceNo, CaseRole... caseRoles) {
         this.type = type;
