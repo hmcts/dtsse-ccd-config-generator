@@ -2,6 +2,9 @@
 
 ./gradlew check
 
+# To run the sdk tests
+
+./gradlew -i e2e:check
 
 # To run the e2e tests
 

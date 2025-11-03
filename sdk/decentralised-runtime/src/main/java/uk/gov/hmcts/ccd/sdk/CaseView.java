@@ -7,10 +7,10 @@ package uk.gov.hmcts.ccd.sdk;
  * Decentralised services typically implement the request-only overload and ignore the JSON blob,
  * while legacy services can override the request-plus-blob overload to continue working with the blob.
  *
- * @param <ViewType> domain view returned to CCD
+ * @param <CaseType> domain view returned to CCD
  * @param <StateType> typed enum representing possible CCD states
  */
-public interface CaseView<ViewType, StateType extends Enum<StateType>> {
+public interface CaseView<CaseType, StateType extends Enum<StateType>> {
 
   /**
    * Retrieve a case view for the given request.
@@ -18,7 +18,7 @@ public interface CaseView<ViewType, StateType extends Enum<StateType>> {
    * @param request encapsulated request information
    * @return the projected case data
    */
-  default ViewType getCase(CaseViewRequest<StateType> request) {
+  default CaseType getCase(CaseViewRequest<StateType> request) {
     throw new UnsupportedOperationException(
         "CaseView implementations must override getCase(CaseViewRequest) or "
             + "getCase(CaseViewRequest, CaseType)");
@@ -31,7 +31,7 @@ public interface CaseView<ViewType, StateType extends Enum<StateType>> {
    * @param blobCase case data deserialised from the blob
    * @return the projected case data
    */
-  default ViewType getCase(CaseViewRequest<StateType> request, ViewType blobCase) {
+  default CaseType getCase(CaseViewRequest<StateType> request, CaseType blobCase) {
     return getCase(request);
   }
 }
