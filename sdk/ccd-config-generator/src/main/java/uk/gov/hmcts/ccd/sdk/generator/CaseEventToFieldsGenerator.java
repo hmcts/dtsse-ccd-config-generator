@@ -51,7 +51,7 @@ class CaseEventToFieldsGenerator<T, S, R extends HasRole> implements ConfigGener
       Map<String, Object> row = JsonUtils.caseRow(config.getCaseType());
       entries.add(row);
       populateCoreColumns(row, event, field);
-      applyPublishFlag(row, event, field);
+      applyPublishFlag(row, event);
 
       Object pageId = resolvePageId(field.getPage());
       row.put("PageID", pageId);
@@ -81,7 +81,7 @@ class CaseEventToFieldsGenerator<T, S, R extends HasRole> implements ConfigGener
         .orElse("COMPLEX");
   }
 
-  private void applyPublishFlag(Map<String, Object> row, Event<T, R, S> event, Field field) {
+  private void applyPublishFlag(Map<String, Object> row, Event<T, R, S> event) {
     if (!event.isPublishToCamunda()) {
       return;
     }

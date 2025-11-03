@@ -93,7 +93,7 @@ class CaseFieldGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
 
       if (field.getType() != null) {
         fieldData.put("FieldType", field.getType());
-      } else if (!caseField.isPresent()) {
+      } else if (caseField.isEmpty()) {
         fieldData.put("FieldType", "Label");
       }
 
@@ -108,13 +108,8 @@ class CaseFieldGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
 
   private static List<Map<String, Object>> buildComplexFields(
       Class<?> dataClass, String caseTypeId) {
-    return buildComplexFields(dataClass, caseTypeId, "");
-  }
-
-  private static List<Map<String, Object>> buildComplexFields(
-      Class<?> dataClass, String caseTypeId, String idPrefix) {
     List<Map<String, Object>> fields = Lists.newArrayList();
-    appendFields(fields, dataClass, caseTypeId, idPrefix);
+    appendFields(fields, dataClass, caseTypeId, "");
     return fields;
   }
 
@@ -234,28 +229,18 @@ class CaseFieldGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
       target.putIfAbsent("FieldTypeParameter", field.getType().getSimpleName());
       return "FixedRadioList";
     }
-    switch (inferredType) {
-      case "String":
-        if (annotation != null && !Strings.isNullOrEmpty(annotation.typeParameterOverride())) {
-          return "FixedList";
-        }
-        return "Text";
-      case "LocalDate":
-        return "Date";
-      case "LocalDateTime":
-        return "DateTime";
-      case "int":
-      case "float":
-      case "double":
-      case "Integer":
-      case "Float":
-      case "Double":
-      case "Long":
-      case "long":
-        return "Number";
-      default:
-        return inferredType;
-    }
+      return switch (inferredType) {
+          case "String" -> {
+              if (annotation != null && !Strings.isNullOrEmpty(annotation.typeParameterOverride())) {
+                  yield "FixedList";
+              }
+              yield "Text";
+          }
+          case "LocalDate" -> "Date";
+          case "LocalDateTime" -> "DateTime";
+          case "int", "float", "double", "Integer", "Float", "Double", "Long", "long" -> "Number";
+          default -> inferredType;
+      };
   }
 
   private static Class<?> resolveCollectionElementType(Class<?> dataClass, Field field) {
