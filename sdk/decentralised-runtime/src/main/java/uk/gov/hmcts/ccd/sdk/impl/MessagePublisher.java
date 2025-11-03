@@ -34,7 +34,7 @@ import uk.gov.hmcts.reform.ccd.client.model.CaseDetails;
 @ConditionalOnBean(MessagingProperties.class)
 class MessagePublisher {
 
-  private DefinitionBlockGenerator definitionBlockGenerator;
+  private final DefinitionBlockGenerator definitionBlockGenerator;
   private final DataBlockGenerator dataBlockGenerator;
   private Map<String, CaseTypeDefinition> definitions = Map.of();
   private final ObjectMapper mapper;
