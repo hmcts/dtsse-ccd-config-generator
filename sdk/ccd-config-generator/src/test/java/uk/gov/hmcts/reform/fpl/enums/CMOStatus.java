@@ -7,7 +7,7 @@ public enum CMOStatus implements HasLabel {
     PARTIES_REVIEW("No, parties need to review it"),
     SELF_REVIEW("No, I need to make changes");
 
-    private String label;
+    private final String label;
 
     CMOStatus(String label) {
         this.label = label;

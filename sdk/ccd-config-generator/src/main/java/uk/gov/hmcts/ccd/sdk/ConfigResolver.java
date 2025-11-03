@@ -18,7 +18,7 @@ class ConfigResolver<T, S, R extends HasRole> {
 
   private static final String basePackage = "uk.gov.hmcts";
 
-  private Collection<CCDConfig<T, S, R>> configs;
+  private final Collection<CCDConfig<T, S, R>> configs;
 
   public ConfigResolver(Collection<CCDConfig<T, S, R>> configs) {
     if (configs.isEmpty()) {

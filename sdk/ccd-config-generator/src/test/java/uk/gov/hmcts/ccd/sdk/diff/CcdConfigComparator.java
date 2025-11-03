@@ -93,7 +93,7 @@ public final class CcdConfigComparator {
             if (result.failed()) {
                 System.out.println(
                     "Failed comparing expected " + expected.getPath() + " to actual " + actual.getPath());
-                System.out.println(result.toString());
+                System.out.println(result);
 
                 List<Map<String, Object>> expectedValues = fromJSON(expectedString);
                 List<Map<String, Object>> actualValues = fromJSON(actualString);
