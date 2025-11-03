@@ -229,18 +229,18 @@ class CaseFieldGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
       target.putIfAbsent("FieldTypeParameter", field.getType().getSimpleName());
       return "FixedRadioList";
     }
-      return switch (inferredType) {
-          case "String" -> {
-              if (annotation != null && !Strings.isNullOrEmpty(annotation.typeParameterOverride())) {
-                  yield "FixedList";
-              }
-              yield "Text";
-          }
-          case "LocalDate" -> "Date";
-          case "LocalDateTime" -> "DateTime";
-          case "int", "float", "double", "Integer", "Float", "Double", "Long", "long" -> "Number";
-          default -> inferredType;
-      };
+    return switch (inferredType) {
+      case "String" -> {
+        if (annotation != null && !Strings.isNullOrEmpty(annotation.typeParameterOverride())) {
+          yield "FixedList";
+        }
+        yield "Text";
+      }
+      case "LocalDate" -> "Date";
+      case "LocalDateTime" -> "DateTime";
+      case "int", "float", "double", "Integer", "Float", "Double", "Long", "long" -> "Number";
+      default -> inferredType;
+    };
   }
 
   private static Class<?> resolveCollectionElementType(Class<?> dataClass, Field field) {
