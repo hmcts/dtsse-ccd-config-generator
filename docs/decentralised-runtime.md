@@ -11,7 +11,6 @@ Opt in via the Gradle `ccd {}` block:
 ccd {
   configDir = file('build/definitions')
   decentralised = true
-  // optional: runtimeIndexing = true // pulls in the SDK Elasticsearch indexer
 }
 ```
 
@@ -19,7 +18,7 @@ Setting `decentralised = true` adds the [decentralised-runtime](../sdk/decentral
 
 ## Case views
 
-Services must provide a [`CaseView<ViewType, StateEnum>`](../sdk/decentralised-runtime/src/main/java/uk/gov/hmcts/ccd/sdk/CaseView.java)
+Services must provide a [`CaseView<CaseType, StateEnum>`](../sdk/decentralised-runtime/src/main/java/uk/gov/hmcts/ccd/sdk/CaseView.java)
 implementation.
 
 Your CaseView is the mechanism through which CCD accesses your case data: CCD provides a case reference, and your view must return a result in the format defined by your CCD definition.

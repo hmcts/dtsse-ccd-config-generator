@@ -57,7 +57,7 @@ participant SDB as Service DB
 
 - **Database provisioning:** Allocate a PostgreSQL database for your service to persist its case data.
 - **Schema migrations:** The SDK provides Flyway scripts to create and manage a 'ccd' schema that resides in your database.
-- **Read APIs:** Implement `CaseView<ViewType, StateEnum>` so CCD can read case data from your service.
+- **Read APIs:** Implement `CaseView<CaseType, StateEnum>` so CCD can read case data from your service.
 - **Write to your database:** You can write to your database during the standard CCD event lifecycle callbacks.
 
 ## Read next
