@@ -6,13 +6,13 @@ import org.gradle.api.Action;
 import org.gradle.api.Plugin;
 import org.gradle.api.Project;
 import org.gradle.api.Task;
+import org.gradle.api.artifacts.Configuration;
 import org.gradle.api.artifacts.repositories.MavenArtifactRepository;
 import org.gradle.api.artifacts.repositories.MavenRepositoryContentDescriptor;
 import org.gradle.api.file.DirectoryProperty;
 import org.gradle.api.plugins.JavaPlugin;
 import org.gradle.api.plugins.JavaPluginConvention;
 import org.gradle.api.tasks.JavaExec;
-import org.gradle.api.tasks.SourceSet;
 import org.gradle.api.tasks.SourceSetContainer;
 
 public class CcdSdkPlugin implements Plugin<Project> {
@@ -29,10 +29,15 @@ public class CcdSdkPlugin implements Plugin<Project> {
     generate.setGroup("CCD tasks");
     generate.getMainClass().set("uk.gov.hmcts.ccd.sdk.Main");
 
+    Configuration configGeneration = project.getConfigurations().maybeCreate("configGeneration");
+    configGeneration.setCanBeConsumed(false);
+    configGeneration.setCanBeResolved(true);
+    configGeneration.setDescription("Dependencies used when generating CCD configuration");
     SourceSetContainer ssc = project.getConvention().getPlugin(JavaPluginConvention.class)
         .getSourceSets();
-    SourceSet main = ssc.getByName("main");
-    generate.setClasspath(main.getRuntimeClasspath());
+    generate.setClasspath(
+        ssc.getByName("main").getRuntimeClasspath()
+            .plus(configGeneration));
 
     CCDConfig config = project.getExtensions().create("ccd", CCDConfig.class);
     config.configDir = project.getObjects().directoryProperty();

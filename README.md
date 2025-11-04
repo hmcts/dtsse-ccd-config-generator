@@ -98,6 +98,14 @@ or
 ./gradlew gCC
 ```
 
+If you need libraries that are only required when producing configuration artefacts, add them to the `configGeneration` configuration. These dependencies are available to `generateCCDConfig` without polluting your application's runtime classpath:
+
+```groovy
+dependencies {
+  configGeneration 'com.example:ccd-config-support:1.2.3'
+}
+```
+
 Once created it can be converted to an XLSX by using the [ccd-definition-processor](https://github.com/hmcts/ccd-definition-processor/):
 
 ```shell
@@ -610,4 +618,3 @@ In order to link a local version of CCD config generator to a project you can us
 ```
 
 To the project dependencies.
-
