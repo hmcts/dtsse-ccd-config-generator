@@ -84,7 +84,7 @@ class AuthorisationCaseStateGenerator<T, S, R extends HasRole> implements Config
     }
 
     Path output = Paths.get(root.getPath(), "AuthorisationCaseState.json");
-    JsonUtils.mergeInto(output, result, new JsonUtils.CRUDMerger(), "CaseStateID", "UserRole");
+    JsonUtils.mergeInto(output, result, new JsonUtils.AddMissing(), "CaseStateID", "UserRole");
   }
 
   private static <R extends HasRole, S> void addPermissions(
