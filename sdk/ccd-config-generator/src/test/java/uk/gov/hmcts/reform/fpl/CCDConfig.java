@@ -375,6 +375,11 @@ public class CCDConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<CaseData, S
             .optional(ApplicantParty::getOrganisationName)
             .done()
           .optional(Applicant::getLeadApplicantIndicator)
+          .done()
+        .list(CaseData::getListApplicantsWithShowCondition, "[STATE]=\"Submitted\"")
+          .complex(Applicant::getParty)
+            .optional(ApplicantParty::getOrganisationName)
+            .done()
           .done();
   }
 

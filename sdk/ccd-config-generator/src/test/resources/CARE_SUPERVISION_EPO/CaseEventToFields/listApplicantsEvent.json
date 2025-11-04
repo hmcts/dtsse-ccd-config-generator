@@ -9,5 +9,17 @@
     "PageDisplayOrder": 1,
     "PageFieldDisplayOrder": 1,
     "PageID": "ListApplicants"
+  },
+  {
+    "CaseEventID": "listApplicantsEvent",
+    "CaseFieldID": "listApplicantsWithShowCondition",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "DisplayContext": "COMPLEX",
+    "FieldShowCondition" : "[STATE]=\"Submitted\"",
+    "LiveFrom": "01/01/2017",
+    "PageColumnNumber": 1,
+    "PageDisplayOrder": 1,
+    "PageFieldDisplayOrder": 2,
+    "PageID": "ListApplicants"
   }
 ]

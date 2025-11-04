@@ -661,6 +661,15 @@
   {
     "CaseTypeID": "CARE_SUPERVISION_EPO",
     "FieldType": "Collection",
+    "FieldTypeParameter": "Applicants",
+    "ID": "listApplicantsWithShowCondition",
+    "Label": " ",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public"
+  },
+  {
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "FieldType": "Collection",
     "FieldTypeParameter": "Direction",
     "ID": "localAuthorityDirections",
     "Label": " ",

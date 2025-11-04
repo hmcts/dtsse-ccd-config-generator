@@ -270,12 +270,17 @@ public class FieldCollection {
       return result;
     }
 
+    public <U> FieldCollectionBuilder<U, StateType, FieldCollectionBuilder<Type, StateType, Parent>> list(
+      TypedPropertyGetter<Type, List<ListValue<U>>> getter) {
+      return list(getter, null);
+    }
 
     public <U> FieldCollectionBuilder<U, StateType, FieldCollectionBuilder<Type, StateType, Parent>> list(
-        TypedPropertyGetter<Type, List<ListValue<U>>> getter) {
+      TypedPropertyGetter<Type, List<ListValue<U>>> getter, String showCondition) {
       String id = propertyUtils.getPropertyName(dataClass, getter);
       Class<U> itemClass = propertyUtils.getListValueElementType(dataClass, getter);
       FieldBuilder<U, StateType, Type, Parent> fieldBuilder = createField(id, itemClass);
+      fieldBuilder.showCondition(showCondition);
 
       CCD cf = propertyUtils.getAnnotationOfProperty(dataClass, getter, CCD.class);
       if (null != cf) {
