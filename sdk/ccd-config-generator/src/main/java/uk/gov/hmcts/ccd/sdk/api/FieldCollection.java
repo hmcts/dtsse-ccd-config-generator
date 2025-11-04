@@ -285,11 +285,6 @@ public class FieldCollection {
       return fieldBuilder.complex();
     }
 
-    public <U extends Iterable> FieldBuilder<U, StateType, Type, Parent> immutableList(
-        TypedPropertyGetter<Type, U> getter) {
-      return field(getter).immutableList();
-    }
-
     FieldBuilder<?, StateType, Type, Parent> field(String id) {
       FieldBuilder<?, StateType, Type, Parent> result = createField(id, null);
       explicitFields.add(result);
