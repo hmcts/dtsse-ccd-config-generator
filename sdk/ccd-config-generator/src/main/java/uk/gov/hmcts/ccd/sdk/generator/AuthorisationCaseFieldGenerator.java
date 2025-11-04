@@ -163,7 +163,7 @@ class AuthorisationCaseFieldGenerator<T, S, R extends HasRole> implements Config
 
       String filename = role.replace("[", "").replace("]", "");
       Path output = Paths.get(folder.getPath(), filename + ".json");
-      JsonUtils.mergeInto(output, permissions, new JsonUtils.CRUDMerger(), "CaseFieldID",
+      JsonUtils.mergeInto(output, permissions, new JsonUtils.AddMissing(), "CaseFieldID",
           "UserRole");
     }
   }
