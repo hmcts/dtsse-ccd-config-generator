@@ -263,20 +263,13 @@ public class FieldCollection {
       return field(getter, DisplayContext.ReadOnly, false);
     }
 
-
-    FieldBuilder<?, StateType, Type, Parent> field(String id) {
-      FieldBuilder<?, StateType, Type, Parent> result = createField(id, null);
-      explicitFields.add(result);
-      return result;
-    }
-
     public <U> FieldCollectionBuilder<U, StateType, FieldCollectionBuilder<Type, StateType, Parent>> list(
-      TypedPropertyGetter<Type, List<ListValue<U>>> getter) {
+        TypedPropertyGetter<Type, List<ListValue<U>>> getter) {
       return list(getter, null);
     }
 
     public <U> FieldCollectionBuilder<U, StateType, FieldCollectionBuilder<Type, StateType, Parent>> list(
-      TypedPropertyGetter<Type, List<ListValue<U>>> getter, String showCondition) {
+        TypedPropertyGetter<Type, List<ListValue<U>>> getter, String showCondition) {
       String id = propertyUtils.getPropertyName(dataClass, getter);
       Class<U> itemClass = propertyUtils.getListValueElementType(dataClass, getter);
       FieldBuilder<U, StateType, Type, Parent> fieldBuilder = createField(id, itemClass);
@@ -295,6 +288,12 @@ public class FieldCollection {
     public <U extends Iterable> FieldBuilder<U, StateType, Type, Parent> immutableList(
         TypedPropertyGetter<Type, U> getter) {
       return field(getter).immutableList();
+    }
+
+    FieldBuilder<?, StateType, Type, Parent> field(String id) {
+      FieldBuilder<?, StateType, Type, Parent> result = createField(id, null);
+      explicitFields.add(result);
+      return result;
     }
 
     <Value> FieldCollectionBuilder<Type, StateType, Parent> field(TypedPropertyGetter<Type, Value> getter,
