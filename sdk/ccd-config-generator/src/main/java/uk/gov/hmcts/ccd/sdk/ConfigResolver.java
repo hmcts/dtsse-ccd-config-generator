@@ -5,12 +5,12 @@ import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Maps;
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
-import java.lang.reflect.ParameterizedType;
 import java.util.Collection;
 import java.util.Map;
 import lombok.SneakyThrows;
-import net.jodah.typetools.TypeResolver;
 import org.reflections.ReflectionUtils;
+import org.springframework.core.ResolvableType;
+import org.springframework.util.ClassUtils;
 import uk.gov.hmcts.ccd.sdk.api.CCDConfig;
 import uk.gov.hmcts.ccd.sdk.api.HasRole;
 
@@ -31,11 +31,19 @@ class ConfigResolver<T, S, R extends HasRole> {
   @SneakyThrows
   public ResolvedCCDConfig<T, S, R> resolveCCDConfig() {
     CCDConfig<T, S, R> config = this.configs.iterator().next();
-    Class<?>[] typeArgs = TypeResolver.resolveRawArguments(CCDConfig.class, config.getClass());
-    ImmutableSet<S> allStates = ImmutableSet.copyOf(((Class<S>) typeArgs[1]).getEnumConstants());
-    Map<Class, Integer> types = resolve(typeArgs[0], basePackage);
+    Class<?> userClass = ClassUtils.getUserClass(config);
+    ResolvableType configType = ResolvableType.forClass(userClass).as(CCDConfig.class);
+    @SuppressWarnings("unchecked")
+    Class<T> caseType = (Class<T>) resolveGenericArgument(configType, 0, userClass);
+    @SuppressWarnings("unchecked")
+    Class<S> stateType = (Class<S>) resolveGenericArgument(configType, 1, userClass);
+    @SuppressWarnings("unchecked")
+    Class<R> roleType = (Class<R>) resolveGenericArgument(configType, 2, userClass);
+
+    ImmutableSet<S> allStates = ImmutableSet.copyOf(stateType.getEnumConstants());
+    Map<Class, Integer> types = resolve(caseType, basePackage);
     ConfigBuilderImpl<T, S, R> builder = new ConfigBuilderImpl(
-        new ResolvedCCDConfig(typeArgs[0], typeArgs[1], typeArgs[2], types, allStates)
+        new ResolvedCCDConfig(caseType, stateType, roleType, types, allStates)
     );
 
     for (CCDConfig<T, S, R> c : configs) {
@@ -73,12 +81,28 @@ class ConfigResolver<T, S, R extends HasRole> {
 
   public static Class getComplexType(Class c, Field field) {
     if (Collection.class.isAssignableFrom(field.getType())) {
-      ParameterizedType type = (ParameterizedType) TypeResolver.reify(field.getGenericType(), c);
-      if (type.getActualTypeArguments()[0] instanceof ParameterizedType) {
-        type = (ParameterizedType) type.getActualTypeArguments()[0];
+      ResolvableType fieldType = ResolvableType.forField(field, c);
+      ResolvableType elementType = fieldType.getGeneric(0);
+      if (elementType.hasGenerics()) {
+        elementType = elementType.getGeneric(0);
       }
-      return (Class) type.getActualTypeArguments()[0];
+      Class<?> resolved = elementType.resolve();
+      if (resolved == null) {
+        throw new IllegalStateException("Unable to resolve collection element type for %s.%s"
+            .formatted(c.getName(), field.getName()));
+      }
+      return resolved;
     }
     return field.getType();
+  }
+
+  private static Class<?> resolveGenericArgument(
+      ResolvableType type, int index, Class<?> sourceClass) {
+    Class<?> resolved = type.getGeneric(index).resolve();
+    if (resolved == null) {
+      throw new IllegalStateException(
+          "Unable to resolve generic argument %d for %s".formatted(index, sourceClass.getName()));
+    }
+    return resolved;
   }
 }
