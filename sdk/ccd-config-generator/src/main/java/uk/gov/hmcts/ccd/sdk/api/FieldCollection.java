@@ -5,7 +5,6 @@ import static org.apache.commons.lang3.StringUtils.capitalize;
 import static uk.gov.hmcts.ccd.sdk.FieldUtils.isUnwrappedField;
 
 import com.fasterxml.jackson.annotation.JsonUnwrapped;
-import de.cronn.reflection.util.TypedPropertyGetter;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Hashtable;
