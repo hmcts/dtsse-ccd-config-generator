@@ -57,9 +57,9 @@ class AuthorisationCaseFieldGenerator<T, S, R extends HasRole> implements Config
           if (event.getHistoryOnlyRoles().contains(role)) {
             continue;
           }
-          Set<Permission> perm = fb.build().isImmutable()
+          Set<Permission> perm = new HashSet<>(fb.build().isImmutable()
               ? Permission.CR
-              : event.getGrants().get(role);
+              : event.getGrants().get(role));
           if (!perm.contains(Permission.D) && fb.build().isMutableList()) {
             perm.add(Permission.D);
           }

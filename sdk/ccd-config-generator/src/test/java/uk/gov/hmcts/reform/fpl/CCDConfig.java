@@ -35,6 +35,8 @@ import uk.gov.hmcts.reform.ccd.client.model.SubmittedCallbackResponse;
 import uk.gov.hmcts.reform.fpl.access.SolicitorAccess;
 import uk.gov.hmcts.reform.fpl.enums.State;
 import uk.gov.hmcts.reform.fpl.enums.UserRole;
+import uk.gov.hmcts.reform.fpl.model.Applicant;
+import uk.gov.hmcts.reform.fpl.model.ApplicantParty;
 import uk.gov.hmcts.reform.fpl.model.CaseData;
 import uk.gov.hmcts.reform.fpl.model.HearingPreferences;
 import uk.gov.hmcts.reform.fpl.model.Judge;
@@ -360,6 +362,25 @@ public class CCDConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<CaseData, S
         .fields()
         .page("SetAField")
         .optional(CaseData::getAField);
+
+    builder.event("listApplicantsEvent")
+        .forAllStates()
+        .name("List applicants")
+        .description("Demonstrate ListValue collection binding")
+        .grant(CRU, HMCTS_ADMIN)
+        .fields()
+        .page("ListApplicants")
+        .list(CaseData::getListApplicants)
+          .complex(Applicant::getParty)
+            .optional(ApplicantParty::getOrganisationName)
+            .done()
+          .optional(Applicant::getLeadApplicantIndicator)
+          .done()
+        .list(CaseData::getListApplicantsWithShowCondition, "[STATE]=\"Submitted\"")
+          .complex(Applicant::getParty)
+            .optional(ApplicantParty::getOrganisationName)
+            .done()
+          .done();
   }
 
   private void buildAttachScannedDocEvent() {

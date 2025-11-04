@@ -7,7 +7,11 @@ import de.cronn.reflection.util.TypedPropertyGetter;
 import java.beans.PropertyDescriptor;
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Field;
+import java.lang.reflect.ParameterizedType;
+import java.lang.reflect.Type;
+import java.util.List;
 import org.reflections.ReflectionUtils;
+import uk.gov.hmcts.ccd.sdk.type.ListValue;
 
 class PropertyUtils implements uk.gov.hmcts.ccd.sdk.api.PropertyUtils {
 
@@ -59,6 +63,42 @@ class PropertyUtils implements uk.gov.hmcts.ccd.sdk.api.PropertyUtils {
     }
 
     return name;
+  }
+
+  @Override
+  public <U, T> Class<T> getListValueElementType(Class<U> c,
+      TypedPropertyGetter<U, List<ListValue<T>>> getter) {
+    PropertyDescriptor descriptor = de.cronn.reflection.util.PropertyUtils
+        .getPropertyDescriptor(c, getter);
+    if (descriptor == null || descriptor.getReadMethod() == null) {
+      throw new IllegalArgumentException("Unable to resolve getter method for property");
+    }
+
+    Type genericReturnType = descriptor.getReadMethod().getGenericReturnType();
+    if (!(genericReturnType instanceof ParameterizedType listType)) {
+      throw new IllegalArgumentException("Property is not parameterized as a List");
+    }
+
+    Type listValueType = listType.getActualTypeArguments()[0];
+    if (!(listValueType instanceof ParameterizedType parameterizedListValue)) {
+      throw new IllegalArgumentException("Property is not parameterized as ListValue");
+    }
+
+    if (!ListValue.class.equals(parameterizedListValue.getRawType())) {
+      throw new IllegalArgumentException("Property is not a ListValue collection");
+    }
+
+    Type elementType = parameterizedListValue.getActualTypeArguments()[0];
+    if (elementType instanceof Class<?>) {
+      return (Class<T>) elementType;
+    }
+
+    if (elementType instanceof ParameterizedType parameterizedElement
+        && parameterizedElement.getRawType() instanceof Class<?>) {
+      return (Class<T>) parameterizedElement.getRawType();
+    }
+
+    throw new IllegalArgumentException("Unable to determine ListValue element type");
   }
 
   private Field findField(Class<?> type, String name) {

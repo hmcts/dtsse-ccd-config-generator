@@ -15,7 +15,6 @@ import uk.gov.hmcts.ccd.sdk.api.CCD;
 import uk.gov.hmcts.ccd.sdk.type.ChangeOrganisationRequest;
 import uk.gov.hmcts.ccd.sdk.type.DynamicList;
 import uk.gov.hmcts.ccd.sdk.type.DynamicMultiSelectList;
-import uk.gov.hmcts.ccd.sdk.type.FieldType;
 import uk.gov.hmcts.ccd.sdk.type.ListValue;
 import uk.gov.hmcts.ccd.sdk.type.OrganisationPolicy;
 import uk.gov.hmcts.ccd.sdk.type.ScannedDocument;
@@ -99,6 +98,9 @@ public class CaseData {
   @Valid
   private final List<@NotNull(message = "You need to add details to applicant")
     Element<Applicant>> applicants;
+
+  private final List<ListValue<Applicant>> listApplicants;
+  private final List<ListValue<Applicant>> listApplicantsWithShowCondition;
 
   @Valid
   @NotNull(message = "You need to add details to respondents")

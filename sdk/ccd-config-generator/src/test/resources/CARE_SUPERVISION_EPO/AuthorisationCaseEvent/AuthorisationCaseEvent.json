@@ -85,6 +85,13 @@
   },
   {
     "CRUD": "CRU",
+    "CaseEventID": "listApplicantsEvent",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "LiveFrom": "01/01/2017",
+    "UserRole": "caseworker-publiclaw-courtadmin"
+  },
+  {
+    "CRUD": "CRU",
     "CaseEventID": "noticeOfChangeApplied",
     "CaseTypeID": "CARE_SUPERVISION_EPO",
     "LiveFrom": "01/01/2017",
