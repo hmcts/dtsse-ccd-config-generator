@@ -8,9 +8,9 @@ import java.lang.reflect.Modifier;
 import java.util.Collection;
 import java.util.Map;
 import lombok.SneakyThrows;
-import org.reflections.ReflectionUtils;
 import org.springframework.core.ResolvableType;
 import org.springframework.util.ClassUtils;
+import org.springframework.util.ReflectionUtils;
 import uk.gov.hmcts.ccd.sdk.api.CCDConfig;
 import uk.gov.hmcts.ccd.sdk.api.HasRole;
 
@@ -62,21 +62,21 @@ class ConfigResolver<T, S, R extends HasRole> {
   }
 
   private static void resolve(Class dataClass, Map<Class, Integer> result, int level) {
-    for (java.lang.reflect.Field field : ReflectionUtils.getAllFields(dataClass)) {
-      if (Modifier.isStatic(field.getModifiers())) {
-        continue;
-      }
-      Class c = getComplexType(dataClass, field);
-      if (null != c && !c.equals(dataClass)) {
-        JsonUnwrapped unwrapped = field.getAnnotation(JsonUnwrapped.class);
+    ReflectionUtils.doWithFields(
+        dataClass,
+        field -> {
+          Class c = getComplexType(dataClass, field);
+          if (null != c && !c.equals(dataClass)) {
+            JsonUnwrapped unwrapped = field.getAnnotation(JsonUnwrapped.class);
 
-        // unwrapped properties are automatically ignored as complex types
-        if (null == unwrapped && (!result.containsKey(c) || result.get(c) < level)) {
-          result.put(c, level);
-        }
-        resolve(c, result, level + 1);
-      }
-    }
+            // unwrapped properties are automatically ignored as complex types
+            if (null == unwrapped && (!result.containsKey(c) || result.get(c) < level)) {
+              result.put(c, level);
+            }
+            resolve(c, result, level + 1);
+          }
+        },
+        field -> !Modifier.isStatic(field.getModifiers()));
   }
 
   public static Class getComplexType(Class c, Field field) {
