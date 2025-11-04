@@ -288,7 +288,7 @@ public class MyConfig implements CCDConfig<CaseData, State, UserRole> {
 }
 ```
 
-Through the fields API it is possible to define optional and mandatory fields, fields from complex types, custom labels for events, show conditions and default values.
+When you need to bind a collection of CCD `ListValue<T>` within an event page, use the `.list(CaseData::getSomeList)` helper. It unwraps the `ListValue` wrapper, so you can continue with `.complex(Item::getSomething)` or `.optional(Item::getFlag)` against the item type.
 
 Callbacks are references to methods. The CCD Config Generator runtime library will handle the routing and execution of event callbacks.
 
@@ -610,4 +610,3 @@ In order to link a local version of CCD config generator to a project you can us
 ```
 
 To the project dependencies.
-
