@@ -273,9 +273,6 @@ public class FieldCollection {
                                                       DisplayContext context, String showCondition, Value defaultValue,
                                                       String caseEventFieldLabel, String caseEventFieldHint,
                                                       String displayContextParameter) {
-      if (null != showCondition && null != rootFieldname) {
-        showCondition = showCondition.replace("{{FIELD_NAME}}", rootFieldname);
-      }
       field(getter)
           .context(context)
           .showCondition(showCondition)
@@ -291,9 +288,6 @@ public class FieldCollection {
     <Value> FieldCollectionBuilder<Type, StateType, Parent> field(TypedPropertyGetter<Type, Value> getter,
         DisplayContext context, String showCondition, boolean showSummary, Value defaultValue,
         String caseEventFieldLabel, String caseEventFieldHint, boolean retainHiddenValue) {
-      if (null != showCondition && null != rootFieldname) {
-        showCondition = showCondition.replace("{{FIELD_NAME}}", rootFieldname);
-      }
       field(getter)
           .context(context)
           .showCondition(showCondition)
@@ -307,9 +301,6 @@ public class FieldCollection {
 
     FieldCollectionBuilder<Type, StateType, Parent> field(TypedPropertyGetter<Type, ?> getter,
         DisplayContext context, String showCondition, boolean showSummary, boolean retainHiddenValue) {
-      if (null != showCondition && null != rootFieldname) {
-        showCondition = showCondition.replace("{{FIELD_NAME}}", rootFieldname);
-      }
       field(getter)
           .context(context)
           .showCondition(showCondition)
