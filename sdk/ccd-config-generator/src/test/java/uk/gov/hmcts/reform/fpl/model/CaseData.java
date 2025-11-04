@@ -100,6 +100,8 @@ public class CaseData {
   private final List<@NotNull(message = "You need to add details to applicant")
     Element<Applicant>> applicants;
 
+  private final List<ListValue<Applicant>> listApplicants;
+
   @Valid
   @NotNull(message = "You need to add details to respondents")
   private final List<@NotNull(message = "You need to add details to respondents") Element<Respondent>> respondents1;

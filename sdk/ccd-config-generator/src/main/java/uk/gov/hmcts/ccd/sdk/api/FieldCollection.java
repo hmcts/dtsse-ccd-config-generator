@@ -18,6 +18,7 @@ import lombok.ToString;
 import uk.gov.hmcts.ccd.sdk.api.Event.EventBuilder;
 import uk.gov.hmcts.ccd.sdk.api.Field.FieldBuilder;
 import uk.gov.hmcts.ccd.sdk.api.callback.MidEvent;
+import uk.gov.hmcts.ccd.sdk.type.ListValue;
 
 @Builder
 @Data
@@ -267,6 +268,28 @@ public class FieldCollection {
       FieldBuilder<?, StateType, Type, Parent> result = createField(id, null);
       explicitFields.add(result);
       return result;
+    }
+
+
+    public <U> FieldCollectionBuilder<U, StateType, FieldCollectionBuilder<Type, StateType, Parent>> list(
+        TypedPropertyGetter<Type, List<ListValue<U>>> getter) {
+      String id = propertyUtils.getPropertyName(dataClass, getter);
+      Class<U> itemClass = propertyUtils.getListValueElementType(dataClass, getter);
+      FieldBuilder<U, StateType, Type, Parent> fieldBuilder = createField(id, itemClass);
+
+      CCD cf = propertyUtils.getAnnotationOfProperty(dataClass, getter, CCD.class);
+      if (null != cf) {
+        fieldBuilder.label(cf.label());
+        fieldBuilder.hint(cf.hint());
+      }
+
+      fieldBuilder.mutableList();
+      return fieldBuilder.complex();
+    }
+
+    public <U extends Iterable> FieldBuilder<U, StateType, Type, Parent> immutableList(
+        TypedPropertyGetter<Type, U> getter) {
+      return field(getter).immutableList();
     }
 
     <Value> FieldCollectionBuilder<Type, StateType, Parent> field(TypedPropertyGetter<Type, Value> getter,
