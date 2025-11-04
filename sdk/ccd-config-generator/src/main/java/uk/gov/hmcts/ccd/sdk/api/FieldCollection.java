@@ -432,11 +432,6 @@ public class FieldCollection {
         Class<U> c) {
       FieldCollectionBuilder<U, StateType, FieldCollectionBuilder<Type, StateType, Parent>> result =
           FieldCollectionBuilder.builder(event, this, c, propertyUtils);
-      if (null != rootFieldname) {
-        // TODO: refactor.
-        // Nested fields should not be added to the main field list.
-        fields.removeIf(x -> x.build().getId().equals(fieldName));
-      }
       complexFields.add(result);
       result.rootFieldname = !isNullOrEmpty(unwrappedParentPrefix)
           ? unwrappedParentPrefix.concat(capitalize(fieldName))
