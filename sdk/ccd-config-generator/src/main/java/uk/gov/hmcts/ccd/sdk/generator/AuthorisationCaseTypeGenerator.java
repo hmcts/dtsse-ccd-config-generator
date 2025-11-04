@@ -32,7 +32,7 @@ class AuthorisationCaseTypeGenerator<T, S, R extends HasRole> implements ConfigG
       }
 
       Path output = Paths.get(root.getPath(), "AuthorisationCaseType.json");
-      JsonUtils.mergeInto(output, result, new JsonUtils.AddMissing(), "CaseTypeID", "UserRole");
+      JsonUtils.mergeInto(output, result, new JsonUtils.CRUDMerger(), "CaseTypeID", "UserRole");
     }
   }
 }
