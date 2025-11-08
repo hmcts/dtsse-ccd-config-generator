@@ -5,10 +5,11 @@ import com.google.common.collect.Multimap;
 import com.google.common.collect.Multimaps;
 import java.io.File;
 import java.util.List;
-import net.jodah.typetools.TypeResolver;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.ResolvableType;
+import org.springframework.util.ClassUtils;
 import uk.gov.hmcts.ccd.sdk.api.CCDConfig;
 import uk.gov.hmcts.ccd.sdk.generator.JSONConfigGenerator;
 
@@ -30,7 +31,7 @@ public class CCDDefinitionGenerator {
   public List<ResolvedCCDConfig<?, ?, ?>> loadConfigs() {
     Multimap<Class<?>, CCDConfig<?, ?, ?>>
         configsByDataClass = Multimaps
-        .index(configs, x -> TypeResolver.resolveRawArguments(CCDConfig.class, x.getClass())[0]);
+        .index(configs, CCDDefinitionGenerator::resolveCaseDataClass);
 
     List<ResolvedCCDConfig<?, ?, ?>> result = Lists.newArrayList();
     for (Class<?> c : configsByDataClass.keySet()) {
@@ -38,6 +39,16 @@ public class CCDDefinitionGenerator {
       result.add(generator.resolveCCDConfig());
     }
     return result;
+  }
+
+  private static Class<?> resolveCaseDataClass(CCDConfig<?, ?, ?> config) {
+    Class<?> userClass = ClassUtils.getUserClass(config);
+    ResolvableType configType = ResolvableType.forClass(userClass).as(CCDConfig.class);
+    Class<?> caseType = configType.getGeneric(0).resolve();
+    if (caseType == null) {
+      throw new IllegalStateException("Unable to resolve case data type for " + userClass.getName());
+    }
+    return caseType;
   }
 
   /**

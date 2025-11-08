@@ -11,7 +11,6 @@ import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import java.io.File;
 import java.lang.reflect.Field;
-import java.lang.reflect.ParameterizedType;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Collection;
@@ -19,8 +18,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-import net.jodah.typetools.TypeResolver;
 import org.apache.commons.lang3.StringUtils;
+import org.springframework.core.ResolvableType;
 import org.springframework.stereotype.Component;
 import uk.gov.hmcts.ccd.sdk.ResolvedCCDConfig;
 import uk.gov.hmcts.ccd.sdk.api.CCD;
@@ -244,14 +243,17 @@ class CaseFieldGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
   }
 
   private static Class<?> resolveCollectionElementType(Class<?> dataClass, Field field) {
-    ParameterizedType parameterizedType =
-        (ParameterizedType) TypeResolver.reify(field.getGenericType(), dataClass);
-
-    if (parameterizedType.getActualTypeArguments()[0] instanceof ParameterizedType) {
-      parameterizedType = (ParameterizedType) parameterizedType.getActualTypeArguments()[0];
+    ResolvableType fieldType = ResolvableType.forField(field, dataClass);
+    ResolvableType elementType = fieldType.getGeneric(0);
+    if (elementType.hasGenerics()) {
+      elementType = elementType.getGeneric(0);
     }
-
-    return (Class<?>) parameterizedType.getActualTypeArguments()[0];
+    Class<?> resolved = elementType.resolve();
+    if (resolved == null) {
+      throw new IllegalStateException("Unable to resolve element type for %s on %s"
+          .formatted(field.getName(), dataClass.getName()));
+    }
+    return resolved;
   }
 
   public static Map<String, Object> getField(String caseType, String id) {
