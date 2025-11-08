@@ -21,6 +21,7 @@ import java.time.ZoneOffset;
 import java.util.Arrays;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -75,6 +76,7 @@ import uk.gov.hmcts.divorce.sow014.nfd.CaseworkerMaintainCaseLink;
 import uk.gov.hmcts.divorce.sow014.nfd.DecentralisedCaseworkerAddNote;
 import uk.gov.hmcts.divorce.sow014.nfd.DecentralisedCaseworkerAddNoteFailure;
 import uk.gov.hmcts.divorce.sow014.nfd.FailingSubmittedCallback;
+import uk.gov.hmcts.divorce.sow014.nfd.CaseworkerRoundTripData;
 import uk.gov.hmcts.divorce.sow014.nfd.PublishedEvent;
 import uk.gov.hmcts.divorce.sow014.nfd.ReturnErrorWhenCreateTestCase;
 import uk.gov.hmcts.divorce.sow014.nfd.SubmittedConfirmationCallback;
@@ -1247,8 +1249,79 @@ public class TestWithCCD extends CftlibTest {
     }
 
     private HttpPost prepareEventRequest(String user, String eventId, Map<String, ?> data) {
-        var token = ccdApi.startEvent(getAuthorisation(user), getServiceAuth(), String.valueOf(caseRef), eventId).getToken();
-        return prepareEventRequestWithToken(user, eventId, data, token);
+        var startEvent = ccdApi.startEvent(getAuthorisation(user), getServiceAuth(), String.valueOf(caseRef), eventId);
+        return prepareEventRequestWithToken(user, eventId, data, startEvent.getToken());
+    }
+
+    private void submitRoundTripEvent(Map<String, Object> payload) throws Exception {
+        var request = prepareEventRequest(
+            "TEST_CASE_WORKER_USER@mailinator.com",
+            CaseworkerRoundTripData.CASEWORKER_ROUNDTRIP_DATA,
+            payload
+        );
+        var response = HttpClientBuilder.create().build().execute(request);
+        try {
+            assertThat("Round-trip data update should succeed",
+                response.getStatusLine().getStatusCode(), equalTo(201));
+        } finally {
+            EntityUtils.consumeQuietly(response.getEntity());
+            response.close();
+        }
+    }
+
+    private Map<String, Object> buildRoundTripPayload() {
+        String documentId = UUID.randomUUID().toString();
+        String documentBaseUrl = "http://localhost/documents/" + documentId;
+
+        Map<String, Object> document = new LinkedHashMap<>();
+        document.put("document_url", documentBaseUrl);
+        document.put("document_binary_url", documentBaseUrl + "/binary");
+        document.put("document_filename", "round-trip.pdf");
+
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("applicationType", "jointApplication");
+        payload.put("applicant1FirstName", "RoundTripA1");
+        payload.put("applicant1MiddleName", "Signal");
+        payload.put("applicant1LastName", "Verifier");
+        payload.put("applicant1Email", "roundtrip-a1@example.local");
+        payload.put("applicant1PhoneNumber", "07000000011");
+        payload.put("applicant1LanguagePreferenceWelsh", "Yes");
+        payload.put("applicant1AgreedToReceiveEmails", "Yes");
+        payload.put("applicant2FirstName", "RoundTripA2");
+        payload.put("applicant2MiddleName", "Echo");
+        payload.put("applicant2LastName", "Verifier");
+        payload.put("applicant2Email", "roundtrip-a2@example.local");
+        payload.put("applicant2PhoneNumber", "07000000022");
+        payload.put("applicant2LanguagePreferenceWelsh", "No");
+        payload.put("applicant2AgreedToReceiveEmails", "No");
+        payload.put("dueDate", "2030-01-01");
+        payload.put("testDocument", document);
+        return payload;
+    }
+
+    @SneakyThrows
+    private Map<String, Object> readCaseDataFromDb() {
+        String sql = "select data::text from ccd.case_data where reference = :ref";
+        String json = db.queryForObject(sql, Map.of("ref", caseRef), String.class);
+        return mapper.readValue(json, new TypeReference<Map<String, Object>>() {});
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> extractSubset(Map<String, Object> source, Map<String, Object> template) {
+        Map<String, Object> subset = new LinkedHashMap<>();
+        for (Map.Entry<String, Object> entry : template.entrySet()) {
+            String key = entry.getKey();
+            Object expectedValue = entry.getValue();
+            Object actualValue = source.get(key);
+
+            if (expectedValue instanceof Map<?, ?> expectedNested && actualValue instanceof Map<?, ?> actualNested) {
+                subset.put(key,
+                    extractSubset((Map<String, Object>) actualNested, (Map<String, Object>) expectedNested));
+            } else {
+                subset.put(key, actualValue);
+            }
+        }
+        return subset;
     }
 
     @Order(19)
@@ -1458,6 +1531,30 @@ public class TestWithCCD extends CftlibTest {
                 int esRevision = fetchRevisionFromElasticsearch(caseDataId);
                 assertThat("Elasticsearch revision should eventually match datastore", esRevision, equalTo(revisionAfter));
             });
+    }
+
+    @SneakyThrows
+    @Order(24)
+    @Test
+    void roundTripDataSurvivesCaseLifecycle() {
+        Map<String, Object> payload = buildRoundTripPayload();
+        submitRoundTripEvent(payload);
+
+        Map<String, Object> latestCaseData = mapper.convertValue(
+            ccdApi.getCase(
+                getAuthorisation("TEST_CASE_WORKER_USER@mailinator.com"),
+                getServiceAuth(),
+                String.valueOf(caseRef)
+            ).getData(),
+            new TypeReference<Map<String, Object>>() {}
+        );
+
+        Map<String, Object> datastoreSnapshot = readCaseDataFromDb();
+
+        assertThat("CCD case view should retain the round-trip payload",
+            extractSubset(latestCaseData, payload), equalTo(payload));
+        assertThat("Datastore JSON should retain the round-trip payload",
+            extractSubset(datastoreSnapshot, payload), equalTo(payload));
     }
 
     private int fetchRevisionFromElasticsearch(long caseDataId) throws IOException {
