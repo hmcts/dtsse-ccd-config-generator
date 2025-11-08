@@ -1254,17 +1254,44 @@ public class TestWithCCD extends CftlibTest {
     }
 
     private void submitRoundTripEvent(Map<String, Object> payload) throws Exception {
-        var request = prepareEventRequest(
-            "TEST_CASE_WORKER_USER@mailinator.com",
+        String user = "TEST_CASE_WORKER_USER@mailinator.com";
+        var startEvent = ccdApi.startEvent(
+            getAuthorisation(user),
+            getServiceAuth(),
+            String.valueOf(caseRef),
+            CaseworkerRoundTripData.CASEWORKER_ROUNDTRIP_DATA
+        );
+
+        Map<String, Object> submissionData = new LinkedHashMap<>(payload);
+        Map<String, Object> startCallbackData = mapper.convertValue(
+            startEvent.getCaseDetails().getData(),
+            new TypeReference<Map<String, Object>>() {}
+        );
+        Object startMarker = startCallbackData.get("setInAboutToStart");
+        if (startMarker != null) {
+            submissionData.put("setInAboutToStart", startMarker);
+        }
+
+        Map<String, Object> dataAfterMidEvent = invokeRoundTripMidEvent(user, submissionData);
+        Object midEventMarker = dataAfterMidEvent.get("setInMidEvent");
+        if (midEventMarker != null) {
+            submissionData.put("setInMidEvent", midEventMarker);
+        }
+        assertThat("Mid-event callback should inject marker. Response data: " + dataAfterMidEvent,
+            midEventMarker, equalTo(CaseworkerRoundTripData.MID_EVENT_MARKER));
+
+        var request = prepareEventRequestWithToken(
+            user,
             CaseworkerRoundTripData.CASEWORKER_ROUNDTRIP_DATA,
-            payload
+            submissionData,
+            startEvent.getToken()
         );
         var response = HttpClientBuilder.create().build().execute(request);
         try {
-            assertThat("Round-trip data update should succeed",
+            String responseBody = EntityUtils.toString(response.getEntity());
+            assertThat("Round-trip data update should succeed. Response: " + responseBody,
                 response.getStatusLine().getStatusCode(), equalTo(201));
         } finally {
-            EntityUtils.consumeQuietly(response.getEntity());
             response.close();
         }
     }
@@ -1297,6 +1324,53 @@ public class TestWithCCD extends CftlibTest {
         payload.put("dueDate", "2030-01-01");
         payload.put("testDocument", document);
         return payload;
+    }
+
+    private Map<String, Object> invokeRoundTripMidEvent(String user, Map<String, Object> data) throws Exception {
+        var caseDetails = ccdApi.getCase(
+            getAuthorisation(user),
+            getServiceAuth(),
+            String.valueOf(caseRef)
+        );
+
+        Map<String, Object> caseDetailsPayload = new LinkedHashMap<>();
+        caseDetailsPayload.put("id", caseRef);
+        caseDetailsPayload.put("jurisdiction", caseDetails.getJurisdiction());
+        caseDetailsPayload.put("state", caseDetails.getState());
+        caseDetailsPayload.put("case_type_id", NoFaultDivorce.getCaseType());
+        caseDetailsPayload.put("case_data", data);
+
+        var body = Map.of(
+            "case_details", caseDetailsPayload,
+            "case_details_before", caseDetailsPayload,
+            "event_id", CaseworkerRoundTripData.CASEWORKER_ROUNDTRIP_DATA,
+            "ignore_warning", false
+        );
+
+        String midEventUrl = "http://localhost:4013/callbacks/mid-event?page=roundTripData&eventId="
+            + CaseworkerRoundTripData.CASEWORKER_ROUNDTRIP_DATA;
+
+        var request = new HttpPost(midEventUrl);
+        request.addHeader("Content-Type", "application/json");
+        request.addHeader("ServiceAuthorization", getServiceAuth());
+        request.addHeader("Authorization", getAuthorisation(user));
+        request.setEntity(new StringEntity(mapper.writeValueAsString(body), ContentType.APPLICATION_JSON));
+
+        var response = HttpClientBuilder.create().build().execute(request);
+        try {
+            assertThat("Round-trip mid-event callback should succeed",
+                response.getStatusLine().getStatusCode(), equalTo(200));
+            JsonNode payload = mapper.readTree(EntityUtils.toString(response.getEntity()));
+            JsonNode dataNode = payload.path("data");
+            assertThat("Mid-event response should include data", dataNode.isMissingNode(), is(false));
+            return new LinkedHashMap<>(mapper.convertValue(
+                dataNode,
+                new TypeReference<Map<String, Object>>() {}
+            ));
+        } finally {
+            EntityUtils.consumeQuietly(response.getEntity());
+            response.close();
+        }
     }
 
     @SneakyThrows
@@ -1540,6 +1614,15 @@ public class TestWithCCD extends CftlibTest {
         Map<String, Object> payload = buildRoundTripPayload();
         submitRoundTripEvent(payload);
 
+        Map<String, Object> callbackInjectedFields = Map.of(
+            "setInAboutToStart", CaseworkerRoundTripData.START_CALLBACK_MARKER,
+            "setInMidEvent", CaseworkerRoundTripData.MID_EVENT_MARKER,
+            "setInAboutToSubmit", CaseworkerRoundTripData.SUBMIT_CALLBACK_MARKER
+        );
+
+        Map<String, Object> expectedPersistedData = new LinkedHashMap<>(payload);
+        expectedPersistedData.putAll(callbackInjectedFields);
+
         Map<String, Object> latestCaseData = mapper.convertValue(
             ccdApi.getCase(
                 getAuthorisation("TEST_CASE_WORKER_USER@mailinator.com"),
@@ -1551,10 +1634,10 @@ public class TestWithCCD extends CftlibTest {
 
         Map<String, Object> datastoreSnapshot = readCaseDataFromDb();
 
-        assertThat("CCD case view should retain the round-trip payload",
-            extractSubset(latestCaseData, payload), equalTo(payload));
-        assertThat("Datastore JSON should retain the round-trip payload",
-            extractSubset(datastoreSnapshot, payload), equalTo(payload));
+        assertThat("CCD case view should retain the round-trip payload plus callback fields",
+            extractSubset(latestCaseData, expectedPersistedData), equalTo(expectedPersistedData));
+        assertThat("Datastore JSON should retain the round-trip payload plus callback fields",
+            extractSubset(datastoreSnapshot, expectedPersistedData), equalTo(expectedPersistedData));
     }
 
     private int fetchRevisionFromElasticsearch(long caseDataId) throws IOException {

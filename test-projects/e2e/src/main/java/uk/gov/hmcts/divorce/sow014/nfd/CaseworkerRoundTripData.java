@@ -22,6 +22,9 @@ import static uk.gov.hmcts.divorce.divorcecase.model.access.Permissions.CREATE_R
 public class CaseworkerRoundTripData implements CCDConfig<CaseData, State, UserRole> {
 
     public static final String CASEWORKER_ROUNDTRIP_DATA = "caseworker-roundtrip-data";
+    public static final String START_CALLBACK_MARKER = "set-in-about-to-start";
+    public static final String MID_EVENT_MARKER = "set-in-mid-event";
+    public static final String SUBMIT_CALLBACK_MARKER = "set-in-about-to-submit";
 
     @Override
     public void configure(final ConfigBuilder<CaseData, State, UserRole> configBuilder) {
@@ -40,6 +43,9 @@ public class CaseworkerRoundTripData implements CCDConfig<CaseData, State, UserR
             .optional(CaseData::getApplicationType)
             .optional(CaseData::getDueDate)
             .optional(CaseData::getTestDocument)
+            .optional(CaseData::getSetInAboutToStart)
+            .optional(CaseData::getSetInMidEvent)
+            .optional(CaseData::getSetInAboutToSubmit)
             .complex(CaseData::getApplicant1)
                 .optional(Applicant::getFirstName)
                 .optional(Applicant::getLastName)
@@ -62,6 +68,7 @@ public class CaseworkerRoundTripData implements CCDConfig<CaseData, State, UserR
     }
 
     private AboutToStartOrSubmitResponse<CaseData, State> roundTripStart(CaseDetails<CaseData, State> details) {
+        details.getData().setSetInAboutToStart(START_CALLBACK_MARKER);
         return AboutToStartOrSubmitResponse.<CaseData, State>builder()
             .data(details.getData())
             .build();
@@ -71,6 +78,7 @@ public class CaseworkerRoundTripData implements CCDConfig<CaseData, State, UserR
         CaseDetails<CaseData, State> details,
         CaseDetails<CaseData, State> before
     ) {
+        details.getData().setSetInAboutToSubmit(SUBMIT_CALLBACK_MARKER);
         return AboutToStartOrSubmitResponse.<CaseData, State>builder()
             .data(details.getData())
             .state(details.getState())
@@ -81,6 +89,7 @@ public class CaseworkerRoundTripData implements CCDConfig<CaseData, State, UserR
         CaseDetails<CaseData, State> details,
         CaseDetails<CaseData, State> before
     ) {
+        details.getData().setSetInMidEvent(MID_EVENT_MARKER);
         return AboutToStartOrSubmitResponse.<CaseData, State>builder()
             .data(details.getData())
             .build();
