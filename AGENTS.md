@@ -10,6 +10,10 @@
 
 ./gradlew -i e2e:cftlibTest
 
+# Logging
+
+gradlew `e2e:cftlibtest` runs a `CallbackLoggingFilter` that captures every HTTP request/response hitting the embedded CCD stack (callbacks plus persistence endpoints) and writes JSON lines to `build/logs/http-traffic.log`. Use that file when you need to inspect payloads instead of relying on stdout.
+
 # To run all tests
 
 ./gradlew -i allTests
