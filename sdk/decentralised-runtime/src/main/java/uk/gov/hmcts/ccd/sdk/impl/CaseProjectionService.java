@@ -6,8 +6,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
-import net.jodah.typetools.TypeResolver;
+import org.springframework.core.ResolvableType;
 import org.springframework.stereotype.Service;
+import org.springframework.util.ClassUtils;
 import uk.gov.hmcts.ccd.data.persistence.dto.DecentralisedCaseDetails;
 import uk.gov.hmcts.ccd.sdk.CaseView;
 import uk.gov.hmcts.ccd.sdk.CaseViewRequest;
@@ -37,9 +38,11 @@ class CaseProjectionService {
     this.mapper = mapper;
     this.caseView = caseView;
 
-    Class<?>[] typeArgs = TypeResolver.resolveRawArguments(CaseView.class, caseView.getClass());
-    this.caseDataType = typeArgs.length > 0 && typeArgs[0] != null ? typeArgs[0] : Map.class;
-    Class<?> resolvedState = typeArgs.length > 1 ? typeArgs[1] : null;
+    Class<?> userClass = ClassUtils.getUserClass(caseView);
+    ResolvableType caseViewType = ResolvableType.forClass(userClass).as(CaseView.class);
+    Class<?> resolvedCase = caseViewType.getGeneric(0).resolve();
+    this.caseDataType = resolvedCase != null ? resolvedCase : Map.class;
+    Class<?> resolvedState = caseViewType.getGeneric(1).resolve();
     if (resolvedState == null || !Enum.class.isAssignableFrom(resolvedState)) {
       throw new IllegalStateException(
           "CaseView implementations must declare an enum state type. Found: %s".formatted(resolvedState));
