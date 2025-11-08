@@ -3,7 +3,6 @@ package uk.gov.hmcts.ccd.sdk.api;
 import static java.util.Arrays.asList;
 import static java.util.stream.Collectors.toList;
 
-import de.cronn.reflection.util.TypedPropertyGetter;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashSet;

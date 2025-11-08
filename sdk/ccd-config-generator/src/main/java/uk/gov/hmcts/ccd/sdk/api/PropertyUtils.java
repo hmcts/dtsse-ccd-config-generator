@@ -1,6 +1,5 @@
 package uk.gov.hmcts.ccd.sdk.api;
 
-import de.cronn.reflection.util.TypedPropertyGetter;
 import java.lang.annotation.Annotation;
 import java.util.List;
 import uk.gov.hmcts.ccd.sdk.type.ListValue;

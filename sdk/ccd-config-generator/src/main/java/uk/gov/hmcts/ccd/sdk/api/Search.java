@@ -1,6 +1,5 @@
 package uk.gov.hmcts.ccd.sdk.api;
 
-import de.cronn.reflection.util.TypedPropertyGetter;
 import java.util.ArrayList;
 import java.util.List;
 import lombok.Builder;
