@@ -121,7 +121,11 @@ class PropertyUtils implements uk.gov.hmcts.ccd.sdk.api.PropertyUtils {
     if (name == null || name.isEmpty()) {
       return null;
     }
-    return ReflectionUtils.findField(type, name);
+    Field field = ReflectionUtils.findField(type, name);
+    if (field != null) {
+      ReflectionUtils.makeAccessible(field);
+    }
+    return field;
   }
 
   private <T> PropertyDescriptor resolveRequiredDescriptor(Class<T> type, TypedPropertyGetter<T, ?> getter) {

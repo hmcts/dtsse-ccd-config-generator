@@ -1,16 +1,16 @@
 package uk.gov.hmcts.ccd.sdk;
 
 import static org.apache.commons.lang3.StringUtils.capitalize;
-import static org.reflections.ReflectionUtils.withName;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonUnwrapped;
 import java.lang.reflect.Field;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
-import org.reflections.ReflectionUtils;
+import org.springframework.util.ReflectionUtils;
 import uk.gov.hmcts.ccd.sdk.api.CCD;
 
 public class FieldUtils {
@@ -22,8 +22,9 @@ public class FieldUtils {
   }
 
   public static List<Field> getCaseFields(Class caseDataClass) {
-    return ReflectionUtils.getAllFields(caseDataClass)
-        .stream()
+    List<Field> fields = new ArrayList<>();
+    ReflectionUtils.doWithFields(caseDataClass, fields::add, field -> true);
+    return fields.stream()
         .filter(f -> !isFieldIgnored(f))
         .collect(Collectors.toList());
   }
@@ -40,10 +41,11 @@ public class FieldUtils {
   }
 
   public static Optional<JsonUnwrapped> isUnwrappedField(Class caseDataClass, String fieldName) {
-    return ReflectionUtils
-      .getAllFields(caseDataClass, withName(fieldName))
-      .stream()
-      .findFirst()
-      .map(f -> f.getAnnotation(JsonUnwrapped.class));
+    Field field = ReflectionUtils.findField(caseDataClass, fieldName);
+    if (field == null) {
+      return Optional.empty();
+    }
+    ReflectionUtils.makeAccessible(field);
+    return Optional.ofNullable(field.getAnnotation(JsonUnwrapped.class));
   }
 }
