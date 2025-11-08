@@ -45,6 +45,12 @@ public class CaseData {
     @CCD(access = {DefaultAccess.class})
     private String setInAboutToStart;
 
+    @CCD(access = {DefaultAccess.class})
+    private String setInMidEvent;
+
+    @CCD(access = {DefaultAccess.class})
+    private String setInAboutToSubmit;
+
     @CCD(
         label = "A Field",
         access = {DefaultAccess.class}
