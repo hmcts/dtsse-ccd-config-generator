@@ -10,7 +10,7 @@ import java.lang.reflect.Field;
 import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
 import java.util.List;
-import org.reflections.ReflectionUtils;
+import org.springframework.util.ReflectionUtils;
 import uk.gov.hmcts.ccd.sdk.type.ListValue;
 
 class PropertyUtils implements uk.gov.hmcts.ccd.sdk.api.PropertyUtils {
@@ -102,10 +102,11 @@ class PropertyUtils implements uk.gov.hmcts.ccd.sdk.api.PropertyUtils {
   }
 
   private Field findField(Class<?> type, String name) {
-    return ReflectionUtils.getAllFields(type, ReflectionUtils.withName(name))
-        .stream()
-        .findFirst()
-        .orElse(null);
+    Field field = ReflectionUtils.findField(type, name);
+    if (field != null) {
+      ReflectionUtils.makeAccessible(field);
+    }
+    return field;
   }
 
 }
