@@ -274,25 +274,8 @@ public class CftLibConfig implements CFTLibConfigurer {
         // Generate CCD definitions before importing them into the in-memory instance.
         configWriter.generateAllCaseTypesToJSON(new File("build/definitions"));
 
-        File source = new File("ccd-definitions");
-        File dest = new File("build/definitions/" + NoFaultDivorce.getCaseType());
-        if (!source.exists()) {
-            source = new File("build/definitions/" + NoFaultDivorce.getCaseType());
-        }
-        try {
-            if (!dest.exists()) {
-                dest.mkdirs();
-            }
-            if (!dest.equals(source)) {
-                FileUtils.copyDirectory(source, dest);
-            }
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-
         lib.importJsonDefinition(new File("build/definitions/" + NoFaultDivorce.getCaseType()));
         lib.importJsonDefinition(new File("build/definitions/" + SimpleCaseConfiguration.CASE_TYPE));
-//        lib.importJsonDefinition(new File("build/definitions/NO_FAULT_DIVORCE_BulkAction"));
         lib.dumpDefinitionSnapshots();
     }
 }
