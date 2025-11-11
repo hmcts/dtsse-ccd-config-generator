@@ -10,6 +10,12 @@
         "com.github.hmcts.rse-cft-lib:ccd-lib"
       ],
       "enabled": false
+    },
+    {
+      "matchPackageNames": [
+        "gradle-wrapper"
+      ],
+      "enabled": false
     }
   ]
 }
