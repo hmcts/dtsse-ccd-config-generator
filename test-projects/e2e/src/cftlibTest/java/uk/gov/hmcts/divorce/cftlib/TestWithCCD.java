@@ -71,9 +71,6 @@ import org.springframework.jms.core.MessagePostProcessor;
 import org.springframework.test.context.TestPropertySource;
 import uk.gov.hmcts.divorce.divorcecase.model.CaseData;
 import uk.gov.hmcts.divorce.divorcecase.NoFaultDivorce;
-import uk.gov.hmcts.divorce.simplecase.SimpleCaseConfiguration;
-import uk.gov.hmcts.divorce.simplecase.model.SimpleCaseData;
-import uk.gov.hmcts.divorce.simplecase.model.SimpleCaseState;
 import uk.gov.hmcts.divorce.sow014.nfd.CaseworkerAddNote;
 import uk.gov.hmcts.divorce.sow014.nfd.CaseworkerMaintainCaseLink;
 import uk.gov.hmcts.divorce.sow014.nfd.DecentralisedCaseworkerAddNote;
@@ -341,7 +338,6 @@ public class TestWithCCD extends CftlibTest {
     }
 
     private long caseRef;
-    private long simpleCaseRef;
     @Order(2)
     @Test
     public void addNotes() throws Exception {
@@ -1235,17 +1231,6 @@ public class TestWithCCD extends CftlibTest {
 
     @SneakyThrows
     private HttpPost prepareEventRequestWithToken(String user, String eventId, Map<String, ?> data, String token) {
-        return prepareEventRequestWithToken(user, eventId, data, token, caseRef);
-    }
-
-    @SneakyThrows
-    private HttpPost prepareEventRequestWithToken(
-        String user,
-        String eventId,
-        Map<String, ?> data,
-        String token,
-        long reference
-    ) {
         var body = Map.of(
             "data", data,
             "event", Map.of(
@@ -1257,24 +1242,19 @@ public class TestWithCCD extends CftlibTest {
             "ignore_warning", false
         );
 
-        var e = buildRequest(user, BASE_URL + "/cases/" + reference + "/events", HttpPost::new);
+        var e = buildRequest(user, BASE_URL + "/cases/" + caseRef + "/events", HttpPost::new);
         withCcdAccept(e, ACCEPT_CREATE_EVENT);
         e.setEntity(new StringEntity(mapper.writeValueAsString(body), ContentType.APPLICATION_JSON));
         return e;
     }
 
     private HttpPost prepareEventRequest(String user, String eventId, Map<String, ?> data) {
-        return prepareEventRequestForCase(caseRef, user, eventId, data);
-    }
-
-    @SneakyThrows
-    private HttpPost prepareEventRequestForCase(long reference, String user, String eventId, Map<String, ?> data) {
-        var startEvent = ccdApi.startEvent(getAuthorisation(user), getServiceAuth(), String.valueOf(reference), eventId);
+        var startEvent = ccdApi.startEvent(getAuthorisation(user), getServiceAuth(), String.valueOf(caseRef), eventId);
         Map<String, Object> submissionData = new LinkedHashMap<>(
             mapper.convertValue(startEvent.getCaseDetails().getData(), new TypeReference<Map<String, Object>>() {})
         );
         submissionData.putAll(data);
-        return prepareEventRequestWithToken(user, eventId, submissionData, startEvent.getToken(), reference);
+        return prepareEventRequestWithToken(user, eventId, submissionData, startEvent.getToken());
     }
 
     private void submitRoundTripEvent(Map<String, Object> payload) throws Exception {
@@ -1662,119 +1642,6 @@ public class TestWithCCD extends CftlibTest {
             extractSubset(latestCaseData, expectedPersistedData), equalTo(expectedPersistedData));
         assertThat("Datastore JSON should retain the round-trip payload plus callback fields",
             extractSubset(datastoreSnapshot, expectedPersistedData), equalTo(expectedPersistedData));
-    }
-
-    @SneakyThrows
-    @Order(25)
-    @Test
-    void simpleCaseCreationEventAddsMarkers() {
-        var start = ccdApi.startCase(
-            getAuthorisation("TEST_CASE_WORKER_USER@mailinator.com"),
-            getServiceAuth(),
-            SimpleCaseConfiguration.CASE_TYPE,
-            SimpleCaseConfiguration.CREATE_EVENT
-        );
-
-        var startData = mapper.convertValue(start.getCaseDetails().getData(), SimpleCaseData.class);
-        assertThat(startData.getCreationMarker(), equalTo(SimpleCaseConfiguration.START_CALLBACK_MARKER));
-
-        var token = start.getToken();
-        Map<String, Object> submissionData = new LinkedHashMap<>(
-            mapper.convertValue(start.getCaseDetails().getData(), new TypeReference<Map<String, Object>>() {})
-        );
-        submissionData.put("subject", "Simple case subject");
-        submissionData.put("description", "Initial simple case description");
-
-        var body = Map.of(
-            "data", submissionData,
-            "event", Map.of(
-                "id", SimpleCaseConfiguration.CREATE_EVENT,
-                "summary", "",
-                "description", ""
-            ),
-            "event_token", token,
-            "ignore_warning", false
-        );
-
-        var createCase = buildRequest(
-            "TEST_CASE_WORKER_USER@mailinator.com",
-            BASE_URL + "/data/case-types/" + SimpleCaseConfiguration.CASE_TYPE + "/cases?ignore-warning=false",
-            HttpPost::new
-        );
-        withCcdAccept(createCase, ACCEPT_CREATE_CASE);
-        createCase.setEntity(new StringEntity(mapper.writeValueAsString(body), ContentType.APPLICATION_JSON));
-
-        var response = HttpClientBuilder.create().build().execute(createCase);
-        assertThat(response.getStatusLine().getStatusCode(), equalTo(201));
-        Map<String, Object> result = mapper.readValue(EntityUtils.toString(response.getEntity()), new TypeReference<>() {});
-        simpleCaseRef = Long.parseLong((String) result.get("id"));
-        assertThat(result.get("state"), equalTo(SimpleCaseState.CREATED.name()));
-
-        var storedCase = ccdApi.getCase(
-            getAuthorisation("TEST_CASE_WORKER_USER@mailinator.com"),
-            getServiceAuth(),
-            String.valueOf(simpleCaseRef)
-        );
-        var storedData = mapper.convertValue(storedCase.getData(), SimpleCaseData.class);
-        System.out.println("Simple case data after creation: " + storedCase.getData());
-        assertThat(storedData.getCreationMarker(), equalTo(SimpleCaseConfiguration.SUBMIT_CALLBACK_MARKER));
-        assertThat(storedData.getDescription(), equalTo("Initial simple case description"));
-    }
-
-    @SneakyThrows
-    @Order(26)
-    @Test
-    void simpleCaseBlobPersistsRawValues() {
-        assertThat("Simple case must be created before persisting assertions", simpleCaseRef, greaterThan(0L));
-
-        try (Connection connection = cftlib().getConnection(Database.Datastore);
-             PreparedStatement statement = connection.prepareStatement("""
-                 SELECT state,
-                        data::text AS data
-                   FROM case_data
-                  WHERE reference = ?
-             """)) {
-            statement.setLong(1, simpleCaseRef);
-            try (ResultSet rs = statement.executeQuery()) {
-                assertThat("Expected a persisted record for simple case " + simpleCaseRef, rs.next(), is(true));
-                assertThat("Case state should remain CREATED before follow-up", rs.getString("state"),
-                    equalTo(SimpleCaseState.CREATED.name()));
-
-                var dataNode = mapper.readTree(rs.getString("data"));
-                assertThat(dataNode.path("subject").asText(), equalTo("Simple case subject"));
-                assertThat(dataNode.path("description").asText(), equalTo("Initial simple case description"));
-                assertThat(dataNode.path("creationMarker").asText(),
-                    equalTo(SimpleCaseConfiguration.SUBMIT_CALLBACK_MARKER));
-                assertThat("Hyphenated reference must be derived at projection time only",
-                    dataNode.has("hyphenatedCaseRef"), is(false));
-            }
-        }
-    }
-
-    @SneakyThrows
-    @Order(27)
-    @Test
-    void simpleCaseFollowUpEventUpdatesNote() {
-        var request = prepareEventRequestForCase(
-            simpleCaseRef,
-            "TEST_CASE_WORKER_USER@mailinator.com",
-            SimpleCaseConfiguration.FOLLOW_UP_EVENT,
-            Map.of("followUpNote", "Follow up detail")
-        );
-
-        var response = HttpClientBuilder.create().build().execute(request);
-        assertThat(response.getStatusLine().getStatusCode(), equalTo(201));
-
-        var updatedCase = ccdApi.getCase(
-            getAuthorisation("TEST_CASE_WORKER_USER@mailinator.com"),
-            getServiceAuth(),
-            String.valueOf(simpleCaseRef)
-        );
-        var updatedData = mapper.convertValue(updatedCase.getData(), SimpleCaseData.class);
-        System.out.println("Simple case data after follow up: " + updatedCase.getData());
-        assertThat(updatedCase.getState(), equalTo(SimpleCaseState.FOLLOW_UP.name()));
-        assertThat(updatedData.getFollowUpMarker(), equalTo(SimpleCaseConfiguration.FOLLOW_UP_CALLBACK_MARKER));
-        assertThat(updatedData.getFollowUpNote(), containsString("Follow up detail"));
     }
 
     private int fetchRevisionFromElasticsearch(long caseDataId) throws IOException {
