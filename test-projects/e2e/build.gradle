@@ -178,14 +178,11 @@ tasks.named('generateCCDConfig').configure {
   environment 'SPRING_JMS_SERVICEBUS_ENABLED', 'false'
   environment 'SPRING_AUTOCONFIGURE_EXCLUDE',
     'com.azure.spring.cloud.autoconfigure.implementation.jms.ServiceBusJmsAutoConfiguration'
-  environment 'SPRING_FLYWAY_ENABLED', 'false'
 }
 
 cftlibTest {
   authMode = AuthMode.Local
   group = 'verification'
-
-  dependsOn tasks.named('generateCCDConfig')
 
   systemProperties([
     'junit.jupiter.execution.parallel.enabled'             : 'false',
