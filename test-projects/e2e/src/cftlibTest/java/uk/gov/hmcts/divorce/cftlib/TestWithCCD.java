@@ -1724,6 +1724,36 @@ public class TestWithCCD extends CftlibTest {
     @SneakyThrows
     @Order(26)
     @Test
+    void simpleCaseBlobPersistsRawValues() {
+        assertThat("Simple case must be created before persisting assertions", simpleCaseRef, greaterThan(0L));
+
+        try (Connection connection = cftlib().getConnection(Database.Datastore);
+             PreparedStatement statement = connection.prepareStatement("""
+                 SELECT state,
+                        data::text AS data
+                   FROM case_data
+                  WHERE reference = ?
+             """)) {
+            statement.setLong(1, simpleCaseRef);
+            try (ResultSet rs = statement.executeQuery()) {
+                assertThat("Expected a persisted record for simple case " + simpleCaseRef, rs.next(), is(true));
+                assertThat("Case state should remain CREATED before follow-up", rs.getString("state"),
+                    equalTo(SimpleCaseState.CREATED.name()));
+
+                var dataNode = mapper.readTree(rs.getString("data"));
+                assertThat(dataNode.path("subject").asText(), equalTo("Simple case subject"));
+                assertThat(dataNode.path("description").asText(), equalTo("Initial simple case description"));
+                assertThat(dataNode.path("creationMarker").asText(),
+                    equalTo(SimpleCaseConfiguration.SUBMIT_CALLBACK_MARKER));
+                assertThat("Hyphenated reference must be derived at projection time only",
+                    dataNode.has("hyphenatedCaseRef"), is(false));
+            }
+        }
+    }
+
+    @SneakyThrows
+    @Order(27)
+    @Test
     void simpleCaseFollowUpEventUpdatesNote() {
         var request = prepareEventRequestForCase(
             simpleCaseRef,
