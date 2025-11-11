@@ -6,6 +6,8 @@ import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Component;
 import uk.gov.hmcts.ccd.sdk.CCDDefinitionGenerator;
 import uk.gov.hmcts.divorce.divorcecase.NoFaultDivorce;
+import uk.gov.hmcts.divorce.simplecase.SimpleCaseConfiguration;
+import uk.gov.hmcts.divorce.simplecase.model.SimpleCaseState;
 import uk.gov.hmcts.rse.ccd.lib.api.CFTLib;
 import uk.gov.hmcts.rse.ccd.lib.api.CFTLibConfigurer;
 
@@ -264,6 +266,7 @@ public class CftLibConfig implements CFTLibConfigurer {
         for (var entry : users.entrySet()) {
             lib.createIdamUser(entry.getKey(), entry.getValue().toArray(new String[0]));
             lib.createProfile(entry.getKey(), "DIVORCE", NoFaultDivorce.getCaseType(), "Submitted");
+            lib.createProfile(entry.getKey(), "DIVORCE", SimpleCaseConfiguration.CASE_TYPE, SimpleCaseState.DRAFT.name());
         }
     }
 
@@ -271,16 +274,8 @@ public class CftLibConfig implements CFTLibConfigurer {
         // Generate CCD definitions before importing them into the in-memory instance.
         configWriter.generateAllCaseTypesToJSON(new File("build/definitions"));
 
-        File source = new File("ccd-definitions");
-        File dest = new File("build/definitions/" + NoFaultDivorce.getCaseType());
-        try {
-            FileUtils.copyDirectory(source, dest);
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-
         lib.importJsonDefinition(new File("build/definitions/" + NoFaultDivorce.getCaseType()));
-//        lib.importJsonDefinition(new File("build/definitions/NO_FAULT_DIVORCE_BulkAction"));
+        lib.importJsonDefinition(new File("build/definitions/" + SimpleCaseConfiguration.CASE_TYPE));
         lib.dumpDefinitionSnapshots();
     }
 }
