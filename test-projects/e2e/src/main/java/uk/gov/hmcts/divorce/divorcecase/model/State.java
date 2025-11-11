@@ -13,11 +13,32 @@ import java.util.EnumSet;
 public enum State {
 
     @CCD(
+        label = "Draft",
+        hint = "Case is in draft state",
+        access = {DefaultStateAccess.class}
+    )
+    DRAFT,
+
+    @CCD(
         label = "20 week holding period",
         hint = "### Case number: ${hyphenatedCaseRef}\n ### ${applicant1LastName} and ${applicant2LastName}\n",
         access = {DefaultStateAccess.class}
     )
     Holding,
+
+    @CCD(
+        label = "Simple case created",
+        hint = "State used by the simple e2e case type",
+        access = {DefaultStateAccess.class}
+    )
+    CREATED,
+
+    @CCD(
+        label = "Simple case follow-up",
+        hint = "Follow-up state used by the simple e2e case type",
+        access = {DefaultStateAccess.class}
+    )
+    FOLLOW_UP,
 
     @CCD(
         label = "AoS awaiting",
@@ -391,4 +412,3 @@ public enum State {
     WelshTranslationReview;
 
 }
-
