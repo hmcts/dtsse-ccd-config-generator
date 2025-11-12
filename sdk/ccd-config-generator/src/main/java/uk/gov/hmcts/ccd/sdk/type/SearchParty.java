@@ -30,11 +30,11 @@ public class SearchParty {
   @JsonProperty("PostCode")
   private String postcode;
 
-  @JsonProperty("DOB")
+  @JsonProperty("DateOfBirth")
   @JsonFormat(pattern = "yyyy-MM-dd")
   private LocalDate dateOfBirth;
 
-  @JsonProperty("DOD")
+  @JsonProperty("DateOfDeath")
   @JsonFormat(pattern = "yyyy-MM-dd")
   private LocalDate dateOfDeath;
 
@@ -43,9 +43,9 @@ public class SearchParty {
                      @JsonProperty("Name") String name,
                      @JsonProperty("EmailAddress") String emailAddress,
                      @JsonProperty("AddressLine1") String addressLine1,
-                     @JsonProperty("Postcode") String postcode,
-                     @JsonProperty("DOB") LocalDate dateOfBirth,
-                     @JsonProperty("DOD") LocalDate dateOfDeath) {
+                     @JsonProperty("PostCode") String postcode,
+                     @JsonProperty("DateOfBirth") LocalDate dateOfBirth,
+                     @JsonProperty("DateOfDeath") LocalDate dateOfDeath) {
     this.collectionFieldName = collectionFieldName;
     this.name = name;
     this.emailAddress = emailAddress;

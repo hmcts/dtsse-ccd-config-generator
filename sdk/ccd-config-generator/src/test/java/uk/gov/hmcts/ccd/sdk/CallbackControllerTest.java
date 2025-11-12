@@ -27,6 +27,7 @@ import uk.gov.hmcts.reform.fpl.model.CaseData;
 import java.io.File;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.time.LocalDate;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -147,6 +148,40 @@ public class CallbackControllerTest {
   }
 
   @SneakyThrows
+  @Test
+  public void testSearchPartySerialization() {
+    Map<String, Object> data = Maps.newHashMap();
+    data.put("caseLocalAuthority", "LA1");
+    Map<String, Object> searchParty = Maps.newHashMap();
+    searchParty.put("CollectionFieldName", "respondents1");
+    searchParty.put("Name", "Alex Bonfire");
+    searchParty.put("EmailAddress", "alex@example.com");
+    searchParty.put("AddressLine1", "10 Test Street");
+    searchParty.put("PostCode", "SW1A 2AA");
+    searchParty.put("DateOfBirth", "2000-01-01");
+    searchParty.put("DateOfDeath", "2020-12-31");
+    data.put("SearchParty", searchParty);
+
+    MvcResult result = this.makeRequest("about-to-start", "CARE_SUPERVISION_EPO", "addFamilyManCaseNumber", data)
+        .andExpect(status().isOk())
+        .andReturn();
+
+    AboutToStartOrSubmitCallbackResponse response = getCallbackResponse(result);
+    @SuppressWarnings("unchecked")
+    Map<String, Object> responseSearchParty = (Map<String, Object>) response.getData().get("SearchParty");
+    assertThat(responseSearchParty.get("DateOfBirth")).isEqualTo("2000-01-01");
+    assertThat(responseSearchParty.get("DateOfDeath")).isEqualTo("2020-12-31");
+
+    CaseData caseData = getResponseData(result, CaseData.class);
+    uk.gov.hmcts.ccd.sdk.type.SearchParty party = caseData.getSearchParty();
+    assertThat(party).isNotNull();
+    assertThat(party.getCollectionFieldName()).isEqualTo("respondents1");
+    assertThat(party.getPostcode()).isEqualTo("SW1A 2AA");
+    assertThat(party.getDateOfBirth()).isEqualTo(LocalDate.of(2000, 1, 1));
+    assertThat(party.getDateOfDeath()).isEqualTo(LocalDate.of(2020, 12, 31));
+  }
+
+  @SneakyThrows
   ResultActions makeRequest(String callback, String eventId) {
     return makeRequest(callback, "CARE_SUPERVISION_EPO", eventId);
   }
@@ -167,6 +202,7 @@ public class CallbackControllerTest {
   <T> T getResponseData(MvcResult result, Class<T> c) {
     AboutToStartOrSubmitCallbackResponse r = getCallbackResponse(result);
     ObjectMapper mapper = new ObjectMapper();
+    mapper.findAndRegisterModules();
     String json = mapper.writeValueAsString(r.getData());
     return mapper.readValue(json, c);
   }
