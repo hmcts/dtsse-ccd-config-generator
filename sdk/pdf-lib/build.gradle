@@ -1,0 +1,28 @@
+plugins {
+    id 'java-library'
+}
+
+ext {
+    pebbleVersion = '2.4.0'
+    openHtmlVersion = '1.0.10'
+    assertjVersion = '3.27.2'
+    junitVersion = '5.11.3'
+}
+
+dependencies {
+    api 'com.github.hmcts.java-logging:logging:6.1.9'
+    implementation 'com.google.guava:guava:33.4.8-jre'
+    implementation "com.mitchellbosecke:pebble:${pebbleVersion}"
+
+    implementation "com.openhtmltopdf:openhtmltopdf-core:${openHtmlVersion}"
+    implementation "com.openhtmltopdf:openhtmltopdf-pdfbox:${openHtmlVersion}"
+
+    testImplementation "org.assertj:assertj-core:${assertjVersion}"
+    testImplementation 'org.hamcrest:hamcrest:3.0'
+    testImplementation "org.junit.jupiter:junit-jupiter-api:${junitVersion}"
+    testRuntimeOnly "org.junit.jupiter:junit-jupiter-engine:${junitVersion}"
+}
+
+tasks.withType(Test).configureEach {
+    useJUnitPlatform()
+}

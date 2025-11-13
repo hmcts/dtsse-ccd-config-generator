@@ -73,6 +73,10 @@ public class CcdSdkPlugin implements Plugin<Project> {
         });
       }
 
+      if (config.pdfLib) {
+        project.getDependencies().add("implementation", "com.github.hmcts:pdf-lib:" + getVersion());
+      }
+
       if (config.decentralised) {
         // This is a signal to the cftlib to link in the feature branch
         // TODO: remove on landing
@@ -118,6 +122,7 @@ public class CcdSdkPlugin implements Plugin<Project> {
     private boolean decentralised = false;
     private boolean caseEventServiceBus = false;
     private boolean runtimeIndexing = false;
+    private boolean pdfLib = false;
 
     public CCDConfig() {
     }
