@@ -47,6 +47,11 @@ public class CcdCaseEventPublisher {
 
       totalPublished += result.published();
 
+      if (result.published() == 0) {
+        log.error("Failed to publish any message_queue_candidates record(s) in current batch; aborting run");
+        break;
+      }
+
       if (result.fetched() < properties.getBatchSize()) {
         break;
       }
