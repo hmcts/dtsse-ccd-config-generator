@@ -26,6 +26,7 @@ public class CcdMessageQueueRepository {
          AND message_type = ?
        ORDER BY time_stamp
        LIMIT ?
+       FOR UPDATE SKIP LOCKED
       """;
 
   private static final String UPDATE_PUBLISHED = """
