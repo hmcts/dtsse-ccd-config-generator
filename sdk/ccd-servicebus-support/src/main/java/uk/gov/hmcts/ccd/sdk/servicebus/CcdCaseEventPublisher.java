@@ -15,6 +15,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.jms.core.JmsTemplate;
 import org.springframework.jms.core.MessagePostProcessor;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
 @Component
 @Slf4j
@@ -29,6 +30,7 @@ public class CcdCaseEventPublisher {
   @Value("${ccd.servicebus.destination:}")
   private String destination;
 
+  @Transactional
   public void publishPendingCaseEvents() {
     if (destination == null || destination.isBlank()) {
       log.warn("No CCD Service Bus destination configured; skipping publish run");
