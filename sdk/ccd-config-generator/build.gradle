@@ -35,7 +35,7 @@ dependencies {
     implementation group: 'org.objenesis', name: 'objenesis', version: '3.4'
     api 'com.google.guava:guava:33.5.0-jre'
 
-    implementation 'com.fasterxml.jackson.core:jackson-databind:2.20.0'
+    implementation 'com.fasterxml.jackson.core:jackson-databind:2.20.1'
 }
 
 tasks.register('ccdConfigDiff', JavaExec) {
