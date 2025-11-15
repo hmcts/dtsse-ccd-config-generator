@@ -17,7 +17,7 @@ public class CcdCaseEventScheduler {
 
   private final CcdCaseEventPublisher ccdCaseEventPublisher;
 
-  @Scheduled(cron = "${ccd.servicebus.schedule:*/30 * * * * *}")
+  @Scheduled(cron = "${ccd.servicebus.schedule:*/5 * * * * *}")
   public void publishPendingMessages() {
     log.debug("Scheduled CCD case event publishing task invoked");
     ccdCaseEventPublisher.publishPendingCaseEvents();
