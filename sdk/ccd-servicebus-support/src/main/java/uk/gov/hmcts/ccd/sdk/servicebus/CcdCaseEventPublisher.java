@@ -15,7 +15,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.jms.core.JmsTemplate;
 import org.springframework.jms.core.MessagePostProcessor;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 @Component
 @Slf4j
@@ -26,11 +26,11 @@ public class CcdCaseEventPublisher {
   private final CcdMessageQueueRepository repository;
   private final JmsTemplate jmsTemplate;
   private final CcdServiceBusProperties properties;
+  private final TransactionTemplate transactionTemplate;
 
   @Value("${ccd.servicebus.destination:}")
   private String destination;
 
-  @Transactional
   public void publishPendingCaseEvents() {
     if (destination == null || destination.isBlank()) {
       log.warn("No CCD Service Bus destination configured; skipping publish run");
@@ -40,28 +40,14 @@ public class CcdCaseEventPublisher {
     int totalPublished = 0;
 
     while (true) {
-      List<MessageQueueCandidate> candidates =
-          repository.findUnpublishedMessages(properties.getMessageType(), properties.getBatchSize());
-      if (candidates.isEmpty()) {
+      BatchResult result = transactionTemplate.execute(status -> publishBatch());
+      if (result == null || result.fetched() == 0) {
         break;
       }
 
-      log.info("Preparing to publish {} message_queue_candidates record(s) to {}", candidates.size(), destination);
+      totalPublished += result.published();
 
-      List<Long> publishedIds = new ArrayList<>(candidates.size());
-      for (MessageQueueCandidate candidate : candidates) {
-        if (sendToServiceBus(candidate)) {
-          publishedIds.add(candidate.id());
-        }
-      }
-
-      if (!publishedIds.isEmpty()) {
-        repository.markPublished(publishedIds, LocalDateTime.now());
-        totalPublished += publishedIds.size();
-        log.info("Marked {} message_queue_candidates record(s) as published", publishedIds.size());
-      }
-
-      if (candidates.size() < properties.getBatchSize()) {
+      if (result.fetched() < properties.getBatchSize()) {
         break;
       }
     }
@@ -79,6 +65,34 @@ public class CcdCaseEventPublisher {
     } else {
       log.info("No CCD case event messages published in this run");
     }
+  }
+
+  private BatchResult publishBatch() {
+    List<MessageQueueCandidate> candidates =
+        repository.findUnpublishedMessages(properties.getMessageType(), properties.getBatchSize());
+    if (candidates.isEmpty()) {
+      return BatchResult.EMPTY;
+    }
+
+    log.info("Preparing to publish {} message_queue_candidates record(s) to {}", candidates.size(), destination);
+
+    List<Long> publishedIds = new ArrayList<>(candidates.size());
+    for (MessageQueueCandidate candidate : candidates) {
+      if (sendToServiceBus(candidate)) {
+        publishedIds.add(candidate.id());
+      }
+    }
+
+    if (!publishedIds.isEmpty()) {
+      repository.markPublished(publishedIds, LocalDateTime.now());
+      log.info("Marked {} message_queue_candidates record(s) as published", publishedIds.size());
+    }
+
+    return new BatchResult(candidates.size(), publishedIds.size());
+  }
+
+  private record BatchResult(int fetched, int published) {
+    private static final BatchResult EMPTY = new BatchResult(0, 0);
   }
 
   private boolean sendToServiceBus(MessageQueueCandidate candidate) {

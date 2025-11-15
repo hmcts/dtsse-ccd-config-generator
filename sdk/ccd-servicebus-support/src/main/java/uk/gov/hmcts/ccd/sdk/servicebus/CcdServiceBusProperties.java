@@ -20,7 +20,7 @@ public class CcdServiceBusProperties {
   private int publishedRetentionDays = 90;
 
   @Setter
-  private String schedule = "*/5 * * * * *";
+  private String schedule = "*/10 * * * * *";
 
   @Setter
   private String destination;
