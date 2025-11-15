@@ -14,13 +14,13 @@ public class CcdServiceBusProperties {
   private final String messageType = "CASE_EVENT";
 
   @Setter
-  private int batchSize = 1000;
+  private int batchSize = 100;
 
   @Setter
   private int publishedRetentionDays = 90;
 
   @Setter
-  private String schedule = "*/30 * * * * *";
+  private String schedule = "*/10 * * * * *";
 
   @Setter
   private String destination;
