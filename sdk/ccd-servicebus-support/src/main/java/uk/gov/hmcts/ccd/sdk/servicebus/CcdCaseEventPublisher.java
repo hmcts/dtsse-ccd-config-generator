@@ -10,7 +10,6 @@ import java.util.ArrayList;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.jms.core.JmsTemplate;
 import org.springframework.jms.core.MessagePostProcessor;
@@ -28,10 +27,8 @@ public class CcdCaseEventPublisher {
   private final CcdServiceBusProperties properties;
   private final TransactionTemplate transactionTemplate;
 
-  @Value("${ccd.servicebus.destination:}")
-  private String destination;
-
   public void publishPendingCaseEvents() {
+    String destination = properties.getDestination();
     if (destination == null || destination.isBlank()) {
       log.warn("No CCD Service Bus destination configured; skipping publish run");
       return;
@@ -79,7 +76,8 @@ public class CcdCaseEventPublisher {
       return BatchResult.EMPTY;
     }
 
-    log.info("Preparing to publish {} message_queue_candidates record(s) to {}", candidates.size(), destination);
+    log.info("Preparing to publish {} message_queue_candidates record(s) to {}", candidates.size(),
+        properties.getDestination());
 
     List<Long> publishedIds = new ArrayList<>(candidates.size());
     for (MessageQueueCandidate candidate : candidates) {
@@ -102,7 +100,8 @@ public class CcdCaseEventPublisher {
 
   private boolean sendToServiceBus(MessageQueueCandidate candidate) {
     try {
-      jmsTemplate.convertAndSend(destination, candidate.payload(), applyProperties(candidate.payload()));
+      jmsTemplate.convertAndSend(properties.getDestination(), candidate.payload(),
+          applyProperties(candidate.payload()));
       return true;
     } catch (Exception ex) {
       log.error("Failed to publish message_queue_candidates id {} reference {}", candidate.id(),
