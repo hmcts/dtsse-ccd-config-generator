@@ -146,6 +146,14 @@ Supplementary data operations are implemented and persisted in the `ccd.case_dat
 
 A transactional outbox-based `message_queue_candidates` table is maintained and written to based on your CCD definition, mirroring CCD's implementation.
 
+The SDK's `ccd-servicebus-support` module provides:
+
+- a `JmsTemplate` configured for Azure Service Bus
+- a scheduled publisher (`CcdCaseEventScheduler`) governed by the `ccd.servicebus.*` properties
+- a startup validator that simply opens a producer on the configured destination and closes it immediately.
+
+The validator runs during application boot and fails the service fast if the topic does not exist or the supplied credentials lack `Send` rights.
+
 ## Event submission flow
 
 ```mermaid
