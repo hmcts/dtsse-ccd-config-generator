@@ -24,5 +24,4 @@ public class CcdServiceBusProperties {
 
   @Setter
   private String destination;
-
 }
