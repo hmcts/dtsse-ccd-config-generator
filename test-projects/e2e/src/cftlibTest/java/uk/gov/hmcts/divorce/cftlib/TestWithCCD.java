@@ -124,6 +124,7 @@ public class TestWithCCD extends CftlibTest {
 
     private long firstEventId;
     private static final String BASE_URL = "http://localhost:4452";
+    private static final String SERVICE_BASE_URL = "http://localhost:4013";
     private static final String ELASTICSEARCH_BASE_URL = "http://localhost:9200";
     private static final String ACCEPT_CREATE_CASE =
         "application/vnd.uk.gov.hmcts.ccd-data-store-api.create-case.v2+json;charset=UTF-8";
@@ -1773,6 +1774,38 @@ public class TestWithCCD extends CftlibTest {
         assertThat(updatedCase.getState(), equalTo(SimpleCaseState.FOLLOW_UP.name()));
         assertThat(updatedData.getFollowUpMarker(), equalTo(SimpleCaseConfiguration.FOLLOW_UP_CALLBACK_MARKER));
         assertThat(updatedData.getFollowUpNote(), containsString("Follow up detail"));
+    }
+
+    @SneakyThrows
+    @Order(28)
+    @Test
+    void persistenceEndpointRejectsUnknownCaseType() {
+        Map<String, Object> caseDetails = new LinkedHashMap<>();
+        caseDetails.put("id", caseRef);
+        caseDetails.put("jurisdiction", NoFaultDivorce.JURISDICTION);
+        caseDetails.put("case_type_id", NoFaultDivorce.getCaseType());
+        caseDetails.put("state", "Submitted");
+        caseDetails.put("case_data", Map.of());
+
+        Map<String, Object> payload = Map.of(
+            "case_details", caseDetails,
+            "event_details", Map.of(
+                "case_type", "UNKNOWN_CASE",
+                "event_id", "caseworker-add-note"
+            )
+        );
+
+        var request = new HttpPost(SERVICE_BASE_URL + "/ccd-persistence/cases");
+        request.addHeader("Content-Type", "application/json");
+        request.addHeader("Authorization", getAuthorisation("TEST_CASE_WORKER_USER@mailinator.com"));
+        request.addHeader("Idempotency-Key", UUID.randomUUID().toString());
+        request.setEntity(new StringEntity(mapper.writeValueAsString(payload), ContentType.APPLICATION_JSON));
+
+        var response = HttpClientBuilder.create().build().execute(request);
+        var responseBody = EntityUtils.toString(response.getEntity());
+        assertThat(response.getStatusLine().getStatusCode(), equalTo(400));
+        JsonNode errorPayload = mapper.readTree(responseBody);
+        assertThat(errorPayload.path("status").asInt(), equalTo(400));
     }
 
     private int fetchRevisionFromElasticsearch(long caseDataId) throws IOException {
