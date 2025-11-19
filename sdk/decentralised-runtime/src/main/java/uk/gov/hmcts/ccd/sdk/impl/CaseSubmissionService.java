@@ -36,8 +36,7 @@ public class CaseSubmissionService {
   public DecentralisedSubmitEventResponse submit(DecentralisedCaseEvent event,
                                                  String authorisation,
                                                  UUID idempotencyKey) {
-    var eventConfig = resolvedConfigRegistry.getRequiredEvent(
-        event.getEventDetails().getCaseType(), event.getEventDetails().getEventId());
+    var eventConfig = getEventConfig(event);
     var user = idam.retrieveUser(authorisation);
     var handler = eventConfig.getSubmitHandler() != null ? submitHandler : legacyHandler;
 
@@ -131,6 +130,15 @@ public class CaseSubmissionService {
       caseDataRepository.upsertCase(event, dataUpdate);
     } catch (EmptyResultDataAccessException e) {
       throw new ResponseStatusException(HttpStatus.CONFLICT, "Case was updated concurrently", e);
+    }
+  }
+
+  private uk.gov.hmcts.ccd.sdk.api.Event<?, ?, ?> getEventConfig(DecentralisedCaseEvent event) {
+    try {
+      return resolvedConfigRegistry.getRequiredEvent(
+          event.getEventDetails().getCaseType(), event.getEventDetails().getEventId());
+    } catch (IllegalArgumentException ex) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, ex.getMessage(), ex);
     }
   }
 
