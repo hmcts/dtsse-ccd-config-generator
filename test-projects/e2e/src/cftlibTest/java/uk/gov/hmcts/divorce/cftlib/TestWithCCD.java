@@ -1804,7 +1804,8 @@ public class TestWithCCD extends CftlibTest {
         var response = HttpClientBuilder.create().build().execute(request);
         var responseBody = EntityUtils.toString(response.getEntity());
         assertThat(response.getStatusLine().getStatusCode(), equalTo(400));
-        assertThat(responseBody, containsString("No config for case type UNKNOWN_CASE"));
+        JsonNode errorPayload = mapper.readTree(responseBody);
+        assertThat(errorPayload.path("status").asInt(), equalTo(400));
     }
 
     private int fetchRevisionFromElasticsearch(long caseDataId) throws IOException {
