@@ -8,7 +8,8 @@
     "PageColumnNumber": 1,
     "PageDisplayOrder": 1,
     "PageFieldDisplayOrder": 1,
-    "PageID": "ListApplicants"
+    "PageID": "ListApplicants",
+    "ShowSummaryChangeOption": "Y"
   },
   {
     "CaseEventID": "listApplicantsEvent",
@@ -20,6 +21,7 @@
     "PageColumnNumber": 1,
     "PageDisplayOrder": 1,
     "PageFieldDisplayOrder": 2,
-    "PageID": "ListApplicants"
+    "PageID": "ListApplicants",
+    "ShowSummaryChangeOption": "Y"
   }
 ]
