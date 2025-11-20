@@ -5,6 +5,7 @@ set -euo pipefail
 SRC_DSN="${SRC_DSN:-postgresql://postgres:postgres@localhost:6432/datastore}"
 DST_DSN="${DST_DSN:-postgresql://postgres:postgres@localhost:6432/sptribs}"
 CASE_TYPE="${CASE_TYPE:-CriminalInjuriesCompensation}"
+DO_APPLY=false
 
 log() {
   printf '[%s] %s\n' "$(date '+%Y-%m-%dT%H:%M:%S')" "$*"
@@ -13,6 +14,56 @@ log() {
 require_psql() {
   if ! command -v psql >/dev/null 2>&1; then
     log "ERROR: psql is required on PATH"
+    exit 1
+  fi
+}
+
+usage() {
+  cat <<EOF
+Usage: $(basename "$0") [--apply]
+
+Default mode validates connectivity and checks the target is empty for CASE_TYPE.
+Use --apply to perform the migration after validation passes.
+EOF
+}
+
+parse_args() {
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --apply)
+        DO_APPLY=true
+        shift
+        ;;
+      -h|--help)
+        usage
+        exit 0
+        ;;
+      *)
+        log "ERROR: Unknown argument: $1"
+        usage
+        exit 1
+        ;;
+    esac
+  done
+}
+
+validate_connections() {
+  log "Validating connectivity to source and target databases..."
+  psql "$SRC_DSN" --set=ON_ERROR_STOP=on --no-psqlrc --quiet -c "SELECT 1;" >/dev/null
+  psql "$DST_DSN" --set=ON_ERROR_STOP=on --no-psqlrc --quiet -c "SELECT 1;" >/dev/null
+}
+
+validate_target_empty() {
+  log "Checking target is empty for case_type_id='${CASE_TYPE}'..."
+  local dst_cases dst_events
+  dst_cases=$(psql "$DST_DSN" --set=ON_ERROR_STOP=on --no-psqlrc --quiet -tA \
+    -c "SELECT COUNT(*) FROM ccd.case_data WHERE case_type_id = '${CASE_TYPE}'")
+  dst_events=$(psql "$DST_DSN" --set=ON_ERROR_STOP=on --no-psqlrc --quiet -tA \
+    -c "SELECT COUNT(*) FROM ccd.case_event ce JOIN ccd.case_data cd ON cd.id = ce.case_data_id WHERE cd.case_type_id = '${CASE_TYPE}'")
+
+  if [[ "$dst_cases" -ne 0 || "$dst_events" -ne 0 ]]; then
+    log "ERROR: Target contains ${dst_cases} case_data rows and ${dst_events} case_event rows for ${CASE_TYPE}."
+    log "Run ./scripts/clean-target-case-data.sh before migrating."
     exit 1
   fi
 }
@@ -153,16 +204,26 @@ report_counts() {
   src_events=$(psql "$SRC_DSN" --set=ON_ERROR_STOP=on --no-psqlrc --quiet -tA \
     -c "SELECT COUNT(*) FROM public.case_event ce JOIN public.case_data cd ON cd.id = ce.case_data_id WHERE cd.case_type_id = '${CASE_TYPE}'")
   dst_cases=$(psql "$DST_DSN" --set=ON_ERROR_STOP=on --no-psqlrc --quiet -tA \
-    -c "SELECT COUNT(*) FROM ccd.case_data")
+    -c "SELECT COUNT(*) FROM ccd.case_data WHERE case_type_id = '${CASE_TYPE}'")
   dst_events=$(psql "$DST_DSN" --set=ON_ERROR_STOP=on --no-psqlrc --quiet -tA \
-    -c "SELECT COUNT(*) FROM ccd.case_event")
+    -c "SELECT COUNT(*) FROM ccd.case_event ce JOIN ccd.case_data cd ON cd.id = ce.case_data_id WHERE cd.case_type_id = '${CASE_TYPE}'")
 
   log "Source counts: case_data=${src_cases}, case_event=${src_events}"
   log "Target counts: case_data=${dst_cases}, case_event=${dst_events}"
 }
 
 main() {
+  parse_args "$@"
   require_psql
+  validate_connections
+  validate_target_empty
+
+  if [[ "$DO_APPLY" == false ]]; then
+    log "Validation succeeded. Re-run with --apply to perform the migration."
+    exit 0
+  fi
+
+  log "Validation succeeded. Proceeding with migration..."
   copy_case_data
   copy_case_event
   reset_sequences

@@ -8,6 +8,7 @@ DROPDB_BIN="${DROPDB_BIN:-dropdb}"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 MIGRATION_SCRIPT="${SCRIPT_DIR}/migrate-ccd-data.sh"
+CLEAN_SCRIPT="${SCRIPT_DIR}/clean-target-case-data.sh"
 
 PG_HOST="${PG_HOST:-localhost}"
 PG_PORT="${PG_PORT:-6432}"
@@ -83,18 +84,31 @@ DELETE FROM ccd.case_event;
 DELETE FROM ccd.case_data;
 SQL
 
-echo "Running migration script against temporary databases"
+echo "Running migration script (validation mode only)"
 SRC_DSN="$SRC_DSN" DST_DSN="$DST_DSN" CASE_TYPE="$CASE_TYPE" "$MIGRATION_SCRIPT"
+
+echo "Running migration script (apply mode)"
+SRC_DSN="$SRC_DSN" DST_DSN="$DST_DSN" CASE_TYPE="$CASE_TYPE" "$MIGRATION_SCRIPT" --apply
 
 echo "Validating migrated record counts"
 SRC_CASES=$($PSQL_BIN "$SRC_DSN" -At -c "SELECT COUNT(*) FROM case_data WHERE case_type_id='${CASE_TYPE}'")
 SRC_EVENTS=$($PSQL_BIN "$SRC_DSN" -At -c "SELECT COUNT(*) FROM case_event ce JOIN case_data cd ON cd.id = ce.case_data_id WHERE cd.case_type_id='${CASE_TYPE}'")
 DST_CASES=$($PSQL_BIN "$DST_DSN" -At -c "SELECT COUNT(*) FROM ccd.case_data WHERE case_type_id='${CASE_TYPE}'")
-DST_EVENTS=$($PSQL_BIN "$DST_DSN" -At -c "SELECT COUNT(*) FROM ccd.case_event")
+DST_EVENTS=$($PSQL_BIN "$DST_DSN" -At -c "SELECT COUNT(*) FROM ccd.case_event ce JOIN ccd.case_data cd ON cd.id = ce.case_data_id WHERE cd.case_type_id='${CASE_TYPE}'")
 
 if [[ "$SRC_CASES" != "$DST_CASES" || "$SRC_EVENTS" != "$DST_EVENTS" ]]; then
   echo "Count mismatch after migration: source=${SRC_CASES}/${SRC_EVENTS} target=${DST_CASES}/${DST_EVENTS}" >&2
   exit 1
 fi
 
-echo "Test migration completed successfully."
+echo "Running cleanup script on target"
+DST_DSN="$DST_DSN" CASE_TYPE="$CASE_TYPE" "$CLEAN_SCRIPT"
+
+DST_CASES=$($PSQL_BIN "$DST_DSN" -At -c "SELECT COUNT(*) FROM ccd.case_data WHERE case_type_id='${CASE_TYPE}'")
+DST_EVENTS=$($PSQL_BIN "$DST_DSN" -At -c "SELECT COUNT(*) FROM ccd.case_event ce JOIN ccd.case_data cd ON cd.id = ce.case_data_id WHERE cd.case_type_id='${CASE_TYPE}'")
+if [[ "$DST_CASES" != "0" || "$DST_EVENTS" != "0" ]]; then
+  echo "Cleanup failed: target still has rows (${DST_CASES}/${DST_EVENTS})." >&2
+  exit 1
+fi
+
+echo "Test migration (validate + apply + cleanup) completed successfully."
