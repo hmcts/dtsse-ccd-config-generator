@@ -31,7 +31,7 @@ dependencies {
     testImplementation group: 'org.springframework.boot', name: 'spring-boot-starter-test', version: springBootVersion
 
 
-    implementation group: 'org.apache.commons', name: 'commons-lang3', version: '3.19.0'
+    implementation group: 'org.apache.commons', name: 'commons-lang3', version: '3.20.0'
     implementation group: 'org.objenesis', name: 'objenesis', version: '3.4'
     api 'com.google.guava:guava:33.5.0-jre'
 
