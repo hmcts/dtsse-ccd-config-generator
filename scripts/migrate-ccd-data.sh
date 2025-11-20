@@ -80,6 +80,8 @@ COPY (
       cd.id AS case_data_id,
       ce.case_type_version,
       ce.event_id,
+      row_number() over (partition by cd.id order by ce.id) AS version,
+      row_number() over (partition by cd.id order by ce.id) AS case_revision,
       ce.summary,
       ce.description,
       ce.user_id,
@@ -97,7 +99,7 @@ COPY (
   FROM public.case_event ce
        JOIN public.case_data cd ON cd.id = ce.case_data_id
   WHERE cd.case_type_id = '${CASE_TYPE}'
-  ORDER BY ce.id
+  ORDER BY ce.id ASC
 ) TO STDOUT WITH (FORMAT CSV);
 EOF
 )
@@ -109,6 +111,8 @@ COPY ccd.case_event (
     case_data_id,
     case_type_version,
     event_id,
+    version,
+    case_revision,
     summary,
     description,
     user_id,

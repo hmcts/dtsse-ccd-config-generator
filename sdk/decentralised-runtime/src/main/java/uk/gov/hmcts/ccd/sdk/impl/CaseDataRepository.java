@@ -80,11 +80,11 @@ class CaseDataRepository {
               ce.state_id as state,
               ce.data::text as case_data,
               ce.security_classification::text,
-              cd.version as version,
+              ce.version as version,
               ce.created_date as last_state_modified_date,
               ce.created_date as last_modified,
               cd.supplementary_data::text,
-              cd.case_revision
+              ce.case_revision
          from ccd.case_event ce
          join ccd.case_data cd on cd.id = ce.case_data_id
         where cd.reference = :caseRef
@@ -127,9 +127,8 @@ class CaseDataRepository {
             case when :has_data then :data::jsonb else '{}'::jsonb end,
             :reference,
             :security_classification::ccd.securityclassification,
-            -- We start at a higher version number than CCD's default 1,
-            -- ensuring our write to ES wins
-            coalesce(:version, 2),
+            -- Align with CCD's default for new rows
+            coalesce(:version, 1),
             :id
         )
         on conflict (reference)

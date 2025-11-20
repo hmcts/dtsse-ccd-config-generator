@@ -90,6 +90,8 @@ class AuditEventService {
           summary,
           description,
           security_classification,
+          version,
+          case_revision,
           idempotency_key)
         values (
           :data::jsonb,
@@ -106,6 +108,8 @@ class AuditEventService {
           :summary,
           :description,
           :security_classification::ccd.securityclassification,
+          :version,
+          :case_revision,
           :idempotency_key
         )
         returning id, created_date
@@ -132,6 +136,8 @@ class AuditEventService {
         .addValue("summary", eventDetails.getSummary())
         .addValue("description", eventDetails.getDescription())
         .addValue("security_classification", currentView.getSecurityClassification().toString())
+        .addValue("version", currentView.getVersion())
+        .addValue("case_revision", currentView.getRevision())
         .addValue("idempotency_key", idempotencyKey);
 
     var inserted = ndb.queryForObject(sql, params, this::mapInsertedAuditEvent);
