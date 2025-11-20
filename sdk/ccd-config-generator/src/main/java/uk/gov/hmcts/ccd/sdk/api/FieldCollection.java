@@ -273,6 +273,7 @@ public class FieldCollection {
       Class<U> itemClass = propertyUtils.getListValueElementType(dataClass, getter);
       FieldBuilder<U, StateType, Type, Parent> fieldBuilder = createField(id, itemClass);
       fieldBuilder.showCondition(showCondition);
+      fieldBuilder.showSummary();
 
       CCD cf = propertyUtils.getAnnotationOfProperty(dataClass, getter, CCD.class);
       if (null != cf) {
