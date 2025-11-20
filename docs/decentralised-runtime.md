@@ -65,7 +65,7 @@ If an incoming request has already been processed, the runtime replays the store
 To fulfil the aforementioned responsibilities, the SDK provisions and manages a dedicated `ccd` schema within your application's database.
 
 - `case_data` mirrors CCD’s `case_data` table, including metadata such as state, security classification, TTL and the JSON payload.
-- `case_event` mirrors CCD’s `case_event` table and adds an idempotency key
+- `case_event` mirrors CCD’s `case_event` table and adds an idempotency key.
 - `es_queue` tracks cases that require Elasticsearch indexing 
 - `message_queue_candidates` mirrors CCD’s Service Bus transactional outbox table.
 
@@ -90,6 +90,8 @@ erDiagram
         timestamp created_date
         int case_type_version
         varchar event_id
+        int version
+        bigint case_revision
         varchar state_id
         varchar user_id
         jsonb data
