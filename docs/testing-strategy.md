@@ -5,5 +5,5 @@ The SDK's tests are primarily [Cftlib](https://github.com/hmcts/rse-cft-lib)-bas
 
 ## Data Migration and CCD Definition Diff Checks
 
-- `./gradlew verifyCcdMigration` exercises `scripts/test-migrate-ccd-data.sh`, providing test coverage for the data migration scripts.
+- `./gradlew verifyCcdMigration` exercises `scripts/test-migrate-ccd-data.sh` (validation + apply + cleanup) to cover the migration scripts end-to-end.
 - GitHub Actions run each test project's tests and compare generated CCD definitions against master to flag any discrepancies.

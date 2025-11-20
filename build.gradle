@@ -42,7 +42,7 @@ tasks.register('publishToAzureArtifacts') { task ->
 
 tasks.register('verifyCcdMigration', Exec) {
     group = 'verification'
-    description = 'Runs scripts/test-migrate-ccd-data.sh after the e2e environment is up'
+    description = 'Validates, applies, and cleans up the CCD migration script after the e2e environment is up'
     dependsOn ':e2e:dumpCCDDefinitions'
     workingDir projectDir
     commandLine 'bash', '-lc', './scripts/test-migrate-ccd-data.sh'
