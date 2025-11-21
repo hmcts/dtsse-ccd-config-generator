@@ -53,6 +53,8 @@ $PSQL_BIN "$SRC_DSN" --set=ON_ERROR_STOP=on <<'SQL'
 SET client_min_messages TO WARNING;
 DELETE FROM case_event WHERE case_data_id = 5601;
 DELETE FROM case_data WHERE id = 5601;
+DELETE FROM case_event WHERE case_data_id = 5602;
+DELETE FROM case_data WHERE id = 5602;
 
 INSERT INTO case_data (
     id, reference, created_date, last_modified, jurisdiction, case_type_id, state,
@@ -60,6 +62,9 @@ INSERT INTO case_data (
 ) VALUES (
     5601, 7700000000000001, now(), now(), 'ST_CIC', 'CriminalInjuriesCompensation', 'Submitted',
     '{}'::jsonb, '{}'::jsonb, '{}'::jsonb, 'PUBLIC', 3
+), (
+    5602, 7700000000000002, now(), now(), 'ST_CIC', 'CriminalInjuriesCompensation', 'Submitted',
+    '{}'::jsonb, '{}'::jsonb, '{}'::jsonb, 'PUBLIC', 1
 );
 
 INSERT INTO case_event (
@@ -73,6 +78,14 @@ INSERT INTO case_event (
 ), (
     9102, now(), 'caseworker-add-note', 'user-2', 5601, 'CriminalInjuriesCompensation', 1,
     'Submitted', '{"note":"test"}'::jsonb, 'Case', 'Worker', 'Add note', 'Submitted',
+    'PUBLIC', 'summary', 'description'
+), (
+    9103, now(), 'submit-case', 'user-3', 5602, 'CriminalInjuriesCompensation', 1,
+    'Submitted', '{}'::jsonb, 'Case', 'Worker', 'Submit case', 'Submitted',
+    'PUBLIC', 'summary', 'description'
+), (
+    9104, now(), 'caseworker-add-note', 'user-4', 5602, 'CriminalInjuriesCompensation', 1,
+    'Submitted', '{"note":"extra"}'::jsonb, 'Case', 'Worker', 'Add note', 'Submitted',
     'PUBLIC', 'summary', 'description'
 );
 SQL
@@ -98,6 +111,29 @@ DST_EVENTS=$($PSQL_BIN "$DST_DSN" -At -c "SELECT COUNT(*) FROM ccd.case_event ce
 
 if [[ "$SRC_CASES" != "$DST_CASES" || "$SRC_EVENTS" != "$DST_EVENTS" ]]; then
   echo "Count mismatch after migration: source=${SRC_CASES}/${SRC_EVENTS} target=${DST_CASES}/${DST_EVENTS}" >&2
+  exit 1
+fi
+
+# Guardrail: ensure migrated case_revision aligns with event count. We have seen CCD cases where versions differ
+# from the event count, so surface that here before adding uniqueness constraints in the service DB.
+echo "Validating migrated case revisions match event counts"
+REV_MISMATCH=$($PSQL_BIN "$DST_DSN" -At <<SQL
+WITH ev AS (
+  SELECT cd.id AS case_data_id, COUNT(*) AS event_count
+  FROM ccd.case_data cd
+  JOIN ccd.case_event ce ON ce.case_data_id = cd.id
+  WHERE cd.case_type_id = '${CASE_TYPE}'
+  GROUP BY cd.id
+)
+SELECT COUNT(*)
+FROM ccd.case_data cd
+JOIN ev ON ev.case_data_id = cd.id
+WHERE cd.case_type_id = '${CASE_TYPE}'
+  AND cd.case_revision <> ev.event_count;
+SQL
+)
+if [[ "$REV_MISMATCH" != "0" ]]; then
+  echo "Revision mismatch after migration: ${REV_MISMATCH} case(s) have case_revision out of sync with event count" >&2
   exit 1
 fi
 
