@@ -53,6 +53,16 @@ validate_connections() {
   psql "$DST_DSN" --set=ON_ERROR_STOP=on --no-psqlrc --quiet -c "SELECT 1;" >/dev/null
 }
 
+validate_can_disable_triggers() {
+  log "Validating ability to disable triggers on target (session_replication_role)..."
+  psql "$DST_DSN" --set=ON_ERROR_STOP=on --no-psqlrc --quiet <<'SQL' >/dev/null
+BEGIN;
+SET LOCAL session_replication_role = replica;
+RESET session_replication_role;
+ROLLBACK;
+SQL
+}
+
 validate_target_empty() {
   log "Checking target is empty for case_type_id='${CASE_TYPE}'..."
   local dst_cases dst_events
@@ -95,6 +105,9 @@ COPY (
 EOF
 )
   insert_sql=$(cat <<'EOF'
+-- Disable triggers during COPY to avoid firing revision/indexing triggers on bulk load.
+BEGIN;
+SET LOCAL session_replication_role = replica;
 COPY ccd.case_data (
     reference,
     version,
@@ -111,6 +124,7 @@ COPY ccd.case_data (
     id,
     case_revision
 ) FROM STDIN WITH (FORMAT CSV);
+COMMIT;
 EOF
 )
 
@@ -186,6 +200,30 @@ EOF
     psql "$DST_DSN" --set=ON_ERROR_STOP=on --no-psqlrc --quiet -c "$insert_sql"
 }
 
+align_case_revisions() {
+  log "Aligning case_data.case_revision with migrated event counts..."
+  # We have seen CCD cases where case versions and event counts drift; ensure revisions match event history
+  # before enforcing any uniqueness or writing new events.
+  psql "$DST_DSN" --set=ON_ERROR_STOP=on --no-psqlrc --quiet <<EOF
+BEGIN;
+SET LOCAL session_replication_role = replica;
+WITH ev AS (
+  SELECT cd.id AS case_data_id, COUNT(*) AS event_count
+  FROM ccd.case_data cd
+  JOIN ccd.case_event ce ON ce.case_data_id = cd.id
+  WHERE cd.case_type_id = '${CASE_TYPE}'
+  GROUP BY cd.id
+)
+UPDATE ccd.case_data cd
+SET case_revision = ev.event_count
+FROM ev
+WHERE cd.id = ev.case_data_id
+  AND cd.case_type_id = '${CASE_TYPE}'
+  AND cd.case_revision IS DISTINCT FROM ev.event_count;
+COMMIT;
+EOF
+}
+
 reset_sequences() {
   log "Synchronising target sequences..."
   # During COPY the explicit IDs from the source are loaded as-is, so the sequence
@@ -216,6 +254,7 @@ main() {
   parse_args "$@"
   require_psql
   validate_connections
+  validate_can_disable_triggers
   validate_target_empty
 
   if [[ "$DO_APPLY" == false ]]; then
@@ -226,6 +265,7 @@ main() {
   log "Validation succeeded. Proceeding with migration..."
   copy_case_data
   copy_case_event
+  align_case_revisions
   reset_sequences
   report_counts
   log "Migration complete."
