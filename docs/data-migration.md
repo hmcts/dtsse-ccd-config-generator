@@ -99,10 +99,10 @@ Benchmark: ~3,000 cases / 30,000 events completed in ~2 minutes in Perftest. Siz
 
 ### 5. Smoke test (Service team):
    * View a migrated case.
-   * Edit a migrated case (callback round-trip to the new service).
-   * Create a new case.
-   * Elasticsearch indexing.
-   * Service Bus message publishing (if applicable).
+   * Edit a migrated case - ensure a case event succeeds eg. adding a note
+   * Create a new case
+   * Ensure elasticsearch indexing is functioning (newly created case is searchable in case list view)
+   * Check WA Service Bus message publishing (if applicable).
 
 ### 6. Go / No-go decision
 
