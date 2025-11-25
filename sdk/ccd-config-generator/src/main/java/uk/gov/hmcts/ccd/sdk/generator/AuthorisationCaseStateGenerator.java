@@ -13,8 +13,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import lombok.SneakyThrows;
-import org.objenesis.Objenesis;
-import org.objenesis.ObjenesisStd;
 import org.springframework.stereotype.Component;
 import uk.gov.hmcts.ccd.sdk.ResolvedCCDConfig;
 import uk.gov.hmcts.ccd.sdk.api.CCD;
@@ -54,14 +52,13 @@ class AuthorisationCaseStateGenerator<T, S, R extends HasRole> implements Config
       }
     }
 
-    Objenesis objenesis = new ObjenesisStd();
     for (S state : config.getStateClass().getEnumConstants()) {
       String enumFieldName = ((Enum)state).name();
       CCD ccd = config.getStateClass().getField(enumFieldName).getAnnotation(CCD.class);
 
       if (null != ccd) {
         for (var klass : ccd.access()) {
-          HasAccessControl accessHolder = objenesis.newInstance(klass);
+          HasAccessControl accessHolder = instantiateAccessControl(klass);
           SetMultimap<HasRole, Permission> roleGrants = accessHolder.getGrants();
           for (HasRole key : roleGrants.keys()) {
             addPermissions(config.getStateRolePermissions(), Set.of(state), (R)key, roleGrants.get(key));
@@ -98,6 +95,15 @@ class AuthorisationCaseStateGenerator<T, S, R extends HasRole> implements Config
       existingPermissions.addAll(permissions);
 
       stateRolePermissions.put(state, role, existingPermissions);
+    }
+  }
+
+  private static HasAccessControl instantiateAccessControl(
+      Class<? extends HasAccessControl> klass) {
+    try {
+      return klass.getDeclaredConstructor().newInstance();
+    } catch (ReflectiveOperationException e) {
+      throw new IllegalStateException("Could not instantiate access control class " + klass.getName(), e);
     }
   }
 }
