@@ -4,7 +4,7 @@ set -euo pipefail
 # Configuration (can be overridden via environment variables)
 SRC_DSN="${SRC_DSN:-postgresql://postgres:postgres@localhost:6432/datastore}"
 DST_DSN="${DST_DSN:-postgresql://postgres:postgres@localhost:6432/postgres}"
-CASE_TYPE="${CASE_TYPE:-CriminalInjuriesCompensation}"
+CASE_TYPE="${CASE_TYPE:-TEST_CASE_TYPE}"
 DO_APPLY=false
 
 log() {
