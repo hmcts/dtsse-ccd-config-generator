@@ -13,6 +13,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import lombok.SneakyThrows;
+import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Component;
 import uk.gov.hmcts.ccd.sdk.ResolvedCCDConfig;
 import uk.gov.hmcts.ccd.sdk.api.CCD;
@@ -100,10 +101,6 @@ class AuthorisationCaseStateGenerator<T, S, R extends HasRole> implements Config
 
   private static HasAccessControl instantiateAccessControl(
       Class<? extends HasAccessControl> klass) {
-    try {
-      return klass.getDeclaredConstructor().newInstance();
-    } catch (ReflectiveOperationException e) {
-      throw new IllegalStateException("Could not instantiate access control class " + klass.getName(), e);
-    }
+    return BeanUtils.instantiateClass(klass);
   }
 }
