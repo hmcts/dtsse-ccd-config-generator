@@ -59,7 +59,7 @@ class AuthorisationCaseStateGenerator<T, S, R extends HasRole> implements Config
 
       if (null != ccd) {
         for (var klass : ccd.access()) {
-          HasAccessControl accessHolder = instantiateAccessControl(klass);
+          HasAccessControl accessHolder = BeanUtils.instantiateClass(klass);
           SetMultimap<HasRole, Permission> roleGrants = accessHolder.getGrants();
           for (HasRole key : roleGrants.keys()) {
             addPermissions(config.getStateRolePermissions(), Set.of(state), (R)key, roleGrants.get(key));
@@ -97,10 +97,5 @@ class AuthorisationCaseStateGenerator<T, S, R extends HasRole> implements Config
 
       stateRolePermissions.put(state, role, existingPermissions);
     }
-  }
-
-  private static HasAccessControl instantiateAccessControl(
-      Class<? extends HasAccessControl> klass) {
-    return BeanUtils.instantiateClass(klass);
   }
 }

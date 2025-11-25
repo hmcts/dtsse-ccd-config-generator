@@ -186,7 +186,7 @@ class AuthorisationCaseFieldGenerator<T, S, R extends HasRole> implements Config
         String id = getFieldId(field, prefix);
 
         for (Class<? extends HasAccessControl> klass : access) {
-          HasAccessControl accessHolder = instantiateAccessControl(klass);
+          HasAccessControl accessHolder = BeanUtils.instantiateClass(klass);
           SetMultimap<HasRole, Permission> roleGrants = accessHolder.getGrants();
           for (HasRole key : roleGrants.keys()) {
             Set<Permission> perms = Sets.newHashSet();
@@ -210,10 +210,5 @@ class AuthorisationCaseFieldGenerator<T, S, R extends HasRole> implements Config
         : ccdAnnotation.inheritAccessFromParent()
             ? ArrayUtils.addAll(defaultAccessControl, ccdAnnotation.access())
             : ccdAnnotation.access();
-  }
-
-  private static HasAccessControl instantiateAccessControl(
-      Class<? extends HasAccessControl> klass) {
-    return BeanUtils.instantiateClass(klass);
   }
 }
