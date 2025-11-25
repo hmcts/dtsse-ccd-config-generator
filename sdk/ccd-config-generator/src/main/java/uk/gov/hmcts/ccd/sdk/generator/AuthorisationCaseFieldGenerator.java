@@ -26,8 +26,7 @@ import java.util.Map.Entry;
 import java.util.Optional;
 import java.util.Set;
 import org.apache.commons.lang3.ArrayUtils;
-import org.objenesis.Objenesis;
-import org.objenesis.ObjenesisStd;
+import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Component;
 import uk.gov.hmcts.ccd.sdk.ResolvedCCDConfig;
 import uk.gov.hmcts.ccd.sdk.api.CCD;
@@ -186,9 +185,8 @@ class AuthorisationCaseFieldGenerator<T, S, R extends HasRole> implements Config
       } else if (null != access) {
         String id = getFieldId(field, prefix);
 
-        Objenesis objenesis = new ObjenesisStd();
         for (Class<? extends HasAccessControl> klass : access) {
-          HasAccessControl accessHolder = objenesis.newInstance(klass);
+          HasAccessControl accessHolder = BeanUtils.instantiateClass(klass);
           SetMultimap<HasRole, Permission> roleGrants = accessHolder.getGrants();
           for (HasRole key : roleGrants.keys()) {
             Set<Permission> perms = Sets.newHashSet();

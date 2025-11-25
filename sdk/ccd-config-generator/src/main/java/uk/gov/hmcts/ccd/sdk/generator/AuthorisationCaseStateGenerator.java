@@ -13,8 +13,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import lombok.SneakyThrows;
-import org.objenesis.Objenesis;
-import org.objenesis.ObjenesisStd;
+import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Component;
 import uk.gov.hmcts.ccd.sdk.ResolvedCCDConfig;
 import uk.gov.hmcts.ccd.sdk.api.CCD;
@@ -54,14 +53,13 @@ class AuthorisationCaseStateGenerator<T, S, R extends HasRole> implements Config
       }
     }
 
-    Objenesis objenesis = new ObjenesisStd();
     for (S state : config.getStateClass().getEnumConstants()) {
       String enumFieldName = ((Enum)state).name();
       CCD ccd = config.getStateClass().getField(enumFieldName).getAnnotation(CCD.class);
 
       if (null != ccd) {
         for (var klass : ccd.access()) {
-          HasAccessControl accessHolder = objenesis.newInstance(klass);
+          HasAccessControl accessHolder = BeanUtils.instantiateClass(klass);
           SetMultimap<HasRole, Permission> roleGrants = accessHolder.getGrants();
           for (HasRole key : roleGrants.keys()) {
             addPermissions(config.getStateRolePermissions(), Set.of(state), (R)key, roleGrants.get(key));
