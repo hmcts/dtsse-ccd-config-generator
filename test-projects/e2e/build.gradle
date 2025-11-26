@@ -33,23 +33,6 @@ repositories {
   mavenCentral()
 }
 
-def versions = [
-  jackson      : '2.18.0',
-  junit        : '5.14.1',
-  junitPlatform: '1.14.1',
-  lombok       : '1.18.42'
-]
-
-ext.libraries = [
-  junit5: [
-    "org.junit.jupiter:junit-jupiter-api:${versions.junit}",
-    "org.junit.jupiter:junit-jupiter-engine:${versions.junit}",
-    "org.junit.jupiter:junit-jupiter-params:${versions.junit}",
-    "org.junit.platform:junit-platform-commons:${versions.junitPlatform}",
-    "org.junit.platform:junit-platform-engine:${versions.junitPlatform}"
-  ]
-]
-
 dependencies {
   implementation 'org.springframework.boot:spring-boot-starter-actuator'
   implementation 'org.springframework.boot:spring-boot-starter-aop'
@@ -64,9 +47,9 @@ dependencies {
   implementation 'org.postgresql:postgresql:42.7.8'
 
   implementation 'net.logstash.logback:logstash-logback-encoder:9.0'
-  implementation "com.fasterxml.jackson.core:jackson-annotations:${versions.jackson}"
-  implementation "com.fasterxml.jackson.core:jackson-core:${versions.jackson}"
-  implementation "com.fasterxml.jackson.core:jackson-databind:${versions.jackson}"
+  implementation 'com.fasterxml.jackson.core:jackson-annotations'
+  implementation 'com.fasterxml.jackson.core:jackson-core'
+  implementation 'com.fasterxml.jackson.core:jackson-databind'
 
   implementation 'com.github.hmcts:ccd-case-document-am-client:1.59.2'
   implementation 'com.github.hmcts:core-case-data-store-client:5.2.0'
@@ -79,12 +62,17 @@ dependencies {
   implementation 'com.github.ben-manes.caffeine:caffeine:3.2.3'
   implementation 'com.google.guava:guava:33.5.0-jre'
 
-  implementation "org.projectlombok:lombok:${versions.lombok}"
-  annotationProcessor "org.projectlombok:lombok:${versions.lombok}"
-  cftlibAnnotationProcessor "org.projectlombok:lombok:${versions.lombok}"
-  cftlibTestAnnotationProcessor "org.projectlombok:lombok:${versions.lombok}"
+  implementation 'org.projectlombok:lombok'
+  annotationProcessor 'org.projectlombok:lombok'
+  cftlibAnnotationProcessor 'org.projectlombok:lombok'
+  cftlibTestAnnotationProcessor 'org.projectlombok:lombok'
 
-  testImplementation libraries.junit5
+  testImplementation platform('org.junit:junit-bom')
+  testImplementation 'org.junit.jupiter:junit-jupiter-api'
+  testImplementation 'org.junit.jupiter:junit-jupiter-engine'
+  testImplementation 'org.junit.jupiter:junit-jupiter-params'
+  testImplementation 'org.junit.platform:junit-platform-commons'
+  testImplementation 'org.junit.platform:junit-platform-engine'
   testImplementation('org.springframework.boot:spring-boot-starter-test') {
     exclude module: 'commons-logging'
     exclude module: 'android-json'
@@ -94,7 +82,8 @@ dependencies {
 
   testImplementation 'org.apache.httpcomponents:httpclient:4.5.14'
 
-  cftlibTestImplementation "org.junit.platform:junit-platform-console-standalone:${versions.junitPlatform}"
+  cftlibTestImplementation platform('org.junit:junit-bom')
+  cftlibTestImplementation 'org.junit.platform:junit-platform-console'
   cftlibTestImplementation 'jakarta.jms:jakarta.jms-api:3.1.0'
 }
 
@@ -208,14 +197,6 @@ cftlibTest {
 
 configurations.all {
   exclude group: 'com.vaadin.external.google', module: 'android-json'
-  resolutionStrategy.eachDependency { details ->
-    if (details.requested.group == 'org.junit.jupiter') {
-      details.useVersion versions.junit
-    }
-    if (details.requested.group == 'org.junit.platform') {
-      details.useVersion versions.junitPlatform
-    }
-  }
 }
 
 check.dependsOn 'cftlibTest'
