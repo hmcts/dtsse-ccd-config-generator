@@ -26,6 +26,11 @@ Your application must be either shuttered or put into a read-only state for the 
 
 ### 1. Ensure your shuttered CCD definition is ready to import.
 
+Your shuttered definition should block access to all users except:
+
+1. A test superuser exclusively for use by the team running the migration for use in verification
+2. R access to the caseworker-wa-task-configuration user for task management verification (if applicable)
+
 ### 2. Ready any frontends for shuttering.
 
 See [guide](https://hmcts.github.io/cloud-native-platform/path-to-live/shutter.html#shutter-implementation-and-design)
