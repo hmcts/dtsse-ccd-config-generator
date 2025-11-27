@@ -8,7 +8,6 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
-import org.springframework.jms.connection.CachingConnectionFactory;
 import org.springframework.jms.core.JmsTemplate;
 import org.springframework.jms.support.converter.MappingJackson2MessageConverter;
 import org.springframework.jms.support.converter.MessageConverter;
@@ -22,11 +21,9 @@ public class CcdServiceBusJmsConfiguration {
   @Bean
   @Primary
   public JmsTemplate jmsTemplate(ConnectionFactory jmsConnectionFactory, MessageConverter messageConverter) {
-    JmsTemplate jmsTemplate = new JmsTemplate();
+    // Let Spring Cloud Azure configure the recommended JmsPoolConnectionFactory; avoid wrapping with caching.
+    JmsTemplate jmsTemplate = new JmsTemplate(jmsConnectionFactory);
     jmsTemplate.setMessageConverter(messageConverter);
-    CachingConnectionFactory cachingConnectionFactory = new CachingConnectionFactory(jmsConnectionFactory);
-    cachingConnectionFactory.setCacheProducers(false);
-    jmsTemplate.setConnectionFactory(cachingConnectionFactory);
     return jmsTemplate;
   }
 
