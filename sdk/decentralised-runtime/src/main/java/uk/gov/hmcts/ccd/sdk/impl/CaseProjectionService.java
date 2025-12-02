@@ -78,9 +78,8 @@ class CaseProjectionService {
     CaseViewRequest request = new CaseViewRequest(reference, typedState);
     @SuppressWarnings({"rawtypes", "unchecked"})
     Object projected = ((CaseView) binding.caseView()).getCase(request, blobCase);
-    Map<String, JsonNode> serialised = mapper.convertValue(projected, JSON_NODE_MAP);
-    Map<String, JsonNode> projectedData = serialised;
-    serialised = definitionRegistry.find(caseTypeId)
+    Map<String, JsonNode> projectedData = mapper.convertValue(projected, JSON_NODE_MAP);
+    Map<String, JsonNode> serialised = definitionRegistry.find(caseTypeId)
         .map(caseTypeDefinition -> globalSearchProcessorService.populateGlobalSearchData(
             caseTypeDefinition,
             projectedData
