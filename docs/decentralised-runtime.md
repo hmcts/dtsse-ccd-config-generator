@@ -28,7 +28,7 @@ fully structured set of tables; the CaseView is now an API contract rather than 
 Case views can also inject dynamically rendered HTML/Markdown at runtime, avoiding the need to store presentation
 fragments in the database.
 
-If configured in your CCD definition, the SDK computes and sets `SearchCriteria` for Global Search following CaseView loading, based on your CCD definition and the data returned by your view.
+If configured in your CCD definition, the SDK computes and sets `SearchCriteria` for Global Search following CaseView loading, based on your CCD definition and the data returned by your view, which will subsequently be indexed into Elasticsearch.
 
 > **Mandatory:** Every decentralised case type must have an associated `CaseView`. Register separate beans per case type;
 > the runtime fails fast if it cannot match a case type to a view or if multiple views match the same case type.
