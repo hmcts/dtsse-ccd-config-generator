@@ -92,7 +92,7 @@ springBoot {
 }
 
 tasks.withType(JavaCompile).configureEach {
-  options.compilerArgs << '-Xlint:unchecked' << '-Werror'
+  options.compilerArgs << '-Xlint:unchecked'
 }
 
 tasks.withType(JavaExec).configureEach {

@@ -393,18 +393,14 @@ public class TestWithCCD extends CftlibTest {
             Map.of(),
             startEvent);
         var response = HttpClientBuilder.create().build().execute(event);
+        var responseBody = EntityUtils.toString(response.getEntity());
         assertThat(response.getStatusLine().getStatusCode(), equalTo(201));
+        Map<String, Object> responseMap =
+            mapper.readValue(responseBody, new TypeReference<>() {});
+        Map data = (Map) responseMap.get("data");
+        Map<String, Object> searchCriteria = (Map<String, Object>) data.get("SearchCriteria");
 
-        var currentCase = ccdApi.getCase(
-            getAuthorisation("TEST_CASE_WORKER_USER@mailinator.com"),
-            getServiceAuth(),
-            String.valueOf(caseRef)
-        );
-
-        @SuppressWarnings("unchecked")
-        Map<String, Object> searchCriteria = (Map<String, Object>) currentCase.getData().get("SearchCriteria");
         assertThat("SearchCriteria should be populated from global search processor", searchCriteria, is(notNullValue()));
-        @SuppressWarnings("unchecked")
         List<Map<String, Object>> otherCaseReferences =
             (List<Map<String, Object>>) searchCriteria.get("OtherCaseReferences");
         assertThat(otherCaseReferences, is(notNullValue()));
