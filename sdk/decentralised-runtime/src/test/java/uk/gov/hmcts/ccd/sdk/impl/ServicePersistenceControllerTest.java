@@ -9,8 +9,8 @@ import static org.mockito.Mockito.when;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.http.ResponseEntity;
-import uk.gov.hmcts.ccd.data.persistence.dto.DecentralisedCaseEvent;
-import uk.gov.hmcts.ccd.data.persistence.dto.DecentralisedSubmitEventResponse;
+import uk.gov.hmcts.ccd.decentralised.dto.DecentralisedCaseEvent;
+import uk.gov.hmcts.ccd.decentralised.dto.DecentralisedSubmitEventResponse;
 
 import java.util.UUID;
 
