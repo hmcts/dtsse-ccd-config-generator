@@ -18,7 +18,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
-import uk.gov.hmcts.ccd.data.persistence.dto.DecentralisedCaseDetails;
+import uk.gov.hmcts.ccd.decentralised.dto.DecentralisedCaseDetails;
 import uk.gov.hmcts.ccd.sdk.config.DecentralisedDataConfiguration;
 
 @SpringBootTest(classes = IdempotentReplayIntegrationTest.TestConfig.class, properties = {

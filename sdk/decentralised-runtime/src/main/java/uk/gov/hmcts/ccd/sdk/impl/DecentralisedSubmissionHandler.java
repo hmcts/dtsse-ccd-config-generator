@@ -6,7 +6,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import org.springframework.util.LinkedMultiValueMap;
-import uk.gov.hmcts.ccd.data.persistence.dto.DecentralisedCaseEvent;
+import uk.gov.hmcts.ccd.decentralised.dto.DecentralisedCaseEvent;
 import uk.gov.hmcts.ccd.sdk.ResolvedConfigRegistry;
 import uk.gov.hmcts.ccd.sdk.api.Event;
 import uk.gov.hmcts.ccd.sdk.api.callback.SubmitResponse;
