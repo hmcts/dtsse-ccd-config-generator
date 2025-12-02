@@ -12,7 +12,6 @@ import org.springframework.core.ResolvableType;
 import org.springframework.stereotype.Service;
 import org.springframework.util.ClassUtils;
 import uk.gov.hmcts.ccd.decentralised.dto.DecentralisedCaseDetails;
-import uk.gov.hmcts.ccd.domain.model.definition.CaseTypeDefinition;
 import uk.gov.hmcts.ccd.domain.service.common.DefaultObjectMapperService;
 import uk.gov.hmcts.ccd.domain.service.processor.GlobalSearchProcessorService;
 import uk.gov.hmcts.ccd.sdk.CaseView;
@@ -80,11 +79,13 @@ class CaseProjectionService {
     @SuppressWarnings({"rawtypes", "unchecked"})
     Object projected = ((CaseView) binding.caseView()).getCase(request, blobCase);
     Map<String, JsonNode> serialised = mapper.convertValue(projected, JSON_NODE_MAP);
-    var maybeCaseTypeDef = definitionRegistry.find(caseTypeId);
-    if (maybeCaseTypeDef.isPresent()) {
-      CaseTypeDefinition caseTypeDefinition = maybeCaseTypeDef.get();
-      serialised = globalSearchProcessorService.populateGlobalSearchData(caseTypeDefinition, serialised);
-    }
+    Map<String, JsonNode> projectedData = serialised;
+    serialised = definitionRegistry.find(caseTypeId)
+        .map(caseTypeDefinition -> globalSearchProcessorService.populateGlobalSearchData(
+            caseTypeDefinition,
+            projectedData
+        ))
+        .orElse(projectedData);
 
     caseDetails.setData(serialised);
     return raw;
