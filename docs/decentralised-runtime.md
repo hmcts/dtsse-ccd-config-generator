@@ -28,6 +28,8 @@ fully structured set of tables; the CaseView is now an API contract rather than 
 Case views can also inject dynamically rendered HTML/Markdown at runtime, avoiding the need to store presentation
 fragments in the database.
 
+If configured in your CCD definition, the SDK computes and sets `SearchCriteria` for Global Search following CaseView loading, based on your CCD definition and the data returned by your view.
+
 > **Mandatory:** Every decentralised case type must have an associated `CaseView`. Register separate beans per case type;
 > the runtime fails fast if it cannot match a case type to a view or if multiple views match the same case type.
 
@@ -175,7 +177,7 @@ flowchart TB
     NEW --> UPS
     BLOB --> UPS["Upsert case<br/>update case metadata</br>increment case revision"]
 
-    UPS --> VIEW["Load CaseView</br>insert into ccd.case_event"]
+    UPS --> VIEW["Load CaseView</br>compute & inject SearchCriteria</br>insert into ccd.case_event"]
     VIEW --> BUS["enqueue message_queue_candidates</br>(optional)"]
   end
 
