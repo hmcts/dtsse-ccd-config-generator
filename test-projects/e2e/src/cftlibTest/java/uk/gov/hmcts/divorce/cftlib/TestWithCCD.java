@@ -82,6 +82,7 @@ import uk.gov.hmcts.divorce.simplecase.model.SimpleCaseData;
 import uk.gov.hmcts.divorce.simplecase.model.SimpleCaseState;
 import uk.gov.hmcts.divorce.sow014.nfd.CaseworkerAddNote;
 import uk.gov.hmcts.divorce.sow014.nfd.CaseworkerMaintainCaseLink;
+import uk.gov.hmcts.divorce.sow014.nfd.CaseworkerPopulateSearchCriteria;
 import uk.gov.hmcts.divorce.sow014.nfd.DecentralisedCaseworkerAddNote;
 import uk.gov.hmcts.divorce.sow014.nfd.DecentralisedCaseworkerAddNoteFailure;
 import uk.gov.hmcts.divorce.sow014.nfd.FailingSubmittedCallback;
@@ -375,6 +376,38 @@ public class TestWithCCD extends CftlibTest {
 
     private long caseRef;
     private long simpleCaseRef;
+
+    @Order(199)
+    @Test
+    public void shouldPopulateSearchCriteriaFromAboutToSubmitCallback() throws Exception {
+        var startEvent = ccdApi.startEvent(
+            getAuthorisation("TEST_CASE_WORKER_USER@mailinator.com"),
+            getServiceAuth(),
+            String.valueOf(caseRef),
+            CaseworkerPopulateSearchCriteria.CASEWORKER_POPULATE_SEARCH_CRITERIA
+        ).getToken();
+
+        var event = prepareEventRequestWithToken(
+            "TEST_CASE_WORKER_USER@mailinator.com",
+            CaseworkerPopulateSearchCriteria.CASEWORKER_POPULATE_SEARCH_CRITERIA,
+            Map.of(),
+            startEvent);
+        var response = HttpClientBuilder.create().build().execute(event);
+        var responseBody = EntityUtils.toString(response.getEntity());
+        assertThat(response.getStatusLine().getStatusCode(), equalTo(201));
+        Map<String, Object> responseMap =
+            mapper.readValue(responseBody, new TypeReference<>() {});
+        Map data = (Map) responseMap.get("data");
+        Map<String, Object> searchCriteria = (Map<String, Object>) data.get("SearchCriteria");
+
+        assertThat("SearchCriteria should be populated from global search processor", searchCriteria, is(notNullValue()));
+        List<Map<String, Object>> otherCaseReferences =
+            (List<Map<String, Object>>) searchCriteria.get("OtherCaseReferences");
+        assertThat(otherCaseReferences, is(notNullValue()));
+        assertThat(otherCaseReferences, hasSize(1));
+        assertThat(otherCaseReferences.getFirst().get("value"), equalTo(CaseData.formatCaseRef(caseRef)));
+    }
+
     @Order(2)
     @Test
     public void addNotes() throws Exception {

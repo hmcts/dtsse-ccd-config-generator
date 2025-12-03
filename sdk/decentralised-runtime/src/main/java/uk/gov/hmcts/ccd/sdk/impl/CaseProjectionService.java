@@ -12,6 +12,8 @@ import org.springframework.core.ResolvableType;
 import org.springframework.stereotype.Service;
 import org.springframework.util.ClassUtils;
 import uk.gov.hmcts.ccd.decentralised.dto.DecentralisedCaseDetails;
+import uk.gov.hmcts.ccd.domain.service.common.DefaultObjectMapperService;
+import uk.gov.hmcts.ccd.domain.service.processor.GlobalSearchProcessorService;
 import uk.gov.hmcts.ccd.sdk.CaseView;
 import uk.gov.hmcts.ccd.sdk.CaseViewRequest;
 import uk.gov.hmcts.ccd.sdk.ResolvedCCDConfig;
@@ -31,13 +33,18 @@ class CaseProjectionService {
   private final CaseDataRepository caseDataRepository;
   private final ObjectMapper mapper;
   private final Map<String, CaseViewBinding> bindings;
+  private final DefinitionRegistry definitionRegistry;
+  private final GlobalSearchProcessorService globalSearchProcessorService;
 
   CaseProjectionService(CaseDataRepository caseDataRepository,
                         ObjectMapper mapper,
                         List<CaseView<?, ?>> caseViews,
-                        ResolvedConfigRegistry configRegistry) {
+                        ResolvedConfigRegistry configRegistry,
+                        DefinitionRegistry definitionRegistry) {
     this.caseDataRepository = caseDataRepository;
     this.mapper = mapper;
+    this.definitionRegistry = definitionRegistry;
+    this.globalSearchProcessorService = new GlobalSearchProcessorService(new DefaultObjectMapperService(mapper));
     this.bindings = buildBindings(caseViews, configRegistry.asMap());
   }
 
@@ -71,7 +78,14 @@ class CaseProjectionService {
     CaseViewRequest request = new CaseViewRequest(reference, typedState);
     @SuppressWarnings({"rawtypes", "unchecked"})
     Object projected = ((CaseView) binding.caseView()).getCase(request, blobCase);
-    Map<String, JsonNode> serialised = mapper.convertValue(projected, JSON_NODE_MAP);
+    Map<String, JsonNode> projectedData = mapper.convertValue(projected, JSON_NODE_MAP);
+    Map<String, JsonNode> serialised = definitionRegistry.find(caseTypeId)
+        .map(caseTypeDefinition -> globalSearchProcessorService.populateGlobalSearchData(
+            caseTypeDefinition,
+            projectedData
+        ))
+        .orElse(projectedData);
+
     caseDetails.setData(serialised);
     return raw;
   }
