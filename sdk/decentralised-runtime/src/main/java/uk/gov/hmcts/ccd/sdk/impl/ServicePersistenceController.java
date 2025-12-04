@@ -15,11 +15,11 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
-import uk.gov.hmcts.ccd.data.persistence.dto.DecentralisedAuditEvent;
-import uk.gov.hmcts.ccd.data.persistence.dto.DecentralisedCaseDetails;
-import uk.gov.hmcts.ccd.data.persistence.dto.DecentralisedCaseEvent;
-import uk.gov.hmcts.ccd.data.persistence.dto.DecentralisedSubmitEventResponse;
-import uk.gov.hmcts.ccd.data.persistence.dto.DecentralisedUpdateSupplementaryDataResponse;
+import uk.gov.hmcts.ccd.decentralised.dto.DecentralisedAuditEvent;
+import uk.gov.hmcts.ccd.decentralised.dto.DecentralisedCaseDetails;
+import uk.gov.hmcts.ccd.decentralised.dto.DecentralisedCaseEvent;
+import uk.gov.hmcts.ccd.decentralised.dto.DecentralisedSubmitEventResponse;
+import uk.gov.hmcts.ccd.decentralised.dto.DecentralisedUpdateSupplementaryDataResponse;
 
 @Slf4j
 @RestController

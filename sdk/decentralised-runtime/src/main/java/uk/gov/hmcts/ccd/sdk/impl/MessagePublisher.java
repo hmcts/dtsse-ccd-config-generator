@@ -1,20 +1,11 @@
 package uk.gov.hmcts.ccd.sdk.impl;
 
-import com.fasterxml.jackson.annotation.JsonCreator;
-import com.fasterxml.jackson.core.JsonParser;
-import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.SerializationFeature;
-import com.fasterxml.jackson.datatype.jdk8.Jdk8Module;
-import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
-import com.fasterxml.jackson.module.paramnames.ParameterNamesModule;
-import java.io.File;
 import java.time.LocalDateTime;
-import java.util.HashMap;
-import java.util.Map;
 import java.util.Optional;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
@@ -36,43 +27,21 @@ class MessagePublisher {
 
   private final DefinitionBlockGenerator definitionBlockGenerator;
   private final DataBlockGenerator dataBlockGenerator;
-  private Map<String, CaseTypeDefinition> definitions = Map.of();
+  private final DefinitionRegistry definitionRegistry;
   private final ObjectMapper mapper;
   private final NamedParameterJdbcTemplate db;
 
   @SneakyThrows
   public MessagePublisher(
       MessagingProperties messagingProperties,
-      NamedParameterJdbcTemplate db) {
+      NamedParameterJdbcTemplate db,
+      DefinitionRegistry definitionRegistry,
+      @Qualifier("ccd_mapper") ObjectMapper definitionMapper) {
     this.definitionBlockGenerator = new DefinitionBlockGenerator(messagingProperties);
     this.dataBlockGenerator = new DataBlockGenerator();
-    this.mapper = new ObjectMapper()
-        .registerModule(new Jdk8Module())
-        .registerModule(new ParameterNamesModule(JsonCreator.Mode.PROPERTIES))
-        .registerModule(new JavaTimeModule()).disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)
-        .disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
-        .enable(JsonParser.Feature.STRICT_DUPLICATE_DETECTION);
+    this.mapper = definitionMapper;
     this.db = db;
-    this.definitions = loadDefinitions();
-  }
-
-  @SneakyThrows
-  private synchronized Map<String, CaseTypeDefinition> loadDefinitions() {
-    if (!this.definitions.isEmpty()) {
-      return this.definitions;
-    }
-    this.definitions = new HashMap<>();
-    File[] jsonFiles = new File("build/cftlib/definition-snapshots").listFiles((dir, name) -> name.endsWith(".json"));
-
-    if (jsonFiles != null) {
-      for (File file : jsonFiles) {
-        // Use filename without extension as the key
-        String fileNameWithoutExtension = file.getName().substring(0, file.getName().lastIndexOf("."));
-        CaseTypeDefinition definition = mapper.readValue(file, CaseTypeDefinition.class);
-        definitions.put(fileNameWithoutExtension, definition);
-      }
-    }
-    return definitions;
+    this.definitionRegistry = definitionRegistry;
   }
 
   @SneakyThrows
@@ -85,8 +54,8 @@ class MessagePublisher {
       long instanceId,
       LocalDateTime timestamp
   ) {
-    var caseType = loadDefinitions().get(caseDetails.getCaseTypeId());
-    if (null == caseType) {
+    CaseTypeDefinition caseType = definitionRegistry.find(caseDetails.getCaseTypeId()).orElse(null);
+    if (caseType == null) {
       log.error("Case type {} is not known", caseDetails.getCaseTypeId());
       return;
     }

@@ -3,7 +3,7 @@ package uk.gov.hmcts.ccd.sdk.impl;
 import com.fasterxml.jackson.databind.JsonNode;
 import java.util.Optional;
 import java.util.function.Supplier;
-import uk.gov.hmcts.ccd.data.persistence.dto.DecentralisedCaseEvent;
+import uk.gov.hmcts.ccd.decentralised.dto.DecentralisedCaseEvent;
 import uk.gov.hmcts.ccd.sdk.api.callback.SubmitResponse;
 
 /**

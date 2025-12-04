@@ -47,14 +47,19 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.reset;
+import static org.mockito.Mockito.clearInvocations;
+import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.when;
 
 import org.junit.jupiter.api.MethodOrderer;
 import org.junit.jupiter.api.Order;
@@ -62,6 +67,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
 import org.junit.jupiter.api.TestMethodOrder;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.config.BeanPostProcessor;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
@@ -76,6 +82,7 @@ import uk.gov.hmcts.divorce.simplecase.model.SimpleCaseData;
 import uk.gov.hmcts.divorce.simplecase.model.SimpleCaseState;
 import uk.gov.hmcts.divorce.sow014.nfd.CaseworkerAddNote;
 import uk.gov.hmcts.divorce.sow014.nfd.CaseworkerMaintainCaseLink;
+import uk.gov.hmcts.divorce.sow014.nfd.CaseworkerPopulateSearchCriteria;
 import uk.gov.hmcts.divorce.sow014.nfd.DecentralisedCaseworkerAddNote;
 import uk.gov.hmcts.divorce.sow014.nfd.DecentralisedCaseworkerAddNoteFailure;
 import uk.gov.hmcts.divorce.sow014.nfd.FailingSubmittedCallback;
@@ -145,13 +152,39 @@ public class TestWithCCD extends CftlibTest {
     static class ServiceBusTestConfiguration {
 
         @Bean
-        JmsTemplate jmsTemplate() {
-            return mock(JmsTemplate.class);
+        ConnectionFactory connectionFactory() {
+            ConnectionFactory factory = mock(ConnectionFactory.class);
+            jakarta.jms.Connection connection = mock(jakarta.jms.Connection.class);
+            jakarta.jms.Session session = mock(jakarta.jms.Session.class);
+            jakarta.jms.MessageProducer producer = mock(jakarta.jms.MessageProducer.class);
+            jakarta.jms.Queue queue = mock(jakarta.jms.Queue.class);
+            jakarta.jms.Topic topic = mock(jakarta.jms.Topic.class);
+
+            try {
+                when(factory.createConnection()).thenReturn(connection);
+                when(connection.createSession(anyBoolean(), anyInt())).thenReturn(session);
+                when(session.createQueue(anyString())).thenReturn(queue);
+                when(session.createTopic(anyString())).thenReturn(topic);
+                when(session.createProducer(any())).thenReturn(producer);
+            } catch (jakarta.jms.JMSException ex) {
+                throw new RuntimeException(ex);
+            }
+            return factory;
         }
 
         @Bean
-        ConnectionFactory connectionFactory() {
-            return mock(ConnectionFactory.class);
+        static BeanPostProcessor jmsTemplateSpyPostProcessor() {
+            return new BeanPostProcessor() {
+                @Override
+                public Object postProcessAfterInitialization(Object bean, String beanName) {
+                    if (bean instanceof JmsTemplate jmsTemplate) {
+                        JmsTemplate spy = spy(jmsTemplate);
+                        doNothing().when(spy).convertAndSend(anyString(), any(), any(MessagePostProcessor.class));
+                        return spy;
+                    }
+                    return bean;
+                }
+            };
         }
     }
 
@@ -343,6 +376,38 @@ public class TestWithCCD extends CftlibTest {
 
     private long caseRef;
     private long simpleCaseRef;
+
+    @Order(199)
+    @Test
+    public void shouldPopulateSearchCriteriaFromAboutToSubmitCallback() throws Exception {
+        var startEvent = ccdApi.startEvent(
+            getAuthorisation("TEST_CASE_WORKER_USER@mailinator.com"),
+            getServiceAuth(),
+            String.valueOf(caseRef),
+            CaseworkerPopulateSearchCriteria.CASEWORKER_POPULATE_SEARCH_CRITERIA
+        ).getToken();
+
+        var event = prepareEventRequestWithToken(
+            "TEST_CASE_WORKER_USER@mailinator.com",
+            CaseworkerPopulateSearchCriteria.CASEWORKER_POPULATE_SEARCH_CRITERIA,
+            Map.of(),
+            startEvent);
+        var response = HttpClientBuilder.create().build().execute(event);
+        var responseBody = EntityUtils.toString(response.getEntity());
+        assertThat(response.getStatusLine().getStatusCode(), equalTo(201));
+        Map<String, Object> responseMap =
+            mapper.readValue(responseBody, new TypeReference<>() {});
+        Map data = (Map) responseMap.get("data");
+        Map<String, Object> searchCriteria = (Map<String, Object>) data.get("SearchCriteria");
+
+        assertThat("SearchCriteria should be populated from global search processor", searchCriteria, is(notNullValue()));
+        List<Map<String, Object>> otherCaseReferences =
+            (List<Map<String, Object>>) searchCriteria.get("OtherCaseReferences");
+        assertThat(otherCaseReferences, is(notNullValue()));
+        assertThat(otherCaseReferences, hasSize(1));
+        assertThat(otherCaseReferences.getFirst().get("value"), equalTo(CaseData.formatCaseRef(caseRef)));
+    }
+
     @Order(2)
     @Test
     public void addNotes() throws Exception {
@@ -863,7 +928,7 @@ public class TestWithCCD extends CftlibTest {
     @Test
     public void testPublishingToMessageOutbox() {
         db.update("DELETE FROM ccd.message_queue_candidates", Map.of());
-        reset(jmsTemplate);
+        clearInvocations(jmsTemplate);
 
         var token = ccdApi.startEvent(
             getAuthorisation("TEST_CASE_WORKER_USER@mailinator.com"),
