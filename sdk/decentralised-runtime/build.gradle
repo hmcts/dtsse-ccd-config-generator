@@ -1,5 +1,5 @@
 plugins {
-    id 'org.springframework.boot' version '3.5.8'
+    id 'org.springframework.boot' version '4.0.0'
 }
 
 repositories {
@@ -9,7 +9,7 @@ repositories {
 }
 
 dependencies {
-    implementation platform("org.springframework.boot:spring-boot-dependencies:3.5.8")
+    implementation platform("org.springframework.boot:spring-boot-dependencies:4.0.0")
     implementation project(':ccd-config-generator')
     // A filtered set of useful CCD POJOs including DTOs and other utilities.
     implementation ('com.github.hmcts.rse-cft-lib:ccd-lib:0.19.1953') {
