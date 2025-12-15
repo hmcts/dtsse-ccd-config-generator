@@ -58,3 +58,9 @@ Under this model, case events proceed as follows:
   * Submitted callbacks are invoked (if defined)
 
 From the perspective of application development, callbacks therefore continue to function as before.
+
+> **Note**
+>
+> Emulated AboutToSubmit callbacks cannot add documents to cases.
+>
+> Decentralised services should add documents as input parameters to the event submission (eg. with a chained asynchronous event).
