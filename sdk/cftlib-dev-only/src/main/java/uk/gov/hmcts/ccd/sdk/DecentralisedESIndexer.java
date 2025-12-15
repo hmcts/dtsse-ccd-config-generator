@@ -73,7 +73,7 @@ class DecentralisedESIndexer implements DisposableBean {
               select reference, case_revision
               from ccd.es_queue
               order by enqueued_at
-              limit 1000
+              limit 100
               for update skip locked
           ),
           deleted as (
