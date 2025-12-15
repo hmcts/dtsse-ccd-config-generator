@@ -129,6 +129,8 @@ erDiagram
 
 The SDK maintains a queue of cases requiring Elasticsearch indexing in `ccd.es_queue`.
 
+- **Reindex helper:** `CaseReindexingService` (in `sdk/decentralised-runtime`) lets you count and enqueue cases modified since a given date. Autowire the bean and call `enqueueCasesModifiedSince(LocalDate)` to repopulate `ccd.es_queue` without bumping `case_revision`; the decentralised indexer uses `EXTERNAL_GTE` so same-revision rewrites are accepted while older revisions still conflict.
+
 
 ## Transaction control
 

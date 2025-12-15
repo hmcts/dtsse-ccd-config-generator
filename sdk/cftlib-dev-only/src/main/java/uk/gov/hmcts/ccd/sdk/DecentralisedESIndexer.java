@@ -73,7 +73,7 @@ class DecentralisedESIndexer implements DisposableBean {
               select reference, case_revision
               from ccd.es_queue
               order by enqueued_at
-              limit 1000
+              limit 100
               for update skip locked
           ),
           deleted as (
@@ -131,7 +131,7 @@ class DecentralisedESIndexer implements DisposableBean {
           request.add(new IndexRequest(indexId)
               .id(docId)
               .source(rowJson, XContentType.JSON)
-              .versionType(VersionType.EXTERNAL)
+              .versionType(VersionType.EXTERNAL_GTE)
               .version(version));
 
           // Replicate CCD's globalsearch logstash setup.
@@ -152,7 +152,7 @@ class DecentralisedESIndexer implements DisposableBean {
             request.add(new IndexRequest("global_search")
                 .id(docId)
                 .source(mapper.writeValueAsString(map), XContentType.JSON)
-                .versionType(VersionType.EXTERNAL)
+                .versionType(VersionType.EXTERNAL_GTE)
                 .version(version));
           }
         }
