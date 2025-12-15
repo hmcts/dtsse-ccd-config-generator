@@ -16,6 +16,7 @@ import java.sql.Statement;
 import java.sql.SQLException;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.Arrays;
@@ -56,7 +57,6 @@ import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.spy;
-import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.when;
@@ -80,7 +80,6 @@ import uk.gov.hmcts.divorce.divorcecase.NoFaultDivorce;
 import uk.gov.hmcts.divorce.simplecase.SimpleCaseConfiguration;
 import uk.gov.hmcts.divorce.simplecase.model.SimpleCaseData;
 import uk.gov.hmcts.divorce.simplecase.model.SimpleCaseState;
-import uk.gov.hmcts.divorce.sow014.nfd.CaseworkerAddNote;
 import uk.gov.hmcts.divorce.sow014.nfd.CaseworkerMaintainCaseLink;
 import uk.gov.hmcts.divorce.sow014.nfd.CaseworkerPopulateSearchCriteria;
 import uk.gov.hmcts.divorce.sow014.nfd.DecentralisedCaseworkerAddNote;
@@ -92,6 +91,7 @@ import uk.gov.hmcts.divorce.sow014.nfd.ReturnErrorWhenCreateTestCase;
 import uk.gov.hmcts.divorce.sow014.nfd.SubmittedConfirmationCallback;
 import uk.gov.hmcts.ccd.sdk.type.CaseLink;
 import uk.gov.hmcts.ccd.sdk.type.ListValue;
+import uk.gov.hmcts.ccd.sdk.CaseReindexingService;
 import uk.gov.hmcts.reform.ccd.client.CoreCaseDataApi;
 import uk.gov.hmcts.reform.ccd.client.model.CaseDataContent;
 import uk.gov.hmcts.reform.ccd.client.model.CaseDetails;
@@ -125,6 +125,9 @@ public class TestWithCCD extends CftlibTest {
 
     @Autowired
     NamedParameterJdbcTemplate db;
+
+    @Autowired
+    private CaseReindexingService reindexQueueService;
 
     @Autowired
     private JmsTemplate jmsTemplate;
@@ -1650,7 +1653,7 @@ public class TestWithCCD extends CftlibTest {
     @SneakyThrows
     @Order(23)
     @Test
-    void decentralisedRevisionBumpTriggersReindex() {
+    void decentralisedReindexingUsesQueueWithoutRevisionBump() {
         Long caseDataId = db.queryForObject(
             "SELECT id FROM ccd.case_data WHERE reference = :ref",
             Map.of("ref", caseRef),
@@ -1669,31 +1672,38 @@ public class TestWithCCD extends CftlibTest {
             .pollInterval(Duration.ofSeconds(1))
             .atMost(Duration.ofSeconds(30))
             .untilAsserted(() -> assertThat(
-                "Elasticsearch revision should match datastore before bump",
-                fetchRevisionFromElasticsearch(caseDataId),
+                "Elasticsearch revision should match datastore before reindexing",
+                fetchElasticsearchDocument(caseDataId).path("case_revision").asInt(),
                 equalTo(revisionBefore)
             ));
 
-        int esRevisionBefore = fetchRevisionFromElasticsearch(caseDataId);
-        assertThat("Baseline Elasticsearch revision should equal datastore value",
-            esRevisionBefore, equalTo(revisionBefore));
+        JsonNode originalDoc = fetchElasticsearchDocument(caseDataId);
 
-        int rowsUpdated = db.getJdbcTemplate().update("UPDATE ccd.case_data SET case_revision = case_revision + 1");
-        assertThat("Expected to bump revision for at least one case", rowsUpdated, greaterThan(0));
+        JsonNode corruptedDoc = originalDoc.deepCopy();
+        ((ObjectNode) corruptedDoc).put("state", "MutatedState");
+        pushElasticsearchDocument(caseDataId, revisionBefore, corruptedDoc);
 
-        Integer revisionAfter = db.queryForObject(
-            "SELECT case_revision FROM ccd.case_data WHERE reference = :ref",
-            Map.of("ref", caseRef),
-            Integer.class
-        );
-        assertThat("Revision should increment in datastore", revisionAfter, equalTo(revisionBefore + 1));
+        await()
+            .pollInterval(Duration.ofSeconds(1))
+            .atMost(Duration.ofSeconds(10))
+            .untilAsserted(() -> assertThat(
+                "Elasticsearch document should reflect the mutation",
+                fetchElasticsearchDocument(caseDataId).path("state").asText(),
+                equalTo("MutatedState")
+            ));
+
+        int enqueued = reindexQueueService.enqueueCasesModifiedSince(LocalDate.now().minusYears(1));
+        assertThat("Expected to enqueue at least one case for reindexing", enqueued, greaterThan(0));
 
         await()
             .pollInterval(Duration.ofSeconds(1))
             .atMost(Duration.ofSeconds(30))
             .untilAsserted(() -> {
-                int esRevision = fetchRevisionFromElasticsearch(caseDataId);
-                assertThat("Elasticsearch revision should eventually match datastore", esRevision, equalTo(revisionAfter));
+                JsonNode refreshedDoc = fetchElasticsearchDocument(caseDataId);
+                assertThat("Elasticsearch revision should remain unchanged", refreshedDoc.path("case_revision").asInt(),
+                    equalTo(revisionBefore));
+                assertThat("Elasticsearch state should drop the corruption", refreshedDoc.path("state").asText(),
+                    not(equalTo("MutatedState")));
             });
     }
 
@@ -1873,7 +1883,7 @@ public class TestWithCCD extends CftlibTest {
         assertThat(errorPayload.path("status").asInt(), equalTo(400));
     }
 
-    private int fetchRevisionFromElasticsearch(long caseDataId) throws IOException {
+    private JsonNode fetchElasticsearchDocument(long caseDataId) throws IOException {
         var request = new HttpGet(ELASTICSEARCH_BASE_URL + "/e2e_cases/_doc/" + caseDataId);
         try (var response = HttpClientBuilder.create().build().execute(request)) {
             int statusCode = response.getStatusLine().getStatusCode();
@@ -1882,8 +1892,31 @@ public class TestWithCCD extends CftlibTest {
             var payload = mapper.readTree(EntityUtils.toString(response.getEntity()));
             var source = payload.path("_source");
             assertThat("Elasticsearch document should contain _source", source.isMissingNode(), is(false));
-            return source.path("case_revision").asInt(-1);
+            return source;
         }
+    }
+
+    private void pushElasticsearchDocument(long caseDataId, int revision, JsonNode document) throws IOException {
+        ObjectNode payload = document.deepCopy();
+        payload.put("case_revision", revision);
+
+        var request = new HttpPut(String.format(
+            "%s/e2e_cases/_doc/%d?version_type=external_gte&version=%d",
+            ELASTICSEARCH_BASE_URL,
+            caseDataId,
+            revision
+        ));
+        request.setEntity(new StringEntity(mapper.writeValueAsString(payload), ContentType.APPLICATION_JSON));
+
+        try (var response = HttpClientBuilder.create().build().execute(request)) {
+            int status = response.getStatusLine().getStatusCode();
+            assertThat("Elasticsearch document push should succeed", status, anyOf(equalTo(200), equalTo(201)));
+            EntityUtils.consumeQuietly(response.getEntity());
+        }
+    }
+
+    private int fetchRevisionFromElasticsearch(long caseDataId) throws IOException {
+        return fetchElasticsearchDocument(caseDataId).path("case_revision").asInt(-1);
     }
 
     @SneakyThrows
