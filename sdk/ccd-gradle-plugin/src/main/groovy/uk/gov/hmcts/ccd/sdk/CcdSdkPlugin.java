@@ -11,7 +11,7 @@ import org.gradle.api.artifacts.repositories.MavenArtifactRepository;
 import org.gradle.api.artifacts.repositories.MavenRepositoryContentDescriptor;
 import org.gradle.api.file.DirectoryProperty;
 import org.gradle.api.plugins.JavaPlugin;
-import org.gradle.api.plugins.JavaPluginConvention;
+import org.gradle.api.plugins.JavaPluginExtension;
 import org.gradle.api.tasks.JavaExec;
 import org.gradle.api.tasks.SourceSetContainer;
 
@@ -33,7 +33,8 @@ public class CcdSdkPlugin implements Plugin<Project> {
     configGeneration.setCanBeConsumed(false);
     configGeneration.setCanBeResolved(true);
     configGeneration.setDescription("Dependencies used when generating CCD configuration");
-    SourceSetContainer ssc = project.getConvention().getPlugin(JavaPluginConvention.class)
+    SourceSetContainer ssc = project.getExtensions()
+        .getByType(JavaPluginExtension.class)
         .getSourceSets();
     generate.setClasspath(
         ssc.getByName("main").getRuntimeClasspath()
