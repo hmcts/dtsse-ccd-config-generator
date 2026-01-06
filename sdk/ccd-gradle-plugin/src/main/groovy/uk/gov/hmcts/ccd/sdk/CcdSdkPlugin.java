@@ -34,8 +34,8 @@ public class CcdSdkPlugin implements Plugin<Project> {
     configGeneration.setCanBeResolved(true);
     configGeneration.setDescription("Dependencies used when generating CCD configuration");
     SourceSetContainer ssc = project.getExtensions()
-      .getByType(JavaPluginExtension.class)
-      .getSourceSets();
+        .getByType(JavaPluginExtension.class)
+        .getSourceSets();
     generate.setClasspath(
         ssc.getByName("main").getRuntimeClasspath()
             .plus(configGeneration));
