@@ -5,46 +5,49 @@ Create fully formed tasks directly in Task Management without relying on Camunda
 This API-first design is predicated on the caller supplying all mandatory fields.
 
 ## Idempotency
-- `taskId` forms the idempotency key (scoped to the `caseTypeId`).
-- Repeating the same request with the same `taskId` and `caseTypeId` must return the same task (201 or 200).
-- The same `taskId` with a different payload must return `409 Conflict`.
+- `task_id` forms the idempotency key (scoped to the `case_type_id`).
+- Repeating the same request with the same `task_id` and `case_type_id` must return the same task (201 or 200).
+- The same `task_id` with a different payload must return `409 Conflict`.
 
-## `POST /task`
+## `POST /task/create`
+`POST /task` is already used for task search, so API-first creation is exposed under `/task/create`.
+Payload fields use `snake_case`.
+
 ```json
 {
   "task": {
-    "taskId": "9f3e7e8a-1d3b-4e59-8cb0-2d86f630c1c6",
+    "task_id": "9f3e7e8a-1d3b-4e59-8cb0-2d86f630c1c6",
     "type": "registerNewCase",
     "name": "Register new case",
     "title": "Register new case",
     "state": "UNASSIGNED",
     "created": "2025-01-06T10:15:30Z",
-    "executionType": "Case Management Task",
-    "caseId": "1234567890123456",
-    "caseTypeId": "CriminalInjuriesCompensation",
-    "caseCategory": "CIC",
-    "caseName": "Smith v Doe",
+    "execution_type": "Case Management Task",
+    "case_id": "1234567890123456",
+    "case_type_id": "CriminalInjuriesCompensation",
+    "case_category": "CIC",
+    "case_name": "Smith v Doe",
     "jurisdiction": "ST_CIC",
     "region": "1",
     "location": "336559",
-    "workType": "applications",
-    "roleCategory": "ADMIN",
-    "securityClassification": "PUBLIC",
+    "work_type": "applications",
+    "role_category": "ADMIN",
+    "security_classification": "PUBLIC",
     "description": "[Case: Edit case](/cases/case-details/1234567890123456/trigger/edit-case)",
-    "dueDateTime": "2025-01-10T16:00:00Z",
-    "priorityDate": "2025-01-10T16:00:00Z",
-    "majorPriority": 5000,
-    "minorPriority": 500,
-    "locationName": "Glasgow Tribunals Centre",
-    "regionName": "Scotland",
-    "taskSystem": "SELF",
-    "additionalProperties": {
-      "originatingCaseworker": "user@example.com"
+    "due_date_time": "2025-01-10T16:00:00Z",
+    "priority_date": "2025-01-10T16:00:00Z",
+    "major_priority": 5000,
+    "minor_priority": 500,
+    "location_name": "Glasgow Tribunals Centre",
+    "region_name": "Scotland",
+    "task_system": "SELF",
+    "additional_properties": {
+      "originating_caseworker": "user@example.com"
     },
     "permissions": [
       {
-        "roleName": "regional-centre-admin",
-        "roleCategory": "ADMIN",
+        "role_name": "regional-centre-admin",
+        "role_category": "ADMIN",
         "permissions": [
           "Read",
           "Own",
@@ -57,8 +60,8 @@ This API-first design is predicated on the caller supplying all mandatory fields
           "AUTH_1",
           "AUTH_2"
         ],
-        "assignmentPriority": 1,
-        "autoAssignable": false
+        "assignment_priority": 1,
+        "auto_assignable": false
       }
     ]
   }
@@ -67,7 +70,7 @@ This API-first design is predicated on the caller supplying all mandatory fields
 
 ## Task Fields
 
-### taskId
+### task_id
 Client-supplied task identifier, unique within the case type. UUID string (lowercase or uppercase hex with hyphens).
 Required.
 
@@ -86,21 +89,21 @@ Initial task state. String. Allowed values: `UNASSIGNED`, `ASSIGNED`. Required.
 ### created
 Creation timestamp supplied by the caller. ISO-8601 with offset. Required.
 
-### executionType
+### execution_type
 Execution category. String. Allowed values: `Manual`, `Built In`, `Case Management Task`. Required.
 
-### caseId
+### case_id
 CCD case reference. String. Required.
 
-### caseTypeId
+### case_type_id
 CCD case type identifier. String. Required.
 
-### caseCategory
+### case_category
 Primary case management category for the case. String. Optional.
 Value should be the CCD `caseManagementCategory.categoryId` (e.g., `CIC`) or an agreed service code.
 Used for filtering, reporting, and routing; Task Management does not derive or validate it beyond non-empty.
 
-### caseName
+### case_name
 Human-readable case name. String. Optional.
 
 ### jurisdiction
@@ -116,38 +119,47 @@ Base location identifier from CCD case management location. String (often numeri
 Value should match `caseManagementLocation.baseLocation` when a specific venue/office applies.
 Used for routing and filtering; should be consistent with `region`.
 
-### workType
+### work_type
 Work type identifier. String. Required.
 Value should be from the service's work type catalog if one exists.
 Used for task grouping, filtering, and assignment policies; keep values stable over time.
 
-### roleCategory
+### role_category
 Role category for the task. String. For example: `ADMIN`, `CTSC`, `LEGAL_OPERATIONS`, `JUDICIAL`. Required.
 
-### securityClassification
+### security_classification
 Security classification. String. Allowed values: `PUBLIC`, `PRIVATE`, `RESTRICTED`. Required.
 
 ### description
 Task description text. String. Supports markdown-style links. Optional.
 
-### priorityDate
+### due_date_time
+Target due date/time. ISO-8601 with offset. Required.
+
+### priority_date
 Business priority date/time. ISO-8601 with offset. Optional.
 Represents when the task should rise in priority (e.g., SLA start or escalation point).
-Used alongside `majorPriority`/`minorPriority` for ordering; earlier dates indicate higher urgency.
+Used alongside `major_priority`/`minor_priority` for ordering; earlier dates indicate higher urgency.
 
-### majorPriority
+### major_priority
 Major priority level. Integer. Optional. Higher values indicate higher priority.
 Use a consistent scale within the service (e.g., 0-10000).
 
-### minorPriority
+### minor_priority
 Minor priority level. Integer. Optional. Used as a tie-breaker within the same major priority.
 Higher values indicate higher priority. Use a smaller, consistent scale (e.g., 0-1000).
 
-### locationName
+### location_name
 Location display name. String. Optional.
 
-### regionName
+### region_name
 Region display name. String. Optional.
+
+### task_system
+Task origin system. String. Allowed values: `SELF`, `CTSC`. Optional (defaults to `SELF`).
+
+### additional_properties
+Free-form string map for service-specific metadata. Optional.
 
 ### permissions
 Array of permission entries. Required. Each entry represents one access-control role for the task.
@@ -157,7 +169,8 @@ Array of permission entries. Required. Each entry represents one access-control 
 `Claim`, `Unclaim`, `Assign`, `Unassign`, `UnclaimAssign`, `UnassignClaim`, `UnassignAssign`.
 
 ## Response
-`201 Created` with a `TaskResource` representation.
+`201 Created` with a minimal `TaskResource` representation.
+`200 OK` if the task already exists with the same payload.
 
 Example:
 ```json
@@ -176,7 +189,7 @@ Example:
 ## Error Codes
 - `400 Bad Request`: validation errors.
 - `401 Unauthorized` / `403 Forbidden`: auth failures.
-- `409 Conflict`: `taskId` reused with different payload.
+- `409 Conflict`: `task_id` reused with different payload.
 
 ## Notes
 - This endpoint bypasses Camunda and DMN evaluation.

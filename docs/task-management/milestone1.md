@@ -29,7 +29,7 @@ Deliver a single task end-to-end using API-first creation: `registerNewCase`. Th
 
 ## API-First Implementation Plan
 1) Add Java rule implementation for `registerNewCase` that builds a full task payload.
-2) Add Task Management API client with a `POST /task` (new endpoint) call.
+2) Add Task Management API client with a `POST /task/create` (new endpoint) call.
 3) Add completion call on `edit-case`.
 4) Guard with feature flag (API-first on/off).
 5) Write unit tests for payload parity + contract test for the API.
