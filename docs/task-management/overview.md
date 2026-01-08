@@ -1,0 +1,67 @@
+# Overview (Current vs API-First)
+
+## As-Is Overview (Current WA Flow)
+
+This describes the current CCD → WA task creation path and the components involved.
+
+### Summary
+- Task rules live in DMNs under `src/main/resources/dmn/`.
+- CCD event publication drives the workflow; the service does not create tasks directly.
+- CCD uses a transactional outbox in its database; CCD Message Publisher polls it.
+- Camunda orchestrates task creation and holds process state.
+- Task Monitor bridges Camunda → Task Management (CFT task DB).
+
+```mermaid
+sequenceDiagram
+  participant CCD as CCD Data Store
+  participant CCDDB as CCD DB + Outbox
+  participant CMP as CCD Message Publisher
+  participant SB as Azure Service Bus
+  participant WAEH as WA Case Event Handler
+  participant WAWA as WA Workflow API
+  participant CAM as Camunda Engine
+  participant WATM as WA Task Monitor
+  participant WATMGT as WA Task Management API
+  participant CFTDB as CFT Task DB
+
+  CCD->>CCDDB: Commit case + outbox
+  CMP->>CCDDB: Poll outbox
+  CMP->>SB: Publish message
+  SB-->>WAEH: Consume event
+  WAEH->>WAWA: Evaluate initiation DMN
+  WAWA->>CAM: DMN eval + createTaskMessage
+  CAM->>CAM: Start BPMN process\n(create unconfigured task)
+  WATM->>CAM: Query unconfigured tasks
+  WATM->>WATMGT: POST /task/{id}/initiation
+  WATMGT->>CAM: Eval config + permissions DMNs
+  WATMGT->>CFTDB: Persist task record
+```
+
+## Proposed - API-First Tasks
+
+### Summary
+- Task rules live in Java (testable code), not DMNs.
+- The service creates fully formed tasks via a new Task Management API endpoint.
+- Task creation is queued via a transactional outbox and processed by an in-app poller.
+- The API-first path bypasses Camunda, CCD message publishing, and Task Monitor.
+- API-first assumes the service supplies all mandatory task fields; Task Management does not derive defaults.
+
+### Mermaid Diagram
+```mermaid
+sequenceDiagram
+  participant CCD as CCD Data Store
+  participant SVC as sptribs-case-api
+  participant DB as Service DB + Outbox
+  participant POLL as Outbox Poller
+  participant WATMGT as WA Task Management API
+  participant CFTDB as CFT Task DB
+
+  CCD-->>SVC: Case event
+  SVC->>SVC: Java rules build task payload
+  SVC->>DB: Store outbox record (same transaction)
+  POLL->>DB: Read pending outbox records
+  POLL->>WATMGT: POST /task (API-first)
+  WATMGT->>CFTDB: Persist task record
+  POLL->>DB: Mark outbox record processed
+  Note over SVC,WATMGT: On completion event → POST /task/{id}/complete
+```
