@@ -10,6 +10,15 @@ pluginManagement {
 
 includeBuild 'sdk'
 
+gradle.beforeProject { p ->
+    if (p.path == ':wa-task-management-api') {
+        // Prevent subproject build.gradle from failing on wrapper { }.
+        p.ext.wrapper = { Closure c -> }
+    }
+}
+
+include 'test-projects'
+
 include 'e2e'
 project(':e2e').projectDir = file('test-projects/e2e')
 
@@ -27,4 +36,7 @@ project(':adoption').projectDir = file('test-projects/adoption-cos-api')
 
 if (file('ccd-data-store-api').exists()) {
     include 'ccd-data-store-api'
+}
+if (file('wa-task-management-api').exists()) {
+    include 'wa-task-management-api'
 }

@@ -16,3 +16,6 @@
 	path = test-projects/adoption-cos-api
 	url = git@github.com:hmcts/adoption-cos-api.git
 	branch = cftlib-integration
+[submodule "wa-task-management-api"]
+	path = wa-task-management-api
+	url = git@github.com:hmcts/wa-task-management-api.git
