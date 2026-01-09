@@ -29,7 +29,11 @@ sequenceDiagram
   CMP->>SB: Publish message
   SB-->>WAEH: Consume event
   WAEH->>WAWA: Evaluate initiation DMN
-  WAWA->>CAM: DMN eval + createTaskMessage
+  WAWA->>CAM: DMN eval
+  CAM-->>WAWA: DMN results
+  WAWA-->>WAEH: DMN results
+  WAEH->>WAWA: createTaskMessage
+  WAWA->>CAM: createTaskMessage
   CAM->>CAM: Start BPMN process\n(create unconfigured task)
   WATM->>CAM: Query unconfigured tasks
   WATM->>WATMGT: POST /task/{id}/initiation
