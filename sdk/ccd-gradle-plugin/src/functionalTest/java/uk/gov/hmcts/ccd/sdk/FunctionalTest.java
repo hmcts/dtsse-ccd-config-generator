@@ -28,13 +28,8 @@ public class FunctionalTest {
 
   //  https://docs.gradle.org/current/userguide/compatibility.html
   @Test
-  public void testGradle7() {
-    checkTestProject("7.3");
-  }
-
-  @Test
-  public void testGradle8() {
-    checkTestProject("8.0");
+  public void testGradle8MinJava21() {
+    checkTestProject("8.4");
   }
 
   public void checkTestProject(String gradleVersion) {
@@ -53,4 +48,3 @@ public class FunctionalTest {
     assertEquals(TaskOutcome.UP_TO_DATE,r.build().task(":generateCCDConfig").getOutcome());
   }
 }
-
