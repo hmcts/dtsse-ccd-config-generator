@@ -42,7 +42,7 @@ Write CCD configuration in Java.
 ## Requirements
 
 * Gradle 7.3
-* Java 17
+* Java 21
 
 ## Installation
 

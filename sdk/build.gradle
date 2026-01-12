@@ -12,8 +12,8 @@ subprojects {
     version System.getenv('RELEASE_VERSION')?.replace('refs/tags/', '') ?: 'DEV-SNAPSHOT'
 
     compileJava   {
-        sourceCompatibility = 17
-        targetCompatibility = 17
+        sourceCompatibility = 21
+        targetCompatibility = 21
         options.compilerArgs += ["-Werror"]
     }
 
