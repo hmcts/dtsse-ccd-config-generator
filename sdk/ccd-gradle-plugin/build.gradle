@@ -13,7 +13,7 @@ plugins {
     id 'maven-publish'
 }
 
-group 'com.github.hmcts.rse-cft-lib'
+group = 'com.github.hmcts.rse-cft-lib'
 
 repositories {
   mavenCentral()
