@@ -47,7 +47,7 @@ sequenceDiagram
 ### Summary
 - Task rules live in Java (testable code), not DMNs.
 - The service creates fully formed tasks via a new Task Management API endpoint.
-- Task creation is queued via a transactional outbox and processed by an in-app poller.
+- Task creation is queued via a transactional outbox and processed by an in-app poller (both within the sptribs codebase).
 - The API-first path bypasses Camunda, CCD message publishing, and Task Monitor.
 - API-first assumes the service supplies all mandatory task fields; Task Management does not derive defaults.
 - User/XUI task actions remain via Task Management API and are unchanged.
@@ -56,9 +56,11 @@ sequenceDiagram
 ```mermaid
 sequenceDiagram
   participant CCD as CCD Data Store
-  participant SVC as sptribs-case-api
-  participant DB as Service DB + Outbox
-  participant POLL as Outbox Poller
+  box "sptribs-case-api"
+    participant SVC as sptribs-callbacks
+    participant DB as Service DB Outbox
+    participant POLL as Outbox Poller
+  end
   participant WATMGT as WA Task Management API
   participant CFTDB as CFT Task DB
 
