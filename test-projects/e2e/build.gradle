@@ -50,7 +50,7 @@ dependencies {
   implementation 'com.github.hmcts:idam-java-client:3.0.5'
   implementation 'com.github.hmcts.java-logging:logging:7.0.0'
   implementation 'com.github.hmcts:service-auth-provider-java-client:5.3.3'
-  implementation 'com.github.hmcts:ccd-task-management:DEV-SNAPSHOT'
+  implementation 'com.github.hmcts:task-management:DEV-SNAPSHOT'
 
   implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.8.15'
 
@@ -74,7 +74,7 @@ dependencies {
   cftlibTestImplementation platform('org.junit:junit-bom')
   cftlibTestImplementation 'org.junit.platform:junit-platform-console'
   cftlibTestImplementation 'jakarta.jms:jakarta.jms-api:3.1.0'
-  cftlibTestImplementation 'com.github.hmcts:ccd-task-management:DEV-SNAPSHOT'
+  cftlibTestImplementation 'com.github.hmcts:task-management:DEV-SNAPSHOT'
 }
 
 springBoot {
