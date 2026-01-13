@@ -1,5 +1,6 @@
 package uk.gov.hmcts.ccd.sdk.taskmanagement;
 
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
@@ -11,11 +12,13 @@ public class TaskOutboxRepository {
 
   private final NamedParameterJdbcTemplate jdbc;
   private final String tableName;
+  private final Duration processingTimeout;
 
   public TaskOutboxRepository(NamedParameterJdbcTemplate jdbc, TaskManagementProperties properties) {
     this.jdbc = jdbc;
     String schema = properties.getOutbox().getSchema();
     this.tableName = StringUtils.hasText(schema) ? schema + ".task_outbox" : "task_outbox";
+    this.processingTimeout = properties.getOutbox().getPoller().getProcessingTimeout();
   }
 
   public void enqueue(String taskId, String caseId, String caseTypeId, String payload) {
@@ -40,7 +43,7 @@ public class TaskOutboxRepository {
         """
             select id, task_id, payload::text, attempt_count
             from %s
-            where status in (:newStatus, :failedStatus)
+            where status in (:newStatus, :failedStatus, :processingStatus)
              and (next_attempt_at is null or next_attempt_at <= :now)
              and (:maxAttempts = 0 or attempt_count < :maxAttempts)
             order by id
@@ -49,6 +52,7 @@ public class TaskOutboxRepository {
         Map.of(
             "newStatus", TaskOutboxStatus.NEW.name(),
             "failedStatus", TaskOutboxStatus.FAILED.name(),
+            "processingStatus", TaskOutboxStatus.PROCESSING.name(),
             "now", now,
             "limit", limit,
             "maxAttempts", maxAttempts
@@ -64,12 +68,13 @@ public class TaskOutboxRepository {
 
   public boolean markProcessing(long id) {
     LocalDateTime now = LocalDateTime.now();
+    LocalDateTime nextAttemptAt = now.plus(processingTimeout);
     int updated = jdbc.update(
         """
             update %s
-            set status = :status, updated = :updated
+            set status = :status, updated = :updated, next_attempt_at = :nextAttemptAt
             where id = :id
-             and status in (:newStatus, :failedStatus)
+             and status in (:newStatus, :failedStatus, :processingStatus)
              and (next_attempt_at is null or next_attempt_at <= :now)
             """.formatted(tableName),
         Map.of(
@@ -77,7 +82,9 @@ public class TaskOutboxRepository {
             "status", TaskOutboxStatus.PROCESSING.name(),
             "newStatus", TaskOutboxStatus.NEW.name(),
             "failedStatus", TaskOutboxStatus.FAILED.name(),
+            "processingStatus", TaskOutboxStatus.PROCESSING.name(),
             "updated", now,
+            "nextAttemptAt", nextAttemptAt,
             "now", now
         )
     );

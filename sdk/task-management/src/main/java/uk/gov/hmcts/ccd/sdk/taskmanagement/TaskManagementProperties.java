@@ -26,6 +26,7 @@ public class TaskManagementProperties {
   @Data
   public static class Poller {
     private int batchSize = 5;
+    private Duration processingTimeout = Duration.ofMinutes(5);
   }
 
   @Data
