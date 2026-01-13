@@ -56,6 +56,7 @@ dependencies {
   implementation 'com.github.hmcts:idam-java-client:3.0.5'
   implementation 'com.github.hmcts.java-logging:logging:7.0.0'
   implementation 'com.github.hmcts:service-auth-provider-java-client:5.3.3'
+  implementation 'com.github.hmcts:ccd-task-management:DEV-SNAPSHOT'
 
   implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.8.15'
 
@@ -85,6 +86,7 @@ dependencies {
   cftlibTestImplementation platform('org.junit:junit-bom')
   cftlibTestImplementation 'org.junit.platform:junit-platform-console'
   cftlibTestImplementation 'jakarta.jms:jakarta.jms-api:3.1.0'
+  cftlibTestImplementation 'com.github.hmcts:ccd-task-management:DEV-SNAPSHOT'
 }
 
 springBoot {
@@ -138,6 +140,13 @@ tasks.withType(CftlibExec).configureEach {
   environment 'BEFTA_TEST_STUB_SERVICE_BASE_URL', 'http://localhost:5555'
   environment 'TEST_STUB_SERVICE_BASE_URL', 'http://localhost:5555'
   environment 'SPRING_CLOUD_COMPATIBILITY_VERIFIER_ENABLED', 'false'
+  environment 'IDAM_API_BASEURL', 'http://localhost:5062'
+  systemProperty 'FEATURE_WORKALLOCATION_ENABLED', 'true'
+  systemProperty 'WA_SUPPORTED_JURISDICTIONS', 'DIVORCE,IA,CIVIL,PRIVATELAW,PUBLICLAW,EMPLOYMENT,ST_CIC'
+  systemProperty 'SERVICES_CASE_CASEWORKER_API', 'http://host.docker.internal:4013'
+  systemProperty 'SERVICES_LOCATION_API', 'http://host.docker.internal:4013'
+  systemProperty 'XUI_SYSTEM_USER_NAME', 'TEST_CASE_WORKER_USER@mailinator.com'
+  systemProperty 'XUI_SYSTEM_USER_PASSWORD', 'password'
 
   doFirst {
     environment 'CITIZEN_UPDATE_CASE_STATE_ENABLED', 'true'
@@ -149,9 +158,26 @@ tasks.withType(CftlibExec).configureEach {
     environment 'CCD_POCS_URL', 'http://localhost:4013'
     environment 'CCD_DOCUMENT_URL_PATTERN', '.*'
     environment 'ENABLE_PSEUDO_ROLE_ASSIGNMENTS_GENERATION', true
-    environment 'S2S_AUTHORISED_SERVICES', 'ccd_definition,ccd_data,xui_webapp,nfdiv_case_api,ccd_gw,divorce_frontend'
+    environment 'S2S_AUTHORISED_SERVICES', [
+      'ccd_definition',
+      'ccd_data',
+      'xui_webapp',
+      'nfdiv_case_api',
+      'ccd_gw',
+      'divorce_frontend',
+      'wa_task_management_api'
+    ].join(',')
     environment 'CCD_S2S_AUTHORISED_SERVICES_CASE_USER_ROLES', 'nfdiv_case_api'
-    environment 'ROLE_ASSIGNMENT_S2S_AUTHORISED_SERVICES', 'ccd_gw,am_role_assignment_service,am_org_role_mapping_service,xui_webapp,aac_manage_case_assignment,ccd_data,nfdiv_case_api'
+    environment 'ROLE_ASSIGNMENT_S2S_AUTHORISED_SERVICES', [
+      'ccd_gw',
+      'am_role_assignment_service',
+      'am_org_role_mapping_service',
+      'xui_webapp',
+      'aac_manage_case_assignment',
+      'ccd_data',
+      'nfdiv_case_api',
+      'wa_task_management_api'
+    ].join(',')
     environment 'DATA_STORE_S2S_AUTHORISED_SERVICES', 'ccd_gw,fpl_case_service,ccd_data,ccd_ps,divorce_frontend,payment-api,xui_webapp,nfdiv_case_api,ccd_case_document_am_api,am_role_assignment_service'
 
     if (name in ['bootWithCCD', 'dumpCCDDefinitions']) {
@@ -189,6 +215,7 @@ cftlibTest {
   environment 'CASE_DOCUMENT_AM_API_ATTACH_DOCUMENT_ENABLED', 'false'
   environment 'CASE_DATA_STORE_BASEURL', 'http://localhost:4452'
   environment 'ROLE_ASSIGNMENT_URL', 'http://localhost:4096'
+  environment 'IDAM_API_BASEURL', 'http://localhost:5062'
   environment 'CCD_S2S_AUTHORISED_SERVICES_CASE_USER_ROLES', 'nfdiv_case_api'
   environment 'ROLE_ASSIGNMENT_S2S_AUTHORISED_SERVICES', 'ccd_gw,am_role_assignment_service,am_org_role_mapping_service,am_role_assignment_refresh_batch,xui_webapp,aac_manage_case_assignment,ccd_data,wa_workflow_api,wa_task_management_api,wa_task_monitor,wa_case_event_handler,iac,hmc_cft_hearing_service,ccd_case_disposer,sscs,fis_hmc_api,fpl_case_service,disposer-idam-user,civil_service,prl_cos_api,nfdiv_case_api'
   environment 'DATA_STORE_S2S_AUTHORISED_SERVICES', 'ccd_gw,fpl_case_service,ccd_data,ccd_ps,divorce_frontend,payment-api,xui_webapp,nfdiv_case_api,ccd_case_document_am_api,am_role_assignment_service'

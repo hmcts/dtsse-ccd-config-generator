@@ -1,0 +1,28 @@
+[
+  {
+    "email": "TEST_CASE_WORKER_USER@mailinator.com",
+    "id": "74779774-2fc4-32c9-a842-f8d0aa6e770a",
+    "roleAssignments": [
+      {
+        "roleType": "ORGANISATION",
+        "roleName": "caseworker-divorce",
+        "grantType": "STANDARD",
+        "roleCategory": "ADMIN",
+        "classification": "PUBLIC",
+        "readOnly": false,
+        "attributes": {
+          "jurisdiction": "DIVORCE",
+          "caseType": "NFD",
+          "region": "1",
+          "baseLocation": "336559",
+          "substantive": "Y",
+          "bookable": true
+        },
+        "authorisations": [
+          "AUTH_1"
+        ]
+      }
+    ],
+    "overrideAll": true
+  }
+]

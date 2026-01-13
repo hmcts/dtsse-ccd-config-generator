@@ -150,6 +150,7 @@ public class TestWithCCD extends CftlibTest {
         "application/vnd.uk.gov.hmcts.ccd-data-store-api.ui-event-view.v2+json;charset=UTF-8";
     private static final String ACCEPT_UI_START_EVENT =
         "application/vnd.uk.gov.hmcts.ccd-data-store-api.ui-start-event-trigger.v2+json;charset=UTF-8";
+    private static final String API_FIRST_TASK_EVENT_ID = "api-first-create-task";
 
     @TestConfiguration
     static class ServiceBusTestConfiguration {
@@ -1012,6 +1013,61 @@ public class TestWithCCD extends CftlibTest {
             LocalDateTime.class
         );
         assertThat(publishedTimestamp, is(notNullValue()));
+    }
+
+    @SneakyThrows
+    @Order(19)
+    @Test
+    public void apiFirstTaskShouldBeCreatedViaOutboxAndPoller() {
+        db.update("DELETE FROM ccd.task_outbox", Map.of());
+
+        var startEvent = ccdApi.startEvent(
+            getAuthorisation("TEST_CASE_WORKER_USER@mailinator.com"),
+            getServiceAuth(),
+            String.valueOf(caseRef),
+            API_FIRST_TASK_EVENT_ID
+        );
+
+        var request = prepareEventRequestWithToken(
+            "TEST_CASE_WORKER_USER@mailinator.com",
+            API_FIRST_TASK_EVENT_ID,
+            Map.of("note", "api-first-task"),
+            startEvent.getToken()
+        );
+
+        var response = HttpClientBuilder.create().build().execute(request);
+        assertThat(response.getStatusLine().getStatusCode(), equalTo(201));
+
+        await().atMost(Duration.ofSeconds(10)).untilAsserted(() -> {
+            Integer count = db.queryForObject("SELECT count(*) FROM ccd.task_outbox", Map.of(), Integer.class);
+            assertThat(count, equalTo(1));
+        });
+
+        Map<String, Object> outboxRow = db.queryForMap(
+            "SELECT task_id, status FROM ccd.task_outbox ORDER BY id DESC LIMIT 1",
+            Map.of()
+        );
+        String taskId = (String) outboxRow.get("task_id");
+        assertThat(taskId, is(notNullValue()));
+
+        String payloadCaseId = db.queryForObject(
+            "SELECT payload->'task'->>'case_id' FROM ccd.task_outbox ORDER BY id DESC LIMIT 1",
+            Map.of(),
+            String.class
+        );
+        assertThat(payloadCaseId, equalTo(String.valueOf(caseRef)));
+
+        await().atMost(Duration.ofSeconds(30)).untilAsserted(() -> {
+            Map<String, Object> processed = db.queryForMap(
+                "SELECT status, last_response_code FROM ccd.task_outbox WHERE task_id = :taskId",
+                Map.of("taskId", taskId)
+            );
+            assertThat(processed.get("status"), equalTo("PROCESSED"));
+            assertThat(
+                ((Number) processed.get("last_response_code")).intValue(),
+                anyOf(equalTo(200), equalTo(201))
+            );
+        });
     }
 
     @SneakyThrows
