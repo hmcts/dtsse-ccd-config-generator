@@ -1,40 +1,37 @@
 package uk.gov.hmcts.ccd.sdk.taskmanagement;
 
-import java.time.Duration;
 import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
 
 public class TaskOutboxRetryPolicy {
 
-    private final Duration initialDelay;
-    private final Duration maxDelay;
-    private final double multiplier;
-    private final int maxAttempts;
+  private final int maxAttempts;
+  private final int multiplier;
+  private final long initialDelaySeconds;
+  private final long maxDelaySeconds;
 
-    public TaskOutboxRetryPolicy(TaskManagementProperties properties) {
-        TaskManagementProperties.Retry retry = properties.getOutbox().getRetry();
-        this.initialDelay = retry.getInitialDelay();
-        this.maxDelay = retry.getMaxDelay();
-        this.multiplier = retry.getMultiplier();
-        this.maxAttempts = retry.getMaxAttempts();
+  public TaskOutboxRetryPolicy(TaskManagementProperties properties) {
+    this.maxAttempts = properties.getOutbox().getRetry().getMaxAttempts();
+    this.multiplier = (int) properties.getOutbox().getRetry().getMultiplier();
+    this.initialDelaySeconds = properties.getOutbox().getRetry().getInitialDelay().getSeconds();
+    this.maxDelaySeconds = properties.getOutbox().getRetry().getMaxDelay().getSeconds();
+  }
+
+  public int getMaxAttempts() {
+    return maxAttempts;
+  }
+
+  public LocalDateTime nextAttemptAt(int attemptCount, LocalDateTime now) {
+    if (maxAttempts > 0 && attemptCount >= maxAttempts) {
+      return null;
     }
-
-    public int getMaxAttempts() {
-        return maxAttempts;
+    long delay = initialDelaySeconds;
+    for (int attempt = 1; attempt < attemptCount; attempt++) {
+      delay = delay * multiplier;
     }
-
-    public LocalDateTime nextAttemptAt(int nextAttemptCount, LocalDateTime now) {
-        if (maxAttempts > 0 && nextAttemptCount >= maxAttempts) {
-            return null;
-        }
-
-        long initialMs = Math.max(0, initialDelay.toMillis());
-        double factor = Math.max(1.0, multiplier);
-        double delayMs = initialMs * Math.pow(factor, Math.max(0, nextAttemptCount - 1));
-        long maxMs = maxDelay.toMillis();
-        if (maxMs > 0) {
-            delayMs = Math.min(delayMs, maxMs);
-        }
-
-        return now.plusNanos((long) (delayMs * 1_000_000));
+    if (maxDelaySeconds > 0) {
+      delay = Math.min(delay, maxDelaySeconds);
     }
+    return now.plus(delay, ChronoUnit.SECONDS);
+  }
 }
