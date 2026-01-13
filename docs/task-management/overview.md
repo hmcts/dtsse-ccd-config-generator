@@ -10,6 +10,7 @@ This describes the current CCD → WA task creation path and the components invo
 - CCD uses a transactional outbox in its database; CCD Message Publisher polls it.
 - Camunda orchestrates task creation and holds process state.
 - Task Monitor bridges Camunda → Task Management (CFT task DB).
+- Case-event-driven task operations (cancel, warn, reconfigure) are routed by Case Event Handler.
 
 ```mermaid
 sequenceDiagram
@@ -29,7 +30,11 @@ sequenceDiagram
   CMP->>SB: Publish message
   SB-->>WAEH: Consume event
   WAEH->>WAWA: Evaluate initiation DMN
-  WAWA->>CAM: DMN eval + createTaskMessage
+  WAWA->>CAM: DMN eval
+  CAM-->>WAWA: DMN results
+  WAWA-->>WAEH: DMN results
+  WAEH->>WAWA: createTaskMessage
+  WAWA->>CAM: createTaskMessage
   CAM->>CAM: Start BPMN process\n(create unconfigured task)
   WATM->>CAM: Query unconfigured tasks
   WATM->>WATMGT: POST /task/{id}/initiation
@@ -45,6 +50,7 @@ sequenceDiagram
 - Task creation is queued via a transactional outbox and processed by an in-app poller.
 - The API-first path bypasses Camunda, CCD message publishing, and Task Monitor.
 - API-first assumes the service supplies all mandatory task fields; Task Management does not derive defaults.
+- User/XUI task actions remain via Task Management API and are unchanged.
 
 ### Mermaid Diagram
 ```mermaid
@@ -63,5 +69,5 @@ sequenceDiagram
   POLL->>WATMGT: POST /task/create (API-first)
   WATMGT->>CFTDB: Persist task record
   POLL->>DB: Mark outbox record processed
-  Note over SVC,WATMGT: On completion event → POST /task/{id}/complete
+  Note over SVC,WATMGT: On completion/cancel/reconfigure events → Task Management API calls
 ```
