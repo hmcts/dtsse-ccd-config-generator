@@ -155,6 +155,23 @@ tasks.withType(CftlibExec).configureEach {
       'divorce_frontend',
       'wa_task_management_api'
     ].join(',')
+    environment 'WA_S2S_AUTHORIZED_SERVICES', [
+      'ccd',
+      'ccd_data',
+      'ccd_gw',
+      'ccd_ps',
+      'iac',
+      'wa_task_management_api',
+      'xui_webapp',
+      'wa_task_monitor',
+      'camunda_bpm',
+      'wa_workflow_api',
+      'wa_case_event_handler',
+      'ccd_case_disposer',
+      'civil_service',
+      'sscs',
+      'nfdiv_case_api'
+    ].join(',')
     environment 'CCD_S2S_AUTHORISED_SERVICES_CASE_USER_ROLES', 'nfdiv_case_api'
     environment 'ROLE_ASSIGNMENT_S2S_AUTHORISED_SERVICES', [
       'ccd_gw',
