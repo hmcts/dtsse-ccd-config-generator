@@ -65,7 +65,7 @@ subprojects.each { subproject ->
                 task.dependsOn gradle.includedBuild('sdk').task(':decentralised-runtime:jar')
                 task.dependsOn gradle.includedBuild('sdk').task(':cftlib-dev-only:jar')
                 task.dependsOn gradle.includedBuild('sdk').task(':ccd-servicebus-support:jar')
-                task.dependsOn gradle.includedBuild('sdk').task(':ccd-task-management:jar')
+                task.dependsOn gradle.includedBuild('sdk').task(':task-management:jar')
             }
         }
     }
