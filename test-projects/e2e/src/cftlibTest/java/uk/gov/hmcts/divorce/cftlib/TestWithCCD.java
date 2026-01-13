@@ -86,7 +86,6 @@ import uk.gov.hmcts.divorce.sow014.nfd.DecentralisedCaseworkerAddNote;
 import uk.gov.hmcts.divorce.sow014.nfd.DecentralisedCaseworkerAddNoteFailure;
 import uk.gov.hmcts.divorce.sow014.nfd.FailingSubmittedCallback;
 import uk.gov.hmcts.divorce.sow014.nfd.CaseworkerRoundTripData;
-import uk.gov.hmcts.divorce.sow014.nfd.ApiFirstTaskEvent;
 import uk.gov.hmcts.divorce.sow014.nfd.PublishedEvent;
 import uk.gov.hmcts.divorce.sow014.nfd.ReturnErrorWhenCreateTestCase;
 import uk.gov.hmcts.divorce.sow014.nfd.SubmittedConfirmationCallback;
@@ -151,6 +150,7 @@ public class TestWithCCD extends CftlibTest {
         "application/vnd.uk.gov.hmcts.ccd-data-store-api.ui-event-view.v2+json;charset=UTF-8";
     private static final String ACCEPT_UI_START_EVENT =
         "application/vnd.uk.gov.hmcts.ccd-data-store-api.ui-start-event-trigger.v2+json;charset=UTF-8";
+    private static final String API_FIRST_TASK_EVENT_ID = "api-first-create-task";
 
     @TestConfiguration
     static class ServiceBusTestConfiguration {
@@ -1019,18 +1019,18 @@ public class TestWithCCD extends CftlibTest {
     @Order(19)
     @Test
     public void apiFirstTaskShouldBeCreatedViaOutboxAndPoller() {
-        db.update("DELETE FROM task_outbox", Map.of());
+        db.update("DELETE FROM ccd.task_outbox", Map.of());
 
         var startEvent = ccdApi.startEvent(
             getAuthorisation("TEST_CASE_WORKER_USER@mailinator.com"),
             getServiceAuth(),
             String.valueOf(caseRef),
-            ApiFirstTaskEvent.EVENT_ID
+            API_FIRST_TASK_EVENT_ID
         );
 
         var request = prepareEventRequestWithToken(
             "TEST_CASE_WORKER_USER@mailinator.com",
-            ApiFirstTaskEvent.EVENT_ID,
+            API_FIRST_TASK_EVENT_ID,
             Map.of("note", "api-first-task"),
             startEvent.getToken()
         );
@@ -1039,19 +1039,19 @@ public class TestWithCCD extends CftlibTest {
         assertThat(response.getStatusLine().getStatusCode(), equalTo(201));
 
         await().atMost(Duration.ofSeconds(10)).untilAsserted(() -> {
-            Integer count = db.queryForObject("SELECT count(*) FROM task_outbox", Map.of(), Integer.class);
+            Integer count = db.queryForObject("SELECT count(*) FROM ccd.task_outbox", Map.of(), Integer.class);
             assertThat(count, equalTo(1));
         });
 
         Map<String, Object> outboxRow = db.queryForMap(
-            "SELECT task_id, status FROM task_outbox ORDER BY id DESC LIMIT 1",
+            "SELECT task_id, status FROM ccd.task_outbox ORDER BY id DESC LIMIT 1",
             Map.of()
         );
         String taskId = (String) outboxRow.get("task_id");
         assertThat(taskId, is(notNullValue()));
 
         String payloadCaseId = db.queryForObject(
-            "SELECT payload->'task'->>'case_id' FROM task_outbox ORDER BY id DESC LIMIT 1",
+            "SELECT payload->'task'->>'case_id' FROM ccd.task_outbox ORDER BY id DESC LIMIT 1",
             Map.of(),
             String.class
         );
@@ -1059,7 +1059,7 @@ public class TestWithCCD extends CftlibTest {
 
         await().atMost(Duration.ofSeconds(30)).untilAsserted(() -> {
             Map<String, Object> processed = db.queryForMap(
-                "SELECT status, last_response_code FROM task_outbox WHERE task_id = :taskId",
+                "SELECT status, last_response_code FROM ccd.task_outbox WHERE task_id = :taskId",
                 Map.of("taskId", taskId)
             );
             assertThat(processed.get("status"), equalTo("PROCESSED"));

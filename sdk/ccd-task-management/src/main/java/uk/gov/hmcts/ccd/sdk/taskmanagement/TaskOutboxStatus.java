@@ -1,4 +1,4 @@
-package uk.gov.hmcts.divorce.tasks;
+package uk.gov.hmcts.ccd.sdk.taskmanagement;
 
 public enum TaskOutboxStatus {
     NEW,

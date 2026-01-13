@@ -7,7 +7,6 @@ import static uk.gov.hmcts.divorce.divorcecase.model.UserRole.SUPER_USER;
 import static uk.gov.hmcts.divorce.divorcecase.model.access.Permissions.CREATE_READ_UPDATE;
 import static uk.gov.hmcts.divorce.divorcecase.model.access.Permissions.CREATE_READ_UPDATE_DELETE;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
@@ -15,16 +14,18 @@ import uk.gov.hmcts.ccd.sdk.api.CCDConfig;
 import uk.gov.hmcts.ccd.sdk.api.CaseDetails;
 import uk.gov.hmcts.ccd.sdk.api.ConfigBuilder;
 import uk.gov.hmcts.ccd.sdk.api.callback.AboutToStartOrSubmitResponse;
+import uk.gov.hmcts.ccd.sdk.taskmanagement.TaskCreateRequest;
+import uk.gov.hmcts.ccd.sdk.taskmanagement.TaskOutboxService;
+import uk.gov.hmcts.ccd.sdk.taskmanagement.TaskPayload;
+import uk.gov.hmcts.ccd.sdk.taskmanagement.TaskPermission;
 import uk.gov.hmcts.divorce.common.ccd.PageBuilder;
 import uk.gov.hmcts.divorce.divorcecase.NoFaultDivorce;
 import uk.gov.hmcts.divorce.divorcecase.model.CaseData;
 import uk.gov.hmcts.divorce.divorcecase.model.State;
 import uk.gov.hmcts.divorce.divorcecase.model.UserRole;
-import uk.gov.hmcts.divorce.tasks.TaskOutboxRepository;
 
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -36,10 +37,7 @@ public class ApiFirstTaskEvent implements CCDConfig<CaseData, State, UserRole> {
     public static final String EVENT_ID = "api-first-create-task";
 
     @Autowired
-    private TaskOutboxRepository taskOutboxRepository;
-
-    @Autowired
-    private ObjectMapper objectMapper;
+    private TaskOutboxService taskOutboxService;
 
     @Override
     public void configure(ConfigBuilder<CaseData, State, UserRole> configBuilder) {
@@ -66,54 +64,44 @@ public class ApiFirstTaskEvent implements CCDConfig<CaseData, State, UserRole> {
         String taskId = UUID.randomUUID().toString();
         String caseId = String.valueOf(details.getId());
 
-        Map<String, Object> task = new LinkedHashMap<>();
-        task.put("task_id", taskId);
-        task.put("type", "registerNewCase");
-        task.put("name", "Register new case");
-        task.put("title", "Register new case");
-        task.put("state", "UNASSIGNED");
-        task.put("created", now);
-        task.put("execution_type", "Case Management Task");
-        task.put("case_id", caseId);
-        task.put("case_type_id", NoFaultDivorce.getCaseType());
-        task.put("case_category", "DIVORCE");
-        task.put("case_name", "API-first task case");
-        task.put("jurisdiction", NoFaultDivorce.JURISDICTION);
-        task.put("region", "1");
-        task.put("location", "336559");
-        task.put("work_type", "applications");
-        task.put("role_category", "ADMIN");
-        task.put("security_classification", "PUBLIC");
-        task.put("description", "[Case: Edit case](/cases/case-details/" + caseId + "/trigger/edit-case)");
-        task.put("due_date_time", now.plusDays(5));
-        task.put("priority_date", now.plusDays(5));
-        task.put("major_priority", 5000);
-        task.put("minor_priority", 500);
-        task.put("location_name", "Glasgow Tribunals Centre");
-        task.put("region_name", "Scotland");
-        task.put("task_system", "SELF");
-        task.put("additional_properties", Map.of(
-            "originating_caseworker", "system"
-        ));
-        task.put("permissions", List.of(
-            Map.of(
-                "role_name", "caseworker-divorce",
-                "role_category", "ADMIN",
-                "permissions", List.of("Read", "Own", "Claim", "Unclaim", "Manage", "Complete"),
-                "authorisations", List.of("AUTH_1"),
-                "assignment_priority", 1,
-                "auto_assignable", false
-            )
-        ));
+        TaskPayload task = TaskPayload.builder()
+            .taskId(taskId)
+            .type("registerNewCase")
+            .name("Register new case")
+            .title("Register new case")
+            .state("UNASSIGNED")
+            .created(now)
+            .executionType("Case Management Task")
+            .caseId(caseId)
+            .caseTypeId(NoFaultDivorce.getCaseType())
+            .caseCategory("DIVORCE")
+            .caseName("API-first task case")
+            .jurisdiction(NoFaultDivorce.JURISDICTION)
+            .region("1")
+            .location("336559")
+            .workType("applications")
+            .roleCategory("ADMIN")
+            .securityClassification("PUBLIC")
+            .description("[Case: Edit case](/cases/case-details/" + caseId + "/trigger/edit-case)")
+            .dueDateTime(now.plusDays(5))
+            .priorityDate(now.plusDays(5))
+            .majorPriority(5000)
+            .minorPriority(500)
+            .locationName("Glasgow Tribunals Centre")
+            .regionName("Scotland")
+            .taskSystem("SELF")
+            .additionalProperties(Map.of("originating_caseworker", "system"))
+            .permissions(List.of(TaskPermission.builder()
+                .roleName("caseworker-divorce")
+                .roleCategory("ADMIN")
+                .permissions(List.of("Read", "Own", "Claim", "Unclaim", "Manage", "Complete"))
+                .authorisations(List.of("AUTH_1"))
+                .assignmentPriority(1)
+                .autoAssignable(false)
+                .build()))
+            .build();
 
-        Map<String, Object> payload = Map.of("task", task);
-
-        try {
-            String payloadJson = objectMapper.writeValueAsString(payload);
-            taskOutboxRepository.enqueue(taskId, caseId, NoFaultDivorce.getCaseType(), payloadJson);
-        } catch (Exception ex) {
-            throw new IllegalStateException("Failed to enqueue task outbox entry", ex);
-        }
+        taskOutboxService.enqueue(new TaskCreateRequest(task));
 
         return AboutToStartOrSubmitResponse.<CaseData, State>builder()
             .data(details.getData())
