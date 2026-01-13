@@ -25,3 +25,11 @@ Max line length 120 chars
 # Dirs
 
 /sdk - contains the CCD SDK tooling
+
+# CCD & Architecture
+
+Services & CCD are cyclically dependent
+
+* ccd-data-store-api makes callbacks to services based on their ccd definitions.
+* services may initiate ccd events by calling ccd-data-store-api
+
