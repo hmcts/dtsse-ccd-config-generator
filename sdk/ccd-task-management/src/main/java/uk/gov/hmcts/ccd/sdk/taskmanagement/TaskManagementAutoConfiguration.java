@@ -9,7 +9,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
-import org.springframework.boot.web.client.RestTemplateBuilder;
+import org.springframework.cloud.openfeign.EnableFeignClients;
 import org.springframework.context.annotation.Bean;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import uk.gov.hmcts.reform.authorisation.ServiceAuthorisationApi;
@@ -18,6 +18,7 @@ import uk.gov.hmcts.reform.authorisation.generators.AuthTokenGeneratorFactory;
 
 @AutoConfiguration
 @EnableConfigurationProperties(TaskManagementProperties.class)
+@EnableFeignClients(clients = TaskManagementFeignClient.class)
 public class TaskManagementAutoConfiguration {
 
   @Bean
@@ -39,14 +40,11 @@ public class TaskManagementAutoConfiguration {
 
   @Bean
   @ConditionalOnMissingBean
-  @ConditionalOnClass(RestTemplateBuilder.class)
+  @ConditionalOnClass(TaskManagementFeignClient.class)
   public TaskManagementApiClient taskManagementApiClient(
-      RestTemplateBuilder builder,
-      AuthTokenGenerator authTokenGenerator,
-      TaskManagementProperties properties,
-      ObjectMapper objectMapper
+      TaskManagementFeignClient feignClient
   ) {
-    return new TaskManagementApiClient(builder, authTokenGenerator, properties, objectMapper);
+    return new TaskManagementApiClient(feignClient);
   }
 
   @Bean
@@ -80,9 +78,10 @@ public class TaskManagementAutoConfiguration {
       TaskOutboxRepository repository,
       TaskManagementApiClient taskManagementApiClient,
       TaskOutboxRetryPolicy retryPolicy,
-      TaskManagementProperties properties
+      TaskManagementProperties properties,
+      ObjectMapper objectMapper
   ) {
     int batchSize = properties.getOutbox().getPoller().getBatchSize();
-    return new TaskOutboxPoller(repository, taskManagementApiClient, retryPolicy, batchSize);
+    return new TaskOutboxPoller(repository, taskManagementApiClient, retryPolicy, batchSize, objectMapper);
   }
 }
