@@ -14,10 +14,6 @@ public class TaskOutboxService {
     this.objectMapper = objectMapper;
   }
 
-  public void enqueue(TaskPayload payload) {
-    enqueue(new TaskCreateRequest(payload));
-  }
-
   public void enqueue(TaskCreateRequest request) {
     Objects.requireNonNull(request, "request must not be null");
     TaskPayload task = Objects.requireNonNull(request.task(), "task must not be null");
