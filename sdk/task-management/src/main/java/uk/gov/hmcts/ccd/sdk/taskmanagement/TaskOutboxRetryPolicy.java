@@ -6,15 +6,15 @@ import java.time.temporal.ChronoUnit;
 public class TaskOutboxRetryPolicy {
 
   private final int maxAttempts;
-  private final int multiplier;
-  private final long initialDelaySeconds;
-  private final long maxDelaySeconds;
+  private final double multiplier;
+  private final long initialDelayMillis;
+  private final long maxDelayMillis;
 
   public TaskOutboxRetryPolicy(TaskManagementProperties properties) {
     this.maxAttempts = properties.getOutbox().getRetry().getMaxAttempts();
-    this.multiplier = (int) properties.getOutbox().getRetry().getMultiplier();
-    this.initialDelaySeconds = properties.getOutbox().getRetry().getInitialDelay().getSeconds();
-    this.maxDelaySeconds = properties.getOutbox().getRetry().getMaxDelay().getSeconds();
+    this.multiplier = properties.getOutbox().getRetry().getMultiplier();
+    this.initialDelayMillis = properties.getOutbox().getRetry().getInitialDelay().toMillis();
+    this.maxDelayMillis = properties.getOutbox().getRetry().getMaxDelay().toMillis();
   }
 
   public int getMaxAttempts() {
@@ -25,13 +25,13 @@ public class TaskOutboxRetryPolicy {
     if (maxAttempts > 0 && attemptCount >= maxAttempts) {
       return null;
     }
-    long delay = initialDelaySeconds;
+    double delayMillis = initialDelayMillis;
     for (int attempt = 1; attempt < attemptCount; attempt++) {
-      delay = delay * multiplier;
+      delayMillis = delayMillis * multiplier;
     }
-    if (maxDelaySeconds > 0) {
-      delay = Math.min(delay, maxDelaySeconds);
+    if (maxDelayMillis > 0) {
+      delayMillis = Math.min(delayMillis, maxDelayMillis);
     }
-    return now.plus(delay, ChronoUnit.SECONDS);
+    return now.plus(Math.round(delayMillis), ChronoUnit.MILLIS);
   }
 }
