@@ -19,3 +19,4 @@
 [submodule "wa-task-management-api"]
 	path = wa-task-management-api
 	url = git@github.com:hmcts/wa-task-management-api.git
+	branch = decentralisation-poc
