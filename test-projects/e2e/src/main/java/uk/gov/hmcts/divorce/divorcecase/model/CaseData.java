@@ -124,6 +124,7 @@ public class CaseData {
     private LocalDate dueDate;
 
     @CCD(access = {CaseworkerAccess.class})
+    @External
     private String hyphenatedCaseRef;
 
     @CCD(
