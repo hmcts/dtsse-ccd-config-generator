@@ -44,13 +44,14 @@ sequenceDiagram
 
 ## Proposed - API-First Tasks
 
-### Summary
+### Goals
 - Task rules live in Java (testable code), not DMNs.
 - The service creates fully formed tasks via a new Task Management API endpoint.
-- Task creation is queued via a transactional outbox and processed by an in-app poller (both within the sptribs codebase).
-- The API-first path bypasses Camunda, CCD message publishing, and Task Monitor.
-- API-first assumes the service supplies all mandatory task fields; Task Management does not derive defaults.
-- User/XUI task actions remain via Task Management API and are unchanged.
+- Services lose their transitive dependency on Servicebus & Camunda
+- Backwards compatibility; existing task management integrations are unaffected
+- Testability; services can write end to end automated tests for their task management integration that:
+  - Are deterministic
+  - Run locally
 
 ### Mermaid Diagram
 ```mermaid
