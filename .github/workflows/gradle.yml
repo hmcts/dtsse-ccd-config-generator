@@ -15,6 +15,66 @@ jobs:
         java-version: 21
     - name: Run SDK checks and e2e test
       run: ./gradlew :sdk:check :e2e:check -i
+    - name: Publish test summary
+      if: always()
+      run: |
+        python - <<'PY'
+        import glob
+        import os
+        import xml.etree.ElementTree as ET
+
+        summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
+        if not summary_path:
+          raise SystemExit("GITHUB_STEP_SUMMARY is not set")
+
+        files = glob.glob("**/build/test-results/**/TEST-*.xml", recursive=True)
+        total_tests = total_failures = total_errors = total_skipped = 0
+        failed_cases = []
+
+        def handle_suite(suite):
+          nonlocal total_tests, total_failures, total_errors, total_skipped
+          total_tests += int(suite.attrib.get("tests", 0))
+          total_failures += int(suite.attrib.get("failures", 0))
+          total_errors += int(suite.attrib.get("errors", 0))
+          total_skipped += int(suite.attrib.get("skipped", 0))
+          for case in suite.findall("testcase"):
+            failure = case.find("failure") or case.find("error")
+            if failure is not None:
+              classname = case.attrib.get("classname", "").strip()
+              name = case.attrib.get("name", "").strip()
+              message = (failure.attrib.get("message") or "").strip()
+              failed_cases.append((classname, name, message))
+
+        for path in files:
+          try:
+            tree = ET.parse(path)
+            root = tree.getroot()
+          except ET.ParseError:
+            continue
+          if root.tag == "testsuite":
+            handle_suite(root)
+          elif root.tag == "testsuites":
+            for suite in root.findall("testsuite"):
+              handle_suite(suite)
+
+        with open(summary_path, "w", encoding="utf-8") as summary:
+          summary.write("## Test Summary\n")
+          if not files:
+            summary.write("No JUnit test results found.\n")
+            raise SystemExit(0)
+          summary.write(
+            f"Total: {total_tests} | Failed: {total_failures} | Errors: {total_errors} | "
+            f"Skipped: {total_skipped}\n"
+          )
+          if failed_cases:
+            summary.write("\n### Failed Tests (first 20)\n")
+            for classname, name, message in failed_cases[:20]:
+              label = f"{classname}.{name}" if classname else name
+              suffix = f" - {message}" if message else ""
+              summary.write(f"- {label}{suffix}\n")
+            if len(failed_cases) > 20:
+              summary.write(f"\n…and {len(failed_cases) - 20} more failures.\n")
+        PY
 
   migration-check:
     runs-on: ubuntu-latest
@@ -29,3 +89,63 @@ jobs:
         java-version: 21
     - name: Verify CCD migration script
       run: ./gradlew verifyCcdMigration -i
+    - name: Publish test summary
+      if: always()
+      run: |
+        python - <<'PY'
+        import glob
+        import os
+        import xml.etree.ElementTree as ET
+
+        summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
+        if not summary_path:
+          raise SystemExit("GITHUB_STEP_SUMMARY is not set")
+
+        files = glob.glob("**/build/test-results/**/TEST-*.xml", recursive=True)
+        total_tests = total_failures = total_errors = total_skipped = 0
+        failed_cases = []
+
+        def handle_suite(suite):
+          nonlocal total_tests, total_failures, total_errors, total_skipped
+          total_tests += int(suite.attrib.get("tests", 0))
+          total_failures += int(suite.attrib.get("failures", 0))
+          total_errors += int(suite.attrib.get("errors", 0))
+          total_skipped += int(suite.attrib.get("skipped", 0))
+          for case in suite.findall("testcase"):
+            failure = case.find("failure") or case.find("error")
+            if failure is not None:
+              classname = case.attrib.get("classname", "").strip()
+              name = case.attrib.get("name", "").strip()
+              message = (failure.attrib.get("message") or "").strip()
+              failed_cases.append((classname, name, message))
+
+        for path in files:
+          try:
+            tree = ET.parse(path)
+            root = tree.getroot()
+          except ET.ParseError:
+            continue
+          if root.tag == "testsuite":
+            handle_suite(root)
+          elif root.tag == "testsuites":
+            for suite in root.findall("testsuite"):
+              handle_suite(suite)
+
+        with open(summary_path, "w", encoding="utf-8") as summary:
+          summary.write("## Test Summary\n")
+          if not files:
+            summary.write("No JUnit test results found.\n")
+            raise SystemExit(0)
+          summary.write(
+            f"Total: {total_tests} | Failed: {total_failures} | Errors: {total_errors} | "
+            f"Skipped: {total_skipped}\n"
+          )
+          if failed_cases:
+            summary.write("\n### Failed Tests (first 20)\n")
+            for classname, name, message in failed_cases[:20]:
+              label = f"{classname}.{name}" if classname else name
+              suffix = f" - {message}" if message else ""
+              summary.write(f"- {label}{suffix}\n")
+            if len(failed_cases) > 20:
+              summary.write(f"\n…and {len(failed_cases) - 20} more failures.\n")
+        PY
