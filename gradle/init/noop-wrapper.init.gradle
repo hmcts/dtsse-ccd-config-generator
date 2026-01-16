@@ -1,0 +1,6 @@
+gradle.allprojects { p ->
+  if (p.path == ':wa-task-management-api') {
+    // Make wrapper { } a no-op in this subproject without editing the submodule.
+    p.ext.wrapper = { Closure c -> }
+  }
+}
