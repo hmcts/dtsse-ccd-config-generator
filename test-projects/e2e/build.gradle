@@ -107,6 +107,10 @@ test {
   failFast = true
 }
 
+tasks.named('check') {
+  dependsOn tasks.named('cftlibTest')
+}
+
 bootJar {
   archiveFileName.set('nfdiv-case-api.jar')
   manifest {
