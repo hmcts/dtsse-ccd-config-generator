@@ -14,7 +14,6 @@ import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import uk.gov.hmcts.divorce.divorcecase.NoFaultDivorce;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.MOCK)
@@ -55,6 +54,9 @@ class UnknownEventCallbackTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(mapper.writeValueAsString(payload)))
             .andExpect(status().is(HttpStatus.NOT_FOUND.value()))
-            .andExpect(content().string(org.hamcrest.Matchers.containsString("Case event not found")));
+            .andExpect(result -> org.hamcrest.MatcherAssert.assertThat(
+                result.getResponse().getErrorMessage(),
+                org.hamcrest.Matchers.containsString("Case event not found")
+            ));
     }
 }

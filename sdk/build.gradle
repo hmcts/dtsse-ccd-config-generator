@@ -2,7 +2,7 @@ import org.springframework.boot.gradle.plugin.SpringBootPlugin
 
 plugins {
     id("io.freefair.lombok") version "9.2.0" apply(false)
-    id("org.springframework.boot") version "3.2.12" apply(false)
+    id("org.springframework.boot") version "3.4.3" apply(false)
     id("io.spring.dependency-management") version "1.1.7" apply(false)
 }
 
@@ -48,6 +48,12 @@ subprojects {
 
     apply plugin: 'java-library'
     apply plugin: 'maven-publish'
+
+    dependencies {
+        // Use api to expose the BOM to consumers, and platform to pin consistent Spring versions.
+        // Effect: downstream projects inherit the same dependency constraints, avoiding version drift.
+        api platform(SpringBootPlugin.BOM_COORDINATES)
+    }
 
     java {
         withJavadocJar()
