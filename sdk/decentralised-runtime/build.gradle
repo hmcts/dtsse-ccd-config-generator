@@ -1,3 +1,5 @@
+import org.springframework.boot.gradle.plugin.SpringBootPlugin
+
 repositories {
     maven {
         url = 'https://pkgs.dev.azure.com/hmcts/Artifacts/_packaging/hmcts-lib/maven/v1'
@@ -5,6 +7,7 @@ repositories {
 }
 
 dependencies {
+    implementation platform(SpringBootPlugin.BOM_COORDINATES)
     implementation project(':ccd-config-generator')
     // A filtered set of useful CCD POJOs including DTOs and other utilities.
     implementation ('com.github.hmcts.rse-cft-lib:ccd-lib:0.19.1953') {

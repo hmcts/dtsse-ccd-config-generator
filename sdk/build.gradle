@@ -20,10 +20,6 @@ subprojects {
         }
     }
 
-    if (project.name == 'decentralised-runtime') {
-        apply plugin: 'org.springframework.boot'
-    }
-
     version = System.getenv('RELEASE_VERSION')?.replace('refs/tags/', '') ?: 'DEV-SNAPSHOT'
 
     compileJava   {
@@ -48,12 +44,6 @@ subprojects {
 
     apply plugin: 'java-library'
     apply plugin: 'maven-publish'
-
-    dependencies {
-        // Use api to expose the BOM to consumers, and platform to pin consistent Spring versions.
-        // Effect: downstream projects inherit the same dependency constraints, avoiding version drift.
-        api platform(SpringBootPlugin.BOM_COORDINATES)
-    }
 
     java {
         withJavadocJar()
