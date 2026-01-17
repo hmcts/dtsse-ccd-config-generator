@@ -69,6 +69,9 @@ dependencies {
   }
 
   testImplementation 'org.apache.httpcomponents:httpclient:4.5.14'
+  testImplementation 'org.testcontainers:testcontainers:1.20.4'
+  testImplementation 'org.testcontainers:junit-jupiter:1.20.4'
+  testImplementation 'org.testcontainers:postgresql:1.20.4'
 
   cftlibTestImplementation platform('org.junit:junit-bom')
   cftlibTestImplementation 'org.junit.platform:junit-platform-console'
@@ -102,6 +105,10 @@ tasks.withType(Test).configureEach {
 
 test {
   failFast = true
+}
+
+tasks.named('check') {
+  dependsOn tasks.named('cftlibTest')
 }
 
 bootJar {

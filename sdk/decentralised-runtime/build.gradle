@@ -1,6 +1,4 @@
-plugins {
-    id 'org.springframework.boot' version '3.5.9'
-}
+import org.springframework.boot.gradle.plugin.SpringBootPlugin
 
 repositories {
     maven {
@@ -9,7 +7,7 @@ repositories {
 }
 
 dependencies {
-    implementation platform("org.springframework.boot:spring-boot-dependencies:3.5.9")
+    implementation platform(SpringBootPlugin.BOM_COORDINATES)
     implementation project(':ccd-config-generator')
     // A filtered set of useful CCD POJOs including DTOs and other utilities.
     implementation ('com.github.hmcts.rse-cft-lib:ccd-lib:0.19.1953') {
@@ -17,6 +15,7 @@ dependencies {
     }
     implementation group: 'org.springframework.boot', name: 'spring-boot-starter-web'
     implementation group: 'org.springframework.boot', name: 'spring-boot-starter-jdbc'
+    implementation 'org.flywaydb:flyway-core'
     implementation('com.github.hmcts:idam-java-client:3.0.5') {
         transitive = false
     }
@@ -26,7 +25,7 @@ dependencies {
     annotationProcessor 'org.projectlombok:lombok:1.18.42'
 
     implementation "org.springframework.boot:spring-boot-autoconfigure"
-    implementation 'org.flywaydb:flyway-database-postgresql'
+    runtimeOnly 'org.flywaydb:flyway-database-postgresql'
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testImplementation 'org.testcontainers:junit-jupiter'
     testImplementation 'org.testcontainers:postgresql'

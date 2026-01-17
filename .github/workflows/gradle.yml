@@ -14,7 +14,7 @@ jobs:
         distribution: 'zulu'
         java-version: 21
     - name: Run SDK checks and e2e test
-      run: ./gradlew :sdk:check e2e:cftlibTest -i
+      run: ./gradlew :sdk:check :e2e:check -i
 
   migration-check:
     runs-on: ubuntu-latest
