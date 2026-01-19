@@ -42,6 +42,15 @@ public class TaskOutboxPoller {
 
       try {
         ResponseEntity<TaskCreateResponse> response = createTask(record);
+        if (!hasTaskId(response)) {
+          log.warn(
+              "Task outbox {} create response missing task_id with status {}",
+              record.id(),
+              response.getStatusCodeValue()
+          );
+          handleFailure(record, response.getStatusCodeValue(), "Task creation response missing task_id");
+          continue;
+        }
         repository.markProcessed(record.id(), response.getStatusCodeValue());
         log.info("Task outbox {} processed with status {}", record.id(), response.getStatusCodeValue());
       } catch (FeignException ex) {
@@ -65,6 +74,11 @@ public class TaskOutboxPoller {
   private ResponseEntity<TaskCreateResponse> createTask(TaskOutboxRecord record) throws IOException {
     TaskCreateRequest request = objectMapper.readValue(record.payload(), TaskCreateRequest.class);
     return taskManagementApiClient.createTask(request);
+  }
+
+  private boolean hasTaskId(ResponseEntity<TaskCreateResponse> response) {
+    TaskCreateResponse body = response.getBody();
+    return body != null && body.taskId() != null && !body.taskId().isBlank();
   }
 
   private void handleFailure(TaskOutboxRecord record, Integer statusCode, String body) {

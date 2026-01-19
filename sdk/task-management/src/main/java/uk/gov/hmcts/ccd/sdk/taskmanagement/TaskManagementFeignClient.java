@@ -13,6 +13,6 @@ import org.springframework.web.bind.annotation.RequestBody;
 )
 public interface TaskManagementFeignClient {
 
-  @PostMapping(value = "/task/create", consumes = MediaType.APPLICATION_JSON_VALUE)
+  @PostMapping(value = "/tasks", consumes = MediaType.APPLICATION_JSON_VALUE)
   ResponseEntity<TaskCreateResponse> createTask(@RequestBody TaskCreateRequest payload);
 }
