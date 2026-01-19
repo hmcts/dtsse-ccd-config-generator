@@ -69,7 +69,7 @@ sequenceDiagram
   SVC->>SVC: Java rules build task payload
   SVC->>DB: Store outbox record (same transaction)
   POLL->>DB: Read pending outbox records
-  POLL->>WATMGT: POST /task/create (API-first)
+  POLL->>WATMGT: POST /tasks (API-first)
   WATMGT->>CFTDB: Persist task record
   POLL->>DB: Mark outbox record processed
   Note over SVC,WATMGT: On completion/cancel/reconfigure events → Task Management API calls

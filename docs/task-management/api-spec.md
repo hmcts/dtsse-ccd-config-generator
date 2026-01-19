@@ -9,8 +9,8 @@ This API-first design is predicated on the caller supplying all mandatory fields
 - Repeating the same request with the same `task_id` and `case_type_id` must return the same task (201 or 200).
 - The same `task_id` with a different payload must return `409 Conflict`.
 
-## `POST /task/create`
-`POST /task` is already used for task search, so API-first creation is exposed under `/task/create`.
+## `POST /tasks`
+API-first creation is exposed under `/tasks` to align with HMCTS conventions.
 Payload fields use `snake_case`.
 
 ```json
