@@ -5,9 +5,9 @@ Create fully formed tasks directly in Task Management without relying on Camunda
 This API-first design is predicated on the caller supplying all mandatory fields.
 
 ## Idempotency
-- `task_id` forms the idempotency key (scoped to the `case_type_id`).
-- Repeating the same request with the same `task_id` and `case_type_id` must return success (201 or 204) with no body.
-- The same `task_id` with a different payload must return `409 Conflict`.
+- Idempotency key is the composite of `case_type_id` + `task_id`.
+- Repeating the same request with the same `case_type_id` + `task_id` must return `204 No Content` with an empty body.
+- The same `task_id` can be reused safely across different `case_type_id` values.
 
 ## `POST /tasks`
 API-first creation is exposed under `/tasks` to align with HMCTS conventions.
@@ -72,6 +72,7 @@ Payload fields use `snake_case`.
 
 ### task_id
 Client-supplied task identifier, unique within the case type. UUID string (lowercase or uppercase hex with hyphens).
+Together with `case_type_id`, forms the composite idempotency key.
 Required.
 
 ### type
@@ -170,7 +171,7 @@ Array of permission entries. Required. Each entry represents one access-control 
 
 ## Response
 `201 Created` with a minimal `TaskResource` representation.
-`204 No Content` if the task already exists with the same payload.
+`204 No Content` with an empty response body if the task already exists with the same payload.
 
 Example (201):
 ```json
@@ -189,7 +190,6 @@ Example (201):
 ## Error Codes
 - `400 Bad Request`: validation errors.
 - `401 Unauthorized` / `403 Forbidden`: auth failures.
-- `409 Conflict`: `task_id` reused with different payload.
 
 ## Notes
 - This endpoint bypasses Camunda and DMN evaluation.
