@@ -6,7 +6,7 @@ This API-first design is predicated on the caller supplying all mandatory fields
 
 ## Idempotency
 - `task_id` forms the idempotency key (scoped to the `case_type_id`).
-- Repeating the same request with the same `task_id` and `case_type_id` must return the same task (201 or 200).
+- Repeating the same request with the same `task_id` and `case_type_id` must return success (201 or 204) with no body.
 - The same `task_id` with a different payload must return `409 Conflict`.
 
 ## `POST /tasks`
@@ -170,9 +170,9 @@ Array of permission entries. Required. Each entry represents one access-control 
 
 ## Response
 `201 Created` with a minimal `TaskResource` representation.
-`200 OK` if the task already exists with the same payload.
+`204 No Content` if the task already exists with the same payload.
 
-Example:
+Example (201):
 ```json
 {
   "task_id": "9f3e7e8a-1d3b-4e59-8cb0-2d86f630c1c6",
