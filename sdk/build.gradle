@@ -1,5 +1,9 @@
+import org.springframework.boot.gradle.plugin.SpringBootPlugin
+
 plugins {
-    id("io.freefair.lombok") version "9.1.0" apply(false)
+    id("io.freefair.lombok") version "9.2.0" apply(false)
+    id("org.springframework.boot") version "3.4.3" apply(false)
+    id("io.spring.dependency-management") version "1.1.7" apply(false)
 }
 
 def sdkCheck = tasks.register('check');
@@ -8,6 +12,13 @@ subprojects {
     apply plugin: 'java'
     apply plugin: 'checkstyle'
     apply plugin: 'io.freefair.lombok'
+    apply plugin: 'io.spring.dependency-management'
+
+    dependencyManagement {
+        imports {
+            mavenBom(SpringBootPlugin.BOM_COORDINATES)
+        }
+    }
 
     version = System.getenv('RELEASE_VERSION')?.replace('refs/tags/', '') ?: 'DEV-SNAPSHOT'
 

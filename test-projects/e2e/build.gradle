@@ -5,7 +5,7 @@ plugins {
   id 'org.springframework.boot' version '3.5.9'
   id 'io.spring.dependency-management' version '1.1.7'
   id 'hmcts.ccd.sdk'
-  id 'com.github.hmcts.rse-cft-lib' version '0.19.1978'
+  id 'com.github.hmcts.rse-cft-lib' version '0.19.1988'
 }
 
 group = 'uk.gov.hmcts'
@@ -42,7 +42,7 @@ dependencies {
   implementation 'org.springframework.retry:spring-retry'
 
   implementation 'org.flywaydb:flyway-database-postgresql'
-  implementation 'org.postgresql:postgresql:42.7.8'
+  implementation 'org.postgresql:postgresql:42.7.9'
 
 
   implementation 'com.github.hmcts:ccd-case-document-am-client:1.59.2'
@@ -70,6 +70,9 @@ dependencies {
   }
 
   testImplementation 'org.apache.httpcomponents:httpclient:4.5.14'
+  testImplementation 'org.testcontainers:testcontainers:1.20.4'
+  testImplementation 'org.testcontainers:junit-jupiter:1.20.4'
+  testImplementation 'org.testcontainers:postgresql:1.20.4'
 
   cftlibTestImplementation platform('org.junit:junit-bom')
   cftlibTestImplementation 'org.junit.platform:junit-platform-console'
@@ -104,6 +107,10 @@ tasks.withType(Test).configureEach {
 
 test {
   failFast = true
+}
+
+tasks.named('check') {
+  dependsOn tasks.named('cftlibTest')
 }
 
 bootJar {
