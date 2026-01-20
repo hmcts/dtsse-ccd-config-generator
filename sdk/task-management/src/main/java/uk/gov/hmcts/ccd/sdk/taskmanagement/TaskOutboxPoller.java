@@ -42,6 +42,7 @@ public class TaskOutboxPoller {
 
       try {
         ResponseEntity<TaskCreateResponse> response = createTask(record);
+        log.warn("Task outbox {} create response body {}", record.id(), response.getBody());
         if (!hasTaskId(response)) {
           log.warn(
               "Task outbox {} create response missing task_id with status {}",
@@ -58,7 +59,8 @@ public class TaskOutboxPoller {
             "Task outbox {} create failed with status {}: {}",
             record.id(),
             ex.status(),
-            ex.contentUTF8()
+            ex.contentUTF8(),
+            ex
         );
         handleFailure(record, ex.status(), ex.contentUTF8());
       } catch (IOException ex) {
@@ -73,6 +75,7 @@ public class TaskOutboxPoller {
 
   private ResponseEntity<TaskCreateResponse> createTask(TaskOutboxRecord record) throws IOException {
     TaskCreateRequest request = objectMapper.readValue(record.payload(), TaskCreateRequest.class);
+    log.warn("Task outbox {} sending payload {}", record.id(), objectMapper.writeValueAsString(request));
     return taskManagementApiClient.createTask(request);
   }
 
