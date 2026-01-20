@@ -16,7 +16,7 @@ import lombok.extern.jackson.Jacksonized;
 @JsonInclude(JsonInclude.Include.NON_NULL)
 @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
 public class TaskPayload {
-  String taskId;
+  String externalTaskId;
   String type;
   String name;
   String title;

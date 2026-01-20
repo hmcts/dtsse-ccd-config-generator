@@ -65,7 +65,7 @@ public class ApiFirstTaskEvent implements CCDConfig<CaseData, State, UserRole> {
         String caseId = String.valueOf(details.getId());
 
         TaskPayload task = TaskPayload.builder()
-            .taskId(taskId)
+            .externalTaskId(taskId)
             .type("registerNewCase")
             .name("Register new case")
             .title("Register new case")

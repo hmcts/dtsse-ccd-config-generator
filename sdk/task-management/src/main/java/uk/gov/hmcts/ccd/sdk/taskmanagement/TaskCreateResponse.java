@@ -9,6 +9,7 @@ import java.time.OffsetDateTime;
 @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
 public record TaskCreateResponse(
     String taskId,
+    String externalTaskId,
     String taskName,
     String taskType,
     String state,

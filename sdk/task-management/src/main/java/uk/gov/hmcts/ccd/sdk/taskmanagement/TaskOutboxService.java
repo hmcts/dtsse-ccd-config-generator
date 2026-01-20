@@ -17,13 +17,13 @@ public class TaskOutboxService {
   public void enqueue(TaskCreateRequest request) {
     Objects.requireNonNull(request, "request must not be null");
     TaskPayload task = Objects.requireNonNull(request.task(), "task must not be null");
-    requireText(task.getTaskId(), "taskId");
+    requireText(task.getExternalTaskId(), "external task id");
     requireText(task.getCaseId(), "caseId");
     requireText(task.getCaseTypeId(), "caseTypeId");
 
     try {
       String payload = objectMapper.writeValueAsString(request);
-      repository.enqueue(task.getTaskId(), task.getCaseId(), task.getCaseTypeId(), payload);
+      repository.enqueue(task.getExternalTaskId(), task.getCaseId(), task.getCaseTypeId(), payload);
     } catch (IOException ex) {
       throw new IllegalStateException("Failed to enqueue task outbox entry", ex);
     }
