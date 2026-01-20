@@ -19,24 +19,32 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
+import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Function;
 import java.util.HashMap;
+import java.util.stream.StreamSupport;
 
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.http.NameValuePair;
+import org.apache.http.client.methods.CloseableHttpResponse;
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.client.methods.HttpPost;
 import org.apache.http.client.methods.HttpRequestBase;
 import org.apache.http.client.methods.HttpPut;
+import org.apache.http.client.entity.UrlEncodedFormEntity;
 import org.apache.http.entity.ContentType;
 import org.apache.http.entity.StringEntity;
+import org.apache.http.message.BasicNameValuePair;
+import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClientBuilder;
 import org.apache.http.util.EntityUtils;
 import org.mockito.ArgumentCaptor;
@@ -136,6 +144,7 @@ public class TestWithCCD extends CftlibTest {
     private static final String BASE_URL = "http://localhost:4452";
     private static final String SERVICE_BASE_URL = "http://localhost:4013";
     private static final String ELASTICSEARCH_BASE_URL = "http://localhost:9200";
+    private static final String TASK_MANAGEMENT_BASE_URL = "http://localhost:8087";
     private static final String ACCEPT_CREATE_CASE =
         "application/vnd.uk.gov.hmcts.ccd-data-store-api.create-case.v2+json;charset=UTF-8";
     private static final String ACCEPT_CREATE_EVENT =
@@ -1071,6 +1080,48 @@ public class TestWithCCD extends CftlibTest {
     }
 
     @SneakyThrows
+    @Order(20)
+    @Test
+    public void apiFirstTaskShouldBeVisibleInWorkAllocationSearch() {
+        String user = "TEST_CASE_WORKER_USER@mailinator.com";
+        String authHeader = getIdamAccessTokenFromSimulator(user, "password");
+        Map<String, Object> searchRequest = Map.of(
+            "search_parameters", List.of(Map.of(
+                "key", "jurisdiction",
+                "operator", "IN",
+                "values", List.of(NoFaultDivorce.JURISDICTION)
+            )),
+            "sorting_parameters", List.of(),
+            "request_context", "AVAILABLE_TASKS"
+        );
+
+        await().atMost(Duration.ofSeconds(30)).untilAsserted(() -> {
+            try (CloseableHttpClient client = HttpClientBuilder.create().build()) {
+                HttpPost request = new HttpPost(TASK_MANAGEMENT_BASE_URL + "/task");
+                request.addHeader("Content-Type", "application/json");
+                request.addHeader("ServiceAuthorization", cftlib().generateDummyS2SToken("xui_webapp"));
+                request.addHeader("Authorization", authHeader);
+                request.setEntity(new StringEntity(mapper.writeValueAsString(searchRequest), ContentType.APPLICATION_JSON));
+
+                try (CloseableHttpResponse response = client.execute(request)) {
+                    int status = response.getStatusLine().getStatusCode();
+                    assertThat(status, equalTo(200));
+
+                    String responseBody = EntityUtils.toString(response.getEntity());
+                    JsonNode payload = mapper.readTree(responseBody);
+                    JsonNode tasks = payload.path("tasks");
+
+                    boolean hasCaseTask = tasks.isArray() && StreamSupport.stream(tasks.spliterator(), false)
+                        .map(task -> task.path("case_id").asText(task.path("caseId").asText("")))
+                        .anyMatch(caseId -> String.valueOf(caseRef).equals(caseId));
+                    assertThat("Expected task for case " + caseRef + " in response: " + responseBody,
+                        hasCaseTask, is(true));
+                }
+            }
+        });
+    }
+
+    @SneakyThrows
     @Order(18)
     @Test
     public void testReturnErrorWhenCreateTestCase() {
@@ -1338,6 +1389,53 @@ public class TestWithCCD extends CftlibTest {
 
     private String getAuthorisation(String user) {
         return idam.getAccessToken(user, "");
+    }
+
+    @SneakyThrows
+    private String getIdamAccessTokenFromSimulator(String user, String password) {
+        String baseUrl = Optional.ofNullable(System.getenv("IDAM_API_BASEURL")).orElse("http://localhost:5062");
+        String clientId = Optional.ofNullable(System.getenv("IDAM_CLIENT_ID")).orElse("divorce");
+        String clientSecret = Optional.ofNullable(System.getenv("IDAM_CLIENT_SECRET")).orElse("123456");
+        String tokenUrl = baseUrl + "/o/token";
+
+        List<NameValuePair> params = List.of(
+            new BasicNameValuePair("grant_type", "password"),
+            new BasicNameValuePair("client_id", clientId),
+            new BasicNameValuePair("client_secret", clientSecret),
+            new BasicNameValuePair("username", user),
+            new BasicNameValuePair("password", password),
+            new BasicNameValuePair("scope", "openid profile roles")
+        );
+
+        var request = new HttpPost(tokenUrl);
+        request.setHeader("Content-Type", "application/x-www-form-urlencoded");
+        request.setEntity(new UrlEncodedFormEntity(params, StandardCharsets.UTF_8));
+
+        var response = HttpClientBuilder.create().build().execute(request);
+        try {
+            int status = response.getStatusLine().getStatusCode();
+            if (status != 200) {
+                String body = Optional.ofNullable(response.getEntity())
+                    .map(entity -> {
+                        try {
+                            return EntityUtils.toString(entity);
+                        } catch (IOException ex) {
+                            return "<failed to read body>";
+                        }
+                    })
+                    .orElse("<empty>");
+                throw new IllegalStateException("IDAM token request failed status=" + status + " body=" + body);
+            }
+
+            String body = EntityUtils.toString(response.getEntity());
+            String token = mapper.readTree(body).path("access_token").asText("");
+            if (token.isBlank()) {
+                throw new IllegalStateException("IDAM token response missing access_token");
+            }
+            return "Bearer " + token;
+        } finally {
+            response.close();
+        }
     }
 
     private String getServiceAuth() {
