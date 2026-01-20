@@ -29,7 +29,7 @@ repositories {
 }
 
 dependencies {
-    implementation 'org.springframework.boot:spring-boot-autoconfigure:3.4.3'
+    implementation 'org.springframework.boot:spring-boot-autoconfigure:3.5.9'
 
     // Use JUnit test framework
     testImplementation 'junit:junit:4.13.2'
