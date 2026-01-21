@@ -69,7 +69,6 @@ public class ApiFirstTaskEvent implements CCDConfig<CaseData, State, UserRole> {
             .type("registerNewCase")
             .name("Register new case")
             .title("Register new case")
-            .state("UNASSIGNED")
             .created(now)
             .executionType("Case Management Task")
             .caseId(caseId)

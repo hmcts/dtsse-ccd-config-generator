@@ -46,6 +46,7 @@ public class CftLibConfig implements CFTLibConfigurer {
     public void configure(CFTLib lib) throws Exception {
         createRoles(lib);
         createBeftaUsers(lib);
+        createSystemUsers(lib);
         createDivorceUsers(lib);
         configureRoleAssignments(lib);
         importDivorceDefinitions(lib);
@@ -273,6 +274,12 @@ public class CftLibConfig implements CFTLibConfigurer {
         }
     }
 
+    private void createSystemUsers(CFTLib lib) throws Exception {
+      lib.createIdamUser("wa-system-user@fake.hmcts.net",
+        "caseworker-wa",
+        "caseworker-wa-configuration"
+      );
+    }
     private void importDivorceDefinitions(CFTLib lib) throws Exception {
         // Generate CCD definitions before importing them into the in-memory instance.
         configWriter.generateAllCaseTypesToJSON(new File("build/definitions"));

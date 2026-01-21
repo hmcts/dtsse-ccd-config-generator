@@ -20,7 +20,7 @@ public class TaskPayload {
   String type;
   String name;
   String title;
-  String state;
+  String assignee;
   OffsetDateTime created;
   String executionType;
   String caseId;
