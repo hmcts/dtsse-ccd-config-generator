@@ -1090,6 +1090,12 @@ public class TestWithCCD extends CftlibTest {
                 "key", "jurisdiction",
                 "operator", "IN",
                 "values", List.of(NoFaultDivorce.JURISDICTION)
+            ), Map.of(
+                "key", "location",
+                "operator", "IN",
+                // XUI uses the refdata stub location (336559) for available tasks; keep in sync with
+                // https://github.com/hmcts/dtsse-ccd-config-generator/blob/master/test-projects/e2e/src/main/java/uk/gov/hmcts/divorce/stubs/RefDataStubController.java#L16
+                "values", List.of("336559")
             )),
             "sorting_parameters", List.of(),
             "request_context", "AVAILABLE_TASKS"
@@ -1111,11 +1117,11 @@ public class TestWithCCD extends CftlibTest {
                     JsonNode payload = mapper.readTree(responseBody);
                     JsonNode tasks = payload.path("tasks");
 
-                    boolean hasCaseTask = tasks.isArray() && StreamSupport.stream(tasks.spliterator(), false)
-                        .map(task -> task.path("case_id").asText(task.path("caseId").asText("")))
+                    boolean hasTask = tasks.isArray() && StreamSupport.stream(tasks.spliterator(), false)
+                        .map(task -> task.path("case_id").asText(""))
                         .anyMatch(caseId -> String.valueOf(caseRef).equals(caseId));
-                    assertThat("Expected task for case " + caseRef + " in response: " + responseBody,
-                        hasCaseTask, is(true));
+                    assertThat("Expected case id " + caseRef + " in response: " + responseBody,
+                        hasTask, is(true));
                 }
             }
         });
