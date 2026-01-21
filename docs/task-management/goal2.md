@@ -12,3 +12,5 @@ We need a minimal way for services to end tasks so users do not see stale or irr
 
 ## Notes / out of scope
 - Reconfigure (cancel + recreate) is a follow-up goal.
+
+API details: [Task termination](api/task-termination.md).

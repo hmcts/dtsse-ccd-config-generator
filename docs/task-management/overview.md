@@ -1,5 +1,9 @@
 # Overview (Current vs API-First)
 
+API details live in:
+- [Task creation](api/task-creation.md)
+- [Task termination](api/task-termination.md)
+
 ## As-Is Overview (Current WA Flow)
 
 This describes the current CCD → WA task creation path and the components involved.
