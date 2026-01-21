@@ -275,7 +275,7 @@ public class CftLibConfig implements CFTLibConfigurer {
     }
 
     private void createSystemUsers(CFTLib lib) throws Exception {
-      lib.createIdamUser("wa-system-user@fake.hmcts.net",
+      lib.createIdamUser("some_user@hmcts.net",
         "caseworker-wa",
         "caseworker-wa-configuration"
       );
