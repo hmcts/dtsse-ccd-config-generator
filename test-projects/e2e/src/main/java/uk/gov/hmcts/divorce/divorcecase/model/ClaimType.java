@@ -1,4 +1,4 @@
-package uk.gov.hmcts.civil.divorcecase.model;
+package uk.gov.hmcts.divorce.divorcecase.model;
 
 import com.fasterxml.jackson.annotation.JsonValue;
 import lombok.Getter;
@@ -33,4 +33,3 @@ public enum ClaimType {
     @JsonValue
     private final String displayValue;
 }
-

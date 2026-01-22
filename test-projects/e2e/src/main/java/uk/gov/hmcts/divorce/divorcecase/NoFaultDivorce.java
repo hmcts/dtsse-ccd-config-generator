@@ -3,22 +3,33 @@ package uk.gov.hmcts.divorce.divorcecase;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import uk.gov.hmcts.ccd.sdk.api.CCDConfig;
+import uk.gov.hmcts.ccd.sdk.api.CaseDetails;
 import uk.gov.hmcts.ccd.sdk.api.ConfigBuilder;
+import uk.gov.hmcts.ccd.sdk.api.callback.AboutToStartOrSubmitResponse;
 import uk.gov.hmcts.divorce.divorcecase.model.CaseData;
+import uk.gov.hmcts.divorce.divorcecase.model.Claimant;
+import uk.gov.hmcts.divorce.divorcecase.model.Defendant;
+import uk.gov.hmcts.divorce.divorcecase.model.LegalRepresentative;
 import uk.gov.hmcts.divorce.divorcecase.model.State;
 import uk.gov.hmcts.divorce.divorcecase.model.UserRole;
 
-import static uk.gov.hmcts.divorce.divorcecase.model.UserRole.APPLICANT_1_SOLICITOR;
-import static uk.gov.hmcts.divorce.divorcecase.model.UserRole.APPLICANT_2_SOLICITOR;
+import java.time.LocalDateTime;
+import java.util.EnumSet;
+
+import static uk.gov.hmcts.ccd.sdk.api.Permission.CRU;
+import static uk.gov.hmcts.ccd.sdk.api.Permission.R;
 
 @Component
 @Slf4j
 public class NoFaultDivorce implements CCDConfig<CaseData, State, UserRole> {
 
-    private static final String CASE_TYPE = "E2E";
+    private static final String CASE_TYPE = "E2E_CIVIL";
     public static final String CASE_TYPE_DESCRIPTION = "New Civil Case";
     public static final String JURISDICTION = "CIVIL";
     public static final String CREATE_CLAIM_EVENT = "CREATE_CLAIM";
+    public static final String CREATE_EVENT = "CREATE_CASE";
+    public static final String SUBMIT_EVENT = "SUBMIT_CASE";
+    public static final String UPDATE_EVENT = "UPDATE_CASE";
 
     public static String getCaseType() {
         return CASE_TYPE;
@@ -42,38 +53,44 @@ public class NoFaultDivorce implements CCDConfig<CaseData, State, UserRole> {
                 // Page 1: Is the claimant a child?
                 .page("isClaimantChild")
                 .label("isClaimantChildLabel", "## Create claim - Unspecified")
-                .mandatory(CaseData::getIsClaimantChild, "Is the claimant a child i.e. under the age of 18?")
+                .mandatoryWithLabel(CaseData::getIsClaimantChild, "Is the claimant a child i.e. under the age of 18?")
                 .done()
             .fields()
                 // Page 2: File references
                 .page("fileReferences")
                 .label("fileReferencesLabel", "## Your File Reference (Optional)")
-                .optional(CaseData::getClaimantLegalRepresentativeReference, "Claimant's legal representative's reference (Optional)")
-                .optional(CaseData::getDefendantLegalRepresentativeReference, "Defendant's legal representative's reference (Optional)")
+                .optionalWithLabel(
+                    CaseData::getClaimantLegalRepresentativeReference,
+                    "Claimant's legal representative's reference (Optional)"
+                )
+                .optionalWithLabel(
+                    CaseData::getDefendantLegalRepresentativeReference,
+                    "Defendant's legal representative's reference (Optional)"
+                )
                 .done()
             .fields()
                 // Page 3: Claim type
                 .page("claimType")
                 .label("claimTypeLabel", "## Create claim - Unspecified")
-                .mandatory(CaseData::getClaimType, "What type of claim is this?")
+                .mandatoryWithLabel(CaseData::getClaimType, "What type of claim is this?")
                 .done()
             .fields()
                 // Page 4: Claimant details
                 .page("claimantDetails")
                 .label("claimantDetailsLabel", "## Claimant's details")
                 .complex(CaseData::getClaimant)
-                    .mandatory(uk.gov.hmcts.civil.civilcase.model.Claimant::getType, "Claimant type")
-                    .optional(uk.gov.hmcts.civil.civilcase.model.Claimant::getTitle, "Title (Optional)")
-                    .mandatory(uk.gov.hmcts.civil.civilcase.model.Claimant::getFirstName, "First name")
-                    .mandatory(uk.gov.hmcts.civil.civilcase.model.Claimant::getLastName, "Last name")
-                    .mandatory(uk.gov.hmcts.civil.civilcase.model.Claimant::getDateOfBirth, "Date of birth")
-                    .optional(uk.gov.hmcts.civil.civilcase.model.Claimant::getEmail, "Email (Optional)")
-                    .optional(uk.gov.hmcts.civil.civilcase.model.Claimant::getPhone, "Phone (Optional)")
+                    .mandatoryWithLabel(Claimant::getType, "Claimant type")
+                    .optionalWithLabel(Claimant::getTitle, "Title (Optional)")
+                    .mandatoryWithLabel(Claimant::getFirstName, "First name")
+                    .mandatoryWithLabel(Claimant::getLastName, "Last name")
+                    .mandatoryWithLabel(Claimant::getDateOfBirth, "Date of birth")
+                    .optionalWithLabel(Claimant::getEmail, "Email (Optional)")
+                    .optionalWithLabel(Claimant::getPhone, "Phone (Optional)")
                     .done()
                 .label("addressLabel", "## Address")
                 .complex(CaseData::getClaimant)
-                    .complex(uk.gov.hmcts.civil.civilcase.model.Claimant::getAddress)
-                        .mandatory(uk.gov.hmcts.ccd.sdk.type.AddressUK::getPostCode, "Enter a UK postcode")
+                    .complex(Claimant::getAddress)
+                        .mandatoryWithLabel(uk.gov.hmcts.ccd.sdk.type.AddressUK::getPostCode, "Enter a UK postcode")
                         .done()
                     .done()
                 .done()
@@ -82,18 +99,21 @@ public class NoFaultDivorce implements CCDConfig<CaseData, State, UserRole> {
                 .page("claimantLegalRepresentative")
                 .label("claimantLegalRepresentativeLabel", "## Search for the claimant's legal representative")
                 .complex(CaseData::getClaimantLegalRepresentative)
-                    .optional(uk.gov.hmcts.civil.civilcase.model.LegalRepresentative::getReference, "Reference (Optional)")
-                    .optional(uk.gov.hmcts.civil.civilcase.model.LegalRepresentative::getOrganisationName, "Search for an organisation")
+                    .optionalWithLabel(LegalRepresentative::getReference, "Reference (Optional)")
+                    .optionalWithLabel(LegalRepresentative::getOrganisationName, "Search for an organisation")
                     .done()
                 .done()
             .fields()
                 // Page 6: Legal representative's service address
                 .page("legalRepresentativeServiceAddress")
                 .label("legalRepresentativeServiceAddressLabel", "## Legal representative's service address")
-                .mandatory(CaseData::getEnterDifferentLegalRepAddress, "Do you wish to enter a different address?")
+                .mandatoryWithLabel(
+                    CaseData::getEnterDifferentLegalRepAddress,
+                    "Do you wish to enter a different address?"
+                )
                 .complex(CaseData::getClaimantLegalRepresentative)
-                    .complex(uk.gov.hmcts.civil.civilcase.model.LegalRepresentative::getServiceAddress)
-                        .mandatory(uk.gov.hmcts.ccd.sdk.type.AddressUK::getPostCode, "Enter a UK postcode")
+                    .complex(LegalRepresentative::getServiceAddress)
+                        .mandatoryWithLabel(uk.gov.hmcts.ccd.sdk.type.AddressUK::getPostCode, "Enter a UK postcode")
                         .done()
                     .done()
                 .done()
@@ -101,36 +121,42 @@ public class NoFaultDivorce implements CCDConfig<CaseData, State, UserRole> {
                 // Page 7: Notifications
                 .page("notifications")
                 .label("notificationsLabel", "## Notifications")
-                .mandatory(CaseData::getUseSameEmailForNotifications, "Would you like to use the same email address for notifications related to this claim?")
+                .mandatoryWithLabel(
+                    CaseData::getUseSameEmailForNotifications,
+                    "Would you like to use the same email address for notifications related to this claim?"
+                )
                 .done()
             .fields()
                 // Page 8: Add another claimant?
                 .page("addAnotherClaimant")
                 .label("addAnotherClaimantLabel", "## Create claim - Unspecified")
-                .mandatory(CaseData::getAddAnotherClaimant, "Do you want to add another claimant now?")
+                .mandatoryWithLabel(CaseData::getAddAnotherClaimant, "Do you want to add another claimant now?")
                 .done()
             .fields()
                 // Page 9: Does the defendant have a legal representative?
                 .page("defendantHasLegalRepresentative")
                 .label("defendantHasLegalRepresentativeLabel", "## Create claim - Unspecified")
-                .mandatory(CaseData::getDoesDefendantHaveLegalRepresentative, "Does the defendant have a legal representative?")
+                .mandatoryWithLabel(
+                    CaseData::getDoesDefendantHaveLegalRepresentative,
+                    "Does the defendant have a legal representative?"
+                )
                 .done()
             .fields()
                 // Page 10: Defendant details
                 .page("defendantDetails")
                 .label("defendantDetailsLabel", "## Defendant details")
                 .complex(CaseData::getDefendant)
-                    .mandatory(uk.gov.hmcts.civil.civilcase.model.Defendant::getType, "Defendant type")
-                    .optional(uk.gov.hmcts.civil.civilcase.model.Defendant::getTitle, "Title (Optional)")
-                    .mandatory(uk.gov.hmcts.civil.civilcase.model.Defendant::getFirstName, "First name")
-                    .mandatory(uk.gov.hmcts.civil.civilcase.model.Defendant::getLastName, "Last name")
-                    .optional(uk.gov.hmcts.civil.civilcase.model.Defendant::getEmail, "Email (Optional)")
-                    .optional(uk.gov.hmcts.civil.civilcase.model.Defendant::getPhone, "Phone (Optional)")
+                    .mandatoryWithLabel(Defendant::getType, "Defendant type")
+                    .optionalWithLabel(Defendant::getTitle, "Title (Optional)")
+                    .mandatoryWithLabel(Defendant::getFirstName, "First name")
+                    .mandatoryWithLabel(Defendant::getLastName, "Last name")
+                    .optionalWithLabel(Defendant::getEmail, "Email (Optional)")
+                    .optionalWithLabel(Defendant::getPhone, "Phone (Optional)")
                     .done()
                 .label("defendantAddressLabel", "## Address")
                 .complex(CaseData::getDefendant)
-                    .complex(uk.gov.hmcts.civil.civilcase.model.Defendant::getAddress)
-                        .mandatory(uk.gov.hmcts.ccd.sdk.type.AddressUK::getPostCode, "Enter a UK postcode")
+                    .complex(Defendant::getAddress)
+                        .mandatoryWithLabel(uk.gov.hmcts.ccd.sdk.type.AddressUK::getPostCode, "Enter a UK postcode")
                         .done()
                     .done()
                 .done()
@@ -139,18 +165,21 @@ public class NoFaultDivorce implements CCDConfig<CaseData, State, UserRole> {
                 .page("defendantLegalRepresentative")
                 .label("defendantLegalRepresentativeLabel", "## Search for the defendant's legal representative")
                 .complex(CaseData::getDefendantLegalRepresentative)
-                    .optional(uk.gov.hmcts.civil.civilcase.model.LegalRepresentative::getReference, "Reference (Optional)")
-                    .optional(uk.gov.hmcts.civil.civilcase.model.LegalRepresentative::getOrganisationName, "Search for an organisation")
+                    .optionalWithLabel(LegalRepresentative::getReference, "Reference (Optional)")
+                    .optionalWithLabel(LegalRepresentative::getOrganisationName, "Search for an organisation")
                     .done()
                 .done()
             .fields()
                 // Page 12: Defendant legal representative's address
                 .page("defendantLegalRepresentativeAddress")
                 .label("defendantLegalRepresentativeAddressLabel", "## Defendant legal representative's address")
-                .mandatory(CaseData::getEnterDifferentDefendantLegalRepAddress, "Do you want to change the address?")
+                .mandatoryWithLabel(
+                    CaseData::getEnterDifferentDefendantLegalRepAddress,
+                    "Do you want to change the address?"
+                )
                 .complex(CaseData::getDefendantLegalRepresentative)
-                    .complex(uk.gov.hmcts.civil.civilcase.model.LegalRepresentative::getServiceAddress)
-                        .mandatory(uk.gov.hmcts.ccd.sdk.type.AddressUK::getPostCode, "Enter a UK postcode")
+                    .complex(LegalRepresentative::getServiceAddress)
+                        .mandatoryWithLabel(uk.gov.hmcts.ccd.sdk.type.AddressUK::getPostCode, "Enter a UK postcode")
                         .done()
                     .done()
                 .done()
@@ -159,22 +188,28 @@ public class NoFaultDivorce implements CCDConfig<CaseData, State, UserRole> {
                 .page("defendantLegalRepresentativeEmail")
                 .label("defendantLegalRepresentativeEmailLabel", "## Create claim - Unspecified")
                 .complex(CaseData::getDefendantLegalRepresentative)
-                    .mandatory(uk.gov.hmcts.civil.civilcase.model.LegalRepresentative::getEmailAddress, "Enter defendant legal representative's email address to be used for notifications")
+                    .mandatoryWithLabel(
+                        LegalRepresentative::getEmailAddress,
+                        "Enter defendant legal representative's email address to be used for notifications"
+                    )
                     .done()
                 .done()
             .fields()
                 // Page 14: Is there another defendant?
                 .page("isThereAnotherDefendant")
                 .label("isThereAnotherDefendantLabel", "## Create claim - Unspecified")
-                .mandatory(CaseData::getIsThereAnotherDefendant, "Is there another defendant?")
+                .mandatoryWithLabel(CaseData::getIsThereAnotherDefendant, "Is there another defendant?")
                 .done()
             .fields()
                 // Page 15: Court location and hearing preferences
                 .page("courtLocation")
                 .label("courtLocationLabel", "## Court location code")
-                .mandatory(CaseData::getCourtLocationCode, "Please select your preferred court hearing location")
-                .optional(CaseData::getCourtLocationReason, "Briefly explain your reasons (Optional)")
-                .mandatory(CaseData::getHearingHeldRemotely, "Do you want the hearing to be held remotely?")
+                .mandatoryWithLabel(
+                    CaseData::getCourtLocationCode,
+                    "Please select your preferred court hearing location"
+                )
+                .optionalWithLabel(CaseData::getCourtLocationReason, "Briefly explain your reasons (Optional)")
+                .mandatoryWithLabel(CaseData::getHearingHeldRemotely, "Do you want the hearing to be held remotely?")
                 .done()
             .fields()
                 // Page 16: Requirements/Information (readonly)
@@ -187,7 +222,7 @@ public class NoFaultDivorce implements CCDConfig<CaseData, State, UserRole> {
 
         // Create case event
         builder.event(CREATE_EVENT)
-            .forStateTransition(EnumSet.noneOf(State.class), State.CASE_CREATED)
+            .forStateTransition(EnumSet.noneOf(State.class), State.CREATED)
             .name("Create case")
             .description("Create a new civil case")
             .grant(CRU, UserRole.CASE_WORKER, UserRole.SOLICITOR)
@@ -196,33 +231,35 @@ public class NoFaultDivorce implements CCDConfig<CaseData, State, UserRole> {
             .fields()
                 .page("caseDetails")
                 .label("caseDetailsLabel", "## Case Details")
-                .mandatory(CaseData::getCaseName, "Case name")
-                .optional(CaseData::getCaseDescription, "Case description")
-                .optional(CaseData::getDueDate, "Due date")
-                .optional(CaseData::getIsUrgent, "Is urgent")
+                .mandatoryWithLabel(CaseData::getCaseName, "Case name")
+                .optionalWithLabel(CaseData::getCaseDescription, "Case description")
+                .optionalWithLabel(CaseData::getDueDate, "Due date")
+                .optionalWithLabel(CaseData::getIsUrgent, "Is urgent")
                 .done()
             .fields()
                 .page("claimantDetails")
                 .label("claimantDetailsLabel", "## Claimant Details")
                 .complex(CaseData::getClaimant)
-                    .mandatory(uk.gov.hmcts.civil.civilcase.model.Claimant::getName, "Claimant name")
-                    .optional(uk.gov.hmcts.civil.civilcase.model.Claimant::getEmail, "Claimant email")
-                    .optional(uk.gov.hmcts.civil.civilcase.model.Claimant::getAddress, "Claimant address")
+                    .mandatoryWithLabel(Claimant::getFirstName, "Claimant first name")
+                    .mandatoryWithLabel(Claimant::getLastName, "Claimant last name")
+                    .optionalWithLabel(Claimant::getEmail, "Claimant email")
+                    .optionalWithLabel(Claimant::getAddress, "Claimant address")
                     .done()
                 .done()
             .fields()
                 .page("defendantDetails")
                 .label("defendantDetailsLabel", "## Defendant Details")
                 .complex(CaseData::getDefendant)
-                    .mandatory(uk.gov.hmcts.civil.civilcase.model.Defendant::getName, "Defendant name")
-                    .optional(uk.gov.hmcts.civil.civilcase.model.Defendant::getEmail, "Defendant email")
-                    .optional(uk.gov.hmcts.civil.civilcase.model.Defendant::getAddress, "Defendant address")
+                    .mandatoryWithLabel(Defendant::getFirstName, "Defendant first name")
+                    .mandatoryWithLabel(Defendant::getLastName, "Defendant last name")
+                    .optionalWithLabel(Defendant::getEmail, "Defendant email")
+                    .optionalWithLabel(Defendant::getAddress, "Defendant address")
                     .done()
                 .done();
 
         // Submit case event
         builder.event(SUBMIT_EVENT)
-            .forStateTransition(State.CASE_CREATED, State.CASE_SUBMITTED)
+            .forStateTransition(State.CREATED, State.Submitted)
             .name("Submit case")
             .description("Submit the case for processing")
             .grant(CRU, UserRole.CASE_WORKER, UserRole.SOLICITOR)
@@ -237,16 +274,18 @@ public class NoFaultDivorce implements CCDConfig<CaseData, State, UserRole> {
 
         // Update case event
         builder.event(UPDATE_EVENT)
-            .forStateTransition(EnumSet.of(State.CASE_CREATED, State.CASE_SUBMITTED, State.CASE_IN_PROGRESS), 
-                               EnumSet.of(State.CASE_CREATED, State.CASE_SUBMITTED, State.CASE_IN_PROGRESS))
+            .forStateTransition(
+                EnumSet.of(State.CREATED, State.Submitted, State.AwaitingPayment),
+                EnumSet.of(State.CREATED, State.Submitted, State.AwaitingPayment)
+            )
             .name("Update case")
             .description("Update case details")
             .grant(CRU, UserRole.CASE_WORKER, UserRole.SOLICITOR)
             .fields()
                 .page("updateCase")
-                .optional(CaseData::getCaseDescription, "Case description")
-                .optional(CaseData::getDueDate, "Due date")
-                .optional(CaseData::getIsUrgent, "Is urgent")
+                .optionalWithLabel(CaseData::getCaseDescription, "Case description")
+                .optionalWithLabel(CaseData::getDueDate, "Due date")
+                .optionalWithLabel(CaseData::getIsUrgent, "Is urgent")
                 .done();
 
         // Configure tabs
@@ -286,5 +325,61 @@ public class NoFaultDivorce implements CCDConfig<CaseData, State, UserRole> {
             .field(CaseData::getCaseName, "Case name")
             .field(CaseData::getCaseReference, "Case reference")
             .field(CaseData::getDateCreated, "Date created");
+    }
+
+    private AboutToStartOrSubmitResponse<CaseData, State> aboutToStartCreateClaim(
+        CaseDetails<CaseData, State> details
+    ) {
+        return AboutToStartOrSubmitResponse.<CaseData, State>builder()
+            .data(details.getData())
+            .build();
+    }
+
+    private AboutToStartOrSubmitResponse<CaseData, State> aboutToSubmitCreateClaim(
+        CaseDetails<CaseData, State> details,
+        CaseDetails<CaseData, State> before
+    ) {
+        var data = details.getData();
+        ensureCaseMetadata(data, details);
+        return AboutToStartOrSubmitResponse.<CaseData, State>builder()
+            .data(data)
+            .build();
+    }
+
+    private AboutToStartOrSubmitResponse<CaseData, State> aboutToStartCreate(
+        CaseDetails<CaseData, State> details
+    ) {
+        return AboutToStartOrSubmitResponse.<CaseData, State>builder()
+            .data(details.getData())
+            .build();
+    }
+
+    private AboutToStartOrSubmitResponse<CaseData, State> aboutToSubmitCreate(
+        CaseDetails<CaseData, State> details,
+        CaseDetails<CaseData, State> before
+    ) {
+        var data = details.getData();
+        ensureCaseMetadata(data, details);
+        return AboutToStartOrSubmitResponse.<CaseData, State>builder()
+            .data(data)
+            .build();
+    }
+
+    private AboutToStartOrSubmitResponse<CaseData, State> aboutToSubmitCase(
+        CaseDetails<CaseData, State> details,
+        CaseDetails<CaseData, State> before
+    ) {
+        return AboutToStartOrSubmitResponse.<CaseData, State>builder()
+            .data(details.getData())
+            .build();
+    }
+
+    private void ensureCaseMetadata(CaseData data, CaseDetails<CaseData, State> details) {
+        if (data.getDateCreated() == null) {
+            data.setDateCreated(LocalDateTime.now());
+        }
+        if (data.getCaseReference() == null && details.getId() != null) {
+            data.setCaseReference(details.getId().toString());
+        }
     }
 }

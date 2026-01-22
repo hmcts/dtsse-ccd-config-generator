@@ -20,7 +20,8 @@ public class Claimant {
     @CCD(
         label = "Claimant type",
         hint = "Type of claimant",
-        typeOverride = FieldType.FixedRadioList
+        typeOverride = FieldType.FixedRadioList,
+        typeParameterOverride = "PartyType"
     )
     private PartyType type;
 
@@ -75,4 +76,3 @@ public class Claimant {
     )
     private uk.gov.hmcts.ccd.sdk.type.YesOrNo isChild;
 }
-

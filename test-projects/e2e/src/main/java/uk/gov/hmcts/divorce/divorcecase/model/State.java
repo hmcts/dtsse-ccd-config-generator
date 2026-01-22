@@ -410,13 +410,6 @@ public enum State {
         access = {DefaultStateAccess.class}
     )
     WelshTranslationReview,
-    
-    @CCD(
-        label = "Awaiting payment",
-        hint = "### Case number: ${hyphenatedCaseRef}\n ### ${applicant1LastName} and ${applicant2LastName}\n",
-        access = {DefaultStateAccess.class}
-    )
-    AwaitingPayment,
 
     @CCD(
         label = "Case closed",

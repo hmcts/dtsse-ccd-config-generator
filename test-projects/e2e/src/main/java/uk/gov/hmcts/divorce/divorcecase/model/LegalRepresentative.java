@@ -1,4 +1,4 @@
-package uk.gov.hmcts.civil.divorcecase.model;
+package uk.gov.hmcts.divorce.divorcecase.model;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -39,4 +39,3 @@ public class LegalRepresentative {
     )
     private AddressUK serviceAddress;
 }
-

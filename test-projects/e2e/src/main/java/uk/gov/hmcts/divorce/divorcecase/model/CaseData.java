@@ -17,6 +17,7 @@ import uk.gov.hmcts.ccd.sdk.type.FieldType;
 import uk.gov.hmcts.ccd.sdk.type.ListValue;
 import uk.gov.hmcts.ccd.sdk.type.Document;
 import uk.gov.hmcts.ccd.sdk.type.SearchCriteria;
+import uk.gov.hmcts.ccd.sdk.type.YesOrNo;
 import uk.gov.hmcts.divorce.caseworker.model.CaseNote;
 import uk.gov.hmcts.divorce.divorcecase.model.access.CaseworkerAccess;
 import uk.gov.hmcts.divorce.divorcecase.model.access.CaseworkerCaseLinkAccess;
@@ -25,6 +26,7 @@ import uk.gov.hmcts.divorce.divorcecase.model.access.CaseworkerWithCAAAccess;
 import uk.gov.hmcts.divorce.divorcecase.model.access.DefaultAccess;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -174,13 +176,6 @@ public class CaseData {
     private LocalDateTime dateCreated;
 
     @CCD(
-        label = "Due date",
-        hint = "The due date for this case"
-    )
-    @JsonFormat(pattern = "yyyy-MM-dd")
-    private LocalDate dueDate;
-
-    @CCD(
         label = "Is urgent",
         hint = "Whether this case is urgent"
     )
@@ -208,7 +203,8 @@ public class CaseData {
     @CCD(
         label = "What type of claim is this?",
         hint = "Select the type of claim",
-        typeOverride = FieldType.FixedRadioList
+        typeOverride = FieldType.FixedRadioList,
+        typeParameterOverride = "ClaimType"
     )
     private ClaimType claimType;
 
@@ -226,13 +222,17 @@ public class CaseData {
 
     @CCD(
         label = "Do you want to add another claimant now?",
-        hint = "You can add another Claimant after you have issued the claim but you will need to submit a separate application."
+        hint = "You can add another Claimant after you have issued the claim but you will need "
+            + "to submit a separate application."
     )
     private YesOrNo addAnotherClaimant;
 
     @CCD(
         label = "Do you wish to enter a different address?",
-        hint = "Postal correspondence for the Claimant's legal representative will be sent to the address registered with MyHMCTS. You can, if you wish, change the address to which postal correspondence is sent (eg if you work out of a different office from the address registered with MyHMCTS)."
+        hint = "Postal correspondence for the Claimant's legal representative will be sent to the "
+            + "address registered with MyHMCTS. You can, if you wish, change the address to which "
+            + "postal correspondence is sent (eg if you work out of a different office from the "
+            + "address registered with MyHMCTS)."
     )
     private YesOrNo enterDifferentLegalRepAddress;
 
@@ -244,14 +244,15 @@ public class CaseData {
 
     @CCD(
         label = "Do you want to change the address?",
-        hint = "Postal correspondence to the Defendant's legal representative will be sent to the address that is currently registered with MyHMCTS. You can, if you wish, change the address to which postal correspondence is sent."
+        hint = "Postal correspondence to the Defendant's legal representative will be sent to the "
+            + "address that is currently registered with MyHMCTS. You can, if you wish, change the "
+            + "address to which postal correspondence is sent."
     )
     private YesOrNo enterDifferentDefendantLegalRepAddress;
 
     @CCD(
         label = "Please select your preferred court hearing location",
-        hint = "Court location code",
-        typeOverride = FieldType.FixedList
+        hint = "Court location code"
     )
     private String courtLocationCode;
 

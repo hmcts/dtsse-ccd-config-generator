@@ -1,4 +1,4 @@
-package uk.gov.hmcts.civil.divorcecase.model;
+package uk.gov.hmcts.divorce.divorcecase.model;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
 import lombok.AllArgsConstructor;
@@ -20,7 +20,8 @@ public class Defendant {
     @CCD(
         label = "Defendant type",
         hint = "Type of defendant",
-        typeOverride = FieldType.FixedRadioList
+        typeOverride = FieldType.FixedRadioList,
+        typeParameterOverride = "PartyType"
     )
     private PartyType type;
 
@@ -62,4 +63,3 @@ public class Defendant {
     )
     private AddressUK address;
 }
-
