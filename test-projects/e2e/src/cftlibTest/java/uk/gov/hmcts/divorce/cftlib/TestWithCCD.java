@@ -160,6 +160,8 @@ public class TestWithCCD extends CftlibTest {
     private static final String ACCEPT_UI_START_EVENT =
         "application/vnd.uk.gov.hmcts.ccd-data-store-api.ui-start-event-trigger.v2+json;charset=UTF-8";
     private static final String API_FIRST_TASK_EVENT_ID = "api-first-create-task";
+    private String apiFirstTaskId;
+    private String waTaskId;
 
     @TestConfiguration
     static class ServiceBusTestConfiguration {
@@ -1058,6 +1060,7 @@ public class TestWithCCD extends CftlibTest {
         );
         String taskId = (String) outboxRow.get("task_id");
         assertThat(taskId, is(notNullValue()));
+        apiFirstTaskId = taskId;
 
         String payloadCaseId = db.queryForObject(
             "SELECT payload->'task'->>'case_id' FROM ccd.task_outbox ORDER BY id DESC LIMIT 1",
@@ -1117,14 +1120,47 @@ public class TestWithCCD extends CftlibTest {
                     JsonNode payload = mapper.readTree(responseBody);
                     JsonNode tasks = payload.path("tasks");
 
-                    boolean hasTask = tasks.isArray() && StreamSupport.stream(tasks.spliterator(), false)
-                        .map(task -> task.path("case_id").asText(""))
-                        .anyMatch(caseId -> String.valueOf(caseRef).equals(caseId));
+                    String matchingTaskId = tasks.isArray()
+                        ? StreamSupport.stream(tasks.spliterator(), false)
+                            .filter(task -> String.valueOf(caseRef).equals(task.path("case_id").asText("")))
+                            .map(task -> task.path("id").asText(""))
+                            .filter(taskId -> !taskId.isBlank())
+                            .findFirst()
+                            .orElse("")
+                        : "";
+                    waTaskId = matchingTaskId.isBlank() ? null : matchingTaskId;
+                    boolean hasTask = waTaskId != null;
                     assertThat("Expected case id " + caseRef + " in response: " + responseBody,
                         hasTask, is(true));
                 }
             }
         });
+    }
+
+    @SneakyThrows
+    @Order(21)
+    @Test
+    public void apiFirstTaskClaimShouldReturnTaskAssignError() {
+        String user = "TEST_CASE_WORKER_USER@mailinator.com";
+        String authHeader = getIdamAccessTokenFromSimulator(user, "password");
+        String taskId = waTaskId;
+        assertThat("Task id should be captured from work allocation search", taskId, is(notNullValue()));
+        assertThat("Task id should be captured from work allocation search", taskId.isBlank(), is(false));
+
+        try (CloseableHttpClient client = HttpClientBuilder.create().build()) {
+            HttpPost claim = new HttpPost(TASK_MANAGEMENT_BASE_URL + "/task/" + taskId + "/claim");
+            claim.addHeader("Content-Type", "application/json");
+            claim.addHeader("ServiceAuthorization", cftlib().generateDummyS2SToken("xui_webapp"));
+            claim.addHeader("Authorization", authHeader);
+            claim.setEntity(new StringEntity("{}", ContentType.APPLICATION_JSON));
+
+            try (CloseableHttpResponse response = client.execute(claim)) {
+                int status = response.getStatusLine().getStatusCode();
+                String responseBody = EntityUtils.toString(response.getEntity());
+                assertThat("Claim response (expected 2xx): status=" + status + " body=" + responseBody,
+                    status >= 200 && status < 300, is(true));
+            }
+        }
     }
 
     @SneakyThrows

@@ -21,6 +21,44 @@
         "authorisations": [
           "AUTH_1"
         ]
+      },
+      {
+        "roleType": "ORGANISATION",
+        "roleName": "caseworker-divorce",
+        "grantType": "STANDARD",
+        "roleCategory": "ADMIN",
+        "classification": "PUBLIC",
+        "readOnly": false,
+        "attributes": {
+          "jurisdiction": "DIVORCE",
+          "caseType": "E2E",
+          "region": "1",
+          "baseLocation": "336559",
+          "substantive": "Y",
+          "bookable": true
+        },
+        "authorisations": [
+          "AUTH_1"
+        ]
+      },
+      {
+        "roleType": "ORGANISATION",
+        "roleName": "caseworker-st_cic",
+        "grantType": "STANDARD",
+        "roleCategory": "ADMIN",
+        "classification": "PUBLIC",
+        "readOnly": false,
+        "attributes": {
+          "jurisdiction": "ST_CIC",
+          "caseType": "E2E",
+          "region": "1",
+          "baseLocation": "336559",
+          "substantive": "Y",
+          "bookable": true
+        },
+        "authorisations": [
+          "AUTH_1"
+        ]
       }
     ],
     "overrideAll": true

@@ -135,7 +135,8 @@ public class CftLibConfig implements CFTLibConfigurer {
                 List.of(
                     "caseworker",
                     "caseworker-divorce",
-                    "caseworker-divorce-courtadmin_beta"
+                    "caseworker-divorce-courtadmin_beta",
+                    "caseworker-st_cic"
                 )
             ),
             entry(
