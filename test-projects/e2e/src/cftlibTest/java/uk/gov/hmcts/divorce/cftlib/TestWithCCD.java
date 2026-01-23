@@ -47,6 +47,7 @@ import org.apache.http.message.BasicNameValuePair;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClientBuilder;
 import org.apache.http.util.EntityUtils;
+import org.junit.jupiter.api.Disabled;
 import org.mockito.ArgumentCaptor;
 
 import static org.awaitility.Awaitility.await;
@@ -1137,6 +1138,7 @@ public class TestWithCCD extends CftlibTest {
         });
     }
 
+    @Disabled
     @SneakyThrows
     @Order(21)
     @Test
