@@ -179,7 +179,7 @@ class et_common lib;
 class et_data_model lib;
 class hmc_sb queue;
 class et_ccd_definitions_admin test;
-class et_cron lib;
+class et_cron service;
 class et_sya_frontend service;
 class et_ccd_exporter service;
 
