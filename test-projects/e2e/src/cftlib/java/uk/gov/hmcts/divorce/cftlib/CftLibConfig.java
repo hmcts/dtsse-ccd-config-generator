@@ -25,6 +25,8 @@ public class CftLibConfig implements CFTLibConfigurer {
     private static final String BEFTA_CASE_TYPE = "FT_Decentralisation";
     private static final String BEFTA_JURISDICTION = "BEFTA_MASTER";
     private static final String BEFTA_INITIAL_STATE = "CaseCreated";
+    private static final String CIVIL_JURISDICTION = "CIVIL";
+    private static final String CIVIL_INITIAL_STATE = "AwitingPayment";
     private static final String CASEWORKER_EMAIL = "master.caseworker@gmail.com";
     private static final String PRIVATE_CASEWORKER_EMAIL =
         System.getenv().getOrDefault("CCD_PRIVATE_CASEWORKER_EMAIL", "ccd_private_caseworker_email@local");
@@ -54,6 +56,7 @@ public class CftLibConfig implements CFTLibConfigurer {
             "caseworker-befta_master",
             "caseworker-befta_jurisdiction_1",
             "caseworker-caa",
+            "caseworker-civil",
             "ccd-import"
         ));
         roles.addAll(List.of(
@@ -108,6 +111,15 @@ public class CftLibConfig implements CFTLibConfigurer {
 
     private void createDivorceUsers(CFTLib lib) {
         Map<String, List<String>> users = Map.ofEntries(
+            entry(
+                "civil.solicitor@mailinator.com",
+                List.of(
+                    "caseworker",
+                    "caseworker-civil",
+                    "caseworker-divorce",
+                    "caseworker-divorce-solicitor"
+                )
+            ),
             entry(
                 "DivCaseWorkerUser@AAT.com",
                 List.of(
@@ -267,6 +279,9 @@ public class CftLibConfig implements CFTLibConfigurer {
             lib.createProfile(entry.getKey(), "DIVORCE", NoFaultDivorce.getCaseType(), "Submitted");
             lib.createProfile(entry.getKey(), "DIVORCE", SimpleCaseConfiguration.CASE_TYPE, SimpleCaseState.DRAFT.name());
         }
+
+        lib.createProfile("civil.solicitor@mailinator.com", CIVIL_JURISDICTION, NoFaultDivorce.getCaseType(),
+            CIVIL_INITIAL_STATE);
     }
 
     private void importDivorceDefinitions(CFTLib lib) throws Exception {
