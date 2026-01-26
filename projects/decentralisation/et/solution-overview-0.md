@@ -77,12 +77,9 @@ et_ccd_definitions_admin -->|library| et_ccd_definitions_englandwales
 et_ccd_definitions_admin -->|library| et_ccd_definitions_scotland
 et_ccd_definitions_englandwales -->|http| et_ccd_definitions_admin
 et_ccd_definitions_scotland -->|http| et_ccd_definitions_admin
-et_common -->|http| ecm_common
 et_common -->|library| ecm_common
 et_common -->|library| ecm_data_model
 et_common -->|library| et_data_model
-et_data_model -->|http| ecm_common
-et_data_model -->|http| et_common
 et_hearings_api -->|library| et_common
 et_hearings_api -->|library| et_data_model
 et_message_handler -->|http| ecm_common
