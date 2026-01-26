@@ -1,13 +1,6 @@
----
-config:
-  flowchart:
-    nodeSpacing: 60
-    rankSpacing: 90
-  look: classic
-  theme: default
----
+```mermaid
 graph LR
-
+%%{init: {"flowchart": {"nodeSpacing": 60, "rankSpacing": 90}} }%%
 subgraph ECM_ETHOS[ECM & ETHOS]
   ecm_ccd_case_migration["ecm-ccd-case-migration"]
   ecm_consumer["ecm-consumer"]
@@ -53,6 +46,7 @@ end
     et_pet_admin["et-pet-admin"]
     et_pet_api["et-pet-api"]
     et_pet_ccd_export["et-pet-ccd-export"]
+    et_ccd_exporter["et-ccd-exporter"]
     et_pet_et1["et-pet-et1"]
     et_pet_et3["et-pet-et3"]
     et_pet_shared_infrastructure["et-pet-shared-infrastructure"]
@@ -146,6 +140,7 @@ et_sya_api -->|http| dm_store
 et_sya_frontend -->|http| dm_store
 et_syr_frontend -->|http| dm_store
 ethos_repl_docmosis_service -->|http| dm_store
+et_ccd_exporter -->|http| ccd
 et_ccd_callbacks -->|http| ccd
 et_ccd_definitions_admin -->|http| ccd
 et_cron -->|http| ccd
@@ -186,3 +181,6 @@ class hmc_sb queue;
 class et_ccd_definitions_admin test;
 class et_cron lib;
 class et_sya_frontend service;
+class et_ccd_exporter service;
+
+```
