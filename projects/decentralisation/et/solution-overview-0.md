@@ -71,7 +71,7 @@ et_ccd_callbacks -->|library| ecm_common
 et_ccd_callbacks -->|library| ecm_data_model
 et_ccd_callbacks -->|library| et_common
 et_ccd_callbacks -->|library| et_data_model
-et_ccd_callbacks -->|library| et_sya_frontend
+et_ccd_callbacks -->|http| et_sya_frontend
 et_ccd_definitions_admin -->|http| et_sya_api
 et_ccd_definitions_admin -->|library| et_ccd_definitions_englandwales
 et_ccd_definitions_admin -->|library| et_ccd_definitions_scotland
