@@ -48,7 +48,7 @@ end
   end
 ecm_ccd_case_migration -->|http| ecm_consumer
 ecm_ccd_case_migration -->|library| ecm_data_model
-ecm_common -->|http| et_common
+ecm_common -->|library| et_common
 ecm_common -->|library| ecm_data_model
 ecm_common -->|library| et_data_model
 ecm_consumer -->|http| ecm_common
@@ -66,12 +66,9 @@ et_ccd_callbacks -->|library| ecm_data_model
 et_ccd_callbacks -->|library| et_common
 et_ccd_callbacks -->|library| et_data_model
 et_ccd_callbacks -->|http| et_sya_frontend
-et_common -->|http| ecm_common
 et_common -->|library| ecm_common
 et_common -->|library| ecm_data_model
 et_common -->|library| et_data_model
-et_data_model -->|http| ecm_common
-et_data_model -->|http| et_common
 et_hearings_api -->|library| et_common
 et_hearings_api -->|library| et_data_model
 et_pet_admin -->|http| et_pet_api
