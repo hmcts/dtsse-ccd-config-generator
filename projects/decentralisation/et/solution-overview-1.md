@@ -65,7 +65,7 @@ et_ccd_callbacks -->|library| ecm_common
 et_ccd_callbacks -->|library| ecm_data_model
 et_ccd_callbacks -->|library| et_common
 et_ccd_callbacks -->|library| et_data_model
-et_ccd_callbacks -->|library| et_sya_frontend
+et_ccd_callbacks -->|http| et_sya_frontend
 et_common -->|http| ecm_common
 et_common -->|library| ecm_common
 et_common -->|library| ecm_data_model
