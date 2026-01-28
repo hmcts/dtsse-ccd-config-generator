@@ -1,0 +1,1 @@
+All architectural decisions by the team will be saved here. To do so, copy the _madr-template-minimal.hd file to a new file named {x-yyyyyyyyyy.md} where x is a sequanital, incrementing integer and yyyyyyyyyy is a short title of the decision.
