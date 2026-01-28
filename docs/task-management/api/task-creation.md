@@ -100,23 +100,23 @@ CCD case reference. String. Required.
 CCD case type identifier. String. Required.
 
 ### case_category
-Primary case management category for the case. String. Optional.
+Primary case management category for the case. String. Required.
 Value should be the CCD `caseManagementCategory.categoryId` (e.g., `CIC`) or an agreed service code.
 Used for filtering, reporting, and routing; Task Management does not derive or validate it beyond non-empty.
 
 ### case_name
-Human-readable case name. String. Optional.
+Human-readable case name. String. Required.
 
 ### jurisdiction
 CCD jurisdiction identifier. String. Required.
 
 ### region
-Case management region identifier from CCD location. String (often numeric). Optional.
+Case management region identifier from CCD location. String (often numeric). Required.
 Value should match `caseManagementLocation.region`. Provide alongside `location` where possible.
 Used for routing and filtering; not derived by Task Management.
 
 ### location
-Base location identifier from CCD case management location. String (often numeric). Optional.
+Base location identifier from CCD case management location. String (often numeric). Required.
 Value should match `caseManagementLocation.baseLocation` when a specific venue/office applies.
 Used for routing and filtering; should be consistent with `region`.
 

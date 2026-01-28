@@ -1,12 +1,5 @@
 package uk.gov.hmcts.divorce.sow014.nfd;
 
-import static uk.gov.hmcts.divorce.divorcecase.model.UserRole.CASE_WORKER;
-import static uk.gov.hmcts.divorce.divorcecase.model.UserRole.JUDGE;
-import static uk.gov.hmcts.divorce.divorcecase.model.UserRole.LEGAL_ADVISOR;
-import static uk.gov.hmcts.divorce.divorcecase.model.UserRole.SUPER_USER;
-import static uk.gov.hmcts.divorce.divorcecase.model.access.Permissions.CREATE_READ_UPDATE;
-import static uk.gov.hmcts.divorce.divorcecase.model.access.Permissions.CREATE_READ_UPDATE_DELETE;
-
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
@@ -30,11 +23,17 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+import static uk.gov.hmcts.divorce.divorcecase.model.UserRole.CASE_WORKER;
+import static uk.gov.hmcts.divorce.divorcecase.model.UserRole.JUDGE;
+import static uk.gov.hmcts.divorce.divorcecase.model.UserRole.LEGAL_ADVISOR;
+import static uk.gov.hmcts.divorce.divorcecase.model.UserRole.SUPER_USER;
+import static uk.gov.hmcts.divorce.divorcecase.model.access.Permissions.CREATE_READ_UPDATE;
+import static uk.gov.hmcts.divorce.divorcecase.model.access.Permissions.CREATE_READ_UPDATE_DELETE;
+
 @Component
 @Slf4j
-public class ApiFirstTaskEvent implements CCDConfig<CaseData, State, UserRole> {
+public class ReturnErrorWhenCreateAPIFirstTask implements CCDConfig<CaseData, State, UserRole> {
 
-    public static final String EVENT_ID = "api-first-create-task";
 
     @Autowired
     private TaskOutboxService taskOutboxService;
@@ -42,10 +41,10 @@ public class ApiFirstTaskEvent implements CCDConfig<CaseData, State, UserRole> {
     @Override
     public void configure(ConfigBuilder<CaseData, State, UserRole> configBuilder) {
         new PageBuilder(configBuilder
-            .event(EVENT_ID)
+            .event(ReturnErrorWhenCreateAPIFirstTask.class.getSimpleName())
             .forAllStates()
-            .name("API-first task")
-            .description("Create API-first task")
+            .name("API-first task: missing data")
+            .description("API-first task: missing data")
             .aboutToSubmitCallback(this::aboutToSubmit)
             .showEventNotes()
             .grant(CREATE_READ_UPDATE, CASE_WORKER, JUDGE)
@@ -74,9 +73,9 @@ public class ApiFirstTaskEvent implements CCDConfig<CaseData, State, UserRole> {
             .caseId(caseId)
             .caseTypeId(NoFaultDivorce.getCaseType())
             .caseCategory("DIVORCE")
-            .caseName("API-first task case")
+            //.caseName("API-first task: missing data")
+            .caseName("") //caseName is empty and not passing region
             .jurisdiction(NoFaultDivorce.JURISDICTION)
-            .region("1")
             .location("336559")
             .workType("applications")
             .roleCategory("ADMIN")
@@ -84,6 +83,7 @@ public class ApiFirstTaskEvent implements CCDConfig<CaseData, State, UserRole> {
             .description("[Case: Edit case](/cases/case-details/" + caseId + "/trigger/edit-case)")
             .dueDateTime(now.plusDays(5))
             .priorityDate(now.plusDays(5))
+            .majorPriority(5000)
             .minorPriority(500)
             .locationName("Glasgow Tribunals Centre")
             .regionName("Scotland")

@@ -96,6 +96,7 @@ import uk.gov.hmcts.divorce.sow014.nfd.DecentralisedCaseworkerAddNoteFailure;
 import uk.gov.hmcts.divorce.sow014.nfd.FailingSubmittedCallback;
 import uk.gov.hmcts.divorce.sow014.nfd.CaseworkerRoundTripData;
 import uk.gov.hmcts.divorce.sow014.nfd.PublishedEvent;
+import uk.gov.hmcts.divorce.sow014.nfd.ReturnErrorWhenCreateAPIFirstTask;
 import uk.gov.hmcts.divorce.sow014.nfd.ReturnErrorWhenCreateTestCase;
 import uk.gov.hmcts.divorce.sow014.nfd.SubmittedConfirmationCallback;
 import uk.gov.hmcts.ccd.sdk.type.CaseLink;
@@ -979,7 +980,7 @@ public class TestWithCCD extends CftlibTest {
         String noteCheck = """
             SELECT message_information->'AdditionalData'->'Data'->>'note'
              FROM ccd.message_queue_candidates
-             WHERE reference = :caseReference 
+             WHERE reference = :caseReference
              """;
 
         String retrievedNote = db.queryForObject(noteCheck, Map.of("caseReference", caseRef), String.class);
@@ -988,7 +989,7 @@ public class TestWithCCD extends CftlibTest {
         // Verify the EventTimeStamp from the JSON blob
         String timestampCheckSql = """
             SELECT message_information->>'EventTimeStamp'
-             FROM ccd.message_queue_candidates 
+             FROM ccd.message_queue_candidates
              WHERE reference = :caseReference """;
         String retrievedTimestampStr = db.queryForObject(timestampCheckSql, Map.of("caseReference", caseRef), String.class);
         assertThat(retrievedTimestampStr, is(notNullValue()));
@@ -1082,6 +1083,61 @@ public class TestWithCCD extends CftlibTest {
             );
         });
     }
+
+  @SneakyThrows
+  @Order(21)
+  @Test
+  public void apiFirstTaskShouldReturn400WhenMissingMandatoryField() {
+    db.update("DELETE FROM ccd.task_outbox", Map.of());
+
+    var startEvent = ccdApi.startEvent(
+      getAuthorisation("TEST_CASE_WORKER_USER@mailinator.com"),
+      getServiceAuth(),
+      String.valueOf(caseRef),
+      ReturnErrorWhenCreateAPIFirstTask.class.getSimpleName()
+    );
+
+    var request = prepareEventRequestWithToken(
+      "TEST_CASE_WORKER_USER@mailinator.com",
+      ReturnErrorWhenCreateAPIFirstTask.class.getSimpleName(),
+      Map.of("note", "api-first-task"),
+      startEvent.getToken()
+    );
+
+    var response = HttpClientBuilder.create().build().execute(request);
+    assertThat(response.getStatusLine().getStatusCode(), equalTo(201));
+
+    await().atMost(Duration.ofSeconds(10)).untilAsserted(() -> {
+      Integer count = db.queryForObject("SELECT count(*) FROM ccd.task_outbox", Map.of(), Integer.class);
+      assertThat(count, equalTo(1));
+    });
+
+    Map<String, Object> outboxRow = db.queryForMap(
+      "SELECT task_id, status FROM ccd.task_outbox ORDER BY id DESC LIMIT 1",
+      Map.of()
+    );
+    String taskId = (String) outboxRow.get("task_id");
+    assertThat(taskId, is(notNullValue()));
+
+    String payloadCaseId = db.queryForObject(
+      "SELECT payload->'task'->>'case_id' FROM ccd.task_outbox ORDER BY id DESC LIMIT 1",
+      Map.of(),
+      String.class
+    );
+    assertThat(payloadCaseId, equalTo(String.valueOf(caseRef)));
+
+    await().atMost(Duration.ofSeconds(30)).untilAsserted(() -> {
+      Map<String, Object> processed = db.queryForMap(
+        "SELECT status, last_response_code FROM ccd.task_outbox WHERE task_id = :taskId",
+        Map.of("taskId", taskId)
+      );
+      assertThat(processed.get("status"), equalTo("FAILED"));
+      assertThat(
+        ((Number) processed.get("last_response_code")).intValue(),
+        anyOf(equalTo(200), equalTo(400))
+      );
+    });
+  }
 
     @SneakyThrows
     @Order(20)
