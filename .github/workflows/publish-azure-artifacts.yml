@@ -3,6 +3,9 @@ name: Publish to Azure Artifacts
 on:
   workflow_dispatch:
   push:
+    paths-ignore:
+      - '**/*.md'
+      - '*.md'
     tags:
       - '*'
 
