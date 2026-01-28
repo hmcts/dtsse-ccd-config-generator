@@ -3,7 +3,8 @@ name: PCS CFTLib Test
 on:
   pull_request:
     paths-ignore:
-      - '**.md'
+      - '**/*.md'
+      - '*.md'
 
 jobs:
   pcs-cftlib-test:
