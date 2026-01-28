@@ -1,6 +1,7 @@
 .idea/
 .gradle
 **/*.DS_Store
+**/*.iml
 build
 repository
 sdk/ccd-gradle-plugin/src/main/resources/application.properties

@@ -2,6 +2,9 @@ name: Semantic Diff Checks
 
 on:
   pull_request:
+    paths-ignore:
+      - '**/*.md'
+      - '*.md'
 
 jobs:
   module:
