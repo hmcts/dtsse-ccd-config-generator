@@ -5,30 +5,86 @@ on:
     paths-ignore:
       - '**/*.md'
       - '*.md'
+  pull_request:
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v6
+      with:
+        fetch-depth: 0
+    - name: Determine whether change is docs-only
+      id: changes
+      run: |
+        if [ "${{ github.event_name }}" != "pull_request" ]; then
+          echo "docs_only=false" >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
+        base="${{ github.event.pull_request.base.sha }}"
+        head="${{ github.sha }}"
+        git fetch --no-tags --prune --depth=1 origin "$base"
+        files=$(git diff --name-only "$base" "$head")
+        if [ -z "$files" ]; then
+          echo "docs_only=false" >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
+        if echo "$files" | grep -vE '\.md$' >/dev/null; then
+          echo "docs_only=false" >> "$GITHUB_OUTPUT"
+        else
+          echo "docs_only=true" >> "$GITHUB_OUTPUT"
+        fi
+    - name: Docs-only change detected
+      if: steps.changes.outputs.docs_only == 'true'
+      run: echo "Docs-only change; skipping build."
     - name: Set up JDK
+      if: steps.changes.outputs.docs_only != 'true'
       uses: actions/setup-java@v5
       with:
         distribution: 'zulu'
         java-version: 21
     - name: Run SDK checks and e2e test
+      if: steps.changes.outputs.docs_only != 'true'
       run: ./gradlew :sdk:check :e2e:check -i
 
   migration-check:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v6
+      with:
+        fetch-depth: 0
+    - name: Determine whether change is docs-only
+      id: changes
+      run: |
+        if [ "${{ github.event_name }}" != "pull_request" ]; then
+          echo "docs_only=false" >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
+        base="${{ github.event.pull_request.base.sha }}"
+        head="${{ github.sha }}"
+        git fetch --no-tags --prune --depth=1 origin "$base"
+        files=$(git diff --name-only "$base" "$head")
+        if [ -z "$files" ]; then
+          echo "docs_only=false" >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
+        if echo "$files" | grep -vE '\.md$' >/dev/null; then
+          echo "docs_only=false" >> "$GITHUB_OUTPUT"
+        else
+          echo "docs_only=true" >> "$GITHUB_OUTPUT"
+        fi
+    - name: Docs-only change detected
+      if: steps.changes.outputs.docs_only == 'true'
+      run: echo "Docs-only change; skipping migration check."
     - name: Install PostgreSQL client tools
+      if: steps.changes.outputs.docs_only != 'true'
       run: sudo apt-get update && sudo apt-get install -y postgresql-client
     - name: Set up JDK
+      if: steps.changes.outputs.docs_only != 'true'
       uses: actions/setup-java@v5
       with:
         distribution: 'zulu'
         java-version: 21
     - name: Verify CCD migration script
+      if: steps.changes.outputs.docs_only != 'true'
       run: ./gradlew verifyCcdMigration -i

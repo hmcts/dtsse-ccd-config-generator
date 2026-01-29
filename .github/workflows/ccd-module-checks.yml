@@ -2,9 +2,6 @@ name: Semantic Diff Checks
 
 on:
   pull_request:
-    paths-ignore:
-      - '**/*.md'
-      - '*.md'
 
 jobs:
   module:
@@ -45,18 +42,39 @@ jobs:
         with:
           fetch-depth: 0
           submodules: recursive
+      - name: Determine whether change is docs-only
+        id: changes
+        run: |
+          base="${{ github.event.pull_request.base.sha }}"
+          head="${{ github.sha }}"
+          git fetch --no-tags --prune --depth=1 origin "$base"
+          files=$(git diff --name-only "$base" "$head")
+          if [ -z "$files" ]; then
+            echo "docs_only=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if echo "$files" | grep -vE '\.md$' >/dev/null; then
+            echo "docs_only=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "docs_only=true" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Docs-only change detected
+        if: steps.changes.outputs.docs_only == 'true'
+        run: echo "Docs-only change; skipping semantic diff checks."
 
       - name: Set up JDK
+        if: steps.changes.outputs.docs_only != 'true'
         uses: actions/setup-java@v5
         with:
           distribution: 'zulu'
           java-version: 21
 
       - name: Run ${{ matrix.module }}:integration
-        if: ${{ matrix.runIntegration }}
+        if: ${{ matrix.runIntegration && steps.changes.outputs.docs_only != 'true' }}
         run: ./gradlew ${{ matrix.gradleIntegration }} -i
 
       - name: Checkout base branch
+        if: steps.changes.outputs.docs_only != 'true'
         uses: actions/checkout@v6
         with:
           ref: ${{ github.event.pull_request.base.sha }}
@@ -65,15 +83,17 @@ jobs:
           submodules: recursive
 
       - name: Generate base CCD config
+        if: steps.changes.outputs.docs_only != 'true'
         working-directory: base
         run: ./gradlew ${{ matrix.gradleGenerate }} -i
 
       - name: Generate PR CCD config
         id: generate-pr
+        if: steps.changes.outputs.docs_only != 'true'
         run: ./gradlew ${{ matrix.gradleGenerate }} -i
 
       - name: Compare CCD configuration outputs
-        if: steps.generate-pr.outcome == 'success'
+        if: steps.generate-pr.outcome == 'success' && steps.changes.outputs.docs_only != 'true'
         env:
           EXPECTED_DIR: ${{ format('{0}/base/{1}', github.workspace, matrix.definitionsDir) }}
           ACTUAL_DIR: ${{ format('{0}/{1}', github.workspace, matrix.definitionsDir) }}
