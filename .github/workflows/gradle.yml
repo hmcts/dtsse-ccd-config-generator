@@ -5,6 +5,10 @@ on:
     paths-ignore:
       - '**/*.md'
       - '*.md'
+      - '**/*.yml'
+      - '*.yml'
+      - '**/*.yaml'
+      - '*.yaml'
   pull_request:
 
 jobs:
