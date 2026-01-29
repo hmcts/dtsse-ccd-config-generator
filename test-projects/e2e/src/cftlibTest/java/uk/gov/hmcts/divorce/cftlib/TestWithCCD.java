@@ -1194,11 +1194,10 @@ public class TestWithCCD extends CftlibTest {
         });
     }
 
-    @Disabled
     @SneakyThrows
     @Order(21)
     @Test
-    public void apiFirstTaskClaimShouldReturnTaskAssignError() {
+    public void apiFirstTasksIsClaimable() {
         String user = "TEST_CASE_WORKER_USER@mailinator.com";
         String authHeader = getIdamAccessTokenFromSimulator(user, "password");
         String taskId = waTaskId;
