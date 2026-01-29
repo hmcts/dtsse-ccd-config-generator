@@ -23,7 +23,7 @@ jobs:
             echo "docs_only=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          if echo "$files" | grep -vE '\.md$' >/dev/null; then
+          if echo "$files" | grep -vE '\.(md|yml|yaml)$' >/dev/null; then
             echo "docs_only=false" >> "$GITHUB_OUTPUT"
           else
             echo "docs_only=true" >> "$GITHUB_OUTPUT"
