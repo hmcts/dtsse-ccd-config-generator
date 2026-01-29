@@ -1235,9 +1235,9 @@ public class TestWithCCD extends CftlibTest {
 
             try (CloseableHttpResponse response = client.execute(claim)) {
                 int status = response.getStatusLine().getStatusCode();
-                String responseBody = EntityUtils.toString(response.getEntity());
-                assertThat("Claim response (expected 2xx): status=" + status + " body=" + responseBody,
-                    status >= 200 && status < 300, is(true));
+                assertThat("Claim response (expected 204): status=" + status,
+                    status, equalTo(204));
+                assertThat(response.getEntity(), nullValue());
             }
         }
     }
