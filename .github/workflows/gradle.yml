@@ -22,8 +22,8 @@ jobs:
           exit 0
         fi
         base="${{ github.event.pull_request.base.sha }}"
-        head="${{ github.sha }}"
-        git fetch --no-tags --prune --depth=1 origin "$base"
+        head="${{ github.event.pull_request.head.sha }}"
+        git fetch --no-tags --prune --depth=1 origin "$base" "$head"
         files=$(git diff --name-only "$base" "$head")
         if [ -z "$files" ]; then
           echo "docs_only=false" >> "$GITHUB_OUTPUT"
@@ -61,8 +61,8 @@ jobs:
           exit 0
         fi
         base="${{ github.event.pull_request.base.sha }}"
-        head="${{ github.sha }}"
-        git fetch --no-tags --prune --depth=1 origin "$base"
+        head="${{ github.event.pull_request.head.sha }}"
+        git fetch --no-tags --prune --depth=1 origin "$base" "$head"
         files=$(git diff --name-only "$base" "$head")
         if [ -z "$files" ]; then
           echo "docs_only=false" >> "$GITHUB_OUTPUT"
