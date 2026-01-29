@@ -617,4 +617,4 @@ In order to link a local version of CCD config generator to a project you can us
   implementation group: 'com.github.hmcts', name: 'ccd-config-generator', version: 'DEV-SNAPSHOT'
 ```
 
-To the project dependencies.
+To the project dependencies. If Gradle keeps an older snapshot, rerun with `--refresh-dependencies`.
