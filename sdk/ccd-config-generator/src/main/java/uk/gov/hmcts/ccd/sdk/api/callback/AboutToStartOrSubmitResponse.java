@@ -11,6 +11,9 @@ import lombok.Data;
 public class AboutToStartOrSubmitResponse<T, S> {
   private T data;
 
+  @JsonProperty("error_message_override")
+  private String errorMessageOverride;
+
   private List<String> errors;
 
   private List<String> warnings;
