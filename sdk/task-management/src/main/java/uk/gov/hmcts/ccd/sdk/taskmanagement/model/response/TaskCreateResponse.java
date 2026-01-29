@@ -1,4 +1,4 @@
-package uk.gov.hmcts.ccd.sdk.taskmanagement;
+package uk.gov.hmcts.ccd.sdk.taskmanagement.model.response;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
@@ -43,5 +43,5 @@ public record TaskCreateResponse(
     Map<String, Object> additionalProperties,
     OffsetDateTime priorityDate,
     Boolean indexed
-) {
+) implements TaskApiResponse {
 }

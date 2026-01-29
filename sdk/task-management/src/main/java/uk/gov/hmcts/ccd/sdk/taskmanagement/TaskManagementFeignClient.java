@@ -1,10 +1,19 @@
 package uk.gov.hmcts.ccd.sdk.taskmanagement;
 
 import org.springframework.cloud.openfeign.FeignClient;
-import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
+import uk.gov.hmcts.ccd.sdk.taskmanagement.model.request.TaskCreateRequest;
+import uk.gov.hmcts.ccd.sdk.taskmanagement.model.request.TaskTerminationRequest;
+import uk.gov.hmcts.ccd.sdk.taskmanagement.model.response.TaskCreateResponse;
+import uk.gov.hmcts.ccd.sdk.taskmanagement.model.response.TaskTerminationResponse;
+import uk.gov.hmcts.ccd.sdk.taskmanagement.search.SearchTaskRequest;
+import uk.gov.hmcts.ccd.sdk.taskmanagement.search.TaskSearchResponse;
+
+import static org.springframework.http.HttpHeaders.AUTHORIZATION;
+import static org.springframework.http.MediaType.APPLICATION_JSON_VALUE;
 
 @FeignClient(
     name = "task-management-api",
@@ -13,6 +22,13 @@ import org.springframework.web.bind.annotation.RequestBody;
 )
 public interface TaskManagementFeignClient {
 
-  @PostMapping(value = "/tasks", consumes = MediaType.APPLICATION_JSON_VALUE)
+  @PostMapping(value = "/tasks", consumes = APPLICATION_JSON_VALUE)
   ResponseEntity<TaskCreateResponse> createTask(@RequestBody TaskCreateRequest payload);
+
+  @PostMapping(value = "/tasks/terminate")
+  ResponseEntity<TaskTerminationResponse> terminateTask(@RequestBody TaskTerminationRequest payload);
+
+  @PostMapping(value = "/task", consumes = APPLICATION_JSON_VALUE, produces = APPLICATION_JSON_VALUE)
+  ResponseEntity<TaskSearchResponse> searchTasks(@RequestHeader(AUTHORIZATION) String authToken,
+                                                 @RequestBody SearchTaskRequest searchTaskRequest);
 }

@@ -14,10 +14,10 @@ import uk.gov.hmcts.ccd.sdk.api.CCDConfig;
 import uk.gov.hmcts.ccd.sdk.api.CaseDetails;
 import uk.gov.hmcts.ccd.sdk.api.ConfigBuilder;
 import uk.gov.hmcts.ccd.sdk.api.callback.AboutToStartOrSubmitResponse;
-import uk.gov.hmcts.ccd.sdk.taskmanagement.TaskCreateRequest;
+import uk.gov.hmcts.ccd.sdk.taskmanagement.model.request.TaskCreateRequest;
 import uk.gov.hmcts.ccd.sdk.taskmanagement.TaskOutboxService;
-import uk.gov.hmcts.ccd.sdk.taskmanagement.TaskPayload;
-import uk.gov.hmcts.ccd.sdk.taskmanagement.TaskPermission;
+import uk.gov.hmcts.ccd.sdk.taskmanagement.model.TaskPayload;
+import uk.gov.hmcts.ccd.sdk.taskmanagement.model.TaskPermission;
 import uk.gov.hmcts.divorce.common.ccd.PageBuilder;
 import uk.gov.hmcts.divorce.divorcecase.NoFaultDivorce;
 import uk.gov.hmcts.divorce.divorcecase.model.CaseData;
@@ -35,6 +35,8 @@ import java.util.UUID;
 public class ApiFirstTaskEvent implements CCDConfig<CaseData, State, UserRole> {
 
     public static final String EVENT_ID = "api-first-create-task";
+    public static final String TASK_TYPE = "registerNewCase";
+    public static final String PROCESS_CATEGORY_IDENTIFIER = "Processing";
 
     @Autowired
     private TaskOutboxService taskOutboxService;
@@ -66,7 +68,7 @@ public class ApiFirstTaskEvent implements CCDConfig<CaseData, State, UserRole> {
 
         TaskPayload task = TaskPayload.builder()
             .externalTaskId(taskId)
-            .type("registerNewCase")
+            .type(TASK_TYPE)
             .name("Register new case")
             .title("Register new case")
             .created(now)
@@ -99,7 +101,7 @@ public class ApiFirstTaskEvent implements CCDConfig<CaseData, State, UserRole> {
                 .build()))
             .build();
 
-        taskOutboxService.enqueue(new TaskCreateRequest(task));
+        taskOutboxService.enqueueTaskCreateRequest(new TaskCreateRequest(task));
 
         return AboutToStartOrSubmitResponse.<CaseData, State>builder()
             .data(details.getData())

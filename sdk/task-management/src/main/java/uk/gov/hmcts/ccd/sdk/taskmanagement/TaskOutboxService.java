@@ -1,6 +1,12 @@
 package uk.gov.hmcts.ccd.sdk.taskmanagement;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import uk.gov.hmcts.ccd.sdk.taskmanagement.model.TaskAction;
+import uk.gov.hmcts.ccd.sdk.taskmanagement.model.TaskPayload;
+import uk.gov.hmcts.ccd.sdk.taskmanagement.model.outbox.CancelTaskOutboxPayload;
+import uk.gov.hmcts.ccd.sdk.taskmanagement.model.outbox.CompleteTaskOutboxPayload;
+import uk.gov.hmcts.ccd.sdk.taskmanagement.model.request.TaskCreateRequest;
+
 import java.io.IOException;
 import java.util.Objects;
 
@@ -14,7 +20,7 @@ public class TaskOutboxService {
     this.objectMapper = objectMapper;
   }
 
-  public void enqueue(TaskCreateRequest request) {
+  public void enqueueTaskCreateRequest(TaskCreateRequest request) {
     Objects.requireNonNull(request, "request must not be null");
     TaskPayload task = Objects.requireNonNull(request.task(), "task must not be null");
     requireText(task.getExternalTaskId(), "external task id");
@@ -23,7 +29,37 @@ public class TaskOutboxService {
 
     try {
       String payload = objectMapper.writeValueAsString(request);
-      repository.enqueue(task.getExternalTaskId(), task.getCaseId(), task.getCaseTypeId(), payload);
+      repository.enqueue(task.getCaseId(), task.getCaseTypeId(), payload, TaskAction.INITIATE.getId());
+    } catch (IOException ex) {
+      throw new IllegalStateException("Failed to enqueue task outbox entry", ex);
+    }
+  }
+
+  public void enqueueTaskCompleteRequest(CompleteTaskOutboxPayload payload) {
+    Objects.requireNonNull(payload, "payload must not be null");
+    requireText(payload.caseId(), "caseId");
+
+    try {
+      repository.enqueue(
+        payload.caseId(),
+        payload.caseType(),
+        objectMapper.writeValueAsString(payload),
+        TaskAction.COMPLETE.getId());
+    } catch (IOException ex) {
+      throw new IllegalStateException("Failed to enqueue task outbox entry", ex);
+    }
+  }
+
+  public void enqueueTaskCancelRequest(CancelTaskOutboxPayload payload) {
+    Objects.requireNonNull(payload, "payload must not be null");
+    requireText(payload.caseId(), "caseId");
+
+    try {
+      repository.enqueue(
+        payload.caseId(),
+        payload.caseType(),
+        objectMapper.writeValueAsString(payload),
+        TaskAction.CANCEL.getId());
     } catch (IOException ex) {
       throw new IllegalStateException("Failed to enqueue task outbox entry", ex);
     }

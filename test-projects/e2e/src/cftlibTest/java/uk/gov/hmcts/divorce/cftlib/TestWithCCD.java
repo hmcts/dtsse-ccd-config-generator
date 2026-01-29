@@ -47,7 +47,6 @@ import org.apache.http.message.BasicNameValuePair;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClientBuilder;
 import org.apache.http.util.EntityUtils;
-import org.junit.jupiter.api.Disabled;
 import org.mockito.ArgumentCaptor;
 
 import static org.awaitility.Awaitility.await;
@@ -55,7 +54,6 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.*;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyInt;
@@ -95,6 +93,9 @@ import uk.gov.hmcts.divorce.sow014.nfd.DecentralisedCaseworkerAddNote;
 import uk.gov.hmcts.divorce.sow014.nfd.DecentralisedCaseworkerAddNoteFailure;
 import uk.gov.hmcts.divorce.sow014.nfd.FailingSubmittedCallback;
 import uk.gov.hmcts.divorce.sow014.nfd.CaseworkerRoundTripData;
+import uk.gov.hmcts.divorce.sow014.nfd.ApiFirstTaskCancelEvent;
+import uk.gov.hmcts.divorce.sow014.nfd.ApiFirstTaskCompleteEvent;
+import uk.gov.hmcts.divorce.sow014.nfd.ApiFirstTaskEvent;
 import uk.gov.hmcts.divorce.sow014.nfd.PublishedEvent;
 import uk.gov.hmcts.divorce.sow014.nfd.ReturnErrorWhenCreateAPIFirstTask;
 import uk.gov.hmcts.divorce.sow014.nfd.ReturnErrorWhenCreateTestCase;
@@ -102,6 +103,7 @@ import uk.gov.hmcts.divorce.sow014.nfd.SubmittedConfirmationCallback;
 import uk.gov.hmcts.ccd.sdk.type.CaseLink;
 import uk.gov.hmcts.ccd.sdk.type.ListValue;
 import uk.gov.hmcts.ccd.sdk.CaseReindexingService;
+import uk.gov.hmcts.ccd.sdk.taskmanagement.model.TaskAction;
 import uk.gov.hmcts.reform.ccd.client.CoreCaseDataApi;
 import uk.gov.hmcts.reform.ccd.client.model.CaseDataContent;
 import uk.gov.hmcts.reform.ccd.client.model.CaseDetails;
@@ -161,7 +163,9 @@ public class TestWithCCD extends CftlibTest {
         "application/vnd.uk.gov.hmcts.ccd-data-store-api.ui-event-view.v2+json;charset=UTF-8";
     private static final String ACCEPT_UI_START_EVENT =
         "application/vnd.uk.gov.hmcts.ccd-data-store-api.ui-start-event-trigger.v2+json;charset=UTF-8";
-    private static final String API_FIRST_TASK_EVENT_ID = "api-first-create-task";
+    private static final String API_FIRST_TASK_EVENT_ID = ApiFirstTaskEvent.EVENT_ID;
+    private static final String API_FIRST_TASK_COMPLETE_EVENT_ID = ApiFirstTaskCompleteEvent.EVENT_ID;
+    private static final String API_FIRST_TASK_CANCEL_EVENT_ID = ApiFirstTaskCancelEvent.EVENT_ID;
     private String apiFirstTaskId;
     private String waTaskId;
 
@@ -1057,12 +1061,21 @@ public class TestWithCCD extends CftlibTest {
         });
 
         Map<String, Object> outboxRow = db.queryForMap(
-            "SELECT task_id, status FROM ccd.task_outbox ORDER BY id DESC LIMIT 1",
+            "SELECT case_id, status FROM ccd.task_outbox ORDER BY id DESC LIMIT 1",
             Map.of()
         );
-        String taskId = (String) outboxRow.get("task_id");
-        assertThat(taskId, is(notNullValue()));
-        apiFirstTaskId = taskId;
+        String outboxCaseId = (String) outboxRow.get("case_id");
+        assertThat(outboxCaseId, is(notNullValue()));
+
+        String payloadTaskId = db.queryForObject(
+            "SELECT coalesce(payload->'task'->>'task_id', payload->'task'->>'external_task_id')"
+                + " FROM ccd.task_outbox ORDER BY id DESC LIMIT 1",
+            Map.of(),
+            String.class
+        );
+        assertThat(payloadTaskId, is(notNullValue()));
+        assertThat(payloadTaskId.isBlank(), is(false));
+        apiFirstTaskId = payloadTaskId;
 
         String payloadCaseId = db.queryForObject(
             "SELECT payload->'task'->>'case_id' FROM ccd.task_outbox ORDER BY id DESC LIMIT 1",
@@ -1073,13 +1086,13 @@ public class TestWithCCD extends CftlibTest {
 
         await().atMost(Duration.ofSeconds(30)).untilAsserted(() -> {
             Map<String, Object> processed = db.queryForMap(
-                "SELECT status, last_response_code FROM ccd.task_outbox WHERE task_id = :taskId",
-                Map.of("taskId", taskId)
+                "SELECT status, last_response_code FROM ccd.task_outbox WHERE case_id = :caseId",
+                Map.of("caseId", outboxCaseId)
             );
             assertThat(processed.get("status"), equalTo("PROCESSED"));
             assertThat(
                 ((Number) processed.get("last_response_code")).intValue(),
-                anyOf(equalTo(200), equalTo(201))
+                anyOf(equalTo(200), equalTo(201), equalTo(204))
             );
         });
     }
@@ -1113,11 +1126,20 @@ public class TestWithCCD extends CftlibTest {
     });
 
     Map<String, Object> outboxRow = db.queryForMap(
-      "SELECT task_id, status FROM ccd.task_outbox ORDER BY id DESC LIMIT 1",
+      "SELECT case_id, status FROM ccd.task_outbox ORDER BY id DESC LIMIT 1",
       Map.of()
     );
-    String taskId = (String) outboxRow.get("task_id");
-    assertThat(taskId, is(notNullValue()));
+    String outboxCaseId = (String) outboxRow.get("case_id");
+    assertThat(outboxCaseId, is(notNullValue()));
+
+    String payloadTaskId = db.queryForObject(
+      "SELECT coalesce(payload->'task'->>'task_id', payload->'task'->>'external_task_id')"
+        + " FROM ccd.task_outbox ORDER BY id DESC LIMIT 1",
+      Map.of(),
+      String.class
+    );
+    assertThat(payloadTaskId, is(notNullValue()));
+    assertThat(payloadTaskId.isBlank(), is(false));
 
     String payloadCaseId = db.queryForObject(
       "SELECT payload->'task'->>'case_id' FROM ccd.task_outbox ORDER BY id DESC LIMIT 1",
@@ -1128,8 +1150,8 @@ public class TestWithCCD extends CftlibTest {
 
     await().atMost(Duration.ofSeconds(30)).untilAsserted(() -> {
       Map<String, Object> processed = db.queryForMap(
-        "SELECT status, last_response_code FROM ccd.task_outbox WHERE task_id = :taskId",
-        Map.of("taskId", taskId)
+        "SELECT status, last_response_code FROM ccd.task_outbox WHERE case_id = :caseId",
+        Map.of("caseId", outboxCaseId)
       );
       assertThat(processed.get("status"), equalTo("FAILED"));
       assertThat(
@@ -1139,59 +1161,59 @@ public class TestWithCCD extends CftlibTest {
     });
   }
 
-    @SneakyThrows
-    @Order(20)
-    @Test
-    public void apiFirstTaskShouldBeVisibleInWorkAllocationSearch() {
-        String user = "TEST_CASE_WORKER_USER@mailinator.com";
-        String authHeader = getIdamAccessTokenFromSimulator(user, "password");
-        Map<String, Object> searchRequest = Map.of(
-            "search_parameters", List.of(Map.of(
-                "key", "jurisdiction",
-                "operator", "IN",
-                "values", List.of(NoFaultDivorce.JURISDICTION)
-            ), Map.of(
-                "key", "location",
-                "operator", "IN",
-                // XUI uses the refdata stub location (336559) for available tasks; keep in sync with
-                // https://github.com/hmcts/dtsse-ccd-config-generator/blob/master/test-projects/e2e/src/main/java/uk/gov/hmcts/divorce/stubs/RefDataStubController.java#L16
-                "values", List.of("336559")
-            )),
-            "sorting_parameters", List.of(),
-            "request_context", "AVAILABLE_TASKS"
-        );
+  @SneakyThrows
+  @Order(20)
+  @Test
+  public void apiFirstTaskShouldBeVisibleInWorkAllocationSearch() {
+    String user = "TEST_CASE_WORKER_USER@mailinator.com";
+    String authHeader = getIdamAccessTokenFromSimulator(user, "password");
+    Map<String, Object> searchRequest = Map.of(
+      "search_parameters", List.of(Map.of(
+        "key", "jurisdiction",
+        "operator", "IN",
+        "values", List.of(NoFaultDivorce.JURISDICTION)
+      ), Map.of(
+        "key", "location",
+        "operator", "IN",
+        // XUI uses the refdata stub location (336559) for available tasks; keep in sync with
+        // https://github.com/hmcts/dtsse-ccd-config-generator/blob/master/test-projects/e2e/src/main/java/uk/gov/hmcts/divorce/stubs/RefDataStubController.java#L16
+        "values", List.of("336559")
+      )),
+      "sorting_parameters", List.of(),
+      "request_context", "AVAILABLE_TASKS"
+    );
 
-        await().atMost(Duration.ofSeconds(30)).untilAsserted(() -> {
-            try (CloseableHttpClient client = HttpClientBuilder.create().build()) {
-                HttpPost request = new HttpPost(TASK_MANAGEMENT_BASE_URL + "/task");
-                request.addHeader("Content-Type", "application/json");
-                request.addHeader("ServiceAuthorization", cftlib().generateDummyS2SToken("xui_webapp"));
-                request.addHeader("Authorization", authHeader);
-                request.setEntity(new StringEntity(mapper.writeValueAsString(searchRequest), ContentType.APPLICATION_JSON));
+    await().atMost(Duration.ofSeconds(30)).untilAsserted(() -> {
+      try (CloseableHttpClient client = HttpClientBuilder.create().build()) {
+        HttpPost request = new HttpPost(TASK_MANAGEMENT_BASE_URL + "/task");
+        request.addHeader("Content-Type", "application/json");
+        request.addHeader("ServiceAuthorization", cftlib().generateDummyS2SToken("xui_webapp"));
+        request.addHeader("Authorization", authHeader);
+        request.setEntity(new StringEntity(mapper.writeValueAsString(searchRequest), ContentType.APPLICATION_JSON));
 
-                try (CloseableHttpResponse response = client.execute(request)) {
-                    int status = response.getStatusLine().getStatusCode();
-                    assertThat(status, equalTo(200));
+        try (CloseableHttpResponse response = client.execute(request)) {
+          int status = response.getStatusLine().getStatusCode();
+          assertThat(status, equalTo(200));
 
-                    String responseBody = EntityUtils.toString(response.getEntity());
-                    JsonNode payload = mapper.readTree(responseBody);
-                    JsonNode tasks = payload.path("tasks");
+          String responseBody = EntityUtils.toString(response.getEntity());
+          JsonNode payload = mapper.readTree(responseBody);
+          JsonNode tasks = payload.path("tasks");
 
-                    String matchingTaskId = tasks.isArray()
-                        ? StreamSupport.stream(tasks.spliterator(), false)
-                            .filter(task -> String.valueOf(caseRef).equals(task.path("case_id").asText("")))
-                            .map(task -> task.path("id").asText(""))
-                            .filter(taskId -> !taskId.isBlank())
-                            .findFirst()
-                            .orElse("")
-                        : "";
-                    waTaskId = matchingTaskId.isBlank() ? null : matchingTaskId;
-                    boolean hasTask = waTaskId != null;
-                    assertThat("Expected case id " + caseRef + " in response: " + responseBody,
-                        hasTask, is(true));
-                }
-            }
-        });
+          String matchingTaskId = tasks.isArray()
+            ? StreamSupport.stream(tasks.spliterator(), false)
+            .filter(task -> String.valueOf(caseRef).equals(task.path("case_id").asText("")))
+            .map(task -> task.path("id").asText(""))
+            .filter(taskId -> !taskId.isBlank())
+            .findFirst()
+            .orElse("")
+            : "";
+          waTaskId = matchingTaskId.isBlank() ? null : matchingTaskId;
+          boolean hasTask = waTaskId != null;
+          assertThat("Expected case id " + caseRef + " in response: " + responseBody,
+            hasTask, is(true));
+        }
+      }
+    });
     }
 
     @SneakyThrows
@@ -1218,6 +1240,134 @@ public class TestWithCCD extends CftlibTest {
                     status >= 200 && status < 300, is(true));
             }
         }
+    }
+
+    @SneakyThrows
+    @Order(29)
+    @Test
+    public void taskShouldCompleteViaOutboxPoller() {
+        long caseId = createAdditionalCase("TEST_SOLICITOR@mailinator.com");
+        db.update("DELETE FROM ccd.task_outbox WHERE case_id = :caseId", Map.of("caseId", String.valueOf(caseId)));
+
+        var startCreate = ccdApi.startEvent(
+            getAuthorisation("TEST_CASE_WORKER_USER@mailinator.com"),
+            getServiceAuth(),
+            String.valueOf(caseId),
+            API_FIRST_TASK_EVENT_ID
+        );
+        var createRequest = prepareEventRequestWithToken(
+            "TEST_CASE_WORKER_USER@mailinator.com",
+            API_FIRST_TASK_EVENT_ID,
+            Map.of("note", "api-first-task"),
+            startCreate.getToken(),
+            caseId
+        );
+        var createResponse = HttpClientBuilder.create().build().execute(createRequest);
+        assertThat(createResponse.getStatusLine().getStatusCode(), equalTo(201));
+
+        await().atMost(Duration.ofSeconds(30)).untilAsserted(() -> {
+            Map<String, Object> processed = db.queryForMap(
+                "SELECT status, last_response_code FROM ccd.task_outbox"
+                    + " WHERE case_id = :caseId AND action = :action::ccd.task_action ORDER BY id DESC LIMIT 1",
+                Map.of("caseId", String.valueOf(caseId), "action", TaskAction.INITIATE.getId())
+            );
+            assertThat(processed.get("status"), equalTo("PROCESSED"));
+            Object responseCode = processed.get("last_response_code");
+            assertThat(responseCode, is(notNullValue()));
+            assertThat(((Number) responseCode).intValue(), anyOf(equalTo(200), equalTo(201), equalTo(204)));
+        });
+
+        var startComplete = ccdApi.startEvent(
+            getAuthorisation("TEST_CASE_WORKER_USER@mailinator.com"),
+            getServiceAuth(),
+            String.valueOf(caseId),
+            API_FIRST_TASK_COMPLETE_EVENT_ID
+        );
+        var completeRequest = prepareEventRequestWithToken(
+            "TEST_CASE_WORKER_USER@mailinator.com",
+            API_FIRST_TASK_COMPLETE_EVENT_ID,
+            Map.of("note", "api-first-complete"),
+            startComplete.getToken(),
+            caseId
+        );
+        var completeResponse = HttpClientBuilder.create().build().execute(completeRequest);
+        assertThat(completeResponse.getStatusLine().getStatusCode(), equalTo(201));
+
+        await().atMost(Duration.ofSeconds(30)).untilAsserted(() -> {
+            Map<String, Object> processed = db.queryForMap(
+                "SELECT status, last_response_code FROM ccd.task_outbox"
+                    + " WHERE case_id = :caseId AND action = :action::ccd.task_action ORDER BY id DESC LIMIT 1",
+                Map.of("caseId", String.valueOf(caseId), "action", TaskAction.COMPLETE.getId())
+            );
+            assertThat(processed.get("status"), equalTo("PROCESSED"));
+            Object responseCode = processed.get("last_response_code");
+            assertThat(responseCode, is(notNullValue()));
+            assertThat(((Number) responseCode).intValue(), anyOf(equalTo(200), equalTo(201), equalTo(204)));
+        });
+    }
+
+    @SneakyThrows
+    @Order(30)
+    @Test
+    public void taskShouldCancelViaOutboxPoller() {
+        long caseId = createAdditionalCase("TEST_SOLICITOR@mailinator.com");
+        db.update("DELETE FROM ccd.task_outbox WHERE case_id = :caseId", Map.of("caseId", String.valueOf(caseId)));
+
+        var startCreate = ccdApi.startEvent(
+            getAuthorisation("TEST_CASE_WORKER_USER@mailinator.com"),
+            getServiceAuth(),
+            String.valueOf(caseId),
+            API_FIRST_TASK_EVENT_ID
+        );
+        var createRequest = prepareEventRequestWithToken(
+            "TEST_CASE_WORKER_USER@mailinator.com",
+            API_FIRST_TASK_EVENT_ID,
+            Map.of("note", "api-first-task"),
+            startCreate.getToken(),
+            caseId
+        );
+        var createResponse = HttpClientBuilder.create().build().execute(createRequest);
+        assertThat(createResponse.getStatusLine().getStatusCode(), equalTo(201));
+
+        await().atMost(Duration.ofSeconds(30)).untilAsserted(() -> {
+            Map<String, Object> processed = db.queryForMap(
+                "SELECT status, last_response_code FROM ccd.task_outbox"
+                    + " WHERE case_id = :caseId AND action = :action::ccd.task_action ORDER BY id DESC LIMIT 1",
+                Map.of("caseId", String.valueOf(caseId), "action", TaskAction.INITIATE.getId())
+            );
+            assertThat(processed.get("status"), equalTo("PROCESSED"));
+            Object responseCode = processed.get("last_response_code");
+            assertThat(responseCode, is(notNullValue()));
+            assertThat(((Number) responseCode).intValue(), anyOf(equalTo(200), equalTo(201), equalTo(204)));
+        });
+
+        var startCancel = ccdApi.startEvent(
+            getAuthorisation("TEST_CASE_WORKER_USER@mailinator.com"),
+            getServiceAuth(),
+            String.valueOf(caseId),
+            API_FIRST_TASK_CANCEL_EVENT_ID
+        );
+        var cancelRequest = prepareEventRequestWithToken(
+            "TEST_CASE_WORKER_USER@mailinator.com",
+            API_FIRST_TASK_CANCEL_EVENT_ID,
+            Map.of("note", "api-first-cancel"),
+            startCancel.getToken(),
+            caseId
+        );
+        var cancelResponse = HttpClientBuilder.create().build().execute(cancelRequest);
+        assertThat(cancelResponse.getStatusLine().getStatusCode(), equalTo(201));
+
+        await().atMost(Duration.ofSeconds(30)).untilAsserted(() -> {
+            Map<String, Object> processed = db.queryForMap(
+                "SELECT status, last_response_code FROM ccd.task_outbox"
+                    + " WHERE case_id = :caseId AND action = :action::ccd.task_action ORDER BY id DESC LIMIT 1",
+                Map.of("caseId", String.valueOf(caseId), "action", TaskAction.CANCEL.getId())
+            );
+            assertThat(processed.get("status"), equalTo("PROCESSED"));
+            Object responseCode = processed.get("last_response_code");
+            assertThat(responseCode, is(notNullValue()));
+            assertThat(((Number) responseCode).intValue(), anyOf(equalTo(200), equalTo(201), equalTo(204)));
+        });
     }
 
     @SneakyThrows
@@ -1471,7 +1621,6 @@ public class TestWithCCD extends CftlibTest {
         var response = HttpClientBuilder.create().build().execute(e);
         assertThat(response.getStatusLine().getStatusCode(), equalTo(201));
     }
-
 
     private static int noteCount = 0;
     private void addNote() throws Exception {

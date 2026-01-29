@@ -1,4 +1,4 @@
-package uk.gov.hmcts.ccd.sdk.taskmanagement;
+package uk.gov.hmcts.ccd.sdk.taskmanagement.model;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.databind.PropertyNamingStrategies;

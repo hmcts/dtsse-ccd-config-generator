@@ -1,5 +1,6 @@
-package uk.gov.hmcts.ccd.sdk.taskmanagement;
+package uk.gov.hmcts.ccd.sdk.taskmanagement.model;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.databind.PropertyNamingStrategies;
 import com.fasterxml.jackson.databind.annotation.JsonNaming;
@@ -13,6 +14,7 @@ import lombok.extern.jackson.Jacksonized;
 @Value
 @Builder(toBuilder = true)
 @Jacksonized
+@JsonIgnoreProperties(ignoreUnknown = true)
 @JsonInclude(JsonInclude.Include.NON_NULL)
 @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
 public class TaskPayload {
@@ -41,6 +43,7 @@ public class TaskPayload {
   String locationName;
   String regionName;
   String taskSystem;
+  String processCategoryIdentifiers;
   Map<String, Object> additionalProperties;
   List<TaskPermission> permissions;
 }

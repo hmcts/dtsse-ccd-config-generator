@@ -7,10 +7,10 @@ import uk.gov.hmcts.ccd.sdk.api.CCDConfig;
 import uk.gov.hmcts.ccd.sdk.api.CaseDetails;
 import uk.gov.hmcts.ccd.sdk.api.ConfigBuilder;
 import uk.gov.hmcts.ccd.sdk.api.callback.AboutToStartOrSubmitResponse;
-import uk.gov.hmcts.ccd.sdk.taskmanagement.TaskCreateRequest;
 import uk.gov.hmcts.ccd.sdk.taskmanagement.TaskOutboxService;
-import uk.gov.hmcts.ccd.sdk.taskmanagement.TaskPayload;
-import uk.gov.hmcts.ccd.sdk.taskmanagement.TaskPermission;
+import uk.gov.hmcts.ccd.sdk.taskmanagement.model.TaskPayload;
+import uk.gov.hmcts.ccd.sdk.taskmanagement.model.TaskPermission;
+import uk.gov.hmcts.ccd.sdk.taskmanagement.model.request.TaskCreateRequest;
 import uk.gov.hmcts.divorce.common.ccd.PageBuilder;
 import uk.gov.hmcts.divorce.divorcecase.NoFaultDivorce;
 import uk.gov.hmcts.divorce.divorcecase.model.CaseData;
@@ -99,7 +99,7 @@ public class ReturnErrorWhenCreateAPIFirstTask implements CCDConfig<CaseData, St
                 .build()))
             .build();
 
-        taskOutboxService.enqueue(new TaskCreateRequest(task));
+        taskOutboxService.enqueueTaskCreateRequest(new TaskCreateRequest(task));
 
         return AboutToStartOrSubmitResponse.<CaseData, State>builder()
             .data(details.getData())
