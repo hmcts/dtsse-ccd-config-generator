@@ -43,7 +43,6 @@ public class TaskPayload {
   String locationName;
   String regionName;
   String taskSystem;
-  String processCategoryIdentifiers;
   Map<String, Object> additionalProperties;
   List<TaskPermission> permissions;
 }

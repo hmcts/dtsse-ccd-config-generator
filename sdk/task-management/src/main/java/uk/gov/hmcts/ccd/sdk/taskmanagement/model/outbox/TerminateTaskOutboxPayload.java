@@ -8,5 +8,5 @@ import java.util.List;
 
 @JsonInclude(JsonInclude.Include.NON_NULL)
 @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
-public record CompleteTaskOutboxPayload(String caseId, String caseType, List<String> taskTypes) {
+public record TerminateTaskOutboxPayload(String caseId, String caseType, List<String> taskTypes) {
 }

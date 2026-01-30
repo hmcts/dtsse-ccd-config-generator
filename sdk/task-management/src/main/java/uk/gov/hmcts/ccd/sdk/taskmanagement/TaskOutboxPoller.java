@@ -10,13 +10,10 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.scheduling.annotation.Scheduled;
 import uk.gov.hmcts.ccd.sdk.taskmanagement.model.TaskAction;
 import uk.gov.hmcts.ccd.sdk.taskmanagement.model.TaskPayload;
-import uk.gov.hmcts.ccd.sdk.taskmanagement.model.outbox.CancelTaskOutboxPayload;
-import uk.gov.hmcts.ccd.sdk.taskmanagement.model.outbox.CompleteTaskOutboxPayload;
+import uk.gov.hmcts.ccd.sdk.taskmanagement.model.outbox.TerminateTaskOutboxPayload;
 import uk.gov.hmcts.ccd.sdk.taskmanagement.model.outbox.TaskOutboxRecord;
 import uk.gov.hmcts.ccd.sdk.taskmanagement.model.request.TaskCreateRequest;
 import uk.gov.hmcts.ccd.sdk.taskmanagement.model.request.TaskTerminationRequest;
-import uk.gov.hmcts.ccd.sdk.taskmanagement.model.response.TaskCreateResponse;
-import uk.gov.hmcts.ccd.sdk.taskmanagement.model.response.TaskTerminationResponse;
 import uk.gov.hmcts.ccd.sdk.taskmanagement.search.SearchTaskRequest;
 import uk.gov.hmcts.ccd.sdk.taskmanagement.search.TaskRequestContext;
 import uk.gov.hmcts.ccd.sdk.taskmanagement.search.TaskSearchKey;
@@ -24,10 +21,14 @@ import uk.gov.hmcts.ccd.sdk.taskmanagement.search.TaskSearchParameterList;
 
 import static uk.gov.hmcts.ccd.sdk.taskmanagement.model.TaskAction.CANCEL;
 import static uk.gov.hmcts.ccd.sdk.taskmanagement.model.TaskAction.COMPLETE;
-import static uk.gov.hmcts.ccd.sdk.taskmanagement.model.TaskAction.INITIATE;
 
 @Slf4j
 public class TaskOutboxPoller {
+
+  @FunctionalInterface
+  private interface TaskProcessor {
+    ResponseEntity<?> process(TaskOutboxRecord record) throws IOException;
+  }
 
   private final TaskOutboxRepository repository;
   private final TaskManagementApiClient taskManagementApiClient;
@@ -62,22 +63,21 @@ public class TaskOutboxPoller {
       try {
         TaskAction action = TaskAction.fromId(record.action());
 
-        if (action == INITIATE) {
-          ResponseEntity<TaskCreateResponse> response = createTask(record);
-          statusCode = response.getStatusCode().value();
-          log.warn("Task outbox {} create response body {}", record.id(), response.getBody());
-          if (isUnsuccessfulRequest(record, response, statusCode)) continue;
-        } else if (action == COMPLETE) {
-          ResponseEntity<TaskTerminationResponse> response = completeTask(record);
-          statusCode = response != null ? response.getStatusCode().value() : 500;
-          if (isUnsuccessfulRequest(record, response, statusCode)) continue;
-        } else if (action == CANCEL) {
-          ResponseEntity<TaskTerminationResponse> response = cancelTask(record);
-          statusCode = response != null ? response.getStatusCode().value() : 500;
-          if (isUnsuccessfulRequest(record, response, statusCode)) continue;
-        } else {
+        TaskProcessor processor = switch (action) {
+          case INITIATE -> this::createTask;
+          case COMPLETE -> this::completeTask;
+          case CANCEL -> this::cancelTask;
+          case RECONFIGURE -> null;
+        };
+
+        if (processor == null) {
           log.warn("Task outbox {} unknown action {}", record.id(), record.action());
           statusCode = 500;
+        } else {
+          ResponseEntity<?> response = processor.process(record);
+          statusCode = response != null ? response.getStatusCode().value() : 500;
+          log.info("Task outbox {} response body {}", record.id(), response != null ? response.getBody() : null);
+          if (isUnsuccessfulRequest(record, response, statusCode)) continue;
         }
 
         repository.markProcessed(record.id(), statusCode);
@@ -102,12 +102,6 @@ public class TaskOutboxPoller {
   }
 
   private boolean isUnsuccessfulRequest(TaskOutboxRecord record, ResponseEntity<?> response, int statusCode) {
-    // HTTP 204 No Content is a valid success response for idempotent task creation
-    // (task already exists with the same external_task_id and case_type_id)
-    if (response != null && statusCode == 204) {
-      log.info("Task outbox {} received 204 No Content - task already exists (idempotent success)", record.id());
-      return false;
-    }
 
     if (response != null && response.getBody() != null && response.getStatusCode().is2xxSuccessful()) {
       return false;
@@ -122,24 +116,25 @@ public class TaskOutboxPoller {
     return true;
   }
 
-  private ResponseEntity<TaskCreateResponse> createTask(TaskOutboxRecord record) throws IOException {
+  private ResponseEntity<?> createTask(TaskOutboxRecord record) throws IOException {
     TaskCreateRequest request = objectMapper.readValue(record.payload(), TaskCreateRequest.class);
     log.warn("Task outbox {} sending payload {}", record.id(), objectMapper.writeValueAsString(request));
     return taskManagementApiClient.createTask(request);
   }
 
-  private ResponseEntity<TaskTerminationResponse> completeTask(TaskOutboxRecord record) throws IOException {
-    CompleteTaskOutboxPayload completeTaskOutboxPayload = objectMapper.readValue(record.payload(), CompleteTaskOutboxPayload.class);
+  private ResponseEntity<?> completeTask(TaskOutboxRecord record) throws IOException {
+    TerminateTaskOutboxPayload terminateTaskOutboxPayload =
+        objectMapper.readValue(record.payload(), TerminateTaskOutboxPayload.class);
 
     var searchRequest = SearchTaskRequest.builder().searchParameters(
         List.of(
           TaskSearchParameterList.builder()
             .key(TaskSearchKey.TASK_TYPE)
-            .values(completeTaskOutboxPayload.taskTypes())
+            .values(terminateTaskOutboxPayload.taskTypes())
             .build(),
           TaskSearchParameterList.builder()
             .key(TaskSearchKey.CASE_ID)
-            .values(List.of(completeTaskOutboxPayload.caseId()))
+            .values(List.of(terminateTaskOutboxPayload.caseId()))
             .build()
         )
       )
@@ -151,7 +146,7 @@ public class TaskOutboxPoller {
 
     if (!tasksToComplete.getStatusCode().is2xxSuccessful() || tasksToComplete.getBody() == null) {
       log.warn("Failed to retrieve tasks to cancel for case {} and task types {}",
-        completeTaskOutboxPayload.caseId(), completeTaskOutboxPayload.taskTypes());
+        terminateTaskOutboxPayload.caseId(), terminateTaskOutboxPayload.taskTypes());
       return null;
     }
 
@@ -163,18 +158,19 @@ public class TaskOutboxPoller {
     return taskManagementApiClient.terminateTask(request);
   }
 
-  private ResponseEntity<TaskTerminationResponse> cancelTask(TaskOutboxRecord record) throws IOException {
-    CancelTaskOutboxPayload cancelTaskOutboxPayload = objectMapper.readValue(record.payload(), CancelTaskOutboxPayload.class);
+  private ResponseEntity<?> cancelTask(TaskOutboxRecord record) throws IOException {
+    TerminateTaskOutboxPayload terminateTaskOutboxPayload =
+        objectMapper.readValue(record.payload(), TerminateTaskOutboxPayload.class);
 
     var searchRequest = SearchTaskRequest.builder().searchParameters(
       List.of(
         TaskSearchParameterList.builder()
           .key(TaskSearchKey.PROCESS_CATEGORY_IDENTIFIER)
-          .values(cancelTaskOutboxPayload.processCategoryIdentifiers())
+          .values(terminateTaskOutboxPayload.taskTypes())
           .build(),
         TaskSearchParameterList.builder()
           .key(TaskSearchKey.CASE_ID)
-          .values(List.of(cancelTaskOutboxPayload.caseId()))
+          .values(List.of(terminateTaskOutboxPayload.caseId()))
           .build()
         )
       )
@@ -185,7 +181,7 @@ public class TaskOutboxPoller {
     var tasksToCancel = taskManagementApiClient.searchTasks(searchRequest);
 
     if (!tasksToCancel.getStatusCode().is2xxSuccessful() || tasksToCancel.getBody() == null) {
-      log.warn("Failed to retrieve tasks to cancel for process category identifiers {}", cancelTaskOutboxPayload.processCategoryIdentifiers());
+      log.warn("Failed to retrieve tasks to cancel for task types {}", terminateTaskOutboxPayload.taskTypes());
       return null;
     }
 

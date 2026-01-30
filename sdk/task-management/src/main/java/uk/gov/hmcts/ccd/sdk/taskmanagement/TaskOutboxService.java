@@ -3,8 +3,7 @@ package uk.gov.hmcts.ccd.sdk.taskmanagement;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import uk.gov.hmcts.ccd.sdk.taskmanagement.model.TaskAction;
 import uk.gov.hmcts.ccd.sdk.taskmanagement.model.TaskPayload;
-import uk.gov.hmcts.ccd.sdk.taskmanagement.model.outbox.CancelTaskOutboxPayload;
-import uk.gov.hmcts.ccd.sdk.taskmanagement.model.outbox.CompleteTaskOutboxPayload;
+import uk.gov.hmcts.ccd.sdk.taskmanagement.model.outbox.TerminateTaskOutboxPayload;
 import uk.gov.hmcts.ccd.sdk.taskmanagement.model.request.TaskCreateRequest;
 
 import java.io.IOException;
@@ -35,7 +34,7 @@ public class TaskOutboxService {
     }
   }
 
-  public void enqueueTaskCompleteRequest(CompleteTaskOutboxPayload payload) {
+  public void enqueueTaskCompleteRequest(TerminateTaskOutboxPayload payload) {
     Objects.requireNonNull(payload, "payload must not be null");
     requireText(payload.caseId(), "caseId");
 
@@ -50,7 +49,7 @@ public class TaskOutboxService {
     }
   }
 
-  public void enqueueTaskCancelRequest(CancelTaskOutboxPayload payload) {
+  public void enqueueTaskCancelRequest(TerminateTaskOutboxPayload payload) {
     Objects.requireNonNull(payload, "payload must not be null");
     requireText(payload.caseId(), "caseId");
 

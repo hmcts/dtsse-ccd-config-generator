@@ -8,14 +8,14 @@ import uk.gov.hmcts.ccd.sdk.api.CaseDetails;
 import uk.gov.hmcts.ccd.sdk.api.ConfigBuilder;
 import uk.gov.hmcts.ccd.sdk.api.callback.AboutToStartOrSubmitResponse;
 import uk.gov.hmcts.ccd.sdk.taskmanagement.TaskOutboxService;
-import uk.gov.hmcts.ccd.sdk.taskmanagement.model.outbox.CancelTaskOutboxPayload;
+import uk.gov.hmcts.ccd.sdk.taskmanagement.model.outbox.TerminateTaskOutboxPayload;
 import uk.gov.hmcts.divorce.common.ccd.PageBuilder;
 import uk.gov.hmcts.divorce.divorcecase.NoFaultDivorce;
 import uk.gov.hmcts.divorce.divorcecase.model.CaseData;
 import uk.gov.hmcts.divorce.divorcecase.model.State;
 import uk.gov.hmcts.divorce.divorcecase.model.UserRole;
 
-import java.util.List;
+import java.util.Arrays;
 
 import static uk.gov.hmcts.divorce.divorcecase.model.UserRole.CASE_WORKER;
 import static uk.gov.hmcts.divorce.divorcecase.model.UserRole.JUDGE;
@@ -28,14 +28,14 @@ import static uk.gov.hmcts.divorce.divorcecase.model.access.Permissions.CREATE_R
 @Slf4j
 public class ApiFirstTaskCancelEvent implements CCDConfig<CaseData, State, UserRole> {
 
-    public static final String EVENT_ID = "api-first-cancel-task";
+  public static final String EVENT_ID = "api-first-cancel-task";
 
-    @Autowired
-    private TaskOutboxService taskOutboxService;
+  @Autowired
+  private TaskOutboxService taskOutboxService;
 
-    @Override
-    public void configure(ConfigBuilder<CaseData, State, UserRole> configBuilder) {
-        new PageBuilder(configBuilder
+  @Override
+  public void configure(ConfigBuilder<CaseData, State, UserRole> configBuilder) {
+    new PageBuilder(configBuilder
             .event(EVENT_ID)
             .forAllStates()
             .name("API-first task: cancel")
@@ -48,22 +48,27 @@ public class ApiFirstTaskCancelEvent implements CCDConfig<CaseData, State, UserR
             .page("apiFirstTaskCancel")
             .pageLabel("API-first task: cancel")
             .optional(CaseData::getNote);
-    }
+  }
 
-    public AboutToStartOrSubmitResponse<CaseData, State> aboutToSubmit(
-        CaseDetails<CaseData, State> details,
-        CaseDetails<CaseData, State> beforeDetails
-    ) {
-        CancelTaskOutboxPayload payload = new CancelTaskOutboxPayload(
-            String.valueOf(details.getId()),
-            NoFaultDivorce.getCaseType(),
-            List.of(ApiFirstTaskEvent.PROCESS_CATEGORY_IDENTIFIER)
-        );
+  public AboutToStartOrSubmitResponse<CaseData, State> aboutToSubmit(
+    CaseDetails<CaseData, State> details,
+    CaseDetails<CaseData, State> beforeDetails) {
 
-        taskOutboxService.enqueueTaskCancelRequest(payload);
+    //cancel all tasks - could also just enumerate all task types, but this demos rel between
+    //process category identifiers and a task subset and a way to map them to each other
+    var processCategoryIdentifiers = Arrays.stream(ProcessCategoryIdentifiers.values()).map(Enum::name).toList();
+    var taskTypes = NFDTaskType.getTaskTypesFromProcessCategoryIdentifiers(processCategoryIdentifiers);
 
-        return AboutToStartOrSubmitResponse.<CaseData, State>builder()
-            .data(details.getData())
-            .build();
-    }
+    TerminateTaskOutboxPayload payload = new TerminateTaskOutboxPayload(
+      String.valueOf(details.getId()),
+      NoFaultDivorce.getCaseType(),
+      taskTypes.stream().map(Enum::name).toList()
+    );
+
+    taskOutboxService.enqueueTaskCancelRequest(payload);
+
+    return AboutToStartOrSubmitResponse.<CaseData, State>builder()
+      .data(details.getData())
+      .build();
+  }
 }

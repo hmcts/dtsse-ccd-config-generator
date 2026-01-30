@@ -36,7 +36,6 @@ public class ApiFirstTaskEvent implements CCDConfig<CaseData, State, UserRole> {
 
     public static final String EVENT_ID = "api-first-create-task";
     public static final String TASK_TYPE = "registerNewCase";
-    public static final String PROCESS_CATEGORY_IDENTIFIER = "Processing";
 
     @Autowired
     private TaskOutboxService taskOutboxService;
