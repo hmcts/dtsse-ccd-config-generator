@@ -280,6 +280,7 @@ public class CftLibConfig implements CFTLibConfigurer {
         "caseworker-wa",
         "caseworker-wa-configuration"
       );
+      lib.createIdamUser("test-system-user@hmcts.net", "task-allocator", "caseworker-divorce-systemupdate");
     }
     private void importDivorceDefinitions(CFTLib lib) throws Exception {
         // Generate CCD definitions before importing them into the in-memory instance.
