@@ -62,7 +62,8 @@ public class TaskOutboxPoller {
 
         TaskProcessor processor = switch (action) {
           case INITIATE -> this::createTask;
-          case COMPLETE, CANCEL -> recordToProcess -> terminateTask(recordToProcess, action);
+          case COMPLETE -> this::completeTask;
+          case CANCEL -> this::cancelTask;
           case RECONFIGURE -> null;
         };
 
@@ -116,6 +117,14 @@ public class TaskOutboxPoller {
     TaskCreateRequest request = objectMapper.readValue(record.payload(), TaskCreateRequest.class);
     log.warn("Task outbox {} sending payload {}", record.id(), objectMapper.writeValueAsString(request));
     return taskManagementApiClient.createTask(request);
+  }
+
+  private ResponseEntity<?> cancelTask(TaskOutboxRecord record) throws IOException {
+    return terminateTask(record, TaskAction.CANCEL);
+  }
+
+  private ResponseEntity<?> completeTask(TaskOutboxRecord record) throws IOException {
+    return terminateTask(record, TaskAction.COMPLETE);
   }
 
   private ResponseEntity<?> terminateTask(TaskOutboxRecord record, TaskAction action) throws IOException {

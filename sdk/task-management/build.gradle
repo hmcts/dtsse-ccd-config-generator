@@ -20,8 +20,10 @@ dependencies {
     compileOnly 'org.springframework.boot:spring-boot-autoconfigure'
 
     implementation 'com.fasterxml.jackson.core:jackson-databind'
+    implementation group: 'com.github.hmcts', name: 'idam-java-client', version: '3.0.5'
 
-    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+
+  testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
 

@@ -15,6 +15,7 @@ import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import uk.gov.hmcts.reform.authorisation.ServiceAuthorisationApi;
 import uk.gov.hmcts.reform.authorisation.generators.AuthTokenGenerator;
 import uk.gov.hmcts.reform.authorisation.generators.AuthTokenGeneratorFactory;
+import uk.gov.hmcts.reform.idam.client.IdamClient;
 
 @AutoConfiguration
 @EnableConfigurationProperties(TaskManagementProperties.class)
@@ -40,11 +41,12 @@ public class TaskManagementAutoConfiguration {
 
   @Bean
   @ConditionalOnMissingBean
-  @ConditionalOnClass(TaskManagementFeignClient.class)
+  @ConditionalOnClass({TaskManagementFeignClient.class, IdamClient.class})
   public TaskManagementApiClient taskManagementApiClient(
-      TaskManagementFeignClient feignClient
+      TaskManagementFeignClient feignClient,
+      IdamClient idamClient
   ) {
-    return new TaskManagementApiClient(feignClient);
+    return new TaskManagementApiClient(feignClient, idamClient);
   }
 
   @Bean
