@@ -79,7 +79,8 @@ public class CftLibConfig implements CFTLibConfigurer {
             "pui-finance-manager",
             "pui-organisation-manager",
             "pui-user-manager",
-            "TTL_profile"
+            "TTL_profile",
+            "task-allocator"
         ));
 
         lib.createRoles(roles.toArray(new String[0]));
