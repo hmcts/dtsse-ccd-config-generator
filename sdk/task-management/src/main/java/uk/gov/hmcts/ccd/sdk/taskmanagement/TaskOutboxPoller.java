@@ -19,9 +19,6 @@ import uk.gov.hmcts.ccd.sdk.taskmanagement.search.TaskRequestContext;
 import uk.gov.hmcts.ccd.sdk.taskmanagement.search.TaskSearchKey;
 import uk.gov.hmcts.ccd.sdk.taskmanagement.search.TaskSearchParameterList;
 
-import static uk.gov.hmcts.ccd.sdk.taskmanagement.model.TaskAction.CANCEL;
-import static uk.gov.hmcts.ccd.sdk.taskmanagement.model.TaskAction.COMPLETE;
-
 @Slf4j
 public class TaskOutboxPoller {
 
@@ -65,8 +62,7 @@ public class TaskOutboxPoller {
 
         TaskProcessor processor = switch (action) {
           case INITIATE -> this::createTask;
-          case COMPLETE -> this::completeTask;
-          case CANCEL -> this::cancelTask;
+          case COMPLETE, CANCEL -> recordToProcess -> terminateTask(recordToProcess, action);
           case RECONFIGURE -> null;
         };
 
@@ -122,7 +118,7 @@ public class TaskOutboxPoller {
     return taskManagementApiClient.createTask(request);
   }
 
-  private ResponseEntity<?> completeTask(TaskOutboxRecord record) throws IOException {
+  private ResponseEntity<?> terminateTask(TaskOutboxRecord record, TaskAction action) throws IOException {
     TerminateTaskOutboxPayload terminateTaskOutboxPayload =
         objectMapper.readValue(record.payload(), TerminateTaskOutboxPayload.class);
 
@@ -142,52 +138,21 @@ public class TaskOutboxPoller {
       .requestContext(TaskRequestContext.ALL_WORK)
       .build();
 
-    var tasksToComplete = taskManagementApiClient.searchTasks(searchRequest);
+    var tasksToTerminate = taskManagementApiClient.searchTasks(searchRequest);
 
-    if (!tasksToComplete.getStatusCode().is2xxSuccessful() || tasksToComplete.getBody() == null) {
-      log.warn("Failed to retrieve tasks to cancel for case {} and task types {}",
-        terminateTaskOutboxPayload.caseId(), terminateTaskOutboxPayload.taskTypes());
+    if (!tasksToTerminate.getStatusCode().is2xxSuccessful() || tasksToTerminate.getBody() == null) {
+      log.warn(
+        "Failed to retrieve tasks to terminate for case {} and task types {} with action {}",
+        terminateTaskOutboxPayload.caseId(),
+        terminateTaskOutboxPayload.taskTypes(),
+        action.getId()
+      );
       return null;
     }
 
     TaskTerminationRequest request = TaskTerminationRequest.builder()
-      .taskIds(tasksToComplete.getBody().getTasks().stream().map(TaskPayload::getExternalTaskId).toList())
-      .action(COMPLETE.getId())
-      .build();
-
-    return taskManagementApiClient.terminateTask(request);
-  }
-
-  private ResponseEntity<?> cancelTask(TaskOutboxRecord record) throws IOException {
-    TerminateTaskOutboxPayload terminateTaskOutboxPayload =
-        objectMapper.readValue(record.payload(), TerminateTaskOutboxPayload.class);
-
-    var searchRequest = SearchTaskRequest.builder().searchParameters(
-      List.of(
-        TaskSearchParameterList.builder()
-          .key(TaskSearchKey.PROCESS_CATEGORY_IDENTIFIER)
-          .values(terminateTaskOutboxPayload.taskTypes())
-          .build(),
-        TaskSearchParameterList.builder()
-          .key(TaskSearchKey.CASE_ID)
-          .values(List.of(terminateTaskOutboxPayload.caseId()))
-          .build()
-        )
-      )
-      .taskSortingParameters(null)
-      .requestContext(TaskRequestContext.ALL_WORK)
-      .build();
-
-    var tasksToCancel = taskManagementApiClient.searchTasks(searchRequest);
-
-    if (!tasksToCancel.getStatusCode().is2xxSuccessful() || tasksToCancel.getBody() == null) {
-      log.warn("Failed to retrieve tasks to cancel for task types {}", terminateTaskOutboxPayload.taskTypes());
-      return null;
-    }
-
-    TaskTerminationRequest request = TaskTerminationRequest.builder()
-      .taskIds(tasksToCancel.getBody().getTasks().stream().map(TaskPayload::getExternalTaskId).toList())
-      .action(CANCEL.getId())
+      .taskIds(tasksToTerminate.getBody().getTasks().stream().map(TaskPayload::getTaskId).toList())
+      .action(action.getId())
       .build();
 
     return taskManagementApiClient.terminateTask(request);
