@@ -18,10 +18,10 @@ import uk.gov.hmcts.ccd.sdk.taskmanagement.search.SearchTaskRequest;
 import uk.gov.hmcts.ccd.sdk.taskmanagement.search.TaskRequestContext;
 import uk.gov.hmcts.ccd.sdk.taskmanagement.search.TaskSearchKey;
 import uk.gov.hmcts.ccd.sdk.taskmanagement.search.TaskSearchParameterList;
+import uk.gov.hmcts.ccd.sdk.taskmanagement.search.TaskSearchOperator;
 
 @Slf4j
 public class TaskOutboxPoller {
-
   @FunctionalInterface
   private interface TaskProcessor {
     ResponseEntity<?> process(TaskOutboxRecord record) throws IOException;
@@ -99,9 +99,11 @@ public class TaskOutboxPoller {
   }
 
   private boolean isUnsuccessfulRequest(TaskOutboxRecord record, ResponseEntity<?> response, int statusCode) {
-
-    if (response != null && response.getBody() != null && response.getStatusCode().is2xxSuccessful()) {
-      return false;
+    boolean requireBody = TaskAction.fromId(record.action()) == TaskAction.INITIATE;
+    if (response != null && response.getStatusCode().is2xxSuccessful()) {
+      if (!requireBody || response.getBody() != null) {
+        return false;
+      }
     }
 
     log.warn(
@@ -135,10 +137,12 @@ public class TaskOutboxPoller {
         List.of(
           TaskSearchParameterList.builder()
             .key(TaskSearchKey.TASK_TYPE)
+            .operator(TaskSearchOperator.IN)
             .values(terminateTaskOutboxPayload.taskTypes())
             .build(),
           TaskSearchParameterList.builder()
             .key(TaskSearchKey.CASE_ID)
+            .operator(TaskSearchOperator.IN)
             .values(List.of(terminateTaskOutboxPayload.caseId()))
             .build()
         )

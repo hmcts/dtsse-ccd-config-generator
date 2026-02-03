@@ -5,6 +5,7 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.PropertyNamingStrategies;
 import com.fasterxml.jackson.databind.annotation.JsonNaming;
+import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Map;
@@ -47,5 +48,6 @@ public class TaskPayload {
   String regionName;
   String taskSystem;
   Map<String, Object> additionalProperties;
+  @JsonDeserialize(using = TaskPermissionListDeserializer.class)
   List<TaskPermission> permissions;
 }
