@@ -56,8 +56,9 @@ public class ApiFirstTaskCancelEvent implements CCDConfig<CaseData, State, UserR
 
     //cancel all tasks - could also just enumerate all task types, but this demos rel between
     //process category identifiers and a task subset and a way to map them to each other
-    var processCategoryIdentifiers = Arrays.stream(ProcessCategoryIdentifiers.values()).map(Enum::name).toList();
-    var taskTypes = NFDTaskType.getTaskTypesFromProcessCategoryIdentifiers(processCategoryIdentifiers);
+    var taskTypes = NFDTaskType.getTaskTypesFromProcessCategoryIdentifiers(Arrays.stream(ProcessCategoryIdentifiers.values()).toList());
+
+    log.warn("Cancelling tasks for case {}: {}", details.getId(), taskTypes);
 
     TerminateTaskOutboxPayload payload = new TerminateTaskOutboxPayload(
       String.valueOf(details.getId()),

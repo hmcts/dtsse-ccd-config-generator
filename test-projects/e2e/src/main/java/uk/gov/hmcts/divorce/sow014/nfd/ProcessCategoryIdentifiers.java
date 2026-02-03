@@ -8,5 +8,6 @@ public enum ProcessCategoryIdentifiers {
   Application,
   IssueCase,
   HearingCompletion,
-  HearingBundle
+  HearingBundle,
+  None
 }
