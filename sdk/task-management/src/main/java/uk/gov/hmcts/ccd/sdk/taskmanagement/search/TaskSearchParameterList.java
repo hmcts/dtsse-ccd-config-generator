@@ -1,10 +1,9 @@
 package uk.gov.hmcts.ccd.sdk.taskmanagement.search;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
+import java.util.List;
 import lombok.Builder;
 import lombok.Data;
-
-import java.util.List;
 
 @Builder
 @Data

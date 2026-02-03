@@ -1,9 +1,9 @@
 package uk.gov.hmcts.ccd.sdk.taskmanagement.search;
 
+import static java.util.Arrays.stream;
+
 import com.fasterxml.jackson.annotation.JsonValue;
 import lombok.Getter;
-
-import static java.util.Arrays.stream;
 
 @Getter
 public enum TaskSearchOperator {
@@ -24,9 +24,9 @@ public enum TaskSearchOperator {
 
   public static TaskSearchOperator from(String value) {
     return stream(values())
-      .filter(v -> v.getValue().equals(value))
-      .findFirst()
-      .orElseThrow(() -> new IllegalArgumentException(value + " is an unsupported operator"));
+        .filter(v -> v.getValue().equals(value))
+        .findFirst()
+        .orElseThrow(() -> new IllegalArgumentException(value + " is an unsupported operator"));
   }
 
   @Override

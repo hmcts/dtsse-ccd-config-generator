@@ -5,9 +5,8 @@ import com.fasterxml.jackson.databind.DeserializationContext;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.deser.std.StdDeserializer;
-import org.springframework.boot.jackson.JsonComponent;
-
 import java.io.IOException;
+import org.springframework.boot.jackson.JsonComponent;
 
 @JsonComponent
 @SuppressWarnings({"PMD.LawOfDemeter"})
@@ -16,7 +15,7 @@ public class SearchRequestCustomDeserializer extends StdDeserializer<TaskSearchP
   private static final long serialVersionUID = -1895766495984179418L;
 
   private static final String ERROR_MESSAGE =
-    "Each search_parameter element must have 'key', 'values' and 'operator' fields present and populated.";
+      "Each search_parameter element must have 'key', 'values' and 'operator' fields present and populated.";
 
   public SearchRequestCustomDeserializer() {
     this(null);

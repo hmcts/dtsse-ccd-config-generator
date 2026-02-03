@@ -10,15 +10,15 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.scheduling.annotation.Scheduled;
 import uk.gov.hmcts.ccd.sdk.taskmanagement.model.TaskAction;
 import uk.gov.hmcts.ccd.sdk.taskmanagement.model.TaskPayload;
-import uk.gov.hmcts.ccd.sdk.taskmanagement.model.outbox.TerminateTaskOutboxPayload;
 import uk.gov.hmcts.ccd.sdk.taskmanagement.model.outbox.TaskOutboxRecord;
+import uk.gov.hmcts.ccd.sdk.taskmanagement.model.outbox.TerminateTaskOutboxPayload;
 import uk.gov.hmcts.ccd.sdk.taskmanagement.model.request.TaskCreateRequest;
 import uk.gov.hmcts.ccd.sdk.taskmanagement.model.request.TaskTerminationRequest;
 import uk.gov.hmcts.ccd.sdk.taskmanagement.search.SearchTaskRequest;
 import uk.gov.hmcts.ccd.sdk.taskmanagement.search.TaskRequestContext;
 import uk.gov.hmcts.ccd.sdk.taskmanagement.search.TaskSearchKey;
-import uk.gov.hmcts.ccd.sdk.taskmanagement.search.TaskSearchParameterList;
 import uk.gov.hmcts.ccd.sdk.taskmanagement.search.TaskSearchOperator;
+import uk.gov.hmcts.ccd.sdk.taskmanagement.search.TaskSearchParameterList;
 
 @Slf4j
 public class TaskOutboxPoller {
@@ -74,7 +74,9 @@ public class TaskOutboxPoller {
           ResponseEntity<?> response = processor.process(record);
           statusCode = response != null ? response.getStatusCode().value() : 500;
           log.info("Task outbox {} response body {}", record.id(), response != null ? response.getBody() : null);
-          if (isUnsuccessfulRequest(record, response, statusCode)) continue;
+          if (isUnsuccessfulRequest(record, response, statusCode)) {
+            continue;
+          }
         }
 
         repository.markProcessed(record.id(), statusCode);
@@ -107,9 +109,9 @@ public class TaskOutboxPoller {
     }
 
     log.warn(
-      "Task outbox {} create response missing body or unsuccessful with status {}",
-      record.id(),
-      statusCode
+        "Task outbox {} create response missing body or unsuccessful with status {}",
+        record.id(),
+        statusCode
     );
     handleFailure(record, statusCode, "Task creation response missing task_id");
     return true;
@@ -133,40 +135,41 @@ public class TaskOutboxPoller {
     TerminateTaskOutboxPayload terminateTaskOutboxPayload =
         objectMapper.readValue(record.payload(), TerminateTaskOutboxPayload.class);
 
-    var searchRequest = SearchTaskRequest.builder().searchParameters(
-        List.of(
-          TaskSearchParameterList.builder()
-            .key(TaskSearchKey.TASK_TYPE)
-            .operator(TaskSearchOperator.IN)
-            .values(terminateTaskOutboxPayload.taskTypes())
-            .build(),
-          TaskSearchParameterList.builder()
-            .key(TaskSearchKey.CASE_ID)
-            .operator(TaskSearchOperator.IN)
-            .values(List.of(terminateTaskOutboxPayload.caseId()))
-            .build()
+    var searchRequest = SearchTaskRequest.builder()
+        .searchParameters(
+            List.of(
+                TaskSearchParameterList.builder()
+                    .key(TaskSearchKey.TASK_TYPE)
+                    .operator(TaskSearchOperator.IN)
+                    .values(terminateTaskOutboxPayload.taskTypes())
+                    .build(),
+                TaskSearchParameterList.builder()
+                    .key(TaskSearchKey.CASE_ID)
+                    .operator(TaskSearchOperator.IN)
+                    .values(List.of(terminateTaskOutboxPayload.caseId()))
+                    .build()
+            )
         )
-      )
-      .taskSortingParameters(null)
-      .requestContext(TaskRequestContext.ALL_WORK)
-      .build();
+        .taskSortingParameters(null)
+        .requestContext(TaskRequestContext.ALL_WORK)
+        .build();
 
     var tasksToTerminate = taskManagementApiClient.searchTasks(searchRequest);
 
     if (!tasksToTerminate.getStatusCode().is2xxSuccessful() || tasksToTerminate.getBody() == null) {
       log.warn(
-        "Failed to retrieve tasks to terminate for case {} and task types {} with action {}",
-        terminateTaskOutboxPayload.caseId(),
-        terminateTaskOutboxPayload.taskTypes(),
-        action.getId()
+          "Failed to retrieve tasks to terminate for case {} and task types {} with action {}",
+          terminateTaskOutboxPayload.caseId(),
+          terminateTaskOutboxPayload.taskTypes(),
+          action.getId()
       );
       return null;
     }
 
     TaskTerminationRequest request = TaskTerminationRequest.builder()
-      .taskIds(tasksToTerminate.getBody().getTasks().stream().map(TaskPayload::getTaskId).toList())
-      .action(action.getId())
-      .build();
+        .taskIds(tasksToTerminate.getBody().getTasks().stream().map(TaskPayload::getTaskId).toList())
+        .action(action.getId())
+        .build();
 
     return taskManagementApiClient.terminateTask(request);
   }

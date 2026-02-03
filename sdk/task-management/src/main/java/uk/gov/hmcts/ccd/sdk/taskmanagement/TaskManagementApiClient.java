@@ -38,7 +38,12 @@ public class TaskManagementApiClient {
   public ResponseEntity<TaskSearchResponse> searchTasks(SearchTaskRequest request) {
     System.out.printf("system user details %s password %s%n", systemUserName, systemPassword);
     String authToken = getBearerToken(idamClient.getAccessToken(systemUserName, systemPassword));
-    System.out.printf("system user details are username %s password %s authtoken %s%n", systemUserName, systemPassword, authToken);
+    System.out.printf(
+        "system user details are username %s password %s authtoken %s%n",
+        systemUserName,
+        systemPassword,
+        authToken
+    );
     return feignClient.searchTasks(authToken, request);
   }
 
