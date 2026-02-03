@@ -1178,6 +1178,10 @@ public class TestWithCCD extends CftlibTest {
         // XUI uses the refdata stub location (336559) for available tasks; keep in sync with
         // https://github.com/hmcts/dtsse-ccd-config-generator/blob/master/test-projects/e2e/src/main/java/uk/gov/hmcts/divorce/stubs/RefDataStubController.java#L16
         "values", List.of("336559")
+      ), Map.of(
+        "key", "case_id",
+        "operator", "IN",
+        "values", List.of(String.valueOf(caseRef))
       )),
       "sorting_parameters", List.of(),
       "request_context", "AVAILABLE_TASKS"
@@ -1235,9 +1239,11 @@ public class TestWithCCD extends CftlibTest {
 
             try (CloseableHttpResponse response = client.execute(claim)) {
                 int status = response.getStatusLine().getStatusCode();
-                assertThat("Claim response (expected 204): status=" + status,
+                String responseBody = response.getEntity() != null
+                    ? EntityUtils.toString(response.getEntity())
+                    : null;
+                assertThat("Claim response (expected 204): status=" + status + ", body=" + responseBody,
                     status, equalTo(204));
-                assertThat(response.getEntity(), nullValue());
             }
         }
     }
