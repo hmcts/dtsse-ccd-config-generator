@@ -16,6 +16,12 @@
         "gradle-wrapper"
       ],
       "enabled": false
+    },
+    {
+      "matchPackageNames": [
+        "org.springframework.boot:spring-boot-dependencies"
+      ],
+      "enabled": false
     }
   ]
 }

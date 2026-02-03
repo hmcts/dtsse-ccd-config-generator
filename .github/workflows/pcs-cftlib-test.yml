@@ -12,12 +12,33 @@ jobs:
         with:
           fetch-depth: 0
           submodules: recursive
+      - name: Determine whether change is docs-only
+        id: changes
+        run: |
+          base="${{ github.event.pull_request.base.sha }}"
+          head="${{ github.event.pull_request.head.sha }}"
+          git fetch --no-tags --prune --depth=1 origin "$base" "$head"
+          files=$(git diff --name-only "$base" "$head")
+          if [ -z "$files" ]; then
+            echo "docs_only=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if echo "$files" | grep -vE '\.md$' >/dev/null; then
+            echo "docs_only=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "docs_only=true" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Docs-only change detected
+        if: steps.changes.outputs.docs_only == 'true'
+        run: echo "Docs-only change; skipping PCS CFTLib test."
 
       - name: Set up JDK
+        if: steps.changes.outputs.docs_only != 'true'
         uses: actions/setup-java@v5
         with:
           distribution: 'zulu'
           java-version: 21
 
       - name: Run pcs:cftlibTest
+        if: steps.changes.outputs.docs_only != 'true'
         run: ./gradlew pcs:cftlibTest -i
