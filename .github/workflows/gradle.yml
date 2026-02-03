@@ -45,7 +45,7 @@ jobs:
         java-version: 21
     - name: Run SDK checks and e2e test
       if: steps.changes.outputs.docs_only != 'true'
-      run: ./gradlew :sdk:check :e2e:check -i
+      run: ./gradlew :sdk:check :e2e:check -i --stacktrace
 
   migration-check:
     runs-on: ubuntu-latest
