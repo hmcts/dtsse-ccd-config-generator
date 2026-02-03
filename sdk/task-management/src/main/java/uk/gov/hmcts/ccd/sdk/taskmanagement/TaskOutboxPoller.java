@@ -167,7 +167,7 @@ public class TaskOutboxPoller {
     }
 
     TaskTerminationRequest request = TaskTerminationRequest.builder()
-        .taskIds(tasksToTerminate.getBody().getTasks().stream().map(TaskPayload::getTaskId).toList())
+        .taskIds(tasksToTerminate.getBody().getTasks().stream().map(TaskPayload::getId).toList())
         .action(action.getId())
         .build();
 

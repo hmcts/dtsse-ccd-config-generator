@@ -2,7 +2,6 @@ package uk.gov.hmcts.ccd.sdk.taskmanagement.model;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
-import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.PropertyNamingStrategies;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.annotation.JsonNaming;
@@ -21,8 +20,7 @@ import lombok.extern.jackson.Jacksonized;
 @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
 public class TaskPayload {
   String externalTaskId;
-  @JsonProperty("task_id")
-  String taskId;
+  String id;
   String type;
   String name;
   String title;
