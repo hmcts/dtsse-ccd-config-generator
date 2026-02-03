@@ -62,5 +62,31 @@
       }
     ],
     "overrideAll": true
+  },
+  {
+    "email": "test-system-user@hmcts.net",
+    "id": "e75440a7-580d-3316-91ad-e68ad3648208",
+    "roleAssignments": [
+      {
+        "roleType": "ORGANISATION",
+        "roleName": "caseworker-divorce",
+        "grantType": "STANDARD",
+        "roleCategory": "ADMIN",
+        "classification": "PUBLIC",
+        "readOnly": false,
+        "attributes": {
+          "jurisdiction": "DIVORCE",
+          "caseType": "NFD",
+          "region": "1",
+          "baseLocation": "336559",
+          "substantive": "Y",
+          "bookable": true
+        },
+        "authorisations": [
+          "AUTH_1"
+        ]
+      }
+    ],
+    "overrideAll": true
   }
 ]
