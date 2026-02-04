@@ -96,6 +96,7 @@ import uk.gov.hmcts.divorce.sow014.nfd.CaseworkerRoundTripData;
 import uk.gov.hmcts.divorce.sow014.nfd.ApiFirstTaskCancelEvent;
 import uk.gov.hmcts.divorce.sow014.nfd.ApiFirstTaskCompleteEvent;
 import uk.gov.hmcts.divorce.sow014.nfd.ApiFirstTaskEvent;
+import uk.gov.hmcts.divorce.sow014.nfd.ApiFirstTaskReconfigureEvent;
 import uk.gov.hmcts.divorce.sow014.nfd.PublishedEvent;
 import uk.gov.hmcts.divorce.sow014.nfd.ReturnErrorWhenCreateAPIFirstTask;
 import uk.gov.hmcts.divorce.sow014.nfd.ReturnErrorWhenCreateTestCase;
@@ -166,6 +167,7 @@ public class TestWithCCD extends CftlibTest {
     private static final String API_FIRST_TASK_EVENT_ID = ApiFirstTaskEvent.EVENT_ID;
     private static final String API_FIRST_TASK_COMPLETE_EVENT_ID = ApiFirstTaskCompleteEvent.EVENT_ID;
     private static final String API_FIRST_TASK_CANCEL_EVENT_ID = ApiFirstTaskCancelEvent.EVENT_ID;
+    private static final String API_FIRST_TASK_RECONFIGURE_EVENT_ID = ApiFirstTaskReconfigureEvent.EVENT_ID;
     private String apiFirstTaskId;
     private String waTaskId;
 
@@ -1377,6 +1379,70 @@ public class TestWithCCD extends CftlibTest {
     }
 
     @SneakyThrows
+    @Order(31)
+    @Test
+    public void taskShouldReconfigureViaOutboxPoller() {
+        long caseId = createAdditionalCase("TEST_SOLICITOR@mailinator.com");
+        db.update("DELETE FROM ccd.task_outbox WHERE case_id = :caseId", Map.of("caseId", String.valueOf(caseId)));
+
+        var startCreate = ccdApi.startEvent(
+            getAuthorisation("TEST_CASE_WORKER_USER@mailinator.com"),
+            getServiceAuth(),
+            String.valueOf(caseId),
+            API_FIRST_TASK_EVENT_ID
+        );
+        var createRequest = prepareEventRequestWithToken(
+            "TEST_CASE_WORKER_USER@mailinator.com",
+            API_FIRST_TASK_EVENT_ID,
+            Map.of("note", "api-first-task"),
+            startCreate.getToken(),
+            caseId
+        );
+        var createResponse = HttpClientBuilder.create().build().execute(createRequest);
+        assertThat(createResponse.getStatusLine().getStatusCode(), equalTo(201));
+
+        await().atMost(Duration.ofSeconds(30)).untilAsserted(() -> {
+            Map<String, Object> processed = db.queryForMap(
+                "SELECT status, last_response_code FROM ccd.task_outbox"
+                    + " WHERE case_id = :caseId AND action = :action::ccd.task_action ORDER BY id DESC LIMIT 1",
+                Map.of("caseId", String.valueOf(caseId), "action", TaskAction.INITIATE.getId())
+            );
+            assertThat(processed.get("status"), equalTo("PROCESSED"));
+            Object responseCode = processed.get("last_response_code");
+            assertThat(responseCode, is(notNullValue()));
+            assertThat(((Number) responseCode).intValue(), anyOf(equalTo(200), equalTo(201), equalTo(204)));
+        });
+
+        var startReconfigure = ccdApi.startEvent(
+            getAuthorisation("TEST_CASE_WORKER_USER@mailinator.com"),
+            getServiceAuth(),
+            String.valueOf(caseId),
+            API_FIRST_TASK_RECONFIGURE_EVENT_ID
+        );
+        var reconfigureRequest = prepareEventRequestWithToken(
+            "TEST_CASE_WORKER_USER@mailinator.com",
+            API_FIRST_TASK_RECONFIGURE_EVENT_ID,
+            Map.of("note", "api-first-reconfigure"),
+            startReconfigure.getToken(),
+            caseId
+        );
+        var reconfigureResponse = HttpClientBuilder.create().build().execute(reconfigureRequest);
+        assertThat(reconfigureResponse.getStatusLine().getStatusCode(), equalTo(201));
+
+        await().atMost(Duration.ofSeconds(30)).untilAsserted(() -> {
+            Map<String, Object> processed = db.queryForMap(
+                "SELECT status, last_response_code FROM ccd.task_outbox"
+                    + " WHERE case_id = :caseId AND action = :action::ccd.task_action ORDER BY id DESC LIMIT 1",
+                Map.of("caseId", String.valueOf(caseId), "action", TaskAction.RECONFIGURE.getId())
+            );
+            assertThat(processed.get("status"), equalTo("PROCESSED"));
+            Object responseCode = processed.get("last_response_code");
+            assertThat(responseCode, is(notNullValue()));
+            assertThat(((Number) responseCode).intValue(), equalTo(200));
+        });
+    }
+
+    @SneakyThrows
     @Order(18)
     @Test
     public void testReturnErrorWhenCreateTestCase() {
@@ -2346,7 +2412,7 @@ public class TestWithCCD extends CftlibTest {
                    FROM case_data
                   WHERE reference = ?
                     AND security_classification = 'RESTRICTED'
-                 """)) {
+                """)) {
             statement.setLong(1, caseRef);
 
             try (ResultSet rs = statement.executeQuery()) {

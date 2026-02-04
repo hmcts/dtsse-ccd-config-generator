@@ -10,9 +10,11 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.scheduling.annotation.Scheduled;
 import uk.gov.hmcts.ccd.sdk.taskmanagement.model.TaskAction;
 import uk.gov.hmcts.ccd.sdk.taskmanagement.model.TaskPayload;
+import uk.gov.hmcts.ccd.sdk.taskmanagement.model.outbox.ReconfigureTaskOutboxPayload;
 import uk.gov.hmcts.ccd.sdk.taskmanagement.model.outbox.TaskOutboxRecord;
 import uk.gov.hmcts.ccd.sdk.taskmanagement.model.outbox.TerminateTaskOutboxPayload;
 import uk.gov.hmcts.ccd.sdk.taskmanagement.model.request.TaskCreateRequest;
+import uk.gov.hmcts.ccd.sdk.taskmanagement.model.request.TaskReconfigureRequest;
 import uk.gov.hmcts.ccd.sdk.taskmanagement.model.request.TaskTerminationRequest;
 import uk.gov.hmcts.ccd.sdk.taskmanagement.search.SearchTaskRequest;
 import uk.gov.hmcts.ccd.sdk.taskmanagement.search.TaskRequestContext;
@@ -64,19 +66,14 @@ public class TaskOutboxPoller {
           case INITIATE -> this::createTask;
           case COMPLETE -> this::completeTask;
           case CANCEL -> this::cancelTask;
-          case RECONFIGURE -> null;
+          case RECONFIGURE -> this::reconfigureTask;
         };
 
-        if (processor == null) {
-          log.warn("Task outbox {} unknown action {}", record.id(), record.action());
-          statusCode = 500;
-        } else {
-          ResponseEntity<?> response = processor.process(record);
-          statusCode = response != null ? response.getStatusCode().value() : 500;
-          log.info("Task outbox {} response body {}", record.id(), response != null ? response.getBody() : null);
-          if (isUnsuccessfulRequest(record, response, statusCode)) {
-            continue;
-          }
+        ResponseEntity<?> response = processor.process(record);
+        statusCode = response != null ? response.getStatusCode().value() : 500;
+        log.info("Task outbox {} response body {}", record.id(), response != null ? response.getBody() : null);
+        if (isUnsuccessfulRequest(record, response)) {
+          continue;
         }
 
         repository.markProcessed(record.id(), statusCode);
@@ -100,21 +97,32 @@ public class TaskOutboxPoller {
     }
   }
 
-  private boolean isUnsuccessfulRequest(TaskOutboxRecord record, ResponseEntity<?> response, int statusCode) {
-    boolean requireBody = TaskAction.fromId(record.action()) == TaskAction.INITIATE;
-    if (response != null && response.getStatusCode().is2xxSuccessful()) {
-      if (!requireBody || response.getBody() != null) {
-        return false;
-      }
+  private boolean isUnsuccessfulRequest(TaskOutboxRecord record, ResponseEntity<?> response) {
+    TaskAction action = TaskAction.fromId(record.action());
+    if (response == null) {
+      log.warn("Task outbox {} received null response for action {}", record.id(), action.getId());
+      handleFailure(record, null, "Task outbox received null response");
+      return true;
     }
 
-    log.warn(
-        "Task outbox {} create response missing body or unsuccessful with status {}",
-        record.id(),
-        statusCode
-    );
-    handleFailure(record, statusCode, "Task creation response missing task_id");
-    return true;
+    if (!response.getStatusCode().is2xxSuccessful()) {
+      log.warn(
+          "Task outbox {} response unsuccessful for action {} with status {}",
+          record.id(),
+          action.getId(),
+          response.getStatusCode().value()
+      );
+      handleFailure(record, response.getStatusCode().value(), "Task outbox response unsuccessful");
+      return true;
+    }
+
+    if (List.of(TaskAction.INITIATE, TaskAction.RECONFIGURE).contains(action) && response.getBody() == null) {
+      log.warn("Task outbox {} create response missing body", record.id());
+      handleFailure(record, response.getStatusCode().value(), "Task creation response missing task_id");
+      return true;
+    }
+
+    return false;
   }
 
   private ResponseEntity<?> createTask(TaskOutboxRecord record) throws IOException {
@@ -172,6 +180,18 @@ public class TaskOutboxPoller {
         .build();
 
     return taskManagementApiClient.terminateTask(request);
+  }
+
+  private ResponseEntity<?> reconfigureTask(TaskOutboxRecord record) throws IOException {
+    ReconfigureTaskOutboxPayload reconfigurePayload =
+        objectMapper.readValue(record.payload(), ReconfigureTaskOutboxPayload.class);
+
+    TaskReconfigureRequest request = TaskReconfigureRequest.builder()
+        .caseId(reconfigurePayload.caseId())
+        .tasks(reconfigurePayload.tasks())
+        .build();
+
+    return taskManagementApiClient.reconfigureTask(request);
   }
 
   private void handleFailure(TaskOutboxRecord record, Integer statusCode, String body) {

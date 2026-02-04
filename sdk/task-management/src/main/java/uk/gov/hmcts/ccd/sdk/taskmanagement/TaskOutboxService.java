@@ -5,6 +5,7 @@ import java.io.IOException;
 import java.util.Objects;
 import uk.gov.hmcts.ccd.sdk.taskmanagement.model.TaskAction;
 import uk.gov.hmcts.ccd.sdk.taskmanagement.model.TaskPayload;
+import uk.gov.hmcts.ccd.sdk.taskmanagement.model.outbox.ReconfigureTaskOutboxPayload;
 import uk.gov.hmcts.ccd.sdk.taskmanagement.model.outbox.TerminateTaskOutboxPayload;
 import uk.gov.hmcts.ccd.sdk.taskmanagement.model.request.TaskCreateRequest;
 
@@ -59,6 +60,22 @@ public class TaskOutboxService {
           payload.caseType(),
           objectMapper.writeValueAsString(payload),
           TaskAction.CANCEL.getId()
+      );
+    } catch (IOException ex) {
+      throw new IllegalStateException("Failed to enqueue task outbox entry", ex);
+    }
+  }
+
+  public void enqueueTaskReconfigureRequest(ReconfigureTaskOutboxPayload payload) {
+    Objects.requireNonNull(payload, "payload must not be null");
+    requireText(payload.caseId(), "caseId");
+
+    try {
+      repository.enqueue(
+          payload.caseId(),
+          payload.caseType(),
+          objectMapper.writeValueAsString(payload),
+          TaskAction.RECONFIGURE.getId()
       );
     } catch (IOException ex) {
       throw new IllegalStateException("Failed to enqueue task outbox entry", ex);
