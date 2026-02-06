@@ -6,6 +6,7 @@ import static org.springframework.http.MediaType.APPLICATION_JSON_VALUE;
 import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import uk.gov.hmcts.ccd.sdk.taskmanagement.model.request.TaskCreateRequest;
@@ -30,7 +31,7 @@ public interface TaskManagementFeignClient {
   @PostMapping(value = "/tasks/terminate")
   ResponseEntity<TaskTerminationResponse> terminateTask(@RequestBody TaskTerminationRequest payload);
 
-  @PostMapping(value = "/tasks/reconfigure", consumes = APPLICATION_JSON_VALUE)
+  @PutMapping(value = "/tasks/reconfigure", consumes = APPLICATION_JSON_VALUE)
   ResponseEntity<TaskReconfigureResponse> reconfigureTask(@RequestBody TaskReconfigureRequest payload);
 
   @PostMapping(value = "/task", consumes = APPLICATION_JSON_VALUE, produces = APPLICATION_JSON_VALUE)
