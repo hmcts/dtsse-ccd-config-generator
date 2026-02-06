@@ -48,4 +48,7 @@ public class TaskPayload {
   Map<String, Object> additionalProperties;
   @JsonDeserialize(using = TaskPermissionListDeserializer.class)
   List<TaskPermission> permissions;
+  OffsetDateTime nextHearingDate;
+  String nextHearingId;
+
 }

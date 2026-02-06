@@ -8,7 +8,7 @@ We need a minimal way for services to reconfigure tasks so the task list stays a
 - Behavior mirrors current WA reconfiguration flows without Camunda
 
 ### Minimal API shape
-- Reconfigure accepts a `case_id` plus a list of task payloads (`TaskPayload`)
+- Reconfigure accepts a list of task payloads (`TaskReconfigurePayload`)
 - Returns `200 OK` on success
 
 ### Pending Tests
