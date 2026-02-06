@@ -10,6 +10,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.scheduling.annotation.Scheduled;
 import uk.gov.hmcts.ccd.sdk.taskmanagement.model.TaskAction;
 import uk.gov.hmcts.ccd.sdk.taskmanagement.model.TaskPayload;
+import uk.gov.hmcts.ccd.sdk.taskmanagement.model.TaskReconfigurePayload;
 import uk.gov.hmcts.ccd.sdk.taskmanagement.model.outbox.ReconfigureTaskOutboxPayload;
 import uk.gov.hmcts.ccd.sdk.taskmanagement.model.outbox.TaskOutboxRecord;
 import uk.gov.hmcts.ccd.sdk.taskmanagement.model.outbox.TerminateTaskOutboxPayload;
@@ -186,9 +187,31 @@ public class TaskOutboxPoller {
     ReconfigureTaskOutboxPayload reconfigurePayload =
         objectMapper.readValue(record.payload(), ReconfigureTaskOutboxPayload.class);
 
+    List<TaskReconfigurePayload> taskReconfigurePayloads = reconfigurePayload.tasks() == null
+        ? List.of()
+        : reconfigurePayload.tasks().stream()
+            .map(task -> TaskReconfigurePayload.builder()
+                .id(task.getId())
+                .title(task.getTitle())
+                .caseCategory(task.getCaseCategory())
+                .caseName(task.getCaseName())
+                .region(task.getRegion())
+                .location(task.getLocation())
+                .workType(task.getWorkType())
+                .roleCategory(task.getRoleCategory())
+                .description(task.getDescription())
+                .dueDateTime(task.getDueDateTime())
+                .priorityDate(task.getPriorityDate())
+                .majorPriority(task.getMajorPriority())
+                .minorPriority(task.getMinorPriority())
+                .locationName(task.getLocationName())
+                .additionalProperties(task.getAdditionalProperties())
+                .permissions(task.getPermissions())
+                .build())
+            .toList();
+
     TaskReconfigureRequest request = TaskReconfigureRequest.builder()
-        .caseId(reconfigurePayload.caseId())
-        .tasks(reconfigurePayload.tasks())
+        .tasks(taskReconfigurePayloads)
         .build();
 
     return taskManagementApiClient.reconfigureTask(request);
