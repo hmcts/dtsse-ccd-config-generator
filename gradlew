@@ -88,6 +88,12 @@ APP_BASE_NAME=${0##*/}
 # Discard cd standard output in case $CDPATH is set (https://github.com/gradle/gradle/issues/25036)
 APP_HOME=$( cd -P "${APP_HOME:-./}" > /dev/null && printf '%s\n' "$PWD" ) || exit
 
+# Ensure repo-local init script is used when present.
+INIT_SCRIPT="$APP_HOME/gradle/init/noop-wrapper.init.gradle"
+if [ -f "$INIT_SCRIPT" ]; then
+    set -- "-I" "$INIT_SCRIPT" "$@"
+fi
+
 # Use the maximum available, or set MAX_FD != -1 to use that value.
 MAX_FD=maximum
 
