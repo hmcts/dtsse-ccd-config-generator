@@ -50,5 +50,8 @@ public class TaskPayload {
   List<TaskPermission> permissions;
   OffsetDateTime nextHearingDate;
   String nextHearingId;
-
+  //Added below fields as they are returned from task search endpoint
+  OffsetDateTime dueDate;
+  String taskTitle;
+  String workTypeId;
 }
