@@ -1,6 +1,6 @@
 # CCD Config Generator ![Java CI](https://github.com/hmcts/ccd-config-generator/workflows/Java%20CI/badge.svg?branch=master) ![GitHub tag (latest SemVer)](https://img.shields.io/github/v/tag/hmcts/ccd-config-generator?label=release)
 
-Write CCD configuration in Java.
+Write CCD configuration in Java. 
 
 ### Table of contents
 * [Why](#why)
