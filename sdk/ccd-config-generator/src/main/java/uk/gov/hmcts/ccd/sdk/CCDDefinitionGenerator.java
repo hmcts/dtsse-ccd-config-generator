@@ -22,9 +22,9 @@ public class CCDDefinitionGenerator {
   private final JSONConfigGenerator writer;
 
   @Autowired
-  public CCDDefinitionGenerator(List<CCDConfig<?, ?, ?>> configs, JSONConfigGenerator writer) {
+  public CCDDefinitionGenerator(List<CCDConfig<?, ?, ?>> configs, JSONConfigGenerator writer2) {
     this.configs = configs;
-    this.writer = writer;
+    this.writer = writer2;
   }
 
   @Bean
