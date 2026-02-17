@@ -27,8 +27,9 @@ dependencies {
     implementation "org.springframework.boot:spring-boot-autoconfigure"
     runtimeOnly 'org.flywaydb:flyway-database-postgresql'
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
-    testImplementation 'org.testcontainers:junit-jupiter'
-    testImplementation 'org.testcontainers:postgresql'
+    testImplementation group: 'org.testcontainers', name: 'testcontainers'
+    testImplementation group: 'org.testcontainers', name: 'junit-jupiter'
+    testImplementation group: 'org.testcontainers', name: 'postgresql'
     runtimeOnly 'org.postgresql:postgresql'
 }
 
