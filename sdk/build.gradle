@@ -17,6 +17,7 @@ subprojects {
     dependencyManagement {
         imports {
             mavenBom(SpringBootPlugin.BOM_COORDINATES)
+            mavenBom('org.testcontainers:testcontainers-bom:1.21.4')
         }
     }
 
