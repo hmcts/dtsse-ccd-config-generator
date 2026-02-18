@@ -3,6 +3,7 @@ package uk.gov.hmcts.ccd.sdk.type;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import java.time.LocalDateTime;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -27,6 +28,9 @@ public class Document {
   @JsonProperty("category_id")
   private String categoryId;
 
+  @JsonProperty("upload_timestamp")
+  private LocalDateTime uploadTimestamp;
+
   public Document(
       @JsonProperty("document_url") String url,
       @JsonProperty("document_filename") String filename,
@@ -37,7 +41,11 @@ public class Document {
     this.binaryUrl = binaryUrl;
   }
 
-  @JsonCreator
+  /**
+   * Constructs a Document instance without an uploadTimestamp.
+   * @deprecated since 2026-02-18. Use the builder or the all args constructor
+   */
+  @Deprecated(since = "2026-02-18")
   public Document(
       @JsonProperty("document_url") String url,
       @JsonProperty("document_filename") String filename,
@@ -48,5 +56,20 @@ public class Document {
     this.filename = filename;
     this.binaryUrl = binaryUrl;
     this.categoryId = categoryId;
+  }
+
+  @JsonCreator
+  public Document(
+      @JsonProperty("document_url") String url,
+      @JsonProperty("document_filename") String filename,
+      @JsonProperty("document_binary_url") String binaryUrl,
+      @JsonProperty("category_id") String categoryId,
+      @JsonProperty("upload_timestamp") LocalDateTime uploadTimestamp
+  ) {
+    this.url = url;
+    this.filename = filename;
+    this.binaryUrl = binaryUrl;
+    this.categoryId = categoryId;
+    this.uploadTimestamp = uploadTimestamp;
   }
 }
