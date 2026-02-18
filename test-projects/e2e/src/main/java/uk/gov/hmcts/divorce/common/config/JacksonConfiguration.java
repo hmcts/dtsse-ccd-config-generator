@@ -2,6 +2,7 @@ package uk.gov.hmcts.divorce.common.config;
 
 import static com.fasterxml.jackson.databind.MapperFeature.ACCEPT_CASE_INSENSITIVE_ENUMS;
 import static com.fasterxml.jackson.databind.MapperFeature.INFER_BUILDER_TYPE_BINDINGS;
+import static com.fasterxml.jackson.databind.SerializationFeature.WRITE_DATES_AS_TIMESTAMPS;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -25,6 +26,7 @@ public class JacksonConfiguration {
         ObjectMapper mapper = JsonMapper.builder()
             .configure(ACCEPT_CASE_INSENSITIVE_ENUMS, true)
             .enable(INFER_BUILDER_TYPE_BINDINGS)
+            .disable(WRITE_DATES_AS_TIMESTAMPS)
             .serializationInclusion(JsonInclude.Include.NON_NULL)
             .build();
 

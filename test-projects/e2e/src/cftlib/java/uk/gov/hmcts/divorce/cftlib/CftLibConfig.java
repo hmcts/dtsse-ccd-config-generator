@@ -2,6 +2,8 @@ package uk.gov.hmcts.divorce.cftlib;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
+import org.springframework.core.io.DefaultResourceLoader;
+import org.springframework.core.io.ResourceLoader;
 import org.springframework.stereotype.Component;
 import uk.gov.hmcts.ccd.sdk.CCDDefinitionGenerator;
 import uk.gov.hmcts.divorce.divorcecase.NoFaultDivorce;
@@ -12,6 +14,7 @@ import uk.gov.hmcts.rse.ccd.lib.api.CFTLibConfigurer;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -43,7 +46,9 @@ public class CftLibConfig implements CFTLibConfigurer {
     public void configure(CFTLib lib) throws Exception {
         createRoles(lib);
         createBeftaUsers(lib);
+        createSystemUsers(lib);
         createDivorceUsers(lib);
+        configureRoleAssignments(lib);
         importDivorceDefinitions(lib);
     }
 
@@ -74,7 +79,8 @@ public class CftLibConfig implements CFTLibConfigurer {
             "pui-finance-manager",
             "pui-organisation-manager",
             "pui-user-manager",
-            "TTL_profile"
+            "TTL_profile",
+            "task-allocator"
         ));
 
         lib.createRoles(roles.toArray(new String[0]));
@@ -130,7 +136,8 @@ public class CftLibConfig implements CFTLibConfigurer {
                 List.of(
                     "caseworker",
                     "caseworker-divorce",
-                    "caseworker-divorce-courtadmin_beta"
+                    "caseworker-divorce-courtadmin_beta",
+                    "caseworker-st_cic"
                 )
             ),
             entry(
@@ -269,6 +276,13 @@ public class CftLibConfig implements CFTLibConfigurer {
         }
     }
 
+    private void createSystemUsers(CFTLib lib) throws Exception {
+      lib.createIdamUser("some_user@hmcts.net",
+        "caseworker-wa",
+        "caseworker-wa-configuration"
+      );
+      lib.createIdamUser("test-system-user@hmcts.net", "task-allocator", "caseworker-divorce");
+    }
     private void importDivorceDefinitions(CFTLib lib) throws Exception {
         // Generate CCD definitions before importing them into the in-memory instance.
         configWriter.generateAllCaseTypesToJSON(new File("build/definitions"));
@@ -276,5 +290,14 @@ public class CftLibConfig implements CFTLibConfigurer {
         lib.importJsonDefinition(new File("build/definitions/" + NoFaultDivorce.getCaseType()));
         lib.importJsonDefinition(new File("build/definitions/" + SimpleCaseConfiguration.CASE_TYPE));
         lib.dumpDefinitionSnapshots();
+    }
+
+    private void configureRoleAssignments(CFTLib lib) throws IOException {
+        ResourceLoader resourceLoader = new DefaultResourceLoader();
+        try (var inputStream = resourceLoader.getResource("classpath:cftlib-am-role-assignments.json")
+            .getInputStream()) {
+            String json = new String(inputStream.readAllBytes(), StandardCharsets.UTF_8);
+            lib.configureRoleAssignments(json);
+        }
     }
 }

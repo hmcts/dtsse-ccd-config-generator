@@ -1,1 +1,1 @@
-include 'ccd-gradle-plugin', 'ccd-config-generator', 'decentralised-runtime', 'cftlib-dev-only', 'ccd-servicebus-support'
+include 'ccd-gradle-plugin', 'ccd-config-generator', 'decentralised-runtime', 'cftlib-dev-only', 'ccd-servicebus-support', 'task-management'

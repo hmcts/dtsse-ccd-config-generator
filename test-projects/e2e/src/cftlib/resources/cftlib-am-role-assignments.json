@@ -1,0 +1,92 @@
+[
+  {
+    "email": "TEST_CASE_WORKER_USER@mailinator.com",
+    "id": "74779774-2fc4-32c9-a842-f8d0aa6e770a",
+    "roleAssignments": [
+      {
+        "roleType": "ORGANISATION",
+        "roleName": "caseworker-divorce",
+        "grantType": "STANDARD",
+        "roleCategory": "ADMIN",
+        "classification": "PUBLIC",
+        "readOnly": false,
+        "attributes": {
+          "jurisdiction": "DIVORCE",
+          "caseType": "NFD",
+          "region": "1",
+          "baseLocation": "336559",
+          "substantive": "Y",
+          "bookable": true
+        },
+        "authorisations": [
+          "AUTH_1"
+        ]
+      },
+      {
+        "roleType": "ORGANISATION",
+        "roleName": "caseworker-divorce",
+        "grantType": "STANDARD",
+        "roleCategory": "ADMIN",
+        "classification": "PUBLIC",
+        "readOnly": false,
+        "attributes": {
+          "jurisdiction": "DIVORCE",
+          "caseType": "E2E",
+          "region": "1",
+          "baseLocation": "336559",
+          "substantive": "Y",
+          "bookable": true
+        },
+        "authorisations": [
+          "AUTH_1"
+        ]
+      },
+      {
+        "roleType": "ORGANISATION",
+        "roleName": "caseworker-st_cic",
+        "grantType": "STANDARD",
+        "roleCategory": "ADMIN",
+        "classification": "PUBLIC",
+        "readOnly": false,
+        "attributes": {
+          "jurisdiction": "ST_CIC",
+          "caseType": "E2E",
+          "region": "1",
+          "baseLocation": "336559",
+          "substantive": "Y",
+          "bookable": true
+        },
+        "authorisations": [
+          "AUTH_1"
+        ]
+      }
+    ],
+    "overrideAll": true
+  },
+  {
+    "email": "test-system-user@hmcts.net",
+    "id": "e75440a7-580d-3316-91ad-e68ad3648208",
+    "roleAssignments": [
+      {
+        "roleType": "ORGANISATION",
+        "roleName": "caseworker-divorce",
+        "grantType": "STANDARD",
+        "roleCategory": "ADMIN",
+        "classification": "PUBLIC",
+        "readOnly": false,
+        "attributes": {
+          "jurisdiction": "DIVORCE",
+          "caseType": "NFD",
+          "region": "1",
+          "baseLocation": "336559",
+          "substantive": "Y",
+          "bookable": true
+        },
+        "authorisations": [
+          "AUTH_1"
+        ]
+      }
+    ],
+    "overrideAll": true
+  }
+]
