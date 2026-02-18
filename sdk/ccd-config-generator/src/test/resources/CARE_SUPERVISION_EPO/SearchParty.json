@@ -3,6 +3,7 @@
     "LiveFrom": "01/01/2017",
     "CaseTypeID": "CARE_SUPERVISION_EPO",
     "SearchPartyCollectionFieldName": "respondents1",
+    "QualifiedPartyName": "respondents1/party.firstName,party.lastName",
     "SearchPartyName": "party.firstName,party.lastName",
     "SearchPartyEmailAddress": "party.email",
     "SearchPartyAddressLine1": "party.address.AddressLine1",
@@ -14,11 +15,36 @@
     "LiveFrom": "01/01/2017",
     "CaseTypeID": "CARE_SUPERVISION_EPO",
     "SearchPartyCollectionFieldName": "respondents2",
+    "QualifiedPartyName": "respondents2/party.firstName,party.middleName,party.lastName",
     "SearchPartyName": "party.firstName,party.middleName,party.lastName",
     "SearchPartyEmailAddress": "party.email",
     "SearchPartyAddressLine1": "party.address.AddressLine1",
     "SearchPartyPostCode": "party.address.PostCode",
     "SearchPartyDOB": "party.dateOfBirth",
     "SearchPartyDOD": "party.dateOfDeath"
-  }
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "SearchPartyCollectionFieldName": "respondents3",
+    "QualifiedPartyName": "respondents3/party.firstName,party.middleName,party.lastName",
+    "SearchPartyName": "party.firstName,party.middleName,party.lastName",
+    "SearchPartyEmailAddress": "party.email",
+    "SearchPartyAddressLine1": "party.address.AddressLine1",
+    "SearchPartyPostCode": "party.address.PostCode",
+    "SearchPartyDOB": "party.dateOfBirth",
+    "SearchPartyDOD": "party.dateOfDeath"
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "SearchPartyCollectionFieldName": "",
+    "QualifiedPartyName": "party.firstName,party.middleName,party.lastName",
+    "SearchPartyName": "party.firstName,party.middleName,party.lastName",
+    "SearchPartyEmailAddress": "party.email",
+    "SearchPartyAddressLine1": "party.address.AddressLine1",
+    "SearchPartyPostCode": "party.address.PostCode",
+    "SearchPartyDOB": "",
+    "SearchPartyDOD": ""
+}
 ]

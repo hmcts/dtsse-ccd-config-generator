@@ -165,9 +165,29 @@ public class CCDConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<CaseData, S
         .searchPartyDOB("party.dateOfBirth")
         .searchPartyDOD("party.dateOfDeath")
         .build();
+    SearchPartyField searchPartyField3 =
+      SearchPartyField.builder()
+        .searchPartyCollectionFieldName("respondents3")
+        .searchPartyName("party.firstName,party.middleName,party.lastName") // Same party name as respondents2
+        .searchPartyEmailAddress("party.email")
+        .searchPartyAddressLine1("party.address.AddressLine1")
+        .searchPartyPostCode("party.address.PostCode")
+        .searchPartyDOB("party.dateOfBirth")
+        .searchPartyDOD("party.dateOfDeath")
+        .build();
+    SearchPartyField searchPartyField4 =
+      SearchPartyField.builder()
+        .searchPartyCollectionFieldName("")
+        .searchPartyName("party.firstName,party.middleName,party.lastName")
+        .searchPartyEmailAddress("party.email")
+        .searchPartyAddressLine1("party.address.AddressLine1")
+        .searchPartyPostCode("party.address.PostCode")
+        .searchPartyDOB("")
+        .searchPartyDOD("")
+        .build();
 
     builder.searchParty()
-      .fields(List.of(searchPartyField1, searchPartyField2));
+      .fields(List.of(searchPartyField1, searchPartyField2, searchPartyField3, searchPartyField4));
   }
 
   private AboutToStartOrSubmitResponse<CaseData, State> checkReadyAboutToSubmit(CaseDetails<CaseData, State> details,
