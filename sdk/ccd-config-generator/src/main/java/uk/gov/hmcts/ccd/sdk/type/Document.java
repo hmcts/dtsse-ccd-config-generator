@@ -41,6 +41,22 @@ public class Document {
     this.binaryUrl = binaryUrl;
   }
 
+  /**
+   * @deprecated since 2026-02-18. Use the builder or the all args constructor
+   */
+  @Deprecated(since = "2026-02-18")
+  public Document(
+    @JsonProperty("document_url") String url,
+    @JsonProperty("document_filename") String filename,
+    @JsonProperty("document_binary_url") String binaryUrl,
+    @JsonProperty("category_id") String categoryId
+  ) {
+    this.url = url;
+    this.filename = filename;
+    this.binaryUrl = binaryUrl;
+    this.categoryId = categoryId;
+  }
+
   @JsonCreator
   public Document(
       @JsonProperty("document_url") String url,
