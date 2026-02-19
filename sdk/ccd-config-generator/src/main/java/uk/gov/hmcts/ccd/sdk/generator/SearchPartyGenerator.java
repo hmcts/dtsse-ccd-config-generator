@@ -9,6 +9,7 @@ import java.nio.file.Paths;
 import java.util.List;
 import java.util.Map;
 import lombok.SneakyThrows;
+import org.apache.commons.lang3.StringUtils;
 import org.springframework.stereotype.Component;
 import uk.gov.hmcts.ccd.sdk.ResolvedCCDConfig;
 import uk.gov.hmcts.ccd.sdk.api.HasRole;
@@ -30,14 +31,21 @@ public class SearchPartyGenerator<T, S, R extends HasRole> implements ConfigGene
     }
 
     final Path path = Paths.get(outputFolder.getPath(), "SearchParty.json");
-    mergeInto(path, result, new AddMissing(), "CaseTypeID", "SearchPartyName");
+    mergeInto(path, result, new AddMissing(), "CaseTypeID", "QualifiedPartyName");
   }
 
   @SneakyThrows
   private static Map<String, Object> toJson(String caseType, SearchPartyField searchParty) {
     Map<String, Object> field = JsonUtils.caseRow(caseType);
-    field.put("SearchPartyCollectionFieldName", searchParty.getSearchPartyCollectionFieldName());
-    field.put("SearchPartyName", searchParty.getSearchPartyName());
+
+    String searchPartyCollectionFieldName = searchParty.getSearchPartyCollectionFieldName();
+    String searchPartyName = searchParty.getSearchPartyName();
+
+    String qualifiedPartyName = createQualifiedPartyName(searchPartyCollectionFieldName, searchPartyName);
+
+    field.put("QualifiedPartyName", qualifiedPartyName);
+    field.put("SearchPartyCollectionFieldName", searchPartyCollectionFieldName);
+    field.put("SearchPartyName", searchPartyName);
     field.put("SearchPartyEmailAddress", searchParty.getSearchPartyEmailAddress());
     field.put("SearchPartyAddressLine1", searchParty.getSearchPartyAddressLine1());
     field.put("SearchPartyPostCode", searchParty.getSearchPartyPostCode());
@@ -46,4 +54,13 @@ public class SearchPartyGenerator<T, S, R extends HasRole> implements ConfigGene
 
     return field;
   }
+
+  private static String createQualifiedPartyName(String searchPartyCollectionFieldName, String searchPartyName) {
+    if (StringUtils.isNotBlank(searchPartyCollectionFieldName)) {
+      return searchPartyCollectionFieldName + "/" + searchPartyName;
+    } else {
+      return searchPartyName;
+    }
+  }
+
 }
