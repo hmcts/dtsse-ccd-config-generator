@@ -49,16 +49,45 @@ jobs:
     - name: Generate aggregate coverage report
       if: steps.changes.outputs.docs_only != 'true'
       run: ./gradlew :sdk:jacocoAggregateReport
-    - name: Add coverage to PR
-      if: github.event_name == 'pull_request' && steps.changes.outputs.docs_only != 'true'
-      uses: madrapps/jacoco-report@v1.7.2
+    - name: Publish coverage summary
+      if: steps.changes.outputs.docs_only != 'true'
+      run: |
+        python3 -c "
+        import xml.etree.ElementTree as ET, os
+        tree = ET.parse('sdk/build/reports/jacoco/aggregate/jacocoAggregateReport.xml')
+        root = tree.getroot()
+        lines = [c for c in root.findall('counter') if c.get('type') == 'LINE']
+        if not lines:
+            exit(0)
+        covered = int(lines[0].get('covered', 0))
+        missed = int(lines[0].get('missed', 0))
+        total = covered + missed
+        pct = round(covered * 100 / total, 1) if total else 0
+        icon = ':green_circle:' if pct >= 80 else ':yellow_circle:' if pct >= 60 else ':red_circle:'
+        out = os.environ.get('GITHUB_STEP_SUMMARY', '/dev/null')
+        with open(out, 'a') as f:
+            f.write(f'## SDK Code Coverage\n\n')
+            f.write(f'| Metric | Value |\n|--------|-------|\n')
+            f.write(f'| Line coverage | {icon} **{pct}%** ({covered}/{total}) |\n\n')
+            # Per-package breakdown
+            f.write(f'<details><summary>Coverage by package</summary>\n\n')
+            f.write(f'| Package | Lines | Coverage |\n|---------|-------|----------|\n')
+            for pkg in sorted(root.findall('.//package'), key=lambda p: p.get('name','')):
+                pc = [c for c in pkg.findall('counter') if c.get('type') == 'LINE']
+                if not pc: continue
+                c2, m2 = int(pc[0].get('covered',0)), int(pc[0].get('missed',0))
+                t2 = c2 + m2
+                if t2 == 0: continue
+                p2 = round(c2 * 100 / t2, 1)
+                f.write(f'| \`{pkg.get(\"name\")}\` | {c2}/{t2} | {p2}% |\n')
+            f.write(f'\n</details>\n')
+        "
+    - name: Upload coverage report
+      if: steps.changes.outputs.docs_only != 'true'
+      uses: actions/upload-artifact@v4
       with:
-        paths: sdk/build/reports/jacoco/aggregate/jacocoAggregateReport.xml
-        token: ${{ secrets.GITHUB_TOKEN }}
-        title: SDK Code Coverage
-        update-comment: true
-        min-coverage-overall: 0
-        min-coverage-changed-files: 0
+        name: sdk-coverage-report
+        path: sdk/build/reports/jacoco/aggregate/
 
   migration-check:
     runs-on: ubuntu-latest
