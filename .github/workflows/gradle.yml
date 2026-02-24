@@ -80,7 +80,9 @@ jobs:
                 if t2 == 0: continue
                 p2 = round(c2 * 100 / t2, 1)
                 f.write(f'| \`{pkg.get(\"name\")}\` | {c2}/{t2} | {p2}% |\n')
-            f.write(f'\n</details>\n')
+            f.write(f'\n</details>\n\n')
+            run_url = os.environ.get('GITHUB_SERVER_URL', '') + '/' + os.environ.get('GITHUB_REPOSITORY', '') + '/actions/runs/' + os.environ.get('GITHUB_RUN_ID', '')
+            f.write(f':file_folder: [Download full HTML coverage report]({run_url}#artifacts) (sdk-coverage-report artifact)\n')
         "
     - name: Upload coverage report
       if: steps.changes.outputs.docs_only != 'true'
