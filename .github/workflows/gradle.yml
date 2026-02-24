@@ -46,6 +46,19 @@ jobs:
     - name: Run SDK checks and e2e test
       if: steps.changes.outputs.docs_only != 'true'
       run: ./gradlew :sdk:check :e2e:check -i
+    - name: Generate aggregate coverage report
+      if: steps.changes.outputs.docs_only != 'true'
+      run: ./gradlew :sdk:jacocoAggregateReport
+    - name: Add coverage to PR
+      if: github.event_name == 'pull_request' && steps.changes.outputs.docs_only != 'true'
+      uses: madrapps/jacoco-report@v1.7.2
+      with:
+        paths: sdk/build/reports/jacoco/aggregate/jacocoAggregateReport.xml
+        token: ${{ secrets.GITHUB_TOKEN }}
+        title: SDK Code Coverage
+        update-comment: true
+        min-coverage-overall: 0
+        min-coverage-changed-files: 0
 
   migration-check:
     runs-on: ubuntu-latest
