@@ -115,7 +115,9 @@ tasks.register('jacocoAggregateReport', JacocoReport) {
     def execFiles = subprojects.collect {
         fileTree(dir: it.layout.buildDirectory.dir('jacoco'), includes: ['*.exec'])
     }
-    // Include e2e cftlibTest exec data if available.
+    // Include e2e cftlibTest exec data when available.
+    // Cannot declare a cross-build dependency on :e2e:cftlibTest from this included build;
+    // run e2e tests first (CI does this via :e2e:check before :sdk:jacocoAggregateReport).
     execFiles += fileTree(dir: "${rootProject.projectDir}/../test-projects/e2e/build/jacoco",
                           includes: ['*.exec'])
 
