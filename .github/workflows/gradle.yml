@@ -10,6 +10,9 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
     steps:
     - uses: actions/checkout@v6
       with:
@@ -46,6 +49,75 @@ jobs:
     - name: Run SDK checks and e2e test
       if: steps.changes.outputs.docs_only != 'true'
       run: ./gradlew :sdk:check :e2e:check -i
+    - name: Generate aggregate coverage report
+      if: steps.changes.outputs.docs_only != 'true'
+      run: ./gradlew :sdk:jacocoAggregateReport
+    - name: Publish coverage summary
+      if: steps.changes.outputs.docs_only != 'true'
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        python3 -c "
+        import xml.etree.ElementTree as ET, os
+        tree = ET.parse('sdk/build/reports/jacoco/aggregate/jacocoAggregateReport.xml')
+        root = tree.getroot()
+        lines = [c for c in root.findall('counter') if c.get('type') == 'LINE']
+        if not lines:
+            exit(0)
+        covered = int(lines[0].get('covered', 0))
+        missed = int(lines[0].get('missed', 0))
+        total = covered + missed
+        pct = round(covered * 100 / total, 1) if total else 0
+        icon = ':green_circle:' if pct >= 80 else ':yellow_circle:' if pct >= 60 else ':red_circle:'
+        run_url = os.environ.get('GITHUB_SERVER_URL', '') + '/' + os.environ.get('GITHUB_REPOSITORY', '') + '/actions/runs/' + os.environ.get('GITHUB_RUN_ID', '')
+
+        body = f'## SDK Code Coverage\n\n'
+        body += f'| Metric | Value |\n|--------|-------|\n'
+        body += f'| Line coverage | {icon} **{pct}%** ({covered}/{total}) |\n\n'
+        body += f'<details><summary>Coverage by package</summary>\n\n'
+        body += f'| Package | Lines | Coverage |\n|---------|-------|----------|\n'
+        for pkg in sorted(root.findall('.//package'), key=lambda p: p.get('name','')):
+            pc = [c for c in pkg.findall('counter') if c.get('type') == 'LINE']
+            if not pc: continue
+            c2, m2 = int(pc[0].get('covered',0)), int(pc[0].get('missed',0))
+            t2 = c2 + m2
+            if t2 == 0: continue
+            p2 = round(c2 * 100 / t2, 1)
+            body += f'| \`{pkg.get(\"name\")}\` | {c2}/{t2} | {p2}% |\n'
+        body += f'\n</details>\n\n'
+        body += f':file_folder: [Download full HTML coverage report]({run_url}#artifacts)\n'
+        body += f'\n<!-- sdk-coverage-comment -->\n'
+
+        # Write to job summary
+        with open(os.environ.get('GITHUB_STEP_SUMMARY', '/dev/null'), 'a') as f:
+            f.write(body)
+
+        # Write to file for PR comment step
+        with open('coverage-body.md', 'w') as f:
+            f.write(body)
+        "
+    - name: Comment coverage on PR
+      if: github.event_name == 'pull_request' && steps.changes.outputs.docs_only != 'true'
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        PR_NUMBER=${{ github.event.pull_request.number }}
+        MARKER="<!-- sdk-coverage-comment -->"
+        # Find existing coverage comment
+        COMMENT_ID=$(gh api "repos/${{ github.repository }}/issues/${PR_NUMBER}/comments" \
+          --jq ".[] | select(.body | contains(\"${MARKER}\")) | .id" | head -1)
+        if [ -n "$COMMENT_ID" ]; then
+          gh api "repos/${{ github.repository }}/issues/comments/${COMMENT_ID}" \
+            -X PATCH -F body=@coverage-body.md
+        else
+          gh pr comment "$PR_NUMBER" --body-file coverage-body.md
+        fi
+    - name: Upload coverage report
+      if: steps.changes.outputs.docs_only != 'true'
+      uses: actions/upload-artifact@v4
+      with:
+        name: sdk-coverage-report
+        path: sdk/build/reports/jacoco/aggregate/
 
   migration-check:
     runs-on: ubuntu-latest
