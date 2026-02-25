@@ -8,6 +8,7 @@ import java.sql.SQLException;
 import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Collections;
 import java.util.Map;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
@@ -31,6 +32,9 @@ class CaseDataRepository {
   private final ObjectMapper defaultMapper;
 
   public List<DecentralisedCaseDetails> getCases(@RequestParam("case-refs") List<Long> caseRefs) {
+    if (caseRefs == null || caseRefs.isEmpty()) {
+      return Collections.emptyList();
+    }
     log.info("Fetching cases for references: {}", caseRefs);
     var params = Map.of("caseRefs", caseRefs);
 
