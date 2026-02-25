@@ -14,8 +14,10 @@ import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.web.server.ResponseStatusException;
 import uk.gov.hmcts.ccd.data.casedetails.SecurityClassification;
 import uk.gov.hmcts.ccd.decentralised.dto.DecentralisedCaseDetails;
 import uk.gov.hmcts.ccd.decentralised.dto.DecentralisedCaseEvent;
@@ -65,7 +67,8 @@ class CaseDataRepository {
   public DecentralisedCaseDetails getCase(Long caseRef) {
     var cases = getCases(List.of(caseRef));
     if (cases.isEmpty()) {
-      throw new IllegalStateException("Case reference " + caseRef + " not found");
+      throw new ResponseStatusException(HttpStatus.NOT_FOUND,
+          "Case not found");
     }
     return cases.get(0);
   }
