@@ -29,6 +29,10 @@ class IdempotentReplayIntegrationTest {
 
   private static final long CASE_REFERENCE = 9999000000000000L;
   private static final long CASE_ID = 123L;
+  private static final long CASE_ID_A = 456L;
+  private static final long CASE_ID_B = 789L;
+  private static final long CASE_REFERENCE_A = 1111000000000000L;
+  private static final long CASE_REFERENCE_B = 2222000000000000L;
 
   @Autowired
   private NamedParameterJdbcTemplate jdbc;
@@ -51,10 +55,26 @@ class IdempotentReplayIntegrationTest {
     assertThat(latest.getCaseDetails().getRevision()).isEqualTo(5L);
   }
 
+  @Test
+  void getCasesReturnsStableOrderByReferenceAscending() {
+    seedCaseData(CASE_ID_A, CASE_REFERENCE_A, 1, 1);
+    seedCaseData(CASE_ID_B, CASE_REFERENCE_B, 1, 1);
+
+    var cases = repository.getCases(java.util.List.of(CASE_REFERENCE_B, CASE_REFERENCE_A));
+
+    assertThat(cases)
+        .extracting(details -> details.getCaseDetails().getReference())
+        .containsExactly(CASE_REFERENCE_A, CASE_REFERENCE_B);
+  }
+
   private void seedCaseData(int version, long revision) {
+    seedCaseData(CASE_ID, CASE_REFERENCE, version, revision);
+  }
+
+  private void seedCaseData(long caseId, long caseReference, int version, long revision) {
     var params = new MapSqlParameterSource()
-        .addValue("id", CASE_ID)
-        .addValue("reference", CASE_REFERENCE)
+        .addValue("id", caseId)
+        .addValue("reference", caseReference)
         .addValue("version", version)
         .addValue("revision", revision);
 
