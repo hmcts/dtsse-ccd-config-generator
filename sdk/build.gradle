@@ -4,6 +4,11 @@ plugins {
     id("io.freefair.lombok") version "9.2.0" apply(false)
     id("org.springframework.boot") version "3.4.3" apply(false)
     id("io.spring.dependency-management") version "1.1.7" apply(false)
+    id 'jacoco'
+}
+
+repositories {
+    mavenCentral()
 }
 
 def sdkCheck = tasks.register('check');
@@ -11,6 +16,7 @@ def sdkCheck = tasks.register('check');
 subprojects {
     apply plugin: 'java'
     apply plugin: 'checkstyle'
+    apply plugin: 'jacoco'
     apply plugin: 'io.freefair.lombok'
     apply plugin: 'io.spring.dependency-management'
 
@@ -73,6 +79,15 @@ subprojects {
         }
     }
     sdkCheck.get().dependsOn(tasks.check)
+
+    jacocoTestReport {
+        // Include all Test task exec data (test, functionalTest, etc.)
+        executionData.from = fileTree(dir: layout.buildDirectory.dir('jacoco'), includes: ['*.exec'])
+        reports {
+            xml.required = true
+            html.required = true
+        }
+    }
 }
 
 tasks.register('publishToMavenLocal') { task ->
@@ -86,5 +101,38 @@ tasks.register('publishToAzureArtifacts') { task ->
         task.dependsOn(
             subproject.tasks.matching { it.name.endsWith('ToAzureArtifactsRepository') }
         )
+    }
+}
+
+tasks.register('jacocoAggregateReport', JacocoReport) {
+    description = 'Generates an aggregate JaCoCo coverage report for all SDK subprojects.'
+    group = 'verification'
+
+    subprojects.each { subproject ->
+        dependsOn subproject.tasks.withType(Test)
+    }
+
+    def execFiles = subprojects.collect {
+        fileTree(dir: it.layout.buildDirectory.dir('jacoco'), includes: ['*.exec'])
+    }
+    // Include e2e cftlibTest exec data when available.
+    // Cannot declare a cross-build dependency on :e2e:cftlibTest from this included build;
+    // run e2e tests first (CI does this via :e2e:check before :sdk:jacocoAggregateReport).
+    execFiles += fileTree(dir: "${rootProject.projectDir}/../test-projects/e2e/build/jacoco",
+                          includes: ['*.exec'])
+
+    executionData.from = files(execFiles)
+
+    def srcDirs = subprojects.collect { it.sourceSets.main.allSource.srcDirs }.flatten()
+    def classDirs = subprojects.collect { it.sourceSets.main.output }.flatten()
+
+    sourceDirectories.from = files(srcDirs)
+    classDirectories.from = files(classDirs)
+
+    reports {
+        xml.required = true
+        html.required = true
+        xml.outputLocation = layout.buildDirectory.file('reports/jacoco/aggregate/jacocoAggregateReport.xml')
+        html.outputLocation = layout.buildDirectory.dir('reports/jacoco/aggregate/html')
     }
 }
