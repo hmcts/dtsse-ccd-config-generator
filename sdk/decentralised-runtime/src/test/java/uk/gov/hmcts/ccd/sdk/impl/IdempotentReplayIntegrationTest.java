@@ -56,7 +56,7 @@ class IdempotentReplayIntegrationTest {
   }
 
   @Test
-  void getCasesReturnsStableOrderByReference() {
+  void getCasesReturnsStableOrderByReferenceAscending() {
     seedCaseData(CASE_ID_A, CASE_REFERENCE_A, 1, 1);
     seedCaseData(CASE_ID_B, CASE_REFERENCE_B, 1, 1);
 
