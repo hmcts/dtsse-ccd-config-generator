@@ -1,11 +1,14 @@
 package uk.gov.hmcts.ccd.sdk.impl;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.servlet.http.HttpServletRequest;
+import java.util.Arrays;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import org.springframework.util.LinkedMultiValueMap;
+import org.springframework.util.MultiValueMap;
 import uk.gov.hmcts.ccd.decentralised.dto.DecentralisedCaseEvent;
 import uk.gov.hmcts.ccd.sdk.ResolvedConfigRegistry;
 import uk.gov.hmcts.ccd.sdk.api.Event;
@@ -22,6 +25,7 @@ class DecentralisedSubmissionHandler implements CaseSubmissionHandler {
 
   private final ResolvedConfigRegistry registry;
   private final ObjectMapper mapper;
+  private final HttpServletRequest httpRequest;
 
   @Override
   public CaseSubmissionHandlerResult apply(DecentralisedCaseEvent event) {
@@ -57,10 +61,16 @@ class DecentralisedSubmissionHandler implements CaseSubmissionHandler {
     );
     long caseRef = event.getCaseDetails().getReference();
 
-    // TODO: revisit when CCD resumes sending query params; referer header is absent at the moment.
-    var urlParams = new LinkedMultiValueMap<String, String>();
+    var urlParams = extractQueryParams();
 
     return eventConfig.getSubmitHandler()
         .submit(new uk.gov.hmcts.ccd.sdk.api.EventPayload(caseRef, domainCaseData, urlParams));
+  }
+
+  private MultiValueMap<String, String> extractQueryParams() {
+    MultiValueMap<String, String> params = new LinkedMultiValueMap<>();
+    httpRequest.getParameterMap()
+        .forEach((key, values) -> params.put(key, Arrays.asList(values)));
+    return params;
   }
 }
