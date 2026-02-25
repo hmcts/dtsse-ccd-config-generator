@@ -18,8 +18,8 @@
       "enabled": false
     },
     {
-      "matchPackageNames": [
-        "org.springframework.boot:spring-boot-dependencies"
+      "matchPackagePrefixes": [
+        "org.springframework.boot"
       ],
       "enabled": false
     }

@@ -6,6 +6,7 @@ on:
       - '**/*.md'
       - '*.md'
   pull_request:
+  merge_group:
 
 jobs:
   build:
