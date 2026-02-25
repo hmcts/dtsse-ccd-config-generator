@@ -53,6 +53,7 @@ class CaseDataRepository {
               case_revision
          from ccd.case_data c
          where reference IN (:caseRefs)
+         order by reference asc
         """,
         params,
         (rs, rowNum) -> mapCaseDetails(rs)

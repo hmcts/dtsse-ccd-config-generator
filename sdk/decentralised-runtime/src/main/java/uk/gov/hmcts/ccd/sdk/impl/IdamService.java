@@ -38,7 +38,10 @@ class IdamService {
     if (token == null || token.isBlank()) {
       return token;
     }
-    return token.startsWith(BEARER_PREFIX) ? token : BEARER_PREFIX.concat(token);
+    if (token.regionMatches(true, 0, BEARER_PREFIX, 0, BEARER_PREFIX.length())) {
+      return BEARER_PREFIX.concat(token.substring(BEARER_PREFIX.length()));
+    }
+    return BEARER_PREFIX.concat(token);
   }
 
   public record User(String authToken, UserInfo userDetails) {}
