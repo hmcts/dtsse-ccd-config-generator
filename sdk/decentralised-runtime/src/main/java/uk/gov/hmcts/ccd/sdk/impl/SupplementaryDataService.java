@@ -27,10 +27,14 @@ class SupplementaryDataService {
       long caseRef,
       SupplementaryDataUpdateRequest request
   ) {
-    var requestData = request.getRequestData();
+    var requestData = request == null ? null : request.getRequestData();
     if (requestData == null || requestData.isEmpty()) {
       throw new ResponseStatusException(
           HttpStatus.BAD_REQUEST, "supplementary_data_updates must not be null or empty");
+    }
+    if (requestData.values().stream().anyMatch(operationSet -> operationSet == null || operationSet.isEmpty())) {
+      throw new ResponseStatusException(
+          HttpStatus.BAD_REQUEST, "supplementary_data_updates operation values must not be null or empty");
     }
 
     final AtomicReference<String> result = new AtomicReference<>();
