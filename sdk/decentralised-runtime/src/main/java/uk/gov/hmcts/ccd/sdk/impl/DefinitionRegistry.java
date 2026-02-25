@@ -8,6 +8,7 @@ import java.util.Optional;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import uk.gov.hmcts.ccd.domain.model.definition.CaseTypeDefinition;
 
@@ -16,10 +17,17 @@ import uk.gov.hmcts.ccd.domain.model.definition.CaseTypeDefinition;
 class DefinitionRegistry {
 
   private final ObjectMapper mapper;
+  private final String snapshotDir;
   private Map<String, CaseTypeDefinition> definitions = Map.of();
 
-  DefinitionRegistry(@Qualifier("ccd_mapper") ObjectMapper definitionMapper) {
+  DefinitionRegistry(
+      @Qualifier("ccd_mapper") ObjectMapper definitionMapper,
+      @Value("${ccd.definition.snapshot-dir:"
+          + "build/cftlib/definition-snapshots}")
+      String snapshotDir
+  ) {
     this.mapper = definitionMapper;
+    this.snapshotDir = snapshotDir;
   }
 
   Optional<CaseTypeDefinition> find(String caseTypeId) {
@@ -36,7 +44,7 @@ class DefinitionRegistry {
     }
 
     var loaded = new HashMap<String, CaseTypeDefinition>();
-    File[] jsonFiles = new File("build/cftlib/definition-snapshots")
+    File[] jsonFiles = new File(snapshotDir)
         .listFiles((dir, name) -> name.endsWith(".json"));
 
     if (jsonFiles != null) {
