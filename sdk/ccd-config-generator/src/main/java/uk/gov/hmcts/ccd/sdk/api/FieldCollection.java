@@ -73,6 +73,14 @@ public class FieldCollection {
       return result;
     }
 
+    public static <Type, StateType, Parent> FieldCollectionBuilder<Type, StateType, Parent> builder(EventBuilder event,
+        Parent parent, Class<Type> dataClass,
+        PropertyUtils propertyUtils, String unwrappedParentPrefix) {
+      FieldCollectionBuilder<Type, StateType, Parent> result = builder(event, parent, dataClass, propertyUtils);
+      result.unwrappedParentPrefix = unwrappedParentPrefix;
+      return result;
+    }
+
     public <Value> FieldCollectionBuilder<Type, StateType, Parent> optional(TypedPropertyGetter<Type, Value> getter,
         String showCondition, Value defaultValue, String caseEventFieldLabel, String caseEventFieldHint,
         String displayContextParameter) {

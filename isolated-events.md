@@ -83,6 +83,13 @@ SDK auto-generates prefix from event ID (`createPossessionClaim`). Generated CCD
 **Files to modify:**
 
 - `sdk/ccd-config-generator/src/main/java/uk/gov/hmcts/ccd/sdk/api/DecentralisedConfigBuilder.java`
+  - Deprecate the existing overloads that use the god case data class:
+  ```java
+  @Deprecated
+  EventTypeBuilder<T, R, S> decentralisedEvent(String id, Submit<T, S> submitHandler);
+  @Deprecated
+  EventTypeBuilder<T, R, S> decentralisedEvent(String id, Submit<T, S> submitHandler, Start<T, S> startHandler);
+  ```
   - Add new overloads that accept a DTO class (prefix auto-derived from event ID):
   ```java
   <D> EventTypeBuilder<D, R, S> decentralisedEvent(
@@ -216,7 +223,11 @@ Since Java generics are erased at runtime:
 
 ### Step 6: Update PCS Test Project
 
-**Migration of CreatePossessionClaim** (as proof-of-concept):
+**Page building is unchanged in the SDK.** The existing `FieldCollectionBuilder` is already generic — it works with any class, not just the god case class. Method references in page config simply point at DTO fields instead of `PCSCase` fields. The `unwrappedParentPrefix` mechanism already handles auto-prefixing field IDs in page config.
+
+PCS has a thin `PageBuilder` wrapper hardcoded to `PCSCase`. For DTO events, either make it generic (`PageBuilder<T>`) or use `eventBuilder.fields().page(id)` directly. This is a PCS consumer change, not an SDK change.
+
+**Migration of CreatePossessionClaim** (first migration target — 5 pages, ~10 DTO fields, start + submit handlers):
 
 - Create `src/main/java/uk/gov/hmcts/reform/pcs/ccd/dto/CreateClaimData.java`:
   ```java
@@ -234,27 +245,17 @@ Since Java generics are erased at runtime:
       private String formattedPropertyAddress;
   }
   ```
-- Update `CreatePossessionClaim.java` to use new builder method with DTO class and prefix
-- Update page configurations (StartTheService, EnterPropertyAddress, etc.) to reference `CreateClaimData` fields instead of `PCSCase` fields
-- Update `PageBuilder` to be generic or create DTO-specific page builder
-
-**Migration of EnforcementOrderEvent** (demonstrates flat DTO for a larger event):
-
-- Create `EnforcementOrderData.java` - a flat DTO with ~20 fields (all the leaf fields that were previously nested inside `EnforcementOrder`, `AdditionalInformation`, `NameAndAddressForEviction`, etc., now promoted to top-level):
+- Update `CreatePossessionClaim.java` to use new `decentralisedEvent` overload with DTO class:
   ```java
-  @Data @Builder
-  public class EnforcementOrderData {
-      private SelectEnforcementType selectEnforcementType;
-      private YesNoNotSure anyRiskToBailiff;
-      private String additionalInfo;
-      private String moneyOwed;
-      private String evictionName;
-      private AddressUK evictionAddress;
-      // ... ~14 more flat fields
-  }
+  b.decentralisedEvent("createPossessionClaim", CreateClaimData.class, this::submit, this::start)
   ```
-- Update event to use new builder with `EnforcementOrderData.class`
-- Update page configurations to reference flat DTO fields directly (no `.complex()` calls needed)
+- Update page configurations (StartTheService, EnterPropertyAddress, etc.) to reference `CreateClaimData` fields instead of `PCSCase` fields
+- Make PCS `PageBuilder` generic or use `eventBuilder.fields().page(id)` directly
+
+**Subsequent migrations** (after CreatePossessionClaim is proven):
+- CitizenSubmitApplication, CitizenCreateApplication, CitizenUpdateApplication — simple events with no pages, good for validating the no-page DTO path
+- EnforcementOrderEvent — 16 pages, ~20 flat DTO fields, validates the pattern at larger scale
+- ResumePossessionClaim — largest event (58 pages, ~150+ fields), migrate last
 
 ## How Prefixing Works (Transparent to Developer)
 
@@ -315,19 +316,26 @@ pageBuilder.page("additionalInfo")
 
 **Runtime deserialization** is simple: the SDK strips the event prefix from CCD keys, uncapitalises, and uses Jackson `convertValue()` to deserialise the flat map into the DTO class. No nested object reconstruction needed.
 
-## Verification
+## First Goal: Port CreatePossessionClaim End-to-End
+
+The first milestone is migrating the `CreatePossessionClaim` event to use an isolated DTO and verifying it works end-to-end in a running system. This proves the entire pipeline: API → builder → generators → runtime prefix handling → CCD UI → handlers.
+
+### Verification Steps
 
 1. **Generate config**: Run `./gradlew :test-projects:pcs-api:generateCCDConfig` and verify:
    - `CaseField.json` contains prefixed DTO fields (`createPossessionClaimPropertyAddress`, etc.)
    - `CaseEventToFields/createPossessionClaim.json` references the prefixed fields
    - `AuthorisationCaseField/` has auto-generated CRU entries for DTO fields
 
-2. **Run existing tests**: `./gradlew test` across SDK and test projects
+2. **Run existing tests**: `./gradlew check` — all golden file tests, integration tests, and test project builds must stay green. No regressions in existing events.
 
-3. **End-to-end**: `./gradlew :test-projects:pcs-api:bootWithCCD` and verify:
-   - Event forms render with DTO fields
-   - Start handler populates DTO fields correctly
-   - Submit handler receives the DTO with submitted data
-   - DTO fields are NOT in persisted case_data
+3. **Boot PCS with CCD**: `./gradlew :test-projects:pcs-api:bootWithCCD`
 
-4. **Verify field isolation**: Confirm that multiple events with different DTOs don't have field ID collisions (different prefixes)
+4. **Manual E2E verification in the browser** using Chrome DevTools MCP:
+   - Open the CCD UI and start the CreatePossessionClaim event
+   - Verify the start handler fires (fee amount field populated)
+   - Walk through all 5 pages — fields render correctly, show conditions work, mid-event callbacks fire
+   - Submit the event
+   - Verify the submit handler receives the DTO with correct data (check service logs)
+   - Verify DTO fields are NOT in persisted case data (inspect the case view — DTO fields should not appear)
+   - Verify other existing events still work (run a different event to confirm no regressions)

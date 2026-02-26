@@ -87,6 +87,19 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements Decentralised
     return new EventTypeBuilderImpl<>(config, events, id, submitHandler, startHandler);
   }
 
+  @Override
+  @SuppressWarnings({"unchecked", "rawtypes"})
+  public <D> EventTypeBuilder<D, R, S> decentralisedEvent(String id, Class<D> dtoClass, Submit<D, S> submitHandler) {
+    return new DtoEventTypeBuilderImpl<>(config, (Map) events, id, dtoClass, id, submitHandler, null);
+  }
+
+  @Override
+  @SuppressWarnings({"unchecked", "rawtypes"})
+  public <D> EventTypeBuilder<D, R, S> decentralisedEvent(
+      String id, Class<D> dtoClass, Submit<D, S> submitHandler, Start<D, S> startHandler) {
+    return new DtoEventTypeBuilderImpl<>(config, (Map) events, id, dtoClass, id, submitHandler, startHandler);
+  }
+
 
   @Override
   public EventTypeBuilderImpl<T, R, S> attachScannedDocEvent() {

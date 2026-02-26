@@ -63,5 +63,6 @@ participant SDB as Service DB
 ## Read next
 
 - [Decentralised runtime in detail](./decentralised-runtime.md)
+- [Isolated event DTOs](./isolated-event-dtos.md)
 - [Concurrency considerations](./concurrency.md)
 - [Migrating existing services](./data-migration.md)
