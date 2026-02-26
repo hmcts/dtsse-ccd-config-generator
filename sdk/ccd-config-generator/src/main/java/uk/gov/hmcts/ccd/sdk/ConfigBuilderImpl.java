@@ -90,14 +90,34 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements Decentralised
   @Override
   @SuppressWarnings({"unchecked", "rawtypes"})
   public <D> EventTypeBuilder<D, R, S> decentralisedEvent(String id, Class<D> dtoClass, Submit<D, S> submitHandler) {
-    return new DtoEventTypeBuilderImpl<>(config, (Map) events, id, dtoClass, id, submitHandler, null);
+    return new DtoEventTypeBuilderImpl<>(config, (Map) events, id, dtoClass,
+        camelCaseInitials(id), submitHandler, null);
   }
 
   @Override
   @SuppressWarnings({"unchecked", "rawtypes"})
   public <D> EventTypeBuilder<D, R, S> decentralisedEvent(
       String id, Class<D> dtoClass, Submit<D, S> submitHandler, Start<D, S> startHandler) {
-    return new DtoEventTypeBuilderImpl<>(config, (Map) events, id, dtoClass, id, submitHandler, startHandler);
+    return new DtoEventTypeBuilderImpl<>(config, (Map) events, id, dtoClass,
+        camelCaseInitials(id), submitHandler, startHandler);
+  }
+
+  /**
+   * Extracts the first character of each camelCase word from an event ID.
+   * e.g. "createPossessionClaim" → "cpc", "submitApplication" → "sa"
+   */
+  static String camelCaseInitials(String eventId) {
+    if (eventId == null || eventId.isEmpty()) {
+      throw new IllegalArgumentException("Event ID must not be null or empty");
+    }
+    StringBuilder initials = new StringBuilder();
+    initials.append(Character.toLowerCase(eventId.charAt(0)));
+    for (int i = 1; i < eventId.length(); i++) {
+      if (Character.isUpperCase(eventId.charAt(i))) {
+        initials.append(Character.toLowerCase(eventId.charAt(i)));
+      }
+    }
+    return initials.toString();
   }
 
 

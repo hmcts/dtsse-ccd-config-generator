@@ -48,8 +48,18 @@ class CaseFieldGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
     history.put("FieldType", "CaseHistoryViewer");
     fields.add(history);
 
+    Map<String, String> prefixToEventId = Maps.newHashMap();
     for (Event event : config.getEvents().values()) {
       if (event.isDtoEvent()) {
+        String prefix = event.getDtoPrefix();
+        String existingEventId = prefixToEventId.get(prefix);
+        if (existingEventId != null && !existingEventId.equals(event.getId())) {
+          throw new IllegalStateException(
+              "DTO prefix collision: events '%s' and '%s' both produce prefix '%s'. "
+              + "Rename one of the events to avoid this collision."
+                  .formatted(existingEventId, event.getId(), prefix));
+        }
+        prefixToEventId.put(prefix, event.getId());
         validateDtoClass(event.getDtoClass(), event.getId());
         appendFields(fields, event.getDtoClass(), config.getCaseType(), event.getDtoPrefix());
       }
