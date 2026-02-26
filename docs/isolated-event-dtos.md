@@ -36,11 +36,11 @@ Different events are completely isolated from each other — they cannot see or 
 
 ## Key concepts
 
-### Read and write are separate concerns
+### Encapsulation
 
-With decentralised persistence, your service owns its data. This creates a natural separation: **reading** (your `CaseView` composes a read-only view rendered by XUI or CUI as tabs, labels, summaries etc.) and **writing** (events collect user input and submit it to your handlers, which validate and persist). The fields displayed on a case view are not the same fields a user fills in during an event.
+Rather than all events sharing a single case-wide data class, each event encapsulates its own data in a focused DTO. Events cannot see or modify each other's fields, and there is no shared mutable state between them.
 
-With isolated DTOs, this separation is made explicit — each event defines its own input schema as a DTO class, completely independent of the case view and of other events.
+This also makes the separation between reading and writing explicit. Your `CaseView` composes a read-only view of the case (rendered by XUI or CUI as tabs, labels, summaries etc.), while each event defines its own independent input schema as a DTO class. The two never overlap.
 
 ### DTOs are ephemeral
 
