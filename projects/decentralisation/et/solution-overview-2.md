@@ -34,9 +34,8 @@ ecm_ccd_case_migration -->|http| ecm_consumer
 ecm_ccd_case_migration -->|library| et_shared
 ecm_consumer -->|http| et_shared
 ecm_consumer -->|library| et_shared
-et_ccd_callbacks -->|http| et_shared
+et_ccd_callbacks -->|publishes| et_shared
 et_ccd_callbacks -->|http| et_sya_api
-et_ccd_callbacks -->|library| et_shared
 et_ccd_callbacks -->|http| et_sya_frontend
 et_sya_api -->|http| et_shared
 et_sya_api -->|library| et_shared
