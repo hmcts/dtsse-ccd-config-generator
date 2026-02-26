@@ -13,6 +13,8 @@ import java.io.File;
 import java.lang.reflect.Field;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
@@ -46,6 +48,23 @@ class CaseFieldGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
     history.put("FieldType", "CaseHistoryViewer");
     fields.add(history);
 
+    Map<String, String> prefixToEventId = Maps.newHashMap();
+    for (Event event : config.getEvents().values()) {
+      if (event.isDtoEvent()) {
+        String prefix = event.getDtoPrefix();
+        String existingEventId = prefixToEventId.get(prefix);
+        if (existingEventId != null && !existingEventId.equals(event.getId())) {
+          throw new IllegalStateException(
+              "DTO prefix collision: events '%s' and '%s' both produce prefix '%s'. "
+              + "Rename one of the events to avoid this collision."
+                  .formatted(existingEventId, event.getId(), prefix));
+        }
+        prefixToEventId.put(prefix, event.getId());
+        validateDtoClass(event.getDtoClass(), event.getId());
+        appendFields(fields, event.getDtoClass(), config.getCaseType(), event.getDtoPrefix());
+      }
+    }
+
     fields.addAll(getExplicitFields(config));
 
     Path path = Paths.get(outputFolder.getPath(), "CaseField.json");
@@ -59,6 +78,7 @@ class CaseFieldGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
   private static <T, S, R extends HasRole> List<Map<String, Object>> getExplicitFields(
       ResolvedCCDConfig<T, S, R> config) {
     Map<String, uk.gov.hmcts.ccd.sdk.api.Field> explicitFields = Maps.newHashMap();
+    Map<String, String> fieldDtoPrefix = Maps.newHashMap();
     for (Event event : config.getEvents().values()) {
       List<uk.gov.hmcts.ccd.sdk.api.Field.FieldBuilder> fc = event.getFields()
           .getExplicitFields();
@@ -66,6 +86,9 @@ class CaseFieldGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
       for (uk.gov.hmcts.ccd.sdk.api.Field.FieldBuilder fieldBuilder : fc) {
         uk.gov.hmcts.ccd.sdk.api.Field field = fieldBuilder.build();
         explicitFields.put(field.getId(), field);
+        if (event.isDtoEvent()) {
+          fieldDtoPrefix.put(field.getId(), event.getDtoPrefix());
+        }
       }
     }
 
@@ -87,7 +110,12 @@ class CaseFieldGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
       JsonUtils.ensureDefaultLabel(fieldData);
 
       if (!Strings.isNullOrEmpty(field.getLabel())) {
-        fieldData.put("Label", field.getLabel());
+        String label = field.getLabel();
+        String prefix = fieldDtoPrefix.get(fieldId);
+        if (prefix != null) {
+          label = CaseEventToFieldsGenerator.prefixLabelReferences(label, prefix);
+        }
+        fieldData.put("Label", label);
       }
 
       if (field.getType() != null) {
@@ -268,6 +296,47 @@ class CaseFieldGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
         .stream()
         .filter(candidate -> getFieldId(candidate).equals(fieldId))
         .findFirst();
+  }
+
+  static void validateDtoClass(Class<?> dtoClass, String eventId) {
+    for (Field field : getCaseFields(dtoClass)) {
+      if (field.getAnnotation(com.fasterxml.jackson.annotation.JsonUnwrapped.class) != null) {
+        throw new IllegalArgumentException(
+            "DTO class %s for event '%s' must be flat: field '%s' uses @JsonUnwrapped"
+                .formatted(dtoClass.getSimpleName(), eventId, field.getName()));
+      }
+      if (!isAllowedDtoFieldType(field.getType())) {
+        throw new IllegalArgumentException(
+            "DTO class %s for event '%s' has unsupported field type: '%s %s'. "
+            + "DTO fields must be primitives, enums, String, LocalDate, LocalDateTime, "
+            + "or SDK built-in types (annotated with @ComplexType)."
+                .formatted(dtoClass.getSimpleName(), eventId,
+                    field.getType().getSimpleName(), field.getName()));
+      }
+    }
+  }
+
+  private static boolean isAllowedDtoFieldType(Class<?> type) {
+    if (type.isPrimitive()) {
+      return true;
+    }
+    if (type == String.class || type == LocalDate.class || type == LocalDateTime.class) {
+      return true;
+    }
+    if (type == Integer.class || type == Long.class || type == Float.class
+        || type == Double.class || type == Boolean.class) {
+      return true;
+    }
+    if (type.isEnum()) {
+      return true;
+    }
+    if (type.getAnnotation(ComplexType.class) != null) {
+      return true;
+    }
+    if (Collection.class.isAssignableFrom(type)) {
+      return true;
+    }
+    return false;
   }
 
 }

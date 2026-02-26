@@ -6,6 +6,7 @@ import static uk.gov.hmcts.ccd.sdk.FieldUtils.getCaseFields;
 import static uk.gov.hmcts.ccd.sdk.FieldUtils.getFieldId;
 import static uk.gov.hmcts.ccd.sdk.FieldUtils.isUnwrappedField;
 import static uk.gov.hmcts.ccd.sdk.api.Permission.CRU;
+import static uk.gov.hmcts.ccd.sdk.api.Permission.CRUD;
 
 import com.fasterxml.jackson.annotation.JsonUnwrapped;
 import com.google.common.collect.HashBasedTable;
@@ -88,6 +89,25 @@ class AuthorisationCaseFieldGenerator<T, S, R extends HasRole> implements Config
         }
       }
     }
+    // Add CRUD permissions for all DTO event fields.
+    for (Event<T, R, S> event : config.getEvents().values()) {
+      if (event.isDtoEvent()) {
+        for (java.lang.reflect.Field field : getCaseFields(event.getDtoClass())) {
+          String fieldId = getFieldId(field, event.getDtoPrefix());
+          for (R role : event.getGrants().keys()) {
+            if (!event.getHistoryOnlyRoles().contains(role.getRole())) {
+              Set<Permission> perm = new HashSet<>(CRUD);
+              if (fieldRolePermissions.contains(fieldId, role.getRole())) {
+                fieldRolePermissions.get(fieldId, role.getRole()).addAll(perm);
+              } else {
+                fieldRolePermissions.put(fieldId, role.getRole(), perm);
+              }
+            }
+          }
+        }
+      }
+    }
+
     // Add Permissions for all tabs.
     for (String role : ImmutableSet.copyOf(fieldRolePermissions.columnKeySet())) {
       if (!config.getRolesWithNoHistory().contains(role)) {

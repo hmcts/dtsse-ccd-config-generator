@@ -26,6 +26,10 @@ Max line length 120 chars
 
 /sdk - contains the CCD SDK tooling
 
+# Architecture
+
+See `docs/agent-architecture-overview.md` for a detailed overview of the project structure, config generation pipeline, event model, type resolution, and field prefixing. Review and update that file when making architecturally significant changes that affect any of its content.
+
 # CCD & Architecture
 
 Services & CCD are cyclically dependent

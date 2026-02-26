@@ -25,6 +25,6 @@ project(':sptribs').projectDir = file('test-projects/sptribs-case-api')
 include 'adoption'
 project(':adoption').projectDir = file('test-projects/adoption-cos-api')
 
-if (file('ccd-data-store-api').exists()) {
+if (file('ccd-data-store-api').exists() && !file('ccd-data-store-api/.gradle-exclude').exists()) {
     include 'ccd-data-store-api'
 }

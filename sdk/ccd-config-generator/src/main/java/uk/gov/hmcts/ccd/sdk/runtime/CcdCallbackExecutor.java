@@ -3,6 +3,7 @@ package uk.gov.hmcts.ccd.sdk.runtime;
 import com.fasterxml.jackson.databind.JavaType;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.Maps;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
@@ -42,12 +43,28 @@ public class CcdCallbackExecutor {
   }
 
   @SneakyThrows
+  @SuppressWarnings("unchecked")
   public AboutToStartOrSubmitResponse aboutToStart(CallbackRequest request) {
     log.info("About to start event ID: {}", request.getEventId());
 
     var event = findCaseEvent(request);
 
     if (event.getStartHandler() != null) {
+      if (event.isDtoEvent()) {
+        Map<String, Object> ccdData = request.getCaseDetails().getData();
+        Object dtoData = DtoMapper.fromCcdData(
+            ccdData, event.getDtoPrefix(), event.getDtoClass(), mapper);
+        EventPayload payload = new EventPayload<>(
+            request.getCaseDetails().getId(),
+            dtoData,
+            new LinkedMultiValueMap<>()
+        );
+        var response = event.getStartHandler().start(payload);
+        Map<String, Object> responseData = new LinkedHashMap<>(ccdData);
+        responseData.putAll(DtoMapper.toCcdData(response, event.getDtoPrefix(), mapper));
+        return AboutToStartOrSubmitResponse.builder().data(responseData).build();
+      }
+
       var config = registry.getRequired(request.getCaseDetails().getCaseTypeId());
       String json = mapper.writeValueAsString(request.getCaseDetails().getData());
       var domainClass = mapper.readValue(json, config.getCaseClass());
@@ -83,14 +100,35 @@ public class CcdCallbackExecutor {
   }
 
   @SneakyThrows
+  @SuppressWarnings("unchecked")
   public AboutToStartOrSubmitResponse midEvent(CallbackRequest request, String page) {
     log.info("Mid event callback: {} for page {}", request.getEventId(), page);
-    MidEvent<?, ?> callback = findCaseEvent(request).getFields().getPagesToMidEvent().get(page);
+    var event = findCaseEvent(request);
+    MidEvent<?, ?> callback = event.getFields().getPagesToMidEvent().get(page);
 
     if (callback == null) {
       throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Handler not found for "
           + request.getEventId() + " for page " + page);
     }
+
+    if (event.isDtoEvent()) {
+      Map<String, Object> ccdData = request.getCaseDetails().getData();
+      CaseDetails dtoCaseDetails = buildDtoCaseDetails(
+          request.getCaseDetails(), event.getDtoPrefix(), event.getDtoClass());
+      CaseDetails dtoCaseDetailsBefore = request.getCaseDetailsBefore() != null
+          ? buildDtoCaseDetails(request.getCaseDetailsBefore(), event.getDtoPrefix(), event.getDtoClass())
+          : dtoCaseDetails;
+
+      var response = callback.handle(dtoCaseDetails, dtoCaseDetailsBefore);
+
+      if (response.getData() != null) {
+        Map<String, Object> responseData = new LinkedHashMap<>(ccdData);
+        responseData.putAll(DtoMapper.toCcdData(response.getData(), event.getDtoPrefix(), mapper));
+        response.setData(responseData);
+      }
+      return response;
+    }
+
     return callback.handle(convertCaseDetails(request.getCaseDetails()),
         convertCaseDetails(request.getCaseDetailsBefore(),
             request.getCaseDetails().getCaseTypeId()));
@@ -120,6 +158,18 @@ public class CcdCallbackExecutor {
     }
 
     return result;
+  }
+
+  @SuppressWarnings("unchecked")
+  private CaseDetails buildDtoCaseDetails(
+      uk.gov.hmcts.reform.ccd.client.model.CaseDetails ccdDetails, String prefix, Class<?> dtoClass) {
+    Object dtoData = DtoMapper.fromCcdData(ccdDetails.getData(), prefix, dtoClass, mapper);
+    return CaseDetails.builder()
+        .id(ccdDetails.getId())
+        .caseTypeId(ccdDetails.getCaseTypeId())
+        .data(dtoData)
+        .state(ccdDetails.getState())
+        .build();
   }
 
   CaseDetails convertCaseDetails(uk.gov.hmcts.reform.ccd.client.model.CaseDetails ccdDetails) {
