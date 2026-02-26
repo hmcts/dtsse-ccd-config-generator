@@ -1,27 +1,64 @@
 # Proposal: Isolated Event DTOs
 
-We are proposing that decentralised events can define their own **isolated DTO class** instead of sharing the case-wide data class. A working implementation exists on the `isolated-events` branch with `CreatePossessionClaim` migrated as a proof of concept.
+Decentralised events can define their own **isolated DTO class** instead of sharing a case-wide data class. Each event defines a specific, focused Java class containing only the fields it needs:
 
-Each event would get a small, focused Java class containing only the fields it needs. Different events would be completely isolated from each other — they cannot see or interfere with each other's fields, and they have no coupling to the main case data class.
+```java
+@Data
+@Builder
+public class CreateClaimData {
+    private AddressUK propertyAddress;
+    private LegislativeCountry legislativeCountry;
+    private String feeAmount;
+    private YesOrNo showCrossBorderPage;
+}
+```
 
-## Read and write are separate concerns
+The DTO class is registered when you declare the event:
 
-With decentralised persistence, your service owns its data. This creates a natural separation between two concerns:
+```java
+builder.decentralisedEvent("createPossessionClaim", CreateClaimData.class, this::submit)
+    .initialState(State.AWAITING_FURTHER_CLAIM_DETAILS)
+    .name("Make a claim")
+    .grant(Permission.CRUD, UserRole.PCS_SOLICITOR);
+```
 
-- **Reading case data** — your `CaseView` composes a read-only view of the case for display. These fields come from your database and are rendered by CCD as tabs, labels, and case summaries.
-- **Writing case data** — events collect user input via forms and submit it to your handlers. Your handlers decide what to persist and how.
+Your handlers receive the DTO directly:
 
-These are distinct: the fields CCD displays on a case view are not the same fields a user fills in during an event. With isolated DTOs, this separation is made explicit. Each event defines its own input schema as a DTO class, completely independent of the case view and of other events.
+```java
+private SubmitResponse<State> submit(EventPayload<CreateClaimData, State> payload) {
+    CreateClaimData data = payload.caseData();
+    caseService.createCase(payload.caseReference(), data.getPropertyAddress(), ...);
+    return SubmitResponse.of(State.AWAITING_HEARING);
+}
+```
+
+Different events are completely isolated from each other — they cannot see or interfere with each other's fields nor the main case data view class.
 
 ## Key concepts
 
-**DTOs are ephemeral.** They are not persisted anywhere — not in `ccd.case_data`, not in your service's database. They exist only for the lifetime of a CCD event: rendered to the user as a form, submitted back, and then gone.
+### Read and write are separate concerns
 
-**You hydrate them.** If your event form needs pre-populated data (e.g. a fee amount, a default address), provide a start handler that builds and returns the DTO. The SDK passes it to CCD for rendering.
+With decentralised persistence, your service owns its data. This creates a natural separation: **reading** (your `CaseView` composes a read-only view rendered by XUI or CUI as tabs, labels, summaries etc.) and **writing** (events collect user input and submit it to your handlers, which validate and persist). The fields displayed on a case view are not the same fields a user fills in during an event.
 
-**You persist what you need.** Your submit handler receives the completed DTO. It is your responsibility to extract the data you need and write it to your own database.
+With isolated DTOs, this separation is made explicit — each event defines its own input schema as a DTO class, completely independent of the case view and of other events.
 
-**You own concurrency control.** There is no automatic optimistic locking on DTO data. If your submit handler writes to shared state, you are responsible for implementing appropriate concurrency controls (row-level locking, optimistic versioning, etc.) in your own persistence layer.
+### DTOs are ephemeral
+
+They are not automatically persisted anywhere. They exist only for the lifetime of a CCD event: rendered to the user as a form, submitted back, and then gone.
+
+### You hydrate them
+
+If your event form needs pre-populated data (e.g. a fee amount, a default address), provide a start handler that builds and returns the DTO. The SDK passes it to CCD for rendering.
+
+DTOs will always start empty by default.
+
+### You persist what you need
+
+Your submit handler receives the completed DTO. It is your responsibility to extract the data you need and write it to your own database.
+
+### You own concurrency control
+
+There is no automatic optimistic locking on DTO based events. If your event writes to shared state or has other concurrency requirements, you are responsible for implementing appropriate concurrency controls (row-level locking, optimistic versioning, etc.) in your own persistence layer.
 
 ## A simpler model
 
@@ -34,7 +71,7 @@ This removes the need for several CCD-specific modelling concepts:
 - **No custom complex types.** You don't need to define nested structures for CCD to store on your behalf. CCD's built-in complex types (`AddressUK`, `Document`, etc.) are still available where you need CCD to render a specific UI component (e.g. a postcode lookup for addresses). But you don't need to create your own — if your event collects an address and a name, those are just fields on a flat DTO. How you store them is your business.
 - **No `@JsonUnwrapped`.** That exists for packing nested objects into CCD's flat field model. With flat DTOs there's nothing to unwrap.
 - **No `@Access` annotations on fields.** When all events share the same data class, different roles may need different access to the same fields depending on context. With isolated DTOs each event has its own fields, so field-level access distinctions are unnecessary (see [Access control](#access-control) below).
-- **`@CCD` is optional.** Use it for label overrides or type overrides if the defaults don't suit you. If omitted, labels are auto-generated from the field name and types are inferred from the Java type.
+- **`@CCD` behaves as before.** Use it for label overrides or type overrides if the defaults don't suit you. If omitted, labels are auto-generated from the field name and types are inferred from the Java type.
 
 ### Allowed field types
 
@@ -68,6 +105,40 @@ Today, CCD field names are partially managed by the SDK — they are derived fro
 
 With isolated DTOs, CCD field names become fully managed by the SDK. Each event's fields are automatically prefixed to keep them isolated (see [Field isolation via prefixing](#field-isolation-via-prefixing)), and developers never see or type these internal names. Instead, all field references use Java method references to your DTO class, giving you compile-time checking, IDE autocomplete, and safe refactoring.
 
+
+### Show conditions
+
+Where you previously wrote raw strings:
+
+```java
+.showCondition("legislativeCountry=\"England\" OR legislativeCountry=\"Wales\"")
+```
+
+You now write:
+
+```java
+.showCondition(when(CreateClaimData::getLegislativeCountry).isAnyOf(ENGLAND, WALES))
+```
+
+Available operators:
+
+```java
+// Field equals a value
+when(CreateClaimData::getShowCrossBorderPage).is(YesOrNo.YES)
+
+// Field equals any of several values
+when(CreateClaimData::getLegislativeCountry).isAnyOf(ENGLAND, WALES)
+
+// Contains — for multi-select fields
+when(CreateClaimData::getSelectedGrounds).contains(RENT_ARREARS)
+
+// Combine conditions with AND
+when(CreateClaimData::getShowCrossBorderPage).is(YesOrNo.YES)
+    .and(when(CreateClaimData::getLegislativeCountry).is(SCOTLAND))
+```
+
+Values can be enum constants, `YesOrNo.YES`, or strings. Enum values are resolved to their CCD representation automatically.
+
 ### Page fields
 
 Page field bindings already use method references — this doesn't change:
@@ -97,27 +168,6 @@ For labels that are just static text, a plain string is fine:
 .label("info", "Enter the property address below.")
 ```
 
-### Show conditions
-
-Show conditions control which fields are visible based on the value of other fields:
-
-```java
-// Field equals a value
-when(CreateClaimData::getShowCrossBorderPage).is(YesOrNo.YES)
-
-// Field equals any of several values
-when(CreateClaimData::getLegislativeCountry).isAnyOf(ENGLAND, WALES)
-
-// Contains — for multi-select fields
-when(CreateClaimData::getSelectedGrounds).contains(RENT_ARREARS)
-
-// Combine conditions with AND
-when(CreateClaimData::getShowCrossBorderPage).is(YesOrNo.YES)
-    .and(when(CreateClaimData::getLegislativeCountry).is(SCOTLAND))
-```
-
-Values can be enum constants, `YesOrNo.YES`, or strings. Enum values are resolved to their CCD representation automatically.
-
 ## Example
 
 ### 1. Define a DTO
@@ -142,8 +192,8 @@ public class CreateClaimData {
 Pass the DTO class to `decentralisedEvent`:
 
 ```java
-public void configureDecentralised(DecentralisedConfigBuilder<PCSCase, State, UserRole> b) {
-    EventBuilder<CreateClaimData, UserRole, State> event = b
+public void configureDecentralised(DecentralisedConfigBuilder<PCSCase, State, UserRole> builder) {
+    EventBuilder<CreateClaimData, UserRole, State> event = builder
         .decentralisedEvent("createPossessionClaim", CreateClaimData.class, this::submit, this::start)
         .initialState(State.AWAITING_FURTHER_CLAIM_DETAILS)
         .name("Make a claim")
@@ -292,11 +342,3 @@ SDK passes to handler:        CreateClaimData { propertyAddress: {...}, feeAmoun
 
 **Mid-event callbacks** follow the same pattern: strip prefix inbound, add prefix outbound.
 
-## Open questions
-
-We'd appreciate feedback on:
-
-- **API shape.** Is the `decentralisedEvent(id, DtoClass.class, submit, start)` signature clear? We've considered a builder-style alternative where the DTO class is bound first and handlers are chained — would that be preferable?
-- **Flat-only restriction.** Is the constraint that DTOs must be flat (no custom nested objects) too limiting for any known use cases?
-- **Concurrency model.** Is the expectation that services manage their own concurrency control clear and reasonable?
-- **Anything else** we haven't considered.
