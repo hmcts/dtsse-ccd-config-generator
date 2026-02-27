@@ -1,6 +1,6 @@
 dependencyManagement {
     imports {
-        mavenBom 'com.azure.spring:spring-cloud-azure-dependencies:6.1.0'
+        mavenBom 'com.azure.spring:spring-cloud-azure-dependencies:7.0.0'
     }
 }
 
@@ -9,7 +9,7 @@ dependencies {
     api 'org.springframework:spring-jdbc'
     api 'org.springframework:spring-context'
     api 'org.springframework:spring-web'
-    api 'com.azure.spring:spring-cloud-azure-starter-servicebus-jms:6.1.0'
+    api 'com.azure.spring:spring-cloud-azure-starter-servicebus-jms:7.0.0'
 
     compileOnly 'org.springframework.boot:spring-boot-autoconfigure'
 
