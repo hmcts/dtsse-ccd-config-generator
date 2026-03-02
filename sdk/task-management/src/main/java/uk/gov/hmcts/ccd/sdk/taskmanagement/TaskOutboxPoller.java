@@ -17,11 +17,6 @@ import uk.gov.hmcts.ccd.sdk.taskmanagement.model.outbox.TerminateTaskOutboxPaylo
 import uk.gov.hmcts.ccd.sdk.taskmanagement.model.request.TaskCreateRequest;
 import uk.gov.hmcts.ccd.sdk.taskmanagement.model.request.TaskReconfigureRequest;
 import uk.gov.hmcts.ccd.sdk.taskmanagement.model.request.TaskTerminationRequest;
-import uk.gov.hmcts.ccd.sdk.taskmanagement.search.SearchTaskRequest;
-import uk.gov.hmcts.ccd.sdk.taskmanagement.search.TaskRequestContext;
-import uk.gov.hmcts.ccd.sdk.taskmanagement.search.TaskSearchKey;
-import uk.gov.hmcts.ccd.sdk.taskmanagement.search.TaskSearchOperator;
-import uk.gov.hmcts.ccd.sdk.taskmanagement.search.TaskSearchParameterList;
 
 @Slf4j
 public class TaskOutboxPoller {
@@ -144,26 +139,8 @@ public class TaskOutboxPoller {
     TerminateTaskOutboxPayload terminateTaskOutboxPayload =
         objectMapper.readValue(record.payload(), TerminateTaskOutboxPayload.class);
 
-    var searchRequest = SearchTaskRequest.builder()
-        .searchParameters(
-            List.of(
-                TaskSearchParameterList.builder()
-                    .key(TaskSearchKey.TASK_TYPE)
-                    .operator(TaskSearchOperator.IN)
-                    .values(terminateTaskOutboxPayload.taskTypes())
-                    .build(),
-                TaskSearchParameterList.builder()
-                    .key(TaskSearchKey.CASE_ID)
-                    .operator(TaskSearchOperator.IN)
-                    .values(List.of(terminateTaskOutboxPayload.caseId()))
-                    .build()
-            )
-        )
-        .taskSortingParameters(null)
-        .requestContext(TaskRequestContext.ALL_WORK)
-        .build();
-
-    var tasksToTerminate = taskManagementApiClient.searchTasks(searchRequest);
+    var tasksToTerminate = taskManagementApiClient.getTasks(terminateTaskOutboxPayload.caseId(),
+      terminateTaskOutboxPayload.taskTypes());
 
     if (!tasksToTerminate.getStatusCode().is2xxSuccessful() || tasksToTerminate.getBody() == null) {
       log.warn(
