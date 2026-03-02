@@ -14,6 +14,7 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.Statement;
 import java.sql.SQLException;
+import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -95,6 +96,7 @@ import uk.gov.hmcts.divorce.sow014.nfd.FailingSubmittedCallback;
 import uk.gov.hmcts.divorce.sow014.nfd.CaseworkerRoundTripData;
 import uk.gov.hmcts.divorce.sow014.nfd.ApiFirstTaskCancelEvent;
 import uk.gov.hmcts.divorce.sow014.nfd.ApiFirstTaskCompleteEvent;
+import uk.gov.hmcts.divorce.sow014.nfd.ApiFirstTaskDelayedEvent;
 import uk.gov.hmcts.divorce.sow014.nfd.ApiFirstTaskEvent;
 import uk.gov.hmcts.divorce.sow014.nfd.ApiFirstTaskReconfigureEvent;
 import uk.gov.hmcts.divorce.sow014.nfd.PublishedEvent;
@@ -168,6 +170,7 @@ public class TestWithCCD extends CftlibTest {
     private static final String API_FIRST_TASK_COMPLETE_EVENT_ID = ApiFirstTaskCompleteEvent.EVENT_ID;
     private static final String API_FIRST_TASK_CANCEL_EVENT_ID = ApiFirstTaskCancelEvent.EVENT_ID;
     private static final String API_FIRST_TASK_RECONFIGURE_EVENT_ID = ApiFirstTaskReconfigureEvent.EVENT_ID;
+    private static final String API_FIRST_TASK_DELAYED_EVENT_ID = ApiFirstTaskDelayedEvent.EVENT_ID;
     private String apiFirstTaskId;
     private String waTaskId;
 
@@ -1439,6 +1442,70 @@ public class TestWithCCD extends CftlibTest {
             Object responseCode = processed.get("last_response_code");
             assertThat(responseCode, is(notNullValue()));
             assertThat(((Number) responseCode).intValue(), equalTo(200));
+        });
+    }
+
+    @SneakyThrows
+    @Order(32)
+    @Test
+    public void taskInitiationShouldRespectDelayRulesViaOutbox() {
+        long caseId = createAdditionalCase("TEST_SOLICITOR@mailinator.com");
+        String caseIdValue = String.valueOf(caseId);
+        db.update("DELETE FROM ccd.task_outbox WHERE case_id = :caseId", Map.of("caseId", caseIdValue));
+
+        LocalDateTime submittedAt = LocalDateTime.now(ZoneOffset.UTC);
+
+        var startCreate = ccdApi.startEvent(
+            getAuthorisation("TEST_CASE_WORKER_USER@mailinator.com"),
+            getServiceAuth(),
+            caseIdValue,
+            API_FIRST_TASK_DELAYED_EVENT_ID
+        );
+        var delayedCreateRequest = prepareEventRequestWithToken(
+            "TEST_CASE_WORKER_USER@mailinator.com",
+            API_FIRST_TASK_DELAYED_EVENT_ID,
+            Map.of("note", "api-first-task-delayed"),
+            startCreate.getToken(),
+            caseId
+        );
+        var delayedCreateResponse = HttpClientBuilder.create().build().execute(delayedCreateRequest);
+        assertThat(delayedCreateResponse.getStatusLine().getStatusCode(), equalTo(201));
+
+        Map<String, Object> queued = await().atMost(Duration.ofSeconds(20)).until(
+            () -> db.queryForMap(
+                "SELECT status, next_attempt_at FROM ccd.task_outbox"
+                    + " WHERE case_id = :caseId AND action = :action::ccd.task_action ORDER BY id DESC LIMIT 1",
+                Map.of("caseId", caseIdValue, "action", TaskAction.INITIATE.getId())
+            ),
+            row -> row.get("next_attempt_at") != null
+        );
+
+        Object nextAttemptAtRaw = queued.get("next_attempt_at");
+        LocalDateTime nextAttemptAt = nextAttemptAtRaw instanceof LocalDateTime dateTime
+            ? dateTime
+            : ((Timestamp) nextAttemptAtRaw).toLocalDateTime();
+        assertThat(nextAttemptAt, is(notNullValue()));
+        assertThat(nextAttemptAt.isAfter(submittedAt.plusSeconds(8)), is(true));
+
+        await().during(Duration.ofSeconds(4)).atMost(Duration.ofSeconds(8)).untilAsserted(() -> {
+            Map<String, Object> statusRow = db.queryForMap(
+                "SELECT status FROM ccd.task_outbox"
+                    + " WHERE case_id = :caseId AND action = :action::ccd.task_action ORDER BY id DESC LIMIT 1",
+                Map.of("caseId", caseIdValue, "action", TaskAction.INITIATE.getId())
+            );
+            assertThat(statusRow.get("status"), equalTo("NEW"));
+        });
+
+        await().atMost(Duration.ofSeconds(45)).untilAsserted(() -> {
+            Map<String, Object> processed = db.queryForMap(
+                "SELECT status, last_response_code FROM ccd.task_outbox"
+                    + " WHERE case_id = :caseId AND action = :action::ccd.task_action ORDER BY id DESC LIMIT 1",
+                Map.of("caseId", caseIdValue, "action", TaskAction.INITIATE.getId())
+            );
+            assertThat(processed.get("status"), equalTo("PROCESSED"));
+            Object responseCode = processed.get("last_response_code");
+            assertThat(responseCode, is(notNullValue()));
+            assertThat(((Number) responseCode).intValue(), anyOf(equalTo(200), equalTo(201), equalTo(204)));
         });
     }
 

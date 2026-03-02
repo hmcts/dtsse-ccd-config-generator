@@ -26,16 +26,21 @@ public class TaskOutboxRepository {
   }
 
   public void enqueue(String caseId, String caseTypeId, String payload, String action) {
+    enqueue(caseId, caseTypeId, payload, action, null);
+  }
+
+  public void enqueue(String caseId, String caseTypeId, String payload, String action, LocalDateTime nextAttemptAt) {
     MapSqlParameterSource params = new MapSqlParameterSource()
         .addValue("action", action)
         .addValue("caseId", caseId)
         .addValue("caseTypeId", caseTypeId)
-        .addValue("payload", payload);
+        .addValue("payload", payload)
+        .addValue("nextAttemptAt", nextAttemptAt);
 
     jdbc.update(
         """
-            insert into %s (case_id, case_type_id, payload, action)
-            values (:caseId, :caseTypeId, :payload::jsonb, :action::%s)
+            insert into %s (case_id, case_type_id, payload, action, next_attempt_at)
+            values (:caseId, :caseTypeId, :payload::jsonb, :action::%s, :nextAttemptAt)
             """.formatted(tableName, actionTypeName),
         params
     );
