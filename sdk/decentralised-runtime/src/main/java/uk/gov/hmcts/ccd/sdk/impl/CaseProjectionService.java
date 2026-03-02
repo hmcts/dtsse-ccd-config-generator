@@ -3,11 +3,14 @@ package uk.gov.hmcts.ccd.sdk.impl;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.core.ResolvableType;
 import org.springframework.stereotype.Service;
 import org.springframework.util.ClassUtils;
@@ -28,6 +31,7 @@ import uk.gov.hmcts.ccd.sdk.ResolvedConfigRegistry;
 @Service
 class CaseProjectionService {
 
+  private static final Logger LOG = LoggerFactory.getLogger(CaseProjectionService.class);
   private static final TypeReference<Map<String, JsonNode>> JSON_NODE_MAP = new TypeReference<>() {};
 
   private final CaseDataRepository caseDataRepository;
@@ -72,7 +76,7 @@ class CaseProjectionService {
     }
 
     Object blobCase = mapper.convertValue(caseDetails.getData(), binding.caseDataType());
-    Enum<?> typedState = Enum.valueOf((Class<? extends Enum>) binding.stateType(), state);
+    Enum<?> typedState = resolveState(binding.stateType(), state);
 
     @SuppressWarnings("rawtypes")
     CaseViewRequest request = new CaseViewRequest(reference, typedState);
@@ -88,6 +92,24 @@ class CaseProjectionService {
 
     caseDetails.setData(serialised);
     return raw;
+  }
+
+  private static Enum<?> resolveState(
+      Class<? extends Enum<?>> stateType, String state
+  ) {
+    return Arrays.stream(stateType.getEnumConstants())
+        .filter(e -> e.name().equalsIgnoreCase(state))
+        .findFirst()
+        .orElseThrow(() -> {
+          LOG.warn(
+              "No matching enum constant for state '{}' in {}",
+              state, stateType.getSimpleName()
+          );
+          return new IllegalArgumentException(
+              "Unknown state '%s' for enum %s"
+                  .formatted(state, stateType.getSimpleName())
+          );
+        });
   }
 
   private Map<String, CaseViewBinding> buildBindings(List<CaseView<?, ?>> caseViews,
