@@ -9,6 +9,7 @@ pluginManagement {
 }
 
 includeBuild 'sdk'
+includeBuild 'test-projects/et-ccd-callbacks'
 
 include 'e2e'
 project(':e2e').projectDir = file('test-projects/e2e')

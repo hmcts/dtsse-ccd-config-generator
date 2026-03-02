@@ -4,31 +4,30 @@
 
 Some services, including ET, do not use the SDK config generator to organise callbacks.
 
-They define callback URLs in CCD JSON definition data and implement handlers as manually mapped Spring controllers, for
-example with `@RequestMapping` and `@PostMapping`.
+They define callback URLs in CCD definition JSON and implement handlers in manually wired Spring controllers.
 
 For this design, only `about-to-submit` and `submitted` are in scope.
 
-`about-to-start` and mid-event callbacks are unchanged and continue to run through existing paths.
+`about-to-start` and mid-event callbacks remain unchanged and continue through existing paths.
 
 ## Problem
 
-Decentralised submission must preserve CCD callback guarantees for legacy JSON-wired services:
+Decentralised submission must preserve CCD guarantees for legacy JSON-wired services:
 
 * `about-to-submit` is atomic with persistence
 * service-owned table writes from `about-to-submit` commit or roll back with the event
 * `submitted` runs after commit
 
-Loopback HTTP callback invocation (`http://localhost/...`) breaks this, because it introduces a separate request and
-transaction boundary.
+A loopback HTTP approach (`http://localhost/...`) is not acceptable because it creates a separate request
+and transaction boundary.
 
 ## Design goals
 
-* Support JSON/manual callback wiring without forcing SDK callback registration.
-* Discover callback URLs from dumped CCD definitions.
-* Dispatch to existing controllers without per-controller custom wiring.
+* Avoid implicit Spring handler mapping dispatch.
+* Use explicit callback ownership in code.
 * Keep `about-to-submit` transactional with persistence.
 * Keep `submitted` post-commit.
+* Fail fast on ambiguous or missing handler bindings.
 
 ## Non-goals
 
@@ -38,59 +37,67 @@ transaction boundary.
 
 ## Existing SDK building blocks
 
-This design should extend, not replace, existing registry concepts:
+This design extends existing registry concepts:
 
-* [ResolvedConfigRegistry](https://github.com/hmcts/dtsse-ccd-config-generator/blob/master/sdk/ccd-config-generator/src/main/java/uk/gov/hmcts/ccd/sdk/ResolvedConfigRegistry.java):
-  generated SDK event/callback registry for config-generator services.
-* [DefinitionRegistry](https://github.com/hmcts/dtsse-ccd-config-generator/blob/master/sdk/decentralised-runtime/src/main/java/uk/gov/hmcts/ccd/sdk/impl/DefinitionRegistry.java):
-  loaded case type definitions from `build/cftlib/definition-snapshots`.
+* [ResolvedConfigRegistry][resolved-config-registry]
+* [DefinitionRegistry][definition-registry]
 
-Definition snapshots are produced by cftlib's
-[dumpCCDDefinitions task wiring](https://github.com/hmcts/rse-cft-lib/blob/main/cftlib/rse-cft-lib-plugin/src/main/java/uk/gov/hmcts/rse/CftLibPlugin.java)
-and
-[dumpDefinitionSnapshots implementation](https://github.com/hmcts/rse-cft-lib/blob/main/cftlib/lib/runtime/src/main/java/uk/gov/hmcts/rse/ccd/lib/CFTLibApiImpl.java).
+Definition snapshots are produced by cftlib:
 
-The callback URL fields come from the case definition model:
-
-* [CaseTypeDefinition](https://github.com/hmcts/rse-cft-lib/blob/main/projects/aac-manage-case-assignment/src/main/java/uk/gov/hmcts/reform/managecase/client/datastore/model/CaseTypeDefinition.java)
-* [CaseEventDefinition](https://github.com/hmcts/rse-cft-lib/blob/main/projects/aac-manage-case-assignment/src/main/java/uk/gov/hmcts/reform/managecase/client/datastore/model/CaseEventDefinition.java)
+* [dumpCCDDefinitions task wiring][cftlib-plugin]
+* [dumpDefinitionSnapshots implementation][cftlib-api]
 
 ## Proposed approach
 
-### 1. Look up controller from DefinitionRegistry
+### 1. Explicit callback handler interfaces
 
-Use `DefinitionRegistry` case type data to resolve controller callback targets by:
+Define explicit submit-phase contracts.
+
+* `AboutToSubmitCallbackHandler`
+* `SubmittedCallbackHandler`
+
+Each handler declares the callback it owns via a binding key:
 
 * `caseTypeId`
 * `eventId`
-* `phase` (`ABOUT_TO_SUBMIT`, `SUBMITTED`)
 
-Resolved values:
+Example shape:
 
-* normalized callback target (`path + query`, host ignored)
-* submitted retry metadata
+```java
+public record CallbackBinding(String caseTypeId, String eventId) {}
 
-### 2. Dispatch internally through Spring MVC
+public interface AboutToSubmitCallbackHandler {
+  CallbackBinding binding();
+  AboutToStartOrSubmitResponse handle(CallbackRequest request);
+}
 
-Invoke callbacks in-process using Spring handler mapping/adapter:
+public interface SubmittedCallbackHandler {
+  CallbackBinding binding();
+  SubmittedCallbackResponse handle(CallbackRequest request);
+}
+```
 
-* resolve target `path + query`
-* construct internal request with callback payload
-* resolve mapped handler
-* invoke handler directly in JVM
-* deserialize callback response
+### 2. Runtime injection and registry build
 
-This reuses existing controller mappings while avoiding network hops.
+At startup, runtime injects all handler beans and builds two maps:
 
-### 3. Keep transaction semantics
+* `Map<CallbackBinding, AboutToSubmitCallbackHandler>`
+* `Map<CallbackBinding, SubmittedCallbackHandler>`
+
+Startup validation:
+
+* fail on duplicate bindings
+* optionally cross-check against `DefinitionRegistry` callback configuration to detect drift
+
+### 3. Transaction model
 
 Submit flow:
 
 1. Start submission transaction and acquire case lock.
-2. Execute `about-to-submit` via internal dispatcher.
+2. Resolve and execute `about-to-submit` handler by `(caseTypeId,eventId)`.
 3. Apply callback response and persist case/event data.
 4. Commit.
-5. Execute `submitted` after commit.
+5. Resolve and execute `submitted` handler after commit.
 
 Outcome:
 
@@ -98,27 +105,31 @@ Outcome:
 * callback DB writes in the same transaction share commit/rollback outcome.
 * `submitted` remains post-commit and non-atomic with persistence.
 
-## Why not loopback HTTP
-
-Loopback HTTP is not acceptable for `about-to-submit`:
-
-* separate request lifecycle
-* separate transaction context
-* partial commit risk if callback side effects persist before event rollback
-* added lock contention risk
-
 ## Error handling and retries
 
-* `about-to-submit`: callback errors fail submission and roll back transaction.
+* `about-to-submit`: handler errors fail submission and roll back transaction.
 * `submitted`: execute post-commit; apply CCD-compatible retry behaviour; do not roll back committed persistence.
+
+## Compatibility impact
+
+This supports ET and similar services with large manually organised callback surfaces while avoiding implicit routing
+magic.
+
+Handlers are explicit, testable, and discoverable in code ownership terms.
 
 ## Validation and testing
 
 Required tests:
 
-* definition callback URL extraction for `ABOUT_TO_SUBMIT` and `SUBMITTED`
-* handler resolution for registered callback URLs
+* binding uniqueness and startup validation tests
+* missing binding failure tests
+* optional definition-to-binding consistency tests
 * transaction integration test proving atomicity of callback writes + event persistence
-* rollback test on `about-to-submit` callback failure
+* rollback test on `about-to-submit` handler failure
 * post-commit retry behaviour test for `submitted`
 * ET submit path regressions
+
+[resolved-config-registry]: https://github.com/hmcts/dtsse-ccd-config-generator/blob/master/sdk/ccd-config-generator/src/main/java/uk/gov/hmcts/ccd/sdk/ResolvedConfigRegistry.java
+[definition-registry]: https://github.com/hmcts/dtsse-ccd-config-generator/blob/master/sdk/decentralised-runtime/src/main/java/uk/gov/hmcts/ccd/sdk/impl/DefinitionRegistry.java
+[cftlib-plugin]: https://github.com/hmcts/rse-cft-lib/blob/main/cftlib/rse-cft-lib-plugin/src/main/java/uk/gov/hmcts/rse/CftLibPlugin.java
+[cftlib-api]: https://github.com/hmcts/rse-cft-lib/blob/main/cftlib/lib/runtime/src/main/java/uk/gov/hmcts/rse/ccd/lib/CFTLibApiImpl.java
