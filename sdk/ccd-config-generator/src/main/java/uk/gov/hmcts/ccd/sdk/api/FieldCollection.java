@@ -234,6 +234,12 @@ public class FieldCollection {
         getter, DisplayContext.Mandatory, null, true, null, caseEventFieldLabel, null, false);
     }
 
+    public <Value> FieldCollectionBuilder<Type, StateType, Parent> mandatoryWithLabel(
+        TypedPropertyGetter<Type, Value> getter,
+        TypedLabel caseEventFieldLabel) {
+      return mandatoryWithLabel(getter, caseEventFieldLabel.toString());
+    }
+
     public <Value> FieldCollectionBuilder<Type, StateType, Parent> mandatoryWithoutDefaultValue(
         TypedPropertyGetter<Type, Value> getter,
         String showCondition,
@@ -298,6 +304,14 @@ public class FieldCollection {
 
     public FieldCollectionBuilder<Type, StateType, Parent> readonlyNoSummary(TypedPropertyGetter<Type, ?> getter) {
       return field(getter, DisplayContext.ReadOnly, false);
+    }
+
+    /**
+     * Backwards-compatible alias for legacy page DSL usage where a field is kept in payload
+     * but never rendered in the UI.
+     */
+    public FieldCollectionBuilder<Type, StateType, Parent> hidden(TypedPropertyGetter<Type, ?> getter) {
+      return field(getter, DisplayContext.Optional, "[STATE]=\"NEVER_SHOW\"", false, true);
     }
 
     public <U> FieldCollectionBuilder<U, StateType, FieldCollectionBuilder<Type, StateType, Parent>> list(

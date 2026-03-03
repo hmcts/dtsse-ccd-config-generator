@@ -16,6 +16,9 @@ project(':e2e').projectDir = file('test-projects/e2e')
 include 'pcs'
 project(':pcs').projectDir = file('test-projects/pcs-api')
 
+include 'pcs-frontend'
+project(':pcs-frontend').projectDir = file('test-projects/pcs-frontend')
+
 include 'nfdiv'
 project(':nfdiv').projectDir = file('test-projects/nfdiv-case-api')
 

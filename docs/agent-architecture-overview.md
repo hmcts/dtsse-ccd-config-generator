@@ -42,6 +42,30 @@ Services define events by implementing `CCDConfig<CaseData, State, UserRole>`. T
 
 All generators implement `ConfigGenerator<T, S, R>` and are Spring components auto-collected by `JSONConfigGenerator`.
 
+## TypeScript Bindings Pipeline
+
+`generateCCDConfig` can now optionally emit TypeScript bindings in the same run that writes JSON config.
+
+**Gradle DSL (plugin extension):**
+- `ccd.tsBindings.enabled` (default `false`)
+- `ccd.tsBindings.outputDir` (default `build/ts-bindings`)
+- `ccd.tsBindings.moduleName` (default `ccd-bindings`)
+
+The Gradle plugin passes these as JVM system properties to `uk.gov.hmcts.ccd.sdk.Main`. `Main` maps them into
+`TsBindingsOptions`, then `CCDDefinitionGenerator.generateAllCaseTypes(...)` writes:
+- JSON definitions via `JSONConfigGenerator` (existing behavior)
+- TS bindings via `TypeScriptBindingsGenerator` (new behavior, when enabled)
+
+Bindings are emitted per case type directory and currently include:
+- `dto-types.ts` — DTO interfaces generated from Java DTO classes using `typescript-generator-core`
+- `event-contracts.ts` — event id to DTO/prefix/field manifest
+- `client.ts` — generated `GeneratedCcdClient` with typed `events.<event>.start/submit` APIs
+- `index.ts` — barrel export
+
+For DTO events, the generated client encapsulates prefix marshalling:
+- `start()` unprefixes CCD `case_data` fields into plain DTO-shaped objects
+- `submit()` prefixes DTO fields back to CCD flat field names
+
 ## Event Model
 
 Events are configured via `ConfigBuilder.event("id")` (legacy) or `DecentralisedConfigBuilder.decentralisedEvent("id", submitHandler)` (decentralised).
