@@ -2,10 +2,15 @@ package uk.gov.hmcts.ccd.sdk.taskmanagement;
 
 import static org.springframework.http.MediaType.APPLICATION_JSON_VALUE;
 
+import java.util.List;
 import org.springframework.cloud.openfeign.CollectionFormat;
 import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestParam;
 import uk.gov.hmcts.ccd.sdk.taskmanagement.model.request.TaskCreateRequest;
 import uk.gov.hmcts.ccd.sdk.taskmanagement.model.request.TaskReconfigureRequest;
 import uk.gov.hmcts.ccd.sdk.taskmanagement.model.request.TaskTerminationRequest;
@@ -14,7 +19,6 @@ import uk.gov.hmcts.ccd.sdk.taskmanagement.model.response.TaskReconfigureRespons
 import uk.gov.hmcts.ccd.sdk.taskmanagement.model.response.TaskTerminationResponse;
 import uk.gov.hmcts.ccd.sdk.taskmanagement.search.GetTasksResponse;
 
-import java.util.List;
 
 @FeignClient(
     name = "task-management-api",

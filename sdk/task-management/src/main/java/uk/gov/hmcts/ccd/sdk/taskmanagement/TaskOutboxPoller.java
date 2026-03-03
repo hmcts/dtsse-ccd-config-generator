@@ -140,7 +140,7 @@ public class TaskOutboxPoller {
         objectMapper.readValue(record.payload(), TerminateTaskOutboxPayload.class);
 
     var tasksToTerminate = taskManagementApiClient.getTasks(terminateTaskOutboxPayload.caseId(),
-      terminateTaskOutboxPayload.taskTypes());
+        terminateTaskOutboxPayload.taskTypes());
 
     if (!tasksToTerminate.getStatusCode().is2xxSuccessful() || tasksToTerminate.getBody() == null) {
       log.warn(

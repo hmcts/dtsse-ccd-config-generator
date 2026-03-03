@@ -3,7 +3,6 @@ package uk.gov.hmcts.ccd.sdk.taskmanagement;
 import io.micrometer.common.util.StringUtils;
 import java.util.List;
 import java.util.Objects;
-
 import org.springframework.http.ResponseEntity;
 import uk.gov.hmcts.ccd.sdk.taskmanagement.model.request.TaskCreateRequest;
 import uk.gov.hmcts.ccd.sdk.taskmanagement.model.request.TaskReconfigureRequest;
