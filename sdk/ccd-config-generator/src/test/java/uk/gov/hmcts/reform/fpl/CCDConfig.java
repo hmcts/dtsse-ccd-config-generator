@@ -100,12 +100,12 @@ public class CCDConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<CaseData, S
           .complex(HearingPreferences::getLocationPreferences)
             .optional(LocationPreferences::getLocal)
             .done()
-          .complex(HearingPreferences::getOrganisationPolicy, (String) null, "Event label", "Event hint")
+          .complexWithLabelAndHint(HearingPreferences::getOrganisationPolicy, "Event label", "Event hint")
             .complex(OrganisationPolicy::getOrganisation)
               .mandatory(Organisation::getOrganisationId)
               .done()
-            .optional(OrganisationPolicy::getOrgPolicyCaseAssignedRole, (String) null, CCD_SOLICITOR)
-            .optional(OrganisationPolicy::getOrgPolicyReference, (String) null, null, "Org ref", "Sol org ref")
+            .optional(OrganisationPolicy::getOrgPolicyCaseAssignedRole, CCD_SOLICITOR)
+            .optional(OrganisationPolicy::getOrgPolicyReference, null, "Org ref", "Sol org ref")
             .done()
           .done()
         .optional(CaseData::getCaseName)
@@ -236,7 +236,7 @@ public class CCDConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<CaseData, S
         .field("hearingPreferencesWelsh", "Is in Welsh")
         .stateField()
         .field(CaseData::getCaseLocalAuthority, "Local authority")
-        .field("dateAndTimeSubmitted", "Date submitted", (String) null, (String) null, "#DATETIMEDISPLAY(d  MMMM yyyy)", FIRST.DESCENDING)
+        .field("dateAndTimeSubmitted", "Date submitted", FIRST.DESCENDING, "#DATETIMEDISPLAY(d  MMMM yyyy)")
         .field("evidenceHandled", "Supplementary evidence handled", SECOND.ASCENDING);
   }
 
@@ -259,7 +259,7 @@ public class CCDConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<CaseData, S
         .showCondition("standardDirectionOrder.orderStatus!=\"SEALED\" OR caseManagementOrder!=\"\" OR sharedDraftCMODocument!=\"\" OR cmoToAction!=\"\"")
         .field(CaseData::getStandardDirectionOrder, "standardDirectionOrder.orderStatus!=\"SEALED\"")
         .field(CaseData::getSharedDraftCMODocument)
-        .field(CaseData::getDateSubmitted, (String) null, "#DATETIMEDISPLAY(d  MMMM yyyy)")
+        .fieldWithDisplayContext(CaseData::getDateSubmitted, "#DATETIMEDISPLAY(d  MMMM yyyy)")
         .label("test-label", "", "a label");
 
     builder.tab("OrdersTab", "Orders")
@@ -334,13 +334,13 @@ public class CCDConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<CaseData, S
         .showCondition(ShowCondition.when(CaseData::getAllocatedJudge).is(""))
         .fields()
         .page("AllocatedJudge")
-        .complex(CaseData::getOrganisationPolicy, (String) null, "Event label", "Event hint", true)
+        .complexWithLabelAndHint(CaseData::getOrganisationPolicy, "Event label", "Event hint", true)
           .complex(OrganisationPolicy::getOrganisation)
             .mandatory(Organisation::getOrganisationId, "allocatedJudge=\"*\"", true)
-            .mandatoryNoSummary(Organisation::getOrganisationName, (String) null, "Organisation Name")
+            .mandatoryNoSummary(Organisation::getOrganisationName, "Organisation Name")
           .done()
-          .optional(OrganisationPolicy::getOrgPolicyCaseAssignedRole, (String) null, CCD_SOLICITOR)
-          .optional(OrganisationPolicy::getOrgPolicyReference, (String) null, null, "Org ref", "Sol org ref")
+          .optional(OrganisationPolicy::getOrgPolicyCaseAssignedRole, CCD_SOLICITOR)
+          .optional(OrganisationPolicy::getOrgPolicyReference, null, "Org ref", "Sol org ref")
         .done()
         .label("allocatedJudgeLabel", "Allocated Judge")
         .complex(CaseData::getAllocatedJudge, false)
@@ -348,11 +348,11 @@ public class CCDConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<CaseData, S
           .mandatory(Judge::getOtherTitle)
           .mandatory(Judge::getJudgeLastName)
           .mandatory(Judge::getJudgeFullName)
-            .optionalNoSummary(Judge::getJudgeEmailId, (String) null, "Judge email id")
+            .optionalNoSummary(Judge::getJudgeEmailId, "Judge email id")
         .done()
-        .optional(CaseData::getCaseName, (String) null, null, "Allocated case name", "A hint")
+        .optional(CaseData::getCaseName, null, "Allocated case name", "A hint")
         .page("<Notes>", this::checkCaseNotes)
-          .label("caseNotesLabel1", "###Case notes", (String) null, true)
+          .label("caseNotesLabel1", "###Case notes", true)
           .mandatory(CaseData::getCaseNotes);
 
     builder.event("set-a-field")
@@ -393,8 +393,9 @@ public class CCDConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<CaseData, S
       .pageLabel("Correspondence")
       .mandatory(CaseData::getScannedDocuments)
       .mandatory(CaseData::getEvidenceHandled)
-      .mandatory(CaseData::getDateOfIssue, (String) null, null, "Date of issue", "A hint", "#DATETIMEDISPLAY(d  MMMM yyyy)")
-      .mandatoryWithDisplayContextParameter(CaseData::getDateSubmitted, (String) null, "#DATETIMEDISPLAY(d  MMMM yyyy)");
+      .mandatoryWithLabelHintAndDisplayContext(
+          CaseData::getDateOfIssue, "Date of issue", "A hint", "#DATETIMEDISPLAY(d  MMMM yyyy)")
+      .mandatoryWithDisplayContextParameter(CaseData::getDateSubmitted, "#DATETIMEDISPLAY(d  MMMM yyyy)");
   }
 
   private void buildHandleEvidenceEvent() {

@@ -94,5 +94,11 @@ public class Tab<T, R extends HasRole> {
     public TabBuilder<T, R> collection(TypedPropertyGetter<T, ? extends Collection> getter) {
       return field(getter, (String) null);
     }
+
+    public TabBuilder<T, R> fieldWithDisplayContext(TypedPropertyGetter<T, ?> getter, String displayContext) {
+      String name = propertyUtils.getPropertyName(model, getter);
+      fields.add(TabField.builder().id(name).displayContextParameter(displayContext).build());
+      return this;
+    }
   }
 }

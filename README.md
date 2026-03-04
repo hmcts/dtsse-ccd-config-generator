@@ -14,6 +14,7 @@ Write CCD configuration in Java.
   + [Adding events](#adding-events)
   + [Configuring the work basket and search fields](#configuring-the-work-basket-and-search-fields)
   + [Adding tabs](#adding-tabs)
+  + [Typed show conditions and labels](#typed-show-conditions-and-labels)
 * [Permissions](#permissions)
   + [Events](#events)
   + [Fields](#fields)
@@ -346,6 +347,49 @@ ID `"caseHistory"` for the history field itself:
 ```
 
 If an app does not specify a tab with that ID then a default History tab will be automatically configured as the first tab.
+
+### Typed show conditions and labels
+
+You can build show conditions and label placeholders from typed field references instead of raw strings.
+This avoids hand-written field names and works across event fields, search/workbasket fields and tabs.
+
+```java
+import static uk.gov.hmcts.ccd.sdk.api.ShowCondition.when;
+import static uk.gov.hmcts.ccd.sdk.api.TypedLabel.label;
+import static uk.gov.hmcts.ccd.sdk.type.YesOrNo.YES;
+
+import uk.gov.hmcts.ccd.sdk.api.ShowCondition;
+
+ShowCondition judgeMissing = when(CaseData::getAllocatedJudge).is("");
+ShowCondition urgent = when(CaseData::getUrgent).is(YES);
+
+builder.event("allocateJudge")
+    .showCondition(judgeMissing.and(urgent))
+    .fields()
+      .label("judgePrompt",
+          label("Please confirm %s for %s",
+              CaseData::getAllocatedJudge, CaseData::getCaseName))
+      .mandatory(CaseData::getAllocatedJudge, judgeMissing);
+
+builder.searchInputFields()
+    .field(CaseData::getCaseName, "Case name",
+        when(CaseData::getUrgent).is(YES));
+
+builder.tab("DraftTab", "Draft case tab")
+    .showCondition(when(CaseData::getApplicationType).is("A"))
+    .field(CaseData::getCaseName);
+```
+
+Supported condition operations are:
+
+* `is(...)`
+* `isAnyOf(...)`
+* `contains(...)`
+* `and(...)`
+* `or(...)`
+
+For enum values, `ShowCondition` uses `@JsonProperty`/`@JsonValue` when present so the generated value
+matches CCD serialisation.
 
 ## Permissions
 

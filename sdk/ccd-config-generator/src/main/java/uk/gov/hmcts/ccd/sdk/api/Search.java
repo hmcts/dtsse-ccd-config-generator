@@ -198,6 +198,17 @@ public class Search<T, R extends HasRole> {
       return this;
     }
 
+    public SearchBuilder<T, R> field(String fieldName, String label, SortOrder order,
+                                     String displayContextParameter) {
+      fields.add(SearchField.<R>builder()
+          .id(fieldName)
+          .label(label)
+          .order(order)
+          .displayContextParameter(displayContextParameter)
+          .build());
+      return this;
+    }
+
     public SearchBuilder<T, R> field(String fieldName, String label, String listElementCode, String showCondition,
                                      SortOrder order) {
       fields.add(SearchField.<R>builder()
