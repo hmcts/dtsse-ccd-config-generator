@@ -35,6 +35,10 @@ public class Search<T, R extends HasRole> {
       return this;
     }
 
+    public SearchBuilder<T, R> field(TypedPropertyGetter<T, ?> getter, String label, ShowCondition showCondition) {
+      return field(getter, label, showCondition.toString());
+    }
+
     public SearchBuilder<T, R> field(TypedPropertyGetter<T, ?> getter, String label, R role) {
       String name = propertyUtils.getPropertyName(model, getter);
       fields.add(SearchField.<R>builder().id(name).label(label).userRole(role).build());
@@ -74,6 +78,11 @@ public class Search<T, R extends HasRole> {
       return this;
     }
 
+    public SearchBuilder<T, R> field(TypedPropertyGetter<T, ?> getter, String label, ShowCondition showCondition,
+                                     SortOrder order, String displayContextParameter) {
+      return field(getter, label, showCondition.toString(), order, displayContextParameter);
+    }
+
     public SearchBuilder<T, R> field(TypedPropertyGetter<T, ?> getter, String label, String showCondition,
                                      String displayContextParameter) {
       String name = propertyUtils.getPropertyName(model, getter);
@@ -85,6 +94,11 @@ public class Search<T, R extends HasRole> {
           .build()
       );
       return this;
+    }
+
+    public SearchBuilder<T, R> field(TypedPropertyGetter<T, ?> getter, String label, ShowCondition showCondition,
+                                     String displayContextParameter) {
+      return field(getter, label, showCondition.toString(), displayContextParameter);
     }
 
     public SearchBuilder<T, R> field(String fieldName, String label) {
@@ -113,6 +127,11 @@ public class Search<T, R extends HasRole> {
       return this;
     }
 
+    public SearchBuilder<T, R> field(String fieldName, String label, String listElementCode,
+                                     ShowCondition showCondition) {
+      return field(fieldName, label, listElementCode, showCondition.toString());
+    }
+
     public SearchBuilder<T, R> field(String fieldName, String label, String listElementCode, String showCondition,
                                      String displayContextParameter) {
       fields.add(SearchField.<R>builder()
@@ -124,6 +143,12 @@ public class Search<T, R extends HasRole> {
           .build());
 
       return this;
+    }
+
+    public SearchBuilder<T, R> field(String fieldName, String label, String listElementCode,
+                                     ShowCondition showCondition,
+                                     String displayContextParameter) {
+      return field(fieldName, label, listElementCode, showCondition.toString(), displayContextParameter);
     }
 
     public SearchBuilder<T, R> field(String fieldName, String label, String listElementCode,
@@ -140,6 +165,11 @@ public class Search<T, R extends HasRole> {
     }
 
     public SearchBuilder<T, R> field(String fieldName, String label, String listElementCode,
+                                     ShowCondition showCondition, R role) {
+      return field(fieldName, label, listElementCode, showCondition.toString(), role);
+    }
+
+    public SearchBuilder<T, R> field(String fieldName, String label, String listElementCode,
                                      String showCondition, R role, String displayContextParameter) {
       fields.add(SearchField.<R>builder()
           .id(fieldName)
@@ -151,6 +181,11 @@ public class Search<T, R extends HasRole> {
           .build());
 
       return this;
+    }
+
+    public SearchBuilder<T, R> field(String fieldName, String label, String listElementCode,
+                                     ShowCondition showCondition, R role, String displayContextParameter) {
+      return field(fieldName, label, listElementCode, showCondition.toString(), role, displayContextParameter);
     }
 
     public SearchBuilder<T, R> field(String fieldName, String label, String listElementCode, SortOrder order) {
@@ -177,6 +212,12 @@ public class Search<T, R extends HasRole> {
     }
 
     public SearchBuilder<T, R> field(String fieldName, String label, String listElementCode,
+                                     ShowCondition showCondition,
+                                     SortOrder order) {
+      return field(fieldName, label, listElementCode, showCondition.toString(), order);
+    }
+
+    public SearchBuilder<T, R> field(String fieldName, String label, String listElementCode,
                                                     String showCondition, R role, SortOrder order) {
       fields.add(SearchField.<R>builder()
           .id(fieldName)
@@ -188,6 +229,12 @@ public class Search<T, R extends HasRole> {
           .build());
 
       return this;
+    }
+
+    public SearchBuilder<T, R> field(String fieldName, String label, String listElementCode,
+                                     ShowCondition showCondition,
+                                     R role, SortOrder order) {
+      return field(fieldName, label, listElementCode, showCondition.toString(), role, order);
     }
 
     public SearchBuilder<T, R> field(String fieldName, String label, String listElementCode, String showCondition,
@@ -204,6 +251,12 @@ public class Search<T, R extends HasRole> {
       return this;
     }
 
+    public SearchBuilder<T, R> field(String fieldName, String label, String listElementCode,
+                                     ShowCondition showCondition,
+                                     String displayContextParameter, SortOrder order) {
+      return field(fieldName, label, listElementCode, showCondition.toString(), displayContextParameter, order);
+    }
+
     public SearchBuilder<T, R> field(String fieldName, String label, String listElementCode, String showCondition,
                                      R role, String displayContextParameter, SortOrder order) {
       fields.add(SearchField.<R>builder()
@@ -217,6 +270,12 @@ public class Search<T, R extends HasRole> {
           .build());
 
       return this;
+    }
+
+    public SearchBuilder<T, R> field(String fieldName, String label, String listElementCode,
+                                     ShowCondition showCondition,
+                                     R role, String displayContextParameter, SortOrder order) {
+      return field(fieldName, label, listElementCode, showCondition.toString(), role, displayContextParameter, order);
     }
 
     public SearchBuilder<T, R> caseReferenceField() {

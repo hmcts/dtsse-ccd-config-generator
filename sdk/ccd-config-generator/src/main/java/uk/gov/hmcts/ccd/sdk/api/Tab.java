@@ -45,12 +45,21 @@ public class Tab<T, R extends HasRole> {
       return this;
     }
 
+    public TabBuilder<T, R> field(TypedPropertyGetter<T, ?> getter, ShowCondition showCondition,
+        String displayContext) {
+      return field(getter, showCondition.toString(), displayContext);
+    }
+
     public TabBuilder<T, R> field(TypedPropertyGetter<T, ?> getter, String showCondition) {
       return field(getter, showCondition, null);
     }
 
+    public TabBuilder<T, R> field(TypedPropertyGetter<T, ?> getter, ShowCondition showCondition) {
+      return field(getter, showCondition.toString());
+    }
+
     public TabBuilder<T, R> field(TypedPropertyGetter<T, ?> getter) {
-      return field(getter, null);
+      return field(getter, (String) null);
     }
 
     public TabBuilder<T, R> field(String fieldName) {
@@ -63,9 +72,17 @@ public class Tab<T, R extends HasRole> {
       return this;
     }
 
+    public TabBuilder<T, R> field(String fieldName, ShowCondition showCondition) {
+      return field(fieldName, showCondition.toString());
+    }
+
     public TabBuilder<T, R> label(String fieldName, String showCondition, String label) {
       fields.add(TabField.builder().id(fieldName).showCondition(showCondition).label(label).build());
       return this;
+    }
+
+    public TabBuilder<T, R> label(String fieldName, ShowCondition showCondition, String label) {
+      return label(fieldName, showCondition.toString(), label);
     }
 
     public TabBuilder<T, R> forRoles(R... roles) {
@@ -75,7 +92,7 @@ public class Tab<T, R extends HasRole> {
     }
 
     public TabBuilder<T, R> collection(TypedPropertyGetter<T, ? extends Collection> getter) {
-      return field(getter, null);
+      return field(getter, (String) null);
     }
   }
 }
