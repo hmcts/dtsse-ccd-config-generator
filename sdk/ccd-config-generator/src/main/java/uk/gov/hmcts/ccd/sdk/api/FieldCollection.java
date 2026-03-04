@@ -108,6 +108,16 @@ public class FieldCollection {
       return field(getter, DisplayContext.Optional, showCondition, true, retainHiddenValue);
     }
 
+    public FieldCollectionBuilder<Type, StateType, Parent> optional(TypedPropertyGetter<Type, ?> getter,
+        ShowCondition showCondition) {
+      return optional(getter, showCondition.toString());
+    }
+
+    public FieldCollectionBuilder<Type, StateType, Parent> optional(TypedPropertyGetter<Type, ?> getter,
+        ShowCondition showCondition, boolean retainHiddenValue) {
+      return optional(getter, showCondition.toString(), retainHiddenValue);
+    }
+
     public FieldCollectionBuilder<Type, StateType, Parent> optional(TypedPropertyGetter<Type, ?> getter) {
       return field(getter, DisplayContext.Optional, true);
     }
@@ -187,6 +197,16 @@ public class FieldCollection {
       return field(getter, DisplayContext.Mandatory, showCondition, true, retainHiddenValue);
     }
 
+    public FieldCollectionBuilder<Type, StateType, Parent> mandatory(TypedPropertyGetter<Type, ?> getter,
+        ShowCondition showCondition) {
+      return mandatory(getter, showCondition.toString());
+    }
+
+    public FieldCollectionBuilder<Type, StateType, Parent> mandatory(TypedPropertyGetter<Type, ?> getter,
+        ShowCondition showCondition, boolean retainHiddenValue) {
+      return mandatory(getter, showCondition.toString(), retainHiddenValue);
+    }
+
     public FieldCollectionBuilder<Type, StateType, Parent> mandatory(TypedPropertyGetter<Type, ?> getter) {
       return field(getter, DisplayContext.Mandatory, true);
     }
@@ -241,6 +261,16 @@ public class FieldCollection {
     public FieldCollectionBuilder<Type, StateType, Parent> readonly(TypedPropertyGetter<Type, ?> getter,
         String showCondition, boolean retainHiddenValue) {
       return field(getter, DisplayContext.ReadOnly, showCondition, true, retainHiddenValue);
+    }
+
+    public FieldCollectionBuilder<Type, StateType, Parent> readonly(TypedPropertyGetter<Type, ?> getter,
+        ShowCondition showCondition) {
+      return readonly(getter, showCondition.toString());
+    }
+
+    public FieldCollectionBuilder<Type, StateType, Parent> readonly(TypedPropertyGetter<Type, ?> getter,
+        ShowCondition showCondition, boolean retainHiddenValue) {
+      return readonly(getter, showCondition.toString(), retainHiddenValue);
     }
 
     public FieldCollectionBuilder<Type, StateType, Parent> readonly(TypedPropertyGetter<Type, ?> getter) {
@@ -375,6 +405,10 @@ public class FieldCollection {
       return this;
     }
 
+    public FieldCollectionBuilder<Type, StateType, Parent> showCondition(ShowCondition condition) {
+      return showCondition(condition.toString());
+    }
+
     public <U> FieldCollectionBuilder<U, StateType, FieldCollectionBuilder<Type, StateType, Parent>> complex(
         TypedPropertyGetter<Type, U> getter, String showCondition, String eventFieldLabel, String eventFieldHint) {
       return complex(getter, true, showCondition, eventFieldLabel, eventFieldHint, false);
@@ -490,6 +524,25 @@ public class FieldCollection {
           .showSummary(showSummary)
           .immutable());
       return this;
+    }
+
+    public FieldCollectionBuilder<Type, StateType, Parent> label(String id, String value,
+        ShowCondition showCondition) {
+      return label(id, value, showCondition.toString(), false);
+    }
+
+    public FieldCollectionBuilder<Type, StateType, Parent> label(String id, TypedLabel value) {
+      return label(id, value.toString());
+    }
+
+    public FieldCollectionBuilder<Type, StateType, Parent> label(String id, TypedLabel value,
+        ShowCondition showCondition) {
+      return label(id, value.toString(), showCondition.toString());
+    }
+
+    public FieldCollectionBuilder<Type, StateType, Parent> label(String id, TypedLabel value,
+                                                                 String showCondition) {
+      return label(id, value.toString(), showCondition);
     }
 
     public FieldCollectionBuilder<Type, StateType, Parent> page(String id, MidEvent<Type, StateType> callback) {
