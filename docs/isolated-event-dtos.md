@@ -325,6 +325,8 @@ Developer code never sees these prefixed names. All field references go through 
 ### Runtime prefix handling
 
 At runtime, the SDK transparently translates between CCD's prefixed field names and the plain DTO field names. Developer handlers never see prefixed keys.
+Frontend and test consumers get the same behavior via generated TypeScript client bindings; see
+[ts-bindings.md](./ts-bindings.md).
 
 **Start handler (outbound):** The start handler returns a plain DTO. The SDK adds the prefix before sending to CCD:
 
@@ -341,4 +343,3 @@ SDK passes to handler:        CreateClaimData { propertyAddress: {...}, feeAmoun
 ```
 
 **Mid-event callbacks** follow the same pattern: strip prefix inbound, add prefix outbound.
-

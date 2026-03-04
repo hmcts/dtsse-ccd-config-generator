@@ -1,0 +1,28 @@
+plugins {
+  id 'com.github.node-gradle.node' version '7.1.0'
+}
+
+node {
+  download = false
+  nodeProjectDir = projectDir
+}
+
+tasks.register('yarnInstall', com.github.gradle.node.yarn.task.YarnInstallTask) {
+  group = 'build'
+  description = 'Install E2E TypeScript test dependencies via Yarn.'
+}
+
+tasks.register('yarnTypecheck', com.github.gradle.node.yarn.task.YarnTask) {
+  group = 'verification'
+  description = 'Type-check generated CCD TypeScript bindings E2E tests.'
+  dependsOn tasks.named('yarnInstall')
+  dependsOn ':e2e:generateCCDConfig'
+  args = ['typecheck']
+}
+
+tasks.register('yarnTestE2eClient', com.github.gradle.node.yarn.task.YarnTask) {
+  group = 'verification'
+  description = 'Run generated CCD TypeScript client E2E tests.'
+  dependsOn tasks.named('yarnTypecheck')
+  args = ['test:e2e-client']
+}

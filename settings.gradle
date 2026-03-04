@@ -13,6 +13,9 @@ includeBuild 'sdk'
 include 'e2e'
 project(':e2e').projectDir = file('test-projects/e2e')
 
+include 'e2e-ts-tests'
+project(':e2e-ts-tests').projectDir = file('test-projects/e2e-ts-tests')
+
 include 'pcs'
 project(':pcs').projectDir = file('test-projects/pcs-api')
 

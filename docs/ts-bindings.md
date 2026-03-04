@@ -2,25 +2,31 @@
 
 ## Overview
 
-`generateCCDConfig` can now generate TypeScript event bindings as an optional output
-in the same run that writes JSON config.
+`generateCCDConfig` can optionally generate TypeScript bindings in the same run that writes CCD JSON config.
 
-This is aimed at frontend developers who need a typed way to call CCD event
-`start` and `submit` in a type safe way without handling prefixed field ids manually.
+This feature is for frontend and integration-test developers who want a typed CCD event client with plain DTO-shaped
+objects.
 
-## Developers get
+This is not specific to isolated event DTOs and should be useful for any service that wants a typed CCD integration.
+When isolated event DTOs are used, the same bindings also hide event field prefixing/unprefixing automatically.
 
-Developers work with plain DTO-shaped objects.
+For isolated event DTO behavior in Java and generated config, see
+[isolated-event-dtos.md](./isolated-event-dtos.md).
+
+## What developers get
 
 - generated DTO TypeScript interfaces
 - typed event entry points under `client.events.<eventId>`
-- typed `start`/`submit` event flow
-- automatic prefix/unprefix marshalling behind the client API
+- typed event flow for `start()`, `validate()` (mid-event), and `submit()`
+- automatic transport marshalling so developers use plain DTO field names
 
+`start()` returns unprefixed DTO fields.
+`validate()` accepts and returns unprefixed DTO fields while calling CCD mid-event callbacks.
+`submit()` accepts unprefixed DTO fields and prefixes them for CCD transport behind the scenes.
 
-## Enable in Gradle
+## Enable generation
 
-Configure the SDK plugin in the service project that owns the CCD config:
+Configure the SDK plugin in the service project that owns CCD config:
 
 ```groovy
 ccd {
@@ -40,31 +46,31 @@ ccd {
 - `outputDir` (default `build/ts-bindings`)
 - `moduleName` (default `ccd-bindings`)
 
-## Generate outputs
+## Build output
 
-Run the normal task:
+Run:
 
 ```bash
 ./gradlew generateCCDConfig
 ```
 
-When `ccd.tsBindings.enabled=true`, this single task produces both:
+When `ccd.tsBindings.enabled=true`, the same task produces:
 
-- JSON CCD definition output under `ccd.configDir`
+- CCD JSON definition output under `ccd.configDir`
 - TypeScript bindings output under `ccd.tsBindings.outputDir`
 
-No separate TS generation task is required.
+No separate TypeScript generation task is required.
 
 ## Generated files
 
-Per case type, bindings include:
+Per case type:
 
 - `dto-types.ts`
 - `event-contracts.ts`
 - `client.ts`
 - `index.ts`
 
-## Example usage
+## Example
 
 ```ts
 import Axios from 'axios';
@@ -90,6 +96,36 @@ const config: CcdClientConfig = {
 
 const client = new GeneratedCcdClient(config);
 const flow = await client.events.createPossessionClaim.start();
-flow.data.feeAmount = '£404';
-await flow.submit(flow.data);
+
+// Typed DTO object. If about-to-start is configured for this event, it may already contain pre-populated values.
+const createClaimData = flow.data;
+createClaimData.feeAmount = '£404';
+
+// Mid-event callback for the current page.
+// Returned data is typed and already unmarshalled back to plain DTO fields.
+const midEventResult = await flow.validate('enterPropertyAddress', {
+  propertyAddress: createClaimData.propertyAddress,
+});
+
+if (midEventResult.errors.length > 0) {
+  throw new Error(midEventResult.errors.join('; '));
+}
+
+await flow.submit(midEventResult.data);
 ```
+
+## Mid-event callbacks
+
+Mid-event callbacks use the same event contracts as `start()` and `submit()`.
+
+You pass:
+
+- `pageId` for the page being validated/saved
+- a partial DTO payload containing changed fields
+
+You get back:
+
+- typed DTO data for the event (including any callback mutations)
+- `errors` and `warnings` from CCD callback validation
+
+All prefixing/unprefixing is handled inside the generated client.
