@@ -48,6 +48,48 @@ tasks.register('verifyCcdMigration', Exec) {
     commandLine 'bash', '-lc', './scripts/test-migrate-ccd-data.sh'
 }
 
+def snapshotPcsTsBindingsStatus = tasks.register('snapshotPcsTsBindingsStatus') {
+    group = 'verification'
+    description = 'Captures current git status for generated PCS TypeScript bindings.'
+    doLast {
+        def statusOutput = new ByteArrayOutputStream()
+        exec {
+            commandLine 'git', '-C', 'test-projects/pcs-frontend', 'status', '--porcelain',
+                '--', 'src/main/generated/ccd'
+            standardOutput = statusOutput
+        }
+        file("$buildDir/pcs-ts-bindings-status.before").text = statusOutput.toString('UTF-8')
+    }
+}
+
+project(':pcs').tasks.matching { it.name == 'generateCCDConfig' }.configureEach {
+    mustRunAfter snapshotPcsTsBindingsStatus
+}
+
+tasks.register('verifyPcsTsBindingsUpToDate') {
+    group = 'verification'
+    description = 'Fails when :pcs:generateCCDConfig changes generated bindings in pcs-frontend.'
+    dependsOn snapshotPcsTsBindingsStatus
+    dependsOn ':pcs:generateCCDConfig'
+    doLast {
+        def afterOutput = new ByteArrayOutputStream()
+        exec {
+            commandLine 'git', '-C', 'test-projects/pcs-frontend', 'status', '--porcelain',
+                '--', 'src/main/generated/ccd'
+            standardOutput = afterOutput
+        }
+        def beforeStatus = file("$buildDir/pcs-ts-bindings-status.before").text
+        def afterStatus = afterOutput.toString('UTF-8')
+        if (afterStatus != beforeStatus) {
+            throw new GradleException(
+                "Generated TS bindings are stale. Run :pcs:generateCCDConfig and update "
+                    + "test-projects/pcs-frontend/src/main/generated/ccd.\n"
+                    + afterStatus.trim()
+            )
+        }
+    }
+}
+
 afterEvaluate {
     subprojects.each { subproject ->
         if (subproject.tasks.findByName('check')) {

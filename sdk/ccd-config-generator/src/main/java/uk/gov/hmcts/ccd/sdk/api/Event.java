@@ -65,7 +65,13 @@ public class Event<T, R extends HasRole, S> {
   }
 
   private Class dataClass;
+  private Class<?> dtoClass;
+  private String dtoPrefix;
   private static int eventCount;
+
+  public boolean isDtoEvent() {
+    return dtoClass != null;
+  }
 
   public static class EventBuilder<T, R extends HasRole, S> {
 
@@ -83,6 +89,25 @@ public class Event<T, R extends HasRole, S> {
       result.historyOnlyRoles = new HashSet<>();
       result.fieldsBuilder = FieldCollection.FieldCollectionBuilder
           .builder(result, result, dataClass, propertyUtils);
+      result.retries = new HashMap<>();
+
+      return result;
+    }
+
+    public static <T, R extends HasRole, S> EventBuilder<T, R, S> builder(
+        String id, Class dataClass, PropertyUtils propertyUtils,
+        Set<S> preStates, Set<S> postStates, Class<?> dtoClass, String dtoPrefix) {
+      EventBuilder<T, R, S> result = new EventBuilder<T, R, S>();
+      result.id(id);
+      result.preState = preStates;
+      result.postState = postStates;
+      result.dataClass = dataClass;
+      result.dtoClass(dtoClass);
+      result.dtoPrefix(dtoPrefix);
+      result.grants = HashMultimap.create();
+      result.historyOnlyRoles = new HashSet<>();
+      result.fieldsBuilder = FieldCollection.FieldCollectionBuilder
+          .builder(result, result, dataClass, propertyUtils, dtoPrefix);
       result.retries = new HashMap<>();
 
       return result;
@@ -224,6 +249,14 @@ public class Event<T, R extends HasRole, S> {
 
     private void historyOnlyRoles(Set<String> value) {
       this.historyOnlyRoles = value;
+    }
+
+    private void dtoClass(Class<?> value) {
+      this.dtoClass = value;
+    }
+
+    private void dtoPrefix(String value) {
+      this.dtoPrefix = value;
     }
 
     private void setRetries(Webhook hook, int... retries) {

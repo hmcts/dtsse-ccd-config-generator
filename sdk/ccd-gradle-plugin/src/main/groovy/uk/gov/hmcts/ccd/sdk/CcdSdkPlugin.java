@@ -10,6 +10,7 @@ import org.gradle.api.artifacts.Configuration;
 import org.gradle.api.artifacts.repositories.MavenArtifactRepository;
 import org.gradle.api.artifacts.repositories.MavenRepositoryContentDescriptor;
 import org.gradle.api.file.DirectoryProperty;
+import org.gradle.api.model.ObjectFactory;
 import org.gradle.api.plugins.JavaPlugin;
 import org.gradle.api.plugins.JavaPluginExtension;
 import org.gradle.api.tasks.JavaExec;
@@ -43,8 +44,10 @@ public class CcdSdkPlugin implements Plugin<Project> {
     CCDConfig config = project.getExtensions().create("ccd", CCDConfig.class);
     config.configDir = project.getObjects().directoryProperty();
     config.configDir.set(project.getBuildDir());
+    config.tsBindings = TsBindingsConfig.createDefaults(project.getObjects(), project);
     // Register the config directory as a task output to use Gradle's up-to-date checking.
     generate.getOutputs().dir(config.configDir);
+    generate.getOutputs().dir(config.tsBindings.outputDir);
 
     // We must use an anonymous class here for Gradle's up to date checks to work.
     generate.doFirst(new Action<Task>() {
@@ -55,6 +58,12 @@ public class CcdSdkPlugin implements Plugin<Project> {
             config.rootPackage,
             config.caseType
         ));
+        generate.systemProperty("ccd.tsBindings.enabled", Boolean.toString(config.tsBindings.enabled));
+        generate.systemProperty(
+            "ccd.tsBindings.outputDir",
+            config.tsBindings.outputDir.getAsFile().get().getAbsolutePath()
+        );
+        generate.systemProperty("ccd.tsBindings.moduleName", config.tsBindings.moduleName);
       }
     });
 
@@ -119,8 +128,28 @@ public class CcdSdkPlugin implements Plugin<Project> {
     private boolean decentralised = false;
     private boolean caseEventServiceBus = false;
     private boolean runtimeIndexing = false;
+    private TsBindingsConfig tsBindings;
 
     public CCDConfig() {
+    }
+
+    public void tsBindings(Action<? super TsBindingsConfig> action) {
+      action.execute(tsBindings);
+    }
+  }
+
+  @Data
+  static class TsBindingsConfig {
+
+    private boolean enabled = false;
+    private DirectoryProperty outputDir;
+    private String moduleName = "ccd-bindings";
+
+    public static TsBindingsConfig createDefaults(ObjectFactory objects, Project project) {
+      TsBindingsConfig config = new TsBindingsConfig();
+      config.outputDir = objects.directoryProperty();
+      config.outputDir.set(project.getLayout().getBuildDirectory().dir("ts-bindings"));
+      return config;
     }
   }
 }

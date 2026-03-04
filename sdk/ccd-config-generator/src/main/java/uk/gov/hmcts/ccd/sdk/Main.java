@@ -26,7 +26,8 @@ class Main {
     try (ConfigurableApplicationContext context = application.run(args)) {
 
       File outputDir = new File(args[0]);
-      context.getBean(CCDDefinitionGenerator.class).generateAllCaseTypesToJSON(outputDir);
+      TsBindingsOptions tsBindings = TsBindingsOptions.fromSystemProperties();
+      context.getBean(CCDDefinitionGenerator.class).generateAllCaseTypes(outputDir, tsBindings);
     }
   }
 
