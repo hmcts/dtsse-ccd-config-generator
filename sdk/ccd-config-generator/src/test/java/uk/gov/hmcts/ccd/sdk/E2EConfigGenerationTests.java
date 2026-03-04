@@ -67,6 +67,22 @@ public class E2EConfigGenerationTests {
     }
 
     @SneakyThrows
+    @Test
+    public void generatesTypedShowEvent() {
+        File expected = resourceFile("typed_show/CaseEventToFields/typedShowEvent.json");
+        File actual = new File(tmp.getRoot(), "typed_show/CaseEventToFields/typedShowEvent.json");
+        CcdConfigComparator.assertEquals(expected, actual, JSONCompareMode.STRICT);
+    }
+
+    @SneakyThrows
+    @Test
+    public void generatesTypedShowAcronymGetterEvent() {
+        File expected = resourceFile("typed_show/CaseEventToFields/typedShowAcronymGetterEvent.json");
+        File actual = new File(tmp.getRoot(), "typed_show/CaseEventToFields/typedShowAcronymGetterEvent.json");
+        CcdConfigComparator.assertEquals(expected, actual, JSONCompareMode.STRICT);
+    }
+
+    @SneakyThrows
     private File resourceFile(String resourcePath) {
         URL url = Resources.getResource(resourcePath);
         return new File(url.toURI());
