@@ -1,10 +1,8 @@
 package uk.gov.hmcts.ccd.sdk.impl;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import java.util.Optional;
-import java.util.UUID;
-import java.util.function.Supplier;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -19,6 +17,10 @@ import uk.gov.hmcts.ccd.domain.model.callbacks.AfterSubmitCallbackResponse;
 import uk.gov.hmcts.ccd.sdk.ResolvedConfigRegistry;
 import uk.gov.hmcts.ccd.sdk.api.callback.SubmitResponse;
 
+import java.util.Optional;
+import java.util.UUID;
+import java.util.function.Supplier;
+
 @Service
 @RequiredArgsConstructor
 public class CaseSubmissionService {
@@ -26,19 +28,28 @@ public class CaseSubmissionService {
   private final ResolvedConfigRegistry resolvedConfigRegistry;
   private final DecentralisedSubmissionHandler submitHandler;
   private final LegacyCallbackSubmissionHandler legacyHandler;
+  private final JsonDefinitionSubmissionHandler jsonDefinitionHandler;
   private final IdamService idam;
   private final IdempotencyEnforcer idempotencyEnforcer;
   private final TransactionTemplate transactionTemplate;
   private final AuditEventService auditEventService;
   private final CaseDataRepository caseDataRepository;
   private final CaseProjectionService caseProjectionService;
+  @Value("${ccd.legacy-json-service:false}")
+  private boolean isLegacyJsonDefinition;
 
   public DecentralisedSubmitEventResponse submit(DecentralisedCaseEvent event,
                                                  String authorisation,
                                                  UUID idempotencyKey) {
     var eventConfig = getEventConfig(event);
     var user = idam.retrieveUser(authorisation);
-    var handler = eventConfig.getSubmitHandler() != null ? submitHandler : legacyHandler;
+    CaseSubmissionHandler handler;
+
+    if (isLegacyJsonDefinition) {
+      handler = jsonDefinitionHandler;
+    } else {
+      handler = eventConfig.getSubmitHandler() != null ? submitHandler : legacyHandler;
+    }
 
     try {
       // The result of the transaction can be either an idempotency hit or a new submission.
@@ -141,7 +152,6 @@ public class CaseSubmissionService {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, ex.getMessage(), ex);
     }
   }
-
 
   private record SubmissionOutcome(
       DecentralisedCaseDetails savedCaseDetails,
