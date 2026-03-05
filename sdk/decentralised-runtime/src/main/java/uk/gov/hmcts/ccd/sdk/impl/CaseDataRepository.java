@@ -148,7 +148,7 @@ class CaseDataRepository {
                 state = excluded.state,
                 -- Update safety: never touch `data` unless explicitly provided
                 data = case when :has_data then :data::jsonb else case_data.data end,
-                supplementary_data = coalesce(case_data.supplementary_data, '{}'::jsonb)
+                supplementary_data = case_data.supplementary_data
                     || :enforced_supplementary_data::jsonb,
                 security_classification = excluded.security_classification,
             last_modified = (now() at time zone 'UTC'),
