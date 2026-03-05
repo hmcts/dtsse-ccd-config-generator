@@ -138,7 +138,7 @@ public class MyConfig implements CCDConfig<CaseData, State, UserRole> {
 ```
 
 For decentralised services using their own database for data persistence,
-`hmctsServiceId("ABA1")` sets supplementary key `HMCTSServiceId` and indexes it into Elasticsearch
+`hmctsServiceId("ABA1")` sets supplementary data key `HMCTSServiceId` to 'ABA1' and indexes it into Elasticsearch
 for global search.
 
 The implementation of `CCDConfig` should reference three classes: one for the model, one for the states and one for the user roles. These are typically named: CaseData, State and UserRole.
