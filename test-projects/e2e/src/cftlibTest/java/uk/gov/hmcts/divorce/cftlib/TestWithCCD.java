@@ -657,8 +657,11 @@ public class TestWithCCD extends CftlibTest {
         request.addHeader("Idempotency-Key", UUID.randomUUID().toString());
         request.setEntity(new StringEntity(mapper.writeValueAsString(payload), ContentType.APPLICATION_JSON));
 
-        var response = HttpClientBuilder.create().build().execute(request);
-        assertThat(response.getStatusLine().getStatusCode(), equalTo(200));
+        try (var httpClient = HttpClientBuilder.create().build();
+             var response = httpClient.execute(request)) {
+            assertThat(response.getStatusLine().getStatusCode(), equalTo(200));
+            EntityUtils.consumeQuietly(response.getEntity());
+        }
 
         Map<String, Object> row = db.queryForMap(
             """
@@ -673,22 +676,25 @@ public class TestWithCCD extends CftlibTest {
             row.get("hmcts_service_id"), equalTo(expectedHmctsServiceId));
 
         long caseDataId = ((Number) row.get("id")).longValue();
-        await()
-            .pollInterval(Duration.ofSeconds(1))
-            .atMost(Duration.ofSeconds(15))
-            .untilAsserted(() -> {
-                var esRequest = new HttpGet(ELASTICSEARCH_BASE_URL + "/e2e_cases/_doc/" + caseDataId);
-                var esResponse = HttpClientBuilder.create().build().execute(esRequest);
-                assertThat(esResponse.getStatusLine().getStatusCode(), equalTo(200));
+        try (var esClient = HttpClientBuilder.create().build()) {
+            await()
+                .pollInterval(Duration.ofSeconds(1))
+                .atMost(Duration.ofSeconds(15))
+                .untilAsserted(() -> {
+                    var esRequest = new HttpGet(ELASTICSEARCH_BASE_URL + "/e2e_cases/_doc/" + caseDataId);
+                    try (var esResponse = esClient.execute(esRequest)) {
+                        assertThat(esResponse.getStatusLine().getStatusCode(), equalTo(200));
 
-                var esPayload = mapper.readTree(EntityUtils.toString(esResponse.getEntity()));
-                var hmctsServiceId = esPayload.path("_source")
-                    .path("supplementary_data")
-                    .path("HMCTSServiceId")
-                    .asText();
-                assertThat("Elasticsearch supplementary data should include HMCTSServiceId",
-                    hmctsServiceId, equalTo(expectedHmctsServiceId));
-            });
+                        var esPayload = mapper.readTree(EntityUtils.toString(esResponse.getEntity()));
+                        var hmctsServiceId = esPayload.path("_source")
+                            .path("supplementary_data")
+                            .path("HMCTSServiceId")
+                            .asText();
+                        assertThat("Elasticsearch supplementary data should include HMCTSServiceId",
+                            hmctsServiceId, equalTo(expectedHmctsServiceId));
+                    }
+                });
+        }
     }
 
     @Test

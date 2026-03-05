@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.ImmutableSet;
-import java.lang.reflect.Field;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -294,22 +293,19 @@ class IdempotentReplayIntegrationTest {
           TestRole.class,
           Map.of(),
           ImmutableSet.copyOf(TestState.values())
-      );
+      ) {
+        @Override
+        public String getCaseType() {
+          return "TestCase";
+        }
 
-      setField(resolved, "caseType", "TestCase");
-      setField(resolved, "hmctsServiceId", "ABA1");
+        @Override
+        public String getHmctsServiceId() {
+          return "ABA1";
+        }
+      };
 
       return new ResolvedConfigRegistry(List.of(resolved));
-    }
-
-    private static void setField(Object target, String fieldName, Object value) {
-      try {
-        Field field = target.getClass().getDeclaredField(fieldName);
-        field.setAccessible(true);
-        field.set(target, value);
-      } catch (NoSuchFieldException | IllegalAccessException ex) {
-        throw new IllegalStateException("Unable to set field " + fieldName, ex);
-      }
     }
   }
 
