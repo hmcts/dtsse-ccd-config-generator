@@ -43,5 +43,4 @@ public class UnitTest {
     ResolvedCCDConfig<MissingComplex, State, UserRole> resolved = generator.resolveCCDConfig();
     assertThat(resolved.types).containsKeys(Applicant.class);
   }
-
 }
