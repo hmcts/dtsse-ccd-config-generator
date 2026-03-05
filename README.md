@@ -12,6 +12,7 @@ Write CCD configuration in Java.
   + [Setting up case states](#setting-up-case-states)
   + [Setting up user roles](#setting-up-user-roles)
   + [Adding events](#adding-events)
+  + [Typed show conditions](#typed-show-conditions)
   + [Configuring the work basket and search fields](#configuring-the-work-basket-and-search-fields)
   + [Adding tabs](#adding-tabs)
 * [Permissions](#permissions)
@@ -304,6 +305,43 @@ public class MyConfig implements CCDConfig<CaseData, State, UserRole> {
 When you need to bind a collection of CCD `ListValue<T>` within an event page, use the `.list(CaseData::getSomeList)` helper. It unwraps the `ListValue` wrapper, so you can continue with `.complex(Item::getSomething)` or `.optional(Item::getFlag)` against the item type.
 
 Callbacks are references to methods. The CCD Config Generator runtime library will handle the routing and execution of event callbacks.
+
+### Typed show conditions
+
+String-based show conditions are still fully supported. You can now also use a typed, additive API with explicit
+`...When(...)` methods so there is no ambiguity with existing overloads.
+
+```java
+import uk.gov.hmcts.ccd.sdk.api.TypedShowCondition;
+
+TypedShowCondition issued = TypedShowCondition.when(CaseData::getState).is("Issued");
+TypedShowCondition urgent = TypedShowCondition.when(CaseData::getCaseFlags).contains("URGENT");
+TypedShowCondition visible = issued.and(urgent);
+
+builder.event("review")
+  .forStateTransition(State.Submitted, State.InReview)
+  .fields()
+    .mandatoryWhen(CaseData::getReviewReason, visible)
+    .optionalWhen(CaseData::getReviewNotes, visible, true)
+    .page("2")
+      .showConditionWhen(issued)
+      .labelWhen("reviewInfo", "### Review details", issued, true);
+```
+
+Supported typed builders:
+
+* `TypedShowCondition.when(getter).is(value)`
+* `TypedShowCondition.when(getter).isAnyOf(v1, v2, ...)`
+* `TypedShowCondition.when(getter).contains(value)`
+* Composition with `.and(...)` and `.or(...)`
+
+Supported additive field/page methods:
+
+* `optionalWhen(...)`, `mandatoryWhen(...)`, `readonlyWhen(...)`
+* `listWhen(...)`, `complexWhen(...)`
+* `showConditionWhen(...)`, `labelWhen(...)`
+
+`TypedShowCondition` respects enum serialisation annotations (`@JsonProperty` / `@JsonValue`) when building values.
 
 ### Configuring the work basket and search fields
 
