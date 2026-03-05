@@ -130,11 +130,16 @@ public class MyConfig implements CCDConfig<CaseData, State, UserRole> {
   public void configure(ConfigBuilder<CaseData, State, UserRole> builder) {
     builder.caseType("MY_CASE_TYPE", "My Case Type", "Case type description");
     builder.jurisdiction("MY_JURISDICTION", "Jurisdiction", "Jurisdiction description");
+    builder.hmctsServiceId("ABA1");
     builder.setCallbackHost(System.getenv().getOrDefault("API_URL", "http://localhost:4013"));
   }
 
 }
 ```
+
+For decentralised services using their own database for data persistence,
+`hmctsServiceId("ABA1")` sets supplementary key `HMCTSServiceId` and indexes it into Elasticsearch
+for global search.
 
 The implementation of `CCDConfig` should reference three classes: one for the model, one for the states and one for the user roles. These are typically named: CaseData, State and UserRole.
 

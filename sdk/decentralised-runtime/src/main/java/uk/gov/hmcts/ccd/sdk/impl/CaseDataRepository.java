@@ -22,15 +22,18 @@ import uk.gov.hmcts.ccd.data.casedetails.SecurityClassification;
 import uk.gov.hmcts.ccd.decentralised.dto.DecentralisedCaseDetails;
 import uk.gov.hmcts.ccd.decentralised.dto.DecentralisedCaseEvent;
 import uk.gov.hmcts.ccd.domain.model.definition.CaseDetails;
+import uk.gov.hmcts.ccd.sdk.ResolvedConfigRegistry;
 
 @Slf4j
 @Service
 @RequiredArgsConstructor
 class CaseDataRepository {
   private static final TypeReference<Map<String, JsonNode>> JSON_NODE_MAP = new TypeReference<>() {};
+  private static final String HMCTS_SERVICE_ID_FIELD = "HMCTSServiceId";
 
   private final NamedParameterJdbcTemplate ndb;
   private final ObjectMapper defaultMapper;
+  private final ResolvedConfigRegistry configRegistry;
 
   public List<DecentralisedCaseDetails> getCases(List<Long> caseRefs) {
     if (caseRefs == null || caseRefs.isEmpty()) {
@@ -119,6 +122,7 @@ class CaseDataRepository {
             case_type_id,
             state,
             data,
+            supplementary_data,
             reference,
             security_classification,
             version,
@@ -132,6 +136,7 @@ class CaseDataRepository {
             :state,
             -- On INSERT: if no data was provided, start with {}
             case when :has_data then :data::jsonb else '{}'::jsonb end,
+            :enforced_supplementary_data::jsonb,
             :reference,
             :security_classification::ccd.securityclassification,
             -- Align with CCD's default for new rows
@@ -143,6 +148,8 @@ class CaseDataRepository {
                 state = excluded.state,
                 -- Update safety: never touch `data` unless explicitly provided
                 data = case when :has_data then :data::jsonb else case_data.data end,
+                supplementary_data = coalesce(case_data.supplementary_data, '{}'::jsonb)
+                    || :enforced_supplementary_data::jsonb,
                 security_classification = excluded.security_classification,
             last_modified = (now() at time zone 'UTC'),
             version = case
@@ -174,8 +181,21 @@ class CaseDataRepository {
     params.put("security_classification", event.getCaseDetails().getSecurityClassification().toString());
     params.put("version", event.getCaseDetails().getVersion());
     params.put("id", event.getInternalCaseId());
+    params.put("enforced_supplementary_data",
+        serialiseEnforcedSupplementaryData(event.getCaseDetails().getCaseTypeId()));
 
     return ndb.queryForObject(sql, params, Long.class);
+  }
+
+  @SneakyThrows
+  private String serialiseEnforcedSupplementaryData(String caseTypeId) {
+    var enforcedSupplementaryData = new HashMap<String, String>();
+    configRegistry.find(caseTypeId)
+        .map(config -> config.getHmctsServiceId())
+        .filter(value -> value != null && !value.isBlank())
+        .ifPresent(value -> enforcedSupplementaryData.put(HMCTS_SERVICE_ID_FIELD, value));
+
+    return defaultMapper.writeValueAsString(enforcedSupplementaryData);
   }
 
   @SneakyThrows

@@ -10,14 +10,17 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
+import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.web.server.ResponseStatusException;
+import uk.gov.hmcts.ccd.sdk.ResolvedConfigRegistry;
 
 class CaseDataRepositoryTest {
 
-  private final CaseDataRepository repository = spy(new CaseDataRepository(
-      mock(org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate.class),
-      new ObjectMapper()
-  ));
+  private final NamedParameterJdbcTemplate jdbc = mock(NamedParameterJdbcTemplate.class);
+  private final ResolvedConfigRegistry configRegistry = mock(ResolvedConfigRegistry.class);
+  private final ObjectMapper mapper = new ObjectMapper();
+
+  private final CaseDataRepository repository = spy(new CaseDataRepository(jdbc, mapper, configRegistry));
 
   @Test
   void getCaseWhenMissingReturnsNotFound() {
