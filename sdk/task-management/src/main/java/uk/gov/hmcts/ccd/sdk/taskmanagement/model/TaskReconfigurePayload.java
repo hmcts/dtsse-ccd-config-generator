@@ -5,15 +5,14 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.databind.PropertyNamingStrategies;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.annotation.JsonNaming;
+import java.time.OffsetDateTime;
+import java.util.List;
+import java.util.Map;
 import lombok.Builder;
 import lombok.Value;
 import lombok.extern.jackson.Jacksonized;
 import uk.gov.hmcts.ccd.sdk.taskmanagement.model.TaskPermission;
 import uk.gov.hmcts.ccd.sdk.taskmanagement.model.TaskPermissionListDeserializer;
-
-import java.time.OffsetDateTime;
-import java.util.List;
-import java.util.Map;
 
 @Value
 @Builder(toBuilder = true)
