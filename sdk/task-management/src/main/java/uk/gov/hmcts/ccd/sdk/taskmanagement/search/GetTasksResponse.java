@@ -14,7 +14,7 @@ import uk.gov.hmcts.ccd.sdk.taskmanagement.model.TaskPayload;
 @NoArgsConstructor
 @Builder
 @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
-public class TaskSearchResponse {
+public class GetTasksResponse {
   private List<TaskPayload> tasks;
   private long totalRecords;
 }

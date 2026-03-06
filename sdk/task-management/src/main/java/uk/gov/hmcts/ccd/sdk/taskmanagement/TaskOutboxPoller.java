@@ -8,6 +8,7 @@ import java.util.List;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.util.CollectionUtils;
 import uk.gov.hmcts.ccd.sdk.taskmanagement.model.TaskAction;
 import uk.gov.hmcts.ccd.sdk.taskmanagement.model.TaskPayload;
 import uk.gov.hmcts.ccd.sdk.taskmanagement.model.TaskReconfigurePayload;
@@ -17,11 +18,7 @@ import uk.gov.hmcts.ccd.sdk.taskmanagement.model.outbox.TerminateTaskOutboxPaylo
 import uk.gov.hmcts.ccd.sdk.taskmanagement.model.request.TaskCreateRequest;
 import uk.gov.hmcts.ccd.sdk.taskmanagement.model.request.TaskReconfigureRequest;
 import uk.gov.hmcts.ccd.sdk.taskmanagement.model.request.TaskTerminationRequest;
-import uk.gov.hmcts.ccd.sdk.taskmanagement.search.SearchTaskRequest;
-import uk.gov.hmcts.ccd.sdk.taskmanagement.search.TaskRequestContext;
-import uk.gov.hmcts.ccd.sdk.taskmanagement.search.TaskSearchKey;
-import uk.gov.hmcts.ccd.sdk.taskmanagement.search.TaskSearchOperator;
-import uk.gov.hmcts.ccd.sdk.taskmanagement.search.TaskSearchParameterList;
+import uk.gov.hmcts.ccd.sdk.taskmanagement.search.GetTasksResponse;
 
 @Slf4j
 public class TaskOutboxPoller {
@@ -143,41 +140,30 @@ public class TaskOutboxPoller {
   private ResponseEntity<?> terminateTask(TaskOutboxRecord record, TaskAction action) throws IOException {
     TerminateTaskOutboxPayload terminateTaskOutboxPayload =
         objectMapper.readValue(record.payload(), TerminateTaskOutboxPayload.class);
+    String caseId = terminateTaskOutboxPayload.caseId();
+    List<String> taskTypes = terminateTaskOutboxPayload.taskTypes();
 
-    var searchRequest = SearchTaskRequest.builder()
-        .searchParameters(
-            List.of(
-                TaskSearchParameterList.builder()
-                    .key(TaskSearchKey.TASK_TYPE)
-                    .operator(TaskSearchOperator.IN)
-                    .values(terminateTaskOutboxPayload.taskTypes())
-                    .build(),
-                TaskSearchParameterList.builder()
-                    .key(TaskSearchKey.CASE_ID)
-                    .operator(TaskSearchOperator.IN)
-                    .values(List.of(terminateTaskOutboxPayload.caseId()))
-                    .build()
-            )
-        )
-        .taskSortingParameters(null)
-        .requestContext(TaskRequestContext.ALL_WORK)
-        .build();
+    var tasksToTerminate = taskManagementApiClient.getTasks(caseId, taskTypes);
+    GetTasksResponse responseBody = tasksToTerminate.getBody();
 
-    var tasksToTerminate = taskManagementApiClient.searchTasks(searchRequest);
-
-    if (!tasksToTerminate.getStatusCode().is2xxSuccessful() || tasksToTerminate.getBody() == null) {
-      log.warn(
-          "Failed to retrieve tasks to terminate for case {} and task types {} with action {}",
-          terminateTaskOutboxPayload.caseId(),
-          terminateTaskOutboxPayload.taskTypes(),
-          action.getId()
-      );
+    String actionId = action.getId();
+    if (!tasksToTerminate.getStatusCode().is2xxSuccessful() || responseBody == null) {
+      log.warn("Failed to retrieve tasks to terminate for case {} and task types {} with action {}",
+            caseId, taskTypes, actionId);
       return null;
     }
 
+    List<TaskPayload> tasks = responseBody.getTasks();
+    if (CollectionUtils.isEmpty(tasks)) {
+      log.debug("There are no tasks to terminate for case {} and task types {} with action {}",
+          caseId, taskTypes, actionId);
+      // This is a slight bodge, but it signals to the caller this is not a failure scenario.
+      return ResponseEntity.ok().build();
+    }
+
     TaskTerminationRequest request = TaskTerminationRequest.builder()
-        .taskIds(tasksToTerminate.getBody().getTasks().stream().map(TaskPayload::getId).toList())
-        .action(action.getId())
+        .taskIds(tasks.stream().map(TaskPayload::getId).toList())
+        .action(actionId)
         .build();
 
     return taskManagementApiClient.terminateTask(request);

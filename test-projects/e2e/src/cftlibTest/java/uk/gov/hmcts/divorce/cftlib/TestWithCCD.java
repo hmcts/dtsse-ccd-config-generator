@@ -1510,6 +1510,43 @@ public class TestWithCCD extends CftlibTest {
     }
 
     @SneakyThrows
+    @Order(33)
+    @Test
+    public void taskRecordShouldBeMarkedProcessedWhenNoTasksToTerminateAreReturned() {
+        long caseId = createAdditionalCase("TEST_SOLICITOR@mailinator.com");
+        String caseIdValue = String.valueOf(caseId);
+        db.update("DELETE FROM ccd.task_outbox WHERE case_id = :caseId", Map.of("caseId", caseIdValue));
+
+        var startComplete = ccdApi.startEvent(
+            getAuthorisation("TEST_CASE_WORKER_USER@mailinator.com"),
+            getServiceAuth(),
+            caseIdValue,
+            API_FIRST_TASK_COMPLETE_EVENT_ID
+        );
+        var completeRequest = prepareEventRequestWithToken(
+            "TEST_CASE_WORKER_USER@mailinator.com",
+            API_FIRST_TASK_COMPLETE_EVENT_ID,
+            Map.of("note", "api-first-complete-no-tasks"),
+            startComplete.getToken(),
+            caseId
+        );
+        var completeResponse = HttpClientBuilder.create().build().execute(completeRequest);
+        assertThat(completeResponse.getStatusLine().getStatusCode(), equalTo(201));
+
+        await().atMost(Duration.ofSeconds(30)).untilAsserted(() -> {
+            Map<String, Object> processed = db.queryForMap(
+                "SELECT status, last_response_code FROM ccd.task_outbox"
+                    + " WHERE case_id = :caseId AND action = :action::ccd.task_action ORDER BY id DESC LIMIT 1",
+                Map.of("caseId", caseIdValue, "action", TaskAction.COMPLETE.getId())
+            );
+            assertThat(processed.get("status"), equalTo("PROCESSED"));
+            Object responseCode = processed.get("last_response_code");
+            assertThat(responseCode, is(notNullValue()));
+            assertThat(((Number) responseCode).intValue(), equalTo(200));
+        });
+    }
+
+    @SneakyThrows
     @Order(18)
     @Test
     public void testReturnErrorWhenCreateTestCase() {
