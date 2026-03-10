@@ -14,9 +14,12 @@ import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.EmptyResultDataAccessException;
+import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.web.server.ResponseStatusException;
 import uk.gov.hmcts.ccd.data.casedetails.SecurityClassification;
 import uk.gov.hmcts.ccd.decentralised.dto.DecentralisedAuditEvent;
 import uk.gov.hmcts.ccd.decentralised.dto.DecentralisedCaseEvent;
@@ -56,11 +59,16 @@ class AuditEventService {
         where cd.reference = :caseRef and ce.id = :eventId
         """;
 
-    return ndb.queryForObject(
-        sql,
-        Map.of("caseRef", caseRef, "eventId", eventId),
-        this::mapAuditEvent
-    );
+    try {
+      return ndb.queryForObject(
+          sql,
+          Map.of("caseRef", caseRef, "eventId", eventId),
+          this::mapAuditEvent
+      );
+    } catch (EmptyResultDataAccessException e) {
+      throw new ResponseStatusException(HttpStatus.NOT_FOUND,
+          "History event not found");
+    }
   }
 
   @SneakyThrows

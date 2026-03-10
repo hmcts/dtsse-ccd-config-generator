@@ -647,6 +647,80 @@ public class TestWithCCD extends CftlibTest {
     }
 
     @Test
+    @Order(198)
+    void persistenceUpsertShouldInjectHmctsServiceIdIntoElasticsearch() throws Exception {
+        long directCaseRef = 1888000000000001L;
+        long internalCaseId = 2888000000000001L;
+        String expectedHmctsServiceId = "ABA1";
+
+        Map<String, Object> caseDetails = new LinkedHashMap<>();
+        caseDetails.put("id", directCaseRef);
+        caseDetails.put("jurisdiction", NoFaultDivorce.JURISDICTION);
+        caseDetails.put("case_type_id", NoFaultDivorce.getCaseType());
+        caseDetails.put("state", "Submitted");
+        caseDetails.put("case_data", Map.of());
+        caseDetails.put("security_classification", "PUBLIC");
+        caseDetails.put("version", 1);
+
+        Map<String, Object> payload = Map.of(
+            "internal_case_id", internalCaseId,
+            "case_details", caseDetails,
+            "event_details", Map.of(
+                "case_type", NoFaultDivorce.getCaseType(),
+                "event_id", CaseworkerRoundTripData.CASEWORKER_ROUNDTRIP_DATA,
+                "event_name", "Populate round-trip data",
+                "summary", "HMCTS service id injection",
+                "description", "Persist via repository and verify supplementary data"
+            )
+        );
+
+        var request = new HttpPost(SERVICE_BASE_URL + "/ccd-persistence/cases");
+        request.addHeader("Content-Type", "application/json");
+        request.addHeader("Authorization", getAuthorisation("TEST_CASE_WORKER_USER@mailinator.com"));
+        request.addHeader("Idempotency-Key", UUID.randomUUID().toString());
+        request.setEntity(new StringEntity(mapper.writeValueAsString(payload), ContentType.APPLICATION_JSON));
+
+        try (var httpClient = HttpClientBuilder.create().build();
+             var response = httpClient.execute(request)) {
+            assertThat(response.getStatusLine().getStatusCode(), equalTo(200));
+            EntityUtils.consumeQuietly(response.getEntity());
+        }
+
+        Map<String, Object> row = db.queryForMap(
+            """
+                SELECT id,
+                       supplementary_data->>'HMCTSServiceId' AS hmcts_service_id
+                  FROM ccd.case_data
+                 WHERE reference = :reference
+                """,
+            Map.of("reference", directCaseRef)
+        );
+        assertThat("Persisted supplementary data should include HMCTSServiceId",
+            row.get("hmcts_service_id"), equalTo(expectedHmctsServiceId));
+
+        long caseDataId = ((Number) row.get("id")).longValue();
+        try (var esClient = HttpClientBuilder.create().build()) {
+            await()
+                .pollInterval(Duration.ofSeconds(1))
+                .atMost(Duration.ofSeconds(15))
+                .untilAsserted(() -> {
+                    var esRequest = new HttpGet(ELASTICSEARCH_BASE_URL + "/e2e_cases/_doc/" + caseDataId);
+                    try (var esResponse = esClient.execute(esRequest)) {
+                        assertThat(esResponse.getStatusLine().getStatusCode(), equalTo(200));
+
+                        var esPayload = mapper.readTree(EntityUtils.toString(esResponse.getEntity()));
+                        var hmctsServiceId = esPayload.path("_source")
+                            .path("supplementary_data")
+                            .path("HMCTSServiceId")
+                            .asText();
+                        assertThat("Elasticsearch supplementary data should include HMCTSServiceId",
+                            hmctsServiceId, equalTo(expectedHmctsServiceId));
+                    }
+                });
+        }
+    }
+
+    @Test
     @Order(199)
     void shouldPropagateSupplementaryDataChangesToElasticSearch() throws Exception {
         final int expectedFooValue = 123;

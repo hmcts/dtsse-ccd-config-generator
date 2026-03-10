@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.LocalDateTime;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -13,24 +14,31 @@ import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Service;
-import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.server.ResponseStatusException;
 import uk.gov.hmcts.ccd.data.casedetails.SecurityClassification;
 import uk.gov.hmcts.ccd.decentralised.dto.DecentralisedCaseDetails;
 import uk.gov.hmcts.ccd.decentralised.dto.DecentralisedCaseEvent;
 import uk.gov.hmcts.ccd.domain.model.definition.CaseDetails;
+import uk.gov.hmcts.ccd.sdk.ResolvedConfigRegistry;
 
 @Slf4j
 @Service
 @RequiredArgsConstructor
 class CaseDataRepository {
   private static final TypeReference<Map<String, JsonNode>> JSON_NODE_MAP = new TypeReference<>() {};
+  private static final String HMCTS_SERVICE_ID_FIELD = "HMCTSServiceId";
 
   private final NamedParameterJdbcTemplate ndb;
   private final ObjectMapper defaultMapper;
+  private final ResolvedConfigRegistry configRegistry;
 
-  public List<DecentralisedCaseDetails> getCases(@RequestParam("case-refs") List<Long> caseRefs) {
+  public List<DecentralisedCaseDetails> getCases(List<Long> caseRefs) {
+    if (caseRefs == null || caseRefs.isEmpty()) {
+      return Collections.emptyList();
+    }
     log.info("Fetching cases for references: {}", caseRefs);
     var params = Map.of("caseRefs", caseRefs);
 
@@ -52,6 +60,7 @@ class CaseDataRepository {
               case_revision
          from ccd.case_data c
          where reference IN (:caseRefs)
+         order by reference asc
         """,
         params,
         (rs, rowNum) -> mapCaseDetails(rs)
@@ -61,7 +70,8 @@ class CaseDataRepository {
   public DecentralisedCaseDetails getCase(Long caseRef) {
     var cases = getCases(List.of(caseRef));
     if (cases.isEmpty()) {
-      throw new IllegalStateException("Case reference " + caseRef + " not found");
+      throw new ResponseStatusException(HttpStatus.NOT_FOUND,
+          "Case not found");
     }
     return cases.get(0);
   }
@@ -112,6 +122,7 @@ class CaseDataRepository {
             case_type_id,
             state,
             data,
+            supplementary_data,
             reference,
             security_classification,
             version,
@@ -125,6 +136,7 @@ class CaseDataRepository {
             :state,
             -- On INSERT: if no data was provided, start with {}
             case when :has_data then :data::jsonb else '{}'::jsonb end,
+            :enforced_supplementary_data::jsonb,
             :reference,
             :security_classification::ccd.securityclassification,
             -- Align with CCD's default for new rows
@@ -136,6 +148,8 @@ class CaseDataRepository {
                 state = excluded.state,
                 -- Update safety: never touch `data` unless explicitly provided
                 data = case when :has_data then :data::jsonb else case_data.data end,
+                supplementary_data = case_data.supplementary_data
+                    || :enforced_supplementary_data::jsonb,
                 security_classification = excluded.security_classification,
             last_modified = (now() at time zone 'UTC'),
             version = case
@@ -167,8 +181,21 @@ class CaseDataRepository {
     params.put("security_classification", event.getCaseDetails().getSecurityClassification().toString());
     params.put("version", event.getCaseDetails().getVersion());
     params.put("id", event.getInternalCaseId());
+    params.put("enforced_supplementary_data",
+        serialiseEnforcedSupplementaryData(event.getCaseDetails().getCaseTypeId()));
 
     return ndb.queryForObject(sql, params, Long.class);
+  }
+
+  @SneakyThrows
+  private String serialiseEnforcedSupplementaryData(String caseTypeId) {
+    var enforcedSupplementaryData = new HashMap<String, String>();
+    configRegistry.find(caseTypeId)
+        .map(config -> config.getHmctsServiceId())
+        .filter(value -> value != null && !value.isBlank())
+        .ifPresent(value -> enforcedSupplementaryData.put(HMCTS_SERVICE_ID_FIELD, value));
+
+    return defaultMapper.writeValueAsString(enforcedSupplementaryData);
   }
 
   @SneakyThrows

@@ -6,9 +6,11 @@ import java.util.concurrent.atomic.AtomicReference;
 import lombok.RequiredArgsConstructor;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 import uk.gov.hmcts.ccd.decentralised.dto.DecentralisedUpdateSupplementaryDataResponse;
 
 @Slf4j
@@ -25,8 +27,18 @@ class SupplementaryDataService {
       long caseRef,
       SupplementaryDataUpdateRequest request
   ) {
+    var requestData = request == null ? null : request.getRequestData();
+    if (requestData == null || requestData.isEmpty()) {
+      throw new ResponseStatusException(
+          HttpStatus.BAD_REQUEST, "supplementary_data_updates must not be null or empty");
+    }
+    if (requestData.values().stream().anyMatch(operationSet -> operationSet == null || operationSet.isEmpty())) {
+      throw new ResponseStatusException(
+          HttpStatus.BAD_REQUEST, "supplementary_data_updates operation values must not be null or empty");
+    }
+
     final AtomicReference<String> result = new AtomicReference<>();
-    request.getRequestData()
+    requestData
         .forEach((operationType, operationSet) -> {
           operationSet.forEach((key, value) -> {
             var path = key.split("\\.");

@@ -23,6 +23,20 @@ class IdamServiceTest {
     assertThat(idamClient.lastToken).isEqualTo("Bearer token");
   }
 
+  @Test
+  void shouldNormaliseBearerPrefixCaseAndReuseCacheEntry() {
+    var userInfo = new UserInfo("sub", "uid", "name", "given", "family", java.util.List.of("caseworker"));
+    var idamClient = new StubIdamClient(userInfo);
+    var idamService = new IdamService(idamClient, 10, 60);
+
+    var firstCall = idamService.retrieveUser("bearer token");
+    var secondCall = idamService.retrieveUser("BEARER token");
+
+    assertThat(firstCall).isSameAs(secondCall);
+    assertThat(idamClient.callCount).isEqualTo(1);
+    assertThat(idamClient.lastToken).isEqualTo("Bearer token");
+  }
+
   private static class StubIdamClient extends IdamClient {
     private int callCount;
     private String lastToken;

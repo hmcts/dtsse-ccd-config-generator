@@ -174,6 +174,11 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements Decentralised
   }
 
   @Override
+  public void hmctsServiceId(String value) {
+    config.hmctsServiceId = value;
+  }
+
+  @Override
   public void addPreEventHook(
       Function<Map<String, Object>, Map<String, Object>> hook) {
     config.preEventHooks.add(hook);
