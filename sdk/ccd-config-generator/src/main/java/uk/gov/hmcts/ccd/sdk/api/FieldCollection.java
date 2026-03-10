@@ -112,6 +112,34 @@ public class FieldCollection {
       return field(getter, DisplayContext.Optional, true);
     }
 
+    public FieldCollectionBuilder<Type, StateType, Parent> optionalIf(TypedPropertyGetter<Type, ?> getter,
+        ShowCondition showCondition) {
+      return optional(getter, showCondition.toString());
+    }
+
+    public FieldCollectionBuilder<Type, StateType, Parent> optionalIf(TypedPropertyGetter<Type, ?> getter,
+        ShowCondition showCondition, boolean retainHiddenValue) {
+      return optional(getter, showCondition.toString(), retainHiddenValue);
+    }
+
+    public <Value> FieldCollectionBuilder<Type, StateType, Parent> optionalWithDefaultValue(
+        TypedPropertyGetter<Type, Value> getter, Value defaultValue) {
+      return field(getter, DisplayContext.Optional, null, true, defaultValue, null, null, false);
+    }
+
+    public <Value> FieldCollectionBuilder<Type, StateType, Parent> optionalWithDefaultValue(
+        TypedPropertyGetter<Type, Value> getter, Value defaultValue, String caseEventFieldLabel,
+        String caseEventFieldHint) {
+      return field(getter, DisplayContext.Optional, null, true, defaultValue, caseEventFieldLabel,
+          caseEventFieldHint, false);
+    }
+
+    public <Value> FieldCollectionBuilder<Type, StateType, Parent> optionalWithLabelAndHint(
+        TypedPropertyGetter<Type, Value> getter, String caseEventFieldLabel, String caseEventFieldHint) {
+      return field(getter, DisplayContext.Optional, null, true, null, caseEventFieldLabel, caseEventFieldHint,
+          false);
+    }
+
     public <Value> FieldCollectionBuilder<Type, StateType, Parent> optionalWithLabel(
         TypedPropertyGetter<Type, Value> getter,
         String caseEventFieldLabel) {
@@ -140,6 +168,11 @@ public class FieldCollection {
     public FieldCollectionBuilder<Type, StateType, Parent> optionalNoSummary(TypedPropertyGetter<Type, ?> getter,
          String showCondition, String caseEventFieldLabel) {
       return field(getter, DisplayContext.Optional, showCondition, false, null, caseEventFieldLabel, null, false);
+    }
+
+    public FieldCollectionBuilder<Type, StateType, Parent> optionalNoSummaryWithLabel(
+        TypedPropertyGetter<Type, ?> getter, String caseEventFieldLabel) {
+      return field(getter, DisplayContext.Optional, null, false, null, caseEventFieldLabel, null, false);
     }
 
     public <Value> FieldCollectionBuilder<Type, StateType, Parent> mandatory(TypedPropertyGetter<Type, Value> getter,
@@ -191,6 +224,27 @@ public class FieldCollection {
       return field(getter, DisplayContext.Mandatory, true);
     }
 
+    public <Value> FieldCollectionBuilder<Type, StateType, Parent> mandatoryIf(
+        TypedPropertyGetter<Type, Value> getter,
+        ShowCondition showCondition,
+        Value defaultValue,
+        String caseEventFieldLabel,
+        String caseEventFieldHint,
+        boolean retainHiddenValue) {
+      return mandatory(getter, showCondition.toString(), defaultValue, caseEventFieldLabel, caseEventFieldHint,
+          retainHiddenValue);
+    }
+
+    public FieldCollectionBuilder<Type, StateType, Parent> mandatoryIf(TypedPropertyGetter<Type, ?> getter,
+        ShowCondition showCondition) {
+      return mandatory(getter, showCondition.toString());
+    }
+
+    public FieldCollectionBuilder<Type, StateType, Parent> mandatoryIf(TypedPropertyGetter<Type, ?> getter,
+        ShowCondition showCondition, boolean retainHiddenValue) {
+      return mandatory(getter, showCondition.toString(), retainHiddenValue);
+    }
+
     public <Value> FieldCollectionBuilder<Type, StateType, Parent> mandatoryWithDisplayContextParameter(
         TypedPropertyGetter<Type, Value> getter,
         String showCondition,
@@ -233,6 +287,11 @@ public class FieldCollection {
         caseEventFieldLabel, null, false);
     }
 
+    public FieldCollectionBuilder<Type, StateType, Parent> mandatoryNoSummaryWithLabel(
+        TypedPropertyGetter<Type, ?> getter, String caseEventFieldLabel) {
+      return field(getter, DisplayContext.Mandatory, null, false, null, caseEventFieldLabel, null, false);
+    }
+
     public FieldCollectionBuilder<Type, StateType, Parent> readonly(TypedPropertyGetter<Type, ?> getter,
         String showCondition) {
       return field(getter, DisplayContext.ReadOnly, showCondition, true, false);
@@ -262,9 +321,33 @@ public class FieldCollection {
       return field(getter, DisplayContext.ReadOnly, false);
     }
 
+    public FieldCollectionBuilder<Type, StateType, Parent> readonlyNoSummaryIf(
+        TypedPropertyGetter<Type, ?> getter, ShowCondition showCondition) {
+      return readonlyNoSummary(getter, showCondition.toString());
+    }
+
+    public FieldCollectionBuilder<Type, StateType, Parent> readonlyIf(TypedPropertyGetter<Type, ?> getter,
+        ShowCondition showCondition) {
+      return readonly(getter, showCondition.toString());
+    }
+
+    public FieldCollectionBuilder<Type, StateType, Parent> readonlyIf(TypedPropertyGetter<Type, ?> getter,
+        ShowCondition showCondition, boolean retainHiddenValue) {
+      return readonly(getter, showCondition.toString(), retainHiddenValue);
+    }
+
+    public FieldCollectionBuilder<Type, StateType, Parent> hidden(TypedPropertyGetter<Type, ?> getter) {
+      return readonlyIf(getter, ShowCondition.NEVER);
+    }
+
+    public FieldCollectionBuilder<Type, StateType, Parent> hidden(TypedPropertyGetter<Type, ?> getter,
+        boolean retainHiddenValue) {
+      return readonlyIf(getter, ShowCondition.NEVER, retainHiddenValue);
+    }
+
     public <U> FieldCollectionBuilder<U, StateType, FieldCollectionBuilder<Type, StateType, Parent>> list(
         TypedPropertyGetter<Type, List<ListValue<U>>> getter) {
-      return list(getter, null);
+      return list(getter, (String) null);
     }
 
     public <U> FieldCollectionBuilder<U, StateType, FieldCollectionBuilder<Type, StateType, Parent>> list(
@@ -283,6 +366,11 @@ public class FieldCollection {
 
       fieldBuilder.mutableList();
       return fieldBuilder.complex();
+    }
+
+    public <U> FieldCollectionBuilder<U, StateType, FieldCollectionBuilder<Type, StateType, Parent>> listIf(
+        TypedPropertyGetter<Type, List<ListValue<U>>> getter, ShowCondition showCondition) {
+      return list(getter, showCondition.toString());
     }
 
     FieldBuilder<?, StateType, Type, Parent> field(String id) {
@@ -373,6 +461,10 @@ public class FieldCollection {
     public FieldCollectionBuilder<Type, StateType, Parent> showCondition(String condition) {
       pageShowConditions.put(this.pageId, condition);
       return this;
+    }
+
+    public FieldCollectionBuilder<Type, StateType, Parent> showConditionIf(ShowCondition condition) {
+      return showCondition(condition.toString());
     }
 
     public <U> FieldCollectionBuilder<U, StateType, FieldCollectionBuilder<Type, StateType, Parent>> complex(
@@ -466,6 +558,51 @@ public class FieldCollection {
       return result;
     }
 
+    public <U> FieldCollectionBuilder<U, StateType, FieldCollectionBuilder<Type, StateType, Parent>> complexIf(
+        TypedPropertyGetter<Type, U> getter,
+        ShowCondition showCondition,
+        String eventFieldLabel,
+        String eventFieldHint) {
+      return complex(getter, showCondition.toString(), eventFieldLabel, eventFieldHint);
+    }
+
+    public <U> FieldCollectionBuilder<U, StateType, FieldCollectionBuilder<Type, StateType, Parent>> complexIf(
+        TypedPropertyGetter<Type, U> getter,
+        ShowCondition showCondition,
+        String eventFieldLabel) {
+      return complex(getter, showCondition.toString(), eventFieldLabel);
+    }
+
+    public <U> FieldCollectionBuilder<U, StateType, FieldCollectionBuilder<Type, StateType, Parent>> complexIf(
+        TypedPropertyGetter<Type, U> getter, ShowCondition showCondition) {
+      return complex(getter, showCondition.toString());
+    }
+
+    public <U> FieldCollectionBuilder<U, StateType, FieldCollectionBuilder<Type, StateType, Parent>> complexIf(
+        TypedPropertyGetter<Type, U> getter,
+        ShowCondition showCondition,
+        String eventFieldLabel,
+        String eventFieldHint,
+        boolean retainHiddenValue) {
+      return complex(getter, showCondition.toString(), eventFieldLabel, eventFieldHint, retainHiddenValue);
+    }
+
+    public <U> FieldCollectionBuilder<U, StateType, FieldCollectionBuilder<Type, StateType, Parent>> complexWithLabel(
+        TypedPropertyGetter<Type, U> getter, String eventFieldLabel, String eventFieldHint) {
+      return complex(getter, true, null, eventFieldLabel, eventFieldHint, false);
+    }
+
+    public <U> FieldCollectionBuilder<U, StateType, FieldCollectionBuilder<Type, StateType, Parent>> complexWithLabel(
+        TypedPropertyGetter<Type, U> getter, String eventFieldLabel) {
+      return complex(getter, true, null, eventFieldLabel, null, false);
+    }
+
+    public <U> FieldCollectionBuilder<U, StateType, FieldCollectionBuilder<Type, StateType, Parent>> complexWithLabel(
+        TypedPropertyGetter<Type, U> getter, String eventFieldLabel, String eventFieldHint,
+        boolean retainHiddenValue) {
+      return complex(getter, true, null, eventFieldLabel, eventFieldHint, retainHiddenValue);
+    }
+
     public FieldCollectionBuilder<Type, StateType, Parent> label(String id, String value) {
       explicitFields.add(field(id).context(DisplayContext.ReadOnly).label(value).showSummary(false).immutable());
       return this;
@@ -490,6 +627,20 @@ public class FieldCollection {
           .showSummary(showSummary)
           .immutable());
       return this;
+    }
+
+    public FieldCollectionBuilder<Type, StateType, Parent> label(String id, String value, boolean showSummary) {
+      return label(id, value, (String) null, showSummary);
+    }
+
+    public FieldCollectionBuilder<Type, StateType, Parent> labelIf(String id, String value,
+        ShowCondition showCondition) {
+      return label(id, value, showCondition.toString());
+    }
+
+    public FieldCollectionBuilder<Type, StateType, Parent> labelIf(String id, String value,
+        ShowCondition showCondition, boolean showSummary) {
+      return label(id, value, showCondition.toString(), showSummary);
     }
 
     public FieldCollectionBuilder<Type, StateType, Parent> page(String id, MidEvent<Type, StateType> callback) {

@@ -7,6 +7,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 import lombok.Builder;
 import lombok.Data;
@@ -46,11 +47,15 @@ public class Tab<T, R extends HasRole> {
     }
 
     public TabBuilder<T, R> field(TypedPropertyGetter<T, ?> getter, String showCondition) {
-      return field(getter, showCondition, null);
+      String name = propertyUtils.getPropertyName(model, getter);
+      fields.add(TabField.builder().id(name).showCondition(showCondition).build());
+      return this;
     }
 
     public TabBuilder<T, R> field(TypedPropertyGetter<T, ?> getter) {
-      return field(getter, null);
+      String name = propertyUtils.getPropertyName(model, getter);
+      fields.add(TabField.builder().id(name).build());
+      return this;
     }
 
     public TabBuilder<T, R> field(String fieldName) {
@@ -63,9 +68,23 @@ public class Tab<T, R extends HasRole> {
       return this;
     }
 
+    public TabBuilder<T, R> fieldIf(TypedPropertyGetter<T, ?> getter, ShowCondition showCondition) {
+      return field(getter, Objects.requireNonNull(showCondition, "showCondition must not be null").toString());
+    }
+
     public TabBuilder<T, R> label(String fieldName, String showCondition, String label) {
       fields.add(TabField.builder().id(fieldName).showCondition(showCondition).label(label).build());
       return this;
+    }
+
+    public TabBuilder<T, R> label(String fieldName, String label) {
+      fields.add(TabField.builder().id(fieldName).label(label).build());
+      return this;
+    }
+
+    public TabBuilder<T, R> labelIf(String fieldName, ShowCondition showCondition, String label) {
+      return label(fieldName, Objects.requireNonNull(showCondition, "showCondition must not be null").toString(),
+          label);
     }
 
     public TabBuilder<T, R> forRoles(R... roles) {
@@ -74,8 +93,17 @@ public class Tab<T, R extends HasRole> {
       return this;
     }
 
+    public TabBuilder<T, R> showCondition(String showCondition) {
+      this.showCondition = showCondition;
+      return this;
+    }
+
+    public TabBuilder<T, R> showConditionIf(ShowCondition showCondition) {
+      return showCondition(showCondition.toString());
+    }
+
     public TabBuilder<T, R> collection(TypedPropertyGetter<T, ? extends Collection> getter) {
-      return field(getter, null);
+      return field(getter);
     }
   }
 }

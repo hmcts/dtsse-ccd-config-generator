@@ -140,7 +140,6 @@ class IdempotentReplayIntegrationTest {
     assertThat(result.get("existing_number")).isEqualTo("42");
     assertThat(result.get("hmcts_service_id")).isEqualTo("ABA1");
   }
-
   private void seedCaseData(int version, long revision) {
     seedCaseData(CASE_ID, CASE_REFERENCE, version, revision);
   }
@@ -159,7 +158,6 @@ class IdempotentReplayIntegrationTest {
         .internalCaseId(caseReference)
         .build();
   }
-
   private void seedCaseData(long caseId, long caseReference, int version, long revision) {
     var params = new MapSqlParameterSource()
         .addValue("id", caseId)

@@ -2,6 +2,7 @@ package uk.gov.hmcts.ccd.sdk.api;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import lombok.Builder;
 import lombok.Data;
 
@@ -219,6 +220,61 @@ public class Search<T, R extends HasRole> {
       return this;
     }
 
+    public SearchBuilder<T, R> fieldIf(TypedPropertyGetter<T, ?> getter, String label, ShowCondition showCondition) {
+      return field(getter, label, render(showCondition));
+    }
+
+    public SearchBuilder<T, R> fieldIf(TypedPropertyGetter<T, ?> getter, String label, ShowCondition showCondition,
+                                       SortOrder order, String displayContextParameter) {
+      return field(getter, label, render(showCondition), order, displayContextParameter);
+    }
+
+    public SearchBuilder<T, R> fieldIf(TypedPropertyGetter<T, ?> getter, String label, ShowCondition showCondition,
+                                       String displayContextParameter) {
+      return field(getter, label, render(showCondition), displayContextParameter);
+    }
+
+    public SearchBuilder<T, R> fieldIf(String fieldName, String label, String listElementCode,
+                                       ShowCondition showCondition) {
+      return field(fieldName, label, listElementCode, render(showCondition));
+    }
+
+    public SearchBuilder<T, R> fieldIf(String fieldName, String label, String listElementCode,
+                                       ShowCondition showCondition, String displayContextParameter) {
+      return field(fieldName, label, listElementCode, render(showCondition), displayContextParameter);
+    }
+
+    public SearchBuilder<T, R> fieldIf(String fieldName, String label, String listElementCode,
+                                       ShowCondition showCondition, R role) {
+      return field(fieldName, label, listElementCode, render(showCondition), role);
+    }
+
+    public SearchBuilder<T, R> fieldIf(String fieldName, String label, String listElementCode,
+                                       ShowCondition showCondition, R role, String displayContextParameter) {
+      return field(fieldName, label, listElementCode, render(showCondition), role, displayContextParameter);
+    }
+
+    public SearchBuilder<T, R> fieldIf(String fieldName, String label, String listElementCode,
+                                       ShowCondition showCondition, SortOrder order) {
+      return field(fieldName, label, listElementCode, render(showCondition), order);
+    }
+
+    public SearchBuilder<T, R> fieldIf(String fieldName, String label, String listElementCode,
+                                       ShowCondition showCondition, R role, SortOrder order) {
+      return field(fieldName, label, listElementCode, render(showCondition), role, order);
+    }
+
+    public SearchBuilder<T, R> fieldIf(String fieldName, String label, String listElementCode,
+                                       ShowCondition showCondition, String displayContextParameter, SortOrder order) {
+      return field(fieldName, label, listElementCode, render(showCondition), displayContextParameter, order);
+    }
+
+    public SearchBuilder<T, R> fieldIf(String fieldName, String label, String listElementCode,
+                                       ShowCondition showCondition, R role, String displayContextParameter,
+                                       SortOrder order) {
+      return field(fieldName, label, listElementCode, render(showCondition), role, displayContextParameter, order);
+    }
+
     public SearchBuilder<T, R> caseReferenceField() {
       fields.add(SearchField.<R>builder().id("[CASE_REFERENCE]").label("Case Number").build());
       return this;
@@ -237,6 +293,10 @@ public class Search<T, R extends HasRole> {
     public SearchBuilder<T, R> lastModifiedDate() {
       fields.add(SearchField.<R>builder().id("[LAST_MODIFIED_DATE]").label("Last modified date").build());
       return this;
+    }
+
+    private String render(ShowCondition showCondition) {
+      return Objects.requireNonNull(showCondition, "showCondition must not be null").toString();
     }
   }
 }

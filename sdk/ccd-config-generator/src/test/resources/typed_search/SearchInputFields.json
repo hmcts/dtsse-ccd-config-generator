@@ -1,0 +1,113 @@
+[
+  {
+    "CaseFieldID": "aliasBasic",
+    "CaseTypeID": "typed_search",
+    "DisplayOrder": 4,
+    "FieldShowCondition": "status=\"OPEN\"",
+    "Label": "Alias basic",
+    "ListElementCode": "code",
+    "LiveFrom": "01/01/2017"
+  },
+  {
+    "CaseFieldID": "aliasDisplay",
+    "CaseTypeID": "typed_search",
+    "DisplayContextParameter": "#TABLE(aliasDisplay)",
+    "DisplayOrder": 5,
+    "FieldShowCondition": "status=\"OPEN\"",
+    "Label": "Alias display",
+    "ListElementCode": "code",
+    "LiveFrom": "01/01/2017"
+  },
+  {
+    "CaseFieldID": "aliasDisplayOrdered",
+    "CaseTypeID": "typed_search",
+    "DisplayContextParameter": "#TABLE(aliasDisplayOrdered)",
+    "DisplayOrder": 10,
+    "FieldShowCondition": "status=\"OPEN\"",
+    "Label": "Alias display ordered",
+    "ListElementCode": "code",
+    "LiveFrom": "01/01/2017",
+    "ResultsOrdering": "4:ASC"
+  },
+  {
+    "CaseFieldID": "aliasOrdered",
+    "CaseTypeID": "typed_search",
+    "DisplayOrder": 8,
+    "FieldShowCondition": "status=\"OPEN\"",
+    "Label": "Alias ordered",
+    "ListElementCode": "code",
+    "LiveFrom": "01/01/2017",
+    "ResultsOrdering": "2:ASC"
+  },
+  {
+    "CaseFieldID": "aliasRole",
+    "CaseTypeID": "typed_search",
+    "DisplayOrder": 6,
+    "FieldShowCondition": "status=\"OPEN\"",
+    "Label": "Alias role",
+    "ListElementCode": "code",
+    "LiveFrom": "01/01/2017",
+    "UserRole": "caseworker-typed-search"
+  },
+  {
+    "CaseFieldID": "aliasRoleDisplay",
+    "CaseTypeID": "typed_search",
+    "DisplayContextParameter": "#TABLE(aliasRoleDisplay)",
+    "DisplayOrder": 7,
+    "FieldShowCondition": "status=\"OPEN\"",
+    "Label": "Alias role display",
+    "ListElementCode": "code",
+    "LiveFrom": "01/01/2017",
+    "UserRole": "caseworker-typed-search"
+  },
+  {
+    "CaseFieldID": "aliasRoleDisplayOrdered",
+    "CaseTypeID": "typed_search",
+    "DisplayContextParameter": "#TABLE(aliasRoleDisplayOrdered)",
+    "DisplayOrder": 11,
+    "FieldShowCondition": "status=\"OPEN\"",
+    "Label": "Alias role display ordered",
+    "ListElementCode": "code",
+    "LiveFrom": "01/01/2017",
+    "ResultsOrdering": "5:DESC",
+    "UserRole": "caseworker-typed-search"
+  },
+  {
+    "CaseFieldID": "aliasRoleOrdered",
+    "CaseTypeID": "typed_search",
+    "DisplayOrder": 9,
+    "FieldShowCondition": "status=\"OPEN\"",
+    "Label": "Alias role ordered",
+    "ListElementCode": "code",
+    "LiveFrom": "01/01/2017",
+    "ResultsOrdering": "3:DESC",
+    "UserRole": "caseworker-typed-search"
+  },
+  {
+    "CaseFieldID": "reviewedOn",
+    "CaseTypeID": "typed_search",
+    "DisplayContextParameter": "#DATETIMEDISPLAY(d MMM yyyy)",
+    "DisplayOrder": 2,
+    "FieldShowCondition": "status=\"OPEN\"",
+    "Label": "Reviewed on",
+    "LiveFrom": "01/01/2017"
+  },
+  {
+    "CaseFieldID": "status",
+    "CaseTypeID": "typed_search",
+    "DisplayOrder": 1,
+    "FieldShowCondition": "[STATE]=\"Open\"",
+    "Label": "Status",
+    "LiveFrom": "01/01/2017"
+  },
+  {
+    "CaseFieldID": "submittedOn",
+    "CaseTypeID": "typed_search",
+    "DisplayContextParameter": "#DATETIMEDISPLAY(d MMM yyyy)",
+    "DisplayOrder": 3,
+    "FieldShowCondition": "status=\"OPEN\"",
+    "Label": "Submitted on",
+    "LiveFrom": "01/01/2017",
+    "ResultsOrdering": "1:DESC"
+  }
+]

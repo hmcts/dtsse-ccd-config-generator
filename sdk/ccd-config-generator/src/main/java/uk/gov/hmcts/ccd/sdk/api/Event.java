@@ -122,6 +122,15 @@ public class Event<T, R extends HasRole, S> {
       return this;
     }
 
+    public EventBuilder<T, R, S> showCondition(String showCondition) {
+      this.showCondition = showCondition;
+      return this;
+    }
+
+    public EventBuilder<T, R, S> showConditionIf(ShowCondition showCondition) {
+      return showCondition(showCondition.toString());
+    }
+
     public EventBuilder<T, R, S> publishToCamunda(boolean publishToCamunda) {
       this.publishToCamunda = publishToCamunda;
       return this;

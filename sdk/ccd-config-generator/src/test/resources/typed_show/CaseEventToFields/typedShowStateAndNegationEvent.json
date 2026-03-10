@@ -1,0 +1,42 @@
+[
+  {
+    "CaseEventID": "typedShowStateAndNegationEvent",
+    "CaseFieldID": "notes",
+    "CaseTypeID": "typed_show",
+    "DisplayContext": "OPTIONAL",
+    "FieldShowCondition": "[STATE]!=\"Submitted\"",
+    "LiveFrom": "01/01/2017",
+    "PageColumnNumber": 1,
+    "PageDisplayOrder": 1,
+    "PageFieldDisplayOrder": 2,
+    "PageID": 1,
+    "RetainHiddenValue": "Y",
+    "ShowSummaryChangeOption": "Y"
+  },
+  {
+    "CaseEventID": "typedShowStateAndNegationEvent",
+    "CaseFieldID": "title",
+    "CaseTypeID": "typed_show",
+    "DisplayContext": "MANDATORY",
+    "FieldShowCondition": "visibility!=\"HIDE\" AND [STATE]=\"Open\"",
+    "LiveFrom": "01/01/2017",
+    "PageColumnNumber": 1,
+    "PageDisplayOrder": 1,
+    "PageFieldDisplayOrder": 1,
+    "PageID": 1,
+    "ShowSummaryChangeOption": "Y"
+  },
+  {
+    "CaseEventID": "typedShowStateAndNegationEvent",
+    "CaseFieldID": "typedStateLabel",
+    "CaseTypeID": "typed_show",
+    "DisplayContext": "READONLY",
+    "FieldShowCondition": "[STATE]=\"Open\"",
+    "LiveFrom": "01/01/2017",
+    "PageColumnNumber": 1,
+    "PageDisplayOrder": 1,
+    "PageFieldDisplayOrder": 3,
+    "PageID": 1,
+    "ShowSummaryChangeOption": "Y"
+  }
+]

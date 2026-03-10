@@ -12,6 +12,7 @@ Write CCD configuration in Java.
   + [Setting up case states](#setting-up-case-states)
   + [Setting up user roles](#setting-up-user-roles)
   + [Adding events](#adding-events)
+  + [Typed show conditions](#typed-show-conditions)
   + [Configuring the work basket and search fields](#configuring-the-work-basket-and-search-fields)
   + [Adding tabs](#adding-tabs)
 * [Permissions](#permissions)
@@ -140,7 +141,6 @@ public class MyConfig implements CCDConfig<CaseData, State, UserRole> {
 For decentralised services using their own database for data persistence,
 `hmctsServiceId("ABA1")` sets supplementary data key `HMCTSServiceId` to 'ABA1' and indexes it into Elasticsearch
 for global search.
-
 The implementation of `CCDConfig` should reference three classes: one for the model, one for the states and one for the user roles. These are typically named: CaseData, State and UserRole.
 
 ### Setting up the model
@@ -305,6 +305,43 @@ When you need to bind a collection of CCD `ListValue<T>` within an event page, u
 
 Callbacks are references to methods. The CCD Config Generator runtime library will handle the routing and execution of event callbacks.
 
+### Typed show conditions
+
+String-based show conditions are still fully supported. You can also use a typed `ShowCondition` API.
+
+```java
+import uk.gov.hmcts.ccd.sdk.api.ShowCondition;
+
+ShowCondition issued = ShowCondition.when(CaseData::getState).is("Issued");
+ShowCondition urgent = ShowCondition.when(CaseData::getCaseFlags).contains("URGENT");
+ShowCondition visible = issued.and(urgent);
+
+builder.event("review")
+  .forStateTransition(State.Submitted, State.InReview)
+  .fields()
+    .mandatoryIf(CaseData::getReviewReason, visible)
+    .optionalIf(CaseData::getReviewNotes, visible, true)
+    .page("2")
+      .showConditionIf(issued)
+      .labelIf("reviewInfo", "### Review details", issued, true);
+```
+
+Supported typed builders:
+
+* `ShowCondition.when(getter).is(value)`
+* `ShowCondition.when(getter).isNot(value)`
+* `ShowCondition.when(getter).isAnyOf(v1, v2, ...)`
+* `ShowCondition.when(getter).contains(value)`
+* `ShowCondition.stateIs(value)` and `ShowCondition.stateIsNot(value)`
+* Composition with `.and(...)` and `.or(...)`
+
+Supported field/page overloads:
+
+* `optionalIf(..., ShowCondition)`, `mandatoryIf(..., ShowCondition)`, `readonlyIf(..., ShowCondition)`
+* `listIf(..., ShowCondition)`, `complexIf(..., ShowCondition, ...)`
+* `showConditionIf(ShowCondition)`, `labelIf(..., ShowCondition, ...)`
+
+`ShowCondition` respects enum serialisation annotations (`@JsonProperty` / `@JsonValue`) when building values.
 ### Configuring the work basket and search fields
 
 There are five methods on the `ConfigBuilder` that allow the configuration of work basket input, work basket results, search input, search results and search cases fields. They all follow the same API:

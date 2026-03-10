@@ -26,6 +26,7 @@ import java.util.Set;
 import org.springframework.stereotype.Component;
 import uk.gov.hmcts.ccd.sdk.api.SearchCriteriaField;
 import uk.gov.hmcts.ccd.sdk.api.SearchPartyField;
+import uk.gov.hmcts.ccd.sdk.api.ShowCondition;
 import uk.gov.hmcts.ccd.sdk.api.callback.AboutToStartOrSubmitResponse;
 import uk.gov.hmcts.ccd.sdk.api.CaseDetails;
 import uk.gov.hmcts.ccd.sdk.api.ConfigBuilder;
@@ -99,12 +100,12 @@ public class CCDConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<CaseData, S
           .complex(HearingPreferences::getLocationPreferences)
             .optional(LocationPreferences::getLocal)
             .done()
-          .complex(HearingPreferences::getOrganisationPolicy, null, "Event label", "Event hint")
+          .complexWithLabel(HearingPreferences::getOrganisationPolicy, "Event label", "Event hint")
             .complex(OrganisationPolicy::getOrganisation)
               .mandatory(Organisation::getOrganisationId)
               .done()
-            .optional(OrganisationPolicy::getOrgPolicyCaseAssignedRole, null, CCD_SOLICITOR)
-            .optional(OrganisationPolicy::getOrgPolicyReference, null, null, "Org ref", "Sol org ref")
+            .optionalWithDefaultValue(OrganisationPolicy::getOrgPolicyCaseAssignedRole, CCD_SOLICITOR)
+            .optionalWithLabelAndHint(OrganisationPolicy::getOrgPolicyReference, "Org ref", "Sol org ref")
             .done()
           .done()
         .optional(CaseData::getCaseName)
@@ -197,7 +198,8 @@ public class CCDConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<CaseData, S
         .field(CaseData::getDateOfIssue, "Date of Issue", LOCAL_AUTHORITY)
         .field("hearingPreferencesWelsh", "Is in Welsh")
         .caseReferenceField()
-        .field("allocatedJudge", "Allocated Judge", "judgeTitle", "hearingPreferencesWelsh=\"no\"")
+        .fieldIf("allocatedJudge", "Allocated Judge", "judgeTitle",
+            ShowCondition.field("hearingPreferencesWelsh").is("no"))
         .field(CaseData::getDateSubmitted, "Date submitted");
   }
 
@@ -235,7 +237,8 @@ public class CCDConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<CaseData, S
         .field("hearingPreferencesWelsh", "Is in Welsh")
         .stateField()
         .field(CaseData::getCaseLocalAuthority, "Local authority")
-        .field("dateAndTimeSubmitted", "Date submitted", null, null, "#DATETIMEDISPLAY(d  MMMM yyyy)", FIRST.DESCENDING)
+        .field("dateAndTimeSubmitted", "Date submitted", null, (String) null,
+            "#DATETIMEDISPLAY(d  MMMM yyyy)", FIRST.DESCENDING)
         .field("evidenceHandled", "Supplementary evidence handled", SECOND.ASCENDING);
   }
 
@@ -333,13 +336,13 @@ public class CCDConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<CaseData, S
         .showCondition("allocatedJudge=\"\"")
         .fields()
         .page("AllocatedJudge")
-        .complex(CaseData::getOrganisationPolicy, null, "Event label", "Event hint", true)
+        .complexWithLabel(CaseData::getOrganisationPolicy, "Event label", "Event hint", true)
           .complex(OrganisationPolicy::getOrganisation)
             .mandatory(Organisation::getOrganisationId, "allocatedJudge=\"*\"", true)
-            .mandatoryNoSummary(Organisation::getOrganisationName, null, "Organisation Name")
+            .mandatoryNoSummaryWithLabel(Organisation::getOrganisationName, "Organisation Name")
           .done()
-          .optional(OrganisationPolicy::getOrgPolicyCaseAssignedRole, null, CCD_SOLICITOR)
-          .optional(OrganisationPolicy::getOrgPolicyReference, null, null, "Org ref", "Sol org ref")
+          .optionalWithDefaultValue(OrganisationPolicy::getOrgPolicyCaseAssignedRole, CCD_SOLICITOR)
+          .optionalWithLabelAndHint(OrganisationPolicy::getOrgPolicyReference, "Org ref", "Sol org ref")
         .done()
         .label("allocatedJudgeLabel", "Allocated Judge")
         .complex(CaseData::getAllocatedJudge, false)
@@ -347,11 +350,11 @@ public class CCDConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<CaseData, S
           .mandatory(Judge::getOtherTitle)
           .mandatory(Judge::getJudgeLastName)
           .mandatory(Judge::getJudgeFullName)
-          .optionalNoSummary(Judge::getJudgeEmailId, null, "Judge email id")
+          .optionalNoSummaryWithLabel(Judge::getJudgeEmailId, "Judge email id")
         .done()
-        .optional(CaseData::getCaseName, null, null, "Allocated case name", "A hint")
+        .optionalWithLabelAndHint(CaseData::getCaseName, "Allocated case name", "A hint")
         .page("<Notes>", this::checkCaseNotes)
-          .label("caseNotesLabel1","###Case notes",null,true)
+          .label("caseNotesLabel1","###Case notes", true)
           .mandatory(CaseData::getCaseNotes);
 
     builder.event("set-a-field")
