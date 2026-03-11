@@ -28,6 +28,7 @@ import uk.gov.hmcts.ccd.sdk.api.Event;
 import uk.gov.hmcts.ccd.sdk.api.HasRole;
 import uk.gov.hmcts.ccd.sdk.api.Label;
 import uk.gov.hmcts.ccd.sdk.type.FieldType;
+import uk.gov.hmcts.ccd.sdk.type.Flags;
 
 @Component
 class CaseFieldGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, S, R> {
@@ -171,6 +172,10 @@ class CaseFieldGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
     }
 
     applyFieldType(ownerClass, field, target, annotation);
+
+    if (Flags.class.equals(field.getType())) {
+      target.put("RetainHiddenValue", "Y");
+    }
   }
 
   private static void applyFieldType(

@@ -1,0 +1,26 @@
+[
+  {
+    "CaseEventID": "createFlags",
+    "CaseFieldID": "parties",
+    "DisplayContext": "OPTIONAL",
+    "FieldShowCondition": "flagLauncher = \"ALWAYS_HIDE\"",
+    "ListElementCode": "firstName",
+    "LiveFrom": "01/01/2017"
+  },
+  {
+    "CaseEventID": "createFlags",
+    "CaseFieldID": "parties",
+    "DisplayContext": "OPTIONAL",
+    "FieldShowCondition": "flagLauncher = \"ALWAYS_HIDE\"",
+    "ListElementCode": "flags",
+    "LiveFrom": "01/01/2017"
+  },
+  {
+    "CaseEventID": "createFlags",
+    "CaseFieldID": "parties",
+    "DisplayContext": "OPTIONAL",
+    "FieldShowCondition": "flagLauncher = \"ALWAYS_HIDE\"",
+    "ListElementCode": "lastName",
+    "LiveFrom": "01/01/2017"
+  }
+]
