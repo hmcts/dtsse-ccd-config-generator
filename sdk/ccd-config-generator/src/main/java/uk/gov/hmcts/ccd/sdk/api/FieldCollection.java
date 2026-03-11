@@ -2,9 +2,9 @@ package uk.gov.hmcts.ccd.sdk.api;
 
 import static com.google.common.base.Strings.isNullOrEmpty;
 import static org.apache.commons.lang3.StringUtils.capitalize;
-import static uk.gov.hmcts.ccd.sdk.FieldUtils.isUnwrappedField;
 import static uk.gov.hmcts.ccd.sdk.FieldUtils.getCaseFields;
 import static uk.gov.hmcts.ccd.sdk.FieldUtils.getFieldId;
+import static uk.gov.hmcts.ccd.sdk.FieldUtils.isUnwrappedField;
 
 import com.fasterxml.jackson.annotation.JsonUnwrapped;
 import java.util.ArrayList;
@@ -269,6 +269,24 @@ public class FieldCollection {
       return list(getter, null);
     }
 
+    public <U> FieldCollectionBuilder<U, StateType, FieldCollectionBuilder<Type, StateType, Parent>> list(
+        TypedPropertyGetter<Type, List<ListValue<U>>> getter, String showCondition) {
+      String id = propertyUtils.getPropertyName(dataClass, getter);
+      Class<U> itemClass = propertyUtils.getListValueElementType(dataClass, getter);
+      FieldBuilder<U, StateType, Type, Parent> fieldBuilder = createField(id, itemClass);
+      fieldBuilder.showCondition(showCondition);
+      fieldBuilder.showSummary();
+
+      CCD cf = propertyUtils.getAnnotationOfProperty(dataClass, getter, CCD.class);
+      if (null != cf) {
+        fieldBuilder.label(cf.label());
+        fieldBuilder.hint(cf.hint());
+      }
+
+      fieldBuilder.mutableList();
+      return fieldBuilder.complex();
+    }
+
     public <U> FieldCollectionBuilder<U, StateType, FieldCollectionBuilder<Type, StateType, Parent>> optionalList(
         TypedPropertyGetter<Type, List<ListValue<U>>> getter) {
       return optionalList(getter, null);
@@ -304,24 +322,6 @@ public class FieldCollection {
               .showCondition(showCondition)
               .showSummary(true));
       return result;
-    }
-
-    public <U> FieldCollectionBuilder<U, StateType, FieldCollectionBuilder<Type, StateType, Parent>> list(
-        TypedPropertyGetter<Type, List<ListValue<U>>> getter, String showCondition) {
-      String id = propertyUtils.getPropertyName(dataClass, getter);
-      Class<U> itemClass = propertyUtils.getListValueElementType(dataClass, getter);
-      FieldBuilder<U, StateType, Type, Parent> fieldBuilder = createField(id, itemClass);
-      fieldBuilder.showCondition(showCondition);
-      fieldBuilder.showSummary();
-
-      CCD cf = propertyUtils.getAnnotationOfProperty(dataClass, getter, CCD.class);
-      if (null != cf) {
-        fieldBuilder.label(cf.label());
-        fieldBuilder.hint(cf.hint());
-      }
-
-      fieldBuilder.mutableList();
-      return fieldBuilder.complex();
     }
 
     FieldBuilder<?, StateType, Type, Parent> field(String id) {

@@ -104,6 +104,7 @@
     "ID": "applicantFlags",
     "Label": " ",
     "LiveFrom": "01/01/2017",
+    "RetainHiddenValue": "Y",
     "SecurityClassification": "Public"
   },
   {
@@ -173,6 +174,7 @@
     "ID": "caseFlags",
     "Label": " ",
     "LiveFrom": "01/01/2017",
+    "RetainHiddenValue": "Y",
     "SecurityClassification": "Public"
   },
   {
@@ -892,6 +894,7 @@
     "ID": "representativeFlags",
     "Label": " ",
     "LiveFrom": "01/01/2017",
+    "RetainHiddenValue": "Y",
     "SecurityClassification": "Public"
   },
   {
@@ -1020,6 +1023,7 @@
     "ID": "subjectFlags",
     "Label": " ",
     "LiveFrom": "01/01/2017",
+    "RetainHiddenValue": "Y",
     "SecurityClassification": "Public"
   },
   {
