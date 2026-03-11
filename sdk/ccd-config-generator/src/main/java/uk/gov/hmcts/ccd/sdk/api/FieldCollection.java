@@ -2,8 +2,6 @@ package uk.gov.hmcts.ccd.sdk.api;
 
 import static com.google.common.base.Strings.isNullOrEmpty;
 import static org.apache.commons.lang3.StringUtils.capitalize;
-import static uk.gov.hmcts.ccd.sdk.FieldUtils.getCaseFields;
-import static uk.gov.hmcts.ccd.sdk.FieldUtils.getFieldId;
 import static uk.gov.hmcts.ccd.sdk.FieldUtils.isUnwrappedField;
 
 import com.fasterxml.jackson.annotation.JsonUnwrapped;
@@ -285,43 +283,6 @@ public class FieldCollection {
 
       fieldBuilder.mutableList();
       return fieldBuilder.complex();
-    }
-
-    public <U> FieldCollectionBuilder<U, StateType, FieldCollectionBuilder<Type, StateType, Parent>> optionalList(
-        TypedPropertyGetter<Type, List<ListValue<U>>> getter) {
-      return optionalList(getter, null);
-    }
-
-    public <U> FieldCollectionBuilder<U, StateType, FieldCollectionBuilder<Type, StateType, Parent>> optionalList(
-        TypedPropertyGetter<Type, List<ListValue<U>>> getter, String showCondition) {
-      return optionalList(getter, showCondition, false);
-    }
-
-    public <U> FieldCollectionBuilder<U, StateType, FieldCollectionBuilder<Type, StateType, Parent>> optionalList(
-        TypedPropertyGetter<Type, List<ListValue<U>>> getter, String showCondition, boolean retainHiddenValue) {
-      String id = propertyUtils.getPropertyName(dataClass, getter);
-      Class<U> itemClass = propertyUtils.getListValueElementType(dataClass, getter);
-      FieldBuilder<U, StateType, Type, Parent> fieldBuilder = createField(id, itemClass);
-      fieldBuilder.optional();
-      fieldBuilder.showCondition(showCondition);
-      fieldBuilder.showSummary();
-      fieldBuilder.retainHiddenValue(retainHiddenValue);
-
-      CCD cf = propertyUtils.getAnnotationOfProperty(dataClass, getter, CCD.class);
-      if (null != cf) {
-        fieldBuilder.label(cf.label());
-        fieldBuilder.hint(cf.hint());
-      }
-
-      fieldBuilder.mutableList();
-      FieldCollectionBuilder<U, StateType, FieldCollectionBuilder<Type, StateType, Parent>> result =
-          fieldBuilder.complex();
-      getCaseFields(itemClass).forEach(field ->
-          result.createField(getFieldId(field), field.getType())
-              .context(DisplayContext.Optional)
-              .showCondition(showCondition)
-              .showSummary(true));
-      return result;
     }
 
     FieldBuilder<?, StateType, Type, Parent> field(String id) {

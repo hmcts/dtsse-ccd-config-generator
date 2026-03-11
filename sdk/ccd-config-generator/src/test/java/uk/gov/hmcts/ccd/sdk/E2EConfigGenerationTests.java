@@ -56,26 +56,6 @@ public class E2EConfigGenerationTests {
         CcdConfigComparator.assertEquivalent(expected, actual);
     }
 
-    @SneakyThrows
-    @Test
-    public void generatesOptionalListConfig() {
-        File expectedCaseEventToFields = resourceFile("OptionalList/CaseEventToFields/createFlags.json");
-        File actualCaseEventToFields = new File(tmp.getRoot(), "OptionalList/CaseEventToFields/createFlags.json");
-        CcdConfigComparator.assertEquals(expectedCaseEventToFields, actualCaseEventToFields, JSONCompareMode.STRICT);
-
-        File expectedCaseEventToComplexTypes = resourceFile("OptionalList/CaseEventToComplexTypes/createFlags/parties.json");
-        File actualCaseEventToComplexTypes = new File(tmp.getRoot(), "OptionalList/CaseEventToComplexTypes/createFlags/parties.json");
-        CcdConfigComparator.assertEquals(
-            expectedCaseEventToComplexTypes,
-            actualCaseEventToComplexTypes,
-            JSONCompareMode.STRICT
-        );
-
-        File expectedComplexTypes = resourceFile("OptionalList/ComplexTypes/TestParty.json");
-        File actualComplexTypes = new File(tmp.getRoot(), "OptionalList/ComplexTypes/TestParty.json");
-        CcdConfigComparator.assertEquals(expectedComplexTypes, actualComplexTypes, JSONCompareMode.STRICT);
-    }
-
     @Test
     public void generatesDerivedConfig() {
         Map<String, File> actual = CcdConfigComparator.dirToMap(new File(tmp.getRoot(), "derived"));

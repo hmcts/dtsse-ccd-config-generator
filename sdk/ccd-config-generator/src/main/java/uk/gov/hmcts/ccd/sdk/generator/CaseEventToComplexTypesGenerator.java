@@ -78,7 +78,7 @@ class CaseEventToComplexTypesGenerator<T, S, R extends HasRole> implements
           data.put("CaseFieldID", rfn);
           data.put("DisplayContext", field.getContext().toString().toUpperCase());
           data.put("ListElementCode", locator + field.getId());
-          applyMetadata(data, field);
+          CaseEventToFieldsGenerator.applyMetadata(data, field, "EventElementLabel", "EventHintText");
           data.put("FieldDisplayOrder", field.getFieldDisplayOrder());
           if (!Strings.isNullOrEmpty(field.getHint())) {
             data.put("HintText", field.getHint());
@@ -94,20 +94,6 @@ class CaseEventToComplexTypesGenerator<T, S, R extends HasRole> implements
           expand(complex.getComplexFields(), entries, eventId, rfn, locator);
         }
       }
-    }
-  }
-
-  private static void applyMetadata(Map<String, Object> target, Field field) {
-    if (field.getShowCondition() != null) {
-      target.put("FieldShowCondition", field.getShowCondition());
-    }
-
-    if (field.getCaseEventFieldLabel() != null) {
-      target.put("EventElementLabel", field.getCaseEventFieldLabel());
-    }
-
-    if (field.getCaseEventFieldHint() != null) {
-      target.put("EventHintText", field.getCaseEventFieldHint());
     }
   }
 }
