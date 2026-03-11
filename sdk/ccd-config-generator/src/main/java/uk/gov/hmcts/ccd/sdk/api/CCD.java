@@ -50,4 +50,6 @@ public @interface CCD {
   int min() default Integer.MIN_VALUE;
 
   int max() default Integer.MAX_VALUE;
+
+  boolean retainHiddenValue() default false;
 }

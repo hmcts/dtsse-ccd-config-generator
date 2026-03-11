@@ -18,7 +18,6 @@
     "FieldType": "Flags",
     "ID": "TestParty",
     "ListElementCode": "flags",
-    "LiveFrom": "01/01/2017",
-    "RetainHiddenValue": "Y"
+    "LiveFrom": "01/01/2017"
   }
 ]
