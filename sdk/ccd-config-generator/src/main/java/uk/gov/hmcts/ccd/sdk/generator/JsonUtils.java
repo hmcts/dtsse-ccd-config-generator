@@ -129,6 +129,9 @@ public class JsonUtils {
     if (annotation.max() < Integer.MAX_VALUE) {
       target.put("Max", annotation.max());
     }
+    if (annotation.retainHiddenValue()) {
+      target.put("RetainHiddenValue", "Y");
+    }
   }
 
   static void ensureDefaultLabel(Map<String, Object> target) {
