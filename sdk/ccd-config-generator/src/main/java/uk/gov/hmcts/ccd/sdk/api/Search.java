@@ -224,19 +224,5 @@ public class Search<T, R extends HasRole> {
       return this;
     }
 
-    public SearchBuilder<T, R> stateField() {
-      fields.add(SearchField.<R>builder().id("[STATE]").label("State").build());
-      return this;
-    }
-
-    public SearchBuilder<T, R> createdDateField() {
-      fields.add(SearchField.<R>builder().id("[CREATED_DATE]").label("Created date").build());
-      return this;
-    }
-
-    public SearchBuilder<T, R> lastModifiedDate() {
-      fields.add(SearchField.<R>builder().id("[LAST_MODIFIED_DATE]").label("Last modified date").build());
-      return this;
-    }
   }
 }

@@ -183,7 +183,7 @@ public class CCDConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<CaseData, S
         .field(CaseData::getCaseName, "Case name")
         .field(CaseData::getFamilyManCaseNumber, "FamilyMan case number")
         .field("hearingPreferencesWelsh", "Is in Welsh")
-        .stateField()
+        .field("[STATE]", "State")
         .field(CaseData::getCaseLocalAuthority, "Local authority")
         .field("dateAndTimeSubmitted", "Date submitted");
   }
@@ -233,7 +233,7 @@ public class CCDConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<CaseData, S
         .field(CaseData::getCaseName, "Case name")
         .field(CaseData::getFamilyManCaseNumber, "FamilyMan case number")
         .field("hearingPreferencesWelsh", "Is in Welsh")
-        .stateField()
+        .field("[STATE]", "State")
         .field(CaseData::getCaseLocalAuthority, "Local authority")
         .field("dateAndTimeSubmitted", "Date submitted", null, null, "#DATETIMEDISPLAY(d  MMMM yyyy)", FIRST.DESCENDING)
         .field("evidenceHandled", "Supplementary evidence handled", SECOND.ASCENDING);
