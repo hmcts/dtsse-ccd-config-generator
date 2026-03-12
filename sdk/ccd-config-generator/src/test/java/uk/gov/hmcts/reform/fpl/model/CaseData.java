@@ -373,6 +373,7 @@ public class CaseData {
   private final String caseNote;
   @CCD(searchable = false)
   private final List<Element<CaseNote>> caseNotes;
+  @CCD(retainHiddenValue = true)
   private final OrganisationPolicy<UserRole> organisationPolicy;
 
   @JsonUnwrapped()

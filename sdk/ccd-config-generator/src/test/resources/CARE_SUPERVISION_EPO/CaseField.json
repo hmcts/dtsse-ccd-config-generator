@@ -806,6 +806,7 @@
     "ID": "organisationPolicy",
     "Label": " ",
     "LiveFrom": "01/01/2017",
+    "RetainHiddenValue" : "Y",
     "SecurityClassification": "Public"
   },
   {
