@@ -5,6 +5,7 @@ import static uk.gov.hmcts.ccd.sdk.api.Permission.C;
 import static uk.gov.hmcts.ccd.sdk.api.Permission.CRU;
 import static uk.gov.hmcts.ccd.sdk.api.Permission.R;
 import static uk.gov.hmcts.ccd.sdk.api.SortOrder.*;
+import static java.util.List.of;
 import static uk.gov.hmcts.reform.fpl.enums.State.Deleted;
 import static uk.gov.hmcts.reform.fpl.enums.State.Gatekeeping;
 import static uk.gov.hmcts.reform.fpl.enums.State.Open;
@@ -25,6 +26,7 @@ import java.util.List;
 import java.util.Set;
 import org.springframework.stereotype.Component;
 import uk.gov.hmcts.ccd.sdk.api.SearchCriteriaField;
+import uk.gov.hmcts.ccd.sdk.api.SearchField;
 import uk.gov.hmcts.ccd.sdk.api.SearchPartyField;
 import uk.gov.hmcts.ccd.sdk.api.callback.AboutToStartOrSubmitResponse;
 import uk.gov.hmcts.ccd.sdk.api.CaseDetails;
@@ -46,6 +48,74 @@ import uk.gov.hmcts.reform.fpl.model.LocationPreferences;
 // The CaseData type parameter tells the generator which class represents your case model.
 @Component
 public class CCDConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<CaseData, State, UserRole> {
+
+  private static final List<SearchField<UserRole>> SEARCH_RESULT_FIELD_LIST = of(
+      SearchField.<UserRole>builder().id("caseName").label("Case name").build(),
+      SearchField.<UserRole>builder().id("familyManCaseNumber").label("FamilyMan case number").build(),
+      SearchField.<UserRole>builder().id("hearingPreferencesWelsh").label("Is in Welsh").build(),
+      SearchField.<UserRole>builder().id("[STATE]").label("State").build(),
+      SearchField.<UserRole>builder().id("caseLocalAuthority").label("Local authority").build(),
+      SearchField.<UserRole>builder().id("dateAndTimeSubmitted").label("Date submitted").build()
+  );
+
+  private static final List<SearchField<UserRole>> SEARCH_INPUT_FIELD_LIST = of(
+      SearchField.<UserRole>builder().id("caseLocalAuthority").label("Local authority").build(),
+      SearchField.<UserRole>builder().id("caseName").label("Case name").build(),
+      SearchField.<UserRole>builder().id("familyManCaseNumber").label("FamilyMan case number").build(),
+      SearchField.<UserRole>builder().id("dateOfIssue").label("Date of Issue").userRole(HMCTS_ADMIN).build(),
+      SearchField.<UserRole>builder().id("dateOfIssue").label("Date of Issue").userRole(LOCAL_AUTHORITY).build(),
+      SearchField.<UserRole>builder().id("hearingPreferencesWelsh").label("Is in Welsh").build(),
+      SearchField.<UserRole>builder().id("[CASE_REFERENCE]").label("Case Number").build(),
+      SearchField.<UserRole>builder()
+          .id("allocatedJudge")
+          .label("Allocated Judge")
+          .listElementCode("judgeTitle")
+          .showCondition("hearingPreferencesWelsh=\"no\"")
+          .build(),
+      SearchField.<UserRole>builder().id("dateSubmitted").label("Date submitted").build()
+  );
+
+  private static final List<SearchField<UserRole>> WORK_BASKET_RESULT_FIELD_LIST = of(
+      SearchField.<UserRole>builder().id("caseName").label("Case name").build(),
+      SearchField.<UserRole>builder().id("familyManCaseNumber").label("FamilyMan case number").build(),
+      SearchField.<UserRole>builder().id("hearingPreferencesWelsh").label("Is in Welsh").build(),
+      SearchField.<UserRole>builder().id("[STATE]").label("State").build(),
+      SearchField.<UserRole>builder().id("caseLocalAuthority").label("Local authority").build(),
+      SearchField.<UserRole>builder()
+          .id("dateAndTimeSubmitted")
+          .label("Date submitted")
+          .displayContextParameter("#DATETIMEDISPLAY(d  MMMM yyyy)")
+          .order(FIRST.DESCENDING)
+          .build(),
+      SearchField.<UserRole>builder()
+          .id("evidenceHandled")
+          .label("Supplementary evidence handled")
+          .order(SECOND.ASCENDING)
+          .build()
+  );
+
+  private static final List<SearchField<UserRole>> WORK_BASKET_INPUT_FIELD_LIST = of(
+      SearchField.<UserRole>builder().id("caseLocalAuthority").label("Local authority").build(),
+      SearchField.<UserRole>builder().id("caseName").label("Case name").build(),
+      SearchField.<UserRole>builder().id("familyManCaseNumber").label("FamilyMan case number").build(),
+      SearchField.<UserRole>builder().id("hearingDetails").label("Hearing Details").userRole(LOCAL_AUTHORITY).build(),
+      SearchField.<UserRole>builder().id("hearingDetails").label("Hearing Details").userRole(HMCTS_ADMIN).build(),
+      SearchField.<UserRole>builder().id("hearingPreferencesWelsh").label("Is in Welsh").build(),
+      SearchField.<UserRole>builder().id("[CASE_REFERENCE]").label("Case Number").build(),
+      SearchField.<UserRole>builder()
+          .id("dateSubmitted")
+          .label("Date submitted")
+          .showCondition("")
+          .displayContextParameter("#DATETIMEDISPLAY(d  MMMM yyyy)")
+          .build(),
+      SearchField.<UserRole>builder().id("evidenceHandled").label("Supplementary evidence handled").build(),
+      SearchField.<UserRole>builder()
+          .id("internationalElement")
+          .label("int el")
+          .listElementCode("issues")
+          .showCondition("hearingPreferencesWelsh=\"no\"")
+          .build()
+  );
 
   private ConfigBuilder<CaseData, State, UserRole> builder;
 
@@ -179,26 +249,11 @@ public class CCDConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<CaseData, S
   }
 
   private void buildSearchResultFields() {
-    builder.searchResultFields()
-        .field(CaseData::getCaseName, "Case name")
-        .field(CaseData::getFamilyManCaseNumber, "FamilyMan case number")
-        .field("hearingPreferencesWelsh", "Is in Welsh")
-        .stateField()
-        .field(CaseData::getCaseLocalAuthority, "Local authority")
-        .field("dateAndTimeSubmitted", "Date submitted");
+    builder.searchResultFields().fields(SEARCH_RESULT_FIELD_LIST);
   }
 
   private void buildSearchInputFields() {
-    builder.searchInputFields()
-        .field(CaseData::getCaseLocalAuthority, "Local authority")
-        .field(CaseData::getCaseName, "Case name")
-        .field(CaseData::getFamilyManCaseNumber, "FamilyMan case number")
-        .field(CaseData::getDateOfIssue, "Date of Issue", HMCTS_ADMIN)
-        .field(CaseData::getDateOfIssue, "Date of Issue", LOCAL_AUTHORITY)
-        .field("hearingPreferencesWelsh", "Is in Welsh")
-        .caseReferenceField()
-        .field("allocatedJudge", "Allocated Judge", "judgeTitle", "hearingPreferencesWelsh=\"no\"")
-        .field(CaseData::getDateSubmitted, "Date submitted");
+    builder.searchInputFields().fields(SEARCH_INPUT_FIELD_LIST);
   }
 
   private void buildSearchCasesFields() {
@@ -229,28 +284,11 @@ public class CCDConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<CaseData, S
   }
 
   private void buildWorkBasketResultFields() {
-    builder.workBasketResultFields()
-        .field(CaseData::getCaseName, "Case name")
-        .field(CaseData::getFamilyManCaseNumber, "FamilyMan case number")
-        .field("hearingPreferencesWelsh", "Is in Welsh")
-        .stateField()
-        .field(CaseData::getCaseLocalAuthority, "Local authority")
-        .field("dateAndTimeSubmitted", "Date submitted", null, null, "#DATETIMEDISPLAY(d  MMMM yyyy)", FIRST.DESCENDING)
-        .field("evidenceHandled", "Supplementary evidence handled", SECOND.ASCENDING);
+    builder.workBasketResultFields().fields(WORK_BASKET_RESULT_FIELD_LIST);
   }
 
   private void buildWorkBasketInputFields() {
-    builder.workBasketInputFields()
-        .field(CaseData::getCaseLocalAuthority, "Local authority")
-        .field(CaseData::getCaseName, "Case name")
-        .field(CaseData::getFamilyManCaseNumber, "FamilyMan case number")
-        .field(CaseData::getHearingDetails, "Hearing Details", LOCAL_AUTHORITY)
-        .field(CaseData::getHearingDetails, "Hearing Details", HMCTS_ADMIN)
-        .field("hearingPreferencesWelsh", "Is in Welsh")
-        .caseReferenceField()
-        .field(CaseData::getDateSubmitted, "Date submitted", "", "#DATETIMEDISPLAY(d  MMMM yyyy)")
-        .field("evidenceHandled", "Supplementary evidence handled")
-        .field("internationalElement", "int el", "issues", "hearingPreferencesWelsh=\"no\"");
+    builder.workBasketInputFields().fields(WORK_BASKET_INPUT_FIELD_LIST);
   }
 
   private void buildTabs() {
