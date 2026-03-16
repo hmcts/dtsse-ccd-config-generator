@@ -42,6 +42,7 @@ public class ResolvedCCDConfig<T, S, R extends HasRole> {
   String jurId = "";
   String jurName = "";
   String jurDesc = "";
+  String hmctsServiceId = "";
   boolean shutterService = false;
 
   Table<S, R, Set<Permission>> stateRolePermissions = HashBasedTable.create();

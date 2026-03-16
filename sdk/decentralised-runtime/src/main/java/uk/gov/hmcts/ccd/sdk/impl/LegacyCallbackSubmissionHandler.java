@@ -11,7 +11,6 @@ import org.springframework.stereotype.Component;
 import uk.gov.hmcts.ccd.data.casedetails.SecurityClassification;
 import uk.gov.hmcts.ccd.decentralised.dto.DecentralisedCaseEvent;
 import uk.gov.hmcts.ccd.decentralised.dto.DecentralisedSubmitEventResponse;
-import uk.gov.hmcts.ccd.domain.model.callbacks.AfterSubmitCallbackResponse;
 import uk.gov.hmcts.ccd.sdk.ResolvedConfigRegistry;
 import uk.gov.hmcts.ccd.sdk.api.Event;
 import uk.gov.hmcts.ccd.sdk.api.Webhook;
@@ -82,11 +81,6 @@ class LegacyCallbackSubmissionHandler implements CaseSubmissionHandler {
           SubmittedCallbackResponse submittedResponse = null;
           if (runSubmitted) {
             submittedResponse = runSubmittedCallback(event).orElse(null);
-          }
-
-          if (submittedResponse == null) {
-            submittedResponse = toSubmittedCallbackResponse(
-                event.getCaseDetails().getAfterSubmitCallbackResponse());
           }
 
           if (submittedResponse != null) {
@@ -172,19 +166,6 @@ class LegacyCallbackSubmissionHandler implements CaseSubmissionHandler {
         .caseDetails(caseDetails)
         .caseDetailsBefore(caseDetailsBefore)
         .eventId(event.getEventDetails().getEventId())
-        .build();
-  }
-
-  private SubmittedCallbackResponse toSubmittedCallbackResponse(AfterSubmitCallbackResponse response) {
-    if (response == null) {
-      return null;
-    }
-    if (response.getConfirmationHeader() == null && response.getConfirmationBody() == null) {
-      return null;
-    }
-    return SubmittedCallbackResponse.builder()
-        .confirmationHeader(response.getConfirmationHeader())
-        .confirmationBody(response.getConfirmationBody())
         .build();
   }
 
