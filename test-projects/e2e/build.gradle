@@ -6,7 +6,7 @@ plugins {
   id 'io.spring.dependency-management' version '1.1.7'
   id 'jacoco'
   id 'hmcts.ccd.sdk'
-  id 'com.github.hmcts.rse-cft-lib' version '0.19.2022'
+  id 'com.github.hmcts.rse-cft-lib' version '0.19.2023'
 }
 
 group = 'uk.gov.hmcts'
