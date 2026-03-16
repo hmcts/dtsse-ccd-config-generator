@@ -1,8 +1,6 @@
 package uk.gov.hmcts.ccd.sdk.generator;
 
 
-import static org.apache.commons.lang3.StringUtils.capitalize;
-
 import com.google.common.collect.HashMultimap;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Multimap;
@@ -15,8 +13,6 @@ import java.nio.file.Paths;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 import org.springframework.stereotype.Component;
 import uk.gov.hmcts.ccd.sdk.ResolvedCCDConfig;
 import uk.gov.hmcts.ccd.sdk.api.DisplayContext;
@@ -116,27 +112,15 @@ class CaseEventToFieldsGenerator<T, S, R extends HasRole> implements ConfigGener
                             String hintColumn,
                             Event<?, ?, ?> event) {
     if (field.getShowCondition() != null) {
-      String condition = field.getShowCondition();
-      if (event != null && event.isDtoEvent()) {
-        condition = prefixShowCondition(condition, event.getDtoPrefix());
-      }
-      target.put("FieldShowCondition", condition);
+      target.put("FieldShowCondition", field.getShowCondition());
     }
 
     if (labelColumn != null && field.getCaseEventFieldLabel() != null) {
-      String label = field.getCaseEventFieldLabel();
-      if (event != null && event.isDtoEvent()) {
-        label = prefixLabelReferences(label, event.getDtoPrefix());
-      }
-      target.put(labelColumn, label);
+      target.put(labelColumn, field.getCaseEventFieldLabel());
     }
 
     if (hintColumn != null && field.getCaseEventFieldHint() != null) {
-      String hint = field.getCaseEventFieldHint();
-      if (event != null && event.isDtoEvent()) {
-        hint = prefixLabelReferences(hint, event.getDtoPrefix());
-      }
-      target.put(hintColumn, hint);
+      target.put(hintColumn, field.getCaseEventFieldHint());
     }
 
     if (field.isRetainHiddenValue()) {
@@ -171,11 +155,7 @@ class CaseEventToFieldsGenerator<T, S, R extends HasRole> implements ConfigGener
                                       Field field,
                                       Event<?, ?, ?> event) {
     if (collection.getPageShowConditions().containsKey(field.getPage())) {
-      String condition = collection.getPageShowConditions().remove(field.getPage());
-      if (event.isDtoEvent()) {
-        condition = prefixShowCondition(condition, event.getDtoPrefix());
-      }
-      row.put("PageShowCondition", condition);
+      row.put("PageShowCondition", collection.getPageShowConditions().remove(field.getPage()));
     }
   }
 
@@ -198,25 +178,4 @@ class CaseEventToFieldsGenerator<T, S, R extends HasRole> implements ConfigGener
       row.put("DisplayContextParameter", field.getDisplayContextParameter());
     }
   }
-
-  private static final Pattern SHOW_CONDITION_FIELD_PATTERN = Pattern.compile("(\\w+)(=\")");
-  private static final Pattern LABEL_FIELD_PATTERN = Pattern.compile("\\$\\{(\\w+)\\}");
-
-  static String prefixLabelReferences(String text, String prefix) {
-    if (text == null || prefix == null || prefix.isEmpty()) {
-      return text;
-    }
-    return LABEL_FIELD_PATTERN.matcher(text)
-        .replaceAll(m -> Matcher.quoteReplacement(
-            "${" + prefix + capitalize(m.group(1)) + "}"));
-  }
-
-  static String prefixShowCondition(String condition, String prefix) {
-    if (condition == null || prefix == null || prefix.isEmpty()) {
-      return condition;
-    }
-    return SHOW_CONDITION_FIELD_PATTERN.matcher(condition)
-        .replaceAll(m -> prefix + capitalize(m.group(1)) + m.group(2));
-  }
-
 }

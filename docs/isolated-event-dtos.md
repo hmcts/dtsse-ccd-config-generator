@@ -112,12 +112,12 @@ For page field bindings, you continue to use Java method references:
 .optional(CreateClaimData::getFeeAmount)
 ```
 
-For show conditions and interpolated labels, you still write strings, but you write them using the DTO field names and
-the generator applies the DTO prefix when it writes the CCD JSON:
+For show conditions and interpolated labels, you write the final CCD field names yourself. The generator does not
+rewrite these strings for DTO events:
 
 ```java
-.showCondition("showCrossBorderPage=\"Yes\"")
-.label("info", "The claim fee is ${feeAmount}.")
+.showCondition("cpcShowCrossBorderPage=\"Yes\"")
+.label("info", "The claim fee is ${cpcFeeAmount}.")
 ```
 
 ### Page fields
@@ -131,10 +131,10 @@ Page field bindings already use method references:
 
 ### Labels
 
-Interpolated labels use CCD `${...}` expressions with the DTO field names:
+Interpolated labels use CCD `${...}` expressions with the generated CCD field names:
 
 ```java
-.label("info", "The claim fee is ${feeAmount}.")
+.label("info", "The claim fee is ${cpcFeeAmount}.")
 ```
 
 Static labels remain plain strings:
@@ -216,11 +216,11 @@ public class EnterPropertyAddress {
 }
 ```
 
-Labels and show conditions still use DTO field names rather than the generated prefixed CCD field names:
+Labels and show conditions must use the generated prefixed CCD field names:
 
 ```java
-.label("info", "The claim fee is ${feeAmount}.")
-.showCondition("showCrossBorderPage=\"Yes\"")
+.label("info", "The claim fee is ${cpcFeeAmount}.")
+.showCondition("cpcShowCrossBorderPage=\"Yes\"")
 ```
 
 ## Migrating from the shared data class
@@ -229,7 +229,7 @@ Labels and show conditions still use DTO field names rather than the generated p
 2. Create a DTO class with those fields
 3. Switch from `decentralisedEvent(id, submit, start)` to `decentralisedEvent(id, DtoClass.class, submit, start)`
 4. Update handler signatures from `EventPayload<PCSCase, State>` to `EventPayload<DtoClass, State>`
-5. Update page classes to reference DTO getters, and update any string show conditions or label interpolations to use the DTO field names
+5. Update page classes to reference DTO getters, and update any string show conditions or label interpolations to use the generated CCD field names
 6. Remove orphaned fields from the shared class that are no longer used by any event or view
 
 ## Implementation details
@@ -264,13 +264,13 @@ For the `CreateClaimData` example with event `createPossessionClaim` (prefix `cp
 
 A second event `enforceTheOrder` (prefix `eto`) with its own DTO would produce fields like `etoEnforcementType`, `etoRiskToBailiff`, etc. The prefixes guarantee that events cannot collide, even if their DTOs use the same field names.
 
-Developer code does not need to use these prefixed names directly. Page field bindings use method references and the
-generator rewrites DTO field-name references in supported string expressions when it writes CCD config:
+Page field bindings still use method references, but any field references embedded in strings must use the generated
+prefixed CCD names directly:
 
 | Developer writes | SDK generates |
 |---|---|
-| `"Fee: ${feeAmount}."` | `Fee: ${cpcFeeAmount}.` |
-| `"showCrossBorderPage=\"Yes\""` | `cpcShowCrossBorderPage="Yes"` |
+| `"Fee: ${cpcFeeAmount}."` | `Fee: ${cpcFeeAmount}.` |
+| `"cpcShowCrossBorderPage=\"Yes\""` | `cpcShowCrossBorderPage="Yes"` |
 | `.mandatory(Dto::getPropertyAddress)` | `CaseFieldID: cpcPropertyAddress` |
 
 ### Event-to-fields mapping

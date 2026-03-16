@@ -78,7 +78,6 @@ class CaseFieldGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
   private static <T, S, R extends HasRole> List<Map<String, Object>> getExplicitFields(
       ResolvedCCDConfig<T, S, R> config) {
     Map<String, uk.gov.hmcts.ccd.sdk.api.Field> explicitFields = Maps.newHashMap();
-    Map<String, String> fieldDtoPrefix = Maps.newHashMap();
     for (Event event : config.getEvents().values()) {
       List<uk.gov.hmcts.ccd.sdk.api.Field.FieldBuilder> fc = event.getFields()
           .getExplicitFields();
@@ -86,9 +85,6 @@ class CaseFieldGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
       for (uk.gov.hmcts.ccd.sdk.api.Field.FieldBuilder fieldBuilder : fc) {
         uk.gov.hmcts.ccd.sdk.api.Field field = fieldBuilder.build();
         explicitFields.put(field.getId(), field);
-        if (event.isDtoEvent()) {
-          fieldDtoPrefix.put(field.getId(), event.getDtoPrefix());
-        }
       }
     }
 
@@ -110,12 +106,7 @@ class CaseFieldGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
       JsonUtils.ensureDefaultLabel(fieldData);
 
       if (!Strings.isNullOrEmpty(field.getLabel())) {
-        String label = field.getLabel();
-        String prefix = fieldDtoPrefix.get(fieldId);
-        if (prefix != null) {
-          label = CaseEventToFieldsGenerator.prefixLabelReferences(label, prefix);
-        }
-        fieldData.put("Label", label);
+        fieldData.put("Label", field.getLabel());
       }
 
       if (field.getType() != null) {
