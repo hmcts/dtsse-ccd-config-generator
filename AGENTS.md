@@ -28,12 +28,9 @@ Max line length 120 chars
 
 # Architecture
 
-See `docs/agent-architecture-overview.md` for a detailed overview of the project structure, config generation pipeline, event model, type resolution, and field prefixing. Review and update that file when making architecturally significant changes that affect any of its content.
-
 # CCD & Architecture
 
 Services & CCD are cyclically dependent
 
 * ccd-data-store-api makes callbacks to services based on their ccd definitions.
 * services may initiate ccd events by calling ccd-data-store-api
-
