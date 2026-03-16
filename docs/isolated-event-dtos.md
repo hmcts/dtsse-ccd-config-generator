@@ -99,49 +99,30 @@ If a role is granted permission on the event, it automatically gets full CRUD ac
 
 For finer-grained control (e.g. conditionally hiding a field based on the current user), implement that in your start handler or mid-event callback using application code.
 
-## Fully managed field references
+## Field references and prefixing
 
-Today, CCD field names are partially managed by the SDK — they are derived from the field names in your case data class — but they still surface in your code. You reference them in show condition strings, label expressions, and sometimes need to reason about them when debugging or writing config.
+CCD field names are still derived from Java field names, but isolated DTO events add an automatic event-specific prefix so
+multiple events can reuse the same DTO property names without colliding (see
+[Field isolation via prefixing](#field-isolation-via-prefixing)).
 
-With isolated DTOs, CCD field names become fully managed by the SDK. Each event's fields are automatically prefixed to keep them isolated (see [Field isolation via prefixing](#field-isolation-via-prefixing)), and developers never see or type these internal names. Instead, all field references use Java method references to your DTO class, giving you compile-time checking, IDE autocomplete, and safe refactoring.
-
-
-### Show conditions
-
-Where you previously wrote raw strings:
+For page field bindings, you continue to use Java method references:
 
 ```java
-.showCondition("legislativeCountry=\"England\" OR legislativeCountry=\"Wales\"")
+.mandatory(CreateClaimData::getPropertyAddress)
+.optional(CreateClaimData::getFeeAmount)
 ```
 
-You now write:
+For show conditions and interpolated labels, you still write strings, but you write them using the DTO field names and
+the generator applies the DTO prefix when it writes the CCD JSON:
 
 ```java
-.showCondition(when(CreateClaimData::getLegislativeCountry).isAnyOf(ENGLAND, WALES))
+.showCondition("showCrossBorderPage=\"Yes\"")
+.label("info", "The claim fee is ${feeAmount}.")
 ```
-
-Available operators:
-
-```java
-// Field equals a value
-when(CreateClaimData::getShowCrossBorderPage).is(YesOrNo.YES)
-
-// Field equals any of several values
-when(CreateClaimData::getLegislativeCountry).isAnyOf(ENGLAND, WALES)
-
-// Contains — for multi-select fields
-when(CreateClaimData::getSelectedGrounds).contains(RENT_ARREARS)
-
-// Combine conditions with AND
-when(CreateClaimData::getShowCrossBorderPage).is(YesOrNo.YES)
-    .and(when(CreateClaimData::getLegislativeCountry).is(SCOTLAND))
-```
-
-Values can be enum constants, `YesOrNo.YES`, or strings. Enum values are resolved to their CCD representation automatically.
 
 ### Page fields
 
-Page field bindings already use method references — this doesn't change:
+Page field bindings already use method references:
 
 ```java
 .mandatory(CreateClaimData::getPropertyAddress)
@@ -150,19 +131,13 @@ Page field bindings already use method references — this doesn't change:
 
 ### Labels
 
-Labels that interpolate field values use a format string with method references:
+Interpolated labels use CCD `${...}` expressions with the DTO field names:
 
 ```java
-.label("info", label("The claim fee is %s.", CreateClaimData::getFeeAmount))
+.label("info", "The claim fee is ${feeAmount}.")
 ```
 
-The SDK resolves each `%s` to the corresponding field reference. Multiple fields work naturally:
-
-```java
-.label("info", label("Claim by %s for %s.", Dto::getClaimantName, Dto::getPropertyAddress))
-```
-
-For labels that are just static text, a plain string is fine:
+Static labels remain plain strings:
 
 ```java
 .label("info", "Enter the property address below.")
@@ -241,11 +216,11 @@ public class EnterPropertyAddress {
 }
 ```
 
-Labels and show conditions use fully managed field references — no raw CCD field names:
+Labels and show conditions still use DTO field names rather than the generated prefixed CCD field names:
 
 ```java
-.label("info", label("The claim fee is %s.", CreateClaimData::getFeeAmount))
-.showCondition(when(CreateClaimData::getShowCrossBorderPage).is(YesOrNo.YES))
+.label("info", "The claim fee is ${feeAmount}.")
+.showCondition("showCrossBorderPage=\"Yes\"")
 ```
 
 ## Migrating from the shared data class
@@ -254,7 +229,7 @@ Labels and show conditions use fully managed field references — no raw CCD fie
 2. Create a DTO class with those fields
 3. Switch from `decentralisedEvent(id, submit, start)` to `decentralisedEvent(id, DtoClass.class, submit, start)`
 4. Update handler signatures from `EventPayload<PCSCase, State>` to `EventPayload<DtoClass, State>`
-5. Update page classes to reference DTO getters, and convert show conditions and labels to use the typed builders
+5. Update page classes to reference DTO getters, and update any string show conditions or label interpolations to use the DTO field names
 6. Remove orphaned fields from the shared class that are no longer used by any event or view
 
 ## Implementation details
@@ -289,12 +264,13 @@ For the `CreateClaimData` example with event `createPossessionClaim` (prefix `cp
 
 A second event `enforceTheOrder` (prefix `eto`) with its own DTO would produce fields like `etoEnforcementType`, `etoRiskToBailiff`, etc. The prefixes guarantee that events cannot collide, even if their DTOs use the same field names.
 
-Developer code never sees these prefixed names. All field references go through typed builders (method references for labels, show conditions, and page fields), and the SDK resolves and prefixes them at generation time:
+Developer code does not need to use these prefixed names directly. Page field bindings use method references and the
+generator rewrites DTO field-name references in supported string expressions when it writes CCD config:
 
 | Developer writes | SDK generates |
 |---|---|
-| `label("Fee: %s.", Dto::getFeeAmount)` | `Fee: ${cpcFeeAmount}.` |
-| `when(Dto::getShowCrossBorderPage).is(YesOrNo.YES)` | `cpcShowCrossBorderPage="Yes"` |
+| `"Fee: ${feeAmount}."` | `Fee: ${cpcFeeAmount}.` |
+| `"showCrossBorderPage=\"Yes\""` | `cpcShowCrossBorderPage="Yes"` |
 | `.mandatory(Dto::getPropertyAddress)` | `CaseFieldID: cpcPropertyAddress` |
 
 ### Event-to-fields mapping
