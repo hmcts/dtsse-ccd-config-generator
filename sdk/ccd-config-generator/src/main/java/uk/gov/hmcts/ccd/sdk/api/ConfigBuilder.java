@@ -51,6 +51,11 @@ public interface ConfigBuilder<T, S, R extends HasRole> {
 
   void setCallbackHost(String s);
 
+  /**
+   * Sets the HMCTS service id supplementary value (`HMCTSServiceId`).
+   */
+  void hmctsServiceId(String value);
+
   void addPreEventHook(Function<Map<String, Object>, Map<String, Object>> hook);
 
   CaseRoleToAccessProfileBuilder<R> caseRoleToAccessProfile(R caseRole);

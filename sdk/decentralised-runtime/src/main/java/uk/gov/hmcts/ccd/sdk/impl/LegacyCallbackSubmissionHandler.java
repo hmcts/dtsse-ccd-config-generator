@@ -86,11 +86,6 @@ class LegacyCallbackSubmissionHandler implements CaseSubmissionHandler {
             submittedResponse = runSubmittedCallback(event).orElse(null);
           }
 
-          if (submittedResponse == null) {
-            submittedResponse = toSubmittedCallbackResponse(
-                event.getCaseDetails().getAfterSubmitCallbackResponse());
-          }
-
           if (submittedResponse != null) {
             builder.confirmationHeader(submittedResponse.getConfirmationHeader());
             builder.confirmationBody(submittedResponse.getConfirmationBody());
@@ -174,19 +169,6 @@ class LegacyCallbackSubmissionHandler implements CaseSubmissionHandler {
         .caseDetails(caseDetails)
         .caseDetailsBefore(caseDetailsBefore)
         .eventId(event.getEventDetails().getEventId())
-        .build();
-  }
-
-  private SubmittedCallbackResponse toSubmittedCallbackResponse(AfterSubmitCallbackResponse response) {
-    if (response == null) {
-      return null;
-    }
-    if (response.getConfirmationHeader() == null && response.getConfirmationBody() == null) {
-      return null;
-    }
-    return SubmittedCallbackResponse.builder()
-        .confirmationHeader(response.getConfirmationHeader())
-        .confirmationBody(response.getConfirmationBody())
         .build();
   }
 

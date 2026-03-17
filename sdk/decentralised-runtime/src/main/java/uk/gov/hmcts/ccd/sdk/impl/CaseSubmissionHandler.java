@@ -14,10 +14,31 @@ interface CaseSubmissionHandler {
 
   CaseSubmissionHandlerResult apply(DecentralisedCaseEvent event);
 
+  /**
+   * Result returned by a submission handler after it has prepared all in-transaction mutations.
+   *
+   * <p>The {@code responseSupplier} is intentionally deferred and is invoked by
+   * {@link CaseSubmissionService} only after the database transaction has completed successfully.
+   * Use it for post-transaction response assembly such as submitted/post-submit callbacks,
+   * confirmation header/body population, or other side-effecting response data.
+   */
   record CaseSubmissionHandlerResult(
+      /*
+       * Optional replacement payload for {@code ccd.case_data.data}. If empty, the legacy
+       * json blob is unchanged.
+       */
       Optional<JsonNode> dataUpdate,
+      /*
+       * Optional post-submit canonical case state to be persisted.
+       */
       Optional<String> state,
+      /*
+       * Optional post-submit canonical case level security classification to be persisted.
+       */
       Optional<uk.gov.hmcts.reform.ccd.client.model.Classification> securityClassification,
+      /*
+       * Deferred response builder executed post-transaction by {@link CaseSubmissionService}.
+       */
       Supplier<SubmitResponse<?>> responseSupplier) {
   }
 }
