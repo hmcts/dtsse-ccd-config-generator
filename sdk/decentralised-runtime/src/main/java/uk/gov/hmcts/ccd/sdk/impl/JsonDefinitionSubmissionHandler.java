@@ -97,22 +97,10 @@ public class JsonDefinitionSubmissionHandler implements CaseSubmissionHandler {
   }
 
   private Optional<SubmittedCallbackResponse> runSubmittedCallback(DecentralisedCaseEvent event) {
-    String caseType = event.getEventDetails().getCaseType();
-    String eventId = event.getEventDetails().getEventId();
 
     CallbackRequest request = buildCallbackRequest(event);
-    int retries = callbackDispatchService.resolveSubmittedRetries(eventId);
-
-    for (int attempt = 0; attempt < retries; attempt++) {
-      try {
-        var submitted = callbackDispatchService.dispatchToHandlersSubmitted(request);
-        return Optional.ofNullable(submitted);
-      } catch (Exception ex) {
-        log.warn("Unsuccessful submitted callback for caseType={} eventId={}", caseType, eventId, ex);
-      }
-    }
-
-    return Optional.empty();
+    var submitted = callbackDispatchService.dispatchToHandlersSubmitted(request);
+    return Optional.ofNullable(submitted);
   }
 
   private CallbackRequest buildCallbackRequest(DecentralisedCaseEvent event) {

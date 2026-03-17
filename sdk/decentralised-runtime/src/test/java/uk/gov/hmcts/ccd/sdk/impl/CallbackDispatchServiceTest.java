@@ -1,17 +1,16 @@
 package uk.gov.hmcts.ccd.sdk.impl;
 
 import org.junit.jupiter.api.Test;
-import uk.gov.hmcts.ccd.sdk.CallbackHandlerBean;
+import uk.gov.hmcts.ccd.sdk.CallbackHandler;
 import uk.gov.hmcts.ccd.sdk.CallbackResponse;
-import uk.gov.hmcts.ccd.sdk.Retries;
 import uk.gov.hmcts.ccd.sdk.SubmittedCallbackResponse;
 import uk.gov.hmcts.reform.ccd.client.model.CallbackRequest;
 import uk.gov.hmcts.reform.ccd.client.model.CaseDetails;
 
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 
 class CallbackDispatchServiceTest {
@@ -20,7 +19,7 @@ class CallbackDispatchServiceTest {
   void dispatchToHandlersAboutToSubmitReturnsHandlerResponse() {
     CallbackResponse<?> expected = mock(CallbackResponse.class);
     CallbackDispatchService service = new CallbackDispatchService(List.of(
-        new TestHandler("EVENT_ID", expected, null)
+        new TestHandler("EVENT_ID", expected, null, true, false, 0, 0)
     ));
 
     CallbackResponse<?> response = service.dispatchToHandlersAboutToSubmit(buildRequest("EVENT_ID"));
@@ -32,7 +31,7 @@ class CallbackDispatchServiceTest {
   void dispatchToHandlersSubmittedReturnsHandlerResponse() {
     SubmittedCallbackResponse expected = mock(SubmittedCallbackResponse.class);
     CallbackDispatchService service = new CallbackDispatchService(List.of(
-        new TestHandler("EVENT_ID", null, expected)
+        new TestHandler("EVENT_ID", null, expected, false, true, 0, 0)
     ));
 
     SubmittedCallbackResponse response = service.dispatchToHandlersSubmitted(buildRequest("EVENT_ID"));
@@ -43,7 +42,8 @@ class CallbackDispatchServiceTest {
   @Test
   void dispatchToHandlersReturnsNullWhenNoHandlerMatches() {
     CallbackDispatchService service = new CallbackDispatchService(List.of(
-        new TestHandler("DIFFERENT_EVENT", mock(CallbackResponse.class), mock(SubmittedCallbackResponse.class))
+        new TestHandler("DIFFERENT_EVENT", mock(CallbackResponse.class), mock(SubmittedCallbackResponse.class),
+            true, true, 0, 0)
     ));
 
     assertThat(service.dispatchToHandlersAboutToSubmit(buildRequest("EVENT_ID"))).isNull();
@@ -51,43 +51,25 @@ class CallbackDispatchServiceTest {
   }
 
   @Test
-  void resolveSubmittedRetriesReturnsDefaultWhenAnnotationMissing() {
+  void dispatchToHandlersReturnsNullWhenHandlerDoesNotAcceptCallbacks() {
     CallbackDispatchService service = new CallbackDispatchService(List.of(
-        new TestHandler("EVENT_ID", null, null)
+        new TestHandler("EVENT_ID", mock(CallbackResponse.class), mock(SubmittedCallbackResponse.class),
+            false, false, 0, 0)
     ));
 
-    assertThat(service.resolveSubmittedRetries("EVENT_ID")).isEqualTo(1);
+    assertThat(service.dispatchToHandlersAboutToSubmit(buildRequest("EVENT_ID"))).isNull();
+    assertThat(service.dispatchToHandlersSubmitted(buildRequest("EVENT_ID"))).isNull();
   }
 
   @Test
-  void resolveSubmittedRetriesReturnsAnnotatedValueWhenPresent() {
+  void dispatchToHandlersSubmittedRetriesUntilSuccess() {
+    SubmittedCallbackResponse expected = mock(SubmittedCallbackResponse.class);
     CallbackDispatchService service = new CallbackDispatchService(List.of(
-        new RetriesHandler("EVENT_ID")
+        new TestHandler("EVENT_ID", null, expected, false, true, 2, 2)
     ));
 
-    assertThat(service.resolveSubmittedRetries("EVENT_ID")).isEqualTo(3);
-  }
-
-  @Test
-  void resolveSubmittedRetriesThrowsWhenRetriesAnnotationPlacedOnWrongMethod() {
-    CallbackDispatchService service = new CallbackDispatchService(List.of(
-        new InvalidRetriesPlacementHandler("EVENT_ID")
-    ));
-
-    assertThatThrownBy(() -> service.resolveSubmittedRetries("EVENT_ID"))
-        .isInstanceOf(IllegalStateException.class)
-        .hasMessageContaining("@Retries is only supported on CallbackHandlerBean#submitted implementations");
-  }
-
-  @Test
-  void resolveSubmittedRetriesThrowsWhenAnnotationValueIsNotPositive() {
-    CallbackDispatchService service = new CallbackDispatchService(List.of(
-        new InvalidRetriesValueHandler("EVENT_ID")
-    ));
-
-    assertThatThrownBy(() -> service.resolveSubmittedRetries("EVENT_ID"))
-        .isInstanceOf(IllegalArgumentException.class)
-        .hasMessageContaining("@Retries value must be greater than 0");
+    SubmittedCallbackResponse response = service.dispatchToHandlersSubmitted(buildRequest("EVENT_ID"));
+    assertThat(response).isSameAs(expected);
   }
 
   private static CallbackRequest buildRequest(String eventId) {
@@ -97,17 +79,30 @@ class CallbackDispatchServiceTest {
         .build();
   }
 
-  private static final class TestHandler implements CallbackHandlerBean {
+  private static final class TestHandler implements CallbackHandler {
 
     private final String eventId;
     private final CallbackResponse<?> aboutToSubmitResponse;
     private final SubmittedCallbackResponse submittedResponse;
+    private final boolean acceptsAboutToSubmit;
+    private final boolean acceptsSubmitted;
+    private final int submittedRetries;
+    private final int submittedFailuresBeforeSuccess;
+    private final AtomicInteger submittedAttempts = new AtomicInteger(0);
 
     private TestHandler(String eventId, CallbackResponse<?> aboutToSubmitResponse,
-                        SubmittedCallbackResponse submittedResponse) {
+                        SubmittedCallbackResponse submittedResponse,
+                        boolean acceptsAboutToSubmit,
+                        boolean acceptsSubmitted,
+                        int submittedRetries,
+                        int submittedFailuresBeforeSuccess) {
       this.eventId = eventId;
       this.aboutToSubmitResponse = aboutToSubmitResponse;
       this.submittedResponse = submittedResponse;
+      this.acceptsAboutToSubmit = acceptsAboutToSubmit;
+      this.acceptsSubmitted = acceptsSubmitted;
+      this.submittedRetries = submittedRetries;
+      this.submittedFailuresBeforeSuccess = submittedFailuresBeforeSuccess;
     }
 
     @Override
@@ -122,67 +117,26 @@ class CallbackDispatchServiceTest {
 
     @Override
     public SubmittedCallbackResponse submitted(CallbackRequest callbackRequest) {
+      int attempt = submittedAttempts.incrementAndGet();
+      if (attempt <= submittedFailuresBeforeSuccess) {
+        throw new RuntimeException("submitted callback failure");
+      }
       return submittedResponse;
     }
-  }
 
-  private static final class RetriesHandler implements CallbackHandlerBean {
-
-    private final String eventId;
-
-    private RetriesHandler(String eventId) {
-      this.eventId = eventId;
+    @Override
+    public boolean acceptsAboutToSubmit() {
+      return acceptsAboutToSubmit;
     }
 
     @Override
-    public String getHandledEventId() {
-      return eventId;
+    public boolean acceptsSubmitted() {
+      return acceptsSubmitted;
     }
 
     @Override
-    @Retries(3)
-    public SubmittedCallbackResponse submitted(CallbackRequest callbackRequest) {
-      return null;
-    }
-  }
-
-  private static final class InvalidRetriesPlacementHandler implements CallbackHandlerBean {
-
-    private final String eventId;
-
-    private InvalidRetriesPlacementHandler(String eventId) {
-      this.eventId = eventId;
-    }
-
-    @Override
-    public String getHandledEventId() {
-      return eventId;
-    }
-
-    @Override
-    @Retries(2)
-    public CallbackResponse<?> aboutToSubmit(CallbackRequest callbackRequest) {
-      return null;
-    }
-  }
-
-  private static final class InvalidRetriesValueHandler implements CallbackHandlerBean {
-
-    private final String eventId;
-
-    private InvalidRetriesValueHandler(String eventId) {
-      this.eventId = eventId;
-    }
-
-    @Override
-    public String getHandledEventId() {
-      return eventId;
-    }
-
-    @Override
-    @Retries(0)
-    public SubmittedCallbackResponse submitted(CallbackRequest callbackRequest) {
-      return null;
+    public int getSubmittedRetries() {
+      return submittedRetries;
     }
   }
 }

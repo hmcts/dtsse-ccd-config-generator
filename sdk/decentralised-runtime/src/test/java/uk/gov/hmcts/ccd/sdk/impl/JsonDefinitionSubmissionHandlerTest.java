@@ -16,8 +16,8 @@ import java.util.Map;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
@@ -37,7 +37,7 @@ class JsonDefinitionSubmissionHandlerTest {
     when(callbackResponse.getSecurityClassification()).thenReturn("PUBLIC");
     when(callbackResponse.getErrors()).thenReturn(List.of("validation-error"));
     when(callbackResponse.getWarnings()).thenReturn(List.of("warning"));
-    when(callbackDispatchService.dispatchToHandlersAboutToSubmit(any())).thenReturn(callbackResponse);
+    doReturn(callbackResponse).when(callbackDispatchService).dispatchToHandlersAboutToSubmit(any());
 
     assertThatThrownBy(() -> handler.apply(event))
         .isInstanceOf(CallbackValidationException.class)
@@ -63,8 +63,7 @@ class JsonDefinitionSubmissionHandlerTest {
     when(callbackResponse.getSecurityClassification()).thenReturn("PUBLIC");
     when(callbackResponse.getErrors()).thenReturn(List.of());
     when(callbackResponse.getWarnings()).thenReturn(List.of("warning-message"));
-    when(callbackDispatchService.dispatchToHandlersAboutToSubmit(any())).thenReturn(callbackResponse);
-    when(callbackDispatchService.resolveSubmittedRetries("EVENT_ID")).thenReturn(1);
+    doReturn(callbackResponse).when(callbackDispatchService).dispatchToHandlersAboutToSubmit(any());
     when(callbackDispatchService.dispatchToHandlersSubmitted(any())).thenReturn(submittedCallbackResponse);
     when(submittedCallbackResponse.getConfirmationHeader()).thenReturn("Header");
     when(submittedCallbackResponse.getConfirmationBody()).thenReturn("Body");
@@ -87,37 +86,20 @@ class JsonDefinitionSubmissionHandlerTest {
   }
 
   @Test
-  void applyDefaultsToSingleSubmittedAttemptWhenRetriesAnnotationIsMissing() {
+  void applyPropagatesSubmittedCallbackFailure() {
     JsonDefinitionSubmissionHandler handler = newHandler();
     DecentralisedCaseEvent event = buildEvent();
 
-    when(callbackDispatchService.resolveSubmittedRetries("EVENT_ID")).thenReturn(1);
     when(callbackDispatchService.dispatchToHandlersSubmitted(any()))
         .thenThrow(new RuntimeException("submitted callback failure"));
 
     CaseSubmissionHandler.CaseSubmissionHandlerResult result = handler.apply(event);
-    result.responseSupplier().get();
 
     verify(callbackDispatchService).dispatchToHandlersAboutToSubmit(any());
-    verify(callbackDispatchService, times(1)).dispatchToHandlersSubmitted(any());
-  }
-
-  @Test
-  void applyUsesRetriesAnnotationForSubmittedAttempts() {
-    JsonDefinitionSubmissionHandler handler = newHandler();
-    DecentralisedCaseEvent event = buildEvent();
-
-    when(callbackDispatchService.resolveSubmittedRetries("EVENT_ID")).thenReturn(3);
-    when(callbackDispatchService.dispatchToHandlersSubmitted(any()))
-        .thenThrow(new RuntimeException("submitted callback failure"))
-        .thenThrow(new RuntimeException("submitted callback failure"))
-        .thenReturn(null);
-
-    CaseSubmissionHandler.CaseSubmissionHandlerResult result = handler.apply(event);
-    result.responseSupplier().get();
-
-    verify(callbackDispatchService).dispatchToHandlersAboutToSubmit(any());
-    verify(callbackDispatchService, times(3)).dispatchToHandlersSubmitted(any());
+    assertThatThrownBy(() -> result.responseSupplier().get())
+        .isInstanceOf(RuntimeException.class)
+        .hasMessage("submitted callback failure");
+    verify(callbackDispatchService).dispatchToHandlersSubmitted(any());
   }
 
   private JsonDefinitionSubmissionHandler newHandler() {
