@@ -71,27 +71,35 @@ public class JsonDefinitionSubmissionHandler implements CaseSubmissionHandler {
     var request = buildCallbackRequest(event);
     var response = new DecentralisedSubmitEventResponse();
 
-    var callbackResponse = callbackDispatchService.dispatchToHandlersAboutToSubmit(request);
-
-    if (callbackResponse != null) {
-      Map<String, JsonNode> normalisedData = callbackResponse.getData() == null
-          ? Map.of()
-          : mapper.convertValue(callbackResponse.getData(), JSON_NODE_MAP);
-
-      event.getCaseDetails().setData(normalisedData);
-
-      if (callbackResponse.getState() != null) {
-        event.getCaseDetails().setState(callbackResponse.getState().toString());
-      }
-      if (callbackResponse.getSecurityClassification() != null) {
-        event.getCaseDetails().setSecurityClassification(
-            SecurityClassification.valueOf(callbackResponse.getSecurityClassification())
-        );
-
-        response.setErrors(callbackResponse.getErrors());
-        response.setWarnings(callbackResponse.getWarnings());
-      }
+    var aboutToSubmitResult = callbackDispatchService.dispatchToHandlersAboutToSubmit(request);
+    if (!aboutToSubmitResult.handled()) {
+      return response;
     }
+
+    var callbackResponse = aboutToSubmitResult.response();
+    if (callbackResponse == null) {
+      throw new IllegalStateException(
+          "About-to-submit handler for caseType=%s eventId=%s returned null"
+              .formatted(request.getCaseDetails().getCaseTypeId(), request.getEventId())
+      );
+    }
+
+    Map<String, JsonNode> normalisedData = callbackResponse.getData() == null
+        ? Map.of()
+        : mapper.convertValue(callbackResponse.getData(), JSON_NODE_MAP);
+
+    event.getCaseDetails().setData(normalisedData);
+
+    if (callbackResponse.getState() != null) {
+      event.getCaseDetails().setState(callbackResponse.getState());
+    }
+    if (callbackResponse.getSecurityClassification() != null) {
+      event.getCaseDetails().setSecurityClassification(
+          SecurityClassification.valueOf(callbackResponse.getSecurityClassification())
+      );
+    }
+    response.setErrors(callbackResponse.getErrors());
+    response.setWarnings(callbackResponse.getWarnings());
 
     return response;
   }
@@ -99,8 +107,11 @@ public class JsonDefinitionSubmissionHandler implements CaseSubmissionHandler {
   private Optional<SubmittedCallbackResponse> runSubmittedCallback(DecentralisedCaseEvent event) {
 
     CallbackRequest request = buildCallbackRequest(event);
-    var submitted = callbackDispatchService.dispatchToHandlersSubmitted(request);
-    return Optional.ofNullable(submitted);
+    var submittedResult = callbackDispatchService.dispatchToHandlersSubmitted(request);
+    if (!submittedResult.handled()) {
+      return Optional.empty();
+    }
+    return Optional.ofNullable(submittedResult.response());
   }
 
   private CallbackRequest buildCallbackRequest(DecentralisedCaseEvent event) {

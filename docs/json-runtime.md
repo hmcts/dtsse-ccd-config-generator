@@ -27,7 +27,8 @@ and transaction boundary.
 * Use explicit callback ownership in code.
 * Keep `about-to-submit` transactional with persistence.
 * Keep `submitted` post-commit.
-* Fail fast on ambiguous or missing handler bindings.
+* Fail fast on ambiguous handler bindings and callback execution failures.
+* Treat missing handler bindings as an explicit no-op outcome.
 
 ## Non-goals
 
@@ -122,7 +123,7 @@ Handlers are explicit, testable, and discoverable in code ownership terms.
 Required tests:
 
 * binding uniqueness and startup validation tests
-* missing binding failure tests
+* missing binding no-op tests
 * optional definition-to-binding consistency tests
 * transaction integration test proving atomicity of callback writes + event persistence
 * rollback test on `about-to-submit` handler failure

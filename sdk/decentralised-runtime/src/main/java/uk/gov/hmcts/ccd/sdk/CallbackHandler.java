@@ -4,6 +4,10 @@ import uk.gov.hmcts.reform.ccd.client.model.CallbackRequest;
 
 public interface CallbackHandler<T> {
 
+  default String getHandledCaseTypeId() {
+    return null;
+  }
+
   String getHandledEventId();
 
   default CallbackResponse<T> aboutToSubmit(CallbackRequest data) {

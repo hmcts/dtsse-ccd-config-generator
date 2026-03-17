@@ -37,7 +37,8 @@ class JsonDefinitionSubmissionHandlerTest {
     when(callbackResponse.getSecurityClassification()).thenReturn("PUBLIC");
     when(callbackResponse.getErrors()).thenReturn(List.of("validation-error"));
     when(callbackResponse.getWarnings()).thenReturn(List.of("warning"));
-    doReturn(callbackResponse).when(callbackDispatchService).dispatchToHandlersAboutToSubmit(any());
+    doReturn(new CallbackDispatchService.DispatchResult<>(true, callbackResponse))
+        .when(callbackDispatchService).dispatchToHandlersAboutToSubmit(any());
 
     assertThatThrownBy(() -> handler.apply(event))
         .isInstanceOf(CallbackValidationException.class)
@@ -63,8 +64,10 @@ class JsonDefinitionSubmissionHandlerTest {
     when(callbackResponse.getSecurityClassification()).thenReturn("PUBLIC");
     when(callbackResponse.getErrors()).thenReturn(List.of());
     when(callbackResponse.getWarnings()).thenReturn(List.of("warning-message"));
-    doReturn(callbackResponse).when(callbackDispatchService).dispatchToHandlersAboutToSubmit(any());
-    when(callbackDispatchService.dispatchToHandlersSubmitted(any())).thenReturn(submittedCallbackResponse);
+    doReturn(new CallbackDispatchService.DispatchResult<>(true, callbackResponse))
+        .when(callbackDispatchService).dispatchToHandlersAboutToSubmit(any());
+    when(callbackDispatchService.dispatchToHandlersSubmitted(any()))
+        .thenReturn(new CallbackDispatchService.DispatchResult<>(true, submittedCallbackResponse));
     when(submittedCallbackResponse.getConfirmationHeader()).thenReturn("Header");
     when(submittedCallbackResponse.getConfirmationBody()).thenReturn("Body");
 
@@ -90,6 +93,8 @@ class JsonDefinitionSubmissionHandlerTest {
     JsonDefinitionSubmissionHandler handler = newHandler();
     DecentralisedCaseEvent event = buildEvent();
 
+    when(callbackDispatchService.dispatchToHandlersAboutToSubmit(any()))
+        .thenReturn(new CallbackDispatchService.DispatchResult<>(false, null));
     when(callbackDispatchService.dispatchToHandlersSubmitted(any()))
         .thenThrow(new RuntimeException("submitted callback failure"));
 
@@ -100,6 +105,29 @@ class JsonDefinitionSubmissionHandlerTest {
         .isInstanceOf(RuntimeException.class)
         .hasMessage("submitted callback failure");
     verify(callbackDispatchService).dispatchToHandlersSubmitted(any());
+  }
+
+  @Test
+  void applyPropagatesErrorsWithoutSecurityClassification() {
+    JsonDefinitionSubmissionHandler handler = newHandler();
+    DecentralisedCaseEvent event = buildEvent();
+    CallbackResponse<?> callbackResponse = mock(CallbackResponse.class);
+
+    when(callbackResponse.getData()).thenReturn(Map.of("updated", "value"));
+    when(callbackResponse.getState()).thenReturn("Submitted");
+    when(callbackResponse.getSecurityClassification()).thenReturn(null);
+    when(callbackResponse.getErrors()).thenReturn(List.of("validation-error"));
+    when(callbackResponse.getWarnings()).thenReturn(List.of("warning"));
+    doReturn(new CallbackDispatchService.DispatchResult<>(true, callbackResponse))
+        .when(callbackDispatchService).dispatchToHandlersAboutToSubmit(any());
+
+    assertThatThrownBy(() -> handler.apply(event))
+        .isInstanceOf(CallbackValidationException.class)
+        .satisfies(ex -> {
+          CallbackValidationException callbackEx = (CallbackValidationException) ex;
+          assertThat(callbackEx.getErrors()).containsExactly("validation-error");
+          assertThat(callbackEx.getWarnings()).containsExactly("warning");
+        });
   }
 
   private JsonDefinitionSubmissionHandler newHandler() {

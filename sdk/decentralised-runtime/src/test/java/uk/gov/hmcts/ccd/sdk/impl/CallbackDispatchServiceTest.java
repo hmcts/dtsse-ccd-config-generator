@@ -11,6 +11,7 @@ import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 
 class CallbackDispatchServiceTest {
@@ -19,57 +20,90 @@ class CallbackDispatchServiceTest {
   void dispatchToHandlersAboutToSubmitReturnsHandlerResponse() {
     CallbackResponse<?> expected = mock(CallbackResponse.class);
     CallbackDispatchService service = new CallbackDispatchService(List.of(
-        new TestHandler("EVENT_ID", expected, null, true, false, 0, 0)
+        new TestHandler("CASE_TYPE", "EVENT_ID", expected, null, true, false, 0, 0)
     ));
 
-    CallbackResponse<?> response = service.dispatchToHandlersAboutToSubmit(buildRequest("EVENT_ID"));
+    var result = service.dispatchToHandlersAboutToSubmit(buildRequest("EVENT_ID"));
 
-    assertThat(response).isSameAs(expected);
+    assertThat(result.handled()).isTrue();
+    assertThat(result.response()).isSameAs(expected);
   }
 
   @Test
   void dispatchToHandlersSubmittedReturnsHandlerResponse() {
     SubmittedCallbackResponse expected = mock(SubmittedCallbackResponse.class);
     CallbackDispatchService service = new CallbackDispatchService(List.of(
-        new TestHandler("EVENT_ID", null, expected, false, true, 0, 0)
+        new TestHandler("CASE_TYPE", "EVENT_ID", null, expected, false, true, 0, 0)
     ));
 
-    SubmittedCallbackResponse response = service.dispatchToHandlersSubmitted(buildRequest("EVENT_ID"));
+    var result = service.dispatchToHandlersSubmitted(buildRequest("EVENT_ID"));
 
-    assertThat(response).isSameAs(expected);
+    assertThat(result.handled()).isTrue();
+    assertThat(result.response()).isSameAs(expected);
   }
 
   @Test
-  void dispatchToHandlersReturnsNullWhenNoHandlerMatches() {
+  void dispatchToHandlersReturnsNoHandlerWhenNoBindingMatches() {
     CallbackDispatchService service = new CallbackDispatchService(List.of(
-        new TestHandler("DIFFERENT_EVENT", mock(CallbackResponse.class), mock(SubmittedCallbackResponse.class),
+        new TestHandler("OTHER_CASE_TYPE", "DIFFERENT_EVENT",
+            mock(CallbackResponse.class), mock(SubmittedCallbackResponse.class),
             true, true, 0, 0)
     ));
 
-    assertThat(service.dispatchToHandlersAboutToSubmit(buildRequest("EVENT_ID"))).isNull();
-    assertThat(service.dispatchToHandlersSubmitted(buildRequest("EVENT_ID"))).isNull();
+    var aboutToSubmit = service.dispatchToHandlersAboutToSubmit(buildRequest("EVENT_ID"));
+    var submitted = service.dispatchToHandlersSubmitted(buildRequest("EVENT_ID"));
+    assertThat(aboutToSubmit.handled()).isFalse();
+    assertThat(aboutToSubmit.response()).isNull();
+    assertThat(submitted.handled()).isFalse();
+    assertThat(submitted.response()).isNull();
   }
 
   @Test
-  void dispatchToHandlersReturnsNullWhenHandlerDoesNotAcceptCallbacks() {
+  void dispatchToHandlersReturnsNoHandlerWhenHandlerDoesNotAcceptCallbacks() {
     CallbackDispatchService service = new CallbackDispatchService(List.of(
-        new TestHandler("EVENT_ID", mock(CallbackResponse.class), mock(SubmittedCallbackResponse.class),
+        new TestHandler("CASE_TYPE", "EVENT_ID", mock(CallbackResponse.class), mock(SubmittedCallbackResponse.class),
             false, false, 0, 0)
     ));
 
-    assertThat(service.dispatchToHandlersAboutToSubmit(buildRequest("EVENT_ID"))).isNull();
-    assertThat(service.dispatchToHandlersSubmitted(buildRequest("EVENT_ID"))).isNull();
+    assertThat(service.dispatchToHandlersAboutToSubmit(buildRequest("EVENT_ID")).handled()).isFalse();
+    assertThat(service.dispatchToHandlersSubmitted(buildRequest("EVENT_ID")).handled()).isFalse();
   }
 
   @Test
   void dispatchToHandlersSubmittedRetriesUntilSuccess() {
     SubmittedCallbackResponse expected = mock(SubmittedCallbackResponse.class);
     CallbackDispatchService service = new CallbackDispatchService(List.of(
-        new TestHandler("EVENT_ID", null, expected, false, true, 2, 2)
+        new TestHandler("CASE_TYPE", "EVENT_ID", null, expected, false, true, 2, 2)
     ));
 
-    SubmittedCallbackResponse response = service.dispatchToHandlersSubmitted(buildRequest("EVENT_ID"));
-    assertThat(response).isSameAs(expected);
+    var result = service.dispatchToHandlersSubmitted(buildRequest("EVENT_ID"));
+    assertThat(result.handled()).isTrue();
+    assertThat(result.response()).isSameAs(expected);
+  }
+
+  @Test
+  void dispatchToHandlersSubmittedThrowsWhenRetriesExhausted() {
+    CallbackDispatchService service = new CallbackDispatchService(List.of(
+        new TestHandler("CASE_TYPE", "EVENT_ID", null, mock(SubmittedCallbackResponse.class),
+            false, true, 2, Integer.MAX_VALUE)
+    ));
+
+    assertThatThrownBy(() -> service.dispatchToHandlersSubmitted(buildRequest("EVENT_ID")))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("Submitted callback failed after 3 attempt(s)")
+        .hasMessageContaining("caseType=CASE_TYPE")
+        .hasMessageContaining("eventId=EVENT_ID")
+        .hasCauseInstanceOf(RuntimeException.class);
+  }
+
+  @Test
+  void constructorFailsFastOnDuplicateBindings() {
+    assertThatThrownBy(() -> new CallbackDispatchService(List.of(
+        new TestHandler("CASE_TYPE", "EVENT_ID", mock(CallbackResponse.class), null, true, false, 0, 0),
+        new TestHandler("CASE_TYPE", "EVENT_ID", mock(CallbackResponse.class), null, true, false, 0, 0)
+    )).dispatchToHandlersAboutToSubmit(buildRequest("EVENT_ID")))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("Duplicate aboutToSubmit callback binding");
   }
 
   private static CallbackRequest buildRequest(String eventId) {
@@ -81,6 +115,7 @@ class CallbackDispatchServiceTest {
 
   private static final class TestHandler implements CallbackHandler {
 
+    private final String caseTypeId;
     private final String eventId;
     private final CallbackResponse<?> aboutToSubmitResponse;
     private final SubmittedCallbackResponse submittedResponse;
@@ -90,12 +125,15 @@ class CallbackDispatchServiceTest {
     private final int submittedFailuresBeforeSuccess;
     private final AtomicInteger submittedAttempts = new AtomicInteger(0);
 
-    private TestHandler(String eventId, CallbackResponse<?> aboutToSubmitResponse,
+    private TestHandler(String caseTypeId,
+                        String eventId,
+                        CallbackResponse<?> aboutToSubmitResponse,
                         SubmittedCallbackResponse submittedResponse,
                         boolean acceptsAboutToSubmit,
                         boolean acceptsSubmitted,
                         int submittedRetries,
                         int submittedFailuresBeforeSuccess) {
+      this.caseTypeId = caseTypeId;
       this.eventId = eventId;
       this.aboutToSubmitResponse = aboutToSubmitResponse;
       this.submittedResponse = submittedResponse;
@@ -103,6 +141,11 @@ class CallbackDispatchServiceTest {
       this.acceptsSubmitted = acceptsSubmitted;
       this.submittedRetries = submittedRetries;
       this.submittedFailuresBeforeSuccess = submittedFailuresBeforeSuccess;
+    }
+
+    @Override
+    public String getHandledCaseTypeId() {
+      return caseTypeId;
     }
 
     @Override
