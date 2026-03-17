@@ -15,7 +15,9 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.ArrayDeque;
 import java.util.Collection;
+import java.util.Deque;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -23,6 +25,7 @@ import java.util.Set;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.core.ResolvableType;
 import org.springframework.stereotype.Component;
+import uk.gov.hmcts.ccd.sdk.DtoFieldNamespace;
 import uk.gov.hmcts.ccd.sdk.ResolvedCCDConfig;
 import uk.gov.hmcts.ccd.sdk.api.CCD;
 import uk.gov.hmcts.ccd.sdk.api.ComplexType;
@@ -37,6 +40,7 @@ class CaseFieldGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
   // The field type set from code always takes precedence,
   // so eg. if a field changes type it gets updated.
   private static final ImmutableSet<String> OVERWRITES_FIELDS = ImmutableSet.of();
+  private static final int CCD_FIELD_ID_LIMIT = 70;
 
   @Override
   public void write(
@@ -51,17 +55,19 @@ class CaseFieldGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
     Map<String, String> prefixToEventId = Maps.newHashMap();
     for (Event event : config.getEvents().values()) {
       if (event.isDtoEvent()) {
-        String prefix = event.getDtoPrefix();
+        DtoFieldNamespace.validate(config.getCaseType(), event.getId(), event.getFieldNamespace());
+        String prefix = event.getEventFieldPrefixStem();
         String existingEventId = prefixToEventId.get(prefix);
         if (existingEventId != null && !existingEventId.equals(event.getId())) {
           throw new IllegalStateException(
-              "DTO prefix collision: events '%s' and '%s' both produce prefix '%s'. "
-              + "Rename one of the events to avoid this collision."
-                  .formatted(existingEventId, event.getId(), prefix));
+              ("DTO field namespace collision for case type '%s': events '%s' and '%s' "
+                  + "both produce prefix stem '%s'.")
+                  .formatted(config.getCaseType(), existingEventId, event.getId(), prefix));
         }
         prefixToEventId.put(prefix, event.getId());
-        validateDtoClass(event.getDtoClass(), event.getId());
-        appendFields(fields, event.getDtoClass(), config.getCaseType(), event.getDtoPrefix());
+        validateDtoClass(config.getCaseType(), event.getDtoClass(), event.getId(), event.getFieldNamespace());
+        validateGeneratedFieldIds(config.getCaseType(), event.getDtoClass(), event.getId(), event.getFieldNamespace());
+        appendFields(fields, event.getDtoClass(), config.getCaseType(), prefix);
       }
     }
 
@@ -289,25 +295,101 @@ class CaseFieldGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
         .findFirst();
   }
 
-  static void validateDtoClass(Class<?> dtoClass, String eventId) {
+  static void validateDtoClass(String caseTypeId, Class<?> dtoClass, String eventId, String fieldNamespace) {
     for (Field field : getCaseFields(dtoClass)) {
       if (field.getAnnotation(com.fasterxml.jackson.annotation.JsonUnwrapped.class) != null) {
         throw new IllegalArgumentException(
-            "DTO class %s for event '%s' must be flat: field '%s' uses @JsonUnwrapped"
-                .formatted(dtoClass.getSimpleName(), eventId, field.getName()));
+            ("DTO class %s for case type '%s', event '%s', namespace '%s' must be flat: "
+                + "field '%s' uses @JsonUnwrapped")
+                .formatted(dtoClass.getSimpleName(), caseTypeId, eventId, fieldNamespace, field.getName()));
       }
-      if (!isAllowedDtoFieldType(field.getType())) {
+      validateSupportedDtoFieldType(caseTypeId, dtoClass, eventId, fieldNamespace, field);
+    }
+  }
+
+  private static void validateGeneratedFieldIds(
+      String caseTypeId, Class<?> dtoClass, String eventId, String fieldNamespace) {
+    String prefixStem = DtoFieldNamespace.toPrefixStem(fieldNamespace);
+    for (Field field : getCaseFields(dtoClass)) {
+      String fieldId = getFieldId(field, prefixStem);
+      if (fieldId.length() > CCD_FIELD_ID_LIMIT) {
         throw new IllegalArgumentException(
-            "DTO class %s for event '%s' has unsupported field type: '%s %s'. "
-            + "DTO fields must be primitives, enums, String, LocalDate, LocalDateTime, "
-            + "or SDK built-in types (annotated with @ComplexType)."
-                .formatted(dtoClass.getSimpleName(), eventId,
-                    field.getType().getSimpleName(), field.getName()));
+            ("Generated CCD field ID exceeds %s characters for case type '%s', event '%s', namespace '%s', "
+                + "field '%s': '%s'")
+                .formatted(CCD_FIELD_ID_LIMIT, caseTypeId, eventId, fieldNamespace, field.getName(), fieldId));
       }
     }
   }
 
-  private static boolean isAllowedDtoFieldType(Class<?> type) {
+  private static void validateSupportedDtoFieldType(
+      String caseTypeId, Class<?> dtoClass, String eventId, String fieldNamespace, Field field) {
+    Class<?> type = field.getType();
+    if (Map.class.isAssignableFrom(type)) {
+      throw unsupportedType(caseTypeId, dtoClass, eventId, fieldNamespace, field, "Map is not supported");
+    }
+
+    if (Collection.class.isAssignableFrom(type)) {
+      validateCollectionFieldType(caseTypeId, dtoClass, eventId, fieldNamespace, field);
+      return;
+    }
+
+    if (!isAllowedScalarDtoFieldType(type)) {
+      throw unsupportedType(caseTypeId, dtoClass, eventId, fieldNamespace, field,
+          "nested/custom types are not supported");
+    }
+  }
+
+  private static void validateCollectionFieldType(
+      String caseTypeId, Class<?> dtoClass, String eventId, String fieldNamespace, Field field) {
+    Deque<ResolvableType> elementTypes = new ArrayDeque<>();
+    elementTypes.add(ResolvableType.forField(field, dtoClass).getGeneric(0));
+
+    while (!elementTypes.isEmpty()) {
+      ResolvableType current = elementTypes.removeFirst();
+      Class<?> resolved = current.resolve();
+      if (resolved == null) {
+        throw new IllegalArgumentException(
+            "Unable to resolve DTO collection element type for case type '%s', event '%s', namespace '%s', "
+                + "field '%s' on %s"
+                .formatted(caseTypeId, eventId, fieldNamespace, field.getName(), dtoClass.getName()));
+      }
+
+      if (Map.class.isAssignableFrom(resolved)) {
+        throw unsupportedType(
+            caseTypeId,
+            dtoClass,
+            eventId,
+            fieldNamespace,
+            field,
+            "collection element type '%s' is not supported".formatted(resolved.getSimpleName())
+        );
+      }
+
+      if (Collection.class.isAssignableFrom(resolved)) {
+        if (!current.hasGenerics()) {
+          throw unsupportedType(caseTypeId, dtoClass, eventId, fieldNamespace, field,
+              "nested collections must resolve to supported element types");
+        }
+        elementTypes.addFirst(current.getGeneric(0));
+        continue;
+      }
+
+      if (!isAllowedScalarDtoFieldType(resolved)) {
+        throw unsupportedType(caseTypeId, dtoClass, eventId, fieldNamespace, field,
+            "collection element type '%s' is not supported".formatted(resolved.getSimpleName()));
+      }
+    }
+  }
+
+  private static IllegalArgumentException unsupportedType(
+      String caseTypeId, Class<?> dtoClass, String eventId, String fieldNamespace, Field field, String reason) {
+    return new IllegalArgumentException(
+        "DTO class %s for case type '%s', event '%s', namespace '%s' has unsupported field '%s' of type '%s': %s"
+            .formatted(dtoClass.getSimpleName(), caseTypeId, eventId, fieldNamespace,
+                field.getName(), field.getGenericType().getTypeName(), reason));
+  }
+
+  private static boolean isAllowedScalarDtoFieldType(Class<?> type) {
     if (type.isPrimitive()) {
       return true;
     }
@@ -322,9 +404,6 @@ class CaseFieldGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
       return true;
     }
     if (type.getAnnotation(ComplexType.class) != null) {
-      return true;
-    }
-    if (Collection.class.isAssignableFrom(type)) {
       return true;
     }
     return false;

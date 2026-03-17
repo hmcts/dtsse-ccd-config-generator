@@ -10,6 +10,7 @@
     "test:e2e-client": "tsx src/run-generated-client-e2e.ts"
   },
   "dependencies": {
+    "@hmcts/ccd-event-runtime": "file:../../sdk/ccd-event-runtime",
     "axios": "^1.13.5"
   },
   "devDependencies": {

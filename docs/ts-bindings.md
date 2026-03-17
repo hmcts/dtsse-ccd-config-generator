@@ -1,32 +1,39 @@
-# TypeScript Bindings for CCD Events
+# TypeScript Bindings for DTO Events
 
 ## Overview
 
-`generateCCDConfig` can optionally generate TypeScript bindings in the same run that writes CCD JSON config.
+`generateCCDConfig` can generate TypeScript bindings for DTO-backed decentralised events in the same run that writes CCD
+JSON config.
 
-This feature is for frontend and integration-test developers who want a typed CCD event client with plain DTO-shaped
-objects.
+The generator now emits:
 
-This is not specific to isolated event DTOs and should be useful for any service that wants a typed CCD integration.
-When isolated event DTOs are used, the same bindings also hide event field prefixing/unprefixing automatically.
+- `dto-types.ts`
+- `event-contracts.ts`
+- `index.ts`
 
-For isolated event DTO behavior in Java and generated config, see
+It does not generate `client.ts`.
+
+Frontend and integration-test consumers compose the generated bindings with the shared runtime package
+`@hmcts/ccd-event-runtime`.
+
+For the Java-side DTO event model and field namespace rules, see
 [isolated-event-dtos.md](./isolated-event-dtos.md).
 
 ## What developers get
 
-- generated DTO TypeScript interfaces
-- typed event entry points under `client.events.<eventId>`
-- typed event flow for `start()`, `validate()` (mid-event), and `submit()`
-- automatic transport marshalling so developers use plain DTO field names
+- generated DTO interfaces and enums
+- a generated event manifest containing event IDs, DTO field names, page IDs, and `fieldNamespace`
+- a typed runtime client built from `createCcdClient(config, caseBindings)`
 
-`start()` returns unprefixed DTO fields.
-`validate()` accepts and returns unprefixed DTO fields while calling CCD mid-event callbacks.
-`submit()` accepts unprefixed DTO fields and prefixes them for CCD transport behind the scenes.
+The runtime handles CCD transport marshalling so callers work with plain DTO-shaped objects.
+
+- `start()` returns DTO-shaped data
+- `validate(pageId, patch)` accepts DTO field names and returns DTO field names
+- `submit(data)` accepts DTO field names
 
 ## Enable generation
 
-Configure the SDK plugin in the service project that owns CCD config:
+Configure the SDK plugin in the service project that owns the CCD config:
 
 ```groovy
 ccd {
@@ -42,9 +49,9 @@ ccd {
 
 `tsBindings` options:
 
-- `enabled` (default `false`)
-- `outputDir` (default `build/ts-bindings`)
-- `moduleName` (default `ccd-bindings`)
+- `enabled` default `false`
+- `outputDir` default `build/ts-bindings`
+- `moduleName` default `ccd-bindings`
 
 ## Build output
 
@@ -63,23 +70,55 @@ No separate TypeScript generation task is required.
 
 ## Generated files
 
-Per case type:
+Per case type, the generator writes:
 
 - `dto-types.ts`
 - `event-contracts.ts`
-- `client.ts`
 - `index.ts`
+
+`event-contracts.ts` contains:
+
+- `EventDtoMap`
+- `caseBindings`
+- per-event `fieldNamespace`
+- per-event `fields` as DTO property names
+- per-event `pages` as page IDs
+
+Only DTO-backed decentralised events are included in these bindings in this change. Legacy non-DTO decentralised
+events are omitted.
+
+## Runtime package
+
+Install or reference the shared runtime package:
+
+```json
+{
+  "dependencies": {
+    "@hmcts/ccd-event-runtime": "file:../../sdk/ccd-event-runtime"
+  }
+}
+```
+
+The runtime exports:
+
+- `createCcdClient`
+- `defineCaseBindings`
+- `CcdCaseBindings`
+- `CcdClientConfig`
+- `CcdTransport`
 
 ## Example
 
 ```ts
 import Axios from 'axios';
-import { GeneratedCcdClient, type CcdClientConfig } from '../generated/ccd/MY_CASE_TYPE';
+import { createCcdClient, type CcdClientConfig } from '@hmcts/ccd-event-runtime';
+import { caseBindings, type CreateClaimData } from '../generated/ccd/MY_CASE_TYPE';
 
 const api = Axios.create({ baseURL: process.env.DATA_STORE_URL_BASE });
 
 const config: CcdClientConfig = {
   baseUrl: process.env.DATA_STORE_URL_BASE || '',
+  callbackBaseUrl: process.env.CCD_CALLBACK_BASE_URL,
   caseTypeId: 'MY_CASE_TYPE',
   getAuthHeaders: () => ({
     Authorization: `Bearer ${process.env.BEARER_TOKEN}`,
@@ -94,38 +133,36 @@ const config: CcdClientConfig = {
   },
 };
 
-const client = new GeneratedCcdClient(config);
-const flow = await client.events.createPossessionClaim.start();
+const client = createCcdClient(config, caseBindings);
+const flow = await client.event('createPossessionClaim').start();
 
-// Typed DTO object. If about-to-start is configured for this event, it may already contain pre-populated values.
-const createClaimData = flow.data;
-createClaimData.feeAmount = '£404';
+const data: CreateClaimData = flow.data;
+data.feeAmount = '£404';
 
-// Mid-event callback for the current page.
-// Returned data is typed and already unmarshalled back to plain DTO fields.
-const midEventResult = await flow.validate('enterPropertyAddress', {
-  propertyAddress: createClaimData.propertyAddress,
+const midEvent = await flow.validate('enterPropertyAddress', {
+  propertyAddress: data.propertyAddress,
 });
 
-if (midEventResult.errors.length > 0) {
-  throw new Error(midEventResult.errors.join('; '));
+if (midEvent.errors.length > 0) {
+  throw new Error(midEvent.errors.join('; '));
 }
 
-await flow.submit(midEventResult.data);
+await flow.submit(midEvent.data);
 ```
 
 ## Mid-event callbacks
 
-Mid-event callbacks use the same event contracts as `start()` and `submit()`.
+`validate(pageId, patch)` uses the generated event contract for the selected event.
 
 You pass:
 
-- `pageId` for the page being validated/saved
+- a page ID from the generated `pages` union
 - a partial DTO payload containing changed fields
 
 You get back:
 
-- typed DTO data for the event (including any callback mutations)
-- `errors` and `warnings` from CCD callback validation
+- typed DTO data for the event
+- `errors` and `warnings` returned by CCD callback validation
 
-All prefixing/unprefixing is handled inside the generated client.
+All field prefixing and unprefixing is handled inside `@hmcts/ccd-event-runtime` using the generated
+`fieldNamespace`.

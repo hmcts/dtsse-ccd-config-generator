@@ -1379,6 +1379,7 @@ public class TestWithCCD extends CftlibTest {
         );
         processBuilder.directory(new File(testsDir));
         processBuilder.environment().put("CCD_BASE_URL", BASE_URL);
+        processBuilder.environment().put("CCD_CALLBACK_BASE_URL", SERVICE_BASE_URL);
         processBuilder.environment().put("CCD_CASE_TYPE_ID", NoFaultDivorce.getCaseType());
         processBuilder.environment().put("CCD_CASE_ID", String.valueOf(caseRef));
         processBuilder.environment().put(

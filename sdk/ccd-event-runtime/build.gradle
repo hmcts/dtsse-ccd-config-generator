@@ -1,0 +1,31 @@
+plugins {
+    id 'com.github.node-gradle.node' version '7.1.0'
+}
+
+node {
+    download = false
+    nodeProjectDir = projectDir
+}
+
+tasks.register('yarnInstall', com.github.gradle.node.yarn.task.YarnInstallTask) {
+    group = 'build'
+    description = 'Install shared CCD event runtime dependencies via Yarn.'
+}
+
+tasks.register('yarnTypecheck', com.github.gradle.node.yarn.task.YarnTask) {
+    group = 'verification'
+    description = 'Type-check the shared CCD event runtime package.'
+    dependsOn tasks.named('yarnInstall')
+    args = ['typecheck']
+}
+
+tasks.register('yarnTestRuntime', com.github.gradle.node.yarn.task.YarnTask) {
+    group = 'verification'
+    description = 'Run shared CCD event runtime tests.'
+    dependsOn tasks.named('yarnTypecheck')
+    args = ['test']
+}
+
+tasks.named('check').configure {
+    dependsOn tasks.named('yarnTestRuntime')
+}

@@ -1,10 +1,9 @@
 // Exercises generated CCD TypeScript bindings against a live CCD stack.
 import Axios, { AxiosInstance } from 'axios';
+import { createCcdClient, type CcdClientConfig, type CcdTransport } from '@hmcts/ccd-event-runtime';
 
 import {
-  CcdClientConfig,
-  CcdTransport,
-  GeneratedCcdClient,
+  caseBindings,
   type CaseworkerAddNoteDto,
 } from './generated/ccd/E2E';
 
@@ -25,6 +24,7 @@ function createTransport(api: AxiosInstance): CcdTransport {
 
 async function run(): Promise<void> {
   const baseUrl = requireEnv('CCD_BASE_URL');
+  const callbackBaseUrl = requireEnv('CCD_CALLBACK_BASE_URL');
   const caseTypeId = requireEnv('CCD_CASE_TYPE_ID');
   const caseId = requireEnv('CCD_CASE_ID');
   const userToken = requireEnv('CCD_USER_TOKEN');
@@ -35,6 +35,7 @@ async function run(): Promise<void> {
 
   const config: CcdClientConfig = {
     baseUrl,
+    callbackBaseUrl,
     caseTypeId,
     getAuthHeaders: () => ({
       Authorization: userToken.startsWith('Bearer ') ? userToken : `Bearer ${userToken}`,
@@ -46,8 +47,8 @@ async function run(): Promise<void> {
     transport: createTransport(api),
   };
 
-  const client = new GeneratedCcdClient(config);
-  const flow = await client.events.caseworkerDecentralisedAddNoteDto.start(caseId);
+  const client = createCcdClient(config, caseBindings);
+  const flow = await client.event('caseworkerDecentralisedAddNoteDto').start(caseId);
   const startData: CaseworkerAddNoteDto = flow.data;
 
   if (!startData.note || !startData.note.startsWith('[start] set by ')) {

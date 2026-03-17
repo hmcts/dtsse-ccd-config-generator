@@ -132,6 +132,9 @@
   resolved "https://registry.yarnpkg.com/@esbuild/win32-x64/-/win32-x64-0.27.3.tgz#0eaf705c941a218a43dba8e09f1df1d6cd2f1f17"
   integrity sha512-4uJGhsxuptu3OcpVAzli+/gWusVGwZZHTlS63hh++ehExkVT8SgiEf7/uC/PclrPPkLhZqGgCTjd0VWLo6xMqA==
 
+"@hmcts/ccd-event-runtime@file:../../sdk/ccd-event-runtime":
+  version "0.0.1"
+
 "@types/node@^24.0.0":
   version "24.11.0"
   resolved "https://registry.yarnpkg.com/@types/node/-/node-24.11.0.tgz#34e8f9603ada03fdc36a532faefdb8e1bb3693a0"

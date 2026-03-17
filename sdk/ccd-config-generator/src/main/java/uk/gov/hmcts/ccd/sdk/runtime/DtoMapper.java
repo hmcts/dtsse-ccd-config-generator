@@ -4,6 +4,7 @@ import static org.apache.commons.lang3.StringUtils.capitalize;
 import static org.apache.commons.lang3.StringUtils.uncapitalize;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -27,7 +28,8 @@ public final class DtoMapper {
   public static <D> D fromCcdData(Map<String, ?> data, String prefix, Class<D> dtoClass,
                                   ObjectMapper mapper) {
     Map<String, Object> unprefixed = new LinkedHashMap<>();
-    for (Map.Entry<String, ?> entry : data.entrySet()) {
+    Map<String, ?> source = data == null ? Collections.emptyMap() : data;
+    for (Map.Entry<String, ?> entry : source.entrySet()) {
       String key = entry.getKey();
       if (key.startsWith(prefix) && key.length() > prefix.length()) {
         String fieldName = uncapitalize(key.substring(prefix.length()));
@@ -45,6 +47,10 @@ public final class DtoMapper {
    */
   @SuppressWarnings("unchecked")
   public static Map<String, Object> toCcdData(Object dto, String prefix, ObjectMapper mapper) {
+    if (dto == null) {
+      return new LinkedHashMap<>();
+    }
+
     Map<String, Object> flat = mapper.convertValue(dto, Map.class);
     Map<String, Object> prefixed = new LinkedHashMap<>();
     for (Map.Entry<String, Object> entry : flat.entrySet()) {

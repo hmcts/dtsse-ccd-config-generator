@@ -49,10 +49,12 @@ public class FunctionalTest {
     File tsClient = new File(testProjectDir.getRoot(), "build/ts-bindings/test/client.ts");
     assertTrue(tsContracts.exists());
     assertTrue(tsDtoTypes.exists());
-    assertTrue(tsClient.exists());
+    assertTrue(!tsClient.exists());
     String contractsContent = FileUtils.readFileToString(tsContracts, StandardCharsets.UTF_8);
     assertTrue(contractsContent.contains("\"create-widget\""));
     assertTrue(contractsContent.contains("CreateWidgetData"));
+    assertTrue(contractsContent.contains("fieldNamespace: \"widget.create\""));
+    assertTrue(contractsContent.contains("defineCaseBindings"));
 
     // Run a second time to ensure a non-clean build without changes is up to date.
     assertEquals(TaskOutcome.UP_TO_DATE,r.build().task(":generateCCDConfig").getOutcome());

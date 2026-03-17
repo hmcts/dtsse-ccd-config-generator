@@ -93,7 +93,7 @@ class AuthorisationCaseFieldGenerator<T, S, R extends HasRole> implements Config
     for (Event<T, R, S> event : config.getEvents().values()) {
       if (event.isDtoEvent()) {
         for (java.lang.reflect.Field field : getCaseFields(event.getDtoClass())) {
-          String fieldId = getFieldId(field, event.getDtoPrefix());
+          String fieldId = getFieldId(field, event.getEventFieldPrefixStem());
           for (R role : event.getGrants().keys()) {
             if (!event.getHistoryOnlyRoles().contains(role.getRole())) {
               Set<Permission> perm = new HashSet<>(CRUD);

@@ -34,19 +34,21 @@ public class TypeScriptBindingsGeneratorTest {
 
     File contractsFile = new File(output, "event-contracts.ts");
     File dtoFile = new File(output, "dto-types.ts");
-    File clientFile = new File(output, "client.ts");
     File indexFile = new File(output, "index.ts");
 
     assertThat(contractsFile).exists();
     assertThat(dtoFile).exists();
-    assertThat(clientFile).exists();
+    assertThat(new File(output, "client.ts")).doesNotExist();
     assertThat(indexFile).exists();
 
     String contracts = FileUtils.readFileToString(contractsFile, StandardCharsets.UTF_8);
     assertThat(contracts).contains("\"createWidget\"");
     assertThat(contracts).doesNotContain("legacyUpdate");
-    assertThat(contracts).contains("prefix: \"cw\"");
+    assertThat(contracts).contains("defineCaseBindings");
+    assertThat(contracts).contains("caseTypeId: \"ts_case\"");
+    assertThat(contracts).contains("fieldNamespace: \"widget.create\"");
     assertThat(contracts).contains("fields: [\"name\", \"reference\"]");
+    assertThat(contracts).contains("pages: [\"1\"]");
 
     String firstDto = FileUtils.readFileToString(dtoFile, StandardCharsets.UTF_8);
     generator.writeBindings(output, resolved, "test-module");
@@ -78,7 +80,13 @@ public class TypeScriptBindingsGeneratorTest {
           .optional(TestCaseData::getLegacyField)
           .done();
 
-      builder.decentralisedEvent("createWidget", CreateWidgetDto.class, this::submitDto, this::startDto)
+      builder.decentralisedEvent(
+              "createWidget",
+              CreateWidgetDto.class,
+              "widget.create",
+              this::submitDto,
+              this::startDto
+          )
           .initialState(TestState.DRAFT)
           .grant(CRU, TestRole.USER)
           .name("Create Widget")
