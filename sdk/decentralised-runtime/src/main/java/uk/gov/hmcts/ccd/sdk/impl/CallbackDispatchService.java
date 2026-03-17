@@ -76,7 +76,10 @@ public class CallbackDispatchService {
     );
   }
 
-  private Map<CallbackBinding, CallbackHandler<?>> createHandlerMap(Predicate<CallbackHandler<?>> filter, String phase) {
+  private Map<CallbackBinding, CallbackHandler<?>> createHandlerMap(
+      Predicate<CallbackHandler<?>> filter,
+      String phase
+  ) {
     return callbackHandlers.stream()
         .filter(filter)
         .peek(handler -> validateBinding(handler, phase))
