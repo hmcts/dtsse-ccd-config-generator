@@ -1,8 +1,7 @@
 package uk.gov.hmcts.ccd.sdk;
 
-import uk.gov.hmcts.reform.ccd.client.model.CallbackRequest;
-
 import java.util.List;
+import uk.gov.hmcts.reform.ccd.client.model.CallbackRequest;
 
 /**
  * Defines a callback handler used by services that submit events through JSON-based CCD definitions.

@@ -1,8 +1,7 @@
 package uk.gov.hmcts.ccd.sdk;
 
-import org.springframework.core.NamedThreadLocal;
-
 import java.util.Optional;
+import org.springframework.core.NamedThreadLocal;
 
 /**
  * Exposes request-scoped metadata to callback handlers without changing callback method signatures.
