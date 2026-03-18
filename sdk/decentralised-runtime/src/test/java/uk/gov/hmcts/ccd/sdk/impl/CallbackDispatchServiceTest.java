@@ -59,6 +59,28 @@ class CallbackDispatchServiceTest {
   }
 
   @Test
+  void dispatchToHandlersAboutToSubmitMatchesAllConfiguredBindingCombinations() {
+    CallbackResponse<?> expected = mock(CallbackResponse.class);
+    CallbackDispatchService service = new CallbackDispatchService(List.of(
+        new TestHandler(
+            List.of("CASE_TYPE_A", "CASE_TYPE_B"),
+            List.of("EVENT_A", "EVENT_B"),
+            expected,
+            null,
+            true,
+            false,
+            0,
+            0
+        )
+    ));
+
+    var result = service.dispatchToHandlersAboutToSubmit(buildRequest("CASE_TYPE_B", "EVENT_A"));
+
+    assertThat(result.handled()).isTrue();
+    assertThat(result.response()).isSameAs(expected);
+  }
+
+  @Test
   void dispatchToHandlersReturnsNoHandlerWhenHandlerDoesNotAcceptCallbacks() {
     CallbackDispatchService service = new CallbackDispatchService(List.of(
         new TestHandler("CASE_TYPE", "EVENT_ID", mock(CallbackResponse.class), mock(SubmittedCallbackResponse.class),
@@ -107,16 +129,20 @@ class CallbackDispatchServiceTest {
   }
 
   private static CallbackRequest buildRequest(String eventId) {
+    return buildRequest("CASE_TYPE", eventId);
+  }
+
+  private static CallbackRequest buildRequest(String caseTypeId, String eventId) {
     return CallbackRequest.builder()
         .eventId(eventId)
-        .caseDetails(CaseDetails.builder().id(123L).caseTypeId("CASE_TYPE").build())
+        .caseDetails(CaseDetails.builder().id(123L).caseTypeId(caseTypeId).build())
         .build();
   }
 
   private static final class TestHandler implements CallbackHandler {
 
-    private final String caseTypeId;
-    private final String eventId;
+    private final List<String> caseTypeIds;
+    private final List<String> eventIds;
     private final CallbackResponse<?> aboutToSubmitResponse;
     private final SubmittedCallbackResponse submittedResponse;
     private final boolean acceptsAboutToSubmit;
@@ -133,8 +159,28 @@ class CallbackDispatchServiceTest {
                         boolean acceptsSubmitted,
                         int submittedRetries,
                         int submittedFailuresBeforeSuccess) {
-      this.caseTypeId = caseTypeId;
-      this.eventId = eventId;
+      this(
+          List.of(caseTypeId),
+          List.of(eventId),
+          aboutToSubmitResponse,
+          submittedResponse,
+          acceptsAboutToSubmit,
+          acceptsSubmitted,
+          submittedRetries,
+          submittedFailuresBeforeSuccess
+      );
+    }
+
+    private TestHandler(List<String> caseTypeIds,
+                        List<String> eventIds,
+                        CallbackResponse<?> aboutToSubmitResponse,
+                        SubmittedCallbackResponse submittedResponse,
+                        boolean acceptsAboutToSubmit,
+                        boolean acceptsSubmitted,
+                        int submittedRetries,
+                        int submittedFailuresBeforeSuccess) {
+      this.caseTypeIds = caseTypeIds;
+      this.eventIds = eventIds;
       this.aboutToSubmitResponse = aboutToSubmitResponse;
       this.submittedResponse = submittedResponse;
       this.acceptsAboutToSubmit = acceptsAboutToSubmit;
@@ -144,13 +190,13 @@ class CallbackDispatchServiceTest {
     }
 
     @Override
-    public String getHandledCaseTypeId() {
-      return caseTypeId;
+    public List<String> getHandledCaseTypeIds() {
+      return caseTypeIds;
     }
 
     @Override
-    public String getHandledEventId() {
-      return eventId;
+    public List<String> getHandledEventIds() {
+      return eventIds;
     }
 
     @Override
@@ -178,7 +224,7 @@ class CallbackDispatchServiceTest {
     }
 
     @Override
-    public int getSubmittedRetries() {
+    public int shouldRetrySubmitted() {
       return submittedRetries;
     }
   }

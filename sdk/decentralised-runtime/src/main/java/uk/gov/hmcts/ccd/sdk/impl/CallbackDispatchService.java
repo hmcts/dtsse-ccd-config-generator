@@ -9,11 +9,12 @@ import uk.gov.hmcts.ccd.sdk.CallbackResponse;
 import uk.gov.hmcts.ccd.sdk.SubmittedCallbackResponse;
 import uk.gov.hmcts.reform.ccd.client.model.CallbackRequest;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.function.Predicate;
-import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 @Slf4j
 @RequiredArgsConstructor
@@ -47,7 +48,7 @@ public class CallbackDispatchService {
       return DispatchResult.noHandlerFound();
     }
 
-    var maxAttempts = handler.getSubmittedRetries() + 1;
+    int maxAttempts = handler.shouldRetrySubmitted() ? 3 : 1;
     int attempts = 0;
     Exception lastException = null;
 
@@ -80,24 +81,29 @@ public class CallbackDispatchService {
       Predicate<CallbackHandler<?>> filter,
       String phase
   ) {
-    return callbackHandlers.stream()
+    var handlersByBinding = new HashMap<CallbackBinding, CallbackHandler<?>>();
+
+    callbackHandlers.stream()
         .filter(filter)
-        .peek(handler -> validateBinding(handler, phase))
-        .collect(Collectors.toUnmodifiableMap(
-            this::bindingFor,
-            handler -> handler,
-            (first, second) -> {
+        .forEach(handler -> {
+          validateBinding(handler, phase);
+          bindingsFor(handler).forEach(binding -> {
+            var existingHandler = handlersByBinding.putIfAbsent(binding, handler);
+            if (existingHandler != null && existingHandler != handler) {
               throw new IllegalStateException(
                   "Duplicate %s callback binding for caseType=%s eventId=%s (%s, %s)".formatted(
                       phase,
-                      first.getHandledCaseTypeId(),
-                      first.getHandledEventId(),
-                      first.getClass().getName(),
-                      second.getClass().getName()
+                      binding.caseTypeId(),
+                      binding.eventId(),
+                      existingHandler.getClass().getName(),
+                      handler.getClass().getName()
                   )
               );
             }
-        ));
+          });
+        });
+
+    return Map.copyOf(handlersByBinding);
   }
 
   private void ensureInitialised() {
@@ -107,9 +113,9 @@ public class CallbackDispatchService {
   }
 
   private void validateBinding(CallbackHandler<?> handler, String phase) {
-    if (isBlank(handler.getHandledCaseTypeId()) || isBlank(handler.getHandledEventId())) {
+    if (isBlank(handler.getHandledCaseTypeIds()) || isBlank(handler.getHandledEventIds())) {
       throw new IllegalStateException(
-          "Invalid %s callback binding: handler %s must define non-empty caseTypeId and eventId"
+          "Invalid %s callback binding: handler %s must define non-empty caseTypeId and eventId lists"
               .formatted(phase, handler.getClass().getName())
       );
     }
@@ -122,12 +128,17 @@ public class CallbackDispatchService {
     );
   }
 
-  private CallbackBinding bindingFor(CallbackHandler<?> handler) {
-    return new CallbackBinding(handler.getHandledCaseTypeId(), handler.getHandledEventId());
+  private Stream<CallbackBinding> bindingsFor(CallbackHandler<?> handler) {
+    return handler.getHandledCaseTypeIds().stream()
+        .flatMap(caseTypeId -> handler.getHandledEventIds().stream()
+            .map(eventId -> new CallbackBinding(caseTypeId, eventId)))
+        .distinct();
   }
 
-  private boolean isBlank(String value) {
-    return value == null || value.isBlank();
+  private boolean isBlank(List<String> values) {
+    return values == null
+        || values.isEmpty()
+        || values.stream().anyMatch(value -> value == null || value.isBlank());
   }
 
   private record CallbackBinding(String caseTypeId, String eventId) {
