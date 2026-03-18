@@ -20,7 +20,7 @@ class CallbackDispatchServiceTest {
   void dispatchToHandlersAboutToSubmitReturnsHandlerResponse() {
     CallbackResponse<?> expected = mock(CallbackResponse.class);
     CallbackDispatchService service = new CallbackDispatchService(List.of(
-        new TestHandler("CASE_TYPE", "EVENT_ID", expected, null, true, false, 0, 0)
+        new TestHandler("CASE_TYPE", "EVENT_ID", expected, null, true, false, false, 0)
     ));
 
     var result = service.dispatchToHandlersAboutToSubmit(buildRequest("EVENT_ID"));
@@ -33,7 +33,7 @@ class CallbackDispatchServiceTest {
   void dispatchToHandlersSubmittedReturnsHandlerResponse() {
     SubmittedCallbackResponse expected = mock(SubmittedCallbackResponse.class);
     CallbackDispatchService service = new CallbackDispatchService(List.of(
-        new TestHandler("CASE_TYPE", "EVENT_ID", null, expected, false, true, 0, 0)
+        new TestHandler("CASE_TYPE", "EVENT_ID", null, expected, false, true, false, 0)
     ));
 
     var result = service.dispatchToHandlersSubmitted(buildRequest("EVENT_ID"));
@@ -47,7 +47,7 @@ class CallbackDispatchServiceTest {
     CallbackDispatchService service = new CallbackDispatchService(List.of(
         new TestHandler("OTHER_CASE_TYPE", "DIFFERENT_EVENT",
             mock(CallbackResponse.class), mock(SubmittedCallbackResponse.class),
-            true, true, 0, 0)
+            true, true, false, 0)
     ));
 
     var aboutToSubmit = service.dispatchToHandlersAboutToSubmit(buildRequest("EVENT_ID"));
@@ -69,7 +69,7 @@ class CallbackDispatchServiceTest {
             null,
             true,
             false,
-            0,
+            false,
             0
         )
     ));
@@ -84,7 +84,7 @@ class CallbackDispatchServiceTest {
   void dispatchToHandlersReturnsNoHandlerWhenHandlerDoesNotAcceptCallbacks() {
     CallbackDispatchService service = new CallbackDispatchService(List.of(
         new TestHandler("CASE_TYPE", "EVENT_ID", mock(CallbackResponse.class), mock(SubmittedCallbackResponse.class),
-            false, false, 0, 0)
+            false, false, false, 0)
     ));
 
     assertThat(service.dispatchToHandlersAboutToSubmit(buildRequest("EVENT_ID")).handled()).isFalse();
@@ -95,7 +95,7 @@ class CallbackDispatchServiceTest {
   void dispatchToHandlersSubmittedRetriesUntilSuccess() {
     SubmittedCallbackResponse expected = mock(SubmittedCallbackResponse.class);
     CallbackDispatchService service = new CallbackDispatchService(List.of(
-        new TestHandler("CASE_TYPE", "EVENT_ID", null, expected, false, true, 2, 2)
+        new TestHandler("CASE_TYPE", "EVENT_ID", null, expected, false, true, true, 2)
     ));
 
     var result = service.dispatchToHandlersSubmitted(buildRequest("EVENT_ID"));
@@ -107,7 +107,7 @@ class CallbackDispatchServiceTest {
   void dispatchToHandlersSubmittedThrowsWhenRetriesExhausted() {
     CallbackDispatchService service = new CallbackDispatchService(List.of(
         new TestHandler("CASE_TYPE", "EVENT_ID", null, mock(SubmittedCallbackResponse.class),
-            false, true, 2, Integer.MAX_VALUE)
+            false, true, true, Integer.MAX_VALUE)
     ));
 
     assertThatThrownBy(() -> service.dispatchToHandlersSubmitted(buildRequest("EVENT_ID")))
@@ -121,8 +121,8 @@ class CallbackDispatchServiceTest {
   @Test
   void constructorFailsFastOnDuplicateBindings() {
     assertThatThrownBy(() -> new CallbackDispatchService(List.of(
-        new TestHandler("CASE_TYPE", "EVENT_ID", mock(CallbackResponse.class), null, true, false, 0, 0),
-        new TestHandler("CASE_TYPE", "EVENT_ID", mock(CallbackResponse.class), null, true, false, 0, 0)
+        new TestHandler("CASE_TYPE", "EVENT_ID", mock(CallbackResponse.class), null, true, false, false, 0),
+        new TestHandler("CASE_TYPE", "EVENT_ID", mock(CallbackResponse.class), null, true, false, false, 0)
     )).dispatchToHandlersAboutToSubmit(buildRequest("EVENT_ID")))
         .isInstanceOf(IllegalStateException.class)
         .hasMessageContaining("Duplicate aboutToSubmit callback binding");
@@ -147,7 +147,7 @@ class CallbackDispatchServiceTest {
     private final SubmittedCallbackResponse submittedResponse;
     private final boolean acceptsAboutToSubmit;
     private final boolean acceptsSubmitted;
-    private final int submittedRetries;
+    private final boolean retrySubmitted;
     private final int submittedFailuresBeforeSuccess;
     private final AtomicInteger submittedAttempts = new AtomicInteger(0);
 
@@ -157,7 +157,7 @@ class CallbackDispatchServiceTest {
                         SubmittedCallbackResponse submittedResponse,
                         boolean acceptsAboutToSubmit,
                         boolean acceptsSubmitted,
-                        int submittedRetries,
+                        boolean retrySubmitted,
                         int submittedFailuresBeforeSuccess) {
       this(
           List.of(caseTypeId),
@@ -166,7 +166,7 @@ class CallbackDispatchServiceTest {
           submittedResponse,
           acceptsAboutToSubmit,
           acceptsSubmitted,
-          submittedRetries,
+          retrySubmitted,
           submittedFailuresBeforeSuccess
       );
     }
@@ -177,7 +177,7 @@ class CallbackDispatchServiceTest {
                         SubmittedCallbackResponse submittedResponse,
                         boolean acceptsAboutToSubmit,
                         boolean acceptsSubmitted,
-                        int submittedRetries,
+                        boolean retrySubmitted,
                         int submittedFailuresBeforeSuccess) {
       this.caseTypeIds = caseTypeIds;
       this.eventIds = eventIds;
@@ -185,7 +185,7 @@ class CallbackDispatchServiceTest {
       this.submittedResponse = submittedResponse;
       this.acceptsAboutToSubmit = acceptsAboutToSubmit;
       this.acceptsSubmitted = acceptsSubmitted;
-      this.submittedRetries = submittedRetries;
+      this.retrySubmitted = retrySubmitted;
       this.submittedFailuresBeforeSuccess = submittedFailuresBeforeSuccess;
     }
 
@@ -224,8 +224,8 @@ class CallbackDispatchServiceTest {
     }
 
     @Override
-    public int shouldRetrySubmitted() {
-      return submittedRetries;
+    public boolean shouldRetrySubmitted() {
+      return retrySubmitted;
     }
   }
 }

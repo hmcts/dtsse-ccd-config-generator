@@ -54,10 +54,10 @@ class CaseSubmissionServiceTest {
   @Test
   void submitUsesJsonDefinitionHandlerWhenLegacyJsonServiceIsEnabled() {
     setupTransactionExecution();
-    DecentralisedCaseEvent event = buildEvent();
-    UUID idempotencyKey = UUID.randomUUID();
-    Event eventConfig = mock(Event.class);
-    var user = new IdamService.User("Bearer token", null);
+    final DecentralisedCaseEvent event = buildEvent();
+    final UUID idempotencyKey = UUID.randomUUID();
+    final Event eventConfig = mock(Event.class);
+    final var user = new IdamService.User("Bearer token", null);
 
     ReflectionTestUtils.setField(service, "isLegacyJsonDefinition", true);
     doReturn(eventConfig).when(resolvedConfigRegistry).getRequiredEvent("CASE_TYPE", "EVENT_ID");
@@ -76,10 +76,10 @@ class CaseSubmissionServiceTest {
   @Test
   void submitUsesDecentralisedSubmitHandlerWhenConfigured() {
     setupTransactionExecution();
-    DecentralisedCaseEvent event = buildEvent();
-    UUID idempotencyKey = UUID.randomUUID();
-    Event eventConfig = mock(Event.class);
-    var user = new IdamService.User("Bearer token", null);
+    final DecentralisedCaseEvent event = buildEvent();
+    final UUID idempotencyKey = UUID.randomUUID();
+    final Event eventConfig = mock(Event.class);
+    final var user = new IdamService.User("Bearer token", null);
 
     ReflectionTestUtils.setField(service, "isLegacyJsonDefinition", false);
     when(eventConfig.getSubmitHandler()).thenReturn(mock(uk.gov.hmcts.ccd.sdk.api.callback.Submit.class));
@@ -99,10 +99,10 @@ class CaseSubmissionServiceTest {
   @Test
   void submitUsesLegacyHandlerWhenSubmitHandlerIsNotConfigured() {
     setupTransactionExecution();
-    DecentralisedCaseEvent event = buildEvent();
-    UUID idempotencyKey = UUID.randomUUID();
-    Event eventConfig = mock(Event.class);
-    var user = new IdamService.User("Bearer token", null);
+    final DecentralisedCaseEvent event = buildEvent();
+    final UUID idempotencyKey = UUID.randomUUID();
+    final Event eventConfig = mock(Event.class);
+    final var user = new IdamService.User("Bearer token", null);
 
     ReflectionTestUtils.setField(service, "isLegacyJsonDefinition", false);
     when(eventConfig.getSubmitHandler()).thenReturn(null);

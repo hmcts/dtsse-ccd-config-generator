@@ -16,7 +16,8 @@ public interface CallbackHandler<T> {
   /**
    * Returns the case type IDs handled by this callback.
    *
-   * <p>If this list is empty, dispatching is evaluated using event IDs only.
+   * <p>This list must return at least one element, and no elements can be an empty string,
+   * else an IllegalStateException will be thrown on application startup.
    *
    * @return list of handled case type IDs
    */
@@ -25,9 +26,8 @@ public interface CallbackHandler<T> {
   /**
    * Returns the event IDs handled by this callback.
    *
-   * <p>If this list is empty, dispatching is evaluated using case type IDs only, which effectively
-   * matches all events for those case types. In most scenarios this is not desirable, so
-   * implementations should return at least one event ID.
+   * <p>This list must return at least one element, and no elements can be an empty string,
+   * else an IllegalStateException will be thrown on application startup.
    *
    * @return list of handled event IDs
    */
