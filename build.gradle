@@ -30,9 +30,9 @@ tasks.register('publishToMavenLocal') { task ->
 }
 
 tasks.register('publishToAzureArtifacts') { task ->
-    ['sdk'].each { includedBuildName ->
-        def included = gradle.includedBuilds.find { it.name == includedBuildName }
-        if (included != null) {
+    def includedBuildsToPublish = ['sdk']
+    gradle.includedBuilds.each { included ->
+        if (includedBuildsToPublish.contains(included.name)) {
             task.dependsOn(included.task(':publishToAzureArtifacts'))
         }
     }
