@@ -47,7 +47,7 @@ public class TypeScriptBindingsGeneratorTest {
     assertThat(contracts).contains("defineCaseBindings");
     assertThat(contracts).contains("caseTypeId: \"ts_case\"");
     assertThat(contracts).contains("fieldNamespace: \"widget.create\"");
-    assertThat(contracts).contains("fields: [\"name\", \"reference\"]");
+    assertThat(contracts).doesNotContain("fields: [");
     assertThat(contracts).contains("pages: [\"1\"]");
 
     String firstDto = FileUtils.readFileToString(dtoFile, StandardCharsets.UTF_8);

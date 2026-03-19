@@ -22,7 +22,7 @@ For the Java-side DTO event model and field namespace rules, see
 ## What developers get
 
 - generated DTO interfaces and enums
-- a generated event manifest containing event IDs, DTO field names, page IDs, and `fieldNamespace`
+- a generated event manifest containing event IDs, page IDs, and `fieldNamespace`
 - a typed runtime client built from `createCcdClient(config, caseBindings)`
 
 The runtime handles CCD transport marshalling so callers work with plain DTO-shaped objects.
@@ -81,7 +81,6 @@ Per case type, the generator writes:
 - `EventDtoMap`
 - `caseBindings`
 - per-event `fieldNamespace`
-- per-event `fields` as DTO property names
 - per-event `pages` as page IDs
 
 Only DTO-backed decentralised events are included in these bindings in this change. Legacy non-DTO decentralised

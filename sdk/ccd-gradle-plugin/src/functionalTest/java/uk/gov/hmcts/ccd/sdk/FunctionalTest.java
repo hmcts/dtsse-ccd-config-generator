@@ -55,6 +55,7 @@ public class FunctionalTest {
     assertTrue(contractsContent.contains("CreateWidgetData"));
     assertTrue(contractsContent.contains("fieldNamespace: \"widget.create\""));
     assertTrue(contractsContent.contains("defineCaseBindings"));
+    assertTrue(!contractsContent.contains("fields: ["));
 
     // Run a second time to ensure a non-clean build without changes is up to date.
     assertEquals(TaskOutcome.UP_TO_DATE,r.build().task(":generateCCDConfig").getOutcome());

@@ -1,9 +1,6 @@
 package uk.gov.hmcts.ccd.sdk.ts;
 
 import static java.util.stream.Collectors.joining;
-import static uk.gov.hmcts.ccd.sdk.FieldUtils.getCaseFields;
-import static uk.gov.hmcts.ccd.sdk.FieldUtils.getFieldId;
-
 import cz.habarta.typescript.generator.Input;
 import cz.habarta.typescript.generator.JsonLibrary;
 import cz.habarta.typescript.generator.Settings;
@@ -54,16 +51,10 @@ public class TypeScriptBindingsGenerator {
       if (!event.isDtoEvent()) {
         continue;
       }
-      List<String> fields = getCaseFields(event.getDtoClass()).stream()
-          .map(field -> getFieldId(field))
-          .sorted()
-          .toList();
-
       result.add(new DtoEventContract(
           event.getId(),
           event.getDtoClass(),
           event.getFieldNamespace(),
-          fields,
           extractPages(event)));
     }
     return result.stream()
@@ -137,7 +128,6 @@ public class TypeScriptBindingsGenerator {
     String contractEntries = contracts.stream()
         .map(contract -> "  \"" + contract.eventId() + "\": {\n"
             + "    fieldNamespace: \"" + contract.fieldNamespace() + "\",\n"
-            + "    fields: [" + quotedList(contract.fields()) + "],\n"
             + "    pages: [" + quotedList(contract.pages()) + "],\n"
             + "  },")
         .collect(joining("\n"));
@@ -197,7 +187,6 @@ public class TypeScriptBindingsGenerator {
       String eventId,
       Class<?> dtoClass,
       String fieldNamespace,
-      List<String> fields,
       List<String> pages) {
   }
 }

@@ -8,7 +8,6 @@ type StringKeys<T> = Extract<keyof T, string>;
 type BindingEvents<T extends object> = {
   [K in StringKeys<T>]: {
     fieldNamespace: string;
-    fields: readonly StringKeys<T[K] & object>[];
     pages: readonly string[];
   };
 };
@@ -220,10 +219,8 @@ function marshal<TBindings extends CcdCaseBindings<any>, TEventId extends BoundE
   const source = toRecord(data);
   const marshalled: Record<string, unknown> = {};
   const prefixStem = toPrefixStem(event.fieldNamespace);
-  for (const field of event.fields) {
-    if (Object.prototype.hasOwnProperty.call(source, field)) {
-      marshalled[prefixStem + capitalise(field)] = source[field];
-    }
+  for (const [field, value] of Object.entries(source)) {
+    marshalled[prefixStem + capitalise(field)] = value;
   }
   return marshalled;
 }
@@ -236,10 +233,9 @@ function unmarshal<TBindings extends CcdCaseBindings<any>, TEventId extends Boun
   const event = bindings.events[eventId as keyof typeof bindings.events] as TBindings["events"][TEventId];
   const prefixStem = toPrefixStem(event.fieldNamespace);
   const unmarshalled: Record<string, unknown> = {};
-  for (const field of event.fields) {
-    const prefixedField = prefixStem + capitalise(field);
-    if (Object.prototype.hasOwnProperty.call(ccdData, prefixedField)) {
-      unmarshalled[field] = ccdData[prefixedField];
+  for (const [field, value] of Object.entries(ccdData)) {
+    if (field.startsWith(prefixStem) && field.length > prefixStem.length) {
+      unmarshalled[uncapitalise(field.slice(prefixStem.length))] = value;
     }
   }
   return unmarshalled as BoundEventData<TBindings, TEventId>;
@@ -254,6 +250,10 @@ export function toPrefixStem(fieldNamespace: string): string {
 
 function capitalise(value: string): string {
   return value.length === 0 ? value : value[0].toUpperCase() + value.slice(1);
+}
+
+function uncapitalise(value: string): string {
+  return value.length === 0 ? value : value[0].toLowerCase() + value.slice(1);
 }
 
 function toRecord(value: unknown): Record<string, unknown> {

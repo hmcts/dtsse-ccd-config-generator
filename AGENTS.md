@@ -26,8 +26,6 @@ Max line length 120 chars
 
 /sdk - contains the CCD SDK tooling
 
-# Architecture
-
 # CCD & Architecture
 
 Services & CCD are cyclically dependent

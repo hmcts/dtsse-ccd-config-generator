@@ -7,7 +7,6 @@ type StringKeys<T> = Extract<keyof T, string>;
 type BindingEvents<T extends object> = {
     [K in StringKeys<T>]: {
         fieldNamespace: string;
-        fields: readonly StringKeys<T[K] & object>[];
         pages: readonly string[];
     };
 };

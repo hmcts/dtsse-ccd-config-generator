@@ -95,10 +95,8 @@ function marshal(bindings, eventId, data) {
     const source = toRecord(data);
     const marshalled = {};
     const prefixStem = toPrefixStem(event.fieldNamespace);
-    for (const field of event.fields) {
-        if (Object.prototype.hasOwnProperty.call(source, field)) {
-            marshalled[prefixStem + capitalise(field)] = source[field];
-        }
+    for (const [field, value] of Object.entries(source)) {
+        marshalled[prefixStem + capitalise(field)] = value;
     }
     return marshalled;
 }
@@ -106,10 +104,9 @@ function unmarshal(bindings, eventId, ccdData) {
     const event = bindings.events[eventId];
     const prefixStem = toPrefixStem(event.fieldNamespace);
     const unmarshalled = {};
-    for (const field of event.fields) {
-        const prefixedField = prefixStem + capitalise(field);
-        if (Object.prototype.hasOwnProperty.call(ccdData, prefixedField)) {
-            unmarshalled[field] = ccdData[prefixedField];
+    for (const [field, value] of Object.entries(ccdData)) {
+        if (field.startsWith(prefixStem) && field.length > prefixStem.length) {
+            unmarshalled[uncapitalise(field.slice(prefixStem.length))] = value;
         }
     }
     return unmarshalled;
@@ -122,6 +119,9 @@ function toPrefixStem(fieldNamespace) {
 }
 function capitalise(value) {
     return value.length === 0 ? value : value[0].toUpperCase() + value.slice(1);
+}
+function uncapitalise(value) {
+    return value.length === 0 ? value : value[0].toLowerCase() + value.slice(1);
 }
 function toRecord(value) {
     return (value ?? {});

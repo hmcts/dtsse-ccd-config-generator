@@ -20,7 +20,6 @@ const bindings = defineCaseBindings<EventDtoMap>({
   events: {
     "create-widget": {
       fieldNamespace: "claim.create",
-      fields: ["note", "propertyAddress"],
       pages: ["details"],
     },
   },
