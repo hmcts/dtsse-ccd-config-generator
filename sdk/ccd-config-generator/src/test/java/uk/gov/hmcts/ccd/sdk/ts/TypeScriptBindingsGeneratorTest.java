@@ -46,9 +46,10 @@ public class TypeScriptBindingsGeneratorTest {
     assertThat(contracts).doesNotContain("legacyUpdate");
     assertThat(contracts).contains("defineCaseBindings");
     assertThat(contracts).contains("caseTypeId: \"ts_case\"");
-    assertThat(contracts).contains("fieldNamespace: \"widget.create\"");
+    assertThat(contracts).contains("fieldPrefix: \"widget\"");
     assertThat(contracts).doesNotContain("fields: [");
     assertThat(contracts).contains("pages: [\"1\"]");
+    assertThat(contracts).contains("as const satisfies CcdCaseBindings<EventDtoMap>");
 
     String firstDto = FileUtils.readFileToString(dtoFile, StandardCharsets.UTF_8);
     generator.writeBindings(output, resolved, "test-module");
@@ -83,7 +84,7 @@ public class TypeScriptBindingsGeneratorTest {
       builder.decentralisedEvent(
               "createWidget",
               CreateWidgetDto.class,
-              "widget.create",
+              "widget",
               this::submitDto,
               this::startDto
           )

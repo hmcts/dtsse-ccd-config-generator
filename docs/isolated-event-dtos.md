@@ -16,13 +16,13 @@ public class CreateClaimData {
 
 ## Declaring a DTO event
 
-DTO-backed decentralised events now require an explicit `fieldNamespace`:
+DTO-backed decentralised events now require an explicit `fieldPrefix`:
 
 ```java
 builder.decentralisedEvent(
         "createPossessionClaim",
         CreateClaimData.class,
-        "claim.create",
+        "cpc",
         this::submit,
         this::start
     )
@@ -58,45 +58,39 @@ private SubmitResponse<State> submit(EventPayload<CreateClaimData, State> payloa
 DTOs are event-scoped. CCD renders them for the event, submits them back to your handlers, and does not persist them
 for you. Your application remains responsible for persisting any data it needs.
 
-## Field namespace rules
+## Field prefix rules
 
-`fieldNamespace` is mandatory for DTO-backed decentralised events.
+`fieldPrefix` is mandatory for DTO-backed decentralised events.
 
 Allowed syntax:
 
-- lowercase dot-separated segments only
-- regex `^[a-z][a-z0-9]*(\\.[a-z][a-z0-9]*)*$`
+- ASCII alphanumeric only
+- regex `^[A-Za-z0-9]+$`
 
 Examples:
 
-- `claim.create`
-- `claim.resume`
-- `note.add`
-- `citizen.application.update`
+- `cpc`
+- `claimresume`
+- `noteadd`
+- `citizenapplicationupdate`
 
-The SDK converts `fieldNamespace` to a CCD prefix stem using lower camel case:
-
-- `claim.create` -> `claimCreate`
-- `note.add` -> `noteAdd`
-- `citizen.application.update` -> `citizenApplicationUpdate`
-
-Generated CCD field IDs follow:
+Generated CCD field IDs use literal concatenation:
 
 ```text
-ccdFieldId = prefixStem + Capitalize(dtoFieldName)
+ccdFieldId = fieldPrefix + "_" + dtoFieldName
 ```
 
 Example:
 
-- namespace `claim.create`
+- prefix `cpc`
 - DTO field `propertyAddress`
-- CCD field ID `claimCreatePropertyAddress`
+- CCD field ID `cpc_propertyAddress`
 
 The generator fails fast when:
 
-- namespace is missing
-- namespace syntax is invalid
-- two DTO events in the same case type produce the same prefix stem
+- prefix is missing
+- prefix syntax is invalid
+- two DTO events in the same case type use the same prefix
 - a generated CCD field ID exceeds CCD's 70 character limit
 
 ## Page DSL and field references
@@ -160,7 +154,7 @@ configuration for isolated DTO fields.
 
 1. Identify the fields an event actually needs.
 2. Create a focused DTO for those fields.
-3. Switch to `decentralisedEvent(id, DtoClass.class, fieldNamespace, submit, start)`.
+3. Switch to `decentralisedEvent(id, DtoClass.class, fieldPrefix, submit, start)`.
 4. Update handlers to use `EventPayload<DtoClass, State>`.
 5. Keep page field bindings as method references.
 6. For simple conditions and `${...}` labels, use DTO field names and let the SDK rewrite them.

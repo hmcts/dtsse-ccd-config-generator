@@ -2,9 +2,10 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.defineCaseBindings = defineCaseBindings;
 exports.createCcdClient = createCcdClient;
-exports.toPrefixStem = toPrefixStem;
-function defineCaseBindings(bindings) {
-    return bindings;
+function defineCaseBindings() {
+    return function (bindings) {
+        return bindings;
+    };
 }
 function createCcdClient(config, bindings) {
     if (config.caseTypeId && config.caseTypeId !== bindings.caseTypeId) {
@@ -32,30 +33,36 @@ async function startEvent(config, bindings, eventId, caseId) {
         throw new Error(`Missing event token for ${String(eventId)}`);
     }
     let currentData = unmarshal(bindings, eventId, triggerResponse.case_details?.case_data ?? {});
+    const currentState = triggerResponse.case_details?.state;
     return {
         eventId,
         get data() {
             return currentData;
         },
-        async validate(pageId, patch, validateCaseId) {
+        async validate(pageId, patch) {
             const validationHeaders = await config.getAuthHeaders();
-            const mergedData = { ...toRecord(currentData), ...toRecord(patch) };
+            const mergedData = {
+                ...toRecord(currentData),
+                ...toRecord(patch),
+            };
             const callbackBaseUrl = config.callbackBaseUrl ?? config.baseUrl;
             const callbackBody = {
-                case_details: buildCallbackCaseDetails(bindings.caseTypeId, marshal(bindings, eventId, mergedData), validateCaseId ?? caseId),
-                case_details_before: buildCallbackCaseDetails(bindings.caseTypeId, marshal(bindings, eventId, currentData), validateCaseId ?? caseId),
+                case_details: buildCallbackCaseDetails(bindings.caseTypeId, marshal(bindings, eventId, mergedData), caseId, currentState),
+                case_details_before: buildCallbackCaseDetails(bindings.caseTypeId, marshal(bindings, eventId, currentData), caseId, currentState),
                 event_id: eventId,
                 ignore_warning: false,
             };
             const response = (await config.transport.post(buildMidEventUrl(callbackBaseUrl, eventId, pageId), callbackBody, validationHeaders));
-            currentData = unmarshal(bindings, eventId, response.data ?? {});
+            currentData = response.data !== undefined
+                ? unmarshal(bindings, eventId, response.data)
+                : mergedData;
             return {
                 data: currentData,
                 errors: response.errors ?? [],
                 warnings: response.warnings ?? [],
             };
         },
-        async submit(data, submitCaseId) {
+        async submit(data) {
             const submitHeaders = await config.getAuthHeaders();
             currentData = data;
             const payload = {
@@ -64,7 +71,7 @@ async function startEvent(config, bindings, eventId, caseId) {
                 event_token: eventToken,
                 ignore_warning: false,
             };
-            return (await config.transport.post(buildEventSubmitUrl(config.baseUrl, submitCaseId ?? caseId, bindings.caseTypeId), payload, submitHeaders));
+            return (await config.transport.post(buildEventSubmitUrl(config.baseUrl, caseId, bindings.caseTypeId), payload, submitHeaders));
         },
     };
 }
@@ -83,45 +90,37 @@ function buildEventSubmitUrl(baseUrl, caseId, caseTypeId) {
 function buildMidEventUrl(baseUrl, eventId, pageId) {
     return `${baseUrl}/callbacks/mid-event?page=${encodeURIComponent(pageId)}&eventId=${encodeURIComponent(eventId)}`;
 }
-function buildCallbackCaseDetails(caseTypeId, caseData, caseId) {
+function buildCallbackCaseDetails(caseTypeId, caseData, caseId, state) {
     return {
         ...(caseId !== undefined ? { id: caseId } : {}),
         case_type_id: caseTypeId,
         case_data: caseData,
+        ...(state !== undefined ? { state } : {}),
     };
 }
 function marshal(bindings, eventId, data) {
     const event = bindings.events[eventId];
     const source = toRecord(data);
     const marshalled = {};
-    const prefixStem = toPrefixStem(event.fieldNamespace);
+    const fieldKeyPrefix = toFieldKeyPrefix(event.fieldPrefix);
     for (const [field, value] of Object.entries(source)) {
-        marshalled[prefixStem + capitalise(field)] = value;
+        marshalled[fieldKeyPrefix + field] = value;
     }
     return marshalled;
 }
 function unmarshal(bindings, eventId, ccdData) {
     const event = bindings.events[eventId];
-    const prefixStem = toPrefixStem(event.fieldNamespace);
+    const fieldKeyPrefix = toFieldKeyPrefix(event.fieldPrefix);
     const unmarshalled = {};
     for (const [field, value] of Object.entries(ccdData)) {
-        if (field.startsWith(prefixStem) && field.length > prefixStem.length) {
-            unmarshalled[uncapitalise(field.slice(prefixStem.length))] = value;
+        if (field.startsWith(fieldKeyPrefix) && field.length > fieldKeyPrefix.length) {
+            unmarshalled[field.slice(fieldKeyPrefix.length)] = value;
         }
     }
     return unmarshalled;
 }
-function toPrefixStem(fieldNamespace) {
-    const segments = fieldNamespace.split(".");
-    return segments
-        .map((segment, index) => (index === 0 ? segment : capitalise(segment)))
-        .join("");
-}
-function capitalise(value) {
-    return value.length === 0 ? value : value[0].toUpperCase() + value.slice(1);
-}
-function uncapitalise(value) {
-    return value.length === 0 ? value : value[0].toLowerCase() + value.slice(1);
+function toFieldKeyPrefix(fieldPrefix) {
+    return `${fieldPrefix}_`;
 }
 function toRecord(value) {
     return (value ?? {});

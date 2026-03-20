@@ -14,6 +14,7 @@ import java.util.Optional;
 import lombok.Builder;
 import lombok.Data;
 import lombok.ToString;
+import uk.gov.hmcts.ccd.sdk.DtoFieldPrefix;
 import uk.gov.hmcts.ccd.sdk.DtoFieldReferenceRewriter;
 import uk.gov.hmcts.ccd.sdk.api.Event.EventBuilder;
 import uk.gov.hmcts.ccd.sdk.api.Field.FieldBuilder;
@@ -42,7 +43,7 @@ public class FieldCollection {
   private String rootFieldname;
 
   private String unwrappedParentPrefix;
-  private String dtoFieldPrefixStem;
+  private String dtoFieldPrefix;
 
   public static class FieldCollectionBuilder<Type, StateType, Parent> {
 
@@ -77,9 +78,9 @@ public class FieldCollection {
 
     public static <Type, StateType, Parent> FieldCollectionBuilder<Type, StateType, Parent> builder(EventBuilder event,
         Parent parent, Class<Type> dataClass,
-        PropertyUtils propertyUtils, String unwrappedParentPrefix) {
+        PropertyUtils propertyUtils, String dtoFieldPrefix) {
       FieldCollectionBuilder<Type, StateType, Parent> result = builder(event, parent, dataClass, propertyUtils);
-      result.dtoFieldPrefixStem = unwrappedParentPrefix;
+      result.dtoFieldPrefix = dtoFieldPrefix;
       return result;
     }
 
@@ -481,11 +482,11 @@ public class FieldCollection {
     }
 
     private String resolveFieldId(String fieldName) {
-      String fieldPrefix = null != dtoFieldPrefixStem && !dtoFieldPrefixStem.isEmpty()
-          ? dtoFieldPrefixStem
-          : unwrappedParentPrefix;
-      return null != fieldPrefix && !fieldPrefix.isEmpty()
-          ? fieldPrefix.concat(capitalize(fieldName))
+      if (null != dtoFieldPrefix && !dtoFieldPrefix.isEmpty()) {
+        return DtoFieldPrefix.toFieldId(dtoFieldPrefix, fieldName);
+      }
+      return null != unwrappedParentPrefix && !unwrappedParentPrefix.isEmpty()
+          ? unwrappedParentPrefix.concat(capitalize(fieldName))
           : fieldName;
     }
 
@@ -542,11 +543,11 @@ public class FieldCollection {
     }
 
     private String rewriteShowCondition(String condition) {
-      return DtoFieldReferenceRewriter.rewriteShowCondition(condition, dataClass, dtoFieldPrefixStem);
+      return DtoFieldReferenceRewriter.rewriteShowCondition(condition, dataClass, dtoFieldPrefix);
     }
 
     private String rewriteLabel(String value) {
-      return DtoFieldReferenceRewriter.rewriteLabel(value, dataClass, dtoFieldPrefixStem);
+      return DtoFieldReferenceRewriter.rewriteLabel(value, dataClass, dtoFieldPrefix);
     }
   }
 }

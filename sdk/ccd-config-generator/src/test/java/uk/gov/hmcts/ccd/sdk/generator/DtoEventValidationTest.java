@@ -32,33 +32,33 @@ public class DtoEventValidationTest {
   public static TemporaryFolder tmp = new TemporaryFolder();
 
   @Test
-  public void validNamespaceGeneratesNamespaceDerivedFieldIds() throws IOException {
+  public void validPrefixGeneratesLiteralFieldIds() throws IOException {
     ResolvedCCDConfig<TestCaseData, TestState, TestRole> resolved = resolve(new ValidDtoConfig());
     File output = tmp.newFolder("dto-field-ids");
 
     new CaseFieldGenerator<TestCaseData, TestState, TestRole>().write(output, resolved);
 
     String caseFields = FileUtils.readFileToString(new File(output, "CaseField.json"), StandardCharsets.UTF_8);
-    assertThat(caseFields).contains("claimCreatePropertyAddress");
+    assertThat(caseFields).contains("cpc_propertyAddress");
   }
 
   @Test
-  public void validNamespacePrefixesEventComplexTypeSheets() throws IOException {
+  public void validPrefixPrefixesEventComplexTypeSheets() throws IOException {
     ResolvedCCDConfig<TestCaseData, TestState, TestRole> resolved = resolve(new ValidComplexDtoConfig());
     File output = tmp.newFolder("dto-complex-field-ids");
 
     new CaseEventToComplexTypesGenerator<TestCaseData, TestState, TestRole>().write(output, resolved);
 
-    File complexTypeSheet = new File(output, "CaseEventToComplexTypes/createClaim/claimCreatePropertyAddress.json");
+    File complexTypeSheet = new File(output, "CaseEventToComplexTypes/createClaim/cpc_propertyAddress.json");
     assertThat(complexTypeSheet).exists();
     assertThat(FileUtils.readFileToString(complexTypeSheet, StandardCharsets.UTF_8))
-        .contains("\"CaseFieldID\": \"claimCreatePropertyAddress\"")
+        .contains("\"CaseFieldID\": \"cpc_propertyAddress\"")
         .contains("\"ListElementCode\": \"AddressLine1\"");
   }
 
   @Test
-  public void rejectsInvalidNamespaceSyntax() {
-    ResolvedCCDConfig<TestCaseData, TestState, TestRole> resolved = resolve(new InvalidNamespaceConfig());
+  public void rejectsInvalidPrefixSyntax() {
+    ResolvedCCDConfig<TestCaseData, TestState, TestRole> resolved = resolve(new InvalidPrefixConfig());
 
     assertThatThrownBy(() -> new CaseFieldGenerator<TestCaseData, TestState, TestRole>()
         .write(tmp.getRoot(), resolved))
@@ -69,8 +69,8 @@ public class DtoEventValidationTest {
   }
 
   @Test
-  public void rejectsNamespaceCollisionsWithinCaseType() {
-    ResolvedCCDConfig<TestCaseData, TestState, TestRole> resolved = resolve(new CollidingNamespaceConfig());
+  public void rejectsPrefixCollisionsWithinCaseType() {
+    ResolvedCCDConfig<TestCaseData, TestState, TestRole> resolved = resolve(new CollidingPrefixConfig());
 
     assertThatThrownBy(() -> new CaseFieldGenerator<TestCaseData, TestState, TestRole>()
         .write(tmp.getRoot(), resolved))
@@ -78,6 +78,31 @@ public class DtoEventValidationTest {
         .hasMessageContaining("collision")
         .hasMessageContaining("firstEvent")
         .hasMessageContaining("secondEvent");
+  }
+
+  @Test
+  public void overlappingPrefixesRemainDistinctWhenSeparatorIsPresent() throws IOException {
+    ResolvedCCDConfig<TestCaseData, TestState, TestRole> resolved = resolve(new OverlappingPrefixConfig());
+    File output = tmp.newFolder("dto-overlapping-prefixes");
+
+    new CaseFieldGenerator<TestCaseData, TestState, TestRole>().write(output, resolved);
+
+    String caseFields = FileUtils.readFileToString(new File(output, "CaseField.json"), StandardCharsets.UTF_8);
+    assertThat(caseFields).contains("a_propertyAddress");
+    assertThat(caseFields).contains("ab_propertyAddress");
+  }
+
+  @Test
+  public void rejectsGeneratedFieldIdCollisionsWithExistingCaseFields() {
+    ResolvedCCDConfig<TestCaseData, TestState, TestRole> resolved = resolve(new CaseFieldCollisionConfig());
+
+    assertThatThrownBy(() -> new CaseFieldGenerator<TestCaseData, TestState, TestRole>()
+        .write(tmp.getRoot(), resolved))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("collision")
+        .hasMessageContaining("createClaim.bc")
+        .hasMessageContaining("case field 'a_bc'")
+        .hasMessageContaining("a_bc");
   }
 
   @Test
@@ -130,27 +155,27 @@ public class DtoEventValidationTest {
     Event<TestCaseData, TestRole, TestState> event = resolved.getEvents().get("createClaim");
 
     assertThat(event.getFields().getPageShowConditions())
-        .containsEntry("claimDetails", "claimCreateShowCrossBorderPage=\"Yes\"");
+        .containsEntry("claimDetails", "cpc_showCrossBorderPage=\"Yes\"");
     assertThat(event.getFields().getPageLabels())
-        .containsEntry("claimSummary", "Fee ${claimCreateFeeAmount}");
+        .containsEntry("claimSummary", "Fee ${cpc_feeAmount}");
 
     List<String> fieldShowConditions = event.getFields().getFields().stream()
         .map(builder -> builder.build().getShowCondition())
         .toList();
     assertThat(fieldShowConditions)
-        .contains("claimCreateShowCrossBorderPage=\"Yes\"");
+        .contains("cpc_showCrossBorderPage=\"Yes\"");
 
     List<String> caseEventFieldLabels = event.getFields().getFields().stream()
         .map(builder -> builder.build().getCaseEventFieldLabel())
         .toList();
     assertThat(caseEventFieldLabels)
-        .contains("Fee ${claimCreateFeeAmount}");
+        .contains("Fee ${cpc_feeAmount}");
 
     List<String> explicitLabelValues = event.getFields().getExplicitFields().stream()
         .map(builder -> builder.build().getLabel())
         .toList();
     assertThat(explicitLabelValues)
-        .contains("Cross border: ${claimCreateShowCrossBorderPage}");
+        .contains("Cross border: ${cpc_showCrossBorderPage}");
   }
 
   private ResolvedCCDConfig<TestCaseData, TestState, TestRole> resolve(
@@ -181,9 +206,9 @@ public class DtoEventValidationTest {
         DecentralisedConfigBuilder<TestCaseData, TestState, TestRole> builder,
         String eventId,
         Class<D> dtoClass,
-        String fieldNamespace
+        String fieldPrefix
     ) {
-      builder.decentralisedEvent(eventId, dtoClass, fieldNamespace, submit(), start())
+      builder.decentralisedEvent(eventId, dtoClass, fieldPrefix, submit(), start())
           .initialState(TestState.DRAFT)
           .grant(CRU, TestRole.USER)
           .fields()
@@ -205,7 +230,7 @@ public class DtoEventValidationTest {
       builder.decentralisedEvent(
               "createClaim",
               ValidDto.class,
-              "claim.create",
+              "cpc",
               submit(),
               start()
           )
@@ -217,7 +242,7 @@ public class DtoEventValidationTest {
     }
   }
 
-  private static class InvalidNamespaceConfig extends BaseDtoConfig {
+  private static class InvalidPrefixConfig extends BaseDtoConfig {
     @Override
     protected void configureEvent(DecentralisedConfigBuilder<TestCaseData, TestState, TestRole> builder) {
       addDtoEvent(builder, "validationEvent", ValidDto.class, "invalid_case");
@@ -230,7 +255,7 @@ public class DtoEventValidationTest {
       builder.decentralisedEvent(
               "createClaim",
               ValidComplexDto.class,
-              "claim.create",
+              "cpc",
               submit(),
               start()
           )
@@ -244,11 +269,26 @@ public class DtoEventValidationTest {
     }
   }
 
-  private static class CollidingNamespaceConfig extends BaseDtoConfig {
+  private static class CollidingPrefixConfig extends BaseDtoConfig {
     @Override
     protected void configureEvent(DecentralisedConfigBuilder<TestCaseData, TestState, TestRole> builder) {
-      addDtoEvent(builder, "firstEvent", ValidDto.class, "claim.create");
-      addDtoEvent(builder, "secondEvent", ValidDto.class, "claim.create");
+      addDtoEvent(builder, "firstEvent", ValidDto.class, "cpc");
+      addDtoEvent(builder, "secondEvent", ValidDto.class, "cpc");
+    }
+  }
+
+  private static class OverlappingPrefixConfig extends BaseDtoConfig {
+    @Override
+    protected void configureEvent(DecentralisedConfigBuilder<TestCaseData, TestState, TestRole> builder) {
+      addDtoEvent(builder, "firstEvent", ValidDto.class, "a");
+      addDtoEvent(builder, "secondEvent", ValidDto.class, "ab");
+    }
+  }
+
+  private static class CaseFieldCollisionConfig extends BaseDtoConfig {
+    @Override
+    protected void configureEvent(DecentralisedConfigBuilder<TestCaseData, TestState, TestRole> builder) {
+      addDtoEvent(builder, "createClaim", BcDto.class, "a");
     }
   }
 
@@ -258,7 +298,7 @@ public class DtoEventValidationTest {
       builder.decentralisedEvent(
               "longFieldEvent",
               LongFieldIdDto.class,
-              "citizen.application.update",
+              "citizenapplicationupdate",
               submit(),
               start()
           )
@@ -273,21 +313,21 @@ public class DtoEventValidationTest {
   private static class JsonUnwrappedDtoConfig extends BaseDtoConfig {
     @Override
     protected void configureEvent(DecentralisedConfigBuilder<TestCaseData, TestState, TestRole> builder) {
-      addDtoEvent(builder, "jsonUnwrappedEvent", JsonUnwrappedDto.class, "claim.resume");
+      addDtoEvent(builder, "jsonUnwrappedEvent", JsonUnwrappedDto.class, "cpr");
     }
   }
 
   private static class NestedCustomTypeConfig extends BaseDtoConfig {
     @Override
     protected void configureEvent(DecentralisedConfigBuilder<TestCaseData, TestState, TestRole> builder) {
-      addDtoEvent(builder, "nestedTypeEvent", NestedCustomTypeDto.class, "claim.resume");
+      addDtoEvent(builder, "nestedTypeEvent", NestedCustomTypeDto.class, "cpr");
     }
   }
 
   private static class RecursiveCollectionConfig extends BaseDtoConfig {
     @Override
     protected void configureEvent(DecentralisedConfigBuilder<TestCaseData, TestState, TestRole> builder) {
-      addDtoEvent(builder, "recursiveCollectionEvent", RecursiveCollectionDto.class, "claim.resume");
+      addDtoEvent(builder, "recursiveCollectionEvent", RecursiveCollectionDto.class, "cpr");
     }
   }
 
@@ -297,7 +337,7 @@ public class DtoEventValidationTest {
       builder.decentralisedEvent(
               "createClaim",
               RewritingDto.class,
-              "claim.create",
+              "cpc",
               submit(),
               start()
           )
@@ -319,6 +359,7 @@ public class DtoEventValidationTest {
   }
 
   private static class TestCaseData {
+    private String a_bc;
   }
 
   private static class ValidDto {
@@ -343,6 +384,10 @@ public class DtoEventValidationTest {
     public AddressUK getPropertyAddress() {
       return propertyAddress;
     }
+  }
+
+  private static class BcDto {
+    private String bc;
   }
 
   private static class JsonUnwrappedDto {

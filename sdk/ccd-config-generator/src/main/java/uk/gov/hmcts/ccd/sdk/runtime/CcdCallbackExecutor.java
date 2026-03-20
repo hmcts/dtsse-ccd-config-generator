@@ -53,7 +53,7 @@ public class CcdCallbackExecutor {
       if (event.isDtoEvent()) {
         Map<String, Object> ccdData = request.getCaseDetails().getData();
         Object dtoData = DtoMapper.fromCcdData(
-            ccdData, event.getEventFieldPrefixStem(), event.getDtoClass(), mapper);
+            ccdData, event.getEventFieldPrefix(), event.getDtoClass(), mapper);
         EventPayload payload = new EventPayload<>(
             request.getCaseDetails().getId(),
             dtoData,
@@ -61,7 +61,7 @@ public class CcdCallbackExecutor {
         );
         var response = event.getStartHandler().start(payload);
         Map<String, Object> responseData = new LinkedHashMap<>(ccdData);
-        responseData.putAll(DtoMapper.toCcdData(response, event.getEventFieldPrefixStem(), mapper));
+        responseData.putAll(DtoMapper.toCcdData(response, event.getEventFieldPrefix(), mapper));
         return AboutToStartOrSubmitResponse.builder().data(responseData).build();
       }
 
@@ -114,16 +114,16 @@ public class CcdCallbackExecutor {
     if (event.isDtoEvent()) {
       Map<String, Object> ccdData = request.getCaseDetails().getData();
       CaseDetails dtoCaseDetails = buildDtoCaseDetails(
-          request.getCaseDetails(), event.getEventFieldPrefixStem(), event.getDtoClass());
+          request.getCaseDetails(), event.getEventFieldPrefix(), event.getDtoClass());
       CaseDetails dtoCaseDetailsBefore = request.getCaseDetailsBefore() != null
-          ? buildDtoCaseDetails(request.getCaseDetailsBefore(), event.getEventFieldPrefixStem(), event.getDtoClass())
+          ? buildDtoCaseDetails(request.getCaseDetailsBefore(), event.getEventFieldPrefix(), event.getDtoClass())
           : dtoCaseDetails;
 
       var response = callback.handle(dtoCaseDetails, dtoCaseDetailsBefore);
 
       if (response.getData() != null) {
         Map<String, Object> responseData = new LinkedHashMap<>(ccdData);
-        responseData.putAll(DtoMapper.toCcdData(response.getData(), event.getEventFieldPrefixStem(), mapper));
+        responseData.putAll(DtoMapper.toCcdData(response.getData(), event.getEventFieldPrefix(), mapper));
         response.setData(responseData);
       }
       return response;

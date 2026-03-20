@@ -1,7 +1,5 @@
 package uk.gov.hmcts.ccd.sdk;
 
-import static org.apache.commons.lang3.StringUtils.capitalize;
-
 import com.google.common.base.Strings;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -15,12 +13,12 @@ public final class DtoFieldReferenceRewriter {
   private DtoFieldReferenceRewriter() {
   }
 
-  public static String rewriteShowCondition(String expression, Class<?> dtoClass, String prefixStem) {
-    if (Strings.isNullOrEmpty(expression) || dtoClass == null || Strings.isNullOrEmpty(prefixStem)) {
+  public static String rewriteShowCondition(String expression, Class<?> dtoClass, String fieldPrefix) {
+    if (Strings.isNullOrEmpty(expression) || dtoClass == null || Strings.isNullOrEmpty(fieldPrefix)) {
       return expression;
     }
 
-    Map<String, String> fieldIds = getFieldIds(dtoClass, prefixStem);
+    Map<String, String> fieldIds = getFieldIds(dtoClass, fieldPrefix);
     if (fieldIds.isEmpty()) {
       return expression;
     }
@@ -43,12 +41,12 @@ public final class DtoFieldReferenceRewriter {
     return rewritten.toString();
   }
 
-  public static String rewriteLabel(String value, Class<?> dtoClass, String prefixStem) {
-    if (Strings.isNullOrEmpty(value) || dtoClass == null || Strings.isNullOrEmpty(prefixStem)) {
+  public static String rewriteLabel(String value, Class<?> dtoClass, String fieldPrefix) {
+    if (Strings.isNullOrEmpty(value) || dtoClass == null || Strings.isNullOrEmpty(fieldPrefix)) {
       return value;
     }
 
-    Map<String, String> fieldIds = getFieldIds(dtoClass, prefixStem);
+    Map<String, String> fieldIds = getFieldIds(dtoClass, fieldPrefix);
     if (fieldIds.isEmpty()) {
       return value;
     }
@@ -66,11 +64,11 @@ public final class DtoFieldReferenceRewriter {
     return rewritten.toString();
   }
 
-  private static Map<String, String> getFieldIds(Class<?> dtoClass, String prefixStem) {
+  private static Map<String, String> getFieldIds(Class<?> dtoClass, String fieldPrefix) {
     Map<String, String> fieldIds = new LinkedHashMap<>();
     FieldUtils.getCaseFields(dtoClass).stream()
         .sorted((left, right) -> Integer.compare(right.getName().length(), left.getName().length()))
-        .forEach(field -> fieldIds.put(field.getName(), prefixStem.concat(capitalize(field.getName()))));
+        .forEach(field -> fieldIds.put(field.getName(), DtoFieldPrefix.toFieldId(fieldPrefix, field.getName())));
     return fieldIds;
   }
 }

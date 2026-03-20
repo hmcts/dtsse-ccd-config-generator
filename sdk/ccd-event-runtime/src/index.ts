@@ -7,17 +7,17 @@ type MaybePromise<T> = T | Promise<T>;
 type StringKeys<T> = Extract<keyof T, string>;
 type BindingEvents<T extends object> = {
   [K in StringKeys<T>]: {
-    fieldNamespace: string;
+    fieldPrefix: string;
     pages: readonly string[];
   };
 };
-type BoundDtoMap<TBindings extends CcdCaseBindings<any>> =
-  TBindings extends CcdCaseBindings<infer TMap> ? TMap : never;
-type BoundEventId<TBindings extends CcdCaseBindings<any>> = Extract<keyof TBindings["events"], string>;
+type BoundDtoMap<TBindings extends CcdCaseBindings<any>> = NonNullable<TBindings["__dtoMap"]>;
+type BoundEventId<TBindings extends CcdCaseBindings<any>> =
+  Extract<keyof BoundDtoMap<TBindings>, string> & Extract<keyof TBindings["events"], string>;
 type BoundEventData<
   TBindings extends CcdCaseBindings<any>,
   TEventId extends BoundEventId<TBindings>,
-> = BoundDtoMap<TBindings>[TEventId & keyof BoundDtoMap<TBindings>];
+> = BoundDtoMap<TBindings>[TEventId];
 type BoundPageId<
   TBindings extends CcdCaseBindings<any>,
   TEventId extends BoundEventId<TBindings>,
@@ -26,6 +26,7 @@ type BoundPageId<
 export interface CcdCaseBindings<T extends object> {
   caseTypeId: string;
   events: BindingEvents<T>;
+  readonly __dtoMap?: T;
 }
 
 export interface CcdClientConfig {
@@ -54,16 +55,16 @@ export interface CcdEventFlow<
   readonly data: BoundEventData<TBindings, TEventId>;
   validate(
     pageId: BoundPageId<TBindings, TEventId>,
-    patch: Partial<BoundEventData<TBindings, TEventId>>,
-    caseId?: string | number
+    patch: Partial<BoundEventData<TBindings, TEventId>>
   ): Promise<CcdValidationResult<BoundEventData<TBindings, TEventId>>>;
-  submit(data: BoundEventData<TBindings, TEventId>, caseId?: string | number): Promise<CcdSubmitResult>;
+  submit(data: BoundEventData<TBindings, TEventId>): Promise<CcdSubmitResult>;
 }
 
 interface EventTriggerResponse {
   token?: string;
   case_details?: {
     case_data?: Record<string, unknown>;
+    state?: string;
   };
 }
 
@@ -77,15 +78,21 @@ interface CallbackCaseDetails {
   id?: string | number;
   case_type_id: string;
   case_data: Record<string, unknown>;
+  state?: string;
 }
 
-export function defineCaseBindings<T extends object>(
-  bindings: CcdCaseBindings<T>
-): CcdCaseBindings<T> {
-  return bindings;
+export function defineCaseBindings<T extends object>() {
+  return function <const TBindings extends CcdCaseBindings<T>>(
+    bindings: TBindings
+  ): TBindings & CcdCaseBindings<T> {
+    return bindings as TBindings & CcdCaseBindings<T>;
+  };
 }
 
-export function createCcdClient<TBindings extends CcdCaseBindings<any>>(config: CcdClientConfig, bindings: TBindings) {
+export function createCcdClient<const TBindings extends CcdCaseBindings<any>>(
+  config: CcdClientConfig,
+  bindings: TBindings
+) {
   if (config.caseTypeId && config.caseTypeId !== bindings.caseTypeId) {
     throw new Error(
       `config.caseTypeId ${config.caseTypeId} does not match generated bindings ${bindings.caseTypeId}`
@@ -108,7 +115,10 @@ export function createCcdClient<TBindings extends CcdCaseBindings<any>>(config: 
   };
 }
 
-async function startEvent<TBindings extends CcdCaseBindings<any>, TEventId extends BoundEventId<TBindings>>(
+async function startEvent<
+  TBindings extends CcdCaseBindings<any>,
+  TEventId extends BoundEventId<TBindings>,
+>(
   config: Required<Pick<CcdClientConfig, "baseUrl" | "transport" | "getAuthHeaders">> & Pick<CcdClientConfig, "callbackBaseUrl" | "caseTypeId">,
   bindings: TBindings,
   eventId: TEventId,
@@ -129,19 +139,33 @@ async function startEvent<TBindings extends CcdCaseBindings<any>, TEventId exten
     eventId,
     triggerResponse.case_details?.case_data ?? {}
   );
+  const currentState = triggerResponse.case_details?.state;
 
   return {
     eventId,
     get data() {
       return currentData;
     },
-    async validate(pageId, patch, validateCaseId) {
+    async validate(pageId, patch) {
       const validationHeaders = await config.getAuthHeaders();
-      const mergedData = { ...toRecord(currentData), ...toRecord(patch) } as BoundEventData<TBindings, TEventId>;
+      const mergedData = {
+        ...toRecord(currentData),
+        ...toRecord(patch),
+      } as BoundEventData<TBindings, TEventId>;
       const callbackBaseUrl = config.callbackBaseUrl ?? config.baseUrl;
       const callbackBody = {
-        case_details: buildCallbackCaseDetails(bindings.caseTypeId, marshal(bindings, eventId, mergedData), validateCaseId ?? caseId),
-        case_details_before: buildCallbackCaseDetails(bindings.caseTypeId, marshal(bindings, eventId, currentData), validateCaseId ?? caseId),
+        case_details: buildCallbackCaseDetails(
+          bindings.caseTypeId,
+          marshal(bindings, eventId, mergedData),
+          caseId,
+          currentState
+        ),
+        case_details_before: buildCallbackCaseDetails(
+          bindings.caseTypeId,
+          marshal(bindings, eventId, currentData),
+          caseId,
+          currentState
+        ),
         event_id: eventId,
         ignore_warning: false,
       };
@@ -150,14 +174,16 @@ async function startEvent<TBindings extends CcdCaseBindings<any>, TEventId exten
         callbackBody,
         validationHeaders
       )) as CallbackResponse;
-      currentData = unmarshal(bindings, eventId, response.data ?? {});
+      currentData = response.data !== undefined
+        ? unmarshal(bindings, eventId, response.data)
+        : mergedData;
       return {
         data: currentData,
         errors: response.errors ?? [],
         warnings: response.warnings ?? [],
       } satisfies CcdValidationResult<BoundEventData<TBindings, TEventId>>;
     },
-    async submit(data, submitCaseId) {
+    async submit(data) {
       const submitHeaders = await config.getAuthHeaders();
       currentData = data;
       const payload = {
@@ -167,7 +193,7 @@ async function startEvent<TBindings extends CcdCaseBindings<any>, TEventId exten
         ignore_warning: false,
       };
       return (await config.transport.post(
-        buildEventSubmitUrl(config.baseUrl, submitCaseId ?? caseId, bindings.caseTypeId),
+        buildEventSubmitUrl(config.baseUrl, caseId, bindings.caseTypeId),
         payload,
         submitHeaders
       )) as CcdSubmitResult;
@@ -201,16 +227,21 @@ function buildMidEventUrl(baseUrl: string, eventId: string, pageId: string): str
 function buildCallbackCaseDetails(
   caseTypeId: string,
   caseData: Record<string, unknown>,
-  caseId?: string | number
+  caseId?: string | number,
+  state?: string
 ): CallbackCaseDetails {
   return {
     ...(caseId !== undefined ? { id: caseId } : {}),
     case_type_id: caseTypeId,
     case_data: caseData,
+    ...(state !== undefined ? { state } : {}),
   };
 }
 
-function marshal<TBindings extends CcdCaseBindings<any>, TEventId extends BoundEventId<TBindings>>(
+function marshal<
+  TBindings extends CcdCaseBindings<any>,
+  TEventId extends BoundEventId<TBindings>,
+>(
   bindings: TBindings,
   eventId: TEventId,
   data: BoundEventData<TBindings, TEventId>
@@ -218,42 +249,34 @@ function marshal<TBindings extends CcdCaseBindings<any>, TEventId extends BoundE
   const event = bindings.events[eventId as keyof typeof bindings.events] as TBindings["events"][TEventId];
   const source = toRecord(data);
   const marshalled: Record<string, unknown> = {};
-  const prefixStem = toPrefixStem(event.fieldNamespace);
+  const fieldKeyPrefix = toFieldKeyPrefix(event.fieldPrefix);
   for (const [field, value] of Object.entries(source)) {
-    marshalled[prefixStem + capitalise(field)] = value;
+    marshalled[fieldKeyPrefix + field] = value;
   }
   return marshalled;
 }
 
-function unmarshal<TBindings extends CcdCaseBindings<any>, TEventId extends BoundEventId<TBindings>>(
+function unmarshal<
+  TBindings extends CcdCaseBindings<any>,
+  TEventId extends BoundEventId<TBindings>,
+>(
   bindings: TBindings,
   eventId: TEventId,
   ccdData: Record<string, unknown>
 ): BoundEventData<TBindings, TEventId> {
   const event = bindings.events[eventId as keyof typeof bindings.events] as TBindings["events"][TEventId];
-  const prefixStem = toPrefixStem(event.fieldNamespace);
+  const fieldKeyPrefix = toFieldKeyPrefix(event.fieldPrefix);
   const unmarshalled: Record<string, unknown> = {};
   for (const [field, value] of Object.entries(ccdData)) {
-    if (field.startsWith(prefixStem) && field.length > prefixStem.length) {
-      unmarshalled[uncapitalise(field.slice(prefixStem.length))] = value;
+    if (field.startsWith(fieldKeyPrefix) && field.length > fieldKeyPrefix.length) {
+      unmarshalled[field.slice(fieldKeyPrefix.length)] = value;
     }
   }
   return unmarshalled as BoundEventData<TBindings, TEventId>;
 }
 
-export function toPrefixStem(fieldNamespace: string): string {
-  const segments = fieldNamespace.split(".");
-  return segments
-    .map((segment, index) => (index === 0 ? segment : capitalise(segment)))
-    .join("");
-}
-
-function capitalise(value: string): string {
-  return value.length === 0 ? value : value[0].toUpperCase() + value.slice(1);
-}
-
-function uncapitalise(value: string): string {
-  return value.length === 0 ? value : value[0].toLowerCase() + value.slice(1);
+function toFieldKeyPrefix(fieldPrefix: string): string {
+  return `${fieldPrefix}_`;
 }
 
 function toRecord(value: unknown): Record<string, unknown> {

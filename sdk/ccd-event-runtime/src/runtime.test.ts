@@ -3,7 +3,6 @@ import assert from "node:assert/strict";
 import {
   createCcdClient,
   defineCaseBindings,
-  toPrefixStem,
   type CcdCaseBindings,
   type CcdTransport,
 } from "./index";
@@ -15,21 +14,21 @@ interface EventDtoMap {
   };
 }
 
-const bindings = defineCaseBindings<EventDtoMap>({
+const bindings = defineCaseBindings<EventDtoMap>()({
   caseTypeId: "TEST_CASE",
   events: {
     "create-widget": {
-      fieldNamespace: "claim.create",
+      fieldPrefix: "cpc",
       pages: ["details"],
     },
   },
-} satisfies CcdCaseBindings<EventDtoMap>);
+} as const satisfies CcdCaseBindings<EventDtoMap>);
 
 async function run(): Promise<void> {
   await startAndSubmitRoundTrip();
   await validateRoundTrip();
+  await validateWithoutDataKeepsMergedState();
   await mismatchedCaseTypeFails();
-  namespaceConversionMatchesJava();
 }
 
 async function startAndSubmitRoundTrip(): Promise<void> {
@@ -41,8 +40,8 @@ async function startAndSubmitRoundTrip(): Promise<void> {
         token: "event-token",
         case_details: {
           case_data: {
-            claimCreateNote: "[start]",
-            claimCreatePropertyAddress: "10 Example Street",
+            cpc_note: "[start]",
+            cpc_propertyAddress: "10 Example Street",
           },
         },
       };
@@ -76,8 +75,8 @@ async function startAndSubmitRoundTrip(): Promise<void> {
   assert.equal(requests[1]?.url, "http://ccd/cases/12345/events");
   assert.deepEqual(requests[1]?.body, {
     data: {
-      claimCreateNote: "updated",
-      claimCreatePropertyAddress: "12 Example Street",
+      cpc_note: "updated",
+      cpc_propertyAddress: "12 Example Street",
     },
     event: { id: "create-widget" },
     event_token: "event-token",
@@ -93,8 +92,9 @@ async function validateRoundTrip(): Promise<void> {
       return {
         token: "event-token",
         case_details: {
+          state: "Draft",
           case_data: {
-            claimCreateNote: "before",
+            cpc_note: "before",
           },
         },
       };
@@ -103,8 +103,8 @@ async function validateRoundTrip(): Promise<void> {
       requests.push({ method: "POST", url, body });
       return {
         data: {
-          claimCreateNote: "after",
-          claimCreatePropertyAddress: "99 Example Road",
+          cpc_note: "after",
+          cpc_propertyAddress: "99 Example Road",
         },
         errors: ["warn"],
         warnings: ["heads-up"],
@@ -136,21 +136,66 @@ async function validateRoundTrip(): Promise<void> {
   assert.equal(requests[1]?.url, "http://service/callbacks/mid-event?page=details&eventId=create-widget");
   assert.deepEqual(requests[1]?.body, {
     case_details: {
+      state: "Draft",
       case_type_id: "TEST_CASE",
       case_data: {
-        claimCreateNote: "before",
-        claimCreatePropertyAddress: "99 Example Road",
+        cpc_note: "before",
+        cpc_propertyAddress: "99 Example Road",
       },
     },
     case_details_before: {
+      state: "Draft",
       case_type_id: "TEST_CASE",
       case_data: {
-        claimCreateNote: "before",
+        cpc_note: "before",
       },
     },
     event_id: "create-widget",
     ignore_warning: false,
   });
+}
+
+async function validateWithoutDataKeepsMergedState(): Promise<void> {
+  const transport: CcdTransport = {
+    async get() {
+      return {
+        token: "event-token",
+        case_details: {
+          case_data: {
+            cpc_note: "before",
+          },
+        },
+      };
+    },
+    async post() {
+      return {
+        errors: ["still-invalid"],
+      };
+    },
+  };
+
+  const client = createCcdClient(
+    {
+      baseUrl: "http://ccd",
+      callbackBaseUrl: "http://service",
+      getAuthHeaders: async () => ({ Authorization: "Bearer token" }),
+      transport,
+    },
+    bindings
+  );
+
+  const flow = await client.event("create-widget").start();
+  const validation = await flow.validate("details", { propertyAddress: "99 Example Road" });
+
+  assert.deepEqual(validation, {
+    data: {
+      note: "before",
+      propertyAddress: "99 Example Road",
+    },
+    errors: ["still-invalid"],
+    warnings: [],
+  });
+  assert.deepEqual(flow.data, validation.data);
 }
 
 async function mismatchedCaseTypeFails(): Promise<void> {
@@ -170,11 +215,6 @@ async function mismatchedCaseTypeFails(): Promise<void> {
       ),
     /does not match generated bindings/
   );
-}
-
-function namespaceConversionMatchesJava(): void {
-  assert.equal(toPrefixStem("claim.create"), "claimCreate");
-  assert.equal(toPrefixStem("citizen.application.update"), "citizenApplicationUpdate");
 }
 
 void run();

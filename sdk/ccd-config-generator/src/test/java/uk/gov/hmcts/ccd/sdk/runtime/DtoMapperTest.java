@@ -12,7 +12,7 @@ public class DtoMapperTest {
 
   @Test
   public void fromCcdDataTreatsNullMapAsEmpty() {
-    TestDto result = DtoMapper.fromCcdData(null, "claimCreate", TestDto.class, mapper);
+    TestDto result = DtoMapper.fromCcdData(null, "cpc", TestDto.class, mapper);
 
     assertThat(result).isNotNull();
     assertThat(result.getName()).isNull();
@@ -20,21 +20,21 @@ public class DtoMapperTest {
 
   @Test
   public void toCcdDataTreatsNullDtoAsEmpty() {
-    assertThat(DtoMapper.toCcdData(null, "claimCreate", mapper)).isEmpty();
+    assertThat(DtoMapper.toCcdData(null, "cpc", mapper)).isEmpty();
   }
 
   @Test
-  public void mapsUsingNamespaceDerivedPrefixStem() {
+  public void mapsUsingLiteralFieldPrefix() {
     TestDto result = DtoMapper.fromCcdData(
-        Map.of("claimCreateName", "example"),
-        "claimCreate",
+        Map.of("cpc_name", "example"),
+        "cpc",
         TestDto.class,
         mapper
     );
 
     assertThat(result.getName()).isEqualTo("example");
-    assertThat(DtoMapper.toCcdData(result, "claimCreate", mapper))
-        .containsEntry("claimCreateName", "example");
+    assertThat(DtoMapper.toCcdData(result, "cpc", mapper))
+        .containsEntry("cpc_name", "example");
   }
 
   public static class TestDto {

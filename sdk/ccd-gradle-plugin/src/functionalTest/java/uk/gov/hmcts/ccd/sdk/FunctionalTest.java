@@ -53,7 +53,7 @@ public class FunctionalTest {
     String contractsContent = FileUtils.readFileToString(tsContracts, StandardCharsets.UTF_8);
     assertTrue(contractsContent.contains("\"create-widget\""));
     assertTrue(contractsContent.contains("CreateWidgetData"));
-    assertTrue(contractsContent.contains("fieldNamespace: \"widget.create\""));
+    assertTrue(contractsContent.contains("fieldPrefix: \"widget\""));
     assertTrue(contractsContent.contains("defineCaseBindings"));
     assertTrue(!contractsContent.contains("fields: ["));
 

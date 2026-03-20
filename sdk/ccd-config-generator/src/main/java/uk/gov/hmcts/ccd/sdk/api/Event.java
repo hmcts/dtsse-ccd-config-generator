@@ -10,7 +10,6 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import lombok.Builder;
 import lombok.Data;
-import uk.gov.hmcts.ccd.sdk.DtoFieldNamespace;
 import uk.gov.hmcts.ccd.sdk.api.callback.AboutToStart;
 import uk.gov.hmcts.ccd.sdk.api.callback.AboutToSubmit;
 import uk.gov.hmcts.ccd.sdk.api.callback.Start;
@@ -67,7 +66,7 @@ public class Event<T, R extends HasRole, S> {
 
   private Class dataClass;
   private Class<?> dtoClass;
-  private String fieldNamespace;
+  private String fieldPrefix;
   private static int eventCount;
 
   public boolean isDtoEvent() {
@@ -97,18 +96,18 @@ public class Event<T, R extends HasRole, S> {
 
     public static <T, R extends HasRole, S> EventBuilder<T, R, S> builder(
         String id, Class dataClass, PropertyUtils propertyUtils,
-        Set<S> preStates, Set<S> postStates, Class<?> dtoClass, String fieldNamespace) {
+        Set<S> preStates, Set<S> postStates, Class<?> dtoClass, String fieldPrefix) {
       EventBuilder<T, R, S> result = new EventBuilder<T, R, S>();
       result.id(id);
       result.preState = preStates;
       result.postState = postStates;
       result.dataClass = dataClass;
       result.dtoClass(dtoClass);
-      result.fieldNamespace(fieldNamespace);
+      result.fieldPrefix(fieldPrefix);
       result.grants = HashMultimap.create();
       result.historyOnlyRoles = new HashSet<>();
       result.fieldsBuilder = FieldCollection.FieldCollectionBuilder
-          .builder(result, result, dataClass, propertyUtils, DtoFieldNamespace.toPrefixStem(fieldNamespace));
+          .builder(result, result, dataClass, propertyUtils, fieldPrefix);
       result.retries = new HashMap<>();
 
       return result;
@@ -256,8 +255,8 @@ public class Event<T, R extends HasRole, S> {
       this.dtoClass = value;
     }
 
-    private void fieldNamespace(String value) {
-      this.fieldNamespace = value;
+    private void fieldPrefix(String value) {
+      this.fieldPrefix = value;
     }
 
     private void setRetries(Webhook hook, int... retries) {
@@ -269,7 +268,7 @@ public class Event<T, R extends HasRole, S> {
     }
   }
 
-  public String getEventFieldPrefixStem() {
-    return DtoFieldNamespace.toPrefixStem(fieldNamespace);
+  public String getEventFieldPrefix() {
+    return fieldPrefix;
   }
 }

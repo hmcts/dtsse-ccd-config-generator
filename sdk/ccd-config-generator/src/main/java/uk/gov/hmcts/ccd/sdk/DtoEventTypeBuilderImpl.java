@@ -14,7 +14,7 @@ import uk.gov.hmcts.ccd.sdk.api.callback.Submit;
 /**
  * EventTypeBuilder for decentralised events using isolated DTO classes.
  * Uses the DTO class as the data class for event field resolution,
- * and sets the DTO field namespace on the FieldCollectionBuilder for auto-prefixing.
+ * and sets the DTO field prefix on the FieldCollectionBuilder for direct field ID generation.
  */
 @SuppressWarnings({"unchecked", "rawtypes"})
 public class DtoEventTypeBuilderImpl<D, R extends HasRole, S> implements EventTypeBuilder<D, R, S> {
@@ -23,19 +23,19 @@ public class DtoEventTypeBuilderImpl<D, R extends HasRole, S> implements EventTy
   private final Map<String, List<Event.EventBuilder>> events;
   private final String id;
   private final Class<D> dtoClass;
-  private final String fieldNamespace;
+  private final String fieldPrefix;
   private final Submit<D, S> submitHandler;
   private final Start<D, S> startHandler;
 
   public DtoEventTypeBuilderImpl(ResolvedCCDConfig config,
                                  Map<String, List<Event.EventBuilder>> events,
-                                 String id, Class<D> dtoClass, String fieldNamespace,
+                                 String id, Class<D> dtoClass, String fieldPrefix,
                                  Submit<D, S> submitHandler, Start<D, S> startHandler) {
     this.config = config;
     this.events = events;
     this.id = id;
     this.dtoClass = dtoClass;
-    this.fieldNamespace = fieldNamespace;
+    this.fieldPrefix = fieldPrefix;
     this.submitHandler = submitHandler;
     this.startHandler = startHandler;
   }
@@ -87,7 +87,7 @@ public class DtoEventTypeBuilderImpl<D, R extends HasRole, S> implements EventTy
 
   protected Event.EventBuilder<D, R, S> build(Set<S> preStates, Set<S> postStates) {
     Event.EventBuilder<D, R, S> result = Event.EventBuilder
-        .builder(id, dtoClass, new PropertyUtils(), preStates, postStates, dtoClass, fieldNamespace);
+        .builder(id, dtoClass, new PropertyUtils(), preStates, postStates, dtoClass, fieldPrefix);
     result.submitHandler(this.submitHandler);
     result.startHandler(this.startHandler);
     if (!events.containsKey(id)) {

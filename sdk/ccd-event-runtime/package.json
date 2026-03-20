@@ -19,7 +19,7 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc -p tsconfig.type-tests.json",
     "test": "tsx src/runtime.test.ts"
   },
   "devDependencies": {
