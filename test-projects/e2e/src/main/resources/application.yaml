@@ -354,6 +354,15 @@ core_case_data:
     page_size: ${CCD_SEARCH_PAGE_SIZE:50}
     total_max_results: ${CCD_SEARCH_MAX_RESULTS:250}
 
+task-management:
+  api:
+    url: ${TASK_MANAGEMENT_API_URL:http://localhost:8087}
+  outbox:
+    poller:
+      enabled: ${TASK_OUTBOX_POLLER_ENABLED:true}
+      delay: ${TASK_OUTBOX_POLLER_DELAY:1000}
+      batch-size: ${TASK_OUTBOX_POLLER_BATCH_SIZE:5}
+
 docmosis:
   templates:
     english:
