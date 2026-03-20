@@ -30,8 +30,11 @@ tasks.register('publishToMavenLocal') { task ->
 }
 
 tasks.register('publishToAzureArtifacts') { task ->
+    def includedBuildsToPublish = ['sdk']
     gradle.includedBuilds.each { included ->
-        task.dependsOn(included.task(':publishToAzureArtifacts'))
+        if (includedBuildsToPublish.contains(included.name)) {
+            task.dependsOn(included.task(':publishToAzureArtifacts'))
+        }
     }
     subprojects.each { subproject ->
         task.dependsOn(
@@ -46,6 +49,48 @@ tasks.register('verifyCcdMigration', Exec) {
     dependsOn ':e2e:dumpCCDDefinitions'
     workingDir projectDir
     commandLine 'bash', '-lc', './scripts/test-migrate-ccd-data.sh'
+}
+
+def snapshotPcsTsBindingsStatus = tasks.register('snapshotPcsTsBindingsStatus') {
+    group = 'verification'
+    description = 'Captures current git status for generated PCS TypeScript bindings.'
+    doLast {
+        def statusOutput = new ByteArrayOutputStream()
+        exec {
+            commandLine 'git', '-C', 'test-projects/pcs-frontend', 'status', '--porcelain',
+                '--', 'src/main/generated/ccd'
+            standardOutput = statusOutput
+        }
+        file("$buildDir/pcs-ts-bindings-status.before").text = statusOutput.toString('UTF-8')
+    }
+}
+
+project(':pcs').tasks.matching { it.name == 'generateCCDConfig' }.configureEach {
+    mustRunAfter snapshotPcsTsBindingsStatus
+}
+
+tasks.register('verifyPcsTsBindingsUpToDate') {
+    group = 'verification'
+    description = 'Fails when :pcs:generateCCDConfig changes generated bindings in pcs-frontend.'
+    dependsOn snapshotPcsTsBindingsStatus
+    dependsOn ':pcs:generateCCDConfig'
+    doLast {
+        def afterOutput = new ByteArrayOutputStream()
+        exec {
+            commandLine 'git', '-C', 'test-projects/pcs-frontend', 'status', '--porcelain',
+                '--', 'src/main/generated/ccd'
+            standardOutput = afterOutput
+        }
+        def beforeStatus = file("$buildDir/pcs-ts-bindings-status.before").text
+        def afterStatus = afterOutput.toString('UTF-8')
+        if (afterStatus != beforeStatus) {
+            throw new GradleException(
+                "Generated TS bindings are stale. Run :pcs:generateCCDConfig and update "
+                    + "test-projects/pcs-frontend/src/main/generated/ccd.\n"
+                    + afterStatus.trim()
+            )
+        }
+    }
 }
 
 afterEvaluate {

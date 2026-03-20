@@ -5,10 +5,12 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
+import java.io.File;
 import java.io.IOException;
 import jakarta.jms.ConnectionFactory;
 import jakarta.jms.Message;
 
+import java.nio.charset.StandardCharsets;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -28,6 +30,7 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.function.Function;
 import java.util.HashMap;
+import java.util.concurrent.TimeUnit;
 
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
@@ -1362,6 +1365,44 @@ public class TestWithCCD extends CftlibTest {
         return cftlib().generateDummyS2SToken("ccd_gw");
     }
 
+    private void runGeneratedTypeScriptClient(String noteText) throws Exception {
+        String testsDir = System.getenv("E2E_TS_TESTS_DIR");
+        assertThat("E2E_TS_TESTS_DIR must be configured for cftlibTest", testsDir, notNullValue());
+
+        File tsxCli = new File(testsDir, "node_modules/tsx/dist/cli.mjs");
+        assertThat("TypeScript runner must exist at " + tsxCli.getAbsolutePath(), tsxCli.exists(), is(true));
+
+        ProcessBuilder processBuilder = new ProcessBuilder(
+            "node",
+            tsxCli.getAbsolutePath(),
+            "src/run-generated-client-e2e.ts"
+        );
+        processBuilder.directory(new File(testsDir));
+        processBuilder.environment().put("CCD_BASE_URL", BASE_URL);
+        processBuilder.environment().put("CCD_CALLBACK_BASE_URL", SERVICE_BASE_URL);
+        processBuilder.environment().put("CCD_CASE_TYPE_ID", NoFaultDivorce.getCaseType());
+        processBuilder.environment().put("CCD_CASE_ID", String.valueOf(caseRef));
+        processBuilder.environment().put(
+            "CCD_USER_TOKEN",
+            getAuthorisation("TEST_CASE_WORKER_USER@mailinator.com")
+        );
+        processBuilder.environment().put("CCD_SERVICE_TOKEN", getServiceAuth());
+        processBuilder.environment().put("CCD_NOTE", noteText);
+
+        Process process = processBuilder.start();
+        boolean finished = process.waitFor(90, TimeUnit.SECONDS);
+        if (!finished) {
+            process.destroyForcibly();
+            throw new AssertionError("Generated TypeScript client test timed out");
+        }
+
+        int exitCode = process.exitValue();
+        String stdout = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8).trim();
+        String stderr = new String(process.getErrorStream().readAllBytes(), StandardCharsets.UTF_8).trim();
+        assertThat("Generated TypeScript client test failed.\nstdout:\n" + stdout + "\nstderr:\n" + stderr,
+            exitCode, equalTo(0));
+    }
+
     <T extends HttpRequestBase> T buildRequest(String user, String url, Function<String, T> ctor) {
         var request = ctor.apply(url);
         var token = idam.getAccessToken(user, "");
@@ -1955,6 +1996,17 @@ public class TestWithCCD extends CftlibTest {
         assertThat(response.getStatusLine().getStatusCode(), equalTo(400));
         JsonNode errorPayload = mapper.readTree(responseBody);
         assertThat(errorPayload.path("status").asInt(), equalTo(400));
+    }
+
+    @Order(29)
+    @Test
+    void generatedTypeScriptClientSubmitsDtoEventAgainstLiveStack() throws Exception {
+        String noteText = "Generated TS DTO note " + UUID.randomUUID();
+        runGeneratedTypeScriptClient(noteText);
+
+        String latestNoteSql = "SELECT note FROM case_notes WHERE reference = :ref ORDER BY id DESC LIMIT 1";
+        String latestNote = db.queryForObject(latestNoteSql, Map.of("ref", caseRef), String.class);
+        assertThat(latestNote, equalTo(noteText));
     }
 
     private JsonNode fetchElasticsearchDocument(long caseDataId) throws IOException {

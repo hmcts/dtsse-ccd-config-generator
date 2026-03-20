@@ -12,6 +12,7 @@ import org.springframework.core.ResolvableType;
 import org.springframework.util.ClassUtils;
 import uk.gov.hmcts.ccd.sdk.api.CCDConfig;
 import uk.gov.hmcts.ccd.sdk.generator.JSONConfigGenerator;
+import uk.gov.hmcts.ccd.sdk.ts.TypeScriptBindingsGenerator;
 
 /**
  * Public API for programmatically generating and exporting definitions.
@@ -20,11 +21,15 @@ import uk.gov.hmcts.ccd.sdk.generator.JSONConfigGenerator;
 public class CCDDefinitionGenerator {
   private final List<CCDConfig<?, ?, ?>> configs;
   private final JSONConfigGenerator writer;
+  private final TypeScriptBindingsGenerator tsWriter;
 
   @Autowired
-  public CCDDefinitionGenerator(List<CCDConfig<?, ?, ?>> configs, JSONConfigGenerator writer) {
+  public CCDDefinitionGenerator(List<CCDConfig<?, ?, ?>> configs,
+                                JSONConfigGenerator writer,
+                                TypeScriptBindingsGenerator tsWriter) {
     this.configs = configs;
     this.writer = writer;
+    this.tsWriter = tsWriter;
   }
 
   @Bean
@@ -55,10 +60,25 @@ public class CCDDefinitionGenerator {
    * Export all case types to the specified folder.
    */
   public void generateAllCaseTypesToJSON(File destinationFolder) {
+    generateAllCaseTypes(destinationFolder, new TsBindingsOptions(false, null, "ccd-bindings"));
+  }
+
+  /**
+   * Export all case types to the specified folder and optionally generate TypeScript bindings.
+   */
+  public void generateAllCaseTypes(File destinationFolder, TsBindingsOptions tsBindings) {
     for (ResolvedCCDConfig<?, ?, ?> c : loadConfigs()) {
       File f = new File(destinationFolder, c.caseType);
       f.mkdirs();
       writer.writeConfig(f, c);
+      if (tsBindings.enabled()) {
+        if (tsBindings.outputDir() == null) {
+          throw new IllegalStateException("TS bindings output directory must be configured when enabled");
+        }
+        File tsCaseTypeFolder = new File(tsBindings.outputDir(), c.caseType);
+        tsCaseTypeFolder.mkdirs();
+        tsWriter.writeBindings(tsCaseTypeFolder, c, tsBindings.moduleName());
+      }
     }
   }
 
