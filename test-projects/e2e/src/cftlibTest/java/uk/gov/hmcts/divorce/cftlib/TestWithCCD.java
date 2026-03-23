@@ -1175,8 +1175,7 @@ public class TestWithCCD extends CftlibTest {
                     ]
                   }
                 },
-                "size":25,
-                "sort":[{"_id": "desc"}]
+                "size":25
               },
               "supplementary_data":["*"]
             }
