@@ -148,6 +148,17 @@ The orchestration lives in [`CaseSubmissionService`](../sdk/decentralised-runtim
 
 Supplementary data operations are implemented and persisted in the `ccd.case_data` table via [`SupplementaryDataService`](../sdk/decentralised-runtime/src/main/java/uk/gov/hmcts/ccd/sdk/impl/SupplementaryDataService.java), using PostgreSQL’s JSON functions to apply `$set`/`$inc` style updates atomically.
 
+## Accessing authorization token in callback handlers
+
+`Authorization` is available to `CallbackHandlerBean` implementations through
+[`CallbackRequestContext`](../sdk/decentralised-runtime/src/main/java/uk/gov/hmcts/ccd/sdk/CallbackRequestContext.java).
+The runtime automatically captures the request header for `/ccd-persistence/**` requests and clears it after each
+request.
+
+```java
+String userToken = CallbackRequestContext.getAuthorizationToken().orElse(null);
+```
+
 ## Message publishing to Azure Service Bus
 
 A transactional outbox-based `message_queue_candidates` table is maintained and written to based on your CCD definition, mirroring CCD's implementation.

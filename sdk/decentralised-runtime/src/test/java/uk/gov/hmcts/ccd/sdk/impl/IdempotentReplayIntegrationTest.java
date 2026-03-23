@@ -1,13 +1,7 @@
 package uk.gov.hmcts.ccd.sdk.impl;
 
-import static org.assertj.core.api.Assertions.assertThat;
-
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.ImmutableSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.ImportAutoConfiguration;
@@ -30,6 +24,13 @@ import uk.gov.hmcts.ccd.sdk.ResolvedCCDConfig;
 import uk.gov.hmcts.ccd.sdk.ResolvedConfigRegistry;
 import uk.gov.hmcts.ccd.sdk.api.HasRole;
 import uk.gov.hmcts.ccd.sdk.config.DecentralisedDataConfiguration;
+
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.UUID;
+
+import static org.assertj.core.api.Assertions.assertThat;
 
 @SpringBootTest(classes = IdempotentReplayIntegrationTest.TestConfig.class, properties = {
     "spring.datasource.url=jdbc:tc:postgresql:16-alpine:///ccd",
@@ -145,21 +146,6 @@ class IdempotentReplayIntegrationTest {
     seedCaseData(CASE_ID, CASE_REFERENCE, version, revision);
   }
 
-  private DecentralisedCaseEvent buildEvent(long caseReference, String caseType) {
-    var caseDetails = new CaseDetails();
-    caseDetails.setReference(caseReference);
-    caseDetails.setJurisdiction("TEST");
-    caseDetails.setCaseTypeId(caseType);
-    caseDetails.setState("Submitted");
-    caseDetails.setVersion(1);
-    caseDetails.setSecurityClassification(SecurityClassification.PUBLIC);
-
-    return DecentralisedCaseEvent.builder()
-        .caseDetails(caseDetails)
-        .internalCaseId(caseReference)
-        .build();
-  }
-
   private void seedCaseData(long caseId, long caseReference, int version, long revision) {
     var params = new MapSqlParameterSource()
         .addValue("id", caseId)
@@ -267,6 +253,21 @@ class IdempotentReplayIntegrationTest {
         params,
         Long.class
     );
+  }
+
+  private DecentralisedCaseEvent buildEvent(long caseReference, String caseType) {
+    var caseDetails = new CaseDetails();
+    caseDetails.setReference(caseReference);
+    caseDetails.setJurisdiction("TEST");
+    caseDetails.setCaseTypeId(caseType);
+    caseDetails.setState("Submitted");
+    caseDetails.setVersion(1);
+    caseDetails.setSecurityClassification(SecurityClassification.PUBLIC);
+
+    return DecentralisedCaseEvent.builder()
+        .caseDetails(caseDetails)
+        .internalCaseId(caseReference)
+        .build();
   }
 
   @Configuration
