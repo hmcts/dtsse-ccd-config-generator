@@ -34,7 +34,7 @@ public class TaskOutboxService {
 
     try {
       String payload = objectMapper.writeValueAsString(request);
-      repository.enqueue(task.getCaseId(), task.getCaseTypeId(), payload, TaskAction.INITIATE.getId(), nextAttemptAt);
+      repository.enqueue(task.getCaseId(), payload, TaskAction.INITIATE.getId(), nextAttemptAt);
     } catch (IOException ex) {
       throw new IllegalStateException("Failed to enqueue task outbox entry", ex);
     }
@@ -48,7 +48,6 @@ public class TaskOutboxService {
     try {
       repository.enqueue(
           payload.caseId(),
-          payload.caseType(),
           objectMapper.writeValueAsString(payload),
           TaskAction.COMPLETE.getId()
       );
@@ -65,7 +64,6 @@ public class TaskOutboxService {
     try {
       repository.enqueue(
           payload.caseId(),
-          payload.caseType(),
           objectMapper.writeValueAsString(payload),
           TaskAction.CANCEL.getId()
       );
@@ -81,7 +79,6 @@ public class TaskOutboxService {
     try {
       repository.enqueue(
           payload.caseId(),
-          payload.caseType(),
           objectMapper.writeValueAsString(payload),
           TaskAction.RECONFIGURE.getId()
       );

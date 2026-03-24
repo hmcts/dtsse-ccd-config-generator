@@ -2,8 +2,7 @@ create type ccd.task_action AS ENUM ('cancel', 'complete', 'initiate', 'reconfig
 
 create table ccd.task_outbox (
     id bigserial primary key,
-    case_id text not null,
-    case_type_id text not null,
+    case_id bigint not null references ccd.case_data(id),
     payload jsonb not null,
     action ccd.task_action not null,
     status text not null default 'NEW',

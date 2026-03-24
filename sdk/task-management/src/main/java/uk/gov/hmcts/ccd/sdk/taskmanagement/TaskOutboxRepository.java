@@ -25,25 +25,32 @@ public class TaskOutboxRepository {
     this.processingTimeout = properties.getOutbox().getPoller().getProcessingTimeout();
   }
 
-  public void enqueue(String caseId, String caseTypeId, String payload, String action) {
-    enqueue(caseId, caseTypeId, payload, action, null);
+  public void enqueue(String caseId, String payload, String action) {
+    enqueue(caseId, payload, action, null);
   }
 
-  public void enqueue(String caseId, String caseTypeId, String payload, String action, LocalDateTime nextAttemptAt) {
+  public void enqueue(String caseId, String payload, String action, LocalDateTime nextAttemptAt) {
     MapSqlParameterSource params = new MapSqlParameterSource()
         .addValue("action", action)
-        .addValue("caseId", caseId)
-        .addValue("caseTypeId", caseTypeId)
+        .addValue("caseId", parseCaseId(caseId))
         .addValue("payload", payload)
         .addValue("nextAttemptAt", nextAttemptAt);
 
     jdbc.update(
         """
-            insert into %s (case_id, case_type_id, payload, action, next_attempt_at)
-            values (:caseId, :caseTypeId, :payload::jsonb, :action::%s, :nextAttemptAt)
+            insert into %s (case_id, payload, action, next_attempt_at)
+            values (:caseId, :payload::jsonb, :action::%s, :nextAttemptAt)
             """.formatted(tableName, actionTypeName),
         params
     );
+  }
+
+  private long parseCaseId(String caseId) {
+    try {
+      return Long.parseLong(caseId);
+    } catch (NumberFormatException ex) {
+      throw new IllegalArgumentException("caseId must be a numeric CCD internal ID", ex);
+    }
   }
 
   public List<TaskOutboxRecord> findPending(int limit, int maxAttempts) {
