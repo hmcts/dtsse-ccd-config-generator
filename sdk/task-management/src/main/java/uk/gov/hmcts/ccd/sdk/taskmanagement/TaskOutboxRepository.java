@@ -32,7 +32,7 @@ public class TaskOutboxRepository {
 
     jdbc.update(
         """
-            insert into ccd.task_outbox (case_id, payload, action, next_attempt_at)
+            insert into ccd.task_outbox (case_id, payload, requested_action, next_attempt_at)
             values (:caseId, :payload::jsonb, :action::ccd.task_action, :nextAttemptAt)
             """,
         params
@@ -51,9 +51,9 @@ public class TaskOutboxRepository {
     LocalDateTime now = LocalDateTime.now();
     return jdbc.query(
         """
-            select id, payload::text, action, attempt_count
+            select id, payload::text, requested_action, attempt_count
             from ccd.task_outbox
-            where status in (:newStatus, :failedStatus, :processingStatus)
+            where status::text in (:newStatus, :failedStatus, :processingStatus)
              and (next_attempt_at is null or next_attempt_at <= :now)
              and (:maxAttempts = 0 or attempt_count < :maxAttempts)
             order by id
@@ -70,7 +70,7 @@ public class TaskOutboxRepository {
         (rs, rowNum) -> new TaskOutboxRecord(
             rs.getLong("id"),
             rs.getString("payload"),
-            rs.getString("action"),
+            rs.getString("requested_action"),
             rs.getInt("attempt_count")
         )
     );
@@ -82,9 +82,9 @@ public class TaskOutboxRepository {
     int updated = jdbc.update(
         """
             update ccd.task_outbox
-            set status = :status, updated = :updated, next_attempt_at = :nextAttemptAt
+            set status = cast(:status as ccd.task_outbox_status), updated = :updated, next_attempt_at = :nextAttemptAt
             where id = :id
-             and status in (:newStatus, :failedStatus, :processingStatus)
+             and status::text in (:newStatus, :failedStatus, :processingStatus)
              and (next_attempt_at is null or next_attempt_at <= :now)
             """,
         Map.of(
@@ -113,7 +113,7 @@ public class TaskOutboxRepository {
     jdbc.update(
         """
             update ccd.task_outbox
-            set status = :status,
+            set status = cast(:status as ccd.task_outbox_status),
               updated = :updated,
               next_attempt_at = :nextAttemptAt
             where id = :id
@@ -136,7 +136,7 @@ public class TaskOutboxRepository {
     jdbc.update(
         """
             update ccd.task_outbox
-            set status = :status,
+            set status = cast(:status as ccd.task_outbox_status),
               updated = :updated,
               attempt_count = attempt_count + 1,
               next_attempt_at = :nextAttemptAt
@@ -165,7 +165,7 @@ public class TaskOutboxRepository {
     jdbc.update(
         """
             insert into ccd.task_outbox_history (task_outbox_id, status, response_code, error, created)
-            values (:taskOutboxId, :status, :statusCode, :error, :created)
+            values (:taskOutboxId, cast(:status as ccd.task_outbox_status), :statusCode, :error, :created)
             """,
         params
     );

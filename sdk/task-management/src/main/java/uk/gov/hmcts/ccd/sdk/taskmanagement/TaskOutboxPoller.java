@@ -58,7 +58,7 @@ public class TaskOutboxPoller {
       }
 
       try {
-        TaskAction action = TaskAction.fromId(record.action());
+        TaskAction action = TaskAction.fromId(record.requestedAction());
 
         TaskProcessor processor = switch (action) {
           case INITIATE -> this::createTask;
@@ -96,7 +96,7 @@ public class TaskOutboxPoller {
   }
 
   private boolean isUnsuccessfulRequest(TaskOutboxRecord record, ResponseEntity<?> response) {
-    TaskAction action = TaskAction.fromId(record.action());
+    TaskAction action = TaskAction.fromId(record.requestedAction());
     if (response == null) {
       log.warn("Task outbox {} received null response for action {}", record.id(), action.getId());
       handleFailure(record, null, "Task outbox received null response");

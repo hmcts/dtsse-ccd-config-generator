@@ -1531,7 +1531,7 @@ public class TestWithCCD extends CftlibTest {
             () -> db.queryForMap(
                 "SELECT status, next_attempt_at FROM ccd.task_outbox"
                     + " WHERE case_id = CAST(:caseId AS bigint)"
-                    + " AND action = :action::ccd.task_action ORDER BY id DESC LIMIT 1",
+                    + " AND requested_action = :action::ccd.task_action ORDER BY id DESC LIMIT 1",
                 Map.of("caseId", caseIdValue, "action", TaskAction.INITIATE.getId())
             ),
             row -> row.get("next_attempt_at") != null
@@ -1548,7 +1548,7 @@ public class TestWithCCD extends CftlibTest {
             Map<String, Object> statusRow = db.queryForMap(
                 "SELECT status FROM ccd.task_outbox"
                     + " WHERE case_id = CAST(:caseId AS bigint)"
-                    + " AND action = :action::ccd.task_action ORDER BY id DESC LIMIT 1",
+                    + " AND requested_action = :action::ccd.task_action ORDER BY id DESC LIMIT 1",
                 Map.of("caseId", caseIdValue, "action", TaskAction.INITIATE.getId())
             );
             assertThat(statusRow.get("status"), equalTo("NEW"));
@@ -2515,7 +2515,7 @@ public class TestWithCCD extends CftlibTest {
 
     private Map<String, Object> queryCurrentOutboxRow(String caseId) {
         return db.queryForMap(
-            "SELECT o.status, h.response_code AS last_response_code"
+            "SELECT o.status::text AS status, h.response_code AS last_response_code"
                 + " FROM ccd.task_outbox o"
                 + " LEFT JOIN LATERAL ("
                 + "     SELECT response_code"
@@ -2531,7 +2531,7 @@ public class TestWithCCD extends CftlibTest {
 
     private Map<String, Object> queryLatestCurrentOutboxRow(String caseId, TaskAction action) {
         return db.queryForMap(
-            "SELECT o.status, h.response_code AS last_response_code"
+            "SELECT o.status::text AS status, h.response_code AS last_response_code"
                 + " FROM ccd.task_outbox o"
                 + " LEFT JOIN LATERAL ("
                 + "     SELECT response_code"
@@ -2540,7 +2540,7 @@ public class TestWithCCD extends CftlibTest {
                 + "     ORDER BY h.id DESC LIMIT 1"
                 + " ) h ON true"
                 + " WHERE o.case_id = CAST(:caseId AS bigint)"
-                + " AND o.action = :action::ccd.task_action"
+                + " AND o.requested_action = :action::ccd.task_action"
                 + " ORDER BY o.id DESC LIMIT 1",
             Map.of("caseId", caseId, "action", action.getId())
         );
