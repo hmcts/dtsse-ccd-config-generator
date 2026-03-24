@@ -6,14 +6,11 @@ import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.http.HttpHost;
-import org.elasticsearch.action.bulk.BulkItemResponse;
-import org.elasticsearch.action.bulk.BulkRequest;
-import org.elasticsearch.action.index.IndexRequest;
-import org.elasticsearch.client.RequestOptions;
+import org.apache.http.entity.ContentType;
+import org.apache.http.entity.StringEntity;
+import org.apache.http.util.EntityUtils;
+import org.elasticsearch.client.Request;
 import org.elasticsearch.client.RestClient;
-import org.elasticsearch.client.RestHighLevelClient;
-import org.elasticsearch.index.VersionType;
-import org.elasticsearch.xcontent.XContentType;
 import org.springframework.beans.factory.DisposableBean;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -30,11 +27,13 @@ import org.springframework.transaction.support.TransactionTemplate;
 @Component
 @Slf4j
 class DecentralisedESIndexer implements DisposableBean {
+  private static final char NDJSON_NEWLINE = '\n';
 
   private final JdbcTemplate jdbcTemplate;
   private final TransactionTemplate transactionTemplate;
   private final AtomicBoolean terminated = new AtomicBoolean(false);
-  private final RestHighLevelClient client;
+  private final RestClient client;
+  private final ObjectMapper mapper = new ObjectMapper();
 
   @Autowired
   public DecentralisedESIndexer(JdbcTemplate jdbcTemplate, TransactionTemplate transactionTemplate,
@@ -42,8 +41,7 @@ class DecentralisedESIndexer implements DisposableBean {
                                 String elasticSearchHost) {
     this.jdbcTemplate = jdbcTemplate;
     this.transactionTemplate = transactionTemplate;
-    this.client = new RestHighLevelClient(RestClient.builder(
-        HttpHost.create(elasticSearchHost)));
+    this.client = RestClient.builder(HttpHost.create(elasticSearchHost)).build();
 
     log.info("Starting decentralised ES indexer targeting {}", elasticSearchHost);
   }
@@ -119,8 +117,8 @@ class DecentralisedESIndexer implements DisposableBean {
           """);
 
       try {
-        BulkRequest request = new BulkRequest();
-        ObjectMapper mapper = new ObjectMapper();
+        var bulkBody = new StringBuilder();
+        int actionCount = 0;
 
         for (Map<String, Object> row : results) {
           var rowJson = row.get("row").toString();
@@ -128,11 +126,8 @@ class DecentralisedESIndexer implements DisposableBean {
           String indexId = row.get("index_id").toString();
           String docId = row.get("case_data_id").toString();
 
-          request.add(new IndexRequest(indexId)
-              .id(docId)
-              .source(rowJson, XContentType.JSON)
-              .versionType(VersionType.EXTERNAL_GTE)
-              .version(version));
+          appendBulkIndex(bulkBody, indexId, docId, version, rowJson);
+          actionCount++;
 
           // Replicate CCD's globalsearch logstash setup.
           // Where cases define a 'SearchCriteria' field we index certain fields into CCD's central
@@ -149,48 +144,97 @@ class DecentralisedESIndexer implements DisposableBean {
             map.remove("created_date");
             map.put("index_id", "global_search");
 
-            request.add(new IndexRequest("global_search")
-                .id(docId)
-                .source(mapper.writeValueAsString(map), XContentType.JSON)
-                .versionType(VersionType.EXTERNAL_GTE)
-                .version(version));
+            appendBulkIndex(
+                bulkBody,
+                "global_search",
+                docId,
+                version,
+                mapper.writeValueAsString(map));
+            actionCount++;
           }
         }
 
-        if (request.numberOfActions() > 0) {
-          var r = client.bulk(request, RequestOptions.DEFAULT);
-          if (r.hasFailures()) {
-            boolean hasGenuineFailure = false;
-            for (BulkItemResponse item : r.getItems()) {
-              if (item.isFailed()) {
-                BulkItemResponse.Failure failure = item.getFailure();
-                if (409 == failure.getStatus().getStatus()) {
-                  // This is a stale event. The version in ES is already higher.
-                  // We can safely ignore this and let the transaction commit,
-                  // which will remove the item from the es_queue.
-                  log.info("Stale event processing skipped due to version conflict for id {}: {}",
-                      failure.getId(), failure.getMessage());
-                } else {
-                  hasGenuineFailure = true;
-                  log.error("Cftlib elasticsearch indexing error for id {}: {}",
-                      failure.getId(), failure.getMessage());
-                }
-              }
-            }
-
-            if (hasGenuineFailure) {
-              // Rollback the transaction only if we encountered a non-version-conflict error.
-              log.error("**** Cftlib elasticsearch indexing has genuine failures. Rolling back transaction.");
-              status.setRollbackOnly();
-              return false;
-            }
-          }
+        if (actionCount > 0 && executeBulkIndexingAndCheckForRollback(bulkBody.toString())) {
+          // Rollback the transaction only if we encountered a non-version-conflict error.
+          log.error("**** Cftlib elasticsearch indexing has genuine failures. Rolling back transaction.");
+          status.setRollbackOnly();
+          return false;
         }
         return true;  // Transaction success
       } catch (Exception e) {
         throw new RuntimeException(e);
       }
     });
+  }
+
+  @SuppressWarnings("unchecked")
+  private boolean executeBulkIndexingAndCheckForRollback(String bulkBody) throws Exception {
+    var request = new Request("POST", "/_bulk");
+    request.addParameter("timeout", "1m");
+    request.setEntity(new StringEntity(
+        bulkBody,
+        ContentType.create("application/x-ndjson", "UTF-8")));
+
+    var response = client.performRequest(request);
+    int statusCode = response.getStatusLine().getStatusCode();
+    if (statusCode != 200) {
+      throw new IllegalStateException(
+          "**** Cftlib elasticsearch bulk indexing failed with HTTP status: " + statusCode);
+    }
+
+    var responseBody = EntityUtils.toString(response.getEntity());
+    Map<String, Object> responseMap = mapper.readValue(responseBody, Map.class);
+    if (!Boolean.TRUE.equals(responseMap.get("errors"))) {
+      return false;
+    }
+
+    boolean hasGenuineFailure = false;
+    for (Object itemObj : (Iterable<?>) responseMap.getOrDefault("items", java.util.List.of())) {
+      Map<String, Object> item = (Map<String, Object>) itemObj;
+      Map<String, Object> action = (Map<String, Object>) item.values().iterator().next();
+      int itemStatus = ((Number) action.getOrDefault("status", 0)).intValue();
+      String itemId = String.valueOf(action.get("_id"));
+
+      if (itemStatus == 409) {
+        // This is a stale event. The version in ES is already higher.
+        // We can safely ignore this and let the transaction commit,
+        // which will remove the item from the es_queue.
+        log.info("Stale event processing skipped due to version conflict for id {}: {}",
+            itemId, extractErrorMessage(action));
+      } else if (itemStatus >= 400) {
+        hasGenuineFailure = true;
+        log.error("Cftlib elasticsearch indexing error for id {}: {}",
+            itemId, extractErrorMessage(action));
+      }
+    }
+
+    return hasGenuineFailure;
+  }
+
+  private void appendBulkIndex(StringBuilder bulk, String index, String id, long version, String source) {
+    var action = mapper.createObjectNode();
+    var indexAction = action.putObject("index");
+    indexAction.put("_index", index);
+    indexAction.put("_id", id);
+    indexAction.put("version", version);
+    indexAction.put("version_type", "external_gte");
+
+    appendNdjsonLine(bulk, action.toString());
+    appendNdjsonLine(bulk, source);
+  }
+
+  private void appendNdjsonLine(StringBuilder bulk, String line) {
+    // Elasticsearch _bulk expects newline-delimited JSON (NDJSON): one JSON object per line.
+    bulk.append(line).append(NDJSON_NEWLINE);
+  }
+
+  private String extractErrorMessage(Map<String, Object> action) {
+    Object error = action.get("error");
+    if (error instanceof Map<?, ?> errorMap) {
+      Object reason = errorMap.get("reason");
+      return reason != null ? reason.toString() : errorMap.toString();
+    }
+    return String.valueOf(error);
   }
 
   public void filter(Map<String, Object> map, String... forKeys) {
