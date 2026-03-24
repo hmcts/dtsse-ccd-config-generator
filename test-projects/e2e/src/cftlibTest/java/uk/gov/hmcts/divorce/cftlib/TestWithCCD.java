@@ -14,29 +14,38 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.Statement;
 import java.sql.SQLException;
+import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
+import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Function;
 import java.util.HashMap;
+import java.util.stream.StreamSupport;
 
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.http.NameValuePair;
+import org.apache.http.client.methods.CloseableHttpResponse;
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.client.methods.HttpPost;
 import org.apache.http.client.methods.HttpRequestBase;
 import org.apache.http.client.methods.HttpPut;
+import org.apache.http.client.entity.UrlEncodedFormEntity;
 import org.apache.http.entity.ContentType;
 import org.apache.http.entity.StringEntity;
+import org.apache.http.message.BasicNameValuePair;
+import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClientBuilder;
 import org.apache.http.util.EntityUtils;
 import org.mockito.ArgumentCaptor;
@@ -46,7 +55,6 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.*;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyInt;
@@ -86,12 +94,19 @@ import uk.gov.hmcts.divorce.sow014.nfd.DecentralisedCaseworkerAddNote;
 import uk.gov.hmcts.divorce.sow014.nfd.DecentralisedCaseworkerAddNoteFailure;
 import uk.gov.hmcts.divorce.sow014.nfd.FailingSubmittedCallback;
 import uk.gov.hmcts.divorce.sow014.nfd.CaseworkerRoundTripData;
+import uk.gov.hmcts.divorce.sow014.nfd.ApiFirstTaskCancelEvent;
+import uk.gov.hmcts.divorce.sow014.nfd.ApiFirstTaskCompleteEvent;
+import uk.gov.hmcts.divorce.sow014.nfd.ApiFirstTaskDelayedEvent;
+import uk.gov.hmcts.divorce.sow014.nfd.ApiFirstTaskEvent;
+import uk.gov.hmcts.divorce.sow014.nfd.ApiFirstTaskReconfigureEvent;
 import uk.gov.hmcts.divorce.sow014.nfd.PublishedEvent;
+import uk.gov.hmcts.divorce.sow014.nfd.ReturnErrorWhenCreateAPIFirstTask;
 import uk.gov.hmcts.divorce.sow014.nfd.ReturnErrorWhenCreateTestCase;
 import uk.gov.hmcts.divorce.sow014.nfd.SubmittedConfirmationCallback;
 import uk.gov.hmcts.ccd.sdk.type.CaseLink;
 import uk.gov.hmcts.ccd.sdk.type.ListValue;
 import uk.gov.hmcts.ccd.sdk.CaseReindexingService;
+import uk.gov.hmcts.ccd.sdk.taskmanagement.model.TaskAction;
 import uk.gov.hmcts.reform.ccd.client.CoreCaseDataApi;
 import uk.gov.hmcts.reform.ccd.client.model.CaseDataContent;
 import uk.gov.hmcts.reform.ccd.client.model.CaseDetails;
@@ -136,6 +151,7 @@ public class TestWithCCD extends CftlibTest {
     private static final String BASE_URL = "http://localhost:4452";
     private static final String SERVICE_BASE_URL = "http://localhost:4013";
     private static final String ELASTICSEARCH_BASE_URL = "http://localhost:9200";
+    private static final String TASK_MANAGEMENT_BASE_URL = "http://localhost:8087";
     private static final String ACCEPT_CREATE_CASE =
         "application/vnd.uk.gov.hmcts.ccd-data-store-api.create-case.v2+json;charset=UTF-8";
     private static final String ACCEPT_CREATE_EVENT =
@@ -150,6 +166,13 @@ public class TestWithCCD extends CftlibTest {
         "application/vnd.uk.gov.hmcts.ccd-data-store-api.ui-event-view.v2+json;charset=UTF-8";
     private static final String ACCEPT_UI_START_EVENT =
         "application/vnd.uk.gov.hmcts.ccd-data-store-api.ui-start-event-trigger.v2+json;charset=UTF-8";
+    private static final String API_FIRST_TASK_EVENT_ID = ApiFirstTaskEvent.EVENT_ID;
+    private static final String API_FIRST_TASK_COMPLETE_EVENT_ID = ApiFirstTaskCompleteEvent.EVENT_ID;
+    private static final String API_FIRST_TASK_CANCEL_EVENT_ID = ApiFirstTaskCancelEvent.EVENT_ID;
+    private static final String API_FIRST_TASK_RECONFIGURE_EVENT_ID = ApiFirstTaskReconfigureEvent.EVENT_ID;
+    private static final String API_FIRST_TASK_DELAYED_EVENT_ID = ApiFirstTaskDelayedEvent.EVENT_ID;
+    private String apiFirstTaskId;
+    private String waTaskId;
 
     @TestConfiguration
     static class ServiceBusTestConfiguration {
@@ -1040,7 +1063,7 @@ public class TestWithCCD extends CftlibTest {
         String noteCheck = """
             SELECT message_information->'AdditionalData'->'Data'->>'note'
              FROM ccd.message_queue_candidates
-             WHERE reference = :caseReference 
+             WHERE reference = :caseReference
              """;
 
         String retrievedNote = db.queryForObject(noteCheck, Map.of("caseReference", caseRef), String.class);
@@ -1049,7 +1072,7 @@ public class TestWithCCD extends CftlibTest {
         // Verify the EventTimeStamp from the JSON blob
         String timestampCheckSql = """
             SELECT message_information->>'EventTimeStamp'
-             FROM ccd.message_queue_candidates 
+             FROM ccd.message_queue_candidates
              WHERE reference = :caseReference """;
         String retrievedTimestampStr = db.queryForObject(timestampCheckSql, Map.of("caseReference", caseRef), String.class);
         assertThat(retrievedTimestampStr, is(notNullValue()));
@@ -1086,6 +1109,494 @@ public class TestWithCCD extends CftlibTest {
             LocalDateTime.class
         );
         assertThat(publishedTimestamp, is(notNullValue()));
+    }
+
+    @SneakyThrows
+    @Order(19)
+    @Test
+    public void apiFirstTaskShouldBeCreatedViaOutboxAndPoller() {
+        db.update("DELETE FROM ccd.task_outbox", Map.of());
+
+        var startEvent = ccdApi.startEvent(
+            getAuthorisation("TEST_CASE_WORKER_USER@mailinator.com"),
+            getServiceAuth(),
+            String.valueOf(caseRef),
+            API_FIRST_TASK_EVENT_ID
+        );
+
+        var request = prepareEventRequestWithToken(
+            "TEST_CASE_WORKER_USER@mailinator.com",
+            API_FIRST_TASK_EVENT_ID,
+            Map.of("note", "api-first-task"),
+            startEvent.getToken()
+        );
+
+        var response = HttpClientBuilder.create().build().execute(request);
+        assertThat(response.getStatusLine().getStatusCode(), equalTo(201));
+
+        await().atMost(Duration.ofSeconds(10)).untilAsserted(() -> {
+            Integer count = db.queryForObject("SELECT count(*) FROM ccd.task_outbox", Map.of(), Integer.class);
+            assertThat(count, equalTo(1));
+        });
+
+        Map<String, Object> outboxRow = db.queryForMap(
+            "SELECT case_id, status FROM ccd.task_outbox ORDER BY id DESC LIMIT 1",
+            Map.of()
+        );
+        String outboxCaseId = String.valueOf(outboxRow.get("case_id"));
+        assertThat(outboxCaseId, is(notNullValue()));
+
+        String payloadTaskId = db.queryForObject(
+            "SELECT coalesce(payload->'task'->>'task_id', payload->'task'->>'external_task_id')"
+                + " FROM ccd.task_outbox ORDER BY id DESC LIMIT 1",
+            Map.of(),
+            String.class
+        );
+        assertThat(payloadTaskId, is(notNullValue()));
+        assertThat(payloadTaskId.isBlank(), is(false));
+        apiFirstTaskId = payloadTaskId;
+
+        String payloadCaseId = db.queryForObject(
+            "SELECT payload->'task'->>'case_id' FROM ccd.task_outbox ORDER BY id DESC LIMIT 1",
+            Map.of(),
+            String.class
+        );
+        assertThat(payloadCaseId, equalTo(String.valueOf(caseRef)));
+
+        await().atMost(Duration.ofSeconds(30)).untilAsserted(() -> {
+            Map<String, Object> processed = queryCurrentOutboxRow(outboxCaseId);
+            assertThat(processed.get("status"), equalTo("PROCESSED"));
+            assertThat(
+                ((Number) processed.get("last_response_code")).intValue(),
+                anyOf(equalTo(200), equalTo(201), equalTo(204))
+            );
+        });
+    }
+
+  @SneakyThrows
+  @Order(21)
+  @Test
+  public void apiFirstTaskShouldReturn400WhenMissingMandatoryField() {
+    db.update("DELETE FROM ccd.task_outbox", Map.of());
+
+    var startEvent = ccdApi.startEvent(
+      getAuthorisation("TEST_CASE_WORKER_USER@mailinator.com"),
+      getServiceAuth(),
+      String.valueOf(caseRef),
+      ReturnErrorWhenCreateAPIFirstTask.class.getSimpleName()
+    );
+
+    var request = prepareEventRequestWithToken(
+      "TEST_CASE_WORKER_USER@mailinator.com",
+      ReturnErrorWhenCreateAPIFirstTask.class.getSimpleName(),
+      Map.of("note", "api-first-task"),
+      startEvent.getToken()
+    );
+
+    var response = HttpClientBuilder.create().build().execute(request);
+    assertThat(response.getStatusLine().getStatusCode(), equalTo(201));
+
+    await().atMost(Duration.ofSeconds(10)).untilAsserted(() -> {
+      Integer count = db.queryForObject("SELECT count(*) FROM ccd.task_outbox", Map.of(), Integer.class);
+      assertThat(count, equalTo(1));
+    });
+
+    Map<String, Object> outboxRow = db.queryForMap(
+      "SELECT case_id, status FROM ccd.task_outbox ORDER BY id DESC LIMIT 1",
+      Map.of()
+    );
+    String outboxCaseId = String.valueOf(outboxRow.get("case_id"));
+    assertThat(outboxCaseId, is(notNullValue()));
+
+    String payloadTaskId = db.queryForObject(
+      "SELECT coalesce(payload->'task'->>'task_id', payload->'task'->>'external_task_id')"
+        + " FROM ccd.task_outbox ORDER BY id DESC LIMIT 1",
+      Map.of(),
+      String.class
+    );
+    assertThat(payloadTaskId, is(notNullValue()));
+    assertThat(payloadTaskId.isBlank(), is(false));
+
+    String payloadCaseId = db.queryForObject(
+      "SELECT payload->'task'->>'case_id' FROM ccd.task_outbox ORDER BY id DESC LIMIT 1",
+      Map.of(),
+      String.class
+    );
+    assertThat(payloadCaseId, equalTo(String.valueOf(caseRef)));
+
+    await().atMost(Duration.ofSeconds(30)).untilAsserted(() -> {
+      Map<String, Object> processed = queryCurrentOutboxRow(outboxCaseId);
+      assertThat(processed.get("status"), equalTo("FAILED"));
+      assertThat(
+        ((Number) processed.get("last_response_code")).intValue(),
+        anyOf(equalTo(200), equalTo(400))
+      );
+    });
+  }
+
+  @SneakyThrows
+  @Order(20)
+  @Test
+  public void apiFirstTaskShouldBeVisibleInWorkAllocationSearch() {
+    String user = "TEST_CASE_WORKER_USER@mailinator.com";
+    String authHeader = getIdamAccessTokenFromSimulator(user, "password");
+    Map<String, Object> searchRequest = Map.of(
+      "search_parameters", List.of(Map.of(
+        "key", "jurisdiction",
+        "operator", "IN",
+        "values", List.of(NoFaultDivorce.JURISDICTION)
+      ), Map.of(
+        "key", "location",
+        "operator", "IN",
+        // XUI uses the refdata stub location (336559) for available tasks; keep in sync with
+        // https://github.com/hmcts/dtsse-ccd-config-generator/blob/master/test-projects/e2e/src/main/java/uk/gov/hmcts/divorce/stubs/RefDataStubController.java#L16
+        "values", List.of("336559")
+      ), Map.of(
+        "key", "case_id",
+        "operator", "IN",
+        "values", List.of(String.valueOf(caseRef))
+      )),
+      "sorting_parameters", List.of(),
+      "request_context", "AVAILABLE_TASKS"
+    );
+
+    await().atMost(Duration.ofSeconds(30)).untilAsserted(() -> {
+      try (CloseableHttpClient client = HttpClientBuilder.create().build()) {
+        HttpPost request = new HttpPost(TASK_MANAGEMENT_BASE_URL + "/task");
+        request.addHeader("Content-Type", "application/json");
+        request.addHeader("ServiceAuthorization", cftlib().generateDummyS2SToken("xui_webapp"));
+        request.addHeader("Authorization", authHeader);
+        request.setEntity(new StringEntity(mapper.writeValueAsString(searchRequest), ContentType.APPLICATION_JSON));
+
+        try (CloseableHttpResponse response = client.execute(request)) {
+          int status = response.getStatusLine().getStatusCode();
+          assertThat(status, equalTo(200));
+
+          String responseBody = EntityUtils.toString(response.getEntity());
+          JsonNode payload = mapper.readTree(responseBody);
+          JsonNode tasks = payload.path("tasks");
+
+          String matchingTaskId = tasks.isArray()
+            ? StreamSupport.stream(tasks.spliterator(), false)
+            .filter(task -> String.valueOf(caseRef).equals(task.path("case_id").asText("")))
+            .map(task -> task.path("id").asText(""))
+            .filter(taskId -> !taskId.isBlank())
+            .findFirst()
+            .orElse("")
+            : "";
+          waTaskId = matchingTaskId.isBlank() ? null : matchingTaskId;
+          boolean hasTask = waTaskId != null;
+          assertThat("Expected case id " + caseRef + " in response: " + responseBody,
+            hasTask, is(true));
+        }
+      }
+    });
+    }
+
+    @SneakyThrows
+    @Order(21)
+    @Test
+    public void apiFirstTasksIsClaimable() {
+        String user = "TEST_CASE_WORKER_USER@mailinator.com";
+        String authHeader = getIdamAccessTokenFromSimulator(user, "password");
+        String taskId = waTaskId;
+        assertThat("Task id should be captured from work allocation search", taskId, is(notNullValue()));
+        assertThat("Task id should be captured from work allocation search", taskId.isBlank(), is(false));
+
+        try (CloseableHttpClient client = HttpClientBuilder.create().build()) {
+            HttpPost claim = new HttpPost(TASK_MANAGEMENT_BASE_URL + "/task/" + taskId + "/claim");
+            claim.addHeader("Content-Type", "application/json");
+            claim.addHeader("ServiceAuthorization", cftlib().generateDummyS2SToken("xui_webapp"));
+            claim.addHeader("Authorization", authHeader);
+            claim.setEntity(new StringEntity("{}", ContentType.APPLICATION_JSON));
+
+            try (CloseableHttpResponse response = client.execute(claim)) {
+                int status = response.getStatusLine().getStatusCode();
+                String responseBody = response.getEntity() != null
+                    ? EntityUtils.toString(response.getEntity())
+                    : null;
+                assertThat("Claim response (expected 204): status=" + status + ", body=" + responseBody,
+                    status, equalTo(204));
+            }
+        }
+    }
+
+    @SneakyThrows
+    @Order(29)
+    @Test
+    public void taskShouldCompleteViaOutboxPoller() {
+        long caseId = createAdditionalCase("TEST_SOLICITOR@mailinator.com");
+        db.update(
+            "DELETE FROM ccd.task_outbox WHERE case_id = CAST(:caseId AS bigint)",
+            Map.of("caseId", String.valueOf(caseId))
+        );
+
+        var startCreate = ccdApi.startEvent(
+            getAuthorisation("TEST_CASE_WORKER_USER@mailinator.com"),
+            getServiceAuth(),
+            String.valueOf(caseId),
+            API_FIRST_TASK_EVENT_ID
+        );
+        var createRequest = prepareEventRequestWithToken(
+            "TEST_CASE_WORKER_USER@mailinator.com",
+            API_FIRST_TASK_EVENT_ID,
+            Map.of("note", "api-first-task"),
+            startCreate.getToken(),
+            caseId
+        );
+        var createResponse = HttpClientBuilder.create().build().execute(createRequest);
+        assertThat(createResponse.getStatusLine().getStatusCode(), equalTo(201));
+
+        await().atMost(Duration.ofSeconds(30)).untilAsserted(() -> {
+            Map<String, Object> processed = queryLatestCurrentOutboxRow(String.valueOf(caseId), TaskAction.INITIATE);
+            assertThat(processed.get("status"), equalTo("PROCESSED"));
+            Object responseCode = processed.get("last_response_code");
+            assertThat(responseCode, is(notNullValue()));
+            assertThat(((Number) responseCode).intValue(), anyOf(equalTo(200), equalTo(201), equalTo(204)));
+        });
+
+        var startComplete = ccdApi.startEvent(
+            getAuthorisation("TEST_CASE_WORKER_USER@mailinator.com"),
+            getServiceAuth(),
+            String.valueOf(caseId),
+            API_FIRST_TASK_COMPLETE_EVENT_ID
+        );
+        var completeRequest = prepareEventRequestWithToken(
+            "TEST_CASE_WORKER_USER@mailinator.com",
+            API_FIRST_TASK_COMPLETE_EVENT_ID,
+            Map.of("note", "api-first-complete"),
+            startComplete.getToken(),
+            caseId
+        );
+        var completeResponse = HttpClientBuilder.create().build().execute(completeRequest);
+        assertThat(completeResponse.getStatusLine().getStatusCode(), equalTo(201));
+
+        await().atMost(Duration.ofSeconds(30)).untilAsserted(() -> {
+            Map<String, Object> processed = queryLatestCurrentOutboxRow(String.valueOf(caseId), TaskAction.COMPLETE);
+            assertThat(processed.get("status"), equalTo("PROCESSED"));
+            Object responseCode = processed.get("last_response_code");
+            assertThat(responseCode, is(notNullValue()));
+            assertThat(((Number) responseCode).intValue(), anyOf(equalTo(200), equalTo(201), equalTo(204)));
+        });
+    }
+
+    @SneakyThrows
+    @Order(30)
+    @Test
+    public void taskShouldCancelViaOutboxPoller() {
+        long caseId = createAdditionalCase("TEST_SOLICITOR@mailinator.com");
+        db.update(
+            "DELETE FROM ccd.task_outbox WHERE case_id = CAST(:caseId AS bigint)",
+            Map.of("caseId", String.valueOf(caseId))
+        );
+
+        var startCreate = ccdApi.startEvent(
+            getAuthorisation("TEST_CASE_WORKER_USER@mailinator.com"),
+            getServiceAuth(),
+            String.valueOf(caseId),
+            API_FIRST_TASK_EVENT_ID
+        );
+        var createRequest = prepareEventRequestWithToken(
+            "TEST_CASE_WORKER_USER@mailinator.com",
+            API_FIRST_TASK_EVENT_ID,
+            Map.of("note", "api-first-task"),
+            startCreate.getToken(),
+            caseId
+        );
+        var createResponse = HttpClientBuilder.create().build().execute(createRequest);
+        assertThat(createResponse.getStatusLine().getStatusCode(), equalTo(201));
+
+        await().atMost(Duration.ofSeconds(30)).untilAsserted(() -> {
+            Map<String, Object> processed = queryLatestCurrentOutboxRow(String.valueOf(caseId), TaskAction.INITIATE);
+            assertThat(processed.get("status"), equalTo("PROCESSED"));
+            Object responseCode = processed.get("last_response_code");
+            assertThat(responseCode, is(notNullValue()));
+            assertThat(((Number) responseCode).intValue(), anyOf(equalTo(200), equalTo(201), equalTo(204)));
+        });
+
+        var startCancel = ccdApi.startEvent(
+            getAuthorisation("TEST_CASE_WORKER_USER@mailinator.com"),
+            getServiceAuth(),
+            String.valueOf(caseId),
+            API_FIRST_TASK_CANCEL_EVENT_ID
+        );
+        var cancelRequest = prepareEventRequestWithToken(
+            "TEST_CASE_WORKER_USER@mailinator.com",
+            API_FIRST_TASK_CANCEL_EVENT_ID,
+            Map.of("note", "api-first-cancel"),
+            startCancel.getToken(),
+            caseId
+        );
+        var cancelResponse = HttpClientBuilder.create().build().execute(cancelRequest);
+        assertThat(cancelResponse.getStatusLine().getStatusCode(), equalTo(201));
+
+        await().atMost(Duration.ofSeconds(30)).untilAsserted(() -> {
+            Map<String, Object> processed = queryLatestCurrentOutboxRow(String.valueOf(caseId), TaskAction.CANCEL);
+            assertThat(processed.get("status"), equalTo("PROCESSED"));
+            Object responseCode = processed.get("last_response_code");
+            assertThat(responseCode, is(notNullValue()));
+            assertThat(((Number) responseCode).intValue(), anyOf(equalTo(200), equalTo(201), equalTo(204)));
+        });
+    }
+
+    @SneakyThrows
+    @Order(31)
+    @Test
+    public void taskShouldReconfigureViaOutboxPoller() {
+        long caseId = createAdditionalCase("TEST_SOLICITOR@mailinator.com");
+        db.update(
+            "DELETE FROM ccd.task_outbox WHERE case_id = CAST(:caseId AS bigint)",
+            Map.of("caseId", String.valueOf(caseId))
+        );
+
+        var startCreate = ccdApi.startEvent(
+            getAuthorisation("TEST_CASE_WORKER_USER@mailinator.com"),
+            getServiceAuth(),
+            String.valueOf(caseId),
+            API_FIRST_TASK_EVENT_ID
+        );
+        var createRequest = prepareEventRequestWithToken(
+            "TEST_CASE_WORKER_USER@mailinator.com",
+            API_FIRST_TASK_EVENT_ID,
+            Map.of("note", "api-first-task"),
+            startCreate.getToken(),
+            caseId
+        );
+        var createResponse = HttpClientBuilder.create().build().execute(createRequest);
+        assertThat(createResponse.getStatusLine().getStatusCode(), equalTo(201));
+
+        await().atMost(Duration.ofSeconds(30)).untilAsserted(() -> {
+            Map<String, Object> processed = queryLatestCurrentOutboxRow(String.valueOf(caseId), TaskAction.INITIATE);
+            assertThat(processed.get("status"), equalTo("PROCESSED"));
+            Object responseCode = processed.get("last_response_code");
+            assertThat(responseCode, is(notNullValue()));
+            assertThat(((Number) responseCode).intValue(), anyOf(equalTo(200), equalTo(201), equalTo(204)));
+        });
+
+        var startReconfigure = ccdApi.startEvent(
+            getAuthorisation("TEST_CASE_WORKER_USER@mailinator.com"),
+            getServiceAuth(),
+            String.valueOf(caseId),
+            API_FIRST_TASK_RECONFIGURE_EVENT_ID
+        );
+        var reconfigureRequest = prepareEventRequestWithToken(
+            "TEST_CASE_WORKER_USER@mailinator.com",
+            API_FIRST_TASK_RECONFIGURE_EVENT_ID,
+            Map.of("note", "api-first-reconfigure"),
+            startReconfigure.getToken(),
+            caseId
+        );
+        var reconfigureResponse = HttpClientBuilder.create().build().execute(reconfigureRequest);
+        assertThat(reconfigureResponse.getStatusLine().getStatusCode(), equalTo(201));
+
+        await().atMost(Duration.ofSeconds(30)).untilAsserted(() -> {
+            Map<String, Object> processed = queryLatestCurrentOutboxRow(String.valueOf(caseId), TaskAction.RECONFIGURE);
+            assertThat(processed.get("status"), equalTo("PROCESSED"));
+            Object responseCode = processed.get("last_response_code");
+            assertThat(responseCode, is(notNullValue()));
+            assertThat(((Number) responseCode).intValue(), equalTo(200));
+        });
+    }
+
+    @SneakyThrows
+    @Order(32)
+    @Test
+    public void taskInitiationShouldRespectDelayRulesViaOutbox() {
+        long caseId = createAdditionalCase("TEST_SOLICITOR@mailinator.com");
+        String caseIdValue = String.valueOf(caseId);
+        db.update(
+            "DELETE FROM ccd.task_outbox WHERE case_id = CAST(:caseId AS bigint)",
+            Map.of("caseId", caseIdValue)
+        );
+
+        LocalDateTime submittedAt = LocalDateTime.now(ZoneOffset.UTC);
+
+        var startCreate = ccdApi.startEvent(
+            getAuthorisation("TEST_CASE_WORKER_USER@mailinator.com"),
+            getServiceAuth(),
+            caseIdValue,
+            API_FIRST_TASK_DELAYED_EVENT_ID
+        );
+        var delayedCreateRequest = prepareEventRequestWithToken(
+            "TEST_CASE_WORKER_USER@mailinator.com",
+            API_FIRST_TASK_DELAYED_EVENT_ID,
+            Map.of("note", "api-first-task-delayed"),
+            startCreate.getToken(),
+            caseId
+        );
+        var delayedCreateResponse = HttpClientBuilder.create().build().execute(delayedCreateRequest);
+        assertThat(delayedCreateResponse.getStatusLine().getStatusCode(), equalTo(201));
+
+        Map<String, Object> queued = await().atMost(Duration.ofSeconds(20)).until(
+            () -> db.queryForMap(
+                "SELECT status, next_attempt_at FROM ccd.task_outbox"
+                    + " WHERE case_id = CAST(:caseId AS bigint)"
+                    + " AND requested_action = :action::ccd.task_action ORDER BY id DESC LIMIT 1",
+                Map.of("caseId", caseIdValue, "action", TaskAction.INITIATE.getId())
+            ),
+            row -> row.get("next_attempt_at") != null
+        );
+
+        Object nextAttemptAtRaw = queued.get("next_attempt_at");
+        LocalDateTime nextAttemptAt = nextAttemptAtRaw instanceof LocalDateTime dateTime
+            ? dateTime
+            : ((Timestamp) nextAttemptAtRaw).toLocalDateTime();
+        assertThat(nextAttemptAt, is(notNullValue()));
+        assertThat(nextAttemptAt.isAfter(submittedAt.plusSeconds(8)), is(true));
+
+        await().during(Duration.ofSeconds(4)).atMost(Duration.ofSeconds(8)).untilAsserted(() -> {
+            Map<String, Object> statusRow = db.queryForMap(
+                "SELECT status FROM ccd.task_outbox"
+                    + " WHERE case_id = CAST(:caseId AS bigint)"
+                    + " AND requested_action = :action::ccd.task_action ORDER BY id DESC LIMIT 1",
+                Map.of("caseId", caseIdValue, "action", TaskAction.INITIATE.getId())
+            );
+            assertThat(statusRow.get("status"), equalTo("NEW"));
+        });
+
+        await().atMost(Duration.ofSeconds(45)).untilAsserted(() -> {
+            Map<String, Object> processed = queryLatestCurrentOutboxRow(caseIdValue, TaskAction.INITIATE);
+            assertThat(processed.get("status"), equalTo("PROCESSED"));
+            Object responseCode = processed.get("last_response_code");
+            assertThat(responseCode, is(notNullValue()));
+            assertThat(((Number) responseCode).intValue(), anyOf(equalTo(200), equalTo(201), equalTo(204)));
+        });
+    }
+
+    @SneakyThrows
+    @Order(33)
+    @Test
+    public void taskRecordShouldBeMarkedProcessedWhenNoTasksToTerminateAreReturned() {
+        long caseId = createAdditionalCase("TEST_SOLICITOR@mailinator.com");
+        String caseIdValue = String.valueOf(caseId);
+        db.update(
+            "DELETE FROM ccd.task_outbox WHERE case_id = CAST(:caseId AS bigint)",
+            Map.of("caseId", caseIdValue)
+        );
+
+        var startComplete = ccdApi.startEvent(
+            getAuthorisation("TEST_CASE_WORKER_USER@mailinator.com"),
+            getServiceAuth(),
+            caseIdValue,
+            API_FIRST_TASK_COMPLETE_EVENT_ID
+        );
+        var completeRequest = prepareEventRequestWithToken(
+            "TEST_CASE_WORKER_USER@mailinator.com",
+            API_FIRST_TASK_COMPLETE_EVENT_ID,
+            Map.of("note", "api-first-complete-no-tasks"),
+            startComplete.getToken(),
+            caseId
+        );
+        var completeResponse = HttpClientBuilder.create().build().execute(completeRequest);
+        assertThat(completeResponse.getStatusLine().getStatusCode(), equalTo(201));
+
+        await().atMost(Duration.ofSeconds(30)).untilAsserted(() -> {
+            Map<String, Object> processed = queryLatestCurrentOutboxRow(caseIdValue, TaskAction.COMPLETE);
+            assertThat(processed.get("status"), equalTo("PROCESSED"));
+            Object responseCode = processed.get("last_response_code");
+            assertThat(responseCode, is(notNullValue()));
+            assertThat(((Number) responseCode).intValue(), equalTo(200));
+        });
     }
 
     @SneakyThrows
@@ -1339,7 +1850,6 @@ public class TestWithCCD extends CftlibTest {
         assertThat(response.getStatusLine().getStatusCode(), equalTo(201));
     }
 
-
     private static int noteCount = 0;
     private void addNote() throws Exception {
         var e = prepareEventRequest(
@@ -1355,6 +1865,53 @@ public class TestWithCCD extends CftlibTest {
 
     private String getAuthorisation(String user) {
         return idam.getAccessToken(user, "");
+    }
+
+    @SneakyThrows
+    private String getIdamAccessTokenFromSimulator(String user, String password) {
+        String baseUrl = Optional.ofNullable(System.getenv("IDAM_API_BASEURL")).orElse("http://localhost:5062");
+        String clientId = Optional.ofNullable(System.getenv("IDAM_CLIENT_ID")).orElse("divorce");
+        String clientSecret = Optional.ofNullable(System.getenv("IDAM_CLIENT_SECRET")).orElse("123456");
+        String tokenUrl = baseUrl + "/o/token";
+
+        List<NameValuePair> params = List.of(
+            new BasicNameValuePair("grant_type", "password"),
+            new BasicNameValuePair("client_id", clientId),
+            new BasicNameValuePair("client_secret", clientSecret),
+            new BasicNameValuePair("username", user),
+            new BasicNameValuePair("password", password),
+            new BasicNameValuePair("scope", "openid profile roles")
+        );
+
+        var request = new HttpPost(tokenUrl);
+        request.setHeader("Content-Type", "application/x-www-form-urlencoded");
+        request.setEntity(new UrlEncodedFormEntity(params, StandardCharsets.UTF_8));
+
+        var response = HttpClientBuilder.create().build().execute(request);
+        try {
+            int status = response.getStatusLine().getStatusCode();
+            if (status != 200) {
+                String body = Optional.ofNullable(response.getEntity())
+                    .map(entity -> {
+                        try {
+                            return EntityUtils.toString(entity);
+                        } catch (IOException ex) {
+                            return "<failed to read body>";
+                        }
+                    })
+                    .orElse("<empty>");
+                throw new IllegalStateException("IDAM token request failed status=" + status + " body=" + body);
+            }
+
+            String body = EntityUtils.toString(response.getEntity());
+            String token = mapper.readTree(body).path("access_token").asText("");
+            if (token.isBlank()) {
+                throw new IllegalStateException("IDAM token response missing access_token");
+            }
+            return "Bearer " + token;
+        } finally {
+            response.close();
+        }
     }
 
     private String getServiceAuth() {
@@ -1956,6 +2513,39 @@ public class TestWithCCD extends CftlibTest {
         assertThat(errorPayload.path("status").asInt(), equalTo(400));
     }
 
+    private Map<String, Object> queryCurrentOutboxRow(String caseId) {
+        return db.queryForMap(
+            "SELECT o.status::text AS status, h.response_code AS last_response_code"
+                + " FROM ccd.task_outbox o"
+                + " LEFT JOIN LATERAL ("
+                + "     SELECT response_code"
+                + "     FROM ccd.task_outbox_history h"
+                + "     WHERE h.task_outbox_id = o.id"
+                + "     ORDER BY h.id DESC LIMIT 1"
+                + " ) h ON true"
+                + " WHERE o.case_id = CAST(:caseId AS bigint)"
+                + " ORDER BY o.id DESC LIMIT 1",
+            Map.of("caseId", caseId)
+        );
+    }
+
+    private Map<String, Object> queryLatestCurrentOutboxRow(String caseId, TaskAction action) {
+        return db.queryForMap(
+            "SELECT o.status::text AS status, h.response_code AS last_response_code"
+                + " FROM ccd.task_outbox o"
+                + " LEFT JOIN LATERAL ("
+                + "     SELECT response_code"
+                + "     FROM ccd.task_outbox_history h"
+                + "     WHERE h.task_outbox_id = o.id"
+                + "     ORDER BY h.id DESC LIMIT 1"
+                + " ) h ON true"
+                + " WHERE o.case_id = CAST(:caseId AS bigint)"
+                + " AND o.requested_action = :action::ccd.task_action"
+                + " ORDER BY o.id DESC LIMIT 1",
+            Map.of("caseId", caseId, "action", action.getId())
+        );
+    }
+
     private JsonNode fetchElasticsearchDocument(long caseDataId) throws IOException {
         var request = new HttpGet(ELASTICSEARCH_BASE_URL + "/e2e_cases/_doc/" + caseDataId);
         try (var response = HttpClientBuilder.create().build().execute(request)) {
@@ -2011,7 +2601,7 @@ public class TestWithCCD extends CftlibTest {
                    FROM case_data
                   WHERE reference = ?
                     AND security_classification = 'RESTRICTED'
-                 """)) {
+                """)) {
             statement.setLong(1, caseRef);
 
             try (ResultSet rs = statement.executeQuery()) {
