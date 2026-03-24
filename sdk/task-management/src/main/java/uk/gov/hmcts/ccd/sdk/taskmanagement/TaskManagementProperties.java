@@ -18,7 +18,6 @@ public class TaskManagementProperties {
 
   @Data
   public static class Outbox {
-    private String schema = "ccd";
     private Poller poller = new Poller();
     private Retry retry = new Retry();
   }

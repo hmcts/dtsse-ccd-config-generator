@@ -6,22 +6,16 @@ import java.util.List;
 import java.util.Map;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
-import org.springframework.util.StringUtils;
+import org.springframework.transaction.annotation.Transactional;
 import uk.gov.hmcts.ccd.sdk.taskmanagement.model.outbox.TaskOutboxRecord;
 import uk.gov.hmcts.ccd.sdk.taskmanagement.model.outbox.TaskOutboxStatus;
 
 public class TaskOutboxRepository {
-
   private final NamedParameterJdbcTemplate jdbc;
-  private final String tableName;
-  private final String actionTypeName;
   private final Duration processingTimeout;
 
   public TaskOutboxRepository(NamedParameterJdbcTemplate jdbc, TaskManagementProperties properties) {
     this.jdbc = jdbc;
-    String schema = properties.getOutbox().getSchema();
-    this.tableName = StringUtils.hasText(schema) ? schema + ".task_outbox" : "task_outbox";
-    this.actionTypeName = StringUtils.hasText(schema) ? schema + ".task_action" : "task_action";
     this.processingTimeout = properties.getOutbox().getPoller().getProcessingTimeout();
   }
 
@@ -38,9 +32,9 @@ public class TaskOutboxRepository {
 
     jdbc.update(
         """
-            insert into %s (case_id, payload, action, next_attempt_at)
-            values (:caseId, :payload::jsonb, :action::%s, :nextAttemptAt)
-            """.formatted(tableName, actionTypeName),
+            insert into ccd.task_outbox (case_id, payload, action, next_attempt_at)
+            values (:caseId, :payload::jsonb, :action::ccd.task_action, :nextAttemptAt)
+            """,
         params
     );
   }
@@ -49,7 +43,7 @@ public class TaskOutboxRepository {
     try {
       return Long.parseLong(caseId);
     } catch (NumberFormatException ex) {
-      throw new IllegalArgumentException("caseId must be a numeric CCD internal ID", ex);
+      throw new IllegalArgumentException("caseId must be a numeric CCD case reference", ex);
     }
   }
 
@@ -58,13 +52,13 @@ public class TaskOutboxRepository {
     return jdbc.query(
         """
             select id, payload::text, action, attempt_count
-            from %s
+            from ccd.task_outbox
             where status in (:newStatus, :failedStatus, :processingStatus)
              and (next_attempt_at is null or next_attempt_at <= :now)
              and (:maxAttempts = 0 or attempt_count < :maxAttempts)
             order by id
             limit :limit
-            """.formatted(tableName),
+            """,
         Map.of(
             "newStatus", TaskOutboxStatus.NEW.name(),
             "failedStatus", TaskOutboxStatus.FAILED.name(),
@@ -87,12 +81,12 @@ public class TaskOutboxRepository {
     LocalDateTime nextAttemptAt = now.plus(processingTimeout);
     int updated = jdbc.update(
         """
-            update %s
+            update ccd.task_outbox
             set status = :status, updated = :updated, next_attempt_at = :nextAttemptAt
             where id = :id
              and status in (:newStatus, :failedStatus, :processingStatus)
              and (next_attempt_at is null or next_attempt_at <= :now)
-            """.formatted(tableName),
+            """,
         Map.of(
             "id", id,
             "status", TaskOutboxStatus.PROCESSING.name(),
@@ -107,53 +101,72 @@ public class TaskOutboxRepository {
     return updated == 1;
   }
 
+  @Transactional
   public void markProcessed(long id, int statusCode) {
     LocalDateTime now = LocalDateTime.now();
     MapSqlParameterSource params = new MapSqlParameterSource()
         .addValue("id", id)
         .addValue("status", TaskOutboxStatus.PROCESSED.name())
-        .addValue("processed", now)
         .addValue("updated", now)
-        .addValue("statusCode", statusCode)
-        .addValue("lastError", null)
         .addValue("nextAttemptAt", null);
 
     jdbc.update(
         """
-            update %s
+            update ccd.task_outbox
             set status = :status,
-              processed = :processed,
               updated = :updated,
-              last_response_code = :statusCode,
-              last_error = :lastError,
               next_attempt_at = :nextAttemptAt
             where id = :id
-            """.formatted(tableName),
+            """,
         params
     );
+
+    recordHistory(id, TaskOutboxStatus.PROCESSED, statusCode, null, now);
   }
 
+  @Transactional
   public void markFailed(long id, Integer statusCode, String error, LocalDateTime nextAttemptAt) {
     LocalDateTime now = LocalDateTime.now();
     MapSqlParameterSource params = new MapSqlParameterSource()
         .addValue("id", id)
         .addValue("status", TaskOutboxStatus.FAILED.name())
         .addValue("updated", now)
-        .addValue("statusCode", statusCode)
-        .addValue("lastError", error)
         .addValue("nextAttemptAt", nextAttemptAt);
 
     jdbc.update(
         """
-            update %s
+            update ccd.task_outbox
             set status = :status,
               updated = :updated,
               attempt_count = attempt_count + 1,
-              last_response_code = :statusCode,
-              last_error = :lastError,
               next_attempt_at = :nextAttemptAt
             where id = :id
-            """.formatted(tableName),
+            """,
+        params
+    );
+
+    recordHistory(id, TaskOutboxStatus.FAILED, statusCode, error, now);
+  }
+
+  private void recordHistory(
+      long id,
+      TaskOutboxStatus status,
+      Integer statusCode,
+      String error,
+      LocalDateTime created
+  ) {
+    MapSqlParameterSource params = new MapSqlParameterSource()
+        .addValue("taskOutboxId", id)
+        .addValue("status", status.name())
+        .addValue("statusCode", statusCode)
+        .addValue("error", error)
+        .addValue("created", created);
+
+    jdbc.update(
+        """
+            insert into ccd.task_outbox_history (task_outbox_id, status, response_code, error, created)
+            values (:taskOutboxId, :status, :statusCode, :error, :created)
+            """,
         params
     );
   }

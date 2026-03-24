@@ -1143,7 +1143,7 @@ public class TestWithCCD extends CftlibTest {
             "SELECT case_id, status FROM ccd.task_outbox ORDER BY id DESC LIMIT 1",
             Map.of()
         );
-        String outboxCaseId = (String) outboxRow.get("case_id");
+        String outboxCaseId = String.valueOf(outboxRow.get("case_id"));
         assertThat(outboxCaseId, is(notNullValue()));
 
         String payloadTaskId = db.queryForObject(
@@ -1164,10 +1164,7 @@ public class TestWithCCD extends CftlibTest {
         assertThat(payloadCaseId, equalTo(String.valueOf(caseRef)));
 
         await().atMost(Duration.ofSeconds(30)).untilAsserted(() -> {
-            Map<String, Object> processed = db.queryForMap(
-                "SELECT status, last_response_code FROM ccd.task_outbox WHERE case_id = :caseId",
-                Map.of("caseId", outboxCaseId)
-            );
+            Map<String, Object> processed = queryCurrentOutboxRow(outboxCaseId);
             assertThat(processed.get("status"), equalTo("PROCESSED"));
             assertThat(
                 ((Number) processed.get("last_response_code")).intValue(),
@@ -1208,7 +1205,7 @@ public class TestWithCCD extends CftlibTest {
       "SELECT case_id, status FROM ccd.task_outbox ORDER BY id DESC LIMIT 1",
       Map.of()
     );
-    String outboxCaseId = (String) outboxRow.get("case_id");
+    String outboxCaseId = String.valueOf(outboxRow.get("case_id"));
     assertThat(outboxCaseId, is(notNullValue()));
 
     String payloadTaskId = db.queryForObject(
@@ -1228,10 +1225,7 @@ public class TestWithCCD extends CftlibTest {
     assertThat(payloadCaseId, equalTo(String.valueOf(caseRef)));
 
     await().atMost(Duration.ofSeconds(30)).untilAsserted(() -> {
-      Map<String, Object> processed = db.queryForMap(
-        "SELECT status, last_response_code FROM ccd.task_outbox WHERE case_id = :caseId",
-        Map.of("caseId", outboxCaseId)
-      );
+      Map<String, Object> processed = queryCurrentOutboxRow(outboxCaseId);
       assertThat(processed.get("status"), equalTo("FAILED"));
       assertThat(
         ((Number) processed.get("last_response_code")).intValue(),
@@ -1332,7 +1326,10 @@ public class TestWithCCD extends CftlibTest {
     @Test
     public void taskShouldCompleteViaOutboxPoller() {
         long caseId = createAdditionalCase("TEST_SOLICITOR@mailinator.com");
-        db.update("DELETE FROM ccd.task_outbox WHERE case_id = :caseId", Map.of("caseId", String.valueOf(caseId)));
+        db.update(
+            "DELETE FROM ccd.task_outbox WHERE case_id = CAST(:caseId AS bigint)",
+            Map.of("caseId", String.valueOf(caseId))
+        );
 
         var startCreate = ccdApi.startEvent(
             getAuthorisation("TEST_CASE_WORKER_USER@mailinator.com"),
@@ -1351,11 +1348,7 @@ public class TestWithCCD extends CftlibTest {
         assertThat(createResponse.getStatusLine().getStatusCode(), equalTo(201));
 
         await().atMost(Duration.ofSeconds(30)).untilAsserted(() -> {
-            Map<String, Object> processed = db.queryForMap(
-                "SELECT status, last_response_code FROM ccd.task_outbox"
-                    + " WHERE case_id = :caseId AND action = :action::ccd.task_action ORDER BY id DESC LIMIT 1",
-                Map.of("caseId", String.valueOf(caseId), "action", TaskAction.INITIATE.getId())
-            );
+            Map<String, Object> processed = queryLatestCurrentOutboxRow(String.valueOf(caseId), TaskAction.INITIATE);
             assertThat(processed.get("status"), equalTo("PROCESSED"));
             Object responseCode = processed.get("last_response_code");
             assertThat(responseCode, is(notNullValue()));
@@ -1379,11 +1372,7 @@ public class TestWithCCD extends CftlibTest {
         assertThat(completeResponse.getStatusLine().getStatusCode(), equalTo(201));
 
         await().atMost(Duration.ofSeconds(30)).untilAsserted(() -> {
-            Map<String, Object> processed = db.queryForMap(
-                "SELECT status, last_response_code FROM ccd.task_outbox"
-                    + " WHERE case_id = :caseId AND action = :action::ccd.task_action ORDER BY id DESC LIMIT 1",
-                Map.of("caseId", String.valueOf(caseId), "action", TaskAction.COMPLETE.getId())
-            );
+            Map<String, Object> processed = queryLatestCurrentOutboxRow(String.valueOf(caseId), TaskAction.COMPLETE);
             assertThat(processed.get("status"), equalTo("PROCESSED"));
             Object responseCode = processed.get("last_response_code");
             assertThat(responseCode, is(notNullValue()));
@@ -1396,7 +1385,10 @@ public class TestWithCCD extends CftlibTest {
     @Test
     public void taskShouldCancelViaOutboxPoller() {
         long caseId = createAdditionalCase("TEST_SOLICITOR@mailinator.com");
-        db.update("DELETE FROM ccd.task_outbox WHERE case_id = :caseId", Map.of("caseId", String.valueOf(caseId)));
+        db.update(
+            "DELETE FROM ccd.task_outbox WHERE case_id = CAST(:caseId AS bigint)",
+            Map.of("caseId", String.valueOf(caseId))
+        );
 
         var startCreate = ccdApi.startEvent(
             getAuthorisation("TEST_CASE_WORKER_USER@mailinator.com"),
@@ -1415,11 +1407,7 @@ public class TestWithCCD extends CftlibTest {
         assertThat(createResponse.getStatusLine().getStatusCode(), equalTo(201));
 
         await().atMost(Duration.ofSeconds(30)).untilAsserted(() -> {
-            Map<String, Object> processed = db.queryForMap(
-                "SELECT status, last_response_code FROM ccd.task_outbox"
-                    + " WHERE case_id = :caseId AND action = :action::ccd.task_action ORDER BY id DESC LIMIT 1",
-                Map.of("caseId", String.valueOf(caseId), "action", TaskAction.INITIATE.getId())
-            );
+            Map<String, Object> processed = queryLatestCurrentOutboxRow(String.valueOf(caseId), TaskAction.INITIATE);
             assertThat(processed.get("status"), equalTo("PROCESSED"));
             Object responseCode = processed.get("last_response_code");
             assertThat(responseCode, is(notNullValue()));
@@ -1443,11 +1431,7 @@ public class TestWithCCD extends CftlibTest {
         assertThat(cancelResponse.getStatusLine().getStatusCode(), equalTo(201));
 
         await().atMost(Duration.ofSeconds(30)).untilAsserted(() -> {
-            Map<String, Object> processed = db.queryForMap(
-                "SELECT status, last_response_code FROM ccd.task_outbox"
-                    + " WHERE case_id = :caseId AND action = :action::ccd.task_action ORDER BY id DESC LIMIT 1",
-                Map.of("caseId", String.valueOf(caseId), "action", TaskAction.CANCEL.getId())
-            );
+            Map<String, Object> processed = queryLatestCurrentOutboxRow(String.valueOf(caseId), TaskAction.CANCEL);
             assertThat(processed.get("status"), equalTo("PROCESSED"));
             Object responseCode = processed.get("last_response_code");
             assertThat(responseCode, is(notNullValue()));
@@ -1460,7 +1444,10 @@ public class TestWithCCD extends CftlibTest {
     @Test
     public void taskShouldReconfigureViaOutboxPoller() {
         long caseId = createAdditionalCase("TEST_SOLICITOR@mailinator.com");
-        db.update("DELETE FROM ccd.task_outbox WHERE case_id = :caseId", Map.of("caseId", String.valueOf(caseId)));
+        db.update(
+            "DELETE FROM ccd.task_outbox WHERE case_id = CAST(:caseId AS bigint)",
+            Map.of("caseId", String.valueOf(caseId))
+        );
 
         var startCreate = ccdApi.startEvent(
             getAuthorisation("TEST_CASE_WORKER_USER@mailinator.com"),
@@ -1479,11 +1466,7 @@ public class TestWithCCD extends CftlibTest {
         assertThat(createResponse.getStatusLine().getStatusCode(), equalTo(201));
 
         await().atMost(Duration.ofSeconds(30)).untilAsserted(() -> {
-            Map<String, Object> processed = db.queryForMap(
-                "SELECT status, last_response_code FROM ccd.task_outbox"
-                    + " WHERE case_id = :caseId AND action = :action::ccd.task_action ORDER BY id DESC LIMIT 1",
-                Map.of("caseId", String.valueOf(caseId), "action", TaskAction.INITIATE.getId())
-            );
+            Map<String, Object> processed = queryLatestCurrentOutboxRow(String.valueOf(caseId), TaskAction.INITIATE);
             assertThat(processed.get("status"), equalTo("PROCESSED"));
             Object responseCode = processed.get("last_response_code");
             assertThat(responseCode, is(notNullValue()));
@@ -1507,11 +1490,7 @@ public class TestWithCCD extends CftlibTest {
         assertThat(reconfigureResponse.getStatusLine().getStatusCode(), equalTo(201));
 
         await().atMost(Duration.ofSeconds(30)).untilAsserted(() -> {
-            Map<String, Object> processed = db.queryForMap(
-                "SELECT status, last_response_code FROM ccd.task_outbox"
-                    + " WHERE case_id = :caseId AND action = :action::ccd.task_action ORDER BY id DESC LIMIT 1",
-                Map.of("caseId", String.valueOf(caseId), "action", TaskAction.RECONFIGURE.getId())
-            );
+            Map<String, Object> processed = queryLatestCurrentOutboxRow(String.valueOf(caseId), TaskAction.RECONFIGURE);
             assertThat(processed.get("status"), equalTo("PROCESSED"));
             Object responseCode = processed.get("last_response_code");
             assertThat(responseCode, is(notNullValue()));
@@ -1525,7 +1504,10 @@ public class TestWithCCD extends CftlibTest {
     public void taskInitiationShouldRespectDelayRulesViaOutbox() {
         long caseId = createAdditionalCase("TEST_SOLICITOR@mailinator.com");
         String caseIdValue = String.valueOf(caseId);
-        db.update("DELETE FROM ccd.task_outbox WHERE case_id = :caseId", Map.of("caseId", caseIdValue));
+        db.update(
+            "DELETE FROM ccd.task_outbox WHERE case_id = CAST(:caseId AS bigint)",
+            Map.of("caseId", caseIdValue)
+        );
 
         LocalDateTime submittedAt = LocalDateTime.now(ZoneOffset.UTC);
 
@@ -1548,7 +1530,8 @@ public class TestWithCCD extends CftlibTest {
         Map<String, Object> queued = await().atMost(Duration.ofSeconds(20)).until(
             () -> db.queryForMap(
                 "SELECT status, next_attempt_at FROM ccd.task_outbox"
-                    + " WHERE case_id = :caseId AND action = :action::ccd.task_action ORDER BY id DESC LIMIT 1",
+                    + " WHERE case_id = CAST(:caseId AS bigint)"
+                    + " AND action = :action::ccd.task_action ORDER BY id DESC LIMIT 1",
                 Map.of("caseId", caseIdValue, "action", TaskAction.INITIATE.getId())
             ),
             row -> row.get("next_attempt_at") != null
@@ -1564,18 +1547,15 @@ public class TestWithCCD extends CftlibTest {
         await().during(Duration.ofSeconds(4)).atMost(Duration.ofSeconds(8)).untilAsserted(() -> {
             Map<String, Object> statusRow = db.queryForMap(
                 "SELECT status FROM ccd.task_outbox"
-                    + " WHERE case_id = :caseId AND action = :action::ccd.task_action ORDER BY id DESC LIMIT 1",
+                    + " WHERE case_id = CAST(:caseId AS bigint)"
+                    + " AND action = :action::ccd.task_action ORDER BY id DESC LIMIT 1",
                 Map.of("caseId", caseIdValue, "action", TaskAction.INITIATE.getId())
             );
             assertThat(statusRow.get("status"), equalTo("NEW"));
         });
 
         await().atMost(Duration.ofSeconds(45)).untilAsserted(() -> {
-            Map<String, Object> processed = db.queryForMap(
-                "SELECT status, last_response_code FROM ccd.task_outbox"
-                    + " WHERE case_id = :caseId AND action = :action::ccd.task_action ORDER BY id DESC LIMIT 1",
-                Map.of("caseId", caseIdValue, "action", TaskAction.INITIATE.getId())
-            );
+            Map<String, Object> processed = queryLatestCurrentOutboxRow(caseIdValue, TaskAction.INITIATE);
             assertThat(processed.get("status"), equalTo("PROCESSED"));
             Object responseCode = processed.get("last_response_code");
             assertThat(responseCode, is(notNullValue()));
@@ -1589,7 +1569,10 @@ public class TestWithCCD extends CftlibTest {
     public void taskRecordShouldBeMarkedProcessedWhenNoTasksToTerminateAreReturned() {
         long caseId = createAdditionalCase("TEST_SOLICITOR@mailinator.com");
         String caseIdValue = String.valueOf(caseId);
-        db.update("DELETE FROM ccd.task_outbox WHERE case_id = :caseId", Map.of("caseId", caseIdValue));
+        db.update(
+            "DELETE FROM ccd.task_outbox WHERE case_id = CAST(:caseId AS bigint)",
+            Map.of("caseId", caseIdValue)
+        );
 
         var startComplete = ccdApi.startEvent(
             getAuthorisation("TEST_CASE_WORKER_USER@mailinator.com"),
@@ -1608,11 +1591,7 @@ public class TestWithCCD extends CftlibTest {
         assertThat(completeResponse.getStatusLine().getStatusCode(), equalTo(201));
 
         await().atMost(Duration.ofSeconds(30)).untilAsserted(() -> {
-            Map<String, Object> processed = db.queryForMap(
-                "SELECT status, last_response_code FROM ccd.task_outbox"
-                    + " WHERE case_id = :caseId AND action = :action::ccd.task_action ORDER BY id DESC LIMIT 1",
-                Map.of("caseId", caseIdValue, "action", TaskAction.COMPLETE.getId())
-            );
+            Map<String, Object> processed = queryLatestCurrentOutboxRow(caseIdValue, TaskAction.COMPLETE);
             assertThat(processed.get("status"), equalTo("PROCESSED"));
             Object responseCode = processed.get("last_response_code");
             assertThat(responseCode, is(notNullValue()));
@@ -2532,6 +2511,39 @@ public class TestWithCCD extends CftlibTest {
         assertThat(response.getStatusLine().getStatusCode(), equalTo(400));
         JsonNode errorPayload = mapper.readTree(responseBody);
         assertThat(errorPayload.path("status").asInt(), equalTo(400));
+    }
+
+    private Map<String, Object> queryCurrentOutboxRow(String caseId) {
+        return db.queryForMap(
+            "SELECT o.status, h.response_code AS last_response_code"
+                + " FROM ccd.task_outbox o"
+                + " LEFT JOIN LATERAL ("
+                + "     SELECT response_code"
+                + "     FROM ccd.task_outbox_history h"
+                + "     WHERE h.task_outbox_id = o.id"
+                + "     ORDER BY h.id DESC LIMIT 1"
+                + " ) h ON true"
+                + " WHERE o.case_id = CAST(:caseId AS bigint)"
+                + " ORDER BY o.id DESC LIMIT 1",
+            Map.of("caseId", caseId)
+        );
+    }
+
+    private Map<String, Object> queryLatestCurrentOutboxRow(String caseId, TaskAction action) {
+        return db.queryForMap(
+            "SELECT o.status, h.response_code AS last_response_code"
+                + " FROM ccd.task_outbox o"
+                + " LEFT JOIN LATERAL ("
+                + "     SELECT response_code"
+                + "     FROM ccd.task_outbox_history h"
+                + "     WHERE h.task_outbox_id = o.id"
+                + "     ORDER BY h.id DESC LIMIT 1"
+                + " ) h ON true"
+                + " WHERE o.case_id = CAST(:caseId AS bigint)"
+                + " AND o.action = :action::ccd.task_action"
+                + " ORDER BY o.id DESC LIMIT 1",
+            Map.of("caseId", caseId, "action", action.getId())
+        );
     }
 
     private JsonNode fetchElasticsearchDocument(long caseDataId) throws IOException {
