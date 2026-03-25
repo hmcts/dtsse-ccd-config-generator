@@ -2,10 +2,8 @@
 import Axios, { AxiosInstance } from 'axios';
 import { createCcdClient, type CcdClientConfig, type CcdTransport } from '@hmcts/ccd-event-runtime';
 
-import {
-  caseBindings,
-  type CaseworkerAddNoteDto,
-} from './generated/ccd/E2E';
+import { caseBindings } from './generated/ccd/E2E/event-contracts';
+import type { CaseworkerAddNoteDto } from './generated/ccd/E2E/dto-types';
 
 function requireEnv(name: string): string {
   const value = process.env[name];

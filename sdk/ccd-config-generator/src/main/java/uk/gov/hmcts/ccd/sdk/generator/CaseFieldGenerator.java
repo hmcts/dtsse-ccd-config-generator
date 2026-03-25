@@ -25,6 +25,7 @@ import java.util.Set;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.core.ResolvableType;
 import org.springframework.stereotype.Component;
+import org.springframework.util.ReflectionUtils;
 import uk.gov.hmcts.ccd.sdk.DtoFieldPrefix;
 import uk.gov.hmcts.ccd.sdk.ResolvedCCDConfig;
 import uk.gov.hmcts.ccd.sdk.api.CCD;
@@ -41,6 +42,8 @@ class CaseFieldGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
   // so eg. if a field changes type it gets updated.
   private static final ImmutableSet<String> OVERWRITES_FIELDS = ImmutableSet.of();
   private static final int CCD_FIELD_ID_LIMIT = 70;
+
+  private record FieldMetadata(Class<?> ownerClass, Field field) {}
 
   @Override
   public void write(
@@ -82,6 +85,7 @@ class CaseFieldGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
   private static <T, S, R extends HasRole> List<Map<String, Object>> getExplicitFields(
       ResolvedCCDConfig<T, S, R> config) {
     Map<String, uk.gov.hmcts.ccd.sdk.api.Field> explicitFields = Maps.newHashMap();
+    Map<String, FieldMetadata> explicitFieldMetadata = Maps.newHashMap();
     for (Event event : config.getEvents().values()) {
       List<uk.gov.hmcts.ccd.sdk.api.Field.FieldBuilder> fc = event.getFields()
           .getExplicitFields();
@@ -89,6 +93,8 @@ class CaseFieldGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
       for (uk.gov.hmcts.ccd.sdk.api.Field.FieldBuilder fieldBuilder : fc) {
         uk.gov.hmcts.ccd.sdk.api.Field field = fieldBuilder.build();
         explicitFields.put(field.getId(), field);
+        findExplicitFieldMetadata(config.getCaseClass(), event, field.getId())
+            .ifPresent(metadata -> explicitFieldMetadata.put(field.getId(), metadata));
       }
     }
 
@@ -104,9 +110,10 @@ class CaseFieldGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
       Map<String, Object> fieldData = getField(config.getCaseType(), fieldId);
       result.add(fieldData);
 
-      Optional<Field> caseField = findCaseField(config.getCaseClass(), fieldId);
-      caseField.ifPresent(candidate ->
-          populateFieldMetadata(fieldData, config.getCaseClass(), candidate));
+      FieldMetadata metadata = explicitFieldMetadata.get(fieldId);
+      if (metadata != null) {
+        populateFieldMetadata(fieldData, metadata.ownerClass(), metadata.field());
+      }
       JsonUtils.ensureDefaultLabel(fieldData);
 
       if (!Strings.isNullOrEmpty(field.getLabel())) {
@@ -115,7 +122,7 @@ class CaseFieldGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
 
       if (field.getType() != null) {
         fieldData.put("FieldType", field.getType());
-      } else if (caseField.isEmpty()) {
+      } else if (metadata == null) {
         fieldData.put("FieldType", "Label");
       }
 
@@ -317,6 +324,37 @@ class CaseFieldGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
         .stream()
         .filter(candidate -> getFieldId(candidate).equals(fieldId))
         .findFirst();
+  }
+
+  private static Optional<Field> findDeclaredField(Class<?> caseClass, String fieldId) {
+    List<Field> fields = Lists.newArrayList();
+    ReflectionUtils.doWithFields(caseClass, fields::add, field -> true);
+    return fields.stream()
+        .filter(candidate -> getFieldId(candidate).equals(fieldId))
+        .findFirst();
+  }
+
+  private static Optional<FieldMetadata> findExplicitFieldMetadata(
+      Class<?> caseClass,
+      Event event,
+      String fieldId) {
+    Optional<Field> caseField = findCaseField(caseClass, fieldId);
+    if (caseField.isPresent()) {
+      return Optional.of(new FieldMetadata(caseClass, caseField.get()));
+    }
+
+    if (!event.isDtoEvent()) {
+      return Optional.empty();
+    }
+
+    String prefix = event.getEventFieldPrefix() + "_";
+    if (!fieldId.startsWith(prefix)) {
+      return Optional.empty();
+    }
+
+    String dtoFieldId = fieldId.substring(prefix.length());
+    return findDeclaredField(event.getDtoClass(), dtoFieldId)
+        .map(field -> new FieldMetadata(event.getDtoClass(), field));
   }
 
   static void validateDtoClass(String caseTypeId, Class<?> dtoClass, String eventId, String fieldPrefix) {
