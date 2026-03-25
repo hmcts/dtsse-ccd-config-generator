@@ -552,6 +552,7 @@ The intended styling boundary is:
 
 - the package may visually clone GOV.UK/XUI treatments
 - the package should own the CSS it needs for that clone
+- the package should own required fonts, icons, and images needed for parity
 - package styles should be scoped to the header root and must not leak into the
   host page
 - host page styles should not be required to make the header look correct

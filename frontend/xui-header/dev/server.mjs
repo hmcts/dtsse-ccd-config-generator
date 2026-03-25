@@ -34,6 +34,18 @@ app.get('/', (_req, res) => {
   res.render('preview.njk', { scenarios });
 });
 
+app.get('/scenario/:id', (req, res) => {
+  const scenarios = createPreviewScenarios(buildHeaderModel);
+  const scenario = scenarios.find((candidate) => candidate.id === req.params.id);
+
+  if (!scenario) {
+    res.status(404).send(`Unknown scenario: ${req.params.id}`);
+    return;
+  }
+
+  res.render('scenario.njk', { scenario });
+});
+
 app.listen(port, () => {
   console.log(`xui-header preview available at http://localhost:${port}`);
 });

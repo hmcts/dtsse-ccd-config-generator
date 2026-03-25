@@ -9,6 +9,7 @@ The package is intended to:
 - support SSR-first rendering through Nunjucks
 - keep header policy framework-agnostic
 - own its styling boundary even where GOV.UK/XUI visual patterns are reused
+- own any fonts, icons, and images needed to hit parity
 - enable side-by-side parity testing against the live XUI reference
 
 ## Current status

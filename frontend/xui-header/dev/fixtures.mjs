@@ -1,6 +1,22 @@
 export function createPreviewScenarios(buildHeaderModel) {
   return [
     {
+      id: 'live-reference-case-list',
+      title: 'Live reference case list',
+      model: buildHeaderModel({
+        user: {
+          isAuthenticated: true,
+          roles: ['caseworker', 'caseworker-befta_master'],
+          roleCategory: 'legal-operations'
+        },
+        route: {
+          path: '/cases'
+        },
+        features: {},
+        environment: 'local'
+      })
+    },
+    {
       id: 'default-staff',
       title: 'Default staff',
       model: buildHeaderModel({
