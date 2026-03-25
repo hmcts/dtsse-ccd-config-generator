@@ -1,0 +1,61 @@
+{% from "macro.njk" import hmctsXuiHeader %}
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>XUI Header Preview</title>
+    <link rel="stylesheet" href="/styles/xui-header.css">
+    <style>
+      body {
+        font-family: system-ui, sans-serif;
+        margin: 0;
+        padding: 24px;
+      }
+
+      .preview-grid {
+        display: grid;
+        gap: 32px;
+      }
+
+      .preview-card {
+        border: 1px solid #d8d8d8;
+      }
+
+      .preview-card__title {
+        border-bottom: 1px solid #d8d8d8;
+        font-size: 18px;
+        font-weight: 600;
+        margin: 0;
+        padding: 16px 20px;
+      }
+
+      .preview-card__body {
+        padding: 0;
+      }
+
+      .preview-card__model {
+        background: #f3f2f1;
+        border-top: 1px solid #d8d8d8;
+        font-family: ui-monospace, monospace;
+        font-size: 12px;
+        margin: 0;
+        overflow: auto;
+        padding: 16px 20px;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="preview-grid">
+      {% for scenario in scenarios %}
+        <section class="preview-card" id="{{ scenario.id }}">
+          <h2 class="preview-card__title">{{ scenario.title }}</h2>
+          <div class="preview-card__body">
+            {{ hmctsXuiHeader(scenario.model) }}
+          </div>
+          <pre class="preview-card__model">{{ scenario.model | dump }}</pre>
+        </section>
+      {% endfor %}
+    </main>
+  </body>
+</html>

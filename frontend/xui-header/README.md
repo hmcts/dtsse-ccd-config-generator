@@ -21,6 +21,8 @@ Implemented so far:
 - initial TypeScript package structure
 - initial policy types
 - initial theme and navigation helper functions
+- initial SSR macro
+- local preview server for rendering package scenarios side by side
 
 Not implemented yet:
 

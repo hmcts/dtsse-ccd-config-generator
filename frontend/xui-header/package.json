@@ -16,6 +16,7 @@
   ],
   "scripts": {
     "build": "rm -rf dist && tsc -p tsconfig.json",
+    "preview": "npm run build && node ./dev/server.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "exports": {
@@ -35,6 +36,8 @@
     "./styles/xui-header.css": "./src/styles/xui-header.css"
   },
   "devDependencies": {
+    "express": "^5.1.0",
+    "nunjucks": "^3.2.4",
     "typescript": "^5.8.2"
   }
 }
