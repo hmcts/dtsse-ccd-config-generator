@@ -1,0 +1,10 @@
+{#
+  Placeholder macro.
+  The real SSR output must be implemented against the live XUI reference and
+  verified side by side in Chrome MCP.
+#}
+{% macro hmctsXuiHeader(model) %}
+<div data-module="hmcts-xui-header" data-theme="{{ model.theme.key if model and model.theme else 'default' }}">
+  {# Intentionally minimal until parity work starts. #}
+</div>
+{% endmacro %}
