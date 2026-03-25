@@ -99,7 +99,10 @@ function buildSearchModel(rightItems: HeaderNavItem[]): HeaderModel['search'] {
 
   return {
     mode: 'case-reference',
-    label: searchItem.text,
+    label: '16-digit case reference:',
+    buttonText: 'Find',
+    action: searchItem.href || '/cases/case-search',
+    name: 'case-reference',
     ...(searchItem.href ? { href: searchItem.href } : {})
   };
 }

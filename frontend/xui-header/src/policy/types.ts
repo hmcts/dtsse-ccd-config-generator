@@ -51,6 +51,7 @@ export type HeaderSearchModel = {
   mode: HeaderSearchMode;
   href?: string;
   label?: string;
+  buttonText?: string;
   action?: string;
   name?: string;
   value?: string;

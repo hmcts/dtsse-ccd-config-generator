@@ -8,6 +8,7 @@ The package is intended to:
 - preserve current XUI behaviour and visual output
 - support SSR-first rendering through Nunjucks
 - keep header policy framework-agnostic
+- own its styling boundary even where GOV.UK/XUI visual patterns are reused
 - enable side-by-side parity testing against the live XUI reference
 
 ## Current status

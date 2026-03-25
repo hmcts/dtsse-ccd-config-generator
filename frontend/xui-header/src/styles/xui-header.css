@@ -1,5 +1,32 @@
 /*
- * Placeholder stylesheet.
- * Final styles must be tuned against the live XUI reference and verified
- * side by side in Chrome MCP before being treated as complete.
+ * Early SSR stylesheet scaffold.
+ * Final values and spacing still need parity tuning against the live XUI
+ * reference in Chrome MCP.
+ *
+ * Final CSS should be rooted to the package boundary so reused GOV.UK/XUI
+ * treatments do not leak into the host app and host styles do not leak back in.
  */
+
+.xui-header__surface {
+  display: block;
+}
+
+.xui-header__search-form {
+  align-items: end;
+  display: flex;
+  gap: 8px;
+}
+
+.xui-header__search-label {
+  color: #ffffff;
+  font-size: 16px;
+  line-height: 1.25;
+}
+
+.xui-header__search-input {
+  max-width: 15rem;
+}
+
+.xui-header__search-button.govuk-button {
+  margin-bottom: 0;
+}

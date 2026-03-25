@@ -543,8 +543,18 @@ The package should:
 
 - provide its own minimal stylesheet for XUI-specific differences
 - reuse GOV.UK Frontend utility and component classes where possible
+- internalize any reused GOV.UK/HMCTS header styling so hosts do not need to
+  import a leaking global stylesheet for this package to render correctly
 - keep judicial red and default dark theme values configurable
 - avoid inline style mutation at runtime unless necessary
+
+The intended styling boundary is:
+
+- the package may visually clone GOV.UK/XUI treatments
+- the package should own the CSS it needs for that clone
+- package styles should be scoped to the header root and must not leak into the
+  host page
+- host page styles should not be required to make the header look correct
 
 ## Accessibility requirements
 
