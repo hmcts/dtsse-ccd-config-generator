@@ -211,6 +211,7 @@ tasks.withType(CftlibExec).configureEach {
 
 tasks.named('generateCCDConfig').configure {
   environment 'SPRING_JMS_SERVICEBUS_ENABLED', 'false'
+  environment 'SPRING_FLYWAY_ENABLED', 'false'
   environment 'SPRING_AUTOCONFIGURE_EXCLUDE',
     'com.azure.spring.cloud.autoconfigure.implementation.jms.ServiceBusJmsAutoConfiguration'
 }
