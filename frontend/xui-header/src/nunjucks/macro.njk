@@ -97,19 +97,16 @@
                         action="{{ model.search.action or model.search.href or '#' }}"
                         method="get"
                         novalidate>
-                        <label class="xui-header__search-label" for="xui-header-case-reference">
-                          {{ model.search.label }}
-                        </label>
-                        <input
+                        <label class="xui-header__search-label" for="xui-header-case-reference">{{ model.search.label }}</label><input
                           id="xui-header-case-reference"
                           class="govuk-input xui-header__search-input"
                           type="text"
                           name="{{ model.search.name or 'case-reference' }}"
                           value="{{ model.search.value or '' }}"
-                          {% if model.search.invalid %}aria-invalid="true"{% endif %}>
-                        <button type="submit" class="govuk-button xui-header__search-button" data-module="govuk-button">
-                          {{ model.search.buttonText or "Find" }}
-                        </button>
+                          {% if model.search.invalid %}aria-invalid="true"{% endif %}><button
+                          type="submit"
+                          class="govuk-button xui-header__search-button"
+                          data-module="govuk-button">{{ model.search.buttonText or "Find" }}</button>
                       </form>
                     {% else %}
                       <a

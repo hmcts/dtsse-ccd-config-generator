@@ -24,6 +24,8 @@
 }
 
 .xui-header {
+  -moz-osx-font-smoothing: grayscale;
+  -webkit-font-smoothing: antialiased;
   color: #0b0c0c;
   display: block;
   font-family: "GDS Transport", arial, sans-serif;
@@ -72,7 +74,7 @@
 .xui-header .hmcts-header {
   background-color: #0b0c0c;
   display: block;
-  height: 40px;
+  height: 50px;
   padding-top: 10px;
 }
 
@@ -112,7 +114,6 @@
   border-bottom: 1px solid transparent;
   color: #fff;
   display: inline-block;
-  float: left;
   font-size: 24px;
   font-weight: 700;
   line-height: 30px;
@@ -172,18 +173,20 @@
 }
 
 .xui-header .hmcts-primary-navigation__container {
-  align-items: flex-start;
-  display: flex;
+  display: block;
+  font-size: 0;
   height: 50px;
-  justify-content: space-between;
 }
 
 .xui-header .hmcts-primary-navigation__nav {
-  flex: 1 1 auto;
+  display: inline-block;
+  font-size: 0;
+  vertical-align: middle;
 }
 
 .xui-header .hmcts-primary-navigation__nav .hmcts-primary-navigation__list {
-  display: flex;
+  display: block;
+  font-size: 0;
 }
 
 .xui-header .hmcts-primary-navigation__link {
@@ -211,10 +214,17 @@
   margin-left: 20px;
 }
 
+.xui-header .hmcts-primary-navigation__item {
+  display: inline-block;
+  vertical-align: top;
+}
+
 .xui-header .hmcts-primary-navigation__search {
   display: block;
-  flex: 0 0 auto;
+  float: right;
+  font-size: 0;
   height: 40px;
+  vertical-align: middle;
 }
 
 .xui-header .hmcts-primary-navigation__search .hmcts-primary-navigation__item + .hmcts-primary-navigation__item {
@@ -222,15 +232,14 @@
 }
 
 .xui-header__search-form {
-  display: flex;
-  align-items: flex-start;
+  display: block;
+  font-size: 0;
   height: 40px;
 }
 
 .xui-header__search-label {
   color: #ffffff;
   display: inline;
-  font-family: "GDS Transport", arial, sans-serif;
   font-size: 19px;
   font-weight: 400;
   line-height: 25px;
