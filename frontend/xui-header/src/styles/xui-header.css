@@ -86,7 +86,18 @@
   padding-bottom: 10px;
 }
 
-.xui-header .govuk-header__logo {
+.xui-header .hmcts-header .govuk-header__logo {
+  display: block;
+  float: left;
+  padding-bottom: 10px;
+  width: 160px;
+}
+
+.xui-header .hmcts-primary-navigation__container > .govuk-header__logo {
+  display: block;
+  flex: 0 0 160px;
+  float: none;
+  padding: 0;
   width: 160px;
 }
 
@@ -100,6 +111,7 @@
   border-bottom: 1px solid transparent;
   color: #fff;
   display: inline-block;
+  float: left;
   font-size: 24px;
   font-weight: 700;
   line-height: 30px;
