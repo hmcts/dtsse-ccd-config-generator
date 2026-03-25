@@ -46,15 +46,15 @@ class CaseFieldGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
   public void write(
       File outputFolder, ResolvedCCDConfig<T, S, R> config) {
     List<Map<String, Object>> fields = toComplex(config.getCaseClass(), config.getCaseType());
-    List<Map<String, Object>> explicitFields = getExplicitFields(config);
 
     Map<String, Object> history = getField(config.getCaseType(), "caseHistory");
     history.put("Label", " ");
     history.put("FieldType", "CaseHistoryViewer");
     fields.add(history);
 
+    final List<Map<String, Object>> explicitFields = getExplicitFields(config);
     Map<String, String> prefixToEventId = Maps.newHashMap();
-    Map<String, String> reservedFieldIds = getReservedFieldIds(fields, explicitFields);
+    final Map<String, String> reservedFieldIds = getReservedFieldIds(fields, explicitFields);
     Map<String, String> generatedFieldIds = Maps.newHashMap();
     for (Event event : config.getEvents().values()) {
       if (event.isDtoEvent()) {

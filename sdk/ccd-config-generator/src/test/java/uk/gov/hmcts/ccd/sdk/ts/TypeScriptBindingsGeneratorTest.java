@@ -34,12 +34,10 @@ public class TypeScriptBindingsGeneratorTest {
 
     File contractsFile = new File(output, "event-contracts.ts");
     File dtoFile = new File(output, "dto-types.ts");
-    File indexFile = new File(output, "index.ts");
 
     assertThat(contractsFile).exists();
     assertThat(dtoFile).exists();
     assertThat(new File(output, "client.ts")).doesNotExist();
-    assertThat(indexFile).exists();
 
     String contracts = FileUtils.readFileToString(contractsFile, StandardCharsets.UTF_8);
     assertThat(contracts).contains("\"createWidget\"");

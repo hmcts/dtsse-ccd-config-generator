@@ -1,6 +1,7 @@
 package uk.gov.hmcts.ccd.sdk.ts;
 
 import static java.util.stream.Collectors.joining;
+
 import cz.habarta.typescript.generator.Input;
 import cz.habarta.typescript.generator.JsonLibrary;
 import cz.habarta.typescript.generator.Settings;
@@ -30,6 +31,7 @@ public class TypeScriptBindingsGenerator {
 
   private static final String DTO_TYPES_FILE = "dto-types.ts";
   private static final String CONTRACTS_FILE = "event-contracts.ts";
+
   public void writeBindings(File outputFolder, ResolvedCCDConfig<?, ?, ?> config, String moduleName) {
     List<DtoEventContract> contracts = extractContracts(config);
     if (contracts.isEmpty()) {
