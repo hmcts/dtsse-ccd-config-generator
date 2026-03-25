@@ -31,7 +31,7 @@ export type HeaderAccountItem = {
 };
 
 export type HeaderNavItem = {
-  id: string;
+  id?: string;
   text: string;
   href?: string;
   active?: boolean;
@@ -44,6 +44,8 @@ export type HeaderNavItem = {
   flags?: HeaderFlagDefinition[];
   notFlags?: HeaderFlagDefinition[];
 };
+
+export type HeaderMenuConfig = Record<string, HeaderNavItem[]>;
 
 export type HeaderSearchModel = {
   mode: HeaderSearchMode;
@@ -97,6 +99,7 @@ export type HeaderContext = {
   environment?: HeaderEnvironment;
   config?: {
     themes?: HeaderThemeConfig[];
+    menuConfig?: HeaderMenuConfig;
     accountItems?: HeaderAccountItem[];
   };
 };
