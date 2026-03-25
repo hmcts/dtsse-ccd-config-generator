@@ -24,6 +24,7 @@ Implemented so far:
 - initial theme and navigation helper functions
 - initial SSR macro
 - local preview server for rendering package scenarios side by side
+- local screenshot-diff helper for parity checks against captured reference images
 
 Not implemented yet:
 

@@ -228,13 +228,12 @@
 
 .xui-header__search-label {
   color: #ffffff;
-  display: inline-block;
+  display: inline;
   font-family: "GDS Transport", arial, sans-serif;
   font-size: 19px;
   font-weight: 400;
   line-height: 25px;
-  margin-right: 12px;
-  padding-top: 8px;
+  margin: 8px 6px 0 0;
   white-space: nowrap;
 }
 

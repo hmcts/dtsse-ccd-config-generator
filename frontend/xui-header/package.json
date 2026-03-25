@@ -16,6 +16,7 @@
   ],
   "scripts": {
     "build": "rm -rf dist && tsc -p tsconfig.json",
+    "compare:screenshots": "node ./dev/compare-screenshots.mjs",
     "preview": "npm run build && node ./dev/server.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
@@ -38,6 +39,8 @@
   "devDependencies": {
     "express": "^5.1.0",
     "nunjucks": "^3.2.4",
+    "pixelmatch": "^7.1.0",
+    "pngjs": "^7.0.0",
     "typescript": "^5.8.2"
   }
 }
