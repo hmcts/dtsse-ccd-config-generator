@@ -13,7 +13,7 @@ dependencies {
     implementation project(':ccd-config-generator')
     implementation 'org.springframework.boot:spring-boot-starter-jdbc'
     implementation 'org.springframework:spring-web'
-    implementation 'org.elasticsearch.client:elasticsearch-rest-high-level-client:7.17.29'
+    implementation 'org.elasticsearch.client:elasticsearch-rest-client:9.3.2'
     implementation 'com.fasterxml.jackson.core:jackson-databind'
 
     compileOnly 'org.projectlombok:lombok:1.18.44'

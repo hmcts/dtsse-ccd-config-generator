@@ -1,2 +1,3 @@
 include 'ccd-gradle-plugin', 'ccd-config-generator', 'decentralised-runtime', 'cftlib-dev-only', 'ccd-servicebus-support',
     'ccd-event-runtime'
+include 'task-management'
