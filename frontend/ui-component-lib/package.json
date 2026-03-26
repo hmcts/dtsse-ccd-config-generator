@@ -1,8 +1,8 @@
 {
-  "name": "@hmcts/ui-component-lib",
-  "version": "0.0.0",
-  "description": "Shared SSR-first HMCTS UI component library",
-  "private": true,
+  "name": "@hmcts/cft-ui-component-lib",
+  "version": "0.1.0-alpha.1",
+  "description": "Shared SSR-first HMCTS CFT UI component library",
+  "private": false,
   "type": "module",
   "engines": {
     "node": ">=20"
@@ -45,6 +45,9 @@
     "./nunjucks/footer.njk": "./src/nunjucks/footer.njk",
     "./styles/ui-component-lib.css": "./src/styles/ui-component-lib.css",
     "./styles/xui-header.css": "./src/styles/ui-component-lib.css"
+  },
+  "publishConfig": {
+    "registry": "https://pkgs.dev.azure.com/hmcts/Artifacts/_packaging/hmcts-lib/npm/registry/"
   },
   "devDependencies": {
     "express": "^5.1.0",

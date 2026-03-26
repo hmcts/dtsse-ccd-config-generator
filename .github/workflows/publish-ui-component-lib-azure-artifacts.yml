@@ -1,0 +1,101 @@
+name: Publish CFT UI Component Library to Azure Artifacts
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_version:
+        description: Version to publish, for example 0.1.0-alpha.1
+        required: true
+        default: 0.1.0-alpha.1
+      npm_dist_tag:
+        description: Dist-tag to publish under, for example alpha
+        required: true
+        default: alpha
+  push:
+    paths-ignore:
+      - '**/*.md'
+      - '*.md'
+    tags:
+      - 'cft-ui-component-lib/v*'
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend/ui-component-lib
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          submodules: recursive
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v5
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: frontend/ui-component-lib/package-lock.json
+
+      - name: Resolve release metadata
+        id: release
+        shell: bash
+        run: |
+          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
+            release_version='${{ inputs.release_version }}'
+            npm_dist_tag='${{ inputs.npm_dist_tag }}'
+          else
+            release_version="${GITHUB_REF_NAME#cft-ui-component-lib/v}"
+            case "$release_version" in
+              *-alpha.*) npm_dist_tag="alpha" ;;
+              *-beta.*) npm_dist_tag="beta" ;;
+              *-rc.*) npm_dist_tag="rc" ;;
+              *) npm_dist_tag="latest" ;;
+            esac
+          fi
+
+          if [ -z "$release_version" ]; then
+            echo "Unable to resolve release version" >&2
+            exit 1
+          fi
+
+          echo "release_version=$release_version" >> "$GITHUB_OUTPUT"
+          echo "npm_dist_tag=$npm_dist_tag" >> "$GITHUB_OUTPUT"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Set publish version
+        run: npm version --no-git-tag-version --allow-same-version "${{ steps.release.outputs.release_version }}"
+
+      - name: Build package
+        run: npm run build
+
+      - name: Check published package contents
+        run: npm pack --dry-run
+
+      - name: Configure npm authentication for Azure Artifacts
+        env:
+          AZURE_DEVOPS_ARTIFACT_USERNAME: ${{ secrets.AZURE_DEVOPS_ARTIFACT_USERNAME }}
+          AZURE_DEVOPS_ARTIFACT_TOKEN: ${{ secrets.AZURE_DEVOPS_ARTIFACT_TOKEN }}
+        shell: bash
+        run: |
+          token_b64="$(printf %s "$AZURE_DEVOPS_ARTIFACT_TOKEN" | base64 | tr -d '\n')"
+          username="${AZURE_DEVOPS_ARTIFACT_USERNAME:-github}"
+
+          cat > "$HOME/.npmrc" <<EOF
+          registry=https://pkgs.dev.azure.com/hmcts/Artifacts/_packaging/hmcts-lib/npm/registry/
+          always-auth=true
+          //pkgs.dev.azure.com/hmcts/Artifacts/_packaging/hmcts-lib/npm/registry/:username=${username}
+          //pkgs.dev.azure.com/hmcts/Artifacts/_packaging/hmcts-lib/npm/registry/:_password=${token_b64}
+          //pkgs.dev.azure.com/hmcts/Artifacts/_packaging/hmcts-lib/npm/registry/:email=github-actions@hmcts.net
+          //pkgs.dev.azure.com/hmcts/Artifacts/_packaging/hmcts-lib/npm/:username=${username}
+          //pkgs.dev.azure.com/hmcts/Artifacts/_packaging/hmcts-lib/npm/:_password=${token_b64}
+          //pkgs.dev.azure.com/hmcts/Artifacts/_packaging/hmcts-lib/npm/:email=github-actions@hmcts.net
+          EOF
+
+      - name: Publish package
+        run: npm publish --tag "${{ steps.release.outputs.npm_dist_tag }}"
