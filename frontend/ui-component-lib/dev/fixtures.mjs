@@ -73,17 +73,17 @@ export function createPreviewScenarios(buildHeaderModel, buildFooterModel) {
       headerModel: buildHeaderModel({
         user: {
           isAuthenticated: true,
-          roles: ['judge', 'caseworker-ia-iacjudge']
+          roles: ['caseworker', 'caseworker-divorce', 'caseworker-divorce-judge']
         },
         route: {
-          path: '/search'
+          path: '/cases'
         },
         features: {},
         environment: 'local'
       }),
       footerModel: buildFooterModel(createFooterContext()),
       mainContent: {
-        title: 'Search'
+        title: 'Case list'
       }
     },
     {

@@ -44,7 +44,7 @@
 .xui-header__surface {
   background-color: #202020;
   display: block;
-  height: 100px;
+  height: 98px;
 }
 
 .xui-header--judicial .xui-header__surface {
@@ -83,8 +83,9 @@
 
 .xui-header .hmcts-header {
   background-color: #0b0c0c;
+  box-sizing: content-box;
   display: block;
-  height: 50px;
+  height: 38px;
   padding-top: 10px;
 }
 
@@ -108,9 +109,9 @@
 
 .xui-header .hmcts-primary-navigation__container > .govuk-header__logo {
   display: block;
-  flex: 0 0 160px;
-  float: none;
-  padding: 0;
+  float: left;
+  margin-bottom: 10px;
+  padding: 0 15px 0 0;
   width: 160px;
 }
 
@@ -186,11 +187,19 @@
   display: block;
   font-size: 0;
   height: 50px;
+  text-align: justify;
+}
+
+.xui-header .hmcts-primary-navigation__container::after {
+  content: "";
+  display: inline-block;
+  width: 100%;
 }
 
 .xui-header .hmcts-primary-navigation__nav {
   display: inline-block;
   font-size: 0;
+  text-align: left;
   vertical-align: middle;
 }
 
@@ -209,24 +218,30 @@
   text-decoration: underline;
 }
 
-.xui-header .hmcts-search-toggle__button::after {
-  background-image: url("./images/icon-search-white.svg");
-  background-repeat: no-repeat;
-  content: "";
-  display: inline-block;
-  height: 20px;
-  margin-left: 10px;
-  vertical-align: middle;
-  width: 20px;
-}
-
-.xui-header .hmcts-primary-navigation__item + .hmcts-primary-navigation__item {
-  margin-left: 20px;
-}
-
 .xui-header .hmcts-primary-navigation__item {
   display: inline-block;
+  margin-right: 20px;
   vertical-align: top;
+}
+
+.xui-header .hmcts-primary-navigation__item:last-child {
+  margin-right: 0;
+}
+
+.xui-header .hmcts-primary-navigation__link[aria-current] {
+  position: relative;
+  text-decoration: none;
+}
+
+.xui-header .hmcts-primary-navigation__link[aria-current]::before {
+  background-color: #fff;
+  bottom: 0;
+  content: "";
+  display: block;
+  height: 5px;
+  left: 0;
+  position: absolute;
+  width: 100%;
 }
 
 .xui-header .govuk-phase-banner {
