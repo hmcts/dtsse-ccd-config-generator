@@ -11,6 +11,7 @@ on:
 
 jobs:
   publish:
+    if: ${{ !startsWith(github.ref_name, 'cft-ui-component-lib/') }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
