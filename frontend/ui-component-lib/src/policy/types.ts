@@ -99,6 +99,7 @@ export type HeaderModel = {
 };
 
 export type HeaderContext = {
+  xuiBaseUrl: string;
   user: {
     isAuthenticated: boolean;
     roles: string[];

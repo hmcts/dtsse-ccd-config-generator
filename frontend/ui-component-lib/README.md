@@ -64,7 +64,7 @@ dependency:
 ```json
 {
   "dependencies": {
-    "@hmcts-cft/ui-component-lib": "0.1.0-alpha.1"
+    "@hmcts-cft/ui-component-lib": "0.1.0-alpha.2"
   }
 }
 ```
@@ -95,6 +95,7 @@ Build a header model with `buildHeaderModel(context)`.
 import { buildHeaderModel } from '@hmcts-cft/ui-component-lib';
 
 const headerModel = buildHeaderModel({
+  xuiBaseUrl: process.env.XUI_BASE_URL ?? 'http://localhost:3000',
   user: {
     isAuthenticated: true,
     roles: ['caseworker', 'caseworker-divorce', 'caseworker-divorce-judge']
@@ -111,6 +112,7 @@ The main input type is `HeaderContext`.
 
 Key fields:
 
+- `xuiBaseUrl` required XUI root URL used to build title and navigation links
 - `user.isAuthenticated`
 - `user.roles`
 - `user.roleCategory`
@@ -243,6 +245,7 @@ import { buildFooterModel, buildHeaderModel } from '@hmcts-cft/ui-component-lib'
 
 app.get('/demo/ui-component-lib', (_req, res) => {
   const headerModel = buildHeaderModel({
+    xuiBaseUrl: process.env.XUI_BASE_URL ?? 'http://localhost:3000',
     user: {
       isAuthenticated: true,
       roles: ['caseworker', 'caseworker-divorce', 'caseworker-divorce-judge']

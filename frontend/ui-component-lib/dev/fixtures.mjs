@@ -7,12 +7,15 @@ function createFooterContext(overrides = {}) {
   };
 }
 
+const DEFAULT_XUI_BASE_URL = 'http://localhost:3000';
+
 export function createPreviewScenarios(buildHeaderModel, buildFooterModel) {
   return [
     {
       id: 'live-reference-case-list',
       title: 'Live reference case list',
       headerModel: buildHeaderModel({
+        xuiBaseUrl: DEFAULT_XUI_BASE_URL,
         user: {
           isAuthenticated: true,
           roles: ['caseworker', 'caseworker-befta_master'],
@@ -33,6 +36,7 @@ export function createPreviewScenarios(buildHeaderModel, buildFooterModel) {
       id: 'default-staff',
       title: 'Default staff',
       headerModel: buildHeaderModel({
+        xuiBaseUrl: DEFAULT_XUI_BASE_URL,
         user: {
           isAuthenticated: true,
           roles: ['caseworker-civil']
@@ -52,6 +56,7 @@ export function createPreviewScenarios(buildHeaderModel, buildFooterModel) {
       id: 'pui-case-manager',
       title: 'PUI case manager',
       headerModel: buildHeaderModel({
+        xuiBaseUrl: DEFAULT_XUI_BASE_URL,
         user: {
           isAuthenticated: true,
           roles: ['pui-case-manager']
@@ -71,6 +76,7 @@ export function createPreviewScenarios(buildHeaderModel, buildFooterModel) {
       id: 'judicial',
       title: 'Judicial',
       headerModel: buildHeaderModel({
+        xuiBaseUrl: DEFAULT_XUI_BASE_URL,
         user: {
           isAuthenticated: true,
           roles: ['caseworker', 'caseworker-divorce', 'caseworker-divorce-judge']
@@ -90,6 +96,7 @@ export function createPreviewScenarios(buildHeaderModel, buildFooterModel) {
       id: 'nav-hidden',
       title: 'Navigation hidden',
       headerModel: buildHeaderModel({
+        xuiBaseUrl: DEFAULT_XUI_BASE_URL,
         user: {
           isAuthenticated: true,
           roles: ['caseworker-civil']
@@ -109,6 +116,7 @@ export function createPreviewScenarios(buildHeaderModel, buildFooterModel) {
       id: 'case-reference-search',
       title: 'Case reference search mode',
       headerModel: buildHeaderModel({
+        xuiBaseUrl: DEFAULT_XUI_BASE_URL,
         user: {
           isAuthenticated: true,
           roles: ['caseworker-civil']
@@ -132,6 +140,7 @@ export function createPreviewScenarios(buildHeaderModel, buildFooterModel) {
       id: 'footer-with-help',
       title: 'Footer with help content',
       headerModel: buildHeaderModel({
+        xuiBaseUrl: DEFAULT_XUI_BASE_URL,
         user: {
           isAuthenticated: true,
           roles: ['caseworker-civil']

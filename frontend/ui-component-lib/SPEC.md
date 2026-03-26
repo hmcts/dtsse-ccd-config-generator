@@ -452,6 +452,7 @@ Suggested high-level policy input:
 
 ```ts
 type HeaderContext = {
+  xuiBaseUrl: string;
   user: {
     isAuthenticated: boolean;
     roles: string[];

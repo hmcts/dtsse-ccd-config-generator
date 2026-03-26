@@ -4,9 +4,9 @@ on:
   workflow_dispatch:
     inputs:
       release_version:
-        description: Version to publish, for example 0.1.0-alpha.1
+        description: Version to publish, for example 0.1.0-alpha.2
         required: true
-        default: 0.1.0-alpha.1
+        default: 0.1.0-alpha.2
       npm_dist_tag:
         description: Dist-tag to publish under, for example alpha
         required: true

@@ -24,6 +24,7 @@ import type {
 } from './types.js';
 
 export function buildHeaderModel(context: HeaderContext): HeaderModel {
+  const xuiBaseUrl = normaliseXuiBaseUrl(context.xuiBaseUrl);
   const theme = resolveTheme(context);
   const mergedFeatures = {
     ...DEFAULT_MENU_FLAGS,
@@ -51,7 +52,7 @@ export function buildHeaderModel(context: HeaderContext): HeaderModel {
   );
   const { leftItems, rightItems } = splitNavItems(searchAwareNavItems);
 
-  const search = buildSearchModel(rightItems);
+  const search = buildSearchModel(rightItems, xuiBaseUrl);
   const phaseBanner = resolvePhaseBanner(context);
 
   return {
@@ -60,7 +61,7 @@ export function buildHeaderModel(context: HeaderContext): HeaderModel {
       backgroundColor: theme.backgroundColor,
       logo: theme.logo
     },
-    title: theme.title,
+    title: resolveTitle(theme.title, xuiBaseUrl),
     skipLink: {
       ...DEFAULT_SKIP_LINK
     },
@@ -70,8 +71,8 @@ export function buildHeaderModel(context: HeaderContext): HeaderModel {
     },
     primaryNav: {
       visible: shouldShowPrimaryNav(context.route.path),
-      leftItems,
-      rightItems
+      leftItems: resolveNavItems(leftItems, xuiBaseUrl),
+      rightItems: resolveNavItems(rightItems, xuiBaseUrl)
     },
     ...(phaseBanner ? { phaseBanner } : {}),
     ...(search ? { search } : {})
@@ -95,7 +96,10 @@ function shouldHideBookingNav(context: HeaderContext): boolean {
   );
 }
 
-function buildSearchModel(rightItems: HeaderNavItem[]): HeaderModel['search'] {
+function buildSearchModel(
+  rightItems: HeaderNavItem[],
+  xuiBaseUrl: string
+): HeaderModel['search'] {
   const searchItem = rightItems.find((item) => item.kind === 'case-reference-search');
   if (!searchItem) {
     return undefined;
@@ -105,9 +109,9 @@ function buildSearchModel(rightItems: HeaderNavItem[]): HeaderModel['search'] {
     mode: 'case-reference',
     label: '16-digit case reference:',
     buttonText: 'Find',
-    action: searchItem.href || '/cases/case-search',
+    action: resolveXuiUrl(xuiBaseUrl, searchItem.href || '/cases/case-search'),
     name: 'case-reference',
-    ...(searchItem.href ? { href: searchItem.href } : {})
+    ...(searchItem.href ? { href: resolveXuiUrl(xuiBaseUrl, searchItem.href) } : {})
   };
 }
 
@@ -121,3 +125,47 @@ function resolvePhaseBanner(context: HeaderContext): HeaderPhaseBannerModel | un
     ...(context.config?.phaseBanner ?? {})
   };
 }
+
+function resolveTitle(title: HeaderModel['title'], xuiBaseUrl: string): HeaderModel['title'] {
+  return {
+    ...title,
+    href: resolveXuiUrl(xuiBaseUrl, title.href)
+  };
+}
+
+function resolveNavItems(items: HeaderNavItem[], xuiBaseUrl: string): HeaderNavItem[] {
+  return items.map((item) => {
+    if (!item.href) {
+      return { ...item };
+    }
+
+    return {
+      ...item,
+      href: resolveXuiUrl(xuiBaseUrl, item.href)
+    };
+  });
+}
+
+function normaliseXuiBaseUrl(xuiBaseUrl: string): string {
+  if (!xuiBaseUrl || xuiBaseUrl.trim().length === 0) {
+    throw new Error('HeaderContext.xuiBaseUrl is required.');
+  }
+
+  const parsedBaseUrl = new URL(xuiBaseUrl);
+
+  if (!parsedBaseUrl.pathname.endsWith('/')) {
+    parsedBaseUrl.pathname = `${parsedBaseUrl.pathname}/`;
+  }
+
+  return parsedBaseUrl.toString();
+}
+
+function resolveXuiUrl(xuiBaseUrl: string, href: string): string {
+  if (ABSOLUTE_URL_PATTERN.test(href) || href.startsWith('#')) {
+    return href;
+  }
+
+  return new URL(href.replace(/^\/+/, ''), xuiBaseUrl).toString();
+}
+
+const ABSOLUTE_URL_PATTERN = /^[a-zA-Z][a-zA-Z\d+.-]*:\/\//;
