@@ -132,6 +132,17 @@
   text-decoration: none;
 }
 
+.xui-header .hmcts-header__link:hover,
+.xui-header .hmcts-header__link:active,
+.xui-header .hmcts-header__link:visited,
+.xui-header .hmcts-header__link:link {
+  color: #fff;
+}
+
+.xui-header .hmcts-header__link:hover {
+  border-color: #fff;
+}
+
 .xui-header .govuk-header__link {
   color: #fff;
   display: inline-block;
@@ -398,6 +409,12 @@
   padding: 8px 10px 7px;
   position: relative;
   vertical-align: top;
+}
+
+.xui-header__search-button:hover,
+.xui-header__search-button:focus {
+  background-color: #dbdad9;
+  color: #0b0c0c;
 }
 
 .xui-header .hmcts-header__link:focus,
