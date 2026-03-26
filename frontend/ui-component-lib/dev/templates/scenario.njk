@@ -1,0 +1,38 @@
+{% from "macro.njk" import hmctsXuiHeader %}
+{% from "footer.njk" import hmctsUiFooter %}
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{ scenario.title }}</title>
+    <link rel="stylesheet" href="/styles/ui-component-lib.css">
+    <style>
+      body {
+        display: flex;
+        flex-direction: column;
+        min-height: 100vh;
+        margin: 0;
+      }
+
+      main {
+        flex: 1 0 auto;
+        padding: 32px 30px 48px;
+      }
+
+      h1 {
+        font-family: "GDS Transport", arial, sans-serif;
+        font-size: 48px;
+        line-height: 1.04167;
+        margin: 0;
+      }
+    </style>
+  </head>
+  <body>
+    {{ hmctsXuiHeader(scenario.headerModel) }}
+    <main id="content">
+      <h1>{{ scenario.mainContent.title }}</h1>
+    </main>
+    {{ hmctsUiFooter(scenario.footerModel) }}
+  </body>
+</html>

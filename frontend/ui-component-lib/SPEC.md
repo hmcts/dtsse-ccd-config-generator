@@ -1,9 +1,10 @@
-# XUI Header Specification
+# UI Component Library Specification
 
 ## Purpose
 
-`frontend/xui-header` will contain a shared npm package for rendering the XUI-style
-header across multiple HMCTS frontends.
+`frontend/ui-component-lib` will contain a shared npm package for rendering HMCTS
+frontend components, starting with the XUI-style header and footer across multiple
+frontends.
 
 The package is intended to become part of the organisation's frontend strategy.
 It must:
@@ -165,7 +166,7 @@ against the live reference header.
 Minimum expected verification flow:
 
 1. run the reference XUI header locally
-2. run the new `frontend/xui-header` implementation locally
+2. run the new `frontend/ui-component-lib` implementation locally
 3. open both in Chrome MCP
 4. compare them side by side for agreed scenarios and viewport sizes
 5. adjust until the rendered output matches the reference
@@ -520,7 +521,7 @@ roles and flags.
 Suggested primary macro:
 
 ```njk
-{% from "@hmcts/xui-header/macro.njk" import hmctsXuiHeader %}
+{% from "@hmcts/ui-component-lib/macro.njk" import hmctsXuiHeader %}
 {{ hmctsXuiHeader(model) }}
 ```
 
@@ -582,7 +583,7 @@ The initial package should aim to contain:
 Suggested future file layout:
 
 ```text
-frontend/xui-header/
+frontend/ui-component-lib/
   package.json
   README.md
   SPEC.md

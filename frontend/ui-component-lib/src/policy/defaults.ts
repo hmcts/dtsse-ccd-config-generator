@@ -1,4 +1,8 @@
-import type { HeaderMenuConfig, HeaderThemeConfig } from './types.js';
+import type {
+  HeaderMenuConfig,
+  HeaderPhaseBannerModel,
+  HeaderThemeConfig
+} from './types.js';
 
 export const DEFAULT_SKIP_LINK = {
   text: 'Skip to main content',
@@ -13,6 +17,18 @@ export const DEFAULT_ACCOUNT_ITEMS = [
     action: 'sign-out'
   }
 ] as const;
+
+export const DEFAULT_PHASE_BANNER: HeaderPhaseBannerModel = {
+  visible: true,
+  tag: 'beta',
+  preLinkText: 'This is a new service - your',
+  linkText: 'feedback',
+  linkHref: 'https://www.smartsurvey.co.uk/s/CCDSurvey/',
+  postLinkText: 'will help us to improve it.',
+  newWindowText: '(Opens in a new window)',
+  target: '_blank',
+  rel: 'noopener noreferrer'
+};
 
 export const DEFAULT_THEME_CONFIGS: HeaderThemeConfig[] = [
   {

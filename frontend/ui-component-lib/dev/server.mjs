@@ -9,7 +9,7 @@ const __dirname = path.dirname(__filename);
 const packageRoot = path.resolve(__dirname, '..');
 const distRoot = path.join(packageRoot, 'dist');
 
-const { buildHeaderModel } = await import(path.join(distRoot, 'index.js'));
+const { buildFooterModel, buildHeaderModel } = await import(path.join(distRoot, 'index.js'));
 
 const app = express();
 const port = Number(process.env.PORT || 3100);
@@ -30,12 +30,12 @@ nunjucksEnv.addFilter('dump', (value) => JSON.stringify(value, null, 2));
 app.use('/styles', express.static(path.join(packageRoot, 'src', 'styles')));
 
 app.get('/', (_req, res) => {
-  const scenarios = createPreviewScenarios(buildHeaderModel);
+  const scenarios = createPreviewScenarios(buildHeaderModel, buildFooterModel);
   res.render('preview.njk', { scenarios });
 });
 
 app.get('/scenario/:id', (req, res) => {
-  const scenarios = createPreviewScenarios(buildHeaderModel);
+  const scenarios = createPreviewScenarios(buildHeaderModel, buildFooterModel);
   const scenario = scenarios.find((candidate) => candidate.id === req.params.id);
 
   if (!scenario) {
@@ -47,5 +47,5 @@ app.get('/scenario/:id', (req, res) => {
 });
 
 app.listen(port, () => {
-  console.log(`xui-header preview available at http://localhost:${port}`);
+  console.log(`ui-component-lib preview available at http://localhost:${port}`);
 });

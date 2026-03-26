@@ -2,6 +2,7 @@ import {
   DEFAULT_ACCOUNT_ITEMS,
   DEFAULT_ACCOUNT_NAV_LABEL,
   DEFAULT_MENU_FLAGS,
+  DEFAULT_PHASE_BANNER,
   DEFAULT_SKIP_LINK
 } from './defaults.js';
 import {
@@ -18,7 +19,8 @@ import type {
   HeaderAccountItem,
   HeaderContext,
   HeaderModel,
-  HeaderNavItem
+  HeaderNavItem,
+  HeaderPhaseBannerModel
 } from './types.js';
 
 export function buildHeaderModel(context: HeaderContext): HeaderModel {
@@ -50,6 +52,7 @@ export function buildHeaderModel(context: HeaderContext): HeaderModel {
   const { leftItems, rightItems } = splitNavItems(searchAwareNavItems);
 
   const search = buildSearchModel(rightItems);
+  const phaseBanner = resolvePhaseBanner(context);
 
   return {
     theme: {
@@ -70,6 +73,7 @@ export function buildHeaderModel(context: HeaderContext): HeaderModel {
       leftItems,
       rightItems
     },
+    ...(phaseBanner ? { phaseBanner } : {}),
     ...(search ? { search } : {})
   };
 }
@@ -104,5 +108,16 @@ function buildSearchModel(rightItems: HeaderNavItem[]): HeaderModel['search'] {
     action: searchItem.href || '/cases/case-search',
     name: 'case-reference',
     ...(searchItem.href ? { href: searchItem.href } : {})
+  };
+}
+
+function resolvePhaseBanner(context: HeaderContext): HeaderPhaseBannerModel | undefined {
+  if (context.config?.phaseBanner === null) {
+    return undefined;
+  }
+
+  return {
+    ...DEFAULT_PHASE_BANNER,
+    ...(context.config?.phaseBanner ?? {})
   };
 }

@@ -1,7 +1,7 @@
 {% macro hmctsXuiHeader(model) %}
 {% set assetsPath = model.assetsPath or '/styles' %}
-<header class="xui-header" data-module="hmcts-xui-header">
-  <div class="xui-header__surface" style="background-color: {{ model.theme.backgroundColor }}">
+<header class="xui-header xui-header--{{ model.theme.key or 'default' }}" data-module="hmcts-xui-header">
+  <div class="xui-header__surface">
     <a href="{{ model.skipLink.href }}" class="govuk-skip-link">
       {{ model.skipLink.text }}
     </a>
@@ -125,5 +125,13 @@
       </nav>
     {% endif %}
   </div>
+
+  {% if model.phaseBanner and model.phaseBanner.visible %}
+    <div class="hmcts-header__container">
+      <div class="govuk-phase-banner">
+        <p class="govuk-phase-banner__content"><strong class="govuk-tag govuk-phase-banner__content__tag "> {{ model.phaseBanner.tag }} </strong><span class="govuk-phase-banner__text"> {{ model.phaseBanner.preLinkText }} <a class="govuk-link" href="{{ model.phaseBanner.linkHref }}"{% if model.phaseBanner.target %} target="{{ model.phaseBanner.target }}"{% endif %}{% if model.phaseBanner.rel %} rel="{{ model.phaseBanner.rel }}"{% endif %}>{{ model.phaseBanner.linkText }}<span class="visuallyhidden">{{ model.phaseBanner.newWindowText }}</span></a> {{ model.phaseBanner.postLinkText }} </span></p>
+      </div>
+    </div>
+  {% endif %}
 </header>
 {% endmacro %}

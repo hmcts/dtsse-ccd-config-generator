@@ -1,0 +1,56 @@
+{
+  "name": "@hmcts/ui-component-lib",
+  "version": "0.0.0",
+  "description": "Shared SSR-first HMCTS UI component library",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "files": [
+    "dist",
+    "src/nunjucks",
+    "src/styles",
+    "README.md",
+    "SPEC.md"
+  ],
+  "scripts": {
+    "build": "rm -rf dist && tsc -p tsconfig.json && tsc -p tsconfig.cjs.json && node ./scripts/prepare-cjs.mjs",
+    "compare:screenshots": "node ./dev/compare-screenshots.mjs",
+    "preview": "npm run build && node ./dev/server.mjs",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/cjs/index.js"
+    },
+    "./policy": {
+      "types": "./dist/policy/index.d.ts",
+      "import": "./dist/policy/index.js",
+      "require": "./dist/cjs/policy/index.js"
+    },
+    "./footer": {
+      "types": "./dist/footer/index.d.ts",
+      "import": "./dist/footer/index.js",
+      "require": "./dist/cjs/footer/index.js"
+    },
+    "./client": {
+      "types": "./dist/client/index.d.ts",
+      "import": "./dist/client/index.js",
+      "require": "./dist/cjs/client/index.js"
+    },
+    "./nunjucks/macro.njk": "./src/nunjucks/macro.njk",
+    "./nunjucks/footer.njk": "./src/nunjucks/footer.njk",
+    "./styles/ui-component-lib.css": "./src/styles/ui-component-lib.css",
+    "./styles/xui-header.css": "./src/styles/ui-component-lib.css"
+  },
+  "devDependencies": {
+    "express": "^5.1.0",
+    "nunjucks": "^3.2.4",
+    "pixelmatch": "^7.1.0",
+    "pngjs": "^7.0.0",
+    "typescript": "^5.8.2"
+  }
+}

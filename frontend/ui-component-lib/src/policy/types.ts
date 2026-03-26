@@ -59,6 +59,18 @@ export type HeaderSearchModel = {
   errorMessage?: string;
 };
 
+export type HeaderPhaseBannerModel = {
+  visible: boolean;
+  tag: string;
+  preLinkText: string;
+  linkText: string;
+  linkHref: string;
+  postLinkText: string;
+  newWindowText: string;
+  target?: string;
+  rel?: string;
+};
+
 export type HeaderModel = {
   theme: {
     key: HeaderThemeKey;
@@ -83,6 +95,7 @@ export type HeaderModel = {
     rightItems: HeaderNavItem[];
   };
   search?: HeaderSearchModel;
+  phaseBanner?: HeaderPhaseBannerModel;
 };
 
 export type HeaderContext = {
@@ -102,5 +115,6 @@ export type HeaderContext = {
     themes?: HeaderThemeConfig[];
     menuConfig?: HeaderMenuConfig;
     accountItems?: HeaderAccountItem[];
+    phaseBanner?: HeaderPhaseBannerModel | null;
   };
 };

@@ -1,13 +1,13 @@
-# XUI Header Package
+# UI Component Library
 
-`frontend/xui-header` is the start of a shared frontend package for rendering the
-XUI-style header across HMCTS services.
+`frontend/ui-component-lib` is a shared frontend package for rendering HMCTS UI
+components, starting with the XUI-style header and footer across services.
 
 The package is intended to:
 
 - preserve current XUI behaviour and visual output
 - support SSR-first rendering through Nunjucks
-- keep header policy framework-agnostic
+- keep component policy framework-agnostic
 - own its styling boundary even where GOV.UK/XUI visual patterns are reused
 - own any fonts, icons, and images needed to hit parity
 - enable side-by-side parity testing against the live XUI reference
@@ -37,13 +37,14 @@ Not implemented yet:
 ## Planned layout
 
 ```text
-frontend/xui-header/
+frontend/ui-component-lib/
   package.json
   tsconfig.json
   README.md
   SPEC.md
   src/
     client/
+    footer/
     nunjucks/
     policy/
     styles/
