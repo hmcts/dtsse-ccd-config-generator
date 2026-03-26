@@ -1,11 +1,6 @@
-/*
- * Early SSR stylesheet scaffold.
- * Final values and spacing still need parity tuning against the live XUI
- * reference in Chrome MCP.
- *
- * Final CSS should be rooted to the package boundary so reused GOV.UK/XUI
- * treatments do not leak into the host app and host styles do not leak back in.
- */
+:host {
+  display: block;
+}
 
 @font-face {
   font-family: "GDS Transport";
@@ -181,11 +176,18 @@
   padding: 0;
 }
 
-.xui-header .hmcts-header__navigation-link {
+.xui-header .hmcts-header__navigation-link,
+.xui-header .xui-header__action-link {
+  background: transparent;
+  border: 0;
   color: #fff;
+  cursor: pointer;
+  display: inline;
   font-size: 19px;
   font-weight: 400;
   line-height: 25px;
+  margin: 0;
+  padding: 0;
   text-decoration: underline;
 }
 
@@ -198,13 +200,7 @@
   display: block;
   font-size: 0;
   height: 50px;
-  text-align: justify;
-}
-
-.xui-header .hmcts-primary-navigation__container::after {
-  content: "";
-  display: inline-block;
-  width: 100%;
+  text-align: initial;
 }
 
 .xui-header .hmcts-primary-navigation__nav {
@@ -381,7 +377,10 @@
 }
 
 .xui-header__search-input {
+  appearance: none;
+  background-color: #fff;
   border: 2px solid #0b0c0c;
+  border-radius: 0;
   color: #0b0c0c;
   display: inline-block;
   font-family: "GDS Transport", arial, sans-serif;
@@ -394,9 +393,11 @@
   width: 219px;
 }
 
-.xui-header__search-button {
+.xui-header .xui-header__search-button {
+  appearance: none;
   background-color: #f3f2f1;
   border: 2px solid transparent;
+  border-radius: 0;
   box-shadow: 0 2px 0 #929191;
   color: #0b0c0c;
   cursor: pointer;
@@ -421,125 +422,10 @@
 
 .xui-header .hmcts-header__link:focus,
 .xui-header .hmcts-header__navigation-link:focus,
+.xui-header .xui-header__action-link:focus,
 .xui-header .hmcts-primary-navigation__link:focus,
 .xui-header__search-input:focus,
 .xui-header__search-button:focus {
   outline: 3px solid #ffbf47;
-  outline-offset: 0;
-}
-
-.ui-component-lib-footer,
-.ui-component-lib-footer * {
-  box-sizing: border-box;
-}
-
-.ui-component-lib-footer {
-  -moz-osx-font-smoothing: grayscale;
-  -webkit-font-smoothing: antialiased;
-  background-color: #f3f2f1;
-  border-top: 10px solid #1d70b8;
-  color: #0b0c0c;
-  display: block;
-  font-family: "GDS Transport", arial, sans-serif;
-  font-size: 16px;
-  line-height: 20px;
-  min-width: 1020px;
-  padding-bottom: 25px;
-  padding-top: 40px;
-}
-
-.ui-component-lib-footer .govuk-width-container {
-  margin: 0 auto;
-  max-width: 1920px;
-  min-width: 900px;
-  padding-left: 30px;
-  padding-right: 30px;
-}
-
-.ui-component-lib-footer .govuk-footer__meta {
-  align-items: flex-end;
-  display: flex;
-  flex-wrap: wrap;
-  margin-left: -15px;
-  margin-right: -15px;
-  justify-content: center;
-  max-width: 1860px;
-  min-width: 960px;
-  padding-left: 15px;
-  padding-right: 15px;
-}
-
-.ui-component-lib-footer .govuk-footer__meta-item {
-  margin: 0 15px 25px;
-  min-width: 0;
-}
-
-.ui-component-lib-footer .hmcts-footer__heading {
-  font-size: 24px;
-  font-weight: 700;
-  line-height: 30px;
-  margin: 0 0 15px;
-}
-
-.ui-component-lib-footer .hmcts-footer__list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-
-.ui-component-lib-footer .hmcts-footer__list--inline {
-  display: flex;
-  flex-wrap: wrap;
-}
-
-.ui-component-lib-footer .hmcts-footer__list-item {
-  margin: 0 15px 5px 0;
-}
-
-.ui-component-lib-footer .hmcts-footer__list--stacked .hmcts-footer__list-item {
-  margin-right: 0;
-}
-
-.ui-component-lib-footer .govuk-section-break--l {
-  border: 0;
-  border-top: 1px solid #bfc1c3;
-  margin: 30px 0;
-}
-
-.ui-component-lib-footer .govuk-footer__meta-item--grow {
-  flex: 1;
-  flex-basis: 320px;
-}
-
-.ui-component-lib-footer .govuk-footer__link,
-.ui-component-lib-footer .hmcts-footer__link,
-.ui-component-lib-footer .govuk-js-link {
-  background: none;
-  border: 0;
-  color: #0b0c0c;
-  cursor: pointer;
-  font: inherit;
-  padding: 0;
-  text-decoration: underline;
-}
-
-.ui-component-lib-footer .visuallyhidden {
-  border: 0;
-  clip: rect(0 0 0 0);
-  height: 1px;
-  margin: -1px;
-  overflow: hidden;
-  padding: 0;
-  position: absolute;
-  white-space: nowrap;
-  width: 1px;
-}
-
-.ui-component-lib-footer .govuk-footer__link:focus,
-.ui-component-lib-footer .hmcts-footer__link:focus,
-.ui-component-lib-footer .govuk-js-link:focus {
-  background-color: #fd0;
-  color: #0b0c0c;
-  outline: 3px solid #fd0;
   outline-offset: 0;
 }
