@@ -88,9 +88,17 @@
   padding-top: 10px;
 }
 
+.xui-header--judicial .hmcts-header {
+  height: 38px;
+}
+
 .xui-header .hmcts-header > .hmcts-header__container {
   height: 40px;
   position: relative;
+}
+
+.xui-header--judicial .hmcts-header > .hmcts-header__container {
+  height: 38px;
 }
 
 .xui-header .hmcts-header__logo {
