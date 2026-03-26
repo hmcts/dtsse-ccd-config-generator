@@ -16,3 +16,6 @@
 	path = test-projects/adoption-cos-api
 	url = git@github.com:hmcts/adoption-cos-api.git
 	branch = cftlib-integration
+[submodule "test-projects/pcs-frontend"]
+	path = test-projects/pcs-frontend
+	url = git@github.com:hmcts/pcs-frontend.git
