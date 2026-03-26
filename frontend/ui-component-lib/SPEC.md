@@ -521,7 +521,7 @@ roles and flags.
 Suggested primary macro:
 
 ```njk
-{% from "@hmcts/cft-ui-component-lib/macro.njk" import hmctsXuiHeader %}
+{% from "@hmcts-cft/ui-component-lib/macro.njk" import hmctsXuiHeader %}
 {{ hmctsXuiHeader(model) }}
 ```
 

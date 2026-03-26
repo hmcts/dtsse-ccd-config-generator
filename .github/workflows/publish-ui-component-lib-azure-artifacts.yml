@@ -1,4 +1,4 @@
-name: Publish CFT UI Component Library to Azure Artifacts
+name: Publish HMCTS CFT UI Component Library to Azure Artifacts
 
 on:
   workflow_dispatch:
@@ -16,7 +16,7 @@ on:
       - '**/*.md'
       - '*.md'
     tags:
-      - 'cft-ui-component-lib/v*'
+      - 'hmcts-cft-ui-component-lib/v*'
 
 permissions:
   contents: read
@@ -48,7 +48,7 @@ jobs:
             release_version='${{ inputs.release_version }}'
             npm_dist_tag='${{ inputs.npm_dist_tag }}'
           else
-            release_version="${GITHUB_REF_NAME#cft-ui-component-lib/v}"
+            release_version="${GITHUB_REF_NAME#hmcts-cft-ui-component-lib/v}"
             case "$release_version" in
               *-alpha.*) npm_dist_tag="alpha" ;;
               *-beta.*) npm_dist_tag="beta" ;;

@@ -1,6 +1,6 @@
 # UI Component Library Developer Manual
 
-`@hmcts/cft-ui-component-lib` is an SSR-first package for shared HMCTS shell
+`@hmcts-cft/ui-component-lib` is an SSR-first package for shared HMCTS shell
 components. The first shipped components are the XUI-style global header and
 footer, including the judicial red variant.
 
@@ -39,16 +39,16 @@ The package does not own:
 
 JavaScript and TypeScript exports:
 
-- `@hmcts/cft-ui-component-lib`
-- `@hmcts/cft-ui-component-lib/policy`
-- `@hmcts/cft-ui-component-lib/footer`
-- `@hmcts/cft-ui-component-lib/client`
+- `@hmcts-cft/ui-component-lib`
+- `@hmcts-cft/ui-component-lib/policy`
+- `@hmcts-cft/ui-component-lib/footer`
+- `@hmcts-cft/ui-component-lib/client`
 
 Template and style exports:
 
-- `@hmcts/cft-ui-component-lib/nunjucks/macro.njk`
-- `@hmcts/cft-ui-component-lib/nunjucks/footer.njk`
-- `@hmcts/cft-ui-component-lib/styles/ui-component-lib.css`
+- `@hmcts-cft/ui-component-lib/nunjucks/macro.njk`
+- `@hmcts-cft/ui-component-lib/nunjucks/footer.njk`
+- `@hmcts-cft/ui-component-lib/styles/ui-component-lib.css`
 
 ## Runtime requirements
 
@@ -64,7 +64,7 @@ dependency:
 ```json
 {
   "dependencies": {
-    "@hmcts/cft-ui-component-lib": "file:../../frontend/ui-component-lib"
+    "@hmcts-cft/ui-component-lib": "0.1.0-alpha.1"
   }
 }
 ```
@@ -92,7 +92,7 @@ Do not push entitlement logic into browser-only code.
 Build a header model with `buildHeaderModel(context)`.
 
 ```ts
-import { buildHeaderModel } from '@hmcts/cft-ui-component-lib';
+import { buildHeaderModel } from '@hmcts-cft/ui-component-lib';
 
 const headerModel = buildHeaderModel({
   user: {
@@ -137,7 +137,7 @@ Key output sections:
 Build a footer model with `buildFooterModel(context?)`.
 
 ```ts
-import { buildFooterModel } from '@hmcts/cft-ui-component-lib';
+import { buildFooterModel } from '@hmcts-cft/ui-component-lib';
 
 const footerModel = buildFooterModel({
   termsAndConditionsFeatureEnabled: false,
@@ -167,7 +167,7 @@ import path from 'node:path';
 const app = express();
 
 const uiComponentLibTemplatesPath = path.dirname(
-  require.resolve('@hmcts/cft-ui-component-lib/nunjucks/footer.njk')
+  require.resolve('@hmcts-cft/ui-component-lib/nunjucks/footer.njk')
 );
 
 nunjucks.configure(
@@ -200,7 +200,7 @@ Express example:
 import path from 'node:path';
 
 const uiComponentLibStylesPath = path.dirname(
-  require.resolve('@hmcts/cft-ui-component-lib/styles/ui-component-lib.css')
+  require.resolve('@hmcts-cft/ui-component-lib/styles/ui-component-lib.css')
 );
 
 app.use('/assets/ui-component-lib', express.static(uiComponentLibStylesPath));
@@ -239,7 +239,7 @@ library CSS and assets from a host app.
 Route handler:
 
 ```ts
-import { buildFooterModel, buildHeaderModel } from '@hmcts/cft-ui-component-lib';
+import { buildFooterModel, buildHeaderModel } from '@hmcts-cft/ui-component-lib';
 
 app.get('/demo/ui-component-lib', (_req, res) => {
   const headerModel = buildHeaderModel({
@@ -389,7 +389,7 @@ and screenshot diffs.
 The package currently exports:
 
 ```ts
-import { initUiComponentLibEnhancements } from '@hmcts/cft-ui-component-lib/client';
+import { initUiComponentLibEnhancements } from '@hmcts-cft/ui-component-lib/client';
 ```
 
 This is a placeholder for future progressive enhancement. It is not required for
