@@ -3,22 +3,12 @@ import {
   DEFAULT_MENU_CONFIG
 } from './defaults.js';
 import type {
-  HeaderEnvironment,
   HeaderMenuConfig,
   HeaderNavItem
 } from './types.js';
 
-const AAT_LIKE_ENVIRONMENTS = new Set<HeaderEnvironment>(['local', 'aat', 'preview']);
-
-export function resolveMenuConfig(
-  environment: HeaderEnvironment = 'prod',
-  menuConfig: HeaderMenuConfig = DEFAULT_MENU_CONFIG
-): HeaderMenuConfig {
-  if (!AAT_LIKE_ENVIRONMENTS.has(environment)) {
-    return cloneMenuConfig(menuConfig);
-  }
-
-  return mergeMenuConfigs(menuConfig, AAT_MENU_DIFFERENCES);
+export function resolveMenuConfig(): HeaderMenuConfig {
+  return mergeMenuConfigs(DEFAULT_MENU_CONFIG, AAT_MENU_DIFFERENCES);
 }
 
 function cloneMenuConfig(menuConfig: HeaderMenuConfig): HeaderMenuConfig {

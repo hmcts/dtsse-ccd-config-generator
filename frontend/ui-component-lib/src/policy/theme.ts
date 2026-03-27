@@ -2,10 +2,9 @@ import { DEFAULT_THEME_CONFIGS } from './defaults.js';
 import type { HeaderContext, HeaderThemeConfig } from './types.js';
 
 export function resolveTheme(
-  context: Pick<HeaderContext, 'user' | 'config'>,
-  themeConfigs: HeaderThemeConfig[] = context.config?.themes ?? DEFAULT_THEME_CONFIGS
+  context: Pick<HeaderContext, 'user'>
 ): HeaderThemeConfig {
-  const matchedTheme = themeConfigs.find((themeConfig) => {
+  const matchedTheme = DEFAULT_THEME_CONFIGS.find((themeConfig) => {
     const rolePattern = new RegExp(themeConfig.rolePattern);
     return context.user.roles.some((role) => rolePattern.test(role));
   });

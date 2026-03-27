@@ -1,4 +1,4 @@
-{% from "macro.njk" import hmctsXuiHeader %}
+{% from "xui-header/macro.njk" import hmctsXuiHeader %}
 <!DOCTYPE html>
 <html lang="en">
   <head>
@@ -51,9 +51,9 @@
         <section class="preview-card" id="{{ scenario.id }}">
           <h2 class="preview-card__title">{{ scenario.title }}</h2>
           <div class="preview-card__body">
-            {{ hmctsXuiHeader(scenario.model) }}
+            {{ hmctsXuiHeader(scenario.headerModel) }}
           </div>
-          <pre class="preview-card__model">{{ scenario.model | dump }}</pre>
+          <pre class="preview-card__model">{{ scenario.headerModel | dump }}</pre>
         </section>
       {% endfor %}
     </main>

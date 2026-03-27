@@ -1,4 +1,4 @@
-import type { FooterContext, FooterModel, FooterNavigation } from './types.js';
+import type { FooterModel, FooterNavigation } from './types.js';
 
 export const DEFAULT_FOOTER_NAVIGATION: FooterNavigation = {
   items: [
@@ -18,12 +18,3 @@ export const DEFAULT_COPYRIGHT: FooterModel['copyright'] = {
 };
 
 export const DEFAULT_LANGUAGE_TOGGLE_ACTION = '#toggle-language';
-
-export const DEFAULT_FOOTER_CONTEXT: FooterContext = {
-  help: null,
-  navigation: DEFAULT_FOOTER_NAVIGATION,
-  welshLanguageToggleEnabled: false,
-  currentLanguage: 'en',
-  languageToggleAction: DEFAULT_LANGUAGE_TOGGLE_ACTION,
-  termsAndConditionsFeatureEnabled: true
-};

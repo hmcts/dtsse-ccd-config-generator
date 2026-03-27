@@ -1,33 +1,31 @@
-{% macro hmctsXuiHeader(model) %}
-{% set assetsPath = model.assetsPath or '/styles' %}
 <hmcts-xui-header data-module="hmcts-xui-header">
   <template shadowrootmode="open">
-    <link rel="stylesheet" href="{{ assetsPath }}/xui-header-shadow.css">
-    <header class="xui-header xui-header--{{ model.theme.key or 'default' }}">
+    <link rel="stylesheet" href="{{ params.assetsPath }}/xui-header-shadow.css">
+    <header class="xui-header xui-header--{{ params.theme.key or 'default' }}">
       <div class="xui-header__surface">
-        <a href="{{ model.skipLink.href }}" class="govuk-skip-link">
-          {{ model.skipLink.text }}
+        <a href="{{ params.skipLink.href }}" class="govuk-skip-link">
+          {{ params.skipLink.text }}
         </a>
 
         <div class="hmcts-header">
           <div class="hmcts-header__container">
-            {% if model.theme.logo == "judicial" %}
-              {% if model.primaryNav.visible %}
+            {% if params.theme.logo == "judicial" %}
+              {% if params.primaryNav.visible %}
                 <div class="judicial-header__logo">
                   <a href="#" aria-hidden="true" tabindex="-1">
                     <img
                       class="img-responsive"
                       alt="GOV.UK logo"
-                      src="{{ assetsPath }}/images/govuk-crest-jcm.png"
+                      src="{{ params.assetsPath }}/images/govuk-crest-jcm.png"
                       width="83">
                   </a>
                 </div>
               {% endif %}
               <div class="govuk-header__logo"></div>
-              <a class="hmcts-header__link" href="{{ model.title.href }}">
-                {{ model.title.text }}
+              <a class="hmcts-header__link" href="{{ params.title.href }}">
+                {{ params.title.text }}
               </a>
-            {% elif model.theme.logo == "myhmcts" %}
+            {% elif params.theme.logo == "myhmcts" %}
               <div class="govuk-header__logo">
                 <a href="#" class="govuk-header__link govuk-header__link--homepage">
                   <span class="govuk-header__logotype">
@@ -35,21 +33,21 @@
                   </span>
                 </a>
               </div>
-              <a class="hmcts-header__link" href="{{ model.title.href }}">
-                {{ model.title.text }}
+              <a class="hmcts-header__link" href="{{ params.title.href }}">
+                {{ params.title.text }}
               </a>
             {% else %}
               <div class="hmcts-header__logo">
-                <a class="hmcts-header__link" href="{{ model.title.href }}">
-                  {{ model.title.text }}
+                <a class="hmcts-header__link" href="{{ params.title.href }}">
+                  {{ params.title.text }}
                 </a>
               </div>
             {% endif %}
 
             <div class="hmcts-header__content">
-              <nav class="hmcts-header__navigation" aria-label="{{ model.accountNav.label }}">
+              <nav class="hmcts-header__navigation" aria-label="{{ params.accountNav.label }}">
                 <ul class="hmcts-header__navigation-list">
-                  {% for item in model.accountNav.items %}
+                  {% for item in params.accountNav.items %}
                     <li class="hmcts-header__navigation-item">
                       {% if item.action %}
                         <button
@@ -74,17 +72,17 @@
           </div>
         </div>
 
-        {% if model.primaryNav.visible %}
+        {% if params.primaryNav.visible %}
           <nav class="hmcts-primary-navigation transparent-background">
             <div class="hmcts-primary-navigation__container">
-              {% if model.theme.logo != "none" %}
+              {% if params.theme.logo != "none" %}
                 <div class="govuk-header__logo"></div>
               {% endif %}
 
               <div class="hmcts-primary-navigation__nav">
                 <nav class="hmcts-primary-navigation transparent-background" aria-label="Primary navigation">
                   <ul class="hmcts-primary-navigation__list">
-                    {% for item in model.primaryNav.leftItems %}
+                    {% for item in params.primaryNav.leftItems %}
                       <li class="hmcts-primary-navigation__item">
                         <a
                           class="hmcts-primary-navigation__link{% if item.classes %} {{ item.classes | join(' ') }}{% endif %}"
@@ -101,24 +99,24 @@
               <div class="hmcts-primary-navigation__search">
                 <div class="hmcts-primary-navigation__item">
                   <ul class="hmcts-primary-navigation__list">
-                    {% for item in model.primaryNav.rightItems %}
+                    {% for item in params.primaryNav.rightItems %}
                       <li class="hmcts-primary-navigation__item">
-                        {% if item.kind == "case-reference-search" and model.search %}
+                        {% if item.kind == "case-reference-search" and params.search %}
                           <form
                             class="xui-header__search-form"
-                            action="{{ model.search.action or model.search.href or '#' }}"
+                            action="{{ params.search.action or params.search.href or '#' }}"
                             method="get"
                             novalidate>
-                            <label class="xui-header__search-label" for="xui-header-case-reference">{{ model.search.label }}</label><input
+                            <label class="xui-header__search-label" for="xui-header-case-reference">{{ params.search.label }}</label><input
                               id="xui-header-case-reference"
                               class="govuk-input xui-header__search-input"
                               type="text"
-                              name="{{ model.search.name or 'case-reference' }}"
-                              value="{{ model.search.value or '' }}"
-                              {% if model.search.invalid %}aria-invalid="true"{% endif %}><button
+                              name="{{ params.search.name or 'case-reference' }}"
+                              value="{{ params.search.value or '' }}"
+                              {% if params.search.invalid %}aria-invalid="true"{% endif %}><button
                               type="submit"
                               class="govuk-button xui-header__search-button"
-                              data-module="govuk-button">{{ model.search.buttonText or "Find" }}</button>
+                              data-module="govuk-button">{{ params.search.buttonText or "Find" }}</button>
                           </form>
                         {% else %}
                           <a
@@ -138,14 +136,13 @@
         {% endif %}
       </div>
 
-      {% if model.phaseBanner and model.phaseBanner.visible %}
+      {% if params.phaseBanner and params.phaseBanner.visible %}
         <div class="hmcts-header__container">
           <div class="govuk-phase-banner">
-            <p class="govuk-phase-banner__content"><strong class="govuk-tag govuk-phase-banner__content__tag "> {{ model.phaseBanner.tag }} </strong><span class="govuk-phase-banner__text"> {{ model.phaseBanner.preLinkText }} <a class="govuk-link" href="{{ model.phaseBanner.linkHref }}"{% if model.phaseBanner.target %} target="{{ model.phaseBanner.target }}"{% endif %}{% if model.phaseBanner.rel %} rel="{{ model.phaseBanner.rel }}"{% endif %}>{{ model.phaseBanner.linkText }}<span class="visuallyhidden">{{ model.phaseBanner.newWindowText }}</span></a> {{ model.phaseBanner.postLinkText }} </span></p>
+            <p class="govuk-phase-banner__content"><strong class="govuk-tag govuk-phase-banner__content__tag "> {{ params.phaseBanner.tag }} </strong><span class="govuk-phase-banner__text"> {{ params.phaseBanner.preLinkText }} <a class="govuk-link" href="{{ params.phaseBanner.linkHref }}"{% if params.phaseBanner.target %} target="{{ params.phaseBanner.target }}"{% endif %}{% if params.phaseBanner.rel %} rel="{{ params.phaseBanner.rel }}"{% endif %}>{{ params.phaseBanner.linkText }}<span class="visuallyhidden">{{ params.phaseBanner.newWindowText }}</span></a> {{ params.phaseBanner.postLinkText }} </span></p>
           </div>
         </div>
       {% endif %}
     </header>
   </template>
 </hmcts-xui-header>
-{% endmacro %}

@@ -1,0 +1,36 @@
+<footer class="ui-component-lib-footer govuk-footer" role="contentinfo">
+  <div class="govuk-width-container ">
+    <div class="govuk-footer__meta">
+      <div class="govuk-footer__meta-item govuk-footer__meta-item--grow">
+        <hr class="govuk-section-break govuk-section-break--l">
+        <ul class="hmcts-footer__list hmcts-footer__list--inline">
+          {% for item in params.navigation.items %}
+            <li class="hmcts-footer__list-item">
+              <a class="govuk-footer__link" href="{{ item.href }}"{% if item.target %} target="{{ item.target }}"{% endif %}>
+                {% if item.target == "_blank" %}<span class="visuallyhidden">{{ params.openInNewWindowText }}</span>{% endif %}{{ item.text }}
+              </a>
+            </li>
+          {% endfor %}
+          {% if params.languageToggle and params.languageToggle.enabled %}
+            <li class="hmcts-footer__list-item">
+              <button
+                type="button"
+                class="govuk-footer__link govuk-js-link"
+                data-footer-action="toggle-language"
+                data-language-action="{{ params.languageToggle.action }}">
+                {{ params.languageToggle.text }}
+              </button>
+            </li>
+          {% endif %}
+        </ul>
+      </div>
+      <div class="govuk-footer__meta-item">
+        <a class="govuk-footer__link" href="{{ params.copyright.href }}">
+          {% include "./crown-copyright.svg" %}
+          <br />
+          <span>{{ params.copyright.text }}</span>
+        </a>
+      </div>
+    </div>
+  </div>
+</footer>

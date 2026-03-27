@@ -1,16 +1,11 @@
 import {
   DEFAULT_CASE_MANAGER_ROLES,
-  DEFAULT_MENU_FLAGS,
-  NAV_HIDDEN_ROUTE_FRAGMENTS
+  DEFAULT_MENU_FLAGS
 } from './defaults.js';
 import type {
   HeaderFlagDefinition,
   HeaderNavItem
 } from './types.js';
-
-export function shouldShowPrimaryNav(path: string): boolean {
-  return NAV_HIDDEN_ROUTE_FRAGMENTS.every((fragment) => !path.includes(fragment));
-}
 
 export function isCaseManagerRole(roles: string[]): boolean {
   return DEFAULT_CASE_MANAGER_ROLES.some((role) => roles.includes(role));
@@ -41,18 +36,6 @@ export function filterNavItems(
   });
 }
 
-export function setActiveNavItems(
-  items: HeaderNavItem[],
-  currentPath: string
-): HeaderNavItem[] {
-  const [fullUrl, matchingUrl] = checkTabs(items, currentPath);
-
-  return items.map((item) => ({
-    ...item,
-    active: fullUrl ? item.href === currentPath : item.href === matchingUrl
-  }));
-}
-
 export function decorateRightNavItemsForSearch(
   items: HeaderNavItem[],
   roles: string[],
@@ -76,40 +59,6 @@ export function withDerivedNavItemIds(items: HeaderNavItem[]): HeaderNavItem[] {
     ...item,
     id: item.id ?? buildNavItemId(item)
   }));
-}
-
-function checkTabs(items: HeaderNavItem[], currentPath: string): [boolean, string] {
-  let fullUrl = false;
-  let maxLength = 0;
-  let matchingUrl = '';
-
-  for (const item of items) {
-    const checkHrefs = item.href === '/tasks'
-      ? ['/tasks/list', '/tasks/available']
-      : [item.href ?? ''];
-
-    fullUrl = isFullUrl(item.href ?? '', currentPath);
-    if (fullUrl) {
-      break;
-    }
-
-    if (item.href === '/cases') {
-      continue;
-    }
-
-    if (checkHrefs.some((url) => currentPath.indexOf(url) === 0)) {
-      if ((item.href?.length ?? 0) > maxLength) {
-        maxLength = item.href?.length ?? 0;
-        matchingUrl = item.href ?? '';
-      }
-    }
-  }
-
-  return [fullUrl, matchingUrl];
-}
-
-function isFullUrl(href: string, currentPath: string): boolean {
-  return href === currentPath || currentPath === '/cases/case-search';
 }
 
 function matchesIncludedRoles(item: HeaderNavItem, roles: string[]): boolean {

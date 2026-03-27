@@ -1,61 +1,43 @@
 import {
   DEFAULT_ACCOUNT_ITEMS,
   DEFAULT_ACCOUNT_NAV_LABEL,
-  DEFAULT_MENU_FLAGS,
+  DEFAULT_ASSETS_PATH,
   DEFAULT_PHASE_BANNER,
   DEFAULT_SKIP_LINK
 } from './defaults.js';
 import {
   decorateRightNavItemsForSearch,
   filterNavItems,
-  setActiveNavItems,
-  shouldShowPrimaryNav,
   splitNavItems,
   withDerivedNavItemIds
 } from './navigation.js';
 import { resolveMenuConfig, selectMenuItems } from './menu-config.js';
 import { resolveTheme } from './theme.js';
 import type {
-  HeaderAccountItem,
   HeaderContext,
   HeaderModel,
-  HeaderNavItem,
-  HeaderPhaseBannerModel
+  HeaderNavItem
 } from './types.js';
 
 export function buildHeaderModel(context: HeaderContext): HeaderModel {
   const xuiBaseUrl = normaliseXuiBaseUrl(context.xuiBaseUrl);
   const theme = resolveTheme(context);
-  const mergedFeatures = {
-    ...DEFAULT_MENU_FLAGS,
-    ...context.features
-  };
-
-  const menuConfig = resolveMenuConfig(
-    context.environment ?? 'prod',
-    context.config?.menuConfig
-  );
+  const menuConfig = resolveMenuConfig();
 
   let navItems = selectMenuItems(context.user.roles, menuConfig);
-  navItems = filterNavItems(navItems, context.user.roles, mergedFeatures);
-  navItems = setActiveNavItems(navItems, context.route.path);
+  navItems = filterNavItems(navItems, context.user.roles);
   navItems = withDerivedNavItemIds(navItems);
-
-  if (shouldHideBookingNav(context)) {
-    navItems = [];
-  }
 
   const searchAwareNavItems = decorateRightNavItemsForSearch(
     navItems,
-    context.user.roles,
-    mergedFeatures
+    context.user.roles
   );
   const { leftItems, rightItems } = splitNavItems(searchAwareNavItems);
 
   const search = buildSearchModel(rightItems, xuiBaseUrl);
-  const phaseBanner = resolvePhaseBanner(context);
 
   return {
+    assetsPath: DEFAULT_ASSETS_PATH,
     theme: {
       key: theme.key,
       backgroundColor: theme.backgroundColor,
@@ -67,33 +49,18 @@ export function buildHeaderModel(context: HeaderContext): HeaderModel {
     },
     accountNav: {
       label: DEFAULT_ACCOUNT_NAV_LABEL,
-      items: resolveAccountItems(context)
+      items: context.user.roles.length > 0
+        ? [...DEFAULT_ACCOUNT_ITEMS].map((item) => ({ ...item }))
+        : []
     },
     primaryNav: {
-      visible: shouldShowPrimaryNav(context.route.path),
+      visible: true,
       leftItems: resolveNavItems(leftItems, xuiBaseUrl),
       rightItems: resolveNavItems(rightItems, xuiBaseUrl)
     },
-    ...(phaseBanner ? { phaseBanner } : {}),
+    phaseBanner: { ...DEFAULT_PHASE_BANNER },
     ...(search ? { search } : {})
   };
-}
-
-function resolveAccountItems(context: HeaderContext): HeaderAccountItem[] {
-  if (!context.user.isAuthenticated || context.user.roles.length === 0) {
-    return [];
-  }
-
-  const accountItems = context.config?.accountItems ?? [...DEFAULT_ACCOUNT_ITEMS];
-  return accountItems.map((item) => ({ ...item }));
-}
-
-function shouldHideBookingNav(context: HeaderContext): boolean {
-  return (
-    context.route.path.includes('booking') &&
-    context.user.roleCategory === 'JUDICIAL' &&
-    context.user.bookable === true
-  );
 }
 
 function buildSearchModel(
@@ -112,17 +79,6 @@ function buildSearchModel(
     action: resolveXuiUrl(xuiBaseUrl, searchItem.href || '/cases/case-search'),
     name: 'case-reference',
     ...(searchItem.href ? { href: resolveXuiUrl(xuiBaseUrl, searchItem.href) } : {})
-  };
-}
-
-function resolvePhaseBanner(context: HeaderContext): HeaderPhaseBannerModel | undefined {
-  if (context.config?.phaseBanner === null) {
-    return undefined;
-  }
-
-  return {
-    ...DEFAULT_PHASE_BANNER,
-    ...(context.config?.phaseBanner ?? {})
   };
 }
 

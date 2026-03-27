@@ -4,6 +4,8 @@ import type {
   HeaderThemeConfig
 } from './types.js';
 
+export const DEFAULT_ASSETS_PATH = '/styles';
+
 export const DEFAULT_SKIP_LINK = {
   text: 'Skip to main content',
   href: '#content'
@@ -70,11 +72,6 @@ export const DEFAULT_CASE_MANAGER_ROLES = [
   'caseworker-ia-respondentofficer',
   'caseworker-ia-homeofficelart',
   'caseworker-ia-homeofficepou'
-] as const;
-
-export const NAV_HIDDEN_ROUTE_FRAGMENTS = [
-  'accept-terms-and-conditions',
-  'terms-and-conditions'
 ] as const;
 
 export const DEFAULT_MENU_FLAGS: Record<string, boolean | string> = {

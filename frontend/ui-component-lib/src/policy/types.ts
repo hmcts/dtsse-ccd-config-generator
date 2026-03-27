@@ -3,8 +3,6 @@ export type HeaderLogo = 'judicial' | 'myhmcts' | 'none';
 export type HeaderNavAlign = 'left' | 'right';
 export type HeaderNavKind = 'link' | 'case-reference-search';
 export type HeaderSearchMode = 'link' | 'case-reference';
-export type HeaderEnvironment = 'local' | 'aat' | 'preview' | 'prod';
-
 export type HeaderFlagDefinition =
   | string
   | {
@@ -72,6 +70,7 @@ export type HeaderPhaseBannerModel = {
 };
 
 export type HeaderModel = {
+  assetsPath: string;
   theme: {
     key: HeaderThemeKey;
     backgroundColor: string;
@@ -101,21 +100,7 @@ export type HeaderModel = {
 export type HeaderContext = {
   xuiBaseUrl: string;
   user: {
-    isAuthenticated: boolean;
     roles: string[];
-    roleCategory?: string;
     displayName?: string;
-    bookable?: boolean;
-  };
-  route: {
-    path: string;
-  };
-  features: Record<string, boolean | string>;
-  environment?: HeaderEnvironment;
-  config?: {
-    themes?: HeaderThemeConfig[];
-    menuConfig?: HeaderMenuConfig;
-    accountItems?: HeaderAccountItem[];
-    phaseBanner?: HeaderPhaseBannerModel | null;
   };
 };
