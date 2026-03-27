@@ -1,6 +1,6 @@
 {
   "name": "@hmcts-cft/ui-component-lib",
-  "version": "0.1.0-alpha.2",
+  "version": "0.1.0-alpha.3",
   "description": "Shared SSR-first HMCTS CFT UI component library",
   "private": false,
   "type": "module",
