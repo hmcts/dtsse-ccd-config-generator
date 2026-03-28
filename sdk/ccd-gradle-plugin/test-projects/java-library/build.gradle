@@ -21,6 +21,11 @@ plugins {
 
 ccd {
     configDir = file('build/ccd-definition')
+    tsBindings {
+        enabled = true
+        outputDir.set(file('build/ts-bindings'))
+        moduleName = 'test-library'
+    }
 }
 
 repositories {

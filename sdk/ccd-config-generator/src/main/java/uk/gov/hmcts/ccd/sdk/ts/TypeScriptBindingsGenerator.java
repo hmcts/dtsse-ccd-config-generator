@@ -1,0 +1,191 @@
+package uk.gov.hmcts.ccd.sdk.ts;
+
+import static java.util.stream.Collectors.joining;
+
+import cz.habarta.typescript.generator.Input;
+import cz.habarta.typescript.generator.JsonLibrary;
+import cz.habarta.typescript.generator.Settings;
+import cz.habarta.typescript.generator.TypeScriptGenerator;
+import cz.habarta.typescript.generator.TypeScriptOutputKind;
+import java.io.File;
+import java.io.IOException;
+import java.lang.reflect.Type;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Comparator;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+import org.springframework.stereotype.Component;
+import uk.gov.hmcts.ccd.sdk.ResolvedCCDConfig;
+import uk.gov.hmcts.ccd.sdk.api.Event;
+import uk.gov.hmcts.ccd.sdk.api.Field;
+
+@Component
+public class TypeScriptBindingsGenerator {
+
+  private static final String DTO_TYPES_FILE = "dto-types.ts";
+  private static final String CONTRACTS_FILE = "event-contracts.ts";
+
+  public void writeBindings(File outputFolder, ResolvedCCDConfig<?, ?, ?> config, String moduleName) {
+    List<DtoEventContract> contracts = extractContracts(config);
+    if (contracts.isEmpty()) {
+      return;
+    }
+
+    Map<String, Class<?>> dtoTypeNames = indexDtoTypeNames(contracts);
+    writeDtoTypes(outputFolder, dtoTypeNames.values());
+    writeContracts(outputFolder, config.getCaseType(), contracts, dtoTypeNames, moduleName);
+    deleteIndexFile(outputFolder);
+    deleteLegacyClientFile(outputFolder);
+  }
+
+  private List<DtoEventContract> extractContracts(ResolvedCCDConfig<?, ?, ?> config) {
+    List<DtoEventContract> result = new ArrayList<>();
+    for (Event<?, ?, ?> event : config.getEvents().values()) {
+      if (!event.isDtoEvent()) {
+        continue;
+      }
+      result.add(new DtoEventContract(
+          event.getId(),
+          event.getDtoClass(),
+          event.getFieldPrefix(),
+          extractPages(event)));
+    }
+    return result.stream()
+        .sorted(Comparator.comparing(DtoEventContract::eventId))
+        .toList();
+  }
+
+  private List<String> extractPages(Event<?, ?, ?> event) {
+    Set<String> pages = new LinkedHashSet<>();
+    addPages(pages, event.getFields().getFields());
+    addPages(pages, event.getFields().getExplicitFields());
+    pages.addAll(event.getFields().getPagesToMidEvent().keySet());
+    return pages.stream()
+        .filter(Objects::nonNull)
+        .sorted()
+        .toList();
+  }
+
+  private void addPages(Set<String> pages, Collection<Field.FieldBuilder> fieldBuilders) {
+    fieldBuilders.stream()
+        .map(Field.FieldBuilder::build)
+        .map(Field::getPage)
+        .filter(Objects::nonNull)
+        .map(Object::toString)
+        .forEach(pages::add);
+  }
+
+  private Map<String, Class<?>> indexDtoTypeNames(List<DtoEventContract> contracts) {
+    Map<String, Class<?>> dtoTypeNames = new LinkedHashMap<>();
+    for (DtoEventContract contract : contracts) {
+      Class<?> dtoClass = contract.dtoClass();
+      Class<?> existing = dtoTypeNames.putIfAbsent(dtoClass.getSimpleName(), dtoClass);
+      if (existing != null && !existing.equals(dtoClass)) {
+        throw new IllegalStateException(
+            "TS bindings cannot emit duplicate DTO type names '%s' from %s and %s. "
+                + "Rename one of the DTO classes."
+                .formatted(dtoClass.getSimpleName(), existing.getName(), dtoClass.getName()));
+      }
+    }
+    return dtoTypeNames;
+  }
+
+  private void writeDtoTypes(File outputFolder, Iterable<Class<?>> dtoClasses) {
+    Settings settings = new Settings();
+    settings.outputKind = TypeScriptOutputKind.module;
+    settings.jsonLibrary = JsonLibrary.jackson2;
+    settings.noFileComment = true;
+
+    TypeScriptGenerator generator = new TypeScriptGenerator(settings);
+    Set<Type> types = new LinkedHashSet<>();
+    dtoClasses.forEach(types::add);
+    String generated = generator.generateTypeScript(Input.from(types.toArray(new Type[0])));
+
+    writeFile(outputFolder, DTO_TYPES_FILE, generated);
+  }
+
+  private void writeContracts(File outputFolder,
+                              String caseTypeId,
+                              List<DtoEventContract> contracts,
+                              Map<String, Class<?>> dtoTypeNames,
+                              String moduleName) {
+    String imports = dtoTypeNames.keySet().stream()
+        .sorted()
+        .collect(joining(", "));
+
+    String eventDtoMappings = contracts.stream()
+        .map(contract -> "  \"" + contract.eventId() + "\": "
+            + Objects.requireNonNull(contract.dtoClass()).getSimpleName() + ";")
+        .collect(joining("\n"));
+
+    String contractEntries = contracts.stream()
+        .map(contract -> "  \"" + contract.eventId() + "\": {\n"
+            + "    fieldPrefix: \"" + contract.fieldPrefix() + "\",\n"
+            + "    pages: [" + quotedList(contract.pages()) + "],\n"
+            + "  },")
+        .collect(joining("\n"));
+
+    String contents = """
+        // Generated by CCD SDK. Do not edit manually.
+        // Module: %s
+        import { defineCaseBindings, type CcdCaseBindings } from "@hmcts/ccd-event-runtime";
+        import type { %s } from "./dto-types";
+
+        export interface EventDtoMap {
+        %s
+        }
+
+        export const caseBindings = defineCaseBindings<EventDtoMap>()({
+          caseTypeId: "%s",
+          events: {
+        %s
+          },
+        } as const satisfies CcdCaseBindings<EventDtoMap>);
+        """.formatted(moduleName, imports, eventDtoMappings, caseTypeId, contractEntries);
+
+    writeFile(outputFolder, CONTRACTS_FILE, contents);
+  }
+
+  private String quotedList(List<String> values) {
+    return values.stream().map(value -> "\"" + value + "\"").collect(joining(", "));
+  }
+
+  private void writeFile(File outputFolder, String filename, String contents) {
+    try {
+      Files.createDirectories(outputFolder.toPath());
+      Files.writeString(outputFolder.toPath().resolve(filename), contents, StandardCharsets.UTF_8);
+    } catch (IOException e) {
+      throw new IllegalStateException("Unable to write TS bindings file %s".formatted(filename), e);
+    }
+  }
+
+  private void deleteLegacyClientFile(File outputFolder) {
+    try {
+      Files.deleteIfExists(outputFolder.toPath().resolve("client.ts"));
+    } catch (IOException e) {
+      throw new IllegalStateException("Unable to delete obsolete TS bindings file client.ts", e);
+    }
+  }
+
+  private void deleteIndexFile(File outputFolder) {
+    try {
+      Files.deleteIfExists(outputFolder.toPath().resolve("index.ts"));
+    } catch (IOException e) {
+      throw new IllegalStateException("Unable to delete obsolete TS bindings file index.ts", e);
+    }
+  }
+
+  private record DtoEventContract(
+      String eventId,
+      Class<?> dtoClass,
+      String fieldPrefix,
+      List<String> pages) {
+  }
+}

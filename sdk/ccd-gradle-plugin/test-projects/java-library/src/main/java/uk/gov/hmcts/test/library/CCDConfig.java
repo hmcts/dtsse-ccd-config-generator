@@ -4,13 +4,14 @@ import com.google.common.collect.SetMultimap;
 import uk.gov.hmcts.ccd.sdk.api.*;
 import org.springframework.stereotype.Component;
 import uk.gov.hmcts.ccd.sdk.api.callback.AboutToStartOrSubmitResponse;
+import uk.gov.hmcts.ccd.sdk.api.callback.SubmitResponse;
 
 import static uk.gov.hmcts.ccd.sdk.api.Permission.CRU;
 
 @Component
 public class CCDConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<CaseData, State, Role> {
   @Override
-  public void configure(ConfigBuilder<CaseData, State, Role> builder) {
+  public void configureDecentralised(DecentralisedConfigBuilder<CaseData, State, Role> builder) {
     builder.caseType("test", "test", "test");
     builder
       .event("submit-case")
@@ -22,6 +23,17 @@ public class CCDConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<CaseData, S
       .submittedCallback(this::submitted)
       .fields()
       .mandatory(CaseData::getDocuments)
+      .done();
+
+    builder
+      .decentralisedEvent("create-widget", CreateWidgetData.class, "widget", this::submitDto, this::startDto)
+      .initialState(State.Bar)
+      .grant(CRU, Role.Foo)
+      .name("Create widget")
+      .showSummary()
+      .fields()
+      .optional(CreateWidgetData::getName)
+      .optional(CreateWidgetData::getReference)
       .done();
 
     new HasAccessControl() {
@@ -38,5 +50,13 @@ public class CCDConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<CaseData, S
 
   private AboutToStartOrSubmitResponse<CaseData, State> aboutToSubmit(CaseDetails<CaseData, State> caseDataStateCaseDetails, CaseDetails<CaseData, State> caseDataStateCaseDetails1) {
     return null;
+  }
+
+  private CreateWidgetData startDto(EventPayload<CreateWidgetData, State> eventPayload) {
+    return eventPayload.caseData();
+  }
+
+  private SubmitResponse<State> submitDto(EventPayload<CreateWidgetData, State> eventPayload) {
+    return SubmitResponse.defaultResponse();
   }
 }

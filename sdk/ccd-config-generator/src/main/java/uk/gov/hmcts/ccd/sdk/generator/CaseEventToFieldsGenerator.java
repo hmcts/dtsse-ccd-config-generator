@@ -57,9 +57,9 @@ class CaseEventToFieldsGenerator<T, S, R extends HasRole> implements ConfigGener
       row.put("PageID", pageId);
       row.put("PageDisplayOrder", field.getPageDisplayOrder());
       row.put("PageColumnNumber", 1);
-      applyMetadata(row, field, "CaseEventFieldLabel", "CaseEventFieldHint");
+      applyMetadata(row, field, "CaseEventFieldLabel", "CaseEventFieldHint", event);
       applyMidEventCallback(row, event, config, collection, pageId, writtenCallbacks);
-      applyPageShowCondition(row, collection, field);
+      applyPageShowCondition(row, collection, field, event);
       applySummaryFlag(row, field);
       applyPageLabel(row, collection, field);
       applyDisplayContextParameter(row, field);
@@ -103,6 +103,14 @@ class CaseEventToFieldsGenerator<T, S, R extends HasRole> implements ConfigGener
                             Field field,
                             String labelColumn,
                             String hintColumn) {
+    applyMetadata(target, field, labelColumn, hintColumn, null);
+  }
+
+  static void applyMetadata(Map<String, Object> target,
+                            Field field,
+                            String labelColumn,
+                            String hintColumn,
+                            Event<?, ?, ?> event) {
     if (field.getShowCondition() != null) {
       target.put("FieldShowCondition", field.getShowCondition());
     }
@@ -144,10 +152,10 @@ class CaseEventToFieldsGenerator<T, S, R extends HasRole> implements ConfigGener
 
   private void applyPageShowCondition(Map<String, Object> row,
                                       FieldCollection collection,
-                                      Field field) {
+                                      Field field,
+                                      Event<?, ?, ?> event) {
     if (collection.getPageShowConditions().containsKey(field.getPage())) {
-      row.put("PageShowCondition",
-          collection.getPageShowConditions().remove(field.getPage()));
+      row.put("PageShowCondition", collection.getPageShowConditions().remove(field.getPage()));
     }
   }
 
@@ -170,5 +178,4 @@ class CaseEventToFieldsGenerator<T, S, R extends HasRole> implements ConfigGener
       row.put("DisplayContextParameter", field.getDisplayContextParameter());
     }
   }
-
 }

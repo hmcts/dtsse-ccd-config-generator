@@ -31,6 +31,7 @@ dependencies {
 
     implementation group: 'org.apache.commons', name: 'commons-lang3', version: '3.20.0'
     api 'com.google.guava:guava:33.5.0-jre'
+    implementation group: 'cz.habarta.typescript-generator', name: 'typescript-generator-core', version: '3.2.1263'
 
     implementation 'com.fasterxml.jackson.core:jackson-databind'
 }

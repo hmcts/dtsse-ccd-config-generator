@@ -65,7 +65,13 @@ public class Event<T, R extends HasRole, S> {
   }
 
   private Class dataClass;
+  private Class<?> dtoClass;
+  private String fieldPrefix;
   private static int eventCount;
+
+  public boolean isDtoEvent() {
+    return dtoClass != null;
+  }
 
   public static class EventBuilder<T, R extends HasRole, S> {
 
@@ -83,6 +89,25 @@ public class Event<T, R extends HasRole, S> {
       result.historyOnlyRoles = new HashSet<>();
       result.fieldsBuilder = FieldCollection.FieldCollectionBuilder
           .builder(result, result, dataClass, propertyUtils);
+      result.retries = new HashMap<>();
+
+      return result;
+    }
+
+    public static <T, R extends HasRole, S> EventBuilder<T, R, S> builder(
+        String id, Class dataClass, PropertyUtils propertyUtils,
+        Set<S> preStates, Set<S> postStates, Class<?> dtoClass, String fieldPrefix) {
+      EventBuilder<T, R, S> result = new EventBuilder<T, R, S>();
+      result.id(id);
+      result.preState = preStates;
+      result.postState = postStates;
+      result.dataClass = dataClass;
+      result.dtoClass(dtoClass);
+      result.fieldPrefix(fieldPrefix);
+      result.grants = HashMultimap.create();
+      result.historyOnlyRoles = new HashSet<>();
+      result.fieldsBuilder = FieldCollection.FieldCollectionBuilder
+          .builder(result, result, dataClass, propertyUtils, fieldPrefix);
       result.retries = new HashMap<>();
 
       return result;
@@ -226,6 +251,14 @@ public class Event<T, R extends HasRole, S> {
       this.historyOnlyRoles = value;
     }
 
+    private void dtoClass(Class<?> value) {
+      this.dtoClass = value;
+    }
+
+    private void fieldPrefix(String value) {
+      this.fieldPrefix = value;
+    }
+
     private void setRetries(Webhook hook, int... retries) {
       if (retries.length > 0) {
         String val = String.join(",", Arrays.stream(retries).mapToObj(String::valueOf).collect(
@@ -233,5 +266,9 @@ public class Event<T, R extends HasRole, S> {
         this.retries.put(hook, val);
       }
     }
+  }
+
+  public String getEventFieldPrefix() {
+    return fieldPrefix;
   }
 }
