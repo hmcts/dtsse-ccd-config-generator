@@ -806,7 +806,7 @@
     "ID": "organisationPolicy",
     "Label": " ",
     "LiveFrom": "01/01/2017",
-    "RetainHiddenValue" : "Y",
+    "RetainHiddenValue": "Y",
     "SecurityClassification": "Public"
   },
   {
@@ -850,6 +850,14 @@
     "FieldTypeParameter": "RepresentativeRole",
     "ID": "partyTypes",
     "Label": " ",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public"
+  },
+  {
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "FieldType": "Text",
+    "ID": "payload",
+    "Label": "Event payload",
     "LiveFrom": "01/01/2017",
     "SecurityClassification": "Public"
   },

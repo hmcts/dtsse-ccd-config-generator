@@ -5,6 +5,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import uk.gov.hmcts.ccd.sdk.api.CCDConfig;
 import uk.gov.hmcts.ccd.sdk.api.ConfigBuilder;
+import uk.gov.hmcts.ccd.sdk.api.DecentralisedConfigBuilder;
 import uk.gov.hmcts.reform.fpl.enums.State;
 import uk.gov.hmcts.reform.fpl.enums.UserRole;
 import uk.gov.hmcts.reform.fpl.model.CaseData;
@@ -27,6 +28,16 @@ public class DerivedCaseType implements CCDConfig<DerivedCaseData, State, UserRo
       cfg.configure(upcast);
     }
 
+    builder.caseType("derived", "Derived name", "Derived description");
+  }
+
+  @Override
+  public void configureDecentralised(DecentralisedConfigBuilder<DerivedCaseData, State, UserRole> builder) {
+    @SuppressWarnings("unchecked")
+    var upcast = (DecentralisedConfigBuilder<CaseData, State, UserRole>)(Object) builder;
+    for (var cfg : cfgs) {
+      cfg.configureDecentralised(upcast);
+    }
     builder.caseType("derived", "Derived name", "Derived description");
   }
 }

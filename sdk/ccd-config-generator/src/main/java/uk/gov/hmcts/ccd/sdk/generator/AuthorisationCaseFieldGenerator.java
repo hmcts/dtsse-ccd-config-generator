@@ -92,7 +92,7 @@ class AuthorisationCaseFieldGenerator<T, S, R extends HasRole> implements Config
     }
     // Every role that can see any DTO event needs CRUD on the shared payload field.
     if (config.getEvents().values().stream().anyMatch(Event::isDtoEvent)) {
-      for (String role : fieldRolePermissions.columnKeySet()) {
+      for (String role : ImmutableSet.copyOf(fieldRolePermissions.columnKeySet())) {
         fieldRolePermissions.put(DtoMapper.PAYLOAD_FIELD, role, CRUD);
       }
     }

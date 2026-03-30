@@ -31,6 +31,7 @@ import uk.gov.hmcts.ccd.sdk.api.SearchPartyField;
 import uk.gov.hmcts.ccd.sdk.api.callback.AboutToStartOrSubmitResponse;
 import uk.gov.hmcts.ccd.sdk.api.CaseDetails;
 import uk.gov.hmcts.ccd.sdk.api.ConfigBuilder;
+import uk.gov.hmcts.ccd.sdk.api.DecentralisedConfigBuilder;
 import uk.gov.hmcts.ccd.sdk.type.Organisation;
 import uk.gov.hmcts.ccd.sdk.type.OrganisationPolicy;
 import uk.gov.hmcts.reform.ccd.client.model.SubmittedCallbackResponse;
@@ -42,6 +43,7 @@ import uk.gov.hmcts.reform.fpl.model.ApplicantParty;
 import uk.gov.hmcts.reform.fpl.model.CaseData;
 import uk.gov.hmcts.reform.fpl.model.HearingPreferences;
 import uk.gov.hmcts.reform.fpl.model.Judge;
+import uk.gov.hmcts.reform.fpl.model.AddNoteDto;
 import uk.gov.hmcts.reform.fpl.model.LocationPreferences;
 
 // Found and invoked by the config generator.
@@ -491,6 +493,16 @@ public class CCDConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<CaseData, S
         .grant(CRU, LOCAL_AUTHORITY)
         .fields()
         .optional(CaseData::getInterimEndDate);
+  }
+
+  @Override
+  public void configureDecentralised(DecentralisedConfigBuilder<CaseData, State, UserRole> builder) {
+    configure(builder);
+    builder.decentralisedEvent("addNoteDto", AddNoteDto.class,
+            payload -> uk.gov.hmcts.ccd.sdk.api.callback.SubmitResponse.defaultResponse())
+        .forAllStates()
+        .name("Add note (DTO)")
+        .grant(CRU, HMCTS_ADMIN);
   }
 
   private AboutToStartOrSubmitResponse<CaseData, State> aboutToSubmit(
