@@ -48,10 +48,10 @@ class CaseFieldGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
     fields.add(history);
 
     if (config.getEvents().values().stream().anyMatch(Event::isDtoEvent)) {
-      Map<String, Object> payload = getField(config.getCaseType(), DtoMapper.PAYLOAD_FIELD);
-      payload.put("Label", "Event payload");
-      payload.put("FieldType", "Text");
-      fields.add(payload);
+      Map<String, Object> dtoField = getField(config.getCaseType(), DtoMapper.PAYLOAD_FIELD);
+      dtoField.put("Label", "SDK DTO event data");
+      dtoField.put("FieldType", "Text");
+      fields.add(dtoField);
     }
 
     fields.addAll(getExplicitFields(config));

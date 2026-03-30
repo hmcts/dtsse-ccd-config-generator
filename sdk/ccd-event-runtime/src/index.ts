@@ -73,7 +73,7 @@ interface CallbackCaseDetails {
   state?: string;
 }
 
-const PAYLOAD_FIELD = "payload";
+const PAYLOAD_FIELD = "ccdSdkDtoEventData";
 
 export function defineCaseBindings<T extends object>() {
   return function <const TBindings extends CcdCaseBindings<T>>(

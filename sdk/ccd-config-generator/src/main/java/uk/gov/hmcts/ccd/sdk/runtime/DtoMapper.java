@@ -10,17 +10,17 @@ import lombok.SneakyThrows;
  * Handles transparent JSON payload serialisation for isolated DTO events
  * at the CCD-to-handler boundary.
  *
- * <p>The DTO is serialised as a JSON string in a single opaque {@code payload} CCD field.
+ * <p>The DTO is serialised as a JSON string in a single opaque {@code ccdSdkDtoEventData} CCD field.
  */
 public final class DtoMapper {
 
-  public static final String PAYLOAD_FIELD = "payload";
+  public static final String PAYLOAD_FIELD = "ccdSdkDtoEventData";
 
   private DtoMapper() {
   }
 
   /**
-   * Extracts and deserialises a DTO from the {@code payload} field of CCD data.
+   * Extracts and deserialises a DTO from the {@code ccdSdkDtoEventData} field of CCD data.
    */
   @SneakyThrows
   public static <D> D fromCcdData(Map<String, ?> data, Class<D> dtoClass,
@@ -37,7 +37,7 @@ public final class DtoMapper {
   }
 
   /**
-   * Serialises a DTO as a JSON string and wraps it in the {@code payload} CCD field.
+   * Serialises a DTO as a JSON string and wraps it in the {@code ccdSdkDtoEventData} CCD field.
    */
   @SneakyThrows
   public static Map<String, Object> toCcdData(Object dto, ObjectMapper mapper) {

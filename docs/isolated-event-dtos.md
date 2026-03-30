@@ -60,7 +60,7 @@ submit handler is responsible for persisting any data it needs into your own dat
 
 ## Payload transport
 
-DTO-backed events use a single opaque `payload` CCD field. The SDK serialises the DTO to a JSON string and stores it
+DTO-backed events use a single opaque `ccdSdkDtoEventData` CCD field. The SDK serialises the DTO to a JSON string and stores it
 in this field. On submission, the SDK deserialises the JSON string back into the DTO before passing it to your handler.
 
 CCD does not need to understand the structure of the payload. Individual DTO fields are not mapped to individual CCD

@@ -281,7 +281,7 @@
   },
   {
     "CRUD": "CRUD",
-    "CaseFieldID": "payload",
+    "CaseFieldID": "ccdSdkDtoEventData",
     "CaseTypeID": "CARE_SUPERVISION_EPO",
     "LiveFrom": "01/01/2017",
     "UserRole": "caseworker-publiclaw-systemupdate"
