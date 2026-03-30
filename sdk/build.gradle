@@ -37,7 +37,7 @@ subprojects {
 
     checkstyle {
         maxWarnings = 0
-        toolVersion = '13.3.0'
+        toolVersion = '13.4.0'
         sourceSets = [project.sourceSets.main]
     }
 
