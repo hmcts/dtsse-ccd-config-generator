@@ -52,15 +52,13 @@ class DecentralisedSubmissionHandler implements CaseSubmissionHandler {
     }
 
     long caseRef = event.getCaseDetails().getReference();
-    // TODO: revisit when CCD resumes sending query params; referer header is absent at the moment.
-    var urlParams = new LinkedMultiValueMap<String, String>();
 
     if (eventConfig.isDtoEvent()) {
       Object dtoData = DtoMapper.fromCcdData(
           event.getCaseDetails().getData(),
           eventConfig.getDtoClass(), mapper);
       return eventConfig.getSubmitHandler()
-          .submit(new EventPayload(caseRef, dtoData, urlParams));
+          .submit(new EventPayload(caseRef, dtoData));
     }
 
     var config = registry.getRequired(caseType);
@@ -70,6 +68,6 @@ class DecentralisedSubmissionHandler implements CaseSubmissionHandler {
     );
 
     return eventConfig.getSubmitHandler()
-        .submit(new EventPayload(caseRef, domainCaseData, urlParams));
+        .submit(new EventPayload(caseRef, domainCaseData));
   }
 }

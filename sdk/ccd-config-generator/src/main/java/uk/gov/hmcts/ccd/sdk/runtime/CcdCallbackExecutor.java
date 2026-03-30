@@ -10,7 +10,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
-import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.web.server.ResponseStatusException;
 import uk.gov.hmcts.ccd.sdk.ResolvedCCDConfig;
 import uk.gov.hmcts.ccd.sdk.ResolvedConfigRegistry;
@@ -56,8 +55,7 @@ public class CcdCallbackExecutor {
             ccdData, event.getDtoClass(), mapper);
         EventPayload payload = new EventPayload<>(
             request.getCaseDetails().getId(),
-            dtoData,
-            new LinkedMultiValueMap<>()
+            dtoData
         );
         var response = event.getStartHandler().start(payload);
         Map<String, Object> responseData = new LinkedHashMap<>(ccdData);
@@ -70,8 +68,7 @@ public class CcdCallbackExecutor {
       var domainClass = mapper.readValue(json, config.getCaseClass());
       EventPayload payload = new EventPayload<>(
           request.getCaseDetails().getId(),
-          domainClass,
-          new LinkedMultiValueMap<>()
+          domainClass
       );
 
       var response = event.getStartHandler().start(payload);
