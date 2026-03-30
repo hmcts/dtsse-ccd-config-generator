@@ -47,7 +47,7 @@ jobs:
         with:
           fetch-depth: 0
           submodules: recursive
-      - name: Determine whether change is docs-only
+      - name: Classify changes
         id: changes
         run: |
           if [ "${{ github.event_name }}" != "pull_request" ]; then
@@ -69,7 +69,8 @@ jobs:
           else
             echo "docs_only=true" >> "$GITHUB_OUTPUT"
           fi
-          if echo "$files" | grep -E '^${{ matrix.changePath }}(/|$)' >/dev/null; then
+          non_doc_files=$(echo "$files" | grep -vE '\.md$' || true)
+          if [ -n "$non_doc_files" ] && ! echo "$non_doc_files" | grep -vE '^${{ matrix.changePath }}(/|$)' >/dev/null; then
             echo "module_changed=true" >> "$GITHUB_OUTPUT"
           else
             echo "module_changed=false" >> "$GITHUB_OUTPUT"
