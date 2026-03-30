@@ -53,7 +53,7 @@ public class CcdCallbackExecutor {
       if (event.isDtoEvent()) {
         Map<String, Object> ccdData = request.getCaseDetails().getData();
         Object dtoData = DtoMapper.fromCcdData(
-            ccdData, event.getEventFieldPrefix(), event.getDtoClass(), mapper);
+            ccdData, event.getDtoClass(), mapper);
         EventPayload payload = new EventPayload<>(
             request.getCaseDetails().getId(),
             dtoData,
@@ -61,7 +61,7 @@ public class CcdCallbackExecutor {
         );
         var response = event.getStartHandler().start(payload);
         Map<String, Object> responseData = new LinkedHashMap<>(ccdData);
-        responseData.putAll(DtoMapper.toCcdData(response, event.getEventFieldPrefix(), mapper));
+        responseData.putAll(DtoMapper.toCcdData(response, mapper));
         return AboutToStartOrSubmitResponse.builder().data(responseData).build();
       }
 
@@ -114,16 +114,16 @@ public class CcdCallbackExecutor {
     if (event.isDtoEvent()) {
       Map<String, Object> ccdData = request.getCaseDetails().getData();
       CaseDetails dtoCaseDetails = buildDtoCaseDetails(
-          request.getCaseDetails(), event.getEventFieldPrefix(), event.getDtoClass());
+          request.getCaseDetails(), event.getDtoClass());
       CaseDetails dtoCaseDetailsBefore = request.getCaseDetailsBefore() != null
-          ? buildDtoCaseDetails(request.getCaseDetailsBefore(), event.getEventFieldPrefix(), event.getDtoClass())
+          ? buildDtoCaseDetails(request.getCaseDetailsBefore(), event.getDtoClass())
           : dtoCaseDetails;
 
       var response = callback.handle(dtoCaseDetails, dtoCaseDetailsBefore);
 
       if (response.getData() != null) {
         Map<String, Object> responseData = new LinkedHashMap<>(ccdData);
-        responseData.putAll(DtoMapper.toCcdData(response.getData(), event.getEventFieldPrefix(), mapper));
+        responseData.putAll(DtoMapper.toCcdData(response.getData(), mapper));
         response.setData(responseData);
       }
       return response;
@@ -162,8 +162,8 @@ public class CcdCallbackExecutor {
 
   @SuppressWarnings("unchecked")
   private CaseDetails buildDtoCaseDetails(
-      uk.gov.hmcts.reform.ccd.client.model.CaseDetails ccdDetails, String prefix, Class<?> dtoClass) {
-    Object dtoData = DtoMapper.fromCcdData(ccdDetails.getData(), prefix, dtoClass, mapper);
+      uk.gov.hmcts.reform.ccd.client.model.CaseDetails ccdDetails, Class<?> dtoClass) {
+    Object dtoData = DtoMapper.fromCcdData(ccdDetails.getData(), dtoClass, mapper);
     return CaseDetails.builder()
         .id(ccdDetails.getId())
         .caseTypeId(ccdDetails.getCaseTypeId())

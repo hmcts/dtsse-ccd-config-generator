@@ -23,30 +23,15 @@ public interface DecentralisedConfigBuilder<T, S, R extends HasRole> extends Con
 
   /**
    * Decentralised event using an isolated DTO class.
-   * The DTO class defines the event's field schema. The field prefix is used literally for generated CCD field IDs.
-   * DTO fields must be flat (primitives, enums, strings, dates, or SDK built-in types).
+   * The DTO is serialised as a JSON payload in a single opaque CCD field.
    */
   <D> EventTypeBuilder<D, R, S> decentralisedEvent(
-      String id, Class<D> dtoClass, String fieldPrefix, Submit<D, S> submitHandler);
-
-  /**
-   * Decentralised event using a static DTO event binding.
-   * The binding is the source of truth for the event id, DTO class, and literal field prefix.
-   */
-  <D> EventTypeBuilder<D, R, S> decentralisedEvent(CcdEventBinding<D> event, Submit<D, S> submitHandler);
+      String id, Class<D> dtoClass, Submit<D, S> submitHandler);
 
   /**
    * Decentralised event using an isolated DTO class, with a start handler.
-   * The DTO class defines the event's field schema. The field prefix is used literally for generated CCD field IDs.
-   * DTO fields must be flat (primitives, enums, strings, dates, or SDK built-in types).
+   * The DTO is serialised as a JSON payload in a single opaque CCD field.
    */
   <D> EventTypeBuilder<D, R, S> decentralisedEvent(
-      String id, Class<D> dtoClass, String fieldPrefix, Submit<D, S> submitHandler, Start<D, S> startHandler);
-
-  /**
-   * Decentralised event using a static DTO event binding, with a start handler.
-   * The binding is the source of truth for the event id, DTO class, and literal field prefix.
-   */
-  <D> EventTypeBuilder<D, R, S> decentralisedEvent(
-      CcdEventBinding<D> event, Submit<D, S> submitHandler, Start<D, S> startHandler);
+      String id, Class<D> dtoClass, Submit<D, S> submitHandler, Start<D, S> startHandler);
 }

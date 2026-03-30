@@ -17,10 +17,7 @@ interface EventDtoMap {
 const bindings = defineCaseBindings<EventDtoMap>()({
   caseTypeId: "TEST_CASE",
   events: {
-    "create-widget": {
-      fieldPrefix: "cpc",
-      pages: ["details"],
-    },
+    "create-widget": {},
   },
 } as const satisfies CcdCaseBindings<EventDtoMap>);
 
@@ -40,8 +37,10 @@ async function startAndSubmitRoundTrip(): Promise<void> {
         token: "event-token",
         case_details: {
           case_data: {
-            cpc_note: "[start]",
-            cpc_propertyAddress: "10 Example Street",
+            payload: JSON.stringify({
+              note: "[start]",
+              propertyAddress: "10 Example Street",
+            }),
           },
         },
       };
@@ -75,8 +74,10 @@ async function startAndSubmitRoundTrip(): Promise<void> {
   assert.equal(requests[1]?.url, "http://ccd/cases/12345/events");
   assert.deepEqual(requests[1]?.body, {
     data: {
-      cpc_note: "updated",
-      cpc_propertyAddress: "12 Example Street",
+      payload: JSON.stringify({
+        note: "updated",
+        propertyAddress: "12 Example Street",
+      }),
     },
     event: { id: "create-widget" },
     event_token: "event-token",
@@ -94,7 +95,9 @@ async function validateRoundTrip(): Promise<void> {
         case_details: {
           state: "Draft",
           case_data: {
-            cpc_note: "before",
+            payload: JSON.stringify({
+              note: "before",
+            }),
           },
         },
       };
@@ -103,8 +106,10 @@ async function validateRoundTrip(): Promise<void> {
       requests.push({ method: "POST", url, body });
       return {
         data: {
-          cpc_note: "after",
-          cpc_propertyAddress: "99 Example Road",
+          payload: JSON.stringify({
+            note: "after",
+            propertyAddress: "99 Example Road",
+          }),
         },
         errors: ["warn"],
         warnings: ["heads-up"],
@@ -123,7 +128,7 @@ async function validateRoundTrip(): Promise<void> {
   );
 
   const flow = await client.event("create-widget").start();
-  const validation = await flow.validate("details", { propertyAddress: "99 Example Road" });
+  const validation = await flow.validate({ propertyAddress: "99 Example Road" });
 
   assert.deepEqual(validation, {
     data: {
@@ -133,21 +138,25 @@ async function validateRoundTrip(): Promise<void> {
     errors: ["warn"],
     warnings: ["heads-up"],
   });
-  assert.equal(requests[1]?.url, "http://service/callbacks/mid-event?page=details&eventId=create-widget");
+  assert.equal(requests[1]?.url, "http://service/callbacks/mid-event?eventId=create-widget");
   assert.deepEqual(requests[1]?.body, {
     case_details: {
       state: "Draft",
       case_type_id: "TEST_CASE",
       case_data: {
-        cpc_note: "before",
-        cpc_propertyAddress: "99 Example Road",
+        payload: JSON.stringify({
+          note: "before",
+          propertyAddress: "99 Example Road",
+        }),
       },
     },
     case_details_before: {
       state: "Draft",
       case_type_id: "TEST_CASE",
       case_data: {
-        cpc_note: "before",
+        payload: JSON.stringify({
+          note: "before",
+        }),
       },
     },
     event_id: "create-widget",
@@ -162,7 +171,9 @@ async function validateWithoutDataKeepsMergedState(): Promise<void> {
         token: "event-token",
         case_details: {
           case_data: {
-            cpc_note: "before",
+            payload: JSON.stringify({
+              note: "before",
+            }),
           },
         },
       };
@@ -185,7 +196,7 @@ async function validateWithoutDataKeepsMergedState(): Promise<void> {
   );
 
   const flow = await client.event("create-widget").start();
-  const validation = await flow.validate("details", { propertyAddress: "99 Example Road" });
+  const validation = await flow.validate({ propertyAddress: "99 Example Road" });
 
   assert.deepEqual(validation, {
     data: {

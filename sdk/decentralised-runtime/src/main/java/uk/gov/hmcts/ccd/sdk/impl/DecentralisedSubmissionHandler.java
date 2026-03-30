@@ -58,7 +58,7 @@ class DecentralisedSubmissionHandler implements CaseSubmissionHandler {
 
     if (eventConfig.isDtoEvent()) {
       Object dtoData = DtoMapper.fromCcdData(
-          event.getCaseDetails().getData(), eventConfig.getEventFieldPrefix(),
+          event.getCaseDetails().getData(),
           eventConfig.getDtoClass(), mapper);
       return eventConfig.getSubmitHandler()
           .submit(new EventPayload(caseRef, dtoData, urlParams));

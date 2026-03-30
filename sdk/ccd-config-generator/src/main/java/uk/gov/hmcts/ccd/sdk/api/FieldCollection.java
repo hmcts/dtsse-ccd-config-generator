@@ -14,8 +14,6 @@ import java.util.Optional;
 import lombok.Builder;
 import lombok.Data;
 import lombok.ToString;
-import uk.gov.hmcts.ccd.sdk.DtoFieldPrefix;
-import uk.gov.hmcts.ccd.sdk.DtoFieldReferenceRewriter;
 import uk.gov.hmcts.ccd.sdk.api.Event.EventBuilder;
 import uk.gov.hmcts.ccd.sdk.api.Field.FieldBuilder;
 import uk.gov.hmcts.ccd.sdk.api.callback.MidEvent;
@@ -43,7 +41,6 @@ public class FieldCollection {
   private String rootFieldname;
 
   private String unwrappedParentPrefix;
-  private String dtoFieldPrefix;
 
   public static class FieldCollectionBuilder<Type, StateType, Parent> {
 
@@ -76,13 +73,6 @@ public class FieldCollection {
       return result;
     }
 
-    public static <Type, StateType, Parent> FieldCollectionBuilder<Type, StateType, Parent> builder(EventBuilder event,
-        Parent parent, Class<Type> dataClass,
-        PropertyUtils propertyUtils, String dtoFieldPrefix) {
-      FieldCollectionBuilder<Type, StateType, Parent> result = builder(event, parent, dataClass, propertyUtils);
-      result.dtoFieldPrefix = dtoFieldPrefix;
-      return result;
-    }
 
     public <Value> FieldCollectionBuilder<Type, StateType, Parent> optional(TypedPropertyGetter<Type, Value> getter,
         String showCondition, Value defaultValue, String caseEventFieldLabel, String caseEventFieldHint,
@@ -291,7 +281,7 @@ public class FieldCollection {
       String id = propertyUtils.getPropertyName(dataClass, getter);
       Class<U> itemClass = propertyUtils.getListValueElementType(dataClass, getter);
       FieldBuilder<U, StateType, Type, Parent> fieldBuilder = createField(id, itemClass);
-      fieldBuilder.showCondition(rewriteShowCondition(showCondition));
+      fieldBuilder.showCondition(showCondition);
       fieldBuilder.showSummary();
 
       CCD cf = propertyUtils.getAnnotationOfProperty(dataClass, getter, CCD.class);
@@ -316,11 +306,11 @@ public class FieldCollection {
                                                       String displayContextParameter) {
       field(getter)
           .context(context)
-          .showCondition(rewriteShowCondition(showCondition))
+          .showCondition(showCondition)
           .showSummary(true)
           .defaultValue(defaultValue)
           .displayContextParameter(displayContextParameter)
-          .caseEventFieldLabel(rewriteLabel(caseEventFieldLabel))
+          .caseEventFieldLabel(caseEventFieldLabel)
           .caseEventFieldHint(caseEventFieldHint)
           .retainHiddenValue(false);
       return this;
@@ -331,10 +321,10 @@ public class FieldCollection {
         String caseEventFieldLabel, String caseEventFieldHint, boolean retainHiddenValue) {
       field(getter)
           .context(context)
-          .showCondition(rewriteShowCondition(showCondition))
+          .showCondition(showCondition)
           .showSummary(showSummary)
           .defaultValue(defaultValue)
-          .caseEventFieldLabel(rewriteLabel(caseEventFieldLabel))
+          .caseEventFieldLabel(caseEventFieldLabel)
           .caseEventFieldHint(caseEventFieldHint)
           .retainHiddenValue(retainHiddenValue);
       return this;
@@ -344,7 +334,7 @@ public class FieldCollection {
         DisplayContext context, String showCondition, boolean showSummary, boolean retainHiddenValue) {
       field(getter)
           .context(context)
-          .showCondition(rewriteShowCondition(showCondition))
+          .showCondition(showCondition)
           .showSummary(showSummary)
           .retainHiddenValue(retainHiddenValue);
       return this;
@@ -388,7 +378,7 @@ public class FieldCollection {
     }
 
     public FieldCollectionBuilder<Type, StateType, Parent> showCondition(String condition) {
-      pageShowConditions.put(this.pageId, rewriteShowCondition(condition));
+      pageShowConditions.put(this.pageId, condition);
       return this;
     }
 
@@ -435,8 +425,8 @@ public class FieldCollection {
         field(fieldName)
             .context(DisplayContext.Complex)
             .showSummary(summary)
-            .showCondition(rewriteShowCondition(showCondition))
-            .caseEventFieldLabel(rewriteLabel(label))
+            .showCondition(showCondition)
+            .caseEventFieldLabel(label)
             .caseEventFieldHint(hint)
             .retainHiddenValue(retainHiddenValue);
       }
@@ -482,9 +472,6 @@ public class FieldCollection {
     }
 
     private String resolveFieldId(String fieldName) {
-      if (null != dtoFieldPrefix && !dtoFieldPrefix.isEmpty()) {
-        return DtoFieldPrefix.toFieldId(dtoFieldPrefix, fieldName);
-      }
       return null != unwrappedParentPrefix && !unwrappedParentPrefix.isEmpty()
           ? unwrappedParentPrefix.concat(capitalize(fieldName))
           : fieldName;
@@ -493,7 +480,7 @@ public class FieldCollection {
     public FieldCollectionBuilder<Type, StateType, Parent> label(String id, String value) {
       explicitFields.add(field(id)
           .context(DisplayContext.ReadOnly)
-          .label(rewriteLabel(value))
+          .label(value)
           .showSummary(false)
           .immutable());
       return this;
@@ -502,8 +489,8 @@ public class FieldCollection {
     public FieldCollectionBuilder<Type, StateType, Parent> label(String id, String value, String showCondition) {
       explicitFields.add(field(id)
           .context(DisplayContext.ReadOnly)
-          .label(rewriteLabel(value))
-          .showCondition(rewriteShowCondition(showCondition))
+          .label(value)
+          .showCondition(showCondition)
           .showSummary(false)
           .immutable());
       return this;
@@ -513,8 +500,8 @@ public class FieldCollection {
                                                                  String showCondition, boolean showSummary) {
       explicitFields.add(field(id)
           .context(DisplayContext.ReadOnly)
-          .label(rewriteLabel(value))
-          .showCondition(rewriteShowCondition(showCondition))
+          .label(value)
+          .showCondition(showCondition)
           .showSummary(showSummary)
           .immutable());
       return this;
@@ -538,16 +525,8 @@ public class FieldCollection {
     }
 
     public FieldCollectionBuilder<Type, StateType, Parent> pageLabel(String label) {
-      this.pageLabels.put(this.pageId, rewriteLabel(label));
+      this.pageLabels.put(this.pageId, label);
       return this;
-    }
-
-    private String rewriteShowCondition(String condition) {
-      return DtoFieldReferenceRewriter.rewriteShowCondition(condition, dataClass, dtoFieldPrefix);
-    }
-
-    private String rewriteLabel(String value) {
-      return DtoFieldReferenceRewriter.rewriteLabel(value, dataClass, dtoFieldPrefix);
     }
   }
 }

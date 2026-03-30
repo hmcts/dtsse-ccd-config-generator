@@ -15,7 +15,6 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import uk.gov.hmcts.ccd.sdk.api.CaseCategory.CaseCategoryBuilder;
 import uk.gov.hmcts.ccd.sdk.api.CaseRoleToAccessProfile.CaseRoleToAccessProfileBuilder;
-import uk.gov.hmcts.ccd.sdk.api.CcdEventBinding;
 import uk.gov.hmcts.ccd.sdk.api.DecentralisedConfigBuilder;
 import uk.gov.hmcts.ccd.sdk.api.Event;
 import uk.gov.hmcts.ccd.sdk.api.EventTypeBuilder;
@@ -91,29 +90,17 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements Decentralised
   @Override
   @SuppressWarnings({"unchecked", "rawtypes"})
   public <D> EventTypeBuilder<D, R, S> decentralisedEvent(
-      String id, Class<D> dtoClass, String fieldPrefix, Submit<D, S> submitHandler) {
+      String id, Class<D> dtoClass, Submit<D, S> submitHandler) {
     return new DtoEventTypeBuilderImpl<>(config, (Map) events, id, dtoClass,
-        fieldPrefix, submitHandler, null);
-  }
-
-  @Override
-  public <D> EventTypeBuilder<D, R, S> decentralisedEvent(
-      CcdEventBinding<D> event, Submit<D, S> submitHandler) {
-    return decentralisedEvent(event.id(), event.dtoClass(), event.fieldPrefix(), submitHandler);
+        submitHandler, null);
   }
 
   @Override
   @SuppressWarnings({"unchecked", "rawtypes"})
   public <D> EventTypeBuilder<D, R, S> decentralisedEvent(
-      String id, Class<D> dtoClass, String fieldPrefix, Submit<D, S> submitHandler, Start<D, S> startHandler) {
+      String id, Class<D> dtoClass, Submit<D, S> submitHandler, Start<D, S> startHandler) {
     return new DtoEventTypeBuilderImpl<>(config, (Map) events, id, dtoClass,
-        fieldPrefix, submitHandler, startHandler);
-  }
-
-  @Override
-  public <D> EventTypeBuilder<D, R, S> decentralisedEvent(
-      CcdEventBinding<D> event, Submit<D, S> submitHandler, Start<D, S> startHandler) {
-    return decentralisedEvent(event.id(), event.dtoClass(), event.fieldPrefix(), submitHandler, startHandler);
+        submitHandler, startHandler);
   }
 
 

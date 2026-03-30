@@ -1,7 +1,7 @@
 # Isolated DTO Events
 
-Decentralised events can define their own DTO class instead of sharing a case-wide data class. Each DTO-backed event
-owns a focused input model containing only the fields it needs.
+This proposal adds a new overload of `decentralisedEvent` that lets events define their own DTO class instead of
+sharing a case-wide data class. Each DTO-backed event owns a focused input model containing only the fields it needs.
 
 ```java
 @Data
@@ -16,13 +16,12 @@ public class CreateClaimData {
 
 ## Declaring a DTO event
 
-DTO-backed decentralised events now require an explicit `fieldPrefix`:
+A new overload accepts the DTO class alongside the event ID and handlers:
 
 ```java
 builder.decentralisedEvent(
         "createPossessionClaim",
         CreateClaimData.class,
-        "cpc",
         this::submit,
         this::start
     )
@@ -31,7 +30,7 @@ builder.decentralisedEvent(
     .grant(Permission.CRUD, UserRole.PCS_SOLICITOR);
 ```
 
-Legacy non-DTO decentralised events remain unchanged:
+Existing non-DTO decentralised events are unaffected:
 
 ```java
 builder.decentralisedEvent("createPossessionClaim", this::submit, this::start);
@@ -39,7 +38,7 @@ builder.decentralisedEvent("createPossessionClaim", this::submit, this::start);
 
 ## Handler behaviour
 
-Your handlers receive the DTO directly:
+Handlers receive the DTO directly:
 
 ```java
 private CreateClaimData start(EventPayload<CreateClaimData, State> payload) {
@@ -55,118 +54,86 @@ private SubmitResponse<State> submit(EventPayload<CreateClaimData, State> payloa
 }
 ```
 
-DTOs are event-scoped. CCD renders them for the event, submits them back to your handlers, and does not persist them
-for you. Your application remains responsible for persisting any data it needs.
+DTOs are event-scoped. Your application is responsible for persisting any data it needs.
 
-## Field prefix rules
+## Payload transport
 
-`fieldPrefix` is mandatory for DTO-backed decentralised events.
+DTO-backed events use a single opaque `payload` CCD field. The SDK serialises the DTO to a JSON string and stores it
+in this field. On submission, the SDK deserialises the JSON string back into the DTO before passing it to your handler.
 
-Allowed syntax:
+CCD does not need to understand the structure of the payload. Individual DTO fields are not mapped to individual CCD
+fields — there is no per-field prefixing, no generated CCD field IDs, and no field length constraints beyond the
+capacity of the payload field itself.
 
-- ASCII alphanumeric only
-- regex `^[A-Za-z0-9]+$`
+### Searchable fields
 
-Examples:
+Fields that need to be searchable through CCD are declared separately as explicit CCD fields, independent of the DTO
+payload. The DTO payload itself is not searchable through CCD.
 
-- `cpc`
-- `claimresume`
-- `noteadd`
-- `citizenapplicationupdate`
+### Auditing
 
-Generated CCD field IDs use literal concatenation:
+CCD does not introspect the payload field. Auditing of DTO contents is handled by your backend service.
 
-```text
-ccdFieldId = fieldPrefix + "_" + dtoFieldName
-```
+## No CCD UI configuration
 
-Example:
+DTO-backed decentralised events do not use CCD's UI configuration. There are no pages, show conditions, label
+interpolations, or field display options. Your service provides its own frontend (e.g. GOV.UK Nunjucks templates) which
+works directly with the DTO structure. CCD is not involved in rendering.
 
-- prefix `cpc`
-- DTO field `propertyAddress`
-- CCD field ID `cpc_propertyAddress`
-
-The generator fails fast when:
-
-- prefix is missing
-- prefix syntax is invalid
-- two DTO events in the same case type use the same prefix
-- a generated CCD field ID exceeds CCD's 70 character limit
-
-## Page DSL and field references
-
-Page field bindings still use method references:
-
-```java
-.mandatory(CreateClaimData::getPropertyAddress)
-.optional(CreateClaimData::getFeeAmount)
-```
-
-For simple DTO field references in page conditions and label interpolation, write the DTO field names, not the
-prefixed CCD IDs:
-
-```java
-.showCondition("showCrossBorderPage=\"Yes\"")
-.label("info", "The claim fee is ${feeAmount}.")
-```
-
-The SDK rewrites these simple references to the generated CCD field IDs for transport and config generation. The
-supported scope in this change is:
-
-- `${fieldName}` label interpolation
-- simple show conditions that reference DTO field names
-
-No general CCD expression parser rewrite is attempted here.
+The page DSL (`.mandatory()`, `.optional()`, `.showCondition()`, `.label()`, etc.) is not available on the DTO event
+builder. Conditional rendering and field layout are your frontend's responsibility.
 
 ## Supported DTO field types
 
-DTO fields must be types that the existing CCD field generator can render. Supported shapes include:
-
-- primitives and boxed primitives
-- `String`
-- `LocalDate`
-- `LocalDateTime`
-- enums
-- SDK built-in renderable types such as `AddressUK`, `Document`, `DynamicList`, `YesOrNo`
-- collections of the above
-
-The generator rejects DTOs that use:
-
-- `@JsonUnwrapped`
-- arbitrary nested POJOs or custom persistent case-data models
-- `Map`
-- unsupported collection element types
-
-Validation is recursive for collection element types.
+DTOs are serialised as JSON using Jackson. Any type that Jackson can serialise and deserialise is supported, including
+nested objects, maps, and collections. There are no CCD field type restrictions since CCD never inspects the payload.
 
 ## Access control
 
-DTO-backed events own their fields exclusively. Access control stays on the event:
+DTO-backed events own their payload exclusively. Access control stays on the event:
 
 ```java
 .grant(Permission.CRUD, UserRole.PCS_SOLICITOR)
 ```
 
-If a role can run the event, it gets CRUD access to that event's fields. You do not need per-field `@Access`
+If a role can run the event, it gets CRUD access to that event's payload. You do not need per-field `@Access`
 configuration for isolated DTO fields.
 
-## Migration
+## Migration from shared case data
 
 1. Identify the fields an event actually needs.
 2. Create a focused DTO for those fields.
-3. Switch to `decentralisedEvent(id, DtoClass.class, fieldPrefix, submit, start)`.
+3. Use `decentralisedEvent(id, DtoClass.class, submit, start)`.
 4. Update handlers to use `EventPayload<DtoClass, State>`.
-5. Keep page field bindings as method references.
-6. For simple conditions and `${...}` labels, use DTO field names and let the SDK rewrite them.
-7. Remove no-longer-needed event-only fields from the shared case data class.
+5. Remove no-longer-needed event-only fields from the shared case data class.
 
-## TypeScript bindings
+## Typed frontend–backend contract
 
-When TS bindings are enabled, DTO-backed decentralised events also generate:
+A key benefit of DTO events is a single source of truth for the data contract between your Java backend and your
+frontend. The Java DTO class defines the shape, and the SDK generates TypeScript interfaces from it. Your backend
+handlers and your frontend templates both work against the same type — changes to the DTO fail the build on both sides
+if they fall out of sync.
 
-- `dto-types.ts`
-- `event-contracts.ts`
-- `index.ts`
+When TS bindings are enabled, the SDK generates:
 
-Consumers then compose those bindings with `@hmcts/ccd-event-runtime`. See
-[ts-bindings.md](./ts-bindings.md).
+- `dto-types.ts` — TypeScript interfaces and enums mirroring your Java DTOs
+- `event-contracts.ts` — an event manifest mapping event IDs to their DTO types
+- `index.ts` — barrel export
+
+Your frontend imports these generated types and composes them with `@hmcts/ccd-event-runtime`, which provides a typed
+client for starting events, validating mid-event, and submitting. The runtime handles CCD transport so your frontend
+code works with plain DTO-shaped objects — never raw CCD payloads.
+
+```ts
+import { createCcdClient } from '@hmcts/ccd-event-runtime';
+import { caseBindings, type CreateClaimData } from '../generated/ccd/MY_CASE_TYPE';
+
+const client = createCcdClient(config, caseBindings);
+const flow = await client.event('createPossessionClaim').start();
+
+const data: CreateClaimData = flow.data;
+data.feeAmount = '£404';
+await flow.submit(data);
+```
+
+For full configuration and mid-event validation details, see [ts-bindings.md](./ts-bindings.md).

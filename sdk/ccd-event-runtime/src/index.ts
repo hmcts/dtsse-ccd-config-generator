@@ -6,10 +6,7 @@ export interface CcdTransport {
 type MaybePromise<T> = T | Promise<T>;
 type StringKeys<T> = Extract<keyof T, string>;
 type BindingEvents<T extends object> = {
-  [K in StringKeys<T>]: {
-    fieldPrefix: string;
-    pages: readonly string[];
-  };
+  [K in StringKeys<T>]: Record<string, never>;
 };
 type BoundDtoMap<TBindings extends CcdCaseBindings<any>> = NonNullable<TBindings["__dtoMap"]>;
 type BoundEventId<TBindings extends CcdCaseBindings<any>> =
@@ -18,10 +15,6 @@ type BoundEventData<
   TBindings extends CcdCaseBindings<any>,
   TEventId extends BoundEventId<TBindings>,
 > = BoundDtoMap<TBindings>[TEventId];
-type BoundPageId<
-  TBindings extends CcdCaseBindings<any>,
-  TEventId extends BoundEventId<TBindings>,
-> = TBindings["events"][TEventId]["pages"][number];
 
 export interface CcdCaseBindings<T extends object> {
   caseTypeId: string;
@@ -54,7 +47,6 @@ export interface CcdEventFlow<
   readonly eventId: TEventId;
   readonly data: BoundEventData<TBindings, TEventId>;
   validate(
-    pageId: BoundPageId<TBindings, TEventId>,
     patch: Partial<BoundEventData<TBindings, TEventId>>
   ): Promise<CcdValidationResult<BoundEventData<TBindings, TEventId>>>;
   submit(data: BoundEventData<TBindings, TEventId>): Promise<CcdSubmitResult>;
@@ -80,6 +72,8 @@ interface CallbackCaseDetails {
   case_data: Record<string, unknown>;
   state?: string;
 }
+
+const PAYLOAD_FIELD = "payload";
 
 export function defineCaseBindings<T extends object>() {
   return function <const TBindings extends CcdCaseBindings<T>>(
@@ -135,8 +129,6 @@ async function startEvent<
   }
 
   let currentData: BoundEventData<TBindings, TEventId> = unmarshal(
-    bindings,
-    eventId,
     triggerResponse.case_details?.case_data ?? {}
   );
   const currentState = triggerResponse.case_details?.state;
@@ -146,7 +138,7 @@ async function startEvent<
     get data() {
       return currentData;
     },
-    async validate(pageId, patch) {
+    async validate(patch) {
       const validationHeaders = await config.getAuthHeaders();
       const mergedData = {
         ...toRecord(currentData),
@@ -156,13 +148,13 @@ async function startEvent<
       const callbackBody = {
         case_details: buildCallbackCaseDetails(
           bindings.caseTypeId,
-          marshal(bindings, eventId, mergedData),
+          marshal(mergedData),
           caseId,
           currentState
         ),
         case_details_before: buildCallbackCaseDetails(
           bindings.caseTypeId,
-          marshal(bindings, eventId, currentData),
+          marshal(currentData),
           caseId,
           currentState
         ),
@@ -170,12 +162,12 @@ async function startEvent<
         ignore_warning: false,
       };
       const response = (await config.transport.post(
-        buildMidEventUrl(callbackBaseUrl, eventId, pageId),
+        buildMidEventUrl(callbackBaseUrl, eventId),
         callbackBody,
         validationHeaders
       )) as CallbackResponse;
       currentData = response.data !== undefined
-        ? unmarshal(bindings, eventId, response.data)
+        ? unmarshal(response.data)
         : mergedData;
       return {
         data: currentData,
@@ -187,7 +179,7 @@ async function startEvent<
       const submitHeaders = await config.getAuthHeaders();
       currentData = data;
       const payload = {
-        data: marshal(bindings, eventId, data),
+        data: marshal(data),
         event: { id: eventId },
         event_token: eventToken,
         ignore_warning: false,
@@ -220,8 +212,8 @@ function buildEventSubmitUrl(baseUrl: string, caseId: string | number | undefine
   return `${baseUrl}/case-types/${caseTypeId}/cases`;
 }
 
-function buildMidEventUrl(baseUrl: string, eventId: string, pageId: string): string {
-  return `${baseUrl}/callbacks/mid-event?page=${encodeURIComponent(pageId)}&eventId=${encodeURIComponent(eventId)}`;
+function buildMidEventUrl(baseUrl: string, eventId: string): string {
+  return `${baseUrl}/callbacks/mid-event?eventId=${encodeURIComponent(eventId)}`;
 }
 
 function buildCallbackCaseDetails(
@@ -242,41 +234,27 @@ function marshal<
   TBindings extends CcdCaseBindings<any>,
   TEventId extends BoundEventId<TBindings>,
 >(
-  bindings: TBindings,
-  eventId: TEventId,
   data: BoundEventData<TBindings, TEventId>
 ): Record<string, unknown> {
-  const event = bindings.events[eventId as keyof typeof bindings.events] as TBindings["events"][TEventId];
-  const source = toRecord(data);
-  const marshalled: Record<string, unknown> = {};
-  const fieldKeyPrefix = toFieldKeyPrefix(event.fieldPrefix);
-  for (const [field, value] of Object.entries(source)) {
-    marshalled[fieldKeyPrefix + field] = value;
-  }
-  return marshalled;
+  return {
+    [PAYLOAD_FIELD]: JSON.stringify(toRecord(data)),
+  };
 }
 
 function unmarshal<
   TBindings extends CcdCaseBindings<any>,
   TEventId extends BoundEventId<TBindings>,
 >(
-  bindings: TBindings,
-  eventId: TEventId,
   ccdData: Record<string, unknown>
 ): BoundEventData<TBindings, TEventId> {
-  const event = bindings.events[eventId as keyof typeof bindings.events] as TBindings["events"][TEventId];
-  const fieldKeyPrefix = toFieldKeyPrefix(event.fieldPrefix);
-  const unmarshalled: Record<string, unknown> = {};
-  for (const [field, value] of Object.entries(ccdData)) {
-    if (field.startsWith(fieldKeyPrefix) && field.length > fieldKeyPrefix.length) {
-      unmarshalled[field.slice(fieldKeyPrefix.length)] = value;
-    }
+  const payloadValue = ccdData[PAYLOAD_FIELD];
+  if (payloadValue === undefined || payloadValue === null) {
+    return {} as BoundEventData<TBindings, TEventId>;
   }
-  return unmarshalled as BoundEventData<TBindings, TEventId>;
-}
-
-function toFieldKeyPrefix(fieldPrefix: string): string {
-  return `${fieldPrefix}_`;
+  if (typeof payloadValue === "string") {
+    return JSON.parse(payloadValue) as BoundEventData<TBindings, TEventId>;
+  }
+  return payloadValue as BoundEventData<TBindings, TEventId>;
 }
 
 function toRecord(value: unknown): Record<string, unknown> {

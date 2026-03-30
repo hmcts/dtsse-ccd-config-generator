@@ -93,7 +93,9 @@ import uk.gov.hmcts.divorce.simplecase.model.SimpleCaseState;
 import uk.gov.hmcts.divorce.sow014.nfd.CaseworkerMaintainCaseLink;
 import uk.gov.hmcts.divorce.sow014.nfd.CaseworkerPopulateSearchCriteria;
 import uk.gov.hmcts.divorce.sow014.nfd.DecentralisedCaseworkerAddNote;
+import uk.gov.hmcts.divorce.sow014.nfd.DecentralisedCaseworkerAddNoteDto;
 import uk.gov.hmcts.divorce.sow014.nfd.DecentralisedCaseworkerAddNoteFailure;
+import uk.gov.hmcts.divorce.sow014.nfd.model.CaseworkerAddNoteDto;
 import uk.gov.hmcts.divorce.sow014.nfd.FailingSubmittedCallback;
 import uk.gov.hmcts.divorce.sow014.nfd.CaseworkerRoundTripData;
 import uk.gov.hmcts.divorce.sow014.nfd.ApiFirstTaskCancelEvent;
@@ -108,6 +110,7 @@ import uk.gov.hmcts.divorce.sow014.nfd.SubmittedConfirmationCallback;
 import uk.gov.hmcts.ccd.sdk.type.CaseLink;
 import uk.gov.hmcts.ccd.sdk.type.ListValue;
 import uk.gov.hmcts.ccd.sdk.CaseReindexingService;
+import uk.gov.hmcts.ccd.sdk.CcdEventTestClient;
 import uk.gov.hmcts.ccd.sdk.taskmanagement.model.TaskAction;
 import uk.gov.hmcts.reform.ccd.client.CoreCaseDataApi;
 import uk.gov.hmcts.reform.ccd.client.model.CaseDataContent;
@@ -145,6 +148,9 @@ public class TestWithCCD extends CftlibTest {
 
     @Autowired
     private CaseReindexingService reindexQueueService;
+
+    @Autowired
+    private CcdEventTestClient ccdEventTestClient;
 
     @Autowired
     private JmsTemplate jmsTemplate;
@@ -2561,6 +2567,30 @@ public class TestWithCCD extends CftlibTest {
 
         String latestNoteSql = "SELECT note FROM case_notes WHERE reference = :ref ORDER BY id DESC LIMIT 1";
         String latestNote = db.queryForObject(latestNoteSql, Map.of("ref", caseRef), String.class);
+        assertThat(latestNote, equalTo(noteText));
+    }
+
+    @Order(35)
+    @Test
+    void dtoEventRoundTripsThroughPayloadField() throws Exception {
+        String noteText = "DTO payload test " + UUID.randomUUID();
+        CaseworkerAddNoteDto dto = CaseworkerAddNoteDto.builder().note(noteText).build();
+
+        ccdEventTestClient.startAndSubmitUpdateEvent(
+            getAuthorisation("TEST_CASE_WORKER_USER@mailinator.com"),
+            getServiceAuth(),
+            NoFaultDivorce.getCaseType(),
+            caseRef,
+            DecentralisedCaseworkerAddNoteDto.CASEWORKER_DECENTRALISED_ADD_NOTE_DTO,
+            CaseworkerAddNoteDto.class,
+            dto
+        );
+
+        String latestNote = db.queryForObject(
+            "SELECT note FROM case_notes WHERE reference = :ref ORDER BY id DESC LIMIT 1",
+            Map.of("ref", caseRef),
+            String.class
+        );
         assertThat(latestNote, equalTo(noteText));
     }
 

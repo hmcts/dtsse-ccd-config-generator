@@ -13,7 +13,6 @@ import java.lang.reflect.Type;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -24,7 +23,6 @@ import java.util.Set;
 import org.springframework.stereotype.Component;
 import uk.gov.hmcts.ccd.sdk.ResolvedCCDConfig;
 import uk.gov.hmcts.ccd.sdk.api.Event;
-import uk.gov.hmcts.ccd.sdk.api.Field;
 
 @Component
 public class TypeScriptBindingsGenerator {
@@ -53,33 +51,11 @@ public class TypeScriptBindingsGenerator {
       }
       result.add(new DtoEventContract(
           event.getId(),
-          event.getDtoClass(),
-          event.getFieldPrefix(),
-          extractPages(event)));
+          event.getDtoClass()));
     }
     return result.stream()
         .sorted(Comparator.comparing(DtoEventContract::eventId))
         .toList();
-  }
-
-  private List<String> extractPages(Event<?, ?, ?> event) {
-    Set<String> pages = new LinkedHashSet<>();
-    addPages(pages, event.getFields().getFields());
-    addPages(pages, event.getFields().getExplicitFields());
-    pages.addAll(event.getFields().getPagesToMidEvent().keySet());
-    return pages.stream()
-        .filter(Objects::nonNull)
-        .sorted()
-        .toList();
-  }
-
-  private void addPages(Set<String> pages, Collection<Field.FieldBuilder> fieldBuilders) {
-    fieldBuilders.stream()
-        .map(Field.FieldBuilder::build)
-        .map(Field::getPage)
-        .filter(Objects::nonNull)
-        .map(Object::toString)
-        .forEach(pages::add);
   }
 
   private Map<String, Class<?>> indexDtoTypeNames(List<DtoEventContract> contracts) {
@@ -126,10 +102,7 @@ public class TypeScriptBindingsGenerator {
         .collect(joining("\n"));
 
     String contractEntries = contracts.stream()
-        .map(contract -> "  \"" + contract.eventId() + "\": {\n"
-            + "    fieldPrefix: \"" + contract.fieldPrefix() + "\",\n"
-            + "    pages: [" + quotedList(contract.pages()) + "],\n"
-            + "  },")
+        .map(contract -> "  \"" + contract.eventId() + "\": {},")
         .collect(joining("\n"));
 
     String contents = """
@@ -151,10 +124,6 @@ public class TypeScriptBindingsGenerator {
         """.formatted(moduleName, imports, eventDtoMappings, caseTypeId, contractEntries);
 
     writeFile(outputFolder, CONTRACTS_FILE, contents);
-  }
-
-  private String quotedList(List<String> values) {
-    return values.stream().map(value -> "\"" + value + "\"").collect(joining(", "));
   }
 
   private void writeFile(File outputFolder, String filename, String contents) {
@@ -184,8 +153,6 @@ public class TypeScriptBindingsGenerator {
 
   private record DtoEventContract(
       String eventId,
-      Class<?> dtoClass,
-      String fieldPrefix,
-      List<String> pages) {
+      Class<?> dtoClass) {
   }
 }

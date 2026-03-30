@@ -47,7 +47,6 @@ public class DecentralisedCaseworkerAddNoteDto implements CCDConfig<CaseData, St
             .decentralisedEvent(
                 CASEWORKER_DECENTRALISED_ADD_NOTE_DTO,
                 CaseworkerAddNoteDto.class,
-                "noteAdd",
                 this::submit,
                 this::start
             )

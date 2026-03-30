@@ -4,60 +4,48 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
-import uk.gov.hmcts.ccd.sdk.DtoFieldPrefix;
+import lombok.SneakyThrows;
 
 /**
- * Handles transparent prefix stripping/adding for isolated DTO events
+ * Handles transparent JSON payload serialisation for isolated DTO events
  * at the CCD-to-handler boundary.
  *
- * <p>Since DTOs are flat, this is straightforward key renaming.
+ * <p>The DTO is serialised as a JSON string in a single opaque {@code payload} CCD field.
  */
 public final class DtoMapper {
+
+  public static final String PAYLOAD_FIELD = "payload";
 
   private DtoMapper() {
   }
 
   /**
-   * Strips the event prefix from CCD data keys and deserialises into a DTO.
-   *
-   * <p>CCD sends data like {@code {cpc_propertyAddress: "..."}}.
-   * This strips the prefix to get {@code {propertyAddress: "..."}} and converts to the DTO class.
+   * Extracts and deserialises a DTO from the {@code payload} field of CCD data.
    */
-  public static <D> D fromCcdData(Map<String, ?> data, String prefix, Class<D> dtoClass,
+  @SneakyThrows
+  public static <D> D fromCcdData(Map<String, ?> data, Class<D> dtoClass,
                                   ObjectMapper mapper) {
-    Map<String, Object> unprefixed = new LinkedHashMap<>();
     Map<String, ?> source = data == null ? Collections.emptyMap() : data;
-    String fieldKeyPrefix = DtoFieldPrefix.toFieldKeyPrefix(prefix);
-    for (Map.Entry<String, ?> entry : source.entrySet()) {
-      String key = entry.getKey();
-      if (key.startsWith(fieldKeyPrefix) && key.length() > fieldKeyPrefix.length()) {
-        String fieldName = key.substring(fieldKeyPrefix.length());
-        unprefixed.put(fieldName, entry.getValue());
-      }
+    Object payloadValue = source.get(PAYLOAD_FIELD);
+    if (payloadValue == null) {
+      return mapper.convertValue(Collections.emptyMap(), dtoClass);
     }
-    return mapper.convertValue(unprefixed, dtoClass);
+    if (payloadValue instanceof String json) {
+      return mapper.readValue(json, dtoClass);
+    }
+    return mapper.convertValue(payloadValue, dtoClass);
   }
 
   /**
-   * Serialises a DTO and adds the event prefix to each key.
-   *
-   * <p>Converts a DTO with {@code {propertyAddress: "..."}} to
-   * {@code {cpc_propertyAddress: "..."}}.
+   * Serialises a DTO as a JSON string and wraps it in the {@code payload} CCD field.
    */
-  @SuppressWarnings("unchecked")
-  public static Map<String, Object> toCcdData(Object dto, String prefix, ObjectMapper mapper) {
+  @SneakyThrows
+  public static Map<String, Object> toCcdData(Object dto, ObjectMapper mapper) {
+    Map<String, Object> result = new LinkedHashMap<>();
     if (dto == null) {
-      return new LinkedHashMap<>();
+      return result;
     }
-
-    Map<String, Object> flat = mapper.convertValue(dto, Map.class);
-    Map<String, Object> prefixed = new LinkedHashMap<>();
-    String fieldKeyPrefix = DtoFieldPrefix.toFieldKeyPrefix(prefix);
-    for (Map.Entry<String, Object> entry : flat.entrySet()) {
-      String key = entry.getKey();
-      String prefixedKey = fieldKeyPrefix + key;
-      prefixed.put(prefixedKey, entry.getValue());
-    }
-    return prefixed;
+    result.put(PAYLOAD_FIELD, mapper.writeValueAsString(dto));
+    return result;
   }
 }

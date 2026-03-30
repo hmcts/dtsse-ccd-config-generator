@@ -1,4 +1,4 @@
-package uk.gov.hmcts.ccd.sdk;
+package uk.gov.hmcts.ccd.sdk.ts;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static uk.gov.hmcts.ccd.sdk.api.Permission.CRU;
@@ -11,12 +11,13 @@ import org.apache.commons.io.FileUtils;
 import org.junit.ClassRule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
+import java.util.Collection;
+import uk.gov.hmcts.ccd.sdk.ResolvedCCDConfig;
 import uk.gov.hmcts.ccd.sdk.api.CCDConfig;
 import uk.gov.hmcts.ccd.sdk.api.DecentralisedConfigBuilder;
 import uk.gov.hmcts.ccd.sdk.api.EventPayload;
 import uk.gov.hmcts.ccd.sdk.api.HasRole;
 import uk.gov.hmcts.ccd.sdk.api.callback.SubmitResponse;
-import uk.gov.hmcts.ccd.sdk.ts.TypeScriptBindingsGenerator;
 
 public class TypeScriptBindingsGeneratorTest {
 
@@ -25,8 +26,7 @@ public class TypeScriptBindingsGeneratorTest {
 
   @Test
   public void generatesTypedBindingsForDtoEventsOnly() throws IOException {
-    ResolvedCCDConfig<TestCaseData, TestState, TestRole> resolved =
-        new ConfigResolver<>(List.of(new DtoConfig())).resolveCCDConfig();
+    ResolvedCCDConfig<TestCaseData, TestState, TestRole> resolved = resolve(new DtoConfig());
 
     File output = tmp.newFolder("ts-bindings-dto");
     TypeScriptBindingsGenerator generator = new TypeScriptBindingsGenerator();
@@ -44,9 +44,8 @@ public class TypeScriptBindingsGeneratorTest {
     assertThat(contracts).doesNotContain("legacyUpdate");
     assertThat(contracts).contains("defineCaseBindings");
     assertThat(contracts).contains("caseTypeId: \"ts_case\"");
-    assertThat(contracts).contains("fieldPrefix: \"widget\"");
-    assertThat(contracts).doesNotContain("fields: [");
-    assertThat(contracts).contains("pages: [\"1\"]");
+    assertThat(contracts).doesNotContain("fieldPrefix");
+    assertThat(contracts).doesNotContain("pages");
     assertThat(contracts).contains("as const satisfies CcdCaseBindings<EventDtoMap>");
 
     String firstDto = FileUtils.readFileToString(dtoFile, StandardCharsets.UTF_8);
@@ -57,8 +56,7 @@ public class TypeScriptBindingsGeneratorTest {
 
   @Test
   public void doesNotWriteBindingsWhenNoDtoEventsPresent() throws IOException {
-    ResolvedCCDConfig<TestCaseData, TestState, TestRole> resolved =
-        new ConfigResolver<>(List.of(new NonDtoConfig())).resolveCCDConfig();
+    ResolvedCCDConfig<TestCaseData, TestState, TestRole> resolved = resolve(new NonDtoConfig());
 
     File output = tmp.newFolder("ts-bindings-no-dto");
     TypeScriptBindingsGenerator generator = new TypeScriptBindingsGenerator();
@@ -66,6 +64,21 @@ public class TypeScriptBindingsGeneratorTest {
 
     File[] generated = output.listFiles();
     assertThat(generated).isEmpty();
+  }
+
+  private ResolvedCCDConfig<TestCaseData, TestState, TestRole> resolve(
+      CCDConfig<TestCaseData, TestState, TestRole> config) {
+    try {
+      Class<?> resolverClass = Class.forName("uk.gov.hmcts.ccd.sdk.ConfigResolver");
+      var constructor = resolverClass.getDeclaredConstructor(Collection.class);
+      constructor.setAccessible(true);
+      Object resolver = constructor.newInstance(List.of(config));
+      var method = resolverClass.getDeclaredMethod("resolveCCDConfig");
+      method.setAccessible(true);
+      return (ResolvedCCDConfig<TestCaseData, TestState, TestRole>) method.invoke(resolver);
+    } catch (ReflectiveOperationException e) {
+      throw new IllegalStateException("Unable to resolve CCD config for test", e);
+    }
   }
 
   private static class DtoConfig implements CCDConfig<TestCaseData, TestState, TestRole> {
@@ -82,7 +95,6 @@ public class TypeScriptBindingsGeneratorTest {
       builder.decentralisedEvent(
               "createWidget",
               CreateWidgetDto.class,
-              "widget",
               this::submitDto,
               this::startDto
           )
@@ -90,8 +102,6 @@ public class TypeScriptBindingsGeneratorTest {
           .grant(CRU, TestRole.USER)
           .name("Create Widget")
           .fields()
-          .optional(CreateWidgetDto::getName)
-          .optional(CreateWidgetDto::getReference)
           .done();
     }
 

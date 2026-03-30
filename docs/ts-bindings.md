@@ -16,13 +16,12 @@ It does not generate `client.ts`.
 Frontend and integration-test consumers compose the generated bindings with the shared runtime package
 `@hmcts/ccd-event-runtime`.
 
-For the Java-side DTO event model and field prefix rules, see
-[isolated-event-dtos.md](./isolated-event-dtos.md).
+For the Java-side DTO event model, see [isolated-event-dtos.md](./isolated-event-dtos.md).
 
 ## What developers get
 
 - generated DTO interfaces and enums
-- a generated event manifest containing event IDs, page IDs, and `fieldPrefix`
+- a generated event manifest mapping event IDs to their DTO types
 - a typed runtime client built from `createCcdClient(config, caseBindings)`
 
 The runtime handles CCD transport marshalling so callers work with plain DTO-shaped objects.
@@ -78,10 +77,8 @@ Per case type, the generator writes:
 
 `event-contracts.ts` contains:
 
-- `EventDtoMap`
-- `caseBindings`
-- per-event `fieldPrefix`
-- per-event `pages` as page IDs
+- `EventDtoMap` — maps event IDs to their DTO types
+- `caseBindings` — runtime configuration for the typed client
 
 Only DTO-backed decentralised events are included in these bindings in this change. Legacy non-DTO decentralised
 events are omitted.
@@ -163,5 +160,5 @@ You get back:
 - typed DTO data for the event
 - `errors` and `warnings` returned by CCD callback validation
 
-All field prefixing and unprefixing is handled inside `@hmcts/ccd-event-runtime` using the generated
-`fieldPrefix`.
+Serialisation to and from the CCD payload field is handled inside `@hmcts/ccd-event-runtime` — your code works with
+plain DTO-shaped objects.
