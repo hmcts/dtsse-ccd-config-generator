@@ -1542,17 +1542,22 @@ public class TestWithCCD extends CftlibTest {
             ? dateTime
             : ((Timestamp) nextAttemptAtRaw).toLocalDateTime();
         assertThat(nextAttemptAt, is(notNullValue()));
-        assertThat(nextAttemptAt.isAfter(submittedAt.plusSeconds(8)), is(true));
+        assertThat(nextAttemptAt.isAfter(submittedAt.plusMinutes(30)), is(true));
 
-        await().during(Duration.ofSeconds(4)).atMost(Duration.ofSeconds(8)).untilAsserted(() -> {
-            Map<String, Object> statusRow = db.queryForMap(
-                "SELECT status FROM ccd.task_outbox"
-                    + " WHERE case_id = CAST(:caseId AS bigint)"
-                    + " AND requested_action = :action::ccd.task_action ORDER BY id DESC LIMIT 1",
-                Map.of("caseId", caseIdValue, "action", TaskAction.INITIATE.getId())
-            );
-            assertThat(statusRow.get("status"), equalTo("NEW"));
-        });
+        Map<String, Object> statusRow = db.queryForMap(
+            "SELECT status FROM ccd.task_outbox"
+                + " WHERE case_id = CAST(:caseId AS bigint)"
+                + " AND requested_action = :action::ccd.task_action ORDER BY id DESC LIMIT 1",
+            Map.of("caseId", caseIdValue, "action", TaskAction.INITIATE.getId())
+        );
+        assertThat(statusRow.get("status"), equalTo("NEW"));
+
+        db.update(
+            "UPDATE ccd.task_outbox SET next_attempt_at = NOW() - INTERVAL '1 second'"
+                + " WHERE case_id = CAST(:caseId AS bigint)"
+                + " AND requested_action = :action::ccd.task_action",
+            Map.of("caseId", caseIdValue, "action", TaskAction.INITIATE.getId())
+        );
 
         await().atMost(Duration.ofSeconds(45)).untilAsserted(() -> {
             Map<String, Object> processed = queryLatestCurrentOutboxRow(caseIdValue, TaskAction.INITIATE);
