@@ -40,6 +40,7 @@ import uk.gov.hmcts.ccd.sdk.api.Search;
 import uk.gov.hmcts.ccd.sdk.api.SearchField;
 import uk.gov.hmcts.ccd.sdk.api.Tab;
 import uk.gov.hmcts.ccd.sdk.api.TabField;
+import uk.gov.hmcts.ccd.sdk.runtime.DtoMapper;
 
 @Component
 class AuthorisationCaseFieldGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, S, R> {
@@ -89,20 +90,10 @@ class AuthorisationCaseFieldGenerator<T, S, R extends HasRole> implements Config
         }
       }
     }
-    // Add CRUD permissions for the payload field used by DTO events.
-    for (Event<T, R, S> event : config.getEvents().values()) {
-      if (event.isDtoEvent()) {
-        String fieldId = "payload";
-        for (R role : event.getGrants().keys()) {
-          if (!event.getHistoryOnlyRoles().contains(role.getRole())) {
-            Set<Permission> perm = new HashSet<>(CRUD);
-            if (fieldRolePermissions.contains(fieldId, role.getRole())) {
-              fieldRolePermissions.get(fieldId, role.getRole()).addAll(perm);
-            } else {
-              fieldRolePermissions.put(fieldId, role.getRole(), perm);
-            }
-          }
-        }
+    // Every role that can see any DTO event needs CRUD on the shared payload field.
+    if (config.getEvents().values().stream().anyMatch(Event::isDtoEvent)) {
+      for (String role : fieldRolePermissions.columnKeySet()) {
+        fieldRolePermissions.put(DtoMapper.PAYLOAD_FIELD, role, CRUD);
       }
     }
 

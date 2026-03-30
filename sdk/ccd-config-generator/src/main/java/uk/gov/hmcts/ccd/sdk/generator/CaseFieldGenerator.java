@@ -27,6 +27,7 @@ import uk.gov.hmcts.ccd.sdk.api.ComplexType;
 import uk.gov.hmcts.ccd.sdk.api.Event;
 import uk.gov.hmcts.ccd.sdk.api.HasRole;
 import uk.gov.hmcts.ccd.sdk.api.Label;
+import uk.gov.hmcts.ccd.sdk.runtime.DtoMapper;
 import uk.gov.hmcts.ccd.sdk.type.FieldType;
 
 @Component
@@ -35,7 +36,6 @@ class CaseFieldGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
   // The field type set from code always takes precedence,
   // so eg. if a field changes type it gets updated.
   private static final ImmutableSet<String> OVERWRITES_FIELDS = ImmutableSet.of();
-  private static final String DTO_PAYLOAD_FIELD_ID = "payload";
 
   @Override
   public void write(
@@ -47,26 +47,17 @@ class CaseFieldGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
     history.put("FieldType", "CaseHistoryViewer");
     fields.add(history);
 
-    final List<Map<String, Object>> explicitFields = getExplicitFields(config);
-    boolean hasPayloadField = false;
-    for (Event event : config.getEvents().values()) {
-      if (event.isDtoEvent() && !hasPayloadField) {
-        appendPayloadField(fields, config.getCaseType());
-        hasPayloadField = true;
-      }
+    if (config.getEvents().values().stream().anyMatch(Event::isDtoEvent)) {
+      Map<String, Object> payload = getField(config.getCaseType(), DtoMapper.PAYLOAD_FIELD);
+      payload.put("Label", "Event payload");
+      payload.put("FieldType", "Text");
+      fields.add(payload);
     }
 
-    fields.addAll(explicitFields);
+    fields.addAll(getExplicitFields(config));
 
     Path path = Paths.get(outputFolder.getPath(), "CaseField.json");
     JsonUtils.mergeInto(path, fields, new JsonUtils.OverwriteSpecific(OVERWRITES_FIELDS), "ID");
-  }
-
-  private static void appendPayloadField(List<Map<String, Object>> fields, String caseTypeId) {
-    Map<String, Object> fieldInfo = getField(caseTypeId, DTO_PAYLOAD_FIELD_ID);
-    fieldInfo.put("Label", "Event payload");
-    fieldInfo.put("FieldType", "TextArea");
-    fields.add(fieldInfo);
   }
 
   public static List<Map<String, Object>> toComplex(Class dataClass, String caseTypeId) {
@@ -76,7 +67,6 @@ class CaseFieldGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
   private static <T, S, R extends HasRole> List<Map<String, Object>> getExplicitFields(
       ResolvedCCDConfig<T, S, R> config) {
     Map<String, uk.gov.hmcts.ccd.sdk.api.Field> explicitFields = Maps.newHashMap();
-    Map<String, FieldMetadata> explicitFieldMetadata = Maps.newHashMap();
     for (Event event : config.getEvents().values()) {
       List<uk.gov.hmcts.ccd.sdk.api.Field.FieldBuilder> fc = event.getFields()
           .getExplicitFields();
@@ -84,8 +74,6 @@ class CaseFieldGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
       for (uk.gov.hmcts.ccd.sdk.api.Field.FieldBuilder fieldBuilder : fc) {
         uk.gov.hmcts.ccd.sdk.api.Field field = fieldBuilder.build();
         explicitFields.put(field.getId(), field);
-        findExplicitFieldMetadata(config.getCaseClass(), event, field.getId())
-            .ifPresent(metadata -> explicitFieldMetadata.put(field.getId(), metadata));
       }
     }
 
@@ -101,10 +89,9 @@ class CaseFieldGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
       Map<String, Object> fieldData = getField(config.getCaseType(), fieldId);
       result.add(fieldData);
 
-      FieldMetadata metadata = explicitFieldMetadata.get(fieldId);
-      if (metadata != null) {
-        populateFieldMetadata(fieldData, metadata.ownerClass(), metadata.field());
-      }
+      Optional<Field> caseField = findCaseField(config.getCaseClass(), fieldId);
+      caseField.ifPresent(candidate ->
+          populateFieldMetadata(fieldData, config.getCaseClass(), candidate));
       JsonUtils.ensureDefaultLabel(fieldData);
 
       if (!Strings.isNullOrEmpty(field.getLabel())) {
@@ -113,7 +100,7 @@ class CaseFieldGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
 
       if (field.getType() != null) {
         fieldData.put("FieldType", field.getType());
-      } else if (metadata == null) {
+      } else if (caseField.isEmpty()) {
         fieldData.put("FieldType", "Label");
       }
 
@@ -125,8 +112,6 @@ class CaseFieldGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
 
     return result;
   }
-
-  private record FieldMetadata(Class<?> ownerClass, Field field) {}
 
   private static List<Map<String, Object>> buildComplexFields(
       Class<?> dataClass, String caseTypeId) {
@@ -291,18 +276,6 @@ class CaseFieldGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
         .stream()
         .filter(candidate -> getFieldId(candidate).equals(fieldId))
         .findFirst();
-  }
-
-  private static Optional<FieldMetadata> findExplicitFieldMetadata(
-      Class<?> caseClass,
-      Event event,
-      String fieldId) {
-    Optional<Field> caseField = findCaseField(caseClass, fieldId);
-    if (caseField.isPresent()) {
-      return Optional.of(new FieldMetadata(caseClass, caseField.get()));
-    }
-
-    return Optional.empty();
   }
 
 }

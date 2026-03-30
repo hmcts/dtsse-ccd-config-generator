@@ -261,5 +261,4 @@ public class Event<T, R extends HasRole, S> {
       }
     }
   }
-
 }

@@ -146,7 +146,8 @@ class CaseEventToFieldsGenerator<T, S, R extends HasRole> implements ConfigGener
                                       FieldCollection collection,
                                       Field field) {
     if (collection.getPageShowConditions().containsKey(field.getPage())) {
-      row.put("PageShowCondition", collection.getPageShowConditions().remove(field.getPage()));
+      row.put("PageShowCondition",
+          collection.getPageShowConditions().remove(field.getPage()));
     }
   }
 
@@ -169,4 +170,5 @@ class CaseEventToFieldsGenerator<T, S, R extends HasRole> implements ConfigGener
       row.put("DisplayContextParameter", field.getDisplayContextParameter());
     }
   }
+
 }
