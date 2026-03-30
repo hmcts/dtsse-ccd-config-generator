@@ -3,6 +3,7 @@ package uk.gov.hmcts.ccd.sdk;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import lombok.RequiredArgsConstructor;
 import uk.gov.hmcts.ccd.sdk.runtime.DtoMapper;
 import uk.gov.hmcts.reform.ccd.client.CoreCaseDataApi;
 import uk.gov.hmcts.reform.ccd.client.model.CaseDataContent;
@@ -14,21 +15,12 @@ import uk.gov.hmcts.reform.ccd.client.model.StartEventResponse;
 /**
  * Keeps DTO-backed cftlib tests on DTO fields instead of CCD wire keys.
  */
+@RequiredArgsConstructor
 public class CcdEventTestClient {
 
   private final CoreCaseDataApi ccdApi;
   private final ObjectMapper objectMapper;
   private final ResolvedConfigRegistry resolvedConfigRegistry;
-
-  public CcdEventTestClient(
-      CoreCaseDataApi ccdApi,
-      ObjectMapper objectMapper,
-      ResolvedConfigRegistry resolvedConfigRegistry
-  ) {
-    this.ccdApi = ccdApi;
-    this.objectMapper = objectMapper;
-    this.resolvedConfigRegistry = resolvedConfigRegistry;
-  }
 
   public <D> CaseDetails startAndSubmitCreateEvent(
       String idamToken,

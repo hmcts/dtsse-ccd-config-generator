@@ -5,11 +5,10 @@
 `generateCCDConfig` can generate TypeScript bindings for DTO-backed decentralised events in the same run that writes CCD
 JSON config.
 
-The generator now emits:
+The generator emits:
 
 - `dto-types.ts`
 - `event-contracts.ts`
-- `index.ts`
 
 It does not generate `client.ts`.
 
@@ -27,8 +26,8 @@ For the Java-side DTO event model, see [isolated-event-dtos.md](./isolated-event
 The runtime handles CCD transport marshalling so callers work with plain DTO-shaped objects.
 
 - `start()` returns DTO-shaped data
-- `validate(pageId, patch)` accepts DTO field names and returns DTO field names
-- `submit(data)` accepts DTO field names
+- `validate(patch)` accepts a partial DTO and returns DTO-shaped data
+- `submit(data)` accepts DTO-shaped data
 
 ## Enable generation
 
@@ -73,14 +72,13 @@ Per case type, the generator writes:
 
 - `dto-types.ts`
 - `event-contracts.ts`
-- `index.ts`
 
 `event-contracts.ts` contains:
 
 - `EventDtoMap` — maps event IDs to their DTO types
 - `caseBindings` — runtime configuration for the typed client
 
-Only DTO-backed decentralised events are included in these bindings in this change. Legacy non-DTO decentralised
+Only DTO-backed decentralised events are included in these bindings. Legacy non-DTO decentralised
 events are omitted.
 
 ## Runtime package
@@ -135,7 +133,7 @@ const flow = await client.event('createPossessionClaim').start();
 const data: CreateClaimData = flow.data;
 data.feeAmount = '£404';
 
-const midEvent = await flow.validate('enterPropertyAddress', {
+const midEvent = await flow.validate({
   propertyAddress: data.propertyAddress,
 });
 
@@ -148,11 +146,10 @@ await flow.submit(midEvent.data);
 
 ## Mid-event callbacks
 
-`validate(pageId, patch)` uses the generated event contract for the selected event.
+`validate(patch)` sends a mid-event callback to your service.
 
 You pass:
 
-- a page ID from the generated `pages` union
 - a partial DTO payload containing changed fields
 
 You get back:

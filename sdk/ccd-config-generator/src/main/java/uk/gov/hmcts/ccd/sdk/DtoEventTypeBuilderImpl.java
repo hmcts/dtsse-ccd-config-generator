@@ -5,6 +5,7 @@ import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import lombok.RequiredArgsConstructor;
 import uk.gov.hmcts.ccd.sdk.api.Event;
 import uk.gov.hmcts.ccd.sdk.api.EventTypeBuilder;
 import uk.gov.hmcts.ccd.sdk.api.HasRole;
@@ -16,6 +17,7 @@ import uk.gov.hmcts.ccd.sdk.api.callback.Submit;
  * The DTO payload is serialised as JSON in a single opaque CCD field.
  */
 @SuppressWarnings({"unchecked", "rawtypes"})
+@RequiredArgsConstructor
 public class DtoEventTypeBuilderImpl<D, R extends HasRole, S> implements EventTypeBuilder<D, R, S> {
 
   private final ResolvedCCDConfig config;
@@ -24,18 +26,6 @@ public class DtoEventTypeBuilderImpl<D, R extends HasRole, S> implements EventTy
   private final Class<D> dtoClass;
   private final Submit<D, S> submitHandler;
   private final Start<D, S> startHandler;
-
-  public DtoEventTypeBuilderImpl(ResolvedCCDConfig config,
-                                 Map<String, List<Event.EventBuilder>> events,
-                                 String id, Class<D> dtoClass,
-                                 Submit<D, S> submitHandler, Start<D, S> startHandler) {
-    this.config = config;
-    this.events = events;
-    this.id = id;
-    this.dtoClass = dtoClass;
-    this.submitHandler = submitHandler;
-    this.startHandler = startHandler;
-  }
 
   @Override
   public Event.EventBuilder<D, R, S> forState(S state) {

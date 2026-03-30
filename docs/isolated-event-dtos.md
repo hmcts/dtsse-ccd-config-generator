@@ -54,7 +54,9 @@ private SubmitResponse<State> submit(EventPayload<CreateClaimData, State> payloa
 }
 ```
 
-DTOs are event-scoped. Your application is responsible for persisting any data it needs.
+DTOs are event-scoped and ephemeral. The decentralised runtime does not persist DTO payloads — neither in CCD nor in
+any database. The payload exists only for the lifetime of the event flow (start → mid-event callbacks → submit). Your
+submit handler is responsible for persisting any data it needs into your own data store.
 
 ## Payload transport
 
@@ -73,6 +75,16 @@ payload. The DTO payload itself is not searchable through CCD.
 ### Auditing
 
 CCD does not introspect the payload field. Auditing of DTO contents is handled by your backend service.
+
+## Concurrency
+
+Because DTO payloads are ephemeral, data hydrated onto the DTO by about-to-start or mid-event callbacks reflects a
+point-in-time snapshot. Another user or process may modify the underlying data between the moment your callback reads it
+and the moment the user submits.
+
+Your application is responsible for ensuring that event handlers behave correctly under concurrency — for example,
+through appropriate locking, idempotent submissions, or re-reading authoritative state at submit time rather than
+trusting values hydrated at start.
 
 ## No CCD UI configuration
 
@@ -118,7 +130,6 @@ When TS bindings are enabled, the SDK generates:
 
 - `dto-types.ts` — TypeScript interfaces and enums mirroring your Java DTOs
 - `event-contracts.ts` — an event manifest mapping event IDs to their DTO types
-- `index.ts` — barrel export
 
 Your frontend imports these generated types and composes them with `@hmcts/ccd-event-runtime`, which provides a typed
 client for starting events, validating mid-event, and submitting. The runtime handles CCD transport so your frontend

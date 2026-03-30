@@ -73,7 +73,6 @@ public class FieldCollection {
       return result;
     }
 
-
     public <Value> FieldCollectionBuilder<Type, StateType, Parent> optional(TypedPropertyGetter<Type, Value> getter,
         String showCondition, Value defaultValue, String caseEventFieldLabel, String caseEventFieldHint,
         String displayContextParameter) {
@@ -263,14 +262,6 @@ public class FieldCollection {
       return field(getter, DisplayContext.ReadOnly, false);
     }
 
-    /**
-     * Backwards-compatible alias for legacy page DSL usage where a field is kept in payload
-     * but never rendered in the UI.
-     */
-    public FieldCollectionBuilder<Type, StateType, Parent> hidden(TypedPropertyGetter<Type, ?> getter) {
-      return field(getter, DisplayContext.Optional, "[STATE]=\"NEVER_SHOW\"", false, true);
-    }
-
     public <U> FieldCollectionBuilder<U, StateType, FieldCollectionBuilder<Type, StateType, Parent>> list(
         TypedPropertyGetter<Type, List<ListValue<U>>> getter) {
       return list(getter, null);
@@ -362,7 +353,9 @@ public class FieldCollection {
     }
 
     private <U> FieldBuilder<U, StateType, Type, Parent> createField(String id, Class<U> clazz) {
-      String fieldId = resolveFieldId(id);
+      String fieldId = null != unwrappedParentPrefix && !unwrappedParentPrefix.isEmpty()
+          ? unwrappedParentPrefix.concat(capitalize(id))
+          : id;
 
       FieldBuilder<U, StateType, Type, Parent> f = FieldBuilder.builder(clazz, this, fieldId);
       f.page(this.pageId);
@@ -462,7 +455,9 @@ public class FieldCollection {
       FieldCollectionBuilder<U, StateType, FieldCollectionBuilder<Type, StateType, Parent>> result =
           FieldCollectionBuilder.builder(event, this, c, propertyUtils);
       complexFields.add(result);
-      result.rootFieldname = resolveFieldId(fieldName);
+      result.rootFieldname = !isNullOrEmpty(unwrappedParentPrefix)
+          ? unwrappedParentPrefix.concat(capitalize(fieldName))
+          : fieldName;
       result.pageId = this.pageId;
       // Nested builders inherit ordering state.
       if (null != parent) {
@@ -471,18 +466,8 @@ public class FieldCollection {
       return result;
     }
 
-    private String resolveFieldId(String fieldName) {
-      return null != unwrappedParentPrefix && !unwrappedParentPrefix.isEmpty()
-          ? unwrappedParentPrefix.concat(capitalize(fieldName))
-          : fieldName;
-    }
-
     public FieldCollectionBuilder<Type, StateType, Parent> label(String id, String value) {
-      explicitFields.add(field(id)
-          .context(DisplayContext.ReadOnly)
-          .label(value)
-          .showSummary(false)
-          .immutable());
+      explicitFields.add(field(id).context(DisplayContext.ReadOnly).label(value).showSummary(false).immutable());
       return this;
     }
 

@@ -9,10 +9,7 @@ interface EventDtoMap {
 const bindings = defineCaseBindings<EventDtoMap>()({
   caseTypeId: "TEST_CASE",
   events: {
-    "create-widget": {
-      fieldPrefix: "cpc",
-      pages: ["details"],
-    },
+    "create-widget": {},
   },
 } as const satisfies CcdCaseBindings<EventDtoMap>);
 
@@ -35,10 +32,10 @@ void client.event("wrong-event");
 
 async function runTypeChecks(): Promise<void> {
   const flow = await validFlowPromise;
-  await flow.validate("details", { note: "ok" });
+  await flow.validate({ note: "ok" });
 
-  // @ts-expect-error invalid page id should fail at compile time
-  await flow.validate("wrong-page", { note: "nope" });
+  // @ts-expect-error invalid field should fail at compile time
+  await flow.validate({ bogusField: "nope" });
 }
 
 void runTypeChecks();
