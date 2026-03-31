@@ -24,6 +24,7 @@ import uk.gov.hmcts.ccd.sdk.api.Search.SearchBuilder;
 import uk.gov.hmcts.ccd.sdk.api.SearchCases.SearchCasesBuilder;
 import uk.gov.hmcts.ccd.sdk.api.SearchCriteria.SearchCriteriaBuilder;
 import uk.gov.hmcts.ccd.sdk.api.SearchParty.SearchPartyBuilder;
+import uk.gov.hmcts.ccd.sdk.api.ServiceEventTypeBuilder;
 import uk.gov.hmcts.ccd.sdk.api.Tab.TabBuilder;
 import uk.gov.hmcts.ccd.sdk.api.callback.Start;
 import uk.gov.hmcts.ccd.sdk.api.callback.Submit;
@@ -89,7 +90,7 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements Decentralised
 
   @Override
   @SuppressWarnings({"unchecked", "rawtypes"})
-  public <D> EventTypeBuilder<D, R, S> serviceEvent(
+  public <D> ServiceEventTypeBuilder<D, R, S> serviceEvent(
       String id, Class<D> dtoClass, Submit<D, S> submitHandler) {
     return new ServiceEventTypeBuilderImpl<>(config, (Map) events, id, dtoClass,
         submitHandler, null);
@@ -97,7 +98,7 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements Decentralised
 
   @Override
   @SuppressWarnings({"unchecked", "rawtypes"})
-  public <D> EventTypeBuilder<D, R, S> serviceEvent(
+  public <D> ServiceEventTypeBuilder<D, R, S> serviceEvent(
       String id, Class<D> dtoClass, Submit<D, S> submitHandler, Start<D, S> startHandler) {
     return new ServiceEventTypeBuilderImpl<>(config, (Map) events, id, dtoClass,
         submitHandler, startHandler);

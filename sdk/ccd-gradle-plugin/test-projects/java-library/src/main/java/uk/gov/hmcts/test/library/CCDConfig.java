@@ -29,12 +29,7 @@ public class CCDConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<CaseData, S
       .serviceEvent("create-widget", CreateWidgetData.class, this::submitDto, this::startDto)
       .initialState(State.Bar)
       .grant(CRU, Role.Foo)
-      .name("Create widget")
-      .showSummary()
-      .fields()
-      .optional(CreateWidgetData::getName)
-      .optional(CreateWidgetData::getReference)
-      .done();
+      .name("Create widget");
 
     new HasAccessControl() {
       @Override

@@ -15,6 +15,7 @@ tasks.register('yarnInstall', com.github.gradle.node.yarn.task.YarnInstallTask) 
   args = ['--cache-folder', "${projectDir}/.yarn-cache"]
   inputs.file('package.json')
   inputs.file('yarn.lock')
+  inputs.dir("${rootProject.projectDir}/sdk/ccd-event-runtime/dist")
   outputs.dir('node_modules')
 }
 

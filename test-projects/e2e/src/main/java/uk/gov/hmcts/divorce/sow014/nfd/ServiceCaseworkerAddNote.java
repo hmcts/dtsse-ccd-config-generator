@@ -16,7 +16,6 @@ import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Component;
 import uk.gov.hmcts.ccd.sdk.api.CCDConfig;
 import uk.gov.hmcts.ccd.sdk.api.DecentralisedConfigBuilder;
-import uk.gov.hmcts.ccd.sdk.api.Event.EventBuilder;
 import uk.gov.hmcts.ccd.sdk.api.EventPayload;
 import uk.gov.hmcts.ccd.sdk.api.callback.SubmitResponse;
 import uk.gov.hmcts.divorce.divorcecase.model.CaseData;
@@ -43,7 +42,7 @@ public class ServiceCaseworkerAddNote implements CCDConfig<CaseData, State, User
 
     @Override
     public void configureDecentralised(final DecentralisedConfigBuilder<CaseData, State, UserRole> configBuilder) {
-        EventBuilder<CaseworkerAddNoteDto, UserRole, State> eventBuilder = configBuilder
+        configBuilder
             .serviceEvent(
                 CASEWORKER_SERVICE_ADD_NOTE,
                 CaseworkerAddNoteDto.class,
@@ -52,15 +51,9 @@ public class ServiceCaseworkerAddNote implements CCDConfig<CaseData, State, User
             )
             .forAllStates()
             .name("Add note (service event)")
-            .showEventNotes()
             .grant(CREATE_READ_UPDATE, CASE_WORKER, JUDGE)
             .grant(CREATE_READ_UPDATE_DELETE, SUPER_USER)
             .grantHistoryOnly(LEGAL_ADVISOR, JUDGE);
-
-        eventBuilder.fields()
-            .page("addCaseNotesServiceEvent")
-            .pageLabel("Add case notes (service event)")
-            .optional(CaseworkerAddNoteDto::getNote);
     }
 
     private CaseworkerAddNoteDto start(EventPayload<CaseworkerAddNoteDto, State> payload) {

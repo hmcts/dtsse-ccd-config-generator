@@ -7,8 +7,9 @@ import java.util.Map;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import uk.gov.hmcts.ccd.sdk.api.Event;
-import uk.gov.hmcts.ccd.sdk.api.EventTypeBuilder;
 import uk.gov.hmcts.ccd.sdk.api.HasRole;
+import uk.gov.hmcts.ccd.sdk.api.ServiceEventBuilder;
+import uk.gov.hmcts.ccd.sdk.api.ServiceEventTypeBuilder;
 import uk.gov.hmcts.ccd.sdk.api.callback.Start;
 import uk.gov.hmcts.ccd.sdk.api.callback.Submit;
 
@@ -18,7 +19,7 @@ import uk.gov.hmcts.ccd.sdk.api.callback.Submit;
  */
 @SuppressWarnings({"unchecked", "rawtypes"})
 @RequiredArgsConstructor
-public class ServiceEventTypeBuilderImpl<D, R extends HasRole, S> implements EventTypeBuilder<D, R, S> {
+public class ServiceEventTypeBuilderImpl<D, R extends HasRole, S> implements ServiceEventTypeBuilder<D, R, S> {
 
   private final ResolvedCCDConfig config;
   private final Map<String, List<Event.EventBuilder>> events;
@@ -28,51 +29,51 @@ public class ServiceEventTypeBuilderImpl<D, R extends HasRole, S> implements Eve
   private final Start<D, S> startHandler;
 
   @Override
-  public Event.EventBuilder<D, R, S> forState(S state) {
+  public ServiceEventBuilder<D, R, S> forState(S state) {
     return build(Set.of(state), Set.of(state));
   }
 
   @Override
-  public Event.EventBuilder<D, R, S> initialState(S state) {
+  public ServiceEventBuilder<D, R, S> initialState(S state) {
     return build(Set.of(), Set.of(state));
   }
 
   @Override
-  public Event.EventBuilder<D, R, S> forStateTransition(S from, S to) {
+  public ServiceEventBuilder<D, R, S> forStateTransition(S from, S to) {
     return build(Set.of(from), Set.of(to));
   }
 
   @Override
-  public Event.EventBuilder<D, R, S> forStateTransition(EnumSet from, S to) {
+  public ServiceEventBuilder<D, R, S> forStateTransition(EnumSet from, S to) {
     return build(from, Set.of(to));
   }
 
   @Override
-  public Event.EventBuilder<D, R, S> forStateTransition(S from, EnumSet to) {
+  public ServiceEventBuilder<D, R, S> forStateTransition(S from, EnumSet to) {
     return build(Set.of(from), to);
   }
 
   @Override
-  public Event.EventBuilder<D, R, S> forStateTransition(EnumSet from, EnumSet to) {
+  public ServiceEventBuilder<D, R, S> forStateTransition(EnumSet from, EnumSet to) {
     return build(from, to);
   }
 
   @Override
-  public Event.EventBuilder<D, R, S> forAllStates() {
+  public ServiceEventBuilder<D, R, S> forAllStates() {
     return build(config.getAllStates(), config.getAllStates());
   }
 
   @Override
-  public Event.EventBuilder<D, R, S> forStates(EnumSet states) {
+  public ServiceEventBuilder<D, R, S> forStates(EnumSet states) {
     return build(states, states);
   }
 
   @Override
-  public Event.EventBuilder<D, R, S> forStates(S... states) {
+  public ServiceEventBuilder<D, R, S> forStates(S... states) {
     return build(Set.of(states), Set.of(states));
   }
 
-  protected Event.EventBuilder<D, R, S> build(Set<S> preStates, Set<S> postStates) {
+  protected ServiceEventBuilder<D, R, S> build(Set<S> preStates, Set<S> postStates) {
     Event.EventBuilder<D, R, S> result = Event.EventBuilder
         .builder(id, dtoClass, new PropertyUtils(), preStates, postStates, dtoClass);
     result.submitHandler(this.submitHandler);
@@ -81,6 +82,6 @@ public class ServiceEventTypeBuilderImpl<D, R extends HasRole, S> implements Eve
       events.put(id, Lists.newArrayList());
     }
     events.get(id).add(result);
-    return result;
+    return new ServiceEventBuilder<>(result);
   }
 }
