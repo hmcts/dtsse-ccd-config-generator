@@ -37,7 +37,8 @@ public final class DtoMapper {
     if (payloadValue instanceof JsonNode node && node.isTextual()) {
       return mapper.readValue(node.textValue(), dtoClass);
     }
-    return mapper.convertValue(payloadValue, dtoClass);
+    throw new RuntimeException(PAYLOAD_FIELD + " must be a JSON string, got: "
+        + payloadValue.getClass().getName());
   }
 
   /**

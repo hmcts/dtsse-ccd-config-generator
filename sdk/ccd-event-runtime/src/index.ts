@@ -254,7 +254,7 @@ function unmarshal<
   if (typeof payloadValue === "string") {
     return JSON.parse(payloadValue) as BoundEventData<TBindings, TEventId>;
   }
-  return payloadValue as BoundEventData<TBindings, TEventId>;
+  throw new Error(`${PAYLOAD_FIELD} must be a JSON string, got: ${typeof payloadValue}`);
 }
 
 function toRecord(value: unknown): Record<string, unknown> {
