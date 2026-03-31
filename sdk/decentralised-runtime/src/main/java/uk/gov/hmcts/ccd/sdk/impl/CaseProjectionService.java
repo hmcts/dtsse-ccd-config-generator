@@ -3,6 +3,11 @@ package uk.gov.hmcts.ccd.sdk.impl;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.ResolvableType;
 import org.springframework.stereotype.Service;
@@ -14,12 +19,6 @@ import uk.gov.hmcts.ccd.sdk.CaseView;
 import uk.gov.hmcts.ccd.sdk.CaseViewRequest;
 import uk.gov.hmcts.ccd.sdk.ResolvedCCDConfig;
 import uk.gov.hmcts.ccd.sdk.ResolvedConfigRegistry;
-
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.stream.Collectors;
 
 /**
  * Central place for loading {@link DecentralisedCaseDetails} with the
@@ -110,7 +109,7 @@ class CaseProjectionService {
 
       for (String caseType : supportedCaseTypes) {
         if ((isLegacyJsonDefinition && definitionRegistry.find(caseType).isEmpty())
-          || (!isLegacyJsonDefinition && !configs.containsKey(caseType))) {
+            || (!isLegacyJsonDefinition && !configs.containsKey(caseType))) {
           throw new IllegalStateException(
               "CaseView %s declares unknown case type %s".formatted(view.getClass().getName(), caseType));
         }
