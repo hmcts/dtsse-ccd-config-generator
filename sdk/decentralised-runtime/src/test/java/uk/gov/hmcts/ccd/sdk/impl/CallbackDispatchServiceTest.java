@@ -1,231 +1,411 @@
 package uk.gov.hmcts.ccd.sdk.impl;
 
+import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
-import uk.gov.hmcts.ccd.sdk.CallbackHandler;
+import org.mockito.Mockito;
+import org.springframework.beans.factory.ListableBeanFactory;
+import org.springframework.stereotype.Controller;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+import uk.gov.hmcts.ccd.domain.model.definition.CaseEventDefinition;
+import uk.gov.hmcts.ccd.domain.model.definition.CaseTypeDefinition;
 import uk.gov.hmcts.ccd.sdk.CallbackResponse;
 import uk.gov.hmcts.ccd.sdk.SubmittedCallbackResponse;
 import uk.gov.hmcts.reform.ccd.client.model.CallbackRequest;
 import uk.gov.hmcts.reform.ccd.client.model.CaseDetails;
 
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.Mockito.mock;
 
 class CallbackDispatchServiceTest {
 
   @Test
   void dispatchToHandlersAboutToSubmitReturnsHandlerResponse() {
-    CallbackResponse<?> expected = mock(CallbackResponse.class);
-    CallbackDispatchService service = new CallbackDispatchService(List.of(
-        new TestHandler("CASE_TYPE", "EVENT_ID", expected, null, true, false, false, 0)
-    ));
+    TestCallbackResponse expected = new TestCallbackResponse();
+    TestDispatchController controller = new TestDispatchController(expected, new TestSubmittedCallbackResponse(), 0);
+
+    CallbackDispatchService service = createInitialisedService(
+        Map.of("CASE_TYPE", definitionForEvents(event(
+            "EVENT_ID",
+            "${BASE_URL}/callbacks/aboutToSubmit",
+            null,
+            null
+        ))),
+        controller
+    );
 
     var result = service.dispatchToHandlersAboutToSubmit(buildRequest("EVENT_ID"));
 
-    assertThat(result.handled()).isTrue();
-    assertThat(result.response()).isSameAs(expected);
+    Assertions.assertThat(result.handled()).isTrue();
+    Assertions.assertThat(result.response()).isSameAs(expected);
+    Assertions.assertThat(controller.aboutToSubmitCalls.get()).isEqualTo(1);
   }
 
   @Test
   void dispatchToHandlersSubmittedReturnsHandlerResponse() {
-    SubmittedCallbackResponse expected = mock(SubmittedCallbackResponse.class);
-    CallbackDispatchService service = new CallbackDispatchService(List.of(
-        new TestHandler("CASE_TYPE", "EVENT_ID", null, expected, false, true, false, 0)
-    ));
+    TestSubmittedCallbackResponse expected = new TestSubmittedCallbackResponse();
+    TestDispatchController controller = new TestDispatchController(new TestCallbackResponse(), expected, 0);
+
+    CallbackDispatchService service = createInitialisedService(
+        Map.of("CASE_TYPE", definitionForEvents(event(
+            "EVENT_ID",
+            null,
+            "${BASE_URL}/callbacks/submitted",
+            null
+        ))),
+        controller
+    );
 
     var result = service.dispatchToHandlersSubmitted(buildRequest("EVENT_ID"));
 
-    assertThat(result.handled()).isTrue();
-    assertThat(result.response()).isSameAs(expected);
+    Assertions.assertThat(result.handled()).isTrue();
+    Assertions.assertThat(result.response()).isSameAs(expected);
+    Assertions.assertThat(controller.submittedCalls.get()).isEqualTo(1);
   }
 
   @Test
   void dispatchToHandlersReturnsNoHandlerWhenNoBindingMatches() {
-    CallbackDispatchService service = new CallbackDispatchService(List.of(
-        new TestHandler("OTHER_CASE_TYPE", "DIFFERENT_EVENT",
-            mock(CallbackResponse.class), mock(SubmittedCallbackResponse.class),
-            true, true, false, 0)
-    ));
+    TestDispatchController controller = new TestDispatchController(
+        new TestCallbackResponse(),
+        new TestSubmittedCallbackResponse(),
+        0
+    );
+
+    CallbackDispatchService service = createInitialisedService(
+        Map.of("CASE_TYPE", definitionForEvents(event(
+            "DIFFERENT_EVENT",
+            "${BASE_URL}/callbacks/aboutToSubmit",
+            "${BASE_URL}/callbacks/submitted",
+            null
+        ))),
+        controller
+    );
 
     var aboutToSubmit = service.dispatchToHandlersAboutToSubmit(buildRequest("EVENT_ID"));
     var submitted = service.dispatchToHandlersSubmitted(buildRequest("EVENT_ID"));
-    assertThat(aboutToSubmit.handled()).isFalse();
-    assertThat(aboutToSubmit.response()).isNull();
-    assertThat(submitted.handled()).isFalse();
-    assertThat(submitted.response()).isNull();
-  }
 
-  @Test
-  void dispatchToHandlersAboutToSubmitMatchesAllConfiguredBindingCombinations() {
-    CallbackResponse<?> expected = mock(CallbackResponse.class);
-    CallbackDispatchService service = new CallbackDispatchService(List.of(
-        new TestHandler(
-            List.of("CASE_TYPE_A", "CASE_TYPE_B"),
-            List.of("EVENT_A", "EVENT_B"),
-            expected,
-            null,
-            true,
-            false,
-            false,
-            0
-        )
-    ));
-
-    var result = service.dispatchToHandlersAboutToSubmit(buildRequest("CASE_TYPE_B", "EVENT_A"));
-
-    assertThat(result.handled()).isTrue();
-    assertThat(result.response()).isSameAs(expected);
-  }
-
-  @Test
-  void dispatchToHandlersReturnsNoHandlerWhenHandlerDoesNotAcceptCallbacks() {
-    CallbackDispatchService service = new CallbackDispatchService(List.of(
-        new TestHandler("CASE_TYPE", "EVENT_ID", mock(CallbackResponse.class), mock(SubmittedCallbackResponse.class),
-            false, false, false, 0)
-    ));
-
-    assertThat(service.dispatchToHandlersAboutToSubmit(buildRequest("EVENT_ID")).handled()).isFalse();
-    assertThat(service.dispatchToHandlersSubmitted(buildRequest("EVENT_ID")).handled()).isFalse();
+    Assertions.assertThat(aboutToSubmit.handled()).isFalse();
+    Assertions.assertThat(aboutToSubmit.response()).isNull();
+    Assertions.assertThat(submitted.handled()).isFalse();
+    Assertions.assertThat(submitted.response()).isNull();
   }
 
   @Test
   void dispatchToHandlersSubmittedRetriesUntilSuccess() {
-    SubmittedCallbackResponse expected = mock(SubmittedCallbackResponse.class);
-    CallbackDispatchService service = new CallbackDispatchService(List.of(
-        new TestHandler("CASE_TYPE", "EVENT_ID", null, expected, false, true, true, 2)
-    ));
+    TestSubmittedCallbackResponse expected = new TestSubmittedCallbackResponse();
+    TestDispatchController controller = new TestDispatchController(new TestCallbackResponse(), expected, 2);
+
+    CallbackDispatchService service = createInitialisedService(
+        Map.of("CASE_TYPE", definitionForEvents(event(
+            "EVENT_ID",
+            null,
+            "${BASE_URL}/callbacks/submitted",
+            List.of(1, 2)
+        ))),
+        controller
+    );
 
     var result = service.dispatchToHandlersSubmitted(buildRequest("EVENT_ID"));
-    assertThat(result.handled()).isTrue();
-    assertThat(result.response()).isSameAs(expected);
+
+    Assertions.assertThat(result.handled()).isTrue();
+    Assertions.assertThat(result.response()).isSameAs(expected);
+    Assertions.assertThat(controller.submittedCalls.get()).isEqualTo(3);
   }
 
   @Test
   void dispatchToHandlersSubmittedThrowsWhenRetriesExhausted() {
-    CallbackDispatchService service = new CallbackDispatchService(List.of(
-        new TestHandler("CASE_TYPE", "EVENT_ID", null, mock(SubmittedCallbackResponse.class),
-            false, true, true, Integer.MAX_VALUE)
-    ));
+    TestDispatchController controller = new TestDispatchController(
+        new TestCallbackResponse(),
+        new TestSubmittedCallbackResponse(),
+        Integer.MAX_VALUE
+    );
 
-    assertThatThrownBy(() -> service.dispatchToHandlersSubmitted(buildRequest("EVENT_ID")))
+    CallbackDispatchService service = createInitialisedService(
+        Map.of("CASE_TYPE", definitionForEvents(event(
+            "EVENT_ID",
+            null,
+            "${BASE_URL}/callbacks/submitted",
+            List.of(1, 2)
+        ))),
+        controller
+    );
+
+    Assertions.assertThatThrownBy(() -> service.dispatchToHandlersSubmitted(buildRequest("EVENT_ID")))
         .isInstanceOf(IllegalStateException.class)
         .hasMessageContaining("Submitted callback failed after 3 attempt(s)")
         .hasMessageContaining("caseType=CASE_TYPE")
         .hasMessageContaining("eventId=EVENT_ID")
         .hasCauseInstanceOf(RuntimeException.class);
+    Assertions.assertThat(controller.submittedCalls.get()).isEqualTo(3);
   }
 
   @Test
-  void constructorFailsFastOnDuplicateBindings() {
-    assertThatThrownBy(() -> new CallbackDispatchService(List.of(
-        new TestHandler("CASE_TYPE", "EVENT_ID", mock(CallbackResponse.class), null, true, false, false, 0),
-        new TestHandler("CASE_TYPE", "EVENT_ID", mock(CallbackResponse.class), null, true, false, false, 0)
-    )).dispatchToHandlersAboutToSubmit(buildRequest("EVENT_ID")))
+  void dispatchToHandlersSubmittedDoesNotRetryWhenSingleRetryTimeoutConfigured() {
+    TestDispatchController controller = new TestDispatchController(
+        new TestCallbackResponse(),
+        new TestSubmittedCallbackResponse(),
+        Integer.MAX_VALUE
+    );
+
+    CallbackDispatchService service = createInitialisedService(
+        Map.of("CASE_TYPE", definitionForEvents(event(
+            "EVENT_ID",
+            null,
+            "${BASE_URL}/callbacks/submitted",
+            List.of(1)
+        ))),
+        controller
+    );
+
+    Assertions.assertThatThrownBy(() -> service.dispatchToHandlersSubmitted(buildRequest("EVENT_ID")))
         .isInstanceOf(IllegalStateException.class)
-        .hasMessageContaining("Duplicate aboutToSubmit callback binding");
+        .hasMessageContaining("Submitted callback failed after 1 attempt(s)");
+    Assertions.assertThat(controller.submittedCalls.get()).isEqualTo(1);
+  }
+
+  @Test
+  void createDispatchMapResolvesEveryBindingUsingClassAndMethodPaths() {
+    TestCallbackResponse aboutResponse = new TestCallbackResponse();
+    TestSubmittedCallbackResponse submittedResponse = new TestSubmittedCallbackResponse();
+    MultiPathDispatchController controller = new MultiPathDispatchController(aboutResponse, submittedResponse);
+
+    CallbackDispatchService service = createInitialisedService(
+        Map.of("CASE_TYPE", definitionForEvents(event(
+            "EVENT_ID",
+            "${CCD_DEF_CASE_SERVICE_BASE_URL}/callbacks/downloadDraft/aboutToSubmit?eventId=EVENT_ID",
+            "${CCD_DEF_CASE_SERVICE_BASE_URL}/legacy/callbacks/downloadDraft/submitted",
+            null
+        ))),
+        controller
+    );
+
+    var aboutToSubmitResult = service.dispatchToHandlersAboutToSubmit(buildRequest("EVENT_ID"));
+    var submittedResult = service.dispatchToHandlersSubmitted(buildRequest("EVENT_ID"));
+
+    Assertions.assertThat(aboutToSubmitResult.handled()).isTrue();
+    Assertions.assertThat(aboutToSubmitResult.response()).isSameAs(aboutResponse);
+    Assertions.assertThat(submittedResult.handled()).isTrue();
+    Assertions.assertThat(submittedResult.response()).isSameAs(submittedResponse);
+    Assertions.assertThat(controller.aboutToSubmitCalls.get()).isEqualTo(1);
+    Assertions.assertThat(controller.submittedCalls.get()).isEqualTo(1);
+    Assertions.assertThat(controller.lastAboutToSubmitToken).isNull();
+    Assertions.assertThat(controller.lastSubmittedToken).isNull();
+  }
+
+  @Test
+  void createDispatchMapFailsWhenNoControllerEndpointMatchesDefinitionUrl() {
+    TestDispatchController controller = new TestDispatchController(
+        new TestCallbackResponse(),
+        new TestSubmittedCallbackResponse(),
+        0
+    );
+
+    Assertions.assertThatThrownBy(() -> createInitialisedService(
+        Map.of("CASE_TYPE", definitionForEvents(event(
+            "EVENT_ID",
+            "${BASE_URL}/missing/about-to-submit",
+            null,
+            null
+        ))),
+        controller
+    ))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("No callback controller method found")
+        .hasMessageContaining("CASE_TYPE")
+        .hasMessageContaining("EVENT_ID")
+        .hasMessageContaining("/missing/about-to-submit");
+  }
+
+  @Test
+  void createDispatchMapFailsFastOnDuplicateBindings() {
+    TestDispatchController controller = new TestDispatchController(
+        new TestCallbackResponse(),
+        new TestSubmittedCallbackResponse(),
+        0
+    );
+
+    Assertions.assertThatThrownBy(() -> createInitialisedService(
+        Map.of("CASE_TYPE", definitionForEvents(
+            event("EVENT_ID", "${BASE_URL}/callbacks/aboutToSubmit", null, null),
+            event("EVENT_ID", "${BASE_URL}/callbacks/altAboutToSubmit", null, null)
+        )),
+        controller
+    ))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("Multiple Bindings found")
+        .hasMessageContaining("callback type aboutToSubmit");
+  }
+
+  private CallbackDispatchService createInitialisedService(
+      Map<String, CaseTypeDefinition> definitions,
+      Object... controllers
+  ) {
+    DefinitionRegistry definitionRegistry = Mockito.mock(DefinitionRegistry.class);
+    Mockito.when(definitionRegistry.loadDefinitions()).thenReturn(definitions);
+
+    ListableBeanFactory beanFactory = Mockito.mock(ListableBeanFactory.class);
+    Map<String, Object> restControllers = new LinkedHashMap<>();
+    for (int i = 0; i < controllers.length; i++) {
+      restControllers.put("controller-" + i, controllers[i]);
+    }
+
+    Mockito.when(beanFactory.getBeansWithAnnotation(RestController.class)).thenReturn(restControllers);
+    Mockito.when(beanFactory.getBeansWithAnnotation(Controller.class)).thenReturn(Map.of());
+
+    CallbackDispatchService service = new CallbackDispatchService(definitionRegistry, beanFactory);
+    service.initialiseHandlerMaps();
+    return service;
+  }
+
+  private static CaseTypeDefinition definitionForEvents(CaseEventDefinition... events) {
+    CaseTypeDefinition definition = new CaseTypeDefinition();
+    definition.setEvents(List.of(events));
+    return definition;
+  }
+
+  private static CaseEventDefinition event(
+      String eventId,
+      String aboutToSubmitUrl,
+      String submittedUrl,
+      List<Integer> submittedRetries
+  ) {
+    CaseEventDefinition event = new CaseEventDefinition();
+    event.setId(eventId);
+    event.setCallBackURLAboutToSubmitEvent(aboutToSubmitUrl);
+    event.setCallBackURLSubmittedEvent(submittedUrl);
+    if (submittedRetries != null) {
+      event.setRetriesTimeoutURLSubmittedEvent(submittedRetries);
+    }
+    return event;
   }
 
   private static CallbackRequest buildRequest(String eventId) {
-    return buildRequest("CASE_TYPE", eventId);
-  }
-
-  private static CallbackRequest buildRequest(String caseTypeId, String eventId) {
     return CallbackRequest.builder()
         .eventId(eventId)
-        .caseDetails(CaseDetails.builder().id(123L).caseTypeId(caseTypeId).build())
+        .caseDetails(CaseDetails.builder().id(123L).caseTypeId("CASE_TYPE").build())
         .build();
   }
 
-  private static final class TestHandler implements CallbackHandler {
-
-    private final List<String> caseTypeIds;
-    private final List<String> eventIds;
+  @RestController
+  @RequestMapping("/callbacks")
+  private static final class TestDispatchController {
     private final CallbackResponse<?> aboutToSubmitResponse;
-    private final SubmittedCallbackResponse submittedResponse;
-    private final boolean acceptsAboutToSubmit;
-    private final boolean acceptsSubmitted;
-    private final boolean retrySubmitted;
-    private final int submittedFailuresBeforeSuccess;
-    private final AtomicInteger submittedAttempts = new AtomicInteger(0);
+    private final TestSubmittedCallbackResponse submittedResponse;
+    private final AtomicInteger submittedFailuresRemaining;
+    private final AtomicInteger aboutToSubmitCalls = new AtomicInteger();
+    private final AtomicInteger submittedCalls = new AtomicInteger();
 
-    private TestHandler(String caseTypeId,
-                        String eventId,
-                        CallbackResponse<?> aboutToSubmitResponse,
-                        SubmittedCallbackResponse submittedResponse,
-                        boolean acceptsAboutToSubmit,
-                        boolean acceptsSubmitted,
-                        boolean retrySubmitted,
-                        int submittedFailuresBeforeSuccess) {
-      this(
-          List.of(caseTypeId),
-          List.of(eventId),
-          aboutToSubmitResponse,
-          submittedResponse,
-          acceptsAboutToSubmit,
-          acceptsSubmitted,
-          retrySubmitted,
-          submittedFailuresBeforeSuccess
-      );
-    }
-
-    private TestHandler(List<String> caseTypeIds,
-                        List<String> eventIds,
-                        CallbackResponse<?> aboutToSubmitResponse,
-                        SubmittedCallbackResponse submittedResponse,
-                        boolean acceptsAboutToSubmit,
-                        boolean acceptsSubmitted,
-                        boolean retrySubmitted,
-                        int submittedFailuresBeforeSuccess) {
-      this.caseTypeIds = caseTypeIds;
-      this.eventIds = eventIds;
+    private TestDispatchController(
+        CallbackResponse<?> aboutToSubmitResponse,
+        TestSubmittedCallbackResponse submittedResponse,
+        int submittedFailuresBeforeSuccess
+    ) {
       this.aboutToSubmitResponse = aboutToSubmitResponse;
       this.submittedResponse = submittedResponse;
-      this.acceptsAboutToSubmit = acceptsAboutToSubmit;
-      this.acceptsSubmitted = acceptsSubmitted;
-      this.retrySubmitted = retrySubmitted;
-      this.submittedFailuresBeforeSuccess = submittedFailuresBeforeSuccess;
+      this.submittedFailuresRemaining = new AtomicInteger(submittedFailuresBeforeSuccess);
     }
 
-    @Override
-    public List<String> getHandledCaseTypeIds() {
-      return caseTypeIds;
-    }
-
-    @Override
-    public List<String> getHandledEventIds() {
-      return eventIds;
-    }
-
-    @Override
-    public CallbackResponse<?> aboutToSubmit(CallbackRequest callbackRequest) {
+    @PostMapping("/aboutToSubmit")
+    public CallbackResponse<?> aboutToSubmit(CallbackRequest callbackRequest, String authToken) {
+      aboutToSubmitCalls.incrementAndGet();
       return aboutToSubmitResponse;
     }
 
-    @Override
-    public SubmittedCallbackResponse submitted(CallbackRequest callbackRequest) {
-      int attempt = submittedAttempts.incrementAndGet();
-      if (attempt <= submittedFailuresBeforeSuccess) {
+    @PostMapping("/submitted")
+    public CallbackResponse<?> submitted(CallbackRequest callbackRequest, String authToken) {
+      submittedCalls.incrementAndGet();
+      if (submittedFailuresRemaining.getAndDecrement() > 0) {
         throw new RuntimeException("submitted callback failure");
       }
       return submittedResponse;
     }
+  }
+
+  @RestController
+  @RequestMapping(path = {"/callbacks", "/legacy/callbacks"})
+  private static final class MultiPathDispatchController {
+    private final CallbackResponse<?> aboutToSubmitResponse;
+    private final CallbackResponse<?> submittedResponse;
+    private final AtomicInteger aboutToSubmitCalls = new AtomicInteger();
+    private final AtomicInteger submittedCalls = new AtomicInteger();
+    private String lastAboutToSubmitToken;
+    private String lastSubmittedToken;
+
+    private MultiPathDispatchController(
+        CallbackResponse<?> aboutToSubmitResponse,
+        CallbackResponse<?> submittedResponse
+    ) {
+      this.aboutToSubmitResponse = aboutToSubmitResponse;
+      this.submittedResponse = submittedResponse;
+    }
+
+    @PostMapping(path = {"/downloadDraft/aboutToSubmit", "/aboutToSubmit"})
+    public CallbackResponse<?> aboutToSubmit(CallbackRequest callbackRequest, String authToken) {
+      aboutToSubmitCalls.incrementAndGet();
+      lastAboutToSubmitToken = authToken;
+      return aboutToSubmitResponse;
+    }
+
+    @PostMapping(path = {"/downloadDraft/submitted", "/submitted"})
+    public CallbackResponse<?> submitted(CallbackRequest callbackRequest, String authToken) {
+      submittedCalls.incrementAndGet();
+      lastSubmittedToken = authToken;
+      return submittedResponse;
+    }
+  }
+
+  private static class TestCallbackResponse implements CallbackResponse<Object> {
 
     @Override
-    public boolean acceptsAboutToSubmit() {
-      return acceptsAboutToSubmit;
+    public Object getData() {
+      return null;
     }
 
     @Override
-    public boolean acceptsSubmitted() {
-      return acceptsSubmitted;
+    public List<String> getErrors() {
+      return null;
     }
 
     @Override
-    public boolean shouldRetrySubmitted() {
-      return retrySubmitted;
+    public List<String> getWarnings() {
+      return null;
+    }
+
+    @Override
+    public String getState() {
+      return null;
+    }
+
+    @Override
+    public Map<String, Object> getDataClassification() {
+      return null;
+    }
+
+    @Override
+    public String getSecurityClassification() {
+      return null;
+    }
+
+    @Override
+    public String getErrorMessageOverride() {
+      return null;
+    }
+  }
+
+  private static final class TestSubmittedCallbackResponse extends TestCallbackResponse
+      implements SubmittedCallbackResponse {
+
+    @Override
+    public String getConfirmationHeader() {
+      return "header";
+    }
+
+    @Override
+    public String getConfirmationBody() {
+      return "body";
     }
   }
 }
