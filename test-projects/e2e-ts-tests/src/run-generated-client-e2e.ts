@@ -46,7 +46,7 @@ async function run(): Promise<void> {
   };
 
   const client = createCcdClient(config, caseBindings);
-  const flow = await client.event('caseworkerDecentralisedAddNoteDto').start(caseId);
+  const flow = await client.event('caseworkerServiceAddNote').start(caseId);
   const startData: CaseworkerAddNoteDto = flow.data;
 
   if (!startData.note || !startData.note.startsWith('[start] set by ')) {

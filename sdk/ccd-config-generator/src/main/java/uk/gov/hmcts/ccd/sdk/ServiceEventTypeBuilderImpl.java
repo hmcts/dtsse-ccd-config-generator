@@ -13,12 +13,12 @@ import uk.gov.hmcts.ccd.sdk.api.callback.Start;
 import uk.gov.hmcts.ccd.sdk.api.callback.Submit;
 
 /**
- * EventTypeBuilder for decentralised events using isolated DTO classes.
+ * EventTypeBuilder for service events using isolated DTO classes.
  * The DTO payload is serialised as JSON in a single opaque CCD field.
  */
 @SuppressWarnings({"unchecked", "rawtypes"})
 @RequiredArgsConstructor
-public class DtoEventTypeBuilderImpl<D, R extends HasRole, S> implements EventTypeBuilder<D, R, S> {
+public class ServiceEventTypeBuilderImpl<D, R extends HasRole, S> implements EventTypeBuilder<D, R, S> {
 
   private final ResolvedCCDConfig config;
   private final Map<String, List<Event.EventBuilder>> events;

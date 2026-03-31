@@ -49,17 +49,17 @@ public class CcdCallbackExecutor {
     var event = findCaseEvent(request);
 
     if (event.getStartHandler() != null) {
-      if (event.isDtoEvent()) {
+      if (event.isServiceEvent()) {
         Map<String, Object> ccdData = request.getCaseDetails().getData();
-        Object dtoData = DtoMapper.fromCcdData(
-            ccdData, event.getDtoClass(), mapper);
+        Object dtoData = ServiceEventMapper.fromCcdData(
+            ccdData, event.getServiceEventClass(), mapper);
         EventPayload payload = new EventPayload<>(
             request.getCaseDetails().getId(),
             dtoData
         );
         var response = event.getStartHandler().start(payload);
         Map<String, Object> responseData = new LinkedHashMap<>(ccdData);
-        responseData.putAll(DtoMapper.toCcdData(response, mapper));
+        responseData.putAll(ServiceEventMapper.toCcdData(response, mapper));
         return AboutToStartOrSubmitResponse.builder().data(responseData).build();
       }
 
@@ -108,19 +108,19 @@ public class CcdCallbackExecutor {
           + request.getEventId() + " for page " + page);
     }
 
-    if (event.isDtoEvent()) {
+    if (event.isServiceEvent()) {
       Map<String, Object> ccdData = request.getCaseDetails().getData();
-      CaseDetails dtoCaseDetails = buildDtoCaseDetails(
-          request.getCaseDetails(), event.getDtoClass());
-      CaseDetails dtoCaseDetailsBefore = request.getCaseDetailsBefore() != null
-          ? buildDtoCaseDetails(request.getCaseDetailsBefore(), event.getDtoClass())
-          : dtoCaseDetails;
+      CaseDetails serviceEventCaseDetails = buildServiceEventCaseDetails(
+          request.getCaseDetails(), event.getServiceEventClass());
+      CaseDetails serviceEventCaseDetailsBefore = request.getCaseDetailsBefore() != null
+          ? buildServiceEventCaseDetails(request.getCaseDetailsBefore(), event.getServiceEventClass())
+          : serviceEventCaseDetails;
 
-      var response = callback.handle(dtoCaseDetails, dtoCaseDetailsBefore);
+      var response = callback.handle(serviceEventCaseDetails, serviceEventCaseDetailsBefore);
 
       if (response.getData() != null) {
         Map<String, Object> responseData = new LinkedHashMap<>(ccdData);
-        responseData.putAll(DtoMapper.toCcdData(response.getData(), mapper));
+        responseData.putAll(ServiceEventMapper.toCcdData(response.getData(), mapper));
         response.setData(responseData);
       }
       return response;
@@ -158,9 +158,9 @@ public class CcdCallbackExecutor {
   }
 
   @SuppressWarnings("unchecked")
-  private CaseDetails buildDtoCaseDetails(
-      uk.gov.hmcts.reform.ccd.client.model.CaseDetails ccdDetails, Class<?> dtoClass) {
-    Object dtoData = DtoMapper.fromCcdData(ccdDetails.getData(), dtoClass, mapper);
+  private CaseDetails buildServiceEventCaseDetails(
+      uk.gov.hmcts.reform.ccd.client.model.CaseDetails ccdDetails, Class<?> serviceEventClass) {
+    Object dtoData = ServiceEventMapper.fromCcdData(ccdDetails.getData(), serviceEventClass, mapper);
     return CaseDetails.builder()
         .id(ccdDetails.getId())
         .caseTypeId(ccdDetails.getCaseTypeId())

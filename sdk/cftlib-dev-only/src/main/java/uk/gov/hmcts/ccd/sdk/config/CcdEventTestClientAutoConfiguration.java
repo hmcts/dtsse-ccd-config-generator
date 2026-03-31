@@ -6,8 +6,8 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.context.annotation.Bean;
-import uk.gov.hmcts.ccd.sdk.CcdEventTestClient;
 import uk.gov.hmcts.ccd.sdk.ResolvedConfigRegistry;
+import uk.gov.hmcts.ccd.sdk.ServiceEventTestClient;
 import uk.gov.hmcts.reform.ccd.client.CoreCaseDataApi;
 
 @AutoConfiguration
@@ -17,11 +17,11 @@ public class CcdEventTestClientAutoConfiguration {
 
   @Bean
   @ConditionalOnMissingBean
-  public CcdEventTestClient ccdEventTestClient(
+  public ServiceEventTestClient serviceEventTestClient(
       CoreCaseDataApi ccdApi,
       ObjectMapper objectMapper,
       ResolvedConfigRegistry resolvedConfigRegistry
   ) {
-    return new CcdEventTestClient(ccdApi, objectMapper, resolvedConfigRegistry);
+    return new ServiceEventTestClient(ccdApi, objectMapper, resolvedConfigRegistry);
   }
 }

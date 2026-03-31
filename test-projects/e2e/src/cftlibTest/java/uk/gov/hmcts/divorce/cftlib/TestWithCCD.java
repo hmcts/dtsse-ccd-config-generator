@@ -93,7 +93,7 @@ import uk.gov.hmcts.divorce.simplecase.model.SimpleCaseState;
 import uk.gov.hmcts.divorce.sow014.nfd.CaseworkerMaintainCaseLink;
 import uk.gov.hmcts.divorce.sow014.nfd.CaseworkerPopulateSearchCriteria;
 import uk.gov.hmcts.divorce.sow014.nfd.DecentralisedCaseworkerAddNote;
-import uk.gov.hmcts.divorce.sow014.nfd.DecentralisedCaseworkerAddNoteDto;
+import uk.gov.hmcts.divorce.sow014.nfd.ServiceCaseworkerAddNote;
 import uk.gov.hmcts.divorce.sow014.nfd.DecentralisedCaseworkerAddNoteFailure;
 import uk.gov.hmcts.divorce.sow014.nfd.model.CaseworkerAddNoteDto;
 import uk.gov.hmcts.divorce.sow014.nfd.FailingSubmittedCallback;
@@ -110,7 +110,7 @@ import uk.gov.hmcts.divorce.sow014.nfd.SubmittedConfirmationCallback;
 import uk.gov.hmcts.ccd.sdk.type.CaseLink;
 import uk.gov.hmcts.ccd.sdk.type.ListValue;
 import uk.gov.hmcts.ccd.sdk.CaseReindexingService;
-import uk.gov.hmcts.ccd.sdk.CcdEventTestClient;
+import uk.gov.hmcts.ccd.sdk.ServiceEventTestClient;
 import uk.gov.hmcts.ccd.sdk.taskmanagement.model.TaskAction;
 import uk.gov.hmcts.reform.ccd.client.CoreCaseDataApi;
 import uk.gov.hmcts.reform.ccd.client.model.CaseDataContent;
@@ -150,7 +150,7 @@ public class TestWithCCD extends CftlibTest {
     private CaseReindexingService reindexQueueService;
 
     @Autowired
-    private CcdEventTestClient ccdEventTestClient;
+    private ServiceEventTestClient serviceEventTestClient;
 
     @Autowired
     private JmsTemplate jmsTemplate;
@@ -2566,8 +2566,8 @@ public class TestWithCCD extends CftlibTest {
 
     @Order(29)
     @Test
-    void generatedTypeScriptClientSubmitsDtoEventAgainstLiveStack() throws Exception {
-        String noteText = "Generated TS DTO note " + UUID.randomUUID();
+    void generatedTypeScriptClientSubmitsServiceEventAgainstLiveStack() throws Exception {
+        String noteText = "Generated TS service event note " + UUID.randomUUID();
         runGeneratedTypeScriptClient(noteText);
 
         String latestNoteSql = "SELECT note FROM case_notes WHERE reference = :ref ORDER BY id DESC LIMIT 1";
@@ -2577,16 +2577,16 @@ public class TestWithCCD extends CftlibTest {
 
     @Order(35)
     @Test
-    void dtoEventRoundTripsThroughPayloadField() throws Exception {
-        String noteText = "DTO payload test " + UUID.randomUUID();
+    void serviceEventRoundTripsThroughPayloadField() throws Exception {
+        String noteText = "Service event payload test " + UUID.randomUUID();
         CaseworkerAddNoteDto dto = CaseworkerAddNoteDto.builder().note(noteText).build();
 
-        ccdEventTestClient.startAndSubmitUpdateEvent(
+        serviceEventTestClient.startAndSubmitUpdateEvent(
             getAuthorisation("TEST_CASE_WORKER_USER@mailinator.com"),
             getServiceAuth(),
             NoFaultDivorce.getCaseType(),
             caseRef,
-            DecentralisedCaseworkerAddNoteDto.CASEWORKER_DECENTRALISED_ADD_NOTE_DTO,
+            ServiceCaseworkerAddNote.CASEWORKER_SERVICE_ADD_NOTE,
             CaseworkerAddNoteDto.class,
             dto
         );

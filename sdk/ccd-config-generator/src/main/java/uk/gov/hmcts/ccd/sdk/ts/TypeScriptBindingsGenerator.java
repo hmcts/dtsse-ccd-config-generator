@@ -31,7 +31,7 @@ public class TypeScriptBindingsGenerator {
   private static final String CONTRACTS_FILE = "event-contracts.ts";
 
   public void writeBindings(File outputFolder, ResolvedCCDConfig<?, ?, ?> config, String moduleName) {
-    List<DtoEventContract> contracts = extractContracts(config);
+    List<ServiceEventContract> contracts = extractContracts(config);
     if (contracts.isEmpty()) {
       return;
     }
@@ -43,24 +43,24 @@ public class TypeScriptBindingsGenerator {
     deleteLegacyClientFile(outputFolder);
   }
 
-  private List<DtoEventContract> extractContracts(ResolvedCCDConfig<?, ?, ?> config) {
-    List<DtoEventContract> result = new ArrayList<>();
+  private List<ServiceEventContract> extractContracts(ResolvedCCDConfig<?, ?, ?> config) {
+    List<ServiceEventContract> result = new ArrayList<>();
     for (Event<?, ?, ?> event : config.getEvents().values()) {
-      if (!event.isDtoEvent()) {
+      if (!event.isServiceEvent()) {
         continue;
       }
-      result.add(new DtoEventContract(
+      result.add(new ServiceEventContract(
           event.getId(),
-          event.getDtoClass()));
+          event.getServiceEventClass()));
     }
     return result.stream()
-        .sorted(Comparator.comparing(DtoEventContract::eventId))
+        .sorted(Comparator.comparing(ServiceEventContract::eventId))
         .toList();
   }
 
-  private Map<String, Class<?>> indexDtoTypeNames(List<DtoEventContract> contracts) {
+  private Map<String, Class<?>> indexDtoTypeNames(List<ServiceEventContract> contracts) {
     Map<String, Class<?>> dtoTypeNames = new LinkedHashMap<>();
-    for (DtoEventContract contract : contracts) {
+    for (ServiceEventContract contract : contracts) {
       Class<?> dtoClass = contract.dtoClass();
       Class<?> existing = dtoTypeNames.putIfAbsent(dtoClass.getSimpleName(), dtoClass);
       if (existing != null && !existing.equals(dtoClass)) {
@@ -89,7 +89,7 @@ public class TypeScriptBindingsGenerator {
 
   private void writeContracts(File outputFolder,
                               String caseTypeId,
-                              List<DtoEventContract> contracts,
+                              List<ServiceEventContract> contracts,
                               Map<String, Class<?>> dtoTypeNames,
                               String moduleName) {
     String imports = dtoTypeNames.keySet().stream()
@@ -151,7 +151,7 @@ public class TypeScriptBindingsGenerator {
     }
   }
 
-  private record DtoEventContract(
+  private record ServiceEventContract(
       String eventId,
       Class<?> dtoClass) {
   }

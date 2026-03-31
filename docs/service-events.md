@@ -1,7 +1,7 @@
-# Isolated DTO Events
+# Service Events
 
-This proposal adds a new overload of `decentralisedEvent` that lets events define their own DTO class instead of
-sharing a case-wide data class. Each DTO-backed event owns a focused input model containing only the fields it needs.
+Service events let each event define its own DTO class instead of sharing a case-wide data class.
+Each service event owns a focused input model containing only the fields it needs.
 
 ```java
 @Data
@@ -14,12 +14,12 @@ public class CreateClaimData {
 }
 ```
 
-## Declaring a DTO event
+## Declaring a service event
 
-A new overload accepts the DTO class alongside the event ID and handlers:
+`serviceEvent` accepts the DTO class alongside the event ID and handlers:
 
 ```java
-builder.decentralisedEvent(
+builder.serviceEvent(
         "createPossessionClaim",
         CreateClaimData.class,
         this::submit,
@@ -54,13 +54,13 @@ private SubmitResponse<State> submit(EventPayload<CreateClaimData, State> payloa
 }
 ```
 
-DTOs are event-scoped and ephemeral. The decentralised runtime does not persist DTO payloads — neither in CCD nor in
-any database. The payload exists only for the lifetime of the event flow (start → mid-event callbacks → submit). Your
+DTOs are event-scoped and ephemeral. The runtime does not persist DTO payloads — neither in CCD nor in
+any database. The payload exists only for the lifetime of the event flow (start -> mid-event callbacks -> submit). Your
 submit handler is responsible for persisting any data it needs into your own data store.
 
 ## Payload transport
 
-DTO-backed events use a single opaque `ccdSdkDtoEventData` CCD field. The SDK serialises the DTO to a JSON string and stores it
+Service events use a single opaque `ccdSdkServiceEventData` CCD field. The SDK serialises the DTO to a JSON string and stores it
 in this field. On submission, the SDK deserialises the JSON string back into the DTO before passing it to your handler.
 
 CCD does not need to understand the structure of the payload. Individual DTO fields are not mapped to individual CCD
@@ -86,16 +86,16 @@ Your application is responsible for ensuring that event handlers behave correctl
 through appropriate locking, idempotent submissions, or re-reading authoritative state at submit time rather than
 trusting values hydrated at start.
 
-> **No global optimistic lock for concurrent decentralised events.**
-> Unlike standard CCD events, there is no version check that rejects a decentralised event because another event committed to the same case in the meantime. Two users can both start a decentralised event against the same case version and neither will be rejected by the framework. Your service is responsible for detecting and handling concurrent modifications over its own data — for example, using database-level constraints, idempotency keys, or service-managed optimistic locking.
+> **No global optimistic lock for concurrent service events.**
+> Unlike standard CCD events, there is no version check that rejects a service event because another event committed to the same case in the meantime. Two users can both start a service event against the same case version and neither will be rejected by the framework. Your service is responsible for detecting and handling concurrent modifications over its own data — for example, using database-level constraints, idempotency keys, or service-managed optimistic locking.
 
 ## No CCD UI configuration
 
-DTO-backed decentralised events do not use CCD's UI configuration. There are no pages, show conditions, label
+Service events do not use CCD's UI configuration. There are no pages, show conditions, label
 interpolations, or field display options. Your service provides its own frontend (e.g. GOV.UK Nunjucks templates) which
 works directly with the DTO structure. CCD is not involved in rendering.
 
-The page DSL (`.mandatory()`, `.optional()`, `.showCondition()`, `.label()`, etc.) is not available on the DTO event
+The page DSL (`.mandatory()`, `.optional()`, `.showCondition()`, `.label()`, etc.) is not available on the service event
 builder. Conditional rendering and field layout are your frontend's responsibility.
 
 ## Supported DTO field types
@@ -105,14 +105,14 @@ nested objects, maps, and collections. There are no CCD field type restrictions 
 
 ## Access control
 
-DTO-backed events own their payload exclusively. Access control stays on the event:
+Service events own their payload exclusively. Access control stays on the event:
 
 ```java
 .grant(Permission.CRUD, UserRole.PCS_SOLICITOR)
 ```
 
 If a role can run the event, it gets CRUD access to that event's payload. You do not need per-field `@Access`
-configuration for isolated DTO fields.
+configuration for service event DTO fields.
 
 > **More granular access control must be implemented in your service.**
 > CCD role-based access controls whether a user can invoke the event at all. If you need finer-grained control — for example, restricting which specific records a user may act on, or enforcing ownership checks — implement that logic in your submit handler based on the identity of the incoming request.
@@ -121,13 +121,13 @@ configuration for isolated DTO fields.
 
 1. Identify the fields an event actually needs.
 2. Create a focused DTO for those fields.
-3. Use `decentralisedEvent(id, DtoClass.class, submit, start)`.
+3. Use `serviceEvent(id, DtoClass.class, submit, start)`.
 4. Update handlers to use `EventPayload<DtoClass, State>`.
 5. Remove no-longer-needed event-only fields from the shared case data class.
 
-## Typed frontend–backend contract
+## Typed frontend-backend contract
 
-A key benefit of DTO events is a single source of truth for the data contract between your Java backend and your
+A key benefit of service events is a single source of truth for the data contract between your Java backend and your
 frontend. The Java DTO class defines the shape, and the SDK generates TypeScript interfaces from it. Your backend
 handlers and your frontend templates both work against the same type — changes to the DTO fail the build on both sides
 if they fall out of sync.
@@ -165,7 +165,7 @@ Per case type, the generator writes:
 - `event-contracts.ts` — an event manifest mapping event IDs to their DTO types, plus `caseBindings` runtime
   configuration for the typed client
 
-Only DTO-backed decentralised events are included in these bindings. Legacy non-DTO decentralised events are omitted.
+Only service events are included in these bindings. Legacy non-DTO decentralised events are omitted.
 
 ### Runtime package
 

@@ -37,7 +37,7 @@ async function startAndSubmitRoundTrip(): Promise<void> {
         token: "event-token",
         case_details: {
           case_data: {
-            ccdSdkDtoEventData: JSON.stringify({
+            ccdSdkServiceEventData: JSON.stringify({
               note: "[start]",
               propertyAddress: "10 Example Street",
             }),
@@ -74,7 +74,7 @@ async function startAndSubmitRoundTrip(): Promise<void> {
   assert.equal(requests[1]?.url, "http://ccd/cases/12345/events");
   assert.deepEqual(requests[1]?.body, {
     data: {
-      ccdSdkDtoEventData: JSON.stringify({
+      ccdSdkServiceEventData: JSON.stringify({
         note: "updated",
         propertyAddress: "12 Example Street",
       }),
@@ -95,7 +95,7 @@ async function validateRoundTrip(): Promise<void> {
         case_details: {
           state: "Draft",
           case_data: {
-            ccdSdkDtoEventData: JSON.stringify({
+            ccdSdkServiceEventData: JSON.stringify({
               note: "before",
             }),
           },
@@ -106,7 +106,7 @@ async function validateRoundTrip(): Promise<void> {
       requests.push({ method: "POST", url, body });
       return {
         data: {
-          ccdSdkDtoEventData: JSON.stringify({
+          ccdSdkServiceEventData: JSON.stringify({
             note: "after",
             propertyAddress: "99 Example Road",
           }),
@@ -144,7 +144,7 @@ async function validateRoundTrip(): Promise<void> {
       state: "Draft",
       case_type_id: "TEST_CASE",
       case_data: {
-        ccdSdkDtoEventData: JSON.stringify({
+        ccdSdkServiceEventData: JSON.stringify({
           note: "before",
           propertyAddress: "99 Example Road",
         }),
@@ -154,7 +154,7 @@ async function validateRoundTrip(): Promise<void> {
       state: "Draft",
       case_type_id: "TEST_CASE",
       case_data: {
-        ccdSdkDtoEventData: JSON.stringify({
+        ccdSdkServiceEventData: JSON.stringify({
           note: "before",
         }),
       },
@@ -171,7 +171,7 @@ async function validateWithoutDataKeepsMergedState(): Promise<void> {
         token: "event-token",
         case_details: {
           case_data: {
-            ccdSdkDtoEventData: JSON.stringify({
+            ccdSdkServiceEventData: JSON.stringify({
               note: "before",
             }),
           },

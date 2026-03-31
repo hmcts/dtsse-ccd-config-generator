@@ -22,16 +22,16 @@ public interface DecentralisedConfigBuilder<T, S, R extends HasRole> extends Con
   EventTypeBuilder<T, R, S> decentralisedEvent(String id, Submit<T, S> submitHandler, Start<T, S> startHandler);
 
   /**
-   * Decentralised event using an isolated DTO class.
+   * Service event using an isolated DTO class.
    * The DTO is serialised as a JSON payload in a single opaque CCD field.
    */
-  <D> EventTypeBuilder<D, R, S> decentralisedEvent(
+  <D> EventTypeBuilder<D, R, S> serviceEvent(
       String id, Class<D> dtoClass, Submit<D, S> submitHandler);
 
   /**
-   * Decentralised event using an isolated DTO class, with a start handler.
+   * Service event using an isolated DTO class, with a start handler.
    * The DTO is serialised as a JSON payload in a single opaque CCD field.
    */
-  <D> EventTypeBuilder<D, R, S> decentralisedEvent(
+  <D> EventTypeBuilder<D, R, S> serviceEvent(
       String id, Class<D> dtoClass, Submit<D, S> submitHandler, Start<D, S> startHandler);
 }

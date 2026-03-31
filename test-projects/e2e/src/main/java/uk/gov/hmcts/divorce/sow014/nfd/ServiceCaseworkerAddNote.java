@@ -28,9 +28,9 @@ import uk.gov.hmcts.divorce.sow014.nfd.model.CaseworkerAddNoteDto;
 
 @Component
 @Slf4j
-public class DecentralisedCaseworkerAddNoteDto implements CCDConfig<CaseData, State, UserRole> {
+public class ServiceCaseworkerAddNote implements CCDConfig<CaseData, State, UserRole> {
 
-    public static final String CASEWORKER_DECENTRALISED_ADD_NOTE_DTO = "caseworkerDecentralisedAddNoteDto";
+    public static final String CASEWORKER_SERVICE_ADD_NOTE = "caseworkerServiceAddNote";
 
     @Autowired
     private HttpServletRequest request;
@@ -44,22 +44,22 @@ public class DecentralisedCaseworkerAddNoteDto implements CCDConfig<CaseData, St
     @Override
     public void configureDecentralised(final DecentralisedConfigBuilder<CaseData, State, UserRole> configBuilder) {
         EventBuilder<CaseworkerAddNoteDto, UserRole, State> eventBuilder = configBuilder
-            .decentralisedEvent(
-                CASEWORKER_DECENTRALISED_ADD_NOTE_DTO,
+            .serviceEvent(
+                CASEWORKER_SERVICE_ADD_NOTE,
                 CaseworkerAddNoteDto.class,
                 this::submit,
                 this::start
             )
             .forAllStates()
-            .name("Add note (decentralised dto)")
+            .name("Add note (service event)")
             .showEventNotes()
             .grant(CREATE_READ_UPDATE, CASE_WORKER, JUDGE)
             .grant(CREATE_READ_UPDATE_DELETE, SUPER_USER)
             .grantHistoryOnly(LEGAL_ADVISOR, JUDGE);
 
         eventBuilder.fields()
-            .page("addCaseNotesDecentralisedDto")
-            .pageLabel("Add case notes (decentralised dto)")
+            .page("addCaseNotesServiceEvent")
+            .pageLabel("Add case notes (service event)")
             .optional(CaseworkerAddNoteDto::getNote);
     }
 
@@ -87,9 +87,9 @@ public class DecentralisedCaseworkerAddNoteDto implements CCDConfig<CaseData, St
             params
         );
 
-        log.info("Decentralised DTO add note submitted for case {}", reference);
+        log.info("Service event add note submitted for case {}", reference);
         return SubmitResponse.<State>builder()
-            .confirmationHeader("Decentralised DTO submission complete")
+            .confirmationHeader("Service event submission complete")
             .confirmationBody("Case note saved successfully.")
             .build();
     }

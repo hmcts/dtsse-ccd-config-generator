@@ -89,17 +89,17 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements Decentralised
 
   @Override
   @SuppressWarnings({"unchecked", "rawtypes"})
-  public <D> EventTypeBuilder<D, R, S> decentralisedEvent(
+  public <D> EventTypeBuilder<D, R, S> serviceEvent(
       String id, Class<D> dtoClass, Submit<D, S> submitHandler) {
-    return new DtoEventTypeBuilderImpl<>(config, (Map) events, id, dtoClass,
+    return new ServiceEventTypeBuilderImpl<>(config, (Map) events, id, dtoClass,
         submitHandler, null);
   }
 
   @Override
   @SuppressWarnings({"unchecked", "rawtypes"})
-  public <D> EventTypeBuilder<D, R, S> decentralisedEvent(
+  public <D> EventTypeBuilder<D, R, S> serviceEvent(
       String id, Class<D> dtoClass, Submit<D, S> submitHandler, Start<D, S> startHandler) {
-    return new DtoEventTypeBuilderImpl<>(config, (Map) events, id, dtoClass,
+    return new ServiceEventTypeBuilderImpl<>(config, (Map) events, id, dtoClass,
         submitHandler, startHandler);
   }
 

@@ -111,7 +111,7 @@ ccd {
 ```
 
 When `tsBindings.enabled = true`, `generateCCDConfig` writes JSON config and TypeScript bindings together.
-See the [Typed frontend–backend contract](docs/isolated-event-dtos.md#typed-frontendbackend-contract) section for developer usage.
+See the [Typed frontend-backend contract](docs/service-events.md#typed-frontend-backend-contract) section for developer usage.
 
 If you need libraries that are only required when producing configuration artefacts, add them to the `configGeneration` configuration. These dependencies are available to `generateCCDConfig` without polluting your application's runtime classpath:
 

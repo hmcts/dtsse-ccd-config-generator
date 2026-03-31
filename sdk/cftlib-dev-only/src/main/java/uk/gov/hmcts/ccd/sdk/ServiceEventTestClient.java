@@ -8,7 +8,7 @@ import java.net.http.HttpResponse;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.SneakyThrows;
-import uk.gov.hmcts.ccd.sdk.runtime.DtoMapper;
+import uk.gov.hmcts.ccd.sdk.runtime.ServiceEventMapper;
 import uk.gov.hmcts.reform.ccd.client.CoreCaseDataApi;
 import uk.gov.hmcts.reform.ccd.client.model.CaseDataContent;
 import uk.gov.hmcts.reform.ccd.client.model.CaseDetails;
@@ -16,10 +16,10 @@ import uk.gov.hmcts.reform.ccd.client.model.Event;
 import uk.gov.hmcts.reform.ccd.client.model.StartEventResponse;
 
 /**
- * Keeps DTO-backed cftlib tests on DTO fields instead of CCD wire keys.
+ * Keeps service event cftlib tests on DTO fields instead of CCD wire keys.
  */
 @RequiredArgsConstructor
-public class CcdEventTestClient {
+public class ServiceEventTestClient {
 
   private static final String BASE_URL = "http://localhost:4452";
 
@@ -35,7 +35,7 @@ public class CcdEventTestClient {
       Class<D> dtoClass,
       D dto
   ) {
-    getRequiredDtoEvent(caseTypeId, eventId, dtoClass);
+    getRequiredServiceEvent(caseTypeId, eventId, dtoClass);
     StartEventResponse start = ccdApi.startCase(idamToken, s2sToken, caseTypeId, eventId);
 
     CaseDataContent content = CaseDataContent.builder()
@@ -57,7 +57,7 @@ public class CcdEventTestClient {
       Class<D> dtoClass,
       D dto
   ) {
-    getRequiredDtoEvent(caseTypeId, eventId, dtoClass);
+    getRequiredServiceEvent(caseTypeId, eventId, dtoClass);
     String caseRef = Long.toString(caseReference);
     StartEventResponse start = ccdApi.startEvent(idamToken, s2sToken, caseRef, eventId);
 
@@ -87,21 +87,21 @@ public class CcdEventTestClient {
     }
   }
 
-  private <D> void getRequiredDtoEvent(String caseTypeId, String eventId, Class<D> dtoClass) {
+  private <D> void getRequiredServiceEvent(String caseTypeId, String eventId, Class<D> dtoClass) {
     uk.gov.hmcts.ccd.sdk.api.Event<?, ?, ?> resolvedEvent =
         resolvedConfigRegistry.getRequiredEvent(caseTypeId, eventId);
-    if (!resolvedEvent.isDtoEvent()) {
-      throw new IllegalArgumentException(eventId + " is not configured as a DTO-backed event");
+    if (!resolvedEvent.isServiceEvent()) {
+      throw new IllegalArgumentException(eventId + " is not configured as a service event");
     }
-    if (!dtoClass.equals(resolvedEvent.getDtoClass())) {
+    if (!dtoClass.equals(resolvedEvent.getServiceEventClass())) {
       throw new IllegalArgumentException(
-          "Event " + eventId + " expects DTO " + resolvedEvent.getDtoClass().getName()
+          "Event " + eventId + " expects DTO " + resolvedEvent.getServiceEventClass().getName()
               + " but caller passed " + dtoClass.getName()
       );
     }
   }
 
   private Map<String, Object> buildSubmissionData(Object dto) {
-    return DtoMapper.toCcdData(dto, objectMapper);
+    return ServiceEventMapper.toCcdData(dto, objectMapper);
   }
 }

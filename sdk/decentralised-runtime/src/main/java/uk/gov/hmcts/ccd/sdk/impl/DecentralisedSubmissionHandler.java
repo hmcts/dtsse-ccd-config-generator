@@ -10,7 +10,7 @@ import uk.gov.hmcts.ccd.sdk.ResolvedConfigRegistry;
 import uk.gov.hmcts.ccd.sdk.api.Event;
 import uk.gov.hmcts.ccd.sdk.api.EventPayload;
 import uk.gov.hmcts.ccd.sdk.api.callback.SubmitResponse;
-import uk.gov.hmcts.ccd.sdk.runtime.DtoMapper;
+import uk.gov.hmcts.ccd.sdk.runtime.ServiceEventMapper;
 
 /**
  * Submission flow that relies on the decentralised submit handler instead of the
@@ -53,10 +53,10 @@ class DecentralisedSubmissionHandler implements CaseSubmissionHandler {
 
     long caseRef = event.getCaseDetails().getReference();
 
-    if (eventConfig.isDtoEvent()) {
-      Object dtoData = DtoMapper.fromCcdData(
+    if (eventConfig.isServiceEvent()) {
+      Object dtoData = ServiceEventMapper.fromCcdData(
           event.getCaseDetails().getData(),
-          eventConfig.getDtoClass(), mapper);
+          eventConfig.getServiceEventClass(), mapper);
       return eventConfig.getSubmitHandler()
           .submit(new EventPayload(caseRef, dtoData));
     }

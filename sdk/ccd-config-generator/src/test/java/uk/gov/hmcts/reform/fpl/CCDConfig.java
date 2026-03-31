@@ -498,7 +498,7 @@ public class CCDConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<CaseData, S
   @Override
   public void configureDecentralised(DecentralisedConfigBuilder<CaseData, State, UserRole> builder) {
     configure(builder);
-    builder.decentralisedEvent("addNoteDto", AddNoteDto.class,
+    builder.serviceEvent("addNoteDto", AddNoteDto.class,
             payload -> uk.gov.hmcts.ccd.sdk.api.callback.SubmitResponse.defaultResponse())
         .forAllStates()
         .name("Add note (DTO)")

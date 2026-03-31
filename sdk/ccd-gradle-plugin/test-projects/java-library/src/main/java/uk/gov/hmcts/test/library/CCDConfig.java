@@ -26,7 +26,7 @@ public class CCDConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<CaseData, S
       .done();
 
     builder
-      .decentralisedEvent("create-widget", CreateWidgetData.class, this::submitDto, this::startDto)
+      .serviceEvent("create-widget", CreateWidgetData.class, this::submitDto, this::startDto)
       .initialState(State.Bar)
       .grant(CRU, Role.Foo)
       .name("Create widget")
