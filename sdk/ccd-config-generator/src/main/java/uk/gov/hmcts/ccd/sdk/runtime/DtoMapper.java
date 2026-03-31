@@ -17,9 +17,6 @@ public final class DtoMapper {
 
   public static final String PAYLOAD_FIELD = "ccdSdkDtoEventData";
 
-  private DtoMapper() {
-  }
-
   /**
    * Extracts and deserialises a DTO from the {@code ccdSdkDtoEventData} field of CCD data.
    */
