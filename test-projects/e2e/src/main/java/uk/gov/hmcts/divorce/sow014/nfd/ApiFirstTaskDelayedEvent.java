@@ -98,7 +98,7 @@ public class ApiFirstTaskDelayedEvent implements CCDConfig<CaseData, State, User
             .build()))
         .build();
 
-    taskOutboxService.enqueueTaskCreateRequest(new TaskCreateRequest(task), now.plusSeconds(12).toLocalDateTime());
+    taskOutboxService.enqueueTaskCreateRequest(new TaskCreateRequest(task), now.plusHours(1).toLocalDateTime());
 
     return AboutToStartOrSubmitResponse.<CaseData, State>builder()
         .data(details.getData())
