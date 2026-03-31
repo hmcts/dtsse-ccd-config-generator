@@ -18,24 +18,28 @@ jobs:
             gradleIntegration: adoption:integration
             definitionsDir: test-projects/adoption-cos-api/build/definitions
             runIntegration: false
+            changePath: test-projects/adoption-cos-api
           - checkName: Semantic Diff - NFDiv
             module: nfdiv
             gradleGenerate: nfdiv:generateCCDConfig
             gradleIntegration: nfdiv:integration
             definitionsDir: test-projects/nfdiv-case-api/build/definitions
             runIntegration: true
+            changePath: test-projects/nfdiv-case-api
           - checkName: Semantic Diff - PCS
             module: pcs
             gradleGenerate: pcs:generateCCDConfig
             gradleIntegration: pcs:integration
             definitionsDir: test-projects/pcs-api/build/definitions
             runIntegration: true
+            changePath: test-projects/pcs-api
           - checkName: Semantic Diff - SPTribs
             module: sptribs
             gradleGenerate: sptribs:generateCCDConfig
             gradleIntegration: sptribs:integration
             definitionsDir: test-projects/sptribs-case-api/build/definitions
             runIntegration: true
+            changePath: test-projects/sptribs-case-api
 
     steps:
       - name: Checkout repository
@@ -43,11 +47,12 @@ jobs:
         with:
           fetch-depth: 0
           submodules: recursive
-      - name: Determine whether change is docs-only
+      - name: Classify changes
         id: changes
         run: |
           if [ "${{ github.event_name }}" != "pull_request" ]; then
             echo "docs_only=false" >> "$GITHUB_OUTPUT"
+            echo "module_changed=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           base="${{ github.event.pull_request.base.sha }}"
@@ -56,6 +61,7 @@ jobs:
           files=$(git diff --name-only "$base" "$head")
           if [ -z "$files" ]; then
             echo "docs_only=false" >> "$GITHUB_OUTPUT"
+            echo "module_changed=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           if echo "$files" | grep -vE '\.md$' >/dev/null; then
@@ -63,9 +69,18 @@ jobs:
           else
             echo "docs_only=true" >> "$GITHUB_OUTPUT"
           fi
+          non_doc_files=$(echo "$files" | grep -vE '\.md$' || true)
+          if [ -n "$non_doc_files" ] && ! echo "$non_doc_files" | grep -vE '^${{ matrix.changePath }}(/|$)' >/dev/null; then
+            echo "module_changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "module_changed=false" >> "$GITHUB_OUTPUT"
+          fi
       - name: Docs-only change detected
         if: steps.changes.outputs.docs_only == 'true'
         run: echo "Docs-only change; skipping semantic diff checks."
+      - name: Module change detected
+        if: steps.changes.outputs.docs_only != 'true' && steps.changes.outputs.module_changed == 'true'
+        run: echo "Module changed directly; skipping base-vs-PR semantic diff comparison."
 
       - name: Set up JDK
         if: steps.changes.outputs.docs_only != 'true'
@@ -79,7 +94,7 @@ jobs:
         run: ./gradlew ${{ matrix.gradleIntegration }} -i
 
       - name: Checkout base branch
-        if: steps.changes.outputs.docs_only != 'true'
+        if: steps.changes.outputs.docs_only != 'true' && steps.changes.outputs.module_changed != 'true'
         uses: actions/checkout@v6
         with:
           ref: ${{ github.event.pull_request.base.sha }}
@@ -88,7 +103,7 @@ jobs:
           submodules: recursive
 
       - name: Generate base CCD config
-        if: steps.changes.outputs.docs_only != 'true'
+        if: steps.changes.outputs.docs_only != 'true' && steps.changes.outputs.module_changed != 'true'
         working-directory: base
         run: ./gradlew ${{ matrix.gradleGenerate }} -i
 
@@ -98,7 +113,7 @@ jobs:
         run: ./gradlew ${{ matrix.gradleGenerate }} -i
 
       - name: Compare CCD configuration outputs
-        if: steps.generate-pr.outcome == 'success' && steps.changes.outputs.docs_only != 'true'
+        if: steps.generate-pr.outcome == 'success' && steps.changes.outputs.docs_only != 'true' && steps.changes.outputs.module_changed != 'true'
         env:
           EXPECTED_DIR: ${{ format('{0}/base/{1}', github.workspace, matrix.definitionsDir) }}
           ACTUAL_DIR: ${{ format('{0}/{1}', github.workspace, matrix.definitionsDir) }}

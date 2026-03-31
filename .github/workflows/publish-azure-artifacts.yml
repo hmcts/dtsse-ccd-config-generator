@@ -22,9 +22,20 @@ jobs:
           distribution: temurin
           java-version: 21
           cache: gradle
+      - name: Compute release version
+        id: release_version
+        shell: bash
+        run: |
+          if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
+            version="${GITHUB_REF_NAME}"
+          else
+            ref="$(echo "${GITHUB_REF_NAME}" | tr '/_' '-' | tr -cd '[:alnum:].-')"
+            version="${ref}-${GITHUB_RUN_NUMBER}.${GITHUB_RUN_ATTEMPT}-${GITHUB_SHA::8}"
+          fi
+          echo "release_version=${version}" >> "${GITHUB_OUTPUT}"
       - name: Publish artifacts to Azure
         env:
           AZURE_DEVOPS_ARTIFACT_USERNAME: ${{ secrets.AZURE_DEVOPS_ARTIFACT_USERNAME }}
           AZURE_DEVOPS_ARTIFACT_TOKEN: ${{ secrets.AZURE_DEVOPS_ARTIFACT_TOKEN }}
-          RELEASE_VERSION: ${{ github.ref_name }}
+          RELEASE_VERSION: ${{ steps.release_version.outputs.release_version }}
         run: ./gradlew -i publishToAzureArtifacts
