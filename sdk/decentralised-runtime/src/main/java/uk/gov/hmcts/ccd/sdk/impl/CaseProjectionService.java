@@ -3,11 +3,7 @@ package uk.gov.hmcts.ccd.sdk.impl;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.stream.Collectors;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.ResolvableType;
 import org.springframework.stereotype.Service;
 import org.springframework.util.ClassUtils;
@@ -18,6 +14,12 @@ import uk.gov.hmcts.ccd.sdk.CaseView;
 import uk.gov.hmcts.ccd.sdk.CaseViewRequest;
 import uk.gov.hmcts.ccd.sdk.ResolvedCCDConfig;
 import uk.gov.hmcts.ccd.sdk.ResolvedConfigRegistry;
+
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * Central place for loading {@link DecentralisedCaseDetails} with the
@@ -35,15 +37,18 @@ class CaseProjectionService {
   private final Map<String, CaseViewBinding> bindings;
   private final DefinitionRegistry definitionRegistry;
   private final GlobalSearchProcessorService globalSearchProcessorService;
+  private final boolean isLegacyJsonDefinition;
 
   CaseProjectionService(CaseDataRepository caseDataRepository,
                         ObjectMapper mapper,
                         List<CaseView<?, ?>> caseViews,
                         ResolvedConfigRegistry configRegistry,
-                        DefinitionRegistry definitionRegistry) {
+                        DefinitionRegistry definitionRegistry,
+                        @Value("${ccd.legacy-json-service:false}") boolean isLegacyJsonDefinition) {
     this.caseDataRepository = caseDataRepository;
     this.mapper = mapper;
     this.definitionRegistry = definitionRegistry;
+    this.isLegacyJsonDefinition = isLegacyJsonDefinition;
     this.globalSearchProcessorService = new GlobalSearchProcessorService(new DefaultObjectMapperService(mapper));
     this.bindings = buildBindings(caseViews, configRegistry.asMap());
   }
@@ -104,7 +109,8 @@ class CaseProjectionService {
       Set<String> supportedCaseTypes = resolveCaseTypes(view, caseDataType, stateType, configs);
 
       for (String caseType : supportedCaseTypes) {
-        if (!configs.containsKey(caseType)) {
+        if ((isLegacyJsonDefinition && definitionRegistry.find(caseType).isEmpty())
+          || (!isLegacyJsonDefinition && !configs.containsKey(caseType))) {
           throw new IllegalStateException(
               "CaseView %s declares unknown case type %s".formatted(view.getClass().getName(), caseType));
         }
@@ -115,7 +121,9 @@ class CaseProjectionService {
         if (previous != null) {
           throw new IllegalStateException(
               "Multiple CaseView beans registered for case type %s: %s and %s".formatted(
-                  caseType, previous.caseView().getClass().getName(), view.getClass().getName()
+                caseType,
+                previous.caseView().getClass().getName(),
+                view.getClass().getName()
               ));
         }
       }
@@ -148,6 +156,11 @@ class CaseProjectionService {
                                        Class<?> caseDataType,
                                        Class<? extends Enum<?>> stateType,
                                        Map<String, ResolvedCCDConfig<?, ?, ?>> configs) {
+    Set<String> declaredCaseTypes = sanitiseDeclaredCaseTypes(view);
+    if (!declaredCaseTypes.isEmpty()) {
+      return declaredCaseTypes;
+    }
+
     Set<String> matched = configs.entrySet().stream()
         .filter(entry -> entry.getValue().getCaseClass().equals(caseDataType)
             && entry.getValue().getStateClass().equals(stateType))
@@ -157,18 +170,36 @@ class CaseProjectionService {
     if (matched.isEmpty()) {
       throw new IllegalStateException(
           "Unable to match CaseView %s to any case type. "
-              + "Ensure the generics match a registered CCD configuration."
+              + "Ensure the generics match a registered CCD configuration, or override caseTypeIds()."
               .formatted(view.getClass().getName()));
     }
 
     if (matched.size() > 1) {
       throw new IllegalStateException(
           "CaseView %s matches multiple case types (%s). "
-              + "Provide distinct CaseView beans per case type."
+              + "Provide explicit case type IDs via caseTypeIds()."
               .formatted(view.getClass().getName(), String.join(", ", matched)));
     }
 
     return Set.copyOf(matched);
+  }
+
+  private Set<String> sanitiseDeclaredCaseTypes(CaseView<?, ?> view) {
+    Set<String> declaredCaseTypes = view.caseTypeIds();
+    if (declaredCaseTypes == null || declaredCaseTypes.isEmpty()) {
+      return Set.of();
+    }
+
+    Set<String> cleaned = declaredCaseTypes.stream()
+        .filter(caseType -> caseType != null && !caseType.isBlank())
+        .collect(Collectors.toSet());
+
+    if (cleaned.size() != declaredCaseTypes.size()) {
+      throw new IllegalStateException(
+          "CaseView %s declares blank/null case type IDs via caseTypeIds()".formatted(view.getClass().getName()));
+    }
+
+    return Set.copyOf(cleaned);
   }
 
   private record CaseViewBinding(
