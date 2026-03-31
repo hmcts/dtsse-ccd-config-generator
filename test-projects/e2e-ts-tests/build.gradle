@@ -10,6 +10,7 @@ node {
 tasks.register('yarnInstall', com.github.gradle.node.yarn.task.YarnInstallTask) {
   group = 'build'
   description = 'Install E2E TypeScript test dependencies via Yarn.'
+  args = ['--cache-folder', "${projectDir}/.yarn-cache"]
 }
 
 tasks.register('yarnTypecheck', com.github.gradle.node.yarn.task.YarnTask) {
