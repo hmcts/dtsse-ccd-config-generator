@@ -1,7 +1,14 @@
 # Service Events
 
-Service events let each event define its own DTO class instead of sharing a case-wide data class.
-Each service event owns a focused input model containing only the fields it needs.
+Service events:
+
+1. Are for use by service frontends (not XUI)
+2. Provide a type safe API built around event specific payloads (instead of a single everything-class-domain-model)
+3. Provide coarser event level access control (write field level access control in code if you need it)
+4. May run concurrently
+
+Each service event defines its own DTO class instead of sharing a case-wide data class.
+The DTO is a focused model containing only the fields the event needs, serving as both input and output.
 
 ```java
 @Data
@@ -30,12 +37,6 @@ builder.serviceEvent(
     .grant(Permission.CRUD, UserRole.PCS_SOLICITOR);
 ```
 
-Existing non-DTO decentralised events are unaffected:
-
-```java
-builder.decentralisedEvent("createPossessionClaim", this::submit, this::start);
-```
-
 ## Handler behaviour
 
 Handlers receive the DTO directly:
@@ -56,7 +57,7 @@ private SubmitResponse<State> submit(EventPayload<CreateClaimData, State> payloa
 
 DTOs are event-scoped and ephemeral. The runtime does not persist DTO payloads — neither in CCD nor in
 any database. The payload exists only for the lifetime of the event flow (start -> mid-event callbacks -> submit). Your
-submit handler is responsible for persisting any data it needs into your own data store.
+submit handler is responsible for persisting any data it needs into your own database.
 
 ## Payload transport
 
@@ -66,6 +67,10 @@ in this field. On submission, the SDK deserialises the JSON string back into the
 CCD does not need to understand the structure of the payload. Individual DTO fields are not mapped to individual CCD
 fields — there is no per-field prefixing, no generated CCD field IDs, and no field length constraints beyond the
 capacity of the payload field itself.
+
+### Document attachment
+
+CCD's post-event document attachment is retained and fulfilled by the service's CaseView implementation, which is the view of case data seen by CCD. If new documents appear there then CCD will identify and attach new documents correctly.
 
 ### Searchable fields
 
@@ -78,22 +83,13 @@ CCD does not introspect the payload field. Auditing of DTO contents is handled b
 
 ## Concurrency
 
-Because DTO payloads are ephemeral, data hydrated onto the DTO by about-to-start or mid-event callbacks reflects a
-point-in-time snapshot. Another user or process may modify the underlying data between the moment your callback reads it
-and the moment the user submits.
-
-Your application is responsible for ensuring that event handlers behave correctly under concurrency — for example,
-through appropriate locking, idempotent submissions, or re-reading authoritative state at submit time rather than
-trusting values hydrated at start.
-
-> **No global optimistic lock for concurrent service events.**
-> Unlike standard CCD events, there is no version check that rejects a service event because another event committed to the same case in the meantime. Two users can both start a service event against the same case version and neither will be rejected by the framework. Your service is responsible for detecting and handling concurrent modifications over its own data — for example, using database-level constraints, idempotency keys, or service-managed optimistic locking.
+DTO payloads are ephemeral, so data hydrated by about-to-start or mid-event callbacks reflects a point-in-time snapshot. Your application is responsible for ensuring that event handlers behave correctly under concurrency — for example, through appropriate locking, idempotent submissions, or re-reading authoritative state at submit time rather than trusting values hydrated at start. Unlike standard CCD events, there is no version check that rejects a service event because another event committed to the same case in the meantime. Two users can both start a service event against the same case version and neither will be rejected by the framework. Your service is responsible for detecting and handling concurrent modifications over its own data — for example, using database-level constraints, idempotency keys, or service-managed optimistic locking.
 
 ## No CCD UI configuration
 
 Service events do not use CCD's UI configuration. There are no pages, show conditions, label
 interpolations, or field display options. Your service provides its own frontend (e.g. GOV.UK Nunjucks templates) which
-works directly with the DTO structure. CCD is not involved in rendering.
+works directly with the DTO structure. XUI is not involved in rendering.
 
 The page DSL (`.mandatory()`, `.optional()`, `.showCondition()`, `.label()`, etc.) is not available on the service event
 builder. Conditional rendering and field layout are your frontend's responsibility.
@@ -115,7 +111,7 @@ If a role can run the event, it gets CRUD access to that event's payload. You do
 configuration for service event DTO fields.
 
 > **More granular access control must be implemented in your service.**
-> CCD role-based access controls whether a user can invoke the event at all. If you need finer-grained control — for example, restricting which specific records a user may act on, or enforcing ownership checks — implement that logic in your submit handler based on the identity of the incoming request.
+> CCD role-based access controls whether a user can invoke the event at all. If you need finer-grained control — for example, restricting which individual fields a user may act on, or enforcing ownership checks — implement that logic in your submit handler based on the identity of the incoming request.
 
 ## Migration from shared case data
 
@@ -142,17 +138,9 @@ ccd {
 
   tsBindings {
     enabled = true
-    outputDir.set(file('../my-frontend/src/main/generated/ccd'))
-    moduleName = 'my-module'
   }
 }
 ```
-
-`tsBindings` options:
-
-- `enabled` default `false`
-- `outputDir` default `build/ts-bindings`
-- `moduleName` default `ccd-bindings`
 
 When `ccd.tsBindings.enabled=true`, `./gradlew generateCCDConfig` produces both CCD JSON definitions and TypeScript
 bindings in a single pass. No separate generation task is required.
@@ -183,7 +171,7 @@ The runtime handles CCD transport marshalling so your code works with plain DTO-
 payloads.
 
 - `start()` returns DTO-shaped data
-- `validate(patch)` accepts a partial DTO and returns DTO-shaped data (plus any `errors` and `warnings` from CCD
+- `validate(patch)` accepts a DTO and returns DTO-shaped data (plus any `errors` and `warnings` from CCD
   callback validation)
 - `submit(data)` accepts DTO-shaped data
 
