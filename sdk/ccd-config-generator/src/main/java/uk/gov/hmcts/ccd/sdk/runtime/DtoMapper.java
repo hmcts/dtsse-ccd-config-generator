@@ -1,5 +1,6 @@
 package uk.gov.hmcts.ccd.sdk.runtime;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -32,6 +33,9 @@ public final class DtoMapper {
     }
     if (payloadValue instanceof String json) {
       return mapper.readValue(json, dtoClass);
+    }
+    if (payloadValue instanceof JsonNode node && node.isTextual()) {
+      return mapper.readValue(node.textValue(), dtoClass);
     }
     return mapper.convertValue(payloadValue, dtoClass);
   }

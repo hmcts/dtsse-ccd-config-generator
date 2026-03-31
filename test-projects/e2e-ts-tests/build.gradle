@@ -10,7 +10,12 @@ node {
 tasks.register('yarnInstall', com.github.gradle.node.yarn.task.YarnInstallTask) {
   group = 'build'
   description = 'Install E2E TypeScript test dependencies via Yarn.'
+  // Ensure the runtime's dist/ is built before yarn copies it into node_modules via file: protocol.
+  dependsOn gradle.includedBuild('sdk').task(':ccd-event-runtime:yarnBuild')
   args = ['--cache-folder', "${projectDir}/.yarn-cache"]
+  inputs.file('package.json')
+  inputs.file('yarn.lock')
+  outputs.dir('node_modules')
 }
 
 tasks.register('yarnTypecheck', com.github.gradle.node.yarn.task.YarnTask) {
@@ -19,6 +24,9 @@ tasks.register('yarnTypecheck', com.github.gradle.node.yarn.task.YarnTask) {
   dependsOn tasks.named('yarnInstall')
   dependsOn ':e2e:generateCCDConfig'
   args = ['typecheck']
+  inputs.dir('src')
+  inputs.file('tsconfig.json')
+  inputs.dir('node_modules')
 }
 
 tasks.register('yarnTestE2eClient', com.github.gradle.node.yarn.task.YarnTask) {
@@ -26,4 +34,6 @@ tasks.register('yarnTestE2eClient', com.github.gradle.node.yarn.task.YarnTask) {
   description = 'Run generated CCD TypeScript client E2E tests.'
   dependsOn tasks.named('yarnTypecheck')
   args = ['test:e2e-client']
+  inputs.dir('src')
+  inputs.dir('node_modules')
 }

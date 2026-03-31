@@ -1,14 +1,17 @@
 package uk.gov.hmcts.ccd.sdk;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import java.util.LinkedHashMap;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
+import lombok.SneakyThrows;
 import uk.gov.hmcts.ccd.sdk.runtime.DtoMapper;
 import uk.gov.hmcts.reform.ccd.client.CoreCaseDataApi;
 import uk.gov.hmcts.reform.ccd.client.model.CaseDataContent;
 import uk.gov.hmcts.reform.ccd.client.model.CaseDetails;
-import uk.gov.hmcts.reform.ccd.client.model.CaseResource;
 import uk.gov.hmcts.reform.ccd.client.model.Event;
 import uk.gov.hmcts.reform.ccd.client.model.StartEventResponse;
 
@@ -17,6 +20,8 @@ import uk.gov.hmcts.reform.ccd.client.model.StartEventResponse;
  */
 @RequiredArgsConstructor
 public class CcdEventTestClient {
+
+  private static final String BASE_URL = "http://localhost:4452";
 
   private final CoreCaseDataApi ccdApi;
   private final ObjectMapper objectMapper;
@@ -34,7 +39,7 @@ public class CcdEventTestClient {
     StartEventResponse start = ccdApi.startCase(idamToken, s2sToken, caseTypeId, eventId);
 
     CaseDataContent content = CaseDataContent.builder()
-        .data(buildSubmissionData(start, dto))
+        .data(buildSubmissionData(dto))
         .event(Event.builder().id(eventId).build())
         .eventToken(start.getToken())
         .build();
@@ -42,7 +47,8 @@ public class CcdEventTestClient {
     return ccdApi.submitCaseCreation(idamToken, s2sToken, caseTypeId, content);
   }
 
-  public <D> CaseResource startAndSubmitUpdateEvent(
+  @SneakyThrows
+  public <D> void startAndSubmitUpdateEvent(
       String idamToken,
       String s2sToken,
       String caseTypeId,
@@ -52,15 +58,33 @@ public class CcdEventTestClient {
       D dto
   ) {
     getRequiredDtoEvent(caseTypeId, eventId, dtoClass);
-    StartEventResponse start = ccdApi.startEvent(idamToken, s2sToken, Long.toString(caseReference), eventId);
+    String caseRef = Long.toString(caseReference);
+    StartEventResponse start = ccdApi.startEvent(idamToken, s2sToken, caseRef, eventId);
 
-    CaseDataContent content = CaseDataContent.builder()
-        .data(buildSubmissionData(start, dto))
-        .event(Event.builder().id(eventId).build())
-        .eventToken(start.getToken())
+    var body = Map.of(
+        "data", buildSubmissionData(dto),
+        "event", Map.of("id", eventId),
+        "event_token", start.getToken(),
+        "ignore_warning", false
+    );
+
+    HttpRequest request = HttpRequest.newBuilder()
+        .uri(URI.create(BASE_URL + "/cases/" + caseRef + "/events"))
+        .header("Authorization", idamToken)
+        .header("ServiceAuthorization", s2sToken)
+        .header("Content-Type", "application/json")
+        .header("experimental", "true")
+        .header("Accept",
+            "application/vnd.uk.gov.hmcts.ccd-data-store-api.create-event.v2+json;charset=UTF-8")
+        .POST(HttpRequest.BodyPublishers.ofString(objectMapper.writeValueAsString(body)))
         .build();
 
-    return ccdApi.createEvent(idamToken, s2sToken, Long.toString(caseReference), content);
+    HttpResponse<String> response = HttpClient.newHttpClient()
+        .send(request, HttpResponse.BodyHandlers.ofString());
+
+    if (response.statusCode() >= 400) {
+      throw new RuntimeException("[" + response.statusCode() + "] " + response.body());
+    }
   }
 
   private <D> void getRequiredDtoEvent(String caseTypeId, String eventId, Class<D> dtoClass) {
@@ -77,12 +101,7 @@ public class CcdEventTestClient {
     }
   }
 
-  private Map<String, Object> buildSubmissionData(StartEventResponse start, Object dto) {
-    Map<String, Object> submissionData = new LinkedHashMap<>();
-    if (start.getCaseDetails() != null && start.getCaseDetails().getData() != null) {
-      submissionData.putAll(start.getCaseDetails().getData());
-    }
-    submissionData.putAll(DtoMapper.toCcdData(dto, objectMapper));
-    return submissionData;
+  private Map<String, Object> buildSubmissionData(Object dto) {
+    return DtoMapper.toCcdData(dto, objectMapper);
   }
 }
