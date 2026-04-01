@@ -4,6 +4,7 @@
     "Description": "Add note (DTO)",
     "DisplayOrder": 4,
     "EndButtonLabel": "Save and continue",
+    "EventEnablingCondition": "[STATE]=\"NEVER_SHOW\"",
     "ID": "addNoteDto",
     "LiveFrom": "01/01/2017",
     "Name": "Add note (DTO)",

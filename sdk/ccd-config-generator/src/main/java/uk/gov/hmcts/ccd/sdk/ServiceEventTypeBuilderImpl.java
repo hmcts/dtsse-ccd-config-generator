@@ -78,6 +78,8 @@ public class ServiceEventTypeBuilderImpl<D, R extends HasRole, S> implements Ser
         .builder(id, dtoClass, new PropertyUtils(), preStates, postStates, dtoClass);
     result.submitHandler(this.submitHandler);
     result.startHandler(this.startHandler);
+    // Always-false show condition so XUI hides service events from the next steps dropdown.
+    result.showCondition("[STATE]=\"NEVER_SHOW\"");
     if (!events.containsKey(id)) {
       events.put(id, Lists.newArrayList());
     }
