@@ -43,7 +43,7 @@ class CaseProjectionService {
                         List<CaseView<?, ?>> caseViews,
                         ResolvedConfigRegistry configRegistry,
                         DefinitionRegistry definitionRegistry,
-                        @Value("${ccd.legacy-json-service:false}") boolean isLegacyJsonDefinition) {
+                        @Value("${decentralisation.legacy-json-service:false}") boolean isLegacyJsonDefinition) {
     this.caseDataRepository = caseDataRepository;
     this.mapper = mapper;
     this.definitionRegistry = definitionRegistry;
