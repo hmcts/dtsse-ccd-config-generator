@@ -18,6 +18,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
@@ -42,7 +43,20 @@ class CaseSubmissionServiceTest {
       resolvedConfigRegistry,
       submitHandler,
       legacyHandler,
-      jsonDefinitionHandler,
+      Optional.of(jsonDefinitionHandler),
+      idamService,
+      idempotencyEnforcer,
+      transactionTemplate,
+      auditEventService,
+      caseDataRepository,
+      caseProjectionService
+  );
+
+  private final CaseSubmissionService serviceWithoutJsonHandler = new CaseSubmissionService(
+      resolvedConfigRegistry,
+      submitHandler,
+      legacyHandler,
+      Optional.empty(),
       idamService,
       idempotencyEnforcer,
       transactionTemplate,
@@ -117,6 +131,21 @@ class CaseSubmissionServiceTest {
 
     verify(legacyHandler).apply(event);
     verifyNoInteractions(submitHandler, jsonDefinitionHandler);
+  }
+
+  @Test
+  void submitFailsWhenLegacyJsonServiceEnabledButJsonHandlerMissing() {
+    final DecentralisedCaseEvent event = buildEvent();
+    final UUID idempotencyKey = UUID.randomUUID();
+
+    ReflectionTestUtils.setField(serviceWithoutJsonHandler, "isLegacyJsonDefinition", true);
+    when(idamService.retrieveUser("Bearer token")).thenReturn(new IdamService.User("Bearer token", null));
+    doReturn(mock(Event.class)).when(resolvedConfigRegistry).getRequiredEvent("CASE_TYPE", "EVENT_ID");
+
+    assertThrows(IllegalStateException.class,
+        () -> serviceWithoutJsonHandler.submit(event, "Bearer token", idempotencyKey));
+
+    verifyNoInteractions(submitHandler, legacyHandler, jsonDefinitionHandler);
   }
 
   private void setupTransactionExecution() {

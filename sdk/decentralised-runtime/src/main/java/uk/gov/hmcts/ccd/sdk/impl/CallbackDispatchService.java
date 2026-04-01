@@ -16,6 +16,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.aop.support.AopUtils;
 import org.springframework.beans.factory.ListableBeanFactory;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.core.annotation.AnnotatedElementUtils;
 import org.springframework.stereotype.Controller;
 import org.springframework.stereotype.Service;
@@ -30,6 +31,7 @@ import uk.gov.hmcts.reform.ccd.client.model.CallbackRequest;
 @Slf4j
 @RequiredArgsConstructor
 @Service(value = "uk.gov.hmcts.ccd.sdk.impl.CallbackDispatchService")
+@ConditionalOnProperty(prefix = "decentralisation", name = "legacy-json-service", havingValue = "true")
 public class CallbackDispatchService {
 
   private static final String ABOUT_TO_SUBMIT = "aboutToSubmit";

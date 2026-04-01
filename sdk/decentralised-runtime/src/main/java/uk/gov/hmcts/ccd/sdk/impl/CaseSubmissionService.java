@@ -27,14 +27,14 @@ public class CaseSubmissionService {
   private final ResolvedConfigRegistry resolvedConfigRegistry;
   private final DecentralisedSubmissionHandler submitHandler;
   private final LegacyCallbackSubmissionHandler legacyHandler;
-  private final JsonDefinitionSubmissionHandler jsonDefinitionHandler;
+  private final Optional<JsonDefinitionSubmissionHandler> jsonDefinitionHandler;
   private final IdamService idam;
   private final IdempotencyEnforcer idempotencyEnforcer;
   private final TransactionTemplate transactionTemplate;
   private final AuditEventService auditEventService;
   private final CaseDataRepository caseDataRepository;
   private final CaseProjectionService caseProjectionService;
-  @Value("${ccd.legacy-json-service:false}")
+  @Value("${decentralisation.legacy-json-service:false}")
   private boolean isLegacyJsonDefinition;
 
   public DecentralisedSubmitEventResponse submit(DecentralisedCaseEvent event,
@@ -45,7 +45,8 @@ public class CaseSubmissionService {
     CaseSubmissionHandler handler;
 
     if (isLegacyJsonDefinition) {
-      handler = jsonDefinitionHandler;
+      handler = jsonDefinitionHandler.orElseThrow(() -> new IllegalStateException(
+          "Legacy JSON service is enabled but no JsonDefinitionSubmissionHandler bean is available"));
     } else {
       handler = eventConfig.getSubmitHandler() != null ? submitHandler : legacyHandler;
     }
