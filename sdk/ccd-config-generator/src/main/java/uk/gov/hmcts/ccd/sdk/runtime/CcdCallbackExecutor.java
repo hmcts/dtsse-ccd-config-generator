@@ -3,13 +3,13 @@ package uk.gov.hmcts.ccd.sdk.runtime;
 import com.fasterxml.jackson.databind.JavaType;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.Maps;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
-import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.web.server.ResponseStatusException;
 import uk.gov.hmcts.ccd.sdk.ResolvedCCDConfig;
 import uk.gov.hmcts.ccd.sdk.ResolvedConfigRegistry;
@@ -42,19 +42,33 @@ public class CcdCallbackExecutor {
   }
 
   @SneakyThrows
+  @SuppressWarnings("unchecked")
   public AboutToStartOrSubmitResponse aboutToStart(CallbackRequest request) {
     log.info("About to start event ID: {}", request.getEventId());
 
     var event = findCaseEvent(request);
 
     if (event.getStartHandler() != null) {
+      if (event.isServiceEvent()) {
+        Map<String, Object> ccdData = request.getCaseDetails().getData();
+        Object dtoData = ServiceEventMapper.fromCcdData(
+            ccdData, event.getServiceEventClass(), mapper);
+        EventPayload payload = new EventPayload<>(
+            request.getCaseDetails().getId(),
+            dtoData
+        );
+        var response = event.getStartHandler().start(payload);
+        Map<String, Object> responseData = new LinkedHashMap<>(ccdData);
+        responseData.putAll(ServiceEventMapper.toCcdData(response, mapper));
+        return AboutToStartOrSubmitResponse.builder().data(responseData).build();
+      }
+
       var config = registry.getRequired(request.getCaseDetails().getCaseTypeId());
       String json = mapper.writeValueAsString(request.getCaseDetails().getData());
       var domainClass = mapper.readValue(json, config.getCaseClass());
       EventPayload payload = new EventPayload<>(
           request.getCaseDetails().getId(),
-          domainClass,
-          new LinkedMultiValueMap<>()
+          domainClass
       );
 
       var response = event.getStartHandler().start(payload);
@@ -83,14 +97,35 @@ public class CcdCallbackExecutor {
   }
 
   @SneakyThrows
+  @SuppressWarnings("unchecked")
   public AboutToStartOrSubmitResponse midEvent(CallbackRequest request, String page) {
     log.info("Mid event callback: {} for page {}", request.getEventId(), page);
-    MidEvent<?, ?> callback = findCaseEvent(request).getFields().getPagesToMidEvent().get(page);
+    var event = findCaseEvent(request);
+    MidEvent<?, ?> callback = event.getFields().getPagesToMidEvent().get(page);
 
     if (callback == null) {
       throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Handler not found for "
           + request.getEventId() + " for page " + page);
     }
+
+    if (event.isServiceEvent()) {
+      Map<String, Object> ccdData = request.getCaseDetails().getData();
+      CaseDetails serviceEventCaseDetails = buildServiceEventCaseDetails(
+          request.getCaseDetails(), event.getServiceEventClass());
+      CaseDetails serviceEventCaseDetailsBefore = request.getCaseDetailsBefore() != null
+          ? buildServiceEventCaseDetails(request.getCaseDetailsBefore(), event.getServiceEventClass())
+          : serviceEventCaseDetails;
+
+      var response = callback.handle(serviceEventCaseDetails, serviceEventCaseDetailsBefore);
+
+      if (response.getData() != null) {
+        Map<String, Object> responseData = new LinkedHashMap<>(ccdData);
+        responseData.putAll(ServiceEventMapper.toCcdData(response.getData(), mapper));
+        response.setData(responseData);
+      }
+      return response;
+    }
+
     return callback.handle(convertCaseDetails(request.getCaseDetails()),
         convertCaseDetails(request.getCaseDetailsBefore(),
             request.getCaseDetails().getCaseTypeId()));
@@ -120,6 +155,18 @@ public class CcdCallbackExecutor {
     }
 
     return result;
+  }
+
+  @SuppressWarnings("unchecked")
+  private CaseDetails buildServiceEventCaseDetails(
+      uk.gov.hmcts.reform.ccd.client.model.CaseDetails ccdDetails, Class<?> serviceEventClass) {
+    Object dtoData = ServiceEventMapper.fromCcdData(ccdDetails.getData(), serviceEventClass, mapper);
+    return CaseDetails.builder()
+        .id(ccdDetails.getId())
+        .caseTypeId(ccdDetails.getCaseTypeId())
+        .data(dtoData)
+        .state(ccdDetails.getState())
+        .build();
   }
 
   CaseDetails convertCaseDetails(uk.gov.hmcts.reform.ccd.client.model.CaseDetails ccdDetails) {

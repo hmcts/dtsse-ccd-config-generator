@@ -5,11 +5,12 @@ import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
-import org.springframework.util.LinkedMultiValueMap;
 import uk.gov.hmcts.ccd.decentralised.dto.DecentralisedCaseEvent;
 import uk.gov.hmcts.ccd.sdk.ResolvedConfigRegistry;
 import uk.gov.hmcts.ccd.sdk.api.Event;
+import uk.gov.hmcts.ccd.sdk.api.EventPayload;
 import uk.gov.hmcts.ccd.sdk.api.callback.SubmitResponse;
+import uk.gov.hmcts.ccd.sdk.runtime.ServiceEventMapper;
 
 /**
  * Submission flow that relies on the decentralised submit handler instead of the
@@ -40,6 +41,7 @@ class DecentralisedSubmissionHandler implements CaseSubmissionHandler {
     return new CaseSubmissionHandlerResult(Optional.empty(), state, securityClassification, () -> outcome);
   }
 
+  @SuppressWarnings("unchecked")
   private SubmitResponse<?> prepareSubmitHandler(DecentralisedCaseEvent event) {
     String caseType = event.getEventDetails().getCaseType();
     String eventId = event.getEventDetails().getEventId();
@@ -49,18 +51,23 @@ class DecentralisedSubmissionHandler implements CaseSubmissionHandler {
       throw new IllegalStateException("Submit handler not configured for event %s".formatted(eventId));
     }
 
-    var config = registry.getRequired(caseType);
+    long caseRef = event.getCaseDetails().getReference();
 
+    if (eventConfig.isServiceEvent()) {
+      Object dtoData = ServiceEventMapper.fromCcdData(
+          event.getCaseDetails().getData(),
+          eventConfig.getServiceEventClass(), mapper);
+      return eventConfig.getSubmitHandler()
+          .submit(new EventPayload(caseRef, dtoData));
+    }
+
+    var config = registry.getRequired(caseType);
     Object domainCaseData = mapper.convertValue(
         event.getCaseDetails().getData(),
         config.getCaseClass()
     );
-    long caseRef = event.getCaseDetails().getReference();
-
-    // TODO: revisit when CCD resumes sending query params; referer header is absent at the moment.
-    var urlParams = new LinkedMultiValueMap<String, String>();
 
     return eventConfig.getSubmitHandler()
-        .submit(new uk.gov.hmcts.ccd.sdk.api.EventPayload(caseRef, domainCaseData, urlParams));
+        .submit(new EventPayload(caseRef, domainCaseData));
   }
 }

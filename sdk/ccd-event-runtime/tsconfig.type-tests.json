@@ -1,0 +1,9 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "declaration": false,
+    "outDir": "./.typecheck"
+  },
+  "include": ["src/index.ts", "src/runtime.type-test.ts"]
+}

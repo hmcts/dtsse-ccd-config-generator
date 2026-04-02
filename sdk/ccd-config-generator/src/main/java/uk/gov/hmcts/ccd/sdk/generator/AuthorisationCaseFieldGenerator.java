@@ -6,6 +6,7 @@ import static uk.gov.hmcts.ccd.sdk.FieldUtils.getCaseFields;
 import static uk.gov.hmcts.ccd.sdk.FieldUtils.getFieldId;
 import static uk.gov.hmcts.ccd.sdk.FieldUtils.isUnwrappedField;
 import static uk.gov.hmcts.ccd.sdk.api.Permission.CRU;
+import static uk.gov.hmcts.ccd.sdk.api.Permission.CRUD;
 
 import com.fasterxml.jackson.annotation.JsonUnwrapped;
 import com.google.common.collect.HashBasedTable;
@@ -39,6 +40,7 @@ import uk.gov.hmcts.ccd.sdk.api.Search;
 import uk.gov.hmcts.ccd.sdk.api.SearchField;
 import uk.gov.hmcts.ccd.sdk.api.Tab;
 import uk.gov.hmcts.ccd.sdk.api.TabField;
+import uk.gov.hmcts.ccd.sdk.runtime.ServiceEventMapper;
 
 @Component
 class AuthorisationCaseFieldGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, S, R> {
@@ -88,6 +90,13 @@ class AuthorisationCaseFieldGenerator<T, S, R extends HasRole> implements Config
         }
       }
     }
+    // Every role that can see any service event needs CRUD on the shared payload field.
+    if (config.getEvents().values().stream().anyMatch(Event::isServiceEvent)) {
+      for (String role : ImmutableSet.copyOf(fieldRolePermissions.columnKeySet())) {
+        fieldRolePermissions.put(ServiceEventMapper.PAYLOAD_FIELD, role, CRUD);
+      }
+    }
+
     // Add Permissions for all tabs.
     for (String role : ImmutableSet.copyOf(fieldRolePermissions.columnKeySet())) {
       if (!config.getRolesWithNoHistory().contains(role)) {

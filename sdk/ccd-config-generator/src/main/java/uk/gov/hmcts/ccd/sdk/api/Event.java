@@ -65,7 +65,12 @@ public class Event<T, R extends HasRole, S> {
   }
 
   private Class dataClass;
+  private Class<?> serviceEventClass;
   private static int eventCount;
+
+  public boolean isServiceEvent() {
+    return serviceEventClass != null;
+  }
 
   public static class EventBuilder<T, R extends HasRole, S> {
 
@@ -79,6 +84,24 @@ public class Event<T, R extends HasRole, S> {
       result.preState = preStates;
       result.postState = postStates;
       result.dataClass = dataClass;
+      result.grants = HashMultimap.create();
+      result.historyOnlyRoles = new HashSet<>();
+      result.fieldsBuilder = FieldCollection.FieldCollectionBuilder
+          .builder(result, result, dataClass, propertyUtils);
+      result.retries = new HashMap<>();
+
+      return result;
+    }
+
+    public static <T, R extends HasRole, S> EventBuilder<T, R, S> builder(
+        String id, Class dataClass, PropertyUtils propertyUtils,
+        Set<S> preStates, Set<S> postStates, Class<?> serviceEventClass) {
+      EventBuilder<T, R, S> result = new EventBuilder<T, R, S>();
+      result.id(id);
+      result.preState = preStates;
+      result.postState = postStates;
+      result.dataClass = dataClass;
+      result.serviceEventClass(serviceEventClass);
       result.grants = HashMultimap.create();
       result.historyOnlyRoles = new HashSet<>();
       result.fieldsBuilder = FieldCollection.FieldCollectionBuilder
@@ -224,6 +247,10 @@ public class Event<T, R extends HasRole, S> {
 
     private void historyOnlyRoles(Set<String> value) {
       this.historyOnlyRoles = value;
+    }
+
+    private void serviceEventClass(Class<?> value) {
+      this.serviceEventClass = value;
     }
 
     private void setRetries(Webhook hook, int... retries) {

@@ -27,6 +27,7 @@ import uk.gov.hmcts.ccd.sdk.api.ComplexType;
 import uk.gov.hmcts.ccd.sdk.api.Event;
 import uk.gov.hmcts.ccd.sdk.api.HasRole;
 import uk.gov.hmcts.ccd.sdk.api.Label;
+import uk.gov.hmcts.ccd.sdk.runtime.ServiceEventMapper;
 import uk.gov.hmcts.ccd.sdk.type.FieldType;
 
 @Component
@@ -45,6 +46,13 @@ class CaseFieldGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
     history.put("Label", " ");
     history.put("FieldType", "CaseHistoryViewer");
     fields.add(history);
+
+    if (config.getEvents().values().stream().anyMatch(Event::isServiceEvent)) {
+      Map<String, Object> serviceEventField = getField(config.getCaseType(), ServiceEventMapper.PAYLOAD_FIELD);
+      serviceEventField.put("Label", "SDK service event data");
+      serviceEventField.put("FieldType", "Text");
+      fields.add(serviceEventField);
+    }
 
     fields.addAll(getExplicitFields(config));
 

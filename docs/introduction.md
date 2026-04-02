@@ -71,5 +71,6 @@ See [Routing configuration](./routing-configuration.md) for full details, includ
 
 - [Routing configuration](./routing-configuration.md)
 - [Decentralised runtime in detail](./decentralised-runtime.md)
+- [Service events](./service-events.md)
 - [Concurrency considerations](./concurrency.md)
 - [Migrating existing services](./data-migration.md)

@@ -1,0 +1,45 @@
+plugins {
+    id 'com.github.node-gradle.node' version '7.1.0'
+}
+
+node {
+    download = false
+    nodeProjectDir = projectDir
+}
+
+tasks.register('yarnInstall', com.github.gradle.node.yarn.task.YarnInstallTask) {
+    group = 'build'
+    description = 'Install shared CCD event runtime dependencies via Yarn.'
+    args = ['--cache-folder', "${projectDir}/.yarn-cache"]
+    inputs.file('package.json')
+    inputs.file('yarn.lock')
+    outputs.dir('node_modules')
+}
+
+tasks.register('yarnBuild', com.github.gradle.node.yarn.task.YarnTask) {
+    group = 'build'
+    description = 'Compile the shared CCD event runtime TypeScript package to dist/.'
+    dependsOn tasks.named('yarnInstall')
+    args = ['build']
+    inputs.dir('src')
+    inputs.file('tsconfig.json')
+    outputs.dir('dist')
+}
+
+tasks.register('yarnTypecheck', com.github.gradle.node.yarn.task.YarnTask) {
+    group = 'verification'
+    description = 'Type-check the shared CCD event runtime package.'
+    dependsOn tasks.named('yarnBuild')
+    args = ['typecheck']
+}
+
+tasks.register('yarnTestRuntime', com.github.gradle.node.yarn.task.YarnTask) {
+    group = 'verification'
+    description = 'Run shared CCD event runtime tests.'
+    dependsOn tasks.named('yarnTypecheck')
+    args = ['test']
+}
+
+tasks.named('check').configure {
+    dependsOn tasks.named('yarnTestRuntime')
+}

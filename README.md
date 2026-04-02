@@ -98,6 +98,21 @@ or
 ./gradlew gCC
 ```
 
+`generateCCDConfig` can also emit TypeScript bindings in the same run when enabled:
+
+```groovy
+ccd {
+  tsBindings {
+    enabled = true
+    outputDir.set(file('build/ts-bindings'))
+    moduleName = 'ccd-bindings'
+  }
+}
+```
+
+When `tsBindings.enabled = true`, `generateCCDConfig` writes JSON config and TypeScript bindings together.
+See the [Typed frontend-backend contract](docs/service-events.md#typed-frontend-backend-contract) section for developer usage.
+
 If you need libraries that are only required when producing configuration artefacts, add them to the `configGeneration` configuration. These dependencies are available to `generateCCDConfig` without polluting your application's runtime classpath:
 
 ```groovy
