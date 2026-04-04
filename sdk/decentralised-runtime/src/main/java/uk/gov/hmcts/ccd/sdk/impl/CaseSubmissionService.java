@@ -5,6 +5,7 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Supplier;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -26,19 +27,29 @@ public class CaseSubmissionService {
   private final ResolvedConfigRegistry resolvedConfigRegistry;
   private final DecentralisedSubmissionHandler submitHandler;
   private final LegacyCallbackSubmissionHandler legacyHandler;
+  private final Optional<JsonDefinitionSubmissionHandler> jsonDefinitionHandler;
   private final IdamService idam;
   private final IdempotencyEnforcer idempotencyEnforcer;
   private final TransactionTemplate transactionTemplate;
   private final AuditEventService auditEventService;
   private final CaseDataRepository caseDataRepository;
   private final CaseProjectionService caseProjectionService;
+  @Value("${decentralisation.legacy-json-service:false}")
+  private boolean isLegacyJsonDefinition;
 
   public DecentralisedSubmitEventResponse submit(DecentralisedCaseEvent event,
                                                  String authorisation,
                                                  UUID idempotencyKey) {
     var eventConfig = getEventConfig(event);
     var user = idam.retrieveUser(authorisation);
-    var handler = eventConfig.getSubmitHandler() != null ? submitHandler : legacyHandler;
+    CaseSubmissionHandler handler;
+
+    if (isLegacyJsonDefinition) {
+      handler = jsonDefinitionHandler.orElseThrow(() -> new IllegalStateException(
+          "Legacy JSON service is enabled but no JsonDefinitionSubmissionHandler bean is available"));
+    } else {
+      handler = eventConfig.getSubmitHandler() != null ? submitHandler : legacyHandler;
+    }
 
     try {
       // The result of the transaction can be either an idempotency hit or a new submission.
@@ -141,7 +152,6 @@ public class CaseSubmissionService {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, ex.getMessage(), ex);
     }
   }
-
 
   private record SubmissionOutcome(
       DecentralisedCaseDetails savedCaseDetails,

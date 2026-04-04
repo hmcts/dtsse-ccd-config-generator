@@ -9,6 +9,7 @@ pluginManagement {
 }
 
 includeBuild 'sdk'
+includeBuild 'test-projects/et-ccd-callbacks'
 
 gradle.beforeProject { p ->
     if (p.path == ':wa-task-management-api') {

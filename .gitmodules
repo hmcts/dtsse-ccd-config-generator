@@ -16,6 +16,9 @@
 	path = test-projects/adoption-cos-api
 	url = git@github.com:hmcts/adoption-cos-api.git
 	branch = cftlib-integration
+[submodule "test-projects/et-ccd-callbacks"]
+	path = test-projects/et-ccd-callbacks
+	url = git@github.com:hmcts/et-ccd-callbacks.git
 [submodule "wa-task-management-api"]
 	path = wa-task-management-api
 	url = git@github.com:hmcts/wa-task-management-api.git
