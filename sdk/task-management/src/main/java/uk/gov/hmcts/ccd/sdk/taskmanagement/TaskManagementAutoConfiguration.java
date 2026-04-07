@@ -1,6 +1,7 @@
 package uk.gov.hmcts.ccd.sdk.taskmanagement;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.time.Duration;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
@@ -11,13 +12,10 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.cloud.openfeign.EnableFeignClients;
 import org.springframework.cloud.openfeign.clientconfig.FeignClientConfigurer;
 import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Primary;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import uk.gov.hmcts.reform.authorisation.ServiceAuthorisationApi;
 import uk.gov.hmcts.reform.authorisation.generators.AuthTokenGenerator;
 import uk.gov.hmcts.reform.authorisation.generators.AuthTokenGeneratorFactory;
-
-import java.time.Duration;
 
 @AutoConfiguration
 @EnableConfigurationProperties(TaskManagementProperties.class)
@@ -25,7 +23,12 @@ import java.time.Duration;
 public class TaskManagementAutoConfiguration {
 
   @Bean
-  @Primary
+  @ConditionalOnMissingBean(FeignClientConfigurer.class)
+  @ConditionalOnProperty(
+      prefix = "task-management.feign",
+      name = "inherit-parent-configuration",
+      havingValue = "true"
+  )
   public FeignClientConfigurer feignClientConfigurer() {
     return new FeignClientConfigurer() {
       @Override
