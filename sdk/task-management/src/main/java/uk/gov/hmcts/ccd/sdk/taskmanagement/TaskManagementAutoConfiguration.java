@@ -1,7 +1,6 @@
 package uk.gov.hmcts.ccd.sdk.taskmanagement;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import java.time.Duration;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
@@ -15,6 +14,8 @@ import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import uk.gov.hmcts.reform.authorisation.ServiceAuthorisationApi;
 import uk.gov.hmcts.reform.authorisation.generators.AuthTokenGenerator;
 import uk.gov.hmcts.reform.authorisation.generators.AuthTokenGeneratorFactory;
+
+import java.time.Duration;
 
 @AutoConfiguration
 @EnableConfigurationProperties(TaskManagementProperties.class)
@@ -67,6 +68,15 @@ public class TaskManagementAutoConfiguration {
   }
 
   @Bean
+  @ConditionalOnMissingBean
+  public TaskOutboxTelemetry taskOutboxTelemetry() {
+    return event -> {
+      // No-op by default. Consumer services can override this bean to emit custom telemetry
+      // (for example, Application Insights custom events).
+    };
+  }
+
+  @Bean
   @ConditionalOnProperty(
       name = "task-management.outbox.poller.enabled",
       havingValue = "true",
@@ -76,10 +86,11 @@ public class TaskManagementAutoConfiguration {
       TaskOutboxRepository repository,
       TaskManagementApiClient taskManagementApiClient,
       TaskOutboxRetryPolicy retryPolicy,
+      TaskOutboxTelemetry telemetry,
       TaskManagementProperties properties,
       ObjectMapper objectMapper
   ) {
     int batchSize = properties.getOutbox().getPoller().getBatchSize();
-    return new TaskOutboxPoller(repository, taskManagementApiClient, retryPolicy, batchSize, objectMapper);
+    return new TaskOutboxPoller(repository, taskManagementApiClient, retryPolicy, telemetry, batchSize, objectMapper);
   }
 }
