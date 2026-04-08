@@ -4,6 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import feign.codec.Decoder;
+import feign.codec.Encoder;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
@@ -50,6 +52,36 @@ class TaskManagementAutoConfigurationTest {
         });
   }
 
+  @Test
+  void shouldRegisterCompatibilityCodecBeansByDefault() {
+    contextRunner.run(context -> {
+      assertThat(context).hasSingleBean(Encoder.class);
+      assertThat(context).hasSingleBean(Decoder.class);
+    });
+  }
+
+  @Test
+  void shouldNotRegisterCompatibilityCodecBeansWhenDisabled() {
+    contextRunner
+        .withPropertyValues("task-management.feign.compat-codecs.enabled=false")
+        .run(context -> {
+          assertThat(context).doesNotHaveBean(Encoder.class);
+          assertThat(context).doesNotHaveBean(Decoder.class);
+        });
+  }
+
+  @Test
+  void shouldNotOverrideUserProvidedCompatibilityCodecBeans() {
+    contextRunner
+        .withUserConfiguration(UserFeignCodecConfiguration.class)
+        .run(context -> {
+          assertThat(context).hasSingleBean(Encoder.class);
+          assertThat(context).hasSingleBean(Decoder.class);
+          assertThat(context.getBean(Encoder.class)).isSameAs(context.getBean("userFeignEncoder"));
+          assertThat(context.getBean(Decoder.class)).isSameAs(context.getBean("userFeignDecoder"));
+        });
+  }
+
   @Configuration
   static class TestConfig {
     @Bean
@@ -78,6 +110,19 @@ class TaskManagementAutoConfigurationTest {
           return false;
         }
       };
+    }
+  }
+
+  @Configuration
+  static class UserFeignCodecConfiguration {
+    @Bean
+    Encoder userFeignEncoder() {
+      return mock(Encoder.class);
+    }
+
+    @Bean
+    Decoder userFeignDecoder() {
+      return mock(Decoder.class);
     }
   }
 }
