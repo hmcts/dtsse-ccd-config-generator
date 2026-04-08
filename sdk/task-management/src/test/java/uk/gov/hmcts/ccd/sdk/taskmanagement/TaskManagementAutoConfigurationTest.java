@@ -42,13 +42,14 @@ class TaskManagementAutoConfigurationTest {
   }
 
   @Test
-  void shouldNotOverrideUserProvidedFeignClientConfigurer() {
+  void shouldPreferTaskManagementFeignClientConfigurerWhenPropertyEnabled() {
     contextRunner
         .withPropertyValues("task-management.feign.inherit-parent-configuration=true")
         .withUserConfiguration(UserFeignConfigurerConfiguration.class)
         .run(context -> {
-          assertThat(context).hasSingleBean(FeignClientConfigurer.class);
-          assertThat(context.getBean(FeignClientConfigurer.class).inheritParentConfiguration()).isFalse();
+          assertThat(context).hasBean("feignClientConfigurer");
+          assertThat(context).hasBean("userFeignClientConfigurer");
+          assertThat(context.getBean(FeignClientConfigurer.class).inheritParentConfiguration()).isTrue();
         });
   }
 

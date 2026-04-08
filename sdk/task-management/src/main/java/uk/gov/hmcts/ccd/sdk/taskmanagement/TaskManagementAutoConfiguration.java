@@ -19,6 +19,7 @@ import org.springframework.cloud.openfeign.support.ResponseEntityDecoder;
 import org.springframework.cloud.openfeign.support.SpringDecoder;
 import org.springframework.cloud.openfeign.support.SpringEncoder;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Primary;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import uk.gov.hmcts.reform.authorisation.ServiceAuthorisationApi;
 import uk.gov.hmcts.reform.authorisation.generators.AuthTokenGenerator;
@@ -30,7 +31,7 @@ import uk.gov.hmcts.reform.authorisation.generators.AuthTokenGeneratorFactory;
 public class TaskManagementAutoConfiguration {
 
   @Bean
-  @ConditionalOnMissingBean(FeignClientConfigurer.class)
+  @Primary
   @ConditionalOnProperty(
       prefix = "task-management.feign",
       name = "inherit-parent-configuration",
