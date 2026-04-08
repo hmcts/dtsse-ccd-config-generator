@@ -47,7 +47,8 @@ public class TaskManagementAutoConfiguration {
   }
 
   @Bean
-  @ConditionalOnMissingBean(Encoder.class)
+  @ConditionalOnMissingBean(name = "feignEncoder")
+  @Primary
   @ConditionalOnProperty(
       prefix = "task-management.feign.compat-codecs",
       name = "enabled",
@@ -59,7 +60,8 @@ public class TaskManagementAutoConfiguration {
   }
 
   @Bean
-  @ConditionalOnMissingBean(Decoder.class)
+  @ConditionalOnMissingBean(name = "feignDecoder")
+  @Primary
   @ConditionalOnProperty(
       prefix = "task-management.feign.compat-codecs",
       name = "enabled",

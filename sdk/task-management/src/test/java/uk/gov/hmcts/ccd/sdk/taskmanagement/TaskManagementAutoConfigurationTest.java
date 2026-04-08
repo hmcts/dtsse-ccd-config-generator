@@ -56,9 +56,25 @@ class TaskManagementAutoConfigurationTest {
   @Test
   void shouldRegisterCompatibilityCodecBeansByDefault() {
     contextRunner.run(context -> {
+      assertThat(context).hasBean("compatibilityFeignEncoder");
+      assertThat(context).hasBean("compatibilityFeignDecoder");
       assertThat(context).hasSingleBean(Encoder.class);
       assertThat(context).hasSingleBean(Decoder.class);
     });
+  }
+
+  @Test
+  void shouldRegisterCompatibilityCodecBeansWhenCalendarBeansExist() {
+    contextRunner
+        .withUserConfiguration(CalendarCodecConfiguration.class)
+        .run(context -> {
+          assertThat(context).hasBean("calendarFeignEncoder");
+          assertThat(context).hasBean("calendarFeignDecoder");
+          assertThat(context).hasBean("compatibilityFeignEncoder");
+          assertThat(context).hasBean("compatibilityFeignDecoder");
+          assertThat(context.getBeansOfType(Encoder.class)).hasSize(2);
+          assertThat(context.getBeansOfType(Decoder.class)).hasSize(2);
+        });
   }
 
   @Test
@@ -66,8 +82,8 @@ class TaskManagementAutoConfigurationTest {
     contextRunner
         .withPropertyValues("task-management.feign.compat-codecs.enabled=false")
         .run(context -> {
-          assertThat(context).doesNotHaveBean(Encoder.class);
-          assertThat(context).doesNotHaveBean(Decoder.class);
+          assertThat(context).doesNotHaveBean("compatibilityFeignEncoder");
+          assertThat(context).doesNotHaveBean("compatibilityFeignDecoder");
         });
   }
 
@@ -78,8 +94,8 @@ class TaskManagementAutoConfigurationTest {
         .run(context -> {
           assertThat(context).hasSingleBean(Encoder.class);
           assertThat(context).hasSingleBean(Decoder.class);
-          assertThat(context.getBean(Encoder.class)).isSameAs(context.getBean("userFeignEncoder"));
-          assertThat(context.getBean(Decoder.class)).isSameAs(context.getBean("userFeignDecoder"));
+          assertThat(context.getBean(Encoder.class)).isSameAs(context.getBean("feignEncoder"));
+          assertThat(context.getBean(Decoder.class)).isSameAs(context.getBean("feignDecoder"));
         });
   }
 
@@ -116,13 +132,26 @@ class TaskManagementAutoConfigurationTest {
 
   @Configuration
   static class UserFeignCodecConfiguration {
-    @Bean
+    @Bean("feignEncoder")
     Encoder userFeignEncoder() {
       return mock(Encoder.class);
     }
 
-    @Bean
+    @Bean("feignDecoder")
     Decoder userFeignDecoder() {
+      return mock(Decoder.class);
+    }
+  }
+
+  @Configuration
+  static class CalendarCodecConfiguration {
+    @Bean
+    Encoder calendarFeignEncoder() {
+      return mock(Encoder.class);
+    }
+
+    @Bean
+    Decoder calendarFeignDecoder() {
       return mock(Decoder.class);
     }
   }

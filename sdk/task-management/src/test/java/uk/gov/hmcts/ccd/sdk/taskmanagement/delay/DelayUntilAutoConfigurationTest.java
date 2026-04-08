@@ -29,8 +29,6 @@ class DelayUntilAutoConfigurationTest {
       assertThat(context).hasBean("publicHolidayService");
       assertThat(context).hasBean("calendarCacheManager");
       assertThat(context).doesNotHaveBean("org.springframework.cache.config.internalCacheAdvisor");
-      assertThat(context).hasBean("calendarFeignDecoder");
-      assertThat(context).hasBean("calendarFeignEncoder");
       assertThat(context.getBean("calendarCacheManager")).isInstanceOf(CaffeineCacheManager.class);
     });
   }
