@@ -10,7 +10,6 @@ import org.junit.jupiter.api.Test;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.cloud.openfeign.FeignAutoConfiguration;
-import org.springframework.cloud.openfeign.clientconfig.FeignClientConfigurer;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
@@ -25,33 +24,6 @@ class TaskManagementAutoConfigurationTest {
           "task-management.outbox.poller.enabled=false"
       )
       .withUserConfiguration(TestConfig.class);
-
-  @Test
-  void shouldRegisterFeignClientConfigurerWhenPropertyEnabled() {
-    contextRunner
-        .withPropertyValues("task-management.feign.inherit-parent-configuration=true")
-        .run(context -> {
-          assertThat(context).hasSingleBean(FeignClientConfigurer.class);
-          assertThat(context.getBean(FeignClientConfigurer.class).inheritParentConfiguration()).isTrue();
-        });
-  }
-
-  @Test
-  void shouldNotRegisterFeignClientConfigurerWhenPropertyDisabled() {
-    contextRunner.run(context -> assertThat(context).doesNotHaveBean(FeignClientConfigurer.class));
-  }
-
-  @Test
-  void shouldPreferTaskManagementFeignClientConfigurerWhenPropertyEnabled() {
-    contextRunner
-        .withPropertyValues("task-management.feign.inherit-parent-configuration=true")
-        .withUserConfiguration(UserFeignConfigurerConfiguration.class)
-        .run(context -> {
-          assertThat(context).hasBean("feignClientConfigurer");
-          assertThat(context).hasBean("userFeignClientConfigurer");
-          assertThat(context.getBean(FeignClientConfigurer.class).inheritParentConfiguration()).isTrue();
-        });
-  }
 
   @Test
   void shouldRegisterCompatibilityCodecBeansByDefault() {
@@ -114,19 +86,6 @@ class TaskManagementAutoConfigurationTest {
     @Bean
     AuthTokenGenerator authTokenGenerator() {
       return () -> "service-token";
-    }
-  }
-
-  @Configuration
-  static class UserFeignConfigurerConfiguration {
-    @Bean
-    FeignClientConfigurer userFeignClientConfigurer() {
-      return new FeignClientConfigurer() {
-        @Override
-        public boolean inheritParentConfiguration() {
-          return false;
-        }
-      };
     }
   }
 

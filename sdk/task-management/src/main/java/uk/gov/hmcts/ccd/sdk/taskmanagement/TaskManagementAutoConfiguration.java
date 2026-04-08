@@ -14,7 +14,6 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.http.HttpMessageConverters;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.cloud.openfeign.EnableFeignClients;
-import org.springframework.cloud.openfeign.clientconfig.FeignClientConfigurer;
 import org.springframework.cloud.openfeign.support.ResponseEntityDecoder;
 import org.springframework.cloud.openfeign.support.SpringDecoder;
 import org.springframework.cloud.openfeign.support.SpringEncoder;
@@ -29,22 +28,6 @@ import uk.gov.hmcts.reform.authorisation.generators.AuthTokenGeneratorFactory;
 @EnableConfigurationProperties(TaskManagementProperties.class)
 @EnableFeignClients(clients = TaskManagementFeignClient.class)
 public class TaskManagementAutoConfiguration {
-
-  @Bean
-  @Primary
-  @ConditionalOnProperty(
-      prefix = "task-management.feign",
-      name = "inherit-parent-configuration",
-      havingValue = "true"
-  )
-  public FeignClientConfigurer feignClientConfigurer() {
-    return new FeignClientConfigurer() {
-      @Override
-      public boolean inheritParentConfiguration() {
-        return true;
-      }
-    };
-  }
 
   @Bean
   @ConditionalOnMissingBean(name = "feignEncoder")
