@@ -5,6 +5,7 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Supplier;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.http.HttpStatus;
@@ -27,7 +28,7 @@ public class CaseSubmissionService {
   private final ResolvedConfigRegistry resolvedConfigRegistry;
   private final DecentralisedSubmissionHandler submitHandler;
   private final LegacyCallbackSubmissionHandler legacyHandler;
-  private final Optional<JsonDefinitionSubmissionHandler> jsonDefinitionHandler;
+  private final ObjectProvider<JsonDefinitionSubmissionHandler> jsonDefinitionHandlerProvider;
   private final IdamService idam;
   private final IdempotencyEnforcer idempotencyEnforcer;
   private final TransactionTemplate transactionTemplate;
@@ -45,7 +46,7 @@ public class CaseSubmissionService {
     CaseSubmissionHandler handler;
 
     if (isLegacyJsonDefinition) {
-      handler = jsonDefinitionHandler.orElseThrow(() -> new IllegalStateException(
+      handler = Optional.ofNullable(jsonDefinitionHandlerProvider.getIfAvailable()).orElseThrow(() -> new IllegalStateException(
           "Legacy JSON service is enabled but no JsonDefinitionSubmissionHandler bean is available"));
     } else {
       handler = eventConfig.getSubmitHandler() != null ? submitHandler : legacyHandler;

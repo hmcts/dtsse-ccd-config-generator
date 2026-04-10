@@ -162,7 +162,7 @@ class CallbackDispatchServiceEtFixtureTest {
     Mockito.when(beanFactory.getBeansWithAnnotation(RestController.class)).thenReturn(restControllers);
     Mockito.when(beanFactory.getBeansWithAnnotation(Controller.class)).thenReturn(Map.of());
 
-    CallbackDispatchService service = new CallbackDispatchService(definitionRegistry, beanFactory);
+    CallbackDispatchService service = new CallbackDispatchService(definitionRegistry, beanFactory, new ObjectMapper());
     service.initialiseHandlerMaps();
     return service;
   }

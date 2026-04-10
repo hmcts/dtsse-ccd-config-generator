@@ -2,6 +2,7 @@ package uk.gov.hmcts.ccd.sdk.impl;
 
 import com.fasterxml.jackson.databind.node.TextNode;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.transaction.TransactionStatus;
 import org.springframework.transaction.support.TransactionCallback;
@@ -32,6 +33,12 @@ class CaseSubmissionServiceTest {
   private final DecentralisedSubmissionHandler submitHandler = mock(DecentralisedSubmissionHandler.class);
   private final LegacyCallbackSubmissionHandler legacyHandler = mock(LegacyCallbackSubmissionHandler.class);
   private final JsonDefinitionSubmissionHandler jsonDefinitionHandler = mock(JsonDefinitionSubmissionHandler.class);
+  @SuppressWarnings("unchecked")
+  private final ObjectProvider<JsonDefinitionSubmissionHandler> jsonDefinitionHandlerProvider =
+      mock(ObjectProvider.class);
+  @SuppressWarnings("unchecked")
+  private final ObjectProvider<JsonDefinitionSubmissionHandler> emptyJsonDefinitionHandlerProvider =
+      mock(ObjectProvider.class);
   private final IdamService idamService = mock(IdamService.class);
   private final IdempotencyEnforcer idempotencyEnforcer = mock(IdempotencyEnforcer.class);
   private final TransactionTemplate transactionTemplate = mock(TransactionTemplate.class);
@@ -43,7 +50,7 @@ class CaseSubmissionServiceTest {
       resolvedConfigRegistry,
       submitHandler,
       legacyHandler,
-      Optional.of(jsonDefinitionHandler),
+      jsonDefinitionHandlerProvider,
       idamService,
       idempotencyEnforcer,
       transactionTemplate,
@@ -56,7 +63,7 @@ class CaseSubmissionServiceTest {
       resolvedConfigRegistry,
       submitHandler,
       legacyHandler,
-      Optional.empty(),
+      emptyJsonDefinitionHandlerProvider,
       idamService,
       idempotencyEnforcer,
       transactionTemplate,
@@ -74,6 +81,7 @@ class CaseSubmissionServiceTest {
     final var user = new IdamService.User("Bearer token", null);
 
     ReflectionTestUtils.setField(service, "isLegacyJsonDefinition", true);
+    when(jsonDefinitionHandlerProvider.getIfAvailable()).thenReturn(jsonDefinitionHandler);
     doReturn(eventConfig).when(resolvedConfigRegistry).getRequiredEvent("CASE_TYPE", "EVENT_ID");
     when(idamService.retrieveUser("Bearer token")).thenReturn(user);
     when(idempotencyEnforcer.lockCaseAndGetExistingEvent(idempotencyKey, 1234567890123456L))
@@ -139,6 +147,7 @@ class CaseSubmissionServiceTest {
     final UUID idempotencyKey = UUID.randomUUID();
 
     ReflectionTestUtils.setField(serviceWithoutJsonHandler, "isLegacyJsonDefinition", true);
+    when(emptyJsonDefinitionHandlerProvider.getIfAvailable()).thenReturn(null);
     when(idamService.retrieveUser("Bearer token")).thenReturn(new IdamService.User("Bearer token", null));
     doReturn(mock(Event.class)).when(resolvedConfigRegistry).getRequiredEvent("CASE_TYPE", "EVENT_ID");
 

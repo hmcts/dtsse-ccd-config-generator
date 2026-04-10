@@ -1,9 +1,13 @@
 package uk.gov.hmcts.ccd.sdk.impl;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 import org.springframework.beans.factory.ListableBeanFactory;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -239,6 +243,31 @@ class CallbackDispatchServiceTest {
         .hasMessageContaining("callback type aboutToSubmit");
   }
 
+  @Test
+  void dispatchSupportsLegacyCcdRequestControllersReturningResponseEntity() {
+    LegacyDispatchController controller = new LegacyDispatchController();
+
+    CallbackDispatchService service = createInitialisedService(
+        Map.of("CASE_TYPE", definitionForEvents(event(
+            "EVENT_ID",
+            "${BASE_URL}/legacy/aboutToSubmit",
+            "${BASE_URL}/legacy/submitted",
+            null
+        ))),
+        controller
+    );
+
+    var aboutToSubmit = service.dispatchToHandlersAboutToSubmit(buildRequest("EVENT_ID"));
+    var submitted = service.dispatchToHandlersSubmitted(buildRequest("EVENT_ID"));
+
+    Assertions.assertThat(aboutToSubmit.handled()).isTrue();
+    Assertions.assertThat(((LegacyCallbackResponse) aboutToSubmit.response()).getData().getValue())
+        .isEqualTo("EVENT_ID");
+    Assertions.assertThat(submitted.handled()).isTrue();
+    Assertions.assertThat(((LegacyCallbackResponse) submitted.response()).getConfirmationHeader())
+        .isEqualTo("done");
+  }
+
   private CallbackDispatchService createInitialisedService(
       Map<String, CaseTypeDefinition> definitions,
       Object... controllers
@@ -255,7 +284,7 @@ class CallbackDispatchServiceTest {
     Mockito.when(beanFactory.getBeansWithAnnotation(RestController.class)).thenReturn(restControllers);
     Mockito.when(beanFactory.getBeansWithAnnotation(Controller.class)).thenReturn(Map.of());
 
-    CallbackDispatchService service = new CallbackDispatchService(definitionRegistry, beanFactory);
+    CallbackDispatchService service = new CallbackDispatchService(definitionRegistry, beanFactory, new ObjectMapper());
     service.initialiseHandlerMaps();
     return service;
   }
@@ -406,6 +435,105 @@ class CallbackDispatchServiceTest {
     @Override
     public String getConfirmationBody() {
       return "body";
+    }
+  }
+
+  @RestController
+  @RequestMapping("/legacy")
+  private static final class LegacyDispatchController {
+
+    @PostMapping("/aboutToSubmit")
+    public ResponseEntity<LegacyCallbackResponse> aboutToSubmit(CCDRequest request, String authToken) {
+      return ResponseEntity.ok(new LegacyCallbackResponse(new LegacyCaseData(request.getEventId()), null, null));
+    }
+
+    @PostMapping("/submitted")
+    public ResponseEntity<LegacyCallbackResponse> submitted(CCDRequest request, String authToken) {
+      return ResponseEntity.ok(new LegacyCallbackResponse(null, "done", "body"));
+    }
+  }
+
+  @JsonIgnoreProperties(ignoreUnknown = true)
+  private static final class CCDRequest {
+    private String eventId;
+
+    @JsonProperty("event_id")
+    public String getEventId() {
+      return eventId;
+    }
+
+    @JsonProperty("event_id")
+    public void setEventId(String eventId) {
+      this.eventId = eventId;
+    }
+  }
+
+  private static final class LegacyCaseData {
+    private final String value;
+
+    private LegacyCaseData(String value) {
+      this.value = value;
+    }
+
+    public String getValue() {
+      return value;
+    }
+  }
+
+  private static final class LegacyCallbackResponse implements CallbackResponse<LegacyCaseData>, SubmittedCallbackResponse {
+    private final LegacyCaseData data;
+    private final String confirmationHeader;
+    private final String confirmationBody;
+
+    private LegacyCallbackResponse(LegacyCaseData data, String confirmationHeader, String confirmationBody) {
+      this.data = data;
+      this.confirmationHeader = confirmationHeader;
+      this.confirmationBody = confirmationBody;
+    }
+
+    @Override
+    public LegacyCaseData getData() {
+      return data;
+    }
+
+    @Override
+    public List<String> getErrors() {
+      return null;
+    }
+
+    @Override
+    public List<String> getWarnings() {
+      return null;
+    }
+
+    @Override
+    public String getState() {
+      return null;
+    }
+
+    @Override
+    public Map<String, Object> getDataClassification() {
+      return Map.of();
+    }
+
+    @Override
+    public String getSecurityClassification() {
+      return null;
+    }
+
+    @Override
+    public String getErrorMessageOverride() {
+      return null;
+    }
+
+    @Override
+    public String getConfirmationHeader() {
+      return confirmationHeader;
+    }
+
+    @Override
+    public String getConfirmationBody() {
+      return confirmationBody;
     }
   }
 }

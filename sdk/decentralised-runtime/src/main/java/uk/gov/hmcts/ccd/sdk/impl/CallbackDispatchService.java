@@ -1,5 +1,6 @@
 package uk.gov.hmcts.ccd.sdk.impl;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.micrometer.common.util.StringUtils;
 import jakarta.annotation.PostConstruct;
 import java.lang.reflect.InvocationTargetException;
@@ -17,6 +18,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.aop.support.AopUtils;
 import org.springframework.beans.factory.ListableBeanFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.http.ResponseEntity;
 import org.springframework.core.annotation.AnnotatedElementUtils;
 import org.springframework.stereotype.Controller;
 import org.springframework.stereotype.Service;
@@ -41,6 +43,7 @@ public class CallbackDispatchService {
   private Map<CallbackBinding, Integer> retryAttempts;
   private final DefinitionRegistry definitionRegistry;
   private final ListableBeanFactory beanFactory;
+  private final ObjectMapper objectMapper;
 
 
   @PostConstruct
@@ -184,20 +187,14 @@ public class CallbackDispatchService {
         }
 
         if (!isSupportedCallbackMethod(method)) {
-          throw new IllegalStateException(
-            """
-              Callback controller method %s is not supported.
-              Method must conform to the following signature:
-              CallbackResponse<?> callback(CallbackRequest request, String authToken)
-              """.formatted(method.toGenericString())
-          );
+          continue;
         }
 
         List<String> methodPaths = methodMappingPaths(postMapping);
         for (String classPath : classPaths) {
           for (String methodPath : methodPaths) {
             String fullPath = normalisePath(combinePaths(classPath, methodPath));
-            EndpointInvoker invoker = new EndpointInvoker(controllerBean, method);
+            EndpointInvoker invoker = new EndpointInvoker(controllerBean, method, objectMapper);
             EndpointInvoker existing = endpointsByPath.putIfAbsent(fullPath, invoker);
             if (existing != null && !existing.hasSameMethodAs(invoker)) {
               throw new IllegalStateException(
@@ -246,9 +243,19 @@ public class CallbackDispatchService {
   private boolean isSupportedCallbackMethod(Method method) {
     Class<?>[] parameterTypes = method.getParameterTypes();
     return parameterTypes.length == 2
-        && CallbackRequest.class.isAssignableFrom(parameterTypes[0])
+        && isSupportedRequestType(parameterTypes[0])
         && String.class.equals(parameterTypes[1])
-        && CallbackResponse.class.isAssignableFrom(method.getReturnType());
+        && isSupportedReturnType(method.getReturnType());
+  }
+
+  private boolean isSupportedRequestType(Class<?> parameterType) {
+    return CallbackRequest.class.isAssignableFrom(parameterType)
+        || "CCDRequest".equals(parameterType.getSimpleName());
+  }
+
+  private boolean isSupportedReturnType(Class<?> returnType) {
+    return CallbackResponse.class.isAssignableFrom(returnType)
+        || ResponseEntity.class.isAssignableFrom(returnType);
   }
 
   private String combinePaths(String classPath, String methodPath) {
@@ -311,11 +318,13 @@ public class CallbackDispatchService {
         : path;
   }
 
-  private record EndpointInvoker(Object bean, Method method) {
+  private record EndpointInvoker(Object bean, Method method, ObjectMapper objectMapper) {
 
     private CallbackResponse<?> invoke(CallbackRequest request, String authToken) {
       try {
-        return (CallbackResponse<?>) method.invoke(bean, request, authToken);
+        Object requestArgument = buildRequestArgument(request);
+        Object result = method.invoke(bean, requestArgument, authToken);
+        return extractCallbackResponse(result);
       } catch (InvocationTargetException ex) {
         Throwable cause = ex.getCause();
         if (cause instanceof RuntimeException runtimeException) {
@@ -328,6 +337,34 @@ public class CallbackDispatchService {
       } catch (IllegalAccessException ex) {
         throw new IllegalStateException("Could not access callback endpoint method: " + describe(), ex);
       }
+    }
+
+    private Object buildRequestArgument(CallbackRequest request) {
+      Class<?> parameterType = method.getParameterTypes()[0];
+      if (CallbackRequest.class.isAssignableFrom(parameterType)) {
+        return request;
+      }
+      return objectMapper.convertValue(request, parameterType);
+    }
+
+    private CallbackResponse<?> extractCallbackResponse(Object result) {
+      if (result == null) {
+        return null;
+      }
+      if (result instanceof ResponseEntity<?> responseEntity) {
+        Object body = responseEntity.getBody();
+        if (body == null) {
+          return null;
+        }
+        if (body instanceof CallbackResponse<?> callbackResponse) {
+          return callbackResponse;
+        }
+        throw new IllegalStateException("Callback endpoint returned unsupported response body: " + describe());
+      }
+      if (result instanceof CallbackResponse<?> callbackResponse) {
+        return callbackResponse;
+      }
+      throw new IllegalStateException("Callback endpoint returned unsupported response type: " + describe());
     }
 
     private boolean hasSameMethodAs(EndpointInvoker other) {

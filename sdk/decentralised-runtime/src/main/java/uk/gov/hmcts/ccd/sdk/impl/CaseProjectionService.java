@@ -108,8 +108,7 @@ class CaseProjectionService {
       Set<String> supportedCaseTypes = resolveCaseTypes(view, caseDataType, stateType, configs);
 
       for (String caseType : supportedCaseTypes) {
-        if ((isLegacyJsonDefinition && definitionRegistry.find(caseType).isEmpty())
-            || (!isLegacyJsonDefinition && !configs.containsKey(caseType))) {
+        if (!isLegacyJsonDefinition && !configs.containsKey(caseType)) {
           throw new IllegalStateException(
               "CaseView %s declares unknown case type %s".formatted(view.getClass().getName(), caseType));
         }

@@ -108,20 +108,19 @@ class CaseProjectionServiceTest {
   }
 
   @Test
-  void constructorRejectsLegacyExplicitCaseTypeMissingFromDefinitionRegistry() {
+  void constructorAllowsLegacyExplicitCaseTypeBeforeDefinitionSnapshotsExist() {
     when(configRegistry.asMap()).thenReturn(Map.of());
-    when(definitionRegistry.find("LEGACY_CASE")).thenReturn(Optional.empty());
 
-    assertThatThrownBy(() -> new CaseProjectionService(
+    var service = new CaseProjectionService(
         caseDataRepository,
         mapper,
         List.of(new ExplicitCaseTypeView(Set.of("LEGACY_CASE"))),
         configRegistry,
         definitionRegistry,
         true
-    ))
-        .isInstanceOf(IllegalStateException.class)
-        .hasMessageContaining("unknown case type LEGACY_CASE");
+    );
+
+    assertThat(service).isNotNull();
   }
 
   private static DecentralisedCaseDetails caseDetails(long reference, String caseType, String state) {
