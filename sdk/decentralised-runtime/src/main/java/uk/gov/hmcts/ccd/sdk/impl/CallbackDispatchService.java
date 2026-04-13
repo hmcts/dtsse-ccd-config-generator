@@ -18,14 +18,13 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.aop.support.AopUtils;
 import org.springframework.beans.factory.ListableBeanFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.http.ResponseEntity;
 import org.springframework.core.annotation.AnnotatedElementUtils;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Controller;
 import org.springframework.stereotype.Service;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-import uk.gov.hmcts.ccd.sdk.CallbackRequestContext;
 import uk.gov.hmcts.ccd.sdk.CallbackResponse;
 import uk.gov.hmcts.ccd.sdk.SubmittedCallbackResponse;
 import uk.gov.hmcts.reform.ccd.client.model.CallbackRequest;
@@ -45,25 +44,26 @@ public class CallbackDispatchService {
   private final ListableBeanFactory beanFactory;
   private final ObjectMapper objectMapper;
 
-
   @PostConstruct
   void initialiseHandlerMaps() {
     dispatchMap = createDispatchMap();
   }
 
-  public DispatchResult<CallbackResponse<?>> dispatchToHandlersAboutToSubmit(CallbackRequest callbackRequest) {
+  public DispatchResult<CallbackResponse<?>> dispatchToHandlersAboutToSubmit(CallbackRequest callbackRequest,
+                                                                             String authorisation) {
     var dispatcher = dispatchMap.get(bindingFor(callbackRequest, ABOUT_TO_SUBMIT));
 
     if (dispatcher == null) {
       return DispatchResult.noHandlerFound();
     }
 
-    var result = dispatcher.apply(callbackRequest, CallbackRequestContext.getAuthorizationToken().orElse(null));
+    var result = dispatcher.apply(callbackRequest, authorisation);
 
     return DispatchResult.handled(result);
   }
 
-  public DispatchResult<SubmittedCallbackResponse> dispatchToHandlersSubmitted(CallbackRequest callbackRequest) {
+  public DispatchResult<SubmittedCallbackResponse> dispatchToHandlersSubmitted(CallbackRequest callbackRequest,
+                                                                               String authorisation) {
     var binding = bindingFor(callbackRequest, SUBMITTED);
     var dispatcher = dispatchMap.get(binding);
 
@@ -85,7 +85,7 @@ public class CallbackDispatchService {
       try {
         return DispatchResult.handled((SubmittedCallbackResponse) dispatcher.apply(
           callbackRequest,
-          CallbackRequestContext.getAuthorizationToken().orElse(null)));
+          authorisation));
       } catch (Exception e) {
         lastException = e;
         log.error(

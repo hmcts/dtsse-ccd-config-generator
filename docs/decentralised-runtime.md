@@ -150,13 +150,13 @@ Supplementary data operations are implemented and persisted in the `ccd.case_dat
 
 ## Accessing authorization token in callback handlers
 
-`Authorization` is available to `CallbackHandlerBean` implementations through
-[`CallbackRequestContext`](../sdk/decentralised-runtime/src/main/java/uk/gov/hmcts/ccd/sdk/CallbackRequestContext.java).
-The runtime automatically captures the request header for `/ccd-persistence/**` requests and clears it after each
-request.
+For legacy JSON callback controller methods, the incoming `Authorization` header is passed directly as the second
+method argument.
 
 ```java
-String userToken = CallbackRequestContext.getAuthorizationToken().orElse(null);
+public CallbackResponse<?> aboutToSubmit(CallbackRequest callbackRequest, String authToken) {
+  // use authToken
+}
 ```
 
 ## Message publishing to Azure Service Bus

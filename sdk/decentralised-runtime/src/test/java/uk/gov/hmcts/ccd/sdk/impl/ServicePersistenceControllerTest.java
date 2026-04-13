@@ -1,18 +1,17 @@
 package uk.gov.hmcts.ccd.sdk.impl;
 
-import org.junit.jupiter.api.Test;
-import org.springframework.http.ResponseEntity;
-import uk.gov.hmcts.ccd.decentralised.dto.DecentralisedCaseEvent;
-import uk.gov.hmcts.ccd.decentralised.dto.DecentralisedSubmitEventResponse;
-
-import java.util.UUID;
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
+
+import java.util.UUID;
+import org.junit.jupiter.api.Test;
+import org.springframework.http.ResponseEntity;
+import uk.gov.hmcts.ccd.decentralised.dto.DecentralisedCaseEvent;
+import uk.gov.hmcts.ccd.decentralised.dto.DecentralisedSubmitEventResponse;
 
 public class ServicePersistenceControllerTest {
 

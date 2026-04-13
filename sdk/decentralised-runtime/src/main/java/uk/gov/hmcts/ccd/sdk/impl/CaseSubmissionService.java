@@ -46,8 +46,9 @@ public class CaseSubmissionService {
     CaseSubmissionHandler handler;
 
     if (isLegacyJsonDefinition) {
-      handler = Optional.ofNullable(jsonDefinitionHandlerProvider.getIfAvailable()).orElseThrow(() -> new IllegalStateException(
-          "Legacy JSON service is enabled but no JsonDefinitionSubmissionHandler bean is available"));
+      handler = Optional.ofNullable(jsonDefinitionHandlerProvider.getIfAvailable())
+          .orElseThrow(() -> new IllegalStateException(
+              "Legacy JSON service is enabled but no JsonDefinitionSubmissionHandler bean is available"));
     } else {
       handler = eventConfig.getSubmitHandler() != null ? submitHandler : legacyHandler;
     }
@@ -55,7 +56,7 @@ public class CaseSubmissionService {
     try {
       // The result of the transaction can be either an idempotency hit or a new submission.
       TransactionResult transactionResult = transactionTemplate.execute(status ->
-          executeSubmissionInTransaction(event, user, handler, idempotencyKey)
+          executeSubmissionInTransaction(event, user, handler, authorisation, idempotencyKey)
       );
 
       return transactionResult.existingEventId()
@@ -76,6 +77,7 @@ public class CaseSubmissionService {
   private TransactionResult executeSubmissionInTransaction(DecentralisedCaseEvent event,
                                                            IdamService.User user,
                                                            CaseSubmissionHandler handler,
+                                                           String authorisation,
                                                            UUID idempotencyKey) {
     // Idempotency Check inside the transaction to ensure atomicity
     Optional<Long> existingEventId = idempotencyEnforcer.lockCaseAndGetExistingEvent(
@@ -87,7 +89,7 @@ public class CaseSubmissionService {
     }
 
     // Delegate to the specific handler to apply the change
-    var handlerResult = handler.apply(event);
+    var handlerResult = handler.apply(event, authorisation);
     applyHandlerChanges(event, handlerResult);
 
     // Bookkeeping: update case_data metadata and optionally the legacy json blob

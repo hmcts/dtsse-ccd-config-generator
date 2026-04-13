@@ -3,6 +3,10 @@ package uk.gov.hmcts.ccd.sdk.impl;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
@@ -19,12 +23,9 @@ import uk.gov.hmcts.ccd.sdk.SubmittedCallbackResponse;
 import uk.gov.hmcts.reform.ccd.client.model.CallbackRequest;
 import uk.gov.hmcts.reform.ccd.client.model.CaseDetails;
 
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.atomic.AtomicInteger;
-
 class CallbackDispatchServiceTest {
+
+  private static final String AUTHORIZATION = "Bearer token";
 
   @Test
   void dispatchToHandlersAboutToSubmitReturnsHandlerResponse() {
@@ -41,11 +42,12 @@ class CallbackDispatchServiceTest {
         controller
     );
 
-    var result = service.dispatchToHandlersAboutToSubmit(buildRequest("EVENT_ID"));
+    var result = service.dispatchToHandlersAboutToSubmit(buildRequest("EVENT_ID"), AUTHORIZATION);
 
     Assertions.assertThat(result.handled()).isTrue();
     Assertions.assertThat(result.response()).isSameAs(expected);
     Assertions.assertThat(controller.aboutToSubmitCalls.get()).isEqualTo(1);
+    Assertions.assertThat(controller.lastAboutToSubmitToken).isEqualTo(AUTHORIZATION);
   }
 
   @Test
@@ -63,11 +65,12 @@ class CallbackDispatchServiceTest {
         controller
     );
 
-    var result = service.dispatchToHandlersSubmitted(buildRequest("EVENT_ID"));
+    var result = service.dispatchToHandlersSubmitted(buildRequest("EVENT_ID"), AUTHORIZATION);
 
     Assertions.assertThat(result.handled()).isTrue();
     Assertions.assertThat(result.response()).isSameAs(expected);
     Assertions.assertThat(controller.submittedCalls.get()).isEqualTo(1);
+    Assertions.assertThat(controller.lastSubmittedToken).isEqualTo(AUTHORIZATION);
   }
 
   @Test
@@ -88,8 +91,8 @@ class CallbackDispatchServiceTest {
         controller
     );
 
-    var aboutToSubmit = service.dispatchToHandlersAboutToSubmit(buildRequest("EVENT_ID"));
-    var submitted = service.dispatchToHandlersSubmitted(buildRequest("EVENT_ID"));
+    var aboutToSubmit = service.dispatchToHandlersAboutToSubmit(buildRequest("EVENT_ID"), AUTHORIZATION);
+    var submitted = service.dispatchToHandlersSubmitted(buildRequest("EVENT_ID"), AUTHORIZATION);
 
     Assertions.assertThat(aboutToSubmit.handled()).isFalse();
     Assertions.assertThat(aboutToSubmit.response()).isNull();
@@ -112,7 +115,7 @@ class CallbackDispatchServiceTest {
         controller
     );
 
-    var result = service.dispatchToHandlersSubmitted(buildRequest("EVENT_ID"));
+    var result = service.dispatchToHandlersSubmitted(buildRequest("EVENT_ID"), AUTHORIZATION);
 
     Assertions.assertThat(result.handled()).isTrue();
     Assertions.assertThat(result.response()).isSameAs(expected);
@@ -137,7 +140,7 @@ class CallbackDispatchServiceTest {
         controller
     );
 
-    Assertions.assertThatThrownBy(() -> service.dispatchToHandlersSubmitted(buildRequest("EVENT_ID")))
+    Assertions.assertThatThrownBy(() -> service.dispatchToHandlersSubmitted(buildRequest("EVENT_ID"), AUTHORIZATION))
         .isInstanceOf(IllegalStateException.class)
         .hasMessageContaining("Submitted callback failed after 3 attempt(s)")
         .hasMessageContaining("caseType=CASE_TYPE")
@@ -164,7 +167,7 @@ class CallbackDispatchServiceTest {
         controller
     );
 
-    Assertions.assertThatThrownBy(() -> service.dispatchToHandlersSubmitted(buildRequest("EVENT_ID")))
+    Assertions.assertThatThrownBy(() -> service.dispatchToHandlersSubmitted(buildRequest("EVENT_ID"), AUTHORIZATION))
         .isInstanceOf(IllegalStateException.class)
         .hasMessageContaining("Submitted callback failed after 1 attempt(s)");
     Assertions.assertThat(controller.submittedCalls.get()).isEqualTo(1);
@@ -186,8 +189,8 @@ class CallbackDispatchServiceTest {
         controller
     );
 
-    var aboutToSubmitResult = service.dispatchToHandlersAboutToSubmit(buildRequest("EVENT_ID"));
-    var submittedResult = service.dispatchToHandlersSubmitted(buildRequest("EVENT_ID"));
+    var aboutToSubmitResult = service.dispatchToHandlersAboutToSubmit(buildRequest("EVENT_ID"), AUTHORIZATION);
+    var submittedResult = service.dispatchToHandlersSubmitted(buildRequest("EVENT_ID"), AUTHORIZATION);
 
     Assertions.assertThat(aboutToSubmitResult.handled()).isTrue();
     Assertions.assertThat(aboutToSubmitResult.response()).isSameAs(aboutResponse);
@@ -195,8 +198,8 @@ class CallbackDispatchServiceTest {
     Assertions.assertThat(submittedResult.response()).isSameAs(submittedResponse);
     Assertions.assertThat(controller.aboutToSubmitCalls.get()).isEqualTo(1);
     Assertions.assertThat(controller.submittedCalls.get()).isEqualTo(1);
-    Assertions.assertThat(controller.lastAboutToSubmitToken).isNull();
-    Assertions.assertThat(controller.lastSubmittedToken).isNull();
+    Assertions.assertThat(controller.lastAboutToSubmitToken).isEqualTo(AUTHORIZATION);
+    Assertions.assertThat(controller.lastSubmittedToken).isEqualTo(AUTHORIZATION);
   }
 
   @Test
@@ -257,8 +260,8 @@ class CallbackDispatchServiceTest {
         controller
     );
 
-    var aboutToSubmit = service.dispatchToHandlersAboutToSubmit(buildRequest("EVENT_ID"));
-    var submitted = service.dispatchToHandlersSubmitted(buildRequest("EVENT_ID"));
+    var aboutToSubmit = service.dispatchToHandlersAboutToSubmit(buildRequest("EVENT_ID"), AUTHORIZATION);
+    var submitted = service.dispatchToHandlersSubmitted(buildRequest("EVENT_ID"), AUTHORIZATION);
 
     Assertions.assertThat(aboutToSubmit.handled()).isTrue();
     Assertions.assertThat(((LegacyCallbackResponse) aboutToSubmit.response()).getData().getValue())
@@ -326,6 +329,8 @@ class CallbackDispatchServiceTest {
     private final AtomicInteger submittedFailuresRemaining;
     private final AtomicInteger aboutToSubmitCalls = new AtomicInteger();
     private final AtomicInteger submittedCalls = new AtomicInteger();
+    private String lastAboutToSubmitToken;
+    private String lastSubmittedToken;
 
     private TestDispatchController(
         CallbackResponse<?> aboutToSubmitResponse,
@@ -340,12 +345,14 @@ class CallbackDispatchServiceTest {
     @PostMapping("/aboutToSubmit")
     public CallbackResponse<?> aboutToSubmit(CallbackRequest callbackRequest, String authToken) {
       aboutToSubmitCalls.incrementAndGet();
+      lastAboutToSubmitToken = authToken;
       return aboutToSubmitResponse;
     }
 
     @PostMapping("/submitted")
     public CallbackResponse<?> submitted(CallbackRequest callbackRequest, String authToken) {
       submittedCalls.incrementAndGet();
+      lastSubmittedToken = authToken;
       if (submittedFailuresRemaining.getAndDecrement() > 0) {
         throw new RuntimeException("submitted callback failure");
       }
@@ -480,7 +487,8 @@ class CallbackDispatchServiceTest {
     }
   }
 
-  private static final class LegacyCallbackResponse implements CallbackResponse<LegacyCaseData>, SubmittedCallbackResponse {
+  private static final class LegacyCallbackResponse
+      implements CallbackResponse<LegacyCaseData>, SubmittedCallbackResponse {
     private final LegacyCaseData data;
     private final String confirmationHeader;
     private final String confirmationBody;

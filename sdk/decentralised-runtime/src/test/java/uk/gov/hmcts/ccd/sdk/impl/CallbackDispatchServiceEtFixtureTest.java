@@ -1,7 +1,16 @@
 package uk.gov.hmcts.ccd.sdk.impl;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.io.IOException;
+import java.io.InputStream;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 import org.springframework.beans.factory.ListableBeanFactory;
@@ -16,18 +25,9 @@ import uk.gov.hmcts.ccd.sdk.SubmittedCallbackResponse;
 import uk.gov.hmcts.reform.ccd.client.model.CallbackRequest;
 import uk.gov.hmcts.reform.ccd.client.model.CaseDetails;
 
-import java.io.IOException;
-import java.io.InputStream;
-import java.util.ArrayList;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.atomic.AtomicInteger;
-
-import static org.assertj.core.api.Assertions.assertThat;
-
 class CallbackDispatchServiceEtFixtureTest {
 
+  private static final String AUTHORIZATION = "Bearer token";
   private static final String FIXTURE_PATH = "/fixtures/et-callback-caseevents-subset.json";
   private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
@@ -89,14 +89,16 @@ class CallbackDispatchServiceEtFixtureTest {
 
     for (FixtureEvent fixtureEvent : fixtureEvents) {
       var aboutToSubmitResult = service.dispatchToHandlersAboutToSubmit(
-          buildRequest(fixtureEvent.caseTypeId(), fixtureEvent.eventId())
+          buildRequest(fixtureEvent.caseTypeId(), fixtureEvent.eventId()),
+          AUTHORIZATION
       );
       assertThat(aboutToSubmitResult.handled()).isTrue();
       assertThat(((LabelledResponse) aboutToSubmitResult.response()).label())
           .isEqualTo(EXPECTED_ABOUT_TO_SUBMIT_LABELS.get(fixtureEvent.eventId()));
 
       var submittedResult = service.dispatchToHandlersSubmitted(
-          buildRequest(fixtureEvent.caseTypeId(), fixtureEvent.eventId())
+          buildRequest(fixtureEvent.caseTypeId(), fixtureEvent.eventId()),
+          AUTHORIZATION
       );
       assertThat(submittedResult.handled()).isTrue();
       assertThat(((LabelledResponse) submittedResult.response()).label())
@@ -130,7 +132,7 @@ class CallbackDispatchServiceEtFixtureTest {
     Map<String, CaseTypeDefinition> definitions = new LinkedHashMap<>();
 
     for (FixtureEvent fixtureEvent : fixtureEvents) {
-      CaseTypeDefinition caseTypeDefinition = definitions.computeIfAbsent(fixtureEvent.caseTypeId(), ignored -> {
+      final CaseTypeDefinition caseTypeDefinition = definitions.computeIfAbsent(fixtureEvent.caseTypeId(), ignored -> {
         CaseTypeDefinition definition = new CaseTypeDefinition();
         definition.setEvents(new ArrayList<>());
         return definition;

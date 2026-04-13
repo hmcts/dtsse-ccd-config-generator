@@ -1,7 +1,19 @@
 package uk.gov.hmcts.ccd.sdk.impl;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
+import static org.mockito.Mockito.when;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.TextNode;
+import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.Test;
 import uk.gov.hmcts.ccd.data.casedetails.SecurityClassification;
 import uk.gov.hmcts.ccd.decentralised.dto.DecentralisedCaseEvent;
@@ -10,20 +22,9 @@ import uk.gov.hmcts.ccd.sdk.CallbackResponse;
 import uk.gov.hmcts.ccd.sdk.SubmittedCallbackResponse;
 import uk.gov.hmcts.reform.ccd.client.model.Classification;
 
-import java.util.List;
-import java.util.Map;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.doReturn;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyNoMoreInteractions;
-import static org.mockito.Mockito.when;
-
 class JsonDefinitionSubmissionHandlerTest {
 
+  private static final String AUTHORIZATION = "Bearer token";
   private final CallbackDispatchService callbackDispatchService = mock(CallbackDispatchService.class);
 
   @Test
@@ -38,9 +39,9 @@ class JsonDefinitionSubmissionHandlerTest {
     when(callbackResponse.getErrors()).thenReturn(List.of("validation-error"));
     when(callbackResponse.getWarnings()).thenReturn(List.of("warning"));
     doReturn(new CallbackDispatchService.DispatchResult<>(true, callbackResponse))
-        .when(callbackDispatchService).dispatchToHandlersAboutToSubmit(any());
+        .when(callbackDispatchService).dispatchToHandlersAboutToSubmit(any(), eq(AUTHORIZATION));
 
-    assertThatThrownBy(() -> handler.apply(event))
+    assertThatThrownBy(() -> handler.apply(event, AUTHORIZATION))
         .isInstanceOf(CallbackValidationException.class)
         .satisfies(ex -> {
           CallbackValidationException callbackEx = (CallbackValidationException) ex;
@@ -48,7 +49,7 @@ class JsonDefinitionSubmissionHandlerTest {
           assertThat(callbackEx.getWarnings()).containsExactly("warning");
         });
 
-    verify(callbackDispatchService).dispatchToHandlersAboutToSubmit(any());
+    verify(callbackDispatchService).dispatchToHandlersAboutToSubmit(any(), eq(AUTHORIZATION));
     verifyNoMoreInteractions(callbackDispatchService);
   }
 
@@ -65,13 +66,13 @@ class JsonDefinitionSubmissionHandlerTest {
     when(callbackResponse.getErrors()).thenReturn(List.of());
     when(callbackResponse.getWarnings()).thenReturn(List.of("warning-message"));
     doReturn(new CallbackDispatchService.DispatchResult<>(true, callbackResponse))
-        .when(callbackDispatchService).dispatchToHandlersAboutToSubmit(any());
-    when(callbackDispatchService.dispatchToHandlersSubmitted(any()))
+        .when(callbackDispatchService).dispatchToHandlersAboutToSubmit(any(), eq(AUTHORIZATION));
+    when(callbackDispatchService.dispatchToHandlersSubmitted(any(), eq(AUTHORIZATION)))
         .thenReturn(new CallbackDispatchService.DispatchResult<>(true, submittedCallbackResponse));
     when(submittedCallbackResponse.getConfirmationHeader()).thenReturn("Header");
     when(submittedCallbackResponse.getConfirmationBody()).thenReturn("Body");
 
-    CaseSubmissionHandler.CaseSubmissionHandlerResult result = handler.apply(event);
+    CaseSubmissionHandler.CaseSubmissionHandlerResult result = handler.apply(event, AUTHORIZATION);
     var submitResponse = result.responseSupplier().get();
 
     assertThat(event.getCaseDetails().getState()).isEqualTo("Validated");
@@ -84,8 +85,8 @@ class JsonDefinitionSubmissionHandlerTest {
     assertThat(submitResponse.getConfirmationBody()).isEqualTo("Body");
     assertThat(submitResponse.getCaseSecurityClassification()).isEqualTo(Classification.PUBLIC);
 
-    verify(callbackDispatchService).dispatchToHandlersAboutToSubmit(any());
-    verify(callbackDispatchService).dispatchToHandlersSubmitted(any());
+    verify(callbackDispatchService).dispatchToHandlersAboutToSubmit(any(), eq(AUTHORIZATION));
+    verify(callbackDispatchService).dispatchToHandlersSubmitted(any(), eq(AUTHORIZATION));
   }
 
   @Test
@@ -93,18 +94,18 @@ class JsonDefinitionSubmissionHandlerTest {
     JsonDefinitionSubmissionHandler handler = newHandler();
     DecentralisedCaseEvent event = buildEvent();
 
-    when(callbackDispatchService.dispatchToHandlersAboutToSubmit(any()))
+    when(callbackDispatchService.dispatchToHandlersAboutToSubmit(any(), eq(AUTHORIZATION)))
         .thenReturn(new CallbackDispatchService.DispatchResult<>(false, null));
-    when(callbackDispatchService.dispatchToHandlersSubmitted(any()))
+    when(callbackDispatchService.dispatchToHandlersSubmitted(any(), eq(AUTHORIZATION)))
         .thenThrow(new RuntimeException("submitted callback failure"));
 
-    CaseSubmissionHandler.CaseSubmissionHandlerResult result = handler.apply(event);
+    CaseSubmissionHandler.CaseSubmissionHandlerResult result = handler.apply(event, AUTHORIZATION);
 
-    verify(callbackDispatchService).dispatchToHandlersAboutToSubmit(any());
+    verify(callbackDispatchService).dispatchToHandlersAboutToSubmit(any(), eq(AUTHORIZATION));
     assertThatThrownBy(() -> result.responseSupplier().get())
         .isInstanceOf(RuntimeException.class)
         .hasMessage("submitted callback failure");
-    verify(callbackDispatchService).dispatchToHandlersSubmitted(any());
+    verify(callbackDispatchService).dispatchToHandlersSubmitted(any(), eq(AUTHORIZATION));
   }
 
   @Test
@@ -119,9 +120,9 @@ class JsonDefinitionSubmissionHandlerTest {
     when(callbackResponse.getErrors()).thenReturn(List.of("validation-error"));
     when(callbackResponse.getWarnings()).thenReturn(List.of("warning"));
     doReturn(new CallbackDispatchService.DispatchResult<>(true, callbackResponse))
-        .when(callbackDispatchService).dispatchToHandlersAboutToSubmit(any());
+        .when(callbackDispatchService).dispatchToHandlersAboutToSubmit(any(), eq(AUTHORIZATION));
 
-    assertThatThrownBy(() -> handler.apply(event))
+    assertThatThrownBy(() -> handler.apply(event, AUTHORIZATION))
         .isInstanceOf(CallbackValidationException.class)
         .satisfies(ex -> {
           CallbackValidationException callbackEx = (CallbackValidationException) ex;

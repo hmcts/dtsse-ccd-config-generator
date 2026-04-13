@@ -30,11 +30,11 @@ public class JsonDefinitionSubmissionHandler implements CaseSubmissionHandler {
   private final ObjectMapper mapper;
 
   @Override
-  public CaseSubmissionHandlerResult apply(DecentralisedCaseEvent event) {
+  public CaseSubmissionHandlerResult apply(DecentralisedCaseEvent event, String authorisation) {
     log.info("[submit-handler] Creating event '{}' for case reference: {}",
         event.getEventDetails().getEventId(), event.getCaseDetails().getReference());
 
-    var submitResponse = prepareLegacySubmit(event);
+    var submitResponse = prepareLegacySubmit(event, authorisation);
 
     if (submitResponse.getErrors() != null && !submitResponse.getErrors().isEmpty()) {
       throw new CallbackValidationException(submitResponse.getErrors(), submitResponse.getWarnings());
@@ -57,7 +57,7 @@ public class JsonDefinitionSubmissionHandler implements CaseSubmissionHandler {
               .errors(errors)
               .warnings(warnings);
 
-          var submittedResponse = runSubmittedCallback(event).orElse(null);
+          var submittedResponse = runSubmittedCallback(event, authorisation).orElse(null);
 
           if (submittedResponse != null) {
             builder.confirmationHeader(submittedResponse.getConfirmationHeader());
@@ -68,11 +68,11 @@ public class JsonDefinitionSubmissionHandler implements CaseSubmissionHandler {
         });
   }
 
-  private DecentralisedSubmitEventResponse prepareLegacySubmit(DecentralisedCaseEvent event) {
+  private DecentralisedSubmitEventResponse prepareLegacySubmit(DecentralisedCaseEvent event, String authorisation) {
     var request = buildCallbackRequest(event);
     var response = new DecentralisedSubmitEventResponse();
 
-    var aboutToSubmitResult = callbackDispatchService.dispatchToHandlersAboutToSubmit(request);
+    var aboutToSubmitResult = callbackDispatchService.dispatchToHandlersAboutToSubmit(request, authorisation);
     if (!aboutToSubmitResult.handled()) {
       return response;
     }
@@ -105,10 +105,11 @@ public class JsonDefinitionSubmissionHandler implements CaseSubmissionHandler {
     return response;
   }
 
-  private Optional<SubmittedCallbackResponse> runSubmittedCallback(DecentralisedCaseEvent event) {
+  private Optional<SubmittedCallbackResponse> runSubmittedCallback(DecentralisedCaseEvent event,
+                                                                  String authorisation) {
 
     CallbackRequest request = buildCallbackRequest(event);
-    var submittedResult = callbackDispatchService.dispatchToHandlersSubmitted(request);
+    var submittedResult = callbackDispatchService.dispatchToHandlersSubmitted(request, authorisation);
     if (!submittedResult.handled()) {
       return Optional.empty();
     }

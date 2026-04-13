@@ -1,6 +1,17 @@
 package uk.gov.hmcts.ccd.sdk.impl;
 
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
+
 import com.fasterxml.jackson.databind.node.TextNode;
+import java.util.Map;
+import java.util.Optional;
+import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -14,18 +25,6 @@ import uk.gov.hmcts.ccd.decentralised.dto.DecentralisedEventDetails;
 import uk.gov.hmcts.ccd.sdk.ResolvedConfigRegistry;
 import uk.gov.hmcts.ccd.sdk.api.Event;
 import uk.gov.hmcts.ccd.sdk.api.callback.SubmitResponse;
-
-import java.util.Map;
-import java.util.Optional;
-import java.util.UUID;
-
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.doReturn;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyNoInteractions;
-import static org.mockito.Mockito.when;
 
 class CaseSubmissionServiceTest {
 
@@ -86,12 +85,12 @@ class CaseSubmissionServiceTest {
     when(idamService.retrieveUser("Bearer token")).thenReturn(user);
     when(idempotencyEnforcer.lockCaseAndGetExistingEvent(idempotencyKey, 1234567890123456L))
         .thenReturn(Optional.empty());
-    when(jsonDefinitionHandler.apply(event)).thenReturn(defaultResult());
+    when(jsonDefinitionHandler.apply(event, "Bearer token")).thenReturn(defaultResult());
     when(caseProjectionService.load(1234567890123456L)).thenReturn(buildSavedCaseDetails());
 
     service.submit(event, "Bearer token", idempotencyKey);
 
-    verify(jsonDefinitionHandler).apply(event);
+    verify(jsonDefinitionHandler).apply(event, "Bearer token");
     verifyNoInteractions(submitHandler, legacyHandler);
   }
 
@@ -109,12 +108,12 @@ class CaseSubmissionServiceTest {
     when(idamService.retrieveUser("Bearer token")).thenReturn(user);
     when(idempotencyEnforcer.lockCaseAndGetExistingEvent(idempotencyKey, 1234567890123456L))
         .thenReturn(Optional.empty());
-    when(submitHandler.apply(event)).thenReturn(defaultResult());
+    when(submitHandler.apply(event, "Bearer token")).thenReturn(defaultResult());
     when(caseProjectionService.load(1234567890123456L)).thenReturn(buildSavedCaseDetails());
 
     service.submit(event, "Bearer token", idempotencyKey);
 
-    verify(submitHandler).apply(event);
+    verify(submitHandler).apply(event, "Bearer token");
     verifyNoInteractions(legacyHandler, jsonDefinitionHandler);
   }
 
@@ -132,12 +131,12 @@ class CaseSubmissionServiceTest {
     when(idamService.retrieveUser("Bearer token")).thenReturn(user);
     when(idempotencyEnforcer.lockCaseAndGetExistingEvent(idempotencyKey, 1234567890123456L))
         .thenReturn(Optional.empty());
-    when(legacyHandler.apply(event)).thenReturn(defaultResult());
+    when(legacyHandler.apply(event, "Bearer token")).thenReturn(defaultResult());
     when(caseProjectionService.load(1234567890123456L)).thenReturn(buildSavedCaseDetails());
 
     service.submit(event, "Bearer token", idempotencyKey);
 
-    verify(legacyHandler).apply(event);
+    verify(legacyHandler).apply(event, "Bearer token");
     verifyNoInteractions(submitHandler, jsonDefinitionHandler);
   }
 
