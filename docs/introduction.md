@@ -53,15 +53,23 @@ participant SDB as Service DB
 - Your service persists both the authoritative case record and the event history inside your database (see schema overview).
 - CCD still enforces authorisation, event definitions, and callback sequencing; you take on data modelling, retention, and migrations.
 
+### Routing: telling CCD where your service lives
+
+CCD Data Store needs to know which case types are decentralised and where their service is hosted. You configure this by setting a `CCD_DECENTRALISED_CASE-TYPE-SERVICE-URLS_<CaseType>` environment variable on the CCD Data Store API deployment (not your service). CCD then delegates persistence and read operations to the configured service URL instead of using its own database.
+
+See [Routing configuration](./routing-configuration.md) for full details, including parameterised URL templates for preview environments.
+
 ### What changes for teams
 
 - **Database provisioning:** Allocate a PostgreSQL database for your service to persist its case data.
 - **Schema migrations:** The SDK provides Flyway scripts to create and manage a 'ccd' schema that resides in your database.
 - **Read APIs:** Implement `CaseView<CaseType, StateEnum>` so CCD can read case data from your service.
 - **Write to your database:** You can write to your database during the standard CCD event lifecycle callbacks.
+- **CCD Data Store routing:** Configure the `CCD_DECENTRALISED_CASE-TYPE-SERVICE-URLS_<CaseType>` env var on CCD Data Store to point at your service (see [Routing configuration](./routing-configuration.md)).
 
 ## Read next
 
+- [Routing configuration](./routing-configuration.md)
 - [Decentralised runtime in detail](./decentralised-runtime.md)
 - [Concurrency considerations](./concurrency.md)
 - [Migrating existing services](./data-migration.md)
