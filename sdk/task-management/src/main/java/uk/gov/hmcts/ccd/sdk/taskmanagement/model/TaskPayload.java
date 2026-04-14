@@ -75,7 +75,7 @@ public class TaskPayload {
   String assignee;
 
   /**
-   * Timestamp at which the task task-managements created in task-management.
+   * Timestamp at which the task was created in task-management.
    *
    * <p>Example persisted value: {@code 2026-04-10 12:47:45.228}.
    */
@@ -179,8 +179,7 @@ public class TaskPayload {
    *
    * <p>For API-first create and reconfigure requests, this value is stored on the task and later
    * used by task-management task search as the date-based part of the default ordering after
-   * {@link #majorPriority} and before {@link #minorPriority}. When omitted on task creation, task-management
-   * defaults this value to {@link #dueDateTime}.
+   * {@link #majorPriority} and before {@link #minorPriority}.
    *
    * <p>Example persisted value: {@code 2026-04-10 12:47:45.228}.
    */
@@ -193,6 +192,8 @@ public class TaskPayload {
    * used by task-management task search as the coarse-grained ordering key. Lower values sort ahead of higher
    * values and are applied before {@link #priorityDate} and {@link #minorPriority}.
    *
+   * <p>For creation, this value defaults to 5000 if no value is provided.</p>
+   *
    * <p>Example: {@code 5000}.
    */
   Integer majorPriority;
@@ -203,6 +204,8 @@ public class TaskPayload {
    * <p>For API-first create and reconfigure requests, this value is stored on the task and later
    * used by task-management task search to break ties after {@link #majorPriority} and {@link #priorityDate}.
    * Lower values sort ahead of higher values.
+   *
+   * <p>For creation, this value defaults to 500 if no value is provided.</p>
    *
    * <p>Example: {@code 500}.
    */
