@@ -41,7 +41,6 @@ public class CaseSubmissionService {
   public DecentralisedSubmitEventResponse submit(DecentralisedCaseEvent event,
                                                  String authorisation,
                                                  UUID idempotencyKey) {
-    var eventConfig = getEventConfig(event);
     var user = idam.retrieveUser(authorisation);
     CaseSubmissionHandler handler;
 
@@ -50,6 +49,7 @@ public class CaseSubmissionService {
           .orElseThrow(() -> new IllegalStateException(
               "Legacy JSON service is enabled but no JsonDefinitionSubmissionHandler bean is available"));
     } else {
+      var eventConfig = getEventConfig(event);
       handler = eventConfig.getSubmitHandler() != null ? submitHandler : legacyHandler;
     }
 
