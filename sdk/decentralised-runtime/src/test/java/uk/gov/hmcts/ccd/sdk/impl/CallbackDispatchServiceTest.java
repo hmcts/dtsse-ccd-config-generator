@@ -296,6 +296,31 @@ class CallbackDispatchServiceTest {
         .isEqualTo(AUTHORIZATION);
   }
 
+  @Test
+  void dispatchSupportsTypedRequestControllersWithRequestFirstAndAuthTokenSecond() {
+    TypedRequestDispatchController controller = new TypedRequestDispatchController();
+
+    CallbackDispatchService service = createInitialisedService(
+        Map.of("CASE_TYPE", definitionForEvents(event(
+            "EVENT_ID",
+            "${BASE_URL}/typed/aboutToSubmit",
+            "${BASE_URL}/typed/submitted",
+            null
+        ))),
+        controller
+    );
+
+    var aboutToSubmit = service.dispatchToHandlersAboutToSubmit(buildRequest("EVENT_ID"), AUTHORIZATION);
+    var submitted = service.dispatchToHandlersSubmitted(buildRequest("EVENT_ID"), AUTHORIZATION);
+
+    Assertions.assertThat(aboutToSubmit.handled()).isTrue();
+    Assertions.assertThat(((LegacyCallbackResponse) aboutToSubmit.response()).getData().getValue())
+        .isEqualTo("EVENT_ID");
+    Assertions.assertThat(submitted.handled()).isTrue();
+    Assertions.assertThat(((LegacyCallbackResponse) submitted.response()).getConfirmationHeader())
+        .isEqualTo("EVENT_ID");
+  }
+
   private CallbackDispatchService createInitialisedService(
       Map<String, CaseTypeDefinition> definitions,
       Object... controllers
@@ -500,8 +525,42 @@ class CallbackDispatchServiceTest {
     }
   }
 
+  @RestController
+  @RequestMapping("/typed")
+  private static final class TypedRequestDispatchController {
+
+    @PostMapping("/aboutToSubmit")
+    public ResponseEntity<LegacyCallbackResponse> aboutToSubmit(TypedRequest callbackRequest, String authToken) {
+      return ResponseEntity.ok(new LegacyCallbackResponse(
+          new LegacyCaseData(callbackRequest.getEventId()),
+          null,
+          null
+      ));
+    }
+
+    @PostMapping("/submitted")
+    public ResponseEntity<LegacyCallbackResponse> submitted(TypedRequest callbackRequest, String authToken) {
+      return ResponseEntity.ok(new LegacyCallbackResponse(null, callbackRequest.getEventId(), "body"));
+    }
+  }
+
   @JsonIgnoreProperties(ignoreUnknown = true)
   private static final class CCDRequest {
+    private String eventId;
+
+    @JsonProperty("event_id")
+    public String getEventId() {
+      return eventId;
+    }
+
+    @JsonProperty("event_id")
+    public void setEventId(String eventId) {
+      this.eventId = eventId;
+    }
+  }
+
+  @JsonIgnoreProperties(ignoreUnknown = true)
+  private static final class TypedRequest {
     private String eventId;
 
     @JsonProperty("event_id")

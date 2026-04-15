@@ -284,17 +284,19 @@ public class CallbackDispatchService {
       return "expected exactly 2 parameters but found " + parameterTypes.length;
     }
 
-    boolean firstSupported = isSupportedRequestType(parameterTypes[0]) || String.class.equals(parameterTypes[0]);
-    boolean secondSupported = isSupportedRequestType(parameterTypes[1]) || String.class.equals(parameterTypes[1]);
-    if (!firstSupported || !secondSupported) {
-      return "expected parameters to include one request type and one String auth token but found "
+    long stringParameterCount = Arrays.stream(parameterTypes)
+        .filter(String.class::equals)
+        .count();
+    if (stringParameterCount != 1) {
+      return "expected exactly one String auth token parameter but found "
           + Arrays.toString(parameterTypes);
     }
 
-    boolean hasRequestType = isSupportedRequestType(parameterTypes[0]) || isSupportedRequestType(parameterTypes[1]);
-    boolean hasAuthToken = String.class.equals(parameterTypes[0]) || String.class.equals(parameterTypes[1]);
-    if (!hasRequestType || !hasAuthToken) {
-      return "expected parameters to include one request type and one String auth token but found "
+    long requestParameterCount = Arrays.stream(parameterTypes)
+        .filter(parameterType -> !String.class.equals(parameterType))
+        .count();
+    if (requestParameterCount != 1) {
+      return "expected exactly one request parameter and one String auth token but found "
           + Arrays.toString(parameterTypes);
     }
 
@@ -306,8 +308,7 @@ public class CallbackDispatchService {
   }
 
   private boolean isSupportedRequestType(Class<?> parameterType) {
-    return CallbackRequest.class.isAssignableFrom(parameterType)
-        || "CCDRequest".equals(parameterType.getSimpleName());
+    return !String.class.equals(parameterType);
   }
 
   private boolean isSupportedReturnType(Class<?> returnType) {
