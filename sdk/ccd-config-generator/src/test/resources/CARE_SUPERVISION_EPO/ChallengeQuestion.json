@@ -1,0 +1,32 @@
+[
+  {
+    "Answer": "${caseName}:[caseworker-publiclaw-solicitor]",
+    "AnswerFieldType": "Text",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "DisplayOrder": 1,
+    "ID": "NoCChallenge",
+    "LiveFrom": "01/04/2024",
+    "QuestionId": "caseName",
+    "QuestionText": "Enter the case name"
+  },
+  {
+    "Answer": "${allocatedJudge.judgeFullName}:[caseworker-publiclaw-solicitor],${allocatedJudge.judgeFullName}:[caseworker-publiclaw-courtadmin]",
+    "AnswerFieldType": "Text",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "DisplayOrder": 2,
+    "ID": "NoCChallenge",
+    "LiveFrom": "01/04/2024",
+    "QuestionId": "judgeFullName",
+    "QuestionText": "Enter your allocated judge's full name"
+  },
+  {
+    "Answer": "${hearingPreferencesWelsh}:[caseworker-publiclaw-solicitor]",
+    "AnswerFieldType": "Text",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "DisplayOrder": 3,
+    "ID": "NoCChallenge",
+    "LiveFrom": "01/04/2024",
+    "QuestionId": "welshPreference",
+    "QuestionText": "Do you want some Welsh?"
+  }
+]
