@@ -271,6 +271,31 @@ class CallbackDispatchServiceTest {
         .isEqualTo("done");
   }
 
+  @Test
+  void dispatchSupportsLegacyControllersWithAuthTokenFirstAndCcdRequestSecond() {
+    AuthFirstLegacyDispatchController controller = new AuthFirstLegacyDispatchController();
+
+    CallbackDispatchService service = createInitialisedService(
+        Map.of("CASE_TYPE", definitionForEvents(event(
+            "EVENT_ID",
+            "${BASE_URL}/legacy-auth-first/aboutToSubmit",
+            "${BASE_URL}/legacy-auth-first/submitted",
+            null
+        ))),
+        controller
+    );
+
+    var aboutToSubmit = service.dispatchToHandlersAboutToSubmit(buildRequest("EVENT_ID"), AUTHORIZATION);
+    var submitted = service.dispatchToHandlersSubmitted(buildRequest("EVENT_ID"), AUTHORIZATION);
+
+    Assertions.assertThat(aboutToSubmit.handled()).isTrue();
+    Assertions.assertThat(((LegacyCallbackResponse) aboutToSubmit.response()).getData().getValue())
+        .isEqualTo(AUTHORIZATION);
+    Assertions.assertThat(submitted.handled()).isTrue();
+    Assertions.assertThat(((LegacyCallbackResponse) submitted.response()).getConfirmationHeader())
+        .isEqualTo(AUTHORIZATION);
+  }
+
   private CallbackDispatchService createInitialisedService(
       Map<String, CaseTypeDefinition> definitions,
       Object... controllers
@@ -457,6 +482,21 @@ class CallbackDispatchServiceTest {
     @PostMapping("/submitted")
     public ResponseEntity<LegacyCallbackResponse> submitted(CCDRequest request, String authToken) {
       return ResponseEntity.ok(new LegacyCallbackResponse(null, "done", "body"));
+    }
+  }
+
+  @RestController
+  @RequestMapping("/legacy-auth-first")
+  private static final class AuthFirstLegacyDispatchController {
+
+    @PostMapping("/aboutToSubmit")
+    public ResponseEntity<LegacyCallbackResponse> aboutToSubmit(String authToken, CCDRequest callbackRequest) {
+      return ResponseEntity.ok(new LegacyCallbackResponse(new LegacyCaseData(authToken), null, null));
+    }
+
+    @PostMapping("/submitted")
+    public ResponseEntity<LegacyCallbackResponse> submitted(String authToken, CCDRequest callbackRequest) {
+      return ResponseEntity.ok(new LegacyCallbackResponse(null, authToken, "body"));
     }
   }
 

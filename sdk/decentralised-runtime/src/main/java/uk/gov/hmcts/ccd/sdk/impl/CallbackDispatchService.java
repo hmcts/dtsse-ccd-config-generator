@@ -149,13 +149,35 @@ public class CallbackDispatchService {
       });
     });
 
-    Map<String, EndpointInvoker> invokersByPath = discoverControllerEndpointsByPath();
+    ControllerEndpointDiscovery discovery = discoverControllerEndpoints();
+    Map<String, EndpointInvoker> invokersByPath = discovery.invokersByPath();
     Map<CallbackBinding, BiFunction<CallbackRequest, String, CallbackResponse<?>>> dispatchMap = new HashMap<>();
+
+    log.info(
+        "Initialising callback dispatch map with {} callback bindings and {} discovered controller endpoints",
+        callbackBindings.size(),
+        invokersByPath.size()
+    );
 
     callbackBindings.forEach((binding, callbackUrl) -> {
       String callbackPath = normalisePath(callbackUrl);
       EndpointInvoker invoker = invokersByPath.get(callbackPath);
       if (invoker == null) {
+        List<String> rejectedCandidates = discovery.rejectedMethodsByPath().getOrDefault(callbackPath, List.of());
+        List<String> discoveredCandidates = discovery.invokersByPath().entrySet().stream()
+            .filter(entry -> entry.getKey().startsWith(callbackPath) || callbackPath.startsWith(entry.getKey()))
+            .map(entry -> "%s -> %s".formatted(entry.getKey(), entry.getValue().describe()))
+            .sorted()
+            .toList();
+
+        log.error(
+            "No callback controller method found for binding {}. "
+                + "Rejected candidates for path {}: {}. Nearby discovered endpoints: {}",
+            binding,
+            callbackPath,
+            rejectedCandidates.isEmpty() ? "<none>" : rejectedCandidates,
+            discoveredCandidates.isEmpty() ? "<none>" : discoveredCandidates
+        );
         throw new IllegalStateException(
             "No callback controller method found for caseType=%s eventId=%s callbackType=%s url=%s (normalised=%s)"
                 .formatted(
@@ -173,8 +195,9 @@ public class CallbackDispatchService {
     return Map.copyOf(dispatchMap);
   }
 
-  private Map<String, EndpointInvoker> discoverControllerEndpointsByPath() {
+  private ControllerEndpointDiscovery discoverControllerEndpoints() {
     Map<String, EndpointInvoker> endpointsByPath = new HashMap<>();
+    Map<String, List<String>> rejectedMethodsByPath = new HashMap<>();
 
     for (Object controllerBean : findControllerBeans()) {
       Class<?> controllerClass = AopUtils.getTargetClass(controllerBean);
@@ -186,14 +209,22 @@ public class CallbackDispatchService {
           continue;
         }
 
-        if (!isSupportedCallbackMethod(method)) {
-          continue;
-        }
-
         List<String> methodPaths = methodMappingPaths(postMapping);
         for (String classPath : classPaths) {
           for (String methodPath : methodPaths) {
             String fullPath = normalisePath(combinePaths(classPath, methodPath));
+            String unsupportedReason = unsupportedCallbackMethodReason(method);
+            if (unsupportedReason != null) {
+              rejectedMethodsByPath.computeIfAbsent(fullPath, ignored -> new java.util.ArrayList<>())
+                  .add("%s rejected: %s".formatted(method.toGenericString(), unsupportedReason));
+              log.info(
+                  "Skipping callback endpoint candidate {} for path {}: {}",
+                  method.toGenericString(),
+                  fullPath,
+                  unsupportedReason
+              );
+              continue;
+            }
             EndpointInvoker invoker = new EndpointInvoker(controllerBean, method, objectMapper);
             EndpointInvoker existing = endpointsByPath.putIfAbsent(fullPath, invoker);
             if (existing != null && !existing.hasSameMethodAs(invoker)) {
@@ -210,7 +241,14 @@ public class CallbackDispatchService {
       }
     }
 
-    return Map.copyOf(endpointsByPath);
+    return new ControllerEndpointDiscovery(
+        Map.copyOf(endpointsByPath),
+        rejectedMethodsByPath.entrySet().stream()
+            .collect(java.util.stream.Collectors.toUnmodifiableMap(
+                Map.Entry::getKey,
+                entry -> List.copyOf(entry.getValue())
+            ))
+    );
   }
 
   private List<Object> findControllerBeans() {
@@ -240,12 +278,31 @@ public class CallbackDispatchService {
     return mappingPaths.isEmpty() ? List.of("") : mappingPaths;
   }
 
-  private boolean isSupportedCallbackMethod(Method method) {
+  private String unsupportedCallbackMethodReason(Method method) {
     Class<?>[] parameterTypes = method.getParameterTypes();
-    return parameterTypes.length == 2
-        && isSupportedRequestType(parameterTypes[0])
-        && String.class.equals(parameterTypes[1])
-        && isSupportedReturnType(method.getReturnType());
+    if (parameterTypes.length != 2) {
+      return "expected exactly 2 parameters but found " + parameterTypes.length;
+    }
+
+    boolean firstSupported = isSupportedRequestType(parameterTypes[0]) || String.class.equals(parameterTypes[0]);
+    boolean secondSupported = isSupportedRequestType(parameterTypes[1]) || String.class.equals(parameterTypes[1]);
+    if (!firstSupported || !secondSupported) {
+      return "expected parameters to include one request type and one String auth token but found "
+          + Arrays.toString(parameterTypes);
+    }
+
+    boolean hasRequestType = isSupportedRequestType(parameterTypes[0]) || isSupportedRequestType(parameterTypes[1]);
+    boolean hasAuthToken = String.class.equals(parameterTypes[0]) || String.class.equals(parameterTypes[1]);
+    if (!hasRequestType || !hasAuthToken) {
+      return "expected parameters to include one request type and one String auth token but found "
+          + Arrays.toString(parameterTypes);
+    }
+
+    if (!isSupportedReturnType(method.getReturnType())) {
+      return "unsupported return type " + method.getReturnType().getName();
+    }
+
+    return null;
   }
 
   private boolean isSupportedRequestType(Class<?> parameterType) {
@@ -322,8 +379,7 @@ public class CallbackDispatchService {
 
     private CallbackResponse<?> invoke(CallbackRequest request, String authToken) {
       try {
-        Object requestArgument = buildRequestArgument(request);
-        Object result = method.invoke(bean, requestArgument, authToken);
+        Object result = method.invoke(bean, buildArguments(request, authToken));
         return extractCallbackResponse(result);
       } catch (InvocationTargetException ex) {
         Throwable cause = ex.getCause();
@@ -339,12 +395,20 @@ public class CallbackDispatchService {
       }
     }
 
-    private Object buildRequestArgument(CallbackRequest request) {
-      Class<?> parameterType = method.getParameterTypes()[0];
-      if (CallbackRequest.class.isAssignableFrom(parameterType)) {
-        return request;
+    private Object[] buildArguments(CallbackRequest request, String authToken) {
+      Class<?>[] parameterTypes = method.getParameterTypes();
+      Object[] arguments = new Object[parameterTypes.length];
+      for (int i = 0; i < parameterTypes.length; i++) {
+        Class<?> parameterType = parameterTypes[i];
+        if (String.class.equals(parameterType)) {
+          arguments[i] = authToken;
+        } else if (CallbackRequest.class.isAssignableFrom(parameterType)) {
+          arguments[i] = request;
+        } else {
+          arguments[i] = objectMapper.convertValue(request, parameterType);
+        }
       }
-      return objectMapper.convertValue(request, parameterType);
+      return arguments;
     }
 
     private CallbackResponse<?> extractCallbackResponse(Object result) {
@@ -391,6 +455,12 @@ public class CallbackDispatchService {
       Objects.requireNonNull(eventId, "eventId must not be null");
       Objects.requireNonNull(callbackType, "callbackType must not be null");
     }
+  }
+
+  private record ControllerEndpointDiscovery(
+      Map<String, EndpointInvoker> invokersByPath,
+      Map<String, List<String>> rejectedMethodsByPath
+  ) {
   }
 
   public record DispatchResult<T>(boolean handled, T response) {
