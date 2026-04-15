@@ -12,6 +12,7 @@ import java.util.Map;
 import java.util.Optional;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
@@ -34,6 +35,7 @@ class DefinitionRegistry {
   private final ResourcePatternResolver resourceResolver;
   private Map<String, CaseTypeDefinition> definitions = Map.of();
 
+  @Autowired
   DefinitionRegistry(@Qualifier("ccd_mapper") ObjectMapper definitionMapper) {
     this(
         definitionMapper,
