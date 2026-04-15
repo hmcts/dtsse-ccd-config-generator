@@ -9,30 +9,22 @@ import feign.codec.Decoder;
 import feign.codec.Encoder;
 import java.util.Arrays;
 import org.springframework.beans.factory.ObjectFactory;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.http.HttpMessageConverters;
 import org.springframework.cloud.openfeign.support.ResponseEntityDecoder;
 import org.springframework.cloud.openfeign.support.SpringDecoder;
 import org.springframework.cloud.openfeign.support.SpringEncoder;
-import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Configuration;
 import org.springframework.http.MediaType;
 import org.springframework.http.converter.HttpMessageConverter;
 import org.springframework.http.converter.json.MappingJackson2HttpMessageConverter;
 
-@Configuration
 @SuppressWarnings("PMD.DataflowAnomalyAnalysis")
-class SnakeCaseFeignConfiguration {
+final class SnakeCaseFeignConfiguration {
 
-  private final ObjectMapper objectMapper;
-
-  @Autowired
-  SnakeCaseFeignConfiguration(ObjectMapper objectMapper) {
-    this.objectMapper = objectMapper;
+  private SnakeCaseFeignConfiguration() {
+    // utility class
   }
 
-  @Bean
-  Decoder calendarFeignDecoder() {
+  static Decoder calendarFeignDecoder(ObjectMapper objectMapper) {
     MappingJackson2HttpMessageConverter jacksonConverter = new MappingJackson2HttpMessageConverter(objectMapper);
     jacksonConverter.setSupportedMediaTypes(Arrays.asList(
         MediaType.valueOf(TEXT_PLAIN_VALUE + ";charset=utf-8"),
@@ -44,8 +36,7 @@ class SnakeCaseFeignConfiguration {
     return new ResponseEntityDecoder(new SpringDecoder(objectFactory));
   }
 
-  @Bean
-  Encoder calendarFeignEncoder() {
+  static Encoder calendarFeignEncoder(ObjectMapper objectMapper) {
     HttpMessageConverter jacksonConverter = new MappingJackson2HttpMessageConverter(objectMapper);
     ObjectFactory<HttpMessageConverters> objectFactory = () -> new HttpMessageConverters(jacksonConverter);
     return new SpringEncoder(objectFactory);
