@@ -242,14 +242,19 @@ public class CCDConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<CaseData, S
     builder.noticeOfChange()
       .challenge("NoCChallenge")
         .question("caseName", "Enter the case name")
-          .answer(LOCAL_AUTHORITY).field(CaseData::getCaseName)
+          .answer(LOCAL_AUTHORITY).field(CaseData::getCaseName).or(CaseData::getFamilyManCaseNumber)
           .done()
         .question("judgeFullName", "Enter your allocated judge's full name")
           .answer(LOCAL_AUTHORITY, HMCTS_ADMIN).complex(CaseData::getAllocatedJudge).field(Judge::getJudgeFullName)
           .done()
         .question("welshPreference", "Do you want some Welsh?")
           .answer(LOCAL_AUTHORITY).complex(CaseData::getHearingPreferences).field(HearingPreferences::getWelsh)
-          .done();
+          .done()
+        .question("hearingDate", "Select your CMO hearing date")
+          .answer(LOCAL_AUTHORITY).selectedLabelOf(CaseData::getCmoHearingDateList)
+          .done()
+        .aboutToSubmitCallback(this::applyNoticeOfChange)
+        .submittedCallback(this::noticeOfChangeSubmitted);
 
     builder.grantComplexType(CaseData::getAllocatedJudge, "judgeFullName", CRU,
         CASE_ACCESS_ADMINISTRATOR, CASE_ACCESS_APPROVER);
@@ -263,6 +268,18 @@ public class CCDConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<CaseData, S
         .state(details.getData().getAllocatedJudge().getJudgeFullName().equals("judge") ? Submitted : Gatekeeping)
         .data(details.getData())
         .build();
+  }
+
+  private AboutToStartOrSubmitResponse<CaseData, State> applyNoticeOfChange(
+      CaseDetails<CaseData, State> details, CaseDetails<CaseData, State> before) {
+    return AboutToStartOrSubmitResponse.<CaseData, State>builder()
+        .data(details.getData())
+        .build();
+  }
+
+  private SubmittedCallbackResponse noticeOfChangeSubmitted(
+      CaseDetails<CaseData, State> details, CaseDetails<CaseData, State> before) {
+    return SubmittedCallbackResponse.builder().build();
   }
 
   private void buildSearchResultFields() {

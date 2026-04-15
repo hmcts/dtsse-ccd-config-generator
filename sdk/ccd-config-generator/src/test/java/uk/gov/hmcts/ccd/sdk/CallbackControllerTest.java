@@ -127,7 +127,7 @@ public class CallbackControllerTest {
   public void testNoticeOfChangeAboutToStart() {
     Map<String, Object> data = caseData();
 
-    MvcResult result = this.makeRequest("about-to-start", "CARE_SUPERVISION_EPO", "noticeOfChangeApplied", data)
+    MvcResult result = this.makeRequest("about-to-submit", "CARE_SUPERVISION_EPO", "notice-of-change-applied", data)
             .andExpect(status().isOk())
             .andReturn();
 
