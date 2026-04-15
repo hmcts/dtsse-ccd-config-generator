@@ -5,7 +5,7 @@
     "CaseTypeID": "CARE_SUPERVISION_EPO",
     "DisplayOrder": 1,
     "ID": "NoCChallenge",
-    "LiveFrom": "01/04/2024",
+    "LiveFrom": "01/01/2017",
     "QuestionId": "caseName",
     "QuestionText": "Enter the case name"
   },
@@ -15,7 +15,7 @@
     "CaseTypeID": "CARE_SUPERVISION_EPO",
     "DisplayOrder": 2,
     "ID": "NoCChallenge",
-    "LiveFrom": "01/04/2024",
+    "LiveFrom": "01/01/2017",
     "QuestionId": "judgeFullName",
     "QuestionText": "Enter your allocated judge's full name"
   },
@@ -25,7 +25,7 @@
     "CaseTypeID": "CARE_SUPERVISION_EPO",
     "DisplayOrder": 3,
     "ID": "NoCChallenge",
-    "LiveFrom": "01/04/2024",
+    "LiveFrom": "01/01/2017",
     "QuestionId": "welshPreference",
     "QuestionText": "Do you want some Welsh?"
   }

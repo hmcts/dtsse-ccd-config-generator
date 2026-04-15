@@ -241,7 +241,6 @@ public class CCDConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<CaseData, S
 
     builder.noticeOfChange()
       .challenge("NoCChallenge")
-        .liveFrom("01/04/2024")
         .question("caseName", "Enter the case name")
           .answer(LOCAL_AUTHORITY).field(CaseData::getCaseName)
           .done()

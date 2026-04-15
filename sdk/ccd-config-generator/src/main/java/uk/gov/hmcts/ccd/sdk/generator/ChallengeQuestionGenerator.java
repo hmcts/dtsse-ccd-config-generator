@@ -30,10 +30,8 @@ public class ChallengeQuestionGenerator<T, S, R extends HasRole> implements Conf
 
     final List<Map<String, Object>> result = Lists.newArrayList();
     for (ChallengeQuestion<T, R> challenge : noc.getChallenges()) {
-      String liveFrom = challenge.getLiveFrom() != null
-          ? challenge.getLiveFrom() : JsonUtils.DEFAULT_LIVE_FROM;
       for (ChallengeQuestionField<R> question : challenge.getQuestions()) {
-        result.add(toJson(config.getCaseType(), challenge.getId(), liveFrom, question));
+        result.add(toJson(config.getCaseType(), challenge.getId(), question));
       }
     }
 
@@ -46,8 +44,8 @@ public class ChallengeQuestionGenerator<T, S, R extends HasRole> implements Conf
   }
 
   private static <R extends HasRole> Map<String, Object> toJson(
-      String caseType, String id, String liveFrom, ChallengeQuestionField<R> question) {
-    Map<String, Object> row = JsonUtils.caseRow(caseType, liveFrom);
+      String caseType, String id, ChallengeQuestionField<R> question) {
+    Map<String, Object> row = JsonUtils.caseRow(caseType);
     row.put("ID", id);
     row.put("QuestionId", question.getQuestionId());
     row.put("QuestionText", question.getQuestionText());
