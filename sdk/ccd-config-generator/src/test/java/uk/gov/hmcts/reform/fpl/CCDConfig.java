@@ -238,6 +238,23 @@ public class CCDConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<CaseData, S
 
     builder.searchParty()
       .fields(List.of(searchPartyField1, searchPartyField2));
+
+    builder.noticeOfChange()
+      .challenge("NoCChallenge")
+        .question("caseName", "Enter the case name")
+          .answer(LOCAL_AUTHORITY).field(CaseData::getCaseName)
+          .done()
+        .question("judgeFullName", "Enter your allocated judge's full name")
+          .answer(LOCAL_AUTHORITY, HMCTS_ADMIN).complex(CaseData::getAllocatedJudge).field(Judge::getJudgeFullName)
+          .done()
+        .question("welshPreference", "Do you want some Welsh?")
+          .answer(LOCAL_AUTHORITY).complex(CaseData::getHearingPreferences).field(HearingPreferences::getWelsh)
+          .done();
+
+    builder.grantComplexType(CaseData::getAllocatedJudge, "judgeFullName", CRU,
+        CASE_ACCESS_ADMINISTRATOR, CASE_ACCESS_APPROVER);
+    builder.grantComplexType(CaseData::getAllocatedJudge, "judgeEmailId", CRU,
+        CASE_ACCESS_ADMINISTRATOR);
   }
 
   private AboutToStartOrSubmitResponse<CaseData, State> checkReadyAboutToSubmit(CaseDetails<CaseData, State> details,
