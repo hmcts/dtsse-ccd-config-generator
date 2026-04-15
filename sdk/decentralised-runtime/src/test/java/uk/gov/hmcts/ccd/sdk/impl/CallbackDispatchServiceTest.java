@@ -321,8 +321,86 @@ class CallbackDispatchServiceTest {
         .isEqualTo("EVENT_ID");
   }
 
+  @Test
+  void dispatchSupportsRequestOnlyControllers() {
+    RequestOnlyDispatchController controller = new RequestOnlyDispatchController();
+
+    CallbackDispatchService service = createInitialisedService(
+        Map.of("CASE_TYPE", definitionForEvents(event(
+            "EVENT_ID",
+            "${BASE_URL}/request-only/aboutToSubmit",
+            "${BASE_URL}/request-only/submitted",
+            null
+        ))),
+        controller
+    );
+
+    var aboutToSubmit = service.dispatchToHandlersAboutToSubmit(buildRequest("EVENT_ID"), AUTHORIZATION);
+    var submitted = service.dispatchToHandlersSubmitted(buildRequest("EVENT_ID"), AUTHORIZATION);
+
+    Assertions.assertThat(aboutToSubmit.handled()).isTrue();
+    Assertions.assertThat(((LegacyCallbackResponse) aboutToSubmit.response()).getData().getValue())
+        .isEqualTo("EVENT_ID");
+    Assertions.assertThat(submitted.handled()).isTrue();
+    Assertions.assertThat(((LegacyCallbackResponse) submitted.response()).getConfirmationHeader())
+        .isEqualTo("EVENT_ID");
+  }
+
+  @Test
+  void dispatchSupportsCallbacksWithoutParametersAndVoidReturn() {
+    VoidDispatchController controller = new VoidDispatchController();
+
+    CallbackDispatchService service = createInitialisedService(
+        Map.of("CASE_TYPE", definitionForEvents(event(
+            "EVENT_ID",
+            null,
+            "${BASE_URL}/void/submitted",
+            null
+        ))),
+        controller
+    );
+
+    var submitted = service.dispatchToHandlersSubmitted(buildRequest("EVENT_ID"), AUTHORIZATION);
+
+    Assertions.assertThat(submitted.handled()).isTrue();
+    Assertions.assertThat(submitted.response()).isNull();
+    Assertions.assertThat(controller.submittedCalls.get()).isEqualTo(1);
+  }
+
+  @Test
+  void createDispatchMapIgnoresExternalCallbackBindingsWhenLocalBaseUrlConfigured() {
+    TestDispatchController controller = new TestDispatchController(
+        new TestCallbackResponse(),
+        new TestSubmittedCallbackResponse(),
+        0
+    );
+
+    CallbackDispatchService service = createInitialisedService(
+        Map.of("CASE_TYPE", definitionForEvents(
+            event("LOCAL_EVENT", "${BASE_URL}/callbacks/aboutToSubmit", null, null),
+            event("EXTERNAL_EVENT", "http://localhost:4454/noc/check-noc-approval", null, null)
+        )),
+        "http://localhost:8081",
+        controller
+    );
+
+    var localResult = service.dispatchToHandlersAboutToSubmit(buildRequest("LOCAL_EVENT"), AUTHORIZATION);
+    var externalResult = service.dispatchToHandlersAboutToSubmit(buildRequest("EXTERNAL_EVENT"), AUTHORIZATION);
+
+    Assertions.assertThat(localResult.handled()).isTrue();
+    Assertions.assertThat(externalResult.handled()).isFalse();
+  }
+
   private CallbackDispatchService createInitialisedService(
       Map<String, CaseTypeDefinition> definitions,
+      Object... controllers
+  ) {
+    return createInitialisedService(definitions, "", controllers);
+  }
+
+  private CallbackDispatchService createInitialisedService(
+      Map<String, CaseTypeDefinition> definitions,
+      String localCallbackBaseUrls,
       Object... controllers
   ) {
     DefinitionRegistry definitionRegistry = Mockito.mock(DefinitionRegistry.class);
@@ -338,6 +416,11 @@ class CallbackDispatchServiceTest {
     Mockito.when(beanFactory.getBeansWithAnnotation(Controller.class)).thenReturn(Map.of());
 
     CallbackDispatchService service = new CallbackDispatchService(definitionRegistry, beanFactory, new ObjectMapper());
+    org.springframework.test.util.ReflectionTestUtils.setField(
+        service,
+        "localCallbackBaseUrls",
+        localCallbackBaseUrls
+    );
     service.initialiseHandlerMaps();
     return service;
   }
@@ -541,6 +624,36 @@ class CallbackDispatchServiceTest {
     @PostMapping("/submitted")
     public ResponseEntity<LegacyCallbackResponse> submitted(TypedRequest callbackRequest, String authToken) {
       return ResponseEntity.ok(new LegacyCallbackResponse(null, callbackRequest.getEventId(), "body"));
+    }
+  }
+
+  @RestController
+  @RequestMapping("/request-only")
+  private static final class RequestOnlyDispatchController {
+
+    @PostMapping("/aboutToSubmit")
+    public ResponseEntity<LegacyCallbackResponse> aboutToSubmit(TypedRequest callbackRequest) {
+      return ResponseEntity.ok(new LegacyCallbackResponse(
+          new LegacyCaseData(callbackRequest.getEventId()),
+          null,
+          null
+      ));
+    }
+
+    @PostMapping("/submitted")
+    public ResponseEntity<LegacyCallbackResponse> submitted(TypedRequest callbackRequest) {
+      return ResponseEntity.ok(new LegacyCallbackResponse(null, callbackRequest.getEventId(), "body"));
+    }
+  }
+
+  @RestController
+  @RequestMapping("/void")
+  private static final class VoidDispatchController {
+    private final AtomicInteger submittedCalls = new AtomicInteger();
+
+    @PostMapping("/submitted")
+    public void submitted() {
+      submittedCalls.incrementAndGet();
     }
   }
 

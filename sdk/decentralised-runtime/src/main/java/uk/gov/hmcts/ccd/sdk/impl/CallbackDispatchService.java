@@ -5,24 +5,29 @@ import io.micrometer.common.util.StringUtils;
 import jakarta.annotation.PostConstruct;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
+import java.lang.reflect.Parameter;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.function.BiFunction;
 import java.util.stream.Stream;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.aop.support.AopUtils;
 import org.springframework.beans.factory.ListableBeanFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.core.annotation.AnnotatedElementUtils;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Controller;
 import org.springframework.stereotype.Service;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import uk.gov.hmcts.ccd.sdk.CallbackResponse;
@@ -38,11 +43,13 @@ public class CallbackDispatchService {
   private static final String ABOUT_TO_SUBMIT = "aboutToSubmit";
   private static final String SUBMITTED = "submitted";
 
-  private Map<CallbackBinding, BiFunction<CallbackRequest, String, CallbackResponse<?>>> dispatchMap;
+  private Map<CallbackBinding, CallbackHandler> dispatchMap;
   private Map<CallbackBinding, Integer> retryAttempts;
   private final DefinitionRegistry definitionRegistry;
   private final ListableBeanFactory beanFactory;
   private final ObjectMapper objectMapper;
+  @Value("${decentralisation.local-callback-base-urls:${ET_COS_URL:}}")
+  private String localCallbackBaseUrls;
 
   @PostConstruct
   void initialiseHandlerMaps() {
@@ -57,7 +64,7 @@ public class CallbackDispatchService {
       return DispatchResult.noHandlerFound();
     }
 
-    var result = dispatcher.apply(callbackRequest, authorisation);
+    var result = dispatcher.invoke(callbackRequest, authorisation);
 
     return DispatchResult.handled(result);
   }
@@ -83,7 +90,7 @@ public class CallbackDispatchService {
     while (attempts < maxAttempts) {
       attempts++;
       try {
-        return DispatchResult.handled((SubmittedCallbackResponse) dispatcher.apply(
+        return DispatchResult.handled((SubmittedCallbackResponse) dispatcher.invoke(
           callbackRequest,
           authorisation));
       } catch (Exception e) {
@@ -107,7 +114,7 @@ public class CallbackDispatchService {
     );
   }
 
-  private Map<CallbackBinding, BiFunction<CallbackRequest, String, CallbackResponse<?>>> createDispatchMap() {
+  private Map<CallbackBinding, CallbackHandler> createDispatchMap() {
     var definitions = definitionRegistry.loadDefinitions();
     Map<CallbackBinding, String> callbackBindings = new HashMap<>();
     retryAttempts = new HashMap<>();
@@ -150,8 +157,8 @@ public class CallbackDispatchService {
     });
 
     ControllerEndpointDiscovery discovery = discoverControllerEndpoints();
-    Map<String, EndpointInvoker> invokersByPath = discovery.invokersByPath();
-    Map<CallbackBinding, BiFunction<CallbackRequest, String, CallbackResponse<?>>> dispatchMap = new HashMap<>();
+    Map<String, CallbackHandler> invokersByPath = discovery.invokersByPath();
+    Map<CallbackBinding, CallbackHandler> dispatchMap = new HashMap<>();
 
     log.info(
         "Initialising callback dispatch map with {} callback bindings and {} discovered controller endpoints",
@@ -160,9 +167,13 @@ public class CallbackDispatchService {
     );
 
     callbackBindings.forEach((binding, callbackUrl) -> {
+      if (!shouldBindLocally(callbackUrl)) {
+        log.info("Skipping non-local callback binding {} -> {}", binding, callbackUrl);
+        return;
+      }
       String callbackPath = normalisePath(callbackUrl);
-      EndpointInvoker invoker = invokersByPath.get(callbackPath);
-      if (invoker == null) {
+      CallbackHandler handler = invokersByPath.get(callbackPath);
+      if (handler == null) {
         List<String> rejectedCandidates = discovery.rejectedMethodsByPath().getOrDefault(callbackPath, List.of());
         List<String> discoveredCandidates = discovery.invokersByPath().entrySet().stream()
             .filter(entry -> entry.getKey().startsWith(callbackPath) || callbackPath.startsWith(entry.getKey()))
@@ -189,14 +200,14 @@ public class CallbackDispatchService {
                 )
         );
       }
-      dispatchMap.put(binding, invoker::invoke);
+      dispatchMap.put(binding, handler);
     });
 
     return Map.copyOf(dispatchMap);
   }
 
   private ControllerEndpointDiscovery discoverControllerEndpoints() {
-    Map<String, EndpointInvoker> endpointsByPath = new HashMap<>();
+    Map<String, CallbackHandler> endpointsByPath = new HashMap<>();
     Map<String, List<String>> rejectedMethodsByPath = new HashMap<>();
 
     for (Object controllerBean : findControllerBeans()) {
@@ -225,8 +236,8 @@ public class CallbackDispatchService {
               );
               continue;
             }
-            EndpointInvoker invoker = new EndpointInvoker(controllerBean, method, objectMapper);
-            EndpointInvoker existing = endpointsByPath.putIfAbsent(fullPath, invoker);
+            EndpointInvoker invoker = EndpointInvoker.create(controllerBean, method, objectMapper);
+            CallbackHandler existing = endpointsByPath.putIfAbsent(fullPath, invoker);
             if (existing != null && !existing.hasSameMethodAs(invoker)) {
               throw new IllegalStateException(
                   "Multiple controller methods resolved for callback path %s (%s, %s)".formatted(
@@ -279,39 +290,10 @@ public class CallbackDispatchService {
   }
 
   private String unsupportedCallbackMethodReason(Method method) {
-    Class<?>[] parameterTypes = method.getParameterTypes();
-    if (parameterTypes.length != 2) {
-      return "expected exactly 2 parameters but found " + parameterTypes.length;
-    }
-
-    long stringParameterCount = Arrays.stream(parameterTypes)
-        .filter(String.class::equals)
-        .count();
-    if (stringParameterCount != 1) {
-      return "expected exactly one String auth token parameter but found "
-          + Arrays.toString(parameterTypes);
-    }
-
-    long requestParameterCount = Arrays.stream(parameterTypes)
-        .filter(parameterType -> !String.class.equals(parameterType))
-        .count();
-    if (requestParameterCount != 1) {
-      return "expected exactly one request parameter and one String auth token but found "
-          + Arrays.toString(parameterTypes);
-    }
-
-    if (!isSupportedReturnType(method.getReturnType())) {
-      return "unsupported return type " + method.getReturnType().getName();
-    }
-
-    return null;
+    return EndpointMethodMetadata.from(method).unsupportedReason();
   }
 
-  private boolean isSupportedRequestType(Class<?> parameterType) {
-    return !String.class.equals(parameterType);
-  }
-
-  private boolean isSupportedReturnType(Class<?> returnType) {
+  private static boolean isSupportedReturnType(Class<?> returnType) {
     return CallbackResponse.class.isAssignableFrom(returnType)
         || ResponseEntity.class.isAssignableFrom(returnType);
   }
@@ -376,9 +358,79 @@ public class CallbackDispatchService {
         : path;
   }
 
-  private record EndpointInvoker(Object bean, Method method, ObjectMapper objectMapper) {
+  private boolean shouldBindLocally(String callbackUrl) {
+    if (StringUtils.isBlank(callbackUrl)) {
+      return false;
+    }
+    if (StringUtils.isBlank(localCallbackBaseUrls)) {
+      return true;
+    }
+    if (callbackUrl.startsWith("${")) {
+      return true;
+    }
 
-    private CallbackResponse<?> invoke(CallbackRequest request, String authToken) {
+    URI callbackUri = tryParseAbsoluteUri(callbackUrl);
+    if (callbackUri == null) {
+      return true;
+    }
+
+    return Arrays.stream(localCallbackBaseUrls.split(","))
+        .map(String::trim)
+        .filter(StringUtils::isNotBlank)
+        .map(this::tryParseAbsoluteUri)
+        .filter(Objects::nonNull)
+        .anyMatch(localUri -> sameAuthority(callbackUri, localUri));
+  }
+
+  private URI tryParseAbsoluteUri(String value) {
+    try {
+      URI uri = new URI(value);
+      return uri.isAbsolute() ? uri : null;
+    } catch (URISyntaxException ex) {
+      return null;
+    }
+  }
+
+  private boolean sameAuthority(URI left, URI right) {
+    return Objects.equals(left.getHost(), right.getHost())
+        && effectivePort(left) == effectivePort(right);
+  }
+
+  private int effectivePort(URI uri) {
+    if (uri.getPort() >= 0) {
+      return uri.getPort();
+    }
+    return "https".equalsIgnoreCase(uri.getScheme()) ? 443 : 80;
+  }
+
+  private sealed interface CallbackHandler permits EndpointInvoker {
+    CallbackResponse<?> invoke(CallbackRequest request, String authToken);
+
+    boolean hasSameMethodAs(CallbackHandler other);
+
+    String describe();
+  }
+
+  private record EndpointInvoker(
+      Object bean,
+      Method method,
+      EndpointMethodMetadata metadata,
+      ObjectMapper objectMapper
+  ) implements CallbackHandler {
+
+    private static EndpointInvoker create(Object bean, Method method, ObjectMapper objectMapper) {
+      EndpointMethodMetadata metadata = EndpointMethodMetadata.from(method);
+      if (metadata.unsupportedReason() != null) {
+        throw new IllegalStateException(
+            "Cannot create callback invoker for unsupported method %s: %s"
+                .formatted(method.toGenericString(), metadata.unsupportedReason())
+        );
+      }
+      return new EndpointInvoker(bean, method, metadata, objectMapper);
+    }
+
+    @Override
+    public CallbackResponse<?> invoke(CallbackRequest request, String authToken) {
       try {
         Object result = method.invoke(bean, buildArguments(request, authToken));
         return extractCallbackResponse(result);
@@ -397,17 +449,9 @@ public class CallbackDispatchService {
     }
 
     private Object[] buildArguments(CallbackRequest request, String authToken) {
-      Class<?>[] parameterTypes = method.getParameterTypes();
-      Object[] arguments = new Object[parameterTypes.length];
-      for (int i = 0; i < parameterTypes.length; i++) {
-        Class<?> parameterType = parameterTypes[i];
-        if (String.class.equals(parameterType)) {
-          arguments[i] = authToken;
-        } else if (CallbackRequest.class.isAssignableFrom(parameterType)) {
-          arguments[i] = request;
-        } else {
-          arguments[i] = objectMapper.convertValue(request, parameterType);
-        }
+      Object[] arguments = new Object[metadata.parameterBindings().size()];
+      for (ParameterBinding parameterBinding : metadata.parameterBindings()) {
+        arguments[parameterBinding.index()] = parameterBinding.resolve(request, authToken, objectMapper);
       }
       return arguments;
     }
@@ -432,12 +476,17 @@ public class CallbackDispatchService {
       throw new IllegalStateException("Callback endpoint returned unsupported response type: " + describe());
     }
 
-    private boolean hasSameMethodAs(EndpointInvoker other) {
-      return method.equals(other.method)
-          && method.getDeclaringClass().equals(other.method.getDeclaringClass());
+    @Override
+    public boolean hasSameMethodAs(CallbackHandler other) {
+      if (!(other instanceof EndpointInvoker endpointInvoker)) {
+        return false;
+      }
+      return method.equals(endpointInvoker.method)
+          && method.getDeclaringClass().equals(endpointInvoker.method.getDeclaringClass());
     }
 
-    private String describe() {
+    @Override
+    public String describe() {
       return method.toGenericString();
     }
   }
@@ -459,9 +508,99 @@ public class CallbackDispatchService {
   }
 
   private record ControllerEndpointDiscovery(
-      Map<String, EndpointInvoker> invokersByPath,
+      Map<String, CallbackHandler> invokersByPath,
       Map<String, List<String>> rejectedMethodsByPath
   ) {
+  }
+
+  private record EndpointMethodMetadata(
+      List<ParameterBinding> parameterBindings,
+      String unsupportedReason
+  ) {
+    private static EndpointMethodMetadata from(Method method) {
+      Parameter[] parameters = method.getParameters();
+      if (parameters.length > 2) {
+        return new EndpointMethodMetadata(List.of(), "expected at most 2 parameters but found " + parameters.length);
+      }
+
+      List<ParameterBinding> parameterBindings = new java.util.ArrayList<>(parameters.length);
+      int authTokenBindings = 0;
+      int requestBindings = 0;
+
+      for (int i = 0; i < parameters.length; i++) {
+        ParameterBinding binding = ParameterBinding.from(i, parameters[i]);
+        if (binding == null) {
+          return new EndpointMethodMetadata(
+              List.of(),
+              "unsupported parameter %s in %s".formatted(parameters[i].getType().getName(), method.toGenericString())
+          );
+        }
+        parameterBindings.add(binding);
+        if (binding.role() == ParameterRole.AUTH_TOKEN) {
+          authTokenBindings++;
+        } else {
+          requestBindings++;
+        }
+      }
+
+      if (authTokenBindings > 1 || requestBindings > 1 || authTokenBindings + requestBindings != parameters.length) {
+        return new EndpointMethodMetadata(
+            List.of(),
+            "expected zero or one auth token parameter and zero or one request parameter but found " + Arrays.toString(
+                Arrays.stream(parameters).map(Parameter::getType).toArray()
+            )
+        );
+      }
+
+      if (!isSupportedReturnType(method.getReturnType()) && !Void.TYPE.equals(method.getReturnType())) {
+        return new EndpointMethodMetadata(List.of(), "unsupported return type " + method.getReturnType().getName());
+      }
+
+      return new EndpointMethodMetadata(List.copyOf(parameterBindings), null);
+    }
+  }
+
+  private record ParameterBinding(int index, ParameterRole role, Class<?> targetType) {
+    private static ParameterBinding from(int index, Parameter parameter) {
+      if (isAuthTokenParameter(parameter)) {
+        return new ParameterBinding(index, ParameterRole.AUTH_TOKEN, parameter.getType());
+      }
+      if (isRequestPayloadParameter(parameter)) {
+        return new ParameterBinding(index, ParameterRole.REQUEST_PAYLOAD, parameter.getType());
+      }
+      return null;
+    }
+
+    private Object resolve(CallbackRequest callbackRequest, String authToken, ObjectMapper objectMapper) {
+      if (role == ParameterRole.AUTH_TOKEN) {
+        return authToken;
+      }
+      if (CallbackRequest.class.isAssignableFrom(targetType)) {
+        return callbackRequest;
+      }
+      return objectMapper.convertValue(callbackRequest, targetType);
+    }
+  }
+
+  private enum ParameterRole {
+    AUTH_TOKEN,
+    REQUEST_PAYLOAD
+  }
+
+  private static boolean isAuthTokenParameter(Parameter parameter) {
+    if (!String.class.equals(parameter.getType())) {
+      return false;
+    }
+    RequestHeader requestHeader = AnnotatedElementUtils.findMergedAnnotation(parameter, RequestHeader.class);
+    return requestHeader != null || String.class.equals(parameter.getType());
+  }
+
+  private static boolean isRequestPayloadParameter(Parameter parameter) {
+    if (String.class.equals(parameter.getType())) {
+      return false;
+    }
+    return AnnotatedElementUtils.findMergedAnnotation(parameter, RequestBody.class) != null
+        || !String.class.equals(parameter.getType());
   }
 
   public record DispatchResult<T>(boolean handled, T response) {
