@@ -141,7 +141,8 @@ class DecentralisedESIndexer implements DisposableBean {
             filter((Map<String, Object>) map.get("supplementary_data"), "HMCTSServiceId");
             map.remove("last_state_modified_date");
             map.remove("last_modified");
-            map.remove("created_date");
+            stringify(map, "reference", "case_type_id", "jurisdiction", "state",
+                "security_classification", "index_id");
             map.put("index_id", "global_search");
 
             appendBulkIndex(
@@ -241,6 +242,15 @@ class DecentralisedESIndexer implements DisposableBean {
     if (null != map) {
       var keyset = Set.of(forKeys);
       map.keySet().removeIf(k -> !keyset.contains(k));
+    }
+  }
+
+  private void stringify(Map<String, Object> map, String... fields) {
+    for (String field : fields) {
+      Object value = map.get(field);
+      if (value != null) {
+        map.put(field, String.valueOf(value));
+      }
     }
   }
 
