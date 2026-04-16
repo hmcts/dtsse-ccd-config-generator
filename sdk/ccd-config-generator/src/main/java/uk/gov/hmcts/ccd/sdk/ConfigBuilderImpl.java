@@ -104,7 +104,7 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements Decentralised
           config, events, noc.getEventId(), null, null);
       var event = builder.forStates((java.util.EnumSet) preStateEnumSet);
       event.name(noc.getEventName());
-      event.grant(Permission.CRU, (R[]) new HasRole[] { nocApprover });
+      event.grant(Permission.CRU, nocApprover);
       if (noc.getAboutToSubmitCallback() == null) {
         throw new IllegalStateException(
             "noticeOfChange() requires an aboutToSubmitCallback — that is where the service team "
@@ -128,7 +128,7 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements Decentralised
           config, events, noc.getRequestEventId(), null, null);
       var event = builder.forStates((java.util.EnumSet) preStateEnumSet);
       event.name(noc.getRequestEventName());
-      event.grant(Permission.CRU, (R[]) new HasRole[] { caa });
+      event.grant(Permission.CRU, caa);
       // Register the event in config.events via the doBuild path:
       // we need the url override to reach the generated Event.
       // The EventTypeBuilderImpl registers an EventBuilder in `events`;

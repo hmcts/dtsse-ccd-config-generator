@@ -124,7 +124,7 @@ public class CallbackControllerTest {
 
   @SneakyThrows
   @Test
-  public void testNoticeOfChangeAboutToStart() {
+  public void testNoticeOfChangeAboutToSubmit() {
     Map<String, Object> data = caseData();
 
     MvcResult result = this.makeRequest("about-to-submit", "CARE_SUPERVISION_EPO", "notice-of-change-applied", data)

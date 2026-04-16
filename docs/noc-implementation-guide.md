@@ -295,5 +295,5 @@ After wiring everything up:
 
 ## Open caveats
 
-- **Collection-typed parties are not supported in challenge answers.** If your case has a `List<ListValue<Defendant>>` and you want "any defendant's first name" to unlock, CCD's challenge matcher does not natively expand collections. The standard workaround (used by FPL) is to copy each collection element into flat `noticeOfChangeAnswers0`, `noticeOfChangeAnswers1`, ... fields at request time. See `docs/noc/notice-of-change.md` for the FPL pattern.
+- **Collection-typed parties are not supported in challenge answers.** If your case has a `List<ListValue<Defendant>>` and you want "any defendant's first name" to unlock, CCD's challenge matcher does not natively expand collections. The standard workaround (used by FPL) is to copy each collection element into flat `noticeOfChangeAnswers0`, `noticeOfChangeAnswers1`, ... fields at request time. See `https://tools.hmcts.net/confluence/spaces/PL/pages/1518671359/Notice+of+Change` for the FPL pattern.
 - **`aac /noc/apply-decision` is not transactional with your CCD submit.** aac flips role assignments before your submit completes. If your submit then fails, role assignments are still flipped — investigate before relying on it for sensitive cases.
