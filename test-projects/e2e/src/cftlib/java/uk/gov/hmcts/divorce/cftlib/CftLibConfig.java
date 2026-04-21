@@ -72,6 +72,8 @@ public class CftLibConfig implements CFTLibConfigurer {
             "caseworker-divorce-systemupdate",
             "caseworker-divorce-bulkscan",
             "caseworker-approver",
+            "prd-aac-system",
+            "prd-admin",
             "citizen",
             "caseworker-divorce",
             "payments",
@@ -110,6 +112,20 @@ public class CftLibConfig implements CFTLibConfigurer {
 
         lib.createIdamUser(ROLE_ASSIGNMENT_EMAIL, "caseworker", "caseworker-befta_master");
         lib.createProfile(ROLE_ASSIGNMENT_EMAIL, BEFTA_JURISDICTION, BEFTA_CASE_TYPE, BEFTA_INITIAL_STATE);
+
+        lib.createIdamUser("master.caa@gmail.com", "caseworker", "caseworker-caa");
+        lib.createProfile("master.caa@gmail.com", BEFTA_JURISDICTION, BEFTA_CASE_TYPE, BEFTA_INITIAL_STATE);
+        lib.createProfile("master.caa@gmail.com", "DIVORCE", SimpleCaseConfiguration.CASE_TYPE, SimpleCaseState.DRAFT.name());
+
+        lib.createIdamUser(
+            "noc.approver@gmail.com",
+            "caseworker",
+            "caseworker-approver",
+            "prd-aac-system",
+            "prd-admin"
+        );
+        lib.createProfile("noc.approver@gmail.com", BEFTA_JURISDICTION, BEFTA_CASE_TYPE, BEFTA_INITIAL_STATE);
+        lib.createProfile("noc.approver@gmail.com", "DIVORCE", SimpleCaseConfiguration.CASE_TYPE, SimpleCaseState.DRAFT.name());
     }
 
     private void createDivorceUsers(CFTLib lib) {

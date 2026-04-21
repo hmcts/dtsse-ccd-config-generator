@@ -6,7 +6,10 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import uk.gov.hmcts.ccd.sdk.api.CCD;
 import uk.gov.hmcts.ccd.sdk.type.ListValue;
+import uk.gov.hmcts.ccd.sdk.type.OrganisationPolicy;
+import uk.gov.hmcts.divorce.divorcecase.model.UserRole;
 import uk.gov.hmcts.divorce.divorcecase.model.access.CaseworkerAccess;
+import uk.gov.hmcts.divorce.divorcecase.model.access.CaseworkerWithCAAAccess;
 import uk.gov.hmcts.divorce.divorcecase.model.access.DefaultAccess;
 
 import java.util.ArrayList;
@@ -18,7 +21,7 @@ import java.util.List;
 @AllArgsConstructor
 public class SimpleCaseData {
 
-    @CCD(label = "Subject", access = {CaseworkerAccess.class})
+    @CCD(label = "Subject", access = {CaseworkerWithCAAAccess.class})
     private String subject;
 
     @CCD(label = "Description", access = {CaseworkerAccess.class})
@@ -32,6 +35,9 @@ public class SimpleCaseData {
 
     @CCD(label = "Follow up callback marker", access = {CaseworkerAccess.class})
     private String followUpMarker;
+
+    @CCD(label = "Applicant 1 solicitor organisation policy", access = {CaseworkerWithCAAAccess.class})
+    private OrganisationPolicy<UserRole> applicant1SolicitorOrganisationPolicy;
 
     @CCD(access = {DefaultAccess.class})
     @Builder.Default

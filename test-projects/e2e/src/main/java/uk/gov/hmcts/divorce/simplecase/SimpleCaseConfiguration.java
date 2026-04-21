@@ -6,6 +6,7 @@ import uk.gov.hmcts.ccd.sdk.api.CCDConfig;
 import uk.gov.hmcts.ccd.sdk.api.ConfigBuilder;
 import uk.gov.hmcts.ccd.sdk.api.CaseDetails;
 import uk.gov.hmcts.ccd.sdk.api.callback.AboutToStartOrSubmitResponse;
+import uk.gov.hmcts.ccd.sdk.type.OrganisationPolicy;
 import uk.gov.hmcts.divorce.common.ccd.PageBuilder;
 import uk.gov.hmcts.divorce.divorcecase.model.UserRole;
 import uk.gov.hmcts.divorce.simplecase.model.SimpleCaseData;
@@ -23,6 +24,8 @@ public class SimpleCaseConfiguration implements CCDConfig<SimpleCaseData, Simple
     public static final String JURISDICTION = "DIVORCE";
     public static final String CREATE_EVENT = "create-simple-case";
     public static final String FOLLOW_UP_EVENT = "simple-case-follow-up";
+    public static final String DECENTRALISED_FOLLOW_UP_EVENT = "ext:simple-case-follow-up";
+    public static final String NOTICE_OF_CHANGE_EVENT = "noticeOfChangeApplied";
     public static final String START_CALLBACK_MARKER = "simple-case-start";
     public static final String SUBMIT_CALLBACK_MARKER = "simple-case-creation";
     public static final String FOLLOW_UP_CALLBACK_MARKER = "simple-case-follow-up-callback";
@@ -32,6 +35,12 @@ public class SimpleCaseConfiguration implements CCDConfig<SimpleCaseData, Simple
         configBuilder.setCallbackHost("http://localhost:4013");
         configBuilder.caseType(CASE_TYPE, CASE_TYPE_DESCRIPTION, "Additional simple case type for e2e tests");
         configBuilder.jurisdiction(JURISDICTION, "Family Divorce", "Family Divorce: simple case tests");
+
+        configBuilder.noticeOfChange()
+            .challenge("NoCChallenge")
+            .question("subject", "Enter the case subject")
+            .answer(UserRole.APPLICANT_1_SOLICITOR).field(SimpleCaseData::getSubject)
+            .done();
 
         var createEventBuilder = configBuilder
             .event(CREATE_EVENT)
@@ -64,6 +73,28 @@ public class SimpleCaseConfiguration implements CCDConfig<SimpleCaseData, Simple
             .optional(SimpleCaseData::getFollowUpNote)
             .optional(SimpleCaseData::getFollowUpMarker)
             .done();
+
+        var decentralisedFollowUpEventBuilder = configBuilder
+            .event(DECENTRALISED_FOLLOW_UP_EVENT)
+            .forStateTransition(SimpleCaseState.CREATED, SimpleCaseState.FOLLOW_UP)
+            .name("External simple case follow up")
+            .description("Record follow-up details in a decentralised service")
+            .grant(CREATE_READ_UPDATE, UserRole.CASE_WORKER)
+            .grantHistoryOnly(UserRole.SUPER_USER);
+
+        decentralisedFollowUpEventBuilder.fields()
+            .page("simpleCaseExternalFollowUp")
+            .optional(SimpleCaseData::getFollowUpNote)
+            .optional(SimpleCaseData::getFollowUpMarker)
+            .done();
+
+        configBuilder
+            .event(NOTICE_OF_CHANGE_EVENT)
+            .forAllStates()
+            .name(NOTICE_OF_CHANGE_EVENT)
+            .description(NOTICE_OF_CHANGE_EVENT)
+            .grant(CREATE_READ_UPDATE, UserRole.ORGANISATION_CASE_ACCESS_ADMINISTRATOR)
+            .fields();
 
         configBuilder.searchInputFields()
             .field(SimpleCaseData::getSubject, "Subject");
@@ -101,6 +132,9 @@ public class SimpleCaseConfiguration implements CCDConfig<SimpleCaseData, Simple
         if (caseData.getDescription() == null) {
             caseData.setDescription("Created simple case for " + caseData.getSubject());
         }
+        caseData.setApplicant1SolicitorOrganisationPolicy(OrganisationPolicy.<UserRole>builder()
+            .orgPolicyCaseAssignedRole(UserRole.APPLICANT_1_SOLICITOR)
+            .build());
         caseData.setCreationMarker(SUBMIT_CALLBACK_MARKER);
         log.info("Simple case creation marker set during submit: {}", caseData.getCreationMarker());
         return AboutToStartOrSubmitResponse.<SimpleCaseData, SimpleCaseState>builder()

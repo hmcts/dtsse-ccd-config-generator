@@ -152,7 +152,16 @@ tasks.withType(CftlibExec).configureEach {
     environment 'LOGGING_LEVEL_UK_GOV_HMCTS_DIVORCE', 'info'
     environment 'ROLE_ASSIGNMENT_URL', 'http://localhost:4096'
     environment 'CASE_DATA_STORE_BASEURL', 'http://localhost:4452'
+    environment 'IDAM_CAA_USERNAME', 'master.caa@gmail.com'
+    environment 'IDAM_CAA_PASSWORD', 'password'
+    environment 'IDAM_NOC_APPROVER_USERNAME', 'noc.approver@gmail.com'
+    environment 'IDAM_NOC_APPROVER_PASSWORD', 'password'
     environment 'XUI_MO_PORT', '3009'
+    environment 'RSE_LIB_XUI_ENV_SESSION_SECRET', 'secretSauce'
+    environment 'RSE_LIB_XUI_ENV_APPINSIGHTS_CONNECTION_STRING',
+      'InstrumentationKey=00000000-0000-0000-0000-000000000000'
+    environment 'RSE_LIB_XUI_ENV_DECENTRALISED_CASE_TYPE_CONFIG',
+      '{"E2E_SIMPLE":{"baseUrl":"http://localhost:3009","nocRedirectEnabled":true}}'
     environment 'RSE_LIB_ADDITIONAL_DATABASES', 'nfd'
     environment 'CCD_POCS_URL', 'http://localhost:4013'
     environment 'CCD_DOCUMENT_URL_PATTERN', '.*'
@@ -194,7 +203,7 @@ tasks.withType(CftlibExec).configureEach {
       'nfdiv_case_api',
       'wa_task_management_api'
     ].join(',')
-    environment 'DATA_STORE_S2S_AUTHORISED_SERVICES', 'ccd_gw,fpl_case_service,ccd_data,ccd_ps,divorce_frontend,payment-api,xui_webapp,nfdiv_case_api,ccd_case_document_am_api,am_role_assignment_service'
+    environment 'DATA_STORE_S2S_AUTHORISED_SERVICES', 'ccd_gw,fpl_case_service,ccd_data,ccd_ps,divorce_frontend,payment-api,xui_webapp,nfdiv_case_api,ccd_case_document_am_api,am_role_assignment_service,aac_manage_case_assignment'
 
     if (name in ['bootWithCCD', 'dumpCCDDefinitions']) {
       environment 'SPRING_JMS_SERVICEBUS_ENABLED', 'false'
