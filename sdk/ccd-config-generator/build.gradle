@@ -8,8 +8,8 @@ repositories {
 dependencies {
     // Use JUnit test framework for unit tests
     testImplementation 'junit:junit:4.13.2'
-    annotationProcessor group: 'org.projectlombok', name: 'lombok', version: '1.18.44'
-    compileOnly group: 'org.projectlombok', name: 'lombok', version: '1.18.44'
+    annotationProcessor group: 'org.projectlombok', name: 'lombok', version: '1.18.46'
+    compileOnly group: 'org.projectlombok', name: 'lombok', version: '1.18.46'
     implementation "org.springframework.boot:spring-boot-autoconfigure"
     implementation "org.springframework.boot:spring-boot-starter-web"
     api(group: 'com.github.hmcts', name: 'core-case-data-store-client', version: '5.2.0') {
@@ -18,8 +18,8 @@ dependencies {
         transitive = false
     }
 
-    testAnnotationProcessor group: 'org.projectlombok', name: 'lombok', version: '1.18.44'
-    testCompileOnly group: 'org.projectlombok', name: 'lombok', version: '1.18.44'
+    testAnnotationProcessor group: 'org.projectlombok', name: 'lombok', version: '1.18.46'
+    testCompileOnly group: 'org.projectlombok', name: 'lombok', version: '1.18.46'
     testImplementation group: 'javax.validation', name: 'validation-api', version: '2.0.1.Final'
     testImplementation 'org.skyscreamer:jsonassert:1.5.3'
     testImplementation 'com.google.guava:guava:33.6.0-jre'
