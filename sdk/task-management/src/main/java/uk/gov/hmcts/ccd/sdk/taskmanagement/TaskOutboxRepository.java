@@ -1,15 +1,16 @@
 package uk.gov.hmcts.ccd.sdk.taskmanagement;
 
-import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
-import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
-import org.springframework.transaction.annotation.Transactional;
-import uk.gov.hmcts.ccd.sdk.taskmanagement.model.outbox.TaskOutboxRecord;
-import uk.gov.hmcts.ccd.sdk.taskmanagement.model.outbox.TaskOutboxStatus;
-
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
+import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
+import uk.gov.hmcts.ccd.sdk.taskmanagement.model.outbox.TaskOutboxRecord;
+import uk.gov.hmcts.ccd.sdk.taskmanagement.model.outbox.TaskOutboxStatus;
 
 public class TaskOutboxRepository {
   private final NamedParameterJdbcTemplate jdbc;
@@ -25,19 +26,33 @@ public class TaskOutboxRepository {
   }
 
   public void enqueue(String caseId, String payload, String action, LocalDateTime nextAttemptAt) {
+    enqueueAndReturnId(caseId, payload, action, nextAttemptAt);
+  }
+
+  public long enqueueAndReturnId(String caseId, String payload, String action) {
+    return enqueueAndReturnId(caseId, payload, action, null);
+  }
+
+  public long enqueueAndReturnId(String caseId, String payload, String action, LocalDateTime nextAttemptAt) {
     MapSqlParameterSource params = new MapSqlParameterSource()
         .addValue("action", action)
         .addValue("caseId", parseCaseId(caseId))
         .addValue("payload", payload)
         .addValue("nextAttemptAt", nextAttemptAt);
 
-    jdbc.update(
+    Long id = jdbc.queryForObject(
         """
             insert into ccd.task_outbox (case_id, payload, requested_action, next_attempt_at)
             values (:caseId, :payload::jsonb, :action::ccd.task_action, :nextAttemptAt)
+            returning id
             """,
-        params
+        params,
+        Long.class
     );
+    if (id == null) {
+      throw new IllegalStateException("Task outbox insert did not return an id");
+    }
+    return id;
   }
 
   private long parseCaseId(String caseId) {
@@ -128,6 +143,19 @@ public class TaskOutboxRepository {
             "maxAttempts", maxAttempts
         ),
         rs -> rs.next() ? rs.getLong("id") : null
+    );
+  }
+
+  @Transactional(readOnly = true, propagation = Propagation.REQUIRES_NEW)
+  public Optional<TaskOutboxStatus> findStatus(long id) {
+    return jdbc.query(
+        """
+            select status::text
+            from ccd.task_outbox
+            where id = :id
+            """,
+        Map.of("id", id),
+        rs -> rs.next() ? Optional.of(TaskOutboxStatus.valueOf(rs.getString("status"))) : Optional.empty()
     );
   }
 

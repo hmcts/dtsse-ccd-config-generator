@@ -1,6 +1,7 @@
 package uk.gov.hmcts.ccd.sdk.taskmanagement;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.time.Duration;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
@@ -14,8 +15,6 @@ import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import uk.gov.hmcts.reform.authorisation.ServiceAuthorisationApi;
 import uk.gov.hmcts.reform.authorisation.generators.AuthTokenGenerator;
 import uk.gov.hmcts.reform.authorisation.generators.AuthTokenGeneratorFactory;
-
-import java.time.Duration;
 
 @AutoConfiguration
 @EnableConfigurationProperties(TaskManagementProperties.class)
@@ -57,8 +56,21 @@ public class TaskManagementAutoConfiguration {
 
   @Bean
   @ConditionalOnMissingBean
-  public TaskOutboxService taskOutboxService(TaskOutboxRepository repository, ObjectMapper objectMapper) {
-    return new TaskOutboxService(repository, objectMapper);
+  public TaskOutboxCompletionAwaiter taskOutboxCompletionAwaiter(
+      TaskOutboxRepository repository,
+      TaskManagementProperties properties
+  ) {
+    return new TaskOutboxCompletionAwaiter(repository, properties);
+  }
+
+  @Bean
+  @ConditionalOnMissingBean
+  public TaskOutboxService taskOutboxService(
+      TaskOutboxRepository repository,
+      TaskOutboxCompletionAwaiter completionAwaiter,
+      ObjectMapper objectMapper
+  ) {
+    return new TaskOutboxService(repository, completionAwaiter, objectMapper);
   }
 
   @Bean
