@@ -14,8 +14,10 @@ import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import uk.gov.hmcts.ccd.sdk.api.CaseCategory;
 import uk.gov.hmcts.ccd.sdk.api.CaseRoleToAccessProfile;
+import uk.gov.hmcts.ccd.sdk.api.ComplexTypeAuthorisation;
 import uk.gov.hmcts.ccd.sdk.api.Event;
 import uk.gov.hmcts.ccd.sdk.api.HasRole;
+import uk.gov.hmcts.ccd.sdk.api.NoticeOfChange;
 import uk.gov.hmcts.ccd.sdk.api.Permission;
 import uk.gov.hmcts.ccd.sdk.api.Search;
 import uk.gov.hmcts.ccd.sdk.api.SearchCases;
@@ -60,4 +62,6 @@ public class ResolvedCCDConfig<T, S, R extends HasRole> {
   List<CaseCategory> categories;
   List<SearchCriteria> searchCriteria;
   List<SearchParty> searchParties;
+  NoticeOfChange<T, R> noticeOfChange;
+  List<ComplexTypeAuthorisation<R>> complexTypeAuthorisations;
 }

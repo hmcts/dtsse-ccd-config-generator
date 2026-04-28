@@ -15,16 +15,19 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import uk.gov.hmcts.ccd.sdk.api.CaseCategory.CaseCategoryBuilder;
 import uk.gov.hmcts.ccd.sdk.api.CaseRoleToAccessProfile.CaseRoleToAccessProfileBuilder;
+import uk.gov.hmcts.ccd.sdk.api.ComplexTypeAuthorisation;
 import uk.gov.hmcts.ccd.sdk.api.DecentralisedConfigBuilder;
 import uk.gov.hmcts.ccd.sdk.api.Event;
 import uk.gov.hmcts.ccd.sdk.api.EventTypeBuilder;
 import uk.gov.hmcts.ccd.sdk.api.HasRole;
+import uk.gov.hmcts.ccd.sdk.api.NoticeOfChange.NoticeOfChangeBuilder;
 import uk.gov.hmcts.ccd.sdk.api.Permission;
 import uk.gov.hmcts.ccd.sdk.api.Search.SearchBuilder;
 import uk.gov.hmcts.ccd.sdk.api.SearchCases.SearchCasesBuilder;
 import uk.gov.hmcts.ccd.sdk.api.SearchCriteria.SearchCriteriaBuilder;
 import uk.gov.hmcts.ccd.sdk.api.SearchParty.SearchPartyBuilder;
 import uk.gov.hmcts.ccd.sdk.api.Tab.TabBuilder;
+import uk.gov.hmcts.ccd.sdk.api.TypedPropertyGetter;
 import uk.gov.hmcts.ccd.sdk.api.callback.Start;
 import uk.gov.hmcts.ccd.sdk.api.callback.Submit;
 
@@ -46,6 +49,8 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements Decentralised
   final List<SearchCriteriaBuilder> searchCriteria = Lists.newArrayList();
   final List<SearchPartyBuilder> searchParty = Lists.newArrayList();
   final Set<R> omitHistoryForRoles = new HashSet<>();
+  final List<ComplexTypeAuthorisation<R>> complexTypeAuthorisations = Lists.newArrayList();
+  private NoticeOfChangeBuilder<T, R> noticeOfChangeBuilder;
 
   public ConfigBuilderImpl(ResolvedCCDConfig<T, S, R> config) {
     this.config = config;
@@ -68,6 +73,8 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements Decentralised
     config.categories = buildBuilders(categories, CaseCategoryBuilder::build);
     config.searchCriteria = buildBuilders(searchCriteria, SearchCriteriaBuilder::build);
     config.searchParties = buildBuilders(searchParty, SearchPartyBuilder::build);
+    config.noticeOfChange = noticeOfChangeBuilder == null ? null : noticeOfChangeBuilder.build();
+    config.complexTypeAuthorisations = Lists.newArrayList(complexTypeAuthorisations);
 
     return config;
   }
@@ -210,6 +217,24 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements Decentralised
     var builder = SearchPartyBuilder.builder();
     searchParty.add(builder);
     return builder;
+  }
+
+  @Override
+  public NoticeOfChangeBuilder<T, R> noticeOfChange() {
+    if (noticeOfChangeBuilder == null) {
+      noticeOfChangeBuilder = new NoticeOfChangeBuilder<>(config.caseClass, propertyUtils);
+    }
+    return noticeOfChangeBuilder;
+  }
+
+  @Override
+  public void grantComplexType(TypedPropertyGetter<T, ?> field, String listElementCode,
+                               Set<Permission> permissions, R... roles) {
+    String caseFieldId = propertyUtils.getPropertyName(config.caseClass, field);
+    for (R role : roles) {
+      complexTypeAuthorisations.add(
+          new ComplexTypeAuthorisation<>(caseFieldId, listElementCode, permissions, role));
+    }
   }
 
   private SearchBuilder<T, R> registerSearchBuilder(List<SearchBuilder<T, R>> target) {
