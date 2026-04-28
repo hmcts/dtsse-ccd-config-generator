@@ -12,7 +12,7 @@ import uk.gov.hmcts.ccd.sdk.api.callback.SubmitResponse;
  */
 interface CaseSubmissionHandler {
 
-  CaseSubmissionHandlerResult apply(DecentralisedCaseEvent event);
+  CaseSubmissionHandlerResult apply(DecentralisedCaseEvent event, String authorisation);
 
   /**
    * Result returned by a submission handler after it has prepared all in-transaction mutations.
