@@ -20,6 +20,7 @@ import uk.gov.hmcts.ccd.sdk.api.DecentralisedConfigBuilder;
 import uk.gov.hmcts.ccd.sdk.api.Event;
 import uk.gov.hmcts.ccd.sdk.api.EventTypeBuilder;
 import uk.gov.hmcts.ccd.sdk.api.HasRole;
+import uk.gov.hmcts.ccd.sdk.api.NoticeOfChange;
 import uk.gov.hmcts.ccd.sdk.api.NoticeOfChange.NoticeOfChangeBuilder;
 import uk.gov.hmcts.ccd.sdk.api.Permission;
 import uk.gov.hmcts.ccd.sdk.api.Search.SearchBuilder;
@@ -50,7 +51,7 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements Decentralised
   final List<SearchPartyBuilder> searchParty = Lists.newArrayList();
   final Set<R> omitHistoryForRoles = new HashSet<>();
   final List<ComplexTypeAuthorisation<R>> complexTypeAuthorisations = Lists.newArrayList();
-  private NoticeOfChangeBuilder<T, R> noticeOfChangeBuilder;
+  private NoticeOfChangeBuilder<T, S, R> noticeOfChangeBuilder;
 
   public ConfigBuilderImpl(ResolvedCCDConfig<T, S, R> config) {
     this.config = config;
@@ -61,6 +62,8 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements Decentralised
   }
 
   public ResolvedCCDConfig<T, S, R> build() {
+    config.noticeOfChange = noticeOfChangeBuilder == null ? null : noticeOfChangeBuilder.build();
+    registerNoticeOfChangeEvent();
     config.events = getEvents();
     config.tabs = buildBuilders(tabs, TabBuilder::build);
     config.workBasketResultFields = buildBuilders(workBasketResultFields, SearchBuilder::build);
@@ -73,10 +76,122 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements Decentralised
     config.categories = buildBuilders(categories, CaseCategoryBuilder::build);
     config.searchCriteria = buildBuilders(searchCriteria, SearchCriteriaBuilder::build);
     config.searchParties = buildBuilders(searchParty, SearchPartyBuilder::build);
-    config.noticeOfChange = noticeOfChangeBuilder == null ? null : noticeOfChangeBuilder.build();
     config.complexTypeAuthorisations = Lists.newArrayList(complexTypeAuthorisations);
 
+    assertSingleNocApproverEvent();
     return config;
+  }
+
+  private static final String NOC_APPROVER_ROLE = "[NOCAPPROVER]";
+  private static final String CASEWORKER_CAA_ROLE = "caseworker-caa";
+
+  @SuppressWarnings("unchecked")
+  private void registerNoticeOfChangeEvent() {
+    NoticeOfChange<T, S, R> noc = config.noticeOfChange;
+    if (noc == null || noc.getChallenges().isEmpty()) {
+      return;
+    }
+    assertChangeOrganisationRequestFieldExists();
+
+    Set<S> preStates = noc.getForStates().isEmpty() ? config.allStates : noc.getForStates();
+    java.util.EnumSet<?> preStateEnumSet = java.util.EnumSet.copyOf(
+        (Collection) preStates);
+
+    if (!events.containsKey(noc.getEventId())) {
+      R nocApprover = findRoleByName(NOC_APPROVER_ROLE,
+          "[NOCAPPROVER] — the platform case role that aac auto-assigns during the NoC flow");
+      EventTypeBuilderImpl<T, R, S> builder = new EventTypeBuilderImpl<>(
+          config, events, noc.getEventId(), null, null);
+      var event = builder.forStates((java.util.EnumSet) preStateEnumSet);
+      event.name(noc.getEventName());
+      event.grant(Permission.CRU, nocApprover);
+      if (noc.getAboutToSubmitCallback() == null) {
+        throw new IllegalStateException(
+            "noticeOfChange() requires an aboutToSubmitCallback — that is where the service team "
+                + "must call aac /noc/apply-decision to flip role assignments and apply the "
+                + "new organisation policy. Without it, the approved change is never applied.");
+      }
+      event.aboutToSubmitCallback(noc.getAboutToSubmitCallback());
+      if (noc.getAboutToStartCallback() != null) {
+        event.aboutToStartCallback(noc.getAboutToStartCallback());
+      }
+      if (noc.getSubmittedCallback() != null) {
+        event.submittedCallback(noc.getSubmittedCallback());
+      }
+    }
+
+    if (!events.containsKey(noc.getRequestEventId())) {
+      R caa = findRoleByName(CASEWORKER_CAA_ROLE,
+          "caseworker-caa — the case access administrator role aac uses to populate the "
+              + "ChangeOrganisationRequest field");
+      EventTypeBuilderImpl<T, R, S> builder = new EventTypeBuilderImpl<>(
+          config, events, noc.getRequestEventId(), null, null);
+      var event = builder.forStates((java.util.EnumSet) preStateEnumSet);
+      event.name(noc.getRequestEventName());
+      event.grant(Permission.CRU, caa);
+      // Register the event in config.events via the doBuild path:
+      // we need the url override to reach the generated Event.
+      // The EventTypeBuilderImpl registers an EventBuilder in `events`;
+      // we stash the URL to apply after doBuild() in getEvents().
+      requestEventIdsWithAacCallback.add(noc.getRequestEventId());
+    }
+  }
+
+  // Event IDs whose submittedCallbackUrl should be set to aac's /noc/check-noc-approval
+  // after doBuild(). Populated during registerNoticeOfChangeEvent.
+  private final Set<String> requestEventIdsWithAacCallback = new HashSet<>();
+
+  private R findRoleByName(String roleName, String description) {
+    R[] roles = config.roleClass.getEnumConstants();
+    if (roles == null) {
+      throw new IllegalStateException("noticeOfChange() requires a role enum, but "
+          + config.roleClass.getName() + " is not an enum");
+    }
+    for (R role : roles) {
+      if (roleName.equals(role.getRole())) {
+        return role;
+      }
+    }
+    throw new IllegalStateException(
+        "noticeOfChange() requires " + config.roleClass.getName()
+            + " to declare a constant with getRole() == \"" + roleName + "\" — " + description);
+  }
+
+  private void assertChangeOrganisationRequestFieldExists() {
+    String requiredType = uk.gov.hmcts.ccd.sdk.type.ChangeOrganisationRequest.class.getName();
+    for (java.lang.reflect.Field field :
+        uk.gov.hmcts.ccd.sdk.FieldUtils.getCaseFields(config.caseClass)) {
+      if (field.getType().getName().equals(requiredType)) {
+        return;
+      }
+    }
+    throw new IllegalStateException(
+        "noticeOfChange() requires " + config.caseClass.getName()
+            + " to declare a ChangeOrganisationRequest<R> field — it stores the incoming NoC "
+            + "request from aac. Add: `@CCD ... private ChangeOrganisationRequest<UserRole> "
+            + "changeOrganisationRequestField;`");
+  }
+
+  private void assertSingleNocApproverEvent() {
+    if (config.noticeOfChange == null || config.noticeOfChange.getChallenges().isEmpty()) {
+      return;
+    }
+    List<String> visibleEvents = Lists.newArrayList();
+    for (Event<T, R, S> event : config.events.values()) {
+      if (event.getGrants() == null) {
+        continue;
+      }
+      boolean grantsNocApprover = event.getGrants().keySet().stream()
+          .anyMatch(r -> NOC_APPROVER_ROLE.equals(r.getRole()));
+      if (grantsNocApprover) {
+        visibleEvents.add(event.getId());
+      }
+    }
+    if (visibleEvents.size() > 1) {
+      throw new IllegalStateException(
+          "aac-manage-case-assignment requires exactly one event visible to [NOCAPPROVER], "
+              + "but found: " + visibleEvents);
+    }
   }
 
   @Override
@@ -220,7 +335,7 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements Decentralised
   }
 
   @Override
-  public NoticeOfChangeBuilder<T, R> noticeOfChange() {
+  public NoticeOfChangeBuilder<T, S, R> noticeOfChange() {
     if (noticeOfChangeBuilder == null) {
       noticeOfChangeBuilder = new NoticeOfChangeBuilder<>(config.caseClass, propertyUtils);
     }
@@ -254,6 +369,9 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements Decentralised
     for (Map.Entry<String, List<Event.EventBuilder<T, R, S>>> cell : events.entrySet()) {
       for (Event.EventBuilder<T, R, S> builder : cell.getValue()) {
         Event<T, R, S> event = builder.doBuild();
+        if (requestEventIdsWithAacCallback.contains(event.getId())) {
+          event.setSubmittedCallbackUrl(NoticeOfChange.CHECK_NOC_APPROVAL_URL);
+        }
         result.put(event.getId(), event);
       }
     }

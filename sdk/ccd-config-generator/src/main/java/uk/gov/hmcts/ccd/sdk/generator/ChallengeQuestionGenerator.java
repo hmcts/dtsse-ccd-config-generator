@@ -23,7 +23,7 @@ public class ChallengeQuestionGenerator<T, S, R extends HasRole> implements Conf
 
   @SneakyThrows
   public void write(final File outputFolder, ResolvedCCDConfig<T, S, R> config) {
-    NoticeOfChange<T, R> noc = config.getNoticeOfChange();
+    NoticeOfChange<T, S, R> noc = config.getNoticeOfChange();
     if (noc == null || noc.getChallenges().isEmpty()) {
       return;
     }
@@ -52,8 +52,13 @@ public class ChallengeQuestionGenerator<T, S, R extends HasRole> implements Conf
     row.put("DisplayOrder", question.getDisplayOrder());
     row.put("AnswerFieldType", question.getAnswerFieldType());
     row.put("Answer", question.getAnswers().stream()
-        .flatMap(a -> a.getRoles().stream()
-            .map(role -> "${" + String.join(".", a.getPathSegments()) + "}:" + bracketRole(role.getRole())))
+        .flatMap(a -> {
+          String pathExpr = a.getPathAlternatives().stream()
+              .map(segs -> "${" + String.join(".", segs) + "}")
+              .collect(joining("|"));
+          return a.getRoles().stream()
+              .map(role -> pathExpr + ":" + bracketRole(role.getRole()));
+        })
         .collect(joining(",")));
     return row;
   }

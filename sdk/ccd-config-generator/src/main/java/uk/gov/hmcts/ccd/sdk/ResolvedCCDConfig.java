@@ -62,6 +62,6 @@ public class ResolvedCCDConfig<T, S, R extends HasRole> {
   List<CaseCategory> categories;
   List<SearchCriteria> searchCriteria;
   List<SearchParty> searchParties;
-  NoticeOfChange<T, R> noticeOfChange;
+  NoticeOfChange<T, S, R> noticeOfChange;
   List<ComplexTypeAuthorisation<R>> complexTypeAuthorisations;
 }

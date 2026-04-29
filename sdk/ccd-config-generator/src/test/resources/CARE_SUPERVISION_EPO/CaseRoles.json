@@ -2,6 +2,13 @@
   {
     "LiveFrom": "01/01/2017",
     "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "ID": "[NOCAPPROVER]",
+    "Name": "NOC_APPROVER",
+    "Description": ""
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
     "ID": "[SOLICITOR]",
     "Name": "Solicitor",
     "Description": "Solicitor role"
