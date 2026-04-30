@@ -8,6 +8,7 @@ import static org.mockito.Mockito.verify;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.github.benmanes.caffeine.cache.Ticker;
+import jakarta.annotation.Resource;
 import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
@@ -32,7 +33,7 @@ class PublicHolidayServiceCachingTest {
   @Autowired
   private MutableTicker calendarTicker;
 
-  @Autowired
+  @Resource(name = "calendarCacheManager")
   private CacheManager calendarCacheManager;
 
   @MockitoSpyBean

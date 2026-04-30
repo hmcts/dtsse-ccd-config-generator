@@ -23,7 +23,7 @@ subprojects {
     dependencyManagement {
         imports {
             mavenBom(SpringBootPlugin.BOM_COORDINATES)
-            mavenBom('org.testcontainers:testcontainers-bom:2.0.4')
+            mavenBom('org.testcontainers:testcontainers-bom:2.0.5')
         }
     }
 
@@ -37,7 +37,7 @@ subprojects {
 
     checkstyle {
         maxWarnings = 0
-        toolVersion = '13.4.0'
+        toolVersion = '13.4.1'
         sourceSets = [project.sourceSets.main]
     }
 

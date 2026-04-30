@@ -5,6 +5,7 @@ import java.util.Set;
 import java.util.function.Function;
 import uk.gov.hmcts.ccd.sdk.EventTypeBuilderImpl;
 import uk.gov.hmcts.ccd.sdk.api.CaseRoleToAccessProfile.CaseRoleToAccessProfileBuilder;
+import uk.gov.hmcts.ccd.sdk.api.NoticeOfChange.NoticeOfChangeBuilder;
 import uk.gov.hmcts.ccd.sdk.api.Search.SearchBuilder;
 import uk.gov.hmcts.ccd.sdk.api.SearchCases.SearchCasesBuilder;
 import uk.gov.hmcts.ccd.sdk.api.Tab.TabBuilder;
@@ -65,4 +66,9 @@ public interface ConfigBuilder<T, S, R extends HasRole> {
   SearchCriteria.SearchCriteriaBuilder searchCriteria();
 
   SearchParty.SearchPartyBuilder searchParty();
+
+  NoticeOfChangeBuilder<T, R> noticeOfChange();
+
+  void grantComplexType(TypedPropertyGetter<T, ?> field, String listElementCode,
+                        Set<Permission> permissions, R... roles);
 }

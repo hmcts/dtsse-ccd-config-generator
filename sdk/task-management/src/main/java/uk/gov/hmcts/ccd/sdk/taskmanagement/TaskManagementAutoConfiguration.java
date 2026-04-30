@@ -1,16 +1,24 @@
 package uk.gov.hmcts.ccd.sdk.taskmanagement;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import feign.codec.Decoder;
+import feign.codec.Encoder;
 import java.time.Duration;
+import org.springframework.beans.factory.ObjectFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.autoconfigure.http.HttpMessageConverters;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.cloud.openfeign.EnableFeignClients;
+import org.springframework.cloud.openfeign.support.ResponseEntityDecoder;
+import org.springframework.cloud.openfeign.support.SpringDecoder;
+import org.springframework.cloud.openfeign.support.SpringEncoder;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Primary;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import uk.gov.hmcts.reform.authorisation.ServiceAuthorisationApi;
 import uk.gov.hmcts.reform.authorisation.generators.AuthTokenGenerator;
@@ -20,6 +28,32 @@ import uk.gov.hmcts.reform.authorisation.generators.AuthTokenGeneratorFactory;
 @EnableConfigurationProperties(TaskManagementProperties.class)
 @EnableFeignClients(clients = TaskManagementFeignClient.class)
 public class TaskManagementAutoConfiguration {
+
+  @Bean
+  @ConditionalOnMissingBean(name = "feignEncoder")
+  @Primary
+  @ConditionalOnProperty(
+      prefix = "task-management.feign.compat-codecs",
+      name = "enabled",
+      havingValue = "true",
+      matchIfMissing = true
+  )
+  public Encoder compatibilityFeignEncoder(ObjectFactory<HttpMessageConverters> converters) {
+    return new SpringEncoder(converters);
+  }
+
+  @Bean
+  @ConditionalOnMissingBean(name = "feignDecoder")
+  @Primary
+  @ConditionalOnProperty(
+      prefix = "task-management.feign.compat-codecs",
+      name = "enabled",
+      havingValue = "true",
+      matchIfMissing = true
+  )
+  public Decoder compatibilityFeignDecoder(ObjectFactory<HttpMessageConverters> converters) {
+    return new ResponseEntityDecoder(new SpringDecoder(converters));
+  }
 
   @Bean
   @ConditionalOnMissingBean(AuthTokenGenerator.class)
