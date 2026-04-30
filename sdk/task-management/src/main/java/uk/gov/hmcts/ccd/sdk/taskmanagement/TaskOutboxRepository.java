@@ -2,6 +2,7 @@ package uk.gov.hmcts.ccd.sdk.taskmanagement;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -64,7 +65,7 @@ public class TaskOutboxRepository {
   }
 
   public List<TaskOutboxRecord> claimPending(int limit, int maxAttempts) {
-    LocalDateTime now = LocalDateTime.now();
+    LocalDateTime now = utcNow();
     LocalDateTime processingDeadline = now.plus(processingTimeout);
     return jdbc.query(
         """
@@ -161,7 +162,7 @@ public class TaskOutboxRepository {
 
   @Transactional
   public void markProcessed(long id, int statusCode) {
-    LocalDateTime now = LocalDateTime.now();
+    LocalDateTime now = utcNow();
     MapSqlParameterSource params = new MapSqlParameterSource()
         .addValue("id", id)
         .addValue("status", TaskOutboxStatus.PROCESSED.name())
@@ -184,7 +185,7 @@ public class TaskOutboxRepository {
 
   @Transactional
   public void markFailed(long id, Integer statusCode, String error, LocalDateTime nextAttemptAt) {
-    LocalDateTime now = LocalDateTime.now();
+    LocalDateTime now = utcNow();
     MapSqlParameterSource params = new MapSqlParameterSource()
         .addValue("id", id)
         .addValue("status", TaskOutboxStatus.FAILED.name())
@@ -227,5 +228,9 @@ public class TaskOutboxRepository {
             """,
         params
     );
+  }
+
+  private LocalDateTime utcNow() {
+    return LocalDateTime.now(ZoneOffset.UTC);
   }
 }

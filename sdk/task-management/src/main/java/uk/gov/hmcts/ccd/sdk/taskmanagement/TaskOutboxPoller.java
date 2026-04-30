@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import feign.FeignException;
 import java.io.IOException;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
@@ -215,7 +216,7 @@ public class TaskOutboxPoller {
 
   private void handleFailure(TaskOutboxRecord record, Integer statusCode, String body, int maxAttempts) {
     int nextAttemptCount = record.attemptCount() + 1;
-    LocalDateTime nextAttemptAt = retryPolicy.nextAttemptAt(nextAttemptCount, LocalDateTime.now());
+    LocalDateTime nextAttemptAt = retryPolicy.nextAttemptAt(nextAttemptCount, LocalDateTime.now(ZoneOffset.UTC));
     repository.markFailed(record.id(), statusCode, body, nextAttemptAt);
     if (nextAttemptAt == null) {
       Long nextRetryableOutboxId = repository.findNextRetryableInCase(record.caseId(), record.id(), maxAttempts);
