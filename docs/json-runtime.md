@@ -23,8 +23,9 @@ and transaction boundary.
 
 ## Design goals
 
-* Avoid implicit Spring handler mapping dispatch.
-* Use explicit callback ownership in code.
+* Avoid HTTP loopback.
+* Keep callback ownership explicit in CCD definition JSON.
+* Reuse Spring MVC request mapping, argument resolution and return value handling instead of duplicating it.
 * Keep `about-to-submit` transactional with persistence.
 * Keep `submitted` post-commit.
 * Fail fast on ambiguous handler bindings and callback execution failures.
@@ -58,9 +59,14 @@ decentralisation.legacy-json-service=true
 
 When enabled, [`CaseSubmissionService`][css] uses [`JsonDefinitionSubmissionHandler`][jdsh] for every submit request.
 
-The runtime does not make HTTP loopback calls and does not route through Spring MVC's dispatcher.
-Instead, [`CallbackDispatchService`][cds] builds an explicit in-memory dispatch map
-from CCD definition callback URLs to local Spring controller methods and invokes those methods directly.
+The runtime does not make HTTP loopback calls.
+Instead, [`CallbackDispatchService`][cds] builds an explicit in-memory dispatch map from CCD definition callback URLs
+to local callback endpoints. When a callback is required, it wraps the current `HttpServletRequest` with the callback
+path, query string, JSON body and auth header, then invokes Spring MVC's `DispatcherServlet` in-process.
+
+The servlet response is captured rather than written to the original CCD response, so Spring MVC handles controller
+mapping, `@RequestBody`, `@RequestHeader`, `@RequestParam`, validation, message converters and `ResponseEntity`
+semantics without a second HTTP request or a second transaction boundary.
 
 ### Definition-driven bindings
 
@@ -106,44 +112,33 @@ The default base URL property also reads `ET_COS_URL`:
 decentralisation.local-callback-base-urls=${ET_COS_URL:}
 ```
 
-### Controller discovery
+### Spring MVC dispatch
 
-`CallbackDispatchService` scans beans annotated with `@RestController` and `@Controller`.
+Callback definition URLs are normalised to servlet request paths before dispatch:
 
-It discovers methods annotated with `@PostMapping` and combines class-level `@RequestMapping` paths with method-level
-`@PostMapping` paths. Both `path` and `value` arrays are supported.
-
-Callback definition URLs are normalised to paths before matching:
-
-* property placeholders are stripped
+* property placeholders are stripped from the URL prefix
 * scheme, host and port are stripped from absolute URLs
-* query strings and fragments are stripped
+* query strings are preserved for Spring MVC request parameters
+* fragments are stripped
 * duplicate slashes and trailing slashes are normalised
 
-If a local callback URL from the definition cannot be matched to a supported controller method, startup fails with a
-diagnostic message that includes rejected and nearby candidates. If multiple controller methods resolve to the same
-normalised path, startup also fails.
+If a local callback URL from the definition cannot be matched by Spring MVC, callback invocation fails with the captured
+non-success response status.
 
 ### Supported controller method shape
 
-Controller methods can have zero, one or two parameters.
-
-Supported parameters are:
-
-* a request payload parameter, either `CallbackRequest` or another non-`String` type that Jackson can build from
-  `CallbackRequest`
-* an auth token parameter, represented by a `String`; `@RequestHeader` may be present but is not required
-
-The request and auth token parameters can be declared in either order.
+Controller methods can use normal Spring MVC `@PostMapping` handler signatures.
 
 Supported return shapes are:
 
-* a `CallbackResponse<?>`
-* a `ResponseEntity` whose body is a `CallbackResponse<?>`
+* a `CallbackResponse<?>`, directly or as a `ResponseEntity` body
+* a legacy CCD callback response POJO, directly or as a `ResponseEntity` body, with fields/getters such as `data`,
+  `errors`, `warnings`, `state`, `security_classification`, `confirmation_header` and `confirmation_body`
 * `void` or `null`, mainly for `submitted` callbacks that do not need confirmation content
 
 For `submitted`, the returned object must also implement
-[`SubmittedCallbackResponse`][scr] when confirmation header/body values are required.
+[`SubmittedCallbackResponse`][scr] when confirmation header/body values are required, unless it is a legacy POJO using
+`confirmation_header` and `confirmation_body`.
 
 Example:
 
@@ -153,12 +148,14 @@ Example:
 class TseAdminController {
 
   @PostMapping("/aboutToSubmit")
-  CallbackResponse<?> aboutToSubmit(CallbackRequest request, String authToken) {
+  CallbackResponse<?> aboutToSubmit(@RequestBody CallbackRequest request,
+                                    @RequestHeader("Authorization") String authToken) {
     // runs inside the submit transaction
   }
 
   @PostMapping("/submitted")
-  CallbackResponse<?> submitted(String authToken, CallbackRequest request) {
+  CallbackResponse<?> submitted(@RequestHeader("Authorization") String authToken,
+                                @RequestBody CallbackRequest request) {
     // runs after the submit transaction commits
   }
 }
@@ -171,8 +168,8 @@ The submit flow is:
 1. `CaseSubmissionService` starts the submission transaction, retrieves the user and acquires the idempotency/case lock.
 2. `JsonDefinitionSubmissionHandler` builds a CCD `CallbackRequest` from the decentralised case event.
 3. `CallbackDispatchService` resolves the `aboutToSubmit` binding by case type, event ID and callback type.
-4. If a handler exists, it is invoked directly. Any returned data, state, security classification, errors and warnings
-   are copied back onto the event.
+4. If a handler exists, it is invoked through Spring MVC in-process. Any returned data, state, security classification,
+   errors and warnings are copied back onto the event.
 5. Validation errors from `about-to-submit` are returned to CCD and the transaction is rolled back.
 6. If validation passes, case data, metadata, event history, projection and outbox records are persisted.
 7. The transaction commits.
@@ -185,8 +182,8 @@ If no binding exists for a callback phase, the phase is treated as a no-op.
 
 `about-to-submit` runs inside the same transaction as persistence.
 
-This preserves CCD's atomicity guarantee: any service-owned writes performed by the controller method commit or roll
-back with the event.
+This preserves CCD's atomicity guarantee: any service-owned writes performed by the controller commit or roll back with
+the event.
 
 `submitted` runs after the transaction has committed. Failures from `submitted` do not roll back committed case data.
 
@@ -202,11 +199,10 @@ back with the event.
 
 ## Compatibility impact
 
-This supports ET and similar services with large manually organised callback surfaces while avoiding implicit routing
-magic.
+This supports ET and similar services with large manually organised callback surfaces while avoiding HTTP loopback.
 
 Existing controller methods can remain in place. The key compatibility requirement is that the callback URL path in
-the CCD JSON definition must match a supported local `@PostMapping` method after normalisation.
+the CCD JSON definition must be routable by local Spring MVC after normalisation.
 
 Services using this mode still need a `CaseView` for each case type so the decentralised runtime can load and project
 saved case data.
@@ -215,13 +211,13 @@ saved case data.
 
 Covered behaviour includes:
 
-* definition URL to controller method binding
-* duplicate binding and duplicate endpoint failure
+* definition URL to Spring MVC dispatch
+* duplicate binding failure
 * missing binding no-op behaviour
 * local/external callback URL filtering
-* supported request/auth parameter orders
-* typed request conversion from CCD `CallbackRequest`
-* `ResponseEntity` and void/null return handling
+* request body, auth header and query parameter handling
+* typed request conversion from CCD callback JSON
+* `ResponseEntity` return handling
 * submitted retry and retry exhaustion behaviour
 * ET-style controller and URL patterns
 

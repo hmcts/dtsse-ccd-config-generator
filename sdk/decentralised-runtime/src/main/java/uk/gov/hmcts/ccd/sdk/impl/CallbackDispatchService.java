@@ -1,35 +1,53 @@
 package uk.gov.hmcts.ccd.sdk.impl;
 
+import com.fasterxml.jackson.annotation.JsonAlias;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.micrometer.common.util.StringUtils;
 import jakarta.annotation.PostConstruct;
-import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Method;
-import java.lang.reflect.Parameter;
+import jakarta.servlet.ReadListener;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.ServletInputStream;
+import jakarta.servlet.ServletOutputStream;
+import jakarta.servlet.WriteListener;
+import jakarta.servlet.http.Cookie;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletRequestWrapper;
+import jakarta.servlet.http.HttpServletResponse;
+import jakarta.servlet.http.HttpServletResponseWrapper;
+import java.io.BufferedReader;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.OutputStreamWriter;
+import java.io.PrintWriter;
+import java.io.UnsupportedEncodingException;
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.net.URLDecoder;
+import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
-import java.util.stream.Stream;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.aop.support.AopUtils;
-import org.springframework.beans.factory.ListableBeanFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.core.annotation.AnnotatedElementUtils;
-import org.springframework.http.ResponseEntity;
-import org.springframework.stereotype.Controller;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestHeader;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
+import org.springframework.web.servlet.DispatcherServlet;
 import uk.gov.hmcts.ccd.sdk.CallbackResponse;
 import uk.gov.hmcts.ccd.sdk.SubmittedCallbackResponse;
 import uk.gov.hmcts.reform.ccd.client.model.CallbackRequest;
@@ -42,11 +60,12 @@ public class CallbackDispatchService {
 
   private static final String ABOUT_TO_SUBMIT = "aboutToSubmit";
   private static final String SUBMITTED = "submitted";
+  private static final Charset DEFAULT_CHARSET = StandardCharsets.UTF_8;
 
-  private Map<CallbackBinding, CallbackHandler> dispatchMap;
+  private Map<CallbackBinding, CallbackEndpoint> dispatchMap;
   private Map<CallbackBinding, Integer> retryAttempts;
   private final DefinitionRegistry definitionRegistry;
-  private final ListableBeanFactory beanFactory;
+  private final DispatcherServlet dispatcherServlet;
   private final ObjectMapper objectMapper;
   @Value("${decentralisation.local-callback-base-urls:${ET_COS_URL:}}")
   private String localCallbackBaseUrls;
@@ -58,41 +77,30 @@ public class CallbackDispatchService {
 
   public DispatchResult<CallbackResponse<?>> dispatchToHandlersAboutToSubmit(CallbackRequest callbackRequest,
                                                                              String authorisation) {
-    var dispatcher = dispatchMap.get(bindingFor(callbackRequest, ABOUT_TO_SUBMIT));
-
-    if (dispatcher == null) {
+    var endpoint = dispatchMap.get(bindingFor(callbackRequest, ABOUT_TO_SUBMIT));
+    if (endpoint == null) {
       return DispatchResult.noHandlerFound();
     }
 
-    var result = dispatcher.invoke(callbackRequest, authorisation);
-
-    return DispatchResult.handled(result);
+    return DispatchResult.handled(invoke(endpoint, callbackRequest, authorisation));
   }
 
   public DispatchResult<SubmittedCallbackResponse> dispatchToHandlersSubmitted(CallbackRequest callbackRequest,
                                                                                String authorisation) {
     var binding = bindingFor(callbackRequest, SUBMITTED);
-    var dispatcher = dispatchMap.get(binding);
-
-    if (dispatcher == null) {
+    var endpoint = dispatchMap.get(binding);
+    if (endpoint == null) {
       return DispatchResult.noHandlerFound();
     }
 
-    int maxAttempts;
-    if (retryAttempts.get(binding) == null) {
-      maxAttempts = 1;
-    } else {
-      maxAttempts = retryAttempts.get(binding) > 1 ? 3 : 1;
-    }
+    int maxAttempts = retryAttempts.getOrDefault(binding, 1);
     int attempts = 0;
     Exception lastException = null;
 
     while (attempts < maxAttempts) {
       attempts++;
       try {
-        return DispatchResult.handled((SubmittedCallbackResponse) dispatcher.invoke(
-          callbackRequest,
-          authorisation));
+        return DispatchResult.handled(asSubmittedResponse(invoke(endpoint, callbackRequest, authorisation)));
       } catch (Exception e) {
         lastException = e;
         log.error(
@@ -114,214 +122,84 @@ public class CallbackDispatchService {
     );
   }
 
-  private Map<CallbackBinding, CallbackHandler> createDispatchMap() {
+  private Map<CallbackBinding, CallbackEndpoint> createDispatchMap() {
     var definitions = definitionRegistry.loadDefinitions();
-    Map<CallbackBinding, String> callbackBindings = new HashMap<>();
+    Map<CallbackBinding, CallbackEndpoint> callbacks = new HashMap<>();
     retryAttempts = new HashMap<>();
 
-    definitions.forEach((caseTypeId, definition) -> {
-      definition.getEvents().forEach(event -> {
-        if (!StringUtils.isBlank(event.getCallBackURLAboutToSubmitEvent())) {
-          var previous = callbackBindings.putIfAbsent(
-              new CallbackBinding(caseTypeId, event.getId(), ABOUT_TO_SUBMIT),
-              event.getCallBackURLAboutToSubmitEvent()
-          );
-          if (previous != null) {
-            throw new IllegalStateException(
-                "Multiple Bindings found for case type %s, event id %s and callback type %s".formatted(
-                    caseTypeId,
-                    event.getId(),
-                    ABOUT_TO_SUBMIT
-                )
-            );
-          }
-        }
-        if (!StringUtils.isBlank(event.getCallBackURLSubmittedEvent())) {
-          var binding = new CallbackBinding(caseTypeId, event.getId(), SUBMITTED);
-          var previous = callbackBindings.putIfAbsent(binding, event.getCallBackURLSubmittedEvent());
-          if (event.getRetriesTimeoutURLSubmittedEvent() != null) {
-            int maxRetries = event.getRetriesTimeoutURLSubmittedEvent().size() > 1 ? 3 : 1;
-            retryAttempts.putIfAbsent(binding, maxRetries);
-          }
-          if (previous != null) {
-            throw new IllegalStateException(
-                "Multiple Bindings found for case type %s, event id %s and callback type %s".formatted(
-                    caseTypeId,
-                    event.getId(),
-                    SUBMITTED
-                )
-            );
-          }
-        }
-      });
-    });
+    definitions.forEach((caseTypeId, definition) -> definition.getEvents().forEach(event -> {
+      addBinding(
+          callbacks,
+          new CallbackBinding(caseTypeId, event.getId(), ABOUT_TO_SUBMIT),
+          event.getCallBackURLAboutToSubmitEvent()
+      );
 
-    ControllerEndpointDiscovery discovery = discoverControllerEndpoints();
-    Map<String, CallbackHandler> invokersByPath = discovery.invokersByPath();
-    Map<CallbackBinding, CallbackHandler> dispatchMap = new HashMap<>();
-
-    log.info(
-        "Initialising callback dispatch map with {} callback bindings and {} discovered controller endpoints",
-        callbackBindings.size(),
-        invokersByPath.size()
-    );
-
-    callbackBindings.forEach((binding, callbackUrl) -> {
-      if (!shouldBindLocally(callbackUrl)) {
-        log.info("Skipping non-local callback binding {} -> {}", binding, callbackUrl);
-        return;
-      }
-      String callbackPath = normalisePath(callbackUrl);
-      CallbackHandler handler = invokersByPath.get(callbackPath);
-      if (handler == null) {
-        List<String> rejectedCandidates = discovery.rejectedMethodsByPath().getOrDefault(callbackPath, List.of());
-        List<String> discoveredCandidates = discovery.invokersByPath().entrySet().stream()
-            .filter(entry -> entry.getKey().startsWith(callbackPath) || callbackPath.startsWith(entry.getKey()))
-            .map(entry -> "%s -> %s".formatted(entry.getKey(), entry.getValue().describe()))
-            .sorted()
-            .toList();
-
-        log.error(
-            "No callback controller method found for binding {}. "
-                + "Rejected candidates for path {}: {}. Nearby discovered endpoints: {}",
-            binding,
-            callbackPath,
-            rejectedCandidates.isEmpty() ? "<none>" : rejectedCandidates,
-            discoveredCandidates.isEmpty() ? "<none>" : discoveredCandidates
+      var submittedBinding = new CallbackBinding(caseTypeId, event.getId(), SUBMITTED);
+      addBinding(callbacks, submittedBinding, event.getCallBackURLSubmittedEvent());
+      if (event.getRetriesTimeoutURLSubmittedEvent() != null) {
+        retryAttempts.putIfAbsent(
+            submittedBinding,
+            event.getRetriesTimeoutURLSubmittedEvent().size() > 1 ? 3 : 1
         );
+      }
+    }));
+
+    log.info("Initialised callback dispatch map with {} local callback bindings", callbacks.size());
+    return Map.copyOf(callbacks);
+  }
+
+  private void addBinding(Map<CallbackBinding, CallbackEndpoint> callbacks,
+                          CallbackBinding binding,
+                          String callbackUrl) {
+    if (StringUtils.isBlank(callbackUrl) || !shouldBindLocally(callbackUrl)) {
+      return;
+    }
+
+    CallbackEndpoint previous = callbacks.putIfAbsent(binding, normaliseEndpoint(callbackUrl));
+    if (previous != null) {
+      throw new IllegalStateException(
+          "Multiple Bindings found for case type %s, event id %s and callback type %s".formatted(
+              binding.caseTypeId(),
+              binding.eventId(),
+              binding.callbackType()
+          )
+      );
+    }
+  }
+
+  private CallbackResponse<?> invoke(CallbackEndpoint endpoint, CallbackRequest callbackRequest, String authorisation) {
+    try {
+      ServletRequestAttributes attributes =
+          (ServletRequestAttributes) RequestContextHolder.currentRequestAttributes();
+      HttpServletRequest request = new CallbackServletRequest(
+          attributes.getRequest(),
+          endpoint.path(),
+          endpoint.queryString(),
+          objectMapper.writeValueAsBytes(callbackRequest),
+          authorisation
+      );
+      HttpServletResponse originalResponse = attributes.getResponse();
+      if (originalResponse == null) {
+        throw new IllegalStateException("No current HTTP response available for callback dispatch");
+      }
+      CapturingHttpServletResponse response = new CapturingHttpServletResponse(originalResponse);
+
+      dispatcherServlet.service(request, response);
+      if (!response.isSuccessful()) {
         throw new IllegalStateException(
-            "No callback controller method found for caseType=%s eventId=%s callbackType=%s url=%s (normalised=%s)"
-                .formatted(
-                    binding.caseTypeId(),
-                    binding.eventId(),
-                    binding.callbackType(),
-                    callbackUrl,
-                    callbackPath
-                )
+            "Callback endpoint %s returned non-success status %s: %s"
+                .formatted(endpoint.path(), response.getStatus(), response.getContentAsString())
         );
       }
-      dispatchMap.put(binding, handler);
-    });
 
-    return Map.copyOf(dispatchMap);
-  }
-
-  private ControllerEndpointDiscovery discoverControllerEndpoints() {
-    Map<String, CallbackHandler> endpointsByPath = new HashMap<>();
-    Map<String, List<String>> rejectedMethodsByPath = new HashMap<>();
-
-    for (Object controllerBean : findControllerBeans()) {
-      Class<?> controllerClass = AopUtils.getTargetClass(controllerBean);
-      List<String> classPaths = classMappingPaths(controllerClass);
-
-      for (Method method : controllerClass.getMethods()) {
-        PostMapping postMapping = AnnotatedElementUtils.findMergedAnnotation(method, PostMapping.class);
-        if (postMapping == null) {
-          continue;
-        }
-
-        List<String> methodPaths = methodMappingPaths(postMapping);
-        for (String classPath : classPaths) {
-          for (String methodPath : methodPaths) {
-            String fullPath = normalisePath(combinePaths(classPath, methodPath));
-            String unsupportedReason = unsupportedCallbackMethodReason(method);
-            if (unsupportedReason != null) {
-              rejectedMethodsByPath.computeIfAbsent(fullPath, ignored -> new java.util.ArrayList<>())
-                  .add("%s rejected: %s".formatted(method.toGenericString(), unsupportedReason));
-              log.info(
-                  "Skipping callback endpoint candidate {} for path {}: {}",
-                  method.toGenericString(),
-                  fullPath,
-                  unsupportedReason
-              );
-              continue;
-            }
-            EndpointInvoker invoker = EndpointInvoker.create(controllerBean, method, objectMapper);
-            CallbackHandler existing = endpointsByPath.putIfAbsent(fullPath, invoker);
-            if (existing != null && !existing.hasSameMethodAs(invoker)) {
-              throw new IllegalStateException(
-                  "Multiple controller methods resolved for callback path %s (%s, %s)".formatted(
-                      fullPath,
-                      existing.describe(),
-                      invoker.describe()
-                  )
-              );
-            }
-          }
-        }
-      }
+      byte[] content = response.getContentAsByteArray();
+      return content.length == 0 ? null : objectMapper.readValue(content, NormalisedCallbackResponse.class);
+    } catch (ServletException | IOException ex) {
+      throw new IllegalStateException("Callback endpoint invocation failed for " + endpoint.path(), ex);
     }
-
-    return new ControllerEndpointDiscovery(
-        Map.copyOf(endpointsByPath),
-        rejectedMethodsByPath.entrySet().stream()
-            .collect(java.util.stream.Collectors.toUnmodifiableMap(
-                Map.Entry::getKey,
-                entry -> List.copyOf(entry.getValue())
-            ))
-    );
   }
 
-  private List<Object> findControllerBeans() {
-    Map<String, Object> controllerBeans = new LinkedHashMap<>();
-    controllerBeans.putAll(beanFactory.getBeansWithAnnotation(RestController.class));
-    controllerBeans.putAll(beanFactory.getBeansWithAnnotation(Controller.class));
-    return List.copyOf(controllerBeans.values());
-  }
-
-  private List<String> classMappingPaths(Class<?> controllerClass) {
-    RequestMapping requestMapping = AnnotatedElementUtils.findMergedAnnotation(controllerClass, RequestMapping.class);
-    return mappingPaths(requestMapping == null ? null : requestMapping.path(),
-        requestMapping == null ? null : requestMapping.value());
-  }
-
-  private List<String> methodMappingPaths(PostMapping postMapping) {
-    return mappingPaths(postMapping.path(), postMapping.value());
-  }
-
-  private List<String> mappingPaths(String[] paths, String[] values) {
-    String[] safePaths = paths == null ? new String[0] : paths;
-    String[] safeValues = values == null ? new String[0] : values;
-    List<String> mappingPaths = Stream.concat(Arrays.stream(safePaths), Arrays.stream(safeValues))
-        .filter(StringUtils::isNotBlank)
-        .distinct()
-        .toList();
-    return mappingPaths.isEmpty() ? List.of("") : mappingPaths;
-  }
-
-  private String unsupportedCallbackMethodReason(Method method) {
-    return EndpointMethodMetadata.from(method).unsupportedReason();
-  }
-
-  private static boolean isSupportedReturnType(Class<?> returnType) {
-    return CallbackResponse.class.isAssignableFrom(returnType)
-        || ResponseEntity.class.isAssignableFrom(returnType);
-  }
-
-  private String combinePaths(String classPath, String methodPath) {
-    if (StringUtils.isBlank(classPath)) {
-      return methodPath;
-    }
-    if (StringUtils.isBlank(methodPath)) {
-      return classPath;
-    }
-
-    boolean classEndsWithSlash = classPath.endsWith("/");
-    boolean methodStartsWithSlash = methodPath.startsWith("/");
-    if (classEndsWithSlash && methodStartsWithSlash) {
-      return classPath + methodPath.substring(1);
-    }
-    if (!classEndsWithSlash && !methodStartsWithSlash) {
-      return classPath + "/" + methodPath;
-    }
-    return classPath + methodPath;
-  }
-
-  private String normalisePath(String urlOrPath) {
-    if (StringUtils.isBlank(urlOrPath)) {
-      return "/";
-    }
-
+  private CallbackEndpoint normaliseEndpoint(String urlOrPath) {
     String path = urlOrPath.trim();
     if (path.startsWith("${")) {
       int variableEnd = path.indexOf('}');
@@ -334,38 +212,34 @@ public class CallbackDispatchService {
       }
     }
 
-    int queryIndex = path.indexOf('?');
-    if (queryIndex >= 0) {
-      path = path.substring(0, queryIndex);
-    }
-
     int fragmentIndex = path.indexOf('#');
     if (fragmentIndex >= 0) {
       path = path.substring(0, fragmentIndex);
     }
 
-    if (path.isBlank()) {
-      return "/";
+    String queryString = null;
+    int queryIndex = path.indexOf('?');
+    if (queryIndex >= 0) {
+      queryString = path.substring(queryIndex + 1);
+      path = path.substring(0, queryIndex);
     }
 
+    if (path.isBlank()) {
+      path = "/";
+    }
     if (!path.startsWith("/")) {
       path = "/" + path;
     }
     path = path.replaceAll("/{2,}", "/");
+    if (path.length() > 1 && path.endsWith("/")) {
+      path = path.substring(0, path.length() - 1);
+    }
 
-    return path.length() > 1 && path.endsWith("/")
-        ? path.substring(0, path.length() - 1)
-        : path;
+    return new CallbackEndpoint(path, StringUtils.isBlank(queryString) ? null : queryString);
   }
 
   private boolean shouldBindLocally(String callbackUrl) {
-    if (StringUtils.isBlank(callbackUrl)) {
-      return false;
-    }
-    if (StringUtils.isBlank(localCallbackBaseUrls)) {
-      return true;
-    }
-    if (callbackUrl.startsWith("${")) {
+    if (StringUtils.isBlank(localCallbackBaseUrls) || callbackUrl.startsWith("${")) {
       return true;
     }
 
@@ -403,92 +277,14 @@ public class CallbackDispatchService {
     return "https".equalsIgnoreCase(uri.getScheme()) ? 443 : 80;
   }
 
-  private sealed interface CallbackHandler permits EndpointInvoker {
-    CallbackResponse<?> invoke(CallbackRequest request, String authToken);
-
-    boolean hasSameMethodAs(CallbackHandler other);
-
-    String describe();
-  }
-
-  private record EndpointInvoker(
-      Object bean,
-      Method method,
-      EndpointMethodMetadata metadata,
-      ObjectMapper objectMapper
-  ) implements CallbackHandler {
-
-    private static EndpointInvoker create(Object bean, Method method, ObjectMapper objectMapper) {
-      EndpointMethodMetadata metadata = EndpointMethodMetadata.from(method);
-      if (metadata.unsupportedReason() != null) {
-        throw new IllegalStateException(
-            "Cannot create callback invoker for unsupported method %s: %s"
-                .formatted(method.toGenericString(), metadata.unsupportedReason())
-        );
-      }
-      return new EndpointInvoker(bean, method, metadata, objectMapper);
+  private static SubmittedCallbackResponse asSubmittedResponse(CallbackResponse<?> response) {
+    if (response == null) {
+      return null;
     }
-
-    @Override
-    public CallbackResponse<?> invoke(CallbackRequest request, String authToken) {
-      try {
-        Object result = method.invoke(bean, buildArguments(request, authToken));
-        return extractCallbackResponse(result);
-      } catch (InvocationTargetException ex) {
-        Throwable cause = ex.getCause();
-        if (cause instanceof RuntimeException runtimeException) {
-          throw runtimeException;
-        }
-        if (cause instanceof Error error) {
-          throw error;
-        }
-        throw new IllegalStateException("Callback endpoint invocation failed: " + describe(), cause);
-      } catch (IllegalAccessException ex) {
-        throw new IllegalStateException("Could not access callback endpoint method: " + describe(), ex);
-      }
+    if (response instanceof SubmittedCallbackResponse submittedCallbackResponse) {
+      return submittedCallbackResponse;
     }
-
-    private Object[] buildArguments(CallbackRequest request, String authToken) {
-      Object[] arguments = new Object[metadata.parameterBindings().size()];
-      for (ParameterBinding parameterBinding : metadata.parameterBindings()) {
-        arguments[parameterBinding.index()] = parameterBinding.resolve(request, authToken, objectMapper);
-      }
-      return arguments;
-    }
-
-    private CallbackResponse<?> extractCallbackResponse(Object result) {
-      if (result == null) {
-        return null;
-      }
-      if (result instanceof ResponseEntity<?> responseEntity) {
-        Object body = responseEntity.getBody();
-        if (body == null) {
-          return null;
-        }
-        if (body instanceof CallbackResponse<?> callbackResponse) {
-          return callbackResponse;
-        }
-        throw new IllegalStateException("Callback endpoint returned unsupported response body: " + describe());
-      }
-      if (result instanceof CallbackResponse<?> callbackResponse) {
-        return callbackResponse;
-      }
-      throw new IllegalStateException("Callback endpoint returned unsupported response type: " + describe());
-    }
-
-    @Override
-    public boolean hasSameMethodAs(CallbackHandler other) {
-      if (!(other instanceof EndpointInvoker endpointInvoker)) {
-        return false;
-      }
-      return method.equals(endpointInvoker.method)
-          && method.getDeclaringClass().equals(endpointInvoker.method.getDeclaringClass());
-    }
-
-    @Override
-    public String describe() {
-      return method.toGenericString();
-    }
+    return NormalisedCallbackResponse.from(response);
   }
 
   private CallbackBinding bindingFor(CallbackRequest callbackRequest, String callbackType) {
@@ -507,100 +303,518 @@ public class CallbackDispatchService {
     }
   }
 
-  private record ControllerEndpointDiscovery(
-      Map<String, CallbackHandler> invokersByPath,
-      Map<String, List<String>> rejectedMethodsByPath
-  ) {
+  private record CallbackEndpoint(String path, String queryString) {
   }
 
-  private record EndpointMethodMetadata(
-      List<ParameterBinding> parameterBindings,
-      String unsupportedReason
-  ) {
-    private static EndpointMethodMetadata from(Method method) {
-      Parameter[] parameters = method.getParameters();
-      if (parameters.length > 2) {
-        return new EndpointMethodMetadata(List.of(), "expected at most 2 parameters but found " + parameters.length);
-      }
+  @JsonIgnoreProperties(ignoreUnknown = true)
+  private record NormalisedCallbackResponse(
+      Object data,
+      List<String> errors,
+      List<String> warnings,
+      String state,
+      @JsonAlias("data_classification") Map<String, Object> dataClassification,
+      @JsonAlias("security_classification") String securityClassification,
+      @JsonAlias("error_message_override") String errorMessageOverride,
+      @JsonAlias("confirmation_header") String confirmationHeader,
+      @JsonAlias("confirmation_body") String confirmationBody
+  ) implements CallbackResponse<Object>, SubmittedCallbackResponse {
 
-      List<ParameterBinding> parameterBindings = new java.util.ArrayList<>(parameters.length);
-      int authTokenBindings = 0;
-      int requestBindings = 0;
+    private static NormalisedCallbackResponse from(CallbackResponse<?> response) {
+      return new NormalisedCallbackResponse(
+          response.getData(),
+          response.getErrors(),
+          response.getWarnings(),
+          response.getState(),
+          response.getDataClassification(),
+          response.getSecurityClassification(),
+          response.getErrorMessageOverride(),
+          null,
+          null
+      );
+    }
 
-      for (int i = 0; i < parameters.length; i++) {
-        ParameterBinding binding = ParameterBinding.from(i, parameters[i]);
-        if (binding == null) {
-          return new EndpointMethodMetadata(
-              List.of(),
-              "unsupported parameter %s in %s".formatted(parameters[i].getType().getName(), method.toGenericString())
-          );
-        }
-        parameterBindings.add(binding);
-        if (binding.role() == ParameterRole.AUTH_TOKEN) {
-          authTokenBindings++;
-        } else {
-          requestBindings++;
-        }
-      }
+    @Override
+    public Object getData() {
+      return data;
+    }
 
-      if (authTokenBindings > 1 || requestBindings > 1 || authTokenBindings + requestBindings != parameters.length) {
-        return new EndpointMethodMetadata(
-            List.of(),
-            "expected zero or one auth token parameter and zero or one request parameter but found " + Arrays.toString(
-                Arrays.stream(parameters).map(Parameter::getType).toArray()
-            )
-        );
-      }
+    @Override
+    public List<String> getErrors() {
+      return errors;
+    }
 
-      if (!isSupportedReturnType(method.getReturnType()) && !Void.TYPE.equals(method.getReturnType())) {
-        return new EndpointMethodMetadata(List.of(), "unsupported return type " + method.getReturnType().getName());
-      }
+    @Override
+    public List<String> getWarnings() {
+      return warnings;
+    }
 
-      return new EndpointMethodMetadata(List.copyOf(parameterBindings), null);
+    @Override
+    public String getState() {
+      return state;
+    }
+
+    @Override
+    public Map<String, Object> getDataClassification() {
+      return dataClassification;
+    }
+
+    @Override
+    public String getSecurityClassification() {
+      return securityClassification;
+    }
+
+    @Override
+    public String getErrorMessageOverride() {
+      return errorMessageOverride;
+    }
+
+    @Override
+    public String getConfirmationHeader() {
+      return confirmationHeader;
+    }
+
+    @Override
+    public String getConfirmationBody() {
+      return confirmationBody;
     }
   }
 
-  private record ParameterBinding(int index, ParameterRole role, Class<?> targetType) {
-    private static ParameterBinding from(int index, Parameter parameter) {
-      if (isAuthTokenParameter(parameter)) {
-        return new ParameterBinding(index, ParameterRole.AUTH_TOKEN, parameter.getType());
+  private static final class CallbackServletRequest extends HttpServletRequestWrapper {
+    private final String path;
+    private final String queryString;
+    private final byte[] body;
+    private final Map<String, List<String>> headers = new java.util.TreeMap<>(String.CASE_INSENSITIVE_ORDER);
+    private final Map<String, Object> attributes = new HashMap<>();
+    private final Map<String, String[]> parameters;
+    private String characterEncoding = DEFAULT_CHARSET.name();
+
+    private CallbackServletRequest(HttpServletRequest request,
+                                   String path,
+                                   String queryString,
+                                   byte[] body,
+                                   String authorisation) {
+      super(request);
+      this.path = path;
+      this.queryString = queryString;
+      this.body = body;
+      this.parameters = parseParameters(queryString);
+      if (authorisation != null) {
+        headers.put(HttpHeaders.AUTHORIZATION, List.of(authorisation));
       }
-      if (isRequestPayloadParameter(parameter)) {
-        return new ParameterBinding(index, ParameterRole.REQUEST_PAYLOAD, parameter.getType());
+      headers.put(HttpHeaders.CONTENT_TYPE, List.of(MediaType.APPLICATION_JSON_VALUE));
+      headers.put(HttpHeaders.ACCEPT, List.of(MediaType.APPLICATION_JSON_VALUE));
+    }
+
+    @Override
+    public String getMethod() {
+      return "POST";
+    }
+
+    @Override
+    public String getRequestURI() {
+      return getContextPath() + path;
+    }
+
+    @Override
+    public StringBuffer getRequestURL() {
+      StringBuffer url = new StringBuffer();
+      url.append(getScheme()).append("://").append(getServerName());
+      if (getServerPort() > 0) {
+        url.append(':').append(getServerPort());
       }
+      return url.append(getRequestURI());
+    }
+
+    @Override
+    public String getServletPath() {
+      return path;
+    }
+
+    @Override
+    public String getPathInfo() {
       return null;
     }
 
-    private Object resolve(CallbackRequest callbackRequest, String authToken, ObjectMapper objectMapper) {
-      if (role == ParameterRole.AUTH_TOKEN) {
-        return authToken;
+    @Override
+    public String getQueryString() {
+      return queryString;
+    }
+
+    @Override
+    public Object getAttribute(String name) {
+      return attributes.get(name);
+    }
+
+    @Override
+    public Enumeration<String> getAttributeNames() {
+      return Collections.enumeration(attributes.keySet());
+    }
+
+    @Override
+    public void setAttribute(String name, Object value) {
+      if (value == null) {
+        removeAttribute(name);
+      } else {
+        attributes.put(name, value);
       }
-      if (CallbackRequest.class.isAssignableFrom(targetType)) {
-        return callbackRequest;
+    }
+
+    @Override
+    public void removeAttribute(String name) {
+      attributes.remove(name);
+    }
+
+    @Override
+    public String getHeader(String name) {
+      List<String> values = headers.get(name);
+      return values == null || values.isEmpty() ? super.getHeader(name) : values.getFirst();
+    }
+
+    @Override
+    public Enumeration<String> getHeaders(String name) {
+      List<String> values = headers.get(name);
+      return values == null ? super.getHeaders(name) : Collections.enumeration(values);
+    }
+
+    @Override
+    public Enumeration<String> getHeaderNames() {
+      Enumeration<String> originalHeaderNames = super.getHeaderNames();
+      List<String> names = originalHeaderNames == null ? new ArrayList<>() : Collections.list(originalHeaderNames);
+      names.addAll(headers.keySet());
+      return Collections.enumeration(names.stream().distinct().toList());
+    }
+
+    @Override
+    public String getContentType() {
+      return MediaType.APPLICATION_JSON_VALUE;
+    }
+
+    @Override
+    public int getContentLength() {
+      return body.length;
+    }
+
+    @Override
+    public long getContentLengthLong() {
+      return body.length;
+    }
+
+    @Override
+    public ServletInputStream getInputStream() {
+      return new ByteArrayServletInputStream(body);
+    }
+
+    @Override
+    public BufferedReader getReader() {
+      return new BufferedReader(new java.io.StringReader(new String(body, Charset.forName(characterEncoding))));
+    }
+
+    @Override
+    public String getCharacterEncoding() {
+      return characterEncoding;
+    }
+
+    @Override
+    public void setCharacterEncoding(String encoding) {
+      this.characterEncoding = encoding == null ? DEFAULT_CHARSET.name() : encoding;
+    }
+
+    @Override
+    public String getParameter(String name) {
+      String[] values = parameters.get(name);
+      return values == null || values.length == 0 ? null : values[0];
+    }
+
+    @Override
+    public Map<String, String[]> getParameterMap() {
+      return parameters;
+    }
+
+    @Override
+    public Enumeration<String> getParameterNames() {
+      return Collections.enumeration(parameters.keySet());
+    }
+
+    @Override
+    public String[] getParameterValues(String name) {
+      return parameters.get(name);
+    }
+
+    private static Map<String, String[]> parseParameters(String queryString) {
+      if (StringUtils.isBlank(queryString)) {
+        return Map.of();
       }
-      return objectMapper.convertValue(callbackRequest, targetType);
+
+      Map<String, List<String>> values = new LinkedHashMap<>();
+      for (String pair : queryString.split("&")) {
+        if (pair.isBlank()) {
+          continue;
+        }
+        int separator = pair.indexOf('=');
+        String name = separator < 0 ? pair : pair.substring(0, separator);
+        String value = separator < 0 ? "" : pair.substring(separator + 1);
+        values.computeIfAbsent(decode(name), ignored -> new ArrayList<>()).add(decode(value));
+      }
+
+      Map<String, String[]> parameters = new LinkedHashMap<>();
+      values.forEach((key, parameterValues) -> parameters.put(key, parameterValues.toArray(String[]::new)));
+      return Collections.unmodifiableMap(parameters);
+    }
+
+    private static String decode(String value) {
+      return URLDecoder.decode(value, DEFAULT_CHARSET);
     }
   }
 
-  private enum ParameterRole {
-    AUTH_TOKEN,
-    REQUEST_PAYLOAD
+  private static final class ByteArrayServletInputStream extends ServletInputStream {
+    private final ByteArrayInputStream inputStream;
+
+    private ByteArrayServletInputStream(byte[] body) {
+      this.inputStream = new ByteArrayInputStream(body);
+    }
+
+    @Override
+    public int read() {
+      return inputStream.read();
+    }
+
+    @Override
+    public boolean isFinished() {
+      return inputStream.available() == 0;
+    }
+
+    @Override
+    public boolean isReady() {
+      return true;
+    }
+
+    @Override
+    public void setReadListener(ReadListener readListener) {
+      throw new UnsupportedOperationException("Async callback request reads are not supported");
+    }
   }
 
-  private static boolean isAuthTokenParameter(Parameter parameter) {
-    if (!String.class.equals(parameter.getType())) {
-      return false;
-    }
-    RequestHeader requestHeader = AnnotatedElementUtils.findMergedAnnotation(parameter, RequestHeader.class);
-    return requestHeader != null || String.class.equals(parameter.getType());
-  }
+  private static final class CapturingHttpServletResponse extends HttpServletResponseWrapper {
+    private final Map<String, List<String>> headers = new java.util.TreeMap<>(String.CASE_INSENSITIVE_ORDER);
+    private final ByteArrayOutputStream body = new ByteArrayOutputStream();
+    private ServletOutputStream outputStream;
+    private PrintWriter writer;
+    private int status = HttpServletResponse.SC_OK;
+    private String characterEncoding = DEFAULT_CHARSET.name();
+    private String contentType;
+    private Locale locale = Locale.getDefault();
+    private boolean committed;
 
-  private static boolean isRequestPayloadParameter(Parameter parameter) {
-    if (String.class.equals(parameter.getType())) {
-      return false;
+    private CapturingHttpServletResponse(HttpServletResponse response) {
+      super(response);
     }
-    return AnnotatedElementUtils.findMergedAnnotation(parameter, RequestBody.class) != null
-        || !String.class.equals(parameter.getType());
+
+    private boolean isSuccessful() {
+      return status >= 200 && status < 300;
+    }
+
+    private byte[] getContentAsByteArray() throws IOException {
+      flushBuffer();
+      return body.toByteArray();
+    }
+
+    private String getContentAsString() throws IOException {
+      return new String(getContentAsByteArray(), Charset.forName(characterEncoding));
+    }
+
+    @Override
+    public void addCookie(Cookie cookie) {
+      addHeader(HttpHeaders.SET_COOKIE, "%s=%s".formatted(cookie.getName(), cookie.getValue()));
+    }
+
+    @Override
+    public boolean containsHeader(String name) {
+      return headers.containsKey(name);
+    }
+
+    @Override
+    public void sendError(int sc, String msg) throws IOException {
+      setStatus(sc);
+      resetBuffer();
+      if (msg != null) {
+        getWriter().write(msg);
+      }
+      committed = true;
+    }
+
+    @Override
+    public void sendError(int sc) {
+      setStatus(sc);
+      committed = true;
+    }
+
+    @Override
+    public void sendRedirect(String location) {
+      setStatus(HttpServletResponse.SC_FOUND);
+      setHeader(HttpHeaders.LOCATION, location);
+      committed = true;
+    }
+
+    @Override
+    public void setDateHeader(String name, long date) {
+      setHeader(name, Long.toString(date));
+    }
+
+    @Override
+    public void addDateHeader(String name, long date) {
+      addHeader(name, Long.toString(date));
+    }
+
+    @Override
+    public void setHeader(String name, String value) {
+      headers.put(name, new ArrayList<>(List.of(value)));
+    }
+
+    @Override
+    public void addHeader(String name, String value) {
+      headers.computeIfAbsent(name, ignored -> new ArrayList<>()).add(value);
+    }
+
+    @Override
+    public void setIntHeader(String name, int value) {
+      setHeader(name, Integer.toString(value));
+    }
+
+    @Override
+    public void addIntHeader(String name, int value) {
+      addHeader(name, Integer.toString(value));
+    }
+
+    @Override
+    public void setStatus(int sc) {
+      this.status = sc;
+    }
+
+    @Override
+    public int getStatus() {
+      return status;
+    }
+
+    @Override
+    public String getHeader(String name) {
+      List<String> values = headers.get(name);
+      return values == null || values.isEmpty() ? null : values.getFirst();
+    }
+
+    @Override
+    public Collection<String> getHeaders(String name) {
+      return List.copyOf(headers.getOrDefault(name, List.of()));
+    }
+
+    @Override
+    public Collection<String> getHeaderNames() {
+      return List.copyOf(headers.keySet());
+    }
+
+    @Override
+    public String getCharacterEncoding() {
+      return characterEncoding;
+    }
+
+    @Override
+    public String getContentType() {
+      return contentType;
+    }
+
+    @Override
+    public ServletOutputStream getOutputStream() {
+      if (outputStream == null) {
+        outputStream = new ServletOutputStream() {
+          @Override
+          public void write(int b) {
+            body.write(b);
+          }
+
+          @Override
+          public boolean isReady() {
+            return true;
+          }
+
+          @Override
+          public void setWriteListener(WriteListener writeListener) {
+            throw new UnsupportedOperationException("Async callback response writes are not supported");
+          }
+        };
+      }
+      return outputStream;
+    }
+
+    @Override
+    public PrintWriter getWriter() throws UnsupportedEncodingException {
+      if (writer == null) {
+        writer = new PrintWriter(new OutputStreamWriter(body, characterEncoding));
+      }
+      return writer;
+    }
+
+    @Override
+    public void setCharacterEncoding(String charset) {
+      this.characterEncoding = charset == null ? DEFAULT_CHARSET.name() : charset;
+    }
+
+    @Override
+    public void setContentLength(int len) {
+    }
+
+    @Override
+    public void setContentLengthLong(long len) {
+    }
+
+    @Override
+    public void setContentType(String type) {
+      this.contentType = type;
+    }
+
+    @Override
+    public void setBufferSize(int size) {
+    }
+
+    @Override
+    public int getBufferSize() {
+      return body.size();
+    }
+
+    @Override
+    public void flushBuffer() {
+      if (writer != null) {
+        writer.flush();
+      }
+      committed = true;
+    }
+
+    @Override
+    public void resetBuffer() {
+      body.reset();
+    }
+
+    @Override
+    public boolean isCommitted() {
+      return committed;
+    }
+
+    @Override
+    public void reset() {
+      resetBuffer();
+      headers.clear();
+      status = HttpServletResponse.SC_OK;
+      contentType = null;
+      committed = false;
+    }
+
+    @Override
+    public void setLocale(Locale locale) {
+      this.locale = locale;
+    }
+
+    @Override
+    public Locale getLocale() {
+      return locale;
+    }
   }
 
   public record DispatchResult<T>(boolean handled, T response) {
