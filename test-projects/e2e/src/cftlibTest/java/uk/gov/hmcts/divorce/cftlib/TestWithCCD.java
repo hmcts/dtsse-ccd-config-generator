@@ -4,76 +4,29 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-
-import java.io.IOException;
 import jakarta.jms.ConnectionFactory;
 import jakarta.jms.Message;
-
-import java.sql.Connection;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
-import java.sql.Statement;
-import java.sql.SQLException;
-import java.sql.Timestamp;
-import java.time.Duration;
-import java.time.Instant;
-import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.time.ZoneOffset;
-import java.nio.charset.StandardCharsets;
-import java.util.Arrays;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.UUID;
-import java.util.function.Function;
-import java.util.HashMap;
-import java.util.stream.StreamSupport;
-
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.http.NameValuePair;
+import org.apache.http.client.entity.UrlEncodedFormEntity;
 import org.apache.http.client.methods.CloseableHttpResponse;
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.client.methods.HttpPost;
-import org.apache.http.client.methods.HttpRequestBase;
 import org.apache.http.client.methods.HttpPut;
-import org.apache.http.client.entity.UrlEncodedFormEntity;
+import org.apache.http.client.methods.HttpRequestBase;
 import org.apache.http.entity.ContentType;
 import org.apache.http.entity.StringEntity;
-import org.apache.http.message.BasicNameValuePair;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClientBuilder;
+import org.apache.http.message.BasicNameValuePair;
 import org.apache.http.util.EntityUtils;
-import org.mockito.ArgumentCaptor;
-
-import static org.awaitility.Awaitility.await;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.*;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyBoolean;
-import static org.mockito.ArgumentMatchers.anyInt;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.doAnswer;
-import static org.mockito.Mockito.doNothing;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.clearInvocations;
-import static org.mockito.Mockito.spy;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.atLeastOnce;
-import static org.mockito.Mockito.when;
-
 import org.junit.jupiter.api.MethodOrderer;
 import org.junit.jupiter.api.Order;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
 import org.junit.jupiter.api.TestMethodOrder;
+import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.config.BeanPostProcessor;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -83,30 +36,30 @@ import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.jms.core.JmsTemplate;
 import org.springframework.jms.core.MessagePostProcessor;
 import org.springframework.test.context.TestPropertySource;
-import uk.gov.hmcts.divorce.divorcecase.model.CaseData;
+import uk.gov.hmcts.ccd.sdk.CaseReindexingService;
+import uk.gov.hmcts.ccd.sdk.taskmanagement.model.TaskAction;
+import uk.gov.hmcts.ccd.sdk.type.CaseLink;
+import uk.gov.hmcts.ccd.sdk.type.ListValue;
 import uk.gov.hmcts.divorce.divorcecase.NoFaultDivorce;
+import uk.gov.hmcts.divorce.divorcecase.model.CaseData;
 import uk.gov.hmcts.divorce.simplecase.SimpleCaseConfiguration;
 import uk.gov.hmcts.divorce.simplecase.model.SimpleCaseData;
 import uk.gov.hmcts.divorce.simplecase.model.SimpleCaseState;
-import uk.gov.hmcts.divorce.sow014.nfd.CaseworkerMaintainCaseLink;
-import uk.gov.hmcts.divorce.sow014.nfd.CaseworkerPopulateSearchCriteria;
-import uk.gov.hmcts.divorce.sow014.nfd.DecentralisedCaseworkerAddNote;
-import uk.gov.hmcts.divorce.sow014.nfd.DecentralisedCaseworkerAddNoteFailure;
-import uk.gov.hmcts.divorce.sow014.nfd.FailingSubmittedCallback;
-import uk.gov.hmcts.divorce.sow014.nfd.CaseworkerRoundTripData;
 import uk.gov.hmcts.divorce.sow014.nfd.ApiFirstTaskCancelEvent;
 import uk.gov.hmcts.divorce.sow014.nfd.ApiFirstTaskCompleteEvent;
 import uk.gov.hmcts.divorce.sow014.nfd.ApiFirstTaskDelayedEvent;
 import uk.gov.hmcts.divorce.sow014.nfd.ApiFirstTaskEvent;
 import uk.gov.hmcts.divorce.sow014.nfd.ApiFirstTaskReconfigureEvent;
+import uk.gov.hmcts.divorce.sow014.nfd.CaseworkerMaintainCaseLink;
+import uk.gov.hmcts.divorce.sow014.nfd.CaseworkerPopulateSearchCriteria;
+import uk.gov.hmcts.divorce.sow014.nfd.CaseworkerRoundTripData;
+import uk.gov.hmcts.divorce.sow014.nfd.DecentralisedCaseworkerAddNote;
+import uk.gov.hmcts.divorce.sow014.nfd.DecentralisedCaseworkerAddNoteFailure;
+import uk.gov.hmcts.divorce.sow014.nfd.FailingSubmittedCallback;
 import uk.gov.hmcts.divorce.sow014.nfd.PublishedEvent;
 import uk.gov.hmcts.divorce.sow014.nfd.ReturnErrorWhenCreateAPIFirstTask;
 import uk.gov.hmcts.divorce.sow014.nfd.ReturnErrorWhenCreateTestCase;
 import uk.gov.hmcts.divorce.sow014.nfd.SubmittedConfirmationCallback;
-import uk.gov.hmcts.ccd.sdk.type.CaseLink;
-import uk.gov.hmcts.ccd.sdk.type.ListValue;
-import uk.gov.hmcts.ccd.sdk.CaseReindexingService;
-import uk.gov.hmcts.ccd.sdk.taskmanagement.model.TaskAction;
 import uk.gov.hmcts.reform.ccd.client.CoreCaseDataApi;
 import uk.gov.hmcts.reform.ccd.client.model.CaseDataContent;
 import uk.gov.hmcts.reform.ccd.client.model.CaseDetails;
@@ -115,6 +68,63 @@ import uk.gov.hmcts.reform.ccd.client.model.StartEventResponse;
 import uk.gov.hmcts.reform.idam.client.IdamClient;
 import uk.gov.hmcts.rse.ccd.lib.Database;
 import uk.gov.hmcts.rse.ccd.lib.test.CftlibTest;
+
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Statement;
+import java.sql.Timestamp;
+import java.time.Duration;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.UUID;
+import java.util.function.Function;
+import java.util.stream.StreamSupport;
+
+import static org.awaitility.Awaitility.await;
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.anyOf;
+import static org.hamcrest.Matchers.contains;
+import static org.hamcrest.Matchers.containsInAnyOrder;
+import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.equalTo;
+import static org.hamcrest.Matchers.everyItem;
+import static org.hamcrest.Matchers.greaterThan;
+import static org.hamcrest.Matchers.hasSize;
+import static org.hamcrest.Matchers.is;
+import static org.hamcrest.Matchers.lessThanOrEqualTo;
+import static org.hamcrest.Matchers.not;
+import static org.hamcrest.Matchers.notNullValue;
+import static org.hamcrest.Matchers.nullValue;
+import static org.hamcrest.Matchers.startsWith;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.clearInvocations;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.DEFINED_PORT)
@@ -1602,6 +1612,128 @@ public class TestWithCCD extends CftlibTest {
             assertThat(responseCode, is(notNullValue()));
             assertThat(((Number) responseCode).intValue(), equalTo(200));
         });
+    }
+
+    @SneakyThrows
+    @Order(34)
+    @Test
+    public void delayedInitiateShouldBlockLaterSameCaseRowsUntilResolved() {
+        long caseId = createAdditionalCase("TEST_SOLICITOR@mailinator.com");
+        String caseIdValue = String.valueOf(caseId);
+        db.update(
+            "DELETE FROM ccd.task_outbox WHERE case_id = CAST(:caseId AS bigint)",
+            Map.of("caseId", caseIdValue)
+        );
+
+        var startDelayedInitiate = ccdApi.startEvent(
+            getAuthorisation("TEST_CASE_WORKER_USER@mailinator.com"),
+            getServiceAuth(),
+            caseIdValue,
+            API_FIRST_TASK_DELAYED_EVENT_ID
+        );
+        var delayedInitiateRequest = prepareEventRequestWithToken(
+            "TEST_CASE_WORKER_USER@mailinator.com",
+            API_FIRST_TASK_DELAYED_EVENT_ID,
+            Map.of("note", "api-first-task-delayed-gating"),
+            startDelayedInitiate.getToken(),
+            caseId
+        );
+        var delayedInitiateResponse = HttpClientBuilder.create().build().execute(delayedInitiateRequest);
+        assertThat(delayedInitiateResponse.getStatusLine().getStatusCode(), equalTo(201));
+
+        await().atMost(Duration.ofSeconds(20)).untilAsserted(() -> {
+            Map<String, Object> delayedRow = db.queryForMap(
+                "SELECT status, next_attempt_at FROM ccd.task_outbox"
+                    + " WHERE case_id = CAST(:caseId AS bigint)"
+                    + " AND requested_action = :action::ccd.task_action ORDER BY id DESC LIMIT 1",
+                Map.of("caseId", caseIdValue, "action", TaskAction.INITIATE.getId())
+            );
+            assertThat(delayedRow.get("status"), equalTo("NEW"));
+            assertThat(delayedRow.get("next_attempt_at"), is(notNullValue()));
+        });
+
+        var startComplete = ccdApi.startEvent(
+            getAuthorisation("TEST_CASE_WORKER_USER@mailinator.com"),
+            getServiceAuth(),
+            caseIdValue,
+            API_FIRST_TASK_COMPLETE_EVENT_ID
+        );
+        var completeRequest = prepareEventRequestWithToken(
+            "TEST_CASE_WORKER_USER@mailinator.com",
+            API_FIRST_TASK_COMPLETE_EVENT_ID,
+            Map.of("note", "api-first-complete-behind-delayed-initiate"),
+            startComplete.getToken(),
+            caseId
+        );
+        var completeResponse = HttpClientBuilder.create().build().execute(completeRequest);
+        assertThat(completeResponse.getStatusLine().getStatusCode(), equalTo(201));
+
+        await().atMost(Duration.ofSeconds(20)).untilAsserted(() -> {
+            Integer count = db.queryForObject(
+                "SELECT count(*) FROM ccd.task_outbox"
+                    + " WHERE case_id = CAST(:caseId AS bigint)"
+                    + " AND requested_action in ("
+                    + " CAST(:initiate AS ccd.task_action), CAST(:complete AS ccd.task_action)"
+                    + " )",
+                Map.of("caseId", caseIdValue, "initiate", TaskAction.INITIATE.getId(), "complete",
+                    TaskAction.COMPLETE.getId()),
+                Integer.class
+            );
+            assertThat(count, equalTo(2));
+        });
+
+        // While delayed INITIATE is still waiting on next_attempt_at, COMPLETE must not be processed.
+        await().during(Duration.ofSeconds(3)).atMost(Duration.ofSeconds(10)).untilAsserted(() -> {
+            Map<String, Object> completeRow = queryLatestCurrentOutboxRow(caseIdValue, TaskAction.COMPLETE);
+            assertThat(completeRow.get("status"), equalTo("NEW"));
+        });
+
+        db.update(
+            "UPDATE ccd.task_outbox SET next_attempt_at = NOW() - INTERVAL '1 second'"
+                + " WHERE case_id = CAST(:caseId AS bigint)"
+                + " AND requested_action = :action::ccd.task_action",
+            Map.of("caseId", caseIdValue, "action", TaskAction.INITIATE.getId())
+        );
+
+        await().atMost(Duration.ofSeconds(45)).untilAsserted(() -> {
+            Map<String, Object> initiateProcessed = queryLatestCurrentOutboxRow(caseIdValue, TaskAction.INITIATE);
+            assertThat(initiateProcessed.get("status"), equalTo("PROCESSED"));
+        });
+        await().atMost(Duration.ofSeconds(45)).untilAsserted(() -> {
+            Map<String, Object> completeProcessed = queryLatestCurrentOutboxRow(caseIdValue, TaskAction.COMPLETE);
+            assertThat(completeProcessed.get("status"), equalTo("PROCESSED"));
+        });
+
+        Map<String, Object> processedOrder = db.queryForMap(
+            "SELECT"
+                + " ("
+                + "   SELECT max(h.created)"
+                + "   FROM ccd.task_outbox o"
+                + "   JOIN ccd.task_outbox_history h ON h.task_outbox_id = o.id"
+                + "   WHERE o.case_id = CAST(:caseId AS bigint)"
+                + "     AND o.requested_action = :initiate::ccd.task_action"
+                + "     AND h.status = CAST(:processed as ccd.task_outbox_status)"
+                + " ) as initiate_processed_at,"
+                + " ("
+                + "   SELECT max(h.created)"
+                + "   FROM ccd.task_outbox o"
+                + "   JOIN ccd.task_outbox_history h ON h.task_outbox_id = o.id"
+                + "   WHERE o.case_id = CAST(:caseId AS bigint)"
+                + "     AND o.requested_action = :complete::ccd.task_action"
+                + "     AND h.status = CAST(:processed as ccd.task_outbox_status)"
+                + " ) as complete_processed_at",
+            Map.of(
+                "caseId", caseIdValue,
+                "initiate", TaskAction.INITIATE.getId(),
+                "complete", TaskAction.COMPLETE.getId(),
+                "processed", "PROCESSED"
+            )
+        );
+        LocalDateTime initiateProcessedAt = (LocalDateTime) processedOrder.get("initiate_processed_at");
+        LocalDateTime completeProcessedAt = (LocalDateTime) processedOrder.get("complete_processed_at");
+        assertThat(initiateProcessedAt, is(notNullValue()));
+        assertThat(completeProcessedAt, is(notNullValue()));
+        assertThat(completeProcessedAt.isBefore(initiateProcessedAt), is(false));
     }
 
     @SneakyThrows

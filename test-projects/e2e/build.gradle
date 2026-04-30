@@ -57,6 +57,8 @@ dependencies {
 
   implementation 'com.github.ben-manes.caffeine:caffeine:3.2.3'
   implementation 'com.google.guava:guava:33.6.0-jre'
+  cftlibImplementation 'org.springframework:spring-context-support'
+  cftlibImplementation 'com.github.ben-manes.caffeine:caffeine'
 
   implementation 'org.projectlombok:lombok'
   annotationProcessor 'org.projectlombok:lombok'

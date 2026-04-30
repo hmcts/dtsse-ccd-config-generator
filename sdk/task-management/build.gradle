@@ -12,7 +12,7 @@ dependencyManagement {
 dependencies {
     api 'org.springframework:spring-context'
     api 'org.springframework:spring-jdbc'
-    implementation 'org.springframework:spring-context-support'
+    api 'org.springframework:spring-context-support'
     api 'org.springframework:spring-web'
     api 'org.springframework.cloud:spring-cloud-starter-openfeign'
     api 'com.github.hmcts:service-auth-provider-java-client:5.3.3'
@@ -20,7 +20,7 @@ dependencies {
 
     compileOnly 'org.springframework.boot:spring-boot-autoconfigure'
 
-    implementation 'com.github.ben-manes.caffeine:caffeine'
+    api 'com.github.ben-manes.caffeine:caffeine'
     implementation 'com.fasterxml.jackson.core:jackson-databind'
 
     testImplementation 'org.springframework.boot:spring-boot-starter-test'

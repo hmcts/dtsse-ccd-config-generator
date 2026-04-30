@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import feign.FeignException;
 import java.io.IOException;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
@@ -30,6 +31,7 @@ public class TaskOutboxPoller {
   private final TaskOutboxRepository repository;
   private final TaskManagementApiClient taskManagementApiClient;
   private final TaskOutboxRetryPolicy retryPolicy;
+  private final TaskOutboxTelemetry telemetry;
   private final int batchSize;
   private final ObjectMapper objectMapper;
 
@@ -37,26 +39,25 @@ public class TaskOutboxPoller {
       TaskOutboxRepository repository,
       TaskManagementApiClient taskManagementApiClient,
       TaskOutboxRetryPolicy retryPolicy,
+      TaskOutboxTelemetry telemetry,
       int batchSize,
       ObjectMapper objectMapper
   ) {
     this.repository = repository;
     this.taskManagementApiClient = taskManagementApiClient;
     this.retryPolicy = retryPolicy;
+    this.telemetry = telemetry;
     this.batchSize = batchSize;
     this.objectMapper = objectMapper;
   }
 
   @Scheduled(fixedDelayString = "${task-management.outbox.poller.delay:1000}")
   public void poll() {
-    List<TaskOutboxRecord> records = repository.findPending(batchSize, retryPolicy.getMaxAttempts());
+    int maxAttempts = retryPolicy.getMaxAttempts();
+    List<TaskOutboxRecord> records = repository.claimPending(batchSize, maxAttempts);
     int statusCode;
 
     for (TaskOutboxRecord record : records) {
-      if (!repository.markProcessing(record.id())) {
-        continue;
-      }
-
       try {
         TaskAction action = TaskAction.fromId(record.requestedAction());
 
@@ -84,13 +85,13 @@ public class TaskOutboxPoller {
             ex.contentUTF8(),
             ex
         );
-        handleFailure(record, ex.status(), ex.contentUTF8());
+        handleFailure(record, ex.status(), ex.contentUTF8(), maxAttempts);
       } catch (IOException ex) {
         log.error("Task outbox {} payload could not be parsed", record.id(), ex);
-        handleFailure(record, null, ex.getMessage());
+        handleFailure(record, null, ex.getMessage(), maxAttempts);
       } catch (RuntimeException ex) {
         log.error("Task outbox {} create failed", record.id(), ex);
-        handleFailure(record, null, ex.getMessage());
+        handleFailure(record, null, ex.getMessage(), maxAttempts);
       }
     }
   }
@@ -99,7 +100,7 @@ public class TaskOutboxPoller {
     TaskAction action = TaskAction.fromId(record.requestedAction());
     if (response == null) {
       log.warn("Task outbox {} received null response for action {}", record.id(), action.getId());
-      handleFailure(record, null, "Task outbox received null response");
+      handleFailure(record, null, "Task outbox received null response", retryPolicy.getMaxAttempts());
       return true;
     }
 
@@ -110,13 +111,23 @@ public class TaskOutboxPoller {
           action.getId(),
           response.getStatusCode().value()
       );
-      handleFailure(record, response.getStatusCode().value(), "Task outbox response unsuccessful");
+      handleFailure(
+          record,
+          response.getStatusCode().value(),
+          "Task outbox response unsuccessful",
+          retryPolicy.getMaxAttempts()
+      );
       return true;
     }
 
     if (List.of(TaskAction.INITIATE, TaskAction.RECONFIGURE).contains(action) && response.getBody() == null) {
       log.warn("Task outbox {} create response missing body", record.id());
-      handleFailure(record, response.getStatusCode().value(), "Task creation response missing task_id");
+      handleFailure(
+          record,
+          response.getStatusCode().value(),
+          "Task creation response missing task_id",
+          retryPolicy.getMaxAttempts()
+      );
       return true;
     }
 
@@ -203,15 +214,21 @@ public class TaskOutboxPoller {
     return taskManagementApiClient.reconfigureTask(request);
   }
 
-  private void handleFailure(TaskOutboxRecord record, Integer statusCode, String body) {
+  private void handleFailure(TaskOutboxRecord record, Integer statusCode, String body, int maxAttempts) {
     int nextAttemptCount = record.attemptCount() + 1;
-    LocalDateTime nextAttemptAt = retryPolicy.nextAttemptAt(nextAttemptCount, LocalDateTime.now());
+    LocalDateTime nextAttemptAt = retryPolicy.nextAttemptAt(nextAttemptCount, LocalDateTime.now(ZoneOffset.UTC));
     repository.markFailed(record.id(), statusCode, body, nextAttemptAt);
     if (nextAttemptAt == null) {
+      Long nextRetryableOutboxId = repository.findNextRetryableInCase(record.caseId(), record.id(), maxAttempts);
       log.warn(
-          "Task outbox {} failed with status {}, retries exhausted",
+          "Task outbox {} failed with status {}, retries exhausted; next retryable record for case {} is {}",
           record.id(),
-          statusCode
+          statusCode,
+          record.caseId(),
+          nextRetryableOutboxId
+      );
+      telemetry.retriesExhausted(
+          new TaskOutboxRetriesExhaustedEvent(record, statusCode, maxAttempts, nextRetryableOutboxId)
       );
     } else {
       log.warn(

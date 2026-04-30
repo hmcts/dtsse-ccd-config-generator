@@ -2,10 +2,13 @@ package uk.gov.hmcts.ccd.sdk.taskmanagement;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import uk.gov.hmcts.ccd.sdk.taskmanagement.model.outbox.TaskOutboxRecord;
 import uk.gov.hmcts.ccd.sdk.taskmanagement.model.outbox.TaskOutboxStatus;
@@ -24,19 +27,33 @@ public class TaskOutboxRepository {
   }
 
   public void enqueue(String caseId, String payload, String action, LocalDateTime nextAttemptAt) {
+    enqueueAndReturnId(caseId, payload, action, nextAttemptAt);
+  }
+
+  public long enqueueAndReturnId(String caseId, String payload, String action) {
+    return enqueueAndReturnId(caseId, payload, action, null);
+  }
+
+  public long enqueueAndReturnId(String caseId, String payload, String action, LocalDateTime nextAttemptAt) {
     MapSqlParameterSource params = new MapSqlParameterSource()
         .addValue("action", action)
         .addValue("caseId", parseCaseId(caseId))
         .addValue("payload", payload)
         .addValue("nextAttemptAt", nextAttemptAt);
 
-    jdbc.update(
+    Long id = jdbc.queryForObject(
         """
             insert into ccd.task_outbox (case_id, payload, requested_action, next_attempt_at)
             values (:caseId, :payload::jsonb, :action::ccd.task_action, :nextAttemptAt)
+            returning id
             """,
-        params
+        params,
+        Long.class
     );
+    if (id == null) {
+      throw new IllegalStateException("Task outbox insert did not return an id");
+    }
+    return id;
   }
 
   private long parseCaseId(String caseId) {
@@ -47,28 +64,58 @@ public class TaskOutboxRepository {
     }
   }
 
-  public List<TaskOutboxRecord> findPending(int limit, int maxAttempts) {
-    LocalDateTime now = LocalDateTime.now();
+  public List<TaskOutboxRecord> claimPending(int limit, int maxAttempts) {
+    LocalDateTime now = utcNow();
+    LocalDateTime processingDeadline = now.plus(processingTimeout);
     return jdbc.query(
         """
-            select id, payload::text, requested_action, attempt_count
-            from ccd.task_outbox
-            where status::text in (:newStatus, :failedStatus, :processingStatus)
-             and (next_attempt_at is null or next_attempt_at <= :now)
-             and (:maxAttempts = 0 or attempt_count < :maxAttempts)
+            with claimable as (
+              select o.id
+              from ccd.task_outbox o
+              where o.status::text in (:newStatus, :failedStatus, :processingStatus)
+                and (o.next_attempt_at is null or o.next_attempt_at <= :now)
+                and (:maxAttempts = 0 or o.attempt_count < :maxAttempts)
+                and not exists (
+                  select 1
+                  from ccd.task_outbox prior
+                  where prior.case_id = o.case_id
+                    and prior.id < o.id
+                    and prior.status::text in (:newStatus, :failedStatus, :processingStatus)
+                    and (:maxAttempts = 0 or prior.attempt_count < :maxAttempts)
+                )
+              order by o.id
+              limit :limit
+              for update skip locked
+            ),
+            updated as (
+              update ccd.task_outbox outbox
+              set status = cast(:processingStatus as ccd.task_outbox_status),
+                  updated = :now,
+                  next_attempt_at = :processingDeadline
+              from claimable
+              where outbox.id = claimable.id
+              returning outbox.id,
+                        outbox.case_id,
+                        outbox.payload::text as payload,
+                        outbox.requested_action::text as requested_action,
+                        outbox.attempt_count
+            )
+            select id, case_id, payload, requested_action, attempt_count
+            from updated
             order by id
-            limit :limit
             """,
         Map.of(
             "newStatus", TaskOutboxStatus.NEW.name(),
             "failedStatus", TaskOutboxStatus.FAILED.name(),
             "processingStatus", TaskOutboxStatus.PROCESSING.name(),
             "now", now,
+            "processingDeadline", processingDeadline,
             "limit", limit,
             "maxAttempts", maxAttempts
         ),
         (rs, rowNum) -> new TaskOutboxRecord(
             rs.getLong("id"),
+            rs.getLong("case_id"),
             rs.getString("payload"),
             rs.getString("requested_action"),
             rs.getInt("attempt_count")
@@ -76,34 +123,46 @@ public class TaskOutboxRepository {
     );
   }
 
-  public boolean markProcessing(long id) {
-    LocalDateTime now = LocalDateTime.now();
-    LocalDateTime nextAttemptAt = now.plus(processingTimeout);
-    int updated = jdbc.update(
+  public Long findNextRetryableInCase(long caseId, long afterId, int maxAttempts) {
+    return jdbc.query(
         """
-            update ccd.task_outbox
-            set status = cast(:status as ccd.task_outbox_status), updated = :updated, next_attempt_at = :nextAttemptAt
-            where id = :id
-             and status::text in (:newStatus, :failedStatus, :processingStatus)
-             and (next_attempt_at is null or next_attempt_at <= :now)
+            select o.id
+            from ccd.task_outbox o
+            where o.case_id = :caseId
+              and o.id > :afterId
+              and o.status::text in (:newStatus, :failedStatus, :processingStatus)
+              and (:maxAttempts = 0 or o.attempt_count < :maxAttempts)
+            order by o.id
+            limit 1
             """,
         Map.of(
-            "id", id,
-            "status", TaskOutboxStatus.PROCESSING.name(),
+            "caseId", caseId,
+            "afterId", afterId,
             "newStatus", TaskOutboxStatus.NEW.name(),
             "failedStatus", TaskOutboxStatus.FAILED.name(),
             "processingStatus", TaskOutboxStatus.PROCESSING.name(),
-            "updated", now,
-            "nextAttemptAt", nextAttemptAt,
-            "now", now
-        )
+            "maxAttempts", maxAttempts
+        ),
+        rs -> rs.next() ? rs.getLong("id") : null
     );
-    return updated == 1;
+  }
+
+  @Transactional(readOnly = true, propagation = Propagation.REQUIRES_NEW)
+  public Optional<TaskOutboxStatus> findStatus(long id) {
+    return jdbc.query(
+        """
+            select status::text
+            from ccd.task_outbox
+            where id = :id
+            """,
+        Map.of("id", id),
+        rs -> rs.next() ? Optional.of(TaskOutboxStatus.valueOf(rs.getString("status"))) : Optional.empty()
+    );
   }
 
   @Transactional
   public void markProcessed(long id, int statusCode) {
-    LocalDateTime now = LocalDateTime.now();
+    LocalDateTime now = utcNow();
     MapSqlParameterSource params = new MapSqlParameterSource()
         .addValue("id", id)
         .addValue("status", TaskOutboxStatus.PROCESSED.name())
@@ -126,7 +185,7 @@ public class TaskOutboxRepository {
 
   @Transactional
   public void markFailed(long id, Integer statusCode, String error, LocalDateTime nextAttemptAt) {
-    LocalDateTime now = LocalDateTime.now();
+    LocalDateTime now = utcNow();
     MapSqlParameterSource params = new MapSqlParameterSource()
         .addValue("id", id)
         .addValue("status", TaskOutboxStatus.FAILED.name())
@@ -169,5 +228,9 @@ public class TaskOutboxRepository {
             """,
         params
     );
+  }
+
+  private LocalDateTime utcNow() {
+    return LocalDateTime.now(ZoneOffset.UTC);
   }
 }

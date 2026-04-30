@@ -90,14 +90,36 @@ public class TaskManagementAutoConfiguration {
 
   @Bean
   @ConditionalOnMissingBean
-  public TaskOutboxService taskOutboxService(TaskOutboxRepository repository, ObjectMapper objectMapper) {
-    return new TaskOutboxService(repository, objectMapper);
+  public TaskOutboxCompletionAwaiter taskOutboxCompletionAwaiter(
+      TaskOutboxRepository repository,
+      TaskManagementProperties properties
+  ) {
+    return new TaskOutboxCompletionAwaiter(repository, properties);
+  }
+
+  @Bean
+  @ConditionalOnMissingBean
+  public TaskOutboxService taskOutboxService(
+      TaskOutboxRepository repository,
+      TaskOutboxCompletionAwaiter completionAwaiter,
+      ObjectMapper objectMapper
+  ) {
+    return new TaskOutboxService(repository, completionAwaiter, objectMapper);
   }
 
   @Bean
   @ConditionalOnMissingBean
   public TaskOutboxRetryPolicy taskOutboxRetryPolicy(TaskManagementProperties properties) {
     return new TaskOutboxRetryPolicy(properties);
+  }
+
+  @Bean
+  @ConditionalOnMissingBean
+  public TaskOutboxTelemetry taskOutboxTelemetry() {
+    return event -> {
+      // No-op by default. Consumer services can override this bean to emit custom telemetry
+      // (for example, Application Insights custom events).
+    };
   }
 
   @Bean
@@ -110,10 +132,11 @@ public class TaskManagementAutoConfiguration {
       TaskOutboxRepository repository,
       TaskManagementApiClient taskManagementApiClient,
       TaskOutboxRetryPolicy retryPolicy,
+      TaskOutboxTelemetry telemetry,
       TaskManagementProperties properties,
       ObjectMapper objectMapper
   ) {
     int batchSize = properties.getOutbox().getPoller().getBatchSize();
-    return new TaskOutboxPoller(repository, taskManagementApiClient, retryPolicy, batchSize, objectMapper);
+    return new TaskOutboxPoller(repository, taskManagementApiClient, retryPolicy, telemetry, batchSize, objectMapper);
   }
 }
