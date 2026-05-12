@@ -90,8 +90,21 @@ public class TaskManagementAutoConfiguration {
 
   @Bean
   @ConditionalOnMissingBean
-  public TaskOutboxService taskOutboxService(TaskOutboxRepository repository, ObjectMapper objectMapper) {
-    return new TaskOutboxService(repository, objectMapper);
+  public TaskOutboxCompletionAwaiter taskOutboxCompletionAwaiter(
+      TaskOutboxRepository repository,
+      TaskManagementProperties properties
+  ) {
+    return new TaskOutboxCompletionAwaiter(repository, properties);
+  }
+
+  @Bean
+  @ConditionalOnMissingBean
+  public TaskOutboxService taskOutboxService(
+      TaskOutboxRepository repository,
+      TaskOutboxCompletionAwaiter completionAwaiter,
+      ObjectMapper objectMapper
+  ) {
+    return new TaskOutboxService(repository, completionAwaiter, objectMapper);
   }
 
   @Bean
@@ -115,5 +128,19 @@ public class TaskManagementAutoConfiguration {
   ) {
     int batchSize = properties.getOutbox().getPoller().getBatchSize();
     return new TaskOutboxPoller(repository, taskManagementApiClient, retryPolicy, batchSize, objectMapper);
+  }
+
+  @Bean
+  @ConditionalOnProperty(
+      name = "task-management.outbox.failure-log-poller.enabled",
+      havingValue = "true",
+      matchIfMissing = true
+  )
+  public TaskOutboxFailureLogPoller taskOutboxFailureLogPoller(
+      TaskOutboxRepository repository,
+      TaskManagementProperties properties
+  ) {
+    int batchSize = properties.getOutbox().getFailureLogPoller().getBatchSize();
+    return new TaskOutboxFailureLogPoller(repository, batchSize);
   }
 }
