@@ -221,9 +221,6 @@ cftlibTest {
     'junit.jupiter.execution.parallel.mode.default'        : 'same_thread',
     'junit.jupiter.execution.parallel.mode.classes.default': 'concurrent',
     'spring.cloud.compatibility-verifier.enabled'          : 'false',
-    'spring.jms.servicebus.enabled'                        : 'false',
-    'spring.autoconfigure.exclude'                         :
-      'com.azure.spring.cloud.autoconfigure.implementation.jms.ServiceBusJmsAutoConfiguration',
   ])
 
   environment 'RD_PROFESSIONAL_API_URL', 'http://host.docker.internal:8765'
@@ -245,9 +242,6 @@ cftlibTest {
   environment 'RSE_LIB_ADDITIONAL_DATABASES', 'nfd'
   environment 'IDAM_SYSTEM_UPDATE_USERNAME', 'test-system-user@hmcts.net'
   environment 'IDAM_SYSTEM_UPDATE_PASSWORD', 'password'
-  environment 'SPRING_JMS_SERVICEBUS_ENABLED', 'false'
-  environment 'SPRING_AUTOCONFIGURE_EXCLUDE',
-    'com.azure.spring.cloud.autoconfigure.implementation.jms.ServiceBusJmsAutoConfiguration'
 }
 
 configurations.all {
