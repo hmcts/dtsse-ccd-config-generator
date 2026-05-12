@@ -1,6 +1,6 @@
 [
   {
-    "Answer": "${caseName}:[caseworker-publiclaw-solicitor]",
+    "Answer": "${caseName}|${familyManCaseNumber}:[caseworker-publiclaw-solicitor]",
     "AnswerFieldType": "Text",
     "CaseTypeID": "CARE_SUPERVISION_EPO",
     "DisplayOrder": 1,
@@ -8,6 +8,16 @@
     "LiveFrom": "01/01/2017",
     "QuestionId": "caseName",
     "QuestionText": "Enter the case name"
+  },
+  {
+    "Answer": "${cmoHearingDateList.value.label}:[caseworker-publiclaw-solicitor]",
+    "AnswerFieldType": "Text",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "DisplayOrder": 4,
+    "ID": "NoCChallenge",
+    "LiveFrom": "01/01/2017",
+    "QuestionId": "hearingDate",
+    "QuestionText": "Select your CMO hearing date"
   },
   {
     "Answer": "${allocatedJudge.judgeFullName}:[caseworker-publiclaw-solicitor],${allocatedJudge.judgeFullName}:[caseworker-publiclaw-courtadmin]",

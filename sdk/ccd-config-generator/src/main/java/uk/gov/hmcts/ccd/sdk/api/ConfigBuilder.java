@@ -67,7 +67,7 @@ public interface ConfigBuilder<T, S, R extends HasRole> {
 
   SearchParty.SearchPartyBuilder searchParty();
 
-  NoticeOfChangeBuilder<T, R> noticeOfChange();
+  NoticeOfChangeBuilder<T, S, R> noticeOfChange();
 
   void grantComplexType(TypedPropertyGetter<T, ?> field, String listElementCode,
                         Set<Permission> permissions, R... roles);

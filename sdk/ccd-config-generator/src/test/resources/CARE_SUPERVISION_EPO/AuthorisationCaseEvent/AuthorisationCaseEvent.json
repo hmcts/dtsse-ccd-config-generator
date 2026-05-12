@@ -92,10 +92,17 @@
   },
   {
     "CRUD": "CRU",
-    "CaseEventID": "noticeOfChangeApplied",
+    "CaseEventID": "noc-request",
     "CaseTypeID": "CARE_SUPERVISION_EPO",
     "LiveFrom": "01/01/2017",
-    "UserRole": "caseworker-publiclaw-courtadmin"
+    "UserRole": "caseworker-caa"
+  },
+  {
+    "CRUD": "CRU",
+    "CaseEventID": "notice-of-change-applied",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "LiveFrom": "01/01/2017",
+    "UserRole": "[NOCAPPROVER]"
   },
   {
     "CRUD": "CRU",

@@ -4,6 +4,20 @@
     "CaseStateID": "Deleted",
     "CaseTypeID": "CARE_SUPERVISION_EPO",
     "LiveFrom": "01/01/2017",
+    "UserRole": "[NOCAPPROVER]"
+  },
+  {
+    "CRUD": "CRU",
+    "CaseStateID": "Deleted",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "LiveFrom": "01/01/2017",
+    "UserRole": "caseworker-caa"
+  },
+  {
+    "CRUD": "CRU",
+    "CaseStateID": "Deleted",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "LiveFrom": "01/01/2017",
     "UserRole": "caseworker-publiclaw-cafcass"
   },
   {
@@ -32,6 +46,20 @@
     "CaseStateID": "Gatekeeping",
     "CaseTypeID": "CARE_SUPERVISION_EPO",
     "LiveFrom": "01/01/2017",
+    "UserRole": "[NOCAPPROVER]"
+  },
+  {
+    "CRUD": "CRU",
+    "CaseStateID": "Gatekeeping",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "LiveFrom": "01/01/2017",
+    "UserRole": "caseworker-caa"
+  },
+  {
+    "CRUD": "CRU",
+    "CaseStateID": "Gatekeeping",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "LiveFrom": "01/01/2017",
     "UserRole": "caseworker-publiclaw-cafcass"
   },
   {
@@ -54,6 +82,20 @@
     "CaseTypeID": "CARE_SUPERVISION_EPO",
     "LiveFrom": "01/01/2017",
     "UserRole": "caseworker-publiclaw-systemupdate"
+  },
+  {
+    "CRUD": "CRU",
+    "CaseStateID": "Open",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "LiveFrom": "01/01/2017",
+    "UserRole": "[NOCAPPROVER]"
+  },
+  {
+    "CRUD": "CRU",
+    "CaseStateID": "Open",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "LiveFrom": "01/01/2017",
+    "UserRole": "caseworker-caa"
   },
   {
     "CRUD": "CRU",
@@ -102,6 +144,20 @@
     "CaseStateID": "PREPARE_FOR_HEARING",
     "CaseTypeID": "CARE_SUPERVISION_EPO",
     "LiveFrom": "01/01/2017",
+    "UserRole": "[NOCAPPROVER]"
+  },
+  {
+    "CRUD": "CRU",
+    "CaseStateID": "PREPARE_FOR_HEARING",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "LiveFrom": "01/01/2017",
+    "UserRole": "caseworker-caa"
+  },
+  {
+    "CRUD": "CRU",
+    "CaseStateID": "PREPARE_FOR_HEARING",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "LiveFrom": "01/01/2017",
     "UserRole": "caseworker-publiclaw-cafcass"
   },
   {
@@ -117,6 +173,20 @@
     "CaseTypeID": "CARE_SUPERVISION_EPO",
     "LiveFrom": "01/01/2017",
     "UserRole": "caseworker-publiclaw-systemupdate"
+  },
+  {
+    "CRUD": "CRU",
+    "CaseStateID": "Submitted",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "LiveFrom": "01/01/2017",
+    "UserRole": "[NOCAPPROVER]"
+  },
+  {
+    "CRUD": "CRU",
+    "CaseStateID": "Submitted",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "LiveFrom": "01/01/2017",
+    "UserRole": "caseworker-caa"
   },
   {
     "CRUD": "CRU",

@@ -39,6 +39,7 @@ public class Event<T, R extends HasRole, S> {
   private AboutToStart<T, S> aboutToStartCallback;
   private AboutToSubmit<T, S> aboutToSubmitCallback;
   private Submitted<T, S> submittedCallback;
+  private String submittedCallbackUrl;
   private Submit<T, S> submitHandler;
   private Start<T, S> startHandler;
   private FieldCollection fields;

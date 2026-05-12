@@ -84,9 +84,13 @@ class CaseEventGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
     addCallbackIfConfigured(data, callbackHost, event,
         event.getAboutToSubmitCallback() != null,
         CallbackMetadata.ABOUT_TO_SUBMIT);
-    addCallbackIfConfigured(data, callbackHost, event,
-        event.getSubmittedCallback() != null,
-        CallbackMetadata.SUBMITTED);
+    if (event.getSubmittedCallbackUrl() != null) {
+      data.put(CallbackMetadata.SUBMITTED.callbackField(), event.getSubmittedCallbackUrl());
+    } else {
+      addCallbackIfConfigured(data, callbackHost, event,
+          event.getSubmittedCallback() != null,
+          CallbackMetadata.SUBMITTED);
+    }
 
     return result;
   }
