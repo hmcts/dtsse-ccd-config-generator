@@ -114,15 +114,6 @@ public class TaskManagementAutoConfiguration {
   }
 
   @Bean
-  @ConditionalOnMissingBean
-  public TaskOutboxTelemetry taskOutboxTelemetry() {
-    return event -> {
-      // No-op by default. Consumer services can override this bean to emit custom telemetry
-      // (for example, Application Insights custom events).
-    };
-  }
-
-  @Bean
   @ConditionalOnProperty(
       name = "task-management.outbox.poller.enabled",
       havingValue = "true",
@@ -132,11 +123,10 @@ public class TaskManagementAutoConfiguration {
       TaskOutboxRepository repository,
       TaskManagementApiClient taskManagementApiClient,
       TaskOutboxRetryPolicy retryPolicy,
-      TaskOutboxTelemetry telemetry,
       TaskManagementProperties properties,
       ObjectMapper objectMapper
   ) {
     int batchSize = properties.getOutbox().getPoller().getBatchSize();
-    return new TaskOutboxPoller(repository, taskManagementApiClient, retryPolicy, telemetry, batchSize, objectMapper);
+    return new TaskOutboxPoller(repository, taskManagementApiClient, retryPolicy, batchSize, objectMapper);
   }
 }

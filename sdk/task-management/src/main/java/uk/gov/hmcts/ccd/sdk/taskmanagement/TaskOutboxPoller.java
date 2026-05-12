@@ -31,7 +31,6 @@ public class TaskOutboxPoller {
   private final TaskOutboxRepository repository;
   private final TaskManagementApiClient taskManagementApiClient;
   private final TaskOutboxRetryPolicy retryPolicy;
-  private final TaskOutboxTelemetry telemetry;
   private final int batchSize;
   private final ObjectMapper objectMapper;
 
@@ -39,14 +38,12 @@ public class TaskOutboxPoller {
       TaskOutboxRepository repository,
       TaskManagementApiClient taskManagementApiClient,
       TaskOutboxRetryPolicy retryPolicy,
-      TaskOutboxTelemetry telemetry,
       int batchSize,
       ObjectMapper objectMapper
   ) {
     this.repository = repository;
     this.taskManagementApiClient = taskManagementApiClient;
     this.retryPolicy = retryPolicy;
-    this.telemetry = telemetry;
     this.batchSize = batchSize;
     this.objectMapper = objectMapper;
   }
@@ -221,14 +218,16 @@ public class TaskOutboxPoller {
     if (nextAttemptAt == null) {
       Long nextRetryableOutboxId = repository.findNextRetryableInCase(record.caseId(), record.id(), maxAttempts);
       log.warn(
-          "Task outbox {} failed with status {}, retries exhausted; next retryable record for case {} is {}",
-          record.id(),
-          statusCode,
+          "TaskOutboxHeadRecordExhausted caseId={} taskOutboxId={} requestedAction={} attemptCount={} "
+              + "maxAttempts={} lastStatusCode={} nextRetryableOutboxId={} eventType={}",
           record.caseId(),
-          nextRetryableOutboxId
-      );
-      telemetry.retriesExhausted(
-          new TaskOutboxRetriesExhaustedEvent(record, statusCode, maxAttempts, nextRetryableOutboxId)
+          record.id(),
+          record.requestedAction(),
+          nextAttemptCount,
+          maxAttempts,
+          statusCode,
+          nextRetryableOutboxId,
+          "task-outbox-retry-exhausted"
       );
     } else {
       log.warn(
