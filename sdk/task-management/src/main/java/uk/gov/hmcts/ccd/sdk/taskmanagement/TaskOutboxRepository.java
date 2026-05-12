@@ -65,15 +65,13 @@ public class TaskOutboxRepository {
   }
 
   public List<TaskOutboxRecord> claimPending(int limit, int maxAttempts) {
-    LocalDateTime now = utcNow();
-    LocalDateTime processingDeadline = now.plus(processingTimeout);
     return jdbc.query(
         """
             with claimable as (
               select o.id
               from ccd.task_outbox o
               where o.status::text in (:newStatus, :failedStatus, :processingStatus)
-                and (o.next_attempt_at is null or o.next_attempt_at <= :now)
+                and (o.next_attempt_at is null or o.next_attempt_at <= localtimestamp)
                 and (:maxAttempts = 0 or o.attempt_count < :maxAttempts)
                 and not exists (
                   select 1
@@ -90,8 +88,8 @@ public class TaskOutboxRepository {
             updated as (
               update ccd.task_outbox outbox
               set status = cast(:processingStatus as ccd.task_outbox_status),
-                  updated = :now,
-                  next_attempt_at = :processingDeadline
+                  updated = localtimestamp,
+                  next_attempt_at = localtimestamp + (:processingTimeoutMillis * interval '1 millisecond')
               from claimable
               where outbox.id = claimable.id
               returning outbox.id,
@@ -108,8 +106,7 @@ public class TaskOutboxRepository {
             "newStatus", TaskOutboxStatus.NEW.name(),
             "failedStatus", TaskOutboxStatus.FAILED.name(),
             "processingStatus", TaskOutboxStatus.PROCESSING.name(),
-            "now", now,
-            "processingDeadline", processingDeadline,
+            "processingTimeoutMillis", processingTimeout.toMillis(),
             "limit", limit,
             "maxAttempts", maxAttempts
         ),

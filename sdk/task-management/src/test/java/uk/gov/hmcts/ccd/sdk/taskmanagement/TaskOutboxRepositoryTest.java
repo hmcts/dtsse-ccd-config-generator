@@ -6,11 +6,8 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-import java.time.LocalDateTime;
-import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
-import java.util.TimeZone;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.jdbc.core.RowMapper;
@@ -20,28 +17,22 @@ class TaskOutboxRepositoryTest {
 
   @Test
   @SuppressWarnings({"rawtypes", "unchecked"})
-  void claimPendingUsesUtcClockForDueRows() {
-    TimeZone defaultTimeZone = TimeZone.getDefault();
-    TimeZone.setDefault(TimeZone.getTimeZone("Pacific/Auckland"));
-    try {
-      NamedParameterJdbcTemplate jdbc = mock(NamedParameterJdbcTemplate.class);
-      TaskManagementProperties properties = new TaskManagementProperties();
-      TaskOutboxRepository repository = new TaskOutboxRepository(jdbc, properties);
-      ArgumentCaptor<Map<String, Object>> paramsCaptor = ArgumentCaptor.forClass((Class) Map.class);
+  void claimPendingUsesDatabaseClockForDueRows() {
+    NamedParameterJdbcTemplate jdbc = mock(NamedParameterJdbcTemplate.class);
+    TaskManagementProperties properties = new TaskManagementProperties();
+    TaskOutboxRepository repository = new TaskOutboxRepository(jdbc, properties);
+    ArgumentCaptor<String> sqlCaptor = ArgumentCaptor.forClass(String.class);
+    ArgumentCaptor<Map<String, Object>> paramsCaptor = ArgumentCaptor.forClass((Class) Map.class);
 
-      when(jdbc.query(anyString(), paramsCaptor.capture(), any(RowMapper.class)))
-          .thenReturn(List.of());
+    when(jdbc.query(sqlCaptor.capture(), paramsCaptor.capture(), any(RowMapper.class)))
+        .thenReturn(List.of());
 
-      LocalDateTime beforeUtc = LocalDateTime.now(ZoneOffset.UTC).minusSeconds(1);
-      repository.claimPending(5, 0);
-      LocalDateTime afterUtc = LocalDateTime.now(ZoneOffset.UTC).plusSeconds(1);
+    repository.claimPending(5, 0);
 
-      LocalDateTime capturedNow = (LocalDateTime) paramsCaptor.getValue().get("now");
-
-      assertThat(capturedNow).isBetween(beforeUtc, afterUtc);
-      assertThat(capturedNow).isBefore(LocalDateTime.now().minusHours(1));
-    } finally {
-      TimeZone.setDefault(defaultTimeZone);
-    }
+    assertThat(sqlCaptor.getValue()).contains("o.next_attempt_at <= localtimestamp");
+    assertThat(sqlCaptor.getValue())
+        .contains("next_attempt_at = localtimestamp + (:processingTimeoutMillis * interval '1 millisecond')");
+    assertThat(paramsCaptor.getValue()).doesNotContainKeys("now", "processingDeadline");
+    assertThat(paramsCaptor.getValue()).containsEntry("processingTimeoutMillis", 300000L);
   }
 }
