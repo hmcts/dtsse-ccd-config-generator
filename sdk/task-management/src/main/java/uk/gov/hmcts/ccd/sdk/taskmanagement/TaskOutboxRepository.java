@@ -39,12 +39,14 @@ public class TaskOutboxRepository {
         .addValue("action", action)
         .addValue("caseId", parseCaseId(caseId))
         .addValue("payload", payload)
-        .addValue("nextAttemptAt", nextAttemptAt);
+        .addValue("nextAttemptAt", nextAttemptAt)
+        .addValue("status", nextAttemptAt == null ? TaskOutboxStatus.NEW.name() : TaskOutboxStatus.WAITING.name());
 
     Long id = jdbc.queryForObject(
         """
-            insert into ccd.task_outbox (case_id, payload, requested_action, next_attempt_at)
-            values (:caseId, :payload::jsonb, :action::ccd.task_action, :nextAttemptAt)
+            insert into ccd.task_outbox (case_id, payload, requested_action, status, next_attempt_at)
+            values (:caseId, :payload::jsonb, :action::ccd.task_action,
+                    cast(:status as ccd.task_outbox_status), :nextAttemptAt)
             returning id
             """,
         params,
@@ -70,7 +72,7 @@ public class TaskOutboxRepository {
             with claimable as (
               select o.id
               from ccd.task_outbox o
-              where o.status::text in (:newStatus, :failedStatus, :processingStatus)
+              where o.status::text in (:newStatus, :waitingStatus, :failedStatus, :processingStatus)
                 and (o.next_attempt_at is null or o.next_attempt_at <= localtimestamp)
                 and (:maxAttempts = 0 or o.attempt_count < :maxAttempts)
                 and not exists (
@@ -78,7 +80,13 @@ public class TaskOutboxRepository {
                   from ccd.task_outbox prior
                   where prior.case_id = o.case_id
                     and prior.id < o.id
-                    and prior.status::text in (:newStatus, :failedStatus, :processingStatus)
+                    and (
+                      prior.status::text in (:newStatus, :failedStatus, :processingStatus)
+                      or (
+                        prior.status::text = :waitingStatus
+                        and (prior.next_attempt_at is null or prior.next_attempt_at <= localtimestamp)
+                      )
+                    )
                     and (:maxAttempts = 0 or prior.attempt_count < :maxAttempts)
                 )
               order by o.id
@@ -104,6 +112,7 @@ public class TaskOutboxRepository {
             """,
         Map.of(
             "newStatus", TaskOutboxStatus.NEW.name(),
+            "waitingStatus", TaskOutboxStatus.WAITING.name(),
             "failedStatus", TaskOutboxStatus.FAILED.name(),
             "processingStatus", TaskOutboxStatus.PROCESSING.name(),
             "processingTimeoutMillis", processingTimeout.toMillis(),
@@ -127,7 +136,7 @@ public class TaskOutboxRepository {
             from ccd.task_outbox o
             where o.case_id = :caseId
               and o.id > :afterId
-              and o.status::text in (:newStatus, :failedStatus, :processingStatus)
+              and o.status::text in (:newStatus, :waitingStatus, :failedStatus, :processingStatus)
               and (:maxAttempts = 0 or o.attempt_count < :maxAttempts)
             order by o.id
             limit 1
@@ -136,6 +145,7 @@ public class TaskOutboxRepository {
             "caseId", caseId,
             "afterId", afterId,
             "newStatus", TaskOutboxStatus.NEW.name(),
+            "waitingStatus", TaskOutboxStatus.WAITING.name(),
             "failedStatus", TaskOutboxStatus.FAILED.name(),
             "processingStatus", TaskOutboxStatus.PROCESSING.name(),
             "maxAttempts", maxAttempts

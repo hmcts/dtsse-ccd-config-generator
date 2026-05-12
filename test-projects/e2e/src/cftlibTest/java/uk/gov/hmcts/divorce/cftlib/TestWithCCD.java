@@ -1560,7 +1560,7 @@ public class TestWithCCD extends CftlibTest {
                 + " AND requested_action = :action::ccd.task_action ORDER BY id DESC LIMIT 1",
             Map.of("caseId", caseIdValue, "action", TaskAction.INITIATE.getId())
         );
-        assertThat(statusRow.get("status"), equalTo("NEW"));
+        assertThat(statusRow.get("status"), equalTo("WAITING"));
 
         db.update(
             "UPDATE ccd.task_outbox SET next_attempt_at = NOW() - INTERVAL '1 second'"
@@ -1648,7 +1648,7 @@ public class TestWithCCD extends CftlibTest {
                     + " AND requested_action = :action::ccd.task_action ORDER BY id DESC LIMIT 1",
                 Map.of("caseId", caseIdValue, "action", TaskAction.INITIATE.getId())
             );
-            assertThat(delayedRow.get("status"), equalTo("NEW"));
+            assertThat(delayedRow.get("status"), equalTo("WAITING"));
             assertThat(delayedRow.get("next_attempt_at"), is(notNullValue()));
         });
 
@@ -1682,10 +1682,10 @@ public class TestWithCCD extends CftlibTest {
             assertThat(count, equalTo(2));
         });
 
-        // While delayed INITIATE is still waiting on next_attempt_at, COMPLETE must not be processed.
-        await().during(Duration.ofSeconds(3)).atMost(Duration.ofSeconds(10)).untilAsserted(() -> {
+        // While delayed INITIATE is still waiting on next_attempt_at, later rows for the case may be processed.
+        await().atMost(Duration.ofSeconds(45)).untilAsserted(() -> {
             Map<String, Object> completeRow = queryLatestCurrentOutboxRow(caseIdValue, TaskAction.COMPLETE);
-            assertThat(completeRow.get("status"), equalTo("NEW"));
+            assertThat(completeRow.get("status"), equalTo("PROCESSED"));
         });
 
         db.update(
@@ -1699,11 +1699,6 @@ public class TestWithCCD extends CftlibTest {
             Map<String, Object> initiateProcessed = queryLatestCurrentOutboxRow(caseIdValue, TaskAction.INITIATE);
             assertThat(initiateProcessed.get("status"), equalTo("PROCESSED"));
         });
-        await().atMost(Duration.ofSeconds(45)).untilAsserted(() -> {
-            Map<String, Object> completeProcessed = queryLatestCurrentOutboxRow(caseIdValue, TaskAction.COMPLETE);
-            assertThat(completeProcessed.get("status"), equalTo("PROCESSED"));
-        });
-
         Map<String, Object> processedOrder = db.queryForMap(
             "SELECT"
                 + " ("
@@ -1733,7 +1728,7 @@ public class TestWithCCD extends CftlibTest {
         LocalDateTime completeProcessedAt = (LocalDateTime) processedOrder.get("complete_processed_at");
         assertThat(initiateProcessedAt, is(notNullValue()));
         assertThat(completeProcessedAt, is(notNullValue()));
-        assertThat(completeProcessedAt.isBefore(initiateProcessedAt), is(false));
+        assertThat(completeProcessedAt.isBefore(initiateProcessedAt), is(true));
     }
 
     @SneakyThrows
