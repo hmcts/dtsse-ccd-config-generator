@@ -18,6 +18,7 @@ import uk.gov.hmcts.ccd.sdk.api.CaseRoleToAccessProfile.CaseRoleToAccessProfileB
 import uk.gov.hmcts.ccd.sdk.api.ComplexTypeAuthorisation;
 import uk.gov.hmcts.ccd.sdk.api.DecentralisedConfigBuilder;
 import uk.gov.hmcts.ccd.sdk.api.Event;
+import uk.gov.hmcts.ccd.sdk.api.EventDefaults;
 import uk.gov.hmcts.ccd.sdk.api.EventTypeBuilder;
 import uk.gov.hmcts.ccd.sdk.api.HasRole;
 import uk.gov.hmcts.ccd.sdk.api.NoticeOfChange.NoticeOfChangeBuilder;
@@ -82,6 +83,11 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements Decentralised
   @Override
   public EventTypeBuilderImpl<T, R, S> event(final String id) {
     return new EventTypeBuilderImpl<>(config, events, id, null, null);
+  }
+
+  @Override
+  public EventDefaults eventDefaults() {
+    return config.eventDefaults;
   }
 
   @Override
@@ -258,6 +264,7 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements Decentralised
     Map<String, Event<T, R, S>> result = Maps.newHashMap();
     for (Map.Entry<String, List<Event.EventBuilder<T, R, S>>> cell : events.entrySet()) {
       for (Event.EventBuilder<T, R, S> builder : cell.getValue()) {
+        builder.applyDefaults(config.eventDefaults);
         Event<T, R, S> event = builder.doBuild();
         result.put(event.getId(), event);
       }

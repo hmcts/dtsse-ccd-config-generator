@@ -14,6 +14,8 @@ public interface ConfigBuilder<T, S, R extends HasRole> {
 
   EventTypeBuilder<T, R, S> event(String id);
 
+  EventDefaults eventDefaults();
+
   EventTypeBuilderImpl<T, R, S> attachScannedDocEvent();
 
   EventTypeBuilderImpl<T, R, S> handleSupplementaryEvent();

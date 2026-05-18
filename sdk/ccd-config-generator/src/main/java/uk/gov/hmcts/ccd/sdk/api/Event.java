@@ -56,9 +56,7 @@ public class Event<T, R extends HasRole, S> {
   }
 
 
-  @Builder.Default
-  // TODO: don't always add.
-  private String endButtonLabel = "Save and continue";
+  private String endButtonLabel;
   @Builder.Default
   private int displayOrder = -1;
 
@@ -75,6 +73,9 @@ public class Event<T, R extends HasRole, S> {
   public static class EventBuilder<T, R extends HasRole, S> {
 
     private FieldCollection.FieldCollectionBuilder<T, S, EventBuilder<T, R, S>> fieldsBuilder;
+    private boolean omitLiveFromSet;
+    private boolean omitPublishSet;
+    private boolean endButtonLabelSet;
 
     public static <T, R extends HasRole, S> EventBuilder<T, R, S> builder(
         String id, Class dataClass, PropertyUtils propertyUtils,
@@ -90,6 +91,7 @@ public class Event<T, R extends HasRole, S> {
           .builder(result, result, dataClass, propertyUtils);
       result.retries = new HashMap<>();
       result.callbackUrls = new HashMap<>();
+      result.endButtonLabel = "Save and continue";
 
       return result;
     }
@@ -130,21 +132,43 @@ public class Event<T, R extends HasRole, S> {
 
     public EventBuilder<T, R, S> publishToCamunda(boolean publishToCamunda) {
       this.publishToCamunda = publishToCamunda;
+      this.omitPublish = false;
+      this.omitPublishSet = true;
       return this;
     }
 
     public EventBuilder<T, R, S> publishToCamunda() {
       this.publishToCamunda = true;
+      this.omitPublish = false;
+      this.omitPublishSet = true;
       return this;
     }
 
     public EventBuilder<T, R, S> omitPublish() {
       this.omitPublish = true;
+      this.omitPublishSet = true;
       return this;
     }
 
     public EventBuilder<T, R, S> omitLiveFrom() {
       this.omitLiveFrom = true;
+      this.omitLiveFromSet = true;
+      return this;
+    }
+
+    public EventBuilder<T, R, S> includeLiveFrom() {
+      this.omitLiveFrom = false;
+      this.omitLiveFromSet = true;
+      return this;
+    }
+
+    public EventBuilder<T, R, S> noEndButtonLabel() {
+      return endButtonLabel("");
+    }
+
+    public EventBuilder<T, R, S> endButtonLabel(String label) {
+      this.endButtonLabel = label;
+      this.endButtonLabelSet = true;
       return this;
     }
 
@@ -224,6 +248,25 @@ public class Event<T, R extends HasRole, S> {
 
     public EventBuilder<T, R, S> submittedCallbackUrl(String url) {
       this.callbackUrls.put(Webhook.Submitted, url);
+      return this;
+    }
+
+    public EventBuilder<T, R, S> blankCallbackUrls() {
+      return aboutToStartCallbackUrl("")
+          .aboutToSubmitCallbackUrl("")
+          .submittedCallbackUrl("");
+    }
+
+    public EventBuilder<T, R, S> applyDefaults(EventDefaults defaults) {
+      if (defaults.isOmitLiveFrom() && !omitLiveFromSet) {
+        this.omitLiveFrom = true;
+      }
+      if (defaults.isOmitPublish() && !omitPublishSet) {
+        this.omitPublish = true;
+      }
+      if (defaults.hasEndButtonLabel() && !endButtonLabelSet) {
+        this.endButtonLabel = defaults.getEndButtonLabel();
+      }
       return this;
     }
 

@@ -17,6 +17,7 @@ import uk.gov.hmcts.ccd.sdk.api.CaseCategory;
 import uk.gov.hmcts.ccd.sdk.api.CaseRoleToAccessProfile;
 import uk.gov.hmcts.ccd.sdk.api.ComplexTypeAuthorisation;
 import uk.gov.hmcts.ccd.sdk.api.Event;
+import uk.gov.hmcts.ccd.sdk.api.EventDefaults;
 import uk.gov.hmcts.ccd.sdk.api.HasRole;
 import uk.gov.hmcts.ccd.sdk.api.NoticeOfChange;
 import uk.gov.hmcts.ccd.sdk.api.Permission;
@@ -53,6 +54,7 @@ public class ResolvedCCDConfig<T, S, R extends HasRole> {
 
   // Events by id
   ImmutableMap<String, Event<T, R, S>> events;
+  EventDefaults eventDefaults = new EventDefaults();
   List<Function<Map<String, Object>, Map<String, Object>>> preEventHooks = new ArrayList<>();
   List<Tab<T, R>> tabs;
   List<Search<T, R>> workBasketResultFields;
