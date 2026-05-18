@@ -24,6 +24,7 @@ public class AddCaseNumber implements CCDConfig<CaseData, State, UserRole> {
         .name("Add case number")
         .ttlIncrement(100)
         .grant(CRU, HMCTS_ADMIN)
+        .authorisationCaseEventColumn(HMCTS_ADMIN, "LiveFrom", "10/02/2023")
         .aboutToStartCallback(this::aboutToStart)
         .aboutToSubmitCallback(this::aboutToSubmit)
         .submittedCallback(this::submitted)

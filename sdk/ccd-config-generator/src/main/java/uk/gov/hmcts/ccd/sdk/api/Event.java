@@ -62,6 +62,7 @@ public class Event<T, R extends HasRole, S> {
   private int displayOrder = -1;
 
   private SetMultimap<R, Permission> grants;
+  private Map<R, Map<String, Object>> authorisationCaseEventColumns;
   private Set<String> historyOnlyRoles;
 
   public Set<String> getHistoryOnlyRoles() {
@@ -87,6 +88,7 @@ public class Event<T, R extends HasRole, S> {
       result.postState = postStates;
       result.dataClass = dataClass;
       result.grants = HashMultimap.create();
+      result.authorisationCaseEventColumns = new HashMap<>();
       result.historyOnlyRoles = new HashSet<>();
       result.fieldsBuilder = FieldCollection.FieldCollectionBuilder
           .builder(result, result, dataClass, propertyUtils);
@@ -227,6 +229,11 @@ public class Event<T, R extends HasRole, S> {
         }
       }
 
+      return this;
+    }
+
+    public EventBuilder<T, R, S> authorisationCaseEventColumn(R role, String column, Object value) {
+      authorisationCaseEventColumns.computeIfAbsent(role, ignored -> new HashMap<>()).put(column, value);
       return this;
     }
 

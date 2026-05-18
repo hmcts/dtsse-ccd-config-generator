@@ -29,6 +29,10 @@ class AuthorisationCaseEventGenerator<T, S, R extends HasRole> implements Config
         if (event.isOmitLiveFrom()) {
           entry.remove("LiveFrom");
         }
+        Map<String, Object> columns = event.getAuthorisationCaseEventColumns().get(role);
+        if (columns != null) {
+          entry.putAll(columns);
+        }
       }
     }
 
