@@ -1,0 +1,50 @@
+[
+  {
+    "CaseEventID": "componentHelpers",
+    "CaseFieldID": "caseFlags",
+    "CaseTypeID": "COMPONENT_HELPERS",
+    "DisplayContext": "OPTIONAL",
+    "FieldShowCondition": "flagLauncher=\"hidden\"",
+    "LiveFrom": "01/01/2017",
+    "PageDisplayOrder": 1,
+    "PageFieldDisplayOrder": 1,
+    "PageID": 1,
+    "RetainHiddenValue": "Yes"
+  },
+  {
+    "CaseEventID": "componentHelpers",
+    "CaseFieldID": "flagLauncher",
+    "CaseTypeID": "COMPONENT_HELPERS",
+    "DisplayContext": "OPTIONAL",
+    "DisplayContextParameter": "#ARGUMENT(CREATE)",
+    "LiveFrom": "01/01/2017",
+    "PageDisplayOrder": 1,
+    "PageFieldDisplayOrder": 2,
+    "PageID": 1
+  },
+  {
+    "CaseEventID": "componentHelpers",
+    "CaseFieldID": "caseLinks",
+    "CaseTypeID": "COMPONENT_HELPERS",
+    "DisplayContext": "OPTIONAL",
+    "FieldShowCondition": "componentLauncher = \"DO_NOT_SHOW\"",
+    "LiveFrom": "01/01/2017",
+    "PageDisplayOrder": 1,
+    "PageFieldDisplayOrder": 3,
+    "PageID": 1,
+    "RetainHiddenValue": "Y",
+    "ShowSummaryChangeOption": "Y"
+  },
+  {
+    "CaseEventID": "componentHelpers",
+    "CaseFieldID": "componentLauncher",
+    "CaseTypeID": "COMPONENT_HELPERS",
+    "DisplayContext": "OPTIONAL",
+    "DisplayContextParameter": "#ARGUMENT(UPDATE,LinkedCases)",
+    "LiveFrom": "01/01/2017",
+    "PageDisplayOrder": 1,
+    "PageFieldDisplayOrder": 4,
+    "PageID": 1,
+    "ShowSummaryChangeOption": "N"
+  }
+]

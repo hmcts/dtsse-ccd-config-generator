@@ -66,6 +66,14 @@ public class E2EConfigGenerationTests {
         CcdConfigComparator.assertEquivalent(expected, actual, JSONCompareMode.NON_EXTENSIBLE, "CaseTypeID");
     }
 
+    @Test
+    public void generatesComponentHelperConventions() {
+        Map<String, File> actual = CcdConfigComparator.dirToMap(
+            new File(tmp.getRoot(), "COMPONENT_HELPERS/CaseEventToFields"));
+        Map<String, File> expected = CcdConfigComparator.resourcesDirToMap("COMPONENT_HELPERS/CaseEventToFields");
+        CcdConfigComparator.assertEquivalent(expected, actual);
+    }
+
     @SneakyThrows
     private File resourceFile(String resourcePath) {
         URL url = Resources.getResource(resourcePath);

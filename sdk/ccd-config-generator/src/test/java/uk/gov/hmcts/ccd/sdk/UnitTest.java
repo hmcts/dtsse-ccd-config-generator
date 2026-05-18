@@ -4,8 +4,6 @@ import java.util.List;
 import org.junit.Test;
 import uk.gov.hmcts.ccd.sdk.api.CCDConfig;
 import uk.gov.hmcts.ccd.sdk.api.ConfigBuilder;
-import uk.gov.hmcts.ccd.sdk.api.DisplayContext;
-import uk.gov.hmcts.ccd.sdk.api.Field;
 import uk.gov.hmcts.ccd.sdk.api.HasRole;
 import uk.gov.hmcts.example.missingcomplex.Applicant;
 import uk.gov.hmcts.example.missingcomplex.MissingComplex;
@@ -36,16 +34,6 @@ public class UnitTest {
   }
 
   private static class TestCaseData {
-    private String caseFlags;
-    private String flagLauncher;
-
-    public String getCaseFlags() {
-      return caseFlags;
-    }
-
-    public String getFlagLauncher() {
-      return flagLauncher;
-    }
   }
 
   @Test
@@ -112,37 +100,5 @@ public class UnitTest {
     assertThat(resolved.events.get("overridden").isOmitPublish()).isFalse();
     assertThat(resolved.events.get("overridden").isPublishToCamunda()).isTrue();
     assertThat(resolved.events.get("overridden").getEndButtonLabel()).isEqualTo("Continue");
-  }
-
-  @Test
-  public void caseFlagFieldHelpersApplyCcdFlagLauncherConventions() {
-    class FlagConfig implements CCDConfig<TestCaseData, TestState, TestRole> {
-      @Override
-      public void configure(ConfigBuilder<TestCaseData, TestState, TestRole> builder) {
-        builder.event("createFlag")
-            .forAllStates()
-            .fields()
-            .field(TestCaseData::getCaseFlags)
-            .caseFlagBackingField()
-            .done()
-            .field(TestCaseData::getFlagLauncher)
-            .flagLauncherCreate();
-      }
-    }
-
-    ConfigResolver<TestCaseData, TestState, TestRole> generator = new ConfigResolver<>(List.of(new FlagConfig()));
-    ResolvedCCDConfig<TestCaseData, TestState, TestRole> resolved = generator.resolveCCDConfig();
-
-    Field<?, ?, ?, ?> caseFlags = resolved.events.get("createFlag").getFields().getFields().get(0).build();
-    assertThat(caseFlags.getContext()).isEqualTo(DisplayContext.Optional);
-    assertThat(caseFlags.getShowCondition()).isEqualTo("flagLauncher=\"hidden\"");
-    assertThat(caseFlags.getCaseEventColumns())
-        .containsEntry("PageColumnNumber", null)
-        .containsEntry("RetainHiddenValue", "Yes");
-
-    Field<?, ?, ?, ?> flagLauncher = resolved.events.get("createFlag").getFields().getFields().get(1).build();
-    assertThat(flagLauncher.getContext()).isEqualTo(DisplayContext.Optional);
-    assertThat(flagLauncher.getDisplayContextParameter()).isEqualTo("#ARGUMENT(CREATE)");
-    assertThat(flagLauncher.getCaseEventColumns()).containsEntry("PageColumnNumber", null);
   }
 }

@@ -140,6 +140,29 @@ public class Field<Type, StateType, Parent, Grandparent> {
           .caseEventColumn("PageColumnNumber", null);
     }
 
+    public FieldBuilder<Type, StateType, Parent, Grandparent> componentLauncherBackingField(String launcherFieldId) {
+      return optional()
+          .showSummary()
+          .showCondition(launcherFieldId + " = \"DO_NOT_SHOW\"")
+          .retainHiddenValue(true)
+          .caseEventColumn("PageColumnNumber", null);
+    }
+
+    public FieldBuilder<Type, StateType, Parent, Grandparent> componentLauncherCreate(String component) {
+      return componentLauncher("CREATE", component);
+    }
+
+    public FieldBuilder<Type, StateType, Parent, Grandparent> componentLauncherUpdate(String component) {
+      return componentLauncher("UPDATE", component);
+    }
+
+    public FieldBuilder<Type, StateType, Parent, Grandparent> componentLauncher(String argument, String component) {
+      return optional()
+          .displayContextParameter("#ARGUMENT(" + argument + "," + component + ")")
+          .caseEventColumn("PageColumnNumber", null)
+          .caseEventColumn("ShowSummaryChangeOption", "N");
+    }
+
     public FieldBuilder<Type, StateType, Parent, Grandparent> caseEventColumn(String column, Object value) {
       this.caseEventColumns.put(column, value);
       return this;
