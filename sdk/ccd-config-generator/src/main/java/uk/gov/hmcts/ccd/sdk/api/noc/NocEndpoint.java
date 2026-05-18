@@ -3,8 +3,8 @@ package uk.gov.hmcts.ccd.sdk.api.noc;
 import java.util.Objects;
 import java.util.Set;
 import java.util.function.BiFunction;
+import java.util.function.Function;
 import java.util.function.LongFunction;
-import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
 public final class NocEndpoint {
@@ -12,7 +12,7 @@ public final class NocEndpoint {
   public static final String XUI_WEBAPP_SERVICE = "xui_webapp";
 
   private final LongFunction<NocQuestionsResponse> questionHandler;
-  private final Predicate<NocAnswersRequest> answerVerificationHandler;
+  private final Function<NocAnswersRequest, NocAnswersResponse> answerVerificationHandler;
   private final BiFunction<String, NocAnswersRequest, NocSubmissionResponse> submissionHandler;
   private final Set<String> authorisedServices;
 
@@ -34,8 +34,8 @@ public final class NocEndpoint {
     return questionHandler.apply(caseId);
   }
 
-  public boolean verifyAnswers(NocAnswersRequest request) {
-    return answerVerificationHandler.test(request);
+  public NocAnswersResponse verifyAnswers(NocAnswersRequest request) {
+    return answerVerificationHandler.apply(request);
   }
 
   public NocSubmissionResponse submit(String authorisation, NocAnswersRequest request) {
@@ -49,7 +49,7 @@ public final class NocEndpoint {
   public static final class Builder {
 
     private LongFunction<NocQuestionsResponse> questionHandler;
-    private Predicate<NocAnswersRequest> answerVerificationHandler;
+    private Function<NocAnswersRequest, NocAnswersResponse> answerVerificationHandler;
     private BiFunction<String, NocAnswersRequest, NocSubmissionResponse> submissionHandler;
     private Set<String> authorisedServices = Set.of(XUI_WEBAPP_SERVICE);
 
@@ -61,7 +61,7 @@ public final class NocEndpoint {
       return this;
     }
 
-    public Builder verifyAnswers(Predicate<NocAnswersRequest> handler) {
+    public Builder verifyAnswers(Function<NocAnswersRequest, NocAnswersResponse> handler) {
       this.answerVerificationHandler = handler;
       return this;
     }

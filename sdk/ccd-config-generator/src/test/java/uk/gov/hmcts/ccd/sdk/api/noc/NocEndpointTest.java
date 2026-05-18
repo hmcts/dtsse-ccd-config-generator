@@ -19,14 +19,15 @@ public class NocEndpointTest {
         .build();
 
     NocQuestionsResponse questions = endpoint.getQuestions(1234567890123456L);
-    boolean verified = endpoint.verifyAnswers(new NocAnswersRequest(1234567890123456L, List.of()));
+    NocAnswersResponse verified = endpoint.verifyAnswers(new NocAnswersRequest(1234567890123456L, List.of()));
     NocSubmissionResponse submission = endpoint.submit(
         "Bearer token",
         new NocAnswersRequest(1234567890123456L, List.of())
     );
 
     assertThat(questions.questions()).hasSize(1);
-    assertThat(verified).isTrue();
+    assertThat(verified.isValid()).isTrue();
+    assertThat(verified.statusMessage()).isEqualTo("Notice of Change answers verified successfully");
     assertThat(submission.approvalStatus()).isEqualTo("APPROVED");
     assertThat(endpoint.isAuthorisedService(NocEndpoint.XUI_WEBAPP_SERVICE)).isTrue();
     assertThat(endpoint.isAuthorisedService("pcs_api")).isFalse();
@@ -39,6 +40,31 @@ public class NocEndpointTest {
         .hasMessage("questionHandler");
   }
 
+  @Test
+  public void invalidAnswerResponseShouldUseExistingNocErrorShape() {
+    NocAnswersResponse response = NocAnswersResponse.invalid(
+        "answers-not-matched-any-litigant",
+        "The answers did not match those for any litigant"
+    );
+
+    assertThat(response.status()).isEqualTo("BAD_REQUEST");
+    assertThat(response.code()).isEqualTo("answers-not-matched-any-litigant");
+    assertThat(response.message()).isEqualTo("The answers did not match those for any litigant");
+    assertThat(response.errors()).isEmpty();
+    assertThat(response.isValid()).isFalse();
+  }
+
+  @Test
+  public void approvedSubmissionResponseShouldOnlyCarryApprovalStatusData() {
+    NocSubmissionResponse response = NocSubmissionResponse.approved();
+
+    assertThat(response.approvalStatus()).isEqualTo("APPROVED");
+    assertThat(response.code()).isNull();
+    assertThat(response.message()).isNull();
+    assertThat(response.errors()).isNull();
+    assertThat(response.isApproved()).isTrue();
+  }
+
   private static class Handler {
 
     NocQuestionsResponse questions(long caseId) {
@@ -47,8 +73,8 @@ public class NocEndpointTest {
       ));
     }
 
-    boolean verify(NocAnswersRequest request) {
-      return true;
+    NocAnswersResponse verify(NocAnswersRequest request) {
+      return NocAnswersResponse.verified();
     }
 
     NocSubmissionResponse submit(String authorisation, NocAnswersRequest request) {

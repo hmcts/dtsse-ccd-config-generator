@@ -4,6 +4,9 @@ import java.util.List;
 import org.junit.Test;
 import uk.gov.hmcts.ccd.sdk.api.CCDConfig;
 import uk.gov.hmcts.ccd.sdk.api.ConfigBuilder;
+import uk.gov.hmcts.ccd.sdk.api.noc.NocAnswersResponse;
+import uk.gov.hmcts.ccd.sdk.api.noc.NocQuestionsResponse;
+import uk.gov.hmcts.ccd.sdk.api.noc.NocSubmissionResponse;
 import uk.gov.hmcts.example.missingcomplex.Applicant;
 import uk.gov.hmcts.example.missingcomplex.MissingComplex;
 import uk.gov.hmcts.reform.fpl.enums.State;
@@ -42,5 +45,27 @@ public class UnitTest {
     ConfigResolver<MissingComplex, State, UserRole> generator = new ConfigResolver<>(List.of(new MissingBug()));
     ResolvedCCDConfig<MissingComplex, State, UserRole> resolved = generator.resolveCCDConfig();
     assertThat(resolved.types).containsKeys(Applicant.class);
+  }
+
+  @Test
+  public void configBuilderCanConfigureNocEndpoint() {
+    class NocConfig implements CCDConfig<CaseData, State, UserRole> {
+      @Override
+      public void configure(ConfigBuilder<CaseData, State, UserRole> builder) {
+        builder.caseType("TEST", "Test", "Test case type");
+        builder.noc()
+            .questions(caseId -> new NocQuestionsResponse(List.of()))
+            .verifyAnswers(request -> NocAnswersResponse.verified())
+            .submit((authorisation, request) -> NocSubmissionResponse.approved());
+      }
+    }
+
+    ConfigResolver<CaseData, State, UserRole> generator = new ConfigResolver<>(List.of(new NocConfig()));
+    ResolvedCCDConfig<CaseData, State, UserRole> resolved = generator.resolveCCDConfig();
+
+    assertThat(resolved.getNocEndpoint()).isNotNull();
+    assertThat(resolved.getNocEndpoint().getQuestions(1234567890123456L).questions()).isEmpty();
+    assertThat(resolved.getNocEndpoint().verifyAnswers(null).isValid()).isTrue();
+    assertThat(resolved.getNocEndpoint().submit("Bearer token", null)).isEqualTo(NocSubmissionResponse.approved());
   }
 }

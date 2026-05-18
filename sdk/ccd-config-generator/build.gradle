@@ -12,9 +12,6 @@ dependencies {
     compileOnly group: 'org.projectlombok', name: 'lombok', version: '1.18.46'
     implementation "org.springframework.boot:spring-boot-autoconfigure"
     implementation "org.springframework.boot:spring-boot-starter-web"
-    compileOnly(group: 'com.github.hmcts', name: 'service-auth-provider-java-client', version: '5.3.3') {
-        transitive = false
-    }
     api(group: 'com.github.hmcts', name: 'core-case-data-store-client', version: '5.2.0') {
         // The config generator needs only the types defined in the CCD client library,
         // not all the runtime spring dependencies used by the CCD client.
@@ -30,11 +27,6 @@ dependencies {
     testImplementation group: 'commons-io', name: 'commons-io', version: '2.21.0'
     testImplementation group: 'org.assertj', name: 'assertj-core', version: '3.27.7'
     testImplementation group: 'org.springframework.boot', name: 'spring-boot-starter-test'
-    testImplementation(group: 'com.github.hmcts', name: 'service-auth-provider-java-client', version: '5.3.3') {
-        transitive = false
-    }
-
-
     implementation group: 'org.apache.commons', name: 'commons-lang3', version: '3.20.0'
     api 'com.google.guava:guava:33.6.0-jre'
 

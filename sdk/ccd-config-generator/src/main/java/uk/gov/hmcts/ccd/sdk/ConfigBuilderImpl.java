@@ -30,6 +30,7 @@ import uk.gov.hmcts.ccd.sdk.api.Tab.TabBuilder;
 import uk.gov.hmcts.ccd.sdk.api.TypedPropertyGetter;
 import uk.gov.hmcts.ccd.sdk.api.callback.Start;
 import uk.gov.hmcts.ccd.sdk.api.callback.Submit;
+import uk.gov.hmcts.ccd.sdk.api.noc.NocEndpoint;
 
 public class ConfigBuilderImpl<T, S, R extends HasRole> implements DecentralisedConfigBuilder<T, S, R> {
 
@@ -51,6 +52,7 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements Decentralised
   final Set<R> omitHistoryForRoles = new HashSet<>();
   final List<ComplexTypeAuthorisation<R>> complexTypeAuthorisations = Lists.newArrayList();
   private NoticeOfChangeBuilder<T, R> noticeOfChangeBuilder;
+  private NocEndpoint.Builder nocEndpointBuilder;
 
   public ConfigBuilderImpl(ResolvedCCDConfig<T, S, R> config) {
     this.config = config;
@@ -74,6 +76,7 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements Decentralised
     config.searchCriteria = buildBuilders(searchCriteria, SearchCriteriaBuilder::build);
     config.searchParties = buildBuilders(searchParty, SearchPartyBuilder::build);
     config.noticeOfChange = noticeOfChangeBuilder == null ? null : noticeOfChangeBuilder.build();
+    config.nocEndpoint = nocEndpointBuilder == null ? null : nocEndpointBuilder.build();
     config.complexTypeAuthorisations = Lists.newArrayList(complexTypeAuthorisations);
 
     return config;
@@ -225,6 +228,14 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements Decentralised
       noticeOfChangeBuilder = new NoticeOfChangeBuilder<>(config.caseClass, propertyUtils);
     }
     return noticeOfChangeBuilder;
+  }
+
+  @Override
+  public NocEndpoint.Builder noc() {
+    if (nocEndpointBuilder == null) {
+      nocEndpointBuilder = NocEndpoint.builder();
+    }
+    return nocEndpointBuilder;
   }
 
   @Override

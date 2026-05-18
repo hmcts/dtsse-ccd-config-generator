@@ -9,6 +9,7 @@ import uk.gov.hmcts.ccd.sdk.api.NoticeOfChange.NoticeOfChangeBuilder;
 import uk.gov.hmcts.ccd.sdk.api.Search.SearchBuilder;
 import uk.gov.hmcts.ccd.sdk.api.SearchCases.SearchCasesBuilder;
 import uk.gov.hmcts.ccd.sdk.api.Tab.TabBuilder;
+import uk.gov.hmcts.ccd.sdk.api.noc.NocEndpoint;
 
 public interface ConfigBuilder<T, S, R extends HasRole> {
 
@@ -68,6 +69,8 @@ public interface ConfigBuilder<T, S, R extends HasRole> {
   SearchParty.SearchPartyBuilder searchParty();
 
   NoticeOfChangeBuilder<T, R> noticeOfChange();
+
+  NocEndpoint.Builder noc();
 
   void grantComplexType(TypedPropertyGetter<T, ?> field, String listElementCode,
                         Set<Permission> permissions, R... roles);

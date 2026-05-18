@@ -24,6 +24,7 @@ import uk.gov.hmcts.ccd.sdk.api.SearchCases;
 import uk.gov.hmcts.ccd.sdk.api.SearchCriteria;
 import uk.gov.hmcts.ccd.sdk.api.SearchParty;
 import uk.gov.hmcts.ccd.sdk.api.Tab;
+import uk.gov.hmcts.ccd.sdk.api.noc.NocEndpoint;
 
 @RequiredArgsConstructor
 @Getter
@@ -63,5 +64,6 @@ public class ResolvedCCDConfig<T, S, R extends HasRole> {
   List<SearchCriteria> searchCriteria;
   List<SearchParty> searchParties;
   NoticeOfChange<T, R> noticeOfChange;
+  NocEndpoint nocEndpoint;
   List<ComplexTypeAuthorisation<R>> complexTypeAuthorisations;
 }
