@@ -76,7 +76,7 @@ class AuthorisationCaseStateGenerator<T, S, R extends HasRole> implements Config
       }
       Map<String, Object> permission = JsonUtils.caseRow(config.getCaseType());
       result.add(permission);
-      permission.put("CaseStateID", stateRolePermission.getRowKey());
+      permission.put("CaseStateID", stateRolePermission.getRowKey().toString());
       permission.put("UserRole", stateRolePermission.getColumnKey().getRole());
       permission.put("CRUD", Permission.toString(stateRolePermission.getValue()));
     }

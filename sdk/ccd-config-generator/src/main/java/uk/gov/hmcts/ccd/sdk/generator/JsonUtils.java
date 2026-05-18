@@ -123,6 +123,18 @@ public class JsonUtils {
     if (!Strings.isNullOrEmpty(annotation.categoryID())) {
       target.put("CategoryID", annotation.categoryID());
     }
+    if (!Strings.isNullOrEmpty(annotation.liveFrom())) {
+      target.put("LiveFrom", annotation.liveFrom());
+    }
+    if (!Strings.isNullOrEmpty(annotation.publish())) {
+      target.put("Publish", annotation.publish());
+    }
+    if (!Strings.isNullOrEmpty(annotation.fieldLabel())) {
+      target.put("FieldLabel", annotation.fieldLabel());
+    }
+    if (annotation.fieldOrder() > Integer.MIN_VALUE) {
+      target.put("FieldOrder", annotation.fieldOrder());
+    }
     if (annotation.min() > Integer.MIN_VALUE) {
       target.put("Min", annotation.min());
     }

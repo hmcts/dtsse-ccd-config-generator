@@ -5,6 +5,7 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Table;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -41,6 +42,7 @@ public class ResolvedCCDConfig<T, S, R extends HasRole> {
   String callbackHost = "";
   String caseName = "";
   String caseDesc = "";
+  Map<String, Object> caseTypeColumns = new HashMap<>();
   String jurId = "";
   String jurName = "";
   String jurDesc = "";

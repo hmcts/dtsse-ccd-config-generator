@@ -11,4 +11,7 @@ public class IntRef {
     return num;
   }
 
+  public void set(int num) {
+    this.num = num;
+  }
 }

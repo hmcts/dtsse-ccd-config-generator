@@ -37,6 +37,14 @@ public @interface CCD {
 
   String categoryID() default "";
 
+  String liveFrom() default "";
+
+  String publish() default "";
+
+  String fieldLabel() default "";
+
+  int fieldOrder() default Integer.MIN_VALUE;
+
   Class<? extends HasAccessControl>[] access() default {};
 
   boolean inheritAccessFromParent() default true;

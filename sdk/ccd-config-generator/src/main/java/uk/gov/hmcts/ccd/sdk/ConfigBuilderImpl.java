@@ -113,6 +113,11 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements Decentralised
   }
 
   @Override
+  public void caseTypeColumn(String column, Object value) {
+    config.caseTypeColumns.put(column, value);
+  }
+
+  @Override
   public void jurisdiction(String id, String name, String description) {
     config.jurId = id;
     config.jurName = name;

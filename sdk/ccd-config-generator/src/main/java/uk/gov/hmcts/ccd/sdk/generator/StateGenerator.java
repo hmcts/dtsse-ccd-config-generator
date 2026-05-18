@@ -39,7 +39,8 @@ class StateGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, S, R
     Map<String, Object> field = JsonUtils.caseRow(caseType);
     field.put("ID", id);
 
-    CCD ccd = enumType.getField(enumConstant.toString()).getAnnotation(CCD.class);
+    String enumFieldName = ((Enum<?>) enumConstant).name();
+    CCD ccd = enumType.getField(enumFieldName).getAnnotation(CCD.class);
     String name = ccd != null && !Strings.isNullOrEmpty(ccd.label()) ? ccd.label() :
         enumConstant.toString();
     field.put("Name", name);

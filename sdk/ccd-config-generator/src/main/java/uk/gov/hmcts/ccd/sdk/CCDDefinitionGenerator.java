@@ -61,5 +61,4 @@ public class CCDDefinitionGenerator {
       writer.writeConfig(f, c);
     }
   }
-
 }

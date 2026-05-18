@@ -43,8 +43,36 @@ public class CcdSdkPlugin implements Plugin<Project> {
     CCDConfig config = project.getExtensions().create("ccd", CCDConfig.class);
     config.configDir = project.getObjects().directoryProperty();
     config.configDir.set(project.getBuildDir());
+    config.xlsxTemplate = project.getObjects().fileProperty();
+    config.xlsxOutput = project.getObjects().fileProperty();
+    config.xlsxOutput.set(project.getLayout().getBuildDirectory().file("ccd-config/ccd-definition.xlsx"));
     // Register the config directory as a task output to use Gradle's up-to-date checking.
     generate.getOutputs().dir(config.configDir);
+
+    JavaExec xlsx = project.getTasks().create("generateCCDXlsx", JavaExec.class);
+    xlsx.setGroup("CCD tasks");
+    xlsx.setDescription("Generate a CCD XLSX workbook from generated CCD JSON and a template workbook.");
+    xlsx.getMainClass().set("uk.gov.hmcts.ccd.sdk.XlsxMain");
+    xlsx.setClasspath(
+        ssc.getByName("main").getRuntimeClasspath()
+            .plus(configGeneration));
+    xlsx.dependsOn(generate);
+    xlsx.getOutputs().file(config.xlsxOutput);
+    xlsx.doFirst(new Action<Task>() {
+      @Override
+      public void execute(Task task) {
+        if (!config.xlsxTemplate.isPresent()) {
+          throw new IllegalStateException("Set ccd.xlsxTemplate before running generateCCDXlsx");
+        }
+        xlsx.setArgs(Arrays.asList(
+            config.configDir.getAsFile().get().getAbsolutePath(),
+            config.xlsxTemplate.getAsFile().get().getAbsolutePath(),
+            config.xlsxOutput.getAsFile().get().getAbsolutePath(),
+            config.environment,
+            config.excludedFilenamePatterns
+        ));
+      }
+    });
 
     // We must use an anonymous class here for Gradle's up to date checks to work.
     generate.doFirst(new Action<Task>() {
@@ -114,11 +142,15 @@ public class CcdSdkPlugin implements Plugin<Project> {
   static class CCDConfig {
 
     private DirectoryProperty configDir;
+    private org.gradle.api.file.RegularFileProperty xlsxTemplate;
+    private org.gradle.api.file.RegularFileProperty xlsxOutput;
     private String rootPackage = "uk.gov.hmcts";
     private String caseType = "";
     private boolean decentralised = false;
     private boolean caseEventServiceBus = false;
     private boolean runtimeIndexing = false;
+    private String environment = "";
+    private String excludedFilenamePatterns = "";
 
     public CCDConfig() {
     }

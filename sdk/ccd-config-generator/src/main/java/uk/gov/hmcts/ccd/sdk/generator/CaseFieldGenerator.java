@@ -40,16 +40,24 @@ class CaseFieldGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
   public void write(
       File outputFolder, ResolvedCCDConfig<T, S, R> config) {
     List<Map<String, Object>> fields = toComplex(config.getCaseClass(), config.getCaseType());
+    fields.forEach(CaseFieldGenerator::removeComplexTypeOnlyMetadata);
 
     Map<String, Object> history = getField(config.getCaseType(), "caseHistory");
     history.put("Label", " ");
     history.put("FieldType", "CaseHistoryViewer");
     fields.add(history);
 
-    fields.addAll(getExplicitFields(config));
+    List<Map<String, Object>> explicitFields = getExplicitFields(config);
+    explicitFields.forEach(CaseFieldGenerator::removeComplexTypeOnlyMetadata);
+    fields.addAll(explicitFields);
 
     Path path = Paths.get(outputFolder.getPath(), "CaseField.json");
     JsonUtils.mergeInto(path, fields, new JsonUtils.OverwriteSpecific(OVERWRITES_FIELDS), "ID");
+  }
+
+  private static void removeComplexTypeOnlyMetadata(Map<String, Object> field) {
+    field.remove("FieldLabel");
+    field.remove("FieldOrder");
   }
 
   public static List<Map<String, Object>> toComplex(Class dataClass, String caseTypeId) {

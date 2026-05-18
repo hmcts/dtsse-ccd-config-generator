@@ -53,6 +53,16 @@ public class ComplexTypeGeneratorTest {
     private String stringField3;
   }
 
+  public static class CCDMetadataClass {
+    @CCD(
+        liveFrom = "10/02/2023",
+        publish = "N",
+        fieldLabel = "Hearing ID",
+        fieldOrder = 1
+    )
+    private String hearingID;
+  }
+
   ComplexTypeGenerator<CCDDisplayOrderClass, State, UserRole> complexTypeGenerator;
 
   @Test
@@ -87,5 +97,16 @@ public class ComplexTypeGeneratorTest {
       assertThat(generatedFromCCDTestClass.get(counter).get("Label")).isEqualTo(expected.get(counter));
       counter++;
     }
+  }
+
+  @Test
+  public void shouldApplyAdditionalCcdMetadata() {
+    List<Map<String, Object>> generated = CaseFieldGenerator
+      .toComplex(CCDMetadataClass.class, "CCDMetadataClass");
+
+    assertThat(generated.get(0).get("LiveFrom")).isEqualTo("10/02/2023");
+    assertThat(generated.get(0).get("Publish")).isEqualTo("N");
+    assertThat(generated.get(0).get("FieldLabel")).isEqualTo("Hearing ID");
+    assertThat(generated.get(0).get("FieldOrder")).isEqualTo(1);
   }
 }

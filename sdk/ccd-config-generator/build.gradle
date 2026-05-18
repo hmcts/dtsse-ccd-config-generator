@@ -33,6 +33,7 @@ dependencies {
     api 'com.google.guava:guava:33.6.0-jre'
 
     implementation 'com.fasterxml.jackson.core:jackson-databind'
+    implementation group: 'org.apache.poi', name: 'poi-ooxml', version: '5.4.1'
 }
 
 tasks.register('ccdConfigDiff', JavaExec) {

@@ -26,6 +26,9 @@ class AuthorisationCaseEventGenerator<T, S, R extends HasRole> implements Config
         entry.put("CaseEventID", event.getId());
         entry.put("UserRole", role.getRole());
         entry.put("CRUD", Permission.toString(event.getGrants().get(role)));
+        if (event.isOmitLiveFrom()) {
+          entry.remove("LiveFrom");
+        }
       }
     }
 

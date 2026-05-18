@@ -20,6 +20,12 @@ public interface ConfigBuilder<T, S, R extends HasRole> {
 
   void caseType(String caseType, String name, String description);
 
+  /**
+   * Add a raw column to the generated CaseType row.
+   * This covers CCD spreadsheet columns that are not modelled by the core DSL yet.
+   */
+  void caseTypeColumn(String column, Object value);
+
   void jurisdiction(String id, String name, String description);
 
   void shutterService();

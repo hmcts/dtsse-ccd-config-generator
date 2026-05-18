@@ -53,17 +53,27 @@ class CaseEventGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
     List<Map<String, Object>> result = Lists.newArrayList();
     Map<String, Object> data = JsonUtils.getField(event.getId());
     result.add(data);
+    if (event.isOmitLiveFrom()) {
+      data.remove("LiveFrom");
+    }
     data.put("Name", event.getName());
     data.put("Description", event.getDescription());
     data.put("DisplayOrder", resolveDisplayOrder(event));
     data.put("CaseTypeID", caseTypeId);
     JsonUtils.putYn(data, "ShowSummary", event.isShowSummary());
     JsonUtils.putYn(data, "ShowEventNotes", event.isShowEventNotes());
-    JsonUtils.putYn(data, "Publish", event.isPublishToCamunda());
+    if (!event.isOmitPublish()) {
+      JsonUtils.putYn(data, "Publish", event.isPublishToCamunda());
+    }
+    if (!Strings.isNullOrEmpty(event.getSignificantEvent())) {
+      data.put("SignificantEvent", event.getSignificantEvent());
+    }
     if (!Strings.isNullOrEmpty(event.getEndButtonLabel())) {
       data.put("EndButtonLabel", event.getEndButtonLabel());
     }
-    if (Objects.nonNull(event.getTtlIncrement())) {
+    if (Objects.nonNull(event.getTtlIncrementRaw())) {
+      data.put("TTLIncrement", event.getTtlIncrementRaw());
+    } else if (Objects.nonNull(event.getTtlIncrement())) {
       data.put("TTLIncrement", event.getTtlIncrement());
     }
 
@@ -114,11 +124,14 @@ class CaseEventGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
                                        Event<T, R, S> event,
                                        boolean enabled,
                                        CallbackMetadata metadata) {
-    if (!enabled) {
+    String rawUrl = event.getCallbackUrls().get(metadata.webhook());
+    if (rawUrl != null) {
+      target.put(metadata.callbackField(), rawUrl);
+    } else if (enabled) {
+      target.put(metadata.callbackField(), metadata.buildUrl(callbackHost, event.getId()));
+    } else {
       return;
     }
-    target.put(metadata.callbackField(),
-        metadata.buildUrl(callbackHost, event.getId()));
     String retry = event.getRetries().get(metadata.webhook());
     if (retry != null) {
       target.put(metadata.retriesField(), retry);

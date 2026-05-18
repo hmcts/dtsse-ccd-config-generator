@@ -14,6 +14,7 @@ public class PluginTest {
     project.getPlugins().apply("hmcts.ccd.sdk");
 
     assertNotNull(project.getTasks().findByName("generateCCDConfig"));
+    assertNotNull(project.getTasks().findByName("generateCCDXlsx"));
   }
 
 }

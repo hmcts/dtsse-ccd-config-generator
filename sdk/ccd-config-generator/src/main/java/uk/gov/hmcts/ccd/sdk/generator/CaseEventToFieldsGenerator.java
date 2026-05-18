@@ -57,6 +57,9 @@ class CaseEventToFieldsGenerator<T, S, R extends HasRole> implements ConfigGener
       row.put("PageID", pageId);
       row.put("PageDisplayOrder", field.getPageDisplayOrder());
       row.put("PageColumnNumber", 1);
+      if (event.isOmitLiveFrom()) {
+        row.remove("LiveFrom");
+      }
       applyMetadata(row, field, "CaseEventFieldLabel", "CaseEventFieldHint");
       applyMidEventCallback(row, event, config, collection, pageId, writtenCallbacks);
       applyPageShowCondition(row, collection, field);
@@ -127,6 +130,11 @@ class CaseEventToFieldsGenerator<T, S, R extends HasRole> implements ConfigGener
                                      Object pageId,
                                      Multimap<String, String> writtenCallbacks) {
     String pageKey = pageId.toString();
+    if (collection.getPagesToMidEventCallbackUrl().containsKey(pageKey)) {
+      row.put("CallBackURLMidEvent", collection.getPagesToMidEventCallbackUrl().get(pageKey));
+      writtenCallbacks.put(event.getId(), pageKey);
+      return;
+    }
     if (!collection.getPagesToMidEvent().containsKey(pageKey)) {
       return;
     }

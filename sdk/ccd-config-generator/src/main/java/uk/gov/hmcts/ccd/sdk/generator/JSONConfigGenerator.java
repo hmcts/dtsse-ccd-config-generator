@@ -46,7 +46,7 @@ public class JSONConfigGenerator<T, S, R extends HasRole> {
 
   private void generateCaseType(File outputfolder, ResolvedCCDConfig<T, S, R> builder) {
     List<Map<String, Object>> fields = Lists.newArrayList();
-    fields.add(Map.of(
+    Map<String, Object> row = new java.util.HashMap<>(Map.of(
         "LiveFrom", JsonUtils.DEFAULT_LIVE_FROM,
         "ID", builder.getCaseType(),
         "Name", builder.getCaseName(),
@@ -54,6 +54,8 @@ public class JSONConfigGenerator<T, S, R extends HasRole> {
         "JurisdictionID", builder.getJurId(),
         "SecurityClassification", "Public"
     ));
+    row.putAll(builder.getCaseTypeColumns());
+    fields.add(row);
     Path output = Paths.get(outputfolder.getPath(),"CaseType.json");
     JsonUtils.mergeInto(output, fields, new JsonUtils.AddMissing(), "ID");
   }

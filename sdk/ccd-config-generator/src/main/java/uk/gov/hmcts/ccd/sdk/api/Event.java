@@ -31,11 +31,16 @@ public class Event<T, R extends HasRole, S> {
   private String description;
   private String showCondition;
   private Map<Webhook, String> retries;
+  private Map<Webhook, String> callbackUrls;
   private boolean explicitGrants;
   private boolean showSummary;
   private boolean showEventNotes;
   private boolean publishToCamunda;
+  private boolean omitPublish;
+  private boolean omitLiveFrom;
+  private String significantEvent;
   private Integer ttlIncrement;
+  private String ttlIncrementRaw;
   private AboutToStart<T, S> aboutToStartCallback;
   private AboutToSubmit<T, S> aboutToSubmitCallback;
   private Submitted<T, S> submittedCallback;
@@ -84,6 +89,7 @@ public class Event<T, R extends HasRole, S> {
       result.fieldsBuilder = FieldCollection.FieldCollectionBuilder
           .builder(result, result, dataClass, propertyUtils);
       result.retries = new HashMap<>();
+      result.callbackUrls = new HashMap<>();
 
       return result;
     }
@@ -132,8 +138,32 @@ public class Event<T, R extends HasRole, S> {
       return this;
     }
 
+    public EventBuilder<T, R, S> omitPublish() {
+      this.omitPublish = true;
+      return this;
+    }
+
+    public EventBuilder<T, R, S> omitLiveFrom() {
+      this.omitLiveFrom = true;
+      return this;
+    }
+
+    public EventBuilder<T, R, S> significantEvent() {
+      return significantEvent("Yes");
+    }
+
+    public EventBuilder<T, R, S> significantEvent(String value) {
+      this.significantEvent = value;
+      return this;
+    }
+
     public EventBuilder<T, R, S> ttlIncrement(Integer ttlIncrement) {
       this.ttlIncrement = ttlIncrement;
+      return this;
+    }
+
+    public EventBuilder<T, R, S> ttlIncrement(String ttlIncrement) {
+      this.ttlIncrementRaw = ttlIncrement;
       return this;
     }
 
@@ -179,6 +209,21 @@ public class Event<T, R extends HasRole, S> {
         setRetries(value, retries);
       }
 
+      return this;
+    }
+
+    public EventBuilder<T, R, S> aboutToStartCallbackUrl(String url) {
+      this.callbackUrls.put(Webhook.AboutToStart, url);
+      return this;
+    }
+
+    public EventBuilder<T, R, S> aboutToSubmitCallbackUrl(String url) {
+      this.callbackUrls.put(Webhook.AboutToSubmit, url);
+      return this;
+    }
+
+    public EventBuilder<T, R, S> submittedCallbackUrl(String url) {
+      this.callbackUrls.put(Webhook.Submitted, url);
       return this;
     }
 

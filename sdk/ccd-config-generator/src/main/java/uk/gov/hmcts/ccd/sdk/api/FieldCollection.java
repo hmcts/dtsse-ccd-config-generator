@@ -38,6 +38,8 @@ public class FieldCollection {
 
   private Map<String, MidEvent> pagesToMidEvent;
 
+  private Map<String, String> pagesToMidEventCallbackUrl;
+
   private String rootFieldname;
 
   private String unwrappedParentPrefix;
@@ -68,6 +70,7 @@ public class FieldCollection {
       result.explicitFields = new ArrayList<>();
       result.pageShowConditions = new Hashtable<>();
       result.pagesToMidEvent = new HashMap<>();
+      result.pagesToMidEventCallbackUrl = new HashMap<>();
       result.pageLabels = new Hashtable<>();
       result.propertyUtils = propertyUtils;
       return result;
@@ -492,13 +495,23 @@ public class FieldCollection {
       return this;
     }
 
+    public FieldCollectionBuilder<Type, StateType, Parent> page(String id) {
+      return this.pageObj(id);
+    }
+
     public FieldCollectionBuilder<Type, StateType, Parent> page(String id, MidEvent<Type, StateType> callback) {
       this.pagesToMidEvent.put(id, callback);
       return this.page(id);
     }
 
-    public FieldCollectionBuilder<Type, StateType, Parent> page(String id) {
-      return this.pageObj(id);
+    public FieldCollectionBuilder<Type, StateType, Parent> pageDisplayOrder(int displayOrder) {
+      this.pageDisplayOrder.set(displayOrder);
+      return this;
+    }
+
+    public FieldCollectionBuilder<Type, StateType, Parent> pageWithCallbackUrl(String id, String callbackUrl) {
+      this.pagesToMidEventCallbackUrl.put(id, callbackUrl);
+      return this.page(id);
     }
 
     private FieldCollectionBuilder<Type, StateType, Parent> pageObj(String id) {
