@@ -343,7 +343,7 @@ public class FieldCollection {
       return this;
     }
 
-    <U> Field.FieldBuilder<U, StateType, Type, Parent> field(TypedPropertyGetter<Type, U> getter) {
+    public <U> Field.FieldBuilder<U, StateType, Type, Parent> field(TypedPropertyGetter<Type, U> getter) {
       String id = propertyUtils.getPropertyName(dataClass, getter);
       Class<U> clazz = propertyUtils.getPropertyType(dataClass, getter);
       FieldBuilder<U, StateType, Type, Parent> f = createField(id, clazz);

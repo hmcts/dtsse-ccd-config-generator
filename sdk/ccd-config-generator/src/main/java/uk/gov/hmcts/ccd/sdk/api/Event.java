@@ -32,6 +32,7 @@ public class Event<T, R extends HasRole, S> {
   private String showCondition;
   private Map<Webhook, String> retries;
   private Map<Webhook, String> callbackUrls;
+  private Map<String, Object> caseEventColumns;
   private boolean explicitGrants;
   private boolean showSummary;
   private boolean showEventNotes;
@@ -91,6 +92,7 @@ public class Event<T, R extends HasRole, S> {
           .builder(result, result, dataClass, propertyUtils);
       result.retries = new HashMap<>();
       result.callbackUrls = new HashMap<>();
+      result.caseEventColumns = new HashMap<>();
       result.endButtonLabel = "Save and continue";
 
       return result;
@@ -255,6 +257,11 @@ public class Event<T, R extends HasRole, S> {
       return aboutToStartCallbackUrl("")
           .aboutToSubmitCallbackUrl("")
           .submittedCallbackUrl("");
+    }
+
+    public EventBuilder<T, R, S> caseEventColumn(String column, Object value) {
+      this.caseEventColumns.put(column, value);
+      return this;
     }
 
     public EventBuilder<T, R, S> applyDefaults(EventDefaults defaults) {

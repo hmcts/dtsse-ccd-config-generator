@@ -1,5 +1,7 @@
 package uk.gov.hmcts.ccd.sdk.api;
 
+import java.util.HashMap;
+import java.util.Map;
 import lombok.Builder;
 import lombok.Data;
 import lombok.ToString;
@@ -28,6 +30,7 @@ public class Field<Type, StateType, Parent, Grandparent> {
   int pageDisplayOrder;
   String type;
   String fieldTypeParameter;
+  Map<String, Object> caseEventColumns;
   boolean mutableList;
   boolean immutableList;
   boolean immutable;
@@ -49,6 +52,7 @@ public class Field<Type, StateType, Parent, Grandparent> {
       result.parent = parent;
       result.context = DisplayContext.Complex;
       result.id = id;
+      result.caseEventColumns = new HashMap<>();
       return result;
     }
 
@@ -112,6 +116,11 @@ public class Field<Type, StateType, Parent, Grandparent> {
 
     public FieldBuilder<Type, StateType, Parent, Grandparent> readOnly() {
       this.context = DisplayContext.ReadOnly;
+      return this;
+    }
+
+    public FieldBuilder<Type, StateType, Parent, Grandparent> caseEventColumn(String column, Object value) {
+      this.caseEventColumns.put(column, value);
       return this;
     }
   }

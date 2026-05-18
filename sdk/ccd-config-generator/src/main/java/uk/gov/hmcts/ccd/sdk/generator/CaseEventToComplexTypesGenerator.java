@@ -89,6 +89,7 @@ class CaseEventToComplexTypesGenerator<T, S, R extends HasRole> implements
                              : field.getDefaultValue().toString();
             data.put("DefaultValue", value);
           }
+          JsonUtils.applyColumnOverrides(data, field.getCaseEventColumns());
         }
         if (null != complex.getComplexFields()) {
           expand(complex.getComplexFields(), entries, eventId, rfn, locator);

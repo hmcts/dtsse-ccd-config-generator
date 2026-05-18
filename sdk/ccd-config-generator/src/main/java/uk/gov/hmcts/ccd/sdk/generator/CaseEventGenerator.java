@@ -97,6 +97,7 @@ class CaseEventGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
     addCallbackIfConfigured(data, callbackHost, event,
         event.getSubmittedCallback() != null,
         CallbackMetadata.SUBMITTED);
+    JsonUtils.applyColumnOverrides(data, event.getCaseEventColumns());
 
     return result;
   }

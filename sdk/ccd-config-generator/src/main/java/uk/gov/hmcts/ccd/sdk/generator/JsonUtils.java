@@ -90,6 +90,16 @@ public class JsonUtils {
     target.put(key, condition ? "Y" : "N");
   }
 
+  public static void applyColumnOverrides(Map<String, Object> target, Map<String, Object> overrides) {
+    overrides.forEach((key, value) -> {
+      if (value == null) {
+        target.remove(key);
+      } else {
+        target.put(key, value);
+      }
+    });
+  }
+
   public static String yn(boolean condition) {
     return condition ? "Y" : "N";
   }

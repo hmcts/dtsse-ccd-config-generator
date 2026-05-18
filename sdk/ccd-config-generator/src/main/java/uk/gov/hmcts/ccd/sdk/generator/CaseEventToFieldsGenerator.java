@@ -66,6 +66,7 @@ class CaseEventToFieldsGenerator<T, S, R extends HasRole> implements ConfigGener
       applySummaryFlag(row, field);
       applyPageLabel(row, collection, field);
       applyDisplayContextParameter(row, field);
+      JsonUtils.applyColumnOverrides(row, field.getCaseEventColumns());
     }
 
     return entries;
