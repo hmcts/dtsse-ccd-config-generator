@@ -119,6 +119,27 @@ public class Field<Type, StateType, Parent, Grandparent> {
       return this;
     }
 
+    public FieldBuilder<Type, StateType, Parent, Grandparent> caseFlagBackingField() {
+      return optional()
+          .showCondition("flagLauncher=\"hidden\"")
+          .caseEventColumn("PageColumnNumber", null)
+          .caseEventColumn("RetainHiddenValue", "Yes");
+    }
+
+    public FieldBuilder<Type, StateType, Parent, Grandparent> flagLauncherCreate() {
+      return flagLauncher("CREATE");
+    }
+
+    public FieldBuilder<Type, StateType, Parent, Grandparent> flagLauncherUpdate() {
+      return flagLauncher("UPDATE");
+    }
+
+    public FieldBuilder<Type, StateType, Parent, Grandparent> flagLauncher(String argument) {
+      return optional()
+          .displayContextParameter("#ARGUMENT(" + argument + ")")
+          .caseEventColumn("PageColumnNumber", null);
+    }
+
     public FieldBuilder<Type, StateType, Parent, Grandparent> caseEventColumn(String column, Object value) {
       this.caseEventColumns.put(column, value);
       return this;
