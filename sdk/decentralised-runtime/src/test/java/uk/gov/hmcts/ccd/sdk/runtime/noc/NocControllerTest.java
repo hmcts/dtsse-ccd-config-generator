@@ -157,10 +157,7 @@ public class NocControllerTest {
 
     @Override
     NocAnswersResponse verify(NocAnswersRequest request) {
-      return NocAnswersResponse.invalid(
-          "answers-not-matched-any-litigant",
-          "The answers did not match those for any litigant"
-      );
+      return NocAnswersResponse.answersNotMatchedAnyLitigant();
     }
   }
 

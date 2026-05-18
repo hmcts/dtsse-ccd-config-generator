@@ -18,8 +18,32 @@ public record NocAnswersResponse(
     return new NocAnswersResponse("Notice of Change answers verified successfully", null, null, null, null);
   }
 
+  public static NocAnswersResponse invalid(NocError error, Object... args) {
+    return invalid(error.code(), error.message(args));
+  }
+
   public static NocAnswersResponse invalid(String code, String message) {
     return new NocAnswersResponse(null, "BAD_REQUEST", message, code, List.of());
+  }
+
+  public static NocAnswersResponse answersEmpty() {
+    return invalid(NocError.ANSWERS_EMPTY);
+  }
+
+  public static NocAnswersResponse answersMismatchQuestions(int expected, int received) {
+    return invalid(NocError.ANSWERS_MISMATCH_QUESTIONS, expected, received);
+  }
+
+  public static NocAnswersResponse noAnswerProvidedForQuestion(String questionId) {
+    return invalid(NocError.NO_ANSWER_PROVIDED_FOR_QUESTION, questionId);
+  }
+
+  public static NocAnswersResponse answersNotMatchedAnyLitigant() {
+    return invalid(NocError.ANSWERS_NOT_MATCHED_ANY_LITIGANT);
+  }
+
+  public static NocAnswersResponse answersNotIdentifyLitigant() {
+    return invalid(NocError.ANSWERS_NOT_IDENTIFY_LITIGANT);
   }
 
   @JsonIgnore

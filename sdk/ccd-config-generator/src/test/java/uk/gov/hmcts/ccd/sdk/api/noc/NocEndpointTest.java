@@ -42,16 +42,23 @@ public class NocEndpointTest {
 
   @Test
   public void invalidAnswerResponseShouldUseExistingNocErrorShape() {
-    NocAnswersResponse response = NocAnswersResponse.invalid(
-        "answers-not-matched-any-litigant",
-        "The answers did not match those for any litigant"
-    );
+    NocAnswersResponse response = NocAnswersResponse.answersNotMatchedAnyLitigant();
 
     assertThat(response.status()).isEqualTo("BAD_REQUEST");
     assertThat(response.code()).isEqualTo("answers-not-matched-any-litigant");
     assertThat(response.message()).isEqualTo("The answers did not match those for any litigant");
     assertThat(response.errors()).isEmpty();
     assertThat(response.isValid()).isFalse();
+  }
+
+  @Test
+  public void invalidAnswerResponseShouldFormatParameterizedNocErrorMessages() {
+    NocAnswersResponse response = NocAnswersResponse.answersMismatchQuestions(1, 2);
+
+    assertThat(response.code()).isEqualTo("answers-mismatch-questions");
+    assertThat(response.message()).isEqualTo(
+        "The number of provided answers must match the number of questions - expected 1 answers, received 2"
+    );
   }
 
   @Test

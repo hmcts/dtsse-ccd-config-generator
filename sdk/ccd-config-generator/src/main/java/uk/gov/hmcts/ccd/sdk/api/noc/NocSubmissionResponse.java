@@ -18,6 +18,10 @@ public record NocSubmissionResponse(
     return new NocSubmissionResponse("APPROVED", null, null, null, null);
   }
 
+  public static NocSubmissionResponse invalid(NocError error, Object... args) {
+    return invalid(error.code(), error.message(args));
+  }
+
   public static NocSubmissionResponse invalid(String code, String message) {
     return new NocSubmissionResponse(null, "BAD_REQUEST", message, code, List.of());
   }
