@@ -22,6 +22,7 @@ dependencies {
     implementation('com.github.hmcts:service-auth-provider-java-client:5.3.3') {
         transitive = false
     }
+    implementation 'io.github.openfeign:feign-core:13.6'
     implementation group: 'com.github.ben-manes.caffeine', name: 'caffeine'
     compileOnly 'org.projectlombok:lombok:1.18.46'
 
