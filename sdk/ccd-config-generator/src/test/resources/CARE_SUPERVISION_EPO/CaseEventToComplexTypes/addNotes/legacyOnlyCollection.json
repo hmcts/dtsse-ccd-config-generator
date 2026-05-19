@@ -1,0 +1,10 @@
+[
+  {
+    "CaseFieldID": "legacyOnlyCollection",
+    "CaseEventID": "addNotes",
+    "DisplayContext": "MANDATORY",
+    "ListElementCode": "uploadedDocument",
+    "EventElementLabel": "Upload",
+    "FieldDisplayOrder": 1
+  }
+]

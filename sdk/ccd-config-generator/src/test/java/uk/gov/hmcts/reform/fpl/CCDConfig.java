@@ -6,6 +6,7 @@ import static uk.gov.hmcts.ccd.sdk.api.Permission.CRU;
 import static uk.gov.hmcts.ccd.sdk.api.Permission.R;
 import static uk.gov.hmcts.ccd.sdk.api.SortOrder.*;
 import static java.util.List.of;
+import static uk.gov.hmcts.ccd.sdk.api.DisplayContext.Mandatory;
 import static uk.gov.hmcts.reform.fpl.enums.State.Deleted;
 import static uk.gov.hmcts.reform.fpl.enums.State.Gatekeeping;
 import static uk.gov.hmcts.reform.fpl.enums.State.Open;
@@ -160,6 +161,7 @@ public class CCDConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<CaseData, S
         .grant(R, LOCAL_AUTHORITY)
         .grant(new SolicitorAccess())
         .publishToCamunda()
+        .caseEventToComplexType("legacyOnlyCollection", "uploadedDocument", Mandatory, 1, "Upload", null)
         .fields()
         .optional(CaseData::getCaseNotes)
         .complex(CaseData::getHearingPreferences)

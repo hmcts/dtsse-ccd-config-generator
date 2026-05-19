@@ -10,6 +10,7 @@ import com.google.common.collect.Multimaps;
 import java.io.File;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import org.springframework.stereotype.Component;
@@ -30,6 +31,12 @@ class CaseEventToComplexTypesGenerator<T, S, R extends HasRole> implements
       List<Map<String, Object>> entries = Lists.newArrayList();
       List<FieldCollection.FieldCollectionBuilder> complexFields = collection.getComplexFields();
       expand(complexFields, entries, event.getId(), null, "");
+      List<Map<String, Object>> explicitRows = event.getCaseEventToComplexTypeRows();
+      for (Map<String, Object> explicitRow : explicitRows) {
+        Map<String, Object> row = new HashMap<>(explicitRow);
+        row.put("CaseEventID", event.getId());
+        entries.add(row);
+      }
 
       ImmutableListMultimap<String, Map<String, Object>> entriesByCaseField = Multimaps
           .index(entries, x -> x.get("CaseFieldID").toString());
@@ -41,7 +48,7 @@ class CaseEventToComplexTypesGenerator<T, S, R extends HasRole> implements
           JsonUtils.mergeInto(output, entriesByCaseField.get(fieldID),
               // TODO: remove show condition primary key.
               new AddMissing(), "CaseEventID", "CaseFieldID", "ListElementCode",
-              "FieldShowCondition", "DefaultValue");
+              "FieldDisplayOrder", "FieldShowCondition", "DefaultValue");
         }
       }
     }

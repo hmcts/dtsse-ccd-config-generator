@@ -2,9 +2,11 @@ package uk.gov.hmcts.ccd.sdk.api;
 
 import com.google.common.collect.HashMultimap;
 import com.google.common.collect.SetMultimap;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -33,6 +35,7 @@ public class Event<T, R extends HasRole, S> {
   private Map<Webhook, String> retries;
   private Map<Webhook, String> callbackUrls;
   private Map<String, Object> caseEventColumns;
+  private List<Map<String, Object>> caseEventToComplexTypeRows;
   private boolean explicitGrants;
   private boolean showSummary;
   private boolean showEventNotes;
@@ -95,6 +98,7 @@ public class Event<T, R extends HasRole, S> {
       result.retries = new HashMap<>();
       result.callbackUrls = new HashMap<>();
       result.caseEventColumns = new HashMap<>();
+      result.caseEventToComplexTypeRows = new ArrayList<>();
       result.endButtonLabel = "Save and continue";
 
       return result;
@@ -268,6 +272,55 @@ public class Event<T, R extends HasRole, S> {
 
     public EventBuilder<T, R, S> caseEventColumn(String column, Object value) {
       this.caseEventColumns.put(column, value);
+      return this;
+    }
+
+    public EventBuilder<T, R, S> caseEventToComplexType(
+        String caseFieldId,
+        String listElementCode,
+        DisplayContext context,
+        int fieldDisplayOrder) {
+      return caseEventToComplexType(caseFieldId, listElementCode, context, fieldDisplayOrder, null, null);
+    }
+
+    public EventBuilder<T, R, S> caseEventToComplexType(
+        String caseFieldId,
+        String listElementCode,
+        DisplayContext context,
+        int fieldDisplayOrder,
+        String eventElementLabel,
+        String retainHiddenValue) {
+      return caseEventToComplexType(caseFieldId, listElementCode, context, fieldDisplayOrder, eventElementLabel,
+          retainHiddenValue, null, null);
+    }
+
+    public EventBuilder<T, R, S> caseEventToComplexType(
+        String caseFieldId,
+        String listElementCode,
+        DisplayContext context,
+        int fieldDisplayOrder,
+        String eventElementLabel,
+        String retainHiddenValue,
+        String id,
+        String publish) {
+      Map<String, Object> row = new HashMap<>();
+      row.put("CaseFieldID", caseFieldId);
+      row.put("ListElementCode", listElementCode);
+      row.put("DisplayContext", context.toString().toUpperCase());
+      row.put("FieldDisplayOrder", fieldDisplayOrder);
+      if (eventElementLabel != null) {
+        row.put("EventElementLabel", eventElementLabel);
+      }
+      if (retainHiddenValue != null) {
+        row.put("RetainHiddenValue", retainHiddenValue);
+      }
+      if (id != null) {
+        row.put("ID", id);
+      }
+      if (publish != null) {
+        row.put("Publish", publish);
+      }
+      this.caseEventToComplexTypeRows.add(row);
       return this;
     }
 
