@@ -303,6 +303,20 @@ public class Event<T, R extends HasRole, S> {
         String retainHiddenValue,
         String id,
         String publish) {
+      return caseEventToComplexType(caseFieldId, listElementCode, context, fieldDisplayOrder, eventElementLabel,
+          retainHiddenValue, id, publish, null);
+    }
+
+    public EventBuilder<T, R, S> caseEventToComplexType(
+        String caseFieldId,
+        String listElementCode,
+        DisplayContext context,
+        int fieldDisplayOrder,
+        String eventElementLabel,
+        String retainHiddenValue,
+        String id,
+        String publish,
+        String eventHintText) {
       Map<String, Object> row = new HashMap<>();
       row.put("CaseFieldID", caseFieldId);
       row.put("ListElementCode", listElementCode);
@@ -319,6 +333,9 @@ public class Event<T, R extends HasRole, S> {
       }
       if (publish != null) {
         row.put("Publish", publish);
+      }
+      if (eventHintText != null) {
+        row.put("EventHintText", eventHintText);
       }
       this.caseEventToComplexTypeRows.add(row);
       return this;

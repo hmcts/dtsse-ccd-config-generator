@@ -5,6 +5,7 @@
     "DisplayContext": "MANDATORY",
     "ListElementCode": "uploadedDocument",
     "EventElementLabel": "Upload",
+    "EventHintText": "Upload the document",
     "FieldDisplayOrder": 1
   }
 ]

@@ -161,7 +161,8 @@ public class CCDConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<CaseData, S
         .grant(R, LOCAL_AUTHORITY)
         .grant(new SolicitorAccess())
         .publishToCamunda()
-        .caseEventToComplexType("legacyOnlyCollection", "uploadedDocument", Mandatory, 1, "Upload", null)
+        .caseEventToComplexType("legacyOnlyCollection", "uploadedDocument", Mandatory, 1, "Upload", null, null,
+            null, "Upload the document")
         .fields()
         .optional(CaseData::getCaseNotes)
         .complex(CaseData::getHearingPreferences)
