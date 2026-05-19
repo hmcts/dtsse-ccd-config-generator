@@ -145,21 +145,6 @@ class IdempotentReplayIntegrationTest {
     seedCaseData(CASE_ID, CASE_REFERENCE, version, revision);
   }
 
-  private DecentralisedCaseEvent buildEvent(long caseReference, String caseType) {
-    var caseDetails = new CaseDetails();
-    caseDetails.setReference(caseReference);
-    caseDetails.setJurisdiction("TEST");
-    caseDetails.setCaseTypeId(caseType);
-    caseDetails.setState("Submitted");
-    caseDetails.setVersion(1);
-    caseDetails.setSecurityClassification(SecurityClassification.PUBLIC);
-
-    return DecentralisedCaseEvent.builder()
-        .caseDetails(caseDetails)
-        .internalCaseId(caseReference)
-        .build();
-  }
-
   private void seedCaseData(long caseId, long caseReference, int version, long revision) {
     var params = new MapSqlParameterSource()
         .addValue("id", caseId)
@@ -267,6 +252,21 @@ class IdempotentReplayIntegrationTest {
         params,
         Long.class
     );
+  }
+
+  private DecentralisedCaseEvent buildEvent(long caseReference, String caseType) {
+    var caseDetails = new CaseDetails();
+    caseDetails.setReference(caseReference);
+    caseDetails.setJurisdiction("TEST");
+    caseDetails.setCaseTypeId(caseType);
+    caseDetails.setState("Submitted");
+    caseDetails.setVersion(1);
+    caseDetails.setSecurityClassification(SecurityClassification.PUBLIC);
+
+    return DecentralisedCaseEvent.builder()
+        .caseDetails(caseDetails)
+        .internalCaseId(caseReference)
+        .build();
   }
 
   @Configuration

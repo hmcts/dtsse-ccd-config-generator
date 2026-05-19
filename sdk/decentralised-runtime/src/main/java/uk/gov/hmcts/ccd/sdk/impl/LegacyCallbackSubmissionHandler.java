@@ -11,6 +11,7 @@ import org.springframework.stereotype.Component;
 import uk.gov.hmcts.ccd.data.casedetails.SecurityClassification;
 import uk.gov.hmcts.ccd.decentralised.dto.DecentralisedCaseEvent;
 import uk.gov.hmcts.ccd.decentralised.dto.DecentralisedSubmitEventResponse;
+import uk.gov.hmcts.ccd.sdk.LegacySubmitOutcome;
 import uk.gov.hmcts.ccd.sdk.ResolvedConfigRegistry;
 import uk.gov.hmcts.ccd.sdk.api.Event;
 import uk.gov.hmcts.ccd.sdk.api.Webhook;
@@ -48,7 +49,7 @@ class LegacyCallbackSubmissionHandler implements CaseSubmissionHandler {
   }
 
   @Override
-  public CaseSubmissionHandlerResult apply(DecentralisedCaseEvent event) {
+  public CaseSubmissionHandlerResult apply(DecentralisedCaseEvent event, String authorisation) {
     log.info("[legacy] Creating event '{}' for case reference: {}",
         event.getEventDetails().getEventId(), event.getCaseDetails().getReference());
 
@@ -168,9 +169,6 @@ class LegacyCallbackSubmissionHandler implements CaseSubmissionHandler {
         .eventId(event.getEventDetails().getEventId())
         .build();
   }
-
-  private record LegacySubmitOutcome(DecentralisedSubmitEventResponse response,
-                                     boolean runSubmittedCallback) {}
 
   @SneakyThrows
   private JsonNode snapshotWithFilteredFields(DecentralisedCaseEvent event) {

@@ -1,0 +1,62 @@
+[
+  {
+    "CaseTypeID": "ET_EnglandWales",
+    "ID": "tseAdmReply",
+    "CallBackURLAboutToSubmitEvent": "${ET_COS_URL}/tseAdmReply/aboutToSubmit",
+    "CallBackURLSubmittedEvent": "${ET_COS_URL}/tseAdmReply/submitted"
+  },
+  {
+    "CaseTypeID": "ET_EnglandWales",
+    "ID": "tseAdmin",
+    "CallBackURLAboutToSubmitEvent": "${ET_COS_URL}/tseAdmin/aboutToSubmit",
+    "CallBackURLSubmittedEvent": "${ET_COS_URL}/tseAdmin/submitted"
+  },
+  {
+    "CaseTypeID": "ET_EnglandWales",
+    "ID": "tseAdminCloseAnApplication",
+    "CallBackURLAboutToSubmitEvent": "${ET_COS_URL}/tseAdmin/aboutToSubmitCloseApplication",
+    "CallBackURLSubmittedEvent": "${ET_COS_URL}/tseAdmin/submittedCloseApplication"
+  },
+  {
+    "CaseTypeID": "ET_EnglandWales",
+    "ID": "initiateCase",
+    "CallBackURLAboutToSubmitEvent": "${ET_COS_URL}/postDefaultValues",
+    "CallBackURLSubmittedEvent": "${ET_COS_URL}/addServiceId"
+  },
+  {
+    "CaseTypeID": "ET_EnglandWales",
+    "ID": "et1Vetting",
+    "CallBackURLAboutToSubmitEvent": "${ET_COS_URL}/et1VettingAboutToSubmit",
+    "CallBackURLSubmittedEvent": "${ET_COS_URL}/finishEt1Vetting"
+  },
+  {
+    "CaseTypeID": "ET_EnglandWales",
+    "ID": "et3ResponseEmploymentDetails",
+    "CallBackURLAboutToSubmitEvent": "${ET_COS_URL}/et3Response/submitSection",
+    "CallBackURLSubmittedEvent": "${ET_COS_URL}/et3Response/sectionComplete"
+  },
+  {
+    "CaseTypeID": "ET_EnglandWales",
+    "ID": "et3ResponseDetails",
+    "CallBackURLAboutToSubmitEvent": "${ET_COS_URL}/et3Response/submitSection",
+    "CallBackURLSubmittedEvent": "${ET_COS_URL}/et3Response/sectionComplete"
+  },
+  {
+    "CaseTypeID": "ET_EnglandWales",
+    "ID": "downloadDraftEt3",
+    "CallBackURLAboutToSubmitEvent": "${ET_COS_URL}/et3Response/downloadDraft/aboutToSubmit",
+    "CallBackURLSubmittedEvent": "${ET_COS_URL}/et3Response/downloadDraft/submitted"
+  },
+  {
+    "CaseTypeID": "ET_EnglandWales",
+    "ID": "sendNotification",
+    "CallBackURLAboutToSubmitEvent": "${ET_COS_URL}/sendNotification/aboutToSubmit",
+    "CallBackURLSubmittedEvent": "${ET_COS_URL}/sendNotification/submitted"
+  },
+  {
+    "CaseTypeID": "ET_EnglandWales",
+    "ID": "respondNotification",
+    "CallBackURLAboutToSubmitEvent": "${ET_COS_URL}/respondNotification/aboutToSubmit",
+    "CallBackURLSubmittedEvent": "${ET_COS_URL}/respondNotification/submitted"
+  }
+]

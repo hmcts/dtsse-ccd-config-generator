@@ -1,5 +1,7 @@
 package uk.gov.hmcts.ccd.sdk;
 
+import java.util.Set;
+
 /**
  * Provides case data to CCD when CCD loads cases.
  *
@@ -33,5 +35,19 @@ public interface CaseView<CaseType, StateType extends Enum<StateType>> {
    */
   default CaseType getCase(CaseViewRequest<StateType> request, CaseType blobCase) {
     return getCase(request);
+  }
+
+  /**
+   * Explicitly declares supported CCD case type IDs for this projection.
+   *
+   * <p>
+   * Most services can omit this and rely on generic type matching. Override when
+   * generic matching is ambiguous (for example, multiple case types sharing the same
+   * case data and state types).
+   *
+   * @return supported case type IDs, or empty to use generic inference
+   */
+  default Set<String> caseTypeIds() {
+    return Set.of();
   }
 }
