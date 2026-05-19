@@ -537,6 +537,14 @@
   },
   {
     "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "FieldType": "Text",
+    "ID": "legacy Field ",
+    "Label": "Legacy field",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public"
+  },
+  {
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
     "FieldType": "Grounds",
     "ID": "grounds",
     "Label": " ",

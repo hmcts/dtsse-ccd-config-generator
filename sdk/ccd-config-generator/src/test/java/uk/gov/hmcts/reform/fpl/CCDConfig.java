@@ -297,6 +297,12 @@ public class CCDConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<CaseData, S
         .page("ExplicitAccessPage")
         .showCondition("caseName=\"\"")
         .optionalWithLabel(CaseData::getGatekeeperEmail, "Gatekeeper email (explicit)")
+        .field("legacy Field ")
+        .optional()
+        .type("Text")
+        .label("Legacy field")
+        .showSummary()
+        .done()
         .label("explicitAccessLabel", "Explicit access label");
   }
 
