@@ -38,12 +38,15 @@ public class CaseSubmissionService {
                                                  UUID idempotencyKey) {
     var eventConfig = getEventConfig(event);
     var user = idam.retrieveUser(authorisation);
-    var handler = eventConfig.getSubmitHandler() != null ? submitHandler : legacyHandler;
+    var handler = eventConfig
+        .filter(config -> config.getSubmitHandler() != null)
+        .map(ignored -> (CaseSubmissionHandler) submitHandler)
+        .orElse(legacyHandler);
 
     try {
       // The result of the transaction can be either an idempotency hit or a new submission.
       TransactionResult transactionResult = transactionTemplate.execute(status ->
-          executeSubmissionInTransaction(event, user, handler, idempotencyKey)
+          executeSubmissionInTransaction(event, user, handler, authorisation, idempotencyKey)
       );
 
       return transactionResult.existingEventId()
@@ -64,6 +67,7 @@ public class CaseSubmissionService {
   private TransactionResult executeSubmissionInTransaction(DecentralisedCaseEvent event,
                                                            IdamService.User user,
                                                            CaseSubmissionHandler handler,
+                                                           String authorisation,
                                                            UUID idempotencyKey) {
     // Idempotency Check inside the transaction to ensure atomicity
     Optional<Long> existingEventId = idempotencyEnforcer.lockCaseAndGetExistingEvent(
@@ -75,7 +79,7 @@ public class CaseSubmissionService {
     }
 
     // Delegate to the specific handler to apply the change
-    var handlerResult = handler.apply(event);
+    var handlerResult = handler.apply(event, authorisation);
     applyHandlerChanges(event, handlerResult);
 
     // Bookkeeping: update case_data metadata and optionally the legacy json blob
@@ -133,13 +137,11 @@ public class CaseSubmissionService {
     }
   }
 
-  private uk.gov.hmcts.ccd.sdk.api.Event<?, ?, ?> getEventConfig(DecentralisedCaseEvent event) {
-    try {
-      return resolvedConfigRegistry.getRequiredEvent(
-          event.getEventDetails().getCaseType(), event.getEventDetails().getEventId());
-    } catch (IllegalArgumentException ex) {
-      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, ex.getMessage(), ex);
-    }
+  private Optional<uk.gov.hmcts.ccd.sdk.api.Event<?, ?, ?>> getEventConfig(DecentralisedCaseEvent event) {
+    String caseType = event.getEventDetails().getCaseType();
+    String eventId = event.getEventDetails().getEventId();
+    return resolvedConfigRegistry.find(caseType)
+        .map(config -> config.getEvents().get(eventId));
   }
 
 

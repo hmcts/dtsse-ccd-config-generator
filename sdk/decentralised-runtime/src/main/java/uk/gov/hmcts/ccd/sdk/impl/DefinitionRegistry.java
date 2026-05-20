@@ -9,6 +9,7 @@ import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
+import uk.gov.hmcts.ccd.domain.model.definition.CaseEventDefinition;
 import uk.gov.hmcts.ccd.domain.model.definition.CaseTypeDefinition;
 
 @Component
@@ -24,6 +25,12 @@ class DefinitionRegistry {
 
   Optional<CaseTypeDefinition> find(String caseTypeId) {
     return Optional.ofNullable(loadDefinitions().get(caseTypeId));
+  }
+
+  Optional<CaseEventDefinition> findEvent(String caseTypeId, String eventId) {
+    return find(caseTypeId).flatMap(definition -> definition.getEvents().stream()
+        .filter(event -> eventId.equals(event.getId()))
+        .findFirst());
   }
 
   /**

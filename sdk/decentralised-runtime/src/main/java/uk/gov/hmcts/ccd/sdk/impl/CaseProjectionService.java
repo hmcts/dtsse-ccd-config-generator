@@ -33,6 +33,7 @@ class CaseProjectionService {
   private final CaseDataRepository caseDataRepository;
   private final ObjectMapper mapper;
   private final Map<String, CaseViewBinding> bindings;
+  private final ResolvedConfigRegistry configRegistry;
   private final DefinitionRegistry definitionRegistry;
   private final GlobalSearchProcessorService globalSearchProcessorService;
 
@@ -43,6 +44,7 @@ class CaseProjectionService {
                         DefinitionRegistry definitionRegistry) {
     this.caseDataRepository = caseDataRepository;
     this.mapper = mapper;
+    this.configRegistry = configRegistry;
     this.definitionRegistry = definitionRegistry;
     this.globalSearchProcessorService = new GlobalSearchProcessorService(new DefaultObjectMapperService(mapper));
     this.bindings = buildBindings(caseViews, configRegistry.asMap());
@@ -67,8 +69,15 @@ class CaseProjectionService {
 
     CaseViewBinding binding = bindings.get(caseTypeId);
     if (binding == null) {
-      throw new IllegalStateException(
-          "No CaseView registered for decentralised case type %s".formatted(caseTypeId));
+      if (configRegistry.find(caseTypeId).isPresent()) {
+        throw new IllegalStateException(
+            "No CaseView registered for decentralised case type %s".formatted(caseTypeId));
+      }
+      if (definitionRegistry.find(caseTypeId).isPresent()) {
+        caseDetails.setData(serialiseWithGlobalSearch(caseTypeId, caseDetails.getData()));
+        return raw;
+      }
+      return raw;
     }
 
     Object blobCase = mapper.convertValue(caseDetails.getData(), binding.caseDataType());
@@ -79,21 +88,14 @@ class CaseProjectionService {
     @SuppressWarnings({"rawtypes", "unchecked"})
     Object projected = ((CaseView) binding.caseView()).getCase(request, blobCase);
     Map<String, JsonNode> projectedData = mapper.convertValue(projected, JSON_NODE_MAP);
-    Map<String, JsonNode> serialised = definitionRegistry.find(caseTypeId)
-        .map(caseTypeDefinition -> globalSearchProcessorService.populateGlobalSearchData(
-            caseTypeDefinition,
-            projectedData
-        ))
-        .orElse(projectedData);
-
-    caseDetails.setData(serialised);
+    caseDetails.setData(serialiseWithGlobalSearch(caseTypeId, projectedData));
     return raw;
   }
 
   private Map<String, CaseViewBinding> buildBindings(List<CaseView<?, ?>> caseViews,
                                                      Map<String, ResolvedCCDConfig<?, ?, ?>> configs) {
     if (caseViews == null || caseViews.isEmpty()) {
-      throw new IllegalStateException("At least one CaseView bean is required when running decentralised.");
+      return Map.of();
     }
 
     Map<String, CaseViewBinding> resolvedBindings = new HashMap<>();
@@ -122,6 +124,15 @@ class CaseProjectionService {
     }
 
     return Map.copyOf(resolvedBindings);
+  }
+
+  private Map<String, JsonNode> serialiseWithGlobalSearch(String caseTypeId, Map<String, JsonNode> data) {
+    return definitionRegistry.find(caseTypeId)
+        .map(caseTypeDefinition -> globalSearchProcessorService.populateGlobalSearchData(
+            caseTypeDefinition,
+            data
+        ))
+        .orElse(data);
   }
 
   private Class<?> resolveCaseDataType(CaseView<?, ?> caseView) {
