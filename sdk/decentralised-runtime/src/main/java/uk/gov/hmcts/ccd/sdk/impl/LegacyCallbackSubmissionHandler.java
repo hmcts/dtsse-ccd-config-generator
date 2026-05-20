@@ -163,9 +163,7 @@ class LegacyCallbackSubmissionHandler implements CaseSubmissionHandler {
     String caseType = event.getEventDetails().getCaseType();
     String eventId = event.getEventDetails().getEventId();
 
-    boolean knownEvent = registry.find(caseType)
-        .map(config -> config.getEvents().containsKey(eventId))
-        .orElse(false)
+    boolean knownEvent = sdkEventExists(caseType, eventId)
         || definitionRegistry.findEvent(caseType, eventId).isPresent();
 
     if (!knownEvent) {
@@ -179,6 +177,18 @@ class LegacyCallbackSubmissionHandler implements CaseSubmissionHandler {
         .map(dispatcher -> dispatcher.resolve(caseType, eventId))
         .flatMap(Optional::stream)
         .findFirst();
+  }
+
+  private boolean sdkEventExists(String caseType, String eventId) {
+    if (registry.find(caseType).isEmpty()) {
+      return false;
+    }
+    try {
+      registry.getRequiredEvent(caseType, eventId);
+      return true;
+    } catch (IllegalArgumentException e) {
+      return false;
+    }
   }
 
   private record LegacySubmitOutcome(DecentralisedSubmitEventResponse response) {}

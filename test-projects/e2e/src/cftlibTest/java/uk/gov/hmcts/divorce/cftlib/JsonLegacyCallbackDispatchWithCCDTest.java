@@ -47,6 +47,7 @@ class JsonLegacyCallbackDispatchWithCCDTest extends CftlibTest {
       "application/vnd.uk.gov.hmcts.ccd-data-store-api.create-event.v2+json;charset=UTF-8";
   private static final String USER = "TEST_CASE_WORKER_USER@mailinator.com";
   private static final String EVENT_ID = "json-legacy-dispatch";
+  private static final String SERVICE_BASE_URL = "http://localhost:4013";
 
   @Autowired
   private IdamClient idam;
@@ -149,6 +150,62 @@ class JsonLegacyCallbackDispatchWithCCDTest extends CftlibTest {
     var duplicateResponse = HttpClientBuilder.create().build().execute(duplicateRequest);
     assertEquals(201, duplicateResponse.getStatusLine().getStatusCode());
     assertEquals(3, JsonLegacyCallbackController.submittedAttempts.get());
+  }
+
+  @Test
+  void syntheticDocumentUpdatedEventUsesExistingLegacySubmissionFlow() throws Exception {
+    var caseDetails = ccdApi.getCase(getAuthorisation(USER), getServiceAuth(), String.valueOf(caseRef));
+    Map<String, Object> data = new LinkedHashMap<>(caseDetails.getData());
+    data.put("applicationType", "jointApplication");
+
+    Map<String, Object> row = db.queryForMap(
+        "select id, version from ccd.case_data where reference = :reference",
+        Map.of("reference", caseRef)
+    );
+    Map<String, Object> decentralisedCaseDetails = Map.of(
+        "id", caseRef,
+        "jurisdiction", caseDetails.getJurisdiction(),
+        "case_type_id", caseDetails.getCaseTypeId(),
+        "state", caseDetails.getState(),
+        "case_data", data,
+        "security_classification", "PUBLIC",
+        "version", row.get("version")
+    );
+    Map<String, Object> payload = Map.of(
+        "internal_case_id", row.get("id"),
+        "case_details_before", Map.of(
+            "id", caseRef,
+            "jurisdiction", caseDetails.getJurisdiction(),
+            "case_type_id", caseDetails.getCaseTypeId(),
+            "state", caseDetails.getState(),
+            "case_data", caseDetails.getData(),
+            "security_classification", "PUBLIC",
+            "version", row.get("version")
+        ),
+        "case_details", decentralisedCaseDetails,
+        "event_details", Map.of(
+            "case_type", caseDetails.getCaseTypeId(),
+            "event_id", "DocumentUpdated",
+            "event_name", "Document updated",
+            "summary", "document updated",
+            "description", "document updated"
+        )
+    );
+
+    var request = new HttpPost(SERVICE_BASE_URL + "/ccd-persistence/cases");
+    request.addHeader("Content-Type", "application/json");
+    request.addHeader("Authorization", getAuthorisation(USER));
+    request.addHeader("Idempotency-Key", UUID.randomUUID().toString());
+    request.setEntity(new StringEntity(mapper.writeValueAsString(payload), ContentType.APPLICATION_JSON));
+
+    var response = HttpClientBuilder.create().build().execute(request);
+    assertEquals(200, response.getStatusLine().getStatusCode());
+    Map<String, Object> body = mapper.readValue(EntityUtils.toString(response.getEntity()), new TypeReference<>() {});
+    @SuppressWarnings("unchecked")
+    Map<String, Object> returnedCaseDetails = (Map<String, Object>) body.get("case_details");
+    @SuppressWarnings("unchecked")
+    Map<String, Object> returnedData = (Map<String, Object>) returnedCaseDetails.get("case_data");
+    assertEquals("jointApplication", returnedData.get("applicationType"));
   }
 
   private EventResponse submitEvent(Map<String, ?> data) throws Exception {

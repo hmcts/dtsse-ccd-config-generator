@@ -17,6 +17,7 @@ import uk.gov.hmcts.ccd.decentralised.dto.DecentralisedCaseEvent;
 import uk.gov.hmcts.ccd.decentralised.dto.DecentralisedSubmitEventResponse;
 import uk.gov.hmcts.ccd.domain.model.callbacks.AfterSubmitCallbackResponse;
 import uk.gov.hmcts.ccd.sdk.ResolvedConfigRegistry;
+import uk.gov.hmcts.ccd.sdk.api.Event;
 import uk.gov.hmcts.ccd.sdk.api.callback.SubmitResponse;
 
 @Service
@@ -137,11 +138,19 @@ public class CaseSubmissionService {
     }
   }
 
-  private Optional<uk.gov.hmcts.ccd.sdk.api.Event<?, ?, ?>> getEventConfig(DecentralisedCaseEvent event) {
+  private Optional<Event<?, ?, ?>> getEventConfig(DecentralisedCaseEvent event) {
     String caseType = event.getEventDetails().getCaseType();
     String eventId = event.getEventDetails().getEventId();
-    return resolvedConfigRegistry.find(caseType)
-        .map(config -> config.getEvents().get(eventId));
+
+    if (resolvedConfigRegistry.find(caseType).isEmpty()) {
+      return Optional.empty();
+    }
+
+    try {
+      return Optional.of(resolvedConfigRegistry.getRequiredEvent(caseType, eventId));
+    } catch (IllegalArgumentException e) {
+      return Optional.empty();
+    }
   }
 
 
