@@ -19,13 +19,16 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.core.MethodParameter;
 import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
 import org.springframework.util.ReflectionUtils;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.method.HandlerMethod;
+import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.servlet.mvc.method.RequestMappingInfo;
 import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping;
+import uk.gov.hmcts.ccd.domain.model.callbacks.CallbackResponse;
 import uk.gov.hmcts.ccd.sdk.api.Webhook;
 import uk.gov.hmcts.reform.ccd.client.model.CallbackRequest;
 import uk.gov.hmcts.reform.ccd.client.model.SubmittedCallbackResponse;
@@ -39,7 +42,6 @@ class SpringHandlerLegacyCallbackResolver implements LegacyCallbackResolver {
   private final RequestMappingHandlerMapping handlerMapping;
   private final ObjectMapper mapper;
   private final ObjectMapper callbackBodyMapper;
-  private final LegacyCallbackResponseAdapter responseAdapter;
   private final ObjectProvider<HttpServletRequest> currentRequest;
 
   private Map<LegacyCallbackBinding, SpringHandlerCallback> callbacks = Map.of();
@@ -48,14 +50,12 @@ class SpringHandlerLegacyCallbackResolver implements LegacyCallbackResolver {
                                       @Qualifier("requestMappingHandlerMapping")
                                       RequestMappingHandlerMapping handlerMapping,
                                       ObjectMapper mapper,
-                                      LegacyCallbackResponseAdapter responseAdapter,
                                       ObjectProvider<HttpServletRequest> currentRequest) {
     this.definitionRegistry = definitionRegistry;
     this.handlerMapping = handlerMapping;
     this.mapper = mapper;
     this.callbackBodyMapper = mapper.copy()
         .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
-    this.responseAdapter = responseAdapter;
     this.currentRequest = currentRequest;
   }
 
@@ -188,11 +188,11 @@ class SpringHandlerLegacyCallbackResolver implements LegacyCallbackResolver {
     }
 
     @Override
-    public Optional<LegacyAboutToSubmitCallbackResponse> aboutToSubmit(CallbackRequest request) {
+    public Optional<CallbackResponse> aboutToSubmit(CallbackRequest request) {
       if (aboutToSubmit == null) {
         return Optional.empty();
       }
-      return Optional.of(responseAdapter.aboutToSubmit(aboutToSubmit.invoke(request)));
+      return Optional.of(callbackResponse(aboutToSubmit.invoke(request), CallbackResponse.class));
     }
 
     @Override
@@ -200,7 +200,7 @@ class SpringHandlerLegacyCallbackResolver implements LegacyCallbackResolver {
       if (submitted == null) {
         return Optional.empty();
       }
-      return Optional.of(responseAdapter.submitted(submitted.invoke(request)));
+      return Optional.of(callbackResponse(submitted.invoke(request), SubmittedCallbackResponse.class));
     }
 
     @Override
@@ -305,5 +305,39 @@ class SpringHandlerLegacyCallbackResolver implements LegacyCallbackResolver {
       }
       return "";
     }
+  }
+
+  private <T> T callbackResponse(Object response, Class<T> responseType) {
+    Object body = successfulBody(response);
+    if (body == null) {
+      return emptyResponse(responseType);
+    }
+    if (responseType.isInstance(body)) {
+      return responseType.cast(body);
+    }
+    return mapper.convertValue(body, responseType);
+  }
+
+  private Object successfulBody(Object response) {
+    if (response instanceof ResponseEntity<?> entity) {
+      if (!entity.getStatusCode().is2xxSuccessful()) {
+        throw new ResponseStatusException(
+            entity.getStatusCode(),
+            "Legacy callback returned HTTP %s".formatted(entity.getStatusCode().value())
+        );
+      }
+      return entity.getBody();
+    }
+    return response;
+  }
+
+  private <T> T emptyResponse(Class<T> responseType) {
+    if (CallbackResponse.class.equals(responseType)) {
+      return responseType.cast(new CallbackResponse());
+    }
+    if (SubmittedCallbackResponse.class.equals(responseType)) {
+      return responseType.cast(SubmittedCallbackResponse.builder().build());
+    }
+    throw new IllegalArgumentException("Unsupported legacy callback response type %s".formatted(responseType));
   }
 }

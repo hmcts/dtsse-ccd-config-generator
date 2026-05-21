@@ -1,9 +1,11 @@
 package uk.gov.hmcts.ccd.sdk.impl;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
+import uk.gov.hmcts.ccd.domain.model.callbacks.CallbackResponse;
 import uk.gov.hmcts.ccd.sdk.ResolvedConfigRegistry;
 import uk.gov.hmcts.ccd.sdk.api.Event;
 import uk.gov.hmcts.ccd.sdk.api.Webhook;
@@ -18,7 +20,7 @@ class SdkLegacyCallbackResolver implements LegacyCallbackResolver {
 
   private final ResolvedConfigRegistry registry;
   private final CcdCallbackExecutor executor;
-  private final LegacyCallbackResponseAdapter responseAdapter;
+  private final ObjectMapper mapper;
 
   @Override
   public Optional<LegacyCallback> resolve(String caseTypeId, String eventId) {
@@ -40,11 +42,11 @@ class SdkLegacyCallbackResolver implements LegacyCallbackResolver {
     }
 
     @Override
-    public Optional<LegacyAboutToSubmitCallbackResponse> aboutToSubmit(CallbackRequest request) {
+    public Optional<CallbackResponse> aboutToSubmit(CallbackRequest request) {
       if (eventConfig.getAboutToSubmitCallback() == null) {
         return Optional.empty();
       }
-      return Optional.of(responseAdapter.aboutToSubmit(executor.aboutToSubmit(request)));
+      return Optional.ofNullable(callbackResponse(executor.aboutToSubmit(request)));
     }
 
     @Override
@@ -52,7 +54,7 @@ class SdkLegacyCallbackResolver implements LegacyCallbackResolver {
       if (eventConfig.getSubmittedCallback() == null) {
         return Optional.empty();
       }
-      return Optional.of(responseAdapter.submitted(executor.submitted(request)));
+      return Optional.of(executor.submitted(request));
     }
 
     @Override
@@ -60,5 +62,9 @@ class SdkLegacyCallbackResolver implements LegacyCallbackResolver {
       var retriesConfig = eventConfig.getRetries().get(Webhook.Submitted);
       return retriesConfig == null || retriesConfig.isEmpty() ? 1 : 3;
     }
+  }
+
+  private CallbackResponse callbackResponse(Object response) {
+    return response == null ? new CallbackResponse() : mapper.convertValue(response, CallbackResponse.class);
   }
 }

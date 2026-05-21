@@ -14,6 +14,7 @@ import org.springframework.web.server.ResponseStatusException;
 import uk.gov.hmcts.ccd.data.casedetails.SecurityClassification;
 import uk.gov.hmcts.ccd.decentralised.dto.DecentralisedCaseEvent;
 import uk.gov.hmcts.ccd.decentralised.dto.DecentralisedSubmitEventResponse;
+import uk.gov.hmcts.ccd.domain.model.callbacks.CallbackResponse;
 import uk.gov.hmcts.ccd.sdk.ResolvedConfigRegistry;
 import uk.gov.hmcts.ccd.sdk.api.callback.SubmitResponse;
 import uk.gov.hmcts.reform.ccd.client.model.CallbackRequest;
@@ -98,20 +99,20 @@ class LegacyCallbackSubmissionHandler implements CaseSubmissionHandler {
       CallbackRequest request = buildCallbackRequest(event);
       return resolved.aboutToSubmit(request);
     }).ifPresent(callbackResponse -> {
-      Map<String, JsonNode> normalisedData = callbackResponse.data() == null
+      Map<String, JsonNode> normalisedData = callbackResponse.getData() == null
           ? Map.of()
-          : callbackResponse.data();
+          : callbackResponse.getData();
       event.getCaseDetails().setData(normalisedData);
 
-      if (callbackResponse.state() != null) {
-        event.getCaseDetails().setState(callbackResponse.state());
+      if (callbackResponse.getState() != null) {
+        event.getCaseDetails().setState(callbackResponse.getState());
       }
-      if (callbackResponse.securityClassification() != null) {
-        event.getCaseDetails().setSecurityClassification(callbackResponse.securityClassification());
+      if (callbackResponse.getSecurityClassification() != null) {
+        event.getCaseDetails().setSecurityClassification(callbackResponse.getSecurityClassification());
       }
 
-      response.setErrors(callbackResponse.errors());
-      response.setWarnings(callbackResponse.warnings());
+      response.setErrors(callbackResponse.getErrors());
+      response.setWarnings(callbackResponse.getWarnings());
     });
 
     return response;
