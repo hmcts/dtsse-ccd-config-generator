@@ -47,7 +47,7 @@ public class CaseSubmissionService {
     try {
       // The result of the transaction can be either an idempotency hit or a new submission.
       TransactionResult transactionResult = transactionTemplate.execute(status ->
-          executeSubmissionInTransaction(event, user, handler, authorisation, idempotencyKey)
+          executeSubmissionInTransaction(event, user, handler, idempotencyKey)
       );
 
       return transactionResult.existingEventId()
@@ -68,7 +68,6 @@ public class CaseSubmissionService {
   private TransactionResult executeSubmissionInTransaction(DecentralisedCaseEvent event,
                                                            IdamService.User user,
                                                            CaseSubmissionHandler handler,
-                                                           String authorisation,
                                                            UUID idempotencyKey) {
     // Idempotency Check inside the transaction to ensure atomicity
     Optional<Long> existingEventId = idempotencyEnforcer.lockCaseAndGetExistingEvent(
@@ -80,7 +79,7 @@ public class CaseSubmissionService {
     }
 
     // Delegate to the specific handler to apply the change
-    var handlerResult = handler.apply(event, authorisation);
+    var handlerResult = handler.apply(event);
     applyHandlerChanges(event, handlerResult);
 
     // Bookkeeping: update case_data metadata and optionally the legacy json blob

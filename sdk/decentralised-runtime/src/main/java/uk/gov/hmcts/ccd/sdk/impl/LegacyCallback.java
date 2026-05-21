@@ -6,9 +6,9 @@ import uk.gov.hmcts.reform.ccd.client.model.SubmittedCallbackResponse;
 
 interface LegacyCallback {
 
-  Optional<LegacyAboutToSubmitCallbackResponse> aboutToSubmit(CallbackRequest request, String authorisation);
+  Optional<LegacyAboutToSubmitCallbackResponse> aboutToSubmit(CallbackRequest request);
 
-  Optional<SubmittedCallbackResponse> submitted(CallbackRequest request, String authorisation);
+  Optional<SubmittedCallbackResponse> submitted(CallbackRequest request);
 
   int submittedAttempts();
 }

@@ -3,6 +3,7 @@ package uk.gov.hmcts.ccd.sdk.impl;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.annotation.PostConstruct;
+import jakarta.servlet.http.HttpServletRequest;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.net.URI;
@@ -13,6 +14,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.core.MethodParameter;
 import org.springframework.core.annotation.Order;
@@ -38,6 +40,7 @@ class SpringHandlerLegacyCallbackDispatcher implements LegacyCallbackDispatcher 
   private final ObjectMapper mapper;
   private final ObjectMapper callbackBodyMapper;
   private final LegacyCallbackResponseAdapter responseAdapter;
+  private final ObjectProvider<HttpServletRequest> currentRequest;
 
   private Map<LegacyCallbackBinding, SpringHandlerCallback> callbacks = Map.of();
 
@@ -45,13 +48,15 @@ class SpringHandlerLegacyCallbackDispatcher implements LegacyCallbackDispatcher 
                                         @Qualifier("requestMappingHandlerMapping")
                                         RequestMappingHandlerMapping handlerMapping,
                                         ObjectMapper mapper,
-                                        LegacyCallbackResponseAdapter responseAdapter) {
+                                        LegacyCallbackResponseAdapter responseAdapter,
+                                        ObjectProvider<HttpServletRequest> currentRequest) {
     this.definitionRegistry = definitionRegistry;
     this.handlerMapping = handlerMapping;
     this.mapper = mapper;
     this.callbackBodyMapper = mapper.copy()
         .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
     this.responseAdapter = responseAdapter;
+    this.currentRequest = currentRequest;
   }
 
   @PostConstruct
@@ -183,20 +188,19 @@ class SpringHandlerLegacyCallbackDispatcher implements LegacyCallbackDispatcher 
     }
 
     @Override
-    public Optional<LegacyAboutToSubmitCallbackResponse> aboutToSubmit(CallbackRequest request,
-                                                                       String authorisation) {
+    public Optional<LegacyAboutToSubmitCallbackResponse> aboutToSubmit(CallbackRequest request) {
       if (aboutToSubmit == null) {
         return Optional.empty();
       }
-      return Optional.of(responseAdapter.aboutToSubmit(aboutToSubmit.invoke(request, authorisation)));
+      return Optional.of(responseAdapter.aboutToSubmit(aboutToSubmit.invoke(request)));
     }
 
     @Override
-    public Optional<SubmittedCallbackResponse> submitted(CallbackRequest request, String authorisation) {
+    public Optional<SubmittedCallbackResponse> submitted(CallbackRequest request) {
       if (submitted == null) {
         return Optional.empty();
       }
-      return Optional.of(responseAdapter.submitted(submitted.invoke(request, authorisation)));
+      return Optional.of(responseAdapter.submitted(submitted.invoke(request)));
     }
 
     @Override
@@ -215,11 +219,11 @@ class SpringHandlerLegacyCallbackDispatcher implements LegacyCallbackDispatcher 
       this.submittedAttempts = submittedAttempts;
     }
 
-    Object invoke(CallbackRequest request, String authorisation) {
+    Object invoke(CallbackRequest request) {
       Method method = handlerMethod.getMethod();
       ReflectionUtils.makeAccessible(method);
       try {
-        return method.invoke(handlerMethod.getBean(), arguments(request, authorisation));
+        return method.invoke(handlerMethod.getBean(), arguments(request));
       } catch (InvocationTargetException ex) {
         Throwable target = ex.getTargetException();
         if (target instanceof RuntimeException runtimeException) {
@@ -242,19 +246,19 @@ class SpringHandlerLegacyCallbackDispatcher implements LegacyCallbackDispatcher 
       return submittedAttempts;
     }
 
-    private Object[] arguments(CallbackRequest request, String authorisation) {
+    private Object[] arguments(CallbackRequest request) {
       MethodParameter[] parameters = handlerMethod.getMethodParameters();
       Object[] arguments = new Object[parameters.length];
       for (int i = 0; i < parameters.length; i++) {
-        arguments[i] = argument(parameters[i], request, authorisation);
+        arguments[i] = argument(parameters[i], request);
       }
       return arguments;
     }
 
-    private Object argument(MethodParameter parameter, CallbackRequest request, String authorisation) {
+    private Object argument(MethodParameter parameter, CallbackRequest request) {
       RequestHeader requestHeader = parameter.getParameterAnnotation(RequestHeader.class);
       if (requestHeader != null) {
-        return headerArgument(parameter.getParameterType(), headerName(requestHeader), authorisation);
+        return headerArgument(parameter.getParameterType(), headerName(requestHeader));
       }
 
       RequestBody requestBody = parameter.getParameterAnnotation(RequestBody.class);
@@ -276,19 +280,20 @@ class SpringHandlerLegacyCallbackDispatcher implements LegacyCallbackDispatcher 
       return callbackBodyMapper.convertValue(request, parameterType);
     }
 
-    private Object headerArgument(Class<?> parameterType, String headerName, String authorisation) {
+    private Object headerArgument(Class<?> parameterType, String headerName) {
       if (!"authorization".equalsIgnoreCase(headerName)) {
         return null;
       }
+      String authorizationHeader = currentRequest.getObject().getHeader(HttpHeaders.AUTHORIZATION);
       if (String.class.equals(parameterType)) {
-        return authorisation;
+        return authorizationHeader;
       }
       if (HttpHeaders.class.isAssignableFrom(parameterType)) {
         HttpHeaders headers = new HttpHeaders();
-        headers.setBearerAuth(authorisation.replaceFirst("(?i)^Bearer\\s+", ""));
+        headers.set(HttpHeaders.AUTHORIZATION, authorizationHeader);
         return headers;
       }
-      return mapper.convertValue(authorisation, parameterType);
+      return mapper.convertValue(authorizationHeader, parameterType);
     }
 
     private String headerName(RequestHeader requestHeader) {

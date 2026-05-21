@@ -50,12 +50,12 @@ class LegacyCallbackSubmissionHandler implements CaseSubmissionHandler {
   }
 
   @Override
-  public CaseSubmissionHandlerResult apply(DecentralisedCaseEvent event, String authorisation) {
+  public CaseSubmissionHandlerResult apply(DecentralisedCaseEvent event) {
     log.info("[legacy] Creating event '{}' for case reference: {}",
         event.getEventDetails().getEventId(), event.getCaseDetails().getReference());
 
     Optional<LegacyCallback> callback = resolveCallback(event);
-    var submitResponse = prepareLegacySubmit(event, callback, authorisation);
+    var submitResponse = prepareLegacySubmit(event, callback);
     if (submitResponse.getErrors() != null && !submitResponse.getErrors().isEmpty()) {
       throw new CallbackValidationException(submitResponse.getErrors(), submitResponse.getWarnings());
     }
@@ -78,7 +78,7 @@ class LegacyCallbackSubmissionHandler implements CaseSubmissionHandler {
               .warnings(warnings);
 
           SubmittedCallbackResponse submittedResponse = callback
-              .flatMap(resolved -> runSubmittedCallback(resolved, event, authorisation))
+              .flatMap(resolved -> runSubmittedCallback(resolved, event))
               .orElse(null);
 
           if (submittedResponse != null) {
@@ -91,13 +91,12 @@ class LegacyCallbackSubmissionHandler implements CaseSubmissionHandler {
   }
 
   private DecentralisedSubmitEventResponse prepareLegacySubmit(DecentralisedCaseEvent event,
-                                                               Optional<LegacyCallback> callback,
-                                                               String authorisation) {
+                                                               Optional<LegacyCallback> callback) {
     var response = new DecentralisedSubmitEventResponse();
 
     callback.flatMap(resolved -> {
       CallbackRequest request = buildCallbackRequest(event);
-      return resolved.aboutToSubmit(request, authorisation);
+      return resolved.aboutToSubmit(request);
     }).ifPresent(callbackResponse -> {
       Map<String, JsonNode> normalisedData = callbackResponse.data() == null
           ? Map.of()
@@ -119,8 +118,7 @@ class LegacyCallbackSubmissionHandler implements CaseSubmissionHandler {
   }
 
   private Optional<SubmittedCallbackResponse> runSubmittedCallback(LegacyCallback callback,
-                                                                  DecentralisedCaseEvent event,
-                                                                  String authorisation) {
+                                                                  DecentralisedCaseEvent event) {
     String caseType = event.getEventDetails().getCaseType();
     String eventId = event.getEventDetails().getEventId();
 
@@ -129,7 +127,7 @@ class LegacyCallbackSubmissionHandler implements CaseSubmissionHandler {
 
     for (int attempt = 0; attempt < attempts; attempt++) {
       try {
-        Optional<SubmittedCallbackResponse> submitted = callback.submitted(request, authorisation);
+        Optional<SubmittedCallbackResponse> submitted = callback.submitted(request);
         if (submitted.isEmpty()) {
           return Optional.empty();
         }

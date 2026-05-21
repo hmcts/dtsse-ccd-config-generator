@@ -40,8 +40,7 @@ class SdkLegacyCallbackDispatcher implements LegacyCallbackDispatcher {
     }
 
     @Override
-    public Optional<LegacyAboutToSubmitCallbackResponse> aboutToSubmit(CallbackRequest request,
-                                                                       String authorisation) {
+    public Optional<LegacyAboutToSubmitCallbackResponse> aboutToSubmit(CallbackRequest request) {
       if (eventConfig.getAboutToSubmitCallback() == null) {
         return Optional.empty();
       }
@@ -49,7 +48,7 @@ class SdkLegacyCallbackDispatcher implements LegacyCallbackDispatcher {
     }
 
     @Override
-    public Optional<SubmittedCallbackResponse> submitted(CallbackRequest request, String authorisation) {
+    public Optional<SubmittedCallbackResponse> submitted(CallbackRequest request) {
       if (eventConfig.getSubmittedCallback() == null) {
         return Optional.empty();
       }
