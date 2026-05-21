@@ -69,13 +69,9 @@ class CaseProjectionService {
 
     CaseViewBinding binding = bindings.get(caseTypeId);
     if (binding == null) {
-      if (configRegistry.find(caseTypeId).isPresent()) {
+      if (configRegistry.find(caseTypeId).isPresent() || definitionRegistry.find(caseTypeId).isPresent()) {
         throw new IllegalStateException(
             "No CaseView registered for decentralised case type %s".formatted(caseTypeId));
-      }
-      if (definitionRegistry.find(caseTypeId).isPresent()) {
-        caseDetails.setData(serialiseWithGlobalSearch(caseTypeId, caseDetails.getData()));
-        return raw;
       }
       return raw;
     }
