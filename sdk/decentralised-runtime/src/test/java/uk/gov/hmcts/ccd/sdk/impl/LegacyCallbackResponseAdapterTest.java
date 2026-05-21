@@ -5,10 +5,13 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.server.ResponseStatusException;
 import uk.gov.hmcts.ccd.data.casedetails.SecurityClassification;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class LegacyCallbackResponseAdapterTest {
 
@@ -37,6 +40,26 @@ class LegacyCallbackResponseAdapterTest {
 
     assertEquals("header", response.getConfirmationHeader());
     assertEquals("body", response.getConfirmationBody());
+  }
+
+  @Test
+  void rejectsNonSuccessfulAboutToSubmitResponseEntity() {
+    ResponseStatusException exception = assertThrows(
+        ResponseStatusException.class,
+        () -> adapter.aboutToSubmit(ResponseEntity.status(HttpStatus.BAD_REQUEST).build())
+    );
+
+    assertEquals(HttpStatus.BAD_REQUEST, exception.getStatusCode());
+  }
+
+  @Test
+  void rejectsNonSuccessfulSubmittedResponseEntity() {
+    ResponseStatusException exception = assertThrows(
+        ResponseStatusException.class,
+        () -> adapter.submitted(ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build())
+    );
+
+    assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, exception.getStatusCode());
   }
 
   private record JsonAboutToSubmitResponse(

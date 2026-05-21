@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.Map;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
+import org.springframework.web.server.ResponseStatusException;
 import uk.gov.hmcts.ccd.data.casedetails.SecurityClassification;
 import uk.gov.hmcts.ccd.sdk.api.callback.AboutToStartOrSubmitResponse;
 import uk.gov.hmcts.reform.ccd.client.model.SubmittedCallbackResponse;
@@ -68,7 +69,16 @@ class LegacyCallbackResponseAdapter {
   }
 
   private Object unwrapResponseEntity(Object response) {
-    return response instanceof ResponseEntity<?> entity ? entity.getBody() : response;
+    if (response instanceof ResponseEntity<?> entity) {
+      if (!entity.getStatusCode().is2xxSuccessful()) {
+        throw new ResponseStatusException(
+            entity.getStatusCode(),
+            "Legacy callback returned HTTP %s".formatted(entity.getStatusCode().value())
+        );
+      }
+      return entity.getBody();
+    }
+    return response;
   }
 
   private Map<String, JsonNode> normaliseData(Object data) {
