@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.annotation.PostConstruct;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
+import java.net.URI;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -13,7 +14,6 @@ import java.util.Optional;
 import java.util.Set;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.MethodParameter;
 import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpHeaders;
@@ -38,10 +38,6 @@ class SpringHandlerLegacyCallbackDispatcher implements LegacyCallbackDispatcher 
   private final ObjectMapper mapper;
   private final ObjectMapper callbackBodyMapper;
   private final LegacyCallbackResponseAdapter responseAdapter;
-  private final CallbackUrlNormalizer urlNormalizer;
-
-  @Value("${decentralisation.local-callback-base-urls:${ET_COS_URL:}}")
-  private String localCallbackBaseUrls;
 
   private Map<LegacyCallbackBinding, SpringHandlerCallback> callbacks = Map.of();
 
@@ -49,15 +45,13 @@ class SpringHandlerLegacyCallbackDispatcher implements LegacyCallbackDispatcher 
                                         @Qualifier("requestMappingHandlerMapping")
                                         RequestMappingHandlerMapping handlerMapping,
                                         ObjectMapper mapper,
-                                        LegacyCallbackResponseAdapter responseAdapter,
-                                        CallbackUrlNormalizer urlNormalizer) {
+                                        LegacyCallbackResponseAdapter responseAdapter) {
     this.definitionRegistry = definitionRegistry;
     this.handlerMapping = handlerMapping;
     this.mapper = mapper;
     this.callbackBodyMapper = mapper.copy()
         .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
     this.responseAdapter = responseAdapter;
-    this.urlNormalizer = urlNormalizer;
   }
 
   @PostConstruct
@@ -111,12 +105,8 @@ class SpringHandlerLegacyCallbackDispatcher implements LegacyCallbackDispatcher 
     if (callbackUrl == null || callbackUrl.isBlank()) {
       return;
     }
-    if (!urlNormalizer.isLocalCallbackUrl(callbackUrl, localCallbackBaseUrls)) {
-      log.info("Skipping non-local legacy callback {} -> {}", binding, callbackUrl);
-      return;
-    }
 
-    String path = urlNormalizer.normalisePath(callbackUrl);
+    String path = URI.create(callbackUrl).getPath();
     HandlerMethod handlerMethod = findPostHandler(path).orElseThrow(() -> new IllegalStateException(
         "No POST handler found for legacy callback caseType=%s eventId=%s callbackType=%s url=%s path=%s"
             .formatted(binding.caseTypeId(), binding.eventId(), binding.callbackType(), callbackUrl, path)));
@@ -137,7 +127,6 @@ class SpringHandlerLegacyCallbackDispatcher implements LegacyCallbackDispatcher 
     List<HandlerMethod> matches = handlerMapping.getHandlerMethods().entrySet().stream()
         .filter(entry -> handlesPost(entry.getKey()))
         .filter(entry -> paths(entry.getKey()).stream()
-            .map(urlNormalizer::normalisePath)
             .anyMatch(path::equals))
         .map(Map.Entry::getValue)
         .toList();
