@@ -14,7 +14,7 @@ import uk.gov.hmcts.reform.ccd.client.model.SubmittedCallbackResponse;
 @Component
 @Order(0)
 @RequiredArgsConstructor
-class SdkLegacyCallbackDispatcher implements LegacyCallbackDispatcher {
+class SdkLegacyCallbackResolver implements LegacyCallbackResolver {
 
   private final ResolvedConfigRegistry registry;
   private final CcdCallbackExecutor executor;

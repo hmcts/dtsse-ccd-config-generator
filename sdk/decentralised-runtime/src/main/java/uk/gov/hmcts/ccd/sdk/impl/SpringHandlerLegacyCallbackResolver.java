@@ -33,7 +33,7 @@ import uk.gov.hmcts.reform.ccd.client.model.SubmittedCallbackResponse;
 @Slf4j
 @Component
 @Order(100)
-class SpringHandlerLegacyCallbackDispatcher implements LegacyCallbackDispatcher {
+class SpringHandlerLegacyCallbackResolver implements LegacyCallbackResolver {
 
   private final DefinitionRegistry definitionRegistry;
   private final RequestMappingHandlerMapping handlerMapping;
@@ -44,12 +44,12 @@ class SpringHandlerLegacyCallbackDispatcher implements LegacyCallbackDispatcher 
 
   private Map<LegacyCallbackBinding, SpringHandlerCallback> callbacks = Map.of();
 
-  SpringHandlerLegacyCallbackDispatcher(DefinitionRegistry definitionRegistry,
-                                        @Qualifier("requestMappingHandlerMapping")
-                                        RequestMappingHandlerMapping handlerMapping,
-                                        ObjectMapper mapper,
-                                        LegacyCallbackResponseAdapter responseAdapter,
-                                        ObjectProvider<HttpServletRequest> currentRequest) {
+  SpringHandlerLegacyCallbackResolver(DefinitionRegistry definitionRegistry,
+                                      @Qualifier("requestMappingHandlerMapping")
+                                      RequestMappingHandlerMapping handlerMapping,
+                                      ObjectMapper mapper,
+                                      LegacyCallbackResponseAdapter responseAdapter,
+                                      ObjectProvider<HttpServletRequest> currentRequest) {
     this.definitionRegistry = definitionRegistry;
     this.handlerMapping = handlerMapping;
     this.mapper = mapper;

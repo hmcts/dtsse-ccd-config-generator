@@ -32,17 +32,17 @@ class LegacyCallbackSubmissionHandler implements CaseSubmissionHandler {
 
   private final ResolvedConfigRegistry registry;
   private final DefinitionRegistry definitionRegistry;
-  private final List<LegacyCallbackDispatcher> dispatchers;
+  private final List<LegacyCallbackResolver> callbackResolvers;
   private final ObjectMapper mapper;
   private final ObjectMapper filteredMapper;
 
   LegacyCallbackSubmissionHandler(ResolvedConfigRegistry registry,
                                   DefinitionRegistry definitionRegistry,
-                                  List<LegacyCallbackDispatcher> dispatchers,
+                                  List<LegacyCallbackResolver> callbackResolvers,
                                   ObjectMapper mapper) {
     this.registry = registry;
     this.definitionRegistry = definitionRegistry;
-    this.dispatchers = dispatchers.stream()
+    this.callbackResolvers = callbackResolvers.stream()
         .sorted(AnnotationAwareOrderComparator.INSTANCE)
         .toList();
     this.mapper = mapper;
@@ -170,8 +170,8 @@ class LegacyCallbackSubmissionHandler implements CaseSubmissionHandler {
       );
     }
 
-    return dispatchers.stream()
-        .map(dispatcher -> dispatcher.resolve(caseType, eventId))
+    return callbackResolvers.stream()
+        .map(resolver -> resolver.resolve(caseType, eventId))
         .flatMap(Optional::stream)
         .findFirst();
   }
