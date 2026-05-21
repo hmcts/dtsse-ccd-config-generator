@@ -9,6 +9,7 @@ import uk.gov.hmcts.ccd.sdk.api.Event;
 import uk.gov.hmcts.ccd.sdk.api.Webhook;
 import uk.gov.hmcts.ccd.sdk.runtime.CcdCallbackExecutor;
 import uk.gov.hmcts.reform.ccd.client.model.CallbackRequest;
+import uk.gov.hmcts.reform.ccd.client.model.SubmittedCallbackResponse;
 
 @Component
 @Order(0)
@@ -48,7 +49,7 @@ class SdkLegacyCallbackDispatcher implements LegacyCallbackDispatcher {
     }
 
     @Override
-    public Optional<LegacySubmittedCallbackResponse> submitted(CallbackRequest request, String authorisation) {
+    public Optional<SubmittedCallbackResponse> submitted(CallbackRequest request, String authorisation) {
       if (eventConfig.getSubmittedCallback() == null) {
         return Optional.empty();
       }

@@ -35,8 +35,8 @@ class LegacyCallbackResponseAdapterTest {
   void adaptsSubmittedResponseEntityStructurally() {
     var response = adapter.submitted(ResponseEntity.ok(new JsonSubmittedResponse("header", "body")));
 
-    assertEquals("header", response.confirmationHeader());
-    assertEquals("body", response.confirmationBody());
+    assertEquals("header", response.getConfirmationHeader());
+    assertEquals("body", response.getConfirmationBody());
   }
 
   private record JsonAboutToSubmitResponse(

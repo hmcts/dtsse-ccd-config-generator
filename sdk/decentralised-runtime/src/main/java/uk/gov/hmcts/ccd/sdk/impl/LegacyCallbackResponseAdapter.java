@@ -50,21 +50,21 @@ class LegacyCallbackResponseAdapter {
     );
   }
 
-  LegacySubmittedCallbackResponse submitted(Object response) {
+  SubmittedCallbackResponse submitted(Object response) {
     Object body = unwrapResponseEntity(response);
     if (body == null) {
-      return new LegacySubmittedCallbackResponse(null, null);
+      return SubmittedCallbackResponse.builder().build();
     }
 
     if (body instanceof SubmittedCallbackResponse typed) {
-      return new LegacySubmittedCallbackResponse(typed.getConfirmationHeader(), typed.getConfirmationBody());
+      return typed;
     }
 
     JsonNode root = mapper.valueToTree(body);
-    return new LegacySubmittedCallbackResponse(
-        textValue(root, "confirmationHeader", "confirmation_header"),
-        textValue(root, "confirmationBody", "confirmation_body")
-    );
+    return SubmittedCallbackResponse.builder()
+        .confirmationHeader(textValue(root, "confirmationHeader", "confirmation_header"))
+        .confirmationBody(textValue(root, "confirmationBody", "confirmation_body"))
+        .build();
   }
 
   private Object unwrapResponseEntity(Object response) {

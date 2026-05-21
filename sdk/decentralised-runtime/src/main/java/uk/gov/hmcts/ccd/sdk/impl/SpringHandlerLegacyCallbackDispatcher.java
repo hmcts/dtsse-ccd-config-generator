@@ -24,7 +24,9 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.method.HandlerMethod;
 import org.springframework.web.servlet.mvc.method.RequestMappingInfo;
 import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping;
+import uk.gov.hmcts.ccd.sdk.api.Webhook;
 import uk.gov.hmcts.reform.ccd.client.model.CallbackRequest;
+import uk.gov.hmcts.reform.ccd.client.model.SubmittedCallbackResponse;
 
 @Slf4j
 @Component
@@ -66,13 +68,13 @@ class SpringHandlerLegacyCallbackDispatcher implements LegacyCallbackDispatcher 
         definition.getEvents().forEach(event -> {
           bindCallback(
               resolvedCallbacks,
-              new LegacyCallbackBinding(caseTypeId, event.getId(), LegacyCallbackType.ABOUT_TO_SUBMIT),
+              new LegacyCallbackBinding(caseTypeId, event.getId(), Webhook.AboutToSubmit),
               event.getCallBackURLAboutToSubmitEvent(),
               1
           );
           bindCallback(
               resolvedCallbacks,
-              new LegacyCallbackBinding(caseTypeId, event.getId(), LegacyCallbackType.SUBMITTED),
+              new LegacyCallbackBinding(caseTypeId, event.getId(), Webhook.Submitted),
               event.getCallBackURLSubmittedEvent(),
               submittedAttempts(event.getRetriesTimeoutURLSubmittedEvent())
           );
@@ -88,12 +90,12 @@ class SpringHandlerLegacyCallbackDispatcher implements LegacyCallbackDispatcher 
     var aboutToSubmit = callbacks.get(new LegacyCallbackBinding(
         caseTypeId,
         eventId,
-        LegacyCallbackType.ABOUT_TO_SUBMIT
+        Webhook.AboutToSubmit
     ));
     var submitted = callbacks.get(new LegacyCallbackBinding(
         caseTypeId,
         eventId,
-        LegacyCallbackType.SUBMITTED
+        Webhook.Submitted
     ));
 
     if (aboutToSubmit == null && submitted == null) {
@@ -174,6 +176,13 @@ class SpringHandlerLegacyCallbackDispatcher implements LegacyCallbackDispatcher 
     return retries == null || retries.isEmpty() ? 1 : 3;
   }
 
+  private record LegacyCallbackBinding(
+      String caseTypeId,
+      String eventId,
+      Webhook callbackType
+  ) {
+  }
+
   private class SpringHandlerLegacyCallback implements LegacyCallback {
 
     private final SpringHandlerCallback aboutToSubmit;
@@ -194,7 +203,7 @@ class SpringHandlerLegacyCallbackDispatcher implements LegacyCallbackDispatcher 
     }
 
     @Override
-    public Optional<LegacySubmittedCallbackResponse> submitted(CallbackRequest request, String authorisation) {
+    public Optional<SubmittedCallbackResponse> submitted(CallbackRequest request, String authorisation) {
       if (submitted == null) {
         return Optional.empty();
       }
