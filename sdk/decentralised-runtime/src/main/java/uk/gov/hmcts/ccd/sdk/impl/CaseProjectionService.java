@@ -148,6 +148,11 @@ class CaseProjectionService {
                                        Class<?> caseDataType,
                                        Class<? extends Enum<?>> stateType,
                                        Map<String, ResolvedCCDConfig<?, ?, ?>> configs) {
+    Set<String> explicitCaseTypes = view.caseTypeIds();
+    if (explicitCaseTypes != null && !explicitCaseTypes.isEmpty()) {
+      return Set.copyOf(explicitCaseTypes);
+    }
+
     Set<String> matched = configs.entrySet().stream()
         .filter(entry -> entry.getValue().getCaseClass().equals(caseDataType)
             && entry.getValue().getStateClass().equals(stateType))

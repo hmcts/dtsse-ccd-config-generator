@@ -6,6 +6,7 @@ import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Table;
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -64,4 +65,23 @@ public class ResolvedCCDConfig<T, S, R extends HasRole> {
   List<SearchParty> searchParties;
   NoticeOfChange<T, R> noticeOfChange;
   List<ComplexTypeAuthorisation<R>> complexTypeAuthorisations;
+
+  public void addEvents(Map<String, Event<T, R, S>> additionalEvents) {
+    if (additionalEvents.isEmpty()) {
+      return;
+    }
+
+    Map<String, Event<T, R, S>> merged = new LinkedHashMap<>();
+    if (events != null) {
+      merged.putAll(events);
+    }
+    for (Map.Entry<String, Event<T, R, S>> entry : additionalEvents.entrySet()) {
+      if (merged.containsKey(entry.getKey())) {
+        throw new IllegalStateException(
+            "Event %s is already defined for case type %s".formatted(entry.getKey(), caseType));
+      }
+      merged.put(entry.getKey(), entry.getValue());
+    }
+    events = ImmutableMap.copyOf(merged);
+  }
 }

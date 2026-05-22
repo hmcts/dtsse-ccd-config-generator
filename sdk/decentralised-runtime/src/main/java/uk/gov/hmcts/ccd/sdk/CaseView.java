@@ -1,5 +1,7 @@
 package uk.gov.hmcts.ccd.sdk;
 
+import java.util.Set;
+
 /**
  * Provides case data to CCD when CCD loads cases.
  *
@@ -11,6 +13,10 @@ package uk.gov.hmcts.ccd.sdk;
  * @param <StateType> typed enum representing possible CCD states
  */
 public interface CaseView<CaseType, StateType extends Enum<StateType>> {
+
+  default Set<String> caseTypeIds() {
+    return Set.of();
+  }
 
   /**
    * Retrieve a case view for the given request.

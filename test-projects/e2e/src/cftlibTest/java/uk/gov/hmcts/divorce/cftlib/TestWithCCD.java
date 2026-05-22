@@ -178,6 +178,7 @@ public class TestWithCCD extends CftlibTest {
     private static final String JSON_LEGACY_EVENT_ID = "json-legacy-dispatch";
     private String apiFirstTaskId;
     private String waTaskId;
+    private long jsonLegacyCaseRef;
 
     @TestConfiguration
     static class ServiceBusTestConfiguration {
@@ -2785,7 +2786,7 @@ public class TestWithCCD extends CftlibTest {
         var startEvent = ccdApi.startEvent(
             getAuthorisation("TEST_CASE_WORKER_USER@mailinator.com"),
             getServiceAuth(),
-            String.valueOf(caseRef),
+            String.valueOf(jsonLegacyCaseRef()),
             JSON_LEGACY_EVENT_ID
         );
         Map<String, Object> data = new LinkedHashMap<>(
@@ -2797,7 +2798,8 @@ public class TestWithCCD extends CftlibTest {
             "TEST_CASE_WORKER_USER@mailinator.com",
             JSON_LEGACY_EVENT_ID,
             data,
-            startEvent.getToken()
+            startEvent.getToken(),
+            jsonLegacyCaseRef()
         );
         var firstResponse = HttpClientBuilder.create().build().execute(request);
         assertThat(firstResponse.getStatusLine().getStatusCode(), equalTo(201));
@@ -2807,7 +2809,8 @@ public class TestWithCCD extends CftlibTest {
             "TEST_CASE_WORKER_USER@mailinator.com",
             JSON_LEGACY_EVENT_ID,
             data,
-            startEvent.getToken()
+            startEvent.getToken(),
+            jsonLegacyCaseRef()
         );
         var duplicateResponse = HttpClientBuilder.create().build().execute(duplicateRequest);
         assertThat(duplicateResponse.getStatusLine().getStatusCode(), equalTo(201));
@@ -2817,7 +2820,7 @@ public class TestWithCCD extends CftlibTest {
     private JsonLegacyEventResponse submitJsonLegacyEvent(Map<String, ?> data) throws Exception {
         var response = HttpClientBuilder.create().build().execute(
             prepareEventRequestForCase(
-                caseRef,
+                jsonLegacyCaseRef(),
                 "TEST_CASE_WORKER_USER@mailinator.com",
                 JSON_LEGACY_EVENT_ID,
                 data
@@ -2830,12 +2833,57 @@ public class TestWithCCD extends CftlibTest {
     private String storedData() {
         return db.queryForObject(
             "select data::text from ccd.case_data where reference = :reference",
-            Map.of("reference", caseRef),
+            Map.of("reference", jsonLegacyCaseRef()),
             String.class
         );
     }
 
     private record JsonLegacyEventResponse(int statusCode, Map<String, Object> body) {
+    }
+
+    private long jsonLegacyCaseRef() {
+        if (jsonLegacyCaseRef == 0) {
+            jsonLegacyCaseRef = createJsonLegacyCase();
+        }
+        return jsonLegacyCaseRef;
+    }
+
+    @SneakyThrows
+    private long createJsonLegacyCase() {
+        var start = ccdApi.startCase(
+            getAuthorisation("TEST_CASE_WORKER_USER@mailinator.com"),
+            getServiceAuth(),
+            NoFaultDivorce.getCaseType(),
+            "create-test-application"
+        );
+        var body = Map.of(
+            "data", Map.of(
+                "applicationType", "soleApplication",
+                "applicant1SolicitorRepresented", "No",
+                "applicant2SolicitorRepresented", "No",
+                "testDocument", Map.of(
+                    "document_url", "http://localhost/documents/" + UUID.randomUUID(),
+                    "document_binary_url", "http://localhost/documents/binary",
+                    "document_filename", "test.pdf"
+                )
+            ),
+            "event", Map.of("id", "create-test-application", "summary", "", "description", ""),
+            "event_token", start.getToken(),
+            "ignore_warning", false
+        );
+
+        var request = buildRequest(
+            "TEST_CASE_WORKER_USER@mailinator.com",
+            BASE_URL + "/data/case-types/E2E/cases?ignore-warning=false",
+            HttpPost::new
+        );
+        withCcdAccept(request, ACCEPT_CREATE_CASE);
+        request.setEntity(new StringEntity(mapper.writeValueAsString(body), ContentType.APPLICATION_JSON));
+
+        var response = HttpClientBuilder.create().build().execute(request);
+        assertThat(response.getStatusLine().getStatusCode(), equalTo(201));
+        Map<String, Object> result = mapper.readValue(EntityUtils.toString(response.getEntity()), new TypeReference<>() {});
+        return Long.parseLong((String) result.get("id"));
     }
 
     @SneakyThrows

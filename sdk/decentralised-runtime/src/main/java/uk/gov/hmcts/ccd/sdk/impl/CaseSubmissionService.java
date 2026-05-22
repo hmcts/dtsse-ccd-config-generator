@@ -37,6 +37,13 @@ public class CaseSubmissionService {
   public DecentralisedSubmitEventResponse submit(DecentralisedCaseEvent event,
                                                  String authorisation,
                                                  UUID idempotencyKey) {
+    return CallbackInvocationContext.withAuthorisation(authorisation, () ->
+        submitWithAuthorisationContext(event, authorisation, idempotencyKey));
+  }
+
+  private DecentralisedSubmitEventResponse submitWithAuthorisationContext(DecentralisedCaseEvent event,
+                                                                         String authorisation,
+                                                                         UUID idempotencyKey) {
     var eventConfig = getEventConfig(event);
     var user = idam.retrieveUser(authorisation);
     var handler = eventConfig.getSubmitHandler() != null ? submitHandler : legacyHandler;

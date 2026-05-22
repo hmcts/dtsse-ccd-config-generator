@@ -20,7 +20,7 @@ import org.springframework.util.ReflectionUtils;
 import uk.gov.hmcts.ccd.sdk.api.TypedPropertyGetter;
 import uk.gov.hmcts.ccd.sdk.type.ListValue;
 
-class PropertyUtils implements uk.gov.hmcts.ccd.sdk.api.PropertyUtils {
+public class PropertyUtils implements uk.gov.hmcts.ccd.sdk.api.PropertyUtils {
 
   @Override
   public <T, A extends Annotation> A getAnnotationOfProperty(Class<T> entityType,
