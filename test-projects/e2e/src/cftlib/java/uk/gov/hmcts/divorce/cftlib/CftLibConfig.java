@@ -5,6 +5,7 @@ import org.springframework.context.annotation.Lazy;
 import org.springframework.core.io.DefaultResourceLoader;
 import org.springframework.core.io.ResourceLoader;
 import org.springframework.stereotype.Component;
+import org.springframework.util.FileSystemUtils;
 import uk.gov.hmcts.ccd.sdk.CCDDefinitionGenerator;
 import uk.gov.hmcts.divorce.divorcecase.NoFaultDivorce;
 import uk.gov.hmcts.divorce.simplecase.SimpleCaseConfiguration;
@@ -285,11 +286,19 @@ public class CftLibConfig implements CFTLibConfigurer {
     }
     private void importDivorceDefinitions(CFTLib lib) throws Exception {
         // Generate CCD definitions before importing them into the in-memory instance.
-        configWriter.generateAllCaseTypesToJSON(new File("build/definitions"));
+        File definitionsDir = new File("build/definitions");
+        configWriter.generateAllCaseTypesToJSON(definitionsDir);
+        copyJsonDefinitionOverlays(new File("ccd-definitions"), new File(definitionsDir, NoFaultDivorce.getCaseType()));
 
-        lib.importJsonDefinition(new File("build/definitions/" + NoFaultDivorce.getCaseType()));
-        lib.importJsonDefinition(new File("build/definitions/" + SimpleCaseConfiguration.CASE_TYPE));
+        lib.importJsonDefinition(new File(definitionsDir, NoFaultDivorce.getCaseType()));
+        lib.importJsonDefinition(new File(definitionsDir, SimpleCaseConfiguration.CASE_TYPE));
         lib.dumpDefinitionSnapshots();
+    }
+
+    private void copyJsonDefinitionOverlays(File source, File target) throws IOException {
+        if (source.exists()) {
+            FileSystemUtils.copyRecursively(source, target);
+        }
     }
 
     private void configureRoleAssignments(CFTLib lib) throws IOException {
