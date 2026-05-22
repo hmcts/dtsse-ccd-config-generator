@@ -105,6 +105,7 @@ import uk.gov.hmcts.divorce.sow014.nfd.PublishedEvent;
 import uk.gov.hmcts.divorce.sow014.nfd.ReturnErrorWhenCreateAPIFirstTask;
 import uk.gov.hmcts.divorce.sow014.nfd.ReturnErrorWhenCreateTestCase;
 import uk.gov.hmcts.divorce.sow014.nfd.SubmittedConfirmationCallback;
+import uk.gov.hmcts.divorce.jsonlegacy.JsonLegacyCallbackController;
 import uk.gov.hmcts.ccd.sdk.type.CaseLink;
 import uk.gov.hmcts.ccd.sdk.type.ListValue;
 import uk.gov.hmcts.ccd.sdk.CaseReindexingService;
@@ -122,6 +123,7 @@ import uk.gov.hmcts.rse.ccd.lib.test.CftlibTest;
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.DEFINED_PORT)
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 @TestPropertySource(properties = {
+    "decentralisation.legacy-json-service=true",
     "spring.jms.servicebus.enabled=true",
     "ccd.servicebus.destination=ccd-case-events-test",
     "ccd.servicebus.scheduler-enabled=true",
@@ -173,6 +175,7 @@ public class TestWithCCD extends CftlibTest {
     private static final String API_FIRST_TASK_CANCEL_EVENT_ID = ApiFirstTaskCancelEvent.EVENT_ID;
     private static final String API_FIRST_TASK_RECONFIGURE_EVENT_ID = ApiFirstTaskReconfigureEvent.EVENT_ID;
     private static final String API_FIRST_TASK_DELAYED_EVENT_ID = ApiFirstTaskDelayedEvent.EVENT_ID;
+    private static final String JSON_LEGACY_EVENT_ID = "json-legacy-dispatch";
     private String apiFirstTaskId;
     private String waTaskId;
 
@@ -2730,7 +2733,113 @@ public class TestWithCCD extends CftlibTest {
     }
 
     @SneakyThrows
-    @Order(200)
+    @Order(210)
+    @Test
+    void dispatchesJsonDefinitionCallbacksToSpringController() {
+        JsonLegacyCallbackController.reset();
+
+        var response = submitJsonLegacyEvent(Map.of("note", "json-legacy-normal"));
+        assertThat(response.statusCode(), equalTo(201));
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> data = (Map<String, Object>) response.body().get("data");
+        assertThat(data.get("setInAboutToSubmit"), equalTo(JsonLegacyCallbackController.MARKER));
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> afterSubmit =
+            (Map<String, Object>) response.body().get("after_submit_callback_response");
+        assertThat(afterSubmit.get("confirmation_header"),
+            equalTo(JsonLegacyCallbackController.CONFIRMATION_HEADER));
+        assertThat(afterSubmit.get("confirmation_body"),
+            equalTo(JsonLegacyCallbackController.CONFIRMATION_BODY));
+
+        assertThat(JsonLegacyCallbackController.aboutToSubmitAttempts.get(), equalTo(1));
+        assertThat(JsonLegacyCallbackController.aboutToSubmitSawAuthorisation.get(), is(true));
+        assertThat(JsonLegacyCallbackController.submittedAttempts.get(), equalTo(1));
+        assertThat(JsonLegacyCallbackController.submittedSawCommittedData.get(), is(true));
+    }
+
+    @SneakyThrows
+    @Order(211)
+    @Test
+    void aboutToSubmitErrorsRollbackJsonLegacySubmission() {
+        JsonLegacyCallbackController.reset();
+        String before = storedData();
+
+        var response = submitJsonLegacyEvent(Map.of("note", "json-legacy-error"));
+
+        assertThat(response.statusCode(), equalTo(422));
+        @SuppressWarnings("unchecked")
+        List<String> callbackErrors = (List<String>) response.body().get("callbackErrors");
+        assertThat(callbackErrors, equalTo(List.of("JSON legacy validation error")));
+        assertThat(storedData(), equalTo(before));
+        assertThat(JsonLegacyCallbackController.aboutToSubmitAttempts.get(), equalTo(1));
+        assertThat(JsonLegacyCallbackController.submittedAttempts.get(), equalTo(0));
+    }
+
+    @SneakyThrows
+    @Order(212)
+    @Test
+    void submittedRetriesAndDuplicateJsonLegacySubmissionDoesNotReRun() {
+        JsonLegacyCallbackController.reset();
+        var startEvent = ccdApi.startEvent(
+            getAuthorisation("TEST_CASE_WORKER_USER@mailinator.com"),
+            getServiceAuth(),
+            String.valueOf(caseRef),
+            JSON_LEGACY_EVENT_ID
+        );
+        Map<String, Object> data = new LinkedHashMap<>(
+            mapper.convertValue(startEvent.getCaseDetails().getData(), new TypeReference<Map<String, Object>>() {})
+        );
+        data.put("note", "json-legacy-retry");
+
+        var request = prepareEventRequestWithToken(
+            "TEST_CASE_WORKER_USER@mailinator.com",
+            JSON_LEGACY_EVENT_ID,
+            data,
+            startEvent.getToken()
+        );
+        var firstResponse = HttpClientBuilder.create().build().execute(request);
+        assertThat(firstResponse.getStatusLine().getStatusCode(), equalTo(201));
+        assertThat(JsonLegacyCallbackController.submittedAttempts.get(), equalTo(3));
+
+        var duplicateRequest = prepareEventRequestWithToken(
+            "TEST_CASE_WORKER_USER@mailinator.com",
+            JSON_LEGACY_EVENT_ID,
+            data,
+            startEvent.getToken()
+        );
+        var duplicateResponse = HttpClientBuilder.create().build().execute(duplicateRequest);
+        assertThat(duplicateResponse.getStatusLine().getStatusCode(), equalTo(201));
+        assertThat(JsonLegacyCallbackController.submittedAttempts.get(), equalTo(3));
+    }
+
+    private JsonLegacyEventResponse submitJsonLegacyEvent(Map<String, ?> data) throws Exception {
+        var response = HttpClientBuilder.create().build().execute(
+            prepareEventRequestForCase(
+                caseRef,
+                "TEST_CASE_WORKER_USER@mailinator.com",
+                JSON_LEGACY_EVENT_ID,
+                data
+            )
+        );
+        Map<String, Object> body = mapper.readValue(EntityUtils.toString(response.getEntity()), new TypeReference<>() {});
+        return new JsonLegacyEventResponse(response.getStatusLine().getStatusCode(), body);
+    }
+
+    private String storedData() {
+        return db.queryForObject(
+            "select data::text from ccd.case_data where reference = :reference",
+            Map.of("reference", caseRef),
+            String.class
+        );
+    }
+
+    private record JsonLegacyEventResponse(int statusCode, Map<String, Object> body) {
+    }
+
+    @SneakyThrows
+    @Order(300)
     @Test
     void cascadingDeleteRemovesAllCaseData() {
         db.getJdbcTemplate().execute("DELETE FROM ccd.case_data");
