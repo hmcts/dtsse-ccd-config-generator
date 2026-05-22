@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import java.util.Optional;
 import java.util.function.Supplier;
 import uk.gov.hmcts.ccd.decentralised.dto.DecentralisedCaseEvent;
+import uk.gov.hmcts.ccd.sdk.api.EventMetadata;
 import uk.gov.hmcts.ccd.sdk.api.callback.SubmitResponse;
 
 /**
@@ -36,6 +37,10 @@ interface CaseSubmissionHandler {
        * Optional post-submit canonical case level security classification to be persisted.
        */
       Optional<uk.gov.hmcts.reform.ccd.client.model.Classification> securityClassification,
+      /*
+       * Optional replacement values for the case event audit metadata.
+       */
+      Optional<EventMetadata> eventMetadata,
       /*
        * Deferred response builder executed post-transaction by {@link CaseSubmissionService}.
        */
