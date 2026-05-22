@@ -128,8 +128,11 @@ public class CaseSubmissionService {
   }
 
   private void applyEventMetadata(DecentralisedCaseEvent event, EventMetadata eventMetadata) {
-    event.getEventDetails().setSummary(eventMetadata.getSummary());
-    event.getEventDetails().setDescription(eventMetadata.getDescription());
+    var eventDetails = event.getEventDetails();
+    eventDetails.setSummary(Optional.ofNullable(eventMetadata.getSummary()).orElse(eventDetails.getSummary()));
+    eventDetails.setDescription(
+        Optional.ofNullable(eventMetadata.getDescription()).orElse(eventDetails.getDescription())
+    );
   }
 
   private void upsertCase(DecentralisedCaseEvent event, Optional<JsonNode> dataUpdate) {
