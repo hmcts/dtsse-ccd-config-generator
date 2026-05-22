@@ -1,8 +1,10 @@
 package uk.gov.hmcts.ccd.sdk.api.callback;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import java.util.List;
 import lombok.Builder;
 import lombok.Data;
+import uk.gov.hmcts.ccd.sdk.api.EventMetadata;
 import uk.gov.hmcts.reform.ccd.client.model.Classification;
 
 /**
@@ -29,4 +31,7 @@ public class SubmitResponse<State> {
   private State state;
 
   private Classification caseSecurityClassification;
+
+  @JsonIgnore
+  private EventMetadata eventMetadata;
 }

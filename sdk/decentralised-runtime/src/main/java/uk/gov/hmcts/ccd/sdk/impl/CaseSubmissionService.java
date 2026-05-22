@@ -17,6 +17,7 @@ import uk.gov.hmcts.ccd.decentralised.dto.DecentralisedCaseEvent;
 import uk.gov.hmcts.ccd.decentralised.dto.DecentralisedSubmitEventResponse;
 import uk.gov.hmcts.ccd.domain.model.callbacks.AfterSubmitCallbackResponse;
 import uk.gov.hmcts.ccd.sdk.ResolvedConfigRegistry;
+import uk.gov.hmcts.ccd.sdk.api.EventMetadata;
 import uk.gov.hmcts.ccd.sdk.api.callback.SubmitResponse;
 
 @Service
@@ -123,6 +124,12 @@ public class CaseSubmissionService {
     handlerResult.securityClassification()
         .map(classification -> SecurityClassification.valueOf(classification.name()))
         .ifPresent(event.getCaseDetails()::setSecurityClassification);
+    handlerResult.eventMetadata().ifPresent(metadata -> applyEventMetadata(event, metadata));
+  }
+
+  private void applyEventMetadata(DecentralisedCaseEvent event, EventMetadata eventMetadata) {
+    event.getEventDetails().setSummary(eventMetadata.getSummary());
+    event.getEventDetails().setDescription(eventMetadata.getDescription());
   }
 
   private void upsertCase(DecentralisedCaseEvent event, Optional<JsonNode> dataUpdate) {
