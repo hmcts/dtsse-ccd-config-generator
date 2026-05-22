@@ -2,6 +2,8 @@
 
 This page outlines the steps necessary to migrate an existing centralised CCD case type from CCD's database into the service's own database.
 
+For the FDW-based migration flow, see [FDW data migration guide](fdw-data-migration.md).
+
 ```mermaid
 flowchart LR
     subgraph CCD["CCD central database"]
