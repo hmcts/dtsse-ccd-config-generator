@@ -1,15 +1,20 @@
 package uk.gov.hmcts.ccd.sdk.impl.json;
 
+import com.google.common.collect.ImmutableSet;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.core.ResolvableType;
 import org.springframework.stereotype.Component;
+import org.springframework.util.ClassUtils;
 import uk.gov.hmcts.ccd.domain.model.definition.CaseEventDefinition;
 import uk.gov.hmcts.ccd.domain.model.definition.CaseTypeDefinition;
 import uk.gov.hmcts.ccd.domain.model.definition.EventPostStateDefinition;
+import uk.gov.hmcts.ccd.sdk.CaseView;
 import uk.gov.hmcts.ccd.sdk.PropertyUtils;
 import uk.gov.hmcts.ccd.sdk.ResolvedCCDConfig;
 import uk.gov.hmcts.ccd.sdk.ResolvedConfigAugmenter;
@@ -24,11 +29,14 @@ class JsonResolvedConfigAugmenter implements ResolvedConfigAugmenter {
 
   private final DefinitionRegistry definitionRegistry;
   private final JsonCallbackAdapterFactory callbackAdapterFactory;
+  private final List<CaseView<?, ?>> caseViews;
 
   JsonResolvedConfigAugmenter(DefinitionRegistry definitionRegistry,
-                              JsonCallbackAdapterFactory callbackAdapterFactory) {
+                              JsonCallbackAdapterFactory callbackAdapterFactory,
+                              List<CaseView<?, ?>> caseViews) {
     this.definitionRegistry = definitionRegistry;
     this.callbackAdapterFactory = callbackAdapterFactory;
+    this.caseViews = caseViews;
   }
 
   @Override
@@ -39,13 +47,55 @@ class JsonResolvedConfigAugmenter implements ResolvedConfigAugmenter {
           "JSON callback runtime is enabled but no definition snapshots were found. Run dumpCCDDefinitions first.");
     }
 
-    for (ResolvedCCDConfig<?, ?, ?> config : configs) {
+    List<ResolvedCCDConfig<?, ?, ?>> resolvedConfigs = new ArrayList<>(configs);
+    addJsonOnlyConfigs(resolvedConfigs, definitions);
+
+    for (ResolvedCCDConfig<?, ?, ?> config : resolvedConfigs) {
       CaseTypeDefinition definition = definitions.get(config.getCaseType());
       if (definition != null) {
         addJsonEvents(config, definition);
       }
     }
-    return configs;
+    return resolvedConfigs;
+  }
+
+  private void addJsonOnlyConfigs(List<ResolvedCCDConfig<?, ?, ?>> configs,
+                                  Map<String, CaseTypeDefinition> definitions) {
+    Set<String> existingCaseTypes = configs.stream()
+        .map(ResolvedCCDConfig::getCaseType)
+        .collect(Collectors.toSet());
+
+    for (CaseView<?, ?> caseView : caseViews) {
+      Set<String> caseTypeIds = caseView.caseTypeIds();
+      if (caseTypeIds == null || caseTypeIds.isEmpty()) {
+        continue;
+      }
+
+      Class<?> caseDataType = resolveCaseDataType(caseView);
+      Class<? extends Enum<?>> stateType = resolveStateType(caseView);
+      for (String caseTypeId : caseTypeIds) {
+        if (existingCaseTypes.contains(caseTypeId) || !definitions.containsKey(caseTypeId)) {
+          continue;
+        }
+        configs.add(jsonConfig(caseTypeId, caseDataType, stateType));
+        existingCaseTypes.add(caseTypeId);
+      }
+    }
+  }
+
+  @SuppressWarnings({"rawtypes", "unchecked"})
+  private ResolvedCCDConfig<?, ?, ?> jsonConfig(String caseTypeId,
+                                                Class<?> caseDataType,
+                                                Class<? extends Enum<?>> stateType) {
+    ResolvedCCDConfig config = new ResolvedCCDConfig(
+        caseDataType,
+        stateType,
+        JsonRole.class,
+        Map.of(),
+        ImmutableSet.copyOf(stateType.getEnumConstants())
+    );
+    config.configureCaseType(caseTypeId);
+    return config;
   }
 
   @SuppressWarnings({"unchecked", "rawtypes"})
@@ -53,8 +103,10 @@ class JsonResolvedConfigAugmenter implements ResolvedConfigAugmenter {
                                                        CaseTypeDefinition definition) {
     ResolvedCCDConfig<T, S, R> config = (ResolvedCCDConfig<T, S, R>) rawConfig;
     Map<String, Event<T, R, S>> additionalEvents = new LinkedHashMap<>();
-    for (CaseEventDefinition eventDefinition : definition.getEvents()) {
-      if (config.getEvents().containsKey(eventDefinition.getId()) || !hasJsonCallback(eventDefinition)) {
+    List<CaseEventDefinition> events = definition.getEvents() == null ? List.of() : definition.getEvents();
+    Map<String, Event<T, R, S>> existingEvents = config.getEvents() == null ? Map.of() : config.getEvents();
+    for (CaseEventDefinition eventDefinition : events) {
+      if (existingEvents.containsKey(eventDefinition.getId()) || !hasJsonCallback(eventDefinition)) {
         continue;
       }
       additionalEvents.put(eventDefinition.getId(), buildEvent(config, eventDefinition));
@@ -138,5 +190,37 @@ class JsonResolvedConfigAugmenter implements ResolvedConfigAugmenter {
       return (S) state;
     }
     return (S) Enum.valueOf((Class) config.getStateClass(), state);
+  }
+
+  private Class<?> resolveCaseDataType(CaseView<?, ?> caseView) {
+    Class<?> userClass = ClassUtils.getUserClass(caseView);
+    Class<?> resolvedCase = ResolvableType.forClass(userClass).as(CaseView.class).getGeneric(0).resolve();
+    return resolvedCase == null ? Map.class : resolvedCase;
+  }
+
+  private Class<? extends Enum<?>> resolveStateType(CaseView<?, ?> caseView) {
+    Class<?> userClass = ClassUtils.getUserClass(caseView);
+    Class<?> resolvedState = ResolvableType.forClass(userClass).as(CaseView.class).getGeneric(1).resolve();
+    if (resolvedState == null || !Enum.class.isAssignableFrom(resolvedState)) {
+      throw new IllegalStateException(
+          "CaseView implementations must declare an enum state type. Found: %s".formatted(resolvedState));
+    }
+    @SuppressWarnings("unchecked")
+    Class<? extends Enum<?>> enumClass = (Class<? extends Enum<?>>) resolvedState;
+    return enumClass;
+  }
+
+  private enum JsonRole implements HasRole {
+    JSON;
+
+    @Override
+    public String getRole() {
+      return "json";
+    }
+
+    @Override
+    public String getCaseTypePermissions() {
+      return "";
+    }
   }
 }

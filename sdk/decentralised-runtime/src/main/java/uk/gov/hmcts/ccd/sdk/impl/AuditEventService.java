@@ -175,7 +175,9 @@ class AuditEventService {
   }
 
   private CaseDetails toCaseDetails(uk.gov.hmcts.ccd.domain.model.definition.CaseDetails data) {
-    return defaultMapper.convertValue(data, CaseDetails.class);
+    CaseDetails target = defaultMapper.convertValue(data, CaseDetails.class);
+    target.setData(data.getData() == null ? Map.of() : defaultMapper.convertValue(data.getData(), OBJECT_MAP));
+    return target;
   }
 
   @SneakyThrows
@@ -218,4 +220,5 @@ class AuditEventService {
   private record InsertedAuditEvent(long id, LocalDateTime createdDate) {}
 
   private static final TypeReference<Map<String, JsonNode>> DATA_TYPE = new TypeReference<>() {};
+  private static final TypeReference<Map<String, Object>> OBJECT_MAP = new TypeReference<>() {};
 }

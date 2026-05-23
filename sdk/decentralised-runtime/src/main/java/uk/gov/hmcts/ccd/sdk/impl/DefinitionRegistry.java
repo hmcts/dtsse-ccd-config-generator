@@ -39,6 +39,13 @@ public class DefinitionRegistry {
     }
 
     var loaded = new HashMap<String, CaseTypeDefinition>();
+    String configuredSnapshotDirectory = System.getProperty(
+        "ccd.definition.snapshots.dir",
+        System.getenv("CCD_DEFINITION_SNAPSHOTS_DIR")
+    );
+    if (configuredSnapshotDirectory != null && !configuredSnapshotDirectory.isBlank()) {
+      loadDefinitionsFromDirectory(loaded, new File(configuredSnapshotDirectory));
+    }
     loadDefinitionsFromDirectory(loaded, new File("build/cftlib/definition-snapshots"));
     loadDefinitionsFromDirectory(loaded, new File("/opt/app/build/cftlib/definition-snapshots"));
     loadDefinitionsFromClasspath(loaded);

@@ -30,9 +30,10 @@ class JsonCallbackAdapterFactory {
     return (details, detailsBefore) -> {
       Object response = invoke(callbackUrl, eventId, details, detailsBefore);
       JsonNode node = mapper.valueToTree(response == null ? Map.of() : response);
-      Object data = node.has("data")
-          ? mapper.convertValue(node.get("data"), details.getData().getClass())
-          : details.getData();
+      JsonNode dataNode = firstNode(node, "data", "case_data");
+      Object data = dataNode == null
+          ? details.getData()
+          : mapper.convertValue(dataNode, dataClass(details));
       return AboutToStartOrSubmitResponse.builder()
           .data(data)
           .errors(listNode(node, "errors"))
@@ -50,7 +51,11 @@ class JsonCallbackAdapterFactory {
       if (response == null) {
         return SubmittedCallbackResponse.builder().build();
       }
-      return mapper.convertValue(response, SubmittedCallbackResponse.class);
+      JsonNode node = mapper.valueToTree(response);
+      return SubmittedCallbackResponse.builder()
+          .confirmationHeader(textNode(node, "confirmation_header", "confirmationHeader"))
+          .confirmationBody(textNode(node, "confirmation_body", "confirmationBody"))
+          .build();
     };
   }
 
@@ -67,8 +72,20 @@ class JsonCallbackAdapterFactory {
     return routeRegistry.getObject().invoke(callbackUrl, payload, authorisation);
   }
 
-  private uk.gov.hmcts.reform.ccd.client.model.CaseDetails toCcdCaseDetails(CaseDetails<?, ?> details) {
-    return mapper.convertValue(details, uk.gov.hmcts.reform.ccd.client.model.CaseDetails.class);
+  private Map<String, Object> toCcdCaseDetails(CaseDetails<?, ?> details) {
+    JsonNode node = mapper.valueToTree(details);
+    Map<String, Object> callbackDetails = mapper.convertValue(
+        node,
+        mapper.getTypeFactory().constructMapType(Map.class, String.class, Object.class)
+    );
+    Object caseData = details.getData() == null ? Map.of() : mapper.convertValue(details.getData(), Object.class);
+    callbackDetails.put("data", caseData);
+    callbackDetails.put("case_data", caseData);
+    return callbackDetails;
+  }
+
+  private Class<?> dataClass(CaseDetails<?, ?> details) {
+    return details.getData() == null ? Map.class : details.getData().getClass();
   }
 
   @SuppressWarnings("unchecked")
@@ -96,5 +113,19 @@ class JsonCallbackAdapterFactory {
 
   private String textNode(JsonNode node, String field) {
     return node.has(field) && !node.get(field).isNull() ? node.get(field).asText() : null;
+  }
+
+  private String textNode(JsonNode node, String firstField, String secondField) {
+    String first = textNode(node, firstField);
+    return first == null ? textNode(node, secondField) : first;
+  }
+
+  private JsonNode firstNode(JsonNode node, String firstField, String secondField) {
+    JsonNode first = node.get(firstField);
+    if (first != null && !first.isNull()) {
+      return first;
+    }
+    JsonNode second = node.get(secondField);
+    return second == null || second.isNull() ? null : second;
   }
 }

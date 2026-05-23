@@ -1,5 +1,6 @@
 package uk.gov.hmcts.ccd.sdk.impl.json;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.lang.reflect.InvocationTargetException;
@@ -13,6 +14,8 @@ import lombok.SneakyThrows;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.ApplicationContext;
 import org.springframework.core.MethodParameter;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -36,7 +39,9 @@ class JsonCallbackRouteRegistry {
                             RequestMappingHandlerMapping handlerMapping) {
     this.applicationContext = applicationContext;
     this.mapper = mapper;
-    this.requestMapper = mapper.copy().configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
+    this.requestMapper = mapper.copy()
+        .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
+        .setSerializationInclusion(JsonInclude.Include.ALWAYS);
     this.routes = indexPostRoutes(handlerMapping);
   }
 
@@ -55,7 +60,11 @@ class JsonCallbackRouteRegistry {
     Object[] args = resolveArguments(method, payload, authorisation);
     try {
       Object result = method.invoke(bean, args);
-      return result instanceof ResponseEntity<?> response ? response.getBody() : result;
+      if (result instanceof ResponseEntity<?> response) {
+        assertSuccessfulResponse(callbackUrl, response.getStatusCode());
+        return response.getBody();
+      }
+      return result;
     } catch (IllegalAccessException e) {
       throw new IllegalStateException("Unable to invoke JSON callback " + callbackUrl, e);
     } catch (InvocationTargetException e) {
@@ -109,13 +118,14 @@ class JsonCallbackRouteRegistry {
       MethodParameter parameter = new MethodParameter(method, i);
       RequestBody requestBody = parameter.getParameterAnnotation(RequestBody.class);
       if (requestBody != null) {
-        args[i] = requestMapper.convertValue(payload, parameter.getParameterType());
+        byte[] jsonPayload = requestMapper.writeValueAsBytes(payload);
+        args[i] = requestMapper.readValue(jsonPayload, parameter.getParameterType());
         continue;
       }
 
       RequestHeader requestHeader = parameter.getParameterAnnotation(RequestHeader.class);
       if (requestHeader != null && isAuthorisationHeader(requestHeader)) {
-        args[i] = authorisation;
+        args[i] = headerArgument(parameter.getParameterType(), authorisation);
         continue;
       }
 
@@ -123,6 +133,25 @@ class JsonCallbackRouteRegistry {
           "Unsupported JSON callback parameter %s on %s".formatted(parameter.getParameter(), method));
     }
     return args;
+  }
+
+  private Object headerArgument(Class<?> parameterType, String authorisation) {
+    if (HttpHeaders.class.isAssignableFrom(parameterType)) {
+      HttpHeaders headers = new HttpHeaders();
+      headers.set(HttpHeaders.AUTHORIZATION, authorisation);
+      return headers;
+    }
+    if (String.class.equals(parameterType)) {
+      return authorisation;
+    }
+    throw new IllegalStateException("Unsupported Authorization header parameter type " + parameterType.getName());
+  }
+
+  private void assertSuccessfulResponse(String callbackUrl, HttpStatusCode statusCode) {
+    if (!statusCode.is2xxSuccessful()) {
+      throw new IllegalStateException(
+          "JSON callback %s returned non-success status %s".formatted(callbackUrl, statusCode.value()));
+    }
   }
 
   private boolean isAuthorisationHeader(RequestHeader requestHeader) {

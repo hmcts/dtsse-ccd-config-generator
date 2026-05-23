@@ -84,4 +84,8 @@ public class ResolvedCCDConfig<T, S, R extends HasRole> {
     }
     events = ImmutableMap.copyOf(merged);
   }
+
+  public void configureCaseType(String caseType) {
+    this.caseType = caseType;
+  }
 }

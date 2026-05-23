@@ -33,6 +33,7 @@ import uk.gov.hmcts.reform.ccd.client.model.SubmittedCallbackResponse;
 class LegacyCallbackSubmissionHandler implements CaseSubmissionHandler {
 
   private static final TypeReference<Map<String, JsonNode>> JSON_NODE_MAP = new TypeReference<>() {};
+  private static final TypeReference<Map<String, Object>> OBJECT_MAP = new TypeReference<>() {};
 
   private final ResolvedConfigRegistry registry;
   private final CcdCallbackExecutor executor;
@@ -52,6 +53,10 @@ class LegacyCallbackSubmissionHandler implements CaseSubmissionHandler {
   public CaseSubmissionHandlerResult apply(DecentralisedCaseEvent event) {
     log.info("[legacy] Creating event '{}' for case reference: {}",
         event.getEventDetails().getEventId(), event.getCaseDetails().getReference());
+
+    if (event.getCaseDetails().getData() == null) {
+      event.getCaseDetails().setData(Map.of());
+    }
 
     var outcome = prepareLegacySubmit(event);
 
@@ -110,6 +115,9 @@ class LegacyCallbackSubmissionHandler implements CaseSubmissionHandler {
       Map<String, JsonNode> normalisedData = callbackResponse.getData() == null
           ? Map.of()
           : mapper.convertValue(callbackResponse.getData(), JSON_NODE_MAP);
+      if (normalisedData == null) {
+        normalisedData = Map.of();
+      }
       event.getCaseDetails().setData(normalisedData);
 
       if (callbackResponse.getState() != null) {
@@ -161,16 +169,22 @@ class LegacyCallbackSubmissionHandler implements CaseSubmissionHandler {
   }
 
   private CallbackRequest buildCallbackRequest(DecentralisedCaseEvent event) {
-    CaseDetails caseDetails = mapper.convertValue(event.getCaseDetails(), CaseDetails.class);
+    CaseDetails caseDetails = toCallbackCaseDetails(event.getCaseDetails());
     CaseDetails caseDetailsBefore = event.getCaseDetailsBefore() == null
         ? null
-        : mapper.convertValue(event.getCaseDetailsBefore(), CaseDetails.class);
+        : toCallbackCaseDetails(event.getCaseDetailsBefore());
 
     return CallbackRequest.builder()
         .caseDetails(caseDetails)
         .caseDetailsBefore(caseDetailsBefore)
         .eventId(event.getEventDetails().getEventId())
         .build();
+  }
+
+  private CaseDetails toCallbackCaseDetails(uk.gov.hmcts.ccd.domain.model.definition.CaseDetails source) {
+    CaseDetails target = mapper.convertValue(source, CaseDetails.class);
+    target.setData(source.getData() == null ? Map.of() : mapper.convertValue(source.getData(), OBJECT_MAP));
+    return target;
   }
 
   private record LegacySubmitOutcome(DecentralisedSubmitEventResponse response,
