@@ -36,8 +36,9 @@ public class CaseSubmissionService {
 
   public DecentralisedSubmitEventResponse submit(DecentralisedCaseEvent event,
                                                  String authorisation,
+                                                 String serviceAuthorisation,
                                                  UUID idempotencyKey) {
-    return CallbackInvocationContext.withAuthorisation(authorisation, () ->
+    return CallbackInvocationContext.withAuthorisation(authorisation, serviceAuthorisation, () ->
         submitWithAuthorisationContext(event, authorisation, idempotencyKey));
   }
 

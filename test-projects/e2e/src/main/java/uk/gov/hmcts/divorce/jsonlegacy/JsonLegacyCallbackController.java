@@ -25,6 +25,7 @@ public class JsonLegacyCallbackController {
   public static final AtomicInteger aboutToSubmitAttempts = new AtomicInteger();
   public static final AtomicInteger submittedAttempts = new AtomicInteger();
   public static final AtomicBoolean aboutToSubmitSawAuthorisation = new AtomicBoolean();
+  public static final AtomicBoolean aboutToSubmitSawServiceAuthorisation = new AtomicBoolean();
   public static final AtomicBoolean submittedSawCommittedData = new AtomicBoolean();
 
   private final NamedParameterJdbcTemplate db;
@@ -37,12 +38,14 @@ public class JsonLegacyCallbackController {
     aboutToSubmitAttempts.set(0);
     submittedAttempts.set(0);
     aboutToSubmitSawAuthorisation.set(false);
+    aboutToSubmitSawServiceAuthorisation.set(false);
     submittedSawCommittedData.set(false);
   }
 
   @PostMapping("/about-to-submit")
   public ResponseEntity<AboutToSubmitResponse> aboutToSubmit(
       @RequestHeader("Authorization") String authorisation,
+      @RequestHeader("ServiceAuthorization") String serviceAuthorisation,
       @RequestBody JsonCallbackRequest request
   ) {
     aboutToSubmitAttempts.incrementAndGet();
@@ -53,6 +56,7 @@ public class JsonLegacyCallbackController {
 
     data.put("setInAboutToSubmit", MARKER);
     aboutToSubmitSawAuthorisation.set(authorisation != null && !authorisation.isBlank());
+    aboutToSubmitSawServiceAuthorisation.set(serviceAuthorisation != null && !serviceAuthorisation.isBlank());
     return ResponseEntity.ok(new AboutToSubmitResponse(data, List.of(), List.of()));
   }
 

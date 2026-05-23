@@ -2756,6 +2756,7 @@ public class TestWithCCD extends CftlibTest {
 
         assertThat(JsonLegacyCallbackController.aboutToSubmitAttempts.get(), equalTo(1));
         assertThat(JsonLegacyCallbackController.aboutToSubmitSawAuthorisation.get(), is(true));
+        assertThat(JsonLegacyCallbackController.aboutToSubmitSawServiceAuthorisation.get(), is(true));
         assertThat(JsonLegacyCallbackController.submittedAttempts.get(), equalTo(1));
         assertThat(JsonLegacyCallbackController.submittedSawCommittedData.get(), is(true));
     }

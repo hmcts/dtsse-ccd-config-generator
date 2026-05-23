@@ -28,6 +28,8 @@ import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandl
 @Component
 class JsonCallbackRouteRegistry {
 
+  private static final String SERVICE_AUTHORIZATION = "ServiceAuthorization";
+
   private final ApplicationContext applicationContext;
   private final ObjectMapper mapper;
   private final ObjectMapper requestMapper;
@@ -45,7 +47,10 @@ class JsonCallbackRouteRegistry {
     this.routes = indexPostRoutes(handlerMapping);
   }
 
-  Object invoke(String callbackUrl, Map<String, Object> payload, String authorisation) {
+  Object invoke(String callbackUrl,
+                Map<String, Object> payload,
+                String authorisation,
+                String serviceAuthorisation) {
     List<HandlerMethod> handlers = routes.get(normalise(callbackUrl));
     if (handlers == null || handlers.isEmpty()) {
       throw new IllegalStateException("No local Spring POST handler found for JSON callback " + callbackUrl);
@@ -57,7 +62,8 @@ class JsonCallbackRouteRegistry {
     HandlerMethod handler = handlers.getFirst();
     Object bean = resolveBean(handler);
     Method method = handler.getMethod();
-    Object[] args = resolveArguments(method, payload, authorisation);
+    HttpHeaders headers = callbackHeaders(authorisation, serviceAuthorisation);
+    Object[] args = resolveArguments(method, payload, headers);
     try {
       Object result = method.invoke(bean, args);
       if (result instanceof ResponseEntity<?> response) {
@@ -112,7 +118,7 @@ class JsonCallbackRouteRegistry {
   }
 
   @SneakyThrows
-  private Object[] resolveArguments(Method method, Map<String, Object> payload, String authorisation) {
+  private Object[] resolveArguments(Method method, Map<String, Object> payload, HttpHeaders headers) {
     Object[] args = new Object[method.getParameterCount()];
     for (int i = 0; i < args.length; i++) {
       MethodParameter parameter = new MethodParameter(method, i);
@@ -124,8 +130,8 @@ class JsonCallbackRouteRegistry {
       }
 
       RequestHeader requestHeader = parameter.getParameterAnnotation(RequestHeader.class);
-      if (requestHeader != null && isAuthorisationHeader(requestHeader)) {
-        args[i] = headerArgument(parameter.getParameterType(), authorisation);
+      if (requestHeader != null) {
+        args[i] = headerArgument(parameter.getParameterType(), requestHeader, headers);
         continue;
       }
 
@@ -135,16 +141,25 @@ class JsonCallbackRouteRegistry {
     return args;
   }
 
-  private Object headerArgument(Class<?> parameterType, String authorisation) {
+  private Object headerArgument(Class<?> parameterType, RequestHeader requestHeader, HttpHeaders headers) {
     if (HttpHeaders.class.isAssignableFrom(parameterType)) {
-      HttpHeaders headers = new HttpHeaders();
-      headers.set(HttpHeaders.AUTHORIZATION, authorisation);
       return headers;
     }
     if (String.class.equals(parameterType)) {
-      return authorisation;
+      String headerName = headerName(requestHeader);
+      if (isSupportedHeader(headerName)) {
+        return headers.getFirst(headerName);
+      }
+      throw new IllegalStateException("Unsupported JSON callback header " + headerName);
     }
-    throw new IllegalStateException("Unsupported Authorization header parameter type " + parameterType.getName());
+    throw new IllegalStateException("Unsupported JSON callback header parameter type " + parameterType.getName());
+  }
+
+  private HttpHeaders callbackHeaders(String authorisation, String serviceAuthorisation) {
+    HttpHeaders headers = new HttpHeaders();
+    headers.set(HttpHeaders.AUTHORIZATION, authorisation);
+    headers.set(SERVICE_AUTHORIZATION, serviceAuthorisation);
+    return headers;
   }
 
   private void assertSuccessfulResponse(String callbackUrl, HttpStatusCode statusCode) {
@@ -154,9 +169,16 @@ class JsonCallbackRouteRegistry {
     }
   }
 
-  private boolean isAuthorisationHeader(RequestHeader requestHeader) {
+  private boolean isSupportedHeader(String name) {
+    return "authorization".equalsIgnoreCase(name) || "serviceauthorization".equalsIgnoreCase(name);
+  }
+
+  private String headerName(RequestHeader requestHeader) {
     String name = !requestHeader.name().isBlank() ? requestHeader.name() : requestHeader.value();
-    return "authorization".equalsIgnoreCase(name);
+    if (name.isBlank()) {
+      throw new IllegalStateException("JSON callback String @RequestHeader must declare a header name");
+    }
+    return name;
   }
 
   private String normalise(String callbackUrl) {

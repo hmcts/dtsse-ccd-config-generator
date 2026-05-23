@@ -69,7 +69,8 @@ class JsonCallbackAdapterFactory {
     payload.put("event_id", eventId);
 
     String authorisation = CallbackInvocationContext.authorisation().orElse("");
-    return routeRegistry.getObject().invoke(callbackUrl, payload, authorisation);
+    String serviceAuthorisation = CallbackInvocationContext.serviceAuthorisation().orElse("");
+    return routeRegistry.getObject().invoke(callbackUrl, payload, authorisation, serviceAuthorisation);
   }
 
   private Map<String, Object> toCcdCaseDetails(CaseDetails<?, ?> details) {

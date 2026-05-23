@@ -58,6 +58,7 @@ class ServicePersistenceController {
   public ResponseEntity<DecentralisedSubmitEventResponse> createEvent(
       @RequestBody DecentralisedCaseEvent event,
       @RequestHeader(value = "Authorization") String authorisation,
+      @RequestHeader(value = "ServiceAuthorization", required = false) String serviceAuthorisation,
       @RequestHeader(value = IdempotencyEnforcer.IDEMPOTENCY_KEY_HEADER) UUID idempotencyKey) {
 
     if (authorisation.isBlank()) {
@@ -68,6 +69,7 @@ class ServicePersistenceController {
     var response = submissionService.submit(
         event,
         authorisation,
+        serviceAuthorisation,
         idempotencyKey
     );
     return ResponseEntity.ok(response);
