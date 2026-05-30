@@ -1,0 +1,16 @@
+[
+  {
+    "CaseTypeID": "E2E",
+    "Description": "JSON legacy no-callback event",
+    "DisplayOrder": 102,
+    "EndButtonLabel": "Save and continue",
+    "ID": "json-legacy-no-callback",
+    "LiveFrom": "01/01/2017",
+    "Name": "JSON legacy no-callback",
+    "PostConditionState": "*",
+    "PreConditionState(s)": "*",
+    "SecurityClassification": "Public",
+    "ShowEventNotes": "N",
+    "ShowSummary": "N"
+  }
+]

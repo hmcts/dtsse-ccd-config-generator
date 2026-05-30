@@ -176,6 +176,7 @@ public class TestWithCCD extends CftlibTest {
     private static final String API_FIRST_TASK_RECONFIGURE_EVENT_ID = ApiFirstTaskReconfigureEvent.EVENT_ID;
     private static final String API_FIRST_TASK_DELAYED_EVENT_ID = ApiFirstTaskDelayedEvent.EVENT_ID;
     private static final String JSON_LEGACY_EVENT_ID = "json-legacy-dispatch";
+    private static final String JSON_LEGACY_NO_CALLBACK_EVENT_ID = "json-legacy-no-callback";
     private String apiFirstTaskId;
     private String waTaskId;
     private long jsonLegacyCaseRef;
@@ -2782,6 +2783,25 @@ public class TestWithCCD extends CftlibTest {
     @SneakyThrows
     @Order(212)
     @Test
+    void jsonDefinitionEventWithoutCallbacksIsTriggerable() {
+        JsonLegacyCallbackController.reset();
+
+        var response = submitJsonLegacyEvent(
+            JSON_LEGACY_NO_CALLBACK_EVENT_ID,
+            Map.of("setInMidEvent", "json-legacy-no-callback")
+        );
+
+        assertThat(response.statusCode(), equalTo(201));
+        @SuppressWarnings("unchecked")
+        Map<String, Object> data = (Map<String, Object>) response.body().get("data");
+        assertThat(data.get("setInMidEvent"), equalTo("json-legacy-no-callback"));
+        assertThat(JsonLegacyCallbackController.aboutToSubmitAttempts.get(), equalTo(0));
+        assertThat(JsonLegacyCallbackController.submittedAttempts.get(), equalTo(0));
+    }
+
+    @SneakyThrows
+    @Order(213)
+    @Test
     void submittedRetriesAndDuplicateJsonLegacySubmissionDoesNotReRun() {
         JsonLegacyCallbackController.reset();
         var startEvent = ccdApi.startEvent(
@@ -2819,11 +2839,15 @@ public class TestWithCCD extends CftlibTest {
     }
 
     private JsonLegacyEventResponse submitJsonLegacyEvent(Map<String, ?> data) throws Exception {
+        return submitJsonLegacyEvent(JSON_LEGACY_EVENT_ID, data);
+    }
+
+    private JsonLegacyEventResponse submitJsonLegacyEvent(String eventId, Map<String, ?> data) throws Exception {
         var response = HttpClientBuilder.create().build().execute(
             prepareEventRequestForCase(
                 jsonLegacyCaseRef(),
                 "TEST_CASE_WORKER_USER@mailinator.com",
-                JSON_LEGACY_EVENT_ID,
+                eventId,
                 data
             )
         );

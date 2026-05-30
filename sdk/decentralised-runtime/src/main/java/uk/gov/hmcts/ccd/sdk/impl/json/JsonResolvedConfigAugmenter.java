@@ -106,7 +106,7 @@ class JsonResolvedConfigAugmenter implements ResolvedConfigAugmenter {
     List<CaseEventDefinition> events = definition.getEvents() == null ? List.of() : definition.getEvents();
     Map<String, Event<T, R, S>> existingEvents = config.getEvents() == null ? Map.of() : config.getEvents();
     for (CaseEventDefinition eventDefinition : events) {
-      if (existingEvents.containsKey(eventDefinition.getId()) || !hasJsonCallback(eventDefinition)) {
+      if (existingEvents.containsKey(eventDefinition.getId())) {
         continue;
       }
       additionalEvents.put(eventDefinition.getId(), buildEvent(config, eventDefinition));
@@ -145,10 +145,6 @@ class JsonResolvedConfigAugmenter implements ResolvedConfigAugmenter {
     event.setEndButtonLabel(definition.getEndButtonLabel());
     event.setRetries(retries(definition));
     return event;
-  }
-
-  private boolean hasJsonCallback(CaseEventDefinition definition) {
-    return definition.getCallBackURLAboutToSubmitEvent() != null || definition.getCallBackURLSubmittedEvent() != null;
   }
 
   private Map<Webhook, String> retries(CaseEventDefinition definition) {
