@@ -33,11 +33,6 @@ public class CcdSdkPlugin implements Plugin<Project> {
     configGeneration.setCanBeConsumed(false);
     configGeneration.setCanBeResolved(true);
     configGeneration.setDescription("Dependencies used when generating CCD configuration");
-    Configuration callbackCompatibilityRuntime = project.getConfigurations()
-        .maybeCreate("callbackCompatibilityRuntime");
-    callbackCompatibilityRuntime.setCanBeConsumed(false);
-    callbackCompatibilityRuntime.setCanBeResolved(true);
-    callbackCompatibilityRuntime.setDescription("Runtime for the CCD callback compatibility report tool");
     SourceSetContainer ssc = project.getExtensions()
         .getByType(JavaPluginExtension.class)
         .getSourceSets();
@@ -80,14 +75,10 @@ public class CcdSdkPlugin implements Plugin<Project> {
       }
 
       if (config.decentralised) {
-        // This is a signal to the cftlib to link in the feature branch
-        // TODO: remove on landing
-        project.getExtensions().getExtraProperties().set("cftlib.datastore", "decentralised");
         String version = getVersion();
         project.getDependencies().add("implementation", "com.github.hmcts:decentralised-runtime:"
             + version);
         String dependencyNotation = "com.github.hmcts:cftlib-dev-only:" + version;
-        project.getDependencies().add(callbackCompatibilityRuntime.getName(), dependencyNotation);
         if (config.runtimeIndexing) {
           project.getDependencies().add("implementation", dependencyNotation);
         } else {
@@ -102,7 +93,6 @@ public class CcdSdkPlugin implements Plugin<Project> {
             t.getEnvironment().put("CCD_SDK_DECENTRALISED", "true");
           }
         });
-        registerCallbackCompatibilityTask(project, callbackCompatibilityRuntime);
       }
 
       if (config.caseEventServiceBus) {
@@ -115,55 +105,6 @@ public class CcdSdkPlugin implements Plugin<Project> {
   private String getVersion() {
     String implementationVersion = getClass().getPackage().getImplementationVersion();
     return implementationVersion != null ? implementationVersion : "DEV-SNAPSHOT";
-  }
-
-  private void registerCallbackCompatibilityTask(Project project, Configuration runtime) {
-    if (project.getTasks().findByName("callbackCompatibilityReport") != null) {
-      return;
-    }
-
-    JavaExec report = project.getTasks().create("callbackCompatibilityReport", JavaExec.class);
-    report.setGroup("verification");
-    report.setDescription("Generate a CCD callback compatibility report from JSON definitions");
-    report.getMainClass().set("uk.gov.hmcts.ccd.sdk.testing.callback.CallbackCompatibilityTool");
-    report.setClasspath(runtime);
-    report.doFirst(new Action<Task>() {
-      @Override
-      public void execute(Task task) {
-        String baseUrl = propertyOrEnv(project, "callbackCompatibilityBaseUrl", "CALLBACK_COMPATIBILITY_BASE_URL",
-            "http://localhost:8081");
-        String mode = propertyOrEnv(project, "callbackCompatibilityMode", "CALLBACK_COMPATIBILITY_MODE", "inventory");
-        String definitions = propertyOrEnv(project, "callbackCompatibilityDefinitions",
-            "CALLBACK_COMPATIBILITY_DEFINITIONS", project.file("ccd-definitions").getAbsolutePath());
-        String out = propertyOrEnv(project, "callbackCompatibilityOut", "CALLBACK_COMPATIBILITY_OUT",
-            project.file("test-report").getAbsolutePath());
-        String authorization = propertyOrEnv(project, "callbackCompatibilityAuthorization",
-            "CALLBACK_COMPATIBILITY_AUTHORIZATION", "Bearer callback-compatibility");
-        String serviceAuthorization = propertyOrEnv(project, "callbackCompatibilityServiceAuthorization",
-            "CALLBACK_COMPATIBILITY_SERVICE_AUTHORIZATION", "Bearer callback-compatibility-s2s");
-        String caseRefStart = propertyOrEnv(project, "callbackCompatibilityCaseRefStart",
-            "CALLBACK_COMPATIBILITY_CASE_REF_START", "9900000000000000");
-
-        report.setArgs(Arrays.asList(
-            "--definitions", definitions,
-            "--base-url", baseUrl,
-            "--out", out,
-            "--mode", mode,
-            "--authorization", authorization,
-            "--service-authorization", serviceAuthorization,
-            "--case-ref-start", caseRefStart
-        ));
-      }
-    });
-  }
-
-  private String propertyOrEnv(Project project, String propertyName, String envName, String defaultValue) {
-    Object property = project.findProperty(propertyName);
-    if (property != null && !property.toString().isBlank()) {
-      return property.toString();
-    }
-    String env = System.getenv(envName);
-    return env == null || env.isBlank() ? defaultValue : env;
   }
 
   @Data

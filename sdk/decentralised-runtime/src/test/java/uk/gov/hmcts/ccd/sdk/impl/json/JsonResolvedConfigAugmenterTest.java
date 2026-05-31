@@ -2,6 +2,7 @@ package uk.gov.hmcts.ccd.sdk.impl.json;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.google.common.collect.ImmutableSet;
@@ -36,21 +37,29 @@ class JsonResolvedConfigAugmenterTest {
     CaseEventDefinition overlappingEvent = event("overlap");
     overlappingEvent.setCallBackURLAboutToSubmitEvent("/legacy/about-to-submit");
     overlappingEvent.setCallBackURLSubmittedEvent("/legacy/submitted");
+    Event<TestCaseData, TestRole, TestState> sdkEvent = existingEvent("overlap");
+    JsonCallbackAdapterFactory callbackAdapterFactory = mock(JsonCallbackAdapterFactory.class);
     ResolvedCCDConfig<TestCaseData, TestState, TestRole> config = config(Map.of(
-        "overlap", existingEvent("overlap")
+        "overlap", sdkEvent
     ));
 
-    augmenter(definition(overlappingEvent)).augment(List.of(config));
+    augmenter(definition(overlappingEvent), callbackAdapterFactory).augment(List.of(config));
 
-    assertThat(config.getEvents()).containsOnlyKeys("overlap");
+    assertThat(config.getEvents()).containsEntry("overlap", sdkEvent);
+    verifyNoInteractions(callbackAdapterFactory);
   }
 
   private JsonResolvedConfigAugmenter augmenter(CaseTypeDefinition definition) {
+    return augmenter(definition, mock(JsonCallbackAdapterFactory.class));
+  }
+
+  private JsonResolvedConfigAugmenter augmenter(CaseTypeDefinition definition,
+                                                JsonCallbackAdapterFactory callbackAdapterFactory) {
     DefinitionRegistry definitionRegistry = mock(DefinitionRegistry.class);
     when(definitionRegistry.loadDefinitions()).thenReturn(Map.of("TestCase", definition));
     return new JsonResolvedConfigAugmenter(
         definitionRegistry,
-        mock(JsonCallbackAdapterFactory.class),
+        callbackAdapterFactory,
         List.of()
     );
   }
