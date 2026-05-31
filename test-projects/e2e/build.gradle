@@ -121,13 +121,6 @@ bootJar {
   }
 }
 
-generateCCDConfig.doLast {
-  copy {
-    from file('ccd-definitions')
-    into layout.buildDirectory.dir('definitions/E2E')
-  }
-}
-
 tasks.withType(CftlibExec).configureEach {
   group = 'ccd tasks'
   authMode = AuthMode.Local

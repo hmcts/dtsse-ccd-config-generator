@@ -1,0 +1,25 @@
+[
+  {
+    "ID": "json-legacy-dispatch",
+    "Name": "JSON legacy dispatch",
+    "Description": "JSON legacy dispatch",
+    "CaseTypeID": "E2E",
+    "DisplayOrder": 101,
+    "EndButtonLabel": "Save and continue",
+    "ShowSummary": "N",
+    "ShowEventNotes": "N",
+    "CallBackURLAboutToSubmitEvent": "${CCD_DEF_BASE_URL}/jsonLegacy/about-to-submit",
+    "CallBackURLSubmittedEvent": "${CCD_DEF_BASE_URL}/jsonLegacy/submitted",
+    "RetriesTimeoutURLSubmittedEvent": "120,120"
+  },
+  {
+    "ID": "json-legacy-no-callback",
+    "Name": "JSON legacy no-callback",
+    "Description": "JSON legacy no-callback event",
+    "CaseTypeID": "E2E",
+    "DisplayOrder": 102,
+    "EndButtonLabel": "Save and continue",
+    "ShowSummary": "N",
+    "ShowEventNotes": "N"
+  }
+]

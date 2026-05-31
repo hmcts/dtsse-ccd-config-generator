@@ -123,7 +123,6 @@ import uk.gov.hmcts.rse.ccd.lib.test.CftlibTest;
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.DEFINED_PORT)
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 @TestPropertySource(properties = {
-    "decentralisation.legacy-json-service=true",
     "spring.jms.servicebus.enabled=true",
     "ccd.servicebus.destination=ccd-case-events-test",
     "ccd.servicebus.scheduler-enabled=true",
@@ -2740,16 +2739,15 @@ public class TestWithCCD extends CftlibTest {
     void dispatchesJsonDefinitionCallbacksToSpringController() {
         JsonLegacyCallbackController.reset();
 
-        var response = submitJsonLegacyEvent(Map.of("note", "json-legacy-normal"));
-        assertThat(response.statusCode(), equalTo(201));
+        var response = submitJsonLegacyEvent(Map.of("note", "json-legacy-normal"), 201);
 
         @SuppressWarnings("unchecked")
-        Map<String, Object> data = (Map<String, Object>) response.body().get("data");
+        Map<String, Object> data = (Map<String, Object>) response.get("data");
         assertThat(data.get("setInAboutToSubmit"), equalTo(JsonLegacyCallbackController.MARKER));
 
         @SuppressWarnings("unchecked")
         Map<String, Object> afterSubmit =
-            (Map<String, Object>) response.body().get("after_submit_callback_response");
+            (Map<String, Object>) response.get("after_submit_callback_response");
         assertThat(afterSubmit.get("confirmation_header"),
             equalTo(JsonLegacyCallbackController.CONFIRMATION_HEADER));
         assertThat(afterSubmit.get("confirmation_body"),
@@ -2769,11 +2767,10 @@ public class TestWithCCD extends CftlibTest {
         JsonLegacyCallbackController.reset();
         String before = storedData();
 
-        var response = submitJsonLegacyEvent(Map.of("note", "json-legacy-error"));
+        var response = submitJsonLegacyEvent(Map.of("note", "json-legacy-error"), 422);
 
-        assertThat(response.statusCode(), equalTo(422));
         @SuppressWarnings("unchecked")
-        List<String> callbackErrors = (List<String>) response.body().get("callbackErrors");
+        List<String> callbackErrors = (List<String>) response.get("callbackErrors");
         assertThat(callbackErrors, equalTo(List.of("JSON legacy validation error")));
         assertThat(storedData(), equalTo(before));
         assertThat(JsonLegacyCallbackController.aboutToSubmitAttempts.get(), equalTo(1));
@@ -2788,12 +2785,12 @@ public class TestWithCCD extends CftlibTest {
 
         var response = submitJsonLegacyEvent(
             JSON_LEGACY_NO_CALLBACK_EVENT_ID,
-            Map.of("setInMidEvent", "json-legacy-no-callback")
+            Map.of("setInMidEvent", "json-legacy-no-callback"),
+            201
         );
 
-        assertThat(response.statusCode(), equalTo(201));
         @SuppressWarnings("unchecked")
-        Map<String, Object> data = (Map<String, Object>) response.body().get("data");
+        Map<String, Object> data = (Map<String, Object>) response.get("data");
         assertThat(data.get("setInMidEvent"), equalTo("json-legacy-no-callback"));
         assertThat(JsonLegacyCallbackController.aboutToSubmitAttempts.get(), equalTo(0));
         assertThat(JsonLegacyCallbackController.submittedAttempts.get(), equalTo(0));
@@ -2838,11 +2835,13 @@ public class TestWithCCD extends CftlibTest {
         assertThat(JsonLegacyCallbackController.submittedAttempts.get(), equalTo(3));
     }
 
-    private JsonLegacyEventResponse submitJsonLegacyEvent(Map<String, ?> data) throws Exception {
-        return submitJsonLegacyEvent(JSON_LEGACY_EVENT_ID, data);
+    private Map<String, Object> submitJsonLegacyEvent(Map<String, ?> data, int expectedStatus) throws Exception {
+        return submitJsonLegacyEvent(JSON_LEGACY_EVENT_ID, data, expectedStatus);
     }
 
-    private JsonLegacyEventResponse submitJsonLegacyEvent(String eventId, Map<String, ?> data) throws Exception {
+    private Map<String, Object> submitJsonLegacyEvent(String eventId,
+                                                       Map<String, ?> data,
+                                                       int expectedStatus) throws Exception {
         var response = HttpClientBuilder.create().build().execute(
             prepareEventRequestForCase(
                 jsonLegacyCaseRef(),
@@ -2851,8 +2850,9 @@ public class TestWithCCD extends CftlibTest {
                 data
             )
         );
+        assertThat(response.getStatusLine().getStatusCode(), equalTo(expectedStatus));
         Map<String, Object> body = mapper.readValue(EntityUtils.toString(response.getEntity()), new TypeReference<>() {});
-        return new JsonLegacyEventResponse(response.getStatusLine().getStatusCode(), body);
+        return body;
     }
 
     private String storedData() {
@@ -2861,9 +2861,6 @@ public class TestWithCCD extends CftlibTest {
             Map.of("reference", jsonLegacyCaseRef()),
             String.class
         );
-    }
-
-    private record JsonLegacyEventResponse(int statusCode, Map<String, Object> body) {
     }
 
     private long jsonLegacyCaseRef() {

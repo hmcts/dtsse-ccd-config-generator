@@ -3,14 +3,11 @@ package uk.gov.hmcts.ccd.sdk;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Maps;
 import java.lang.reflect.Field;
-import java.util.ArrayList;
 import java.util.Collection;
-import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import uk.gov.hmcts.ccd.sdk.api.CCD;
 import uk.gov.hmcts.ccd.sdk.api.Event;
@@ -27,17 +24,7 @@ public class ResolvedConfigRegistry {
   private final ImmutableMap<String, ResolvedCCDConfig<?, ?, ?>> configsByCaseType;
 
   public ResolvedConfigRegistry(java.util.List<ResolvedCCDConfig<?, ?, ?>> configs) {
-    this(configs, List.of());
-  }
-
-  @Autowired
-  public ResolvedConfigRegistry(java.util.List<ResolvedCCDConfig<?, ?, ?>> configs,
-                                java.util.List<ResolvedConfigAugmenter> augmenters) {
-    List<ResolvedCCDConfig<?, ?, ?>> resolved = new ArrayList<>(configs);
-    for (ResolvedConfigAugmenter augmenter : augmenters) {
-      resolved = new ArrayList<>(augmenter.augment(resolved));
-    }
-    this.configsByCaseType = Maps.uniqueIndex(resolved, ResolvedCCDConfig::getCaseType);
+    this.configsByCaseType = Maps.uniqueIndex(configs, ResolvedCCDConfig::getCaseType);
   }
 
   public Collection<ResolvedCCDConfig<?, ?, ?>> getAll() {

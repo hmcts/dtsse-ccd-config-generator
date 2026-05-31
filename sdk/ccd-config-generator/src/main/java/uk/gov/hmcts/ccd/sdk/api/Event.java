@@ -182,6 +182,13 @@ public class Event<T, R extends HasRole, S> {
       return this;
     }
 
+    public EventBuilder<T, R, S> retries(Webhook hook, String retries) {
+      if (retries != null && !retries.isBlank()) {
+        this.retries.put(hook, retries);
+      }
+      return this;
+    }
+
     public EventBuilder<T, R, S> submittedCallback(Submitted<T, S> submittedCallback) {
       // TODO: split out decentralised event building to remove these fields for decentralised events.
       if (this.submitHandler != null) {

@@ -7,6 +7,7 @@ import java.util.Map;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Component;
 import uk.gov.hmcts.ccd.sdk.api.CaseDetails;
+import uk.gov.hmcts.ccd.sdk.api.callback.AboutToStart;
 import uk.gov.hmcts.ccd.sdk.api.callback.AboutToStartOrSubmitResponse;
 import uk.gov.hmcts.ccd.sdk.api.callback.AboutToSubmit;
 import uk.gov.hmcts.ccd.sdk.api.callback.Submitted;
@@ -14,7 +15,7 @@ import uk.gov.hmcts.ccd.sdk.impl.CallbackInvocationContext;
 import uk.gov.hmcts.reform.ccd.client.model.SubmittedCallbackResponse;
 
 @Component
-class JsonCallbackAdapterFactory {
+public class JsonCallbackAdapterFactory {
 
   private final ObjectMapper mapper;
   private final ObjectProvider<JsonCallbackRouteRegistry> routeRegistry;
@@ -26,26 +27,17 @@ class JsonCallbackAdapterFactory {
   }
 
   @SuppressWarnings({"rawtypes", "unchecked"})
-  AboutToSubmit aboutToSubmit(String callbackUrl, String eventId) {
-    return (details, detailsBefore) -> {
-      Object response = invoke(callbackUrl, eventId, details, detailsBefore);
-      JsonNode node = mapper.valueToTree(response == null ? Map.of() : response);
-      JsonNode dataNode = firstNode(node, "data", "case_data");
-      Object data = dataNode == null
-          ? details.getData()
-          : mapper.convertValue(dataNode, dataClass(details));
-      return AboutToStartOrSubmitResponse.builder()
-          .data(data)
-          .errors(listNode(node, "errors"))
-          .warnings(listNode(node, "warnings"))
-          .state(state(node, details))
-          .securityClassification(textNode(node, "security_classification"))
-          .build();
-    };
+  public AboutToStart aboutToStart(String callbackUrl, String eventId) {
+    return details -> response(callbackUrl, eventId, details, null);
+  }
+
+  @SuppressWarnings({"rawtypes", "unchecked"})
+  public AboutToSubmit aboutToSubmit(String callbackUrl, String eventId) {
+    return (details, detailsBefore) -> response(callbackUrl, eventId, details, detailsBefore);
   }
 
   @SuppressWarnings("rawtypes")
-  Submitted submitted(String callbackUrl, String eventId) {
+  public Submitted submitted(String callbackUrl, String eventId) {
     return (details, detailsBefore) -> {
       Object response = invoke(callbackUrl, eventId, details, detailsBefore);
       if (response == null) {
@@ -57,6 +49,25 @@ class JsonCallbackAdapterFactory {
           .confirmationBody(textNode(node, "confirmation_body", "confirmationBody"))
           .build();
     };
+  }
+
+  private AboutToStartOrSubmitResponse response(String callbackUrl,
+                                                String eventId,
+                                                CaseDetails<?, ?> details,
+                                                CaseDetails<?, ?> detailsBefore) {
+    Object response = invoke(callbackUrl, eventId, details, detailsBefore);
+    JsonNode node = mapper.valueToTree(response == null ? Map.of() : response);
+    JsonNode dataNode = firstNode(node, "data", "case_data");
+    Object data = dataNode == null
+        ? details.getData()
+        : mapper.convertValue(dataNode, dataClass(details));
+    return AboutToStartOrSubmitResponse.builder()
+        .data(data)
+        .errors(listNode(node, "errors"))
+        .warnings(listNode(node, "warnings"))
+        .state(state(node, details))
+        .securityClassification(textNode(node, "security_classification"))
+        .build();
   }
 
   private Object invoke(String callbackUrl,

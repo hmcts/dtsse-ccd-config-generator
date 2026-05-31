@@ -1,6 +1,5 @@
 package uk.gov.hmcts.divorce.jsonlegacy;
 
-import com.fasterxml.jackson.annotation.JsonProperty;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -13,7 +12,6 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-import uk.gov.hmcts.reform.ccd.client.model.CaseDetails;
 
 @RestController
 @RequestMapping("/jsonLegacy")
@@ -43,33 +41,44 @@ public class JsonLegacyCallbackController {
   }
 
   @PostMapping("/about-to-submit")
-  public ResponseEntity<AboutToSubmitResponse> aboutToSubmit(
+  public ResponseEntity<Map<String, Object>> aboutToSubmit(
       @RequestHeader("Authorization") String authorisation,
       @RequestHeader("ServiceAuthorization") String serviceAuthorisation,
-      @RequestBody JsonCallbackRequest request
+      @RequestBody Map<String, Object> request
   ) {
     aboutToSubmitAttempts.incrementAndGet();
-    Map<String, Object> data = new LinkedHashMap<>(request.caseDetails().getData());
+    Map<String, Object> data = new LinkedHashMap<>(caseData(request));
     if ("json-legacy-error".equals(data.get("note"))) {
-      return ResponseEntity.ok(new AboutToSubmitResponse(data, List.of("JSON legacy validation error"), List.of()));
+      return ResponseEntity.ok(aboutToSubmitResponse(data, List.of("JSON legacy validation error")));
     }
 
     data.put("setInAboutToSubmit", MARKER);
     aboutToSubmitSawAuthorisation.set(authorisation != null && !authorisation.isBlank());
     aboutToSubmitSawServiceAuthorisation.set(serviceAuthorisation != null && !serviceAuthorisation.isBlank());
-    return ResponseEntity.ok(new AboutToSubmitResponse(data, List.of(), List.of()));
+    return ResponseEntity.ok(aboutToSubmitResponse(data, List.of()));
   }
 
   @PostMapping("/submitted")
-  public SubmittedResponse submitted(@RequestBody JsonCallbackRequest request) {
+  public Map<String, Object> submitted(@RequestBody Map<String, Object> request) {
     int attempt = submittedAttempts.incrementAndGet();
-    Map<String, Object> data = request.caseDetails().getData();
+    Map<String, Object> data = caseData(request);
     if ("json-legacy-retry".equals(data.get("note")) && attempt < 3) {
       throw new IllegalStateException("retry submitted callback");
     }
 
-    submittedSawCommittedData.set(storedDataContainsMarker(request.caseDetails().getId()));
-    return new SubmittedResponse(CONFIRMATION_HEADER, CONFIRMATION_BODY);
+    submittedSawCommittedData.set(storedDataContainsMarker(caseReference(request)));
+    return Map.of(
+        "confirmation_header", CONFIRMATION_HEADER,
+        "confirmation_body", CONFIRMATION_BODY
+    );
+  }
+
+  private Map<String, Object> aboutToSubmitResponse(Map<String, Object> data, List<String> errors) {
+    Map<String, Object> response = new LinkedHashMap<>();
+    response.put("data", data);
+    response.put("errors", errors);
+    response.put("warnings", List.of());
+    return response;
   }
 
   private boolean storedDataContainsMarker(Long caseReference) {
@@ -81,24 +90,29 @@ public class JsonLegacyCallbackController {
     return stored != null && stored.contains(MARKER);
   }
 
-  public record JsonCallbackRequest(@JsonProperty("case_details") CaseDetails caseDetails) {
-  }
-
-  public record AboutToSubmitResponse(
-      Map<String, Object> data,
-      List<String> errors,
-      List<String> warnings
-  ) {
-    public AboutToSubmitResponse {
-      errors = errors == null ? List.of() : List.copyOf(errors);
-      warnings = warnings == null ? List.of() : List.copyOf(warnings);
-      data = data == null ? Map.of() : new LinkedHashMap<>(data);
+  @SuppressWarnings("unchecked")
+  private Map<String, Object> caseData(Map<String, Object> request) {
+    Object data = caseDetails(request).get("data");
+    if (data instanceof Map<?, ?> map) {
+      return (Map<String, Object>) map;
     }
+    return Map.of();
   }
 
-  public record SubmittedResponse(
-      @JsonProperty("confirmation_header") String confirmationHeader,
-      @JsonProperty("confirmation_body") String confirmationBody
-  ) {
+  private Long caseReference(Map<String, Object> request) {
+    Object id = caseDetails(request).get("id");
+    if (id instanceof Number number) {
+      return number.longValue();
+    }
+    return Long.parseLong(id.toString());
+  }
+
+  @SuppressWarnings("unchecked")
+  private Map<String, Object> caseDetails(Map<String, Object> request) {
+    Object details = request.get("case_details");
+    if (details instanceof Map<?, ?> map) {
+      return (Map<String, Object>) map;
+    }
+    return Map.of();
   }
 }

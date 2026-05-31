@@ -1,9 +1,0 @@
-[
-  {
-    "CRUD": "CRU",
-    "CaseEventID": "json-legacy-no-callback",
-    "CaseTypeID": "E2E",
-    "LiveFrom": "01/01/2017",
-    "UserRole": "caseworker-divorce-courtadmin_beta"
-  }
-]
