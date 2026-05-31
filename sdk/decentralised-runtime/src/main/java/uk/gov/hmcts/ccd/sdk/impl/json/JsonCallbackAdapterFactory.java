@@ -1,8 +1,12 @@
 package uk.gov.hmcts.ccd.sdk.impl.json;
 
+import com.fasterxml.jackson.annotation.JsonAlias;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Component;
@@ -42,10 +46,10 @@ public class JsonCallbackAdapterFactory {
       if (response == null) {
         return SubmittedCallbackResponse.builder().build();
       }
-      JsonNode node = mapper.valueToTree(response);
+      JsonCallbackResponse callbackResponse = callbackResponse(response);
       return SubmittedCallbackResponse.builder()
-          .confirmationHeader(textNode(node, "confirmation_header", "confirmationHeader"))
-          .confirmationBody(textNode(node, "confirmation_body", "confirmationBody"))
+          .confirmationHeader(callbackResponse.confirmationHeader)
+          .confirmationBody(callbackResponse.confirmationBody)
           .build();
     };
   }
@@ -55,17 +59,16 @@ public class JsonCallbackAdapterFactory {
                                                 CaseDetails<?, ?> details,
                                                 CaseDetails<?, ?> detailsBefore) {
     Object response = invoke(callbackUrl, eventId, details, detailsBefore);
-    JsonNode node = mapper.valueToTree(response == null ? Map.of() : response);
-    JsonNode dataNode = firstNode(node, "data", "case_data");
-    Object data = dataNode == null
+    JsonCallbackResponse callbackResponse = callbackResponse(response);
+    Object data = callbackResponse.data == null
         ? details.getData()
-        : mapper.convertValue(dataNode, dataClass(details));
+        : mapper.convertValue(callbackResponse.data, dataClass(details));
     return AboutToStartOrSubmitResponse.builder()
         .data(data)
-        .errors(listNode(node, "errors"))
-        .warnings(listNode(node, "warnings"))
-        .state(state(node, details))
-        .securityClassification(textNode(node, "security_classification"))
+        .errors(callbackResponse.errors())
+        .warnings(callbackResponse.warnings())
+        .state(callbackResponse.state)
+        .securityClassification(callbackResponse.securityClassification)
         .build();
   }
 
@@ -97,44 +100,40 @@ public class JsonCallbackAdapterFactory {
     return details.getData() == null ? Map.class : details.getData().getClass();
   }
 
-  @SuppressWarnings("unchecked")
-  private <S> S state(JsonNode node, CaseDetails<?, S> details) {
-    String state = textNode(node, "state");
-    if (state == null) {
-      return null;
-    }
-    S current = details.getState();
-    if (current instanceof Enum<?> currentEnum) {
-      return (S) Enum.valueOf((Class) currentEnum.getDeclaringClass(), state);
-    }
-    return (S) state;
+  private JsonCallbackResponse callbackResponse(Object response) {
+    return response == null ? new JsonCallbackResponse() : mapper.convertValue(response, JsonCallbackResponse.class);
   }
 
-  private java.util.List<String> listNode(JsonNode node, String field) {
-    if (!node.has(field) || node.get(field).isNull()) {
-      return java.util.List.of();
+  @JsonIgnoreProperties(ignoreUnknown = true)
+  private static class JsonCallbackResponse {
+
+    @JsonAlias("case_data")
+    public Object data;
+
+    public List<String> errors = List.of();
+
+    public List<String> warnings = List.of();
+
+    public Object state;
+
+    @JsonProperty("security_classification")
+    @JsonAlias("securityClassification")
+    public String securityClassification;
+
+    @JsonProperty("confirmation_header")
+    @JsonAlias("confirmationHeader")
+    public String confirmationHeader;
+
+    @JsonProperty("confirmation_body")
+    @JsonAlias("confirmationBody")
+    public String confirmationBody;
+
+    private List<String> errors() {
+      return errors == null ? List.of() : errors;
     }
-    return mapper.convertValue(
-        node.get(field),
-        mapper.getTypeFactory().constructCollectionType(java.util.List.class, String.class)
-    );
-  }
 
-  private String textNode(JsonNode node, String field) {
-    return node.has(field) && !node.get(field).isNull() ? node.get(field).asText() : null;
-  }
-
-  private String textNode(JsonNode node, String firstField, String secondField) {
-    String first = textNode(node, firstField);
-    return first == null ? textNode(node, secondField) : first;
-  }
-
-  private JsonNode firstNode(JsonNode node, String firstField, String secondField) {
-    JsonNode first = node.get(firstField);
-    if (first != null && !first.isNull()) {
-      return first;
+    private List<String> warnings() {
+      return warnings == null ? List.of() : warnings;
     }
-    JsonNode second = node.get(secondField);
-    return second == null || second.isNull() ? null : second;
   }
 }
