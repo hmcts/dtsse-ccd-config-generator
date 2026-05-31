@@ -10,6 +10,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import jakarta.servlet.http.HttpServletRequest;
 import lombok.SneakyThrows;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.ApplicationContext;
@@ -21,6 +22,8 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMethod;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
 import org.springframework.web.method.HandlerMethod;
 import org.springframework.web.servlet.mvc.method.RequestMappingInfo;
 import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping;
@@ -48,9 +51,7 @@ class JsonCallbackRouteRegistry {
   }
 
   Object invoke(String callbackUrl,
-                Map<String, Object> payload,
-                String authorisation,
-                String serviceAuthorisation) {
+                Map<String, Object> payload) {
     List<HandlerMethod> handlers = routes.get(normalise(callbackUrl));
     if (handlers == null || handlers.isEmpty()) {
       throw new IllegalStateException("No local Spring POST handler found for JSON callback " + callbackUrl);
@@ -62,7 +63,7 @@ class JsonCallbackRouteRegistry {
     HandlerMethod handler = handlers.getFirst();
     Object bean = resolveBean(handler);
     Method method = handler.getMethod();
-    HttpHeaders headers = callbackHeaders(authorisation, serviceAuthorisation);
+    HttpHeaders headers = callbackHeaders();
     Object[] args = resolveArguments(method, payload, headers);
     try {
       Object result = method.invoke(bean, args);
@@ -155,11 +156,20 @@ class JsonCallbackRouteRegistry {
     throw new IllegalStateException("Unsupported JSON callback header parameter type " + parameterType.getName());
   }
 
-  private HttpHeaders callbackHeaders(String authorisation, String serviceAuthorisation) {
+  private HttpHeaders callbackHeaders() {
     HttpHeaders headers = new HttpHeaders();
-    headers.set(HttpHeaders.AUTHORIZATION, authorisation);
-    headers.set(SERVICE_AUTHORIZATION, serviceAuthorisation);
+    headers.set(HttpHeaders.AUTHORIZATION, currentRequestHeader(HttpHeaders.AUTHORIZATION));
+    headers.set(SERVICE_AUTHORIZATION, currentRequestHeader(SERVICE_AUTHORIZATION));
     return headers;
+  }
+
+  private String currentRequestHeader(String name) {
+    if (RequestContextHolder.getRequestAttributes() instanceof ServletRequestAttributes servletAttributes) {
+      HttpServletRequest request = servletAttributes.getRequest();
+      String value = request.getHeader(name);
+      return value == null ? "" : value;
+    }
+    return "";
   }
 
   private void assertSuccessfulResponse(String callbackUrl, HttpStatusCode statusCode) {

@@ -11,7 +11,6 @@ import uk.gov.hmcts.ccd.sdk.api.callback.AboutToStart;
 import uk.gov.hmcts.ccd.sdk.api.callback.AboutToStartOrSubmitResponse;
 import uk.gov.hmcts.ccd.sdk.api.callback.AboutToSubmit;
 import uk.gov.hmcts.ccd.sdk.api.callback.Submitted;
-import uk.gov.hmcts.ccd.sdk.impl.CallbackInvocationContext;
 import uk.gov.hmcts.reform.ccd.client.model.SubmittedCallbackResponse;
 
 @Component
@@ -79,9 +78,7 @@ public class JsonCallbackAdapterFactory {
     payload.put("case_details_before", detailsBefore == null ? null : toCcdCaseDetails(detailsBefore));
     payload.put("event_id", eventId);
 
-    String authorisation = CallbackInvocationContext.authorisation().orElse("");
-    String serviceAuthorisation = CallbackInvocationContext.serviceAuthorisation().orElse("");
-    return routeRegistry.getObject().invoke(callbackUrl, payload, authorisation, serviceAuthorisation);
+    return routeRegistry.getObject().invoke(callbackUrl, payload);
   }
 
   private Map<String, Object> toCcdCaseDetails(CaseDetails<?, ?> details) {

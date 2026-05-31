@@ -35,7 +35,6 @@ public class ServicePersistenceControllerTest {
     ResponseEntity<DecentralisedSubmitEventResponse> response = controller.createEvent(
         event,
         "",
-        null,
         UUID.randomUUID()
     );
 
@@ -54,7 +53,6 @@ public class ServicePersistenceControllerTest {
     ResponseEntity<DecentralisedSubmitEventResponse> response = controller.createEvent(
         event,
         " ",
-        null,
         UUID.randomUUID()
     );
 
@@ -71,20 +69,19 @@ public class ServicePersistenceControllerTest {
     DecentralisedCaseEvent event = mock(DecentralisedCaseEvent.class);
     UUID idempotencyKey = UUID.randomUUID();
     var expectedResponse = new DecentralisedSubmitEventResponse();
-    when(submissionService.submit(event, "Bearer token", "Bearer service-token", idempotencyKey))
+    when(submissionService.submit(event, "Bearer token", idempotencyKey))
         .thenReturn(expectedResponse);
 
     ResponseEntity<DecentralisedSubmitEventResponse> response = controller.createEvent(
         event,
         "Bearer token",
-        "Bearer service-token",
         idempotencyKey
     );
 
     assertThat(response.getStatusCodeValue()).isEqualTo(200);
     assertThat(response.getBody()).isSameAs(expectedResponse);
 
-    verify(submissionService).submit(event, "Bearer token", "Bearer service-token", idempotencyKey);
+    verify(submissionService).submit(event, "Bearer token", idempotencyKey);
     verifyNoMoreInteractions(submissionService);
   }
 }
