@@ -33,7 +33,6 @@ import uk.gov.hmcts.reform.ccd.client.model.SubmittedCallbackResponse;
 class LegacyCallbackSubmissionHandler implements CaseSubmissionHandler {
 
   private static final TypeReference<Map<String, JsonNode>> JSON_NODE_MAP = new TypeReference<>() {};
-  private static final TypeReference<Map<String, Object>> OBJECT_MAP = new TypeReference<>() {};
 
   private final ResolvedConfigRegistry registry;
   private final CcdCallbackExecutor executor;
@@ -182,9 +181,7 @@ class LegacyCallbackSubmissionHandler implements CaseSubmissionHandler {
   }
 
   private CaseDetails toCallbackCaseDetails(uk.gov.hmcts.ccd.domain.model.definition.CaseDetails source) {
-    CaseDetails target = mapper.convertValue(source, CaseDetails.class);
-    target.setData(source.getData() == null ? Map.of() : mapper.convertValue(source.getData(), OBJECT_MAP));
-    return target;
+    return mapper.convertValue(source, CaseDetails.class);
   }
 
   private record LegacySubmitOutcome(DecentralisedSubmitEventResponse response,
