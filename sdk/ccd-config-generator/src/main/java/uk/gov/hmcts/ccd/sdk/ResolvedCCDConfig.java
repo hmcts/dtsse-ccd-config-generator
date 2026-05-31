@@ -67,10 +67,6 @@ public class ResolvedCCDConfig<T, S, R extends HasRole> {
   List<ComplexTypeAuthorisation<R>> complexTypeAuthorisations;
 
   public void addEvents(Map<String, Event<T, R, S>> additionalEvents) {
-    if (additionalEvents.isEmpty()) {
-      return;
-    }
-
     Map<String, Event<T, R, S>> merged = new LinkedHashMap<>();
     if (events != null) {
       merged.putAll(events);
