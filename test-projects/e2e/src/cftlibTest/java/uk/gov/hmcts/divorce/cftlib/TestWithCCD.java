@@ -89,9 +89,11 @@ import uk.gov.hmcts.divorce.simplecase.SimpleCaseConfiguration;
 import uk.gov.hmcts.divorce.simplecase.model.SimpleCaseData;
 import uk.gov.hmcts.divorce.simplecase.model.SimpleCaseState;
 import uk.gov.hmcts.divorce.sow014.nfd.CaseworkerMaintainCaseLink;
+import uk.gov.hmcts.divorce.sow014.nfd.CaseworkerOverrideEventMetadata;
 import uk.gov.hmcts.divorce.sow014.nfd.CaseworkerPopulateSearchCriteria;
 import uk.gov.hmcts.divorce.sow014.nfd.DecentralisedCaseworkerAddNote;
 import uk.gov.hmcts.divorce.sow014.nfd.DecentralisedCaseworkerAddNoteFailure;
+import uk.gov.hmcts.divorce.sow014.nfd.DecentralisedOverrideEventMetadata;
 import uk.gov.hmcts.divorce.sow014.nfd.FailingSubmittedCallback;
 import uk.gov.hmcts.divorce.sow014.nfd.CaseworkerRoundTripData;
 import uk.gov.hmcts.divorce.sow014.nfd.ApiFirstTaskCancelEvent;
@@ -1967,6 +1969,24 @@ public class TestWithCCD extends CftlibTest {
         return e;
     }
 
+    private void assertLatestEventMetadata(String eventId, String expectedSummary, String expectedDescription) {
+        var latestMetadata = db.queryForMap(
+            """
+                SELECT ce.summary, ce.description
+                  FROM ccd.case_event ce
+                  JOIN ccd.case_data cd ON cd.id = ce.case_data_id
+                 WHERE cd.reference = :ref
+                   AND ce.event_id = :eventId
+              ORDER BY ce.id DESC
+                 LIMIT 1
+                """,
+            Map.of("ref", caseRef, "eventId", eventId)
+        );
+
+        assertThat(latestMetadata.get("summary"), equalTo(expectedSummary));
+        assertThat(latestMetadata.get("description"), equalTo(expectedDescription));
+    }
+
     private HttpPost prepareEventRequest(String user, String eventId, Map<String, ?> data) {
         return prepareEventRequestForCase(caseRef, user, eventId, data);
     }
@@ -2162,6 +2182,70 @@ public class TestWithCCD extends CftlibTest {
         String lastNoteSql = "SELECT note FROM case_notes WHERE reference = :ref ORDER BY id DESC LIMIT 1";
         String latestNote = db.queryForObject(lastNoteSql, Map.of("ref", caseRef), String.class);
         assertThat(latestNote, equalTo(noteText));
+    }
+
+    @Order(19)
+    @Test
+    public void decentralisedSubmitHandlerCanOverrideEventMetadata() throws Exception {
+        var start = ccdApi.startEvent(
+            getAuthorisation("TEST_CASE_WORKER_USER@mailinator.com"),
+            getServiceAuth(),
+            String.valueOf(caseRef),
+            DecentralisedOverrideEventMetadata.EVENT_ID
+        );
+
+        var request = prepareEventRequestWithToken(
+            "TEST_CASE_WORKER_USER@mailinator.com",
+            DecentralisedOverrideEventMetadata.EVENT_ID,
+            Map.of("note", "metadata override"),
+            start.getToken(),
+            caseRef
+        );
+
+        var response = HttpClientBuilder.create().build().execute(request);
+        try {
+            assertThat(response.getStatusLine().getStatusCode(), equalTo(201));
+        } finally {
+            response.close();
+        }
+
+        assertLatestEventMetadata(
+            DecentralisedOverrideEventMetadata.EVENT_ID,
+            DecentralisedOverrideEventMetadata.METADATA_OVERRIDE_PREFIX + " summary",
+            DecentralisedOverrideEventMetadata.METADATA_OVERRIDE_PREFIX + " description"
+        );
+    }
+
+    @Order(19)
+    @Test
+    public void aboutToSubmitCallbackCanOverrideEventMetadata() throws Exception {
+        var start = ccdApi.startEvent(
+            getAuthorisation("TEST_CASE_WORKER_USER@mailinator.com"),
+            getServiceAuth(),
+            String.valueOf(caseRef),
+            CaseworkerOverrideEventMetadata.EVENT_ID
+        );
+
+        var request = prepareEventRequestWithToken(
+            "TEST_CASE_WORKER_USER@mailinator.com",
+            CaseworkerOverrideEventMetadata.EVENT_ID,
+            Map.of("note", "metadata override"),
+            start.getToken(),
+            caseRef
+        );
+
+        var response = HttpClientBuilder.create().build().execute(request);
+        try {
+            assertThat(response.getStatusLine().getStatusCode(), equalTo(201));
+        } finally {
+            response.close();
+        }
+
+        assertLatestEventMetadata(
+            CaseworkerOverrideEventMetadata.EVENT_ID,
+            CaseworkerOverrideEventMetadata.METADATA_OVERRIDE_PREFIX + " summary",
+            CaseworkerOverrideEventMetadata.METADATA_OVERRIDE_PREFIX + " description"
+        );
     }
 
     @Order(20)
