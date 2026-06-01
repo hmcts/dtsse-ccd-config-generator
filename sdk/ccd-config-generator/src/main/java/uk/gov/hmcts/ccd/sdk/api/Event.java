@@ -11,10 +11,14 @@ import java.util.stream.Collectors;
 import lombok.Builder;
 import lombok.Data;
 import uk.gov.hmcts.ccd.sdk.api.callback.AboutToStart;
+import uk.gov.hmcts.ccd.sdk.api.callback.AboutToStartOrSubmitResponse;
 import uk.gov.hmcts.ccd.sdk.api.callback.AboutToSubmit;
 import uk.gov.hmcts.ccd.sdk.api.callback.Start;
 import uk.gov.hmcts.ccd.sdk.api.callback.Submit;
 import uk.gov.hmcts.ccd.sdk.api.callback.Submitted;
+import uk.gov.hmcts.ccd.sdk.runtime.RuntimeCallback;
+import uk.gov.hmcts.reform.ccd.client.model.CallbackRequest;
+import uk.gov.hmcts.reform.ccd.client.model.SubmittedCallbackResponse;
 
 @Builder
 @Data
@@ -36,9 +40,9 @@ public class Event<T, R extends HasRole, S> {
   private boolean showEventNotes;
   private boolean publishToCamunda;
   private Integer ttlIncrement;
-  private AboutToStart<T, S> aboutToStartCallback;
-  private AboutToSubmit<T, S> aboutToSubmitCallback;
-  private Submitted<T, S> submittedCallback;
+  private RuntimeCallback<AboutToStartOrSubmitResponse> runtimeAboutToStartCallback;
+  private RuntimeCallback<AboutToStartOrSubmitResponse> runtimeAboutToSubmitCallback;
+  private RuntimeCallback<SubmittedCallbackResponse> runtimeSubmittedCallback;
   private Submit<T, S> submitHandler;
   private Start<T, S> startHandler;
   private FieldCollection fields;
@@ -70,7 +74,6 @@ public class Event<T, R extends HasRole, S> {
   public static class EventBuilder<T, R extends HasRole, S> {
 
     private FieldCollection.FieldCollectionBuilder<T, S, EventBuilder<T, R, S>> fieldsBuilder;
-
     public static <T, R extends HasRole, S> EventBuilder<T, R, S> builder(
         String id, Class dataClass, PropertyUtils propertyUtils,
         Set<S> preStates, Set<S> postStates) {
@@ -182,23 +185,79 @@ public class Event<T, R extends HasRole, S> {
       return this;
     }
 
+    public EventBuilder<T, R, S> aboutToStartCallback(AboutToStart<T, S> aboutToStartCallback) {
+      if (this.startHandler == null) {
+        this.runtimeAboutToStartCallback = aboutToStartCallback == null
+            ? null
+            : (request, context) -> aboutToStartCallback.handle(caseDetails(request, context));
+      }
+      return this;
+    }
+
     public EventBuilder<T, R, S> submittedCallback(Submitted<T, S> submittedCallback) {
-      // TODO: split out decentralised event building to remove these fields for decentralised events.
       if (this.submitHandler != null) {
         throw new IllegalStateException("Cannot set both submitHandler and submittedCallback");
       }
-      this.submittedCallback = submittedCallback;
+      this.runtimeSubmittedCallback = submittedCallback == null
+          ? null
+          : (request, context) -> submittedCallback.handle(
+              caseDetails(request, context),
+              caseDetailsBefore(request, context)
+          );
       return this;
     }
 
 
     public EventBuilder<T, R, S> aboutToSubmitCallback(AboutToSubmit<T, S> aboutToSubmitCallback) {
-      // TODO: split out decentralised event building to remove these fields for decentralised events.
       if (this.submitHandler != null) {
         throw new IllegalStateException("Cannot set both submitHandler and aboutToSubmitCallback");
       }
-      this.aboutToSubmitCallback = aboutToSubmitCallback;
+      this.runtimeAboutToSubmitCallback = aboutToSubmitCallback == null
+          ? null
+          : (request, context) -> aboutToSubmitCallback.handle(
+              caseDetails(request, context),
+              caseDetailsBefore(request, context)
+          );
       return this;
+    }
+
+    public EventBuilder<T, R, S> submitHandler(Submit<T, S> submitHandler) {
+      if (submitHandler != null && runtimeSubmittedCallback != null) {
+        throw new IllegalStateException("Cannot set both submitHandler and submittedCallback");
+      }
+      if (submitHandler != null && runtimeAboutToSubmitCallback != null) {
+        throw new IllegalStateException("Cannot set both submitHandler and aboutToSubmitCallback");
+      }
+      this.submitHandler = submitHandler;
+      return this;
+    }
+
+    public EventBuilder<T, R, S> startHandler(Start<T, S> startHandler) {
+      this.startHandler = startHandler;
+      if (startHandler != null) {
+        this.runtimeAboutToStartCallback = (request, context) -> AboutToStartOrSubmitResponse.builder()
+            .data(startHandler.start(startPayload(request, context)))
+            .build();
+      }
+      return this;
+    }
+
+    @SuppressWarnings("unchecked")
+    private CaseDetails<T, S> caseDetails(CallbackRequest request, RuntimeCallback.Context context) {
+      return (CaseDetails<T, S>) context.convertCaseDetails(request.getCaseDetails());
+    }
+
+    @SuppressWarnings("unchecked")
+    private CaseDetails<T, S> caseDetailsBefore(CallbackRequest request, RuntimeCallback.Context context) {
+      return (CaseDetails<T, S>) context.convertCaseDetails(
+          request.getCaseDetailsBefore(),
+          request.getCaseDetails().getCaseTypeId()
+      );
+    }
+
+    @SuppressWarnings("unchecked")
+    private EventPayload<T, S> startPayload(CallbackRequest request, RuntimeCallback.Context context) {
+      return (EventPayload<T, S>) context.startPayload(request);
     }
 
     // Hide lombok's generated builder methods for these fields to stop them polluting the public API.
@@ -216,6 +275,18 @@ public class Event<T, R extends HasRole, S> {
 
     private void dataClass(Class value) {
       this.dataClass = value;
+    }
+
+    private void runtimeAboutToStartCallback(RuntimeCallback<AboutToStartOrSubmitResponse> value) {
+      this.runtimeAboutToStartCallback = value;
+    }
+
+    private void runtimeAboutToSubmitCallback(RuntimeCallback<AboutToStartOrSubmitResponse> value) {
+      this.runtimeAboutToSubmitCallback = value;
+    }
+
+    private void runtimeSubmittedCallback(RuntimeCallback<SubmittedCallbackResponse> value) {
+      this.runtimeSubmittedCallback = value;
     }
 
     private void grants(SetMultimap<R, Permission> value) {

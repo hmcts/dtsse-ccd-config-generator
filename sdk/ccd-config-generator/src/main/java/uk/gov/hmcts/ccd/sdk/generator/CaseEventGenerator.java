@@ -79,13 +79,13 @@ class CaseEventGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
     data.put("SecurityClassification", "Public");
 
     addCallbackIfConfigured(data, callbackHost, event,
-        event.getAboutToStartCallback() != null || event.getStartHandler() != null,
+        event.getRuntimeAboutToStartCallback() != null,
         CallbackMetadata.ABOUT_TO_START);
     addCallbackIfConfigured(data, callbackHost, event,
-        event.getAboutToSubmitCallback() != null,
+        event.getRuntimeAboutToSubmitCallback() != null,
         CallbackMetadata.ABOUT_TO_SUBMIT);
     addCallbackIfConfigured(data, callbackHost, event,
-        event.getSubmittedCallback() != null,
+        event.getRuntimeSubmittedCallback() != null,
         CallbackMetadata.SUBMITTED);
 
     return result;

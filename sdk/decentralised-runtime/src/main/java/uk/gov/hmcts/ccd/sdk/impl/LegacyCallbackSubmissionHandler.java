@@ -102,7 +102,7 @@ class LegacyCallbackSubmissionHandler implements CaseSubmissionHandler {
     var response = new DecentralisedSubmitEventResponse();
     EventMetadata eventMetadata = null;
 
-    if (eventConfig.getAboutToSubmitCallback() != null) {
+    if (eventConfig.getRuntimeAboutToSubmitCallback() != null) {
       CallbackRequest request = buildCallbackRequest(event);
       AboutToStartOrSubmitResponse callbackResponse = executor.aboutToSubmit(request);
       eventMetadata = callbackResponse.getEventMetadata();
@@ -125,7 +125,7 @@ class LegacyCallbackSubmissionHandler implements CaseSubmissionHandler {
       response.setWarnings(callbackResponse.getWarnings());
     }
 
-    boolean hasSubmitted = eventConfig.getSubmittedCallback() != null;
+    boolean hasSubmitted = eventConfig.getRuntimeSubmittedCallback() != null;
     return new LegacySubmitOutcome(response, eventMetadata, hasSubmitted);
   }
 
@@ -134,7 +134,7 @@ class LegacyCallbackSubmissionHandler implements CaseSubmissionHandler {
     String eventId = event.getEventDetails().getEventId();
     Event<?, ?, ?> eventConfig = registry.getRequiredEvent(caseType, eventId);
 
-    if (eventConfig.getSubmittedCallback() == null) {
+    if (eventConfig.getRuntimeSubmittedCallback() == null) {
       return Optional.empty();
     }
 

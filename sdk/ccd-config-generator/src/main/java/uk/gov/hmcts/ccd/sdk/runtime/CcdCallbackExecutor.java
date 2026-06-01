@@ -29,6 +29,24 @@ public class CcdCallbackExecutor {
   private final ResolvedConfigRegistry registry;
   private final ObjectMapper mapper;
   private final Map<String, JavaType> caseTypeToJavaType = Maps.newHashMap();
+  private final RuntimeCallback.Context callbackContext = new RuntimeCallback.Context() {
+
+    @Override
+    public CaseDetails<?, ?> convertCaseDetails(uk.gov.hmcts.reform.ccd.client.model.CaseDetails ccdDetails) {
+      return CcdCallbackExecutor.this.convertCaseDetails(ccdDetails);
+    }
+
+    @Override
+    public CaseDetails<?, ?> convertCaseDetails(uk.gov.hmcts.reform.ccd.client.model.CaseDetails ccdDetails,
+                                                String caseType) {
+      return CcdCallbackExecutor.this.convertCaseDetails(ccdDetails, caseType);
+    }
+
+    @Override
+    public EventPayload<?, ?> startPayload(CallbackRequest request) {
+      return CcdCallbackExecutor.this.startPayload(request);
+    }
+  };
 
   @Autowired
   public CcdCallbackExecutor(ResolvedConfigRegistry registry, ObjectMapper mapper) {
@@ -45,41 +63,20 @@ public class CcdCallbackExecutor {
   public AboutToStartOrSubmitResponse aboutToStart(CallbackRequest request) {
     log.info("About to start event ID: {}", request.getEventId());
 
-    var event = findCaseEvent(request);
-
-    if (event.getStartHandler() != null) {
-      var config = registry.getRequired(request.getCaseDetails().getCaseTypeId());
-      String json = mapper.writeValueAsString(request.getCaseDetails().getData());
-      var domainClass = mapper.readValue(json, config.getCaseClass());
-      EventPayload payload = new EventPayload<>(
-          request.getCaseDetails().getId(),
-          domainClass,
-          new LinkedMultiValueMap<>()
-      );
-
-      var response = event.getStartHandler().start(payload);
-      return AboutToStartOrSubmitResponse.builder().data(response).build();
-    }
-
-    return findCallback(request, Event::getAboutToStartCallback)
-        .handle(convertCaseDetails(request.getCaseDetails()));
+    return findCallback(request, Event::getRuntimeAboutToStartCallback).invoke(request, callbackContext);
   }
 
   @SneakyThrows
   public AboutToStartOrSubmitResponse aboutToSubmit(CallbackRequest request) {
     log.info("About to submit event ID: {}", request.getEventId());
 
-    return findCallback(request, Event::getAboutToSubmitCallback)
-        .handle(convertCaseDetails(request.getCaseDetails()),
-            convertCaseDetails(request.getCaseDetailsBefore(), request.getCaseDetails().getCaseTypeId()));
+    return findCallback(request, Event::getRuntimeAboutToSubmitCallback).invoke(request, callbackContext);
   }
 
   @SneakyThrows
   public SubmittedCallbackResponse submitted(CallbackRequest request) {
     log.info("Submitted event ID: {}", request.getEventId());
-    return findCallback(request, Event::getSubmittedCallback)
-        .handle(convertCaseDetails(request.getCaseDetails()),
-            convertCaseDetails(request.getCaseDetailsBefore(), request.getCaseDetails().getCaseTypeId()));
+    return findCallback(request, Event::getRuntimeSubmittedCallback).invoke(request, callbackContext);
   }
 
   @SneakyThrows
@@ -144,7 +141,18 @@ public class CcdCallbackExecutor {
     }
 
     String json = mapper.writeValueAsString(ccdDetails);
-    CaseDetails result = mapper.readValue(json, caseTypeToJavaType.get(caseType));
-    return result;
+    return mapper.readValue(json, caseTypeToJavaType.get(caseType));
+  }
+
+  @SneakyThrows
+  EventPayload<?, ?> startPayload(CallbackRequest request) {
+    var config = registry.getRequired(request.getCaseDetails().getCaseTypeId());
+    String json = mapper.writeValueAsString(request.getCaseDetails().getData());
+    var domainClass = mapper.readValue(json, config.getCaseClass());
+    return new EventPayload<>(
+        request.getCaseDetails().getId(),
+        domainClass,
+        new LinkedMultiValueMap<>()
+    );
   }
 }
