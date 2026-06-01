@@ -226,3 +226,9 @@ After a successful run, smoke test:
 * edit a migrated case and confirm a new event can be created
 * create a new case
 * confirm search/indexing still works for newly created or edited cases
+
+## Automated regression test
+
+`./gradlew verifyCcdMigration` runs the FDW migration test as well as the classic migration test.
+The FDW test uses the shared fixture under `scripts/migration-test/` to verify setup, full
+migration, delta migration, revision alignment, trigger suppression and constraint restoration.
