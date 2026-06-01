@@ -35,6 +35,7 @@ CASE_TYPE_IDS_SQL="${CASE_TYPE_IDS_SQL:-'TEST_CASE_TYPE'}"
 DELTA_SINCE="${DELTA_SINCE:-}"
 
 DO_APPLY=false
+CONSTRAINTS_DROPPED=false
 
 log() {
   printf '[%s] %s\n' "$(date '+%Y-%m-%dT%H:%M:%S')" "$*"
@@ -112,6 +113,17 @@ validate_connection() {
   psql_dst --quiet -c "select 1;" >/dev/null
 }
 
+validate_can_disable_triggers() {
+  log "Validating ability to disable target triggers..."
+
+  psql_dst --quiet <<'SQL' >/dev/null
+begin;
+set local session_replication_role = replica;
+reset session_replication_role;
+rollback;
+SQL
+}
+
 validate_fdw_ready() {
   log "Validating required extensions and FDW foreign tables..."
 
@@ -185,12 +197,17 @@ drop constraint if exists case_event_case_data_id_fkey;
 
 drop index if exists :dst_schema.idx_case_event_case_data_revision_unique;
 SQL
+
+  CONSTRAINTS_DROPPED=true
 }
 
 load_case_data() {
   log "Loading/upserting case_data..."
 
   psql_dst <<'SQL'
+begin;
+set local session_replication_role = replica;
+
 insert into :dst_schema.case_data (
     reference,
     version,
@@ -258,6 +275,8 @@ where (
     excluded.data,
     excluded.supplementary_data
 );
+
+commit;
 SQL
 }
 
@@ -313,7 +332,9 @@ select
     0,
     0
 from :fdw_schema.case_event ce
-where ce.case_type_id in (:case_type_ids)
+join :dst_schema.case_data cd
+  on cd.id = ce.case_data_id
+where cd.case_type_id in (:case_type_ids)
 and (
     nullif(:'delta_since', '') is null
     or ce.created_date >= nullif(:'delta_since', '')::timestamp
@@ -364,6 +385,9 @@ from (
 ) s
 where t.id = s.id;
 
+begin;
+set local session_replication_role = replica;
+
 update :dst_schema.case_data cd
 set case_revision = evt.event_count
 from (
@@ -375,6 +399,8 @@ from (
     group by case_data_id
 ) evt
 where cd.id = evt.case_data_id;
+
+commit;
 SQL
 }
 
@@ -402,7 +428,7 @@ SQL
 restore_constraints() {
   log "Restoring event revision unique index and FK..."
 
-  psql_dst <<'SQL'
+  if psql_dst <<'SQL'
 create unique index if not exists idx_case_event_case_data_revision_unique
 on :dst_schema.case_event (case_data_id, case_revision);
 
@@ -412,6 +438,11 @@ foreign key (case_data_id)
 references :dst_schema.case_data(id)
 on delete cascade;
 SQL
+  then
+    CONSTRAINTS_DROPPED=false
+  else
+    return 1
+  fi
 }
 
 reset_sequences() {
@@ -460,6 +491,57 @@ from (
 SQL
 }
 
+validate_case_revision_alignment() {
+  log "Checking case_data.case_revision alignment..."
+
+  local mismatch_count
+
+  mismatch_count="$(psql_dst --quiet -tA <<'SQL'
+with case_revision_check as (
+    select
+        cd.id,
+        cd.case_revision,
+        count(ce.id)::bigint as event_count,
+        coalesce(max(ce.case_revision), 0)::bigint as max_event_revision
+    from :dst_schema.case_data cd
+    left join :dst_schema.case_event ce
+      on ce.case_data_id = cd.id
+    where cd.case_type_id in (:case_type_ids)
+    group by cd.id, cd.case_revision
+)
+select count(*)
+from case_revision_check
+where case_revision is distinct from event_count
+   or case_revision is distinct from max_event_revision;
+SQL
+)"
+
+  if [[ "$mismatch_count" != "0" ]]; then
+    log "ERROR: Found ${mismatch_count} case_data.case_revision mismatches."
+    exit 1
+  fi
+
+  log "case_data.case_revision mismatches=0"
+}
+
+cleanup_on_exit() {
+  local exit_code=$?
+
+  if [[ "$exit_code" != "0" && "$CONSTRAINTS_DROPPED" == "true" ]]; then
+    log "Migration failed after constraints were dropped; attempting to restore them..."
+    set +e
+    restore_constraints
+    local restore_exit=$?
+    set -e
+
+    if [[ "$restore_exit" != "0" ]]; then
+      log "ERROR: Failed to restore constraints automatically. Manual intervention is required."
+    fi
+  fi
+
+  exit "$exit_code"
+}
+
 main() {
   parse_args "$@"
   require_psql
@@ -467,6 +549,7 @@ main() {
   log "DELTA_SINCE=${DELTA_SINCE:-<empty: full load>}"
 
   validate_connection
+  validate_can_disable_triggers
   validate_fdw_ready
   validate_counts
 
@@ -489,8 +572,11 @@ main() {
   restore_constraints
   reset_sequences
   final_validation
+  validate_case_revision_alignment
 
   log "FDW migration completed successfully."
 }
+
+trap cleanup_on_exit EXIT
 
 main "$@"

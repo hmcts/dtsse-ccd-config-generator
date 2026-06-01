@@ -64,6 +64,7 @@ You need:
   FDW servers, user mappings and foreign tables for setup
 * a source CCD database user with read access to `case_data` and `case_event`
 * a target application database user with write access to `ccd.case_data` and `ccd.case_event`
+* permission for the migration user to run `SET LOCAL session_replication_role = replica`
 * network connectivity from the target database to the source CCD database
 * `psql` available on the machine running the scripts
 
@@ -149,6 +150,7 @@ The validation checks:
 
 * target database connectivity
 * `pgcrypto` is installed
+* the migration user can temporarily disable target triggers with `session_replication_role`
 * `fdw_stage.case_data` and `fdw_stage.case_event` exist as foreign tables
 * source `case_data` count for the selected case types
 * target `case_data` and `case_event` counts
@@ -189,15 +191,19 @@ only.
 The migration script:
 
 * temporarily drops the `case_event` FK and event revision unique index
-* upserts `case_data` rows from `fdw_stage.case_data`
-* upserts `case_event` rows from `fdw_stage.case_event`
+* upserts `case_data` rows from `fdw_stage.case_data` with target triggers suppressed
+* upserts `case_event` rows from `fdw_stage.case_event` for cases already loaded into `ccd.case_data`
 * reruns `case_data` upsert to catch parent cases changed while events were copying
 * recalculates `case_event.version` and `case_event.case_revision`
-* updates `case_data.case_revision`
+* updates `case_data.case_revision` with target triggers suppressed
 * checks for orphaned events
 * restores the event revision unique index and FK
 * resets `case_event_id_seq`
-* runs final validation for counts, orphan events and duplicate event revisions
+* runs final validation for counts, orphan events, duplicate event revisions and case revision alignment
+
+If the script exits after dropping the FK and unique index, it attempts to restore them in an exit
+handler before returning the original failure status. If automatic restoration fails, manual
+database intervention is required before the application is unshuttered.
 
 ## Expected runtime
 
