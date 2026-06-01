@@ -34,6 +34,11 @@ project(':sptribs').projectDir = file('test-projects/sptribs-case-api')
 include 'adoption'
 project(':adoption').projectDir = file('test-projects/adoption-cos-api')
 
+include 'et'
+project(':et').projectDir = file('test-projects/et-ccd-callbacks')
+include 'et-shared'
+project(':et-shared').projectDir = file('test-projects/et-ccd-callbacks/et-shared')
+
 if (file('ccd-data-store-api').exists()) {
     include 'ccd-data-store-api'
 }
