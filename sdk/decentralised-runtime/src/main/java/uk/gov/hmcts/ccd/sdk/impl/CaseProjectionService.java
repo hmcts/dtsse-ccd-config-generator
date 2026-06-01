@@ -149,7 +149,7 @@ class CaseProjectionService {
                                        Class<? extends Enum<?>> stateType,
                                        Map<String, ResolvedCCDConfig<?, ?, ?>> configs) {
     Set<String> explicitCaseTypes = view.caseTypeIds();
-    if (explicitCaseTypes != null && !explicitCaseTypes.isEmpty()) {
+    if (!explicitCaseTypes.isEmpty()) {
       return Set.copyOf(explicitCaseTypes);
     }
 

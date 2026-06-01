@@ -183,9 +183,7 @@ public class Event<T, R extends HasRole, S> {
     }
 
     public EventBuilder<T, R, S> retries(Webhook hook, String retries) {
-      if (retries != null && !retries.isBlank()) {
-        this.retries.put(hook, retries);
-      }
+      this.retries.put(hook, retries);
       return this;
     }
 
