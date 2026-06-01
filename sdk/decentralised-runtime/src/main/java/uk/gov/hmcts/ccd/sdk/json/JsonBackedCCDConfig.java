@@ -4,7 +4,6 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
 import java.io.InputStream;
-import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -220,23 +219,7 @@ public class JsonBackedCCDConfig<Case, State, Role extends HasRole> implements C
     if (value == null || value.isBlank()) {
       return java.util.Optional.empty();
     }
-    String trimmed = value.trim();
-    if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
-      return java.util.Optional.of(trimmed);
-    }
-    if (trimmed.startsWith("${")) {
-      int placeholderEnd = trimmed.indexOf('}');
-      if (placeholderEnd >= 0 && placeholderEnd < trimmed.length() - 1) {
-        return java.util.Optional.of("http://localhost" + trimmed.substring(placeholderEnd + 1));
-      }
-    }
-    if (trimmed.startsWith("/")) {
-      return java.util.Optional.of("http://localhost" + trimmed);
-    }
-    URI uri = URI.create(trimmed);
-    return uri.getPath() == null || uri.getPath().isBlank()
-        ? java.util.Optional.empty()
-        : java.util.Optional.of("http://localhost" + uri.getPath());
+    return java.util.Optional.of(value.trim());
   }
 
   private String string(Map<String, Object> row, String column) {

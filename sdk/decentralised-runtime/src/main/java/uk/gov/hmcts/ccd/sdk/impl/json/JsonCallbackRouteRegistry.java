@@ -4,19 +4,26 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.HttpServletRequest;
+import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import lombok.SneakyThrows;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.ApplicationContext;
 import org.springframework.core.MethodParameter;
+import org.springframework.core.env.Environment;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatusCode;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -36,17 +43,22 @@ class JsonCallbackRouteRegistry {
   private final ApplicationContext applicationContext;
   private final ObjectMapper mapper;
   private final ObjectMapper requestMapper;
+  private final Environment environment;
+  private final HttpClient httpClient;
   private final Map<String, List<HandlerMethod>> routes;
 
   JsonCallbackRouteRegistry(ApplicationContext applicationContext,
                             ObjectMapper mapper,
                             @Qualifier("requestMappingHandlerMapping")
-                            RequestMappingHandlerMapping handlerMapping) {
+                            RequestMappingHandlerMapping handlerMapping,
+                            Environment environment) {
     this.applicationContext = applicationContext;
     this.mapper = mapper;
     this.requestMapper = mapper.copy()
         .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
         .setSerializationInclusion(JsonInclude.Include.ALWAYS);
+    this.environment = environment;
+    this.httpClient = HttpClient.newHttpClient();
     this.routes = indexPostRoutes(handlerMapping);
   }
 
@@ -54,7 +66,7 @@ class JsonCallbackRouteRegistry {
                 Map<String, Object> payload) {
     List<HandlerMethod> handlers = routes.get(normalise(callbackUrl));
     if (handlers == null || handlers.isEmpty()) {
-      throw new IllegalStateException("No local Spring POST handler found for JSON callback " + callbackUrl);
+      return invokeExternal(callbackUrl, payload);
     }
     if (handlers.size() > 1) {
       throw new IllegalStateException("Multiple local Spring POST handlers found for JSON callback " + callbackUrl);
@@ -191,14 +203,101 @@ class JsonCallbackRouteRegistry {
     return name;
   }
 
+  private Object invokeExternal(String callbackUrl, Map<String, Object> payload) {
+    URI uri = externalUri(callbackUrl)
+        .orElseThrow(() -> new IllegalStateException("No local Spring POST handler found for JSON callback "
+            + callbackUrl));
+    HttpHeaders headers = callbackHeaders();
+    try {
+      HttpResponse<String> response = httpClient.send(
+          externalRequest(uri, payload, headers),
+          HttpResponse.BodyHandlers.ofString()
+      );
+      assertSuccessfulResponse(callbackUrl, HttpStatusCode.valueOf(response.statusCode()));
+      String body = response.body();
+      return body == null || body.isBlank() ? null : mapper.readValue(body, Object.class);
+    } catch (IOException e) {
+      throw new IllegalStateException("Unable to invoke external JSON callback " + callbackUrl, e);
+    } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
+      throw new IllegalStateException("Interrupted invoking external JSON callback " + callbackUrl, e);
+    }
+  }
+
+  private HttpRequest externalRequest(URI uri, Map<String, Object> payload, HttpHeaders headers) throws IOException {
+    HttpRequest.Builder request = HttpRequest.newBuilder(uri)
+        .header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
+        .POST(HttpRequest.BodyPublishers.ofByteArray(requestMapper.writeValueAsBytes(payload)));
+    copyHeader(request, headers, HttpHeaders.AUTHORIZATION);
+    copyHeader(request, headers, SERVICE_AUTHORIZATION);
+    return request.build();
+  }
+
+  private void copyHeader(HttpRequest.Builder request, HttpHeaders headers, String name) {
+    String value = headers.getFirst(name);
+    if (value != null && !value.isBlank()) {
+      request.header(name, value);
+    }
+  }
+
+  private Optional<URI> externalUri(String callbackUrl) {
+    if (callbackUrl.startsWith("http://") || callbackUrl.startsWith("https://")) {
+      return Optional.of(URI.create(callbackUrl));
+    }
+    Placeholder placeholder = placeholder(callbackUrl);
+    if (placeholder == null) {
+      return Optional.empty();
+    }
+    String baseUrl = environment.getProperty(placeholder.name());
+    if (baseUrl == null || baseUrl.isBlank()) {
+      baseUrl = System.getenv(placeholder.name());
+    }
+    if (baseUrl == null || baseUrl.isBlank()) {
+      return Optional.empty();
+    }
+    return Optional.of(URI.create(joinUrl(baseUrl.trim(), placeholder.path())));
+  }
+
+  private String joinUrl(String baseUrl, String path) {
+    if (path == null || path.isBlank()) {
+      return baseUrl;
+    }
+    if (baseUrl.endsWith("/") && path.startsWith("/")) {
+      return baseUrl + path.substring(1);
+    }
+    if (!baseUrl.endsWith("/") && !path.startsWith("/")) {
+      return baseUrl + "/" + path;
+    }
+    return baseUrl + path;
+  }
+
   private String normalise(String callbackUrl) {
     String path = callbackUrl;
     if (callbackUrl.startsWith("http://") || callbackUrl.startsWith("https://")) {
       path = URI.create(callbackUrl).getPath();
+    } else {
+      Placeholder placeholder = placeholder(callbackUrl);
+      if (placeholder != null) {
+        path = placeholder.path();
+      }
     }
     if (path.length() > 1 && path.endsWith("/")) {
       return path.substring(0, path.length() - 1);
     }
     return path;
+  }
+
+  private Placeholder placeholder(String callbackUrl) {
+    if (!callbackUrl.startsWith("${")) {
+      return null;
+    }
+    int placeholderEnd = callbackUrl.indexOf('}');
+    if (placeholderEnd <= 2) {
+      return null;
+    }
+    return new Placeholder(callbackUrl.substring(2, placeholderEnd), callbackUrl.substring(placeholderEnd + 1));
+  }
+
+  private record Placeholder(String name, String path) {
   }
 }
