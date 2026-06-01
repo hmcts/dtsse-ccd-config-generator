@@ -10,14 +10,19 @@ MIGRATION_SCRIPT="${SCRIPT_DIR}/migrate-ccd-data-fdw.sh"
 DELTA_SINCE="${DELTA_SINCE:-2026-01-01 00:00:00}"
 FAILURE_LOG="/tmp/test-migrate-ccd-data-fdw-failure-$$.log"
 
+# FDW connections are made by the Postgres server, not by the test runner.
+# The runner uses PG_PORT (usually 6432), while the server normally sees itself on 5432.
+FDW_SRC_HOST="${FDW_SRC_HOST:-localhost}"
+FDW_SRC_PORT="${FDW_SRC_PORT:-5432}"
+
 init_migration_test_env "fdw"
 trap cleanup_temp_dbs EXIT
 
 run_fdw_setup() {
   echo "Running FDW setup script (validation mode only)"
   DST_DSN="$DST_DSN" \
-    SRC_HOST="$PG_HOST" \
-    SRC_PORT="$PG_PORT" \
+    SRC_HOST="$FDW_SRC_HOST" \
+    SRC_PORT="$FDW_SRC_PORT" \
     SRC_DB="$SRC_DB" \
     SRC_SCHEMA="public" \
     SRC_USER="$PG_USER" \
@@ -28,8 +33,8 @@ run_fdw_setup() {
 
   echo "Running FDW setup script (apply mode)"
   DST_DSN="$DST_DSN" \
-    SRC_HOST="$PG_HOST" \
-    SRC_PORT="$PG_PORT" \
+    SRC_HOST="$FDW_SRC_HOST" \
+    SRC_PORT="$FDW_SRC_PORT" \
     SRC_DB="$SRC_DB" \
     SRC_SCHEMA="public" \
     SRC_USER="$PG_USER" \
