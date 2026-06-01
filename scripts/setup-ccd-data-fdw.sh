@@ -22,6 +22,7 @@ SRC_DB="${SRC_DB:-datastore}"
 SRC_SCHEMA="${SRC_SCHEMA:-public}"
 SRC_USER="${SRC_USER:-postgres}"
 SRC_PASSWORD="${SRC_PASSWORD:-postgres}"
+SRC_SSLMODE="${SRC_SSLMODE:-require}"
 
 DST_SCHEMA="${DST_SCHEMA:-ccd}"
 FDW_SCHEMA="${FDW_SCHEMA:-fdw_stage}"
@@ -49,6 +50,7 @@ Environment variables:
   SRC_SCHEMA
   SRC_USER
   SRC_PASSWORD
+  SRC_SSLMODE
   DST_SCHEMA
   FDW_SCHEMA
   FDW_SERVER
@@ -62,6 +64,7 @@ Example:
   export SRC_SCHEMA='public'
   export SRC_USER='readonly_user'
   export SRC_PASSWORD='...'
+  export SRC_SSLMODE='require'
   export LOCAL_USER_SQL='current_user'
 
   ./scripts/setup-ccd-data-fdw.sh
@@ -106,6 +109,7 @@ psql_dst() {
     --set=src_schema="$SRC_SCHEMA" \
     --set=src_user="$SRC_USER" \
     --set=src_password="$SRC_PASSWORD" \
+    --set=src_sslmode="$SRC_SSLMODE" \
     --set=dst_schema="$DST_SCHEMA" \
     --set=fdw_schema="$FDW_SCHEMA" \
     --set=fdw_server="$FDW_SERVER" \
@@ -131,6 +135,7 @@ FDW setup configuration:
   Source database: ${SRC_DB}
   Source schema:   ${SRC_SCHEMA}
   Source user:     ${SRC_USER}
+  Source sslmode:  ${SRC_SSLMODE}
 EOF
 }
 
@@ -159,7 +164,7 @@ options (
   host :'src_host',
   port :'src_port',
   dbname :'src_db',
-  sslmode 'require'
+  sslmode :'src_sslmode'
 );
 
 create user mapping for :local_user_sql

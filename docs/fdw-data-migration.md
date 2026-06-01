@@ -86,6 +86,7 @@ export SRC_DB='ccd_data_store'
 export SRC_SCHEMA='public'
 export SRC_USER='readonly_user'
 export SRC_PASSWORD='...'
+export SRC_SSLMODE='require'
 ```
 
 Optional environment variables:

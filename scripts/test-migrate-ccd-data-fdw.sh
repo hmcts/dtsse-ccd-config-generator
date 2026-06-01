@@ -14,6 +14,7 @@ FAILURE_LOG="/tmp/test-migrate-ccd-data-fdw-failure-$$.log"
 # The runner uses PG_PORT (usually 6432), while the server normally sees itself on 5432.
 FDW_SRC_HOST="${FDW_SRC_HOST:-localhost}"
 FDW_SRC_PORT="${FDW_SRC_PORT:-5432}"
+FDW_SRC_SSLMODE="${FDW_SRC_SSLMODE:-disable}"
 
 init_migration_test_env "fdw"
 trap cleanup_temp_dbs EXIT
@@ -27,6 +28,7 @@ run_fdw_setup() {
     SRC_SCHEMA="public" \
     SRC_USER="$PG_USER" \
     SRC_PASSWORD="$PG_PASSWORD" \
+    SRC_SSLMODE="$FDW_SRC_SSLMODE" \
     FDW_SCHEMA="$FDW_SCHEMA" \
     LOCAL_USER_SQL="current_user" \
     "$SETUP_SCRIPT"
@@ -39,6 +41,7 @@ run_fdw_setup() {
     SRC_SCHEMA="public" \
     SRC_USER="$PG_USER" \
     SRC_PASSWORD="$PG_PASSWORD" \
+    SRC_SSLMODE="$FDW_SRC_SSLMODE" \
     FDW_SCHEMA="$FDW_SCHEMA" \
     LOCAL_USER_SQL="current_user" \
     "$SETUP_SCRIPT" --apply
