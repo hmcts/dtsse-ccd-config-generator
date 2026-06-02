@@ -89,9 +89,11 @@ import uk.gov.hmcts.divorce.simplecase.SimpleCaseConfiguration;
 import uk.gov.hmcts.divorce.simplecase.model.SimpleCaseData;
 import uk.gov.hmcts.divorce.simplecase.model.SimpleCaseState;
 import uk.gov.hmcts.divorce.sow014.nfd.CaseworkerMaintainCaseLink;
+import uk.gov.hmcts.divorce.sow014.nfd.CaseworkerOverrideEventMetadata;
 import uk.gov.hmcts.divorce.sow014.nfd.CaseworkerPopulateSearchCriteria;
 import uk.gov.hmcts.divorce.sow014.nfd.DecentralisedCaseworkerAddNote;
 import uk.gov.hmcts.divorce.sow014.nfd.DecentralisedCaseworkerAddNoteFailure;
+import uk.gov.hmcts.divorce.sow014.nfd.DecentralisedOverrideEventMetadata;
 import uk.gov.hmcts.divorce.sow014.nfd.FailingSubmittedCallback;
 import uk.gov.hmcts.divorce.sow014.nfd.CaseworkerRoundTripData;
 import uk.gov.hmcts.divorce.sow014.nfd.ApiFirstTaskCancelEvent;
@@ -103,6 +105,7 @@ import uk.gov.hmcts.divorce.sow014.nfd.PublishedEvent;
 import uk.gov.hmcts.divorce.sow014.nfd.ReturnErrorWhenCreateAPIFirstTask;
 import uk.gov.hmcts.divorce.sow014.nfd.ReturnErrorWhenCreateTestCase;
 import uk.gov.hmcts.divorce.sow014.nfd.SubmittedConfirmationCallback;
+import uk.gov.hmcts.divorce.jsonlegacy.JsonLegacyCallbackController;
 import uk.gov.hmcts.ccd.sdk.type.CaseLink;
 import uk.gov.hmcts.ccd.sdk.type.ListValue;
 import uk.gov.hmcts.ccd.sdk.CaseReindexingService;
@@ -171,8 +174,11 @@ public class TestWithCCD extends CftlibTest {
     private static final String API_FIRST_TASK_CANCEL_EVENT_ID = ApiFirstTaskCancelEvent.EVENT_ID;
     private static final String API_FIRST_TASK_RECONFIGURE_EVENT_ID = ApiFirstTaskReconfigureEvent.EVENT_ID;
     private static final String API_FIRST_TASK_DELAYED_EVENT_ID = ApiFirstTaskDelayedEvent.EVENT_ID;
+    private static final String JSON_LEGACY_EVENT_ID = "json-legacy-dispatch";
+    private static final String JSON_LEGACY_NO_CALLBACK_EVENT_ID = "json-legacy-no-callback";
     private String apiFirstTaskId;
     private String waTaskId;
+    private long jsonLegacyCaseRef;
 
     @TestConfiguration
     static class ServiceBusTestConfiguration {
@@ -1967,6 +1973,24 @@ public class TestWithCCD extends CftlibTest {
         return e;
     }
 
+    private void assertLatestEventMetadata(String eventId, String expectedSummary, String expectedDescription) {
+        var latestMetadata = db.queryForMap(
+            """
+                SELECT ce.summary, ce.description
+                  FROM ccd.case_event ce
+                  JOIN ccd.case_data cd ON cd.id = ce.case_data_id
+                 WHERE cd.reference = :ref
+                   AND ce.event_id = :eventId
+              ORDER BY ce.id DESC
+                 LIMIT 1
+                """,
+            Map.of("ref", caseRef, "eventId", eventId)
+        );
+
+        assertThat(latestMetadata.get("summary"), equalTo(expectedSummary));
+        assertThat(latestMetadata.get("description"), equalTo(expectedDescription));
+    }
+
     private HttpPost prepareEventRequest(String user, String eventId, Map<String, ?> data) {
         return prepareEventRequestForCase(caseRef, user, eventId, data);
     }
@@ -2162,6 +2186,70 @@ public class TestWithCCD extends CftlibTest {
         String lastNoteSql = "SELECT note FROM case_notes WHERE reference = :ref ORDER BY id DESC LIMIT 1";
         String latestNote = db.queryForObject(lastNoteSql, Map.of("ref", caseRef), String.class);
         assertThat(latestNote, equalTo(noteText));
+    }
+
+    @Order(19)
+    @Test
+    public void decentralisedSubmitHandlerCanOverrideEventMetadata() throws Exception {
+        var start = ccdApi.startEvent(
+            getAuthorisation("TEST_CASE_WORKER_USER@mailinator.com"),
+            getServiceAuth(),
+            String.valueOf(caseRef),
+            DecentralisedOverrideEventMetadata.EVENT_ID
+        );
+
+        var request = prepareEventRequestWithToken(
+            "TEST_CASE_WORKER_USER@mailinator.com",
+            DecentralisedOverrideEventMetadata.EVENT_ID,
+            Map.of("note", "metadata override"),
+            start.getToken(),
+            caseRef
+        );
+
+        var response = HttpClientBuilder.create().build().execute(request);
+        try {
+            assertThat(response.getStatusLine().getStatusCode(), equalTo(201));
+        } finally {
+            response.close();
+        }
+
+        assertLatestEventMetadata(
+            DecentralisedOverrideEventMetadata.EVENT_ID,
+            DecentralisedOverrideEventMetadata.METADATA_OVERRIDE_PREFIX + " summary",
+            DecentralisedOverrideEventMetadata.METADATA_OVERRIDE_PREFIX + " description"
+        );
+    }
+
+    @Order(19)
+    @Test
+    public void aboutToSubmitCallbackCanOverrideEventMetadata() throws Exception {
+        var start = ccdApi.startEvent(
+            getAuthorisation("TEST_CASE_WORKER_USER@mailinator.com"),
+            getServiceAuth(),
+            String.valueOf(caseRef),
+            CaseworkerOverrideEventMetadata.EVENT_ID
+        );
+
+        var request = prepareEventRequestWithToken(
+            "TEST_CASE_WORKER_USER@mailinator.com",
+            CaseworkerOverrideEventMetadata.EVENT_ID,
+            Map.of("note", "metadata override"),
+            start.getToken(),
+            caseRef
+        );
+
+        var response = HttpClientBuilder.create().build().execute(request);
+        try {
+            assertThat(response.getStatusLine().getStatusCode(), equalTo(201));
+        } finally {
+            response.close();
+        }
+
+        assertLatestEventMetadata(
+            CaseworkerOverrideEventMetadata.EVENT_ID,
+            CaseworkerOverrideEventMetadata.METADATA_OVERRIDE_PREFIX + " summary",
+            CaseworkerOverrideEventMetadata.METADATA_OVERRIDE_PREFIX + " description"
+        );
     }
 
     @Order(20)
@@ -2646,7 +2734,182 @@ public class TestWithCCD extends CftlibTest {
     }
 
     @SneakyThrows
-    @Order(200)
+    @Order(210)
+    @Test
+    void dispatchesJsonDefinitionCallbacksToSpringController() {
+        JsonLegacyCallbackController.reset();
+
+        var response = submitJsonLegacyEvent(Map.of("note", "json-legacy-normal"), 201);
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> data = (Map<String, Object>) response.get("data");
+        assertThat(data.get("setInAboutToSubmit"), equalTo(JsonLegacyCallbackController.MARKER));
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> afterSubmit =
+            (Map<String, Object>) response.get("after_submit_callback_response");
+        assertThat(afterSubmit.get("confirmation_header"),
+            equalTo(JsonLegacyCallbackController.CONFIRMATION_HEADER));
+        assertThat(afterSubmit.get("confirmation_body"),
+            equalTo(JsonLegacyCallbackController.CONFIRMATION_BODY));
+
+        assertThat(JsonLegacyCallbackController.aboutToSubmitAttempts.get(), equalTo(1));
+        assertThat(JsonLegacyCallbackController.aboutToSubmitSawAuthorisation.get(), is(true));
+        assertThat(JsonLegacyCallbackController.aboutToSubmitSawServiceAuthorisation.get(), is(true));
+        assertThat(JsonLegacyCallbackController.submittedAttempts.get(), equalTo(1));
+        assertThat(JsonLegacyCallbackController.submittedSawCommittedData.get(), is(true));
+    }
+
+    @SneakyThrows
+    @Order(211)
+    @Test
+    void aboutToSubmitErrorsRollbackJsonLegacySubmission() {
+        JsonLegacyCallbackController.reset();
+        String before = storedData();
+
+        var response = submitJsonLegacyEvent(Map.of("note", "json-legacy-error"), 422);
+
+        @SuppressWarnings("unchecked")
+        List<String> callbackErrors = (List<String>) response.get("callbackErrors");
+        assertThat(callbackErrors, equalTo(List.of("JSON legacy validation error")));
+        assertThat(storedData(), equalTo(before));
+        assertThat(JsonLegacyCallbackController.aboutToSubmitAttempts.get(), equalTo(1));
+        assertThat(JsonLegacyCallbackController.submittedAttempts.get(), equalTo(0));
+    }
+
+    @SneakyThrows
+    @Order(212)
+    @Test
+    void jsonDefinitionEventWithoutCallbacksIsTriggerable() {
+        JsonLegacyCallbackController.reset();
+
+        var response = submitJsonLegacyEvent(
+            JSON_LEGACY_NO_CALLBACK_EVENT_ID,
+            Map.of("setInMidEvent", "json-legacy-no-callback"),
+            201
+        );
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> data = (Map<String, Object>) response.get("data");
+        assertThat(data.get("setInMidEvent"), equalTo("json-legacy-no-callback"));
+        assertThat(JsonLegacyCallbackController.aboutToSubmitAttempts.get(), equalTo(0));
+        assertThat(JsonLegacyCallbackController.submittedAttempts.get(), equalTo(0));
+    }
+
+    @SneakyThrows
+    @Order(213)
+    @Test
+    void submittedRetriesAndDuplicateJsonLegacySubmissionDoesNotReRun() {
+        JsonLegacyCallbackController.reset();
+        var startEvent = ccdApi.startEvent(
+            getAuthorisation("TEST_CASE_WORKER_USER@mailinator.com"),
+            getServiceAuth(),
+            String.valueOf(jsonLegacyCaseRef()),
+            JSON_LEGACY_EVENT_ID
+        );
+        Map<String, Object> data = new LinkedHashMap<>(
+            mapper.convertValue(startEvent.getCaseDetails().getData(), new TypeReference<Map<String, Object>>() {})
+        );
+        data.put("note", "json-legacy-retry");
+
+        var request = prepareEventRequestWithToken(
+            "TEST_CASE_WORKER_USER@mailinator.com",
+            JSON_LEGACY_EVENT_ID,
+            data,
+            startEvent.getToken(),
+            jsonLegacyCaseRef()
+        );
+        var firstResponse = HttpClientBuilder.create().build().execute(request);
+        assertThat(firstResponse.getStatusLine().getStatusCode(), equalTo(201));
+        assertThat(JsonLegacyCallbackController.submittedAttempts.get(), equalTo(3));
+
+        var duplicateRequest = prepareEventRequestWithToken(
+            "TEST_CASE_WORKER_USER@mailinator.com",
+            JSON_LEGACY_EVENT_ID,
+            data,
+            startEvent.getToken(),
+            jsonLegacyCaseRef()
+        );
+        var duplicateResponse = HttpClientBuilder.create().build().execute(duplicateRequest);
+        assertThat(duplicateResponse.getStatusLine().getStatusCode(), equalTo(201));
+        assertThat(JsonLegacyCallbackController.submittedAttempts.get(), equalTo(3));
+    }
+
+    private Map<String, Object> submitJsonLegacyEvent(Map<String, ?> data, int expectedStatus) throws Exception {
+        return submitJsonLegacyEvent(JSON_LEGACY_EVENT_ID, data, expectedStatus);
+    }
+
+    private Map<String, Object> submitJsonLegacyEvent(String eventId,
+                                                       Map<String, ?> data,
+                                                       int expectedStatus) throws Exception {
+        var response = HttpClientBuilder.create().build().execute(
+            prepareEventRequestForCase(
+                jsonLegacyCaseRef(),
+                "TEST_CASE_WORKER_USER@mailinator.com",
+                eventId,
+                data
+            )
+        );
+        assertThat(response.getStatusLine().getStatusCode(), equalTo(expectedStatus));
+        Map<String, Object> body = mapper.readValue(EntityUtils.toString(response.getEntity()), new TypeReference<>() {});
+        return body;
+    }
+
+    private String storedData() {
+        return db.queryForObject(
+            "select data::text from ccd.case_data where reference = :reference",
+            Map.of("reference", jsonLegacyCaseRef()),
+            String.class
+        );
+    }
+
+    private long jsonLegacyCaseRef() {
+        if (jsonLegacyCaseRef == 0) {
+            jsonLegacyCaseRef = createJsonLegacyCase();
+        }
+        return jsonLegacyCaseRef;
+    }
+
+    @SneakyThrows
+    private long createJsonLegacyCase() {
+        var start = ccdApi.startCase(
+            getAuthorisation("TEST_CASE_WORKER_USER@mailinator.com"),
+            getServiceAuth(),
+            NoFaultDivorce.getCaseType(),
+            "create-test-application"
+        );
+        var body = Map.of(
+            "data", Map.of(
+                "applicationType", "soleApplication",
+                "applicant1SolicitorRepresented", "No",
+                "applicant2SolicitorRepresented", "No",
+                "testDocument", Map.of(
+                    "document_url", "http://localhost/documents/" + UUID.randomUUID(),
+                    "document_binary_url", "http://localhost/documents/binary",
+                    "document_filename", "test.pdf"
+                )
+            ),
+            "event", Map.of("id", "create-test-application", "summary", "", "description", ""),
+            "event_token", start.getToken(),
+            "ignore_warning", false
+        );
+
+        var request = buildRequest(
+            "TEST_CASE_WORKER_USER@mailinator.com",
+            BASE_URL + "/data/case-types/E2E/cases?ignore-warning=false",
+            HttpPost::new
+        );
+        withCcdAccept(request, ACCEPT_CREATE_CASE);
+        request.setEntity(new StringEntity(mapper.writeValueAsString(body), ContentType.APPLICATION_JSON));
+
+        var response = HttpClientBuilder.create().build().execute(request);
+        assertThat(response.getStatusLine().getStatusCode(), equalTo(201));
+        Map<String, Object> result = mapper.readValue(EntityUtils.toString(response.getEntity()), new TypeReference<>() {});
+        return Long.parseLong((String) result.get("id"));
+    }
+
+    @SneakyThrows
+    @Order(300)
     @Test
     void cascadingDeleteRemovesAllCaseData() {
         db.getJdbcTemplate().execute("DELETE FROM ccd.case_data");

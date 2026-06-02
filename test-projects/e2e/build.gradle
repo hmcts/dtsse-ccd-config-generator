@@ -6,7 +6,7 @@ plugins {
   id 'io.spring.dependency-management' version '1.1.7'
   id 'jacoco'
   id 'hmcts.ccd.sdk'
-  id 'com.github.hmcts.rse-cft-lib' version '0.19.2119'
+  id 'com.github.hmcts.rse-cft-lib' version '0.19.2161'
 }
 
 group = 'uk.gov.hmcts'
@@ -43,7 +43,7 @@ dependencies {
   implementation 'org.springframework.retry:spring-retry'
 
   implementation 'org.flywaydb:flyway-database-postgresql'
-  implementation 'org.postgresql:postgresql:42.7.10'
+  implementation 'org.postgresql:postgresql:42.7.11'
 
 
   implementation 'com.github.hmcts:ccd-case-document-am-client:1.59.2'
@@ -55,7 +55,7 @@ dependencies {
 
   implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.8.17'
 
-  implementation 'com.github.ben-manes.caffeine:caffeine:3.2.3'
+  implementation 'com.github.ben-manes.caffeine:caffeine:3.2.4'
   implementation 'com.google.guava:guava:33.6.0-jre'
 
   implementation 'org.projectlombok:lombok'
@@ -118,13 +118,6 @@ bootJar {
   archiveFileName.set('nfdiv-case-api.jar')
   manifest {
     attributes('Implementation-Version': project.version.toString())
-  }
-}
-
-generateCCDConfig.doLast {
-  copy {
-    from file('ccd-definitions')
-    into layout.buildDirectory.dir('definitions/E2E')
   }
 }
 
@@ -217,7 +210,7 @@ cftlibTest {
   systemProperties([
     'junit.jupiter.execution.parallel.enabled'             : 'false',
     'junit.jupiter.execution.parallel.mode.default'        : 'same_thread',
-    'junit.jupiter.execution.parallel.mode.classes.default': 'concurrent',
+    'junit.jupiter.execution.parallel.mode.classes.default': 'same_thread',
     'spring.cloud.compatibility-verifier.enabled'          : 'false',
   ])
 
