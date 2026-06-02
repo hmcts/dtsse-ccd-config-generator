@@ -24,7 +24,7 @@ class DecentralisedSubmissionHandler implements CaseSubmissionHandler {
   private final ObjectMapper mapper;
 
   @Override
-  public CaseSubmissionHandlerResult apply(DecentralisedCaseEvent event, String authorisation) {
+  public CaseSubmissionHandlerResult apply(DecentralisedCaseEvent event) {
     log.info("[submit-handler] Creating event '{}' for case reference: {}",
         event.getEventDetails().getEventId(), event.getCaseDetails().getReference());
 
@@ -37,7 +37,12 @@ class DecentralisedSubmissionHandler implements CaseSubmissionHandler {
     var state = Optional.ofNullable(outcome.getState()).map(Object::toString);
     var securityClassification = Optional.ofNullable(outcome.getCaseSecurityClassification());
 
-    return new CaseSubmissionHandlerResult(Optional.empty(), state, securityClassification, () -> outcome);
+    return new CaseSubmissionHandlerResult(
+        Optional.empty(),
+        state,
+        securityClassification,
+        Optional.ofNullable(outcome.getEventMetadata()),
+        () -> outcome);
   }
 
   private SubmitResponse<?> prepareSubmitHandler(DecentralisedCaseEvent event) {

@@ -11,9 +11,9 @@ import org.springframework.stereotype.Component;
 import uk.gov.hmcts.ccd.data.casedetails.SecurityClassification;
 import uk.gov.hmcts.ccd.decentralised.dto.DecentralisedCaseEvent;
 import uk.gov.hmcts.ccd.decentralised.dto.DecentralisedSubmitEventResponse;
-import uk.gov.hmcts.ccd.sdk.LegacySubmitOutcome;
 import uk.gov.hmcts.ccd.sdk.ResolvedConfigRegistry;
 import uk.gov.hmcts.ccd.sdk.api.Event;
+import uk.gov.hmcts.ccd.sdk.api.EventMetadata;
 import uk.gov.hmcts.ccd.sdk.api.Webhook;
 import uk.gov.hmcts.ccd.sdk.api.callback.AboutToStartOrSubmitResponse;
 import uk.gov.hmcts.ccd.sdk.api.callback.SubmitResponse;
@@ -49,7 +49,7 @@ class LegacyCallbackSubmissionHandler implements CaseSubmissionHandler {
   }
 
   @Override
-  public CaseSubmissionHandlerResult apply(DecentralisedCaseEvent event, String authorisation) {
+  public CaseSubmissionHandlerResult apply(DecentralisedCaseEvent event) {
     log.info("[legacy] Creating event '{}' for case reference: {}",
         event.getEventDetails().getEventId(), event.getCaseDetails().getReference());
 
@@ -74,6 +74,7 @@ class LegacyCallbackSubmissionHandler implements CaseSubmissionHandler {
         Optional.ofNullable(dataSnapshot),
         state,
         securityClassification,
+        Optional.ofNullable(outcome.eventMetadata()),
         () -> {
           var builder = SubmitResponse.builder()
               .errors(errors)
@@ -99,10 +100,12 @@ class LegacyCallbackSubmissionHandler implements CaseSubmissionHandler {
     Event<?, ?, ?> eventConfig = registry.getRequiredEvent(caseType, eventId);
 
     var response = new DecentralisedSubmitEventResponse();
+    EventMetadata eventMetadata = null;
 
     if (eventConfig.getAboutToSubmitCallback() != null) {
       CallbackRequest request = buildCallbackRequest(event);
       AboutToStartOrSubmitResponse callbackResponse = executor.aboutToSubmit(request);
+      eventMetadata = callbackResponse.getEventMetadata();
 
       Map<String, JsonNode> normalisedData = callbackResponse.getData() == null
           ? Map.of()
@@ -123,7 +126,7 @@ class LegacyCallbackSubmissionHandler implements CaseSubmissionHandler {
     }
 
     boolean hasSubmitted = eventConfig.getSubmittedCallback() != null;
-    return new LegacySubmitOutcome(response, hasSubmitted);
+    return new LegacySubmitOutcome(response, eventMetadata, hasSubmitted);
   }
 
   private Optional<SubmittedCallbackResponse> runSubmittedCallback(DecentralisedCaseEvent event) {
@@ -169,6 +172,10 @@ class LegacyCallbackSubmissionHandler implements CaseSubmissionHandler {
         .eventId(event.getEventDetails().getEventId())
         .build();
   }
+
+  private record LegacySubmitOutcome(DecentralisedSubmitEventResponse response,
+                                     EventMetadata eventMetadata,
+                                     boolean runSubmittedCallback) {}
 
   @SneakyThrows
   private JsonNode snapshotWithFilteredFields(DecentralisedCaseEvent event) {

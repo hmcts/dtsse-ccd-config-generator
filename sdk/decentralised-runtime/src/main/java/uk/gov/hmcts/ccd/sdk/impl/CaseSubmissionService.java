@@ -5,8 +5,6 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Supplier;
 import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -19,6 +17,7 @@ import uk.gov.hmcts.ccd.decentralised.dto.DecentralisedCaseEvent;
 import uk.gov.hmcts.ccd.decentralised.dto.DecentralisedSubmitEventResponse;
 import uk.gov.hmcts.ccd.domain.model.callbacks.AfterSubmitCallbackResponse;
 import uk.gov.hmcts.ccd.sdk.ResolvedConfigRegistry;
+import uk.gov.hmcts.ccd.sdk.api.EventMetadata;
 import uk.gov.hmcts.ccd.sdk.api.callback.SubmitResponse;
 
 @Service
@@ -28,35 +27,24 @@ public class CaseSubmissionService {
   private final ResolvedConfigRegistry resolvedConfigRegistry;
   private final DecentralisedSubmissionHandler submitHandler;
   private final LegacyCallbackSubmissionHandler legacyHandler;
-  private final ObjectProvider<JsonDefinitionSubmissionHandler> jsonDefinitionHandlerProvider;
   private final IdamService idam;
   private final IdempotencyEnforcer idempotencyEnforcer;
   private final TransactionTemplate transactionTemplate;
   private final AuditEventService auditEventService;
   private final CaseDataRepository caseDataRepository;
   private final CaseProjectionService caseProjectionService;
-  @Value("${decentralisation.legacy-json-service:false}")
-  private boolean isLegacyJsonDefinition;
 
   public DecentralisedSubmitEventResponse submit(DecentralisedCaseEvent event,
                                                  String authorisation,
                                                  UUID idempotencyKey) {
+    var eventConfig = getEventConfig(event);
     var user = idam.retrieveUser(authorisation);
-    CaseSubmissionHandler handler;
-
-    if (isLegacyJsonDefinition) {
-      handler = Optional.ofNullable(jsonDefinitionHandlerProvider.getIfAvailable())
-          .orElseThrow(() -> new IllegalStateException(
-              "Legacy JSON service is enabled but no JsonDefinitionSubmissionHandler bean is available"));
-    } else {
-      var eventConfig = getEventConfig(event);
-      handler = eventConfig.getSubmitHandler() != null ? submitHandler : legacyHandler;
-    }
+    var handler = eventConfig.getSubmitHandler() != null ? submitHandler : legacyHandler;
 
     try {
       // The result of the transaction can be either an idempotency hit or a new submission.
       TransactionResult transactionResult = transactionTemplate.execute(status ->
-          executeSubmissionInTransaction(event, user, handler, authorisation, idempotencyKey)
+          executeSubmissionInTransaction(event, user, handler, idempotencyKey)
       );
 
       return transactionResult.existingEventId()
@@ -77,7 +65,6 @@ public class CaseSubmissionService {
   private TransactionResult executeSubmissionInTransaction(DecentralisedCaseEvent event,
                                                            IdamService.User user,
                                                            CaseSubmissionHandler handler,
-                                                           String authorisation,
                                                            UUID idempotencyKey) {
     // Idempotency Check inside the transaction to ensure atomicity
     Optional<Long> existingEventId = idempotencyEnforcer.lockCaseAndGetExistingEvent(
@@ -89,7 +76,7 @@ public class CaseSubmissionService {
     }
 
     // Delegate to the specific handler to apply the change
-    var handlerResult = handler.apply(event, authorisation);
+    var handlerResult = handler.apply(event);
     applyHandlerChanges(event, handlerResult);
 
     // Bookkeeping: update case_data metadata and optionally the legacy json blob
@@ -137,6 +124,15 @@ public class CaseSubmissionService {
     handlerResult.securityClassification()
         .map(classification -> SecurityClassification.valueOf(classification.name()))
         .ifPresent(event.getCaseDetails()::setSecurityClassification);
+    handlerResult.eventMetadata().ifPresent(metadata -> applyEventMetadata(event, metadata));
+  }
+
+  private void applyEventMetadata(DecentralisedCaseEvent event, EventMetadata eventMetadata) {
+    var eventDetails = event.getEventDetails();
+    eventDetails.setSummary(Optional.ofNullable(eventMetadata.getSummary()).orElse(eventDetails.getSummary()));
+    eventDetails.setDescription(
+        Optional.ofNullable(eventMetadata.getDescription()).orElse(eventDetails.getDescription())
+    );
   }
 
   private void upsertCase(DecentralisedCaseEvent event, Optional<JsonNode> dataUpdate) {
@@ -155,6 +151,7 @@ public class CaseSubmissionService {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, ex.getMessage(), ex);
     }
   }
+
 
   private record SubmissionOutcome(
       DecentralisedCaseDetails savedCaseDetails,
