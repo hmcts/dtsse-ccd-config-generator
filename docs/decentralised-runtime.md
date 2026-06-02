@@ -45,6 +45,37 @@ Case records are persisted and updated in the `ccd.case_data` table, including l
 
 Snapshots are recorded in the `ccd.case_event` table upon conclusion of each case event.
 
+### Event metadata
+
+Decentralised services can set the event history summary and description from server-side event handling. This is useful
+when the metadata should be derived from the selected case data rather than typed manually in XUI.
+
+For an emulated AboutToSubmit callback:
+
+```java
+return AboutToStartOrSubmitResponse.<CaseData, State>builder()
+    .data(caseData)
+    .eventMetadata(EventMetadata.builder()
+        .summary("Selected documents added")
+        .description("Documents: application.pdf, evidence.pdf")
+        .build())
+    .build();
+```
+
+For a decentralised submit handler:
+
+```java
+return SubmitResponse.<State>builder()
+    .eventMetadata(EventMetadata.builder()
+        .summary("Selected documents added")
+        .description("Documents: application.pdf, evidence.pdf")
+        .build())
+    .build();
+```
+
+`EventMetadata` is consumed by the decentralised runtime when it writes `ccd.case_event`. It is SDK-internal metadata and
+is not included in the callback response JSON returned to CCD.
+
 ### Optimistic locking of legacy JSON blobs
 
 The SDK implements optimistic locking on the legacy JSON blob in `ccd.case_data` via the `version` column.
@@ -147,17 +178,6 @@ The orchestration lives in [`CaseSubmissionService`](../sdk/decentralised-runtim
 ## Supplementary data
 
 Supplementary data operations are implemented and persisted in the `ccd.case_data` table via [`SupplementaryDataService`](../sdk/decentralised-runtime/src/main/java/uk/gov/hmcts/ccd/sdk/impl/SupplementaryDataService.java), using PostgreSQL’s JSON functions to apply `$set`/`$inc` style updates atomically.
-
-## Accessing authorization token in callback handlers
-
-For legacy JSON callback controller methods, the incoming `Authorization` header is passed directly as the second
-method argument.
-
-```java
-public CallbackResponse<?> aboutToSubmit(CallbackRequest callbackRequest, String authToken) {
-  // use authToken
-}
-```
 
 ## Message publishing to Azure Service Bus
 

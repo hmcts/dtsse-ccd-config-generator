@@ -2,13 +2,12 @@
 
 ## Context
 
-Some services, including ET, do not use the SDK config generator to organise callbacks.
-
-They define callback URLs in CCD definition JSON and implement handlers in manually wired Spring controllers.
+Some services, including ET, define CCD configuration in JSON and wire callbacks through Spring controllers rather
+than through SDK config classes.
 
 For this design, only `about-to-submit` and `submitted` are in scope.
 
-`about-to-start` and mid-event callbacks remain unchanged and continue through existing paths.
+`about-to-start` and mid-event callbacks remain unchanged and continue through existing CCD paths.
 
 ## Problem
 
@@ -18,17 +17,17 @@ Decentralised submission must preserve CCD guarantees for legacy JSON-wired serv
 * service-owned table writes from `about-to-submit` commit or roll back with the event
 * `submitted` runs after commit
 
-A loopback HTTP approach (`http://localhost/...`) is not acceptable because it creates a separate request
-and transaction boundary.
+A loopback HTTP approach (`http://localhost/...`) is not suitable for local callbacks because it creates a separate
+request and transaction boundary.
 
 ## Design goals
 
-* Avoid implicit Spring handler mapping dispatch.
-* Use explicit callback ownership in code.
+* Keep the existing decentralised submission flow as the source of truth.
+* Populate the normal SDK runtime config registry from JSON callback definitions.
 * Keep `about-to-submit` transactional with persistence.
 * Keep `submitted` post-commit.
-* Fail fast on ambiguous handler bindings and callback execution failures.
-* Treat missing handler bindings as an explicit no-op outcome.
+* Fail fast when a JSON callback URL is expected to be local but no supported controller route exists.
+* Keep external callbacks, such as AAC callbacks, external.
 
 ## Non-goals
 
@@ -36,198 +35,137 @@ and transaction boundary.
 * Migrating services to SDK-generated callback endpoints.
 * Changing `about-to-start` or mid-event execution paths.
 
-## Existing SDK building blocks
-
-This runtime uses existing registry concepts:
-
-* [ResolvedConfigRegistry][rcr]
-* [DefinitionRegistry][dr]
-
-Definition snapshots are produced by cftlib:
-
-* `dumpCCDDefinitions` task wiring
-* `dumpDefinitionSnapshots` implementation
-
 ## Runtime approach
 
-The JSON runtime is enabled by setting:
+JSON-backed services register a [`JsonBackedCCDConfig`][jbcc] bean for each JSON case type they need to run through
+the decentralised runtime.
 
-```properties
-decentralisation.legacy-json-service=true
-```
+`JsonBackedCCDConfig` reads the service CCD JSON rows and builds a normal SDK `CCDConfig`:
 
-When enabled, [`CaseSubmissionService`][css] uses [`JsonDefinitionSubmissionHandler`][jdsh] for every submit request.
+* `CaseType` supplies the case type and jurisdiction IDs.
+* `CaseEvent` supplies the event IDs.
+* `CallBackURLAboutToSubmitEvent` becomes an SDK `about-to-submit` callback.
+* `CallBackURLSubmittedEvent` becomes an SDK `submitted` callback.
+* `RetriesTimeoutURLSubmittedEvent` is copied onto the SDK event retry metadata.
 
-The runtime does not make HTTP loopback calls and does not route through Spring MVC's dispatcher.
-Instead, [`CallbackDispatchService`][cds] builds an explicit in-memory dispatch map
-from CCD definition callback URLs to local Spring controller methods and invokes those methods directly.
+The resulting events are resolved into [`ResolvedConfigRegistry`][rcr], so existing decentralised runtime components
+continue to use their normal config lookup, audit, projection, idempotency and persistence behaviour.
 
-### Definition-driven bindings
+This avoids maintaining a second submission pipeline for JSON services. The branch still keeps the callback URL
+learning from the earlier runtime work, but routes it through the existing SDK callback machinery.
 
-At startup, `CallbackDispatchService` loads case type definitions through `DefinitionRegistry`.
+### Callback invocation
 
-`DefinitionRegistry` looks for cftlib definition snapshots in:
+[`JsonCallbackAdapterFactory`][jcaf] adapts JSON callback URLs into SDK callback handlers.
 
-* `build/cftlib/definition-snapshots`
-* `/opt/app/build/cftlib/definition-snapshots`
-* `classpath*:definition-snapshots/*.json`, if no filesystem snapshots are found
+When a callback runs, the adapter builds the CCD callback request shape expected by existing JSON services:
 
-Each snapshot filename is treated as the case type ID.
+* `case_details`
+* `case_details_before`
+* `event_id`
 
-For every case event, the dispatcher creates callback bindings from:
+The current SDK `CaseDetails<T, S>` is converted into that CCD payload shape before invocation. For ET this is a
+transitional cost rather than the long-term target architecture. ET already deserialises incoming CCD callback payloads
+into its domain models, so the bridge duplicates an existing conversion path without introducing a new conversion pair.
 
-* `CallBackURLAboutToSubmitEvent`
-* `CallBackURLSubmittedEvent`
+### Local and external callbacks
 
-The binding key is:
+[`JsonCallbackRouteRegistry`][jcrr] indexes Spring MVC `POST` routes from `RequestMappingHandlerMapping`.
 
-* `caseTypeId`
-* `eventId`
-* callback type, either `aboutToSubmit` or `submitted`
+Local callback URLs are invoked directly against the resolved controller method. This avoids HTTP loopback and keeps
+`about-to-submit` inside the same transaction as case persistence.
 
-Duplicate bindings fail startup.
+External callback URLs are invoked over HTTP. This is required for JSON definitions that call other services, for
+example AAC.
 
-### Local callback selection
+The local/external boundary is explicit:
 
-Callback URLs are bound locally when either:
+* relative URLs are local
+* known service placeholders such as `${ET_COS_URL}` and `${CCD_DEF_BASE_URL}` are local when they do not resolve to
+  an external base URL
+* absolute URLs are local only when their host and effective port match `decentralisation.local-callback-base-urls`
+* `decentralisation.local-callback-base-urls` defaults from `ET_COS_URL` when present
+* other absolute or resolvable placeholder URLs are external
 
-* `decentralisation.local-callback-base-urls` is blank
-* the URL is relative
-* the URL begins with a Spring-style placeholder, such as `${CCD_DEF_CASE_SERVICE_BASE_URL}/callbacks/submit`
-* the absolute URL host and effective port match one of the comma-separated
-  `decentralisation.local-callback-base-urls` values
+This prevents an external callback from being dispatched locally simply because its path matches a local controller.
 
-If `decentralisation.local-callback-base-urls` is set, absolute URLs for other hosts are ignored and behave as if
-there is no local handler for that event.
+Callback paths are normalised before route matching:
 
-The default base URL property also reads `ET_COS_URL`:
-
-```properties
-decentralisation.local-callback-base-urls=${ET_COS_URL:}
-```
-
-### Controller discovery
-
-`CallbackDispatchService` scans beans annotated with `@RestController` and `@Controller`.
-
-It discovers methods annotated with `@PostMapping` and combines class-level `@RequestMapping` paths with method-level
-`@PostMapping` paths. Both `path` and `value` arrays are supported.
-
-Callback definition URLs are normalised to paths before matching:
-
-* property placeholders are stripped
-* scheme, host and port are stripped from absolute URLs
+* property placeholders are stripped to their path component
+* scheme, host and port are stripped from absolute URLs for local route lookup
 * query strings and fragments are stripped
 * duplicate slashes and trailing slashes are normalised
 
-If a local callback URL from the definition cannot be matched to a supported controller method, startup fails with a
-diagnostic message that includes rejected and nearby candidates. If multiple controller methods resolve to the same
-normalised path, startup also fails.
+If a JSON callback is classified as local, startup/config construction validates that exactly one supported Spring
+`POST` handler exists for the normalised path. Missing or ambiguous local handlers fail fast. External callbacks are
+not required to have local handlers.
 
 ### Supported controller method shape
 
-Controller methods can have zero, one or two parameters.
+Controller methods must use Spring MVC annotations for callback inputs.
 
 Supported parameters are:
 
-* a request payload parameter, either `CallbackRequest` or another non-`String` type that Jackson can build from
-  `CallbackRequest`
-* an auth token parameter, represented by a `String`; `@RequestHeader` may be present but is not required
-
-The request and auth token parameters can be declared in either order.
+* `@RequestBody` on a CCD callback request type or another type Jackson can build from the callback payload
+* `@RequestHeader("Authorization") String`
+* `@RequestHeader("ServiceAuthorization") String`
+* `@RequestHeader HttpHeaders`
 
 Supported return shapes are:
 
-* a `CallbackResponse<?>`
-* a `ResponseEntity` whose body is a `CallbackResponse<?>`
-* `void` or `null`, mainly for `submitted` callbacks that do not need confirmation content
+* a callback response object
+* `ResponseEntity` whose body is a callback response object
+* `void` or `null` for `submitted` callbacks that do not need confirmation content
 
-For `submitted`, the returned object must also implement
-[`SubmittedCallbackResponse`][scr] when confirmation header/body values are required.
-
-Example:
-
-```java
-@RestController
-@RequestMapping("/tseAdmin")
-class TseAdminController {
-
-  @PostMapping("/aboutToSubmit")
-  CallbackResponse<?> aboutToSubmit(CallbackRequest request, String authToken) {
-    // runs inside the submit transaction
-  }
-
-  @PostMapping("/submitted")
-  CallbackResponse<?> submitted(String authToken, CallbackRequest request) {
-    // runs after the submit transaction commits
-  }
-}
-```
+For `about-to-submit`, a matched callback returning `null` fails the submission because there is no response to apply.
 
 ## Submit flow
 
-The submit flow is:
+The submit flow remains the standard decentralised runtime flow:
 
-1. `CaseSubmissionService` starts the submission transaction, retrieves the user and acquires the idempotency/case lock.
-2. `JsonDefinitionSubmissionHandler` builds a CCD `CallbackRequest` from the decentralised case event.
-3. `CallbackDispatchService` resolves the `aboutToSubmit` binding by case type, event ID and callback type.
-4. If a handler exists, it is invoked directly. Any returned data, state, security classification, errors and warnings
-   are copied back onto the event.
-5. Validation errors from `about-to-submit` are returned to CCD and the transaction is rolled back.
-6. If validation passes, case data, metadata, event history, projection and outbox records are persisted.
-7. The transaction commits.
-8. The deferred response supplier invokes the `submitted` callback, if one is bound locally, and applies confirmation
-   header/body values to the CCD response.
+1. `CaseSubmissionService` retrieves the user and acquires the idempotency/case lock inside the transaction.
+2. `LegacyCallbackSubmissionHandler` finds the resolved SDK event for the case type and event ID.
+3. For JSON-backed events, the SDK callback delegates to `JsonCallbackAdapterFactory`.
+4. The adapter invokes the local controller directly or an external callback over HTTP.
+5. Returned data, state, security classification, errors and warnings are mapped back into the SDK callback response.
+6. Validation errors from `about-to-submit` are returned to CCD and the transaction is rolled back.
+7. If validation passes, case data, metadata, event history, projection and outbox records are persisted.
+8. The transaction commits.
+9. The deferred response supplier invokes the `submitted` callback and applies confirmation header/body values.
 
-If no binding exists for a callback phase, the phase is treated as a no-op.
+If no JSON callback URL is configured for an event phase, that phase is a no-op.
 
-## Transaction model
+## ET compatibility notes
 
-`about-to-submit` runs inside the same transaction as persistence.
+The SDK tooling is typed around a case data class and state enum. JSON-backed ET configuration does not exactly follow
+the same shape:
 
-This preserves CCD's atomicity guarantee: any service-owned writes performed by the controller method commit or roll
-back with the event.
+* ET uses clear domain models for each case family, but England/Wales and Scotland both use `CaseData`.
+* ET callback controllers already bind incoming CCD callback payloads to those domain models.
+* Runtime roles are not materially used by this bridge beyond the SDK generic type.
+* State enums are still needed because SDK callback execution and case projection are typed by state.
 
-`submitted` runs after the transaction has committed. Failures from `submitted` do not roll back committed case data.
-
-## Error handling and retries
-
-* `about-to-submit`: handler exceptions fail submission and roll back the transaction.
-* `about-to-submit`: returned errors are converted to CCD validation errors and roll back the transaction.
-* `about-to-submit`: a matched handler returning `null` fails the submission, because there is no response to persist.
-* `submitted`: handler exceptions are retried after commit according to the event definition.
-* `submitted`: when `RetriesTimeoutURLSubmittedEvent` contains more than one entry, the runtime attempts the callback
-  three times in total; otherwise it attempts once.
-* `submitted`: if all attempts fail, the exception is propagated to the caller after persistence has already committed.
-
-## Compatibility impact
-
-This supports ET and similar services with large manually organised callback surfaces while avoiding implicit routing
-magic.
-
-Existing controller methods can remain in place. The key compatibility requirement is that the callback URL path in
-the CCD JSON definition must match a supported local `@PostMapping` method after normalisation.
-
-Services using this mode still need a `CaseView` for each case type so the decentralised runtime can load and project
-saved case data.
+Where a single `CaseView` generic type can match more than one case type, the view can override `caseTypeIds()` to
+declare the supported CCD case type IDs explicitly.
 
 ## Validation and testing
 
 Covered behaviour includes:
 
-* definition URL to controller method binding
-* duplicate binding and duplicate endpoint failure
-* missing binding no-op behaviour
-* local/external callback URL filtering
-* supported request/auth parameter orders
-* typed request conversion from CCD `CallbackRequest`
-* `ResponseEntity` and void/null return handling
-* submitted retry and retry exhaustion behaviour
-* ET-style controller and URL patterns
+* JSON event rows becoming SDK callbacks
+* local callback route invocation
+* external callback invocation
+* authorization and service authorization propagation
+* local/external URL classification
+* missing local callback route failure
+* duplicate local callback route failure
+* typed `@RequestBody` conversion
+* `ResponseEntity` status handling
+* `about-to-submit` validation errors rolling back persistence
+* submitted retry behaviour using SDK event retry metadata
+* ET-style shared domain model projection via explicit case type IDs
 
 [rcr]: ../sdk/ccd-config-generator/src/main/java/uk/gov/hmcts/ccd/sdk/ResolvedConfigRegistry.java
-[dr]: ../sdk/decentralised-runtime/src/main/java/uk/gov/hmcts/ccd/sdk/impl/DefinitionRegistry.java
-[css]: ../sdk/decentralised-runtime/src/main/java/uk/gov/hmcts/ccd/sdk/impl/CaseSubmissionService.java
-[jdsh]: ../sdk/decentralised-runtime/src/main/java/uk/gov/hmcts/ccd/sdk/impl/JsonDefinitionSubmissionHandler.java
-[cds]: ../sdk/decentralised-runtime/src/main/java/uk/gov/hmcts/ccd/sdk/impl/CallbackDispatchService.java
-[scr]: ../sdk/decentralised-runtime/src/main/java/uk/gov/hmcts/ccd/sdk/SubmittedCallbackResponse.java
+[jbcc]: ../sdk/decentralised-runtime/src/main/java/uk/gov/hmcts/ccd/sdk/json/JsonBackedCCDConfig.java
+[jcaf]: ../sdk/decentralised-runtime/src/main/java/uk/gov/hmcts/ccd/sdk/impl/json/JsonCallbackAdapterFactory.java
+[jcrr]: ../sdk/decentralised-runtime/src/main/java/uk/gov/hmcts/ccd/sdk/impl/json/JsonCallbackRouteRegistry.java
