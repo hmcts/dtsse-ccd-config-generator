@@ -59,29 +59,8 @@ public class JsonBackedCCDConfig<Case, State, Role extends HasRole> implements C
     Event.EventBuilder<Case, Role, State> event = builder.event(id)
         .forAllStates();
 
-    event.name(nonBlank(definition, "Name").orElse(id));
-    nonBlank(definition, "Description").ifPresent(event::description);
-    nonBlank(definition, "EventEnablingCondition").ifPresent(event::showCondition);
-    integer(definition, "DisplayOrder").ifPresent(event::displayOrder);
-    integer(definition, "TTLIncrement").ifPresent(event::ttlIncrement);
-    if (definition.containsKey("EndButtonLabel")) {
-      event.endButtonLabel(string(definition, "EndButtonLabel"));
-    }
-    event.showSummary(yes(definition, "ShowSummary"));
-    if (yes(definition, "ShowEventNotes")) {
-      event.showEventNotes();
-    }
-    event.publishToCamunda(yes(definition, "Publish"));
-
-    event.retries(Webhook.AboutToStart, string(definition, "RetriesTimeoutURLAboutToStartEvent"));
-    event.retries(Webhook.AboutToSubmit, string(definition, "RetriesTimeoutURLAboutToSubmitEvent"));
     event.retries(Webhook.Submitted, string(definition, "RetriesTimeoutURLSubmittedEvent"));
 
-    url(definition, "CallBackURLAboutToStartEvent")
-        .ifPresent(callbackUrl -> {
-          callbackAdapterFactory.validate(callbackUrl);
-          event.aboutToStartCallback(callbackAdapterFactory.aboutToStart(callbackUrl, id));
-        });
     url(definition, "CallBackURLAboutToSubmitEvent")
         .ifPresent(callbackUrl -> {
           callbackAdapterFactory.validate(callbackUrl);
@@ -154,31 +133,6 @@ public class JsonBackedCCDConfig<Case, State, Role extends HasRole> implements C
       return Optional.empty();
     }
     return Optional.of(value.trim());
-  }
-
-  private Optional<String> nonBlank(Map<String, Object> row, String column) {
-    String value = string(row, column);
-    return value == null || value.isBlank() ? Optional.empty() : Optional.of(value.trim());
-  }
-
-  private Optional<Integer> integer(Map<String, Object> row, String column) {
-    Object value = row.get(column);
-    if (value == null || value.toString().isBlank()) {
-      return Optional.empty();
-    }
-    if (value instanceof Number number) {
-      return Optional.of(number.intValue());
-    }
-    try {
-      return Optional.of(Integer.parseInt(value.toString().trim()));
-    } catch (NumberFormatException e) {
-      throw new IllegalStateException("Invalid integer value for JSON " + column + ": " + value, e);
-    }
-  }
-
-  private boolean yes(Map<String, Object> row, String column) {
-    String value = string(row, column);
-    return value != null && ("Y".equalsIgnoreCase(value.trim()) || "true".equalsIgnoreCase(value.trim()));
   }
 
   private String string(Map<String, Object> row, String column) {
