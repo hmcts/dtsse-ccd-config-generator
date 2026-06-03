@@ -11,7 +11,7 @@ pluginManagement {
 includeBuild 'sdk'
 
 gradle.beforeProject { p ->
-    if (p.path == ':wa-task-management-api') {
+    if (p.path in [':wa-task-management-api', ':et']) {
         // Prevent subproject build.gradle from failing on wrapper { }.
         p.ext.wrapper = { Closure c -> }
     }
