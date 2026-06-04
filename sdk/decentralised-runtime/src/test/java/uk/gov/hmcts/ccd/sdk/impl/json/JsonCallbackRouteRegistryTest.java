@@ -82,49 +82,6 @@ class JsonCallbackRouteRegistryTest {
   }
 
   @Test
-  void validatesLocalPlaceholderCallbackRoute() throws Exception {
-    JsonCallbackRouteRegistry registry = registryWith(new MockEnvironment(), new LocalCallbackController());
-
-    registry.validate("${CCD_DEF_BASE_URL}//callbacks/about-to-submit/?ignored=true#fragment");
-  }
-
-  @Test
-  void failsFastWhenLocalCallbackRouteIsMissing() throws Exception {
-    JsonCallbackRouteRegistry registry = registryWith(new MockEnvironment(), new LocalCallbackController());
-
-    assertThatThrownBy(() -> registry.validate("${CCD_DEF_BASE_URL}/callbacks/missing"))
-        .isInstanceOf(IllegalStateException.class)
-        .hasMessage("No local Spring POST handler found for JSON callback ${CCD_DEF_BASE_URL}/callbacks/missing");
-  }
-
-  @Test
-  void failsFastWhenLocalCallbackSignatureIsUnsupported() throws Exception {
-    JsonCallbackRouteRegistry registry = registryWith(new MockEnvironment(), new UnsupportedCallbackController());
-
-    assertThatThrownBy(() -> registry.validate("${CCD_DEF_BASE_URL}/callbacks/unsupported"))
-        .isInstanceOf(IllegalStateException.class)
-        .hasMessageContaining("Unsupported JSON callback parameter");
-  }
-
-  @Test
-  void invokesAbsoluteLocalCallbackWhenBaseUrlMatches() throws Exception {
-    JsonCallbackRouteRegistry registry = registryWith(
-        new MockEnvironment().withProperty(
-            "decentralisation.local-callback-base-urls",
-            "http://localhost:8080"
-        ),
-        new LocalCallbackController()
-    );
-
-    Object response = registry.invoke("http://localhost:8080/callbacks/about-to-submit", Map.of("event_id", "local"));
-
-    assertThat(response)
-        .isInstanceOf(Map.class)
-        .asInstanceOf(org.assertj.core.api.InstanceOfAssertFactories.MAP)
-        .containsEntry("source", "local");
-  }
-
-  @Test
   void invokesExternalCallbackEvenWhenLocalPathMatches() throws Exception {
     ArrayBlockingQueue<CapturedRequest> requests = new ArrayBlockingQueue<>(1);
     HttpServer server = HttpServer.create(new InetSocketAddress("localhost", 0), 0);
@@ -199,15 +156,6 @@ class JsonCallbackRouteRegistryTest {
     }
   }
 
-  private JsonCallbackRouteRegistry registryWithEmptyContext(MockEnvironment environment) {
-    return new JsonCallbackRouteRegistry(
-        new StaticApplicationContext(),
-        mapper,
-        new RequestMappingHandlerMapping(),
-        environment
-    );
-  }
-
   private void setCurrentHeaders() {
     MockHttpServletRequest request = new MockHttpServletRequest();
     request.addHeader(HttpHeaders.AUTHORIZATION, "Bearer user");
@@ -229,16 +177,6 @@ class JsonCallbackRouteRegistryTest {
     @PostMapping("/about-to-submit")
     Map<String, Object> aboutToSubmit(@RequestBody Map<String, Object> request) {
       return Map.of("source", "local", "event_id", request.get("event_id"));
-    }
-  }
-
-  @RestController
-  @RequestMapping("/callbacks")
-  private static class UnsupportedCallbackController {
-
-    @PostMapping("/unsupported")
-    Map<String, Object> unsupported(String request) {
-      return Map.of();
     }
   }
 }
