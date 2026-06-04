@@ -45,6 +45,37 @@ Case records are persisted and updated in the `ccd.case_data` table, including l
 
 Snapshots are recorded in the `ccd.case_event` table upon conclusion of each case event.
 
+### Event metadata
+
+Decentralised services can set the event history summary and description from server-side event handling. This is useful
+when the metadata should be derived from the selected case data rather than typed manually in XUI.
+
+For an emulated AboutToSubmit callback:
+
+```java
+return AboutToStartOrSubmitResponse.<CaseData, State>builder()
+    .data(caseData)
+    .eventMetadata(EventMetadata.builder()
+        .summary("Selected documents added")
+        .description("Documents: application.pdf, evidence.pdf")
+        .build())
+    .build();
+```
+
+For a decentralised submit handler:
+
+```java
+return SubmitResponse.<State>builder()
+    .eventMetadata(EventMetadata.builder()
+        .summary("Selected documents added")
+        .description("Documents: application.pdf, evidence.pdf")
+        .build())
+    .build();
+```
+
+`EventMetadata` is consumed by the decentralised runtime when it writes `ccd.case_event`. It is SDK-internal metadata and
+is not included in the callback response JSON returned to CCD.
+
 ### Optimistic locking of legacy JSON blobs
 
 The SDK implements optimistic locking on the legacy JSON blob in `ccd.case_data` via the `version` column.

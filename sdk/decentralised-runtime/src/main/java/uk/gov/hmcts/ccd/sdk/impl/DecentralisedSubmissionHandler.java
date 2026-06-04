@@ -37,7 +37,12 @@ class DecentralisedSubmissionHandler implements CaseSubmissionHandler {
     var state = Optional.ofNullable(outcome.getState()).map(Object::toString);
     var securityClassification = Optional.ofNullable(outcome.getCaseSecurityClassification());
 
-    return new CaseSubmissionHandlerResult(Optional.empty(), state, securityClassification, () -> outcome);
+    return new CaseSubmissionHandlerResult(
+        Optional.empty(),
+        state,
+        securityClassification,
+        Optional.ofNullable(outcome.getEventMetadata()),
+        () -> outcome);
   }
 
   private SubmitResponse<?> prepareSubmitHandler(DecentralisedCaseEvent event) {
