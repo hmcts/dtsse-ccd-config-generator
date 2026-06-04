@@ -14,7 +14,7 @@ import uk.gov.hmcts.divorce.divorcecase.model.UserRole;
 public class JsonLegacyCcdConfig {
 
   public static final String CASE_TYPE = "E2E-JSON";
-  private static final String JSON_ROOT = "classpath:json-ccd-definitions/json-legacy";
+  private static final String JSON_ROOT = "classpath:json-ccd-definitions/CaseTypeA";
 
   @Bean
   CCDConfig<E2eJson, State, UserRole> jsonLegacyConfig(ResourceLoader resourceLoader,

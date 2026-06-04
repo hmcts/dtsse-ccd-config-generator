@@ -15,7 +15,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/jsonLegacy")
-public class JsonLegacyCallbackController {
+public class CaseTypeAController {
 
   public static final String MARKER = "json-legacy-about-to-submit";
   public static final String CONFIRMATION_HEADER = "# JSON legacy submitted";
@@ -28,7 +28,7 @@ public class JsonLegacyCallbackController {
 
   private final NamedParameterJdbcTemplate db;
 
-  public JsonLegacyCallbackController(NamedParameterJdbcTemplate db) {
+  public CaseTypeAController(NamedParameterJdbcTemplate db) {
     this.db = db;
   }
 
