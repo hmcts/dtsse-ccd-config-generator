@@ -16,10 +16,14 @@ import uk.gov.hmcts.rse.ccd.lib.api.CFTLibConfigurer;
 import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.Comparator;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Stream;
 
 import static java.util.Map.entry;
 
@@ -291,8 +295,38 @@ public class CftLibConfig implements CFTLibConfigurer {
         lib.importJsonDefinition(new File("build/definitions/" + NoFaultDivorce.getCaseType()));
         lib.importJsonDefinition(new File("build/definitions/" + SimpleCaseConfiguration.CASE_TYPE));
         lib.importJsonDefinition(new File("src/main/resources/json-ccd-definitions/CaseTypeA"));
-        lib.createProfile("TEST_CASE_WORKER_USER@mailinator.com", "DIVORCE", JsonLegacyCcdConfig.CASE_TYPE, "Submitted");
+        lib.importJsonDefinition(createJsonLegacyCaseTypeBDefinition());
+        lib.createProfile("TEST_CASE_WORKER_USER@mailinator.com", "DIVORCE", JsonLegacyCcdConfig.CASE_TYPE_A, "Submitted");
+        lib.createProfile("TEST_CASE_WORKER_USER@mailinator.com", "DIVORCE", JsonLegacyCcdConfig.CASE_TYPE_B, "Submitted");
         lib.dumpDefinitionSnapshots();
+    }
+
+    private File createJsonLegacyCaseTypeBDefinition() throws IOException {
+        Path source = Path.of("src/main/resources/json-ccd-definitions/CaseTypeA");
+        Path target = Path.of("build/definitions/CaseTypeB");
+
+        if (Files.exists(target)) {
+            try (Stream<Path> paths = Files.walk(target)) {
+                paths.sorted(Comparator.reverseOrder())
+                    .map(Path::toFile)
+                    .forEach(File::delete);
+            }
+        }
+
+        try (Stream<Path> paths = Files.walk(source)) {
+            for (Path sourcePath : paths.toList()) {
+                Path targetPath = target.resolve(source.relativize(sourcePath));
+                if (Files.isDirectory(sourcePath)) {
+                    Files.createDirectories(targetPath);
+                } else {
+                    String json = Files.readString(sourcePath, StandardCharsets.UTF_8)
+                        .replace(JsonLegacyCcdConfig.CASE_TYPE_A, JsonLegacyCcdConfig.CASE_TYPE_B);
+                    Files.writeString(targetPath, json, StandardCharsets.UTF_8);
+                }
+            }
+        }
+
+        return target.toFile();
     }
 
     private void configureRoleAssignments(CFTLib lib) throws IOException {

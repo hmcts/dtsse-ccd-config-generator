@@ -2882,7 +2882,7 @@ public class TestWithCCD extends CftlibTest {
             serviceToken,
             userId,
             NoFaultDivorce.JURISDICTION,
-            JsonLegacyCcdConfig.CASE_TYPE,
+            JsonLegacyCcdConfig.CASE_TYPE_A,
             JSON_LEGACY_CREATE_EVENT_ID
         );
 
@@ -2901,7 +2901,7 @@ public class TestWithCCD extends CftlibTest {
             serviceToken,
             userId,
             NoFaultDivorce.JURISDICTION,
-            JsonLegacyCcdConfig.CASE_TYPE,
+            JsonLegacyCcdConfig.CASE_TYPE_A,
             true,
             content
         );

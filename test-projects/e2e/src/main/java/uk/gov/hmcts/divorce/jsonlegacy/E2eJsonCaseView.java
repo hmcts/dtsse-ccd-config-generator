@@ -11,7 +11,7 @@ public class E2eJsonCaseView implements CaseView<E2eJson, State> {
 
     @Override
     public Set<String> caseTypeIds() {
-        return Set.of(JsonLegacyCcdConfig.CASE_TYPE);
+        return Set.of(JsonLegacyCcdConfig.CASE_TYPE_A);
     }
 
     @Override

@@ -13,7 +13,8 @@ import uk.gov.hmcts.divorce.divorcecase.model.UserRole;
 @Configuration
 public class JsonLegacyCcdConfig {
 
-  public static final String CASE_TYPE = "case-type-a";
+  public static final String CASE_TYPE_A = "case-type-a";
+  public static final String CASE_TYPE_B = "case-type-b";
   private static final String JSON_ROOT = "classpath:json-ccd-definitions/CaseTypeA";
 
   @Bean
@@ -21,7 +22,7 @@ public class JsonLegacyCcdConfig {
                                                         ObjectMapper mapper,
                                                         JsonCallbackAdapterFactory callbackAdapterFactory) {
     return new JsonBackedCCDConfig<>(
-      CASE_TYPE,
+      CASE_TYPE_A,
       JSON_ROOT,
       resourceLoader,
       mapper,
