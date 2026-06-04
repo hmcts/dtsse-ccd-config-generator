@@ -11,7 +11,6 @@ import java.util.Map;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Component;
 import uk.gov.hmcts.ccd.sdk.api.CaseDetails;
-import uk.gov.hmcts.ccd.sdk.api.callback.AboutToStart;
 import uk.gov.hmcts.ccd.sdk.api.callback.AboutToStartOrSubmitResponse;
 import uk.gov.hmcts.ccd.sdk.api.callback.AboutToSubmit;
 import uk.gov.hmcts.ccd.sdk.api.callback.Submitted;
@@ -31,11 +30,6 @@ public class JsonCallbackAdapterFactory {
 
   public void validate(String callbackUrl) {
     routeRegistry.getObject().validate(callbackUrl);
-  }
-
-  @SuppressWarnings({"rawtypes", "unchecked"})
-  public AboutToStart aboutToStart(String callbackUrl, String eventId) {
-    return details -> response(callbackUrl, eventId, details, null);
   }
 
   @SuppressWarnings({"rawtypes", "unchecked"})
