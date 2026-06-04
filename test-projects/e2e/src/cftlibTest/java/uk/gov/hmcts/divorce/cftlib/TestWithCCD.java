@@ -105,7 +105,7 @@ import uk.gov.hmcts.divorce.sow014.nfd.PublishedEvent;
 import uk.gov.hmcts.divorce.sow014.nfd.ReturnErrorWhenCreateAPIFirstTask;
 import uk.gov.hmcts.divorce.sow014.nfd.ReturnErrorWhenCreateTestCase;
 import uk.gov.hmcts.divorce.sow014.nfd.SubmittedConfirmationCallback;
-import uk.gov.hmcts.divorce.jsonlegacy.CaseTypeAController;
+import uk.gov.hmcts.divorce.jsonlegacy.BaseJsonLegacyController;
 import uk.gov.hmcts.divorce.jsonlegacy.JsonLegacyCcdConfig;
 import uk.gov.hmcts.ccd.sdk.type.CaseLink;
 import uk.gov.hmcts.ccd.sdk.type.ListValue;
@@ -2739,34 +2739,34 @@ public class TestWithCCD extends CftlibTest {
     @Order(210)
     @Test
     void dispatchesJsonDefinitionCallbacksToSpringController() {
-        CaseTypeAController.reset();
+        BaseJsonLegacyController.reset();
 
         var response = submitJsonLegacyEvent(Map.of("note", "json-legacy-normal"), 201);
 
         @SuppressWarnings("unchecked")
         Map<String, Object> data = (Map<String, Object>) response.get("data");
-        assertThat(data.get("setInAboutToSubmit"), equalTo(CaseTypeAController.MARKER));
+        assertThat(data.get("setInAboutToSubmit"), equalTo(BaseJsonLegacyController.MARKER));
 
         @SuppressWarnings("unchecked")
         Map<String, Object> afterSubmit =
             (Map<String, Object>) response.get("after_submit_callback_response");
         assertThat(afterSubmit.get("confirmation_header"),
-            equalTo(CaseTypeAController.CONFIRMATION_HEADER));
+            equalTo(BaseJsonLegacyController.CONFIRMATION_HEADER));
         assertThat(afterSubmit.get("confirmation_body"),
-            equalTo(CaseTypeAController.CONFIRMATION_BODY));
+            equalTo(BaseJsonLegacyController.CONFIRMATION_BODY));
 
-        assertThat(CaseTypeAController.aboutToSubmitAttempts.get(), equalTo(1));
-        assertThat(CaseTypeAController.aboutToSubmitSawAuthorisation.get(), is(true));
-        assertThat(CaseTypeAController.aboutToSubmitSawServiceAuthorisation.get(), is(true));
-        assertThat(CaseTypeAController.submittedAttempts.get(), equalTo(1));
-        assertThat(CaseTypeAController.submittedSawCommittedData.get(), is(true));
+        assertThat(BaseJsonLegacyController.aboutToSubmitAttempts, equalTo(1));
+        assertThat(BaseJsonLegacyController.aboutToSubmitSawAuthorisation, is(true));
+        assertThat(BaseJsonLegacyController.aboutToSubmitSawServiceAuthorisation, is(true));
+        assertThat(BaseJsonLegacyController.submittedAttempts, equalTo(1));
+        assertThat(BaseJsonLegacyController.submittedSawCommittedData, is(true));
     }
 
     @SneakyThrows
     @Order(211)
     @Test
     void aboutToSubmitErrorsRollbackJsonLegacySubmission() {
-        CaseTypeAController.reset();
+        BaseJsonLegacyController.reset();
         String before = storedData();
 
         var response = submitJsonLegacyEvent(Map.of("note", "json-legacy-error"), 422);
@@ -2775,15 +2775,15 @@ public class TestWithCCD extends CftlibTest {
         List<String> callbackErrors = (List<String>) response.get("callbackErrors");
         assertThat(callbackErrors, equalTo(List.of("JSON legacy validation error")));
         assertThat(storedData(), equalTo(before));
-        assertThat(CaseTypeAController.aboutToSubmitAttempts.get(), equalTo(1));
-        assertThat(CaseTypeAController.submittedAttempts.get(), equalTo(0));
+        assertThat(BaseJsonLegacyController.aboutToSubmitAttempts, equalTo(1));
+        assertThat(BaseJsonLegacyController.submittedAttempts, equalTo(0));
     }
 
     @SneakyThrows
     @Order(212)
     @Test
     void jsonDefinitionEventWithoutCallbacksIsTriggerable() {
-        CaseTypeAController.reset();
+        BaseJsonLegacyController.reset();
 
         var response = submitJsonLegacyEvent(
             JSON_LEGACY_NO_CALLBACK_EVENT_ID,
@@ -2794,15 +2794,15 @@ public class TestWithCCD extends CftlibTest {
         @SuppressWarnings("unchecked")
         Map<String, Object> data = (Map<String, Object>) response.get("data");
         assertThat(data.get("setInMidEvent"), equalTo("json-legacy-no-callback"));
-        assertThat(CaseTypeAController.aboutToSubmitAttempts.get(), equalTo(0));
-        assertThat(CaseTypeAController.submittedAttempts.get(), equalTo(0));
+        assertThat(BaseJsonLegacyController.aboutToSubmitAttempts, equalTo(0));
+        assertThat(BaseJsonLegacyController.submittedAttempts, equalTo(0));
     }
 
     @SneakyThrows
     @Order(213)
     @Test
     void submittedRetriesAndDuplicateJsonLegacySubmissionDoesNotReRun() {
-        CaseTypeAController.reset();
+        BaseJsonLegacyController.reset();
         var startEvent = ccdApi.startEvent(
             getAuthorisation("TEST_CASE_WORKER_USER@mailinator.com"),
             getServiceAuth(),
@@ -2823,7 +2823,7 @@ public class TestWithCCD extends CftlibTest {
         );
         var firstResponse = HttpClientBuilder.create().build().execute(request);
         assertThat(firstResponse.getStatusLine().getStatusCode(), equalTo(201));
-        assertThat(CaseTypeAController.submittedAttempts.get(), equalTo(3));
+        assertThat(BaseJsonLegacyController.submittedAttempts, equalTo(3));
 
         var duplicateRequest = prepareEventRequestWithToken(
             "TEST_CASE_WORKER_USER@mailinator.com",
@@ -2834,7 +2834,7 @@ public class TestWithCCD extends CftlibTest {
         );
         var duplicateResponse = HttpClientBuilder.create().build().execute(duplicateRequest);
         assertThat(duplicateResponse.getStatusLine().getStatusCode(), equalTo(201));
-        assertThat(CaseTypeAController.submittedAttempts.get(), equalTo(3));
+        assertThat(BaseJsonLegacyController.submittedAttempts, equalTo(3));
     }
 
     private Map<String, Object> submitJsonLegacyEvent(Map<String, ?> data, int expectedStatus) throws Exception {

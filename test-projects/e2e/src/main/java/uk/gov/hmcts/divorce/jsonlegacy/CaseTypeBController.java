@@ -5,10 +5,10 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@RequestMapping("/case-type-a")
-public class CaseTypeAController extends BaseJsonLegacyController {
+@RequestMapping("/case-type-b")
+public class CaseTypeBController extends BaseJsonLegacyController {
 
-  public CaseTypeAController(NamedParameterJdbcTemplate db) {
+  public CaseTypeBController(NamedParameterJdbcTemplate db) {
     super(db);
   }
 }

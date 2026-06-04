@@ -23,8 +23,8 @@
     "SecurityClassification": "Public",
     "PreConditionState(s)": "*",
     "PostConditionState": "*",
-    "CallBackURLAboutToSubmitEvent": "${CCD_DEF_BASE_URL}/jsonLegacy/about-to-submit",
-    "CallBackURLSubmittedEvent": "${CCD_DEF_BASE_URL}/jsonLegacy/submitted",
+    "CallBackURLAboutToSubmitEvent": "${CCD_DEF_BASE_URL}/case-type-a/about-to-submit",
+    "CallBackURLSubmittedEvent": "${CCD_DEF_BASE_URL}/case-type-a/submitted",
     "RetriesTimeoutURLSubmittedEvent": "120,120"
   },
   {
