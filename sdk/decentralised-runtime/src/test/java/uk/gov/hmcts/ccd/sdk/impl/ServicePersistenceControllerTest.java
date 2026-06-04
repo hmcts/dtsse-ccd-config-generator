@@ -69,8 +69,7 @@ public class ServicePersistenceControllerTest {
     DecentralisedCaseEvent event = mock(DecentralisedCaseEvent.class);
     UUID idempotencyKey = UUID.randomUUID();
     var expectedResponse = new DecentralisedSubmitEventResponse();
-    when(submissionService.submit(event, "Bearer token", idempotencyKey))
-        .thenReturn(expectedResponse);
+    when(submissionService.submit(event, "Bearer token", idempotencyKey)).thenReturn(expectedResponse);
 
     ResponseEntity<DecentralisedSubmitEventResponse> response = controller.createEvent(
         event,
