@@ -13,13 +13,10 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Optional;
-import java.util.Set;
 import lombok.SneakyThrows;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.ApplicationContext;
@@ -43,12 +40,7 @@ import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandl
 class JsonCallbackRouteRegistry {
 
   private static final String SERVICE_AUTHORIZATION = "ServiceAuthorization";
-  private static final String LOCAL_CALLBACK_BASE_URLS = "decentralisation.local-callback-base-urls";
-  private static final Set<String> LOCAL_PLACEHOLDER_NAMES = Set.of(
-      "CCD_DEF_BASE_URL",
-      "CCD_DEF_CASE_SERVICE_BASE_URL",
-      "ET_COS_URL"
-  );
+  private static final String LOCAL_CALLBACK_BASE_URL = "decentralisation.local-callback-base-url";
 
   private final ApplicationContext applicationContext;
   private final ObjectMapper mapper;
@@ -56,7 +48,7 @@ class JsonCallbackRouteRegistry {
   private final Environment environment;
   private final HttpClient httpClient;
   private final Map<String, List<HandlerMethod>> routes;
-  private final String localCallbackBaseUrls;
+  private final String localCallbackBaseUrl;
 
   JsonCallbackRouteRegistry(ApplicationContext applicationContext,
                             ObjectMapper mapper,
@@ -70,7 +62,7 @@ class JsonCallbackRouteRegistry {
         .setSerializationInclusion(JsonInclude.Include.ALWAYS);
     this.environment = environment;
     this.httpClient = HttpClient.newHttpClient();
-    this.localCallbackBaseUrls = localCallbackBaseUrls(environment);
+    this.localCallbackBaseUrl = localCallbackBaseUrl(environment);
     this.routes = indexPostRoutes(handlerMapping);
   }
 
@@ -381,38 +373,12 @@ class JsonCallbackRouteRegistry {
       return false;
     }
 
-    Optional<URI> callbackUri = externalUri(callbackUrl.trim());
-    if (callbackUri.isPresent()) {
-      return localBaseUris().stream().anyMatch(localUri -> sameAuthority(callbackUri.get(), localUri));
-    }
-
-    Placeholder placeholder = placeholder(callbackUrl.trim());
-    if (placeholder != null) {
-      return LOCAL_PLACEHOLDER_NAMES.contains(placeholder.name());
-    }
-
-    return absoluteUri(callbackUrl.trim()).isEmpty();
+    return !localCallbackBaseUrl.isBlank() && callbackUrl.trim().startsWith(localCallbackBaseUrl);
   }
 
-  private List<URI> localBaseUris() {
-    if (localCallbackBaseUrls == null || localCallbackBaseUrls.isBlank()) {
-      return List.of();
-    }
-    return Arrays.stream(localCallbackBaseUrls.split(","))
+  private String localCallbackBaseUrl(Environment environment) {
+    return Optional.ofNullable(environment.getProperty(LOCAL_CALLBACK_BASE_URL))
         .map(String::trim)
-        .filter(value -> !value.isBlank())
-        .map(this::absoluteUri)
-        .flatMap(Optional::stream)
-        .toList();
-  }
-
-  private String localCallbackBaseUrls(Environment environment) {
-    String configured = environment.getProperty(LOCAL_CALLBACK_BASE_URLS);
-    if (configured != null && !configured.isBlank()) {
-      return configured;
-    }
-    return Optional.ofNullable(environment.getProperty("ET_COS_URL"))
-        .or(() -> Optional.ofNullable(System.getenv("ET_COS_URL")))
         .orElse("");
   }
 
@@ -423,18 +389,6 @@ class JsonCallbackRouteRegistry {
     } catch (URISyntaxException | NullPointerException e) {
       return Optional.empty();
     }
-  }
-
-  private boolean sameAuthority(URI left, URI right) {
-    return Objects.equals(left.getHost(), right.getHost())
-        && effectivePort(left) == effectivePort(right);
-  }
-
-  private int effectivePort(URI uri) {
-    if (uri.getPort() >= 0) {
-      return uri.getPort();
-    }
-    return "https".equalsIgnoreCase(uri.getScheme()) ? 443 : 80;
   }
 
   private record Placeholder(String name, String path) {

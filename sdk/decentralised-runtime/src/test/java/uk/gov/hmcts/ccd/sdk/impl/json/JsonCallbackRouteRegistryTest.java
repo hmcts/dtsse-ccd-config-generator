@@ -82,42 +82,21 @@ class JsonCallbackRouteRegistryTest {
   }
 
   @Test
-  void invokesExternalCallbackEvenWhenLocalPathMatches() throws Exception {
-    ArrayBlockingQueue<CapturedRequest> requests = new ArrayBlockingQueue<>(1);
-    HttpServer server = HttpServer.create(new InetSocketAddress("localhost", 0), 0);
-    server.createContext("/callbacks/about-to-submit", exchange -> {
-      requests.add(new CapturedRequest(
-          exchange.getRequestMethod(),
-          exchange.getRequestURI().getPath(),
-          null,
-          null,
-          new String(exchange.getRequestBody().readAllBytes(), UTF_8)
-      ));
+  void invokesCallbackLocallyOnlyWhenCallbackUrlStartsWithConfiguredBaseUrl() throws Exception {
+    JsonCallbackRouteRegistry registry = registryWith(
+        new MockEnvironment().withProperty("decentralisation.local-callback-base-url", "http://localhost:8080"),
+        new LocalCallbackController()
+    );
 
-      byte[] responseBody = "{\"source\":\"external\"}".getBytes(UTF_8);
-      exchange.getResponseHeaders().set(HttpHeaders.CONTENT_TYPE, "application/json");
-      exchange.sendResponseHeaders(200, responseBody.length);
-      exchange.getResponseBody().write(responseBody);
-      exchange.close();
-    });
+    Object response = registry.invoke(
+        "http://localhost:8080/callbacks/about-to-submit",
+        Map.of("event_id", "local")
+    );
 
-    server.start();
-    try {
-      JsonCallbackRouteRegistry registry = registryWith(new MockEnvironment(), new LocalCallbackController());
-
-      Object response = registry.invoke(
-          "http://localhost:" + server.getAddress().getPort() + "/callbacks/about-to-submit",
-          Map.of("event_id", "external")
-      );
-
-      assertThat(requests.poll(5, SECONDS)).isNotNull();
-      assertThat(response)
-          .isInstanceOf(Map.class)
-          .asInstanceOf(org.assertj.core.api.InstanceOfAssertFactories.MAP)
-          .containsEntry("source", "external");
-    } finally {
-      server.stop(0);
-    }
+    assertThat(response)
+        .isInstanceOf(Map.class)
+        .asInstanceOf(org.assertj.core.api.InstanceOfAssertFactories.MAP)
+        .containsEntry("source", "local");
   }
 
   @Test

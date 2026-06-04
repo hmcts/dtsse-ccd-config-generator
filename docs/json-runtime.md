@@ -80,19 +80,15 @@ example AAC.
 
 The local/external boundary is explicit:
 
-* relative URLs are local
-* known service placeholders such as `${ET_COS_URL}` and `${CCD_DEF_BASE_URL}` are local when they do not resolve to
-  an external base URL
-* absolute URLs are local only when their host and effective port match `decentralisation.local-callback-base-urls`
-* `decentralisation.local-callback-base-urls` defaults from `ET_COS_URL` when present
-* other absolute or resolvable placeholder URLs are external
+* URLs that start with `decentralisation.local-callback-base-url` are local
+* all other absolute or resolvable placeholder URLs are external
 
 This prevents an external callback from being dispatched locally simply because its path matches a local controller.
 
 Callback paths are normalised before route matching:
 
-* property placeholders are stripped to their path component
-* scheme, host and port are stripped from absolute URLs for local route lookup
+* the configured local callback base URL is stripped from local URLs
+* scheme, host and port are stripped from absolute URLs for route lookup
 * query strings and fragments are stripped
 * duplicate slashes and trailing slashes are normalised
 
