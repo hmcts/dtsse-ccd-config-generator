@@ -26,12 +26,12 @@ public class JsonLegacyCcdConfig {
   }
 
   @Bean
-  JsonCaseType<E2eJson, State> jsonLegacyCaseTypeAConfig(JsonCaseTypeFactory builder) {
-    return builder.build(E2eJson.class, State.class, CASE_TYPE_A, CASE_TYPE_A_JSON_PATH.toUri().toString());
+  JsonCaseType<LegacyJsonDataModel, State> jsonLegacyCaseTypeAConfig(JsonCaseTypeFactory builder) {
+    return builder.build(LegacyJsonDataModel.class, State.class, CASE_TYPE_A, CASE_TYPE_A_JSON_PATH.toUri().toString());
   }
 
   @Bean
-  JsonCaseType<E2eJson, State> jsonLegacyCaseTypeBConfig(JsonCaseTypeFactory builder) {
-    return builder.build(E2eJson.class, State.class, CASE_TYPE_B, CASE_TYPE_B_JSON_PATH.toUri().toString());
+  JsonCaseType<LegacyJsonDataModel, State> jsonLegacyCaseTypeBConfig(JsonCaseTypeFactory builder) {
+    return builder.build(LegacyJsonDataModel.class, State.class, CASE_TYPE_B, CASE_TYPE_B_JSON_PATH.toUri().toString());
   }
 }

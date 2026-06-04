@@ -3,7 +3,7 @@ package uk.gov.hmcts.divorce.jsonlegacy;
 import lombok.Data;
 
 @Data
-public class E2eJson {
+public class LegacyJsonDataModel {
 
   private String note;
 

@@ -7,7 +7,7 @@ import uk.gov.hmcts.ccd.sdk.CaseViewRequest;
 import uk.gov.hmcts.divorce.divorcecase.model.State;
 
 @Component
-public class E2eJsonCaseView implements CaseView<E2eJson, State> {
+public class E2eJsonCaseView implements CaseView<LegacyJsonDataModel, State> {
 
     @Override
     public Set<String> caseTypeIds() {
@@ -15,7 +15,7 @@ public class E2eJsonCaseView implements CaseView<E2eJson, State> {
     }
 
     @Override
-    public E2eJson getCase(CaseViewRequest<State> request, E2eJson blobCase) {
+    public LegacyJsonDataModel getCase(CaseViewRequest<State> request, LegacyJsonDataModel blobCase) {
         return blobCase;
     }
 }
