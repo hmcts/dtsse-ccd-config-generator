@@ -29,6 +29,13 @@ public interface CCDConfig<Case, State, Role extends HasRole> {
   }
 
   /**
+   * Whether this config should be exported when generating JSON definition files.
+   */
+  default boolean generateJsonDefinition() {
+    return true;
+  }
+
+  /**
    * Invoked during config generation.
    *
    * @param builder Use to declare your CCD configuration.

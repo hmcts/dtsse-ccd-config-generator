@@ -1,16 +1,12 @@
 package uk.gov.hmcts.divorce.jsonlegacy;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.File;
 import java.nio.file.Path;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.core.io.ResourceLoader;
-import uk.gov.hmcts.ccd.sdk.api.CCDConfig;
-import uk.gov.hmcts.ccd.sdk.impl.json.JsonCallbackAdapterFactory;
-import uk.gov.hmcts.ccd.sdk.json.JsonBackedCCDConfig;
+import uk.gov.hmcts.ccd.sdk.json.JsonCaseType;
+import uk.gov.hmcts.ccd.sdk.json.JsonCaseTypeFactory;
 import uk.gov.hmcts.divorce.divorcecase.model.State;
-import uk.gov.hmcts.divorce.divorcecase.model.UserRole;
 
 @Configuration
 public class JsonLegacyCcdConfig {
@@ -32,30 +28,12 @@ public class JsonLegacyCcdConfig {
   }
 
   @Bean
-  CCDConfig<E2eJson, State, UserRole> jsonLegacyCaseTypeAConfig(ResourceLoader resourceLoader,
-                                                                 ObjectMapper mapper,
-                                                                 JsonCallbackAdapterFactory callbackAdapterFactory) {
-    return new JsonBackedCCDConfig<E2eJson, State, UserRole>(
-      CASE_TYPE_A,
-      CASE_TYPE_A_JSON_ROOT,
-      resourceLoader,
-      mapper,
-      callbackAdapterFactory
-    ) {
-    };
+  JsonCaseType<E2eJson, State> jsonLegacyCaseTypeAConfig(JsonCaseTypeFactory builder) {
+    return builder.build(E2eJson.class, State.class, CASE_TYPE_A, CASE_TYPE_A_JSON_ROOT);
   }
 
   @Bean
-  CCDConfig<E2eJson, State, UserRole> jsonLegacyCaseTypeBConfig(ResourceLoader resourceLoader,
-                                                                  ObjectMapper mapper,
-                                                                  JsonCallbackAdapterFactory callbackAdapterFactory) {
-    return new JsonBackedCCDConfig<E2eJson, State, UserRole>(
-      CASE_TYPE_B,
-      CASE_TYPE_B_JSON_ROOT,
-      resourceLoader,
-      mapper,
-      callbackAdapterFactory
-    ) {
-    };
+  JsonCaseType<E2eJson, State> jsonLegacyCaseTypeBConfig(JsonCaseTypeFactory builder) {
+    return builder.build(E2eJson.class, State.class, CASE_TYPE_B, CASE_TYPE_B_JSON_ROOT);
   }
 }
