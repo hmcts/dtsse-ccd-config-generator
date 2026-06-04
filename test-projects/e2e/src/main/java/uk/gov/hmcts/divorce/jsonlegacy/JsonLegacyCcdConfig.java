@@ -16,8 +16,6 @@ public class JsonLegacyCcdConfig {
   private static final Path JSON_LEGACY_DEFINITIONS_PATH = Path.of("build/json-ccd-definitions");
   private static final Path CASE_TYPE_A_JSON_PATH = JSON_LEGACY_DEFINITIONS_PATH.resolve("CaseTypeA");
   private static final Path CASE_TYPE_B_JSON_PATH = JSON_LEGACY_DEFINITIONS_PATH.resolve("CaseTypeB");
-  private static final String CASE_TYPE_A_JSON_ROOT = CASE_TYPE_A_JSON_PATH.toUri().toString();
-  private static final String CASE_TYPE_B_JSON_ROOT = CASE_TYPE_B_JSON_PATH.toUri().toString();
 
   public static File caseTypeADefinitionDirectory() {
     return CASE_TYPE_A_JSON_PATH.toFile();
@@ -29,11 +27,11 @@ public class JsonLegacyCcdConfig {
 
   @Bean
   JsonCaseType<E2eJson, State> jsonLegacyCaseTypeAConfig(JsonCaseTypeFactory builder) {
-    return builder.build(E2eJson.class, State.class, CASE_TYPE_A, CASE_TYPE_A_JSON_ROOT);
+    return builder.build(E2eJson.class, State.class, CASE_TYPE_A, CASE_TYPE_A_JSON_PATH.toUri().toString());
   }
 
   @Bean
   JsonCaseType<E2eJson, State> jsonLegacyCaseTypeBConfig(JsonCaseTypeFactory builder) {
-    return builder.build(E2eJson.class, State.class, CASE_TYPE_B, CASE_TYPE_B_JSON_ROOT);
+    return builder.build(E2eJson.class, State.class, CASE_TYPE_B, CASE_TYPE_B_JSON_PATH.toUri().toString());
   }
 }
