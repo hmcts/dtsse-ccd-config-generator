@@ -1,6 +1,6 @@
 [
   {
-    "CaseTypeID": "E2E-JSON",
+    "CaseTypeID": "case-type-a",
     "CaseStateID": "Submitted",
     "UserRole": "caseworker-divorce-courtadmin_beta",
     "CRUD": "CRU",

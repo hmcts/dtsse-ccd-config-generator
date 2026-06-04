@@ -1,20 +1,20 @@
 [
   {
-    "CaseTypeID": "E2E-JSON",
+    "CaseTypeID": "case-type-a",
     "CaseEventID": "json-legacy-create",
     "UserRole": "caseworker-divorce-courtadmin_beta",
     "CRUD": "CRU",
     "LiveFrom": "01/01/2017"
   },
   {
-    "CaseTypeID": "E2E-JSON",
+    "CaseTypeID": "case-type-a",
     "CaseEventID": "json-legacy-dispatch",
     "UserRole": "caseworker-divorce-courtadmin_beta",
     "CRUD": "CRU",
     "LiveFrom": "01/01/2017"
   },
   {
-    "CaseTypeID": "E2E-JSON",
+    "CaseTypeID": "case-type-a",
     "CaseEventID": "json-legacy-no-callback",
     "UserRole": "caseworker-divorce-courtadmin_beta",
     "CRUD": "CRU",

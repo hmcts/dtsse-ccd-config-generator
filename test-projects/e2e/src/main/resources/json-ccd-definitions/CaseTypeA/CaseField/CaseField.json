@@ -1,7 +1,7 @@
 [
   {
     "ID": "note",
-    "CaseTypeID": "E2E-JSON",
+    "CaseTypeID": "case-type-a",
     "Label": "Note",
     "FieldType": "Text",
     "SecurityClassification": "Public",
@@ -9,7 +9,7 @@
   },
   {
     "ID": "setInMidEvent",
-    "CaseTypeID": "E2E-JSON",
+    "CaseTypeID": "case-type-a",
     "Label": "Set in mid event",
     "FieldType": "Text",
     "SecurityClassification": "Public",
@@ -17,7 +17,7 @@
   },
   {
     "ID": "setInAboutToSubmit",
-    "CaseTypeID": "E2E-JSON",
+    "CaseTypeID": "case-type-a",
     "Label": "Set in about to submit",
     "FieldType": "Text",
     "SecurityClassification": "Public",

@@ -1,18 +1,18 @@
 [
   {
-    "CaseTypeID": "E2E-JSON",
+    "CaseTypeID": "case-type-a",
     "CaseFieldID": "note",
     "UserRole": "caseworker-divorce-courtadmin_beta",
     "CRUD": "CRU"
   },
   {
-    "CaseTypeID": "E2E-JSON",
+    "CaseTypeID": "case-type-a",
     "CaseFieldID": "setInMidEvent",
     "UserRole": "caseworker-divorce-courtadmin_beta",
     "CRUD": "CRU"
   },
   {
-    "CaseTypeID": "E2E-JSON",
+    "CaseTypeID": "case-type-a",
     "CaseFieldID": "setInAboutToSubmit",
     "UserRole": "caseworker-divorce-courtadmin_beta",
     "CRUD": "CRU"

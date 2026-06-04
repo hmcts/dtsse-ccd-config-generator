@@ -4,7 +4,7 @@
     "Name": "Submitted",
     "Description": "Submitted",
     "DisplayOrder": 1,
-    "CaseTypeID": "E2E-JSON",
+    "CaseTypeID": "case-type-a",
     "LiveFrom": "01/01/2017"
   }
 ]

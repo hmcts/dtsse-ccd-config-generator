@@ -7,6 +7,10 @@ server:
 
 pebble:
   cache: false
+
+decentralisation:
+  local-callback-base-urls: http://localhost:4013
+
 management:
   endpoint:
     health:

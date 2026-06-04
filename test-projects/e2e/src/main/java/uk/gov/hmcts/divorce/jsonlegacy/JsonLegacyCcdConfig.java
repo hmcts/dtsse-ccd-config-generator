@@ -13,7 +13,7 @@ import uk.gov.hmcts.divorce.divorcecase.model.UserRole;
 @Configuration
 public class JsonLegacyCcdConfig {
 
-  public static final String CASE_TYPE = "E2E-JSON";
+  public static final String CASE_TYPE = "case-type-a";
   private static final String JSON_ROOT = "classpath:json-ccd-definitions/CaseTypeA";
 
   @Bean
