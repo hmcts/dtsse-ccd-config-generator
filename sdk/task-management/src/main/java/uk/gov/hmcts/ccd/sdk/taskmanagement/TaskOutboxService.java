@@ -14,16 +14,13 @@ import uk.gov.hmcts.ccd.sdk.taskmanagement.model.request.TaskCreateRequest;
 public class TaskOutboxService {
 
   private final TaskOutboxRepository repository;
-  private final TaskOutboxCompletionAwaiter completionAwaiter;
   private final ObjectMapper objectMapper;
 
   public TaskOutboxService(
       TaskOutboxRepository repository,
-      TaskOutboxCompletionAwaiter completionAwaiter,
       ObjectMapper objectMapper
   ) {
     this.repository = repository;
-    this.completionAwaiter = completionAwaiter;
     this.objectMapper = objectMapper;
   }
 
@@ -52,12 +49,11 @@ public class TaskOutboxService {
     requireNonEmpty(payload.taskTypes(), "taskTypes");
 
     try {
-      long outboxId = repository.enqueueAndReturnId(
+      repository.enqueueAndReturnId(
           payload.caseId(),
           objectMapper.writeValueAsString(payload),
           TaskAction.COMPLETE.getId()
       );
-      completionAwaiter.awaitProcessedAfterCommit(outboxId);
     } catch (IOException ex) {
       throw new IllegalStateException("Failed to enqueue task outbox entry", ex);
     }

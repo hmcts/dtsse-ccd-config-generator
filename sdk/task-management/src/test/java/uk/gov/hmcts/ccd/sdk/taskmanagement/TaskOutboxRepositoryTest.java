@@ -33,9 +33,10 @@ class TaskOutboxRepositoryTest {
 
     repository.claimPending(5, 0);
 
-    assertThat(sqlCaptor.getValue()).contains("o.next_attempt_at <= localtimestamp");
-    assertThat(sqlCaptor.getValue())
-        .contains("next_attempt_at = localtimestamp + (:processingTimeoutMillis * interval '1 millisecond')");
+    assertThat(sqlCaptor.getValue()).contains("o.next_attempt_at <= (current_timestamp at time zone 'UTC')");
+    assertThat(sqlCaptor.getValue()).contains("next_attempt_at =");
+    assertThat(sqlCaptor.getValue()).contains("(current_timestamp at time zone 'UTC')");
+    assertThat(sqlCaptor.getValue()).contains(":processingTimeoutMillis * interval '1 millisecond'");
     assertThat(paramsCaptor.getValue()).doesNotContainKeys("now", "processingDeadline");
     assertThat(paramsCaptor.getValue()).containsEntry("processingTimeoutMillis", 300000L);
   }

@@ -10,6 +10,7 @@ import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import uk.gov.hmcts.ccd.sdk.taskmanagement.model.TaskAction;
 import uk.gov.hmcts.ccd.sdk.taskmanagement.model.outbox.TaskOutboxRecord;
 import uk.gov.hmcts.ccd.sdk.taskmanagement.model.outbox.TaskOutboxStatus;
 
@@ -73,7 +74,7 @@ public class TaskOutboxRepository {
               select o.id
               from ccd.task_outbox o
               where o.status::text in (:newStatus, :waitingStatus, :failedStatus, :processingStatus)
-                and (o.next_attempt_at is null or o.next_attempt_at <= localtimestamp)
+                and (o.next_attempt_at is null or o.next_attempt_at <= (current_timestamp at time zone 'UTC'))
                 and (:maxAttempts = 0 or o.attempt_count < :maxAttempts)
                 and not exists (
                   select 1
@@ -84,7 +85,10 @@ public class TaskOutboxRepository {
                       prior.status::text in (:newStatus, :failedStatus, :processingStatus)
                       or (
                         prior.status::text = :waitingStatus
-                        and (prior.next_attempt_at is null or prior.next_attempt_at <= localtimestamp)
+                        and (
+                          prior.next_attempt_at is null
+                          or prior.next_attempt_at <= (current_timestamp at time zone 'UTC')
+                        )
                       )
                     )
                     and (:maxAttempts = 0 or prior.attempt_count < :maxAttempts)
@@ -97,7 +101,8 @@ public class TaskOutboxRepository {
               update ccd.task_outbox outbox
               set status = cast(:processingStatus as ccd.task_outbox_status),
                   updated = localtimestamp,
-                  next_attempt_at = localtimestamp + (:processingTimeoutMillis * interval '1 millisecond')
+                  next_attempt_at =
+                    (current_timestamp at time zone 'UTC') + (:processingTimeoutMillis * interval '1 millisecond')
               from claimable
               where outbox.id = claimable.id
               returning outbox.id,
@@ -201,6 +206,73 @@ public class TaskOutboxRepository {
             """,
         Map.of("id", id),
         rs -> rs.next() ? Optional.of(TaskOutboxStatus.valueOf(rs.getString("status"))) : Optional.empty()
+    );
+  }
+
+  @Transactional(readOnly = true, propagation = Propagation.REQUIRES_NEW)
+  public Optional<TaskOutboxCompletionResult> findFinishedCompleteTask(long id) {
+    return jdbc.query(
+        """
+            select id,
+                   case_id,
+                   requested_action::text as requested_action,
+                   status::text as status,
+                   attempt_count
+            from ccd.task_outbox
+            where id = :id
+              and requested_action = 'complete'::ccd.task_action
+              and status in (
+                'PROCESSED'::ccd.task_outbox_status,
+                'FAILED'::ccd.task_outbox_status
+              )
+            """,
+        Map.of("id", id),
+        rs -> {
+          if (!rs.next()) {
+            return Optional.empty();
+          }
+
+          return Optional.of(new TaskOutboxCompletionResult(
+              rs.getLong("id"),
+              rs.getLong("case_id"),
+              rs.getString("requested_action"),
+              TaskOutboxStatus.valueOf(rs.getString("status")),
+              rs.getInt("attempt_count")
+          ));
+        }
+    );
+  }
+
+  @Transactional(readOnly = true, propagation = Propagation.REQUIRES_NEW)
+  public long findLatestIdForCase(long caseId) {
+    return jdbc.query(
+        """
+            select coalesce(max(id), 0)
+            from ccd.task_outbox
+            where case_id = :caseId
+            """,
+        Map.of("caseId", caseId),
+        rs -> rs.next() ? rs.getLong(1) : 0L
+    );
+  }
+
+  @Transactional(readOnly = true, propagation = Propagation.REQUIRES_NEW)
+  public List<Long> findCompletionIdsForCaseAfter(long caseId, long afterId) {
+    return jdbc.queryForList(
+        """
+            select id
+            from ccd.task_outbox
+            where case_id = :caseId
+              and id > :afterId
+              and requested_action::text = :completeAction
+            order by id
+            """,
+        Map.of(
+            "caseId", caseId,
+            "afterId", afterId,
+            "completeAction", TaskAction.COMPLETE.getId()
+        ),
+        Long.class
     );
   }
 

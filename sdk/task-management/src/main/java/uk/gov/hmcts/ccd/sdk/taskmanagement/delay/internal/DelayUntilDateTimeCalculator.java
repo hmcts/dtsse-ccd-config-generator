@@ -1,6 +1,7 @@
 package uk.gov.hmcts.ccd.sdk.taskmanagement.delay.internal;
 
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.Optional;
 import uk.gov.hmcts.ccd.sdk.taskmanagement.delay.DelayUntilRequest;
 
@@ -15,6 +16,6 @@ class DelayUntilDateTimeCalculator implements DelayUntilCalculator {
 
   @Override
   public LocalDateTime calculateDate(DelayUntilRequest delayUntilRequest) {
-    return addTimeToDate(delayUntilRequest.getDelayUntilTime(), LocalDateTime.now());
+    return addTimeToDate(delayUntilRequest.getDelayUntilTime(), LocalDateTime.now(ZoneOffset.UTC));
   }
 }

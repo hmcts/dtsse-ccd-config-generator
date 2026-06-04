@@ -17,6 +17,7 @@ dependencies {
     api 'org.springframework.cloud:spring-cloud-starter-openfeign'
     api 'com.github.hmcts:service-auth-provider-java-client:5.3.4'
     api 'org.slf4j:slf4j-api'
+    api 'org.postgresql:postgresql'
 
     compileOnly 'org.springframework.boot:spring-boot-autoconfigure'
 

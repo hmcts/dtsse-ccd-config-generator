@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import feign.codec.Decoder;
 import feign.codec.Encoder;
 import java.time.Duration;
+import javax.sql.DataSource;
 import org.springframework.beans.factory.ObjectFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
@@ -90,21 +91,23 @@ public class TaskManagementAutoConfiguration {
 
   @Bean
   @ConditionalOnMissingBean
+  @ConditionalOnBean(DataSource.class)
   public TaskOutboxCompletionAwaiter taskOutboxCompletionAwaiter(
       TaskOutboxRepository repository,
-      TaskManagementProperties properties
+      TaskManagementProperties properties,
+      DataSource dataSource,
+      ObjectMapper objectMapper
   ) {
-    return new TaskOutboxCompletionAwaiter(repository, properties);
+    return new TaskOutboxCompletionAwaiter(repository, properties, dataSource, objectMapper);
   }
 
   @Bean
   @ConditionalOnMissingBean
   public TaskOutboxService taskOutboxService(
       TaskOutboxRepository repository,
-      TaskOutboxCompletionAwaiter completionAwaiter,
       ObjectMapper objectMapper
   ) {
-    return new TaskOutboxService(repository, completionAwaiter, objectMapper);
+    return new TaskOutboxService(repository, objectMapper);
   }
 
   @Bean

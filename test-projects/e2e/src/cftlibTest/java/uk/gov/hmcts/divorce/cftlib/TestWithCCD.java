@@ -45,24 +45,18 @@ import uk.gov.hmcts.divorce.divorcecase.model.CaseData;
 import uk.gov.hmcts.divorce.simplecase.SimpleCaseConfiguration;
 import uk.gov.hmcts.divorce.simplecase.model.SimpleCaseData;
 import uk.gov.hmcts.divorce.simplecase.model.SimpleCaseState;
-import uk.gov.hmcts.divorce.sow014.nfd.CaseworkerMaintainCaseLink;
-import uk.gov.hmcts.divorce.sow014.nfd.CaseworkerOverrideEventMetadata;
-import uk.gov.hmcts.divorce.sow014.nfd.CaseworkerPopulateSearchCriteria;
-import uk.gov.hmcts.divorce.sow014.nfd.DecentralisedCaseworkerAddNote;
-import uk.gov.hmcts.divorce.sow014.nfd.DecentralisedCaseworkerAddNoteFailure;
-import uk.gov.hmcts.divorce.sow014.nfd.DecentralisedOverrideEventMetadata;
-import uk.gov.hmcts.divorce.sow014.nfd.FailingSubmittedCallback;
-import uk.gov.hmcts.divorce.sow014.nfd.CaseworkerRoundTripData;
 import uk.gov.hmcts.divorce.sow014.nfd.ApiFirstTaskCancelEvent;
 import uk.gov.hmcts.divorce.sow014.nfd.ApiFirstTaskCompleteEvent;
 import uk.gov.hmcts.divorce.sow014.nfd.ApiFirstTaskDelayedEvent;
 import uk.gov.hmcts.divorce.sow014.nfd.ApiFirstTaskEvent;
 import uk.gov.hmcts.divorce.sow014.nfd.ApiFirstTaskReconfigureEvent;
 import uk.gov.hmcts.divorce.sow014.nfd.CaseworkerMaintainCaseLink;
+import uk.gov.hmcts.divorce.sow014.nfd.CaseworkerOverrideEventMetadata;
 import uk.gov.hmcts.divorce.sow014.nfd.CaseworkerPopulateSearchCriteria;
 import uk.gov.hmcts.divorce.sow014.nfd.CaseworkerRoundTripData;
 import uk.gov.hmcts.divorce.sow014.nfd.DecentralisedCaseworkerAddNote;
 import uk.gov.hmcts.divorce.sow014.nfd.DecentralisedCaseworkerAddNoteFailure;
+import uk.gov.hmcts.divorce.sow014.nfd.DecentralisedOverrideEventMetadata;
 import uk.gov.hmcts.divorce.sow014.nfd.FailingSubmittedCallback;
 import uk.gov.hmcts.divorce.sow014.nfd.PublishedEvent;
 import uk.gov.hmcts.divorce.sow014.nfd.ReturnErrorWhenCreateAPIFirstTask;
@@ -1571,7 +1565,7 @@ public class TestWithCCD extends CftlibTest {
         assertThat(statusRow.get("status"), equalTo("WAITING"));
 
         db.update(
-            "UPDATE ccd.task_outbox SET next_attempt_at = NOW() - INTERVAL '1 second'"
+            "UPDATE ccd.task_outbox SET next_attempt_at = (current_timestamp at time zone 'UTC') - INTERVAL '1 second'"
                 + " WHERE case_id = CAST(:caseId AS bigint)"
                 + " AND requested_action = :action::ccd.task_action",
             Map.of("caseId", caseIdValue, "action", TaskAction.INITIATE.getId())
@@ -1697,7 +1691,7 @@ public class TestWithCCD extends CftlibTest {
         });
 
         db.update(
-            "UPDATE ccd.task_outbox SET next_attempt_at = NOW() - INTERVAL '1 second'"
+            "UPDATE ccd.task_outbox SET next_attempt_at = (current_timestamp at time zone 'UTC') - INTERVAL '1 second'"
                 + " WHERE case_id = CAST(:caseId AS bigint)"
                 + " AND requested_action = :action::ccd.task_action",
             Map.of("caseId", caseIdValue, "action", TaskAction.INITIATE.getId())
@@ -1710,21 +1704,21 @@ public class TestWithCCD extends CftlibTest {
         Map<String, Object> processedOrder = db.queryForMap(
             "SELECT"
                 + " ("
-                + "   SELECT max(h.created)"
+                + "   SELECT max(h.id)"
                 + "   FROM ccd.task_outbox o"
                 + "   JOIN ccd.task_outbox_history h ON h.task_outbox_id = o.id"
                 + "   WHERE o.case_id = CAST(:caseId AS bigint)"
                 + "     AND o.requested_action = :initiate::ccd.task_action"
                 + "     AND h.status = CAST(:processed as ccd.task_outbox_status)"
-                + " ) as initiate_processed_at,"
+                + " ) as initiate_processed_history_id,"
                 + " ("
-                + "   SELECT max(h.created)"
+                + "   SELECT max(h.id)"
                 + "   FROM ccd.task_outbox o"
                 + "   JOIN ccd.task_outbox_history h ON h.task_outbox_id = o.id"
                 + "   WHERE o.case_id = CAST(:caseId AS bigint)"
                 + "     AND o.requested_action = :complete::ccd.task_action"
                 + "     AND h.status = CAST(:processed as ccd.task_outbox_status)"
-                + " ) as complete_processed_at",
+                + " ) as complete_processed_history_id",
             Map.of(
                 "caseId", caseIdValue,
                 "initiate", TaskAction.INITIATE.getId(),
@@ -1732,11 +1726,13 @@ public class TestWithCCD extends CftlibTest {
                 "processed", "PROCESSED"
             )
         );
-        LocalDateTime initiateProcessedAt = (LocalDateTime) processedOrder.get("initiate_processed_at");
-        LocalDateTime completeProcessedAt = (LocalDateTime) processedOrder.get("complete_processed_at");
-        assertThat(initiateProcessedAt, is(notNullValue()));
-        assertThat(completeProcessedAt, is(notNullValue()));
-        assertThat(completeProcessedAt.isBefore(initiateProcessedAt), is(true));
+        Long initiateProcessedHistoryId =
+            ((Number) processedOrder.get("initiate_processed_history_id")).longValue();
+        Long completeProcessedHistoryId =
+            ((Number) processedOrder.get("complete_processed_history_id")).longValue();
+        assertThat(initiateProcessedHistoryId, is(notNullValue()));
+        assertThat(completeProcessedHistoryId, is(notNullValue()));
+        assertThat(completeProcessedHistoryId < initiateProcessedHistoryId, is(true));
     }
 
     @SneakyThrows

@@ -6,6 +6,7 @@ import static uk.gov.hmcts.ccd.sdk.taskmanagement.delay.internal.DelayUntilInter
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.time.ZoneOffset;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
@@ -101,7 +102,7 @@ class DelayUntilIntervalCalculator implements DelayUntilCalculator {
     return DelayUntilIntervalData.builder()
         .referenceDate(Optional.ofNullable(delayUntilRequest.getDelayUntilOrigin())
             .map(this::parseDateTime)
-            .orElse(LocalDateTime.now()))
+            .orElse(LocalDateTime.now(ZoneOffset.UTC)))
         .intervalDays(Optional.ofNullable(delayUntilRequest.getDelayUntilIntervalDays())
             .map(Long::valueOf)
             .orElse(0L))
