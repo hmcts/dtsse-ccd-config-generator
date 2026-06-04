@@ -39,6 +39,11 @@ public class JsonBackedCCDConfig<Case, State, Role extends HasRole> implements C
   private final JsonCallbackAdapterFactory callbackAdapterFactory;
 
   @Override
+  public String groupingKey() {
+    return caseTypeId;
+  }
+
+  @Override
   public void configure(ConfigBuilder<Case, State, Role> builder) {
     Map<String, Object> caseType = requiredRow("CaseType", "ID", caseTypeId);
     String jurisdictionId = string(caseType, "JurisdictionID");

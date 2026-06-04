@@ -46,10 +46,10 @@ public class JsonLegacyCcdConfig {
   }
 
   @Bean
-  CCDConfig<E2eJsonB, State, UserRole> jsonLegacyCaseTypeBConfig(ResourceLoader resourceLoader,
+  CCDConfig<E2eJson, State, UserRole> jsonLegacyCaseTypeBConfig(ResourceLoader resourceLoader,
                                                                   ObjectMapper mapper,
                                                                   JsonCallbackAdapterFactory callbackAdapterFactory) {
-    return new JsonBackedCCDConfig<E2eJsonB, State, UserRole>(
+    return new JsonBackedCCDConfig<E2eJson, State, UserRole>(
       CASE_TYPE_B,
       CASE_TYPE_B_JSON_ROOT,
       resourceLoader,

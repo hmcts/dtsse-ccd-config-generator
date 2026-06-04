@@ -29,16 +29,20 @@ public class CCDDefinitionGenerator {
 
   @Bean
   public List<ResolvedCCDConfig<?, ?, ?>> loadConfigs() {
-    Multimap<Class<?>, CCDConfig<?, ?, ?>>
-        configsByDataClass = Multimaps
-        .index(configs, CCDDefinitionGenerator::resolveCaseDataClass);
+    Multimap<ConfigGroup, CCDConfig<?, ?, ?>>
+        configsByGroup = Multimaps
+        .index(configs, CCDDefinitionGenerator::resolveConfigGroup);
 
     List<ResolvedCCDConfig<?, ?, ?>> result = Lists.newArrayList();
-    for (Class<?> c : configsByDataClass.keySet()) {
-      ConfigResolver generator = new ConfigResolver(configsByDataClass.get(c));
+    for (ConfigGroup group : configsByGroup.keySet()) {
+      ConfigResolver generator = new ConfigResolver(configsByGroup.get(group));
       result.add(generator.resolveCCDConfig());
     }
     return result;
+  }
+
+  private static ConfigGroup resolveConfigGroup(CCDConfig<?, ?, ?> config) {
+    return new ConfigGroup(resolveCaseDataClass(config), config.groupingKey());
   }
 
   private static Class<?> resolveCaseDataClass(CCDConfig<?, ?, ?> config) {
@@ -49,6 +53,9 @@ public class CCDDefinitionGenerator {
       throw new IllegalStateException("Unable to resolve case data type for " + userClass.getName());
     }
     return caseType;
+  }
+
+  private record ConfigGroup(Class<?> caseDataClass, String groupingKey) {
   }
 
   /**
