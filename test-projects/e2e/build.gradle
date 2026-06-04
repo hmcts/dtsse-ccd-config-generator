@@ -18,6 +18,32 @@ ccd {
   caseEventServiceBus = true
 }
 
+def jsonLegacyDefinitionsDir = layout.buildDirectory.dir('json-ccd-definitions')
+
+tasks.register('generateJsonLegacyDefinitions') {
+  def sourceDir = layout.projectDirectory.dir('src/main/resources/json-ccd-definitions/CaseTypeA')
+  def caseTypeADir = jsonLegacyDefinitionsDir.map { it.dir('CaseTypeA') }
+  def caseTypeBDir = jsonLegacyDefinitionsDir.map { it.dir('CaseTypeB') }
+
+  inputs.dir(sourceDir)
+  outputs.dirs(caseTypeADir, caseTypeBDir)
+
+  doLast {
+    delete caseTypeADir, caseTypeBDir
+
+    copy {
+      from sourceDir
+      into caseTypeADir
+    }
+
+    copy {
+      from sourceDir
+      into caseTypeBDir
+      filter { line -> line.replace('case-type-a', 'case-type-b') }
+    }
+  }
+}
+
 java {
   toolchain {
     languageVersion = JavaLanguageVersion.of(21)
@@ -123,6 +149,7 @@ bootJar {
 
 tasks.withType(CftlibExec).configureEach {
   group = 'ccd tasks'
+  dependsOn tasks.named('generateJsonLegacyDefinitions')
   authMode = AuthMode.Local
   environment 'CCD_DECENTRALISED_CASE-TYPE-SERVICE-URLS_E2E', 'http://localhost:4013'
   environment 'CCD_DECENTRALISED_CASE-TYPE-SERVICE-URLS_case-type-a', 'http://localhost:4013'
@@ -200,6 +227,7 @@ tasks.withType(CftlibExec).configureEach {
 }
 
 tasks.named('generateCCDConfig').configure {
+  dependsOn tasks.named('generateJsonLegacyDefinitions')
   environment 'SPRING_JMS_SERVICEBUS_ENABLED', 'false'
   environment 'SPRING_AUTOCONFIGURE_EXCLUDE',
     'com.azure.spring.cloud.autoconfigure.implementation.jms.ServiceBusJmsAutoConfiguration'
