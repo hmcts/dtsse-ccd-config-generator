@@ -1,8 +1,10 @@
 [
   {
-    "ID": "E2E",
+    "ID": "E2E-JSON",
     "Name": "JSON legacy callbacks",
     "Description": "JSON legacy callbacks",
-    "JurisdictionID": "DIVORCE"
+    "JurisdictionID": "DIVORCE",
+    "SecurityClassification": "Public",
+    "LiveFrom": "01/01/2017"
   }
 ]

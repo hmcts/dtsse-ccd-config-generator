@@ -1,0 +1,10 @@
+[
+  {
+    "ID": "Submitted",
+    "Name": "Submitted",
+    "Description": "Submitted",
+    "DisplayOrder": 1,
+    "CaseTypeID": "E2E-JSON",
+    "LiveFrom": "01/01/2017"
+  }
+]

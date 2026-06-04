@@ -1,0 +1,9 @@
+[
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "E2E-JSON",
+    "CaseFieldID": "[STATE]",
+    "DisplayOrder": 1,
+    "Label": "State"
+  }
+]

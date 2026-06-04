@@ -7,26 +7,26 @@ import org.springframework.core.io.ResourceLoader;
 import uk.gov.hmcts.ccd.sdk.api.CCDConfig;
 import uk.gov.hmcts.ccd.sdk.impl.json.JsonCallbackAdapterFactory;
 import uk.gov.hmcts.ccd.sdk.json.JsonBackedCCDConfig;
-import uk.gov.hmcts.divorce.divorcecase.NoFaultDivorce;
-import uk.gov.hmcts.divorce.divorcecase.model.CaseData;
 import uk.gov.hmcts.divorce.divorcecase.model.State;
 import uk.gov.hmcts.divorce.divorcecase.model.UserRole;
 
 @Configuration
 public class JsonLegacyCcdConfig {
 
+  public static final String CASE_TYPE = "E2E-JSON";
   private static final String JSON_ROOT = "classpath:json-ccd-definitions/json-legacy";
 
   @Bean
-  CCDConfig<CaseData, State, UserRole> jsonLegacyConfig(ResourceLoader resourceLoader,
+  CCDConfig<E2eJson, State, UserRole> jsonLegacyConfig(ResourceLoader resourceLoader,
                                                         ObjectMapper mapper,
                                                         JsonCallbackAdapterFactory callbackAdapterFactory) {
-    return new JsonBackedCCDConfig<CaseData, State, UserRole>(
-        NoFaultDivorce.getCaseType(),
-        JSON_ROOT,
-        resourceLoader,
-        mapper,
-        callbackAdapterFactory
-    ) {};
+    return new JsonBackedCCDConfig<>(
+      CASE_TYPE,
+      JSON_ROOT,
+      resourceLoader,
+      mapper,
+      callbackAdapterFactory
+    ) {
+    };
   }
 }

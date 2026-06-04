@@ -1,0 +1,26 @@
+[
+  {
+    "ID": "note",
+    "CaseTypeID": "E2E-JSON",
+    "Label": "Note",
+    "FieldType": "Text",
+    "SecurityClassification": "Public",
+    "LiveFrom": "01/01/2017"
+  },
+  {
+    "ID": "setInMidEvent",
+    "CaseTypeID": "E2E-JSON",
+    "Label": "Set in mid event",
+    "FieldType": "Text",
+    "SecurityClassification": "Public",
+    "LiveFrom": "01/01/2017"
+  },
+  {
+    "ID": "setInAboutToSubmit",
+    "CaseTypeID": "E2E-JSON",
+    "Label": "Set in about to submit",
+    "FieldType": "Text",
+    "SecurityClassification": "Public",
+    "LiveFrom": "01/01/2017"
+  }
+]

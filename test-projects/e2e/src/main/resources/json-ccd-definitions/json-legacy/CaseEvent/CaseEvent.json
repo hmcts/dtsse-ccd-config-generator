@@ -1,13 +1,28 @@
 [
   {
+    "ID": "json-legacy-create",
+    "Name": "JSON legacy create",
+    "Description": "JSON legacy create event",
+    "CaseTypeID": "E2E-JSON",
+    "DisplayOrder": 100,
+    "EndButtonLabel": "Save and continue",
+    "ShowSummary": "N",
+    "ShowEventNotes": "N",
+    "SecurityClassification": "Public",
+    "PostConditionState": "Submitted"
+  },
+  {
     "ID": "json-legacy-dispatch",
     "Name": "JSON legacy dispatch",
     "Description": "JSON legacy dispatch",
-    "CaseTypeID": "E2E",
+    "CaseTypeID": "E2E-JSON",
     "DisplayOrder": 101,
     "EndButtonLabel": "Save and continue",
     "ShowSummary": "N",
     "ShowEventNotes": "N",
+    "SecurityClassification": "Public",
+    "PreConditionState(s)": "*",
+    "PostConditionState": "*",
     "CallBackURLAboutToSubmitEvent": "${CCD_DEF_BASE_URL}/jsonLegacy/about-to-submit",
     "CallBackURLSubmittedEvent": "${CCD_DEF_BASE_URL}/jsonLegacy/submitted",
     "RetriesTimeoutURLSubmittedEvent": "120,120"
@@ -16,10 +31,13 @@
     "ID": "json-legacy-no-callback",
     "Name": "JSON legacy no-callback",
     "Description": "JSON legacy no-callback event",
-    "CaseTypeID": "E2E",
+    "CaseTypeID": "E2E-JSON",
     "DisplayOrder": 102,
     "EndButtonLabel": "Save and continue",
     "ShowSummary": "N",
-    "ShowEventNotes": "N"
+    "ShowEventNotes": "N",
+    "SecurityClassification": "Public",
+    "PreConditionState(s)": "*",
+    "PostConditionState": "*"
   }
 ]

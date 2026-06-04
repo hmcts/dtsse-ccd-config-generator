@@ -57,7 +57,9 @@ public class JsonBackedCCDConfig<Case, State, Role extends HasRole> implements C
                               Map<String, Object> definition) {
     String id = string(definition, "ID");
     Event.EventBuilder<Case, Role, State> event = builder.event(id)
-        .forAllStates();
+        .forAllStates()
+        .name(string(definition, "Name"))
+        .description(string(definition, "Description"));
 
     event.retries(Webhook.Submitted, string(definition, "RetriesTimeoutURLSubmittedEvent"));
 

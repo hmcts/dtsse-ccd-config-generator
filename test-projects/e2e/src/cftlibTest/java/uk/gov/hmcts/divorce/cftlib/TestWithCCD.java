@@ -106,6 +106,7 @@ import uk.gov.hmcts.divorce.sow014.nfd.ReturnErrorWhenCreateAPIFirstTask;
 import uk.gov.hmcts.divorce.sow014.nfd.ReturnErrorWhenCreateTestCase;
 import uk.gov.hmcts.divorce.sow014.nfd.SubmittedConfirmationCallback;
 import uk.gov.hmcts.divorce.jsonlegacy.JsonLegacyCallbackController;
+import uk.gov.hmcts.divorce.jsonlegacy.JsonLegacyCcdConfig;
 import uk.gov.hmcts.ccd.sdk.type.CaseLink;
 import uk.gov.hmcts.ccd.sdk.type.ListValue;
 import uk.gov.hmcts.ccd.sdk.CaseReindexingService;
@@ -174,6 +175,7 @@ public class TestWithCCD extends CftlibTest {
     private static final String API_FIRST_TASK_CANCEL_EVENT_ID = ApiFirstTaskCancelEvent.EVENT_ID;
     private static final String API_FIRST_TASK_RECONFIGURE_EVENT_ID = ApiFirstTaskReconfigureEvent.EVENT_ID;
     private static final String API_FIRST_TASK_DELAYED_EVENT_ID = ApiFirstTaskDelayedEvent.EVENT_ID;
+    private static final String JSON_LEGACY_CREATE_EVENT_ID = "json-legacy-create";
     private static final String JSON_LEGACY_EVENT_ID = "json-legacy-dispatch";
     private static final String JSON_LEGACY_NO_CALLBACK_EVENT_ID = "json-legacy-no-callback";
     private String apiFirstTaskId;
@@ -2851,8 +2853,7 @@ public class TestWithCCD extends CftlibTest {
             )
         );
         assertThat(response.getStatusLine().getStatusCode(), equalTo(expectedStatus));
-        Map<String, Object> body = mapper.readValue(EntityUtils.toString(response.getEntity()), new TypeReference<>() {});
-        return body;
+        return mapper.readValue(EntityUtils.toString(response.getEntity()), new TypeReference<>() {});
     }
 
     private String storedData() {
@@ -2872,40 +2873,39 @@ public class TestWithCCD extends CftlibTest {
 
     @SneakyThrows
     private long createJsonLegacyCase() {
-        var start = ccdApi.startCase(
-            getAuthorisation("TEST_CASE_WORKER_USER@mailinator.com"),
-            getServiceAuth(),
-            NoFaultDivorce.getCaseType(),
-            "create-test-application"
-        );
-        var body = Map.of(
-            "data", Map.of(
-                "applicationType", "soleApplication",
-                "applicant1SolicitorRepresented", "No",
-                "applicant2SolicitorRepresented", "No",
-                "testDocument", Map.of(
-                    "document_url", "http://localhost/documents/" + UUID.randomUUID(),
-                    "document_binary_url", "http://localhost/documents/binary",
-                    "document_filename", "test.pdf"
-                )
-            ),
-            "event", Map.of("id", "create-test-application", "summary", "", "description", ""),
-            "event_token", start.getToken(),
-            "ignore_warning", false
+        String userToken = getAuthorisation("TEST_CASE_WORKER_USER@mailinator.com");
+        String serviceToken = getServiceAuth();
+        String userId = idam.getUserInfo(userToken).getUid();
+
+        var start = ccdApi.startForCaseworker(
+            userToken,
+            serviceToken,
+            userId,
+            NoFaultDivorce.JURISDICTION,
+            JsonLegacyCcdConfig.CASE_TYPE,
+            JSON_LEGACY_CREATE_EVENT_ID
         );
 
-        var request = buildRequest(
-            "TEST_CASE_WORKER_USER@mailinator.com",
-            BASE_URL + "/data/case-types/E2E/cases?ignore-warning=false",
-            HttpPost::new
-        );
-        withCcdAccept(request, ACCEPT_CREATE_CASE);
-        request.setEntity(new StringEntity(mapper.writeValueAsString(body), ContentType.APPLICATION_JSON));
+        CaseDataContent content = CaseDataContent.builder()
+            .eventToken(start.getToken())
+            .event(Event.builder()
+                .id(JSON_LEGACY_CREATE_EVENT_ID)
+                .summary("")
+                .description("")
+                .build())
+            .data(Map.of("setInMidEvent", "json-legacy-create"))
+            .build();
 
-        var response = HttpClientBuilder.create().build().execute(request);
-        assertThat(response.getStatusLine().getStatusCode(), equalTo(201));
-        Map<String, Object> result = mapper.readValue(EntityUtils.toString(response.getEntity()), new TypeReference<>() {});
-        return Long.parseLong((String) result.get("id"));
+        CaseDetails result = ccdApi.submitForCaseworker(
+            userToken,
+            serviceToken,
+            userId,
+            NoFaultDivorce.JURISDICTION,
+            JsonLegacyCcdConfig.CASE_TYPE,
+            true,
+            content
+        );
+        return Long.parseLong(result.getId().toString());
     }
 
     @SneakyThrows
