@@ -4,8 +4,10 @@ import java.io.File;
 import java.nio.file.Path;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import uk.gov.hmcts.ccd.sdk.json.JsonCaseType;
-import uk.gov.hmcts.ccd.sdk.json.JsonCaseTypeFactory;
+import uk.gov.hmcts.ccd.sdk.api.CCDConfig;
+import uk.gov.hmcts.ccd.sdk.api.HasRole;
+import uk.gov.hmcts.ccd.sdk.json.JsonBackedCCDConfig;
+import uk.gov.hmcts.ccd.sdk.json.JsonBackedCCDConfigFactory;
 import uk.gov.hmcts.divorce.divorcecase.model.State;
 
 @Configuration
@@ -26,12 +28,36 @@ public class JsonLegacyCcdConfig {
   }
 
   @Bean
-  JsonCaseType<LegacyJsonDataModel, State> jsonLegacyCaseTypeAConfig(JsonCaseTypeFactory builder) {
-    return builder.build(LegacyJsonDataModel.class, State.class, CASE_TYPE_A, CASE_TYPE_A_JSON_PATH.toUri().toString());
+  CCDConfig<LegacyJsonDataModel, State, JsonOnlyRole> jsonLegacyCaseTypeAConfig(
+      JsonBackedCCDConfigFactory factory) {
+    return new JsonBackedCCDConfig<LegacyJsonDataModel, State, JsonOnlyRole>(
+        factory,
+        CASE_TYPE_A,
+        CASE_TYPE_A_JSON_PATH.toUri().toString()
+    ) {};
   }
 
   @Bean
-  JsonCaseType<LegacyJsonDataModel, State> jsonLegacyCaseTypeBConfig(JsonCaseTypeFactory builder) {
-    return builder.build(LegacyJsonDataModel.class, State.class, CASE_TYPE_B, CASE_TYPE_B_JSON_PATH.toUri().toString());
+  CCDConfig<LegacyJsonDataModel, State, JsonOnlyRole> jsonLegacyCaseTypeBConfig(
+      JsonBackedCCDConfigFactory factory) {
+    return new JsonBackedCCDConfig<LegacyJsonDataModel, State, JsonOnlyRole>(
+        factory,
+        CASE_TYPE_B,
+        CASE_TYPE_B_JSON_PATH.toUri().toString()
+    ) {};
+  }
+
+  enum JsonOnlyRole implements HasRole {
+    ;
+
+    @Override
+    public String getRole() {
+      return "";
+    }
+
+    @Override
+    public String getCaseTypePermissions() {
+      return "";
+    }
   }
 }

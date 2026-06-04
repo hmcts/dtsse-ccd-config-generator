@@ -13,7 +13,6 @@ import org.springframework.util.ClassUtils;
 import org.springframework.util.ReflectionUtils;
 import uk.gov.hmcts.ccd.sdk.api.CCDConfig;
 import uk.gov.hmcts.ccd.sdk.api.HasRole;
-import uk.gov.hmcts.ccd.sdk.api.TypedCCDConfig;
 
 class ConfigResolver<T, S, R extends HasRole> {
 
@@ -35,17 +34,11 @@ class ConfigResolver<T, S, R extends HasRole> {
     Class<?> userClass = ClassUtils.getUserClass(config);
     ResolvableType configType = ResolvableType.forClass(userClass).as(CCDConfig.class);
     @SuppressWarnings("unchecked")
-    Class<T> caseType = config instanceof TypedCCDConfig<?, ?, ?> typedConfig
-        ? (Class<T>) typedConfig.caseDataClass()
-        : (Class<T>) resolveGenericArgument(configType, 0, userClass);
+    Class<T> caseType = (Class<T>) resolveGenericArgument(configType, 0, userClass);
     @SuppressWarnings("unchecked")
-    Class<S> stateType = config instanceof TypedCCDConfig<?, ?, ?> typedConfig
-        ? (Class<S>) typedConfig.stateClass()
-        : (Class<S>) resolveGenericArgument(configType, 1, userClass);
+    Class<S> stateType = (Class<S>) resolveGenericArgument(configType, 1, userClass);
     @SuppressWarnings("unchecked")
-    Class<R> roleType = config instanceof TypedCCDConfig<?, ?, ?> typedConfig
-        ? (Class<R>) typedConfig.roleClass()
-        : (Class<R>) resolveGenericArgument(configType, 2, userClass);
+    Class<R> roleType = (Class<R>) resolveGenericArgument(configType, 2, userClass);
 
     ImmutableSet<S> allStates = ImmutableSet.copyOf(stateType.getEnumConstants());
     Map<Class, Integer> types = resolve(caseType, basePackage);

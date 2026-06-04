@@ -12,7 +12,6 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.core.ResolvableType;
 import org.springframework.util.ClassUtils;
 import uk.gov.hmcts.ccd.sdk.api.CCDConfig;
-import uk.gov.hmcts.ccd.sdk.api.TypedCCDConfig;
 import uk.gov.hmcts.ccd.sdk.generator.JSONConfigGenerator;
 
 /**
@@ -52,9 +51,6 @@ public class CCDDefinitionGenerator {
   }
 
   private static Class<?> resolveCaseDataClass(CCDConfig<?, ?, ?> config) {
-    if (config instanceof TypedCCDConfig<?, ?, ?> typedConfig) {
-      return typedConfig.caseDataClass();
-    }
     Class<?> userClass = ClassUtils.getUserClass(config);
     ResolvableType configType = ResolvableType.forClass(userClass).as(CCDConfig.class);
     Class<?> caseType = configType.getGeneric(0).resolve();
