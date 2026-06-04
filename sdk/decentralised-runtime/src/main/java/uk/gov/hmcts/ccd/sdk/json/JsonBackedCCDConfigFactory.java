@@ -4,7 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.io.ResourceLoader;
 import org.springframework.stereotype.Component;
-import uk.gov.hmcts.ccd.sdk.impl.json.JsonCallbackAdapterFactory;
+import uk.gov.hmcts.ccd.sdk.impl.json.JsonCallbackBridge;
 
 @Component
 @RequiredArgsConstructor
@@ -12,7 +12,7 @@ public class JsonBackedCCDConfigFactory {
 
   private final ResourceLoader resourceLoader;
   private final ObjectMapper mapper;
-  private final JsonCallbackAdapterFactory callbackAdapterFactory;
+  private final JsonCallbackBridge callbackBridge;
 
   ResourceLoader resourceLoader() {
     return resourceLoader;
@@ -22,7 +22,7 @@ public class JsonBackedCCDConfigFactory {
     return mapper;
   }
 
-  JsonCallbackAdapterFactory callbackAdapterFactory() {
-    return callbackAdapterFactory;
+  JsonCallbackBridge callbackBridge() {
+    return callbackBridge;
   }
 }

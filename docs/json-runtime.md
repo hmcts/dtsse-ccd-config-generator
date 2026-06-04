@@ -56,7 +56,7 @@ learning from the earlier runtime work, but routes it through the existing SDK c
 
 ### Callback invocation
 
-[`JsonCallbackAdapterFactory`][jcaf] adapts JSON callback URLs into SDK callback handlers.
+[`JsonCallbackBridge`][jcb] adapts JSON callback URLs into SDK callback handlers.
 
 When a callback runs, the adapter builds the CCD callback request shape expected by existing JSON services:
 
@@ -70,7 +70,7 @@ into its domain models, so the bridge duplicates an existing conversion path wit
 
 ### Local and external callbacks
 
-[`JsonCallbackRouteRegistry`][jcrr] indexes Spring MVC `POST` routes from `RequestMappingHandlerMapping`.
+`JsonCallbackBridge` indexes Spring MVC `POST` routes from `RequestMappingHandlerMapping`.
 
 Local callback URLs are invoked directly against the resolved controller method. This avoids HTTP loopback and keeps
 `about-to-submit` inside the same transaction as case persistence.
@@ -121,7 +121,7 @@ The submit flow remains the standard decentralised runtime flow:
 
 1. `CaseSubmissionService` retrieves the user and acquires the idempotency/case lock inside the transaction.
 2. `LegacyCallbackSubmissionHandler` finds the resolved SDK event for the case type and event ID.
-3. For JSON-backed events, the SDK callback delegates to `JsonCallbackAdapterFactory`.
+3. For JSON-backed events, the SDK callback delegates to `JsonCallbackBridge`.
 4. The adapter invokes the local controller directly or an external callback over HTTP.
 5. Returned data, state, security classification, errors and warnings are mapped back into the SDK callback response.
 6. Validation errors from `about-to-submit` are returned to CCD and the transaction is rolled back.
@@ -163,5 +163,4 @@ Covered behaviour includes:
 
 [rcr]: ../sdk/ccd-config-generator/src/main/java/uk/gov/hmcts/ccd/sdk/ResolvedConfigRegistry.java
 [jbcc]: ../sdk/decentralised-runtime/src/main/java/uk/gov/hmcts/ccd/sdk/json/JsonBackedCCDConfig.java
-[jcaf]: ../sdk/decentralised-runtime/src/main/java/uk/gov/hmcts/ccd/sdk/impl/json/JsonCallbackAdapterFactory.java
-[jcrr]: ../sdk/decentralised-runtime/src/main/java/uk/gov/hmcts/ccd/sdk/impl/json/JsonCallbackRouteRegistry.java
+[jcb]: ../sdk/decentralised-runtime/src/main/java/uk/gov/hmcts/ccd/sdk/impl/json/JsonCallbackBridge.java

@@ -19,7 +19,7 @@ import uk.gov.hmcts.ccd.sdk.api.ConfigBuilder;
 import uk.gov.hmcts.ccd.sdk.api.Event;
 import uk.gov.hmcts.ccd.sdk.api.HasRole;
 import uk.gov.hmcts.ccd.sdk.api.Webhook;
-import uk.gov.hmcts.ccd.sdk.impl.json.JsonCallbackAdapterFactory;
+import uk.gov.hmcts.ccd.sdk.impl.json.JsonCallbackBridge;
 
 public class JsonBackedCCDConfig<Case, State, Role extends HasRole>
     implements CCDConfig<Case, State, Role> {
@@ -30,7 +30,7 @@ public class JsonBackedCCDConfig<Case, State, Role extends HasRole>
   private final String jsonRoot;
   private final ResourceLoader resourceLoader;
   private final ObjectMapper mapper;
-  private final JsonCallbackAdapterFactory callbackAdapterFactory;
+  private final JsonCallbackBridge callbackBridge;
 
   public JsonBackedCCDConfig(JsonBackedCCDConfigFactory factory,
                              String caseTypeId,
@@ -39,7 +39,7 @@ public class JsonBackedCCDConfig<Case, State, Role extends HasRole>
     this.jsonRoot = Objects.requireNonNull(jsonRoot);
     this.resourceLoader = factory.resourceLoader();
     this.mapper = factory.mapper();
-    this.callbackAdapterFactory = factory.callbackAdapterFactory();
+    this.callbackBridge = factory.callbackBridge();
   }
 
   @Override
@@ -79,13 +79,13 @@ public class JsonBackedCCDConfig<Case, State, Role extends HasRole>
 
     url(definition, "CallBackURLAboutToSubmitEvent")
         .ifPresent(callbackUrl -> {
-          callbackAdapterFactory.validate(callbackUrl);
-          event.aboutToSubmitCallback(callbackAdapterFactory.aboutToSubmit(callbackUrl, id));
+          callbackBridge.validate(callbackUrl);
+          event.aboutToSubmitCallback(callbackBridge.aboutToSubmit(callbackUrl, id));
         });
     url(definition, "CallBackURLSubmittedEvent")
         .ifPresent(callbackUrl -> {
-          callbackAdapterFactory.validate(callbackUrl);
-          event.submittedCallback(callbackAdapterFactory.submitted(callbackUrl, id));
+          callbackBridge.validate(callbackUrl);
+          event.submittedCallback(callbackBridge.submitted(callbackUrl, id));
         });
   }
 

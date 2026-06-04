@@ -16,7 +16,7 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping;
 
-class JsonCallbackRouteRegistryTest {
+class JsonCallbackBridgeTest {
 
   private final ObjectMapper mapper = new ObjectMapper();
 
@@ -27,12 +27,12 @@ class JsonCallbackRouteRegistryTest {
 
   @Test
   void invokesCallbackLocallyOnlyWhenCallbackUrlStartsWithConfiguredBaseUrl() throws Exception {
-    JsonCallbackRouteRegistry registry = registryWith(
+    JsonCallbackBridge bridge = bridgeWith(
         new MockEnvironment().withProperty("decentralisation.local-callback-base-url", "http://localhost:8080"),
         new LocalCallbackController()
     );
 
-    Object response = registry.invoke(
+    Object response = bridge.invoke(
         "http://localhost:8080/callbacks/about-to-submit",
         Map.of("event_id", "local")
     );
@@ -45,18 +45,18 @@ class JsonCallbackRouteRegistryTest {
 
   @Test
   void failsFastWhenCallbackIsNeitherLocalNorResolvableExternally() {
-    JsonCallbackRouteRegistry registry = registryWith(new MockEnvironment());
+    JsonCallbackBridge bridge = bridgeWith(new MockEnvironment());
 
-    assertThatThrownBy(() -> registry.invoke("${MISSING_URL}/callback", Map.of()))
+    assertThatThrownBy(() -> bridge.invoke("${MISSING_URL}/callback", Map.of()))
         .isInstanceOf(IllegalStateException.class)
         .hasMessage("No resolvable external URL found for JSON callback ${MISSING_URL}/callback");
   }
 
-  private JsonCallbackRouteRegistry registryWith(MockEnvironment environment) {
-    return registryWith(environment, new Object[0]);
+  private JsonCallbackBridge bridgeWith(MockEnvironment environment) {
+    return bridgeWith(environment, new Object[0]);
   }
 
-  private JsonCallbackRouteRegistry registryWith(MockEnvironment environment, Object... controllers) {
+  private JsonCallbackBridge bridgeWith(MockEnvironment environment, Object... controllers) {
     try {
       StaticApplicationContext applicationContext = new StaticApplicationContext();
       for (int i = 0; i < controllers.length; i++) {
@@ -68,7 +68,7 @@ class JsonCallbackRouteRegistryTest {
       handlerMapping.setApplicationContext(applicationContext);
       handlerMapping.afterPropertiesSet();
 
-      return new JsonCallbackRouteRegistry(
+      return new JsonCallbackBridge(
           applicationContext,
           mapper,
           handlerMapping,

@@ -1,7 +1,9 @@
 package uk.gov.hmcts.ccd.sdk.impl.json;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.DeserializationFeature;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.HttpServletRequest;
 import java.io.IOException;
@@ -35,10 +37,16 @@ import org.springframework.web.context.request.ServletRequestAttributes;
 import org.springframework.web.method.HandlerMethod;
 import org.springframework.web.servlet.mvc.method.RequestMappingInfo;
 import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping;
+import uk.gov.hmcts.ccd.sdk.api.CaseDetails;
+import uk.gov.hmcts.ccd.sdk.api.callback.AboutToStartOrSubmitResponse;
+import uk.gov.hmcts.ccd.sdk.api.callback.AboutToSubmit;
+import uk.gov.hmcts.ccd.sdk.api.callback.Submitted;
+import uk.gov.hmcts.reform.ccd.client.model.SubmittedCallbackResponse;
 
 @Component
-class JsonCallbackRouteRegistry {
+public class JsonCallbackBridge {
 
+  private static final TypeReference<Map<String, Object>> MAP = new TypeReference<>() {};
   private static final String SERVICE_AUTHORIZATION = "ServiceAuthorization";
   private static final String LOCAL_CALLBACK_BASE_URL = "decentralisation.local-callback-base-url";
 
@@ -50,11 +58,11 @@ class JsonCallbackRouteRegistry {
   private final Map<String, List<HandlerMethod>> routes;
   private final String localCallbackBaseUrl;
 
-  JsonCallbackRouteRegistry(ApplicationContext applicationContext,
-                            ObjectMapper mapper,
-                            @Qualifier("requestMappingHandlerMapping")
-                            RequestMappingHandlerMapping handlerMapping,
-                            Environment environment) {
+  JsonCallbackBridge(ApplicationContext applicationContext,
+                     ObjectMapper mapper,
+                     @Qualifier("requestMappingHandlerMapping")
+                     RequestMappingHandlerMapping handlerMapping,
+                     Environment environment) {
     this.applicationContext = applicationContext;
     this.mapper = mapper;
     this.requestMapper = mapper.copy()
@@ -66,10 +74,69 @@ class JsonCallbackRouteRegistry {
     this.routes = indexPostRoutes(handlerMapping);
   }
 
-  void validate(String callbackUrl) {
+  public void validate(String callbackUrl) {
     if (shouldInvokeLocally(callbackUrl)) {
       localHandler(callbackUrl);
     }
+  }
+
+  @SuppressWarnings({"rawtypes", "unchecked"})
+  public AboutToSubmit aboutToSubmit(String callbackUrl, String eventId) {
+    return (details, detailsBefore) -> response(callbackUrl, eventId, details, detailsBefore);
+  }
+
+  @SuppressWarnings("rawtypes")
+  public Submitted submitted(String callbackUrl, String eventId) {
+    return (details, detailsBefore) -> {
+      Object response = invoke(callbackUrl, eventId, details, detailsBefore);
+      if (response == null) {
+        return SubmittedCallbackResponse.builder().build();
+      }
+      Map<String, Object> callbackResponse = responseMap(response);
+      return SubmittedCallbackResponse.builder()
+          .confirmationHeader((String) callbackResponse.get("confirmation_header"))
+          .confirmationBody((String) callbackResponse.get("confirmation_body"))
+          .build();
+    };
+  }
+
+  @SuppressWarnings("unchecked")
+  private AboutToStartOrSubmitResponse response(String callbackUrl,
+                                                String eventId,
+                                                CaseDetails<?, ?> details,
+                                                CaseDetails<?, ?> detailsBefore) {
+    Object response = invoke(callbackUrl, eventId, details, detailsBefore);
+    if (response == null) {
+      throw new IllegalStateException("JSON callback " + callbackUrl + " returned no response");
+    }
+    Map<String, Object> callbackResponse = responseMap(response);
+    Object data = callbackResponse.get("data");
+    Object convertedData = data == null
+        ? details.getData()
+        : mapper.convertValue(data, dataClass(details));
+    List<String> errors = (List<String>) callbackResponse.getOrDefault("errors", List.of());
+    List<String> warnings = (List<String>) callbackResponse.getOrDefault("warnings", List.of());
+    return AboutToStartOrSubmitResponse.builder()
+        .data(convertedData)
+        .errors(errors)
+        .warnings(warnings)
+        .state(callbackResponse.get("state"))
+        .dataClassification((Map<String, Object>) callbackResponse.get("data_classification"))
+        .securityClassification((String) callbackResponse.get("security_classification"))
+        .errorMessageOverride((String) callbackResponse.get("error_message_override"))
+        .build();
+  }
+
+  private Object invoke(String callbackUrl,
+                        String eventId,
+                        CaseDetails<?, ?> details,
+                        CaseDetails<?, ?> detailsBefore) {
+    Map<String, Object> payload = new LinkedHashMap<>();
+    payload.put("case_details", toCcdCaseDetails(details));
+    payload.put("case_details_before", detailsBefore == null ? null : toCcdCaseDetails(detailsBefore));
+    payload.put("event_id", eventId);
+
+    return invoke(callbackUrl, payload);
   }
 
   Object invoke(String callbackUrl,
@@ -374,6 +441,26 @@ class JsonCallbackRouteRegistry {
     } catch (URISyntaxException | NullPointerException e) {
       return Optional.empty();
     }
+  }
+
+  private Map<String, Object> toCcdCaseDetails(CaseDetails<?, ?> details) {
+    JsonNode node = mapper.valueToTree(details);
+    Map<String, Object> callbackDetails = mapper.convertValue(
+        node,
+        mapper.getTypeFactory().constructMapType(Map.class, String.class, Object.class)
+    );
+    Object caseData = details.getData() == null ? Map.of() : mapper.convertValue(details.getData(), Object.class);
+    callbackDetails.put("data", caseData);
+    callbackDetails.put("case_data", caseData);
+    return callbackDetails;
+  }
+
+  private Class<?> dataClass(CaseDetails<?, ?> details) {
+    return details.getData() == null ? Map.class : details.getData().getClass();
+  }
+
+  private Map<String, Object> responseMap(Object response) {
+    return response == null ? Map.of() : mapper.convertValue(response, MAP);
   }
 
   private record Placeholder(String name, String path) {
