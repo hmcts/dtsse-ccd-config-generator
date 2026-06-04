@@ -326,21 +326,6 @@ class JsonCallbackRouteRegistry {
     Optional<URI> absoluteUri = absoluteUri(path);
     if (absoluteUri.isPresent()) {
       path = absoluteUri.get().getPath();
-    } else {
-      Placeholder placeholder = placeholder(path);
-      if (placeholder != null) {
-        path = placeholder.path();
-      }
-    }
-
-    int queryIndex = path.indexOf('?');
-    if (queryIndex >= 0) {
-      path = path.substring(0, queryIndex);
-    }
-
-    int fragmentIndex = path.indexOf('#');
-    if (fragmentIndex >= 0) {
-      path = path.substring(0, fragmentIndex);
     }
 
     if (path.isBlank()) {
