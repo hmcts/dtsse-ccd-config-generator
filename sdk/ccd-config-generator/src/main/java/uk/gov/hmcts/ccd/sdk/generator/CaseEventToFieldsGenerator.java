@@ -10,6 +10,7 @@ import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -45,6 +46,7 @@ class CaseEventToFieldsGenerator<T, S, R extends HasRole> implements ConfigGener
     }
 
     Multimap<String, String> writtenCallbacks = HashMultimap.create();
+    Map<String, String> pageShowConditions = new HashMap<>(collection.getPageShowConditions());
     List<Map<String, Object>> entries = Lists.newArrayList();
     for (Field.FieldBuilder builder : collection.getFields()) {
       Field field = builder.build();
@@ -59,7 +61,7 @@ class CaseEventToFieldsGenerator<T, S, R extends HasRole> implements ConfigGener
       row.put("PageColumnNumber", 1);
       applyMetadata(row, field, "CaseEventFieldLabel", "CaseEventFieldHint");
       applyMidEventCallback(row, event, config, collection, pageId, writtenCallbacks);
-      applyPageShowCondition(row, collection, field);
+      applyPageShowCondition(row, pageShowConditions, field);
       applySummaryFlag(row, field);
       applyPageLabel(row, collection, field);
       applyDisplayContextParameter(row, field);
@@ -143,11 +145,11 @@ class CaseEventToFieldsGenerator<T, S, R extends HasRole> implements ConfigGener
   }
 
   private void applyPageShowCondition(Map<String, Object> row,
-                                      FieldCollection collection,
+                                      Map<String, String> pageShowConditions,
                                       Field field) {
-    if (collection.getPageShowConditions().containsKey(field.getPage())) {
+    if (pageShowConditions.containsKey(field.getPage())) {
       row.put("PageShowCondition",
-          collection.getPageShowConditions().remove(field.getPage()));
+          pageShowConditions.remove(field.getPage()));
     }
   }
 
