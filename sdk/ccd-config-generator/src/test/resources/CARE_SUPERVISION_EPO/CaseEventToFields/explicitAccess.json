@@ -21,6 +21,7 @@
     "PageDisplayOrder": 1,
     "PageFieldDisplayOrder": 1,
     "PageID": "ExplicitAccessPage",
+    "PageShowCondition": "caseName=\"\"",
     "ShowSummaryChangeOption": "Y"
   }
 ]
