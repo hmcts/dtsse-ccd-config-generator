@@ -13,7 +13,7 @@ import uk.gov.hmcts.ccd.sdk.impl.json.JsonCallbackBridge;
 @Getter(AccessLevel.PACKAGE)
 @RequiredArgsConstructor
 @Accessors(fluent = true)
-public class JsonBackedCCDConfigFactory {
+public class JsonCCDConfigSupport {
 
   private final ResourceLoader resourceLoader;
   private final ObjectMapper mapper;

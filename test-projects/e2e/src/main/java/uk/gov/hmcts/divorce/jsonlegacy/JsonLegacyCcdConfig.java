@@ -7,7 +7,7 @@ import org.springframework.context.annotation.Configuration;
 import uk.gov.hmcts.ccd.sdk.api.CCDConfig;
 import uk.gov.hmcts.ccd.sdk.api.HasRole;
 import uk.gov.hmcts.ccd.sdk.json.JsonBackedCCDConfig;
-import uk.gov.hmcts.ccd.sdk.json.JsonBackedCCDConfigFactory;
+import uk.gov.hmcts.ccd.sdk.json.JsonCCDConfigSupport;
 import uk.gov.hmcts.divorce.divorcecase.model.State;
 
 @Configuration
@@ -29,9 +29,9 @@ public class JsonLegacyCcdConfig {
 
   @Bean
   CCDConfig<LegacyJsonDataModel, State, JsonOnlyRole> jsonLegacyCaseTypeAConfig(
-      JsonBackedCCDConfigFactory factory) {
+      JsonCCDConfigSupport support) {
     return new JsonBackedCCDConfig<LegacyJsonDataModel, State, JsonOnlyRole>(
-        factory,
+        support,
         CASE_TYPE_A,
         CASE_TYPE_A_JSON_PATH.toUri().toString()
     ) {};
@@ -39,9 +39,9 @@ public class JsonLegacyCcdConfig {
 
   @Bean
   CCDConfig<LegacyJsonDataModel, State, JsonOnlyRole> jsonLegacyCaseTypeBConfig(
-      JsonBackedCCDConfigFactory factory) {
+      JsonCCDConfigSupport support) {
     return new JsonBackedCCDConfig<LegacyJsonDataModel, State, JsonOnlyRole>(
-        factory,
+        support,
         CASE_TYPE_B,
         CASE_TYPE_B_JSON_PATH.toUri().toString()
     ) {};

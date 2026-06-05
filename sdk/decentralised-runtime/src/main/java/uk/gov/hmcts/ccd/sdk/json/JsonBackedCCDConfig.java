@@ -1,7 +1,6 @@
 package uk.gov.hmcts.ccd.sdk.json;
 
 import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
@@ -19,7 +18,6 @@ import uk.gov.hmcts.ccd.sdk.api.ConfigBuilder;
 import uk.gov.hmcts.ccd.sdk.api.Event;
 import uk.gov.hmcts.ccd.sdk.api.HasRole;
 import uk.gov.hmcts.ccd.sdk.api.Webhook;
-import uk.gov.hmcts.ccd.sdk.impl.json.JsonCallbackBridge;
 
 public class JsonBackedCCDConfig<Case, State, Role extends HasRole>
     implements CCDConfig<Case, State, Role> {
@@ -28,18 +26,14 @@ public class JsonBackedCCDConfig<Case, State, Role extends HasRole>
 
   private final String caseTypeId;
   private final String jsonRoot;
-  private final ResourceLoader resourceLoader;
-  private final ObjectMapper mapper;
-  private final JsonCallbackBridge callbackBridge;
+  private final JsonCCDConfigSupport support;
 
-  public JsonBackedCCDConfig(JsonBackedCCDConfigFactory factory,
+  public JsonBackedCCDConfig(JsonCCDConfigSupport support,
                              String caseTypeId,
                              String jsonRoot) {
+    this.support = Objects.requireNonNull(support);
     this.caseTypeId = Objects.requireNonNull(caseTypeId);
     this.jsonRoot = Objects.requireNonNull(jsonRoot);
-    this.resourceLoader = factory.resourceLoader();
-    this.mapper = factory.mapper();
-    this.callbackBridge = factory.callbackBridge();
   }
 
   @Override
@@ -74,13 +68,13 @@ public class JsonBackedCCDConfig<Case, State, Role extends HasRole>
 
     url(definition, "CallBackURLAboutToSubmitEvent")
         .ifPresent(callbackUrl -> {
-          callbackBridge.validate(callbackUrl);
-          event.aboutToSubmitCallback(callbackBridge.aboutToSubmit(callbackUrl, id));
+          support.callbackBridge().validate(callbackUrl);
+          event.aboutToSubmitCallback(support.callbackBridge().aboutToSubmit(callbackUrl, id));
         });
     url(definition, "CallBackURLSubmittedEvent")
         .ifPresent(callbackUrl -> {
-          callbackBridge.validate(callbackUrl);
-          event.submittedCallback(callbackBridge.submitted(callbackUrl, id));
+          support.callbackBridge().validate(callbackUrl);
+          event.submittedCallback(support.callbackBridge().submitted(callbackUrl, id));
         });
   }
 
@@ -101,7 +95,7 @@ public class JsonBackedCCDConfig<Case, State, Role extends HasRole>
     List<Map<String, Object>> values = new ArrayList<>();
     for (Resource resource : resources) {
       try (InputStream input = resource.getInputStream()) {
-        values.addAll(mapper.readValue(input, ROWS));
+        values.addAll(support.mapper().readValue(input, ROWS));
       }
     }
     return values;
@@ -109,7 +103,7 @@ public class JsonBackedCCDConfig<Case, State, Role extends HasRole>
 
   private List<Resource> resources(String folder) {
     String base = jsonRoot.endsWith("/") ? jsonRoot + folder : jsonRoot + "/" + folder;
-    Resource folderResource = resourceLoader.getResource(base);
+    Resource folderResource = resourceLoader().getResource(base);
     if (folderResource.exists()) {
       try {
         if (folderResource.isFile()) {
@@ -120,22 +114,26 @@ public class JsonBackedCCDConfig<Case, State, Role extends HasRole>
       }
     }
 
-    Resource fileResource = resourceLoader.getResource(base + ".json");
+    Resource fileResource = resourceLoader().getResource(base + ".json");
     return fileResource.exists() ? List.of(fileResource) : List.of();
   }
 
   private List<Resource> fileResources(Path path) throws IOException {
     if (Files.isRegularFile(path)) {
-      return List.of(resourceLoader.getResource(path.toUri().toString()));
+      return List.of(resourceLoader().getResource(path.toUri().toString()));
     }
 
     try (var stream = Files.list(path)) {
       return stream
           .filter(candidate -> Files.isRegularFile(candidate) && candidate.toString().endsWith(".json"))
           .sorted()
-          .map(candidate -> resourceLoader.getResource(candidate.toUri().toString()))
+          .map(candidate -> resourceLoader().getResource(candidate.toUri().toString()))
           .toList();
     }
+  }
+
+  private ResourceLoader resourceLoader() {
+    return support.resourceLoader();
   }
 
   private Optional<String> url(Map<String, Object> row, String column) {
