@@ -67,10 +67,7 @@ public class CCDDefinitionGenerator {
    * Export all case types to the specified folder.
    */
   public void generateAllCaseTypesToJSON(File destinationFolder) {
-    List<CCDConfig<?, ?, ?>> exportableConfigs = configs.stream()
-        .filter(CCDConfig::generateJsonDefinition)
-        .toList();
-    for (ResolvedCCDConfig<?, ?, ?> c : loadConfigs(exportableConfigs)) {
+    for (ResolvedCCDConfig<?, ?, ?> c : loadConfigs(configs)) {
       File f = new File(destinationFolder, c.caseType);
       f.mkdirs();
       writer.writeConfig(f, c);

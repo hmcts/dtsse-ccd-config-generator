@@ -48,11 +48,6 @@ public class JsonBackedCCDConfig<Case, State, Role extends HasRole>
   }
 
   @Override
-  public boolean generateJsonDefinition() {
-    return false;
-  }
-
-  @Override
   public void configure(ConfigBuilder<Case, State, Role> builder) {
     Map<String, Object> caseType = requiredRow("CaseType", "ID", caseTypeId);
     String jurisdictionId = string(caseType, "JurisdictionID");

@@ -295,7 +295,6 @@ public class CCDConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<CaseData, S
         .grant(CRU, HMCTS_ADMIN)
         .fields()
         .page("ExplicitAccessPage")
-        .showCondition("caseName=\"\"")
         .optionalWithLabel(CaseData::getGatekeeperEmail, "Gatekeeper email (explicit)")
         .label("explicitAccessLabel", "Explicit access label");
   }
