@@ -13,6 +13,8 @@ import java.util.Map;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import uk.gov.hmcts.ccd.sdk.api.AccessType.AccessTypeBuilder;
+import uk.gov.hmcts.ccd.sdk.api.AccessTypeRole.AccessTypeRoleBuilder;
 import uk.gov.hmcts.ccd.sdk.api.CaseCategory.CaseCategoryBuilder;
 import uk.gov.hmcts.ccd.sdk.api.CaseRoleToAccessProfile.CaseRoleToAccessProfileBuilder;
 import uk.gov.hmcts.ccd.sdk.api.ComplexTypeAuthorisation;
@@ -46,6 +48,8 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements Decentralised
   final List<SearchCasesBuilder<T>> searchCaseResultFields = Lists.newArrayList();
   final List<CaseRoleToAccessProfileBuilder<R>> caseRoleToAccessProfiles = Lists.newArrayList();
   final List<CaseCategoryBuilder<R>> categories = Lists.newArrayList();
+  final List<AccessTypeBuilder> accessTypes = Lists.newArrayList();
+  final List<AccessTypeRoleBuilder> accessTypeRoles = Lists.newArrayList();
   final List<SearchCriteriaBuilder> searchCriteria = Lists.newArrayList();
   final List<SearchPartyBuilder> searchParty = Lists.newArrayList();
   final Set<R> omitHistoryForRoles = new HashSet<>();
@@ -71,6 +75,8 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements Decentralised
     config.rolesWithNoHistory = omitHistoryForRoles.stream().map(HasRole::getRole).collect(Collectors.toSet());
     config.caseRoleToAccessProfiles = buildBuilders(caseRoleToAccessProfiles, CaseRoleToAccessProfileBuilder::build);
     config.categories = buildBuilders(categories, CaseCategoryBuilder::build);
+    config.accessTypes = buildBuilders(accessTypes, AccessTypeBuilder::build);
+    config.accessTypeRoles = buildBuilders(accessTypeRoles, AccessTypeRoleBuilder::build);
     config.searchCriteria = buildBuilders(searchCriteria, SearchCriteriaBuilder::build);
     config.searchParties = buildBuilders(searchParty, SearchPartyBuilder::build);
     config.noticeOfChange = noticeOfChangeBuilder == null ? null : noticeOfChangeBuilder.build();
@@ -207,6 +213,20 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements Decentralised
   public CaseCategoryBuilder<R> categories(R caseRole) {
     var builder = CaseCategoryBuilder.builder(caseRole);
     categories.add(builder);
+    return builder;
+  }
+
+  @Override
+  public AccessTypeBuilder accessType(String accessTypeId) {
+    var builder = AccessTypeBuilder.builder(accessTypeId);
+    accessTypes.add(builder);
+    return builder;
+  }
+
+  @Override
+  public AccessTypeRoleBuilder accessTypeRole(String accessTypeId) {
+    var builder = AccessTypeRoleBuilder.builder(accessTypeId);
+    accessTypeRoles.add(builder);
     return builder;
   }
 
