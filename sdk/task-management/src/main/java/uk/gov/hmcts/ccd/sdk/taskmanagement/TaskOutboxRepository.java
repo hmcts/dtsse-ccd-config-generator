@@ -10,7 +10,6 @@ import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
-import uk.gov.hmcts.ccd.sdk.taskmanagement.model.TaskAction;
 import uk.gov.hmcts.ccd.sdk.taskmanagement.model.outbox.TaskOutboxRecord;
 import uk.gov.hmcts.ccd.sdk.taskmanagement.model.outbox.TaskOutboxStatus;
 
@@ -240,39 +239,6 @@ public class TaskOutboxRepository {
               rs.getInt("attempt_count")
           ));
         }
-    );
-  }
-
-  @Transactional(readOnly = true, propagation = Propagation.REQUIRES_NEW)
-  public long findLatestIdForCase(long caseId) {
-    return jdbc.query(
-        """
-            select coalesce(max(id), 0)
-            from ccd.task_outbox
-            where case_id = :caseId
-            """,
-        Map.of("caseId", caseId),
-        rs -> rs.next() ? rs.getLong(1) : 0L
-    );
-  }
-
-  @Transactional(readOnly = true, propagation = Propagation.REQUIRES_NEW)
-  public List<Long> findCompletionIdsForCaseAfter(long caseId, long afterId) {
-    return jdbc.queryForList(
-        """
-            select id
-            from ccd.task_outbox
-            where case_id = :caseId
-              and id > :afterId
-              and requested_action::text = :completeAction
-            order by id
-            """,
-        Map.of(
-            "caseId", caseId,
-            "afterId", afterId,
-            "completeAction", TaskAction.COMPLETE.getId()
-        ),
-        Long.class
     );
   }
 

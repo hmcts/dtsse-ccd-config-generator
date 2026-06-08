@@ -60,7 +60,7 @@ public class ApiFirstTaskCompleteEvent implements CCDConfig<CaseData, State, Use
             List.of(ApiFirstTaskEvent.TASK_TYPE)
         );
 
-        taskOutboxService.enqueueTaskCompleteRequest(payload);
+        taskOutboxService.enqueueTaskCompleteRequest(payload, true);
 
         return AboutToStartOrSubmitResponse.<CaseData, State>builder()
             .data(details.getData())

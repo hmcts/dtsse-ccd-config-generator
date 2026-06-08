@@ -9,16 +9,8 @@ begin
        )
     then
         perform pg_notify(
-            'task_outbox_complete_finished',
-            json_build_object(
-                'id', new.id,
-                'case_id', new.case_id,
-                'requested_action', new.requested_action,
-                'old_status', old.status,
-                'new_status', new.status,
-                'attempt_count', new.attempt_count,
-                'updated', new.updated
-            )::text
+            'task_outbox_complete_finished_' || new.id,
+            ''
         );
     end if;
 

@@ -95,19 +95,20 @@ public class TaskManagementAutoConfiguration {
   public TaskOutboxCompletionAwaiter taskOutboxCompletionAwaiter(
       TaskOutboxRepository repository,
       TaskManagementProperties properties,
-      DataSource dataSource,
-      ObjectMapper objectMapper
+      DataSource dataSource
   ) {
-    return new TaskOutboxCompletionAwaiter(repository, properties, dataSource, objectMapper);
+    return new TaskOutboxCompletionAwaiter(repository, properties, dataSource);
   }
 
   @Bean
   @ConditionalOnMissingBean
+  @ConditionalOnBean(TaskOutboxCompletionAwaiter.class)
   public TaskOutboxService taskOutboxService(
       TaskOutboxRepository repository,
-      ObjectMapper objectMapper
+      ObjectMapper objectMapper,
+      TaskOutboxCompletionAwaiter completionAwaiter
   ) {
-    return new TaskOutboxService(repository, objectMapper);
+    return new TaskOutboxService(repository, objectMapper, completionAwaiter);
   }
 
   @Bean

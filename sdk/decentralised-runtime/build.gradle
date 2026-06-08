@@ -10,7 +10,6 @@ dependencies {
     implementation platform(SpringBootPlugin.BOM_COORDINATES)
     implementation platform('org.springframework.cloud:spring-cloud-dependencies:2024.0.3')
     implementation project(':ccd-config-generator')
-    implementation project(':task-management')
     // A filtered set of useful CCD POJOs including DTOs and other utilities.
     implementation ('com.github.hmcts.rse-cft-lib:ccd-lib:0.19.1953') {
         transitive = false

@@ -45,8 +45,7 @@ public class TaskManagementProperties {
 
   @Data
   public static class Completion {
-    private boolean awaitProcessed = true;
     private Duration timeout = Duration.ofSeconds(30);
-    private Duration pollInterval = Duration.ofMillis(100);
+    private Duration pollInterval = Duration.ofSeconds(10);
   }
 }

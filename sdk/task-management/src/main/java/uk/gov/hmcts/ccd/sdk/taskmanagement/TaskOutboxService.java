@@ -5,24 +5,24 @@ import java.io.IOException;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Objects;
+import lombok.RequiredArgsConstructor;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import uk.gov.hmcts.ccd.sdk.taskmanagement.model.TaskAction;
 import uk.gov.hmcts.ccd.sdk.taskmanagement.model.TaskPayload;
 import uk.gov.hmcts.ccd.sdk.taskmanagement.model.outbox.ReconfigureTaskOutboxPayload;
 import uk.gov.hmcts.ccd.sdk.taskmanagement.model.outbox.TerminateTaskOutboxPayload;
 import uk.gov.hmcts.ccd.sdk.taskmanagement.model.request.TaskCreateRequest;
 
+@RequiredArgsConstructor
+@Transactional(propagation = Propagation.MANDATORY)
 public class TaskOutboxService {
 
   private final TaskOutboxRepository repository;
   private final ObjectMapper objectMapper;
-
-  public TaskOutboxService(
-      TaskOutboxRepository repository,
-      ObjectMapper objectMapper
-  ) {
-    this.repository = repository;
-    this.objectMapper = objectMapper;
-  }
+  private final TaskOutboxCompletionAwaiter completionAwaiter;
 
   public void enqueueTaskCreateRequest(TaskCreateRequest request) {
     enqueueTaskCreateRequest(request, null);
@@ -43,17 +43,30 @@ public class TaskOutboxService {
     }
   }
 
-  public void enqueueTaskCompleteRequest(TerminateTaskOutboxPayload payload) {
+  public long enqueueTaskCompleteRequest(TerminateTaskOutboxPayload payload) {
+    return enqueueTaskCompleteRequest(payload, false);
+  }
+
+  public long enqueueTaskCompleteRequest(TerminateTaskOutboxPayload payload, boolean waitAfterCommit) {
     Objects.requireNonNull(payload, "payload must not be null");
     requireText(payload.caseId(), "caseId");
     requireNonEmpty(payload.taskTypes(), "taskTypes");
 
     try {
-      repository.enqueueAndReturnId(
+      long outboxId = repository.enqueueAndReturnId(
           payload.caseId(),
           objectMapper.writeValueAsString(payload),
           TaskAction.COMPLETE.getId()
       );
+      if (waitAfterCommit) {
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+          @Override
+          public void afterCommit() {
+            completionAwaiter.awaitProcessed(outboxId);
+          }
+        });
+      }
+      return outboxId;
     } catch (IOException ex) {
       throw new IllegalStateException("Failed to enqueue task outbox entry", ex);
     }

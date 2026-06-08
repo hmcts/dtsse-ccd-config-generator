@@ -1383,13 +1383,11 @@ public class TestWithCCD extends CftlibTest {
         var completeResponse = HttpClientBuilder.create().build().execute(completeRequest);
         assertThat(completeResponse.getStatusLine().getStatusCode(), equalTo(201));
 
-        await().atMost(Duration.ofSeconds(30)).untilAsserted(() -> {
-            Map<String, Object> processed = queryLatestCurrentOutboxRow(String.valueOf(caseId), TaskAction.COMPLETE);
-            assertThat(processed.get("status"), equalTo("PROCESSED"));
-            Object responseCode = processed.get("last_response_code");
-            assertThat(responseCode, is(notNullValue()));
-            assertThat(((Number) responseCode).intValue(), anyOf(equalTo(200), equalTo(201), equalTo(204)));
-        });
+        Map<String, Object> processed = queryLatestCurrentOutboxRow(String.valueOf(caseId), TaskAction.COMPLETE);
+        assertThat(processed.get("status"), equalTo("PROCESSED"));
+        Object responseCode = processed.get("last_response_code");
+        assertThat(responseCode, is(notNullValue()));
+        assertThat(((Number) responseCode).intValue(), anyOf(equalTo(200), equalTo(201), equalTo(204)));
     }
 
     @SneakyThrows
