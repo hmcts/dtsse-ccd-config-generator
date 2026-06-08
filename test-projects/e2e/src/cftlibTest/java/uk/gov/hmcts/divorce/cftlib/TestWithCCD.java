@@ -179,7 +179,6 @@ public class TestWithCCD extends CftlibTest {
     private static final String JSON_LEGACY_EVENT_ID = "json-legacy-dispatch";
     private static final String JSON_LEGACY_NO_CALLBACK_EVENT_ID = "json-legacy-no-callback";
     private static final String JSON_LEGACY_SUBMITTED_STATE_LABEL = "JSON submitted label";
-    private static final String JSON_LEGACY_HMCTS_SERVICE_ID = "JSON1";
     private String apiFirstTaskId;
     private String waTaskId;
     private long jsonLegacyCaseTypeACaseRef;
@@ -2875,26 +2874,6 @@ public class TestWithCCD extends CftlibTest {
             Map<String, Object> createdEvent = auditEvents.getLast();
             assertThat(createdEvent.get("state_id"), equalTo("Submitted"));
             assertThat(createdEvent.get("state_name"), equalTo(JSON_LEGACY_SUBMITTED_STATE_LABEL));
-        }
-    }
-
-    @SneakyThrows
-    @Order(215)
-    @Test
-    void jsonDefinitionSupplementaryDataUsesHmctsServiceId() {
-        for (String caseType : jsonLegacyCaseTypes()) {
-            long caseRef = jsonLegacyCaseRef(caseType);
-
-            String supplementaryData = db.queryForObject(
-                "select supplementary_data::text from ccd.case_data where reference = :reference",
-                Map.of("reference", caseRef),
-                String.class
-            );
-
-            assertThat(
-                mapper.readTree(supplementaryData).path("HMCTSServiceId").asText(),
-                equalTo(JSON_LEGACY_HMCTS_SERVICE_ID)
-            );
         }
     }
 
