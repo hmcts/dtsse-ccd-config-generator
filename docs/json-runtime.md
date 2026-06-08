@@ -105,7 +105,6 @@ Supported parameters are:
 * `@RequestBody` on a CCD callback request type or another type Jackson can build from the callback payload
 * `@RequestHeader("Authorization") String`
 * `@RequestHeader("ServiceAuthorization") String`
-* `@RequestHeader HttpHeaders`
 
 Supported return shapes are:
 

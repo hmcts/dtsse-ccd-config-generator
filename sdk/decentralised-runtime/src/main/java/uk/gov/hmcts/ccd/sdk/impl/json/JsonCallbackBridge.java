@@ -222,9 +222,6 @@ public class JsonCallbackBridge {
   }
 
   private void validateHeader(Class<?> parameterType, RequestHeader requestHeader) {
-    if (HttpHeaders.class.isAssignableFrom(parameterType)) {
-      return;
-    }
     if (String.class.equals(parameterType) && isSupportedHeader(headerName(requestHeader))) {
       return;
     }
@@ -234,9 +231,6 @@ public class JsonCallbackBridge {
   private List<String> patterns(RequestMappingInfo info) {
     if (info.getPathPatternsCondition() != null) {
       return new ArrayList<>(info.getPathPatternsCondition().getPatternValues());
-    }
-    if (info.getPatternsCondition() != null) {
-      return new ArrayList<>(info.getPatternsCondition().getPatterns());
     }
     return List.of();
   }
@@ -271,9 +265,6 @@ public class JsonCallbackBridge {
   }
 
   private Object headerArgument(Class<?> parameterType, RequestHeader requestHeader, HttpHeaders headers) {
-    if (HttpHeaders.class.isAssignableFrom(parameterType)) {
-      return headers;
-    }
     if (String.class.equals(parameterType)) {
       String headerName = headerName(requestHeader);
       if (isSupportedHeader(headerName)) {
