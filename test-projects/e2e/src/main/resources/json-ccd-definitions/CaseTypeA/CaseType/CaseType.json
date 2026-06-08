@@ -5,6 +5,7 @@
     "Description": "JSON legacy callbacks",
     "JurisdictionID": "DIVORCE",
     "SecurityClassification": "Public",
+    "HMCTSServiceId": "JSON1",
     "LiveFrom": "01/01/2017"
   }
 ]
