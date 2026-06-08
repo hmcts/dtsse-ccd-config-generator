@@ -19,5 +19,12 @@
     "UserRole": "caseworker-divorce-courtadmin_beta",
     "CRUD": "CRU",
     "LiveFrom": "01/01/2017"
+  },
+  {
+    "CaseTypeID": "case-type-a",
+    "CaseEventID": "json-legacy-external-submitted",
+    "UserRole": "caseworker-divorce-courtadmin_beta",
+    "CRUD": "CRU",
+    "LiveFrom": "01/01/2017"
   }
 ]

@@ -178,6 +178,7 @@ public class TestWithCCD extends CftlibTest {
     private static final String JSON_LEGACY_CREATE_EVENT_ID = "json-legacy-create";
     private static final String JSON_LEGACY_EVENT_ID = "json-legacy-dispatch";
     private static final String JSON_LEGACY_NO_CALLBACK_EVENT_ID = "json-legacy-no-callback";
+    private static final String JSON_LEGACY_EXTERNAL_SUBMITTED_EVENT_ID = "json-legacy-external-submitted";
     private static final String JSON_LEGACY_SUBMITTED_STATE_LABEL = "JSON submitted label";
     private String apiFirstTaskId;
     private String waTaskId;
@@ -2810,6 +2811,35 @@ public class TestWithCCD extends CftlibTest {
     @SneakyThrows
     @Order(213)
     @Test
+    void jsonDefinitionSubmittedCallbackCanBeInvokedOverHttp() {
+        for (String caseType : jsonLegacyCaseTypes()) {
+            BaseJsonLegacyController.reset();
+
+            var response = submitJsonLegacyEventForCaseType(
+                caseType,
+                JSON_LEGACY_EXTERNAL_SUBMITTED_EVENT_ID,
+                Map.of("setInMidEvent", "json-legacy-external-submitted"),
+                201
+            );
+
+            @SuppressWarnings("unchecked")
+            Map<String, Object> afterSubmit =
+                (Map<String, Object>) response.get("after_submit_callback_response");
+            assertThat(afterSubmit.get("confirmation_header"),
+                equalTo(BaseJsonLegacyController.EXTERNAL_CONFIRMATION_HEADER));
+            assertThat(afterSubmit.get("confirmation_body"),
+                equalTo(BaseJsonLegacyController.EXTERNAL_CONFIRMATION_BODY));
+
+            assertThat(BaseJsonLegacyController.aboutToSubmitAttempts, equalTo(0));
+            assertThat(BaseJsonLegacyController.externalSubmittedAttempts, equalTo(1));
+            assertThat(BaseJsonLegacyController.externalSubmittedSawAuthorisation, is(true));
+            assertThat(BaseJsonLegacyController.externalSubmittedSawServiceAuthorisation, is(true));
+        }
+    }
+
+    @SneakyThrows
+    @Order(214)
+    @Test
     void submittedRetriesAndDuplicateJsonLegacySubmissionDoesNotReRun() {
         for (String caseType : jsonLegacyCaseTypes()) {
             BaseJsonLegacyController.reset();
@@ -2850,7 +2880,7 @@ public class TestWithCCD extends CftlibTest {
     }
 
     @SneakyThrows
-    @Order(214)
+    @Order(215)
     @Test
     void jsonDefinitionAuditHistoryUsesStateLabel() {
         for (String caseType : jsonLegacyCaseTypes()) {

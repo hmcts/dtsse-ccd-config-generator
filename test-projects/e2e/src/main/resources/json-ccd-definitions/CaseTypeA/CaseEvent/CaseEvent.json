@@ -39,5 +39,19 @@
     "SecurityClassification": "Public",
     "PreConditionState(s)": "*",
     "PostConditionState": "*"
+  },
+  {
+    "ID": "json-legacy-external-submitted",
+    "Name": "JSON legacy external submitted",
+    "Description": "JSON legacy external submitted callback",
+    "CaseTypeID": "case-type-a",
+    "DisplayOrder": 103,
+    "EndButtonLabel": "Save and continue",
+    "ShowSummary": "N",
+    "ShowEventNotes": "N",
+    "SecurityClassification": "Public",
+    "PreConditionState(s)": "*",
+    "PostConditionState": "*",
+    "CallBackURLSubmittedEvent": "http://127.0.0.1:4013/case-type-a/external-submitted"
   }
 ]

@@ -14,11 +14,16 @@ public abstract class BaseJsonLegacyController {
   public static final String MARKER = "json-legacy-about-to-submit";
   public static final String CONFIRMATION_HEADER = "# JSON legacy submitted";
   public static final String CONFIRMATION_BODY = "JSON legacy submitted callback ran";
+  public static final String EXTERNAL_CONFIRMATION_HEADER = "# JSON legacy external submitted";
+  public static final String EXTERNAL_CONFIRMATION_BODY = "hello from external endpoint";
   public static volatile int aboutToSubmitAttempts;
   public static volatile int submittedAttempts;
+  public static volatile int externalSubmittedAttempts;
   public static volatile boolean aboutToSubmitSawAuthorisation;
   public static volatile boolean aboutToSubmitSawServiceAuthorisation;
   public static volatile boolean submittedSawCommittedData;
+  public static volatile boolean externalSubmittedSawAuthorisation;
+  public static volatile boolean externalSubmittedSawServiceAuthorisation;
 
   private final NamedParameterJdbcTemplate db;
 
@@ -59,6 +64,20 @@ public abstract class BaseJsonLegacyController {
     );
   }
 
+  @PostMapping("/external-submitted")
+  public Map<String, Object> externalSubmitted(
+      @RequestHeader("Authorization") String authorisation,
+      @RequestHeader("ServiceAuthorization") String serviceAuthorisation
+  ) {
+    externalSubmittedAttempts++;
+    externalSubmittedSawAuthorisation = authorisation != null && !authorisation.isBlank();
+    externalSubmittedSawServiceAuthorisation = serviceAuthorisation != null && !serviceAuthorisation.isBlank();
+    return Map.of(
+        "confirmation_header", EXTERNAL_CONFIRMATION_HEADER,
+        "confirmation_body", EXTERNAL_CONFIRMATION_BODY
+    );
+  }
+
   private Map<String, Object> aboutToSubmitResponse(Map<String, Object> data, List<String> errors) {
     Map<String, Object> response = new LinkedHashMap<>();
     response.put("data", data);
@@ -79,9 +98,12 @@ public abstract class BaseJsonLegacyController {
   public static void reset() {
     aboutToSubmitAttempts = 0;
     submittedAttempts = 0;
+    externalSubmittedAttempts = 0;
     aboutToSubmitSawAuthorisation = false;
     aboutToSubmitSawServiceAuthorisation = false;
     submittedSawCommittedData = false;
+    externalSubmittedSawAuthorisation = false;
+    externalSubmittedSawServiceAuthorisation = false;
   }
 
   @SuppressWarnings("unchecked")
