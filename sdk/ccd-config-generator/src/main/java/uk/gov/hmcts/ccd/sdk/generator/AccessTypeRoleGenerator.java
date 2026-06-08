@@ -27,7 +27,7 @@ public class AccessTypeRoleGenerator<T, S, R extends HasRole> implements ConfigG
         .map(role -> toJson(config.getCaseType(), role))
         .collect(toList());
     mergeInto(path, rows, new AddMissing(), false,
-      "AccessTypeID", "OrganisationalRoleName", "GroupRoleName");
+        "AccessTypeID", "OrganisationalRoleName", "GroupRoleName");
   }
 
   private static Map<String, Object> toJson(String caseType, AccessTypeRole accessTypeRole) {
