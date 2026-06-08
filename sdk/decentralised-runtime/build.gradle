@@ -42,3 +42,32 @@ java {
 tasks.withType(Test).configureEach {
     useJUnitPlatform()
 }
+
+tasks.register('checkMigrationImmutability') {
+    group = 'verification'
+    description = 'Fails if existing decentralised runtime database migrations are modified, deleted, or renamed'
+
+    doLast {
+        def stdout = new ByteArrayOutputStream()
+        exec {
+            commandLine 'git', 'diff', '--name-status', '--find-renames', '--diff-filter=MDR',
+                'origin/master...HEAD', '--',
+                ':(top)sdk/decentralised-runtime/src/main/resources/dataruntime-db/migration/V*.sql'
+            standardOutput = stdout
+        }
+
+        def changedExistingMigrations = stdout.toString('UTF-8').readLines().findAll { it.trim() }
+
+        if (!changedExistingMigrations.isEmpty()) {
+            throw new GradleException(
+                "Existing decentralised runtime database migrations must not be modified, deleted, or renamed. "
+                    + "Add a new migration instead.\n\n"
+                    + changedExistingMigrations.join('\n')
+            )
+        }
+    }
+}
+
+tasks.named('check') {
+    dependsOn tasks.named('checkMigrationImmutability')
+}
