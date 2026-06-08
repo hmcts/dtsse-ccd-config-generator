@@ -49,8 +49,14 @@ public class JsonBackedCCDConfig<Case, State, Role extends HasRole>
     builder.caseType(caseTypeId, caseTypeId, caseTypeId);
     builder.jurisdiction(jurisdictionId, jurisdictionId, jurisdictionId);
 
+    for (Map<String, Object> state : readOptionalFolder("State")) {
+      if (belongsToCaseType(state)) {
+        builder.stateLabel(string(state, "ID"), string(state, "Name"));
+      }
+    }
+
     for (Map<String, Object> event : readFolder("CaseEvent")) {
-      if (caseTypeId.equals(string(event, "CaseTypeID"))) {
+      if (belongsToCaseType(event)) {
         configureEvent(builder, event);
       }
     }
@@ -90,6 +96,22 @@ public class JsonBackedCCDConfig<Case, State, Role extends HasRole>
     List<Resource> resources = resources(folder);
     if (resources.isEmpty()) {
       throw new IllegalStateException("No JSON files found in " + jsonRoot + "/" + folder);
+    }
+
+    List<Map<String, Object>> values = new ArrayList<>();
+    for (Resource resource : resources) {
+      try (InputStream input = resource.getInputStream()) {
+        values.addAll(support.mapper().readValue(input, ROWS));
+      }
+    }
+    return values;
+  }
+
+  @SneakyThrows
+  private List<Map<String, Object>> readOptionalFolder(String folder) {
+    List<Resource> resources = resources(folder);
+    if (resources.isEmpty()) {
+      return List.of();
     }
 
     List<Map<String, Object>> values = new ArrayList<>();
@@ -142,6 +164,11 @@ public class JsonBackedCCDConfig<Case, State, Role extends HasRole>
       return Optional.empty();
     }
     return Optional.of(value.trim());
+  }
+
+  private boolean belongsToCaseType(Map<String, Object> row) {
+    String rowCaseTypeId = string(row, "CaseTypeID");
+    return rowCaseTypeId == null || caseTypeId.equals(rowCaseTypeId);
   }
 
   private String string(Map<String, Object> row, String column) {
