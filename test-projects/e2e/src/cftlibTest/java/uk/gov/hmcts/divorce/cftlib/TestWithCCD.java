@@ -178,6 +178,7 @@ public class TestWithCCD extends CftlibTest {
     private static final String JSON_LEGACY_CREATE_EVENT_ID = "json-legacy-create";
     private static final String JSON_LEGACY_EVENT_ID = "json-legacy-dispatch";
     private static final String JSON_LEGACY_NO_CALLBACK_EVENT_ID = "json-legacy-no-callback";
+    private static final String JSON_LEGACY_SUBMITTED_STATE_LABEL = "JSON submitted label";
     private String apiFirstTaskId;
     private String waTaskId;
     private long jsonLegacyCaseTypeACaseRef;
@@ -2845,6 +2846,34 @@ public class TestWithCCD extends CftlibTest {
             var duplicateResponse = HttpClientBuilder.create().build().execute(duplicateRequest);
             assertThat(duplicateResponse.getStatusLine().getStatusCode(), equalTo(201));
             assertThat(BaseJsonLegacyController.submittedAttempts, equalTo(3));
+        }
+    }
+
+    @SneakyThrows
+    @Order(214)
+    @Test
+    void jsonDefinitionAuditHistoryUsesStateLabel() {
+        for (String caseType : jsonLegacyCaseTypes()) {
+            long caseRef = jsonLegacyCaseRef(caseType);
+
+            var get = buildRequest(
+                "TEST_CASE_WORKER_USER@mailinator.com",
+                BASE_URL + "/cases/" + caseRef + "/events",
+                HttpGet::new);
+            withCcdAccept(get, ACCEPT_CASE_EVENTS);
+
+            var response = HttpClientBuilder.create().build().execute(get);
+            Map<String, Object> result =
+                mapper.readValue(EntityUtils.toString(response.getEntity()), new TypeReference<>() {});
+
+            assertThat(response.getStatusLine().getStatusCode(), equalTo(200));
+            @SuppressWarnings("unchecked")
+            List<Map<String, Object>> auditEvents = (List<Map<String, Object>>) result.get("auditEvents");
+            assertThat(auditEvents, is(not(empty())));
+
+            Map<String, Object> createdEvent = auditEvents.getLast();
+            assertThat(createdEvent.get("state_id"), equalTo("Submitted"));
+            assertThat(createdEvent.get("state_name"), equalTo(JSON_LEGACY_SUBMITTED_STATE_LABEL));
         }
     }
 

@@ -1,7 +1,7 @@
 [
   {
     "ID": "Submitted",
-    "Name": "Submitted",
+    "Name": "JSON submitted label",
     "Description": "Submitted",
     "DisplayOrder": 1,
     "CaseTypeID": "case-type-a",
