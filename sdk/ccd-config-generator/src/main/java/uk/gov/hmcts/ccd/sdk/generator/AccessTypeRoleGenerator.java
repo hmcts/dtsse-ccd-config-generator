@@ -1,7 +1,6 @@
 package uk.gov.hmcts.ccd.sdk.generator;
 
 import static java.util.stream.Collectors.toList;
-import static org.springframework.util.CollectionUtils.isEmpty;
 import static uk.gov.hmcts.ccd.sdk.generator.JsonUtils.mergeInto;
 import static uk.gov.hmcts.ccd.sdk.generator.JsonUtils.nullToEmpty;
 
@@ -22,10 +21,6 @@ public class AccessTypeRoleGenerator<T, S, R extends HasRole> implements ConfigG
 
   @SneakyThrows
   public void write(final File outputFolder, ResolvedCCDConfig<T, S, R> config) {
-    if (isEmpty(config.getAccessTypeRoles())) {
-      return;
-    }
-
     final Path path = Paths.get(outputFolder.getPath(), "AccessTypeRole.json");
 
     final List<Map<String, Object>> rows = config.getAccessTypeRoles().stream()
