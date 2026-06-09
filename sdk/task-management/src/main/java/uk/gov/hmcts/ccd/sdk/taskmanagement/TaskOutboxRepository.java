@@ -67,6 +67,7 @@ public class TaskOutboxRepository {
     }
   }
 
+  //todo: I don't think failed records should block further processing of tasks. This seems disastrous.
   public List<TaskOutboxRecord> claimPending(int limit, int maxAttempts) {
     return jdbc.query(
         """
