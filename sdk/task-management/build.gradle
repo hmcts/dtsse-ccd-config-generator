@@ -15,7 +15,7 @@ dependencies {
     implementation 'org.springframework:spring-context-support'
     api 'org.springframework:spring-web'
     api 'org.springframework.cloud:spring-cloud-starter-openfeign'
-    api 'com.github.hmcts:service-auth-provider-java-client:5.3.4'
+    api 'com.github.hmcts:service-auth-provider-java-client:6.0.0'
     api 'org.slf4j:slf4j-api'
 
     compileOnly 'org.springframework.boot:spring-boot-autoconfigure'
