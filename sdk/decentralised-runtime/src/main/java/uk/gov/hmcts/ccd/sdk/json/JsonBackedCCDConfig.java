@@ -8,8 +8,9 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Optional;
+import lombok.NonNull;
+import lombok.RequiredArgsConstructor;
 import lombok.SneakyThrows;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.ResourceLoader;
@@ -19,22 +20,18 @@ import uk.gov.hmcts.ccd.sdk.api.Event;
 import uk.gov.hmcts.ccd.sdk.api.HasRole;
 import uk.gov.hmcts.ccd.sdk.api.Webhook;
 
+@RequiredArgsConstructor
 public class JsonBackedCCDConfig<Case, State, Role extends HasRole>
     implements CCDConfig<Case, State, Role> {
 
   private static final TypeReference<List<Map<String, Object>>> ROWS = new TypeReference<>() {};
 
-  private final String caseTypeId;
-  private final String jsonRoot;
+  @NonNull
   private final JsonCCDConfigSupport support;
-
-  public JsonBackedCCDConfig(JsonCCDConfigSupport support,
-                             String caseTypeId,
-                             String jsonRoot) {
-    this.support = Objects.requireNonNull(support);
-    this.caseTypeId = Objects.requireNonNull(caseTypeId);
-    this.jsonRoot = Objects.requireNonNull(jsonRoot);
-  }
+  @NonNull
+  private final String caseTypeId;
+  @NonNull
+  private final String jsonRoot;
 
   @Override
   public String groupingKey() {

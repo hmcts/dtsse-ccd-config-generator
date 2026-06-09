@@ -3,12 +3,15 @@ package uk.gov.hmcts.divorce.jsonlegacy;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import lombok.AccessLevel;
+import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 
+@RequiredArgsConstructor(access = AccessLevel.PROTECTED)
 public abstract class BaseJsonLegacyController {
 
   public static final String MARKER = "json-legacy-about-to-submit";
@@ -26,10 +29,6 @@ public abstract class BaseJsonLegacyController {
   public static volatile boolean externalSubmittedSawServiceAuthorisation;
 
   private final NamedParameterJdbcTemplate db;
-
-  protected BaseJsonLegacyController(NamedParameterJdbcTemplate db) {
-    this.db = db;
-  }
 
   @PostMapping("/about-to-submit")
   public ResponseEntity<Map<String, Object>> aboutToSubmit(
