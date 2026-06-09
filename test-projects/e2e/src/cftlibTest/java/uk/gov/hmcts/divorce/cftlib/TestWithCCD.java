@@ -4,11 +4,13 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.sun.net.httpserver.HttpServer;
 
 import java.io.IOException;
 import jakarta.jms.ConnectionFactory;
 import jakarta.jms.Message;
 
+import java.net.InetSocketAddress;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -154,6 +156,8 @@ public class TestWithCCD extends CftlibTest {
     private long firstEventId;
     private static final String BASE_URL = "http://localhost:4452";
     private static final String SERVICE_BASE_URL = "http://localhost:4013";
+    private static final String EXTERNAL_CALLBACK_HOST = "127.0.0.1";
+    private static final int EXTERNAL_CALLBACK_PORT = 4014;
     private static final String ELASTICSEARCH_BASE_URL = "http://localhost:9200";
     private static final String TASK_MANAGEMENT_BASE_URL = "http://localhost:8087";
     private static final String ACCEPT_CREATE_CASE =
@@ -2812,29 +2816,72 @@ public class TestWithCCD extends CftlibTest {
     @Order(213)
     @Test
     void jsonDefinitionSubmittedCallbackCanBeInvokedOverHttp() {
-        for (String caseType : jsonLegacyCaseTypes()) {
-            BaseJsonLegacyController.reset();
+        HttpServer externalCallbackServer = startExternalSubmittedCallbackServer();
+        try {
+            for (String caseType : jsonLegacyCaseTypes()) {
+                BaseJsonLegacyController.reset();
 
-            var response = submitJsonLegacyEventForCaseType(
-                caseType,
-                JSON_LEGACY_EXTERNAL_SUBMITTED_EVENT_ID,
-                Map.of("setInMidEvent", "json-legacy-external-submitted"),
-                201
-            );
+                var response = submitJsonLegacyEventForCaseType(
+                    caseType,
+                    JSON_LEGACY_EXTERNAL_SUBMITTED_EVENT_ID,
+                    Map.of("setInMidEvent", "json-legacy-external-submitted"),
+                    201
+                );
 
-            @SuppressWarnings("unchecked")
-            Map<String, Object> afterSubmit =
-                (Map<String, Object>) response.get("after_submit_callback_response");
-            assertThat(afterSubmit.get("confirmation_header"),
-                equalTo(BaseJsonLegacyController.EXTERNAL_CONFIRMATION_HEADER));
-            assertThat(afterSubmit.get("confirmation_body"),
-                equalTo(BaseJsonLegacyController.EXTERNAL_CONFIRMATION_BODY));
+                @SuppressWarnings("unchecked")
+                Map<String, Object> afterSubmit =
+                    (Map<String, Object>) response.get("after_submit_callback_response");
+                assertThat(afterSubmit.get("confirmation_header"),
+                    equalTo(BaseJsonLegacyController.EXTERNAL_CONFIRMATION_HEADER));
+                assertThat(afterSubmit.get("confirmation_body"),
+                    equalTo(BaseJsonLegacyController.EXTERNAL_CONFIRMATION_BODY));
 
-            assertThat(BaseJsonLegacyController.aboutToSubmitAttempts, equalTo(0));
-            assertThat(BaseJsonLegacyController.externalSubmittedAttempts, equalTo(1));
-            assertThat(BaseJsonLegacyController.externalSubmittedSawAuthorisation, is(true));
-            assertThat(BaseJsonLegacyController.externalSubmittedSawServiceAuthorisation, is(true));
+                assertThat(BaseJsonLegacyController.aboutToSubmitAttempts, equalTo(0));
+                assertThat(BaseJsonLegacyController.externalSubmittedAttempts, equalTo(1));
+                assertThat(BaseJsonLegacyController.externalSubmittedSawAuthorisation, is(true));
+                assertThat(BaseJsonLegacyController.externalSubmittedSawServiceAuthorisation, is(true));
+            }
+        } finally {
+            externalCallbackServer.stop(0);
         }
+    }
+
+    @SneakyThrows
+    private HttpServer startExternalSubmittedCallbackServer() {
+        HttpServer server = HttpServer.create(
+            new InetSocketAddress(EXTERNAL_CALLBACK_HOST, EXTERNAL_CALLBACK_PORT),
+            0
+        );
+        server.createContext("/", exchange -> {
+            try {
+                if (!"POST".equals(exchange.getRequestMethod())) {
+                    exchange.sendResponseHeaders(405, -1);
+                    return;
+                }
+
+                BaseJsonLegacyController.externalSubmittedAttempts++;
+                BaseJsonLegacyController.externalSubmittedSawAuthorisation =
+                    hasText(exchange.getRequestHeaders().getFirst("Authorization"));
+                BaseJsonLegacyController.externalSubmittedSawServiceAuthorisation =
+                    hasText(exchange.getRequestHeaders().getFirst("ServiceAuthorization"));
+
+                byte[] body = mapper.writeValueAsBytes(Map.of(
+                    "confirmation_header", BaseJsonLegacyController.EXTERNAL_CONFIRMATION_HEADER,
+                    "confirmation_body", BaseJsonLegacyController.EXTERNAL_CONFIRMATION_BODY
+                ));
+                exchange.getResponseHeaders().set("Content-Type", "application/json");
+                exchange.sendResponseHeaders(200, body.length);
+                exchange.getResponseBody().write(body);
+            } finally {
+                exchange.close();
+            }
+        });
+        server.start();
+        return server;
+    }
+
+    private boolean hasText(String value) {
+        return value != null && !value.isBlank();
     }
 
     @SneakyThrows

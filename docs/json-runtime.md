@@ -78,17 +78,29 @@ Local callback URLs are invoked directly against the resolved controller method.
 External callback URLs are invoked over HTTP. This is required for JSON definitions that call other services, for
 example AAC.
 
-The local/external boundary is explicit:
+The local/external boundary is placeholder based:
 
-* URLs that start with `decentralisation.local-callback-base-url` are local
-* all other absolute or resolvable placeholder URLs are external
+* callback URLs using `decentralisation.local-callback-placeholder` are local
+* callback URLs using a key in `decentralisation.external-callback-base-urls` are external
+* all other absolute URLs are external
+* unknown placeholder URLs fail fast
 
-This prevents an external callback from being dispatched locally simply because its path matches a local controller.
+For ET this keeps the CCD definition convention intact while making runtime substitution explicit:
+
+```yaml
+decentralisation:
+  local-callback-placeholder: ET_COS_URL
+  external-callback-base-urls:
+    "[CCD_DEF_AAC_URL]": ${AAC_URL:http://localhost:4454}
+```
+
+With that configuration, `${ET_COS_URL}/callback` is dispatched locally by path, and
+`${CCD_DEF_AAC_URL}/noc/check-noc-approval` is invoked over HTTP using the configured AAC base URL. The bridge does not
+resolve arbitrary `${...}` values from application properties or environment variables.
 
 Callback paths are normalised before route matching:
 
-* the configured local callback base URL is stripped from local URLs
-* scheme, host and port are stripped from absolute URLs for route lookup
+* configured local placeholder bases such as `${ET_COS_URL}` are stripped for route lookup
 * query strings and fragments are stripped
 * duplicate slashes and trailing slashes are normalised
 

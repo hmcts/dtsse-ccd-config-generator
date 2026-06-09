@@ -26,14 +26,14 @@ class JsonCallbackBridgeTest {
   }
 
   @Test
-  void invokesCallbackLocallyOnlyWhenCallbackUrlStartsWithConfiguredBaseUrl() throws Exception {
+  void invokesConfiguredPlaceholderCallbackLocally() {
     JsonCallbackBridge bridge = bridgeWith(
-        new MockEnvironment().withProperty("decentralisation.local-callback-base-url", "http://localhost:8080"),
+        new MockEnvironment().withProperty("decentralisation.local-callback-placeholder", "ET_COS_URL"),
         new LocalCallbackController()
     );
 
     Object response = bridge.invoke(
-        "http://localhost:8080/callbacks/about-to-submit",
+        "${ET_COS_URL}/callbacks/about-to-submit",
         Map.of("event_id", "local")
     );
 
@@ -44,16 +44,33 @@ class JsonCallbackBridgeTest {
   }
 
   @Test
-  void failsFastWhenCallbackIsNeitherLocalNorResolvableExternally() {
+  void failsFastWhenCallbackUsesUnknownPlaceholder() {
     JsonCallbackBridge bridge = bridgeWith(new MockEnvironment());
 
     assertThatThrownBy(() -> bridge.invoke("${MISSING_URL}/callback", Map.of()))
         .isInstanceOf(IllegalStateException.class)
-        .hasMessage("No resolvable external URL found for JSON callback ${MISSING_URL}/callback");
+        .hasMessage("No external callback base URL configured for JSON callback placeholder MISSING_URL");
   }
 
-  private JsonCallbackBridge bridgeWith(MockEnvironment environment) {
-    return bridgeWith(environment, new Object[0]);
+  @Test
+  void acceptsConfiguredExternalPlaceholderAtValidationTime() {
+    JsonCallbackBridge bridge = bridgeWith(
+        new MockEnvironment().withProperty(
+            "decentralisation.external-callback-base-urls[CCD_DEF_AAC_URL]",
+            "http://aac.example"
+        )
+    );
+
+    bridge.validate("${CCD_DEF_AAC_URL}/noc/check-noc-approval");
+  }
+
+  @Test
+  void failsFastWhenCallbackIsNeitherLocalNorAbsoluteExternalUrl() {
+    JsonCallbackBridge bridge = bridgeWith(new MockEnvironment());
+
+    assertThatThrownBy(() -> bridge.invoke("/callback", Map.of()))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessage("No absolute external URL found for JSON callback /callback");
   }
 
   private JsonCallbackBridge bridgeWith(MockEnvironment environment, Object... controllers) {

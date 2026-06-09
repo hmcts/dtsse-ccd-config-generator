@@ -23,8 +23,8 @@
     "SecurityClassification": "Public",
     "PreConditionState(s)": "*",
     "PostConditionState": "*",
-    "CallBackURLAboutToSubmitEvent": "http://localhost:4013/case-type-a/about-to-submit",
-    "CallBackURLSubmittedEvent": "http://localhost:4013/case-type-a/submitted",
+    "CallBackURLAboutToSubmitEvent": "${ET_COS_URL}/case-type-a/about-to-submit",
+    "CallBackURLSubmittedEvent": "${ET_COS_URL}/case-type-a/submitted",
     "RetriesTimeoutURLSubmittedEvent": "120,120"
   },
   {
@@ -52,6 +52,6 @@
     "SecurityClassification": "Public",
     "PreConditionState(s)": "*",
     "PostConditionState": "*",
-    "CallBackURLSubmittedEvent": "http://127.0.0.1:4013/case-type-a/external-submitted"
+    "CallBackURLSubmittedEvent": "${CCD_DEF_AAC_URL}/case-type-a/external-submitted"
   }
 ]

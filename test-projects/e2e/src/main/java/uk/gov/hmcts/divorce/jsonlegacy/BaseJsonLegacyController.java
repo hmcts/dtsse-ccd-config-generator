@@ -64,20 +64,6 @@ public abstract class BaseJsonLegacyController {
     );
   }
 
-  @PostMapping("/external-submitted")
-  public Map<String, Object> externalSubmitted(
-      @RequestHeader("Authorization") String authorisation,
-      @RequestHeader("ServiceAuthorization") String serviceAuthorisation
-  ) {
-    externalSubmittedAttempts++;
-    externalSubmittedSawAuthorisation = authorisation != null && !authorisation.isBlank();
-    externalSubmittedSawServiceAuthorisation = serviceAuthorisation != null && !serviceAuthorisation.isBlank();
-    return Map.of(
-        "confirmation_header", EXTERNAL_CONFIRMATION_HEADER,
-        "confirmation_body", EXTERNAL_CONFIRMATION_BODY
-    );
-  }
-
   private Map<String, Object> aboutToSubmitResponse(Map<String, Object> data, List<String> errors) {
     Map<String, Object> response = new LinkedHashMap<>();
     response.put("data", data);

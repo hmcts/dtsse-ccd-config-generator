@@ -21,6 +21,8 @@ import java.util.Map;
 import java.util.Optional;
 import lombok.SneakyThrows;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.boot.context.properties.bind.Bindable;
+import org.springframework.boot.context.properties.bind.Binder;
 import org.springframework.context.ApplicationContext;
 import org.springframework.core.MethodParameter;
 import org.springframework.core.env.Environment;
@@ -48,15 +50,16 @@ public class JsonCallbackBridge {
 
   private static final TypeReference<Map<String, Object>> MAP = new TypeReference<>() {};
   private static final String SERVICE_AUTHORIZATION = "ServiceAuthorization";
-  private static final String LOCAL_CALLBACK_BASE_URL = "decentralisation.local-callback-base-url";
+  private static final String LOCAL_CALLBACK_PLACEHOLDER = "decentralisation.local-callback-placeholder";
+  private static final String EXTERNAL_CALLBACK_BASE_URLS = "decentralisation.external-callback-base-urls";
 
   private final ApplicationContext applicationContext;
   private final ObjectMapper mapper;
   private final ObjectMapper requestMapper;
-  private final Environment environment;
   private final HttpClient httpClient;
   private final Map<String, List<HandlerMethod>> routes;
-  private final String localCallbackBaseUrl;
+  private final String localCallbackPlaceholder;
+  private final Map<String, String> externalCallbackBaseUrls;
 
   JsonCallbackBridge(ApplicationContext applicationContext,
                      ObjectMapper mapper,
@@ -68,15 +71,19 @@ public class JsonCallbackBridge {
     this.requestMapper = mapper.copy()
         .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
         .setSerializationInclusion(JsonInclude.Include.ALWAYS);
-    this.environment = environment;
     this.httpClient = HttpClient.newHttpClient();
-    this.localCallbackBaseUrl = localCallbackBaseUrl(environment);
     this.routes = indexPostRoutes(handlerMapping);
+    this.localCallbackPlaceholder = normalisePlaceholderName(
+        environment.getProperty(LOCAL_CALLBACK_PLACEHOLDER, "")
+    );
+    this.externalCallbackBaseUrls = externalCallbackBaseUrls(environment);
   }
 
   public void validate(String callbackUrl) {
     if (shouldInvokeLocally(callbackUrl)) {
       localHandler(callbackUrl);
+    } else {
+      externalUri(callbackUrl);
     }
   }
 
@@ -311,9 +318,7 @@ public class JsonCallbackBridge {
   }
 
   private Object invokeExternal(String callbackUrl, Map<String, Object> payload) {
-    URI uri = externalUri(callbackUrl)
-        .orElseThrow(() -> new IllegalStateException("No resolvable external URL found for JSON callback "
-            + callbackUrl));
+    URI uri = externalUri(callbackUrl);
     HttpHeaders headers = callbackHeaders();
     try {
       HttpResponse<String> response = httpClient.send(
@@ -347,23 +352,23 @@ public class JsonCallbackBridge {
     }
   }
 
-  private Optional<URI> externalUri(String callbackUrl) {
+  private URI externalUri(String callbackUrl) {
     Optional<URI> absoluteUri = absoluteUri(callbackUrl);
     if (absoluteUri.isPresent()) {
-      return absoluteUri;
+      return absoluteUri.get();
     }
-    Placeholder placeholder = placeholder(callbackUrl);
-    if (placeholder == null) {
-      return Optional.empty();
-    }
-    String baseUrl = environment.getProperty(placeholder.name());
+
+    Placeholder placeholder = placeholder(callbackUrl)
+        .orElseThrow(() -> new IllegalStateException("No absolute external URL found for JSON callback "
+            + callbackUrl));
+    String baseUrl = externalCallbackBaseUrls.get(placeholder.name());
     if (baseUrl == null || baseUrl.isBlank()) {
-      baseUrl = System.getenv(placeholder.name());
+      throw new IllegalStateException(
+          "No external callback base URL configured for JSON callback placeholder " + placeholder.name());
     }
-    if (baseUrl == null || baseUrl.isBlank()) {
-      return Optional.empty();
-    }
-    return absoluteUri(joinUrl(baseUrl.trim(), placeholder.path()));
+    return absoluteUri(joinUrl(baseUrl.trim(), placeholder.path()))
+        .orElseThrow(() -> new IllegalStateException(
+            "External callback base URL for placeholder " + placeholder.name() + " is not absolute"));
   }
 
   private String joinUrl(String baseUrl, String path) {
@@ -384,6 +389,11 @@ public class JsonCallbackBridge {
     Optional<URI> absoluteUri = absoluteUri(path);
     if (absoluteUri.isPresent()) {
       path = absoluteUri.get().getPath();
+    } else {
+      Optional<Placeholder> placeholder = placeholder(path);
+      if (placeholder.isPresent()) {
+        path = placeholder.get().path();
+      }
     }
 
     if (path.isBlank()) {
@@ -400,15 +410,18 @@ public class JsonCallbackBridge {
     return path;
   }
 
-  private Placeholder placeholder(String callbackUrl) {
-    if (!callbackUrl.startsWith("${")) {
-      return null;
+  private Optional<Placeholder> placeholder(String callbackUrl) {
+    if (callbackUrl == null || !callbackUrl.startsWith("${")) {
+      return Optional.empty();
     }
     int placeholderEnd = callbackUrl.indexOf('}');
     if (placeholderEnd <= 2) {
-      return null;
+      return Optional.empty();
     }
-    return new Placeholder(callbackUrl.substring(2, placeholderEnd), callbackUrl.substring(placeholderEnd + 1));
+    return Optional.of(new Placeholder(
+        callbackUrl.substring(2, placeholderEnd),
+        callbackUrl.substring(placeholderEnd + 1)
+    ));
   }
 
   private boolean shouldInvokeLocally(String callbackUrl) {
@@ -416,13 +429,22 @@ public class JsonCallbackBridge {
       return false;
     }
 
-    return !localCallbackBaseUrl.isBlank() && callbackUrl.trim().startsWith(localCallbackBaseUrl);
+    return placeholder(callbackUrl)
+        .map(placeholder -> placeholder.name().equals(localCallbackPlaceholder))
+        .orElse(false);
   }
 
-  private String localCallbackBaseUrl(Environment environment) {
-    return Optional.ofNullable(environment.getProperty(LOCAL_CALLBACK_BASE_URL))
-        .map(String::trim)
-        .orElse("");
+  private String normalisePlaceholderName(String value) {
+    return placeholder(value)
+        .map(Placeholder::name)
+        .orElse(value == null ? "" : value.trim());
+  }
+
+  private Map<String, String> externalCallbackBaseUrls(Environment environment) {
+    Map<String, String> values = Binder.get(environment)
+        .bind(EXTERNAL_CALLBACK_BASE_URLS, Bindable.mapOf(String.class, String.class))
+        .orElse(Map.of());
+    return Map.copyOf(values);
   }
 
   private Optional<URI> absoluteUri(String value) {
