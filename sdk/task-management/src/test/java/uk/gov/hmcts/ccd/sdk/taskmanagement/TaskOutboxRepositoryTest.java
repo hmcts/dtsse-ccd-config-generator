@@ -42,6 +42,22 @@ class TaskOutboxRepositoryTest {
   }
 
   @Test
+  @SuppressWarnings({"rawtypes", "unchecked"})
+  void claimPendingDoesNotTreatFailedRowsAsSameCaseBlockers() {
+    NamedParameterJdbcTemplate jdbc = mock(NamedParameterJdbcTemplate.class);
+    TaskOutboxRepository repository = new TaskOutboxRepository(jdbc, new TaskManagementProperties());
+    ArgumentCaptor<String> sqlCaptor = ArgumentCaptor.forClass(String.class);
+
+    when(jdbc.query(sqlCaptor.capture(), any(Map.class), any(RowMapper.class))).thenReturn(List.of());
+
+    repository.claimPending(5, 0);
+
+    assertThat(sqlCaptor.getValue()).contains("prior.status::text in (:newStatus, :processingStatus)");
+    assertThat(sqlCaptor.getValue())
+        .doesNotContain("prior.status::text in (:newStatus, :failedStatus, :processingStatus)");
+  }
+
+  @Test
   void enqueueStoresWaitingStatusForDelayedRows() {
     NamedParameterJdbcTemplate jdbc = mock(NamedParameterJdbcTemplate.class);
     TaskOutboxRepository repository = new TaskOutboxRepository(jdbc, new TaskManagementProperties());
