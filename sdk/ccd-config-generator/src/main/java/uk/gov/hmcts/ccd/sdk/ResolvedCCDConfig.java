@@ -71,24 +71,17 @@ public class ResolvedCCDConfig<T, S, R extends HasRole> {
   List<ComplexTypeAuthorisation<R>> complexTypeAuthorisations;
 
   public Optional<String> labelForState(String stateId) {
-    if (stateId == null) {
-      return Optional.empty();
-    }
     return Optional.ofNullable(stateLabels.get(stateId));
   }
 
   public void stateLabel(String stateId, String label) {
-    if (stateId != null && label != null && !label.isBlank()) {
+    if (label != null && !label.isBlank()) {
       stateLabels.put(stateId, label);
     }
   }
 
   void resolveStateLabels() {
     Object[] constants = stateClass.getEnumConstants();
-    if (constants == null) {
-      return;
-    }
-
     for (Object constant : constants) {
       String stateId = constant.toString();
       stateLabels.putIfAbsent(stateId, resolvedEnumStateLabel(stateId));
