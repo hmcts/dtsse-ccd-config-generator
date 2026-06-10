@@ -676,6 +676,8 @@ public class TestWithCCD extends CftlibTest {
         caseDetails.put("case_data", Map.of());
         caseDetails.put("security_classification", "PUBLIC");
         caseDetails.put("version", 1);
+        // Simulates CCD adding another top-level CaseDetails field.
+        caseDetails.put("future_callback_message", "hello here is a random new field!");
 
         Map<String, Object> payload = Map.of(
             "internal_case_id", internalCaseId,
