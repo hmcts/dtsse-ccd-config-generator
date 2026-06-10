@@ -8,13 +8,17 @@ import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import java.util.Collection;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import uk.gov.hmcts.ccd.sdk.api.AccessType;
 import uk.gov.hmcts.ccd.sdk.api.AccessType.AccessTypeBuilder;
+import uk.gov.hmcts.ccd.sdk.api.AccessTypeRole;
 import uk.gov.hmcts.ccd.sdk.api.AccessTypeRole.AccessTypeRoleBuilder;
+import uk.gov.hmcts.ccd.sdk.api.CCDAccessGroup;
 import uk.gov.hmcts.ccd.sdk.api.CaseCategory.CaseCategoryBuilder;
 import uk.gov.hmcts.ccd.sdk.api.CaseRoleToAccessProfile.CaseRoleToAccessProfileBuilder;
 import uk.gov.hmcts.ccd.sdk.api.ComplexTypeAuthorisation;
@@ -77,6 +81,7 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements Decentralised
     config.categories = buildBuilders(categories, CaseCategoryBuilder::build);
     config.accessTypes = buildBuilders(accessTypes, AccessTypeBuilder::build);
     config.accessTypeRoles = buildBuilders(accessTypeRoles, AccessTypeRoleBuilder::build);
+    deriveAccessTypesFromRoles();
     config.searchCriteria = buildBuilders(searchCriteria, SearchCriteriaBuilder::build);
     config.searchParties = buildBuilders(searchParty, SearchPartyBuilder::build);
     config.noticeOfChange = noticeOfChangeBuilder == null ? null : noticeOfChangeBuilder.build();
@@ -228,6 +233,65 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements Decentralised
     var builder = AccessTypeRoleBuilder.builder(accessTypeId);
     accessTypeRoles.add(builder);
     return builder;
+  }
+
+  /**
+   * Translate any {@link CCDAccessGroup} attached to a role enum constant into the same
+   * {@code AccessType} / {@code AccessTypeRole} model objects the explicit builder calls produce,
+   * so the existing generators emit identical JSON. Explicit builder rows take precedence: an
+   * access type already configured via {@link #accessType} is not re-added.
+   */
+  private void deriveAccessTypesFromRoles() {
+    R[] roles = config.getRoleClass().getEnumConstants();
+    if (roles == null) {
+      return;
+    }
+
+    Set<String> existingAccessTypeIds = config.accessTypes.stream()
+        .map(AccessType::getAccessTypeId)
+        .collect(Collectors.toCollection(HashSet::new));
+
+    Map<String, AccessType> derivedAccessTypes = new LinkedHashMap<>();
+    List<AccessTypeRole> derivedRoles = Lists.newArrayList();
+
+    for (R role : roles) {
+      @SuppressWarnings("unchecked")
+      CCDAccessGroup<T> group = (CCDAccessGroup<T>) role.getAccessGroup();
+      if (group == null) {
+        continue;
+      }
+
+      if (!existingAccessTypeIds.contains(group.getAccessTypeId())) {
+        derivedAccessTypes.putIfAbsent(group.getAccessTypeId(), AccessType.builder()
+            .accessTypeId(group.getAccessTypeId())
+            .organisationProfileId(group.getOrganisationProfileId())
+            .accessMandatory(group.isAccessMandatory())
+            .accessDefault(group.isAccessDefault())
+            .display(group.isDisplay())
+            .description(group.getDescription())
+            .hintText(group.getHintText())
+            .displayOrder(group.getDisplayOrder())
+            .liveTo(group.getLiveTo())
+            .build());
+      }
+
+      String caseAssignedRoleField =
+          propertyUtils.getPropertyName(config.caseClass, group.getCaseAssignedRoleField());
+
+      derivedRoles.add(AccessTypeRole.builder()
+          .accessTypeId(group.getAccessTypeId())
+          .organisationProfileId(group.getOrganisationProfileId())
+          .organisationalRoleName(role.getRole())
+          .groupRoleName(group.getGroupRoleName().getRole())
+          .caseAssignedRoleField(caseAssignedRoleField)
+          .groupAccessEnabled(group.isGroupAccessEnabled())
+          .caseAccessGroupIdTemplate(group.getCaseAccessGroupIdTemplate())
+          .liveTo(group.getLiveTo())
+          .build());
+    }
+
+    config.accessTypes.addAll(derivedAccessTypes.values());
+    config.accessTypeRoles.addAll(derivedRoles);
   }
 
   @Override
