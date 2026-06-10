@@ -7,6 +7,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 import org.junit.jupiter.api.Nested;
@@ -34,7 +35,7 @@ class DelayUntilResolverTest {
           DelayUntilRequest.builder().build()
       );
 
-      assertThat(calculateDelayUntil).isCloseTo(LocalDateTime.now(), within(100, ChronoUnit.SECONDS));
+      assertThat(calculateDelayUntil).isCloseTo(LocalDateTime.now(ZoneOffset.UTC), within(100, ChronoUnit.SECONDS));
     }
 
     @Test
@@ -45,7 +46,7 @@ class DelayUntilResolverTest {
           DelayUntilRequest.builder().delayUntil("2023-01-10T16:00").build()
       );
 
-      assertThat(calculateDelayUntil).isCloseTo(LocalDateTime.now(), within(100, ChronoUnit.SECONDS));
+      assertThat(calculateDelayUntil).isCloseTo(LocalDateTime.now(ZoneOffset.UTC), within(100, ChronoUnit.SECONDS));
     }
   }
 

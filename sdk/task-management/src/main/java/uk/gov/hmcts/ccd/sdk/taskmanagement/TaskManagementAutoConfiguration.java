@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import feign.codec.Decoder;
 import feign.codec.Encoder;
 import java.time.Duration;
+import javax.sql.DataSource;
 import org.springframework.beans.factory.ObjectFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
@@ -90,7 +91,22 @@ public class TaskManagementAutoConfiguration {
 
   @Bean
   @ConditionalOnMissingBean
-  public TaskOutboxService taskOutboxService(TaskOutboxRepository repository, ObjectMapper objectMapper) {
+  @ConditionalOnBean(DataSource.class)
+  public TaskOutboxCompletionAwaiter taskOutboxCompletionAwaiter(
+      TaskOutboxRepository repository,
+      TaskManagementProperties properties,
+      DataSource dataSource,
+      ObjectMapper objectMapper
+  ) {
+    return new TaskOutboxCompletionAwaiter(repository, properties, dataSource, objectMapper);
+  }
+
+  @Bean
+  @ConditionalOnMissingBean
+  public TaskOutboxService taskOutboxService(
+      TaskOutboxRepository repository,
+      ObjectMapper objectMapper
+  ) {
     return new TaskOutboxService(repository, objectMapper);
   }
 
@@ -115,5 +131,19 @@ public class TaskManagementAutoConfiguration {
   ) {
     int batchSize = properties.getOutbox().getPoller().getBatchSize();
     return new TaskOutboxPoller(repository, taskManagementApiClient, retryPolicy, batchSize, objectMapper);
+  }
+
+  @Bean
+  @ConditionalOnProperty(
+      name = "task-management.outbox.failure-log-poller.enabled",
+      havingValue = "true",
+      matchIfMissing = true
+  )
+  public TaskOutboxFailureLogPoller taskOutboxFailureLogPoller(
+      TaskOutboxRepository repository,
+      TaskManagementProperties properties
+  ) {
+    int batchSize = properties.getOutbox().getFailureLogPoller().getBatchSize();
+    return new TaskOutboxFailureLogPoller(repository, batchSize);
   }
 }

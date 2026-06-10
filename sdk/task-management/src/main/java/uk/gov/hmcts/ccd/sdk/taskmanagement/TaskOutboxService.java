@@ -16,7 +16,10 @@ public class TaskOutboxService {
   private final TaskOutboxRepository repository;
   private final ObjectMapper objectMapper;
 
-  public TaskOutboxService(TaskOutboxRepository repository, ObjectMapper objectMapper) {
+  public TaskOutboxService(
+      TaskOutboxRepository repository,
+      ObjectMapper objectMapper
+  ) {
     this.repository = repository;
     this.objectMapper = objectMapper;
   }
@@ -46,7 +49,7 @@ public class TaskOutboxService {
     requireNonEmpty(payload.taskTypes(), "taskTypes");
 
     try {
-      repository.enqueue(
+      repository.enqueueAndReturnId(
           payload.caseId(),
           objectMapper.writeValueAsString(payload),
           TaskAction.COMPLETE.getId()

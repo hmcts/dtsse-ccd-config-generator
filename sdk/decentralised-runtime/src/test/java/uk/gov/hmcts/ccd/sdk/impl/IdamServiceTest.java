@@ -1,10 +1,10 @@
 package uk.gov.hmcts.ccd.sdk.impl;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import org.junit.jupiter.api.Test;
 import uk.gov.hmcts.reform.idam.client.IdamClient;
 import uk.gov.hmcts.reform.idam.client.models.UserInfo;
-
-import static org.assertj.core.api.Assertions.assertThat;
 
 class IdamServiceTest {
 
