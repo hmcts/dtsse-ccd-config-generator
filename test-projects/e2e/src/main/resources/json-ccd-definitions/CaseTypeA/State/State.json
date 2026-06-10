@@ -1,0 +1,10 @@
+[
+  {
+    "ID": "Submitted",
+    "Name": "JSON submitted label",
+    "Description": "Submitted",
+    "DisplayOrder": 1,
+    "CaseTypeID": "case-type-a",
+    "LiveFrom": "01/01/2017"
+  }
+]

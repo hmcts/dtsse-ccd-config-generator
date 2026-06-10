@@ -18,6 +18,32 @@ ccd {
   caseEventServiceBus = true
 }
 
+def jsonLegacyDefinitionsDir = layout.buildDirectory.dir('json-ccd-definitions')
+
+tasks.register('generateJsonLegacyDefinitions') {
+  def sourceDir = layout.projectDirectory.dir('src/main/resources/json-ccd-definitions/CaseTypeA')
+  def caseTypeADir = jsonLegacyDefinitionsDir.map { it.dir('CaseTypeA') }
+  def caseTypeBDir = jsonLegacyDefinitionsDir.map { it.dir('CaseTypeB') }
+
+  inputs.dir(sourceDir)
+  outputs.dirs(caseTypeADir, caseTypeBDir)
+
+  doLast {
+    delete caseTypeADir, caseTypeBDir
+
+    copy {
+      from sourceDir
+      into caseTypeADir
+    }
+
+    copy {
+      from sourceDir
+      into caseTypeBDir
+      filter { line -> line.replace('case-type-a', 'case-type-b') }
+    }
+  }
+}
+
 java {
   toolchain {
     languageVersion = JavaLanguageVersion.of(21)
@@ -121,17 +147,13 @@ bootJar {
   }
 }
 
-generateCCDConfig.doLast {
-  copy {
-    from file('ccd-definitions')
-    into layout.buildDirectory.dir('definitions/E2E')
-  }
-}
-
 tasks.withType(CftlibExec).configureEach {
   group = 'ccd tasks'
+  dependsOn tasks.named('generateJsonLegacyDefinitions')
   authMode = AuthMode.Local
   environment 'CCD_DECENTRALISED_CASE-TYPE-SERVICE-URLS_E2E', 'http://localhost:4013'
+  environment 'CCD_DECENTRALISED_CASE-TYPE-SERVICE-URLS_case-type-a', 'http://localhost:4013'
+  environment 'CCD_DECENTRALISED_CASE-TYPE-SERVICE-URLS_case-type-b', 'http://localhost:4013'
   environment 'SPRING_APPLICATION_JSON', '{"ccd":{"decentralised":{"case-type-service-urls":{"ft_decentralisation":"http://localhost:5555"}}}}'
   environment 'BEFTA_TEST_STUB_SERVICE_BASE_URL', 'http://localhost:5555'
   environment 'TEST_STUB_SERVICE_BASE_URL', 'http://localhost:5555'
@@ -205,6 +227,7 @@ tasks.withType(CftlibExec).configureEach {
 }
 
 tasks.named('generateCCDConfig').configure {
+  dependsOn tasks.named('generateJsonLegacyDefinitions')
   environment 'SPRING_JMS_SERVICEBUS_ENABLED', 'false'
   environment 'SPRING_AUTOCONFIGURE_EXCLUDE',
     'com.azure.spring.cloud.autoconfigure.implementation.jms.ServiceBusJmsAutoConfiguration'
@@ -217,7 +240,7 @@ cftlibTest {
   systemProperties([
     'junit.jupiter.execution.parallel.enabled'             : 'false',
     'junit.jupiter.execution.parallel.mode.default'        : 'same_thread',
-    'junit.jupiter.execution.parallel.mode.classes.default': 'concurrent',
+    'junit.jupiter.execution.parallel.mode.classes.default': 'same_thread',
     'spring.cloud.compatibility-verifier.enabled'          : 'false',
   ])
 

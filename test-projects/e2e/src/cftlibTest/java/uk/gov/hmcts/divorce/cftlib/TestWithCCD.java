@@ -4,11 +4,13 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.sun.net.httpserver.HttpServer;
 
 import java.io.IOException;
 import jakarta.jms.ConnectionFactory;
 import jakarta.jms.Message;
 
+import java.net.InetSocketAddress;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -105,6 +107,8 @@ import uk.gov.hmcts.divorce.sow014.nfd.PublishedEvent;
 import uk.gov.hmcts.divorce.sow014.nfd.ReturnErrorWhenCreateAPIFirstTask;
 import uk.gov.hmcts.divorce.sow014.nfd.ReturnErrorWhenCreateTestCase;
 import uk.gov.hmcts.divorce.sow014.nfd.SubmittedConfirmationCallback;
+import uk.gov.hmcts.divorce.jsonlegacy.BaseJsonLegacyController;
+import uk.gov.hmcts.divorce.jsonlegacy.JsonLegacyCcdConfig;
 import uk.gov.hmcts.ccd.sdk.type.CaseLink;
 import uk.gov.hmcts.ccd.sdk.type.ListValue;
 import uk.gov.hmcts.ccd.sdk.CaseReindexingService;
@@ -152,6 +156,8 @@ public class TestWithCCD extends CftlibTest {
     private long firstEventId;
     private static final String BASE_URL = "http://localhost:4452";
     private static final String SERVICE_BASE_URL = "http://localhost:4013";
+    private static final String EXTERNAL_CALLBACK_HOST = "127.0.0.1";
+    private static final int EXTERNAL_CALLBACK_PORT = 4014;
     private static final String ELASTICSEARCH_BASE_URL = "http://localhost:9200";
     private static final String TASK_MANAGEMENT_BASE_URL = "http://localhost:8087";
     private static final String ACCEPT_CREATE_CASE =
@@ -173,8 +179,15 @@ public class TestWithCCD extends CftlibTest {
     private static final String API_FIRST_TASK_CANCEL_EVENT_ID = ApiFirstTaskCancelEvent.EVENT_ID;
     private static final String API_FIRST_TASK_RECONFIGURE_EVENT_ID = ApiFirstTaskReconfigureEvent.EVENT_ID;
     private static final String API_FIRST_TASK_DELAYED_EVENT_ID = ApiFirstTaskDelayedEvent.EVENT_ID;
+    private static final String JSON_LEGACY_CREATE_EVENT_ID = "json-legacy-create";
+    private static final String JSON_LEGACY_EVENT_ID = "json-legacy-dispatch";
+    private static final String JSON_LEGACY_NO_CALLBACK_EVENT_ID = "json-legacy-no-callback";
+    private static final String JSON_LEGACY_EXTERNAL_SUBMITTED_EVENT_ID = "json-legacy-external-submitted";
+    private static final String JSON_LEGACY_SUBMITTED_STATE_LABEL = "JSON submitted label";
     private String apiFirstTaskId;
     private String waTaskId;
+    private long jsonLegacyCaseTypeACaseRef;
+    private long jsonLegacyCaseTypeBCaseRef;
 
     @TestConfiguration
     static class ServiceBusTestConfiguration {
@@ -2732,7 +2745,330 @@ public class TestWithCCD extends CftlibTest {
     }
 
     @SneakyThrows
-    @Order(200)
+    @Order(210)
+    @Test
+    void dispatchesJsonDefinitionCallbacksToSpringController() {
+        for (String caseType : jsonLegacyCaseTypes()) {
+            BaseJsonLegacyController.reset();
+
+            var response = submitJsonLegacyEventForCaseType(caseType, Map.of("note", "json-legacy-normal"), 201);
+
+            @SuppressWarnings("unchecked")
+            Map<String, Object> data = (Map<String, Object>) response.get("data");
+            assertThat(data.get("setInAboutToSubmit"), equalTo(BaseJsonLegacyController.MARKER));
+
+            @SuppressWarnings("unchecked")
+            Map<String, Object> afterSubmit =
+                (Map<String, Object>) response.get("after_submit_callback_response");
+            assertThat(afterSubmit.get("confirmation_header"),
+                equalTo(BaseJsonLegacyController.CONFIRMATION_HEADER));
+            assertThat(afterSubmit.get("confirmation_body"),
+                equalTo(BaseJsonLegacyController.CONFIRMATION_BODY));
+
+            assertThat(BaseJsonLegacyController.aboutToSubmitAttempts, equalTo(1));
+            assertThat(BaseJsonLegacyController.aboutToSubmitSawAuthorisation, is(true));
+            assertThat(BaseJsonLegacyController.aboutToSubmitSawServiceAuthorisation, is(true));
+            assertThat(BaseJsonLegacyController.submittedAttempts, equalTo(1));
+            assertThat(BaseJsonLegacyController.submittedSawCommittedData, is(true));
+        }
+    }
+
+    @SneakyThrows
+    @Order(211)
+    @Test
+    void aboutToSubmitErrorsRollbackJsonLegacySubmission() {
+        for (String caseType : jsonLegacyCaseTypes()) {
+            BaseJsonLegacyController.reset();
+            String before = storedData(caseType);
+
+            var response = submitJsonLegacyEventForCaseType(caseType, Map.of("note", "json-legacy-error"), 422);
+
+            @SuppressWarnings("unchecked")
+            List<String> callbackErrors = (List<String>) response.get("callbackErrors");
+            assertThat(callbackErrors, equalTo(List.of("JSON legacy validation error")));
+            assertThat(storedData(caseType), equalTo(before));
+            assertThat(BaseJsonLegacyController.aboutToSubmitAttempts, equalTo(1));
+            assertThat(BaseJsonLegacyController.submittedAttempts, equalTo(0));
+        }
+    }
+
+    @SneakyThrows
+    @Order(212)
+    @Test
+    void jsonDefinitionEventWithoutCallbacksIsTriggerable() {
+        for (String caseType : jsonLegacyCaseTypes()) {
+            BaseJsonLegacyController.reset();
+
+            var response = submitJsonLegacyEventForCaseType(
+                caseType,
+                JSON_LEGACY_NO_CALLBACK_EVENT_ID,
+                Map.of("setInMidEvent", "json-legacy-no-callback"),
+                201
+            );
+
+            @SuppressWarnings("unchecked")
+            Map<String, Object> data = (Map<String, Object>) response.get("data");
+            assertThat(data.get("setInMidEvent"), equalTo("json-legacy-no-callback"));
+            assertThat(BaseJsonLegacyController.aboutToSubmitAttempts, equalTo(0));
+            assertThat(BaseJsonLegacyController.submittedAttempts, equalTo(0));
+        }
+    }
+
+    @SneakyThrows
+    @Order(213)
+    @Test
+    void jsonDefinitionSubmittedCallbackCanBeInvokedOverHttp() {
+        HttpServer externalCallbackServer = startExternalSubmittedCallbackServer();
+        try {
+            for (String caseType : jsonLegacyCaseTypes()) {
+                BaseJsonLegacyController.reset();
+
+                var response = submitJsonLegacyEventForCaseType(
+                    caseType,
+                    JSON_LEGACY_EXTERNAL_SUBMITTED_EVENT_ID,
+                    Map.of("setInMidEvent", "json-legacy-external-submitted"),
+                    201
+                );
+
+                @SuppressWarnings("unchecked")
+                Map<String, Object> afterSubmit =
+                    (Map<String, Object>) response.get("after_submit_callback_response");
+                assertThat(afterSubmit.get("confirmation_header"),
+                    equalTo(BaseJsonLegacyController.EXTERNAL_CONFIRMATION_HEADER));
+                assertThat(afterSubmit.get("confirmation_body"),
+                    equalTo(BaseJsonLegacyController.EXTERNAL_CONFIRMATION_BODY));
+
+                assertThat(BaseJsonLegacyController.aboutToSubmitAttempts, equalTo(0));
+                assertThat(BaseJsonLegacyController.externalSubmittedAttempts, equalTo(1));
+                assertThat(BaseJsonLegacyController.externalSubmittedSawAuthorisation, is(true));
+                assertThat(BaseJsonLegacyController.externalSubmittedSawServiceAuthorisation, is(true));
+            }
+        } finally {
+            externalCallbackServer.stop(0);
+        }
+    }
+
+    @SneakyThrows
+    private HttpServer startExternalSubmittedCallbackServer() {
+        HttpServer server = HttpServer.create(
+            new InetSocketAddress(EXTERNAL_CALLBACK_HOST, EXTERNAL_CALLBACK_PORT),
+            0
+        );
+        server.createContext("/", exchange -> {
+            try {
+                if (!"POST".equals(exchange.getRequestMethod())) {
+                    exchange.sendResponseHeaders(405, -1);
+                    return;
+                }
+
+                BaseJsonLegacyController.externalSubmittedAttempts++;
+                BaseJsonLegacyController.externalSubmittedSawAuthorisation =
+                    hasText(exchange.getRequestHeaders().getFirst("Authorization"));
+                BaseJsonLegacyController.externalSubmittedSawServiceAuthorisation =
+                    hasText(exchange.getRequestHeaders().getFirst("ServiceAuthorization"));
+
+                byte[] body = mapper.writeValueAsBytes(Map.of(
+                    "confirmation_header", BaseJsonLegacyController.EXTERNAL_CONFIRMATION_HEADER,
+                    "confirmation_body", BaseJsonLegacyController.EXTERNAL_CONFIRMATION_BODY
+                ));
+                exchange.getResponseHeaders().set("Content-Type", "application/json");
+                exchange.sendResponseHeaders(200, body.length);
+                exchange.getResponseBody().write(body);
+            } finally {
+                exchange.close();
+            }
+        });
+        server.start();
+        return server;
+    }
+
+    private boolean hasText(String value) {
+        return value != null && !value.isBlank();
+    }
+
+    @SneakyThrows
+    @Order(214)
+    @Test
+    void submittedRetriesAndDuplicateJsonLegacySubmissionDoesNotReRun() {
+        for (String caseType : jsonLegacyCaseTypes()) {
+            BaseJsonLegacyController.reset();
+            long caseRef = jsonLegacyCaseRef(caseType);
+            var startEvent = ccdApi.startEvent(
+                getAuthorisation("TEST_CASE_WORKER_USER@mailinator.com"),
+                getServiceAuth(),
+                String.valueOf(caseRef),
+                JSON_LEGACY_EVENT_ID
+            );
+            Map<String, Object> data = new LinkedHashMap<>(
+                mapper.convertValue(startEvent.getCaseDetails().getData(), new TypeReference<Map<String, Object>>() {})
+            );
+            data.put("note", "json-legacy-retry");
+
+            var request = prepareEventRequestWithToken(
+                "TEST_CASE_WORKER_USER@mailinator.com",
+                JSON_LEGACY_EVENT_ID,
+                data,
+                startEvent.getToken(),
+                caseRef
+            );
+            var firstResponse = HttpClientBuilder.create().build().execute(request);
+            assertThat(firstResponse.getStatusLine().getStatusCode(), equalTo(201));
+            assertThat(BaseJsonLegacyController.submittedAttempts, equalTo(3));
+
+            var duplicateRequest = prepareEventRequestWithToken(
+                "TEST_CASE_WORKER_USER@mailinator.com",
+                JSON_LEGACY_EVENT_ID,
+                data,
+                startEvent.getToken(),
+                caseRef
+            );
+            var duplicateResponse = HttpClientBuilder.create().build().execute(duplicateRequest);
+            assertThat(duplicateResponse.getStatusLine().getStatusCode(), equalTo(201));
+            assertThat(BaseJsonLegacyController.submittedAttempts, equalTo(3));
+        }
+    }
+
+    @SneakyThrows
+    @Order(215)
+    @Test
+    void jsonDefinitionAuditHistoryUsesStateLabel() {
+        for (String caseType : jsonLegacyCaseTypes()) {
+            long caseRef = jsonLegacyCaseRef(caseType);
+
+            var get = buildRequest(
+                "TEST_CASE_WORKER_USER@mailinator.com",
+                BASE_URL + "/cases/" + caseRef + "/events",
+                HttpGet::new);
+            withCcdAccept(get, ACCEPT_CASE_EVENTS);
+
+            var response = HttpClientBuilder.create().build().execute(get);
+            Map<String, Object> result =
+                mapper.readValue(EntityUtils.toString(response.getEntity()), new TypeReference<>() {});
+
+            assertThat(response.getStatusLine().getStatusCode(), equalTo(200));
+            @SuppressWarnings("unchecked")
+            List<Map<String, Object>> auditEvents = (List<Map<String, Object>>) result.get("auditEvents");
+            assertThat(auditEvents, is(not(empty())));
+
+            Map<String, Object> createdEvent = auditEvents.getLast();
+            assertThat(createdEvent.get("state_id"), equalTo("Submitted"));
+            assertThat(createdEvent.get("state_name"), equalTo(JSON_LEGACY_SUBMITTED_STATE_LABEL));
+        }
+    }
+
+    private Map<String, Object> submitJsonLegacyEvent(Map<String, ?> data, int expectedStatus) throws Exception {
+        return submitJsonLegacyEvent(JsonLegacyCcdConfig.CASE_TYPE_A, JSON_LEGACY_EVENT_ID, data, expectedStatus);
+    }
+
+    private Map<String, Object> submitJsonLegacyEventForCaseType(String caseType,
+                                                                  Map<String, ?> data,
+                                                                  int expectedStatus) throws Exception {
+        return submitJsonLegacyEvent(caseType, JSON_LEGACY_EVENT_ID, data, expectedStatus);
+    }
+
+    private Map<String, Object> submitJsonLegacyEvent(String eventId,
+                                                       Map<String, ?> data,
+                                                       int expectedStatus) throws Exception {
+        return submitJsonLegacyEvent(JsonLegacyCcdConfig.CASE_TYPE_A, eventId, data, expectedStatus);
+    }
+
+    private Map<String, Object> submitJsonLegacyEventForCaseType(String caseType,
+                                                                  String eventId,
+                                                                  Map<String, ?> data,
+                                                                  int expectedStatus) throws Exception {
+        return submitJsonLegacyEvent(caseType, eventId, data, expectedStatus);
+    }
+
+    private Map<String, Object> submitJsonLegacyEvent(String caseType,
+                                                       String eventId,
+                                                       Map<String, ?> data,
+                                                       int expectedStatus) throws Exception {
+        var response = HttpClientBuilder.create().build().execute(
+            prepareEventRequestForCase(
+                jsonLegacyCaseRef(caseType),
+                "TEST_CASE_WORKER_USER@mailinator.com",
+                eventId,
+                data
+            )
+        );
+        assertThat(response.getStatusLine().getStatusCode(), equalTo(expectedStatus));
+        return mapper.readValue(EntityUtils.toString(response.getEntity()), new TypeReference<>() {});
+    }
+
+    private String storedData() {
+        return storedData(JsonLegacyCcdConfig.CASE_TYPE_A);
+    }
+
+    private String storedData(String caseType) {
+        return db.queryForObject(
+            "select data::text from ccd.case_data where reference = :reference",
+            Map.of("reference", jsonLegacyCaseRef(caseType)),
+            String.class
+        );
+    }
+
+    private long jsonLegacyCaseRef() {
+        return jsonLegacyCaseRef(JsonLegacyCcdConfig.CASE_TYPE_A);
+    }
+
+    private long jsonLegacyCaseRef(String caseType) {
+        if (JsonLegacyCcdConfig.CASE_TYPE_A.equals(caseType)) {
+            if (jsonLegacyCaseTypeACaseRef == 0) {
+                jsonLegacyCaseTypeACaseRef = createJsonLegacyCase(caseType);
+            }
+            return jsonLegacyCaseTypeACaseRef;
+        } else if (JsonLegacyCcdConfig.CASE_TYPE_B.equals(caseType)) {
+            if (jsonLegacyCaseTypeBCaseRef == 0) {
+                jsonLegacyCaseTypeBCaseRef = createJsonLegacyCase(caseType);
+            }
+            return jsonLegacyCaseTypeBCaseRef;
+        }
+        throw new IllegalArgumentException("Unsupported JSON legacy case type: " + caseType);
+    }
+
+    private List<String> jsonLegacyCaseTypes() {
+        return List.of(JsonLegacyCcdConfig.CASE_TYPE_A, JsonLegacyCcdConfig.CASE_TYPE_B);
+    }
+
+    @SneakyThrows
+    private long createJsonLegacyCase(String caseType) {
+        String userToken = getAuthorisation("TEST_CASE_WORKER_USER@mailinator.com");
+        String serviceToken = getServiceAuth();
+        String userId = idam.getUserInfo(userToken).getUid();
+
+        var start = ccdApi.startForCaseworker(
+            userToken,
+            serviceToken,
+            userId,
+            NoFaultDivorce.JURISDICTION,
+            caseType,
+            JSON_LEGACY_CREATE_EVENT_ID
+        );
+
+        CaseDataContent content = CaseDataContent.builder()
+            .eventToken(start.getToken())
+            .event(Event.builder()
+                .id(JSON_LEGACY_CREATE_EVENT_ID)
+                .summary("")
+                .description("")
+                .build())
+            .data(Map.of("setInMidEvent", "json-legacy-create"))
+            .build();
+
+        CaseDetails result = ccdApi.submitForCaseworker(
+            userToken,
+            serviceToken,
+            userId,
+            NoFaultDivorce.JURISDICTION,
+            caseType,
+            true,
+            content
+        );
+        return Long.parseLong(result.getId().toString());
+    }
+
+    @SneakyThrows
+    @Order(300)
     @Test
     void cascadingDeleteRemovesAllCaseData() {
         db.getJdbcTemplate().execute("DELETE FROM ccd.case_data");

@@ -19,6 +19,16 @@ package uk.gov.hmcts.ccd.sdk.api;
 public interface CCDConfig<Case, State, Role extends HasRole> {
 
   /**
+   * Optional discriminator used when multiple independent case type configurations share the same case data class.
+   *
+   * <p>By default, configs with the same case data class are resolved together as one case type. Override this when
+   * configs should instead be resolved as separate case types despite sharing the same data class.</p>
+   */
+  default String groupingKey() {
+    return "";
+  }
+
+  /**
    * Invoked during config generation.
    *
    * @param builder Use to declare your CCD configuration.

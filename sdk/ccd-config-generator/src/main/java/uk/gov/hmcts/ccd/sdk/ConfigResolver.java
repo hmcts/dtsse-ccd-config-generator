@@ -42,9 +42,10 @@ class ConfigResolver<T, S, R extends HasRole> {
 
     ImmutableSet<S> allStates = ImmutableSet.copyOf(stateType.getEnumConstants());
     Map<Class, Integer> types = resolve(caseType, basePackage);
-    ConfigBuilderImpl<T, S, R> builder = new ConfigBuilderImpl(
-        new ResolvedCCDConfig(caseType, stateType, roleType, types, allStates)
-    );
+    ResolvedCCDConfig<T, S, R> resolvedConfig =
+        new ResolvedCCDConfig(caseType, stateType, roleType, types, allStates);
+    resolvedConfig.resolveStateLabels();
+    ConfigBuilderImpl<T, S, R> builder = new ConfigBuilderImpl(resolvedConfig);
 
     for (CCDConfig<T, S, R> c : configs) {
       c.configureDecentralised(builder);

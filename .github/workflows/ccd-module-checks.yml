@@ -18,6 +18,7 @@ jobs:
             gradleIntegration: adoption:integration
             definitionsDir: test-projects/adoption-cos-api/build/definitions
             runIntegration: false
+            runSemanticDiff: true
             changePath: test-projects/adoption-cos-api
           - checkName: Semantic Diff - NFDiv
             module: nfdiv
@@ -25,6 +26,7 @@ jobs:
             gradleIntegration: nfdiv:integration
             definitionsDir: test-projects/nfdiv-case-api/build/definitions
             runIntegration: true
+            runSemanticDiff: true
             changePath: test-projects/nfdiv-case-api
           - checkName: Semantic Diff - PCS
             module: pcs
@@ -32,6 +34,7 @@ jobs:
             gradleIntegration: pcs:integration
             definitionsDir: test-projects/pcs-api/build/definitions
             runIntegration: true
+            runSemanticDiff: true
             changePath: test-projects/pcs-api
           - checkName: Semantic Diff - SPTribs
             module: sptribs
@@ -39,7 +42,16 @@ jobs:
             gradleIntegration: sptribs:integration
             definitionsDir: test-projects/sptribs-case-api/build/definitions
             runIntegration: true
+            runSemanticDiff: true
             changePath: test-projects/sptribs-case-api
+          - checkName: ET Integration
+            module: et
+            gradleGenerate: et:generateCCDConfig
+            gradleIntegration: et:integration
+            definitionsDir: test-projects/et-ccd-callbacks/build/definitions
+            runIntegration: true
+            runSemanticDiff: false
+            changePath: test-projects/et-ccd-callbacks
 
     steps:
       - name: Checkout repository
@@ -94,7 +106,7 @@ jobs:
         run: ./gradlew ${{ matrix.gradleIntegration }} -i
 
       - name: Checkout base branch
-        if: steps.changes.outputs.docs_only != 'true' && steps.changes.outputs.module_changed != 'true'
+        if: matrix.runSemanticDiff && steps.changes.outputs.docs_only != 'true' && steps.changes.outputs.module_changed != 'true'
         uses: actions/checkout@v6
         with:
           ref: ${{ github.event.pull_request.base.sha }}
@@ -103,17 +115,17 @@ jobs:
           submodules: recursive
 
       - name: Generate base CCD config
-        if: steps.changes.outputs.docs_only != 'true' && steps.changes.outputs.module_changed != 'true'
+        if: matrix.runSemanticDiff && steps.changes.outputs.docs_only != 'true' && steps.changes.outputs.module_changed != 'true'
         working-directory: base
         run: ./gradlew ${{ matrix.gradleGenerate }} -i
 
       - name: Generate PR CCD config
         id: generate-pr
-        if: steps.changes.outputs.docs_only != 'true'
+        if: matrix.runSemanticDiff && steps.changes.outputs.docs_only != 'true'
         run: ./gradlew ${{ matrix.gradleGenerate }} -i
 
       - name: Compare CCD configuration outputs
-        if: steps.generate-pr.outcome == 'success' && steps.changes.outputs.docs_only != 'true' && steps.changes.outputs.module_changed != 'true'
+        if: matrix.runSemanticDiff && steps.generate-pr.outcome == 'success' && steps.changes.outputs.docs_only != 'true' && steps.changes.outputs.module_changed != 'true'
         env:
           EXPECTED_DIR: ${{ format('{0}/base/{1}', github.workspace, matrix.definitionsDir) }}
           ACTUAL_DIR: ${{ format('{0}/{1}', github.workspace, matrix.definitionsDir) }}
