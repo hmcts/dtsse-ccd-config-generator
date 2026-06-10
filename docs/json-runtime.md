@@ -54,6 +54,26 @@ continue to use their normal config lookup, audit, projection, idempotency and p
 This avoids maintaining a second submission pipeline for JSON services. The branch still keeps the callback URL
 learning from the earlier runtime work, but routes it through the existing SDK callback machinery.
 
+### Packaging JSON definitions
+
+Services should copy JSON CCD definitions into the Docker image as filesystem files and configure
+`JsonBackedCCDConfig` with that location:
+
+```text
+/opt/app/json-ccd-definitions/CaseTypeA
+```
+
+For example:
+
+```java
+Path definitions = Path.of("/opt/app/json-ccd-definitions/CaseTypeA");
+return new JsonBackedCCDConfig<MyCaseData, MyState, MyRole>(
+    support,
+    "case-type-a",
+    definitions.toUri().toString()
+) {};
+```
+
 ### Callback invocation
 
 [`JsonCallbackBridge`][jcb] adapts JSON callback URLs into SDK callback handlers.
