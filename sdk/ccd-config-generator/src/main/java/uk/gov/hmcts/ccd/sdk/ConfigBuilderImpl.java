@@ -282,7 +282,7 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements Decentralised
           .accessTypeId(group.getAccessTypeId())
           .organisationProfileId(group.getOrganisationProfileId())
           .organisationalRoleName(role.getRole())
-          .groupRoleName(group.getGroupRoleName())
+          .groupRoleName(group.getGroupRoleName().getRole())
           .caseAssignedRoleField(caseAssignedRoleField)
           .groupAccessEnabled(group.isGroupAccessEnabled())
           .caseAccessGroupIdTemplate(group.getCaseAccessGroupIdTemplate())

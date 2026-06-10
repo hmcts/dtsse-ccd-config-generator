@@ -1,6 +1,7 @@
 package uk.gov.hmcts.reform.fpl.enums;
 
 import uk.gov.hmcts.ccd.sdk.api.CCDAccessType;
+import uk.gov.hmcts.ccd.sdk.api.HasRole;
 import uk.gov.hmcts.ccd.sdk.api.TypedPropertyGetter;
 import uk.gov.hmcts.reform.fpl.model.CaseData;
 
@@ -21,7 +22,7 @@ public enum AccessGroups implements CCDAccessType<CaseData> {
       "Solicitor access type description",
       "Solicitor access type hint",
       1,
-      "caseworker-approver-group",
+      GroupRole.CASE_ACCESS_APPROVER_GROUP,
       CaseData::getOrganisationPolicy,
       true,
       "CARE_SUPERVISION_EPO:$ORGID$");
@@ -33,14 +34,14 @@ public enum AccessGroups implements CCDAccessType<CaseData> {
   private final String description;
   private final String hintText;
   private final int displayOrder;
-  private final String groupRoleName;
+  private final HasRole groupRoleName;
   private final TypedPropertyGetter<CaseData, ?> caseAssignedRoleField;
   private final boolean groupAccessEnabled;
   private final String caseAccessGroupIdTemplate;
 
   AccessGroups(String organisationProfileId, boolean accessMandatory, boolean accessDefault,
                boolean display, String description, String hintText, int displayOrder,
-               String groupRoleName, TypedPropertyGetter<CaseData, ?> caseAssignedRoleField,
+               HasRole groupRoleName, TypedPropertyGetter<CaseData, ?> caseAssignedRoleField,
                boolean groupAccessEnabled, String caseAccessGroupIdTemplate) {
     this.organisationProfileId = organisationProfileId;
     this.accessMandatory = accessMandatory;
@@ -96,7 +97,7 @@ public enum AccessGroups implements CCDAccessType<CaseData> {
   }
 
   @Override
-  public String getGroupRoleName() {
+  public HasRole getGroupRoleName() {
     return groupRoleName;
   }
 

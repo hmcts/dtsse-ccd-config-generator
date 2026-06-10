@@ -37,7 +37,12 @@ public interface CCDAccessType<T> {
 
   // --- group-level portion of the AccessTypeRole row (OrganisationalRoleName comes from the role) ---
 
-  String getGroupRoleName();
+  /**
+   * The group role this access type maps to. A {@link HasRole} constant rather than a free-text
+   * role name, so it can't drift from the declared roles; the SDK reads its {@link HasRole#getRole()}
+   * at build time.
+   */
+  HasRole getGroupRoleName();
 
   /**
    * Type-safe reference to the case field that holds the assigned organisation policy. Resolved to
