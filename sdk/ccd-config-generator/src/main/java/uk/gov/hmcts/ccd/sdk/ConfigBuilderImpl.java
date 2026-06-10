@@ -255,7 +255,8 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements Decentralised
     List<AccessTypeRole> derivedRoles = Lists.newArrayList();
 
     for (R role : roles) {
-      CCDAccessType group = role.getAccessType();
+      @SuppressWarnings("unchecked")
+      CCDAccessType<T> group = (CCDAccessType<T>) role.getAccessType();
       if (group == null) {
         continue;
       }
@@ -274,12 +275,15 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements Decentralised
             .build());
       }
 
+      String caseAssignedRoleField =
+          propertyUtils.getPropertyName(config.caseClass, group.getCaseAssignedRoleField());
+
       derivedRoles.add(AccessTypeRole.builder()
           .accessTypeId(group.getAccessTypeId())
           .organisationProfileId(group.getOrganisationProfileId())
           .organisationalRoleName(role.getRole())
           .groupRoleName(group.getGroupRoleName())
-          .caseAssignedRoleField(group.getCaseAssignedRoleField())
+          .caseAssignedRoleField(caseAssignedRoleField)
           .groupAccessEnabled(group.isGroupAccessEnabled())
           .caseAccessGroupIdTemplate(group.getCaseAccessGroupIdTemplate())
           .liveTo(group.getLiveTo())

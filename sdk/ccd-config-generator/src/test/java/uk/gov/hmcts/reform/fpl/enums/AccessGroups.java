@@ -1,12 +1,17 @@
 package uk.gov.hmcts.reform.fpl.enums;
 
 import uk.gov.hmcts.ccd.sdk.api.CCDAccessType;
+import uk.gov.hmcts.ccd.sdk.api.TypedPropertyGetter;
+import uk.gov.hmcts.reform.fpl.model.CaseData;
 
 /**
  * Spike: organisational access types declared as enum constants. A role attaches to one of these
  * via {@link UserRole#getAccessType()}; the SDK then derives the AccessType + AccessTypeRole rows.
+ *
+ * <p>{@code caseAssignedRoleField} is a type-safe method reference to a real {@link CaseData} field
+ * ({@code CaseData::getOrganisationPolicy}); the SDK resolves it to the CCD field id at build time.</p>
  */
-public enum AccessGroups implements CCDAccessType {
+public enum AccessGroups implements CCDAccessType<CaseData> {
 
   SOLICITOR_ORG_POLICY(
       "SOLICITOR_PROFILE",
@@ -17,7 +22,7 @@ public enum AccessGroups implements CCDAccessType {
       "Solicitor access type hint",
       1,
       "caseworker-approver-group",
-      "applicant1OrganisationPolicy",
+      CaseData::getOrganisationPolicy,
       true,
       "CARE_SUPERVISION_EPO:$ORGID$");
 
@@ -29,14 +34,14 @@ public enum AccessGroups implements CCDAccessType {
   private final String hintText;
   private final int displayOrder;
   private final String groupRoleName;
-  private final String caseAssignedRoleField;
+  private final TypedPropertyGetter<CaseData, ?> caseAssignedRoleField;
   private final boolean groupAccessEnabled;
   private final String caseAccessGroupIdTemplate;
 
   AccessGroups(String organisationProfileId, boolean accessMandatory, boolean accessDefault,
                boolean display, String description, String hintText, int displayOrder,
-               String groupRoleName, String caseAssignedRoleField, boolean groupAccessEnabled,
-               String caseAccessGroupIdTemplate) {
+               String groupRoleName, TypedPropertyGetter<CaseData, ?> caseAssignedRoleField,
+               boolean groupAccessEnabled, String caseAccessGroupIdTemplate) {
     this.organisationProfileId = organisationProfileId;
     this.accessMandatory = accessMandatory;
     this.accessDefault = accessDefault;
@@ -96,7 +101,7 @@ public enum AccessGroups implements CCDAccessType {
   }
 
   @Override
-  public String getCaseAssignedRoleField() {
+  public TypedPropertyGetter<CaseData, ?> getCaseAssignedRoleField() {
     return caseAssignedRoleField;
   }
 
