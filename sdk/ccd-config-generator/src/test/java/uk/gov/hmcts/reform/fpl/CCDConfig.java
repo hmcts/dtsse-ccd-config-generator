@@ -203,22 +203,10 @@ public class CCDConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<CaseData, S
       .displayOrder(1)
       .parentCategoryID("A");
 
-    builder.accessType("SOLICITOR_ORG_POLICY")
-      .organisationProfileId("SOLICITOR_PROFILE")
-      .accessMandatory(true)
-      .accessDefault(true)
-      .display(true)
-      .description("Solicitor access type description")
-      .hintText("Solicitor access type hint")
-      .displayOrder(1);
-
-    builder.accessTypeRole("SOLICITOR_ORG_POLICY")
-      .organisationProfileId("SOLICITOR_PROFILE")
-      .organisationalRoleName("caseworker-approver")
-      .groupRoleName("caseworker-approver-group")
-      .caseAssignedRoleField("applicant1OrganisationPolicy")
-      .groupAccessEnabled(true)
-      .caseAccessGroupIdTemplate("CARE_SUPERVISION_EPO:$ORGID$");
+    // Spike: AccessType + AccessTypeRole now derived from the AccessGroups enum that
+    // CASE_ACCESS_APPROVER attaches to (see UserRole.getAccessType()), rather than the explicit
+    // builder.accessType(...) / builder.accessTypeRole(...) calls. The generated JSON fixtures are
+    // unchanged, proving equivalence.
 
     SearchCriteriaField searchCriteriaField1 =
       SearchCriteriaField.builder()
