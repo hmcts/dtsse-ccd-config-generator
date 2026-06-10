@@ -19,7 +19,6 @@ public class TaskManagementProperties {
   @Data
   public static class Outbox {
     private Poller poller = new Poller();
-    private FailureLogPoller failureLogPoller = new FailureLogPoller();
     private Retry retry = new Retry();
     private Completion completion = new Completion();
   }
@@ -28,11 +27,6 @@ public class TaskManagementProperties {
   public static class Poller {
     private int batchSize = 5;
     private Duration processingTimeout = Duration.ofMinutes(5);
-  }
-
-  @Data
-  public static class FailureLogPoller {
-    private int batchSize = 100;
   }
 
   @Data

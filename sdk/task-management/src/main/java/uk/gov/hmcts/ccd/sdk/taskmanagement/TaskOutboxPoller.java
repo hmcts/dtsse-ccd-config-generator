@@ -73,7 +73,15 @@ public class TaskOutboxPoller {
         }
 
         repository.markProcessed(record.id(), statusCode);
-        log.info("Task outbox {} processed with status {}", record.id(), statusCode);
+        log.info(
+            "TaskOutboxOutcome status=PROCESSED taskOutboxId={} caseId={} requestedAction={} "
+                + "attemptCount={} responseCode={}",
+            record.id(),
+            record.caseId(),
+            record.requestedAction(),
+            record.attemptCount(),
+            statusCode
+        );
       } catch (FeignException ex) {
         log.warn(
             "Task outbox {} create failed with status {}: {}",
@@ -215,6 +223,20 @@ public class TaskOutboxPoller {
     int nextAttemptCount = record.attemptCount() + 1;
     LocalDateTime nextAttemptAt = retryPolicy.nextAttemptAt(nextAttemptCount, LocalDateTime.now(ZoneOffset.UTC));
     repository.markFailed(record.id(), statusCode, body, nextAttemptAt);
+    log.warn(
+        "TaskOutboxOutcome status=FAILED taskOutboxId={} caseId={} requestedAction={} attemptCount={} "
+            + "maxAttempts={} responseCode={} nextAttemptAt={} retryScheduled={} error={} payload={}",
+        record.id(),
+        record.caseId(),
+        record.requestedAction(),
+        nextAttemptCount,
+        maxAttempts,
+        statusCode,
+        nextAttemptAt,
+        nextAttemptAt != null,
+        body,
+        record.payload()
+    );
     if (nextAttemptAt == null) {
       Long nextRetryableOutboxId = repository.findNextRetryableInCase(record.caseId(), record.id(), maxAttempts);
       log.warn(
@@ -228,13 +250,6 @@ public class TaskOutboxPoller {
           statusCode,
           nextRetryableOutboxId,
           "task-outbox-retry-exhausted"
-      );
-    } else {
-      log.warn(
-          "Task outbox {} failed with status {}, retrying at {}",
-          record.id(),
-          statusCode,
-          nextAttemptAt
       );
     }
   }

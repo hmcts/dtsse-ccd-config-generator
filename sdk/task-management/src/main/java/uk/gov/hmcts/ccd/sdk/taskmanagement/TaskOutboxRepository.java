@@ -160,43 +160,6 @@ public class TaskOutboxRepository {
   }
 
   @Transactional(readOnly = true, propagation = Propagation.REQUIRES_NEW)
-  public List<TaskOutboxFailureLogEntry> findFailedHistoryAfter(long historyId, int limit) {
-    return jdbc.query(
-        """
-            select h.id as history_id,
-                   h.task_outbox_id,
-                   o.case_id,
-                   o.requested_action::text as requested_action,
-                   o.payload::text as payload,
-                   h.response_code,
-                   h.error,
-                   h.created
-            from ccd.task_outbox_history h
-            join ccd.task_outbox o on o.id = h.task_outbox_id
-            where h.id > :historyId
-              and h.status::text = :failedStatus
-            order by h.id
-            limit :limit
-            """,
-        Map.of(
-            "historyId", historyId,
-            "failedStatus", TaskOutboxStatus.FAILED.name(),
-            "limit", limit
-        ),
-        (rs, rowNum) -> new TaskOutboxFailureLogEntry(
-            rs.getLong("history_id"),
-            rs.getLong("task_outbox_id"),
-            rs.getLong("case_id"),
-            rs.getString("requested_action"),
-            rs.getString("payload"),
-            rs.getObject("response_code", Integer.class),
-            rs.getString("error"),
-            rs.getTimestamp("created").toLocalDateTime()
-        )
-    );
-  }
-
-  @Transactional(readOnly = true, propagation = Propagation.REQUIRES_NEW)
   public Optional<TaskOutboxStatus> findStatus(long id) {
     return jdbc.query(
         """

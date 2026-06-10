@@ -36,18 +36,6 @@ class TaskManagementAutoConfigurationTest {
   }
 
   @Test
-  void shouldRegisterFailureLogPollerByDefault() {
-    contextRunner.run(context -> assertThat(context).hasSingleBean(TaskOutboxFailureLogPoller.class));
-  }
-
-  @Test
-  void shouldNotRegisterFailureLogPollerWhenDisabled() {
-    contextRunner
-        .withPropertyValues("task-management.outbox.failure-log-poller.enabled=false")
-        .run(context -> assertThat(context).doesNotHaveBean(TaskOutboxFailureLogPoller.class));
-  }
-
-  @Test
   void shouldRegisterCompatibilityCodecBeansWhenCalendarBeansExist() {
     contextRunner
         .withUserConfiguration(CalendarCodecConfiguration.class)

@@ -132,18 +132,4 @@ public class TaskManagementAutoConfiguration {
     int batchSize = properties.getOutbox().getPoller().getBatchSize();
     return new TaskOutboxPoller(repository, taskManagementApiClient, retryPolicy, batchSize, objectMapper);
   }
-
-  @Bean
-  @ConditionalOnProperty(
-      name = "task-management.outbox.failure-log-poller.enabled",
-      havingValue = "true",
-      matchIfMissing = true
-  )
-  public TaskOutboxFailureLogPoller taskOutboxFailureLogPoller(
-      TaskOutboxRepository repository,
-      TaskManagementProperties properties
-  ) {
-    int batchSize = properties.getOutbox().getFailureLogPoller().getBatchSize();
-    return new TaskOutboxFailureLogPoller(repository, batchSize);
-  }
 }
