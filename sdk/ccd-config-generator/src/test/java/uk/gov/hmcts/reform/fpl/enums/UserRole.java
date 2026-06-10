@@ -2,7 +2,7 @@ package uk.gov.hmcts.reform.fpl.enums;
 
 import com.google.common.collect.ImmutableList;
 import uk.gov.hmcts.ccd.sdk.api.CCD;
-import uk.gov.hmcts.ccd.sdk.api.CCDAccessType;
+import uk.gov.hmcts.ccd.sdk.api.CCDAccessGroup;
 import uk.gov.hmcts.ccd.sdk.api.HasLabel;
 import uk.gov.hmcts.ccd.sdk.api.HasRole;
 
@@ -23,7 +23,7 @@ public enum UserRole implements HasRole {
 
     private final String role;
     private final String casetypePermissions;
-    private final CCDAccessType accessType;
+    private final CCDAccessGroup accessGroup;
 
     UserRole(String role) {
         this(role, "CRU");
@@ -33,10 +33,10 @@ public enum UserRole implements HasRole {
         this(role, casetypePermissions, null);
     }
 
-    UserRole(String role, String casetypePermissions, CCDAccessType accessType) {
+    UserRole(String role, String casetypePermissions, CCDAccessGroup accessGroup) {
         this.role = role;
         this.casetypePermissions = casetypePermissions;
-        this.accessType = accessType;
+        this.accessGroup = accessGroup;
     }
 
     public String getRole() {
@@ -49,8 +49,8 @@ public enum UserRole implements HasRole {
     }
 
     @Override
-    public CCDAccessType getAccessType() {
-        return accessType;
+    public CCDAccessGroup getAccessGroup() {
+        return accessGroup;
     }
 
     public List<String> getRoles() {

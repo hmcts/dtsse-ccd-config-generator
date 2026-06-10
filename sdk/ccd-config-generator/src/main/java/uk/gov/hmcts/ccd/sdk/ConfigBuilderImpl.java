@@ -18,7 +18,7 @@ import uk.gov.hmcts.ccd.sdk.api.AccessType;
 import uk.gov.hmcts.ccd.sdk.api.AccessType.AccessTypeBuilder;
 import uk.gov.hmcts.ccd.sdk.api.AccessTypeRole;
 import uk.gov.hmcts.ccd.sdk.api.AccessTypeRole.AccessTypeRoleBuilder;
-import uk.gov.hmcts.ccd.sdk.api.CCDAccessType;
+import uk.gov.hmcts.ccd.sdk.api.CCDAccessGroup;
 import uk.gov.hmcts.ccd.sdk.api.CaseCategory.CaseCategoryBuilder;
 import uk.gov.hmcts.ccd.sdk.api.CaseRoleToAccessProfile.CaseRoleToAccessProfileBuilder;
 import uk.gov.hmcts.ccd.sdk.api.ComplexTypeAuthorisation;
@@ -236,7 +236,7 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements Decentralised
   }
 
   /**
-   * Spike: translate any {@link CCDAccessType} attached to a role enum constant into the same
+   * Translate any {@link CCDAccessGroup} attached to a role enum constant into the same
    * {@code AccessType} / {@code AccessTypeRole} model objects the explicit builder calls produce,
    * so the existing generators emit identical JSON. Explicit builder rows take precedence: an
    * access type already configured via {@link #accessType} is not re-added.
@@ -256,7 +256,7 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements Decentralised
 
     for (R role : roles) {
       @SuppressWarnings("unchecked")
-      CCDAccessType<T> group = (CCDAccessType<T>) role.getAccessType();
+      CCDAccessGroup<T> group = (CCDAccessGroup<T>) role.getAccessGroup();
       if (group == null) {
         continue;
       }

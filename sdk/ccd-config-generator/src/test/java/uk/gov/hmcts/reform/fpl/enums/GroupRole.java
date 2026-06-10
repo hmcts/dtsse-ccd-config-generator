@@ -3,7 +3,7 @@ package uk.gov.hmcts.reform.fpl.enums;
 import uk.gov.hmcts.ccd.sdk.api.HasRole;
 
 /**
- * Spike: organisational group roles referenced by {@link AccessGroups#getGroupRoleName()}.
+ * Organisational group roles referenced by {@link AccessGroups#getGroupRoleName()}.
  *
  * <p>These are {@link HasRole}s so the reference is type-safe, but they are deliberately a separate
  * enum from {@link UserRole} (the case's role class). Group roles do not participate in case-type

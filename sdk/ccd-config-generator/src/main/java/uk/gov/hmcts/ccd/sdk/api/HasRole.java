@@ -8,11 +8,11 @@ public interface HasRole {
   String getCaseTypePermissions();
 
   /**
-   * Spike: the organisational access type this role participates in, or {@code null} if none.
-   * When present, the SDK derives the matching {@code AccessType} and {@code AccessTypeRole}
-   * rows at build time, using this role's {@link #getRole()} as the {@code OrganisationalRoleName}.
+   * The organisational access group this role participates in, or {@code null} if none. When
+   * present, the SDK derives the matching {@code AccessType} and {@code AccessTypeRole} rows at
+   * build time, using this role's {@link #getRole()} as the {@code OrganisationalRoleName}.
    */
-  default CCDAccessType<?> getAccessType() {
+  default CCDAccessGroup<?> getAccessGroup() {
     return null;
   }
 }

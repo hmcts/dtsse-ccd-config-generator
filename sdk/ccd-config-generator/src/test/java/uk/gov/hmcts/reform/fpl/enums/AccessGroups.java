@@ -1,18 +1,20 @@
 package uk.gov.hmcts.reform.fpl.enums;
 
-import uk.gov.hmcts.ccd.sdk.api.CCDAccessType;
+import lombok.Getter;
+import uk.gov.hmcts.ccd.sdk.api.CCDAccessGroup;
 import uk.gov.hmcts.ccd.sdk.api.HasRole;
 import uk.gov.hmcts.ccd.sdk.api.TypedPropertyGetter;
 import uk.gov.hmcts.reform.fpl.model.CaseData;
 
 /**
- * Spike: organisational access types declared as enum constants. A role attaches to one of these
- * via {@link UserRole#getAccessType()}; the SDK then derives the AccessType + AccessTypeRole rows.
+ * Organisational access groups declared as enum constants. A role attaches to one of these via
+ * {@link UserRole#getAccessGroup()}; the SDK then derives the AccessType + AccessTypeRole rows.
  *
  * <p>{@code caseAssignedRoleField} is a type-safe method reference to a real {@link CaseData} field
  * ({@code CaseData::getOrganisationPolicy}); the SDK resolves it to the CCD field id at build time.</p>
  */
-public enum AccessGroups implements CCDAccessType<CaseData> {
+@Getter
+public enum AccessGroups implements CCDAccessGroup<CaseData> {
 
   SOLICITOR_ORG_POLICY(
       "SOLICITOR_PROFILE",
@@ -59,60 +61,5 @@ public enum AccessGroups implements CCDAccessType<CaseData> {
   @Override
   public String getAccessTypeId() {
     return name();
-  }
-
-  @Override
-  public String getOrganisationProfileId() {
-    return organisationProfileId;
-  }
-
-  @Override
-  public boolean isAccessMandatory() {
-    return accessMandatory;
-  }
-
-  @Override
-  public boolean isAccessDefault() {
-    return accessDefault;
-  }
-
-  @Override
-  public boolean isDisplay() {
-    return display;
-  }
-
-  @Override
-  public String getDescription() {
-    return description;
-  }
-
-  @Override
-  public String getHintText() {
-    return hintText;
-  }
-
-  @Override
-  public int getDisplayOrder() {
-    return displayOrder;
-  }
-
-  @Override
-  public HasRole getGroupRoleName() {
-    return groupRoleName;
-  }
-
-  @Override
-  public TypedPropertyGetter<CaseData, ?> getCaseAssignedRoleField() {
-    return caseAssignedRoleField;
-  }
-
-  @Override
-  public boolean isGroupAccessEnabled() {
-    return groupAccessEnabled;
-  }
-
-  @Override
-  public String getCaseAccessGroupIdTemplate() {
-    return caseAccessGroupIdTemplate;
   }
 }
