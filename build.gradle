@@ -75,7 +75,7 @@ subprojects.each { subproject ->
                 // Ensure the local SDK projects are packaged so they appear on the manifest classpath
                 task.dependsOn gradle.includedBuild('sdk').task(':ccd-config-generator:jar')
                 task.dependsOn gradle.includedBuild('sdk').task(':decentralised-runtime:jar')
-                task.dependsOn gradle.includedBuild('sdk').task(':cftlib-dev-only:jar')
+                task.dependsOn gradle.includedBuild('sdk').task(':ccd-runtime-indexing:jar')
                 task.dependsOn gradle.includedBuild('sdk').task(':ccd-servicebus-support:jar')
                 task.dependsOn gradle.includedBuild('sdk').task(':task-management:jar')
             }

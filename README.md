@@ -82,11 +82,14 @@ For decentralised services you can opt in to specialised runtime features:
 ```groovy
 ccd {
   decentralised = true
-  runtimeIndexing = true // brings the decentralised Elasticsearch indexer into the main runtime classpath
+  runtimeIndexing = true // brings ccd-runtime-indexing into the main runtime classpath
 }
 ```
 
 When `runtimeIndexing` is enabled the decentralised indexer now relies on Spring’s scheduling infrastructure. Ensure the application that boots the SDK is annotated with `@EnableScheduling` so the indexer starts and stops with the rest of the Spring context.
+
+Set `ELASTIC_SEARCH_HOSTS` to the Elasticsearch HTTP endpoint or a comma-separated list of endpoints. For example:
+`ELASTIC_SEARCH_HOSTS=http://es-1:9200,http://es-2:9200`.
 
 ### Config generation
 

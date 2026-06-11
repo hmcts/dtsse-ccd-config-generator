@@ -81,7 +81,7 @@ public class CcdSdkPlugin implements Plugin<Project> {
         String version = getVersion();
         project.getDependencies().add("implementation", "com.github.hmcts:decentralised-runtime:"
             + version);
-        String dependencyNotation = "com.github.hmcts:cftlib-dev-only:" + version;
+        String dependencyNotation = "com.github.hmcts:ccd-runtime-indexing:" + version;
         if (config.runtimeIndexing) {
           project.getDependencies().add("implementation", dependencyNotation);
         } else {
