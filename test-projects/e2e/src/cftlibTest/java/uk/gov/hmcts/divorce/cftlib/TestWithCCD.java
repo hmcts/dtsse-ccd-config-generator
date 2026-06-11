@@ -50,6 +50,7 @@ import uk.gov.hmcts.divorce.sow014.nfd.ApiFirstTaskCompleteEvent;
 import uk.gov.hmcts.divorce.sow014.nfd.ApiFirstTaskDelayedEvent;
 import uk.gov.hmcts.divorce.sow014.nfd.ApiFirstTaskEvent;
 import uk.gov.hmcts.divorce.sow014.nfd.ApiFirstTaskReconfigureEvent;
+import uk.gov.hmcts.divorce.sow014.nfd.ApiFirstTaskSequencingEvent;
 import uk.gov.hmcts.divorce.sow014.nfd.CaseworkerMaintainCaseLink;
 import uk.gov.hmcts.divorce.sow014.nfd.CaseworkerOverrideEventMetadata;
 import uk.gov.hmcts.divorce.sow014.nfd.CaseworkerPopulateSearchCriteria;
@@ -183,6 +184,7 @@ public class TestWithCCD extends CftlibTest {
     private static final String API_FIRST_TASK_CANCEL_EVENT_ID = ApiFirstTaskCancelEvent.EVENT_ID;
     private static final String API_FIRST_TASK_RECONFIGURE_EVENT_ID = ApiFirstTaskReconfigureEvent.EVENT_ID;
     private static final String API_FIRST_TASK_DELAYED_EVENT_ID = ApiFirstTaskDelayedEvent.EVENT_ID;
+    private static final String API_FIRST_TASK_SEQUENCING_EVENT_ID = ApiFirstTaskSequencingEvent.EVENT_ID;
     private String apiFirstTaskId;
     private String waTaskId;
 
@@ -1748,13 +1750,14 @@ public class TestWithCCD extends CftlibTest {
 
         Long failedOutboxId = db.queryForObject(
             "INSERT INTO ccd.task_outbox"
-                + " (case_id, payload, requested_action, status, attempt_count, next_attempt_at)"
-                + " VALUES (CAST(:caseId AS bigint), '{}'::jsonb, CAST(:action AS ccd.task_action),"
+                + " (case_id, event_id, payload, requested_action, status, attempt_count, next_attempt_at)"
+                + " VALUES (CAST(:caseId AS bigint), :eventId, '{}'::jsonb, CAST(:action AS ccd.task_action),"
                 + " CAST(:status AS ccd.task_outbox_status), 1,"
                 + " (current_timestamp at time zone 'UTC') + INTERVAL '1 day')"
                 + " RETURNING id",
             Map.of(
                 "caseId", caseIdValue,
+                "eventId", "failed-task-test",
                 "action", TaskAction.INITIATE.getId(),
                 "status", "FAILED"
             ),
@@ -1795,6 +1798,92 @@ public class TestWithCCD extends CftlibTest {
             assertThat(((Number) laterRow.get("id")).longValue(), greaterThan(failedOutboxId));
             assertThat(laterRow.get("status"), equalTo("PROCESSED"));
         });
+    }
+
+    @SneakyThrows
+    @Order(36)
+    @Test
+    public void taskActionsFromSameTriggerShouldRunInRequiredOrder() {
+        long caseId = createAdditionalCase("TEST_SOLICITOR@mailinator.com");
+        String caseIdValue = String.valueOf(caseId);
+        db.update(
+            "DELETE FROM ccd.task_outbox WHERE case_id = CAST(:caseId AS bigint)",
+            Map.of("caseId", caseIdValue)
+        );
+
+        var startCreate = ccdApi.startEvent(
+            getAuthorisation("TEST_CASE_WORKER_USER@mailinator.com"),
+            getServiceAuth(),
+            caseIdValue,
+            API_FIRST_TASK_EVENT_ID
+        );
+        var createRequest = prepareEventRequestWithToken(
+            "TEST_CASE_WORKER_USER@mailinator.com",
+            API_FIRST_TASK_EVENT_ID,
+            Map.of("note", "api-first-task-for-sequencing"),
+            startCreate.getToken(),
+            caseId
+        );
+        var createResponse = HttpClientBuilder.create().build().execute(createRequest);
+        assertThat(createResponse.getStatusLine().getStatusCode(), equalTo(201));
+
+        await().atMost(Duration.ofSeconds(30)).untilAsserted(() -> {
+            Map<String, Object> processed = queryLatestCurrentOutboxRow(caseIdValue, TaskAction.INITIATE);
+            assertThat(processed.get("status"), equalTo("PROCESSED"));
+        });
+        db.update(
+            "DELETE FROM ccd.task_outbox WHERE case_id = CAST(:caseId AS bigint)",
+            Map.of("caseId", caseIdValue)
+        );
+
+        var startEvent = ccdApi.startEvent(
+            getAuthorisation("TEST_CASE_WORKER_USER@mailinator.com"),
+            getServiceAuth(),
+            caseIdValue,
+            API_FIRST_TASK_SEQUENCING_EVENT_ID
+        );
+        var request = prepareEventRequestWithToken(
+            "TEST_CASE_WORKER_USER@mailinator.com",
+            API_FIRST_TASK_SEQUENCING_EVENT_ID,
+            Map.of("note", "api-first-task-sequencing"),
+            startEvent.getToken(),
+            caseId
+        );
+
+        var response = HttpClientBuilder.create().build().execute(request);
+        assertThat(response.getStatusLine().getStatusCode(), equalTo(201));
+
+        await().atMost(Duration.ofSeconds(45)).untilAsserted(() -> {
+            Map<String, Object> trigger = db.queryForMap(
+                "SELECT count(*) AS row_count,"
+                    + " count(DISTINCT created) AS created_count,"
+                    + " count(*) FILTER (WHERE status = 'PROCESSED'::ccd.task_outbox_status) AS processed_count"
+                    + " FROM ccd.task_outbox"
+                    + " WHERE case_id = CAST(:caseId AS bigint)"
+                    + " AND event_id = :eventId",
+                Map.of("caseId", caseIdValue, "eventId", API_FIRST_TASK_SEQUENCING_EVENT_ID)
+            );
+            assertThat(((Number) trigger.get("row_count")).intValue(), equalTo(3));
+            assertThat(((Number) trigger.get("created_count")).intValue(), equalTo(1));
+            assertThat(((Number) trigger.get("processed_count")).intValue(), equalTo(3));
+        });
+
+        List<String> processedOrder = db.queryForList(
+            "SELECT o.requested_action::text"
+                + " FROM ccd.task_outbox o"
+                + " JOIN ccd.task_outbox_history h ON h.task_outbox_id = o.id"
+                + " WHERE o.case_id = CAST(:caseId AS bigint)"
+                + " AND o.event_id = :eventId"
+                + " AND h.status = 'PROCESSED'::ccd.task_outbox_status"
+                + " ORDER BY h.id",
+            Map.of("caseId", caseIdValue, "eventId", API_FIRST_TASK_SEQUENCING_EVENT_ID),
+            String.class
+        );
+        assertThat(processedOrder, contains(
+            TaskAction.CANCEL.getId(),
+            TaskAction.RECONFIGURE.getId(),
+            TaskAction.INITIATE.getId()
+        ));
     }
 
     @SneakyThrows

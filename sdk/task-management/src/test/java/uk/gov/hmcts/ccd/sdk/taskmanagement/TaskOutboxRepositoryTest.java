@@ -43,7 +43,7 @@ class TaskOutboxRepositoryTest {
 
   @Test
   @SuppressWarnings({"rawtypes", "unchecked"})
-  void claimPendingDoesNotTreatFailedRowsAsSameCaseBlockers() {
+  void claimPendingOrdersRowsByTriggerAndActionPriority() {
     NamedParameterJdbcTemplate jdbc = mock(NamedParameterJdbcTemplate.class);
     TaskOutboxRepository repository = new TaskOutboxRepository(jdbc, new TaskManagementProperties());
     ArgumentCaptor<String> sqlCaptor = ArgumentCaptor.forClass(String.class);
@@ -52,9 +52,11 @@ class TaskOutboxRepositoryTest {
 
     repository.claimPending(5, 0);
 
+    assertThat(sqlCaptor.getValue()).contains("partition by o.case_id, o.event_id, o.created");
+    assertThat(sqlCaptor.getValue()).contains("predecessor.action_priority < o.action_priority");
+    assertThat(sqlCaptor.getValue()).contains("predecessor.status::text <> :processedStatus");
     assertThat(sqlCaptor.getValue()).contains("prior.status::text in (:newStatus, :processingStatus)");
-    assertThat(sqlCaptor.getValue())
-        .doesNotContain("prior.status::text in (:newStatus, :failedStatus, :processingStatus)");
+    assertThat(sqlCaptor.getValue()).doesNotContain("o.event_id is null", "o.event_id is not null");
   }
 
   @Test
@@ -66,7 +68,14 @@ class TaskOutboxRepositoryTest {
 
     when(jdbc.queryForObject(anyString(), paramsCaptor.capture(), eq(Long.class))).thenReturn(42L);
 
-    long id = repository.enqueueAndReturnId("1234567890123456", "{}", "initiate", nextAttemptAt);
+    long id = repository.enqueueAndReturnId(
+        "1234567890123456",
+        "event-id",
+        LocalDateTime.now(),
+        "{}",
+        "initiate",
+        nextAttemptAt
+    );
 
     assertThat(id).isEqualTo(42L);
     assertThat(paramsCaptor.getValue().getValue("status")).isEqualTo(TaskOutboxStatus.WAITING.name());
@@ -81,10 +90,32 @@ class TaskOutboxRepositoryTest {
 
     when(jdbc.queryForObject(anyString(), paramsCaptor.capture(), eq(Long.class))).thenReturn(42L);
 
-    long id = repository.enqueueAndReturnId("1234567890123456", "{}", "initiate");
+    long id = repository.enqueueAndReturnId(
+        "1234567890123456",
+        "event-id",
+        LocalDateTime.now(),
+        "{}",
+        "initiate",
+        null
+    );
 
     assertThat(id).isEqualTo(42L);
     assertThat(paramsCaptor.getValue().getValue("status")).isEqualTo(TaskOutboxStatus.NEW.name());
     assertThat(paramsCaptor.getValue().getValue("nextAttemptAt")).isNull();
+  }
+
+  @Test
+  void enqueueStoresTriggerMetadataAndSharedCreatedTimestamp() {
+    NamedParameterJdbcTemplate jdbc = mock(NamedParameterJdbcTemplate.class);
+    TaskOutboxRepository repository = new TaskOutboxRepository(jdbc, new TaskManagementProperties());
+    ArgumentCaptor<MapSqlParameterSource> paramsCaptor = ArgumentCaptor.forClass(MapSqlParameterSource.class);
+    LocalDateTime created = LocalDateTime.of(2026, 6, 11, 12, 0);
+
+    when(jdbc.queryForObject(anyString(), paramsCaptor.capture(), eq(Long.class))).thenReturn(42L);
+
+    repository.enqueue("1234567890123456", "event-id", created, "{}", "cancel");
+
+    assertThat(paramsCaptor.getValue().getValue("eventId")).isEqualTo("event-id");
+    assertThat(paramsCaptor.getValue().getValue("created")).isEqualTo(created);
   }
 }

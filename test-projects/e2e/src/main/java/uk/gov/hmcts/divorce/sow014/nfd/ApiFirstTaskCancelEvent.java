@@ -8,6 +8,7 @@ import uk.gov.hmcts.ccd.sdk.api.CaseDetails;
 import uk.gov.hmcts.ccd.sdk.api.ConfigBuilder;
 import uk.gov.hmcts.ccd.sdk.api.callback.AboutToStartOrSubmitResponse;
 import uk.gov.hmcts.ccd.sdk.taskmanagement.TaskOutboxService;
+import uk.gov.hmcts.ccd.sdk.taskmanagement.model.outbox.TaskOutboxTrigger;
 import uk.gov.hmcts.ccd.sdk.taskmanagement.model.outbox.TerminateTaskOutboxPayload;
 import uk.gov.hmcts.divorce.common.ccd.PageBuilder;
 import uk.gov.hmcts.divorce.divorcecase.NoFaultDivorce;
@@ -56,7 +57,9 @@ public class ApiFirstTaskCancelEvent implements CCDConfig<CaseData, State, UserR
 
     //cancel all tasks - could also just enumerate all task types, but this demos rel between
     //process category identifiers and a task subset and a way to map them to each other
-    var taskTypes = NFDTaskType.getTaskTypesFromProcessCategoryIdentifiers(Arrays.stream(ProcessCategoryIdentifiers.values()).toList());
+    var taskTypes = NFDTaskType.getTaskTypesFromProcessCategoryIdentifiers(
+        Arrays.stream(ProcessCategoryIdentifiers.values()).toList()
+    );
 
     log.warn("Cancelling tasks for case {}: {}", details.getId(), taskTypes);
 
@@ -66,7 +69,12 @@ public class ApiFirstTaskCancelEvent implements CCDConfig<CaseData, State, UserR
       taskTypes.stream().map(Enum::name).toList()
     );
 
-    taskOutboxService.enqueueTaskCancelRequest(payload);
+    TaskOutboxTrigger trigger = TaskOutboxTrigger.create(
+        String.valueOf(details.getId()),
+        NoFaultDivorce.getCaseType(),
+        EVENT_ID
+    );
+    taskOutboxService.enqueueTaskCancelRequest(trigger, payload);
 
     return AboutToStartOrSubmitResponse.<CaseData, State>builder()
       .data(details.getData())

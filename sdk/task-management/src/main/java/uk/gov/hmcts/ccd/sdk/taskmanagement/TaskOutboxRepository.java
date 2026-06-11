@@ -23,31 +23,66 @@ public class TaskOutboxRepository {
     this.processingTimeout = properties.getOutbox().getPoller().getProcessingTimeout();
   }
 
-  public void enqueue(String caseId, String payload, String action) {
-    enqueue(caseId, payload, action, null);
+  public void enqueue(
+      String caseId,
+      String eventId,
+      LocalDateTime created,
+      String payload,
+      String action
+  ) {
+    enqueue(caseId, eventId, created, payload, action, null);
   }
 
-  public void enqueue(String caseId, String payload, String action, LocalDateTime nextAttemptAt) {
-    enqueueAndReturnId(caseId, payload, action, nextAttemptAt);
+  public void enqueue(
+      String caseId,
+      String eventId,
+      LocalDateTime created,
+      String payload,
+      String action,
+      LocalDateTime nextAttemptAt
+  ) {
+    enqueueAndReturnId(caseId, eventId, created, payload, action, nextAttemptAt);
   }
 
-  public long enqueueAndReturnId(String caseId, String payload, String action) {
-    return enqueueAndReturnId(caseId, payload, action, null);
-  }
-
-  public long enqueueAndReturnId(String caseId, String payload, String action, LocalDateTime nextAttemptAt) {
+  public long enqueueAndReturnId(
+      String caseId,
+      String eventId,
+      LocalDateTime created,
+      String payload,
+      String action,
+      LocalDateTime nextAttemptAt
+  ) {
     MapSqlParameterSource params = new MapSqlParameterSource()
         .addValue("action", action)
         .addValue("caseId", parseCaseId(caseId))
+        .addValue("eventId", eventId)
+        .addValue("created", created)
         .addValue("payload", payload)
         .addValue("nextAttemptAt", nextAttemptAt)
         .addValue("status", nextAttemptAt == null ? TaskOutboxStatus.NEW.name() : TaskOutboxStatus.WAITING.name());
 
     Long id = jdbc.queryForObject(
         """
-            insert into ccd.task_outbox (case_id, payload, requested_action, status, next_attempt_at)
-            values (:caseId, :payload::jsonb, :action::ccd.task_action,
-                    cast(:status as ccd.task_outbox_status), :nextAttemptAt)
+            insert into ccd.task_outbox (
+              case_id,
+              event_id,
+              created,
+              updated,
+              payload,
+              requested_action,
+              status,
+              next_attempt_at
+            )
+            values (
+              :caseId,
+              :eventId,
+              coalesce(:created, (current_timestamp at time zone 'UTC')),
+              coalesce(:created, (current_timestamp at time zone 'UTC')),
+              :payload::jsonb,
+              :action::ccd.task_action,
+              cast(:status as ccd.task_outbox_status),
+              :nextAttemptAt
+            )
             returning id
             """,
         params,
@@ -70,17 +105,37 @@ public class TaskOutboxRepository {
   public List<TaskOutboxRecord> claimPending(int limit, int maxAttempts) {
     return jdbc.query(
         """
-            with claimable as (
-              select o.id
+            with ordered as (
+              -- Give every row an action precedence and a stable position for its trigger.
+              -- min(id) is shared by all rows in a trigger and breaks ties when triggers have the same created value.
+              select o.*,
+                     case o.requested_action
+                       when 'complete'::ccd.task_action then 0
+                       when 'cancel'::ccd.task_action then 10
+                       when 'reconfigure'::ccd.task_action then 20
+                       when 'initiate'::ccd.task_action then 30
+                     end as action_priority,
+                     min(o.id) over (
+                       partition by o.case_id, o.event_id, o.created
+                     ) as trigger_first_id
               from ccd.task_outbox o
+            ),
+            eligible as (
+              -- Start with rows that are due and still have an attempt available.
+              select o.id,
+                     o.created,
+                     o.trigger_first_id,
+                     o.action_priority
+              from ordered o
               where o.status::text in (:newStatus, :waitingStatus, :failedStatus, :processingStatus)
                 and (o.next_attempt_at is null or o.next_attempt_at <= (current_timestamp at time zone 'UTC'))
                 and (:maxAttempts = 0 or o.attempt_count < :maxAttempts)
                 and not exists (
+                  -- Preserve ordering between triggers for a case. An earlier active row blocks this trigger.
+                  -- Exhausted FAILED rows and future WAITING rows retain the existing cross-trigger bypass policy.
                   select 1
-                  from ccd.task_outbox prior
+                  from ordered prior
                   where prior.case_id = o.case_id
-                    and prior.id < o.id
                     and (
                       prior.status::text in (:newStatus, :processingStatus)
                       or (
@@ -92,12 +147,41 @@ public class TaskOutboxRepository {
                       )
                     )
                     and (:maxAttempts = 0 or prior.attempt_count < :maxAttempts)
+                    and (
+                      prior.created < o.created
+                      or (
+                        prior.created = o.created
+                        and prior.trigger_first_id < o.trigger_first_id
+                      )
+                    )
                 )
-              order by o.id
+                and not exists (
+                  -- Within one trigger, every lower-priority action must succeed before this action can run.
+                  -- Unlike cross-trigger ordering, a failed or delayed predecessor deliberately blocks its successors.
+                  select 1
+                  from ordered predecessor
+                  where predecessor.case_id = o.case_id
+                    and predecessor.event_id = o.event_id
+                    and predecessor.created = o.created
+                    and predecessor.action_priority < o.action_priority
+                    and predecessor.status::text <> :processedStatus
+                )
+            ),
+            claimable as (
+              -- Lock only rows that passed both ordering checks. SKIP LOCKED allows independent cases to progress
+              -- concurrently while preventing two pollers from claiming the same physical outbox row.
+              select outbox.id
+              from ccd.task_outbox outbox
+              join eligible on eligible.id = outbox.id
+              order by eligible.created,
+                       eligible.trigger_first_id,
+                       eligible.action_priority,
+                       outbox.id
               limit :limit
-              for update skip locked
+              for update of outbox skip locked
             ),
             updated as (
+              -- Claiming and setting the processing lease happen atomically in the same statement.
               update ccd.task_outbox outbox
               set status = cast(:processingStatus as ccd.task_outbox_status),
                   updated = localtimestamp,
@@ -107,11 +191,13 @@ public class TaskOutboxRepository {
               where outbox.id = claimable.id
               returning outbox.id,
                         outbox.case_id,
+                        outbox.event_id,
+                        outbox.created,
                         outbox.payload::text as payload,
                         outbox.requested_action::text as requested_action,
                         outbox.attempt_count
             )
-            select id, case_id, payload, requested_action, attempt_count
+            select id, case_id, event_id, created, payload, requested_action, attempt_count
             from updated
             order by id
             """,
@@ -120,6 +206,7 @@ public class TaskOutboxRepository {
             "waitingStatus", TaskOutboxStatus.WAITING.name(),
             "failedStatus", TaskOutboxStatus.FAILED.name(),
             "processingStatus", TaskOutboxStatus.PROCESSING.name(),
+            "processedStatus", TaskOutboxStatus.PROCESSED.name(),
             "processingTimeoutMillis", processingTimeout.toMillis(),
             "limit", limit,
             "maxAttempts", maxAttempts
@@ -127,6 +214,8 @@ public class TaskOutboxRepository {
         (rs, rowNum) -> new TaskOutboxRecord(
             rs.getLong("id"),
             rs.getLong("case_id"),
+            rs.getString("event_id"),
+            rs.getObject("created", LocalDateTime.class),
             rs.getString("payload"),
             rs.getString("requested_action"),
             rs.getInt("attempt_count")

@@ -74,10 +74,12 @@ public class TaskOutboxPoller {
 
         repository.markProcessed(record.id(), statusCode);
         log.info(
-            "TaskOutboxOutcome status=PROCESSED taskOutboxId={} caseId={} requestedAction={} "
-                + "attemptCount={} responseCode={}",
+            "TaskOutboxOutcome status=PROCESSED taskOutboxId={} caseId={} eventId={} triggerCreated={} "
+                + "requestedAction={} attemptCount={} responseCode={}",
             record.id(),
             record.caseId(),
+            record.eventId(),
+            record.created(),
             record.requestedAction(),
             record.attemptCount(),
             statusCode
@@ -224,10 +226,13 @@ public class TaskOutboxPoller {
     LocalDateTime nextAttemptAt = retryPolicy.nextAttemptAt(nextAttemptCount, LocalDateTime.now(ZoneOffset.UTC));
     repository.markFailed(record.id(), statusCode, body, nextAttemptAt);
     log.warn(
-        "TaskOutboxOutcome status=FAILED taskOutboxId={} caseId={} requestedAction={} attemptCount={} "
-            + "maxAttempts={} responseCode={} nextAttemptAt={} retryScheduled={} error={} payload={}",
+        "TaskOutboxOutcome status=FAILED taskOutboxId={} caseId={} eventId={} triggerCreated={} "
+            + "requestedAction={} attemptCount={} maxAttempts={} responseCode={} nextAttemptAt={} "
+            + "retryScheduled={} error={} payload={}",
         record.id(),
         record.caseId(),
+        record.eventId(),
+        record.created(),
         record.requestedAction(),
         nextAttemptCount,
         maxAttempts,
@@ -240,9 +245,12 @@ public class TaskOutboxPoller {
     if (nextAttemptAt == null) {
       Long nextRetryableOutboxId = repository.findNextRetryableInCase(record.caseId(), record.id(), maxAttempts);
       log.warn(
-          "TaskOutboxHeadRecordExhausted caseId={} taskOutboxId={} requestedAction={} attemptCount={} "
-              + "maxAttempts={} lastStatusCode={} nextRetryableOutboxId={} eventType={}",
+          "TaskOutboxHeadRecordExhausted caseId={} eventId={} triggerCreated={} taskOutboxId={} "
+              + "requestedAction={} attemptCount={} maxAttempts={} lastStatusCode={} "
+              + "nextRetryableOutboxId={} eventType={}",
           record.caseId(),
+          record.eventId(),
+          record.created(),
           record.id(),
           record.requestedAction(),
           nextAttemptCount,
