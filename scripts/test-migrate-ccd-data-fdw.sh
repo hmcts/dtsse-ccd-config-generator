@@ -15,6 +15,7 @@ FAILURE_LOG="/tmp/test-migrate-ccd-data-fdw-failure-$$.log"
 FDW_SRC_HOST="${FDW_SRC_HOST:-localhost}"
 FDW_SRC_PORT="${FDW_SRC_PORT:-5432}"
 FDW_SRC_SSLMODE="${FDW_SRC_SSLMODE:-disable}"
+FDW_SERVER="${FDW_SERVER:-source-server-with-dashes.example.test}"
 
 init_migration_test_env "fdw"
 trap cleanup_temp_dbs EXIT
@@ -30,6 +31,7 @@ run_fdw_setup() {
     SRC_PASSWORD="$PG_PASSWORD" \
     SRC_SSLMODE="$FDW_SRC_SSLMODE" \
     FDW_SCHEMA="$FDW_SCHEMA" \
+    FDW_SERVER="$FDW_SERVER" \
     LOCAL_USER_SQL="current_user" \
     "$SETUP_SCRIPT"
 
@@ -43,6 +45,7 @@ run_fdw_setup() {
     SRC_PASSWORD="$PG_PASSWORD" \
     SRC_SSLMODE="$FDW_SRC_SSLMODE" \
     FDW_SCHEMA="$FDW_SCHEMA" \
+    FDW_SERVER="$FDW_SERVER" \
     LOCAL_USER_SQL="current_user" \
     "$SETUP_SCRIPT" --apply
 }
@@ -59,13 +62,19 @@ run_fdw_migration() {
 }
 
 assert_fdw_setup() {
-  local extension_count foreign_table_count source_case_count
+  local extension_count foreign_server_count foreign_table_count source_case_count
 
   echo "Validating FDW setup"
   extension_count="$(psql_dst --quiet -tA <<'SQL'
 select count(*)
 from pg_extension
 where extname in ('postgres_fdw', 'pgcrypto');
+SQL
+)"
+  foreign_server_count="$(psql_dst --quiet -tA --set=fdw_server="$FDW_SERVER" <<'SQL'
+select count(*)
+from pg_foreign_server
+where srvname = :'fdw_server';
 SQL
 )"
   foreign_table_count="$(psql_dst --quiet -tA <<SQL
@@ -86,9 +95,10 @@ where case_type_id = :'case_type';
 SQL
 )"
 
-  if [[ "$extension_count" != "2" || "$foreign_table_count" != "2" || "$source_case_count" != "2" ]]; then
+  if [[ "$extension_count" != "2" || "$foreign_server_count" != "1" || "$foreign_table_count" != "2" || "$source_case_count" != "2" ]]; then
     echo "FDW setup validation failed:" \
-      "extensions=${extension_count}, tables=${foreign_table_count}, source_cases=${source_case_count}" >&2
+      "extensions=${extension_count}, server=${foreign_server_count}," \
+      "tables=${foreign_table_count}, source_cases=${source_case_count}" >&2
     exit 1
   fi
 }
