@@ -61,6 +61,15 @@ From the perspective of application development, callbacks therefore continue to
 
 > **Note**
 >
-> Emulated AboutToSubmit callbacks cannot add documents to cases.
+> CDAM attachment is separate from upload/storage. A document can be uploaded before it is attached to a case.
 >
-> Decentralised services should add documents as input parameters to the event submission (eg. with a chained asynchronous event).
+> CCD can attach documents it can see before it delegates a decentralised submit to the service. If the service
+> generates, uploads, bundles, or otherwise introduces a new durable document reference during its own submit handling,
+> the service must own CDAM attach for that document before committing the case data.
+>
+> The invariant is: do not commit case data containing a new document reference until CDAM attach has succeeded for the
+> same case id, case type and jurisdiction. Where possible, add documents as event input so CCD can attach them before
+> delegation. Where that is not possible, the decentralised service needs scoped CDAM `ATTACH` permission. See the
+> [decentralised runtime transaction boundary](./decentralised-runtime.md#transaction-control), and the ET/SP Tribs
+> permission example:
+> [hmcts/ccd-case-document-am-api#776](https://github.com/hmcts/ccd-case-document-am-api/pull/776).
