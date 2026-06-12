@@ -34,7 +34,8 @@ public class TaskManagementProperties {
     private Duration initialDelay = Duration.ofSeconds(1);
     private Duration maxDelay = Duration.ofMinutes(5);
     private double multiplier = 2.0;
-    private int maxAttempts = 0;
+    // The initial attempt plus eight retries.
+    private int maxAttempts = 9;
   }
 
   @Data

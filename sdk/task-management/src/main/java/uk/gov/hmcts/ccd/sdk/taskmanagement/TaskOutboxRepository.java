@@ -131,13 +131,18 @@ public class TaskOutboxRepository {
                 and (o.next_attempt_at is null or o.next_attempt_at <= (current_timestamp at time zone 'UTC'))
                 and (:maxAttempts = 0 or o.attempt_count < :maxAttempts)
                 and not exists (
-                  -- Preserve ordering between triggers for a case. An earlier active row blocks this trigger.
-                  -- Exhausted FAILED rows and future WAITING rows retain the existing cross-trigger bypass policy.
+                  -- Preserve ordering between triggers for a case. A failed or unprocessable row always blocks later
+                  -- triggers. A future WAITING row retains the existing bypass policy until it becomes due.
                   select 1
                   from ordered prior
                   where prior.case_id = o.case_id
                     and (
-                      prior.status::text in (:newStatus, :processingStatus)
+                      prior.status::text in (
+                        :newStatus,
+                        :processingStatus,
+                        :failedStatus,
+                        :unprocessableStatus
+                      )
                       or (
                         prior.status::text = :waitingStatus
                         and (
@@ -146,7 +151,6 @@ public class TaskOutboxRepository {
                         )
                       )
                     )
-                    and (:maxAttempts = 0 or prior.attempt_count < :maxAttempts)
                     and (
                       prior.created < o.created
                       or (
@@ -205,6 +209,7 @@ public class TaskOutboxRepository {
             "newStatus", TaskOutboxStatus.NEW.name(),
             "waitingStatus", TaskOutboxStatus.WAITING.name(),
             "failedStatus", TaskOutboxStatus.FAILED.name(),
+            "unprocessableStatus", TaskOutboxStatus.UNPROCESSABLE.name(),
             "processingStatus", TaskOutboxStatus.PROCESSING.name(),
             "processedStatus", TaskOutboxStatus.PROCESSED.name(),
             "processingTimeoutMillis", processingTimeout.toMillis(),
@@ -220,31 +225,6 @@ public class TaskOutboxRepository {
             rs.getString("requested_action"),
             rs.getInt("attempt_count")
         )
-    );
-  }
-
-  public Long findNextRetryableInCase(long caseId, long afterId, int maxAttempts) {
-    return jdbc.query(
-        """
-            select o.id
-            from ccd.task_outbox o
-            where o.case_id = :caseId
-              and o.id > :afterId
-              and o.status::text in (:newStatus, :waitingStatus, :failedStatus, :processingStatus)
-              and (:maxAttempts = 0 or o.attempt_count < :maxAttempts)
-            order by o.id
-            limit 1
-            """,
-        Map.of(
-            "caseId", caseId,
-            "afterId", afterId,
-            "newStatus", TaskOutboxStatus.NEW.name(),
-            "waitingStatus", TaskOutboxStatus.WAITING.name(),
-            "failedStatus", TaskOutboxStatus.FAILED.name(),
-            "processingStatus", TaskOutboxStatus.PROCESSING.name(),
-            "maxAttempts", maxAttempts
-        ),
-        rs -> rs.next() ? rs.getLong("id") : null
     );
   }
 
@@ -275,7 +255,7 @@ public class TaskOutboxRepository {
               and requested_action = 'complete'::ccd.task_action
               and status in (
                 'PROCESSED'::ccd.task_outbox_status,
-                'FAILED'::ccd.task_outbox_status
+                'UNPROCESSABLE'::ccd.task_outbox_status
               )
             """,
         Map.of("id", id),
@@ -353,10 +333,25 @@ public class TaskOutboxRepository {
 
   @Transactional
   public void markFailed(long id, Integer statusCode, String error, LocalDateTime nextAttemptAt) {
+    updateFailure(id, TaskOutboxStatus.FAILED, statusCode, error, nextAttemptAt);
+  }
+
+  @Transactional
+  public void markUnprocessable(long id, Integer statusCode, String error) {
+    updateFailure(id, TaskOutboxStatus.UNPROCESSABLE, statusCode, error, null);
+  }
+
+  private void updateFailure(
+      long id,
+      TaskOutboxStatus status,
+      Integer statusCode,
+      String error,
+      LocalDateTime nextAttemptAt
+  ) {
     LocalDateTime now = utcNow();
     MapSqlParameterSource params = new MapSqlParameterSource()
         .addValue("id", id)
-        .addValue("status", TaskOutboxStatus.FAILED.name())
+        .addValue("status", status.name())
         .addValue("updated", now)
         .addValue("nextAttemptAt", nextAttemptAt);
 
@@ -372,7 +367,7 @@ public class TaskOutboxRepository {
         params
     );
 
-    recordHistory(id, TaskOutboxStatus.FAILED, statusCode, error, now);
+    recordHistory(id, status, statusCode, error, now);
   }
 
   private void recordHistory(

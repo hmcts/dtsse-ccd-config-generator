@@ -1190,7 +1190,7 @@ public class TestWithCCD extends CftlibTest {
   @SneakyThrows
   @Order(21)
   @Test
-  public void apiFirstTaskShouldReturn400WhenMissingMandatoryField() {
+  public void unrecoverableTaskRequestShouldBecomeUnprocessableWithoutRetry() {
     db.update("DELETE FROM ccd.task_outbox", Map.of());
 
     var startEvent = ccdApi.startEvent(
@@ -1240,11 +1240,9 @@ public class TestWithCCD extends CftlibTest {
 
     await().atMost(Duration.ofSeconds(30)).untilAsserted(() -> {
       Map<String, Object> processed = queryCurrentOutboxRow(outboxCaseId);
-      assertThat(processed.get("status"), equalTo("FAILED"));
-      assertThat(
-        ((Number) processed.get("last_response_code")).intValue(),
-        anyOf(equalTo(200), equalTo(400))
-      );
+      assertThat(processed.get("status"), equalTo("UNPROCESSABLE"));
+      assertThat(((Number) processed.get("attempt_count")).intValue(), equalTo(1));
+      assertThat(((Number) processed.get("last_response_code")).intValue(), equalTo(400));
     });
   }
 
@@ -1740,64 +1738,10 @@ public class TestWithCCD extends CftlibTest {
     @SneakyThrows
     @Order(35)
     @Test
-    public void failedTaskShouldNotBlockLaterSameCaseRows() {
-        long caseId = createAdditionalCase("TEST_SOLICITOR@mailinator.com");
-        String caseIdValue = String.valueOf(caseId);
-        db.update(
-            "DELETE FROM ccd.task_outbox WHERE case_id = CAST(:caseId AS bigint)",
-            Map.of("caseId", caseIdValue)
-        );
-
-        Long failedOutboxId = db.queryForObject(
-            "INSERT INTO ccd.task_outbox"
-                + " (case_id, event_id, payload, requested_action, status, attempt_count, next_attempt_at)"
-                + " VALUES (CAST(:caseId AS bigint), :eventId, '{}'::jsonb, CAST(:action AS ccd.task_action),"
-                + " CAST(:status AS ccd.task_outbox_status), 1,"
-                + " (current_timestamp at time zone 'UTC') + INTERVAL '1 day')"
-                + " RETURNING id",
-            Map.of(
-                "caseId", caseIdValue,
-                "eventId", "failed-task-test",
-                "action", TaskAction.INITIATE.getId(),
-                "status", "FAILED"
-            ),
-            Long.class
-        );
-        assertThat(failedOutboxId, is(notNullValue()));
-
-        var startCreate = ccdApi.startEvent(
-            getAuthorisation("TEST_CASE_WORKER_USER@mailinator.com"),
-            getServiceAuth(),
-            caseIdValue,
-            API_FIRST_TASK_EVENT_ID
-        );
-        var createRequest = prepareEventRequestWithToken(
-            "TEST_CASE_WORKER_USER@mailinator.com",
-            API_FIRST_TASK_EVENT_ID,
-            Map.of("note", "api-first-task-behind-failed-row"),
-            startCreate.getToken(),
-            caseId
-        );
-        var createResponse = HttpClientBuilder.create().build().execute(createRequest);
-        assertThat(createResponse.getStatusLine().getStatusCode(), equalTo(201));
-
-        await().atMost(Duration.ofSeconds(45)).untilAsserted(() -> {
-            String failedStatus = db.queryForObject(
-                "SELECT status::text FROM ccd.task_outbox WHERE id = :id",
-                Map.of("id", failedOutboxId),
-                String.class
-            );
-            assertThat(failedStatus, equalTo("FAILED"));
-
-            Map<String, Object> laterRow = db.queryForMap(
-                "SELECT id, status::text AS status FROM ccd.task_outbox"
-                    + " WHERE case_id = CAST(:caseId AS bigint)"
-                    + " AND id > :failedOutboxId ORDER BY id LIMIT 1",
-                Map.of("caseId", caseIdValue, "failedOutboxId", failedOutboxId)
-            );
-            assertThat(((Number) laterRow.get("id")).longValue(), greaterThan(failedOutboxId));
-            assertThat(laterRow.get("status"), equalTo("PROCESSED"));
-        });
+    public void failedAndUnprocessableTasksShouldBlockLaterSameCaseRows() {
+        for (String blockingStatus : List.of("FAILED", "UNPROCESSABLE")) {
+            assertTaskOutboxStatusBlocksLaterSameCaseRow(blockingStatus);
+        }
     }
 
     @SneakyThrows
@@ -2884,7 +2828,7 @@ public class TestWithCCD extends CftlibTest {
 
     private Map<String, Object> queryCurrentOutboxRow(String caseId) {
         return db.queryForMap(
-            "SELECT o.status::text AS status, h.response_code AS last_response_code"
+            "SELECT o.status::text AS status, o.attempt_count, h.response_code AS last_response_code"
                 + " FROM ccd.task_outbox o"
                 + " LEFT JOIN LATERAL ("
                 + "     SELECT response_code"
@@ -2900,7 +2844,7 @@ public class TestWithCCD extends CftlibTest {
 
     private Map<String, Object> queryLatestCurrentOutboxRow(String caseId, TaskAction action) {
         return db.queryForMap(
-            "SELECT o.status::text AS status, h.response_code AS last_response_code"
+            "SELECT o.status::text AS status, o.attempt_count, h.response_code AS last_response_code"
                 + " FROM ccd.task_outbox o"
                 + " LEFT JOIN LATERAL ("
                 + "     SELECT response_code"
@@ -2913,6 +2857,78 @@ public class TestWithCCD extends CftlibTest {
                 + " ORDER BY o.id DESC LIMIT 1",
             Map.of("caseId", caseId, "action", action.getId())
         );
+    }
+
+    private void assertTaskOutboxStatusBlocksLaterSameCaseRow(String blockingStatus) throws Exception {
+        long caseId = createAdditionalCase("TEST_SOLICITOR@mailinator.com");
+        String caseIdValue = String.valueOf(caseId);
+        db.update(
+            "DELETE FROM ccd.task_outbox WHERE case_id = CAST(:caseId AS bigint)",
+            Map.of("caseId", caseIdValue)
+        );
+
+        Long blockingOutboxId = db.queryForObject(
+            "INSERT INTO ccd.task_outbox"
+                + " (case_id, event_id, created, updated, payload, requested_action, status, attempt_count,"
+                + " next_attempt_at)"
+                + " VALUES (CAST(:caseId AS bigint), :eventId,"
+                + " (current_timestamp at time zone 'UTC') - INTERVAL '1 day',"
+                + " (current_timestamp at time zone 'UTC') - INTERVAL '1 day',"
+                + " '{}'::jsonb, CAST(:action AS ccd.task_action), CAST(:status AS ccd.task_outbox_status), 1,"
+                + " (current_timestamp at time zone 'UTC') + INTERVAL '1 day')"
+                + " RETURNING id",
+            Map.of(
+                "caseId", caseIdValue,
+                "eventId", blockingStatus.toLowerCase() + "-task-test",
+                "action", TaskAction.INITIATE.getId(),
+                "status", blockingStatus
+            ),
+            Long.class
+        );
+        assertThat(blockingOutboxId, is(notNullValue()));
+
+        var startCreate = ccdApi.startEvent(
+            getAuthorisation("TEST_CASE_WORKER_USER@mailinator.com"),
+            getServiceAuth(),
+            caseIdValue,
+            API_FIRST_TASK_EVENT_ID
+        );
+        var createRequest = prepareEventRequestWithToken(
+            "TEST_CASE_WORKER_USER@mailinator.com",
+            API_FIRST_TASK_EVENT_ID,
+            Map.of("note", "api-first-task-behind-" + blockingStatus.toLowerCase() + "-row"),
+            startCreate.getToken(),
+            caseId
+        );
+        var createResponse = HttpClientBuilder.create().build().execute(createRequest);
+        assertThat(createResponse.getStatusLine().getStatusCode(), equalTo(201));
+
+        await().atMost(Duration.ofSeconds(20)).untilAsserted(() -> {
+            Map<String, Object> laterRow = db.queryForMap(
+                "SELECT id, status::text AS status FROM ccd.task_outbox"
+                    + " WHERE case_id = CAST(:caseId AS bigint)"
+                    + " AND id > :blockingOutboxId ORDER BY id LIMIT 1",
+                Map.of("caseId", caseIdValue, "blockingOutboxId", blockingOutboxId)
+            );
+            assertThat(((Number) laterRow.get("id")).longValue(), greaterThan(blockingOutboxId));
+        });
+
+        Thread.sleep(3000);
+
+        String blockingRowStatus = db.queryForObject(
+            "SELECT status::text FROM ccd.task_outbox WHERE id = :id",
+            Map.of("id", blockingOutboxId),
+            String.class
+        );
+        String laterRowStatus = db.queryForObject(
+            "SELECT status::text FROM ccd.task_outbox"
+                + " WHERE case_id = CAST(:caseId AS bigint)"
+                + " AND id > :blockingOutboxId ORDER BY id LIMIT 1",
+            Map.of("caseId", caseIdValue, "blockingOutboxId", blockingOutboxId),
+            String.class
+        );
+        assertThat(blockingRowStatus, equalTo(blockingStatus));
+        assertThat(laterRowStatus, equalTo("NEW"));
     }
 
     private JsonNode fetchElasticsearchDocument(long caseDataId) throws IOException {

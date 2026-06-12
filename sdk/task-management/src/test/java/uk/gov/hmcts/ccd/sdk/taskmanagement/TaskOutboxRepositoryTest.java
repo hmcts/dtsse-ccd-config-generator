@@ -55,7 +55,10 @@ class TaskOutboxRepositoryTest {
     assertThat(sqlCaptor.getValue()).contains("partition by o.case_id, o.event_id, o.created");
     assertThat(sqlCaptor.getValue()).contains("predecessor.action_priority < o.action_priority");
     assertThat(sqlCaptor.getValue()).contains("predecessor.status::text <> :processedStatus");
-    assertThat(sqlCaptor.getValue()).contains("prior.status::text in (:newStatus, :processingStatus)");
+    assertThat(sqlCaptor.getValue()).contains(":failedStatus", ":unprocessableStatus");
+    assertThat(sqlCaptor.getValue()).doesNotContain(
+        "and (:maxAttempts = 0 or prior.attempt_count < :maxAttempts)"
+    );
     assertThat(sqlCaptor.getValue()).doesNotContain("o.event_id is null", "o.event_id is not null");
   }
 

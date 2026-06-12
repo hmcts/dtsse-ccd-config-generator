@@ -62,6 +62,22 @@ class TaskOutboxCompletionAwaiterTest {
   }
 
   @Test
+  void returnsUnprocessableCompletionAsTerminalFailure() throws Exception {
+    listeningConnection();
+    TaskOutboxCompletionResult result = new TaskOutboxCompletionResult(
+        42L,
+        123L,
+        "complete",
+        TaskOutboxStatus.UNPROCESSABLE,
+        9
+    );
+    when(repository.findFinishedCompleteTask(42L)).thenReturn(Optional.of(result));
+
+    assertThat(awaiter.awaitCompleteFinished(42L)).isEqualTo(result);
+    assertThat(result.failed()).isTrue();
+  }
+
+  @Test
   void ignoresNotificationsForOtherRows() throws Exception {
     properties.getOutbox().getCompletion().setTimeout(Duration.ofMillis(1));
     properties.getOutbox().getCompletion().setPollInterval(Duration.ofMillis(1));

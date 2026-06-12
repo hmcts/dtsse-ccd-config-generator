@@ -101,7 +101,7 @@ public class TaskOutboxCompletionAwaiter {
     }
 
     throw new TaskOutboxTimeoutException(
-        "Timed out waiting for task_outbox id " + outboxId + " to become PROCESSED or FAILED"
+        "Timed out waiting for task_outbox id " + outboxId + " to become PROCESSED or UNPROCESSABLE"
     );
   }
 

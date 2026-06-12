@@ -68,7 +68,7 @@ public class TaskOutboxPoller {
         ResponseEntity<?> response = processor.process(record);
         statusCode = response != null ? response.getStatusCode().value() : 500;
         log.info("Task outbox {} response body {}", record.id(), response != null ? response.getBody() : null);
-        if (isUnsuccessfulRequest(record, response)) {
+        if (isUnsuccessfulRequest(record, response, maxAttempts)) {
           continue;
         }
 
@@ -92,22 +92,35 @@ public class TaskOutboxPoller {
             ex.contentUTF8(),
             ex
         );
-        handleFailure(record, ex.status(), ex.contentUTF8(), maxAttempts);
+        handleFailure(
+            record,
+            ex.status(),
+            ex.contentUTF8(),
+            maxAttempts,
+            TaskOutboxFailureClassifier.isRecoverable(ex.status())
+        );
       } catch (IOException ex) {
         log.error("Task outbox {} payload could not be parsed", record.id(), ex);
-        handleFailure(record, null, ex.getMessage(), maxAttempts);
+        handleFailure(record, null, ex.getMessage(), maxAttempts, false);
+      } catch (IllegalArgumentException ex) {
+        log.error("Task outbox {} contains invalid action or request data", record.id(), ex);
+        handleFailure(record, null, ex.getMessage(), maxAttempts, false);
       } catch (RuntimeException ex) {
         log.error("Task outbox {} create failed", record.id(), ex);
-        handleFailure(record, null, ex.getMessage(), maxAttempts);
+        handleFailure(record, null, ex.getMessage(), maxAttempts, true);
       }
     }
   }
 
-  private boolean isUnsuccessfulRequest(TaskOutboxRecord record, ResponseEntity<?> response) {
+  private boolean isUnsuccessfulRequest(
+      TaskOutboxRecord record,
+      ResponseEntity<?> response,
+      int maxAttempts
+  ) {
     TaskAction action = TaskAction.fromId(record.requestedAction());
     if (response == null) {
       log.warn("Task outbox {} received null response for action {}", record.id(), action.getId());
-      handleFailure(record, null, "Task outbox received null response", retryPolicy.getMaxAttempts());
+      handleFailure(record, null, "Task outbox received null response", maxAttempts, true);
       return true;
     }
 
@@ -122,7 +135,8 @@ public class TaskOutboxPoller {
           record,
           response.getStatusCode().value(),
           "Task outbox response unsuccessful",
-          retryPolicy.getMaxAttempts()
+          maxAttempts,
+          TaskOutboxFailureClassifier.isRecoverable(response.getStatusCode().value())
       );
       return true;
     }
@@ -133,7 +147,8 @@ public class TaskOutboxPoller {
           record,
           response.getStatusCode().value(),
           "Task creation response missing task_id",
-          retryPolicy.getMaxAttempts()
+          maxAttempts,
+          true
       );
       return true;
     }
@@ -168,7 +183,7 @@ public class TaskOutboxPoller {
     if (!tasksToTerminate.getStatusCode().is2xxSuccessful() || responseBody == null) {
       log.warn("Failed to retrieve tasks to terminate for case {} and task types {} with action {}",
             caseId, taskTypes, actionId);
-      return null;
+      return tasksToTerminate.getStatusCode().is2xxSuccessful() ? null : tasksToTerminate;
     }
 
     List<TaskPayload> tasks = responseBody.getTasks();
@@ -221,14 +236,33 @@ public class TaskOutboxPoller {
     return taskManagementApiClient.reconfigureTask(request);
   }
 
-  private void handleFailure(TaskOutboxRecord record, Integer statusCode, String body, int maxAttempts) {
+  private void handleFailure(
+      TaskOutboxRecord record,
+      Integer statusCode,
+      String body,
+      int maxAttempts,
+      boolean recoverable
+  ) {
     int nextAttemptCount = record.attemptCount() + 1;
-    LocalDateTime nextAttemptAt = retryPolicy.nextAttemptAt(nextAttemptCount, LocalDateTime.now(ZoneOffset.UTC));
-    repository.markFailed(record.id(), statusCode, body, nextAttemptAt);
+    LocalDateTime nextAttemptAt = recoverable
+        ? retryPolicy.nextAttemptAt(nextAttemptCount, LocalDateTime.now(ZoneOffset.UTC))
+        : null;
+    boolean retryScheduled = nextAttemptAt != null;
+    String outcome;
+
+    if (retryScheduled) {
+      repository.markFailed(record.id(), statusCode, body, nextAttemptAt);
+      outcome = "FAILED";
+    } else {
+      repository.markUnprocessable(record.id(), statusCode, body);
+      outcome = "UNPROCESSABLE";
+    }
+
     log.warn(
-        "TaskOutboxOutcome status=FAILED taskOutboxId={} caseId={} eventId={} triggerCreated={} "
+        "TaskOutboxOutcome status={} taskOutboxId={} caseId={} eventId={} triggerCreated={} "
             + "requestedAction={} attemptCount={} maxAttempts={} responseCode={} nextAttemptAt={} "
-            + "retryScheduled={} error={} payload={}",
+            + "recoverable={} retryScheduled={} error={} payload={}",
+        outcome,
         record.id(),
         record.caseId(),
         record.eventId(),
@@ -238,16 +272,15 @@ public class TaskOutboxPoller {
         maxAttempts,
         statusCode,
         nextAttemptAt,
-        nextAttemptAt != null,
+        recoverable,
+        retryScheduled,
         body,
         record.payload()
     );
-    if (nextAttemptAt == null) {
-      Long nextRetryableOutboxId = repository.findNextRetryableInCase(record.caseId(), record.id(), maxAttempts);
+    if (!retryScheduled) {
       log.warn(
-          "TaskOutboxHeadRecordExhausted caseId={} eventId={} triggerCreated={} taskOutboxId={} "
-              + "requestedAction={} attemptCount={} maxAttempts={} lastStatusCode={} "
-              + "nextRetryableOutboxId={} eventType={}",
+          "TaskOutboxCaseBlocked caseId={} eventId={} triggerCreated={} taskOutboxId={} "
+              + "requestedAction={} attemptCount={} maxAttempts={} lastStatusCode={} recoverable={} eventType={}",
           record.caseId(),
           record.eventId(),
           record.created(),
@@ -256,8 +289,8 @@ public class TaskOutboxPoller {
           nextAttemptCount,
           maxAttempts,
           statusCode,
-          nextRetryableOutboxId,
-          "task-outbox-retry-exhausted"
+          recoverable,
+          "task-outbox-unprocessable"
       );
     }
   }

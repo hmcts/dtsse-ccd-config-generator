@@ -1,9 +1,10 @@
 package uk.gov.hmcts.ccd.sdk.taskmanagement.model.outbox;
 
 public enum TaskOutboxStatus {
-    NEW,
-    WAITING,
-    PROCESSING,
-    PROCESSED,
-    FAILED
+  NEW,
+  WAITING,
+  PROCESSING,
+  PROCESSED,
+  FAILED,
+  UNPROCESSABLE
 }

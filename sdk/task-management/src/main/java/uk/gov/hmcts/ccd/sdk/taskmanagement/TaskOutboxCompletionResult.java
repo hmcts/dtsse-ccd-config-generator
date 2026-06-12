@@ -14,6 +14,6 @@ public record TaskOutboxCompletionResult(
   }
 
   public boolean failed() {
-    return status == TaskOutboxStatus.FAILED;
+    return status == TaskOutboxStatus.UNPROCESSABLE;
   }
 }

@@ -102,6 +102,40 @@ class TaskOutboxOrderingIntegrationTest {
   }
 
   @Test
+  void failedEarlierTriggerBlocksLaterTriggerEvenWhenRetryIsNotDue() {
+    long failedId = enqueue(CASE_A, "event-one", FIRST_TRIGGER, TaskAction.INITIATE);
+    enqueue(CASE_A, "event-two", SECOND_TRIGGER, TaskAction.INITIATE);
+    setFailureStatus(failedId, "FAILED");
+
+    assertThat(repository.claimPending(10, 9)).isEmpty();
+  }
+
+  @Test
+  void unprocessableEarlierTriggerBlocksLaterTrigger() {
+    long unprocessableId = enqueue(CASE_A, "event-one", FIRST_TRIGGER, TaskAction.INITIATE);
+    enqueue(CASE_A, "event-two", SECOND_TRIGGER, TaskAction.INITIATE);
+    setFailureStatus(unprocessableId, "UNPROCESSABLE");
+
+    assertThat(repository.claimPending(10, 9)).isEmpty();
+  }
+
+  @Test
+  void dueFailedRowRemainsEligibleForRetry() {
+    long failedId = enqueue(CASE_A, "event-one", FIRST_TRIGGER, TaskAction.INITIATE);
+    jdbc.update(
+        """
+            update ccd.task_outbox
+            set status = 'FAILED'::ccd.task_outbox_status,
+                next_attempt_at = (current_timestamp at time zone 'UTC') - interval '1 second'
+            where id = :id
+            """,
+        Map.of("id", failedId)
+    );
+
+    assertThat(claimSingle().id()).isEqualTo(failedId);
+  }
+
+  @Test
   void futureWaitingTriggerDoesNotBlockLaterTrigger() {
     long waitingId = enqueue(CASE_A, "delayed-event", FIRST_TRIGGER, TaskAction.INITIATE);
     enqueue(CASE_A, "later-event", SECOND_TRIGGER, TaskAction.INITIATE);
@@ -207,6 +241,18 @@ class TaskOutboxOrderingIntegrationTest {
         new MapSqlParameterSource()
             .addValue("caseId", CASE_A)
             .addValue("eventId", eventId)
+    );
+  }
+
+  private void setFailureStatus(long id, String status) {
+    jdbc.update(
+        """
+            update ccd.task_outbox
+            set status = cast(:status as ccd.task_outbox_status),
+                next_attempt_at = (current_timestamp at time zone 'UTC') + interval '1 hour'
+            where id = :id
+            """,
+        Map.of("id", id, "status", status)
     );
   }
 
