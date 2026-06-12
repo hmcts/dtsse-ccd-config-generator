@@ -83,7 +83,7 @@ public class CcdSdkPlugin implements Plugin<Project> {
             + version);
         project.getDependencies().add("implementation", "com.github.hmcts:task-management:"
             + version);
-        String dependencyNotation = "com.github.hmcts:cftlib-dev-only:" + version;
+        String dependencyNotation = "com.github.hmcts:ccd-runtime-indexing:" + version;
         if (config.runtimeIndexing) {
           project.getDependencies().add("implementation", dependencyNotation);
         } else {

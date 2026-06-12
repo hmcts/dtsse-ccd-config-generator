@@ -1,0 +1,57 @@
+[
+  {
+    "ID": "json-legacy-create",
+    "Name": "JSON legacy create",
+    "Description": "JSON legacy create event",
+    "CaseTypeID": "case-type-a",
+    "DisplayOrder": 100,
+    "EndButtonLabel": "Save and continue",
+    "ShowSummary": "N",
+    "ShowEventNotes": "N",
+    "SecurityClassification": "Public",
+    "PostConditionState": "Submitted"
+  },
+  {
+    "ID": "json-legacy-dispatch",
+    "Name": "JSON legacy dispatch",
+    "Description": "JSON legacy dispatch",
+    "CaseTypeID": "case-type-a",
+    "DisplayOrder": 101,
+    "EndButtonLabel": "Save and continue",
+    "ShowSummary": "N",
+    "ShowEventNotes": "N",
+    "SecurityClassification": "Public",
+    "PreConditionState(s)": "*",
+    "PostConditionState": "*",
+    "CallBackURLAboutToSubmitEvent": "${ET_COS_URL}/case-type-a/about-to-submit",
+    "CallBackURLSubmittedEvent": "${ET_COS_URL}/case-type-a/submitted",
+    "RetriesTimeoutURLSubmittedEvent": "120,120"
+  },
+  {
+    "ID": "json-legacy-no-callback",
+    "Name": "JSON legacy no-callback",
+    "Description": "JSON legacy no-callback event",
+    "CaseTypeID": "case-type-a",
+    "DisplayOrder": 102,
+    "EndButtonLabel": "Save and continue",
+    "ShowSummary": "N",
+    "ShowEventNotes": "N",
+    "SecurityClassification": "Public",
+    "PreConditionState(s)": "*",
+    "PostConditionState": "*"
+  },
+  {
+    "ID": "json-legacy-external-submitted",
+    "Name": "JSON legacy external submitted",
+    "Description": "JSON legacy external submitted callback",
+    "CaseTypeID": "case-type-a",
+    "DisplayOrder": 103,
+    "EndButtonLabel": "Save and continue",
+    "ShowSummary": "N",
+    "ShowEventNotes": "N",
+    "SecurityClassification": "Public",
+    "PreConditionState(s)": "*",
+    "PostConditionState": "*",
+    "CallBackURLSubmittedEvent": "${CCD_DEF_AAC_URL}/case-type-a/external-submitted"
+  }
+]

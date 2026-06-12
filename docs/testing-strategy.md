@@ -1,9 +1,19 @@
 # Testing Strategy
 
-The SDK's tests are primarily [Cftlib](https://github.com/hmcts/rse-cft-lib)-based [functional tests](../test-projects/e2e/src/cftlibTest/java/uk/gov/hmcts/divorce/cftlib/TestWithCCD.java) that run against an isolated full CCD stack.
+The SDK's tests are primarily [Cftlib](https://github.com/hmcts/rse-cft-lib)-based functional tests
+that run against an isolated full CCD stack.
 
+Test behaviour rather than implementation. Avoid mocks unless there is no practical integration or full-stack route.
+
+Prefer Spring integration tests or `e2e:cftlibTest` full-stack tests for SDK behaviour; prefer adding new assertions to existing tests where appropriate.
+
+Config generator changes should be covered by extending the existing JSON diff-based golden files.
+
+Changes that deviate from this strategy should explain why in the PR.
 
 ## Data Migration and CCD Definition Diff Checks
 
-- `./gradlew verifyCcdMigration` exercises `scripts/test-migrate-ccd-data.sh` (validation + apply + cleanup) to cover the migration scripts end-to-end.
-- GitHub Actions run each test project's tests and compare generated CCD definitions against master to flag any discrepancies.
+- `./gradlew verifyCcdMigration` exercises the classic and FDW migration scripts end-to-end.
+  The tests share the same source data fixture under `scripts/migration-test/`.
+- GitHub Actions run each test project's tests and compare generated CCD definitions against master to flag
+  any discrepancies.

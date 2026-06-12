@@ -2,14 +2,12 @@ package uk.gov.hmcts.ccd.sdk;
 
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Maps;
-import java.lang.reflect.Field;
 import java.util.Collection;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
 import org.springframework.stereotype.Component;
-import uk.gov.hmcts.ccd.sdk.api.CCD;
 import uk.gov.hmcts.ccd.sdk.api.Event;
 
 /**
@@ -70,28 +68,7 @@ public class ResolvedConfigRegistry {
     if (config == null || stateId == null) {
       return Optional.empty();
     }
-
-    Class<?> stateClass = config.getStateClass();
-    Object[] constants = stateClass.getEnumConstants();
-    if (constants == null) {
-      return Optional.empty();
-    }
-
-    for (Object constant : constants) {
-      if (stateId.equals(constant.toString())) {
-        try {
-          Field field = stateClass.getField(constant.toString());
-          CCD ccd = field.getAnnotation(CCD.class);
-          if (ccd != null && !ccd.label().isBlank()) {
-            return Optional.of(ccd.label());
-          }
-        } catch (NoSuchFieldException ignored) {
-          // Fall back to the enum name if reflection fails
-        }
-        return Optional.of(stateId);
-      }
-    }
-    return Optional.empty();
+    return config.labelForState(stateId);
   }
 
   private Event<?, ?, ?> synthesiseDocumentUpdatedEvent(ResolvedCCDConfig<?, ?, ?> config) {

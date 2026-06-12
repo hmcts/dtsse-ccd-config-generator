@@ -1,0 +1,8 @@
+[
+  {
+    "CaseTypeID": "case-type-a",
+    "UserRole": "caseworker-divorce-courtadmin_beta",
+    "CRUD": "CRU",
+    "LiveFrom": "01/01/2017"
+  }
+]

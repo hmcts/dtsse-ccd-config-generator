@@ -7,6 +7,12 @@ server:
 
 pebble:
   cache: false
+
+decentralisation:
+  local-callback-placeholder: ET_COS_URL
+  external-callback-base-urls:
+    "[CCD_DEF_AAC_URL]": http://127.0.0.1:4014
+
 management:
   endpoint:
     health:

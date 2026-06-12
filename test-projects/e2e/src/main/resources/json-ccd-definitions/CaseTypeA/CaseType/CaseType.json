@@ -1,0 +1,10 @@
+[
+  {
+    "ID": "case-type-a",
+    "Name": "JSON legacy callbacks",
+    "Description": "JSON legacy callbacks",
+    "JurisdictionID": "DIVORCE",
+    "SecurityClassification": "Public",
+    "LiveFrom": "01/01/2017"
+  }
+]

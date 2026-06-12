@@ -120,6 +120,11 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements Decentralised
   }
 
   @Override
+  public void stateLabel(String stateId, String label) {
+    config.stateLabel(stateId, label);
+  }
+
+  @Override
   public void shutterService() {
     config.shutterService = true;
   }

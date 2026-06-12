@@ -1,6 +1,7 @@
 package uk.gov.hmcts.ccd.sdk;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.util.Arrays;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -38,12 +39,46 @@ class DecentralisedESIndexer implements DisposableBean {
   @Autowired
   public DecentralisedESIndexer(JdbcTemplate jdbcTemplate, TransactionTemplate transactionTemplate,
                                 @Value("${ELASTIC_SEARCH_HOSTS:http://localhost:9200}")
-                                String elasticSearchHost) {
+                                String elasticSearchHosts) {
     this.jdbcTemplate = jdbcTemplate;
     this.transactionTemplate = transactionTemplate;
-    this.client = RestClient.builder(HttpHost.create(elasticSearchHost)).build();
+    var hosts = parseElasticSearchHosts(elasticSearchHosts);
+    this.client = RestClient.builder(hosts)
+        .setFailureListener(new RestClient.FailureListener() {
+          @Override
+          public void onFailure(org.elasticsearch.client.Node node) {
+            log.warn("Decentralised ES indexer marked Elasticsearch host {} as failed", node.getHost());
+          }
+        })
+        .build();
 
-    log.info("Starting decentralised ES indexer targeting {}", elasticSearchHost);
+    log.info("Starting decentralised ES indexer targeting {}", Arrays.toString(hosts));
+  }
+
+  static HttpHost[] parseElasticSearchHosts(String elasticSearchHosts) {
+    if (elasticSearchHosts == null || elasticSearchHosts.trim().isEmpty()) {
+      throw new IllegalArgumentException("ELASTIC_SEARCH_HOSTS must contain at least one Elasticsearch host");
+    }
+
+    var entries = elasticSearchHosts.split(",", -1);
+    var hosts = new HttpHost[entries.length];
+    for (int i = 0; i < entries.length; i++) {
+      var host = entries[i].trim();
+      if (host.isEmpty()) {
+        throw new IllegalArgumentException("ELASTIC_SEARCH_HOSTS contains an empty host entry");
+      }
+      try {
+        hosts[i] = HttpHost.create(host);
+        if (hosts[i].getHostName() == null
+            || hosts[i].getHostName().isBlank()
+            || hosts[i].getHostName().startsWith(":")) {
+          throw new IllegalArgumentException("Host name must not be blank");
+        }
+      } catch (IllegalArgumentException ex) {
+        throw new IllegalArgumentException("Invalid Elasticsearch host in ELASTIC_SEARCH_HOSTS: " + host, ex);
+      }
+    }
+    return hosts;
   }
 
   @Scheduled(fixedDelayString = "${ccd.sdk.decentralised.poll-interval-ms:250}")

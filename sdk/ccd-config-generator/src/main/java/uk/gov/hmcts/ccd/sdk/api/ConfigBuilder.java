@@ -22,6 +22,10 @@ public interface ConfigBuilder<T, S, R extends HasRole> {
 
   void jurisdiction(String id, String name, String description);
 
+  default void stateLabel(String stateId, String label) {
+    // Implementations that expose resolved config metadata may override this.
+  }
+
   void shutterService();
 
   void shutterService(R... roles);
