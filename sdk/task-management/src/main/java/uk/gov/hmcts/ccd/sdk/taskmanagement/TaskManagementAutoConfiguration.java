@@ -27,6 +27,7 @@ import uk.gov.hmcts.reform.authorisation.generators.AuthTokenGeneratorFactory;
 
 @AutoConfiguration
 @EnableConfigurationProperties(TaskManagementProperties.class)
+@ConditionalOnProperty(prefix = "task-management.api", name = "url")
 @EnableFeignClients(clients = TaskManagementFeignClient.class)
 public class TaskManagementAutoConfiguration {
 

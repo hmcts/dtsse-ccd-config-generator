@@ -17,13 +17,24 @@ import uk.gov.hmcts.reform.authorisation.generators.AuthTokenGenerator;
 
 class TaskManagementAutoConfigurationTest {
 
-  private final ApplicationContextRunner contextRunner = new ApplicationContextRunner()
+  private final ApplicationContextRunner unconfiguredContextRunner = new ApplicationContextRunner()
       .withConfiguration(AutoConfigurations.of(FeignAutoConfiguration.class, TaskManagementAutoConfiguration.class))
-      .withPropertyValues(
-          "task-management.api.url=http://localhost:8080",
-          "task-management.outbox.poller.enabled=false"
-      )
       .withUserConfiguration(TestConfig.class);
+
+  private final ApplicationContextRunner contextRunner = unconfiguredContextRunner.withPropertyValues(
+      "task-management.api.url=http://localhost:8080",
+      "task-management.outbox.poller.enabled=false"
+  );
+
+  @Test
+  void shouldNotConfigureTaskManagementWhenApiUrlIsMissing() {
+    unconfiguredContextRunner.run(context -> {
+      assertThat(context).doesNotHaveBean(TaskManagementFeignClient.class);
+      assertThat(context).doesNotHaveBean(TaskManagementApiClient.class);
+      assertThat(context).doesNotHaveBean(TaskOutboxService.class);
+      assertThat(context).doesNotHaveBean(TaskOutboxPoller.class);
+    });
+  }
 
   @Test
   void shouldRegisterCompatibilityCodecBeansByDefault() {
