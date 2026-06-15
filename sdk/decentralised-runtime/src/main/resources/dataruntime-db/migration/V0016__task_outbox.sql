@@ -1,5 +1,5 @@
 create type ccd.task_action AS ENUM ('cancel', 'complete', 'initiate', 'reconfigure');
-create type ccd.task_outbox_status AS ENUM ('NEW', 'WAITING', 'PROCESSING', 'PROCESSED', 'FAILED');
+create type ccd.task_outbox_status AS ENUM ('NEW', 'PROCESSING', 'PROCESSED', 'FAILED');
 
 create table ccd.task_outbox (
     id bigserial primary key,
