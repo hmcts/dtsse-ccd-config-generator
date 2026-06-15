@@ -29,6 +29,22 @@ owns the case state and the queue of case revisions requiring indexing. When thi
 to `ccd.case_data`, `ccd.case_event` or `ccd.es_queue`, those tables are in the service database
 for the decentralised runtime, not the central CCD database.
 
+## Indexing Requirements
+
+The indexing model has the following requirements:
+
+* Correctness: case updates must not be lost. The index may skip intermediate versions, for example
+  indexing revision `N + 2` without first indexing `N + 1`, but an older revision must not overwrite
+  a newer one.
+* Robustness: indexer failure should be avoided where possible. Where failure is unavoidable, the
+  indexer should fail safe so that the application is restarted by AKS rather than continuing in an
+  unknown state.
+* Reindexing: reindexing should be straightforward and should use the same queue contract as live
+  indexing. If reindexing bumps case revision, in-flight indexing work for older revisions should be
+  invalidated by the versioning model.
+* Non-blocking events: a case that is pending indexing or currently being indexed must not block
+  subsequent case events.
+
 ## Design Responsibilities
 
 The decentralised model separates responsibilities as follows:
