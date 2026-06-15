@@ -33,8 +33,9 @@ class TaskOutboxRepositoryTest {
 
     repository.claimPending(5, 0);
 
-    assertThat(sqlCaptor.getValue()).contains("o.next_attempt_at <= (current_timestamp at time zone 'UTC')");
-    assertThat(sqlCaptor.getValue()).contains("next_attempt_at =");
+    assertThat(sqlCaptor.getValue()).contains("o.available_at <= (current_timestamp at time zone 'UTC')");
+    assertThat(sqlCaptor.getValue()).contains("o.lease_until <= (current_timestamp at time zone 'UTC')");
+    assertThat(sqlCaptor.getValue()).contains("claim_token = gen_random_uuid()");
     assertThat(sqlCaptor.getValue()).contains("(current_timestamp at time zone 'UTC')");
     assertThat(sqlCaptor.getValue()).contains(":processingTimeoutMillis * interval '1 millisecond'");
     assertThat(paramsCaptor.getValue()).doesNotContainKeys("now", "processingDeadline");
@@ -55,7 +56,7 @@ class TaskOutboxRepositoryTest {
     assertThat(sqlCaptor.getValue()).contains("partition by o.case_id, o.event_id, o.created");
     assertThat(sqlCaptor.getValue()).contains("predecessor.action_priority < o.action_priority");
     assertThat(sqlCaptor.getValue()).contains("predecessor.status::text <> :processedStatus");
-    assertThat(sqlCaptor.getValue()).contains(":failedStatus", ":unprocessableStatus");
+    assertThat(sqlCaptor.getValue()).contains("prior.attempt_count > 0", ":unprocessableStatus");
     assertThat(sqlCaptor.getValue()).doesNotContain(
         "and (:maxAttempts = 0 or prior.attempt_count < :maxAttempts)"
     );
@@ -63,7 +64,7 @@ class TaskOutboxRepositoryTest {
   }
 
   @Test
-  void enqueueStoresWaitingStatusForDelayedRows() {
+  void enqueueStoresPendingStatusAndAvailableTimeForDelayedRows() {
     NamedParameterJdbcTemplate jdbc = mock(NamedParameterJdbcTemplate.class);
     TaskOutboxRepository repository = new TaskOutboxRepository(jdbc, new TaskManagementProperties());
     ArgumentCaptor<MapSqlParameterSource> paramsCaptor = ArgumentCaptor.forClass(MapSqlParameterSource.class);
@@ -81,12 +82,12 @@ class TaskOutboxRepositoryTest {
     );
 
     assertThat(id).isEqualTo(42L);
-    assertThat(paramsCaptor.getValue().getValue("status")).isEqualTo(TaskOutboxStatus.WAITING.name());
-    assertThat(paramsCaptor.getValue().getValue("nextAttemptAt")).isEqualTo(nextAttemptAt);
+    assertThat(paramsCaptor.getValue().getValue("status")).isEqualTo(TaskOutboxStatus.PENDING.name());
+    assertThat(paramsCaptor.getValue().getValue("availableAt")).isEqualTo(nextAttemptAt);
   }
 
   @Test
-  void enqueueStoresNewStatusForImmediateRows() {
+  void enqueueStoresPendingStatusForImmediateRows() {
     NamedParameterJdbcTemplate jdbc = mock(NamedParameterJdbcTemplate.class);
     TaskOutboxRepository repository = new TaskOutboxRepository(jdbc, new TaskManagementProperties());
     ArgumentCaptor<MapSqlParameterSource> paramsCaptor = ArgumentCaptor.forClass(MapSqlParameterSource.class);
@@ -103,8 +104,8 @@ class TaskOutboxRepositoryTest {
     );
 
     assertThat(id).isEqualTo(42L);
-    assertThat(paramsCaptor.getValue().getValue("status")).isEqualTo(TaskOutboxStatus.NEW.name());
-    assertThat(paramsCaptor.getValue().getValue("nextAttemptAt")).isNull();
+    assertThat(paramsCaptor.getValue().getValue("status")).isEqualTo(TaskOutboxStatus.PENDING.name());
+    assertThat(paramsCaptor.getValue().getValue("availableAt")).isNull();
   }
 
   @Test

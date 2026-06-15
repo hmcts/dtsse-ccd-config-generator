@@ -62,11 +62,11 @@ class TaskOutboxOrderingIntegrationTest {
 
     TaskOutboxRecord cancellation = claimSingle();
     assertThat(cancellation.requestedAction()).isEqualTo(TaskAction.CANCEL.getId());
-    repository.markProcessed(cancellation.id(), 200);
+    assertThat(repository.markProcessed(cancellation.id(), cancellation.claimToken(), 200)).isTrue();
 
     TaskOutboxRecord reconfiguration = claimSingle();
     assertThat(reconfiguration.requestedAction()).isEqualTo(TaskAction.RECONFIGURE.getId());
-    repository.markProcessed(reconfiguration.id(), 200);
+    assertThat(repository.markProcessed(reconfiguration.id(), reconfiguration.claimToken(), 200)).isTrue();
 
     TaskOutboxRecord initiation = claimSingle();
     assertThat(initiation.requestedAction()).isEqualTo(TaskAction.INITIATE.getId());
@@ -84,15 +84,15 @@ class TaskOutboxOrderingIntegrationTest {
   }
 
   @Test
-  void failedPredecessorBlocksLaterActionInSameTrigger() {
+  void retryingPredecessorBlocksLaterActionInSameTrigger() {
     long cancellationId = enqueue(CASE_A, "event-one", FIRST_TRIGGER, TaskAction.CANCEL);
     enqueue(CASE_A, "event-one", FIRST_TRIGGER, TaskAction.INITIATE);
     enqueue(CASE_A, "event-two", SECOND_TRIGGER, TaskAction.INITIATE);
     jdbc.update(
         """
             update ccd.task_outbox
-            set status = 'FAILED'::ccd.task_outbox_status,
-                next_attempt_at = (current_timestamp at time zone 'UTC') + interval '1 hour'
+            set attempt_count = 1,
+                available_at = (current_timestamp at time zone 'UTC') + interval '1 hour'
             where id = :id
             """,
         Map.of("id", cancellationId)
@@ -102,10 +102,10 @@ class TaskOutboxOrderingIntegrationTest {
   }
 
   @Test
-  void failedEarlierTriggerBlocksLaterTriggerEvenWhenRetryIsNotDue() {
-    long failedId = enqueue(CASE_A, "event-one", FIRST_TRIGGER, TaskAction.INITIATE);
+  void retryingEarlierTriggerBlocksLaterTriggerEvenWhenRetryIsNotDue() {
+    long retryingId = enqueue(CASE_A, "event-one", FIRST_TRIGGER, TaskAction.INITIATE);
     enqueue(CASE_A, "event-two", SECOND_TRIGGER, TaskAction.INITIATE);
-    setFailureStatus(failedId, "FAILED");
+    setRetryPending(retryingId);
 
     assertThat(repository.claimPending(10, 9)).isEmpty();
   }
@@ -114,44 +114,119 @@ class TaskOutboxOrderingIntegrationTest {
   void unprocessableEarlierTriggerBlocksLaterTrigger() {
     long unprocessableId = enqueue(CASE_A, "event-one", FIRST_TRIGGER, TaskAction.INITIATE);
     enqueue(CASE_A, "event-two", SECOND_TRIGGER, TaskAction.INITIATE);
-    setFailureStatus(unprocessableId, "UNPROCESSABLE");
+    setUnprocessable(unprocessableId);
 
     assertThat(repository.claimPending(10, 9)).isEmpty();
   }
 
   @Test
-  void dueFailedRowRemainsEligibleForRetry() {
-    long failedId = enqueue(CASE_A, "event-one", FIRST_TRIGGER, TaskAction.INITIATE);
+  void dueRetryRowRemainsEligible() {
+    long retryingId = enqueue(CASE_A, "event-one", FIRST_TRIGGER, TaskAction.INITIATE);
     jdbc.update(
         """
             update ccd.task_outbox
-            set status = 'FAILED'::ccd.task_outbox_status,
-                next_attempt_at = (current_timestamp at time zone 'UTC') - interval '1 second'
+            set attempt_count = 1,
+                available_at = (current_timestamp at time zone 'UTC') - interval '1 second'
             where id = :id
             """,
-        Map.of("id", failedId)
+        Map.of("id", retryingId)
     );
 
-    assertThat(claimSingle().id()).isEqualTo(failedId);
+    TaskOutboxRecord claimed = claimSingle();
+    assertThat(claimed.id()).isEqualTo(retryingId);
+    assertThat(claimed.attemptCount()).isEqualTo(2);
   }
 
   @Test
-  void futureWaitingTriggerDoesNotBlockLaterTrigger() {
-    long waitingId = enqueue(CASE_A, "delayed-event", FIRST_TRIGGER, TaskAction.INITIATE);
+  void futureNeverAttemptedPendingTriggerDoesNotBlockLaterTrigger() {
+    long delayedId = enqueue(CASE_A, "delayed-event", FIRST_TRIGGER, TaskAction.INITIATE);
     enqueue(CASE_A, "later-event", SECOND_TRIGGER, TaskAction.INITIATE);
     jdbc.update(
         """
             update ccd.task_outbox
-            set status = 'WAITING'::ccd.task_outbox_status,
-                next_attempt_at = (current_timestamp at time zone 'UTC') + interval '1 hour'
+            set available_at = (current_timestamp at time zone 'UTC') + interval '1 hour'
             where id = :id
             """,
-        Map.of("id", waitingId)
+        Map.of("id", delayedId)
     );
 
     TaskOutboxRecord claimed = claimSingle();
 
     assertThat(claimed.eventId()).isEqualTo("later-event");
+  }
+
+  @Test
+  void liveProcessingLeasePreventsSecondClaimForSameCase() {
+    long delayedId = enqueue(CASE_A, "delayed-event", FIRST_TRIGGER, TaskAction.INITIATE);
+    enqueue(CASE_A, "later-event", SECOND_TRIGGER, TaskAction.INITIATE);
+    jdbc.update(
+        """
+            update ccd.task_outbox
+            set available_at = (current_timestamp at time zone 'UTC') + interval '1 hour'
+            where id = :id
+            """,
+        Map.of("id", delayedId)
+    );
+    TaskOutboxRecord laterClaim = claimSingle();
+    assertThat(laterClaim.eventId()).isEqualTo("later-event");
+    jdbc.update(
+        """
+            update ccd.task_outbox
+            set available_at = (current_timestamp at time zone 'UTC') - interval '1 second'
+            where id = :id
+            """,
+        Map.of("id", delayedId)
+    );
+
+    assertThat(repository.claimPending(10, 0)).isEmpty();
+  }
+
+  @Test
+  void reclaimsExpiredProcessingLeaseWithNewTokenAndAttempt() {
+    enqueue(CASE_A, "event-one", FIRST_TRIGGER, TaskAction.INITIATE);
+    TaskOutboxRecord firstClaim = claimSingle();
+    expireLease(firstClaim.id());
+
+    TaskOutboxRecord secondClaim = claimSingle();
+
+    assertThat(secondClaim.id()).isEqualTo(firstClaim.id());
+    assertThat(secondClaim.attemptCount()).isEqualTo(2);
+    assertThat(secondClaim.claimToken()).isNotEqualTo(firstClaim.claimToken());
+  }
+
+  @Test
+  void expiredClaimCannotOverwriteCurrentClaim() {
+    enqueue(CASE_A, "event-one", FIRST_TRIGGER, TaskAction.INITIATE);
+    TaskOutboxRecord firstClaim = claimSingle();
+    expireLease(firstClaim.id());
+    TaskOutboxRecord secondClaim = claimSingle();
+
+    assertThat(repository.markProcessed(firstClaim.id(), firstClaim.claimToken(), 200)).isFalse();
+    assertThat(repository.markProcessed(secondClaim.id(), secondClaim.claimToken(), 200)).isTrue();
+  }
+
+  @Test
+  void expiredFinalAttemptBecomesUnprocessable() {
+    enqueue(CASE_A, "event-one", FIRST_TRIGGER, TaskAction.INITIATE);
+    TaskOutboxRecord claim = repository.claimPending(10, 1).getFirst();
+    expireLease(claim.id());
+
+    assertThat(repository.claimPending(10, 1)).isEmpty();
+    assertThat(repository.findStatus(claim.id())).contains(
+        uk.gov.hmcts.ccd.sdk.taskmanagement.model.outbox.TaskOutboxStatus.UNPROCESSABLE
+    );
+    Integer historyCount = jdbc.queryForObject(
+        """
+            select count(*)
+            from ccd.task_outbox_history
+            where task_outbox_id = :id
+              and status = 'UNPROCESSABLE'::ccd.task_outbox_status
+              and error = 'Processing lease expired after final attempt'
+            """,
+        Map.of("id", claim.id()),
+        Integer.class
+    );
+    assertThat(historyCount).isEqualTo(1);
   }
 
   @Test
@@ -244,15 +319,38 @@ class TaskOutboxOrderingIntegrationTest {
     );
   }
 
-  private void setFailureStatus(long id, String status) {
+  private void setRetryPending(long id) {
     jdbc.update(
         """
             update ccd.task_outbox
-            set status = cast(:status as ccd.task_outbox_status),
-                next_attempt_at = (current_timestamp at time zone 'UTC') + interval '1 hour'
+            set attempt_count = 1,
+                available_at = (current_timestamp at time zone 'UTC') + interval '1 hour'
             where id = :id
             """,
-        Map.of("id", id, "status", status)
+        Map.of("id", id)
+    );
+  }
+
+  private void setUnprocessable(long id) {
+    jdbc.update(
+        """
+            update ccd.task_outbox
+            set status = 'UNPROCESSABLE'::ccd.task_outbox_status,
+                available_at = null
+            where id = :id
+            """,
+        Map.of("id", id)
+    );
+  }
+
+  private void expireLease(long id) {
+    jdbc.update(
+        """
+            update ccd.task_outbox
+            set lease_until = (current_timestamp at time zone 'UTC') - interval '1 second'
+            where id = :id
+            """,
+        Map.of("id", id)
     );
   }
 

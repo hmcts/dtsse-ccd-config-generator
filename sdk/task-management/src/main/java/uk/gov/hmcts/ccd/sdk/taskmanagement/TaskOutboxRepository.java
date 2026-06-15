@@ -6,6 +6,7 @@ import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.UUID;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.transaction.annotation.Propagation;
@@ -39,9 +40,9 @@ public class TaskOutboxRepository {
       LocalDateTime created,
       String payload,
       String action,
-      LocalDateTime nextAttemptAt
+      LocalDateTime availableAt
   ) {
-    enqueueAndReturnId(caseId, eventId, created, payload, action, nextAttemptAt);
+    enqueueAndReturnId(caseId, eventId, created, payload, action, availableAt);
   }
 
   public long enqueueAndReturnId(
@@ -50,7 +51,7 @@ public class TaskOutboxRepository {
       LocalDateTime created,
       String payload,
       String action,
-      LocalDateTime nextAttemptAt
+      LocalDateTime availableAt
   ) {
     MapSqlParameterSource params = new MapSqlParameterSource()
         .addValue("action", action)
@@ -58,8 +59,8 @@ public class TaskOutboxRepository {
         .addValue("eventId", eventId)
         .addValue("created", created)
         .addValue("payload", payload)
-        .addValue("nextAttemptAt", nextAttemptAt)
-        .addValue("status", nextAttemptAt == null ? TaskOutboxStatus.NEW.name() : TaskOutboxStatus.WAITING.name());
+        .addValue("availableAt", availableAt)
+        .addValue("status", TaskOutboxStatus.PENDING.name());
 
     Long id = jdbc.queryForObject(
         """
@@ -71,7 +72,7 @@ public class TaskOutboxRepository {
               payload,
               requested_action,
               status,
-              next_attempt_at
+              available_at
             )
             values (
               :caseId,
@@ -81,7 +82,7 @@ public class TaskOutboxRepository {
               :payload::jsonb,
               :action::ccd.task_action,
               cast(:status as ccd.task_outbox_status),
-              :nextAttemptAt
+              coalesce(:availableAt, (current_timestamp at time zone 'UTC'))
             )
             returning id
             """,
@@ -105,7 +106,31 @@ public class TaskOutboxRepository {
   public List<TaskOutboxRecord> claimPending(int limit, int maxAttempts) {
     return jdbc.query(
         """
-            with ordered as (
+            with exhausted as (
+              -- A crashed worker has already consumed the final allowed claim. Make that row terminal rather than
+              -- leaving it permanently in PROCESSING. maxAttempts = 0 retains the unlimited-attempt convention.
+              update ccd.task_outbox outbox
+              set status = cast(:unprocessableStatus as ccd.task_outbox_status),
+                  updated = (current_timestamp at time zone 'UTC'),
+                  available_at = null,
+                  claim_token = null,
+                  lease_until = null
+              where outbox.status::text = :processingStatus
+                and outbox.lease_until <= (current_timestamp at time zone 'UTC')
+                and :maxAttempts > 0
+                and outbox.attempt_count >= :maxAttempts
+              returning outbox.id, outbox.updated
+            ),
+            exhausted_history as (
+              insert into ccd.task_outbox_history (task_outbox_id, status, error, created)
+              select exhausted.id,
+                     cast(:unprocessableStatus as ccd.task_outbox_status),
+                     'Processing lease expired after final attempt',
+                     exhausted.updated
+              from exhausted
+              returning task_outbox_id
+            ),
+            ordered as (
               -- Give every row an action precedence and a stable position for its trigger.
               -- min(id) is shared by all rows in a trigger and breaks ties when triggers have the same created value.
               select o.*,
@@ -127,27 +152,39 @@ public class TaskOutboxRepository {
                      o.trigger_first_id,
                      o.action_priority
               from ordered o
-              where o.status::text in (:newStatus, :waitingStatus, :failedStatus, :processingStatus)
-                and (o.next_attempt_at is null or o.next_attempt_at <= (current_timestamp at time zone 'UTC'))
+              where (
+                  (
+                    o.status::text = :pendingStatus
+                    and o.available_at <= (current_timestamp at time zone 'UTC')
+                  )
+                  or (
+                    o.status::text = :processingStatus
+                    and o.lease_until <= (current_timestamp at time zone 'UTC')
+                  )
+                )
                 and (:maxAttempts = 0 or o.attempt_count < :maxAttempts)
                 and not exists (
-                  -- Preserve ordering between triggers for a case. A failed or unprocessable row always blocks later
-                  -- triggers. A future WAITING row retains the existing bypass policy until it becomes due.
+                  -- A case has at most one live processing lease, including when a delayed trigger was bypassed.
+                  select 1
+                  from ordered active
+                  where active.case_id = o.case_id
+                    and active.id <> o.id
+                    and active.status::text = :processingStatus
+                    and active.lease_until > (current_timestamp at time zone 'UTC')
+                )
+                and not exists (
+                  -- Preserve ordering between triggers for a case. Retry PENDING rows, PROCESSING rows, and terminal
+                  -- failures always block. A future never-attempted PENDING row retains the delayed-work bypass policy.
                   select 1
                   from ordered prior
                   where prior.case_id = o.case_id
                     and (
-                      prior.status::text in (
-                        :newStatus,
-                        :processingStatus,
-                        :failedStatus,
-                        :unprocessableStatus
-                      )
+                      prior.status::text in (:processingStatus, :unprocessableStatus)
                       or (
-                        prior.status::text = :waitingStatus
+                        prior.status::text = :pendingStatus
                         and (
-                          prior.next_attempt_at is null
-                          or prior.next_attempt_at <= (current_timestamp at time zone 'UTC')
+                          prior.attempt_count > 0
+                          or prior.available_at <= (current_timestamp at time zone 'UTC')
                         )
                       )
                     )
@@ -188,8 +225,11 @@ public class TaskOutboxRepository {
               -- Claiming and setting the processing lease happen atomically in the same statement.
               update ccd.task_outbox outbox
               set status = cast(:processingStatus as ccd.task_outbox_status),
-                  updated = localtimestamp,
-                  next_attempt_at =
+                  updated = (current_timestamp at time zone 'UTC'),
+                  available_at = null,
+                  attempt_count = outbox.attempt_count + 1,
+                  claim_token = gen_random_uuid(),
+                  lease_until =
                     (current_timestamp at time zone 'UTC') + (:processingTimeoutMillis * interval '1 millisecond')
               from claimable
               where outbox.id = claimable.id
@@ -199,16 +239,15 @@ public class TaskOutboxRepository {
                         outbox.created,
                         outbox.payload::text as payload,
                         outbox.requested_action::text as requested_action,
-                        outbox.attempt_count
+                        outbox.attempt_count,
+                        outbox.claim_token
             )
-            select id, case_id, event_id, created, payload, requested_action, attempt_count
+            select id, case_id, event_id, created, payload, requested_action, attempt_count, claim_token
             from updated
             order by id
             """,
         Map.of(
-            "newStatus", TaskOutboxStatus.NEW.name(),
-            "waitingStatus", TaskOutboxStatus.WAITING.name(),
-            "failedStatus", TaskOutboxStatus.FAILED.name(),
+            "pendingStatus", TaskOutboxStatus.PENDING.name(),
             "unprocessableStatus", TaskOutboxStatus.UNPROCESSABLE.name(),
             "processingStatus", TaskOutboxStatus.PROCESSING.name(),
             "processedStatus", TaskOutboxStatus.PROCESSED.name(),
@@ -223,7 +262,8 @@ public class TaskOutboxRepository {
             rs.getObject("created", LocalDateTime.class),
             rs.getString("payload"),
             rs.getString("requested_action"),
-            rs.getInt("attempt_count")
+            rs.getInt("attempt_count"),
+            rs.getObject("claim_token", UUID.class)
         )
     );
   }
@@ -309,65 +349,106 @@ public class TaskOutboxRepository {
   }
 
   @Transactional
-  public void markProcessed(long id, int statusCode) {
+  public boolean markProcessed(long id, UUID claimToken, int statusCode) {
     LocalDateTime now = utcNow();
     MapSqlParameterSource params = new MapSqlParameterSource()
         .addValue("id", id)
+        .addValue("claimToken", claimToken)
+        .addValue("processingStatus", TaskOutboxStatus.PROCESSING.name())
         .addValue("status", TaskOutboxStatus.PROCESSED.name())
-        .addValue("updated", now)
-        .addValue("nextAttemptAt", null);
+        .addValue("updated", now);
 
-    jdbc.update(
+    int updated = jdbc.update(
         """
             update ccd.task_outbox
             set status = cast(:status as ccd.task_outbox_status),
               updated = :updated,
-              next_attempt_at = :nextAttemptAt
+              available_at = null,
+              claim_token = null,
+              lease_until = null
             where id = :id
+              and status = cast(:processingStatus as ccd.task_outbox_status)
+              and claim_token = :claimToken
             """,
         params
     );
 
+    if (updated == 0) {
+      return false;
+    }
+
     recordHistory(id, TaskOutboxStatus.PROCESSED, statusCode, null, now);
+    return true;
   }
 
   @Transactional
-  public void markFailed(long id, Integer statusCode, String error, LocalDateTime nextAttemptAt) {
-    updateFailure(id, TaskOutboxStatus.FAILED, statusCode, error, nextAttemptAt);
-  }
-
-  @Transactional
-  public void markUnprocessable(long id, Integer statusCode, String error) {
-    updateFailure(id, TaskOutboxStatus.UNPROCESSABLE, statusCode, error, null);
-  }
-
-  private void updateFailure(
+  public boolean rescheduleAfterFailure(
       long id,
+      UUID claimToken,
+      Integer statusCode,
+      String error,
+      LocalDateTime availableAt
+  ) {
+    return updateFailure(
+        id,
+        claimToken,
+        TaskOutboxStatus.PENDING,
+        statusCode,
+        error,
+        availableAt
+    );
+  }
+
+  @Transactional
+  public boolean markUnprocessable(long id, UUID claimToken, Integer statusCode, String error) {
+    return updateFailure(
+        id,
+        claimToken,
+        TaskOutboxStatus.UNPROCESSABLE,
+        statusCode,
+        error,
+        null
+    );
+  }
+
+  private boolean updateFailure(
+      long id,
+      UUID claimToken,
       TaskOutboxStatus status,
       Integer statusCode,
       String error,
-      LocalDateTime nextAttemptAt
+      LocalDateTime availableAt
   ) {
     LocalDateTime now = utcNow();
     MapSqlParameterSource params = new MapSqlParameterSource()
         .addValue("id", id)
+        .addValue("claimToken", claimToken)
+        .addValue("processingStatus", TaskOutboxStatus.PROCESSING.name())
         .addValue("status", status.name())
         .addValue("updated", now)
-        .addValue("nextAttemptAt", nextAttemptAt);
+        .addValue("availableAt", availableAt);
 
-    jdbc.update(
+    int updated = jdbc.update(
         """
             update ccd.task_outbox
             set status = cast(:status as ccd.task_outbox_status),
               updated = :updated,
-              attempt_count = attempt_count + 1,
-              next_attempt_at = :nextAttemptAt
+              available_at = :availableAt,
+              claim_token = null,
+              lease_until = null
             where id = :id
+              and status = cast(:processingStatus as ccd.task_outbox_status)
+              and claim_token = :claimToken
             """,
         params
     );
 
+    if (updated == 0) {
+      return false;
+    }
+
     recordHistory(id, status, statusCode, error, now);
+    return true;
   }
 
   private void recordHistory(

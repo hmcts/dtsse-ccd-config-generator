@@ -72,7 +72,10 @@ public class TaskOutboxPoller {
           continue;
         }
 
-        repository.markProcessed(record.id(), statusCode);
+        if (!repository.markProcessed(record.id(), record.claimToken(), statusCode)) {
+          logLostLease(record, "PROCESSED");
+          continue;
+        }
         log.info(
             "TaskOutboxOutcome status=PROCESSED taskOutboxId={} caseId={} eventId={} triggerCreated={} "
                 + "requestedAction={} attemptCount={} responseCode={}",
@@ -243,19 +246,30 @@ public class TaskOutboxPoller {
       int maxAttempts,
       boolean recoverable
   ) {
-    int nextAttemptCount = record.attemptCount() + 1;
     LocalDateTime nextAttemptAt = recoverable
-        ? retryPolicy.nextAttemptAt(nextAttemptCount, LocalDateTime.now(ZoneOffset.UTC))
+        ? retryPolicy.nextAttemptAt(record.attemptCount(), LocalDateTime.now(ZoneOffset.UTC))
         : null;
     boolean retryScheduled = nextAttemptAt != null;
     String outcome;
+    boolean updated;
 
     if (retryScheduled) {
-      repository.markFailed(record.id(), statusCode, body, nextAttemptAt);
-      outcome = "FAILED";
+      updated = repository.rescheduleAfterFailure(
+          record.id(),
+          record.claimToken(),
+          statusCode,
+          body,
+          nextAttemptAt
+      );
+      outcome = "PENDING";
     } else {
-      repository.markUnprocessable(record.id(), statusCode, body);
+      updated = repository.markUnprocessable(record.id(), record.claimToken(), statusCode, body);
       outcome = "UNPROCESSABLE";
+    }
+
+    if (!updated) {
+      logLostLease(record, outcome);
+      return;
     }
 
     log.warn(
@@ -268,7 +282,7 @@ public class TaskOutboxPoller {
         record.eventId(),
         record.created(),
         record.requestedAction(),
-        nextAttemptCount,
+        record.attemptCount(),
         maxAttempts,
         statusCode,
         nextAttemptAt,
@@ -286,12 +300,21 @@ public class TaskOutboxPoller {
           record.created(),
           record.id(),
           record.requestedAction(),
-          nextAttemptCount,
+          record.attemptCount(),
           maxAttempts,
           statusCode,
           recoverable,
           "task-outbox-unprocessable"
       );
     }
+  }
+
+  private void logLostLease(TaskOutboxRecord record, String attemptedOutcome) {
+    log.warn(
+        "Task outbox {} discarded {} outcome because processing lease {} is no longer current",
+        record.id(),
+        attemptedOutcome,
+        record.claimToken()
+    );
   }
 }

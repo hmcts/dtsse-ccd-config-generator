@@ -1559,15 +1559,15 @@ public class TestWithCCD extends CftlibTest {
 
         Map<String, Object> queued = await().atMost(Duration.ofSeconds(20)).until(
             () -> db.queryForMap(
-                "SELECT status, next_attempt_at FROM ccd.task_outbox"
+                "SELECT status, available_at FROM ccd.task_outbox"
                     + " WHERE case_id = CAST(:caseId AS bigint)"
                     + " AND requested_action = :action::ccd.task_action ORDER BY id DESC LIMIT 1",
                 Map.of("caseId", caseIdValue, "action", TaskAction.INITIATE.getId())
             ),
-            row -> row.get("next_attempt_at") != null
+            row -> row.get("available_at") != null
         );
 
-        Object nextAttemptAtRaw = queued.get("next_attempt_at");
+        Object nextAttemptAtRaw = queued.get("available_at");
         LocalDateTime nextAttemptAt = nextAttemptAtRaw instanceof LocalDateTime dateTime
             ? dateTime
             : ((Timestamp) nextAttemptAtRaw).toLocalDateTime();
@@ -1580,10 +1580,10 @@ public class TestWithCCD extends CftlibTest {
                 + " AND requested_action = :action::ccd.task_action ORDER BY id DESC LIMIT 1",
             Map.of("caseId", caseIdValue, "action", TaskAction.INITIATE.getId())
         );
-        assertThat(statusRow.get("status"), equalTo("WAITING"));
+        assertThat(statusRow.get("status"), equalTo("PENDING"));
 
         db.update(
-            "UPDATE ccd.task_outbox SET next_attempt_at = (current_timestamp at time zone 'UTC') - INTERVAL '1 second'"
+            "UPDATE ccd.task_outbox SET available_at = (current_timestamp at time zone 'UTC') - INTERVAL '1 second'"
                 + " WHERE case_id = CAST(:caseId AS bigint)"
                 + " AND requested_action = :action::ccd.task_action",
             Map.of("caseId", caseIdValue, "action", TaskAction.INITIATE.getId())
@@ -1637,7 +1637,7 @@ public class TestWithCCD extends CftlibTest {
     @SneakyThrows
     @Order(34)
     @Test
-    public void delayedInitiateShouldBlockLaterSameCaseRowsUntilResolved() {
+    public void delayedInitiateShouldAllowLaterSameCaseRowsUntilItIsAvailable() {
         long caseId = createAdditionalCase("TEST_SOLICITOR@mailinator.com");
         String caseIdValue = String.valueOf(caseId);
         db.update(
@@ -1663,13 +1663,13 @@ public class TestWithCCD extends CftlibTest {
 
         await().atMost(Duration.ofSeconds(20)).untilAsserted(() -> {
             Map<String, Object> delayedRow = db.queryForMap(
-                "SELECT status, next_attempt_at FROM ccd.task_outbox"
+                "SELECT status, available_at FROM ccd.task_outbox"
                     + " WHERE case_id = CAST(:caseId AS bigint)"
                     + " AND requested_action = :action::ccd.task_action ORDER BY id DESC LIMIT 1",
                 Map.of("caseId", caseIdValue, "action", TaskAction.INITIATE.getId())
             );
-            assertThat(delayedRow.get("status"), equalTo("WAITING"));
-            assertThat(delayedRow.get("next_attempt_at"), is(notNullValue()));
+            assertThat(delayedRow.get("status"), equalTo("PENDING"));
+            assertThat(delayedRow.get("available_at"), is(notNullValue()));
         });
 
         var startComplete = ccdApi.startEvent(
@@ -1702,14 +1702,14 @@ public class TestWithCCD extends CftlibTest {
             assertThat(count, equalTo(2));
         });
 
-        // While delayed INITIATE is still waiting on next_attempt_at, later rows for the case may be processed.
+        // While delayed INITIATE is still waiting on available_at, later rows for the case may be processed.
         await().atMost(Duration.ofSeconds(45)).untilAsserted(() -> {
             Map<String, Object> completeRow = queryLatestCurrentOutboxRow(caseIdValue, TaskAction.COMPLETE);
             assertThat(completeRow.get("status"), equalTo("PROCESSED"));
         });
 
         db.update(
-            "UPDATE ccd.task_outbox SET next_attempt_at = (current_timestamp at time zone 'UTC') - INTERVAL '1 second'"
+            "UPDATE ccd.task_outbox SET available_at = (current_timestamp at time zone 'UTC') - INTERVAL '1 second'"
                 + " WHERE case_id = CAST(:caseId AS bigint)"
                 + " AND requested_action = :action::ccd.task_action",
             Map.of("caseId", caseIdValue, "action", TaskAction.INITIATE.getId())
@@ -1756,8 +1756,8 @@ public class TestWithCCD extends CftlibTest {
     @SneakyThrows
     @Order(35)
     @Test
-    public void failedAndUnprocessableTasksShouldBlockLaterSameCaseRows() {
-        for (String blockingStatus : List.of("FAILED", "UNPROCESSABLE")) {
+    public void retryingAndUnprocessableTasksShouldBlockLaterSameCaseRows() {
+        for (String blockingStatus : List.of("PENDING", "UNPROCESSABLE")) {
             assertTaskOutboxStatusBlocksLaterSameCaseRow(blockingStatus);
         }
     }
@@ -2888,12 +2888,13 @@ public class TestWithCCD extends CftlibTest {
         Long blockingOutboxId = db.queryForObject(
             "INSERT INTO ccd.task_outbox"
                 + " (case_id, event_id, created, updated, payload, requested_action, status, attempt_count,"
-                + " next_attempt_at)"
+                + " available_at)"
                 + " VALUES (CAST(:caseId AS bigint), :eventId,"
                 + " (current_timestamp at time zone 'UTC') - INTERVAL '1 day',"
                 + " (current_timestamp at time zone 'UTC') - INTERVAL '1 day',"
                 + " '{}'::jsonb, CAST(:action AS ccd.task_action), CAST(:status AS ccd.task_outbox_status), 1,"
-                + " (current_timestamp at time zone 'UTC') + INTERVAL '1 day')"
+                + " CASE WHEN :status = 'PENDING'"
+                + " THEN (current_timestamp at time zone 'UTC') + INTERVAL '1 day' ELSE NULL END)"
                 + " RETURNING id",
             Map.of(
                 "caseId", caseIdValue,
@@ -2946,7 +2947,7 @@ public class TestWithCCD extends CftlibTest {
             String.class
         );
         assertThat(blockingRowStatus, equalTo(blockingStatus));
-        assertThat(laterRowStatus, equalTo("NEW"));
+        assertThat(laterRowStatus, equalTo("PENDING"));
     }
 
     private JsonNode fetchElasticsearchDocument(long caseDataId) throws IOException {

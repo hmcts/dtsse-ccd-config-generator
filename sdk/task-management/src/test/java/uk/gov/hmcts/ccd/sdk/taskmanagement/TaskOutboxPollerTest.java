@@ -10,6 +10,7 @@ import static org.mockito.Mockito.when;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -21,6 +22,7 @@ import uk.gov.hmcts.ccd.sdk.taskmanagement.model.response.TaskCreateResponse;
 class TaskOutboxPollerTest {
 
   private static final long OUTBOX_ID = 42L;
+  private static final UUID CLAIM_TOKEN = UUID.fromString("11111111-1111-1111-1111-111111111111");
 
   private final TaskOutboxRepository repository = mock(TaskOutboxRepository.class);
   private final TaskManagementApiClient apiClient = mock(TaskManagementApiClient.class);
@@ -36,7 +38,7 @@ class TaskOutboxPollerTest {
 
   @BeforeEach
   void setUp() {
-    when(repository.claimPending(5, 9)).thenReturn(List.of(record(0, validPayload(), "initiate")));
+    when(repository.claimPending(5, 9)).thenReturn(List.of(record(1, validPayload(), "initiate")));
   }
 
   @Test
@@ -47,10 +49,11 @@ class TaskOutboxPollerTest {
 
     verify(repository).markUnprocessable(
         OUTBOX_ID,
+        CLAIM_TOKEN,
         HttpStatus.BAD_REQUEST.value(),
         "Task outbox response unsuccessful"
     );
-    verify(repository, never()).markFailed(eq(OUTBOX_ID), any(), any(), any());
+    verify(repository, never()).rescheduleAfterFailure(eq(OUTBOX_ID), any(), any(), any(), any());
   }
 
   @Test
@@ -60,13 +63,14 @@ class TaskOutboxPollerTest {
 
     poller.poll();
 
-    verify(repository).markFailed(
+    verify(repository).rescheduleAfterFailure(
         eq(OUTBOX_ID),
+        eq(CLAIM_TOKEN),
         eq(HttpStatus.SERVICE_UNAVAILABLE.value()),
         eq("Task outbox response unsuccessful"),
         nextAttemptAt.capture()
     );
-    verify(repository, never()).markUnprocessable(eq(OUTBOX_ID), any(), any());
+    verify(repository, never()).markUnprocessable(eq(OUTBOX_ID), any(), any(), any());
   }
 
   @Test
@@ -75,8 +79,9 @@ class TaskOutboxPollerTest {
 
     poller.poll();
 
-    verify(repository).markFailed(
+    verify(repository).rescheduleAfterFailure(
         eq(OUTBOX_ID),
+        eq(CLAIM_TOKEN),
         eq(HttpStatus.CONFLICT.value()),
         eq("Task outbox response unsuccessful"),
         any(LocalDateTime.class)
@@ -85,26 +90,27 @@ class TaskOutboxPollerTest {
 
   @Test
   void marksRecoverableFailureUnprocessableAfterEightRetries() {
-    when(repository.claimPending(5, 9)).thenReturn(List.of(record(8, validPayload(), "initiate")));
+    when(repository.claimPending(5, 9)).thenReturn(List.of(record(9, validPayload(), "initiate")));
     when(apiClient.createTask(any())).thenReturn(response(HttpStatus.SERVICE_UNAVAILABLE, null));
 
     poller.poll();
 
     verify(repository).markUnprocessable(
         OUTBOX_ID,
+        CLAIM_TOKEN,
         HttpStatus.SERVICE_UNAVAILABLE.value(),
         "Task outbox response unsuccessful"
     );
-    verify(repository, never()).markFailed(eq(OUTBOX_ID), any(), any(), any());
+    verify(repository, never()).rescheduleAfterFailure(eq(OUTBOX_ID), any(), any(), any(), any());
   }
 
   @Test
   void marksMalformedStoredPayloadUnprocessable() {
-    when(repository.claimPending(5, 9)).thenReturn(List.of(record(0, "{", "initiate")));
+    when(repository.claimPending(5, 9)).thenReturn(List.of(record(1, "{", "initiate")));
 
     poller.poll();
 
-    verify(repository).markUnprocessable(eq(OUTBOX_ID), eq(null), any());
+    verify(repository).markUnprocessable(eq(OUTBOX_ID), eq(CLAIM_TOKEN), eq(null), any());
     verify(apiClient, never()).createTask(any());
   }
 
@@ -114,8 +120,9 @@ class TaskOutboxPollerTest {
 
     poller.poll();
 
-    verify(repository).markFailed(
+    verify(repository).rescheduleAfterFailure(
         eq(OUTBOX_ID),
+        eq(CLAIM_TOKEN),
         eq(null),
         eq("temporary local failure"),
         any(LocalDateTime.class)
@@ -129,7 +136,7 @@ class TaskOutboxPollerTest {
 
     poller.poll();
 
-    verify(repository).markProcessed(OUTBOX_ID, HttpStatus.CREATED.value());
+    verify(repository).markProcessed(OUTBOX_ID, CLAIM_TOKEN, HttpStatus.CREATED.value());
   }
 
   private TaskOutboxRecord record(int attemptCount, String payload, String action) {
@@ -140,7 +147,8 @@ class TaskOutboxPollerTest {
         LocalDateTime.of(2026, 6, 12, 10, 0),
         payload,
         action,
-        attemptCount
+        attemptCount,
+        CLAIM_TOKEN
     );
   }
 
