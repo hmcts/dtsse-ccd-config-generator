@@ -335,6 +335,7 @@ from :fdw_schema.case_event ce
 join :dst_schema.case_data cd
   on cd.id = ce.case_data_id
 where cd.case_type_id in (:case_type_ids)
+and ce.case_type_id in (:case_type_ids)
 and (
     nullif(:'delta_since', '') is null
     or ce.created_date >= nullif(:'delta_since', '')::timestamp
