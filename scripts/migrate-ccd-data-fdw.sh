@@ -29,6 +29,7 @@ DST_SCHEMA="${DST_SCHEMA:-ccd}"
 FDW_SCHEMA="${FDW_SCHEMA:-fdw_stage}"
 
 CASE_TYPE_IDS_SQL="${CASE_TYPE_IDS_SQL:-'TEST_CASE_TYPE'}"
+CASE_REVISION_OFFSET="${CASE_REVISION_OFFSET:-1000000000}"
 
 # Optional. Empty means full load.
 # Example: DELTA_SINCE="2026-04-30 10:00:00"
@@ -56,11 +57,13 @@ Environment variables:
   DST_SCHEMA
   FDW_SCHEMA
   CASE_TYPE_IDS_SQL
+  CASE_REVISION_OFFSET optional; defaults to 1000000000
   DELTA_SINCE optional, e.g. "2026-04-30 10:00:00"
 
 Example:
   export DST_DSN='postgresql://user:pass@dest.postgres.database.azure.com:5432/appdb?sslmode=require'
   export CASE_TYPE_IDS_SQL="'ET_EnglandWales','ET_Scotland','ET_Admin'"
+  export CASE_REVISION_OFFSET='1000000000'
 
   ./scripts/migrate-ccd-data-fdw.sh
   ./scripts/migrate-ccd-data-fdw.sh --apply
@@ -97,6 +100,13 @@ require_psql() {
   fi
 }
 
+validate_case_revision_offset() {
+  if [[ ! "$CASE_REVISION_OFFSET" =~ ^[0-9]+$ ]]; then
+    log "ERROR: CASE_REVISION_OFFSET must be a non-negative integer"
+    exit 1
+  fi
+}
+
 psql_dst() {
   psql "$DST_DSN" \
     --set=ON_ERROR_STOP=on \
@@ -104,6 +114,7 @@ psql_dst() {
     --set=dst_schema="$DST_SCHEMA" \
     --set=fdw_schema="$FDW_SCHEMA" \
     --set=case_type_ids="$CASE_TYPE_IDS_SQL" \
+    --set=case_revision_offset="$CASE_REVISION_OFFSET" \
     --set=delta_since="$DELTA_SINCE" \
     "$@"
 }
@@ -390,7 +401,7 @@ begin;
 set local session_replication_role = replica;
 
 update :dst_schema.case_data cd
-set case_revision = evt.event_count
+set case_revision = evt.event_count + (:case_revision_offset)::bigint
 from (
     select
         case_data_id,
@@ -503,7 +514,8 @@ with case_revision_check as (
         cd.id,
         cd.case_revision,
         count(ce.id)::bigint as event_count,
-        coalesce(max(ce.case_revision), 0)::bigint as max_event_revision
+        coalesce(max(ce.case_revision), 0)::bigint as max_event_revision,
+        coalesce(max(ce.case_revision), 0)::bigint + (:case_revision_offset)::bigint as expected_case_revision
     from :dst_schema.case_data cd
     left join :dst_schema.case_event ce
       on ce.case_data_id = cd.id
@@ -512,8 +524,8 @@ with case_revision_check as (
 )
 select count(*)
 from case_revision_check
-where case_revision is distinct from event_count
-   or case_revision is distinct from max_event_revision;
+where case_revision is distinct from expected_case_revision
+   or event_count is distinct from max_event_revision;
 SQL
 )"
 
@@ -546,8 +558,10 @@ cleanup_on_exit() {
 main() {
   parse_args "$@"
   require_psql
+  validate_case_revision_offset
 
   log "DELTA_SINCE=${DELTA_SINCE:-<empty: full load>}"
+  log "CASE_REVISION_OFFSET=${CASE_REVISION_OFFSET}"
 
   validate_connection
   validate_can_disable_triggers
