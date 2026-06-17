@@ -1219,6 +1219,83 @@ public class TestWithCCD extends CftlibTest {
         });
     }
 
+    @SneakyThrows
+    @Order(20)
+    @Test
+    public void duplicateApiFirstTaskCreateShouldReturnNoContentAndMarkOutboxProcessed() {
+        long caseId = createAdditionalCase("TEST_SOLICITOR@mailinator.com");
+        String caseIdValue = String.valueOf(caseId);
+        db.update(
+            "DELETE FROM ccd.task_outbox WHERE case_id = CAST(:caseId AS bigint)",
+            Map.of("caseId", caseIdValue)
+        );
+
+        var startEvent = ccdApi.startEvent(
+            getAuthorisation("TEST_CASE_WORKER_USER@mailinator.com"),
+            getServiceAuth(),
+            caseIdValue,
+            API_FIRST_TASK_EVENT_ID
+        );
+
+        var request = prepareEventRequestWithToken(
+            "TEST_CASE_WORKER_USER@mailinator.com",
+            API_FIRST_TASK_EVENT_ID,
+            Map.of("note", "api-first-task-duplicate-create"),
+            startEvent.getToken(),
+            caseId
+        );
+
+        var response = HttpClientBuilder.create().build().execute(request);
+        assertThat(response.getStatusLine().getStatusCode(), equalTo(201));
+
+        await().atMost(Duration.ofSeconds(30)).untilAsserted(() -> {
+            Map<String, Object> processed = queryLatestCurrentOutboxRow(caseIdValue, TaskAction.INITIATE);
+            assertThat(processed.get("status"), equalTo("PROCESSED"));
+            assertThat(((Number) processed.get("last_response_code")).intValue(), equalTo(201));
+        });
+
+        String payload = db.queryForObject(
+            "SELECT payload::text FROM ccd.task_outbox"
+                + " WHERE case_id = CAST(:caseId AS bigint)"
+                + " AND requested_action = :action::ccd.task_action"
+                + " ORDER BY id DESC LIMIT 1",
+            Map.of("caseId", caseIdValue, "action", TaskAction.INITIATE.getId()),
+            String.class
+        );
+        assertThat(payload, is(notNullValue()));
+
+        Long duplicateOutboxId = db.queryForObject(
+            "INSERT INTO ccd.task_outbox"
+                + " (case_id, event_id, created, updated, payload, requested_action, status, attempt_count,"
+                + " available_at)"
+                + " VALUES (CAST(:caseId AS bigint), :eventId,"
+                + " (current_timestamp at time zone 'UTC') + INTERVAL '1 millisecond',"
+                + " (current_timestamp at time zone 'UTC'),"
+                + " :payload::jsonb, CAST(:action AS ccd.task_action),"
+                + " 'PENDING'::ccd.task_outbox_status, 0,"
+                + " (current_timestamp at time zone 'UTC') - INTERVAL '1 second')"
+                + " RETURNING id",
+            Map.of(
+                "caseId", caseIdValue,
+                "eventId", "duplicate-create-" + UUID.randomUUID(),
+                "payload", payload,
+                "action", TaskAction.INITIATE.getId()
+            ),
+            Long.class
+        );
+        assertThat(duplicateOutboxId, is(notNullValue()));
+
+        Map<String, Object> duplicateAttempt = await().atMost(Duration.ofSeconds(45)).until(
+            () -> queryCurrentOutboxRow(duplicateOutboxId),
+            row -> ((Number) row.get("attempt_count")).intValue() > 0
+                && !"PROCESSING".equals(row.get("status"))
+        );
+
+        assertThat(duplicateAttempt.get("status"), equalTo("PROCESSED"));
+        assertThat(((Number) duplicateAttempt.get("attempt_count")).intValue(), equalTo(1));
+        assertThat(((Number) duplicateAttempt.get("last_response_code")).intValue(), equalTo(204));
+    }
+
   @SneakyThrows
   @Order(21)
   @Test
@@ -2894,6 +2971,21 @@ public class TestWithCCD extends CftlibTest {
                 + " AND o.requested_action = :action::ccd.task_action"
                 + " ORDER BY o.id DESC LIMIT 1",
             Map.of("caseId", caseId, "action", action.getId())
+        );
+    }
+
+    private Map<String, Object> queryCurrentOutboxRow(long outboxId) {
+        return db.queryForMap(
+            "SELECT o.status::text AS status, o.attempt_count, h.response_code AS last_response_code"
+                + " FROM ccd.task_outbox o"
+                + " LEFT JOIN LATERAL ("
+                + "     SELECT response_code"
+                + "     FROM ccd.task_outbox_history h"
+                + "     WHERE h.task_outbox_id = o.id"
+                + "     ORDER BY h.id DESC LIMIT 1"
+                + " ) h ON true"
+                + " WHERE o.id = :outboxId",
+            Map.of("outboxId", outboxId)
         );
     }
 
