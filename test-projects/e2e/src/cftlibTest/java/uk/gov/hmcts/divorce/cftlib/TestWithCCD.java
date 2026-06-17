@@ -1179,7 +1179,12 @@ public class TestWithCCD extends CftlibTest {
         assertThat(outboxCaseId, is(notNullValue()));
 
         String payloadTaskId = db.queryForObject(
-            "SELECT coalesce(payload->'task'->>'task_id', payload->'task'->>'external_task_id')"
+            "SELECT coalesce("
+                + "payload->'tasks'->0->>'task_id',"
+                + "payload->'tasks'->0->>'external_task_id',"
+                + "payload->'task'->>'task_id',"
+                + "payload->'task'->>'external_task_id'"
+                + ")"
                 + " FROM ccd.task_outbox ORDER BY id DESC LIMIT 1",
             Map.of(),
             String.class
@@ -1188,8 +1193,17 @@ public class TestWithCCD extends CftlibTest {
         assertThat(payloadTaskId.isBlank(), is(false));
         apiFirstTaskId = payloadTaskId;
 
+        Integer payloadTaskCount = db.queryForObject(
+            "SELECT jsonb_array_length(coalesce(payload->'tasks', jsonb_build_array(payload->'task')))"
+                + " FROM ccd.task_outbox ORDER BY id DESC LIMIT 1",
+            Map.of(),
+            Integer.class
+        );
+        assertThat(payloadTaskCount, equalTo(2));
+
         String payloadCaseId = db.queryForObject(
-            "SELECT payload->'task'->>'case_id' FROM ccd.task_outbox ORDER BY id DESC LIMIT 1",
+            "SELECT coalesce(payload->'tasks'->0->>'case_id', payload->'task'->>'case_id')"
+                + " FROM ccd.task_outbox ORDER BY id DESC LIMIT 1",
             Map.of(),
             String.class
         );
@@ -1241,7 +1255,12 @@ public class TestWithCCD extends CftlibTest {
     assertThat(outboxCaseId, is(notNullValue()));
 
     String payloadTaskId = db.queryForObject(
-      "SELECT coalesce(payload->'task'->>'task_id', payload->'task'->>'external_task_id')"
+      "SELECT coalesce("
+        + "payload->'tasks'->0->>'task_id',"
+        + "payload->'tasks'->0->>'external_task_id',"
+        + "payload->'task'->>'task_id',"
+        + "payload->'task'->>'external_task_id'"
+        + ")"
         + " FROM ccd.task_outbox ORDER BY id DESC LIMIT 1",
       Map.of(),
       String.class
@@ -1250,7 +1269,8 @@ public class TestWithCCD extends CftlibTest {
     assertThat(payloadTaskId.isBlank(), is(false));
 
     String payloadCaseId = db.queryForObject(
-      "SELECT payload->'task'->>'case_id' FROM ccd.task_outbox ORDER BY id DESC LIMIT 1",
+      "SELECT coalesce(payload->'tasks'->0->>'case_id', payload->'task'->>'case_id')"
+        + " FROM ccd.task_outbox ORDER BY id DESC LIMIT 1",
       Map.of(),
       String.class
     );

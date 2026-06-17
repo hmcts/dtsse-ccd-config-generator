@@ -3,8 +3,10 @@ package uk.gov.hmcts.ccd.sdk.taskmanagement;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
 import java.time.LocalDateTime;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 import uk.gov.hmcts.ccd.sdk.taskmanagement.model.TaskAction;
 import uk.gov.hmcts.ccd.sdk.taskmanagement.model.TaskPayload;
 import uk.gov.hmcts.ccd.sdk.taskmanagement.model.outbox.ReconfigureTaskOutboxPayload;
@@ -36,12 +38,8 @@ public class TaskOutboxService {
   ) {
     validateTrigger(trigger);
     Objects.requireNonNull(request, "request must not be null");
-    TaskPayload task = Objects.requireNonNull(request.task(), "task must not be null");
-    requireText(task.getExternalTaskId(), "external task id");
-    requireText(task.getCaseId(), "caseId");
-    requireText(task.getCaseTypeId(), "caseTypeId");
-    requireMatchingTriggerValue(trigger.caseId(), task.getCaseId(), "caseId");
-    requireMatchingTriggerValue(trigger.caseType(), task.getCaseTypeId(), "caseTypeId");
+    List<TaskPayload> tasks = requireNonEmpty(request.tasks(), "tasks");
+    validateCreateTasks(trigger, tasks);
 
     try {
       String payload = objectMapper.writeValueAsString(request);
@@ -55,6 +53,24 @@ public class TaskOutboxService {
       );
     } catch (IOException ex) {
       throw new IllegalStateException("Failed to enqueue task outbox entry", ex);
+    }
+  }
+
+  private void validateCreateTasks(TaskOutboxTrigger trigger, List<TaskPayload> tasks) {
+    Set<String> idempotencyKeys = new HashSet<>();
+
+    for (TaskPayload task : tasks) {
+      Objects.requireNonNull(task, "task must not be null");
+      requireText(task.getExternalTaskId(), "external task id");
+      requireText(task.getCaseId(), "caseId");
+      requireText(task.getCaseTypeId(), "caseTypeId");
+      requireMatchingTriggerValue(trigger.caseId(), task.getCaseId(), "caseId");
+      requireMatchingTriggerValue(trigger.caseType(), task.getCaseTypeId(), "caseTypeId");
+
+      String idempotencyKey = task.getExternalTaskId() + "\u0000" + task.getCaseTypeId();
+      if (!idempotencyKeys.add(idempotencyKey)) {
+        throw new IllegalArgumentException("tasks must not contain duplicate external task id and caseTypeId");
+      }
     }
   }
 
@@ -144,9 +160,10 @@ public class TaskOutboxService {
     }
   }
 
-  private <T> void requireNonEmpty(List<T> value, String field) {
+  private <T> List<T> requireNonEmpty(List<T> value, String field) {
     if (value == null || value.isEmpty()) {
       throw new IllegalArgumentException(field + " must not be empty");
     }
+    return value;
   }
 }

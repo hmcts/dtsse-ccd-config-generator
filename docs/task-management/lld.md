@@ -246,14 +246,15 @@ The same trigger must be reused for all task outbox rows produced by the same CC
 Validation:
 
 - Trigger case ID, case type, event ID, and created timestamp are required.
-- Create requests require `task`, `externalTaskId`, `caseId`, and `caseTypeId`.
+- Create requests require at least one task. Each task requires `externalTaskId`, `caseId`, and `caseTypeId`.
 - Complete and cancel requests require `caseId`, `caseType`, and at least one task type.
 - Reconfigure requests require `caseId` and `caseType`.
 - Payload case ID and case type must match the trigger.
 - `caseId` must be a numeric CCD case reference because the repository stores it as `bigint`.
 
-The service writes JSON payloads to `ccd.task_outbox`. All rows start as `PENDING`, with `available_at` set to either
-the supplied delay or current UTC time.
+The service writes JSON payloads to `ccd.task_outbox`. Create rows store a `tasks` array so one CCD callback can create
+multiple tasks under the same trigger and the same `initiate` action row. All rows start as `PENDING`, with
+`available_at` set to either the supplied delay or current UTC time.
 
 ### Outbox database model
 
@@ -330,7 +331,7 @@ Within-trigger action priority:
 
 For each claimed row, the poller dispatches by `requested_action`:
 
-- `initiate`: deserialize `TaskCreateRequest` and call `POST /tasks`.
+- `initiate`: deserialize `TaskCreateRequest`, then call `POST /tasks` once for each task in the row.
 - `complete`: resolve matching tasks with `GET /tasks`, then call `POST /tasks/terminate` with action `complete`.
 - `cancel`: resolve matching tasks with `GET /tasks`, then call `POST /tasks/terminate` with action `cancel`.
 - `reconfigure`: map stored `TaskPayload` rows into `TaskReconfigurePayload` rows and call `PUT /tasks/reconfigure`.
@@ -342,6 +343,15 @@ Termination lookup:
 - If lookup succeeds and returns no tasks, the poller treats the action as successful and marks the row `PROCESSED`.
 - If lookup fails, that response is handled as the row failure.
 - If lookup succeeds, the poller sends all returned task IDs to `POST /tasks/terminate`.
+
+Create fan-out:
+
+- The Task Management API still receives the single-task `{"task": ...}` request body.
+- The outbox row can contain multiple tasks in `{"tasks": [...]}`.
+- The poller sends the tasks sequentially and only marks the outbox row `PROCESSED` after every create call succeeds.
+- `204 No Content` is treated as a successful idempotent create response.
+- If one create call fails after earlier tasks in the same row succeeded, the whole row is retried. The create
+  idempotency key, `externalTaskId + caseTypeId`, is therefore required for every task.
 
 Success rules:
 
@@ -474,8 +484,8 @@ Use this section as the short version when integrating the library.
    `(case_id, event_id, created, requested_action)`.
 3. Use numeric CCD case references as `caseId`; the outbox stores them as `bigint`.
 4. Make the payload case ID and case type match the trigger exactly.
-5. Create requests must provide `externalTaskId`, `caseId`, and `caseTypeId`; `externalTaskId + caseTypeId` is the
-   Task Management create idempotency key.
+5. Create requests can contain multiple tasks in one outbox row; each task must provide `externalTaskId`, `caseId`, and
+   `caseTypeId`. `externalTaskId + caseTypeId` is the Task Management create idempotency key.
 6. Complete and cancel requests specify task types, not task IDs. The poller resolves IDs with `GET /tasks`.
 7. Within one trigger, work runs in this priority order: complete, cancel, reconfigure, initiate.
 8. For one case, an earlier due, retrying, processing, or unprocessable trigger blocks later triggers.

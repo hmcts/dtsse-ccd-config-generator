@@ -4,6 +4,8 @@ import io.micrometer.common.util.StringUtils;
 import java.util.List;
 import java.util.Objects;
 import org.springframework.http.ResponseEntity;
+import uk.gov.hmcts.ccd.sdk.taskmanagement.model.TaskPayload;
+import uk.gov.hmcts.ccd.sdk.taskmanagement.model.request.TaskCreateApiRequest;
 import uk.gov.hmcts.ccd.sdk.taskmanagement.model.request.TaskCreateRequest;
 import uk.gov.hmcts.ccd.sdk.taskmanagement.model.request.TaskReconfigureRequest;
 import uk.gov.hmcts.ccd.sdk.taskmanagement.model.request.TaskTerminationRequest;
@@ -21,7 +23,17 @@ public class TaskManagementApiClient {
   }
 
   public ResponseEntity<TaskCreateResponse> createTask(TaskCreateRequest request) {
-    return feignClient.createTask(request);
+    Objects.requireNonNull(request, "request must not be null");
+    List<TaskPayload> tasks = request.tasks();
+    if (tasks.size() != 1) {
+      throw new IllegalArgumentException("createTask requires exactly one task");
+    }
+    return createTask(tasks.get(0));
+  }
+
+  public ResponseEntity<TaskCreateResponse> createTask(TaskPayload task) {
+    Objects.requireNonNull(task, "task must not be null");
+    return feignClient.createTask(new TaskCreateApiRequest(task));
   }
 
   public ResponseEntity<GetTasksResponse> getTasks(String caseId, List<String> taskTypes) {

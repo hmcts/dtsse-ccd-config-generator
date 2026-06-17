@@ -144,7 +144,9 @@ public class TaskOutboxPoller {
       return true;
     }
 
-    if (List.of(TaskAction.INITIATE, TaskAction.RECONFIGURE).contains(action) && response.getBody() == null) {
+    if (action == TaskAction.INITIATE
+        && response.getBody() == null
+        && response.getStatusCode().value() != 204) {
       log.warn("Task outbox {} create response missing body", record.id());
       handleFailure(
           record,
@@ -156,13 +158,40 @@ public class TaskOutboxPoller {
       return true;
     }
 
+    if (action == TaskAction.RECONFIGURE && response.getBody() == null) {
+      log.warn("Task outbox {} reconfigure response missing body", record.id());
+      handleFailure(
+          record,
+          response.getStatusCode().value(),
+          "Task reconfiguration response missing body",
+          maxAttempts,
+          true
+      );
+      return true;
+    }
+
     return false;
   }
 
   private ResponseEntity<?> createTask(TaskOutboxRecord record) throws IOException {
     TaskCreateRequest request = objectMapper.readValue(record.payload(), TaskCreateRequest.class);
-    log.warn("Task outbox {} sending payload {}", record.id(), objectMapper.writeValueAsString(request));
-    return taskManagementApiClient.createTask(request);
+    List<TaskPayload> tasks = request.tasks();
+    if (CollectionUtils.isEmpty(tasks)) {
+      throw new IllegalArgumentException("Task create request must contain at least one task");
+    }
+
+    ResponseEntity<?> lastResponse = null;
+    for (TaskPayload task : tasks) {
+      log.warn("Task outbox {} sending create payload {}", record.id(), objectMapper.writeValueAsString(task));
+      ResponseEntity<?> response = taskManagementApiClient.createTask(task);
+      if (response == null
+          || !response.getStatusCode().is2xxSuccessful()
+          || (response.getBody() == null && response.getStatusCode().value() != 204)) {
+        return response;
+      }
+      lastResponse = response;
+    }
+    return lastResponse;
   }
 
   private ResponseEntity<?> cancelTask(TaskOutboxRecord record) throws IOException {

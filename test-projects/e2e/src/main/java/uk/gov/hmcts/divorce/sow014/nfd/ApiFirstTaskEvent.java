@@ -100,6 +100,11 @@ public class ApiFirstTaskEvent implements CCDConfig<CaseData, State, UserRole> {
                 .autoAssignable(false)
                 .build()))
             .build();
+        TaskPayload secondTask = task.toBuilder()
+            .externalTaskId(UUID.randomUUID().toString())
+            .name("Register new case follow-up")
+            .title("Register new case follow-up")
+            .build();
 
         TaskOutboxTrigger trigger = new TaskOutboxTrigger(
             caseId,
@@ -107,7 +112,7 @@ public class ApiFirstTaskEvent implements CCDConfig<CaseData, State, UserRole> {
             EVENT_ID,
             now.toLocalDateTime()
         );
-        taskOutboxService.enqueueTaskCreateRequest(trigger, new TaskCreateRequest(task));
+        taskOutboxService.enqueueTaskCreateRequest(trigger, new TaskCreateRequest(List.of(task, secondTask)));
 
         return AboutToStartOrSubmitResponse.<CaseData, State>builder()
             .data(details.getData())
