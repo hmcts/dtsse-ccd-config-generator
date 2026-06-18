@@ -45,7 +45,21 @@ jobs:
           cache: gradle
 
       - name: Run green Elasticsearch indexing chaos suite
-        if: github.event_name != 'workflow_dispatch' || inputs.mode == 'green'
+        if: github.event_name != 'workflow_dispatch'
+        run: >
+          ./gradlew -p sdk :ccd-runtime-indexing:chaosTest
+          --tests '*scheduledIndexerRecoversAfterElasticsearchNetworkCut'
+          --tests '*pendingQueueSurvivesSpringContextRestart'
+          --tests '*twoSpringIndexerInstancesDrainTheSameQueueWithoutLosingUpdates'
+          --tests '*concurrentCommittedWritersEventuallyIndexLatestRevision'
+          --tests '*scheduledIndexerRecoversAfterElasticsearchContainerPause'
+          --tests '*searchCriteriaCasesAreAlsoIndexedIntoGlobalSearch'
+          --tests '*validItemsInMixedBulkCanBeAcceptedEvenWhenPoisonRollsBackQueueDeletion'
+          -Dccd.indexing.chaos.case-count=200
+          -Dccd.indexing.chaos.revision-count=4
+
+      - name: Run green Elasticsearch indexing chaos suite with custom volume
+        if: github.event_name == 'workflow_dispatch' && inputs.mode == 'green'
         run: >
           ./gradlew -p sdk :ccd-runtime-indexing:chaosTest
           --tests '*scheduledIndexerRecoversAfterElasticsearchNetworkCut'
