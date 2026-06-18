@@ -207,6 +207,9 @@ alter table :dst_schema.case_event
 drop constraint if exists case_event_case_data_id_fkey;
 
 drop index if exists :dst_schema.idx_case_event_case_data_revision_unique;
+
+alter table :dst_schema.case_event
+disable trigger user;
 SQL
 
   CONSTRAINTS_DROPPED=true
@@ -295,6 +298,9 @@ load_case_events() {
   log "Loading/upserting case_event with temporary version/case_revision values..."
 
   psql_dst <<'SQL'
+begin;
+set local session_replication_role = replica;
+
 insert into :dst_schema.case_event (
     id,
     created_date,
@@ -371,6 +377,8 @@ set
     proxied_by = excluded.proxied_by,
     proxied_by_first_name = excluded.proxied_by_first_name,
     proxied_by_last_name = excluded.proxied_by_last_name;
+
+commit;
 SQL
 }
 
@@ -449,6 +457,9 @@ add constraint case_event_case_data_id_fkey
 foreign key (case_data_id)
 references :dst_schema.case_data(id)
 on delete cascade;
+
+alter table :dst_schema.case_event
+enable trigger user;
 SQL
   then
     CONSTRAINTS_DROPPED=false
@@ -581,6 +592,8 @@ main() {
 
   # Important: catch parent cases created while events were being copied.
   load_case_data
+  # Then catch events for cases loaded or updated by the second case_data pass.
+  load_case_events
 
   recalculate_revisions
   validate_no_orphans
