@@ -2,23 +2,6 @@ name: Elasticsearch Indexing Chaos
 
 on:
   workflow_dispatch:
-    inputs:
-      mode:
-        description: Chaos suite mode
-        required: true
-        default: green
-        type: choice
-        options:
-          - green
-          - full
-      case-count:
-        description: Number of deterministic cases for the volume scenario
-        required: true
-        default: '200'
-      revision-count:
-        description: Number of deterministic revisions per case for the volume scenario
-        required: true
-        default: '4'
   pull_request:
     paths:
       - '.github/workflows/es-indexing-chaos.yml'
@@ -44,37 +27,5 @@ jobs:
           java-version: 21
           cache: gradle
 
-      - name: Run green Elasticsearch indexing chaos suite
-        if: github.event_name != 'workflow_dispatch'
-        run: >
-          ./gradlew -p sdk :ccd-runtime-indexing:chaosTest
-          --tests '*scheduledIndexerRecoversAfterElasticsearchNetworkCut'
-          --tests '*pendingQueueSurvivesSpringContextRestart'
-          --tests '*twoSpringIndexerInstancesDrainTheSameQueueWithoutLosingUpdates'
-          --tests '*concurrentCommittedWritersEventuallyIndexLatestRevision'
-          --tests '*scheduledIndexerRecoversAfterElasticsearchContainerPause'
-          --tests '*searchCriteriaCasesAreAlsoIndexedIntoGlobalSearch'
-          --tests '*validItemsInMixedBulkCanBeAcceptedEvenWhenPoisonRollsBackQueueDeletion'
-          -Dccd.indexing.chaos.case-count=200
-          -Dccd.indexing.chaos.revision-count=4
-
-      - name: Run green Elasticsearch indexing chaos suite with custom volume
-        if: github.event_name == 'workflow_dispatch' && inputs.mode == 'green'
-        run: >
-          ./gradlew -p sdk :ccd-runtime-indexing:chaosTest
-          --tests '*scheduledIndexerRecoversAfterElasticsearchNetworkCut'
-          --tests '*pendingQueueSurvivesSpringContextRestart'
-          --tests '*twoSpringIndexerInstancesDrainTheSameQueueWithoutLosingUpdates'
-          --tests '*concurrentCommittedWritersEventuallyIndexLatestRevision'
-          --tests '*scheduledIndexerRecoversAfterElasticsearchContainerPause'
-          --tests '*searchCriteriaCasesAreAlsoIndexedIntoGlobalSearch'
-          --tests '*validItemsInMixedBulkCanBeAcceptedEvenWhenPoisonRollsBackQueueDeletion'
-          -Dccd.indexing.chaos.case-count=${{ inputs['case-count'] || '200' }}
-          -Dccd.indexing.chaos.revision-count=${{ inputs['revision-count'] || '4' }}
-
-      - name: Run full Elasticsearch indexing chaos suite
-        if: github.event_name == 'workflow_dispatch' && inputs.mode == 'full'
-        run: >
-          ./gradlew -p sdk :ccd-runtime-indexing:chaosTest
-          -Dccd.indexing.chaos.case-count=${{ inputs['case-count'] }}
-          -Dccd.indexing.chaos.revision-count=${{ inputs['revision-count'] }}
+      - name: Run Elasticsearch indexing chaos tests
+        run: ./gradlew -p sdk :ccd-runtime-indexing:chaosTest
