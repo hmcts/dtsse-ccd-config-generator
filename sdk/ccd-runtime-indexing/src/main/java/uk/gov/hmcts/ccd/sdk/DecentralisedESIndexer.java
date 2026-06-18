@@ -39,11 +39,19 @@ class DecentralisedESIndexer implements DisposableBean {
   @Autowired
   public DecentralisedESIndexer(JdbcTemplate jdbcTemplate, TransactionTemplate transactionTemplate,
                                 @Value("${ELASTIC_SEARCH_HOSTS:http://localhost:9200}")
-                                String elasticSearchHosts) {
+                                String elasticSearchHosts,
+                                @Value("${ccd.sdk.indexing.elasticsearch.connect-timeout-ms:10000}")
+                                int connectTimeoutMs,
+                                @Value("${ccd.sdk.indexing.elasticsearch.socket-timeout-ms:60000}")
+                                int socketTimeoutMs) {
     this.jdbcTemplate = jdbcTemplate;
     this.transactionTemplate = transactionTemplate;
     var hosts = parseElasticSearchHosts(elasticSearchHosts);
     this.client = RestClient.builder(hosts)
+        .setRequestConfigCallback(requestConfigBuilder -> requestConfigBuilder
+            .setConnectTimeout(connectTimeoutMs)
+            .setConnectionRequestTimeout(connectTimeoutMs)
+            .setSocketTimeout(socketTimeoutMs))
         .setFailureListener(new RestClient.FailureListener() {
           @Override
           public void onFailure(org.elasticsearch.client.Node node) {
