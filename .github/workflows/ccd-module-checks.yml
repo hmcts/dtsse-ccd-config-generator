@@ -55,7 +55,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
           submodules: recursive
@@ -107,7 +107,7 @@ jobs:
 
       - name: Checkout base branch
         if: matrix.runSemanticDiff && steps.changes.outputs.docs_only != 'true' && steps.changes.outputs.module_changed != 'true'
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           ref: ${{ github.event.pull_request.base.sha }}
           path: base
