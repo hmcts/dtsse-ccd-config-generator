@@ -206,9 +206,10 @@ public class TaskOutboxPoller {
     TerminateTaskOutboxPayload terminateTaskOutboxPayload =
         objectMapper.readValue(record.payload(), TerminateTaskOutboxPayload.class);
     String caseId = terminateTaskOutboxPayload.caseId();
+    String caseType = terminateTaskOutboxPayload.caseType();
     List<String> taskTypes = terminateTaskOutboxPayload.taskTypes();
 
-    var tasksToTerminate = taskManagementApiClient.getTasks(caseId, taskTypes);
+    var tasksToTerminate = taskManagementApiClient.getTasks(caseId, caseType, taskTypes);
     GetTasksResponse responseBody = tasksToTerminate.getBody();
 
     String actionId = action.getId();
@@ -229,6 +230,7 @@ public class TaskOutboxPoller {
     TaskTerminationRequest request = TaskTerminationRequest.builder()
         .taskIds(tasks.stream().map(TaskPayload::getId).toList())
         .action(actionId)
+        .caseTypeId(caseType)
         .build();
 
     return taskManagementApiClient.terminateTask(request);
@@ -262,6 +264,7 @@ public class TaskOutboxPoller {
             .toList();
 
     TaskReconfigureRequest request = TaskReconfigureRequest.builder()
+        .caseTypeId(reconfigurePayload.caseType())
         .tasks(taskReconfigurePayloads)
         .build();
 

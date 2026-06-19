@@ -8,5 +8,5 @@ import uk.gov.hmcts.ccd.sdk.taskmanagement.model.TaskReconfigurePayload;
 
 @Builder
 @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
-public record TaskReconfigureRequest(List<TaskReconfigurePayload> tasks) {
+public record TaskReconfigureRequest(String caseTypeId, List<TaskReconfigurePayload> tasks) {
 }
