@@ -5,6 +5,7 @@ set -euo pipefail
 SRC_DSN="${SRC_DSN:-postgresql://postgres:postgres@localhost:6432/datastore}"
 DST_DSN="${DST_DSN:-postgresql://postgres:postgres@localhost:6432/postgres}"
 CASE_TYPE="${CASE_TYPE:-TEST_CASE_TYPE}"
+CASE_REVISION_OFFSET="${CASE_REVISION_OFFSET:-1000000000}"
 DO_APPLY=false
 
 log() {
@@ -14,6 +15,13 @@ log() {
 require_psql() {
   if ! command -v psql >/dev/null 2>&1; then
     log "ERROR: psql is required on PATH"
+    exit 1
+  fi
+}
+
+validate_case_revision_offset() {
+  if [[ ! "$CASE_REVISION_OFFSET" =~ ^[0-9]+$ ]]; then
+    log "ERROR: CASE_REVISION_OFFSET must be a non-negative integer"
     exit 1
   fi
 }
@@ -201,7 +209,7 @@ EOF
 }
 
 align_case_revisions() {
-  log "Aligning case_data.case_revision with migrated event counts..."
+  log "Aligning case_data.case_revision with migrated event counts plus offset..."
   # We have seen CCD cases where case versions and event counts drift; ensure revisions match event history
   # before enforcing any uniqueness or writing new events.
   psql "$DST_DSN" --set=ON_ERROR_STOP=on --no-psqlrc --quiet <<EOF
@@ -215,11 +223,11 @@ WITH ev AS (
   GROUP BY cd.id
 )
 UPDATE ccd.case_data cd
-SET case_revision = ev.event_count
+SET case_revision = ev.event_count + ${CASE_REVISION_OFFSET}
 FROM ev
 WHERE cd.id = ev.case_data_id
   AND cd.case_type_id = '${CASE_TYPE}'
-  AND cd.case_revision IS DISTINCT FROM ev.event_count;
+  AND cd.case_revision IS DISTINCT FROM ev.event_count + ${CASE_REVISION_OFFSET};
 COMMIT;
 EOF
 }
@@ -253,6 +261,8 @@ report_counts() {
 main() {
   parse_args "$@"
   require_psql
+  validate_case_revision_offset
+  log "CASE_REVISION_OFFSET=${CASE_REVISION_OFFSET}"
   validate_connections
   validate_can_disable_triggers
   validate_target_empty

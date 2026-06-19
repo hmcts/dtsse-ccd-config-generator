@@ -138,8 +138,15 @@ Optional environment variables:
 ```bash
 export DST_SCHEMA='ccd'          # defaults to ccd
 export FDW_SCHEMA='fdw_stage'    # defaults to fdw_stage
+export CASE_REVISION_OFFSET='1000000000'
 export DELTA_SINCE=''            # empty means full load
 ```
+
+`CASE_REVISION_OFFSET` is added to `ccd.case_data.case_revision` after event revisions are
+recalculated. The decentralised Elasticsearch indexer uses `case_data.case_revision` as the
+external Elasticsearch version, so the default high offset lets reindexed migrated cases overwrite
+any existing central CCD Elasticsearch document with a lower revision. Migrated `case_event`
+revisions remain sequential from `1` per case.
 
 Validate before applying:
 
@@ -192,13 +199,16 @@ only.
 The migration script:
 
 * temporarily drops the `case_event` FK and event revision unique index
+* temporarily disables `case_event` user triggers so delta upserts do not write audit rows
 * upserts `case_data` rows from `fdw_stage.case_data` with target triggers suppressed
 * upserts `case_event` rows from `fdw_stage.case_event` for cases already loaded into `ccd.case_data`
 * reruns `case_data` upsert to catch parent cases changed while events were copying
+* reruns `case_event` upsert to catch events for cases loaded or updated by the second `case_data` pass
 * recalculates `case_event.version` and `case_event.case_revision`
-* updates `case_data.case_revision` with target triggers suppressed
+* updates `case_data.case_revision` to the max event revision plus `CASE_REVISION_OFFSET`, with
+  target triggers suppressed
 * checks for orphaned events
-* restores the event revision unique index and FK
+* restores the event revision unique index, FK and `case_event` user triggers
 * resets `case_event_id_seq`
 * runs final validation for counts, orphan events, duplicate event revisions and case revision alignment
 
