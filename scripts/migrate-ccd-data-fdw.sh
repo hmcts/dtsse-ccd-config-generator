@@ -203,6 +203,8 @@ prepare_target() {
   log "Dropping constraints/indexes that block placeholder event revisions..."
 
   psql_dst <<'SQL'
+begin;
+
 alter table :dst_schema.case_event
 drop constraint if exists case_event_case_data_id_fkey;
 
@@ -210,6 +212,8 @@ drop index if exists :dst_schema.idx_case_event_case_data_revision_unique;
 
 alter table :dst_schema.case_event
 disable trigger user;
+
+commit;
 SQL
 
   CONSTRAINTS_DROPPED=true
