@@ -27,22 +27,20 @@ Purpose:
 Request:
 
 - Header: `ServiceAuthorization` is required.
-- Query: `case_type_id` is required.
 - Query: `case_id` is optional.
 - Query: `task_types` is optional and encoded as CSV by the SDK Feign client.
 
 Validation:
 
-- `case_type_id` must not be blank and must be authorised for the calling S2S service.
 - At least one of `case_id` or `task_types` must be present.
 - `case_id`, when present, must not be blank.
 - `task_types`, when present, must not be empty and must not contain blank values.
-- `ClientAccessControlService#hasExclusiveCaseTypeAccess` must return true for the service token and case type.
+- `ClientAccessControlService#hasExclusiveAccess` must return true for the service token.
 
 Implementation:
 
 - `TaskManagementService#getTasks` delegates to `CFTTaskDatabaseService#findAllBy`.
-- The database query builds a JPA specification from the supplied filters and always constrains by `case_type_id`.
+- The database query builds a JPA specification from the supplied filters.
 - `GetTasksResponseMapper` maps persisted `TaskResource` rows to the new response shape.
 - Response is `200 OK` with `tasks` and `total_records`.
 
@@ -98,13 +96,12 @@ Purpose:
 Request:
 
 - Header: `ServiceAuthorization` is required.
-- Body: `TerminateTasksRequest` with `action`, `case_type_id`, and `task_ids`.
+- Body: `TerminateTasksRequest` with `action` and `task_ids`.
 - `action` is `cancel` or `complete` in the OpenAPI enum.
 
 Implementation:
 
-- `TaskManagementService#terminateTasks` converts request IDs to strings, verifies any existing requested task belongs
-  to the request `case_type_id`, and processes each task under a transaction.
+- `TaskManagementService#terminateTasks` converts request IDs to strings and processes each task under a transaction.
 - Each task is loaded with a pessimistic write lock via `findByIdAndObtainLock`.
 - Repeated or already-terminal work is skipped for idempotency.
 - For a cancel request the transient state is set to `CANCELLED`, termination process to
@@ -129,12 +126,11 @@ Purpose:
 Request:
 
 - Header: `ServiceAuthorization` is required.
-- Body: `TaskReconfigureRequest` with `case_type_id` and one or more task payloads.
+- Body: `TaskReconfigureRequest` with one or more task payloads.
 
 Implementation:
 
-- `TaskManagementService#reconfigureTasks` first verifies any existing requested task belongs to the request
-  `case_type_id`, then loads each task by ID using a pessimistic write lock.
+- `TaskManagementService#reconfigureTasks` loads each task by ID using a pessimistic write lock.
 - Only tasks currently in `ASSIGNED` or `UNASSIGNED` are reconfigured.
 - Missing tasks, or tasks in disallowed states, are logged and skipped rather than failing the whole request.
 - `CFTTaskMapper#mapToTaskResourceForReconfigure` updates mutable fields, permissions, work type, hearing fields, and
@@ -151,8 +147,7 @@ Response:
 Security and exception advice:
 
 - `SecurityConfiguration` permits unauthenticated Spring Security access to `GET /tasks`, `POST /tasks`,
-  `POST /tasks/terminate`, and `PUT /tasks/reconfigure`; the controller still enforces S2S exclusive client and
-  case-type access.
+  `POST /tasks/terminate`, and `PUT /tasks/reconfigure`; the controller still enforces S2S exclusive client access.
 - `ApplicationProblemControllerAdvice` now includes the POC controller package.
 
 Task entity and Camunda bypass:
@@ -219,7 +214,7 @@ Important properties:
 `TaskManagementFeignClient` exposes:
 
 - `POST /tasks` for create.
-- `GET /tasks?case_id=...&case_type_id=...&task_types=...` for lookup.
+- `GET /tasks?case_id=...&task_types=...` for lookup.
 - `POST /tasks/terminate` for complete/cancel.
 - `PUT /tasks/reconfigure` for reconfigure.
 
@@ -337,16 +332,14 @@ Within-trigger action priority:
 For each claimed row, the poller dispatches by `requested_action`:
 
 - `initiate`: deserialize `TaskCreateRequest`, then call `POST /tasks` once for each task in the row.
-- `complete`: resolve matching tasks with `GET /tasks` using the trigger case type, then call `POST /tasks/terminate`
-  with action `complete` and the same case type.
-- `cancel`: resolve matching tasks with `GET /tasks` using the trigger case type, then call `POST /tasks/terminate`
-  with action `cancel` and the same case type.
+- `complete`: resolve matching tasks with `GET /tasks`, then call `POST /tasks/terminate` with action `complete`.
+- `cancel`: resolve matching tasks with `GET /tasks`, then call `POST /tasks/terminate` with action `cancel`.
 - `reconfigure`: map stored `TaskPayload` rows into `TaskReconfigurePayload` rows and call `PUT /tasks/reconfigure`.
 
 Termination lookup:
 
 - The outbox payload stores task types, not Task Management task IDs.
-- The poller calls `GET /tasks` using `caseId`, `caseType`, and `taskTypes`.
+- The poller calls `GET /tasks` using `caseId` and `taskTypes`.
 - If lookup succeeds and returns no tasks, the poller treats the action as successful and marks the row `PROCESSED`.
 - If lookup fails, that response is handled as the row failure.
 - If lookup succeeds, the poller sends all returned task IDs to `POST /tasks/terminate`.
@@ -472,9 +465,9 @@ sequenceDiagram
   SVC->>OUT: enqueue complete row in case transaction
   SVC-->>AWAIT: response built but held
   POLL->>OUT: claim complete row
-  POLL->>API: GET /tasks by case_id + case_type_id + task_types
+  POLL->>API: GET /tasks by case_id + task_types
   API-->>POLL: task IDs
-  POLL->>API: POST /tasks/terminate action=complete + case_type_id
+  POLL->>API: POST /tasks/terminate action=complete
   API-->>POLL: 204 No Content
   POLL->>OUT: mark PROCESSED
   OUT-->>AWAIT: PostgreSQL notification
@@ -493,8 +486,7 @@ Use this section as the short version when integrating the library.
 4. Make the payload case ID and case type match the trigger exactly.
 5. Create requests can contain multiple tasks in one outbox row; each task must provide `externalTaskId`, `caseId`, and
    `caseTypeId`. `externalTaskId + caseTypeId` is the Task Management create idempotency key.
-6. Complete and cancel requests specify task types, not task IDs. The poller resolves IDs with `GET /tasks` scoped to
-   the trigger case type.
+6. Complete and cancel requests specify task types, not task IDs. The poller resolves IDs with `GET /tasks`.
 7. Within one trigger, work runs in this priority order: complete, cancel, reconfigure, initiate.
 8. For one case, an earlier due, retrying, processing, or unprocessable trigger blocks later triggers.
 9. A future delayed row that has never been attempted does not block later triggers for the same case.

@@ -69,11 +69,7 @@ public class ApiFirstTaskSequencingEvent implements CCDConfig<CaseData, State, U
     String caseId = String.valueOf(details.getId());
     String caseType = NoFaultDivorce.getCaseType();
     TaskOutboxTrigger trigger = new TaskOutboxTrigger(caseId, caseType, EVENT_ID, now.toLocalDateTime());
-    var getTasksResponse = taskManagementApiClient.getTasks(
-        caseId,
-        caseType,
-        List.of(ApiFirstTaskEvent.TASK_TYPE)
-    );
+    var getTasksResponse = taskManagementApiClient.getTasks(caseId, List.of(ApiFirstTaskEvent.TASK_TYPE));
     if (!getTasksResponse.getStatusCode().is2xxSuccessful()
         || getTasksResponse.getBody() == null
         || getTasksResponse.getBody().getTasks().isEmpty()) {

@@ -16,7 +16,6 @@ Payload fields use `snake_case`.
 ```json
 {
   "action": "Cancel",
-  "case_type_id": "NFD",
   "task_ids": [
     "b49d2f4f-1d9e-4c2a-9f0a-8b0d9b2c90aa",
     "e99b6b54-2b51-4d7c-93c1-9c6c1b7f9014"
@@ -29,9 +28,6 @@ Payload fields use `snake_case`.
 #### action
 Termination action. String. Allowed values: `Cancel`, `Complete`. Required.
 
-#### case_type_id
-CCD case type owned by the calling service. String. Required.
-
 #### task_ids
 List of task IDs to terminate. Array of UUID strings. Required.
 Values must be unique; an empty list returns `400 Bad Request`.
@@ -40,7 +36,7 @@ Values must be unique; an empty list returns `400 Bad Request`.
 `204 No Content` with an empty body.
 
 ## Error Codes
-- `400 Bad Request`: invalid action, missing case type, empty list, invalid task ID format.
+- `400 Bad Request`: invalid action, empty list, invalid task ID format.
 - `401 Unauthorized` / `403 Forbidden`: auth failures.
 - `404 Not Found`: one or more task IDs do not exist.
 

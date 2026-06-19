@@ -65,20 +65,19 @@ public class ApiFirstTaskReconfigureEvent implements CCDConfig<CaseData, State, 
     log.warn("Reconfiguring tasks for case {}: {}", details.getId(), taskTypes);
 
     String caseId = String.valueOf(details.getId());
-    String caseType = NoFaultDivorce.getCaseType();
     List<String> taskTypeNames = taskTypes.stream().map(Enum::name).toList();
-    var getTasksResponse = taskManagementApiClient.getTasks(caseId, caseType, taskTypeNames);
+    var getTasksResponse = taskManagementApiClient.getTasks(caseId, taskTypeNames);
     if (!getTasksResponse.getStatusCode().is2xxSuccessful() || getTasksResponse.getBody() == null) {
       throw new IllegalStateException("Failed to retrieve tasks for reconfiguration");
     }
 
     ReconfigureTaskOutboxPayload payload = new ReconfigureTaskOutboxPayload(
         caseId,
-        caseType,
+        NoFaultDivorce.getCaseType(),
         getTasksResponse.getBody().getTasks()
     );
 
-    TaskOutboxTrigger trigger = TaskOutboxTrigger.create(caseId, caseType, EVENT_ID);
+    TaskOutboxTrigger trigger = TaskOutboxTrigger.create(caseId, NoFaultDivorce.getCaseType(), EVENT_ID);
     taskOutboxService.enqueueTaskReconfigureRequest(trigger, payload);
 
     return AboutToStartOrSubmitResponse.<CaseData, State>builder()

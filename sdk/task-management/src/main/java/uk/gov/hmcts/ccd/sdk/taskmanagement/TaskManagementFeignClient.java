@@ -39,7 +39,6 @@ public interface TaskManagementFeignClient {
   @GetMapping(value = "/tasks", produces = APPLICATION_JSON_VALUE)
   @CollectionFormat(feign.CollectionFormat.CSV)
   ResponseEntity<GetTasksResponse> getTasks(@RequestParam("case_id") String caseId,
-                                            @RequestParam("case_type_id") String caseTypeId,
                                             @RequestParam("task_types") List<String> taskTypes);
 
 }

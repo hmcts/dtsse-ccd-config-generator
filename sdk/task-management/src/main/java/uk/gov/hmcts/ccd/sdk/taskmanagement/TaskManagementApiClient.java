@@ -36,11 +36,10 @@ public class TaskManagementApiClient {
     return feignClient.createTask(new TaskCreateApiRequest(task));
   }
 
-  public ResponseEntity<GetTasksResponse> getTasks(String caseId, String caseTypeId, List<String> taskTypes) {
+  public ResponseEntity<GetTasksResponse> getTasks(String caseId, List<String> taskTypes) {
     requireText(caseId, "caseId");
-    requireText(caseTypeId, "caseTypeId");
     Objects.requireNonNull(taskTypes, "taskTypes must not be null");
-    return feignClient.getTasks(caseId, caseTypeId, taskTypes);
+    return feignClient.getTasks(caseId, taskTypes);
   }
 
   public ResponseEntity<TaskTerminationResponse> terminateTask(TaskTerminationRequest request) {

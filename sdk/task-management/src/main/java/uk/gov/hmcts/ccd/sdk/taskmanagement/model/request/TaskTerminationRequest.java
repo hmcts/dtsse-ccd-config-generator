@@ -7,5 +7,5 @@ import lombok.Builder;
 
 @Builder
 @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
-public record TaskTerminationRequest(String action, String caseTypeId, List<String> taskIds) {
+public record TaskTerminationRequest(String action, List<String> taskIds) {
 }
