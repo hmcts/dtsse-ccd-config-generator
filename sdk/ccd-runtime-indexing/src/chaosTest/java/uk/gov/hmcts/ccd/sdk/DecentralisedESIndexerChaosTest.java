@@ -289,6 +289,32 @@ class DecentralisedESIndexerChaosTest {
     });
   }
 
+  @Test
+  void poisonPillFailuresAreRecordedInDeadLetterQueue() throws Exception {
+    context = startApplication();
+    resetState();
+    createPoisonMapping();
+
+    commitCaseRevision(9001, 9001, POISON_CASE_TYPE, 1, "dead-letter-poison");
+    long eventId = latestEventId(9001);
+
+    await().pollInterval(Duration.ofMillis(250)).atMost(Duration.ofSeconds(30)).untilAsserted(() -> {
+      Map<String, Object> deadLetter = jdbc().queryForMap(
+          """
+          select event_id, index_id, timestamp, failure_message
+            from ccd.es_dead_letter_queue
+           where event_id = :event_id
+             and index_id = :index_id
+          """,
+          Map.of("event_id", eventId, "index_id", POISON_INDEX));
+
+      assertThat(((Number) deadLetter.get("event_id")).longValue()).isEqualTo(eventId);
+      assertThat(deadLetter.get("index_id")).isEqualTo(POISON_INDEX);
+      assertThat(deadLetter.get("timestamp")).isNotNull();
+      assertThat((String) deadLetter.get("failure_message")).isNotBlank();
+    });
+  }
+
   private ConfigurableApplicationContext startApplication() {
     SpringApplication application = new SpringApplicationBuilder(ChaosApplication.class)
         .properties(Map.of(
@@ -484,6 +510,13 @@ class DecentralisedESIndexerChaosTest {
   private long latestRevision(long caseId) {
     return jdbc().queryForObject(
         "select case_revision from ccd.case_data where id = :id",
+        Map.of("id", caseId),
+        Long.class);
+  }
+
+  private long latestEventId(long caseId) {
+    return jdbc().queryForObject(
+        "select max(id) from ccd.case_event where case_data_id = :id",
         Map.of("id", caseId),
         Long.class);
   }
