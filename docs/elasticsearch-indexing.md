@@ -87,6 +87,7 @@ This custom indexing component uses postgres to track all indexing state includi
 
 This enables us to meet the correctness requirements above while improving observability to the owning service team by consolidating all state in a single database.
 
+It must be delivered in a backwards compatible way to existing consumers; eg. sptribs-logstash must continue to function until migration.
 
 ### Case views as source of truth
 

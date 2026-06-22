@@ -25,7 +25,18 @@ configurations {
 
 dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-jdbc'
-    implementation 'org.elasticsearch.client:elasticsearch-rest-client:9.4.2'
+
+    implementation('co.elastic.clients:elasticsearch-java') {
+        version {
+            strictly '9.4.2'
+        }
+    }
+    implementation('co.elastic.clients:elasticsearch-rest5-client') {
+        version {
+            strictly '9.4.2'
+        }
+    }
+
     implementation 'com.fasterxml.jackson.core:jackson-databind'
 
     compileOnly 'org.projectlombok:lombok:1.18.46'
