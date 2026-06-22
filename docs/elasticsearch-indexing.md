@@ -81,4 +81,27 @@ Given that:
 
 a custom approach is warranted.
 
+## ccd-runtime-indexing
 
+This custom indexing component uses postgres to track all indexing state including the dead letter queue - as opposed to logstash container filesystems & dedicated elasticsearch indexes.
+
+This enables us to meet the correctness requirements above while improving observability to the owning service team by consolidating all state in a single database.
+
+
+### Case views as source of truth
+
+A key goal of decentralised data persistence is to decouple a service's domain model and private persistence schema from CCD's case-data JSON - which becomes an API based projection.
+
+Services may persist their authoritative state however they choose, including in arbitrary private tables. They translate that state into the CCD JSON shape defined by their CCD definitions on read via CaseView, and update their private state on write via event handlers.
+
+Consequently each case type's CaseView provides the authoritative CCD JSON projection that is captured for indexing.
+
+During event submission:
+
+1. A committed, non-idempotent event always advances the case revision, yielding R
+2. The physical ccd.case_data.data blob is updated only when the event changes that blob; decentralised services may keep their authoritative state elsewhere
+3. ccd.es_queue records (reference, case_revision) = (case reference, R) in the same transaction
+4. The case type's CaseView is invoked to render the saved case to CCD JSON, yielding V
+5. ccd.case_event stores that immutable event snapshot:
+   1. ccd.case_event.data = V
+   2. ccd.case_event.case_revision = R
