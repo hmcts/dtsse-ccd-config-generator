@@ -106,3 +106,99 @@ During event submission:
 5. ccd.case_event stores that immutable event snapshot:
    1. ccd.case_event.data = V
    2. ccd.case_event.case_revision = R
+
+
+### The indexing of a case event
+
+#### Case views as source of CCD case 'data'
+
+A key goal of decentralised data persistence is to decouple a service's domain model and private persistence schema from CCD's case-data JSON - which becomes an API based projection.
+
+Services may persist their authoritative state however they choose, including in arbitrary private tables. They translate that state into the CCD JSON shape defined by their CCD definitions on read via CaseView, and update their private state on write via event handlers.
+
+Consequently each case type's CaseView provides the authoritative CCD JSON projection that is captured for indexing.
+
+#### Lifecycle of a case event
+
+During event submission:
+
+1. A committed, non-idempotent event always advances the case revision, yielding R
+   2. The case reference C is flagged as requiring indexing at R in the ccd.es_queue table
+      3. `insert into ccd.es_queue(reference, revision) values (C, R) on conflict do update set revision = excluded.revision`
+4. The case type's CaseView is invoked to render the case to CCD's JSON format, yielding V
+5. ccd.case_event stores that rendered event snapshot inserting ccd.case_event E where:
+  1. E.data = V
+  2. E.case_revision = R
+3. After the above transaction commits:
+4. The indexer finds case C requires indexing at revision R
+   5. The indexer locks the row in ccd.es_queue and sets locked_until and lock_token, committing the transaction.
+   6. The indexer loads the most recent case_event.data snapshot V*
+6. The indexer sends a bulk request to Elasticsearch containing
+   7. The case data V* into the [TODO put the case_case_type convention in here]
+      8. With an external version of R using `external_gte` mode
+   8. Where V defines 'SearchCriteria', a custom projection into the `global_search` index
+      8. With an external version of R using `external_gte` mode
+9. The bulk response is processed:
+   10. Successfully indexed documents are removed from ccd.es_queue **where the revision is still current**
+       11. `delete from ccd.es_queue where reference = C and revision = R`
+   12. Transient failures are left in the queue to be retried after a delay
+       13. eg. HTTP 429, timeouts
+   14. Unindexable documents explicitly rejected by Elasticsearch are entered into the dead letter queue.
+
+### Concurrency correctness
+
+This setup is designed to meet the correctness requirents outlined above.
+
+#### No stale updates
+
+Elasticsearch external versioning is used with case revisions to prevent stale updates; an older case revision will be rejected by Elasticsearch.
+
+#### No lost updates
+
+If a case is not already in the queue to be indexed, a database trigger ensures it is enqueued.
+
+If a case is already in the queue to be indexed, its enqueued revision is updated.
+
+This ensures that, if the queued row is locked and being processed, the updated revision will remain in the queue for subsequent indexing and not deleted.
+
+
+#### Minimal lock contention
+
+Locks are only held on the ccd.es_queue table whilst they are updated. They are not held during blocking events like writing to Elasticsearch.
+
+### Indexing table schema
+
+```sql
+create table ccd.es_queue (
+  reference          bigint primary key references ccd.case_data(reference) on delete cascade,
+  case_revision      bigint not null,
+  enqueued_at        timestamptz not null default now(),
+  locked_until       timestamptz,
+  lock_token        uuid
+);
+```
+
+`ccd.es_queue` is written to by the `ccd.enqueue_case_revision` trigger function on the ccd.case_data table.
+
+### The dead letter queue
+
+Cases that cannot be indexed, for example because of a field type change that Elasticsearch will not accept, are tracked in `ccd.es_dead_letter_queue`.
+
+```sql
+create table ccd.es_dead_letter_queue (
+  case_event_id bigint references ccd.case_event(id) on delete cascade,
+  timestamp timestampz not null default now(),
+  case_revision bigint not null,
+  index_id text check (length(trim(index_id)) > 0),
+  failure_message text,
+  primary key (event_id, revision, index_id)
+);
+```
+### Supplementary data-only updates
+
+Supplementary data JSON is indexed into elasticsearch and may be updated outside of a standard CCD event.
+
+Such an update will create a new case revision and trigger the indexing process - but without a matching case_revision in the ccd.case_event table.
+
+Consequently the indexing retrieves the latest case data snapshot from the most recent case_event snapshot, not an exact revision match.
+
