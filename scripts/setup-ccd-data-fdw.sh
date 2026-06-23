@@ -151,14 +151,14 @@ setup_fdw() {
   log "Creating FDW server, user mapping and foreign tables..."
 
   psql_dst <<'SQL'
-create schema if not exists :fdw_schema;
+create schema if not exists :"fdw_schema";
 
-drop foreign table if exists :fdw_schema.case_event;
-drop foreign table if exists :fdw_schema.case_data;
+drop foreign table if exists :"fdw_schema".case_event;
+drop foreign table if exists :"fdw_schema".case_data;
 
-drop server if exists :fdw_server cascade;
+drop server if exists :"fdw_server" cascade;
 
-create server :fdw_server
+create server :"fdw_server"
 foreign data wrapper postgres_fdw
 options (
   host :'src_host',
@@ -168,17 +168,17 @@ options (
 );
 
 create user mapping for :local_user_sql
-server :fdw_server
+server :"fdw_server"
 options (
   user :'src_user',
   password :'src_password'
 );
 
-create foreign table :fdw_schema.case_data (
+create foreign table :"fdw_schema".case_data (
   reference bigint,
   version integer,
   created_date timestamp without time zone,
-  security_classification :dst_schema.securityclassification,
+  security_classification :"dst_schema".securityclassification,
   last_state_modified_date timestamp without time zone,
   resolved_ttl date,
   last_modified timestamp without time zone,
@@ -190,16 +190,16 @@ create foreign table :fdw_schema.case_data (
   id bigint,
   case_revision bigint
 )
-server :fdw_server
+server :"fdw_server"
 options (
   schema_name :'src_schema',
   table_name 'case_data'
 );
 
-create foreign table :fdw_schema.case_event (
+create foreign table :"fdw_schema".case_event (
   id bigint,
   created_date timestamp without time zone,
-  security_classification :dst_schema.securityclassification,
+  security_classification :"dst_schema".securityclassification,
   case_data_id bigint,
   case_type_version integer,
   event_id varchar(70),
@@ -220,7 +220,7 @@ create foreign table :fdw_schema.case_event (
   version integer,
   case_revision bigint
 )
-server :fdw_server
+server :"fdw_server"
 options (
   schema_name :'src_schema',
   table_name 'case_event'
@@ -232,9 +232,9 @@ grant_fdw_access() {
   log "Granting FDW access to ${LOCAL_USER_SQL}..."
 
   psql_dst <<'SQL'
-grant usage on foreign server :fdw_server to :local_user_sql;
-grant usage on schema :fdw_schema to :local_user_sql;
-grant select on :fdw_schema.case_data, :fdw_schema.case_event to :local_user_sql;
+grant usage on foreign server :"fdw_server" to :local_user_sql;
+grant usage on schema :"fdw_schema" to :local_user_sql;
+grant select on :"fdw_schema".case_data, :"fdw_schema".case_event to :local_user_sql;
 SQL
 }
 
@@ -247,13 +247,13 @@ select 'fdw case_event table' as check_name, to_regclass(:'fdw_schema' || '.case
 
 select 'source case_data reachable' as check_name, exists(
   select 1
-  from :fdw_schema.case_data
+  from :"fdw_schema".case_data
   limit 1
 ) as reachable;
 
 select 'source case_event reachable' as check_name, exists(
   select 1
-  from :fdw_schema.case_event
+  from :"fdw_schema".case_event
   limit 1
 ) as reachable;
 SQL
