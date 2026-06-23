@@ -93,6 +93,29 @@ delete from ccd.case_data;
 SQL
 }
 
+install_trigger_guards() {
+  echo "Installing target trigger guards"
+  psql_dst <<'SQL'
+create or replace function ccd.fail_if_migration_trigger_fires()
+returns trigger as $$
+begin
+    raise exception 'Migration write trigger fired on %.% during %',
+        tg_table_schema, tg_table_name, tg_op;
+end;
+$$ language plpgsql;
+
+drop trigger if exists migration_test_case_data_guard on ccd.case_data;
+create trigger migration_test_case_data_guard
+before insert or update on ccd.case_data
+for each row execute function ccd.fail_if_migration_trigger_fires();
+
+drop trigger if exists migration_test_case_event_guard on ccd.case_event;
+create trigger migration_test_case_event_guard
+before insert or update on ccd.case_event
+for each row execute function ccd.fail_if_migration_trigger_fires();
+SQL
+}
+
 assert_target_empty() {
   local dst_cases dst_events
 

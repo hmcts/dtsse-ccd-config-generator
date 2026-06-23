@@ -14,6 +14,7 @@ trap cleanup_temp_dbs EXIT
 create_temp_dbs
 seed_source_data
 clear_target_data
+install_trigger_guards
 
 assert_case_event_constraints_present
 

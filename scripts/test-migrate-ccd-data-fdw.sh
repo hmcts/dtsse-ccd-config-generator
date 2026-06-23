@@ -163,6 +163,7 @@ SQL
 create_temp_dbs
 seed_source_data
 clear_target_data
+install_trigger_guards
 run_fdw_setup
 assert_fdw_setup
 assert_case_event_constraints_present
