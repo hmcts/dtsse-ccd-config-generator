@@ -12,6 +12,7 @@ PG_PASSWORD="${PG_PASSWORD:-postgres}"
 CASE_TYPE="${CASE_TYPE:-CriminalInjuriesCompensation}"
 OTHER_CASE_TYPE="${OTHER_CASE_TYPE:-OtherCaseType}"
 FDW_SCHEMA="${FDW_SCHEMA:-fdw_stage}"
+CASE_REVISION_OFFSET="${CASE_REVISION_OFFSET:-1000000000}"
 
 export PGPASSWORD="$PG_PASSWORD"
 
@@ -47,6 +48,7 @@ psql_src() {
     --no-psqlrc \
     --set=case_type="$CASE_TYPE" \
     --set=other_case_type="$OTHER_CASE_TYPE" \
+    --set=case_revision_offset="$CASE_REVISION_OFFSET" \
     "$@"
 }
 
@@ -56,6 +58,7 @@ psql_dst() {
     --no-psqlrc \
     --set=case_type="$CASE_TYPE" \
     --set=other_case_type="$OTHER_CASE_TYPE" \
+    --set=case_revision_offset="$CASE_REVISION_OFFSET" \
     "$@"
 }
 
@@ -173,14 +176,15 @@ SQL
 assert_case_revision_alignment() {
   local mismatch_count
 
-  echo "Validating migrated case revisions match event counts and max revisions"
+  echo "Validating migrated case revisions match event revisions plus offset"
   mismatch_count="$(psql_dst --quiet -tA <<'SQL'
 with revision_check as (
     select
         cd.id,
         cd.case_revision,
         count(ce.id)::bigint as event_count,
-        coalesce(max(ce.case_revision), 0)::bigint as max_event_revision
+        coalesce(max(ce.case_revision), 0)::bigint as max_event_revision,
+        coalesce(max(ce.case_revision), 0)::bigint + :'case_revision_offset'::bigint as expected_case_revision
     from ccd.case_data cd
     left join ccd.case_event ce
       on ce.case_data_id = cd.id
@@ -189,8 +193,8 @@ with revision_check as (
 )
 select count(*)
 from revision_check
-where case_revision is distinct from event_count
-   or case_revision is distinct from max_event_revision;
+where case_revision is distinct from expected_case_revision
+   or event_count is distinct from max_event_revision;
 SQL
 )"
 
