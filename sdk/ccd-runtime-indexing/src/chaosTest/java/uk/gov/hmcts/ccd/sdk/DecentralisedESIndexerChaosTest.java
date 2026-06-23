@@ -43,6 +43,7 @@ import uk.gov.hmcts.ccd.sdk.config.DecentralisedDataConfiguration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
+import static java.util.Map.entry;
 
 @Testcontainers
 class DecentralisedESIndexerChaosTest {
@@ -63,7 +64,7 @@ class DecentralisedESIndexerChaosTest {
 
   @Container
   private static final ElasticsearchContainer ELASTICSEARCH = new ElasticsearchContainer(
-      DockerImageName.parse("docker.elastic.co/elasticsearch/elasticsearch:8.15.3"))
+      DockerImageName.parse("docker.elastic.co/elasticsearch/elasticsearch:9.4.2"))
       .withNetwork(NETWORK)
       .withNetworkAliases("elasticsearch")
       .withEnv("xpack.security.enabled", "false");
@@ -229,7 +230,7 @@ class DecentralisedESIndexerChaosTest {
   }
 
   @Test
-  void validItemsInMixedBulkCanBeAcceptedEvenWhenPoisonRollsBackQueueDeletion() throws Exception {
+  void validItemsInMixedBulkCanBeAcceptedWhilePoisonDocumentsAreDeadLettered() throws Exception {
     context = startApplication();
     resetState();
     createPoisonMapping();
@@ -244,7 +245,8 @@ class DecentralisedESIndexerChaosTest {
     await().pollInterval(Duration.ofMillis(250)).atMost(Duration.ofSeconds(30)).untilAsserted(() -> {
       JsonNode document = fetchDocument(CASE_INDEX, 8100);
       assertThat(document.path("data").path("marker").asText()).isEqualTo("mixed-valid");
-      assertThat(queueSize()).isGreaterThan(0);
+      assertThat(deadLetterSize()).isEqualTo(99);
+      assertThat(queueSize()).isZero();
     });
   }
 
@@ -315,19 +317,68 @@ class DecentralisedESIndexerChaosTest {
     });
   }
 
+  @Test
+  void globalSearchPoisonFailuresAreRecordedInDeadLetterQueue() throws Exception {
+    context = startApplication();
+    resetState();
+    createGlobalSearchPoisonMapping();
+
+    commitCaseRevisionWithData(
+        9101,
+        9101,
+        CASE_TYPE,
+        1,
+        """
+        {
+          "marker": "global-search-poison",
+          "counter": 9101,
+          "expected_revision": 1,
+          "SearchCriteria": {
+            "OtherCaseReferences": [
+              {
+                "value": {
+                  "CaseReference": "9101"
+                }
+              }
+            ]
+          }
+        }
+        """);
+    long eventId = latestEventId(9101);
+
+    awaitLatestIndexed(9101, 9101, 1);
+    await().pollInterval(Duration.ofMillis(250)).atMost(Duration.ofSeconds(30)).untilAsserted(() -> {
+      Map<String, Object> deadLetter = jdbc().queryForMap(
+          """
+          select event_id, index_id, timestamp, failure_message
+            from ccd.es_dead_letter_queue
+           where event_id = :event_id
+             and index_id = :index_id
+          """,
+          Map.of("event_id", eventId, "index_id", "global_search"));
+
+      assertThat(((Number) deadLetter.get("event_id")).longValue()).isEqualTo(eventId);
+      assertThat(deadLetter.get("index_id")).isEqualTo("global_search");
+      assertThat(deadLetter.get("timestamp")).isNotNull();
+      assertThat((String) deadLetter.get("failure_message")).contains("global_search");
+      assertThat(queueSize()).isZero();
+    });
+  }
+
   private ConfigurableApplicationContext startApplication() {
     SpringApplication application = new SpringApplicationBuilder(ChaosApplication.class)
-        .properties(Map.of(
-            "spring.datasource.url", POSTGRES.getJdbcUrl(),
-            "spring.datasource.username", POSTGRES.getUsername(),
-            "spring.datasource.password", POSTGRES.getPassword(),
-            "spring.datasource.driver-class-name", POSTGRES.getDriverClassName(),
-            "ELASTIC_SEARCH_HOSTS", elasticsearchProxyUrl(),
-            "ccd.sdk.decentralised.poll-interval-ms", "100",
-            "ccd.sdk.indexing.elasticsearch.connect-timeout-ms", "500",
-            "ccd.sdk.indexing.elasticsearch.socket-timeout-ms", "500",
-            "spring.main.banner-mode", "off",
-            "spring.main.web-application-type", "none"
+        .properties(Map.ofEntries(
+            entry("spring.datasource.url", POSTGRES.getJdbcUrl()),
+            entry("spring.datasource.username", POSTGRES.getUsername()),
+            entry("spring.datasource.password", POSTGRES.getPassword()),
+            entry("spring.datasource.driver-class-name", POSTGRES.getDriverClassName()),
+            entry("ELASTIC_SEARCH_HOSTS", elasticsearchProxyUrl()),
+            entry("ccd.sdk.decentralised.poll-interval-ms", "100"),
+            entry("ccd.sdk.indexing.elasticsearch.connect-timeout-ms", "500"),
+            entry("ccd.sdk.indexing.elasticsearch.socket-timeout-ms", "500"),
+            entry("ccd.sdk.indexing.queue-lock-ms", "250"),
+            entry("spring.main.banner-mode", "off"),
+            entry("spring.main.web-application-type", "none")
         ))
         .build();
     return application.run();
@@ -337,6 +388,7 @@ class DecentralisedESIndexerChaosTest {
     restoreElasticsearchConnection();
     deleteIndex(CASE_INDEX);
     deleteIndex(POISON_INDEX);
+    deleteIndex("global_search");
     jdbc().getJdbcTemplate().execute("truncate table ccd.case_data restart identity cascade");
   }
 
@@ -525,6 +577,10 @@ class DecentralisedESIndexerChaosTest {
     return jdbc().queryForObject("select count(*) from ccd.es_queue", Map.of(), Long.class);
   }
 
+  private long deadLetterSize() {
+    return jdbc().queryForObject("select count(*) from ccd.es_dead_letter_queue", Map.of(), Long.class);
+  }
+
   private void makePoisonQueueEntriesOlderThanValidEntry() {
     jdbc().update(
         "update ccd.es_queue set enqueued_at = now() - interval '10 minutes' where reference between 2001 and 2100",
@@ -545,6 +601,27 @@ class DecentralisedESIndexerChaosTest {
               "data": {
                 "properties": {
                   "poison": {
+                    "type": "keyword"
+                  }
+                }
+              }
+            }
+          }
+        }
+        """);
+  }
+
+  private void createGlobalSearchPoisonMapping() throws Exception {
+    sendEsRequest(
+        "PUT",
+        "/global_search",
+        """
+        {
+          "mappings": {
+            "properties": {
+              "data": {
+                "properties": {
+                  "SearchCriteria": {
                     "type": "keyword"
                   }
                 }
