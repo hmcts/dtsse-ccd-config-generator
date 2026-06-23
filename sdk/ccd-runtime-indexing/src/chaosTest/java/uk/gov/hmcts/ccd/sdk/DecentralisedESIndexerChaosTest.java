@@ -303,14 +303,14 @@ class DecentralisedESIndexerChaosTest {
     await().pollInterval(Duration.ofMillis(250)).atMost(Duration.ofSeconds(30)).untilAsserted(() -> {
       Map<String, Object> deadLetter = jdbc().queryForMap(
           """
-          select event_id, index_id, timestamp, failure_message
+          select case_event_id, index_id, timestamp, failure_message
             from ccd.es_dead_letter_queue
-           where event_id = :event_id
+           where case_event_id = :case_event_id
              and index_id = :index_id
           """,
-          Map.of("event_id", eventId, "index_id", POISON_INDEX));
+          Map.of("case_event_id", eventId, "index_id", POISON_INDEX));
 
-      assertThat(((Number) deadLetter.get("event_id")).longValue()).isEqualTo(eventId);
+      assertThat(((Number) deadLetter.get("case_event_id")).longValue()).isEqualTo(eventId);
       assertThat(deadLetter.get("index_id")).isEqualTo(POISON_INDEX);
       assertThat(deadLetter.get("timestamp")).isNotNull();
       assertThat((String) deadLetter.get("failure_message")).isNotBlank();
@@ -350,14 +350,14 @@ class DecentralisedESIndexerChaosTest {
     await().pollInterval(Duration.ofMillis(250)).atMost(Duration.ofSeconds(30)).untilAsserted(() -> {
       Map<String, Object> deadLetter = jdbc().queryForMap(
           """
-          select event_id, index_id, timestamp, failure_message
+          select case_event_id, index_id, timestamp, failure_message
             from ccd.es_dead_letter_queue
-           where event_id = :event_id
+           where case_event_id = :case_event_id
              and index_id = :index_id
           """,
-          Map.of("event_id", eventId, "index_id", "global_search"));
+          Map.of("case_event_id", eventId, "index_id", "global_search"));
 
-      assertThat(((Number) deadLetter.get("event_id")).longValue()).isEqualTo(eventId);
+      assertThat(((Number) deadLetter.get("case_event_id")).longValue()).isEqualTo(eventId);
       assertThat(deadLetter.get("index_id")).isEqualTo("global_search");
       assertThat(deadLetter.get("timestamp")).isNotNull();
       assertThat((String) deadLetter.get("failure_message")).contains("global_search");
@@ -376,7 +376,7 @@ class DecentralisedESIndexerChaosTest {
             entry("ccd.sdk.decentralised.poll-interval-ms", "100"),
             entry("ccd.sdk.indexing.elasticsearch.connect-timeout-ms", "500"),
             entry("ccd.sdk.indexing.elasticsearch.socket-timeout-ms", "500"),
-            entry("ccd.sdk.indexing.queue-lock-ms", "250"),
+            entry("ccd.sdk.indexing.queue-lock-seconds", "1"),
             entry("spring.main.banner-mode", "off"),
             entry("spring.main.web-application-type", "none")
         ))

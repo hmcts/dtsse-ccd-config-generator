@@ -5,6 +5,7 @@ import co.elastic.clients.elasticsearch._types.ErrorCause;
 import co.elastic.clients.elasticsearch._types.Time;
 import co.elastic.clients.elasticsearch._types.VersionType;
 import co.elastic.clients.elasticsearch.core.bulk.BulkOperation;
+import co.elastic.clients.elasticsearch.core.bulk.BulkResponseItem;
 import co.elastic.clients.json.jackson.JacksonJsonpMapper;
 import co.elastic.clients.transport.ElasticsearchTransport;
 import co.elastic.clients.transport.rest5_client.Rest5ClientTransport;
@@ -16,8 +17,11 @@ import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.hc.core5.util.Timeout;
@@ -43,6 +47,7 @@ class DecentralisedESIndexer implements DisposableBean {
   private final ElasticsearchTransport transport;
   private final ElasticsearchClient client;
   private final ObjectMapper mapper = new ObjectMapper();
+  private final int queueLockSeconds;
 
   @Autowired
   public DecentralisedESIndexer(JdbcTemplate jdbcTemplate, TransactionTemplate transactionTemplate,
@@ -51,9 +56,12 @@ class DecentralisedESIndexer implements DisposableBean {
                                 @Value("${ccd.sdk.indexing.elasticsearch.connect-timeout-ms:10000}")
                                 int connectTimeoutMs,
                                 @Value("${ccd.sdk.indexing.elasticsearch.socket-timeout-ms:60000}")
-                                int socketTimeoutMs) {
+                                int socketTimeoutMs,
+                                @Value("${ccd.sdk.indexing.queue-lock-seconds:30}")
+                                int queueLockSeconds) {
     this.jdbcTemplate = jdbcTemplate;
     this.transactionTemplate = transactionTemplate;
+    this.queueLockSeconds = queueLockSeconds;
     var hosts = Arrays.stream(elasticSearchHosts.split(",")).map(String::trim).map(URI::create).toArray(URI[]::new);
     var restClient = Rest5Client.builder(hosts)
         .setRequestConfigCallback(requestConfigBuilder -> {
@@ -93,21 +101,82 @@ class DecentralisedESIndexer implements DisposableBean {
     }
   }
 
+  @SuppressWarnings("unchecked")
   private void pollForNewCases() {
-    transactionTemplate.execute(status -> {
-      // Replicates the behaviour of the previous logstash configuration.
-      // https://github.com/hmcts/rse-cft-lib/blob/94aa0edeb0e1a4337a411ed8e6e20f170ed30bae/cftlib/lib/runtime/compose/logstash/logstash_conf.in#L3
-      var results = jdbcTemplate.queryForList("""
+    UUID lockToken = UUID.randomUUID();
+    List<Map<String, Object>> results = transactionTemplate.execute(status -> claimBatch(lockToken));
+
+    if (results == null || results.isEmpty()) {
+      return;
+    }
+
+    try {
+      var operations = new ArrayList<BulkOperation>();
+      var operationMetadata = new ArrayList<Map<String, Object>>();
+
+      for (Map<String, Object> row : results) {
+        var rowJson = row.get("row").toString();
+        long reference = ((Number) row.get("reference")).longValue();
+        long version = ((Number) row.get("case_revision")).longValue();
+        long eventId = ((Number) row.get("event_id")).longValue();
+        String indexId = row.get("index_id").toString();
+        String docId = row.get("case_data_id").toString();
+
+        appendBulkIndex(operations, indexId, docId, version, rowJson);
+        operationMetadata.add(metadata(reference, version, lockToken, eventId, indexId));
+
+        // Replicate CCD's globalsearch logstash setup.
+        // Where cases define a 'SearchCriteria' field we index certain fields into CCD's central
+        // 'global search' index.
+        // https://github.com/hmcts/cnp-flux-config/blob/master/apps/ccd/ccd-logstash/ccd-logstash.yaml#L99-L175
+        Map<String, Object> map = mapper.readValue(rowJson, Map.class);
+        var data = (Map<String, Object>) map.get("data");
+        if (data.containsKey("SearchCriteria")) {
+          filter(data, "SearchCriteria", "caseManagementLocation", "CaseAccessCategory",
+              "caseNameHmctsInternal", "caseManagementCategory");
+          filter((Map<String, Object>) map.get("supplementary_data"), "HMCTSServiceId");
+          map.remove("last_state_modified_date");
+          map.remove("last_modified");
+          map.remove("created_date");
+          map.put("index_id", "global_search");
+
+          appendBulkIndex(
+              operations,
+              "global_search",
+              docId,
+              version,
+              mapper.writeValueAsString(map));
+          operationMetadata.add(metadata(reference, version, lockToken, eventId, "global_search"));
+        }
+      }
+
+      if (!operations.isEmpty()) {
+        IndexingResult result = executeBulkIndexing(operations, operationMetadata);
+        transactionTemplate.executeWithoutResult(status -> completeIndexing(result));
+      }
+    } catch (Exception e) {
+      throw new RuntimeException(e);
+    }
+  }
+
+  private List<Map<String, Object>> claimBatch(UUID lockToken) {
+    // Replicates the behaviour of the previous logstash configuration.
+    // https://github.com/hmcts/rse-cft-lib/blob/94aa0edeb0e1a4337a411ed8e6e20f170ed30bae/cftlib/lib/runtime/compose/logstash/logstash_conf.in#L3
+    return jdbcTemplate.queryForList("""
           with next_batch as (
               select reference, case_revision
               from ccd.es_queue
+              where locked_until is null
+                 or locked_until < now()
               order by enqueued_at
               limit 100
               for update skip locked
           ),
-          deleted as (
-              delete from ccd.es_queue q
-              using next_batch nb
+          claimed as (
+              update ccd.es_queue q
+              set locked_until = now() + (? * interval '1 second'),
+                  lock_token = ?
+              from next_batch nb
               where q.reference = nb.reference
                 and q.case_revision = nb.case_revision
               returning q.reference, q.case_revision
@@ -117,11 +186,12 @@ class DecentralisedESIndexer implements DisposableBean {
               row.reference,
               row.case_revision,
               row.case_data_id,
+              row.event_id,
               row.index_id
           from (
               select
                   cd.reference,
-                  cd.case_revision,
+                  c.case_revision,
                   cd.case_type_id,
                   lower(cd.case_type_id) || '_cases' as index_id,
                   cd.created_date,
@@ -134,98 +204,136 @@ class DecentralisedESIndexer implements DisposableBean {
                   ce.id as event_id,
                   ce.data,
                   ce.created_date as last_modified
-              from deleted d
-              join ccd.case_data cd on cd.reference = d.reference
+              from claimed c
+              join ccd.case_data cd on cd.reference = c.reference
               join lateral (
                   select ce.*
                   from ccd.case_event ce
                   where ce.case_data_id = cd.id
-                  order by ce.id desc
+                    and ce.case_revision <= c.case_revision
+                  order by ce.case_revision desc, ce.id desc
                   limit 1
               ) ce on true
-              where cd.case_revision = d.case_revision
           ) row
-          """);
-
-      try {
-        var operations = new ArrayList<BulkOperation>();
-
-        for (Map<String, Object> row : results) {
-          var rowJson = row.get("row").toString();
-          long version = ((Number) row.get("case_revision")).longValue();
-          String indexId = row.get("index_id").toString();
-          String docId = row.get("case_data_id").toString();
-
-          appendBulkIndex(operations, indexId, docId, version, rowJson);
-
-          // Replicate CCD's globalsearch logstash setup.
-          // Where cases define a 'SearchCriteria' field we index certain fields into CCD's central
-          // 'global search' index.
-          // https://github.com/hmcts/cnp-flux-config/blob/master/apps/ccd/ccd-logstash/ccd-logstash.yaml#L99-L175
-          Map<String, Object> map = mapper.readValue(rowJson, Map.class);
-          var data = (Map<String, Object>) map.get("data");
-          if (data.containsKey("SearchCriteria")) {
-            filter(data, "SearchCriteria", "caseManagementLocation", "CaseAccessCategory",
-                "caseNameHmctsInternal", "caseManagementCategory");
-            filter((Map<String, Object>) map.get("supplementary_data"), "HMCTSServiceId");
-            map.remove("last_state_modified_date");
-            map.remove("last_modified");
-            map.remove("created_date");
-            map.put("index_id", "global_search");
-
-            appendBulkIndex(
-                operations,
-                "global_search",
-                docId,
-                version,
-                mapper.writeValueAsString(map));
-          }
-        }
-
-        if (!operations.isEmpty() && executeBulkIndexingAndCheckForRollback(operations)) {
-          // Rollback the transaction only if we encountered a non-version-conflict error.
-          log.error("**** Cftlib elasticsearch indexing has genuine failures. Rolling back transaction.");
-          status.setRollbackOnly();
-          return false;
-        }
-        return true;  // Transaction success
-      } catch (Exception e) {
-        throw new RuntimeException(e);
-      }
-    });
+          """, queueLockSeconds, lockToken);
   }
 
-  @SuppressWarnings("unchecked")
-  private boolean executeBulkIndexingAndCheckForRollback(
-      java.util.List<BulkOperation> operations) throws Exception {
+  private IndexingResult executeBulkIndexing(
+      List<BulkOperation> operations,
+      List<Map<String, Object>> operationMetadata
+  ) throws Exception {
     var response = client.bulk(builder -> builder
         .timeout(Time.of(time -> time.time("1m")))
         .operations(operations));
 
+    Map<String, Map<String, Object>> claimsByKey = new HashMap<>();
+    operationMetadata.forEach(metadata -> claimsByKey.putIfAbsent(claimKey(metadata), metadata));
+
     if (!response.errors()) {
-      return false;
+      return new IndexingResult(new ArrayList<>(claimsByKey.values()), List.of());
     }
 
-    boolean hasGenuineFailure = false;
-    for (var item : response.items()) {
-      if (item.status() == 409) {
+    var transientFailureKeys = new java.util.HashSet<String>();
+    var deadLetters = new ArrayList<Map<String, Object>>();
+
+    for (int i = 0; i < response.items().size(); i++) {
+      BulkResponseItem item = response.items().get(i);
+      Map<String, Object> metadata = operationMetadata.get(i);
+      int itemStatus = item.status();
+
+      if (itemStatus >= 200 && itemStatus < 300) {
+        continue;
+      }
+
+      if (itemStatus == 409) {
         // This is a stale event. The version in ES is already higher.
-        // We can safely ignore this and let the transaction commit,
-        // which will remove the item from the es_queue.
+        // The queued revision can be completed because a newer version already exists in Elasticsearch.
         log.info("Stale event processing skipped due to version conflict for id {}: {}",
             item.id(), extractErrorMessage(item.error()));
-      } else if (item.status() >= 400) {
-        hasGenuineFailure = true;
-        log.error("Cftlib elasticsearch indexing error for id {}: {}",
+      } else if (isDocumentRejection(itemStatus, item.error())) {
+        deadLetters.add(Map.of(
+            "case_event_id", metadata.get("event_id"),
+            "case_revision", metadata.get("case_revision"),
+            "index_id", metadata.get("index_id"),
+            "failure_message", "%s: %s".formatted(metadata.get("index_id"), extractErrorMessage(item.error()))
+        ));
+        log.error("Cftlib elasticsearch indexing document rejected for id {}: {}",
+            item.id(), extractErrorMessage(item.error()));
+      } else {
+        transientFailureKeys.add(claimKey(metadata));
+        log.warn("Cftlib elasticsearch indexing transient failure for id {}: {}",
             item.id(), extractErrorMessage(item.error()));
       }
     }
 
-    return hasGenuineFailure;
+    var completedClaims = claimsByKey.entrySet().stream()
+        .filter(entry -> !transientFailureKeys.contains(entry.getKey()))
+        .map(Map.Entry::getValue)
+        .toList();
+
+    return new IndexingResult(completedClaims, deadLetters);
+  }
+
+  private void completeIndexing(IndexingResult result) {
+    for (Map<String, Object> deadLetter : result.deadLetters()) {
+      jdbcTemplate.update("""
+          insert into ccd.es_dead_letter_queue(case_event_id, case_revision, index_id, failure_message)
+          values (?, ?, ?, ?)
+          on conflict (case_event_id, case_revision, index_id) do update
+          set timestamp = now(),
+              failure_message = excluded.failure_message
+          """,
+          deadLetter.get("case_event_id"),
+          deadLetter.get("case_revision"),
+          deadLetter.get("index_id"),
+          deadLetter.get("failure_message"));
+    }
+
+    if (!result.completedClaims().isEmpty()) {
+      var params = result.completedClaims().stream()
+          .map(claim -> new Object[] {
+              claim.get("reference"),
+              claim.get("case_revision"),
+              claim.get("lock_token")
+          })
+          .toList();
+
+      jdbcTemplate.batchUpdate("""
+          merge into ccd.es_queue q
+          using (
+              values (?::bigint, ?::bigint, ?::uuid)
+          ) as completed(reference, case_revision, lock_token)
+             on q.reference = completed.reference
+             and q.lock_token = completed.lock_token
+          when matched and q.case_revision = completed.case_revision then
+              delete
+          when matched then
+              update set
+                  locked_until = null,
+                  lock_token = null
+          """, params);
+    }
+  }
+
+  private boolean isDocumentRejection(int status, ErrorCause error) {
+    if (status == 408 || status == 409 || status == 429 || status == 401 || status == 403 || status >= 500) {
+      return false;
+    }
+
+    if (status == 400 || status == 413) {
+      return true;
+    }
+
+    String type = error == null ? null : error.type();
+    return Set.of(
+        "document_parsing_exception",
+        "mapper_parsing_exception",
+        "strict_dynamic_mapping_exception"
+    ).contains(type);
   }
 
   private void appendBulkIndex(
-      java.util.List<BulkOperation> operations,
+      List<BulkOperation> operations,
       String index,
       String id,
       long version,
@@ -237,6 +345,23 @@ class DecentralisedESIndexer implements DisposableBean {
             .version(version)
             .versionType(VersionType.ExternalGte)
             .document(BinaryData.of(source.getBytes(StandardCharsets.UTF_8), "application/json")))));
+  }
+
+  private Map<String, Object> metadata(long reference, long caseRevision, UUID lockToken, long eventId, String indexId) {
+    Map<String, Object> metadata = new HashMap<>();
+    metadata.put("reference", reference);
+    metadata.put("case_revision", caseRevision);
+    metadata.put("lock_token", lockToken);
+    metadata.put("event_id", eventId);
+    metadata.put("index_id", indexId);
+    return metadata;
+  }
+
+  private String claimKey(Map<String, Object> metadata) {
+    return "%s:%s:%s".formatted(
+        metadata.get("reference"),
+        metadata.get("case_revision"),
+        metadata.get("lock_token"));
   }
 
   private String extractErrorMessage(ErrorCause error) {
@@ -258,4 +383,9 @@ class DecentralisedESIndexer implements DisposableBean {
     terminated.set(true);
     transport.close();
   }
+
+  private record IndexingResult(
+      List<Map<String, Object>> completedClaims,
+      List<Map<String, Object>> deadLetters
+  ) {}
 }
