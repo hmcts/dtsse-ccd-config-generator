@@ -63,7 +63,7 @@ class ServicePersistenceExceptionHandler {
 
   static Optional<String> jsonLocation(Throwable exception) {
     return findCause(exception, JsonProcessingException.class)
-        .map(JsonProcessingException::getLocation)
+        .flatMap(e -> Optional.ofNullable(e.getLocation()))
         .map(ServicePersistenceExceptionHandler::formatJsonLocation);
   }
 
