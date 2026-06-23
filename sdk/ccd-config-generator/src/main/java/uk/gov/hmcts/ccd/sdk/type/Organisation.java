@@ -12,6 +12,7 @@ import uk.gov.hmcts.ccd.sdk.api.ComplexType;
 @Data
 @ComplexType(name = "Organisation", generate = false)
 public class Organisation {
+
   @JsonProperty("OrganisationID")
   private String organisationId;
 
