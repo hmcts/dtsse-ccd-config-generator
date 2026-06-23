@@ -41,7 +41,9 @@ class ServicePersistenceExceptionHandler {
         request.getHeader(IdempotencyEnforcer.IDEMPOTENCY_KEY_HEADER),
         jsonPath(exception).orElse(""),
         jsonLocation(exception).orElse(""),
-        exception.getMostSpecificCause().getMessage(),
+        (exception.getMostSpecificCause() != null
+            ? exception.getMostSpecificCause().getMessage()
+            : exception.getMessage()),
         exception
     );
 
