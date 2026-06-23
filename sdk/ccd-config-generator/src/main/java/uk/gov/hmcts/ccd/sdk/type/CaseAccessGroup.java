@@ -13,7 +13,10 @@ import uk.gov.hmcts.ccd.sdk.api.ComplexType;
 @ComplexType(name = "CaseAccessGroup", generate = false)
 public class CaseAccessGroup {
 
+  @JsonProperty("caseAccessGroupType")
   private String caseAccessGroupType;
+
+  @JsonProperty("caseAccessGroupId")
   private String caseAccessGroupId;
 
   @JsonCreator
