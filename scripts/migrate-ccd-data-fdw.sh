@@ -393,6 +393,9 @@ recalculate_revisions() {
 create index if not exists idx_tmp_case_event_case_data_id_id
 on :dst_schema.case_event (case_data_id, id);
 
+begin;
+set local session_replication_role = replica;
+
 update :dst_schema.case_event t
 set
     version = s.rn::int,
@@ -408,6 +411,8 @@ from (
     where case_type_id in (:case_type_ids)
 ) s
 where t.id = s.id;
+
+commit;
 
 begin;
 set local session_replication_role = replica;

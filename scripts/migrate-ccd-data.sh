@@ -177,6 +177,8 @@ COPY (
 EOF
 )
   insert_sql=$(cat <<'EOF'
+BEGIN;
+SET LOCAL session_replication_role = replica;
 COPY ccd.case_event (
     id,
     created_date,
@@ -201,6 +203,7 @@ COPY ccd.case_event (
     proxied_by_last_name,
     idempotency_key
 ) FROM STDIN WITH (FORMAT CSV);
+COMMIT;
 EOF
 )
 
