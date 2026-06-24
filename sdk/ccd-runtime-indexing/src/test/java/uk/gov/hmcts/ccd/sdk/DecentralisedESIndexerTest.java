@@ -1,11 +1,41 @@
 package uk.gov.hmcts.ccd.sdk;
 
-import org.junit.jupiter.api.Test;
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import org.junit.jupiter.api.Test;
+import org.springframework.boot.test.context.runner.ApplicationContextRunner;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.datasource.DataSourceTransactionManager;
+import org.springframework.jdbc.datasource.DriverManagerDataSource;
+import org.springframework.transaction.support.TransactionTemplate;
+
 class DecentralisedESIndexerTest {
+
+  private final ApplicationContextRunner contextRunner = new ApplicationContextRunner()
+      .withUserConfiguration(DecentralisedESIndexer.class)
+      .withBean(JdbcTemplate.class, () -> new JdbcTemplate(new DriverManagerDataSource()))
+      .withBean(TransactionTemplate.class, () ->
+          new TransactionTemplate(new DataSourceTransactionManager(new DriverManagerDataSource())));
+
+  @Test
+  void doesNotStartIndexerWhenDecentralisedConfigurationIsMissing() {
+    contextRunner.run(context -> assertThat(context).doesNotHaveBean(DecentralisedESIndexer.class));
+  }
+
+  @Test
+  void doesNotStartIndexerWhenDecentralisedConfigurationIsFalse() {
+    contextRunner
+        .withPropertyValues("ccd.sdk.decentralised=false")
+        .run(context -> assertThat(context).doesNotHaveBean(DecentralisedESIndexer.class));
+  }
+
+  @Test
+  void startsIndexerWhenDecentralisedConfigurationIsTrue() {
+    contextRunner
+        .withPropertyValues("ccd.sdk.decentralised=true")
+        .run(context -> assertThat(context).hasSingleBean(DecentralisedESIndexer.class));
+  }
 
   @Test
   void parsesSingleHostWithScheme() {

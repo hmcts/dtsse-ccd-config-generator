@@ -23,8 +23,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 @ConditionalOnProperty(
     name = "ccd.sdk.decentralised",
-    havingValue = "true",
-    matchIfMissing = true)
+    havingValue = "true")
 @Component
 @Slf4j
 class DecentralisedESIndexer implements DisposableBean {
