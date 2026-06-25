@@ -116,6 +116,13 @@ The delta overlap intentionally reprocesses a small amount of recent data. Upser
 and the overlap protects against late-committing transactions whose `last_modified` timestamp falls
 just before the previous completed delta boundary.
 
+The SDK default `batchSize` is deliberately conservative, but production migrations should tune it
+with a lower environment rehearsal. Larger batches reduce transaction, FDW round-trip and progress
+update overhead, so they are usually faster when cases have a modest number of events. Start with
+`500` or `1_000` cases per batch, then adjust using the observed per-chunk duration and event count.
+Use a smaller batch size if individual cases have very large event histories or if chunks approach
+the maximum runtime window.
+
 ## Full validation
 
 Full validation logs final counts, checks for orphaned `case_event` rows, and verifies
@@ -131,7 +138,7 @@ Configure `validationMode` with one of:
 
 ## Example Spring integration
 
-This example wires an ET migration task that copies two case types in batches of 100 cases and stops
+This example wires an ET migration task that copies two case types in batches of 500 cases and stops
 after either 4 hours or 06:00 UTC, whichever happens first.
 
 ```java
@@ -166,7 +173,7 @@ public class EtCcdDataMigrationTask extends CcdDataMigrationTask {
             .taskName("et-ccd-data-migration")
             .targetSchema("ccd")
             .fdwSchema("fdw_stage")
-            .batchSize(100)
+            .batchSize(500)
             .maxBatchesPerRun(1_000)
             .maxRunTime(Duration.ofHours(4))
             .runUntil(LocalDateTime.of(LocalDate.now(ZoneOffset.UTC), LocalTime.of(6, 0)))
@@ -239,6 +246,12 @@ Run a lower environment rehearsal first with representative data volumes. Check 
 * `stoppedByTimeLimit=true` when a run deliberately stops after an overnight window
 * `target_prepared=true` in `ccd.ccd_data_migration_progress` while a partial migration is still
   waiting to resume
+
+Use the rehearsal to choose the production `batchSize`. The target is to keep chunks large enough to
+avoid excessive per-batch overhead, but small enough that a single chunk completes comfortably before
+the end of the overnight window. If the logs show consistently small event counts and short chunk
+times, increase the batch size. If one chunk takes too long or contains unusually large event
+histories, reduce it before production.
 
 For production, agree the FDW setup and database permissions with PlatOps before enabling the
 scheduled task. A partial migration deliberately leaves the `case_event` FK, event revision unique
