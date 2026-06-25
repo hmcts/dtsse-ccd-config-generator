@@ -134,14 +134,15 @@ public abstract class CcdDataMigrationTask implements Runnable {
   public final CcdDataMigrationRunResult runMigration() {
     log.info(
         "Starting CCD data migration task taskName={} caseTypeIds={} batchSize={} maxBatchesPerRun={} "
-            + "maxRunTime={} runUntil={} deltaOverlap={}",
+            + "maxRunTime={} runUntil={} deltaOverlap={} validationMode={}",
         options.taskName(),
         options.caseTypeIds(),
         options.batchSize(),
         options.maxBatchesPerRun(),
         options.maxRunTime(),
         options.runUntil(),
-        options.deltaOverlap()
+        options.deltaOverlap(),
+        options.validationMode()
     );
 
     validateDecentralisedRuntimeDisabled();
@@ -157,8 +158,10 @@ public abstract class CcdDataMigrationTask implements Runnable {
       RunTotals totals = processAvailableBatches();
       Progress progress = loadProgress();
       if (totals.caughtUp() && progress.targetPrepared()) {
-        finishMigration();
+        restoreTargetAfterCatchUp();
+        progress = loadProgress();
       }
+      runFullValidationIfEnabled(progress);
 
       log.info(
           "Completed CCD data migration taskName={} batches={} cases={} events={} caughtUp={} stoppedByTimeLimit={}",
@@ -187,13 +190,34 @@ public abstract class CcdDataMigrationTask implements Runnable {
     }
   }
 
-  private void finishMigration() {
-    validateNoOrphans();
+  private void restoreTargetAfterCatchUp() {
     restoreConstraints();
     markTargetRestored();
     resetSequences();
+  }
+
+  private void runFullValidationIfEnabled(Progress progress) {
+    if (!shouldRunFullValidation(progress)) {
+      log.info(
+          "Skipping CCD data migration full validation taskName={} validationMode={} phase={}",
+          options.taskName(),
+          options.validationMode(),
+          progress.phase()
+      );
+      return;
+    }
+
+    validateNoOrphans();
     finalValidation();
     validateCaseRevisionAlignment();
+  }
+
+  private boolean shouldRunFullValidation(Progress progress) {
+    return switch (options.validationMode()) {
+      case ALWAYS -> true;
+      case NEVER -> false;
+      case DELTA_ONLY -> DELTA_PHASE.equals(progress.phase());
+    };
   }
 
   protected CcdDataMigrationTaskOptions options() {

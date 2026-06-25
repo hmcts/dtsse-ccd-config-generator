@@ -22,7 +22,8 @@ public record CcdDataMigrationTaskOptions(
     int maxBatchesPerRun,
     Duration maxRunTime,
     LocalDateTime runUntil,
-    Duration deltaOverlap
+    Duration deltaOverlap,
+    CcdDataMigrationValidationMode validationMode
 ) {
   private static final Pattern SQL_IDENTIFIER = Pattern.compile("[A-Za-z_][A-Za-z0-9_]*");
 
@@ -49,6 +50,9 @@ public record CcdDataMigrationTaskOptions(
     }
     if (deltaOverlap.isNegative()) {
       throw new IllegalArgumentException("deltaOverlap must be zero or greater");
+    }
+    if (validationMode == null) {
+      validationMode = CcdDataMigrationValidationMode.DELTA_ONLY;
     }
   }
 
@@ -131,6 +135,7 @@ public record CcdDataMigrationTaskOptions(
     private Duration maxRunTime;
     private LocalDateTime runUntil;
     private Duration deltaOverlap = Duration.ofMinutes(15);
+    private CcdDataMigrationValidationMode validationMode = CcdDataMigrationValidationMode.DELTA_ONLY;
 
     private Builder(List<String> caseTypeIds) {
       this.caseTypeIds = caseTypeIds;
@@ -181,6 +186,11 @@ public record CcdDataMigrationTaskOptions(
       return this;
     }
 
+    public Builder validationMode(CcdDataMigrationValidationMode validationMode) {
+      this.validationMode = validationMode;
+      return this;
+    }
+
     public CcdDataMigrationTaskOptions build() {
       return new CcdDataMigrationTaskOptions(
           taskName,
@@ -192,7 +202,8 @@ public record CcdDataMigrationTaskOptions(
           maxBatchesPerRun,
           maxRunTime,
           runUntil,
-          deltaOverlap
+          deltaOverlap,
+          validationMode
       );
     }
   }

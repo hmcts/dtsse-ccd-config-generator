@@ -106,6 +106,7 @@ Configure one or more limits:
 * `maxRunTime`: maximum elapsed runtime for one invocation
 * `runUntil`: fixed date/time after which the invocation should stop
 * `deltaOverlap`: overlap applied when opening delta windows, default 15 minutes
+* `validationMode`: when to run full table validation, default `DELTA_ONLY`
 
 If both `maxRunTime` and `runUntil` are set, the earlier deadline is used. The returned
 `CcdDataMigrationRunResult` includes `stoppedByTimeLimit` so scheduled jobs can distinguish a
@@ -114,6 +115,19 @@ planned time stop from a caught-up migration.
 The delta overlap intentionally reprocesses a small amount of recent data. Upserts are idempotent,
 and the overlap protects against late-committing transactions whose `last_modified` timestamp falls
 just before the previous completed delta boundary.
+
+## Full validation
+
+Full validation logs final counts, checks for orphaned `case_event` rows, and verifies
+`case_data.case_revision` against the migrated events. These checks scan the target CCD tables for
+the configured case types, so large migrations may need to avoid running them during every initial
+load window.
+
+Configure `validationMode` with one of:
+
+* `DELTA_ONLY`: run full validation while the saved progress is in delta mode. This is the default.
+* `ALWAYS`: run full validation after every invocation that acquires the migration lock.
+* `NEVER`: skip full validation. Use this only when validation is handled separately.
 
 ## Example Spring integration
 
@@ -135,6 +149,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.PlatformTransactionManager;
 import uk.gov.hmcts.ccd.sdk.migration.CcdDataMigrationTask;
 import uk.gov.hmcts.ccd.sdk.migration.CcdDataMigrationTaskOptions;
+import uk.gov.hmcts.ccd.sdk.migration.CcdDataMigrationValidationMode;
 
 @Component
 public class EtCcdDataMigrationTask extends CcdDataMigrationTask {
@@ -156,6 +171,7 @@ public class EtCcdDataMigrationTask extends CcdDataMigrationTask {
             .maxRunTime(Duration.ofHours(4))
             .runUntil(LocalDateTime.of(LocalDate.now(ZoneOffset.UTC), LocalTime.of(6, 0)))
             .deltaOverlap(Duration.ofMinutes(15))
+            .validationMode(CcdDataMigrationValidationMode.DELTA_ONLY)
             .caseRevisionOffset(1_000_000_000L)
             .build(),
         environment

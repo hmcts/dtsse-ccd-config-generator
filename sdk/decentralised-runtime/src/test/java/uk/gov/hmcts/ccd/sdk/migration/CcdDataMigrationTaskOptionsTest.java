@@ -22,6 +22,7 @@ class CcdDataMigrationTaskOptionsTest {
     assertThat(options.maxRunTime()).isNull();
     assertThat(options.runUntil()).isNull();
     assertThat(options.deltaOverlap()).isEqualTo(Duration.ofMinutes(15));
+    assertThat(options.validationMode()).isEqualTo(CcdDataMigrationValidationMode.DELTA_ONLY);
   }
 
   @Test

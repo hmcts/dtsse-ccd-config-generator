@@ -271,6 +271,50 @@ class CcdDataMigrationTaskIntegrationTest {
   }
 
   @Test
+  void skipsFullValidationWhenValidationModeIsNever() {
+    insertSourceCase(10, 1000000000000010L, 1, "Submitted", "{\"field\":\"one\"}");
+    insertSourceCaseEvent(101, 10, "create", "Submitted", "{\"field\":\"one\"}");
+
+    var initialOptions = CcdDataMigrationTaskOptions.builder(List.of("TestCase"))
+        .deltaOverlap(Duration.ZERO)
+        .build();
+    new TestMigrationTask(jdbc, transactionManager, initialOptions).runMigration();
+
+    moveSourceCaseOutsideNextDeltaWindow(10);
+    corruptTargetCaseRevision(10);
+
+    var skipValidationOptions = CcdDataMigrationTaskOptions.builder(List.of("TestCase"))
+        .deltaOverlap(Duration.ZERO)
+        .validationMode(CcdDataMigrationValidationMode.NEVER)
+        .build();
+
+    CcdDataMigrationRunResult result = new TestMigrationTask(jdbc, transactionManager, skipValidationOptions)
+        .runMigration();
+
+    assertThat(result.caughtUp()).isTrue();
+    assertThat(caseRevision(10)).isZero();
+  }
+
+  @Test
+  void runsFullValidationWhenValidationModeIsDeltaOnlyAndProgressIsInDeltaPhase() {
+    insertSourceCase(10, 1000000000000010L, 1, "Submitted", "{\"field\":\"one\"}");
+    insertSourceCaseEvent(101, 10, "create", "Submitted", "{\"field\":\"one\"}");
+
+    var options = CcdDataMigrationTaskOptions.builder(List.of("TestCase"))
+        .deltaOverlap(Duration.ZERO)
+        .validationMode(CcdDataMigrationValidationMode.DELTA_ONLY)
+        .build();
+    new TestMigrationTask(jdbc, transactionManager, options).runMigration();
+
+    moveSourceCaseOutsideNextDeltaWindow(10);
+    corruptTargetCaseRevision(10);
+
+    assertThatThrownBy(() -> new TestMigrationTask(jdbc, transactionManager, options).runMigration())
+        .isInstanceOf(CcdDataMigrationException.class)
+        .hasMessageContaining("case_data.case_revision mismatches");
+  }
+
+  @Test
   void failsWithDocsLinkWhenFdwTablesAreMissing() {
     jdbc.getJdbcTemplate().execute("drop schema fdw_stage cascade");
 
@@ -584,6 +628,25 @@ class CcdDataMigrationTaskIntegrationTest {
         "select case_revision from ccd.case_data where id = :id",
         Map.of("id", id),
         Long.class
+    );
+  }
+
+  private void corruptTargetCaseRevision(long id) {
+    jdbc.getJdbcTemplate().execute("alter table ccd.case_data disable trigger user");
+    try {
+      jdbc.update(
+          "update ccd.case_data set case_revision = 0 where id = :id",
+          Map.of("id", id)
+      );
+    } finally {
+      jdbc.getJdbcTemplate().execute("alter table ccd.case_data enable trigger user");
+    }
+  }
+
+  private void moveSourceCaseOutsideNextDeltaWindow(long id) {
+    jdbc.update(
+        "update source.case_data set last_modified = timestamp '2000-01-01 00:00:00' where id = :id",
+        Map.of("id", id)
     );
   }
 
