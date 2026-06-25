@@ -240,6 +240,11 @@ public abstract class CcdDataMigrationTask implements Runnable {
           and table_name = 'ccd_data_migration_progress'
           and column_name in (
             'task_name',
+            'config_hash',
+            'target_schema',
+            'fdw_schema',
+            'case_type_ids',
+            'case_revision_offset',
             'phase',
             'window_start',
             'window_end',
@@ -257,7 +262,7 @@ public abstract class CcdDataMigrationTask implements Runnable {
         Map.of("schema", options.targetSchema()),
         Integer.class
     );
-    if (columnCount == null || columnCount != 13) {
+    if (columnCount == null || columnCount != 18) {
       throw new CcdDataMigrationException(
           "CCD data migration progress table is missing or incomplete. "
               + "Run the decentralised-runtime Flyway migrations before starting the task."
@@ -467,24 +472,39 @@ public abstract class CcdDataMigrationTask implements Runnable {
         """
         insert into %s (
           task_name,
+          config_hash,
+          target_schema,
+          fdw_schema,
+          case_type_ids,
+          case_revision_offset,
           phase,
           window_end
         ) values (
           :taskName,
+          :configHash,
+          :targetSchema,
+          :fdwSchema,
+          :caseTypeIds,
+          :caseRevisionOffset,
           :phase,
           now() at time zone 'UTC'
         )
         on conflict (task_name) do nothing
         """.formatted(progressTable),
-        Map.of("taskName", options.taskName(), "phase", INITIAL_PHASE)
+        progressConfigParams().addValue("phase", INITIAL_PHASE)
     );
     return loadProgress();
   }
 
   private Progress loadProgress() {
-    return db.queryForObject(
+    Progress progress = db.queryForObject(
         """
         select task_name,
+               config_hash,
+               target_schema,
+               fdw_schema,
+               case_type_ids,
+               case_revision_offset,
                phase,
                window_start,
                window_end,
@@ -501,6 +521,31 @@ public abstract class CcdDataMigrationTask implements Runnable {
         Map.of("taskName", options.taskName()),
         this::mapProgress
     );
+    validateProgressConfiguration(progress);
+    return progress;
+  }
+
+  private MapSqlParameterSource progressConfigParams() {
+    return new MapSqlParameterSource()
+        .addValue("taskName", options.taskName())
+        .addValue("configHash", options.migrationConfigHash())
+        .addValue("targetSchema", options.targetSchema())
+        .addValue("fdwSchema", options.fdwSchema())
+        .addValue("caseTypeIds", options.canonicalCaseTypeIds())
+        .addValue("caseRevisionOffset", options.caseRevisionOffset());
+  }
+
+  private void validateProgressConfiguration(Progress progress) {
+    if (!options.migrationConfigHash().equals(progress.configHash())) {
+      throw new CcdDataMigrationException(
+          "CCD data migration progress for taskName=" + options.taskName()
+              + " was created with a different migration configuration. Existing configuration: "
+              + progress.configSummary() + ". Current configuration: "
+              + options.migrationConfigSummary()
+              + ". Use a new taskName for a different migration, or reset ccd_data_migration_progress only "
+              + "after confirming the existing migration state is no longer needed."
+      );
+    }
   }
 
   private Progress prepareDeltaWindow(Progress progress) {
@@ -983,6 +1028,11 @@ public abstract class CcdDataMigrationTask implements Runnable {
 
   private Progress mapProgress(ResultSet rs, int rowNum) throws SQLException {
     return new Progress(
+        rs.getString("config_hash"),
+        rs.getString("target_schema"),
+        rs.getString("fdw_schema"),
+        rs.getString("case_type_ids"),
+        rs.getLong("case_revision_offset"),
         rs.getString("phase"),
         rs.getObject("window_start", LocalDateTime.class),
         rs.getObject("window_end", LocalDateTime.class),
@@ -1009,6 +1059,11 @@ public abstract class CcdDataMigrationTask implements Runnable {
   }
 
   private record Progress(
+      String configHash,
+      String targetSchema,
+      String fdwSchema,
+      String caseTypeIds,
+      long caseRevisionOffset,
       String phase,
       LocalDateTime windowStart,
       LocalDateTime windowEnd,
@@ -1020,6 +1075,12 @@ public abstract class CcdDataMigrationTask implements Runnable {
       long totalEvents,
       boolean targetPrepared
   ) {
+    private String configSummary() {
+      return "targetSchema=" + targetSchema
+          + ", fdwSchema=" + fdwSchema
+          + ", caseTypeIds=" + caseTypeIds
+          + ", caseRevisionOffset=" + caseRevisionOffset;
+    }
   }
 
   private record CaseDataCursor(long id, LocalDateTime modifiedAt) {

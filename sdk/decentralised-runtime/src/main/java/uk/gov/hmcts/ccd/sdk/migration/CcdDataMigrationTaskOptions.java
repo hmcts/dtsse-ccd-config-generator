@@ -1,11 +1,16 @@
 package uk.gov.hmcts.ccd.sdk.migration;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.HexFormat;
 import java.util.List;
 import java.util.Objects;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 public record CcdDataMigrationTaskOptions(
     String taskName,
@@ -49,6 +54,42 @@ public record CcdDataMigrationTaskOptions(
 
   public static Builder builder(List<String> caseTypeIds) {
     return new Builder(caseTypeIds);
+  }
+
+  String migrationConfigHash() {
+    return sha256(migrationConfigFingerprint());
+  }
+
+  String migrationConfigSummary() {
+    return "targetSchema=" + targetSchema
+        + ", fdwSchema=" + fdwSchema
+        + ", caseTypeIds=" + canonicalCaseTypeIds()
+        + ", caseRevisionOffset=" + caseRevisionOffset;
+  }
+
+  String canonicalCaseTypeIds() {
+    return caseTypeIds.stream()
+        .sorted()
+        .collect(Collectors.joining(","));
+  }
+
+  private String migrationConfigFingerprint() {
+    return String.join(
+        "\n",
+        "targetSchema=" + targetSchema,
+        "fdwSchema=" + fdwSchema,
+        "caseTypeIds=" + canonicalCaseTypeIds(),
+        "caseRevisionOffset=" + caseRevisionOffset
+    );
+  }
+
+  private static String sha256(String value) {
+    try {
+      return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
+          .digest(value.getBytes(StandardCharsets.UTF_8)));
+    } catch (NoSuchAlgorithmException ex) {
+      throw new IllegalStateException("SHA-256 is not available", ex);
+    }
   }
 
   static String requireIdentifier(String value, String fieldName) {

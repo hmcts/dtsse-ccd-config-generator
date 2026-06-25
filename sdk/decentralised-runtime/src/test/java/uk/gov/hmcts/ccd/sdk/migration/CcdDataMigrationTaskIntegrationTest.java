@@ -152,6 +152,49 @@ class CcdDataMigrationTaskIntegrationTest {
   }
 
   @Test
+  void resumesWhenOnlyRuntimeLimitsChange() {
+    insertSourceCase(10, 1000000000000010L, 1, "Submitted", "{\"field\":\"one\"}");
+    insertSourceCase(20, 1000000000000020L, 1, "Submitted", "{\"field\":\"two\"}");
+
+    var firstRunOptions = CcdDataMigrationTaskOptions.builder(List.of("TestCase"))
+        .batchSize(1)
+        .maxBatchesPerRun(1)
+        .deltaOverlap(Duration.ZERO)
+        .build();
+    new TestMigrationTask(jdbc, transactionManager, firstRunOptions).runMigration();
+
+    var resumedOptions = CcdDataMigrationTaskOptions.builder(List.of("TestCase"))
+        .batchSize(10)
+        .maxBatchesPerRun(10)
+        .maxRunTime(Duration.ofHours(1))
+        .deltaOverlap(Duration.ZERO)
+        .build();
+    CcdDataMigrationRunResult resumedRun = new TestMigrationTask(jdbc, transactionManager, resumedOptions)
+        .runMigration();
+
+    assertThat(resumedRun.batchesProcessed()).isEqualTo(1);
+    assertThat(countRows("ccd.case_data")).isEqualTo(2);
+  }
+
+  @Test
+  void failsWhenExistingProgressWasCreatedForDifferentMigrationConfiguration() {
+    insertSourceCase(10, 1000000000000010L, 1, "Submitted", "{\"field\":\"one\"}");
+    task(1, 1).runMigration();
+
+    var differentCaseTypeOptions = CcdDataMigrationTaskOptions.builder(List.of("OtherCase"))
+        .taskName("ccd-data-migration")
+        .deltaOverlap(Duration.ZERO)
+        .build();
+
+    assertThatThrownBy(() -> new TestMigrationTask(jdbc, transactionManager, differentCaseTypeOptions).runMigration())
+        .isInstanceOf(CcdDataMigrationException.class)
+        .hasMessageContaining("different migration configuration")
+        .hasMessageContaining("Existing configuration")
+        .hasMessageContaining("Current configuration")
+        .hasMessageContaining("Use a new taskName");
+  }
+
+  @Test
   void doesNotPrepareTargetWhenThereIsNoDataToMigrate() {
     CcdDataMigrationRunResult result = task(10, 10).runMigration();
 

@@ -1,5 +1,10 @@
 create table ccd.ccd_data_migration_progress (
     task_name varchar(255) primary key,
+    config_hash varchar(64) not null,
+    target_schema varchar(255) not null,
+    fdw_schema varchar(255) not null,
+    case_type_ids text not null,
+    case_revision_offset bigint not null,
     phase varchar(20) not null,
     window_start timestamp without time zone,
     window_end timestamp without time zone not null,

@@ -25,6 +25,39 @@ class CcdDataMigrationTaskOptionsTest {
   }
 
   @Test
+  void migrationConfigHashIgnoresRuntimeLimitsAndCaseTypeOrder() {
+    var first = CcdDataMigrationTaskOptions.builder(List.of("CaseB", "CaseA"))
+        .batchSize(1)
+        .maxBatchesPerRun(1)
+        .maxRunTime(Duration.ofMinutes(10))
+        .deltaOverlap(Duration.ZERO)
+        .build();
+
+    var second = CcdDataMigrationTaskOptions.builder(List.of("CaseA", "CaseB"))
+        .batchSize(500)
+        .maxBatchesPerRun(500)
+        .maxRunTime(Duration.ofHours(4))
+        .deltaOverlap(Duration.ofMinutes(30))
+        .build();
+
+    assertThat(second.migrationConfigHash()).isEqualTo(first.migrationConfigHash());
+    assertThat(second.canonicalCaseTypeIds()).isEqualTo("CaseA,CaseB");
+  }
+
+  @Test
+  void migrationConfigHashChangesForMigrationIdentityChanges() {
+    var original = CcdDataMigrationTaskOptions.builder(List.of("TestCase")).build();
+
+    assertThat(CcdDataMigrationTaskOptions.builder(List.of("OtherCase")).build().migrationConfigHash())
+        .isNotEqualTo(original.migrationConfigHash());
+    assertThat(CcdDataMigrationTaskOptions.builder(List.of("TestCase"))
+        .caseRevisionOffset(2_000_000_000L)
+        .build()
+        .migrationConfigHash())
+        .isNotEqualTo(original.migrationConfigHash());
+  }
+
+  @Test
   void rejectsUnsafeSchemaNames() {
     assertThatThrownBy(() -> CcdDataMigrationTaskOptions.builder(List.of("TestCase"))
         .targetSchema("ccd;drop schema ccd")

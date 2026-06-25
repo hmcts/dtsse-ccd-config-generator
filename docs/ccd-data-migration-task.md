@@ -62,6 +62,8 @@ The decentralised runtime Flyway migrations create `ccd.ccd_data_migration_progr
 records:
 
 * task name
+* migration configuration fingerprint
+* target schema, FDW schema, case type IDs and case revision offset
 * current phase: initial load or delta catch-up
 * current source window
 * last copied source modified timestamp in delta mode
@@ -78,6 +80,13 @@ previous completed window. Delta progress is ordered by
 `coalesce(last_modified, created_date), id`, not just by ID, so an older case ID updated later in the
 same window is still picked up. This lets a service run the task overnight, stop cleanly, then
 continue the next day without starting again.
+
+Saved progress is tied to the migration definition. A later run with the same `taskName` must use
+the same target schema, FDW schema, case type IDs and case revision offset. Changing operational
+limits such as `batchSize`, `maxBatchesPerRun`, `maxRunTime`, `runUntil` or `deltaOverlap` is allowed,
+but changing the migration definition fails fast. Use a new `taskName` for a different migration, or
+manually reset the progress row only after confirming the previous migration state is no longer
+needed.
 
 The target is prepared only when the task has a real batch to copy. If a run stops because of
 `maxBatchesPerRun`, `maxRunTime`, or `runUntil`, the progress table keeps `target_prepared=true` and
