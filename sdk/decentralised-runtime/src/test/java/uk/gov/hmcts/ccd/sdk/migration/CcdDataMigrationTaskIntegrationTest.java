@@ -115,6 +115,20 @@ class CcdDataMigrationTaskIntegrationTest {
   }
 
   @Test
+  void copiesEventsBySelectedParentCaseIdsWhenEventCaseTypeIsInconsistent() {
+    insertSourceCase(10, 1000000000000010L, 1, "Submitted", "{\"field\":\"one\"}");
+    insertSourceCaseEvent(101, 10, "create", "Submitted", "{\"field\":\"one\"}", "OtherCase");
+
+    CcdDataMigrationRunResult result = task(10, 10).runMigration();
+
+    assertThat(result.batchesProcessed()).isEqualTo(1);
+    assertThat(countRows("ccd.case_data")).isEqualTo(1);
+    assertThat(countRows("ccd.case_event")).isEqualTo(1);
+    assertThat(caseRevision(10)).isEqualTo(CASE_REVISION_OFFSET + 1);
+    assertThat(targetCaseEventCaseType(101)).isEqualTo("OtherCase");
+  }
+
+  @Test
   void skipsWhenAnotherInstanceHoldsTheAdvisoryLock() throws Exception {
     insertSourceCase(10, 1000000000000010L, 1, "Submitted", "{\"field\":\"one\"}");
 
@@ -534,12 +548,24 @@ class CcdDataMigrationTaskIntegrationTest {
   }
 
   private void insertSourceCaseEvent(long id, long caseDataId, String eventId, String stateId, String data) {
+    insertSourceCaseEvent(id, caseDataId, eventId, stateId, data, "TestCase");
+  }
+
+  private void insertSourceCaseEvent(
+      long id,
+      long caseDataId,
+      String eventId,
+      String stateId,
+      String data,
+      String caseTypeId
+  ) {
     var params = new MapSqlParameterSource()
         .addValue("id", id)
         .addValue("caseDataId", caseDataId)
         .addValue("eventId", eventId)
         .addValue("stateId", stateId)
-        .addValue("data", data);
+        .addValue("data", data)
+        .addValue("caseTypeId", caseTypeId);
     jdbc.update(
         """
         insert into source.case_event (
@@ -575,7 +601,7 @@ class CcdDataMigrationTaskIntegrationTest {
           'summary',
           'description',
           'user-1',
-          'TestCase',
+          :caseTypeId,
           :stateId,
           :data::jsonb,
           'Test',
@@ -656,6 +682,14 @@ class CcdDataMigrationTaskIntegrationTest {
 
   private String targetCaseData(long id) {
     return jdbc.queryForObject("select data::text from ccd.case_data where id = :id", Map.of("id", id), String.class);
+  }
+
+  private String targetCaseEventCaseType(long id) {
+    return jdbc.queryForObject(
+        "select case_type_id from ccd.case_event where id = :id",
+        Map.of("id", id),
+        String.class
+    );
   }
 
   private boolean targetPrepared() {

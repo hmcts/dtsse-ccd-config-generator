@@ -837,10 +837,7 @@ public abstract class CcdDataMigrationTask implements Runnable {
           0,
           0
         from %s.case_event ce
-        join %s.case_data cd on cd.id = ce.case_data_id
         where ce.case_data_id in (:caseDataIds)
-          and cd.case_type_id in (:caseTypeIds)
-          and ce.case_type_id in (:caseTypeIds)
         on conflict (id) do update
         set created_date = excluded.created_date,
             security_classification = excluded.security_classification,
@@ -860,7 +857,7 @@ public abstract class CcdDataMigrationTask implements Runnable {
             proxied_by = excluded.proxied_by,
             proxied_by_first_name = excluded.proxied_by_first_name,
             proxied_by_last_name = excluded.proxied_by_last_name
-        """.formatted(targetSchema, fdwSchema, targetSchema),
+        """.formatted(targetSchema, fdwSchema),
         batchParams(caseDataIds)
     );
   }
