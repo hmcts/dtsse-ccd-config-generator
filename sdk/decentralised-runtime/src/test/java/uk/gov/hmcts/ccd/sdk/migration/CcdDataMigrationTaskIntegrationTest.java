@@ -10,6 +10,7 @@ import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
+import java.util.function.BooleanSupplier;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -233,7 +234,25 @@ class CcdDataMigrationTaskIntegrationTest {
     assertThatThrownBy(() -> task(10, 10).runMigration())
         .isInstanceOf(CcdDataMigrationException.class)
         .hasMessageContaining("FDW foreign tables are missing")
-        .hasMessageContaining("https://github.com/hmcts/dtsse-ccd-config-generator/blob/master/docs/fdw-data-migration.md");
+        .hasMessageContaining(
+            "https://github.com/hmcts/dtsse-ccd-config-generator/blob/master/docs/fdw-data-migration.md"
+        );
+  }
+
+  @Test
+  void failsWhenDecentralisedRuntimeIsEnabled() {
+    insertSourceCase(10, 1000000000000010L, 1, "Submitted", "{\"field\":\"one\"}");
+    var options = CcdDataMigrationTaskOptions.builder(List.of("TestCase")).build();
+
+    assertThatThrownBy(() -> new TestMigrationTask(jdbc, transactionManager, options, () -> true).runMigration())
+        .isInstanceOf(CcdDataMigrationException.class)
+        .hasMessageContaining("cannot run while the decentralised runtime is enabled")
+        .hasMessageContaining("live case writes for the migrated case types still go to source CCD");
+
+    assertThat(countRows("ccd.case_data")).isZero();
+    assertThat(caseEventCaseDataForeignKeyExists()).isTrue();
+    assertThat(caseEventRevisionIndexExists()).isTrue();
+    assertThat(caseEventUserTriggersEnabled()).isTrue();
   }
 
   private CcdDataMigrationTask task(int batchSize, int maxBatchesPerRun) {
@@ -624,6 +643,15 @@ class CcdDataMigrationTaskIntegrationTest {
         CcdDataMigrationTaskOptions options
     ) {
       super(db, transactionManager, options);
+    }
+
+    TestMigrationTask(
+        NamedParameterJdbcTemplate db,
+        PlatformTransactionManager transactionManager,
+        CcdDataMigrationTaskOptions options,
+        BooleanSupplier decentralisedRuntimeEnabled
+    ) {
+      super(db, transactionManager, options, decentralisedRuntimeEnabled);
     }
   }
 

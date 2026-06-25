@@ -20,6 +20,7 @@ The task:
 * fails with a link to the FDW setup guide if the FDW setup is missing
 * uses a Postgres advisory lock to prevent two instances of the same migration running at once
 * maintains a Flyway-managed progress table in the target `ccd` schema
+* refuses to run while the decentralised runtime is enabled
 * copies source cases in chunks from `fdw_stage.case_data`
 * copies all events for each copied case from `fdw_stage.case_event`
 * upserts existing target rows so reruns are idempotent
@@ -49,6 +50,11 @@ must have:
 
 The task assumes the service already depends on the decentralised runtime SDK and has a configured
 Spring `DataSource`.
+
+The application must also be running with the decentralised runtime disabled. The task checks
+`ccd.sdk.decentralised` through Spring `Environment` when supplied, or falls back to
+`CCD_SDK_DECENTRALISED` / the `ccd.sdk.decentralised` system property. If that value is `true`, the
+task fails before taking a lock or preparing the target tables.
 
 ## Progress and reruns
 
@@ -114,6 +120,7 @@ import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.ZoneOffset;
 import java.util.List;
+import org.springframework.core.env.Environment;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -125,7 +132,8 @@ public class EtCcdDataMigrationTask extends CcdDataMigrationTask {
 
   public EtCcdDataMigrationTask(
       NamedParameterJdbcTemplate jdbcTemplate,
-      PlatformTransactionManager transactionManager
+      PlatformTransactionManager transactionManager,
+      Environment environment
   ) {
     super(
         jdbcTemplate,
@@ -140,7 +148,8 @@ public class EtCcdDataMigrationTask extends CcdDataMigrationTask {
             .runUntil(LocalDateTime.of(LocalDate.now(ZoneOffset.UTC), LocalTime.of(6, 0)))
             .deltaOverlap(Duration.ofMinutes(15))
             .caseRevisionOffset(1_000_000_000L)
-            .build()
+            .build(),
+        environment
     );
   }
 }
@@ -208,6 +217,12 @@ Run a lower environment rehearsal first with representative data volumes. Check 
 
 For production, agree the FDW setup and database permissions with PlatOps before enabling the
 scheduled task. A partial migration deliberately leaves the `case_event` FK, event revision unique
-index and user triggers prepared until delta catch-up has completed, so do not allow normal case
-writes while `target_prepared=true`. If restoration fails, stop the application and restore the
-`case_event` FK, event revision unique index and user triggers before allowing case writes.
+index and user triggers prepared until delta catch-up has completed.
+
+That is safe only while the target runtime tables are migration-owned. Do not enable decentralised
+case writes, admin jobs, repair scripts, test endpoints, or any other writer that inserts or updates
+target `ccd.case_data` / `ccd.case_event` rows while `target_prepared=true`. Postgres will not replay
+disabled triggers for rows written during that period, and the missing FK/index mean normal integrity
+checks are not enforced until the task restores them. If restoration fails, stop the application and
+restore the `case_event` FK, event revision unique index and user triggers before allowing case
+writes.

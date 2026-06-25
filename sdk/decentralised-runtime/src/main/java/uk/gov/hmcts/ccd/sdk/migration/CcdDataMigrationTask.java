@@ -8,8 +8,10 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.function.BooleanSupplier;
 import javax.sql.DataSource;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.core.env.Environment;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
@@ -28,6 +30,7 @@ public abstract class CcdDataMigrationTask implements Runnable {
   private final TransactionOperations transaction;
   private final CcdDataMigrationTaskOptions options;
   private final Clock clock;
+  private final BooleanSupplier decentralisedRuntimeEnabled;
   private final String targetSchema;
   private final String fdwSchema;
   private final String progressTable;
@@ -37,11 +40,44 @@ public abstract class CcdDataMigrationTask implements Runnable {
       PlatformTransactionManager transactionManager,
       CcdDataMigrationTaskOptions options
   ) {
-    this(db, new TransactionTemplate(transactionManager), options);
+    this(
+        db,
+        new TransactionTemplate(transactionManager),
+        options,
+        CcdDataMigrationTask::defaultDecentralisedRuntimeEnabled
+    );
+  }
+
+  protected CcdDataMigrationTask(
+      NamedParameterJdbcTemplate db,
+      PlatformTransactionManager transactionManager,
+      CcdDataMigrationTaskOptions options,
+      Environment environment
+  ) {
+    this(
+        db,
+        new TransactionTemplate(transactionManager),
+        options,
+        decentralisedRuntimeEnabled(environment)
+    );
+  }
+
+  protected CcdDataMigrationTask(
+      NamedParameterJdbcTemplate db,
+      PlatformTransactionManager transactionManager,
+      CcdDataMigrationTaskOptions options,
+      BooleanSupplier decentralisedRuntimeEnabled
+  ) {
+    this(db, new TransactionTemplate(transactionManager), options, decentralisedRuntimeEnabled);
   }
 
   protected CcdDataMigrationTask(NamedParameterJdbcTemplate db, CcdDataMigrationTaskOptions options) {
-    this(db, new TransactionTemplate(defaultTransactionManager(db)), options);
+    this(
+        db,
+        new TransactionTemplate(defaultTransactionManager(db)),
+        options,
+        CcdDataMigrationTask::defaultDecentralisedRuntimeEnabled
+    );
   }
 
   protected CcdDataMigrationTask(
@@ -49,7 +85,16 @@ public abstract class CcdDataMigrationTask implements Runnable {
       TransactionOperations transaction,
       CcdDataMigrationTaskOptions options
   ) {
-    this(db, transaction, options, Clock.systemUTC());
+    this(db, transaction, options, CcdDataMigrationTask::defaultDecentralisedRuntimeEnabled);
+  }
+
+  protected CcdDataMigrationTask(
+      NamedParameterJdbcTemplate db,
+      TransactionOperations transaction,
+      CcdDataMigrationTaskOptions options,
+      BooleanSupplier decentralisedRuntimeEnabled
+  ) {
+    this(db, transaction, options, Clock.systemUTC(), decentralisedRuntimeEnabled);
   }
 
   protected CcdDataMigrationTask(
@@ -58,10 +103,24 @@ public abstract class CcdDataMigrationTask implements Runnable {
       CcdDataMigrationTaskOptions options,
       Clock clock
   ) {
+    this(db, transaction, options, clock, CcdDataMigrationTask::defaultDecentralisedRuntimeEnabled);
+  }
+
+  protected CcdDataMigrationTask(
+      NamedParameterJdbcTemplate db,
+      TransactionOperations transaction,
+      CcdDataMigrationTaskOptions options,
+      Clock clock,
+      BooleanSupplier decentralisedRuntimeEnabled
+  ) {
     this.db = Objects.requireNonNull(db, "db must not be null");
     this.transaction = Objects.requireNonNull(transaction, "transaction must not be null");
     this.options = Objects.requireNonNull(options, "options must not be null");
     this.clock = Objects.requireNonNull(clock, "clock must not be null");
+    this.decentralisedRuntimeEnabled = Objects.requireNonNull(
+        decentralisedRuntimeEnabled,
+        "decentralisedRuntimeEnabled must not be null"
+    );
     this.targetSchema = quoteIdentifier(options.targetSchema());
     this.fdwSchema = quoteIdentifier(options.fdwSchema());
     this.progressTable = targetSchema + ".ccd_data_migration_progress";
@@ -85,6 +144,7 @@ public abstract class CcdDataMigrationTask implements Runnable {
         options.deltaOverlap()
     );
 
+    validateDecentralisedRuntimeDisabled();
     validateProgressTableReady();
     if (!tryLock()) {
       log.warn("CCD data migration taskName={} is already running; skipping this invocation", options.taskName());
@@ -146,6 +206,29 @@ public abstract class CcdDataMigrationTask implements Runnable {
       throw new IllegalArgumentException("NamedParameterJdbcTemplate must expose a DataSource");
     }
     return new DataSourceTransactionManager(dataSource);
+  }
+
+  private static boolean defaultDecentralisedRuntimeEnabled() {
+    return isTrue(System.getProperty("ccd.sdk.decentralised")) || isTrue(System.getenv("CCD_SDK_DECENTRALISED"));
+  }
+
+  private static BooleanSupplier decentralisedRuntimeEnabled(Environment environment) {
+    Environment requiredEnvironment = Objects.requireNonNull(environment, "environment must not be null");
+    return () -> requiredEnvironment.getProperty("ccd.sdk.decentralised", Boolean.class, false);
+  }
+
+  private static boolean isTrue(String value) {
+    return value != null && Boolean.parseBoolean(value);
+  }
+
+  private void validateDecentralisedRuntimeDisabled() {
+    if (decentralisedRuntimeEnabled.getAsBoolean()) {
+      throw new CcdDataMigrationException(
+          "CCD data migration cannot run while the decentralised runtime is enabled. "
+              + "Set ccd.sdk.decentralised=false or CCD_SDK_DECENTRALISED=false, and only run this task while live "
+              + "case writes for the migrated case types still go to source CCD."
+      );
+    }
   }
 
   private void validateProgressTableReady() {
