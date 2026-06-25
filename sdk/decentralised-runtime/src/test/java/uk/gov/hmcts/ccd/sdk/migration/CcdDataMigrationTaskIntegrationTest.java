@@ -51,6 +51,7 @@ class CcdDataMigrationTaskIntegrationTest {
     jdbc.getJdbcTemplate().execute("drop server if exists ccd_migration_test_server cascade");
     jdbc.getJdbcTemplate().execute("delete from ccd.ccd_data_migration_progress");
     jdbc.getJdbcTemplate().execute("truncate table ccd.case_event, ccd.case_data restart identity cascade");
+    restoreTargetSchemaState();
     createSourceTables();
     createFdwTables();
   }
@@ -70,6 +71,9 @@ class CcdDataMigrationTaskIntegrationTest {
     assertThat(countRows("ccd.case_data")).isEqualTo(1);
     assertThat(countRows("ccd.case_event")).isEqualTo(2);
     assertThat(caseRevision(10)).isEqualTo(CASE_REVISION_OFFSET + 2);
+    assertThat(targetPrepared()).isTrue();
+    assertThat(caseEventCaseDataForeignKeyExists()).isFalse();
+    assertThat(caseEventRevisionIndexExists()).isFalse();
 
     CcdDataMigrationRunResult secondRun = task.runMigration();
     assertThat(secondRun.batchesProcessed()).isEqualTo(1);
@@ -80,6 +84,10 @@ class CcdDataMigrationTaskIntegrationTest {
     task.runMigration();
     CcdDataMigrationRunResult caughtUpRun = task.runMigration();
     assertThat(caughtUpRun.caughtUp()).isTrue();
+    assertThat(targetPrepared()).isFalse();
+    assertThat(caseEventCaseDataForeignKeyExists()).isTrue();
+    assertThat(caseEventRevisionIndexExists()).isTrue();
+    assertThat(caseEventUserTriggersEnabled()).isTrue();
 
     sleepPastProgressWindow();
     jdbc.update(
@@ -137,6 +145,20 @@ class CcdDataMigrationTaskIntegrationTest {
     assertThat(result.batchesProcessed()).isEqualTo(1);
     assertThat(result.stoppedByTimeLimit()).isTrue();
     assertThat(countRows("ccd.case_data")).isEqualTo(1);
+    assertThat(targetPrepared()).isTrue();
+    assertThat(caseEventCaseDataForeignKeyExists()).isFalse();
+    assertThat(caseEventRevisionIndexExists()).isFalse();
+  }
+
+  @Test
+  void doesNotPrepareTargetWhenThereIsNoDataToMigrate() {
+    CcdDataMigrationRunResult result = task(10, 10).runMigration();
+
+    assertThat(result.caughtUp()).isTrue();
+    assertThat(targetPrepared()).isFalse();
+    assertThat(caseEventCaseDataForeignKeyExists()).isTrue();
+    assertThat(caseEventRevisionIndexExists()).isTrue();
+    assertThat(caseEventUserTriggersEnabled()).isTrue();
   }
 
   @Test
@@ -335,6 +357,31 @@ class CcdDataMigrationTaskIntegrationTest {
         """);
   }
 
+  private void restoreTargetSchemaState() {
+    jdbc.getJdbcTemplate().execute("""
+        create unique index if not exists idx_case_event_case_data_revision_unique
+        on ccd.case_event (case_data_id, case_revision)
+        """);
+    jdbc.getJdbcTemplate().execute("""
+        do $$
+        begin
+          if not exists (
+            select 1
+            from pg_constraint
+            where conname = 'case_event_case_data_id_fkey'
+              and conrelid = 'ccd.case_event'::regclass
+          ) then
+            alter table ccd.case_event
+            add constraint case_event_case_data_id_fkey
+            foreign key (case_data_id)
+            references ccd.case_data(id)
+            on delete cascade;
+          end if;
+        end $$;
+        """);
+    jdbc.getJdbcTemplate().execute("alter table ccd.case_event enable trigger user");
+  }
+
   private void insertSourceCase(long id, long reference, int version, String state, String data) {
     var params = new MapSqlParameterSource()
         .addValue("id", id)
@@ -484,6 +531,65 @@ class CcdDataMigrationTaskIntegrationTest {
 
   private String targetCaseData(long id) {
     return jdbc.queryForObject("select data::text from ccd.case_data where id = :id", Map.of("id", id), String.class);
+  }
+
+  private boolean targetPrepared() {
+    return Boolean.TRUE.equals(jdbc.queryForObject(
+        """
+        select target_prepared
+        from ccd.ccd_data_migration_progress
+        where task_name = :taskName
+        """,
+        Map.of("taskName", "ccd-data-migration"),
+        Boolean.class
+    ));
+  }
+
+  private boolean caseEventCaseDataForeignKeyExists() {
+    return Boolean.TRUE.equals(jdbc.queryForObject(
+        """
+        select exists (
+          select 1
+          from pg_constraint
+          where conname = 'case_event_case_data_id_fkey'
+            and conrelid = 'ccd.case_event'::regclass
+        )
+        """,
+        Map.of(),
+        Boolean.class
+    ));
+  }
+
+  private boolean caseEventRevisionIndexExists() {
+    return Boolean.TRUE.equals(jdbc.queryForObject(
+        """
+        select exists (
+          select 1
+          from pg_class c
+          join pg_namespace n on n.oid = c.relnamespace
+          where n.nspname = 'ccd'
+            and c.relname = 'idx_case_event_case_data_revision_unique'
+        )
+        """,
+        Map.of(),
+        Boolean.class
+    ));
+  }
+
+  private boolean caseEventUserTriggersEnabled() {
+    return Boolean.TRUE.equals(jdbc.queryForObject(
+        """
+        select not exists (
+          select 1
+          from pg_trigger
+          where tgrelid = 'ccd.case_event'::regclass
+            and not tgisinternal
+            and tgenabled = 'D'
+        )
+        """,
+        Map.of(),
+        Boolean.class
+    ));
   }
 
   private void sleepPastProgressWindow() {

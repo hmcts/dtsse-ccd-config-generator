@@ -91,16 +91,14 @@ public abstract class CcdDataMigrationTask implements Runnable {
       return CcdDataMigrationRunResult.skippedLocked();
     }
 
-    var constraintsPrepared = false;
     try {
-      validateCanDisableTriggers();
       validateFdwReady();
-      prepareTarget();
-      constraintsPrepared = true;
 
       RunTotals totals = processAvailableBatches();
-      finishMigration();
-      constraintsPrepared = false;
+      Progress progress = loadProgress();
+      if (totals.caughtUp() && progress.targetPrepared()) {
+        finishMigration();
+      }
 
       log.info(
           "Completed CCD data migration taskName={} batches={} cases={} events={} caughtUp={} stoppedByTimeLimit={}",
@@ -125,9 +123,6 @@ public abstract class CcdDataMigrationTask implements Runnable {
     } catch (Exception ex) {
       throw new CcdDataMigrationException("CCD data migration failed", ex);
     } finally {
-      if (constraintsPrepared) {
-        restoreConstraintsAfterFailure();
-      }
       unlock();
     }
   }
@@ -135,6 +130,7 @@ public abstract class CcdDataMigrationTask implements Runnable {
   private void finishMigration() {
     validateNoOrphans();
     restoreConstraints();
+    markTargetRestored();
     resetSequences();
     finalValidation();
     validateCaseRevisionAlignment();
@@ -170,6 +166,7 @@ public abstract class CcdDataMigrationTask implements Runnable {
             'total_batches',
             'total_cases',
             'total_events',
+            'target_prepared',
             'created_at',
             'updated_at'
           )
@@ -177,7 +174,7 @@ public abstract class CcdDataMigrationTask implements Runnable {
         Map.of("schema", options.targetSchema()),
         Integer.class
     );
-    if (columnCount == null || columnCount != 12) {
+    if (columnCount == null || columnCount != 13) {
       throw new CcdDataMigrationException(
           "CCD data migration progress table is missing or incomplete. "
               + "Run the decentralised-runtime Flyway migrations before starting the task."
@@ -270,6 +267,30 @@ public abstract class CcdDataMigrationTask implements Runnable {
         """.formatted(targetSchema));
   }
 
+  private void markTargetPrepared() {
+    db.update(
+        """
+        update %s
+        set target_prepared = true,
+            updated_at = now() at time zone 'UTC'
+        where task_name = :taskName
+        """.formatted(progressTable),
+        Map.of("taskName", options.taskName())
+    );
+  }
+
+  private void markTargetRestored() {
+    db.update(
+        """
+        update %s
+        set target_prepared = false,
+            updated_at = now() at time zone 'UTC'
+        where task_name = :taskName
+        """.formatted(progressTable),
+        Map.of("taskName", options.taskName())
+    );
+  }
+
   private RunTotals processAvailableBatches() {
     var totals = new RunTotals();
     Progress progress = getOrCreateProgress();
@@ -290,6 +311,7 @@ public abstract class CcdDataMigrationTask implements Runnable {
       }
 
       List<Long> caseDataIds = cases.stream().map(CaseDataCursor::id).toList();
+      ensureTargetPrepared(progress);
       BatchResult batch = migrateBatch(caseDataIds);
       totals = totals.plus(batch);
       progress = recordBatch(cases, batch);
@@ -318,6 +340,25 @@ public abstract class CcdDataMigrationTask implements Runnable {
     }
 
     return totals;
+  }
+
+  private void ensureTargetPrepared(Progress progress) {
+    if (progress.targetPrepared()) {
+      return;
+    }
+
+    var prepared = false;
+    try {
+      validateCanDisableTriggers();
+      prepareTarget();
+      prepared = true;
+      markTargetPrepared();
+    } catch (RuntimeException ex) {
+      if (prepared) {
+        restoreConstraintsAfterFailure();
+      }
+      throw ex;
+    }
   }
 
   private LocalDateTime calculateStopAt() {
@@ -369,7 +410,8 @@ public abstract class CcdDataMigrationTask implements Runnable {
                initial_complete,
                total_batches,
                total_cases,
-               total_events
+               total_events,
+               target_prepared
         from %s
         where task_name = :taskName
         """.formatted(progressTable),
@@ -866,7 +908,8 @@ public abstract class CcdDataMigrationTask implements Runnable {
         rs.getBoolean("initial_complete"),
         rs.getLong("total_batches"),
         rs.getLong("total_cases"),
-        rs.getLong("total_events")
+        rs.getLong("total_events"),
+        rs.getBoolean("target_prepared")
     );
   }
 
@@ -891,7 +934,8 @@ public abstract class CcdDataMigrationTask implements Runnable {
       boolean initialComplete,
       long totalBatches,
       long totalCases,
-      long totalEvents
+      long totalEvents,
+      boolean targetPrepared
   ) {
   }
 

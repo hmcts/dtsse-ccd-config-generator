@@ -23,11 +23,12 @@ The task:
 * copies source cases in chunks from `fdw_stage.case_data`
 * copies all events for each copied case from `fdw_stage.case_event`
 * upserts existing target rows so reruns are idempotent
-* temporarily removes the `case_event` FK and event revision unique index that block copied history
-* temporarily disables `case_event` user triggers while history is copied
+* prepares the target before the first copied chunk by removing the `case_event` FK and event
+  revision unique index that block copied history
+* disables `case_event` user triggers while migration chunks are still outstanding
 * recalculates `case_event.version` and `case_event.case_revision`
 * sets `case_data.case_revision` to event count plus the configured revision offset
-* restores the FK, unique index, trigger state and `case_event_id_seq`
+* restores the FK, unique index, trigger state and `case_event_id_seq` after delta catch-up
 * logs start, per-chunk progress, final counts and completion state
 
 ## Prerequisites
@@ -60,6 +61,7 @@ records:
 * last copied source modified timestamp in delta mode
 * last copied source `case_data.id`
 * total copied batches, cases and events
+* whether the target constraints/triggers are currently prepared for an unfinished migration
 
 During the initial phase, each run copies cases where source `case_data.id` is greater than the last
 processed ID and the source `last_modified`/`created_date` is inside the current window. When the
@@ -70,6 +72,12 @@ previous completed window. Delta progress is ordered by
 `coalesce(last_modified, created_date), id`, not just by ID, so an older case ID updated later in the
 same window is still picked up. This lets a service run the task overnight, stop cleanly, then
 continue the next day without starting again.
+
+The target is prepared only when the task has a real batch to copy. If a run stops because of
+`maxBatchesPerRun`, `maxRunTime`, or `runUntil`, the progress table keeps `target_prepared=true` and
+the task does not rebuild the `case_event` revision index at the end of that partial run. The next
+invocation resumes with the target still prepared. Once the task reaches delta catch-up, it restores
+the FK, revision unique index and user triggers, then records `target_prepared=false`.
 
 ## Runtime limits
 
@@ -195,8 +203,11 @@ Run a lower environment rehearsal first with representative data volumes. Check 
 * final target counts by case type
 * `caughtUp=true` when no more eligible data remains in the current delta window
 * `stoppedByTimeLimit=true` when a run deliberately stops after an overnight window
+* `target_prepared=true` in `ccd.ccd_data_migration_progress` while a partial migration is still
+  waiting to resume
 
 For production, agree the FDW setup and database permissions with PlatOps before enabling the
-scheduled task. If the task fails after target constraints have been prepared, it attempts to restore
-them before exiting. If restoration fails, stop the application and restore the `case_event` FK,
-event revision unique index and user triggers before allowing case writes.
+scheduled task. A partial migration deliberately leaves the `case_event` FK, event revision unique
+index and user triggers prepared until delta catch-up has completed, so do not allow normal case
+writes while `target_prepared=true`. If restoration fails, stop the application and restore the
+`case_event` FK, event revision unique index and user triggers before allowing case writes.

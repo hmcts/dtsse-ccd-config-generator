@@ -9,6 +9,7 @@ create table ccd.ccd_data_migration_progress (
     total_batches bigint not null default 0,
     total_cases bigint not null default 0,
     total_events bigint not null default 0,
+    target_prepared boolean not null default false,
     created_at timestamp without time zone not null default (now() at time zone 'UTC'),
     updated_at timestamp without time zone not null default (now() at time zone 'UTC')
 );
