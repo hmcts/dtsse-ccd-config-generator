@@ -5,7 +5,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.sql.Connection;
 import java.sql.SQLException;
+import java.sql.Types;
 import java.time.Duration;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 import javax.sql.DataSource;
@@ -126,6 +128,7 @@ class CcdDataMigrationTaskIntegrationTest {
     var options = CcdDataMigrationTaskOptions.builder(List.of("TestCase"))
         .batchSize(1)
         .maxBatchesPerRun(10)
+        .deltaOverlap(Duration.ZERO)
         .maxRunTime(Duration.ofNanos(1))
         .build();
 
@@ -164,6 +167,44 @@ class CcdDataMigrationTaskIntegrationTest {
   }
 
   @Test
+  void deltaOverlapPicksUpLateCommitWithTimestampBeforeLastClosedWindow() {
+    insertSourceCase(10, 1000000000000010L, 1, "Submitted", "{\"field\":\"one\"}");
+
+    CcdDataMigrationTask initialTask = task(10, 10);
+    CcdDataMigrationRunResult initialRun = initialTask.runMigration();
+    assertThat(initialRun.caughtUp()).isTrue();
+    assertThat(targetCaseState(10)).isEqualTo("Submitted");
+
+    LocalDateTime closedWindowStart = jdbc.queryForObject(
+        """
+        select window_start
+        from ccd.ccd_data_migration_progress
+        where task_name = :taskName
+        """,
+        Map.of("taskName", "ccd-data-migration"),
+        LocalDateTime.class
+    );
+    updateSourceCase(
+        10,
+        2,
+        "LateCommit",
+        "{\"field\":\"late\"}",
+        closedWindowStart.minusMinutes(5)
+    );
+
+    var options = CcdDataMigrationTaskOptions.builder(List.of("TestCase"))
+        .batchSize(10)
+        .maxBatchesPerRun(10)
+        .deltaOverlap(Duration.ofMinutes(10))
+        .build();
+    CcdDataMigrationRunResult overlapRun = new TestMigrationTask(jdbc, transactionManager, options).runMigration();
+
+    assertThat(overlapRun.batchesProcessed()).isEqualTo(1);
+    assertThat(targetCaseState(10)).isEqualTo("LateCommit");
+    assertThat(targetCaseData(10)).isEqualTo("{\"field\": \"late\"}");
+  }
+
+  @Test
   void failsWithDocsLinkWhenFdwTablesAreMissing() {
     jdbc.getJdbcTemplate().execute("drop schema fdw_stage cascade");
 
@@ -177,6 +218,7 @@ class CcdDataMigrationTaskIntegrationTest {
     var options = CcdDataMigrationTaskOptions.builder(List.of("TestCase"))
         .batchSize(batchSize)
         .maxBatchesPerRun(maxBatchesPerRun)
+        .deltaOverlap(Duration.ZERO)
         .build();
     return new TestMigrationTask(jdbc, transactionManager, options);
   }
@@ -400,21 +442,27 @@ class CcdDataMigrationTaskIntegrationTest {
   }
 
   private void updateSourceCase(long id, int version, String state, String data) {
+    updateSourceCase(id, version, state, data, null);
+  }
+
+  private void updateSourceCase(long id, int version, String state, String data, LocalDateTime lastModified) {
+    var params = new MapSqlParameterSource()
+        .addValue("id", id)
+        .addValue("version", version)
+        .addValue("state", state)
+        .addValue("data", data)
+        .addValue("lastModified", lastModified, Types.TIMESTAMP);
+
     jdbc.update(
         """
         update source.case_data
         set version = :version,
             state = :state,
             data = :data::jsonb,
-            last_modified = now() at time zone 'UTC'
+            last_modified = coalesce(:lastModified, now() at time zone 'UTC')
         where id = :id
         """,
-        Map.of(
-            "id", id,
-            "version", version,
-            "state", state,
-            "data", data
-        )
+        params
     );
   }
 

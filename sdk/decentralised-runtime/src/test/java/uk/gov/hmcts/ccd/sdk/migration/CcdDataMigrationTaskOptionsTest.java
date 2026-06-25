@@ -21,6 +21,7 @@ class CcdDataMigrationTaskOptionsTest {
     assertThat(options.maxBatchesPerRun()).isEqualTo(Integer.MAX_VALUE);
     assertThat(options.maxRunTime()).isNull();
     assertThat(options.runUntil()).isNull();
+    assertThat(options.deltaOverlap()).isEqualTo(Duration.ofMinutes(15));
   }
 
   @Test
@@ -46,5 +47,14 @@ class CcdDataMigrationTaskOptionsTest {
         .build())
         .isInstanceOf(IllegalArgumentException.class)
         .hasMessageContaining("maxRunTime");
+  }
+
+  @Test
+  void rejectsNegativeDeltaOverlap() {
+    assertThatThrownBy(() -> CcdDataMigrationTaskOptions.builder(List.of("TestCase"))
+        .deltaOverlap(Duration.ofMillis(-1))
+        .build())
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("deltaOverlap");
   }
 }

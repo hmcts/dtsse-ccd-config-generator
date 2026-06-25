@@ -75,13 +75,14 @@ public abstract class CcdDataMigrationTask implements Runnable {
   public final CcdDataMigrationRunResult runMigration() {
     log.info(
         "Starting CCD data migration task taskName={} caseTypeIds={} batchSize={} maxBatchesPerRun={} "
-            + "maxRunTime={} runUntil={}",
+            + "maxRunTime={} runUntil={} deltaOverlap={}",
         options.taskName(),
         options.caseTypeIds(),
         options.batchSize(),
         options.maxBatchesPerRun(),
         options.maxRunTime(),
-        options.runUntil()
+        options.runUntil(),
+        options.deltaOverlap()
     );
 
     ensureProgressTable();
@@ -269,8 +270,9 @@ public abstract class CcdDataMigrationTask implements Runnable {
       List<CaseDataCursor> cases = findNextCases(progress);
 
       if (cases.isEmpty()) {
+        String completedPhase = progress.phase();
         progress = completeCurrentWindow(progress);
-        if (DELTA_PHASE.equals(progress.phase())) {
+        if (DELTA_PHASE.equals(completedPhase)) {
           totals = totals.markCaughtUp();
           break;
         }
@@ -374,13 +376,17 @@ public abstract class CcdDataMigrationTask implements Runnable {
     db.update(
         """
         update %s
-        set window_end = now() at time zone 'UTC',
+        set window_start = :windowStart,
+            window_end = now() at time zone 'UTC',
             last_case_data_modified = null,
             last_case_data_id = 0,
             updated_at = now() at time zone 'UTC'
         where task_name = :taskName
         """.formatted(progressTable),
-        Map.of("taskName", options.taskName())
+        Map.of(
+            "taskName", options.taskName(),
+            "windowStart", deltaWindowStart(progress.windowStart())
+        )
     );
     return loadProgress();
   }
@@ -456,14 +462,18 @@ public abstract class CcdDataMigrationTask implements Runnable {
           update %s
           set phase = :phase,
               initial_complete = true,
-              window_start = window_end,
+              window_start = :windowStart,
               window_end = now() at time zone 'UTC',
               last_case_data_modified = null,
               last_case_data_id = 0,
               updated_at = now() at time zone 'UTC'
           where task_name = :taskName
           """.formatted(progressTable),
-          Map.of("taskName", options.taskName(), "phase", DELTA_PHASE)
+          Map.of(
+              "taskName", options.taskName(),
+              "phase", DELTA_PHASE,
+              "windowStart", deltaWindowStart(progress.windowEnd())
+          )
       );
     } else {
       log.info(
@@ -484,6 +494,10 @@ public abstract class CcdDataMigrationTask implements Runnable {
       );
     }
     return loadProgress();
+  }
+
+  private LocalDateTime deltaWindowStart(LocalDateTime windowStart) {
+    return windowStart.minus(options.deltaOverlap());
   }
 
   private BatchResult migrateBatch(List<Long> caseDataIds) {

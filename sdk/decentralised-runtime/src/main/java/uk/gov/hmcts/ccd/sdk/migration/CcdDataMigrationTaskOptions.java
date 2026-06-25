@@ -16,7 +16,8 @@ public record CcdDataMigrationTaskOptions(
     long caseRevisionOffset,
     int maxBatchesPerRun,
     Duration maxRunTime,
-    LocalDateTime runUntil
+    LocalDateTime runUntil,
+    Duration deltaOverlap
 ) {
   private static final Pattern SQL_IDENTIFIER = Pattern.compile("[A-Za-z_][A-Za-z0-9_]*");
 
@@ -37,6 +38,12 @@ public record CcdDataMigrationTaskOptions(
     }
     if (maxRunTime != null && !maxRunTime.isPositive()) {
       throw new IllegalArgumentException("maxRunTime must be positive when set");
+    }
+    if (deltaOverlap == null) {
+      deltaOverlap = Duration.ofMinutes(15);
+    }
+    if (deltaOverlap.isNegative()) {
+      throw new IllegalArgumentException("deltaOverlap must be zero or greater");
     }
   }
 
@@ -82,6 +89,7 @@ public record CcdDataMigrationTaskOptions(
     private int maxBatchesPerRun = Integer.MAX_VALUE;
     private Duration maxRunTime;
     private LocalDateTime runUntil;
+    private Duration deltaOverlap = Duration.ofMinutes(15);
 
     private Builder(List<String> caseTypeIds) {
       this.caseTypeIds = caseTypeIds;
@@ -127,6 +135,11 @@ public record CcdDataMigrationTaskOptions(
       return this;
     }
 
+    public Builder deltaOverlap(Duration deltaOverlap) {
+      this.deltaOverlap = deltaOverlap;
+      return this;
+    }
+
     public CcdDataMigrationTaskOptions build() {
       return new CcdDataMigrationTaskOptions(
           taskName,
@@ -137,7 +150,8 @@ public record CcdDataMigrationTaskOptions(
           caseRevisionOffset,
           maxBatchesPerRun,
           maxRunTime,
-          runUntil
+          runUntil,
+          deltaOverlap
       );
     }
   }

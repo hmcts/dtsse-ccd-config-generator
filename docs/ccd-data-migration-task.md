@@ -81,10 +81,15 @@ Configure one or more limits:
 * `maxBatchesPerRun`: maximum chunks in one invocation
 * `maxRunTime`: maximum elapsed runtime for one invocation
 * `runUntil`: fixed date/time after which the invocation should stop
+* `deltaOverlap`: overlap applied when opening delta windows, default 15 minutes
 
 If both `maxRunTime` and `runUntil` are set, the earlier deadline is used. The returned
 `CcdDataMigrationRunResult` includes `stoppedByTimeLimit` so scheduled jobs can distinguish a
 planned time stop from a caught-up migration.
+
+The delta overlap intentionally reprocesses a small amount of recent data. Upserts are idempotent,
+and the overlap protects against late-committing transactions whose `last_modified` timestamp falls
+just before the previous completed delta boundary.
 
 ## Example Spring integration
 
@@ -124,6 +129,7 @@ public class EtCcdDataMigrationTask extends CcdDataMigrationTask {
             .maxBatchesPerRun(1_000)
             .maxRunTime(Duration.ofHours(4))
             .runUntil(LocalDateTime.of(LocalDate.now(ZoneOffset.UTC), LocalTime.of(6, 0)))
+            .deltaOverlap(Duration.ofMinutes(15))
             .caseRevisionOffset(1_000_000_000L)
             .build()
     );
