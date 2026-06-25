@@ -347,7 +347,8 @@ class DecentralisedESIndexer implements DisposableBean {
             .document(BinaryData.of(source.getBytes(StandardCharsets.UTF_8), "application/json")))));
   }
 
-  private Map<String, Object> metadata(long reference, long caseRevision, UUID lockToken, long eventId, String indexId) {
+  private Map<String, Object> metadata(long reference, long caseRevision, UUID lockToken, long eventId,
+                                       String indexId) {
     Map<String, Object> metadata = new HashMap<>();
     metadata.put("reference", reference);
     metadata.put("case_revision", caseRevision);
