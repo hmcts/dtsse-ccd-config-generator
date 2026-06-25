@@ -137,6 +137,33 @@ class CcdDataMigrationTaskIntegrationTest {
   }
 
   @Test
+  void deltaCursorDoesNotMissLowerIdCaseUpdatedAfterHigherIdCaseInSameWindow() {
+    insertSourceCase(10, 1000000000000010L, 1, "Submitted", "{\"field\":\"one\"}");
+    insertSourceCase(20, 1000000000000020L, 1, "Submitted", "{\"field\":\"two\"}");
+
+    CcdDataMigrationTask fullRunTask = task(10, 10);
+    fullRunTask.runMigration();
+    CcdDataMigrationRunResult caughtUpRun = fullRunTask.runMigration();
+    assertThat(caughtUpRun.caughtUp()).isTrue();
+
+    sleepPastProgressWindow();
+    updateSourceCase(20, 2, "UpdatedHigherId", "{\"field\":\"two-delta\"}");
+    sleepPastProgressWindow();
+    updateSourceCase(10, 2, "UpdatedLowerId", "{\"field\":\"one-delta\"}");
+
+    CcdDataMigrationTask oneChunkTask = task(1, 1);
+
+    CcdDataMigrationRunResult firstDeltaRun = oneChunkTask.runMigration();
+    assertThat(firstDeltaRun.batchesProcessed()).isEqualTo(1);
+    assertThat(targetCaseState(20)).isEqualTo("UpdatedHigherId");
+
+    CcdDataMigrationRunResult secondDeltaRun = oneChunkTask.runMigration();
+    assertThat(secondDeltaRun.batchesProcessed()).isEqualTo(1);
+    assertThat(targetCaseState(10)).isEqualTo("UpdatedLowerId");
+    assertThat(targetCaseData(10)).isEqualTo("{\"field\": \"one-delta\"}");
+  }
+
+  @Test
   void failsWithDocsLinkWhenFdwTablesAreMissing() {
     jdbc.getJdbcTemplate().execute("drop schema fdw_stage cascade");
 
@@ -369,6 +396,25 @@ class CcdDataMigrationTaskIntegrationTest {
         )
         """,
         params
+    );
+  }
+
+  private void updateSourceCase(long id, int version, String state, String data) {
+    jdbc.update(
+        """
+        update source.case_data
+        set version = :version,
+            state = :state,
+            data = :data::jsonb,
+            last_modified = now() at time zone 'UTC'
+        where id = :id
+        """,
+        Map.of(
+            "id", id,
+            "version", version,
+            "state", state,
+            "data", data
+        )
     );
   }
 

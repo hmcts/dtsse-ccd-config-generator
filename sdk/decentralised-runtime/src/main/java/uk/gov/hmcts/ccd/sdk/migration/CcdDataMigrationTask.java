@@ -2,6 +2,7 @@ package uk.gov.hmcts.ccd.sdk.migration;
 
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.Types;
 import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -157,6 +158,7 @@ public abstract class CcdDataMigrationTask implements Runnable {
           phase varchar(20) not null,
           window_start timestamp without time zone,
           window_end timestamp without time zone not null,
+          last_case_data_modified timestamp without time zone,
           last_case_data_id bigint not null default 0,
           initial_complete boolean not null default false,
           total_batches bigint not null default 0,
@@ -165,6 +167,10 @@ public abstract class CcdDataMigrationTask implements Runnable {
           created_at timestamp without time zone not null default (now() at time zone 'UTC'),
           updated_at timestamp without time zone not null default (now() at time zone 'UTC')
         )
+        """.formatted(progressTable));
+    db.getJdbcTemplate().execute("""
+        alter table %s
+        add column if not exists last_case_data_modified timestamp without time zone
         """.formatted(progressTable));
   }
 
@@ -260,9 +266,9 @@ public abstract class CcdDataMigrationTask implements Runnable {
 
     for (int i = 0; i < options.maxBatchesPerRun(); i++) {
       progress = prepareDeltaWindow(progress);
-      List<Long> caseDataIds = findNextCaseDataIds(progress);
+      List<CaseDataCursor> cases = findNextCases(progress);
 
-      if (caseDataIds.isEmpty()) {
+      if (cases.isEmpty()) {
         progress = completeCurrentWindow(progress);
         if (DELTA_PHASE.equals(progress.phase())) {
           totals = totals.markCaughtUp();
@@ -271,16 +277,18 @@ public abstract class CcdDataMigrationTask implements Runnable {
         continue;
       }
 
+      List<Long> caseDataIds = cases.stream().map(CaseDataCursor::id).toList();
       BatchResult batch = migrateBatch(caseDataIds);
       totals = totals.plus(batch);
-      progress = recordBatch(progress, caseDataIds, batch);
+      progress = recordBatch(cases, batch);
       log.info(
           "CCD data migration progress taskName={} phase={} batchCases={} batchEvents={} "
-              + "lastCaseDataId={} totalBatches={} totalCases={} totalEvents={}",
+              + "lastCaseDataModified={} lastCaseDataId={} totalBatches={} totalCases={} totalEvents={}",
           options.taskName(),
           progress.phase(),
           batch.cases(),
           batch.events(),
+          progress.lastCaseDataModified(),
           progress.lastCaseDataId(),
           progress.totalBatches(),
           progress.totalCases(),
@@ -344,6 +352,7 @@ public abstract class CcdDataMigrationTask implements Runnable {
                phase,
                window_start,
                window_end,
+               last_case_data_modified,
                last_case_data_id,
                initial_complete,
                total_batches,
@@ -366,6 +375,8 @@ public abstract class CcdDataMigrationTask implements Runnable {
         """
         update %s
         set window_end = now() at time zone 'UTC',
+            last_case_data_modified = null,
+            last_case_data_id = 0,
             updated_at = now() at time zone 'UTC'
         where task_name = :taskName
         """.formatted(progressTable),
@@ -374,31 +385,62 @@ public abstract class CcdDataMigrationTask implements Runnable {
     return loadProgress();
   }
 
-  private List<Long> findNextCaseDataIds(Progress progress) {
+  private List<CaseDataCursor> findNextCases(Progress progress) {
     var params = new MapSqlParameterSource()
         .addValue("caseTypeIds", options.caseTypeIds())
         .addValue("lastCaseDataId", progress.lastCaseDataId())
+        .addValue("lastCaseDataModified", progress.lastCaseDataModified(), Types.TIMESTAMP)
+        .addValue("hasDeltaCursor", progress.lastCaseDataModified() != null)
         .addValue("windowStart", progress.windowStart())
         .addValue("windowEnd", progress.windowEnd())
         .addValue("batchSize", options.batchSize());
 
-    var deltaPredicate = DELTA_PHASE.equals(progress.phase())
-        ? "and coalesce(last_modified, created_date) >= :windowStart"
-        : "";
+    if (DELTA_PHASE.equals(progress.phase())) {
+      return findNextDeltaCases(params);
+    }
 
-    return db.queryForList(
+    return db.query(
         """
-        select id
+        select id,
+               coalesce(last_modified, created_date) as modified_at
         from %s.case_data
         where case_type_id in (:caseTypeIds)
           and id > :lastCaseDataId
           and coalesce(last_modified, created_date) < :windowEnd
-          %s
         order by id
         limit :batchSize
-        """.formatted(fdwSchema, deltaPredicate),
+        """.formatted(fdwSchema),
         params,
-        Long.class
+        (rs, rowNum) -> mapCaseDataCursor(rs)
+    );
+  }
+
+  private List<CaseDataCursor> findNextDeltaCases(MapSqlParameterSource params) {
+    return db.query(
+        """
+        select id,
+               modified_at
+        from (
+          select id,
+                 coalesce(last_modified, created_date) as modified_at
+          from %s.case_data
+          where case_type_id in (:caseTypeIds)
+            and coalesce(last_modified, created_date) >= :windowStart
+            and coalesce(last_modified, created_date) < :windowEnd
+        ) eligible
+        where :hasDeltaCursor = false
+           or (
+             modified_at > :lastCaseDataModified
+             or (
+               modified_at = :lastCaseDataModified
+               and id > :lastCaseDataId
+             )
+           )
+        order by modified_at, id
+        limit :batchSize
+        """.formatted(fdwSchema),
+        params,
+        (rs, rowNum) -> mapCaseDataCursor(rs)
     );
   }
 
@@ -416,6 +458,7 @@ public abstract class CcdDataMigrationTask implements Runnable {
               initial_complete = true,
               window_start = window_end,
               window_end = now() at time zone 'UTC',
+              last_case_data_modified = null,
               last_case_data_id = 0,
               updated_at = now() at time zone 'UTC'
           where task_name = :taskName
@@ -432,6 +475,7 @@ public abstract class CcdDataMigrationTask implements Runnable {
           """
           update %s
           set window_start = window_end,
+              last_case_data_modified = null,
               last_case_data_id = 0,
               updated_at = now() at time zone 'UTC'
           where task_name = :taskName
@@ -646,12 +690,13 @@ public abstract class CcdDataMigrationTask implements Runnable {
     );
   }
 
-  private Progress recordBatch(Progress progress, List<Long> caseDataIds, BatchResult batch) {
-    long lastCaseDataId = caseDataIds.get(caseDataIds.size() - 1);
+  private Progress recordBatch(List<CaseDataCursor> cases, BatchResult batch) {
+    CaseDataCursor lastCase = cases.get(cases.size() - 1);
     db.update(
         """
         update %s
-        set last_case_data_id = :lastCaseDataId,
+        set last_case_data_modified = :lastCaseDataModified,
+            last_case_data_id = :lastCaseDataId,
             total_batches = total_batches + 1,
             total_cases = total_cases + :cases,
             total_events = total_events + :events,
@@ -660,7 +705,8 @@ public abstract class CcdDataMigrationTask implements Runnable {
         """.formatted(progressTable),
         Map.of(
             "taskName", options.taskName(),
-            "lastCaseDataId", lastCaseDataId,
+            "lastCaseDataModified", lastCase.modifiedAt(),
+            "lastCaseDataId", lastCase.id(),
             "cases", batch.cases(),
             "events", batch.events()
         )
@@ -791,11 +837,19 @@ public abstract class CcdDataMigrationTask implements Runnable {
         rs.getString("phase"),
         rs.getObject("window_start", LocalDateTime.class),
         rs.getObject("window_end", LocalDateTime.class),
+        rs.getObject("last_case_data_modified", LocalDateTime.class),
         rs.getLong("last_case_data_id"),
         rs.getBoolean("initial_complete"),
         rs.getLong("total_batches"),
         rs.getLong("total_cases"),
         rs.getLong("total_events")
+    );
+  }
+
+  private CaseDataCursor mapCaseDataCursor(ResultSet rs) throws SQLException {
+    return new CaseDataCursor(
+        rs.getLong("id"),
+        rs.getObject("modified_at", LocalDateTime.class)
     );
   }
 
@@ -808,12 +862,16 @@ public abstract class CcdDataMigrationTask implements Runnable {
       String phase,
       LocalDateTime windowStart,
       LocalDateTime windowEnd,
+      LocalDateTime lastCaseDataModified,
       long lastCaseDataId,
       boolean initialComplete,
       long totalBatches,
       long totalCases,
       long totalEvents
   ) {
+  }
+
+  private record CaseDataCursor(long id, LocalDateTime modifiedAt) {
   }
 
   private record BatchResult(int cases, int events) {

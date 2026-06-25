@@ -56,6 +56,7 @@ The task creates `ccd.ccd_data_migration_progress` on first use. The table recor
 * task name
 * current phase: initial load or delta catch-up
 * current source window
+* last copied source modified timestamp in delta mode
 * last copied source `case_data.id`
 * total copied batches, cases and events
 
@@ -64,8 +65,10 @@ processed ID and the source `last_modified`/`created_date` is inside the current
 initial window is exhausted, the task moves to delta mode.
 
 During delta mode, the task repeatedly opens a new source window and copies cases modified since the
-previous completed window. This lets a service run the task overnight, stop cleanly, then continue
-the next day without starting again.
+previous completed window. Delta progress is ordered by
+`coalesce(last_modified, created_date), id`, not just by ID, so an older case ID updated later in the
+same window is still picked up. This lets a service run the task overnight, stop cleanly, then
+continue the next day without starting again.
 
 ## Runtime limits
 
