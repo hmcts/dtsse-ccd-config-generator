@@ -49,7 +49,7 @@ class CcdDataMigrationTaskIntegrationTest {
     jdbc.getJdbcTemplate().execute("drop schema if exists fdw_stage cascade");
     jdbc.getJdbcTemplate().execute("drop schema if exists source cascade");
     jdbc.getJdbcTemplate().execute("drop server if exists ccd_migration_test_server cascade");
-    jdbc.getJdbcTemplate().execute("drop table if exists ccd.ccd_data_migration_progress");
+    jdbc.getJdbcTemplate().execute("delete from ccd.ccd_data_migration_progress");
     jdbc.getJdbcTemplate().execute("truncate table ccd.case_event, ccd.case_data restart identity cascade");
     createSourceTables();
     createFdwTables();

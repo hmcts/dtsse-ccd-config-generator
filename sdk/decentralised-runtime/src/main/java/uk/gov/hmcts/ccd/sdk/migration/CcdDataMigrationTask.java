@@ -85,7 +85,7 @@ public abstract class CcdDataMigrationTask implements Runnable {
         options.deltaOverlap()
     );
 
-    ensureProgressTable();
+    validateProgressTableReady();
     if (!tryLock()) {
       log.warn("CCD data migration taskName={} is already running; skipping this invocation", options.taskName());
       return CcdDataMigrationRunResult.skippedLocked();
@@ -152,27 +152,37 @@ public abstract class CcdDataMigrationTask implements Runnable {
     return new DataSourceTransactionManager(dataSource);
   }
 
-  private void ensureProgressTable() {
-    db.getJdbcTemplate().execute("""
-        create table if not exists %s (
-          task_name varchar(255) primary key,
-          phase varchar(20) not null,
-          window_start timestamp without time zone,
-          window_end timestamp without time zone not null,
-          last_case_data_modified timestamp without time zone,
-          last_case_data_id bigint not null default 0,
-          initial_complete boolean not null default false,
-          total_batches bigint not null default 0,
-          total_cases bigint not null default 0,
-          total_events bigint not null default 0,
-          created_at timestamp without time zone not null default (now() at time zone 'UTC'),
-          updated_at timestamp without time zone not null default (now() at time zone 'UTC')
-        )
-        """.formatted(progressTable));
-    db.getJdbcTemplate().execute("""
-        alter table %s
-        add column if not exists last_case_data_modified timestamp without time zone
-        """.formatted(progressTable));
+  private void validateProgressTableReady() {
+    Integer columnCount = db.queryForObject(
+        """
+        select count(*)
+        from information_schema.columns
+        where table_schema = :schema
+          and table_name = 'ccd_data_migration_progress'
+          and column_name in (
+            'task_name',
+            'phase',
+            'window_start',
+            'window_end',
+            'last_case_data_modified',
+            'last_case_data_id',
+            'initial_complete',
+            'total_batches',
+            'total_cases',
+            'total_events',
+            'created_at',
+            'updated_at'
+          )
+        """,
+        Map.of("schema", options.targetSchema()),
+        Integer.class
+    );
+    if (columnCount == null || columnCount != 12) {
+      throw new CcdDataMigrationException(
+          "CCD data migration progress table is missing or incomplete. "
+              + "Run the decentralised-runtime Flyway migrations before starting the task."
+      );
+    }
   }
 
   private boolean tryLock() {

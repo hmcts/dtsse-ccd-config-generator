@@ -19,7 +19,7 @@ The task:
 * validates that `pgcrypto` and the FDW foreign tables exist before copying data
 * fails with a link to the FDW setup guide if the FDW setup is missing
 * uses a Postgres advisory lock to prevent two instances of the same migration running at once
-* creates and maintains a progress table in the target `ccd` schema
+* maintains a Flyway-managed progress table in the target `ccd` schema
 * copies source cases in chunks from `fdw_stage.case_data`
 * copies all events for each copied case from `fdw_stage.case_event`
 * upserts existing target rows so reruns are idempotent
@@ -51,7 +51,8 @@ Spring `DataSource`.
 
 ## Progress and reruns
 
-The task creates `ccd.ccd_data_migration_progress` on first use. The table records:
+The decentralised runtime Flyway migrations create `ccd.ccd_data_migration_progress`. The table
+records:
 
 * task name
 * current phase: initial load or delta catch-up
