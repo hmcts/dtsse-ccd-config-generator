@@ -38,7 +38,9 @@ public class CaseReindexingService {
             select reference, case_revision
             from ccd.case_data
             where coalesce(last_modified, created_date) >= :since
-            on conflict do nothing
+            on conflict (reference) do update
+            set case_revision = greatest(ccd.es_queue.case_revision, excluded.case_revision),
+                enqueued_at = greatest(ccd.es_queue.enqueued_at, excluded.enqueued_at)
             """,
         java.util.Map.of("since", since)
     );

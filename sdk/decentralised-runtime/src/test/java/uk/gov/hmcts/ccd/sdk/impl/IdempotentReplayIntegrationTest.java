@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.ImmutableSet;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -26,6 +27,7 @@ import uk.gov.hmcts.ccd.data.casedetails.SecurityClassification;
 import uk.gov.hmcts.ccd.decentralised.dto.DecentralisedCaseDetails;
 import uk.gov.hmcts.ccd.decentralised.dto.DecentralisedCaseEvent;
 import uk.gov.hmcts.ccd.domain.model.definition.CaseDetails;
+import uk.gov.hmcts.ccd.sdk.CaseReindexingService;
 import uk.gov.hmcts.ccd.sdk.ResolvedCCDConfig;
 import uk.gov.hmcts.ccd.sdk.ResolvedConfigRegistry;
 import uk.gov.hmcts.ccd.sdk.api.HasRole;
@@ -44,12 +46,16 @@ class IdempotentReplayIntegrationTest {
   private static final long CASE_REFERENCE_A = 1111000000000000L;
   private static final long CASE_REFERENCE_B = 2222000000000000L;
   private static final long UPSERT_CASE_REFERENCE = 3333000000000000L;
+  private static final long REINDEX_CASE_REFERENCE = 4444000000000000L;
 
   @Autowired
   private NamedParameterJdbcTemplate jdbc;
 
   @Autowired
   private CaseDataRepository repository;
+
+  @Autowired
+  private CaseReindexingService reindexingService;
 
   @Test
   void idempotentReplayReturnsEventVersionAndRevision() {
@@ -139,6 +145,31 @@ class IdempotentReplayIntegrationTest {
     assertThat(result.get("foo")).isEqualTo("bar");
     assertThat(result.get("existing_number")).isEqualTo("42");
     assertThat(result.get("hmcts_service_id")).isEqualTo("ABA1");
+  }
+
+  @Test
+  void reindexingAdvancesExistingQueueRowToLatestRevision() {
+    seedCaseData(REINDEX_CASE_REFERENCE, REINDEX_CASE_REFERENCE, 1, 5);
+    jdbc.update(
+        """
+        update ccd.es_queue
+           set case_revision = :stale_revision
+         where reference = :reference
+        """,
+        Map.of(
+            "reference", REINDEX_CASE_REFERENCE,
+            "stale_revision", 2
+        )
+    );
+
+    reindexingService.enqueueCasesModifiedSince(LocalDate.now().minusDays(1));
+
+    Long queuedRevision = jdbc.queryForObject(
+        "select case_revision from ccd.es_queue where reference = :reference",
+        Map.of("reference", REINDEX_CASE_REFERENCE),
+        Long.class
+    );
+    assertThat(queuedRevision).isEqualTo(5L);
   }
 
   private void seedCaseData(int version, long revision) {
@@ -270,7 +301,7 @@ class IdempotentReplayIntegrationTest {
   }
 
   @Configuration
-  @Import({CaseDataRepository.class, DecentralisedDataConfiguration.class})
+  @Import({CaseDataRepository.class, CaseReindexingService.class, DecentralisedDataConfiguration.class})
   @ImportAutoConfiguration({
       DataSourceAutoConfiguration.class,
       JdbcTemplateAutoConfiguration.class,
