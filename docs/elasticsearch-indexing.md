@@ -122,7 +122,8 @@ During event submission:
 After the above transaction commits:
 
 1. The indexer finds case C requires indexing at revision R
-2. The indexer claims the row in ccd.es_queue by setting locked_until and lock_token, committing the transaction. The lease duration is configured in seconds via `ccd.sdk.indexing.queue-lock-seconds`.
+2. The indexer claims a batch of rows in ccd.es_queue by setting locked_until and lock_token, committing the transaction.
+   The lease duration is configured in seconds via `ccd.sdk.indexing.queue-lock-seconds`, and the batch size defaults to 25 via `ccd.sdk.indexing.batch-size`.
 3. The indexer loads the latest ccd.case_event.data snapshot V* for the case where ccd.case_event.case_revision <= R
 4. The indexer sends a bulk request to Elasticsearch containing:
    1. The case data V* into the `lower(case_type_id) || '_cases'` index
@@ -135,6 +136,8 @@ After the above transaction commits:
 6. Terminal outcomes complete the queue claim:
    1. If the queued row still matches reference C, case_revision R and the indexer's lock_token, it is deleted
    2. If the queued row has advanced while locked, the lock is cleared and the newer revision remains queued
+7. If a full batch was claimed, the same scheduled run immediately claims another batch instead of waiting for the next poll interval.
+   This drain runs on a dedicated single-thread scheduler so it cannot block unrelated scheduled jobs in the service.
 
 ### Concurrency correctness
 

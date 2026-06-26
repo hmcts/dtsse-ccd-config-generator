@@ -22,13 +22,17 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.atomic.AtomicBoolean;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.hc.core5.util.Timeout;
 import org.springframework.beans.factory.DisposableBean;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.context.annotation.Bean;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -41,6 +45,8 @@ import org.springframework.transaction.support.TransactionTemplate;
 @Component
 @Slf4j
 class DecentralisedESIndexer implements DisposableBean {
+  private static final String SCHEDULER_BEAN_NAME = "ccdEsIndexerScheduler";
+
   private final JdbcTemplate jdbcTemplate;
   private final TransactionTemplate transactionTemplate;
   private final AtomicBoolean terminated = new AtomicBoolean(false);
@@ -48,6 +54,7 @@ class DecentralisedESIndexer implements DisposableBean {
   private final ElasticsearchClient client;
   private final ObjectMapper mapper = new ObjectMapper();
   private final int queueLockSeconds;
+  private final int batchSize;
 
   @Autowired
   public DecentralisedESIndexer(JdbcTemplate jdbcTemplate, TransactionTemplate transactionTemplate,
@@ -58,10 +65,16 @@ class DecentralisedESIndexer implements DisposableBean {
                                 @Value("${ccd.sdk.indexing.elasticsearch.socket-timeout-ms:60000}")
                                 int socketTimeoutMs,
                                 @Value("${ccd.sdk.indexing.queue-lock-seconds:30}")
-                                int queueLockSeconds) {
+                                int queueLockSeconds,
+                                @Value("${ccd.sdk.indexing.batch-size:25}")
+                                int batchSize) {
     this.jdbcTemplate = jdbcTemplate;
     this.transactionTemplate = transactionTemplate;
     this.queueLockSeconds = queueLockSeconds;
+    this.batchSize = batchSize;
+    if (batchSize < 1) {
+      throw new IllegalArgumentException("ccd.sdk.indexing.batch-size must be greater than zero");
+    }
     var hosts = Arrays.stream(elasticSearchHosts.split(",")).map(String::trim).map(URI::create).toArray(URI[]::new);
     var restClient = Rest5Client.builder(hosts)
         .setRequestConfigCallback(requestConfigBuilder -> {
@@ -85,13 +98,24 @@ class DecentralisedESIndexer implements DisposableBean {
     log.info("Starting decentralised ES indexer targeting {}", Arrays.toString(hosts));
   }
 
-  @Scheduled(fixedDelayString = "${ccd.sdk.decentralised.poll-interval-ms:250}")
+  @Bean(name = SCHEDULER_BEAN_NAME, destroyMethod = "shutdown", defaultCandidate = false)
+  @ConditionalOnMissingBean(name = SCHEDULER_BEAN_NAME)
+  ScheduledExecutorService ccdEsIndexerScheduler() {
+    return Executors.newSingleThreadScheduledExecutor(runnable -> new Thread(runnable, "ccd-es-indexer"));
+  }
+
+  @Scheduled(
+      fixedDelayString = "${ccd.sdk.decentralised.poll-interval-ms:250}",
+      scheduler = SCHEDULER_BEAN_NAME)
   public void runIndexer() {
     if (terminated.get()) {
       return;
     }
     try {
-      pollForNewCases();
+      PollResult result;
+      do {
+        result = pollForNewCases();
+      } while (!terminated.get() && result.claimedCases() == batchSize && !result.hasTransientFailures());
     } catch (Exception ex) {
       if (terminated.get()) {
         log.debug("Decentralised ES indexer stopped after shutdown signal", ex);
@@ -102,12 +126,12 @@ class DecentralisedESIndexer implements DisposableBean {
   }
 
   @SuppressWarnings("unchecked")
-  private void pollForNewCases() {
+  private PollResult pollForNewCases() {
     UUID lockToken = UUID.randomUUID();
     List<Map<String, Object>> results = transactionTemplate.execute(status -> claimBatch(lockToken));
 
     if (results == null || results.isEmpty()) {
-      return;
+      return new PollResult(0, false);
     }
 
     try {
@@ -153,7 +177,9 @@ class DecentralisedESIndexer implements DisposableBean {
       if (!operations.isEmpty()) {
         IndexingResult result = executeBulkIndexing(operations, operationMetadata);
         transactionTemplate.executeWithoutResult(status -> completeIndexing(result));
+        return new PollResult(results.size(), result.hasTransientFailures());
       }
+      return new PollResult(results.size(), false);
     } catch (Exception e) {
       throw new RuntimeException(e);
     }
@@ -169,7 +195,7 @@ class DecentralisedESIndexer implements DisposableBean {
               where locked_until is null
                  or locked_until < now()
               order by enqueued_at
-              limit 100
+              limit ?
               for update skip locked
           ),
           claimed as (
@@ -215,7 +241,7 @@ class DecentralisedESIndexer implements DisposableBean {
                   limit 1
               ) ce on true
           ) row
-          """, queueLockSeconds, lockToken);
+          """, batchSize, queueLockSeconds, lockToken);
   }
 
   private IndexingResult executeBulkIndexing(
@@ -230,7 +256,7 @@ class DecentralisedESIndexer implements DisposableBean {
     operationMetadata.forEach(metadata -> claimsByKey.putIfAbsent(claimKey(metadata), metadata));
 
     if (!response.errors()) {
-      return new IndexingResult(new ArrayList<>(claimsByKey.values()), List.of());
+      return new IndexingResult(new ArrayList<>(claimsByKey.values()), List.of(), false);
     }
 
     var transientFailureKeys = new java.util.HashSet<String>();
@@ -271,7 +297,7 @@ class DecentralisedESIndexer implements DisposableBean {
         .map(Map.Entry::getValue)
         .toList();
 
-    return new IndexingResult(completedClaims, deadLetters);
+    return new IndexingResult(completedClaims, deadLetters, !transientFailureKeys.isEmpty());
   }
 
   private void completeIndexing(IndexingResult result) {
@@ -387,6 +413,12 @@ class DecentralisedESIndexer implements DisposableBean {
 
   private record IndexingResult(
       List<Map<String, Object>> completedClaims,
-      List<Map<String, Object>> deadLetters
+      List<Map<String, Object>> deadLetters,
+      boolean hasTransientFailures
+  ) {}
+
+  private record PollResult(
+      int claimedCases,
+      boolean hasTransientFailures
   ) {}
 }
