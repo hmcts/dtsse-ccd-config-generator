@@ -225,7 +225,14 @@ public class EtCcdDataMigrationScheduler {
 }
 ```
 
-Example configuration:
+## Example application configuration
+
+These are Spring Boot application properties, not a Flux configuration fragment. Put them in the
+service's `application.yaml` or provide the equivalent environment variables through its deployment
+configuration (for example, values rendered by the service's Helm/Flux deployment):
+
+* `MIGRATION_CCD_DATA_ENABLED=false`
+* `MIGRATION_CCD_DATA_CRON=0 */10 20-23,0-5 * * *`
 
 ```yaml
 migration:
