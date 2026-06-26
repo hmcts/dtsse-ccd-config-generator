@@ -17,7 +17,6 @@ import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -144,7 +143,7 @@ class DecentralisedESIndexer implements DisposableBean {
 
     try {
       var operations = new ArrayList<BulkOperation>();
-      var operationMetadata = new ArrayList<Map<String, Object>>();
+      var operationMetadata = new ArrayList<IndexOperation>();
 
       for (Map<String, Object> row : results) {
         var rowJson = row.get("row").toString();
@@ -153,9 +152,10 @@ class DecentralisedESIndexer implements DisposableBean {
         long eventId = ((Number) row.get("event_id")).longValue();
         String indexId = row.get("index_id").toString();
         String docId = row.get("case_data_id").toString();
+        var claim = new IndexClaim(reference, version, lockToken);
 
         appendBulkIndex(operations, indexId, docId, version, rowJson);
-        operationMetadata.add(metadata(reference, version, lockToken, eventId, indexId));
+        operationMetadata.add(new IndexOperation(claim, eventId, indexId));
 
         // Replicate CCD's globalsearch logstash setup.
         // Where cases define a 'SearchCriteria' field we index certain fields into CCD's central
@@ -178,7 +178,7 @@ class DecentralisedESIndexer implements DisposableBean {
               docId,
               version,
               mapper.writeValueAsString(map));
-          operationMetadata.add(metadata(reference, version, lockToken, eventId, "global_search"));
+          operationMetadata.add(new IndexOperation(claim, eventId, "global_search"));
         }
       }
 
@@ -254,25 +254,27 @@ class DecentralisedESIndexer implements DisposableBean {
 
   private IndexingResult executeBulkIndexing(
       List<BulkOperation> operations,
-      List<Map<String, Object>> operationMetadata
+      List<IndexOperation> operationMetadata
   ) throws Exception {
     var response = client.bulk(builder -> builder
         .timeout(Time.of(time -> time.time("1m")))
         .operations(operations));
 
-    Map<String, Map<String, Object>> claimsByKey = new HashMap<>();
-    operationMetadata.forEach(metadata -> claimsByKey.putIfAbsent(claimKey(metadata), metadata));
+    var claims = operationMetadata.stream()
+        .map(IndexOperation::claim)
+        .distinct()
+        .toList();
 
     if (!response.errors()) {
-      return new IndexingResult(new ArrayList<>(claimsByKey.values()), List.of(), false);
+      return new IndexingResult(claims, List.of(), false);
     }
 
-    var transientFailureKeys = new java.util.HashSet<String>();
-    var deadLetters = new ArrayList<Map<String, Object>>();
+    var transientFailureClaims = new java.util.HashSet<IndexClaim>();
+    var deadLetters = new ArrayList<DeadLetter>();
 
     for (int i = 0; i < response.items().size(); i++) {
       BulkResponseItem item = response.items().get(i);
-      Map<String, Object> metadata = operationMetadata.get(i);
+      IndexOperation metadata = operationMetadata.get(i);
       int itemStatus = item.status();
 
       if (itemStatus >= 200 && itemStatus < 300) {
@@ -285,37 +287,36 @@ class DecentralisedESIndexer implements DisposableBean {
         log.info("Stale event processing skipped due to version conflict for id {}: {}",
             item.id(), extractErrorMessage(item.error()));
       } else if (isDocumentRejection(itemStatus, item.error())) {
-        deadLetters.add(Map.of(
-            "case_event_id", metadata.get("event_id"),
-            "case_revision", metadata.get("case_revision"),
-            "index_id", metadata.get("index_id"),
-            "failure_message", "%s: %s".formatted(metadata.get("index_id"), extractErrorMessage(item.error()))
+        deadLetters.add(new DeadLetter(
+            metadata.eventId(),
+            metadata.claim().caseRevision(),
+            metadata.indexId(),
+            "%s: %s".formatted(metadata.indexId(), extractErrorMessage(item.error()))
         ));
         log.error("Cftlib elasticsearch indexing document rejected for id {}: {}",
             item.id(), extractErrorMessage(item.error()));
       } else {
-        transientFailureKeys.add(claimKey(metadata));
+        transientFailureClaims.add(metadata.claim());
         log.warn("Cftlib elasticsearch indexing transient failure for id {}: {}",
             item.id(), extractErrorMessage(item.error()));
       }
     }
 
-    var completedClaims = claimsByKey.entrySet().stream()
-        .filter(entry -> !transientFailureKeys.contains(entry.getKey()))
-        .map(Map.Entry::getValue)
+    var completedClaims = claims.stream()
+        .filter(claim -> !transientFailureClaims.contains(claim))
         .toList();
 
-    return new IndexingResult(completedClaims, deadLetters, !transientFailureKeys.isEmpty());
+    return new IndexingResult(completedClaims, deadLetters, !transientFailureClaims.isEmpty());
   }
 
   private void completeIndexing(IndexingResult result) {
     if (!result.deadLetters().isEmpty()) {
       var params = result.deadLetters().stream()
           .map(deadLetter -> new Object[] {
-              deadLetter.get("case_event_id"),
-              deadLetter.get("case_revision"),
-              deadLetter.get("index_id"),
-              deadLetter.get("failure_message")
+              deadLetter.caseEventId(),
+              deadLetter.caseRevision(),
+              deadLetter.indexId(),
+              deadLetter.failureMessage()
           })
           .toList();
 
@@ -331,9 +332,9 @@ class DecentralisedESIndexer implements DisposableBean {
     if (!result.completedClaims().isEmpty()) {
       var params = result.completedClaims().stream()
           .map(claim -> new Object[] {
-              claim.get("reference"),
-              claim.get("case_revision"),
-              claim.get("lock_token")
+              claim.reference(),
+              claim.caseRevision(),
+              claim.lockToken()
           })
           .toList();
 
@@ -386,24 +387,6 @@ class DecentralisedESIndexer implements DisposableBean {
             .document(BinaryData.of(source.getBytes(StandardCharsets.UTF_8), "application/json")))));
   }
 
-  private Map<String, Object> metadata(long reference, long caseRevision, UUID lockToken, long eventId,
-                                       String indexId) {
-    Map<String, Object> metadata = new HashMap<>();
-    metadata.put("reference", reference);
-    metadata.put("case_revision", caseRevision);
-    metadata.put("lock_token", lockToken);
-    metadata.put("event_id", eventId);
-    metadata.put("index_id", indexId);
-    return metadata;
-  }
-
-  private String claimKey(Map<String, Object> metadata) {
-    return "%s:%s:%s".formatted(
-        metadata.get("reference"),
-        metadata.get("case_revision"),
-        metadata.get("lock_token"));
-  }
-
   private String extractErrorMessage(ErrorCause error) {
     if (error == null) {
       return null;
@@ -425,9 +408,28 @@ class DecentralisedESIndexer implements DisposableBean {
   }
 
   private record IndexingResult(
-      List<Map<String, Object>> completedClaims,
-      List<Map<String, Object>> deadLetters,
+      List<IndexClaim> completedClaims,
+      List<DeadLetter> deadLetters,
       boolean hasTransientFailures
+  ) {}
+
+  private record IndexClaim(
+      long reference,
+      long caseRevision,
+      UUID lockToken
+  ) {}
+
+  private record IndexOperation(
+      IndexClaim claim,
+      long eventId,
+      String indexId
+  ) {}
+
+  private record DeadLetter(
+      long caseEventId,
+      long caseRevision,
+      String indexId,
+      String failureMessage
   ) {}
 
   private record PollResult(
