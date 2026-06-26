@@ -136,7 +136,7 @@ After the above transaction commits:
 6. Terminal outcomes complete the queue claim:
    1. If the queued row still matches reference C, case_revision R and the indexer's lock_token, it is deleted
    2. If the queued row has advanced while locked, the lock is cleared and the newer revision remains queued
-7. If a full batch was claimed, the same scheduled run immediately claims another batch instead of waiting for the next poll interval.
+7. If a full batch was claimed, the same scheduled run claims another batch after `ccd.sdk.indexing.drain-delay-ms`, which defaults to 100ms, instead of waiting for the next poll interval.
    This drain runs on a dedicated single-thread scheduler so it cannot block unrelated scheduled jobs in the service.
 
 ### Concurrency correctness

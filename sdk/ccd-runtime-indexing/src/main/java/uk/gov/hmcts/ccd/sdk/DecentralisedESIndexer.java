@@ -55,6 +55,7 @@ class DecentralisedESIndexer implements DisposableBean {
   private final ObjectMapper mapper = new ObjectMapper();
   private final int queueLockSeconds;
   private final int batchSize;
+  private final int drainDelayMs;
 
   @Autowired
   public DecentralisedESIndexer(JdbcTemplate jdbcTemplate, TransactionTemplate transactionTemplate,
@@ -67,13 +68,19 @@ class DecentralisedESIndexer implements DisposableBean {
                                 @Value("${ccd.sdk.indexing.queue-lock-seconds:30}")
                                 int queueLockSeconds,
                                 @Value("${ccd.sdk.indexing.batch-size:25}")
-                                int batchSize) {
+                                int batchSize,
+                                @Value("${ccd.sdk.indexing.drain-delay-ms:100}")
+                                int drainDelayMs) {
     this.jdbcTemplate = jdbcTemplate;
     this.transactionTemplate = transactionTemplate;
     this.queueLockSeconds = queueLockSeconds;
     this.batchSize = batchSize;
+    this.drainDelayMs = drainDelayMs;
     if (batchSize < 1) {
       throw new IllegalArgumentException("ccd.sdk.indexing.batch-size must be greater than zero");
+    }
+    if (drainDelayMs < 0) {
+      throw new IllegalArgumentException("ccd.sdk.indexing.drain-delay-ms must not be negative");
     }
     var hosts = Arrays.stream(elasticSearchHosts.split(",")).map(String::trim).map(URI::create).toArray(URI[]::new);
     var restClient = Rest5Client.builder(hosts)
@@ -113,9 +120,14 @@ class DecentralisedESIndexer implements DisposableBean {
     }
     try {
       PollResult result;
+      boolean continueDrain;
       do {
         result = pollForNewCases();
-      } while (!terminated.get() && result.claimedCases() == batchSize && !result.hasTransientFailures());
+        continueDrain = !terminated.get() && result.claimedCases() == batchSize && !result.hasTransientFailures();
+        if (continueDrain) {
+          Thread.sleep(drainDelayMs);
+        }
+      } while (continueDrain);
     } catch (Exception ex) {
       if (terminated.get()) {
         log.debug("Decentralised ES indexer stopped after shutdown signal", ex);
