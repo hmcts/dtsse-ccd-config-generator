@@ -1,5 +1,7 @@
 package uk.gov.hmcts.ccd.sdk.migration;
 
+import java.sql.Connection;
+import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Types;
@@ -147,7 +149,8 @@ public abstract class CcdDataMigrationTask implements Runnable {
 
     validateDecentralisedRuntimeDisabled();
     validateProgressTableReady();
-    if (!tryLock()) {
+    AdvisoryLock migrationLock = tryLock();
+    if (migrationLock == null) {
       log.warn("CCD data migration taskName={} is already running; skipping this invocation", options.taskName());
       return CcdDataMigrationRunResult.skippedLocked();
     }
@@ -186,7 +189,7 @@ public abstract class CcdDataMigrationTask implements Runnable {
     } catch (Exception ex) {
       throw new CcdDataMigrationException("CCD data migration failed", ex);
     } finally {
-      unlock();
+      migrationLock.close();
     }
   }
 
@@ -294,32 +297,85 @@ public abstract class CcdDataMigrationTask implements Runnable {
     }
   }
 
-  private boolean tryLock() {
-    Boolean locked = db.queryForObject(
-        "select pg_try_advisory_lock(hashtext(:taskName), hashtext(:caseTypes))",
-        lockParams(),
-        Boolean.class
-    );
-    return Boolean.TRUE.equals(locked);
-  }
+  private AdvisoryLock tryLock() {
+    DataSource dataSource = db.getJdbcTemplate().getDataSource();
+    if (dataSource == null) {
+      throw new CcdDataMigrationException("NamedParameterJdbcTemplate must expose a DataSource");
+    }
 
-  private void unlock() {
+    Connection connection = null;
     try {
-      db.queryForObject(
-          "select pg_advisory_unlock(hashtext(:taskName), hashtext(:caseTypes))",
-          lockParams(),
-          Boolean.class
+      connection = dataSource.getConnection();
+      try (PreparedStatement statement = connection.prepareStatement(
+          "select pg_try_advisory_lock(hashtext(?), hashtext(?))"
+      )) {
+        statement.setString(1, options.taskName());
+        statement.setString(2, String.join(",", options.caseTypeIds()));
+        try (ResultSet result = statement.executeQuery()) {
+          if (result.next() && result.getBoolean(1)) {
+            return new AdvisoryLock(connection);
+          }
+        }
+      }
+      connection.close();
+      return null;
+    } catch (SQLException ex) {
+      closeLockConnection(connection);
+      throw new CcdDataMigrationException(
+          "Could not acquire CCD data migration advisory lock taskName=" + options.taskName(),
+          ex
       );
-    } catch (RuntimeException ex) {
-      log.warn("Failed to release CCD data migration advisory lock taskName={}", options.taskName(), ex);
     }
   }
 
-  private Map<String, Object> lockParams() {
-    return Map.of(
-        "taskName", options.taskName(),
-        "caseTypes", String.join(",", options.caseTypeIds())
-    );
+  private void closeLockConnection(Connection connection) {
+    if (connection == null) {
+      return;
+    }
+    try {
+      connection.close();
+    } catch (SQLException closeEx) {
+      log.warn("Failed to close CCD data migration lock connection taskName={}", options.taskName(), closeEx);
+    }
+  }
+
+  private void abortLockConnection(Connection connection) {
+    try {
+      connection.abort(Runnable::run);
+    } catch (SQLException abortEx) {
+      log.warn("Failed to abort CCD data migration lock connection taskName={}", options.taskName(), abortEx);
+      closeLockConnection(connection);
+    }
+  }
+
+  private final class AdvisoryLock implements AutoCloseable {
+    private final Connection connection;
+
+    private AdvisoryLock(Connection connection) {
+      this.connection = connection;
+    }
+
+    @Override
+    public void close() {
+      boolean unlocked = false;
+      try (PreparedStatement statement = connection.prepareStatement(
+          "select pg_advisory_unlock(hashtext(?), hashtext(?))"
+      )) {
+        statement.setString(1, options.taskName());
+        statement.setString(2, String.join(",", options.caseTypeIds()));
+        try (ResultSet result = statement.executeQuery()) {
+          unlocked = result.next() && result.getBoolean(1);
+        }
+      } catch (SQLException ex) {
+        log.warn("Failed to release CCD data migration advisory lock taskName={}", options.taskName(), ex);
+      } finally {
+        if (unlocked) {
+          closeLockConnection(connection);
+        } else {
+          abortLockConnection(connection);
+        }
+      }
+    }
   }
 
   private void validateCanDisableTriggers() {
