@@ -219,7 +219,7 @@ class DecentralisedESIndexer implements DisposableBean {
               row_to_json(row)::jsonb as row,
               row.reference,
               row.case_revision,
-              row.case_data_id,
+              row.id as case_data_id,
               row.event_id,
               row.index_id
           from (
@@ -230,14 +230,14 @@ class DecentralisedESIndexer implements DisposableBean {
                   lower(cd.case_type_id) || '_cases' as index_id,
                   cd.created_date,
                   cd.jurisdiction,
-                  cd.id as case_data_id,
+                  cd.id as id,
                   cd.state,
                   cd.security_classification,
                   cd.last_state_modified_date,
                   cd.supplementary_data,
                   ce.id as event_id,
                   ce.data,
-                  ce.created_date as last_modified
+                  coalesce(cd.last_modified, cd.created_date) as last_modified
               from claimed c
               join ccd.case_data cd on cd.reference = c.reference
               join lateral (
@@ -309,18 +309,23 @@ class DecentralisedESIndexer implements DisposableBean {
   }
 
   private void completeIndexing(IndexingResult result) {
-    for (Map<String, Object> deadLetter : result.deadLetters()) {
-      jdbcTemplate.update("""
+    if (!result.deadLetters().isEmpty()) {
+      var params = result.deadLetters().stream()
+          .map(deadLetter -> new Object[] {
+              deadLetter.get("case_event_id"),
+              deadLetter.get("case_revision"),
+              deadLetter.get("index_id"),
+              deadLetter.get("failure_message")
+          })
+          .toList();
+
+      jdbcTemplate.batchUpdate("""
           insert into ccd.es_dead_letter_queue(case_event_id, case_revision, index_id, failure_message)
           values (?, ?, ?, ?)
           on conflict (case_event_id, case_revision, index_id) do update
           set timestamp = now(),
               failure_message = excluded.failure_message
-          """,
-          deadLetter.get("case_event_id"),
-          deadLetter.get("case_revision"),
-          deadLetter.get("index_id"),
-          deadLetter.get("failure_message"));
+          """, params);
     }
 
     if (!result.completedClaims().isEmpty()) {
