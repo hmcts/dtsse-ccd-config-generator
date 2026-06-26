@@ -22,7 +22,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.support.TransactionTemplate;
 
 @ConditionalOnProperty(
-    name = "ccd.sdk.decentralised",
+    name = "ccd.sdk.decentralised.es-indexer.enabled",
     havingValue = "true",
     matchIfMissing = true)
 @Component
