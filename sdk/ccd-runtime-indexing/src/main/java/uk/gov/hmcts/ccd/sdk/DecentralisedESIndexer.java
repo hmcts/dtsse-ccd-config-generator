@@ -130,10 +130,6 @@ class DecentralisedESIndexer implements DisposableBean {
     UUID lockToken = UUID.randomUUID();
     List<Map<String, Object>> results = transactionTemplate.execute(status -> claimBatch(lockToken));
 
-    if (results == null || results.isEmpty()) {
-      return new PollResult(0, false);
-    }
-
     try {
       var operations = new ArrayList<BulkOperation>();
       var operationMetadata = new ArrayList<Map<String, Object>>();
