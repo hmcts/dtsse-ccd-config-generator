@@ -51,14 +51,19 @@ run_fdw_setup() {
 }
 
 run_fdw_migration() {
-  local extra_env=("${@:1}")
+  local env_args=(
+    "DST_DSN=$DST_DSN"
+    "FDW_SCHEMA=$FDW_SCHEMA"
+    "CASE_TYPE_IDS_SQL='${CASE_TYPE}'"
+    "CASE_REVISION_OFFSET=$CASE_REVISION_OFFSET"
+  )
+
+  if (($# > 0)); then
+    env_args+=("$@")
+  fi
 
   env \
-    DST_DSN="$DST_DSN" \
-    FDW_SCHEMA="$FDW_SCHEMA" \
-    CASE_TYPE_IDS_SQL="'${CASE_TYPE}'" \
-    CASE_REVISION_OFFSET="$CASE_REVISION_OFFSET" \
-    "${extra_env[@]}" \
+    "${env_args[@]}" \
     "$MIGRATION_SCRIPT" --apply
 }
 

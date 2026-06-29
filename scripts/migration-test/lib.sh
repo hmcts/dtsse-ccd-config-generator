@@ -32,6 +32,8 @@ init_migration_test_env() {
 }
 
 cleanup_temp_dbs() {
+  local exit_code=$?
+
   for db in "$SRC_DB" "$DST_DB"; do
     "$PSQL_BIN" -d "${BASE_DSN}/postgres" "${BASE_CONN_ARGS[@]}" --set=ON_ERROR_STOP=on --command \
       "select pg_terminate_backend(pid) from pg_stat_activity where datname = '${db}' and pid <> pg_backend_pid();" \
@@ -40,6 +42,8 @@ cleanup_temp_dbs() {
 
   "$DROPDB_BIN" "${BASE_CONN_ARGS[@]}" --if-exists "$SRC_DB" >/dev/null 2>&1 || true
   "$DROPDB_BIN" "${BASE_CONN_ARGS[@]}" --if-exists "$DST_DB" >/dev/null 2>&1 || true
+
+  return "$exit_code"
 }
 
 psql_src() {
