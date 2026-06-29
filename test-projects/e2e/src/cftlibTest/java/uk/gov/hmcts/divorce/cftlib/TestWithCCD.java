@@ -159,6 +159,7 @@ public class TestWithCCD extends CftlibTest {
     private static final String EXTERNAL_CALLBACK_HOST = "127.0.0.1";
     private static final int EXTERNAL_CALLBACK_PORT = 4014;
     private static final String ELASTICSEARCH_BASE_URL = "http://localhost:9200";
+    private static final Duration ELASTICSEARCH_ASSERTION_TIMEOUT = Duration.ofSeconds(75);
     private static final String TASK_MANAGEMENT_BASE_URL = "http://localhost:8087";
     private static final String ACCEPT_CREATE_CASE =
         "application/vnd.uk.gov.hmcts.ccd-data-store-api.create-case.v2+json;charset=UTF-8";
@@ -557,7 +558,7 @@ public class TestWithCCD extends CftlibTest {
     void searchCases() {
         // Give some time to index the case created by the previous test
         await()
-            .timeout(Duration.ofSeconds(10))
+            .atMost(ELASTICSEARCH_ASSERTION_TIMEOUT)
             .ignoreExceptions()
             .until(this::caseAppearsInSearch);
     }
@@ -719,7 +720,7 @@ public class TestWithCCD extends CftlibTest {
         try (var esClient = HttpClientBuilder.create().build()) {
             await()
                 .pollInterval(Duration.ofSeconds(1))
-                .atMost(Duration.ofSeconds(15))
+                .atMost(ELASTICSEARCH_ASSERTION_TIMEOUT)
                 .untilAsserted(() -> {
                     var esRequest = new HttpGet(ELASTICSEARCH_BASE_URL + "/e2e_cases/_doc/" + caseDataId);
                     try (var esResponse = esClient.execute(esRequest)) {
@@ -786,7 +787,7 @@ public class TestWithCCD extends CftlibTest {
 
         await()
             .pollInterval(Duration.ofSeconds(1))
-            .atMost(Duration.ofSeconds(15))
+            .atMost(ELASTICSEARCH_ASSERTION_TIMEOUT)
             .untilAsserted(() -> {
                 var esRequest = new HttpGet(ELASTICSEARCH_BASE_URL + "/e2e_cases/_doc/" + caseDataId);
                 var esResponse = HttpClientBuilder.create().build().execute(esRequest);
@@ -2419,7 +2420,7 @@ public class TestWithCCD extends CftlibTest {
 
         await()
             .pollInterval(Duration.ofSeconds(1))
-            .atMost(Duration.ofSeconds(30))
+            .atMost(ELASTICSEARCH_ASSERTION_TIMEOUT)
             .untilAsserted(() -> assertThat(
                 "Elasticsearch revision should match datastore before reindexing",
                 fetchElasticsearchDocument(caseDataId).path("case_revision").asInt(),

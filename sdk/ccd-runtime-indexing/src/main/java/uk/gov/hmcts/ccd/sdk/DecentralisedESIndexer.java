@@ -63,6 +63,7 @@ class DecentralisedESIndexer implements DisposableBean {
   private final int queueLockSeconds;
   private final int batchSize;
   private final int drainDelayMs;
+  private final String bulkTimeout;
 
   @Autowired
   public DecentralisedESIndexer(JdbcTemplate jdbcTemplate, TransactionTemplate transactionTemplate,
@@ -77,17 +78,23 @@ class DecentralisedESIndexer implements DisposableBean {
                                 @Value("${ccd.sdk.indexing.batch-size:25}")
                                 int batchSize,
                                 @Value("${ccd.sdk.indexing.drain-delay-ms:100}")
-                                int drainDelayMs) {
+                                int drainDelayMs,
+                                @Value("${ccd.sdk.indexing.bulk-timeout:1m}")
+                                String bulkTimeout) {
     this.jdbcTemplate = jdbcTemplate;
     this.transactionTemplate = transactionTemplate;
     this.queueLockSeconds = queueLockSeconds;
     this.batchSize = batchSize;
     this.drainDelayMs = drainDelayMs;
+    this.bulkTimeout = bulkTimeout;
     if (batchSize < 1) {
       throw new IllegalArgumentException("ccd.sdk.indexing.batch-size must be greater than zero");
     }
     if (drainDelayMs < 0) {
       throw new IllegalArgumentException("ccd.sdk.indexing.drain-delay-ms must not be negative");
+    }
+    if (bulkTimeout.isBlank()) {
+      throw new IllegalArgumentException("ccd.sdk.indexing.bulk-timeout must not be blank");
     }
     var hosts = parseElasticSearchHosts(elasticSearchHosts);
     var restClient = Rest5Client.builder(hosts)
@@ -289,7 +296,7 @@ class DecentralisedESIndexer implements DisposableBean {
       List<IndexOperation> operationMetadata
   ) throws Exception {
     var response = client.bulk(builder -> builder
-        .timeout(Time.of(time -> time.time("1m")))
+        .timeout(Time.of(time -> time.time(bulkTimeout)))
         .operations(operations));
 
     var claims = operationMetadata.stream()
