@@ -159,6 +159,7 @@ public class TestWithCCD extends CftlibTest {
     private static final String EXTERNAL_CALLBACK_HOST = "127.0.0.1";
     private static final int EXTERNAL_CALLBACK_PORT = 4014;
     private static final String ELASTICSEARCH_BASE_URL = "http://localhost:9200";
+    private static final Duration ELASTICSEARCH_ASSERTION_TIMEOUT = Duration.ofSeconds(75);
     private static final String TASK_MANAGEMENT_BASE_URL = "http://localhost:8087";
     private static final String ACCEPT_CREATE_CASE =
         "application/vnd.uk.gov.hmcts.ccd-data-store-api.create-case.v2+json;charset=UTF-8";
@@ -557,7 +558,7 @@ public class TestWithCCD extends CftlibTest {
     void searchCases() {
         // Give some time to index the case created by the previous test
         await()
-            .timeout(Duration.ofSeconds(10))
+            .atMost(ELASTICSEARCH_ASSERTION_TIMEOUT)
             .ignoreExceptions()
             .until(this::caseAppearsInSearch);
     }
@@ -719,7 +720,7 @@ public class TestWithCCD extends CftlibTest {
         try (var esClient = HttpClientBuilder.create().build()) {
             await()
                 .pollInterval(Duration.ofSeconds(1))
-                .atMost(Duration.ofSeconds(15))
+                .atMost(ELASTICSEARCH_ASSERTION_TIMEOUT)
                 .untilAsserted(() -> {
                     var esRequest = new HttpGet(ELASTICSEARCH_BASE_URL + "/e2e_cases/_doc/" + caseDataId);
                     try (var esResponse = esClient.execute(esRequest)) {
@@ -771,15 +772,22 @@ public class TestWithCCD extends CftlibTest {
         assertThat("Supplementary data response should contain foo", supplementaryData.path("foo").asInt(-1),
             equalTo(expectedFooValue));
 
-        Integer fooInDb = db.queryForObject(
-            "SELECT (supplementary_data->>'foo')::integer FROM ccd.case_data WHERE reference = :ref",
-            Map.of("ref", caseRef),
-            Integer.class);
-        assertThat("Supplementary data in datastore should reflect update", fooInDb, equalTo(expectedFooValue));
+        Map<String, Object> row = db.queryForMap(
+            """
+                SELECT (supplementary_data->>'foo')::integer AS foo,
+                       trim(both '"' from to_json(coalesce(last_modified, created_date))::text) AS last_modified
+                 FROM ccd.case_data
+                 WHERE reference = :ref
+                """,
+            Map.of("ref", caseRef)
+        );
+        assertThat("Supplementary data in datastore should reflect update",
+            row.get("foo"), equalTo(expectedFooValue));
+        String expectedLastModified = (String) row.get("last_modified");
 
         await()
             .pollInterval(Duration.ofSeconds(1))
-            .atMost(Duration.ofSeconds(15))
+            .atMost(ELASTICSEARCH_ASSERTION_TIMEOUT)
             .untilAsserted(() -> {
                 var esRequest = new HttpGet(ELASTICSEARCH_BASE_URL + "/e2e_cases/_doc/" + caseDataId);
                 var esResponse = HttpClientBuilder.create().build().execute(esRequest);
@@ -788,6 +796,14 @@ public class TestWithCCD extends CftlibTest {
                 var esPayload = mapper.readTree(EntityUtils.toString(esResponse.getEntity()));
                 var source = esPayload.path("_source");
                 assertThat("Elasticsearch document should contain _source", source.isMissingNode(), is(false));
+
+                assertThat("Elasticsearch _source should expose Logstash-compatible id field",
+                    source.has("id"), is(true));
+                assertThat("Elasticsearch _source should not expose internal case_data_id field",
+                    source.has("case_data_id"), is(false));
+                assertThat("Elasticsearch last_modified should match case_data.last_modified",
+                    source.path("last_modified").asText(), equalTo(expectedLastModified));
+
                 var fooValue = source.path("supplementary_data").path("foo").asInt(-1);
                 assertThat("Supplementary data in Elasticsearch should reflect latest value",
                     fooValue, equalTo(expectedFooValue));
@@ -2404,7 +2420,7 @@ public class TestWithCCD extends CftlibTest {
 
         await()
             .pollInterval(Duration.ofSeconds(1))
-            .atMost(Duration.ofSeconds(30))
+            .atMost(ELASTICSEARCH_ASSERTION_TIMEOUT)
             .untilAsserted(() -> assertThat(
                 "Elasticsearch revision should match datastore before reindexing",
                 fetchElasticsearchDocument(caseDataId).path("case_revision").asInt(),

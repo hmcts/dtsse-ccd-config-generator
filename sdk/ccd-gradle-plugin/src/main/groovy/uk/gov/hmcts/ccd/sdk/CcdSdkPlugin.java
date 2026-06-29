@@ -88,6 +88,14 @@ public class CcdSdkPlugin implements Plugin<Project> {
           project.getPluginManager().withPlugin("com.github.hmcts.rse-cft-lib", plugin ->
               project.getDependencies().add("cftlibImplementation", dependencyNotation));
         }
+        project.getConfigurations().configureEach(configuration ->
+            configuration.getResolutionStrategy().eachDependency(details -> {
+              if ("co.elastic.clients".equals(details.getRequested().getGroup())
+                  && ("elasticsearch-java".equals(details.getRequested().getName())
+                  || "elasticsearch-rest5-client".equals(details.getRequested().getName()))) {
+                details.useVersion("9.4.2");
+              }
+            }));
         // Surface that we are decentralised to the spring boot apps.
         // This is an env var since it needs to be read beyond the application's classpath
         // to shut off the default cftlib elasticsearch indexer when decentralised)
