@@ -264,7 +264,6 @@ cftlibTest {
   environment 'IDAM_SYSTEM_UPDATE_USERNAME', 'test-system-user@hmcts.net'
   environment 'IDAM_SYSTEM_UPDATE_PASSWORD', 'password'
   environment 'CCD_SDK_INDEXING_BULK_TIMEOUT', '5s'
-  environment 'CCD_SDK_INDEXING_QUEUE_LOCK_SECONDS', '2'
 }
 
 configurations.all {
