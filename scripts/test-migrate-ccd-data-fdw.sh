@@ -57,6 +57,7 @@ run_fdw_migration() {
     DST_DSN="$DST_DSN" \
     FDW_SCHEMA="$FDW_SCHEMA" \
     CASE_TYPE_IDS_SQL="'${CASE_TYPE}'" \
+    CASE_REVISION_OFFSET="$CASE_REVISION_OFFSET" \
     "${extra_env[@]}" \
     "$MIGRATION_SCRIPT" --apply
 }
@@ -162,13 +163,18 @@ SQL
 create_temp_dbs
 seed_source_data
 clear_target_data
+install_trigger_guards
 run_fdw_setup
 assert_fdw_setup
 assert_case_event_constraints_present
 assert_constraints_restored_after_failure
 
 echo "Running FDW migration script (validation mode only)"
-DST_DSN="$DST_DSN" FDW_SCHEMA="$FDW_SCHEMA" CASE_TYPE_IDS_SQL="'${CASE_TYPE}'" "$MIGRATION_SCRIPT"
+DST_DSN="$DST_DSN" \
+  FDW_SCHEMA="$FDW_SCHEMA" \
+  CASE_TYPE_IDS_SQL="'${CASE_TYPE}'" \
+  CASE_REVISION_OFFSET="$CASE_REVISION_OFFSET" \
+  "$MIGRATION_SCRIPT"
 
 echo "Running FDW migration script (apply mode)"
 run_fdw_migration

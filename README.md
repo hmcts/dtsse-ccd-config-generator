@@ -91,6 +91,10 @@ When `runtimeIndexing` is enabled the decentralised indexer now relies on Spring
 Set `ELASTIC_SEARCH_HOSTS` to the Elasticsearch HTTP endpoint or a comma-separated list of endpoints. For example:
 `ELASTIC_SEARCH_HOSTS=http://es-1:9200,http://es-2:9200`.
 
+The poller is enabled by default. To leave the runtime indexing library on the classpath while temporarily
+disabling the decentralised Elasticsearch poller, set
+`CCD_SDK_DECENTRALISED_ES_INDEXER_ENABLED=false`.
+
 ### Config generation
 
 The `generateCCDConfig` task generates the configuration in JSON format to the configured folder:

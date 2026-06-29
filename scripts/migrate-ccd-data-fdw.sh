@@ -29,6 +29,7 @@ DST_SCHEMA="${DST_SCHEMA:-ccd}"
 FDW_SCHEMA="${FDW_SCHEMA:-fdw_stage}"
 
 CASE_TYPE_IDS_SQL="${CASE_TYPE_IDS_SQL:-'TEST_CASE_TYPE'}"
+CASE_REVISION_OFFSET="${CASE_REVISION_OFFSET:-1000000000}"
 
 # Optional. Empty means full load.
 # Example: DELTA_SINCE="2026-04-30 10:00:00"
@@ -56,11 +57,13 @@ Environment variables:
   DST_SCHEMA
   FDW_SCHEMA
   CASE_TYPE_IDS_SQL
+  CASE_REVISION_OFFSET optional; defaults to 1000000000
   DELTA_SINCE optional, e.g. "2026-04-30 10:00:00"
 
 Example:
   export DST_DSN='postgresql://user:pass@dest.postgres.database.azure.com:5432/appdb?sslmode=require'
   export CASE_TYPE_IDS_SQL="'ET_EnglandWales','ET_Scotland','ET_Admin'"
+  export CASE_REVISION_OFFSET='1000000000'
 
   ./scripts/migrate-ccd-data-fdw.sh
   ./scripts/migrate-ccd-data-fdw.sh --apply
@@ -97,6 +100,13 @@ require_psql() {
   fi
 }
 
+validate_case_revision_offset() {
+  if [[ ! "$CASE_REVISION_OFFSET" =~ ^[0-9]+$ ]]; then
+    log "ERROR: CASE_REVISION_OFFSET must be a non-negative integer"
+    exit 1
+  fi
+}
+
 psql_dst() {
   psql "$DST_DSN" \
     --set=ON_ERROR_STOP=on \
@@ -104,6 +114,7 @@ psql_dst() {
     --set=dst_schema="$DST_SCHEMA" \
     --set=fdw_schema="$FDW_SCHEMA" \
     --set=case_type_ids="$CASE_TYPE_IDS_SQL" \
+    --set=case_revision_offset="$CASE_REVISION_OFFSET" \
     --set=delta_since="$DELTA_SINCE" \
     "$@"
 }
@@ -192,10 +203,17 @@ prepare_target() {
   log "Dropping constraints/indexes that block placeholder event revisions..."
 
   psql_dst <<'SQL'
+begin;
+
 alter table :dst_schema.case_event
 drop constraint if exists case_event_case_data_id_fkey;
 
 drop index if exists :dst_schema.idx_case_event_case_data_revision_unique;
+
+alter table :dst_schema.case_event
+disable trigger user;
+
+commit;
 SQL
 
   CONSTRAINTS_DROPPED=true
@@ -284,6 +302,9 @@ load_case_events() {
   log "Loading/upserting case_event with temporary version/case_revision values..."
 
   psql_dst <<'SQL'
+begin;
+set local session_replication_role = replica;
+
 insert into :dst_schema.case_event (
     id,
     created_date,
@@ -335,6 +356,7 @@ from :fdw_schema.case_event ce
 join :dst_schema.case_data cd
   on cd.id = ce.case_data_id
 where cd.case_type_id in (:case_type_ids)
+and ce.case_type_id in (:case_type_ids)
 and (
     nullif(:'delta_since', '') is null
     or ce.created_date >= nullif(:'delta_since', '')::timestamp
@@ -359,6 +381,8 @@ set
     proxied_by = excluded.proxied_by,
     proxied_by_first_name = excluded.proxied_by_first_name,
     proxied_by_last_name = excluded.proxied_by_last_name;
+
+commit;
 SQL
 }
 
@@ -368,6 +392,9 @@ recalculate_revisions() {
   psql_dst <<'SQL'
 create index if not exists idx_tmp_case_event_case_data_id_id
 on :dst_schema.case_event (case_data_id, id);
+
+begin;
+set local session_replication_role = replica;
 
 update :dst_schema.case_event t
 set
@@ -385,11 +412,13 @@ from (
 ) s
 where t.id = s.id;
 
+commit;
+
 begin;
 set local session_replication_role = replica;
 
 update :dst_schema.case_data cd
-set case_revision = evt.event_count
+set case_revision = evt.event_count + (:case_revision_offset)::bigint
 from (
     select
         case_data_id,
@@ -437,6 +466,9 @@ add constraint case_event_case_data_id_fkey
 foreign key (case_data_id)
 references :dst_schema.case_data(id)
 on delete cascade;
+
+alter table :dst_schema.case_event
+enable trigger user;
 SQL
   then
     CONSTRAINTS_DROPPED=false
@@ -502,7 +534,8 @@ with case_revision_check as (
         cd.id,
         cd.case_revision,
         count(ce.id)::bigint as event_count,
-        coalesce(max(ce.case_revision), 0)::bigint as max_event_revision
+        coalesce(max(ce.case_revision), 0)::bigint as max_event_revision,
+        coalesce(max(ce.case_revision), 0)::bigint + (:case_revision_offset)::bigint as expected_case_revision
     from :dst_schema.case_data cd
     left join :dst_schema.case_event ce
       on ce.case_data_id = cd.id
@@ -511,8 +544,8 @@ with case_revision_check as (
 )
 select count(*)
 from case_revision_check
-where case_revision is distinct from event_count
-   or case_revision is distinct from max_event_revision;
+where case_revision is distinct from expected_case_revision
+   or event_count is distinct from max_event_revision;
 SQL
 )"
 
@@ -545,8 +578,10 @@ cleanup_on_exit() {
 main() {
   parse_args "$@"
   require_psql
+  validate_case_revision_offset
 
   log "DELTA_SINCE=${DELTA_SINCE:-<empty: full load>}"
+  log "CASE_REVISION_OFFSET=${CASE_REVISION_OFFSET}"
 
   validate_connection
   validate_can_disable_triggers
@@ -566,6 +601,8 @@ main() {
 
   # Important: catch parent cases created while events were being copied.
   load_case_data
+  # Then catch events for cases loaded or updated by the second case_data pass.
+  load_case_events
 
   recalculate_revisions
   validate_no_orphans

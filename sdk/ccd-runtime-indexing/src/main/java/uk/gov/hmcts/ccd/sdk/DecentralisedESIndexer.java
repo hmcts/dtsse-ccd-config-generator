@@ -38,13 +38,19 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.support.TransactionTemplate;
 
 @ConditionalOnProperty(
-    name = "ccd.sdk.decentralised",
+    name = "ccd.sdk.decentralised.es-indexer.enabled",
     havingValue = "true",
     matchIfMissing = true)
 @Component
 @Slf4j
 class DecentralisedESIndexer implements DisposableBean {
   private static final String SCHEDULER_BEAN_NAME = "ccdEsIndexerScheduler";
+
+  enum BulkActionOutcome {
+    COMPLETE,
+    DEAD_LETTER,
+    RETRYABLE
+  }
 
   private final JdbcTemplate jdbcTemplate;
   private final TransactionTemplate transactionTemplate;
@@ -277,28 +283,30 @@ class DecentralisedESIndexer implements DisposableBean {
       IndexOperation metadata = operationMetadata.get(i);
       int itemStatus = item.status();
 
-      if (itemStatus >= 200 && itemStatus < 300) {
-        continue;
-      }
-
-      if (itemStatus == 409) {
-        // This is a stale event. The version in ES is already higher.
-        // The queued revision can be completed because a newer version already exists in Elasticsearch.
-        log.info("Stale event processing skipped due to version conflict for id {}: {}",
-            item.id(), extractErrorMessage(item.error()));
-      } else if (isDocumentRejection(itemStatus, item.error())) {
-        deadLetters.add(new DeadLetter(
-            metadata.eventId(),
-            metadata.claim().caseRevision(),
-            metadata.indexId(),
-            "%s: %s".formatted(metadata.indexId(), extractErrorMessage(item.error()))
-        ));
-        log.error("Cftlib elasticsearch indexing document rejected for id {}: {}",
-            item.id(), extractErrorMessage(item.error()));
-      } else {
-        transientFailureClaims.add(metadata.claim());
-        log.warn("Cftlib elasticsearch indexing transient failure for id {}: {}",
-            item.id(), extractErrorMessage(item.error()));
+      switch (classifyBulkActionStatus(itemStatus)) {
+        case COMPLETE -> {
+          if (itemStatus == 409) {
+            // This is a stale event. The version in ES is already higher.
+            // The queued revision can be completed because a newer version already exists in Elasticsearch.
+            log.info("Stale event processing skipped due to version conflict for id {}: {}",
+                item.id(), extractErrorMessage(item.error()));
+          }
+        }
+        case DEAD_LETTER -> {
+          deadLetters.add(new DeadLetter(
+              metadata.eventId(),
+              metadata.claim().caseRevision(),
+              metadata.indexId(),
+              "%s: %s".formatted(metadata.indexId(), extractErrorMessage(item.error()))
+          ));
+          log.error("Cftlib elasticsearch indexing document rejected for id {}: {}",
+              item.id(), extractErrorMessage(item.error()));
+        }
+        case RETRYABLE -> {
+          transientFailureClaims.add(metadata.claim());
+          log.warn("Cftlib elasticsearch indexing transient failure for id {}: {}",
+              item.id(), extractErrorMessage(item.error()));
+        }
       }
     }
 
@@ -355,21 +363,14 @@ class DecentralisedESIndexer implements DisposableBean {
     }
   }
 
-  private boolean isDocumentRejection(int status, ErrorCause error) {
-    if (status == 408 || status == 409 || status == 429 || status == 401 || status == 403 || status >= 500) {
-      return false;
+  static BulkActionOutcome classifyBulkActionStatus(int status) {
+    if (status >= 200 && status < 300 || status == 409) {
+      return BulkActionOutcome.COMPLETE;
     }
-
-    if (status == 400 || status == 413) {
-      return true;
+    if (status == 400 || status == 404) {
+      return BulkActionOutcome.DEAD_LETTER;
     }
-
-    String type = error == null ? null : error.type();
-    return Set.of(
-        "document_parsing_exception",
-        "mapper_parsing_exception",
-        "strict_dynamic_mapping_exception"
-    ).contains(type);
+    return BulkActionOutcome.RETRYABLE;
   }
 
   private void appendBulkIndex(
