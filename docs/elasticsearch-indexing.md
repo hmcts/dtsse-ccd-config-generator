@@ -196,3 +196,8 @@ Supplementary data JSON is indexed into elasticsearch and may be updated outside
 Such an update will create a new case revision and trigger the indexing process - but without a matching case_revision in the ccd.case_event table.
 
 Consequently the indexing retrieves the latest case_event snapshot for the case where case_event.case_revision <= the queued case_revision, not an exact revision match.
+
+## Out of scope
+
+Deleting case data from elasticsearch; this is handled by retain and dispose.
+
