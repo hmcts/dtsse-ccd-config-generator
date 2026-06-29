@@ -11,7 +11,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
-import uk.gov.hmcts.ccd.sdk.taskmanagement.model.request.TaskCreateRequest;
+import uk.gov.hmcts.ccd.sdk.taskmanagement.model.request.TaskCreateApiRequest;
 import uk.gov.hmcts.ccd.sdk.taskmanagement.model.request.TaskReconfigureRequest;
 import uk.gov.hmcts.ccd.sdk.taskmanagement.model.request.TaskTerminationRequest;
 import uk.gov.hmcts.ccd.sdk.taskmanagement.model.response.TaskCreateResponse;
@@ -28,7 +28,7 @@ import uk.gov.hmcts.ccd.sdk.taskmanagement.search.GetTasksResponse;
 public interface TaskManagementFeignClient {
 
   @PostMapping(value = "/tasks", consumes = APPLICATION_JSON_VALUE)
-  ResponseEntity<TaskCreateResponse> createTask(@RequestBody TaskCreateRequest payload);
+  ResponseEntity<TaskCreateResponse> createTask(@RequestBody TaskCreateApiRequest payload);
 
   @PostMapping(value = "/tasks/terminate")
   ResponseEntity<TaskTerminationResponse> terminateTask(@RequestBody TaskTerminationRequest payload);

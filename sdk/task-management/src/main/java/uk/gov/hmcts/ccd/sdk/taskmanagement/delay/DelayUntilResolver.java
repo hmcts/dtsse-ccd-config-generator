@@ -3,6 +3,7 @@ package uk.gov.hmcts.ccd.sdk.taskmanagement.delay;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
@@ -58,7 +59,7 @@ public class DelayUntilResolver {
         .filter(delayUntilCalculator -> delayUntilCalculator.supports(delayUntilRequest))
         .findFirst()
         .map(dateCalculator -> dateCalculator.calculateDate(delayUntilRequest))
-        .orElse(LocalDateTime.now());
+        .orElse(LocalDateTime.now(ZoneOffset.UTC));
   }
 
   private static void logInput(DelayUntilRequest delayUntilRequest) {

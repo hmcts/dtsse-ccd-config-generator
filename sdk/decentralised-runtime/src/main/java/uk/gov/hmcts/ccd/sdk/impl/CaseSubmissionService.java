@@ -5,6 +5,7 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Supplier;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -19,6 +20,7 @@ import uk.gov.hmcts.ccd.domain.model.callbacks.AfterSubmitCallbackResponse;
 import uk.gov.hmcts.ccd.sdk.ResolvedConfigRegistry;
 import uk.gov.hmcts.ccd.sdk.api.EventMetadata;
 import uk.gov.hmcts.ccd.sdk.api.callback.SubmitResponse;
+import uk.gov.hmcts.ccd.sdk.taskmanagement.TaskOutboxCompletionAwaiter;
 
 @Service
 @RequiredArgsConstructor
@@ -33,6 +35,7 @@ public class CaseSubmissionService {
   private final AuditEventService auditEventService;
   private final CaseDataRepository caseDataRepository;
   private final CaseProjectionService caseProjectionService;
+  private final ObjectProvider<TaskOutboxCompletionAwaiter> taskOutboxCompletionAwaiter;
 
   public DecentralisedSubmitEventResponse submit(DecentralisedCaseEvent event,
                                                  String authorisation,
@@ -40,6 +43,9 @@ public class CaseSubmissionService {
     var eventConfig = getEventConfig(event);
     var user = idam.retrieveUser(authorisation);
     var handler = eventConfig.getSubmitHandler() != null ? submitHandler : legacyHandler;
+    long caseReference = event.getCaseDetails().getReference();
+    TaskOutboxCompletionAwaiter completionAwaiter = taskOutboxCompletionAwaiter.getIfAvailable();
+    long latestTaskOutboxId = latestTaskOutboxIdForCase(completionAwaiter, caseReference);
 
     try {
       // The result of the transaction can be either an idempotency hit or a new submission.
@@ -47,9 +53,11 @@ public class CaseSubmissionService {
           executeSubmissionInTransaction(event, user, handler, idempotencyKey)
       );
 
-      return transactionResult.existingEventId()
-          .map(eventId -> replayIdempotentRequest(event.getCaseDetails().getReference(), eventId))
+      DecentralisedSubmitEventResponse response = transactionResult.existingEventId()
+          .map(eventId -> replayIdempotentRequest(caseReference, eventId))
           .orElseGet(() -> buildSuccessResponse(transactionResult.submissionOutcome().orElseThrow()));
+      awaitTaskOutboxCompletions(completionAwaiter, caseReference, latestTaskOutboxId);
+      return response;
 
     } catch (CallbackValidationException e) {
       var response = new DecentralisedSubmitEventResponse();
@@ -149,6 +157,20 @@ public class CaseSubmissionService {
           event.getEventDetails().getCaseType(), event.getEventDetails().getEventId());
     } catch (IllegalArgumentException ex) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, ex.getMessage(), ex);
+    }
+  }
+
+  private long latestTaskOutboxIdForCase(TaskOutboxCompletionAwaiter completionAwaiter, long caseReference) {
+    return completionAwaiter == null ? 0L : completionAwaiter.latestOutboxIdForCase(caseReference);
+  }
+
+  private void awaitTaskOutboxCompletions(
+      TaskOutboxCompletionAwaiter completionAwaiter,
+      long caseReference,
+      long latestTaskOutboxId
+  ) {
+    if (completionAwaiter != null) {
+      completionAwaiter.awaitCompletionsCreatedAfter(caseReference, latestTaskOutboxId);
     }
   }
 

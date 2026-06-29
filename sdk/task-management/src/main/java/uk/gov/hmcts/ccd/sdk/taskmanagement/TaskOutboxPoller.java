@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import feign.FeignException;
 import java.io.IOException;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
@@ -49,14 +50,11 @@ public class TaskOutboxPoller {
 
   @Scheduled(fixedDelayString = "${task-management.outbox.poller.delay:1000}")
   public void poll() {
-    List<TaskOutboxRecord> records = repository.findPending(batchSize, retryPolicy.getMaxAttempts());
+    int maxAttempts = retryPolicy.getMaxAttempts();
+    List<TaskOutboxRecord> records = repository.claimPending(batchSize, maxAttempts);
     int statusCode;
 
     for (TaskOutboxRecord record : records) {
-      if (!repository.markProcessing(record.id())) {
-        continue;
-      }
-
       try {
         TaskAction action = TaskAction.fromId(record.requestedAction());
 
@@ -70,12 +68,25 @@ public class TaskOutboxPoller {
         ResponseEntity<?> response = processor.process(record);
         statusCode = response != null ? response.getStatusCode().value() : 500;
         log.info("Task outbox {} response body {}", record.id(), response != null ? response.getBody() : null);
-        if (isUnsuccessfulRequest(record, response)) {
+        if (isUnsuccessfulRequest(record, response, maxAttempts)) {
           continue;
         }
 
-        repository.markProcessed(record.id(), statusCode);
-        log.info("Task outbox {} processed with status {}", record.id(), statusCode);
+        if (!repository.markProcessed(record.id(), record.claimToken(), statusCode)) {
+          logLostLease(record, "PROCESSED");
+          continue;
+        }
+        log.info(
+            "TaskOutboxOutcome status=PROCESSED taskOutboxId={} caseId={} eventId={} triggerCreated={} "
+                + "requestedAction={} attemptCount={} responseCode={}",
+            record.id(),
+            record.caseId(),
+            record.eventId(),
+            record.created(),
+            record.requestedAction(),
+            record.attemptCount(),
+            statusCode
+        );
       } catch (FeignException ex) {
         log.warn(
             "Task outbox {} create failed with status {}: {}",
@@ -84,22 +95,35 @@ public class TaskOutboxPoller {
             ex.contentUTF8(),
             ex
         );
-        handleFailure(record, ex.status(), ex.contentUTF8());
+        handleFailure(
+            record,
+            ex.status(),
+            ex.contentUTF8(),
+            maxAttempts,
+            TaskOutboxFailureClassifier.isRecoverable(ex.status())
+        );
       } catch (IOException ex) {
         log.error("Task outbox {} payload could not be parsed", record.id(), ex);
-        handleFailure(record, null, ex.getMessage());
+        handleFailure(record, null, ex.getMessage(), maxAttempts, false);
+      } catch (IllegalArgumentException ex) {
+        log.error("Task outbox {} contains invalid action or request data", record.id(), ex);
+        handleFailure(record, null, ex.getMessage(), maxAttempts, false);
       } catch (RuntimeException ex) {
         log.error("Task outbox {} create failed", record.id(), ex);
-        handleFailure(record, null, ex.getMessage());
+        handleFailure(record, null, ex.getMessage(), maxAttempts, true);
       }
     }
   }
 
-  private boolean isUnsuccessfulRequest(TaskOutboxRecord record, ResponseEntity<?> response) {
+  private boolean isUnsuccessfulRequest(
+      TaskOutboxRecord record,
+      ResponseEntity<?> response,
+      int maxAttempts
+  ) {
     TaskAction action = TaskAction.fromId(record.requestedAction());
     if (response == null) {
       log.warn("Task outbox {} received null response for action {}", record.id(), action.getId());
-      handleFailure(record, null, "Task outbox received null response");
+      handleFailure(record, null, "Task outbox received null response", maxAttempts, true);
       return true;
     }
 
@@ -110,13 +134,39 @@ public class TaskOutboxPoller {
           action.getId(),
           response.getStatusCode().value()
       );
-      handleFailure(record, response.getStatusCode().value(), "Task outbox response unsuccessful");
+      handleFailure(
+          record,
+          response.getStatusCode().value(),
+          "Task outbox response unsuccessful",
+          maxAttempts,
+          TaskOutboxFailureClassifier.isRecoverable(response.getStatusCode().value())
+      );
       return true;
     }
 
-    if (List.of(TaskAction.INITIATE, TaskAction.RECONFIGURE).contains(action) && response.getBody() == null) {
+    if (action == TaskAction.INITIATE
+        && response.getBody() == null
+        && response.getStatusCode().value() != 204) {
       log.warn("Task outbox {} create response missing body", record.id());
-      handleFailure(record, response.getStatusCode().value(), "Task creation response missing task_id");
+      handleFailure(
+          record,
+          response.getStatusCode().value(),
+          "Task creation response missing task_id",
+          maxAttempts,
+          true
+      );
+      return true;
+    }
+
+    if (action == TaskAction.RECONFIGURE && response.getBody() == null) {
+      log.warn("Task outbox {} reconfigure response missing body", record.id());
+      handleFailure(
+          record,
+          response.getStatusCode().value(),
+          "Task reconfiguration response missing body",
+          maxAttempts,
+          true
+      );
       return true;
     }
 
@@ -125,8 +175,23 @@ public class TaskOutboxPoller {
 
   private ResponseEntity<?> createTask(TaskOutboxRecord record) throws IOException {
     TaskCreateRequest request = objectMapper.readValue(record.payload(), TaskCreateRequest.class);
-    log.warn("Task outbox {} sending payload {}", record.id(), objectMapper.writeValueAsString(request));
-    return taskManagementApiClient.createTask(request);
+    List<TaskPayload> tasks = request.tasks();
+    if (CollectionUtils.isEmpty(tasks)) {
+      throw new IllegalArgumentException("Task create request must contain at least one task");
+    }
+
+    ResponseEntity<?> lastResponse = null;
+    for (TaskPayload task : tasks) {
+      log.warn("Task outbox {} sending create payload {}", record.id(), objectMapper.writeValueAsString(task));
+      ResponseEntity<?> response = taskManagementApiClient.createTask(task);
+      if (response == null
+          || !response.getStatusCode().is2xxSuccessful()
+          || (response.getBody() == null && response.getStatusCode().value() != 204)) {
+        return response;
+      }
+      lastResponse = response;
+    }
+    return lastResponse;
   }
 
   private ResponseEntity<?> cancelTask(TaskOutboxRecord record) throws IOException {
@@ -150,7 +215,7 @@ public class TaskOutboxPoller {
     if (!tasksToTerminate.getStatusCode().is2xxSuccessful() || responseBody == null) {
       log.warn("Failed to retrieve tasks to terminate for case {} and task types {} with action {}",
             caseId, taskTypes, actionId);
-      return null;
+      return tasksToTerminate.getStatusCode().is2xxSuccessful() ? null : tasksToTerminate;
     }
 
     List<TaskPayload> tasks = responseBody.getTasks();
@@ -203,23 +268,82 @@ public class TaskOutboxPoller {
     return taskManagementApiClient.reconfigureTask(request);
   }
 
-  private void handleFailure(TaskOutboxRecord record, Integer statusCode, String body) {
-    int nextAttemptCount = record.attemptCount() + 1;
-    LocalDateTime nextAttemptAt = retryPolicy.nextAttemptAt(nextAttemptCount, LocalDateTime.now());
-    repository.markFailed(record.id(), statusCode, body, nextAttemptAt);
-    if (nextAttemptAt == null) {
-      log.warn(
-          "Task outbox {} failed with status {}, retries exhausted",
+  private void handleFailure(
+      TaskOutboxRecord record,
+      Integer statusCode,
+      String body,
+      int maxAttempts,
+      boolean recoverable
+  ) {
+    LocalDateTime nextAttemptAt = recoverable
+        ? retryPolicy.nextAttemptAt(record.attemptCount(), LocalDateTime.now(ZoneOffset.UTC))
+        : null;
+    boolean retryScheduled = nextAttemptAt != null;
+    String outcome;
+    boolean updated;
+
+    if (retryScheduled) {
+      updated = repository.rescheduleAfterFailure(
           record.id(),
-          statusCode
-      );
-    } else {
-      log.warn(
-          "Task outbox {} failed with status {}, retrying at {}",
-          record.id(),
+          record.claimToken(),
           statusCode,
+          body,
           nextAttemptAt
       );
+      outcome = "PENDING";
+    } else {
+      updated = repository.markUnprocessable(record.id(), record.claimToken(), statusCode, body);
+      outcome = "UNPROCESSABLE";
     }
+
+    if (!updated) {
+      logLostLease(record, outcome);
+      return;
+    }
+
+    log.warn(
+        "TaskOutboxOutcome status={} taskOutboxId={} caseId={} eventId={} triggerCreated={} "
+            + "requestedAction={} attemptCount={} maxAttempts={} responseCode={} nextAttemptAt={} "
+            + "recoverable={} retryScheduled={} error={} payload={}",
+        outcome,
+        record.id(),
+        record.caseId(),
+        record.eventId(),
+        record.created(),
+        record.requestedAction(),
+        record.attemptCount(),
+        maxAttempts,
+        statusCode,
+        nextAttemptAt,
+        recoverable,
+        retryScheduled,
+        body,
+        record.payload()
+    );
+    if (!retryScheduled) {
+      log.warn(
+          "TaskOutboxCaseBlocked caseId={} eventId={} triggerCreated={} taskOutboxId={} "
+              + "requestedAction={} attemptCount={} maxAttempts={} lastStatusCode={} recoverable={} eventType={}",
+          record.caseId(),
+          record.eventId(),
+          record.created(),
+          record.id(),
+          record.requestedAction(),
+          record.attemptCount(),
+          maxAttempts,
+          statusCode,
+          recoverable,
+          "task-outbox-unprocessable"
+      );
+    }
+  }
+
+  private void logLostLease(TaskOutboxRecord record, String attemptedOutcome) {
+    log.warn(
+        "Task outbox {} discarded {} outcome because processing lease {} is no longer current",
+        record.id(),
+        attemptedOutcome,
+        record.claimToken()
+    );
   }
 }

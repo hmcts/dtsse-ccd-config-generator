@@ -12,6 +12,7 @@ import uk.gov.hmcts.ccd.sdk.api.callback.AboutToStartOrSubmitResponse;
 import uk.gov.hmcts.ccd.sdk.taskmanagement.TaskManagementApiClient;
 import uk.gov.hmcts.ccd.sdk.taskmanagement.TaskOutboxService;
 import uk.gov.hmcts.ccd.sdk.taskmanagement.model.outbox.ReconfigureTaskOutboxPayload;
+import uk.gov.hmcts.ccd.sdk.taskmanagement.model.outbox.TaskOutboxTrigger;
 import uk.gov.hmcts.divorce.common.ccd.PageBuilder;
 import uk.gov.hmcts.divorce.divorcecase.NoFaultDivorce;
 import uk.gov.hmcts.divorce.divorcecase.model.CaseData;
@@ -76,11 +77,11 @@ public class ApiFirstTaskReconfigureEvent implements CCDConfig<CaseData, State, 
         getTasksResponse.getBody().getTasks()
     );
 
-    taskOutboxService.enqueueTaskReconfigureRequest(payload);
+    TaskOutboxTrigger trigger = TaskOutboxTrigger.create(caseId, NoFaultDivorce.getCaseType(), EVENT_ID);
+    taskOutboxService.enqueueTaskReconfigureRequest(trigger, payload);
 
     return AboutToStartOrSubmitResponse.<CaseData, State>builder()
         .data(details.getData())
         .build();
   }
 }
-

@@ -18,6 +18,7 @@ import uk.gov.hmcts.ccd.sdk.taskmanagement.model.request.TaskCreateRequest;
 import uk.gov.hmcts.ccd.sdk.taskmanagement.TaskOutboxService;
 import uk.gov.hmcts.ccd.sdk.taskmanagement.model.TaskPayload;
 import uk.gov.hmcts.ccd.sdk.taskmanagement.model.TaskPermission;
+import uk.gov.hmcts.ccd.sdk.taskmanagement.model.outbox.TaskOutboxTrigger;
 import uk.gov.hmcts.divorce.common.ccd.PageBuilder;
 import uk.gov.hmcts.divorce.divorcecase.NoFaultDivorce;
 import uk.gov.hmcts.divorce.divorcecase.model.CaseData;
@@ -99,8 +100,19 @@ public class ApiFirstTaskEvent implements CCDConfig<CaseData, State, UserRole> {
                 .autoAssignable(false)
                 .build()))
             .build();
+        TaskPayload secondTask = task.toBuilder()
+            .externalTaskId(UUID.randomUUID().toString())
+            .name("Register new case follow-up")
+            .title("Register new case follow-up")
+            .build();
 
-        taskOutboxService.enqueueTaskCreateRequest(new TaskCreateRequest(task));
+        TaskOutboxTrigger trigger = new TaskOutboxTrigger(
+            caseId,
+            NoFaultDivorce.getCaseType(),
+            EVENT_ID,
+            now.toLocalDateTime()
+        );
+        taskOutboxService.enqueueTaskCreateRequest(trigger, new TaskCreateRequest(List.of(task, secondTask)));
 
         return AboutToStartOrSubmitResponse.<CaseData, State>builder()
             .data(details.getData())

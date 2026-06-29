@@ -20,6 +20,7 @@ public class TaskManagementProperties {
   public static class Outbox {
     private Poller poller = new Poller();
     private Retry retry = new Retry();
+    private Completion completion = new Completion();
   }
 
   @Data
@@ -33,6 +34,14 @@ public class TaskManagementProperties {
     private Duration initialDelay = Duration.ofSeconds(1);
     private Duration maxDelay = Duration.ofMinutes(5);
     private double multiplier = 2.0;
-    private int maxAttempts = 0;
+    // The initial attempt plus eight retries.
+    private int maxAttempts = 9;
+  }
+
+  @Data
+  public static class Completion {
+    private boolean awaitProcessed = true;
+    private Duration timeout = Duration.ofSeconds(30);
+    private Duration pollInterval = Duration.ofMillis(100);
   }
 }

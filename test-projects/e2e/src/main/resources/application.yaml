@@ -26,11 +26,16 @@ management:
     case-document-am-api:
       enabled: ${ENABLE_CDAM:true}
 spring:
+  autoconfigure:
+    exclude: ${SPRING_AUTOCONFIGURE_EXCLUDE:com.azure.spring.cloud.autoconfigure.implementation.jms.ServiceBusJmsAutoConfiguration}
   datasource:
     url: jdbc:postgresql://localhost:6432/nfd
     username: postgres
     password: postgres
     type: com.zaxxer.hikari.HikariDataSource
+  jms:
+    servicebus:
+      enabled: ${SPRING_JMS_SERVICEBUS_ENABLED:false}
 
   application:
     name: NFDIV Case API

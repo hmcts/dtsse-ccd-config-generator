@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import feign.codec.Decoder;
 import feign.codec.Encoder;
 import java.time.Duration;
+import javax.sql.DataSource;
 import org.springframework.beans.factory.ObjectFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
@@ -26,6 +27,7 @@ import uk.gov.hmcts.reform.authorisation.generators.AuthTokenGeneratorFactory;
 
 @AutoConfiguration
 @EnableConfigurationProperties(TaskManagementProperties.class)
+@ConditionalOnProperty(prefix = "task-management.api", name = "url")
 @EnableFeignClients(clients = TaskManagementFeignClient.class)
 public class TaskManagementAutoConfiguration {
 
@@ -90,7 +92,22 @@ public class TaskManagementAutoConfiguration {
 
   @Bean
   @ConditionalOnMissingBean
-  public TaskOutboxService taskOutboxService(TaskOutboxRepository repository, ObjectMapper objectMapper) {
+  @ConditionalOnBean(DataSource.class)
+  public TaskOutboxCompletionAwaiter taskOutboxCompletionAwaiter(
+      TaskOutboxRepository repository,
+      TaskManagementProperties properties,
+      DataSource dataSource,
+      ObjectMapper objectMapper
+  ) {
+    return new TaskOutboxCompletionAwaiter(repository, properties, dataSource, objectMapper);
+  }
+
+  @Bean
+  @ConditionalOnMissingBean
+  public TaskOutboxService taskOutboxService(
+      TaskOutboxRepository repository,
+      ObjectMapper objectMapper
+  ) {
     return new TaskOutboxService(repository, objectMapper);
   }
 

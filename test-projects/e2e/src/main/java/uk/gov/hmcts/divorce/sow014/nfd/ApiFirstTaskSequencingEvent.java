@@ -12,17 +12,19 @@ import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import uk.gov.hmcts.ccd.sdk.api.CCDConfig;
 import uk.gov.hmcts.ccd.sdk.api.CaseDetails;
 import uk.gov.hmcts.ccd.sdk.api.ConfigBuilder;
 import uk.gov.hmcts.ccd.sdk.api.callback.AboutToStartOrSubmitResponse;
+import uk.gov.hmcts.ccd.sdk.taskmanagement.TaskManagementApiClient;
 import uk.gov.hmcts.ccd.sdk.taskmanagement.TaskOutboxService;
 import uk.gov.hmcts.ccd.sdk.taskmanagement.model.TaskPayload;
 import uk.gov.hmcts.ccd.sdk.taskmanagement.model.TaskPermission;
+import uk.gov.hmcts.ccd.sdk.taskmanagement.model.outbox.ReconfigureTaskOutboxPayload;
 import uk.gov.hmcts.ccd.sdk.taskmanagement.model.outbox.TaskOutboxTrigger;
+import uk.gov.hmcts.ccd.sdk.taskmanagement.model.outbox.TerminateTaskOutboxPayload;
 import uk.gov.hmcts.ccd.sdk.taskmanagement.model.request.TaskCreateRequest;
 import uk.gov.hmcts.divorce.common.ccd.PageBuilder;
 import uk.gov.hmcts.divorce.divorcecase.NoFaultDivorce;
@@ -31,28 +33,31 @@ import uk.gov.hmcts.divorce.divorcecase.model.State;
 import uk.gov.hmcts.divorce.divorcecase.model.UserRole;
 
 @Component
-@Slf4j
-public class ApiFirstTaskDelayedEvent implements CCDConfig<CaseData, State, UserRole> {
+public class ApiFirstTaskSequencingEvent implements CCDConfig<CaseData, State, UserRole> {
 
-  public static final String EVENT_ID = "api-first-create-task-delayed";
+  public static final String EVENT_ID = "api-first-task-sequencing";
+  private static final String TASK_TYPE = "sequencedTask";
 
   @Autowired
   private TaskOutboxService taskOutboxService;
+
+  @Autowired
+  private TaskManagementApiClient taskManagementApiClient;
 
   @Override
   public void configure(ConfigBuilder<CaseData, State, UserRole> configBuilder) {
     new PageBuilder(configBuilder
         .event(EVENT_ID)
         .forAllStates()
-        .name("API-first delayed task")
-        .description("Create API-first task with delayed WA initiation")
+        .name("API-first task sequencing")
+        .description("API-first task sequencing")
         .aboutToSubmitCallback(this::aboutToSubmit)
         .showEventNotes()
         .grant(CREATE_READ_UPDATE, CASE_WORKER, JUDGE)
         .grant(CREATE_READ_UPDATE_DELETE, SUPER_USER)
         .grantHistoryOnly(LEGAL_ADVISOR, JUDGE))
-        .page("apiFirstTaskDelayed")
-        .pageLabel("API-first delayed task")
+        .page("apiFirstTaskSequencing")
+        .pageLabel("API-first task sequencing")
         .optional(CaseData::getNote);
   }
 
@@ -61,27 +66,34 @@ public class ApiFirstTaskDelayedEvent implements CCDConfig<CaseData, State, User
       CaseDetails<CaseData, State> beforeDetails
   ) {
     OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
-    String taskId = UUID.randomUUID().toString();
     String caseId = String.valueOf(details.getId());
+    String caseType = NoFaultDivorce.getCaseType();
+    TaskOutboxTrigger trigger = new TaskOutboxTrigger(caseId, caseType, EVENT_ID, now.toLocalDateTime());
+    var getTasksResponse = taskManagementApiClient.getTasks(caseId, List.of(ApiFirstTaskEvent.TASK_TYPE));
+    if (!getTasksResponse.getStatusCode().is2xxSuccessful()
+        || getTasksResponse.getBody() == null
+        || getTasksResponse.getBody().getTasks().isEmpty()) {
+      throw new IllegalStateException("Failed to retrieve a task for the sequencing reconfiguration request");
+    }
 
     TaskPayload task = TaskPayload.builder()
-        .externalTaskId(taskId)
-        .type(ApiFirstTaskEvent.TASK_TYPE)
-        .name("Register new case")
-        .title("Register new case")
+        .externalTaskId(UUID.randomUUID().toString())
+        .type(TASK_TYPE)
+        .name("Sequenced task")
+        .title("Sequenced task")
         .created(now)
         .executionType("Case Management Task")
         .caseId(caseId)
-        .caseTypeId(NoFaultDivorce.getCaseType())
+        .caseTypeId(caseType)
         .caseCategory("DIVORCE")
-        .caseName("API-first delayed task case")
+        .caseName("API-first sequencing task case")
         .jurisdiction(NoFaultDivorce.JURISDICTION)
         .region("1")
         .location("336559")
         .workType("applications")
         .roleCategory("ADMIN")
         .securityClassification("PUBLIC")
-        .description("[Case: Edit case](/cases/case-details/" + caseId + "/trigger/edit-case)")
+        .description("[Case](/cases/case-details/" + caseId + ")")
         .dueDateTime(now.plusDays(5))
         .priorityDate(now.plusDays(5))
         .minorPriority(500)
@@ -99,16 +111,14 @@ public class ApiFirstTaskDelayedEvent implements CCDConfig<CaseData, State, User
             .build()))
         .build();
 
-    TaskOutboxTrigger trigger = new TaskOutboxTrigger(
-        caseId,
-        NoFaultDivorce.getCaseType(),
-        EVENT_ID,
-        now.toLocalDateTime()
-    );
-    taskOutboxService.enqueueTaskCreateRequest(
+    taskOutboxService.enqueueTaskCreateRequest(trigger, new TaskCreateRequest(task));
+    taskOutboxService.enqueueTaskReconfigureRequest(
         trigger,
-        new TaskCreateRequest(task),
-        now.plusHours(1).toLocalDateTime()
+        new ReconfigureTaskOutboxPayload(caseId, caseType, getTasksResponse.getBody().getTasks())
+    );
+    taskOutboxService.enqueueTaskCancelRequest(
+        trigger,
+        new TerminateTaskOutboxPayload(caseId, caseType, List.of("taskTypeThatDoesNotExist"))
     );
 
     return AboutToStartOrSubmitResponse.<CaseData, State>builder()
