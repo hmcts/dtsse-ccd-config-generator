@@ -1,6 +1,7 @@
 package uk.gov.hmcts.ccd.sdk;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
@@ -34,6 +35,68 @@ class DecentralisedESIndexerTest {
     contextRunner
         .withPropertyValues("ccd.sdk.decentralised.es-indexer.enabled=true")
         .run(context -> assertThat(context).hasSingleBean(DecentralisedESIndexer.class));
+  }
+
+  @Test
+  void parsesSingleHostWithScheme() {
+    var hosts = DecentralisedESIndexer.parseElasticSearchHosts("https://es-master:9243");
+
+    assertThat(hosts).hasSize(1);
+    assertThat(hosts[0].toString()).isEqualTo("https://es-master:9243");
+  }
+
+  @Test
+  void parsesSingleHostWithoutSchemeAsHttp() {
+    var hosts = DecentralisedESIndexer.parseElasticSearchHosts("es-master:9200");
+
+    assertThat(hosts).hasSize(1);
+    assertThat(hosts[0].toString()).isEqualTo("http://es-master:9200");
+  }
+
+  @Test
+  void parsesBareIpAsHttp() {
+    var hosts = DecentralisedESIndexer.parseElasticSearchHosts("10.96.149.253");
+
+    assertThat(hosts).hasSize(1);
+    assertThat(hosts[0].toString()).isEqualTo("http://10.96.149.253");
+  }
+
+  @Test
+  void parsesMultipleCommaSeparatedHosts() {
+    var hosts = DecentralisedESIndexer.parseElasticSearchHosts(
+        "http://es-one:9200,https://es-two:9243,es-three:9200");
+
+    assertThat(hosts).extracting(Object::toString)
+        .containsExactly(
+            "http://es-one:9200",
+            "https://es-two:9243",
+            "http://es-three:9200");
+  }
+
+  @Test
+  void parsesQuotedCommaSeparatedHosts() {
+    var hosts = DecentralisedESIndexer.parseElasticSearchHosts(
+        "\"http://ccd-data-0.service.core-compute-aat.internal:9200\","
+            + "\"http://ccd-data-1.service.core-compute-aat.internal:9200\"");
+
+    assertThat(hosts).extracting(Object::toString)
+        .containsExactly(
+            "http://ccd-data-0.service.core-compute-aat.internal:9200",
+            "http://ccd-data-1.service.core-compute-aat.internal:9200");
+  }
+
+  @Test
+  void trimsWhitespaceAroundHosts() {
+    var hosts = DecentralisedESIndexer.parseElasticSearchHosts(" http://es-one:9200 , es-two:9200 ");
+
+    assertThat(hosts).extracting(Object::toString)
+        .containsExactly("http://es-one:9200", "http://es-two:9200");
+  }
+
+  @Test
+  void rejectsEmptyCommaSeparatedEntry() {
+    assertThatThrownBy(() -> DecentralisedESIndexer.parseElasticSearchHosts("http://es-one:9200, ,es-two:9200"))
+        .isInstanceOf(IllegalArgumentException.class);
   }
 
   @Test

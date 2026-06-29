@@ -14,6 +14,7 @@ import co.elastic.clients.transport.rest5_client.low_level.Rest5Client;
 import co.elastic.clients.util.BinaryData;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.net.URI;
+import java.net.URISyntaxException;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -25,6 +26,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.atomic.AtomicBoolean;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.hc.core5.http.HttpHost;
 import org.apache.hc.core5.util.Timeout;
 import org.springframework.beans.factory.DisposableBean;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -87,7 +89,7 @@ class DecentralisedESIndexer implements DisposableBean {
     if (drainDelayMs < 0) {
       throw new IllegalArgumentException("ccd.sdk.indexing.drain-delay-ms must not be negative");
     }
-    var hosts = Arrays.stream(elasticSearchHosts.split(",")).map(String::trim).map(URI::create).toArray(URI[]::new);
+    var hosts = parseElasticSearchHosts(elasticSearchHosts);
     var restClient = Rest5Client.builder(hosts)
         .setRequestConfigCallback(requestConfigBuilder -> {
           requestConfigBuilder.setConnectionRequestTimeout(Timeout.ofMilliseconds(connectTimeoutMs));
@@ -108,6 +110,30 @@ class DecentralisedESIndexer implements DisposableBean {
     this.client = new ElasticsearchClient(transport);
 
     log.info("Starting decentralised ES indexer targeting {}", Arrays.toString(hosts));
+  }
+
+  static URI[] parseElasticSearchHosts(String elasticSearchHosts) {
+    return Arrays.stream(elasticSearchHosts.split(",", -1))
+        .map(String::trim)
+        .map(DecentralisedESIndexer::stripSurroundingQuotes)
+        .map(DecentralisedESIndexer::parseElasticSearchHost)
+        .map(host -> URI.create(host.toURI()))
+        .toArray(URI[]::new);
+  }
+
+  private static HttpHost parseElasticSearchHost(String host) {
+    try {
+      return HttpHost.create(host);
+    } catch (URISyntaxException e) {
+      throw new IllegalArgumentException("Invalid Elasticsearch host in ELASTIC_SEARCH_HOSTS: " + host, e);
+    }
+  }
+
+  private static String stripSurroundingQuotes(String host) {
+    if (host.length() >= 2 && host.startsWith("\"") && host.endsWith("\"")) {
+      return host.substring(1, host.length() - 1).trim();
+    }
+    return host;
   }
 
   @Bean(name = SCHEDULER_BEAN_NAME, destroyMethod = "shutdown", defaultCandidate = false)
