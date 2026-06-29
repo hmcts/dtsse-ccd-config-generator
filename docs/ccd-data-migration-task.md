@@ -10,9 +10,10 @@ single unattended session.
 
 ## What the task does
 
-`CcdDataMigrationTask` is an abstract `Runnable` in the `decentralised-runtime` SDK module. A
-service extends it, supplies its normal Spring JDBC database access, and runs it from a scheduler,
-cron endpoint, job runner, or manual admin command.
+`CcdDataMigrationTask` is a reusable `Runnable` in the `decentralised-runtime` SDK module. The
+runtime library can create it as a Spring bean from `ccd.data-migration.*` properties, or a service
+can provide its own `CcdDataMigrationTask` bean if it needs custom construction. A service still
+owns the scheduler, cron endpoint, job runner, or manual admin command that calls `runMigration()`.
 
 The task:
 
@@ -49,7 +50,8 @@ must have:
 * permission to drop and recreate the `case_event` FK and event revision unique index
 
 The task assumes the service already depends on the decentralised runtime SDK and has a configured
-Spring `DataSource`.
+Spring `DataSource`. The SDK task bean is disabled by default; set `ccd.data-migration.enabled=true`
+only for services that should create the migration task bean.
 
 The application must also be running with the decentralised runtime disabled. The task checks
 `ccd.sdk.decentralised` through Spring `Environment` when supplied, or falls back to
@@ -138,53 +140,25 @@ Configure `validationMode` with one of:
 
 ## Example Spring integration
 
-This example wires an ET migration task that copies two case types in batches of 500 cases and stops
-after either 4 hours or 06:00 UTC, whichever happens first.
+This example configures an ET migration task bean that copies two case types in batches of 500 cases
+and stops after 4 hours.
 
-```java
-package uk.gov.hmcts.ethos.replacement.docmosis.service.migration;
-
-import java.time.Duration;
-import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.time.LocalTime;
-import java.time.ZoneOffset;
-import java.util.List;
-import org.springframework.core.env.Environment;
-import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
-import org.springframework.stereotype.Component;
-import org.springframework.transaction.PlatformTransactionManager;
-import uk.gov.hmcts.ccd.sdk.migration.CcdDataMigrationTask;
-import uk.gov.hmcts.ccd.sdk.migration.CcdDataMigrationTaskOptions;
-import uk.gov.hmcts.ccd.sdk.migration.CcdDataMigrationValidationMode;
-
-@Component
-public class EtCcdDataMigrationTask extends CcdDataMigrationTask {
-
-  public EtCcdDataMigrationTask(
-      NamedParameterJdbcTemplate jdbcTemplate,
-      PlatformTransactionManager transactionManager,
-      Environment environment
-  ) {
-    super(
-        jdbcTemplate,
-        transactionManager,
-        CcdDataMigrationTaskOptions.builder(List.of("ET_EnglandWales", "ET_Scotland"))
-            .taskName("et-ccd-data-migration")
-            .targetSchema("ccd")
-            .fdwSchema("fdw_stage")
-            .batchSize(500)
-            .maxBatchesPerRun(1_000)
-            .maxRunTime(Duration.ofHours(4))
-            .runUntil(LocalDateTime.of(LocalDate.now(ZoneOffset.UTC), LocalTime.of(6, 0)))
-            .deltaOverlap(Duration.ofMinutes(15))
-            .validationMode(CcdDataMigrationValidationMode.DELTA_ONLY)
-            .caseRevisionOffset(1_000_000_000L)
-            .build(),
-        environment
-    );
-  }
-}
+```yaml
+ccd:
+  data-migration:
+    enabled: true
+    task-name: et-ccd-data-migration
+    target-schema: ccd
+    fdw-schema: fdw_stage
+    case-type-ids:
+      - ET_EnglandWales
+      - ET_Scotland
+    batch-size: 500
+    max-batches-per-run: 1000
+    max-run-time: 4h
+    delta-overlap: 15m
+    validation-mode: DELTA_ONLY
+    case-revision-offset: 1000000000
 ```
 
 Run the task from a scheduler owned by the service. Keep the schedule disabled by default and enable
@@ -198,6 +172,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
+import uk.gov.hmcts.ccd.sdk.migration.CcdDataMigrationTask;
 import uk.gov.hmcts.ccd.sdk.migration.CcdDataMigrationRunResult;
 
 @Slf4j
@@ -206,7 +181,7 @@ import uk.gov.hmcts.ccd.sdk.migration.CcdDataMigrationRunResult;
 @ConditionalOnProperty(name = "migration.ccd-data.enabled", havingValue = "true")
 public class EtCcdDataMigrationScheduler {
 
-  private final EtCcdDataMigrationTask migrationTask;
+  private final CcdDataMigrationTask migrationTask;
 
   @Scheduled(cron = "${migration.ccd-data.cron}")
   public void runMigration() {
@@ -233,8 +208,13 @@ configuration (for example, values rendered by the service's Helm/Flux deploymen
 
 * `MIGRATION_CCD_DATA_ENABLED=false`
 * `MIGRATION_CCD_DATA_CRON=0 */10 20-23,0-5 * * *`
+* `CCD_DATA_MIGRATION_ENABLED=false`
 
 ```yaml
+ccd:
+  data-migration:
+    enabled: false
+
 migration:
   ccd-data:
     enabled: false
