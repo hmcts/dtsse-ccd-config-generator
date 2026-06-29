@@ -313,7 +313,8 @@ class DecentralisedESIndexer implements DisposableBean {
       IndexOperation metadata = operationMetadata.get(i);
       int itemStatus = item.status();
 
-      switch (classifyBulkActionStatus(itemStatus)) {
+      BulkActionOutcome outcome = classifyBulkActionStatus(itemStatus);
+      switch (outcome) {
         case COMPLETE -> {
           successfulOperations.add(SuccessfulIndexOperation.from(metadata));
           if (itemStatus == 409) {
@@ -338,6 +339,7 @@ class DecentralisedESIndexer implements DisposableBean {
           log.warn("Cftlib elasticsearch indexing transient failure for id {}: {}",
               item.id(), extractErrorMessage(item.error()));
         }
+        default -> throw new IllegalStateException("Unhandled bulk action outcome: " + outcome);
       }
     }
 
