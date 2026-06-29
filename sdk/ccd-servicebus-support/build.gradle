@@ -2,6 +2,13 @@ dependencyManagement {
     imports {
         mavenBom 'com.azure.spring:spring-cloud-azure-dependencies:6.4.0'
     }
+    dependencies {
+        dependency 'com.azure:azure-core:1.58.1'
+        dependency 'com.azure:azure-core-amqp:2.12.0'
+        dependency 'com.azure:azure-core-http-netty:1.16.5'
+        dependency 'com.azure:azure-core-management:1.19.5'
+        dependency 'com.microsoft.azure:msal4j:1.25.0'
+    }
 }
 
 dependencies {
