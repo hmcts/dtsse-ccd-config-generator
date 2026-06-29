@@ -7,6 +7,7 @@ import java.sql.Connection;
 import java.sql.SQLException;
 import java.sql.Types;
 import java.time.Duration;
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
@@ -35,6 +36,7 @@ import uk.gov.hmcts.ccd.sdk.config.DecentralisedDataConfiguration;
 })
 class CcdDataMigrationTaskIntegrationTest {
   private static final long CASE_REVISION_OFFSET = 1_000_000_000L;
+  private static final String PERF_CASE_TYPE = "PerfCase";
 
   @Autowired
   private NamedParameterJdbcTemplate jdbc;
@@ -126,6 +128,45 @@ class CcdDataMigrationTaskIntegrationTest {
     assertThat(countRows("ccd.case_event")).isEqualTo(1);
     assertThat(caseRevision(10)).isEqualTo(CASE_REVISION_OFFSET + 1);
     assertThat(targetCaseEventCaseType(101)).isEqualTo("OtherCase");
+  }
+
+  @Test
+  void generatesTargetIdempotencyKeyAndPreservesExistingEventOnRetry() {
+    insertSourceCase(10, 1000000000000010L, 1, "Submitted", "{\"field\":\"one\"}");
+    insertSourceCaseEvent(101, 10, "create", "Submitted", "{\"field\":\"one\"}");
+
+    CcdDataMigrationTask task = task(10, 10);
+    task.runMigration();
+    final String firstIdempotencyKey = targetCaseEventIdempotencyKey(101);
+
+    sleepPastProgressWindow();
+    updateSourceCase(10, 2, "Updated", "{\"field\":\"updated\"}");
+    CcdDataMigrationRunResult retryRun = task.runMigration();
+
+    assertThat(retryRun.batchesProcessed()).isEqualTo(1);
+    assertThat(countRows("ccd.case_event")).isEqualTo(1);
+    assertThat(targetCaseEventIdempotencyKey(101)).isEqualTo(firstIdempotencyKey);
+  }
+
+  @Test
+  void failsWhenExistingTargetCaseEventDiffersFromSource() {
+    insertSourceCase(10, 1000000000000010L, 1, "Submitted", "{\"field\":\"one\"}");
+    insertSourceCaseEvent(101, 10, "create", "Submitted", "{\"field\":\"one\"}");
+
+    CcdDataMigrationTask task = task(10, 10);
+    task.runMigration();
+    jdbc.update(
+        "update ccd.case_event set summary = 'target-only-change' where id = :id",
+        Map.of("id", 101)
+    );
+
+    sleepPastProgressWindow();
+    updateSourceCase(10, 2, "Updated", "{\"field\":\"updated\"}");
+
+    assertThatThrownBy(task::runMigration)
+        .isInstanceOf(CcdDataMigrationException.class)
+        .hasMessageContaining("conflicting case_event rows")
+        .hasMessageContaining("101");
   }
 
   @Test
@@ -356,6 +397,36 @@ class CcdDataMigrationTaskIntegrationTest {
     assertThat(caseEventUserTriggersEnabled()).isTrue();
   }
 
+  @Test
+  void migratesSeededDatasetWithinPerfHarnessLimit() {
+    int caseCount = Integer.getInteger("ccd.data-migration.perf.cases", 1_000);
+    int eventsPerCase = Integer.getInteger("ccd.data-migration.perf.events-per-case", 5);
+    int batchSize = Integer.getInteger("ccd.data-migration.perf.batch-size", 250);
+    final Duration maxElapsed = Duration.ofSeconds(Long.getLong("ccd.data-migration.perf.max-seconds", 60L));
+
+    seedSourceDataset(PERF_CASE_TYPE, caseCount, eventsPerCase);
+
+    var options = CcdDataMigrationTaskOptions.builder(List.of(PERF_CASE_TYPE))
+        .batchSize(batchSize)
+        .deltaOverlap(Duration.ZERO)
+        .validationMode(CcdDataMigrationValidationMode.ALWAYS)
+        .build();
+
+    Instant started = Instant.now();
+    CcdDataMigrationRunResult result = new TestMigrationTask(jdbc, transactionManager, options).runMigration();
+    Duration elapsed = Duration.between(started, Instant.now());
+
+    long expectedEvents = (long) caseCount * eventsPerCase;
+    assertThat(result.caughtUp()).isTrue();
+    assertThat(result.batchesProcessed()).isEqualTo((caseCount + batchSize - 1L) / batchSize);
+    assertThat(countRows("ccd.case_data", PERF_CASE_TYPE)).isEqualTo((long) caseCount);
+    assertThat(countRows("ccd.case_event", PERF_CASE_TYPE)).isEqualTo(expectedEvents);
+    assertThat(targetPrepared()).isFalse();
+    assertThat(caseEventCaseDataForeignKeyExists()).isTrue();
+    assertThat(caseEventRevisionIndexExists()).isTrue();
+    assertThat(elapsed).isLessThan(maxElapsed);
+  }
+
   private CcdDataMigrationTask task(int batchSize, int maxBatchesPerRun) {
     var options = CcdDataMigrationTaskOptions.builder(List.of("TestCase"))
         .batchSize(batchSize)
@@ -381,8 +452,7 @@ class CcdDataMigrationTaskIntegrationTest {
           state varchar(255) not null,
           data jsonb not null,
           supplementary_data jsonb,
-          id bigint not null unique,
-          case_revision bigint not null
+          id bigint not null unique
         )
         """);
     jdbc.getJdbcTemplate().execute("""
@@ -405,10 +475,7 @@ class CcdDataMigrationTaskIntegrationTest {
           state_name varchar(255) not null,
           proxied_by varchar(64),
           proxied_by_first_name varchar(255),
-          proxied_by_last_name varchar(255),
-          idempotency_key uuid,
-          version integer,
-          case_revision bigint
+          proxied_by_last_name varchar(255)
         )
         """);
   }
@@ -441,8 +508,7 @@ class CcdDataMigrationTaskIntegrationTest {
           state varchar(255),
           data jsonb,
           supplementary_data jsonb,
-          id bigint,
-          case_revision bigint
+          id bigint
         )
         server ccd_migration_test_server
         options (schema_name 'source', table_name 'case_data')
@@ -467,10 +533,7 @@ class CcdDataMigrationTaskIntegrationTest {
           state_name varchar(255),
           proxied_by varchar(64),
           proxied_by_first_name varchar(255),
-          proxied_by_last_name varchar(255),
-          idempotency_key uuid,
-          version integer,
-          case_revision bigint
+          proxied_by_last_name varchar(255)
         )
         server ccd_migration_test_server
         options (schema_name 'source', table_name 'case_event')
@@ -524,8 +587,7 @@ class CcdDataMigrationTaskIntegrationTest {
           state,
           data,
           supplementary_data,
-          id,
-          case_revision
+          id
         ) values (
           :reference,
           :version,
@@ -539,8 +601,7 @@ class CcdDataMigrationTaskIntegrationTest {
           :state,
           :data::jsonb,
           '{}'::jsonb,
-          :id,
-          :version
+          :id
         )
         """,
         params
@@ -587,10 +648,7 @@ class CcdDataMigrationTaskIntegrationTest {
           state_name,
           proxied_by,
           proxied_by_first_name,
-          proxied_by_last_name,
-          idempotency_key,
-          version,
-          case_revision
+          proxied_by_last_name
         ) values (
           :id,
           now() at time zone 'UTC',
@@ -609,9 +667,6 @@ class CcdDataMigrationTaskIntegrationTest {
           :eventId,
           :stateId,
           null,
-          null,
-          null,
-          gen_random_uuid(),
           null,
           null
         )
@@ -645,8 +700,110 @@ class CcdDataMigrationTaskIntegrationTest {
     );
   }
 
+  private void seedSourceDataset(String caseTypeId, int caseCount, int eventsPerCase) {
+    var params = new MapSqlParameterSource()
+        .addValue("caseTypeId", caseTypeId)
+        .addValue("caseCount", caseCount)
+        .addValue("eventsPerCase", eventsPerCase);
+
+    jdbc.update(
+        """
+        insert into source.case_data (
+          reference,
+          version,
+          created_date,
+          security_classification,
+          last_state_modified_date,
+          resolved_ttl,
+          last_modified,
+          jurisdiction,
+          case_type_id,
+          state,
+          data,
+          supplementary_data,
+          id
+        )
+        select
+          9000000000000000::bigint + case_number,
+          events_per_case,
+          timestamp '2024-01-01 00:00:00' + make_interval(secs => case_number),
+          'PUBLIC'::ccd.securityclassification,
+          timestamp '2024-01-01 00:00:00' + make_interval(secs => case_number),
+          null,
+          timestamp '2024-01-01 00:00:00' + make_interval(secs => case_number),
+          'TEST',
+          :caseTypeId,
+          'Submitted',
+          jsonb_build_object('caseNumber', case_number),
+          '{}'::jsonb,
+          9000000000000000::bigint + case_number
+        from generate_series(1, :caseCount) case_number
+        cross join (select :eventsPerCase::integer as events_per_case) event_counts
+        """,
+        params
+    );
+
+    jdbc.update(
+        """
+        insert into source.case_event (
+          id,
+          created_date,
+          security_classification,
+          case_data_id,
+          case_type_version,
+          event_id,
+          summary,
+          description,
+          user_id,
+          case_type_id,
+          state_id,
+          data,
+          user_first_name,
+          user_last_name,
+          event_name,
+          state_name,
+          proxied_by,
+          proxied_by_first_name,
+          proxied_by_last_name
+        )
+        select
+          9000000000000000::bigint + ((case_number - 1) * :eventsPerCase) + event_number,
+          timestamp '2024-01-01 00:00:00' + make_interval(secs => ((case_number - 1) * :eventsPerCase)
+              + event_number),
+          'PUBLIC'::ccd.securityclassification,
+          9000000000000000::bigint + case_number,
+          1,
+          'event-' || event_number,
+          'summary',
+          'description',
+          'user-1',
+          :caseTypeId,
+          'Submitted',
+          jsonb_build_object('caseNumber', case_number, 'eventNumber', event_number),
+          'Test',
+          'User',
+          'event-' || event_number,
+          'Submitted',
+          null,
+          null,
+          null
+        from generate_series(1, :caseCount) case_number
+        cross join generate_series(1, :eventsPerCase) event_number
+        """,
+        params
+    );
+  }
+
   private long countRows(String tableName) {
     return jdbc.getJdbcTemplate().queryForObject("select count(*) from " + tableName, Long.class);
+  }
+
+  private long countRows(String tableName, String caseTypeId) {
+    return jdbc.queryForObject(
+        "select count(*) from " + tableName + " where case_type_id = :caseTypeId",
+        Map.of("caseTypeId", caseTypeId),
+        Long.class
+    );
   }
 
   private long caseRevision(long id) {
@@ -687,6 +844,14 @@ class CcdDataMigrationTaskIntegrationTest {
   private String targetCaseEventCaseType(long id) {
     return jdbc.queryForObject(
         "select case_type_id from ccd.case_event where id = :id",
+        Map.of("id", id),
+        String.class
+    );
+  }
+
+  private String targetCaseEventIdempotencyKey(long id) {
+    return jdbc.queryForObject(
+        "select idempotency_key::text from ccd.case_event where id = :id",
         Map.of("id", id),
         String.class
     );

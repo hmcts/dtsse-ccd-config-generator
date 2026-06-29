@@ -9,13 +9,10 @@ import java.util.ArrayList;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Objects;
-import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 public record CcdDataMigrationTaskOptions(
     String taskName,
-    String targetSchema,
-    String fdwSchema,
     List<String> caseTypeIds,
     int batchSize,
     long caseRevisionOffset,
@@ -25,12 +22,11 @@ public record CcdDataMigrationTaskOptions(
     Duration deltaOverlap,
     CcdDataMigrationValidationMode validationMode
 ) {
-  private static final Pattern SQL_IDENTIFIER = Pattern.compile("[A-Za-z_][A-Za-z0-9_]*");
+  private static final String TARGET_SCHEMA = "ccd";
+  private static final String FDW_SCHEMA = "fdw_stage";
 
   public CcdDataMigrationTaskOptions {
     taskName = requireText(taskName, "taskName");
-    targetSchema = requireIdentifier(targetSchema, "targetSchema");
-    fdwSchema = requireIdentifier(fdwSchema, "fdwSchema");
     caseTypeIds = List.copyOf(requireCaseTypeIds(caseTypeIds));
 
     if (batchSize < 1) {
@@ -65,8 +61,8 @@ public record CcdDataMigrationTaskOptions(
   }
 
   String migrationConfigSummary() {
-    return "targetSchema=" + targetSchema
-        + ", fdwSchema=" + fdwSchema
+    return "targetSchema=" + TARGET_SCHEMA
+        + ", fdwSchema=" + FDW_SCHEMA
         + ", caseTypeIds=" + canonicalCaseTypeIds()
         + ", caseRevisionOffset=" + caseRevisionOffset;
   }
@@ -80,8 +76,8 @@ public record CcdDataMigrationTaskOptions(
   private String migrationConfigFingerprint() {
     return String.join(
         "\n",
-        "targetSchema=" + targetSchema,
-        "fdwSchema=" + fdwSchema,
+        "targetSchema=" + TARGET_SCHEMA,
+        "fdwSchema=" + FDW_SCHEMA,
         "caseTypeIds=" + canonicalCaseTypeIds(),
         "caseRevisionOffset=" + caseRevisionOffset
     );
@@ -94,14 +90,6 @@ public record CcdDataMigrationTaskOptions(
     } catch (NoSuchAlgorithmException ex) {
       throw new IllegalStateException("SHA-256 is not available", ex);
     }
-  }
-
-  static String requireIdentifier(String value, String fieldName) {
-    var text = requireText(value, fieldName);
-    if (!SQL_IDENTIFIER.matcher(text).matches()) {
-      throw new IllegalArgumentException(fieldName + " must be a simple SQL identifier");
-    }
-    return text;
   }
 
   private static String requireText(String value, String fieldName) {
@@ -126,8 +114,6 @@ public record CcdDataMigrationTaskOptions(
 
   public static final class Builder {
     private String taskName = "ccd-data-migration";
-    private String targetSchema = "ccd";
-    private String fdwSchema = "fdw_stage";
     private final List<String> caseTypeIds;
     private int batchSize = 100;
     private long caseRevisionOffset = 1_000_000_000L;
@@ -143,16 +129,6 @@ public record CcdDataMigrationTaskOptions(
 
     public Builder taskName(String taskName) {
       this.taskName = taskName;
-      return this;
-    }
-
-    public Builder targetSchema(String targetSchema) {
-      this.targetSchema = targetSchema;
-      return this;
-    }
-
-    public Builder fdwSchema(String fdwSchema) {
-      this.fdwSchema = fdwSchema;
       return this;
     }
 
@@ -194,8 +170,6 @@ public record CcdDataMigrationTaskOptions(
     public CcdDataMigrationTaskOptions build() {
       return new CcdDataMigrationTaskOptions(
           taskName,
-          targetSchema,
-          fdwSchema,
           caseTypeIds,
           batchSize,
           caseRevisionOffset,

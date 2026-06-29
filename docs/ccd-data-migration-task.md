@@ -49,6 +49,9 @@ must have:
 * permission for the application database user to run `SET LOCAL session_replication_role = replica`
 * permission to drop and recreate the `case_event` FK and event revision unique index
 
+The task uses the documented FDW and runtime schemas directly: `fdw_stage` for source foreign
+tables and `ccd` for the decentralised runtime target tables.
+
 The task assumes the service already depends on the decentralised runtime SDK and has a configured
 Spring `DataSource`. The SDK task bean is disabled by default; set `ccd.data-migration.enabled=true`
 only for services that should create the migration task bean.
@@ -138,6 +141,30 @@ Configure `validationMode` with one of:
 * `ALWAYS`: run full validation after every invocation that acquires the migration lock.
 * `NEVER`: skip full validation. Use this only when validation is handled separately.
 
+## Performance harness
+
+The SDK integration tests include a configurable FDW migration harness that seeds a synthetic source
+dataset, runs the task against the real decentralised runtime Flyway schema, and verifies migrated
+case/event counts plus final target restoration.
+
+Run the default harness with:
+
+```bash
+./gradlew -p sdk :decentralised-runtime:test \
+  --tests '*CcdDataMigrationTaskIntegrationTest.migratesSeededDatasetWithinPerfHarnessLimit'
+```
+
+Scale the dataset with system properties when rehearsing larger volumes:
+
+```bash
+./gradlew -p sdk :decentralised-runtime:test \
+  --tests '*CcdDataMigrationTaskIntegrationTest.migratesSeededDatasetWithinPerfHarnessLimit' \
+  -Dccd.data-migration.perf.cases=100000 \
+  -Dccd.data-migration.perf.events-per-case=10 \
+  -Dccd.data-migration.perf.batch-size=500 \
+  -Dccd.data-migration.perf.max-seconds=900
+```
+
 ## Example Spring integration
 
 This example configures an ET migration task bean that copies two case types in batches of 500 cases
@@ -148,8 +175,6 @@ ccd:
   data-migration:
     enabled: true
     task-name: et-ccd-data-migration
-    target-schema: ccd
-    fdw-schema: fdw_stage
     case-type-ids:
       - ET_EnglandWales
       - ET_Scotland

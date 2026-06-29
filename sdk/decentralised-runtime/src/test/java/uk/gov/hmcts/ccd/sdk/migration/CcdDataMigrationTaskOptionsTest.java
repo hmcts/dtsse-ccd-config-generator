@@ -14,8 +14,6 @@ class CcdDataMigrationTaskOptionsTest {
     var options = CcdDataMigrationTaskOptions.builder(List.of("TestCase")).build();
 
     assertThat(options.taskName()).isEqualTo("ccd-data-migration");
-    assertThat(options.targetSchema()).isEqualTo("ccd");
-    assertThat(options.fdwSchema()).isEqualTo("fdw_stage");
     assertThat(options.batchSize()).isEqualTo(100);
     assertThat(options.caseRevisionOffset()).isEqualTo(1_000_000_000L);
     assertThat(options.maxBatchesPerRun()).isEqualTo(Integer.MAX_VALUE);
@@ -56,15 +54,6 @@ class CcdDataMigrationTaskOptionsTest {
         .build()
         .migrationConfigHash())
         .isNotEqualTo(original.migrationConfigHash());
-  }
-
-  @Test
-  void rejectsUnsafeSchemaNames() {
-    assertThatThrownBy(() -> CcdDataMigrationTaskOptions.builder(List.of("TestCase"))
-        .targetSchema("ccd;drop schema ccd")
-        .build())
-        .isInstanceOf(IllegalArgumentException.class)
-        .hasMessageContaining("targetSchema");
   }
 
   @Test

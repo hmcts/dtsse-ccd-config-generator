@@ -27,15 +27,14 @@ public abstract class CcdDataMigrationTask implements Runnable {
       "https://github.com/hmcts/dtsse-ccd-config-generator/blob/master/docs/fdw-data-migration.md";
   private static final String INITIAL_PHASE = "INITIAL";
   private static final String DELTA_PHASE = "DELTA";
+  private static final String TARGET_SCHEMA = "ccd";
+  private static final String FDW_SCHEMA = "fdw_stage";
 
   private final NamedParameterJdbcTemplate db;
   private final TransactionOperations transaction;
   private final CcdDataMigrationTaskOptions options;
   private final Clock clock;
   private final BooleanSupplier decentralisedRuntimeEnabled;
-  private final String targetSchema;
-  private final String fdwSchema;
-  private final String progressTable;
 
   protected CcdDataMigrationTask(
       NamedParameterJdbcTemplate db,
@@ -123,9 +122,6 @@ public abstract class CcdDataMigrationTask implements Runnable {
         decentralisedRuntimeEnabled,
         "decentralisedRuntimeEnabled must not be null"
     );
-    this.targetSchema = quoteIdentifier(options.targetSchema());
-    this.fdwSchema = quoteIdentifier(options.fdwSchema());
-    this.progressTable = targetSchema + ".ccd_data_migration_progress";
   }
 
   @Override
@@ -286,7 +282,7 @@ public abstract class CcdDataMigrationTask implements Runnable {
             'updated_at'
           )
         """,
-        Map.of("schema", options.targetSchema()),
+        Map.of("schema", TARGET_SCHEMA),
         Integer.class
     );
     if (columnCount == null || columnCount != 18) {
@@ -409,12 +405,12 @@ public abstract class CcdDataMigrationTask implements Runnable {
             and c.relname in ('case_data', 'case_event')
         ) fdw_tables
         """,
-        Map.of("fdwSchema", options.fdwSchema()),
+        Map.of("fdwSchema", FDW_SCHEMA),
         Integer.class
     );
     if (missingTables == null || missingTables != 0) {
       throw new CcdDataMigrationException(
-          "FDW foreign tables are missing in schema " + options.fdwSchema()
+          "FDW foreign tables are missing in schema " + FDW_SCHEMA
               + ". Run the FDW setup first: " + DOCS_URL
       );
     }
@@ -423,26 +419,26 @@ public abstract class CcdDataMigrationTask implements Runnable {
   private void prepareTarget() {
     log.info("Preparing CCD migration target tables taskName={}", options.taskName());
     db.getJdbcTemplate().execute("""
-        alter table %s.case_event
+        alter table ccd.case_event
         drop constraint if exists case_event_case_data_id_fkey
-        """.formatted(targetSchema));
+        """);
     db.getJdbcTemplate().execute("""
-        drop index if exists %s.idx_case_event_case_data_revision_unique
-        """.formatted(targetSchema));
+        drop index if exists ccd.idx_case_event_case_data_revision_unique
+        """);
     db.getJdbcTemplate().execute("""
-        alter table %s.case_event
+        alter table ccd.case_event
         disable trigger user
-        """.formatted(targetSchema));
+        """);
   }
 
   private void markTargetPrepared() {
     db.update(
         """
-        update %s
+        update ccd.ccd_data_migration_progress
         set target_prepared = true,
             updated_at = now() at time zone 'UTC'
         where task_name = :taskName
-        """.formatted(progressTable),
+        """,
         Map.of("taskName", options.taskName())
     );
   }
@@ -450,11 +446,11 @@ public abstract class CcdDataMigrationTask implements Runnable {
   private void markTargetRestored() {
     db.update(
         """
-        update %s
+        update ccd.ccd_data_migration_progress
         set target_prepared = false,
             updated_at = now() at time zone 'UTC'
         where task_name = :taskName
-        """.formatted(progressTable),
+        """,
         Map.of("taskName", options.taskName())
     );
   }
@@ -550,7 +546,7 @@ public abstract class CcdDataMigrationTask implements Runnable {
   private Progress getOrCreateProgress() {
     db.update(
         """
-        insert into %s (
+        insert into ccd.ccd_data_migration_progress (
           task_name,
           config_hash,
           target_schema,
@@ -570,7 +566,7 @@ public abstract class CcdDataMigrationTask implements Runnable {
           now() at time zone 'UTC'
         )
         on conflict (task_name) do nothing
-        """.formatted(progressTable),
+        """,
         progressConfigParams().addValue("phase", INITIAL_PHASE)
     );
     return loadProgress();
@@ -595,9 +591,9 @@ public abstract class CcdDataMigrationTask implements Runnable {
                total_cases,
                total_events,
                target_prepared
-        from %s
+        from ccd.ccd_data_migration_progress
         where task_name = :taskName
-        """.formatted(progressTable),
+        """,
         Map.of("taskName", options.taskName()),
         this::mapProgress
     );
@@ -609,8 +605,8 @@ public abstract class CcdDataMigrationTask implements Runnable {
     return new MapSqlParameterSource()
         .addValue("taskName", options.taskName())
         .addValue("configHash", options.migrationConfigHash())
-        .addValue("targetSchema", options.targetSchema())
-        .addValue("fdwSchema", options.fdwSchema())
+        .addValue("targetSchema", TARGET_SCHEMA)
+        .addValue("fdwSchema", FDW_SCHEMA)
         .addValue("caseTypeIds", options.canonicalCaseTypeIds())
         .addValue("caseRevisionOffset", options.caseRevisionOffset());
   }
@@ -635,14 +631,14 @@ public abstract class CcdDataMigrationTask implements Runnable {
 
     db.update(
         """
-        update %s
+        update ccd.ccd_data_migration_progress
         set window_start = :windowStart,
             window_end = now() at time zone 'UTC',
             last_case_data_modified = null,
             last_case_data_id = 0,
             updated_at = now() at time zone 'UTC'
         where task_name = :taskName
-        """.formatted(progressTable),
+        """,
         Map.of(
             "taskName", options.taskName(),
             "windowStart", deltaWindowStart(progress.windowStart())
@@ -669,13 +665,13 @@ public abstract class CcdDataMigrationTask implements Runnable {
         """
         select id,
                coalesce(last_modified, created_date) as modified_at
-        from %s.case_data
+        from fdw_stage.case_data
         where case_type_id in (:caseTypeIds)
           and id > :lastCaseDataId
           and coalesce(last_modified, created_date) < :windowEnd
         order by id
         limit :batchSize
-        """.formatted(fdwSchema),
+        """,
         params,
         (rs, rowNum) -> mapCaseDataCursor(rs)
     );
@@ -689,7 +685,7 @@ public abstract class CcdDataMigrationTask implements Runnable {
         from (
           select id,
                  coalesce(last_modified, created_date) as modified_at
-          from %s.case_data
+          from fdw_stage.case_data
           where case_type_id in (:caseTypeIds)
             and coalesce(last_modified, created_date) >= :windowStart
             and coalesce(last_modified, created_date) < :windowEnd
@@ -704,7 +700,7 @@ public abstract class CcdDataMigrationTask implements Runnable {
            )
         order by modified_at, id
         limit :batchSize
-        """.formatted(fdwSchema),
+        """,
         params,
         (rs, rowNum) -> mapCaseDataCursor(rs)
     );
@@ -719,7 +715,7 @@ public abstract class CcdDataMigrationTask implements Runnable {
       );
       db.update(
           """
-          update %s
+          update ccd.ccd_data_migration_progress
           set phase = :phase,
               initial_complete = true,
               window_start = :windowStart,
@@ -728,7 +724,7 @@ public abstract class CcdDataMigrationTask implements Runnable {
               last_case_data_id = 0,
               updated_at = now() at time zone 'UTC'
           where task_name = :taskName
-          """.formatted(progressTable),
+          """,
           Map.of(
               "taskName", options.taskName(),
               "phase", DELTA_PHASE,
@@ -743,13 +739,13 @@ public abstract class CcdDataMigrationTask implements Runnable {
       );
       db.update(
           """
-          update %s
+          update ccd.ccd_data_migration_progress
           set window_start = window_end,
               last_case_data_modified = null,
               last_case_data_id = 0,
               updated_at = now() at time zone 'UTC'
           where task_name = :taskName
-          """.formatted(progressTable),
+          """,
           Map.of("taskName", options.taskName())
       );
     }
@@ -764,6 +760,7 @@ public abstract class CcdDataMigrationTask implements Runnable {
     return transaction.execute(status -> {
       db.getJdbcTemplate().execute("set local session_replication_role = replica");
       int cases = loadCaseData(caseDataIds);
+      validateNoConflictingCaseEvents(caseDataIds);
       int events = loadCaseEvents(caseDataIds);
       recalculateRevisions(caseDataIds);
       return new BatchResult(cases, events);
@@ -773,7 +770,7 @@ public abstract class CcdDataMigrationTask implements Runnable {
   private int loadCaseData(List<Long> caseDataIds) {
     return db.update(
         """
-        insert into %s.case_data (
+        insert into ccd.case_data (
           reference,
           version,
           created_date,
@@ -804,7 +801,7 @@ public abstract class CcdDataMigrationTask implements Runnable {
           coalesce(supplementary_data, jsonb_build_object()),
           id,
           version
-        from %s.case_data
+        from fdw_stage.case_data
         where id in (:caseDataIds)
           and case_type_id in (:caseTypeIds)
         on conflict (reference) do update
@@ -822,12 +819,12 @@ public abstract class CcdDataMigrationTask implements Runnable {
             id = excluded.id,
             case_revision = excluded.case_revision
         where (
-          %s.case_data.version,
-          %s.case_data.last_modified,
-          %s.case_data.case_revision,
-          %s.case_data.state,
-          %s.case_data.data,
-          %s.case_data.supplementary_data
+          ccd.case_data.version,
+          ccd.case_data.last_modified,
+          ccd.case_data.case_revision,
+          ccd.case_data.state,
+          ccd.case_data.data,
+          ccd.case_data.supplementary_data
         ) is distinct from (
           excluded.version,
           excluded.last_modified,
@@ -836,16 +833,76 @@ public abstract class CcdDataMigrationTask implements Runnable {
           excluded.data,
           excluded.supplementary_data
         )
-        """.formatted(targetSchema, fdwSchema, targetSchema, targetSchema, targetSchema, targetSchema, targetSchema,
-            targetSchema),
+        """,
         batchParams(caseDataIds)
     );
+  }
+
+  private void validateNoConflictingCaseEvents(List<Long> caseDataIds) {
+    List<Long> conflictingEventIds = db.query(
+        """
+        select target.id
+        from ccd.case_event target
+        join fdw_stage.case_event source on source.id = target.id
+        where source.case_data_id in (:caseDataIds)
+          and (
+            target.created_date,
+            target.security_classification,
+            target.case_data_id,
+            target.case_type_version,
+            target.event_id,
+            target.summary,
+            target.description,
+            target.user_id,
+            target.case_type_id,
+            target.state_id,
+            target.data,
+            target.user_first_name,
+            target.user_last_name,
+            target.event_name,
+            target.state_name,
+            target.proxied_by,
+            target.proxied_by_first_name,
+            target.proxied_by_last_name
+          ) is distinct from (
+            source.created_date,
+            source.security_classification,
+            source.case_data_id,
+            source.case_type_version,
+            source.event_id,
+            source.summary,
+            source.description,
+            source.user_id,
+            source.case_type_id,
+            source.state_id,
+            source.data,
+            source.user_first_name,
+            source.user_last_name,
+            source.event_name,
+            source.state_name,
+            source.proxied_by,
+            source.proxied_by_first_name,
+            source.proxied_by_last_name
+          )
+        order by target.id
+        limit 10
+        """,
+        batchParams(caseDataIds),
+        (rs, rowNum) -> rs.getLong("id")
+    );
+
+    if (!conflictingEventIds.isEmpty()) {
+      throw new CcdDataMigrationException(
+          "Found conflicting case_event rows already in the target for taskName=" + options.taskName()
+              + " eventIds=" + conflictingEventIds
+      );
+    }
   }
 
   private int loadCaseEvents(List<Long> caseDataIds) {
     return db.update(
         """
-        insert into %s.case_event (
+        insert into ccd.case_event (
           id,
           created_date,
           security_classification,
@@ -889,31 +946,13 @@ public abstract class CcdDataMigrationTask implements Runnable {
           ce.proxied_by,
           ce.proxied_by_first_name,
           ce.proxied_by_last_name,
-          coalesce(ce.idempotency_key, gen_random_uuid()),
+          gen_random_uuid(),
           0,
           0
-        from %s.case_event ce
+        from fdw_stage.case_event ce
         where ce.case_data_id in (:caseDataIds)
-        on conflict (id) do update
-        set created_date = excluded.created_date,
-            security_classification = excluded.security_classification,
-            case_data_id = excluded.case_data_id,
-            case_type_version = excluded.case_type_version,
-            event_id = excluded.event_id,
-            summary = excluded.summary,
-            description = excluded.description,
-            user_id = excluded.user_id,
-            case_type_id = excluded.case_type_id,
-            state_id = excluded.state_id,
-            data = excluded.data,
-            user_first_name = excluded.user_first_name,
-            user_last_name = excluded.user_last_name,
-            event_name = excluded.event_name,
-            state_name = excluded.state_name,
-            proxied_by = excluded.proxied_by,
-            proxied_by_first_name = excluded.proxied_by_first_name,
-            proxied_by_last_name = excluded.proxied_by_last_name
-        """.formatted(targetSchema, fdwSchema),
+        on conflict (id) do nothing
+        """,
         batchParams(caseDataIds)
     );
   }
@@ -921,12 +960,12 @@ public abstract class CcdDataMigrationTask implements Runnable {
   private void recalculateRevisions(List<Long> caseDataIds) {
     db.getJdbcTemplate().execute("""
         create index if not exists idx_tmp_case_event_case_data_id_id
-        on %s.case_event (case_data_id, id)
-        """.formatted(targetSchema));
+        on ccd.case_event (case_data_id, id)
+        """);
 
     db.update(
         """
-        update %s.case_event target
+        update ccd.case_event target
         set version = source.revision::int,
             case_revision = source.revision::bigint
         from (
@@ -935,28 +974,28 @@ public abstract class CcdDataMigrationTask implements Runnable {
                    partition by case_data_id
                    order by id
                  ) as revision
-          from %s.case_event
+          from ccd.case_event
           where case_data_id in (:caseDataIds)
         ) source
         where target.id = source.id
-        """.formatted(targetSchema, targetSchema),
+        """,
         batchParams(caseDataIds)
     );
 
     db.update(
         """
-        update %s.case_data cd
+        update ccd.case_data cd
         set case_revision = counts.event_count + :caseRevisionOffset
         from (
           select cd2.id,
                  count(ce.id)::bigint as event_count
-          from %s.case_data cd2
-          left join %s.case_event ce on ce.case_data_id = cd2.id
+          from ccd.case_data cd2
+          left join ccd.case_event ce on ce.case_data_id = cd2.id
           where cd2.id in (:caseDataIds)
           group by cd2.id
         ) counts
         where cd.id = counts.id
-        """.formatted(targetSchema, targetSchema, targetSchema),
+        """,
         batchParams(caseDataIds).addValue("caseRevisionOffset", options.caseRevisionOffset())
     );
   }
@@ -965,7 +1004,7 @@ public abstract class CcdDataMigrationTask implements Runnable {
     CaseDataCursor lastCase = cases.get(cases.size() - 1);
     db.update(
         """
-        update %s
+        update ccd.ccd_data_migration_progress
         set last_case_data_modified = :lastCaseDataModified,
             last_case_data_id = :lastCaseDataId,
             total_batches = total_batches + 1,
@@ -973,7 +1012,7 @@ public abstract class CcdDataMigrationTask implements Runnable {
             total_events = total_events + :events,
             updated_at = now() at time zone 'UTC'
         where task_name = :taskName
-        """.formatted(progressTable),
+        """,
         Map.of(
             "taskName", options.taskName(),
             "lastCaseDataModified", lastCase.modifiedAt(),
@@ -989,11 +1028,11 @@ public abstract class CcdDataMigrationTask implements Runnable {
     Long orphanCount = db.queryForObject(
         """
         select count(*)
-        from %s.case_event e
-        left join %s.case_data d on d.id = e.case_data_id
+        from ccd.case_event e
+        left join ccd.case_data d on d.id = e.case_data_id
         where d.id is null
           and e.case_type_id in (:caseTypeIds)
-        """.formatted(targetSchema, targetSchema),
+        """,
         baseParams(),
         Long.class
     );
@@ -1006,8 +1045,8 @@ public abstract class CcdDataMigrationTask implements Runnable {
     log.info("Restoring CCD migration target constraints taskName={}", options.taskName());
     db.getJdbcTemplate().execute("""
         create unique index if not exists idx_case_event_case_data_revision_unique
-        on %s.case_event (case_data_id, case_revision)
-        """.formatted(targetSchema));
+        on ccd.case_event (case_data_id, case_revision)
+        """);
     db.getJdbcTemplate().execute("""
         do $$
         begin
@@ -1015,20 +1054,20 @@ public abstract class CcdDataMigrationTask implements Runnable {
             select 1
             from pg_constraint
             where conname = 'case_event_case_data_id_fkey'
-              and conrelid = '%s.case_event'::regclass
+              and conrelid = 'ccd.case_event'::regclass
           ) then
-            alter table %s.case_event
+            alter table ccd.case_event
             add constraint case_event_case_data_id_fkey
             foreign key (case_data_id)
-            references %s.case_data(id)
+            references ccd.case_data(id)
             on delete cascade;
           end if;
         end $$;
-        """.formatted(targetSchema, targetSchema, targetSchema));
+        """);
     db.getJdbcTemplate().execute("""
-        alter table %s.case_event
+        alter table ccd.case_event
         enable trigger user
-        """.formatted(targetSchema));
+        """);
   }
 
   private void restoreConstraintsAfterFailure() {
@@ -1042,11 +1081,11 @@ public abstract class CcdDataMigrationTask implements Runnable {
   private void resetSequences() {
     db.getJdbcTemplate().execute("""
         select setval(
-          format('%%I.case_event_id_seq', '%s')::regclass,
-          (select coalesce(max(id), 1) from %s.case_event),
+          'ccd.case_event_id_seq'::regclass,
+          (select coalesce(max(id), 1) from ccd.case_event),
           true
         )
-        """.formatted(options.targetSchema(), targetSchema));
+        """);
   }
 
   private void finalValidation() {
@@ -1055,16 +1094,24 @@ public abstract class CcdDataMigrationTask implements Runnable {
   }
 
   private List<Map<String, Object>> queryCounts(String tableName) {
-    return db.queryForList(
-        """
-        select case_type_id, count(*) as count
-        from %s.%s
-        where case_type_id in (:caseTypeIds)
-        group by case_type_id
-        order by case_type_id
-        """.formatted(targetSchema, tableName),
-        baseParams()
-    );
+    String sql = switch (tableName) {
+      case "case_data" -> """
+          select case_type_id, count(*) as count
+          from ccd.case_data
+          where case_type_id in (:caseTypeIds)
+          group by case_type_id
+          order by case_type_id
+          """;
+      case "case_event" -> """
+          select case_type_id, count(*) as count
+          from ccd.case_event
+          where case_type_id in (:caseTypeIds)
+          group by case_type_id
+          order by case_type_id
+          """;
+      default -> throw new IllegalArgumentException("Unsupported table name: " + tableName);
+    };
+    return db.queryForList(sql, baseParams());
   }
 
   private void validateCaseRevisionAlignment() {
@@ -1076,8 +1123,8 @@ public abstract class CcdDataMigrationTask implements Runnable {
                  count(ce.id)::bigint as event_count,
                  coalesce(max(ce.case_revision), 0)::bigint as max_event_revision,
                  coalesce(max(ce.case_revision), 0)::bigint + :caseRevisionOffset as expected_case_revision
-          from %s.case_data cd
-          left join %s.case_event ce on ce.case_data_id = cd.id
+          from ccd.case_data cd
+          left join ccd.case_event ce on ce.case_data_id = cd.id
           where cd.case_type_id in (:caseTypeIds)
           group by cd.id, cd.case_revision
         )
@@ -1085,7 +1132,7 @@ public abstract class CcdDataMigrationTask implements Runnable {
         from case_revision_check
         where case_revision is distinct from expected_case_revision
            or event_count is distinct from max_event_revision
-        """.formatted(targetSchema, targetSchema),
+        """,
         baseParams().addValue("caseRevisionOffset", options.caseRevisionOffset()),
         Long.class
     );
@@ -1128,11 +1175,6 @@ public abstract class CcdDataMigrationTask implements Runnable {
         rs.getLong("id"),
         rs.getObject("modified_at", LocalDateTime.class)
     );
-  }
-
-  private static String quoteIdentifier(String identifier) {
-    CcdDataMigrationTaskOptions.requireIdentifier(identifier, "identifier");
-    return "\"" + identifier + "\"";
   }
 
   private record Progress(

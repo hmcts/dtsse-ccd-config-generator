@@ -13,8 +13,6 @@ public class CcdDataMigrationProperties {
 
   private boolean enabled;
   private String taskName = "ccd-data-migration";
-  private String targetSchema = "ccd";
-  private String fdwSchema = "fdw_stage";
   private List<String> caseTypeIds = new ArrayList<>();
   private int batchSize = 100;
   private long caseRevisionOffset = 1_000_000_000L;
@@ -31,8 +29,6 @@ public class CcdDataMigrationProperties {
 
     return CcdDataMigrationTaskOptions.builder(caseTypeIds)
         .taskName(taskName)
-        .targetSchema(targetSchema)
-        .fdwSchema(fdwSchema)
         .batchSize(batchSize)
         .caseRevisionOffset(caseRevisionOffset)
         .maxBatchesPerRun(maxBatchesPerRun)
