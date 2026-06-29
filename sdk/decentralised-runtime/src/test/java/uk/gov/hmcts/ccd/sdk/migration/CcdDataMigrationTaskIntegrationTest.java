@@ -399,10 +399,10 @@ class CcdDataMigrationTaskIntegrationTest {
 
   @Test
   void migratesSeededDatasetWithinPerfHarnessLimit() {
-    int caseCount = Integer.getInteger("ccd.data-migration.perf.cases", 1_000);
-    int eventsPerCase = Integer.getInteger("ccd.data-migration.perf.events-per-case", 5);
+    int caseCount = Integer.getInteger("ccd.data-migration.perf.cases", 100_000);
+    int eventsPerCase = Integer.getInteger("ccd.data-migration.perf.events-per-case", 10);
     int batchSize = Integer.getInteger("ccd.data-migration.perf.batch-size", 250);
-    final Duration maxElapsed = Duration.ofSeconds(Long.getLong("ccd.data-migration.perf.max-seconds", 60L));
+    final Duration maxElapsed = Duration.ofSeconds(Long.getLong("ccd.data-migration.perf.max-seconds", 900L));
 
     seedSourceDataset(PERF_CASE_TYPE, caseCount, eventsPerCase);
 

@@ -41,6 +41,17 @@ java {
 
 tasks.withType(Test).configureEach {
     useJUnitPlatform()
+    [
+        'ccd.data-migration.perf.cases',
+        'ccd.data-migration.perf.events-per-case',
+        'ccd.data-migration.perf.batch-size',
+        'ccd.data-migration.perf.max-seconds'
+    ].each { propertyName ->
+        def propertyValue = System.getProperty(propertyName)
+        if (propertyValue != null) {
+            systemProperty propertyName, propertyValue
+        }
+    }
 }
 
 tasks.register('checkMigrationImmutability') {

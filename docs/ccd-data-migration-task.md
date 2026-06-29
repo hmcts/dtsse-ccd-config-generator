@@ -145,7 +145,8 @@ Configure `validationMode` with one of:
 
 The SDK integration tests include a configurable FDW migration harness that seeds a synthetic source
 dataset, runs the task against the real decentralised runtime Flyway schema, and verifies migrated
-case/event counts plus final target restoration.
+case/event counts plus final target restoration. By default it seeds 100,000 cases and 1,000,000
+case events.
 
 Run the default harness with:
 
@@ -154,13 +155,13 @@ Run the default harness with:
   --tests '*CcdDataMigrationTaskIntegrationTest.migratesSeededDatasetWithinPerfHarnessLimit'
 ```
 
-Scale the dataset with system properties when rehearsing larger volumes:
+Override the dataset with system properties when rehearsing different volumes:
 
 ```bash
 ./gradlew -p sdk :decentralised-runtime:test \
   --tests '*CcdDataMigrationTaskIntegrationTest.migratesSeededDatasetWithinPerfHarnessLimit' \
-  -Dccd.data-migration.perf.cases=100000 \
-  -Dccd.data-migration.perf.events-per-case=10 \
+  -Dccd.data-migration.perf.cases=10000 \
+  -Dccd.data-migration.perf.events-per-case=5 \
   -Dccd.data-migration.perf.batch-size=500 \
   -Dccd.data-migration.perf.max-seconds=900
 ```
