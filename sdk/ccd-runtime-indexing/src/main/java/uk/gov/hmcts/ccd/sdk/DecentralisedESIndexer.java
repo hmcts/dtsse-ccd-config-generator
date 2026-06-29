@@ -298,10 +298,14 @@ class DecentralisedESIndexer implements DisposableBean {
         .toList();
 
     if (!response.errors()) {
-      return new IndexingResult(claims, List.of(), false);
+      return new IndexingResult(claims, operationMetadata.stream()
+          .map(SuccessfulIndexOperation::from)
+          .distinct()
+          .toList(), List.of(), false);
     }
 
     var transientFailureClaims = new java.util.HashSet<IndexClaim>();
+    var successfulOperations = new ArrayList<SuccessfulIndexOperation>();
     var deadLetters = new ArrayList<DeadLetter>();
 
     for (int i = 0; i < response.items().size(); i++) {
@@ -311,6 +315,7 @@ class DecentralisedESIndexer implements DisposableBean {
 
       switch (classifyBulkActionStatus(itemStatus)) {
         case COMPLETE -> {
+          successfulOperations.add(SuccessfulIndexOperation.from(metadata));
           if (itemStatus == 409) {
             // This is a stale event. The version in ES is already higher.
             // The queued revision can be completed because a newer version already exists in Elasticsearch.
@@ -340,7 +345,11 @@ class DecentralisedESIndexer implements DisposableBean {
         .filter(claim -> !transientFailureClaims.contains(claim))
         .toList();
 
-    return new IndexingResult(completedClaims, deadLetters, !transientFailureClaims.isEmpty());
+    return new IndexingResult(
+        completedClaims,
+        successfulOperations.stream().distinct().toList(),
+        deadLetters,
+        !transientFailureClaims.isEmpty());
   }
 
   private void completeIndexing(IndexingResult result) {
@@ -360,6 +369,26 @@ class DecentralisedESIndexer implements DisposableBean {
           on conflict (case_event_id, case_revision, index_id) do update
           set timestamp = now(),
               failure_message = excluded.failure_message
+          """, params);
+    }
+
+    if (!result.successfulOperations().isEmpty()) {
+      var params = result.successfulOperations().stream()
+          .map(success -> new Object[] {
+              success.reference(),
+              success.indexId(),
+              success.caseRevision()
+          })
+          .toList();
+
+      jdbcTemplate.batchUpdate("""
+          delete from ccd.es_dead_letter_queue dlq
+          using ccd.case_event ce
+          join ccd.case_data cd on cd.id = ce.case_data_id
+          where dlq.case_event_id = ce.id
+            and cd.reference = ?
+            and dlq.index_id = ?
+            and dlq.case_revision <= ?
           """, params);
     }
 
@@ -436,6 +465,7 @@ class DecentralisedESIndexer implements DisposableBean {
 
   private record IndexingResult(
       List<IndexClaim> completedClaims,
+      List<SuccessfulIndexOperation> successfulOperations,
       List<DeadLetter> deadLetters,
       boolean hasTransientFailures
   ) {}
@@ -451,6 +481,19 @@ class DecentralisedESIndexer implements DisposableBean {
       long eventId,
       String indexId
   ) {}
+
+  private record SuccessfulIndexOperation(
+      long reference,
+      long caseRevision,
+      String indexId
+  ) {
+    static SuccessfulIndexOperation from(IndexOperation operation) {
+      return new SuccessfulIndexOperation(
+          operation.claim().reference(),
+          operation.claim().caseRevision(),
+          operation.indexId());
+    }
+  }
 
   private record DeadLetter(
       long caseEventId,

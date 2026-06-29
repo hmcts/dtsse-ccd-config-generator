@@ -365,6 +365,31 @@ class DecentralisedESIndexerChaosTest {
     });
   }
 
+  @Test
+  void successfulRemediationReindexClearsOlderDeadLetterRowsForTheSameIndex() throws Exception {
+    context = startApplication();
+    resetState();
+    createPoisonMapping();
+
+    commitCaseRevision(9201, 9201, POISON_CASE_TYPE, 1, "dead-letter-before-remediation");
+
+    await().pollInterval(Duration.ofMillis(250)).atMost(Duration.ofSeconds(30)).untilAsserted(() -> {
+      assertThat(deadLetterSize()).isEqualTo(1);
+      assertThat(queueSize()).isZero();
+    });
+
+    deleteIndex(POISON_INDEX);
+    commitCaseRevision(9201, 9201, POISON_CASE_TYPE, 2, "indexed-after-remediation");
+
+    await().pollInterval(Duration.ofMillis(250)).atMost(Duration.ofSeconds(30)).untilAsserted(() -> {
+      JsonNode document = fetchDocument(POISON_INDEX, 9201);
+      assertThat(document.path("data").path("poison").path("marker").asText())
+          .isEqualTo("indexed-after-remediation");
+      assertThat(deadLetterSize()).isZero();
+      assertThat(queueSize()).isZero();
+    });
+  }
+
   private ConfigurableApplicationContext startApplication() {
     SpringApplication application = new SpringApplicationBuilder(ChaosApplication.class)
         .properties(Map.ofEntries(

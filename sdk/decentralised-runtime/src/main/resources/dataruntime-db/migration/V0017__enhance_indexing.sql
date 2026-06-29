@@ -18,6 +18,11 @@ alter table ccd.es_queue
   add column locked_until timestamp with time zone,
   add column lock_token uuid;
 
+drop index if exists ccd.idx_es_queue_enqueued_at;
+
+create index idx_es_queue_enqueued_at_locked_until
+  on ccd.es_queue (enqueued_at, locked_until);
+
 create or replace function ccd.enqueue_case_revision()
 returns trigger as $$
 begin
@@ -40,3 +45,6 @@ create table ccd.es_dead_letter_queue (
   failure_message text,
   primary key (case_event_id, case_revision, index_id)
 );
+
+create index idx_es_dead_letter_queue_index_revision
+  on ccd.es_dead_letter_queue (index_id, case_revision, case_event_id);

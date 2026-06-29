@@ -128,14 +128,15 @@ After the above transaction commits:
 4. The indexer sends a [bulk request to Elasticsearch](../sdk/ccd-runtime-indexing/src/main/java/uk/gov/hmcts/ccd/sdk/DecentralisedESIndexer.java#L261) containing:
    1. The case data V* into the [`lower(case_type_id) || '_cases'` index](../sdk/ccd-runtime-indexing/src/main/java/uk/gov/hmcts/ccd/sdk/DecentralisedESIndexer.java#L235)
    2. Where V* defines `SearchCriteria`, a [custom projection](../sdk/ccd-runtime-indexing/src/main/java/uk/gov/hmcts/ccd/sdk/DecentralisedESIndexer.java#L166) into the `global_search` index
-   3. Both writes use an [external version of R using `external_gte` mode](../sdk/ccd-runtime-indexing/src/main/java/uk/gov/hmcts/ccd/sdk/DecentralisedESIndexer.java#L376)
+   3. Both writes use an [external version of R using `external_gte` mode](../sdk/ccd-runtime-indexing/src/main/java/uk/gov/hmcts/ccd/sdk/DecentralisedESIndexer.java#L442)
 5. The [bulk response is processed](../sdk/ccd-runtime-indexing/src/main/java/uk/gov/hmcts/ccd/sdk/DecentralisedESIndexer.java#L281):
    1. Successfully indexed documents and Elasticsearch version conflicts are [terminal outcomes](../sdk/ccd-runtime-indexing/src/main/java/uk/gov/hmcts/ccd/sdk/DecentralisedESIndexer.java#L286)
    2. Transient failures, for example HTTP 429, timeouts, or 5xx responses, [remain in the queue until the lease expires](../sdk/ccd-runtime-indexing/src/main/java/uk/gov/hmcts/ccd/sdk/DecentralisedESIndexer.java#L305)
    3. Unindexable documents explicitly rejected by Elasticsearch are [entered into the dead letter queue](../sdk/ccd-runtime-indexing/src/main/java/uk/gov/hmcts/ccd/sdk/DecentralisedESIndexer.java#L320)
 6. Terminal outcomes [complete the queue claim](../sdk/ccd-runtime-indexing/src/main/java/uk/gov/hmcts/ccd/sdk/DecentralisedESIndexer.java#L340):
-   1. If the queued row still matches reference C, case_revision R and the indexer's lock_token, it is [deleted](../sdk/ccd-runtime-indexing/src/main/java/uk/gov/hmcts/ccd/sdk/DecentralisedESIndexer.java#L356)
-   2. If the queued row has advanced while locked, [the lock is cleared](../sdk/ccd-runtime-indexing/src/main/java/uk/gov/hmcts/ccd/sdk/DecentralisedESIndexer.java#L358) and the newer revision remains queued
+   1. For each successful document write, any older dead letter rows for the same case reference and index_id are [deleted](../sdk/ccd-runtime-indexing/src/main/java/uk/gov/hmcts/ccd/sdk/DecentralisedESIndexer.java#L384)
+   2. If the queued row still matches reference C, case_revision R and the indexer's lock_token, it is [deleted](../sdk/ccd-runtime-indexing/src/main/java/uk/gov/hmcts/ccd/sdk/DecentralisedESIndexer.java#L411)
+   3. If the queued row has advanced while locked, [the lock is cleared](../sdk/ccd-runtime-indexing/src/main/java/uk/gov/hmcts/ccd/sdk/DecentralisedESIndexer.java#L413) and the newer revision remains queued
 7. If a full batch was claimed, the same scheduled run [claims another batch](../sdk/ccd-runtime-indexing/src/main/java/uk/gov/hmcts/ccd/sdk/DecentralisedESIndexer.java#L122) after `ccd.sdk.indexing.drain-delay-ms`, which defaults to 100ms, instead of waiting for the next poll interval.
    This drain runs on a dedicated single-thread scheduler so it cannot block unrelated scheduled jobs in the service.
 
@@ -189,6 +190,15 @@ create table ccd.es_dead_letter_queue (
 );
 ```
 
+Dead letter rows are automatically cleared down after successful remediation. When a later reindex successfully writes a
+document, or Elasticsearch reports a version conflict because it already has a newer document, the indexer deletes dead
+letter rows for the same case reference and `index_id` where the dead letter `case_revision` is less than or equal to the
+successful revision.
+
+The cleanup is index-specific. A successful write to the case-type index does not clear a `global_search` dead letter row,
+and a successful `global_search` write does not clear a case-type-index dead letter row. This prevents one projection from
+hiding a remaining failure in the other projection.
+
 ### Supplementary data-only updates
 
 Supplementary data JSON is indexed into elasticsearch and may be updated outside of a standard CCD event.
@@ -200,4 +210,3 @@ Consequently the indexing retrieves the latest case_event snapshot for the case 
 ## Out of scope
 
 Deleting case data from elasticsearch; this is handled by retain and dispose.
-
