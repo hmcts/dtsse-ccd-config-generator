@@ -398,6 +398,42 @@ class CcdDataMigrationTaskIntegrationTest {
   }
 
   @Test
+  void canReportCaughtUpWhenSourceEventArrivesWithoutCaseDataModification() {
+    insertSourceCase(10, 1000000000000010L, 1, "Submitted", "{\"field\":\"one\"}");
+    insertSourceCaseEvent(101, 10, "create", "Submitted", "{\"field\":\"one\"}");
+
+    CcdDataMigrationTask task = task(10, 10);
+    assertThat(task.runMigration().caughtUp()).isTrue();
+
+    insertSourceCaseEvent(102, 10, "late-event", "Submitted", "{\"field\":\"late-event\"}");
+    sleepPastProgressWindow();
+
+    CcdDataMigrationRunResult result = task.runMigration();
+
+    assertThat(result.caughtUp()).isTrue();
+    assertThat(countRows("source.case_event")).isEqualTo(2);
+    assertThat(countRows("ccd.case_event")).isEqualTo(1);
+  }
+
+  @Test
+  void prepareFailureAfterDroppingProtectionsLeavesTargetWithoutForeignKeyOrRevisionIndex() {
+    insertSourceCase(10, 1000000000000010L, 1, "Submitted", "{\"field\":\"one\"}");
+    createFailingAlterTableEventTriggerAfterFirstAlterTableCommand();
+
+    try {
+      assertThatThrownBy(() -> task(10, 10).runMigration())
+          .hasMessageContaining("forced prepare failure");
+
+      assertThat(caseEventCaseDataForeignKeyExists()).isFalse();
+      assertThat(caseEventRevisionIndexExists()).isFalse();
+      assertThat(targetPreparedProgressRows()).isZero();
+    } finally {
+      dropFailingAlterTableEventTrigger();
+      restoreTargetSchemaState();
+    }
+  }
+
+  @Test
   void migratesSeededDatasetWithinPerfHarnessLimit() {
     int caseCount = Integer.getInteger("ccd.data-migration.perf.cases", 100_000);
     int eventsPerCase = Integer.getInteger("ccd.data-migration.perf.events-per-case", 10);
@@ -563,6 +599,49 @@ class CcdDataMigrationTaskIntegrationTest {
         end $$;
         """);
     jdbc.getJdbcTemplate().execute("alter table ccd.case_event enable trigger user");
+  }
+
+  private void createFailingAlterTableEventTriggerAfterFirstAlterTableCommand() {
+    jdbc.getJdbcTemplate().execute("""
+        create table public.ccd_migration_prepare_failure_guard (
+          alter_table_count integer not null
+        )
+        """);
+    jdbc.getJdbcTemplate().execute("insert into public.ccd_migration_prepare_failure_guard values (0)");
+    jdbc.getJdbcTemplate().execute("""
+        create or replace function public.fail_second_alter_table_for_migration_prepare()
+        returns event_trigger
+        language plpgsql
+        as $$
+        declare
+          command record;
+          command_count integer;
+        begin
+          for command in select * from pg_event_trigger_ddl_commands() loop
+            if command.command_tag = 'ALTER TABLE' and command.object_identity = 'ccd.case_event' then
+              update public.ccd_migration_prepare_failure_guard
+              set alter_table_count = alter_table_count + 1
+              returning alter_table_count into command_count;
+
+              if command_count > 1 then
+                raise exception 'forced prepare failure';
+              end if;
+            end if;
+          end loop;
+        end;
+        $$;
+        """);
+    jdbc.getJdbcTemplate().execute("""
+        create event trigger fail_second_alter_table_for_migration_prepare
+        on ddl_command_end
+        execute function public.fail_second_alter_table_for_migration_prepare()
+        """);
+  }
+
+  private void dropFailingAlterTableEventTrigger() {
+    jdbc.getJdbcTemplate().execute("drop event trigger if exists fail_second_alter_table_for_migration_prepare");
+    jdbc.getJdbcTemplate().execute("drop function if exists public.fail_second_alter_table_for_migration_prepare()");
+    jdbc.getJdbcTemplate().execute("drop table if exists public.ccd_migration_prepare_failure_guard");
   }
 
   private void insertSourceCase(long id, long reference, int version, String state, String data) {
@@ -867,6 +946,19 @@ class CcdDataMigrationTaskIntegrationTest {
         Map.of("taskName", "ccd-data-migration"),
         Boolean.class
     ));
+  }
+
+  private long targetPreparedProgressRows() {
+    return jdbc.queryForObject(
+        """
+        select count(*)
+        from ccd.ccd_data_migration_progress
+        where task_name = :taskName
+          and target_prepared
+        """,
+        Map.of("taskName", "ccd-data-migration"),
+        Long.class
+    );
   }
 
   private boolean caseEventCaseDataForeignKeyExists() {
