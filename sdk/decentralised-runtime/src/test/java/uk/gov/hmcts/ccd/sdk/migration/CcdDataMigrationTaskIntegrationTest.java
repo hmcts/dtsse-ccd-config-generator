@@ -75,7 +75,7 @@ class CcdDataMigrationTaskIntegrationTest {
     assertThat(countRows("ccd.case_event")).isEqualTo(2);
     assertThat(caseRevision(10)).isEqualTo(CASE_REVISION_OFFSET + 2);
     assertThat(targetPrepared()).isTrue();
-    assertThat(caseEventCaseDataForeignKeyExists()).isFalse();
+    assertThat(caseEventCaseDataForeignKeyExists()).isTrue();
     assertThat(caseEventRevisionIndexExists()).isFalse();
 
     CcdDataMigrationRunResult secondRun = task.runMigration();
@@ -202,7 +202,7 @@ class CcdDataMigrationTaskIntegrationTest {
     assertThat(result.stoppedByTimeLimit()).isTrue();
     assertThat(countRows("ccd.case_data")).isEqualTo(1);
     assertThat(targetPrepared()).isTrue();
-    assertThat(caseEventCaseDataForeignKeyExists()).isFalse();
+    assertThat(caseEventCaseDataForeignKeyExists()).isTrue();
     assertThat(caseEventRevisionIndexExists()).isFalse();
   }
 

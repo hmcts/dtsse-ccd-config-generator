@@ -419,10 +419,6 @@ public abstract class CcdDataMigrationTask implements Runnable {
   private void prepareTarget() {
     log.info("Preparing CCD migration target tables taskName={}", options.taskName());
     db.getJdbcTemplate().execute("""
-        alter table ccd.case_event
-        drop constraint if exists case_event_case_data_id_fkey
-        """);
-    db.getJdbcTemplate().execute("""
         drop index if exists ccd.idx_case_event_case_data_revision_unique
         """);
     db.getJdbcTemplate().execute("""
@@ -1046,23 +1042,6 @@ public abstract class CcdDataMigrationTask implements Runnable {
     db.getJdbcTemplate().execute("""
         create unique index if not exists idx_case_event_case_data_revision_unique
         on ccd.case_event (case_data_id, case_revision)
-        """);
-    db.getJdbcTemplate().execute("""
-        do $$
-        begin
-          if not exists (
-            select 1
-            from pg_constraint
-            where conname = 'case_event_case_data_id_fkey'
-              and conrelid = 'ccd.case_event'::regclass
-          ) then
-            alter table ccd.case_event
-            add constraint case_event_case_data_id_fkey
-            foreign key (case_data_id)
-            references ccd.case_data(id)
-            on delete cascade;
-          end if;
-        end $$;
         """);
     db.getJdbcTemplate().execute("""
         alter table ccd.case_event

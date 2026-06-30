@@ -25,12 +25,12 @@ The task:
 * copies source cases in chunks from `fdw_stage.case_data`
 * copies all events for each copied case from `fdw_stage.case_event`
 * upserts existing target rows so reruns are idempotent
-* prepares the target before the first copied chunk by removing the `case_event` FK and event
-  revision unique index that block copied history
+* prepares the target before the first copied chunk by removing the `case_event` revision unique
+  index that blocks temporary copied history revisions
 * disables `case_event` user triggers while migration chunks are still outstanding
 * recalculates `case_event.version` and `case_event.case_revision`
 * sets `case_data.case_revision` to event count plus the configured revision offset
-* restores the FK, unique index, trigger state and `case_event_id_seq` after delta catch-up
+* restores the unique index, trigger state and `case_event_id_seq` after delta catch-up
 * logs start, per-chunk progress, final counts and completion state
 
 ## Prerequisites
@@ -47,7 +47,7 @@ must have:
   * `ccd.case_data`
   * `ccd.case_event`
 * permission for the application database user to run `SET LOCAL session_replication_role = replica`
-* permission to drop and recreate the `case_event` FK and event revision unique index
+* permission to drop and recreate the `case_event` revision unique index
 
 The task uses the documented FDW and runtime schemas directly: `fdw_stage` for source foreign
 tables and `ccd` for the decentralised runtime target tables.
@@ -97,7 +97,7 @@ The target is prepared only when the task has a real batch to copy. If a run sto
 `maxBatchesPerRun`, `maxRunTime`, or `runUntil`, the progress table keeps `target_prepared=true` and
 the task does not rebuild the `case_event` revision index at the end of that partial run. The next
 invocation resumes with the target still prepared. Once the task reaches delta catch-up, it restores
-the FK, revision unique index and user triggers, then records `target_prepared=false`.
+the revision unique index and user triggers, then records `target_prepared=false`.
 
 ## Runtime limits
 
@@ -267,13 +267,14 @@ times, increase the batch size. If one chunk takes too long or contains unusuall
 histories, reduce it before production.
 
 For production, agree the FDW setup and database permissions with PlatOps before enabling the
-scheduled task. A partial migration deliberately leaves the `case_event` FK, event revision unique
-index and user triggers prepared until delta catch-up has completed.
+scheduled task. A partial migration deliberately leaves the `case_event` revision unique index and
+user triggers prepared until delta catch-up has completed. The `case_event` foreign key remains in
+place throughout the migration.
 
 That is safe only while the target runtime tables are migration-owned. Do not enable decentralised
 case writes, admin jobs, repair scripts, test endpoints, or any other writer that inserts or updates
 target `ccd.case_data` / `ccd.case_event` rows while `target_prepared=true`. Postgres will not replay
-disabled triggers for rows written during that period, and the missing FK/index mean normal integrity
-checks are not enforced until the task restores them. If restoration fails, stop the application and
-restore the `case_event` FK, event revision unique index and user triggers before allowing case
+disabled triggers for rows written during that period, and the missing revision index means normal
+event revision uniqueness is not enforced until the task restores it. If restoration fails, stop the
+application and restore the `case_event` revision unique index and user triggers before allowing case
 writes.
