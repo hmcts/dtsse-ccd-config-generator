@@ -9,7 +9,6 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.Clock;
-import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
@@ -226,7 +225,7 @@ public class CcdDataMigrationTask implements Runnable {
           totals.stoppedByTimeLimit()
       );
     }
-    int refreshedCases = refreshCutoverCaseData();
+    final int refreshedCases = refreshCutoverCaseData();
     resetSequences();
     validateFinal(cutoverEventHwm);
     markComplete();
