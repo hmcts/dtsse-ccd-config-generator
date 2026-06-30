@@ -128,12 +128,18 @@ update overhead, so they are usually faster when cases have a modest number of e
 Use a smaller batch size if individual cases have very large event histories or if chunks approach
 the maximum runtime window.
 
-## Full validation
+## Catch-up and validation
 
-Full validation logs final counts, checks for orphaned `case_event` rows, and verifies
-`case_data.case_revision` against the migrated events. These checks scan the target CCD tables for
-the configured case types, so large migrations may need to avoid running them during every initial
-load window.
+Before returning `caughtUp=true`, the task always compares the selected source case IDs and their
+source events with the target tables. This validation fails the run if any source case/event is
+missing from the target, or if copied source-owned columns differ. It protects against source rows
+becoming visible after the initial ID cursor has passed them, events being written without the parent
+case timestamp advancing, and repeated changes with the same parent modified timestamp.
+
+Full validation additionally logs final counts, checks for orphaned `case_event` rows, and verifies
+`case_data.case_revision` against the migrated events. These checks scan the target CCD tables for the
+configured case types, so large migrations may need to avoid running them during every initial load
+window.
 
 Configure `validationMode` with one of:
 

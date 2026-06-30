@@ -326,6 +326,71 @@ class CcdDataMigrationTaskIntegrationTest {
   }
 
   @Test
+  void failsCaughtUpWhenInitialIdCursorMissesLateVisibleLowerIdCase() {
+    insertSourceCase(20, 1000000000000020L, 1, "Submitted", "{\"field\":\"two\"}");
+
+    new TestMigrationTask(
+        jdbc,
+        transactionManager,
+        CcdDataMigrationTaskOptions.builder(List.of("TestCase"))
+            .batchSize(1)
+            .maxBatchesPerRun(1)
+            .deltaOverlap(Duration.ZERO)
+            .build()
+    ).runMigration();
+
+    LocalDateTime initialWindowEnd = progressWindowEnd();
+    insertSourceCase(10, 1000000000000010L, 1, "Submitted", "{\"field\":\"one\"}");
+    setSourceCaseModifiedAt(10, initialWindowEnd.minusSeconds(1));
+
+    var resumeOptions = CcdDataMigrationTaskOptions.builder(List.of("TestCase"))
+        .batchSize(1)
+        .maxBatchesPerRun(10)
+        .deltaOverlap(Duration.ZERO)
+        .build();
+
+    assertThatThrownBy(() -> new TestMigrationTask(jdbc, transactionManager, resumeOptions).runMigration())
+        .isInstanceOf(CcdDataMigrationException.class)
+        .hasMessageContaining("source case_data rows missing from target")
+        .hasMessageContaining("10");
+  }
+
+  @Test
+  void failsCaughtUpWhenSourceEventIsAddedWithoutParentCaseModifiedAdvancing() {
+    insertSourceCase(10, 1000000000000010L, 1, "Submitted", "{\"field\":\"one\"}");
+    insertSourceCaseEvent(101, 10, "create", "Submitted", "{\"field\":\"one\"}");
+
+    CcdDataMigrationTask task = task(10, 10);
+    CcdDataMigrationRunResult initialRun = task.runMigration();
+    assertThat(initialRun.caughtUp()).isTrue();
+
+    insertSourceCaseEvent(102, 10, "update", "Submitted", "{\"field\":\"two\"}");
+
+    assertThatThrownBy(task::runMigration)
+        .isInstanceOf(CcdDataMigrationException.class)
+        .hasMessageContaining("source case_event rows missing from target")
+        .hasMessageContaining("102");
+  }
+
+  @Test
+  void failsCaughtUpWhenSourceCaseChangesWithSameModifiedTimestamp() {
+    insertSourceCase(10, 1000000000000010L, 1, "Submitted", "{\"field\":\"one\"}");
+    insertSourceCaseEvent(101, 10, "create", "Submitted", "{\"field\":\"one\"}");
+
+    CcdDataMigrationTask task = task(10, 10);
+    CcdDataMigrationRunResult initialRun = task.runMigration();
+    assertThat(initialRun.caughtUp()).isTrue();
+
+    LocalDateTime originalModifiedAt = sourceCaseModifiedAt(10);
+    updateSourceCase(10, 2, "Updated", "{\"field\":\"same-timestamp\"}", originalModifiedAt);
+
+    assertThatThrownBy(task::runMigration)
+        .isInstanceOf(CcdDataMigrationException.class)
+        .hasMessageContaining("source case_data rows different in target")
+        .hasMessageContaining("10");
+  }
+
+  @Test
   void skipsFullValidationWhenValidationModeIsNever() {
     insertSourceCase(10, 1000000000000010L, 1, "Submitted", "{\"field\":\"one\"}");
     insertSourceCaseEvent(101, 10, "create", "Submitted", "{\"field\":\"one\"}");
@@ -335,7 +400,6 @@ class CcdDataMigrationTaskIntegrationTest {
         .build();
     new TestMigrationTask(jdbc, transactionManager, initialOptions).runMigration();
 
-    moveSourceCaseOutsideNextDeltaWindow(10);
     corruptTargetCaseRevision(10);
 
     var skipValidationOptions = CcdDataMigrationTaskOptions.builder(List.of("TestCase"))
@@ -361,7 +425,6 @@ class CcdDataMigrationTaskIntegrationTest {
         .build();
     new TestMigrationTask(jdbc, transactionManager, options).runMigration();
 
-    moveSourceCaseOutsideNextDeltaWindow(10);
     corruptTargetCaseRevision(10);
 
     assertThatThrownBy(() -> new TestMigrationTask(jdbc, transactionManager, options).runMigration())
@@ -826,10 +889,35 @@ class CcdDataMigrationTaskIntegrationTest {
     }
   }
 
-  private void moveSourceCaseOutsideNextDeltaWindow(long id) {
+  private void setSourceCaseModifiedAt(long id, LocalDateTime modifiedAt) {
     jdbc.update(
-        "update source.case_data set last_modified = timestamp '2000-01-01 00:00:00' where id = :id",
-        Map.of("id", id)
+        """
+        update source.case_data
+        set created_date = :modifiedAt,
+            last_modified = :modifiedAt
+        where id = :id
+        """,
+        Map.of("id", id, "modifiedAt", modifiedAt)
+    );
+  }
+
+  private LocalDateTime sourceCaseModifiedAt(long id) {
+    return jdbc.queryForObject(
+        "select coalesce(last_modified, created_date) from source.case_data where id = :id",
+        Map.of("id", id),
+        LocalDateTime.class
+    );
+  }
+
+  private LocalDateTime progressWindowEnd() {
+    return jdbc.queryForObject(
+        """
+        select window_end
+        from ccd.ccd_data_migration_progress
+        where task_name = :taskName
+        """,
+        Map.of("taskName", "ccd-data-migration"),
+        LocalDateTime.class
     );
   }
 

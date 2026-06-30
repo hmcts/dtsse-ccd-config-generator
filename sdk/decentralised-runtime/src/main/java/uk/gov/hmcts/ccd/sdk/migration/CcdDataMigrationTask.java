@@ -160,6 +160,9 @@ public abstract class CcdDataMigrationTask implements Runnable {
         restoreTargetAfterCatchUp();
         progress = loadProgress();
       }
+      if (totals.caughtUp()) {
+        validateSourceFullyMigrated();
+      }
       runFullValidationIfEnabled(progress);
 
       log.info(
@@ -1070,6 +1073,130 @@ public abstract class CcdDataMigrationTask implements Runnable {
   private void finalValidation() {
     log.info("CCD data migration final counts taskName={} caseData={}", options.taskName(), queryCounts("case_data"));
     log.info("CCD data migration final counts taskName={} caseEvent={}", options.taskName(), queryCounts("case_event"));
+  }
+
+  private void validateSourceFullyMigrated() {
+    assertNoSampleIds(
+        "source case_data rows missing from target",
+        """
+        select source.id
+        from fdw_stage.case_data source
+        left join ccd.case_data target on target.id = source.id
+        where source.case_type_id in (:caseTypeIds)
+          and target.id is null
+        order by source.id
+        limit 10
+        """
+    );
+    assertNoSampleIds(
+        "source case_data rows different in target",
+        """
+        select source.id
+        from fdw_stage.case_data source
+        join ccd.case_data target on target.id = source.id
+        where source.case_type_id in (:caseTypeIds)
+          and (
+            target.reference,
+            target.version,
+            target.created_date,
+            target.security_classification,
+            target.last_state_modified_date,
+            target.resolved_ttl,
+            target.last_modified,
+            target.jurisdiction,
+            target.case_type_id,
+            target.state,
+            target.data,
+            target.supplementary_data
+          ) is distinct from (
+            source.reference,
+            source.version,
+            source.created_date,
+            source.security_classification,
+            source.last_state_modified_date,
+            source.resolved_ttl,
+            source.last_modified,
+            source.jurisdiction,
+            source.case_type_id,
+            source.state,
+            source.data,
+            coalesce(source.supplementary_data, jsonb_build_object())
+          )
+        order by source.id
+        limit 10
+        """
+    );
+    assertNoSampleIds(
+        "source case_event rows missing from target",
+        """
+        select source_event.id
+        from fdw_stage.case_event source_event
+        join fdw_stage.case_data source_case on source_case.id = source_event.case_data_id
+        left join ccd.case_event target on target.id = source_event.id
+        where source_case.case_type_id in (:caseTypeIds)
+          and target.id is null
+        order by source_event.id
+        limit 10
+        """
+    );
+    assertNoSampleIds(
+        "source case_event rows different in target",
+        """
+        select source_event.id
+        from fdw_stage.case_event source_event
+        join fdw_stage.case_data source_case on source_case.id = source_event.case_data_id
+        join ccd.case_event target on target.id = source_event.id
+        where source_case.case_type_id in (:caseTypeIds)
+          and (
+            target.created_date,
+            target.security_classification,
+            target.case_data_id,
+            target.case_type_version,
+            target.event_id,
+            target.summary,
+            target.description,
+            target.user_id,
+            target.case_type_id,
+            target.state_id,
+            target.data,
+            target.user_first_name,
+            target.user_last_name,
+            target.event_name,
+            target.state_name,
+            target.proxied_by,
+            target.proxied_by_first_name,
+            target.proxied_by_last_name
+          ) is distinct from (
+            source_event.created_date,
+            source_event.security_classification,
+            source_event.case_data_id,
+            source_event.case_type_version,
+            source_event.event_id,
+            source_event.summary,
+            source_event.description,
+            source_event.user_id,
+            source_event.case_type_id,
+            source_event.state_id,
+            source_event.data,
+            source_event.user_first_name,
+            source_event.user_last_name,
+            source_event.event_name,
+            source_event.state_name,
+            source_event.proxied_by,
+            source_event.proxied_by_first_name,
+            source_event.proxied_by_last_name
+          )
+        order by source_event.id
+        limit 10
+        """
+    );
+  }
+
+  private void assertNoSampleIds(String failure, String sql) {
+    List<Long> ids = db.query(sql, baseParams(), (rs, rowNum) -> rs.getLong("id"));
+    if (!ids.isEmpty()) {
+      throw new CcdDataMigrationException("Found " + failure + " taskName=" + options.taskName() + " ids=" + ids);
+    }
   }
 
   private List<Map<String, Object>> queryCounts(String tableName) {
