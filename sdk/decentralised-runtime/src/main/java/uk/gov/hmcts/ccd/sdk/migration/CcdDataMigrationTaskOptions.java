@@ -4,7 +4,6 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
-import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HexFormat;
 import java.util.List;
@@ -13,13 +12,13 @@ import java.util.stream.Collectors;
 
 public record CcdDataMigrationTaskOptions(
     String taskName,
+    CcdDataMigrationMode mode,
     List<String> caseTypeIds,
-    int batchSize,
+    int eventBatchSize,
     long caseRevisionOffset,
     int maxBatchesPerRun,
     Duration maxRunTime,
-    LocalDateTime runUntil,
-    Duration deltaOverlap,
+    Duration settlementInterval,
     CcdDataMigrationValidationMode validationMode
 ) {
   private static final String TARGET_SCHEMA = "ccd";
@@ -27,10 +26,11 @@ public record CcdDataMigrationTaskOptions(
 
   public CcdDataMigrationTaskOptions {
     taskName = requireText(taskName, "taskName");
+    mode = mode == null ? CcdDataMigrationMode.PRELOAD_EVENTS : mode;
     caseTypeIds = List.copyOf(requireCaseTypeIds(caseTypeIds));
 
-    if (batchSize < 1) {
-      throw new IllegalArgumentException("batchSize must be greater than zero");
+    if (eventBatchSize < 1) {
+      throw new IllegalArgumentException("eventBatchSize must be greater than zero");
     }
     if (caseRevisionOffset < 0) {
       throw new IllegalArgumentException("caseRevisionOffset must be zero or greater");
@@ -41,14 +41,14 @@ public record CcdDataMigrationTaskOptions(
     if (maxRunTime != null && !maxRunTime.isPositive()) {
       throw new IllegalArgumentException("maxRunTime must be positive when set");
     }
-    if (deltaOverlap == null) {
-      deltaOverlap = Duration.ofMinutes(15);
+    if (settlementInterval == null) {
+      settlementInterval = Duration.ofMinutes(30);
     }
-    if (deltaOverlap.isNegative()) {
-      throw new IllegalArgumentException("deltaOverlap must be zero or greater");
+    if (settlementInterval.isNegative()) {
+      throw new IllegalArgumentException("settlementInterval must be zero or greater");
     }
     if (validationMode == null) {
-      validationMode = CcdDataMigrationValidationMode.DELTA_ONLY;
+      validationMode = CcdDataMigrationValidationMode.NEVER;
     }
   }
 
@@ -114,14 +114,14 @@ public record CcdDataMigrationTaskOptions(
 
   public static final class Builder {
     private String taskName = "ccd-data-migration";
+    private CcdDataMigrationMode mode = CcdDataMigrationMode.PRELOAD_EVENTS;
     private final List<String> caseTypeIds;
-    private int batchSize = 100;
+    private int eventBatchSize = 10_000;
     private long caseRevisionOffset = 1_000_000_000L;
     private int maxBatchesPerRun = Integer.MAX_VALUE;
     private Duration maxRunTime;
-    private LocalDateTime runUntil;
-    private Duration deltaOverlap = Duration.ofMinutes(15);
-    private CcdDataMigrationValidationMode validationMode = CcdDataMigrationValidationMode.DELTA_ONLY;
+    private Duration settlementInterval = Duration.ofMinutes(30);
+    private CcdDataMigrationValidationMode validationMode = CcdDataMigrationValidationMode.NEVER;
 
     private Builder(List<String> caseTypeIds) {
       this.caseTypeIds = caseTypeIds;
@@ -132,8 +132,13 @@ public record CcdDataMigrationTaskOptions(
       return this;
     }
 
-    public Builder batchSize(int batchSize) {
-      this.batchSize = batchSize;
+    public Builder mode(CcdDataMigrationMode mode) {
+      this.mode = mode;
+      return this;
+    }
+
+    public Builder eventBatchSize(int eventBatchSize) {
+      this.eventBatchSize = eventBatchSize;
       return this;
     }
 
@@ -152,13 +157,8 @@ public record CcdDataMigrationTaskOptions(
       return this;
     }
 
-    public Builder runUntil(LocalDateTime runUntil) {
-      this.runUntil = runUntil;
-      return this;
-    }
-
-    public Builder deltaOverlap(Duration deltaOverlap) {
-      this.deltaOverlap = deltaOverlap;
+    public Builder settlementInterval(Duration settlementInterval) {
+      this.settlementInterval = settlementInterval;
       return this;
     }
 
@@ -170,13 +170,13 @@ public record CcdDataMigrationTaskOptions(
     public CcdDataMigrationTaskOptions build() {
       return new CcdDataMigrationTaskOptions(
           taskName,
+          mode,
           caseTypeIds,
-          batchSize,
+          eventBatchSize,
           caseRevisionOffset,
           maxBatchesPerRun,
           maxRunTime,
-          runUntil,
-          deltaOverlap,
+          settlementInterval,
           validationMode
       );
     }

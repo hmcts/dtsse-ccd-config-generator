@@ -44,7 +44,7 @@ tasks.withType(Test).configureEach {
     [
         'ccd.data-migration.perf.cases',
         'ccd.data-migration.perf.events-per-case',
-        'ccd.data-migration.perf.batch-size',
+        'ccd.data-migration.perf.event-batch-size',
         'ccd.data-migration.perf.max-seconds'
     ].each { propertyName ->
         def propertyValue = System.getProperty(propertyName)

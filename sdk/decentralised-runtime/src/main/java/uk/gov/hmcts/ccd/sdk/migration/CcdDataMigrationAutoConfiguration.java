@@ -27,7 +27,6 @@ public class CcdDataMigrationAutoConfiguration {
         transactionManager,
         properties.toOptions(),
         environment
-    ) {
-    };
+    );
   }
 }

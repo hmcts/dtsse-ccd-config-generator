@@ -1,20 +1,11 @@
 create table ccd.ccd_data_migration_progress (
     task_name varchar(255) primary key,
     config_hash varchar(64) not null,
-    target_schema varchar(255) not null,
-    fdw_schema varchar(255) not null,
-    case_type_ids text not null,
-    case_revision_offset bigint not null,
-    phase varchar(20) not null,
-    window_start timestamp without time zone,
-    window_end timestamp without time zone not null,
-    last_case_data_modified timestamp without time zone,
-    last_case_data_id bigint not null default 0,
-    initial_complete boolean not null default false,
-    total_batches bigint not null default 0,
-    total_cases bigint not null default 0,
-    total_events bigint not null default 0,
-    target_prepared boolean not null default false,
+    status varchar(32) not null default 'PRELOAD',
+    loaded_event_hwm bigint not null default 0,
+    cutover_event_hwm bigint,
     created_at timestamp without time zone not null default (now() at time zone 'UTC'),
-    updated_at timestamp without time zone not null default (now() at time zone 'UTC')
+    updated_at timestamp without time zone not null default (now() at time zone 'UTC'),
+    constraint ccd_data_migration_progress_status_chk
+        check (status in ('PRELOAD', 'CUTOVER', 'COMPLETE'))
 );

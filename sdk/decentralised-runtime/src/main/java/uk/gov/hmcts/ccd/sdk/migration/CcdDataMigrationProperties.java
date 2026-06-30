@@ -1,7 +1,6 @@
 package uk.gov.hmcts.ccd.sdk.migration;
 
 import java.time.Duration;
-import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import lombok.Data;
@@ -13,14 +12,14 @@ public class CcdDataMigrationProperties {
 
   private boolean enabled;
   private String taskName = "ccd-data-migration";
+  private CcdDataMigrationMode mode = CcdDataMigrationMode.PRELOAD_EVENTS;
   private List<String> caseTypeIds = new ArrayList<>();
-  private int batchSize = 100;
+  private int eventBatchSize = 10_000;
   private long caseRevisionOffset = 1_000_000_000L;
   private int maxBatchesPerRun = Integer.MAX_VALUE;
   private Duration maxRunTime;
-  private LocalDateTime runUntil;
-  private Duration deltaOverlap = Duration.ofMinutes(15);
-  private CcdDataMigrationValidationMode validationMode = CcdDataMigrationValidationMode.DELTA_ONLY;
+  private Duration settlementInterval = Duration.ofMinutes(30);
+  private CcdDataMigrationValidationMode validationMode = CcdDataMigrationValidationMode.NEVER;
 
   CcdDataMigrationTaskOptions toOptions() {
     if (caseTypeIds == null || caseTypeIds.isEmpty()) {
@@ -29,12 +28,12 @@ public class CcdDataMigrationProperties {
 
     return CcdDataMigrationTaskOptions.builder(caseTypeIds)
         .taskName(taskName)
-        .batchSize(batchSize)
+        .mode(mode)
+        .eventBatchSize(eventBatchSize)
         .caseRevisionOffset(caseRevisionOffset)
         .maxBatchesPerRun(maxBatchesPerRun)
         .maxRunTime(maxRunTime)
-        .runUntil(runUntil)
-        .deltaOverlap(deltaOverlap)
+        .settlementInterval(settlementInterval)
         .validationMode(validationMode)
         .build();
   }

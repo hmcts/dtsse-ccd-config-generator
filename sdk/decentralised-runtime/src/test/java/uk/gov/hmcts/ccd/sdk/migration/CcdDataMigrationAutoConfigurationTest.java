@@ -33,7 +33,7 @@ class CcdDataMigrationAutoConfigurationTest {
         .withPropertyValues(
             "ccd.data-migration.enabled=true",
             "ccd.data-migration.case-type-ids[0]=TestCase",
-            "ccd.data-migration.batch-size=500",
+            "ccd.data-migration.event-batch-size=500",
             "ccd.data-migration.max-batches-per-run=10"
         )
         .run(context -> assertThat(context).hasSingleBean(CcdDataMigrationTask.class));
@@ -55,8 +55,7 @@ class CcdDataMigrationAutoConfigurationTest {
             mock(PlatformTransactionManager.class),
             CcdDataMigrationTaskOptions.builder(List.of("ServiceCase")).build(),
             () -> false
-        ) {
-        })
+        ))
         .withPropertyValues("ccd.data-migration.enabled=true")
         .run(context -> assertThat(context).hasSingleBean(CcdDataMigrationTask.class));
   }

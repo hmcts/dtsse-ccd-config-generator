@@ -1,200 +1,115 @@
 # CCD data migration task
 
-This page covers the SDK `CcdDataMigrationTask`, a reusable Java migration runner for services
-that need to copy large CCD `case_data` and `case_event` tables into their decentralised runtime
-database over multiple scheduled runs.
+This page covers the SDK `CcdDataMigrationTask`, a reusable Java migration runner for services that
+need to copy large CCD `case_event` history and final `case_data` rows into their decentralised
+runtime database.
 
-Use this task when the FDW setup has already been created and the one-shot
-[`migrate-ccd-data-fdw.sh`](fdw-data-migration.md) script is too operationally risky to run in a
-single unattended session.
+Use this task after the FDW setup in [`fdw-data-migration.md`](fdw-data-migration.md) has been
+created. The task is designed for repeated event preloads before downtime, followed by an explicit
+operator-run cutover after source writes for the selected case types have been frozen.
 
-## What the task does
+## Modes
 
-`CcdDataMigrationTask` is a reusable `Runnable` in the `decentralised-runtime` SDK module. The
-runtime library can create it as a Spring bean from `ccd.data-migration.*` properties, or a service
-can provide its own `CcdDataMigrationTask` bean if it needs custom construction. A service still
-owns the scheduler, cron endpoint, job runner, or manual admin command that calls `runMigration()`.
+The task has one implementation with explicit modes:
 
-The task:
+* `PRELOAD_EVENTS`: scheduled before cutover. Copies settled immutable source events by event ID
+  high-water mark and inserts provisional parent `case_data` rows so the target FK remains valid.
+* `CUTOVER`: explicit operator action during downtime. Captures the cutover event high-water mark,
+  repairs any late lower-ID event gaps, copies the final event delta, refreshes all selected
+  `case_data`, resets sequences, validates, and marks the migration complete.
+* `VALIDATE_ONLY`: runs final source-vs-target validation without copying data.
 
-* validates that `pgcrypto` and the FDW foreign tables exist before copying data
-* fails with a link to the FDW setup guide if the FDW setup is missing
-* uses a Postgres advisory lock to prevent two instances of the same migration running at once
-* maintains a Flyway-managed progress table in the target `ccd` schema
-* refuses to run while the decentralised runtime is enabled
-* copies source cases in chunks from `fdw_stage.case_data`
-* copies all events for each copied case from `fdw_stage.case_event`
-* upserts existing target rows so reruns are idempotent
-* prepares the target before the first copied chunk by removing the `case_event` revision unique
-  index that blocks temporary copied history revisions
-* disables `case_event` user triggers while migration chunks are still outstanding
-* recalculates `case_event.version` and `case_event.case_revision`
-* sets `case_data.case_revision` to event count plus the configured revision offset
-* restores the unique index, trigger state and `case_event_id_seq` after delta catch-up
-* logs start, per-chunk progress, final counts and completion state
+Do not switch to `CUTOVER` automatically from a scheduler. The operator must first freeze source
+writes for the selected case types and wait for in-flight source transactions to drain.
 
-## Prerequisites
+## Safety Model
 
-Before the task can run, complete the FDW setup described in
-[`fdw-data-migration.md`](fdw-data-migration.md). In particular, the target application database
-must have:
+The preload path keeps the target tables constraint-valid after every committed batch:
 
-* the `postgres_fdw` and `pgcrypto` extensions
-* readable foreign tables for the source CCD tables:
-  * `fdw_stage.case_data`
-  * `fdw_stage.case_event`
-* writable target runtime tables:
-  * `ccd.case_data`
-  * `ccd.case_event`
-* permission for the application database user to run `SET LOCAL session_replication_role = replica`
-* permission to drop and recreate the `case_event` revision unique index
+* the `case_event -> case_data` FK stays in place
+* the unique `(case_data_id, case_revision)` index stays in place
+* `case_event.version` and `case_event.case_revision` are calculated before insert
+* `case_event` user triggers are not disabled
+* progress advances only after the parent/event inserts commit
 
-The task uses the documented FDW and runtime schemas directly: `fdw_stage` for source foreign
-tables and `ccd` for the decentralised runtime target tables.
+Preloaded `case_data` is provisional. Its purpose is to satisfy the event FK. `CUTOVER` refreshes
+every selected source case regardless of source `last_modified`, then sets
+`case_data.case_revision = max(case_event.case_revision) + caseRevisionOffset`.
 
-The task assumes the service already depends on the decentralised runtime SDK and has a configured
-Spring `DataSource`. The SDK task bean is disabled by default; set `ccd.data-migration.enabled=true`
-only for services that should create the migration task bean.
+The runtime `case_data` revision trigger is deliberately disabled only inside the cutover refresh
+transaction so the final source-derived revision can be written. The trigger is re-enabled before the
+transaction completes.
 
-The application must also be running with the decentralised runtime disabled. The task checks
-`ccd.sdk.decentralised` through Spring `Environment` when supplied, or falls back to
-`CCD_SDK_DECENTRALISED` / the `ccd.sdk.decentralised` system property. If that value is `true`, the
-task fails before taking a lock or preparing the target tables.
+## Progress
 
-## Progress and reruns
+The decentralised runtime Flyway migration creates `ccd.ccd_data_migration_progress` with minimal
+state:
 
-The decentralised runtime Flyway migrations create `ccd.ccd_data_migration_progress`. The table
-records:
+* `task_name`
+* `config_hash`
+* `status`: `PRELOAD`, `CUTOVER`, or `COMPLETE`
+* `loaded_event_hwm`
+* `cutover_event_hwm`
+* timestamps
 
-* task name
-* migration configuration fingerprint
-* target schema, FDW schema, case type IDs and case revision offset
-* current phase: initial load or delta catch-up
-* current source window
-* last copied source modified timestamp in delta mode
-* last copied source `case_data.id`
-* total copied batches, cases and events
-* whether the target constraints/triggers are currently prepared for an unfinished migration
+The migration configuration hash covers the migration identity. Runtime limits such as
+`eventBatchSize`, `maxBatchesPerRun`, `maxRunTime`, `settlementInterval`, and `mode` can change
+between invocations.
 
-During the initial phase, each run copies cases where source `case_data.id` is greater than the last
-processed ID and the source `last_modified`/`created_date` is inside the current window. When the
-initial window is exhausted, the task moves to delta mode.
+## Settlement
 
-During delta mode, the task repeatedly opens a new source window and copies cases modified since the
-previous completed window. Delta progress is ordered by
-`coalesce(last_modified, created_date), id`, not just by ID, so an older case ID updated later in the
-same window is still picked up. This lets a service run the task overnight, stop cleanly, then
-continue the next day without starting again.
+`PRELOAD_EVENTS` does not use raw `max(case_event.id)`. Source sequence IDs are allocation-order, not
+commit-order, so the task uses a settled event high-water mark:
 
-Saved progress is tied to the migration definition. A later run with the same `taskName` must use
-the same target schema, FDW schema, case type IDs and case revision offset. Changing operational
-limits such as `batchSize`, `maxBatchesPerRun`, `maxRunTime`, `runUntil` or `deltaOverlap` is allowed,
-but changing the migration definition fails fast. Use a new `taskName` for a different migration, or
-manually reset the progress row only after confirming the previous migration state is no longer
-needed.
-
-The target is prepared only when the task has a real batch to copy. If a run stops because of
-`maxBatchesPerRun`, `maxRunTime`, or `runUntil`, the progress table keeps `target_prepared=true` and
-the task does not rebuild the `case_event` revision index at the end of that partial run. The next
-invocation resumes with the target still prepared. Once the task reaches delta catch-up, it restores
-the revision unique index and user triggers, then records `target_prepared=false`.
-
-## Runtime limits
-
-The task always finishes the current chunk before checking stop conditions. It does not interrupt a
-chunk mid-transaction.
-
-Configure one or more limits:
-
-* `batchSize`: number of source cases per chunk
-* `maxBatchesPerRun`: maximum chunks in one invocation
-* `maxRunTime`: maximum elapsed runtime for one invocation
-* `runUntil`: fixed date/time after which the invocation should stop
-* `deltaOverlap`: overlap applied when opening delta windows, default 15 minutes
-* `validationMode`: when to run full table validation, default `DELTA_ONLY`
-
-If both `maxRunTime` and `runUntil` are set, the earlier deadline is used. The returned
-`CcdDataMigrationRunResult` includes `stoppedByTimeLimit` so scheduled jobs can distinguish a
-planned time stop from a caught-up migration.
-
-The delta overlap intentionally reprocesses a small amount of recent data. Upserts are idempotent,
-and the overlap protects against late-committing transactions whose `last_modified` timestamp falls
-just before the previous completed delta boundary.
-
-The SDK default `batchSize` is deliberately conservative, but production migrations should tune it
-with a lower environment rehearsal. Larger batches reduce transaction, FDW round-trip and progress
-update overhead, so they are usually faster when cases have a modest number of events. Start with
-`500` or `1_000` cases per batch, then adjust using the observed per-chunk duration and event count.
-Use a smaller batch size if individual cases have very large event histories or if chunks approach
-the maximum runtime window.
-
-## Catch-up and validation
-
-Before returning `caughtUp=true`, the task always compares the selected source case IDs and their
-source events with the target tables. This validation fails the run if any source case/event is
-missing from the target, or if copied source-owned columns differ. It protects against source rows
-becoming visible after the initial ID cursor has passed them, events being written without the parent
-case timestamp advancing, and repeated changes with the same parent modified timestamp.
-
-Full validation additionally logs final counts, checks for orphaned `case_event` rows, and verifies
-`case_data.case_revision` against the migrated events. These checks scan the target CCD tables for the
-configured case types, so large migrations may need to avoid running them during every initial load
-window.
-
-Configure `validationMode` with one of:
-
-* `DELTA_ONLY`: run full validation while the saved progress is in delta mode. This is the default.
-* `ALWAYS`: run full validation after every invocation that acquires the migration lock.
-* `NEVER`: skip full validation. Use this only when validation is handled separately.
-
-## Performance harness
-
-The SDK integration tests include a configurable FDW migration harness that seeds a synthetic source
-dataset, runs the task against the real decentralised runtime Flyway schema, and verifies migrated
-case/event counts plus final target restoration. By default it seeds 100,000 cases and 1,000,000
-case events.
-
-Run the default harness with:
-
-```bash
-./gradlew -p sdk :decentralised-runtime:test \
-  --tests '*CcdDataMigrationTaskIntegrationTest.migratesSeededDatasetWithinPerfHarnessLimit'
+```sql
+ce.created_date < clock_timestamp() - settlementInterval
 ```
 
-Override the dataset with system properties when rehearsing different volumes:
+`settlementInterval` must be greater than the maximum source write transaction lifetime plus a
+safety margin. If that lifetime is not enforced, cutover validation and the late-event repair sweep
+are the safety net.
 
-```bash
-./gradlew -p sdk :decentralised-runtime:test \
-  --tests '*CcdDataMigrationTaskIntegrationTest.migratesSeededDatasetWithinPerfHarnessLimit' \
-  -Dccd.data-migration.perf.cases=10000 \
-  -Dccd.data-migration.perf.events-per-case=5 \
-  -Dccd.data-migration.perf.batch-size=500 \
-  -Dccd.data-migration.perf.max-seconds=900
-```
+## Configuration
 
-## Example Spring integration
-
-This example configures an ET migration task bean that copies two case types in batches of 500 cases
-and stops after 4 hours.
+Common Spring Boot properties:
 
 ```yaml
 ccd:
   data-migration:
     enabled: true
     task-name: et-ccd-data-migration
+    mode: PRELOAD_EVENTS
     case-type-ids:
       - ET_EnglandWales
       - ET_Scotland
-    batch-size: 500
-    max-batches-per-run: 1000
+    event-batch-size: 10000
+    max-batches-per-run: 100
     max-run-time: 4h
-    delta-overlap: 15m
-    validation-mode: DELTA_ONLY
+    settlement-interval: 30m
+    validation-mode: NEVER
     case-revision-offset: 1000000000
 ```
 
-Run the task from a scheduler owned by the service. Keep the schedule disabled by default and enable
-it only for the migration window.
+For cutover, run the same task with:
+
+```yaml
+ccd:
+  data-migration:
+    mode: CUTOVER
+```
+
+For an independent validation run:
+
+```yaml
+ccd:
+  data-migration:
+    mode: VALIDATE_ONLY
+```
+
+## Scheduler Example
+
+The SDK can create the task bean from `ccd.data-migration.*`. The service owns the scheduler or
+operator endpoint that calls it.
 
 ```java
 package uk.gov.hmcts.ethos.replacement.docmosis.service.migration;
@@ -204,8 +119,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
-import uk.gov.hmcts.ccd.sdk.migration.CcdDataMigrationTask;
 import uk.gov.hmcts.ccd.sdk.migration.CcdDataMigrationRunResult;
+import uk.gov.hmcts.ccd.sdk.migration.CcdDataMigrationTask;
 
 @Slf4j
 @Component
@@ -232,55 +147,42 @@ public class EtCcdDataMigrationScheduler {
 }
 ```
 
-## Example application configuration
+Keep the scheduler disabled by default. Enable scheduled `PRELOAD_EVENTS` only during the preload
+period. Run `CUTOVER` explicitly during the agreed downtime window.
 
-These are Spring Boot application properties, not a Flux configuration fragment. Put them in the
-service's `application.yaml` or provide the equivalent environment variables through its deployment
-configuration (for example, values rendered by the service's Helm/Flux deployment):
+## Validation
 
-* `MIGRATION_CCD_DATA_ENABLED=false`
-* `MIGRATION_CCD_DATA_CRON=0 */10 20-23,0-5 * * *`
-* `CCD_DATA_MIGRATION_ENABLED=false`
+Final validation checks:
 
-```yaml
-ccd:
-  data-migration:
-    enabled: false
+* no selected source `case_data` rows are missing from target
+* no selected source `case_event` rows up to `cutover_event_hwm` are missing from target
+* source-owned `case_data` and `case_event` columns match target
+* no orphaned target `case_event` rows exist for the selected case types
+* `case_data.case_revision` matches `max(case_event.case_revision) + caseRevisionOffset`
+* target event IDs reach the required high-water mark
 
-migration:
-  ccd-data:
-    enabled: false
-    cron: "0 */10 20-23,0-5 * * *"
+`PRELOAD_EVENTS` can optionally check that no source events are missing up to `loaded_event_hwm` by
+setting `validationMode=ALWAYS`. The default is `NEVER` to avoid expensive scans on every scheduled
+preload. `CUTOVER` and `VALIDATE_ONLY` always run final validation.
+
+## Performance Harness
+
+The SDK integration tests include a configurable FDW migration harness that seeds a synthetic source
+dataset, runs `PRELOAD_EVENTS` and `CUTOVER` against the real decentralised runtime Flyway schema,
+and verifies migrated case/event counts. By default it seeds 100,000 cases and 1,000,000 events.
+
+```bash
+./gradlew -p sdk :decentralised-runtime:test \
+  --tests '*CcdDataMigrationTaskIntegrationTest.migratesSeededDatasetWithinPerfHarnessLimit'
 ```
 
-## Operational guidance
+Override the dataset with system properties:
 
-Run a lower environment rehearsal first with representative data volumes. Check the task logs for:
-
-* start configuration
-* FDW validation
-* per-chunk case and event counts
-* final target counts by case type
-* `caughtUp=true` when no more eligible data remains in the current delta window
-* `stoppedByTimeLimit=true` when a run deliberately stops after an overnight window
-* `target_prepared=true` in `ccd.ccd_data_migration_progress` while a partial migration is still
-  waiting to resume
-
-Use the rehearsal to choose the production `batchSize`. The target is to keep chunks large enough to
-avoid excessive per-batch overhead, but small enough that a single chunk completes comfortably before
-the end of the overnight window. If the logs show consistently small event counts and short chunk
-times, increase the batch size. If one chunk takes too long or contains unusually large event
-histories, reduce it before production.
-
-For production, agree the FDW setup and database permissions with PlatOps before enabling the
-scheduled task. A partial migration deliberately leaves the `case_event` revision unique index and
-user triggers prepared until delta catch-up has completed. The `case_event` foreign key remains in
-place throughout the migration.
-
-That is safe only while the target runtime tables are migration-owned. Do not enable decentralised
-case writes, admin jobs, repair scripts, test endpoints, or any other writer that inserts or updates
-target `ccd.case_data` / `ccd.case_event` rows while `target_prepared=true`. Postgres will not replay
-disabled triggers for rows written during that period, and the missing revision index means normal
-event revision uniqueness is not enforced until the task restores it. If restoration fails, stop the
-application and restore the `case_event` revision unique index and user triggers before allowing case
-writes.
+```bash
+./gradlew -p sdk :decentralised-runtime:test \
+  --tests '*CcdDataMigrationTaskIntegrationTest.migratesSeededDatasetWithinPerfHarnessLimit' \
+  -Dccd.data-migration.perf.cases=10000 \
+  -Dccd.data-migration.perf.events-per-case=5 \
+  -Dccd.data-migration.perf.event-batch-size=1000 \
+  -Dccd.data-migration.perf.max-seconds=900
+```
