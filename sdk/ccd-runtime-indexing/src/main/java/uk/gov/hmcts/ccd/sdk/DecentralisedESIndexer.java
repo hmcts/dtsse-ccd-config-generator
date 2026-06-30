@@ -180,8 +180,11 @@ class DecentralisedESIndexer implements SmartLifecycle, DisposableBean {
 
   @Override
   public void stop(Runnable callback) {
-    stopWorker();
-    callback.run();
+    try {
+      stopWorker();
+    } finally {
+      callback.run();
+    }
   }
 
   private void stopWorker() {
