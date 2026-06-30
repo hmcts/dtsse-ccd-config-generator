@@ -8,6 +8,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -30,7 +31,6 @@ import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
-import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.testcontainers.containers.Network;
 import org.testcontainers.containers.PostgreSQLContainer;
@@ -94,7 +94,7 @@ class DecentralisedESIndexerChaosTest {
   }
 
   @Test
-  void scheduledIndexerRecoversAfterElasticsearchNetworkCut() {
+  void notificationDrivenIndexerRecoversAfterElasticsearchNetworkCut() {
     context = startApplication();
     resetState();
 
@@ -171,7 +171,7 @@ class DecentralisedESIndexerChaosTest {
   }
 
   @Test
-  void scheduledIndexerRecoversAfterElasticsearchContainerPause() {
+  void notificationDrivenIndexerRecoversAfterElasticsearchContainerPause() {
     context = startApplication();
     resetState();
 
@@ -390,6 +390,40 @@ class DecentralisedESIndexerChaosTest {
     });
   }
 
+  @Test
+  void queueNotificationWakesIndexerBeforeFallbackPoll() throws Exception {
+    context = startApplication();
+    resetState();
+
+    commitCaseRevision(9301, 9301, CASE_TYPE, 1, "notification-wakeup");
+
+    await().pollInterval(Duration.ofMillis(100)).atMost(Duration.ofSeconds(3)).untilAsserted(() -> {
+      JsonNode document = fetchDocument(CASE_INDEX, 9301);
+      assertThat(document.path("data").path("marker").asText()).isEqualTo("notification-wakeup");
+      assertThat(queueSize()).isZero();
+    });
+  }
+
+  @Test
+  void caseReindexingServiceQueueUpdateWakesIndexerBeforeFallbackPoll() throws Exception {
+    context = startApplication();
+    resetState();
+
+    commitCaseRevision(9401, 9401, CASE_TYPE, 1, "reindex-notification");
+    awaitLatestIndexed(9401, 9401, 1);
+    deleteIndex(CASE_INDEX);
+
+    int queued = context.getBean(CaseReindexingService.class)
+        .enqueueCasesModifiedSince(LocalDate.now().minusDays(1));
+
+    assertThat(queued).isEqualTo(1);
+    await().pollInterval(Duration.ofMillis(100)).atMost(Duration.ofSeconds(3)).untilAsserted(() -> {
+      JsonNode document = fetchDocument(CASE_INDEX, 9401);
+      assertThat(document.path("data").path("marker").asText()).isEqualTo("reindex-notification");
+      assertThat(queueSize()).isZero();
+    });
+  }
+
   private ConfigurableApplicationContext startApplication() {
     SpringApplication application = new SpringApplicationBuilder(ChaosApplication.class)
         .properties(Map.ofEntries(
@@ -398,7 +432,6 @@ class DecentralisedESIndexerChaosTest {
             entry("spring.datasource.password", POSTGRES.getPassword()),
             entry("spring.datasource.driver-class-name", POSTGRES.getDriverClassName()),
             entry("ELASTIC_SEARCH_HOSTS", elasticsearchProxyUrl()),
-            entry("ccd.sdk.decentralised.poll-interval-ms", "100"),
             entry("ccd.sdk.indexing.elasticsearch.connect-timeout-ms", "500"),
             entry("ccd.sdk.indexing.elasticsearch.socket-timeout-ms", "500"),
             entry("ccd.sdk.indexing.queue-lock-seconds", "1"),
@@ -759,8 +792,7 @@ class DecentralisedESIndexerChaosTest {
       TransactionAutoConfiguration.class,
       FlywayAutoConfiguration.class
   })
-  @EnableScheduling
-  @Import({DecentralisedDataConfiguration.class, DecentralisedESIndexer.class})
+  @Import({CaseReindexingService.class, DecentralisedDataConfiguration.class, DecentralisedESIndexer.class})
   static class ChaosApplication {
   }
 }

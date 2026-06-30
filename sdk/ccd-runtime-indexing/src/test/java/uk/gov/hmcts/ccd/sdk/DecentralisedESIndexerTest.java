@@ -3,6 +3,7 @@ package uk.gov.hmcts.ccd.sdk;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import javax.sql.DataSource;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -11,12 +12,14 @@ import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.springframework.transaction.support.TransactionTemplate;
 
 class DecentralisedESIndexerTest {
+  private final DriverManagerDataSource dataSource = new DriverManagerDataSource();
 
   private final ApplicationContextRunner contextRunner = new ApplicationContextRunner()
       .withUserConfiguration(DecentralisedESIndexer.class)
-      .withBean(JdbcTemplate.class, () -> new JdbcTemplate(new DriverManagerDataSource()))
+      .withBean(DataSource.class, () -> dataSource)
+      .withBean(JdbcTemplate.class, () -> new JdbcTemplate(dataSource))
       .withBean(TransactionTemplate.class, () ->
-          new TransactionTemplate(new DataSourceTransactionManager(new DriverManagerDataSource())));
+          new TransactionTemplate(new DataSourceTransactionManager(dataSource)));
 
   @Test
   void startsIndexerWhenIndexerConfigurationIsMissing() {

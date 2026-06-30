@@ -121,6 +121,9 @@ During event submission:
 
 After the above transaction commits:
 
+The indexer uses PostgreSQL `LISTEN`/`NOTIFY` to wake promptly when `ccd.es_queue` changes, with
+`ccd.sdk.decentralised.poll-interval-ms` as a fallback.
+
 1. The indexer [finds case C requires indexing at revision R](../sdk/ccd-runtime-indexing/src/main/java/uk/gov/hmcts/ccd/sdk/DecentralisedESIndexer.java#L146)
 2. The indexer [claims a batch of rows](../sdk/ccd-runtime-indexing/src/main/java/uk/gov/hmcts/ccd/sdk/DecentralisedESIndexer.java#L202) in ccd.es_queue by setting locked_until and lock_token, committing the transaction.
    The lease duration is configured in seconds via `ccd.sdk.indexing.queue-lock-seconds`, and the batch size defaults to 25 via `ccd.sdk.indexing.batch-size`.
@@ -137,8 +140,8 @@ After the above transaction commits:
    1. For each successful document write, any older dead letter rows for the same case reference and index_id are [deleted](../sdk/ccd-runtime-indexing/src/main/java/uk/gov/hmcts/ccd/sdk/DecentralisedESIndexer.java#L384)
    2. If the queued row still matches reference C, case_revision R and the indexer's lock_token, it is [deleted](../sdk/ccd-runtime-indexing/src/main/java/uk/gov/hmcts/ccd/sdk/DecentralisedESIndexer.java#L411)
    3. If the queued row has advanced while locked, [the lock is cleared](../sdk/ccd-runtime-indexing/src/main/java/uk/gov/hmcts/ccd/sdk/DecentralisedESIndexer.java#L413) and the newer revision remains queued
-7. If a full batch was claimed, the same scheduled run [claims another batch](../sdk/ccd-runtime-indexing/src/main/java/uk/gov/hmcts/ccd/sdk/DecentralisedESIndexer.java#L122) after `ccd.sdk.indexing.drain-delay-ms`, which defaults to 100ms, instead of waiting for the next poll interval.
-   This drain runs on a dedicated single-thread scheduler so it cannot block unrelated scheduled jobs in the service.
+7. If a full batch was claimed, the same worker loop [claims another batch](../sdk/ccd-runtime-indexing/src/main/java/uk/gov/hmcts/ccd/sdk/DecentralisedESIndexer.java#L122) after `ccd.sdk.indexing.drain-delay-ms`, which defaults to 100ms, instead of waiting for the next notification or fallback interval.
+   This drain runs on a dedicated single-thread worker so it cannot overlap with another indexer run in the same service.
 
 ### Concurrency correctness
 
