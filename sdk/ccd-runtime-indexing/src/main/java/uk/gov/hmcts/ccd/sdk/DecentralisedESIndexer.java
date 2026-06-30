@@ -29,7 +29,6 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicReference;
 import javax.sql.DataSource;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.hc.core5.http.HttpHost;
@@ -66,7 +65,6 @@ class DecentralisedESIndexer implements SmartLifecycle, DisposableBean {
   private final TransactionTemplate transactionTemplate;
   private final AtomicBoolean terminated = new AtomicBoolean(false);
   private final AtomicBoolean running = new AtomicBoolean(false);
-  private final AtomicReference<Connection> listenerConnection = new AtomicReference<>();
   private final ExecutorService workerExecutor;
   private final ElasticsearchTransport transport;
   private final ElasticsearchClient client;
@@ -188,26 +186,14 @@ class DecentralisedESIndexer implements SmartLifecycle, DisposableBean {
 
   private void stopWorker() {
     terminated.set(true);
-    running.set(false);
-    closeListenerConnection();
     workerExecutor.shutdownNow();
     try {
-      if (!workerExecutor.awaitTermination(30, TimeUnit.SECONDS)) {
-        log.warn("Decentralised ES indexer worker did not stop within 30 seconds");
+      long waitMs = Math.max(30_000L, pollIntervalMs + 5_000L);
+      if (!workerExecutor.awaitTermination(waitMs, TimeUnit.MILLISECONDS)) {
+        log.warn("Decentralised ES indexer worker did not stop within {}ms", waitMs);
       }
     } catch (InterruptedException ex) {
       Thread.currentThread().interrupt();
-    }
-  }
-
-  private void closeListenerConnection() {
-    Connection connection = listenerConnection.getAndSet(null);
-    if (connection != null) {
-      try {
-        connection.close();
-      } catch (SQLException ex) {
-        log.debug("Failed to close ES indexer listener connection", ex);
-      }
     }
   }
 
@@ -243,13 +229,12 @@ class DecentralisedESIndexer implements SmartLifecycle, DisposableBean {
     try {
       while (!terminated.get()) {
         try (Connection connection = dataSource.getConnection()) {
-          listenerConnection.set(connection);
-          try {
-            connection.setAutoCommit(true);
-            try (Statement statement = connection.createStatement()) {
-              statement.execute("LISTEN " + NOTIFICATION_CHANNEL);
-            }
+          connection.setAutoCommit(true);
+          try (Statement statement = connection.createStatement()) {
+            statement.execute("LISTEN " + NOTIFICATION_CHANNEL);
+          }
 
+          try {
             PGConnection pgConnection = connection.unwrap(PGConnection.class);
             log.info("Decentralised ES indexer listening for PostgreSQL notifications on {}", NOTIFICATION_CHANNEL);
 
@@ -258,7 +243,7 @@ class DecentralisedESIndexer implements SmartLifecycle, DisposableBean {
               waitForNotification(pgConnection);
             }
           } finally {
-            listenerConnection.compareAndSet(connection, null);
+            unlistenQuietly(connection);
           }
         } catch (Exception ex) {
           if (terminated.get()) {
@@ -271,6 +256,18 @@ class DecentralisedESIndexer implements SmartLifecycle, DisposableBean {
       }
     } finally {
       running.set(false);
+    }
+  }
+
+  private void unlistenQuietly(Connection connection) {
+    try {
+      if (!connection.isClosed()) {
+        try (Statement statement = connection.createStatement()) {
+          statement.execute("UNLISTEN " + NOTIFICATION_CHANNEL);
+        }
+      }
+    } catch (SQLException ex) {
+      log.debug("Failed to unlisten ES indexer notification channel", ex);
     }
   }
 
