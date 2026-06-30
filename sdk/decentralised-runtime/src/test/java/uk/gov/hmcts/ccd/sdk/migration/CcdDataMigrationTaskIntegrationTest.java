@@ -331,7 +331,7 @@ class CcdDataMigrationTaskIntegrationTest {
           id bigint
         )
         server ccd_migration_test_server
-        options (schema_name 'source', table_name 'case_data')
+        options (schema_name 'source', table_name 'case_data', fetch_size '10000')
         """);
     jdbc.getJdbcTemplate().execute("""
         create foreign table fdw_stage.case_event (
@@ -356,7 +356,7 @@ class CcdDataMigrationTaskIntegrationTest {
           proxied_by_last_name varchar(255)
         )
         server ccd_migration_test_server
-        options (schema_name 'source', table_name 'case_event')
+        options (schema_name 'source', table_name 'case_event', fetch_size '10000')
         """);
   }
 

@@ -192,7 +192,8 @@ create foreign table :"fdw_schema".case_data (
 server :"fdw_server"
 options (
   schema_name :'src_schema',
-  table_name 'case_data'
+  table_name 'case_data',
+  fetch_size '10000'
 );
 
 create foreign table :"fdw_schema".case_event (
@@ -219,7 +220,8 @@ create foreign table :"fdw_schema".case_event (
 server :"fdw_server"
 options (
   schema_name :'src_schema',
-  table_name 'case_event'
+  table_name 'case_event',
+  fetch_size '10000'
 );
 SQL
 }

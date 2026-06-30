@@ -119,6 +119,10 @@ The setup script creates:
 * foreign tables:
   * `fdw_stage.case_data`
   * `fdw_stage.case_event`
+
+The foreign tables are created with `fetch_size '10000'` so large reads do not use the
+`postgres_fdw` default of 100 rows per cursor fetch. If the FDW objects were created before this
+option existed, recreate them with `setup-ccd-data-fdw.sh --apply` before running a large migration.
 * grants for `LOCAL_USER_SQL`
 
 ## Phase 2: Run the migration

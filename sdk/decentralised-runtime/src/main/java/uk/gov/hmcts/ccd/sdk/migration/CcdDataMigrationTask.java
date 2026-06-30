@@ -332,6 +332,28 @@ public class CcdDataMigrationTask implements Runnable {
   private int upsertParentCaseDataForEventRange(long loadedEventHwm, long batchUpperHwm) {
     return db.update(
         """
+        with source_cases as materialized (
+          select distinct on (cd.id)
+            cd.reference,
+            cd.version,
+            cd.created_date,
+            cd.security_classification,
+            cd.last_state_modified_date,
+            cd.resolved_ttl,
+            cd.last_modified,
+            cd.jurisdiction,
+            cd.case_type_id,
+            cd.state,
+            cd.data,
+            cd.supplementary_data,
+            cd.id
+          from fdw_stage.case_event ce
+          join fdw_stage.case_data cd on cd.id = ce.case_data_id
+          where cd.case_type_id in (:caseTypeIds)
+            and ce.id > :loadedEventHwm
+            and ce.id <= :batchUpperHwm
+          order by cd.id
+        )
         insert into ccd.case_data (
           reference,
           version,
@@ -363,14 +385,7 @@ public class CcdDataMigrationTask implements Runnable {
           coalesce(cd.supplementary_data, jsonb_build_object()),
           cd.id,
           0
-        from fdw_stage.case_data cd
-        where cd.case_type_id in (:caseTypeIds)
-          and cd.id in (
-            select distinct ce.case_data_id
-            from fdw_stage.case_event ce
-            where ce.id > :loadedEventHwm
-              and ce.id <= :batchUpperHwm
-          )
+        from source_cases cd
         on conflict (reference) do update
         set version = excluded.version,
             created_date = excluded.created_date,
@@ -703,28 +718,79 @@ public class CcdDataMigrationTask implements Runnable {
   }
 
   private int refreshCutoverCaseData() {
-    List<Long> caseDataIds = db.query(
-        """
-        select id
-        from fdw_stage.case_data
-        where case_type_id in (:caseTypeIds)
-        order by id
-        """,
-        baseParams(),
-        (rs, rowNum) -> rs.getLong("id")
-    );
-    if (caseDataIds.isEmpty()) {
-      return 0;
-    }
-
     return transaction.execute(status -> {
       disableCaseDataRevisionTrigger();
       try {
-        return upsertCaseDataByIds(caseDataIds, true);
+        int insertedMissingCases = insertMissingCaseDataForCutover();
+        int revisedCases = updateCaseRevisionsForCutover();
+        return insertedMissingCases + revisedCases;
       } finally {
         enableCaseDataRevisionTrigger();
       }
     });
+  }
+
+  private int insertMissingCaseDataForCutover() {
+    return db.update(
+        """
+        insert into ccd.case_data (
+          reference,
+          version,
+          created_date,
+          security_classification,
+          last_state_modified_date,
+          resolved_ttl,
+          last_modified,
+          jurisdiction,
+          case_type_id,
+          state,
+          data,
+          supplementary_data,
+          id,
+          case_revision
+        )
+        select
+          cd.reference,
+          cd.version,
+          cd.created_date,
+          cd.security_classification,
+          cd.last_state_modified_date,
+          cd.resolved_ttl,
+          cd.last_modified,
+          cd.jurisdiction,
+          cd.case_type_id,
+          cd.state,
+          cd.data,
+          coalesce(cd.supplementary_data, jsonb_build_object()),
+          cd.id,
+          :caseRevisionOffset
+        from fdw_stage.case_data cd
+        left join ccd.case_data target on target.id = cd.id
+        where cd.case_type_id in (:caseTypeIds)
+          and target.id is null
+        on conflict (reference) do nothing
+        """,
+        baseParams().addValue("caseRevisionOffset", options.caseRevisionOffset())
+    );
+  }
+
+  private int updateCaseRevisionsForCutover() {
+    return db.update(
+        """
+        with event_counts as (
+          select case_data_id, max(case_revision)::bigint as max_revision
+          from ccd.case_event
+          where case_type_id in (:caseTypeIds)
+          group by case_data_id
+        )
+        update ccd.case_data cd
+        set case_revision = coalesce(event_counts.max_revision, 0) + :caseRevisionOffset
+        from event_counts
+        where cd.id = event_counts.case_data_id
+          and cd.case_type_id in (:caseTypeIds)
+        """,
+        baseParams().addValue("caseRevisionOffset", options.caseRevisionOffset())
+    );
   }
 
   private long settledEventHighWaterMark() {

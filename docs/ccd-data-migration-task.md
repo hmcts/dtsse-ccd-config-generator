@@ -15,8 +15,9 @@ The task has one implementation with explicit modes:
 * `PRELOAD_EVENTS`: scheduled before cutover. Copies settled immutable source events by event ID
   high-water mark and inserts provisional parent `case_data` rows so the target FK remains valid.
 * `CUTOVER`: explicit operator action during downtime. Captures the cutover event high-water mark,
-  repairs any late lower-ID event gaps, copies the final event delta, refreshes all selected
-  `case_data`, resets sequences, validates, and marks the migration complete.
+  repairs any late lower-ID event gaps, copies the final event delta, inserts any missing
+  `case_data`, sets final case revisions, resets sequences, validates, and marks the migration
+  complete.
 * `VALIDATE_ONLY`: runs final source-vs-target validation without copying data.
 
 Do not switch to `CUTOVER` automatically from a scheduler. The operator must first freeze source
@@ -32,9 +33,12 @@ The preload path keeps the target tables constraint-valid after every committed 
 * `case_event` user triggers are not disabled
 * progress advances only after the parent/event inserts commit
 
-Preloaded `case_data` is provisional. Its purpose is to satisfy the event FK. `CUTOVER` refreshes
-every selected source case regardless of source `last_modified`, then sets
-`case_data.case_revision = max(case_event.case_revision) + caseRevisionOffset`.
+Preloaded `case_data` is provisional. Its purpose is to satisfy the event FK. Every copied event
+batch upserts the parent source `case_data` rows for that batch. `CUTOVER` inserts any selected
+source cases that do not already exist in the target, then sets
+`case_data.case_revision = max(case_event.case_revision) + caseRevisionOffset`. Final validation
+compares source-owned `case_data` columns back to the source before the task can mark the migration
+complete.
 
 The runtime `case_data` revision trigger is deliberately disabled only inside the cutover refresh
 transaction so the final source-derived revision can be written. The trigger is re-enabled before the
