@@ -510,17 +510,15 @@ public abstract class CcdDataMigrationTask implements Runnable {
       return;
     }
 
-    var prepared = false;
     try {
       validateCanDisableTriggers();
-      prepareTarget();
-      prepared = true;
-      markTargetPrepared();
+      transaction.executeWithoutResult(status -> {
+        prepareTarget();
+        markTargetPrepared();
+      });
     } catch (RuntimeException ex) {
-      if (prepared) {
-        restoreConstraintsAfterFailure();
-      }
-      throw ex;
+      restoreConstraintsAfterFailure();
+      throw new CcdDataMigrationException("Failed to prepare CCD migration target", ex);
     }
   }
 

@@ -461,6 +461,26 @@ class CcdDataMigrationTaskIntegrationTest {
   }
 
   @Test
+  void prepareFailureRollsBackTargetPreparation() {
+    insertSourceCase(10, 1000000000000010L, 1, "Submitted", "{\"field\":\"one\"}");
+    createFailingAlterTableEventTrigger();
+
+    try {
+      assertThatThrownBy(() -> task(10, 10).runMigration())
+          .isInstanceOf(CcdDataMigrationException.class)
+          .hasMessageContaining("Failed to prepare CCD migration target");
+
+      assertThat(caseEventCaseDataForeignKeyExists()).isTrue();
+      assertThat(caseEventRevisionIndexExists()).isTrue();
+      assertThat(caseEventUserTriggersEnabled()).isTrue();
+      assertThat(targetPreparedProgressRows()).isZero();
+    } finally {
+      dropFailingAlterTableEventTrigger();
+      restoreTargetSchemaState();
+    }
+  }
+
+  @Test
   void migratesSeededDatasetWithinPerfHarnessLimit() {
     int caseCount = Integer.getInteger("ccd.data-migration.perf.cases", 100_000);
     int eventsPerCase = Integer.getInteger("ccd.data-migration.perf.events-per-case", 10);
@@ -626,6 +646,37 @@ class CcdDataMigrationTaskIntegrationTest {
         end $$;
         """);
     jdbc.getJdbcTemplate().execute("alter table ccd.case_event enable trigger user");
+  }
+
+  private void createFailingAlterTableEventTrigger() {
+    jdbc.getJdbcTemplate().execute("""
+        create or replace function public.fail_alter_table_for_migration_prepare()
+        returns event_trigger
+        language plpgsql
+        as $$
+        declare
+          command record;
+        begin
+          for command in select * from pg_event_trigger_ddl_commands() loop
+            if command.command_tag = 'ALTER TABLE'
+              and command.schema_name = 'ccd'
+              and command.object_identity = 'ccd.case_event' then
+              raise exception 'forced prepare failure';
+            end if;
+          end loop;
+        end;
+        $$;
+        """);
+    jdbc.getJdbcTemplate().execute("""
+        create event trigger fail_alter_table_for_migration_prepare
+        on ddl_command_end
+        execute function public.fail_alter_table_for_migration_prepare()
+        """);
+  }
+
+  private void dropFailingAlterTableEventTrigger() {
+    jdbc.getJdbcTemplate().execute("drop event trigger if exists fail_alter_table_for_migration_prepare");
+    jdbc.getJdbcTemplate().execute("drop function if exists public.fail_alter_table_for_migration_prepare()");
   }
 
   private void insertSourceCase(long id, long reference, int version, String state, String data) {
@@ -955,6 +1006,19 @@ class CcdDataMigrationTaskIntegrationTest {
         Map.of("taskName", "ccd-data-migration"),
         Boolean.class
     ));
+  }
+
+  private long targetPreparedProgressRows() {
+    return jdbc.queryForObject(
+        """
+        select count(*)
+        from ccd.ccd_data_migration_progress
+        where task_name = :taskName
+          and target_prepared
+        """,
+        Map.of("taskName", "ccd-data-migration"),
+        Long.class
+    );
   }
 
   private boolean caseEventCaseDataForeignKeyExists() {
