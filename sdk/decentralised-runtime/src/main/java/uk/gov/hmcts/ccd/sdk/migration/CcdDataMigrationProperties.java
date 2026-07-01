@@ -18,8 +18,6 @@ public class CcdDataMigrationProperties {
   private long caseRevisionOffset = 1_000_000_000L;
   private int maxBatchesPerRun = Integer.MAX_VALUE;
   private Duration maxRunTime;
-  private Duration settlementInterval = Duration.ofMinutes(30);
-  private CcdDataMigrationValidationMode validationMode = CcdDataMigrationValidationMode.NEVER;
 
   CcdDataMigrationTaskOptions toOptions() {
     if (caseTypeIds == null || caseTypeIds.isEmpty()) {
@@ -33,8 +31,6 @@ public class CcdDataMigrationProperties {
         .caseRevisionOffset(caseRevisionOffset)
         .maxBatchesPerRun(maxBatchesPerRun)
         .maxRunTime(maxRunTime)
-        .settlementInterval(settlementInterval)
-        .validationMode(validationMode)
         .build();
   }
 }

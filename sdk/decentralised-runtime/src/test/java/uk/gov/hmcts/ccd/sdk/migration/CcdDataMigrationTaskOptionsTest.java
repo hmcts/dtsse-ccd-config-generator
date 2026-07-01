@@ -19,8 +19,6 @@ class CcdDataMigrationTaskOptionsTest {
     assertThat(options.caseRevisionOffset()).isEqualTo(1_000_000_000L);
     assertThat(options.maxBatchesPerRun()).isEqualTo(Integer.MAX_VALUE);
     assertThat(options.maxRunTime()).isNull();
-    assertThat(options.settlementInterval()).isEqualTo(Duration.ofMinutes(30));
-    assertThat(options.validationMode()).isEqualTo(CcdDataMigrationValidationMode.NEVER);
   }
 
   @Test
@@ -30,7 +28,6 @@ class CcdDataMigrationTaskOptionsTest {
         .eventBatchSize(1)
         .maxBatchesPerRun(1)
         .maxRunTime(Duration.ofMinutes(10))
-        .settlementInterval(Duration.ZERO)
         .build();
 
     var second = CcdDataMigrationTaskOptions.builder(List.of("CaseA", "CaseB"))
@@ -38,7 +35,6 @@ class CcdDataMigrationTaskOptionsTest {
         .eventBatchSize(500)
         .maxBatchesPerRun(500)
         .maxRunTime(Duration.ofHours(4))
-        .settlementInterval(Duration.ofMinutes(30))
         .build();
 
     assertThat(second.migrationConfigHash()).isEqualTo(first.migrationConfigHash());
@@ -74,12 +70,4 @@ class CcdDataMigrationTaskOptionsTest {
         .hasMessageContaining("maxRunTime");
   }
 
-  @Test
-  void rejectsNegativeSettlementInterval() {
-    assertThatThrownBy(() -> CcdDataMigrationTaskOptions.builder(List.of("TestCase"))
-        .settlementInterval(Duration.ofMillis(-1))
-        .build())
-        .isInstanceOf(IllegalArgumentException.class)
-        .hasMessageContaining("settlementInterval");
-  }
 }

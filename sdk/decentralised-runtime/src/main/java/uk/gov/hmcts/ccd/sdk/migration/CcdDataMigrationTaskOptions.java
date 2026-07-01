@@ -17,9 +17,7 @@ public record CcdDataMigrationTaskOptions(
     int eventBatchSize,
     long caseRevisionOffset,
     int maxBatchesPerRun,
-    Duration maxRunTime,
-    Duration settlementInterval,
-    CcdDataMigrationValidationMode validationMode
+    Duration maxRunTime
 ) {
   private static final String TARGET_SCHEMA = "ccd";
   private static final String FDW_SCHEMA = "fdw_stage";
@@ -40,15 +38,6 @@ public record CcdDataMigrationTaskOptions(
     }
     if (maxRunTime != null && !maxRunTime.isPositive()) {
       throw new IllegalArgumentException("maxRunTime must be positive when set");
-    }
-    if (settlementInterval == null) {
-      settlementInterval = Duration.ofMinutes(30);
-    }
-    if (settlementInterval.isNegative()) {
-      throw new IllegalArgumentException("settlementInterval must be zero or greater");
-    }
-    if (validationMode == null) {
-      validationMode = CcdDataMigrationValidationMode.NEVER;
     }
   }
 
@@ -120,8 +109,6 @@ public record CcdDataMigrationTaskOptions(
     private long caseRevisionOffset = 1_000_000_000L;
     private int maxBatchesPerRun = Integer.MAX_VALUE;
     private Duration maxRunTime;
-    private Duration settlementInterval = Duration.ofMinutes(30);
-    private CcdDataMigrationValidationMode validationMode = CcdDataMigrationValidationMode.NEVER;
 
     private Builder(List<String> caseTypeIds) {
       this.caseTypeIds = caseTypeIds;
@@ -157,16 +144,6 @@ public record CcdDataMigrationTaskOptions(
       return this;
     }
 
-    public Builder settlementInterval(Duration settlementInterval) {
-      this.settlementInterval = settlementInterval;
-      return this;
-    }
-
-    public Builder validationMode(CcdDataMigrationValidationMode validationMode) {
-      this.validationMode = validationMode;
-      return this;
-    }
-
     public CcdDataMigrationTaskOptions build() {
       return new CcdDataMigrationTaskOptions(
           taskName,
@@ -175,9 +152,7 @@ public record CcdDataMigrationTaskOptions(
           eventBatchSize,
           caseRevisionOffset,
           maxBatchesPerRun,
-          maxRunTime,
-          settlementInterval,
-          validationMode
+          maxRunTime
       );
     }
   }

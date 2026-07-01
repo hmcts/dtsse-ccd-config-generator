@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static uk.gov.hmcts.ccd.sdk.migration.CcdDataMigrationMode.CUTOVER;
 import static uk.gov.hmcts.ccd.sdk.migration.CcdDataMigrationMode.PRELOAD_EVENTS;
-import static uk.gov.hmcts.ccd.sdk.migration.CcdDataMigrationMode.VALIDATE_ONLY;
 
 import java.sql.Connection;
 import java.sql.SQLException;
