@@ -2,7 +2,6 @@ create table ccd.ccd_data_migration_progress (
     task_name varchar(255) primary key,
     config_hash varchar(64) not null,
     status varchar(32) not null default 'PRELOAD',
-    loaded_event_hwm bigint not null default 0,
     cutover_event_hwm bigint,
     created_at timestamp without time zone not null default (now() at time zone 'UTC'),
     updated_at timestamp without time zone not null default (now() at time zone 'UTC'),

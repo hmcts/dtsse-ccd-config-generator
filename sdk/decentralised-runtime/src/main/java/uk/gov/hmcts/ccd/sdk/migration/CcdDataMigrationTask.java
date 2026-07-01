@@ -71,23 +71,6 @@ public class CcdDataMigrationTask implements Runnable {
     this(db, new TransactionTemplate(transactionManager), options, decentralisedRuntimeEnabled);
   }
 
-  public CcdDataMigrationTask(NamedParameterJdbcTemplate db, CcdDataMigrationTaskOptions options) {
-    this(
-        db,
-        new TransactionTemplate(defaultTransactionManager(db)),
-        options,
-        CcdDataMigrationTask::defaultDecentralisedRuntimeEnabled
-    );
-  }
-
-  public CcdDataMigrationTask(
-      NamedParameterJdbcTemplate db,
-      TransactionOperations transaction,
-      CcdDataMigrationTaskOptions options
-  ) {
-    this(db, transaction, options, CcdDataMigrationTask::defaultDecentralisedRuntimeEnabled);
-  }
-
   public CcdDataMigrationTask(
       NamedParameterJdbcTemplate db,
       TransactionOperations transaction,
@@ -122,15 +105,13 @@ public class CcdDataMigrationTask implements Runnable {
   public final CcdDataMigrationRunResult runMigration() {
     log.info(
         "Starting CCD data migration task taskName={} mode={} caseTypeIds={} eventBatchSize={} "
-            + "maxBatchesPerRun={} maxRunTime={} settlementInterval={} validationMode={}",
+            + "maxBatchesPerRun={} maxRunTime={}",
         options.taskName(),
         options.mode(),
         options.caseTypeIds(),
         options.eventBatchSize(),
         options.maxBatchesPerRun(),
-        options.maxRunTime(),
-        options.settlementInterval(),
-        options.validationMode()
+        options.maxRunTime()
     );
 
     validateDecentralisedRuntimeDisabled();
@@ -166,19 +147,17 @@ public class CcdDataMigrationTask implements Runnable {
       );
     }
 
-    long targetEventHwm = settledEventHighWaterMark();
-    RunTotals totals = copyEventBatches(targetEventHwm);
-    boolean caughtUp = loadProgress().loadedEventHwm() >= targetEventHwm;
-    if (options.validationMode() == CcdDataMigrationValidationMode.ALWAYS) {
-      validateNoMissingEventsUpTo(loadProgress().loadedEventHwm());
-    }
+    long targetEventHwm = sourceEventHighWaterMark();
+    CopyTotals totals = copyEventBatches(targetEventHwm);
+    long localEventHwm = localEventHighWaterMark();
+    boolean caughtUp = localEventHwm >= targetEventHwm;
     log.info(
         "Completed CCD data migration preload taskName={} targetEventHwm={} batches={} cases={} events={} "
             + "caughtUp={} stoppedByTimeLimit={}",
         options.taskName(),
         targetEventHwm,
         totals.batches(),
-        totals.cases(),
+        0,
         totals.events(),
         caughtUp,
         totals.stoppedByTimeLimit()
@@ -186,7 +165,7 @@ public class CcdDataMigrationTask implements Runnable {
     return new CcdDataMigrationRunResult(
         true,
         totals.batches(),
-        totals.cases(),
+        0,
         totals.events(),
         caughtUp,
         totals.stoppedByTimeLimit()
@@ -203,15 +182,15 @@ public class CcdDataMigrationTask implements Runnable {
     long cutoverEventHwm = progress.cutoverEventHwm() == null
         ? captureCutoverEventHighWaterMark()
         : progress.cutoverEventHwm();
-    rebuildCasesWithMissingEvents(cutoverEventHwm);
-    RunTotals totals = copyEventBatches(cutoverEventHwm);
-    if (totals.stoppedByTimeLimit() || loadProgress().loadedEventHwm() < cutoverEventHwm) {
+    CopyTotals totals = copyEventBatches(cutoverEventHwm);
+    long localEventHwm = localEventHighWaterMark();
+    if (totals.stoppedByTimeLimit() || localEventHwm < cutoverEventHwm) {
       log.info(
-          "CCD data migration cutover paused before final refresh taskName={} cutoverEventHwm={} loadedEventHwm={} "
+          "CCD data migration cutover paused before final refresh taskName={} cutoverEventHwm={} localEventHwm={} "
               + "batches={} events={} stoppedByTimeLimit={}",
           options.taskName(),
           cutoverEventHwm,
-          loadProgress().loadedEventHwm(),
+          localEventHwm,
           totals.batches(),
           totals.events(),
           totals.stoppedByTimeLimit()
@@ -219,7 +198,7 @@ public class CcdDataMigrationTask implements Runnable {
       return new CcdDataMigrationRunResult(
           true,
           totals.batches(),
-          totals.cases(),
+          0,
           totals.events(),
           false,
           totals.stoppedByTimeLimit()
@@ -259,42 +238,41 @@ public class CcdDataMigrationTask implements Runnable {
     return new CcdDataMigrationRunResult(true, 0, 0, 0, true, false);
   }
 
-  private RunTotals copyEventBatches(long targetEventHwm) {
-    var totals = new RunTotals();
+  private CopyTotals copyEventBatches(long targetEventHwm) {
+    var totals = new CopyTotals();
     LocalDateTime stopAt = calculateStopAt();
 
     for (int i = 0; i < options.maxBatchesPerRun(); i++) {
-      Progress progress = loadProgress();
-      if (progress.loadedEventHwm() >= targetEventHwm) {
+      long localEventHwm = localEventHighWaterMark();
+      if (localEventHwm >= targetEventHwm) {
         totals = totals.markCaughtUp();
         break;
       }
 
-      List<Long> eventIds = findNextEventIds(progress.loadedEventHwm(), targetEventHwm);
-      if (eventIds.isEmpty()) {
+      Long batchStartEventId = nextSourceEventIdAfter(localEventHwm, targetEventHwm);
+      if (batchStartEventId == null) {
         totals = totals.markCaughtUp();
         break;
       }
 
-      long batchUpperHwm = eventIds.get(eventIds.size() - 1);
-      BatchResult batch = transaction.execute(status -> {
-        validateNoConflictingCaseEvents(progress.loadedEventHwm(), batchUpperHwm);
-        int cases = upsertParentCaseDataForEventRange(progress.loadedEventHwm(), batchUpperHwm);
-        int events = insertCaseEvents(progress.loadedEventHwm(), batchUpperHwm);
-        advanceLoadedEventHighWaterMark(batchUpperHwm);
-        return new BatchResult(cases, events);
-      });
-      totals = totals.plus(batch);
+      long batchEndEventHwm = batchEndEventHwm(batchStartEventId, targetEventHwm);
+      int events = transaction.execute(status -> copyNextEventBatch(batchStartEventId, batchEndEventHwm));
+      if (events == 0) {
+        totals = totals.markCaughtUp();
+        break;
+      }
+      totals = totals.plus(events);
       log.info(
-          "CCD data migration progress taskName={} mode={} batchUpperHwm={} batchCases={} batchEvents={} "
-              + "totalBatches={} totalCases={} totalEvents={}",
+          "CCD data migration progress taskName={} mode={} localEventHwm={} targetEventHwm={} "
+              + "batchStartEventId={} batchEndEventHwm={} batchEvents={} totalBatches={} totalEvents={}",
           options.taskName(),
           options.mode(),
-          batchUpperHwm,
-          batch.cases(),
-          batch.events(),
+          localEventHwm,
+          targetEventHwm,
+          batchStartEventId,
+          batchEndEventHwm,
+          events,
           totals.batches(),
-          totals.cases(),
           totals.events()
       );
 
@@ -308,31 +286,36 @@ public class CcdDataMigrationTask implements Runnable {
     return totals;
   }
 
-  private List<Long> findNextEventIds(long loadedEventHwm, long targetEventHwm) {
-    return db.query(
-        """
-        select ce.id
-        from fdw_stage.case_event ce
-        join fdw_stage.case_data cd on cd.id = ce.case_data_id
-        where cd.case_type_id in (:caseTypeIds)
-          and ce.id > :loadedEventHwm
-          and ce.id <= :targetEventHwm
-        order by ce.id
-        limit :eventBatchSize
-        """,
-        baseParams()
-            .addValue("loadedEventHwm", loadedEventHwm)
-            .addValue("targetEventHwm", targetEventHwm)
-            .addValue("eventBatchSize", options.eventBatchSize()),
-        (rs, rowNum) -> rs.getLong("id")
-    );
-  }
-
-  private int upsertParentCaseDataForEventRange(long loadedEventHwm, long batchUpperHwm) {
+  private int copyNextEventBatch(long batchStartEventId, long batchEndEventHwm) {
     return db.update(
         """
         with source_cases as materialized (
-          select distinct on (cd.id)
+          select distinct on (cd.id) cd.*
+          from fdw_stage.case_data cd
+          join fdw_stage.case_event ce on ce.case_data_id = cd.id
+          where ce.case_type_id in (:caseTypeIds)
+            and ce.id >= :batchStartEventId
+            and ce.id <= :batchEndEventHwm
+          order by cd.id
+        ),
+        inserted_cases as (
+          insert into ccd.case_data (
+            reference,
+            version,
+            created_date,
+            security_classification,
+            last_state_modified_date,
+            resolved_ttl,
+            last_modified,
+            jurisdiction,
+            case_type_id,
+            state,
+            data,
+            supplementary_data,
+            id,
+            case_revision
+          )
+          select
             cd.reference,
             cd.version,
             cd.created_date,
@@ -344,322 +327,37 @@ public class CcdDataMigrationTask implements Runnable {
             cd.case_type_id,
             cd.state,
             cd.data,
-            cd.supplementary_data,
-            cd.id
-          from fdw_stage.case_event ce
-          join fdw_stage.case_data cd on cd.id = ce.case_data_id
-          where cd.case_type_id in (:caseTypeIds)
-            and ce.id > :loadedEventHwm
-            and ce.id <= :batchUpperHwm
-          order by cd.id
-        )
-        insert into ccd.case_data (
-          reference,
-          version,
-          created_date,
-          security_classification,
-          last_state_modified_date,
-          resolved_ttl,
-          last_modified,
-          jurisdiction,
-          case_type_id,
-          state,
-          data,
-          supplementary_data,
-          id,
-          case_revision
-        )
-        select
-          cd.reference,
-          cd.version,
-          cd.created_date,
-          cd.security_classification,
-          cd.last_state_modified_date,
-          cd.resolved_ttl,
-          cd.last_modified,
-          cd.jurisdiction,
-          cd.case_type_id,
-          cd.state,
-          cd.data,
-          coalesce(cd.supplementary_data, jsonb_build_object()),
-          cd.id,
-          0
-        from source_cases cd
-        on conflict (reference) do update
-        set version = excluded.version,
-            created_date = excluded.created_date,
-            security_classification = excluded.security_classification,
-            last_state_modified_date = excluded.last_state_modified_date,
-            resolved_ttl = excluded.resolved_ttl,
-            last_modified = excluded.last_modified,
-            jurisdiction = excluded.jurisdiction,
-            case_type_id = excluded.case_type_id,
-            state = excluded.state,
-            data = excluded.data,
-            supplementary_data = excluded.supplementary_data,
-            id = excluded.id
-        """,
-        eventRangeParams(loadedEventHwm, batchUpperHwm)
-    );
-  }
-
-  private int insertCaseEvents(long loadedEventHwm, long batchUpperHwm) {
-    return db.update(
-        """
-        with events_to_insert as (
+            coalesce(cd.supplementary_data, jsonb_build_object()),
+            cd.id,
+            0
+          from source_cases cd
+          on conflict do nothing
+          returning id
+        ),
+        events_to_insert as materialized (
           select ce.*
           from fdw_stage.case_event ce
-          join fdw_stage.case_data cd on cd.id = ce.case_data_id
-          where cd.case_type_id in (:caseTypeIds)
-            and ce.id > :loadedEventHwm
-            and ce.id <= :batchUpperHwm
+          where ce.case_type_id in (:caseTypeIds)
+            and ce.id >= :batchStartEventId
+            and ce.id <= :batchEndEventHwm
         ),
         affected_cases as (
           select distinct case_data_id
           from events_to_insert
         ),
-        ranked_source_events as (
-          select ce.*,
-                 row_number() over (
-                   partition by ce.case_data_id
-                   order by ce.id
-                 ) as calculated_revision
-          from fdw_stage.case_event ce
+        local_revisions as (
+          select ce.case_data_id, max(ce.case_revision)::bigint as case_revision
+          from ccd.case_event ce
           join affected_cases ac on ac.case_data_id = ce.case_data_id
-          where ce.id <= :batchUpperHwm
-        )
-        insert into ccd.case_event (
-          id,
-          created_date,
-          security_classification,
-          case_data_id,
-          case_type_version,
-          event_id,
-          summary,
-          description,
-          user_id,
-          case_type_id,
-          state_id,
-          data,
-          user_first_name,
-          user_last_name,
-          event_name,
-          state_name,
-          proxied_by,
-          proxied_by_first_name,
-          proxied_by_last_name,
-          idempotency_key,
-          version,
-          case_revision
-        )
-        select
-          id,
-          created_date,
-          security_classification,
-          case_data_id,
-          case_type_version,
-          event_id,
-          summary,
-          description,
-          user_id,
-          case_type_id,
-          state_id,
-          data,
-          user_first_name,
-          user_last_name,
-          event_name,
-          state_name,
-          proxied_by,
-          proxied_by_first_name,
-          proxied_by_last_name,
-          gen_random_uuid(),
-          calculated_revision::int,
-          calculated_revision::bigint
-        from ranked_source_events
-        where id > :loadedEventHwm
-          and id <= :batchUpperHwm
-        on conflict (id) do nothing
-        """,
-        eventRangeParams(loadedEventHwm, batchUpperHwm)
-    );
-  }
-
-  private void validateNoConflictingCaseEvents(long loadedEventHwm, long batchUpperHwm) {
-    assertNoSampleIds(
-        "conflicting case_event rows already in the target",
-        """
-        select target.id
-        from ccd.case_event target
-        join fdw_stage.case_event source on source.id = target.id
-        join fdw_stage.case_data cd on cd.id = source.case_data_id
-        where cd.case_type_id in (:caseTypeIds)
-          and source.id > :loadedEventHwm
-          and source.id <= :batchUpperHwm
-          and (
-            target.created_date,
-            target.security_classification,
-            target.case_data_id,
-            target.case_type_version,
-            target.event_id,
-            target.summary,
-            target.description,
-            target.user_id,
-            target.case_type_id,
-            target.state_id,
-            target.data,
-            target.user_first_name,
-            target.user_last_name,
-            target.event_name,
-            target.state_name,
-            target.proxied_by,
-            target.proxied_by_first_name,
-            target.proxied_by_last_name
-          ) is distinct from (
-            source.created_date,
-            source.security_classification,
-            source.case_data_id,
-            source.case_type_version,
-            source.event_id,
-            source.summary,
-            source.description,
-            source.user_id,
-            source.case_type_id,
-            source.state_id,
-            source.data,
-            source.user_first_name,
-            source.user_last_name,
-            source.event_name,
-            source.state_name,
-            source.proxied_by,
-            source.proxied_by_first_name,
-            source.proxied_by_last_name
-          )
-        order by target.id
-        limit 10
-        """,
-        eventRangeParams(loadedEventHwm, batchUpperHwm)
-    );
-  }
-
-  private void rebuildCasesWithMissingEvents(long cutoverEventHwm) {
-    List<Long> affectedCaseIds = db.query(
-        """
-        select distinct source_event.case_data_id
-        from fdw_stage.case_event source_event
-        join fdw_stage.case_data source_case on source_case.id = source_event.case_data_id
-        left join ccd.case_event target on target.id = source_event.id
-        where source_case.case_type_id in (:caseTypeIds)
-          and source_event.id <= :loadedEventHwm
-          and source_event.id <= :cutoverEventHwm
-          and target.id is null
-        order by source_event.case_data_id
-        """,
-        baseParams()
-            .addValue("loadedEventHwm", loadProgress().loadedEventHwm())
-            .addValue("cutoverEventHwm", cutoverEventHwm),
-        (rs, rowNum) -> rs.getLong("case_data_id")
-    );
-
-    if (affectedCaseIds.isEmpty()) {
-      return;
-    }
-
-    log.warn(
-        "Rebuilding CCD migration event histories for cases with late lower-id events taskName={} caseDataIds={}",
-        options.taskName(),
-        affectedCaseIds
-    );
-    transaction.executeWithoutResult(status -> {
-      upsertCaseDataByIds(affectedCaseIds, false);
-      deleteTargetEventsForCases(affectedCaseIds);
-      insertAllEventsForCases(affectedCaseIds, cutoverEventHwm);
-    });
-  }
-
-  private int upsertCaseDataByIds(List<Long> caseDataIds, boolean finalRevision) {
-    return db.update(
-        """
-        insert into ccd.case_data (
-          reference,
-          version,
-          created_date,
-          security_classification,
-          last_state_modified_date,
-          resolved_ttl,
-          last_modified,
-          jurisdiction,
-          case_type_id,
-          state,
-          data,
-          supplementary_data,
-          id,
-          case_revision
-        )
-        select
-          cd.reference,
-          cd.version,
-          cd.created_date,
-          cd.security_classification,
-          cd.last_state_modified_date,
-          cd.resolved_ttl,
-          cd.last_modified,
-          cd.jurisdiction,
-          cd.case_type_id,
-          cd.state,
-          cd.data,
-          coalesce(cd.supplementary_data, jsonb_build_object()),
-          cd.id,
-          case when :finalRevision then coalesce(event_counts.max_revision, 0) + :caseRevisionOffset else 0 end
-        from fdw_stage.case_data cd
-        left join (
-          select case_data_id, max(case_revision)::bigint as max_revision
-          from ccd.case_event
-          where case_data_id in (:caseDataIds)
-          group by case_data_id
-        ) event_counts on event_counts.case_data_id = cd.id
-        where cd.case_type_id in (:caseTypeIds)
-          and cd.id in (:caseDataIds)
-        on conflict (reference) do update
-        set version = excluded.version,
-            created_date = excluded.created_date,
-            security_classification = excluded.security_classification,
-            last_state_modified_date = excluded.last_state_modified_date,
-            resolved_ttl = excluded.resolved_ttl,
-            last_modified = excluded.last_modified,
-            jurisdiction = excluded.jurisdiction,
-            case_type_id = excluded.case_type_id,
-            state = excluded.state,
-            data = excluded.data,
-            supplementary_data = excluded.supplementary_data,
-            id = excluded.id,
-            case_revision = excluded.case_revision
-        """,
-        baseParams()
-            .addValue("caseDataIds", caseDataIds)
-            .addValue("finalRevision", finalRevision)
-            .addValue("caseRevisionOffset", options.caseRevisionOffset())
-    );
-  }
-
-  private int deleteTargetEventsForCases(List<Long> caseDataIds) {
-    return db.update(
-        "delete from ccd.case_event where case_data_id in (:caseDataIds)",
-        new MapSqlParameterSource().addValue("caseDataIds", caseDataIds)
-    );
-  }
-
-  private int insertAllEventsForCases(List<Long> caseDataIds, long cutoverEventHwm) {
-    return db.update(
-        """
-        with ranked_source_events as (
+          group by ce.case_data_id
+        ),
+        numbered_events as (
           select ce.*,
                  row_number() over (
                    partition by ce.case_data_id
                    order by ce.id
                  ) as calculated_revision
-          from fdw_stage.case_event ce
-          where ce.case_data_id in (:caseDataIds)
-            and ce.id <= :cutoverEventHwm
+          from events_to_insert ce
         )
         insert into ccd.case_event (
           id,
@@ -686,33 +384,32 @@ public class CcdDataMigrationTask implements Runnable {
           case_revision
         )
         select
-          id,
-          created_date,
-          security_classification,
-          case_data_id,
-          case_type_version,
-          event_id,
-          summary,
-          description,
-          user_id,
-          case_type_id,
-          state_id,
-          data,
-          user_first_name,
-          user_last_name,
-          event_name,
-          state_name,
-          proxied_by,
-          proxied_by_first_name,
-          proxied_by_last_name,
+          numbered_events.id,
+          numbered_events.created_date,
+          numbered_events.security_classification,
+          numbered_events.case_data_id,
+          numbered_events.case_type_version,
+          numbered_events.event_id,
+          numbered_events.summary,
+          numbered_events.description,
+          numbered_events.user_id,
+          numbered_events.case_type_id,
+          numbered_events.state_id,
+          numbered_events.data,
+          numbered_events.user_first_name,
+          numbered_events.user_last_name,
+          numbered_events.event_name,
+          numbered_events.state_name,
+          numbered_events.proxied_by,
+          numbered_events.proxied_by_first_name,
+          numbered_events.proxied_by_last_name,
           gen_random_uuid(),
-          calculated_revision::int,
-          calculated_revision::bigint
-        from ranked_source_events
+          (coalesce(local_revisions.case_revision, 0) + calculated_revision)::int,
+          coalesce(local_revisions.case_revision, 0) + calculated_revision
+        from numbered_events
+        left join local_revisions on local_revisions.case_data_id = numbered_events.case_data_id
         """,
-        new MapSqlParameterSource()
-            .addValue("caseDataIds", caseDataIds)
-            .addValue("cutoverEventHwm", cutoverEventHwm)
+        eventBatchParams(batchStartEventId, batchEndEventHwm)
     );
   }
 
@@ -720,185 +417,34 @@ public class CcdDataMigrationTask implements Runnable {
     return transaction.execute(status -> {
       disableCaseDataRevisionTrigger();
       try {
-        int insertedMissingCases = insertMissingCaseDataForCutover();
-        int revisedCases = updateCaseRevisionsForCutover();
-        return insertedMissingCases + revisedCases;
+        int refreshedCases = syncCaseDataForCutover();
+        updateCaseRevisionsForCutover();
+        return refreshedCases;
       } finally {
         enableCaseDataRevisionTrigger();
       }
     });
   }
 
-  private int insertMissingCaseDataForCutover() {
+  private int syncCaseDataForCutover() {
     return db.update(
         """
-        insert into ccd.case_data (
-          reference,
-          version,
-          created_date,
-          security_classification,
-          last_state_modified_date,
-          resolved_ttl,
-          last_modified,
-          jurisdiction,
-          case_type_id,
-          state,
-          data,
-          supplementary_data,
-          id,
-          case_revision
-        )
-        select
-          cd.reference,
-          cd.version,
-          cd.created_date,
-          cd.security_classification,
-          cd.last_state_modified_date,
-          cd.resolved_ttl,
-          cd.last_modified,
-          cd.jurisdiction,
-          cd.case_type_id,
-          cd.state,
-          cd.data,
-          coalesce(cd.supplementary_data, jsonb_build_object()),
-          cd.id,
-          :caseRevisionOffset
-        from fdw_stage.case_data cd
-        left join ccd.case_data target on target.id = cd.id
-        where cd.case_type_id in (:caseTypeIds)
-          and target.id is null
-        on conflict (reference) do nothing
-        """,
-        baseParams().addValue("caseRevisionOffset", options.caseRevisionOffset())
-    );
-  }
-
-  private int updateCaseRevisionsForCutover() {
-    return db.update(
-        """
-        with event_counts as (
-          select case_data_id, max(case_revision)::bigint as max_revision
-          from ccd.case_event
-          where case_type_id in (:caseTypeIds)
-          group by case_data_id
-        )
-        update ccd.case_data cd
-        set case_revision = coalesce(event_counts.max_revision, 0) + :caseRevisionOffset
-        from event_counts
-        where cd.id = event_counts.case_data_id
-          and cd.case_type_id in (:caseTypeIds)
-        """,
-        baseParams().addValue("caseRevisionOffset", options.caseRevisionOffset())
-    );
-  }
-
-  private long settledEventHighWaterMark() {
-    Long hwm = db.queryForObject(
-        """
-        select coalesce(max(ce.id), 0)
-        from fdw_stage.case_event ce
-        join fdw_stage.case_data cd on cd.id = ce.case_data_id
-        where cd.case_type_id in (:caseTypeIds)
-          and ce.created_date < clock_timestamp() - (:settlementMillis * interval '1 millisecond')
-        """,
-        baseParams().addValue("settlementMillis", options.settlementInterval().toMillis()),
-        Long.class
-    );
-    return hwm == null ? 0 : hwm;
-  }
-
-  private long sourceEventHighWaterMark() {
-    Long hwm = db.queryForObject(
-        """
-        select coalesce(max(ce.id), 0)
-        from fdw_stage.case_event ce
-        join fdw_stage.case_data cd on cd.id = ce.case_data_id
-        where cd.case_type_id in (:caseTypeIds)
-        """,
-        baseParams(),
-        Long.class
-    );
-    return hwm == null ? 0 : hwm;
-  }
-
-  private long captureCutoverEventHighWaterMark() {
-    long hwm = sourceEventHighWaterMark();
-    db.update(
-        """
-        update ccd.ccd_data_migration_progress
-        set status = :status,
-            cutover_event_hwm = :cutoverEventHwm,
-            updated_at = now() at time zone 'UTC'
-        where task_name = :taskName
-        """,
-        Map.of(
-            "taskName", options.taskName(),
-            "status", STATUS_CUTOVER,
-            "cutoverEventHwm", hwm
-        )
-    );
-    return hwm;
-  }
-
-  private void advanceLoadedEventHighWaterMark(long loadedEventHwm) {
-    db.update(
-        """
-        update ccd.ccd_data_migration_progress
-        set loaded_event_hwm = :loadedEventHwm,
-            updated_at = now() at time zone 'UTC'
-        where task_name = :taskName
-        """,
-        Map.of("taskName", options.taskName(), "loadedEventHwm", loadedEventHwm)
-    );
-  }
-
-  private void markComplete() {
-    db.update(
-        """
-        update ccd.ccd_data_migration_progress
-        set status = :status,
-            updated_at = now() at time zone 'UTC'
-        where task_name = :taskName
-        """,
-        Map.of("taskName", options.taskName(), "status", STATUS_COMPLETE)
-    );
-  }
-
-  private void validateFinal(long eventHwm) {
-    validateNoMissingCases();
-    validateCaseDataMatchesSource();
-    validateNoMissingEventsUpTo(eventHwm);
-    validateCaseEventsMatchSource(eventHwm);
-    validateNoOrphans();
-    validateCaseRevisionAlignment();
-    validateEventHighWaterMark(eventHwm);
-    finalValidation();
-  }
-
-  private void validateNoMissingCases() {
-    assertNoSampleIds(
-        "source case_data rows missing from target",
-        """
-        select source.id
+        update ccd.case_data target
+        set reference = source.reference,
+            version = source.version,
+            created_date = source.created_date,
+            security_classification = source.security_classification,
+            last_state_modified_date = source.last_state_modified_date,
+            resolved_ttl = source.resolved_ttl,
+            last_modified = source.last_modified,
+            jurisdiction = source.jurisdiction,
+            case_type_id = source.case_type_id,
+            state = source.state,
+            data = source.data,
+            supplementary_data = coalesce(source.supplementary_data, jsonb_build_object())
         from fdw_stage.case_data source
-        left join ccd.case_data target on target.id = source.id
-        where source.case_type_id in (:caseTypeIds)
-          and target.id is null
-        order by source.id
-        limit 10
-        """,
-        baseParams()
-    );
-  }
-
-  private void validateCaseDataMatchesSource() {
-    assertNoSampleIds(
-        "source case_data rows different in target",
-        """
-        select source.id
-        from fdw_stage.case_data source
-        join ccd.case_data target on target.id = source.id
-        where source.case_type_id in (:caseTypeIds)
+        where target.id = source.id
+          and source.case_type_id in (:caseTypeIds)
           and (
             target.reference,
             target.version,
@@ -926,148 +472,111 @@ public class CcdDataMigrationTask implements Runnable {
             source.data,
             coalesce(source.supplementary_data, jsonb_build_object())
           )
-        order by source.id
-        limit 10
         """,
         baseParams()
     );
   }
 
-  private void validateNoMissingEventsUpTo(long eventHwm) {
-    assertNoSampleIds(
-        "source case_event rows missing from target",
+  private int updateCaseRevisionsForCutover() {
+    return db.update(
         """
-        select source_event.id
-        from fdw_stage.case_event source_event
-        join fdw_stage.case_data source_case on source_case.id = source_event.case_data_id
-        left join ccd.case_event target on target.id = source_event.id
-        where source_case.case_type_id in (:caseTypeIds)
-          and source_event.id <= :eventHwm
-          and target.id is null
-        order by source_event.id
-        limit 10
+        with event_counts as (
+          select case_data_id, max(case_revision)::bigint as max_revision
+          from ccd.case_event
+          where case_type_id in (:caseTypeIds)
+          group by case_data_id
+        )
+        update ccd.case_data target
+        set case_revision = event_counts.max_revision + :caseRevisionOffset
+        from event_counts
+        where target.id = event_counts.case_data_id
+          and target.case_type_id in (:caseTypeIds)
         """,
-        baseParams().addValue("eventHwm", eventHwm)
+        baseParams().addValue("caseRevisionOffset", options.caseRevisionOffset())
     );
   }
 
-  private void validateCaseEventsMatchSource(long eventHwm) {
-    assertNoSampleIds(
-        "source case_event rows different in target",
+  private long sourceEventHighWaterMark() {
+    Long hwm = db.queryForObject(
         """
-        select source_event.id
-        from fdw_stage.case_event source_event
-        join fdw_stage.case_data source_case on source_case.id = source_event.case_data_id
-        join ccd.case_event target on target.id = source_event.id
-        where source_case.case_type_id in (:caseTypeIds)
-          and source_event.id <= :eventHwm
-          and (
-            target.created_date,
-            target.security_classification,
-            target.case_data_id,
-            target.case_type_version,
-            target.event_id,
-            target.summary,
-            target.description,
-            target.user_id,
-            target.case_type_id,
-            target.state_id,
-            target.data,
-            target.user_first_name,
-            target.user_last_name,
-            target.event_name,
-            target.state_name,
-            target.proxied_by,
-            target.proxied_by_first_name,
-            target.proxied_by_last_name
-          ) is distinct from (
-            source_event.created_date,
-            source_event.security_classification,
-            source_event.case_data_id,
-            source_event.case_type_version,
-            source_event.event_id,
-            source_event.summary,
-            source_event.description,
-            source_event.user_id,
-            source_event.case_type_id,
-            source_event.state_id,
-            source_event.data,
-            source_event.user_first_name,
-            source_event.user_last_name,
-            source_event.event_name,
-            source_event.state_name,
-            source_event.proxied_by,
-            source_event.proxied_by_first_name,
-            source_event.proxied_by_last_name
-          )
-        order by source_event.id
-        limit 10
-        """,
-        baseParams().addValue("eventHwm", eventHwm)
-    );
-  }
-
-  private void validateNoOrphans() {
-    Long orphanCount = db.queryForObject(
-        """
-        select count(*)
-        from ccd.case_event e
-        left join ccd.case_data d on d.id = e.case_data_id
-        where d.id is null
-          and e.case_type_id in (:caseTypeIds)
+        select coalesce(max(ce.id), 0)
+        from fdw_stage.case_event ce
+        where ce.case_type_id in (:caseTypeIds)
         """,
         baseParams(),
         Long.class
     );
-    if (orphanCount != null && orphanCount != 0) {
-      throw new CcdDataMigrationException("Found " + orphanCount + " orphaned case_event rows");
-    }
+    return hwm == null ? 0 : hwm;
   }
 
-  private void validateCaseRevisionAlignment() {
-    Long mismatchCount = db.queryForObject(
-        """
-        with case_revision_check as (
-          select cd.id,
-                 cd.case_revision,
-                 coalesce(max(ce.case_revision), 0)::bigint as max_event_revision,
-                 coalesce(max(ce.case_revision), 0)::bigint + :caseRevisionOffset as expected_case_revision
-          from ccd.case_data cd
-          left join ccd.case_event ce on ce.case_data_id = cd.id
-          where cd.case_type_id in (:caseTypeIds)
-          group by cd.id, cd.case_revision
-        )
-        select count(*)
-        from case_revision_check
-        where case_revision is distinct from expected_case_revision
-        """,
-        baseParams().addValue("caseRevisionOffset", options.caseRevisionOffset()),
-        Long.class
-    );
-    if (mismatchCount != null && mismatchCount != 0) {
-      throw new CcdDataMigrationException("Found " + mismatchCount + " case_data.case_revision mismatches");
-    }
-  }
-
-  private void validateEventHighWaterMark(long eventHwm) {
-    Long targetMaxEventId = db.queryForObject(
+  private long localEventHighWaterMark() {
+    Long hwm = db.queryForObject(
         """
         select coalesce(max(ce.id), 0)
         from ccd.case_event ce
-        join ccd.case_data cd on cd.id = ce.case_data_id
-        where cd.case_type_id in (:caseTypeIds)
+        where ce.case_type_id in (:caseTypeIds)
         """,
         baseParams(),
         Long.class
     );
-    if (targetMaxEventId == null || targetMaxEventId < eventHwm) {
-      throw new CcdDataMigrationException(
-          "Target case_event high-water mark " + targetMaxEventId + " is below required " + eventHwm
-      );
-    }
+    return hwm == null ? 0 : hwm;
   }
 
-  private void finalValidation() {
+  private Long nextSourceEventIdAfter(long localEventHwm, long targetEventHwm) {
+    return db.queryForObject(
+        """
+        select min(ce.id)
+        from fdw_stage.case_event ce
+        where ce.case_type_id in (:caseTypeIds)
+          and ce.id > :localEventHwm
+          and ce.id <= :targetEventHwm
+        """,
+        baseParams()
+            .addValue("localEventHwm", localEventHwm)
+            .addValue("targetEventHwm", targetEventHwm),
+        Long.class
+    );
+  }
+
+  private long batchEndEventHwm(long batchStartEventId, long targetEventHwm) {
+    long batchWindowEnd = batchStartEventId > Long.MAX_VALUE - options.eventBatchSize() + 1
+        ? Long.MAX_VALUE
+        : batchStartEventId + options.eventBatchSize() - 1L;
+    return Math.min(batchWindowEnd, targetEventHwm);
+  }
+
+  private long captureCutoverEventHighWaterMark() {
+    long hwm = sourceEventHighWaterMark();
+    db.update(
+        """
+        update ccd.ccd_data_migration_progress
+        set status = :status,
+            cutover_event_hwm = :cutoverEventHwm,
+            updated_at = now() at time zone 'UTC'
+        where task_name = :taskName
+        """,
+        Map.of(
+            "taskName", options.taskName(),
+            "status", STATUS_CUTOVER,
+            "cutoverEventHwm", hwm
+        )
+    );
+    return hwm;
+  }
+
+  private void markComplete() {
+    db.update(
+        """
+        update ccd.ccd_data_migration_progress
+        set status = :status,
+            updated_at = now() at time zone 'UTC'
+        where task_name = :taskName
+        """,
+        Map.of("taskName", options.taskName(), "status", STATUS_COMPLETE)
+    );
+  }
+
+  private void validateFinal(long eventHwm) {
     log.info("CCD data migration final counts taskName={} caseData={}", options.taskName(), queryCounts("case_data"));
     log.info("CCD data migration final counts taskName={} caseEvent={}", options.taskName(), queryCounts("case_event"));
   }
@@ -1122,7 +631,6 @@ public class CcdDataMigrationTask implements Runnable {
             'task_name',
             'config_hash',
             'status',
-            'loaded_event_hwm',
             'cutover_event_hwm',
             'created_at',
             'updated_at'
@@ -1131,7 +639,7 @@ public class CcdDataMigrationTask implements Runnable {
         Map.of("schema", TARGET_SCHEMA),
         Integer.class
     );
-    if (columnCount == null || columnCount != 7) {
+    if (columnCount == null || columnCount != 6) {
       throw new CcdDataMigrationException(
           "CCD data migration progress table is missing or incomplete. "
               + "Run the decentralised-runtime Flyway migrations before starting the task."
@@ -1161,7 +669,6 @@ public class CcdDataMigrationTask implements Runnable {
         """
         select config_hash,
                status,
-               loaded_event_hwm,
                cutover_event_hwm
         from ccd.ccd_data_migration_progress
         where task_name = :taskName
@@ -1197,7 +704,6 @@ public class CcdDataMigrationTask implements Runnable {
     return new Progress(
         rs.getString("config_hash"),
         rs.getString("status"),
-        rs.getLong("loaded_event_hwm"),
         cutoverEventHwm
     );
   }
@@ -1252,21 +758,14 @@ public class CcdDataMigrationTask implements Runnable {
     return stopAt != null && !LocalDateTime.now(clock).isBefore(stopAt);
   }
 
-  private MapSqlParameterSource eventRangeParams(long loadedEventHwm, long batchUpperHwm) {
+  private MapSqlParameterSource eventBatchParams(long batchStartEventId, long batchEndEventHwm) {
     return baseParams()
-        .addValue("loadedEventHwm", loadedEventHwm)
-        .addValue("batchUpperHwm", batchUpperHwm);
+        .addValue("batchStartEventId", batchStartEventId)
+        .addValue("batchEndEventHwm", batchEndEventHwm);
   }
 
   private MapSqlParameterSource baseParams() {
     return new MapSqlParameterSource().addValue("caseTypeIds", options.caseTypeIds());
-  }
-
-  private void assertNoSampleIds(String failure, String sql, MapSqlParameterSource params) {
-    List<Long> ids = db.query(sql, params, (rs, rowNum) -> rs.getLong("id"));
-    if (!ids.isEmpty()) {
-      throw new CcdDataMigrationException("Found " + failure + " taskName=" + options.taskName() + " ids=" + ids);
-    }
   }
 
   private AdvisoryLock tryLock() {
@@ -1371,7 +870,7 @@ public class CcdDataMigrationTask implements Runnable {
     }
   }
 
-  private record Progress(String configHash, String status, long loadedEventHwm, Long cutoverEventHwm) {
+  private record Progress(String configHash, String status, Long cutoverEventHwm) {
     long requiredCutoverEventHwm() {
       if (cutoverEventHwm == null) {
         throw new CcdDataMigrationException("cutover_event_hwm is not set for completed migration");
@@ -1380,24 +879,21 @@ public class CcdDataMigrationTask implements Runnable {
     }
   }
 
-  private record BatchResult(int cases, int events) {
-  }
-
-  private record RunTotals(long batches, long cases, long events, boolean caughtUp, boolean stoppedByTimeLimit) {
-    private RunTotals() {
-      this(0, 0, 0, false, false);
+  private record CopyTotals(long batches, long events, boolean caughtUp, boolean stoppedByTimeLimit) {
+    private CopyTotals() {
+      this(0, 0, false, false);
     }
 
-    private RunTotals plus(BatchResult result) {
-      return new RunTotals(batches + 1, cases + result.cases(), events + result.events(), caughtUp, stoppedByTimeLimit);
+    private CopyTotals plus(int copiedEvents) {
+      return new CopyTotals(batches + 1, events + copiedEvents, caughtUp, stoppedByTimeLimit);
     }
 
-    private RunTotals markCaughtUp() {
-      return new RunTotals(batches, cases, events, true, stoppedByTimeLimit);
+    private CopyTotals markCaughtUp() {
+      return new CopyTotals(batches, events, true, stoppedByTimeLimit);
     }
 
-    private RunTotals markStoppedByTimeLimit() {
-      return new RunTotals(batches, cases, events, caughtUp, true);
+    private CopyTotals markStoppedByTimeLimit() {
+      return new CopyTotals(batches, events, caughtUp, true);
     }
   }
 }

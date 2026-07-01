@@ -133,6 +133,7 @@ tasks.withType(Test).configureEach {
 }
 
 test {
+  dependsOn tasks.named('generateJsonLegacyDefinitions')
   failFast = true
 }
 
