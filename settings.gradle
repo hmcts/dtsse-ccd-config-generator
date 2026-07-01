@@ -15,6 +15,11 @@ gradle.beforeProject { p ->
         // Prevent subproject build.gradle from failing on wrapper { }.
         p.ext.wrapper = { Closure c -> }
     }
+    if (p.path == ':et-shared') {
+        def etProject = gradle.rootProject.findProject(':et')
+        p.ext.jacksonVersion = etProject.jacksonVersion
+        p.ext.jacksonAnnotationsVersion = etProject.jacksonAnnotationsVersion
+    }
 }
 
 include 'test-projects'
