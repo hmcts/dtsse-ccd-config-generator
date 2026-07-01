@@ -25,6 +25,7 @@ configurations {
 
 dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-jdbc'
+    implementation 'org.postgresql:postgresql'
 
     implementation('co.elastic.clients:elasticsearch-java') {
         version {

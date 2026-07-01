@@ -16,26 +16,31 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.nio.charset.StandardCharsets;
+import java.sql.Connection;
+import java.sql.SQLException;
+import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import javax.sql.DataSource;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.hc.core5.http.HttpHost;
 import org.apache.hc.core5.util.Timeout;
+import org.postgresql.PGConnection;
+import org.postgresql.PGNotification;
 import org.springframework.beans.factory.DisposableBean;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.context.annotation.Bean;
+import org.springframework.context.SmartLifecycle;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.support.TransactionTemplate;
 
@@ -45,8 +50,9 @@ import org.springframework.transaction.support.TransactionTemplate;
     matchIfMissing = true)
 @Component
 @Slf4j
-class DecentralisedESIndexer implements DisposableBean {
-  private static final String SCHEDULER_BEAN_NAME = "ccdEsIndexerScheduler";
+class DecentralisedESIndexer implements SmartLifecycle, DisposableBean {
+  private static final String NOTIFICATION_CHANNEL = "ccd_es_queue_changed";
+  private static final int NOTIFICATION_RECONNECT_DELAY_MS = 1000;
 
   enum BulkActionOutcome {
     COMPLETE,
@@ -54,19 +60,25 @@ class DecentralisedESIndexer implements DisposableBean {
     RETRYABLE
   }
 
+  private final DataSource dataSource;
   private final JdbcTemplate jdbcTemplate;
   private final TransactionTemplate transactionTemplate;
   private final AtomicBoolean terminated = new AtomicBoolean(false);
+  private final AtomicBoolean running = new AtomicBoolean(false);
+  private final ExecutorService workerExecutor;
   private final ElasticsearchTransport transport;
   private final ElasticsearchClient client;
   private final ObjectMapper mapper = new ObjectMapper();
   private final int queueLockSeconds;
   private final int batchSize;
   private final int drainDelayMs;
+  private final int pollIntervalMs;
   private final String bulkTimeout;
 
   @Autowired
-  public DecentralisedESIndexer(JdbcTemplate jdbcTemplate, TransactionTemplate transactionTemplate,
+  public DecentralisedESIndexer(DataSource dataSource,
+                                JdbcTemplate jdbcTemplate,
+                                TransactionTemplate transactionTemplate,
                                 @Value("${ELASTIC_SEARCH_HOSTS:http://localhost:9200}")
                                 String elasticSearchHosts,
                                 @Value("${ccd.sdk.indexing.elasticsearch.connect-timeout-ms:10000}")
@@ -79,13 +91,17 @@ class DecentralisedESIndexer implements DisposableBean {
                                 int batchSize,
                                 @Value("${ccd.sdk.indexing.drain-delay-ms:100}")
                                 int drainDelayMs,
+                                @Value("${ccd.sdk.decentralised.poll-interval-ms:10000}")
+                                int pollIntervalMs,
                                 @Value("${ccd.sdk.indexing.bulk-timeout:1m}")
                                 String bulkTimeout) {
+    this.dataSource = dataSource;
     this.jdbcTemplate = jdbcTemplate;
     this.transactionTemplate = transactionTemplate;
     this.queueLockSeconds = queueLockSeconds;
     this.batchSize = batchSize;
     this.drainDelayMs = drainDelayMs;
+    this.pollIntervalMs = pollIntervalMs;
     this.bulkTimeout = bulkTimeout;
     if (batchSize < 1) {
       throw new IllegalArgumentException("ccd.sdk.indexing.batch-size must be greater than zero");
@@ -93,9 +109,13 @@ class DecentralisedESIndexer implements DisposableBean {
     if (drainDelayMs < 0) {
       throw new IllegalArgumentException("ccd.sdk.indexing.drain-delay-ms must not be negative");
     }
+    if (pollIntervalMs < 1) {
+      throw new IllegalArgumentException("ccd.sdk.decentralised.poll-interval-ms must be greater than zero");
+    }
     if (bulkTimeout.isBlank()) {
       throw new IllegalArgumentException("ccd.sdk.indexing.bulk-timeout must not be blank");
     }
+    this.workerExecutor = Executors.newSingleThreadExecutor(runnable -> new Thread(runnable, "ccd-es-indexer"));
     var hosts = parseElasticSearchHosts(elasticSearchHosts);
     var restClient = Rest5Client.builder(hosts)
         .setRequestConfigCallback(requestConfigBuilder -> {
@@ -143,15 +163,48 @@ class DecentralisedESIndexer implements DisposableBean {
     return host;
   }
 
-  @Bean(name = SCHEDULER_BEAN_NAME, destroyMethod = "shutdown", defaultCandidate = false)
-  @ConditionalOnMissingBean(name = SCHEDULER_BEAN_NAME)
-  ScheduledExecutorService ccdEsIndexerScheduler() {
-    return Executors.newSingleThreadScheduledExecutor(runnable -> new Thread(runnable, "ccd-es-indexer"));
+  @Override
+  public void start() {
+    if (terminated.get()) {
+      return;
+    }
+    if (running.compareAndSet(false, true)) {
+      workerExecutor.submit(this::listenAndPoll);
+    }
   }
 
-  @Scheduled(
-      fixedDelayString = "${ccd.sdk.decentralised.poll-interval-ms:250}",
-      scheduler = SCHEDULER_BEAN_NAME)
+  @Override
+  public void stop() {
+    stopWorker();
+  }
+
+  @Override
+  public void stop(Runnable callback) {
+    try {
+      stopWorker();
+    } finally {
+      callback.run();
+    }
+  }
+
+  private void stopWorker() {
+    terminated.set(true);
+    workerExecutor.shutdownNow();
+    try {
+      long waitMs = Math.max(30_000L, pollIntervalMs + 5_000L);
+      if (!workerExecutor.awaitTermination(waitMs, TimeUnit.MILLISECONDS)) {
+        log.warn("Decentralised ES indexer worker did not stop within {}ms", waitMs);
+      }
+    } catch (InterruptedException ex) {
+      Thread.currentThread().interrupt();
+    }
+  }
+
+  @Override
+  public boolean isRunning() {
+    return running.get();
+  }
+
   public void runIndexer() {
     if (terminated.get()) {
       return;
@@ -172,6 +225,67 @@ class DecentralisedESIndexer implements DisposableBean {
       } else {
         log.error("Decentralised ES indexer failed to poll for new cases", ex);
       }
+    }
+  }
+
+  private void listenAndPoll() {
+    try {
+      while (!terminated.get()) {
+        try (Connection connection = dataSource.getConnection()) {
+          connection.setAutoCommit(true);
+          try (Statement statement = connection.createStatement()) {
+            statement.execute("LISTEN " + NOTIFICATION_CHANNEL);
+          }
+
+          try {
+            PGConnection pgConnection = connection.unwrap(PGConnection.class);
+            log.info("Decentralised ES indexer listening for PostgreSQL notifications on {}", NOTIFICATION_CHANNEL);
+
+            while (!terminated.get()) {
+              runIndexer();
+              waitForNotification(pgConnection);
+            }
+          } finally {
+            unlistenQuietly(connection);
+          }
+        } catch (Exception ex) {
+          if (terminated.get()) {
+            log.debug("Decentralised ES indexer notification listener stopped after shutdown signal", ex);
+          } else {
+            log.warn("Decentralised ES indexer notification listener failed; reconnecting", ex);
+            sleepBeforeReconnect();
+          }
+        }
+      }
+    } finally {
+      running.set(false);
+    }
+  }
+
+  private void unlistenQuietly(Connection connection) {
+    try {
+      if (!connection.isClosed()) {
+        try (Statement statement = connection.createStatement()) {
+          statement.execute("UNLISTEN " + NOTIFICATION_CHANNEL);
+        }
+      }
+    } catch (SQLException ex) {
+      log.debug("Failed to unlisten ES indexer notification channel", ex);
+    }
+  }
+
+  private void waitForNotification(PGConnection pgConnection) throws SQLException {
+    PGNotification[] notifications = pgConnection.getNotifications(pollIntervalMs);
+    if (notifications != null && notifications.length > 0) {
+      log.debug("Decentralised ES indexer received {} PostgreSQL notifications", notifications.length);
+    }
+  }
+
+  private void sleepBeforeReconnect() {
+    try {
+      Thread.sleep(NOTIFICATION_RECONNECT_DELAY_MS);
+    } catch (InterruptedException ex) {
+      Thread.currentThread().interrupt();
     }
   }
 
@@ -468,7 +582,7 @@ class DecentralisedESIndexer implements DisposableBean {
 
   @Override
   public void destroy() throws Exception {
-    terminated.set(true);
+    stopWorker();
     transport.close();
   }
 
