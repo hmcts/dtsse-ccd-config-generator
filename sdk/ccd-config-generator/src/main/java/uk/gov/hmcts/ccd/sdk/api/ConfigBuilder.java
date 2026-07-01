@@ -4,6 +4,8 @@ import java.util.Map;
 import java.util.Set;
 import java.util.function.Function;
 import uk.gov.hmcts.ccd.sdk.EventTypeBuilderImpl;
+import uk.gov.hmcts.ccd.sdk.api.AccessType.AccessTypeBuilder;
+import uk.gov.hmcts.ccd.sdk.api.AccessTypeRole.AccessTypeRoleBuilder;
 import uk.gov.hmcts.ccd.sdk.api.CaseRoleToAccessProfile.CaseRoleToAccessProfileBuilder;
 import uk.gov.hmcts.ccd.sdk.api.NoticeOfChange.NoticeOfChangeBuilder;
 import uk.gov.hmcts.ccd.sdk.api.Search.SearchBuilder;
@@ -66,6 +68,10 @@ public interface ConfigBuilder<T, S, R extends HasRole> {
   CaseRoleToAccessProfileBuilder<R> caseRoleToAccessProfile(R caseRole);
 
   CaseCategory.CaseCategoryBuilder categories(R caseRole);
+
+  AccessTypeBuilder accessType(String accessTypeId);
+
+  AccessTypeRoleBuilder accessTypeRole(String accessTypeId);
 
   SearchCriteria.SearchCriteriaBuilder searchCriteria();
 
