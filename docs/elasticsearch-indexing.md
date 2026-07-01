@@ -124,23 +124,23 @@ After the above transaction commits:
 The indexer uses PostgreSQL `LISTEN`/`NOTIFY` to wake promptly when `ccd.es_queue` changes, with
 `ccd.sdk.decentralised.poll-interval-ms` as a fallback.
 
-1. The indexer [finds case C requires indexing at revision R](../sdk/ccd-runtime-indexing/src/main/java/uk/gov/hmcts/ccd/sdk/DecentralisedESIndexer.java#L146)
-2. The indexer [claims a batch of rows](../sdk/ccd-runtime-indexing/src/main/java/uk/gov/hmcts/ccd/sdk/DecentralisedESIndexer.java#L202) in ccd.es_queue by setting locked_until and lock_token, committing the transaction.
+1. The indexer [finds case C requires indexing at revision R](../sdk/ccd-runtime-indexing/src/main/java/uk/gov/hmcts/ccd/sdk/DecentralisedESIndexer.java#L349)
+2. The indexer [claims a batch of rows](../sdk/ccd-runtime-indexing/src/main/java/uk/gov/hmcts/ccd/sdk/DecentralisedESIndexer.java#L362) in ccd.es_queue by setting locked_until and lock_token, committing the transaction.
    The lease duration is configured in seconds via `ccd.sdk.indexing.queue-lock-seconds`, and the batch size defaults to 25 via `ccd.sdk.indexing.batch-size`.
-3. The indexer [loads the latest ccd.case_event.data snapshot](../sdk/ccd-runtime-indexing/src/main/java/uk/gov/hmcts/ccd/sdk/DecentralisedESIndexer.java#L249) V* for the case where ccd.case_event.case_revision <= R
-4. The indexer sends a [bulk request to Elasticsearch](../sdk/ccd-runtime-indexing/src/main/java/uk/gov/hmcts/ccd/sdk/DecentralisedESIndexer.java#L261) containing:
-   1. The case data V* into the [`lower(case_type_id) || '_cases'` index](../sdk/ccd-runtime-indexing/src/main/java/uk/gov/hmcts/ccd/sdk/DecentralisedESIndexer.java#L235)
-   2. Where V* defines `SearchCriteria`, a [custom projection](../sdk/ccd-runtime-indexing/src/main/java/uk/gov/hmcts/ccd/sdk/DecentralisedESIndexer.java#L166) into the `global_search` index
-   3. Both writes use an [external version of R using `external_gte` mode](../sdk/ccd-runtime-indexing/src/main/java/uk/gov/hmcts/ccd/sdk/DecentralisedESIndexer.java#L442)
-5. The [bulk response is processed](../sdk/ccd-runtime-indexing/src/main/java/uk/gov/hmcts/ccd/sdk/DecentralisedESIndexer.java#L281):
-   1. Successfully indexed documents and Elasticsearch version conflicts are [terminal outcomes](../sdk/ccd-runtime-indexing/src/main/java/uk/gov/hmcts/ccd/sdk/DecentralisedESIndexer.java#L286)
-   2. Transient failures, for example HTTP 429, timeouts, or 5xx responses, [remain in the queue until the lease expires](../sdk/ccd-runtime-indexing/src/main/java/uk/gov/hmcts/ccd/sdk/DecentralisedESIndexer.java#L305)
-   3. Unindexable documents explicitly rejected by Elasticsearch are [entered into the dead letter queue](../sdk/ccd-runtime-indexing/src/main/java/uk/gov/hmcts/ccd/sdk/DecentralisedESIndexer.java#L320)
-6. Terminal outcomes [complete the queue claim](../sdk/ccd-runtime-indexing/src/main/java/uk/gov/hmcts/ccd/sdk/DecentralisedESIndexer.java#L340):
-   1. For each successful document write, any older dead letter rows for the same case reference and index_id are [deleted](../sdk/ccd-runtime-indexing/src/main/java/uk/gov/hmcts/ccd/sdk/DecentralisedESIndexer.java#L384)
-   2. If the queued row still matches reference C, case_revision R and the indexer's lock_token, it is [deleted](../sdk/ccd-runtime-indexing/src/main/java/uk/gov/hmcts/ccd/sdk/DecentralisedESIndexer.java#L411)
-   3. If the queued row has advanced while locked, [the lock is cleared](../sdk/ccd-runtime-indexing/src/main/java/uk/gov/hmcts/ccd/sdk/DecentralisedESIndexer.java#L413) and the newer revision remains queued
-7. If a full batch was claimed, the same worker loop [claims another batch](../sdk/ccd-runtime-indexing/src/main/java/uk/gov/hmcts/ccd/sdk/DecentralisedESIndexer.java#L122) after `ccd.sdk.indexing.drain-delay-ms`, which defaults to 100ms, instead of waiting for the next notification or fallback interval.
+3. The indexer [loads the latest ccd.case_event.data snapshot](../sdk/ccd-runtime-indexing/src/main/java/uk/gov/hmcts/ccd/sdk/DecentralisedESIndexer.java#L396) V* for the case where ccd.case_event.case_revision <= R
+4. The indexer sends a [bulk request to Elasticsearch](../sdk/ccd-runtime-indexing/src/main/java/uk/gov/hmcts/ccd/sdk/DecentralisedESIndexer.java#L412) containing:
+   1. The case data V* into the [`lower(case_type_id) || '_cases'` index](../sdk/ccd-runtime-indexing/src/main/java/uk/gov/hmcts/ccd/sdk/DecentralisedESIndexer.java#L383)
+   2. Where V* defines `SearchCriteria`, a [custom projection](../sdk/ccd-runtime-indexing/src/main/java/uk/gov/hmcts/ccd/sdk/DecentralisedESIndexer.java#L319) into the `global_search` index
+   3. Both writes use an [external version of R using `external_gte` mode](../sdk/ccd-runtime-indexing/src/main/java/uk/gov/hmcts/ccd/sdk/DecentralisedESIndexer.java#L564)
+5. The [bulk response is processed](../sdk/ccd-runtime-indexing/src/main/java/uk/gov/hmcts/ccd/sdk/DecentralisedESIndexer.java#L421):
+   1. Successfully indexed documents and Elasticsearch version conflicts are [terminal outcomes](../sdk/ccd-runtime-indexing/src/main/java/uk/gov/hmcts/ccd/sdk/DecentralisedESIndexer.java#L544)
+   2. Transient failures, for example HTTP 429, timeouts, or 5xx responses, [remain in the queue until the lease expires](../sdk/ccd-runtime-indexing/src/main/java/uk/gov/hmcts/ccd/sdk/DecentralisedESIndexer.java#L467)
+   3. Unindexable documents explicitly rejected by Elasticsearch are [entered into the dead letter queue](../sdk/ccd-runtime-indexing/src/main/java/uk/gov/hmcts/ccd/sdk/DecentralisedESIndexer.java#L489)
+6. Terminal outcomes [complete the queue claim](../sdk/ccd-runtime-indexing/src/main/java/uk/gov/hmcts/ccd/sdk/DecentralisedESIndexer.java#L478):
+   1. For each successful document write, any older dead letter rows for the same case reference and index_id are [deleted](../sdk/ccd-runtime-indexing/src/main/java/uk/gov/hmcts/ccd/sdk/DecentralisedESIndexer.java#L507)
+   2. If the queued row still matches reference C, case_revision R and the indexer's lock_token, it is [deleted](../sdk/ccd-runtime-indexing/src/main/java/uk/gov/hmcts/ccd/sdk/DecentralisedESIndexer.java#L527)
+   3. If the queued row has advanced while locked, [the lock is cleared](../sdk/ccd-runtime-indexing/src/main/java/uk/gov/hmcts/ccd/sdk/DecentralisedESIndexer.java#L536) and the newer revision remains queued
+7. If a full batch was claimed, the same worker loop [claims another batch](../sdk/ccd-runtime-indexing/src/main/java/uk/gov/hmcts/ccd/sdk/DecentralisedESIndexer.java#L216) after `ccd.sdk.indexing.drain-delay-ms`, which defaults to 100ms, instead of waiting for the next notification or fallback interval.
    This drain runs on a dedicated single-thread worker so it cannot overlap with another indexer run in the same service.
 
 ### Concurrency correctness
