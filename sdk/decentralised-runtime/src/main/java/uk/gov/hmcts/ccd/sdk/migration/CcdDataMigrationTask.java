@@ -249,13 +249,13 @@ public class CcdDataMigrationTask implements Runnable {
         break;
       }
 
-      Long batchStartEventId = nextSourceEventIdAfter(localEventHwm, targetEventHwm);
-      if (batchStartEventId == null) {
+      Long batchEndEventHwm = nextSourceEventBatchEndAfter(localEventHwm, targetEventHwm);
+      if (batchEndEventHwm == null) {
         totals = totals.markCaughtUp();
         break;
       }
 
-      long batchEndEventHwm = batchEndEventHwm(batchStartEventId, targetEventHwm);
+      long batchStartEventId = localEventHwm + 1L;
       int events = transaction.execute(status -> copyNextEventBatch(batchStartEventId, batchEndEventHwm));
       if (events == 0) {
         totals = totals.markCaughtUp();
@@ -522,10 +522,15 @@ public class CcdDataMigrationTask implements Runnable {
     return hwm == null ? 0 : hwm;
   }
 
-  private Long nextSourceEventIdAfter(long localEventHwm, long targetEventHwm) {
+  private Long nextSourceEventBatchEndAfter(long localEventHwm, long targetEventHwm) {
     return db.queryForObject(
         """
-        select min(ce.id)
+        -- The + 0 prevents PostgreSQL's min/max optimisation from walking pk_case_event
+        -- when the case_type_id predicate is sparse on the source CCD table.
+        select coalesce(
+          (array_agg(ce.id + 0 order by ce.id))[:eventBatchSize],
+          max(ce.id + 0)
+        )
         from fdw_stage.case_event ce
         where ce.case_type_id in (:caseTypeIds)
           and ce.id > :localEventHwm
@@ -533,16 +538,10 @@ public class CcdDataMigrationTask implements Runnable {
         """,
         baseParams()
             .addValue("localEventHwm", localEventHwm)
-            .addValue("targetEventHwm", targetEventHwm),
+            .addValue("targetEventHwm", targetEventHwm)
+            .addValue("eventBatchSize", options.eventBatchSize()),
         Long.class
     );
-  }
-
-  private long batchEndEventHwm(long batchStartEventId, long targetEventHwm) {
-    long batchWindowEnd = batchStartEventId > Long.MAX_VALUE - options.eventBatchSize() + 1
-        ? Long.MAX_VALUE
-        : batchStartEventId + options.eventBatchSize() - 1L;
-    return Math.min(batchWindowEnd, targetEventHwm);
   }
 
   private long captureCutoverEventHighWaterMark() {

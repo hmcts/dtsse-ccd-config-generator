@@ -122,6 +122,22 @@ class CcdDataMigrationTaskIntegrationTest {
   }
 
   @Test
+  void preloadBatchesByMatchingSourceEventsNotGlobalEventIdWindow() {
+    insertSourceCase(10, 1000000000000010L, 1, "Submitted", "{\"field\":\"one\"}");
+    insertSourceCaseEvent(101, 10, "create", "Submitted", "{\"field\":\"one\"}", minutesAgo(60));
+    insertSourceCaseEvent(1001, 10, "update", "Updated", "{\"field\":\"two\"}", minutesAgo(60));
+    insertSourceCaseEvent(2001, 10, "close", "Closed", "{\"field\":\"three\"}", minutesAgo(60));
+    insertSourceCaseEvent(102, 10, "other", "Submitted", "{\"field\":\"other\"}", "OtherCase", minutesAgo(60));
+
+    CcdDataMigrationRunResult result = task(PRELOAD_EVENTS, 2, 1).runMigration();
+
+    assertThat(result.caughtUp()).isFalse();
+    assertThat(result.eventsProcessed()).isEqualTo(2);
+    assertThat(countRows("ccd.case_event")).isEqualTo(2);
+    assertThat(localEventHwm()).isEqualTo(1001);
+  }
+
+  @Test
   void cutoverPausesBeforeFinalRefreshWhenRuntimeLimitStopsEventCopying() {
     insertSourceCase(10, 1000000000000010L, 1, "Submitted", "{\"field\":\"one\"}");
     insertSourceCaseEvent(101, 10, "create", "Submitted", "{\"field\":\"one\"}", minutesAgo(60));
