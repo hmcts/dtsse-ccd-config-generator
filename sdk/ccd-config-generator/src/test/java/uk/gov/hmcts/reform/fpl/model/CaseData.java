@@ -399,10 +399,16 @@ public class CaseData {
   private String paymentHistoryField;
 
   @CCD(
-    label = "Select the solicitor PBA number you wish to use",
+    label = "Select the solicitor PBA number you wish to use (radio)",
     typeOverride = DynamicRadioList
   )
-  private DynamicList solicitorPbaNumber;
+  private DynamicList solicitorPbaNumberRadio;
+
+  @CCD(
+    label = "Select the solicitor PBA number you wish to use (dropdown)",
+    typeOverride = DynamicList
+  )
+  private DynamicList solicitorPbaNumberDropDown;
 
   @CCD(
     typeOverride = FixedList,

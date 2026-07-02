@@ -993,8 +993,16 @@
   {
     "CaseTypeID": "CARE_SUPERVISION_EPO",
     "FieldType": "DynamicRadioList",
-    "ID": "solicitorPbaNumber",
-    "Label": "Select the solicitor PBA number you wish to use",
+    "ID": "solicitorPbaNumberRadio",
+    "Label": "Select the solicitor PBA number you wish to use (radio)",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public"
+  },
+  {
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "FieldType": "DynamicList",
+    "ID": "solicitorPbaNumberDropDown",
+    "Label": "Select the solicitor PBA number you wish to use (dropdown)",
     "LiveFrom": "01/01/2017",
     "SecurityClassification": "Public"
   },
