@@ -100,7 +100,10 @@ class AuditEventService {
           security_classification,
           version,
           case_revision,
-          idempotency_key)
+          idempotency_key,
+          proxied_by,
+          proxied_by_first_name,
+          proxied_by_last_name)
         values (
           :data::jsonb,
           :event_id,
@@ -118,7 +121,10 @@ class AuditEventService {
           :security_classification::ccd.securityclassification,
           :version,
           :case_revision,
-          :idempotency_key
+          :idempotency_key,
+          :proxied_by,
+          :proxied_by_first_name,
+          :proxied_by_last_name
         )
         returning id, created_date
         """;
@@ -129,16 +135,32 @@ class AuditEventService {
         )
         .orElse(String.valueOf(currentView.getState()));
 
+    var auditUserId = user.userDetails().getUid();
+    var auditUserFirstName = user.userDetails().getGivenName();
+    var auditUserLastName = user.userDetails().getFamilyName();
+    String proxiedBy = null;
+    String proxiedByFirstName = null;
+    String proxiedByLastName = null;
+
+    if (eventDetails.getProxiedBy() != null && !eventDetails.getProxiedBy().isBlank()) {
+      auditUserId = eventDetails.getProxiedBy();
+      auditUserFirstName = eventDetails.getProxiedByFirstName();
+      auditUserLastName = eventDetails.getProxiedByLastName();
+      proxiedBy = user.userDetails().getUid();
+      proxiedByFirstName = user.userDetails().getGivenName();
+      proxiedByLastName = user.userDetails().getFamilyName();
+    }
+
     var params = new MapSqlParameterSource()
         .addValue("data", defaultMapper.writeValueAsString(currentView.getData()))
         .addValue("event_id", eventDetails.getEventId())
-        .addValue("user_id", user.userDetails().getUid())
+        .addValue("user_id", auditUserId)
         .addValue("case_data_id", event.getInternalCaseId())
         .addValue("case_type_id", eventDetails.getCaseType())
         .addValue("case_type_version", 1)
         .addValue("state_id", currentView.getState())
-        .addValue("user_first_name", user.userDetails().getGivenName())
-        .addValue("user_last_name", user.userDetails().getFamilyName())
+        .addValue("user_first_name", auditUserFirstName)
+        .addValue("user_last_name", auditUserLastName)
         .addValue("event_name", eventDetails.getEventName())
         .addValue("state_name", stateName)
         .addValue("summary", eventDetails.getSummary())
@@ -146,7 +168,10 @@ class AuditEventService {
         .addValue("security_classification", currentView.getSecurityClassification().toString())
         .addValue("version", currentView.getVersion())
         .addValue("case_revision", currentView.getRevision())
-        .addValue("idempotency_key", idempotencyKey);
+        .addValue("idempotency_key", idempotencyKey)
+        .addValue("proxied_by", proxiedBy)
+        .addValue("proxied_by_first_name", proxiedByFirstName)
+        .addValue("proxied_by_last_name", proxiedByLastName);
 
     var inserted = ndb.queryForObject(sql, params, this::mapInsertedAuditEvent);
 
