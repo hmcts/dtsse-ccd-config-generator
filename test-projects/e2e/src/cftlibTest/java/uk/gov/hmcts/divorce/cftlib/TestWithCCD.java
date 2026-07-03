@@ -1983,21 +1983,53 @@ public class TestWithCCD extends CftlibTest {
         String token,
         long reference
     ) {
-        var body = Map.of(
-            "data", data,
-            "event", Map.of(
-                "id", eventId,
-                "summary", "summary",
-                "description", "description"
-            ),
-            "event_token", token,
-            "ignore_warning", false
-        );
+        return prepareEventRequestWithToken(user, eventId, data, token, reference, null);
+    }
+
+    @SneakyThrows
+    private HttpPost prepareEventRequestWithToken(
+        String user,
+        String eventId,
+        Map<String, ?> data,
+        String token,
+        long reference,
+        String onBehalfOfToken
+    ) {
+        var body = new LinkedHashMap<String, Object>();
+        body.put("data", data);
+        body.put("event", Map.of(
+            "id", eventId,
+            "summary", "summary",
+            "description", "description"
+        ));
+        body.put("event_token", token);
+        body.put("ignore_warning", false);
+        if (onBehalfOfToken != null) {
+            body.put("on_behalf_of_token", onBehalfOfToken);
+        }
 
         var e = buildRequest(user, BASE_URL + "/cases/" + reference + "/events", HttpPost::new);
         withCcdAccept(e, ACCEPT_CREATE_EVENT);
         e.setEntity(new StringEntity(mapper.writeValueAsString(body), ContentType.APPLICATION_JSON));
         return e;
+    }
+
+    @SneakyThrows
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> getLatestAuditEvent(String user, long reference, String eventId) {
+        var get = buildRequest(user, BASE_URL + "/cases/" + reference + "/events", HttpGet::new);
+        withCcdAccept(get, ACCEPT_CASE_EVENTS);
+
+        try (var response = HttpClientBuilder.create().build().execute(get)) {
+            Map<String, Object> result =
+                mapper.readValue(EntityUtils.toString(response.getEntity()), new TypeReference<>() {});
+            assertThat(response.getStatusLine().getStatusCode(), equalTo(200));
+            var auditEvents = (List<Map<String, Object>>) result.get("auditEvents");
+            return auditEvents.stream()
+                .filter(event -> eventId.equals(event.get("id")))
+                .findFirst()
+                .orElseThrow();
+        }
     }
 
     private void assertLatestEventMetadata(String eventId, String expectedSummary, String expectedDescription) {
@@ -2180,9 +2212,13 @@ public class TestWithCCD extends CftlibTest {
     @Order(19)
     @Test
     public void testDecentralisedEventStartAndSubmitHandlers() throws Exception {
+        String submittingUser = "TEST_CASE_WORKER_USER@mailinator.com";
+        String submittingUserToken = getAuthorisation(submittingUser);
+        var submittingUserInfo = idam.getUserInfo(submittingUserToken);
+
         // Verify start handler pre-populates data
         var start = ccdApi.startEvent(
-            getAuthorisation("TEST_CASE_WORKER_USER@mailinator.com"),
+            submittingUserToken,
             getServiceAuth(), String.valueOf(caseRef), DecentralisedCaseworkerAddNote.CASEWORKER_DECENTRALISED_ADD_NOTE);
 
         var startData = mapper.readValue(mapper.writeValueAsString(start.getCaseDetails().getData()), CaseData.class);
@@ -2213,6 +2249,59 @@ public class TestWithCCD extends CftlibTest {
         String lastNoteSql = "SELECT note FROM case_notes WHERE reference = :ref ORDER BY id DESC LIMIT 1";
         String latestNote = db.queryForObject(lastNoteSql, Map.of("ref", caseRef), String.class);
         assertThat(latestNote, equalTo(noteText));
+
+        var submittedEvent = getLatestAuditEvent(
+            submittingUser,
+            caseRef,
+            DecentralisedCaseworkerAddNote.CASEWORKER_DECENTRALISED_ADD_NOTE);
+
+        assertThat(submittedEvent.get("user_id"), equalTo(submittingUserInfo.getUid()));
+        assertThat(submittedEvent.get("user_first_name"), equalTo(submittingUserInfo.getGivenName()));
+        assertThat(submittedEvent.get("user_last_name"), equalTo(submittingUserInfo.getFamilyName()));
+        assertThat(submittedEvent.get("proxied_by"), nullValue());
+        assertThat(submittedEvent.get("proxied_by_first_name"), nullValue());
+        assertThat(submittedEvent.get("proxied_by_last_name"), nullValue());
+    }
+
+    @Order(19)
+    @Test
+    public void decentralisedEventHistoryPreservesOnBehalfUserAndProxy() throws Exception {
+        String submittingUser = "TEST_CASE_WORKER_USER@mailinator.com";
+        String onBehalfOfUser = "TEST_SOLICITOR@mailinator.com";
+        String submittingUserToken = getAuthorisation(submittingUser);
+        String onBehalfOfUserToken = getAuthorisation(onBehalfOfUser);
+        var submittingUserInfo = idam.getUserInfo(submittingUserToken);
+        var onBehalfOfUserInfo = idam.getUserInfo(onBehalfOfUserToken);
+        long proxiedCaseRef = createAdditionalCase(onBehalfOfUser);
+
+        var start = ccdApi.startEvent(
+            submittingUserToken,
+            getServiceAuth(),
+            String.valueOf(proxiedCaseRef),
+            DecentralisedCaseworkerAddNote.CASEWORKER_DECENTRALISED_ADD_NOTE);
+
+        var request = prepareEventRequestWithToken(
+            submittingUser,
+            DecentralisedCaseworkerAddNote.CASEWORKER_DECENTRALISED_ADD_NOTE,
+            Map.of("note", "Decentralised proxied history test"),
+            start.getToken(),
+            proxiedCaseRef,
+            onBehalfOfUserToken);
+
+        var response = HttpClientBuilder.create().build().execute(request);
+        assertThat(response.getStatusLine().getStatusCode(), equalTo(201));
+
+        var submittedEvent = getLatestAuditEvent(
+            submittingUser,
+            proxiedCaseRef,
+            DecentralisedCaseworkerAddNote.CASEWORKER_DECENTRALISED_ADD_NOTE);
+
+        assertThat(submittedEvent.get("user_id"), equalTo(onBehalfOfUserInfo.getUid()));
+        assertThat(submittedEvent.get("user_first_name"), equalTo(onBehalfOfUserInfo.getGivenName()));
+        assertThat(submittedEvent.get("user_last_name"), equalTo(onBehalfOfUserInfo.getFamilyName()));
+        assertThat(submittedEvent.get("proxied_by"), equalTo(submittingUserInfo.getUid()));
+        assertThat(submittedEvent.get("proxied_by_first_name"), equalTo(submittingUserInfo.getGivenName()));
+        assertThat(submittedEvent.get("proxied_by_last_name"), equalTo(submittingUserInfo.getFamilyName()));
     }
 
     @Order(19)
