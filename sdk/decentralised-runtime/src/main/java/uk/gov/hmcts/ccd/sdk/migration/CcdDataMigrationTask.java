@@ -147,6 +147,7 @@ public class CcdDataMigrationTask implements Runnable {
       );
     }
 
+    prepareElasticsearchQueueForMigration();
     long targetEventHwm = sourceEventHighWaterMark();
     CopyTotals totals = copyEventBatches(targetEventHwm);
     long localEventHwm = localEventHighWaterMark();
@@ -175,10 +176,15 @@ public class CcdDataMigrationTask implements Runnable {
   private CcdDataMigrationRunResult cutover() {
     Progress progress = getOrCreateProgress();
     if (STATUS_COMPLETE.equals(progress.status())) {
-      validateFinal(progress.requiredCutoverEventHwm());
+      transaction.execute(status -> {
+        validateFinal(progress.requiredCutoverEventHwm());
+        enableElasticsearchQueueTrigger();
+        return null;
+      });
       return new CcdDataMigrationRunResult(true, 0, 0, 0, true, false);
     }
 
+    prepareElasticsearchQueueForMigration();
     long cutoverEventHwm = progress.cutoverEventHwm() == null
         ? captureCutoverEventHighWaterMark()
         : progress.cutoverEventHwm();
@@ -206,8 +212,7 @@ public class CcdDataMigrationTask implements Runnable {
     }
     final int refreshedCases = refreshCutoverCaseData();
     resetSequences();
-    validateFinal(cutoverEventHwm);
-    markComplete();
+    completeCutover(cutoverEventHwm);
 
     log.info(
         "Completed CCD data migration cutover taskName={} cutoverEventHwm={} batches={} refreshedCases={} events={} "
@@ -575,9 +580,25 @@ public class CcdDataMigrationTask implements Runnable {
     );
   }
 
+  private void completeCutover(long cutoverEventHwm) {
+    transaction.execute(status -> {
+      validateFinal(cutoverEventHwm);
+      enableElasticsearchQueueTrigger();
+      markComplete();
+      return null;
+    });
+  }
+
   private void validateFinal(long eventHwm) {
     log.info("CCD data migration final counts taskName={} caseData={}", options.taskName(), queryCounts("case_data"));
     log.info("CCD data migration final counts taskName={} caseEvent={}", options.taskName(), queryCounts("case_event"));
+    long esQueueRows = countElasticsearchQueueRows();
+    log.info("CCD data migration final counts taskName={} esQueue={}", options.taskName(), esQueueRows);
+    if (esQueueRows > 0) {
+      throw new CcdDataMigrationException(
+          "CCD data migration left " + esQueueRows + " Elasticsearch queue rows"
+      );
+    }
   }
 
   private List<Map<String, Object>> queryCounts(String tableName) {
@@ -611,12 +632,51 @@ public class CcdDataMigrationTask implements Runnable {
         """);
   }
 
+  private void prepareElasticsearchQueueForMigration() {
+    disableElasticsearchQueueTrigger();
+    deleteElasticsearchQueueRowsForMigration();
+  }
+
+  private void deleteElasticsearchQueueRowsForMigration() {
+    db.update(
+        """
+        delete from ccd.es_queue queue
+        using ccd.case_data case_data
+        where queue.reference = case_data.reference
+          and case_data.case_type_id in (:caseTypeIds)
+        """,
+        baseParams()
+    );
+  }
+
+  private long countElasticsearchQueueRows() {
+    Long rows = db.queryForObject(
+        """
+        select count(*)
+        from ccd.es_queue queue
+        join ccd.case_data case_data on case_data.reference = queue.reference
+        where case_data.case_type_id in (:caseTypeIds)
+        """,
+        baseParams(),
+        Long.class
+    );
+    return rows == null ? 0 : rows;
+  }
+
   private void disableCaseDataRevisionTrigger() {
     db.getJdbcTemplate().execute("alter table ccd.case_data disable trigger trigger_increment_case_revision");
   }
 
   private void enableCaseDataRevisionTrigger() {
     db.getJdbcTemplate().execute("alter table ccd.case_data enable trigger trigger_increment_case_revision");
+  }
+
+  private void disableElasticsearchQueueTrigger() {
+    db.getJdbcTemplate().execute("alter table ccd.case_data disable trigger trigger_enqueue_case_revision");
+  }
+
+  private void enableElasticsearchQueueTrigger() {
+    db.getJdbcTemplate().execute("alter table ccd.case_data enable trigger trigger_enqueue_case_revision");
   }
 
   private void validateProgressTableReady() {

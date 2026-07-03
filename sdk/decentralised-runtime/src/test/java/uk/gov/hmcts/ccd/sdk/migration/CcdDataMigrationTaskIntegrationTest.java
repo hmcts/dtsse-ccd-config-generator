@@ -76,6 +76,8 @@ class CcdDataMigrationTaskIntegrationTest {
     assertThat(caseEventRevision(101)).isEqualTo(1);
     assertThat(caseEventRevision(102)).isEqualTo(2);
     assertThat(caseRevision(10)).isZero();
+    assertElasticsearchQueueEmpty();
+    assertThat(caseDataTriggerEnabled("trigger_enqueue_case_revision")).isFalse();
     assertTargetProtectionsPresent();
   }
 
@@ -100,7 +102,37 @@ class CcdDataMigrationTaskIntegrationTest {
     assertThat(caseEventRevision(102)).isEqualTo(2);
     assertThat(caseRevision(10)).isEqualTo(CASE_REVISION_OFFSET + 2);
     assertThat(caseEventSequenceLastValue()).isGreaterThanOrEqualTo(102);
+    assertElasticsearchQueueEmpty();
+    assertThat(caseDataTriggerEnabled("trigger_enqueue_case_revision")).isTrue();
     assertTargetProtectionsPresent();
+  }
+
+  @Test
+  void cutoverDeletesOnlyMigratedCaseTypeElasticsearchQueueRows() {
+    insertSourceCase(10, 1000000000000010L, 1, "Submitted", "{\"field\":\"one\"}");
+    insertSourceCaseEvent(101, 10, "create", "Submitted", "{\"field\":\"one\"}", minutesAgo(60));
+    insertTargetCase(20, 1000000000000020L, 1, "Submitted", "{\"field\":\"other\"}", "OtherCase", 1);
+
+    CcdDataMigrationRunResult result = task(CUTOVER, 10, 10).runMigration();
+
+    assertThat(result.caughtUp()).isTrue();
+    assertThat(progressStatus()).isEqualTo("COMPLETE");
+    assertElasticsearchQueueEmpty("TestCase");
+    assertThat(countElasticsearchQueueRows("OtherCase")).isEqualTo(1);
+    assertThat(caseDataTriggerEnabled("trigger_enqueue_case_revision")).isTrue();
+  }
+
+  @Test
+  void completedCutoverRerunValidatesBeforeReEnablingElasticsearchQueueTrigger() {
+    insertTargetCase(10, 1000000000000010L, 1, "Submitted", "{\"field\":\"one\"}", 1);
+    createCompleteProgress(101);
+    jdbc.getJdbcTemplate().execute("alter table ccd.case_data disable trigger trigger_enqueue_case_revision");
+
+    assertThatThrownBy(() -> task(CUTOVER, 10, 10).runMigration())
+        .isInstanceOf(CcdDataMigrationException.class)
+        .hasMessageContaining("CCD data migration left 1 Elasticsearch queue rows");
+
+    assertThat(caseDataTriggerEnabled("trigger_enqueue_case_revision")).isFalse();
   }
 
   @Test
@@ -119,6 +151,7 @@ class CcdDataMigrationTaskIntegrationTest {
     assertThat(countRows("ccd.case_event")).isEqualTo(2);
     assertThat(localEventHwm()).isEqualTo(102);
     assertThat(caseEventRevision(102)).isEqualTo(2);
+    assertElasticsearchQueueEmpty();
   }
 
   @Test
@@ -150,6 +183,8 @@ class CcdDataMigrationTaskIntegrationTest {
     assertThat(localEventHwm()).isEqualTo(101);
     assertThat(countRows("ccd.case_event")).isEqualTo(1);
     assertThat(caseRevision(10)).isZero();
+    assertElasticsearchQueueEmpty();
+    assertThat(caseDataTriggerEnabled("trigger_enqueue_case_revision")).isFalse();
   }
 
   @Test
@@ -227,6 +262,8 @@ class CcdDataMigrationTaskIntegrationTest {
     assertThat(countRows("ccd.case_data", PERF_CASE_TYPE)).isEqualTo((long) caseCount);
     assertThat(countRows("ccd.case_event", PERF_CASE_TYPE)).isEqualTo(expectedEvents);
     assertThat(progressStatus()).isEqualTo("COMPLETE");
+    assertElasticsearchQueueEmpty();
+    assertThat(caseDataTriggerEnabled("trigger_enqueue_case_revision")).isTrue();
     assertTargetProtectionsPresent();
     assertThat(elapsed).isLessThan(maxElapsed);
   }
@@ -372,6 +409,7 @@ class CcdDataMigrationTaskIntegrationTest {
         """);
     jdbc.getJdbcTemplate().execute("alter table ccd.case_event enable trigger user");
     jdbc.getJdbcTemplate().execute("alter table ccd.case_data enable trigger trigger_increment_case_revision");
+    jdbc.getJdbcTemplate().execute("alter table ccd.case_data enable trigger trigger_enqueue_case_revision");
   }
 
   private void insertSourceCase(long id, long reference, int version, String state, String data) {
@@ -508,6 +546,18 @@ class CcdDataMigrationTaskIntegrationTest {
   }
 
   private void insertTargetCase(long id, long reference, int version, String state, String data, long caseRevision) {
+    insertTargetCase(id, reference, version, state, data, "TestCase", caseRevision);
+  }
+
+  private void insertTargetCase(
+      long id,
+      long reference,
+      int version,
+      String state,
+      String data,
+      String caseTypeId,
+      long caseRevision
+  ) {
     jdbc.update(
         """
         insert into ccd.case_data (
@@ -534,7 +584,7 @@ class CcdDataMigrationTaskIntegrationTest {
           null,
           timestamp '2024-01-01 00:00:00',
           'TEST',
-          'TestCase',
+          :caseTypeId,
           :state,
           :data::jsonb,
           '{}'::jsonb,
@@ -548,6 +598,7 @@ class CcdDataMigrationTaskIntegrationTest {
             .addValue("version", version)
             .addValue("state", state)
             .addValue("data", data)
+            .addValue("caseTypeId", caseTypeId)
             .addValue("caseRevision", caseRevision)
     );
   }
@@ -636,6 +687,30 @@ class CcdDataMigrationTaskIntegrationTest {
             .addValue("configHash", CcdDataMigrationTaskOptions.builder(List.of("TestCase"))
                 .build()
                 .migrationConfigHash())
+    );
+  }
+
+  private void createCompleteProgress(long cutoverEventHwm) {
+    jdbc.update(
+        """
+        insert into ccd.ccd_data_migration_progress (
+          task_name,
+          config_hash,
+          status,
+          cutover_event_hwm
+        ) values (
+          :taskName,
+          :configHash,
+          'COMPLETE',
+          :cutoverEventHwm
+        )
+        """,
+        new MapSqlParameterSource()
+            .addValue("taskName", "ccd-data-migration")
+            .addValue("configHash", CcdDataMigrationTaskOptions.builder(List.of("TestCase"))
+                .build()
+                .migrationConfigHash())
+            .addValue("cutoverEventHwm", cutoverEventHwm)
     );
   }
 
@@ -745,6 +820,19 @@ class CcdDataMigrationTaskIntegrationTest {
     );
   }
 
+  private long countElasticsearchQueueRows(String caseTypeId) {
+    return jdbc.queryForObject(
+        """
+        select count(*)
+        from ccd.es_queue queue
+        join ccd.case_data case_data on case_data.reference = queue.reference
+        where case_data.case_type_id = :caseTypeId
+        """,
+        Map.of("caseTypeId", caseTypeId),
+        Long.class
+    );
+  }
+
   private long caseRevision(long id) {
     return jdbc.queryForObject(
         "select case_revision from ccd.case_data where id = :id",
@@ -847,6 +935,29 @@ class CcdDataMigrationTaskIntegrationTest {
         Map.of(),
         Boolean.class
     ));
+  }
+
+  private boolean caseDataTriggerEnabled(String triggerName) {
+    List<Boolean> rows = jdbc.queryForList(
+        """
+        select tgenabled <> 'D'
+        from pg_trigger
+        where tgrelid = 'ccd.case_data'::regclass
+          and tgname = :triggerName
+        """,
+        Map.of("triggerName", triggerName),
+        Boolean.class
+    );
+    assertThat(rows).hasSize(1);
+    return Boolean.TRUE.equals(rows.get(0));
+  }
+
+  private void assertElasticsearchQueueEmpty() {
+    assertThat(countRows("ccd.es_queue")).isZero();
+  }
+
+  private void assertElasticsearchQueueEmpty(String caseTypeId) {
+    assertThat(countElasticsearchQueueRows(caseTypeId)).isZero();
   }
 
   private void assertTargetProtectionsPresent() {
