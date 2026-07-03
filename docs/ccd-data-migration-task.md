@@ -43,9 +43,10 @@ transaction completes.
 
 The `ccd.case_data` Elasticsearch enqueue trigger is disabled while migration work is in progress
 because it fires after inserts and updates on `ccd.case_data` and would otherwise populate
-`ccd.es_queue` with stale revision entries. The queue is truncated when the task starts migration
-work because it is not in use until after cutover, final validation requires it to be empty, and the
-trigger is re-enabled before `CUTOVER` is marked complete.
+`ccd.es_queue` with stale revision entries. Existing queue rows for the migrated case types are
+deleted when the task starts migration work because those case types do not use the queue until after
+cutover. Final validation requires the migrated case types to have no queue rows, and the trigger is
+re-enabled in the same transaction that marks `CUTOVER` complete.
 
 ## Progress
 
