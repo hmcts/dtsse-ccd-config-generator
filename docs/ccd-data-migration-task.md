@@ -41,6 +41,12 @@ The runtime `case_data` revision trigger is deliberately disabled only inside th
 transaction so the final source-derived revision can be written. The trigger is re-enabled before the
 transaction completes.
 
+The `ccd.case_data` Elasticsearch enqueue trigger is disabled while migration work is in progress
+because it fires after inserts and updates on `ccd.case_data` and would otherwise populate
+`ccd.es_queue` with stale revision entries. Any queued rows for the migrating case types are removed
+when the task starts migration work, final validation requires the queue to be empty for those case
+types, and the trigger is re-enabled before `CUTOVER` is marked complete.
+
 ## Progress
 
 The decentralised runtime Flyway migration creates `ccd.ccd_data_migration_progress` with minimal
