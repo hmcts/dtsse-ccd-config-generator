@@ -582,11 +582,11 @@ public class CcdDataMigrationTask implements Runnable {
   private void validateFinal(long eventHwm) {
     log.info("CCD data migration final counts taskName={} caseData={}", options.taskName(), queryCounts("case_data"));
     log.info("CCD data migration final counts taskName={} caseEvent={}", options.taskName(), queryCounts("case_event"));
-    long esQueueRows = countMigratedElasticsearchQueueRows();
+    long esQueueRows = countElasticsearchQueueRows();
     log.info("CCD data migration final counts taskName={} esQueue={}", options.taskName(), esQueueRows);
     if (esQueueRows > 0) {
       throw new CcdDataMigrationException(
-          "CCD data migration left " + esQueueRows + " Elasticsearch queue rows for migrated case types"
+          "CCD data migration left " + esQueueRows + " Elasticsearch queue rows"
       );
     }
   }
@@ -624,30 +624,17 @@ public class CcdDataMigrationTask implements Runnable {
 
   private void prepareElasticsearchQueueForMigration() {
     disableElasticsearchQueueTrigger();
-    deleteMigratedElasticsearchQueueRows();
+    truncateElasticsearchQueue();
   }
 
-  private void deleteMigratedElasticsearchQueueRows() {
-    db.update(
-        """
-        delete from ccd.es_queue queue
-        using ccd.case_data cd
-        where queue.reference = cd.reference
-          and cd.case_type_id in (:caseTypeIds)
-        """,
-        baseParams()
-    );
+  private void truncateElasticsearchQueue() {
+    db.getJdbcTemplate().execute("truncate table ccd.es_queue");
   }
 
-  private long countMigratedElasticsearchQueueRows() {
+  private long countElasticsearchQueueRows() {
     Long rows = db.queryForObject(
-        """
-        select count(*)
-        from ccd.es_queue queue
-        join ccd.case_data cd on cd.reference = queue.reference
-        where cd.case_type_id in (:caseTypeIds)
-        """,
-        baseParams(),
+        "select count(*) from ccd.es_queue",
+        Map.of(),
         Long.class
     );
     return rows == null ? 0 : rows;
