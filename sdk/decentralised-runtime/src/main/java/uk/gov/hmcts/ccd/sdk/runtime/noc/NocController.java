@@ -26,7 +26,7 @@ import uk.gov.hmcts.reform.authorisation.exceptions.ServiceException;
 import uk.gov.hmcts.reform.authorisation.validators.AuthTokenValidator;
 
 @RestController
-@ConditionalOnBean(ResolvedConfigRegistry.class)
+@ConditionalOnBean({ResolvedConfigRegistry.class, AuthTokenValidator.class, IdamService.class})
 @RequestMapping("/noc")
 public class NocController {
 
