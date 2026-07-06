@@ -1,8 +1,8 @@
 create or replace function ccd.enqueue_case_revision()
 returns trigger as $$
 begin
-  insert into ccd.es_queue(reference, case_revision)
-  values (NEW.reference, NEW.case_revision)
+  insert into ccd.es_queue(reference, case_revision, enqueued_at)
+  values (NEW.reference, NEW.case_revision, now())
   on conflict (reference) do update
   set
     case_revision = greatest(ccd.es_queue.case_revision, excluded.case_revision),
