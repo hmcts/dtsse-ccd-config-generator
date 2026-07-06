@@ -3,6 +3,7 @@ package uk.gov.hmcts.ccd.sdk.impl.json;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.Map;
 import org.junit.jupiter.api.AfterEach;
@@ -15,10 +16,14 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping;
+import uk.gov.hmcts.ccd.sdk.api.CaseDetails;
+import uk.gov.hmcts.ccd.sdk.api.callback.AboutToStartOrSubmitResponse;
+import uk.gov.hmcts.ccd.sdk.config.CcdCaseDataMapperConfiguration;
 
 class JsonCallbackBridgeTest {
 
-  private final ObjectMapper mapper = new ObjectMapper();
+  private final ObjectMapper mapper = new CcdCaseDataMapperConfiguration()
+      .ccdCaseDataObjectMapper(new ObjectMapper().setSerializationInclusion(JsonInclude.Include.NON_EMPTY));
 
   @AfterEach
   void resetRequestContext() {
@@ -65,6 +70,25 @@ class JsonCallbackBridgeTest {
   }
 
   @Test
+  void preservesEmptyNestedCaseDataObjectsInLocalCallbackResponse() {
+    JsonCallbackBridge bridge = bridgeWith(
+        new MockEnvironment().withProperty("decentralisation.local-callback-placeholder", "ET_COS_URL"),
+        new LocalCallbackController()
+    );
+    CaseDetails<Object, Object> caseDetails = CaseDetails.builder()
+        .data(new NocCaseData(null))
+        .build();
+
+    AboutToStartOrSubmitResponse response = bridge.aboutToSubmit(
+        "${ET_COS_URL}/callbacks/noc-about-to-submit",
+        "local"
+    ).handle(caseDetails, null);
+
+    NocCaseData responseData = (NocCaseData) response.getData();
+    assertThat(responseData.changeOrganisationRequestField().OrganisationToAdd()).isNotNull();
+  }
+
+  @Test
   void failsFastWhenCallbackIsNeitherLocalNorAbsoluteExternalUrl() {
     JsonCallbackBridge bridge = bridgeWith(new MockEnvironment());
 
@@ -104,5 +128,24 @@ class JsonCallbackBridgeTest {
     Map<String, Object> aboutToSubmit(@RequestBody Map<String, Object> request) {
       return Map.of("source", "local", "event_id", request.get("event_id"));
     }
+
+    @PostMapping("/noc-about-to-submit")
+    NocCallbackResponse nocAboutToSubmit(@RequestBody Map<String, Object> request) {
+      return new NocCallbackResponse(new NocCaseData(
+          new ChangeOrganisationRequestField(new OrganisationToAdd())
+      ));
+    }
+  }
+
+  private record NocCallbackResponse(NocCaseData data) {
+  }
+
+  private record NocCaseData(ChangeOrganisationRequestField changeOrganisationRequestField) {
+  }
+
+  private record ChangeOrganisationRequestField(OrganisationToAdd OrganisationToAdd) {
+  }
+
+  private record OrganisationToAdd() {
   }
 }
