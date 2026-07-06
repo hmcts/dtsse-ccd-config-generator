@@ -30,7 +30,7 @@ The preload path keeps the target tables constraint-valid after every committed 
 * the unique `(case_data_id, case_revision)` index stays in place
 * `case_event.version` and `case_event.case_revision` are calculated before insert
 * `case_event` user triggers are not disabled
-* resume position is derived from target `case_event` after each committed batch
+* resume position is stored as a source event high-water mark after each committed batch
 
 Preloaded `case_data` is provisional. Its purpose is to satisfy the event FK. Every copied event
 batch inserts missing parent source `case_data` rows for that batch. `CUTOVER` overwrites target
@@ -57,10 +57,14 @@ state:
 * `config_hash`
 * `status`: `PRELOAD`, `CUTOVER`, or `COMPLETE`
 * `cutover_event_hwm`
+* `source_event_hwm`
 * timestamps
 
 The migration configuration hash covers the migration identity. Runtime limits such as
-`eventBatchSize`, `maxBatchesPerRun`, `maxRunTime`, and `mode` can change between invocations.
+`eventIdWindowSize`, `maxBatchesPerRun`, `maxRunTime`, and `mode` can change between invocations.
+If the migration identity changes after a task has already created a progress row, the task fails
+fast rather than resuming under different source filters. Operators must either keep the same
+identity configuration or explicitly reset/use a new `task-name` after confirming the target state.
 
 ## Configuration
 
@@ -75,7 +79,8 @@ ccd:
     case-type-ids:
       - ET_EnglandWales
       - ET_Scotland
-    event-batch-size: 10000
+    source-jurisdiction: EMPLOYMENT
+    event-id-window-size: 1000000
     max-batches-per-run: 100
     max-run-time: 4h
     case-revision-offset: 1000000000
@@ -163,6 +168,6 @@ Override the dataset with system properties:
   --tests '*CcdDataMigrationTaskIntegrationTest.migratesSeededDatasetWithinPerfHarnessLimit' \
   -Dccd.data-migration.perf.cases=10000 \
   -Dccd.data-migration.perf.events-per-case=5 \
-  -Dccd.data-migration.perf.event-batch-size=1000 \
+  -Dccd.data-migration.perf.event-id-window-size=1000 \
   -Dccd.data-migration.perf.max-seconds=900
 ```

@@ -14,11 +14,12 @@ public record CcdDataMigrationTaskOptions(
     String taskName,
     CcdDataMigrationMode mode,
     List<String> caseTypeIds,
-    int eventBatchSize,
+    int eventIdWindowSize,
     long caseRevisionOffset,
     int maxBatchesPerRun,
     Duration maxRunTime,
-    Duration statementTimeout
+    Duration statementTimeout,
+    String sourceJurisdiction
 ) {
   private static final String TARGET_SCHEMA = "ccd";
   private static final String FDW_SCHEMA = "fdw_stage";
@@ -28,9 +29,10 @@ public record CcdDataMigrationTaskOptions(
     taskName = requireText(taskName, "taskName");
     mode = mode == null ? CcdDataMigrationMode.PRELOAD_EVENTS : mode;
     caseTypeIds = List.copyOf(requireCaseTypeIds(caseTypeIds));
+    sourceJurisdiction = requireText(sourceJurisdiction, "sourceJurisdiction");
 
-    if (eventBatchSize < 1) {
-      throw new IllegalArgumentException("eventBatchSize must be greater than zero");
+    if (eventIdWindowSize < 1) {
+      throw new IllegalArgumentException("eventIdWindowSize must be greater than zero");
     }
     if (caseRevisionOffset < 0) {
       throw new IllegalArgumentException("caseRevisionOffset must be zero or greater");
@@ -57,6 +59,7 @@ public record CcdDataMigrationTaskOptions(
   String migrationConfigSummary() {
     return "targetSchema=" + TARGET_SCHEMA
         + ", fdwSchema=" + FDW_SCHEMA
+        + ", sourceJurisdiction=" + sourceJurisdiction
         + ", caseTypeIds=" + canonicalCaseTypeIds()
         + ", caseRevisionOffset=" + caseRevisionOffset;
   }
@@ -67,14 +70,26 @@ public record CcdDataMigrationTaskOptions(
         .collect(Collectors.joining(","));
   }
 
+  /**
+   * Returns the event id window size.
+   *
+   * @deprecated use {@link #eventIdWindowSize()}.
+   */
+  @Deprecated(forRemoval = false)
+  public int eventBatchSize() {
+    return eventIdWindowSize;
+  }
+
   private String migrationConfigFingerprint() {
-    return String.join(
-        "\n",
+    var fields = new ArrayList<String>();
+    fields.addAll(List.of(
         "targetSchema=" + TARGET_SCHEMA,
         "fdwSchema=" + FDW_SCHEMA,
+        "sourceJurisdiction=" + sourceJurisdiction,
         "caseTypeIds=" + canonicalCaseTypeIds(),
         "caseRevisionOffset=" + caseRevisionOffset
-    );
+    ));
+    return String.join("\n", fields);
   }
 
   private static String sha256(String value) {
@@ -110,11 +125,12 @@ public record CcdDataMigrationTaskOptions(
     private String taskName = "ccd-data-migration";
     private CcdDataMigrationMode mode = CcdDataMigrationMode.PRELOAD_EVENTS;
     private final List<String> caseTypeIds;
-    private int eventBatchSize = 10_000;
+    private int eventIdWindowSize = 1_000_000;
     private long caseRevisionOffset = 1_000_000_000L;
     private int maxBatchesPerRun = Integer.MAX_VALUE;
     private Duration maxRunTime;
     private Duration statementTimeout = DEFAULT_STATEMENT_TIMEOUT;
+    private String sourceJurisdiction;
 
     private Builder(List<String> caseTypeIds) {
       this.caseTypeIds = caseTypeIds;
@@ -130,9 +146,19 @@ public record CcdDataMigrationTaskOptions(
       return this;
     }
 
-    public Builder eventBatchSize(int eventBatchSize) {
-      this.eventBatchSize = eventBatchSize;
+    public Builder eventIdWindowSize(int eventIdWindowSize) {
+      this.eventIdWindowSize = eventIdWindowSize;
       return this;
+    }
+
+    /**
+     * Sets the event id window size.
+     *
+     * @deprecated use {@link #eventIdWindowSize(int)}.
+     */
+    @Deprecated(forRemoval = false)
+    public Builder eventBatchSize(int eventBatchSize) {
+      return eventIdWindowSize(eventBatchSize);
     }
 
     public Builder caseRevisionOffset(long caseRevisionOffset) {
@@ -155,16 +181,22 @@ public record CcdDataMigrationTaskOptions(
       return this;
     }
 
+    public Builder sourceJurisdiction(String sourceJurisdiction) {
+      this.sourceJurisdiction = sourceJurisdiction;
+      return this;
+    }
+
     public CcdDataMigrationTaskOptions build() {
       return new CcdDataMigrationTaskOptions(
           taskName,
           mode,
           caseTypeIds,
-          eventBatchSize,
+          eventIdWindowSize,
           caseRevisionOffset,
           maxBatchesPerRun,
           maxRunTime,
-          statementTimeout
+          statementTimeout,
+          sourceJurisdiction
       );
     }
   }

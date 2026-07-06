@@ -105,12 +105,12 @@ public class CcdDataMigrationTask implements Runnable {
 
   public final CcdDataMigrationRunResult runMigration() {
     log.info(
-        "Starting CCD data migration task taskName={} mode={} caseTypeIds={} eventBatchSize={} "
+        "Starting CCD data migration task taskName={} mode={} caseTypeIds={} eventIdWindowSize={} "
             + "maxBatchesPerRun={} maxRunTime={}",
         options.taskName(),
         options.mode(),
         options.caseTypeIds(),
-        options.eventBatchSize(),
+        options.eventIdWindowSize(),
         options.maxBatchesPerRun(),
         options.maxRunTime()
     );
@@ -151,8 +151,8 @@ public class CcdDataMigrationTask implements Runnable {
     prepareElasticsearchQueueForMigration();
     long targetEventHwm = sourceEventHighWaterMark();
     CopyTotals totals = copyEventBatches(targetEventHwm);
-    long localEventHwm = localEventHighWaterMark();
-    boolean caughtUp = localEventHwm >= targetEventHwm;
+    long sourceEventHwm = sourceEventProgressHighWaterMark();
+    boolean caughtUp = sourceEventHwm >= targetEventHwm;
     log.info(
         "Completed CCD data migration preload taskName={} targetEventHwm={} batches={} cases={} events={} "
             + "caughtUp={} stoppedByTimeLimit={}",
@@ -190,14 +190,14 @@ public class CcdDataMigrationTask implements Runnable {
         ? captureCutoverEventHighWaterMark()
         : progress.cutoverEventHwm();
     CopyTotals totals = copyEventBatches(cutoverEventHwm);
-    long localEventHwm = localEventHighWaterMark();
-    if (totals.stoppedByTimeLimit() || localEventHwm < cutoverEventHwm) {
+    long sourceEventHwm = sourceEventProgressHighWaterMark();
+    if (totals.stoppedByTimeLimit() || sourceEventHwm < cutoverEventHwm) {
       log.info(
-          "CCD data migration cutover paused before final refresh taskName={} cutoverEventHwm={} localEventHwm={} "
+          "CCD data migration cutover paused before final refresh taskName={} cutoverEventHwm={} sourceEventHwm={} "
               + "batches={} events={} stoppedByTimeLimit={}",
           options.taskName(),
           cutoverEventHwm,
-          localEventHwm,
+          sourceEventHwm,
           totals.batches(),
           totals.events(),
           totals.stoppedByTimeLimit()
@@ -249,29 +249,27 @@ public class CcdDataMigrationTask implements Runnable {
     LocalDateTime stopAt = calculateStopAt();
 
     for (int i = 0; i < options.maxBatchesPerRun(); i++) {
-      long localEventHwm = localEventHighWaterMark();
-      if (localEventHwm >= targetEventHwm) {
+      long sourceEventHwm = effectiveSourceEventHighWaterMark(targetEventHwm);
+      if (sourceEventHwm >= targetEventHwm) {
         totals = totals.markCaughtUp();
         break;
       }
 
-      long batchEndEventHwm = nextSourceEventBatchEndAfter(localEventHwm, targetEventHwm);
-      long batchStartEventId = localEventHwm + 1L;
+      long batchEndEventHwm = nextFixedEventWindowEnd(sourceEventHwm, targetEventHwm);
+      long batchStartEventId = sourceEventHwm + 1L;
       int events = transaction.execute(status -> {
         applyMigrationStatementTimeout();
-        return copyNextEventBatch(batchStartEventId, batchEndEventHwm);
+        int copiedEvents = copyNextEventBatch(batchStartEventId, batchEndEventHwm);
+        updateSourceEventProgressHighWaterMark(batchEndEventHwm);
+        return copiedEvents;
       });
-      if (events == 0) {
-        totals = totals.markCaughtUp();
-        break;
-      }
       totals = totals.plus(events);
       log.info(
-          "CCD data migration progress taskName={} mode={} localEventHwm={} targetEventHwm={} "
+          "CCD data migration progress taskName={} mode={} sourceEventHwm={} targetEventHwm={} "
               + "batchStartEventId={} batchEndEventHwm={} batchEvents={} totalBatches={} totalEvents={}",
           options.taskName(),
           options.mode(),
-          localEventHwm,
+          sourceEventHwm,
           targetEventHwm,
           batchStartEventId,
           batchEndEventHwm,
@@ -281,7 +279,7 @@ public class CcdDataMigrationTask implements Runnable {
       );
 
       if (isTimeLimitReached(stopAt)) {
-        log.info("Stopping CCD data migration taskName={} after event batch because time limit was reached",
+        log.info("Stopping CCD data migration taskName={} after event id window because time limit was reached",
             options.taskName());
         totals = totals.markStoppedByTimeLimit();
         break;
@@ -297,7 +295,9 @@ public class CcdDataMigrationTask implements Runnable {
           select distinct on (cd.id) cd.*
           from fdw_stage.case_data cd
           join fdw_stage.case_event ce on ce.case_data_id = cd.id
-          where ce.case_type_id in (:caseTypeIds)
+          where cd.jurisdiction = :sourceJurisdiction
+            and cd.case_type_id in (:caseTypeIds)
+            and ce.case_type_id in (:caseTypeIds)
             and ce.id >= :batchStartEventId
             and ce.id <= :batchEndEventHwm
           order by cd.id
@@ -341,7 +341,10 @@ public class CcdDataMigrationTask implements Runnable {
         events_to_insert as materialized (
           select ce.*
           from fdw_stage.case_event ce
-          where ce.case_type_id in (:caseTypeIds)
+          join fdw_stage.case_data cd on cd.id = ce.case_data_id
+          where cd.jurisdiction = :sourceJurisdiction
+            and cd.case_type_id in (:caseTypeIds)
+            and ce.case_type_id in (:caseTypeIds)
             and ce.id >= :batchStartEventId
             and ce.id <= :batchEndEventHwm
         ),
@@ -507,7 +510,10 @@ public class CcdDataMigrationTask implements Runnable {
           """
           select coalesce(max(ce.id), 0)
           from fdw_stage.case_event ce
-          where ce.case_type_id in (:caseTypeIds)
+          join fdw_stage.case_data cd on cd.id = ce.case_data_id
+          where cd.jurisdiction = :sourceJurisdiction
+            and cd.case_type_id in (:caseTypeIds)
+            and ce.case_type_id in (:caseTypeIds)
           """,
           baseParams(),
           Long.class
@@ -522,7 +528,10 @@ public class CcdDataMigrationTask implements Runnable {
           """
           select coalesce(max(ce.id), 0)
           from ccd.case_event ce
-          where ce.case_type_id in (:caseTypeIds)
+          join ccd.case_data cd on cd.id = ce.case_data_id
+          where cd.jurisdiction = :sourceJurisdiction
+            and cd.case_type_id in (:caseTypeIds)
+            and ce.case_type_id in (:caseTypeIds)
           """,
           baseParams(),
           Long.class
@@ -531,25 +540,53 @@ public class CcdDataMigrationTask implements Runnable {
     });
   }
 
-  private long nextSourceEventBatchEndAfter(long localEventHwm, long targetEventHwm) {
-    Long batchEndEventHwm = withMigrationStatementTimeout(() -> db.query(
+  private long sourceEventProgressHighWaterMark() {
+    Long hwm = db.queryForObject(
         """
-        select ce.id
-        from fdw_stage.case_event ce
-        where ce.case_type_id in (:caseTypeIds)
-          and ce.id > :localEventHwm
-          and ce.id <= :targetEventHwm
-        order by ce.id
-        offset :eventBatchOffset
-        limit 1
+        select source_event_hwm
+        from ccd.ccd_data_migration_progress
+        where task_name = :taskName
         """,
-        baseParams()
-            .addValue("localEventHwm", localEventHwm)
-            .addValue("targetEventHwm", targetEventHwm)
-            .addValue("eventBatchOffset", options.eventBatchSize() - 1),
-        rs -> rs.next() ? rs.getLong(1) : null
-    ));
-    return batchEndEventHwm == null ? targetEventHwm : batchEndEventHwm;
+        Map.of("taskName", options.taskName()),
+        Long.class
+    );
+    return hwm == null ? 0 : hwm;
+  }
+
+  private void updateSourceEventProgressHighWaterMark(long sourceEventHwm) {
+    db.update(
+        """
+        update ccd.ccd_data_migration_progress
+        set source_event_hwm = :sourceEventHwm,
+            updated_at = now() at time zone 'UTC'
+        where task_name = :taskName
+        """,
+        Map.of(
+            "taskName", options.taskName(),
+            "sourceEventHwm", sourceEventHwm
+        )
+    );
+  }
+
+  private long effectiveSourceEventHighWaterMark(long targetEventHwm) {
+    long progressEventHwm = sourceEventProgressHighWaterMark();
+    long localEventHwm = localEventHighWaterMark();
+    long effectiveEventHwm = Math.max(progressEventHwm, localEventHwm);
+    if (effectiveEventHwm > 0) {
+      if (progressEventHwm < effectiveEventHwm) {
+        updateSourceEventProgressHighWaterMark(effectiveEventHwm);
+      }
+      return effectiveEventHwm;
+    }
+    return 0;
+  }
+
+  private long nextFixedEventWindowEnd(long sourceEventHwm, long targetEventHwm) {
+    long eventIdWindowSize = options.eventIdWindowSize();
+    long windowEnd = sourceEventHwm > Long.MAX_VALUE - eventIdWindowSize
+        ? Long.MAX_VALUE
+        : sourceEventHwm + eventIdWindowSize;
+    return Math.min(windowEnd, targetEventHwm);
   }
 
   private long captureCutoverEventHighWaterMark() {
@@ -695,6 +732,7 @@ public class CcdDataMigrationTask implements Runnable {
             'config_hash',
             'status',
             'cutover_event_hwm',
+            'source_event_hwm',
             'created_at',
             'updated_at'
           )
@@ -702,7 +740,7 @@ public class CcdDataMigrationTask implements Runnable {
         Map.of("schema", TARGET_SCHEMA),
         Integer.class
     );
-    if (columnCount == null || columnCount != 6) {
+    if (columnCount == null || columnCount != 7) {
       throw new CcdDataMigrationException(
           "CCD data migration progress table is missing or incomplete. "
               + "Run the decentralised-runtime Flyway migrations before starting the task."
@@ -732,7 +770,8 @@ public class CcdDataMigrationTask implements Runnable {
         """
         select config_hash,
                status,
-               cutover_event_hwm
+               cutover_event_hwm,
+               source_event_hwm
         from ccd.ccd_data_migration_progress
         where task_name = :taskName
         """,
@@ -767,7 +806,8 @@ public class CcdDataMigrationTask implements Runnable {
     return new Progress(
         rs.getString("config_hash"),
         rs.getString("status"),
-        cutoverEventHwm
+        cutoverEventHwm,
+        rs.getLong("source_event_hwm")
     );
   }
 
@@ -846,7 +886,9 @@ public class CcdDataMigrationTask implements Runnable {
   }
 
   private MapSqlParameterSource baseParams() {
-    return new MapSqlParameterSource().addValue("caseTypeIds", options.caseTypeIds());
+    return new MapSqlParameterSource()
+        .addValue("caseTypeIds", options.caseTypeIds())
+        .addValue("sourceJurisdiction", options.sourceJurisdiction());
   }
 
   private AdvisoryLock tryLock() {
@@ -951,7 +993,7 @@ public class CcdDataMigrationTask implements Runnable {
     }
   }
 
-  private record Progress(String configHash, String status, Long cutoverEventHwm) {
+  private record Progress(String configHash, String status, Long cutoverEventHwm, long sourceEventHwm) {
     long requiredCutoverEventHwm() {
       if (cutoverEventHwm == null) {
         throw new CcdDataMigrationException("cutover_event_hwm is not set for completed migration");
