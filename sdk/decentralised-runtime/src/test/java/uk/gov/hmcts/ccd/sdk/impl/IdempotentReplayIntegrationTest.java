@@ -47,6 +47,8 @@ class IdempotentReplayIntegrationTest {
   private static final long CASE_REFERENCE_B = 2222000000000000L;
   private static final long UPSERT_CASE_REFERENCE = 3333000000000000L;
   private static final long REINDEX_CASE_REFERENCE = 4444000000000000L;
+  private static final long LOWER_PRIORITY_REINDEX_CASE_REFERENCE = 5555000000000000L;
+  private static final long LIVE_UPDATE_AFTER_REINDEX_CASE_REFERENCE = 6666000000000000L;
 
   @Autowired
   private NamedParameterJdbcTemplate jdbc;
@@ -153,7 +155,8 @@ class IdempotentReplayIntegrationTest {
     jdbc.update(
         """
         update ccd.es_queue
-           set case_revision = :stale_revision
+           set case_revision = :stale_revision,
+               enqueued_at = now() - interval '1 minute'
          where reference = :reference
         """,
         Map.of(
@@ -170,6 +173,86 @@ class IdempotentReplayIntegrationTest {
         Long.class
     );
     assertThat(queuedRevision).isEqualTo(5L);
+
+    Boolean keptLiveQueuePriority = jdbc.queryForObject(
+        """
+        select enqueued_at < now()
+        from ccd.es_queue
+        where reference = :reference
+        """,
+        Map.of("reference", REINDEX_CASE_REFERENCE),
+        Boolean.class
+    );
+    assertThat(keptLiveQueuePriority).isTrue();
+  }
+
+  @Test
+  void reindexingPlacesNewQueueRowsBehindLiveCaseUpdates() {
+    seedCaseData(LOWER_PRIORITY_REINDEX_CASE_REFERENCE, LOWER_PRIORITY_REINDEX_CASE_REFERENCE, 1, 5);
+    jdbc.update(
+        "delete from ccd.es_queue where reference = :reference",
+        Map.of("reference", LOWER_PRIORITY_REINDEX_CASE_REFERENCE)
+    );
+
+    reindexingService.enqueueCasesModifiedSince(LocalDate.now().minusDays(1));
+
+    Boolean lowerPriorityByDefault = jdbc.queryForObject(
+        """
+        select enqueued_at >= now() + interval '5 hours'
+        from ccd.es_queue
+        where reference = :reference
+        """,
+        Map.of("reference", LOWER_PRIORITY_REINDEX_CASE_REFERENCE),
+        Boolean.class
+    );
+    assertThat(lowerPriorityByDefault).isTrue();
+  }
+
+  @Test
+  void liveCaseUpdateRestoresQueuePriorityAfterReindexingQueuedTheCase() {
+    seedCaseData(LIVE_UPDATE_AFTER_REINDEX_CASE_REFERENCE, LIVE_UPDATE_AFTER_REINDEX_CASE_REFERENCE, 1, 5);
+    jdbc.update(
+        "delete from ccd.es_queue where reference = :reference",
+        Map.of("reference", LIVE_UPDATE_AFTER_REINDEX_CASE_REFERENCE)
+    );
+
+    reindexingService.enqueueCasesModifiedSince(LocalDate.now().minusDays(1));
+
+    Boolean lowerPriorityAfterReindex = jdbc.queryForObject(
+        """
+        select enqueued_at >= now() + interval '5 hours'
+        from ccd.es_queue
+        where reference = :reference
+        """,
+        Map.of("reference", LIVE_UPDATE_AFTER_REINDEX_CASE_REFERENCE),
+        Boolean.class
+    );
+    assertThat(lowerPriorityAfterReindex).isTrue();
+
+    jdbc.update(
+        """
+        update ccd.case_data
+           set case_revision = :revision,
+               last_modified = now()
+         where reference = :reference
+        """,
+        Map.of(
+            "reference", LIVE_UPDATE_AFTER_REINDEX_CASE_REFERENCE,
+            "revision", 6
+        )
+    );
+
+    Map<String, Object> queued = jdbc.queryForMap(
+        """
+        select case_revision,
+               enqueued_at < now() + interval '1 minute' as live_priority
+        from ccd.es_queue
+        where reference = :reference
+        """,
+        Map.of("reference", LIVE_UPDATE_AFTER_REINDEX_CASE_REFERENCE)
+    );
+    assertThat(queued.get("case_revision")).isEqualTo(6L);
+    assertThat(queued.get("live_priority")).isEqualTo(true);
   }
 
   private void seedCaseData(int version, long revision) {
