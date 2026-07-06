@@ -26,7 +26,7 @@ public class RetentionCaseDataRepository {
     String sql = SELECT_CASE_DATA + """
         where case_type_id in (:caseTypeIds)
           and resolved_ttl < current_date
-        order by resolved_ttl desc
+        order by resolved_ttl asc
         limit :limit
         """;
 
