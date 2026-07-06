@@ -14,6 +14,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.function.BooleanSupplier;
+import java.util.function.Supplier;
 import javax.sql.DataSource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.env.Environment;
@@ -254,14 +255,12 @@ public class CcdDataMigrationTask implements Runnable {
         break;
       }
 
-      Long batchEndEventHwm = nextSourceEventBatchEndAfter(localEventHwm, targetEventHwm);
-      if (batchEndEventHwm == null) {
-        totals = totals.markCaughtUp();
-        break;
-      }
-
+      long batchEndEventHwm = nextSourceEventBatchEndAfter(localEventHwm, targetEventHwm);
       long batchStartEventId = localEventHwm + 1L;
-      int events = transaction.execute(status -> copyNextEventBatch(batchStartEventId, batchEndEventHwm));
+      int events = transaction.execute(status -> {
+        applyMigrationStatementTimeout();
+        return copyNextEventBatch(batchStartEventId, batchEndEventHwm);
+      });
       if (events == 0) {
         totals = totals.markCaughtUp();
         break;
@@ -420,6 +419,7 @@ public class CcdDataMigrationTask implements Runnable {
 
   private int refreshCutoverCaseData() {
     return transaction.execute(status -> {
+      applyMigrationStatementTimeout();
       disableCaseDataRevisionTrigger();
       try {
         int refreshedCases = syncCaseDataForCutover();
@@ -502,51 +502,54 @@ public class CcdDataMigrationTask implements Runnable {
   }
 
   private long sourceEventHighWaterMark() {
-    Long hwm = db.queryForObject(
-        """
-        select coalesce(max(ce.id), 0)
-        from fdw_stage.case_event ce
-        where ce.case_type_id in (:caseTypeIds)
-        """,
-        baseParams(),
-        Long.class
-    );
-    return hwm == null ? 0 : hwm;
+    return withMigrationStatementTimeout(() -> {
+      Long hwm = db.queryForObject(
+          """
+          select coalesce(max(ce.id), 0)
+          from fdw_stage.case_event ce
+          where ce.case_type_id in (:caseTypeIds)
+          """,
+          baseParams(),
+          Long.class
+      );
+      return hwm == null ? 0 : hwm;
+    });
   }
 
   private long localEventHighWaterMark() {
-    Long hwm = db.queryForObject(
-        """
-        select coalesce(max(ce.id), 0)
-        from ccd.case_event ce
-        where ce.case_type_id in (:caseTypeIds)
-        """,
-        baseParams(),
-        Long.class
-    );
-    return hwm == null ? 0 : hwm;
+    return withMigrationStatementTimeout(() -> {
+      Long hwm = db.queryForObject(
+          """
+          select coalesce(max(ce.id), 0)
+          from ccd.case_event ce
+          where ce.case_type_id in (:caseTypeIds)
+          """,
+          baseParams(),
+          Long.class
+      );
+      return hwm == null ? 0 : hwm;
+    });
   }
 
-  private Long nextSourceEventBatchEndAfter(long localEventHwm, long targetEventHwm) {
-    return db.queryForObject(
+  private long nextSourceEventBatchEndAfter(long localEventHwm, long targetEventHwm) {
+    Long batchEndEventHwm = withMigrationStatementTimeout(() -> db.query(
         """
-        -- The + 0 prevents PostgreSQL's min/max optimisation from walking pk_case_event
-        -- when the case_type_id predicate is sparse on the source CCD table.
-        select coalesce(
-          (array_agg(ce.id + 0 order by ce.id))[:eventBatchSize],
-          max(ce.id + 0)
-        )
+        select ce.id
         from fdw_stage.case_event ce
         where ce.case_type_id in (:caseTypeIds)
           and ce.id > :localEventHwm
           and ce.id <= :targetEventHwm
+        order by ce.id
+        offset :eventBatchOffset
+        limit 1
         """,
         baseParams()
             .addValue("localEventHwm", localEventHwm)
             .addValue("targetEventHwm", targetEventHwm)
-            .addValue("eventBatchSize", options.eventBatchSize()),
-        Long.class
-    );
+            .addValue("eventBatchOffset", options.eventBatchSize() - 1),
+        rs -> rs.next() ? rs.getLong(1) : null
+    ));
+    return batchEndEventHwm == null ? targetEventHwm : batchEndEventHwm;
   }
 
   private long captureCutoverEventHighWaterMark() {
@@ -582,6 +585,7 @@ public class CcdDataMigrationTask implements Runnable {
 
   private void completeCutover(long cutoverEventHwm) {
     transaction.execute(status -> {
+      applyMigrationStatementTimeout();
       validateFinal(cutoverEventHwm);
       enableElasticsearchQueueTrigger();
       markComplete();
@@ -815,6 +819,24 @@ public class CcdDataMigrationTask implements Runnable {
 
   private boolean isTimeLimitReached(LocalDateTime stopAt) {
     return stopAt != null && !LocalDateTime.now(clock).isBefore(stopAt);
+  }
+
+  private <T> T withMigrationStatementTimeout(Supplier<T> operation) {
+    return transaction.execute(status -> {
+      applyMigrationStatementTimeout();
+      return operation.get();
+    });
+  }
+
+  private void applyMigrationStatementTimeout() {
+    if (options.statementTimeout() == null) {
+      return;
+    }
+    db.getJdbcTemplate().queryForObject(
+        "select set_config('statement_timeout', ?, true)",
+        String.class,
+        options.statementTimeout().toMillis() + "ms"
+    );
   }
 
   private MapSqlParameterSource eventBatchParams(long batchStartEventId, long batchEndEventHwm) {

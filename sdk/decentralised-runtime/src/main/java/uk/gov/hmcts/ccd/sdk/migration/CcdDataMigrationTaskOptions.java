@@ -17,10 +17,12 @@ public record CcdDataMigrationTaskOptions(
     int eventBatchSize,
     long caseRevisionOffset,
     int maxBatchesPerRun,
-    Duration maxRunTime
+    Duration maxRunTime,
+    Duration statementTimeout
 ) {
   private static final String TARGET_SCHEMA = "ccd";
   private static final String FDW_SCHEMA = "fdw_stage";
+  private static final Duration DEFAULT_STATEMENT_TIMEOUT = Duration.ofMinutes(10);
 
   public CcdDataMigrationTaskOptions {
     taskName = requireText(taskName, "taskName");
@@ -38,6 +40,9 @@ public record CcdDataMigrationTaskOptions(
     }
     if (maxRunTime != null && !maxRunTime.isPositive()) {
       throw new IllegalArgumentException("maxRunTime must be positive when set");
+    }
+    if (statementTimeout != null && !statementTimeout.isPositive()) {
+      throw new IllegalArgumentException("statementTimeout must be positive when set");
     }
   }
 
@@ -109,6 +114,7 @@ public record CcdDataMigrationTaskOptions(
     private long caseRevisionOffset = 1_000_000_000L;
     private int maxBatchesPerRun = Integer.MAX_VALUE;
     private Duration maxRunTime;
+    private Duration statementTimeout = DEFAULT_STATEMENT_TIMEOUT;
 
     private Builder(List<String> caseTypeIds) {
       this.caseTypeIds = caseTypeIds;
@@ -144,6 +150,11 @@ public record CcdDataMigrationTaskOptions(
       return this;
     }
 
+    public Builder statementTimeout(Duration statementTimeout) {
+      this.statementTimeout = statementTimeout;
+      return this;
+    }
+
     public CcdDataMigrationTaskOptions build() {
       return new CcdDataMigrationTaskOptions(
           taskName,
@@ -152,7 +163,8 @@ public record CcdDataMigrationTaskOptions(
           eventBatchSize,
           caseRevisionOffset,
           maxBatchesPerRun,
-          maxRunTime
+          maxRunTime,
+          statementTimeout
       );
     }
   }
