@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.Map;
 import org.junit.jupiter.api.AfterEach;
@@ -132,7 +133,7 @@ class JsonCallbackBridgeTest {
     @PostMapping("/noc-about-to-submit")
     NocCallbackResponse nocAboutToSubmit(@RequestBody Map<String, Object> request) {
       return new NocCallbackResponse(new NocCaseData(
-          new ChangeOrganisationRequestField(new OrganisationToAdd())
+          new ChangeOrganisationRequestField(new OrganisationToAdd(null))
       ));
     }
   }
@@ -146,6 +147,6 @@ class JsonCallbackBridgeTest {
   private record ChangeOrganisationRequestField(OrganisationToAdd OrganisationToAdd) {
   }
 
-  private record OrganisationToAdd() {
+  private record OrganisationToAdd(@JsonProperty("OrganisationID") String organisationId) {
   }
 }
