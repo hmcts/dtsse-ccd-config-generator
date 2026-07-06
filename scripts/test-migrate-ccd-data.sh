@@ -1,101 +1,22 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-PSQL_BIN="${PSQL_BIN:-psql}"
-PG_DUMP_BIN="${PG_DUMP_BIN:-pg_dump}"
-CREATEDB_BIN="${CREATEDB_BIN:-createdb}"
-DROPDB_BIN="${DROPDB_BIN:-dropdb}"
-
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=scripts/migration-test/lib.sh
+source "${SCRIPT_DIR}/migration-test/lib.sh"
+
 MIGRATION_SCRIPT="${SCRIPT_DIR}/migrate-ccd-data.sh"
 CLEAN_SCRIPT="${SCRIPT_DIR}/clean-target-case-data.sh"
 
-PG_HOST="${PG_HOST:-localhost}"
-PG_PORT="${PG_PORT:-6432}"
-PG_USER="${PG_USER:-postgres}"
-PG_PASSWORD="${PG_PASSWORD:-postgres}"
-CASE_TYPE="${CASE_TYPE:-CriminalInjuriesCompensation}"
-export PGPASSWORD="$PG_PASSWORD"
+init_migration_test_env "classic"
+trap cleanup_temp_dbs EXIT
 
-BASE_CONN_ARGS=(-h "$PG_HOST" -p "$PG_PORT" -U "$PG_USER")
-BASE_DSN="postgresql://${PG_USER}:${PG_PASSWORD}@${PG_HOST}:${PG_PORT}"
+create_temp_dbs
+seed_source_data
+clear_target_data
+install_trigger_guards
 
-SUFFIX="$(date +%s%N)"
-SRC_DB="tmp_datastore_${SUFFIX}"
-DST_DB="tmp_nfd_${SUFFIX}"
-SRC_DSN="${BASE_DSN}/${SRC_DB}"
-DST_DSN="${BASE_DSN}/${DST_DB}"
-
-cleanup() {
-  # Terminate any remaining connections, then drop the temporary databases.
-  for db in "$SRC_DB" "$DST_DB"; do
-    $PSQL_BIN -d "${BASE_DSN}/postgres" "${BASE_CONN_ARGS[@]}" --set=ON_ERROR_STOP=on --command \
-      "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '${db}' AND pid <> pg_backend_pid();" >/dev/null 2>&1 || true
-  done
-
-  $DROPDB_BIN "${BASE_CONN_ARGS[@]}" --if-exists "$SRC_DB" >/dev/null 2>&1 || true
-  $DROPDB_BIN "${BASE_CONN_ARGS[@]}" --if-exists "$DST_DB" >/dev/null 2>&1 || true
-}
-trap cleanup EXIT
-
-echo "Creating temporary databases: $SRC_DB and $DST_DB"
-$CREATEDB_BIN "${BASE_CONN_ARGS[@]}" "$SRC_DB"
-$CREATEDB_BIN "${BASE_CONN_ARGS[@]}" "$DST_DB"
-
-echo "Cloning datastore schema into $SRC_DB"
-$PG_DUMP_BIN --schema-only "${BASE_DSN}/datastore" | $PSQL_BIN "$SRC_DSN" >/dev/null
-
-echo "Cloning nfd schema into $DST_DB"
-$PG_DUMP_BIN --schema-only --schema=ccd "${BASE_DSN}/nfd" | $PSQL_BIN "$DST_DSN" >/dev/null
-
-echo "Seeding source database with sample CIC data"
-$PSQL_BIN "$SRC_DSN" --set=ON_ERROR_STOP=on <<'SQL'
-SET client_min_messages TO WARNING;
-DELETE FROM case_event WHERE case_data_id = 5601;
-DELETE FROM case_data WHERE id = 5601;
-DELETE FROM case_event WHERE case_data_id = 5602;
-DELETE FROM case_data WHERE id = 5602;
-
-INSERT INTO case_data (
-    id, reference, created_date, last_modified, jurisdiction, case_type_id, state,
-    data, data_classification, supplementary_data, security_classification, version
-) VALUES (
-    5601, 7700000000000001, now(), now(), 'ST_CIC', 'CriminalInjuriesCompensation', 'Submitted',
-    '{}'::jsonb, '{}'::jsonb, '{}'::jsonb, 'PUBLIC', 3
-), (
-    5602, 7700000000000002, now(), now(), 'ST_CIC', 'CriminalInjuriesCompensation', 'Submitted',
-    '{}'::jsonb, '{}'::jsonb, '{}'::jsonb, 'PUBLIC', 1
-);
-
-INSERT INTO case_event (
-    id, created_date, event_id, user_id, case_data_id, case_type_id, case_type_version,
-    state_id, data, user_first_name, user_last_name, event_name, state_name,
-    security_classification, summary, description
-) VALUES (
-    9101, now(), 'submit-case', 'user-1', 5601, 'CriminalInjuriesCompensation', 1,
-    'Submitted', '{}'::jsonb, 'Case', 'Worker', 'Submit case', 'Submitted',
-    'PUBLIC', 'summary', 'description'
-), (
-    9102, now(), 'caseworker-add-note', 'user-2', 5601, 'CriminalInjuriesCompensation', 1,
-    'Submitted', '{"note":"test"}'::jsonb, 'Case', 'Worker', 'Add note', 'Submitted',
-    'PUBLIC', 'summary', 'description'
-), (
-    9103, now(), 'submit-case', 'user-3', 5602, 'CriminalInjuriesCompensation', 1,
-    'Submitted', '{}'::jsonb, 'Case', 'Worker', 'Submit case', 'Submitted',
-    'PUBLIC', 'summary', 'description'
-), (
-    9104, now(), 'caseworker-add-note', 'user-4', 5602, 'CriminalInjuriesCompensation', 1,
-    'Submitted', '{"note":"extra"}'::jsonb, 'Case', 'Worker', 'Add note', 'Submitted',
-    'PUBLIC', 'summary', 'description'
-);
-SQL
-
-echo "Ensuring target database is empty"
-$PSQL_BIN "$DST_DSN" --set=ON_ERROR_STOP=on <<'SQL'
-SET client_min_messages TO WARNING;
-DELETE FROM ccd.case_event;
-DELETE FROM ccd.case_data;
-SQL
+assert_case_event_constraints_present
 
 echo "Running migration script (validation mode only)"
 SRC_DSN="$SRC_DSN" DST_DSN="$DST_DSN" CASE_TYPE="$CASE_TYPE" "$MIGRATION_SCRIPT"
@@ -103,48 +24,10 @@ SRC_DSN="$SRC_DSN" DST_DSN="$DST_DSN" CASE_TYPE="$CASE_TYPE" "$MIGRATION_SCRIPT"
 echo "Running migration script (apply mode)"
 SRC_DSN="$SRC_DSN" DST_DSN="$DST_DSN" CASE_TYPE="$CASE_TYPE" "$MIGRATION_SCRIPT" --apply
 
-echo "Validating migrated record counts"
-SRC_CASES=$($PSQL_BIN "$SRC_DSN" -At -c "SELECT COUNT(*) FROM case_data WHERE case_type_id='${CASE_TYPE}'")
-SRC_EVENTS=$($PSQL_BIN "$SRC_DSN" -At -c "SELECT COUNT(*) FROM case_event ce JOIN case_data cd ON cd.id = ce.case_data_id WHERE cd.case_type_id='${CASE_TYPE}'")
-DST_CASES=$($PSQL_BIN "$DST_DSN" -At -c "SELECT COUNT(*) FROM ccd.case_data WHERE case_type_id='${CASE_TYPE}'")
-DST_EVENTS=$($PSQL_BIN "$DST_DSN" -At -c "SELECT COUNT(*) FROM ccd.case_event ce JOIN ccd.case_data cd ON cd.id = ce.case_data_id WHERE cd.case_type_id='${CASE_TYPE}'")
-
-if [[ "$SRC_CASES" != "$DST_CASES" || "$SRC_EVENTS" != "$DST_EVENTS" ]]; then
-  echo "Count mismatch after migration: source=${SRC_CASES}/${SRC_EVENTS} target=${DST_CASES}/${DST_EVENTS}" >&2
-  exit 1
-fi
-
-# Guardrail: ensure migrated case_revision aligns with event count. We have seen CCD cases where versions differ
-# from the event count, so surface that here before adding uniqueness constraints in the service DB.
-echo "Validating migrated case revisions match event counts"
-REV_MISMATCH=$($PSQL_BIN "$DST_DSN" -At <<SQL
-WITH ev AS (
-  SELECT cd.id AS case_data_id, COUNT(*) AS event_count
-  FROM ccd.case_data cd
-  JOIN ccd.case_event ce ON ce.case_data_id = cd.id
-  WHERE cd.case_type_id = '${CASE_TYPE}'
-  GROUP BY cd.id
-)
-SELECT COUNT(*)
-FROM ccd.case_data cd
-JOIN ev ON ev.case_data_id = cd.id
-WHERE cd.case_type_id = '${CASE_TYPE}'
-  AND cd.case_revision <> ev.event_count;
-SQL
-)
-if [[ "$REV_MISMATCH" != "0" ]]; then
-  echo "Revision mismatch after migration: ${REV_MISMATCH} case(s) have case_revision out of sync with event count" >&2
-  exit 1
-fi
+assert_common_migration_state
 
 echo "Running cleanup script on target"
 DST_DSN="$DST_DSN" CASE_TYPE="$CASE_TYPE" "$CLEAN_SCRIPT"
-
-DST_CASES=$($PSQL_BIN "$DST_DSN" -At -c "SELECT COUNT(*) FROM ccd.case_data WHERE case_type_id='${CASE_TYPE}'")
-DST_EVENTS=$($PSQL_BIN "$DST_DSN" -At -c "SELECT COUNT(*) FROM ccd.case_event ce JOIN ccd.case_data cd ON cd.id = ce.case_data_id WHERE cd.case_type_id='${CASE_TYPE}'")
-if [[ "$DST_CASES" != "0" || "$DST_EVENTS" != "0" ]]; then
-  echo "Cleanup failed: target still has rows (${DST_CASES}/${DST_EVENTS})." >&2
-  exit 1
-fi
+assert_target_empty
 
 echo "Test migration (validate + apply + cleanup) completed successfully."

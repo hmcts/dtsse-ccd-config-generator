@@ -11,9 +11,14 @@ pluginManagement {
 includeBuild 'sdk'
 
 gradle.beforeProject { p ->
-    if (p.path == ':wa-task-management-api') {
+    if (p.path in [':wa-task-management-api', ':et']) {
         // Prevent subproject build.gradle from failing on wrapper { }.
         p.ext.wrapper = { Closure c -> }
+    }
+    if (p.path == ':et-shared') {
+        def etProject = gradle.rootProject.findProject(':et')
+        p.ext.jacksonVersion = etProject.jacksonVersion
+        p.ext.jacksonAnnotationsVersion = etProject.jacksonAnnotationsVersion
     }
 }
 
@@ -34,9 +39,14 @@ project(':sptribs').projectDir = file('test-projects/sptribs-case-api')
 include 'adoption'
 project(':adoption').projectDir = file('test-projects/adoption-cos-api')
 
+include 'et'
+project(':et').projectDir = file('test-projects/et-ccd-callbacks')
+include 'et-shared'
+project(':et-shared').projectDir = file('test-projects/et-ccd-callbacks/et-shared')
+
 if (file('ccd-data-store-api').exists()) {
     include 'ccd-data-store-api'
 }
-if (file('wa-task-management-api').exists()) {
+if (file('wa-task-management-api/build.gradle').exists()) {
     include 'wa-task-management-api'
 }

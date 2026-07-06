@@ -10,7 +10,7 @@ dependencies {
     implementation platform(SpringBootPlugin.BOM_COORDINATES)
     implementation project(':ccd-config-generator')
     // A filtered set of useful CCD POJOs including DTOs and other utilities.
-    implementation ('com.github.hmcts.rse-cft-lib:ccd-lib:0.19.1953') {
+    implementation ('com.github.hmcts.rse-cft-lib:ccd-lib:0.19.2186') {
         transitive = false
     }
     implementation group: 'org.springframework.boot', name: 'spring-boot-starter-web'
@@ -42,4 +42,44 @@ java {
 
 tasks.withType(Test).configureEach {
     useJUnitPlatform()
+    [
+        'ccd.data-migration.perf.cases',
+        'ccd.data-migration.perf.events-per-case',
+        'ccd.data-migration.perf.event-batch-size',
+        'ccd.data-migration.perf.max-seconds'
+    ].each { propertyName ->
+        def propertyValue = System.getProperty(propertyName)
+        if (propertyValue != null) {
+            systemProperty propertyName, propertyValue
+        }
+    }
+}
+
+tasks.register('checkMigrationImmutability') {
+    group = 'verification'
+    description = 'Fails if existing decentralised runtime database migrations are modified, deleted, or renamed'
+
+    doLast {
+        def stdout = new ByteArrayOutputStream()
+        exec {
+            commandLine 'git', 'diff', '--name-status', '--find-renames', '--diff-filter=MDR',
+                'origin/master...HEAD', '--',
+                ':(top)sdk/decentralised-runtime/src/main/resources/dataruntime-db/migration/V*.sql'
+            standardOutput = stdout
+        }
+
+        def changedExistingMigrations = stdout.toString('UTF-8').readLines().findAll { it.trim() }
+
+        if (!changedExistingMigrations.isEmpty()) {
+            throw new GradleException(
+                "Existing decentralised runtime database migrations must not be modified, deleted, or renamed. "
+                    + "Add a new migration instead.\n\n"
+                    + changedExistingMigrations.join('\n')
+            )
+        }
+    }
+}
+
+tasks.named('check') {
+    dependsOn tasks.named('checkMigrationImmutability')
 }

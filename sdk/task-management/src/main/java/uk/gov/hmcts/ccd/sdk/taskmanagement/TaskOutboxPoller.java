@@ -114,12 +114,6 @@ public class TaskOutboxPoller {
       return true;
     }
 
-    if (List.of(TaskAction.INITIATE, TaskAction.RECONFIGURE).contains(action) && response.getBody() == null) {
-      log.warn("Task outbox {} create response missing body", record.id());
-      handleFailure(record, response.getStatusCode().value(), "Task creation response missing task_id");
-      return true;
-    }
-
     return false;
   }
 
@@ -144,16 +138,16 @@ public class TaskOutboxPoller {
     List<String> taskTypes = terminateTaskOutboxPayload.taskTypes();
 
     var tasksToTerminate = taskManagementApiClient.getTasks(caseId, taskTypes);
-    GetTasksResponse responseBody = tasksToTerminate.getBody();
 
     String actionId = action.getId();
-    if (!tasksToTerminate.getStatusCode().is2xxSuccessful() || responseBody == null) {
+    if (tasksToTerminate == null || !tasksToTerminate.getStatusCode().is2xxSuccessful()) {
       log.warn("Failed to retrieve tasks to terminate for case {} and task types {} with action {}",
             caseId, taskTypes, actionId);
       return null;
     }
 
-    List<TaskPayload> tasks = responseBody.getTasks();
+    GetTasksResponse responseBody = tasksToTerminate.getBody();
+    List<TaskPayload> tasks = responseBody == null ? List.of() : responseBody.getTasks();
     if (CollectionUtils.isEmpty(tasks)) {
       log.debug("There are no tasks to terminate for case {} and task types {} with action {}",
           caseId, taskTypes, actionId);

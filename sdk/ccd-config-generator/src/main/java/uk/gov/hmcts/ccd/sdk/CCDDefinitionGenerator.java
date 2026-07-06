@@ -4,6 +4,7 @@ import com.google.common.collect.Lists;
 import com.google.common.collect.Multimap;
 import com.google.common.collect.Multimaps;
 import java.io.File;
+import java.util.Collection;
 import java.util.List;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
@@ -29,16 +30,24 @@ public class CCDDefinitionGenerator {
 
   @Bean
   public List<ResolvedCCDConfig<?, ?, ?>> loadConfigs() {
-    Multimap<Class<?>, CCDConfig<?, ?, ?>>
-        configsByDataClass = Multimaps
-        .index(configs, CCDDefinitionGenerator::resolveCaseDataClass);
+    return loadConfigs(configs);
+  }
+
+  private static List<ResolvedCCDConfig<?, ?, ?>> loadConfigs(Collection<CCDConfig<?, ?, ?>> configs) {
+    Multimap<ConfigGroup, CCDConfig<?, ?, ?>>
+        configsByGroup = Multimaps
+        .index(configs, CCDDefinitionGenerator::resolveConfigGroup);
 
     List<ResolvedCCDConfig<?, ?, ?>> result = Lists.newArrayList();
-    for (Class<?> c : configsByDataClass.keySet()) {
-      ConfigResolver generator = new ConfigResolver(configsByDataClass.get(c));
+    for (ConfigGroup group : configsByGroup.keySet()) {
+      ConfigResolver generator = new ConfigResolver(configsByGroup.get(group));
       result.add(generator.resolveCCDConfig());
     }
     return result;
+  }
+
+  private static ConfigGroup resolveConfigGroup(CCDConfig<?, ?, ?> config) {
+    return new ConfigGroup(resolveCaseDataClass(config), config.groupingKey());
   }
 
   private static Class<?> resolveCaseDataClass(CCDConfig<?, ?, ?> config) {
@@ -51,11 +60,14 @@ public class CCDDefinitionGenerator {
     return caseType;
   }
 
+  private record ConfigGroup(Class<?> caseDataClass, String groupingKey) {
+  }
+
   /**
    * Export all case types to the specified folder.
    */
   public void generateAllCaseTypesToJSON(File destinationFolder) {
-    for (ResolvedCCDConfig<?, ?, ?> c : loadConfigs()) {
+    for (ResolvedCCDConfig<?, ?, ?> c : loadConfigs(configs)) {
       File f = new File(destinationFolder, c.caseType);
       f.mkdirs();
       writer.writeConfig(f, c);

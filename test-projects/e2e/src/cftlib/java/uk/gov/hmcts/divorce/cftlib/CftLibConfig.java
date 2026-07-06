@@ -7,6 +7,7 @@ import org.springframework.core.io.ResourceLoader;
 import org.springframework.stereotype.Component;
 import uk.gov.hmcts.ccd.sdk.CCDDefinitionGenerator;
 import uk.gov.hmcts.divorce.divorcecase.NoFaultDivorce;
+import uk.gov.hmcts.divorce.jsonlegacy.JsonLegacyCcdConfig;
 import uk.gov.hmcts.divorce.simplecase.SimpleCaseConfiguration;
 import uk.gov.hmcts.divorce.simplecase.model.SimpleCaseState;
 import uk.gov.hmcts.rse.ccd.lib.api.CFTLib;
@@ -289,6 +290,10 @@ public class CftLibConfig implements CFTLibConfigurer {
 
         lib.importJsonDefinition(new File("build/definitions/" + NoFaultDivorce.getCaseType()));
         lib.importJsonDefinition(new File("build/definitions/" + SimpleCaseConfiguration.CASE_TYPE));
+        lib.importJsonDefinition(JsonLegacyCcdConfig.caseTypeADefinitionDirectory());
+        lib.importJsonDefinition(JsonLegacyCcdConfig.caseTypeBDefinitionDirectory());
+        lib.createProfile("TEST_CASE_WORKER_USER@mailinator.com", "DIVORCE", JsonLegacyCcdConfig.CASE_TYPE_A, "Submitted");
+        lib.createProfile("TEST_CASE_WORKER_USER@mailinator.com", "DIVORCE", JsonLegacyCcdConfig.CASE_TYPE_B, "Submitted");
         lib.dumpDefinitionSnapshots();
     }
 

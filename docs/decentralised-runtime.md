@@ -45,6 +45,37 @@ Case records are persisted and updated in the `ccd.case_data` table, including l
 
 Snapshots are recorded in the `ccd.case_event` table upon conclusion of each case event.
 
+### Event metadata
+
+Decentralised services can set the event history summary and description from server-side event handling. This is useful
+when the metadata should be derived from the selected case data rather than typed manually in XUI.
+
+For an emulated AboutToSubmit callback:
+
+```java
+return AboutToStartOrSubmitResponse.<CaseData, State>builder()
+    .data(caseData)
+    .eventMetadata(EventMetadata.builder()
+        .summary("Selected documents added")
+        .description("Documents: application.pdf, evidence.pdf")
+        .build())
+    .build();
+```
+
+For a decentralised submit handler:
+
+```java
+return SubmitResponse.<State>builder()
+    .eventMetadata(EventMetadata.builder()
+        .summary("Selected documents added")
+        .description("Documents: application.pdf, evidence.pdf")
+        .build())
+    .build();
+```
+
+`EventMetadata` is consumed by the decentralised runtime when it writes `ccd.case_event`. It is SDK-internal metadata and
+is not included in the callback response JSON returned to CCD.
+
 ### Optimistic locking of legacy JSON blobs
 
 The SDK implements optimistic locking on the legacy JSON blob in `ccd.case_data` via the `version` column.
@@ -129,7 +160,11 @@ erDiagram
 
 The SDK maintains a queue of cases requiring Elasticsearch indexing in `ccd.es_queue`.
 
-- **Reindex helper:** `CaseReindexingService` (in `sdk/decentralised-runtime`) lets you count and enqueue cases modified since a given date. Autowire the bean and call `enqueueCasesModifiedSince(LocalDate)` to repopulate `ccd.es_queue` without bumping `case_revision`; the decentralised indexer uses `EXTERNAL_GTE` so same-revision rewrites are accepted while older revisions still conflict.
+- **Reindex helper:** `CaseReindexingService` (in `sdk/decentralised-runtime`) lets you count and enqueue cases modified since a given date. Autowire the bean and call `enqueueCasesModifiedSince(LocalDate)` to repopulate `ccd.es_queue` without bumping `case_revision`; the decentralised indexer uses `EXTERNAL_GTE` so same-revision rewrites are accepted while older revisions still conflict. A successful reindex automatically clears older `ccd.es_dead_letter_queue` rows for the same case reference and `index_id`.
+
+The runtime indexer is provided by the `ccd-runtime-indexing` module when `runtimeIndexing = true`.
+Configure the target cluster with `ELASTIC_SEARCH_HOSTS`; multiple hosts can be supplied as a comma-separated
+list, for example `ELASTIC_SEARCH_HOSTS=http://es-1:9200,http://es-2:9200`.
 
 
 ## Transaction control

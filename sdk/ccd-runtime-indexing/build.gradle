@@ -1,0 +1,94 @@
+plugins {
+    id 'java-library'
+}
+
+repositories {
+    maven {
+        url = 'https://pkgs.dev.azure.com/hmcts/Artifacts/_packaging/hmcts-lib/maven/v1'
+    }
+    mavenCentral()
+}
+
+sourceSets {
+    chaosTest {
+        java.srcDir file('src/chaosTest/java')
+        resources.srcDir file('src/chaosTest/resources')
+        compileClasspath += sourceSets.main.output
+        runtimeClasspath += output + compileClasspath
+    }
+}
+
+configurations {
+    chaosTestImplementation.extendsFrom testImplementation
+    chaosTestRuntimeOnly.extendsFrom testRuntimeOnly
+}
+
+dependencies {
+    implementation 'org.springframework.boot:spring-boot-starter-jdbc'
+    implementation 'org.postgresql:postgresql'
+
+    implementation('co.elastic.clients:elasticsearch-java') {
+        version {
+            strictly '9.4.2'
+        }
+    }
+    implementation('co.elastic.clients:elasticsearch-rest5-client') {
+        version {
+            strictly '9.4.2'
+        }
+    }
+
+    implementation 'com.fasterxml.jackson.core:jackson-databind'
+
+    compileOnly 'org.projectlombok:lombok:1.18.46'
+    annotationProcessor 'org.projectlombok:lombok:1.18.46'
+
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+
+    chaosTestImplementation project(':decentralised-runtime')
+    chaosTestImplementation 'org.springframework.boot:spring-boot-starter-test'
+    chaosTestImplementation 'org.testcontainers:testcontainers'
+    chaosTestImplementation 'org.testcontainers:junit-jupiter'
+    chaosTestImplementation 'org.testcontainers:postgresql'
+    chaosTestImplementation 'org.testcontainers:testcontainers-elasticsearch'
+    chaosTestImplementation 'org.testcontainers:toxiproxy'
+    chaosTestImplementation 'org.flywaydb:flyway-core'
+    chaosTestImplementation 'org.awaitility:awaitility'
+    chaosTestRuntimeOnly 'org.flywaydb:flyway-database-postgresql'
+    chaosTestRuntimeOnly 'org.postgresql:postgresql'
+    chaosTestRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}
+
+tasks.withType(Javadoc).configureEach {
+    // Module intentionally exposes no public API; allow empty javadoc output without breaking publishes.
+    failOnError = false
+    options.addBooleanOption("Xdoclint:none", true)
+}
+
+tasks.withType(Test).configureEach {
+    useJUnitPlatform()
+}
+
+tasks.register('chaosTest', Test) {
+    description = 'Runs opt-in Elasticsearch indexing custody chaos tests'
+    group = 'verification'
+    testClassesDirs = sourceSets.chaosTest.output.classesDirs
+    classpath = sourceSets.chaosTest.runtimeClasspath
+    shouldRunAfter tasks.named('test')
+    useJUnitPlatform()
+    ['ccd.indexing.chaos.case-count', 'ccd.indexing.chaos.revision-count'].each { propertyName ->
+        if (System.getProperty(propertyName) != null) {
+            systemProperty propertyName, System.getProperty(propertyName)
+        }
+    }
+    testLogging {
+        exceptionFormat = 'full'
+    }
+}
