@@ -6,6 +6,12 @@ repositories {
     }
 }
 
+dependencyManagement {
+    imports {
+        mavenBom 'org.springframework.cloud:spring-cloud-dependencies:2024.0.3'
+    }
+}
+
 dependencies {
     implementation platform(SpringBootPlugin.BOM_COORDINATES)
     implementation project(':ccd-config-generator')
@@ -15,6 +21,8 @@ dependencies {
     }
     implementation group: 'org.springframework.boot', name: 'spring-boot-starter-web'
     implementation group: 'org.springframework.boot', name: 'spring-boot-starter-jdbc'
+    api 'org.springframework.cloud:spring-cloud-starter-openfeign'
+    api 'com.github.hmcts:service-auth-provider-java-client:5.3.4'
     implementation 'org.flywaydb:flyway-core'
     implementation('com.github.hmcts:idam-java-client:3.0.5') {
         transitive = false

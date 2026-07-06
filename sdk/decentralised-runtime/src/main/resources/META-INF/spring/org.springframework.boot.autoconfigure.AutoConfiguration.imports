@@ -2,3 +2,4 @@ uk.gov.hmcts.ccd.sdk.config.CcdWireFormatConfiguration
 uk.gov.hmcts.ccd.sdk.config.DecentralisedDataConfiguration
 uk.gov.hmcts.ccd.sdk.config.DefinitionMapperConfiguration
 uk.gov.hmcts.ccd.config.MessagingPropertiesAutoConfiguration
+uk.gov.hmcts.ccd.sdk.retention.config.RetentionAutoConfiguration

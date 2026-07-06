@@ -25,6 +25,7 @@ import java.time.ZoneOffset;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -33,6 +34,7 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Function;
 import java.util.HashMap;
+import java.util.Set;
 import java.util.stream.StreamSupport;
 
 import lombok.SneakyThrows;
@@ -112,6 +114,10 @@ import uk.gov.hmcts.divorce.jsonlegacy.JsonLegacyCcdConfig;
 import uk.gov.hmcts.ccd.sdk.type.CaseLink;
 import uk.gov.hmcts.ccd.sdk.type.ListValue;
 import uk.gov.hmcts.ccd.sdk.CaseReindexingService;
+import uk.gov.hmcts.ccd.sdk.retention.CaseRetentionService;
+import uk.gov.hmcts.ccd.sdk.retention.CcdCaseDataExistenceClient;
+import uk.gov.hmcts.ccd.sdk.retention.RetentionCaseDataRepository;
+import uk.gov.hmcts.ccd.sdk.retention.RetentionTaskResult;
 import uk.gov.hmcts.ccd.sdk.taskmanagement.model.TaskAction;
 import uk.gov.hmcts.reform.ccd.client.CoreCaseDataApi;
 import uk.gov.hmcts.reform.ccd.client.model.CaseDataContent;
@@ -184,6 +190,9 @@ public class TestWithCCD extends CftlibTest {
     private static final String JSON_LEGACY_NO_CALLBACK_EVENT_ID = "json-legacy-no-callback";
     private static final String JSON_LEGACY_EXTERNAL_SUBMITTED_EVENT_ID = "json-legacy-external-submitted";
     private static final String JSON_LEGACY_SUBMITTED_STATE_LABEL = "JSON submitted label";
+    private static final String RETENTION_CASE_TYPE = "RetentionTestCase";
+    private static final String RETENTION_JURISDICTION = "DIVORCE";
+    private static final long RETENTION_REFERENCE_BASE = 9_999_880_000_000_000L;
     private String apiFirstTaskId;
     private String waTaskId;
     private long jsonLegacyCaseTypeACaseRef;
@@ -2615,6 +2624,234 @@ public class TestWithCCD extends CftlibTest {
         assertThat(response.getStatusLine().getStatusCode(), equalTo(400));
         JsonNode errorPayload = mapper.readTree(responseBody);
         assertThat(errorPayload.path("status").asInt(), equalTo(400));
+    }
+
+    @SneakyThrows
+    @Order(34)
+    @Test
+    void retentionDeletesExpiredLocalCaseAndCascadesDependenciesWhenCcdPointerHasGone() {
+        long reference = RETENTION_REFERENCE_BASE + 1;
+        cleanupRetentionCases(reference);
+        seedRetentionCase(reference, reference, LocalDate.now().minusDays(1), "{}");
+        RetentionDependentRows dependentRows = insertRetentionDependentRows(reference, reference);
+
+        var existenceClient = new TestCcdCaseDataExistenceClient();
+        existenceClient.setExists(reference, false);
+
+        RetentionTaskResult result = retentionService(existenceClient).run(Set.of(RETENTION_CASE_TYPE), Set.of(), 10);
+
+        assertThat(result.deletedCases(), equalTo(1));
+        assertThat(result.skippedCases(), equalTo(0));
+        assertThat(countRows("ccd.case_data", "reference", reference), equalTo(0));
+        assertThat(countRows("ccd.case_event", "case_data_id", reference), equalTo(0));
+        assertThat(countRows("ccd.case_event_audit", "case_event_id", dependentRows.eventId()), equalTo(0));
+        assertThat(countRows("ccd.message_queue_candidates", "reference", reference), equalTo(0));
+        assertThat(countRows("ccd.es_queue", "reference", reference), equalTo(0));
+        assertThat(countRows("ccd.task_outbox", "case_id", reference), equalTo(0));
+        assertThat(countRows("ccd.task_outbox_history", "task_outbox_id", dependentRows.taskOutboxId()), equalTo(0));
+    }
+
+    @SneakyThrows
+    @Order(35)
+    @Test
+    void retentionKeepsExpiredLocalCaseWhenCcdPointerStillExists() {
+        long reference = RETENTION_REFERENCE_BASE + 2;
+        cleanupRetentionCases(reference);
+        seedRetentionCase(reference, reference, LocalDate.now().minusDays(1), "{}");
+
+        var existenceClient = new TestCcdCaseDataExistenceClient();
+        existenceClient.setExists(reference, true);
+
+        RetentionTaskResult result = retentionService(existenceClient).run(Set.of(RETENTION_CASE_TYPE), Set.of(), 10);
+
+        assertThat(result.deletedCases(), equalTo(0));
+        assertThat(result.skippedCases(), equalTo(1));
+        assertThat(countRows("ccd.case_data", "reference", reference), equalTo(1));
+
+        cleanupRetentionCases(reference);
+    }
+
+    @SneakyThrows
+    @Order(36)
+    @Test
+    void retentionDoesNotExpandCaseLinksBeforeDeletingExpiredLocalCase() {
+        long expiredReference = RETENTION_REFERENCE_BASE + 3;
+        long linkedFutureReference = RETENTION_REFERENCE_BASE + 4;
+        cleanupRetentionCases(expiredReference, linkedFutureReference);
+
+        seedRetentionCase(expiredReference, expiredReference, LocalDate.now().minusDays(1), """
+            {
+              "transferredCaseLinkSourceCaseId": "%d",
+              "linkedCaseCT": "/case-details/%d",
+              "transferredCaseLink": "/case-details/%d",
+              "caseLinks": [
+                {
+                  "value": {
+                    "CaseReference": "%d"
+                  }
+                }
+              ]
+            }
+            """.formatted(linkedFutureReference, linkedFutureReference, linkedFutureReference, linkedFutureReference));
+        seedRetentionCase(linkedFutureReference, linkedFutureReference, LocalDate.now().plusYears(1), "{}");
+
+        var existenceClient = new TestCcdCaseDataExistenceClient();
+        existenceClient.setExists(expiredReference, false);
+
+        RetentionTaskResult result = retentionService(existenceClient).run(Set.of(RETENTION_CASE_TYPE), Set.of(), 10);
+
+        assertThat(result.deletedCases(), equalTo(1));
+        assertThat(result.skippedCases(), equalTo(0));
+        assertThat(countRows("ccd.case_data", "reference", expiredReference), equalTo(0));
+        assertThat(countRows("ccd.case_data", "reference", linkedFutureReference), equalTo(1));
+        assertThat(existenceClient.requestedReferences(), contains(expiredReference));
+
+        cleanupRetentionCases(linkedFutureReference);
+    }
+
+    @SneakyThrows
+    @Order(37)
+    @Test
+    void retentionSimulationUsesResolvedTtlAndDoesNotCallCcdExistenceApi() {
+        long reference = RETENTION_REFERENCE_BASE + 5;
+        cleanupRetentionCases(reference);
+        seedRetentionCase(reference, reference, LocalDate.now().minusDays(1), """
+            {
+              "TTL": {
+                "SystemTTL": "2999-01-01",
+                "Suspended": "No"
+              }
+            }
+            """);
+
+        var existenceClient = new TestCcdCaseDataExistenceClient();
+
+        RetentionTaskResult result = retentionService(existenceClient).run(Set.of(), Set.of(RETENTION_CASE_TYPE), 10);
+
+        assertThat(result.simulatedCases(), equalTo(1));
+        assertThat(result.deletedCases(), equalTo(0));
+        assertThat(existenceClient.calls(), equalTo(0));
+        assertThat(countRows("ccd.case_data", "reference", reference), equalTo(1));
+
+        cleanupRetentionCases(reference);
+    }
+
+    private CaseRetentionService retentionService(TestCcdCaseDataExistenceClient existenceClient) {
+        return new CaseRetentionService(new RetentionCaseDataRepository(db), existenceClient);
+    }
+
+    private void seedRetentionCase(long reference, long id, LocalDate resolvedTtl, String data) {
+        db.getJdbcTemplate().update("""
+            insert into ccd.case_data (
+              id,
+              reference,
+              version,
+              jurisdiction,
+              case_type_id,
+              state,
+              data,
+              supplementary_data,
+              security_classification,
+              resolved_ttl,
+              case_revision,
+              created_date,
+              last_modified,
+              last_state_modified_date
+            ) values (?, ?, 1, ?, ?, 'Submitted', ?::jsonb, '{}'::jsonb, 'PUBLIC', ?, 1, now(), now(), now())
+            """, id, reference, RETENTION_JURISDICTION, RETENTION_CASE_TYPE, data, resolvedTtl);
+    }
+
+    private RetentionDependentRows insertRetentionDependentRows(long reference, long caseDataId) {
+        Long eventId = db.getJdbcTemplate().queryForObject("""
+            insert into ccd.case_event (
+              case_data_id,
+              case_type_version,
+              event_id,
+              summary,
+              description,
+              user_id,
+              case_type_id,
+              state_id,
+              data,
+              user_first_name,
+              user_last_name,
+              event_name,
+              state_name,
+              security_classification,
+              version,
+              case_revision,
+              idempotency_key
+            ) values (
+              ?, 1, 'retention-test-event', 'summary', 'description', 'user-1', ?, 'Submitted', '{}'::jsonb,
+              'Test', 'User', 'Event One', 'Submitted', 'PUBLIC', 1, 1,
+              '00000000-0000-0000-0000-000000000002'::uuid
+            )
+            returning id
+            """, Long.class, caseDataId, RETENTION_CASE_TYPE);
+        db.getJdbcTemplate().update("""
+            insert into ccd.case_event_audit(case_event_id, user_id, data)
+            values (?, '00000000-0000-0000-0000-000000000001'::uuid, '{}'::jsonb)
+            """, eventId);
+        db.getJdbcTemplate().update("""
+            insert into ccd.message_queue_candidates(reference, message_type, message_information)
+            values (?, 'caseEvent', '{}'::jsonb)
+            """, reference);
+        Long taskOutboxId = db.getJdbcTemplate().queryForObject("""
+            insert into ccd.task_outbox(case_id, payload, requested_action)
+            values (?, '{}'::jsonb, 'cancel')
+            returning id
+            """, Long.class, reference);
+        db.getJdbcTemplate().update("""
+            insert into ccd.task_outbox_history(task_outbox_id, status)
+            values (?, 'NEW')
+            """, taskOutboxId);
+        return new RetentionDependentRows(eventId, taskOutboxId);
+    }
+
+    private int countRows(String table, String column, long value) {
+        return db.getJdbcTemplate().queryForObject(
+            "select count(*) from " + table + " where " + column + " = ?",
+            Integer.class,
+            value
+        );
+    }
+
+    private void cleanupRetentionCases(long... references) {
+        if (references.length == 0) {
+            return;
+        }
+
+        List<Long> refs = Arrays.stream(references).boxed().toList();
+        db.update("delete from ccd.case_data where reference in (:references)", Map.of("references", refs));
+    }
+
+    private static final class TestCcdCaseDataExistenceClient implements CcdCaseDataExistenceClient {
+        private final Map<Long, Boolean> results = new HashMap<>();
+        private final List<Long> requestedReferences = new ArrayList<>();
+        private int calls;
+
+        @Override
+        public Map<Long, Boolean> caseDataExists(String jurisdiction, Collection<Long> caseReferences) {
+            calls++;
+            assertThat(jurisdiction, equalTo(RETENTION_JURISDICTION));
+            requestedReferences.addAll(caseReferences);
+            return Map.copyOf(results);
+        }
+
+        void setExists(Long reference, boolean exists) {
+            results.put(reference, exists);
+        }
+
+        int calls() {
+            return calls;
+        }
+
+        List<Long> requestedReferences() {
+            return requestedReferences;
+        }
+    }
+
+    private record RetentionDependentRows(Long eventId, Long taskOutboxId) {
     }
 
     private Map<String, Object> queryCurrentOutboxRow(String caseId) {
