@@ -6,7 +6,7 @@ plugins {
   id 'io.spring.dependency-management' version '1.1.7'
   id 'jacoco'
   id 'hmcts.ccd.sdk'
-  id 'com.github.hmcts.rse-cft-lib' version '0.19.2197'
+  id 'com.github.hmcts.rse-cft-lib' version '0.19.2227'
 }
 
 group = 'uk.gov.hmcts'
@@ -69,7 +69,7 @@ dependencies {
   implementation 'org.springframework.retry:spring-retry'
 
   implementation 'org.flywaydb:flyway-database-postgresql'
-  implementation 'org.postgresql:postgresql:42.7.11'
+  implementation 'org.postgresql:postgresql:42.7.12'
 
 
   implementation 'com.github.hmcts:ccd-case-document-am-client:1.59.2'
@@ -133,6 +133,7 @@ tasks.withType(Test).configureEach {
 }
 
 test {
+  dependsOn tasks.named('generateJsonLegacyDefinitions')
   failFast = true
 }
 
@@ -263,6 +264,7 @@ cftlibTest {
   environment 'RSE_LIB_ADDITIONAL_DATABASES', 'nfd'
   environment 'IDAM_SYSTEM_UPDATE_USERNAME', 'test-system-user@hmcts.net'
   environment 'IDAM_SYSTEM_UPDATE_PASSWORD', 'password'
+  environment 'CCD_SDK_INDEXING_BULK_TIMEOUT', '5s'
 }
 
 configurations.all {

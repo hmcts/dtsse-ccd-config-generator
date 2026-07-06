@@ -187,13 +187,13 @@ create foreign table :"fdw_schema".case_data (
   state varchar(255),
   data jsonb,
   supplementary_data jsonb,
-  id bigint,
-  case_revision bigint
+  id bigint
 )
 server :"fdw_server"
 options (
   schema_name :'src_schema',
-  table_name 'case_data'
+  table_name 'case_data',
+  fetch_size '10000'
 );
 
 create foreign table :"fdw_schema".case_event (
@@ -215,15 +215,13 @@ create foreign table :"fdw_schema".case_event (
   state_name varchar(255),
   proxied_by varchar(64),
   proxied_by_first_name varchar(255),
-  proxied_by_last_name varchar(255),
-  idempotency_key uuid,
-  version integer,
-  case_revision bigint
+  proxied_by_last_name varchar(255)
 )
 server :"fdw_server"
 options (
   schema_name :'src_schema',
-  table_name 'case_event'
+  table_name 'case_event',
+  fetch_size '10000'
 );
 SQL
 }

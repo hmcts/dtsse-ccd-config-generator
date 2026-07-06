@@ -12,6 +12,7 @@ PG_PASSWORD="${PG_PASSWORD:-postgres}"
 CASE_TYPE="${CASE_TYPE:-CriminalInjuriesCompensation}"
 OTHER_CASE_TYPE="${OTHER_CASE_TYPE:-OtherCaseType}"
 FDW_SCHEMA="${FDW_SCHEMA:-fdw_stage}"
+CASE_REVISION_OFFSET="${CASE_REVISION_OFFSET:-1000000000}"
 
 export PGPASSWORD="$PG_PASSWORD"
 
@@ -31,6 +32,8 @@ init_migration_test_env() {
 }
 
 cleanup_temp_dbs() {
+  local exit_code=$?
+
   for db in "$SRC_DB" "$DST_DB"; do
     "$PSQL_BIN" -d "${BASE_DSN}/postgres" "${BASE_CONN_ARGS[@]}" --set=ON_ERROR_STOP=on --command \
       "select pg_terminate_backend(pid) from pg_stat_activity where datname = '${db}' and pid <> pg_backend_pid();" \
@@ -39,6 +42,8 @@ cleanup_temp_dbs() {
 
   "$DROPDB_BIN" "${BASE_CONN_ARGS[@]}" --if-exists "$SRC_DB" >/dev/null 2>&1 || true
   "$DROPDB_BIN" "${BASE_CONN_ARGS[@]}" --if-exists "$DST_DB" >/dev/null 2>&1 || true
+
+  return "$exit_code"
 }
 
 psql_src() {
@@ -47,6 +52,7 @@ psql_src() {
     --no-psqlrc \
     --set=case_type="$CASE_TYPE" \
     --set=other_case_type="$OTHER_CASE_TYPE" \
+    --set=case_revision_offset="$CASE_REVISION_OFFSET" \
     "$@"
 }
 
@@ -56,6 +62,7 @@ psql_dst() {
     --no-psqlrc \
     --set=case_type="$CASE_TYPE" \
     --set=other_case_type="$OTHER_CASE_TYPE" \
+    --set=case_revision_offset="$CASE_REVISION_OFFSET" \
     "$@"
 }
 
@@ -87,6 +94,29 @@ clear_target_data() {
 set client_min_messages to warning;
 delete from ccd.case_event;
 delete from ccd.case_data;
+SQL
+}
+
+install_trigger_guards() {
+  echo "Installing target trigger guards"
+  psql_dst <<'SQL'
+create or replace function ccd.fail_if_migration_trigger_fires()
+returns trigger as $$
+begin
+    raise exception 'Migration write trigger fired on %.% during %',
+        tg_table_schema, tg_table_name, tg_op;
+end;
+$$ language plpgsql;
+
+drop trigger if exists migration_test_case_data_guard on ccd.case_data;
+create trigger migration_test_case_data_guard
+before insert or update on ccd.case_data
+for each row execute function ccd.fail_if_migration_trigger_fires();
+
+drop trigger if exists migration_test_case_event_guard on ccd.case_event;
+create trigger migration_test_case_event_guard
+before insert or update on ccd.case_event
+for each row execute function ccd.fail_if_migration_trigger_fires();
 SQL
 }
 
@@ -173,14 +203,15 @@ SQL
 assert_case_revision_alignment() {
   local mismatch_count
 
-  echo "Validating migrated case revisions match event counts and max revisions"
+  echo "Validating migrated case revisions match event revisions plus offset"
   mismatch_count="$(psql_dst --quiet -tA <<'SQL'
 with revision_check as (
     select
         cd.id,
         cd.case_revision,
         count(ce.id)::bigint as event_count,
-        coalesce(max(ce.case_revision), 0)::bigint as max_event_revision
+        coalesce(max(ce.case_revision), 0)::bigint as max_event_revision,
+        coalesce(max(ce.case_revision), 0)::bigint + :'case_revision_offset'::bigint as expected_case_revision
     from ccd.case_data cd
     left join ccd.case_event ce
       on ce.case_data_id = cd.id
@@ -189,8 +220,8 @@ with revision_check as (
 )
 select count(*)
 from revision_check
-where case_revision is distinct from event_count
-   or case_revision is distinct from max_event_revision;
+where case_revision is distinct from expected_case_revision
+   or event_count is distinct from max_event_revision;
 SQL
 )"
 

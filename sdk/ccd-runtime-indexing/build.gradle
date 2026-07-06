@@ -9,9 +9,35 @@ repositories {
     mavenCentral()
 }
 
+sourceSets {
+    chaosTest {
+        java.srcDir file('src/chaosTest/java')
+        resources.srcDir file('src/chaosTest/resources')
+        compileClasspath += sourceSets.main.output
+        runtimeClasspath += output + compileClasspath
+    }
+}
+
+configurations {
+    chaosTestImplementation.extendsFrom testImplementation
+    chaosTestRuntimeOnly.extendsFrom testRuntimeOnly
+}
+
 dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-jdbc'
-    implementation 'org.elasticsearch.client:elasticsearch-rest-client:9.4.2'
+    implementation 'org.postgresql:postgresql'
+
+    implementation('co.elastic.clients:elasticsearch-java') {
+        version {
+            strictly '9.4.2'
+        }
+    }
+    implementation('co.elastic.clients:elasticsearch-rest5-client') {
+        version {
+            strictly '9.4.2'
+        }
+    }
+
     implementation 'com.fasterxml.jackson.core:jackson-databind'
 
     compileOnly 'org.projectlombok:lombok:1.18.46'
@@ -19,6 +45,19 @@ dependencies {
 
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+
+    chaosTestImplementation project(':decentralised-runtime')
+    chaosTestImplementation 'org.springframework.boot:spring-boot-starter-test'
+    chaosTestImplementation 'org.testcontainers:testcontainers'
+    chaosTestImplementation 'org.testcontainers:junit-jupiter'
+    chaosTestImplementation 'org.testcontainers:postgresql'
+    chaosTestImplementation 'org.testcontainers:testcontainers-elasticsearch'
+    chaosTestImplementation 'org.testcontainers:toxiproxy'
+    chaosTestImplementation 'org.flywaydb:flyway-core'
+    chaosTestImplementation 'org.awaitility:awaitility'
+    chaosTestRuntimeOnly 'org.flywaydb:flyway-database-postgresql'
+    chaosTestRuntimeOnly 'org.postgresql:postgresql'
+    chaosTestRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
 
 java {
@@ -35,4 +74,21 @@ tasks.withType(Javadoc).configureEach {
 
 tasks.withType(Test).configureEach {
     useJUnitPlatform()
+}
+
+tasks.register('chaosTest', Test) {
+    description = 'Runs opt-in Elasticsearch indexing custody chaos tests'
+    group = 'verification'
+    testClassesDirs = sourceSets.chaosTest.output.classesDirs
+    classpath = sourceSets.chaosTest.runtimeClasspath
+    shouldRunAfter tasks.named('test')
+    useJUnitPlatform()
+    ['ccd.indexing.chaos.case-count', 'ccd.indexing.chaos.revision-count'].each { propertyName ->
+        if (System.getProperty(propertyName) != null) {
+            systemProperty propertyName, System.getProperty(propertyName)
+        }
+    }
+    testLogging {
+        exceptionFormat = 'full'
+    }
 }

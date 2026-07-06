@@ -165,6 +165,7 @@ public class TestWithCCD extends CftlibTest {
     private static final String EXTERNAL_CALLBACK_HOST = "127.0.0.1";
     private static final int EXTERNAL_CALLBACK_PORT = 4014;
     private static final String ELASTICSEARCH_BASE_URL = "http://localhost:9200";
+    private static final Duration ELASTICSEARCH_ASSERTION_TIMEOUT = Duration.ofSeconds(75);
     private static final String TASK_MANAGEMENT_BASE_URL = "http://localhost:8087";
     private static final String ACCEPT_CREATE_CASE =
         "application/vnd.uk.gov.hmcts.ccd-data-store-api.create-case.v2+json;charset=UTF-8";
@@ -566,7 +567,7 @@ public class TestWithCCD extends CftlibTest {
     void searchCases() {
         // Give some time to index the case created by the previous test
         await()
-            .timeout(Duration.ofSeconds(10))
+            .atMost(ELASTICSEARCH_ASSERTION_TIMEOUT)
             .ignoreExceptions()
             .until(this::caseAppearsInSearch);
     }
@@ -728,7 +729,7 @@ public class TestWithCCD extends CftlibTest {
         try (var esClient = HttpClientBuilder.create().build()) {
             await()
                 .pollInterval(Duration.ofSeconds(1))
-                .atMost(Duration.ofSeconds(15))
+                .atMost(ELASTICSEARCH_ASSERTION_TIMEOUT)
                 .untilAsserted(() -> {
                     var esRequest = new HttpGet(ELASTICSEARCH_BASE_URL + "/e2e_cases/_doc/" + caseDataId);
                     try (var esResponse = esClient.execute(esRequest)) {
@@ -780,15 +781,22 @@ public class TestWithCCD extends CftlibTest {
         assertThat("Supplementary data response should contain foo", supplementaryData.path("foo").asInt(-1),
             equalTo(expectedFooValue));
 
-        Integer fooInDb = db.queryForObject(
-            "SELECT (supplementary_data->>'foo')::integer FROM ccd.case_data WHERE reference = :ref",
-            Map.of("ref", caseRef),
-            Integer.class);
-        assertThat("Supplementary data in datastore should reflect update", fooInDb, equalTo(expectedFooValue));
+        Map<String, Object> row = db.queryForMap(
+            """
+                SELECT (supplementary_data->>'foo')::integer AS foo,
+                       trim(both '"' from to_json(coalesce(last_modified, created_date))::text) AS last_modified
+                 FROM ccd.case_data
+                 WHERE reference = :ref
+                """,
+            Map.of("ref", caseRef)
+        );
+        assertThat("Supplementary data in datastore should reflect update",
+            row.get("foo"), equalTo(expectedFooValue));
+        String expectedLastModified = (String) row.get("last_modified");
 
         await()
             .pollInterval(Duration.ofSeconds(1))
-            .atMost(Duration.ofSeconds(15))
+            .atMost(ELASTICSEARCH_ASSERTION_TIMEOUT)
             .untilAsserted(() -> {
                 var esRequest = new HttpGet(ELASTICSEARCH_BASE_URL + "/e2e_cases/_doc/" + caseDataId);
                 var esResponse = HttpClientBuilder.create().build().execute(esRequest);
@@ -797,6 +805,14 @@ public class TestWithCCD extends CftlibTest {
                 var esPayload = mapper.readTree(EntityUtils.toString(esResponse.getEntity()));
                 var source = esPayload.path("_source");
                 assertThat("Elasticsearch document should contain _source", source.isMissingNode(), is(false));
+
+                assertThat("Elasticsearch _source should expose Logstash-compatible id field",
+                    source.has("id"), is(true));
+                assertThat("Elasticsearch _source should not expose internal case_data_id field",
+                    source.has("case_data_id"), is(false));
+                assertThat("Elasticsearch last_modified should match case_data.last_modified",
+                    source.path("last_modified").asText(), equalTo(expectedLastModified));
+
                 var fooValue = source.path("supplementary_data").path("foo").asInt(-1);
                 assertThat("Supplementary data in Elasticsearch should reflect latest value",
                     fooValue, equalTo(expectedFooValue));
@@ -1976,21 +1992,53 @@ public class TestWithCCD extends CftlibTest {
         String token,
         long reference
     ) {
-        var body = Map.of(
-            "data", data,
-            "event", Map.of(
-                "id", eventId,
-                "summary", "summary",
-                "description", "description"
-            ),
-            "event_token", token,
-            "ignore_warning", false
-        );
+        return prepareEventRequestWithToken(user, eventId, data, token, reference, null);
+    }
+
+    @SneakyThrows
+    private HttpPost prepareEventRequestWithToken(
+        String user,
+        String eventId,
+        Map<String, ?> data,
+        String token,
+        long reference,
+        String onBehalfOfToken
+    ) {
+        var body = new LinkedHashMap<String, Object>();
+        body.put("data", data);
+        body.put("event", Map.of(
+            "id", eventId,
+            "summary", "summary",
+            "description", "description"
+        ));
+        body.put("event_token", token);
+        body.put("ignore_warning", false);
+        if (onBehalfOfToken != null) {
+            body.put("on_behalf_of_token", onBehalfOfToken);
+        }
 
         var e = buildRequest(user, BASE_URL + "/cases/" + reference + "/events", HttpPost::new);
         withCcdAccept(e, ACCEPT_CREATE_EVENT);
         e.setEntity(new StringEntity(mapper.writeValueAsString(body), ContentType.APPLICATION_JSON));
         return e;
+    }
+
+    @SneakyThrows
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> getLatestAuditEvent(String user, long reference, String eventId) {
+        var get = buildRequest(user, BASE_URL + "/cases/" + reference + "/events", HttpGet::new);
+        withCcdAccept(get, ACCEPT_CASE_EVENTS);
+
+        try (var response = HttpClientBuilder.create().build().execute(get)) {
+            Map<String, Object> result =
+                mapper.readValue(EntityUtils.toString(response.getEntity()), new TypeReference<>() {});
+            assertThat(response.getStatusLine().getStatusCode(), equalTo(200));
+            var auditEvents = (List<Map<String, Object>>) result.get("auditEvents");
+            return auditEvents.stream()
+                .filter(event -> eventId.equals(event.get("id")))
+                .findFirst()
+                .orElseThrow();
+        }
     }
 
     private void assertLatestEventMetadata(String eventId, String expectedSummary, String expectedDescription) {
@@ -2173,9 +2221,13 @@ public class TestWithCCD extends CftlibTest {
     @Order(19)
     @Test
     public void testDecentralisedEventStartAndSubmitHandlers() throws Exception {
+        String submittingUser = "TEST_CASE_WORKER_USER@mailinator.com";
+        String submittingUserToken = getAuthorisation(submittingUser);
+        var submittingUserInfo = idam.getUserInfo(submittingUserToken);
+
         // Verify start handler pre-populates data
         var start = ccdApi.startEvent(
-            getAuthorisation("TEST_CASE_WORKER_USER@mailinator.com"),
+            submittingUserToken,
             getServiceAuth(), String.valueOf(caseRef), DecentralisedCaseworkerAddNote.CASEWORKER_DECENTRALISED_ADD_NOTE);
 
         var startData = mapper.readValue(mapper.writeValueAsString(start.getCaseDetails().getData()), CaseData.class);
@@ -2206,6 +2258,59 @@ public class TestWithCCD extends CftlibTest {
         String lastNoteSql = "SELECT note FROM case_notes WHERE reference = :ref ORDER BY id DESC LIMIT 1";
         String latestNote = db.queryForObject(lastNoteSql, Map.of("ref", caseRef), String.class);
         assertThat(latestNote, equalTo(noteText));
+
+        var submittedEvent = getLatestAuditEvent(
+            submittingUser,
+            caseRef,
+            DecentralisedCaseworkerAddNote.CASEWORKER_DECENTRALISED_ADD_NOTE);
+
+        assertThat(submittedEvent.get("user_id"), equalTo(submittingUserInfo.getUid()));
+        assertThat(submittedEvent.get("user_first_name"), equalTo(submittingUserInfo.getGivenName()));
+        assertThat(submittedEvent.get("user_last_name"), equalTo(submittingUserInfo.getFamilyName()));
+        assertThat(submittedEvent.get("proxied_by"), nullValue());
+        assertThat(submittedEvent.get("proxied_by_first_name"), nullValue());
+        assertThat(submittedEvent.get("proxied_by_last_name"), nullValue());
+    }
+
+    @Order(19)
+    @Test
+    public void decentralisedEventHistoryPreservesOnBehalfUserAndProxy() throws Exception {
+        String submittingUser = "TEST_CASE_WORKER_USER@mailinator.com";
+        String onBehalfOfUser = "TEST_SOLICITOR@mailinator.com";
+        String submittingUserToken = getAuthorisation(submittingUser);
+        String onBehalfOfUserToken = getAuthorisation(onBehalfOfUser);
+        var submittingUserInfo = idam.getUserInfo(submittingUserToken);
+        var onBehalfOfUserInfo = idam.getUserInfo(onBehalfOfUserToken);
+        long proxiedCaseRef = createAdditionalCase(onBehalfOfUser);
+
+        var start = ccdApi.startEvent(
+            submittingUserToken,
+            getServiceAuth(),
+            String.valueOf(proxiedCaseRef),
+            DecentralisedCaseworkerAddNote.CASEWORKER_DECENTRALISED_ADD_NOTE);
+
+        var request = prepareEventRequestWithToken(
+            submittingUser,
+            DecentralisedCaseworkerAddNote.CASEWORKER_DECENTRALISED_ADD_NOTE,
+            Map.of("note", "Decentralised proxied history test"),
+            start.getToken(),
+            proxiedCaseRef,
+            onBehalfOfUserToken);
+
+        var response = HttpClientBuilder.create().build().execute(request);
+        assertThat(response.getStatusLine().getStatusCode(), equalTo(201));
+
+        var submittedEvent = getLatestAuditEvent(
+            submittingUser,
+            proxiedCaseRef,
+            DecentralisedCaseworkerAddNote.CASEWORKER_DECENTRALISED_ADD_NOTE);
+
+        assertThat(submittedEvent.get("user_id"), equalTo(onBehalfOfUserInfo.getUid()));
+        assertThat(submittedEvent.get("user_first_name"), equalTo(onBehalfOfUserInfo.getGivenName()));
+        assertThat(submittedEvent.get("user_last_name"), equalTo(onBehalfOfUserInfo.getFamilyName()));
+        assertThat(submittedEvent.get("proxied_by"), equalTo(submittingUserInfo.getUid()));
+        assertThat(submittedEvent.get("proxied_by_first_name"), equalTo(submittingUserInfo.getGivenName()));
+        assertThat(submittedEvent.get("proxied_by_last_name"), equalTo(submittingUserInfo.getFamilyName()));
     }
 
     @Order(19)
@@ -2413,7 +2518,7 @@ public class TestWithCCD extends CftlibTest {
 
         await()
             .pollInterval(Duration.ofSeconds(1))
-            .atMost(Duration.ofSeconds(30))
+            .atMost(ELASTICSEARCH_ASSERTION_TIMEOUT)
             .untilAsserted(() -> assertThat(
                 "Elasticsearch revision should match datastore before reindexing",
                 fetchElasticsearchDocument(caseDataId).path("case_revision").asInt(),
