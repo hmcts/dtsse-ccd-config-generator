@@ -35,8 +35,12 @@ public class CaseRetentionService {
   }
 
   private ModeResult processMode(Collection<String> caseTypeIds, int batchSize, boolean simulation) {
-    if (caseTypeIds.isEmpty() || batchSize <= 0) {
+    if (caseTypeIds.isEmpty()) {
       log.info("Case retention {} mode has no configured case types", modeName(simulation));
+      return new ModeResult(0, 0);
+    }
+    if (batchSize <= 0) {
+      log.info("Case retention {} mode has non-positive batch size ({}); skipping", modeName(simulation), batchSize);
       return new ModeResult(0, 0);
     }
 
