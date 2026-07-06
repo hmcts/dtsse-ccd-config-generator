@@ -255,12 +255,7 @@ public class CcdDataMigrationTask implements Runnable {
         break;
       }
 
-      Long batchEndEventHwm = nextSourceEventBatchEndAfter(localEventHwm, targetEventHwm);
-      if (batchEndEventHwm == null) {
-        totals = totals.markCaughtUp();
-        break;
-      }
-
+      long batchEndEventHwm = nextSourceEventBatchEndAfter(localEventHwm, targetEventHwm);
       long batchStartEventId = localEventHwm + 1L;
       int events = transaction.execute(status -> {
         applyMigrationStatementTimeout();
@@ -536,7 +531,7 @@ public class CcdDataMigrationTask implements Runnable {
     });
   }
 
-  private Long nextSourceEventBatchEndAfter(long localEventHwm, long targetEventHwm) {
+  private long nextSourceEventBatchEndAfter(long localEventHwm, long targetEventHwm) {
     Long batchEndEventHwm = withMigrationStatementTimeout(() -> db.query(
         """
         select ce.id
