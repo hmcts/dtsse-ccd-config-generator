@@ -77,7 +77,7 @@ public class CaseRetentionService {
         .distinct()
         .toList();
     try {
-      Map<Long, Boolean> existenceResults = ccdCaseDataExistenceClient.caseDataExists(jurisdiction, references);
+      Map<Long, Boolean> existenceResults = ccdCaseDataExistenceClient.caseDataExists(batch);
       List<Long> deletableReferences = new ArrayList<>();
       int skippedCases = 0;
 

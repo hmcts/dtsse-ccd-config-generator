@@ -116,6 +116,7 @@ import uk.gov.hmcts.ccd.sdk.type.ListValue;
 import uk.gov.hmcts.ccd.sdk.CaseReindexingService;
 import uk.gov.hmcts.ccd.sdk.retention.CaseRetentionService;
 import uk.gov.hmcts.ccd.sdk.retention.CcdCaseDataExistenceClient;
+import uk.gov.hmcts.ccd.sdk.retention.RetentionCaseData;
 import uk.gov.hmcts.ccd.sdk.retention.RetentionCaseDataRepository;
 import uk.gov.hmcts.ccd.sdk.retention.RetentionTaskResult;
 import uk.gov.hmcts.ccd.sdk.taskmanagement.model.TaskAction;
@@ -2936,10 +2937,12 @@ public class TestWithCCD extends CftlibTest {
         private int calls;
 
         @Override
-        public Map<Long, Boolean> caseDataExists(String jurisdiction, Collection<Long> caseReferences) {
+        public Map<Long, Boolean> caseDataExists(Collection<RetentionCaseData> cases) {
             calls++;
-            assertThat(jurisdiction, equalTo(RETENTION_JURISDICTION));
-            requestedReferences.addAll(caseReferences);
+            requestedReferences.addAll(cases.stream()
+                .peek(retentionCase -> assertThat(retentionCase.jurisdiction(), equalTo(RETENTION_JURISDICTION)))
+                .map(RetentionCaseData::reference)
+                .toList());
             return Map.copyOf(results);
         }
 

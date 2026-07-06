@@ -199,6 +199,9 @@ ccd:
         case-type-ids: "MyCaseType"
         simulation-case-type-ids: ""
         batch-size: 100
+      system-user:
+        username: "system-update@example.com"
+        password: "${SYSTEM_UPDATE_PASSWORD}"
   data-store:
     api:
       url: "http://ccd-data-store-api"
@@ -209,46 +212,26 @@ case groups.
 
 Before local deletion it checks that CCD has already removed the upstream pointer row. The candidate query reads
 `reference`, `case_type_id`, `jurisdiction` and `resolved_ttl` from each matching local `ccd.case_data` row, so the
-jurisdiction used for the upstream check is inferred from the case row itself rather than configured separately. Cases are
-grouped by that stored jurisdiction because CCD Data Store authorises the existence check for one caller-declared
-jurisdiction at a time. Each jurisdiction group is de-duplicated and split into batches of at most 100 case references.
+jurisdiction used for the upstream check is inferred from the case row itself rather than configured separately. Cases
+are grouped by that stored jurisdiction and de-duplicated before the upstream checks are made.
 
-The upstream check uses CCD Data Store's S2S-only read endpoint:
+The upstream check currently uses CCD Data Store's existing caseworker retrieve-case endpoint, authenticated with the
+configured system user's IDAM token plus the service's S2S token:
 
 ```http
-POST /internal/cases/existence
+GET /caseworkers/{uid}/jurisdictions/{jurisdiction}/case-types/{caseTypeId}/cases/{caseReference}
+Authorization: Bearer <system-user-idam-token>
 ServiceAuthorization: Bearer <s2s-token>
-Content-Type: application/json
 ```
 
-```json
-{
-  "jurisdiction": "DIVORCE",
-  "case_references": [
-    "1720000000000001",
-    "1720000000000002"
-  ]
-}
-```
+For each candidate case, a `200` response means CCD still has the pointer row, so local deletion is skipped. A `404`
+response means CCD no longer has the pointer row, so the local row can be deleted. Any other CCD response is treated as
+uncertain and the local row is skipped so the service does not delete local data while CCD may still have a pointer to
+it.
 
-The response maps each supplied reference to whether CCD still has a `case_data` pointer row:
-
-```json
-{
-  "results": {
-    "1720000000000001": true,
-    "1720000000000002": false
-  }
-}
-```
-
-Only references returned as `false` are deleted locally. References returned as `true`, omitted from the response, or
-covered by a failed existence-check request are skipped so the service does not delete local data while CCD may still
-have a pointer to it. The endpoint does not require an IDAM `Authorization` header; access is scoped by the supplied S2S
-service token and the request `jurisdiction`.
-
-Consumers must provide S2S token generation, either via an `AuthTokenGenerator` bean or via the standard
-`ServiceAuthorisationApi` plus `idam.s2s-auth.secret` and `idam.s2s-auth.microservice` properties.
+Consumers must provide the retention system user's username and password, and S2S token generation either via an
+`AuthTokenGenerator` bean or via the standard `ServiceAuthorisationApi` plus `idam.s2s-auth.secret` and
+`idam.s2s-auth.microservice` properties.
 
 ## Message publishing to Azure Service Bus
 

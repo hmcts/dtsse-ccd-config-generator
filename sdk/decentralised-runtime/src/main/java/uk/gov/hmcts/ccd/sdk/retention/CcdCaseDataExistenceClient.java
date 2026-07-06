@@ -5,5 +5,5 @@ import java.util.Map;
 
 public interface CcdCaseDataExistenceClient {
 
-  Map<Long, Boolean> caseDataExists(String jurisdiction, Collection<Long> caseReferences);
+  Map<Long, Boolean> caseDataExists(Collection<RetentionCaseData> cases);
 }

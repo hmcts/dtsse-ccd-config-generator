@@ -17,9 +17,11 @@ import uk.gov.hmcts.ccd.sdk.retention.RetentionCaseDataRepository;
 import uk.gov.hmcts.ccd.sdk.retention.RetentionProperties;
 import uk.gov.hmcts.ccd.sdk.retention.client.CcdDataStoreRetentionFeignClient;
 import uk.gov.hmcts.ccd.sdk.retention.client.FeignCcdCaseDataExistenceClient;
+import uk.gov.hmcts.ccd.sdk.retention.client.RetentionSystemUserTokenProvider;
 import uk.gov.hmcts.reform.authorisation.ServiceAuthorisationApi;
 import uk.gov.hmcts.reform.authorisation.generators.AuthTokenGenerator;
 import uk.gov.hmcts.reform.authorisation.generators.AuthTokenGeneratorFactory;
+import uk.gov.hmcts.reform.idam.client.IdamClient;
 
 @AutoConfiguration
 @EnableConfigurationProperties(RetentionProperties.class)
@@ -56,8 +58,18 @@ public class RetentionAutoConfiguration {
 
   @Bean
   @ConditionalOnMissingBean
-  public CcdCaseDataExistenceClient ccdCaseDataExistenceClient(CcdDataStoreRetentionFeignClient feignClient) {
-    return new FeignCcdCaseDataExistenceClient(feignClient);
+  public RetentionSystemUserTokenProvider retentionSystemUserTokenProvider(IdamClient idamClient,
+                                                                           RetentionProperties properties) {
+    return new RetentionSystemUserTokenProvider(idamClient, properties);
+  }
+
+  @Bean
+  @ConditionalOnMissingBean
+  public CcdCaseDataExistenceClient ccdCaseDataExistenceClient(
+      CcdDataStoreRetentionFeignClient feignClient,
+      RetentionSystemUserTokenProvider systemUserTokenProvider
+  ) {
+    return new FeignCcdCaseDataExistenceClient(feignClient, systemUserTokenProvider);
   }
 
   @Bean

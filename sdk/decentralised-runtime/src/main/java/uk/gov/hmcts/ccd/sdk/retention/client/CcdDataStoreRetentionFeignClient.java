@@ -1,10 +1,11 @@
 package uk.gov.hmcts.ccd.sdk.retention.client;
 
-import static org.springframework.http.MediaType.APPLICATION_JSON_VALUE;
-
+import com.fasterxml.jackson.databind.JsonNode;
 import org.springframework.cloud.openfeign.FeignClient;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.http.HttpHeaders;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestHeader;
 
 @FeignClient(
     name = "ccd-data-store-retention-client",
@@ -13,10 +14,10 @@ import org.springframework.web.bind.annotation.RequestBody;
 )
 public interface CcdDataStoreRetentionFeignClient {
 
-  @PostMapping(
-      value = "/internal/cases/existence",
-      consumes = APPLICATION_JSON_VALUE,
-      produces = APPLICATION_JSON_VALUE
-  )
-  CcdCaseDataExistenceResponse caseDataExists(@RequestBody CcdCaseDataExistenceRequest request);
+  @GetMapping("/caseworkers/{uid}/jurisdictions/{jurisdiction}/case-types/{caseTypeId}/cases/{caseReference}")
+  JsonNode retrieveCase(@RequestHeader(HttpHeaders.AUTHORIZATION) String authorization,
+                        @PathVariable("uid") String uid,
+                        @PathVariable("jurisdiction") String jurisdiction,
+                        @PathVariable("caseTypeId") String caseTypeId,
+                        @PathVariable("caseReference") String caseReference);
 }
