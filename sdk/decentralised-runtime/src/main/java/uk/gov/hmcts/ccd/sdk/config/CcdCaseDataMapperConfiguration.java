@@ -15,6 +15,7 @@ public class CcdCaseDataMapperConfiguration {
    */
   @Bean(name = CCD_CASE_DATA_OBJECT_MAPPER)
   public ObjectMapper ccdCaseDataObjectMapper(ObjectMapper mapper) {
+    // NON_NULL will retain eg. empty maps, required by certain contracts eg. AAC service & notice of change.
     return mapper.copy().setSerializationInclusion(JsonInclude.Include.NON_NULL);
   }
 }
