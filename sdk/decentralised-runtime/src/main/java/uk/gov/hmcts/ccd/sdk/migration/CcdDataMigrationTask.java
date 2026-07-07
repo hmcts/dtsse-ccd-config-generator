@@ -508,12 +508,8 @@ public class CcdDataMigrationTask implements Runnable {
     return withMigrationStatementTimeout(() -> {
       Long hwm = db.queryForObject(
           """
-          select coalesce(max(ce.id), 0)
-          from fdw_stage.case_event ce
-          join fdw_stage.case_data cd on cd.id = ce.case_data_id
-          where cd.jurisdiction = :sourceJurisdiction
-            and cd.case_type_id in (:caseTypeIds)
-            and ce.case_type_id in (:caseTypeIds)
+          select coalesce(max(id), 0)
+          from fdw_stage.case_event
           """,
           baseParams(),
           Long.class

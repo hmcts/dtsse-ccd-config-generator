@@ -30,7 +30,7 @@ The preload path keeps the target tables constraint-valid after every committed 
 * the unique `(case_data_id, case_revision)` index stays in place
 * `case_event.version` and `case_event.case_revision` are calculated before insert
 * `case_event` user triggers are not disabled
-* resume position is stored as a source event high-water mark after each committed batch
+* resume position is stored as a source `case_event.id` window position after each committed batch
 
 Preloaded `case_data` is provisional. Its purpose is to satisfy the event FK. Every copied event
 batch inserts missing parent source `case_data` rows for that batch. `CUTOVER` overwrites target

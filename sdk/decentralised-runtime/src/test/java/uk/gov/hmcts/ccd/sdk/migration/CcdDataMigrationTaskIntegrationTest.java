@@ -220,6 +220,7 @@ class CcdDataMigrationTaskIntegrationTest {
     assertThat(result.caughtUp()).isTrue();
     assertThat(result.eventsProcessed()).isZero();
     assertThat(countRows("ccd.case_event")).isZero();
+    assertThat(sourceEventHwm()).isEqualTo(101);
   }
 
   @Test
