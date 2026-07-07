@@ -33,7 +33,8 @@ class CcdDataMigrationAutoConfigurationTest {
         .withPropertyValues(
             "ccd.data-migration.enabled=true",
             "ccd.data-migration.case-type-ids[0]=TestCase",
-            "ccd.data-migration.event-batch-size=500",
+            "ccd.data-migration.source-jurisdiction=TEST",
+            "ccd.data-migration.event-id-window-size=500",
             "ccd.data-migration.max-batches-per-run=10"
         )
         .run(context -> assertThat(context).hasSingleBean(CcdDataMigrationTask.class));
@@ -48,12 +49,25 @@ class CcdDataMigrationAutoConfigurationTest {
   }
 
   @Test
+  void failsClearlyWhenEnabledWithoutSourceJurisdiction() {
+    contextRunner
+        .withPropertyValues(
+            "ccd.data-migration.enabled=true",
+            "ccd.data-migration.case-type-ids[0]=TestCase"
+        )
+        .run(context -> assertThat(context.getStartupFailure())
+            .hasMessageContaining("ccd.data-migration.source-jurisdiction must be configured when enabled"));
+  }
+
+  @Test
   void backsOffWhenServiceProvidesTaskBean() {
     contextRunner
         .withBean(CcdDataMigrationTask.class, () -> new CcdDataMigrationTask(
             new NamedParameterJdbcTemplate(mock(DataSource.class)),
             mock(PlatformTransactionManager.class),
-            CcdDataMigrationTaskOptions.builder(List.of("ServiceCase")).build(),
+            CcdDataMigrationTaskOptions.builder(List.of("ServiceCase"))
+                .sourceJurisdiction("TEST")
+                .build(),
             () -> false
         ))
         .withPropertyValues("ccd.data-migration.enabled=true")
