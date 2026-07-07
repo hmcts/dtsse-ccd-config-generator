@@ -43,6 +43,7 @@ import uk.gov.hmcts.ccd.sdk.api.CaseDetails;
 import uk.gov.hmcts.ccd.sdk.api.callback.AboutToStartOrSubmitResponse;
 import uk.gov.hmcts.ccd.sdk.api.callback.AboutToSubmit;
 import uk.gov.hmcts.ccd.sdk.api.callback.Submitted;
+import uk.gov.hmcts.ccd.sdk.config.CcdCaseDataMapperConfiguration;
 import uk.gov.hmcts.reform.ccd.client.model.SubmittedCallbackResponse;
 
 @Component
@@ -62,6 +63,7 @@ public class JsonCallbackBridge {
   private final Map<String, String> externalCallbackBaseUrls;
 
   JsonCallbackBridge(ApplicationContext applicationContext,
+                     @Qualifier(CcdCaseDataMapperConfiguration.CCD_CASE_DATA_OBJECT_MAPPER)
                      ObjectMapper mapper,
                      @Qualifier("requestMappingHandlerMapping")
                      RequestMappingHandlerMapping handlerMapping,
