@@ -123,6 +123,27 @@ class CcdDataMigrationTaskIntegrationTest {
   }
 
   @Test
+  void cutoverScopesCaseDataRefreshAndQueueCleanupBySourceJurisdiction() {
+    insertSourceCase(10, 1000000000000010L, 1, "Submitted", "{\"field\":\"one\"}");
+    insertSourceCaseEvent(101, 10, "create", "Submitted", "{\"field\":\"one\"}", minutesAgo(60));
+    task(PRELOAD_EVENTS, 1000, 10).runMigration();
+
+    insertSourceCase(20, 1000000000000020L, 2, "Updated", "{\"field\":\"source-other\"}", "OTHER", "TestCase");
+    insertTargetCase(20, 1000000000000020L, 1, "Submitted", "{\"field\":\"target-other\"}", "OTHER", "TestCase", 5);
+    insertElasticsearchQueueRow(1000000000000020L, 5);
+
+    CcdDataMigrationRunResult result = task(CUTOVER, 1000, 10).runMigration();
+
+    assertThat(result.caughtUp()).isTrue();
+    assertThat(progressStatus()).isEqualTo("COMPLETE");
+    assertThat(targetCaseState(20)).isEqualTo("Submitted");
+    assertThat(targetCaseData(20)).isEqualTo("{\"field\": \"target-other\"}");
+    assertThat(caseRevision(20)).isEqualTo(5);
+    assertThat(countElasticsearchQueueRows("TestCase")).isEqualTo(1);
+    assertThat(caseDataTriggerEnabled("trigger_enqueue_case_revision")).isTrue();
+  }
+
+  @Test
   void completedCutoverRerunValidatesBeforeReEnablingElasticsearchQueueTrigger() {
     insertTargetCase(10, 1000000000000010L, 1, "Submitted", "{\"field\":\"one\"}", 1);
     createCompleteProgress(101);
@@ -136,7 +157,7 @@ class CcdDataMigrationTaskIntegrationTest {
   }
 
   @Test
-  void preloadResumesFromLocalTargetEventHighWaterMark() {
+  void preloadFailsWhenTargetEventsExistWithoutSourceProgress() {
     insertSourceCase(10, 1000000000000010L, 1, "Submitted", "{\"field\":\"one\"}");
     insertSourceCaseEvent(101, 10, "create", "Submitted", "{\"field\":\"one\"}", minutesAgo(60));
     insertSourceCaseEvent(102, 10, "update", "Updated", "{\"field\":\"two\"}", minutesAgo(60));
@@ -144,14 +165,13 @@ class CcdDataMigrationTaskIntegrationTest {
     insertTargetEvent(101, 10, "create", "Submitted", "{\"field\":\"one\"}", 1);
     createProgress();
 
-    CcdDataMigrationRunResult result = task(PRELOAD_EVENTS, 10, 10).runMigration();
-
-    assertThat(result.caughtUp()).isTrue();
-    assertThat(result.eventsProcessed()).isEqualTo(1);
-    assertThat(countRows("ccd.case_event")).isEqualTo(2);
-    assertThat(localEventHwm()).isEqualTo(102);
-    assertThat(caseEventRevision(102)).isEqualTo(2);
-    assertElasticsearchQueueEmpty();
+    assertThatThrownBy(() -> task(PRELOAD_EVENTS, 10, 10).runMigration())
+        .isInstanceOf(CcdDataMigrationException.class)
+        .hasMessageContaining("target already contains migrated events")
+        .hasMessageContaining("source_event_hwm is zero");
+    assertThat(countRows("ccd.case_event")).isEqualTo(1);
+    assertThat(localEventHwm()).isEqualTo(101);
+    assertThat(sourceEventHwm()).isZero();
   }
 
   @Test
@@ -615,7 +635,7 @@ class CcdDataMigrationTaskIntegrationTest {
   }
 
   private void insertTargetCase(long id, long reference, int version, String state, String data, long caseRevision) {
-    insertTargetCase(id, reference, version, state, data, "TestCase", caseRevision);
+    insertTargetCase(id, reference, version, state, data, "TEST", "TestCase", caseRevision);
   }
 
   private void insertTargetCase(
@@ -624,6 +644,19 @@ class CcdDataMigrationTaskIntegrationTest {
       int version,
       String state,
       String data,
+      String caseTypeId,
+      long caseRevision
+  ) {
+    insertTargetCase(id, reference, version, state, data, "TEST", caseTypeId, caseRevision);
+  }
+
+  private void insertTargetCase(
+      long id,
+      long reference,
+      int version,
+      String state,
+      String data,
+      String jurisdiction,
       String caseTypeId,
       long caseRevision
   ) {
@@ -652,7 +685,7 @@ class CcdDataMigrationTaskIntegrationTest {
           timestamp '2024-01-01 00:00:00',
           null,
           timestamp '2024-01-01 00:00:00',
-          'TEST',
+          :jurisdiction,
           :caseTypeId,
           :state,
           :data::jsonb,
@@ -667,6 +700,7 @@ class CcdDataMigrationTaskIntegrationTest {
             .addValue("version", version)
             .addValue("state", state)
             .addValue("data", data)
+            .addValue("jurisdiction", jurisdiction)
             .addValue("caseTypeId", caseTypeId)
             .addValue("caseRevision", caseRevision)
     );
@@ -904,6 +938,16 @@ class CcdDataMigrationTaskIntegrationTest {
         """,
         Map.of("caseTypeId", caseTypeId),
         Long.class
+    );
+  }
+
+  private void insertElasticsearchQueueRow(long reference, long caseRevision) {
+    jdbc.update(
+        """
+        insert into ccd.es_queue(reference, case_revision)
+        values (:reference, :caseRevision)
+        """,
+        Map.of("reference", reference, "caseRevision", caseRevision)
     );
   }
 

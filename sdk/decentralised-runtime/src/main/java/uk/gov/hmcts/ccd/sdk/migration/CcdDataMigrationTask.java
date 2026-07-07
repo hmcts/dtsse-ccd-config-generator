@@ -291,15 +291,20 @@ public class CcdDataMigrationTask implements Runnable {
   private int copyNextEventBatch(long batchStartEventId, long batchEndEventHwm) {
     return db.update(
         """
-        with source_cases as materialized (
-          select distinct on (cd.id) cd.*
-          from fdw_stage.case_data cd
-          join fdw_stage.case_event ce on ce.case_data_id = cd.id
+        with events_to_insert as materialized (
+          select ce.*
+          from fdw_stage.case_event ce
+          join fdw_stage.case_data cd on cd.id = ce.case_data_id
           where cd.jurisdiction = :sourceJurisdiction
             and cd.case_type_id in (:caseTypeIds)
             and ce.case_type_id in (:caseTypeIds)
             and ce.id >= :batchStartEventId
             and ce.id <= :batchEndEventHwm
+        ),
+        source_cases as materialized (
+          select distinct on (cd.id) cd.*
+          from fdw_stage.case_data cd
+          join events_to_insert ce on ce.case_data_id = cd.id
           order by cd.id
         ),
         inserted_cases as (
@@ -337,16 +342,6 @@ public class CcdDataMigrationTask implements Runnable {
           from source_cases cd
           on conflict do nothing
           returning id
-        ),
-        events_to_insert as materialized (
-          select ce.*
-          from fdw_stage.case_event ce
-          join fdw_stage.case_data cd on cd.id = ce.case_data_id
-          where cd.jurisdiction = :sourceJurisdiction
-            and cd.case_type_id in (:caseTypeIds)
-            and ce.case_type_id in (:caseTypeIds)
-            and ce.id >= :batchStartEventId
-            and ce.id <= :batchEndEventHwm
         ),
         affected_cases as (
           select distinct case_data_id
@@ -452,6 +447,7 @@ public class CcdDataMigrationTask implements Runnable {
             supplementary_data = coalesce(source.supplementary_data, jsonb_build_object())
         from fdw_stage.case_data source
         where target.id = source.id
+          and source.jurisdiction = :sourceJurisdiction
           and source.case_type_id in (:caseTypeIds)
           and (
             target.reference,
@@ -489,15 +485,19 @@ public class CcdDataMigrationTask implements Runnable {
     return db.update(
         """
         with event_counts as (
-          select case_data_id, max(case_revision)::bigint as max_revision
-          from ccd.case_event
-          where case_type_id in (:caseTypeIds)
-          group by case_data_id
+          select ce.case_data_id, max(ce.case_revision)::bigint as max_revision
+          from ccd.case_event ce
+          join ccd.case_data cd on cd.id = ce.case_data_id
+          where cd.jurisdiction = :sourceJurisdiction
+            and cd.case_type_id in (:caseTypeIds)
+            and ce.case_type_id in (:caseTypeIds)
+          group by ce.case_data_id
         )
         update ccd.case_data target
         set case_revision = event_counts.max_revision + :caseRevisionOffset
         from event_counts
         where target.id = event_counts.case_data_id
+          and target.jurisdiction = :sourceJurisdiction
           and target.case_type_id in (:caseTypeIds)
         """,
         baseParams().addValue("caseRevisionOffset", options.caseRevisionOffset())
@@ -566,13 +566,18 @@ public class CcdDataMigrationTask implements Runnable {
 
   private long effectiveSourceEventHighWaterMark(long targetEventHwm) {
     long progressEventHwm = sourceEventProgressHighWaterMark();
+    if (progressEventHwm > 0) {
+      return progressEventHwm;
+    }
+
     long localEventHwm = localEventHighWaterMark();
-    long effectiveEventHwm = Math.max(progressEventHwm, localEventHwm);
-    if (effectiveEventHwm > 0) {
-      if (progressEventHwm < effectiveEventHwm) {
-        updateSourceEventProgressHighWaterMark(effectiveEventHwm);
-      }
-      return effectiveEventHwm;
+    if (localEventHwm > 0) {
+      throw new CcdDataMigrationException(
+          "CCD data migration target already contains migrated events but source_event_hwm is zero"
+              + " taskName=" + options.taskName()
+              + " localEventHwm=" + localEventHwm
+              + " targetEventHwm=" + targetEventHwm
+      );
     }
     return 0;
   }
@@ -643,16 +648,20 @@ public class CcdDataMigrationTask implements Runnable {
       case "case_data" -> """
           select case_type_id, count(*) as count
           from ccd.case_data
-          where case_type_id in (:caseTypeIds)
+          where jurisdiction = :sourceJurisdiction
+            and case_type_id in (:caseTypeIds)
           group by case_type_id
           order by case_type_id
           """;
       case "case_event" -> """
-          select case_type_id, count(*) as count
-          from ccd.case_event
-          where case_type_id in (:caseTypeIds)
-          group by case_type_id
-          order by case_type_id
+          select ce.case_type_id, count(*) as count
+          from ccd.case_event ce
+          join ccd.case_data cd on cd.id = ce.case_data_id
+          where cd.jurisdiction = :sourceJurisdiction
+            and cd.case_type_id in (:caseTypeIds)
+            and ce.case_type_id in (:caseTypeIds)
+          group by ce.case_type_id
+          order by ce.case_type_id
           """;
       default -> throw new IllegalArgumentException("Unsupported table name: " + tableName);
     };
@@ -680,6 +689,7 @@ public class CcdDataMigrationTask implements Runnable {
         delete from ccd.es_queue queue
         using ccd.case_data case_data
         where queue.reference = case_data.reference
+          and case_data.jurisdiction = :sourceJurisdiction
           and case_data.case_type_id in (:caseTypeIds)
         """,
         baseParams()
@@ -692,7 +702,8 @@ public class CcdDataMigrationTask implements Runnable {
         select count(*)
         from ccd.es_queue queue
         join ccd.case_data case_data on case_data.reference = queue.reference
-        where case_data.case_type_id in (:caseTypeIds)
+        where case_data.jurisdiction = :sourceJurisdiction
+          and case_data.case_type_id in (:caseTypeIds)
         """,
         baseParams(),
         Long.class

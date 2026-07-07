@@ -14,7 +14,7 @@ public class CcdDataMigrationProperties {
   private String taskName = "ccd-data-migration";
   private CcdDataMigrationMode mode = CcdDataMigrationMode.PRELOAD_EVENTS;
   private List<String> caseTypeIds = new ArrayList<>();
-  private int eventIdWindowSize = 1_000_000;
+  private Integer eventIdWindowSize;
   private Integer eventBatchSize;
   private long caseRevisionOffset = 1_000_000_000L;
   private int maxBatchesPerRun = Integer.MAX_VALUE;
@@ -33,12 +33,22 @@ public class CcdDataMigrationProperties {
     return CcdDataMigrationTaskOptions.builder(caseTypeIds)
         .taskName(taskName)
         .mode(mode)
-        .eventIdWindowSize(eventBatchSize == null ? eventIdWindowSize : eventBatchSize)
+        .eventIdWindowSize(resolvedEventIdWindowSize())
         .caseRevisionOffset(caseRevisionOffset)
         .maxBatchesPerRun(maxBatchesPerRun)
         .maxRunTime(maxRunTime)
         .statementTimeout(statementTimeout)
         .sourceJurisdiction(sourceJurisdiction)
         .build();
+  }
+
+  private int resolvedEventIdWindowSize() {
+    if (eventIdWindowSize != null) {
+      return eventIdWindowSize;
+    }
+    if (eventBatchSize != null) {
+      return eventBatchSize;
+    }
+    return 1_000_000;
   }
 }
