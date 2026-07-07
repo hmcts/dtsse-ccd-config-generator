@@ -70,16 +70,6 @@ public record CcdDataMigrationTaskOptions(
         .collect(Collectors.joining(","));
   }
 
-  /**
-   * Returns the event id window size.
-   *
-   * @deprecated use {@link #eventIdWindowSize()}.
-   */
-  @Deprecated(forRemoval = false)
-  public int eventBatchSize() {
-    return eventIdWindowSize;
-  }
-
   private String migrationConfigFingerprint() {
     var fields = new ArrayList<String>();
     fields.addAll(List.of(
@@ -149,16 +139,6 @@ public record CcdDataMigrationTaskOptions(
     public Builder eventIdWindowSize(int eventIdWindowSize) {
       this.eventIdWindowSize = eventIdWindowSize;
       return this;
-    }
-
-    /**
-     * Sets the event id window size.
-     *
-     * @deprecated use {@link #eventIdWindowSize(int)}.
-     */
-    @Deprecated(forRemoval = false)
-    public Builder eventBatchSize(int eventBatchSize) {
-      return eventIdWindowSize(eventBatchSize);
     }
 
     public Builder caseRevisionOffset(long caseRevisionOffset) {

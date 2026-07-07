@@ -98,29 +98,6 @@ class CcdDataMigrationTaskOptionsTest {
   }
 
   @Test
-  @SuppressWarnings("deprecation")
-  void supportsDeprecatedEventBatchSizeAlias() {
-    assertThat(builder(List.of("TestCase"))
-        .eventBatchSize(123)
-        .build()
-        .eventIdWindowSize()).isEqualTo(123);
-  }
-
-  @Test
-  void deprecatedEventBatchSizePropertyAppliesOnlyWhenEventIdWindowSizeIsUnset() {
-    var properties = new CcdDataMigrationProperties();
-    properties.setCaseTypeIds(List.of("TestCase"));
-    properties.setSourceJurisdiction("TEST");
-    properties.setEventBatchSize(123);
-
-    assertThat(properties.toOptions().eventIdWindowSize()).isEqualTo(123);
-
-    properties.setEventIdWindowSize(456);
-
-    assertThat(properties.toOptions().eventIdWindowSize()).isEqualTo(456);
-  }
-
-  @Test
   void rejectsBlankSourceJurisdiction() {
     assertThatThrownBy(() -> CcdDataMigrationTaskOptions.builder(List.of("TestCase"))
         .sourceJurisdiction(" ")
