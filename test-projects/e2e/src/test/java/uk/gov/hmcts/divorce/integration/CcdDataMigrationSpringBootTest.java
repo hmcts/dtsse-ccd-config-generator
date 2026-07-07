@@ -18,6 +18,7 @@ import uk.gov.hmcts.ccd.sdk.migration.CcdDataMigrationTask;
     "spring.autoconfigure.exclude=com.azure.spring.cloud.autoconfigure.implementation.jms.ServiceBusJmsAutoConfiguration",
     "ccd.data-migration.enabled=true",
     "ccd.data-migration.case-type-ids[0]=NFD",
+    "ccd.data-migration.source-jurisdiction=DIVORCE",
     "ccd.sdk.decentralised=true"
 })
 class CcdDataMigrationSpringBootTest {
