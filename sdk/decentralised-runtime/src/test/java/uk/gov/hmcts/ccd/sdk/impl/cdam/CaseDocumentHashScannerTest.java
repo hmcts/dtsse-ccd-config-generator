@@ -113,6 +113,52 @@ class CaseDocumentHashScannerTest {
   }
 
   @Test
+  void extractsDocumentIdFromUrlSuffixLikeCcdDataStore() throws Exception {
+    JsonNode submittedData = read("""
+        {
+          "document": {
+            "document_url": "https://example.invalid/not-cdam/22222222-2222-2222-2222-222222222222",
+            "document_hash": "hash-token"
+          }
+        }
+        """);
+
+    var tokens = scanner.findNewDocumentHashTokens(null, submittedData);
+
+    assertThat(tokens).containsExactly(new DocumentHashToken("22222222-2222-2222-2222-222222222222", "hash-token"));
+  }
+
+  @Test
+  void ignoresBinaryUrlWithoutDocumentUrlLikeCcdDataStore() throws Exception {
+    JsonNode submittedData = read("""
+        {
+          "document": {
+            "document_binary_url": "http://dm-store/documents/22222222-2222-2222-2222-222222222222/binary",
+            "document_hash": "hash-token"
+          }
+        }
+        """);
+
+    assertThat(scanner.findNewDocumentHashTokens(null, submittedData)).isEmpty();
+    assertThat(scanner.stripDocumentHashes(submittedData).findValues("document_hash")).hasSize(1);
+  }
+
+  @Test
+  void ignoresHearingRecordingDocumentUrlsLikeCcdDataStore() throws Exception {
+    JsonNode submittedData = read("""
+        {
+          "recording": {
+            "document_url": "http://dm-store/hearing-recordings/22222222-2222-2222-2222-222222222222",
+            "document_hash": "hash-token"
+          }
+        }
+        """);
+
+    assertThat(scanner.findNewDocumentHashTokens(null, submittedData)).isEmpty();
+    assertThat(scanner.stripDocumentHashes(submittedData).findValues("document_hash")).hasSize(1);
+  }
+
+  @Test
   void failsWhenExistingDocumentReturnsHashToken() throws Exception {
     JsonNode preCallbackData = read("""
         {

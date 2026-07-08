@@ -2,7 +2,6 @@ package uk.gov.hmcts.ccd.sdk.impl.cdam;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import java.net.URI;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -17,9 +16,10 @@ import uk.gov.hmcts.reform.ccd.document.am.model.DocumentHashToken;
 public class CaseDocumentHashScanner {
 
   private static final String DOCUMENT_URL = "document_url";
-  private static final String DOCUMENT_BINARY_URL = "document_binary_url";
   private static final String DOCUMENT_HASH = "document_hash";
-  private static final String DOCUMENTS_PATH = "/documents/";
+  private static final String BINARY = "/binary";
+  private static final String HEARING_RECORDINGS = "hearing-recordings";
+  private static final int UUID_LENGTH = 36;
 
   public List<DocumentHashToken> findNewDocumentHashTokens(JsonNode existingData, JsonNode submittedData) {
     Set<String> existingDocumentIds = new LinkedHashSet<>();
@@ -61,7 +61,7 @@ public class CaseDocumentHashScanner {
 
     if (node.isObject()) {
       ObjectNode objectNode = (ObjectNode) node;
-      if (documentId(objectNode) != null) {
+      if (isDocumentNode(objectNode)) {
         documentNodes.add(objectNode);
       }
       objectNode.fields().forEachRemaining(entry -> collectDocumentNodes(entry.getValue(), documentNodes));
@@ -88,31 +88,16 @@ public class CaseDocumentHashScanner {
   }
 
   private String documentId(JsonNode node) {
-    JsonNode documentUrlNode = node.get(DOCUMENT_URL);
-    if (isText(documentUrlNode)) {
-      return extractDocumentId(documentUrlNode.asText());
-    }
-
-    JsonNode documentBinaryUrlNode = node.get(DOCUMENT_BINARY_URL);
-    if (isText(documentBinaryUrlNode)) {
-      return extractDocumentId(documentBinaryUrlNode.asText());
-    }
-
-    return null;
+    return extractDocumentId(node.get(DOCUMENT_URL).asText());
   }
 
   private String extractDocumentId(String documentUrl) {
-    String path = path(documentUrl);
-    int index = path.lastIndexOf(DOCUMENTS_PATH);
-    if (index < 0) {
-      throw new CdamAttachException("Document URL does not contain " + DOCUMENTS_PATH);
-    }
-
-    String id = path.substring(index + DOCUMENTS_PATH.length());
-    int slash = id.indexOf('/');
-    if (slash >= 0) {
-      id = id.substring(0, slash);
-    }
+    String id = documentUrl.contains(BINARY)
+        ? documentUrl.substring(
+            documentUrl.length() - UUID_LENGTH - BINARY.length(),
+            documentUrl.length() - BINARY.length()
+        )
+        : documentUrl.substring(documentUrl.length() - UUID_LENGTH);
 
     try {
       return UUID.fromString(id).toString();
@@ -121,13 +106,9 @@ public class CaseDocumentHashScanner {
     }
   }
 
-  private String path(String documentUrl) {
-    try {
-      URI uri = URI.create(documentUrl);
-      return uri.getPath() == null ? documentUrl : uri.getPath();
-    } catch (IllegalArgumentException ex) {
-      return documentUrl;
-    }
+  private boolean isDocumentNode(ObjectNode node) {
+    JsonNode documentUrlNode = node.get(DOCUMENT_URL);
+    return isText(documentUrlNode) && !documentUrlNode.asText().contains(HEARING_RECORDINGS);
   }
 
   private boolean isText(JsonNode node) {
