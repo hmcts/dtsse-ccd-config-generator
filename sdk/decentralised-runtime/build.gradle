@@ -19,6 +19,7 @@ dependencies {
     implementation('com.github.hmcts:idam-java-client:3.0.5') {
         transitive = false
     }
+    implementation 'com.github.hmcts:service-auth-provider-java-client:5.3.4'
     implementation group: 'com.github.ben-manes.caffeine', name: 'caffeine'
     compileOnly 'org.projectlombok:lombok:1.18.46'
 
