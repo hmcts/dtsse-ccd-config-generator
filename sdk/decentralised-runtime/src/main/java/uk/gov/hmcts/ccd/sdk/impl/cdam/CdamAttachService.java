@@ -1,12 +1,14 @@
 package uk.gov.hmcts.ccd.sdk.impl.cdam;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.HttpHeaders;
 import org.springframework.stereotype.Service;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
 import uk.gov.hmcts.ccd.decentralised.dto.DecentralisedCaseEvent;
-import uk.gov.hmcts.ccd.sdk.impl.CurrentRequestHeaders;
 
 @Slf4j
 @Service
@@ -50,10 +52,19 @@ public class CdamAttachService {
   }
 
   private String authorisation() {
-    String authorisation = CurrentRequestHeaders.get(HttpHeaders.AUTHORIZATION);
+    String authorisation = currentRequestHeader(HttpHeaders.AUTHORIZATION);
     if (authorisation.isBlank()) {
       throw new IllegalStateException("Authorization header is required to attach CDAM documents");
     }
     return authorisation;
+  }
+
+  private String currentRequestHeader(String name) {
+    if (RequestContextHolder.getRequestAttributes() instanceof ServletRequestAttributes servletAttributes) {
+      HttpServletRequest request = servletAttributes.getRequest();
+      String value = request.getHeader(name);
+      return value == null ? "" : value;
+    }
+    return "";
   }
 }
