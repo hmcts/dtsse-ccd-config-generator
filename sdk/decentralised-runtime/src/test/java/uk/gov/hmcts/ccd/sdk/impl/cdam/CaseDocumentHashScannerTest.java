@@ -135,7 +135,7 @@ class CaseDocumentHashScannerTest {
   }
 
   @Test
-  void stripsDocumentHashesFromNestedDataWithoutChangingOriginal() throws Exception {
+  void stripsDocumentHashesOnlyFromDocumentNodesWithoutChangingOriginal() throws Exception {
     JsonNode submittedData = read("""
         {
           "document": {
@@ -154,7 +154,8 @@ class CaseDocumentHashScannerTest {
 
     JsonNode stripped = scanner.stripDocumentHashes(submittedData);
 
-    assertThat(stripped.findValues("document_hash")).isEmpty();
+    assertThat(stripped.at("/document").has("document_hash")).isFalse();
+    assertThat(stripped.at("/collection/0/value/document_hash").asText()).isEqualTo("nested-token");
     assertThat(submittedData.findValues("document_hash")).hasSize(2);
   }
 

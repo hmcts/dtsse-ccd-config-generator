@@ -18,10 +18,18 @@ public class CaseDocumentHashScanner {
 
   public List<DocumentHashToken> findNewDocumentHashTokens(JsonNode existingData, JsonNode submittedData) {
     Set<String> existingDocumentIds = new LinkedHashSet<>();
-    collectDocumentIds(existingData, existingDocumentIds);
+    documentNodes(existingData).forEach(node -> existingDocumentIds.add(documentId(node)));
 
     List<DocumentHashToken> tokens = new ArrayList<>();
-    collectNewDocumentHashTokens(submittedData, existingDocumentIds, tokens);
+    for (ObjectNode documentNode : documentNodes(submittedData)) {
+      String documentId = documentId(documentNode);
+      JsonNode documentHashNode = documentNode.get(DOCUMENT_HASH);
+      if (existingDocumentIds.contains(documentId)) {
+        failIfExistingDocumentHashReturned(documentId, documentHashNode);
+      } else {
+        tokens.add(buildDocumentHashToken(documentId, documentHashNode));
+      }
+    }
     return List.copyOf(tokens);
   }
 
@@ -31,53 +39,32 @@ public class CaseDocumentHashScanner {
     }
 
     JsonNode copy = data.deepCopy();
-    stripDocumentHashesInPlace(copy);
+    documentNodes(copy).forEach(node -> node.remove(DOCUMENT_HASH));
     return copy;
   }
 
-  private void collectDocumentIds(JsonNode node, Set<String> documentIds) {
-    if (node == null || node.isNull() || node.isMissingNode()) {
-      return;
-    }
-
-    if (node.isObject()) {
-      String documentId = documentId(node);
-      if (documentId != null) {
-        documentIds.add(documentId);
-      }
-      node.fields().forEachRemaining(entry -> collectDocumentIds(entry.getValue(), documentIds));
-      return;
-    }
-
-    if (node.isArray()) {
-      node.forEach(child -> collectDocumentIds(child, documentIds));
-    }
+  private List<ObjectNode> documentNodes(JsonNode node) {
+    List<ObjectNode> documentNodes = new ArrayList<>();
+    collectDocumentNodes(node, documentNodes);
+    return documentNodes;
   }
 
-  private void collectNewDocumentHashTokens(JsonNode node,
-                                            Set<String> existingDocumentIds,
-                                            List<DocumentHashToken> tokens) {
+  private void collectDocumentNodes(JsonNode node, List<ObjectNode> documentNodes) {
     if (node == null || node.isNull() || node.isMissingNode()) {
       return;
     }
 
     if (node.isObject()) {
-      String documentId = documentId(node);
-      if (documentId != null) {
-        JsonNode documentHashNode = node.get(DOCUMENT_HASH);
-        if (existingDocumentIds.contains(documentId)) {
-          failIfExistingDocumentHashReturned(documentId, documentHashNode);
-        } else {
-          tokens.add(buildDocumentHashToken(documentId, documentHashNode));
-        }
+      ObjectNode objectNode = (ObjectNode) node;
+      if (documentId(objectNode) != null) {
+        documentNodes.add(objectNode);
       }
-      node.fields().forEachRemaining(entry -> collectNewDocumentHashTokens(entry.getValue(), existingDocumentIds,
-          tokens));
+      objectNode.fields().forEachRemaining(entry -> collectDocumentNodes(entry.getValue(), documentNodes));
       return;
     }
 
     if (node.isArray()) {
-      node.forEach(child -> collectNewDocumentHashTokens(child, existingDocumentIds, tokens));
+      node.forEach(child -> collectDocumentNodes(child, documentNodes));
     }
   }
 
@@ -142,20 +129,4 @@ public class CaseDocumentHashScanner {
     return node != null && node.isTextual() && !node.asText().isBlank();
   }
 
-  private void stripDocumentHashesInPlace(JsonNode node) {
-    if (node == null || node.isNull() || node.isMissingNode()) {
-      return;
-    }
-
-    if (node.isObject()) {
-      ObjectNode objectNode = (ObjectNode) node;
-      objectNode.remove(DOCUMENT_HASH);
-      objectNode.fields().forEachRemaining(entry -> stripDocumentHashesInPlace(entry.getValue()));
-      return;
-    }
-
-    if (node.isArray()) {
-      node.forEach(this::stripDocumentHashesInPlace);
-    }
-  }
 }
