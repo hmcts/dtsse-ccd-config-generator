@@ -63,7 +63,7 @@ class LegacyCallbackSubmissionHandler implements CaseSubmissionHandler {
     log.info("[legacy] Creating event '{}' for case reference: {}",
         event.getEventDetails().getEventId(), event.getCaseDetails().getReference());
 
-    JsonNode preCallbackData = attachBaselineData(event);
+    JsonNode preCallbackData = preCallbackDocumentBaselineData(event);
     var outcome = prepareLegacySubmit(event);
 
     var submitResponse = outcome.response();
@@ -209,8 +209,10 @@ class LegacyCallbackSubmissionHandler implements CaseSubmissionHandler {
     event.getCaseDetails().setData(mapper.convertValue(strippedData, JSON_NODE_MAP));
   }
 
-  private JsonNode attachBaselineData(DecentralisedCaseEvent event) {
+  private JsonNode preCallbackDocumentBaselineData(DecentralisedCaseEvent event) {
     ArrayNode baseline = mapper.createArrayNode();
+    // Match CCD data-store's document attach baseline: database data plus event input are both pre-callback documents.
+    // Only documents first returned by the about-to-submit callback should be attached by the SDK.
     if (event.getCaseDetailsBefore() != null) {
       baseline.add(mapper.valueToTree(event.getCaseDetailsBefore().getData()));
     }
