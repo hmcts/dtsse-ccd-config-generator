@@ -90,6 +90,26 @@ class JsonCallbackBridgeTest {
   }
 
   @Test
+  void mapsSignificantItemFromLocalCallbackResponse() {
+    JsonCallbackBridge bridge = bridgeWith(
+        new MockEnvironment().withProperty("decentralisation.local-callback-placeholder", "ET_COS_URL"),
+        new LocalCallbackController()
+    );
+    CaseDetails<Object, Object> caseDetails = CaseDetails.builder()
+        .data(Map.of())
+        .build();
+
+    AboutToStartOrSubmitResponse response = bridge.aboutToSubmit(
+        "${ET_COS_URL}/callbacks/significant-item",
+        "local"
+    ).handle(caseDetails, null);
+
+    assertThat(response.getSignificantItem().getType()).isEqualTo("DOCUMENT");
+    assertThat(response.getSignificantItem().getDescription()).isEqualTo("Generated document");
+    assertThat(response.getSignificantItem().getUrl()).isEqualTo("http://dm-store/documents/123");
+  }
+
+  @Test
   void failsFastWhenCallbackIsNeitherLocalNorAbsoluteExternalUrl() {
     JsonCallbackBridge bridge = bridgeWith(new MockEnvironment());
 
@@ -135,6 +155,18 @@ class JsonCallbackBridgeTest {
       return new NocCallbackResponse(new NocCaseData(
           new ChangeOrganisationRequestField(new OrganisationToAdd(null))
       ));
+    }
+
+    @PostMapping("/significant-item")
+    Map<String, Object> significantItem(@RequestBody Map<String, Object> request) {
+      return Map.of(
+          "data", Map.of(),
+          "significant_item", Map.of(
+              "type", "DOCUMENT",
+              "description", "Generated document",
+              "url", "http://dm-store/documents/123"
+          )
+      );
     }
   }
 
