@@ -2994,6 +2994,42 @@ public class TestWithCCD extends CftlibTest {
     @SneakyThrows
     @Order(214)
     @Test
+    void legacyJsonCallbackAddsAcasStyleDocumentAndSdkAttachesIt() {
+        BaseJsonLegacyController.reset();
+
+        Map<String, Object> existingDocument = BaseJsonLegacyController.acasDocumentCollectionItem(
+            "event-input-acas-document",
+            BaseJsonLegacyController.EVENT_INPUT_DOCUMENT_ID,
+            BaseJsonLegacyController.EVENT_INPUT_DOCUMENT_HASH
+        );
+
+        var response = submitJsonLegacyEventForCaseType(
+            JsonLegacyCcdConfig.CASE_TYPE_A,
+            Map.of(
+                "note", BaseJsonLegacyController.ACAS_DOCUMENT_NOTE,
+                "documentCollection", List.of(existingDocument)
+            ),
+            201
+        );
+
+        assertThat(BaseJsonLegacyController.aboutToSubmitAttempts, equalTo(1));
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> data = (Map<String, Object>) response.get("data");
+        JsonNode responseData = mapper.valueToTree(data);
+        assertThat(responseData.findValues("document_hash"), is(empty()));
+        assertThat(responseData.toString(), containsString(BaseJsonLegacyController.EVENT_INPUT_DOCUMENT_ID));
+        assertThat(responseData.toString(), containsString(BaseJsonLegacyController.CALLBACK_DOCUMENT_ID));
+
+        JsonNode storedData = mapper.readTree(storedData(JsonLegacyCcdConfig.CASE_TYPE_A));
+        assertThat(storedData.findValues("document_hash"), is(empty()));
+        assertThat(storedData.toString(), containsString(BaseJsonLegacyController.EVENT_INPUT_DOCUMENT_ID));
+        assertThat(storedData.toString(), containsString(BaseJsonLegacyController.CALLBACK_DOCUMENT_ID));
+    }
+
+    @SneakyThrows
+    @Order(215)
+    @Test
     void submittedRetriesAndDuplicateJsonLegacySubmissionDoesNotReRun() {
         for (String caseType : jsonLegacyCaseTypes()) {
             BaseJsonLegacyController.reset();
@@ -3034,7 +3070,7 @@ public class TestWithCCD extends CftlibTest {
     }
 
     @SneakyThrows
-    @Order(215)
+    @Order(216)
     @Test
     void jsonDefinitionAuditHistoryUsesStateLabel() {
         for (String caseType : jsonLegacyCaseTypes()) {

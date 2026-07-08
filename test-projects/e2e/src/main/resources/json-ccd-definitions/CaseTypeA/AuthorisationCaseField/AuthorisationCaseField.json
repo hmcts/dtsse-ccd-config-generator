@@ -16,5 +16,11 @@
     "CaseFieldID": "setInAboutToSubmit",
     "UserRole": "caseworker-divorce-courtadmin_beta",
     "CRUD": "CRU"
+  },
+  {
+    "CaseTypeID": "case-type-a",
+    "CaseFieldID": "documentCollection",
+    "UserRole": "caseworker-divorce-courtadmin_beta",
+    "CRUD": "CRU"
   }
 ]
