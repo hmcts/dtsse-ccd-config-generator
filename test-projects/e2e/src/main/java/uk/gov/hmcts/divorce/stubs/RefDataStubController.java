@@ -1,5 +1,6 @@
 package uk.gov.hmcts.divorce.stubs;
 
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
 
@@ -103,7 +104,7 @@ public class RefDataStubController {
             return ResponseEntity.notFound().build();
         }
 
-        return ResponseEntity.ok("%PDF-1.4\n% test cdam document\n".getBytes());
+        return ResponseEntity.ok("%PDF-1.4\n% test cdam document\n".getBytes(StandardCharsets.UTF_8));
     }
 
     @PatchMapping(value = "/documents", produces = MediaType.APPLICATION_JSON_VALUE)
