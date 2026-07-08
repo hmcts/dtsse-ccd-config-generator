@@ -43,12 +43,26 @@ tasks.register('publishToAzureArtifacts') { task ->
     }
 }
 
+def configurePostgresClientTools = { task ->
+    ['/opt/homebrew/opt/libpq/bin', '/usr/local/opt/libpq/bin'].find {
+        file("${it}/pg_dump").exists()
+    }.with {
+        if (it != null) {
+            task.environment 'PG_DUMP_BIN', "${it}/pg_dump"
+            task.environment 'PSQL_BIN', "${it}/psql"
+            task.environment 'CREATEDB_BIN', "${it}/createdb"
+            task.environment 'DROPDB_BIN', "${it}/dropdb"
+        }
+    }
+}
+
 tasks.register('verifyCcdMigration', Exec) {
     group = 'verification'
     description = 'Validates the classic and FDW CCD migration scripts after the e2e environment is up'
     dependsOn ':e2e:dumpCCDDefinitions'
     dependsOn 'verifyCcdMigrationFdw'
     workingDir projectDir
+    configurePostgresClientTools(it)
     commandLine 'bash', '-lc', './scripts/test-migrate-ccd-data.sh'
 }
 
@@ -57,16 +71,7 @@ tasks.register('verifyCcdMigrationFdw', Exec) {
     description = 'Validates and applies the FDW CCD migration scripts after the e2e environment is up'
     dependsOn ':e2e:dumpCCDDefinitions'
     workingDir projectDir
-    ['/opt/homebrew/opt/libpq/bin', '/usr/local/opt/libpq/bin'].find {
-        file("${it}/pg_dump").exists()
-    }.with {
-        if (it != null) {
-            environment 'PG_DUMP_BIN', "${it}/pg_dump"
-            environment 'PSQL_BIN', "${it}/psql"
-            environment 'CREATEDB_BIN', "${it}/createdb"
-            environment 'DROPDB_BIN', "${it}/dropdb"
-        }
-    }
+    configurePostgresClientTools(it)
     commandLine 'bash', '-lc', './scripts/test-migrate-ccd-data-fdw.sh'
 }
 
