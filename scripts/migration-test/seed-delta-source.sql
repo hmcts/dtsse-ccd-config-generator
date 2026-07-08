@@ -86,3 +86,23 @@ insert into case_event (
     'summary',
     'description'
 );
+
+insert into case_event_significant_items (
+    id,
+    description,
+    "type",
+    url,
+    case_event_id
+) values (
+    8105,
+    'Delta document',
+    'DOCUMENT',
+    'http://dm-store/documents/8105',
+    9105
+), (
+    8106,
+    'New case document',
+    'DOCUMENT',
+    'http://dm-store/documents/8106',
+    9106
+);

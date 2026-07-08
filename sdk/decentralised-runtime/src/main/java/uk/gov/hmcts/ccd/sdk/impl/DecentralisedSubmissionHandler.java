@@ -42,6 +42,7 @@ class DecentralisedSubmissionHandler implements CaseSubmissionHandler {
         state,
         securityClassification,
         Optional.ofNullable(outcome.getEventMetadata()),
+        Optional.ofNullable(outcome.getSignificantItem()),
         () -> outcome);
   }
 

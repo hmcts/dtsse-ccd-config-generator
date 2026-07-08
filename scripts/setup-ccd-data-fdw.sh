@@ -9,7 +9,7 @@ set -euo pipefail
 #   - postgres_fdw and pgcrypto extensions
 #   - FDW staging schema
 #   - FDW server and user mapping
-#   - foreign tables for source case_data and case_event
+#   - foreign tables for source case_data, case_event and case_event_significant_items
 #
 # This script is intended to be run once by the team with database privileges.
 # ------------------------------------------------------------------------------
@@ -153,6 +153,7 @@ setup_fdw() {
   psql_dst <<'SQL'
 create schema if not exists :"fdw_schema";
 
+drop foreign table if exists :"fdw_schema".case_event_significant_items;
 drop foreign table if exists :"fdw_schema".case_event;
 drop foreign table if exists :"fdw_schema".case_data;
 
@@ -223,6 +224,20 @@ options (
   table_name 'case_event',
   fetch_size '10000'
 );
+
+create foreign table :"fdw_schema".case_event_significant_items (
+  id bigint,
+  description varchar(64),
+  "type" text,
+  url text,
+  case_event_id bigint
+)
+server :"fdw_server"
+options (
+  schema_name :'src_schema',
+  table_name 'case_event_significant_items',
+  fetch_size '10000'
+);
 SQL
 }
 
@@ -232,7 +247,11 @@ grant_fdw_access() {
   psql_dst <<'SQL'
 grant usage on foreign server :"fdw_server" to :local_user_sql;
 grant usage on schema :"fdw_schema" to :local_user_sql;
-grant select on :"fdw_schema".case_data, :"fdw_schema".case_event to :local_user_sql;
+grant select on
+  :"fdw_schema".case_data,
+  :"fdw_schema".case_event,
+  :"fdw_schema".case_event_significant_items
+to :local_user_sql;
 SQL
 }
 
@@ -242,6 +261,8 @@ validate_fdw_tables() {
   psql_dst <<'SQL'
 select 'fdw case_data table' as check_name, to_regclass(:'fdw_schema' || '.case_data') as relation;
 select 'fdw case_event table' as check_name, to_regclass(:'fdw_schema' || '.case_event') as relation;
+select 'fdw case_event_significant_items table' as check_name,
+  to_regclass(:'fdw_schema' || '.case_event_significant_items') as relation;
 
 select 'source case_data reachable' as check_name, exists(
   select 1
@@ -252,6 +273,12 @@ select 'source case_data reachable' as check_name, exists(
 select 'source case_event reachable' as check_name, exists(
   select 1
   from :"fdw_schema".case_event
+  limit 1
+) as reachable;
+
+select 'source case_event_significant_items reachable' as check_name, exists(
+  select 1
+  from :"fdw_schema".case_event_significant_items
   limit 1
 ) as reachable;
 SQL

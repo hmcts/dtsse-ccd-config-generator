@@ -92,6 +92,7 @@ clear_target_data() {
   echo "Ensuring target database is empty"
   psql_dst <<'SQL'
 set client_min_messages to warning;
+delete from ccd.case_event_significant_items;
 delete from ccd.case_event;
 delete from ccd.case_data;
 SQL
@@ -145,7 +146,7 @@ SQL
 }
 
 assert_migrated_counts_match_source() {
-  local src_cases src_events dst_cases dst_events
+  local src_cases src_events src_significant_items dst_cases dst_events dst_significant_items
 
   echo "Validating migrated record counts"
   src_cases="$(psql_src --quiet -tA <<'SQL'
@@ -157,6 +158,16 @@ SQL
   src_events="$(psql_src --quiet -tA <<'SQL'
 select count(*)
 from case_event ce
+join case_data cd
+  on cd.id = ce.case_data_id
+where cd.case_type_id = :'case_type';
+SQL
+)"
+  src_significant_items="$(psql_src --quiet -tA <<'SQL'
+select count(*)
+from case_event_significant_items item
+join case_event ce
+  on ce.id = item.case_event_id
 join case_data cd
   on cd.id = ce.case_data_id
 where cd.case_type_id = :'case_type';
@@ -176,9 +187,22 @@ join ccd.case_data cd
 where cd.case_type_id = :'case_type';
 SQL
 )"
+  dst_significant_items="$(psql_dst --quiet -tA <<'SQL'
+select count(*)
+from ccd.case_event_significant_items item
+join ccd.case_event ce
+  on ce.id = item.case_event_id
+join ccd.case_data cd
+  on cd.id = ce.case_data_id
+where cd.case_type_id = :'case_type';
+SQL
+)"
 
-  if [[ "$src_cases" != "$dst_cases" || "$src_events" != "$dst_events" ]]; then
-    echo "Count mismatch after migration: source=${src_cases}/${src_events} target=${dst_cases}/${dst_events}" >&2
+  if [[ "$src_cases" != "$dst_cases"
+      || "$src_events" != "$dst_events"
+      || "$src_significant_items" != "$dst_significant_items" ]]; then
+    echo "Count mismatch after migration: source=${src_cases}/${src_events}/${src_significant_items}" \
+      "target=${dst_cases}/${dst_events}/${dst_significant_items}" >&2
     exit 1
   fi
 }
@@ -196,6 +220,18 @@ SQL
 
   if [[ "$copied_count" != "0" ]]; then
     echo "Out-of-scope parent event was migrated despite misleading event case_type_id" >&2
+    exit 1
+  fi
+
+  copied_count="$(psql_dst --quiet -tA <<'SQL'
+select count(*)
+from ccd.case_event_significant_items
+where id = 8199;
+SQL
+)"
+
+  if [[ "$copied_count" != "0" ]]; then
+    echo "Out-of-scope parent significant item was migrated despite misleading event case_type_id" >&2
     exit 1
   fi
 }
@@ -261,7 +297,7 @@ SQL
 }
 
 assert_no_orphans_or_duplicate_revisions() {
-  local orphan_count duplicate_count
+  local orphan_count significant_item_orphan_count duplicate_count
 
   echo "Validating no orphan events or duplicate event revisions"
   orphan_count="$(psql_dst --quiet -tA <<'SQL'
@@ -270,6 +306,14 @@ from ccd.case_event ce
 left join ccd.case_data cd
   on cd.id = ce.case_data_id
 where cd.id is null;
+SQL
+)"
+  significant_item_orphan_count="$(psql_dst --quiet -tA <<'SQL'
+select count(*)
+from ccd.case_event_significant_items item
+left join ccd.case_event ce
+  on ce.id = item.case_event_id
+where ce.id is null;
 SQL
 )"
   duplicate_count="$(psql_dst --quiet -tA <<'SQL'
@@ -286,24 +330,36 @@ from (
 SQL
 )"
 
-  if [[ "$orphan_count" != "0" || "$duplicate_count" != "0" ]]; then
-    echo "Invalid event state: orphans=${orphan_count}, duplicate revisions=${duplicate_count}" >&2
+  if [[ "$orphan_count" != "0" || "$significant_item_orphan_count" != "0" || "$duplicate_count" != "0" ]]; then
+    echo "Invalid event state: orphans=${orphan_count}, significant_item_orphans=${significant_item_orphan_count}," \
+      "duplicate revisions=${duplicate_count}" >&2
     exit 1
   fi
 }
 
 assert_case_event_sequence_is_safe() {
-  local sequence_is_safe
+  local sequence_is_safe significant_item_sequence_is_safe
 
   echo "Validating case_event_id_seq is above migrated event ids"
   sequence_is_safe="$(psql_dst --quiet -tA <<'SQL'
-select last_value >= (select max(id) from ccd.case_event)
+select last_value >= (select coalesce(max(id), 1) from ccd.case_event)
 from ccd.case_event_id_seq;
 SQL
 )"
 
   if [[ "$sequence_is_safe" != "t" ]]; then
     echo "case_event_id_seq was not reset above migrated event ids" >&2
+    exit 1
+  fi
+
+  significant_item_sequence_is_safe="$(psql_dst --quiet -tA <<'SQL'
+select last_value >= (select coalesce(max(id), 1) from ccd.case_event_significant_items)
+from ccd.case_event_significant_items_id_seq;
+SQL
+)"
+
+  if [[ "$significant_item_sequence_is_safe" != "t" ]]; then
+    echo "case_event_significant_items_id_seq was not reset above migrated significant item ids" >&2
     exit 1
   fi
 }

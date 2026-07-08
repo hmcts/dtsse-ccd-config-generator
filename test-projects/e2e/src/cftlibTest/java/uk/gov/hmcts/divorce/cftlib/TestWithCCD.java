@@ -93,6 +93,7 @@ import uk.gov.hmcts.divorce.simplecase.model.SimpleCaseState;
 import uk.gov.hmcts.divorce.sow014.nfd.CaseworkerMaintainCaseLink;
 import uk.gov.hmcts.divorce.sow014.nfd.CaseworkerOverrideEventMetadata;
 import uk.gov.hmcts.divorce.sow014.nfd.CaseworkerPopulateSearchCriteria;
+import uk.gov.hmcts.divorce.sow014.nfd.CaseworkerSignificantItem;
 import uk.gov.hmcts.divorce.sow014.nfd.DecentralisedCaseworkerAddNote;
 import uk.gov.hmcts.divorce.sow014.nfd.DecentralisedCaseworkerAddNoteFailure;
 import uk.gov.hmcts.divorce.sow014.nfd.DecentralisedOverrideEventMetadata;
@@ -975,6 +976,34 @@ public class TestWithCCD extends CftlibTest {
 
     @SneakyThrows
     @Order(16)
+    @Test
+    public void callbackSignificantItemIsReturnedInEventHistory() {
+        String user = "TEST_CASE_WORKER_USER@mailinator.com";
+        var start = ccdApi.startEvent(
+            getAuthorisation(user),
+            getServiceAuth(),
+            String.valueOf(caseRef),
+            CaseworkerSignificantItem.EVENT_ID);
+
+        var request = prepareEventRequestWithToken(
+            user,
+            CaseworkerSignificantItem.EVENT_ID,
+            Map.of("note", "Significant item test"),
+            start.getToken());
+
+        var response = HttpClientBuilder.create().build().execute(request);
+        assertThat(response.getStatusLine().getStatusCode(), equalTo(201));
+
+        var submittedEvent = getLatestAuditEvent(user, caseRef, CaseworkerSignificantItem.EVENT_ID);
+        var significantItem = significantItemFrom(submittedEvent);
+
+        assertThat(significantItem.get("type"), equalTo("DOCUMENT"));
+        assertThat(significantItem.get("description"), equalTo(CaseworkerSignificantItem.DESCRIPTION));
+        assertThat(significantItem.get("url"), equalTo(CaseworkerSignificantItem.URL));
+    }
+
+    @SneakyThrows
+    @Order(17)
     @Test
     public void testSubmittedCallback() {
         var token = ccdApi.startEvent(
@@ -2030,6 +2059,17 @@ public class TestWithCCD extends CftlibTest {
                 .findFirst()
                 .orElseThrow();
         }
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> significantItemFrom(Map<String, Object> event) {
+        Map<String, Object> significantItem = (Map<String, Object>) event.get("significant_item");
+        if (significantItem == null) {
+            significantItem = (Map<String, Object>) event.get("significantItem");
+        }
+        assertThat("Significant item should be present in event history: " + event,
+            significantItem, is(notNullValue()));
+        return significantItem;
     }
 
     private void assertLatestEventMetadata(String eventId, String expectedSummary, String expectedDescription) {

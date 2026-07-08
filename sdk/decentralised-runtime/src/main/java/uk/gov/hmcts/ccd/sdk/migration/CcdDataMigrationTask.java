@@ -178,6 +178,9 @@ public class CcdDataMigrationTask implements Runnable {
     Progress progress = getOrCreateProgress();
     if (STATUS_COMPLETE.equals(progress.status())) {
       transaction.execute(status -> {
+        applyMigrationStatementTimeout();
+        copySignificantItemsForCutover(progress.requiredCutoverEventHwm());
+        resetSequences();
         validateFinal(progress.requiredCutoverEventHwm());
         enableElasticsearchQueueTrigger();
         return null;
@@ -211,18 +214,23 @@ public class CcdDataMigrationTask implements Runnable {
           totals.stoppedByTimeLimit()
       );
     }
+    int significantItems = transaction.execute(status -> {
+      applyMigrationStatementTimeout();
+      return copySignificantItemsForCutover(cutoverEventHwm);
+    });
     final int refreshedCases = refreshCutoverCaseData();
     resetSequences();
     completeCutover(cutoverEventHwm);
 
     log.info(
         "Completed CCD data migration cutover taskName={} cutoverEventHwm={} batches={} refreshedCases={} events={} "
-            + "stoppedByTimeLimit={}",
+            + "significantItems={} stoppedByTimeLimit={}",
         options.taskName(),
         cutoverEventHwm,
         totals.batches(),
         refreshedCases,
         totals.events(),
+        significantItems,
         totals.stoppedByTimeLimit()
     );
     return new CcdDataMigrationRunResult(
@@ -412,6 +420,40 @@ public class CcdDataMigrationTask implements Runnable {
         left join local_revisions on local_revisions.case_data_id = numbered_events.case_data_id
         """,
         eventBatchParams(batchStartEventId, batchEndEventHwm)
+    );
+  }
+
+  private int copySignificantItemsForCutover(long cutoverEventHwm) {
+    return db.update(
+        """
+        insert into ccd.case_event_significant_items (
+          id,
+          description,
+          "type",
+          url,
+          case_event_id
+        )
+        select
+          item.id,
+          item.description,
+          item."type"::ccd.significant_item_type,
+          item.url,
+          item.case_event_id
+        from fdw_stage.case_event_significant_items item
+        join fdw_stage.case_event ce on ce.id = item.case_event_id
+        join fdw_stage.case_data cd on cd.id = ce.case_data_id
+        join ccd.case_event target_event on target_event.id = item.case_event_id
+        where cd.jurisdiction = :sourceJurisdiction
+          and cd.case_type_id in (:caseTypeIds)
+          and ce.case_type_id in (:caseTypeIds)
+          and ce.id <= :cutoverEventHwm
+        on conflict (id) do update
+        set description = excluded.description,
+            "type" = excluded."type",
+            url = excluded.url,
+            case_event_id = excluded.case_event_id
+        """,
+        baseParams().addValue("cutoverEventHwm", cutoverEventHwm)
     );
   }
 
@@ -634,6 +676,12 @@ public class CcdDataMigrationTask implements Runnable {
   private void validateFinal(long eventHwm) {
     log.info("CCD data migration final counts taskName={} caseData={}", options.taskName(), queryCounts("case_data"));
     log.info("CCD data migration final counts taskName={} caseEvent={}", options.taskName(), queryCounts("case_event"));
+    log.info(
+        "CCD data migration final counts taskName={} caseEventSignificantItems={}",
+        options.taskName(),
+        queryCounts("case_event_significant_items")
+    );
+    validateSignificantItemCounts(eventHwm);
     long esQueueRows = countElasticsearchQueueRows();
     log.info("CCD data migration final counts taskName={} esQueue={}", options.taskName(), esQueueRows);
     if (esQueueRows > 0) {
@@ -663,9 +711,60 @@ public class CcdDataMigrationTask implements Runnable {
           group by ce.case_type_id
           order by ce.case_type_id
           """;
+      case "case_event_significant_items" -> """
+          select ce.case_type_id, count(*) as count
+          from ccd.case_event_significant_items item
+          join ccd.case_event ce on ce.id = item.case_event_id
+          join ccd.case_data cd on cd.id = ce.case_data_id
+          where cd.jurisdiction = :sourceJurisdiction
+            and cd.case_type_id in (:caseTypeIds)
+            and ce.case_type_id in (:caseTypeIds)
+          group by ce.case_type_id
+          order by ce.case_type_id
+          """;
       default -> throw new IllegalArgumentException("Unsupported table name: " + tableName);
     };
     return db.queryForList(sql, baseParams());
+  }
+
+  private void validateSignificantItemCounts(long eventHwm) {
+    MapSqlParameterSource params = baseParams().addValue("eventHwm", eventHwm);
+    Long sourceCount = db.queryForObject(
+        """
+        select count(*)
+        from fdw_stage.case_event_significant_items item
+        join fdw_stage.case_event ce on ce.id = item.case_event_id
+        join fdw_stage.case_data cd on cd.id = ce.case_data_id
+        where cd.jurisdiction = :sourceJurisdiction
+          and cd.case_type_id in (:caseTypeIds)
+          and ce.case_type_id in (:caseTypeIds)
+          and ce.id <= :eventHwm
+        """,
+        params,
+        Long.class
+    );
+    Long targetCount = db.queryForObject(
+        """
+        select count(*)
+        from ccd.case_event_significant_items item
+        join ccd.case_event ce on ce.id = item.case_event_id
+        join ccd.case_data cd on cd.id = ce.case_data_id
+        where cd.jurisdiction = :sourceJurisdiction
+          and cd.case_type_id in (:caseTypeIds)
+          and ce.case_type_id in (:caseTypeIds)
+          and ce.id <= :eventHwm
+        """,
+        params,
+        Long.class
+    );
+
+    long sourceRows = sourceCount == null ? 0 : sourceCount;
+    long targetRows = targetCount == null ? 0 : targetCount;
+    if (sourceRows != targetRows) {
+      throw new CcdDataMigrationException(
+          "CCD data migration significant item count mismatch source=" + sourceRows + " target=" + targetRows
+      );
+    }
   }
 
   private void resetSequences() {
@@ -673,6 +772,13 @@ public class CcdDataMigrationTask implements Runnable {
         select setval(
           'ccd.case_event_id_seq'::regclass,
           (select coalesce(max(id), 1) from ccd.case_event),
+          true
+        )
+        """);
+    db.getJdbcTemplate().execute("""
+        select setval(
+          'ccd.case_event_significant_items_id_seq'::regclass,
+          (select coalesce(max(id), 1) from ccd.case_event_significant_items),
           true
         )
         """);
@@ -828,16 +934,18 @@ public class CcdDataMigrationTask implements Runnable {
       throw new CcdDataMigrationException("pgcrypto extension is missing. Run the FDW setup first: " + DOCS_URL);
     }
 
+    ensureFdwTables();
+
     Integer missingTables = db.queryForObject(
         """
-        select 2 - count(*)
+        select 3 - count(*)
         from (
           select c.relname
           from pg_foreign_table ft
           join pg_class c on c.oid = ft.ftrelid
           join pg_namespace n on n.oid = c.relnamespace
           where n.nspname = :fdwSchema
-            and c.relname in ('case_data', 'case_event')
+            and c.relname in ('case_data', 'case_event', 'case_event_significant_items')
         ) fdw_tables
         """,
         Map.of("fdwSchema", FDW_SCHEMA),
@@ -848,6 +956,129 @@ public class CcdDataMigrationTask implements Runnable {
           "FDW foreign tables are missing in schema " + FDW_SCHEMA + ". Run the FDW setup first: " + DOCS_URL
       );
     }
+  }
+
+  private void ensureFdwTables() {
+    db.getJdbcTemplate().execute("""
+        do $$
+        declare
+          fdw_server text;
+          source_schema text;
+          fetch_size text;
+        begin
+          if to_regclass('fdw_stage.case_data') is not null
+              and to_regclass('fdw_stage.case_event') is not null
+              and to_regclass('fdw_stage.case_event_significant_items') is not null then
+            return;
+          end if;
+
+          select s.srvname,
+                 coalesce((
+                   select split_part(option, '=', 2)
+                   from unnest(ft.ftoptions) option
+                   where split_part(option, '=', 1) = 'schema_name'
+                 ), 'public'),
+                 (
+                   select split_part(option, '=', 2)
+                   from unnest(ft.ftoptions) option
+                   where split_part(option, '=', 1) = 'fetch_size'
+                 )
+          into fdw_server, source_schema, fetch_size
+          from pg_foreign_table ft
+          join pg_class c on c.oid = ft.ftrelid
+          join pg_namespace n on n.oid = c.relnamespace
+          join pg_foreign_server s on s.oid = ft.ftserver
+          where n.nspname = 'fdw_stage'
+            and c.relname in ('case_data', 'case_event', 'case_event_significant_items')
+          order by case c.relname
+            when 'case_event' then 1
+            when 'case_data' then 2
+            else 3
+          end
+          limit 1;
+
+          if fdw_server is null then
+            return;
+          end if;
+          fetch_size := coalesce(fetch_size, '10000');
+
+          if to_regclass('fdw_stage.case_data') is null then
+            execute format(
+              'create foreign table fdw_stage.case_data (
+                reference bigint,
+                version integer,
+                created_date timestamp without time zone,
+                security_classification ccd.securityclassification,
+                last_state_modified_date timestamp without time zone,
+                resolved_ttl date,
+                last_modified timestamp without time zone,
+                jurisdiction varchar(255),
+                case_type_id varchar(255),
+                state varchar(255),
+                data jsonb,
+                supplementary_data jsonb,
+                id bigint
+              ) server %I options (schema_name %L, table_name %L, fetch_size %L)',
+              fdw_server,
+              source_schema,
+              'case_data',
+              fetch_size
+            );
+          end if;
+
+          if to_regclass('fdw_stage.case_event') is null then
+            execute format(
+              'create foreign table fdw_stage.case_event (
+                id bigint,
+                created_date timestamp without time zone,
+                security_classification ccd.securityclassification,
+                case_data_id bigint,
+                case_type_version integer,
+                event_id varchar(70),
+                summary varchar(1024),
+                description varchar(65536),
+                user_id varchar(64),
+                case_type_id varchar(255),
+                state_id varchar(255),
+                data jsonb,
+                user_first_name varchar(255),
+                user_last_name varchar(255),
+                event_name varchar(30),
+                state_name varchar(255),
+                proxied_by varchar(64),
+                proxied_by_first_name varchar(255),
+                proxied_by_last_name varchar(255)
+              ) server %I options (schema_name %L, table_name %L, fetch_size %L)',
+              fdw_server,
+              source_schema,
+              'case_event',
+              fetch_size
+            );
+          end if;
+
+          if to_regclass('fdw_stage.case_event_significant_items') is null then
+            execute format(
+              'create foreign table fdw_stage.case_event_significant_items (
+                id bigint,
+                description varchar(64),
+                "type" text,
+                url text,
+                case_event_id bigint
+              ) server %I options (schema_name %L, table_name %L, fetch_size %L)',
+              fdw_server,
+              source_schema,
+              'case_event_significant_items',
+              fetch_size
+            );
+          end if;
+
+          grant select on
+            fdw_stage.case_data,
+            fdw_stage.case_event,
+            fdw_stage.case_event_significant_items
+          to current_user;
+        end $$;
+        """);
   }
 
   private void validateDecentralisedRuntimeDisabled() {
