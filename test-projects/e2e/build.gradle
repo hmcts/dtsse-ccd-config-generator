@@ -119,6 +119,9 @@ tasks.withType(JavaExec).configureEach {
   javaLauncher.set(javaToolchains.launcherFor(java.toolchain))
 }
 
+// cftlib starts ccd-case-document-am-api from a generated manifest classpath. Prepend a test-only
+// service_config.json override so nfdiv_case_api can ATTACH EMPLOYMENT documents for the legacy
+// callback CDAM attach regression without changing the global e2e S2S identity.
 tasks.named('writeManifestccd-case-document-am-api').configure {
   doLast {
     def manifest = layout.buildDirectory.file('cftlib/ccd-case-document-am-api').get().asFile
