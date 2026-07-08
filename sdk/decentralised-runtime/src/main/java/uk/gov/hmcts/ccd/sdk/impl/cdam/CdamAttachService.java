@@ -1,13 +1,9 @@
 package uk.gov.hmcts.ccd.sdk.impl.cdam;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.http.HttpHeaders;
 import org.springframework.stereotype.Service;
-import org.springframework.web.context.request.RequestContextHolder;
-import org.springframework.web.context.request.ServletRequestAttributes;
 import uk.gov.hmcts.ccd.decentralised.dto.DecentralisedCaseEvent;
 import uk.gov.hmcts.reform.authorisation.generators.AuthTokenGenerator;
 import uk.gov.hmcts.reform.ccd.document.am.feign.CaseDocumentClient;
@@ -30,7 +26,8 @@ public class CdamAttachService {
     this.authTokenGenerator = authTokenGenerator;
   }
 
-  public JsonNode attachNewDocumentsAndStripHashes(DecentralisedCaseEvent event,
+  public JsonNode attachNewDocumentsAndStripHashes(String authorisation,
+                                                   DecentralisedCaseEvent event,
                                                    JsonNode preCallbackData,
                                                    JsonNode postCallbackData) {
     var tokens = scanner.findNewDocumentHashTokens(preCallbackData, postCallbackData);
@@ -47,7 +44,6 @@ public class CdamAttachService {
         tokens
     );
 
-    String authorisation = authorisation();
     try {
       caseDocumentClient.patchDocument(authorisation, authTokenGenerator.generate(), metadata);
       log.info("Attached CDAM documents caseId={} caseType={} jurisdiction={} documentCount={}",
@@ -60,15 +56,5 @@ public class CdamAttachService {
           ex
       );
     }
-  }
-
-  private String authorisation() {
-    HttpServletRequest request = ((ServletRequestAttributes) RequestContextHolder.currentRequestAttributes())
-        .getRequest();
-    String authorisation = request.getHeader(HttpHeaders.AUTHORIZATION);
-    if (authorisation == null || authorisation.isBlank()) {
-      throw new IllegalStateException("Authorization header is required to attach CDAM documents");
-    }
-    return authorisation;
   }
 }
