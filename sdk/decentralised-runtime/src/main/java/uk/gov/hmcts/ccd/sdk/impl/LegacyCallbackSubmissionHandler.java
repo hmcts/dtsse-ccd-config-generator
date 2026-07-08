@@ -59,11 +59,6 @@ class LegacyCallbackSubmissionHandler implements CaseSubmissionHandler {
 
   @Override
   public CaseSubmissionHandlerResult apply(DecentralisedCaseEvent event) {
-    return apply(event, null);
-  }
-
-  @Override
-  public CaseSubmissionHandlerResult apply(DecentralisedCaseEvent event, String authorisation) {
     log.info("[legacy] Creating event '{}' for case reference: {}",
         event.getEventDetails().getEventId(), event.getCaseDetails().getReference());
 
@@ -75,7 +70,7 @@ class LegacyCallbackSubmissionHandler implements CaseSubmissionHandler {
       throw new CallbackValidationException(submitResponse.getErrors(), submitResponse.getWarnings());
     }
 
-    attachNewCdamDocuments(event, authorisation, preCallbackData);
+    attachNewCdamDocuments(event, preCallbackData);
 
     boolean runSubmitted = outcome.runSubmittedCallback();
 
@@ -194,20 +189,15 @@ class LegacyCallbackSubmissionHandler implements CaseSubmissionHandler {
                                      EventMetadata eventMetadata,
                                      boolean runSubmittedCallback) {}
 
-  private void attachNewCdamDocuments(DecentralisedCaseEvent event, String authorisation, JsonNode preCallbackData) {
+  private void attachNewCdamDocuments(DecentralisedCaseEvent event, JsonNode preCallbackData) {
     CdamAttachService service = cdamAttachService.getIfAvailable();
     if (service == null) {
       return;
     }
 
-    if (authorisation == null || authorisation.isBlank()) {
-      throw new IllegalStateException("Authorization header is required to attach CDAM documents");
-    }
-
     JsonNode postCallbackData = mapper.valueToTree(event.getCaseDetails().getData());
     JsonNode strippedData = service.attachNewDocumentsAndStripHashes(
         event,
-        authorisation,
         preCallbackData,
         postCallbackData
     );

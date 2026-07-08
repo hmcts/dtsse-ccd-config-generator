@@ -56,13 +56,13 @@ class LegacyCallbackSubmissionHandlerTest {
         }
         """, List.of()));
 
-    var result = handler.apply(event, "Bearer user-token");
+    var result = handler.apply(event);
 
     assertThat(event.getCaseDetails().getData().get("generatedDocument").get("document_hash").asText())
         .isEqualTo("hash-token");
     assertThat(result.dataUpdate()).isPresent();
     assertThat(result.dataUpdate().orElseThrow().findValues("document_hash")).hasSize(1);
-    verify(cdamAttachService, never()).attachNewDocumentsAndStripHashes(any(), any(), any(), any());
+    verify(cdamAttachService, never()).attachNewDocumentsAndStripHashes(any(), any(), any());
   }
 
   @Test
@@ -78,13 +78,13 @@ class LegacyCallbackSubmissionHandlerTest {
         }
         """, List.of()));
 
-    var result = handler.apply(event, "Bearer user-token");
+    var result = handler.apply(event);
 
     assertThat(event.getCaseDetails().getData().get("generatedDocument").get("document_hash").asText())
         .isEqualTo("hash-token");
     assertThat(result.dataUpdate()).isPresent();
     assertThat(result.dataUpdate().orElseThrow().findValues("document_hash")).isEmpty();
-    verify(cdamAttachService, never()).attachNewDocumentsAndStripHashes(any(), any(), any(), any());
+    verify(cdamAttachService, never()).attachNewDocumentsAndStripHashes(any(), any(), any());
   }
 
   @Test
@@ -99,7 +99,7 @@ class LegacyCallbackSubmissionHandlerTest {
         }
         """);
     when(cdamAttachServiceProvider.getIfAvailable()).thenReturn(cdamAttachService);
-    when(cdamAttachService.attachNewDocumentsAndStripHashes(eq(event), eq("Bearer user-token"), any(), any()))
+    when(cdamAttachService.attachNewDocumentsAndStripHashes(eq(event), any(), any()))
         .thenReturn(strippedData);
     when(executor.aboutToSubmit(any())).thenReturn(callbackResponse("""
         {
@@ -110,7 +110,7 @@ class LegacyCallbackSubmissionHandlerTest {
         }
         """, List.of()));
 
-    var result = handler.apply(event, "Bearer user-token");
+    var result = handler.apply(event);
 
     assertThat(event.getCaseDetails().getData().get("generatedDocument").has("document_hash")).isFalse();
     assertThat(result.dataUpdate()).isPresent();
@@ -120,7 +120,6 @@ class LegacyCallbackSubmissionHandlerTest {
     ArgumentCaptor<JsonNode> postCallbackData = ArgumentCaptor.forClass(JsonNode.class);
     verify(cdamAttachService).attachNewDocumentsAndStripHashes(
         eq(event),
-        eq("Bearer user-token"),
         preCallbackData.capture(),
         postCallbackData.capture()
     );
@@ -142,10 +141,10 @@ class LegacyCallbackSubmissionHandlerTest {
         }
         """, List.of("callback error")));
 
-    assertThatThrownBy(() -> handler.apply(event, "Bearer user-token"))
+    assertThatThrownBy(() -> handler.apply(event))
         .isInstanceOf(CallbackValidationException.class);
 
-    verify(cdamAttachService, never()).attachNewDocumentsAndStripHashes(any(), any(), any(), any());
+    verify(cdamAttachService, never()).attachNewDocumentsAndStripHashes(any(), any(), any());
   }
 
   private void setupEventConfig() {

@@ -1,11 +1,12 @@
 package uk.gov.hmcts.ccd.sdk.impl.cdam;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import java.util.Optional;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.http.HttpHeaders;
 import org.springframework.stereotype.Service;
 import uk.gov.hmcts.ccd.decentralised.dto.DecentralisedCaseEvent;
+import uk.gov.hmcts.ccd.sdk.impl.CurrentRequestHeaders;
 
 @Slf4j
 @Service
@@ -22,7 +23,6 @@ public class CdamAttachService {
   }
 
   public JsonNode attachNewDocumentsAndStripHashes(DecentralisedCaseEvent event,
-                                                   String authorisation,
                                                    JsonNode preCallbackData,
                                                    JsonNode postCallbackData) {
     var tokens = scanner.findNewDocumentHashTokens(preCallbackData, postCallbackData);
@@ -39,6 +39,7 @@ public class CdamAttachService {
         tokens
     );
 
+    String authorisation = authorisation();
     try {
       caseDocumentAmClient.attach(authorisation, metadata);
       log.info("Attached {} CDAM document(s) to case {}", tokens.size(), metadata.caseId());
@@ -48,7 +49,11 @@ public class CdamAttachService {
     }
   }
 
-  public static Optional<CdamAttachService> optional(CdamAttachService service) {
-    return Optional.ofNullable(service);
+  private String authorisation() {
+    String authorisation = CurrentRequestHeaders.get(HttpHeaders.AUTHORIZATION);
+    if (authorisation.isBlank()) {
+      throw new IllegalStateException("Authorization header is required to attach CDAM documents");
+    }
+    return authorisation;
   }
 }

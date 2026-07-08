@@ -5,7 +5,6 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import jakarta.servlet.http.HttpServletRequest;
 import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
@@ -34,8 +33,6 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMethod;
-import org.springframework.web.context.request.RequestContextHolder;
-import org.springframework.web.context.request.ServletRequestAttributes;
 import org.springframework.web.method.HandlerMethod;
 import org.springframework.web.servlet.mvc.method.RequestMappingInfo;
 import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping;
@@ -44,6 +41,7 @@ import uk.gov.hmcts.ccd.sdk.api.callback.AboutToStartOrSubmitResponse;
 import uk.gov.hmcts.ccd.sdk.api.callback.AboutToSubmit;
 import uk.gov.hmcts.ccd.sdk.api.callback.Submitted;
 import uk.gov.hmcts.ccd.sdk.config.CcdCaseDataMapperConfiguration;
+import uk.gov.hmcts.ccd.sdk.impl.CurrentRequestHeaders;
 import uk.gov.hmcts.reform.ccd.client.model.SubmittedCallbackResponse;
 
 @Component
@@ -286,18 +284,9 @@ public class JsonCallbackBridge {
 
   private HttpHeaders callbackHeaders() {
     HttpHeaders headers = new HttpHeaders();
-    headers.set(HttpHeaders.AUTHORIZATION, currentRequestHeader(HttpHeaders.AUTHORIZATION));
-    headers.set(SERVICE_AUTHORIZATION, currentRequestHeader(SERVICE_AUTHORIZATION));
+    headers.set(HttpHeaders.AUTHORIZATION, CurrentRequestHeaders.get(HttpHeaders.AUTHORIZATION));
+    headers.set(SERVICE_AUTHORIZATION, CurrentRequestHeaders.get(SERVICE_AUTHORIZATION));
     return headers;
-  }
-
-  private String currentRequestHeader(String name) {
-    if (RequestContextHolder.getRequestAttributes() instanceof ServletRequestAttributes servletAttributes) {
-      HttpServletRequest request = servletAttributes.getRequest();
-      String value = request.getHeader(name);
-      return value == null ? "" : value;
-    }
-    return "";
   }
 
   private void assertSuccessfulResponse(String callbackUrl, HttpStatusCode statusCode) {

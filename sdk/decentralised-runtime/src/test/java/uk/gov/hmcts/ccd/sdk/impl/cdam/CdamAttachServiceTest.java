@@ -1,14 +1,20 @@
 package uk.gov.hmcts.ccd.sdk.impl.cdam;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.springframework.http.HttpHeaders;
+import org.springframework.mock.web.MockHttpServletRequest;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
 import uk.gov.hmcts.ccd.decentralised.dto.DecentralisedCaseEvent;
 import uk.gov.hmcts.ccd.decentralised.dto.DecentralisedEventDetails;
 import uk.gov.hmcts.ccd.domain.model.definition.CaseDetails;
@@ -20,8 +26,14 @@ class CdamAttachServiceTest {
   private final CaseDocumentAmClient client = mock(CaseDocumentAmClient.class);
   private final CdamAttachService service = new CdamAttachService(new CaseDocumentHashScanner(), client);
 
+  @AfterEach
+  void resetRequestContext() {
+    RequestContextHolder.resetRequestAttributes();
+  }
+
   @Test
   void attachesOnlyDocumentsAddedByAboutToSubmitCallback() throws Exception {
+    withAuthorisation("Bearer user-token");
     JsonNode preCallbackData = read("""
         {
           "eventInputDocument": {
@@ -44,7 +56,6 @@ class CdamAttachServiceTest {
 
     JsonNode stripped = service.attachNewDocumentsAndStripHashes(
         event(),
-        "Bearer user-token",
         preCallbackData,
         postCallbackData
     );
@@ -78,12 +89,29 @@ class CdamAttachServiceTest {
 
     JsonNode stripped = service.attachNewDocumentsAndStripHashes(
         event(),
-        "Bearer user-token",
         preCallbackData,
         postCallbackData
     );
 
     assertThat(stripped.findValues("document_hash")).isEmpty();
+    verify(client, never()).attach(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
+  }
+
+  @Test
+  void failsWhenNewDocumentsNeedAttachButAuthorisationHeaderIsMissing() throws Exception {
+    JsonNode postCallbackData = read("""
+        {
+          "callbackDocument": {
+            "document_url": "http://dm-store/documents/22222222-2222-2222-2222-222222222222",
+            "document_hash": "callback-hash"
+          }
+        }
+        """);
+
+    assertThatThrownBy(() -> service.attachNewDocumentsAndStripHashes(event(), null, postCallbackData))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("Authorization header is required");
+
     verify(client, never()).attach(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
   }
 
@@ -103,5 +131,11 @@ class CdamAttachServiceTest {
 
   private JsonNode read(String json) throws Exception {
     return MAPPER.readTree(json);
+  }
+
+  private void withAuthorisation(String authorisation) {
+    MockHttpServletRequest request = new MockHttpServletRequest();
+    request.addHeader(HttpHeaders.AUTHORIZATION, authorisation);
+    RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(request));
   }
 }
