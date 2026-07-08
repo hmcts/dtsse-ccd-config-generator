@@ -99,7 +99,7 @@ To fulfil the aforementioned responsibilities, the SDK provisions and manages a 
 
 - `case_data` mirrors CCD’s `case_data` table, including metadata such as state, security classification, TTL and the JSON payload.
 - `case_event` mirrors CCD’s `case_event` table and adds an idempotency key.
-- `es_queue` tracks cases that require Elasticsearch indexing 
+- `es_queue` tracks cases that require Elasticsearch indexing
 - `message_queue_candidates` mirrors CCD’s Service Bus transactional outbox table.
 
 
@@ -232,6 +232,87 @@ it.
 Consumers must provide the retention system user's username and password, and S2S token generation either via an
 `AuthTokenGenerator` bean or via the standard `ServiceAuthorisationApi` plus `idam.s2s-auth.secret` and
 `idam.s2s-auth.microservice` properties.
+
+### Running as a scheduled job
+
+Retention is exposed as a `Runnable` bean named `caseRetentionTask`. In services that use the standard HMCTS scheduled
+task runner pattern, the Kubernetes job should set `TASK_NAME: CaseRetentionTask`; the runner lowercases the first
+character and resolves the Spring bean.
+
+In `cnp-flux-config`, add a cron HelmRelease alongside the consuming service, following the typical pattern.
+The cron should run the same service image as the API so it has the same application code,
+database migrations and Spring configuration:
+
+```yaml
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: my-service-cron-retention-disposal
+spec:
+  releaseName: my-service-cron-retention-disposal
+  values:
+    job:
+      image: hmctsprod.azurecr.io/my-service/case-api:prod-abc123 #{"$imagepolicy": "flux-system:my-service-case-api"}
+      keyVaults:
+        my-service:
+          secrets:
+            - name: s2s-case-api-secret
+              alias: S2S_SECRET
+            - name: idam-systemupdate-username
+              alias: IDAM_SYSTEM_UPDATE_USERNAME
+            - name: idam-systemupdate-password
+              alias: IDAM_SYSTEM_UPDATE_PASSWORD
+            - name: my-service-POSTGRES-HOST
+              alias: POSTGRES_HOST
+            - name: my-service-POSTGRES-PORT
+              alias: POSTGRES_PORT
+            - name: my-service-POSTGRES-DATABASE
+              alias: POSTGRES_NAME
+            - name: my-service-POSTGRES-USER
+              alias: POSTGRES_USERNAME
+            - name: my-service-POSTGRES-PASS
+              alias: POSTGRES_PASSWORD
+      environment:
+        TASK_NAME: CaseRetentionTask
+        CCD_DECENTRALISED_RUNTIME_RETENTION_ENABLED: true
+        CCD_DECENTRALISED_RUNTIME_RETENTION_DISPOSAL_CASE_TYPE_IDS: MyCaseType
+        CCD_DECENTRALISED_RUNTIME_RETENTION_DISPOSAL_BATCH_SIZE: 100
+        CCD_DECENTRALISED_RUNTIME_RETENTION_SYSTEM_USER_USERNAME: $(IDAM_SYSTEM_UPDATE_USERNAME)
+        CCD_DECENTRALISED_RUNTIME_RETENTION_SYSTEM_USER_PASSWORD: $(IDAM_SYSTEM_UPDATE_PASSWORD)
+        CCD_DATA_STORE_API_URL: http://ccd-data-store-api
+        IDAM_S2S_AUTH_SECRET: $(S2S_SECRET)
+        IDAM_S2S_AUTH_MICROSERVICE: my_service_case_api
+      schedule: 0 2 * * *
+  chart:
+    spec:
+      chart: my-service-cron
+      version: 1.0.0
+      sourceRef:
+        kind: HelmRepository
+        name: hmctspublic
+        namespace: flux-system
+```
+
+Add the base HelmRelease to the environment base kustomization, then patch the schedule and job kind per environment:
+
+```yaml
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: my-service-cron-retention-disposal
+spec:
+  releaseName: my-service-cron-retention-disposal
+  values:
+    job:
+      schedule: "0 2 * * *"
+    global:
+      jobKind: CronJob
+      enableKeyVaults: true
+```
+
+For a first rollout, configure `simulation-case-type-ids` instead of `case-type-ids` so the task logs the cases it would
+delete without removing local rows. Move those case types to `case-type-ids` only after the schedule, credentials and CCD
+pointer checks have been verified.
 
 ## Message publishing to Azure Service Bus
 
