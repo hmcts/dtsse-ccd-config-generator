@@ -63,7 +63,8 @@ class LegacyCallbackSubmissionHandler implements CaseSubmissionHandler {
     log.info("[legacy] Creating event '{}' for case reference: {}",
         event.getEventDetails().getEventId(), event.getCaseDetails().getReference());
 
-    JsonNode preCallbackData = preCallbackDocumentBaselineData(event);
+    CdamAttachService service = cdamAttachService.getIfAvailable();
+    JsonNode preCallbackData = service == null ? null : preCallbackDocumentBaselineData(event);
     var outcome = prepareLegacySubmit(event);
 
     var submitResponse = outcome.response();
@@ -71,7 +72,7 @@ class LegacyCallbackSubmissionHandler implements CaseSubmissionHandler {
       throw new CallbackValidationException(submitResponse.getErrors(), submitResponse.getWarnings());
     }
 
-    attachNewCdamDocuments(event, preCallbackData);
+    attachNewCdamDocuments(event, service, preCallbackData);
 
     boolean runSubmitted = outcome.runSubmittedCallback();
 
@@ -194,8 +195,9 @@ class LegacyCallbackSubmissionHandler implements CaseSubmissionHandler {
                                      SignificantItem significantItem,
                                      boolean runSubmittedCallback) {}
 
-  private void attachNewCdamDocuments(DecentralisedCaseEvent event, JsonNode preCallbackData) {
-    CdamAttachService service = cdamAttachService.getIfAvailable();
+  private void attachNewCdamDocuments(DecentralisedCaseEvent event,
+                                      CdamAttachService service,
+                                      JsonNode preCallbackData) {
     if (service == null) {
       return;
     }
