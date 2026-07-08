@@ -3,10 +3,14 @@ package uk.gov.hmcts.ccd.sdk.impl;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.net.MalformedURLException;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.LocalDateTime;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -100,6 +104,8 @@ class AuditEventService {
       UUID idempotencyKey,
       Optional<uk.gov.hmcts.reform.ccd.client.model.SignificantItem> significantItem
   ) {
+    significantItem.ifPresent(this::validateSignificantItem);
+
     final String oldState = event.getCaseDetailsBefore() != null
         ? event.getCaseDetailsBefore().getState()
         : null;
@@ -220,6 +226,23 @@ class AuditEventService {
       );
     }
     return inserted.id();
+  }
+
+  private void validateSignificantItem(uk.gov.hmcts.reform.ccd.client.model.SignificantItem item) {
+    if (item.getType() == null || item.getType().isBlank()
+        || item.getDescription() == null || item.getDescription().isBlank()
+        || item.getUrl() == null || item.getUrl().isBlank()) {
+      return;
+    }
+
+    try {
+      new URI(item.getUrl()).toURL();
+    } catch (IllegalArgumentException | MalformedURLException | URISyntaxException e) {
+      throw new CallbackValidationException(
+          List.of("Significant item URL is not valid"),
+          Collections.emptyList()
+      );
+    }
   }
 
   private void saveSignificantItem(long caseEventId, uk.gov.hmcts.reform.ccd.client.model.SignificantItem item) {
