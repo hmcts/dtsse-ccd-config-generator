@@ -29,6 +29,7 @@ import uk.gov.hmcts.ccd.sdk.api.callback.AboutToStartOrSubmitResponse;
 import uk.gov.hmcts.ccd.sdk.api.callback.AboutToSubmit;
 import uk.gov.hmcts.ccd.sdk.impl.cdam.CdamAttachService;
 import uk.gov.hmcts.ccd.sdk.runtime.CcdCallbackExecutor;
+import uk.gov.hmcts.ccd.sdk.type.Document;
 
 class LegacyCallbackSubmissionHandlerTest {
 
@@ -61,7 +62,29 @@ class LegacyCallbackSubmissionHandlerTest {
         .isEqualTo("hash-token");
     assertThat(result.dataUpdate()).isPresent();
     assertThat(result.dataUpdate().orElseThrow().findValues("document_hash")).hasSize(1);
-    verify(cdamAttachService, never()).attachNewDocumentsAndStripHashes(any(), any(), any());
+    verify(cdamAttachService, never()).attachNewDocumentsAndStripHashes(any(), any(), any(), any());
+  }
+
+  @Test
+  void stripsExternalDocumentHashFromTypedPersistenceSnapshotWhenCdamAttachServiceIsDisabled() throws Exception {
+    setupEventConfig(DocumentCaseData.class);
+    DecentralisedCaseEvent event = event();
+    when(executor.aboutToSubmit(any())).thenReturn(callbackResponse("""
+        {
+          "generatedDocument": {
+            "document_url": "http://dm-store/documents/22222222-2222-2222-2222-222222222222",
+            "document_hash": "hash-token"
+          }
+        }
+        """, List.of()));
+
+    var result = handler.apply(event, "Bearer user-token");
+
+    assertThat(event.getCaseDetails().getData().get("generatedDocument").get("document_hash").asText())
+        .isEqualTo("hash-token");
+    assertThat(result.dataUpdate()).isPresent();
+    assertThat(result.dataUpdate().orElseThrow().findValues("document_hash")).isEmpty();
+    verify(cdamAttachService, never()).attachNewDocumentsAndStripHashes(any(), any(), any(), any());
   }
 
   @Test
@@ -76,7 +99,7 @@ class LegacyCallbackSubmissionHandlerTest {
         }
         """);
     when(cdamAttachServiceProvider.getIfAvailable()).thenReturn(cdamAttachService);
-    when(cdamAttachService.attachNewDocumentsAndStripHashes(eq(event), eq("Bearer user-token"), any()))
+    when(cdamAttachService.attachNewDocumentsAndStripHashes(eq(event), eq("Bearer user-token"), any(), any()))
         .thenReturn(strippedData);
     when(executor.aboutToSubmit(any())).thenReturn(callbackResponse("""
         {
@@ -93,9 +116,16 @@ class LegacyCallbackSubmissionHandlerTest {
     assertThat(result.dataUpdate()).isPresent();
     assertThat(result.dataUpdate().orElseThrow().findValues("document_hash")).isEmpty();
 
-    ArgumentCaptor<JsonNode> rawData = ArgumentCaptor.forClass(JsonNode.class);
-    verify(cdamAttachService).attachNewDocumentsAndStripHashes(eq(event), eq("Bearer user-token"), rawData.capture());
-    assertThat(rawData.getValue().findValues("document_hash")).hasSize(1);
+    ArgumentCaptor<JsonNode> preCallbackData = ArgumentCaptor.forClass(JsonNode.class);
+    ArgumentCaptor<JsonNode> postCallbackData = ArgumentCaptor.forClass(JsonNode.class);
+    verify(cdamAttachService).attachNewDocumentsAndStripHashes(
+        eq(event),
+        eq("Bearer user-token"),
+        preCallbackData.capture(),
+        postCallbackData.capture()
+    );
+    assertThat(preCallbackData.getValue().findValues("document_hash")).isEmpty();
+    assertThat(postCallbackData.getValue().findValues("document_hash")).hasSize(1);
   }
 
   @Test
@@ -115,17 +145,21 @@ class LegacyCallbackSubmissionHandlerTest {
     assertThatThrownBy(() -> handler.apply(event, "Bearer user-token"))
         .isInstanceOf(CallbackValidationException.class);
 
-    verify(cdamAttachService, never()).attachNewDocumentsAndStripHashes(any(), any(), any());
+    verify(cdamAttachService, never()).attachNewDocumentsAndStripHashes(any(), any(), any(), any());
   }
 
   private void setupEventConfig() {
+    setupEventConfig(Map.class);
+  }
+
+  private void setupEventConfig(Class<?> caseClass) {
     Event<?, ?, ?> eventConfig = mock(Event.class);
     when(eventConfig.getAboutToSubmitCallback()).thenReturn(mock(AboutToSubmit.class));
     when(eventConfig.getSubmittedCallback()).thenReturn(null);
     doReturn(eventConfig).when(registry).getRequiredEvent("TestCase", "submit");
 
     ResolvedCCDConfig<?, ?, ?> config = mock(ResolvedCCDConfig.class);
-    when(config.getCaseClass()).thenReturn((Class) Map.class);
+    when(config.getCaseClass()).thenReturn((Class) caseClass);
     doReturn(config).when(registry).getRequired("TestCase");
   }
 
@@ -162,5 +196,9 @@ class LegacyCallbackSubmissionHandlerTest {
 
   private JsonNode read(String json) throws Exception {
     return MAPPER.readTree(json);
+  }
+
+  static class DocumentCaseData {
+    public Document generatedDocument;
   }
 }

@@ -46,6 +46,27 @@ class CaseDocumentHashScannerTest {
   }
 
   @Test
+  void ignoresDocumentUrlsAlreadyPresentBeforeCallbackEvenWhenHashIsNotReturned() throws Exception {
+    JsonNode preCallbackData = read("""
+        {
+          "eventInputDocument": {
+            "document_url": "http://dm-store/documents/11111111-1111-1111-1111-111111111111",
+            "document_hash": "event-input-hash"
+          }
+        }
+        """);
+    JsonNode postCallbackData = read("""
+        {
+          "eventInputDocument": {
+            "document_url": "http://dm-store/documents/11111111-1111-1111-1111-111111111111"
+          }
+        }
+        """);
+
+    assertThat(scanner.findNewDocumentHashTokens(preCallbackData, postCallbackData)).isEmpty();
+  }
+
+  @Test
   void stripsDocumentHashesFromNestedDataWithoutChangingOriginal() throws Exception {
     JsonNode submittedData = read("""
         {

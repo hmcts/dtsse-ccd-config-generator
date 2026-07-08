@@ -7,8 +7,8 @@ import java.util.Map;
 import java.util.Optional;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 import uk.gov.hmcts.ccd.data.casedetails.SecurityClassification;
 import uk.gov.hmcts.ccd.decentralised.dto.DecentralisedCaseEvent;
@@ -66,6 +66,7 @@ class LegacyCallbackSubmissionHandler implements CaseSubmissionHandler {
     log.info("[legacy] Creating event '{}' for case reference: {}",
         event.getEventDetails().getEventId(), event.getCaseDetails().getReference());
 
+    JsonNode preCallbackData = mapper.valueToTree(event.getCaseDetails().getData());
     var outcome = prepareLegacySubmit(event);
 
     var submitResponse = outcome.response();
@@ -73,7 +74,7 @@ class LegacyCallbackSubmissionHandler implements CaseSubmissionHandler {
       throw new CallbackValidationException(submitResponse.getErrors(), submitResponse.getWarnings());
     }
 
-    attachNewCdamDocuments(event, authorisation);
+    attachNewCdamDocuments(event, authorisation, preCallbackData);
 
     boolean runSubmitted = outcome.runSubmittedCallback();
 
@@ -192,7 +193,7 @@ class LegacyCallbackSubmissionHandler implements CaseSubmissionHandler {
                                      EventMetadata eventMetadata,
                                      boolean runSubmittedCallback) {}
 
-  private void attachNewCdamDocuments(DecentralisedCaseEvent event, String authorisation) {
+  private void attachNewCdamDocuments(DecentralisedCaseEvent event, String authorisation, JsonNode preCallbackData) {
     CdamAttachService service = cdamAttachService.getIfAvailable();
     if (service == null) {
       return;
@@ -202,8 +203,13 @@ class LegacyCallbackSubmissionHandler implements CaseSubmissionHandler {
       throw new IllegalStateException("Authorization header is required to attach CDAM documents");
     }
 
-    JsonNode rawData = mapper.valueToTree(event.getCaseDetails().getData());
-    JsonNode strippedData = service.attachNewDocumentsAndStripHashes(event, authorisation, rawData);
+    JsonNode postCallbackData = mapper.valueToTree(event.getCaseDetails().getData());
+    JsonNode strippedData = service.attachNewDocumentsAndStripHashes(
+        event,
+        authorisation,
+        preCallbackData,
+        postCallbackData
+    );
     event.getCaseDetails().setData(mapper.convertValue(strippedData, JSON_NODE_MAP));
   }
 

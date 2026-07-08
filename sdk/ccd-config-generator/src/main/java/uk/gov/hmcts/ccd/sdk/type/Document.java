@@ -7,6 +7,7 @@ import java.time.LocalDateTime;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import uk.gov.hmcts.ccd.sdk.External;
 import uk.gov.hmcts.ccd.sdk.api.ComplexType;
 
 @NoArgsConstructor
@@ -32,6 +33,7 @@ public class Document {
   private LocalDateTime uploadTimestamp;
 
   @JsonProperty("document_hash")
+  @External
   private String hashToken;
 
   public Document(
