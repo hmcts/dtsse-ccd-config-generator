@@ -17,8 +17,8 @@ writes for the selected case types have been frozen.
 The task has one implementation with explicit modes:
 
 * `PRELOAD_EVENTS`: scheduled before cutover. Copies immutable source events by event ID high-water
-  mark, copies any linked `case_event_significant_items`, and inserts provisional parent `case_data`
-  rows so the target FK remains valid.
+  mark, then copies linked `case_event_significant_items` with a separate event ID high-water mark,
+  and inserts provisional parent `case_data` rows so the target FK remains valid.
 * `CUTOVER`: explicit operator action during downtime. Captures the cutover event high-water mark,
   copies the final event delta, refreshes target `case_data` from source, sets final case revisions,
   resets sequences, validates, and marks the migration complete.
@@ -36,12 +36,16 @@ The preload path keeps the target tables constraint-valid after every committed 
 * the unique `(case_data_id, case_revision)` index stays in place
 * `case_event.version` and `case_event.case_revision` are calculated before insert
 * `case_event` user triggers are not disabled
-* resume position is stored as a source `case_event.id` window position after each committed batch
+* event resume position is stored as a source `case_event.id` window position after each committed
+  event batch
+* significant-item resume position is stored independently, also by source `case_event.id` window
 
 Preloaded `case_data` is provisional. Its purpose is to satisfy the event FK. Every copied event
 batch inserts missing parent source `case_data` rows for that batch. Significant items are copied in
-the same committed event ID window as their parent events. `CUTOVER` overwrites target `case_data`
-columns from source, then sets
+a separate stage that only joins to already copied target events. This lets an environment with an
+existing event preload backfill the new `case_event_significant_items` table without resetting or
+rewalking the long `case_event` migration progress. `CUTOVER` overwrites target `case_data` columns
+from source, then sets
 `case_data.case_revision = max(case_event.case_revision) + caseRevisionOffset`.
 
 The runtime `case_data` revision trigger is deliberately disabled only inside the cutover refresh
@@ -65,6 +69,7 @@ state:
 * `status`: `PRELOAD`, `CUTOVER`, or `COMPLETE`
 * `cutover_event_hwm`
 * `source_event_hwm`
+* `significant_items_event_hwm`
 * timestamps
 
 The migration configuration hash covers the migration identity. Runtime limits such as

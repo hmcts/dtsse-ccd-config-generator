@@ -121,6 +121,7 @@ class CcdDataMigrationTaskIntegrationTest {
     assertThat(countRows("ccd.case_event_significant_items")).isEqualTo(1);
     assertThat(significantItemDescription(5001)).isEqualTo("First document");
     assertThat(sourceEventHwm()).isEqualTo(101);
+    assertThat(significantItemsEventHwm()).isEqualTo(101);
 
     CcdDataMigrationRunResult cutoverResult = task(CUTOVER, 1000, 10).runMigration();
 
@@ -128,7 +129,51 @@ class CcdDataMigrationTaskIntegrationTest {
     assertThat(progressStatus()).isEqualTo("COMPLETE");
     assertThat(countRows("ccd.case_event_significant_items")).isEqualTo(2);
     assertThat(significantItemDescription(5002)).isEqualTo("Second document");
+    assertThat(significantItemsEventHwm()).isEqualTo(102);
     assertThat(caseEventSignificantItemsSequenceLastValue()).isGreaterThanOrEqualTo(5002);
+  }
+
+  @Test
+  void preloadsSignificantItemsWithoutRewalkingCompletedEventProgress() {
+    insertSourceCase(10, 1000000000000010L, 1, "Submitted", "{\"field\":\"one\"}");
+    insertSourceCaseEvent(101, 10, "create", "Submitted", "{\"field\":\"one\"}", minutesAgo(60));
+    insertSourceCaseEvent(102, 10, "update", "Updated", "{\"field\":\"two\"}", minutesAgo(30));
+    insertSourceSignificantItem(5001, 101, "First document", "http://dm-store/documents/first");
+    insertSourceSignificantItem(5002, 102, "Second document", "http://dm-store/documents/second");
+    insertTargetCase(10, 1000000000000010L, 1, "Submitted", "{\"field\":\"one\"}", 0);
+    insertTargetEvent(101, 10, "create", "Submitted", "{\"field\":\"one\"}", 1);
+    insertTargetEvent(102, 10, "update", "Updated", "{\"field\":\"two\"}", 2);
+    createProgressWithSourceEventHwm(102);
+
+    CcdDataMigrationRunResult result = task(PRELOAD_EVENTS, 1000, 10).runMigration();
+
+    assertThat(result.caughtUp()).isTrue();
+    assertThat(result.eventsProcessed()).isZero();
+    assertThat(sourceEventHwm()).isEqualTo(102);
+    assertThat(significantItemsEventHwm()).isEqualTo(102);
+    assertThat(countRows("ccd.case_event")).isEqualTo(2);
+    assertThat(countRows("ccd.case_event_significant_items")).isEqualTo(2);
+  }
+
+  @Test
+  void completedCutoverBackfillsSignificantItemsWithoutRewalkingEvents() {
+    insertSourceCase(10, 1000000000000010L, 1, "Submitted", "{\"field\":\"one\"}");
+    insertSourceCaseEvent(101, 10, "create", "Submitted", "{\"field\":\"one\"}", minutesAgo(60));
+    insertSourceSignificantItem(5001, 101, "First document", "http://dm-store/documents/first");
+    insertTargetCase(10, 1000000000000010L, 1, "Submitted", "{\"field\":\"one\"}", CASE_REVISION_OFFSET + 1);
+    insertTargetEvent(101, 10, "create", "Submitted", "{\"field\":\"one\"}", 1);
+    createCompleteProgress(101);
+    jdbc.getJdbcTemplate().execute("delete from ccd.es_queue");
+
+    CcdDataMigrationRunResult result = task(CUTOVER, 1000, 10).runMigration();
+
+    assertThat(result.caughtUp()).isTrue();
+    assertThat(result.eventsProcessed()).isZero();
+    assertThat(sourceEventHwm()).isZero();
+    assertThat(significantItemsEventHwm()).isEqualTo(101);
+    assertThat(countRows("ccd.case_event")).isEqualTo(1);
+    assertThat(countRows("ccd.case_event_significant_items")).isEqualTo(1);
+    assertThat(significantItemDescription(5001)).isEqualTo("First document");
   }
 
   @Test
@@ -190,7 +235,7 @@ class CcdDataMigrationTaskIntegrationTest {
     createCompleteProgress(101);
     jdbc.getJdbcTemplate().execute("alter table ccd.case_data disable trigger trigger_enqueue_case_revision");
 
-    assertThatThrownBy(() -> task(CUTOVER, 10, 10).runMigration())
+    assertThatThrownBy(() -> task(CUTOVER, 101, 10).runMigration())
         .isInstanceOf(CcdDataMigrationException.class)
         .hasMessageContaining("CCD data migration left 1 Elasticsearch queue rows");
 
@@ -868,6 +913,28 @@ class CcdDataMigrationTaskIntegrationTest {
     );
   }
 
+  private void createProgressWithSourceEventHwm(long sourceEventHwm) {
+    jdbc.update(
+        """
+        insert into ccd.ccd_data_migration_progress (
+          task_name,
+          config_hash,
+          source_event_hwm
+        ) values (
+          :taskName,
+          :configHash,
+          :sourceEventHwm
+        )
+        """,
+        new MapSqlParameterSource()
+            .addValue("taskName", "ccd-data-migration")
+            .addValue("configHash", optionsBuilder(List.of("TestCase"))
+                .build()
+                .migrationConfigHash())
+            .addValue("sourceEventHwm", sourceEventHwm)
+    );
+  }
+
   private void createCompleteProgress(long cutoverEventHwm) {
     jdbc.update(
         """
@@ -1074,6 +1141,14 @@ class CcdDataMigrationTaskIntegrationTest {
   private long sourceEventHwm() {
     return jdbc.queryForObject(
         "select source_event_hwm from ccd.ccd_data_migration_progress where task_name = :taskName",
+        Map.of("taskName", "ccd-data-migration"),
+        Long.class
+    );
+  }
+
+  private long significantItemsEventHwm() {
+    return jdbc.queryForObject(
+        "select significant_items_event_hwm from ccd.ccd_data_migration_progress where task_name = :taskName",
         Map.of("taskName", "ccd-data-migration"),
         Long.class
     );
