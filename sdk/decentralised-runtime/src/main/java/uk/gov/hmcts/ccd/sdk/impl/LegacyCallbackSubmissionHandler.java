@@ -3,6 +3,7 @@ package uk.gov.hmcts.ccd.sdk.impl;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
 import java.util.Map;
 import java.util.Optional;
 import lombok.SneakyThrows;
@@ -66,7 +67,7 @@ class LegacyCallbackSubmissionHandler implements CaseSubmissionHandler {
     log.info("[legacy] Creating event '{}' for case reference: {}",
         event.getEventDetails().getEventId(), event.getCaseDetails().getReference());
 
-    JsonNode preCallbackData = mapper.valueToTree(event.getCaseDetails().getData());
+    JsonNode preCallbackData = attachBaselineData(event);
     var outcome = prepareLegacySubmit(event);
 
     var submitResponse = outcome.response();
@@ -211,6 +212,15 @@ class LegacyCallbackSubmissionHandler implements CaseSubmissionHandler {
         postCallbackData
     );
     event.getCaseDetails().setData(mapper.convertValue(strippedData, JSON_NODE_MAP));
+  }
+
+  private JsonNode attachBaselineData(DecentralisedCaseEvent event) {
+    ArrayNode baseline = mapper.createArrayNode();
+    if (event.getCaseDetailsBefore() != null) {
+      baseline.add(mapper.valueToTree(event.getCaseDetailsBefore().getData()));
+    }
+    baseline.add(mapper.valueToTree(event.getCaseDetails().getData()));
+    return baseline;
   }
 
   @SneakyThrows

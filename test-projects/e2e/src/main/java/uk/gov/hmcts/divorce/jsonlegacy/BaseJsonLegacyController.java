@@ -23,7 +23,6 @@ public abstract class BaseJsonLegacyController {
   public static final String ACAS_DOCUMENT_NOTE = "json-legacy-acas-cdam-document";
   public static final String EVENT_INPUT_DOCUMENT_ID = "11111111-1111-1111-1111-111111111111";
   public static final String CALLBACK_DOCUMENT_ID = "22222222-2222-2222-2222-222222222222";
-  public static final String EVENT_INPUT_DOCUMENT_HASH = "event-input-hash";
   public static final String CALLBACK_DOCUMENT_HASH = documentHashToken(CALLBACK_DOCUMENT_ID, "EMPLOYMENT", "case-type-a");
   public static final String CONFIRMATION_HEADER = "# JSON legacy submitted";
   public static final String CONFIRMATION_BODY = "JSON legacy submitted callback ran";
@@ -63,16 +62,31 @@ public abstract class BaseJsonLegacyController {
 
   public static Map<String, Object> acasDocumentCollectionItem(String id, String documentId, String hashToken) {
     String documentBaseUrl = "http://localhost/documents/" + documentId;
+    Map<String, Object> uploadedDocument = new LinkedHashMap<>(Map.of(
+        "document_url", documentBaseUrl,
+        "document_binary_url", documentBaseUrl + "/binary",
+        "document_filename", id + ".pdf"
+    ));
+    uploadedDocument.put("document_hash", hashToken);
+
+    return acasDocumentCollectionItem(id, uploadedDocument);
+  }
+
+  public static Map<String, Object> acasDocumentCollectionItem(String id, String documentId) {
+    String documentBaseUrl = "http://localhost/documents/" + documentId;
+    return acasDocumentCollectionItem(id, new LinkedHashMap<>(Map.of(
+        "document_url", documentBaseUrl,
+        "document_binary_url", documentBaseUrl + "/binary",
+        "document_filename", id + ".pdf"
+    )));
+  }
+
+  private static Map<String, Object> acasDocumentCollectionItem(String id, Map<String, Object> uploadedDocument) {
     return new LinkedHashMap<>(Map.of(
         "id", id,
         "value", new LinkedHashMap<>(Map.of(
             "documentType", "ET1",
-            "uploadedDocument", new LinkedHashMap<>(Map.of(
-                "document_url", documentBaseUrl,
-                "document_binary_url", documentBaseUrl + "/binary",
-                "document_filename", id + ".pdf",
-                "document_hash", hashToken
-            ))
+            "uploadedDocument", uploadedDocument
         ))
     ));
   }

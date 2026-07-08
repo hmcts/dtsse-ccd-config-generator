@@ -2999,8 +2999,7 @@ public class TestWithCCD extends CftlibTest {
 
         Map<String, Object> existingDocument = BaseJsonLegacyController.acasDocumentCollectionItem(
             "event-input-acas-document",
-            BaseJsonLegacyController.EVENT_INPUT_DOCUMENT_ID,
-            BaseJsonLegacyController.EVENT_INPUT_DOCUMENT_HASH
+            BaseJsonLegacyController.EVENT_INPUT_DOCUMENT_ID
         );
 
         var response = submitJsonLegacyEventForCaseType(

@@ -12,15 +12,16 @@ import java.util.UUID;
 public class CaseDocumentHashScanner {
 
   private static final String DOCUMENT_URL = "document_url";
+  private static final String DOCUMENT_BINARY_URL = "document_binary_url";
   private static final String DOCUMENT_HASH = "document_hash";
   private static final String DOCUMENTS_PATH = "/documents/";
 
   public List<DocumentHashToken> findNewDocumentHashTokens(JsonNode existingData, JsonNode submittedData) {
-    Set<String> existingDocumentUrls = new LinkedHashSet<>();
-    collectDocumentUrls(existingData, existingDocumentUrls);
+    Set<String> existingDocumentIds = new LinkedHashSet<>();
+    collectDocumentIds(existingData, existingDocumentIds);
 
     List<DocumentHashToken> tokens = new ArrayList<>();
-    collectNewDocumentHashTokens(submittedData, existingDocumentUrls, tokens);
+    collectNewDocumentHashTokens(submittedData, existingDocumentIds, tokens);
     return List.copyOf(tokens);
   }
 
@@ -34,53 +35,78 @@ public class CaseDocumentHashScanner {
     return copy;
   }
 
-  private void collectDocumentUrls(JsonNode node, Set<String> documentUrls) {
+  private void collectDocumentIds(JsonNode node, Set<String> documentIds) {
     if (node == null || node.isNull() || node.isMissingNode()) {
       return;
     }
 
     if (node.isObject()) {
-      JsonNode documentUrlNode = node.get(DOCUMENT_URL);
-      if (isText(documentUrlNode)) {
-        documentUrls.add(documentUrlNode.asText());
+      String documentId = documentId(node);
+      if (documentId != null) {
+        documentIds.add(documentId);
       }
-      node.fields().forEachRemaining(entry -> collectDocumentUrls(entry.getValue(), documentUrls));
+      node.fields().forEachRemaining(entry -> collectDocumentIds(entry.getValue(), documentIds));
       return;
     }
 
     if (node.isArray()) {
-      node.forEach(child -> collectDocumentUrls(child, documentUrls));
+      node.forEach(child -> collectDocumentIds(child, documentIds));
     }
   }
 
   private void collectNewDocumentHashTokens(JsonNode node,
-                                            Set<String> existingDocumentUrls,
+                                            Set<String> existingDocumentIds,
                                             List<DocumentHashToken> tokens) {
     if (node == null || node.isNull() || node.isMissingNode()) {
       return;
     }
 
     if (node.isObject()) {
-      JsonNode documentUrlNode = node.get(DOCUMENT_URL);
-      if (isText(documentUrlNode) && !existingDocumentUrls.contains(documentUrlNode.asText())) {
-        tokens.add(buildDocumentHashToken(documentUrlNode.asText(), node.get(DOCUMENT_HASH)));
+      String documentId = documentId(node);
+      if (documentId != null) {
+        JsonNode documentHashNode = node.get(DOCUMENT_HASH);
+        if (existingDocumentIds.contains(documentId)) {
+          failIfExistingDocumentHashReturned(documentId, documentHashNode);
+        } else {
+          tokens.add(buildDocumentHashToken(documentId, documentHashNode));
+        }
       }
-      node.fields().forEachRemaining(entry -> collectNewDocumentHashTokens(entry.getValue(), existingDocumentUrls,
+      node.fields().forEachRemaining(entry -> collectNewDocumentHashTokens(entry.getValue(), existingDocumentIds,
           tokens));
       return;
     }
 
     if (node.isArray()) {
-      node.forEach(child -> collectNewDocumentHashTokens(child, existingDocumentUrls, tokens));
+      node.forEach(child -> collectNewDocumentHashTokens(child, existingDocumentIds, tokens));
     }
   }
 
-  private DocumentHashToken buildDocumentHashToken(String documentUrl, JsonNode documentHashNode) {
+  private void failIfExistingDocumentHashReturned(String documentId, JsonNode documentHashNode) {
+    if (isText(documentHashNode)) {
+      throw new CdamAttachException("Existing document " + documentId + " must not return document_hash");
+    }
+  }
+
+  private DocumentHashToken buildDocumentHashToken(String documentId, JsonNode documentHashNode) {
     if (!isText(documentHashNode)) {
-      throw new CdamAttachException("New document " + documentUrl + " is missing document_hash");
+      throw new CdamAttachException("New document " + documentId + " is missing document_hash");
     }
 
-    return new DocumentHashToken(extractDocumentId(documentUrl), documentHashNode.asText());
+    return new DocumentHashToken(documentId, documentHashNode.asText());
+  }
+
+  private String documentId(JsonNode node) {
+    JsonNode documentUrlNode = node.get(DOCUMENT_URL);
+    if (isText(documentUrlNode)) {
+      return extractDocumentId(documentUrlNode.asText());
+    }
+
+    JsonNode documentBinaryUrlNode = node.get(DOCUMENT_BINARY_URL);
+    if (isText(documentBinaryUrlNode)) {
+      return extractDocumentId(documentBinaryUrlNode.asText());
+    }
+
+    return null;
   }
 
   private String extractDocumentId(String documentUrl) {

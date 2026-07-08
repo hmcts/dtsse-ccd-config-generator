@@ -67,6 +67,74 @@ class CaseDocumentHashScannerTest {
   }
 
   @Test
+  void comparesExistingDocumentsByDocumentIdNotRawUrl() throws Exception {
+    JsonNode preCallbackData = read("""
+        {
+          "eventInputDocument": {
+            "document_url": "http://dm-store/documents/11111111-1111-1111-1111-111111111111"
+          }
+        }
+        """);
+    JsonNode postCallbackData = read("""
+        {
+          "movedDocument": {
+            "document_url": "https://case-document-am/documents/11111111-1111-1111-1111-111111111111"
+          }
+        }
+        """);
+
+    assertThat(scanner.findNewDocumentHashTokens(preCallbackData, postCallbackData)).isEmpty();
+  }
+
+  @Test
+  void treatsDocumentFromCaseDetailsBeforeAsExistingWhenMovedToAnotherField() throws Exception {
+    JsonNode preCallbackData = read("""
+        [
+          {
+            "storedDocument": {
+              "document_url": "http://dm-store/documents/11111111-1111-1111-1111-111111111111"
+            }
+          },
+          {
+            "note": "event input"
+          }
+        ]
+        """);
+    JsonNode postCallbackData = read("""
+        {
+          "movedDocument": {
+            "document_url": "http://dm-store/documents/11111111-1111-1111-1111-111111111111"
+          }
+        }
+        """);
+
+    assertThat(scanner.findNewDocumentHashTokens(preCallbackData, postCallbackData)).isEmpty();
+  }
+
+  @Test
+  void failsWhenExistingDocumentReturnsHashToken() throws Exception {
+    JsonNode preCallbackData = read("""
+        {
+          "storedDocument": {
+            "document_url": "http://dm-store/documents/11111111-1111-1111-1111-111111111111"
+          }
+        }
+        """);
+    JsonNode postCallbackData = read("""
+        {
+          "storedDocument": {
+            "document_url": "http://dm-store/documents/11111111-1111-1111-1111-111111111111",
+            "document_hash": "tampered-hash"
+          }
+        }
+        """);
+
+    assertThatThrownBy(() -> scanner.findNewDocumentHashTokens(preCallbackData, postCallbackData))
+        .isInstanceOf(CdamAttachException.class)
+        .hasMessageContaining("must not return document_hash");
+  }
+
+  @Test
   void stripsDocumentHashesFromNestedDataWithoutChangingOriginal() throws Exception {
     JsonNode submittedData = read("""
         {
