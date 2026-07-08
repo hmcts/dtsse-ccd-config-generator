@@ -50,10 +50,15 @@ public class CdamAttachService {
     String authorisation = authorisation();
     try {
       caseDocumentClient.patchDocument(authorisation, authTokenGenerator.generate(), metadata);
-      log.info("Attached {} CDAM document(s) to case {}", tokens.size(), metadata.getCaseId());
+      log.info("Attached CDAM documents caseId={} caseType={} jurisdiction={} documentCount={}",
+          metadata.getCaseId(), metadata.getCaseTypeId(), metadata.getJurisdictionId(), tokens.size());
       return strippedData;
     } catch (RuntimeException ex) {
-      throw new CdamAttachException("Unable to attach CDAM documents to case " + metadata.getCaseId(), ex);
+      throw new CdamAttachException(
+          "Unable to attach CDAM documents caseId=%s caseType=%s jurisdiction=%s documentCount=%d".formatted(
+              metadata.getCaseId(), metadata.getCaseTypeId(), metadata.getJurisdictionId(), tokens.size()),
+          ex
+      );
     }
   }
 

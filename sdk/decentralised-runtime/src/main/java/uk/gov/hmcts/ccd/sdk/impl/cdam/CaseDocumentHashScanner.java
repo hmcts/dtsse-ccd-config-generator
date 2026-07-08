@@ -105,7 +105,7 @@ public class CaseDocumentHashScanner {
     String path = path(documentUrl);
     int index = path.lastIndexOf(DOCUMENTS_PATH);
     if (index < 0) {
-      throw new CdamAttachException("Document URL does not contain " + DOCUMENTS_PATH + ": " + documentUrl);
+      throw new CdamAttachException("Document URL does not contain " + DOCUMENTS_PATH);
     }
 
     String id = path.substring(index + DOCUMENTS_PATH.length());
@@ -117,7 +117,7 @@ public class CaseDocumentHashScanner {
     try {
       return UUID.fromString(id).toString();
     } catch (IllegalArgumentException ex) {
-      throw new CdamAttachException("Document URL does not contain a valid document id: " + documentUrl, ex);
+      throw new CdamAttachException("Document URL does not contain a valid document id", ex);
     }
   }
 
