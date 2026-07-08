@@ -69,8 +69,30 @@ From the perspective of application development, callbacks therefore continue to
 >
 > The invariant is: do not commit case data containing a new document reference until CDAM attach has succeeded for the
 > same case id, case type and jurisdiction. The SDK only attaches documents that are new in the about-to-submit callback
-> result; documents already present as event input are not re-attached by the SDK. The service identity used by the
-> decentralised runtime still needs scoped CDAM `ATTACH` permission. See the
+> result; documents already present as event input are not re-attached by the SDK.
+>
+> When CDAM attach is enabled, the decentralised runtime requires the service application to provide an
+> `AuthTokenGenerator` bean. The SDK does not create an S2S token generator itself; it uses the service's configured S2S
+> identity for the `ServiceAuthorization` header on the CDAM attach call. That service identity still needs scoped CDAM
+> `ATTACH` permission. See the
 > [decentralised runtime transaction boundary](./decentralised-runtime.md#transaction-control), and the ET/SP Tribs
 > permission example:
 > [hmcts/ccd-case-document-am-api#776](https://github.com/hmcts/ccd-case-document-am-api/pull/776).
+>
+> A typical service configuration is:
+>
+> ```java
+> @Bean
+> AuthTokenGenerator serviceAuthTokenGenerator(
+>     @Value("${idam.s2s-auth.secret}") String secret,
+>     @Value("${idam.s2s-auth.microservice}") String microService,
+>     ServiceAuthorisationApi serviceAuthorisationApi
+> ) {
+>   return AuthTokenGeneratorFactory.createDefaultGenerator(
+>       secret,
+>       microService,
+>       serviceAuthorisationApi,
+>       Duration.ofMinutes(5)
+>   );
+> }
+> ```
