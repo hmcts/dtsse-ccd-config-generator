@@ -57,6 +57,16 @@ tasks.register('verifyCcdMigrationFdw', Exec) {
     description = 'Validates and applies the FDW CCD migration scripts after the e2e environment is up'
     dependsOn ':e2e:dumpCCDDefinitions'
     workingDir projectDir
+    ['/opt/homebrew/opt/libpq/bin', '/usr/local/opt/libpq/bin'].find {
+        file("${it}/pg_dump").exists()
+    }.with {
+        if (it != null) {
+            environment 'PG_DUMP_BIN', "${it}/pg_dump"
+            environment 'PSQL_BIN', "${it}/psql"
+            environment 'CREATEDB_BIN', "${it}/createdb"
+            environment 'DROPDB_BIN', "${it}/dropdb"
+        }
+    }
     commandLine 'bash', '-lc', './scripts/test-migrate-ccd-data-fdw.sh'
 }
 

@@ -108,6 +108,47 @@ class CcdDataMigrationTaskIntegrationTest {
   }
 
   @Test
+  void copiesSignificantItemsWithPreloadAndCutoverEventWindows() {
+    insertSourceCase(10, 1000000000000010L, 1, "Submitted", "{\"field\":\"one\"}");
+    insertSourceCaseEvent(101, 10, "create", "Submitted", "{\"field\":\"one\"}", minutesAgo(60));
+    insertSourceCaseEvent(102, 10, "update", "Updated", "{\"field\":\"two\"}", minutesAgo(30));
+    insertSourceSignificantItem(5001, 101, "First document", "http://dm-store/documents/first");
+    insertSourceSignificantItem(5002, 102, "Second document", "http://dm-store/documents/second");
+
+    CcdDataMigrationRunResult preloadResult = task(PRELOAD_EVENTS, 101, 1).runMigration();
+
+    assertThat(preloadResult.caughtUp()).isFalse();
+    assertThat(countRows("ccd.case_event_significant_items")).isEqualTo(1);
+    assertThat(significantItemDescription(5001)).isEqualTo("First document");
+    assertThat(sourceEventHwm()).isEqualTo(101);
+
+    CcdDataMigrationRunResult cutoverResult = task(CUTOVER, 1000, 10).runMigration();
+
+    assertThat(cutoverResult.caughtUp()).isTrue();
+    assertThat(progressStatus()).isEqualTo("COMPLETE");
+    assertThat(countRows("ccd.case_event_significant_items")).isEqualTo(2);
+    assertThat(significantItemDescription(5002)).isEqualTo("Second document");
+    assertThat(caseEventSignificantItemsSequenceLastValue()).isGreaterThanOrEqualTo(5002);
+  }
+
+  @Test
+  void createsMissingFdwTablesFromExistingFdwConfiguration() {
+    jdbc.getJdbcTemplate().execute("drop foreign table fdw_stage.case_event");
+    insertSourceCase(10, 1000000000000010L, 1, "Submitted", "{\"field\":\"one\"}");
+    insertSourceCaseEvent(101, 10, "create", "Submitted", "{\"field\":\"one\"}", minutesAgo(60));
+    insertSourceSignificantItem(5001, 101, "First document", "http://dm-store/documents/first");
+
+    CcdDataMigrationRunResult result = task(PRELOAD_EVENTS, 1000, 10).runMigration();
+
+    assertThat(result.caughtUp()).isTrue();
+    assertThat(countRows("ccd.case_event")).isEqualTo(1);
+    assertThat(countRows("ccd.case_event_significant_items")).isEqualTo(1);
+    assertThat(fdwTableExists("case_data")).isTrue();
+    assertThat(fdwTableExists("case_event")).isTrue();
+    assertThat(fdwTableExists("case_event_significant_items")).isTrue();
+  }
+
+  @Test
   void cutoverDeletesOnlyMigratedCaseTypeElasticsearchQueueRows() {
     insertSourceCase(10, 1000000000000010L, 1, "Submitted", "{\"field\":\"one\"}");
     insertSourceCaseEvent(101, 10, "create", "Submitted", "{\"field\":\"one\"}", minutesAgo(60));
@@ -398,6 +439,15 @@ class CcdDataMigrationTaskIntegrationTest {
           proxied_by_last_name varchar(255)
         )
         """);
+    jdbc.getJdbcTemplate().execute("""
+        create table source.case_event_significant_items (
+          id bigint primary key,
+          description varchar(64) not null,
+          "type" text not null,
+          url text,
+          case_event_id bigint not null
+        )
+        """);
   }
 
   private void createFdwTables() {
@@ -458,6 +508,31 @@ class CcdDataMigrationTaskIntegrationTest {
         server ccd_migration_test_server
         options (schema_name 'source', table_name 'case_event', fetch_size '10000')
         """);
+  }
+
+  private void insertSourceSignificantItem(long id, long caseEventId, String description, String url) {
+    jdbc.update(
+        """
+        insert into source.case_event_significant_items (
+          id,
+          description,
+          "type",
+          url,
+          case_event_id
+        ) values (
+          :id,
+          :description,
+          'DOCUMENT',
+          :url,
+          :caseEventId
+        )
+        """,
+        new MapSqlParameterSource()
+            .addValue("id", id)
+            .addValue("description", description)
+            .addValue("url", url)
+            .addValue("caseEventId", caseEventId)
+    );
   }
 
   private void restoreTargetSchemaState() {
@@ -1016,6 +1091,19 @@ class CcdDataMigrationTaskIntegrationTest {
     return jdbc.getJdbcTemplate().queryForObject("select last_value from ccd.case_event_id_seq", Long.class);
   }
 
+  private long caseEventSignificantItemsSequenceLastValue() {
+    return jdbc.getJdbcTemplate()
+        .queryForObject("select last_value from ccd.case_event_significant_items_id_seq", Long.class);
+  }
+
+  private String significantItemDescription(long id) {
+    return jdbc.queryForObject(
+        "select description from ccd.case_event_significant_items where id = :id",
+        Map.of("id", id),
+        String.class
+    );
+  }
+
   private boolean caseEventCaseDataForeignKeyExists() {
     return Boolean.TRUE.equals(jdbc.queryForObject(
         """
@@ -1059,6 +1147,23 @@ class CcdDataMigrationTaskIntegrationTest {
         )
         """,
         Map.of(),
+        Boolean.class
+    ));
+  }
+
+  private boolean fdwTableExists(String tableName) {
+    return Boolean.TRUE.equals(jdbc.queryForObject(
+        """
+        select exists (
+          select 1
+          from pg_foreign_table ft
+          join pg_class c on c.oid = ft.ftrelid
+          join pg_namespace n on n.oid = c.relnamespace
+          where n.nspname = 'fdw_stage'
+            and c.relname = :tableName
+        )
+        """,
+        Map.of("tableName", tableName),
         Boolean.class
     ));
   }

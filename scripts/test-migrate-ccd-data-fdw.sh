@@ -91,7 +91,7 @@ join pg_class c
 join pg_namespace n
   on n.oid = c.relnamespace
 where n.nspname = '${FDW_SCHEMA}'
-  and c.relname in ('case_data', 'case_event');
+  and c.relname in ('case_data', 'case_event', 'case_event_significant_items');
 SQL
 )"
   source_case_count="$(psql_dst --quiet -tA <<SQL
@@ -101,7 +101,7 @@ where case_type_id = :'case_type';
 SQL
 )"
 
-  if [[ "$extension_count" != "2" || "$foreign_server_count" != "1" || "$foreign_table_count" != "2" || "$source_case_count" != "2" ]]; then
+  if [[ "$extension_count" != "2" || "$foreign_server_count" != "1" || "$foreign_table_count" != "3" || "$source_case_count" != "2" ]]; then
     echo "FDW setup validation failed:" \
       "extensions=${extension_count}, server=${foreign_server_count}," \
       "tables=${foreign_table_count}, source_cases=${source_case_count}" >&2
@@ -110,7 +110,7 @@ SQL
 }
 
 assert_delta_rows_migrated() {
-  local delta_event_count delta_case_count
+  local delta_event_count delta_case_count delta_significant_item_count
 
   echo "Validating delta rows were migrated"
   delta_event_count="$(psql_dst --quiet -tA <<'SQL'
@@ -125,9 +125,16 @@ from ccd.case_data
 where id = 5604;
 SQL
 )"
+  delta_significant_item_count="$(psql_dst --quiet -tA <<'SQL'
+select count(*)
+from ccd.case_event_significant_items
+where id in (8105, 8106);
+SQL
+)"
 
-  if [[ "$delta_event_count" != "2" || "$delta_case_count" != "1" ]]; then
-    echo "Delta migration failed: delta_cases=${delta_case_count}, delta_events=${delta_event_count}" >&2
+  if [[ "$delta_event_count" != "2" || "$delta_case_count" != "1" || "$delta_significant_item_count" != "2" ]]; then
+    echo "Delta migration failed: delta_cases=${delta_case_count}, delta_events=${delta_event_count}," \
+      "delta_significant_items=${delta_significant_item_count}" >&2
     exit 1
   fi
 }

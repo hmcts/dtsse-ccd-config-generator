@@ -23,6 +23,7 @@ import uk.gov.hmcts.ccd.sdk.runtime.CcdCallbackExecutor;
 import uk.gov.hmcts.reform.ccd.client.model.CallbackRequest;
 import uk.gov.hmcts.reform.ccd.client.model.CaseDetails;
 import uk.gov.hmcts.reform.ccd.client.model.Classification;
+import uk.gov.hmcts.reform.ccd.client.model.SignificantItem;
 import uk.gov.hmcts.reform.ccd.client.model.SubmittedCallbackResponse;
 
 /**
@@ -78,6 +79,7 @@ class LegacyCallbackSubmissionHandler implements CaseSubmissionHandler {
         state,
         securityClassification,
         Optional.ofNullable(outcome.eventMetadata()),
+        Optional.ofNullable(outcome.significantItem()),
         () -> {
           var builder = SubmitResponse.builder()
               .errors(errors)
@@ -104,11 +106,13 @@ class LegacyCallbackSubmissionHandler implements CaseSubmissionHandler {
 
     var response = new DecentralisedSubmitEventResponse();
     EventMetadata eventMetadata = null;
+    SignificantItem significantItem = null;
 
     if (eventConfig.getAboutToSubmitCallback() != null) {
       CallbackRequest request = buildCallbackRequest(event);
       AboutToStartOrSubmitResponse callbackResponse = executor.aboutToSubmit(request);
       eventMetadata = callbackResponse.getEventMetadata();
+      significantItem = callbackResponse.getSignificantItem();
 
       Map<String, JsonNode> normalisedData = callbackResponse.getData() == null
           ? Map.of()
@@ -129,7 +133,7 @@ class LegacyCallbackSubmissionHandler implements CaseSubmissionHandler {
     }
 
     boolean hasSubmitted = eventConfig.getSubmittedCallback() != null;
-    return new LegacySubmitOutcome(response, eventMetadata, hasSubmitted);
+    return new LegacySubmitOutcome(response, eventMetadata, significantItem, hasSubmitted);
   }
 
   private Optional<SubmittedCallbackResponse> runSubmittedCallback(DecentralisedCaseEvent event) {
@@ -178,6 +182,7 @@ class LegacyCallbackSubmissionHandler implements CaseSubmissionHandler {
 
   private record LegacySubmitOutcome(DecentralisedSubmitEventResponse response,
                                      EventMetadata eventMetadata,
+                                     SignificantItem significantItem,
                                      boolean runSubmittedCallback) {}
 
   @SneakyThrows

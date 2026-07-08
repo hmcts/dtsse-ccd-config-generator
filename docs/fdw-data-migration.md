@@ -16,19 +16,24 @@ flowchart LR
     subgraph CCD["CCD central database"]
       A["public.case_data"]
       B["public.case_event"]
+      G["public.case_event_significant_items"]
     end
 
     subgraph APP["Application database"]
       C["fdw_stage.case_data"]
       D["fdw_stage.case_event"]
+      H["fdw_stage.case_event_significant_items"]
       E["ccd.case_data"]
       F["ccd.case_event"]
+      I["ccd.case_event_significant_items"]
     end
 
     A -->|postgres_fdw| C
     B -->|postgres_fdw| D
+    G -->|postgres_fdw| H
     C -->|insert/update| E
     D -->|insert/update| F
+    H -->|insert/update| I
 ```
 
 ## Prerequisites
@@ -62,8 +67,10 @@ You need:
 
 * a target application database connection string with permission to create extensions, schemas,
   FDW servers, user mappings and foreign tables for setup
-* a source CCD database user with read access to `case_data` and `case_event`
-* a target application database user with write access to `ccd.case_data` and `ccd.case_event`
+* a source CCD database user with read access to `case_data`, `case_event`, and
+  `case_event_significant_items`
+* a target application database user with write access to `ccd.case_data`, `ccd.case_event`, and
+  `ccd.case_event_significant_items`
 * permission for the migration user to run `SET LOCAL session_replication_role = replica`
 * network connectivity from the target database to the source CCD database
 * `psql` available on the machine running the scripts
@@ -119,6 +126,7 @@ The setup script creates:
 * foreign tables:
   * `fdw_stage.case_data`
   * `fdw_stage.case_event`
+  * `fdw_stage.case_event_significant_items`
 
 The foreign tables are created with `fetch_size '10000'` so large reads do not use the
 `postgres_fdw` default of 100 rows per cursor fetch. If the FDW objects were created before this
@@ -128,7 +136,10 @@ option existed, recreate them with `setup-ccd-data-fdw.sh --apply` before runnin
 ## Phase 2: Run the migration
 
 The migration script only reads from the FDW foreign tables. It does not create or write to
-`fdw_stage`.
+`fdw_stage`. The Java `CcdDataMigrationTask` is a little more forgiving: if the FDW server and at
+least one of the expected source foreign tables already exist, it creates any missing
+`fdw_stage.case_data`, `fdw_stage.case_event`, or `fdw_stage.case_event_significant_items` foreign
+tables from the same server, source schema, and fetch size options.
 
 Required environment variables:
 
@@ -163,9 +174,10 @@ The validation checks:
 * target database connectivity
 * `pgcrypto` is installed
 * the migration user can temporarily disable target triggers with `session_replication_role`
-* `fdw_stage.case_data` and `fdw_stage.case_event` exist as foreign tables
+* `fdw_stage.case_data`, `fdw_stage.case_event`, and `fdw_stage.case_event_significant_items` exist
+  as foreign tables
 * source `case_data` count for the selected case types
-* target `case_data` and `case_event` counts
+* target `case_data`, `case_event`, and `case_event_significant_items` counts
 
 Run a full migration:
 
@@ -190,6 +202,7 @@ types, clean the target CCD tables before rerunning:
 truncate table
   ccd.case_event_audit,
   ccd.es_queue,
+  ccd.case_event_significant_items,
   ccd.case_event,
   ccd.case_data
 restart identity cascade;
@@ -206,15 +219,17 @@ The migration script:
 * temporarily disables `case_event` user triggers so delta upserts do not write audit rows
 * upserts `case_data` rows from `fdw_stage.case_data` with target triggers suppressed
 * upserts `case_event` rows from `fdw_stage.case_event` for cases already loaded into `ccd.case_data`
+* upserts `case_event_significant_items` rows linked to copied target events
 * reruns `case_data` upsert to catch parent cases changed while events were copying
 * reruns `case_event` upsert to catch events for cases loaded or updated by the second `case_data` pass
+* reruns `case_event_significant_items` upsert for events caught by the second `case_event` pass
 * recalculates `case_event.version` and `case_event.case_revision`
 * updates `case_data.case_revision` to the max event revision plus `CASE_REVISION_OFFSET`, with
   target triggers suppressed
-* checks for orphaned events
+* checks for orphaned events and significant items
 * restores the event revision unique index, FK and `case_event` user triggers
-* resets `case_event_id_seq`
-* runs final validation for counts, orphan events, duplicate event revisions and case revision alignment
+* resets `case_event_id_seq` and `case_event_significant_items_id_seq`
+* runs final validation for counts, orphan events/items, duplicate event revisions and case revision alignment
 
 If the script exits after dropping the FK and unique index, it attempts to restore them in an exit
 handler before returning the original failure status. If automatic restoration fails, manual
