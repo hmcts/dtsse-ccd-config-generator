@@ -1,4 +1,5 @@
 uk.gov.hmcts.ccd.sdk.config.CcdWireFormatConfiguration
+uk.gov.hmcts.ccd.sdk.config.CcdCaseDataMapperConfiguration
 uk.gov.hmcts.ccd.sdk.migration.CcdDataMigrationAutoConfiguration
 uk.gov.hmcts.ccd.sdk.config.DecentralisedDataConfiguration
 uk.gov.hmcts.ccd.sdk.config.DefinitionMapperConfiguration
