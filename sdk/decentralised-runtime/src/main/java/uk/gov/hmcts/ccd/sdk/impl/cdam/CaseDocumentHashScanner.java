@@ -8,7 +8,12 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.stereotype.Component;
+import uk.gov.hmcts.reform.ccd.document.am.model.DocumentHashToken;
 
+@Component
+@ConditionalOnProperty(prefix = "ccd.decentralised-runtime.cdam-attach", name = "enabled", havingValue = "true")
 public class CaseDocumentHashScanner {
 
   private static final String DOCUMENT_URL = "document_url";

@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
+import uk.gov.hmcts.reform.ccd.document.am.model.DocumentHashToken;
 
 class CaseDocumentHashScannerTest {
 

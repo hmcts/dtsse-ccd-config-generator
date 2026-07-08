@@ -9,6 +9,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
 import uk.gov.hmcts.ccd.decentralised.dto.DecentralisedCaseEvent;
+import uk.gov.hmcts.reform.authorisation.generators.AuthTokenGenerator;
+import uk.gov.hmcts.reform.ccd.document.am.feign.CaseDocumentClient;
+import uk.gov.hmcts.reform.ccd.document.am.model.CaseDocumentsMetadata;
 
 @Slf4j
 @Service
@@ -16,12 +19,15 @@ import uk.gov.hmcts.ccd.decentralised.dto.DecentralisedCaseEvent;
 public class CdamAttachService {
 
   private final CaseDocumentHashScanner scanner;
-  private final CaseDocumentAmClient caseDocumentAmClient;
+  private final CaseDocumentClient caseDocumentClient;
+  private final AuthTokenGenerator authTokenGenerator;
 
   public CdamAttachService(CaseDocumentHashScanner scanner,
-                           CaseDocumentAmClient caseDocumentAmClient) {
+                           CaseDocumentClient caseDocumentClient,
+                           AuthTokenGenerator authTokenGenerator) {
     this.scanner = scanner;
-    this.caseDocumentAmClient = caseDocumentAmClient;
+    this.caseDocumentClient = caseDocumentClient;
+    this.authTokenGenerator = authTokenGenerator;
   }
 
   public JsonNode attachNewDocumentsAndStripHashes(DecentralisedCaseEvent event,
@@ -43,11 +49,11 @@ public class CdamAttachService {
 
     String authorisation = authorisation();
     try {
-      caseDocumentAmClient.attach(authorisation, metadata);
-      log.info("Attached {} CDAM document(s) to case {}", tokens.size(), metadata.caseId());
+      caseDocumentClient.patchDocument(authorisation, authTokenGenerator.generate(), metadata);
+      log.info("Attached {} CDAM document(s) to case {}", tokens.size(), metadata.getCaseId());
       return strippedData;
     } catch (RuntimeException ex) {
-      throw new CdamAttachException("Unable to attach CDAM documents to case " + metadata.caseId(), ex);
+      throw new CdamAttachException("Unable to attach CDAM documents to case " + metadata.getCaseId(), ex);
     }
   }
 

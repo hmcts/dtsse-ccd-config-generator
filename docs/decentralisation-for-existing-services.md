@@ -73,8 +73,9 @@ From the perspective of application development, callbacks therefore continue to
 >
 > When CDAM attach is enabled, the decentralised runtime requires the service application to provide an
 > `AuthTokenGenerator` bean. The SDK does not create an S2S token generator itself; it uses the service's configured S2S
-> identity for the `ServiceAuthorization` header on the CDAM attach call. That service identity still needs scoped CDAM
-> `ATTACH` permission. See the
+> identity for the `ServiceAuthorization` header on the CDAM attach call. The attach call itself uses the standard
+> `ccd-case-document-am-client`; services do not need to implement their own CDAM attach client. That service identity
+> still needs scoped CDAM `ATTACH` permission. See the
 > [decentralised runtime transaction boundary](./decentralised-runtime.md#transaction-control), and the ET/SP Tribs
 > permission example:
 > [hmcts/ccd-case-document-am-api#776](https://github.com/hmcts/ccd-case-document-am-api/pull/776).
