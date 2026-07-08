@@ -141,10 +141,9 @@ least one of the expected source foreign tables already exist, it creates any mi
 `fdw_stage.case_data`, `fdw_stage.case_event`, or `fdw_stage.case_event_significant_items` foreign
 tables from the same server, source schema, and fetch size options.
 
-For services using the Java task, `case_event_significant_items` is copied as a separate resumable
-stage tracked by `ccd.ccd_data_migration_progress.significant_items_event_hwm`. If events have
-already been preloaded, the task can backfill significant items up to the existing event high-water
-mark without resetting `source_event_hwm` or rewalking the long `case_event` copy.
+For services using the Java task, `case_event_significant_items` is copied during `CUTOVER` after
+events have caught up. It uses one set-based insert query joined through the migrated target events
+up to the captured cutover event high-water mark, so the preload event walk is not restarted.
 
 Required environment variables:
 
