@@ -58,19 +58,12 @@ public class CdamAttachService {
   }
 
   private String authorisation() {
-    String authorisation = currentRequestHeader(HttpHeaders.AUTHORIZATION);
-    if (authorisation.isBlank()) {
+    HttpServletRequest request = ((ServletRequestAttributes) RequestContextHolder.currentRequestAttributes())
+        .getRequest();
+    String authorisation = request.getHeader(HttpHeaders.AUTHORIZATION);
+    if (authorisation == null || authorisation.isBlank()) {
       throw new IllegalStateException("Authorization header is required to attach CDAM documents");
     }
     return authorisation;
-  }
-
-  private String currentRequestHeader(String name) {
-    if (RequestContextHolder.getRequestAttributes() instanceof ServletRequestAttributes servletAttributes) {
-      HttpServletRequest request = servletAttributes.getRequest();
-      String value = request.getHeader(name);
-      return value == null ? "" : value;
-    }
-    return "";
   }
 }
