@@ -15,6 +15,10 @@ interface CaseSubmissionHandler {
 
   CaseSubmissionHandlerResult apply(DecentralisedCaseEvent event);
 
+  default CaseSubmissionHandlerResult apply(DecentralisedCaseEvent event, String authorisation) {
+    return apply(event);
+  }
+
   /**
    * Result returned by a submission handler after it has prepared all in-transaction mutations.
    *

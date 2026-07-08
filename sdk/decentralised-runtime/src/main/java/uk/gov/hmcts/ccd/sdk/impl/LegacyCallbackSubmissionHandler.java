@@ -8,6 +8,7 @@ import java.util.Optional;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Component;
 import uk.gov.hmcts.ccd.data.casedetails.SecurityClassification;
 import uk.gov.hmcts.ccd.decentralised.dto.DecentralisedCaseEvent;
@@ -19,6 +20,7 @@ import uk.gov.hmcts.ccd.sdk.api.Webhook;
 import uk.gov.hmcts.ccd.sdk.api.callback.AboutToStartOrSubmitResponse;
 import uk.gov.hmcts.ccd.sdk.api.callback.SubmitResponse;
 import uk.gov.hmcts.ccd.sdk.config.CcdCaseDataMapperConfiguration;
+import uk.gov.hmcts.ccd.sdk.impl.cdam.CdamAttachService;
 import uk.gov.hmcts.ccd.sdk.runtime.CcdCallbackExecutor;
 import uk.gov.hmcts.reform.ccd.client.model.CallbackRequest;
 import uk.gov.hmcts.reform.ccd.client.model.CaseDetails;
@@ -40,19 +42,27 @@ class LegacyCallbackSubmissionHandler implements CaseSubmissionHandler {
   private final CcdCallbackExecutor executor;
   private final ObjectMapper mapper;
   private final ObjectMapper filteredMapper;
+  private final ObjectProvider<CdamAttachService> cdamAttachService;
 
   LegacyCallbackSubmissionHandler(ResolvedConfigRegistry registry,
                                   CcdCallbackExecutor executor,
                                   @Qualifier(CcdCaseDataMapperConfiguration.CCD_CASE_DATA_OBJECT_MAPPER)
-                                  ObjectMapper mapper) {
+                                  ObjectMapper mapper,
+                                  ObjectProvider<CdamAttachService> cdamAttachService) {
     this.registry = registry;
     this.executor = executor;
     this.mapper = mapper;
     this.filteredMapper = mapper.copy().setAnnotationIntrospector(new FilterExternalFieldsInspector());
+    this.cdamAttachService = cdamAttachService;
   }
 
   @Override
   public CaseSubmissionHandlerResult apply(DecentralisedCaseEvent event) {
+    return apply(event, null);
+  }
+
+  @Override
+  public CaseSubmissionHandlerResult apply(DecentralisedCaseEvent event, String authorisation) {
     log.info("[legacy] Creating event '{}' for case reference: {}",
         event.getEventDetails().getEventId(), event.getCaseDetails().getReference());
 
@@ -62,6 +72,8 @@ class LegacyCallbackSubmissionHandler implements CaseSubmissionHandler {
     if (submitResponse.getErrors() != null && !submitResponse.getErrors().isEmpty()) {
       throw new CallbackValidationException(submitResponse.getErrors(), submitResponse.getWarnings());
     }
+
+    attachNewCdamDocuments(event, authorisation);
 
     boolean runSubmitted = outcome.runSubmittedCallback();
 
@@ -179,6 +191,21 @@ class LegacyCallbackSubmissionHandler implements CaseSubmissionHandler {
   private record LegacySubmitOutcome(DecentralisedSubmitEventResponse response,
                                      EventMetadata eventMetadata,
                                      boolean runSubmittedCallback) {}
+
+  private void attachNewCdamDocuments(DecentralisedCaseEvent event, String authorisation) {
+    CdamAttachService service = cdamAttachService.getIfAvailable();
+    if (service == null) {
+      return;
+    }
+
+    if (authorisation == null || authorisation.isBlank()) {
+      throw new IllegalStateException("Authorization header is required to attach CDAM documents");
+    }
+
+    JsonNode rawData = mapper.valueToTree(event.getCaseDetails().getData());
+    JsonNode strippedData = service.attachNewDocumentsAndStripHashes(event, authorisation, rawData);
+    event.getCaseDetails().setData(mapper.convertValue(strippedData, JSON_NODE_MAP));
+  }
 
   @SneakyThrows
   private JsonNode snapshotWithFilteredFields(DecentralisedCaseEvent event) {
