@@ -157,6 +157,7 @@ public class TestWithCCD extends CftlibTest {
     private long firstEventId;
     private static final String BASE_URL = "http://localhost:4452";
     private static final String SERVICE_BASE_URL = "http://localhost:4013";
+    private static final String CDAM_BASE_URL = "http://localhost:4455";
     private static final String EXTERNAL_CALLBACK_HOST = "127.0.0.1";
     private static final int EXTERNAL_CALLBACK_PORT = 4014;
     private static final String ELASTICSEARCH_BASE_URL = "http://localhost:9200";
@@ -3064,6 +3065,25 @@ public class TestWithCCD extends CftlibTest {
         assertThat(storedData.findValues("document_hash"), is(empty()));
         assertThat(storedData.toString(), containsString(BaseJsonLegacyController.EVENT_INPUT_DOCUMENT_ID));
         assertThat(storedData.toString(), containsString(BaseJsonLegacyController.CALLBACK_DOCUMENT_ID));
+
+        JsonNode cdamDocument = fetchCdamDocument(BaseJsonLegacyController.CALLBACK_DOCUMENT_ID);
+        assertThat(cdamDocument.path("metadata").path("case_type_id").asText(),
+            equalTo(JsonLegacyCcdConfig.CASE_TYPE_A));
+        assertThat(cdamDocument.path("metadata").path("jurisdiction").asText(), equalTo("EMPLOYMENT"));
+    }
+
+    @SneakyThrows
+    private JsonNode fetchCdamDocument(String documentId) {
+        var request = new HttpGet(CDAM_BASE_URL + "/cases/documents/" + documentId);
+        request.addHeader("Authorization", getAuthorisation("TEST_CASE_WORKER_USER@mailinator.com"));
+        request.addHeader("ServiceAuthorization", cftlib().generateDummyS2SToken("nfdiv_case_api"));
+
+        try (CloseableHttpResponse response = HttpClientBuilder.create().build().execute(request)) {
+            String responseBody = EntityUtils.toString(response.getEntity());
+            assertThat("CDAM document metadata response: " + responseBody,
+                response.getStatusLine().getStatusCode(), equalTo(200));
+            return mapper.readTree(responseBody);
+        }
     }
 
     @SneakyThrows

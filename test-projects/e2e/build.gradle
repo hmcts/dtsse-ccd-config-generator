@@ -269,7 +269,7 @@ cftlibTest {
   environment 'PAYMENT_API_BASEURL', 'http://localhost:8765'
   environment 'CCD_DOCUMENT_URL_PATTERN', '.*'
   environment 'DM_STORE_BASE_URL', 'http://localhost:4013'
-  environment 'CASE_DOCUMENT_AM_URL', 'http://localhost:4013'
+  environment 'CASE_DOCUMENT_AM_URL', 'http://localhost:4455'
   environment 'CASE_DOCUMENT_AM_API_ATTACH_DOCUMENT_ENABLED', 'false'
   environment 'CCD_DECENTRALISED_RUNTIME_CDAM_ATTACH_ENABLED', 'true'
   environment 'CASE_DATA_STORE_BASEURL', 'http://localhost:4452'
