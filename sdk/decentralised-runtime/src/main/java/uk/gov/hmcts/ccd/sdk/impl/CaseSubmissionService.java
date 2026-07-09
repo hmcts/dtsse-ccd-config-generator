@@ -76,7 +76,7 @@ public class CaseSubmissionService {
     }
 
     // Delegate to the specific handler to apply the change
-    var handlerResult = handler.apply(event);
+    var handlerResult = handler.apply(event, user.authToken());
     applyHandlerChanges(event, handlerResult);
 
     // Bookkeeping: update case_data metadata and optionally the legacy json blob

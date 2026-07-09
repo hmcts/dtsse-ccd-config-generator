@@ -1,0 +1,34 @@
+[
+  {
+    "ID": "UploadedDocumentType",
+    "ListElementCode": "document_url",
+    "ElementLabel": "Document URL",
+    "FieldType": "Text",
+    "SecurityClassification": "Public",
+    "LiveFrom": "01/01/2017"
+  },
+  {
+    "ID": "UploadedDocumentType",
+    "ListElementCode": "document_binary_url",
+    "ElementLabel": "Document binary URL",
+    "FieldType": "Text",
+    "SecurityClassification": "Public",
+    "LiveFrom": "01/01/2017"
+  },
+  {
+    "ID": "UploadedDocumentType",
+    "ListElementCode": "document_filename",
+    "ElementLabel": "Document filename",
+    "FieldType": "Text",
+    "SecurityClassification": "Public",
+    "LiveFrom": "01/01/2017"
+  },
+  {
+    "ID": "UploadedDocumentType",
+    "ListElementCode": "document_hash",
+    "ElementLabel": "Document hash",
+    "FieldType": "Text",
+    "SecurityClassification": "Public",
+    "LiveFrom": "01/01/2017"
+  }
+]

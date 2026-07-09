@@ -7,6 +7,7 @@ import java.time.LocalDateTime;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import uk.gov.hmcts.ccd.sdk.External;
 import uk.gov.hmcts.ccd.sdk.api.ComplexType;
 
 @NoArgsConstructor
@@ -30,6 +31,10 @@ public class Document {
 
   @JsonProperty("upload_timestamp")
   private LocalDateTime uploadTimestamp;
+
+  @JsonProperty("document_hash")
+  @External
+  private String hashToken;
 
   public Document(
       @JsonProperty("document_url") String url,
@@ -58,7 +63,6 @@ public class Document {
     this.categoryId = categoryId;
   }
 
-  @JsonCreator
   public Document(
       @JsonProperty("document_url") String url,
       @JsonProperty("document_filename") String filename,
@@ -66,10 +70,23 @@ public class Document {
       @JsonProperty("category_id") String categoryId,
       @JsonProperty("upload_timestamp") LocalDateTime uploadTimestamp
   ) {
+    this(url, filename, binaryUrl, categoryId, uploadTimestamp, null);
+  }
+
+  @JsonCreator
+  public Document(
+      @JsonProperty("document_url") String url,
+      @JsonProperty("document_filename") String filename,
+      @JsonProperty("document_binary_url") String binaryUrl,
+      @JsonProperty("category_id") String categoryId,
+      @JsonProperty("upload_timestamp") LocalDateTime uploadTimestamp,
+      @JsonProperty("document_hash") String hashToken
+  ) {
     this.url = url;
     this.filename = filename;
     this.binaryUrl = binaryUrl;
     this.categoryId = categoryId;
     this.uploadTimestamp = uploadTimestamp;
+    this.hashToken = hashToken;
   }
 }
