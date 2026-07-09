@@ -56,6 +56,14 @@ public class E2EConfigGenerationTests {
         CcdConfigComparator.assertEquivalent(expected, actual);
     }
 
+    @SneakyThrows
+    @Test
+    public void shuttersAllRolesExceptExcludedRole() {
+        File expected = resourceFile("Shuttered/AuthorisationCaseType.json");
+        File actual = new File(tmp.getRoot(), "Shuttered/AuthorisationCaseType.json");
+        CcdConfigComparator.assertEquals(expected, actual, JSONCompareMode.NON_EXTENSIBLE);
+    }
+
     @Test
     public void generatesDerivedConfig() {
         Map<String, File> actual = CcdConfigComparator.dirToMap(new File(tmp.getRoot(), "derived"));
