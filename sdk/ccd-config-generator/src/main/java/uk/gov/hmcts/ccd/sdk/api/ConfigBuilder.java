@@ -41,7 +41,9 @@ public interface ConfigBuilder<T, S, R extends HasRole> {
    *
    * @param roles roles to exclude from the shutter
    */
-  void shutterServiceExclude(R... roles);
+  default void shutterServiceExclude(R... roles) {
+    // Default no-op for backward compatibility; implementations may override.
+  }
 
   void omitHistoryForRoles(R... roles);
 
