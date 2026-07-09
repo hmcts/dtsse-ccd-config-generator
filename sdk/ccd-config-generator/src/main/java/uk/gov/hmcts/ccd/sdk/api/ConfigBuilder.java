@@ -30,6 +30,19 @@ public interface ConfigBuilder<T, S, R extends HasRole> {
 
   void shutterService(R... roles);
 
+  /**
+   * Exclude roles from a shutter so they retain their normal case-type permissions rather than
+   * being set to DELETE. The exclusion applies whether the shutter was requested for the whole
+   * service via {@link #shutterService()} or for individual roles via {@link #shutterService(R...)},
+   * and takes precedence over both.
+   *
+   * <p>Typically used to keep {@code caseworker-wa-task-configuration} out of a shutter, as
+   * dropping that role to DELETE can cause issues for Work Allocation / Task Management.
+   *
+   * @param roles roles to exclude from the shutter
+   */
+  void shutterServiceExclude(R... roles);
+
   void omitHistoryForRoles(R... roles);
 
   /**
