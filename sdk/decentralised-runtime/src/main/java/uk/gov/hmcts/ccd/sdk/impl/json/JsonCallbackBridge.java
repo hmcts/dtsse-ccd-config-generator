@@ -44,6 +44,7 @@ import uk.gov.hmcts.ccd.sdk.api.callback.AboutToStartOrSubmitResponse;
 import uk.gov.hmcts.ccd.sdk.api.callback.AboutToSubmit;
 import uk.gov.hmcts.ccd.sdk.api.callback.Submitted;
 import uk.gov.hmcts.ccd.sdk.config.CcdCaseDataMapperConfiguration;
+import uk.gov.hmcts.reform.ccd.client.model.SignificantItem;
 import uk.gov.hmcts.reform.ccd.client.model.SubmittedCallbackResponse;
 
 @Component
@@ -133,7 +134,12 @@ public class JsonCallbackBridge {
         .dataClassification((Map<String, Object>) callbackResponse.get("data_classification"))
         .securityClassification((String) callbackResponse.get("security_classification"))
         .errorMessageOverride((String) callbackResponse.get("error_message_override"))
+        .significantItem(significantItem(callbackResponse.get("significant_item")))
         .build();
+  }
+
+  private SignificantItem significantItem(Object value) {
+    return value == null ? null : mapper.convertValue(value, SignificantItem.class);
   }
 
   private Object invoke(String callbackUrl,
