@@ -80,11 +80,10 @@ public class CaseDocumentHashScanner {
   }
 
   private DocumentHashToken buildDocumentHashToken(String documentId, JsonNode documentHashNode) {
-    if (!isText(documentHashNode)) {
-      throw new CdamAttachException("New document " + documentId + " is missing document_hash");
-    }
-
-    return new DocumentHashToken(documentId, documentHashNode.asText());
+    String hashToken = documentHashNode == null || documentHashNode.isNull()
+        ? null
+        : documentHashNode.textValue();
+    return new DocumentHashToken(documentId, hashToken);
   }
 
   private String documentId(JsonNode node) {

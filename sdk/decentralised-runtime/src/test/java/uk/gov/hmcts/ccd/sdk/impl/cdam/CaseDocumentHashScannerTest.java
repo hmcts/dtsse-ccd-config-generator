@@ -207,7 +207,7 @@ class CaseDocumentHashScannerTest {
   }
 
   @Test
-  void failsWhenNewDocumentIsMissingHash() throws Exception {
+  void returnsNullHashTokenWhenNewDocumentHashIsMissing() throws Exception {
     JsonNode submittedData = read("""
         {
           "document": {
@@ -216,9 +216,23 @@ class CaseDocumentHashScannerTest {
         }
         """);
 
-    assertThatThrownBy(() -> scanner.findNewDocumentHashTokens(null, submittedData))
-        .isInstanceOf(CdamAttachException.class)
-        .hasMessageContaining("missing document_hash");
+    assertThat(scanner.findNewDocumentHashTokens(null, submittedData))
+        .containsExactly(new DocumentHashToken("22222222-2222-2222-2222-222222222222", null));
+  }
+
+  @Test
+  void returnsNullHashTokenWhenNewDocumentHashIsExplicitlyNull() throws Exception {
+    JsonNode submittedData = read("""
+        {
+          "document": {
+            "document_url": "http://dm-store/documents/22222222-2222-2222-2222-222222222222",
+            "document_hash": null
+          }
+        }
+        """);
+
+    assertThat(scanner.findNewDocumentHashTokens(null, submittedData))
+        .containsExactly(new DocumentHashToken("22222222-2222-2222-2222-222222222222", null));
   }
 
   @Test
