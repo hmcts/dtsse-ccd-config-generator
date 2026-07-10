@@ -21,8 +21,10 @@ public abstract class BaseJsonLegacyController {
 
   public static final String MARKER = "json-legacy-about-to-submit";
   public static final String ACAS_DOCUMENT_NOTE = "json-legacy-acas-cdam-document";
+  public static final String ACAS_DOCUMENT_WITH_NULL_HASH_NOTE = "json-legacy-acas-cdam-document-null-hash";
   public static final String EVENT_INPUT_DOCUMENT_ID = "11111111-1111-1111-1111-111111111111";
   public static final String CALLBACK_DOCUMENT_ID = "22222222-2222-2222-2222-222222222222";
+  public static final String NULL_HASH_CALLBACK_DOCUMENT_ID = "33333333-3333-3333-3333-333333333333";
   public static final String CALLBACK_DOCUMENT_HASH = documentHashToken(CALLBACK_DOCUMENT_ID, "EMPLOYMENT", "case-type-a");
   public static final String CONFIRMATION_HEADER = "# JSON legacy submitted";
   public static final String CONFIRMATION_BODY = "JSON legacy submitted callback ran";
@@ -54,6 +56,8 @@ public abstract class BaseJsonLegacyController {
     data.put("setInAboutToSubmit", MARKER);
     if (ACAS_DOCUMENT_NOTE.equals(data.get("note"))) {
       addAcasVisibleDocument(data, "callback-acas-document", CALLBACK_DOCUMENT_ID, CALLBACK_DOCUMENT_HASH);
+    } else if (ACAS_DOCUMENT_WITH_NULL_HASH_NOTE.equals(data.get("note"))) {
+      addAcasVisibleDocument(data, "callback-acas-document-null-hash", NULL_HASH_CALLBACK_DOCUMENT_ID, null);
     }
     aboutToSubmitSawAuthorisation = authorisation != null && !authorisation.isBlank();
     aboutToSubmitSawServiceAuthorisation = serviceAuthorisation != null && !serviceAuthorisation.isBlank();
