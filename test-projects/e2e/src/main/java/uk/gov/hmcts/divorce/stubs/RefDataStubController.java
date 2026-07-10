@@ -81,7 +81,8 @@ public class RefDataStubController {
 
     @GetMapping(value = "/documents/{documentId}", produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<Map<String, Object>> documentMetadata(@PathVariable String documentId) {
-        if (!BaseJsonLegacyController.CALLBACK_DOCUMENT_ID.equals(documentId)) {
+        if (!BaseJsonLegacyController.CALLBACK_DOCUMENT_ID.equals(documentId)
+            && !BaseJsonLegacyController.NULL_HASH_CALLBACK_DOCUMENT_ID.equals(documentId)) {
             return ResponseEntity.notFound().build();
         }
 
