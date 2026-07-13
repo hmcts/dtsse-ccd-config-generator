@@ -20,6 +20,7 @@ public class CcdDataMigrationProperties {
   private Duration maxRunTime;
   private Duration statementTimeout = Duration.ofMinutes(10);
   private String sourceJurisdiction;
+  private String fdwAdditionalSelectGrantee;
 
   CcdDataMigrationTaskOptions toOptions() {
     if (caseTypeIds == null || caseTypeIds.isEmpty()) {
@@ -38,6 +39,7 @@ public class CcdDataMigrationProperties {
         .maxRunTime(maxRunTime)
         .statementTimeout(statementTimeout)
         .sourceJurisdiction(sourceJurisdiction)
+        .fdwAdditionalSelectGrantee(fdwAdditionalSelectGrantee)
         .build();
   }
 

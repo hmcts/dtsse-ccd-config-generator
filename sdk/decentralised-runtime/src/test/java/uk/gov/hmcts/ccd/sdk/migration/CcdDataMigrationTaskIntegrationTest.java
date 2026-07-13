@@ -37,6 +37,7 @@ import uk.gov.hmcts.ccd.sdk.config.DecentralisedDataConfiguration;
 class CcdDataMigrationTaskIntegrationTest {
   private static final long CASE_REVISION_OFFSET = 1_000_000_000L;
   private static final String PERF_CASE_TYPE = "PerfCase";
+  private static final String FDW_READER_ROLE = "DTS JIT Access et DB Reader SC";
 
   @Autowired
   private NamedParameterJdbcTemplate jdbc;
@@ -166,6 +167,25 @@ class CcdDataMigrationTaskIntegrationTest {
     assertThat(fdwTableExists("case_data")).isTrue();
     assertThat(fdwTableExists("case_event")).isTrue();
     assertThat(fdwTableExists("case_event_significant_items")).isTrue();
+  }
+
+  @Test
+  void grantsFdwSelectToConfiguredAdditionalGrantee() {
+    createRole(FDW_READER_ROLE);
+    insertSourceCase(10, 1000000000000010L, 1, "Submitted", "{\"field\":\"one\"}");
+    insertSourceCaseEvent(101, 10, "create", "Submitted", "{\"field\":\"one\"}", minutesAgo(60));
+
+    var options = optionsBuilder(List.of("TestCase"))
+        .mode(PRELOAD_EVENTS)
+        .fdwAdditionalSelectGrantee(FDW_READER_ROLE)
+        .build();
+
+    CcdDataMigrationRunResult result = new CcdDataMigrationTask(jdbc, transactionManager, options).runMigration();
+
+    assertThat(result.caughtUp()).isTrue();
+    assertThat(hasFdwSelectGrant(FDW_READER_ROLE, "case_data")).isTrue();
+    assertThat(hasFdwSelectGrant(FDW_READER_ROLE, "case_event")).isTrue();
+    assertThat(hasFdwSelectGrant(FDW_READER_ROLE, "case_event_significant_items")).isTrue();
   }
 
   @Test
@@ -1186,6 +1206,33 @@ class CcdDataMigrationTaskIntegrationTest {
         Map.of("tableName", tableName),
         Boolean.class
     ));
+  }
+
+  private void createRole(String roleName) {
+    Boolean exists = jdbc.queryForObject(
+        """
+        select exists (select 1 from pg_roles where rolname = :roleName)
+        """,
+        Map.of("roleName", roleName),
+        Boolean.class
+    );
+    if (!Boolean.TRUE.equals(exists)) {
+      jdbc.getJdbcTemplate().execute("create role " + quoteIdentifier(roleName));
+    }
+  }
+
+  private boolean hasFdwSelectGrant(String roleName, String tableName) {
+    return Boolean.TRUE.equals(jdbc.queryForObject(
+        """
+        select has_table_privilege(:roleName, 'fdw_stage.' || :tableName, 'select')
+        """,
+        Map.of("roleName", roleName, "tableName", tableName),
+        Boolean.class
+    ));
+  }
+
+  private static String quoteIdentifier(String identifier) {
+    return "\"" + identifier.replace("\"", "\"\"") + "\"";
   }
 
   private boolean caseDataTriggerEnabled(String triggerName) {

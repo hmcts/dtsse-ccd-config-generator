@@ -21,6 +21,7 @@ class CcdDataMigrationTaskOptionsTest {
     assertThat(options.maxBatchesPerRun()).isEqualTo(Integer.MAX_VALUE);
     assertThat(options.maxRunTime()).isNull();
     assertThat(options.statementTimeout()).isEqualTo(Duration.ofMinutes(10));
+    assertThat(options.fdwAdditionalSelectGrantee()).isNull();
   }
 
   @Test
@@ -43,6 +44,24 @@ class CcdDataMigrationTaskOptionsTest {
 
     assertThat(second.migrationConfigHash()).isEqualTo(first.migrationConfigHash());
     assertThat(second.canonicalCaseTypeIds()).isEqualTo("CaseA,CaseB");
+  }
+
+  @Test
+  void trimsOptionalFdwAdditionalSelectGrantee() {
+    var options = builder(List.of("TestCase"))
+        .fdwAdditionalSelectGrantee("  DTS JIT Access et DB Reader SC  ")
+        .build();
+
+    assertThat(options.fdwAdditionalSelectGrantee()).isEqualTo("DTS JIT Access et DB Reader SC");
+  }
+
+  @Test
+  void treatsBlankFdwAdditionalSelectGranteeAsUnset() {
+    var options = builder(List.of("TestCase"))
+        .fdwAdditionalSelectGrantee(" ")
+        .build();
+
+    assertThat(options.fdwAdditionalSelectGrantee()).isNull();
   }
 
   @Test

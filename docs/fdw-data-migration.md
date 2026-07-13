@@ -141,6 +141,11 @@ least one of the expected source foreign tables already exist, it creates any mi
 `fdw_stage.case_data`, `fdw_stage.case_event`, or `fdw_stage.case_event_significant_items` foreign
 tables from the same server, source schema, and fetch size options.
 
+For services using the Java task, set `ccd.data-migration.fdw-additional-select-grantee` or
+`CCD_DATA_MIGRATION_FDW_ADDITIONAL_SELECT_GRANTEE` to grant `SELECT` on the FDW tables to an
+additional team-specific reader role, for example `DTS JIT Access et DB Reader SC`. Leave it blank
+to skip the extra grant.
+
 For services using the Java task, `case_event_significant_items` is copied during `CUTOVER` after
 events have caught up. It uses one set-based insert query joined through the migrated target events
 up to the captured cutover event high-water mark, so the preload event walk is not restarted.
