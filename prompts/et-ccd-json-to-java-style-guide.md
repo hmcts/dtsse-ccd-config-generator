@@ -281,9 +281,11 @@ Use:
 - method references for about-to-start, mid-event, about-to-submit and submitted callbacks;
 - `.grant(...)` or a named access policy for `AuthorisationCaseEvent`.
 
-SDK callbacks are deliberately typed and routed by the runtime. A legacy raw callback URL is not equivalent just
-because it points to the same controller today: it may carry environment substitution, retry or local/external routing
-semantics. Keep the JSON event until those semantics are represented by a typed SDK API and covered by runtime tests.
+SDK callback handlers are deliberately typed and routed by the runtime. Definition-only migration does not register
+handlers or change that routing. Where the golden event calls an existing external endpoint, represent its exact URL as
+typed generation metadata, preserving environment placeholders and retry semantics. The generation API must make an
+external URL mutually exclusive with a registered Java callback handler. Runtime tests become mandatory only when a
+separate change transfers callback execution to Java.
 
 If a JSON event uses a state expression which cannot be represented by the state enum APIs, do not place that expression
 in an arbitrary string column. Add an explicit event-transition abstraction to the SDK, or leave the event in JSON.
@@ -455,9 +457,10 @@ JSON diagnostics may explain an XLSX difference, but canonical workbook parity i
 
 ### 7. Prove behaviour and transfer ownership
 
-Follow `docs/testing-strategy.md`. Add generator golden tests for SDK changes and cftlib/Spring behaviour tests for the
-converted event or feature. Transfer the declared slice from legacy JSON to Java only after row parity, XLSX parity and
-behaviour tests pass.
+Follow `docs/testing-strategy.md`. Add generator golden tests for SDK changes. During the definition-only migration,
+prove the converted event or feature at the generated JSON and canonical XLSX boundaries; callback behaviour tests are
+required only when a separately scoped change moves callback wiring. Transfer the declared slice from legacy JSON to
+Java only after row parity and XLSX parity pass.
 
 Do not delete or edit the golden JSON during the migration programme. Removing the legacy definition is a separate,
 explicit end-state decision after all eight case types have Java ownership and the comparison harness has no legacy rows
