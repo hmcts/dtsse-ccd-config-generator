@@ -418,8 +418,9 @@ public class CcdDataMigrationTask implements Runnable {
   }
 
   private int copySignificantItemsForCutover(long cutoverEventHwm) {
-    long significantItemsEventHwm = significantItemsProgressHighWaterMark();
-    if (significantItemsEventHwm >= cutoverEventHwm) {
+    long significantItemsHwm = significantItemsProgressHighWaterMark();
+    long targetSignificantItemsHwm = sourceSignificantItemsHighWaterMark(cutoverEventHwm);
+    if (significantItemsHwm >= targetSignificantItemsHwm) {
       validateSignificantItemCounts(cutoverEventHwm);
       return 0;
     }
@@ -445,15 +446,17 @@ public class CcdDataMigrationTask implements Runnable {
         join ccd.case_event target_event on target_event.id = item.case_event_id
         where cd.jurisdiction = :sourceJurisdiction
           and cd.case_type_id in (:caseTypeIds)
-          and ce.id > :significantItemsEventHwm
           and ce.id <= :cutoverEventHwm
+          and item.id > :significantItemsHwm
+          and item.id <= :targetSignificantItemsHwm
         on conflict (id) do nothing
         """,
         baseParams().addValue("cutoverEventHwm", cutoverEventHwm)
-            .addValue("significantItemsEventHwm", significantItemsEventHwm)
+            .addValue("significantItemsHwm", significantItemsHwm)
+            .addValue("targetSignificantItemsHwm", targetSignificantItemsHwm)
     );
     validateSignificantItemCounts(cutoverEventHwm);
-    updateSignificantItemsProgressHighWaterMark(cutoverEventHwm);
+    updateSignificantItemsProgressHighWaterMark(targetSignificantItemsHwm);
     return copiedItems;
   }
 
@@ -609,7 +612,7 @@ public class CcdDataMigrationTask implements Runnable {
   private long significantItemsProgressHighWaterMark() {
     Long hwm = db.queryForObject(
         """
-        select significant_items_event_hwm
+        select significant_items_hwm
         from ccd.ccd_data_migration_progress
         where task_name = :taskName
         """,
@@ -619,17 +622,34 @@ public class CcdDataMigrationTask implements Runnable {
     return hwm == null ? 0 : hwm;
   }
 
-  private void updateSignificantItemsProgressHighWaterMark(long significantItemsEventHwm) {
+  private long sourceSignificantItemsHighWaterMark(long cutoverEventHwm) {
+    Long hwm = withMigrationStatementTimeout(() -> db.queryForObject(
+        """
+        select coalesce(max(item.id), 0)
+        from fdw_stage.case_event_significant_items item
+        join fdw_stage.case_event ce on ce.id = item.case_event_id
+        join fdw_stage.case_data cd on cd.id = ce.case_data_id
+        where cd.jurisdiction = :sourceJurisdiction
+          and cd.case_type_id in (:caseTypeIds)
+          and ce.id <= :cutoverEventHwm
+        """,
+        baseParams().addValue("cutoverEventHwm", cutoverEventHwm),
+        Long.class
+    ));
+    return hwm == null ? 0 : hwm;
+  }
+
+  private void updateSignificantItemsProgressHighWaterMark(long significantItemsHwm) {
     db.update(
         """
         update ccd.ccd_data_migration_progress
-        set significant_items_event_hwm = greatest(significant_items_event_hwm, :significantItemsEventHwm),
+        set significant_items_hwm = greatest(significant_items_hwm, :significantItemsHwm),
             updated_at = now() at time zone 'UTC'
         where task_name = :taskName
         """,
         Map.of(
             "taskName", options.taskName(),
-            "significantItemsEventHwm", significantItemsEventHwm
+            "significantItemsHwm", significantItemsHwm
         )
     );
   }
@@ -937,7 +957,7 @@ public class CcdDataMigrationTask implements Runnable {
                status,
                cutover_event_hwm,
                source_event_hwm,
-               significant_items_event_hwm
+               significant_items_hwm
         from ccd.ccd_data_migration_progress
         where task_name = :taskName
         """,
@@ -974,7 +994,7 @@ public class CcdDataMigrationTask implements Runnable {
         rs.getString("status"),
         cutoverEventHwm,
         rs.getLong("source_event_hwm"),
-        rs.getLong("significant_items_event_hwm")
+        rs.getLong("significant_items_hwm")
     );
   }
 
@@ -1290,7 +1310,7 @@ public class CcdDataMigrationTask implements Runnable {
       String status,
       Long cutoverEventHwm,
       long sourceEventHwm,
-      long significantItemsEventHwm
+      long significantItemsHwm
   ) {
     long requiredCutoverEventHwm() {
       if (cutoverEventHwm == null) {
