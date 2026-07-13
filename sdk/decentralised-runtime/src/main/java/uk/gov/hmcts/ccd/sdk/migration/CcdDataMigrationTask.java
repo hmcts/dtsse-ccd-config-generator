@@ -106,11 +106,12 @@ public class CcdDataMigrationTask implements Runnable {
   public final CcdDataMigrationRunResult runMigration() {
     log.info(
         "Starting CCD data migration task taskName={} mode={} caseTypeIds={} eventIdWindowSize={} "
-            + "maxBatchesPerRun={} maxRunTime={}",
+            + "significantItemIdWindowSize={} maxBatchesPerRun={} maxRunTime={}",
         options.taskName(),
         options.mode(),
         options.caseTypeIds(),
         options.eventIdWindowSize(),
+        options.significantItemIdWindowSize(),
         options.maxBatchesPerRun(),
         options.maxRunTime()
     );
@@ -152,7 +153,7 @@ public class CcdDataMigrationTask implements Runnable {
 
     prepareElasticsearchQueueForMigration();
     long targetEventHwm = sourceEventHighWaterMark();
-    CopyTotals totals = copyEventBatches(targetEventHwm);
+    CopyTotals totals = copyEventBatches(targetEventHwm, calculateStopAt());
     long sourceEventHwm = sourceEventProgressHighWaterMark();
     boolean caughtUp = sourceEventHwm >= targetEventHwm;
     log.info(
@@ -186,7 +187,8 @@ public class CcdDataMigrationTask implements Runnable {
     long cutoverEventHwm = progress.cutoverEventHwm() == null || STATUS_COMPLETE.equals(progress.status())
         ? captureCutoverEventHighWaterMark()
         : progress.cutoverEventHwm();
-    CopyTotals totals = copyEventBatches(cutoverEventHwm);
+    LocalDateTime stopAt = calculateStopAt();
+    CopyTotals totals = copyEventBatches(cutoverEventHwm, stopAt);
     long sourceEventHwm = sourceEventProgressHighWaterMark();
     if (totals.stoppedByTimeLimit() || sourceEventHwm < cutoverEventHwm) {
       log.info(
@@ -208,23 +210,40 @@ public class CcdDataMigrationTask implements Runnable {
           totals.stoppedByTimeLimit()
       );
     }
-    int significantItems = transaction.execute(status -> {
-      applyMigrationStatementTimeout();
-      return copySignificantItemsForCutover(cutoverEventHwm);
-    });
+    SignificantItemCopyTotals significantItemTotals = copySignificantItemBatches(cutoverEventHwm, stopAt);
+    if (!significantItemTotals.caughtUp()) {
+      log.info(
+          "CCD data migration cutover paused before final refresh taskName={} cutoverEventHwm={} "
+              + "significantItemBatches={} significantItems={} stoppedByTimeLimit={}",
+          options.taskName(),
+          cutoverEventHwm,
+          significantItemTotals.batches(),
+          significantItemTotals.items(),
+          significantItemTotals.stoppedByTimeLimit()
+      );
+      return new CcdDataMigrationRunResult(
+          true,
+          totals.batches(),
+          0,
+          totals.events(),
+          false,
+          significantItemTotals.stoppedByTimeLimit()
+      );
+    }
     final int refreshedCases = refreshCutoverCaseData();
     resetSequences();
     completeCutover(cutoverEventHwm);
 
     log.info(
         "Completed CCD data migration cutover taskName={} cutoverEventHwm={} batches={} refreshedCases={} events={} "
-            + "significantItems={} stoppedByTimeLimit={}",
+            + "significantItems={} significantItemBatches={} stoppedByTimeLimit={}",
         options.taskName(),
         cutoverEventHwm,
         totals.batches(),
         refreshedCases,
         totals.events(),
-        significantItems,
+        significantItemTotals.items(),
+        significantItemTotals.batches(),
         totals.stoppedByTimeLimit()
     );
     return new CcdDataMigrationRunResult(
@@ -246,9 +265,8 @@ public class CcdDataMigrationTask implements Runnable {
     return new CcdDataMigrationRunResult(true, 0, 0, 0, true, false);
   }
 
-  private CopyTotals copyEventBatches(long targetEventHwm) {
+  private CopyTotals copyEventBatches(long targetEventHwm, LocalDateTime stopAt) {
     var totals = new CopyTotals();
-    LocalDateTime stopAt = calculateStopAt();
 
     for (int i = 0; i < options.maxBatchesPerRun(); i++) {
       long sourceEventHwm = effectiveSourceEventHighWaterMark(targetEventHwm);
@@ -417,15 +435,56 @@ public class CcdDataMigrationTask implements Runnable {
     );
   }
 
-  private int copySignificantItemsForCutover(long cutoverEventHwm) {
-    long significantItemsHwm = significantItemsProgressHighWaterMark();
+  private SignificantItemCopyTotals copySignificantItemBatches(long cutoverEventHwm, LocalDateTime stopAt) {
     long targetSignificantItemsHwm = sourceSignificantItemsHighWaterMark(cutoverEventHwm);
-    if (significantItemsHwm >= targetSignificantItemsHwm) {
-      validateSignificantItemCounts(cutoverEventHwm);
-      return 0;
-    }
+    var totals = new SignificantItemCopyTotals();
 
-    int copiedItems = db.update(
+    for (int i = 0; i < options.maxBatchesPerRun(); i++) {
+      long significantItemsHwm = significantItemsProgressHighWaterMark();
+      if (significantItemsHwm >= targetSignificantItemsHwm) {
+        validateSignificantItemCounts(cutoverEventHwm);
+        return totals.markCaughtUp();
+      }
+      if (isTimeLimitReached(stopAt)) {
+        return totals.markStoppedByTimeLimit();
+      }
+
+      long batchEndItemHwm = nextFixedSignificantItemWindowEnd(significantItemsHwm, targetSignificantItemsHwm);
+      int copiedItems = transaction.execute(status -> {
+        applyMigrationStatementTimeout();
+        int copied = copySignificantItemBatch(cutoverEventHwm, significantItemsHwm, batchEndItemHwm);
+        updateSignificantItemsProgressHighWaterMark(batchEndItemHwm);
+        return copied;
+      });
+      totals = totals.plus(copiedItems);
+      log.info(
+          "CCD data migration significant item progress taskName={} cutoverEventHwm={} "
+              + "batchStartItemId={} batchEndItemHwm={} batchItems={} totalBatches={} totalItems={}",
+          options.taskName(),
+          cutoverEventHwm,
+          significantItemsHwm + 1L,
+          batchEndItemHwm,
+          copiedItems,
+          totals.batches(),
+          totals.items()
+      );
+      if (isTimeLimitReached(stopAt)) {
+        return totals.markStoppedByTimeLimit();
+      }
+    }
+    if (significantItemsProgressHighWaterMark() >= targetSignificantItemsHwm) {
+      validateSignificantItemCounts(cutoverEventHwm);
+      return totals.markCaughtUp();
+    }
+    return totals;
+  }
+
+  private int copySignificantItemBatch(
+      long cutoverEventHwm,
+      long significantItemsHwm,
+      long targetSignificantItemsHwm
+  ) {
+    return db.update(
         """
         insert into ccd.case_event_significant_items (
           id,
@@ -455,9 +514,6 @@ public class CcdDataMigrationTask implements Runnable {
             .addValue("significantItemsHwm", significantItemsHwm)
             .addValue("targetSignificantItemsHwm", targetSignificantItemsHwm)
     );
-    validateSignificantItemCounts(cutoverEventHwm);
-    updateSignificantItemsProgressHighWaterMark(targetSignificantItemsHwm);
-    return copiedItems;
   }
 
   private int refreshCutoverCaseData() {
@@ -637,6 +693,14 @@ public class CcdDataMigrationTask implements Runnable {
         Long.class
     ));
     return hwm == null ? 0 : hwm;
+  }
+
+  private long nextFixedSignificantItemWindowEnd(long significantItemsHwm, long targetSignificantItemsHwm) {
+    long itemIdWindowSize = options.significantItemIdWindowSize();
+    long windowEnd = significantItemsHwm > Long.MAX_VALUE - itemIdWindowSize
+        ? Long.MAX_VALUE
+        : significantItemsHwm + itemIdWindowSize;
+    return Math.min(windowEnd, targetSignificantItemsHwm);
   }
 
   private void updateSignificantItemsProgressHighWaterMark(long significantItemsHwm) {
@@ -1335,6 +1399,24 @@ public class CcdDataMigrationTask implements Runnable {
 
     private CopyTotals markStoppedByTimeLimit() {
       return new CopyTotals(batches, events, caughtUp, true);
+    }
+  }
+
+  private record SignificantItemCopyTotals(long batches, long items, boolean caughtUp, boolean stoppedByTimeLimit) {
+    private SignificantItemCopyTotals() {
+      this(0, 0, false, false);
+    }
+
+    private SignificantItemCopyTotals plus(int copiedItems) {
+      return new SignificantItemCopyTotals(batches + 1, items + copiedItems, caughtUp, stoppedByTimeLimit);
+    }
+
+    private SignificantItemCopyTotals markCaughtUp() {
+      return new SignificantItemCopyTotals(batches, items, true, stoppedByTimeLimit);
+    }
+
+    private SignificantItemCopyTotals markStoppedByTimeLimit() {
+      return new SignificantItemCopyTotals(batches, items, caughtUp, true);
     }
   }
 }

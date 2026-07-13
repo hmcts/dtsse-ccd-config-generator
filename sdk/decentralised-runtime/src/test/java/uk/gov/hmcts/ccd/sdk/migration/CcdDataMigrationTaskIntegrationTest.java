@@ -188,6 +188,26 @@ class CcdDataMigrationTaskIntegrationTest {
   }
 
   @Test
+  void batchesSignificantItemsAcrossCutoverRuns() {
+    insertSourceCase(10, 1000000000000010L, 1, "Submitted", "{\"field\":\"one\"}");
+    insertSourceCaseEvent(101, 10, "create", "Submitted", "{\"field\":\"one\"}", minutesAgo(60));
+    insertSourceSignificantItem(5001, 101, "First document", "http://dm-store/documents/first");
+    insertSourceSignificantItem(10002, 101, "Second document", "http://dm-store/documents/second");
+
+    CcdDataMigrationRunResult firstCutover = task(CUTOVER, 1000, 1, 5001).runMigration();
+
+    assertThat(firstCutover.caughtUp()).isFalse();
+    assertThat(significantItemsHwm()).isEqualTo(5001);
+    assertThat(countRows("ccd.case_event_significant_items")).isEqualTo(1);
+
+    CcdDataMigrationRunResult secondCutover = task(CUTOVER, 1000, 1, 5001).runMigration();
+
+    assertThat(secondCutover.caughtUp()).isTrue();
+    assertThat(significantItemsHwm()).isEqualTo(10002);
+    assertThat(countRows("ccd.case_event_significant_items")).isEqualTo(2);
+  }
+
+  @Test
   void completedCutoverRerunCopiesSignificantItemsBeforeValidation() {
     insertSourceCase(10, 1000000000000010L, 1, "Submitted", "{\"field\":\"one\"}");
     insertSourceCaseEvent(101, 10, "create", "Submitted", "{\"field\":\"one\"}", minutesAgo(60));
@@ -468,9 +488,19 @@ class CcdDataMigrationTaskIntegrationTest {
       int eventIdWindowSize,
       int maxBatchesPerRun
   ) {
+    return task(mode, eventIdWindowSize, maxBatchesPerRun, 100_000);
+  }
+
+  private CcdDataMigrationTask task(
+      CcdDataMigrationMode mode,
+      int eventIdWindowSize,
+      int maxBatchesPerRun,
+      int significantItemIdWindowSize
+  ) {
     var options = optionsBuilder(List.of("TestCase"))
         .mode(mode)
         .eventIdWindowSize(eventIdWindowSize)
+        .significantItemIdWindowSize(significantItemIdWindowSize)
         .maxBatchesPerRun(maxBatchesPerRun)
         .build();
     return new CcdDataMigrationTask(jdbc, transactionManager, options);
