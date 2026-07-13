@@ -76,13 +76,19 @@ public class CaseSubmissionService {
     }
 
     // Delegate to the specific handler to apply the change
-    var handlerResult = handler.apply(event);
+    var handlerResult = handler.apply(event, user.authToken());
     applyHandlerChanges(event, handlerResult);
 
     // Bookkeeping: update case_data metadata and optionally the legacy json blob
     upsertCase(event, handlerResult.dataUpdate());
     DecentralisedCaseDetails savedCaseDetails = caseProjectionService.load(event.getCaseDetails().getReference());
-    auditEventService.saveAuditRecord(event, user, savedCaseDetails.getCaseDetails(), idempotencyKey);
+    auditEventService.saveAuditRecord(
+        event,
+        user,
+        savedCaseDetails.getCaseDetails(),
+        idempotencyKey,
+        handlerResult.significantItem()
+    );
 
     var outcome = new SubmissionOutcome(savedCaseDetails, handlerResult.responseSupplier());
     return new TransactionResult(Optional.empty(), Optional.of(outcome));

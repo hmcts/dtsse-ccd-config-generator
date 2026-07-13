@@ -22,5 +22,14 @@
     "FieldType": "Text",
     "SecurityClassification": "Public",
     "LiveFrom": "01/01/2017"
+  },
+  {
+    "ID": "documentCollection",
+    "CaseTypeID": "case-type-a",
+    "Label": "Document collection",
+    "FieldType": "Collection",
+    "FieldTypeParameter": "DocumentType",
+    "SecurityClassification": "Public",
+    "LiveFrom": "01/01/2017"
   }
 ]
