@@ -500,12 +500,11 @@ public class CcdDataMigrationTask implements Runnable {
           item.url,
           item.case_event_id
         from fdw_stage.case_event_significant_items item
-        join fdw_stage.case_event ce on ce.id = item.case_event_id
-        join fdw_stage.case_data cd on cd.id = ce.case_data_id
         join ccd.case_event target_event on target_event.id = item.case_event_id
-        where cd.jurisdiction = :sourceJurisdiction
-          and cd.case_type_id in (:caseTypeIds)
-          and ce.id <= :cutoverEventHwm
+        join ccd.case_data target_case on target_case.id = target_event.case_data_id
+        where target_case.jurisdiction = :sourceJurisdiction
+          and target_case.case_type_id in (:caseTypeIds)
+          and target_event.id <= :cutoverEventHwm
           and item.id > :significantItemsHwm
           and item.id <= :targetSignificantItemsHwm
         on conflict (id) do nothing
@@ -683,11 +682,7 @@ public class CcdDataMigrationTask implements Runnable {
         """
         select coalesce(max(item.id), 0)
         from fdw_stage.case_event_significant_items item
-        join fdw_stage.case_event ce on ce.id = item.case_event_id
-        join fdw_stage.case_data cd on cd.id = ce.case_data_id
-        where cd.jurisdiction = :sourceJurisdiction
-          and cd.case_type_id in (:caseTypeIds)
-          and ce.id <= :cutoverEventHwm
+        where item.case_event_id <= :cutoverEventHwm
         """,
         baseParams().addValue("cutoverEventHwm", cutoverEventHwm),
         Long.class
