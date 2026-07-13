@@ -120,13 +120,14 @@ class CcdDataMigrationTaskIntegrationTest {
     assertThat(preloadResult.caughtUp()).isFalse();
     assertThat(countRows("ccd.case_event_significant_items")).isZero();
     assertThat(sourceEventHwm()).isEqualTo(101);
+    insertTargetSignificantItem(5001, 101, "Existing document", "http://dm-store/documents/existing");
 
     CcdDataMigrationRunResult cutoverResult = task(CUTOVER, 1000, 10).runMigration();
 
     assertThat(cutoverResult.caughtUp()).isTrue();
     assertThat(progressStatus()).isEqualTo("COMPLETE");
     assertThat(countRows("ccd.case_event_significant_items")).isEqualTo(2);
-    assertThat(significantItemDescription(5001)).isEqualTo("First document");
+    assertThat(significantItemDescription(5001)).isEqualTo("Existing document");
     assertThat(significantItemDescription(5002)).isEqualTo("Second document");
     assertThat(caseEventSignificantItemsSequenceLastValue()).isGreaterThanOrEqualTo(5002);
   }
@@ -590,6 +591,31 @@ class CcdDataMigrationTaskIntegrationTest {
     jdbc.update(
         """
         insert into source.case_event_significant_items (
+          id,
+          description,
+          "type",
+          url,
+          case_event_id
+        ) values (
+          :id,
+          :description,
+          'DOCUMENT',
+          :url,
+          :caseEventId
+        )
+        """,
+        new MapSqlParameterSource()
+            .addValue("id", id)
+            .addValue("description", description)
+            .addValue("url", url)
+            .addValue("caseEventId", caseEventId)
+    );
+  }
+
+  private void insertTargetSignificantItem(long id, long caseEventId, String description, String url) {
+    jdbc.update(
+        """
+        insert into ccd.case_event_significant_items (
           id,
           description,
           "type",

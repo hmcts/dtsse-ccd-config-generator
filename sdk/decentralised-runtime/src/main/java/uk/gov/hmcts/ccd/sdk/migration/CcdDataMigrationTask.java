@@ -445,14 +445,9 @@ public class CcdDataMigrationTask implements Runnable {
         join ccd.case_event target_event on target_event.id = item.case_event_id
         where cd.jurisdiction = :sourceJurisdiction
           and cd.case_type_id in (:caseTypeIds)
-          and ce.case_type_id in (:caseTypeIds)
           and ce.id > :significantItemsEventHwm
           and ce.id <= :cutoverEventHwm
-        on conflict (id) do update
-        set description = excluded.description,
-            "type" = excluded."type",
-            url = excluded.url,
-            case_event_id = excluded.case_event_id
+        on conflict (id) do nothing
         """,
         baseParams().addValue("cutoverEventHwm", cutoverEventHwm)
             .addValue("significantItemsEventHwm", significantItemsEventHwm)
@@ -768,20 +763,18 @@ public class CcdDataMigrationTask implements Runnable {
           join ccd.case_data cd on cd.id = ce.case_data_id
           where cd.jurisdiction = :sourceJurisdiction
             and cd.case_type_id in (:caseTypeIds)
-            and ce.case_type_id in (:caseTypeIds)
           group by ce.case_type_id
           order by ce.case_type_id
           """;
       case "case_event_significant_items" -> """
-          select ce.case_type_id, count(*) as count
+          select cd.case_type_id, count(*) as count
           from ccd.case_event_significant_items item
           join ccd.case_event ce on ce.id = item.case_event_id
           join ccd.case_data cd on cd.id = ce.case_data_id
           where cd.jurisdiction = :sourceJurisdiction
             and cd.case_type_id in (:caseTypeIds)
-            and ce.case_type_id in (:caseTypeIds)
-          group by ce.case_type_id
-          order by ce.case_type_id
+          group by cd.case_type_id
+          order by cd.case_type_id
           """;
       default -> throw new IllegalArgumentException("Unsupported table name: " + tableName);
     };
@@ -798,7 +791,6 @@ public class CcdDataMigrationTask implements Runnable {
         join fdw_stage.case_data cd on cd.id = ce.case_data_id
         where cd.jurisdiction = :sourceJurisdiction
           and cd.case_type_id in (:caseTypeIds)
-          and ce.case_type_id in (:caseTypeIds)
           and ce.id <= :eventHwm
         """,
         params,
@@ -812,7 +804,6 @@ public class CcdDataMigrationTask implements Runnable {
         join ccd.case_data cd on cd.id = ce.case_data_id
         where cd.jurisdiction = :sourceJurisdiction
           and cd.case_type_id in (:caseTypeIds)
-          and ce.case_type_id in (:caseTypeIds)
           and ce.id <= :eventHwm
         """,
         params,
