@@ -195,6 +195,7 @@ public class TestWithCCD extends CftlibTest {
     private static final String RETENTION_CASE_TYPE = "RetentionTestCase";
     private static final String RETENTION_JURISDICTION = "DIVORCE";
     private static final long RETENTION_REFERENCE_BASE = 9_999_880_000_000_000L;
+    private static final int RETENTION_RECENTLY_MODIFIED_EXCLUSION_DAYS = 100;
     private String apiFirstTaskId;
     private String waTaskId;
     private long jsonLegacyCaseTypeACaseRef;
@@ -2842,11 +2843,53 @@ public class TestWithCCD extends CftlibTest {
         cleanupRetentionCases(reference);
     }
 
+    @SneakyThrows
+    @Order(38)
+    @Test
+    void retentionIgnoresExpiredLocalCaseModifiedWithinLast100Days() {
+        long reference = RETENTION_REFERENCE_BASE + 6;
+        cleanupRetentionCases(reference);
+        seedRetentionCase(
+            reference,
+            reference,
+            LocalDate.now().minusDays(1),
+            "{}",
+            LocalDateTime.now().minusDays(RETENTION_RECENTLY_MODIFIED_EXCLUSION_DAYS - 1)
+        );
+
+        var existenceClient = new TestCcdCaseDataExistenceClient();
+        existenceClient.setExists(reference, false);
+
+        RetentionTaskResult result = retentionService(existenceClient).run(Set.of(RETENTION_CASE_TYPE), Set.of(), 10);
+
+        assertThat(result.deletedCases(), equalTo(0));
+        assertThat(result.skippedCases(), equalTo(0));
+        assertThat(existenceClient.calls(), equalTo(0));
+        assertThat(countRows("ccd.case_data", "reference", reference), equalTo(1));
+
+        cleanupRetentionCases(reference);
+    }
+
     private CaseRetentionService retentionService(TestCcdCaseDataExistenceClient existenceClient) {
         return new CaseRetentionService(new RetentionCaseDataRepository(db), existenceClient);
     }
 
     private void seedRetentionCase(long reference, long id, LocalDate resolvedTtl, String data) {
+        seedRetentionCase(
+            reference,
+            id,
+            resolvedTtl,
+            data,
+            LocalDateTime.now().minusDays(RETENTION_RECENTLY_MODIFIED_EXCLUSION_DAYS + 1)
+        );
+    }
+
+    private void seedRetentionCase(long reference,
+                                   long id,
+                                   LocalDate resolvedTtl,
+                                   String data,
+                                   LocalDateTime lastModified) {
+        Timestamp lastModifiedTimestamp = Timestamp.valueOf(lastModified);
         db.getJdbcTemplate().update("""
             insert into ccd.case_data (
               id,
@@ -2863,8 +2906,18 @@ public class TestWithCCD extends CftlibTest {
               created_date,
               last_modified,
               last_state_modified_date
-            ) values (?, ?, 1, ?, ?, 'Submitted', ?::jsonb, '{}'::jsonb, 'PUBLIC', ?, 1, now(), now(), now())
-            """, id, reference, RETENTION_JURISDICTION, RETENTION_CASE_TYPE, data, resolvedTtl);
+            ) values (?, ?, 1, ?, ?, 'Submitted', ?::jsonb, '{}'::jsonb, 'PUBLIC', ?, 1, ?, ?, ?)
+            """,
+            id,
+            reference,
+            RETENTION_JURISDICTION,
+            RETENTION_CASE_TYPE,
+            data,
+            resolvedTtl,
+            lastModifiedTimestamp,
+            lastModifiedTimestamp,
+            lastModifiedTimestamp
+        );
     }
 
     private RetentionDependentRows insertRetentionDependentRows(long reference, long caseDataId) {

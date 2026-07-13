@@ -18,20 +18,24 @@ public class RetentionCaseDataRepository {
     this.jdbcTemplate = jdbcTemplate;
   }
 
-  public List<RetentionCaseData> findExpiredCases(Collection<String> caseTypeIds, int limit) {
-    if (caseTypeIds.isEmpty() || limit <= 0) {
+  public List<RetentionCaseData> findExpiredCases(Collection<String> caseTypeIds,
+                                                  int limit,
+                                                  int recentlyModifiedExclusionDays) {
+    if (caseTypeIds.isEmpty() || limit <= 0 || recentlyModifiedExclusionDays <= 0) {
       return List.of();
     }
 
     String sql = SELECT_CASE_DATA + """
         where case_type_id in (:caseTypeIds)
           and resolved_ttl < current_date
+          and last_modified < current_timestamp - (:recentlyModifiedExclusionDays * interval '1 day')
         order by resolved_ttl asc
         limit :limit
         """;
 
     return jdbcTemplate.query(sql, new MapSqlParameterSource()
         .addValue("caseTypeIds", caseTypeIds)
+        .addValue("recentlyModifiedExclusionDays", recentlyModifiedExclusionDays)
         .addValue("limit", limit), rowMapper());
   }
 

@@ -207,8 +207,9 @@ ccd:
       url: "http://ccd-data-store-api"
 ```
 
-The task selects cases by `case_data.resolved_ttl < current_date`. It does not inspect case-link fields or expand linked
-case groups.
+The task selects cases by `case_data.resolved_ttl < current_date`, and only where `case_data.last_modified` is more than
+100 days old. This last-modified guard prevents the local service from deleting a recently touched case immediately after
+CCD removes the upstream pointer. It does not inspect case-link fields or expand linked case groups.
 
 Before local deletion it checks that CCD has already removed the upstream pointer row. The candidate query reads
 `reference`, `case_type_id`, `jurisdiction` and `resolved_ttl` from each matching local `ccd.case_data` row, so the

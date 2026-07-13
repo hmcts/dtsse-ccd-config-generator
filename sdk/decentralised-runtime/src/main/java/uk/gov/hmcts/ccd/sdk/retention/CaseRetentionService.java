@@ -12,6 +12,7 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class CaseRetentionService {
   private static final int CCD_EXISTENCE_BATCH_LIMIT = 100;
+  private static final int RECENTLY_MODIFIED_EXCLUSION_DAYS = 100;
 
   private final RetentionCaseDataRepository repository;
   private final CcdCaseDataExistenceClient ccdCaseDataExistenceClient;
@@ -44,7 +45,11 @@ public class CaseRetentionService {
       return new ModeResult(0, 0);
     }
 
-    List<RetentionCaseData> candidates = repository.findExpiredCases(caseTypeIds, batchSize);
+    List<RetentionCaseData> candidates = repository.findExpiredCases(
+        caseTypeIds,
+        batchSize,
+        RECENTLY_MODIFIED_EXCLUSION_DAYS
+    );
     log.info("Case retention {} mode found {} candidate cases", modeName(simulation), candidates.size());
 
     if (simulation) {
