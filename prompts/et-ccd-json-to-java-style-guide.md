@@ -350,6 +350,41 @@ Known areas to assess early include ET's additional `CaseType` columns, raw call
 state expressions, exact event-to-complex metadata, concrete collection wrappers and tab/channel metadata. This list is
 not an exemption for unlisted columns: inventory the entire slice before coding.
 
+## Progress tooling and scope
+
+Definition migration progress is measured at the canonical XLSX boundary. This is the artefact CCD imports after ET's
+environment substitution, file exclusion, access-control expansion, sheet flattening and template-column handling.
+Binary XLSX files and physical row positions are not compared; each workbook is read as a multiset of canonical row
+values per sheet.
+
+Run the committed comparison from the repository root:
+
+```shell
+./gradlew :et:etMigrationProgress
+```
+
+The baseline contains no Java-owned definition rows and is therefore exactly `0.00%` complete, with `52,227` remaining
+differences across `cftlib` and `prod`. A missing golden row, an unexpected Java row, or a row with the same
+sheet-specific CCD identity but different values contributes one remaining difference. A changed external identity
+contributes a missing and an unexpected row. Duplicate occurrences are counted independently.
+
+The deterministic result is committed at
+`test-projects/et-ccd-callbacks/ccd-definitions/migration-progress.json`. After an intentional definition change, run:
+
+```shell
+./gradlew :et:updateEtMigrationProgress
+```
+
+Review the snapshot diff as part of the change. Declaring ownership does not improve the convergence number; only rows
+which reach canonical XLSX parity do. The report also records physical Java lines for ET and the SDK, split between
+main/generation code and verification code. Treat line growth and main-lines-per-completed-difference as design review
+signals, not hard limits. Repeated ET boilerplate is a reason to improve a poorly fitting typed SDK API, provided the
+replacement is coherent, reusable and tested.
+
+The `ccdMigration` source set and `generateEtMigrationJson` task are definition-generation-only boundaries. They do not
+register callbacks, start the ET application or prove runtime behaviour. Callback wiring is outside the current
+definition-conversion scope and must be handled as separate, explicitly tested work.
+
 ## Incremental migration workflow
 
 ### 1. Select and inventory a slice
@@ -373,14 +408,20 @@ Use `groupingKey()` for each shared-model case type. Do not remove or overwrite 
 
 ### 4. Generate separately
 
-Write Java-generated definitions to a build directory. The eventual parity harness should declare ownership of converted
-slices explicitly and overlay only those rows onto the processed legacy definition. Its ownership format is a build-tool
-concern; it must not become a Java row-description DSL.
+Put migration `CCDConfig` components under the generation-only source set and run `generateEtMigrationJson`. The progress
+task stages its case-type JSON beneath `build/ccd-migration`, then generates Java-only workbooks from copies of the ET
+templates with all seeded legacy data rows removed. This prevents template-owned rows from being counted as Java
+progress.
 
-### 5. Compare canonical rows
+The eventual packaging harness should declare ownership of converted slices explicitly and overlay only those rows onto
+the processed legacy definition. Its ownership format is a build-tool concern; it must not become a Java row-description
+DSL.
 
-ET splits logical sheets across many JSON files, while the SDK normally emits one file per sheet and case type. A path-
-based directory comparison is therefore insufficient.
+### 5. Compare canonical XLSX rows
+
+ET splits logical sheets across many JSON files, while the SDK normally emits one file per sheet and case type. The ET
+definition processor resolves those layout differences and produces the canonical workbook. A path-based JSON directory
+comparison is therefore insufficient.
 
 The comparison model should be:
 
@@ -388,28 +429,29 @@ The comparison model should be:
 sheet name -> multiset of canonical row maps
 ```
 
-Before comparing:
+The tooling must:
 
 1. apply the same ET environment substitution and include/exclude rules to the golden input;
-2. flatten all files contributing to the same CCD sheet;
-3. remove file paths, JSON property ordering and row ordering;
-4. canonicalise missing, null, blank and generated default values only where CCD importer behaviour or an existing
-   generator test proves them equivalent;
-5. retain every meaningful column and retain duplicate row counts.
+2. build golden and Java-only workbooks with the same jurisdiction template;
+3. remove seeded template rows from the Java-only template, but retain them in the golden workbook;
+4. reject generated sheets or populated columns which the template would silently discard;
+5. remove file paths, property ordering and physical row ordering; and
+6. retain every imported column and duplicate row count.
 
 Report differences using the sheet's identifying columns and the differing values. Do not add a broad ignore list. A new
 normalisation rule requires a focused test showing why the two values are semantically equivalent.
 
-### 6. Validate canonical XLSX
+### 6. Validate merged canonical XLSX
 
-After row parity, run ET's existing `ccd-definition-processor` to build the canonical CCD workbook from the legacy and
-merged definitions. Compare normalised workbook cells as an end-to-end check. Cover at least:
+The convergence comparison is Java-only versus golden and therefore starts with every golden row missing. Separately,
+once ownership overlay exists, build the canonical CCD workbook from the legacy and Java-merged definitions. The merged
+workbook must stay at zero differences throughout the migration. Cover at least:
 
 - `cftlib`, representing the non-production `*-prod.json` exclusion path; and
 - `prod`, representing the `*-nonprod.json` exclusion path.
 
-Run another environment when the converted slice contains substitutions which differ from both of those outputs. The
-workbook check supplements the row comparison; it does not replace the more precise row-level diagnostics.
+Run another environment when the converted slice contains substitutions which differ from both of those outputs. Raw
+JSON diagnostics may explain an XLSX difference, but canonical workbook parity is the acceptance condition.
 
 ### 7. Prove behaviour and transfer ownership
 
@@ -431,5 +473,6 @@ left to merge.
 - [ ] No arbitrary column API, positional row record or copied golden fixture was introduced.
 - [ ] Every unsupported value remains owned by JSON or has a typed SDK enhancement with tests.
 - [ ] Generated and golden rows are semantically equal, including permissions and duplicate counts.
+- [ ] The convergence snapshot is regenerated, shows no regression, and its Java line growth is reasonable.
 - [ ] Normalised XLSX output matches for the required environments.
 - [ ] Behaviour tests follow `docs/testing-strategy.md`.
