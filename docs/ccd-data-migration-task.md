@@ -69,7 +69,7 @@ state:
 * timestamps
 
 The migration configuration hash covers the migration identity. Runtime limits such as
-`eventIdWindowSize`, `maxBatchesPerRun`, `maxRunTime`, and `mode` can change between invocations.
+`eventIdWindowSize`, `significantItemIdWindowSize`, `maxBatchesPerRun`, `maxRunTime`, and `mode` can change between invocations.
 If the migration identity changes after a task has already created a progress row, the task fails
 fast rather than resuming under different source filters. Operators must either keep the same
 identity configuration or explicitly reset/use a new `task-name` after confirming the target state.
@@ -89,6 +89,7 @@ ccd:
       - ET_Scotland
     source-jurisdiction: EMPLOYMENT
     event-id-window-size: 1000000
+    significant-item-id-window-size: 100000
     max-batches-per-run: 100
     max-run-time: 4h
     case-revision-offset: 1000000000
