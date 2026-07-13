@@ -20,7 +20,36 @@ public interface ConfigBuilder<T, S, R extends HasRole> {
 
   void caseType(String caseType, String name, String description);
 
+  /**
+   * Defines a case type including optional CCD import metadata.
+   */
+  default void caseType(CaseType caseType) {
+    caseType(caseType.getId(), caseType.getName(), caseType.getDescription());
+  }
+
   void jurisdiction(String id, String name, String description);
+
+  /**
+   * Defines a jurisdiction including optional CCD import metadata.
+   */
+  default void jurisdiction(Jurisdiction jurisdiction) {
+    jurisdiction(jurisdiction.getId(), jurisdiction.getName(), jurisdiction.getDescription());
+  }
+
+  /**
+   * Omits the generator's default {@code LiveFrom} value from definition rows. Case-type and
+   * jurisdiction metadata retain their explicitly configured live dates.
+   */
+  default void omitDefaultLiveFrom() {
+    // Default no-op for backwards compatibility; implementations may override.
+  }
+
+  /**
+   * Omits the conventional case-history field and automatically generated history tab.
+   */
+  default void omitCaseHistory() {
+    // Default no-op for backwards compatibility; implementations may override.
+  }
 
   default void stateLabel(String stateId, String label) {
     // Implementations that expose resolved config metadata may override this.

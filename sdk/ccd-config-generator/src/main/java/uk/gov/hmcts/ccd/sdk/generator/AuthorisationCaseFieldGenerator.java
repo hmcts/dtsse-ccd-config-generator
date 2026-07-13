@@ -90,7 +90,7 @@ class AuthorisationCaseFieldGenerator<T, S, R extends HasRole> implements Config
     }
     // Add Permissions for all tabs.
     for (String role : ImmutableSet.copyOf(fieldRolePermissions.columnKeySet())) {
-      if (!config.getRolesWithNoHistory().contains(role)) {
+      if (config.isIncludeCaseHistory() && !config.getRolesWithNoHistory().contains(role)) {
         fieldRolePermissions.put("caseHistory", role, CRU);
       }
 

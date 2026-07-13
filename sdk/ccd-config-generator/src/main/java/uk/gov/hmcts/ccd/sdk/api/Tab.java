@@ -17,6 +17,7 @@ public class Tab<T, R extends HasRole> {
   private String tabID;
   private String labelText;
   private String showCondition;
+  private String channel;
   private List<TabField> fields;
   private Set<R> forRoles;
 
@@ -33,6 +34,7 @@ public class Tab<T, R extends HasRole> {
       TabBuilder<T, R> result = Tab.builder();
       result.model = model;
       result.propertyUtils = propertyUtils;
+      result.channel = "CaseWorker";
       result.fields = new ArrayList<>();
       result.forRoles = new HashSet<>();
       return result;
@@ -76,6 +78,11 @@ public class Tab<T, R extends HasRole> {
 
     public TabBuilder<T, R> collection(TypedPropertyGetter<T, ? extends Collection> getter) {
       return field(getter, null);
+    }
+
+    public TabBuilder<T, R> withoutChannel() {
+      this.channel = null;
+      return this;
     }
   }
 }

@@ -15,11 +15,13 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import uk.gov.hmcts.ccd.sdk.api.CaseCategory.CaseCategoryBuilder;
 import uk.gov.hmcts.ccd.sdk.api.CaseRoleToAccessProfile.CaseRoleToAccessProfileBuilder;
+import uk.gov.hmcts.ccd.sdk.api.CaseType;
 import uk.gov.hmcts.ccd.sdk.api.ComplexTypeAuthorisation;
 import uk.gov.hmcts.ccd.sdk.api.DecentralisedConfigBuilder;
 import uk.gov.hmcts.ccd.sdk.api.Event;
 import uk.gov.hmcts.ccd.sdk.api.EventTypeBuilder;
 import uk.gov.hmcts.ccd.sdk.api.HasRole;
+import uk.gov.hmcts.ccd.sdk.api.Jurisdiction;
 import uk.gov.hmcts.ccd.sdk.api.NoticeOfChange.NoticeOfChangeBuilder;
 import uk.gov.hmcts.ccd.sdk.api.Permission;
 import uk.gov.hmcts.ccd.sdk.api.Search.SearchBuilder;
@@ -107,16 +109,46 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements Decentralised
 
   @Override
   public void caseType(String caseType, String name, String desc) {
-    config.caseType = caseType;
-    config.caseName = name;
-    config.caseDesc = desc;
+    caseType(CaseType.builder()
+        .id(caseType)
+        .name(name)
+        .description(desc)
+        .build());
+  }
+
+  @Override
+  public void caseType(CaseType caseType) {
+    config.caseTypeDefinition = caseType;
+    config.caseType = caseType.getId();
+    config.caseName = caseType.getName();
+    config.caseDesc = caseType.getDescription();
   }
 
   @Override
   public void jurisdiction(String id, String name, String description) {
-    config.jurId = id;
-    config.jurName = name;
-    config.jurDesc = description;
+    jurisdiction(Jurisdiction.builder()
+        .id(id)
+        .name(name)
+        .description(description)
+        .build());
+  }
+
+  @Override
+  public void jurisdiction(Jurisdiction jurisdiction) {
+    config.jurisdictionDefinition = jurisdiction;
+    config.jurId = jurisdiction.getId();
+    config.jurName = jurisdiction.getName();
+    config.jurDesc = jurisdiction.getDescription();
+  }
+
+  @Override
+  public void omitDefaultLiveFrom() {
+    config.includeDefaultLiveFrom = false;
+  }
+
+  @Override
+  public void omitCaseHistory() {
+    config.includeCaseHistory = false;
   }
 
   @Override

@@ -41,10 +41,12 @@ class CaseFieldGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
       File outputFolder, ResolvedCCDConfig<T, S, R> config) {
     List<Map<String, Object>> fields = toComplex(config.getCaseClass(), config.getCaseType());
 
-    Map<String, Object> history = getField(config.getCaseType(), "caseHistory");
-    history.put("Label", " ");
-    history.put("FieldType", "CaseHistoryViewer");
-    fields.add(history);
+    if (config.isIncludeCaseHistory()) {
+      Map<String, Object> history = getField(config.getCaseType(), "caseHistory");
+      history.put("Label", " ");
+      history.put("FieldType", "CaseHistoryViewer");
+      fields.add(history);
+    }
 
     fields.addAll(getExplicitFields(config));
 

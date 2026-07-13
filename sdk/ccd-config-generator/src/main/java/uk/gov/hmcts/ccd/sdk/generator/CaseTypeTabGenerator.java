@@ -27,8 +27,10 @@ class CaseTypeTabGenerator<T, S, R extends HasRole> implements ConfigGenerator<T
 
     int tabDisplayOrder = 1;
     // For backwards compatibility we automatically define a history tab as the first tab if the app doesn't set one.
-    if (config.getTabs().stream().noneMatch(x -> x.getTabID().equals("CaseHistory"))) {
-      result.add(buildField(config.getCaseType(), "CaseHistory", "caseHistory", "History", 1, 1, ""));
+    if (config.isIncludeCaseHistory()
+        && config.getTabs().stream().noneMatch(x -> x.getTabID().equals("CaseHistory"))) {
+      result.add(buildField(config.getCaseType(), "CaseHistory", "caseHistory", "History", 1, 1, "",
+          "CaseWorker"));
       tabDisplayOrder = 2;
     }
 
@@ -66,7 +68,7 @@ class CaseTypeTabGenerator<T, S, R extends HasRole> implements ConfigGenerator<T
     int tabFieldDisplayOrder = 1;
     for (TabField tabField : tab.getFields()) {
       Map<String, Object> field = buildField(caseType, tab.getTabID() + role, tabField.getId(),
-          tab.getLabelText(), tabDisplayOrder, tabFieldDisplayOrder, role);
+          tab.getLabelText(), tabDisplayOrder, tabFieldDisplayOrder, role, tab.getChannel());
       if (tab.getShowCondition() != null && tabFieldDisplayOrder == 1) {
         field.put("TabShowCondition", tab.getShowCondition());
       }
@@ -88,9 +90,11 @@ class CaseTypeTabGenerator<T, S, R extends HasRole> implements ConfigGenerator<T
   }
 
   private static Map<String, Object> buildField(String caseType, String tabId, String fieldId,
-      String tabLabel, int displayOrder, int tabFieldDisplayOrder, String role) {
+      String tabLabel, int displayOrder, int tabFieldDisplayOrder, String role, String channel) {
     Map<String, Object> field = JsonUtils.caseRow(caseType);
-    field.put("Channel", "CaseWorker");
+    if (channel != null) {
+      field.put("Channel", channel);
+    }
     field.put("TabID", tabId);
     field.put("TabLabel", tabLabel);
     field.put("UserRole", tabFieldDisplayOrder == 1 ? role : "");

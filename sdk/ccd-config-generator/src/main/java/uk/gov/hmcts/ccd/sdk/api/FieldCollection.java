@@ -38,6 +38,8 @@ public class FieldCollection {
 
   private Map<String, MidEvent> pagesToMidEvent;
 
+  private boolean includePageColumnNumber;
+
   private String rootFieldname;
 
   private String unwrappedParentPrefix;
@@ -69,6 +71,7 @@ public class FieldCollection {
       result.pageShowConditions = new Hashtable<>();
       result.pagesToMidEvent = new HashMap<>();
       result.pageLabels = new Hashtable<>();
+      result.includePageColumnNumber = true;
       result.propertyUtils = propertyUtils;
       return result;
     }
@@ -511,6 +514,11 @@ public class FieldCollection {
 
     public FieldCollectionBuilder<Type, StateType, Parent> pageLabel(String label) {
       this.pageLabels.put(this.pageId, label);
+      return this;
+    }
+
+    public FieldCollectionBuilder<Type, StateType, Parent> omitPageColumnNumber() {
+      this.includePageColumnNumber = false;
       return this;
     }
   }

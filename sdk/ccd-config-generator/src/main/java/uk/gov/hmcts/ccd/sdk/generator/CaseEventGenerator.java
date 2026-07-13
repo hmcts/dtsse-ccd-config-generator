@@ -57,9 +57,13 @@ class CaseEventGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
     data.put("Description", event.getDescription());
     data.put("DisplayOrder", resolveDisplayOrder(event));
     data.put("CaseTypeID", caseTypeId);
-    JsonUtils.putYn(data, "ShowSummary", event.isShowSummary());
+    if (event.isShowSummaryColumn()) {
+      JsonUtils.putYn(data, "ShowSummary", event.isShowSummary());
+    }
     JsonUtils.putYn(data, "ShowEventNotes", event.isShowEventNotes());
-    JsonUtils.putYn(data, "Publish", event.isPublishToCamunda());
+    if (event.isPublishColumn()) {
+      JsonUtils.putYn(data, "Publish", event.isPublishToCamunda());
+    }
     if (!Strings.isNullOrEmpty(event.getEndButtonLabel())) {
       data.put("EndButtonLabel", event.getEndButtonLabel());
     }
@@ -114,11 +118,12 @@ class CaseEventGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
                                        Event<T, R, S> event,
                                        boolean enabled,
                                        CallbackMetadata metadata) {
-    if (!enabled) {
+    String externalUrl = event.getCallbackUrls().get(metadata.webhook());
+    if (!enabled && externalUrl == null) {
       return;
     }
     target.put(metadata.callbackField(),
-        metadata.buildUrl(callbackHost, event.getId()));
+        externalUrl == null ? metadata.buildUrl(callbackHost, event.getId()) : externalUrl);
     String retry = event.getRetries().get(metadata.webhook());
     if (retry != null) {
       target.put(metadata.retriesField(), retry);

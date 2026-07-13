@@ -11,6 +11,7 @@ import com.google.common.collect.ComparisonChain;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
+import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -19,6 +20,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Stream;
 import lombok.AllArgsConstructor;
 import lombok.SneakyThrows;
 import uk.gov.hmcts.ccd.sdk.api.CCD;
@@ -65,6 +67,23 @@ public class JsonUtils {
     return new ObjectMapper()
       .configure(SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS, true)
       .writer(new CustomPrinter()).writeValueAsString(data) + "\n";
+  }
+
+  @SneakyThrows
+  static void removePropertyFromJsonFiles(File root, String property) {
+    ObjectMapper mapper = new ObjectMapper();
+    CollectionType mapCollectionType = mapper.getTypeFactory()
+        .constructCollectionType(List.class, Map.class);
+
+    try (Stream<Path> paths = Files.walk(root.toPath())) {
+      for (Path path : paths.filter(Files::isRegularFile)
+          .filter(candidate -> candidate.toString().endsWith(".json"))
+          .toList()) {
+        List<Map<String, Object>> rows = mapper.readValue(path.toFile(), mapCollectionType);
+        rows.forEach(row -> row.remove(property));
+        writeFile(path, serialise(rows, false));
+      }
+    }
   }
 
   public static Map<String, Object> getField(String id) {

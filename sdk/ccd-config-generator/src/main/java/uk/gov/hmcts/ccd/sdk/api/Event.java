@@ -31,10 +31,13 @@ public class Event<T, R extends HasRole, S> {
   private String description;
   private String showCondition;
   private Map<Webhook, String> retries;
+  private Map<Webhook, String> callbackUrls;
   private boolean explicitGrants;
   private boolean showSummary;
+  private boolean showSummaryColumn;
   private boolean showEventNotes;
   private boolean publishToCamunda;
+  private boolean publishColumn;
   private Integer ttlIncrement;
   private AboutToStart<T, S> aboutToStartCallback;
   private AboutToSubmit<T, S> aboutToSubmitCallback;
@@ -84,6 +87,9 @@ public class Event<T, R extends HasRole, S> {
       result.fieldsBuilder = FieldCollection.FieldCollectionBuilder
           .builder(result, result, dataClass, propertyUtils);
       result.retries = new HashMap<>();
+      result.callbackUrls = new HashMap<>();
+      result.showSummaryColumn = true;
+      result.publishColumn = true;
 
       return result;
     }
@@ -122,6 +128,11 @@ public class Event<T, R extends HasRole, S> {
       return this;
     }
 
+    public EventBuilder<T, R, S> omitShowSummary() {
+      this.showSummaryColumn = false;
+      return this;
+    }
+
     public EventBuilder<T, R, S> publishToCamunda(boolean publishToCamunda) {
       this.publishToCamunda = publishToCamunda;
       return this;
@@ -129,6 +140,11 @@ public class Event<T, R extends HasRole, S> {
 
     public EventBuilder<T, R, S> publishToCamunda() {
       this.publishToCamunda = true;
+      return this;
+    }
+
+    public EventBuilder<T, R, S> omitPublish() {
+      this.publishColumn = false;
       return this;
     }
 
@@ -192,7 +208,15 @@ public class Event<T, R extends HasRole, S> {
       if (this.submitHandler != null) {
         throw new IllegalStateException("Cannot set both submitHandler and submittedCallback");
       }
+      ensureNoExternalCallback(Webhook.Submitted);
       this.submittedCallback = submittedCallback;
+      return this;
+    }
+
+
+    public EventBuilder<T, R, S> aboutToStartCallback(AboutToStart<T, S> aboutToStartCallback) {
+      ensureNoExternalCallback(Webhook.AboutToStart);
+      this.aboutToStartCallback = aboutToStartCallback;
       return this;
     }
 
@@ -202,8 +226,40 @@ public class Event<T, R extends HasRole, S> {
       if (this.submitHandler != null) {
         throw new IllegalStateException("Cannot set both submitHandler and aboutToSubmitCallback");
       }
+      ensureNoExternalCallback(Webhook.AboutToSubmit);
       this.aboutToSubmitCallback = aboutToSubmitCallback;
       return this;
+    }
+
+    /**
+     * Writes an existing external callback URL into the CCD definition without registering a Java
+     * callback handler.
+     */
+    public EventBuilder<T, R, S> externalCallbackUrl(Webhook webhook, String url) {
+      if (webhook == Webhook.MidEvent) {
+        throw new IllegalArgumentException("Mid-event callback URLs belong to an event page");
+      }
+      ensureNoCallbackHandler(webhook);
+      this.callbackUrls.put(webhook, url);
+      return this;
+    }
+
+    private void ensureNoExternalCallback(Webhook webhook) {
+      if (this.callbackUrls.containsKey(webhook)) {
+        throw new IllegalStateException("Cannot set both an external URL and a Java handler for " + webhook);
+      }
+    }
+
+    private void ensureNoCallbackHandler(Webhook webhook) {
+      boolean configured = switch (webhook) {
+        case AboutToStart -> this.aboutToStartCallback != null || this.startHandler != null;
+        case AboutToSubmit -> this.aboutToSubmitCallback != null || this.submitHandler != null;
+        case Submitted -> this.submittedCallback != null || this.submitHandler != null;
+        case MidEvent -> false;
+      };
+      if (configured) {
+        throw new IllegalStateException("Cannot set both an external URL and a Java handler for " + webhook);
+      }
     }
 
     // Hide lombok's generated builder methods for these fields to stop them polluting the public API.

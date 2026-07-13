@@ -58,7 +58,9 @@ class CaseEventToFieldsGenerator<T, S, R extends HasRole> implements ConfigGener
       Object pageId = resolvePageId(field.getPage());
       row.put("PageID", pageId);
       row.put("PageDisplayOrder", field.getPageDisplayOrder());
-      row.put("PageColumnNumber", 1);
+      if (collection.isIncludePageColumnNumber()) {
+        row.put("PageColumnNumber", 1);
+      }
       applyMetadata(row, field, "CaseEventFieldLabel", "CaseEventFieldHint");
       applyMidEventCallback(row, event, config, collection, pageId, writtenCallbacks);
       applyPageShowCondition(row, pageShowConditions, field);
