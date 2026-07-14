@@ -103,6 +103,7 @@ export DST_SCHEMA='ccd'                    # defaults to ccd
 export FDW_SCHEMA='fdw_stage'              # defaults to fdw_stage
 export FDW_SERVER='src_ccd_server'         # defaults to src_ccd_server
 export LOCAL_USER_SQL='current_user'       # role that will run the migration
+export FDW_ADDITIONAL_GRANTEE_SQL='"DTS JIT Access et DB Reader SC"'
 ```
 
 Validate the setup configuration without creating anything:
@@ -122,7 +123,9 @@ The setup script creates:
 * the `postgres_fdw` and `pgcrypto` extensions
 * the FDW staging schema, default `fdw_stage`
 * an FDW server pointing at the source CCD database
-* a user mapping using `SRC_USER` and `SRC_PASSWORD`
+* a user mapping for `LOCAL_USER_SQL` using `SRC_USER` and `SRC_PASSWORD`
+* when `FDW_ADDITIONAL_GRANTEE_SQL` is set, another user mapping for that role using the same
+  source credentials
 * foreign tables:
   * `fdw_stage.case_data`
   * `fdw_stage.case_event`
@@ -132,6 +135,7 @@ The foreign tables are created with `fetch_size '10000'` so large reads do not u
 `postgres_fdw` default of 100 rows per cursor fetch. If the FDW objects were created before this
 option existed, recreate them with `setup-ccd-data-fdw.sh --apply` before running a large migration.
 * grants for `LOCAL_USER_SQL`
+* when `FDW_ADDITIONAL_GRANTEE_SQL` is set, grants for that additional role
 
 ## Phase 2: Run the migration
 
@@ -142,9 +146,12 @@ least one of the expected source foreign tables already exist, it creates any mi
 tables from the same server, source schema, and fetch size options.
 
 For services using the Java task, set `ccd.data-migration.fdw-additional-select-grantee` or
-`CCD_DATA_MIGRATION_FDW_ADDITIONAL_SELECT_GRANTEE` to grant `SELECT` on the FDW tables to an
-additional team-specific reader role, for example `DTS JIT Access et DB Reader SC`. Leave it blank
-to skip the extra grant.
+`CCD_DATA_MIGRATION_FDW_ADDITIONAL_SELECT_GRANTEE` to grant an additional team-specific reader role
+enough access to query the FDW tables, for example `DTS JIT Access et DB Reader SC`. The task grants
+schema usage, foreign server usage, and table select. The role must already have a user mapping for
+the FDW server; create it during setup with `FDW_ADDITIONAL_GRANTEE_SQL` or have Platform Operations
+create it manually. The Java task does not create user mappings because they contain source database
+credentials. Leave it blank to skip the extra grant.
 
 For services using the Java task, `case_event_significant_items` is copied during `CUTOVER` after
 events have caught up. It uses one set-based insert query joined through the migrated target events

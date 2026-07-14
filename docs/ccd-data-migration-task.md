@@ -95,10 +95,14 @@ ccd:
     fdw-additional-select-grantee: DTS JIT Access et DB Reader SC
 ```
 
-`fdw-additional-select-grantee` is optional. When set, the Java task grants `SELECT` on the
-`fdw_stage.case_data`, `fdw_stage.case_event`, and `fdw_stage.case_event_significant_items` foreign
-tables to that role after validating the FDW tables. Leave it blank to skip the extra grant. As an
-environment variable, use `CCD_DATA_MIGRATION_FDW_ADDITIONAL_SELECT_GRANTEE`.
+`fdw-additional-select-grantee` is optional. When set, the Java task grants the role local access to
+query the existing FDW tables after validating them: `USAGE` on the FDW staging schema, `USAGE` on
+the foreign server, and `SELECT` on `fdw_stage.case_data`, `fdw_stage.case_event`, and
+`fdw_stage.case_event_significant_items`. The role must already have a user mapping for the FDW
+server. Create it during FDW setup with `FDW_ADDITIONAL_GRANTEE_SQL` or have Platform Operations
+create it manually. The Java task does not create one because the mapping contains source database
+credentials. Leave it blank to skip the extra grant. As an environment variable, use
+`CCD_DATA_MIGRATION_FDW_ADDITIONAL_SELECT_GRANTEE`.
 
 For cutover, run the same task with:
 

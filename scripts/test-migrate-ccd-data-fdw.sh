@@ -16,11 +16,25 @@ FDW_SRC_HOST="${FDW_SRC_HOST:-localhost}"
 FDW_SRC_PORT="${FDW_SRC_PORT:-5432}"
 FDW_SRC_SSLMODE="${FDW_SRC_SSLMODE:-disable}"
 FDW_SERVER="${FDW_SERVER:-source-server-with-dashes.example.test}"
+FDW_ADDITIONAL_GRANTEE_NAME="${FDW_ADDITIONAL_GRANTEE_NAME:-FDW Additional Reader SC}"
+FDW_ADDITIONAL_GRANTEE_SQL="\"${FDW_ADDITIONAL_GRANTEE_NAME}\""
 
 init_migration_test_env "fdw"
 trap cleanup_temp_dbs EXIT
 
 run_fdw_setup() {
+  echo "Creating additional FDW reader role"
+  psql_dst --set=fdw_additional_grantee_name="$FDW_ADDITIONAL_GRANTEE_NAME" <<'SQL'
+select format('create role %I', :'fdw_additional_grantee_name')
+where not exists (
+  select 1
+  from pg_roles
+  where rolname = :'fdw_additional_grantee_name'
+)
+\gexec
+grant :"fdw_additional_grantee_name" to current_user;
+SQL
+
   echo "Running FDW setup script (validation mode only)"
   DST_DSN="$DST_DSN" \
     SRC_HOST="$FDW_SRC_HOST" \
@@ -33,6 +47,7 @@ run_fdw_setup() {
     FDW_SCHEMA="$FDW_SCHEMA" \
     FDW_SERVER="$FDW_SERVER" \
     LOCAL_USER_SQL="current_user" \
+    FDW_ADDITIONAL_GRANTEE_SQL="$FDW_ADDITIONAL_GRANTEE_SQL" \
     "$SETUP_SCRIPT"
 
   echo "Running FDW setup script (apply mode)"
@@ -47,6 +62,7 @@ run_fdw_setup() {
     FDW_SCHEMA="$FDW_SCHEMA" \
     FDW_SERVER="$FDW_SERVER" \
     LOCAL_USER_SQL="current_user" \
+    FDW_ADDITIONAL_GRANTEE_SQL="$FDW_ADDITIONAL_GRANTEE_SQL" \
     "$SETUP_SCRIPT" --apply
 }
 
@@ -68,7 +84,8 @@ run_fdw_migration() {
 }
 
 assert_fdw_setup() {
-  local extension_count foreign_server_count foreign_table_count source_case_count
+  local extension_count foreign_server_count foreign_table_count source_case_count additional_role_case_count
+  local additional_mapping_count
 
   echo "Validating FDW setup"
   extension_count="$(psql_dst --quiet -tA <<'SQL'
@@ -100,11 +117,35 @@ from ${FDW_SCHEMA}.case_data
 where case_type_id = :'case_type';
 SQL
 )"
+  additional_mapping_count="$(psql_dst --quiet -tA \
+    --set=fdw_server="$FDW_SERVER" \
+    --set=fdw_additional_grantee_name="$FDW_ADDITIONAL_GRANTEE_NAME" <<'SQL'
+select count(*)
+from pg_user_mapping um
+join pg_foreign_server s
+  on s.oid = um.umserver
+join pg_roles r
+  on r.oid = um.umuser
+where s.srvname = :'fdw_server'
+  and r.rolname = :'fdw_additional_grantee_name';
+SQL
+)"
+  additional_role_case_count="$(psql_dst --quiet -tA \
+    --set=fdw_additional_grantee_name="$FDW_ADDITIONAL_GRANTEE_NAME" <<SQL
+set role :"fdw_additional_grantee_name";
+select count(*)
+from ${FDW_SCHEMA}.case_data
+where case_type_id = :'case_type';
+reset role;
+SQL
+)"
 
-  if [[ "$extension_count" != "2" || "$foreign_server_count" != "1" || "$foreign_table_count" != "3" || "$source_case_count" != "2" ]]; then
+  if [[ "$extension_count" != "2" || "$foreign_server_count" != "1" || "$foreign_table_count" != "3" \
+      || "$source_case_count" != "2" || "$additional_mapping_count" != "1" || "$additional_role_case_count" != "2" ]]; then
     echo "FDW setup validation failed:" \
       "extensions=${extension_count}, server=${foreign_server_count}," \
-      "tables=${foreign_table_count}, source_cases=${source_case_count}" >&2
+      "tables=${foreign_table_count}, source_cases=${source_case_count}," \
+      "additional_mapping=${additional_mapping_count}, additional_role_cases=${additional_role_case_count}" >&2
     exit 1
   fi
 }
