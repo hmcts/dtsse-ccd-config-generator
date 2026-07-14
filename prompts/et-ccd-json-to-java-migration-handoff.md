@@ -12,8 +12,8 @@ The migration spans the generator repository and its ET submodule:
 
 | Repository | Branch | Current reviewed state |
 | --- | --- | --- |
-| `hmcts/dtsse-ccd-config-generator` | `json-to-java` | Slice 11 exact conversion in this commit; generator-fit review pending |
-| `hmcts/et-ccd-callbacks` | `json-to-java-migration` | `efeb69b3c` — Slice 11 exact conversion |
+| `hmcts/dtsse-ccd-config-generator` | `json-to-java` | Slice 11 generator-fit review in this commit |
+| `hmcts/et-ccd-callbacks` | `json-to-java-migration` | `efeb69b3c` — Slice 11 exact conversion; no follow-up refactor required |
 
 The root repository must point at the intended ET commit. A fresh session should inspect both worktrees before changing
 anything:
@@ -111,7 +111,8 @@ metric effect. An unproven candidate does not belong in this ledger.
 | Slice 9 generator-fit follow-up | this review commit | `4dfbcb703` | Replaced repeated hearing-event, grant and row defaults with feature-local factories |
 | Slice 10: paired Singles hearing documents and bundles | `72dcd6ba` | `11bca5627` | Added 240 exact rows; reached 83.28% |
 | Slice 10 generator-fit review | this review commit | `11bca5627` | Confirmed the feature-local factories and standalone nested-event API already fit the generator |
-| Slice 11: paired Singles correspondence and document serving | this exact conversion commit | `efeb69b3c` | Added 321 exact rows; reached 83.90% |
+| Slice 11: paired Singles correspondence and document serving | `05fcf302` | `efeb69b3c` | Added 321 exact rows; reached 83.90% |
+| Slice 11 generator-fit review | this review commit | `efeb69b3c` | Confirmed the feature-local event, page, document-element and grant factories already fit the generator |
 
 The ET submodule commit must be published before a root commit which points to it. Otherwise another checkout cannot
 resolve the root tree. Commit ET changes first, then commit the updated submodule pointer and related SDK or prompt
@@ -427,7 +428,7 @@ Post-commit generator-fit review:
 
 ### Slice 11: paired Singles correspondence and document serving
 
-Status: complete and exact in `cftlib` and `prod`; post-commit generator-fit review pending.
+Status: complete and exact in `cftlib` and `prod`, including the post-commit generator-fit review.
 
 The slice converts the paired document entry, letter generation and ET1 serving workflow: `addDocument`,
 `uploadDocument`, `generateCorrespondence` and `uploadDocumentForServing`.
@@ -463,11 +464,20 @@ Important implementation choices:
 
 Post-commit generator-fit review:
 
-- Review point: the exact conversion root commit and ET `efeb69b3c`.
-- Pending. Review the committed feature factories, regional document-element expansion and generated output before
-  making any parity-preserving refactor. Record the decision in a separate commit even if no code refactor is warranted.
-- No intentional CCD definition improvement has been proposed or made. Any future improvement requires its own
-  commit-pinned platform evidence and focused behavioural test.
+- Review point: root `05fcf302`, ET `efeb69b3c`.
+- Finding: the committed 877-line feature catalog already names the four environment-specific event shapes, regional
+  correspondence page family, common tribunal grants and regional document-element expansion. Its remaining serving
+  field specifications carry distinct field/page conditions, labels, positions, summary values or publish metadata;
+  the generated cftlib/production difference is expressed by the document-element profile masks rather than duplicated
+  event configuration.
+- Decision: no further ET or SDK refactor is warranted. A broader field-row abstraction would obscure the event's
+  meaningful page flow, while the reusable SDK already models every CCD concept this slice needs.
+- Follow-up: this root review commit records the decision; ET remains at the exact conversion commit `efeb69b3c`.
+- Result: all 43,816 rows remain exact with zero changed or unexpected rows. ET production/generation growth remains
+  66,576 lines, SDK production growth 1,364 lines, total production growth 67,940 lines and verification growth 1,093
+  lines. The cumulative production-lines ratio remains 1.55.
+- No intentional CCD definition improvement was identified or made. The golden JSON and generated definition semantics
+  are unchanged, so no platform-source evidence or separate behavioural-definition commit is required for this slice.
 
 ### Slice 10: paired Singles hearing documents and bundles
 
