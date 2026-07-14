@@ -16,6 +16,7 @@ import org.springframework.stereotype.Component;
 import uk.gov.hmcts.ccd.sdk.ResolvedCCDConfig;
 import uk.gov.hmcts.ccd.sdk.api.CCD;
 import uk.gov.hmcts.ccd.sdk.api.ComplexType;
+import uk.gov.hmcts.ccd.sdk.api.HasCode;
 import uk.gov.hmcts.ccd.sdk.api.HasLabel;
 import uk.gov.hmcts.ccd.sdk.api.HasRole;
 import uk.gov.hmcts.ccd.sdk.generator.JsonUtils.AddMissing;
@@ -71,8 +72,13 @@ class FixedListGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
         value.put("ListElement", label);
         value.put("LiveFrom", JsonUtils.DEFAULT_LIVE_FROM);
         value.put("ID", definition.getKey());
-        value.put("ListElementCode", enumConstant);
-        value.put("DisplayOrder", order++);
+        value.put("ListElementCode", enumConstant instanceof HasCode coded
+            ? coded.getCode()
+            : enumConstant);
+        value.put("DisplayOrder", annotation != null && annotation.displayOrder() > 0
+            ? annotation.displayOrder()
+            : order);
+        order++;
       }
 
       Path path = Paths.get(dir.getPath(), definition.getKey() + ".json");

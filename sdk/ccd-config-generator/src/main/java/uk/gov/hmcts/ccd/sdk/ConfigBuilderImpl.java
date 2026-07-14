@@ -65,6 +65,11 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements Decentralised
 
   public ResolvedCCDConfig<T, S, R> build() {
     config.types = ConfigResolver.resolve(config.caseClass, "uk.gov.hmcts", config.schemaProfile);
+    for (Class<?> registeredType : config.registeredComplexTypes) {
+      config.types.put(registeredType, 0);
+      ConfigResolver.resolve(registeredType, "uk.gov.hmcts", config.schemaProfile)
+          .forEach((type, depth) -> config.types.merge(type, depth + 1, Math::max));
+    }
     config.events = getEvents();
     config.tabs = buildBuilders(tabs, TabBuilder::build);
     config.workBasketResultFields = buildBuilders(workBasketResultFields, SearchBuilder::build);
@@ -178,6 +183,17 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements Decentralised
   }
 
   @Override
+  public void registerComplexTypes(Class<?>... types) {
+    if (types == null || types.length == 0) {
+      throw new IllegalArgumentException("Complex types must not be empty");
+    }
+    for (Class<?> type : types) {
+      config.registeredComplexTypes.add(Objects.requireNonNull(type,
+          "Complex type must not be null"));
+    }
+  }
+
+  @Override
   public void schemaProfile(Class<?> profile) {
     Objects.requireNonNull(profile, "Schema profile must not be null");
     if (config.schemaProfile != null && !config.schemaProfile.equals(profile)) {
@@ -209,6 +225,22 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements Decentralised
   @SafeVarargs
   public final void retainCaseTypeAuthorisationLiveFrom(R... roles) {
     config.caseTypeAuthorisationRolesWithLiveFrom.addAll(Set.of(roles));
+  }
+
+  @Override
+  @SafeVarargs
+  public final void omitCaseTypeAuthorisation(R... roles) {
+    config.rolesWithNoCaseTypeAuthorisation.addAll(Set.of(roles));
+  }
+
+  @Override
+  public void retainCaseRoleLiveFrom() {
+    config.retainCaseRoleLiveFrom = true;
+  }
+
+  @Override
+  public void omitFieldAuthorisationInference() {
+    config.inferFieldAuthorisation = false;
   }
 
   @Override

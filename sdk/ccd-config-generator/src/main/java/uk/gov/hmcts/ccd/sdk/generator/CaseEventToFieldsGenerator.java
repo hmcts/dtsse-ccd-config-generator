@@ -53,14 +53,14 @@ class CaseEventToFieldsGenerator<T, S, R extends HasRole> implements ConfigGener
       Map<String, Object> row = JsonUtils.caseRow(config.getCaseType());
       entries.add(row);
       populateCoreColumns(row, event, field);
-      applyPublishFlag(row, event);
+      applyPublishFlag(row, event, field);
 
       Object pageId = resolvePageId(field.getPage());
       row.put("PageID", pageId);
       if (collection.isIncludePageDisplayOrder()) {
         row.put("PageDisplayOrder", field.getPageDisplayOrder());
       }
-      if (collection.isIncludePageColumnNumber()) {
+      if (collection.isIncludePageColumnNumber() && field.isIncludePageColumnNumber()) {
         row.put("PageColumnNumber", 1);
       }
       applyMetadata(row, field, "CaseEventFieldLabel", "CaseEventFieldHint");
@@ -87,7 +87,13 @@ class CaseEventToFieldsGenerator<T, S, R extends HasRole> implements ConfigGener
         .orElse("COMPLEX");
   }
 
-  private void applyPublishFlag(Map<String, Object> row, Event<T, R, S> event) {
+  private void applyPublishFlag(Map<String, Object> row, Event<T, R, S> event, Field field) {
+    if (field.getEventFieldPublish() != null) {
+      if (!field.getEventFieldPublish().isEmpty()) {
+        row.put("Publish", field.getEventFieldPublish());
+      }
+      return;
+    }
     if (!event.isPublishToCamunda()) {
       return;
     }
@@ -162,6 +168,11 @@ class CaseEventToFieldsGenerator<T, S, R extends HasRole> implements ConfigGener
   private void applyPageShowCondition(Map<String, Object> row,
                                       Map<String, String> pageShowConditions,
                                       Field field) {
+    if (field.getPageShowCondition() != null) {
+      row.put("PageShowCondition", field.getPageShowCondition());
+      pageShowConditions.remove(field.getPage());
+      return;
+    }
     if (pageShowConditions.containsKey(field.getPage())) {
       row.put("PageShowCondition",
           pageShowConditions.remove(field.getPage()));
@@ -169,8 +180,8 @@ class CaseEventToFieldsGenerator<T, S, R extends HasRole> implements ConfigGener
   }
 
   private void applySummaryFlag(Map<String, Object> row, Field field) {
-    if (field.isShowSummary()) {
-      row.put("ShowSummaryChangeOption", "Y");
+    if (field.isShowSummaryColumn()) {
+      row.put("ShowSummaryChangeOption", field.isShowSummary() ? "Y" : "N");
     }
   }
 

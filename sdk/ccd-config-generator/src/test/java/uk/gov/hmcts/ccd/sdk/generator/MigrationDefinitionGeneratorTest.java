@@ -2,8 +2,8 @@ package uk.gov.hmcts.ccd.sdk.generator;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static uk.gov.hmcts.ccd.sdk.api.Permission.CRU;
 
-import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.ImmutableSet;
@@ -19,6 +19,8 @@ import uk.gov.hmcts.ccd.sdk.ConfigBuilderImpl;
 import uk.gov.hmcts.ccd.sdk.ResolvedCCDConfig;
 import uk.gov.hmcts.ccd.sdk.api.CCD;
 import uk.gov.hmcts.ccd.sdk.api.CaseType;
+import uk.gov.hmcts.ccd.sdk.api.ComplexType;
+import uk.gov.hmcts.ccd.sdk.api.HasCode;
 import uk.gov.hmcts.ccd.sdk.api.HasRole;
 import uk.gov.hmcts.ccd.sdk.api.HasLabel;
 import uk.gov.hmcts.ccd.sdk.api.Jurisdiction;
@@ -158,21 +160,35 @@ public class MigrationDefinitionGeneratorTest {
     ConfigBuilderImpl<TestData, TestState, TestRole> builder = newBuilder();
     builder.caseHistoryLabel("History");
     builder.registerFixedList("external_list", TestFixedList.SECOND, TestFixedList.FIRST);
-    builder.event("import")
+    builder.registerComplexTypes(UnreferencedComplex.class);
+    builder.retainCaseRoleLiveFrom();
+    var event = builder.event("import")
         .forAllStates()
-        .postStateWildcard()
+        .postStateExpression("$PREVIOUS")
         .name("Import")
         .omitEndButtonLabel()
         .omitShowEventNotes()
-        .fields()
+        .omitDisplayOrder()
+        .omitStateAuthorisationInference()
+        .grant(CRU, TestRole.TEST);
+    event.fields()
         .omitPageDisplayOrder()
         .externalMidEventCallbackUrl("${TEST_URL}/mid-event")
-        .optionalNoSummary(TestData::getName)
+        .field(TestData::getName)
+        .optional()
+        .showSummaryChangeOption(false)
+        .doNotPublish()
+        .pageShowCondition("name=\"visible\"")
+        .done()
         .complex(TestData::getImportFile, false)
         .eventToComplexTypeId("file")
         .mandatoryWithLabel(TestComplex::getFile, "File")
         .done()
         .done();
+    builder.tab("ExactMetadata", "Default label")
+        .displayOrder(9)
+        .field("name", null, 1, null, "Row label", 9)
+        .field("legacyType", null, 2, null, null, null);
 
     File output = new File(tmp.getRoot(), "exact-definition");
     JSONConfigGenerator<TestData, TestState, TestRole> generator = new JSONConfigGenerator<>(List.of(
@@ -180,7 +196,11 @@ public class MigrationDefinitionGeneratorTest {
         new CaseEventGenerator<>(),
         new CaseEventToFieldsGenerator<>(),
         new CaseEventToComplexTypesGenerator<>(),
-        new FixedListGenerator<>()
+        new CaseTypeTabGenerator<>(),
+        new ComplexTypeGenerator<>(),
+        new FixedListGenerator<>(),
+        new CaseRoleGenerator<>(),
+        new AuthorisationCaseStateGenerator<>()
     ));
     generator.writeConfig(output, builder.build());
 
@@ -189,11 +209,18 @@ public class MigrationDefinitionGeneratorTest {
             .containsEntry("ID", "caseHistory")
             .containsEntry("Label", "History"));
     assertThat(onlyRow(output, "CaseEvent/import.json"))
-        .containsEntry("PostConditionState", "*")
-        .doesNotContainKeys("EndButtonLabel", "ShowEventNotes");
+        .containsEntry("PostConditionState", "$PREVIOUS")
+        .doesNotContainKeys("DisplayOrder", "EndButtonLabel", "ShowEventNotes");
     List<Map<String, Object>> eventFields = rows(output, "CaseEventToFields/import.json");
     assertThat(eventFields)
         .allSatisfy(row -> assertThat(row).doesNotContainKey("PageDisplayOrder"));
+    assertThat(eventFields)
+        .filteredOn(row -> row.get("CaseFieldID").equals("name"))
+        .singleElement()
+        .satisfies(row -> assertThat(row)
+            .containsEntry("Publish", "N")
+            .containsEntry("ShowSummaryChangeOption", "N")
+            .containsEntry("PageShowCondition", "name=\"visible\""));
     assertThat(eventFields)
         .filteredOn(row -> row.containsKey("CallBackURLMidEvent"))
         .singleElement()
@@ -209,7 +236,28 @@ public class MigrationDefinitionGeneratorTest {
             .containsEntry("DisplayOrder", 1))
         .anySatisfy(row -> assertThat(row)
             .containsEntry("ListElementCode", "first-code")
-            .containsEntry("DisplayOrder", 2));
+            .containsEntry("DisplayOrder", 7));
+    assertThat(onlyRow(output, "ComplexTypes/Unreferenced.json"))
+        .containsEntry("ID", "Unreferenced")
+        .containsEntry("ListElementCode", "value");
+    assertThat(rows(output, "CaseRoles.json"))
+        .filteredOn(row -> row.get("ID").equals("[TEST_ROLE]"))
+        .singleElement()
+        .satisfies(row -> assertThat(row).containsEntry("LiveFrom", "15/08/2024"));
+    assertThat(rows(output, "CaseField.json"))
+        .filteredOn(row -> row.get("ID").equals("legacyType"))
+        .singleElement()
+        .satisfies(row -> assertThat(row)
+            .containsEntry("FieldType", "LegacyComplex")
+            .containsEntry("Searchable", "Y")
+            .containsEntry("RetainHiddenValue", "Yes"));
+    assertThat(onlyRow(output, "CaseTypeTab/9_ExactMetadata.json"))
+        .containsEntry("TabLabel", "Row label")
+        .containsEntry("TabDisplayOrder", 9);
+    assertThat(onlyRow(output, "CaseTypeTab/null_ExactMetadata.json"))
+        .containsEntry("CaseFieldID", "legacyType")
+        .doesNotContainKeys("TabLabel", "TabDisplayOrder");
+    assertThat(rows(output, "AuthorisationCaseState.json")).isEmpty();
   }
 
   @Test
@@ -272,6 +320,14 @@ public class MigrationDefinitionGeneratorTest {
 
     private TestComplex importFile;
 
+    @CCD(
+        label = "Legacy type",
+        typeNameOverride = "LegacyComplex",
+        includeSearchable = true,
+        retainHiddenValueValue = "Yes"
+    )
+    private String legacyType;
+
     public String getName() {
       return name;
     }
@@ -280,6 +336,12 @@ public class MigrationDefinitionGeneratorTest {
       return importFile;
     }
 
+  }
+
+  @ComplexType(name = "Unreferenced", generate = true)
+  private static class UnreferencedComplex {
+    @CCD(label = "Value")
+    private String value;
   }
 
   private static class TestComplex {
@@ -291,16 +353,22 @@ public class MigrationDefinitionGeneratorTest {
     }
   }
 
-  private enum TestFixedList implements HasLabel {
-    @JsonProperty("first-code")
-    FIRST("First"),
-    @JsonProperty("second-code")
-    SECOND("Second");
+  private enum TestFixedList implements HasLabel, HasCode {
+    @CCD(displayOrder = 7)
+    FIRST("first-code", "First"),
+    SECOND("second-code", "Second");
 
+    private final String code;
     private final String label;
 
-    TestFixedList(String label) {
+    TestFixedList(String code, String label) {
+      this.code = code;
       this.label = label;
+    }
+
+    @Override
+    public String getCode() {
+      return code;
     }
 
     @Override
@@ -315,7 +383,9 @@ public class MigrationDefinitionGeneratorTest {
 
   private enum TestRole implements HasRole {
     TEST("caseworker-test"),
-    TEST_WITHOUT_LIVE_FROM("caseworker-test-without-live-from");
+    TEST_WITHOUT_LIVE_FROM("caseworker-test-without-live-from"),
+    @CCD(label = "Test role", liveFrom = "15/08/2024")
+    CASE_ROLE("[TEST_ROLE]");
 
     private final String role;
 

@@ -48,41 +48,41 @@ class AuthorisationCaseFieldGenerator<T, S, R extends HasRole> implements Config
 
     Table<String, String, Set<Permission>> fieldRolePermissions = HashBasedTable.create();
     // Add field permissions based on event permissions.
-    for (Event<T, R, S> event : config.getEvents().values()) {
-      List<Field.FieldBuilder> fields = event.getFields().getFields();
-      for (Field.FieldBuilder fb : fields) {
+    if (config.isInferFieldAuthorisation()) {
+      for (Event<T, R, S> event : config.getEvents().values()) {
+        List<Field.FieldBuilder> fields = event.getFields().getFields();
+        for (Field.FieldBuilder fb : fields) {
 
-        for (R role : event.getGrants().keys()) {
-          if (!config.isApplicableRole(role)) {
-            continue;
-          }
-          if (event.getHistoryOnlyRoles().contains(role)) {
-            continue;
-          }
-          Set<Permission> perm = new HashSet<>(fb.build().isImmutable()
-              ? Permission.CR
-              : event.getGrants().get(role));
-          if (!perm.contains(Permission.D) && fb.build().isMutableList()) {
-            perm.add(Permission.D);
-          }
-
-          String id = fb.build().getId();
-
-          // if explicit grants is enabled field permissions will be derived from ccd annotation on case field
-          // and not the event permissions
-          if (event.isExplicitGrants()) {
-            // deal with immutable fields such as labels
-            if (fb.build().isImmutable()) {
-              if (fieldRolePermissions.contains(id, role.getRole())) {
-                fieldRolePermissions.get(id, role.getRole()).addAll(perm);
-              } else {
-                fieldRolePermissions.put(id, role.getRole(), new HashSet<>(perm));
-              }
-            } else {
-              fieldRolePermissions.put(id, role.getRole(), new HashSet<>());
+          for (R role : event.getGrants().keys()) {
+            if (!config.isApplicableRole(role)) {
+              continue;
             }
-          } else {
-            if (fieldRolePermissions.contains(id, role.getRole())) {
+            if (event.getHistoryOnlyRoles().contains(role)) {
+              continue;
+            }
+            Set<Permission> perm = new HashSet<>(fb.build().isImmutable()
+                ? Permission.CR
+                : event.getGrants().get(role));
+            if (!perm.contains(Permission.D) && fb.build().isMutableList()) {
+              perm.add(Permission.D);
+            }
+
+            String id = fb.build().getId();
+
+            // if explicit grants is enabled field permissions will be derived from ccd annotation on case field
+            // and not the event permissions
+            if (event.isExplicitGrants()) {
+              // deal with immutable fields such as labels
+              if (fb.build().isImmutable()) {
+                if (fieldRolePermissions.contains(id, role.getRole())) {
+                  fieldRolePermissions.get(id, role.getRole()).addAll(perm);
+                } else {
+                  fieldRolePermissions.put(id, role.getRole(), new HashSet<>(perm));
+                }
+              } else {
+                fieldRolePermissions.put(id, role.getRole(), new HashSet<>());
+              }
+            } else if (fieldRolePermissions.contains(id, role.getRole())) {
               fieldRolePermissions.get(id, role.getRole()).addAll(perm);
             } else {
               fieldRolePermissions.put(id, role.getRole(), new HashSet<>(perm));
@@ -92,39 +92,41 @@ class AuthorisationCaseFieldGenerator<T, S, R extends HasRole> implements Config
       }
     }
     // Add Permissions for all tabs.
-    for (String role : ImmutableSet.copyOf(fieldRolePermissions.columnKeySet())) {
-      if (config.isIncludeCaseHistory() && !config.getRolesWithNoHistory().contains(role)) {
-        fieldRolePermissions.put("caseHistory", role, CRU);
-      }
+    if (config.isInferFieldAuthorisation()) {
+      for (String role : ImmutableSet.copyOf(fieldRolePermissions.columnKeySet())) {
+        if (config.isIncludeCaseHistory() && !config.getRolesWithNoHistory().contains(role)) {
+          fieldRolePermissions.put("caseHistory", role, CRU);
+        }
 
-      // Add read for any tab fields
-      for (Tab<T, R> tab : config.getTabs()) {
-        for (TabField field : tab.getFields()) {
-          boolean giveReadPermission = tab.getForRolesAsString().contains(role) || tab.getForRoles().isEmpty();
-          if (giveReadPermission && !fieldRolePermissions.contains(field.getId(), role)) {
-            fieldRolePermissions.put(field.getId(), role, Collections.singleton(Permission.R));
+        // Add read for any tab fields
+        for (Tab<T, R> tab : config.getTabs()) {
+          for (TabField field : tab.getFields()) {
+            boolean giveReadPermission = tab.getForRolesAsString().contains(role) || tab.getForRoles().isEmpty();
+            if (giveReadPermission && !fieldRolePermissions.contains(field.getId(), role)) {
+              fieldRolePermissions.put(field.getId(), role, Collections.singleton(Permission.R));
+            }
           }
         }
-      }
 
-      // Add read for WorkBaskets
-      for (Search<T, R> basket :
-          Iterables.concat(config.getWorkBasketInputFields(),
-              config.getWorkBasketResultFields())) {
-        for (SearchField<R> searchField : basket.getFields()) {
-          if (searchField.availableToRole(role) && !fieldRolePermissions.contains(searchField.getId(), role)) {
-            fieldRolePermissions.put(searchField.getId(), role, Collections.singleton(Permission.R));
+        // Add read for WorkBaskets
+        for (Search<T, R> basket :
+            Iterables.concat(config.getWorkBasketInputFields(),
+                config.getWorkBasketResultFields())) {
+          for (SearchField<R> searchField : basket.getFields()) {
+            if (searchField.availableToRole(role) && !fieldRolePermissions.contains(searchField.getId(), role)) {
+              fieldRolePermissions.put(searchField.getId(), role, Collections.singleton(Permission.R));
+            }
           }
         }
-      }
 
-      // Add read for Search Input fields
-      for (Search<T, R> search :
-          Iterables.concat(config.getSearchInputFields(),
-              config.getSearchResultFields())) {
-        for (SearchField<R> searchField : search.getFields()) {
-          if (searchField.availableToRole(role) && !fieldRolePermissions.contains(searchField.getId(), role)) {
-            fieldRolePermissions.put(searchField.getId(), role, Collections.singleton(Permission.R));
+        // Add read for Search Input fields
+        for (Search<T, R> search :
+            Iterables.concat(config.getSearchInputFields(),
+                config.getSearchResultFields())) {
+          for (SearchField<R> searchField : search.getFields()) {
+            if (searchField.availableToRole(role) && !fieldRolePermissions.contains(searchField.getId(), role)) {
+              fieldRolePermissions.put(searchField.getId(), role, Collections.singleton(Permission.R));
+            }
           }
         }
       }

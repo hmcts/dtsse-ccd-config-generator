@@ -22,6 +22,9 @@ class AuthorisationCaseTypeGenerator<T, S, R extends HasRole> implements ConfigG
           if (!config.isApplicableRole(r)) {
             continue;
           }
+          if (config.getRolesWithNoCaseTypeAuthorisation().contains(r)) {
+            continue;
+          }
           // Add non case roles.
           if (!r.getRole().matches("\\[.+\\]")) {
             boolean shuttered =

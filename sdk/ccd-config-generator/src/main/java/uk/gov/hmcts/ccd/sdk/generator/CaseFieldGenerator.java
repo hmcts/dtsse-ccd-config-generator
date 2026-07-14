@@ -182,6 +182,13 @@ class CaseFieldGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
       }
       return;
     }
+    if (annotation != null && !Strings.isNullOrEmpty(annotation.typeNameOverride())) {
+      target.put("FieldType", annotation.typeNameOverride());
+      if (!Strings.isNullOrEmpty(annotation.typeParameterOverride())) {
+        target.put("FieldTypeParameter", annotation.typeParameterOverride());
+      }
+      return;
+    }
 
     applyFieldType(ownerClass, field, target, annotation);
   }

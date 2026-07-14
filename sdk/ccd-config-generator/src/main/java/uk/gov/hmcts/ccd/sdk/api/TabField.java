@@ -12,4 +12,7 @@ public class TabField {
   private String displayContextParameter;
   private String label;
   private Integer displayOrder;
+  private boolean tabMetadataConfigured;
+  private String tabLabel;
+  private Integer tabDisplayOrder;
 }

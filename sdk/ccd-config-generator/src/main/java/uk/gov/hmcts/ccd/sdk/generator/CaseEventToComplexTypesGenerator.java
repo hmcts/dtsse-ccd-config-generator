@@ -85,6 +85,9 @@ class CaseEventToComplexTypesGenerator<T, S, R extends HasRole> implements
           data.put("ListElementCode", locator + field.getId());
           CaseEventToFieldsGenerator.applyMetadata(data, field, "EventElementLabel", "EventHintText");
           data.put("FieldDisplayOrder", field.getFieldDisplayOrder());
+          if (field.isPublish()) {
+            data.put("Publish", "Y");
+          }
           if (!Strings.isNullOrEmpty(field.getHint())) {
             data.put("HintText", field.getHint());
           }

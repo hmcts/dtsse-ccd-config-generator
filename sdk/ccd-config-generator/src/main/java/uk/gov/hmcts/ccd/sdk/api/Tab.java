@@ -22,6 +22,7 @@ public class Tab<T, R extends HasRole> {
   private Set<R> forRoles;
   private boolean metadataOnFirstFieldOnly;
   private String showConditionFieldId;
+  private Integer displayOrder;
 
   public List<String> getForRolesAsString() {
     return forRoles.stream().map(HasRole::getRole).sorted().collect(toList());
@@ -85,8 +86,33 @@ public class Tab<T, R extends HasRole> {
       return this;
     }
 
+    /** Configures the tab label and order columns for this row; null omits that column. */
+    public TabBuilder<T, R> field(
+        String fieldName,
+        String showCondition,
+        int displayOrder,
+        String displayContextParameter,
+        String tabLabel,
+        Integer tabDisplayOrder) {
+      fields.add(TabField.builder()
+          .id(fieldName)
+          .showCondition(showCondition)
+          .displayOrder(displayOrder)
+          .displayContextParameter(displayContextParameter)
+          .tabMetadataConfigured(true)
+          .tabLabel(tabLabel)
+          .tabDisplayOrder(tabDisplayOrder)
+          .build());
+      return this;
+    }
+
     public TabBuilder<T, R> metadataOnFirstFieldOnly() {
       this.metadataOnFirstFieldOnly = true;
+      return this;
+    }
+
+    public TabBuilder<T, R> displayOrder(int value) {
+      this.displayOrder = value;
       return this;
     }
 

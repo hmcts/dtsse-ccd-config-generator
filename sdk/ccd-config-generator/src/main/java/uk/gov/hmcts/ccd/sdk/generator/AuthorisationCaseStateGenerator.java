@@ -30,6 +30,10 @@ class AuthorisationCaseStateGenerator<T, S, R extends HasRole> implements Config
 
     for (Event<T, R, S> event : config.getEvents().values()) {
 
+      if (!event.isInferStateAuthorisation()) {
+        continue;
+      }
+
       SetMultimap<R, Permission> grants = event.getGrants();
       for (R role : event.getGrants().keys()) {
         if (!config.isApplicableRole(role)) {

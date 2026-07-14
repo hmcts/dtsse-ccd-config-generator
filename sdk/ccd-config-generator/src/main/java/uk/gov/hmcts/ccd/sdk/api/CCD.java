@@ -35,6 +35,9 @@ public @interface CCD {
    */
   String hint() default "";
 
+  /** Optional state Description when it intentionally differs from the state Name. */
+  String description() default "";
+
   String showCondition() default "";
 
   String regex() default "";
@@ -42,6 +45,9 @@ public @interface CCD {
   int displayOrder() default 0;
 
   FieldType typeOverride() default FieldType.Unspecified;
+
+  /** External CCD field type name when the type is a service-defined complex type. */
+  String typeNameOverride() default "";
 
   String typeParameterOverride() default "";
 
@@ -64,11 +70,26 @@ public @interface CCD {
 
   boolean searchable() default true;
 
+  /**
+   * Emits the Searchable column even when its value is the default {@code Y}.
+   */
+  boolean includeSearchable() default false;
+
   int min() default Integer.MIN_VALUE;
 
   int max() default Integer.MAX_VALUE;
 
   boolean retainHiddenValue() default false;
+
+  /**
+   * Optional legacy RetainHiddenValue spelling, for example {@code Yes}.
+   */
+  String retainHiddenValueValue() default "";
+
+  /**
+   * Optional row-specific live date in CCD's {@code dd/MM/yyyy} format.
+   */
+  String liveFrom() default "";
 
   /** Omits the state Description column while retaining its Name. */
   boolean omitDescription() default false;

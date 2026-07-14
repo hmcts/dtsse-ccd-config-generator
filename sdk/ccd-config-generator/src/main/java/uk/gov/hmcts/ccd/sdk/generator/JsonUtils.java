@@ -152,8 +152,8 @@ public class JsonUtils {
     if (annotation.showSummaryContent()) {
       target.put("ShowSummaryContentOption", "Y");
     }
-    if (!annotation.searchable()) {
-      target.put("Searchable", "N");
+    if (!annotation.searchable() || annotation.includeSearchable()) {
+      target.put("Searchable", annotation.searchable() ? "Y" : "N");
     }
     if (!Strings.isNullOrEmpty(annotation.showCondition())) {
       target.put("FieldShowCondition", annotation.showCondition());
@@ -170,8 +170,10 @@ public class JsonUtils {
     if (annotation.max() < Integer.MAX_VALUE) {
       target.put("Max", annotation.max());
     }
-    if (annotation.retainHiddenValue()) {
-      target.put("RetainHiddenValue", "Y");
+    if (annotation.retainHiddenValue() || !Strings.isNullOrEmpty(annotation.retainHiddenValueValue())) {
+      target.put("RetainHiddenValue", Strings.isNullOrEmpty(annotation.retainHiddenValueValue())
+          ? "Y"
+          : annotation.retainHiddenValueValue());
     }
   }
 

@@ -60,11 +60,15 @@ public class ResolvedCCDConfig<T, S, R extends HasRole> {
   String caseHistoryLabel = " ";
   boolean shutterService = false;
   Map<String, List<? extends Enum<?>>> fixedLists = new LinkedHashMap<>();
+  Set<Class<?>> registeredComplexTypes = new HashSet<>();
   Map<String, String> stateLabels = new HashMap<>();
   Class<?> schemaProfile;
   Set<R> applicableRoles;
   boolean legacyCaseAuthorisationIdColumn;
   Set<R> caseTypeAuthorisationRolesWithLiveFrom = new HashSet<>();
+  Set<R> rolesWithNoCaseTypeAuthorisation = new HashSet<>();
+  boolean retainCaseRoleLiveFrom;
+  boolean inferFieldAuthorisation = true;
 
   Table<S, R, Set<Permission>> stateRolePermissions = HashBasedTable.create();
 

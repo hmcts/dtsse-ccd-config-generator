@@ -296,7 +296,12 @@ public class FieldCollection {
       return fieldBuilder.complex();
     }
 
-    FieldBuilder<?, StateType, Type, Parent> field(String id) {
+    /**
+     * Adds an event field by its external CCD identifier. This is intended for definition modules
+     * whose event schema is shared with a runtime DTO but cannot safely express every field as a
+     * Java method reference.
+     */
+    public FieldBuilder<?, StateType, Type, Parent> field(String id) {
       FieldBuilder<?, StateType, Type, Parent> result = createField(id, null);
       explicitFields.add(result);
       return result;

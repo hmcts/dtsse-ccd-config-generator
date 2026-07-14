@@ -44,7 +44,9 @@ class StateGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, S, R
         enumConstant.toString();
     field.put("Name", name);
     if (ccd == null || !ccd.omitDescription()) {
-      field.put("Description", name);
+      field.put("Description", ccd != null && !Strings.isNullOrEmpty(ccd.description())
+          ? ccd.description()
+          : name);
     }
     String desc = ccd != null ? ccd.hint() : "";
 

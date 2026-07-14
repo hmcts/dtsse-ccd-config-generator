@@ -7,9 +7,12 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonUnwrapped;
 import java.lang.reflect.AnnotatedElement;
 import java.lang.reflect.Field;
+import java.lang.reflect.Modifier;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
 import org.springframework.util.ReflectionUtils;
@@ -36,11 +39,40 @@ public class FieldUtils {
   }
 
   public static List<Field> getCaseFields(Class caseDataClass, Class<?> schemaProfile) {
-    List<Field> fields = new ArrayList<>();
-    ReflectionUtils.doWithFields(caseDataClass, fields::add, field -> true);
-    return fields.stream()
-        .filter(f -> !isFieldIgnored(f, schemaProfile))
-        .collect(Collectors.toList());
+    Map<String, Field> fieldsById = new LinkedHashMap<>();
+    for (Class<?> type = caseDataClass; type != null && type != Object.class;
+         type = type.getSuperclass()) {
+      for (Field field : type.getDeclaredFields()) {
+        if (Modifier.isStatic(field.getModifiers())) {
+          continue;
+        }
+        String id = getFieldId(field, null, schemaProfile);
+        Field selected = fieldsById.get(id);
+        if (selected == null) {
+          fieldsById.put(id, field);
+        } else {
+          validateRedeclaredField(id, selected, field, schemaProfile);
+        }
+      }
+    }
+    return fieldsById.values().stream()
+        .filter(field -> !isFieldIgnored(field, schemaProfile))
+        .collect(Collectors.toCollection(ArrayList::new));
+  }
+
+  private static void validateRedeclaredField(
+      String id, Field selected, Field inherited, Class<?> schemaProfile) {
+    if (!selected.getType().equals(inherited.getType())) {
+      throw new IllegalStateException("Conflicting Java types for redeclared CCD field " + id
+          + ": " + selected + " and " + inherited);
+    }
+    Optional<CCD> selectedDefinition = getCCD(selected, schemaProfile);
+    Optional<CCD> inheritedDefinition = getCCD(inherited, schemaProfile);
+    if (selectedDefinition.isPresent() && inheritedDefinition.isPresent()
+        && !selectedDefinition.get().equals(inheritedDefinition.get())) {
+      throw new IllegalStateException("Conflicting @CCD definitions for redeclared field " + id
+          + ": " + selected + " and " + inherited);
+    }
   }
 
   public static Optional<CCD> getCCD(AnnotatedElement element, Class<?> schemaProfile) {
@@ -105,6 +137,9 @@ public class FieldUtils {
   }
 
   public static Optional<JsonUnwrapped> isUnwrappedField(Class caseDataClass, String fieldName) {
+    if (caseDataClass == null) {
+      return Optional.empty();
+    }
     Field field = ReflectionUtils.findField(caseDataClass, fieldName);
     if (field == null) {
       return Optional.empty();

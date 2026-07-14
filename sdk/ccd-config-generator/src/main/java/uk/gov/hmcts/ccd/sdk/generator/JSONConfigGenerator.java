@@ -49,6 +49,8 @@ public class JSONConfigGenerator<T, S, R extends HasRole> {
                   && config.getCaseTypeAuthorisationRolesWithLiveFrom().stream()
                       .map(HasRole::getRole)
                       .anyMatch(role -> role.equals(row.get("UserRole"))))
+              || (path.getFileName().toString().equals("CaseRoles.json")
+                  && config.isRetainCaseRoleLiveFrom())
       );
     }
 

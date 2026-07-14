@@ -18,11 +18,13 @@ public class Field<Type, StateType, Parent, Grandparent> {
   DisplayContext context;
   String displayContextParameter;
   String showCondition;
+  String pageShowCondition;
   String page;
   String caseEventFieldLabel;
   String caseEventFieldHint;
   Type defaultValue;
   boolean showSummary;
+  boolean showSummaryColumn;
   int fieldDisplayOrder;
   int pageFieldDisplayOrder;
   int pageDisplayOrder;
@@ -37,6 +39,9 @@ public class Field<Type, StateType, Parent, Grandparent> {
   private MidEvent midEventCallback;
   boolean retainHiddenValue;
   String retainHiddenValueValue;
+  boolean publish;
+  String eventFieldPublish;
+  boolean includePageColumnNumber;
 
   Class<Type> clazz;
   @ToString.Exclude
@@ -52,6 +57,7 @@ public class Field<Type, StateType, Parent, Grandparent> {
       result.parent = parent;
       result.context = DisplayContext.Complex;
       result.id = id;
+      result.includePageColumnNumber = true;
       return result;
     }
 
@@ -88,11 +94,20 @@ public class Field<Type, StateType, Parent, Grandparent> {
 
     public FieldBuilder<Type, StateType, Parent, Grandparent> showSummary() {
       this.showSummary = true;
+      this.showSummaryColumn = true;
       return this;
     }
 
     public FieldBuilder<Type, StateType, Parent, Grandparent> showSummary(boolean b) {
       this.showSummary = b;
+      this.showSummaryColumn = b;
+      return this;
+    }
+
+    /** Emits an explicit Y or N ShowSummaryChangeOption value. */
+    public FieldBuilder<Type, StateType, Parent, Grandparent> showSummaryChangeOption(boolean value) {
+      this.showSummary = value;
+      this.showSummaryColumn = true;
       return this;
     }
 
@@ -133,6 +148,29 @@ public class Field<Type, StateType, Parent, Grandparent> {
     public FieldBuilder<Type, StateType, Parent, Grandparent> retainHiddenValue(boolean value) {
       this.retainHiddenValue = value;
       this.retainHiddenValueValue = null;
+      return this;
+    }
+
+    /** Publishes this event-complex element to the downstream event message. */
+    public FieldBuilder<Type, StateType, Parent, Grandparent> publish() {
+      this.publish = true;
+      this.eventFieldPublish = "Y";
+      return this;
+    }
+
+    public FieldBuilder<Type, StateType, Parent, Grandparent> doNotPublish() {
+      this.eventFieldPublish = "N";
+      return this;
+    }
+
+    public FieldBuilder<Type, StateType, Parent, Grandparent> omitPublish() {
+      this.eventFieldPublish = "";
+      return this;
+    }
+
+    /** Omits PageColumnNumber for this event field only. */
+    public FieldBuilder<Type, StateType, Parent, Grandparent> omitPageColumnNumber() {
+      this.includePageColumnNumber = false;
       return this;
     }
   }

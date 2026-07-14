@@ -76,6 +76,16 @@ public class AuthorisationCaseTypeGeneratorTest {
                 UserRole.LOCAL_AUTHORITY.getRole());
     }
 
+    @Test
+    public void omitsSelectedCaseTypeAuthorisationRoles() {
+        ConfigBuilderImpl<CaseData, State, UserRole> builder = newBuilder();
+        builder.applicableRoles(UserRole.SYSTEM_UPDATE, UserRole.LOCAL_AUTHORITY);
+        builder.omitCaseTypeAuthorisation(UserRole.SYSTEM_UPDATE);
+
+        assertThat(generateCrudByRole(builder).keySet())
+            .containsExactly(UserRole.LOCAL_AUTHORITY.getRole());
+    }
+
     private ConfigBuilderImpl<CaseData, State, UserRole> newBuilder() {
         ResolvedCCDConfig<CaseData, State, UserRole> config = new ResolvedCCDConfig<>(
             CaseData.class, State.class, UserRole.class, Map.of(),

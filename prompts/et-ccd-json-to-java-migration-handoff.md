@@ -12,8 +12,8 @@ The migration spans the generator repository and its ET submodule:
 
 | Repository | Branch | Current reviewed state |
 | --- | --- | --- |
-| `hmcts/dtsse-ccd-config-generator` | `json-to-java` | Slice 3 generator-fit follow-up in this commit |
-| `hmcts/et-ccd-callbacks` | `json-to-java-migration` | `a72f1bee6` — Slice 3 generator-fit snapshot follow-up |
+| `hmcts/dtsse-ccd-config-generator` | `json-to-java` | Slice 4 exact conversion in this commit |
+| `hmcts/et-ccd-callbacks` | `json-to-java-migration` | `63bb25c58` — Slice 4 exact conversion |
 
 The root repository must point at the intended ET commit. A fresh session should inspect both worktrees before changing
 anything:
@@ -48,22 +48,22 @@ Read the migration material in this order:
 
 ## Current convergence
 
-The immutable initial baseline is 52,227 remaining differences across `cftlib` and `prod`. The committed snapshot after
-the third slice is:
+The immutable initial baseline is 52,227 remaining differences across `cftlib` and `prod`. The committed exact-conversion
+snapshot after the fourth slice is:
 
 | Metric | Current value |
 | --- | ---: |
-| Exact Java rows | 2,448 |
+| Exact Java rows | 7,719 |
 | Changed rows | 0 |
 | Unexpected rows | 0 |
-| Remaining differences | 49,779 |
-| Completed differences | 2,448 |
-| Completion | 4.69% |
-| ET production/generation Java delta | +2,004 |
-| SDK production Java delta | +828 |
-| Total production Java delta | +2,832 |
-| Verification Java delta | +675 |
-| Production lines per completed difference | 1.16 |
+| Remaining differences | 44,508 |
+| Completed differences | 7,719 |
+| Completion | 14.78% |
+| ET production/generation Java delta | +16,347 |
+| SDK production Java delta | +1,105 |
+| Total production Java delta | +17,452 |
+| Verification Java delta | +843 |
+| Production lines per completed difference | 2.26 |
 
 The authoritative values are in
 `test-projects/et-ccd-callbacks/ccd-definitions/migration-progress.json`. If this table and the snapshot disagree, the
@@ -97,6 +97,7 @@ metric effect. An unproven candidate does not belong in this ledger.
 | Slice 2 generator-fit follow-up | this review commit | `bb666f5e5` | Replaced magic empty event labels with typed omission metadata |
 | Slice 3: paired regional Listings | `c3ecad5f` | `2241a7da6` | Added 1,838 exact rows; reached 4.69% |
 | Slice 3 generator-fit follow-up | this review commit | `a72f1bee6` | Made access-profile `LiveFrom` retention row-specific |
+| Slice 4: paired regional Multiples | this commit | `63bb25c58` | Added 5,271 exact rows; reached 14.78% |
 
 The ET submodule commit must be published before a root commit which points to it. Otherwise another checkout cannot
 resolve the root tree. Commit ET changes first, then commit the updated submodule pointer and related SDK or prompt
@@ -327,9 +328,79 @@ Post-commit generator-fit review:
   branches, event sequences and tab rows express real golden-definition differences; no further SDK refactor is
   warranted for this slice.
 
+### Slice 4: paired regional Multiples aggregates
+
+Status: exact conversion complete in `cftlib` and `prod`; post-commit generator-fit review pending.
+
+The slice adds 5,271 exact rows. Its 3,754 case-type-specific rows pull in 1,517 newly owned jurisdiction-global rows;
+the exact dependency closure is therefore larger than the pre-implementation 4,971-row forecast.
+
+| Workbook sheet | cftlib E/W | cftlib Scotland | prod E/W | prod Scotland |
+| --- | ---: | ---: | ---: | ---: |
+| `CaseType` | 1 | 1 | 1 | 1 |
+| `State` | 5 | 5 | 5 | 5 |
+| `CaseTypeTab` | 32 | 32 | 14 | 14 |
+| `CaseEvent` | 27 | 26 | 16 | 16 |
+| `CaseEventToFields` | 148 | 154 | 67 | 73 |
+| `CaseField` | 147 | 150 | 56 | 59 |
+| `Categories` | 82 | 82 | 82 | 82 |
+| `ComplexTypes` | 180 | 180 | 174 | 174 |
+| `EventToComplexTypes` | 53 | 52 | 9 | 9 |
+| `RoleToAccessProfiles` | 7 | 7 | 5 | 5 |
+| regional fixed-list sheet | 272 | 277 | 80 | 85 |
+| `SearchInputFields` | 3 | 2 | 3 | 2 |
+| `SearchResultFields` | 2 | 2 | 2 | 2 |
+| `WorkBasketInputFields` | 3 | 2 | 3 | 2 |
+| `WorkBasketResultFields` | 3 | 2 | 3 | 2 |
+| `CaseRoles` | 2 | 2 | 2 | 2 |
+| `AuthorisationCaseType` | 6 | 6 | 5 | 5 |
+| `AuthorisationCaseField` | 732 | 723 | 216 | 227 |
+| `AuthorisationCaseEvent` | 89 | 86 | 40 | 36 |
+| `AuthorisationCaseState` | 26 | 26 | 25 | 25 |
+| **Total** | **1,820** | **1,817** | **808** | **826** |
+
+Important implementation choices:
+
+- `MultipleData` remains the runtime wire model. The generator deterministically selects the most-derived declaration
+  for each external CCD field identity, rejects incompatible redeclarations and applies profile exclusion only after
+  duplicate resolution. The 34 fields redeclared from `BaseCaseData` therefore generate once without relying on JVM
+  reflection order.
+- Four typed schema markers represent England/Wales and Scotland in `cftlib` and `prod`. Generation runs with each
+  Spring profile into a separate directory, and the convergence tool selects the matching directory while retaining a
+  backwards-compatible flat-directory fallback.
+- Common roles, access policies, complex-type registration and configuration support are shared. Regional and
+  environment differences remain explicit in four small foundation components and profile-specific field metadata.
+- The previously converted `ImportFile` complex type remains owned by Admin. Identical global rows continue to coalesce
+  at the jurisdiction boundary; Multiples does not create a second owner or change the shared definition.
+- Fixed-list Java enums preserve legacy codes and non-sequential display orders independently of Java constant names.
+  Definition-only complex types can be registered even when a runtime field names the CCD type explicitly.
+- Exact legacy omission and spelling differences are represented through typed metadata, including raw dynamic
+  post-state expressions, row-specific tab metadata, explicit `Y`/`N` event-field values, selective authorisation
+  inference, case-role live dates and `RetainHiddenValue: Yes`.
+- Existing callback URLs are emitted as metadata only. No callback handler, controller or runtime route is introduced.
+- Golden JSON is unchanged. All 7,719 generated rows are exact with zero changed or unexpected rows.
+
+The primary ET files are:
+
+```text
+src/ccdMigration/java/.../ccd/migration/config/*Multiple*Definition.java
+src/ccdMigration/java/.../ccd/migration/config/MultipleDefinitionSupport.java
+src/ccdMigration/java/.../ccd/migration/config/MultipleDefinitionRows.java
+src/ccdMigration/java/.../ccd/migration/config/MultipleFixedLists.java
+et-shared/src/main/java/.../model/multiples/MultipleData.java
+et-shared/src/main/java/.../model/generic/BaseCaseData.java
+et-shared/src/main/java/.../model/ccd/Multiple*.java
+src/main/java/.../domain/caseview/state/MultipleCaseState.java
+```
+
+Post-commit generator-fit review:
+
+- Pending from the exact conversion review point. The 17,452-line production delta, especially the formatted row
+  catalog and fixed-list declarations, requires an explicit follow-up review before Slice 4 is complete.
+
 ## SDK migration capabilities
 
-Capabilities delivered by Slices 1 to 3 and available for reuse:
+Capabilities delivered by Slices 1 to 4 and available for reuse:
 
 - typed `CaseType` and `Jurisdiction` metadata, including live dates, printable-document URLs, shuttering, deletion and
   retry metadata;
@@ -356,6 +427,17 @@ Capabilities delivered by Slices 1 to 3 and available for reuse:
 - exact field-level page labels, mid-event URLs and retain-hidden-value metadata; and
 - optional legacy authorisation column names and selective retention of access-profile and authorisation `LiveFrom`
   values.
+- separate `cftlib` and `prod` generation directories selected by active definition modules and matched by the XLSX
+  harness;
+- deterministic most-derived field redeclaration with conflicting Java type or applicable `@CCD` metadata rejection;
+- explicit complex-type registration and external CCD complex-type names without changing runtime Java field types;
+- fixed-list codes independent of Java enum names and row-specific fixed-list display orders;
+- raw dynamic event post-state expressions, optional event display-order output and selective event/state/field
+  authorisation inference;
+- per-row case-role live dates, case-type authorisation exclusions and exact searchable/retain-hidden-value spellings;
+  and
+- row-specific event-field publish, summary, page-condition and page-column metadata plus row-specific tab label/order
+  metadata.
 
 Class-level access is a default for `AuthorisationCaseField` generation only. It does not grant
 `AuthorisationComplexType` permissions: complex-type access remains explicit through `builder.grantComplexType(...)`.
@@ -364,35 +446,44 @@ These capabilities have backwards-compatible defaults and focused SDK generation
 invalid-combination tests in `MigrationDefinitionGeneratorTest`, `MigrationArchitectureTest`,
 `AuthorisationCaseFieldGeneratorTest` and `AuthorisationCaseTypeGeneratorTest`.
 
-Capabilities anticipated by the architecture but not yet delivered:
+The remaining architecture capability not yet delivered is the build-side ownership manifest and legacy/Java overlay
+used for deployable packaging.
 
-- explicit `cftlib`/`prod` module selection for environment-only definitions; and
-- the build-side ownership manifest and legacy/Java overlay used for deployable packaging.
+Add it only when a coherent slice needs deployable packaging; do not implement it speculatively.
 
-Add these only when the next coherent slice needs them. Do not implement the whole list speculatively.
+## Recommended next slice: paired Singles schema, base lifecycle and access
 
-## Recommended next slice: paired regional Multiples aggregates
+The recommended fifth slice prepares and enables `ET_EnglandWales` and `ET_Scotland` together, covering the complete
+regional root-field projection and access foundation plus these 14 base lifecycle events:
+`initiateCase`, `INITIATE_CASE_DRAFT`, `UPDATE_CASE_DRAFT`, `SUBMIT_CASE_DRAFT`, `UPDATE_CASE_SUBMITTED`,
+`REMOVE_OWN_REP_AS_RESPONDENT`, `REMOVE_OWN_REP_AS_CLAIMANT`, `assignCase`, `preAcceptanceCase`,
+`acceptRejectedCase`, `disposeCase`, `reinstateClosedCase`, `deleteDraftCase` and `DELETE_DRAFT_CASE`.
 
-The recommended fourth slice is `ET_EnglandWales_Multiple` together with `ET_Scotland_Multiple`. They share the
-`MultipleData` runtime model and `MultipleCaseState`, and are the next smallest regional aggregate boundary after
-Listings. Converting them together continues to exercise the regional profile and applicable-role APIs while avoiding
-a one-region implementation which bakes regional differences into shared code.
+This boundary follows the architecture constraint that a Singles foundation must not expose roughly one thousand
+unreviewed fields merely to migrate one event. It establishes the full typed schema and explicit field access once, then
+moves the first coherent lifecycle family with its pages and event permissions.
 
-The processed `cftlib` workbooks contain 1,325 England/Wales and 1,318 Scotland case-type-specific rows for the pair, so
-2,643 exact rows is the workbook-derived minimum forecast for that profile alone. The full forecast must add newly
-owned complex-type, fixed-list, event-to-complex and complex-authorisation rows, then separately inventory `prod`:
-non-production Multiples files mean the two profiles are not safely assumed to have the same total.
+The workbook-derived case-type-specific minimum is 24,119 rows before newly owned complex types, fixed lists and
+event-to-complex rows:
 
-Before implementation, inventory those rows exactly and prove:
+| Profile and case type | Schema/access foundation | Lifecycle event rows | Minimum |
+| --- | ---: | ---: | ---: |
+| cftlib `ET_EnglandWales` | 6,103 | 163 | 6,266 |
+| cftlib `ET_Scotland` | 5,730 | 167 | 5,897 |
+| prod `ET_EnglandWales` | 6,002 | 161 | 6,163 |
+| prod `ET_Scotland` | 5,628 | 165 | 5,793 |
+| **Total** | **23,463** | **656** | **24,119** |
 
-- how `MultipleData`'s 34 redeclarations of fields inherited from `BaseCaseData` map to one CCD identity each, without
-  changing the runtime serialisation model or relying on reflection order;
-- which modules are common, regional, production-only or non-production-only;
-- which shared complex types and fixed lists are already exact because Listings owns them, and which are newly owned;
-- that concrete collection wrappers continue to resolve to their value types and conflicting duplicate field metadata
-  fails explicitly; and
-- whether the planned environment-module selector is required for this slice or whether the exact prod/cftlib boundary
-  can be expressed with a smaller typed API.
+The foundation subtotal covers `CaseType`, all regional `CaseField` rows, `CaseRoles`, `State`,
+`RoleToAccessProfiles`, and case-type, field and state authorisation. The lifecycle subtotal covers `CaseEvent`,
+`CaseEventToFields` and event authorisation for the 14 named IDs. The next session must compute the global dependency
+closure and subtract rows already exact through Listings or Multiples before accepting a final forecast.
+
+Expected SDK reuse is typed regional/environment profiles, deterministic inherited-field selection, explicit complex
+registration, applicable roles, fixed-list registration and explicit-only authorisation. Known blockers are the
+1,930-line `CaseData` union model and its inherited fields, 18,801 field-authorisation rows in the minimum, cftlib/prod
+field deltas, and the need to prevent unrelated tab, search and later-event rows from being inferred when the foundations
+are enabled. Keep ET1/ET3 intake and every later business family out of this slice.
 
 This is a recommendation, not permission to skip the normal starting inventory. Re-run convergence and verify the
 golden workbooks before choosing or implementing the slice.

@@ -68,6 +68,12 @@ public interface ConfigBuilder<T, S, R extends HasRole> {
     throw new UnsupportedOperationException("This ConfigBuilder does not support fixed-list registration");
   }
 
+  /** Registers generated complex schema types that are referenced through explicit CCD names. */
+  default void registerComplexTypes(Class<?>... types) {
+    throw new UnsupportedOperationException(
+        "This ConfigBuilder does not support explicit complex-type registration");
+  }
+
   /**
    * Selects the typed schema projection used for this case type.
    */
@@ -96,6 +102,27 @@ public interface ConfigBuilder<T, S, R extends HasRole> {
   default void retainCaseTypeAuthorisationLiveFrom(R... roles) {
     throw new UnsupportedOperationException(
         "This ConfigBuilder does not support authorisation LiveFrom metadata");
+  }
+
+  /**
+   * Keeps roles available to field, event and state policies without emitting a case-type
+   * authorisation row for them.
+   */
+  default void omitCaseTypeAuthorisation(R... roles) {
+    throw new UnsupportedOperationException(
+        "This ConfigBuilder does not support case-type authorisation exclusions");
+  }
+
+  /** Retains row-specific live dates on generated case-role rows. */
+  default void retainCaseRoleLiveFrom() {
+    throw new UnsupportedOperationException(
+        "This ConfigBuilder does not support case-role LiveFrom metadata");
+  }
+
+  /** Uses only explicit field access policies, without event, tab or search inference. */
+  default void omitFieldAuthorisationInference() {
+    throw new UnsupportedOperationException(
+        "This ConfigBuilder does not support explicit-only field authorisation");
   }
 
   default void stateLabel(String stateId, String label) {

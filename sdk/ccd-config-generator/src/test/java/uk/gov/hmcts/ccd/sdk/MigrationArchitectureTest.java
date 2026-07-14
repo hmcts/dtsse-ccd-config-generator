@@ -1,6 +1,7 @@
 package uk.gov.hmcts.ccd.sdk;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.lang.reflect.Field;
 import java.util.List;
@@ -61,6 +62,30 @@ public class MigrationArchitectureTest {
         .isEqualTo("secondRegional");
   }
 
+  @Test
+  public void keepsTheMostDerivedCompatibleRedeclarationOnce() {
+    assertThat(FieldUtils.getCaseFields(CompatibleChild.class))
+        .extracting(Field::getDeclaringClass, Field::getName)
+        .containsExactly(
+            org.assertj.core.groups.Tuple.tuple(CompatibleChild.class, "value"),
+            org.assertj.core.groups.Tuple.tuple(CompatibleParent.class, "parentOnly")
+        );
+  }
+
+  @Test
+  public void rejectsConflictingRedeclaredFieldTypes() {
+    assertThatThrownBy(() -> FieldUtils.getCaseFields(ConflictingChild.class))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("Conflicting Java types for redeclared CCD field value");
+  }
+
+  @Test
+  public void doesNotFallBackToAnInheritedFieldWhenTheMostDerivedDeclarationIsProfileExcluded() {
+    assertThat(FieldUtils.getCaseFields(ProfileExcludedChild.class, FirstProfile.class))
+        .extracting(Field::getName)
+        .doesNotContain("value");
+  }
+
   private static class FirstFoundation implements CCDConfig<SharedData, TestState, TestRole> {
     @Override
     public String groupingKey() {
@@ -116,6 +141,32 @@ public class MigrationArchitectureTest {
   }
 
   private static final class SecondProfile {
+  }
+
+  private static class CompatibleParent {
+    private String value;
+    private String parentOnly;
+  }
+
+  private static class CompatibleChild extends CompatibleParent {
+    private String value;
+  }
+
+  private static class ConflictingParent {
+    private String value;
+  }
+
+  private static class ConflictingChild extends ConflictingParent {
+    private Integer value;
+  }
+
+  private static class ProfileExcludedParent {
+    private String value;
+  }
+
+  private static class ProfileExcludedChild extends ProfileExcludedParent {
+    @CCD(excludeFromProfiles = FirstProfile.class)
+    private String value;
   }
 
   @ComplexType(name = "Profiled", generate = true)

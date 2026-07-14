@@ -38,10 +38,11 @@ public class CaseRoleGenerator<T, S, R extends HasRole> implements ConfigGenerat
   @SneakyThrows
   private static Map<String, Object> enumToJsonMap(String caseType, Class<?> enumType,
                                                    Object enumConstant, String id) {
-    Map<String, Object> field = JsonUtils.caseRow(caseType);
-    field.put("ID", id);
-
     CCD ccd = enumType.getField(enumConstant.toString()).getAnnotation(CCD.class);
+    Map<String, Object> field = ccd != null && !Strings.isNullOrEmpty(ccd.liveFrom())
+        ? JsonUtils.caseRow(caseType, ccd.liveFrom())
+        : JsonUtils.caseRow(caseType);
+    field.put("ID", id);
     String name = ccd != null && !Strings.isNullOrEmpty(ccd.label()) ? ccd.label() :
         enumConstant.toString();
     String desc = ccd != null ? ccd.hint() : "";

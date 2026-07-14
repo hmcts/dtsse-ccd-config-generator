@@ -46,7 +46,11 @@ class CaseTypeTabGenerator<T, S, R extends HasRole> implements ConfigGenerator<T
       }
 
       for (String role : roles) {
-        addTab(config.getCaseType(), result, caseFields, tabDisplayOrder++, tab, role);
+        int outputDisplayOrder = tab.getDisplayOrder() == null
+            ? tabDisplayOrder
+            : tab.getDisplayOrder();
+        addTab(config.getCaseType(), result, caseFields, outputDisplayOrder, tab, role);
+        tabDisplayOrder++;
       }
     }
 
@@ -70,9 +74,21 @@ class CaseTypeTabGenerator<T, S, R extends HasRole> implements ConfigGenerator<T
       int outputDisplayOrder = tabField.getDisplayOrder() == null
           ? tabFieldDisplayOrder
           : tabField.getDisplayOrder();
+      boolean includeDefaultMetadata = !tab.isMetadataOnFirstFieldOnly() || tabFieldDisplayOrder == 1;
       Map<String, Object> field = buildField(caseType, tab.getTabID() + role, tabField.getId(),
           tab.getLabelText(), tabDisplayOrder, outputDisplayOrder, role, tab.getChannel(),
-          !tab.isMetadataOnFirstFieldOnly() || tabFieldDisplayOrder == 1);
+          !tabField.isTabMetadataConfigured() && includeDefaultMetadata);
+      if (tabField.isTabMetadataConfigured()) {
+        if (tabField.getTabLabel() != null) {
+          field.put("TabLabel", tabField.getTabLabel());
+        }
+        if (tabField.getTabDisplayOrder() != null) {
+          field.put("TabDisplayOrder", tabField.getTabDisplayOrder());
+        }
+        if (tabFieldDisplayOrder == 1 && !role.isEmpty()) {
+          field.put("UserRole", role);
+        }
+      }
       boolean showConditionOnThisField = tab.getShowConditionFieldId() == null
           ? tabFieldDisplayOrder == 1
           : tab.getShowConditionFieldId().equals(tabField.getId());

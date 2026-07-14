@@ -1,6 +1,7 @@
 package uk.gov.hmcts.ccd.sdk.generator;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static uk.gov.hmcts.ccd.sdk.api.Permission.CRU;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -58,6 +59,34 @@ public class AuthorisationCaseFieldGeneratorTest {
         .doesNotContain("optOutField", "ignoredField");
   }
 
+  @Test
+  public void canDisableEventTabAndSearchFieldAuthorisationInference() {
+    ResolvedCCDConfig<InferredData, TestState, TestRole> config = new ResolvedCCDConfig<>(
+        InferredData.class,
+        TestState.class,
+        TestRole.class,
+        Map.of(),
+        ImmutableSet.copyOf(TestState.values())
+    );
+    ConfigBuilderImpl<InferredData, TestState, TestRole> builder = new ConfigBuilderImpl<>(config);
+    builder.caseType("ExplicitAccess", "Explicit access", "Explicit access test");
+    builder.omitCaseHistory();
+    builder.omitFieldAuthorisationInference();
+    builder.event("edit")
+        .forAllStates()
+        .grant(CRU, TestRole.DEFAULT)
+        .fields()
+        .optional(InferredData::getValue)
+        .done();
+
+    new AuthorisationCaseFieldGenerator<InferredData, TestState, TestRole>()
+        .write(tmp.getRoot(), builder.build());
+
+    assertThat(new File(tmp.getRoot(),
+        "AuthorisationCaseField/" + TestRole.DEFAULT.getRole() + ".json"))
+        .doesNotExist();
+  }
+
   private List<Map.Entry<String, String>> fieldPermissions(TestRole role) {
     return rows(role).stream()
         .map(row -> Map.entry((String) row.get("CaseFieldID"), (String) row.get("CRUD")))
@@ -96,6 +125,14 @@ public class AuthorisationCaseFieldGeneratorTest {
 
     @CCD(ignore = true)
     private String ignoredField;
+  }
+
+  private static class InferredData {
+    private String value;
+
+    public String getValue() {
+      return value;
+    }
   }
 
   public static class DefaultAccess implements HasAccessControl {

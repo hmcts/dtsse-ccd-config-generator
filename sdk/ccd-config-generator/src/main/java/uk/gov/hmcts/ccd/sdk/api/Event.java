@@ -29,6 +29,8 @@ public class Event<T, R extends HasRole, S> {
   private Set<S> preState;
   private Set<S> postState;
   private boolean postStateWildcard;
+  private String postStateExpression;
+  private boolean inferStateAuthorisation;
   private String description;
   private String showCondition;
   private Map<Webhook, String> retries;
@@ -40,6 +42,7 @@ public class Event<T, R extends HasRole, S> {
   private boolean showEventNotesColumn;
   private boolean publishToCamunda;
   private boolean publishColumn;
+  private boolean displayOrderColumn;
   private Integer ttlIncrement;
   private AboutToStart<T, S> aboutToStartCallback;
   private AboutToSubmit<T, S> aboutToSubmitCallback;
@@ -93,6 +96,8 @@ public class Event<T, R extends HasRole, S> {
       result.showSummaryColumn = true;
       result.showEventNotesColumn = true;
       result.publishColumn = true;
+      result.displayOrderColumn = true;
+      result.inferStateAuthorisation = true;
 
       return result;
     }
@@ -123,6 +128,21 @@ public class Event<T, R extends HasRole, S> {
 
     public EventBuilder<T, R, S> postStateWildcard() {
       this.postStateWildcard = true;
+      return this;
+    }
+
+    /** Uses an existing CCD dynamic post-state expression. */
+    public EventBuilder<T, R, S> postStateExpression(String expression) {
+      if (expression == null || expression.isBlank()) {
+        throw new IllegalArgumentException("Post-state expression must not be blank");
+      }
+      this.postStateExpression = expression;
+      return this;
+    }
+
+    /** Keeps state authorisation fully explicit for this event. */
+    public EventBuilder<T, R, S> omitStateAuthorisationInference() {
+      this.inferStateAuthorisation = false;
       return this;
     }
 
@@ -163,6 +183,11 @@ public class Event<T, R extends HasRole, S> {
 
     public EventBuilder<T, R, S> omitPublish() {
       this.publishColumn = false;
+      return this;
+    }
+
+    public EventBuilder<T, R, S> omitDisplayOrder() {
+      this.displayOrderColumn = false;
       return this;
     }
 
