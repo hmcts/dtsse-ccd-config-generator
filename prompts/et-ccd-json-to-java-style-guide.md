@@ -7,6 +7,9 @@ The words **must**, **must not**, **should** and **may** are normative. A migrat
 Java compiles or CCD accepts the generated definition: the generated configuration must remain semantically equivalent
 to the ET JSON that it replaces.
 
+Use [`et-ccd-json-to-java-convergence-tooling.md`](et-ccd-json-to-java-convergence-tooling.md) to run and interpret the
+XLSX comparison, update the reviewed progress snapshot and report Java line growth for each migration slice.
+
 ## Migration contract
 
 1. The existing files under `test-projects/et-ccd-callbacks/ccd-definitions` are the golden definition. Do not edit them
