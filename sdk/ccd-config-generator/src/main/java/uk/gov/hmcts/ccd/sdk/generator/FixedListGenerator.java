@@ -2,11 +2,13 @@ package uk.gov.hmcts.ccd.sdk.generator;
 
 import static com.google.common.base.Strings.isNullOrEmpty;
 
-import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import java.io.File;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import lombok.SneakyThrows;
@@ -26,39 +28,55 @@ class FixedListGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
     File dir = root.toPath().resolve("FixedLists").toFile();
     dir.mkdir();
 
+    Map<String, List<Enum<?>>> definitions = new LinkedHashMap<>();
     for (Class<?> c : config.getTypes().keySet()) {
       ComplexType complexType = c.getAnnotation(ComplexType.class);
       if (c.isEnum() && (complexType == null || complexType.generate())) {
-        List<Map<String, Object>> fields = Lists.newArrayList();
-
-        int order = 1;
-        for (Object enumConstant : c.getEnumConstants()) {
-          String enumName = ((Enum<?>)enumConstant).name();
-          CCD annotation = c.getField(enumName).getAnnotation(CCD.class);
-
-          // use the enum label field, or the @CCD label, or the @CCD hint, or the enumConstant
-          Object label = enumConstant instanceof HasLabel
-              ? ((HasLabel) enumConstant).getLabel()
-              : annotation == null
-                  ? enumConstant
-                  : !isNullOrEmpty(annotation.label())
-                      ? annotation.label()
-                      : !isNullOrEmpty(annotation.hint())
-                          ? annotation.hint()
-                          : enumConstant;
-
-          Map<String, Object> value = Maps.newHashMap();
-          fields.add(value);
-          value.put("ListElement", label);
-          value.put("LiveFrom", JsonUtils.DEFAULT_LIVE_FROM);
-          value.put("ID", c.getSimpleName());
-          value.put("ListElementCode", enumConstant);
-          value.put("DisplayOrder", order++);
-        }
-
-        Path path = Paths.get(dir.getPath(), c.getSimpleName() + ".json");
-        JsonUtils.mergeInto(path, fields, new AddMissing(), "ListElementCode");
+        definitions.computeIfAbsent(c.getSimpleName(), ignored -> new ArrayList<>())
+            .addAll(Arrays.asList((Enum<?>[]) c.getEnumConstants()));
       }
+    }
+
+    config.getFixedLists().forEach((id, values) -> {
+      List<Enum<?>> existing = definitions.get(id);
+      if (existing == null) {
+        definitions.put(id, new ArrayList<>(values));
+        return;
+      }
+      if (!existing.equals(values)) {
+        throw new IllegalStateException("Conflicting fixed-list definitions for " + id);
+      }
+    });
+
+    for (Map.Entry<String, List<Enum<?>>> definition : definitions.entrySet()) {
+      List<Map<String, Object>> fields = new ArrayList<>();
+      int order = 1;
+      for (Enum<?> enumConstant : definition.getValue()) {
+        CCD annotation = enumConstant.getDeclaringClass()
+            .getField(enumConstant.name())
+            .getAnnotation(CCD.class);
+
+        Object label = enumConstant instanceof HasLabel
+            ? ((HasLabel) enumConstant).getLabel()
+            : annotation == null
+                ? enumConstant
+                : !isNullOrEmpty(annotation.label())
+                    ? annotation.label()
+                    : !isNullOrEmpty(annotation.hint())
+                        ? annotation.hint()
+                        : enumConstant;
+
+        Map<String, Object> value = Maps.newHashMap();
+        fields.add(value);
+        value.put("ListElement", label);
+        value.put("LiveFrom", JsonUtils.DEFAULT_LIVE_FROM);
+        value.put("ID", definition.getKey());
+        value.put("ListElementCode", enumConstant);
+        value.put("DisplayOrder", order++);
+      }
+
+      Path path = Paths.get(dir.getPath(), definition.getKey() + ".json");
+      JsonUtils.mergeInto(path, fields, new AddMissing(), "ListElementCode");
     }
   }
 }

@@ -11,8 +11,10 @@ import lombok.SneakyThrows;
 import org.springframework.core.ResolvableType;
 import org.springframework.util.ClassUtils;
 import org.springframework.util.ReflectionUtils;
+import uk.gov.hmcts.ccd.sdk.api.CCD;
 import uk.gov.hmcts.ccd.sdk.api.CCDConfig;
 import uk.gov.hmcts.ccd.sdk.api.HasRole;
+import uk.gov.hmcts.ccd.sdk.type.FieldType;
 
 class ConfigResolver<T, S, R extends HasRole> {
 
@@ -66,7 +68,16 @@ class ConfigResolver<T, S, R extends HasRole> {
     ReflectionUtils.doWithFields(
         dataClass,
         field -> {
+          CCD definition = field.getAnnotation(CCD.class);
+          if (definition != null && definition.ignore()) {
+            return;
+          }
           Class c = getComplexType(dataClass, field);
+          if (definition != null
+              && definition.typeOverride() != FieldType.Unspecified
+              && !c.isEnum()) {
+            return;
+          }
           if (null != c && !c.equals(dataClass)) {
             JsonUnwrapped unwrapped = field.getAnnotation(JsonUnwrapped.class);
 

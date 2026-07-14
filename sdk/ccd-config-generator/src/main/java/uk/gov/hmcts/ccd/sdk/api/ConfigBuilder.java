@@ -51,6 +51,23 @@ public interface ConfigBuilder<T, S, R extends HasRole> {
     // Default no-op for backwards compatibility; implementations may override.
   }
 
+  /**
+   * Sets the label of the conventional generated case-history field.
+   */
+  default void caseHistoryLabel(String label) {
+    throw new UnsupportedOperationException("This ConfigBuilder does not support case-history metadata");
+  }
+
+  /**
+   * Registers an ordered fixed list independently of the Java type used by a case-data field.
+   *
+   * @param id external CCD fixed-list identifier
+   * @param values ordered enum values supplying the external codes and labels
+   */
+  default <E extends Enum<E>> void registerFixedList(String id, E... values) {
+    throw new UnsupportedOperationException("This ConfigBuilder does not support fixed-list registration");
+  }
+
   default void stateLabel(String stateId, String label) {
     // Implementations that expose resolved config metadata may override this.
   }

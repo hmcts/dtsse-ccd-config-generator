@@ -146,8 +146,9 @@ The percentage is calculated across both environments and all jurisdiction bundl
 8. Run the relevant SDK tests, ET compilation, Checkstyle and PMD checks.
 9. Run `updateEtMigrationProgress`, review the snapshot diff, then rerun `etMigrationProgress` to prove that the
     committed snapshot is current.
-10. Update the migration handoff with the completed slice, resulting metric, delivered capabilities, next slice and any
-    newly proven blockers.
+10. Update the migration handoff with the completed slice, resulting metric, delivered capabilities and exactly one
+    recommended next coherent slice. Give the recommendation a workbook-derived minimum or exact row forecast, the SDK
+    capabilities it is expected to exercise and any newly proven blockers.
 11. Commit the exact working conversion: ET implementation and snapshot first, followed by SDK changes and the ET
     submodule pointer in the root repository.
 
@@ -289,6 +290,7 @@ When reporting a completed slice, state:
 - any reviewed definition change, its commit-pinned source references, behavioural evidence, canonical row delta and
   metric effect;
 - confirmation that the migration handoff was updated; and
+- the next recommended slice, its workbook-derived row forecast, expected capabilities and blockers; and
 - confirmation that golden definitions were unchanged, or the commit containing the approved change.
 
 Use a compact result such as:

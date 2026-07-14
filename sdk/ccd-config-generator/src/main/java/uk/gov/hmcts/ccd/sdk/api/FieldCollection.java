@@ -38,7 +38,13 @@ public class FieldCollection {
 
   private Map<String, MidEvent> pagesToMidEvent;
 
+  private Map<String, String> pagesToExternalMidEvent;
+
   private boolean includePageColumnNumber;
+
+  private boolean includePageDisplayOrder;
+
+  private String eventToComplexTypeId;
 
   private String rootFieldname;
 
@@ -70,8 +76,10 @@ public class FieldCollection {
       result.explicitFields = new ArrayList<>();
       result.pageShowConditions = new Hashtable<>();
       result.pagesToMidEvent = new HashMap<>();
+      result.pagesToExternalMidEvent = new HashMap<>();
       result.pageLabels = new Hashtable<>();
       result.includePageColumnNumber = true;
+      result.includePageDisplayOrder = true;
       result.propertyUtils = propertyUtils;
       return result;
     }
@@ -399,6 +407,11 @@ public class FieldCollection {
     }
 
     public <U> FieldCollectionBuilder<U, StateType, FieldCollectionBuilder<Type, StateType, Parent>> complex(
+        TypedPropertyGetter<Type, U> getter, boolean summary, String eventFieldLabel) {
+      return complex(getter, summary, null, eventFieldLabel, null, false);
+    }
+
+    public <U> FieldCollectionBuilder<U, StateType, FieldCollectionBuilder<Type, StateType, Parent>> complex(
         TypedPropertyGetter<Type, U> getter, String showCondition, String eventFieldLabel, String eventFieldHint,
         boolean retainHiddenValue) {
       return complex(getter, true, showCondition, eventFieldLabel, eventFieldHint, retainHiddenValue);
@@ -496,6 +509,9 @@ public class FieldCollection {
     }
 
     public FieldCollectionBuilder<Type, StateType, Parent> page(String id, MidEvent<Type, StateType> callback) {
+      if (this.pagesToExternalMidEvent.containsKey(id)) {
+        throw new IllegalStateException("Cannot set both an external URL and a Java handler for mid-event page " + id);
+      }
       this.pagesToMidEvent.put(id, callback);
       return this.page(id);
     }
@@ -519,6 +535,31 @@ public class FieldCollection {
 
     public FieldCollectionBuilder<Type, StateType, Parent> omitPageColumnNumber() {
       this.includePageColumnNumber = false;
+      return this;
+    }
+
+    /** Writes an existing external mid-event URL for the current page without registering a handler. */
+    public FieldCollectionBuilder<Type, StateType, Parent> externalMidEventCallbackUrl(String url) {
+      if (this.pagesToMidEvent.containsKey(this.pageId)) {
+        throw new IllegalStateException(
+            "Cannot set both an external URL and a Java handler for mid-event page " + this.pageId);
+      }
+      this.pagesToExternalMidEvent.put(this.pageId, url);
+      return this;
+    }
+
+    public FieldCollectionBuilder<Type, StateType, Parent> omitPageDisplayOrder() {
+      this.includePageDisplayOrder = false;
+      return this;
+    }
+
+    /** Sets the optional CCD row identifier on all elements of this root event complex. */
+    public FieldCollectionBuilder<Type, StateType, Parent> eventToComplexTypeId(String id) {
+      if (this.rootFieldname == null) {
+        throw new IllegalStateException("Event-to-complex ID can only be set on a root complex field");
+      }
+      this.eventToComplexTypeId = id;
+      this.fieldDisplayOrder = new IntRef();
       return this;
     }
   }

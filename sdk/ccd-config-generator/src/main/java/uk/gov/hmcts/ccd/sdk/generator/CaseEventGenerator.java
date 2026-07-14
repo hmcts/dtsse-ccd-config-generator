@@ -60,7 +60,9 @@ class CaseEventGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
     if (event.isShowSummaryColumn()) {
       JsonUtils.putYn(data, "ShowSummary", event.isShowSummary());
     }
-    JsonUtils.putYn(data, "ShowEventNotes", event.isShowEventNotes());
+    if (event.isShowEventNotesColumn()) {
+      JsonUtils.putYn(data, "ShowEventNotes", event.isShowEventNotes());
+    }
     if (event.isPublishColumn()) {
       JsonUtils.putYn(data, "Publish", event.isPublishToCamunda());
     }
@@ -79,7 +81,8 @@ class CaseEventGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
       data.put("PreConditionState(s)", getPreStateString(event.getPreState(), allStates));
     }
 
-    data.put("PostConditionState", getPostStateString(event.getPostState()));
+    data.put("PostConditionState",
+        event.isPostStateWildcard() ? "*" : getPostStateString(event.getPostState()));
     data.put("SecurityClassification", "Public");
 
     addCallbackIfConfigured(data, callbackHost, event,

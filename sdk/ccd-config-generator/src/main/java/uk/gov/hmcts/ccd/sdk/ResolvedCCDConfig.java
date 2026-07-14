@@ -8,6 +8,7 @@ import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -56,7 +57,9 @@ public class ResolvedCCDConfig<T, S, R extends HasRole> {
   String hmctsServiceId = "";
   boolean includeDefaultLiveFrom = true;
   boolean includeCaseHistory = true;
+  String caseHistoryLabel = " ";
   boolean shutterService = false;
+  Map<String, List<? extends Enum<?>>> fixedLists = new LinkedHashMap<>();
   Map<String, String> stateLabels = new HashMap<>();
 
   Table<S, R, Set<Permission>> stateRolePermissions = HashBasedTable.create();

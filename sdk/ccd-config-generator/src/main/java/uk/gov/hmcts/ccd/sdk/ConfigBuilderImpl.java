@@ -10,6 +10,7 @@ import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -149,6 +150,30 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements Decentralised
   @Override
   public void omitCaseHistory() {
     config.includeCaseHistory = false;
+  }
+
+  @Override
+  public void caseHistoryLabel(String label) {
+    config.caseHistoryLabel = Objects.requireNonNull(label, "Case-history label must not be null");
+  }
+
+  @Override
+  @SuppressWarnings("varargs")
+  public final <E extends Enum<E>> void registerFixedList(String id, E... values) {
+    if (id == null || id.isBlank()) {
+      throw new IllegalArgumentException("Fixed-list id must not be blank");
+    }
+    if (values == null || values.length == 0) {
+      throw new IllegalArgumentException("Fixed list " + id + " must contain at least one value");
+    }
+    List<E> orderedValues = List.of(values);
+    if (new HashSet<>(orderedValues).size() != orderedValues.size()) {
+      throw new IllegalArgumentException("Fixed list " + id + " contains duplicate values");
+    }
+    List<? extends Enum<?>> existing = config.fixedLists.putIfAbsent(id, orderedValues);
+    if (existing != null && !existing.equals(orderedValues)) {
+      throw new IllegalStateException("Conflicting fixed-list registrations for " + id);
+    }
   }
 
   @Override

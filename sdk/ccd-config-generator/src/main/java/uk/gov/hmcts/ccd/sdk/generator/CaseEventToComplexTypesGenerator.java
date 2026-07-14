@@ -29,7 +29,7 @@ class CaseEventToComplexTypesGenerator<T, S, R extends HasRole> implements
       FieldCollection collection = event.getFields();
       List<Map<String, Object>> entries = Lists.newArrayList();
       List<FieldCollection.FieldCollectionBuilder> complexFields = collection.getComplexFields();
-      expand(complexFields, entries, event.getId(), null, "");
+      expand(complexFields, entries, event.getId(), null, "", null);
 
       ImmutableListMultimap<String, Map<String, Object>> entriesByCaseField = Multimaps
           .index(entries, x -> x.get("CaseFieldID").toString());
@@ -49,15 +49,17 @@ class CaseEventToComplexTypesGenerator<T, S, R extends HasRole> implements
 
   private static void expand(List<FieldCollection.FieldCollectionBuilder> complexFieldsCollection,
       List<Map<String, Object>> entries, String eventId, final String rootFieldName,
-      final String fieldLocator) {
+      final String fieldLocator, final String rootId) {
     if (null != complexFieldsCollection) {
       for (FieldCollection.FieldCollectionBuilder complexFields : complexFieldsCollection) {
         FieldCollection complex = complexFields.build();
         String rfn = rootFieldName;
         String locator = fieldLocator;
+        String rowId = rootId;
         if (null == rootFieldName) {
           // This is a root complex
           rfn = complex.getRootFieldname();
+          rowId = complex.getEventToComplexTypeId();
         } else {
           // This is a nested complex
           locator += complex.getRootFieldname() + ".";
@@ -74,6 +76,9 @@ class CaseEventToComplexTypesGenerator<T, S, R extends HasRole> implements
           Map<String, Object> data = Maps.newHashMap();
           entries.add(data);
           data.put("LiveFrom", JsonUtils.DEFAULT_LIVE_FROM);
+          if (!Strings.isNullOrEmpty(rowId)) {
+            data.put("ID", rowId);
+          }
           data.put("CaseEventID", eventId);
           data.put("CaseFieldID", rfn);
           data.put("DisplayContext", field.getContext().toString().toUpperCase());
@@ -91,7 +96,7 @@ class CaseEventToComplexTypesGenerator<T, S, R extends HasRole> implements
           }
         }
         if (null != complex.getComplexFields()) {
-          expand(complex.getComplexFields(), entries, eventId, rfn, locator);
+          expand(complex.getComplexFields(), entries, eventId, rfn, locator, rowId);
         }
       }
     }

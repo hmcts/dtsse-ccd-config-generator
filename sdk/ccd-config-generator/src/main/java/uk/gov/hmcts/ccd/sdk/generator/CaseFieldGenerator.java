@@ -43,7 +43,7 @@ class CaseFieldGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
 
     if (config.isIncludeCaseHistory()) {
       Map<String, Object> history = getField(config.getCaseType(), "caseHistory");
-      history.put("Label", " ");
+      history.put("Label", config.getCaseHistoryLabel());
       history.put("FieldType", "CaseHistoryViewer");
       fields.add(history);
     }

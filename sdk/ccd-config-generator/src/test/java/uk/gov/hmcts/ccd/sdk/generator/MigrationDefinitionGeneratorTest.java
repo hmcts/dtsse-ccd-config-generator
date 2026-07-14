@@ -3,6 +3,7 @@ package uk.gov.hmcts.ccd.sdk.generator;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.ImmutableSet;
@@ -19,6 +20,7 @@ import uk.gov.hmcts.ccd.sdk.ResolvedCCDConfig;
 import uk.gov.hmcts.ccd.sdk.api.CCD;
 import uk.gov.hmcts.ccd.sdk.api.CaseType;
 import uk.gov.hmcts.ccd.sdk.api.HasRole;
+import uk.gov.hmcts.ccd.sdk.api.HasLabel;
 import uk.gov.hmcts.ccd.sdk.api.Jurisdiction;
 import uk.gov.hmcts.ccd.sdk.api.Webhook;
 
@@ -98,7 +100,10 @@ public class MigrationDefinitionGeneratorTest {
     assertThat(eventField)
         .doesNotContainKeys("LiveFrom", "PageColumnNumber", "ShowSummaryChangeOption");
 
-    Map<String, Object> caseField = onlyRow(output, "CaseField.json");
+    Map<String, Object> caseField = rows(output, "CaseField.json").stream()
+        .filter(row -> row.get("ID").equals("name"))
+        .findFirst()
+        .orElseThrow();
     assertThat(caseField)
         .containsEntry("ID", "name")
         .doesNotContainEntry("ID", "caseHistory")
@@ -120,6 +125,95 @@ public class MigrationDefinitionGeneratorTest {
     assertThatThrownBy(() -> event.aboutToSubmitCallback((details, before) -> null))
         .isInstanceOf(IllegalStateException.class)
         .hasMessageContaining("external URL");
+  }
+
+  @Test
+  public void generatesExactOptionalMigrationColumnsAndRegisteredDefinitions() {
+    ConfigBuilderImpl<TestData, TestState, TestRole> builder = newBuilder();
+    builder.caseHistoryLabel("History");
+    builder.registerFixedList("external_list", TestFixedList.SECOND, TestFixedList.FIRST);
+    builder.event("import")
+        .forAllStates()
+        .postStateWildcard()
+        .name("Import")
+        .omitShowEventNotes()
+        .fields()
+        .omitPageDisplayOrder()
+        .externalMidEventCallbackUrl("${TEST_URL}/mid-event")
+        .optionalNoSummary(TestData::getName)
+        .complex(TestData::getImportFile, false)
+        .eventToComplexTypeId("file")
+        .mandatoryWithLabel(TestComplex::getFile, "File")
+        .done()
+        .done();
+
+    File output = new File(tmp.getRoot(), "exact-definition");
+    JSONConfigGenerator<TestData, TestState, TestRole> generator = new JSONConfigGenerator<>(List.of(
+        new CaseFieldGenerator<>(),
+        new CaseEventGenerator<>(),
+        new CaseEventToFieldsGenerator<>(),
+        new CaseEventToComplexTypesGenerator<>(),
+        new FixedListGenerator<>()
+    ));
+    generator.writeConfig(output, builder.build());
+
+    assertThat(rows(output, "CaseField.json"))
+        .anySatisfy(row -> assertThat(row)
+            .containsEntry("ID", "caseHistory")
+            .containsEntry("Label", "History"));
+    assertThat(onlyRow(output, "CaseEvent/import.json"))
+        .containsEntry("PostConditionState", "*")
+        .doesNotContainKey("ShowEventNotes");
+    List<Map<String, Object>> eventFields = rows(output, "CaseEventToFields/import.json");
+    assertThat(eventFields)
+        .allSatisfy(row -> assertThat(row).doesNotContainKey("PageDisplayOrder"));
+    assertThat(eventFields)
+        .filteredOn(row -> row.containsKey("CallBackURLMidEvent"))
+        .singleElement()
+        .satisfies(row -> assertThat(row)
+            .containsEntry("CallBackURLMidEvent", "${TEST_URL}/mid-event"));
+    assertThat(onlyRow(output, "CaseEventToComplexTypes/import/importFile.json"))
+        .containsEntry("ID", "file")
+        .containsEntry("EventElementLabel", "File")
+        .containsEntry("FieldDisplayOrder", 1);
+    assertThat(rows(output, "FixedLists/external_list.json"))
+        .anySatisfy(row -> assertThat(row)
+            .containsEntry("ListElementCode", "second-code")
+            .containsEntry("DisplayOrder", 1))
+        .anySatisfy(row -> assertThat(row)
+            .containsEntry("ListElementCode", "first-code")
+            .containsEntry("DisplayOrder", 2));
+  }
+
+  @Test
+  public void rejectsMixedExternalAndHandledMidEventCallbacks() {
+    ConfigBuilderImpl<TestData, TestState, TestRole> builder = newBuilder();
+    var fields = builder.event("import")
+        .initialState(TestState.Open)
+        .fields()
+        .page("details", (details, before) -> null);
+
+    assertThatThrownBy(() -> fields.externalMidEventCallbackUrl("${TEST_URL}/mid-event"))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("external URL");
+  }
+
+  @Test
+  public void rejectsInvalidOrConflictingFixedListRegistrations() {
+    ConfigBuilderImpl<TestData, TestState, TestRole> builder = newBuilder();
+
+    assertThatThrownBy(() -> builder.registerFixedList("", TestFixedList.FIRST))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("must not be blank");
+    assertThatThrownBy(() -> builder.registerFixedList(
+        "external_list", TestFixedList.FIRST, TestFixedList.FIRST))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("duplicate");
+
+    builder.registerFixedList("external_list", TestFixedList.FIRST);
+    assertThatThrownBy(() -> builder.registerFixedList("external_list", TestFixedList.SECOND))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("Conflicting");
   }
 
   private ConfigBuilderImpl<TestData, TestState, TestRole> newBuilder() {
@@ -149,8 +243,42 @@ public class MigrationDefinitionGeneratorTest {
     @CCD(label = "Name")
     private String name;
 
+    private TestComplex importFile;
+
     public String getName() {
       return name;
+    }
+
+    public TestComplex getImportFile() {
+      return importFile;
+    }
+
+  }
+
+  private static class TestComplex {
+
+    private String file;
+
+    public String getFile() {
+      return file;
+    }
+  }
+
+  private enum TestFixedList implements HasLabel {
+    @JsonProperty("first-code")
+    FIRST("First"),
+    @JsonProperty("second-code")
+    SECOND("Second");
+
+    private final String label;
+
+    TestFixedList(String label) {
+      this.label = label;
+    }
+
+    @Override
+    public String getLabel() {
+      return label;
     }
   }
 

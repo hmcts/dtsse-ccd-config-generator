@@ -33,6 +33,9 @@ XLSX comparison, update the reviewed progress snapshot and report Java line grow
    and row order are not semantic; permissions, conditions, callbacks, display metadata and duplicate row counts are.
 8. Commit the exact working conversion before performing its generator-fit review. Record whether the committed Java
    exposes a reusable SDK gap; put any resulting refactor in a separate parity-preserving follow-up commit.
+9. Complete each slice by recording exactly one recommended next coherent slice in the migration handoff. Include its
+   aggregate boundary, a workbook-derived row forecast, expected SDK capabilities and known blockers. Treat it as a
+   resumption aid, not a substitute for re-inventorying the golden workbooks in the next session.
 
 Do not treat `EtJsonCcdConfig` as the Java form of the definition. `JsonBackedCCDConfig` is a transitional runtime bridge
 which reads enough JSON to register legacy callbacks. The golden JSON contains eight case types, while that bridge

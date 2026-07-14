@@ -28,6 +28,7 @@ public class Event<T, R extends HasRole, S> {
   private String name;
   private Set<S> preState;
   private Set<S> postState;
+  private boolean postStateWildcard;
   private String description;
   private String showCondition;
   private Map<Webhook, String> retries;
@@ -36,6 +37,7 @@ public class Event<T, R extends HasRole, S> {
   private boolean showSummary;
   private boolean showSummaryColumn;
   private boolean showEventNotes;
+  private boolean showEventNotesColumn;
   private boolean publishToCamunda;
   private boolean publishColumn;
   private Integer ttlIncrement;
@@ -89,6 +91,7 @@ public class Event<T, R extends HasRole, S> {
       result.retries = new HashMap<>();
       result.callbackUrls = new HashMap<>();
       result.showSummaryColumn = true;
+      result.showEventNotesColumn = true;
       result.publishColumn = true;
 
       return result;
@@ -115,6 +118,16 @@ public class Event<T, R extends HasRole, S> {
 
     public EventBuilder<T, R, S> showEventNotes() {
       this.showEventNotes = true;
+      return this;
+    }
+
+    public EventBuilder<T, R, S> postStateWildcard() {
+      this.postStateWildcard = true;
+      return this;
+    }
+
+    public EventBuilder<T, R, S> omitShowEventNotes() {
+      this.showEventNotesColumn = false;
       return this;
     }
 

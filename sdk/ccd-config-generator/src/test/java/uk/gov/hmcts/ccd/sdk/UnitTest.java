@@ -2,8 +2,10 @@ package uk.gov.hmcts.ccd.sdk;
 
 import java.util.List;
 import org.junit.Test;
+import uk.gov.hmcts.ccd.sdk.api.CCD;
 import uk.gov.hmcts.ccd.sdk.api.CCDConfig;
 import uk.gov.hmcts.ccd.sdk.api.ConfigBuilder;
+import uk.gov.hmcts.ccd.sdk.type.FieldType;
 import uk.gov.hmcts.example.missingcomplex.Applicant;
 import uk.gov.hmcts.example.missingcomplex.MissingComplex;
 import uk.gov.hmcts.reform.fpl.enums.State;
@@ -42,5 +44,20 @@ public class UnitTest {
     ConfigResolver<MissingComplex, State, UserRole> generator = new ConfigResolver<>(List.of(new MissingBug()));
     ResolvedCCDConfig<MissingComplex, State, UserRole> resolved = generator.resolveCCDConfig();
     assertThat(resolved.types).containsKeys(Applicant.class);
+  }
+
+  @Test
+  public void explicitFieldTypeOverridesAreNotTraversedAsComplexTypes() {
+    assertThat(ConfigResolver.resolve(DefinitionOnlyWrapper.class, "uk.gov.hmcts"))
+        .doesNotContainKey(DynamicWrapper.class);
+  }
+
+  private static class DefinitionOnlyWrapper {
+    @CCD(typeOverride = FieldType.DynamicList)
+    private DynamicWrapper value;
+  }
+
+  private static class DynamicWrapper {
+    private String value;
   }
 }

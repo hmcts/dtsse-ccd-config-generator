@@ -57,7 +57,9 @@ class CaseEventToFieldsGenerator<T, S, R extends HasRole> implements ConfigGener
 
       Object pageId = resolvePageId(field.getPage());
       row.put("PageID", pageId);
-      row.put("PageDisplayOrder", field.getPageDisplayOrder());
+      if (collection.isIncludePageDisplayOrder()) {
+        row.put("PageDisplayOrder", field.getPageDisplayOrder());
+      }
       if (collection.isIncludePageColumnNumber()) {
         row.put("PageColumnNumber", 1);
       }
@@ -131,17 +133,21 @@ class CaseEventToFieldsGenerator<T, S, R extends HasRole> implements ConfigGener
                                      Object pageId,
                                      Multimap<String, String> writtenCallbacks) {
     String pageKey = pageId.toString();
-    if (!collection.getPagesToMidEvent().containsKey(pageKey)) {
+    boolean hasHandler = collection.getPagesToMidEvent().containsKey(pageKey);
+    String externalUrl = collection.getPagesToExternalMidEvent().get(pageKey);
+    if (!hasHandler && externalUrl == null) {
       return;
     }
     if (writtenCallbacks.containsEntry(event.getId(), pageKey)) {
       return;
     }
 
-    String url = config.getCallbackHost() + "/callbacks/mid-event?page="
-        + URLEncoder.encode(pageKey, StandardCharsets.UTF_8)
-        + "&eventId="
-        + event.getId();
+    String url = externalUrl == null
+        ? config.getCallbackHost() + "/callbacks/mid-event?page="
+            + URLEncoder.encode(pageKey, StandardCharsets.UTF_8)
+            + "&eventId="
+            + event.getId()
+        : externalUrl;
     row.put("CallBackURLMidEvent", url);
     writtenCallbacks.put(event.getId(), pageKey);
   }
