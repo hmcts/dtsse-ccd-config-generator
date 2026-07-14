@@ -12,8 +12,8 @@ The migration spans the generator repository and its ET submodule:
 
 | Repository | Branch | Current reviewed state |
 | --- | --- | --- |
-| `hmcts/dtsse-ccd-config-generator` | `json-to-java` | Slice 10 exact conversion in this commit; generator-fit review pending |
-| `hmcts/et-ccd-callbacks` | `json-to-java-migration` | `11bca5627` — Slice 10 exact conversion |
+| `hmcts/dtsse-ccd-config-generator` | `json-to-java` | Slice 10 generator-fit review in this commit |
+| `hmcts/et-ccd-callbacks` | `json-to-java-migration` | `11bca5627` — Slice 10 exact conversion; no follow-up refactor required |
 
 The root repository must point at the intended ET commit. A fresh session should inspect both worktrees before changing
 anything:
@@ -109,7 +109,8 @@ metric effect. An unproven candidate does not belong in this ledger.
 | Slice 8 generator-fit follow-up | this review commit | `901ddfc6c` | Named shared tribunal grants and the two ET3 event shapes |
 | Slice 9: paired Singles core hearing management | `1c757feb` | `b09dfdec7` | Added 598 exact rows; reached 82.82% |
 | Slice 9 generator-fit follow-up | this review commit | `4dfbcb703` | Replaced repeated hearing-event, grant and row defaults with feature-local factories |
-| Slice 10: paired Singles hearing documents and bundles | this exact conversion commit | `11bca5627` | Added 240 exact rows; reached 83.28% |
+| Slice 10: paired Singles hearing documents and bundles | `72dcd6ba` | `11bca5627` | Added 240 exact rows; reached 83.28% |
+| Slice 10 generator-fit review | this review commit | `11bca5627` | Confirmed the feature-local factories and standalone nested-event API already fit the generator |
 
 The ET submodule commit must be published before a root commit which points to it. Otherwise another checkout cannot
 resolve the root tree. Commit ET changes first, then commit the updated submodule pointer and related SDK or prompt
@@ -425,7 +426,7 @@ Post-commit generator-fit review:
 
 ### Slice 10: paired Singles hearing documents and bundles
 
-Status: complete and exact in `cftlib` and `prod`; post-commit generator-fit review pending.
+Status: complete and exact in `cftlib` and `prod`, including the post-commit generator-fit review.
 
 The slice converts the paired hearing-document and bundle workflow: `bundlesRespondentPrepareDoc`,
 `SUBMIT_CLAIMANT_BUNDLES`, `removeHearingBundles`, `uploadHearingDocuments`, `createDcf` and
@@ -458,11 +459,20 @@ Important implementation choices:
 
 Post-commit generator-fit review:
 
-- Review point: the exact conversion root commit and ET `11bca5627`.
-- Pending. Review the committed feature factories, standalone nested-event SDK API and generated output before making
-  any parity-preserving refactor. Record the decision in a separate commit even if no code refactor is warranted.
-- No intentional CCD definition improvement has been proposed or made. Any future improvement requires its own
-  commit-pinned platform evidence and focused behavioural test.
+- Review point: root `72dcd6ba`, ET `11bca5627`.
+- Finding: the committed 714-line feature catalog already names the six event shapes, regional tribunal grant family,
+  event-field defaults and nested-element defaults. Its remaining 25 event-field and five nested-element specifications
+  carry genuine conditions, labels, ordering, profile masks or hidden-value distinctions. The SDK's standalone
+  event-to-complex method models one precise legacy omission, rejects flattened properties and does not alter the
+  established `complex(...)` behaviour.
+- Decision: no further ET or SDK refactor is warranted. A broader abstraction would either duplicate the existing
+  feature-local factories or obscure the workbook distinctions the Java definition is intended to own.
+- Follow-up: this root review commit records the decision; ET remains at the exact conversion commit `11bca5627`.
+- Result: all 43,495 rows remain exact with zero changed or unexpected rows. ET production/generation growth remains
+  65,692 lines, SDK production growth 1,364 lines, total production growth 67,056 lines and verification growth 1,093
+  lines. The cumulative production-lines ratio remains 1.54.
+- No intentional CCD definition improvement was identified or made. The golden JSON and generated definition semantics
+  are unchanged, so no platform-source evidence or separate behavioural-definition commit is required for this slice.
 
 ### Slice 9: paired Singles core hearing management
 
