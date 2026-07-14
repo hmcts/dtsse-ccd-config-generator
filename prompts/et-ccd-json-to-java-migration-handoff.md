@@ -12,8 +12,8 @@ The migration spans the generator repository and its ET submodule:
 
 | Repository | Branch | Current reviewed state |
 | --- | --- | --- |
-| `hmcts/dtsse-ccd-config-generator` | `json-to-java` | Slice 10 generator-fit review in this commit |
-| `hmcts/et-ccd-callbacks` | `json-to-java-migration` | `11bca5627` — Slice 10 exact conversion; no follow-up refactor required |
+| `hmcts/dtsse-ccd-config-generator` | `json-to-java` | Slice 11 exact conversion in this commit; generator-fit review pending |
+| `hmcts/et-ccd-callbacks` | `json-to-java-migration` | `efeb69b3c` — Slice 11 exact conversion |
 
 The root repository must point at the intended ET commit. A fresh session should inspect both worktrees before changing
 anything:
@@ -49,21 +49,21 @@ Read the migration material in this order:
 ## Current convergence
 
 The immutable initial baseline is 52,227 remaining differences across `cftlib` and `prod`. The exact snapshot after
-the tenth slice is:
+the eleventh slice is:
 
 | Metric | Current value |
 | --- | ---: |
-| Exact Java rows | 43,495 |
+| Exact Java rows | 43,816 |
 | Changed rows | 0 |
 | Unexpected rows | 0 |
-| Remaining differences | 8,732 |
-| Completed differences | 43,495 |
-| Completion | 83.28% |
-| ET production/generation Java delta | +65,692 |
+| Remaining differences | 8,411 |
+| Completed differences | 43,816 |
+| Completion | 83.90% |
+| ET production/generation Java delta | +66,576 |
 | SDK production Java delta | +1,364 |
-| Total production Java delta | +67,056 |
+| Total production Java delta | +67,940 |
 | Verification Java delta | +1,093 |
-| Production lines per completed difference | 1.54 |
+| Production lines per completed difference | 1.55 |
 
 The authoritative values are in
 `test-projects/et-ccd-callbacks/ccd-definitions/migration-progress.json`. If this table and the snapshot disagree, the
@@ -111,6 +111,7 @@ metric effect. An unproven candidate does not belong in this ledger.
 | Slice 9 generator-fit follow-up | this review commit | `4dfbcb703` | Replaced repeated hearing-event, grant and row defaults with feature-local factories |
 | Slice 10: paired Singles hearing documents and bundles | `72dcd6ba` | `11bca5627` | Added 240 exact rows; reached 83.28% |
 | Slice 10 generator-fit review | this review commit | `11bca5627` | Confirmed the feature-local factories and standalone nested-event API already fit the generator |
+| Slice 11: paired Singles correspondence and document serving | this exact conversion commit | `efeb69b3c` | Added 321 exact rows; reached 83.90% |
 
 The ET submodule commit must be published before a root commit which points to it. Otherwise another checkout cannot
 resolve the root tree. Commit ET changes first, then commit the updated submodule pointer and related SDK or prompt
@@ -424,6 +425,50 @@ Post-commit generator-fit review:
 - No intentional CCD definition improvement was identified or made. The golden JSON and generated definition semantics
   are unchanged, so no platform-source evidence or separate behavioural-definition commit is required for this slice.
 
+### Slice 11: paired Singles correspondence and document serving
+
+Status: complete and exact in `cftlib` and `prod`; post-commit generator-fit review pending.
+
+The slice converts the paired document entry, letter generation and ET1 serving workflow: `addDocument`,
+`uploadDocument`, `generateCorrespondence` and `uploadDocumentForServing`.
+
+| Profile and case type | `CaseEvent` | `CaseEventToFields` | Event authorisation | Event-to-complex | Complex authorisation | Exact gain |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| cftlib `ET_EnglandWales` | 4 | 23 | 21 | 25 | 0 | 73 |
+| cftlib `ET_Scotland` | 4 | 23 | 21 | 24 | 0 | 72 |
+| prod `ET_EnglandWales` | 4 | 23 | 21 | 41 | 0 | 89 |
+| prod `ET_Scotland` | 4 | 23 | 21 | 39 | 0 | 87 |
+| **Total** | **16** | **92** | **84** | **129** | **0** | **321** |
+
+Important implementation choices:
+
+- All four events move with their page fields, nested event elements and event permissions. Their exact pre-state
+  ordering, enabling conditions, publish values and cftlib/production callback bases remain explicit.
+- England/Wales uses `correspondenceType` and Scotland uses `correspondenceScotType`; the associated top-level and
+  part-level page conditions retain their different field paths. Scotland also retains the page label which is absent
+  from the England/Wales `sendDocByFirstClass` row.
+- `addDocument` retains the regional `Documents` element sets in every profile. England/Wales includes the employer
+  contract claim category while Scotland omits it and shifts the following display orders. The legacy equal display
+  orders for document index/exclude-from-DCF and date/exclude-from-DCF are preserved exactly.
+- `uploadDocument` has no nested rows in cftlib and retains the production-only regional `Documents` element sets.
+  Address-label, serving-document and brought-forward-action nested rows retain their exact IDs, contexts, labels and
+  publish metadata.
+- ET1 serving retains the work-allocation task-configuration grant in addition to the common and regional tribunal
+  grant family. No direct `AuthorisationComplexType` rows belong to this slice.
+- Callback URLs are generated as metadata only. No callback handler, controller or runtime route registration is
+  included.
+- Golden JSON is unchanged. All 43,816 generated rows are exact with zero changed or unexpected rows.
+- Relative to the reviewed Slice 10 snapshot, ET and total production growth are 884 lines. SDK production and all
+  verification growth are unchanged. The cumulative production-lines ratio moves from 1.54 to 1.55.
+
+Post-commit generator-fit review:
+
+- Review point: the exact conversion root commit and ET `efeb69b3c`.
+- Pending. Review the committed feature factories, regional document-element expansion and generated output before
+  making any parity-preserving refactor. Record the decision in a separate commit even if no code refactor is warranted.
+- No intentional CCD definition improvement has been proposed or made. Any future improvement requires its own
+  commit-pinned platform evidence and focused behavioural test.
+
 ### Slice 10: paired Singles hearing documents and bundles
 
 Status: complete and exact in `cftlib` and `prod`, including the post-commit generator-fit review.
@@ -709,7 +754,7 @@ Post-commit generator-fit review:
 
 ## SDK migration capabilities
 
-Capabilities delivered by Slices 1 to 10 and available for reuse:
+Capabilities delivered by Slices 1 to 11 and available for reuse:
 
 - typed `CaseType` and `Jurisdiction` metadata, including live dates, printable-document URLs, shuttering, deletion and
   retry metadata;
@@ -772,29 +817,28 @@ used for deployable packaging.
 
 Add it only when a coherent slice needs deployable packaging; do not implement it speculatively.
 
-## Recommended next slice: paired Singles correspondence and document serving
+## Recommended next slice: paired Singles tribunal notifications
 
-The recommended eleventh slice completes the next coherent part of correspondence and document management for
-`ET_EnglandWales` and `ET_Scotland`: `addDocument`, `uploadDocument`, `generateCorrespondence` and
-`uploadDocumentForServing`. It keeps document collection entry, letter generation and ET1 serving together because
-they share document and address-label nested structures, tribunal grant families and environment-specific callbacks.
+The recommended twelfth slice completes the tribunal-facing notification workflow for `ET_EnglandWales` and
+`ET_Scotland`: `sendNotification`, `respondNotification`, `viewAllNotifications` and
+`generateNotificationSummary`. It keeps notification creation, response, consolidated viewing and summary generation
+together while leaving citizen-hub and party-specific notification actions for their later business-capability slice.
 
-The processed-workbook inventory gives an exact minimum of 321 currently missing rows:
+The processed-workbook inventory gives an exact minimum of 290 currently missing rows:
 
 | Profile and case type | `CaseEvent` | `CaseEventToFields` | Event authorisation | Event-to-complex | Complex authorisation | Minimum |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| cftlib `ET_EnglandWales` | 4 | 23 | 21 | 25 | 0 | 73 |
-| cftlib `ET_Scotland` | 4 | 23 | 21 | 24 | 0 | 72 |
-| prod `ET_EnglandWales` | 4 | 23 | 21 | 41 | 0 | 89 |
-| prod `ET_Scotland` | 4 | 23 | 21 | 39 | 0 | 87 |
-| **Total** | **16** | **92** | **84** | **129** | **0** | **321** |
+| cftlib `ET_EnglandWales` | 4 | 36 | 29 | 2 | 0 | 71 |
+| cftlib `ET_Scotland` | 4 | 36 | 30 | 2 | 0 | 72 |
+| prod `ET_EnglandWales` | 4 | 36 | 29 | 4 | 0 | 73 |
+| prod `ET_Scotland` | 4 | 36 | 30 | 4 | 0 | 74 |
+| **Total** | **16** | **144** | **118** | **12** | **0** | **290** |
 
 Expected SDK reuse is typed event and callback metadata, regional and environment profile masks, row-specific event
 fields and multiset-preserving nested-event generation; no new SDK capability is presently expected. Re-inventory the
-cftlib/production differences in the `Documents` nested rows, the regional correspondence field and page conditions,
-and the work-allocation grant on ET1 serving before implementation. Keep the notification send/respond/view family,
-notification summaries, cftlib-only party unavailability and specialist ADR, appeal, PII and legal-representative
-document views out of this slice.
+production-only `sendNotification` nested rows, the Scotland-only send grant and the broad `viewAllNotifications`
+permission family before implementation. Keep claimant/respondent PSE notification views and responses, citizen-hub
+notification actions, TSE applications and referral/case-management events out of this tribunal notification slice.
 
 This is a recommendation, not permission to skip the normal starting inventory. Re-run convergence and verify the
 golden workbooks before choosing or implementing the slice.
