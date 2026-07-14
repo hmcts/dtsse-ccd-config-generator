@@ -64,6 +64,14 @@ public class E2EConfigGenerationTests {
         CcdConfigComparator.assertEquals(expected, actual, JSONCompareMode.NON_EXTENSIBLE);
     }
 
+    @SneakyThrows
+    @Test
+    public void emitsOnlyExplicitStateGrants() {
+        File expected = resourceFile("ExplicitStateGrants/AuthorisationCaseState.json");
+        File actual = new File(tmp.getRoot(), "ExplicitStateGrants/AuthorisationCaseState.json");
+        CcdConfigComparator.assertEquals(expected, actual, JSONCompareMode.NON_EXTENSIBLE);
+    }
+
     @Test
     public void generatesDerivedConfig() {
         Map<String, File> actual = CcdConfigComparator.dirToMap(new File(tmp.getRoot(), "derived"));
