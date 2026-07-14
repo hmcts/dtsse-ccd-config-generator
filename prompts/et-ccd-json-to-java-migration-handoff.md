@@ -12,8 +12,8 @@ The migration spans the generator repository and its ET submodule:
 
 | Repository | Branch | Current reviewed state |
 | --- | --- | --- |
-| `hmcts/dtsse-ccd-config-generator` | `json-to-java` | Slice 7 exact-conversion review point in this commit |
-| `hmcts/et-ccd-callbacks` | `json-to-java-migration` | `a728b7463` — Slice 7 exact conversion |
+| `hmcts/dtsse-ccd-config-generator` | `json-to-java` | Slice 7 generator-fit review in this commit |
+| `hmcts/et-ccd-callbacks` | `json-to-java-migration` | `2d97f2837` — Slice 7 generator-fit follow-up |
 
 The root repository must point at the intended ET commit. A fresh session should inspect both worktrees before changing
 anything:
@@ -59,9 +59,9 @@ after the seventh slice is:
 | Remaining differences | 9,990 |
 | Completed differences | 42,237 |
 | Completion | 80.87% |
-| ET production/generation Java delta | +61,645 |
+| ET production/generation Java delta | +61,399 |
 | SDK production Java delta | +1,346 |
-| Total production Java delta | +62,991 |
+| Total production Java delta | +62,745 |
 | Verification Java delta | +1,050 |
 | Production lines per completed difference | 1.49 |
 
@@ -103,7 +103,8 @@ metric effect. An unproven candidate does not belong in this ledger.
 | Slice 5 generator-fit follow-up | this review commit | `13ebb6d1b` | Removed repeated fixed-list value plumbing while preserving exact parity |
 | Slice 6: paired Singles ET1 claim intake | `5e295bd2` | `567f83d62` | Added 1,052 exact rows; reached 79.67% |
 | Slice 6 generator-fit follow-up | this review commit | `624fa14f7` | Replaced repeated ET1 row defaults with feature-specific factories |
-| Slice 7: paired Singles core ET3 response intake | this conversion commit | `a728b7463` | Added 626 exact rows; reached 80.87% |
+| Slice 7: paired Singles core ET3 response intake | `07566b9b` | `a728b7463` | Added 626 exact rows; reached 80.87% |
+| Slice 7 generator-fit follow-up | this review commit | `2d97f2837` | Named ET3 event shapes and respondent-solicitor grant family |
 
 The ET submodule commit must be published before a root commit which points to it. Otherwise another checkout cannot
 resolve the root tree. Commit ET changes first, then commit the updated submodule pointer and related SDK or prompt
@@ -419,7 +420,7 @@ Post-commit generator-fit review:
 
 ### Slice 7: paired Singles core ET3 response intake
 
-Status: exact-conversion review point committed in `cftlib` and `prod`; post-commit generator-fit review is pending.
+Status: complete and exact in `cftlib` and `prod`, including the post-commit generator-fit review.
 
 The slice converts the respondent-facing ET3 authoring, draft-download and submission flow:
 `et3Response`, `et3ResponseEmploymentDetails`, `et3ResponseDetails`, `downloadDraftEt3` and `submitEt3`.
@@ -445,12 +446,21 @@ Important implementation choices:
   route registration is included.
 - Golden JSON is unchanged. All 42,237 generated rows are exact with zero changed or unexpected rows.
 
-The exact-conversion review point is root `this conversion commit`, ET `a728b7463`. Relative to the Slice 6 reviewed
-snapshot, ET production/generation growth increases by 1,495 lines; SDK production and all verification growth are
-unchanged. Total production growth increases by 1,495 lines and the cumulative production-lines ratio moves from 1.48
-to 1.49. The required post-commit generator-fit review must assess the 1,488-line ET3 catalog, particularly repeated
-environment callback bases, regional event variants and the ten-role respondent-solicitor grant family, without hiding
-real row-level access differences.
+Post-commit generator-fit review:
+
+- Review point: root `07566b9b`, ET `a728b7463`.
+- Finding: the 1,488-line ET3 catalog expanded the same ten respondent-solicitor grants across five events and repeated
+  20 event records which follow three stable ET3 section, draft-download and submission shapes. The 88 event-field
+  specifications remain meaningfully distinct through their contexts, conditions, retention, labels and regional rows.
+- Decision: name the respondent-solicitor permission family and introduce feature-local ET3 event factories which keep
+  profile mask, display order, publish flag and Scotland's enabling condition explicit. No SDK feature is warranted:
+  these are ET3 business families rather than missing reusable CCD concepts.
+- Follow-up: root review commit containing this record and submodule update, ET `2d97f2837`.
+- Result: all 42,237 rows remain exact with zero changed or unexpected rows. The ET3 catalog fell from 1,488 to 1,242
+  lines. Relative to the Slice 6 reviewed snapshot, ET and total production growth are 1,249 lines; SDK production and
+  all verification growth are unchanged. The cumulative production-lines ratio moves from 1.48 to 1.49.
+- No intentional CCD definition improvement was identified or made. The golden JSON and generated definition semantics
+  are unchanged, so no platform-source evidence or separate behavioural-definition commit is required for this slice.
 
 ### Slice 6: paired Singles ET1 claim intake
 
