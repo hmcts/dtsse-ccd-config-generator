@@ -12,8 +12,8 @@ The migration spans the generator repository and its ET submodule:
 
 | Repository | Branch | Current reviewed state |
 | --- | --- | --- |
-| `hmcts/dtsse-ccd-config-generator` | `json-to-java` | Slice 9 exact conversion in this commit |
-| `hmcts/et-ccd-callbacks` | `json-to-java-migration` | `b09dfdec7` — Slice 9 exact conversion |
+| `hmcts/dtsse-ccd-config-generator` | `json-to-java` | Slice 9 generator-fit review in this commit |
+| `hmcts/et-ccd-callbacks` | `json-to-java-migration` | `4dfbcb703` — Slice 9 generator-fit follow-up |
 
 The root repository must point at the intended ET commit. A fresh session should inspect both worktrees before changing
 anything:
@@ -48,8 +48,8 @@ Read the migration material in this order:
 
 ## Current convergence
 
-The immutable initial baseline is 52,227 remaining differences across `cftlib` and `prod`. The exact-conversion snapshot
-after the ninth slice is:
+The immutable initial baseline is 52,227 remaining differences across `cftlib` and `prod`. The reviewed snapshot after
+the ninth slice is:
 
 | Metric | Current value |
 | --- | ---: |
@@ -59,11 +59,11 @@ after the ninth slice is:
 | Remaining differences | 8,972 |
 | Completed differences | 43,255 |
 | Completion | 82.82% |
-| ET production/generation Java delta | +65,566 |
+| ET production/generation Java delta | +64,899 |
 | SDK production Java delta | +1,346 |
-| Total production Java delta | +66,912 |
+| Total production Java delta | +66,245 |
 | Verification Java delta | +1,050 |
-| Production lines per completed difference | 1.55 |
+| Production lines per completed difference | 1.53 |
 
 The authoritative values are in
 `test-projects/et-ccd-callbacks/ccd-definitions/migration-progress.json`. If this table and the snapshot disagree, the
@@ -107,7 +107,8 @@ metric effect. An unproven candidate does not belong in this ledger.
 | Slice 7 generator-fit follow-up | this review commit | `2d97f2837` | Named ET3 event shapes and respondent-solicitor grant family |
 | Slice 8: paired Singles ET3 processing and notification | `41c09858` | `6dfe1014f` | Added 420 exact rows; reached 81.68% |
 | Slice 8 generator-fit follow-up | this review commit | `901ddfc6c` | Named shared tribunal grants and the two ET3 event shapes |
-| Slice 9: paired Singles core hearing management | this exact conversion commit | `b09dfdec7` | Added 598 exact rows; reached 82.82% |
+| Slice 9: paired Singles core hearing management | `1c757feb` | `b09dfdec7` | Added 598 exact rows; reached 82.82% |
+| Slice 9 generator-fit follow-up | this review commit | `4dfbcb703` | Replaced repeated hearing-event, grant and row defaults with feature-local factories |
 
 The ET submodule commit must be published before a root commit which points to it. Otherwise another checkout cannot
 resolve the root tree. Commit ET changes first, then commit the updated submodule pointer and related SDK or prompt
@@ -423,7 +424,7 @@ Post-commit generator-fit review:
 
 ### Slice 9: paired Singles core hearing management
 
-Status: complete and exact in `cftlib` and `prod`; the post-commit generator-fit review remains to be recorded.
+Status: complete and exact in `cftlib` and `prod`, including the post-commit generator-fit review.
 
 The slice converts the four core tribunal hearing-management events: `allocateHearing`, `printHearing`,
 `addAmendHearing` and `updateHearing`.
@@ -452,13 +453,22 @@ Important implementation choices:
   included.
 - Golden JSON is unchanged. All 43,255 generated rows are exact with zero changed or unexpected rows.
 
-Exact-conversion review point:
+Post-commit generator-fit review:
 
-- Root: this exact conversion commit; ET: `b09dfdec7`.
-- The feature catalog is 2,532 lines and increases ET production/generation growth by 2,540 lines. SDK production and
-  all verification growth are unchanged. The cumulative production-lines ratio moves from 1.51 to 1.55.
-- The post-commit generator-fit review must decide whether repeated event, grant or field shapes warrant a
-  parity-preserving ET or SDK refactor. No intentional CCD definition improvement has been identified.
+- Review point: root `1c757feb`, ET `b09dfdec7`.
+- Finding: all 43 event-field specifications use the same page-column convention, all 105 nested-element
+  specifications omit the same four optional metadata values, and the same seven regional tribunal grant policies are
+  repeated across the four events. Each event is also expanded twice solely to substitute its cftlib or production
+  callback base.
+- Decision: use feature-local factories for the hearing-event shapes, tribunal grants, event fields and nested elements.
+  These defaults are specific to this coherent hearing workflow, so no SDK change is warranted; the exceptional row
+  metadata and direct complex-type permissions remain explicit.
+- Follow-up: root review commit containing this record and submodule update, ET `4dfbcb703`.
+- Result: all 43,255 rows remain exact with zero changed or unexpected rows. The feature catalog fell from 2,532 to
+  1,865 lines. Relative to the Slice 8 reviewed snapshot, ET and total production growth are 1,873 lines; SDK production
+  and all verification growth are unchanged. The cumulative production-lines ratio moves from 1.51 to 1.53.
+- No intentional CCD definition improvement was identified or made. The golden JSON and generated definition semantics
+  are unchanged, so no platform-source evidence or separate behavioural-definition commit is required for this slice.
 
 ### Slice 8: paired Singles ET3 processing and notification
 
