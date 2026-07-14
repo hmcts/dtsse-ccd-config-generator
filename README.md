@@ -251,6 +251,37 @@ public enum State {
 }
 ```
 
+By default the CCD state ID is the enum constant name. A constant may override this with
+`@JsonProperty`, exactly as case fields do — the annotated value then becomes the state ID
+**everywhere** a state is written (the `State` sheet, each event's `PreConditionState(s)` /
+`PostConditionState`, and the `AuthorisationCaseState` `CaseStateID` rows):
+
+```java
+public enum State {
+  @JsonProperty("PREPARE_FOR_HEARING")
+  CASE_MANAGEMENT,   // → state ID "PREPARE_FOR_HEARING"
+  Open;              // → state ID "Open" (no @JsonProperty, unchanged)
+}
+```
+
+This matters for three reasons:
+
+- **Consistency.** `FieldUtils.getFieldId` already honours `@JsonProperty` for case fields; states
+  were the one place the SDK ignored it.
+- **Correctness.** At runtime the case state value is serialised by Jackson, which *does* honour
+  `@JsonProperty` — so a service whose state enum carried `@JsonProperty` was previously generating
+  definition state IDs that could never match the state values it actually writes. The old
+  behaviour was a latent bug, not a contract.
+- **Retrofit.** It lets services migrating from hand-written definitions (e.g. FPL, whose enum
+  reconciles `CASE_MANAGEMENT → @JsonProperty("PREPARE_FOR_HEARING")`) reuse their existing `State`
+  enum instead of maintaining a parallel one.
+
+An enum without `@JsonProperty` on its constants behaves exactly as before, so existing definitions
+regenerate byte-for-byte identically. Enums whose `toString()` is overridden (e.g. an `@JsonValue`
+`toString()` returning a lowercase id) are also supported: the ID falls back to `toString()`, and
+the SDK reads any `@CCD` annotation via `Enum.name()` so such enums no longer throw during
+generation.
+
 ### Setting up user roles
 
 The `UserRole` class should implement `HasRole` and define all the user roles that are relevant to the case type (both user and case roles).

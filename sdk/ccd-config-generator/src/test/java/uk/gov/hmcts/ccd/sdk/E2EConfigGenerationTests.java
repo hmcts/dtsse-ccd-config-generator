@@ -72,6 +72,25 @@ public class E2EConfigGenerationTests {
         CcdConfigComparator.assertEquals(expected, actual, JSONCompareMode.NON_EXTENSIBLE);
     }
 
+    @SneakyThrows
+    @Test
+    public void honoursJsonPropertyOnStateIds() {
+        // CASE_MANAGEMENT carries @JsonProperty("PREPARE_FOR_HEARING"); Open has no @JsonProperty.
+        // Every sheet that serialises a state must use the resolved id on the annotated constant and
+        // the constant name on the plain one.
+        File expectedState = resourceFile("JsonPropertyState/State.json");
+        File actualState = new File(tmp.getRoot(), "JsonPropertyState/State.json");
+        CcdConfigComparator.assertEquals(expectedState, actualState, JSONCompareMode.NON_EXTENSIBLE);
+
+        File expectedEvent = resourceFile("JsonPropertyState/CaseEvent/create.json");
+        File actualEvent = new File(tmp.getRoot(), "JsonPropertyState/CaseEvent/create.json");
+        CcdConfigComparator.assertEquals(expectedEvent, actualEvent, JSONCompareMode.NON_EXTENSIBLE);
+
+        File expectedAuth = resourceFile("JsonPropertyState/AuthorisationCaseState.json");
+        File actualAuth = new File(tmp.getRoot(), "JsonPropertyState/AuthorisationCaseState.json");
+        CcdConfigComparator.assertEquals(expectedAuth, actualAuth, JSONCompareMode.NON_EXTENSIBLE);
+    }
+
     @Test
     public void generatesDerivedConfig() {
         Map<String, File> actual = CcdConfigComparator.dirToMap(new File(tmp.getRoot(), "derived"));

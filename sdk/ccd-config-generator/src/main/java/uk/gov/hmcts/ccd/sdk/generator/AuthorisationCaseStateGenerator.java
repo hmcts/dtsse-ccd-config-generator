@@ -16,6 +16,7 @@ import lombok.SneakyThrows;
 import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Component;
 import uk.gov.hmcts.ccd.sdk.ResolvedCCDConfig;
+import uk.gov.hmcts.ccd.sdk.StateId;
 import uk.gov.hmcts.ccd.sdk.api.CCD;
 import uk.gov.hmcts.ccd.sdk.api.Event;
 import uk.gov.hmcts.ccd.sdk.api.HasAccessControl;
@@ -80,7 +81,9 @@ class AuthorisationCaseStateGenerator<T, S, R extends HasRole> implements Config
       }
       Map<String, Object> permission = JsonUtils.caseRow(config.getCaseType());
       result.add(permission);
-      permission.put("CaseStateID", stateRolePermission.getRowKey());
+      // Resolve the state ID via StateId.of so @JsonProperty on the state constant is honoured,
+      // matching the State sheet and the event pre/post condition states.
+      permission.put("CaseStateID", StateId.of(stateRolePermission.getRowKey()));
       permission.put("UserRole", stateRolePermission.getColumnKey().getRole());
       permission.put("CRUD", Permission.toString(stateRolePermission.getValue()));
     }

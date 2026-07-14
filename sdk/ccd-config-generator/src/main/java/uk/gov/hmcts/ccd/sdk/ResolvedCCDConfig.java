@@ -95,14 +95,20 @@ public class ResolvedCCDConfig<T, S, R extends HasRole> {
   void resolveStateLabels() {
     Object[] constants = stateClass.getEnumConstants();
     for (Object constant : constants) {
+      // Keyed by toString() to match the runtime lookup in AuditEventService, which resolves labels
+      // by String.valueOf(currentView.getState()). This is a runtime lookup map, not generated
+      // output, so the keying is intentionally left as-is; only the reflection below is corrected.
       String stateId = constant.toString();
-      stateLabels.putIfAbsent(stateId, resolvedEnumStateLabel(stateId));
+      stateLabels.putIfAbsent(stateId, resolvedEnumStateLabel(constant, stateId));
     }
   }
 
-  private String resolvedEnumStateLabel(String stateId) {
+  private String resolvedEnumStateLabel(Object constant, String stateId) {
     try {
-      Field field = stateClass.getField(stateId);
+      // Look the enum field up via Enum.name(), never toString(): an enum whose toString() is
+      // overridden (e.g. an @JsonValue toString() returning a lowercase id) would otherwise throw
+      // NoSuchFieldException here and silently lose its @CCD label.
+      Field field = stateClass.getField(((Enum<?>) constant).name());
       CCD ccd = field.getAnnotation(CCD.class);
       if (ccd != null && !ccd.label().isBlank()) {
         return ccd.label();
