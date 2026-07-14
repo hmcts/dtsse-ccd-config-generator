@@ -12,8 +12,8 @@ The migration spans the generator repository and its ET submodule:
 
 | Repository | Branch | Current reviewed state |
 | --- | --- | --- |
-| `hmcts/dtsse-ccd-config-generator` | `json-to-java` | Slice 14 exact conversion in this commit; generator-fit review pending |
-| `hmcts/et-ccd-callbacks` | `json-to-java-migration` | `4ff6d1ad2` — Slice 14 exact conversion; generator-fit review pending |
+| `hmcts/dtsse-ccd-config-generator` | `json-to-java` | Slice 14 generator-fit review in this commit |
+| `hmcts/et-ccd-callbacks` | `json-to-java-migration` | `034b722a7` — Slice 14 generator-fit refactor; parity unchanged |
 
 The root repository must point at the intended ET commit. A fresh session should inspect both worktrees before changing
 anything:
@@ -59,11 +59,11 @@ the fourteenth slice is:
 | Remaining differences | 7,083 |
 | Completed differences | 45,144 |
 | Completion | 86.44% |
-| ET production/generation Java delta | +72,463 |
-| SDK production Java delta | +1,382 |
-| Total production Java delta | +73,845 |
-| Verification Java delta | +1,130 |
-| Production lines per completed difference | 1.64 |
+| ET production/generation Java delta | +68,767 |
+| SDK production Java delta | +1,372 |
+| Total production Java delta | +70,139 |
+| Verification Java delta | +1,119 |
+| Production lines per completed difference | 1.55 |
 
 The authoritative values are in
 `test-projects/et-ccd-callbacks/ccd-definitions/migration-progress.json`. If this table and the snapshot disagree, the
@@ -117,7 +117,8 @@ metric effect. An unproven candidate does not belong in this ledger.
 | Slice 12 generator-fit review | this review commit | `9f0ba610b` | Confirmed the feature-local event, field, nested-document and grant factories already fit the generator |
 | Slice 13: paired Singles referral lifecycle | `c58227bc` | `9c2d28145` | Added 406 exact rows; reached 85.23% |
 | Slice 13 generator-fit review | this review commit | `9c2d28145` | Confirmed the feature-local lifecycle, page, nested-path and grant factories already fit the generator |
-| Slice 14: paired Singles initial consideration | this exact conversion commit | `4ff6d1ad2` | Added 632 exact rows; reached 86.44% |
+| Slice 14: paired Singles initial consideration | `d99ca3ba` | `4ff6d1ad2` | Added 632 exact rows; reached 86.44% |
+| Slice 14 generator-fit follow-up | this review commit | `034b722a7` | Named invariant event, page and nested-row defaults; reduced the feature catalog from 4,089 to 393 lines |
 
 The ET submodule commit must be published before a root commit which points to it. Otherwise another checkout cannot
 resolve the root tree. Commit ET changes first, then commit the updated submodule pointer and related SDK or prompt
@@ -433,7 +434,7 @@ Post-commit generator-fit review:
 
 ### Slice 14: paired Singles initial consideration
 
-Status: exact in `cftlib` and `prod`; post-commit generator-fit review pending.
+Status: complete and exact in `cftlib` and `prod`, including the post-commit generator-fit review.
 
 The slice converts the paired regional `initialConsideration` case-management wizard.
 
@@ -464,12 +465,23 @@ Important implementation choices:
 - Callback URLs are generated as metadata only. No callback handler, controller or runtime route registration is
   included. The shared `ImportFile` complex type remains unchanged and owned by the completed Admin conversion.
 - Golden JSON is unchanged. All 45,144 generated rows are exact with zero changed or unexpected rows.
-- Relative to the reviewed Slice 13 snapshot, ET production/generation growth is 4,098 lines, SDK production growth is
-  18 lines and total production growth is 4,116 lines. SDK verification growth is 37 lines; ET verification growth is
-  unchanged. The cumulative production-lines ratio moves from 1.57 to 1.64.
 
-The post-commit generator-fit review must examine the 4,089-line feature catalog before this slice is considered
-complete. Any warranted refactor belongs in a separate parity-preserving commit.
+Post-commit generator-fit review:
+
+- Review point: root `d99ca3ba`, ET `4ff6d1ad2`.
+- Finding: the exact 4,089-line catalog repeated `initialConsideration`, callback paths and the same absent mid-event,
+  hint, condition and default metadata across all 128 page-field and 131 nested-element specifications. The regional
+  masks, ordering, labels, conditions, hidden-value and publish values remain meaningful and distinct.
+- Decision: introduce feature-local event, page-field and nested-element factories which make only those proven
+  invariants implicit. Keep every regional specification explicit and retain the existing SDK API; no broader row DSL
+  or further SDK capability is warranted.
+- Follow-up: root review commit containing this record and submodule update, ET `034b722a7`.
+- Result: all 45,144 rows remain exact with zero changed or unexpected rows. The feature catalog falls from 4,089 to
+  393 lines. Relative to the reviewed Slice 13 snapshot, ET production/generation growth is 402 lines, SDK production
+  growth is eight lines and total production growth is 410 lines. SDK verification growth is 26 lines; ET verification
+  growth is unchanged. The cumulative production-lines ratio improves from 1.57 to 1.55.
+- No intentional CCD definition improvement was identified or made. The golden JSON and generated definition semantics
+  are unchanged, so no platform-source evidence or separate behavioural-definition commit is required for this slice.
 
 ### Slice 13: paired Singles referral lifecycle
 
