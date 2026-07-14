@@ -20,7 +20,8 @@ public record CcdDataMigrationTaskOptions(
     int maxBatchesPerRun,
     Duration maxRunTime,
     Duration statementTimeout,
-    String sourceJurisdiction
+    String sourceJurisdiction,
+    String fdwAdditionalSelectGrantee
 ) {
   private static final String TARGET_SCHEMA = "ccd";
   private static final String FDW_SCHEMA = "fdw_stage";
@@ -31,6 +32,7 @@ public record CcdDataMigrationTaskOptions(
     mode = mode == null ? CcdDataMigrationMode.PRELOAD_EVENTS : mode;
     caseTypeIds = List.copyOf(requireCaseTypeIds(caseTypeIds));
     sourceJurisdiction = requireText(sourceJurisdiction, "sourceJurisdiction");
+    fdwAdditionalSelectGrantee = nullIfBlank(fdwAdditionalSelectGrantee);
 
     if (eventIdWindowSize < 1) {
       throw new IllegalArgumentException("eventIdWindowSize must be greater than zero");
@@ -102,6 +104,10 @@ public record CcdDataMigrationTaskOptions(
     return value;
   }
 
+  private static String nullIfBlank(String value) {
+    return value == null || value.isBlank() ? null : value.trim();
+  }
+
   private static List<String> requireCaseTypeIds(List<String> values) {
     Objects.requireNonNull(values, "caseTypeIds must not be null");
     if (values.isEmpty()) {
@@ -126,6 +132,7 @@ public record CcdDataMigrationTaskOptions(
     private Duration maxRunTime;
     private Duration statementTimeout = DEFAULT_STATEMENT_TIMEOUT;
     private String sourceJurisdiction;
+    private String fdwAdditionalSelectGrantee;
 
     private Builder(List<String> caseTypeIds) {
       this.caseTypeIds = caseTypeIds;
@@ -176,6 +183,11 @@ public record CcdDataMigrationTaskOptions(
       return this;
     }
 
+    public Builder fdwAdditionalSelectGrantee(String fdwAdditionalSelectGrantee) {
+      this.fdwAdditionalSelectGrantee = fdwAdditionalSelectGrantee;
+      return this;
+    }
+
     public CcdDataMigrationTaskOptions build() {
       return new CcdDataMigrationTaskOptions(
           taskName,
@@ -187,7 +199,8 @@ public record CcdDataMigrationTaskOptions(
           maxBatchesPerRun,
           maxRunTime,
           statementTimeout,
-          sourceJurisdiction
+          sourceJurisdiction,
+          fdwAdditionalSelectGrantee
       );
     }
   }
