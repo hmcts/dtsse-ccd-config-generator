@@ -50,6 +50,12 @@ class CaseEventToFieldsGenerator<T, S, R extends HasRole> implements ConfigGener
     List<Map<String, Object>> entries = Lists.newArrayList();
     for (Field.FieldBuilder builder : collection.getFields()) {
       Field field = builder.build();
+      // A field placed on this event via a typed getter still compiles when it is gated off (the
+      // Java member always exists), but its CaseField row is suppressed — so skip the placement to
+      // avoid a dangling CaseEventToFields row referencing a field that was not emitted.
+      if (config.getGatedOffFieldIds().contains(field.getId())) {
+        continue;
+      }
       Map<String, Object> row = JsonUtils.caseRow(config.getCaseType());
       entries.add(row);
       populateCoreColumns(row, event, field);

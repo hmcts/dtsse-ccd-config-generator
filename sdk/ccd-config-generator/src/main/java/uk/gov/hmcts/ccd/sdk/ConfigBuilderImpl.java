@@ -75,6 +75,9 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements Decentralised
     config.searchParties = buildBuilders(searchParty, SearchPartyBuilder::build);
     config.noticeOfChange = noticeOfChangeBuilder == null ? null : noticeOfChangeBuilder.build();
     config.complexTypeAuthorisations = Lists.newArrayList(complexTypeAuthorisations);
+    // Resolve @CCD(gate) fields against the current environment once, so every ID-based generator
+    // gates the same set. Empty unless a field is gated off, keeping ungated definitions unchanged.
+    config.gatedOffFieldIds = FieldUtils.gatedOffFieldIds(config.caseClass);
 
     return config;
   }

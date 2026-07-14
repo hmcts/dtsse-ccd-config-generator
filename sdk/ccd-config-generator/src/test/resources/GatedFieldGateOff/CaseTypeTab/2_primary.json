@@ -1,0 +1,13 @@
+[
+  {
+    "CaseFieldID": "baseField",
+    "CaseTypeID": "GatedField",
+    "Channel": "CaseWorker",
+    "LiveFrom": "01/01/2017",
+    "TabDisplayOrder": 2,
+    "TabFieldDisplayOrder": 1,
+    "TabID": "primary",
+    "TabLabel": "Primary",
+    "UserRole": ""
+  }
+]
