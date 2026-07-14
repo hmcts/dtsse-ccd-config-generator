@@ -6,16 +6,22 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.sun.net.httpserver.HttpServer;
+import java.net.InetSocketAddress;
+import java.nio.charset.StandardCharsets;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.context.support.StaticApplicationContext;
 import org.springframework.mock.env.MockEnvironment;
+import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
 import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping;
 import uk.gov.hmcts.ccd.sdk.api.CaseDetails;
 import uk.gov.hmcts.ccd.sdk.api.callback.AboutToStartOrSubmitResponse;
@@ -68,6 +74,43 @@ class JsonCallbackBridgeTest {
     );
 
     bridge.validate("${CCD_DEF_AAC_URL}/noc/check-noc-approval");
+  }
+
+  @Test
+  void forwardsCcdServiceAuthorizationHeaderToExternalCallback() throws Exception {
+    AtomicReference<String> serviceAuthorization = new AtomicReference<>();
+    HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+    server.createContext("/noc/check-noc-approval", exchange -> {
+      serviceAuthorization.set(exchange.getRequestHeaders().getFirst("ServiceAuthorization"));
+      byte[] response = "{}".getBytes(StandardCharsets.UTF_8);
+      exchange.getResponseHeaders().set("Content-Type", "application/json");
+      exchange.sendResponseHeaders(200, response.length);
+      try (var responseBody = exchange.getResponseBody()) {
+        responseBody.write(response);
+      }
+    });
+    server.start();
+
+    MockHttpServletRequest request = new MockHttpServletRequest();
+    request.addHeader("Authorization", "Bearer user-token");
+    request.addHeader("ServiceAuthorization", "Bearer aac-token");
+    request.addHeader("ServiceAuthorization", "Bearer ccd-data-token");
+    RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(request));
+
+    try {
+      JsonCallbackBridge bridge = bridgeWith(
+          new MockEnvironment().withProperty(
+              "decentralisation.external-callback-base-urls[CCD_DEF_AAC_URL]",
+              "http://127.0.0.1:" + server.getAddress().getPort()
+          )
+      );
+
+      bridge.invoke("${CCD_DEF_AAC_URL}/noc/check-noc-approval", Map.of("event_id", "nocRequest"));
+
+      assertThat(serviceAuthorization.get()).isEqualTo("Bearer ccd-data-token");
+    } finally {
+      server.stop(0);
+    }
   }
 
   @Test

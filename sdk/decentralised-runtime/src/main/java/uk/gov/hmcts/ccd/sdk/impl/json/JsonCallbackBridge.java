@@ -293,7 +293,7 @@ public class JsonCallbackBridge {
   private HttpHeaders callbackHeaders() {
     HttpHeaders headers = new HttpHeaders();
     headers.set(HttpHeaders.AUTHORIZATION, currentRequestHeader(HttpHeaders.AUTHORIZATION));
-    headers.set(SERVICE_AUTHORIZATION, currentRequestHeader(SERVICE_AUTHORIZATION));
+    headers.set(SERVICE_AUTHORIZATION, currentRequestLastHeader(SERVICE_AUTHORIZATION));
     return headers;
   }
 
@@ -302,6 +302,19 @@ public class JsonCallbackBridge {
       HttpServletRequest request = servletAttributes.getRequest();
       String value = request.getHeader(name);
       return value == null ? "" : value;
+    }
+    return "";
+  }
+
+  private String currentRequestLastHeader(String name) {
+    if (RequestContextHolder.getRequestAttributes() instanceof ServletRequestAttributes servletAttributes) {
+      // CCD appends its service token after the caller's token for decentralised persistence requests.
+      String value = "";
+      var values = servletAttributes.getRequest().getHeaders(name);
+      while (values.hasMoreElements()) {
+        value = values.nextElement();
+      }
+      return value;
     }
     return "";
   }
