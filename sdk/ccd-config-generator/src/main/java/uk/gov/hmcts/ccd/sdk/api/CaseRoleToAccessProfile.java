@@ -18,6 +18,10 @@ public class CaseRoleToAccessProfile<R extends HasRole> {
   private boolean retainLiveFrom;
   private boolean includeDisabled;
 
+  public String getRoleName() {
+    return (legacyIdamRole ? "idam:" : "") + role.getRole();
+  }
+
   public static class CaseRoleToAccessProfileBuilder<R extends HasRole> {
 
     public static <R extends HasRole> CaseRoleToAccessProfileBuilder<R> builder(R role) {

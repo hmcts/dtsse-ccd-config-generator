@@ -128,6 +128,32 @@ public class MigrationDefinitionGeneratorTest {
   }
 
   @Test
+  public void retainsAccessProfileLiveFromPerRow() {
+    ConfigBuilderImpl<TestData, TestState, TestRole> builder = newBuilder();
+    builder.omitDefaultLiveFrom();
+    builder.caseRoleToAccessProfile(TestRole.TEST)
+        .legacyIdamRole()
+        .retainLiveFrom();
+    builder.caseRoleToAccessProfile(TestRole.TEST_WITHOUT_LIVE_FROM)
+        .legacyIdamRole();
+
+    File output = new File(tmp.getRoot(), "access-profile-live-from");
+    JSONConfigGenerator<TestData, TestState, TestRole> generator =
+        new JSONConfigGenerator<>(List.of(new RoleToAccessProfilesGenerator<>()));
+    generator.writeConfig(output, builder.build());
+
+    List<Map<String, Object>> profiles = rows(output, "RoleToAccessProfiles.json");
+    assertThat(profiles)
+        .filteredOn(row -> row.get("RoleName").equals("idam:caseworker-test"))
+        .singleElement()
+        .satisfies(row -> assertThat(row).containsEntry("LiveFrom", "01/01/2017"));
+    assertThat(profiles)
+        .filteredOn(row -> row.get("RoleName").equals("idam:caseworker-test-without-live-from"))
+        .singleElement()
+        .satisfies(row -> assertThat(row).doesNotContainKey("LiveFrom"));
+  }
+
+  @Test
   public void generatesExactOptionalMigrationColumnsAndRegisteredDefinitions() {
     ConfigBuilderImpl<TestData, TestState, TestRole> builder = newBuilder();
     builder.caseHistoryLabel("History");
@@ -288,11 +314,18 @@ public class MigrationDefinitionGeneratorTest {
   }
 
   private enum TestRole implements HasRole {
-    TEST;
+    TEST("caseworker-test"),
+    TEST_WITHOUT_LIVE_FROM("caseworker-test-without-live-from");
+
+    private final String role;
+
+    TestRole(String role) {
+      this.role = role;
+    }
 
     @Override
     public String getRole() {
-      return "caseworker-test";
+      return role;
     }
 
     @Override

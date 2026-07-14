@@ -12,8 +12,8 @@ The migration spans the generator repository and its ET submodule:
 
 | Repository | Branch | Current reviewed state |
 | --- | --- | --- |
-| `hmcts/dtsse-ccd-config-generator` | `json-to-java` | Slice 3 exact Listings conversion in this commit |
-| `hmcts/et-ccd-callbacks` | `json-to-java-migration` | `2241a7da6` — Slice 3 exact Listings conversion |
+| `hmcts/dtsse-ccd-config-generator` | `json-to-java` | Slice 3 generator-fit follow-up in this commit |
+| `hmcts/et-ccd-callbacks` | `json-to-java-migration` | `a72f1bee6` — Slice 3 generator-fit snapshot follow-up |
 
 The root repository must point at the intended ET commit. A fresh session should inspect both worktrees before changing
 anything:
@@ -60,9 +60,9 @@ the third slice is:
 | Completed differences | 2,448 |
 | Completion | 4.69% |
 | ET production/generation Java delta | +2,004 |
-| SDK production Java delta | +829 |
-| Total production Java delta | +2,833 |
-| Verification Java delta | +642 |
+| SDK production Java delta | +828 |
+| Total production Java delta | +2,832 |
+| Verification Java delta | +675 |
 | Production lines per completed difference | 1.16 |
 
 The authoritative values are in
@@ -95,7 +95,8 @@ metric effect. An unproven candidate does not belong in this ledger.
 | Slice 1 generator-fit follow-up | `c343f2c7` | `b0bb67f97` | Replaced repeated field access with a typed class default |
 | Slice 2: remainder of `ET_Admin` | `c58ca56c` | `3d551154d` | Added 298 exact rows; reached 1.17% |
 | Slice 2 generator-fit follow-up | this review commit | `bb666f5e5` | Replaced magic empty event labels with typed omission metadata |
-| Slice 3: paired regional Listings | this exact-conversion commit | `2241a7da6` | Added 1,838 exact rows; reached 4.69% |
+| Slice 3: paired regional Listings | `c3ecad5f` | `2241a7da6` | Added 1,838 exact rows; reached 4.69% |
+| Slice 3 generator-fit follow-up | this review commit | `a72f1bee6` | Made access-profile `LiveFrom` retention row-specific |
 
 The ET submodule commit must be published before a root commit which points to it. Otherwise another checkout cannot
 resolve the root tree. Commit ET changes first, then commit the updated submodule pointer and related SDK or prompt
@@ -252,7 +253,7 @@ Post-commit generator-fit review:
 
 ### Slice 3: paired regional Listings aggregates
 
-Status: exact in both `cftlib` and `prod`; generator-fit review follows the exact-conversion commits.
+Status: complete and exact in both `cftlib` and `prod`.
 
 The slice owns 451 England/Wales rows and 468 Scotland rows in each environment:
 
@@ -311,6 +312,20 @@ et-shared/src/main/java/.../model/listing/types/*.java
 et-shared/src/main/java/.../model/ccd/ListingRole.java
 et-shared/src/main/java/.../model/ccd/ListingAccess.java
 ```
+
+Post-commit generator-fit review:
+
+- Review point: root `c3ecad5f`, ET `2241a7da6`.
+- Finding: `CaseRoleToAccessProfile.retainLiveFrom()` promised row-level retention, but generation retained the column
+  only when every access-profile row opted in. Listings uses retention on all five rows, so the exact output masked the
+  mixed-row behaviour.
+- Decision: centralise the emitted access-profile role name and match retention by that row identity. Add a focused
+  mixed-profile test which proves one row retains `LiveFrom` while another omits it.
+- Follow-up: root review commit containing this record, ET snapshot commit `a72f1bee6`.
+- Result: all 2,448 rows remain exact with zero changed or unexpected rows. The refactor removes one SDK production
+  line and adds 33 verification lines relative to the exact-conversion snapshot. The remaining explicit regional
+  branches, event sequences and tab rows express real golden-definition differences; no further SDK refactor is
+  warranted for this slice.
 
 ## SDK migration capabilities
 

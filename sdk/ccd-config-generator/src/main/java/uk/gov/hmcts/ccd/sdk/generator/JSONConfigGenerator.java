@@ -38,18 +38,17 @@ public class JSONConfigGenerator<T, S, R extends HasRole> {
     }
 
     if (!config.isIncludeDefaultLiveFrom()) {
-      boolean retainAccessProfileLiveFrom = !config.getCaseRoleToAccessProfiles().isEmpty()
-          && config.getCaseRoleToAccessProfiles().stream()
-              .allMatch(profile -> profile.isRetainLiveFrom());
       JsonUtils.removePropertyFromJsonFiles(
           outputfolder,
           "LiveFrom",
-          (path, row) -> retainAccessProfileLiveFrom
-              && path.getFileName().toString().equals("RoleToAccessProfiles.json")
-              || path.getFileName().toString().equals("AuthorisationCaseType.json")
-              && config.getCaseTypeAuthorisationRolesWithLiveFrom().stream()
-                  .map(HasRole::getRole)
-                  .anyMatch(role -> role.equals(row.get("UserRole")))
+          (path, row) -> (path.getFileName().toString().equals("RoleToAccessProfiles.json")
+              && config.getCaseRoleToAccessProfiles().stream()
+                  .filter(profile -> profile.isRetainLiveFrom())
+                  .anyMatch(profile -> profile.getRoleName().equals(row.get("RoleName"))))
+              || (path.getFileName().toString().equals("AuthorisationCaseType.json")
+                  && config.getCaseTypeAuthorisationRolesWithLiveFrom().stream()
+                      .map(HasRole::getRole)
+                      .anyMatch(role -> role.equals(row.get("UserRole"))))
       );
     }
 
