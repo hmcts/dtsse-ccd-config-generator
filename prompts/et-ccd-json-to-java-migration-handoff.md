@@ -12,8 +12,8 @@ The migration spans the generator repository and its ET submodule:
 
 | Repository | Branch | Current reviewed state |
 | --- | --- | --- |
-| `hmcts/dtsse-ccd-config-generator` | `json-to-java` | Slice 5 exact-conversion review point in this commit |
-| `hmcts/et-ccd-callbacks` | `json-to-java-migration` | `f1f439330` — Slice 5 exact conversion |
+| `hmcts/dtsse-ccd-config-generator` | `json-to-java` | Slice 5 reviewed state in this commit |
+| `hmcts/et-ccd-callbacks` | `json-to-java-migration` | `13ebb6d1b` — Slice 5 generator-fit follow-up |
 
 The root repository must point at the intended ET commit. A fresh session should inspect both worktrees before changing
 anything:
@@ -48,8 +48,8 @@ Read the migration material in this order:
 
 ## Current convergence
 
-The immutable initial baseline is 52,227 remaining differences across `cftlib` and `prod`. The committed exact-conversion
-snapshot after the fifth slice is:
+The immutable initial baseline is 52,227 remaining differences across `cftlib` and `prod`. The reviewed snapshot after
+the fifth slice is:
 
 | Metric | Current value |
 | --- | ---: |
@@ -59,11 +59,11 @@ snapshot after the fifth slice is:
 | Remaining differences | 11,668 |
 | Completed differences | 40,559 |
 | Completion | 77.66% |
-| ET production/generation Java delta | +60,604 |
+| ET production/generation Java delta | +57,382 |
 | SDK production Java delta | +1,319 |
-| Total production Java delta | +61,923 |
+| Total production Java delta | +58,701 |
 | Verification Java delta | +1,016 |
-| Production lines per completed difference | 1.53 |
+| Production lines per completed difference | 1.45 |
 
 The authoritative values are in
 `test-projects/et-ccd-callbacks/ccd-definitions/migration-progress.json`. If this table and the snapshot disagree, the
@@ -99,7 +99,8 @@ metric effect. An unproven candidate does not belong in this ledger.
 | Slice 3 generator-fit follow-up | this review commit | `a72f1bee6` | Made access-profile `LiveFrom` retention row-specific |
 | Slice 4: paired regional Multiples | `f943c79f` | `63bb25c58` | Added 5,271 exact rows; reached 14.78% |
 | Slice 4 generator-fit follow-up | this review commit | `0ccb196ae` | Added profile families and removed repeated profile, access and fixed-list boilerplate |
-| Slice 5: paired Singles foundation and lifecycle | this conversion commit | `f1f439330` | Added 32,840 exact rows; reached 77.66% |
+| Slice 5: paired Singles foundation and lifecycle | `d78e66f2` | `f1f439330` | Added 32,840 exact rows; reached 77.66% |
+| Slice 5 generator-fit follow-up | this review commit | `13ebb6d1b` | Removed repeated fixed-list value plumbing while preserving exact parity |
 
 The ET submodule commit must be published before a root commit which points to it. Otherwise another checkout cannot
 resolve the root tree. Commit ET changes first, then commit the updated submodule pointer and related SDK or prompt
@@ -415,7 +416,7 @@ Post-commit generator-fit review:
 
 ### Slice 5: paired regional Singles foundation and base lifecycle
 
-Status: exact-conversion review point committed in `cftlib` and `prod`; post-commit generator-fit review is pending.
+Status: complete and exact in `cftlib` and `prod`, including the post-commit generator-fit review.
 
 The slice adds 32,840 exact rows by enabling the complete `ET_EnglandWales` and `ET_Scotland` root schema, roles,
 access foundation and the 14 base lifecycle events named in the previous recommendation. The committed closure is:
@@ -443,10 +444,23 @@ Important implementation choices:
   types, while duplicate fixed-list and event-to-complex occurrences within one definition remain a multiset.
 - Golden JSON is unchanged. All 40,559 generated rows are exact with zero changed or unexpected rows.
 
-The exact-conversion review point is root `this conversion commit`, ET `f1f439330`. Relative to the Slice 4 reviewed
-snapshot, ET production/generation growth increases by 46,776 lines, SDK production growth by 212 lines and verification
-growth by 153 lines. This unusually large increase requires the documented post-commit generator-fit review; do not
-rewrite or squash the exact conversion commit when performing it.
+Post-commit generator-fit review:
+
+- Review point: root `d78e66f2`, ET `f1f439330`.
+- Finding: the 248 fixed-list enums repeated hand-written constructors and `HasCode`/`HasLabel` accessors. This was
+  accidental value plumbing rather than CCD metadata, and the preceding Multiples slice already established Lombok for
+  the identical enum shape. The large case-field, complex-type, access-policy and definition-row catalogs remain
+  explicit because their types, regional selection, ordering, conditions and legacy metadata encode real workbook
+  differences.
+- Decision: align the Singles fixed lists with the proven `@Getter` and `@RequiredArgsConstructor` representation. No
+  SDK feature is warranted: the generator already accepts the typed enum values, and adding a data-loading abstraction
+  would weaken the Java ownership boundary without removing meaningful CCD complexity.
+- Follow-up: root review commit containing this record and submodule update, ET `13ebb6d1b`.
+- Result: all 40,559 rows remain exact with zero changed or unexpected rows. ET production/generation growth fell by
+  3,222 lines from 60,604 to 57,382; total production growth fell from 61,923 to 58,701, improving production lines per
+  completed difference from 1.53 to 1.45. SDK and verification LOC are unchanged by the review.
+- No intentional CCD definition improvement was identified or made. The golden JSON and generated definition semantics
+  are unchanged, so no platform-source evidence or separate behavioural-definition commit is required for this slice.
 
 ## SDK migration capabilities
 
