@@ -1,11 +1,12 @@
 package uk.gov.hmcts.ccd.sdk;
 
 import com.google.common.collect.Lists;
-import com.google.common.collect.Multimap;
-import com.google.common.collect.Multimaps;
 import java.io.File;
+import java.util.ArrayList;
 import java.util.Collection;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -33,21 +34,34 @@ public class CCDDefinitionGenerator {
     return loadConfigs(configs);
   }
 
-  private static List<ResolvedCCDConfig<?, ?, ?>> loadConfigs(Collection<CCDConfig<?, ?, ?>> configs) {
-    Multimap<ConfigGroup, CCDConfig<?, ?, ?>>
-        configsByGroup = Multimaps
-        .index(configs, CCDDefinitionGenerator::resolveConfigGroup);
+  static List<ResolvedCCDConfig<?, ?, ?>> loadConfigs(Collection<CCDConfig<?, ?, ?>> configs) {
+    Map<ConfigGroup, List<CCDConfig<?, ?, ?>>> configsByGroup = new LinkedHashMap<>();
+    for (CCDConfig<?, ?, ?> config : configs) {
+      List<String> groupingKeys = config.groupingKeys();
+      if (groupingKeys == null || groupingKeys.isEmpty()) {
+        throw new IllegalStateException("CCDConfig groupingKeys must not be empty for "
+            + ClassUtils.getUserClass(config).getName());
+      }
+      for (String groupingKey : groupingKeys) {
+        ConfigGroup group = resolveConfigGroup(config, groupingKey);
+        configsByGroup.computeIfAbsent(group, ignored -> new ArrayList<>()).add(config);
+      }
+    }
 
     List<ResolvedCCDConfig<?, ?, ?>> result = Lists.newArrayList();
-    for (ConfigGroup group : configsByGroup.keySet()) {
-      ConfigResolver generator = new ConfigResolver(configsByGroup.get(group));
+    for (Map.Entry<ConfigGroup, List<CCDConfig<?, ?, ?>>> entry : configsByGroup.entrySet()) {
+      ConfigResolver generator = new ConfigResolver(entry.getValue());
       result.add(generator.resolveCCDConfig());
     }
     return result;
   }
 
-  private static ConfigGroup resolveConfigGroup(CCDConfig<?, ?, ?> config) {
-    return new ConfigGroup(resolveCaseDataClass(config), config.groupingKey());
+  private static ConfigGroup resolveConfigGroup(CCDConfig<?, ?, ?> config, String groupingKey) {
+    if (groupingKey == null) {
+      throw new IllegalStateException("CCDConfig grouping key must not be null for "
+          + ClassUtils.getUserClass(config).getName());
+    }
+    return new ConfigGroup(resolveCaseDataClass(config), groupingKey);
   }
 
   private static Class<?> resolveCaseDataClass(CCDConfig<?, ?, ?> config) {

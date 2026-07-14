@@ -68,6 +68,36 @@ public interface ConfigBuilder<T, S, R extends HasRole> {
     throw new UnsupportedOperationException("This ConfigBuilder does not support fixed-list registration");
   }
 
+  /**
+   * Selects the typed schema projection used for this case type.
+   */
+  default void schemaProfile(Class<?> profile) {
+    throw new UnsupportedOperationException("This ConfigBuilder does not support schema profiles");
+  }
+
+  /**
+   * Selects the role constants applicable to this case type.
+   */
+  default void applicableRoles(R... roles) {
+    throw new UnsupportedOperationException("This ConfigBuilder does not support applicable roles");
+  }
+
+  /**
+   * Uses the legacy {@code CaseTypeId} column on case type, field and event authorisation rows.
+   */
+  default void legacyCaseAuthorisationIdColumn() {
+    throw new UnsupportedOperationException(
+        "This ConfigBuilder does not support legacy authorisation columns");
+  }
+
+  /**
+   * Retains LiveFrom on selected case-type authorisation rows.
+   */
+  default void retainCaseTypeAuthorisationLiveFrom(R... roles) {
+    throw new UnsupportedOperationException(
+        "This ConfigBuilder does not support authorisation LiveFrom metadata");
+  }
+
   default void stateLabel(String stateId, String label) {
     // Implementations that expose resolved config metadata may override this.
   }

@@ -37,7 +37,8 @@ class ComplexTypeGenerator<T, S, R extends HasRole> implements ConfigGenerator<T
         continue;
       }
 
-      List<Map<String, Object>> fields = CaseFieldGenerator.toComplex(c, config.getCaseType());
+      List<Map<String, Object>> fields = CaseFieldGenerator.toComplex(
+          c, config.getCaseType(), config.getSchemaProfile());
 
       for (Map<String, Object> info : fields) {
         info.put("ListElementCode", info.get("ID"));

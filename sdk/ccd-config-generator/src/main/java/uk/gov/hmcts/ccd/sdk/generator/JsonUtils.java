@@ -20,9 +20,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.BiPredicate;
 import java.util.stream.Stream;
 import lombok.AllArgsConstructor;
 import lombok.SneakyThrows;
+import uk.gov.hmcts.ccd.sdk.ResolvedCCDConfig;
 import uk.gov.hmcts.ccd.sdk.api.CCD;
 import uk.gov.hmcts.ccd.sdk.api.Label;
 
@@ -71,6 +73,14 @@ public class JsonUtils {
 
   @SneakyThrows
   static void removePropertyFromJsonFiles(File root, String property) {
+    removePropertyFromJsonFiles(root, property, (path, row) -> false);
+  }
+
+  @SneakyThrows
+  static void removePropertyFromJsonFiles(
+      File root,
+      String property,
+      BiPredicate<Path, Map<String, Object>> retainProperty) {
     ObjectMapper mapper = new ObjectMapper();
     CollectionType mapCollectionType = mapper.getTypeFactory()
         .constructCollectionType(List.class, Map.class);
@@ -80,7 +90,11 @@ public class JsonUtils {
           .filter(candidate -> candidate.toString().endsWith(".json"))
           .toList()) {
         List<Map<String, Object>> rows = mapper.readValue(path.toFile(), mapCollectionType);
-        rows.forEach(row -> row.remove(property));
+        rows.forEach(row -> {
+          if (!retainProperty.test(path, row)) {
+            row.remove(property);
+          }
+        });
         writeFile(path, serialise(rows, false));
       }
     }
@@ -102,6 +116,14 @@ public class JsonUtils {
     Map<String, Object> row = Maps.newHashMap();
     row.put("LiveFrom", liveFrom);
     row.put("CaseTypeID", caseTypeId);
+    return row;
+  }
+
+  public static Map<String, Object> caseAuthorisationRow(ResolvedCCDConfig<?, ?, ?> config) {
+    Map<String, Object> row = Maps.newHashMap();
+    row.put("LiveFrom", DEFAULT_LIVE_FROM);
+    row.put(config.isLegacyCaseAuthorisationIdColumn() ? "CaseTypeId" : "CaseTypeID",
+        config.getCaseType());
     return row;
   }
 

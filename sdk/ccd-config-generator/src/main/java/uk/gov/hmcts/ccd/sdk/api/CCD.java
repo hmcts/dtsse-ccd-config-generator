@@ -1,11 +1,21 @@
 package uk.gov.hmcts.ccd.sdk.api;
 
+import java.lang.annotation.Repeatable;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import uk.gov.hmcts.ccd.sdk.type.FieldType;
 
 @Retention(RetentionPolicy.RUNTIME)
+@Repeatable(CCDDefinitions.class)
 public @interface CCD {
+
+  /**
+   * Optional external CCD identifier. This is independent of the Java/Jackson property name.
+   */
+  String id() default "";
+
+  /** Optional legacy field identifier used only by field authorisation rows. */
+  String authorisationId() default "";
 
   /**
    * Primary human readable description field. This property will populate different fields in different contexts:
@@ -59,4 +69,17 @@ public @interface CCD {
   int max() default Integer.MAX_VALUE;
 
   boolean retainHiddenValue() default false;
+
+  /** Omits the state Description column while retaining its Name. */
+  boolean omitDescription() default false;
+
+  /**
+   * Typed schema profiles in which this metadata is applicable. Empty means every profile.
+   */
+  Class<?>[] includeInProfiles() default {};
+
+  /**
+   * Typed schema profiles from which this field is excluded.
+   */
+  Class<?>[] excludeFromProfiles() default {};
 }

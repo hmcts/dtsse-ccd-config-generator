@@ -39,7 +39,7 @@ public class ResolvedCCDConfig<T, S, R extends HasRole> {
   final Class<T> caseClass;
   final Class<S> stateClass;
   final Class<R> roleClass;
-  final Map<Class, Integer> types;
+  Map<Class, Integer> types;
   final ImmutableSet<S> allStates;
 
   Set<String> rolesWithNoHistory;
@@ -61,6 +61,10 @@ public class ResolvedCCDConfig<T, S, R extends HasRole> {
   boolean shutterService = false;
   Map<String, List<? extends Enum<?>>> fixedLists = new LinkedHashMap<>();
   Map<String, String> stateLabels = new HashMap<>();
+  Class<?> schemaProfile;
+  Set<R> applicableRoles;
+  boolean legacyCaseAuthorisationIdColumn;
+  Set<R> caseTypeAuthorisationRolesWithLiveFrom = new HashSet<>();
 
   Table<S, R, Set<Permission>> stateRolePermissions = HashBasedTable.create();
 
@@ -80,6 +84,18 @@ public class ResolvedCCDConfig<T, S, R extends HasRole> {
   NoticeOfChange<T, R> noticeOfChange;
   List<ComplexTypeAuthorisation<R>> complexTypeAuthorisations;
 
+  /** Backwards-compatible constructor for callers which pre-resolve complex types. */
+  public ResolvedCCDConfig(
+      Class<T> caseClass,
+      Class<S> stateClass,
+      Class<R> roleClass,
+      Map<Class, Integer> types,
+      ImmutableSet<S> allStates
+  ) {
+    this(caseClass, stateClass, roleClass, allStates);
+    this.types = types;
+  }
+
   public Optional<String> labelForState(String stateId) {
     return Optional.ofNullable(stateLabels.get(stateId));
   }
@@ -88,6 +104,10 @@ public class ResolvedCCDConfig<T, S, R extends HasRole> {
     if (label != null && !label.isBlank()) {
       stateLabels.put(stateId, label);
     }
+  }
+
+  public boolean isApplicableRole(HasRole role) {
+    return applicableRoles == null || applicableRoles.contains(role);
   }
 
   void resolveStateLabels() {

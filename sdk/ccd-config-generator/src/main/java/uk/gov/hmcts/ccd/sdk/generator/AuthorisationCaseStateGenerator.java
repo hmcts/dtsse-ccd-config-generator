@@ -32,6 +32,9 @@ class AuthorisationCaseStateGenerator<T, S, R extends HasRole> implements Config
 
       SetMultimap<R, Permission> grants = event.getGrants();
       for (R role : event.getGrants().keys()) {
+        if (!config.isApplicableRole(role)) {
+          continue;
+        }
         // Don't add state access to history only roles
         if (event.getHistoryOnlyRoles().contains(role.getRole())) {
           continue;
@@ -62,6 +65,9 @@ class AuthorisationCaseStateGenerator<T, S, R extends HasRole> implements Config
           HasAccessControl accessHolder = BeanUtils.instantiateClass(klass);
           SetMultimap<HasRole, Permission> roleGrants = accessHolder.getGrants();
           for (HasRole key : roleGrants.keys()) {
+            if (!config.isApplicableRole(key)) {
+              continue;
+            }
             addPermissions(config.getStateRolePermissions(), Set.of(state), (R)key, roleGrants.get(key));
           }
         }
@@ -70,6 +76,9 @@ class AuthorisationCaseStateGenerator<T, S, R extends HasRole> implements Config
 
     List<Map<String, Object>> result = Lists.newArrayList();
     for (Cell<S, R, Set<Permission>> stateRolePermission : config.getStateRolePermissions().cellSet()) {
+      if (!config.isApplicableRole(stateRolePermission.getColumnKey())) {
+        continue;
+      }
       if (stateRolePermission.getColumnKey().toString().matches("\\[.*?\\]")) {
         // Ignore CCD roles.
         continue;

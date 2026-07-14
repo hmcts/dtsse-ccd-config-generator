@@ -43,7 +43,9 @@ public class RoleToAccessProfilesGenerator<T, S, R extends HasRole> implements C
     field.put("Authorisation", join(caseRoleToAccessProfile.getAuthorisation(), ","));
     field.put("ReadOnly", JsonUtils.yn(caseRoleToAccessProfile.isReadonly()));
     field.put("AccessProfiles", join(caseRoleToAccessProfile.getAccessProfiles(), ","));
-    field.put("Disabled", JsonUtils.yn(caseRoleToAccessProfile.isDisabled()));
+    if (caseRoleToAccessProfile.isIncludeDisabled()) {
+      field.put("Disabled", JsonUtils.yn(caseRoleToAccessProfile.isDisabled()));
+    }
 
     return field;
   }

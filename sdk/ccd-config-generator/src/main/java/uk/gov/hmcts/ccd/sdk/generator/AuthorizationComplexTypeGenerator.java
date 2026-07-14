@@ -29,6 +29,9 @@ public class AuthorizationComplexTypeGenerator<T, S, R extends HasRole>
 
     final List<Map<String, Object>> result = Lists.newArrayList();
     for (ComplexTypeAuthorisation<R> grant : grants) {
+      if (!config.isApplicableRole(grant.getRole())) {
+        continue;
+      }
       result.add(toJson(config.getCaseType(), grant));
     }
 

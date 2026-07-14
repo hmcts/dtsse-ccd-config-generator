@@ -26,6 +26,8 @@ public class Field<Type, StateType, Parent, Grandparent> {
   int fieldDisplayOrder;
   int pageFieldDisplayOrder;
   int pageDisplayOrder;
+  String pageLabel;
+  String externalMidEventCallbackUrl;
   String type;
   String fieldTypeParameter;
   boolean mutableList;
@@ -34,6 +36,7 @@ public class Field<Type, StateType, Parent, Grandparent> {
   boolean readOnly;
   private MidEvent midEventCallback;
   boolean retainHiddenValue;
+  String retainHiddenValueValue;
 
   Class<Type> clazz;
   @ToString.Exclude
@@ -112,6 +115,24 @@ public class Field<Type, StateType, Parent, Grandparent> {
 
     public FieldBuilder<Type, StateType, Parent, Grandparent> readOnly() {
       this.context = DisplayContext.ReadOnly;
+      return this;
+    }
+
+    public FieldBuilder<Type, StateType, Parent, Grandparent> externalMidEventCallbackUrl(
+        String url) {
+      this.externalMidEventCallbackUrl = url;
+      return this;
+    }
+
+    public FieldBuilder<Type, StateType, Parent, Grandparent> retainHiddenValue(String value) {
+      this.retainHiddenValue = true;
+      this.retainHiddenValueValue = value;
+      return this;
+    }
+
+    public FieldBuilder<Type, StateType, Parent, Grandparent> retainHiddenValue(boolean value) {
+      this.retainHiddenValue = value;
+      this.retainHiddenValueValue = null;
       return this;
     }
   }

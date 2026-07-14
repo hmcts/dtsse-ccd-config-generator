@@ -64,6 +64,7 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements Decentralised
   }
 
   public ResolvedCCDConfig<T, S, R> build() {
+    config.types = ConfigResolver.resolve(config.caseClass, "uk.gov.hmcts", config.schemaProfile);
     config.events = getEvents();
     config.tabs = buildBuilders(tabs, TabBuilder::build);
     config.workBasketResultFields = buildBuilders(workBasketResultFields, SearchBuilder::build);
@@ -174,6 +175,40 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements Decentralised
     if (existing != null && !existing.equals(orderedValues)) {
       throw new IllegalStateException("Conflicting fixed-list registrations for " + id);
     }
+  }
+
+  @Override
+  public void schemaProfile(Class<?> profile) {
+    Objects.requireNonNull(profile, "Schema profile must not be null");
+    if (config.schemaProfile != null && !config.schemaProfile.equals(profile)) {
+      throw new IllegalStateException("Conflicting schema profiles: "
+          + config.schemaProfile.getName() + " and " + profile.getName());
+    }
+    config.schemaProfile = profile;
+  }
+
+  @Override
+  @SafeVarargs
+  public final void applicableRoles(R... roles) {
+    if (roles == null || roles.length == 0) {
+      throw new IllegalArgumentException("Applicable roles must not be empty");
+    }
+    Set<R> selected = Set.of(roles);
+    if (config.applicableRoles != null && !config.applicableRoles.equals(selected)) {
+      throw new IllegalStateException("Conflicting applicable-role selections");
+    }
+    config.applicableRoles = selected;
+  }
+
+  @Override
+  public void legacyCaseAuthorisationIdColumn() {
+    config.legacyCaseAuthorisationIdColumn = true;
+  }
+
+  @Override
+  @SafeVarargs
+  public final void retainCaseTypeAuthorisationLiveFrom(R... roles) {
+    config.caseTypeAuthorisationRolesWithLiveFrom.addAll(Set.of(roles));
   }
 
   @Override

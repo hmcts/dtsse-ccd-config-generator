@@ -39,7 +39,8 @@ class CaseFieldGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
   @Override
   public void write(
       File outputFolder, ResolvedCCDConfig<T, S, R> config) {
-    List<Map<String, Object>> fields = toComplex(config.getCaseClass(), config.getCaseType());
+    List<Map<String, Object>> fields = toComplex(
+        config.getCaseClass(), config.getCaseType(), config.getSchemaProfile());
 
     if (config.isIncludeCaseHistory()) {
       Map<String, Object> history = getField(config.getCaseType(), "caseHistory");
@@ -55,7 +56,12 @@ class CaseFieldGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
   }
 
   public static List<Map<String, Object>> toComplex(Class dataClass, String caseTypeId) {
-    return buildComplexFields(dataClass, caseTypeId);
+    return toComplex(dataClass, caseTypeId, null);
+  }
+
+  public static List<Map<String, Object>> toComplex(
+      Class dataClass, String caseTypeId, Class<?> schemaProfile) {
+    return buildComplexFields(dataClass, caseTypeId, schemaProfile);
   }
 
   private static <T, S, R extends HasRole> List<Map<String, Object>> getExplicitFields(
@@ -83,9 +89,11 @@ class CaseFieldGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
       Map<String, Object> fieldData = getField(config.getCaseType(), fieldId);
       result.add(fieldData);
 
-      Optional<Field> caseField = findCaseField(config.getCaseClass(), fieldId);
+      Optional<Field> caseField = findCaseField(
+          config.getCaseClass(), fieldId, config.getSchemaProfile());
       caseField.ifPresent(candidate ->
-          populateFieldMetadata(fieldData, config.getCaseClass(), candidate));
+          populateFieldMetadata(
+              fieldData, config.getCaseClass(), candidate, config.getSchemaProfile()));
       JsonUtils.ensureDefaultLabel(fieldData);
 
       if (!Strings.isNullOrEmpty(field.getLabel())) {
@@ -108,9 +116,9 @@ class CaseFieldGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
   }
 
   private static List<Map<String, Object>> buildComplexFields(
-      Class<?> dataClass, String caseTypeId) {
+      Class<?> dataClass, String caseTypeId, Class<?> schemaProfile) {
     List<Map<String, Object>> fields = Lists.newArrayList();
-    appendFields(fields, dataClass, caseTypeId, "");
+    appendFields(fields, dataClass, caseTypeId, "", schemaProfile);
     return fields;
   }
 
@@ -118,9 +126,10 @@ class CaseFieldGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
       List<Map<String, Object>> fields,
       Class<?> dataClass,
       String caseTypeId,
-      String idPrefix) {
-    for (Field field : getCaseFields(dataClass)) {
-      appendField(fields, caseTypeId, dataClass, field, idPrefix);
+      String idPrefix,
+      Class<?> schemaProfile) {
+    for (Field field : getCaseFields(dataClass, schemaProfile)) {
+      appendField(fields, caseTypeId, dataClass, field, idPrefix, schemaProfile);
     }
   }
 
@@ -129,21 +138,22 @@ class CaseFieldGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
       String caseTypeId,
       Class<?> ownerClass,
       Field field,
-      String idPrefix) {
+      String idPrefix,
+      Class<?> schemaProfile) {
     JsonUnwrapped unwrapped = field.getAnnotation(JsonUnwrapped.class);
     if (unwrapped != null) {
-      appendUnwrapped(fields, caseTypeId, field, idPrefix, unwrapped);
+      appendUnwrapped(fields, caseTypeId, field, idPrefix, unwrapped, schemaProfile);
       return;
     }
 
-    String id = getFieldId(field, idPrefix);
+    String id = getFieldId(field, idPrefix, schemaProfile);
     Label label = field.getAnnotation(Label.class);
     JsonUtils.applyLabelAnnotation(fields, caseTypeId, label);
 
     Map<String, Object> fieldInfo = getField(caseTypeId, id);
     fields.add(fieldInfo);
 
-    populateFieldMetadata(fieldInfo, ownerClass, field);
+    populateFieldMetadata(fieldInfo, ownerClass, field, schemaProfile);
   }
 
   private static void appendUnwrapped(
@@ -151,16 +161,17 @@ class CaseFieldGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
       String caseTypeId,
       Field field,
       String currentPrefix,
-      JsonUnwrapped unwrapped) {
+      JsonUnwrapped unwrapped,
+      Class<?> schemaProfile) {
     String prefix = currentPrefix.isEmpty()
         ? unwrapped.prefix()
         : currentPrefix.concat(StringUtils.capitalize(unwrapped.prefix()));
-    appendFields(fields, field.getType(), caseTypeId, prefix);
+    appendFields(fields, field.getType(), caseTypeId, prefix, schemaProfile);
   }
 
   private static void populateFieldMetadata(
-      Map<String, Object> target, Class<?> ownerClass, Field field) {
-    CCD annotation = field.getAnnotation(CCD.class);
+      Map<String, Object> target, Class<?> ownerClass, Field field, Class<?> schemaProfile) {
+    CCD annotation = uk.gov.hmcts.ccd.sdk.FieldUtils.getCCD(field, schemaProfile).orElse(null);
     JsonUtils.applyCcdAnnotation(target, annotation);
     JsonUtils.ensureDefaultLabel(target);
 
@@ -255,7 +266,7 @@ class CaseFieldGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
       throw new IllegalStateException("Unable to resolve element type for %s on %s"
           .formatted(field.getName(), dataClass.getName()));
     }
-    return resolved;
+    return uk.gov.hmcts.ccd.sdk.FieldUtils.unwrapCollectionValueType(resolved);
   }
 
   public static Map<String, Object> getField(String caseType, String id) {
@@ -265,10 +276,11 @@ class CaseFieldGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
     return result;
   }
 
-  private static Optional<Field> findCaseField(Class<?> caseClass, String fieldId) {
-    return getCaseFields(caseClass)
+  private static Optional<Field> findCaseField(
+      Class<?> caseClass, String fieldId, Class<?> schemaProfile) {
+    return getCaseFields(caseClass, schemaProfile)
         .stream()
-        .filter(candidate -> getFieldId(candidate).equals(fieldId))
+        .filter(candidate -> getFieldId(candidate, null, schemaProfile).equals(fieldId))
         .findFirst();
   }
 

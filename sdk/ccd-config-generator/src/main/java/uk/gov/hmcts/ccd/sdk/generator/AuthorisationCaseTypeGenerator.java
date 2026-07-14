@@ -19,12 +19,15 @@ class AuthorisationCaseTypeGenerator<T, S, R extends HasRole> implements ConfigG
     if (roleEnum.isEnum()) {
       for (Object enumConstant : roleEnum.getEnumConstants()) {
         if (enumConstant instanceof HasRole r) {
+          if (!config.isApplicableRole(r)) {
+            continue;
+          }
           // Add non case roles.
           if (!r.getRole().matches("\\[.+\\]")) {
             boolean shuttered =
                 (config.isShutterService() || config.getShutterServiceForRoles().contains(r))
                     && !config.getShutterServiceExcludedRoles().contains(r);
-            Map<String, Object> entry = JsonUtils.caseRow(config.getCaseType());
+            Map<String, Object> entry = JsonUtils.caseAuthorisationRow(config);
             entry.put("UserRole", r.getRole());
             entry.put("CRUD", shuttered ? "D" : r.getCaseTypePermissions());
             result.add(entry);
@@ -34,7 +37,10 @@ class AuthorisationCaseTypeGenerator<T, S, R extends HasRole> implements ConfigG
       }
 
       Path output = Paths.get(root.getPath(), "AuthorisationCaseType.json");
-      JsonUtils.mergeInto(output, result, new JsonUtils.AddMissing(), "CaseTypeID", "UserRole");
+      String caseTypeColumn = config.isLegacyCaseAuthorisationIdColumn()
+          ? "CaseTypeId"
+          : "CaseTypeID";
+      JsonUtils.mergeInto(output, result, new JsonUtils.AddMissing(), caseTypeColumn, "UserRole");
     }
   }
 }

@@ -67,9 +67,16 @@ class CaseTypeTabGenerator<T, S, R extends HasRole> implements ConfigGenerator<T
                                                     int tabDisplayOrder, Tab<T, R> tab, String role) {
     int tabFieldDisplayOrder = 1;
     for (TabField tabField : tab.getFields()) {
+      int outputDisplayOrder = tabField.getDisplayOrder() == null
+          ? tabFieldDisplayOrder
+          : tabField.getDisplayOrder();
       Map<String, Object> field = buildField(caseType, tab.getTabID() + role, tabField.getId(),
-          tab.getLabelText(), tabDisplayOrder, tabFieldDisplayOrder, role, tab.getChannel());
-      if (tab.getShowCondition() != null && tabFieldDisplayOrder == 1) {
+          tab.getLabelText(), tabDisplayOrder, outputDisplayOrder, role, tab.getChannel(),
+          !tab.isMetadataOnFirstFieldOnly() || tabFieldDisplayOrder == 1);
+      boolean showConditionOnThisField = tab.getShowConditionFieldId() == null
+          ? tabFieldDisplayOrder == 1
+          : tab.getShowConditionFieldId().equals(tabField.getId());
+      if (tab.getShowCondition() != null && showConditionOnThisField) {
         field.put("TabShowCondition", tab.getShowCondition());
       }
       if (tabField.getShowCondition() != null) {
@@ -91,14 +98,23 @@ class CaseTypeTabGenerator<T, S, R extends HasRole> implements ConfigGenerator<T
 
   private static Map<String, Object> buildField(String caseType, String tabId, String fieldId,
       String tabLabel, int displayOrder, int tabFieldDisplayOrder, String role, String channel) {
+    return buildField(caseType, tabId, fieldId, tabLabel, displayOrder, tabFieldDisplayOrder,
+        role, channel, true);
+  }
+
+  private static Map<String, Object> buildField(String caseType, String tabId, String fieldId,
+      String tabLabel, int displayOrder, int tabFieldDisplayOrder, String role, String channel,
+      boolean includeTabMetadata) {
     Map<String, Object> field = JsonUtils.caseRow(caseType);
     if (channel != null) {
       field.put("Channel", channel);
     }
     field.put("TabID", tabId);
-    field.put("TabLabel", tabLabel);
-    field.put("UserRole", tabFieldDisplayOrder == 1 ? role : "");
-    field.put("TabDisplayOrder", displayOrder);
+    if (includeTabMetadata) {
+      field.put("TabLabel", tabLabel);
+      field.put("UserRole", tabFieldDisplayOrder == 1 ? role : "");
+      field.put("TabDisplayOrder", displayOrder);
+    }
     field.put("TabFieldDisplayOrder", tabFieldDisplayOrder);
     field.put("CaseFieldID", fieldId);
     return field;

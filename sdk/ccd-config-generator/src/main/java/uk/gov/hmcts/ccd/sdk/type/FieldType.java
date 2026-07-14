@@ -14,6 +14,7 @@ public enum FieldType {
   FixedRadioList,
   YesOrNo,
   Address,
+  AddressUK,
   CaseLink,
   CaseLocation,
   OrderSummary,

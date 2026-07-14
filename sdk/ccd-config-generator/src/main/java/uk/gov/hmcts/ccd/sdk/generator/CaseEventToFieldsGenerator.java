@@ -64,7 +64,7 @@ class CaseEventToFieldsGenerator<T, S, R extends HasRole> implements ConfigGener
         row.put("PageColumnNumber", 1);
       }
       applyMetadata(row, field, "CaseEventFieldLabel", "CaseEventFieldHint");
-      applyMidEventCallback(row, event, config, collection, pageId, writtenCallbacks);
+      applyMidEventCallback(row, event, config, collection, field, pageId, writtenCallbacks);
       applyPageShowCondition(row, pageShowConditions, field);
       applySummaryFlag(row, field);
       applyPageLabel(row, collection, field);
@@ -122,7 +122,9 @@ class CaseEventToFieldsGenerator<T, S, R extends HasRole> implements ConfigGener
     }
 
     if (field.isRetainHiddenValue()) {
-      target.put("RetainHiddenValue", "Y");
+      target.put("RetainHiddenValue", field.getRetainHiddenValueValue() == null
+          ? "Y"
+          : field.getRetainHiddenValueValue());
     }
   }
 
@@ -130,8 +132,13 @@ class CaseEventToFieldsGenerator<T, S, R extends HasRole> implements ConfigGener
                                      Event<T, R, S> event,
                                      ResolvedCCDConfig<T, S, R> config,
                                      FieldCollection collection,
+                                     Field field,
                                      Object pageId,
                                      Multimap<String, String> writtenCallbacks) {
+    if (field.getExternalMidEventCallbackUrl() != null) {
+      row.put("CallBackURLMidEvent", field.getExternalMidEventCallbackUrl());
+      return;
+    }
     String pageKey = pageId.toString();
     boolean hasHandler = collection.getPagesToMidEvent().containsKey(pageKey);
     String externalUrl = collection.getPagesToExternalMidEvent().get(pageKey);
@@ -170,7 +177,9 @@ class CaseEventToFieldsGenerator<T, S, R extends HasRole> implements ConfigGener
   private void applyPageLabel(Map<String, Object> row,
                               FieldCollection collection,
                               Field field) {
-    if (collection.getPageLabels().containsKey(field.getPage())) {
+    if (field.getPageLabel() != null) {
+      row.put("PageLabel", field.getPageLabel());
+    } else if (collection.getPageLabels().containsKey(field.getPage())) {
       row.put("PageLabel", collection.getPageLabels().get(field.getPage()));
     }
   }

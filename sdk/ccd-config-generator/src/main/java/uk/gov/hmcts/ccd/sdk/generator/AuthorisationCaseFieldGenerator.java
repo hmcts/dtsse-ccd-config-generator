@@ -2,8 +2,8 @@ package uk.gov.hmcts.ccd.sdk.generator;
 
 import static com.google.common.base.Strings.isNullOrEmpty;
 import static org.apache.commons.lang3.StringUtils.capitalize;
+import static uk.gov.hmcts.ccd.sdk.FieldUtils.getAuthorisationFieldId;
 import static uk.gov.hmcts.ccd.sdk.FieldUtils.getCaseFields;
-import static uk.gov.hmcts.ccd.sdk.FieldUtils.getFieldId;
 import static uk.gov.hmcts.ccd.sdk.FieldUtils.isUnwrappedField;
 import static uk.gov.hmcts.ccd.sdk.api.Permission.CRU;
 
@@ -53,6 +53,9 @@ class AuthorisationCaseFieldGenerator<T, S, R extends HasRole> implements Config
       for (Field.FieldBuilder fb : fields) {
 
         for (R role : event.getGrants().keys()) {
+          if (!config.isApplicableRole(role)) {
+            continue;
+          }
           if (event.getHistoryOnlyRoles().contains(role)) {
             continue;
           }
@@ -127,7 +130,14 @@ class AuthorisationCaseFieldGenerator<T, S, R extends HasRole> implements Config
       }
     }
 
-    addPermissionsFromFields(fieldRolePermissions, config.getCaseClass(), null, null);
+    addPermissionsFromFields(
+        fieldRolePermissions,
+        config.getCaseClass(),
+        null,
+        null,
+        config.getSchemaProfile(),
+        config
+    );
 
     File folder = new File(root.getPath(), "AuthorisationCaseField");
     folder.mkdir();
@@ -147,7 +157,7 @@ class AuthorisationCaseFieldGenerator<T, S, R extends HasRole> implements Config
           if (field.matches("\\[.+\\]")) {
             continue;
           }
-          Map<String, Object> permission = JsonUtils.caseRow(config.getCaseType());
+          Map<String, Object> permission = JsonUtils.caseAuthorisationRow(config);
           permission.put("UserRole", role);
           permission.put("CaseFieldID", field);
           permission.put("CRUD", Permission.toString(fieldPermission));
@@ -171,28 +181,34 @@ class AuthorisationCaseFieldGenerator<T, S, R extends HasRole> implements Config
       Table<String, String, Set<Permission>> fieldRolePermissions,
       Class<?> parent,
       String prefix,
-      Class<? extends HasAccessControl>[] defaultAccessControl
+      Class<? extends HasAccessControl>[] defaultAccessControl,
+      Class<?> schemaProfile,
+      ResolvedCCDConfig<?, ?, ?> config
   ) {
     Class<? extends HasAccessControl>[] classAccess = mergeAccess(
         defaultAccessControl,
-        parent.getAnnotation(CCD.class)
+        uk.gov.hmcts.ccd.sdk.FieldUtils.getCCD(parent, schemaProfile).orElse(null)
     );
 
-    for (java.lang.reflect.Field field : getCaseFields(parent)) {
-      CCD ccdAnnotation = field.getAnnotation(CCD.class);
+    for (java.lang.reflect.Field field : getCaseFields(parent, schemaProfile)) {
+      CCD ccdAnnotation = uk.gov.hmcts.ccd.sdk.FieldUtils.getCCD(field, schemaProfile).orElse(null);
       Class<? extends HasAccessControl>[] access = mergeAccess(classAccess, ccdAnnotation);
       JsonUnwrapped unwrapped = field.getAnnotation(JsonUnwrapped.class);
 
       if (null != unwrapped) {
         String newPrefix = isNullOrEmpty(prefix) ? unwrapped.prefix() : prefix.concat(capitalize(unwrapped.prefix()));
-        addPermissionsFromFields(fieldRolePermissions, field.getType(), newPrefix, access);
+        addPermissionsFromFields(
+            fieldRolePermissions, field.getType(), newPrefix, access, schemaProfile, config);
       } else if (null != access) {
-        String id = getFieldId(field, prefix);
+        String id = getAuthorisationFieldId(field, prefix, schemaProfile);
 
         for (Class<? extends HasAccessControl> klass : access) {
           HasAccessControl accessHolder = BeanUtils.instantiateClass(klass);
           SetMultimap<HasRole, Permission> roleGrants = accessHolder.getGrants();
           for (HasRole key : roleGrants.keys()) {
+            if (!config.isApplicableRole(key)) {
+              continue;
+            }
             Set<Permission> perms = Sets.newHashSet();
             perms.addAll(roleGrants.get(key));
 

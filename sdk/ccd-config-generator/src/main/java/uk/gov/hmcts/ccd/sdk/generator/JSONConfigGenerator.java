@@ -38,7 +38,19 @@ public class JSONConfigGenerator<T, S, R extends HasRole> {
     }
 
     if (!config.isIncludeDefaultLiveFrom()) {
-      JsonUtils.removePropertyFromJsonFiles(outputfolder, "LiveFrom");
+      boolean retainAccessProfileLiveFrom = !config.getCaseRoleToAccessProfiles().isEmpty()
+          && config.getCaseRoleToAccessProfiles().stream()
+              .allMatch(profile -> profile.isRetainLiveFrom());
+      JsonUtils.removePropertyFromJsonFiles(
+          outputfolder,
+          "LiveFrom",
+          (path, row) -> retainAccessProfileLiveFrom
+              && path.getFileName().toString().equals("RoleToAccessProfiles.json")
+              || path.getFileName().toString().equals("AuthorisationCaseType.json")
+              && config.getCaseTypeAuthorisationRolesWithLiveFrom().stream()
+                  .map(HasRole::getRole)
+                  .anyMatch(role -> role.equals(row.get("UserRole")))
+      );
     }
 
     generateJurisdiction(outputfolder, config);

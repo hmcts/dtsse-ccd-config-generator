@@ -21,7 +21,10 @@ class AuthorisationCaseEventGenerator<T, S, R extends HasRole> implements Config
 
     for (Event<T, R, S> event : config.getEvents().values()) {
       for (R role : event.getGrants().keys()) {
-        Map<String, Object> entry = JsonUtils.caseRow(config.getCaseType());
+        if (!config.isApplicableRole(role)) {
+          continue;
+        }
+        Map<String, Object> entry = JsonUtils.caseAuthorisationRow(config);
         entries.add(entry);
         entry.put("CaseEventID", event.getId());
         entry.put("UserRole", role.getRole());

@@ -1,5 +1,7 @@
 package uk.gov.hmcts.ccd.sdk.api;
 
+import java.util.List;
+
 /**
  * The main Config Generator interface.
  *
@@ -26,6 +28,14 @@ public interface CCDConfig<Case, State, Role extends HasRole> {
    */
   default String groupingKey() {
     return "";
+  }
+
+  /**
+   * Optional grouping keys for a region-neutral component shared by several case types.
+   * Existing single-group configurations continue to use {@link #groupingKey()}.
+   */
+  default List<String> groupingKeys() {
+    return List.of(groupingKey());
   }
 
   /**

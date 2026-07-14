@@ -43,9 +43,8 @@ class ConfigResolver<T, S, R extends HasRole> {
     Class<R> roleType = (Class<R>) resolveGenericArgument(configType, 2, userClass);
 
     ImmutableSet<S> allStates = ImmutableSet.copyOf(stateType.getEnumConstants());
-    Map<Class, Integer> types = resolve(caseType, basePackage);
     ResolvedCCDConfig<T, S, R> resolvedConfig =
-        new ResolvedCCDConfig(caseType, stateType, roleType, types, allStates);
+        new ResolvedCCDConfig(caseType, stateType, roleType, allStates);
     resolvedConfig.resolveStateLabels();
     ConfigBuilderImpl<T, S, R> builder = new ConfigBuilderImpl(resolvedConfig);
 
@@ -58,20 +57,23 @@ class ConfigResolver<T, S, R extends HasRole> {
 
 
   public static Map<Class, Integer> resolve(Class dataClass, String basePackage) {
+    return resolve(dataClass, basePackage, null);
+  }
+
+  public static Map<Class, Integer> resolve(
+      Class dataClass, String basePackage, Class<?> schemaProfile) {
     Map<Class, Integer> result = Maps.newHashMap();
-    resolve(dataClass, result, 0);
+    resolve(dataClass, result, 0, schemaProfile);
     result = Maps.filterKeys(result, x -> x.getPackageName().startsWith(basePackage));
     return result;
   }
 
-  private static void resolve(Class dataClass, Map<Class, Integer> result, int level) {
+  private static void resolve(
+      Class dataClass, Map<Class, Integer> result, int level, Class<?> schemaProfile) {
     ReflectionUtils.doWithFields(
         dataClass,
         field -> {
-          CCD definition = field.getAnnotation(CCD.class);
-          if (definition != null && definition.ignore()) {
-            return;
-          }
+          CCD definition = FieldUtils.getCCD(field, schemaProfile).orElse(null);
           Class c = getComplexType(dataClass, field);
           if (definition != null
               && definition.typeOverride() != FieldType.Unspecified
@@ -85,10 +87,11 @@ class ConfigResolver<T, S, R extends HasRole> {
             if (null == unwrapped && (!result.containsKey(c) || result.get(c) < level)) {
               result.put(c, level);
             }
-            resolve(c, result, level + 1);
+            resolve(c, result, level + 1, schemaProfile);
           }
         },
-        field -> !Modifier.isStatic(field.getModifiers()));
+        field -> !Modifier.isStatic(field.getModifiers())
+            && !FieldUtils.isFieldIgnored(field, schemaProfile));
   }
 
   public static Class getComplexType(Class c, Field field) {
@@ -103,7 +106,7 @@ class ConfigResolver<T, S, R extends HasRole> {
         throw new IllegalStateException("Unable to resolve collection element type for %s.%s"
             .formatted(c.getName(), field.getName()));
       }
-      return resolved;
+      return FieldUtils.unwrapCollectionValueType(resolved);
     }
     return field.getType();
   }

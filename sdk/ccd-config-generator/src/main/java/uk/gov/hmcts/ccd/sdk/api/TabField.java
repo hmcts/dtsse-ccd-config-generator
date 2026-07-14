@@ -11,4 +11,5 @@ public class TabField {
   private String showCondition;
   private String displayContextParameter;
   private String label;
+  private Integer displayOrder;
 }

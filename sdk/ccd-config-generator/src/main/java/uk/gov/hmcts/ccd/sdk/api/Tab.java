@@ -20,6 +20,8 @@ public class Tab<T, R extends HasRole> {
   private String channel;
   private List<TabField> fields;
   private Set<R> forRoles;
+  private boolean metadataOnFirstFieldOnly;
+  private String showConditionFieldId;
 
   public List<String> getForRolesAsString() {
     return forRoles.stream().map(HasRole::getRole).sorted().collect(toList());
@@ -62,6 +64,34 @@ public class Tab<T, R extends HasRole> {
 
     public TabBuilder<T, R> field(String fieldName, String showCondition) {
       fields.add(TabField.builder().id(fieldName).showCondition(showCondition).build());
+      return this;
+    }
+
+    public TabBuilder<T, R> field(String fieldName, String showCondition, int displayOrder) {
+      return field(fieldName, showCondition, displayOrder, null);
+    }
+
+    public TabBuilder<T, R> field(
+        String fieldName,
+        String showCondition,
+        int displayOrder,
+        String displayContextParameter) {
+      fields.add(TabField.builder()
+          .id(fieldName)
+          .showCondition(showCondition)
+          .displayOrder(displayOrder)
+          .displayContextParameter(displayContextParameter)
+          .build());
+      return this;
+    }
+
+    public TabBuilder<T, R> metadataOnFirstFieldOnly() {
+      this.metadataOnFirstFieldOnly = true;
+      return this;
+    }
+
+    public TabBuilder<T, R> showConditionOnField(String fieldId) {
+      this.showConditionFieldId = fieldId;
       return this;
     }
 

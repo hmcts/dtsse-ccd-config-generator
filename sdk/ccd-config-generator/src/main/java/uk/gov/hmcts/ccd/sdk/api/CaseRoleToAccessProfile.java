@@ -15,6 +15,8 @@ public class CaseRoleToAccessProfile<R extends HasRole> {
   private boolean disabled;
   private List<String> caseAccessCategories;
   private boolean legacyIdamRole;
+  private boolean retainLiveFrom;
+  private boolean includeDisabled;
 
   public static class CaseRoleToAccessProfileBuilder<R extends HasRole> {
 
@@ -24,6 +26,7 @@ public class CaseRoleToAccessProfile<R extends HasRole> {
       result.authorisation = new ArrayList<>();
       result.accessProfiles = new ArrayList<>();
       result.caseAccessCategories = new ArrayList<>();
+      result.includeDisabled = true;
       return result;
     }
 
@@ -60,6 +63,17 @@ public class CaseRoleToAccessProfile<R extends HasRole> {
     public CaseRoleToAccessProfileBuilder<R> legacyIdamRole() {
       legacyIdamRole = true;
 
+      return this;
+    }
+
+    /** Retains the conventional LiveFrom value on this access-profile row. */
+    public CaseRoleToAccessProfileBuilder<R> retainLiveFrom() {
+      retainLiveFrom = true;
+      return this;
+    }
+
+    public CaseRoleToAccessProfileBuilder<R> omitDisabled() {
+      includeDisabled = false;
       return this;
     }
   }
