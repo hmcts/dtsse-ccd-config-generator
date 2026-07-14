@@ -12,8 +12,8 @@ The migration spans the generator repository and its ET submodule:
 
 | Repository | Branch | Current migration milestone |
 | --- | --- | --- |
-| `hmcts/dtsse-ccd-config-generator` | `json-to-java` | This handoff plus the architecture and tooling prompts |
-| `hmcts/et-ccd-callbacks` | `json-to-java-migration` | `5cd2c9b6d` — `Pre_Hearing_Deposit` conversion |
+| `hmcts/dtsse-ccd-config-generator` | `json-to-java` | `0a80b1ec` — post-commit generator-fit review workflow |
+| `hmcts/et-ccd-callbacks` | `json-to-java-migration` | `b0bb67f97` — Slice 1 class-level access follow-up |
 
 The root repository must point at the intended ET commit. A fresh session should inspect both worktrees before changing
 anything:
@@ -91,6 +91,20 @@ This generates Java-only JSON and XLSX artefacts. It does not start ET, wire cal
 The ET submodule commit must be published before a root commit which points to it. Otherwise another checkout cannot
 resolve the root tree. Commit ET changes first, then commit the updated submodule pointer and related SDK or prompt
 changes in the root repository. Push in the same order.
+
+## Publication state
+
+Both migration branches are published. As of 14 July 2026, neither branch has a pull request. Confirm the current state
+rather than assuming this remains true:
+
+```shell
+gh pr list --repo hmcts/et-ccd-callbacks --head json-to-java-migration --state all
+gh pr list --repo hmcts/dtsse-ccd-config-generator --head json-to-java --state all
+```
+
+When pull requests are opened, review and merge the ET pull request first. The generator pull request records an ET
+submodule commit, so it must not reach the generator repository's default branch before that commit has reached the ET
+default branch. Do not delete the ET migration branch while the generator pull request still depends on it.
 
 ## Completed slice ledger
 
@@ -172,8 +186,11 @@ Capabilities delivered by Slice 1 and available for reuse:
 - tabs without the default `CaseWorker` channel; and
 - `FieldType.DateTime` where the runtime Java field must remain a string.
 
-These have backwards-compatible defaults and focused SDK generation/invalid-combination tests in
-`MigrationDefinitionGeneratorTest`.
+Class-level access is a default for `AuthorisationCaseField` generation only. It does not grant
+`AuthorisationComplexType` permissions: complex-type access remains explicit through `builder.grantComplexType(...)`.
+
+These capabilities have backwards-compatible defaults and focused SDK generation, precedence and
+invalid-combination tests in `MigrationDefinitionGeneratorTest` and `AuthorisationCaseFieldGeneratorTest`.
 
 Capabilities anticipated by the architecture but not yet delivered:
 

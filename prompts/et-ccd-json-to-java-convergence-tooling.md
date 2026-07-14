@@ -188,7 +188,12 @@ The snapshot records physical Java lines for:
 
 It also reports the total production-line delta from baseline and production lines per completed difference. These are
 review signals, not automatic limits. A foundational SDK feature may make an early slice look expensive but should be
-reused by later slices. Investigate line growth when:
+reused by later slices. Every recorded delta and the lines-per-completed-difference ratio are cumulative from the
+immutable initial baseline; they are not the cost of the most recent slice. To assess one slice or a post-commit
+refactor, compare its committed snapshot with the immediately preceding reviewed snapshot or compare the two milestone
+commits directly.
+
+Investigate line growth when:
 
 - regional variants repeat nearly identical configuration;
 - an SDK limitation forces forwarding classes or boilerplate;
@@ -223,6 +228,19 @@ workbooks/<profile>/golden/       Processed golden workbooks
 workbooks/<profile>/java/         Java-only workbooks
 migration-progress.json           Detailed result from the latest local run
 ```
+
+When a slice produces changed, unexpected or unexpectedly missing rows, diagnose it before updating the committed
+snapshot:
+
+1. inspect `java-definitions/` to confirm the generator emitted the intended case-type JSON;
+2. inspect `staged-java/` to confirm each JSON fragment was placed in the intended jurisdiction/profile layout;
+3. use the generated `migration-progress.json` to narrow the mismatch to an environment, jurisdiction and sheet; and
+4. compare that sheet in `workbooks/<profile>/golden/` and `workbooks/<profile>/java/` to identify the differing row and
+   cell values.
+
+The generated report is a count-level diagnostic and may not print every differing row. The generated workbooks are the
+row-level evidence. Do not run `updateEtMigrationProgress` merely to make a stale-snapshot failure pass; update the
+committed snapshot only after every selected-slice mismatch is understood and the reviewed counts are intentional.
 
 These generated artefacts are disposable and must not be committed. The reviewed
 `ccd-definitions/migration-progress.json` is the only committed metric state.
