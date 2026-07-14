@@ -37,8 +37,15 @@ public @interface CCD {
 
   String categoryID() default "";
 
+  /**
+   * Access policies for a field, enum constant or class. Access declared on a class is the default for its fields.
+   */
   Class<? extends HasAccessControl>[] access() default {};
 
+  /**
+   * Whether access policies inherit defaults from the containing class or an enclosing unwrapped field. Set to false
+   * with no {@link #access()} values to opt out of inherited access entirely.
+   */
   boolean inheritAccessFromParent() default true;
 
   boolean showSummaryContent() default false;

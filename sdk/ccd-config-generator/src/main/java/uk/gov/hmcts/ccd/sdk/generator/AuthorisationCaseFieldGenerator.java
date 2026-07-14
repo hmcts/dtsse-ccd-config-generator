@@ -169,14 +169,18 @@ class AuthorisationCaseFieldGenerator<T, S, R extends HasRole> implements Config
 
   private static void addPermissionsFromFields(
       Table<String, String, Set<Permission>> fieldRolePermissions,
-      Class parent,
+      Class<?> parent,
       String prefix,
       Class<? extends HasAccessControl>[] defaultAccessControl
   ) {
+    Class<? extends HasAccessControl>[] classAccess = mergeAccess(
+        defaultAccessControl,
+        parent.getAnnotation(CCD.class)
+    );
 
     for (java.lang.reflect.Field field : getCaseFields(parent)) {
       CCD ccdAnnotation = field.getAnnotation(CCD.class);
-      Class<? extends HasAccessControl>[] access = mergeAccess(defaultAccessControl, ccdAnnotation);
+      Class<? extends HasAccessControl>[] access = mergeAccess(classAccess, ccdAnnotation);
       JsonUnwrapped unwrapped = field.getAnnotation(JsonUnwrapped.class);
 
       if (null != unwrapped) {
@@ -205,10 +209,14 @@ class AuthorisationCaseFieldGenerator<T, S, R extends HasRole> implements Config
 
   private static Class<? extends HasAccessControl>[] mergeAccess(
       Class<? extends HasAccessControl>[] defaultAccessControl, CCD ccdAnnotation) {
-    return null == ccdAnnotation || ccdAnnotation.access().length == 0
+    if (null == ccdAnnotation) {
+      return defaultAccessControl;
+    }
+    if (!ccdAnnotation.inheritAccessFromParent()) {
+      return ccdAnnotation.access();
+    }
+    return ccdAnnotation.access().length == 0
         ? defaultAccessControl
-        : ccdAnnotation.inheritAccessFromParent()
-            ? ArrayUtils.addAll(defaultAccessControl, ccdAnnotation.access())
-            : ccdAnnotation.access();
+        : ArrayUtils.addAll(defaultAccessControl, ccdAnnotation.access());
   }
 }
