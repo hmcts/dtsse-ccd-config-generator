@@ -5,6 +5,7 @@ semantic convergence, how to interpret the result and when the committed snapsho
 
 Read these documents before changing a definition:
 
+- [`et-ccd-json-to-java-migration-handoff.md`](et-ccd-json-to-java-migration-handoff.md)
 - [`et-ccd-json-to-java-style-guide.md`](et-ccd-json-to-java-style-guide.md)
 - [`et-ccd-json-to-java-architecture-plan.md`](et-ccd-json-to-java-architecture-plan.md)
 - [`../test-projects/et-ccd-callbacks/ccd-definitions/tools/et-migration-progress/README.md`](../test-projects/et-ccd-callbacks/ccd-definitions/tools/et-migration-progress/README.md)
@@ -143,6 +144,8 @@ The percentage is calculated across both environments and all jurisdiction bundl
 9. Run the relevant SDK tests, ET compilation, Checkstyle and PMD checks.
 10. Run `updateEtMigrationProgress`, review the snapshot diff, then rerun `etMigrationProgress` to prove that the
     committed snapshot is current.
+11. Update the migration handoff with the completed slice, resulting metric, delivered capabilities, next slice and any
+    newly proven blockers.
 
 An accepted slice should normally have zero changed and zero unexpected rows. Do not accept approximate rows to make
 the completion percentage move: only exact generated rows remove golden differences safely.
@@ -217,6 +220,7 @@ When reporting a completed slice, state:
 - ET and SDK production Java-line deltas;
 - production lines per completed difference;
 - checks run and any repository-wide pre-existing blockers; and
+- confirmation that the migration handoff was updated; and
 - confirmation that golden definitions were not edited.
 
 Use a compact result such as:
