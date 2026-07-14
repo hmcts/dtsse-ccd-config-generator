@@ -248,8 +248,10 @@ class CcdDataMigrationTaskIntegrationTest {
   @Test
   void grantsFdwSelectToConfiguredAdditionalGrantee() {
     createRole(FDW_READER_ROLE);
+    createFdwUserMapping(FDW_READER_ROLE);
     insertSourceCase(10, 1000000000000010L, 1, "Submitted", "{\"field\":\"one\"}");
     insertSourceCaseEvent(101, 10, "create", "Submitted", "{\"field\":\"one\"}", minutesAgo(60));
+    insertSourceSignificantItem(5001, 101, "First document", "http://dm-store/documents/first");
 
     var options = optionsBuilder(List.of("TestCase"))
         .mode(PRELOAD_EVENTS)
@@ -259,9 +261,9 @@ class CcdDataMigrationTaskIntegrationTest {
     CcdDataMigrationRunResult result = new CcdDataMigrationTask(jdbc, transactionManager, options).runMigration();
 
     assertThat(result.caughtUp()).isTrue();
-    assertThat(hasFdwSelectGrant(FDW_READER_ROLE, "case_data")).isTrue();
-    assertThat(hasFdwSelectGrant(FDW_READER_ROLE, "case_event")).isTrue();
-    assertThat(hasFdwSelectGrant(FDW_READER_ROLE, "case_event_significant_items")).isTrue();
+    assertThat(countFdwRowsAsRole(FDW_READER_ROLE, "case_data")).isEqualTo(1);
+    assertThat(countFdwRowsAsRole(FDW_READER_ROLE, "case_event")).isEqualTo(1);
+    assertThat(countFdwRowsAsRole(FDW_READER_ROLE, "case_event_significant_items")).isEqualTo(1);
   }
 
   @Test
@@ -591,7 +593,7 @@ class CcdDataMigrationTaskIntegrationTest {
     jdbc.getJdbcTemplate().execute("""
         create user mapping for current_user
         server ccd_migration_test_server
-        options (user 'test', password 'test')
+        options (user 'test', password 'test', password_required 'false')
         """);
     jdbc.getJdbcTemplate().execute("""
         create foreign table fdw_stage.case_data (
@@ -1341,16 +1343,35 @@ class CcdDataMigrationTaskIntegrationTest {
     if (!Boolean.TRUE.equals(exists)) {
       jdbc.getJdbcTemplate().execute("create role " + quoteIdentifier(roleName));
     }
+    jdbc.getJdbcTemplate().execute("grant " + quoteIdentifier(roleName) + " to current_user");
   }
 
-  private boolean hasFdwSelectGrant(String roleName, String tableName) {
-    return Boolean.TRUE.equals(jdbc.queryForObject(
-        """
-        select has_table_privilege(:roleName, 'fdw_stage.' || :tableName, 'select')
-        """,
-        Map.of("roleName", roleName, "tableName", tableName),
-        Boolean.class
-    ));
+  private void createFdwUserMapping(String roleName) {
+    jdbc.getJdbcTemplate().execute("""
+        create user mapping for """ + quoteIdentifier(roleName) + """
+        server ccd_migration_test_server
+        options (user 'test', password 'test', password_required 'false')
+        """);
+  }
+
+  private long countFdwRowsAsRole(String roleName, String tableName) {
+    if (!List.of("case_data", "case_event", "case_event_significant_items").contains(tableName)) {
+      throw new IllegalArgumentException("Unexpected FDW table name: " + tableName);
+    }
+
+    return jdbc.getJdbcTemplate().execute((Connection connection) -> {
+      try (var statement = connection.createStatement()) {
+        statement.execute("set role " + quoteIdentifier(roleName));
+        try {
+          try (var resultSet = statement.executeQuery("select count(*) from fdw_stage." + tableName)) {
+            resultSet.next();
+            return resultSet.getLong(1);
+          }
+        } finally {
+          statement.execute("reset role");
+        }
+      }
+    });
   }
 
   private static String quoteIdentifier(String identifier) {

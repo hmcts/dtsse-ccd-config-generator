@@ -28,6 +28,7 @@ DST_SCHEMA="${DST_SCHEMA:-ccd}"
 FDW_SCHEMA="${FDW_SCHEMA:-fdw_stage}"
 FDW_SERVER="${FDW_SERVER:-src_ccd_server}"
 LOCAL_USER_SQL="${LOCAL_USER_SQL:-current_user}"
+FDW_ADDITIONAL_GRANTEE_SQL="${FDW_ADDITIONAL_GRANTEE_SQL:-}"
 
 DO_APPLY=false
 
@@ -55,6 +56,7 @@ Environment variables:
   FDW_SCHEMA
   FDW_SERVER
   LOCAL_USER_SQL local role that will run the migration; defaults to current_user
+  FDW_ADDITIONAL_GRANTEE_SQL optional additional local role to map and grant FDW read access
 
 Example:
   export DST_DSN='postgresql://user:pass@dest.postgres.database.azure.com:5432/appdb?sslmode=require'
@@ -66,6 +68,7 @@ Example:
   export SRC_PASSWORD='...'
   export SRC_SSLMODE='require'
   export LOCAL_USER_SQL='current_user'
+  export FDW_ADDITIONAL_GRANTEE_SQL='"DTS JIT Access et DB Reader SC"'
 
   ./scripts/setup-ccd-data-fdw.sh
   ./scripts/setup-ccd-data-fdw.sh --apply
@@ -114,6 +117,7 @@ psql_dst() {
     --set=fdw_schema="$FDW_SCHEMA" \
     --set=fdw_server="$FDW_SERVER" \
     --set=local_user_sql="$LOCAL_USER_SQL" \
+    --set=fdw_additional_grantee_sql="$FDW_ADDITIONAL_GRANTEE_SQL" \
     "$@"
 }
 
@@ -130,6 +134,7 @@ FDW setup configuration:
   FDW schema:      ${FDW_SCHEMA}
   FDW server:      ${FDW_SERVER}
   Local user SQL:  ${LOCAL_USER_SQL}
+  Extra grantee:   ${FDW_ADDITIONAL_GRANTEE_SQL:-<none>}
   Source host:     ${SRC_HOST}
   Source port:     ${SRC_PORT}
   Source database: ${SRC_DB}
@@ -174,6 +179,18 @@ options (
   user :'src_user',
   password :'src_password'
 );
+
+select case
+  when :'fdw_additional_grantee_sql' <> '' and :'fdw_additional_grantee_sql' <> :'local_user_sql'
+    then format(
+      'create user mapping for %s server %I options (user %L, password %L)',
+      :'fdw_additional_grantee_sql',
+      :'fdw_server',
+      :'src_user',
+      :'src_password'
+    )
+end as extra_user_mapping_sql
+\gexec
 
 create foreign table :"fdw_schema".case_data (
   reference bigint,
@@ -252,6 +269,38 @@ grant select on
   :"fdw_schema".case_event,
   :"fdw_schema".case_event_significant_items
 to :local_user_sql;
+
+select case
+  when :'fdw_additional_grantee_sql' <> '' and :'fdw_additional_grantee_sql' <> :'local_user_sql'
+    then format(
+      'grant usage on foreign server %I to %s',
+      :'fdw_server',
+      :'fdw_additional_grantee_sql'
+    )
+end as extra_foreign_server_grant_sql
+\gexec
+
+select case
+  when :'fdw_additional_grantee_sql' <> '' and :'fdw_additional_grantee_sql' <> :'local_user_sql'
+    then format(
+      'grant usage on schema %I to %s',
+      :'fdw_schema',
+      :'fdw_additional_grantee_sql'
+    )
+end as extra_schema_grant_sql
+\gexec
+
+select case
+  when :'fdw_additional_grantee_sql' <> '' and :'fdw_additional_grantee_sql' <> :'local_user_sql'
+    then format(
+      'grant select on %I.case_data, %I.case_event, %I.case_event_significant_items to %s',
+      :'fdw_schema',
+      :'fdw_schema',
+      :'fdw_schema',
+      :'fdw_additional_grantee_sql'
+    )
+end as extra_table_grant_sql
+\gexec
 SQL
 }
 

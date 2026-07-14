@@ -1225,18 +1225,40 @@ public class CcdDataMigrationTask implements Runnable {
 
     log.info("Granting CCD data migration FDW select access to {}", grantee);
     db.getJdbcTemplate().execute("""
-        grant select on
-          fdw_stage.case_data,
-          fdw_stage.case_event,
-          fdw_stage.case_event_significant_items
-        to """ + quoteIdentifier(grantee));
+        do $$
+        declare
+          grantee text := ${grantee};
+          fdw_server text;
+        begin
+          select s.srvname
+          into fdw_server
+          from pg_foreign_table ft
+          join pg_class c on c.oid = ft.ftrelid
+          join pg_namespace n on n.oid = c.relnamespace
+          join pg_foreign_server s on s.oid = ft.ftserver
+          where n.nspname = 'fdw_stage'
+            and c.relname in ('case_data', 'case_event', 'case_event_significant_items')
+          limit 1;
+
+          if fdw_server is null then
+            raise exception 'No FDW server found for fdw_stage tables';
+          end if;
+
+          execute format('grant usage on schema fdw_stage to %I', grantee);
+          execute format('grant usage on foreign server %I to %I', fdw_server, grantee);
+          execute format(
+            'grant select on fdw_stage.case_data, fdw_stage.case_event, fdw_stage.case_event_significant_items to %I',
+            grantee
+          );
+        end $$;
+        """.replace("${grantee}", quoteLiteral(grantee)));
   }
 
-  private static String quoteIdentifier(String identifier) {
-    if (identifier.indexOf('\0') >= 0) {
-      throw new IllegalArgumentException("SQL identifier must not contain null bytes");
+  private static String quoteLiteral(String value) {
+    if (value.indexOf('\0') >= 0) {
+      throw new IllegalArgumentException("SQL literal must not contain null bytes");
     }
-    return "\"" + identifier.replace("\"", "\"\"") + "\"";
+    return "'" + value.replace("'", "''") + "'";
   }
 
   private void validateDecentralisedRuntimeDisabled() {
