@@ -12,8 +12,8 @@ The migration spans the generator repository and its ET submodule:
 
 | Repository | Branch | Current reviewed state |
 | --- | --- | --- |
-| `hmcts/dtsse-ccd-config-generator` | `json-to-java` | Slice 13 exact conversion in this commit; generator-fit review follows |
-| `hmcts/et-ccd-callbacks` | `json-to-java-migration` | `9c2d28145` — Slice 13 exact conversion |
+| `hmcts/dtsse-ccd-config-generator` | `json-to-java` | Slice 13 generator-fit review in this commit |
+| `hmcts/et-ccd-callbacks` | `json-to-java-migration` | `9c2d28145` — Slice 13 exact conversion; no follow-up refactor required |
 
 The root repository must point at the intended ET commit. A fresh session should inspect both worktrees before changing
 anything:
@@ -115,7 +115,8 @@ metric effect. An unproven candidate does not belong in this ledger.
 | Slice 11 generator-fit review | this review commit | `efeb69b3c` | Confirmed the feature-local event, page, document-element and grant factories already fit the generator |
 | Slice 12: paired Singles tribunal notifications | `a1fa898b` | `9f0ba610b` | Added 290 exact rows; reached 84.45% |
 | Slice 12 generator-fit review | this review commit | `9f0ba610b` | Confirmed the feature-local event, field, nested-document and grant factories already fit the generator |
-| Slice 13: paired Singles referral lifecycle | this exact conversion commit | `9c2d28145` | Added 406 exact rows; reached 85.23% |
+| Slice 13: paired Singles referral lifecycle | `c58227bc` | `9c2d28145` | Added 406 exact rows; reached 85.23% |
+| Slice 13 generator-fit review | this review commit | `9c2d28145` | Confirmed the feature-local lifecycle, page, nested-path and grant factories already fit the generator |
 
 The ET submodule commit must be published before a root commit which points to it. Otherwise another checkout cannot
 resolve the root tree. Commit ET changes first, then commit the updated submodule pointer and related SDK or prompt
@@ -431,8 +432,7 @@ Post-commit generator-fit review:
 
 ### Slice 13: paired Singles referral lifecycle
 
-Status: complete and exact in `cftlib` and `prod`; the post-commit generator-fit review follows the exact conversion
-commits.
+Status: complete and exact in `cftlib` and `prod`, including the post-commit generator-fit review.
 
 The slice converts the paired referral lifecycle: `createReferral`, `updateReferral`, `replyToReferral` and
 `closeReferral`.
@@ -467,9 +467,20 @@ Important implementation choices:
 
 Post-commit generator-fit review:
 
-- Review point: pending until the exact ET and root commits exist.
-- No intentional CCD definition improvement has been made. Any later candidate must preserve this exact conversion
-  review point and follow the separate evidence-backed definition-change process.
+- Review point: root `c58227bc`, ET `9c2d28145`.
+- Finding: the committed 1,006-line feature catalog already names the regional/environment event family, create/update/
+  reply/close page families, document and referral nested-row families and common tribunal grants. Its remaining field
+  rows encode distinct conditions, positions, page-column omissions and callbacks, while the nested rows encode exact
+  ordered and dotted paths rather than a missing generator abstraction.
+- Decision: no further ET or SDK refactor is warranted. The reusable SDK already expresses every required event, page,
+  profile, nested-path and permission concept. Turning the ordered referral paths into a generic array or broader row
+  DSL would reduce physical lines by hiding definition semantics rather than improving the typed API.
+- Follow-up: this root review commit records the decision; ET remains at the exact conversion commit `9c2d28145`.
+- Result: all 44,512 rows remain exact with zero changed or unexpected rows. ET production/generation growth remains
+  68,365 lines, SDK production growth 1,364 lines, total production growth 69,729 lines and verification growth 1,093
+  lines. The cumulative production-lines ratio remains 1.57.
+- No intentional CCD definition improvement was identified or made. The golden JSON and generated definition semantics
+  are unchanged, so no platform-source evidence or separate behavioural-definition commit is required for this slice.
 
 ### Slice 12: paired Singles tribunal notifications
 
