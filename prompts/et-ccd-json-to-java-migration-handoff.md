@@ -12,8 +12,8 @@ The migration spans the generator repository and its ET submodule:
 
 | Repository | Branch | Current reviewed state |
 | --- | --- | --- |
-| `hmcts/dtsse-ccd-config-generator` | `json-to-java` | Slice 11 generator-fit review in this commit |
-| `hmcts/et-ccd-callbacks` | `json-to-java-migration` | `efeb69b3c` — Slice 11 exact conversion; no follow-up refactor required |
+| `hmcts/dtsse-ccd-config-generator` | `json-to-java` | Slice 12 exact conversion in this commit; generator-fit review follows |
+| `hmcts/et-ccd-callbacks` | `json-to-java-migration` | `9f0ba610b` — Slice 12 exact conversion |
 
 The root repository must point at the intended ET commit. A fresh session should inspect both worktrees before changing
 anything:
@@ -49,21 +49,21 @@ Read the migration material in this order:
 ## Current convergence
 
 The immutable initial baseline is 52,227 remaining differences across `cftlib` and `prod`. The exact snapshot after
-the eleventh slice is:
+the twelfth slice is:
 
 | Metric | Current value |
 | --- | ---: |
-| Exact Java rows | 43,816 |
+| Exact Java rows | 44,106 |
 | Changed rows | 0 |
 | Unexpected rows | 0 |
-| Remaining differences | 8,411 |
-| Completed differences | 43,816 |
-| Completion | 83.90% |
-| ET production/generation Java delta | +66,576 |
+| Remaining differences | 8,121 |
+| Completed differences | 44,106 |
+| Completion | 84.45% |
+| ET production/generation Java delta | +67,352 |
 | SDK production Java delta | +1,364 |
-| Total production Java delta | +67,940 |
+| Total production Java delta | +68,716 |
 | Verification Java delta | +1,093 |
-| Production lines per completed difference | 1.55 |
+| Production lines per completed difference | 1.56 |
 
 The authoritative values are in
 `test-projects/et-ccd-callbacks/ccd-definitions/migration-progress.json`. If this table and the snapshot disagree, the
@@ -113,6 +113,7 @@ metric effect. An unproven candidate does not belong in this ledger.
 | Slice 10 generator-fit review | this review commit | `11bca5627` | Confirmed the feature-local factories and standalone nested-event API already fit the generator |
 | Slice 11: paired Singles correspondence and document serving | `05fcf302` | `efeb69b3c` | Added 321 exact rows; reached 83.90% |
 | Slice 11 generator-fit review | this review commit | `efeb69b3c` | Confirmed the feature-local event, page, document-element and grant factories already fit the generator |
+| Slice 12: paired Singles tribunal notifications | this exact conversion commit | `9f0ba610b` | Added 290 exact rows; reached 84.45% |
 
 The ET submodule commit must be published before a root commit which points to it. Otherwise another checkout cannot
 resolve the root tree. Commit ET changes first, then commit the updated submodule pointer and related SDK or prompt
@@ -425,6 +426,49 @@ Post-commit generator-fit review:
   Verification growth rose by 20 lines for the profile-family behaviour test.
 - No intentional CCD definition improvement was identified or made. The golden JSON and generated definition semantics
   are unchanged, so no platform-source evidence or separate behavioural-definition commit is required for this slice.
+
+### Slice 12: paired Singles tribunal notifications
+
+Status: complete and exact in `cftlib` and `prod`; the post-commit generator-fit review follows the exact conversion
+commits.
+
+The slice converts the paired tribunal-facing notification workflow: `sendNotification`, `respondNotification`,
+`viewAllNotifications` and `generateNotificationSummary`.
+
+| Profile and case type | `CaseEvent` | `CaseEventToFields` | Event authorisation | Event-to-complex | Complex authorisation | Exact gain |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| cftlib `ET_EnglandWales` | 4 | 36 | 29 | 2 | 0 | 71 |
+| cftlib `ET_Scotland` | 4 | 36 | 30 | 2 | 0 | 72 |
+| prod `ET_EnglandWales` | 4 | 36 | 29 | 4 | 0 | 73 |
+| prod `ET_Scotland` | 4 | 36 | 30 | 4 | 0 | 74 |
+| **Total** | **16** | **144** | **118** | **12** | **0** | **290** |
+
+Important implementation choices:
+
+- All four events move with their page fields, nested event elements and event permissions. The cftlib and production
+  callback bases, wildcard states, publish metadata, enabling conditions and the regional judgment/judgement spelling
+  remain explicit.
+- `sendNotification` retains its Scotland-only page-level validation callback. `respondNotification` retains the
+  environment-specific validation callback in both regions, while every notification field preserves its exact
+  condition, retain-hidden, summary and publish metadata. All 144 rows intentionally omit `PageColumnNumber`.
+- The two `respondNotificationUploadDocument` nested rows exist in every profile. The two
+  `sendNotificationUploadDocument` rows remain production-only and retain their different context and label metadata.
+- Event permissions retain the Scotland-only base caseworker grant for `sendNotification`, the broad respondent
+  solicitor family for `viewAllNotifications`, and the exact regional judge/caseworker CRUD variants. No direct
+  `AuthorisationComplexType` rows belong to this slice.
+- Callback URLs are generated as metadata only. No callback handler, controller or runtime route registration is
+  included.
+- The shared `ImportFile` complex type remains owned by the completed Admin conversion and continues to coalesce
+  unchanged; this slice adds no competing global complex-type owner.
+- Golden JSON is unchanged. All 44,106 generated rows are exact with zero changed or unexpected rows.
+- Relative to the reviewed Slice 11 snapshot, ET and total production growth are 776 lines. SDK production and all
+  verification growth are unchanged. The cumulative production-lines ratio moves from 1.55 to 1.56.
+
+Post-commit generator-fit review:
+
+- Review point: pending until the exact ET and root commits exist.
+- No intentional CCD definition improvement has been made. Any later candidate must preserve this exact conversion
+  review point and follow the separate evidence-backed definition-change process.
 
 ### Slice 11: paired Singles correspondence and document serving
 
@@ -764,7 +808,7 @@ Post-commit generator-fit review:
 
 ## SDK migration capabilities
 
-Capabilities delivered by Slices 1 to 11 and available for reuse:
+Capabilities delivered by Slices 1 to 12 and available for reuse:
 
 - typed `CaseType` and `Jurisdiction` metadata, including live dates, printable-document URLs, shuttering, deletion and
   retry metadata;
@@ -827,28 +871,28 @@ used for deployable packaging.
 
 Add it only when a coherent slice needs deployable packaging; do not implement it speculatively.
 
-## Recommended next slice: paired Singles tribunal notifications
+## Recommended next slice: paired Singles referral lifecycle
 
-The recommended twelfth slice completes the tribunal-facing notification workflow for `ET_EnglandWales` and
-`ET_Scotland`: `sendNotification`, `respondNotification`, `viewAllNotifications` and
-`generateNotificationSummary`. It keeps notification creation, response, consolidated viewing and summary generation
-together while leaving citizen-hub and party-specific notification actions for their later business-capability slice.
+The recommended thirteenth slice completes the tribunal referral lifecycle for `ET_EnglandWales` and `ET_Scotland`:
+`createReferral`, `updateReferral`, `replyToReferral` and `closeReferral`. Keeping the four events together preserves the
+create/update/reply/close business boundary and avoids splitting the shared referral fields and nested reply/update
+structures across separate conversion commits.
 
-The processed-workbook inventory gives an exact minimum of 290 currently missing rows:
+The processed-workbook inventory gives an exact minimum of 406 currently missing rows:
 
 | Profile and case type | `CaseEvent` | `CaseEventToFields` | Event authorisation | Event-to-complex | Complex authorisation | Minimum |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| cftlib `ET_EnglandWales` | 4 | 36 | 29 | 2 | 0 | 71 |
-| cftlib `ET_Scotland` | 4 | 36 | 30 | 2 | 0 | 72 |
-| prod `ET_EnglandWales` | 4 | 36 | 29 | 4 | 0 | 73 |
-| prod `ET_Scotland` | 4 | 36 | 30 | 4 | 0 | 74 |
-| **Total** | **16** | **144** | **118** | **12** | **0** | **290** |
+| cftlib `ET_EnglandWales` | 4 | 46 | 23 | 18 | 0 | 91 |
+| cftlib `ET_Scotland` | 4 | 46 | 23 | 18 | 0 | 91 |
+| prod `ET_EnglandWales` | 4 | 46 | 23 | 39 | 0 | 112 |
+| prod `ET_Scotland` | 4 | 46 | 23 | 39 | 0 | 112 |
+| **Total** | **16** | **184** | **92** | **114** | **0** | **406** |
 
-Expected SDK reuse is typed event and callback metadata, regional and environment profile masks, row-specific event
-fields and multiset-preserving nested-event generation; no new SDK capability is presently expected. Re-inventory the
-production-only `sendNotification` nested rows, the Scotland-only send grant and the broad `viewAllNotifications`
-permission family before implementation. Keep claimant/respondent PSE notification views and responses, citizen-hub
-notification actions, TSE applications and referral/case-management events out of this tribunal notification slice.
+Expected SDK reuse is typed event and callback metadata, regional and environment profile masks, multi-page
+event-field metadata and multiset-preserving nested-event generation; no new SDK capability is presently expected.
+Re-inventory all production-only nested rows and the regional callback and permission differences before implementation.
+Keep initial consideration, case amendment, TSE applications, party-specific notification actions and work-allocation
+maintenance events out of this referral slice.
 
 This is a recommendation, not permission to skip the normal starting inventory. Re-run convergence and verify the
 golden workbooks before choosing or implementing the slice.
