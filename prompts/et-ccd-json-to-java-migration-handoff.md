@@ -12,8 +12,8 @@ The migration spans the generator repository and its ET submodule:
 
 | Repository | Branch | Current reviewed state |
 | --- | --- | --- |
-| `hmcts/dtsse-ccd-config-generator` | `json-to-java` | Slice 6 exact-conversion review point in this commit |
-| `hmcts/et-ccd-callbacks` | `json-to-java-migration` | `567f83d62` — Slice 6 exact conversion |
+| `hmcts/dtsse-ccd-config-generator` | `json-to-java` | Slice 6 generator-fit review in this commit |
+| `hmcts/et-ccd-callbacks` | `json-to-java-migration` | `624fa14f7` — Slice 6 generator-fit follow-up |
 
 The root repository must point at the intended ET commit. A fresh session should inspect both worktrees before changing
 anything:
@@ -59,11 +59,11 @@ after the sixth slice is:
 | Remaining differences | 10,616 |
 | Completed differences | 41,611 |
 | Completion | 79.67% |
-| ET production/generation Java delta | +61,951 |
+| ET production/generation Java delta | +60,150 |
 | SDK production Java delta | +1,346 |
-| Total production Java delta | +63,297 |
+| Total production Java delta | +61,496 |
 | Verification Java delta | +1,050 |
-| Production lines per completed difference | 1.52 |
+| Production lines per completed difference | 1.48 |
 
 The authoritative values are in
 `test-projects/et-ccd-callbacks/ccd-definitions/migration-progress.json`. If this table and the snapshot disagree, the
@@ -101,7 +101,8 @@ metric effect. An unproven candidate does not belong in this ledger.
 | Slice 4 generator-fit follow-up | this review commit | `0ccb196ae` | Added profile families and removed repeated profile, access and fixed-list boilerplate |
 | Slice 5: paired Singles foundation and lifecycle | `d78e66f2` | `f1f439330` | Added 32,840 exact rows; reached 77.66% |
 | Slice 5 generator-fit follow-up | this review commit | `13ebb6d1b` | Removed repeated fixed-list value plumbing while preserving exact parity |
-| Slice 6: paired Singles ET1 claim intake | this conversion commit | `567f83d62` | Added 1,052 exact rows; reached 79.67% |
+| Slice 6: paired Singles ET1 claim intake | `5e295bd2` | `567f83d62` | Added 1,052 exact rows; reached 79.67% |
+| Slice 6 generator-fit follow-up | this review commit | `624fa14f7` | Replaced repeated ET1 row defaults with feature-specific factories |
 
 The ET submodule commit must be published before a root commit which points to it. Otherwise another checkout cannot
 resolve the root tree. Commit ET changes first, then commit the updated submodule pointer and related SDK or prompt
@@ -417,7 +418,7 @@ Post-commit generator-fit review:
 
 ### Slice 6: paired Singles ET1 claim intake
 
-Status: exact-conversion review point committed in `cftlib` and `prod`; post-commit generator-fit review is pending.
+Status: complete and exact in `cftlib` and `prod`, including the post-commit generator-fit review.
 
 The slice converts the ET1 claim creation, drafting, document-generation, submission and vetting family:
 `et1SectionOne`, `et1SectionTwo`, `et1SectionThree`, `createDraftEt1`, `generateEt1Documents`,
@@ -446,11 +447,22 @@ Important implementation choices:
   existing typed Singles profile masks. Identical event rows and grants are shared across both regions and profiles.
 - Golden JSON is unchanged. All 41,611 generated rows are exact with zero changed or unexpected rows.
 
-The exact-conversion review point is root `this conversion commit`, ET `567f83d62`. Relative to the Slice 5 reviewed
-snapshot, ET production/generation growth increases by 4,569 lines, reusable SDK production growth by 27 lines and SDK
-verification growth by 34 lines. Total production growth increases by 4,596 lines and the cumulative production-lines
-ratio moves from 1.45 to 1.52. The required post-commit generator-fit review must assess the 4,498-line ET1 row catalog
-without weakening its typed event ownership or exact regional/profile differences.
+Post-commit generator-fit review:
+
+- Review point: root `5e295bd2`, ET `567f83d62`.
+- Finding: the 4,498-line ET1 catalog repeated page-order values, null retention/publish metadata, summary defaults and
+  long callback URL bases across 238 event-field specifications. Those values follow four stable ET1-local row shapes;
+  the event ownership, regional/profile masks, page conditions and exceptional metadata remain meaningful and explicit.
+- Decision: introduce feature-specific `readOnly`, `mandatory`, `optional`, `complex` and nested-complex factories plus
+  local event, profile and callback-base constants. No further SDK feature is warranted because this repetition is local
+  to the ET1 catalog rather than a missing CCD concept.
+- Follow-up: root review commit containing this record and submodule update, ET `624fa14f7`.
+- Result: all 41,611 rows remain exact with zero changed or unexpected rows. The ET1 catalog fell from 4,498 to 2,702
+  lines. Relative to the Slice 5 reviewed snapshot, ET production/generation growth is 2,768 lines, reusable SDK
+  production growth is 27 lines and SDK verification growth is 34 lines. Total production growth is 2,795 lines and
+  the cumulative production-lines ratio moves from 1.45 to 1.48.
+- No intentional CCD definition improvement was identified or made. The golden JSON and generated definition semantics
+  are unchanged, so no platform-source evidence or separate behavioural-definition commit is required for this slice.
 
 ### Slice 5: paired regional Singles foundation and base lifecycle
 
