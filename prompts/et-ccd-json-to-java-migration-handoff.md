@@ -12,8 +12,8 @@ The migration spans the generator repository and its ET submodule:
 
 | Repository | Branch | Current reviewed state |
 | --- | --- | --- |
-| `hmcts/dtsse-ccd-config-generator` | `json-to-java` | Slice 12 generator-fit review in this commit |
-| `hmcts/et-ccd-callbacks` | `json-to-java-migration` | `9f0ba610b` — Slice 12 exact conversion; no follow-up refactor required |
+| `hmcts/dtsse-ccd-config-generator` | `json-to-java` | Slice 13 exact conversion in this commit; generator-fit review follows |
+| `hmcts/et-ccd-callbacks` | `json-to-java-migration` | `9c2d28145` — Slice 13 exact conversion |
 
 The root repository must point at the intended ET commit. A fresh session should inspect both worktrees before changing
 anything:
@@ -49,21 +49,21 @@ Read the migration material in this order:
 ## Current convergence
 
 The immutable initial baseline is 52,227 remaining differences across `cftlib` and `prod`. The exact snapshot after
-the twelfth slice is:
+the thirteenth slice is:
 
 | Metric | Current value |
 | --- | ---: |
-| Exact Java rows | 44,106 |
+| Exact Java rows | 44,512 |
 | Changed rows | 0 |
 | Unexpected rows | 0 |
-| Remaining differences | 8,121 |
-| Completed differences | 44,106 |
-| Completion | 84.45% |
-| ET production/generation Java delta | +67,352 |
+| Remaining differences | 7,715 |
+| Completed differences | 44,512 |
+| Completion | 85.23% |
+| ET production/generation Java delta | +68,365 |
 | SDK production Java delta | +1,364 |
-| Total production Java delta | +68,716 |
+| Total production Java delta | +69,729 |
 | Verification Java delta | +1,093 |
-| Production lines per completed difference | 1.56 |
+| Production lines per completed difference | 1.57 |
 
 The authoritative values are in
 `test-projects/et-ccd-callbacks/ccd-definitions/migration-progress.json`. If this table and the snapshot disagree, the
@@ -115,6 +115,7 @@ metric effect. An unproven candidate does not belong in this ledger.
 | Slice 11 generator-fit review | this review commit | `efeb69b3c` | Confirmed the feature-local event, page, document-element and grant factories already fit the generator |
 | Slice 12: paired Singles tribunal notifications | `a1fa898b` | `9f0ba610b` | Added 290 exact rows; reached 84.45% |
 | Slice 12 generator-fit review | this review commit | `9f0ba610b` | Confirmed the feature-local event, field, nested-document and grant factories already fit the generator |
+| Slice 13: paired Singles referral lifecycle | this exact conversion commit | `9c2d28145` | Added 406 exact rows; reached 85.23% |
 
 The ET submodule commit must be published before a root commit which points to it. Otherwise another checkout cannot
 resolve the root tree. Commit ET changes first, then commit the updated submodule pointer and related SDK or prompt
@@ -427,6 +428,48 @@ Post-commit generator-fit review:
   Verification growth rose by 20 lines for the profile-family behaviour test.
 - No intentional CCD definition improvement was identified or made. The golden JSON and generated definition semantics
   are unchanged, so no platform-source evidence or separate behavioural-definition commit is required for this slice.
+
+### Slice 13: paired Singles referral lifecycle
+
+Status: complete and exact in `cftlib` and `prod`; the post-commit generator-fit review follows the exact conversion
+commits.
+
+The slice converts the paired referral lifecycle: `createReferral`, `updateReferral`, `replyToReferral` and
+`closeReferral`.
+
+| Profile and case type | `CaseEvent` | `CaseEventToFields` | Event authorisation | Event-to-complex | Complex authorisation | Exact gain |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| cftlib `ET_EnglandWales` | 4 | 46 | 23 | 18 | 0 | 91 |
+| cftlib `ET_Scotland` | 4 | 46 | 23 | 18 | 0 | 91 |
+| prod `ET_EnglandWales` | 4 | 46 | 23 | 39 | 0 | 112 |
+| prod `ET_Scotland` | 4 | 46 | 23 | 39 | 0 | 112 |
+| **Total** | **16** | **184** | **92** | **114** | **0** | **406** |
+
+Important implementation choices:
+
+- All four events move with their page fields, nested event elements and event permissions. The regional display-order
+  differences, Scotland's shorter create description, wildcard states, publish metadata and environment-specific
+  callback bases remain explicit.
+- The 184 event-field rows preserve the regional `referentEmail` and `nextListedDate` positions, Scotland-only
+  retain-hidden metadata and the exact `PageColumnNumber` omissions on selection pages. Multi-page update/reply/close
+  flows retain their distinct page labels, conditions, summary values, publish values and mid-event callbacks.
+- The 18 `UpdateReferralDetails` nested rows exist in every profile. Production adds 21 rows per region for referral,
+  update-document and reply-document structures, including their dotted reply/update collection paths and exact
+  publish metadata.
+- The common and regional tribunal grants remain shared across all four events. Create, update and reply retain the
+  work-allocation task-configuration grant; close deliberately does not. No direct `AuthorisationComplexType` rows
+  belong to this slice.
+- Callback URLs are generated as metadata only. No callback handler, controller or runtime route registration is
+  included.
+- Golden JSON is unchanged. All 44,512 generated rows are exact with zero changed or unexpected rows.
+- Relative to the reviewed Slice 12 snapshot, ET and total production growth are 1,013 lines. SDK production and all
+  verification growth are unchanged. The cumulative production-lines ratio moves from 1.56 to 1.57.
+
+Post-commit generator-fit review:
+
+- Review point: pending until the exact ET and root commits exist.
+- No intentional CCD definition improvement has been made. Any later candidate must preserve this exact conversion
+  review point and follow the separate evidence-backed definition-change process.
 
 ### Slice 12: paired Singles tribunal notifications
 
@@ -819,7 +862,7 @@ Post-commit generator-fit review:
 
 ## SDK migration capabilities
 
-Capabilities delivered by Slices 1 to 12 and available for reuse:
+Capabilities delivered by Slices 1 to 13 and available for reuse:
 
 - typed `CaseType` and `Jurisdiction` metadata, including live dates, printable-document URLs, shuttering, deletion and
   retry metadata;
@@ -882,28 +925,26 @@ used for deployable packaging.
 
 Add it only when a coherent slice needs deployable packaging; do not implement it speculatively.
 
-## Recommended next slice: paired Singles referral lifecycle
+## Recommended next slice: paired Singles initial consideration
 
-The recommended thirteenth slice completes the tribunal referral lifecycle for `ET_EnglandWales` and `ET_Scotland`:
-`createReferral`, `updateReferral`, `replyToReferral` and `closeReferral`. Keeping the four events together preserves the
-create/update/reply/close business boundary and avoids splitting the shared referral fields and nested reply/update
-structures across separate conversion commits.
+The recommended fourteenth slice converts the `initialConsideration` case-management event for `ET_EnglandWales` and
+`ET_Scotland`. It is one large but self-contained wizard whose regional page fields and nested rule/direction structures
+must move together; splitting those rows would leave an incomplete tribunal decision workflow.
 
-The processed-workbook inventory gives an exact minimum of 406 currently missing rows:
+The processed-workbook inventory gives an exact minimum of 632 currently missing rows:
 
 | Profile and case type | `CaseEvent` | `CaseEventToFields` | Event authorisation | Event-to-complex | Complex authorisation | Minimum |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| cftlib `ET_EnglandWales` | 4 | 46 | 23 | 18 | 0 | 91 |
-| cftlib `ET_Scotland` | 4 | 46 | 23 | 18 | 0 | 91 |
-| prod `ET_EnglandWales` | 4 | 46 | 23 | 39 | 0 | 112 |
-| prod `ET_Scotland` | 4 | 46 | 23 | 39 | 0 | 112 |
-| **Total** | **16** | **184** | **92** | **114** | **0** | **406** |
+| cftlib `ET_EnglandWales` | 1 | 75 | 4 | 77 | 0 | 157 |
+| cftlib `ET_Scotland` | 1 | 66 | 4 | 88 | 0 | 159 |
+| prod `ET_EnglandWales` | 1 | 75 | 4 | 77 | 0 | 157 |
+| prod `ET_Scotland` | 1 | 66 | 4 | 88 | 0 | 159 |
+| **Total** | **4** | **282** | **16** | **330** | **0** | **632** |
 
-Expected SDK reuse is typed event and callback metadata, regional and environment profile masks, multi-page
-event-field metadata and multiset-preserving nested-event generation; no new SDK capability is presently expected.
-Re-inventory all production-only nested rows and the regional callback and permission differences before implementation.
-Keep initial consideration, case amendment, TSE applications, party-specific notification actions and work-allocation
-maintenance events out of this referral slice.
+Expected SDK reuse is typed event and callback metadata, regional profile masks, multi-page event-field metadata and
+multiset-preserving nested paths; no new SDK capability is presently expected. Re-inventory the nine fewer Scotland
+page rows, eleven additional Scotland nested rows and all regional conditions before implementation. Keep the separate
+`issueInitialConsiderationDirectionsWA`, amendment, TSE and work-allocation maintenance events out of this slice.
 
 This is a recommendation, not permission to skip the normal starting inventory. Re-run convergence and verify the
 golden workbooks before choosing or implementing the slice.
