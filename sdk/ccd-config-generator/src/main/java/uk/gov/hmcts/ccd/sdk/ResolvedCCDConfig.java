@@ -51,6 +51,7 @@ public class ResolvedCCDConfig<T, S, R extends HasRole> {
   String jurDesc = "";
   String hmctsServiceId = "";
   boolean shutterService = false;
+  boolean explicitStateGrants = false;
   Map<String, String> stateLabels = new HashMap<>();
 
   Table<S, R, Set<Permission>> stateRolePermissions = HashBasedTable.create();

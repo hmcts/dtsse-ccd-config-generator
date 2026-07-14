@@ -48,6 +48,24 @@ public interface ConfigBuilder<T, S, R extends HasRole> {
   void omitHistoryForRoles(R... roles);
 
   /**
+   * Emit AuthorisationCaseState rows only for the grants declared explicitly via
+   * {@link #grant(Object, Set, HasRole...)}. When set, no state permissions are inferred from
+   * event grants, so the generated AuthorisationCaseState contains exactly the rows this case
+   * type declares and nothing more.
+   *
+   * <p>By default (when this is not called) AuthorisationCaseState is broadened by deriving
+   * permissions from every event's grants, which produces wider access than an explicit
+   * {@code grant(state, ...)} row alone. Services migrating from hand-written JSON with
+   * deliberately narrow state permissions can call this to opt out of that derivation.
+   *
+   * <p>This is a whole case-type switch and applies to every state. It does not affect field
+   * authorisation; {@code Event.explicitGrants()} remains the switch for that.
+   */
+  default void explicitStateGrants() {
+    // Default no-op for backward compatibility; implementations may override.
+  }
+
+  /**
    * Set AuthorisationCaseState explicitly.
    * Note that additional AuthorisationCaseState permissions are inferred based on grants of
    * event-level permissions.
