@@ -42,6 +42,7 @@ public class Field<Type, StateType, Parent, Grandparent> {
   boolean publish;
   String eventFieldPublish;
   boolean includePageColumnNumber;
+  boolean includePageDisplayOrder;
   boolean includePageFieldDisplayOrder;
 
   Class<Type> clazz;
@@ -60,6 +61,7 @@ public class Field<Type, StateType, Parent, Grandparent> {
       result.context = DisplayContext.Complex;
       result.id = id;
       result.includePageColumnNumber = true;
+      result.includePageDisplayOrder = true;
       result.includePageFieldDisplayOrder = true;
       return result;
     }
@@ -177,6 +179,12 @@ public class Field<Type, StateType, Parent, Grandparent> {
     /** Omits PageColumnNumber for this event field only. */
     public FieldBuilder<Type, StateType, Parent, Grandparent> omitPageColumnNumber() {
       this.includePageColumnNumber = false;
+      return this;
+    }
+
+    /** Omits PageDisplayOrder for this event field only. */
+    public FieldBuilder<Type, StateType, Parent, Grandparent> omitPageDisplayOrder() {
+      this.includePageDisplayOrder = false;
       return this;
     }
 

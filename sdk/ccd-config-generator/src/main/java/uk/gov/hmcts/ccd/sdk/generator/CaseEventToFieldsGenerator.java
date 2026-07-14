@@ -56,7 +56,7 @@ class CaseEventToFieldsGenerator<T, S, R extends HasRole> implements ConfigGener
 
       Object pageId = resolvePageId(field.getPage());
       row.put("PageID", pageId);
-      if (collection.isIncludePageDisplayOrder()) {
+      if (collection.isIncludePageDisplayOrder() && field.isIncludePageDisplayOrder()) {
         row.put("PageDisplayOrder", field.getPageDisplayOrder());
       }
       if (collection.isIncludePageColumnNumber() && field.isIncludePageColumnNumber()) {

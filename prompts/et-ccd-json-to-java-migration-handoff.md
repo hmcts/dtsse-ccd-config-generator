@@ -12,8 +12,8 @@ The migration spans the generator repository and its ET submodule:
 
 | Repository | Branch | Current reviewed state |
 | --- | --- | --- |
-| `hmcts/dtsse-ccd-config-generator` | `json-to-java` | Slice 13 generator-fit review in this commit |
-| `hmcts/et-ccd-callbacks` | `json-to-java-migration` | `9c2d28145` — Slice 13 exact conversion; no follow-up refactor required |
+| `hmcts/dtsse-ccd-config-generator` | `json-to-java` | Slice 14 exact conversion in this commit; generator-fit review pending |
+| `hmcts/et-ccd-callbacks` | `json-to-java-migration` | `4ff6d1ad2` — Slice 14 exact conversion; generator-fit review pending |
 
 The root repository must point at the intended ET commit. A fresh session should inspect both worktrees before changing
 anything:
@@ -49,21 +49,21 @@ Read the migration material in this order:
 ## Current convergence
 
 The immutable initial baseline is 52,227 remaining differences across `cftlib` and `prod`. The exact snapshot after
-the thirteenth slice is:
+the fourteenth slice is:
 
 | Metric | Current value |
 | --- | ---: |
-| Exact Java rows | 44,512 |
+| Exact Java rows | 45,144 |
 | Changed rows | 0 |
 | Unexpected rows | 0 |
-| Remaining differences | 7,715 |
-| Completed differences | 44,512 |
-| Completion | 85.23% |
-| ET production/generation Java delta | +68,365 |
-| SDK production Java delta | +1,364 |
-| Total production Java delta | +69,729 |
-| Verification Java delta | +1,093 |
-| Production lines per completed difference | 1.57 |
+| Remaining differences | 7,083 |
+| Completed differences | 45,144 |
+| Completion | 86.44% |
+| ET production/generation Java delta | +72,463 |
+| SDK production Java delta | +1,382 |
+| Total production Java delta | +73,845 |
+| Verification Java delta | +1,130 |
+| Production lines per completed difference | 1.64 |
 
 The authoritative values are in
 `test-projects/et-ccd-callbacks/ccd-definitions/migration-progress.json`. If this table and the snapshot disagree, the
@@ -117,6 +117,7 @@ metric effect. An unproven candidate does not belong in this ledger.
 | Slice 12 generator-fit review | this review commit | `9f0ba610b` | Confirmed the feature-local event, field, nested-document and grant factories already fit the generator |
 | Slice 13: paired Singles referral lifecycle | `c58227bc` | `9c2d28145` | Added 406 exact rows; reached 85.23% |
 | Slice 13 generator-fit review | this review commit | `9c2d28145` | Confirmed the feature-local lifecycle, page, nested-path and grant factories already fit the generator |
+| Slice 14: paired Singles initial consideration | this exact conversion commit | `4ff6d1ad2` | Added 632 exact rows; reached 86.44% |
 
 The ET submodule commit must be published before a root commit which points to it. Otherwise another checkout cannot
 resolve the root tree. Commit ET changes first, then commit the updated submodule pointer and related SDK or prompt
@@ -429,6 +430,46 @@ Post-commit generator-fit review:
   Verification growth rose by 20 lines for the profile-family behaviour test.
 - No intentional CCD definition improvement was identified or made. The golden JSON and generated definition semantics
   are unchanged, so no platform-source evidence or separate behavioural-definition commit is required for this slice.
+
+### Slice 14: paired Singles initial consideration
+
+Status: exact in `cftlib` and `prod`; post-commit generator-fit review pending.
+
+The slice converts the paired regional `initialConsideration` case-management wizard.
+
+| Profile and case type | `CaseEvent` | `CaseEventToFields` | Event authorisation | Event-to-complex | Complex authorisation | Exact gain |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| cftlib `ET_EnglandWales` | 1 | 75 | 4 | 77 | 0 | 157 |
+| cftlib `ET_Scotland` | 1 | 66 | 4 | 88 | 0 | 159 |
+| prod `ET_EnglandWales` | 1 | 75 | 4 | 77 | 0 | 157 |
+| prod `ET_Scotland` | 1 | 66 | 4 | 88 | 0 | 159 |
+| **Total** | **4** | **282** | **16** | **330** | **0** | **632** |
+
+Important implementation choices:
+
+- The four-page wizard moves with every regional page field, nested rule/direction row and event grant. England/Wales
+  and Scotland retain their different event display orders, field sets, labels, conditions, hearing structures and
+  exact cftlib/production callback bases.
+- Seven read-only page-one rows per variant intentionally omit `PageDisplayOrder` while other fields on the same event
+  retain it. The SDK now supports row-specific omission without changing the existing collection-wide omission API;
+  a focused mixed-row generator test protects both values.
+- `icAllDocumentCollection` has two nested document rows without a root `CaseEventToFields` row. The existing typed
+  standalone-complex API emits those rows, while the three page-owned document collections use the ordinary complex
+  path.
+- Scotland retains two different `etICExtendDurationGiveDetails` rows under the same event/root/element identity, at
+  display orders 2 and 7. Jurisdiction staging now preserves distinct same-identity rows contributed by one case type,
+  while the existing cross-owner conflict test continues to reject incompatible shared definitions.
+- The common API and work-allocation grants and the regional caseworker/judge grants remain exact. No direct
+  `AuthorisationComplexType` rows belong to this slice.
+- Callback URLs are generated as metadata only. No callback handler, controller or runtime route registration is
+  included. The shared `ImportFile` complex type remains unchanged and owned by the completed Admin conversion.
+- Golden JSON is unchanged. All 45,144 generated rows are exact with zero changed or unexpected rows.
+- Relative to the reviewed Slice 13 snapshot, ET production/generation growth is 4,098 lines, SDK production growth is
+  18 lines and total production growth is 4,116 lines. SDK verification growth is 37 lines; ET verification growth is
+  unchanged. The cumulative production-lines ratio moves from 1.57 to 1.64.
+
+The post-commit generator-fit review must examine the 4,089-line feature catalog before this slice is considered
+complete. Any warranted refactor belongs in a separate parity-preserving commit.
 
 ### Slice 13: paired Singles referral lifecycle
 
@@ -873,7 +914,7 @@ Post-commit generator-fit review:
 
 ## SDK migration capabilities
 
-Capabilities delivered by Slices 1 to 13 and available for reuse:
+Capabilities delivered by Slices 1 to 14 and available for reuse:
 
 - typed `CaseType` and `Jurisdiction` metadata, including live dates, printable-document URLs, shuttering, deletion and
   retry metadata;
@@ -910,8 +951,8 @@ Capabilities delivered by Slices 1 to 13 and available for reuse:
   authorisation inference;
 - per-row case-role live dates, case-type authorisation exclusions and exact searchable/retain-hidden-value spellings;
   and
-- row-specific event-field publish, summary, page-condition and page-column metadata plus row-specific tab label/order
-  metadata;
+- row-specific event-field publish, summary, page-condition, page-column and page-display-order omission metadata plus
+  row-specific tab label/order metadata;
 - exact omission of page-field display order and retention of field authorisation without a generated `CaseField` row;
 - significant-event metadata, string-valued TTL increments and profile-specific state metadata and ordering;
 - case-role inclusion in case-type authorisation and row-specific access-profile live dates;
@@ -936,26 +977,27 @@ used for deployable packaging.
 
 Add it only when a coherent slice needs deployable packaging; do not implement it speculatively.
 
-## Recommended next slice: paired Singles initial consideration
+## Recommended next slice: paired Singles case-details amendment
 
-The recommended fourteenth slice converts the `initialConsideration` case-management event for `ET_EnglandWales` and
-`ET_Scotland`. It is one large but self-contained wizard whose regional page fields and nested rule/direction structures
-must move together; splitting those rows would leave an incomplete tribunal decision workflow.
+The recommended fifteenth slice converts `amendCaseDetails` and `amendCaseDetailsClosed` together for
+`ET_EnglandWales` and `ET_Scotland`. They are the open and closed-state variants of one case-details maintenance
+workflow, share callback endpoints and grants, and should not be split into separate owners.
 
-The processed-workbook inventory gives an exact minimum of 632 currently missing rows:
+The processed-workbook inventory gives an exact minimum of 220 currently missing rows:
 
 | Profile and case type | `CaseEvent` | `CaseEventToFields` | Event authorisation | Event-to-complex | Complex authorisation | Minimum |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| cftlib `ET_EnglandWales` | 1 | 75 | 4 | 77 | 0 | 157 |
-| cftlib `ET_Scotland` | 1 | 66 | 4 | 88 | 0 | 159 |
-| prod `ET_EnglandWales` | 1 | 75 | 4 | 77 | 0 | 157 |
-| prod `ET_Scotland` | 1 | 66 | 4 | 88 | 0 | 159 |
-| **Total** | **4** | **282** | **16** | **330** | **0** | **632** |
+| cftlib `ET_EnglandWales` | 2 | 32 | 10 | 10 | 0 | 54 |
+| cftlib `ET_Scotland` | 2 | 42 | 10 | 6 | 0 | 60 |
+| prod `ET_EnglandWales` | 2 | 30 | 10 | 8 | 0 | 50 |
+| prod `ET_Scotland` | 2 | 40 | 10 | 4 | 0 | 56 |
+| **Total** | **8** | **144** | **40** | **28** | **0** | **220** |
 
-Expected SDK reuse is typed event and callback metadata, regional profile masks, multi-page event-field metadata and
-multiset-preserving nested paths; no new SDK capability is presently expected. Re-inventory the nine fewer Scotland
-page rows, eleven additional Scotland nested rows and all regional conditions before implementation. Keep the separate
-`issueInitialConsiderationDirectionsWA`, amendment, TSE and work-allocation maintenance events out of this slice.
+Expected SDK reuse is typed state ordering, event enabling conditions, external callback metadata, regional profile
+masks, per-row page metadata and multiset-preserving nested paths; no new SDK capability is presently expected.
+Re-inventory the additional Scotland page fields, cftlib-only page/nested rows, Scotland's different summary/publish
+metadata and every regional condition before implementation. Keep `fixCaseAPI`, respondent-representative maintenance,
+TSE and work-allocation events out of this slice.
 
 This is a recommendation, not permission to skip the normal starting inventory. Re-run convergence and verify the
 golden workbooks before choosing or implementing the slice.

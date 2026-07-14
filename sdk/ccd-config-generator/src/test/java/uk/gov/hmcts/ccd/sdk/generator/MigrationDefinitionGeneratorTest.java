@@ -134,6 +134,32 @@ public class MigrationDefinitionGeneratorTest {
   }
 
   @Test
+  public void omitsPageDisplayOrderForOneEventField() {
+    ConfigBuilderImpl<TestData, TestState, TestRole> builder = newBuilder();
+    var fields = builder.event("row-order").forAllStates().fields();
+    fields.field("withoutOrder").optional().omitPageDisplayOrder();
+    fields.field("withOrder").optional();
+    fields.done();
+
+    File output = new File(tmp.getRoot(), "row-page-display-order");
+    JSONConfigGenerator<TestData, TestState, TestRole> generator =
+        new JSONConfigGenerator<>(List.of(new CaseEventToFieldsGenerator<>()));
+    generator.writeConfig(output, builder.build());
+
+    assertThat(rows(output, "CaseEventToFields/row-order.json"))
+        .anySatisfy(
+            row ->
+                assertThat(row)
+                    .containsEntry("CaseFieldID", "withoutOrder")
+                    .doesNotContainKey("PageDisplayOrder"))
+        .anySatisfy(
+            row ->
+                assertThat(row)
+                    .containsEntry("CaseFieldID", "withOrder")
+                    .containsEntry("PageDisplayOrder", 1));
+  }
+
+  @Test
   public void retainsAccessProfileLiveFromPerRow() {
     ConfigBuilderImpl<TestData, TestState, TestRole> builder = newBuilder();
     builder.omitDefaultLiveFrom();
