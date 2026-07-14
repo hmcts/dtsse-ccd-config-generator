@@ -21,8 +21,8 @@ import uk.gov.hmcts.ccd.sdk.api.HasRole;
 import uk.gov.hmcts.ccd.sdk.generator.JsonUtils.AddMissing;
 
 @Component
-class CaseEventToComplexTypesGenerator<T, S, R extends HasRole> implements
-    ConfigGenerator<T, S, R> {
+class CaseEventToComplexTypesGenerator<T, S, R extends HasRole>
+    implements ConfigGenerator<T, S, R> {
 
   public void write(File root, ResolvedCCDConfig<T, S, R> config) {
     for (Event event : config.getEvents().values()) {
@@ -31,25 +31,36 @@ class CaseEventToComplexTypesGenerator<T, S, R extends HasRole> implements
       List<FieldCollection.FieldCollectionBuilder> complexFields = collection.getComplexFields();
       expand(complexFields, entries, event.getId(), null, "", null);
 
-      ImmutableListMultimap<String, Map<String, Object>> entriesByCaseField = Multimaps
-          .index(entries, x -> x.get("CaseFieldID").toString());
+      ImmutableListMultimap<String, Map<String, Object>> entriesByCaseField =
+          Multimaps.index(entries, x -> x.get("CaseFieldID").toString());
 
       if (entriesByCaseField.size() > 0) {
-        File folder = GeneratorUtils.ensureDirectory(root, "CaseEventToComplexTypes", event.getId());
+        File folder =
+            GeneratorUtils.ensureDirectory(root, "CaseEventToComplexTypes", event.getId());
         for (String fieldID : entriesByCaseField.keySet()) {
           Path output = Paths.get(folder.getPath(), fieldID + ".json");
-          JsonUtils.mergeInto(output, entriesByCaseField.get(fieldID),
+          JsonUtils.mergeIntoPreservingGeneratedOccurrences(
+              output,
+              entriesByCaseField.get(fieldID),
               // TODO: remove show condition primary key.
-              new AddMissing(), "CaseEventID", "CaseFieldID", "ListElementCode",
-              "FieldShowCondition", "DefaultValue");
+              new AddMissing(),
+              "CaseEventID",
+              "CaseFieldID",
+              "ListElementCode",
+              "FieldShowCondition",
+              "DefaultValue");
         }
       }
     }
   }
 
-  private static void expand(List<FieldCollection.FieldCollectionBuilder> complexFieldsCollection,
-      List<Map<String, Object>> entries, String eventId, final String rootFieldName,
-      final String fieldLocator, final String rootId) {
+  private static void expand(
+      List<FieldCollection.FieldCollectionBuilder> complexFieldsCollection,
+      List<Map<String, Object>> entries,
+      String eventId,
+      final String rootFieldName,
+      final String fieldLocator,
+      final String rootId) {
     if (null != complexFieldsCollection) {
       for (FieldCollection.FieldCollectionBuilder complexFields : complexFieldsCollection) {
         FieldCollection complex = complexFields.build();
@@ -68,8 +79,10 @@ class CaseEventToComplexTypesGenerator<T, S, R extends HasRole> implements
         for (Field.FieldBuilder complexField : fields) {
           Field field = complexField.build();
 
-          // unwrapped complex type fields are added to CaseEventToFields as they are actually on the CaseData
-          if (isUnwrappedField(field.getClazz(), field.getParent().build().getRootFieldname()).isPresent()) {
+          // unwrapped complex type fields are added to CaseEventToFields as they are actually on
+          // the CaseData
+          if (isUnwrappedField(field.getClazz(), field.getParent().build().getRootFieldname())
+              .isPresent()) {
             continue;
           }
 
@@ -83,7 +96,8 @@ class CaseEventToComplexTypesGenerator<T, S, R extends HasRole> implements
           data.put("CaseFieldID", rfn);
           data.put("DisplayContext", field.getContext().toString().toUpperCase());
           data.put("ListElementCode", locator + field.getId());
-          CaseEventToFieldsGenerator.applyMetadata(data, field, "EventElementLabel", "EventHintText");
+          CaseEventToFieldsGenerator.applyMetadata(
+              data, field, "EventElementLabel", "EventHintText");
           data.put("FieldDisplayOrder", field.getFieldDisplayOrder());
           if (field.isPublish()) {
             data.put("Publish", "Y");
@@ -92,9 +106,10 @@ class CaseEventToComplexTypesGenerator<T, S, R extends HasRole> implements
             data.put("HintText", field.getHint());
           }
           if (null != field.getDefaultValue()) {
-            String value = field.getDefaultValue() instanceof HasRole
-                             ? ((HasRole) field.getDefaultValue()).getRole()
-                             : field.getDefaultValue().toString();
+            String value =
+                field.getDefaultValue() instanceof HasRole
+                    ? ((HasRole) field.getDefaultValue()).getRole()
+                    : field.getDefaultValue().toString();
             data.put("DefaultValue", value);
           }
         }

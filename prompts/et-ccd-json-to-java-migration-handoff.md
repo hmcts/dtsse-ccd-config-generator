@@ -12,8 +12,8 @@ The migration spans the generator repository and its ET submodule:
 
 | Repository | Branch | Current reviewed state |
 | --- | --- | --- |
-| `hmcts/dtsse-ccd-config-generator` | `json-to-java` | Slice 4 generator-fit follow-up in this commit |
-| `hmcts/et-ccd-callbacks` | `json-to-java-migration` | `0ccb196ae` — Slice 4 generator-fit follow-up |
+| `hmcts/dtsse-ccd-config-generator` | `json-to-java` | Slice 5 exact-conversion review point in this commit |
+| `hmcts/et-ccd-callbacks` | `json-to-java-migration` | `f1f439330` — Slice 5 exact conversion |
 
 The root repository must point at the intended ET commit. A fresh session should inspect both worktrees before changing
 anything:
@@ -48,22 +48,22 @@ Read the migration material in this order:
 
 ## Current convergence
 
-The immutable initial baseline is 52,227 remaining differences across `cftlib` and `prod`. The committed post-review
-snapshot after the fourth slice is:
+The immutable initial baseline is 52,227 remaining differences across `cftlib` and `prod`. The committed exact-conversion
+snapshot after the fifth slice is:
 
 | Metric | Current value |
 | --- | ---: |
-| Exact Java rows | 7,719 |
+| Exact Java rows | 40,559 |
 | Changed rows | 0 |
 | Unexpected rows | 0 |
-| Remaining differences | 44,508 |
-| Completed differences | 7,719 |
-| Completion | 14.78% |
-| ET production/generation Java delta | +13,828 |
-| SDK production Java delta | +1,107 |
-| Total production Java delta | +14,935 |
-| Verification Java delta | +863 |
-| Production lines per completed difference | 1.93 |
+| Remaining differences | 11,668 |
+| Completed differences | 40,559 |
+| Completion | 77.66% |
+| ET production/generation Java delta | +60,604 |
+| SDK production Java delta | +1,319 |
+| Total production Java delta | +61,923 |
+| Verification Java delta | +1,016 |
+| Production lines per completed difference | 1.53 |
 
 The authoritative values are in
 `test-projects/et-ccd-callbacks/ccd-definitions/migration-progress.json`. If this table and the snapshot disagree, the
@@ -99,6 +99,7 @@ metric effect. An unproven candidate does not belong in this ledger.
 | Slice 3 generator-fit follow-up | this review commit | `a72f1bee6` | Made access-profile `LiveFrom` retention row-specific |
 | Slice 4: paired regional Multiples | `f943c79f` | `63bb25c58` | Added 5,271 exact rows; reached 14.78% |
 | Slice 4 generator-fit follow-up | this review commit | `0ccb196ae` | Added profile families and removed repeated profile, access and fixed-list boilerplate |
+| Slice 5: paired Singles foundation and lifecycle | this conversion commit | `f1f439330` | Added 32,840 exact rows; reached 77.66% |
 
 The ET submodule commit must be published before a root commit which points to it. Otherwise another checkout cannot
 resolve the root tree. Commit ET changes first, then commit the updated submodule pointer and related SDK or prompt
@@ -412,9 +413,44 @@ Post-commit generator-fit review:
 - No intentional CCD definition improvement was identified or made. The golden JSON and generated definition semantics
   are unchanged, so no platform-source evidence or separate behavioural-definition commit is required for this slice.
 
+### Slice 5: paired regional Singles foundation and base lifecycle
+
+Status: exact-conversion review point committed in `cftlib` and `prod`; post-commit generator-fit review is pending.
+
+The slice adds 32,840 exact rows by enabling the complete `ET_EnglandWales` and `ET_Scotland` root schema, roles,
+access foundation and the 14 base lifecycle events named in the previous recommendation. The committed closure is:
+
+| Profile and case type | Exact-row gain |
+| --- | ---: |
+| cftlib `ET_EnglandWales` | 8,403 |
+| cftlib `ET_Scotland` | 7,967 |
+| prod `ET_EnglandWales` | 8,453 |
+| prod `ET_Scotland` | 8,017 |
+| **Total** | **32,840** |
+
+Important implementation choices:
+
+- `CaseData`, `Et1CaseData` and `BaseCaseData` remain the runtime wire models. Repeatable profile metadata projects the
+  complete Singles workbook schema while profile-scoped ignores prevent 77 unrelated runtime-only fields and their
+  reachable Java types from becoming unexpected CCD rows.
+- Four concrete generation modules share typed Singles, regional and environment profile families. Roles, 220 distinct
+  access policies, 86 explicitly registered complex types and 204 fixed lists are defined once and selected by profile.
+- The 14 base lifecycle events include their exact pages, conditions, event permissions, nested event rows and callback
+  URL metadata. No callback handler, controller or runtime route is introduced.
+- Definition-only field metadata retains legacy numeric fixed-list cells, string-valued bounds, searchable and security
+  spellings, omitted display orders and authorisation-only fields without changing runtime DTO types.
+- The previously converted `ImportFile` complex type remains a shared global owner. Identical rows coalesce across case
+  types, while duplicate fixed-list and event-to-complex occurrences within one definition remain a multiset.
+- Golden JSON is unchanged. All 40,559 generated rows are exact with zero changed or unexpected rows.
+
+The exact-conversion review point is root `this conversion commit`, ET `f1f439330`. Relative to the Slice 4 reviewed
+snapshot, ET production/generation growth increases by 46,776 lines, SDK production growth by 212 lines and verification
+growth by 153 lines. This unusually large increase requires the documented post-commit generator-fit review; do not
+rewrite or squash the exact conversion commit when performing it.
+
 ## SDK migration capabilities
 
-Capabilities delivered by Slices 1 to 4 and available for reuse:
+Capabilities delivered by Slices 1 to 5 and available for reuse:
 
 - typed `CaseType` and `Jurisdiction` metadata, including live dates, printable-document URLs, shuttering, deletion and
   retry metadata;
@@ -452,7 +488,14 @@ Capabilities delivered by Slices 1 to 4 and available for reuse:
 - per-row case-role live dates, case-type authorisation exclusions and exact searchable/retain-hidden-value spellings;
   and
 - row-specific event-field publish, summary, page-condition and page-column metadata plus row-specific tab label/order
-  metadata.
+  metadata;
+- exact omission of page-field display order and retention of field authorisation without a generated `CaseField` row;
+- significant-event metadata, string-valued TTL increments and profile-specific state metadata and ordering;
+- case-role inclusion in case-type authorisation and row-specific access-profile live dates;
+- `Number`, `Organisation` and `OrganisationPolicy` field types plus exact legacy searchable, min, max and security
+  values; and
+- numeric fixed-list codes and labels, omitted fixed-list display order and multiset-preserving fixed-list and
+  event-to-complex generation.
 
 Class-level access is a default for `AuthorisationCaseField` generation only. It does not grant
 `AuthorisationComplexType` permissions: complex-type access remains explicit through `builder.grantComplexType(...)`.
@@ -466,39 +509,29 @@ used for deployable packaging.
 
 Add it only when a coherent slice needs deployable packaging; do not implement it speculatively.
 
-## Recommended next slice: paired Singles schema, base lifecycle and access
+## Recommended next slice: paired Singles ET1 claim intake
 
-The recommended fifth slice prepares and enables `ET_EnglandWales` and `ET_Scotland` together, covering the complete
-regional root-field projection and access foundation plus these 14 base lifecycle events:
-`initiateCase`, `INITIATE_CASE_DRAFT`, `UPDATE_CASE_DRAFT`, `SUBMIT_CASE_DRAFT`, `UPDATE_CASE_SUBMITTED`,
-`REMOVE_OWN_REP_AS_RESPONDENT`, `REMOVE_OWN_REP_AS_CLAIMANT`, `assignCase`, `preAcceptanceCase`,
-`acceptRejectedCase`, `disposeCase`, `reinstateClosedCase`, `deleteDraftCase` and `DELETE_DRAFT_CASE`.
+The recommended sixth slice migrates the coherent ET1 claim creation, drafting, submission, document-generation and
+vetting family for `ET_EnglandWales` and `ET_Scotland`: `et1SectionOne`, `et1SectionTwo`, `et1SectionThree`,
+`createDraftEt1`, `generateEt1Documents`, `et1ReppedCreateCase`, `submitEt1Draft` and `et1Vetting`.
 
-This boundary follows the architecture constraint that a Singles foundation must not expose roughly one thousand
-unreviewed fields merely to migrate one event. It establishes the full typed schema and explicit field access once, then
-moves the first coherent lifecycle family with its pages and event permissions.
+The workbook-derived exact minimum is 1,052 currently missing rows. The complete Singles field and complex-type schema
+is already exact, so this minimum covers the eight event rows per profile, their pages, permissions and 24 nested
+event-to-complex rows per profile:
 
-The workbook-derived case-type-specific minimum is 24,119 rows before newly owned complex types, fixed lists and
-event-to-complex rows:
+| Profile and case type | `CaseEvent` | `CaseEventToFields` | Event authorisation | Event-to-complex | Minimum |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| cftlib `ET_EnglandWales` | 8 | 214 | 19 | 24 | 265 |
+| cftlib `ET_Scotland` | 8 | 210 | 19 | 24 | 261 |
+| prod `ET_EnglandWales` | 8 | 214 | 19 | 24 | 265 |
+| prod `ET_Scotland` | 8 | 210 | 19 | 24 | 261 |
+| **Total** | **32** | **848** | **76** | **96** | **1,052** |
 
-| Profile and case type | Schema/access foundation | Lifecycle event rows | Minimum |
-| --- | ---: | ---: | ---: |
-| cftlib `ET_EnglandWales` | 6,103 | 163 | 6,266 |
-| cftlib `ET_Scotland` | 5,730 | 167 | 5,897 |
-| prod `ET_EnglandWales` | 6,002 | 161 | 6,163 |
-| prod `ET_Scotland` | 5,628 | 165 | 5,793 |
-| **Total** | **23,463** | **656** | **24,119** |
-
-The foundation subtotal covers `CaseType`, all regional `CaseField` rows, `CaseRoles`, `State`,
-`RoleToAccessProfiles`, and case-type, field and state authorisation. The lifecycle subtotal covers `CaseEvent`,
-`CaseEventToFields` and event authorisation for the 14 named IDs. The next session must compute the global dependency
-closure and subtract rows already exact through Listings or Multiples before accepting a final forecast.
-
-Expected SDK reuse is typed regional/environment profiles, deterministic inherited-field selection, explicit complex
-registration, applicable roles, fixed-list registration and explicit-only authorisation. Known blockers are the
-1,930-line `CaseData` union model and its inherited fields, 18,801 field-authorisation rows in the minimum, cftlib/prod
-field deltas, and the need to prevent unrelated tab, search and later-event rows from being inferred when the foundations
-are enabled. Keep ET1/ET3 intake and every later business family out of this slice.
+Expected SDK reuse is the typed event metadata, explicit callback URLs, per-field page omission values,
+multiset-preserving event-to-complex rows and regional access policies delivered by Slice 5. Inventory whether any of
+the remaining `AuthorisationComplexType` rows are semantically owned by these ET1 pages before accepting the boundary;
+the direct workbook identity join currently adds none. Keep ET3 response, claimant/representative maintenance,
+post-submission case management and deployable ownership-overlay work out of this slice.
 
 This is a recommendation, not permission to skip the normal starting inventory. Re-run convergence and verify the
 golden workbooks before choosing or implementing the slice.

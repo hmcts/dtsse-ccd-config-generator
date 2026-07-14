@@ -4,6 +4,7 @@ import static com.google.common.base.Strings.isNullOrEmpty;
 
 import com.google.common.collect.Maps;
 import java.io.File;
+import java.math.BigDecimal;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
@@ -33,56 +34,67 @@ class FixedListGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
     for (Class<?> c : config.getTypes().keySet()) {
       ComplexType complexType = c.getAnnotation(ComplexType.class);
       if (c.isEnum() && (complexType == null || complexType.generate())) {
-        definitions.computeIfAbsent(c.getSimpleName(), ignored -> new ArrayList<>())
+        definitions
+            .computeIfAbsent(c.getSimpleName(), ignored -> new ArrayList<>())
             .addAll(Arrays.asList((Enum<?>[]) c.getEnumConstants()));
       }
     }
 
-    config.getFixedLists().forEach((id, values) -> {
-      List<Enum<?>> existing = definitions.get(id);
-      if (existing == null) {
-        definitions.put(id, new ArrayList<>(values));
-        return;
-      }
-      if (!existing.equals(values)) {
-        throw new IllegalStateException("Conflicting fixed-list definitions for " + id);
-      }
-    });
+    config
+        .getFixedLists()
+        .forEach(
+            (id, values) -> {
+              List<Enum<?>> existing = definitions.get(id);
+              if (existing == null) {
+                definitions.put(id, new ArrayList<>(values));
+                return;
+              }
+              if (!existing.equals(values)) {
+                throw new IllegalStateException("Conflicting fixed-list definitions for " + id);
+              }
+            });
 
     for (Map.Entry<String, List<Enum<?>>> definition : definitions.entrySet()) {
       List<Map<String, Object>> fields = new ArrayList<>();
       int order = 1;
       for (Enum<?> enumConstant : definition.getValue()) {
-        CCD annotation = enumConstant.getDeclaringClass()
-            .getField(enumConstant.name())
-            .getAnnotation(CCD.class);
+        CCD annotation =
+            enumConstant.getDeclaringClass().getField(enumConstant.name()).getAnnotation(CCD.class);
 
-        Object label = enumConstant instanceof HasLabel
-            ? ((HasLabel) enumConstant).getLabel()
-            : annotation == null
-                ? enumConstant
-                : !isNullOrEmpty(annotation.label())
-                    ? annotation.label()
-                    : !isNullOrEmpty(annotation.hint())
-                        ? annotation.hint()
-                        : enumConstant;
+        Object label =
+            annotation != null && annotation.numericListElement() > Integer.MIN_VALUE
+                ? annotation.numericListElement()
+                : enumConstant instanceof HasLabel
+                    ? ((HasLabel) enumConstant).getLabel()
+                    : annotation == null
+                        ? enumConstant
+                        : !isNullOrEmpty(annotation.label())
+                            ? annotation.label()
+                            : !isNullOrEmpty(annotation.hint()) ? annotation.hint() : enumConstant;
 
         Map<String, Object> value = Maps.newHashMap();
         fields.add(value);
         value.put("ListElement", label);
         value.put("LiveFrom", JsonUtils.DEFAULT_LIVE_FROM);
         value.put("ID", definition.getKey());
-        value.put("ListElementCode", enumConstant instanceof HasCode coded
-            ? coded.getCode()
-            : enumConstant);
-        value.put("DisplayOrder", annotation != null && annotation.displayOrder() > 0
-            ? annotation.displayOrder()
-            : order);
+        value.put(
+            "ListElementCode",
+            annotation != null && !annotation.numericListElementCode().isEmpty()
+                ? new BigDecimal(annotation.numericListElementCode())
+                : enumConstant instanceof HasCode coded ? coded.getCode() : enumConstant);
+        if (annotation == null || !annotation.omitDisplayOrder()) {
+          value.put(
+              "DisplayOrder",
+              annotation != null && annotation.displayOrder() > 0
+                  ? annotation.displayOrder()
+                  : order);
+        }
         order++;
       }
 
       Path path = Paths.get(dir.getPath(), definition.getKey() + ".json");
-      JsonUtils.mergeInto(path, fields, new AddMissing(), "ListElementCode");
+      JsonUtils.mergeIntoPreservingGeneratedOccurrences(
+          path, fields, new AddMissing(), "ListElementCode");
     }
   }
 }

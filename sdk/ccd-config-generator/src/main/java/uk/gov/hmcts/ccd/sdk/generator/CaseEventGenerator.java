@@ -35,21 +35,24 @@ class CaseEventGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
     for (Event event : events) {
       Path output = Paths.get(folder.getPath(), event.getId() + ".json");
 
-      JsonUtils.mergeInto(output, serialise(config.getCaseType(), event, config.getAllStates(),
-              config.getCallbackHost()),
-          new AddMissing(), "ID");
+      JsonUtils.mergeInto(
+          output,
+          serialise(config.getCaseType(), event, config.getAllStates(), config.getCallbackHost()),
+          new AddMissing(),
+          "ID");
     }
   }
 
-  private List<Event<T, R, S>> getOrderedEvents(ImmutableCollection<Event<T, R, S>> originalEvents) {
+  private List<Event<T, R, S>> getOrderedEvents(
+      ImmutableCollection<Event<T, R, S>> originalEvents) {
     if (hasAnyDisplayOrder(originalEvents)) {
       return new ArrayList<>(originalEvents);
     }
     return sortDisplayOrderByEventName(originalEvents);
   }
 
-  private List<Map<String, Object>> serialise(String caseTypeId, Event<T, R, S> event,
-                                              Set<S> allStates, String callbackHost) {
+  private List<Map<String, Object>> serialise(
+      String caseTypeId, Event<T, R, S> event, Set<S> allStates, String callbackHost) {
     List<Map<String, Object>> result = Lists.newArrayList();
     Map<String, Object> data = JsonUtils.getField(event.getId());
     result.add(data);
@@ -74,6 +77,9 @@ class CaseEventGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
     if (Objects.nonNull(event.getTtlIncrement())) {
       data.put("TTLIncrement", event.getTtlIncrement());
     }
+    if (event.isSignificantEvent()) {
+      data.put("SignificantEvent", "Yes");
+    }
 
     if (!Strings.isNullOrEmpty(event.getShowCondition())) {
       data.put("EventEnablingCondition", event.getShowCondition());
@@ -83,18 +89,29 @@ class CaseEventGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
       data.put("PreConditionState(s)", getPreStateString(event.getPreState(), allStates));
     }
 
-    data.put("PostConditionState", !Strings.isNullOrEmpty(event.getPostStateExpression())
-        ? event.getPostStateExpression()
-        : event.isPostStateWildcard() ? "*" : getPostStateString(event.getPostState()));
+    data.put(
+        "PostConditionState",
+        !Strings.isNullOrEmpty(event.getPostStateExpression())
+            ? event.getPostStateExpression()
+            : event.isPostStateWildcard() ? "*" : getPostStateString(event.getPostState()));
     data.put("SecurityClassification", "Public");
 
-    addCallbackIfConfigured(data, callbackHost, event,
+    addCallbackIfConfigured(
+        data,
+        callbackHost,
+        event,
         event.getAboutToStartCallback() != null || event.getStartHandler() != null,
         CallbackMetadata.ABOUT_TO_START);
-    addCallbackIfConfigured(data, callbackHost, event,
+    addCallbackIfConfigured(
+        data,
+        callbackHost,
+        event,
         event.getAboutToSubmitCallback() != null,
         CallbackMetadata.ABOUT_TO_SUBMIT);
-    addCallbackIfConfigured(data, callbackHost, event,
+    addCallbackIfConfigured(
+        data,
+        callbackHost,
+        event,
         event.getSubmittedCallback() != null,
         CallbackMetadata.SUBMITTED);
 
@@ -104,31 +121,29 @@ class CaseEventGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
   private String getPreStateString(Set<S> states, Set<S> allStates) {
     return states.equals(allStates)
         ? "*"
-        : states.stream().map(Objects::toString)
-        .sorted()
-        .collect(Collectors.joining(";"));
+        : states.stream().map(Objects::toString).sorted().collect(Collectors.joining(";"));
   }
 
   private String getPostStateString(Set<S> states) {
-    return states.size() != 1
-        ? "*"
-        : states.stream().findFirst().map(Objects::toString).orElse("");
+    return states.size() != 1 ? "*" : states.stream().findFirst().map(Objects::toString).orElse("");
   }
 
   private int resolveDisplayOrder(Event<T, R, S> event) {
     return event.getDisplayOrder() != -1 ? event.getDisplayOrder() : 1;
   }
 
-  private void addCallbackIfConfigured(Map<String, Object> target,
-                                       String callbackHost,
-                                       Event<T, R, S> event,
-                                       boolean enabled,
-                                       CallbackMetadata metadata) {
+  private void addCallbackIfConfigured(
+      Map<String, Object> target,
+      String callbackHost,
+      Event<T, R, S> event,
+      boolean enabled,
+      CallbackMetadata metadata) {
     String externalUrl = event.getCallbackUrls().get(metadata.webhook());
     if (!enabled && externalUrl == null) {
       return;
     }
-    target.put(metadata.callbackField(),
+    target.put(
+        metadata.callbackField(),
         externalUrl == null ? metadata.buildUrl(callbackHost, event.getId()) : externalUrl);
     String retry = event.getRetries().get(metadata.webhook());
     if (retry != null) {
@@ -136,31 +151,32 @@ class CaseEventGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
     }
   }
 
-  private record CallbackMetadata(Webhook webhook,
-                                  String callbackField,
-                                  String retriesField,
-                                  Function<String, String> pathBuilder) {
+  private record CallbackMetadata(
+      Webhook webhook,
+      String callbackField,
+      String retriesField,
+      Function<String, String> pathBuilder) {
 
-    private static final CallbackMetadata ABOUT_TO_START = new CallbackMetadata(
-        Webhook.AboutToStart,
-        "CallBackURLAboutToStartEvent",
-        "RetriesTimeoutURLAboutToStartEvent",
-        eventId -> "/callbacks/about-to-start?eventId=" + eventId
-    );
+    private static final CallbackMetadata ABOUT_TO_START =
+        new CallbackMetadata(
+            Webhook.AboutToStart,
+            "CallBackURLAboutToStartEvent",
+            "RetriesTimeoutURLAboutToStartEvent",
+            eventId -> "/callbacks/about-to-start?eventId=" + eventId);
 
-    private static final CallbackMetadata ABOUT_TO_SUBMIT = new CallbackMetadata(
-        Webhook.AboutToSubmit,
-        "CallBackURLAboutToSubmitEvent",
-        "RetriesTimeoutURLAboutToSubmitEvent",
-        eventId -> "/callbacks/about-to-submit?eventId=" + eventId
-    );
+    private static final CallbackMetadata ABOUT_TO_SUBMIT =
+        new CallbackMetadata(
+            Webhook.AboutToSubmit,
+            "CallBackURLAboutToSubmitEvent",
+            "RetriesTimeoutURLAboutToSubmitEvent",
+            eventId -> "/callbacks/about-to-submit?eventId=" + eventId);
 
-    private static final CallbackMetadata SUBMITTED = new CallbackMetadata(
-        Webhook.Submitted,
-        "CallBackURLSubmittedEvent",
-        "RetriesTimeoutURLSubmittedEvent",
-        eventId -> "/callbacks/submitted?eventId=" + eventId
-    );
+    private static final CallbackMetadata SUBMITTED =
+        new CallbackMetadata(
+            Webhook.Submitted,
+            "CallBackURLSubmittedEvent",
+            "RetriesTimeoutURLSubmittedEvent",
+            eventId -> "/callbacks/submitted?eventId=" + eventId);
 
     String buildUrl(String callbackHost, String eventId) {
       return callbackHost + pathBuilder.apply(eventId);

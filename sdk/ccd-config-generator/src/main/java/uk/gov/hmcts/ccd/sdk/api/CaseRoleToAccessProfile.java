@@ -1,5 +1,6 @@
 package uk.gov.hmcts.ccd.sdk.api;
 
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 import lombok.Builder;
@@ -16,6 +17,7 @@ public class CaseRoleToAccessProfile<R extends HasRole> {
   private List<String> caseAccessCategories;
   private boolean legacyIdamRole;
   private boolean retainLiveFrom;
+  private LocalDate liveFrom;
   private boolean includeDisabled;
 
   public String getRoleName() {
@@ -72,6 +74,13 @@ public class CaseRoleToAccessProfile<R extends HasRole> {
 
     /** Retains the conventional LiveFrom value on this access-profile row. */
     public CaseRoleToAccessProfileBuilder<R> retainLiveFrom() {
+      retainLiveFrom = true;
+      return this;
+    }
+
+    /** Retains and sets a row-specific access-profile live date. */
+    public CaseRoleToAccessProfileBuilder<R> liveFrom(LocalDate value) {
+      liveFrom = value;
       retainLiveFrom = true;
       return this;
     }

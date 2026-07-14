@@ -43,7 +43,8 @@ public class Event<T, R extends HasRole, S> {
   private boolean publishToCamunda;
   private boolean publishColumn;
   private boolean displayOrderColumn;
-  private Integer ttlIncrement;
+  private Object ttlIncrement;
+  private boolean significantEvent;
   private AboutToStart<T, S> aboutToStartCallback;
   private AboutToSubmit<T, S> aboutToSubmitCallback;
   private Submitted<T, S> submittedCallback;
@@ -58,12 +59,11 @@ public class Event<T, R extends HasRole, S> {
     }
   }
 
-
   @Builder.Default
   // TODO: don't always add.
   private String endButtonLabel = "Save and continue";
-  @Builder.Default
-  private int displayOrder = -1;
+
+  @Builder.Default private int displayOrder = -1;
 
   private SetMultimap<R, Permission> grants;
   private Set<String> historyOnlyRoles;
@@ -80,8 +80,11 @@ public class Event<T, R extends HasRole, S> {
     private FieldCollection.FieldCollectionBuilder<T, S, EventBuilder<T, R, S>> fieldsBuilder;
 
     public static <T, R extends HasRole, S> EventBuilder<T, R, S> builder(
-        String id, Class dataClass, PropertyUtils propertyUtils,
-        Set<S> preStates, Set<S> postStates) {
+        String id,
+        Class dataClass,
+        PropertyUtils propertyUtils,
+        Set<S> preStates,
+        Set<S> postStates) {
       EventBuilder<T, R, S> result = new EventBuilder<T, R, S>();
       result.id(id);
       result.preState = preStates;
@@ -89,8 +92,8 @@ public class Event<T, R extends HasRole, S> {
       result.dataClass = dataClass;
       result.grants = HashMultimap.create();
       result.historyOnlyRoles = new HashSet<>();
-      result.fieldsBuilder = FieldCollection.FieldCollectionBuilder
-          .builder(result, result, dataClass, propertyUtils);
+      result.fieldsBuilder =
+          FieldCollection.FieldCollectionBuilder.builder(result, result, dataClass, propertyUtils);
       result.retries = new HashMap<>();
       result.callbackUrls = new HashMap<>();
       result.showSummaryColumn = true;
@@ -196,6 +199,18 @@ public class Event<T, R extends HasRole, S> {
       return this;
     }
 
+    /** Retains a legacy string-valued TTL increment during definition migration. */
+    public EventBuilder<T, R, S> ttlIncrement(String ttlIncrement) {
+      this.ttlIncrement = ttlIncrement;
+      return this;
+    }
+
+    /** Marks an event as significant for CCD event-history and retention processing. */
+    public EventBuilder<T, R, S> significantEvent() {
+      this.significantEvent = true;
+      return this;
+    }
+
     // Do not inherit role permissions from states.
     public EventBuilder<T, R, S> explicitGrants() {
       this.explicitGrants = true;
@@ -247,7 +262,8 @@ public class Event<T, R extends HasRole, S> {
     }
 
     public EventBuilder<T, R, S> submittedCallback(Submitted<T, S> submittedCallback) {
-      // TODO: split out decentralised event building to remove these fields for decentralised events.
+      // TODO: split out decentralised event building to remove these fields for decentralised
+      // events.
       if (this.submitHandler != null) {
         throw new IllegalStateException("Cannot set both submitHandler and submittedCallback");
       }
@@ -256,16 +272,15 @@ public class Event<T, R extends HasRole, S> {
       return this;
     }
 
-
     public EventBuilder<T, R, S> aboutToStartCallback(AboutToStart<T, S> aboutToStartCallback) {
       ensureNoExternalCallback(Webhook.AboutToStart);
       this.aboutToStartCallback = aboutToStartCallback;
       return this;
     }
 
-
     public EventBuilder<T, R, S> aboutToSubmitCallback(AboutToSubmit<T, S> aboutToSubmitCallback) {
-      // TODO: split out decentralised event building to remove these fields for decentralised events.
+      // TODO: split out decentralised event building to remove these fields for decentralised
+      // events.
       if (this.submitHandler != null) {
         throw new IllegalStateException("Cannot set both submitHandler and aboutToSubmitCallback");
       }
@@ -289,23 +304,27 @@ public class Event<T, R extends HasRole, S> {
 
     private void ensureNoExternalCallback(Webhook webhook) {
       if (this.callbackUrls.containsKey(webhook)) {
-        throw new IllegalStateException("Cannot set both an external URL and a Java handler for " + webhook);
+        throw new IllegalStateException(
+            "Cannot set both an external URL and a Java handler for " + webhook);
       }
     }
 
     private void ensureNoCallbackHandler(Webhook webhook) {
-      boolean configured = switch (webhook) {
-        case AboutToStart -> this.aboutToStartCallback != null || this.startHandler != null;
-        case AboutToSubmit -> this.aboutToSubmitCallback != null || this.submitHandler != null;
-        case Submitted -> this.submittedCallback != null || this.submitHandler != null;
-        case MidEvent -> false;
-      };
+      boolean configured =
+          switch (webhook) {
+            case AboutToStart -> this.aboutToStartCallback != null || this.startHandler != null;
+            case AboutToSubmit -> this.aboutToSubmitCallback != null || this.submitHandler != null;
+            case Submitted -> this.submittedCallback != null || this.submitHandler != null;
+            case MidEvent -> false;
+          };
       if (configured) {
-        throw new IllegalStateException("Cannot set both an external URL and a Java handler for " + webhook);
+        throw new IllegalStateException(
+            "Cannot set both an external URL and a Java handler for " + webhook);
       }
     }
 
-    // Hide lombok's generated builder methods for these fields to stop them polluting the public API.
+    // Hide lombok's generated builder methods for these fields to stop them polluting the public
+    // API.
     private void id(String value) {
       this.id = value;
     }
@@ -332,8 +351,9 @@ public class Event<T, R extends HasRole, S> {
 
     private void setRetries(Webhook hook, int... retries) {
       if (retries.length > 0) {
-        String val = String.join(",", Arrays.stream(retries).mapToObj(String::valueOf).collect(
-            Collectors.toList()));
+        String val =
+            String.join(
+                ",", Arrays.stream(retries).mapToObj(String::valueOf).collect(Collectors.toList()));
         this.retries.put(hook, val);
       }
     }

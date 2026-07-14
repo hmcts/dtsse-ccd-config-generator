@@ -1,6 +1,7 @@
 package uk.gov.hmcts.ccd.sdk.generator;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -21,92 +22,116 @@ import uk.gov.hmcts.reform.fpl.model.CaseData;
 
 public class AuthorisationCaseTypeGeneratorTest {
 
-    private static final String CASE_TYPE = "TEST_CASE_TYPE";
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+  private static final String CASE_TYPE = "TEST_CASE_TYPE";
+  private static final ObjectMapper MAPPER = new ObjectMapper();
 
-    @Rule
-    public TemporaryFolder tmp = new TemporaryFolder();
+  @Rule public TemporaryFolder tmp = new TemporaryFolder();
 
-    @Test
-    public void fullShutterSetsAllRolesToDelete() {
-        ConfigBuilderImpl<CaseData, State, UserRole> builder = newBuilder();
-        builder.shutterService();
+  @Test
+  public void fullShutterSetsAllRolesToDelete() {
+    ConfigBuilderImpl<CaseData, State, UserRole> builder = newBuilder();
+    builder.shutterService();
 
-        Map<String, String> crudByRole = generateCrudByRole(builder);
+    Map<String, String> crudByRole = generateCrudByRole(builder);
 
-        assertThat(crudByRole.values()).containsOnly("D");
-    }
+    assertThat(crudByRole.values()).containsOnly("D");
+  }
 
-    @Test
-    public void excludedRolesKeepTheirPermissionsWhenServiceIsShuttered() {
-        ConfigBuilderImpl<CaseData, State, UserRole> builder = newBuilder();
-        builder.shutterService();
-        builder.shutterServiceExclude(UserRole.SYSTEM_UPDATE);
+  @Test
+  public void excludedRolesKeepTheirPermissionsWhenServiceIsShuttered() {
+    ConfigBuilderImpl<CaseData, State, UserRole> builder = newBuilder();
+    builder.shutterService();
+    builder.shutterServiceExclude(UserRole.SYSTEM_UPDATE);
 
-        Map<String, String> crudByRole = generateCrudByRole(builder);
+    Map<String, String> crudByRole = generateCrudByRole(builder);
 
-        // The excluded role retains its normal case-type permissions.
-        assertThat(crudByRole.get(UserRole.SYSTEM_UPDATE.getRole()))
-            .isEqualTo(UserRole.SYSTEM_UPDATE.getCaseTypePermissions());
-        // Every other non-case role is still shuttered to DELETE.
-        assertThat(crudByRole.get(UserRole.LOCAL_AUTHORITY.getRole())).isEqualTo("D");
-        assertThat(crudByRole.get(UserRole.CASE_ACCESS_APPROVER.getRole())).isEqualTo("D");
-    }
+    // The excluded role retains its normal case-type permissions.
+    assertThat(crudByRole.get(UserRole.SYSTEM_UPDATE.getRole()))
+        .isEqualTo(UserRole.SYSTEM_UPDATE.getCaseTypePermissions());
+    // Every other non-case role is still shuttered to DELETE.
+    assertThat(crudByRole.get(UserRole.LOCAL_AUTHORITY.getRole())).isEqualTo("D");
+    assertThat(crudByRole.get(UserRole.CASE_ACCESS_APPROVER.getRole())).isEqualTo("D");
+  }
 
-    @Test
-    public void excludeOverridesRoleSpecificShutter() {
-        ConfigBuilderImpl<CaseData, State, UserRole> builder = newBuilder();
-        builder.shutterService(UserRole.SYSTEM_UPDATE);
-        builder.shutterServiceExclude(UserRole.SYSTEM_UPDATE);
+  @Test
+  public void excludeOverridesRoleSpecificShutter() {
+    ConfigBuilderImpl<CaseData, State, UserRole> builder = newBuilder();
+    builder.shutterService(UserRole.SYSTEM_UPDATE);
+    builder.shutterServiceExclude(UserRole.SYSTEM_UPDATE);
 
-        Map<String, String> crudByRole = generateCrudByRole(builder);
+    Map<String, String> crudByRole = generateCrudByRole(builder);
 
-        assertThat(crudByRole.get(UserRole.SYSTEM_UPDATE.getRole()))
-            .isEqualTo(UserRole.SYSTEM_UPDATE.getCaseTypePermissions());
-    }
+    assertThat(crudByRole.get(UserRole.SYSTEM_UPDATE.getRole()))
+        .isEqualTo(UserRole.SYSTEM_UPDATE.getCaseTypePermissions());
+  }
 
-    @Test
-    public void emitsOnlyApplicableRoles() {
-        ConfigBuilderImpl<CaseData, State, UserRole> builder = newBuilder();
-        builder.applicableRoles(UserRole.SYSTEM_UPDATE, UserRole.LOCAL_AUTHORITY);
+  @Test
+  public void emitsOnlyApplicableRoles() {
+    ConfigBuilderImpl<CaseData, State, UserRole> builder = newBuilder();
+    builder.applicableRoles(UserRole.SYSTEM_UPDATE, UserRole.LOCAL_AUTHORITY);
 
-        assertThat(generateCrudByRole(builder).keySet())
-            .containsExactlyInAnyOrder(
-                UserRole.SYSTEM_UPDATE.getRole(),
-                UserRole.LOCAL_AUTHORITY.getRole());
-    }
+    assertThat(generateCrudByRole(builder).keySet())
+        .containsExactlyInAnyOrder(
+            UserRole.SYSTEM_UPDATE.getRole(), UserRole.LOCAL_AUTHORITY.getRole());
+  }
 
-    @Test
-    public void omitsSelectedCaseTypeAuthorisationRoles() {
-        ConfigBuilderImpl<CaseData, State, UserRole> builder = newBuilder();
-        builder.applicableRoles(UserRole.SYSTEM_UPDATE, UserRole.LOCAL_AUTHORITY);
-        builder.omitCaseTypeAuthorisation(UserRole.SYSTEM_UPDATE);
+  @Test
+  public void omitsSelectedCaseTypeAuthorisationRoles() {
+    ConfigBuilderImpl<CaseData, State, UserRole> builder = newBuilder();
+    builder.applicableRoles(UserRole.SYSTEM_UPDATE, UserRole.LOCAL_AUTHORITY);
+    builder.omitCaseTypeAuthorisation(UserRole.SYSTEM_UPDATE);
 
-        assertThat(generateCrudByRole(builder).keySet())
-            .containsExactly(UserRole.LOCAL_AUTHORITY.getRole());
-    }
+    assertThat(generateCrudByRole(builder).keySet())
+        .containsExactly(UserRole.LOCAL_AUTHORITY.getRole());
+  }
 
-    private ConfigBuilderImpl<CaseData, State, UserRole> newBuilder() {
-        ResolvedCCDConfig<CaseData, State, UserRole> config = new ResolvedCCDConfig<>(
-            CaseData.class, State.class, UserRole.class, Map.of(),
+  @Test
+  public void emitsSelectedCaseRolesInCaseTypeAuthorisation() {
+    ConfigBuilderImpl<CaseData, State, UserRole> builder = newBuilder();
+    builder.applicableRoles(UserRole.SYSTEM_UPDATE, UserRole.CCD_SOLICITOR);
+    builder.includeCaseRolesInCaseTypeAuthorisation(UserRole.CCD_SOLICITOR);
+
+    assertThat(generateCrudByRole(builder).keySet())
+        .containsExactlyInAnyOrder(
+            UserRole.SYSTEM_UPDATE.getRole(), UserRole.CCD_SOLICITOR.getRole());
+  }
+
+  @Test
+  public void rejectsNonCaseRolesForCaseRoleCaseTypeAuthorisation() {
+    ConfigBuilderImpl<CaseData, State, UserRole> builder = newBuilder();
+
+    assertThatThrownBy(
+            () -> builder.includeCaseRolesInCaseTypeAuthorisation(UserRole.SYSTEM_UPDATE))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("CCD case role");
+  }
+
+  private ConfigBuilderImpl<CaseData, State, UserRole> newBuilder() {
+    ResolvedCCDConfig<CaseData, State, UserRole> config =
+        new ResolvedCCDConfig<>(
+            CaseData.class,
+            State.class,
+            UserRole.class,
+            Map.of(),
             ImmutableSet.copyOf(State.values()));
-        ConfigBuilderImpl<CaseData, State, UserRole> builder = new ConfigBuilderImpl<>(config);
-        builder.caseType(CASE_TYPE, "Test", "Test case type");
-        return builder;
-    }
+    ConfigBuilderImpl<CaseData, State, UserRole> builder = new ConfigBuilderImpl<>(config);
+    builder.caseType(CASE_TYPE, "Test", "Test case type");
+    return builder;
+  }
 
-    @SneakyThrows
-    private Map<String, String> generateCrudByRole(ConfigBuilderImpl<CaseData, State, UserRole> builder) {
-        ResolvedCCDConfig<CaseData, State, UserRole> config = builder.build();
-        new AuthorisationCaseTypeGenerator<CaseData, State, UserRole>().write(tmp.getRoot(), config);
+  @SneakyThrows
+  private Map<String, String> generateCrudByRole(
+      ConfigBuilderImpl<CaseData, State, UserRole> builder) {
+    ResolvedCCDConfig<CaseData, State, UserRole> config = builder.build();
+    new AuthorisationCaseTypeGenerator<CaseData, State, UserRole>().write(tmp.getRoot(), config);
 
-        File output = new File(tmp.getRoot(), "AuthorisationCaseType.json");
-        List<Map<String, Object>> rows =
-            MAPPER.readValue(output, new TypeReference<List<Map<String, Object>>>() {});
+    File output = new File(tmp.getRoot(), "AuthorisationCaseType.json");
+    List<Map<String, Object>> rows =
+        MAPPER.readValue(output, new TypeReference<List<Map<String, Object>>>() {});
 
-        return rows.stream().collect(Collectors.toMap(
-            row -> (String) row.get("UserRole"),
-            row -> (String) row.get("CRUD"),
-            (a, b) -> b));
-    }
+    return rows.stream()
+        .collect(
+            Collectors.toMap(
+                row -> (String) row.get("UserRole"), row -> (String) row.get("CRUD"), (a, b) -> b));
+  }
 }

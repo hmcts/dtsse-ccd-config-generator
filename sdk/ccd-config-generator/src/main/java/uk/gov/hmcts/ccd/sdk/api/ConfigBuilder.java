@@ -20,18 +20,14 @@ public interface ConfigBuilder<T, S, R extends HasRole> {
 
   void caseType(String caseType, String name, String description);
 
-  /**
-   * Defines a case type including optional CCD import metadata.
-   */
+  /** Defines a case type including optional CCD import metadata. */
   default void caseType(CaseType caseType) {
     caseType(caseType.getId(), caseType.getName(), caseType.getDescription());
   }
 
   void jurisdiction(String id, String name, String description);
 
-  /**
-   * Defines a jurisdiction including optional CCD import metadata.
-   */
+  /** Defines a jurisdiction including optional CCD import metadata. */
   default void jurisdiction(Jurisdiction jurisdiction) {
     jurisdiction(jurisdiction.getId(), jurisdiction.getName(), jurisdiction.getDescription());
   }
@@ -44,18 +40,15 @@ public interface ConfigBuilder<T, S, R extends HasRole> {
     // Default no-op for backwards compatibility; implementations may override.
   }
 
-  /**
-   * Omits the conventional case-history field and automatically generated history tab.
-   */
+  /** Omits the conventional case-history field and automatically generated history tab. */
   default void omitCaseHistory() {
     // Default no-op for backwards compatibility; implementations may override.
   }
 
-  /**
-   * Sets the label of the conventional generated case-history field.
-   */
+  /** Sets the label of the conventional generated case-history field. */
   default void caseHistoryLabel(String label) {
-    throw new UnsupportedOperationException("This ConfigBuilder does not support case-history metadata");
+    throw new UnsupportedOperationException(
+        "This ConfigBuilder does not support case-history metadata");
   }
 
   /**
@@ -65,7 +58,8 @@ public interface ConfigBuilder<T, S, R extends HasRole> {
    * @param values ordered enum values supplying the external codes and labels
    */
   default <E extends Enum<E>> void registerFixedList(String id, E... values) {
-    throw new UnsupportedOperationException("This ConfigBuilder does not support fixed-list registration");
+    throw new UnsupportedOperationException(
+        "This ConfigBuilder does not support fixed-list registration");
   }
 
   /** Registers generated complex schema types that are referenced through explicit CCD names. */
@@ -74,16 +68,12 @@ public interface ConfigBuilder<T, S, R extends HasRole> {
         "This ConfigBuilder does not support explicit complex-type registration");
   }
 
-  /**
-   * Selects the typed schema projection used for this case type.
-   */
+  /** Selects the typed schema projection used for this case type. */
   default void schemaProfile(Class<?> profile) {
     throw new UnsupportedOperationException("This ConfigBuilder does not support schema profiles");
   }
 
-  /**
-   * Selects the role constants applicable to this case type.
-   */
+  /** Selects the role constants applicable to this case type. */
   default void applicableRoles(R... roles) {
     throw new UnsupportedOperationException("This ConfigBuilder does not support applicable roles");
   }
@@ -96,9 +86,7 @@ public interface ConfigBuilder<T, S, R extends HasRole> {
         "This ConfigBuilder does not support legacy authorisation columns");
   }
 
-  /**
-   * Retains LiveFrom on selected case-type authorisation rows.
-   */
+  /** Retains LiveFrom on selected case-type authorisation rows. */
   default void retainCaseTypeAuthorisationLiveFrom(R... roles) {
     throw new UnsupportedOperationException(
         "This ConfigBuilder does not support authorisation LiveFrom metadata");
@@ -111,6 +99,14 @@ public interface ConfigBuilder<T, S, R extends HasRole> {
   default void omitCaseTypeAuthorisation(R... roles) {
     throw new UnsupportedOperationException(
         "This ConfigBuilder does not support case-type authorisation exclusions");
+  }
+
+  /**
+   * Emits selected CCD case roles in case-type authorisation as well as in {@code CaseRoles}.
+   */
+  default void includeCaseRolesInCaseTypeAuthorisation(R... roles) {
+    throw new UnsupportedOperationException(
+        "This ConfigBuilder does not support case-role case-type authorisation");
   }
 
   /** Retains row-specific live dates on generated case-role rows. */
@@ -136,8 +132,8 @@ public interface ConfigBuilder<T, S, R extends HasRole> {
   /**
    * Exclude roles from a shutter so they retain their normal case-type permissions rather than
    * being set to DELETE. The exclusion applies whether the shutter was requested for the whole
-   * service via {@link #shutterService()} or for individual roles via {@link #shutterService(R...)},
-   * and takes precedence over both.
+   * service via {@link #shutterService()} or for individual roles via {@link
+   * #shutterService(R...)}, and takes precedence over both.
    *
    * <p>Typically used to keep {@code caseworker-wa-task-configuration} out of a shutter, as
    * dropping that role to DELETE can cause issues for Work Allocation / Task Management.
@@ -151,9 +147,9 @@ public interface ConfigBuilder<T, S, R extends HasRole> {
   void omitHistoryForRoles(R... roles);
 
   /**
-   * Set AuthorisationCaseState explicitly.
-   * Note that additional AuthorisationCaseState permissions are inferred based on grants of
-   * event-level permissions.
+   * Set AuthorisationCaseState explicitly. Note that additional AuthorisationCaseState permissions
+   * are inferred based on grants of event-level permissions.
+   *
    * @param state state
    * @param permissions permissions
    * @param role One or more roles
@@ -174,9 +170,7 @@ public interface ConfigBuilder<T, S, R extends HasRole> {
 
   void setCallbackHost(String s);
 
-  /**
-   * Sets the HMCTS service id supplementary value (`HMCTSServiceId`).
-   */
+  /** Sets the HMCTS service id supplementary value (`HMCTSServiceId`). */
   void hmctsServiceId(String value);
 
   void addPreEventHook(Function<Map<String, Object>, Map<String, Object>> hook);
@@ -191,6 +185,9 @@ public interface ConfigBuilder<T, S, R extends HasRole> {
 
   NoticeOfChangeBuilder<T, R> noticeOfChange();
 
-  void grantComplexType(TypedPropertyGetter<T, ?> field, String listElementCode,
-                        Set<Permission> permissions, R... roles);
+  void grantComplexType(
+      TypedPropertyGetter<T, ?> field,
+      String listElementCode,
+      Set<Permission> permissions,
+      R... roles);
 }

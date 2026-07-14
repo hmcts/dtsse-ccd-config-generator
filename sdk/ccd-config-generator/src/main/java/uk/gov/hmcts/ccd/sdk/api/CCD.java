@@ -9,29 +9,23 @@ import uk.gov.hmcts.ccd.sdk.type.FieldType;
 @Repeatable(CCDDefinitions.class)
 public @interface CCD {
 
-  /**
-   * Optional external CCD identifier. This is independent of the Java/Jackson property name.
-   */
+  /** Optional external CCD identifier. This is independent of the Java/Jackson property name. */
   String id() default "";
 
   /** Optional legacy field identifier used only by field authorisation rows. */
   String authorisationId() default "";
 
   /**
-   * Primary human readable description field. This property will populate different fields in different contexts:
-   * - FixedLists: ListElement
-   * - Fields: Label
-   * - CaseRoles: Name
-   * - States: Name and Description
+   * Primary human readable description field. This property will populate different fields in
+   * different contexts: - FixedLists: ListElement - Fields: Label - CaseRoles: Name - States: Name
+   * and Description
    */
   String label() default "";
 
   /**
-   * Secondary human readable description field. This property will populate different fields in different contexts:
-   * - FixedLists: ListElementCode
-   * - Fields: HintText
-   * - CaseRoles: Description
-   * - States: TitleDisplay
+   * Secondary human readable description field. This property will populate different fields in
+   * different contexts: - FixedLists: ListElementCode - Fields: HintText - CaseRoles: Description -
+   * States: TitleDisplay
    */
   String hint() default "";
 
@@ -44,6 +38,15 @@ public @interface CCD {
 
   int displayOrder() default 0;
 
+  /** Omits DisplayOrder where a legacy definition intentionally leaves it blank. */
+  boolean omitDisplayOrder() default false;
+
+  /** Numeric fixed-list code retained as a number rather than a numeric string. */
+  String numericListElementCode() default "";
+
+  /** Numeric fixed-list label retained as a number rather than a numeric string. */
+  int numericListElement() default Integer.MIN_VALUE;
+
   FieldType typeOverride() default FieldType.Unspecified;
 
   /** External CCD field type name when the type is a service-defined complex type. */
@@ -54,13 +57,14 @@ public @interface CCD {
   String categoryID() default "";
 
   /**
-   * Access policies for a field, enum constant or class. Access declared on a class is the default for its fields.
+   * Access policies for a field, enum constant or class. Access declared on a class is the default
+   * for its fields.
    */
   Class<? extends HasAccessControl>[] access() default {};
 
   /**
-   * Whether access policies inherit defaults from the containing class or an enclosing unwrapped field. Set to false
-   * with no {@link #access()} values to opt out of inherited access entirely.
+   * Whether access policies inherit defaults from the containing class or an enclosing unwrapped
+   * field. Set to false with no {@link #access()} values to opt out of inherited access entirely.
    */
   boolean inheritAccessFromParent() default true;
 
@@ -68,7 +72,15 @@ public @interface CCD {
 
   boolean ignore() default false;
 
+  /** Retains field authorisation metadata without emitting a CaseField row. */
+  boolean omitFromCaseField() default false;
+
   boolean searchable() default true;
+
+  /**
+   * Optional legacy Searchable spelling, for example {@code No}.
+   */
+  String searchableValue() default "";
 
   /**
    * Emits the Searchable column even when its value is the default {@code Y}.
@@ -77,7 +89,17 @@ public @interface CCD {
 
   int min() default Integer.MIN_VALUE;
 
+  /**
+   * Optional legacy Min value retained as a string.
+   */
+  String minValue() default "";
+
   int max() default Integer.MAX_VALUE;
+
+  /**
+   * Optional legacy Max value retained as a string.
+   */
+  String maxValue() default "";
 
   boolean retainHiddenValue() default false;
 
@@ -91,16 +113,17 @@ public @interface CCD {
    */
   String liveFrom() default "";
 
+  /**
+   * Optional legacy SecurityClassification spelling, for example {@code PUBLIC}.
+   */
+  String securityClassification() default "";
+
   /** Omits the state Description column while retaining its Name. */
   boolean omitDescription() default false;
 
-  /**
-   * Typed schema profiles in which this metadata is applicable. Empty means every profile.
-   */
+  /** Typed schema profiles in which this metadata is applicable. Empty means every profile. */
   Class<?>[] includeInProfiles() default {};
 
-  /**
-   * Typed schema profiles from which this field is excluded.
-   */
+  /** Typed schema profiles from which this field is excluded. */
   Class<?>[] excludeFromProfiles() default {};
 }

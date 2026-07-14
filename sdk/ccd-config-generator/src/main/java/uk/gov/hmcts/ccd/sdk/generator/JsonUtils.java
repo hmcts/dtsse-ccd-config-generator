@@ -38,7 +38,8 @@ public class JsonUtils {
   }
 
   @SneakyThrows
-  public static String serialise(List<Map<String, Object>> data, boolean sort, String... primaryKeys) {
+  public static String serialise(
+      List<Map<String, Object>> data, boolean sort, String... primaryKeys) {
     class CustomPrinter extends DefaultPrettyPrinter {
       @Override
       public DefaultPrettyPrinter createInstance() {
@@ -54,21 +55,28 @@ public class JsonUtils {
     }
 
     // Emit deterministic JSON so we get exactly the same json output for a given configuration.
-    // This allows Gradle to skip converting it to xlsx if unchanged (eg. if we only changed a callback).
-    // We make the json deterministic by sorting the maps by their primary keys and sorting the keys in each map.
+    // This allows Gradle to skip converting it to xlsx if unchanged (eg. if we only changed a
+    // callback).
+    // We make the json deterministic by sorting the maps by their primary keys and sorting the keys
+    // in each map.
     if (sort) {
-      data.sort((a, b) -> {
-        var chain = ComparisonChain.start();
-        for (String primaryKey : primaryKeys) {
-          chain = chain.compare(String.valueOf(a.get(primaryKey)), String.valueOf(b.get(primaryKey)));
-        }
-        return chain.result();
-      });
+      data.sort(
+          (a, b) -> {
+            var chain = ComparisonChain.start();
+            for (String primaryKey : primaryKeys) {
+              chain =
+                  chain.compare(
+                      String.valueOf(a.get(primaryKey)), String.valueOf(b.get(primaryKey)));
+            }
+            return chain.result();
+          });
     }
 
     return new ObjectMapper()
-      .configure(SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS, true)
-      .writer(new CustomPrinter()).writeValueAsString(data) + "\n";
+            .configure(SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS, true)
+            .writer(new CustomPrinter())
+            .writeValueAsString(data)
+        + "\n";
   }
 
   @SneakyThrows
@@ -78,23 +86,24 @@ public class JsonUtils {
 
   @SneakyThrows
   static void removePropertyFromJsonFiles(
-      File root,
-      String property,
-      BiPredicate<Path, Map<String, Object>> retainProperty) {
+      File root, String property, BiPredicate<Path, Map<String, Object>> retainProperty) {
     ObjectMapper mapper = new ObjectMapper();
-    CollectionType mapCollectionType = mapper.getTypeFactory()
-        .constructCollectionType(List.class, Map.class);
+    CollectionType mapCollectionType =
+        mapper.getTypeFactory().constructCollectionType(List.class, Map.class);
 
     try (Stream<Path> paths = Files.walk(root.toPath())) {
-      for (Path path : paths.filter(Files::isRegularFile)
-          .filter(candidate -> candidate.toString().endsWith(".json"))
-          .toList()) {
+      for (Path path :
+          paths
+              .filter(Files::isRegularFile)
+              .filter(candidate -> candidate.toString().endsWith(".json"))
+              .toList()) {
         List<Map<String, Object>> rows = mapper.readValue(path.toFile(), mapCollectionType);
-        rows.forEach(row -> {
-          if (!retainProperty.test(path, row)) {
-            row.remove(property);
-          }
-        });
+        rows.forEach(
+            row -> {
+              if (!retainProperty.test(path, row)) {
+                row.remove(property);
+              }
+            });
         writeFile(path, serialise(rows, false));
       }
     }
@@ -122,7 +131,8 @@ public class JsonUtils {
   public static Map<String, Object> caseAuthorisationRow(ResolvedCCDConfig<?, ?, ?> config) {
     Map<String, Object> row = Maps.newHashMap();
     row.put("LiveFrom", DEFAULT_LIVE_FROM);
-    row.put(config.isLegacyCaseAuthorisationIdColumn() ? "CaseTypeId" : "CaseTypeID",
+    row.put(
+        config.isLegacyCaseAuthorisationIdColumn() ? "CaseTypeId" : "CaseTypeID",
         config.getCaseType());
     return row;
   }
@@ -152,7 +162,9 @@ public class JsonUtils {
     if (annotation.showSummaryContent()) {
       target.put("ShowSummaryContentOption", "Y");
     }
-    if (!annotation.searchable() || annotation.includeSearchable()) {
+    if (!Strings.isNullOrEmpty(annotation.searchableValue())) {
+      target.put("Searchable", annotation.searchableValue());
+    } else if (!annotation.searchable() || annotation.includeSearchable()) {
       target.put("Searchable", annotation.searchable() ? "Y" : "N");
     }
     if (!Strings.isNullOrEmpty(annotation.showCondition())) {
@@ -164,16 +176,26 @@ public class JsonUtils {
     if (!Strings.isNullOrEmpty(annotation.categoryID())) {
       target.put("CategoryID", annotation.categoryID());
     }
-    if (annotation.min() > Integer.MIN_VALUE) {
+    if (!Strings.isNullOrEmpty(annotation.minValue())) {
+      target.put("Min", annotation.minValue());
+    } else if (annotation.min() > Integer.MIN_VALUE) {
       target.put("Min", annotation.min());
     }
-    if (annotation.max() < Integer.MAX_VALUE) {
+    if (!Strings.isNullOrEmpty(annotation.maxValue())) {
+      target.put("Max", annotation.maxValue());
+    } else if (annotation.max() < Integer.MAX_VALUE) {
       target.put("Max", annotation.max());
     }
-    if (annotation.retainHiddenValue() || !Strings.isNullOrEmpty(annotation.retainHiddenValueValue())) {
-      target.put("RetainHiddenValue", Strings.isNullOrEmpty(annotation.retainHiddenValueValue())
-          ? "Y"
-          : annotation.retainHiddenValueValue());
+    if (annotation.retainHiddenValue()
+        || !Strings.isNullOrEmpty(annotation.retainHiddenValueValue())) {
+      target.put(
+          "RetainHiddenValue",
+          Strings.isNullOrEmpty(annotation.retainHiddenValueValue())
+              ? "Y"
+              : annotation.retainHiddenValueValue());
+    }
+    if (!Strings.isNullOrEmpty(annotation.securityClassification())) {
+      target.put("SecurityClassification", annotation.securityClassification());
     }
   }
 
@@ -193,25 +215,16 @@ public class JsonUtils {
     target.add(labelField);
   }
 
-  static List<Map<String, Object>> mergeInto(List<Map<String, Object>> existing,
-      List<Map<String, Object>> generated, JsonMerger merger, String... primaryKeys) {
+  static List<Map<String, Object>> mergeInto(
+      List<Map<String, Object>> existing,
+      List<Map<String, Object>> generated,
+      JsonMerger merger,
+      String... primaryKeys) {
     for (Map<String, Object> generatedField : generated) {
-      Optional<Map<String, Object>> existingMatch = existing.stream().filter(x -> {
-        for (String primaryKey : primaryKeys) {
-          if (!x.containsKey(primaryKey)) {
-            return !generatedField.containsKey(primaryKey);
-          }
-          if (!generatedField.containsKey(primaryKey)) {
-            return !x.containsKey(primaryKey);
-          }
-
-          if (!x.get(primaryKey).equals(generatedField.get(primaryKey).toString())) {
-            return false;
-          }
-        }
-
-        return true;
-      }).findFirst();
+      Optional<Map<String, Object>> existingMatch =
+          existing.stream()
+              .filter(candidate -> primaryKeysMatch(candidate, generatedField, primaryKeys))
+              .findFirst();
 
       if (!existingMatch.isPresent()) {
         existing.add(generatedField);
@@ -221,9 +234,10 @@ public class JsonUtils {
           if (!match.containsKey(generatedKey)) {
             match.put(generatedKey, generatedField.get(generatedKey));
           } else {
-            match.put(generatedKey,
-                merger.merge(generatedKey, match.get(generatedKey),
-                    generatedField.get(generatedKey)));
+            match.put(
+                generatedKey,
+                merger.merge(
+                    generatedKey, match.get(generatedKey), generatedField.get(generatedKey)));
           }
         }
       }
@@ -233,19 +247,23 @@ public class JsonUtils {
   }
 
   @SneakyThrows
-  public static void mergeInto(Path path, List<Map<String, Object>> fields,
-                               JsonMerger merger, String... primaryKeys) {
-    mergeInto(path,fields, merger, true, primaryKeys);
+  public static void mergeInto(
+      Path path, List<Map<String, Object>> fields, JsonMerger merger, String... primaryKeys) {
+    mergeInto(path, fields, merger, true, primaryKeys);
   }
 
   @SneakyThrows
-  public static void mergeInto(Path path, List<Map<String, Object>> fields,
-      JsonMerger merger, boolean sort, String... primaryKeys) {
+  public static void mergeInto(
+      Path path,
+      List<Map<String, Object>> fields,
+      JsonMerger merger,
+      boolean sort,
+      String... primaryKeys) {
     ObjectMapper mapper = new ObjectMapper();
     List<Map<String, Object>> existing;
     if (path.toFile().exists()) {
-      CollectionType mapCollectionType = mapper.getTypeFactory()
-          .constructCollectionType(List.class, Map.class);
+      CollectionType mapCollectionType =
+          mapper.getTypeFactory().constructCollectionType(List.class, Map.class);
       existing = mapper.readValue(path.toFile(), mapCollectionType);
     } else {
       existing = Lists.newArrayList();
@@ -253,8 +271,61 @@ public class JsonUtils {
 
     mergeInto(existing, fields, merger, primaryKeys);
 
-
     writeFile(path, serialise(existing, sort, primaryKeys));
+  }
+
+  private static boolean primaryKeysMatch(
+      Map<String, Object> existing, Map<String, Object> generated, String... primaryKeys) {
+    for (String primaryKey : primaryKeys) {
+      if (existing.containsKey(primaryKey) != generated.containsKey(primaryKey)) {
+        return false;
+      }
+      if (!existing.containsKey(primaryKey)) {
+        continue;
+      }
+      if (!existing.get(primaryKey).equals(generated.get(primaryKey).toString())) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  /** Merges generated rows occurrence-by-occurrence so equal CCD identities remain a multiset. */
+  @SneakyThrows
+  static void mergeIntoPreservingGeneratedOccurrences(
+      Path path, List<Map<String, Object>> fields, JsonMerger merger, String... primaryKeys) {
+    ObjectMapper mapper = new ObjectMapper();
+    CollectionType mapCollectionType =
+        mapper.getTypeFactory().constructCollectionType(List.class, Map.class);
+    List<Map<String, Object>> existing =
+        path.toFile().exists()
+            ? mapper.readValue(path.toFile(), mapCollectionType)
+            : Lists.newArrayList();
+    boolean[] matched = new boolean[existing.size()];
+
+    for (Map<String, Object> generated : fields) {
+      int match = -1;
+      for (int index = 0; index < matched.length; index++) {
+        if (!matched[index] && primaryKeysMatch(existing.get(index), generated, primaryKeys)) {
+          match = index;
+          break;
+        }
+      }
+      if (match < 0) {
+        existing.add(generated);
+        continue;
+      }
+      matched[match] = true;
+      Map<String, Object> target = existing.get(match);
+      for (Map.Entry<String, Object> entry : generated.entrySet()) {
+        target.merge(
+            entry.getKey(),
+            entry.getValue(),
+            (oldValue, newValue) -> merger.merge(entry.getKey(), oldValue, newValue));
+      }
+    }
+
+    writeFile(path, serialise(existing, true, primaryKeys));
   }
 
   @FunctionalInterface
@@ -263,7 +334,7 @@ public class JsonUtils {
   }
 
   @AllArgsConstructor
-  public static  class OverwriteSpecific implements JsonMerger {
+  public static class OverwriteSpecific implements JsonMerger {
     private Set<String> overwriteKeys;
 
     @Override
@@ -277,5 +348,4 @@ public class JsonUtils {
       super(Sets.newHashSet());
     }
   }
-
 }

@@ -21,6 +21,7 @@ import java.util.Set;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.core.ResolvableType;
 import org.springframework.stereotype.Component;
+import uk.gov.hmcts.ccd.sdk.FieldUtils;
 import uk.gov.hmcts.ccd.sdk.ResolvedCCDConfig;
 import uk.gov.hmcts.ccd.sdk.api.CCD;
 import uk.gov.hmcts.ccd.sdk.api.ComplexType;
@@ -37,10 +38,9 @@ class CaseFieldGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
   private static final ImmutableSet<String> OVERWRITES_FIELDS = ImmutableSet.of();
 
   @Override
-  public void write(
-      File outputFolder, ResolvedCCDConfig<T, S, R> config) {
-    List<Map<String, Object>> fields = toComplex(
-        config.getCaseClass(), config.getCaseType(), config.getSchemaProfile());
+  public void write(File outputFolder, ResolvedCCDConfig<T, S, R> config) {
+    List<Map<String, Object>> fields =
+        toComplex(config.getCaseClass(), config.getCaseType(), config.getSchemaProfile());
 
     if (config.isIncludeCaseHistory()) {
       Map<String, Object> history = getField(config.getCaseType(), "caseHistory");
@@ -68,8 +68,7 @@ class CaseFieldGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
       ResolvedCCDConfig<T, S, R> config) {
     Map<String, uk.gov.hmcts.ccd.sdk.api.Field> explicitFields = Maps.newHashMap();
     for (Event event : config.getEvents().values()) {
-      List<uk.gov.hmcts.ccd.sdk.api.Field.FieldBuilder> fc = event.getFields()
-          .getExplicitFields();
+      List<uk.gov.hmcts.ccd.sdk.api.Field.FieldBuilder> fc = event.getFields().getExplicitFields();
 
       for (uk.gov.hmcts.ccd.sdk.api.Field.FieldBuilder fieldBuilder : fc) {
         uk.gov.hmcts.ccd.sdk.api.Field field = fieldBuilder.build();
@@ -89,11 +88,12 @@ class CaseFieldGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
       Map<String, Object> fieldData = getField(config.getCaseType(), fieldId);
       result.add(fieldData);
 
-      Optional<Field> caseField = findCaseField(
-          config.getCaseClass(), fieldId, config.getSchemaProfile());
-      caseField.ifPresent(candidate ->
-          populateFieldMetadata(
-              fieldData, config.getCaseClass(), candidate, config.getSchemaProfile()));
+      Optional<Field> caseField =
+          findCaseField(config.getCaseClass(), fieldId, config.getSchemaProfile());
+      caseField.ifPresent(
+          candidate ->
+              populateFieldMetadata(
+                  fieldData, config.getCaseClass(), candidate, config.getSchemaProfile()));
       JsonUtils.ensureDefaultLabel(fieldData);
 
       if (!Strings.isNullOrEmpty(field.getLabel())) {
@@ -110,7 +110,6 @@ class CaseFieldGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
         fieldData.put("FieldTypeParameter", field.getFieldTypeParameter());
       }
     }
-
 
     return result;
   }
@@ -140,6 +139,10 @@ class CaseFieldGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
       Field field,
       String idPrefix,
       Class<?> schemaProfile) {
+    CCD definition = FieldUtils.getCCD(field, schemaProfile).orElse(null);
+    if (definition != null && definition.omitFromCaseField()) {
+      return;
+    }
     JsonUnwrapped unwrapped = field.getAnnotation(JsonUnwrapped.class);
     if (unwrapped != null) {
       appendUnwrapped(fields, caseTypeId, field, idPrefix, unwrapped, schemaProfile);
@@ -163,9 +166,10 @@ class CaseFieldGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
       String currentPrefix,
       JsonUnwrapped unwrapped,
       Class<?> schemaProfile) {
-    String prefix = currentPrefix.isEmpty()
-        ? unwrapped.prefix()
-        : currentPrefix.concat(StringUtils.capitalize(unwrapped.prefix()));
+    String prefix =
+        currentPrefix.isEmpty()
+            ? unwrapped.prefix()
+            : currentPrefix.concat(StringUtils.capitalize(unwrapped.prefix()));
     appendFields(fields, field.getType(), caseTypeId, prefix, schemaProfile);
   }
 
@@ -239,10 +243,7 @@ class CaseFieldGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
   }
 
   private static String resolveSimpleType(
-      Field field,
-      Map<String, Object> target,
-      String inferredType,
-      CCD annotation) {
+      Field field, Map<String, Object> target, String inferredType, CCD annotation) {
     ComplexType complexType = field.getType().getAnnotation(ComplexType.class);
     if (field.getType().isEnum() && (complexType == null || complexType.generate())) {
       target.putIfAbsent("FieldTypeParameter", field.getType().getSimpleName());
@@ -270,8 +271,9 @@ class CaseFieldGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
     }
     Class<?> resolved = elementType.resolve();
     if (resolved == null) {
-      throw new IllegalStateException("Unable to resolve element type for %s on %s"
-          .formatted(field.getName(), dataClass.getName()));
+      throw new IllegalStateException(
+          "Unable to resolve element type for %s on %s"
+              .formatted(field.getName(), dataClass.getName()));
     }
     return uk.gov.hmcts.ccd.sdk.FieldUtils.unwrapCollectionValueType(resolved);
   }
@@ -285,10 +287,8 @@ class CaseFieldGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
 
   private static Optional<Field> findCaseField(
       Class<?> caseClass, String fieldId, Class<?> schemaProfile) {
-    return getCaseFields(caseClass, schemaProfile)
-        .stream()
+    return getCaseFields(caseClass, schemaProfile).stream()
         .filter(candidate -> getFieldId(candidate, null, schemaProfile).equals(fieldId))
         .findFirst();
   }
-
 }

@@ -9,6 +9,7 @@ import java.util.List;
 import java.util.Map;
 import lombok.SneakyThrows;
 import org.springframework.stereotype.Component;
+import uk.gov.hmcts.ccd.sdk.FieldUtils;
 import uk.gov.hmcts.ccd.sdk.ResolvedCCDConfig;
 import uk.gov.hmcts.ccd.sdk.api.CCD;
 import uk.gov.hmcts.ccd.sdk.api.HasRole;
@@ -22,9 +23,14 @@ class StateGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, S, R
     int i = 1;
     if (config.getStateClass().isEnum()) {
       for (Object enumConstant : config.getStateClass().getEnumConstants()) {
-        Map<String, Object> field = enumToJsonMap(config.getCaseType(), config.getStateClass(), enumConstant,
-            enumConstant.toString());
-        field.put("DisplayOrder", i++);
+        Map<String, Object> field =
+            enumToJsonMap(
+                config.getCaseType(),
+                config.getStateClass(),
+                enumConstant,
+                enumConstant.toString(),
+                config.getSchemaProfile());
+        field.putIfAbsent("DisplayOrder", i++);
         result.add(field);
       }
     }
@@ -34,24 +40,34 @@ class StateGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, S, R
   }
 
   @SneakyThrows
-  public static Map<String, Object> enumToJsonMap(String caseType, Class<?> enumType,
-                                                  Object enumConstant, String id) {
+  public static Map<String, Object> enumToJsonMap(
+      String caseType, Class<?> enumType, Object enumConstant, String id) {
+    return enumToJsonMap(caseType, enumType, enumConstant, id, null);
+  }
+
+  @SneakyThrows
+  public static Map<String, Object> enumToJsonMap(
+      String caseType, Class<?> enumType, Object enumConstant, String id, Class<?> schemaProfile) {
     Map<String, Object> field = JsonUtils.caseRow(caseType);
     field.put("ID", id);
 
-    CCD ccd = enumType.getField(enumConstant.toString()).getAnnotation(CCD.class);
-    String name = ccd != null && !Strings.isNullOrEmpty(ccd.label()) ? ccd.label() :
-        enumConstant.toString();
+    CCD ccd =
+        FieldUtils.getCCD(enumType.getField(enumConstant.toString()), schemaProfile).orElse(null);
+    String name =
+        ccd != null && !Strings.isNullOrEmpty(ccd.label()) ? ccd.label() : enumConstant.toString();
     field.put("Name", name);
     if (ccd == null || !ccd.omitDescription()) {
-      field.put("Description", ccd != null && !Strings.isNullOrEmpty(ccd.description())
-          ? ccd.description()
-          : name);
+      field.put(
+          "Description",
+          ccd != null && !Strings.isNullOrEmpty(ccd.description()) ? ccd.description() : name);
     }
     String desc = ccd != null ? ccd.hint() : "";
 
     if (!Strings.isNullOrEmpty(desc)) {
       field.put("TitleDisplay", desc);
+    }
+    if (ccd != null && ccd.displayOrder() > 0) {
+      field.put("DisplayOrder", ccd.displayOrder());
     }
 
     return field;

@@ -25,8 +25,10 @@ class AuthorisationCaseTypeGenerator<T, S, R extends HasRole> implements ConfigG
           if (config.getRolesWithNoCaseTypeAuthorisation().contains(r)) {
             continue;
           }
-          // Add non case roles.
-          if (!r.getRole().matches("\\[.+\\]")) {
+          // Case roles are opt-in because most CCD definitions authorise them through case-role
+          // assignment rather than static case-type authorisation.
+          if (!r.getRole().matches("\\[.+\\]")
+              || config.getCaseRolesWithCaseTypeAuthorisation().contains(r)) {
             boolean shuttered =
                 (config.isShutterService() || config.getShutterServiceForRoles().contains(r))
                     && !config.getShutterServiceExcludedRoles().contains(r);
@@ -36,13 +38,11 @@ class AuthorisationCaseTypeGenerator<T, S, R extends HasRole> implements ConfigG
             result.add(entry);
           }
         }
-
       }
 
       Path output = Paths.get(root.getPath(), "AuthorisationCaseType.json");
-      String caseTypeColumn = config.isLegacyCaseAuthorisationIdColumn()
-          ? "CaseTypeId"
-          : "CaseTypeID";
+      String caseTypeColumn =
+          config.isLegacyCaseAuthorisationIdColumn() ? "CaseTypeId" : "CaseTypeID";
       JsonUtils.mergeInto(output, result, new JsonUtils.AddMissing(), caseTypeColumn, "UserRole");
     }
   }

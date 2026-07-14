@@ -67,6 +67,7 @@ public class ResolvedCCDConfig<T, S, R extends HasRole> {
   boolean legacyCaseAuthorisationIdColumn;
   Set<R> caseTypeAuthorisationRolesWithLiveFrom = new HashSet<>();
   Set<R> rolesWithNoCaseTypeAuthorisation = new HashSet<>();
+  Set<R> caseRolesWithCaseTypeAuthorisation = new HashSet<>();
   boolean retainCaseRoleLiveFrom;
   boolean inferFieldAuthorisation = true;
 
@@ -94,8 +95,7 @@ public class ResolvedCCDConfig<T, S, R extends HasRole> {
       Class<S> stateClass,
       Class<R> roleClass,
       Map<Class, Integer> types,
-      ImmutableSet<S> allStates
-  ) {
+      ImmutableSet<S> allStates) {
     this(caseClass, stateClass, roleClass, allStates);
     this.types = types;
   }

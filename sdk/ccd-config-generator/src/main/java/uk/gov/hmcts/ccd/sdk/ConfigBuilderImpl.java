@@ -34,7 +34,8 @@ import uk.gov.hmcts.ccd.sdk.api.TypedPropertyGetter;
 import uk.gov.hmcts.ccd.sdk.api.callback.Start;
 import uk.gov.hmcts.ccd.sdk.api.callback.Submit;
 
-public class ConfigBuilderImpl<T, S, R extends HasRole> implements DecentralisedConfigBuilder<T, S, R> {
+public class ConfigBuilderImpl<T, S, R extends HasRole>
+    implements DecentralisedConfigBuilder<T, S, R> {
 
   private final ResolvedCCDConfig<T, S, R> config;
 
@@ -76,9 +77,12 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements Decentralised
     config.workBasketInputFields = buildBuilders(workBasketInputFields, SearchBuilder::build);
     config.searchResultFields = buildBuilders(searchResultFields, SearchBuilder::build);
     config.searchInputFields = buildBuilders(searchInputFields, SearchBuilder::build);
-    config.searchCaseResultFields = buildBuilders(searchCaseResultFields, SearchCasesBuilder::build);
-    config.rolesWithNoHistory = omitHistoryForRoles.stream().map(HasRole::getRole).collect(Collectors.toSet());
-    config.caseRoleToAccessProfiles = buildBuilders(caseRoleToAccessProfiles, CaseRoleToAccessProfileBuilder::build);
+    config.searchCaseResultFields =
+        buildBuilders(searchCaseResultFields, SearchCasesBuilder::build);
+    config.rolesWithNoHistory =
+        omitHistoryForRoles.stream().map(HasRole::getRole).collect(Collectors.toSet());
+    config.caseRoleToAccessProfiles =
+        buildBuilders(caseRoleToAccessProfiles, CaseRoleToAccessProfileBuilder::build);
     config.categories = buildBuilders(categories, CaseCategoryBuilder::build);
     config.searchCriteria = buildBuilders(searchCriteria, SearchCriteriaBuilder::build);
     config.searchParties = buildBuilders(searchParty, SearchPartyBuilder::build);
@@ -99,28 +103,26 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements Decentralised
   }
 
   @Override
-  public EventTypeBuilder<T, R, S> decentralisedEvent(String id, Submit<T, S> submitHandler, Start<T, S> startHandler) {
+  public EventTypeBuilder<T, R, S> decentralisedEvent(
+      String id, Submit<T, S> submitHandler, Start<T, S> startHandler) {
     return new EventTypeBuilderImpl<>(config, events, id, submitHandler, startHandler);
   }
 
-
   @Override
   public EventTypeBuilderImpl<T, R, S> attachScannedDocEvent() {
-    return new BulkScanEventTypeBuilderImpl<>(config, events, ATTACH_SCANNED_DOCS, "Attach scanned docs");
+    return new BulkScanEventTypeBuilderImpl<>(
+        config, events, ATTACH_SCANNED_DOCS, "Attach scanned docs");
   }
 
   @Override
   public EventTypeBuilderImpl<T, R, S> handleSupplementaryEvent() {
-    return new BulkScanEventTypeBuilderImpl<>(config, events, HANDLE_EVIDENCE, "Handle supplementary evidence");
+    return new BulkScanEventTypeBuilderImpl<>(
+        config, events, HANDLE_EVIDENCE, "Handle supplementary evidence");
   }
 
   @Override
   public void caseType(String caseType, String name, String desc) {
-    caseType(CaseType.builder()
-        .id(caseType)
-        .name(name)
-        .description(desc)
-        .build());
+    caseType(CaseType.builder().id(caseType).name(name).description(desc).build());
   }
 
   @Override
@@ -133,11 +135,7 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements Decentralised
 
   @Override
   public void jurisdiction(String id, String name, String description) {
-    jurisdiction(Jurisdiction.builder()
-        .id(id)
-        .name(name)
-        .description(description)
-        .build());
+    jurisdiction(Jurisdiction.builder().id(id).name(name).description(description).build());
   }
 
   @Override
@@ -188,8 +186,8 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements Decentralised
       throw new IllegalArgumentException("Complex types must not be empty");
     }
     for (Class<?> type : types) {
-      config.registeredComplexTypes.add(Objects.requireNonNull(type,
-          "Complex type must not be null"));
+      config.registeredComplexTypes.add(
+          Objects.requireNonNull(type, "Complex type must not be null"));
     }
   }
 
@@ -197,8 +195,11 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements Decentralised
   public void schemaProfile(Class<?> profile) {
     Objects.requireNonNull(profile, "Schema profile must not be null");
     if (config.schemaProfile != null && !config.schemaProfile.equals(profile)) {
-      throw new IllegalStateException("Conflicting schema profiles: "
-          + config.schemaProfile.getName() + " and " + profile.getName());
+      throw new IllegalStateException(
+          "Conflicting schema profiles: "
+              + config.schemaProfile.getName()
+              + " and "
+              + profile.getName());
     }
     config.schemaProfile = profile;
   }
@@ -231,6 +232,18 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements Decentralised
   @SafeVarargs
   public final void omitCaseTypeAuthorisation(R... roles) {
     config.rolesWithNoCaseTypeAuthorisation.addAll(Set.of(roles));
+  }
+
+  @Override
+  @SafeVarargs
+  public final void includeCaseRolesInCaseTypeAuthorisation(R... roles) {
+    for (R role : roles) {
+      if (!role.getRole().matches("\\[.+\\]")) {
+        throw new IllegalArgumentException(
+            "Case-type case-role authorisation requires a CCD case role: " + role.getRole());
+      }
+    }
+    config.caseRolesWithCaseTypeAuthorisation.addAll(Set.of(roles));
   }
 
   @Override
@@ -277,8 +290,9 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements Decentralised
 
   @Override
   public TabBuilder<T, R> tab(String tabId, String tabLabel) {
-    TabBuilder<T, R> result = (TabBuilder<T, R>) TabBuilder.builder(config.caseClass,
-        propertyUtils).tabID(tabId).labelText(tabLabel);
+    TabBuilder<T, R> result =
+        (TabBuilder<T, R>)
+            TabBuilder.builder(config.caseClass, propertyUtils).tabID(tabId).labelText(tabLabel);
     tabs.add(result);
     return result;
   }
@@ -308,7 +322,6 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements Decentralised
     return registerSearchCasesBuilder(searchCaseResultFields);
   }
 
-
   @Override
   public void setCallbackHost(String s) {
     config.callbackHost = s;
@@ -320,8 +333,7 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements Decentralised
   }
 
   @Override
-  public void addPreEventHook(
-      Function<Map<String, Object>, Map<String, Object>> hook) {
+  public void addPreEventHook(Function<Map<String, Object>, Map<String, Object>> hook) {
     config.preEventHooks.add(hook);
   }
 
@@ -362,8 +374,11 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements Decentralised
   }
 
   @Override
-  public void grantComplexType(TypedPropertyGetter<T, ?> field, String listElementCode,
-                               Set<Permission> permissions, R... roles) {
+  public void grantComplexType(
+      TypedPropertyGetter<T, ?> field,
+      String listElementCode,
+      Set<Permission> permissions,
+      R... roles) {
     String caseFieldId = propertyUtils.getPropertyName(config.caseClass, field);
     for (R role : roles) {
       complexTypeAuthorisations.add(
@@ -394,5 +409,4 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements Decentralised
 
     return ImmutableMap.copyOf(result);
   }
-
 }

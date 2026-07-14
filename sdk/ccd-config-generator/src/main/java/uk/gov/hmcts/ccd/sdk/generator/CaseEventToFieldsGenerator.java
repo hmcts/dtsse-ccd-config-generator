@@ -1,6 +1,5 @@
 package uk.gov.hmcts.ccd.sdk.generator;
 
-
 import com.google.common.collect.HashMultimap;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Multimap;
@@ -38,8 +37,8 @@ class CaseEventToFieldsGenerator<T, S, R extends HasRole> implements ConfigGener
     }
   }
 
-  private List<Map<String, Object>> buildEntries(ResolvedCCDConfig<T, S, R> config,
-                                                 Event<T, R, S> event) {
+  private List<Map<String, Object>> buildEntries(
+      ResolvedCCDConfig<T, S, R> config, Event<T, R, S> event) {
     FieldCollection collection = event.getFields();
     if (collection.getFields().isEmpty()) {
       return List.of();
@@ -78,7 +77,9 @@ class CaseEventToFieldsGenerator<T, S, R extends HasRole> implements ConfigGener
     row.put("CaseEventID", event.getId());
     row.put("CaseFieldID", field.getId());
     row.put("DisplayContext", resolveDisplayContext(field));
-    row.put("PageFieldDisplayOrder", field.getPageFieldDisplayOrder());
+    if (field.isIncludePageFieldDisplayOrder()) {
+      row.put("PageFieldDisplayOrder", field.getPageFieldDisplayOrder());
+    }
   }
 
   private String resolveDisplayContext(Field field) {
@@ -111,10 +112,8 @@ class CaseEventToFieldsGenerator<T, S, R extends HasRole> implements ConfigGener
     return parsed != null ? parsed : rawPageId;
   }
 
-  static void applyMetadata(Map<String, Object> target,
-                            Field field,
-                            String labelColumn,
-                            String hintColumn) {
+  static void applyMetadata(
+      Map<String, Object> target, Field field, String labelColumn, String hintColumn) {
     if (field.getShowCondition() != null) {
       target.put("FieldShowCondition", field.getShowCondition());
     }
@@ -128,19 +127,20 @@ class CaseEventToFieldsGenerator<T, S, R extends HasRole> implements ConfigGener
     }
 
     if (field.isRetainHiddenValue()) {
-      target.put("RetainHiddenValue", field.getRetainHiddenValueValue() == null
-          ? "Y"
-          : field.getRetainHiddenValueValue());
+      target.put(
+          "RetainHiddenValue",
+          field.getRetainHiddenValueValue() == null ? "Y" : field.getRetainHiddenValueValue());
     }
   }
 
-  private void applyMidEventCallback(Map<String, Object> row,
-                                     Event<T, R, S> event,
-                                     ResolvedCCDConfig<T, S, R> config,
-                                     FieldCollection collection,
-                                     Field field,
-                                     Object pageId,
-                                     Multimap<String, String> writtenCallbacks) {
+  private void applyMidEventCallback(
+      Map<String, Object> row,
+      Event<T, R, S> event,
+      ResolvedCCDConfig<T, S, R> config,
+      FieldCollection collection,
+      Field field,
+      Object pageId,
+      Multimap<String, String> writtenCallbacks) {
     if (field.getExternalMidEventCallbackUrl() != null) {
       row.put("CallBackURLMidEvent", field.getExternalMidEventCallbackUrl());
       return;
@@ -155,27 +155,27 @@ class CaseEventToFieldsGenerator<T, S, R extends HasRole> implements ConfigGener
       return;
     }
 
-    String url = externalUrl == null
-        ? config.getCallbackHost() + "/callbacks/mid-event?page="
-            + URLEncoder.encode(pageKey, StandardCharsets.UTF_8)
-            + "&eventId="
-            + event.getId()
-        : externalUrl;
+    String url =
+        externalUrl == null
+            ? config.getCallbackHost()
+                + "/callbacks/mid-event?page="
+                + URLEncoder.encode(pageKey, StandardCharsets.UTF_8)
+                + "&eventId="
+                + event.getId()
+            : externalUrl;
     row.put("CallBackURLMidEvent", url);
     writtenCallbacks.put(event.getId(), pageKey);
   }
 
-  private void applyPageShowCondition(Map<String, Object> row,
-                                      Map<String, String> pageShowConditions,
-                                      Field field) {
+  private void applyPageShowCondition(
+      Map<String, Object> row, Map<String, String> pageShowConditions, Field field) {
     if (field.getPageShowCondition() != null) {
       row.put("PageShowCondition", field.getPageShowCondition());
       pageShowConditions.remove(field.getPage());
       return;
     }
     if (pageShowConditions.containsKey(field.getPage())) {
-      row.put("PageShowCondition",
-          pageShowConditions.remove(field.getPage()));
+      row.put("PageShowCondition", pageShowConditions.remove(field.getPage()));
     }
   }
 
@@ -185,9 +185,7 @@ class CaseEventToFieldsGenerator<T, S, R extends HasRole> implements ConfigGener
     }
   }
 
-  private void applyPageLabel(Map<String, Object> row,
-                              FieldCollection collection,
-                              Field field) {
+  private void applyPageLabel(Map<String, Object> row, FieldCollection collection, Field field) {
     if (field.getPageLabel() != null) {
       row.put("PageLabel", field.getPageLabel());
     } else if (collection.getPageLabels().containsKey(field.getPage())) {
@@ -200,5 +198,4 @@ class CaseEventToFieldsGenerator<T, S, R extends HasRole> implements ConfigGener
       row.put("DisplayContextParameter", field.getDisplayContextParameter());
     }
   }
-
 }

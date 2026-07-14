@@ -32,5 +32,8 @@ public enum FieldType {
   ComponentLauncher,
   SearchCriteria,
   TTL,
-  MoneyGBP
+  MoneyGBP,
+  Number,
+  Organisation,
+  OrganisationPolicy
 }

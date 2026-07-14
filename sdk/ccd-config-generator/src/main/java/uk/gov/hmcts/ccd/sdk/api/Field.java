@@ -42,22 +42,25 @@ public class Field<Type, StateType, Parent, Grandparent> {
   boolean publish;
   String eventFieldPublish;
   boolean includePageColumnNumber;
+  boolean includePageFieldDisplayOrder;
 
   Class<Type> clazz;
-  @ToString.Exclude
-  private FieldCollectionBuilder<Parent, StateType, Grandparent> parent;
+  @ToString.Exclude private FieldCollectionBuilder<Parent, StateType, Grandparent> parent;
 
   public static class FieldBuilder<Type, StateType, Parent, Grandparent> {
 
-    public static <Type, StateType, Parent, Grandparent> FieldBuilder<Type, StateType, Parent, Grandparent> builder(
-        Class<Type> clazz, FieldCollection.FieldCollectionBuilder<Parent, StateType, Grandparent> parent,
-        String id) {
+    public static <Type, StateType, Parent, Grandparent>
+        FieldBuilder<Type, StateType, Parent, Grandparent> builder(
+            Class<Type> clazz,
+            FieldCollection.FieldCollectionBuilder<Parent, StateType, Grandparent> parent,
+            String id) {
       FieldBuilder result = new FieldBuilder();
       result.clazz = clazz;
       result.parent = parent;
       result.context = DisplayContext.Complex;
       result.id = id;
       result.includePageColumnNumber = true;
+      result.includePageFieldDisplayOrder = true;
       return result;
     }
 
@@ -65,7 +68,6 @@ public class Field<Type, StateType, Parent, Grandparent> {
       context = DisplayContext.Optional;
       return this;
     }
-
 
     public FieldBuilder<Type, StateType, Parent, Grandparent> mandatory() {
       context = DisplayContext.Mandatory;
@@ -105,22 +107,26 @@ public class Field<Type, StateType, Parent, Grandparent> {
     }
 
     /** Emits an explicit Y or N ShowSummaryChangeOption value. */
-    public FieldBuilder<Type, StateType, Parent, Grandparent> showSummaryChangeOption(boolean value) {
+    public FieldBuilder<Type, StateType, Parent, Grandparent> showSummaryChangeOption(
+        boolean value) {
       this.showSummary = value;
       this.showSummaryColumn = true;
       return this;
     }
 
-    public FieldCollectionBuilder<Type, StateType, FieldCollectionBuilder<Parent, StateType, Grandparent>> complex() {
+    public FieldCollectionBuilder<
+            Type, StateType, FieldCollectionBuilder<Parent, StateType, Grandparent>>
+        complex() {
       if (clazz == null) {
-        throw new RuntimeException("Cannot infer type for field: " + id
-            + ". Provide an explicit type.");
+        throw new RuntimeException(
+            "Cannot infer type for field: " + id + ". Provide an explicit type.");
       }
       return parent.complex(this.id, clazz);
     }
 
-    public <U> FieldCollectionBuilder<U, StateType, FieldCollectionBuilder<Parent, StateType, Grandparent>> complex(
-        Class<U> c) {
+    public <U>
+        FieldCollectionBuilder<U, StateType, FieldCollectionBuilder<Parent, StateType, Grandparent>>
+            complex(Class<U> c) {
       return parent.complex(this.id, c);
     }
 
@@ -171,6 +177,12 @@ public class Field<Type, StateType, Parent, Grandparent> {
     /** Omits PageColumnNumber for this event field only. */
     public FieldBuilder<Type, StateType, Parent, Grandparent> omitPageColumnNumber() {
       this.includePageColumnNumber = false;
+      return this;
+    }
+
+    /** Omits PageFieldDisplayOrder for this event field only. */
+    public FieldBuilder<Type, StateType, Parent, Grandparent> omitPageFieldDisplayOrder() {
+      this.includePageFieldDisplayOrder = false;
       return this;
     }
   }
