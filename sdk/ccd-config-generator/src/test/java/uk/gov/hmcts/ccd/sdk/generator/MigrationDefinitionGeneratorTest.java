@@ -136,6 +136,7 @@ public class MigrationDefinitionGeneratorTest {
         .forAllStates()
         .postStateWildcard()
         .name("Import")
+        .omitEndButtonLabel()
         .omitShowEventNotes()
         .fields()
         .omitPageDisplayOrder()
@@ -163,7 +164,7 @@ public class MigrationDefinitionGeneratorTest {
             .containsEntry("Label", "History"));
     assertThat(onlyRow(output, "CaseEvent/import.json"))
         .containsEntry("PostConditionState", "*")
-        .doesNotContainKey("ShowEventNotes");
+        .doesNotContainKeys("EndButtonLabel", "ShowEventNotes");
     List<Map<String, Object>> eventFields = rows(output, "CaseEventToFields/import.json");
     assertThat(eventFields)
         .allSatisfy(row -> assertThat(row).doesNotContainKey("PageDisplayOrder"));

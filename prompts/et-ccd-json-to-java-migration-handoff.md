@@ -12,8 +12,8 @@ The migration spans the generator repository and its ET submodule:
 
 | Repository | Branch | Current reviewed state |
 | --- | --- | --- |
-| `hmcts/dtsse-ccd-config-generator` | `json-to-java` | Slice 2 exact conversion prepared; post-commit generator-fit review is the next action |
-| `hmcts/et-ccd-callbacks` | `json-to-java-migration` | `3d551154d` — Slice 2 exact `ET_Admin` conversion |
+| `hmcts/dtsse-ccd-config-generator` | `json-to-java` | Slice 2 generator-fit follow-up in this commit; review recorded below |
+| `hmcts/et-ccd-callbacks` | `json-to-java-migration` | `bb666f5e5` — Slice 2 explicit omitted-button follow-up |
 
 The root repository must point at the intended ET commit. A fresh session should inspect both worktrees before changing
 anything:
@@ -60,10 +60,10 @@ the second slice is:
 | Completed differences | 610 |
 | Completion | 1.17% |
 | ET production/generation Java delta | +952 |
-| SDK production Java delta | +414 |
-| Total production Java delta | +1,366 |
-| Verification Java delta | +475 |
-| Production lines per completed difference | 2.24 |
+| SDK production Java delta | +420 |
+| Total production Java delta | +1,372 |
+| Verification Java delta | +476 |
+| Production lines per completed difference | 2.25 |
 
 The authoritative values are in
 `test-projects/et-ccd-callbacks/ccd-definitions/migration-progress.json`. If this table and the snapshot disagree, the
@@ -93,7 +93,8 @@ metric effect. An unproven candidate does not belong in this ledger.
 | Slice 1: `Pre_Hearing_Deposit` | `4253eb3e` | `5cd2c9b6d` | Added 312 exact rows; reached 0.60% |
 | Tooling resumption prompt | `ebc0e30e` | — | Documented how to run and interpret convergence |
 | Slice 1 generator-fit follow-up | `c343f2c7` | `b0bb67f97` | Replaced repeated field access with a typed class default |
-| Slice 2: remainder of `ET_Admin` | this exact conversion commit | `3d551154d` | Added 298 exact rows; reached 1.17% |
+| Slice 2: remainder of `ET_Admin` | `c58ca56c` | `3d551154d` | Added 298 exact rows; reached 1.17% |
+| Slice 2 generator-fit follow-up | this review commit | `bb666f5e5` | Replaced magic empty event labels with typed omission metadata |
 
 The ET submodule commit must be published before a root commit which points to it. Otherwise another checkout cannot
 resolve the root tree. Commit ET changes first, then commit the updated submodule pointer and related SDK or prompt
@@ -181,8 +182,7 @@ src/main/java/.../domain/admin/types/Document.java
 
 ### Slice 2: remainder of `ET_Admin`
 
-Status: exact in both `cftlib` and `prod`; the required post-commit generator-fit review remains to be recorded after
-the exact conversion commits exist.
+Status: complete and exact in both `cftlib` and `prod`.
 
 The slice adds the 149 previously missing admin rows in each environment:
 
@@ -236,6 +236,18 @@ src/main/java/.../domain/admin/AdminState.java
 src/main/java/.../domain/admin/AdminRole.java
 src/main/java/.../domain/admin/AdminAccess.java
 ```
+
+Post-commit generator-fit review:
+
+- Review point: root `c58ca56c`, ET `3d551154d`.
+- Finding: four events used `endButtonLabel("")` to suppress an optional CCD column. The empty string preserved parity
+  but hid the definition intent and would recur in later ET event conversions.
+- Decision: add the typed, backwards-compatible `omitEndButtonLabel()` event metadata API and refactor those four
+  events. Keep the four configuration modules and their explicit page/event sequences: they represent different
+  callbacks, field contexts and golden display metadata rather than accidental duplication.
+- Follow-up: root review commit containing this record, ET `bb666f5e5`.
+- Result: all 610 rows remain exact, with zero changed or unexpected rows. ET production/generation LOC is unchanged;
+  SDK production LOC increases by six and verification LOC by one. No further SDK refactor is warranted for this slice.
 
 ## SDK migration capabilities
 

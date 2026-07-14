@@ -131,6 +131,11 @@ public class Event<T, R extends HasRole, S> {
       return this;
     }
 
+    public EventBuilder<T, R, S> omitEndButtonLabel() {
+      endButtonLabel(null);
+      return this;
+    }
+
     public EventBuilder<T, R, S> showSummary(boolean show) {
       this.showSummary = show;
       return this;
