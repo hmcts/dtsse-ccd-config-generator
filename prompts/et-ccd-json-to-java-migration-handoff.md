@@ -59,11 +59,11 @@ the first slice is:
 | Remaining differences | 51,915 |
 | Completed differences | 312 |
 | Completion | 0.60% |
-| ET production/generation Java delta | +277 |
-| SDK production Java delta | +258 |
-| Total production Java delta | +535 |
-| Verification Java delta | +174 |
-| Production lines per completed difference | 1.71 |
+| ET production/generation Java delta | +267 |
+| SDK production Java delta | +273 |
+| Total production Java delta | +540 |
+| Verification Java delta | +330 |
+| Production lines per completed difference | 1.73 |
 
 The authoritative values are in
 `test-projects/et-ccd-callbacks/ccd-definitions/migration-progress.json`. If this table and the snapshot disagree, the
@@ -86,6 +86,7 @@ This generates Java-only JSON and XLSX artefacts. It does not start ET, wire cal
 | Architecture | `89c94b4f` | — | Chose eight aggregates, composition and explicit profiles |
 | Slice 1: `Pre_Hearing_Deposit` | `4253eb3e` | `5cd2c9b6d` | Added 312 exact rows; reached 0.60% |
 | Tooling resumption prompt | `ebc0e30e` | — | Documented how to run and interpret convergence |
+| Slice 1 generator-fit follow-up | `c343f2c7` | `b0bb67f97` | Replaced repeated field access with a typed class default |
 
 The ET submodule commit must be published before a root commit which points to it. Otherwise another checkout cannot
 resolve the root tree. Commit ET changes first, then commit the updated submodule pointer and related SDK or prompt
@@ -133,6 +134,18 @@ Important implementation choices:
 - The cftlib and production definitions for this aggregate are identical, so 156 exact rows remove 312 baseline
   differences.
 
+Post-commit generator-fit review:
+
+- Review point: root `4253eb3e`, ET `5cd2c9b6d`.
+- Finding: all 35 case fields repeated `access = PreHearingDepositAccess.class`, obscuring the field labels and types.
+- Decision: add class-level `@CCD(access = ...)` as a reusable default with additive field access, explicit replacement
+  and empty opt-out semantics.
+- Follow-up: root `c343f2c7`, ET `b0bb67f97`.
+- Result: all 312 rows remain exact with zero changed or unexpected rows. ET production/generation code fell by ten
+  lines; reusable SDK production code grew by fifteen, a net five-line increase which should amortise over later models.
+- No further SDK ergonomics refactor was warranted for this slice. Its remaining event, tab and search builder calls
+  express real ordering and conditions rather than accidental repetition.
+
 The primary ET files are:
 
 ```text
@@ -153,6 +166,7 @@ Capabilities delivered by Slice 1 and available for reuse:
   retry metadata;
 - optional omission of generator-default `LiveFrom` values;
 - optional omission of the conventional case-history field, tab and authorisation;
+- class-level default case-field access with additive, replacement and empty opt-out field semantics;
 - external event callback URL metadata which is mutually exclusive with a Java handler;
 - optional omission of `ShowSummary`, `Publish` and event-field page-column output;
 - tabs without the default `CaseWorker` channel; and
@@ -229,7 +243,7 @@ During implementation:
 4. resolve all changed and unexpected rows before accepting exact progress; and
 5. monitor ET and SDK production Java growth rather than optimising only the percentage.
 
-At the end of every slice:
+To create the exact conversion review point:
 
 1. run the focused SDK tests and ET generation, convergence, Checkstyle and PMD gates;
 2. run `updateEtMigrationProgress`, review its diff, then rerun `etMigrationProgress`;
@@ -239,10 +253,21 @@ At the end of every slice:
 5. inspect `ccd-definitions/.yarn/install-state.gz` and do not commit it when the only change came from the tooling;
 6. commit ET implementation and snapshot changes in the ET repository;
 7. commit SDK, prompt and ET submodule-pointer changes in the root repository; and
-8. when publishing, push the ET branch before the root branch.
+8. do not amend or squash this working conversion merely because a later review identifies better SDK ergonomics.
 
-The handoff update is part of slice completion. A metric snapshot without this semantic ledger is not sufficient for a
-future session to resume safely.
+After those commits exist, perform the generator-fit review described in the convergence tooling prompt:
+
+1. review the committed Java and its generated JSON/XLSX for repetition, awkward abstractions and unnecessary line
+   growth;
+2. record the decision in this handoff, including a reason when no new SDK feature is warranted;
+3. if a narrow typed SDK improvement is justified, add focused tests and refactor the committed slice;
+4. prove the exact/changed/unexpected counts are unchanged and update the LOC snapshot;
+5. commit the ET refactor first and the SDK/submodule follow-up second, without rewriting the original conversion
+   commits; and
+6. when publishing either review point, push the ET branch before the root branch.
+
+The handoff update and post-commit generator-fit review are both part of slice completion. A metric snapshot without this
+semantic ledger is not sufficient for a future session to resume safely.
 
 ## Known repository-wide blockers
 

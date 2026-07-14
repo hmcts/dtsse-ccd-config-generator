@@ -326,6 +326,12 @@ Every slice must satisfy all of these gates:
 7. jurisdiction aggregation has no conflicting global identities or dangling type/list references; and
 8. tests follow `docs/testing-strategy.md`.
 
+These gates establish the exact conversion commit. After it is committed, perform a separate generator-fit review of
+the committed Java and generated output. Look for repeated policies, awkward spreadsheet-shaped APIs, regional
+duplication and production line growth which a narrow typed SDK feature could improve. Record the decision. Any
+resulting refactor must be a follow-up commit, retain exact parity and have focused backwards-compatibility and
+precedence tests; do not rewrite the original working conversion commit.
+
 The current full `:et:check` also has an unrelated `org.lz4:lz4-java` capability conflict in the cftlib IDE
 classpath. The focused migration tasks remain required while that repository-wide dependency issue exists; it must not
 be mistaken for a convergence failure.

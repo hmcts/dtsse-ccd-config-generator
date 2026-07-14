@@ -30,6 +30,8 @@ XLSX comparison, update the reviewed progress snapshot and report Java line grow
    understand an event as an event, not as a list of cells.
 7. Semantic parity is the acceptance condition. JSON file boundaries, object property order and row order are not
    semantic; permissions, conditions, callbacks, display metadata and duplicate row counts are.
+8. Commit the exact working conversion before performing its generator-fit review. Record whether the committed Java
+   exposes a reusable SDK gap; put any resulting refactor in a separate parity-preserving follow-up commit.
 
 Do not treat `EtJsonCcdConfig` as the Java form of the definition. `JsonBackedCCDConfig` is a transitional runtime bridge
 which reads enough JSON to register legacy callbacks. The golden JSON contains eight case types, while that bridge

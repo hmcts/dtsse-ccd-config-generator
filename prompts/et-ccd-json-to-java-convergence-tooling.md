@@ -139,16 +139,43 @@ The percentage is calculated across both environments and all jurisdiction bundl
 6. Resolve all changed and unexpected rows. Missing rows outside the selected slice are expected; missing rows owned by
    the slice are not.
 7. Confirm that the exact-row increase equals the expected slice size in every applicable environment.
-8. Review Java line growth. Prefer reusable domain-oriented APIs and shared configuration modules over repeated builder
-   calls or a generic Java representation of spreadsheet rows.
-9. Run the relevant SDK tests, ET compilation, Checkstyle and PMD checks.
-10. Run `updateEtMigrationProgress`, review the snapshot diff, then rerun `etMigrationProgress` to prove that the
+8. Run the relevant SDK tests, ET compilation, Checkstyle and PMD checks.
+9. Run `updateEtMigrationProgress`, review the snapshot diff, then rerun `etMigrationProgress` to prove that the
     committed snapshot is current.
-11. Update the migration handoff with the completed slice, resulting metric, delivered capabilities, next slice and any
+10. Update the migration handoff with the completed slice, resulting metric, delivered capabilities, next slice and any
     newly proven blockers.
+11. Commit the exact working conversion: ET implementation and snapshot first, followed by SDK changes and the ET
+    submodule pointer in the root repository.
 
 An accepted slice should normally have zero changed and zero unexpected rows. Do not accept approximate rows to make
 the completion percentage move: only exact generated rows remove golden differences safely.
+
+## Post-commit generator-fit review
+
+Review the committed conversion before starting the next slice. Keeping this review after the conversion commit
+preserves an auditable point where straightforward Java already produced exact output. Do not squash a resulting
+refactor back into that conversion commit.
+
+Review the committed Java together with its generated JSON/XLSX and ask:
+
+- Is one policy, annotation or builder sequence repeated enough to hide the domain intent?
+- Does the Java express a real CCD concept, or is it imitating spreadsheet cells?
+- Did a missing SDK concept force raw strings, forwarding classes, inheritance or region/profile duplication?
+- Can a narrow typed feature reduce future ET code as well as the current slice?
+- Can the feature have backwards-compatible defaults and precise merge, override and opt-out semantics?
+- Is the production Java cost justified by reuse, clarity and the expected reduction in later slices?
+
+Record the decision in the migration handoff even when no refactor is warranted. When a feature is warranted:
+
+1. add focused SDK generation and invalid-combination or precedence tests;
+2. refactor the already exact slice to use it;
+3. rerun the complete slice gates and prove exact, changed and unexpected row counts are unchanged;
+4. update the LOC snapshot and handoff review record; and
+5. commit it as a clearly named follow-up, ET first and root repository second.
+
+Parity-blocking SDK changes still belong in the initial conversion commit: a slice cannot be committed as exact without
+them. The post-commit review is for improvements discovered by examining working code, not a reason to commit knowingly
+incorrect output.
 
 ## Java line-count guardrail
 
@@ -220,6 +247,7 @@ When reporting a completed slice, state:
 - ET and SDK production Java-line deltas;
 - production lines per completed difference;
 - checks run and any repository-wide pre-existing blockers; and
+- the result of the post-commit generator-fit review and any follow-up commits;
 - confirmation that the migration handoff was updated; and
 - confirmation that golden definitions were not edited.
 
