@@ -86,7 +86,7 @@ class CaseEventGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
     }
 
     if (!event.getPreState().isEmpty()) {
-      data.put("PreConditionState(s)", getPreStateString(event.getPreState(), allStates));
+      data.put("PreConditionState(s)", getPreStateString(event, allStates));
     }
 
     data.put(
@@ -118,7 +118,13 @@ class CaseEventGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
     return result;
   }
 
-  private String getPreStateString(Set<S> states, Set<S> allStates) {
+  private String getPreStateString(Event<T, R, S> event, Set<S> allStates) {
+    if (event.getPreStateOrder() != null) {
+      return event.getPreStateOrder().stream()
+          .map(Objects::toString)
+          .collect(Collectors.joining(";"));
+    }
+    Set<S> states = event.getPreState();
     return states.equals(allStates)
         ? "*"
         : states.stream().map(Objects::toString).sorted().collect(Collectors.joining(";"));

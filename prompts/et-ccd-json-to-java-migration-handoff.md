@@ -12,8 +12,8 @@ The migration spans the generator repository and its ET submodule:
 
 | Repository | Branch | Current reviewed state |
 | --- | --- | --- |
-| `hmcts/dtsse-ccd-config-generator` | `json-to-java` | Slice 5 reviewed state in this commit |
-| `hmcts/et-ccd-callbacks` | `json-to-java-migration` | `13ebb6d1b` — Slice 5 generator-fit follow-up |
+| `hmcts/dtsse-ccd-config-generator` | `json-to-java` | Slice 6 exact-conversion review point in this commit |
+| `hmcts/et-ccd-callbacks` | `json-to-java-migration` | `567f83d62` — Slice 6 exact conversion |
 
 The root repository must point at the intended ET commit. A fresh session should inspect both worktrees before changing
 anything:
@@ -48,22 +48,22 @@ Read the migration material in this order:
 
 ## Current convergence
 
-The immutable initial baseline is 52,227 remaining differences across `cftlib` and `prod`. The reviewed snapshot after
-the fifth slice is:
+The immutable initial baseline is 52,227 remaining differences across `cftlib` and `prod`. The exact-conversion snapshot
+after the sixth slice is:
 
 | Metric | Current value |
 | --- | ---: |
-| Exact Java rows | 40,559 |
+| Exact Java rows | 41,611 |
 | Changed rows | 0 |
 | Unexpected rows | 0 |
-| Remaining differences | 11,668 |
-| Completed differences | 40,559 |
-| Completion | 77.66% |
-| ET production/generation Java delta | +57,382 |
-| SDK production Java delta | +1,319 |
-| Total production Java delta | +58,701 |
-| Verification Java delta | +1,016 |
-| Production lines per completed difference | 1.45 |
+| Remaining differences | 10,616 |
+| Completed differences | 41,611 |
+| Completion | 79.67% |
+| ET production/generation Java delta | +61,951 |
+| SDK production Java delta | +1,346 |
+| Total production Java delta | +63,297 |
+| Verification Java delta | +1,050 |
+| Production lines per completed difference | 1.52 |
 
 The authoritative values are in
 `test-projects/et-ccd-callbacks/ccd-definitions/migration-progress.json`. If this table and the snapshot disagree, the
@@ -101,6 +101,7 @@ metric effect. An unproven candidate does not belong in this ledger.
 | Slice 4 generator-fit follow-up | this review commit | `0ccb196ae` | Added profile families and removed repeated profile, access and fixed-list boilerplate |
 | Slice 5: paired Singles foundation and lifecycle | `d78e66f2` | `f1f439330` | Added 32,840 exact rows; reached 77.66% |
 | Slice 5 generator-fit follow-up | this review commit | `13ebb6d1b` | Removed repeated fixed-list value plumbing while preserving exact parity |
+| Slice 6: paired Singles ET1 claim intake | this conversion commit | `567f83d62` | Added 1,052 exact rows; reached 79.67% |
 
 The ET submodule commit must be published before a root commit which points to it. Otherwise another checkout cannot
 resolve the root tree. Commit ET changes first, then commit the updated submodule pointer and related SDK or prompt
@@ -414,6 +415,43 @@ Post-commit generator-fit review:
 - No intentional CCD definition improvement was identified or made. The golden JSON and generated definition semantics
   are unchanged, so no platform-source evidence or separate behavioural-definition commit is required for this slice.
 
+### Slice 6: paired Singles ET1 claim intake
+
+Status: exact-conversion review point committed in `cftlib` and `prod`; post-commit generator-fit review is pending.
+
+The slice converts the ET1 claim creation, drafting, document-generation, submission and vetting family:
+`et1SectionOne`, `et1SectionTwo`, `et1SectionThree`, `createDraftEt1`, `generateEt1Documents`,
+`et1ReppedCreateCase`, `submitEt1Draft` and `et1Vetting`.
+
+| Profile and case type | `CaseEvent` | `CaseEventToFields` | Event authorisation | Event-to-complex | Exact gain |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| cftlib `ET_EnglandWales` | 8 | 214 | 19 | 24 | 265 |
+| cftlib `ET_Scotland` | 8 | 210 | 19 | 24 | 261 |
+| prod `ET_EnglandWales` | 8 | 214 | 19 | 24 | 265 |
+| prod `ET_Scotland` | 8 | 210 | 19 | 24 | 261 |
+| **Total** | **32** | **848** | **76** | **96** | **1,052** |
+
+Important implementation choices:
+
+- The complete Singles case-field and complex-type schema remains owned by Slice 5. This feature adds only its event,
+  page, nested event-field and event-authorisation rows; a direct workbook identity join finds no additional
+  `AuthorisationComplexType` ownership.
+- Exact event end-button labels, significant-event flags, string-valued TTL increments and environment-specific
+  external callback URLs are retained. Callback handlers, controllers and runtime route registration remain out of
+  scope.
+- The golden `et1Vetting` pre-state sequence is `Submitted;Rejected;Vetted`. A typed SDK pre-state-order override now
+  preserves that canonical order while validating that it contains exactly the configured states; the default sorted
+  behaviour remains unchanged.
+- Regional differences in claimant hearing/contact fields and the repped triage error page remain explicit through the
+  existing typed Singles profile masks. Identical event rows and grants are shared across both regions and profiles.
+- Golden JSON is unchanged. All 41,611 generated rows are exact with zero changed or unexpected rows.
+
+The exact-conversion review point is root `this conversion commit`, ET `567f83d62`. Relative to the Slice 5 reviewed
+snapshot, ET production/generation growth increases by 4,569 lines, reusable SDK production growth by 27 lines and SDK
+verification growth by 34 lines. Total production growth increases by 4,596 lines and the cumulative production-lines
+ratio moves from 1.45 to 1.52. The required post-commit generator-fit review must assess the 4,498-line ET1 row catalog
+without weakening its typed event ownership or exact regional/profile differences.
+
 ### Slice 5: paired regional Singles foundation and base lifecycle
 
 Status: complete and exact in `cftlib` and `prod`, including the post-commit generator-fit review.
@@ -464,7 +502,7 @@ Post-commit generator-fit review:
 
 ## SDK migration capabilities
 
-Capabilities delivered by Slices 1 to 5 and available for reuse:
+Capabilities delivered by Slices 1 to 6 and available for reuse:
 
 - typed `CaseType` and `Jurisdiction` metadata, including live dates, printable-document URLs, shuttering, deletion and
   retry metadata;
@@ -509,7 +547,9 @@ Capabilities delivered by Slices 1 to 5 and available for reuse:
 - `Number`, `Organisation` and `OrganisationPolicy` field types plus exact legacy searchable, min, max and security
   values; and
 - numeric fixed-list codes and labels, omitted fixed-list display order and multiset-preserving fixed-list and
-  event-to-complex generation.
+  event-to-complex generation; and
+- validated explicit pre-state ordering for legacy definitions whose canonical state sequence differs from the SDK's
+  deterministic default sort.
 
 Class-level access is a default for `AuthorisationCaseField` generation only. It does not grant
 `AuthorisationComplexType` permissions: complex-type access remains explicit through `builder.grantComplexType(...)`.
@@ -523,29 +563,27 @@ used for deployable packaging.
 
 Add it only when a coherent slice needs deployable packaging; do not implement it speculatively.
 
-## Recommended next slice: paired Singles ET1 claim intake
+## Recommended next slice: paired Singles core ET3 response intake
 
-The recommended sixth slice migrates the coherent ET1 claim creation, drafting, submission, document-generation and
-vetting family for `ET_EnglandWales` and `ET_Scotland`: `et1SectionOne`, `et1SectionTwo`, `et1SectionThree`,
-`createDraftEt1`, `generateEt1Documents`, `et1ReppedCreateCase`, `submitEt1Draft` and `et1Vetting`.
+The recommended seventh slice migrates the respondent-facing ET3 authoring and submission flow for
+`ET_EnglandWales` and `ET_Scotland`: `et3Response`, `et3ResponseEmploymentDetails`, `et3ResponseDetails`,
+`downloadDraftEt3` and `submitEt3`.
 
-The workbook-derived exact minimum is 1,052 currently missing rows. The complete Singles field and complex-type schema
-is already exact, so this minimum covers the eight event rows per profile, their pages, permissions and 24 nested
-event-to-complex rows per profile:
+The processed-workbook inventory gives an exact minimum of 626 currently missing rows:
 
 | Profile and case type | `CaseEvent` | `CaseEventToFields` | Event authorisation | Event-to-complex | Minimum |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| cftlib `ET_EnglandWales` | 8 | 214 | 19 | 24 | 265 |
-| cftlib `ET_Scotland` | 8 | 210 | 19 | 24 | 261 |
-| prod `ET_EnglandWales` | 8 | 214 | 19 | 24 | 265 |
-| prod `ET_Scotland` | 8 | 210 | 19 | 24 | 261 |
-| **Total** | **32** | **848** | **76** | **96** | **1,052** |
+| cftlib `ET_EnglandWales` | 5 | 80 | 69 | 1 | 155 |
+| cftlib `ET_Scotland` | 5 | 83 | 69 | 1 | 158 |
+| prod `ET_EnglandWales` | 5 | 80 | 69 | 1 | 155 |
+| prod `ET_Scotland` | 5 | 83 | 69 | 1 | 158 |
+| **Total** | **20** | **326** | **276** | **4** | **626** |
 
-Expected SDK reuse is the typed event metadata, explicit callback URLs, per-field page omission values,
-multiset-preserving event-to-complex rows and regional access policies delivered by Slice 5. Inventory whether any of
-the remaining `AuthorisationComplexType` rows are semantically owned by these ET1 pages before accepting the boundary;
-the direct workbook identity join currently adds none. Keep ET3 response, claimant/representative maintenance,
-post-submission case management and deployable ownership-overlay work out of this slice.
+Expected SDK reuse is the typed event/end-button, callback URL, significant-event, TTL, explicit pre-state-order,
+regional page-field and multiset-preserving nested-complex support delivered by Slices 5 and 6. The direct workbook
+identity join currently adds no `AuthorisationComplexType` rows, but re-inventory that boundary before implementation.
+Keep ET3 vetting and notification, the hidden `SUBMIT_ET3_FORM`/`UPDATE_ET3_FORM` API events, PSE notification-response
+events, claimant application responses and post-submission case management out of this authoring/submission slice.
 
 This is a recommendation, not permission to skip the normal starting inventory. Re-run convergence and verify the
 golden workbooks before choosing or implementing the slice.

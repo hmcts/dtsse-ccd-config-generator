@@ -367,6 +367,37 @@ public class MigrationDefinitionGeneratorTest {
         .hasMessageContaining("Conflicting");
   }
 
+  @Test
+  public void preservesExplicitPreStateOrder() {
+    ConfigBuilderImpl<TestData, TestState, TestRole> builder = newBuilder();
+    builder
+        .event("ordered")
+        .forStates(TestState.Submitted, TestState.Rejected, TestState.Vetted)
+        .preStateOrder(TestState.Submitted, TestState.Rejected, TestState.Vetted)
+        .name("Ordered states");
+
+    File output = new File(tmp.getRoot(), "ordered-pre-states");
+    new JSONConfigGenerator<TestData, TestState, TestRole>(List.of(new CaseEventGenerator<>()))
+        .writeConfig(output, builder.build());
+
+    assertThat(onlyRow(output, "CaseEvent/ordered.json"))
+        .containsEntry("PreConditionState(s)", "Submitted;Rejected;Vetted");
+  }
+
+  @Test
+  public void rejectsInvalidExplicitPreStateOrder() {
+    ConfigBuilderImpl<TestData, TestState, TestRole> builder = newBuilder();
+    var event = builder.event("ordered").forStates(TestState.Submitted, TestState.Rejected);
+
+    assertThatThrownBy(
+            () -> event.preStateOrder(TestState.Submitted, TestState.Rejected, TestState.Submitted))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("duplicate");
+    assertThatThrownBy(() -> event.preStateOrder(TestState.Submitted, TestState.Vetted))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("exactly the configured pre-states");
+  }
+
   private ConfigBuilderImpl<TestData, TestState, TestRole> newBuilder() {
     ResolvedCCDConfig<TestData, TestState, TestRole> config =
         new ResolvedCCDConfig<>(
@@ -477,7 +508,10 @@ public class MigrationDefinitionGeneratorTest {
   }
 
   private enum TestState {
-    Open
+    Open,
+    Submitted,
+    Rejected,
+    Vetted
   }
 
   private interface FirstProfile {}

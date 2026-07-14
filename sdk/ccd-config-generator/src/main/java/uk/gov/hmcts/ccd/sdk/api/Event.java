@@ -5,6 +5,7 @@ import com.google.common.collect.SetMultimap;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -27,6 +28,7 @@ public class Event<T, R extends HasRole, S> {
 
   private String name;
   private Set<S> preState;
+  private List<S> preStateOrder;
   private Set<S> postState;
   private boolean postStateWildcard;
   private String postStateExpression;
@@ -131,6 +133,25 @@ public class Event<T, R extends HasRole, S> {
 
     public EventBuilder<T, R, S> postStateWildcard() {
       this.postStateWildcard = true;
+      return this;
+    }
+
+    /** Preserves an explicit CCD pre-state order when canonical definition parity requires it. */
+    @SafeVarargs
+    public final EventBuilder<T, R, S> preStateOrder(S... orderedStates) {
+      List<S> order = List.of(orderedStates);
+      Set<S> uniqueStates = Set.copyOf(order);
+      if (order.isEmpty()) {
+        throw new IllegalArgumentException("Pre-state order must not be empty");
+      }
+      if (uniqueStates.size() != order.size()) {
+        throw new IllegalArgumentException("Pre-state order must not contain duplicate states");
+      }
+      if (!uniqueStates.equals(preState)) {
+        throw new IllegalArgumentException(
+            "Pre-state order must contain exactly the configured pre-states");
+      }
+      this.preStateOrder = order;
       return this;
     }
 
