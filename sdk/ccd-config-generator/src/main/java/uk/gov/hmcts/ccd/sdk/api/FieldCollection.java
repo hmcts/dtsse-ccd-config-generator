@@ -375,6 +375,31 @@ public class FieldCollection {
       return this;
     }
 
+    /**
+     * Explicitly sets the most-recently-added field's {@code CaseEventToFields.Publish} column,
+     * overriding the event-level {@code publishToCamunda()} cascade for that field only:
+     * {@code false} opts the field out of a publishing event, {@code true} publishes it on a
+     * non-publishing event.
+     */
+    public FieldCollectionBuilder<Type, StateType, Parent> publish(boolean publish) {
+      lastField().publish(publish);
+      return this;
+    }
+
+    /**
+     * Sets the most-recently-added field's {@code CaseEventToFields.PublishAs} alias. Implies
+     * {@code publish(true)} per the definition-store parser, which treats {@code PublishAs} as
+     * meaningless without {@code Publish}.
+     */
+    public FieldCollectionBuilder<Type, StateType, Parent> publishAs(String publishAs) {
+      lastField().publishAs(publishAs);
+      return this;
+    }
+
+    private FieldBuilder<?, StateType, Type, Parent> lastField() {
+      return fields.get(fields.size() - 1);
+    }
+
     public <U> FieldCollectionBuilder<U, StateType, FieldCollectionBuilder<Type, StateType, Parent>> complex(
         TypedPropertyGetter<Type, U> getter, String showCondition, String eventFieldLabel, String eventFieldHint) {
       return complex(getter, true, showCondition, eventFieldLabel, eventFieldHint, false);
