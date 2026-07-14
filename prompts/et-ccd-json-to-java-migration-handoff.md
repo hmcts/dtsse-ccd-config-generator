@@ -12,8 +12,8 @@ The migration spans the generator repository and its ET submodule:
 
 | Repository | Branch | Current reviewed state |
 | --- | --- | --- |
-| `hmcts/dtsse-ccd-config-generator` | `json-to-java` | Slice 12 exact conversion in this commit; generator-fit review follows |
-| `hmcts/et-ccd-callbacks` | `json-to-java-migration` | `9f0ba610b` — Slice 12 exact conversion |
+| `hmcts/dtsse-ccd-config-generator` | `json-to-java` | Slice 12 generator-fit review in this commit |
+| `hmcts/et-ccd-callbacks` | `json-to-java-migration` | `9f0ba610b` — Slice 12 exact conversion; no follow-up refactor required |
 
 The root repository must point at the intended ET commit. A fresh session should inspect both worktrees before changing
 anything:
@@ -113,7 +113,8 @@ metric effect. An unproven candidate does not belong in this ledger.
 | Slice 10 generator-fit review | this review commit | `11bca5627` | Confirmed the feature-local factories and standalone nested-event API already fit the generator |
 | Slice 11: paired Singles correspondence and document serving | `05fcf302` | `efeb69b3c` | Added 321 exact rows; reached 83.90% |
 | Slice 11 generator-fit review | this review commit | `efeb69b3c` | Confirmed the feature-local event, page, document-element and grant factories already fit the generator |
-| Slice 12: paired Singles tribunal notifications | this exact conversion commit | `9f0ba610b` | Added 290 exact rows; reached 84.45% |
+| Slice 12: paired Singles tribunal notifications | `a1fa898b` | `9f0ba610b` | Added 290 exact rows; reached 84.45% |
+| Slice 12 generator-fit review | this review commit | `9f0ba610b` | Confirmed the feature-local event, field, nested-document and grant factories already fit the generator |
 
 The ET submodule commit must be published before a root commit which points to it. Otherwise another checkout cannot
 resolve the root tree. Commit ET changes first, then commit the updated submodule pointer and related SDK or prompt
@@ -429,8 +430,7 @@ Post-commit generator-fit review:
 
 ### Slice 12: paired Singles tribunal notifications
 
-Status: complete and exact in `cftlib` and `prod`; the post-commit generator-fit review follows the exact conversion
-commits.
+Status: complete and exact in `cftlib` and `prod`, including the post-commit generator-fit review.
 
 The slice converts the paired tribunal-facing notification workflow: `sendNotification`, `respondNotification`,
 `viewAllNotifications` and `generateNotificationSummary`.
@@ -466,9 +466,20 @@ Important implementation choices:
 
 Post-commit generator-fit review:
 
-- Review point: pending until the exact ET and root commits exist.
-- No intentional CCD definition improvement has been made. Any later candidate must preserve this exact conversion
-  review point and follow the separate evidence-backed definition-change process.
+- Review point: root `a1fa898b`, ET `9f0ba610b`.
+- Finding: the committed 769-line feature catalog already names the shared notification, view and summary event shapes,
+  the send/respond field families, the nested-document rows and the four permission families. Its remaining long field
+  conditions, retain-hidden values, regional spelling, profile-specific callbacks and role grants are distinct golden
+  metadata rather than missing generator concepts.
+- Decision: no further ET or SDK refactor is warranted. The reusable SDK already expresses page-column omission,
+  external callback metadata, exact event-field metadata, profile masks and multiset-preserving nested rows. A broader
+  row DSL or role expansion API would obscure the meaningful notification workflow and permission differences.
+- Follow-up: this root review commit records the decision; ET remains at the exact conversion commit `9f0ba610b`.
+- Result: all 44,106 rows remain exact with zero changed or unexpected rows. ET production/generation growth remains
+  67,352 lines, SDK production growth 1,364 lines, total production growth 68,716 lines and verification growth 1,093
+  lines. The cumulative production-lines ratio remains 1.56.
+- No intentional CCD definition improvement was identified or made. The golden JSON and generated definition semantics
+  are unchanged, so no platform-source evidence or separate behavioural-definition commit is required for this slice.
 
 ### Slice 11: paired Singles correspondence and document serving
 
