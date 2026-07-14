@@ -93,6 +93,7 @@ export SRC_DB='ccd_data_store'
 export SRC_SCHEMA='public'
 export SRC_USER='readonly_user'
 export SRC_PASSWORD='...'
+export SRC_PASSWORD_REQUIRED='true'
 export SRC_SSLMODE='require'
 ```
 
@@ -136,6 +137,10 @@ The foreign tables are created with `fetch_size '10000'` so large reads do not u
 option existed, recreate them with `setup-ccd-data-fdw.sh --apply` before running a large migration.
 * grants for `LOCAL_USER_SQL`
 * when `FDW_ADDITIONAL_GRANTEE_SQL` is set, grants for that additional role
+
+`SRC_PASSWORD_REQUIRED` defaults to `true`, matching `postgres_fdw`'s default safety check for
+non-superusers. Only set it to `false` for local/test FDW servers that use trust authentication and
+do not request a password.
 
 ## Phase 2: Run the migration
 

@@ -22,6 +22,7 @@ SRC_DB="${SRC_DB:-datastore}"
 SRC_SCHEMA="${SRC_SCHEMA:-public}"
 SRC_USER="${SRC_USER:-postgres}"
 SRC_PASSWORD="${SRC_PASSWORD:-postgres}"
+SRC_PASSWORD_REQUIRED="${SRC_PASSWORD_REQUIRED:-true}"
 SRC_SSLMODE="${SRC_SSLMODE:-require}"
 
 DST_SCHEMA="${DST_SCHEMA:-ccd}"
@@ -51,6 +52,7 @@ Environment variables:
   SRC_SCHEMA
   SRC_USER
   SRC_PASSWORD
+  SRC_PASSWORD_REQUIRED
   SRC_SSLMODE
   DST_SCHEMA
   FDW_SCHEMA
@@ -66,6 +68,7 @@ Example:
   export SRC_SCHEMA='public'
   export SRC_USER='readonly_user'
   export SRC_PASSWORD='...'
+  export SRC_PASSWORD_REQUIRED='true'
   export SRC_SSLMODE='require'
   export LOCAL_USER_SQL='current_user'
   export FDW_ADDITIONAL_GRANTEE_SQL='"DTS JIT Access et DB Reader SC"'
@@ -112,6 +115,7 @@ psql_dst() {
     --set=src_schema="$SRC_SCHEMA" \
     --set=src_user="$SRC_USER" \
     --set=src_password="$SRC_PASSWORD" \
+    --set=src_password_required="$SRC_PASSWORD_REQUIRED" \
     --set=src_sslmode="$SRC_SSLMODE" \
     --set=dst_schema="$DST_SCHEMA" \
     --set=fdw_schema="$FDW_SCHEMA" \
@@ -140,6 +144,7 @@ FDW setup configuration:
   Source database: ${SRC_DB}
   Source schema:   ${SRC_SCHEMA}
   Source user:     ${SRC_USER}
+  Password needed: ${SRC_PASSWORD_REQUIRED}
   Source sslmode:  ${SRC_SSLMODE}
 EOF
 }
@@ -177,17 +182,19 @@ create user mapping for :local_user_sql
 server :"fdw_server"
 options (
   user :'src_user',
-  password :'src_password'
+  password :'src_password',
+  password_required :'src_password_required'
 );
 
 select case
   when :'fdw_additional_grantee_sql' <> '' and :'fdw_additional_grantee_sql' <> :'local_user_sql'
     then format(
-      'create user mapping for %s server %I options (user %L, password %L)',
+      'create user mapping for %s server %I options (user %L, password %L, password_required %L)',
       :'fdw_additional_grantee_sql',
       :'fdw_server',
       :'src_user',
-      :'src_password'
+      :'src_password',
+      :'src_password_required'
     )
 end as extra_user_mapping_sql
 \gexec
