@@ -63,6 +63,17 @@ public class MigrationArchitectureTest {
   }
 
   @Test
+  public void resolvesMetadataDeclaredForAProfileFamily() throws Exception {
+    Field included = SharedData.class.getDeclaredField("familyIncluded");
+    Field excluded = SharedData.class.getDeclaredField("familyExcluded");
+
+    assertThat(FieldUtils.getCCD(included, FirstProfile.class)).isPresent();
+    assertThat(FieldUtils.getCCD(included, SecondProfile.class)).isEmpty();
+    assertThat(FieldUtils.getCCD(excluded, FirstProfile.class)).isEmpty();
+    assertThat(FieldUtils.getCCD(excluded, SecondProfile.class)).isPresent();
+  }
+
+  @Test
   public void keepsTheMostDerivedCompatibleRedeclarationOnce() {
     assertThat(FieldUtils.getCaseFields(CompatibleChild.class))
         .extracting(Field::getDeclaringClass, Field::getName)
@@ -134,10 +145,19 @@ public class MigrationArchitectureTest {
     @CCD(label = "Profiled", includeInProfiles = FirstProfile.class)
     private ProfiledComplex profiled;
 
+    @CCD(label = "Profile family", includeInProfiles = FirstProfileFamily.class)
+    private String familyIncluded;
+
+    @CCD(label = "Profile family exclusion", excludeFromProfiles = FirstProfileFamily.class)
+    private String familyExcluded;
+
     private List<CollectionWrapper> values;
   }
 
-  private static final class FirstProfile {
+  private interface FirstProfileFamily {
+  }
+
+  private static final class FirstProfile implements FirstProfileFamily {
   }
 
   private static final class SecondProfile {

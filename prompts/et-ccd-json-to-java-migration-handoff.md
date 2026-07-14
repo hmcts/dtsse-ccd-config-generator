@@ -12,8 +12,8 @@ The migration spans the generator repository and its ET submodule:
 
 | Repository | Branch | Current reviewed state |
 | --- | --- | --- |
-| `hmcts/dtsse-ccd-config-generator` | `json-to-java` | Slice 4 exact conversion in this commit |
-| `hmcts/et-ccd-callbacks` | `json-to-java-migration` | `63bb25c58` — Slice 4 exact conversion |
+| `hmcts/dtsse-ccd-config-generator` | `json-to-java` | Slice 4 generator-fit follow-up in this commit |
+| `hmcts/et-ccd-callbacks` | `json-to-java-migration` | `0ccb196ae` — Slice 4 generator-fit follow-up |
 
 The root repository must point at the intended ET commit. A fresh session should inspect both worktrees before changing
 anything:
@@ -48,7 +48,7 @@ Read the migration material in this order:
 
 ## Current convergence
 
-The immutable initial baseline is 52,227 remaining differences across `cftlib` and `prod`. The committed exact-conversion
+The immutable initial baseline is 52,227 remaining differences across `cftlib` and `prod`. The committed post-review
 snapshot after the fourth slice is:
 
 | Metric | Current value |
@@ -59,11 +59,11 @@ snapshot after the fourth slice is:
 | Remaining differences | 44,508 |
 | Completed differences | 7,719 |
 | Completion | 14.78% |
-| ET production/generation Java delta | +16,347 |
-| SDK production Java delta | +1,105 |
-| Total production Java delta | +17,452 |
-| Verification Java delta | +843 |
-| Production lines per completed difference | 2.26 |
+| ET production/generation Java delta | +13,828 |
+| SDK production Java delta | +1,107 |
+| Total production Java delta | +14,935 |
+| Verification Java delta | +863 |
+| Production lines per completed difference | 1.93 |
 
 The authoritative values are in
 `test-projects/et-ccd-callbacks/ccd-definitions/migration-progress.json`. If this table and the snapshot disagree, the
@@ -97,7 +97,8 @@ metric effect. An unproven candidate does not belong in this ledger.
 | Slice 2 generator-fit follow-up | this review commit | `bb666f5e5` | Replaced magic empty event labels with typed omission metadata |
 | Slice 3: paired regional Listings | `c3ecad5f` | `2241a7da6` | Added 1,838 exact rows; reached 4.69% |
 | Slice 3 generator-fit follow-up | this review commit | `a72f1bee6` | Made access-profile `LiveFrom` retention row-specific |
-| Slice 4: paired regional Multiples | this commit | `63bb25c58` | Added 5,271 exact rows; reached 14.78% |
+| Slice 4: paired regional Multiples | `f943c79f` | `63bb25c58` | Added 5,271 exact rows; reached 14.78% |
+| Slice 4 generator-fit follow-up | this review commit | `0ccb196ae` | Added profile families and removed repeated profile, access and fixed-list boilerplate |
 
 The ET submodule commit must be published before a root commit which points to it. Otherwise another checkout cannot
 resolve the root tree. Commit ET changes first, then commit the updated submodule pointer and related SDK or prompt
@@ -330,7 +331,7 @@ Post-commit generator-fit review:
 
 ### Slice 4: paired regional Multiples aggregates
 
-Status: exact conversion complete in `cftlib` and `prod`; post-commit generator-fit review pending.
+Status: complete and exact in `cftlib` and `prod`, including the post-commit generator-fit review.
 
 The slice adds 5,271 exact rows. Its 3,754 case-type-specific rows pull in 1,517 newly owned jurisdiction-global rows;
 the exact dependency closure is therefore larger than the pre-implementation 4,971-row forecast.
@@ -395,8 +396,21 @@ src/main/java/.../domain/caseview/state/MultipleCaseState.java
 
 Post-commit generator-fit review:
 
-- Pending from the exact conversion review point. The 17,452-line production delta, especially the formatted row
-  catalog and fixed-list declarations, requires an explicit follow-up review before Slice 4 is complete.
+- Review point: root `f943c79f`, ET `63bb25c58`.
+- Finding: the exact conversion repeated four concrete schema profiles across common fields and complex types, expanded
+  the same four permission sets in 316 grants, and repeated identical enum constructors and accessors in 47 fixed
+  lists. Those forms obscured the regional and environment distinctions which actually matter.
+- Decision: allow a schema profile to match an included or excluded parent interface, add typed all-Multiples,
+  region and cftlib profile families, name the four ET permission sets, and use Lombok for the fixed-list enum value
+  plumbing. The 5,678-line definition-row catalog remains explicit because its ordering, conditions and metadata encode
+  real workbook row differences; replacing it with an untyped data loader would weaken the Java ownership boundary.
+- Follow-up: root review commit containing this record and SDK change, ET `0ccb196ae`.
+- Result: all 7,719 rows remain exact with zero changed or unexpected rows. ET production/generation growth fell from
+  16,347 to 13,828 lines while reusable SDK production growth rose from 1,105 to 1,107 lines, reducing total production
+  growth by 2,517 lines to 14,935 and improving production lines per completed difference from 2.26 to 1.93.
+  Verification growth rose by 20 lines for the profile-family behaviour test.
+- No intentional CCD definition improvement was identified or made. The golden JSON and generated definition semantics
+  are unchanged, so no platform-source evidence or separate behavioural-definition commit is required for this slice.
 
 ## SDK migration capabilities
 
@@ -422,6 +436,7 @@ Capabilities delivered by Slices 1 to 4 and available for reuse:
 - multiple grouping keys for one region-neutral shared configuration module;
 - case-type-specific applicable-role selection across case-role, access-profile and authorisation generation;
 - typed regional schema profiles, including repeatable profile-specific field IDs, authorisation IDs and metadata;
+- hierarchical schema-profile families for common, regional and environment-specific field metadata;
 - explicit ET collection-wrapper value resolution without generating wrapper complex types;
 - sparse tab metadata, explicit tab-field ordering and targeted tab show conditions;
 - exact field-level page labels, mid-event URLs and retain-hidden-value metadata; and

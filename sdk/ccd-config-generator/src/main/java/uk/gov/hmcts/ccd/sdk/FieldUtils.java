@@ -91,8 +91,10 @@ public class FieldUtils {
       return annotation.includeInProfiles().length == 0;
     }
     boolean included = annotation.includeInProfiles().length == 0
-        || Arrays.asList(annotation.includeInProfiles()).contains(schemaProfile);
-    return included && !Arrays.asList(annotation.excludeFromProfiles()).contains(schemaProfile);
+        || Arrays.stream(annotation.includeInProfiles())
+            .anyMatch(profile -> profile.isAssignableFrom(schemaProfile));
+    return included && Arrays.stream(annotation.excludeFromProfiles())
+        .noneMatch(profile -> profile.isAssignableFrom(schemaProfile));
   }
 
   public static Class<?> unwrapCollectionValueType(Class<?> elementType) {
