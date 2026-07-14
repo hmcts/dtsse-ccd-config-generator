@@ -488,6 +488,24 @@ public class FieldCollection {
       return result;
     }
 
+    /**
+     * Adds nested event-to-complex fields for an existing case field without adding that root to
+     * the event's {@code CaseEventToFields} rows.
+     *
+     * <p>This supports definitions where an event exposes selected complex elements while the root
+     * field itself is not part of the event wizard. Flattened properties cannot use this form
+     * because their elements are ordinary root event fields.
+     */
+    public <U> FieldCollectionBuilder<U, StateType, FieldCollectionBuilder<Type, StateType, Parent>>
+        complexWithoutEventField(TypedPropertyGetter<Type, ?> getter, Class<U> complexType) {
+      String fieldName = propertyUtils.getPropertyName(dataClass, getter);
+      if (isUnwrappedField(dataClass, fieldName).isPresent()) {
+        throw new IllegalArgumentException(
+            "A flattened property cannot be configured without a root event field: " + fieldName);
+      }
+      return complex(fieldName, complexType);
+    }
+
     public FieldCollectionBuilder<Type, StateType, Parent> label(String id, String value) {
       explicitFields.add(field(id).context(DisplayContext.ReadOnly).label(value).showSummary(false).immutable());
       return this;

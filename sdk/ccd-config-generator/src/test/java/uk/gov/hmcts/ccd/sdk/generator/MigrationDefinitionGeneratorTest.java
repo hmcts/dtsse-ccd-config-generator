@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static uk.gov.hmcts.ccd.sdk.api.Permission.CRU;
 
+import com.fasterxml.jackson.annotation.JsonUnwrapped;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.ImmutableSet;
@@ -199,6 +200,10 @@ public class MigrationDefinitionGeneratorTest {
         .mandatoryWithLabel(TestComplex::getFile, "File")
         .mandatoryWithLabel(TestComplex::getFile, "File")
         .done()
+        .complexWithoutEventField(TestData::getStandaloneComplex, TestComplex.class)
+        .eventToComplexTypeId("standalone")
+        .mandatoryWithLabel(TestComplex::getFile, "Standalone file")
+        .done()
         .done();
     builder
         .tab("ExactMetadata", "Default label")
@@ -257,6 +262,13 @@ public class MigrationDefinitionGeneratorTest {
                 assertThat(row)
                     .containsEntry("ID", "file")
                     .containsEntry("EventElementLabel", "File"));
+    assertThat(eventFields)
+        .noneSatisfy(row -> assertThat(row).containsEntry("CaseFieldID", "standaloneComplex"));
+    assertThat(onlyRow(output, "CaseEventToComplexTypes/import/standaloneComplex.json"))
+        .containsEntry("ID", "standalone")
+        .containsEntry("CaseFieldID", "standaloneComplex")
+        .containsEntry("ListElementCode", "file")
+        .containsEntry("EventElementLabel", "Standalone file");
     assertThat(rows(output, "FixedLists/external_list.json"))
         .anySatisfy(
             row ->
@@ -345,6 +357,19 @@ public class MigrationDefinitionGeneratorTest {
     assertThatThrownBy(() -> fields.externalMidEventCallbackUrl("${TEST_URL}/mid-event"))
         .isInstanceOf(IllegalStateException.class)
         .hasMessageContaining("external URL");
+  }
+
+  @Test
+  public void rejectsAFlattenedComplexWithoutAnEventField() {
+    ConfigBuilderImpl<TestData, TestState, TestRole> builder = newBuilder();
+    var fields = builder.event("import").initialState(TestState.Open).fields();
+
+    assertThatThrownBy(
+            () ->
+                fields.complexWithoutEventField(
+                    TestData::getUnwrappedComplex, UnwrappedComplex.class))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("flattened property");
   }
 
   @Test
@@ -438,6 +463,11 @@ public class MigrationDefinitionGeneratorTest {
 
     private TestComplex importFile;
 
+    private TestComplex standaloneComplex;
+
+    @JsonUnwrapped(prefix = "unwrapped")
+    private UnwrappedComplex unwrappedComplex;
+
     @CCD(
         label = "Legacy type",
         typeNameOverride = "LegacyComplex",
@@ -461,6 +491,14 @@ public class MigrationDefinitionGeneratorTest {
     public TestComplex getImportFile() {
       return importFile;
     }
+
+    public TestComplex getStandaloneComplex() {
+      return standaloneComplex;
+    }
+
+    public UnwrappedComplex getUnwrappedComplex() {
+      return unwrappedComplex;
+    }
   }
 
   @ComplexType(name = "Unreferenced", generate = true)
@@ -476,6 +514,11 @@ public class MigrationDefinitionGeneratorTest {
     public String getFile() {
       return file;
     }
+  }
+
+  private static class UnwrappedComplex {
+
+    private String value;
   }
 
   private enum TestFixedList implements HasLabel, HasCode {
