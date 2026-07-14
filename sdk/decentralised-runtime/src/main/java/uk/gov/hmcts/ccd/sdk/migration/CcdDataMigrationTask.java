@@ -1090,6 +1090,8 @@ public class CcdDataMigrationTask implements Runnable {
           "FDW foreign tables are missing in schema " + FDW_SCHEMA + ". Run the FDW setup first: " + DOCS_URL
       );
     }
+
+    grantAdditionalFdwSelectAccess();
   }
 
   private void ensureFdwTables() {
@@ -1213,6 +1215,28 @@ public class CcdDataMigrationTask implements Runnable {
           to current_user;
         end $$;
         """);
+  }
+
+  private void grantAdditionalFdwSelectAccess() {
+    String grantee = options.fdwAdditionalSelectGrantee();
+    if (grantee == null) {
+      return;
+    }
+
+    log.info("Granting CCD data migration FDW select access to {}", grantee);
+    db.getJdbcTemplate().execute("""
+        grant select on
+          fdw_stage.case_data,
+          fdw_stage.case_event,
+          fdw_stage.case_event_significant_items
+        to """ + quoteIdentifier(grantee));
+  }
+
+  private static String quoteIdentifier(String identifier) {
+    if (identifier.indexOf('\0') >= 0) {
+      throw new IllegalArgumentException("SQL identifier must not contain null bytes");
+    }
+    return "\"" + identifier.replace("\"", "\"\"") + "\"";
   }
 
   private void validateDecentralisedRuntimeDisabled() {
