@@ -5,7 +5,7 @@ generator in this repository. It is written for both engineers and automated cod
 
 The words **must**, **must not**, **should** and **may** are normative. A migration is not complete merely because the
 Java compiles or CCD accepts the generated definition: the generated configuration must remain semantically equivalent
-to the ET JSON that it replaces.
+to the ET JSON that it replaces, except for a separately committed and evidenced intentional definition change.
 
 Start each session with
 [`et-ccd-json-to-java-migration-handoff.md`](et-ccd-json-to-java-migration-handoff.md), which records completed slices,
@@ -17,7 +17,8 @@ XLSX comparison, update the reviewed progress snapshot and report Java line grow
 ## Migration contract
 
 1. The existing files under `test-projects/et-ccd-callbacks/ccd-definitions` are the golden definition. Do not edit them
-   to make a Java conversion pass.
+   to make a Java conversion pass. A benign definition improvement may change them only through the separate review
+   process below.
 2. Migrate incrementally. A change must own an explicit, reviewable vertical slice, such as one event and all of its
    fields and permissions for one case type or a deliberately shared pair of case types.
 3. Keep unconverted rows supplied by the existing JSON. Generate converted rows into a build directory and combine
@@ -28,8 +29,8 @@ XLSX comparison, update the reviewed progress snapshot and report Java line grow
    callback paths are external contracts and are case-sensitive.
 6. Prefer ordinary domain-oriented Java over a second representation of the spreadsheet. A reader should be able to
    understand an event as an event, not as a list of cells.
-7. Semantic parity is the acceptance condition. JSON file boundaries, object property order and row order are not
-   semantic; permissions, conditions, callbacks, display metadata and duplicate row counts are.
+7. Semantic parity is the acceptance condition for a conversion commit. JSON file boundaries, object property order
+   and row order are not semantic; permissions, conditions, callbacks, display metadata and duplicate row counts are.
 8. Commit the exact working conversion before performing its generator-fit review. Record whether the committed Java
    exposes a reusable SDK gap; put any resulting refactor in a separate parity-preserving follow-up commit.
 
@@ -312,6 +313,42 @@ Tabs, workbasket fields and search fields should use typed getters where the fie
 field IDs are appropriate only for CCD system fields or a public API which explicitly requires them. Preserve role
 visibility, conditions, display context parameters and sort order.
 
+## Intentional CCD definition changes
+
+Exact conversion remains the default and must be committed first. A mismatch must not be reclassified as harmless to
+avoid modelling an awkward CCD concept or fixing the generator. After the exact review point exists, a separate
+follow-up may improve the CCD definition where the current row is redundant, erroneous or has no relied-on behaviour.
+
+The follow-up must:
+
+1. identify the exact current and proposed canonical rows and why the current value is unnecessary;
+2. assess persisted data, API read/write access, UI visibility, conditions, search/workbasket use, documents, callbacks,
+   audit/export behaviour and every affected role;
+3. trace the relevant behaviour through the platform implementation, citing permanent source links pinned to commit
+   SHAs, naming the controlling files, methods or components, and showing that the cited revisions correspond to the
+   dependency or deployment versions in scope;
+4. cover every implicated layer, including the relevant CCD backend service, `xui-webapp` and
+   `ccd-case-ui-toolkit`; explicitly explain why a layer is not implicated rather than silently omitting it;
+5. prove the relevant behaviour with focused tests against CCD where runtime semantics are involved; generated parity,
+   source inspection alone or an assertion that a field is not business data is not sufficient evidence by itself;
+6. treat authorisation changes as security-relevant and prove that they neither broaden nor unintentionally remove
+   access;
+7. update the active legacy JSON and any Java owner together, so both describe the same reviewed target definition;
+8. retain exact XLSX parity for every applicable environment without comparator ignores or normalisation exceptions;
+9. record the source references, behavioural evidence, reviewed row delta, metric effect and commit in the migration
+   handoff; and
+10. remain a distinct commit from both the exact conversion and any generator-fit refactor.
+
+Permissions attached to a CCD `Label` field are a candidate for this review when the label is proven to be static UI
+content rather than persisted case data. They are not a blanket exemption: field authorisation may still affect which
+roles can see the label or the page containing it. Check the label's event-field usage, conditions and role-visible UI
+behaviour before removing or changing its authorisation rows. For this example, the proof must follow the label and its
+authorisation from CCD's definition/data response through `xui-webapp` into `ccd-case-ui-toolkit` rendering, and show
+what, if anything, reaches the case-data payload.
+
+Never add an ignore list for approved definition changes. Git retains the historical definition; the checked-in golden
+JSON becomes the new reviewed target only after the change has passed this process.
+
 ## What idiomatic Java means here
 
 Prefer:
@@ -380,7 +417,8 @@ sheet-specific CCD identity but different values contributes one remaining diffe
 contributes a missing and an unexpected row. Duplicate occurrences are counted independently.
 
 The deterministic result is committed at
-`test-projects/et-ccd-callbacks/ccd-definitions/migration-progress.json`. After an intentional definition change, run:
+`test-projects/et-ccd-callbacks/ccd-definitions/migration-progress.json`. After an intentional migration or reviewed
+definition change, run:
 
 ```shell
 ./gradlew :et:updateEtMigrationProgress
@@ -391,6 +429,12 @@ which reach canonical XLSX parity do. The report also records physical Java line
 main/generation code and verification code. Treat line growth and main-lines-per-completed-difference as design review
 signals, not hard limits. Repeated ET boilerplate is a reason to improve a poorly fitting typed SDK API, provided the
 replacement is coherent, reusable and tested.
+
+The 52,227 baseline remains immutable when a small approved definition change removes or replaces rows. Consequently,
+completed differences need not always equal exact Java rows: an approved removal can reduce the remaining target
+without adding Java output. Record that delta separately in the handoff. Do not silently rebaseline; if a material scope
+change makes the original number misleading, change the metric design and establish a reviewed successor baseline in a
+dedicated tooling commit.
 
 The `ccdMigration` source set and `generateEtMigrationJson` task are definition-generation-only boundaries. They do not
 register callbacks, start the ET application or prove runtime behaviour. Callback wiring is outside the current
@@ -471,20 +515,23 @@ prove the converted event or feature at the generated JSON and canonical XLSX bo
 required only when a separately scoped change moves callback wiring. Transfer the declared slice from legacy JSON to
 Java only after row parity and XLSX parity pass.
 
-Do not delete or edit the golden JSON during the migration programme. Removing the legacy definition is a separate,
-explicit end-state decision after all eight case types have Java ownership and the comparison harness has no legacy rows
-left to merge.
+Do not delete or edit the golden JSON in an exact conversion commit. The only permitted edits during the migration are
+separate, evidenced definition improvements which follow the process above. Removing the legacy definition remains a
+separate, explicit end-state decision after all eight case types have Java ownership and the comparison harness has no
+legacy rows left to merge.
 
 ## Review checklist
 
 - [ ] The exact case type, feature/event and affected sheets are stated.
-- [ ] Existing ET JSON is unchanged.
+- [ ] Existing ET JSON is unchanged in the conversion commit, or a separate definition-change commit records its proof.
 - [ ] CCD IDs and Jackson wire names are unchanged.
 - [ ] Existing domain models are reused or any minimal model change is justified by runtime behaviour.
 - [ ] The Java reads as domain/event configuration rather than spreadsheet rows.
 - [ ] No arbitrary column API, positional row record or copied golden fixture was introduced.
 - [ ] Every unsupported value remains owned by JSON or has a typed SDK enhancement with tests.
-- [ ] Generated and golden rows are semantically equal, including permissions and duplicate counts.
+- [ ] Generated and current golden rows are semantically equal, including permissions and duplicate counts.
+- [ ] Any intentional definition change has commit-pinned platform source references, focused behavioural evidence and
+      no comparator ignores.
 - [ ] The convergence snapshot is regenerated, shows no regression, and its Java line growth is reasonable.
 - [ ] Normalised XLSX output matches for the required environments.
 - [ ] Behaviour tests follow `docs/testing-strategy.md`.

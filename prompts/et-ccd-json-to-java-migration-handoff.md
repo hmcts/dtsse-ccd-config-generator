@@ -10,9 +10,9 @@ Last reviewed: 14 July 2026.
 
 The migration spans the generator repository and its ET submodule:
 
-| Repository | Branch | Current migration milestone |
+| Repository | Branch | Current reviewed state |
 | --- | --- | --- |
-| `hmcts/dtsse-ccd-config-generator` | `json-to-java` | `0a80b1ec` — post-commit generator-fit review workflow |
+| `hmcts/dtsse-ccd-config-generator` | `json-to-java` | Slice 1 generator-fit complete; resumption and review workflow documented below |
 | `hmcts/et-ccd-callbacks` | `json-to-java-migration` | `b0bb67f97` — Slice 1 class-level access follow-up |
 
 The root repository must point at the intended ET commit. A fresh session should inspect both worktrees before changing
@@ -76,6 +76,12 @@ Verify the committed state from the root repository with:
 ```
 
 This generates Java-only JSON and XLSX artefacts. It does not start ET, wire callbacks or alter the golden definition.
+
+## Reviewed definition changes
+
+None to date. Future entries must identify the exact canonical row delta, commit-pinned platform source references and
+version mapping, focused behavioural evidence, security conclusion, affected ET and Java commits, and convergence
+metric effect. An unproven candidate does not belong in this ledger.
 
 ## Milestone history
 
@@ -286,6 +292,13 @@ After those commits exist, perform the generator-fit review described in the con
 The handoff update and post-commit generator-fit review are both part of slice completion. A metric snapshot without this
 semantic ledger is not sufficient for a future session to resume safely.
 
+If review identifies a potentially benign improvement to the existing CCD definition, preserve the exact conversion
+commit and follow the intentional-definition-change process in the style guide. Commit the improvement separately,
+change the active legacy JSON and Java owner together, and prove its runtime and security effect with commit-pinned
+source references through the applicable CCD backend, `xui-webapp` and `ccd-case-ui-toolkit` layers plus focused
+behavioural evidence. Record those references, the canonical row delta and convergence impact here. Permissions on
+`Label` fields are candidates for evidence-based review, not an automatic exception to authorisation parity.
+
 ## Known repository-wide blockers
 
 As of the review date:
@@ -302,7 +315,8 @@ of the current slice.
 
 ## Scope boundaries which remain in force
 
-- Golden ET JSON remains unchanged throughout convergence.
+- Golden ET JSON remains unchanged in conversion commits. A separate, evidenced definition-improvement commit may
+  update both the active legacy definition and its Java owner while retaining exact XLSX parity.
 - Java-only convergence and deployable legacy/Java overlay are separate milestones.
 - Callback wiring remains out of scope; only exact generated callback URL metadata is included.
 - Use composition for case-type and regional sharing. Do not create a `CCDConfig` inheritance hierarchy or empty regional

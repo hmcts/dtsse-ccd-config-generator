@@ -315,7 +315,7 @@ rows from one spreadsheet sheet in isolation: event fields, nested complex field
 
 ## Testing and review gates
 
-Every slice must satisfy all of these gates:
+Every exact conversion slice must satisfy all of these gates:
 
 1. golden JSON is unchanged;
 2. SDK enhancements have focused JSON golden tests and invalid-combination tests;
@@ -332,6 +332,13 @@ duplication and production line growth which a narrow typed SDK feature could im
 resulting refactor must be a follow-up commit, retain exact parity and have focused backwards-compatibility and
 precedence tests; do not rewrite the original working conversion commit.
 
+A separately reviewed CCD definition improvement may follow the exact conversion and generator-fit commits. It must
+change legacy JSON and Java ownership together, prove the runtime and security effect is benign, preserve canonical XLSX
+parity and record its metric impact. It must not be folded into the conversion commit or represented by comparator
+ignores. The proof must cite commit-pinned controlling source in each applicable CCD backend, `xui-webapp` and
+`ccd-case-ui-toolkit` layer and add focused behavioural evidence. Label-field authorisation is only a candidate for this
+process, never an automatic exemption.
+
 The current full `:et:check` also has an unrelated `org.lz4:lz4-java` capability conflict in the cftlib IDE
 classpath. The focused migration tasks remain required while that repository-wide dependency issue exists; it must not
 be mistaken for a convergence failure.
@@ -343,6 +350,7 @@ routing is changed.
 ## End state
 
 At 100% convergence, both Java definition profiles generate the complete canonical ET workbooks for all three
-jurisdiction bundles. The legacy JSON remains an untouched historical golden until a separate removal decision. The
-runtime may continue using its existing callback controllers until callback migration is designed and tested; definition
-ownership does not silently alter that routing.
+jurisdiction bundles. The legacy JSON remains the current reviewed golden until a separate removal decision; Git retains
+its pre-migration history and any evidenced definition improvements. The runtime may continue using its existing
+callback controllers until callback migration is designed and tested; definition ownership does not silently alter that
+routing.

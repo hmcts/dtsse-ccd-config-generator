@@ -19,13 +19,17 @@ line counts are a secondary guardrail against replacing a concise definition wit
 Do not judge a slice by compilation or generated JSON appearance alone. The slice is acceptable only when its Java rows
 are exact matches for the corresponding processed golden workbook rows in every applicable environment.
 
+An intentional improvement to the CCD definition is not a parity exception. First commit the exact conversion, then
+make the legacy and Java definitions agree on the reviewed improvement in a separate, evidenced follow-up.
+
 Callback handler registration, controllers and runtime callback routing are outside this work. Existing callback URLs
 may be represented as definition-generation metadata only.
 
 ## Non-negotiable rules
 
 1. Treat `test-projects/et-ccd-callbacks/ccd-definitions` as the golden definition. Do not edit golden JSON or XLSX
-   templates to make a comparison pass.
+   templates to make a comparison pass. Only the intentional-definition-change process in the style guide permits a
+   separate reviewed edit.
 2. Generate Java-only definitions. Do not start the ET application or embedded CCD stack to measure convergence.
 3. Compare processed XLSX output, not source JSON files. ET's definition processor applies environment selection, sheet
    aliases, access-control transformations and template column rules which a direct JSON diff would miss.
@@ -150,6 +154,22 @@ The percentage is calculated across both environments and all jurisdiction bundl
 An accepted slice should normally have zero changed and zero unexpected rows. Do not accept approximate rows to make
 the completion percentage move: only exact generated rows remove golden differences safely.
 
+## Reviewed definition improvements
+
+A benign CCD definition improvement must follow the evidence requirements in the style guide. It is performed only
+after an exact conversion review point, in its own commit, by changing the active legacy definition and any Java owner
+together. The resulting Java and golden workbooks must still compare exactly; do not encode the change as a comparator
+ignore or a new normalisation rule.
+
+Its handoff evidence must include commit-pinned source links tracing the applicable CCD backend, `xui-webapp` and
+`ccd-case-ui-toolkit` behaviour, together with the dependency/deployment-version mapping which makes those revisions
+relevant. Add focused runtime tests where source inspection does not by itself prove the external behaviour. A
+generated-output comparison alone cannot establish that a definition deviation is safe.
+
+Keep the immutable 52,227 baseline and record the definition row delta separately in the handoff. Removing an approved
+obsolete row may reduce remaining differences without increasing exact Java rows, so those values are no longer assumed
+to be identical. A material scope change requires an explicit metric-design review rather than a silent rebaseline.
+
 ## Post-commit generator-fit review
 
 Review the committed conversion before starting the next slice. Keeping this review after the conversion commit
@@ -266,8 +286,10 @@ When reporting a completed slice, state:
 - production lines per completed difference;
 - checks run and any repository-wide pre-existing blockers; and
 - the result of the post-commit generator-fit review and any follow-up commits;
+- any reviewed definition change, its commit-pinned source references, behavioural evidence, canonical row delta and
+  metric effect;
 - confirmation that the migration handoff was updated; and
-- confirmation that golden definitions were not edited.
+- confirmation that golden definitions were unchanged, or the commit containing the approved change.
 
 Use a compact result such as:
 
@@ -278,5 +300,5 @@ Completion: <percentage>% (<completed> removed, <remaining> remaining)
 Changed/unexpected: <changed>/<unexpected>
 Java: ET <delta>, SDK <delta>, <ratio> production lines per completed difference
 Verification: <commands and result>
-Golden definitions: unchanged
+Definition changes: none | <commit, evidence and row delta>
 ```
