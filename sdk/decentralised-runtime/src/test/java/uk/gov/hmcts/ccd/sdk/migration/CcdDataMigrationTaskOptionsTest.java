@@ -17,6 +17,7 @@ class CcdDataMigrationTaskOptionsTest {
     assertThat(options.mode()).isEqualTo(CcdDataMigrationMode.PRELOAD_EVENTS);
     assertThat(options.sourceJurisdiction()).isEqualTo("TEST");
     assertThat(options.eventIdWindowSize()).isEqualTo(1_000_000);
+    assertThat(options.significantItemIdWindowSize()).isEqualTo(100_000);
     assertThat(options.caseRevisionOffset()).isEqualTo(1_000_000_000L);
     assertThat(options.maxBatchesPerRun()).isEqualTo(Integer.MAX_VALUE);
     assertThat(options.maxRunTime()).isNull();
@@ -105,6 +106,15 @@ class CcdDataMigrationTaskOptionsTest {
         .build())
         .isInstanceOf(IllegalArgumentException.class)
         .hasMessageContaining("eventIdWindowSize");
+  }
+
+  @Test
+  void rejectsNonPositiveSignificantItemIdWindowSize() {
+    assertThatThrownBy(() -> builder(List.of("TestCase"))
+        .significantItemIdWindowSize(0)
+        .build())
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("significantItemIdWindowSize");
   }
 
   @Test

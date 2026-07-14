@@ -6,7 +6,7 @@ plugins {
   id 'io.spring.dependency-management' version '1.1.7'
   id 'jacoco'
   id 'hmcts.ccd.sdk'
-  id 'com.github.hmcts.rse-cft-lib' version '0.19.2227'
+  id 'com.github.hmcts.rse-cft-lib' version '0.19.2240'
 }
 
 group = 'uk.gov.hmcts'
@@ -117,6 +117,23 @@ tasks.withType(JavaCompile).configureEach {
 
 tasks.withType(JavaExec).configureEach {
   javaLauncher.set(javaToolchains.launcherFor(java.toolchain))
+}
+
+// cftlib starts ccd-case-document-am-api from a generated manifest classpath. Prepend a test-only
+// service_config.json override so nfdiv_case_api can ATTACH EMPLOYMENT documents for the legacy
+// callback CDAM attach regression without changing the global e2e S2S identity.
+tasks.named('writeManifestccd-case-document-am-api').configure {
+  doLast {
+    def manifest = layout.buildDirectory.file('cftlib/ccd-case-document-am-api').get().asFile
+    def serviceConfigOverride =
+        layout.projectDirectory.dir('src/cftlib/resources/cdam-service-config-override').asFile.absolutePath
+    def manifestLines = manifest.readLines('UTF-8')
+
+    if (!manifestLines.contains(serviceConfigOverride)) {
+      manifestLines.add(1, serviceConfigOverride)
+      manifest.text = manifestLines.join(System.lineSeparator()) + System.lineSeparator()
+    }
+  }
 }
 
 tasks.withType(Test).configureEach {
@@ -251,8 +268,10 @@ cftlibTest {
   environment 'FEE_API_URL', 'http://localhost:8765'
   environment 'PAYMENT_API_BASEURL', 'http://localhost:8765'
   environment 'CCD_DOCUMENT_URL_PATTERN', '.*'
-  environment 'DM_STORE_BASE_URL', 'http://localhost:8765'
+  environment 'DM_STORE_BASE_URL', 'http://localhost:4013'
+  environment 'CASE_DOCUMENT_AM_URL', 'http://localhost:4455'
   environment 'CASE_DOCUMENT_AM_API_ATTACH_DOCUMENT_ENABLED', 'false'
+  environment 'CCD_DECENTRALISED_RUNTIME_CDAM_ATTACH_ENABLED', 'true'
   environment 'CASE_DATA_STORE_BASEURL', 'http://localhost:4452'
   environment 'ROLE_ASSIGNMENT_URL', 'http://localhost:4096'
   environment 'IDAM_API_BASEURL', 'http://localhost:5062'

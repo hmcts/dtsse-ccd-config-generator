@@ -15,6 +15,7 @@ public record CcdDataMigrationTaskOptions(
     CcdDataMigrationMode mode,
     List<String> caseTypeIds,
     int eventIdWindowSize,
+    int significantItemIdWindowSize,
     long caseRevisionOffset,
     int maxBatchesPerRun,
     Duration maxRunTime,
@@ -35,6 +36,9 @@ public record CcdDataMigrationTaskOptions(
 
     if (eventIdWindowSize < 1) {
       throw new IllegalArgumentException("eventIdWindowSize must be greater than zero");
+    }
+    if (significantItemIdWindowSize < 1) {
+      throw new IllegalArgumentException("significantItemIdWindowSize must be greater than zero");
     }
     if (caseRevisionOffset < 0) {
       throw new IllegalArgumentException("caseRevisionOffset must be zero or greater");
@@ -122,6 +126,7 @@ public record CcdDataMigrationTaskOptions(
     private CcdDataMigrationMode mode = CcdDataMigrationMode.PRELOAD_EVENTS;
     private final List<String> caseTypeIds;
     private int eventIdWindowSize = 1_000_000;
+    private int significantItemIdWindowSize = 100_000;
     private long caseRevisionOffset = 1_000_000_000L;
     private int maxBatchesPerRun = Integer.MAX_VALUE;
     private Duration maxRunTime;
@@ -145,6 +150,11 @@ public record CcdDataMigrationTaskOptions(
 
     public Builder eventIdWindowSize(int eventIdWindowSize) {
       this.eventIdWindowSize = eventIdWindowSize;
+      return this;
+    }
+
+    public Builder significantItemIdWindowSize(int significantItemIdWindowSize) {
+      this.significantItemIdWindowSize = significantItemIdWindowSize;
       return this;
     }
 
@@ -184,6 +194,7 @@ public record CcdDataMigrationTaskOptions(
           mode,
           caseTypeIds,
           eventIdWindowSize,
+          significantItemIdWindowSize,
           caseRevisionOffset,
           maxBatchesPerRun,
           maxRunTime,

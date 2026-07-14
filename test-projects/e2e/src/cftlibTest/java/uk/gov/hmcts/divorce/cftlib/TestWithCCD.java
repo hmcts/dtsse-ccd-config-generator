@@ -157,6 +157,7 @@ public class TestWithCCD extends CftlibTest {
     private long firstEventId;
     private static final String BASE_URL = "http://localhost:4452";
     private static final String SERVICE_BASE_URL = "http://localhost:4013";
+    private static final String CDAM_BASE_URL = "http://localhost:4455";
     private static final String EXTERNAL_CALLBACK_HOST = "127.0.0.1";
     private static final int EXTERNAL_CALLBACK_PORT = 4014;
     private static final String ELASTICSEARCH_BASE_URL = "http://localhost:9200";
@@ -3034,6 +3035,90 @@ public class TestWithCCD extends CftlibTest {
     @SneakyThrows
     @Order(214)
     @Test
+    void legacyJsonCallbackAddsAcasStyleDocumentAndSdkAttachesIt() {
+        BaseJsonLegacyController.reset();
+
+        Map<String, Object> existingDocument = BaseJsonLegacyController.acasDocumentCollectionItem(
+            "event-input-acas-document",
+            BaseJsonLegacyController.EVENT_INPUT_DOCUMENT_ID
+        );
+
+        var response = submitJsonLegacyEventForCaseType(
+            JsonLegacyCcdConfig.CASE_TYPE_A,
+            Map.of(
+                "note", BaseJsonLegacyController.ACAS_DOCUMENT_NOTE,
+                "documentCollection", List.of(existingDocument)
+            ),
+            201
+        );
+
+        assertThat(BaseJsonLegacyController.aboutToSubmitAttempts, equalTo(1));
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> data = (Map<String, Object>) response.get("data");
+        JsonNode responseData = mapper.valueToTree(data);
+        assertThat(responseData.findValues("document_hash"), is(empty()));
+        assertThat(responseData.toString(), containsString(BaseJsonLegacyController.EVENT_INPUT_DOCUMENT_ID));
+        assertThat(responseData.toString(), containsString(BaseJsonLegacyController.CALLBACK_DOCUMENT_ID));
+
+        JsonNode storedData = mapper.readTree(storedData(JsonLegacyCcdConfig.CASE_TYPE_A));
+        assertThat(storedData.findValues("document_hash"), is(empty()));
+        assertThat(storedData.toString(), containsString(BaseJsonLegacyController.EVENT_INPUT_DOCUMENT_ID));
+        assertThat(storedData.toString(), containsString(BaseJsonLegacyController.CALLBACK_DOCUMENT_ID));
+
+        JsonNode cdamDocument = fetchCdamDocument(BaseJsonLegacyController.CALLBACK_DOCUMENT_ID);
+        assertThat(cdamDocument.path("metadata").path("case_type_id").asText(),
+            equalTo(JsonLegacyCcdConfig.CASE_TYPE_A));
+        assertThat(cdamDocument.path("metadata").path("jurisdiction").asText(), equalTo("EMPLOYMENT"));
+    }
+
+    @SneakyThrows
+    private JsonNode fetchCdamDocument(String documentId) {
+        var request = new HttpGet(CDAM_BASE_URL + "/cases/documents/" + documentId);
+        request.addHeader("Authorization", getAuthorisation("TEST_CASE_WORKER_USER@mailinator.com"));
+        request.addHeader("ServiceAuthorization", cftlib().generateDummyS2SToken("nfdiv_case_api"));
+
+        try (CloseableHttpResponse response = HttpClientBuilder.create().build().execute(request)) {
+            String responseBody = EntityUtils.toString(response.getEntity());
+            assertThat("CDAM document metadata response: " + responseBody,
+                response.getStatusLine().getStatusCode(), equalTo(200));
+            return mapper.readTree(responseBody);
+        }
+    }
+
+    @SneakyThrows
+    @Order(215)
+    @Test
+    void legacyJsonCallbackAddsDocumentWithNullHashAndSdkAttachesIt() {
+        BaseJsonLegacyController.reset();
+
+        var response = submitJsonLegacyEventForCaseType(
+            JsonLegacyCcdConfig.CASE_TYPE_A,
+            Map.of("note", BaseJsonLegacyController.ACAS_DOCUMENT_WITH_NULL_HASH_NOTE),
+            201
+        );
+
+        assertThat(BaseJsonLegacyController.aboutToSubmitAttempts, equalTo(1));
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> data = (Map<String, Object>) response.get("data");
+        JsonNode responseData = mapper.valueToTree(data);
+        assertThat(responseData.findValues("document_hash"), is(empty()));
+        assertThat(responseData.toString(), containsString(BaseJsonLegacyController.NULL_HASH_CALLBACK_DOCUMENT_ID));
+
+        JsonNode storedData = mapper.readTree(storedData(JsonLegacyCcdConfig.CASE_TYPE_A));
+        assertThat(storedData.findValues("document_hash"), is(empty()));
+        assertThat(storedData.toString(), containsString(BaseJsonLegacyController.NULL_HASH_CALLBACK_DOCUMENT_ID));
+
+        JsonNode cdamDocument = fetchCdamDocument(BaseJsonLegacyController.NULL_HASH_CALLBACK_DOCUMENT_ID);
+        assertThat(cdamDocument.path("metadata").path("case_type_id").asText(),
+            equalTo(JsonLegacyCcdConfig.CASE_TYPE_A));
+        assertThat(cdamDocument.path("metadata").path("jurisdiction").asText(), equalTo("EMPLOYMENT"));
+    }
+
+    @SneakyThrows
+    @Order(216)
+    @Test
     void submittedRetriesAndDuplicateJsonLegacySubmissionDoesNotReRun() {
         for (String caseType : jsonLegacyCaseTypes()) {
             BaseJsonLegacyController.reset();
@@ -3074,7 +3159,7 @@ public class TestWithCCD extends CftlibTest {
     }
 
     @SneakyThrows
-    @Order(215)
+    @Order(217)
     @Test
     void jsonDefinitionAuditHistoryUsesStateLabel() {
         for (String caseType : jsonLegacyCaseTypes()) {
