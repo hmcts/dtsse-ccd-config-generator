@@ -1,0 +1,17 @@
+[
+  {
+    "CaseTypeID": "GatedField",
+    "Description": "Create",
+    "DisplayOrder": 1,
+    "EndButtonLabel": "Save and continue",
+    "ID": "create",
+    "LiveFrom": "01/01/2017",
+    "Name": "Create",
+    "PostConditionState": "Submitted",
+    "PreConditionState(s)": "Open",
+    "Publish": "N",
+    "SecurityClassification": "Public",
+    "ShowEventNotes": "N",
+    "ShowSummary": "N"
+  }
+]

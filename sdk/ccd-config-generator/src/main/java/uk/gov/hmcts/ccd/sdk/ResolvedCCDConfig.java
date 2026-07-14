@@ -53,6 +53,16 @@ public class ResolvedCCDConfig<T, S, R extends HasRole> {
   boolean shutterService = false;
   Map<String, String> stateLabels = new HashMap<>();
 
+  /**
+   * CCD IDs of {@code @CCD(gate)} fields whose gate is inactive in the current environment. Empty
+   * when nothing is gated off (the common case). Generators that place fields by ID — the
+   * CaseEventToFields, AuthorisationCaseField event/tab/search, CaseTypeTab and search/work-basket
+   * generators — skip a placement whose ID is in this set, so a gated-off field leaves no dangling
+   * row referencing a CaseField the reflection filter already suppressed. Populated once at build
+   * time (see {@code ConfigBuilderImpl.build}).
+   */
+  Set<String> gatedOffFieldIds = new HashSet<>();
+
   Table<S, R, Set<Permission>> stateRolePermissions = HashBasedTable.create();
 
   // Events by id

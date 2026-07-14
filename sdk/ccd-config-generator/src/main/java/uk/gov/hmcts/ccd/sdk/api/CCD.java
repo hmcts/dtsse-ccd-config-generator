@@ -45,6 +45,26 @@ public @interface CCD {
 
   boolean ignore() default false;
 
+  /**
+   * A generation-time environment gate: when set, this field is part of the generated definition
+   * only when the predicate matches at the moment {@code generateCCDConfig} runs. Empty (the
+   * default) means the field is always emitted.
+   *
+   * <p>The grammar is {@code [!]ENV_VAR:value} (e.g. {@code CCD_DEF_JO:true} or
+   * {@code !CCD_DEF_ENV:prod}); the variable is resolved from {@link System#getProperty(String)}
+   * first, then the process environment. When the gate does not match the field behaves exactly as
+   * {@code ignore = true}: no CaseField row, no AuthorisationCaseField rows, no CaseEventToFields
+   * placement on any event, no CaseTypeTab/search rows, and it is excluded from complex-type member
+   * emission and from complex-type reachability (a complex type reached only through gated-off
+   * fields produces no ComplexTypes rows). The Java member always exists, so a typed getter used to
+   * place the field on an event still compiles; only the emitted rows are gated.
+   *
+   * <p>This mirrors the per-environment overlay fragments hand-written definitions activate by
+   * glob inclusion/exclusion when building each environment's spreadsheet — the field lives only in
+   * that environment's definition, not in a base row shared by all environments.
+   */
+  String gate() default "";
+
   boolean searchable() default true;
 
   int min() default Integer.MIN_VALUE;
