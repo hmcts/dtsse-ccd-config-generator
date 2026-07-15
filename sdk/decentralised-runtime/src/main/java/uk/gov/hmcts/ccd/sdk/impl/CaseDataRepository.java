@@ -118,6 +118,7 @@ class CaseDataRepository {
         insert into ccd.case_data (
             last_modified,
             last_state_modified_date,
+            resolved_ttl,
             jurisdiction,
             case_type_id,
             state,
@@ -131,6 +132,7 @@ class CaseDataRepository {
         values (
             (now() at time zone 'UTC'),
             (now() at time zone 'UTC'),
+            :resolved_ttl,
             :jurisdiction,
             :case_type_id,
             :state,
@@ -151,6 +153,7 @@ class CaseDataRepository {
                 supplementary_data = case_data.supplementary_data
                     || :enforced_supplementary_data::jsonb,
                 security_classification = excluded.security_classification,
+                resolved_ttl = excluded.resolved_ttl,
             last_modified = (now() at time zone 'UTC'),
             version = case
                         when
@@ -172,6 +175,7 @@ class CaseDataRepository {
         """;
 
     Map<String, Object> params = new HashMap<>();
+    params.put("resolved_ttl", event.getResolvedTtl());
     params.put("jurisdiction", event.getCaseDetails().getJurisdiction());
     params.put("case_type_id", event.getCaseDetails().getCaseTypeId());
     params.put("state", event.getCaseDetails().getState());

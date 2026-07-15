@@ -5,7 +5,9 @@ import com.fasterxml.jackson.annotation.JsonValue;
 public enum SimpleCaseState {
     DRAFT,
     CREATED,
-    FOLLOW_UP;
+    FOLLOW_UP,
+    SUBMITTED,
+    DELETE;
 
     @JsonValue
     public String getId() {

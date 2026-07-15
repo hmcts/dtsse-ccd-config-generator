@@ -23,6 +23,12 @@ public class SimpleCaseConfiguration implements CCDConfig<SimpleCaseData, Simple
     public static final String JURISDICTION = "DIVORCE";
     public static final String CREATE_EVENT = "create-simple-case";
     public static final String FOLLOW_UP_EVENT = "simple-case-follow-up";
+    public static final String CREATE_TTL_DRAFT_EVENT = "create-ttl-draft";
+    public static final String SUBMIT_TTL_DRAFT_EVENT = "submit-ttl-draft";
+    public static final String DELETE_TTL_DRAFT_EVENT = "delete-ttl-draft";
+    public static final int DRAFT_TTL_DAYS = 365;
+    public static final int SUBMITTED_TTL_DAYS = 36_524;
+    public static final int DELETED_TTL_DAYS = 0;
     public static final String START_CALLBACK_MARKER = "simple-case-start";
     public static final String SUBMIT_CALLBACK_MARKER = "simple-case-creation";
     public static final String FOLLOW_UP_CALLBACK_MARKER = "simple-case-follow-up-callback";
@@ -64,6 +70,33 @@ public class SimpleCaseConfiguration implements CCDConfig<SimpleCaseData, Simple
             .optional(SimpleCaseData::getFollowUpNote)
             .optional(SimpleCaseData::getFollowUpMarker)
             .done();
+
+        configBuilder
+            .event(CREATE_TTL_DRAFT_EVENT)
+            .forStateTransition(EnumSet.noneOf(SimpleCaseState.class), SimpleCaseState.DRAFT)
+            .ttlIncrement(DRAFT_TTL_DAYS)
+            .name("Create TTL draft")
+            .description("Create a draft with a one year TTL")
+            .grant(CREATE_READ_UPDATE, UserRole.CASE_WORKER)
+            .grantHistoryOnly(UserRole.SUPER_USER);
+
+        configBuilder
+            .event(SUBMIT_TTL_DRAFT_EVENT)
+            .forStateTransition(SimpleCaseState.DRAFT, SimpleCaseState.SUBMITTED)
+            .ttlIncrement(SUBMITTED_TTL_DAYS)
+            .name("Submit TTL draft")
+            .description("Submit a draft and retain it for approximately 100 years")
+            .grant(CREATE_READ_UPDATE, UserRole.CASE_WORKER)
+            .grantHistoryOnly(UserRole.SUPER_USER);
+
+        configBuilder
+            .event(DELETE_TTL_DRAFT_EVENT)
+            .forStateTransition(SimpleCaseState.DRAFT, SimpleCaseState.DELETE)
+            .ttlIncrement(DELETED_TTL_DAYS)
+            .name("Delete TTL draft")
+            .description("Delete a draft by expiring its TTL")
+            .grant(CREATE_READ_UPDATE, UserRole.CASE_WORKER)
+            .grantHistoryOnly(UserRole.SUPER_USER);
 
         configBuilder.searchInputFields()
             .field(SimpleCaseData::getSubject, "Subject");

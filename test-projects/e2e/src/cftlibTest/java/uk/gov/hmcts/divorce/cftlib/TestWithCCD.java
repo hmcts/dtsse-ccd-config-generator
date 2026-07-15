@@ -2763,6 +2763,175 @@ public class TestWithCCD extends CftlibTest {
         assertThat(errorPayload.path("status").asInt(), equalTo(400));
     }
 
+    @SneakyThrows
+    @Order(280)
+    @Test
+    void ttlLifecyclePersistsDraftAndSubmittedResolvedTtlInServiceAndCcd() {
+        LocalDate draftEventStartedOn = LocalDate.now();
+        long reference = createTtlLifecycleCase("Draft which will be submitted");
+
+        assertResolvedTtlMatchesCaseDataAndBothDatabases(
+            reference,
+            SimpleCaseState.DRAFT,
+            SimpleCaseConfiguration.DRAFT_TTL_DAYS,
+            draftEventStartedOn,
+            LocalDate.now()
+        );
+
+        LocalDate submitEventStartedOn = LocalDate.now();
+        submitTtlLifecycleEvent(
+            reference,
+            SimpleCaseConfiguration.SUBMIT_TTL_DRAFT_EVENT,
+            SimpleCaseState.SUBMITTED
+        );
+
+        assertResolvedTtlMatchesCaseDataAndBothDatabases(
+            reference,
+            SimpleCaseState.SUBMITTED,
+            SimpleCaseConfiguration.SUBMITTED_TTL_DAYS,
+            submitEventStartedOn,
+            LocalDate.now()
+        );
+    }
+
+    @SneakyThrows
+    @Order(281)
+    @Test
+    void ttlLifecyclePersistsZeroResolvedTtlWhenDraftIsDeleted() {
+        LocalDate draftEventStartedOn = LocalDate.now();
+        long reference = createTtlLifecycleCase("Draft which will be deleted");
+
+        assertResolvedTtlMatchesCaseDataAndBothDatabases(
+            reference,
+            SimpleCaseState.DRAFT,
+            SimpleCaseConfiguration.DRAFT_TTL_DAYS,
+            draftEventStartedOn,
+            LocalDate.now()
+        );
+
+        LocalDate deleteEventStartedOn = LocalDate.now();
+        submitTtlLifecycleEvent(
+            reference,
+            SimpleCaseConfiguration.DELETE_TTL_DRAFT_EVENT,
+            SimpleCaseState.DELETE
+        );
+
+        assertResolvedTtlMatchesCaseDataAndBothDatabases(
+            reference,
+            SimpleCaseState.DELETE,
+            SimpleCaseConfiguration.DELETED_TTL_DAYS,
+            deleteEventStartedOn,
+            LocalDate.now()
+        );
+    }
+
+    private long createTtlLifecycleCase(String subject) throws Exception {
+        var start = ccdApi.startCase(
+            getAuthorisation("TEST_CASE_WORKER_USER@mailinator.com"),
+            getServiceAuth(),
+            SimpleCaseConfiguration.CASE_TYPE,
+            SimpleCaseConfiguration.CREATE_TTL_DRAFT_EVENT
+        );
+
+        Map<String, Object> submissionData = new LinkedHashMap<>(
+            mapper.convertValue(start.getCaseDetails().getData(), new TypeReference<Map<String, Object>>() {})
+        );
+        submissionData.put("subject", subject);
+
+        var body = Map.of(
+            "data", submissionData,
+            "event", Map.of(
+                "id", SimpleCaseConfiguration.CREATE_TTL_DRAFT_EVENT,
+                "summary", "",
+                "description", ""
+            ),
+            "event_token", start.getToken(),
+            "ignore_warning", false
+        );
+
+        var createCase = buildRequest(
+            "TEST_CASE_WORKER_USER@mailinator.com",
+            BASE_URL + "/data/case-types/" + SimpleCaseConfiguration.CASE_TYPE + "/cases?ignore-warning=false",
+            HttpPost::new
+        );
+        withCcdAccept(createCase, ACCEPT_CREATE_CASE);
+        createCase.setEntity(new StringEntity(mapper.writeValueAsString(body), ContentType.APPLICATION_JSON));
+
+        try (var response = HttpClientBuilder.create().build().execute(createCase)) {
+            String responseBody = EntityUtils.toString(response.getEntity());
+            assertThat("Create TTL draft response: " + responseBody,
+                response.getStatusLine().getStatusCode(), equalTo(201));
+            Map<String, Object> result = mapper.readValue(responseBody, new TypeReference<>() {});
+            assertThat(result.get("state"), equalTo(SimpleCaseState.DRAFT.name()));
+            return Long.parseLong((String) result.get("id"));
+        }
+    }
+
+    private void submitTtlLifecycleEvent(long reference,
+                                         String eventId,
+                                         SimpleCaseState expectedState) throws Exception {
+        var request = prepareEventRequestForCase(
+            reference,
+            "TEST_CASE_WORKER_USER@mailinator.com",
+            eventId,
+            Map.of()
+        );
+
+        try (var response = HttpClientBuilder.create().build().execute(request)) {
+            String responseBody = EntityUtils.toString(response.getEntity());
+            assertThat(eventId + " response: " + responseBody,
+                response.getStatusLine().getStatusCode(), equalTo(201));
+            Map<String, Object> result = mapper.readValue(responseBody, new TypeReference<>() {});
+            assertThat(result.get("state"), equalTo(expectedState.name()));
+        }
+    }
+
+    private void assertResolvedTtlMatchesCaseDataAndBothDatabases(long reference,
+                                                                   SimpleCaseState expectedState,
+                                                                   int ttlIncrementDays,
+                                                                   LocalDate eventStartedOn,
+                                                                   LocalDate eventCompletedOn) throws Exception {
+        Map<String, Object> localCase = db.queryForMap(
+            """
+                SELECT state,
+                       resolved_ttl,
+                       data #>> '{TTL,SystemTTL}' AS system_ttl
+                  FROM ccd.case_data
+                 WHERE reference = :reference
+                """,
+            Map.of("reference", reference)
+        );
+
+        LocalDate localResolvedTtl = ((java.sql.Date) localCase.get("resolved_ttl")).toLocalDate();
+        LocalDate caseDataSystemTtl = LocalDate.parse((String) localCase.get("system_ttl"));
+        LocalDate ccdResolvedTtl = readCcdResolvedTtl(reference);
+
+        assertThat(localCase.get("state"), equalTo(expectedState.name()));
+        assertThat("The service resolved_ttl must match case data TTL.SystemTTL",
+            localResolvedTtl, equalTo(caseDataSystemTtl));
+        assertThat("CCD and the service must persist the same resolved_ttl",
+            ccdResolvedTtl, equalTo(localResolvedTtl));
+        assertThat(localResolvedTtl, allOf(
+            greaterThanOrEqualTo(eventStartedOn.plusDays(ttlIncrementDays)),
+            lessThanOrEqualTo(eventCompletedOn.plusDays(ttlIncrementDays))
+        ));
+    }
+
+    private LocalDate readCcdResolvedTtl(long reference) throws SQLException {
+        try (Connection connection = cftlib().getConnection(Database.Datastore);
+             PreparedStatement statement = connection.prepareStatement(
+                 "SELECT resolved_ttl FROM case_data WHERE reference = ?"
+             )) {
+            statement.setLong(1, reference);
+            try (ResultSet resultSet = statement.executeQuery()) {
+                assertThat("Expected CCD pointer for case " + reference, resultSet.next(), is(true));
+                java.sql.Date resolvedTtl = resultSet.getDate("resolved_ttl");
+                assertThat("Expected CCD resolved_ttl for case " + reference, resolvedTtl, is(notNullValue()));
+                return resolvedTtl.toLocalDate();
+            }
+        }
+    }
+
     private Map<String, Object> queryCurrentOutboxRow(String caseId) {
         return db.queryForMap(
             "SELECT o.status::text AS status, h.response_code AS last_response_code"

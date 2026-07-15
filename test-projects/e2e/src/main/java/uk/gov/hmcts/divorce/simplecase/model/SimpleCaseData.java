@@ -1,11 +1,13 @@
 package uk.gov.hmcts.divorce.simplecase.model;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import uk.gov.hmcts.ccd.sdk.api.CCD;
 import uk.gov.hmcts.ccd.sdk.type.ListValue;
+import uk.gov.hmcts.ccd.sdk.type.TTL;
 import uk.gov.hmcts.divorce.divorcecase.model.access.CaseworkerAccess;
 import uk.gov.hmcts.divorce.divorcecase.model.access.DefaultAccess;
 
@@ -40,6 +42,14 @@ public class SimpleCaseData {
     @CCD(access = {DefaultAccess.class})
     @Builder.Default
     private List<ListValue<SimpleCaseLink>> caseLinks = new ArrayList<>();
+
+    @JsonProperty("TTL")
+    @CCD(
+        typeOverride = uk.gov.hmcts.ccd.sdk.type.FieldType.TTL,
+        label = "Time to live",
+        access = {CaseworkerAccess.class}
+    )
+    private TTL timeToLive;
 
     @CCD(access = {CaseworkerAccess.class})
     private String hyphenatedCaseRef;
