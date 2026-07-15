@@ -1,12 +1,16 @@
 # CCD data migration task
 
 This page covers the SDK `CcdDataMigrationTask`, a reusable Java migration runner for services that
-need to copy large CCD `case_event` history and final `case_data` rows into their decentralised
-runtime database.
+need to copy large CCD `case_event` history, event significant items and final `case_data` rows into
+their decentralised runtime database.
 
-Use this task after the FDW setup in [`fdw-data-migration.md`](fdw-data-migration.md) has been
-created. The task is designed for repeated event preloads before downtime, followed by an explicit
-operator-run cutover after source writes for the selected case types have been frozen.
+Use this task after the FDW setup in [`fdw-data-migration.md`](fdw-data-migration.md) has created
+the FDW server, user mapping, and at least one of the CCD source foreign tables. The task creates
+any missing `fdw_stage.case_data`, `fdw_stage.case_event`, or
+`fdw_stage.case_event_significant_items` foreign tables from the same existing FDW table options so
+environments that were set up before a table was added can self-heal. The task is designed for
+repeated event preloads before downtime, followed by an explicit operator-run cutover after source
+writes for the selected case types have been frozen.
 
 ## Modes
 
@@ -15,8 +19,9 @@ The task has one implementation with explicit modes:
 * `PRELOAD_EVENTS`: scheduled before cutover. Copies immutable source events by event ID high-water
   mark and inserts provisional parent `case_data` rows so the target FK remains valid.
 * `CUTOVER`: explicit operator action during downtime. Captures the cutover event high-water mark,
-  copies the final event delta, refreshes target `case_data` from source, sets final case revisions,
-  resets sequences, validates, and marks the migration complete.
+  copies the final event delta, copies linked `case_event_significant_items` in a single set-based
+  query, refreshes target `case_data` from source, sets final case revisions, resets sequences,
+  validates, and marks the migration complete.
 * `VALIDATE_ONLY`: runs final source-vs-target validation without copying data.
 
 Do not switch to `CUTOVER` automatically from a scheduler. The operator must first freeze source
@@ -27,14 +32,17 @@ writes for the selected case types and wait for in-flight source transactions to
 The preload path keeps the target tables constraint-valid after every committed batch:
 
 * the `case_event -> case_data` FK stays in place
+* the `case_event_significant_items -> case_event` FK stays in place
 * the unique `(case_data_id, case_revision)` index stays in place
 * `case_event.version` and `case_event.case_revision` are calculated before insert
 * `case_event` user triggers are not disabled
 * resume position is stored as a source `case_event.id` window position after each committed batch
 
 Preloaded `case_data` is provisional. Its purpose is to satisfy the event FK. Every copied event
-batch inserts missing parent source `case_data` rows for that batch. `CUTOVER` overwrites target
-`case_data` columns from source, then sets
+batch inserts missing parent source `case_data` rows for that batch. Significant items are copied
+only during `CUTOVER`, using one `insert into ... select` query that reads source significant items
+and joins through already migrated target events up to the captured cutover event high-water mark.
+`CUTOVER` then overwrites target `case_data` columns from source and sets
 `case_data.case_revision = max(case_event.case_revision) + caseRevisionOffset`.
 
 The runtime `case_data` revision trigger is deliberately disabled only inside the cutover refresh
@@ -61,7 +69,7 @@ state:
 * timestamps
 
 The migration configuration hash covers the migration identity. Runtime limits such as
-`eventIdWindowSize`, `maxBatchesPerRun`, `maxRunTime`, and `mode` can change between invocations.
+`eventIdWindowSize`, `significantItemIdWindowSize`, `maxBatchesPerRun`, `maxRunTime`, and `mode` can change between invocations.
 If the migration identity changes after a task has already created a progress row, the task fails
 fast rather than resuming under different source filters. Operators must either keep the same
 identity configuration or explicitly reset/use a new `task-name` after confirming the target state.
@@ -81,10 +89,17 @@ ccd:
       - ET_Scotland
     source-jurisdiction: EMPLOYMENT
     event-id-window-size: 1000000
+    significant-item-id-window-size: 100000
     max-batches-per-run: 100
     max-run-time: 4h
     case-revision-offset: 1000000000
+    fdw-additional-select-grantee: DTS JIT Access et DB Reader SC
 ```
+
+`fdw-additional-select-grantee` is optional. When set, the Java task grants `SELECT` on the
+`fdw_stage.case_data`, `fdw_stage.case_event`, and `fdw_stage.case_event_significant_items` foreign
+tables to that role after validating the FDW tables. Leave it blank to skip the extra grant. As an
+environment variable, use `CCD_DATA_MIGRATION_FDW_ADDITIONAL_SELECT_GRANTEE`.
 
 For cutover, run the same task with:
 
@@ -148,7 +163,9 @@ period. Run `CUTOVER` explicitly during the agreed downtime window.
 
 ## Validation
 
-After cutover, the task logs final `case_data` and `case_event` counts for the selected case types.
+After cutover, the task logs final `case_data`, `case_event`, and `case_event_significant_items`
+counts for the selected case types. It also compares source and target significant-item counts up to
+the captured cutover event high-water mark.
 
 ## Performance Harness
 

@@ -211,6 +211,44 @@ EOF
     psql "$DST_DSN" --set=ON_ERROR_STOP=on --no-psqlrc --quiet -c "$insert_sql"
 }
 
+copy_case_event_significant_items() {
+  log "Copying case_event_significant_items rows linked to migrated events..."
+  local select_sql
+  local insert_sql
+  select_sql=$(cat <<EOF
+COPY (
+  SELECT
+      item.id,
+      item.description,
+      item."type",
+      item.url,
+      item.case_event_id
+  FROM public.case_event_significant_items item
+       JOIN public.case_event ce ON ce.id = item.case_event_id
+       JOIN public.case_data cd ON cd.id = ce.case_data_id
+  WHERE cd.case_type_id = '${CASE_TYPE}'
+  ORDER BY item.id ASC
+) TO STDOUT WITH (FORMAT CSV);
+EOF
+)
+  insert_sql=$(cat <<'EOF'
+BEGIN;
+SET LOCAL session_replication_role = replica;
+COPY ccd.case_event_significant_items (
+    id,
+    description,
+    "type",
+    url,
+    case_event_id
+) FROM STDIN WITH (FORMAT CSV);
+COMMIT;
+EOF
+)
+
+  psql "$SRC_DSN" --set=ON_ERROR_STOP=on --no-psqlrc --tuples-only --quiet -c "$select_sql" | \
+    psql "$DST_DSN" --set=ON_ERROR_STOP=on --no-psqlrc --quiet -c "$insert_sql"
+}
+
 align_case_revisions() {
   log "Aligning case_data.case_revision with migrated event counts plus offset..."
   # We have seen CCD cases where case versions and event counts drift; ensure revisions match event history
@@ -243,22 +281,31 @@ reset_sequences() {
   # duplicate-key error once decentralised writes resume.
   psql "$DST_DSN" --set=ON_ERROR_STOP=on --no-psqlrc --tuples-only --quiet <<'SQL' >/dev/null
 SELECT setval('ccd.case_event_id_seq', COALESCE((SELECT MAX(id) FROM ccd.case_event), 1), true);
+SELECT setval(
+  'ccd.case_event_significant_items_id_seq',
+  COALESCE((SELECT MAX(id) FROM ccd.case_event_significant_items), 1),
+  true
+);
 SQL
 }
 
 report_counts() {
-  local src_cases src_events dst_cases dst_events
+  local src_cases src_events src_significant_items dst_cases dst_events dst_significant_items
   src_cases=$(psql "$SRC_DSN" --set=ON_ERROR_STOP=on --no-psqlrc --quiet -tA \
     -c "SELECT COUNT(*) FROM public.case_data WHERE case_type_id = '${CASE_TYPE}'")
   src_events=$(psql "$SRC_DSN" --set=ON_ERROR_STOP=on --no-psqlrc --quiet -tA \
     -c "SELECT COUNT(*) FROM public.case_event ce JOIN public.case_data cd ON cd.id = ce.case_data_id WHERE cd.case_type_id = '${CASE_TYPE}'")
+  src_significant_items=$(psql "$SRC_DSN" --set=ON_ERROR_STOP=on --no-psqlrc --quiet -tA \
+    -c "SELECT COUNT(*) FROM public.case_event_significant_items item JOIN public.case_event ce ON ce.id = item.case_event_id JOIN public.case_data cd ON cd.id = ce.case_data_id WHERE cd.case_type_id = '${CASE_TYPE}'")
   dst_cases=$(psql "$DST_DSN" --set=ON_ERROR_STOP=on --no-psqlrc --quiet -tA \
     -c "SELECT COUNT(*) FROM ccd.case_data WHERE case_type_id = '${CASE_TYPE}'")
   dst_events=$(psql "$DST_DSN" --set=ON_ERROR_STOP=on --no-psqlrc --quiet -tA \
     -c "SELECT COUNT(*) FROM ccd.case_event ce JOIN ccd.case_data cd ON cd.id = ce.case_data_id WHERE cd.case_type_id = '${CASE_TYPE}'")
+  dst_significant_items=$(psql "$DST_DSN" --set=ON_ERROR_STOP=on --no-psqlrc --quiet -tA \
+    -c "SELECT COUNT(*) FROM ccd.case_event_significant_items item JOIN ccd.case_event ce ON ce.id = item.case_event_id JOIN ccd.case_data cd ON cd.id = ce.case_data_id WHERE cd.case_type_id = '${CASE_TYPE}'")
 
-  log "Source counts: case_data=${src_cases}, case_event=${src_events}"
-  log "Target counts: case_data=${dst_cases}, case_event=${dst_events}"
+  log "Source counts: case_data=${src_cases}, case_event=${src_events}, case_event_significant_items=${src_significant_items}"
+  log "Target counts: case_data=${dst_cases}, case_event=${dst_events}, case_event_significant_items=${dst_significant_items}"
 }
 
 main() {
@@ -278,6 +325,7 @@ main() {
   log "Validation succeeded. Proceeding with migration..."
   copy_case_data
   copy_case_event
+  copy_case_event_significant_items
   align_case_revisions
   reset_sequences
   report_counts
