@@ -149,7 +149,7 @@ public interface ConfigBuilder<T, S, R extends HasRole> {
 
   SearchBuilder<T, R> searchInputFields();
 
-  SearchCasesBuilder<T> searchCasesFields();
+  SearchCasesBuilder<T, R> searchCasesFields();
 
   void setCallbackHost(String s);
 
