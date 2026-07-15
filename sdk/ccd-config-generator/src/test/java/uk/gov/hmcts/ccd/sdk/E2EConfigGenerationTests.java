@@ -78,6 +78,18 @@ public class E2EConfigGenerationTests {
 
     @SneakyThrows
     @Test
+    public void emitsPerEventComplexTypeMemberOverrides() {
+        // A complex field whose members carry fluent .eventLabel/.eventHint plus a show condition,
+        // and a nested member override, must produce the EventToComplexTypes rows verbatim.
+        Map<String, File> actual = CcdConfigComparator.dirToMap(
+            new File(tmp.getRoot(), "EventComplexMember/CaseEventToComplexTypes"));
+        Map<String, File> expected = CcdConfigComparator.resourcesDirToMap(
+            "EventComplexMember/CaseEventToComplexTypes");
+        CcdConfigComparator.assertEquivalent(expected, actual, JSONCompareMode.NON_EXTENSIBLE);
+    }
+
+    @SneakyThrows
+    @Test
     public void emitsConfiguredBanner() {
         File expected = resourceFile("BannerFeature/Banner.json");
         File actual = new File(tmp.getRoot(), "BannerFeature/Banner.json");
