@@ -74,7 +74,10 @@ public class JsonCallbackBridge {
     this.requestMapper = mapper.copy()
         .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
         .setSerializationInclusion(JsonInclude.Include.ALWAYS);
-    this.httpClient = HttpClient.newHttpClient();
+    // Application Gateway rejects the h2c upgrade attempted by the default client for HTTP URLs.
+    this.httpClient = HttpClient.newBuilder()
+        .version(HttpClient.Version.HTTP_1_1)
+        .build();
     this.routes = indexPostRoutes(handlerMapping);
     this.localCallbackPlaceholder = normalisePlaceholderName(
         environment.getProperty(LOCAL_CALLBACK_PLACEHOLDER, "")
