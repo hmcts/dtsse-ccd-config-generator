@@ -60,6 +60,9 @@ class CaseEventGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
     JsonUtils.putYn(data, "ShowSummary", event.isShowSummary());
     JsonUtils.putYn(data, "ShowEventNotes", event.isShowEventNotes());
     JsonUtils.putYn(data, "Publish", event.isPublishToCamunda());
+    if (event.isSignificant()) {
+      data.put("SignificantEvent", "Y");
+    }
     // An external event's frontend is not EXUI, so it has no end button to label.
     if (!Strings.isNullOrEmpty(event.getEndButtonLabel()) && !event.isExternal()) {
       data.put("EndButtonLabel", event.getEndButtonLabel());
