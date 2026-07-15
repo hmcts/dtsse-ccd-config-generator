@@ -430,6 +430,38 @@ public class FieldCollection {
     }
 
     /**
+     * Sets the most-recently-added field's {@code CaseEventToFields.DefaultValue} to a raw string,
+     * verbatim — usable after any context-selecting call ({@code readonly}, {@code *NoSummary},
+     * etc.) that returns this builder rather than the field, matching the sheet column, which is
+     * untyped.
+     */
+    public FieldCollectionBuilder<Type, StateType, Parent> defaultValue(String defaultValue) {
+      lastField().defaultValue(defaultValue);
+      return this;
+    }
+
+    /**
+     * Sets the most-recently-added field's {@code CaseEventToFields.RetainHiddenValue} flag: a
+     * value entered while the field is visible survives it later being hidden by its
+     * {@code showCondition} — usable after any context-selecting call ({@code readonly},
+     * {@code *NoSummary}, etc.) that returns this builder rather than the field.
+     */
+    public FieldCollectionBuilder<Type, StateType, Parent> retainHiddenValue() {
+      lastField().retainHiddenValue();
+      return this;
+    }
+
+    /**
+     * Sets the most-recently-added field's {@code CaseEventToFields.CaseEventFieldLabel} — usable
+     * after any context-selecting call ({@code readonly}, {@code *NoSummary}, etc.) that returns
+     * this builder rather than the field.
+     */
+    public FieldCollectionBuilder<Type, StateType, Parent> caseEventFieldLabel(String label) {
+      lastField().caseEventFieldLabel(label);
+      return this;
+    }
+
+    /**
      * Sets the most-recently-added complex-type member's event-level hint text. Emitted as
      * {@code CaseEventToComplexTypes.EventHintText} for a member reached through {@link #complex},
      * and as {@code CaseEventToFields.CaseEventFieldHint} for a top-level field.
@@ -440,6 +472,16 @@ public class FieldCollection {
      * the column, leaving output byte-identical to before this option existed.
      */
     public FieldCollectionBuilder<Type, StateType, Parent> eventHint(String hint) {
+      lastField().caseEventFieldHint(hint);
+      return this;
+    }
+
+    /**
+     * Sets the most-recently-added field's {@code CaseEventToFields.CaseEventFieldHint} — usable
+     * after any context-selecting call ({@code readonly}, {@code *NoSummary}, etc.) that returns
+     * this builder rather than the field.
+     */
+    public FieldCollectionBuilder<Type, StateType, Parent> caseEventFieldHint(String hint) {
       lastField().caseEventFieldHint(hint);
       return this;
     }
@@ -458,6 +500,27 @@ public class FieldCollection {
      */
     public FieldCollectionBuilder<Type, StateType, Parent> pageId(String pageId) {
       lastField().eventComplexPageId(pageId);
+      return this;
+    }
+
+    /**
+     * Sets the most-recently-added field's {@code CaseEventToFields.FieldShowCondition} — usable
+     * after any context-selecting call ({@code readonly}, {@code *NoSummary}, etc.) that returns
+     * this builder rather than the field. Named to avoid colliding with {@link #showCondition}
+     * above, which sets the enclosing page's show condition, not the field's.
+     */
+    public FieldCollectionBuilder<Type, StateType, Parent> fieldShowCondition(String showCondition) {
+      lastField().showCondition(showCondition);
+      return this;
+    }
+
+    /**
+     * Sets the most-recently-added field's {@code CaseEventToFields.DisplayContextParameter} —
+     * usable after any context-selecting call ({@code readonly}, {@code *NoSummary}, etc.) that
+     * returns this builder rather than the field.
+     */
+    public FieldCollectionBuilder<Type, StateType, Parent> displayContextParameter(String displayContextParameter) {
+      lastField().displayContextParameter(displayContextParameter);
       return this;
     }
 

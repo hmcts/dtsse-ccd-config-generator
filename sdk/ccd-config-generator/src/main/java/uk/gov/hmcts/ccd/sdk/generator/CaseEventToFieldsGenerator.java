@@ -73,6 +73,7 @@ class CaseEventToFieldsGenerator<T, S, R extends HasRole> implements ConfigGener
       applyDisplayContextParameter(row, field);
       applyShowSummaryContentOption(row, field);
       applyNullifyByDefault(row, field);
+      applyDefaultValue(row, field);
     }
 
     return entries;
@@ -206,6 +207,16 @@ class CaseEventToFieldsGenerator<T, S, R extends HasRole> implements ConfigGener
     if (field.isNullifyByDefault()) {
       row.put("NullifyByDefault", "Y");
     }
+  }
+
+  private void applyDefaultValue(Map<String, Object> row, Field field) {
+    if (field.getDefaultValue() == null) {
+      return;
+    }
+    String value = field.getDefaultValue() instanceof HasRole
+        ? ((HasRole) field.getDefaultValue()).getRole()
+        : field.getDefaultValue().toString();
+    row.put("DefaultValue", value);
   }
 
 }

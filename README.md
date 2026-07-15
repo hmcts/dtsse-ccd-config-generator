@@ -468,6 +468,33 @@ Members carry their per-event label and hint fluently with `.eventLabel(...)` an
 
 `.pageId(...)` sets the member row's `PageID`. The definition-store `EventToComplexTypes` parser does not read `PageID`, so this value does not change how CCD renders the member — it exists purely so a hand-authored definition carrying `PageID` on member rows round-trips through the SDK byte-for-byte. Rarely used columns not read by that parser (`SecurityClassification`, `Publish`, `ShowSummaryChangeOption` — each under ~1.5% of observed member rows) are intentionally left as raw passthrough rather than given SDK setters.
 
+#### Per-field defaults and hidden-value retention
+
+A field placed on an event can set its `CaseEventToFields.DefaultValue` to a raw string with
+`.defaultValue(String)`, and can set `RetainHiddenValue=Y` — a value entered while the field is
+visible survives it later being hidden by its show condition — with `.retainHiddenValue()`. Both
+compose with every other fluent call, including `readonly`/`*NoSummary` field placements and any
+`.publish(...)`/`.showSummaryContentOption(...)` calls on the same field:
+
+```java
+  builder.event("create")
+    ...
+    .fields()
+      .optional(CaseData::getInternalNote, "otherField=\"*\"")
+      .defaultValue("a literal default")
+      .retainHiddenValue()
+      .readonlyNoSummary(CaseData::getComputedNote)
+      .caseEventFieldLabel("Computed note")
+      .fieldShowCondition("internalNote=\"*\"")
+    ;
+```
+
+`caseEventFieldLabel(String)`, `caseEventFieldHint(String)`, `fieldShowCondition(String)` and
+`displayContextParameter(String)` are the same fluent, `lastField()`-style calls that set
+`CaseEventFieldLabel`/`CaseEventFieldHint`/`FieldShowCondition`/`DisplayContextParameter` on the
+field just placed — usable after any field-placement call, including `readonly`/`*NoSummary`
+variants that return the `FieldCollectionBuilder` rather than the field itself.
+
 ### Configuring the work basket and search fields
 
 There are five methods on the `ConfigBuilder` that allow the configuration of work basket input, work basket results, search input, search results and search cases fields. They all follow the same API:

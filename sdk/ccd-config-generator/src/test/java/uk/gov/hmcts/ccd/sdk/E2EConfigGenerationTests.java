@@ -193,6 +193,19 @@ public class E2EConfigGenerationTests {
             JSONCompareMode.NON_EXTENSIBLE);
     }
 
+    @SneakyThrows
+    @Test
+    public void emitsFieldExtrasMetadata() {
+        // See uk.gov.hmcts.reform.FieldExtrasCaseType: raw-string defaultValue(String), fluent
+        // retainHiddenValue(), and the FieldCollectionBuilder lastField()-style fluent metadata
+        // setters (caseEventFieldLabel/Hint, fieldShowCondition, displayContextParameter) usable
+        // after a readonly/*NoSummary call each pin a column-graft replacement that is default-off.
+        File expectedCaseEventToFields = resourceFile("FieldExtras/CaseEventToFields/create.json");
+        File actualCaseEventToFields = new File(tmp.getRoot(), "FieldExtras/CaseEventToFields/create.json");
+        CcdConfigComparator.assertEquals(expectedCaseEventToFields, actualCaseEventToFields,
+            JSONCompareMode.NON_EXTENSIBLE);
+    }
+
     @Test
     public void generatesDerivedConfig() {
         Map<String, File> actual = CcdConfigComparator.dirToMap(new File(tmp.getRoot(), "derived"));
