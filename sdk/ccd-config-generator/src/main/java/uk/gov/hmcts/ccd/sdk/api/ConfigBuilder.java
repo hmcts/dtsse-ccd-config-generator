@@ -47,6 +47,16 @@ public interface ConfigBuilder<T, S, R extends HasRole> {
     // Default no-op for backward compatibility; implementations may override.
   }
 
+  /**
+   * Sets the CaseType sheet's {@code PrintableDocumentsUrl} column, the webhook the definition
+   * store calls to obtain a printable representation of a case (consumed via
+   * {@code CaseTypeEntity.getPrintWebhook()} at import time). Empty (the default) omits the
+   * column, matching output produced before this option existed.
+   */
+  default void printableDocumentsUrl(String url) {
+    // Default no-op for backward compatibility; implementations may override.
+  }
+
   void shutterService();
 
   void shutterService(R... roles);
@@ -119,7 +129,7 @@ public interface ConfigBuilder<T, S, R extends HasRole> {
 
   SearchBuilder<T, R> searchInputFields();
 
-  SearchCasesBuilder<T> searchCasesFields();
+  SearchCasesBuilder<T, R> searchCasesFields();
 
   void setCallbackHost(String s);
 

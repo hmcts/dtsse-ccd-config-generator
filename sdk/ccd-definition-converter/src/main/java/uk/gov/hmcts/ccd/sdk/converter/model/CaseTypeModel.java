@@ -46,6 +46,12 @@ public class CaseTypeModel {
   boolean jurisdictionShuttered;
 
   /**
+   * CaseType {@code PrintableDocumentsUrl} column — emitted via
+   * {@code builder.printableDocumentsUrl(url)}, or null when the input row omits it.
+   */
+  String printableDocumentsUrl;
+
+  /**
    * Whether every input {@code CaseRoles} row carries a {@code JurisdictionID}: when true the
    * emitter calls {@code builder.emitCaseRoleJurisdiction()} so the generator stamps the column.
    * When only some rows carry it, this is false and the column is grafted via passthrough instead.

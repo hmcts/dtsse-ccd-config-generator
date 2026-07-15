@@ -56,6 +56,7 @@ public class ResolvedCCDConfig<T, S, R extends HasRole> {
   boolean emitCaseRoleJurisdiction = false;
   boolean jurisdictionShuttered = false;
   boolean enableForDeletion = false;
+  String printableDocumentsUrl = "";
   Map<String, String> stateLabels = new HashMap<>();
 
   /**
@@ -78,7 +79,7 @@ public class ResolvedCCDConfig<T, S, R extends HasRole> {
   List<Search<T, R>> workBasketInputFields;
   List<Search<T, R>> searchResultFields;
   List<Search<T, R>> searchInputFields;
-  List<SearchCases> searchCaseResultFields;
+  List<SearchCases<T, R>> searchCaseResultFields;
   List<CaseRoleToAccessProfile> caseRoleToAccessProfiles;
   List<CaseCategory> categories;
   List<SearchCriteria> searchCriteria;

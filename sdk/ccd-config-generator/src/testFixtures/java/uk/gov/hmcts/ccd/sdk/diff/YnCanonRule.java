@@ -31,6 +31,7 @@ public final class YnCanonRule implements NormalisationRule {
         // Definition-time boolean flags the converter now emits via builder switches. The generator
         // writes Y/N; hand-written definitions use Yes/No (ia/ET) or JSON true/false (civil/probate).
         "SignificantEvent",
+        "CanSaveDraft",
         "EnableForDeletion",
         "Shuttered",
         "BannerEnabled"

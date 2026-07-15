@@ -99,17 +99,15 @@ class RetrofitMatcherGoldenTest {
     assertThat(documents.getAction()).contains("typeParameterOverride");
 
     // Plain (non-wrapper) TYPE_CONFLICT: model LocalDate infers Date, definition says DateTime.
-    // DateTime is NOT a FieldType enum constant, so @CCD(typeOverride = FieldType.DateTime) would not
-    // compile — the action must say so honestly rather than recommend uncompilable code (bug A1: the
-    // phase-2 emitter already drops it; phase-1 was still suggesting it).
+    // DateTime is now a completed FieldType enum constant, so the conflict is reconcilable via
+    // @CCD(typeOverride = FieldType.DateTime) — the SDK forces the FieldType column back to DateTime
+    // over the model's Date-inferring LocalDate field, no manual model change needed.
     RetrofitReport.FieldFinding dob = fields.get("dateOfBirth");
     assertThat(dob.getBucket()).isEqualTo(RetrofitReport.Bucket.TYPE_CONFLICT);
     assertThat(dob.isConcreteWrapper()).isFalse();
     assertThat(dob.getInferredFieldType()).isEqualTo("Date");
     assertThat(dob.getAction())
-        .doesNotContain("typeOverride = FieldType.DateTime")
-        .contains("genuine type divergence")
-        .contains("reconcile the model type by hand");
+        .contains("typeOverride = FieldType.DateTime");
 
     // Unmatched definition field.
     RetrofitReport.FieldFinding extra = fields.get("extraSynthField");

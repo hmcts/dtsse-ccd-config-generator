@@ -78,6 +78,18 @@ public class E2EConfigGenerationTests {
 
     @SneakyThrows
     @Test
+    public void emitsPerEventComplexTypeMemberOverrides() {
+        // A complex field whose members carry fluent .eventLabel/.eventHint plus a show condition,
+        // and a nested member override, must produce the EventToComplexTypes rows verbatim.
+        Map<String, File> actual = CcdConfigComparator.dirToMap(
+            new File(tmp.getRoot(), "EventComplexMember/CaseEventToComplexTypes"));
+        Map<String, File> expected = CcdConfigComparator.resourcesDirToMap(
+            "EventComplexMember/CaseEventToComplexTypes");
+        CcdConfigComparator.assertEquivalent(expected, actual, JSONCompareMode.NON_EXTENSIBLE);
+    }
+
+    @SneakyThrows
+    @Test
     public void emitsConfiguredBanner() {
         File expected = resourceFile("BannerFeature/Banner.json");
         File actual = new File(tmp.getRoot(), "BannerFeature/Banner.json");
@@ -145,20 +157,6 @@ public class E2EConfigGenerationTests {
 
     @SneakyThrows
     @Test
-    public void emitsSearchExtras() {
-        // Pins the search/workbasket sub-builder: ListElementCode (several leaves per complex field),
-        // FieldShowCondition on input sheets and ResultsOrdering on result sheets, plus role scoping.
-        // One file per sheet keeps the snapshot on this feature's output and off unrelated generators.
-        for (String sheet : new String[] {
-            "SearchInputFields", "WorkBasketInputFields", "SearchResultFields", "WorkBasketResultFields"}) {
-            File expected = resourceFile("SearchExtras/" + sheet + ".json");
-            File actual = new File(tmp.getRoot(), "SearchExtras/" + sheet + ".json");
-            CcdConfigComparator.assertEquals(expected, actual, JSONCompareMode.NON_EXTENSIBLE);
-        }
-    }
-
-    @SneakyThrows
-    @Test
     public void emitsEventColumnsFlags() {
         // See uk.gov.hmcts.reform.EventColumnsCaseType: significant(), enableForDeletion() and
         // jurisdictionShuttered() each pin a column-graft replacement that is default-off.
@@ -175,6 +173,39 @@ public class E2EConfigGenerationTests {
         CcdConfigComparator.assertEquals(expectedEvent, actualEvent, JSONCompareMode.NON_EXTENSIBLE);
     }
 
+    @SneakyThrows
+    @Test
+    public void emitsSmallColumns2Flags() {
+        // See uk.gov.hmcts.reform.SmallColumns2CaseType: printableDocumentsUrl(), canSaveDraft(),
+        // showSummaryContentOption() and nullifyByDefault() each pin a column-graft replacement
+        // that is default-off.
+        File expectedCaseType = resourceFile("SmallColumns2/CaseType.json");
+        File actualCaseType = new File(tmp.getRoot(), "SmallColumns2/CaseType.json");
+        CcdConfigComparator.assertEquals(expectedCaseType, actualCaseType, JSONCompareMode.NON_EXTENSIBLE);
+
+        File expectedEvent = resourceFile("SmallColumns2/CaseEvent/create.json");
+        File actualEvent = new File(tmp.getRoot(), "SmallColumns2/CaseEvent/create.json");
+        CcdConfigComparator.assertEquals(expectedEvent, actualEvent, JSONCompareMode.NON_EXTENSIBLE);
+
+        File expectedCaseEventToFields = resourceFile("SmallColumns2/CaseEventToFields/create.json");
+        File actualCaseEventToFields = new File(tmp.getRoot(), "SmallColumns2/CaseEventToFields/create.json");
+        CcdConfigComparator.assertEquals(expectedCaseEventToFields, actualCaseEventToFields,
+            JSONCompareMode.NON_EXTENSIBLE);
+    }
+
+    @SneakyThrows
+    @Test
+    public void emitsFieldExtrasMetadata() {
+        // See uk.gov.hmcts.reform.FieldExtrasCaseType: raw-string defaultValue(String), fluent
+        // retainHiddenValue(), and the FieldCollectionBuilder lastField()-style fluent metadata
+        // setters (caseEventFieldLabel/Hint, fieldShowCondition, displayContextParameter) usable
+        // after a readonly/*NoSummary call each pin a column-graft replacement that is default-off.
+        File expectedCaseEventToFields = resourceFile("FieldExtras/CaseEventToFields/create.json");
+        File actualCaseEventToFields = new File(tmp.getRoot(), "FieldExtras/CaseEventToFields/create.json");
+        CcdConfigComparator.assertEquals(expectedCaseEventToFields, actualCaseEventToFields,
+            JSONCompareMode.NON_EXTENSIBLE);
+    }
+
     @Test
     public void generatesDerivedConfig() {
         Map<String, File> actual = CcdConfigComparator.dirToMap(new File(tmp.getRoot(), "derived"));
@@ -183,6 +214,52 @@ public class E2EConfigGenerationTests {
             .putAll(CcdConfigComparator.resourcesDirToMap("derived"))
             .buildKeepingLast();
         CcdConfigComparator.assertEquivalent(expected, actual, JSONCompareMode.NON_EXTENSIBLE, "CaseTypeID");
+    }
+
+    @SneakyThrows
+    @Test
+    public void emitsSearchExtras() {
+        // Pins the search/workbasket sub-builder: ListElementCode (several leaves per complex field),
+        // FieldShowCondition on input sheets and ResultsOrdering on result sheets, plus role scoping.
+        // One file per sheet keeps the snapshot on this feature's output and off unrelated generators.
+        for (String sheet : new String[] {
+            "SearchInputFields", "WorkBasketInputFields", "SearchResultFields", "WorkBasketResultFields"}) {
+            File expected = resourceFile("SearchExtras/" + sheet + ".json");
+            File actual = new File(tmp.getRoot(), "SearchExtras/" + sheet + ".json");
+            CcdConfigComparator.assertEquals(expected, actual, JSONCompareMode.NON_EXTENSIBLE);
+        }
+    }
+
+    @SneakyThrows
+    @Test
+    public void keepsSameNamedSearchPartiesDistinct() {
+        // Two parties share a SearchPartyName but differ in SearchPartyCollectionFieldName; both rows
+        // must survive (keying on name alone collapsed them last-wins).
+        File expected = resourceFile("SearchPartyDuplicate/SearchParty.json");
+        File actual = new File(tmp.getRoot(), "SearchPartyDuplicate/SearchParty.json");
+        CcdConfigComparator.assertEquals(expected, actual, JSONCompareMode.NON_EXTENSIBLE);
+    }
+
+    @SneakyThrows
+    @Test
+    public void emitsSearchCasesRoleAndUseCase() {
+        // Role/use-case scoping of SearchCasesResultFields rows, keeping the historic default row
+        // (empty UserRole, UseCase=orgcases) byte-identical alongside the opted-in rows.
+        File expected = resourceFile("SearchCasesRole/SearchCasesResultFields/SearchCasesResultFields.json");
+        File actual =
+            new File(tmp.getRoot(), "SearchCasesRole/SearchCasesResultFields/SearchCasesResultFields.json");
+        CcdConfigComparator.assertEquals(expected, actual, JSONCompareMode.NON_EXTENSIBLE);
+    }
+
+    @SneakyThrows
+    @Test
+    public void emitsFieldTypeCompletionFields() {
+        // See uk.gov.hmcts.reform.FieldTypeCompletionCaseData: typeOverride = WaysToPay pins the
+        // new base FieldType constant, and the JudicialUser field pins the new predefined complex
+        // type resolving to FieldType "JudicialUser" via its class-level @ComplexType.
+        File expected = resourceFile("FieldTypeCompletion/CaseField.json");
+        File actual = new File(tmp.getRoot(), "FieldTypeCompletion/CaseField.json");
+        CcdConfigComparator.assertEquals(expected, actual, JSONCompareMode.NON_EXTENSIBLE);
     }
 
     @SneakyThrows

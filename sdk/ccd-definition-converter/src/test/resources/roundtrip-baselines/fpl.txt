@@ -12,7 +12,6 @@ Sheet 'ComplexTypes' row [HearingOrderForApproval|dateSent] column 'FieldShowCon
 Sheet 'ComplexTypes' row [HearingOrderForApproval|status] column 'FieldShowCondition:': expected <status!="APPROVED"> but column is missing in actual
 Sheet 'ComplexTypes' row [HearingOrderForReview|dateSent] column 'FieldShowCondition:': expected <judgeTitleAndName=""> but column is missing in actual
 Sheet 'ComplexTypes' row [HearingOrderForReview|status] column 'FieldShowCondition:': expected <status!="APPROVED"> but column is missing in actual
-Sheet 'ComplexTypes' row [JudgeAndLegalAdvisor|judgeJudicialUser] column 'FieldType': expected <JudicialUser> but was <Text>
 Sheet 'ComplexTypes' row [ListingActionRequest|dateReviewed] column 'DisplayContextParameter': expected <#DATETIMEDISPLAY(d LLL yyyy)> but column is missing in actual
 Sheet 'ComplexTypes' row [ListingActionRequest|dateSent] column 'DisplayContextParameter': expected <#DATETIMEDISPLAY(d LLL yyyy)> but column is missing in actual
 Sheet 'ComplexTypes' row [UploadedCaseManagementOrder|dateSent] column 'FieldShowCondition:': expected <judgeTitleAndName=""> but column is missing in actual
@@ -21,4 +20,3 @@ Sheet 'EventToComplexTypes' row [LocalAuthority|||colleagues]: expected row has 
 Sheet 'FixedLists' row [HearingVenue|301] column 'LiveTo': expected <05/06/2022> but column is missing in actual
 Sheet 'FixedLists' row [HearingVenue|302] column 'LiveTo': expected <05/06/2022> but column is missing in actual
 Sheet 'FixedLists' row [RepresentativeRole|LA_BARRISTER]: unexpected row in actual: {ID=RepresentativeRole, ListElement=LA Barrister, ListElementCode=LA_BARRISTER}
-Sheet 'SearchParty' row [CARE_SUPERVISION_EPO|party.firstName,party.lastName|children1]: expected row has no match in actual: {CaseTypeID=CARE_SUPERVISION_EPO, SearchPartyCollectionFieldName=children1, SearchPartyName=party.firstName,party.lastName, SearchPartyAddressLine1=party.address.AddressLine1, SearchPartyPostCode=party.address.PostCode, SearchPartyDOB=party.dateOfBirth}

@@ -143,7 +143,9 @@ public class DefaultDefinitionLinker implements DefinitionLinker {
     // Shuttered flags are now all emitted via real builder calls, so no passthrough is produced for
     // them here.
     passthroughSheets.addAll(buildCaseEventColumnPassthrough(ir, caseTypeId, events, options));
-    passthroughSheets.addAll(buildSearchFieldPassthrough(ir, caseTypeId, options));
+    // SearchCasesResultFields role/useCase/ListElementCode/ResultsOrdering/DisplayContextParameter
+    // are now all emitted via the SearchCases per-field lambda (see CoreConfigEmitter), so the sheet
+    // needs no passthrough and no FieldShowCondition graft — buildSearchFieldPassthrough is retired.
     passthroughSheets.addAll(
         buildUnknownFieldTypePassthrough(ir, caseTypeId, caseFields, options));
     // When only SOME CaseRoles rows carry a JurisdictionID the all-or-nothing generator switch
@@ -161,6 +163,7 @@ public class DefaultDefinitionLinker implements DefinitionLinker {
         .banner(buildBanner(ir))
         .enableForDeletion(caseTypeFlag(caseType, Columns.ENABLE_FOR_DELETION))
         .jurisdictionShuttered(jurisdiction != null && rowFlag(jurisdiction, Columns.SHUTTERED))
+        .printableDocumentsUrl(caseType.getString(Columns.PRINTABLE_DOCUMENTS_URL).orElse(null))
         .emitCaseRoleJurisdiction(emitCaseRoleJurisdiction)
         .complexTypeAuthorisations(complexTypeAuth.grants())
         .jurisdictionId(jurisdiction == null ? null : jurisdiction.getString(Columns.ID).orElse(null))
@@ -1174,6 +1177,9 @@ public class DefaultDefinitionLinker implements DefinitionLinker {
           // SignificantEvent is a genuinely boolean column (civil ships JSON true/false, ia/ET ship
           // "Yes"); getYesNo canonicalises both. Emitted via EventBuilder.significant().
           .significant(row.getYesNo(Columns.SIGNIFICANT_EVENT).orElse(null))
+          // CanSaveDraft is a genuinely boolean CaseEvent column; getYesNo canonicalises Y/true.
+          // Emitted via EventBuilder.canSaveDraft() (create events only).
+          .canSaveDraft(row.getYesNo(Columns.CAN_SAVE_DRAFT).orElse(null))
           .endButtonLabel(row.getDisplayText(Columns.END_BUTTON_LABEL).orElse(null))
           .publish(row.getYesNo(Columns.PUBLISH).orElse(null))
           .publishAs(row.getString(Columns.PUBLISH_AS).orElse(null))
@@ -1347,6 +1353,8 @@ public class DefaultDefinitionLinker implements DefinitionLinker {
             .publish(row.getYesNo(Columns.PUBLISH).orElse(null))
             .publishAs(row.getString(Columns.PUBLISH_AS).orElse(null))
             .nullifyByDefault(row.getYesNo(Columns.NULLIFY_BY_DEFAULT).orElse(null))
+            .showSummaryContentOption(
+                row.getInteger(Columns.SHOW_SUMMARY_CONTENT_OPTION).orElse(null))
             .displayOrder(row.getInteger(Columns.PAGE_FIELD_DISPLAY_ORDER).orElse(null))
             .pageColumnNumber(row.getInteger(Columns.PAGE_COLUMN_NUMBER).orElse(null))
             .complexTypeOverrides(complexOverrides(complexByField.get(fieldId)))
@@ -1450,21 +1458,18 @@ public class DefaultDefinitionLinker implements DefinitionLinker {
       DefinitionIr ir, String caseTypeId, SheetName sheet, boolean cases) {
     List<SearchFieldModel> fields = new ArrayList<>();
     for (SheetRow row : ir.rowsForCaseType(sheet, caseTypeId)) {
-      // SearchCasesResultFields (cases=true) is emitted by a generator that hardcodes UserRole=""
-      // and UseCase and cannot carry role/ListElementCode/ResultsOrdering per field, so a row
-      // carrying a ListElementCode there is still reproduced verbatim via buildSearchFieldPassthrough.
-      // For the four SearchBuilder sheets (cases=false) the per-field lambda now carries
-      // ListElementCode / FieldShowCondition / ResultsOrdering, so those rows are emitted rather
-      // than skipped — a single (field, role) legitimately carries several LEC rows, one per leaf.
-      if (cases && row.getString(Columns.LIST_ELEMENT_CODE).isPresent()) {
-        continue;
-      }
+      // Both the four SearchBuilder sheets (cases=false) and SearchCasesResultFields (cases=true)
+      // now carry ListElementCode / ResultsOrdering / DisplayContextParameter (and, for cases, a
+      // role/UserRole scope and the UseCase) via their per-field lambda, so every row is emitted as
+      // Java — no passthrough. A single (field, role/useCase) legitimately carries several LEC rows,
+      // one per leaf. FieldShowCondition is a SearchBuilder-only column (the SearchCases sheet does
+      // not model it), so it is carried only when cases=false.
       fields.add(SearchFieldModel.builder()
           .caseFieldId(row.getString(Columns.CASE_FIELD_ID).orElse(""))
           .label(row.getDisplayText(Columns.LABEL).orElse(null))
           .displayOrder(row.getInteger(Columns.DISPLAY_ORDER).orElse(null))
           .displayContextParameter(row.getString(Columns.DISPLAY_CONTEXT_PARAMETER).orElse(null))
-          .listElementCode(cases ? null : row.getString(Columns.LIST_ELEMENT_CODE).orElse(null))
+          .listElementCode(row.getString(Columns.LIST_ELEMENT_CODE).orElse(null))
           .showCondition(cases ? null : row.getString(Columns.FIELD_SHOW_CONDITION).orElse(null))
           .useCase(cases ? row.getString(Columns.USE_CASE).orElse(null) : null)
           .resultsOrdering(row.getString(Columns.RESULTS_ORDERING).orElse(null))
@@ -1472,84 +1477,6 @@ public class DefaultDefinitionLinker implements DefinitionLinker {
           .build());
     }
     return fields;
-  }
-
-  /**
-   * Passes through the {@code SearchCasesResultFields} rows the SDK's {@code SearchCasesBuilder}
-   * cannot express. The four flat SearchBuilder sheets (SearchInputFields / SearchResultFields /
-   * WorkBasketInputFields / WorkBasketResultFields) now carry {@code ListElementCode},
-   * {@code FieldShowCondition} and {@code ResultsOrdering} via the per-field lambda
-   * ({@code SearchBuilder.field(getter, label, f -> …)}), so they need no passthrough at all.
-   *
-   * <p>{@code SearchCasesResultFields} is different: its generator hardcodes {@code UserRole=""} and
-   * {@code UseCase=orgcases} and carries no working {@code ListElementCode}/{@code ResultsOrdering}
-   * builder overload, so a row carrying a {@code ListElementCode} is reproduced verbatim (keyed to
-   * keep several LECs under one field distinct) and a {@code FieldShowCondition} on a non-LEC row is
-   * grafted onto the generated row. {@code ResultsOrdering} on this sheet stays a documented residual.
-   *
-   * @param ir the definition IR
-   * @param caseTypeId the case type being converted
-   * @param options the conversion options (for overlay suffix resolution)
-   * @return the SearchCasesResultFields passthrough sheets, one per overlay suffix
-   */
-  private List<PassthroughSheet> buildSearchFieldPassthrough(
-      DefinitionIr ir, String caseTypeId, ConversionOptions options) {
-    List<PassthroughSheet> sheets = new ArrayList<>();
-    SheetName sheet = SheetName.SEARCH_CASES_RESULT_FIELDS;
-    Map<String, List<Map<String, Object>>> lecBySuffix = new LinkedHashMap<>();
-    Map<String, List<Map<String, Object>>> graftBySuffix = new LinkedHashMap<>();
-    for (SheetRow row : ir.rowsForCaseType(sheet, caseTypeId)) {
-      String suffix = OverlayResolver.suffixFor(row.getOverlayTags(), options);
-      if (row.getString(Columns.LIST_ELEMENT_CODE).isPresent()) {
-        Map<String, Object> out = new LinkedHashMap<>(row.getColumns());
-        // Canonicalise the role column to AccessProfile so the passthrough primary key (which
-        // keys on AccessProfile) is stable regardless of which spelling the input row used.
-        if (out.containsKey(Columns.USER_ROLE) && !out.containsKey(Columns.ACCESS_PROFILE)) {
-          out.put(Columns.ACCESS_PROFILE, out.remove(Columns.USER_ROLE));
-        }
-        lecBySuffix.computeIfAbsent(suffix, k -> new ArrayList<>()).add(out);
-      } else {
-        // A non-LEC row whose FieldShowCondition the generator's builder cannot carry: graft it
-        // additively onto the generated row (keyed by CaseFieldID + the generator's UserRole="").
-        Optional<String> value = row.getString(Columns.FIELD_SHOW_CONDITION);
-        if (value.isPresent()) {
-          Map<String, Object> out = new LinkedHashMap<>();
-          out.put(Columns.FIELD_SHOW_CONDITION, value.get());
-          out.put(Columns.CASE_FIELD_ID, row.getString(Columns.CASE_FIELD_ID).orElse(""));
-          Optional<String> role = row.getString(Columns.ACCESS_PROFILE, Columns.USER_ROLE);
-          out.put(Columns.USER_ROLE, role.orElse(""));
-          graftBySuffix.computeIfAbsent(suffix, k -> new ArrayList<>()).add(out);
-        }
-      }
-    }
-    // SearchCasesResultFields is written to a same-named SUBDIRECTORY by its generator; match that
-    // layout so passthrough merges into the generated file rather than creating a sibling.
-    String relativePath = sheet.getName() + "/" + sheet.getName() + ".json";
-    for (Map.Entry<String, List<Map<String, Object>>> entry : lecBySuffix.entrySet()) {
-      String suffix = entry.getKey();
-      sheets.add(PassthroughSheet.builder()
-          .relativePath(relativePath)
-          // ListElementCode leads the key: JsonUtils.mergeInto's matcher short-circuits to a match
-          // on the first key absent from BOTH rows, so the always-present ListElementCode must come
-          // first to keep several LEC rows for one (field, role) distinct.
-          .primaryKeys(List.of(Columns.CASE_FIELD_ID, Columns.LIST_ELEMENT_CODE,
-              Columns.ACCESS_PROFILE, Columns.USE_CASE))
-          .overlaySuffix(suffix)
-          .overlayCondition(OverlayResolver.conditionFor(suffix, options))
-          .rows(entry.getValue())
-          .build());
-    }
-    for (Map.Entry<String, List<Map<String, Object>>> entry : graftBySuffix.entrySet()) {
-      String suffix = entry.getKey();
-      sheets.add(PassthroughSheet.builder()
-          .relativePath(relativePath)
-          .primaryKeys(List.of(Columns.CASE_FIELD_ID, Columns.USER_ROLE))
-          .overlaySuffix(suffix)
-          .overlayCondition(OverlayResolver.conditionFor(suffix, options))
-          .rows(entry.getValue())
-          .build());
-    }
-    return sheets;
   }
 
   /**
@@ -2209,21 +2136,33 @@ public class DefaultDefinitionLinker implements DefinitionLinker {
         .value(null)
         .category(GapCategory.UNSUPPORTED_SHEET)
         .action(GapAction.PASSTHROUGH_ROW)
-        .detail("EventToComplexTypes rows have no config-generator equivalent (per-member event"
-            + " display-context overrides); " + rows.size() + " rows passed through as raw JSON")
+        // The SDK now exposes per-member event overrides (.complex(parent).<ctx>(member) carrying
+        // .eventLabel/.eventHint/.pageId + show condition — see EventComplexMember SDK test), but the
+        // converter keeps the whole EventToComplexTypes sheet as a row-level passthrough: it already
+        // round-trips BYTE-IDENTICALLY (zero residuals in every fixture baseline), whereas re-emitting
+        // it as Java would require resolving each row's dotted ListElementCode into a nested member
+        // getter chain — including through predefined SDK complex types whose members the converter
+        // does not generate — for no fidelity gain and real regression risk. The exotic-tail columns
+        // (SecurityClassification/Publish/ShowSummaryChangeOption/RetainHiddenValue/DefaultValue) ride
+        // through on the same rows. Decision per the row-level-vs-column-graft rule: what stays
+        // byte-identical stays row-level passthrough.
+        .detail("EventToComplexTypes per-member event overrides carried as a byte-identical row-level"
+            + " passthrough (the SDK's .complex(...) member setters are available for hand-written"
+            + " Java but re-deriving nested member getters here is pure risk for zero residual gain); "
+            + rows.size() + " rows passed through as raw JSON")
         .build());
     return sheets;
   }
 
   /**
-   * Grafts the CaseEventToFields columns the SDK's fluent field builder cannot express back onto
-   * the generated rows via column-level passthrough. The SDK writes one file per event
-   * ({@code CaseEventToFields/<event>.json}) merged on CaseFieldID and only emits a field's
-   * DisplayContext, page and summary flag; a definition's per-field FieldShowCondition,
-   * CaseEventFieldLabel/Hint, RetainHiddenValue, DisplayContextParameter and DefaultValue have no
-   * builder equivalent for every display context. Passing the input rows through (AddMissing)
-   * grafts those columns onto the generated rows without overwriting the values the SDK does
-   * compute, and adds rows for fields the SDK omits.
+   * Grafts the CaseEventToFields columns the SDK has no builder for back onto the generated rows via
+   * column-level passthrough. The SDK writes one file per event ({@code CaseEventToFields/<event>.json})
+   * merged on CaseFieldID. Per-field display metadata (FieldShowCondition, CaseEventFieldLabel/Hint,
+   * DisplayContextParameter, DefaultValue, RetainHiddenValue) is now emitted as real Java by
+   * {@code EventsConfigEmitter.fieldMetadataChain} for placed fields, so only the per-page mid-event
+   * callback columns — which the converter deliberately emits no wiring for — remain grafted here.
+   * Passing the input rows through (AddMissing) grafts those onto the generated rows without
+   * overwriting the values the SDK computes, and adds rows for fields the SDK omits.
    *
    * @param ir the definition IR
    * @param caseTypeId the case type being converted
@@ -2239,18 +2178,21 @@ public class DefaultDefinitionLinker implements DefinitionLinker {
     for (EventModel event : events) {
       knownEvents.add(event.getId());
     }
-    // Only these columns are grafted; the SDK computes the rest (DisplayContext, PageID, page
-    // ordering, ShowSummaryChangeOption, Publish) and those must not be shadowed by passthrough.
+    // Only the mid-event callback columns are grafted now. Every per-field display-metadata column
+    // the graft used to carry — FieldShowCondition, CaseEventFieldLabel/Hint, DisplayContextParameter,
+    // DefaultValue and RetainHiddenValue — is emitted as real Java for placed fields by
+    // EventsConfigEmitter.fieldMetadataChain via the all-context fluent FieldCollectionBuilder setters
+    // (.fieldShowCondition/.caseEventFieldLabel/.caseEventFieldHint/.displayContextParameter/
+    // .defaultValue/.retainHiddenValue), so grafting them too would be redundant (AddMissing would
+    // skip the already-populated column anyway).
+    //
+    // The mid-event callback is a per-page CaseEventToFields property with NO builder API (the
+    // converter emits no callback wiring at all), so the SDK writes no CallBackURLMidEvent and
+    // grafting the input's raw value (env ${CCD_DEF_*} placeholders included) can never collide with
+    // a generated one — the original mid-event endpoint round-trips byte-for-byte. Its retry policy
+    // (RetriesTimeoutURLMidEvent / plain RetriesTimeoutMidEvent) is carried alongside. All three are
+    // page-scoped, so PageLabelPropagationRule reconciles which row on the page carries them.
     Set<String> carried = Set.of(
-        Columns.FIELD_SHOW_CONDITION, Columns.CASE_EVENT_FIELD_LABEL, Columns.CASE_EVENT_FIELD_HINT,
-        Columns.RETAIN_HIDDEN_VALUE, Columns.DISPLAY_CONTEXT_PARAMETER, Columns.DEFAULT_VALUE,
-        // The mid-event callback is a per-page CaseEventToFields property. Since the converter now
-        // emits no callback wiring at all, the SDK writes no CallBackURLMidEvent, so grafting the
-        // input's raw value (env ${CCD_DEF_*} placeholders included) can never collide with a
-        // generated one — the original mid-event endpoint round-trips byte-for-byte. Its retry
-        // policy (RetriesTimeoutURLMidEvent / plain RetriesTimeoutMidEvent) is carried alongside.
-        // All three are page-scoped, so PageLabelPropagationRule reconciles which row on the page
-        // carries them.
         Columns.CALLBACK_URL_MID_EVENT,
         Columns.RETRIES_TIMEOUT_URL_MID_EVENT, "RetriesTimeoutMidEvent");
 
@@ -2316,10 +2258,11 @@ public class DefaultDefinitionLinker implements DefinitionLinker {
           .value(null)
           .category(GapCategory.UNSUPPORTED_VALUE)
           .action(GapAction.PASSTHROUGH_COLUMN)
-          .detail("Per-field CaseEventToFields display metadata (FieldShowCondition, "
-              + "CaseEventFieldLabel/Hint, RetainHiddenValue, DisplayContextParameter, "
-              + "DefaultValue) has no fluent-builder equivalent for every context; grafted onto "
-              + "the generated rows via column passthrough")
+          .detail("Per-page mid-event callback columns (CallBackURLMidEvent + its retry policy) "
+              + "have no SDK builder equivalent (the converter emits no callback wiring); grafted "
+              + "onto the generated CaseEventToFields rows via column passthrough. Per-field display "
+              + "metadata (FieldShowCondition, CaseEventFieldLabel/Hint, DisplayContextParameter, "
+              + "DefaultValue, RetainHiddenValue) is now emitted as Java and no longer grafted")
           .build());
     }
     return sheets;

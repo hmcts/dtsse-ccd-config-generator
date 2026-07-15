@@ -45,7 +45,7 @@ this page.** Each gap is classified one of four ways:
 | `Public` ≡ `PUBLIC` | Not semantic | `SECURITY_CLASSIFICATION_CASE` | Importer case-insensitive |
 | Whitespace inside show conditions | Not semantic | `SHOW_CONDITION_WHITESPACE` | Expression parser ignores it |
 | State `Description` repeating `Name` | Not semantic | `STATE_DESCRIPTION` | The generator default (a *differing* Description is emitted via `@CCD(description)`) |
-| `Yes`/`true` ≡ `Y` etc. on boolean columns | Not semantic | `YN_CANON` | Incl. `SignificantEvent`/`EnableForDeletion`/`Shuttered`/`BannerEnabled` |
+| `Yes`/`true` ≡ `Y` etc. on boolean columns | Not semantic | `YN_CANON` | Incl. `SignificantEvent`/`CanSaveDraft`/`EnableForDeletion`/`Shuttered`/`BannerEnabled` |
 | Injected `caseHistory` field/tab/auth rows (creates/widens `CRU`) | **Semantic, accepted** | `CASE_HISTORY` | CaseHistoryViewer carries no submitted data; grants are display-only |
 | Injected/widened read (`R`) on unrestricted-tab fields | **Semantic, accepted** | `TAB_READ_INJECTION` | Roles already event-granted gain tab-field visibility |
 | Surplus `⊆ {C,R}` grants on `Label`/`READONLY` fields | **Semantic, accepted** | `IMMUTABLE_FIELD_CR` | Display permission on data-free fields |
@@ -54,17 +54,17 @@ this page.** Each gap is classified one of four ways:
 | SearchAlias sheet | Fixed with passthrough | whole-sheet | No SDK generator |
 | UserProfile sheet | Fixed with passthrough | whole-sheet | Per-user default worklists; no generator |
 | AccessType / AccessTypeRole sheets | Fixed with passthrough | whole-sheet | Org group-access config; no generator (and NOT deprecated — importer + data store consume them) |
-| EventToComplexTypes rows | Fixed with passthrough | row | Per-member event display overrides have no `EventBuilder` equivalent (12,163 rows — largest passthrough) |
-| `SearchCasesResultFields` complex-leaf rows + `FieldShowCondition` | Fixed with passthrough | row / column-graft | Its generator hardcodes `UserRole`/`UseCase`; the four flat search sheets emit these natively now |
+| EventToComplexTypes rows (incl. exotic tail `SecurityClassification`/`Publish`/`ShowSummaryChangeOption`) | Fixed with passthrough | row | Byte-identical round-trip (zero residuals). SDK now has `.complex(parent).<ctx>(member).eventLabel/.eventHint/.pageId` for hand-written Java, but re-deriving each row's dotted `ListElementCode` into nested member getters (incl. through predefined types) is pure risk for zero residual gain — kept as row passthrough |
 | Orphan / illegal-ID / predefined ComplexTypes; orphan-path FixedLists | Fixed with passthrough | row | Unreachable or non-Java-representable declarations |
 | Conditional / multi-target `PostConditionState` | Fixed with passthrough | overwrite-graft | Runtime honours `state(cond):priority` (JEXL, first-match-wins); `EventBuilder` models one post-state |
-| Callback URLs + retries (all phases, incl. mid-event) | Fixed with passthrough | column-graft | Deliberate: no SDK callback wiring emitted; input URLs carried byte-exactly, `${CCD_DEF_*}` included, and compared exactly |
-| `CaseEventToFields` `DefaultValue`/`RetainHiddenValue` (+ metadata for non-summary contexts) | Fixed with passthrough | column-graft | `DefaultValue` is typed to the field's value; no combinable overload for the rest |
+| Callback URLs + retries (all phases, incl. mid-event) | Fixed with passthrough | column-graft | Deliberate: no SDK callback wiring emitted; input URLs carried byte-exactly, `${CCD_DEF_*}` included, and compared exactly. This is now the *only* `CaseEventToFields` column graft |
 | CaseRoles `JurisdictionID` (mixed usage only) | Fixed with passthrough | column-graft | `emitCaseRoleJurisdiction()` is all-or-nothing; all-rows usage emits natively |
-| Unknown / custom `FieldType` (`CaseHistoryViewer`, `JudicialUser`, …) | Fixed with passthrough | overwrite-graft | No Java carrier; original type replaces the `String`-inferred `Text` |
+| Unknown / custom `FieldType` (no Java carrier, not a `FieldType` constant) | Fixed with passthrough | overwrite-graft | Original type replaces the `String`-inferred `Text`. Now that `CaseHistoryViewer`/`WaysToPay`/`JudicialUser`/… are real `FieldType` constants they take the `@CCD(typeOverride)` Java path instead; only genuinely unknown types graft |
+| `CaseEventToFields` `DefaultValue`/`RetainHiddenValue`/`FieldShowCondition`/label/hint/DCP/`ShowSummaryContentOption`/`NullifyByDefault` | Generated Java | — | Emitted via the all-context fluent `FieldCollectionBuilder` setters (`.defaultValue`/`.retainHiddenValue`/`.fieldShowCondition`/`.caseEventFieldLabel`/`.caseEventFieldHint`/`.displayContextParameter`/`.showSummaryContentOption`/`.nullifyByDefault`) — graft retired |
+| `SearchCasesResultFields` role/`UseCase`/`ListElementCode`/`ResultsOrdering`/DCP | Generated Java | — | Emitted via `searchCasesFields().field(id, label, f -> …)`; passthrough + `FieldShowCondition` graft retired |
+| `PrintableDocumentsUrl` (CaseType), `CanSaveDraft` (CaseEvent) | Generated Java | — | Emitted via `builder.printableDocumentsUrl(...)` / `EventBuilder.canSaveDraft()` |
 | Overlay-only complex-type *members* (ET) | **Open** | — | Needs per-member `@CCD(gate)`; field-level gates cover everything else |
-| No-API columns: `PrintableDocumentsUrl`, `CanSaveDraft`, `ShowSummaryContentOption`, `NullifyByDefault` | **Open** | — | Each needs an SDK API or a decision |
-| SDK keyed collisions: `SearchPartyGenerator` name key; `SearchCases` hardcoded `UserRole`/`UseCase` | **Open** | — | `src/main` generator limitations |
+| `CaseField`-sheet `ShowSummaryContentOption` (`Y`, fpl/prl) | **Open** | — | A CaseField-sheet flag distinct from the `CaseEventToFields` integer column now emitted; no SDK API |
 
 Anything not in this table that survives normalisation is a **real fidelity gap** — the round-trip
 fails on it. Current open-gap totals per fixture are in
@@ -317,17 +317,14 @@ row (source: `DefaultDefinitionLinker`). *Mechanism* is the merge shape:
 | SearchAlias | `SearchAlias` | whole-sheet | No `SearchAlias` generator. |
 | UserProfile | `UserProfile` | whole-sheet | No `UserProfile` generator (per-user default worklists). |
 | AccessType / AccessTypeRole | `AccessType`, `AccessTypeRole` | whole-sheet | No generator for org access-type config. |
-| EventToComplexTypes | `CaseEventToComplexTypes` (→ `EventToComplexTypes`) | row (per event/field) | Per-member event display-context overrides have no `EventBuilder` equivalent. |
-| `SearchCasesResultFields` `ListElementCode` rows | `SearchCasesResultFields` | row | The `SearchCasesBuilder` generator hardcodes `UserRole=""`/`UseCase=orgcases`; a row searching within a complex sub-field is reproduced verbatim. (The four flat `SearchBuilder` sheets now emit `ListElementCode`/`FieldShowCondition`/`ResultsOrdering` via the per-field lambda — see below.) |
-| `SearchCasesResultFields` `FieldShowCondition` | `SearchCasesResultFields` | column-graft | Its generator carries no per-field lambda; `FieldShowCondition` on a non-LEC row is grafted, `ResultsOrdering` stays a documented residual. |
+| EventToComplexTypes (incl. exotic tail) | `CaseEventToComplexTypes` (→ `EventToComplexTypes`) | row (per event/field) | Per-member event display-context overrides. Byte-identical round-trip (zero residuals); the SDK now has `.complex(parent).<ctx>(member).eventLabel/.eventHint/.pageId` for hand-written Java, but re-deriving each row's dotted `ListElementCode` into nested member getters (incl. through predefined types) is pure risk for zero residual gain, so the whole sheet stays a row passthrough. |
 | Orphan / illegal-ID / predefined ComplexTypes | `ComplexTypes` | row | A declared-but-unreachable complex type, one whose ID is not a legal Java identifier, or an explicit re-declaration of an SDK-predefined type is not emitted as a Java `@ComplexType`. |
 | Orphan-path FixedLists | `FixedLists` | row | A FixedList reachable only through an unreachable complex type generates no enum. |
 | Conditional / multi-target `PostConditionState` | `CaseEvent` | overwrite-graft | `EventBuilder` models a single post-state, so the generator emits only the primary state. |
 | Callback URLs (about-to-start / about-to-submit / submitted) + their `RetriesTimeout*` | `CaseEvent` | column-graft | The converter deliberately emits **no** SDK callback wiring, so the generator writes no `CallBackURL*`/`RetriesTimeout*`; the input values (env `${CCD_DEF_*}` placeholders included) are grafted back verbatim. |
 | Mid-event callback URL + its `RetriesTimeout*MidEvent` | `CaseEventToFields` | column-graft | Same: mid-event is a per-page property, carried verbatim per field row rather than wired (a bracketed metadata `CaseFieldID` such as `[STATE]` is skipped — the generator emits no row for it to graft onto). |
-| `CaseEventToFields` `DefaultValue` / `RetainHiddenValue` (+ label/hint/showCondition/DCP for READONLY, HIDDEN and *NoSummary contexts) | `CaseEventToFields` | column-graft | `DefaultValue` is typed to the field's `Value` (unknown to the converter, so it cannot be passed as a literal); no combinable overload carries `RetainHiddenValue` alongside a DCP; and only the Optional/Mandatory *summary* contexts expose the metadata overload. For those contexts label/hint/`FieldShowCondition`/`DisplayContextParameter` are emitted via the `FieldCollection` overloads; elsewhere they fall back to this additive graft. |
 | CaseRoles `JurisdictionID` (mixed usage only) | `CaseRoles` | column-graft | `emitCaseRoleJurisdiction()` is all-or-nothing; when only *some* rows carry `JurisdictionID` the switch cannot be used, so those rows are grafted (a gap records the mixed usage). When every row carries it, the switch is on and nothing is grafted. |
-| Unknown / custom `FieldType` (+`FieldTypeParameter`) | `CaseField` | overwrite-graft | A CCD-platform type with no Java carrier (`CaseHistoryViewer`, `JudicialUser`, `WaysToPay`, …) is generated as `String` → `FieldType=Text`; the original type must replace that. |
+| Unknown / custom `FieldType` (+`FieldTypeParameter`) | `CaseField` | overwrite-graft | A type with no Java carrier that is **not** a real `FieldType` enum constant is generated as `String` → `FieldType=Text`; the original type must replace that. `CaseHistoryViewer`/`WaysToPay`/`JudicialUser`/… are now completed `FieldType` constants, so they take the `@CCD(typeOverride = FieldType.X)` Java path instead — only genuinely unknown types still graft. |
 
 Anything not expressible as code *or* passthrough is an `OMITTED_FAIL` entry in the gap report and
 fails the conversion unless `--allow-gaps`.
@@ -360,7 +357,27 @@ The following constructs used to live in this table and are now emitted as real 
   which emits only the mapping row without registering a `UserRole` or an empty-CRUD `AuthorisationCaseType`.
 - **Search/workbasket `ListElementCode`/`FieldShowCondition`/`ResultsOrdering`** on the four flat
   `SearchBuilder` sheets → the per-field lambda `field(getter, label, f -> f.listElementCode(…).showCondition(…).resultsOrdering(…).role(…))`.
-  Only `SearchCasesResultFields` (whose generator cannot carry these) keeps a passthrough.
+- **`SearchCasesResultFields` role/`UseCase`/`ListElementCode`/`ResultsOrdering`/DCP** → the SDK's new
+  `searchCasesFields().field(id, label, f -> f.role(…).useCase(…).listElementCode(…).resultsOrdering(…).displayContextParameter(…))`
+  lambda (`SearchCases.ResultFieldBuilder`). Both the `ListElementCode` row passthrough and the
+  `FieldShowCondition` column graft are deleted, and `ResultsOrdering` (previously a documented
+  residual on this sheet) now round-trips. Fixed a copy-paste bug in `SearchCasesResultFieldsGenerator`
+  that wrote the `ListElementCode` value into the `DisplayContextParameter`/`ResultsOrdering` columns.
+- **`CaseEventToFields` per-field metadata** — `DefaultValue`, `RetainHiddenValue`, `FieldShowCondition`,
+  `CaseEventFieldLabel`/`Hint`, `DisplayContextParameter`, `ShowSummaryContentOption`, `NullifyByDefault` →
+  the all-context fluent `FieldCollectionBuilder` setters
+  (`.defaultValue`/`.retainHiddenValue`/`.fieldShowCondition`/`.caseEventFieldLabel`/`.caseEventFieldHint`/
+  `.displayContextParameter`/`.showSummaryContentOption`/`.nullifyByDefault`), appended after every
+  placement context (optional/mandatory/readonly/`*NoSummary`/label/complex). The column graft now carries
+  **only** the mid-event callback columns (no SDK API by design).
+- **`PrintableDocumentsUrl`** (CaseType) → `builder.printableDocumentsUrl(url)`; **`CanSaveDraft`**
+  (CaseEvent) → `EventBuilder.canSaveDraft()`. Both were previously dropped residuals.
+- **Completed `FieldType` constants** — `CaseHistoryViewer`, `WaysToPay`, `DateTime`, `Number`, the
+  `AddressUK`/`AddressGlobal`/`AddressGlobalUK` family, `Fee`, `Organisation(+Policy)`,
+  `ChangeOrganisationRequest`, `JudicialUser` are now real `FieldType` enum constants, so an unknown-type
+  overwrite-graft is no longer produced for them: they emit `@CCD(typeOverride = FieldType.X)` (or, for
+  `JudicialUser`, reference the SDK Java type directly). The retrofit `TypeReconciler` reconciles these
+  conflicts via `typeOverride` too instead of flagging a manual model change.
 
 ## The generation-time environment gate
 
@@ -390,37 +407,38 @@ demanding a baseline refresh — the ratchet only tightens). Current baseline si
 
 | Fixture  | Residual lines |
 |----------|---------------:|
-| ia       |              5 |
-| fpl      |             24 |
-| ET       |             34 |
-| probate  |             34 |
-| sscs     |             62 |
-| prl      |            187 |
-| civil    |            211 |
+| ia       |              4 |
+| probate  |              6 |
+| fpl      |             22 |
+| ET       |             33 |
+| sscs     |             57 |
+| prl      |            170 |
+| civil    |            201 |
 
-(probate fell from 442 to 34 once `LIVE_TO_VESTIGIAL` absorbed its uniform vestigial
-`AuthorisationCaseState LiveTo` — ~408 lines; prl fell from 199 to 187 as `CONFLICTING_ELEMENT_LABELS`
-collapsed its cross-fragment `ElementLabel` conflicts and Part 3's `CaseField`-DCP strip closed the
-rest of that tail. The other fixtures held. To regenerate a baseline after an intended change, run
-`GenerateGoldenFiles` with `-Djunit.jupiter.conditions.deactivate='*'`.)
+(The M2-wiring round drove every fixture down by wiring the S-wave SDK features into the converter:
+`PrintableDocumentsUrl`/`CanSaveDraft`/`ShowSummaryContentOption` now emit as Java (et, sscs, probate,
+civil), the completed `FieldType` constants resolve `JudicialUser` etc. via `typeOverride` (fpl, prl,
+sscs), the `SearchParty` identity-key fix de-duplicates same-named parties (fpl), and — the biggest
+single win — the `SearchCasesResultFields` per-field lambda emits role/`UseCase`/`ListElementCode`/
+`ResultsOrdering`/DCP as Java, closing probate's 26-line `UserRole`/`UseCase`-scoped tail (34→6) and
+shrinking civil, prl and ia. Earlier, probate had fallen from 442 to 34 once `LIVE_TO_VESTIGIAL`
+absorbed its uniform vestigial `AuthorisationCaseState LiveTo`. To regenerate a baseline after an
+intended change, run `GenerateGoldenFiles` with `-Djunit.jupiter.conditions.deactivate='*'`.)
 
 The categories, all SDK-structural limitations or fixture-data findings (none are converter bugs):
 
 - **Complex-type members that are themselves overlay-only** (ET: `UnavailabilityDateRange`,
   `sendNotificationCollection`) — `@CCD(gate)` gates a `CaseData` field; a shared complex class
   would need per-member gates. Routed to passthrough today; imperfect when the gate is on.
-- **No SDK builder API**: `CaseType PrintableDocumentsUrl` (fixed CaseType column set in
-  `JSONConfigGenerator`), `CanSaveDraft` (probate), `ShowSummaryContentOption`, a
-  `DisplayContextParameter` on labelled/non-member tab fields;
-  `CaseEventToFields NullifyByDefault` (parsed into the model but emitted by no generator and — unlike
-  `DefaultValue`/`RetainHiddenValue`/`FieldShowCondition` — *not* in the column-passthrough graft set,
-  so a `NullifyByDefault=Y` surfaces as an unabsorbed diff).
+- **`CaseField`-sheet `ShowSummaryContentOption=Y`** (fpl, prl): a `CaseField`-sheet flag distinct
+  from the numeric `CaseEventToFields.ShowSummaryContentOption` column the converter now emits; it has
+  no SDK API and stays a residual. (`PrintableDocumentsUrl`, `CanSaveDraft` and the
+  `CaseEventToFields` `ShowSummaryContentOption`/`NullifyByDefault`/`DefaultValue`/`RetainHiddenValue`
+  columns are now all emitted as Java — see [Constructs moved from passthrough to generated Java](#constructs-moved-from-passthrough-to-generated-java).)
 - **Unreachable / non-Java complex types** (prl): whole `ComplexTypes` members with no match in the
-  generated definition — orphan/unreachable types and platform types carried as `Text` (e.g.
-  `JudicialUser`) — the bulk of prl's remaining tail, routed to passthrough or type-grafted.
-- **SDK generator keyed collisions**: `SearchPartyGenerator` keys on `(CaseTypeID, SearchPartyName)`
-  so same-named rows differing only in collection field collapse last-wins; the `SearchCases`
-  builder emits an empty `UserRole` and hardcodes `UseCase=orgcases`.
+  generated definition — orphan/unreachable types — remain the bulk of prl's tail, routed to
+  passthrough. (Platform types such as `JudicialUser` are no longer carried as `Text`: they are now
+  real `FieldType` constants emitting `typeOverride`.)
 
 ## What the round-trip does not prove
 

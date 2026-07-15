@@ -45,6 +45,15 @@ public class PageModel {
     Boolean publish;
     String publishAs;
     Boolean nullifyByDefault;
+
+    /**
+     * CaseEventToFields {@code ShowSummaryContentOption} — the display order of this field's content
+     * within the event's check-your-answers summary. Emitted via
+     * {@code FieldCollectionBuilder.showSummaryContentOption(int)}. Distinct from
+     * {@code showSummary} (the ShowSummaryChange<em>Option</em> Y/N flag). Null when absent.
+     */
+    Integer showSummaryContentOption;
+
     Integer displayOrder;
     Integer pageColumnNumber;
 

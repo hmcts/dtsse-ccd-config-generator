@@ -46,6 +46,12 @@ public class EventModel {
    */
   Boolean significant;
 
+  /**
+   * CaseEvent {@code CanSaveDraft} flag — emitted via {@code EventBuilder.canSaveDraft()}. Valid
+   * only on create events (no pre-state); the definition-store importer rejects it otherwise.
+   */
+  Boolean canSaveDraft;
+
   String endButtonLabel;
   Boolean publish;
   String publishAs;

@@ -36,7 +36,7 @@ import uk.gov.hmcts.ccd.sdk.converter.model.gap.GapEntry;
  * Emits the retrofit annotation patch (proposal §3 mechanism (b), §4): a {@code git apply}-able
  * unified diff that annotates the team's <em>existing</em> model sources so the SDK reads the
  * definition metadata straight off their fields. It edits with JavaParser's
- * {@link LexicalPreservingPrinter} (minimal churn — untouched lines are preserved byte-for-byte) and
+ * {@code LexicalPreservingPrinter} (minimal churn — untouched lines are preserved byte-for-byte) and
  * renders the before/after of each touched file into a unified diff with java-diff-utils.
  *
  * <p>Per the taxonomy the linker + matcher produced, for each reachable model class it:

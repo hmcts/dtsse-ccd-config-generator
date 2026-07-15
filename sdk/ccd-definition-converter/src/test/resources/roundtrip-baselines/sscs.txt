@@ -30,8 +30,6 @@ Sheet 'CaseEventToFields' row [directionIssued|prePostHearing] column 'Publish':
 Sheet 'CaseEventToFields' row [hmctsResponseReviewed|selectWhoReviewsCase] column 'Publish': expected <N> but was <Y>
 Sheet 'CaseEventToFields' row [manageWelshDocuments|uploadedWelshDocumentTypes] column 'Publish': expected <N> but was <Y>
 Sheet 'CaseEventToFields' row [postHearingRequest|postHearingRequestType] column 'Publish': expected <N> but was <Y>
-Sheet 'CaseEventToFields' row [reviewConfidentialityRequest|confidentialityRequestAppellantGrantedOrRefused] column 'ShowSummaryContentOption': expected <0> but column is missing in actual
-Sheet 'CaseEventToFields' row [reviewConfidentialityRequest|confidentialityRequestJointPartyGrantedOrRefused] column 'ShowSummaryContentOption': expected <0> but column is missing in actual
 Sheet 'CaseEventToFields' row [tcwReferToJudge|prePostHearing] column 'Publish': expected <N> but was <Y>
 Sheet 'CaseEventToFields' row [updateNotListable|interlocReviewState] column 'Publish': expected <N> but was <Y>
 Sheet 'CaseEventToFields' row [uploadWelshDocument|uploadedWelshDocumentTypes] column 'Publish': expected <N> but was <Y>
@@ -42,18 +40,15 @@ Sheet 'CaseField' row [adjournCaseAdditionalDirections] column 'FieldTypeParamet
 Sheet 'CaseField' row [adjournCaseReasons] column 'FieldTypeParameter': expected <TextArea> but was <Text>
 Sheet 'CaseField' row [writeFinalDecisionReasons] column 'FieldTypeParameter': expected <TextArea> but was <Text>
 Sheet 'CaseType' row [Benefit] column 'Name': expected <SSCS Case ${CCD_DEF_VERSION} nonprod> but was <SSCS Case ${CCD_DEF_VERSION} ${CCD_DEF_ENV}>
-Sheet 'CaseType' row [Benefit] column 'PrintableDocumentsUrl': expected <http://ccd-data-store-api-prod.service.core-compute-prod.internal/callback/jurisdictions/SSCS/case-types/Benefit/documents> but column is missing in actual
 Sheet 'CaseType' row [Benefit] column 'RetriesTimeoutURLPrintEvent': expected <5,10,15> but column is missing in actual
 Sheet 'CaseTypeTab' row [CaseHistory|caseHistory]: unexpected row in actual: {CaseFieldID=caseHistory, CaseTypeID=Benefit, Channel=CaseWorker, TabID=CaseHistory, TabLabel=History}
 Sheet 'ComplexTypes' row [appellant|confidentialityRequiredChangedDate]: expected row has no match in actual: {ID=appellant, ListElementCode=confidentialityRequiredChangedDate, FieldType=Text, ElementLabel=Confidentiality Confirmed, SecurityClassification=PUBLIC}
 Sheet 'ComplexTypes' row [appellant|confidentialityRequiredConfirmedDate] column 'DisplayContextParameter': expected <#DATETIMEDISPLAY(d MMM yyyy, h:mm:ss a)> but column is missing in actual
-Sheet 'ComplexTypes' row [judicialUserPanel|assignedTo] column 'FieldType': expected <JudicialUser> but was <Text>
 Sheet 'ComplexTypes' row [judicialUserPanel|panelMembers] column 'FieldTypeParameter': expected <JudicialUser> but was <Text>
 Sheet 'ComplexTypes' row [otherParty|confidentialityRequiredChangedDate]: expected row has no match in actual: {ID=otherParty, ListElementCode=confidentialityRequiredChangedDate, FieldType=Text, ElementLabel=Confidentiality Confirmed, SecurityClassification=PUBLIC}
 Sheet 'ComplexTypes' row [otherParty|confidentialityRequiredConfirmedDate] column 'DisplayContextParameter': expected <#DATETIMEDISPLAY(d MMM yyyy, h:mm:ss a)> but column is missing in actual
 Sheet 'ComplexTypes' row [panelMemberExclusions|excludedPanelMembers] column 'FieldTypeParameter': expected <JudicialUser> but was <Text>
 Sheet 'ComplexTypes' row [panelMemberExclusions|reservedPanelMembers] column 'FieldTypeParameter': expected <JudicialUser> but was <Text>
-Sheet 'ComplexTypes' row [reserveTo|reservedJudge] column 'FieldType': expected <JudicialUser> but was <Text>
 Sheet 'FixedLists' row [FL_selectWhoReviewsCase|postponementRequestInterlocSendToTcw]: expected row has no match in actual: {ID=FL_selectWhoReviewsCase, ListElementCode=postponementRequestInterlocSendToTcw, ListElement=Postponement request for interloc - send to TCW}
 Sheet 'FixedLists' row [FL_selectWhoReviewsCase|reviewByJudge]: expected row has no match in actual: {ID=FL_selectWhoReviewsCase, ListElementCode=reviewByJudge, ListElement=Review by Judge}
 Sheet 'FixedLists' row [FL_selectWhoReviewsCase|reviewByTcw]: expected row has no match in actual: {ID=FL_selectWhoReviewsCase, ListElementCode=reviewByTcw, ListElement=Review by TCW}

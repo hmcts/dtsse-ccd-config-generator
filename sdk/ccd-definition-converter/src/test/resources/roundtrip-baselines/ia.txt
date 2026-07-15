@@ -2,4 +2,3 @@ Sheet 'CaseEventToFields' row [customiseHearingBundle|customAppAdditionalEvidenc
 Sheet 'CaseEventToFields' row [updateDetentionLocation|appellantAddressTitle] column 'Retries': expected <5, 5, 5, 5> but column is missing in actual
 Sheet 'CaseField' row [SearchCriteria] column 'OtherCaseReference': expected <appealNumber.value> but column is missing in actual
 Sheet 'CaseField' row [paymentAccountList] column 'Value': expected <Select a number> but column is missing in actual
-Sheet 'SearchCasesResultFields' row [[CASE_REFERENCE]|||orgcases] column 'ResultsOrdering': expected <1:ASC> but column is missing in actual

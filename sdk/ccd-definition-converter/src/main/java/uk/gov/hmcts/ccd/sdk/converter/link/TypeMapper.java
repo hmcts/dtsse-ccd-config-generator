@@ -85,14 +85,14 @@ final class TypeMapper {
     }
     if (FIELD_TYPE_CONSTANTS.contains(type)) {
       // A real FieldType enum constant with no dedicated Java carrier (OrderSummary,
-      // CaseLocation, ComponentLauncher, CasePaymentHistoryViewer, …): carry as String with
-      // an override naming the constant.
+      // CaseLocation, ComponentLauncher, CasePaymentHistoryViewer, CaseHistoryViewer,
+      // WaysToPay, JudicialUser, …): carry as String with an override naming the constant.
       return override("String", type, fieldTypeParameter);
     }
-    // An unknown/custom type that is neither a generated complex type, an SDK predefined type,
-    // nor a real FieldType constant (e.g. CaseHistoryViewer, WaysToPay). Emitting
-    // FieldType.<type> would not compile, so carry it as a plain String and flag it unknown so
-    // the linker records a gap and passes the original FieldType through as raw JSON.
+    // A genuinely unknown/custom type that is neither a generated complex type, an SDK predefined
+    // type, nor a real FieldType constant. Emitting FieldType.<type> would not compile, so carry it
+    // as a plain String and flag it unknown so the linker records a gap and passes the original
+    // FieldType through as raw JSON.
     return Mapping.unknown("String");
   }
 

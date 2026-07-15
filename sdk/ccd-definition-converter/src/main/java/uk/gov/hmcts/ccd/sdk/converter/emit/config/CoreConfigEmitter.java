@@ -201,6 +201,12 @@ public class CoreConfigEmitter implements SourceEmitter {
     if (model.isJurisdictionShuttered()) {
       cb.addStatement("builder.jurisdictionShuttered()");
     }
+    // CaseType PrintableDocumentsUrl: emitted via the builder switch (default no-op) rather than
+    // grafted; the generator writes it onto the CaseType row. Placeholders (${CCD_DEF_*}) are
+    // carried verbatim in the string literal, so the migrated service's webhook round-trips.
+    if (model.getPrintableDocumentsUrl() != null && !model.getPrintableDocumentsUrl().isEmpty()) {
+      cb.addStatement("builder.printableDocumentsUrl($S)", model.getPrintableDocumentsUrl());
+    }
     // Stamp JurisdictionID on every generated CaseRoles row when the input carried it on all of
     // them (all-or-nothing switch; see DefaultDefinitionLinker.allCaseRolesCarryJurisdiction).
     if (model.isEmitCaseRoleJurisdiction()) {
@@ -456,7 +462,8 @@ public class CoreConfigEmitter implements SourceEmitter {
         userRole, roleConstants, context, "SearchInputFields");
     emitSearchBuilder(cb, "searchResultFields", model.getSearchResultFields(),
         userRole, roleConstants, context, "SearchResultFields");
-    emitSearchCasesBuilder(cb, model.getSearchCasesResultFields());
+    emitSearchCasesBuilder(cb, model.getSearchCasesResultFields(),
+        userRole, roleConstants, context);
   }
 
   private void emitSearchBuilder(
@@ -540,19 +547,53 @@ public class CoreConfigEmitter implements SourceEmitter {
   }
 
   private void emitSearchCasesBuilder(
-      CodeBlock.Builder cb, List<SearchFieldModel> fields) {
+      CodeBlock.Builder cb, List<SearchFieldModel> fields,
+      ClassName userRole, Map<String, String> roleConstants, EmitContext context) {
     if (fields == null || fields.isEmpty()) {
       return;
     }
     cb.add("builder.searchCasesFields()");
     for (SearchFieldModel field : fields) {
       String label = field.getLabel() != null ? field.getLabel() : "";
-      String dcp = field.getDisplayContextParameter();
-      // The SDK's SearchCasesBuilder exposes field(id, label) and field(id, label,
-      // displayContext) only; ListElementCode and ResultsOrdering have no builder overload and
-      // are grafted back via column-level passthrough recorded by the linker.
-      if (dcp != null && !dcp.isEmpty()) {
-        cb.add("\n    .field($S, $S, $S)", field.getCaseFieldId(), label, dcp);
+      String roleId = field.getUserRole();
+      String roleConst = null;
+      if (roleId != null && !roleId.isEmpty()) {
+        roleConst = roleConstants.get(roleId);
+        if (roleConst == null) {
+          missingRoleGap(context, "SearchCasesResultFields",
+              field.getCaseFieldId() + "/" + roleId, roleId);
+          continue;
+        }
+      }
+      // The optional columns — an AccessProfile/UserRole scope, the UseCase, ListElementCode,
+      // ResultsOrdering and DisplayContextParameter — are now all carried through the per-field
+      // lambda field(id, label, f -> …) (SearchCases.ResultFieldBuilder), retiring the LEC row
+      // passthrough and the FieldShowCondition graft the linker used to record. The plain
+      // field(id, label) overload stays the terse common case when a row sets none of them.
+      boolean hasExtras = roleConst != null
+          || notBlank(field.getUseCase())
+          || notBlank(field.getListElementCode())
+          || notBlank(field.getResultsOrdering())
+          || notBlank(field.getDisplayContextParameter());
+      if (hasExtras) {
+        CodeBlock.Builder lambda = CodeBlock.builder();
+        lambda.add("f -> f");
+        if (roleConst != null) {
+          lambda.add(".role($T.$L)", userRole, roleConst);
+        }
+        if (notBlank(field.getUseCase())) {
+          lambda.add(".useCase($S)", field.getUseCase());
+        }
+        if (notBlank(field.getListElementCode())) {
+          lambda.add(".listElementCode($S)", field.getListElementCode());
+        }
+        if (notBlank(field.getResultsOrdering())) {
+          lambda.add(".resultsOrdering($S)", field.getResultsOrdering());
+        }
+        if (notBlank(field.getDisplayContextParameter())) {
+          lambda.add(".displayContextParameter($S)", field.getDisplayContextParameter());
+        }
+        cb.add("\n    .field($S, $S, $L)", field.getCaseFieldId(), label, lambda.build());
       } else {
         cb.add("\n    .field($S, $S)", field.getCaseFieldId(), label);
       }

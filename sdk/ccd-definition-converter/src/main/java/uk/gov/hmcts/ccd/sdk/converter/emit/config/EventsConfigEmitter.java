@@ -327,6 +327,11 @@ public class EventsConfigEmitter implements SourceEmitter {
       // CaseEvent SignificantEvent flag, emitted via the builder rather than the CaseEvent graft.
       cb.add("\n    .significant()");
     }
+    if (Boolean.TRUE.equals(event.getCanSaveDraft())) {
+      // CaseEvent CanSaveDraft flag, emitted via the builder rather than a residual/graft. The
+      // importer only allows this on create events (no pre-state); the input already respects that.
+      cb.add("\n    .canSaveDraft()");
+    }
     if (event.getTtlIncrement() != null) {
       cb.add("\n    .ttlIncrement($L)", event.getTtlIncrement());
     }
@@ -587,6 +592,7 @@ public class EventsConfigEmitter implements SourceEmitter {
           }
           nested.add("\n    .$L($T::$L)", clusterMethod,
               ClassName.get(innerPkg, innerType), ref.getMemberGetter());
+          nested.add(fieldMetadataChain(field));
           nested.add(publishChain(field, event));
           // One .done() to close the leaf's enclosing block plus one per hop back to CaseData.
           for (int i = 0; i <= ref.getParentHops().size(); i++) {
@@ -605,6 +611,7 @@ public class EventsConfigEmitter implements SourceEmitter {
         }
         cluster.add("\n    .$L($T::$L)", clusterMethod,
             ClassName.get(clusterPkg, ref.getClusterType()), ref.getMemberGetter());
+        cluster.add(fieldMetadataChain(field));
         // Per-field Publish/PublishAs override the event's publishToCamunda() cascade; chain onto
         // the just-added member so the generated CaseEventToFields.Publish matches the input.
         cluster.add(publishChain(field, event));
@@ -663,6 +670,7 @@ public class EventsConfigEmitter implements SourceEmitter {
         CodeBlock.Builder labelStmt = CodeBlock.builder();
         labelStmt.add("fields.$L($T::get$L)", labelMethod, caseData,
             capitalise(fieldModel.getJavaName()));
+        labelStmt.add(fieldMetadataChain(field));
         labelStmt.add(publishChain(field, event));
         cb.addStatement("$L", labelStmt.build());
         continue;
@@ -673,13 +681,19 @@ public class EventsConfigEmitter implements SourceEmitter {
         // DisplayContext=COMPLEX only via a .complex(getter) block, so emit an empty one. Honour
         // the input's ShowSummaryChangeOption via the two-arg complex(getter, summary) overload
         // when it is N (the SDK otherwise defaults ShowSummaryChangeOption to Y).
+        CodeBlock.Builder complexStmt = CodeBlock.builder();
         if (Boolean.FALSE.equals(field.getShowSummary())) {
-          cb.addStatement("fields.complex($T::get$L, false).done()", caseData,
+          complexStmt.add("fields.complex($T::get$L, false).done()", caseData,
               capitalise(fieldModel.getJavaName()));
         } else {
-          cb.addStatement("fields.complex($T::get$L).done()", caseData,
+          complexStmt.add("fields.complex($T::get$L).done()", caseData,
               capitalise(fieldModel.getJavaName()));
         }
+        // The .complex(...).done() call returns the FieldCollectionBuilder, so the fluent
+        // lastField() metadata setters act on the complex field just placed — emit its per-field
+        // CaseEventToFields metadata as Java rather than via the retired column graft.
+        complexStmt.add(fieldMetadataChain(field));
+        cb.addStatement("$L", complexStmt.build());
         continue;
       }
       // The SDK field builder defaults ShowSummaryChangeOption to Y; when the input explicitly
@@ -687,27 +701,16 @@ public class EventsConfigEmitter implements SourceEmitter {
       String method = Boolean.FALSE.equals(field.getShowSummary())
           ? builderMethod + "NoSummary" : builderMethod;
       String getter = "get" + capitalise(fieldModel.getJavaName());
-      // Per-field CaseEventToFields metadata via the FieldCollection overloads: the six-arg
-      // optional/mandatory(getter, showCondition, defaultValue, label, hint, displayContextParameter)
-      // carries FieldShowCondition + CaseEventFieldLabel/Hint + DisplayContextParameter in one call
-      // (only for the summary Optional/Mandatory contexts that expose it — READONLY/HIDDEN and the
-      // *NoSummary variants have no such overload, so those keep the column graft). DefaultValue and
-      // RetainHiddenValue have no compile-safe/ combinable overload here (DefaultValue is typed to
-      // the field's Value, unknown to the emitter) and stay grafted; see
-      // DefaultDefinitionLinker.buildEventFieldColumnPassthrough for the documented residual set.
-      boolean metadataOverload = ("optional".equals(method) || "mandatory".equals(method))
-          && (notBlank(field.getShowCondition()) || notBlank(field.getLabel())
-              || notBlank(field.getHint()) || notBlank(field.getDisplayContextParameter()));
+      // Per-field CaseEventToFields metadata via the fluent lastField()-style FieldCollectionBuilder
+      // setters, available after EVERY placement call (optional/mandatory/readonly and their
+      // *NoSummary variants all return the FieldCollectionBuilder): FieldShowCondition,
+      // CaseEventFieldLabel/Hint, DisplayContextParameter, DefaultValue, RetainHiddenValue,
+      // ShowSummaryContentOption and NullifyByDefault. Emitting them here retires the per-field
+      // CaseEventToFields column graft entirely for placed fields (see
+      // DefaultDefinitionLinker.buildEventFieldColumnPassthrough, now callback-only).
       CodeBlock.Builder stmt = CodeBlock.builder();
-      if (metadataOverload) {
-        stmt.add("fields.$L($T::$L, $L, null, $L, $L, $L)", method, caseData, getter,
-            literalOrNull(field.getShowCondition()),
-            literalOrNull(field.getLabel()),
-            literalOrNull(field.getHint()),
-            literalOrNull(field.getDisplayContextParameter()));
-      } else {
-        stmt.add("fields.$L($T::$L)", method, caseData, getter);
-      }
+      stmt.add("fields.$L($T::$L)", method, caseData, getter);
+      stmt.add(fieldMetadataChain(field));
       stmt.add(publishChain(field, event));
       cb.addStatement("$L", stmt.build());
     }
@@ -744,6 +747,47 @@ public class EventsConfigEmitter implements SourceEmitter {
     boolean fieldPublishes = Boolean.TRUE.equals(field.getPublish());
     if (fieldPublishes != eventPublishes) {
       cb.add("\n    .publish($L)", fieldPublishes);
+    }
+    return cb.build();
+  }
+
+  /**
+   * The fluent per-field {@code CaseEventToFields} metadata chain appended after a field placement.
+   * Every setter is a {@code lastField()}-style {@code FieldCollectionBuilder} call usable after any
+   * placement context (including {@code readonly}/{@code *NoSummary}), so all of these are emitted as
+   * Java rather than grafted: {@code FieldShowCondition}, {@code CaseEventFieldLabel/Hint},
+   * {@code DisplayContextParameter}, {@code DefaultValue} (raw string), {@code RetainHiddenValue},
+   * {@code ShowSummaryContentOption} and {@code NullifyByDefault}. An empty chain when the field sets
+   * none of them, keeping the terse common case unchanged.
+   *
+   * @param field the page field
+   * @return the chained metadata calls, possibly empty
+   */
+  private CodeBlock fieldMetadataChain(PageModel.PageField field) {
+    CodeBlock.Builder cb = CodeBlock.builder();
+    if (notBlank(field.getShowCondition())) {
+      cb.add("\n    .fieldShowCondition($S)", field.getShowCondition());
+    }
+    if (notBlank(field.getLabel())) {
+      cb.add("\n    .caseEventFieldLabel($S)", field.getLabel());
+    }
+    if (notBlank(field.getHint())) {
+      cb.add("\n    .caseEventFieldHint($S)", field.getHint());
+    }
+    if (notBlank(field.getDisplayContextParameter())) {
+      cb.add("\n    .displayContextParameter($S)", field.getDisplayContextParameter());
+    }
+    if (notBlank(field.getDefaultValue())) {
+      cb.add("\n    .defaultValue($S)", field.getDefaultValue());
+    }
+    if (Boolean.TRUE.equals(field.getRetainHiddenValue())) {
+      cb.add("\n    .retainHiddenValue()");
+    }
+    if (field.getShowSummaryContentOption() != null) {
+      cb.add("\n    .showSummaryContentOption($L)", field.getShowSummaryContentOption());
+    }
+    if (Boolean.TRUE.equals(field.getNullifyByDefault())) {
+      cb.add("\n    .nullifyByDefault()");
     }
     return cb.build();
   }

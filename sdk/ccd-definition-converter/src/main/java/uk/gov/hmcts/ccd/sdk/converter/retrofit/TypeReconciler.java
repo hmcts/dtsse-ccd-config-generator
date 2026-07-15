@@ -74,10 +74,11 @@ final class TypeReconciler {
       }
       return rebound.build();
     }
-    // A conflict whose definition FieldType is not a FieldType enum constant (Number, DateTime,
-    // AddressUK, a custom complex type): inexpressible via @CCD(typeOverride=…). Leave it un-annotated
-    // — a wrong FieldType.X would not compile — and let the match report flag it for a manual model
-    // reconciliation.
+    // A conflict whose definition FieldType is not a FieldType enum constant (a custom/unknown
+    // complex type): inexpressible via @CCD(typeOverride=…). Leave it un-annotated — a wrong
+    // FieldType.X would not compile — and let the match report flag it for a manual model
+    // reconciliation. (DateTime/Number/AddressUK-family and the other completed constants now ARE
+    // FieldType enum constants, so they take the typeOverride branch above.)
     return field;
   }
 

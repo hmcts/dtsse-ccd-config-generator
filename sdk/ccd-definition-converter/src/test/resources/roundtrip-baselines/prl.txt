@@ -41,7 +41,6 @@ Sheet 'CaseTypeTab' row [RespondentTasksC|respondentTaskListC] column 'TabLabel'
 Sheet 'CaseTypeTab' row [RespondentTasksD|respondentTaskListD] column 'TabLabel': expected <Respondent tasks D> but was <Respondent 4 tasks>
 Sheet 'CaseTypeTab' row [RespondentTasksE|respondentTaskListE] column 'TabLabel': expected <Respondent tasks E> but was <Respondent 5 tasks>
 Sheet 'CaseTypeTab' row [confidentialDetails|daApplicantContactInstructions] column 'TabLabel': expected <Applicant contact instructions> but was <Confidential details>
-Sheet 'ComplexTypes' row [AllocatedJudge|judgeNameAndEmail] column 'FieldType': expected <JudicialUser> but was <Text>
 Sheet 'ComplexTypes' row [Behaviours|abuseNatureDescription]: expected row has no match in actual: {ID=Behaviours, ListElementCode=abuseNatureDescription, FieldType=TextArea, ElementLabel=*Describe the nature of the abuse, what happened and who was involved., SecurityClassification=PUBLIC}
 Sheet 'ComplexTypes' row [Behaviours|behavioursApplicantHelpAction]: expected row has no match in actual: {ID=Behaviours, ListElementCode=behavioursApplicantHelpAction, FieldType=TextArea, ElementLabel=*Did they do anything? If yes, what did they do?, SecurityClassification=PUBLIC}
 Sheet 'ComplexTypes' row [Behaviours|behavioursApplicantHelpSoughtWho]: expected row has no match in actual: {ID=Behaviours, ListElementCode=behavioursApplicantHelpSoughtWho, FieldType=TextArea, ElementLabel=*Who did they seek help from?, SecurityClassification=PUBLIC}
@@ -76,15 +75,12 @@ Sheet 'ComplexTypes' row [FL400|fl404bDateOrderEnd] column 'DisplayContextParame
 Sheet 'ComplexTypes' row [FL400|fl404bOccupationDate1] column 'DisplayContextParameter': expected <#DATETIMEENTRY(dd-MM-yyyy hh:mm a)> but column is missing in actual
 Sheet 'ComplexTypes' row [FL400|fl404bOccupationDate2] column 'DisplayContextParameter': expected <#DATETIMEENTRY(dd-MM-yyyy hh:mm a)> but column is missing in actual
 Sheet 'ComplexTypes' row [FL400|orderSpecifiedDateTime] column 'DisplayContextParameter': expected <#DATETIMEENTRY(dd-MM-yyyy hh:mm a)> but column is missing in actual
-Sheet 'ComplexTypes' row [GatekeepingDetails|judgeName] column 'FieldType': expected <JudicialUser> but was <Text>
-Sheet 'ComplexTypes' row [HearingData|hearingJudgeNameAndEmail] column 'FieldType': expected <JudicialUser> but was <Text>
 Sheet 'ComplexTypes' row [HearingDateTimeOption|hearingDateTimeOption] column 'DisplayContextParameter': expected <#DATETIMEENTRY(dd-MM-yyyy hh:mm a)> but column is missing in actual
 Sheet 'ComplexTypes' row [InterpreterNeed|language]: expected row has no match in actual: {ID=InterpreterNeed, ListElementCode=language, FieldType=Text, ElementLabel=*Enter details of the language or dialect required., SecurityClassification=PUBLIC}
 Sheet 'ComplexTypes' row [InterpreterNeed|nameLabel]: expected row has no match in actual: {ID=InterpreterNeed, ListElementCode=nameLabel, FieldType=Label, ElementLabel=*Describe their relationship to the case. For example - grandmother of the applicant., SecurityClassification=PUBLIC}
 Sheet 'ComplexTypes' row [InterpreterNeed|name]: expected row has no match in actual: {ID=InterpreterNeed, ListElementCode=name, FieldType=Text, SecurityClassification=PUBLIC}
 Sheet 'ComplexTypes' row [InterpreterNeed|party]: expected row has no match in actual: {ID=InterpreterNeed, ListElementCode=party, FieldType=MultiSelectList, FieldTypeParameter=PartyEnum, ElementLabel=*Who will require the interpreter?, SecurityClassification=PUBLIC}
 Sheet 'ComplexTypes' row [ManageDocuments|restrictedDetails] column 'DisplayContext': expected <OPTIONAL> but column is missing in actual
-Sheet 'ComplexTypes' row [Message|sendReplyJudgeName] column 'FieldType': expected <JudicialUser> but was <Text>
 Sheet 'ComplexTypes' row [PartyDetails|addNewApplicantLabel]: expected row has no match in actual: {ID=PartyDetails, ListElementCode=addNewApplicantLabel, FieldType=Label, ElementLabel=## Add new applicant, SecurityClassification=PUBLIC}
 Sheet 'ComplexTypes' row [PartyDetails|addNewRespondentLabel]: expected row has no match in actual: {ID=PartyDetails, ListElementCode=addNewRespondentLabel, FieldType=Label, ElementLabel=## Add new respondent, SecurityClassification=PUBLIC}
 Sheet 'ComplexTypes' row [PartyDetails|addressLivedLessThan5YearsDetails]: expected row has no match in actual: {ID=PartyDetails, ListElementCode=addressLivedLessThan5YearsDetails, FieldType=TextArea, ElementLabel=*Provide details of all previous addresses for the last 5 years below(if known, including the dates and starting with most recent), SecurityClassification=PUBLIC}
@@ -139,8 +135,6 @@ Sheet 'ComplexTypes' row [ProceedingDetails|typeOfOrder]: expected row has no ma
 Sheet 'ComplexTypes' row [ProceedingDetails|uploadRelevantOrder]: expected row has no match in actual: {ID=ProceedingDetails, ListElementCode=uploadRelevantOrder, FieldType=Document, ElementLabel=Other proceedings order document, SecurityClassification=PUBLIC, CategoryID=anyOtherDoc}
 Sheet 'ComplexTypes' row [RequestFurtherInformationDetailsType|reviewByDate] column 'DisplayContextParameter': expected <#DATETIMEENTRY(dd-MM-yyyy)> but column is missing in actual
 Sheet 'ComplexTypes' row [RequestFurtherInformationDetailsType|reviewByDate] column 'Publish': expected <Y> but column is missing in actual
-Sheet 'ComplexTypes' row [SdoDetails|sdoAllocateOrReserveJudgeName] column 'FieldType': expected <JudicialUser> but was <Text>
-Sheet 'ComplexTypes' row [SdoDetails|sdoNextStepJudgeName] column 'FieldType': expected <JudicialUser> but was <Text>
 Sheet 'ComplexTypes' row [StmtOfServiceAddRecipient|servedDateTimeOption] column 'DisplayContextParameter': expected <#DATETIMEENTRY(dd-MM-yyyy hh:mm a)> but column is missing in actual
 Sheet 'ComplexTypes' row [WelshNeed|spokenOrWritten]: expected row has no match in actual: {ID=WelshNeed, ListElementCode=spokenOrWritten, FieldType=MultiSelectList, FieldTypeParameter=SpokenOrWrittenWelshEnum, SecurityClassification=PUBLIC}
 Sheet 'ComplexTypes' row [WelshNeed|whoNeedsWelsh]: expected row has no match in actual: {ID=WelshNeed, ListElementCode=whoNeedsWelsh, FieldType=Text, ElementLabel=*Provide the names of the people involved in the case who want to speak Welsh or read and write in Welsh., SecurityClassification=PUBLIC}
@@ -172,16 +166,5 @@ Sheet 'FixedLists' row [RelationshipsEnum|stepMother] column 'HintText': expecte
 Sheet 'RoleToAccessProfiles' row [hmcts-admin]: expected row has no match in actual: {CaseTypeID=PRLAPPS, RoleName=hmcts-admin, ReadOnly=Y, AccessProfiles=GS_profile}
 Sheet 'RoleToAccessProfiles' row [hmcts-judiciary]: expected row has no match in actual: {CaseTypeID=PRLAPPS, RoleName=hmcts-judiciary, ReadOnly=Y, AccessProfiles=GS_profile}
 Sheet 'RoleToAccessProfiles' row [hmcts-legal-operations]: expected row has no match in actual: {CaseTypeID=PRLAPPS, RoleName=hmcts-legal-operations, ReadOnly=Y, AccessProfiles=GS_profile}
-Sheet 'SearchCasesResultFields' row [[CREATED_DATE]|||orgcases] column 'UserRole': expected <caseworker-caa> but was <>
-Sheet 'SearchCasesResultFields' row [applicantCaseName|||orgcases] column 'ResultsOrdering': expected <1:ASC> but column is missing in actual
-Sheet 'SearchCasesResultFields' row [applicantCaseName|||orgcases] column 'UserRole': expected <caseworker-caa> but was <>
-Sheet 'SearchCasesResultFields' row [applicantName|||orgcases] column 'UserRole': expected <caseworker-caa> but was <>
-Sheet 'SearchCasesResultFields' row [childName|||orgcases] column 'UserRole': expected <caseworker-caa> but was <>
-Sheet 'SearchCasesResultFields' row [dateSubmitted|||orgcases] column 'UserRole': expected <caseworker-caa> but was <>
-Sheet 'SearchCasesResultFields' row [respondentName|||orgcases] column 'UserRole': expected <caseworker-caa> but was <>
-Sheet 'SearchCasesResultFields' row [selectedCaseTypeID|||orgcases] column 'UserRole': expected <caseworker-caa> but was <>
 Sheet 'SearchCriteria' row [{CaseTypeID=PRLAPPS, LiveTo=, OtherCaseReference=familymanCaseNumber}]: expected row has no match in actual: {LiveTo=, CaseTypeID=PRLAPPS, OtherCaseReference=familymanCaseNumber}
 Sheet 'SearchCriteria' row [{CaseTypeID=PRLAPPS, OtherCaseReference=familymanCaseNumber}]: unexpected row in actual: {CaseTypeID=PRLAPPS, OtherCaseReference=familymanCaseNumber}
-Sheet 'SearchParty' row [PRLAPPS|firstName,lastName|children]: expected row has no match in actual: {CaseTypeID=PRLAPPS, SearchPartyName=firstName,lastName, SearchPartyCollectionFieldName=children, SearchPartyDOB=dateOfBirth}
-Sheet 'SearchParty' row [PRLAPPS|firstName,lastName|newChildDetails]: expected row has no match in actual: {CaseTypeID=PRLAPPS, SearchPartyName=firstName,lastName, SearchPartyCollectionFieldName=newChildDetails, SearchPartyDOB=dateOfBirth}
-Sheet 'SearchParty' row [PRLAPPS|firstName,lastName|respondents]: expected row has no match in actual: {CaseTypeID=PRLAPPS, SearchPartyName=firstName,lastName, SearchPartyCollectionFieldName=respondents, SearchPartyEmailAddress=email, SearchPartyAddressLine1=address.AddressLine1, SearchPartyPostCode=address.PostCode, SearchPartyDOB=dateOfBirth}

@@ -29,7 +29,6 @@ Sheet 'CaseEvent' row [UPDATE_DASHBOARD_NOTIFICATIONS_JUDGMENT_PAID_CLAIMANT] co
 Sheet 'CaseEvent' row [UPDATE_DASHBOARD_NOTIFICATIONS_JUDGMENT_PAID_DEFENDANT] column 'Description': expected < > but was <Defendant payment dashboard>
 Sheet 'CaseEvent' row [UPDATE_GA_CASE_DATA] column 'Description': expected <Update parent case data > but was <Update parent case data>
 Sheet 'CaseEvent' row [UPDATE_PARTIES_NOTIFIED_HMC] column 'Description': expected < > but was <Hearing parties notified>
-Sheet 'CaseEventToFields' row [ADD_CASE_NOTE|caseNote] column 'ShowSummaryContentOption': expected <1> but column is missing in actual
 Sheet 'CaseEventToFields' row [CASE_PROCEEDS_IN_CASEMAN|CaseAccessCategory] column 'DisplayContext': expected <Mandatory> but was <MANDATORY>
 Sheet 'CaseEventToFields' row [CASE_PROCEEDS_IN_CASEMAN|claimProceedsInCasemanLR] column 'DisplayContext': expected <Mandatory> but was <MANDATORY>
 Sheet 'CaseEventToFields' row [CASE_PROCEEDS_IN_CASEMAN|claimProceedsInCaseman] column 'DisplayContext': expected <Mandatory> but was <MANDATORY>
@@ -48,7 +47,6 @@ Sheet 'CaseEventToFields' row [DEFENDANT_RESPONSE_SPEC|respondent2DQFutureApplic
 Sheet 'CaseEventToFields' row [DEFENDANT_RESPONSE_SPEC|responseClaimMediationSpecLabel2] column 'PageShowCondition': expected <> but was <showConditionFlags CONTAINS "CAN_ANSWER_RESPONDENT_1" OR showConditionFlags CONTAINS "SOMEONE_DISPUTES" AND responseClaimTrack = "SMALL_CLAIM" AND showCarmFields="No" AND respondentClaimResponseTypeForSpecGeneric != "FULL_ADMISSION">
 Sheet 'CaseEventToFields' row [EVIDENCE_UPLOAD_APPLICANT|notificationText] column 'DisplayContext': expected <readonly> but was <READONLY>
 Sheet 'CaseEventToFields' row [GENERATE_DIRECTIONS_ORDER|selectTemplateLabel] column 'EventHintText': expected <Select a template to download a Word document and edit offline> but column is missing in actual
-Sheet 'CaseEventToFields' row [UPDATE_CASE_DATA|nextState] column 'ShowSummaryContentOption': expected <1> but column is missing in actual
 Sheet 'CaseEventToFields' row [queryManagementRespondQuery|preStayState] column 'PageShowShowCondition': expected <QueryManagementComponentLauncher="DUMMY_VALUE_TO_HIDE_PAGE"> but column is missing in actual
 Sheet 'CaseField' row [applicant1LiPResponse] column 'Publish': expected <Y> but column is missing in actual
 Sheet 'CaseField' row [applicant1Represented] column 'Publish': expected <Y> but column is missing in actual
@@ -199,13 +197,5 @@ Sheet 'FixedLists' row [SmallClaimsMethodInPerson|hearingMethodDrop]: expected r
 Sheet 'RoleToAccessProfiles' row [[APPLICANTSOLICITORONE]]: expected row has no match in actual: {RoleName=[APPLICANTSOLICITORONE], Authorisation=, CaseTypeID=CIVIL, AccessProfiles=APP-SOL-SPEC-PROFILE,payment-access, ReadOnly=N, Disabled=N, CaseAccessCategories=SPEC_CLAIM}
 Sheet 'RoleToAccessProfiles' row [[RESPONDENTSOLICITORONE]]: expected row has no match in actual: {RoleName=[RESPONDENTSOLICITORONE], Authorisation=, CaseTypeID=CIVIL, AccessProfiles=RES-SOL-ONE-SPEC-PROFILE, ReadOnly=N, Disabled=N, CaseAccessCategories=SPEC_CLAIM}
 Sheet 'RoleToAccessProfiles' row [[RESPONDENTSOLICITORTWO]]: expected row has no match in actual: {RoleName=[RESPONDENTSOLICITORTWO], Authorisation=, CaseTypeID=CIVIL, AccessProfiles=RES-SOL-TWO-SPEC-PROFILE, ReadOnly=N, Disabled=N, CaseAccessCategories=SPEC_CLAIM}
-Sheet 'SearchCasesResultFields' row [[CASE_REFERENCE]|||orgcases] column 'ResultsOrdering': expected <1:ASC> but column is missing in actual
-Sheet 'SearchCasesResultFields' row [[CASE_REFERENCE]|||orgcases] column 'UserRole': expected <caseworker-caa> but was <>
-Sheet 'SearchCasesResultFields' row [[LAST_MODIFIED_DATE]|||orgcases] column 'UserRole': expected <caseworker-caa> but was <>
-Sheet 'SearchCasesResultFields' row [[STATE]|||orgcases] column 'UserRole': expected <caseworker-caa> but was <>
-Sheet 'SearchCasesResultFields' row [allPartyNames|||orgcases] column 'UserRole': expected <caseworker-caa> but was <>
-Sheet 'SearchCasesResultFields' row [legacyCaseReference|||orgcases] column 'UserRole': expected <caseworker-caa> but was <>
-Sheet 'SearchCasesResultFields' row [nextDeadline|||orgcases] column 'UserRole': expected <caseworker-caa> but was <>
-Sheet 'SearchCasesResultFields' row [unassignedCaseListDisplayOrganisationReferences|||orgcases] column 'UserRole': expected <caseworker-caa> but was <>
 Sheet 'SearchCriteria' row [{CaseTypeID=CIVIL, LiveTo=, OtherCaseReference=legacyCaseReference}]: expected row has no match in actual: {LiveTo=, CaseTypeID=CIVIL, OtherCaseReference=legacyCaseReference}
 Sheet 'SearchCriteria' row [{CaseTypeID=CIVIL, OtherCaseReference=legacyCaseReference}]: unexpected row in actual: {CaseTypeID=CIVIL, OtherCaseReference=legacyCaseReference}
