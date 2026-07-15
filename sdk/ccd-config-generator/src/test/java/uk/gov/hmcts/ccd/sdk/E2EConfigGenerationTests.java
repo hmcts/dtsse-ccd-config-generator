@@ -1,11 +1,13 @@
 package uk.gov.hmcts.ccd.sdk;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.Assert.assertFalse;
 
 import com.google.common.collect.ImmutableMap;
 import com.google.common.io.Resources;
 import java.io.File;
 import java.net.URL;
+import java.nio.charset.StandardCharsets;
 import java.util.Map;
 import lombok.SneakyThrows;
 import org.junit.Before;
@@ -85,6 +87,32 @@ public class E2EConfigGenerationTests {
     @Test
     public void omitsBannerWhenNotConfigured() {
         assertFalse(new File(tmp.getRoot(), "CARE_SUPERVISION_EPO/Banner.json").exists());
+    }
+
+    @SneakyThrows
+    @Test
+    public void mapsUnregisteredRolesToAccessProfiles() {
+        // The two org/IDAM roles appear in RoleToAccessProfiles verbatim...
+        File expectedProfiles = resourceFile("RoleMappings/RoleToAccessProfiles.json");
+        File actualProfiles = new File(tmp.getRoot(), "RoleMappings/RoleToAccessProfiles.json");
+        CcdConfigComparator.assertEquals(expectedProfiles, actualProfiles, JSONCompareMode.NON_EXTENSIBLE);
+
+        // ...but must NOT be registered as UserRoles in AuthorisationCaseType, which only lists
+        // enum-backed roles. A plain-string mapping never registers a role.
+        String auth = Resources.toString(
+            new File(tmp.getRoot(), "RoleMappings/AuthorisationCaseType.json").toURI().toURL(),
+            StandardCharsets.UTF_8);
+        assertThat(auth)
+            .doesNotContain("caseworker-rolemap-system")
+            .doesNotContain("caseworker-rolemap-caseofficer");
+    }
+
+    @SneakyThrows
+    @Test
+    public void stampsCaseRoleJurisdictionWhenOptedIn() {
+        File expected = resourceFile("RoleMappings/CaseRoles.json");
+        File actual = new File(tmp.getRoot(), "RoleMappings/CaseRoles.json");
+        CcdConfigComparator.assertEquals(expected, actual, JSONCompareMode.NON_EXTENSIBLE);
     }
 
     @SneakyThrows
