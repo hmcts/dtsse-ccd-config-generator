@@ -91,6 +91,15 @@ public class E2EConfigGenerationTests {
         CcdConfigComparator.assertEquals(expectedAuth, actualAuth, JSONCompareMode.NON_EXTENSIBLE);
     }
 
+    @SneakyThrows
+    @Test
+    public void honoursExplicitStateDescription() {
+        // CaseManagement carries @CCD(description = ...); Open has none and must default to Name.
+        File expected = resourceFile("StateDescription/State.json");
+        File actual = new File(tmp.getRoot(), "StateDescription/State.json");
+        CcdConfigComparator.assertEquals(expected, actual, JSONCompareMode.NON_EXTENSIBLE);
+    }
+
     @Test
     public void generatesDerivedConfig() {
         Map<String, File> actual = CcdConfigComparator.dirToMap(new File(tmp.getRoot(), "derived"));

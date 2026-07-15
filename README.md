@@ -251,6 +251,16 @@ public enum State {
 }
 ```
 
+By default the state's `Description` column is the same as its `Name` (i.e. `label`). Set
+`@CCD(description = ...)` on the constant to give it a distinct `Description`:
+
+```java
+public enum State {
+  @CCD(label = "Holding", description = "Case is on hold pending payment")
+  Holding;
+}
+```
+
 By default the CCD state ID is the enum constant name. A constant may override this with
 `@JsonProperty`, exactly as case fields do — the annotated value then becomes the state ID
 **everywhere** a state is written (the `State` sheet, each event's `PreConditionState(s)` /
