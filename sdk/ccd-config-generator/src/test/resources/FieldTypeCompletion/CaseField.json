@@ -1,0 +1,26 @@
+[
+  {
+    "CaseTypeID": "FieldTypeCompletion",
+    "FieldType": "JudicialUser",
+    "ID": "allocatedJudge",
+    "Label": "Allocated judge",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public"
+  },
+  {
+    "CaseTypeID": "FieldTypeCompletion",
+    "FieldType": "CaseHistoryViewer",
+    "ID": "caseHistory",
+    "Label": " ",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public"
+  },
+  {
+    "CaseTypeID": "FieldTypeCompletion",
+    "FieldType": "WaysToPay",
+    "ID": "serviceRequest",
+    "Label": "Service request",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public"
+  }
+]
