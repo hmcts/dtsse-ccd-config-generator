@@ -396,6 +396,24 @@ public class FieldCollection {
       return this;
     }
 
+    /**
+     * Sets the most-recently-added field's {@code CaseEventToFields.ShowSummaryContentOption},
+     * the display order of that field's content within the event's check-your-answers summary.
+     */
+    public FieldCollectionBuilder<Type, StateType, Parent> showSummaryContentOption(int order) {
+      lastField().showSummaryContentOption(order);
+      return this;
+    }
+
+    /**
+     * Sets the most-recently-added field's {@code CaseEventToFields.NullifyByDefault} flag: on
+     * submit the field is cleared unless a value was provided.
+     */
+    public FieldCollectionBuilder<Type, StateType, Parent> nullifyByDefault() {
+      lastField().nullifyByDefault();
+      return this;
+    }
+
     private FieldBuilder<?, StateType, Type, Parent> lastField() {
       return fields.get(fields.size() - 1);
     }
