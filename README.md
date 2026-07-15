@@ -236,6 +236,45 @@ public class Application {
 
 `LocalDateTime` classes are mapped to the CCD `DateTime` type so the complex type `Application` will have a single `DateTime` field.
 
+### Generation-time environment gates
+
+`@CCD(gate = "[!]ENV_VAR:value")` makes a field part of the generated definition only when an
+environment predicate matches at the moment `generateCCDConfig` runs. It is the SDK counterpart of
+the per-environment overlay files hand-written definitions activate by glob inclusion/exclusion: instead of
+shipping a field in a `CaseField-prod.json` fragment, the field is annotated and the generator emits — or
+omits — every row it owns according to whether the gate matches. The predicate grammar is identical to the
+ccd-definition-converter's overlay condition, so a converted overlay suffix maps to the same expression:
+
+```java
+  @CCD(label = "A Judgments-Online field", gate = "CCD_DEF_JO:true")
+  private String judgmentsOnlineField;
+```
+
+- `CCD_DEF_JO:true` — active when `CCD_DEF_JO` resolves to `true` (case-insensitively).
+- `!CCD_DEF_ENV:prod` — active when `CCD_DEF_ENV` does *not* resolve to `prod`.
+
+The variable is resolved from a system property first, then the process environment. When the gate is
+inactive the gated field is dropped exactly like `@CCD(ignore = true)`: every row it owns — CaseField,
+AuthorisationCaseField, CaseEventToFields placements, CaseTypeTab, WorkBasket/Search — vanishes, while
+ungated fields regenerate byte-identically.
+
+The same gate works on a **member of a complex type**, for members that exist only in a per-environment
+overlay and so cannot be expressed by a field-level gate on the CaseData class:
+
+```java
+  @ComplexType(name = "GatedMemberComplex", generate = true)
+  public class GatedMemberComplex {
+    @CCD(label = "An always-present member")
+    private String alwaysMember;
+
+    @CCD(label = "A Judgments-Online member", gate = "CCD_DEF_JO:true")
+    private GatedMemberNested gatedMember;
+  }
+```
+
+When the gate is inactive the gated member vanishes from that type's `ComplexTypes` rows, and any nested
+complex type reachable only through the gated member disappears from the definition entirely.
+
 ### Setting up case states
 
 The case states are implemented by an enum:

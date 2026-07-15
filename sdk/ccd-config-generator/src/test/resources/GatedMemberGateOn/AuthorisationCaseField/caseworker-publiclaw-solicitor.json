@@ -1,0 +1,23 @@
+[
+  {
+    "CRUD": "CRU",
+    "CaseFieldID": "baseField",
+    "CaseTypeID": "GatedMember",
+    "LiveFrom": "01/01/2017",
+    "UserRole": "caseworker-publiclaw-solicitor"
+  },
+  {
+    "CRUD": "CRU",
+    "CaseFieldID": "caseHistory",
+    "CaseTypeID": "GatedMember",
+    "LiveFrom": "01/01/2017",
+    "UserRole": "caseworker-publiclaw-solicitor"
+  },
+  {
+    "CRUD": "CRU",
+    "CaseFieldID": "complexField",
+    "CaseTypeID": "GatedMember",
+    "LiveFrom": "01/01/2017",
+    "UserRole": "caseworker-publiclaw-solicitor"
+  }
+]
