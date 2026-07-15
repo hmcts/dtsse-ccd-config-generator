@@ -284,6 +284,16 @@ public enum State {
 }
 ```
 
+By default the state's `Description` column is the same as its `Name` (i.e. `label`). Set
+`@CCD(description = ...)` on the constant to give it a distinct `Description`:
+
+```java
+public enum State {
+  @CCD(label = "Holding", description = "Case is on hold pending payment")
+  Holding;
+}
+```
+
 ### Setting up user roles
 
 The `UserRole` class should implement `HasRole` and define all the user roles that are relevant to the case type (both user and case roles).

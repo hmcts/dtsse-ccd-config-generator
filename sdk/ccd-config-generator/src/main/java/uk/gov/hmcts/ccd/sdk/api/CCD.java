@@ -12,7 +12,7 @@ public @interface CCD {
    * - FixedLists: ListElement
    * - Fields: Label
    * - CaseRoles: Name
-   * - States: Name and Description
+   * - States: Name, and Description too unless {@link #description()} is set
    */
   String label() default "";
 
@@ -24,6 +24,13 @@ public @interface CCD {
    * - States: TitleDisplay
    */
   String hint() default "";
+
+  /**
+   * The state's {@code Description} column, when it needs to differ from {@link #label()} (the
+   * state's {@code Name}). Only meaningful on a {@code State} enum constant; empty (the default)
+   * keeps today's behaviour of {@code Description == Name}.
+   */
+  String description() default "";
 
   String showCondition() default "";
 
