@@ -1,0 +1,22 @@
+[
+  {
+    "AccessProfiles": "caseworker-rolemap-system,caseworker-rolemap-caseofficer",
+    "Authorisation": "",
+    "CaseAccessCategories": "",
+    "CaseTypeID": "RoleMappings",
+    "Disabled": "N",
+    "LiveFrom": "01/01/2017",
+    "ReadOnly": "N",
+    "RoleName": "caseworker-rolemap-system"
+  },
+  {
+    "AccessProfiles": "citizen",
+    "Authorisation": "",
+    "CaseAccessCategories": "",
+    "CaseTypeID": "RoleMappings",
+    "Disabled": "N",
+    "LiveFrom": "01/01/2017",
+    "ReadOnly": "N",
+    "RoleName": "idam:citizen"
+  }
+]
