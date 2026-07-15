@@ -17,6 +17,7 @@ import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import uk.gov.hmcts.ccd.sdk.api.AccessType;
 import uk.gov.hmcts.ccd.sdk.api.AccessTypeRole;
+import uk.gov.hmcts.ccd.sdk.api.Banner;
 import uk.gov.hmcts.ccd.sdk.api.CCD;
 import uk.gov.hmcts.ccd.sdk.api.CaseCategory;
 import uk.gov.hmcts.ccd.sdk.api.CaseRoleToAccessProfile;
@@ -75,6 +76,7 @@ public class ResolvedCCDConfig<T, S, R extends HasRole> {
   List<SearchParty> searchParties;
   NoticeOfChange<T, R> noticeOfChange;
   List<ComplexTypeAuthorisation<R>> complexTypeAuthorisations;
+  Banner banner;
 
   public Optional<String> labelForState(String stateId) {
     return Optional.ofNullable(stateLabels.get(stateId));
