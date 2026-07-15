@@ -59,6 +59,7 @@ public class ResolvedCCDConfig<T, S, R extends HasRole> {
   boolean noCaseHistoryTab = false;
   boolean jurisdictionShuttered = false;
   boolean enableForDeletion = false;
+  String printableDocumentsUrl = "";
   Map<String, String> stateLabels = new HashMap<>();
 
   Table<S, R, Set<Permission>> stateRolePermissions = HashBasedTable.create();
