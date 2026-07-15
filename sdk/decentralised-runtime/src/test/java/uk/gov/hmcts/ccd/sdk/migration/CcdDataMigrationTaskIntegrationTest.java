@@ -37,7 +37,7 @@ import uk.gov.hmcts.ccd.sdk.config.DecentralisedDataConfiguration;
 class CcdDataMigrationTaskIntegrationTest {
   private static final long CASE_REVISION_OFFSET = 1_000_000_000L;
   private static final String PERF_CASE_TYPE = "PerfCase";
-  private static final String FDW_READER_ROLE = "DTS JIT Access et DB Reader SC";
+  private static final String FDW_READER_ROLE = "DTS JIT Access et DB Reader SC\"; select 1; --";
 
   @Autowired
   private NamedParameterJdbcTemplate jdbc;
