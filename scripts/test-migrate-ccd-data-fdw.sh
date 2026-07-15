@@ -16,23 +16,22 @@ FDW_SRC_HOST="${FDW_SRC_HOST:-localhost}"
 FDW_SRC_PORT="${FDW_SRC_PORT:-5432}"
 FDW_SRC_SSLMODE="${FDW_SRC_SSLMODE:-disable}"
 FDW_SERVER="${FDW_SERVER:-source-server-with-dashes.example.test}"
-FDW_ADDITIONAL_GRANTEE_NAME="${FDW_ADDITIONAL_GRANTEE_NAME:-FDW Additional Reader SC}"
-FDW_ADDITIONAL_GRANTEE_SQL="\"${FDW_ADDITIONAL_GRANTEE_NAME}\""
+FDW_ADDITIONAL_GRANTEE="${FDW_ADDITIONAL_GRANTEE:-FDW Additional Reader SC\"; select 1; --}"
 
 init_migration_test_env "fdw"
 trap cleanup_temp_dbs EXIT
 
 run_fdw_setup() {
   echo "Creating additional FDW reader role"
-  psql_dst --set=fdw_additional_grantee_name="$FDW_ADDITIONAL_GRANTEE_NAME" <<'SQL'
-select format('create role %I', :'fdw_additional_grantee_name')
+  psql_dst --set=fdw_additional_grantee="$FDW_ADDITIONAL_GRANTEE" <<'SQL'
+select format('create role %I', :'fdw_additional_grantee')
 where not exists (
   select 1
   from pg_roles
-  where rolname = :'fdw_additional_grantee_name'
+  where rolname = :'fdw_additional_grantee'
 )
 \gexec
-grant :"fdw_additional_grantee_name" to current_user;
+grant :"fdw_additional_grantee" to current_user;
 SQL
 
   echo "Running FDW setup script (validation mode only)"
@@ -48,7 +47,7 @@ SQL
     FDW_SCHEMA="$FDW_SCHEMA" \
     FDW_SERVER="$FDW_SERVER" \
     LOCAL_USER_SQL="current_user" \
-    FDW_ADDITIONAL_GRANTEE_SQL="$FDW_ADDITIONAL_GRANTEE_SQL" \
+    FDW_ADDITIONAL_GRANTEE="$FDW_ADDITIONAL_GRANTEE" \
     "$SETUP_SCRIPT"
 
   echo "Running FDW setup script (apply mode)"
@@ -64,7 +63,7 @@ SQL
     FDW_SCHEMA="$FDW_SCHEMA" \
     FDW_SERVER="$FDW_SERVER" \
     LOCAL_USER_SQL="current_user" \
-    FDW_ADDITIONAL_GRANTEE_SQL="$FDW_ADDITIONAL_GRANTEE_SQL" \
+    FDW_ADDITIONAL_GRANTEE="$FDW_ADDITIONAL_GRANTEE" \
     "$SETUP_SCRIPT" --apply
 }
 
@@ -121,7 +120,7 @@ SQL
 )"
   additional_mapping_count="$(psql_dst --quiet -tA \
     --set=fdw_server="$FDW_SERVER" \
-    --set=fdw_additional_grantee_name="$FDW_ADDITIONAL_GRANTEE_NAME" <<'SQL'
+    --set=fdw_additional_grantee="$FDW_ADDITIONAL_GRANTEE" <<'SQL'
 select count(*)
 from pg_user_mapping um
 join pg_foreign_server s
@@ -129,12 +128,12 @@ join pg_foreign_server s
 join pg_roles r
   on r.oid = um.umuser
 where s.srvname = :'fdw_server'
-  and r.rolname = :'fdw_additional_grantee_name';
+  and r.rolname = :'fdw_additional_grantee';
 SQL
 )"
   additional_role_case_count="$(psql_dst --quiet -tA \
-    --set=fdw_additional_grantee_name="$FDW_ADDITIONAL_GRANTEE_NAME" <<SQL
-set role :"fdw_additional_grantee_name";
+    --set=fdw_additional_grantee="$FDW_ADDITIONAL_GRANTEE" <<SQL
+set role :"fdw_additional_grantee";
 select count(*)
 from ${FDW_SCHEMA}.case_data
 where case_type_id = :'case_type';

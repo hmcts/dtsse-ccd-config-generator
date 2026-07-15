@@ -104,7 +104,7 @@ export DST_SCHEMA='ccd'                    # defaults to ccd
 export FDW_SCHEMA='fdw_stage'              # defaults to fdw_stage
 export FDW_SERVER='src_ccd_server'         # defaults to src_ccd_server
 export LOCAL_USER_SQL='current_user'       # role that will run the migration
-export FDW_ADDITIONAL_GRANTEE_SQL='"DTS JIT Access et DB Reader SC"'
+export FDW_ADDITIONAL_GRANTEE='DTS JIT Access et DB Reader SC'
 ```
 
 Validate the setup configuration without creating anything:
@@ -125,7 +125,7 @@ The setup script creates:
 * the FDW staging schema, default `fdw_stage`
 * an FDW server pointing at the source CCD database
 * a user mapping for `LOCAL_USER_SQL` using `SRC_USER` and `SRC_PASSWORD`
-* when `FDW_ADDITIONAL_GRANTEE_SQL` is set, another user mapping for that role using the same
+* when `FDW_ADDITIONAL_GRANTEE` is set, another user mapping for that role using the same
   source credentials
 * foreign tables:
   * `fdw_stage.case_data`
@@ -136,7 +136,7 @@ The foreign tables are created with `fetch_size '10000'` so large reads do not u
 `postgres_fdw` default of 100 rows per cursor fetch. If the FDW objects were created before this
 option existed, recreate them with `setup-ccd-data-fdw.sh --apply` before running a large migration.
 * grants for `LOCAL_USER_SQL`
-* when `FDW_ADDITIONAL_GRANTEE_SQL` is set, grants for that additional role
+* when `FDW_ADDITIONAL_GRANTEE` is set, grants for that additional role
 
 `SRC_PASSWORD_REQUIRED` defaults to `true`, matching `postgres_fdw`'s default safety check for
 non-superusers. Only set it to `false` for local/test FDW servers that use trust authentication and
@@ -154,7 +154,7 @@ For services using the Java task, set `ccd.data-migration.fdw-additional-select-
 `CCD_DATA_MIGRATION_FDW_ADDITIONAL_SELECT_GRANTEE` to grant an additional team-specific reader role
 enough access to query the FDW tables, for example `DTS JIT Access et DB Reader SC`. The task grants
 schema usage, foreign server usage, and table select. The role must already have a user mapping for
-the FDW server; create it during setup with `FDW_ADDITIONAL_GRANTEE_SQL` or have Platform Operations
+the FDW server; create it during setup with `FDW_ADDITIONAL_GRANTEE` or have Platform Operations
 create it manually. The Java task does not create user mappings because they contain source database
 credentials. Leave it blank to skip the extra grant.
 
