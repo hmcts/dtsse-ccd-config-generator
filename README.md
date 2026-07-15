@@ -448,6 +448,17 @@ For the less common columns — searching *within* a complex field (`ListElement
 
 `FieldShowCondition` is valid only on the input sheets and `ResultsOrdering` only on the result sheets (the definition-store importer rejects the wrong one for a given sheet); `ListElementCode` is valid on all four. Calling the lambda once per element code emits one row each, so a complex field can expose several of its leaves.
 
+The `searchCasesFields()` (`SearchCasesResultFields` sheet) builder takes the same lambda overload for its two extra columns — an `AccessProfile`/`UserRole` scope and the `UseCase`. Both default to their historic values (empty `UserRole`, `UseCase = orgcases`) when unset, so plain `.field(...)` calls are unchanged; scope a field to several roles or use cases by calling it once per combination (both columns are part of the row's identity, so the rows stay distinct):
+
+```java
+  builder.searchCasesFields()
+    .field(CaseData::getCaseName, "Case name")                               // orgcases, no role
+    .field(CaseData::getCaseName, "Case name",
+        f -> f.role(CASEWORKER).useCase("WORKBASKET"));
+```
+
+Similarly, the `searchParty()` builder can declare several parties that share a `SearchPartyName` as long as they point at different collections (`SearchPartyCollectionFieldName`) — each is emitted as its own `SearchParty` row.
+
 ### Adding tabs
 
 Tabs follow a similar API to events:

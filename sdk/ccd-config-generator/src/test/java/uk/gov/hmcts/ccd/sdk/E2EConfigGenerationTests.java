@@ -186,6 +186,27 @@ public class E2EConfigGenerationTests {
     }
 
     @SneakyThrows
+    @Test
+    public void keepsSameNamedSearchPartiesDistinct() {
+        // Two parties share a SearchPartyName but differ in SearchPartyCollectionFieldName; both rows
+        // must survive (keying on name alone collapsed them last-wins).
+        File expected = resourceFile("SearchPartyDuplicate/SearchParty.json");
+        File actual = new File(tmp.getRoot(), "SearchPartyDuplicate/SearchParty.json");
+        CcdConfigComparator.assertEquals(expected, actual, JSONCompareMode.NON_EXTENSIBLE);
+    }
+
+    @SneakyThrows
+    @Test
+    public void emitsSearchCasesRoleAndUseCase() {
+        // Role/use-case scoping of SearchCasesResultFields rows, keeping the historic default row
+        // (empty UserRole, UseCase=orgcases) byte-identical alongside the opted-in rows.
+        File expected = resourceFile("SearchCasesRole/SearchCasesResultFields/SearchCasesResultFields.json");
+        File actual =
+            new File(tmp.getRoot(), "SearchCasesRole/SearchCasesResultFields/SearchCasesResultFields.json");
+        CcdConfigComparator.assertEquals(expected, actual, JSONCompareMode.NON_EXTENSIBLE);
+    }
+
+    @SneakyThrows
     private File resourceFile(String resourcePath) {
         URL url = Resources.getResource(resourcePath);
         return new File(url.toURI());

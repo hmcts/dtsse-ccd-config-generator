@@ -44,7 +44,7 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements Decentralised
   final List<SearchBuilder<T, R>> workBasketInputFields = Lists.newArrayList();
   final List<SearchBuilder<T, R>> searchResultFields = Lists.newArrayList();
   final List<SearchBuilder<T, R>> searchInputFields = Lists.newArrayList();
-  final List<SearchCasesBuilder<T>> searchCaseResultFields = Lists.newArrayList();
+  final List<SearchCasesBuilder<T, R>> searchCaseResultFields = Lists.newArrayList();
   final List<CaseRoleToAccessProfileBuilder<R>> caseRoleToAccessProfiles = Lists.newArrayList();
   final List<CaseCategoryBuilder<R>> categories = Lists.newArrayList();
   final List<SearchCriteriaBuilder> searchCriteria = Lists.newArrayList();
@@ -204,7 +204,7 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements Decentralised
   }
 
   @Override
-  public SearchCasesBuilder<T> searchCasesFields() {
+  public SearchCasesBuilder<T, R> searchCasesFields() {
     return registerSearchCasesBuilder(searchCaseResultFields);
   }
 
@@ -294,8 +294,8 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements Decentralised
     return builder;
   }
 
-  private SearchCasesBuilder<T> registerSearchCasesBuilder(List<SearchCasesBuilder<T>> target) {
-    SearchCasesBuilder<T> builder = SearchCasesBuilder.builder(config.caseClass, propertyUtils);
+  private SearchCasesBuilder<T, R> registerSearchCasesBuilder(List<SearchCasesBuilder<T, R>> target) {
+    SearchCasesBuilder<T, R> builder = SearchCasesBuilder.builder(config.caseClass, propertyUtils);
     target.add(builder);
     return builder;
   }
