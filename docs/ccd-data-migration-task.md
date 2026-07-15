@@ -17,15 +17,19 @@ writes for the selected case types have been frozen.
 The task has one implementation with explicit modes:
 
 * `PRELOAD_EVENTS`: scheduled before cutover. Copies immutable source events by event ID high-water
-  mark and inserts provisional parent `case_data` rows so the target FK remains valid.
+  mark, inserts provisional parent `case_data` rows so the target FK remains valid, copies linked
+  significant items for copied events, and advances range-based validation checkpoints.
 * `CUTOVER`: explicit operator action during downtime. Captures the cutover event high-water mark,
-  copies the final event delta, copies linked `case_event_significant_items` in a single set-based
-  query, refreshes target `case_data` from source, sets final case revisions, resets sequences,
-  validates, and marks the migration complete.
+  copies the final event and significant-item delta, refreshes target `case_data` from source, sets
+  final case revisions, resets sequences, validates any remaining unvalidated local ranges, and
+  marks the migration complete.
 * `VALIDATE_ONLY`: runs final source-vs-target validation without copying data.
 
 Do not switch to `CUTOVER` automatically from a scheduler. The operator must first freeze source
-writes for the selected case types and wait for in-flight source transactions to drain.
+writes for the selected case types and wait for in-flight source transactions to drain. By default
+the task only targets a contiguous source event ID range before the first event inside the two-minute
+safety window. If `CUTOVER` sees source events inside that safety window before capturing its
+high-water mark, it leaves the migration in its current state and returns without the final refresh.
 
 ## Safety Model
 
@@ -40,10 +44,24 @@ The preload path keeps the target tables constraint-valid after every committed 
 
 Preloaded `case_data` is provisional. Its purpose is to satisfy the event FK. Every copied event
 batch inserts missing parent source `case_data` rows for that batch. Significant items are copied
-only during `CUTOVER`, using one `insert into ... select` query that reads source significant items
-and joins through already migrated target events up to the captured cutover event high-water mark.
-`CUTOVER` then overwrites target `case_data` columns from source and sets
+after event preload batches and during `CUTOVER`, using resumable ID windows that read source
+significant items and join through already migrated target events up to the current event high-water
+mark. `CUTOVER` then overwrites target `case_data` columns from source and sets
 `case_data.case_revision = max(case_event.case_revision) + caseRevisionOffset`.
+
+Validation is also resumable. The task records the highest local `case_event.id` and
+`case_event_significant_items.id` ranges whose source and target counts have matched. Validation
+walks local target rows to choose the next range end, then compares only that range with source CCD,
+so cutover does not need to repeat a full source count for all historical significant items.
+
+Source event high-water marks are selected from the configured jurisdiction/case types. The task
+finds the first matching source event inside `sourceEventSafetyWindow`, which defaults to two
+minutes, and will not advance the source event high-water mark beyond the row before it. This keeps
+preload and incremental validation away from rows that may still have related source writes in
+flight, even if a higher event ID is already old enough to copy. If a newly calculated safe event or
+significant-item high-water mark is lower than stored progress, the task fails rather than treating
+the run as caught up; that indicates source rows became visible after progress had already advanced
+and must be investigated before retrying.
 
 The runtime `case_data` revision trigger is deliberately disabled only inside the cutover refresh
 transaction so the final source-derived revision can be written. The trigger is re-enabled before the
@@ -66,10 +84,14 @@ state:
 * `status`: `PRELOAD`, `CUTOVER`, or `COMPLETE`
 * `cutover_event_hwm`
 * `source_event_hwm`
+* `significant_items_hwm`
+* `validated_event_hwm`
+* `validated_significant_items_hwm`
 * timestamps
 
 The migration configuration hash covers the migration identity. Runtime limits such as
-`eventIdWindowSize`, `significantItemIdWindowSize`, `maxBatchesPerRun`, `maxRunTime`, and `mode` can change between invocations.
+`eventIdWindowSize`, `significantItemIdWindowSize`, `maxBatchesPerRun`, `maxRunTime`,
+`sourceEventSafetyWindow`, and `mode` can change between invocations.
 If the migration identity changes after a task has already created a progress row, the task fails
 fast rather than resuming under different source filters. Operators must either keep the same
 identity configuration or explicitly reset/use a new `task-name` after confirming the target state.
@@ -92,9 +114,14 @@ ccd:
     significant-item-id-window-size: 100000
     max-batches-per-run: 100
     max-run-time: 4h
+    source-event-safety-window: 2m
     case-revision-offset: 1000000000
     fdw-additional-select-grantee: DTS JIT Access et DB Reader SC
 ```
+
+`max-batches-per-run` is a run-level budget shared by event copy, significant-item copy, event
+validation, and significant-item validation. If the budget is exhausted before all phases catch up,
+the task returns `caughtUp=false` and resumes from the stored high-water marks on the next run.
 
 `fdw-additional-select-grantee` is optional. When set, the Java task grants the role local access to
 query the existing FDW tables after validating them: `USAGE` on the FDW staging schema, `USAGE` on
@@ -167,9 +194,9 @@ period. Run `CUTOVER` explicitly during the agreed downtime window.
 
 ## Validation
 
-After cutover, the task logs final `case_data`, `case_event`, and `case_event_significant_items`
-counts for the selected case types. It also compares source and target significant-item counts up to
-the captured cutover event high-water mark.
+After cutover, the task logs final target `case_data`, `case_event`, and
+`case_event_significant_items` counts for the selected case types. Source/target validation is
+performed incrementally in ID windows and only unvalidated ranges are checked during cutover.
 
 ## Performance Harness
 

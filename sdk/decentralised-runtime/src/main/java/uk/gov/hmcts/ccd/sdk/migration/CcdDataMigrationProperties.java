@@ -20,6 +20,7 @@ public class CcdDataMigrationProperties {
   private int maxBatchesPerRun = Integer.MAX_VALUE;
   private Duration maxRunTime;
   private Duration statementTimeout = Duration.ofMinutes(10);
+  private Duration sourceEventSafetyWindow = Duration.ofMinutes(2);
   private String sourceJurisdiction;
   private String fdwAdditionalSelectGrantee;
 
@@ -40,6 +41,7 @@ public class CcdDataMigrationProperties {
         .maxBatchesPerRun(maxBatchesPerRun)
         .maxRunTime(maxRunTime)
         .statementTimeout(statementTimeout)
+        .sourceEventSafetyWindow(sourceEventSafetyWindow)
         .sourceJurisdiction(sourceJurisdiction)
         .fdwAdditionalSelectGrantee(fdwAdditionalSelectGrantee)
         .build();

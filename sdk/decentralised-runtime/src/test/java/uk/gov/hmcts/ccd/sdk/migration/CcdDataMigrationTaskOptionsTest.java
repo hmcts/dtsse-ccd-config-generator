@@ -22,6 +22,7 @@ class CcdDataMigrationTaskOptionsTest {
     assertThat(options.maxBatchesPerRun()).isEqualTo(Integer.MAX_VALUE);
     assertThat(options.maxRunTime()).isNull();
     assertThat(options.statementTimeout()).isEqualTo(Duration.ofMinutes(10));
+    assertThat(options.sourceEventSafetyWindow()).isEqualTo(Duration.ofMinutes(2));
     assertThat(options.fdwAdditionalSelectGrantee()).isNull();
   }
 
@@ -33,6 +34,7 @@ class CcdDataMigrationTaskOptionsTest {
         .maxBatchesPerRun(1)
         .maxRunTime(Duration.ofMinutes(10))
         .statementTimeout(Duration.ofSeconds(30))
+        .sourceEventSafetyWindow(Duration.ZERO)
         .build();
 
     var second = builder(List.of("CaseA", "CaseB"))
@@ -41,6 +43,7 @@ class CcdDataMigrationTaskOptionsTest {
         .maxBatchesPerRun(500)
         .maxRunTime(Duration.ofHours(4))
         .statementTimeout(Duration.ofMinutes(15))
+        .sourceEventSafetyWindow(Duration.ofMinutes(5))
         .build();
 
     assertThat(second.migrationConfigHash()).isEqualTo(first.migrationConfigHash());
@@ -124,6 +127,15 @@ class CcdDataMigrationTaskOptionsTest {
         .build())
         .isInstanceOf(IllegalArgumentException.class)
         .hasMessageContaining("statementTimeout");
+  }
+
+  @Test
+  void rejectsNegativeSourceEventSafetyWindow() {
+    assertThatThrownBy(() -> builder(List.of("TestCase"))
+        .sourceEventSafetyWindow(Duration.ofSeconds(-1))
+        .build())
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("sourceEventSafetyWindow");
   }
 
   @Test

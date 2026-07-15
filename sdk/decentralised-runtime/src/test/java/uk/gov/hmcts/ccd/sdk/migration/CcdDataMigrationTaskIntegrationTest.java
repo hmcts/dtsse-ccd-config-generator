@@ -7,6 +7,7 @@ import static uk.gov.hmcts.ccd.sdk.migration.CcdDataMigrationMode.PRELOAD_EVENTS
 
 import java.sql.Connection;
 import java.sql.SQLException;
+import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDateTime;
@@ -64,7 +65,7 @@ class CcdDataMigrationTaskIntegrationTest {
   void preloadsEventsBySourceHighWaterMarkWithoutDroppingTargetProtections() {
     insertSourceCase(10, 1000000000000010L, 1, "Submitted", "{\"field\":\"one\"}");
     insertSourceCaseEvent(101, 10, "create", "Submitted", "{\"field\":\"one\"}", minutesAgo(60));
-    insertSourceCaseEvent(102, 10, "update", "Updated", "{\"field\":\"two\"}", LocalDateTime.now());
+    insertSourceCaseEvent(102, 10, "update", "Updated", "{\"field\":\"two\"}", minutesAgo(60));
 
     CcdDataMigrationRunResult result = task(PRELOAD_EVENTS, 1000, 10).runMigration();
 
@@ -74,6 +75,8 @@ class CcdDataMigrationTaskIntegrationTest {
     assertThat(countRows("ccd.case_event")).isEqualTo(2);
     assertThat(progressStatus()).isEqualTo("PRELOAD");
     assertThat(localEventHwm()).isEqualTo(102);
+    assertThat(validatedEventHwm()).isEqualTo(102);
+    assertThat(validatedSignificantItemsHwm()).isZero();
     assertThat(caseEventRevision(101)).isEqualTo(1);
     assertThat(caseEventRevision(102)).isEqualTo(2);
     assertThat(caseRevision(10)).isZero();
@@ -83,13 +86,117 @@ class CcdDataMigrationTaskIntegrationTest {
   }
 
   @Test
+  void preloadOnlyTargetsSourceEventsOutsideTheSafetyWindow() {
+    insertSourceCase(10, 1000000000000010L, 1, "Submitted", "{\"field\":\"one\"}");
+    insertSourceCaseEvent(101, 10, "create", "Submitted", "{\"field\":\"one\"}", minutesAgo(60));
+    insertSourceCaseEvent(102, 10, "update", "Updated", "{\"field\":\"fresh\"}", LocalDateTime.now(Clock.systemUTC()));
+    insertSourceCaseEvent(103, 10, "close", "Closed", "{\"field\":\"old-but-after-fresh\"}", minutesAgo(60));
+
+    CcdDataMigrationRunResult defaultWindowResult = task(PRELOAD_EVENTS, 1000, 10).runMigration();
+
+    assertThat(defaultWindowResult.caughtUp()).isTrue();
+    assertThat(sourceEventHwm()).isEqualTo(101);
+    assertThat(countRows("ccd.case_event")).isEqualTo(1);
+    assertThat(validatedEventHwm()).isEqualTo(101);
+
+    CcdDataMigrationRunResult zeroWindowResult = new CcdDataMigrationTask(
+        jdbc,
+        transactionManager,
+        optionsBuilder(List.of("TestCase"))
+            .mode(PRELOAD_EVENTS)
+            .eventIdWindowSize(1000)
+            .sourceEventSafetyWindow(Duration.ZERO)
+            .build()
+    ).runMigration();
+
+    assertThat(zeroWindowResult.caughtUp()).isTrue();
+    assertThat(sourceEventHwm()).isEqualTo(103);
+    assertThat(countRows("ccd.case_event")).isEqualTo(3);
+    assertThat(validatedEventHwm()).isEqualTo(103);
+  }
+
+  @Test
+  void failsWhenSafeSourceEventHighWaterMarkRegressesBehindStoredProgress() {
+    insertSourceCase(10, 1000000000000010L, 1, "Submitted", "{\"field\":\"one\"}");
+    insertSourceCaseEvent(101, 10, "create", "Submitted", "{\"field\":\"one\"}", minutesAgo(60));
+    insertSourceCaseEvent(102, 10, "update", "Updated", "{\"field\":\"fresh\"}", LocalDateTime.now(Clock.systemUTC()));
+
+    new CcdDataMigrationTask(
+        jdbc,
+        transactionManager,
+        optionsBuilder(List.of("TestCase"))
+            .mode(PRELOAD_EVENTS)
+            .eventIdWindowSize(1000)
+            .sourceEventSafetyWindow(Duration.ZERO)
+            .build()
+    ).runMigration();
+
+    assertThat(sourceEventHwm()).isEqualTo(102);
+
+    assertThatThrownBy(() -> task(PRELOAD_EVENTS, 1000, 10).runMigration())
+        .isInstanceOf(CcdDataMigrationException.class)
+        .hasMessageContaining("source event high-water mark regressed")
+        .hasMessageContaining("sourceEventHwm=102")
+        .hasMessageContaining("currentSourceEventHwm=101");
+  }
+
+  @Test
+  void cutoverPausesBeforeCapturingHighWaterMarkWhenFreshSourceEventsExist() {
+    insertSourceCase(10, 1000000000000010L, 1, "Submitted", "{\"field\":\"one\"}");
+    insertSourceCaseEvent(101, 10, "create", "Submitted", "{\"field\":\"one\"}", minutesAgo(60));
+    task(PRELOAD_EVENTS, 1000, 10).runMigration();
+
+    updateSourceCase(10, 2, "Updated", "{\"field\":\"fresh\"}");
+    insertSourceCaseEvent(102, 10, "update", "Updated", "{\"field\":\"fresh\"}", LocalDateTime.now(Clock.systemUTC()));
+
+    CcdDataMigrationRunResult pausedCutover = task(CUTOVER, 1000, 10).runMigration();
+
+    assertThat(pausedCutover.caughtUp()).isFalse();
+    assertThat(progressStatus()).isEqualTo("PRELOAD");
+    assertThat(countRows("ccd.case_event")).isEqualTo(1);
+    assertThat(targetCaseState(10)).isEqualTo("Submitted");
+
+    CcdDataMigrationRunResult completedCutover = new CcdDataMigrationTask(
+        jdbc,
+        transactionManager,
+        optionsBuilder(List.of("TestCase"))
+            .mode(CUTOVER)
+            .eventIdWindowSize(1000)
+            .sourceEventSafetyWindow(Duration.ZERO)
+            .build()
+    ).runMigration();
+
+    assertThat(completedCutover.caughtUp()).isTrue();
+    assertThat(progressStatus()).isEqualTo("COMPLETE");
+    assertThat(cutoverEventHwm()).isEqualTo(102);
+    assertThat(countRows("ccd.case_event")).isEqualTo(2);
+    assertThat(targetCaseState(10)).isEqualTo("Updated");
+  }
+
+  @Test
+  void cutoverFailsWhenFreshSourceEventWouldRegressSafeHighWaterMark() {
+    insertSourceCase(10, 1000000000000010L, 1, "Submitted", "{\"field\":\"one\"}");
+    insertSourceCaseEvent(101, 10, "create", "Submitted", "{\"field\":\"one\"}", minutesAgo(60));
+    task(PRELOAD_EVENTS, 1000, 10).runMigration();
+
+    insertSourceCaseEvent(100, 10, "late-visible", "Submitted", "{\"field\":\"late\"}",
+        LocalDateTime.now(Clock.systemUTC()));
+
+    assertThatThrownBy(() -> task(CUTOVER, 1000, 10).runMigration())
+        .isInstanceOf(CcdDataMigrationException.class)
+        .hasMessageContaining("source event high-water mark regressed")
+        .hasMessageContaining("sourceEventHwm=101")
+        .hasMessageContaining("currentSourceEventHwm=99");
+  }
+
+  @Test
   void cutoverCopiesRemainingEventsRefreshesCaseDataAndMarksComplete() {
     insertSourceCase(10, 1000000000000010L, 1, "Submitted", "{\"field\":\"one\"}");
     insertSourceCaseEvent(101, 10, "create", "Submitted", "{\"field\":\"one\"}", minutesAgo(60));
     task(PRELOAD_EVENTS, 1000, 10).runMigration();
 
     updateSourceCase(10, 2, "Updated", "{\"field\":\"cutover\"}");
-    insertSourceCaseEvent(102, 10, "update", "Updated", "{\"field\":\"cutover\"}", LocalDateTime.now());
+    insertSourceCaseEvent(102, 10, "update", "Updated", "{\"field\":\"cutover\"}", minutesAgo(60));
 
     CcdDataMigrationRunResult result = task(CUTOVER, 1000, 10).runMigration();
 
@@ -109,28 +216,66 @@ class CcdDataMigrationTaskIntegrationTest {
   }
 
   @Test
-  void copiesSignificantItemsInSingleCutoverQuery() {
+  void failsWhenSourceSignificantItemsHighWaterMarkRegressesBehindStoredProgress() {
+    insertSourceCase(10, 1000000000000010L, 1, "Submitted", "{\"field\":\"one\"}");
+    insertSourceCaseEvent(101, 10, "create", "Submitted", "{\"field\":\"one\"}", minutesAgo(60));
+    insertSourceSignificantItem(5001, 101, "First document", "http://dm-store/documents/first");
+    createProgress();
+    updateSignificantItemsHwm(10002);
+
+    assertThatThrownBy(() -> task(PRELOAD_EVENTS, 1000, 10).runMigration())
+        .isInstanceOf(CcdDataMigrationException.class)
+        .hasMessageContaining("significant-item high-water mark regressed")
+        .hasMessageContaining("significantItemsHwm=10002")
+        .hasMessageContaining("currentSignificantItemsHwm=5001");
+  }
+
+  @Test
+  void preloadsSignificantItemsAndValidatesIncrementally() {
     insertSourceCase(10, 1000000000000010L, 1, "Submitted", "{\"field\":\"one\"}");
     insertSourceCaseEvent(101, 10, "create", "Submitted", "{\"field\":\"one\"}", minutesAgo(60));
     insertSourceCaseEvent(102, 10, "update", "Updated", "{\"field\":\"two\"}", minutesAgo(30));
     insertSourceSignificantItem(5001, 101, "First document", "http://dm-store/documents/first");
     insertSourceSignificantItem(5002, 102, "Second document", "http://dm-store/documents/second");
 
-    CcdDataMigrationRunResult preloadResult = task(PRELOAD_EVENTS, 101, 1).runMigration();
+    CcdDataMigrationRunResult preloadResult = task(PRELOAD_EVENTS, 1000, 4).runMigration();
 
-    assertThat(preloadResult.caughtUp()).isFalse();
-    assertThat(countRows("ccd.case_event_significant_items")).isZero();
-    assertThat(sourceEventHwm()).isEqualTo(101);
-    insertTargetSignificantItem(5001, 101, "Existing document", "http://dm-store/documents/existing");
+    assertThat(preloadResult.caughtUp()).isTrue();
+    assertThat(countRows("ccd.case_event_significant_items")).isEqualTo(2);
+    assertThat(sourceEventHwm()).isEqualTo(102);
+    assertThat(significantItemsHwm()).isEqualTo(5002);
+    assertThat(validatedEventHwm()).isEqualTo(102);
+    assertThat(validatedSignificantItemsHwm()).isEqualTo(5002);
 
     CcdDataMigrationRunResult cutoverResult = task(CUTOVER, 1000, 10).runMigration();
 
     assertThat(cutoverResult.caughtUp()).isTrue();
     assertThat(progressStatus()).isEqualTo("COMPLETE");
     assertThat(countRows("ccd.case_event_significant_items")).isEqualTo(2);
-    assertThat(significantItemDescription(5001)).isEqualTo("Existing document");
+    assertThat(significantItemDescription(5001)).isEqualTo("First document");
     assertThat(significantItemDescription(5002)).isEqualTo("Second document");
     assertThat(caseEventSignificantItemsSequenceLastValue()).isGreaterThanOrEqualTo(5002);
+  }
+
+  @Test
+  void significantItemCopyAndValidationUseSourceEventCaseTypeScope() {
+    insertSourceCase(10, 1000000000000010L, 1, "Submitted", "{\"field\":\"one\"}");
+    insertSourceCaseEvent(101, 10, "create", "Submitted", "{\"field\":\"one\"}", minutesAgo(60));
+    insertSourceSignificantItem(5002, 101, "Migrated document", "http://dm-store/documents/migrated");
+
+    insertSourceCase(20, 1000000000000020L, 1, "Submitted", "{\"field\":\"other\"}");
+    insertSourceCaseEvent(100, 20, "other-create", "Submitted", "{\"field\":\"other\"}", "OtherCase", minutesAgo(60));
+    insertSourceSignificantItem(5001, 100, "Other document", "http://dm-store/documents/other");
+    insertTargetCase(20, 1000000000000020L, 1, "Submitted", "{\"field\":\"other\"}", 0);
+    insertTargetEvent(100, 20, "other-create", "Submitted", "{\"field\":\"other\"}", "OtherCase", 1);
+
+    CcdDataMigrationRunResult result = task(PRELOAD_EVENTS, 1000, 10).runMigration();
+
+    assertThat(result.caughtUp()).isTrue();
+    assertThat(countRows("ccd.case_event_significant_items")).isEqualTo(1);
+    assertThat(significantItemDescription(5002)).isEqualTo("Migrated document");
+    assertThat(significantItemsHwm()).isEqualTo(5002);
+    assertThat(validatedSignificantItemsHwm()).isEqualTo(5002);
   }
 
   @Test
@@ -146,6 +291,8 @@ class CcdDataMigrationTaskIntegrationTest {
     assertThat(cutoverEventHwm()).isEqualTo(101);
     assertThat(sourceEventHwm()).isEqualTo(101);
     assertThat(significantItemsHwm()).isEqualTo(5001);
+    assertThat(validatedEventHwm()).isEqualTo(101);
+    assertThat(validatedSignificantItemsHwm()).isEqualTo(5001);
     assertThat(countRows("ccd.case_event_significant_items")).isEqualTo(1);
 
     updateSourceCase(10, 2, "Updated", "{\"field\":\"two\"}");
@@ -158,8 +305,10 @@ class CcdDataMigrationTaskIntegrationTest {
     assertThat(preload.caughtUp()).isTrue();
     assertThat(progressStatus()).isEqualTo("PRELOAD");
     assertThat(sourceEventHwm()).isEqualTo(102);
-    assertThat(significantItemsHwm()).isEqualTo(5001);
-    assertThat(countRows("ccd.case_event_significant_items")).isEqualTo(1);
+    assertThat(significantItemsHwm()).isEqualTo(5003);
+    assertThat(validatedEventHwm()).isEqualTo(102);
+    assertThat(validatedSignificantItemsHwm()).isEqualTo(5003);
+    assertThat(countRows("ccd.case_event_significant_items")).isEqualTo(3);
 
     CcdDataMigrationRunResult secondCutover = task(CUTOVER, 1000, 10).runMigration();
 
@@ -175,7 +324,7 @@ class CcdDataMigrationTaskIntegrationTest {
     assertThat(significantItemDescription(5003)).isEqualTo("Late old event document");
 
     updateSourceCase(10, 3, "Closed", "{\"field\":\"three\"}");
-    insertSourceCaseEvent(103, 10, "close", "Closed", "{\"field\":\"three\"}", LocalDateTime.now());
+    insertSourceCaseEvent(103, 10, "close", "Closed", "{\"field\":\"three\"}", minutesAgo(60));
 
     task(PRELOAD_EVENTS, 1000, 10).runMigration();
     CcdDataMigrationRunResult thirdCutover = task(CUTOVER, 1000, 10).runMigration();
@@ -197,14 +346,40 @@ class CcdDataMigrationTaskIntegrationTest {
 
     CcdDataMigrationRunResult firstCutover = task(CUTOVER, 1000, 1, 5001).runMigration();
 
+    assertThat(firstCutover.batchesProcessed()).isEqualTo(1);
     assertThat(firstCutover.caughtUp()).isFalse();
-    assertThat(significantItemsHwm()).isEqualTo(5001);
-    assertThat(countRows("ccd.case_event_significant_items")).isEqualTo(1);
+    assertThat(sourceEventHwm()).isEqualTo(101);
+    assertThat(significantItemsHwm()).isZero();
+    assertThat(countRows("ccd.case_event_significant_items")).isZero();
 
     CcdDataMigrationRunResult secondCutover = task(CUTOVER, 1000, 1, 5001).runMigration();
 
-    assertThat(secondCutover.caughtUp()).isTrue();
+    assertThat(secondCutover.batchesProcessed()).isEqualTo(1);
+    assertThat(secondCutover.caughtUp()).isFalse();
+    assertThat(significantItemsHwm()).isEqualTo(5001);
+    assertThat(validatedSignificantItemsHwm()).isZero();
+    assertThat(countRows("ccd.case_event_significant_items")).isEqualTo(1);
+
+    CcdDataMigrationRunResult thirdCutover = task(CUTOVER, 1000, 1, 5001).runMigration();
+
+    assertThat(thirdCutover.batchesProcessed()).isEqualTo(1);
+    assertThat(thirdCutover.caughtUp()).isFalse();
     assertThat(significantItemsHwm()).isEqualTo(10002);
+    assertThat(validatedSignificantItemsHwm()).isZero();
+    assertThat(countRows("ccd.case_event_significant_items")).isEqualTo(2);
+
+    CcdDataMigrationRunResult fourthCutover = task(CUTOVER, 1000, 1, 5001).runMigration();
+
+    assertThat(fourthCutover.batchesProcessed()).isEqualTo(1);
+    assertThat(fourthCutover.caughtUp()).isFalse();
+    assertThat(validatedEventHwm()).isEqualTo(101);
+    assertThat(validatedSignificantItemsHwm()).isZero();
+
+    CcdDataMigrationRunResult fifthCutover = task(CUTOVER, 1000, 1, 5001).runMigration();
+
+    assertThat(fifthCutover.batchesProcessed()).isEqualTo(1);
+    assertThat(fifthCutover.caughtUp()).isTrue();
+    assertThat(validatedSignificantItemsHwm()).isEqualTo(10002);
     assertThat(countRows("ccd.case_event_significant_items")).isEqualTo(2);
   }
 
@@ -239,7 +414,7 @@ class CcdDataMigrationTaskIntegrationTest {
 
     assertThat(result.caughtUp()).isTrue();
     assertThat(countRows("ccd.case_event")).isEqualTo(1);
-    assertThat(countRows("ccd.case_event_significant_items")).isZero();
+    assertThat(countRows("ccd.case_event_significant_items")).isEqualTo(1);
     assertThat(fdwTableExists("case_data")).isTrue();
     assertThat(fdwTableExists("case_event")).isTrue();
     assertThat(fdwTableExists("case_event_significant_items")).isTrue();
@@ -315,6 +490,22 @@ class CcdDataMigrationTaskIntegrationTest {
     assertThat(result.caughtUp()).isTrue();
     assertThat(cutoverEventHwm()).isEqualTo(101);
     assertThat(countElasticsearchQueueRows("TestCase")).isZero();
+    assertThat(caseDataTriggerEnabled("trigger_enqueue_case_revision")).isTrue();
+  }
+
+  @Test
+  void completedCutoverRerunPausedByFreshEventsDoesNotPrepareElasticsearchQueue() {
+    insertSourceCase(10, 1000000000000010L, 1, "Submitted", "{\"field\":\"one\"}");
+    insertSourceCaseEvent(101, 10, "create", "Submitted", "{\"field\":\"one\"}", minutesAgo(60));
+    insertSourceCaseEvent(102, 10, "update", "Updated", "{\"field\":\"fresh\"}", LocalDateTime.now(Clock.systemUTC()));
+    insertTargetCase(10, 1000000000000010L, 1, "Submitted", "{\"field\":\"one\"}", 1);
+    createCompleteProgress(101);
+
+    CcdDataMigrationRunResult result = task(CUTOVER, 1000, 10).runMigration();
+
+    assertThat(result.caughtUp()).isFalse();
+    assertThat(progressStatus()).isEqualTo("COMPLETE");
+    assertThat(countElasticsearchQueueRows("TestCase")).isEqualTo(1);
     assertThat(caseDataTriggerEnabled("trigger_enqueue_case_revision")).isTrue();
   }
 
@@ -402,7 +593,7 @@ class CcdDataMigrationTaskIntegrationTest {
     assertThat(result.caughtUp()).isTrue();
     assertThat(result.eventsProcessed()).isZero();
     assertThat(countRows("ccd.case_event")).isZero();
-    assertThat(sourceEventHwm()).isEqualTo(101);
+    assertThat(sourceEventHwm()).isZero();
   }
 
   @Test
@@ -945,6 +1136,18 @@ class CcdDataMigrationTaskIntegrationTest {
       String data,
       long caseRevision
   ) {
+    insertTargetEvent(id, caseDataId, eventId, stateId, data, "TestCase", caseRevision);
+  }
+
+  private void insertTargetEvent(
+      long id,
+      long caseDataId,
+      String eventId,
+      String stateId,
+      String data,
+      String caseTypeId,
+      long caseRevision
+  ) {
     jdbc.update(
         """
         insert into ccd.case_event (
@@ -980,7 +1183,7 @@ class CcdDataMigrationTaskIntegrationTest {
           'summary',
           'description',
           'user-1',
-          'TestCase',
+          :caseTypeId,
           :stateId,
           :data::jsonb,
           'Test',
@@ -1001,6 +1204,7 @@ class CcdDataMigrationTaskIntegrationTest {
             .addValue("eventId", eventId)
             .addValue("stateId", stateId)
             .addValue("data", data)
+            .addValue("caseTypeId", caseTypeId)
             .addValue("caseRevision", caseRevision)
     );
   }
@@ -1021,6 +1225,20 @@ class CcdDataMigrationTaskIntegrationTest {
             .addValue("configHash", optionsBuilder(List.of("TestCase"))
                 .build()
                 .migrationConfigHash())
+    );
+  }
+
+  private void updateSignificantItemsHwm(long significantItemsHwm) {
+    jdbc.update(
+        """
+        update ccd.ccd_data_migration_progress
+        set significant_items_hwm = :significantItemsHwm
+        where task_name = :taskName
+        """,
+        Map.of(
+            "taskName", "ccd-data-migration",
+            "significantItemsHwm", significantItemsHwm
+        )
     );
   }
 
@@ -1251,6 +1469,26 @@ class CcdDataMigrationTaskIntegrationTest {
     );
   }
 
+  private long validatedEventHwm() {
+    return jdbc.queryForObject(
+        "select validated_event_hwm from ccd.ccd_data_migration_progress where task_name = :taskName",
+        Map.of("taskName", "ccd-data-migration"),
+        Long.class
+    );
+  }
+
+  private long validatedSignificantItemsHwm() {
+    return jdbc.queryForObject(
+        """
+        select validated_significant_items_hwm
+        from ccd.ccd_data_migration_progress
+        where task_name = :taskName
+        """,
+        Map.of("taskName", "ccd-data-migration"),
+        Long.class
+    );
+  }
+
   private long caseEventSequenceLastValue() {
     return jdbc.getJdbcTemplate().queryForObject("select last_value from ccd.case_event_id_seq", Long.class);
   }
@@ -1424,7 +1662,7 @@ class CcdDataMigrationTaskIntegrationTest {
   }
 
   private LocalDateTime minutesAgo(int minutes) {
-    return LocalDateTime.now().minusMinutes(minutes);
+    return LocalDateTime.now(Clock.systemUTC()).minusMinutes(minutes);
   }
 
   @Configuration
