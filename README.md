@@ -439,6 +439,35 @@ A field placed on an event can set `ShowSummaryContentOption` — its display or
 
 The definition-store importer rejects `NullifyByDefault=Y` together with a `DefaultValue` on the same field.
 
+#### Overriding complex-type members on an event
+
+`.complex(getter)` opens a complex field for a specific event and lets you override its members with `.mandatory`/`.optional`/`.readonly`. Each override becomes an `EventToComplexTypes` row keyed by the member's `ListElementCode` (dotted for nested members, e.g. `address.postcode`), letting you re-label, re-hint and conditionally show a member within that event only.
+
+Members carry their per-event label and hint fluently with `.eventLabel(...)` and `.eventHint(...)` — the `EventElementLabel` and `EventHintText` columns — and a show condition via the existing positional argument:
+
+```java
+  builder.event("create")
+    ...
+    .fields()
+      .complex(CaseData::getContact)
+        .mandatory(Contact::getName)
+          .eventLabel("Your full name")
+        .optional(Contact::getEmail, "contactName=\"*\"")
+          .eventLabel("Your email")
+          .eventHint("We only use this to contact you")
+        .complex(Contact::getAddress)
+          .optional(Address::getPostcode)
+            .eventLabel("Postcode")
+            .pageId("2")
+          .done()
+        .done()
+    ;
+```
+
+`.eventLabel`/`.eventHint` are the fluent equivalents of the trailing label/hint arguments on the positional `.optional`/`.mandatory` overloads, reachable without also threading a show condition or default value — and, unlike those overloads, available on `.readonly` too. `RetainHiddenValue` is carried through from the member's `retainHiddenValue` flag.
+
+`.pageId(...)` sets the member row's `PageID`. The definition-store `EventToComplexTypes` parser does not read `PageID`, so this value does not change how CCD renders the member — it exists purely so a hand-authored definition carrying `PageID` on member rows round-trips through the SDK byte-for-byte. Rarely used columns not read by that parser (`SecurityClassification`, `Publish`, `ShowSummaryChangeOption` — each under ~1.5% of observed member rows) are intentionally left as raw passthrough rather than given SDK setters.
+
 ### Configuring the work basket and search fields
 
 There are five methods on the `ConfigBuilder` that allow the configuration of work basket input, work basket results, search input, search results and search cases fields. They all follow the same API:

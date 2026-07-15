@@ -38,6 +38,7 @@ public class Field<Type, StateType, Parent, Grandparent> {
   String publishAs;
   Integer showSummaryContentOption;
   boolean nullifyByDefault;
+  String eventComplexPageId;
 
   Class<Type> clazz;
   @ToString.Exclude
