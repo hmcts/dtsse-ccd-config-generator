@@ -252,6 +252,17 @@ public class E2EConfigGenerationTests {
     }
 
     @SneakyThrows
+    @Test
+    public void emitsFieldTypeCompletionFields() {
+        // See uk.gov.hmcts.reform.FieldTypeCompletionCaseData: typeOverride = WaysToPay pins the
+        // new base FieldType constant, and the JudicialUser field pins the new predefined complex
+        // type resolving to FieldType "JudicialUser" via its class-level @ComplexType.
+        File expected = resourceFile("FieldTypeCompletion/CaseField.json");
+        File actual = new File(tmp.getRoot(), "FieldTypeCompletion/CaseField.json");
+        CcdConfigComparator.assertEquals(expected, actual, JSONCompareMode.NON_EXTENSIBLE);
+    }
+
+    @SneakyThrows
     private File resourceFile(String resourcePath) {
         URL url = Resources.getResource(resourcePath);
         return new File(url.toURI());

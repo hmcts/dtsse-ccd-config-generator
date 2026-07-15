@@ -187,6 +187,13 @@ There are number of predefined types in CCD that are included in the library, su
 
 See [in-built types](https://github.com/hmcts/ccd-config-generator/tree/master/ccd-config-generator/src/main/java/uk/gov/hmcts/ccd/sdk/type) for a complete list.
 
+`FieldType` also covers base types the definition-store importer accepts but that only appear via
+`typeOverride`, such as `WaysToPay`, `CaseHistoryViewer`, `AddressUK`/`AddressGlobal`/`AddressGlobalUK`,
+`DateTime`, `Number`, `Fee`, `Organisation`, `OrganisationPolicy` and `ChangeOrganisationRequest`.
+`JudicialUser` is a predefined complex type (like `CaseLink` or `Document`) — reference
+`uk.gov.hmcts.ccd.sdk.type.JudicialUser` as a field's Java type directly rather than using
+`typeOverride`.
+
 It is also possible to override the Java type for a CCD specific one. For example, a `String` that should be an `Email` type in CCD:
 
 ```java
