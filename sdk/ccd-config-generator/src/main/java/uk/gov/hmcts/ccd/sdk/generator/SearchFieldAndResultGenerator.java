@@ -52,7 +52,11 @@ class SearchFieldAndResultGenerator<T, S, R extends HasRole> implements ConfigGe
     }
 
     Path output = Paths.get(root.getPath(), fileName + ".json");
-    JsonUtils.mergeInto(output, result, new AddMissing(), "CaseFieldID", "UserRole");
+    // ListElementCode is part of the key: a complex field carries one row per searched leaf, so
+    // several rows legitimately share the same (CaseFieldID, UserRole). Rows that set no
+    // ListElementCode omit the column entirely and still merge on (CaseFieldID, UserRole) exactly as
+    // before, keeping the output byte-identical for configs that do not use the new sub-builder.
+    JsonUtils.mergeInto(output, result, new AddMissing(), "CaseFieldID", "UserRole", "ListElementCode");
   }
 
   protected static Map<String, Object> buildField(String caseType, String fieldId, String label, int displayOrder,

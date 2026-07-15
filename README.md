@@ -376,6 +376,23 @@ On the work basket and search results fields a sort order can be specified using
     .caseReferenceField();
 ```
 
+For the less common columns — searching *within* a complex field (`ListElementCode`), a `FieldShowCondition`, an explicit `ResultsOrdering`, or scoping a single row to a role — pass a configurer lambda as the third argument:
+
+```java
+  builder.searchInputFields()
+    // one row per searched leaf of a complex field
+    .field(CaseData::getApplicant, "Applicant surname",
+        f -> f.listElementCode("surname").showCondition("caseName=\"x\""))
+    .field(CaseData::getApplicant, "Applicant surname (admin)",
+        f -> f.listElementCode("surname").role(HMCTS_ADMIN));
+
+  builder.searchResultFields()
+    .field(CaseData::getApplicant, "Applicant surname",
+        f -> f.listElementCode("surname").resultsOrdering(FIRST.DESCENDING));
+```
+
+`FieldShowCondition` is valid only on the input sheets and `ResultsOrdering` only on the result sheets (the definition-store importer rejects the wrong one for a given sheet); `ListElementCode` is valid on all four. Calling the lambda once per element code emits one row each, so a complex field can expose several of its leaves.
+
 ### Adding tabs
 
 Tabs follow a similar API to events:

@@ -154,6 +154,20 @@ public class E2EConfigGenerationTests {
     }
 
     @SneakyThrows
+    @Test
+    public void emitsSearchExtras() {
+        // Pins the search/workbasket sub-builder: ListElementCode (several leaves per complex field),
+        // FieldShowCondition on input sheets and ResultsOrdering on result sheets, plus role scoping.
+        // One file per sheet keeps the snapshot on this feature's output and off unrelated generators.
+        for (String sheet : new String[] {
+            "SearchInputFields", "WorkBasketInputFields", "SearchResultFields", "WorkBasketResultFields"}) {
+            File expected = resourceFile("SearchExtras/" + sheet + ".json");
+            File actual = new File(tmp.getRoot(), "SearchExtras/" + sheet + ".json");
+            CcdConfigComparator.assertEquals(expected, actual, JSONCompareMode.NON_EXTENSIBLE);
+        }
+    }
+
+    @SneakyThrows
     private File resourceFile(String resourcePath) {
         URL url = Resources.getResource(resourcePath);
         return new File(url.toURI());
