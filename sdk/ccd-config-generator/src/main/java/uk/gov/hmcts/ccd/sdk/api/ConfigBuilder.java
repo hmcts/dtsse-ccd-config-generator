@@ -26,6 +26,27 @@ public interface ConfigBuilder<T, S, R extends HasRole> {
     // Implementations that expose resolved config metadata may override this.
   }
 
+  /**
+   * Sets the Jurisdiction sheet's {@code Shuttered} flag. This is a definition-time flag
+   * persisted by {@code ccd-definition-store-api} and surfaced via its
+   * {@code GET /internal/jurisdiction-ui-configs} endpoint; nothing in CCD or ExUI currently reads
+   * it. It is unrelated to {@link #shutterService()}, which achieves an actual functional shutter
+   * by restricting CRUD permissions.
+   */
+  default void jurisdictionShuttered() {
+    // Default no-op for backward compatibility; implementations may override.
+  }
+
+  /**
+   * Sets the CaseType sheet's {@code EnableForDeletion} flag. This is a definition-time flag with
+   * no known runtime consumer in CCD; {@code ccd-case-disposer} decides which case types are
+   * eligible for permanent deletion from its own {@code DELETE_CASE_TYPES} deploy-time
+   * configuration, not from this column.
+   */
+  default void enableForDeletion() {
+    // Default no-op for backward compatibility; implementations may override.
+  }
+
   void shutterService();
 
   void shutterService(R... roles);

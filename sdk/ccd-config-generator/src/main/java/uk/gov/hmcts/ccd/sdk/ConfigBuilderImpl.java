@@ -154,6 +154,16 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements Decentralised
   }
 
   @Override
+  public void jurisdictionShuttered() {
+    config.jurisdictionShuttered = true;
+  }
+
+  @Override
+  public void enableForDeletion() {
+    config.enableForDeletion = true;
+  }
+
+  @Override
   public void omitHistoryForRoles(R... roles) {
     omitHistoryForRoles.addAll(Set.of(roles));
   }

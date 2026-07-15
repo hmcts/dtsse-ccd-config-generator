@@ -149,6 +149,11 @@ For decentralised services using their own database for data persistence,
 `hmctsServiceId("ABA1")` sets supplementary data key `HMCTSServiceId` to 'ABA1' and indexes it into Elasticsearch
 for global search.
 
+`builder.enableForDeletion()` sets the CaseType sheet's `EnableForDeletion=Y`, and
+`builder.jurisdictionShuttered()` sets the Jurisdiction sheet's `Shuttered=Y`. Neither is consumed
+by CCD at runtime today; both are definition-time flags carried for tooling/migration parity. This
+is unrelated to [shuttering](#Shuttering), which is the mechanism that actually restricts access.
+
 The implementation of `CCDConfig` should reference three classes: one for the model, one for the states and one for the user roles. These are typically named: CaseData, State and UserRole.
 
 ### Setting up the model
@@ -353,6 +358,17 @@ public class MyConfig implements CCDConfig<CaseData, State, UserRole> {
 When you need to bind a collection of CCD `ListValue<T>` within an event page, use the `.list(CaseData::getSomeList)` helper. It unwraps the `ListValue` wrapper, so you can continue with `.complex(Item::getSomething)` or `.optional(Item::getFlag)` against the item type.
 
 Callbacks are references to methods. The CCD Config Generator runtime library will handle the routing and execution of event callbacks.
+
+An event can be marked significant on the CaseEvent sheet with `.significant()`:
+
+```java
+  builder.event("submit")
+    .forStateTransition(State.Holding, State.Submitted)
+    .significant()
+    ...
+```
+
+This sets `SignificantEvent=Y`. It isn't consumed by CCD at runtime; it's a definition-time marker some services use in their own tooling.
 
 ### Configuring the work basket and search fields
 

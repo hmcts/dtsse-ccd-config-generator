@@ -143,6 +143,24 @@ public class E2EConfigGenerationTests {
         CcdConfigComparator.assertEquals(expected, actual, JSONCompareMode.NON_EXTENSIBLE);
     }
 
+    @SneakyThrows
+    @Test
+    public void emitsEventColumnsFlags() {
+        // See uk.gov.hmcts.reform.EventColumnsCaseType: significant(), enableForDeletion() and
+        // jurisdictionShuttered() each pin a column-graft replacement that is default-off.
+        File expectedCaseType = resourceFile("EventColumns/CaseType.json");
+        File actualCaseType = new File(tmp.getRoot(), "EventColumns/CaseType.json");
+        CcdConfigComparator.assertEquals(expectedCaseType, actualCaseType, JSONCompareMode.NON_EXTENSIBLE);
+
+        File expectedJurisdiction = resourceFile("EventColumns/Jurisdiction.json");
+        File actualJurisdiction = new File(tmp.getRoot(), "EventColumns/Jurisdiction.json");
+        CcdConfigComparator.assertEquals(expectedJurisdiction, actualJurisdiction, JSONCompareMode.NON_EXTENSIBLE);
+
+        File expectedEvent = resourceFile("EventColumns/CaseEvent/close.json");
+        File actualEvent = new File(tmp.getRoot(), "EventColumns/CaseEvent/close.json");
+        CcdConfigComparator.assertEquals(expectedEvent, actualEvent, JSONCompareMode.NON_EXTENSIBLE);
+    }
+
     @Test
     public void generatesDerivedConfig() {
         Map<String, File> actual = CcdConfigComparator.dirToMap(new File(tmp.getRoot(), "derived"));

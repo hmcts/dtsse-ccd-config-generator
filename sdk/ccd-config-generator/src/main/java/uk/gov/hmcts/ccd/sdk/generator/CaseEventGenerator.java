@@ -61,6 +61,9 @@ class CaseEventGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
     JsonUtils.putYn(data, "ShowSummary", event.isShowSummary());
     JsonUtils.putYn(data, "ShowEventNotes", event.isShowEventNotes());
     JsonUtils.putYn(data, "Publish", event.isPublishToCamunda());
+    if (event.isSignificant()) {
+      data.put("SignificantEvent", "Y");
+    }
     if (!Strings.isNullOrEmpty(event.getEndButtonLabel())) {
       data.put("EndButtonLabel", event.getEndButtonLabel());
     }
