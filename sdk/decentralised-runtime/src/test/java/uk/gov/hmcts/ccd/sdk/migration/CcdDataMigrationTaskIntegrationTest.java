@@ -190,6 +190,31 @@ class CcdDataMigrationTaskIntegrationTest {
   }
 
   @Test
+  void cutoverReleasesCapturedHighWaterMarkWhenSourceAdvancesBeforeFinalRefresh() {
+    insertSourceCase(10, 1000000000000010L, 1, "Submitted", "{\"field\":\"one\"}");
+    insertSourceCaseEvent(101, 10, "create", "Submitted", "{\"field\":\"one\"}", minutesAgo(60));
+    insertSourceCaseEvent(102, 10, "update", "Updated", "{\"field\":\"two\"}", minutesAgo(60));
+    insertTargetCase(10, 1000000000000010L, 1, "Submitted", "{\"field\":\"one\"}", 1);
+    insertTargetEvent(101, 10, "create", "Submitted", "{\"field\":\"one\"}", 1);
+    createCutoverProgress(101);
+
+    CcdDataMigrationRunResult staleCutover = task(CUTOVER, 1000, 10).runMigration();
+
+    assertThat(staleCutover.caughtUp()).isFalse();
+    assertThat(progressStatus()).isEqualTo("PRELOAD");
+    assertThat(cutoverEventHwm()).isNull();
+    assertThat(countRows("ccd.case_event")).isEqualTo(1);
+    assertThat(targetCaseState(10)).isEqualTo("Submitted");
+
+    CcdDataMigrationRunResult completedCutover = task(CUTOVER, 1000, 10).runMigration();
+
+    assertThat(completedCutover.caughtUp()).isTrue();
+    assertThat(progressStatus()).isEqualTo("COMPLETE");
+    assertThat(cutoverEventHwm()).isEqualTo(102);
+    assertThat(countRows("ccd.case_event")).isEqualTo(2);
+  }
+
+  @Test
   void cutoverCopiesRemainingEventsRefreshesCaseDataAndMarksComplete() {
     insertSourceCase(10, 1000000000000010L, 1, "Submitted", "{\"field\":\"one\"}");
     insertSourceCaseEvent(101, 10, "create", "Submitted", "{\"field\":\"one\"}", minutesAgo(60));
@@ -593,7 +618,7 @@ class CcdDataMigrationTaskIntegrationTest {
     assertThat(result.caughtUp()).isTrue();
     assertThat(result.eventsProcessed()).isZero();
     assertThat(countRows("ccd.case_event")).isZero();
-    assertThat(sourceEventHwm()).isZero();
+    assertThat(sourceEventHwm()).isEqualTo(101);
   }
 
   @Test
@@ -1266,6 +1291,32 @@ class CcdDataMigrationTaskIntegrationTest {
     );
   }
 
+  private void createCutoverProgress(long cutoverEventHwm) {
+    jdbc.update(
+        """
+        insert into ccd.ccd_data_migration_progress (
+          task_name,
+          config_hash,
+          status,
+          cutover_event_hwm,
+          source_event_hwm
+        ) values (
+          :taskName,
+          :configHash,
+          'CUTOVER',
+          :cutoverEventHwm,
+          :cutoverEventHwm
+        )
+        """,
+        new MapSqlParameterSource()
+            .addValue("taskName", "ccd-data-migration")
+            .addValue("configHash", optionsBuilder(List.of("TestCase"))
+                .build()
+                .migrationConfigHash())
+            .addValue("cutoverEventHwm", cutoverEventHwm)
+    );
+  }
+
   private CcdDataMigrationTaskOptions.Builder optionsBuilder(List<String> caseTypeIds) {
     return CcdDataMigrationTaskOptions.builder(caseTypeIds)
         .sourceJurisdiction("TEST");
@@ -1453,7 +1504,7 @@ class CcdDataMigrationTaskIntegrationTest {
     );
   }
 
-  private long cutoverEventHwm() {
+  private Long cutoverEventHwm() {
     return jdbc.queryForObject(
         "select cutover_event_hwm from ccd.ccd_data_migration_progress where task_name = :taskName",
         Map.of("taskName", "ccd-data-migration"),

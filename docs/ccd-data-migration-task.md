@@ -54,14 +54,21 @@ Validation is also resumable. The task records the highest local `case_event.id`
 walks local target rows to choose the next range end, then compares only that range with source CCD,
 so cutover does not need to repeat a full source count for all historical significant items.
 
-Source event high-water marks are selected from the configured jurisdiction/case types. The task
-finds the first matching source event inside `sourceEventSafetyWindow`, which defaults to two
-minutes, and will not advance the source event high-water mark beyond the row before it. This keeps
-preload and incremental validation away from rows that may still have related source writes in
-flight, even if a higher event ID is already old enough to copy. If a newly calculated safe event or
-significant-item high-water mark is lower than stored progress, the task fails rather than treating
-the run as caught up; that indicates source rows became visible after progress had already advanced
-and must be investigated before retrying.
+Source event and significant-item high-water marks stay in the same global CCD ID coordinate used by
+older task versions, so existing checkpoints can be resumed without resetting progress. To avoid
+unbounded source scans, the event high-water mark is selected by walking only the most recent global
+source events in descending ID order. If that bounded recent set contains rows inside
+`sourceEventSafetyWindow`, which defaults to two minutes, the task only advances to the row before
+the first fresh event. If the whole bounded recent set is still inside the safety window, progress is
+not advanced on that run. If a newly calculated safe event or significant-item high-water mark is
+lower than stored progress, the task fails rather than treating the run as caught up; that indicates
+source rows became visible after progress had already advanced and must be investigated before
+retrying.
+
+If source events appear after a `CUTOVER` high-water mark has been captured but before the final
+refresh, the task releases the captured high-water mark, returns the progress row to `PRELOAD`, and
+returns `caughtUp=false`. The next cutover attempt can then wait for the safety window and capture a
+new high-water mark instead of being stuck on the stale one.
 
 The runtime `case_data` revision trigger is deliberately disabled only inside the cutover refresh
 transaction so the final source-derived revision can be written. The trigger is re-enabled before the
