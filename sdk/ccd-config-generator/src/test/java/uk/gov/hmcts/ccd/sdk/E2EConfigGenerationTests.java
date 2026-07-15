@@ -161,6 +161,26 @@ public class E2EConfigGenerationTests {
         CcdConfigComparator.assertEquals(expectedEvent, actualEvent, JSONCompareMode.NON_EXTENSIBLE);
     }
 
+    @SneakyThrows
+    @Test
+    public void emitsSmallColumns2Flags() {
+        // See uk.gov.hmcts.reform.SmallColumns2CaseType: printableDocumentsUrl(), canSaveDraft(),
+        // showSummaryContentOption() and nullifyByDefault() each pin a column-graft replacement
+        // that is default-off.
+        File expectedCaseType = resourceFile("SmallColumns2/CaseType.json");
+        File actualCaseType = new File(tmp.getRoot(), "SmallColumns2/CaseType.json");
+        CcdConfigComparator.assertEquals(expectedCaseType, actualCaseType, JSONCompareMode.NON_EXTENSIBLE);
+
+        File expectedEvent = resourceFile("SmallColumns2/CaseEvent/create.json");
+        File actualEvent = new File(tmp.getRoot(), "SmallColumns2/CaseEvent/create.json");
+        CcdConfigComparator.assertEquals(expectedEvent, actualEvent, JSONCompareMode.NON_EXTENSIBLE);
+
+        File expectedCaseEventToFields = resourceFile("SmallColumns2/CaseEventToFields/create.json");
+        File actualCaseEventToFields = new File(tmp.getRoot(), "SmallColumns2/CaseEventToFields/create.json");
+        CcdConfigComparator.assertEquals(expectedCaseEventToFields, actualCaseEventToFields,
+            JSONCompareMode.NON_EXTENSIBLE);
+    }
+
     @Test
     public void generatesDerivedConfig() {
         Map<String, File> actual = CcdConfigComparator.dirToMap(new File(tmp.getRoot(), "derived"));

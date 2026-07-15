@@ -64,6 +64,9 @@ class CaseEventGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
     if (event.isSignificant()) {
       data.put("SignificantEvent", "Y");
     }
+    if (event.isCanSaveDraft()) {
+      data.put("CanSaveDraft", "Y");
+    }
     if (!Strings.isNullOrEmpty(event.getEndButtonLabel())) {
       data.put("EndButtonLabel", event.getEndButtonLabel());
     }

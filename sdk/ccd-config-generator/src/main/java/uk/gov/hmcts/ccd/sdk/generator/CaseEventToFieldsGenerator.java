@@ -71,6 +71,8 @@ class CaseEventToFieldsGenerator<T, S, R extends HasRole> implements ConfigGener
       applySummaryFlag(row, field);
       applyPageLabel(row, collection, field);
       applyDisplayContextParameter(row, field);
+      applyShowSummaryContentOption(row, field);
+      applyNullifyByDefault(row, field);
     }
 
     return entries;
@@ -191,6 +193,18 @@ class CaseEventToFieldsGenerator<T, S, R extends HasRole> implements ConfigGener
   private void applyDisplayContextParameter(Map<String, Object> row, Field field) {
     if (field.getDisplayContextParameter() != null) {
       row.put("DisplayContextParameter", field.getDisplayContextParameter());
+    }
+  }
+
+  private void applyShowSummaryContentOption(Map<String, Object> row, Field field) {
+    if (field.getShowSummaryContentOption() != null) {
+      row.put("ShowSummaryContentOption", field.getShowSummaryContentOption());
+    }
+  }
+
+  private void applyNullifyByDefault(Map<String, Object> row, Field field) {
+    if (field.isNullifyByDefault()) {
+      row.put("NullifyByDefault", "Y");
     }
   }
 

@@ -58,6 +58,9 @@ public class JSONConfigGenerator<T, S, R extends HasRole> {
     if (builder.isEnableForDeletion()) {
       caseType.put("EnableForDeletion", "Y");
     }
+    if (!builder.getPrintableDocumentsUrl().isEmpty()) {
+      caseType.put("PrintableDocumentsUrl", builder.getPrintableDocumentsUrl());
+    }
     fields.add(caseType);
     Path output = Paths.get(outputfolder.getPath(),"CaseType.json");
     JsonUtils.mergeInto(output, fields, new JsonUtils.AddMissing(), "ID");

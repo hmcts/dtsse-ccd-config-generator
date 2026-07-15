@@ -36,6 +36,8 @@ public class Field<Type, StateType, Parent, Grandparent> {
   boolean retainHiddenValue;
   Boolean publish;
   String publishAs;
+  Integer showSummaryContentOption;
+  boolean nullifyByDefault;
 
   Class<Type> clazz;
   @ToString.Exclude
@@ -135,6 +137,26 @@ public class Field<Type, StateType, Parent, Grandparent> {
     public FieldBuilder<Type, StateType, Parent, Grandparent> publishAs(String publishAs) {
       this.publishAs = publishAs;
       this.publish = true;
+      return this;
+    }
+
+    /**
+     * Sets this field's {@code CaseEventToFields.ShowSummaryContentOption}, the display order of
+     * this field's content within the event's check-your-answers summary. {@code null} (the
+     * default) omits the column, matching output produced before this option existed.
+     */
+    public FieldBuilder<Type, StateType, Parent, Grandparent> showSummaryContentOption(int order) {
+      this.showSummaryContentOption = order;
+      return this;
+    }
+
+    /**
+     * Sets this field's {@code CaseEventToFields.NullifyByDefault} flag: on submit the field is
+     * cleared unless a value was provided, regardless of any prior value. The definition-store
+     * importer rejects setting this together with a {@code DefaultValue} on the same field.
+     */
+    public FieldBuilder<Type, StateType, Parent, Grandparent> nullifyByDefault() {
+      this.nullifyByDefault = true;
       return this;
     }
   }

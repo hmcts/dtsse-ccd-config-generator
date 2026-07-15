@@ -154,6 +154,10 @@ for global search.
 by CCD at runtime today; both are definition-time flags carried for tooling/migration parity. This
 is unrelated to [shuttering](#Shuttering), which is the mechanism that actually restricts access.
 
+`builder.printableDocumentsUrl(url)` sets the CaseType sheet's `PrintableDocumentsUrl` column, the
+webhook the definition store calls to obtain a printable representation of a case. Omitted (the
+default) leaves the column unset, matching output produced before this option existed.
+
 The implementation of `CCDConfig` should reference three classes: one for the model, one for the states and one for the user roles. These are typically named: CaseData, State and UserRole.
 
 ### Setting up the model
@@ -408,6 +412,32 @@ An event can be marked significant on the CaseEvent sheet with `.significant()`:
 ```
 
 This sets `SignificantEvent=Y`. It isn't consumed by CCD at runtime; it's a definition-time marker some services use in their own tooling.
+
+An event can allow the caseworker to save a partial submission and resume it later with `.canSaveDraft()`:
+
+```java
+  builder.event("create")
+    .initialState(State.Open)
+    .canSaveDraft()
+    ...
+```
+
+This sets `CanSaveDraft=Y`. The definition-store importer only allows this on create events (those with no pre-state); setting it on an event with a pre-state fails validation on import.
+
+A field placed on an event can set `ShowSummaryContentOption` — its display order within the event's check-your-answers summary — with `.showSummaryContentOption(n)`, and `NullifyByDefault` — clear the field on submit unless a value is provided — with `.nullifyByDefault()`:
+
+```java
+  builder.event("create")
+    ...
+    .fields()
+      .optional(CaseData::getInternalNote)
+      .showSummaryContentOption(1)
+      .optional(CaseData::getStaleFlag)
+      .nullifyByDefault()
+    ;
+```
+
+The definition-store importer rejects `NullifyByDefault=Y` together with a `DefaultValue` on the same field.
 
 ### Configuring the work basket and search fields
 
