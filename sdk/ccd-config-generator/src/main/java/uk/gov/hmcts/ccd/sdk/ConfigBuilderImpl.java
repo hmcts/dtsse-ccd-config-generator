@@ -13,6 +13,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import uk.gov.hmcts.ccd.sdk.api.Banner;
 import uk.gov.hmcts.ccd.sdk.api.CaseCategory.CaseCategoryBuilder;
 import uk.gov.hmcts.ccd.sdk.api.CaseRoleToAccessProfile.CaseRoleToAccessProfileBuilder;
 import uk.gov.hmcts.ccd.sdk.api.ComplexTypeAuthorisation;
@@ -243,6 +244,16 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements Decentralised
       noticeOfChangeBuilder = new NoticeOfChangeBuilder<>(config.caseClass, propertyUtils);
     }
     return noticeOfChangeBuilder;
+  }
+
+  @Override
+  public void banner(boolean enabled, String description, String url, String urlText) {
+    config.banner = Banner.builder()
+        .enabled(enabled)
+        .description(description)
+        .url(url)
+        .urlText(urlText)
+        .build();
   }
 
   @Override

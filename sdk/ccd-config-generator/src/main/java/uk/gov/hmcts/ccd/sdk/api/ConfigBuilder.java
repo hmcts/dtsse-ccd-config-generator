@@ -108,4 +108,16 @@ public interface ConfigBuilder<T, S, R extends HasRole> {
 
   void grantComplexType(TypedPropertyGetter<T, ?> field, String listElementCode,
                         Set<Permission> permissions, R... roles);
+
+  /**
+   * Sets the jurisdiction-wide service notice banner shown by XUI. The importer allows exactly
+   * one banner per jurisdiction; calling this more than once overwrites the previous value
+   * rather than adding a row.
+   *
+   * @param enabled whether the banner is shown
+   * @param description the banner message
+   * @param url an optional link target; pass {@code null} or {@code ""} if the banner carries no link
+   * @param urlText the link text shown for {@code url}; pass {@code null} or {@code ""} if unused
+   */
+  void banner(boolean enabled, String description, String url, String urlText);
 }

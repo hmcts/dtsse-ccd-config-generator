@@ -499,6 +499,17 @@ Roles can be excluded from a shutter with `shutterServiceExclude`, so they keep 
 
 This is typically used to keep `caseworker-wa-task-configuration` out of a shutter, as dropping that role to DELETE can cause issues for Work Allocation / Task Management.
 
+### Service notice banner
+
+CCD allows one jurisdiction-wide service notice banner, shown by XUI. Configure it with:
+
+```java
+  configBuilder.banner(true, "Your system might be running slowly.",
+      "https://status.example.com", "Check service status");
+```
+
+The `url`/`urlText` arguments are optional — pass `null` or `""` if the banner carries no link. Calling `banner(...)` more than once for the same case type overwrites the previous value, matching the importer's one-banner-per-jurisdiction rule. If `banner(...)` is never called, no `Banner.json` is generated.
+
 ## Unwrapped types
 
 In some cases you might want to use a Java class for a property but not have it mapped to a complex type. Jackson provides an annotation `@JsonUnwrapped` that will flatten properties in a child class to the parent class. The CCD config generator treats the `@JsonUnwrapped` annotation as a sign that the class should be flattened into fields rather than a complex type.

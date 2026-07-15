@@ -1,5 +1,7 @@
 package uk.gov.hmcts.ccd.sdk;
 
+import static org.junit.Assert.assertFalse;
+
 import com.google.common.collect.ImmutableMap;
 import com.google.common.io.Resources;
 import java.io.File;
@@ -70,6 +72,19 @@ public class E2EConfigGenerationTests {
         File expected = resourceFile("ExplicitStateGrants/AuthorisationCaseState.json");
         File actual = new File(tmp.getRoot(), "ExplicitStateGrants/AuthorisationCaseState.json");
         CcdConfigComparator.assertEquals(expected, actual, JSONCompareMode.NON_EXTENSIBLE);
+    }
+
+    @SneakyThrows
+    @Test
+    public void emitsConfiguredBanner() {
+        File expected = resourceFile("BannerFeature/Banner.json");
+        File actual = new File(tmp.getRoot(), "BannerFeature/Banner.json");
+        CcdConfigComparator.assertEquals(expected, actual, JSONCompareMode.NON_EXTENSIBLE);
+    }
+
+    @Test
+    public void omitsBannerWhenNotConfigured() {
+        assertFalse(new File(tmp.getRoot(), "CARE_SUPERVISION_EPO/Banner.json").exists());
     }
 
     @SneakyThrows
