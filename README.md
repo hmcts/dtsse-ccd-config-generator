@@ -510,6 +510,36 @@ CCD allows one jurisdiction-wide service notice banner, shown by XUI. Configure 
 
 The `url`/`urlText` arguments are optional — pass `null` or `""` if the banner carries no link. Calling `banner(...)` more than once for the same case type overwrites the previous value, matching the importer's one-banner-per-jurisdiction rule. If `banner(...)` is never called, no `Banner.json` is generated.
 
+### Role to access profile mappings
+
+`caseRoleToAccessProfile` maps a case-type role (a `UserRole` / `HasRole` constant) to one or more
+access profiles:
+
+```java
+  configBuilder.caseRoleToAccessProfile(UserRole.SOLICITOR)
+    .accessProfiles("caseworker-solicitor");
+```
+
+Many definitions also map **organisational / IDAM roles that are not case-type roles** (e.g.
+`caseworker-ia-system`). Adding these to the `UserRole` enum just to map them would register them and
+emit an `AuthorisationCaseType` row. Use `roleToAccessProfile(String)` to map a role by name without
+registering it — it emits only the `RoleToAccessProfiles` row and carries the same fluent options:
+
+```java
+  configBuilder.roleToAccessProfile("caseworker-ia-system")
+    .accessProfiles("caseworker-ia-system", "caseworker-ia-caseofficer");
+```
+
+### Case role jurisdiction
+
+Generated `CaseRoles` rows omit the `JurisdictionID` column by default. Call
+`emitCaseRoleJurisdiction()` to stamp it (taken from `jurisdiction(...)`) on every case role:
+
+```java
+  configBuilder.emitCaseRoleJurisdiction();
+```
+
+
 ## Unwrapped types
 
 In some cases you might want to use a Java class for a property but not have it mapped to a complex type. Jackson provides an annotation `@JsonUnwrapped` that will flatten properties in a child class to the parent class. The CCD config generator treats the `@JsonUnwrapped` annotation as a sign that the class should be flattened into fields rather than a complex type.

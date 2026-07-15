@@ -149,6 +149,11 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements Decentralised
   }
 
   @Override
+  public void emitCaseRoleJurisdiction() {
+    config.emitCaseRoleJurisdiction = true;
+  }
+
+  @Override
   public void omitHistoryForRoles(R... roles) {
     omitHistoryForRoles.addAll(Set.of(roles));
   }
@@ -213,6 +218,13 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements Decentralised
   @Override
   public CaseRoleToAccessProfileBuilder<R> caseRoleToAccessProfile(R caseRole) {
     var builder = CaseRoleToAccessProfileBuilder.builder(caseRole);
+    caseRoleToAccessProfiles.add(builder);
+    return builder;
+  }
+
+  @Override
+  public CaseRoleToAccessProfileBuilder<R> roleToAccessProfile(String roleName) {
+    var builder = CaseRoleToAccessProfileBuilder.<R>builder(roleName);
     caseRoleToAccessProfiles.add(builder);
     return builder;
   }

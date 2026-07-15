@@ -53,6 +53,7 @@ public class ResolvedCCDConfig<T, S, R extends HasRole> {
   String hmctsServiceId = "";
   boolean shutterService = false;
   boolean explicitStateGrants = false;
+  boolean emitCaseRoleJurisdiction = false;
   Map<String, String> stateLabels = new HashMap<>();
 
   /**

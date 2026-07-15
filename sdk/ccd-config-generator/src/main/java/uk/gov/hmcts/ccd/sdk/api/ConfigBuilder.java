@@ -66,6 +66,19 @@ public interface ConfigBuilder<T, S, R extends HasRole> {
   }
 
   /**
+   * Emit the {@code JurisdictionID} column on generated {@code CaseRoles} rows. By default the
+   * column is omitted so that output is byte-identical to before this option existed; call this to
+   * opt in when a definition needs the jurisdiction stamped on each case role.
+   *
+   * <p>The jurisdiction is taken from {@link #jurisdiction(String, String, String)}. The importer's
+   * {@code CaseRoleParser} reads only {@code ID}/{@code Name}/{@code Description}, so the column is
+   * additive: it is tolerated when present and its absence is the historic default.
+   */
+  default void emitCaseRoleJurisdiction() {
+    // Default no-op for backward compatibility; implementations may override.
+  }
+
+  /**
    * Set AuthorisationCaseState explicitly.
    * Note that additional AuthorisationCaseState permissions are inferred based on grants of
    * event-level permissions.
@@ -97,6 +110,23 @@ public interface ConfigBuilder<T, S, R extends HasRole> {
   void addPreEventHook(Function<Map<String, Object>, Map<String, Object>> hook);
 
   CaseRoleToAccessProfileBuilder<R> caseRoleToAccessProfile(R caseRole);
+
+  /**
+   * Declare a {@code RoleToAccessProfiles} mapping keyed on a plain role-name string rather than a
+   * {@link HasRole} constant. This carries the same fluent options as
+   * {@link #caseRoleToAccessProfile(HasRole)} (access profiles, authorisations, case-access
+   * categories, read-only, disabled, legacy IDAM role).
+   *
+   * <p>Real case-type definitions map many organisational / IDAM role names
+   * (e.g. {@code caseworker-ia-system}) that are <em>not</em> case-type {@code UserRole}s. Those
+   * cannot be declared via the typed API without first adding them to the {@code UserRole} enum,
+   * which would register them and emit an {@code AuthorisationCaseType} row. This overload takes the
+   * name verbatim: it emits only the {@code RoleToAccessProfiles} row and does <strong>not</strong>
+   * register a {@code UserRole} or produce an {@code AuthorisationCaseType} row.
+   *
+   * @param roleName the literal role name to map, emitted verbatim as {@code RoleName}
+   */
+  CaseRoleToAccessProfileBuilder<R> roleToAccessProfile(String roleName);
 
   CaseCategory.CaseCategoryBuilder categories(R caseRole);
 
