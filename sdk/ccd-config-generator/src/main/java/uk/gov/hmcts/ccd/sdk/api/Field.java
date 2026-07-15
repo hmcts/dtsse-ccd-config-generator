@@ -98,6 +98,51 @@ public class Field<Type, StateType, Parent, Grandparent> {
       return this;
     }
 
+    /**
+     * Sets this field's {@code CaseEventToFields.DefaultValue} to a raw string, verbatim. Declaring
+     * this overload alongside the {@code Type}-typed setter Lombok would otherwise generate means
+     * that setter must be hand-written here too (Lombok skips generation for any property with an
+     * existing same-named builder method, regardless of arity).
+     */
+    public FieldBuilder<Type, StateType, Parent, Grandparent> defaultValue(Type defaultValue) {
+      this.defaultValue = defaultValue;
+      return this;
+    }
+
+    /**
+     * See {@link #defaultValue(Object)}. Accepts a plain string so a field whose {@code Type} is
+     * not {@code String} (e.g. an enum) can still carry a literal {@code DefaultValue}, matching
+     * the sheet column, which is untyped.
+     */
+    @SuppressWarnings("unchecked")
+    public FieldBuilder<Type, StateType, Parent, Grandparent> defaultValue(String defaultValue) {
+      this.defaultValue = (Type) defaultValue;
+      return this;
+    }
+
+    /**
+     * Sets this field's {@code CaseEventToFields.RetainHiddenValue} flag: a value entered while the
+     * field is visible survives it later being hidden by its {@code showCondition}. Declaring the
+     * no-arg {@link #retainHiddenValue()} overload means this setter must be hand-written too
+     * (Lombok skips generation for any property with an existing same-named builder method,
+     * regardless of arity) — it is otherwise identical to the setter Lombok would have generated.
+     */
+    public FieldBuilder<Type, StateType, Parent, Grandparent> retainHiddenValue(boolean retainHiddenValue) {
+      this.retainHiddenValue = retainHiddenValue;
+      return this;
+    }
+
+    /**
+     * Sets this field's {@code CaseEventToFields.RetainHiddenValue} flag: a value entered while the
+     * field is visible survives it later being hidden by its {@code showCondition}. Composes with
+     * every other fluent setter (unlike the {@code FieldCollectionBuilder} positional overloads
+     * carrying {@code retainHiddenValue}, which have no combinable overload alongside a
+     * {@code displayContextParameter}).
+     */
+    public FieldBuilder<Type, StateType, Parent, Grandparent> retainHiddenValue() {
+      return retainHiddenValue(true);
+    }
+
     public FieldCollectionBuilder<Type, StateType, FieldCollectionBuilder<Parent, StateType, Grandparent>> complex() {
       if (clazz == null) {
         throw new RuntimeException("Cannot infer type for field: " + id
