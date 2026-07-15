@@ -53,10 +53,10 @@ class SearchCasesResultFieldsGenerator<T, S, R extends HasRole> implements
       object.put("ListElementCode", field.getListElementCode());
     }
     if (null != field.getDisplayContextParameter()) {
-      object.put("DisplayContextParameter", field.getListElementCode());
+      object.put("DisplayContextParameter", field.getDisplayContextParameter());
     }
     if (null != field.getResultsOrdering()) {
-      object.put("ResultsOrdering", field.getListElementCode());
+      object.put("ResultsOrdering", field.getResultsOrdering());
     }
     return object;
   }
