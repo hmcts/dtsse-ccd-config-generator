@@ -1,0 +1,23 @@
+[
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "Minimal",
+    "CaseStateID": "Open",
+    "UserRole": "caseworker-test",
+    "CRUD": "CRU"
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "Minimal",
+    "CaseStateID": "Open",
+    "UserRole": "citizen",
+    "CRUD": "R"
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "Minimal",
+    "CaseStateID": "Closed",
+    "UserRole": "caseworker-test",
+    "CRUD": "CRUD"
+  }
+]

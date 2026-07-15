@@ -1,0 +1,24 @@
+Sheet 'AuthorisationCaseField' row [caseManagementOrder|caseworker-publiclaw-solicitor] column 'Comments': expected <This complex type permission should be for LASOLICITOR role, but somehow it causes issues in CCD.> but column is missing in actual
+Sheet 'CaseEvent' row [caseProgressionReport] column 'PreConditionState(s)': expected <CLOSED;Deleted;FINAL_HEARING;GATEKEEPING_LISTING;Gatekeeping;Open;PREPARE_FOR_HEARING;RETURNED;Submitted> but was <*>
+Sheet 'CaseEventToFields' row [addColleaguesToNotify|colleaguesToNotify] column 'Label': expected <Colleagues for ${respondentName}'s solicitor> but column is missing in actual
+Sheet 'CaseEventToFields' row [enterGrounds|contactWithChildInCareOrderType] column 'Comments': expected <A control flag. Yes if order type of this case is contact with a child in care application> but column is missing in actual
+Sheet 'CaseEventToFields' row [enterGrounds|refuseContactWithChildOrderType] column 'Comments': expected <A control flag. Yes if order type of this case is Refuse contact with child application> but column is missing in actual
+Sheet 'CaseEventToFields' row [enterGrounds|secureAccommodationOrderType] column 'Comments': expected <A control flag. Yes if order type of this case is secure accommodation order> but column is missing in actual
+Sheet 'CaseField' row [allocationDecision] column 'ShowSummaryContentOption': expected <Y> but column is missing in actual
+Sheet 'CaseField' row [judgeTitleAndName] column 'FieldShownCondition': expected <judgeTitleAndName="DO_NOT_SHOW"> but column is missing in actual
+Sheet 'CaseTypeTab' row [JudicialMessagesTab|closedJudicialMessages] column 'TabLabel': expected <Closed messages> but was <Judicial messages>
+Sheet 'ComplexTypes' row [Direction|allParties_label] column 'comment': expected <Used in event to complex type to display All parties if direction is for all parties> but column is missing in actual
+Sheet 'ComplexTypes' row [HearingOrderForApproval|dateSent] column 'FieldShowCondition:': expected <judgeTitleAndName=""> but column is missing in actual
+Sheet 'ComplexTypes' row [HearingOrderForApproval|status] column 'FieldShowCondition:': expected <status!="APPROVED"> but column is missing in actual
+Sheet 'ComplexTypes' row [HearingOrderForReview|dateSent] column 'FieldShowCondition:': expected <judgeTitleAndName=""> but column is missing in actual
+Sheet 'ComplexTypes' row [HearingOrderForReview|status] column 'FieldShowCondition:': expected <status!="APPROVED"> but column is missing in actual
+Sheet 'ComplexTypes' row [JudgeAndLegalAdvisor|judgeJudicialUser] column 'FieldType': expected <JudicialUser> but was <Text>
+Sheet 'ComplexTypes' row [ListingActionRequest|dateReviewed] column 'DisplayContextParameter': expected <#DATETIMEDISPLAY(d LLL yyyy)> but column is missing in actual
+Sheet 'ComplexTypes' row [ListingActionRequest|dateSent] column 'DisplayContextParameter': expected <#DATETIMEDISPLAY(d LLL yyyy)> but column is missing in actual
+Sheet 'ComplexTypes' row [UploadedCaseManagementOrder|dateSent] column 'FieldShowCondition:': expected <judgeTitleAndName=""> but column is missing in actual
+Sheet 'ComplexTypes' row [UploadedCaseManagementOrder|status] column 'FieldShowCondition:': expected <status!="APPROVED"> but column is missing in actual
+Sheet 'EventToComplexTypes' row [LocalAuthority|||colleagues]: expected row has no match in actual: {ID=LocalAuthority, ListElementCode=colleagues, FieldType=Collection, FieldTypeParameter=Colleague, ElementLabel=Colleague, SecurityClassification=PUBLIC, FieldShowCondition=email="DO NOT SHOW"}
+Sheet 'FixedLists' row [HearingVenue|301] column 'LiveTo': expected <05/06/2022> but column is missing in actual
+Sheet 'FixedLists' row [HearingVenue|302] column 'LiveTo': expected <05/06/2022> but column is missing in actual
+Sheet 'FixedLists' row [RepresentativeRole|LA_BARRISTER]: unexpected row in actual: {ID=RepresentativeRole, ListElement=LA Barrister, ListElementCode=LA_BARRISTER}
+Sheet 'SearchParty' row [CARE_SUPERVISION_EPO|party.firstName,party.lastName|children1]: expected row has no match in actual: {CaseTypeID=CARE_SUPERVISION_EPO, SearchPartyCollectionFieldName=children1, SearchPartyName=party.firstName,party.lastName, SearchPartyAddressLine1=party.address.AddressLine1, SearchPartyPostCode=party.address.PostCode, SearchPartyDOB=party.dateOfBirth}

@@ -1,0 +1,10 @@
+[
+  {
+    "CaseTypeID": "Test",
+    "CaseEventID": "someEvent",
+    "CaseFieldID": "field1",
+    "ListElementCode": "code1",
+    "DisplayOrder": 1,
+    "DisplayContext": "READONLY"
+  }
+]

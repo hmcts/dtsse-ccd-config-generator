@@ -1,0 +1,15 @@
+[
+  { "CaseTypeID": "EXAMPLE", "ID": "applicantName", "FieldType": "Text", "Label": "Applicant name" },
+  { "CaseTypeID": "EXAMPLE", "ID": "dateOfBirth", "FieldType": "DateTime", "Label": "DOB" },
+  { "CaseTypeID": "EXAMPLE", "ID": "renamedId", "FieldType": "Text", "Label": "Renamed" },
+  { "CaseTypeID": "EXAMPLE", "ID": "caseReference", "FieldType": "Text", "Label": "Case ref" },
+  { "CaseTypeID": "EXAMPLE", "ID": "claimType", "FieldType": "FixedList", "FieldTypeParameter": "ClaimType", "Label": "Claim type" },
+  { "CaseTypeID": "EXAMPLE", "ID": "parties", "FieldType": "Collection", "FieldTypeParameter": "Party", "Label": "Parties" },
+  { "CaseTypeID": "EXAMPLE", "ID": "documents", "FieldType": "Collection", "FieldTypeParameter": "Document", "Label": "Documents" },
+  { "CaseTypeID": "EXAMPLE", "ID": "hearingType", "FieldType": "Text", "Label": "Hearing type" },
+  { "CaseTypeID": "EXAMPLE", "ID": "hearingLength", "FieldType": "Number", "Label": "Hearing length" },
+  { "CaseTypeID": "EXAMPLE", "ID": "confidentialNote", "FieldType": "Text", "Label": "Confidential note" },
+  { "CaseTypeID": "EXAMPLE", "ID": "extraSynthField", "FieldType": "Text", "Label": "Definition-only" },
+  { "CaseTypeID": "EXAMPLE", "ID": "confidentialData", "FieldType": "Text", "Label": "Collides with @JsonUnwrapped parent" },
+  { "CaseTypeID": "EXAMPLE", "ID": "sectionLabel", "FieldType": "Label", "Label": "A presentational label" }
+]

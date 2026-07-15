@@ -1,0 +1,46 @@
+name: Definition Converter Round Trip
+
+on:
+  push:
+    branches:
+      - master
+    paths-ignore:
+      - '**/*.md'
+      - '*.md'
+  pull_request:
+  merge_group:
+
+jobs:
+  round-trip:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+    - uses: actions/checkout@v7
+      with:
+        fetch-depth: 0
+        submodules: false
+    - name: Init fixture submodules
+      # All seven round-trip fixtures; the sdk build itself needs no submodules. Each fixture's
+      # RoundTripTest case asserts its residuals against a checked-in baseline, so every one must be
+      # present for the ratchet to genuinely gate here (an uninitialised submodule would only skip
+      # via Assumptions, silently dropping that fixture's coverage). actions/checkout's token
+      # insteadOf rewrite only applies inside its own step, so rewrite git@github.com: SSH URLs to
+      # https before running a manual submodule update.
+      run: |
+        git config --global url."https://github.com/".insteadOf "git@github.com:"
+        git submodule update --init --depth 1 \
+          test-projects/ia-ccd-definitions \
+          test-projects/sscs-tribunals-case-api \
+          test-builds/fpl-ccd-configuration \
+          test-projects/et-ccd-callbacks \
+          test-projects/civil-ccd-definition \
+          test-projects/prl-ccd-definitions \
+          test-projects/probate-back-office
+    - name: Set up JDK
+      uses: actions/setup-java@v5
+      with:
+        distribution: 'zulu'
+        java-version: 21
+    - name: Run definition-converter round-trip tests
+      run: ./gradlew :sdk:ccd-definition-converter:roundTripTest -i --stacktrace

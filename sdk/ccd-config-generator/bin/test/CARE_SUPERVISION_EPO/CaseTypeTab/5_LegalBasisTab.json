@@ -1,0 +1,112 @@
+[
+  {
+    "TabDisplayOrder": 5,
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "CaseFieldID": "statementOfService",
+    "Channel": "CaseWorker",
+    "UserRole": "",
+    "TabFieldDisplayOrder": 1,
+    "TabLabel": "Legal basis",
+    "TabID": "LegalBasisTab"
+  },
+  {
+    "TabDisplayOrder": 5,
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "CaseFieldID": "groundsForEPO",
+    "Channel": "CaseWorker",
+    "UserRole": "",
+    "TabFieldDisplayOrder": 2,
+    "TabLabel": "Legal basis",
+    "TabID": "LegalBasisTab"
+  },
+  {
+    "TabDisplayOrder": 5,
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "CaseFieldID": "grounds",
+    "Channel": "CaseWorker",
+    "UserRole": "",
+    "TabFieldDisplayOrder": 3,
+    "TabLabel": "Legal basis",
+    "TabID": "LegalBasisTab"
+  },
+  {
+    "TabDisplayOrder": 5,
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "CaseFieldID": "risks",
+    "Channel": "CaseWorker",
+    "UserRole": "",
+    "TabFieldDisplayOrder": 4,
+    "TabLabel": "Legal basis",
+    "TabID": "LegalBasisTab"
+  },
+  {
+    "TabDisplayOrder": 5,
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "CaseFieldID": "factorsParenting",
+    "Channel": "CaseWorker",
+    "UserRole": "",
+    "TabFieldDisplayOrder": 5,
+    "TabLabel": "Legal basis",
+    "TabID": "LegalBasisTab"
+  },
+  {
+    "TabDisplayOrder": 5,
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "CaseFieldID": "internationalElement",
+    "Channel": "CaseWorker",
+    "UserRole": "",
+    "TabFieldDisplayOrder": 6,
+    "TabLabel": "Legal basis",
+    "TabID": "LegalBasisTab"
+  },
+  {
+    "TabDisplayOrder": 5,
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "CaseFieldID": "proceeding",
+    "Channel": "CaseWorker",
+    "UserRole": "",
+    "TabFieldDisplayOrder": 7,
+    "TabLabel": "Legal basis",
+    "TabID": "LegalBasisTab"
+  },
+  {
+    "TabDisplayOrder": 5,
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "CaseFieldID": "allocationDecision",
+    "Channel": "CaseWorker",
+    "UserRole": "",
+    "TabFieldDisplayOrder": 8,
+    "TabLabel": "Legal basis",
+    "TabID": "LegalBasisTab"
+  },
+  {
+    "TabDisplayOrder": 5,
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "CaseFieldID": "allocationProposal",
+    "Channel": "CaseWorker",
+    "UserRole": "",
+    "TabFieldDisplayOrder": 9,
+    "TabLabel": "Legal basis",
+    "TabID": "LegalBasisTab"
+  },
+  {
+    "TabDisplayOrder": 5,
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "CaseFieldID": "hearingPreferences",
+    "Channel": "CaseWorker",
+    "UserRole": "",
+    "TabFieldDisplayOrder": 10,
+    "TabLabel": "Legal basis",
+    "TabID": "LegalBasisTab"
+  }
+]

@@ -7,6 +7,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import org.springframework.stereotype.Component;
 import uk.gov.hmcts.ccd.sdk.ResolvedCCDConfig;
 import uk.gov.hmcts.ccd.sdk.api.HasRole;
@@ -44,7 +45,8 @@ class CaseTypeTabGenerator<T, S, R extends HasRole> implements ConfigGenerator<T
       }
 
       for (String role : roles) {
-        addTab(config.getCaseType(), result, caseFields, tabDisplayOrder++, tab, role);
+        addTab(config.getCaseType(), result, caseFields, tabDisplayOrder++, tab, role,
+            config.getGatedOffFieldIds());
       }
     }
 
@@ -62,9 +64,15 @@ class CaseTypeTabGenerator<T, S, R extends HasRole> implements ConfigGenerator<T
 
   private static <T, R extends HasRole> void addTab(String caseType, List<Map<String, Object>> result,
                                                     List<Map<String, Object>> caseFields,
-                                                    int tabDisplayOrder, Tab<T, R> tab, String role) {
+                                                    int tabDisplayOrder, Tab<T, R> tab, String role,
+                                                    Set<String> gatedOffFieldIds) {
     int tabFieldDisplayOrder = 1;
     for (TabField tabField : tab.getFields()) {
+      // A gated-off field's CaseField row is suppressed; omit it from the tab too so no CaseTypeTab
+      // row references a field that was not emitted.
+      if (gatedOffFieldIds.contains(tabField.getId())) {
+        continue;
+      }
       Map<String, Object> field = buildField(caseType, tab.getTabID() + role, tabField.getId(),
           tab.getLabelText(), tabDisplayOrder, tabFieldDisplayOrder, role);
       if (tab.getShowCondition() != null && tabFieldDisplayOrder == 1) {

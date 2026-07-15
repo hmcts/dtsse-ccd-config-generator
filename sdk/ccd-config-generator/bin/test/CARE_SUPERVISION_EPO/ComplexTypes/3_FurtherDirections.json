@@ -1,0 +1,16 @@
+[
+  {
+    "ID": "FurtherDirections",
+    "FieldType": "Text",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "directionsNeeded"
+  },
+  {
+    "ID": "FurtherDirections",
+    "FieldType": "Text",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "directions"
+  }
+]

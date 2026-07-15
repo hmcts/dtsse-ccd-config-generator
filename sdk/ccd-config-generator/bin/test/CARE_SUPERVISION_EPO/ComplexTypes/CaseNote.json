@@ -1,0 +1,23 @@
+[
+  {
+    "ID": "CaseNote",
+    "FieldType": "Date",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "date"
+  },
+  {
+    "ID": "CaseNote",
+    "FieldType": "Text",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "note"
+  },
+  {
+    "ID": "CaseNote",
+    "FieldType": "Text",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "createdBy"
+  }
+]

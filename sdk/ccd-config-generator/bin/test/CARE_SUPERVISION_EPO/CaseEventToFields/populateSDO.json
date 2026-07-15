@@ -1,0 +1,75 @@
+[
+  {
+    "PageID": 1,
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "CaseFieldID": "allParties",
+    "CaseEventID": "populateSDO",
+    "PageColumnNumber": 1,
+    "PageFieldDisplayOrder": 1,
+    "DisplayContext": "OPTIONAL",
+    "PageDisplayOrder": 1,
+    "ShowSummaryChangeOption" : "Y",
+    "CallBackURLMidEvent": "${CCD_DEF_CASE_SERVICE_BASE_URL}/callbacks/mid-event?page=1&eventId=populateSDO"
+  },
+  {
+    "PageID": 1,
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "CaseFieldID": "localAuthorityDirections",
+    "CaseEventID": "populateSDO",
+    "PageColumnNumber": 1,
+    "PageFieldDisplayOrder": 2,
+    "DisplayContext": "OPTIONAL",
+    "PageDisplayOrder": 1,
+    "ShowSummaryChangeOption" : "Y"
+  },
+  {
+    "PageID": 1,
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "CaseFieldID": "respondentDirections",
+    "CaseEventID": "populateSDO",
+    "PageColumnNumber": 1,
+    "PageFieldDisplayOrder": 3,
+    "DisplayContext": "OPTIONAL",
+    "PageDisplayOrder": 1,
+    "ShowSummaryChangeOption" : "Y"
+  },
+  {
+    "PageID": 1,
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "CaseFieldID": "cafcassDirections",
+    "CaseEventID": "populateSDO",
+    "PageColumnNumber": 1,
+    "PageFieldDisplayOrder": 4,
+    "DisplayContext": "OPTIONAL",
+    "PageDisplayOrder": 1,
+    "ShowSummaryChangeOption" : "Y"
+  },
+  {
+    "PageID": 1,
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "CaseFieldID": "otherPartiesDirections",
+    "CaseEventID": "populateSDO",
+    "PageColumnNumber": 1,
+    "PageFieldDisplayOrder": 5,
+    "DisplayContext": "OPTIONAL",
+    "PageDisplayOrder": 1,
+    "ShowSummaryChangeOption" : "Y"
+  },
+  {
+    "PageID": 1,
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "CaseFieldID": "courtDirections",
+    "CaseEventID": "populateSDO",
+    "PageColumnNumber": 1,
+    "PageFieldDisplayOrder": 6,
+    "DisplayContext": "OPTIONAL",
+    "PageDisplayOrder": 1,
+    "ShowSummaryChangeOption" : "Y"
+  }
+]

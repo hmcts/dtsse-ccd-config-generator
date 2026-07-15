@@ -1,0 +1,10 @@
+[
+  {
+    "CaseEventID": "listApplicantsEvent",
+    "CaseFieldID": "listApplicantsWithShowCondition",
+    "DisplayContext": "OPTIONAL",
+    "FieldDisplayOrder": 1,
+    "ListElementCode": "party.organisationName",
+    "LiveFrom": "01/01/2017"
+  }
+]

@@ -77,7 +77,13 @@ class ConfigResolver<T, S, R extends HasRole> {
             resolve(c, result, level + 1);
           }
         },
-        field -> !Modifier.isStatic(field.getModifiers()));
+        // Exclude gated-off fields so a complex type reachable ONLY through a field whose
+        // @CCD(gate) is inactive contributes no ComplexTypes rows (matching how it is dropped from
+        // CaseField/AuthorisationCaseField). Only the gate is filtered here, not ignore/JsonIgnore:
+        // this predicate historically never filtered ignored fields, and adding that now would
+        // change the emitted complex-type set for existing definitions.
+        field -> !Modifier.isStatic(field.getModifiers())
+            && !FieldUtils.isFieldGatedOff(field));
   }
 
   public static Class getComplexType(Class c, Field field) {

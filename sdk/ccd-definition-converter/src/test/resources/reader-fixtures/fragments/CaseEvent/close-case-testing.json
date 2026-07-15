@@ -1,0 +1,9 @@
+[
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "Test",
+    "ID": "closeCaseTesting",
+    "Name": "Close case (testing fragment, '-testing' is not a configured suffix)",
+    "SecurityClassification": "Public"
+  }
+]

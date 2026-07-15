@@ -1,0 +1,13 @@
+[
+  {
+    "CaseTypeID" : "CARE_SUPERVISION_EPO",
+    "Description" : "Deleted only",
+    "EndButtonLabel" : "Save and continue",
+    "ID" : "deleted",
+    "LiveFrom" : "01/01/2017",
+    "Name" : "Deleted only",
+    "PostConditionState" : "Deleted",
+    "PreConditionState(s)" : "Deleted",
+    "Publish": "N"
+  }
+]

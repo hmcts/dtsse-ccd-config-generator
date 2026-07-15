@@ -1,9 +1,13 @@
 package uk.gov.hmcts.ccd.sdk;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.Assert.assertFalse;
+
 import com.google.common.collect.ImmutableMap;
 import com.google.common.io.Resources;
 import java.io.File;
 import java.net.URL;
+import java.nio.charset.StandardCharsets;
 import java.util.Map;
 import lombok.SneakyThrows;
 import org.junit.Before;
@@ -62,6 +66,113 @@ public class E2EConfigGenerationTests {
         File expected = resourceFile("Shuttered/AuthorisationCaseType.json");
         File actual = new File(tmp.getRoot(), "Shuttered/AuthorisationCaseType.json");
         CcdConfigComparator.assertEquals(expected, actual, JSONCompareMode.NON_EXTENSIBLE);
+    }
+
+    @SneakyThrows
+    @Test
+    public void emitsOnlyExplicitStateGrants() {
+        File expected = resourceFile("ExplicitStateGrants/AuthorisationCaseState.json");
+        File actual = new File(tmp.getRoot(), "ExplicitStateGrants/AuthorisationCaseState.json");
+        CcdConfigComparator.assertEquals(expected, actual, JSONCompareMode.NON_EXTENSIBLE);
+    }
+
+    @SneakyThrows
+    @Test
+    public void emitsConfiguredBanner() {
+        File expected = resourceFile("BannerFeature/Banner.json");
+        File actual = new File(tmp.getRoot(), "BannerFeature/Banner.json");
+        CcdConfigComparator.assertEquals(expected, actual, JSONCompareMode.NON_EXTENSIBLE);
+    }
+
+    @Test
+    public void omitsBannerWhenNotConfigured() {
+        assertFalse(new File(tmp.getRoot(), "CARE_SUPERVISION_EPO/Banner.json").exists());
+    }
+
+    @SneakyThrows
+    @Test
+    public void mapsUnregisteredRolesToAccessProfiles() {
+        // The two org/IDAM roles appear in RoleToAccessProfiles verbatim...
+        File expectedProfiles = resourceFile("RoleMappings/RoleToAccessProfiles.json");
+        File actualProfiles = new File(tmp.getRoot(), "RoleMappings/RoleToAccessProfiles.json");
+        CcdConfigComparator.assertEquals(expectedProfiles, actualProfiles, JSONCompareMode.NON_EXTENSIBLE);
+
+        // ...but must NOT be registered as UserRoles in AuthorisationCaseType, which only lists
+        // enum-backed roles. A plain-string mapping never registers a role.
+        String auth = Resources.toString(
+            new File(tmp.getRoot(), "RoleMappings/AuthorisationCaseType.json").toURI().toURL(),
+            StandardCharsets.UTF_8);
+        assertThat(auth)
+            .doesNotContain("caseworker-rolemap-system")
+            .doesNotContain("caseworker-rolemap-caseofficer");
+    }
+
+    @SneakyThrows
+    @Test
+    public void stampsCaseRoleJurisdictionWhenOptedIn() {
+        File expected = resourceFile("RoleMappings/CaseRoles.json");
+        File actual = new File(tmp.getRoot(), "RoleMappings/CaseRoles.json");
+        CcdConfigComparator.assertEquals(expected, actual, JSONCompareMode.NON_EXTENSIBLE);
+    }
+
+    @SneakyThrows
+    @Test
+    public void honoursJsonPropertyOnStateIds() {
+        // CASE_MANAGEMENT carries @JsonProperty("PREPARE_FOR_HEARING"); Open has no @JsonProperty.
+        // Every sheet that serialises a state must use the resolved id on the annotated constant and
+        // the constant name on the plain one.
+        File expectedState = resourceFile("JsonPropertyState/State.json");
+        File actualState = new File(tmp.getRoot(), "JsonPropertyState/State.json");
+        CcdConfigComparator.assertEquals(expectedState, actualState, JSONCompareMode.NON_EXTENSIBLE);
+
+        File expectedEvent = resourceFile("JsonPropertyState/CaseEvent/create.json");
+        File actualEvent = new File(tmp.getRoot(), "JsonPropertyState/CaseEvent/create.json");
+        CcdConfigComparator.assertEquals(expectedEvent, actualEvent, JSONCompareMode.NON_EXTENSIBLE);
+
+        File expectedAuth = resourceFile("JsonPropertyState/AuthorisationCaseState.json");
+        File actualAuth = new File(tmp.getRoot(), "JsonPropertyState/AuthorisationCaseState.json");
+        CcdConfigComparator.assertEquals(expectedAuth, actualAuth, JSONCompareMode.NON_EXTENSIBLE);
+    }
+
+    @SneakyThrows
+    @Test
+    public void honoursExplicitStateDescription() {
+        // CaseManagement carries @CCD(description = ...); Open has none and must default to Name.
+        File expected = resourceFile("StateDescription/State.json");
+        File actual = new File(tmp.getRoot(), "StateDescription/State.json");
+        CcdConfigComparator.assertEquals(expected, actual, JSONCompareMode.NON_EXTENSIBLE);
+    }
+
+    @SneakyThrows
+    @Test
+    public void emitsSearchExtras() {
+        // Pins the search/workbasket sub-builder: ListElementCode (several leaves per complex field),
+        // FieldShowCondition on input sheets and ResultsOrdering on result sheets, plus role scoping.
+        // One file per sheet keeps the snapshot on this feature's output and off unrelated generators.
+        for (String sheet : new String[] {
+            "SearchInputFields", "WorkBasketInputFields", "SearchResultFields", "WorkBasketResultFields"}) {
+            File expected = resourceFile("SearchExtras/" + sheet + ".json");
+            File actual = new File(tmp.getRoot(), "SearchExtras/" + sheet + ".json");
+            CcdConfigComparator.assertEquals(expected, actual, JSONCompareMode.NON_EXTENSIBLE);
+        }
+    }
+
+    @SneakyThrows
+    @Test
+    public void emitsEventColumnsFlags() {
+        // See uk.gov.hmcts.reform.EventColumnsCaseType: significant(), enableForDeletion() and
+        // jurisdictionShuttered() each pin a column-graft replacement that is default-off.
+        File expectedCaseType = resourceFile("EventColumns/CaseType.json");
+        File actualCaseType = new File(tmp.getRoot(), "EventColumns/CaseType.json");
+        CcdConfigComparator.assertEquals(expectedCaseType, actualCaseType, JSONCompareMode.NON_EXTENSIBLE);
+
+        File expectedJurisdiction = resourceFile("EventColumns/Jurisdiction.json");
+        File actualJurisdiction = new File(tmp.getRoot(), "EventColumns/Jurisdiction.json");
+        CcdConfigComparator.assertEquals(expectedJurisdiction, actualJurisdiction, JSONCompareMode.NON_EXTENSIBLE);
+
+        File expectedEvent = resourceFile("EventColumns/CaseEvent/close.json");
+        File actualEvent = new File(tmp.getRoot(), "EventColumns/CaseEvent/close.json");
+        CcdConfigComparator.assertEquals(expectedEvent, actualEvent, JSONCompareMode.NON_EXTENSIBLE);
     }
 
     @Test

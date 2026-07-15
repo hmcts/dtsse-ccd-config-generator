@@ -1,3 +1,6 @@
+plugins {
+    id 'java-test-fixtures'
+}
 
 group = 'com.github.hmcts'
 
@@ -33,12 +36,25 @@ dependencies {
     api 'com.google.guava:guava:33.6.0-jre'
 
     implementation 'com.fasterxml.jackson.core:jackson-databind'
+
+    // Dependencies for the diff tooling shipped as test fixtures.
+    // jsonassert appears in CcdConfigComparator method signatures (JSONCompareMode), so expose it as api.
+    testFixturesApi 'org.skyscreamer:jsonassert:1.5.3'
+    testFixturesImplementation 'com.google.guava:guava:33.6.0-jre'
+    testFixturesImplementation 'com.fasterxml.jackson.core:jackson-databind'
+    testFixturesImplementation group: 'commons-io', name: 'commons-io', version: '2.22.0'
+    testFixturesImplementation group: 'org.apache.commons', name: 'commons-lang3', version: '3.20.0'
 }
+
+// The test-fixtures jar (diff comparator) is for in-repo consumption only — keep it out of
+// the published component so releases don't ship it to Azure Artifacts.
+components.java.withVariantsFromConfiguration(configurations.testFixturesApiElements) { skip() }
+components.java.withVariantsFromConfiguration(configurations.testFixturesRuntimeElements) { skip() }
 
 tasks.register('ccdConfigDiff', JavaExec) {
     group = 'verification'
     description = 'Compare CCD configuration directories using the Java diff comparator.'
-    classpath = sourceSets.test.runtimeClasspath
+    classpath = sourceSets.testFixtures.runtimeClasspath
     mainClass.set('uk.gov.hmcts.ccd.sdk.diff.CcdConfigDiffCli')
 
     doFirst {

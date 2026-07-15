@@ -13,6 +13,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import uk.gov.hmcts.ccd.sdk.api.Banner;
 import uk.gov.hmcts.ccd.sdk.api.CaseCategory.CaseCategoryBuilder;
 import uk.gov.hmcts.ccd.sdk.api.CaseRoleToAccessProfile.CaseRoleToAccessProfileBuilder;
 import uk.gov.hmcts.ccd.sdk.api.ComplexTypeAuthorisation;
@@ -75,6 +76,9 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements Decentralised
     config.searchParties = buildBuilders(searchParty, SearchPartyBuilder::build);
     config.noticeOfChange = noticeOfChangeBuilder == null ? null : noticeOfChangeBuilder.build();
     config.complexTypeAuthorisations = Lists.newArrayList(complexTypeAuthorisations);
+    // Resolve @CCD(gate) fields against the current environment once, so every ID-based generator
+    // gates the same set. Empty unless a field is gated off, keeping ungated definitions unchanged.
+    config.gatedOffFieldIds = FieldUtils.gatedOffFieldIds(config.caseClass);
 
     return config;
   }
@@ -137,6 +141,26 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements Decentralised
   @Override
   public void shutterServiceExclude(R... roles) {
     config.shutterServiceExcludedRoles.addAll(Set.of(roles));
+  }
+
+  @Override
+  public void explicitStateGrants() {
+    config.explicitStateGrants = true;
+  }
+
+  @Override
+  public void emitCaseRoleJurisdiction() {
+    config.emitCaseRoleJurisdiction = true;
+  }
+
+  @Override
+  public void jurisdictionShuttered() {
+    config.jurisdictionShuttered = true;
+  }
+
+  @Override
+  public void enableForDeletion() {
+    config.enableForDeletion = true;
   }
 
   @Override
@@ -209,6 +233,13 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements Decentralised
   }
 
   @Override
+  public CaseRoleToAccessProfileBuilder<R> roleToAccessProfile(String roleName) {
+    var builder = CaseRoleToAccessProfileBuilder.<R>builder(roleName);
+    caseRoleToAccessProfiles.add(builder);
+    return builder;
+  }
+
+  @Override
   public CaseCategoryBuilder<R> categories(R caseRole) {
     var builder = CaseCategoryBuilder.builder(caseRole);
     categories.add(builder);
@@ -235,6 +266,16 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements Decentralised
       noticeOfChangeBuilder = new NoticeOfChangeBuilder<>(config.caseClass, propertyUtils);
     }
     return noticeOfChangeBuilder;
+  }
+
+  @Override
+  public void banner(boolean enabled, String description, String url, String urlText) {
+    config.banner = Banner.builder()
+        .enabled(enabled)
+        .description(description)
+        .url(url)
+        .urlText(urlText)
+        .build();
   }
 
   @Override

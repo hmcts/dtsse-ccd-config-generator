@@ -1,0 +1,25 @@
+[
+  {
+    "TabDisplayOrder": 3,
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "CaseFieldID": "standardDirectionOrder",
+    "Channel": "CaseWorker",
+    "UserRole": "",
+    "TabFieldDisplayOrder": 1,
+    "TabLabel": "Orders",
+    "FieldShowCondition": "standardDirectionOrder.orderStatus=\"SEALED\"",
+    "TabID": "OrdersTab"
+  },
+  {
+    "TabDisplayOrder": 3,
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "CaseFieldID": "orders",
+    "Channel": "CaseWorker",
+    "UserRole": "",
+    "TabFieldDisplayOrder": 2,
+    "TabLabel": "Orders",
+    "TabID": "OrdersTab"
+  }
+]

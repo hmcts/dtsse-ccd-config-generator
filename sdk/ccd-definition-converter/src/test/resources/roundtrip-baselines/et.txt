@@ -1,0 +1,34 @@
+Sheet 'AuthorisationCaseType' row [[SOLICITORA]]: expected row has no match in actual: {CRUD=CRU, CaseTypeID=ET_EnglandWales, AccessProfile=[SOLICITORA]}
+Sheet 'AuthorisationCaseType' row [[SOLICITORB]]: expected row has no match in actual: {CRUD=CRU, CaseTypeID=ET_EnglandWales, AccessProfile=[SOLICITORB]}
+Sheet 'AuthorisationCaseType' row [[SOLICITORC]]: expected row has no match in actual: {CRUD=CRU, CaseTypeID=ET_EnglandWales, AccessProfile=[SOLICITORC]}
+Sheet 'AuthorisationCaseType' row [[SOLICITORD]]: expected row has no match in actual: {CRUD=CRU, CaseTypeID=ET_EnglandWales, AccessProfile=[SOLICITORD]}
+Sheet 'AuthorisationCaseType' row [[SOLICITORE]]: expected row has no match in actual: {CRUD=CRU, CaseTypeID=ET_EnglandWales, AccessProfile=[SOLICITORE]}
+Sheet 'AuthorisationCaseType' row [[SOLICITORF]]: expected row has no match in actual: {CRUD=CRU, CaseTypeID=ET_EnglandWales, AccessProfile=[SOLICITORF]}
+Sheet 'AuthorisationCaseType' row [[SOLICITORG]]: expected row has no match in actual: {CRUD=CRU, CaseTypeID=ET_EnglandWales, AccessProfile=[SOLICITORG]}
+Sheet 'AuthorisationCaseType' row [[SOLICITORH]]: expected row has no match in actual: {CRUD=CRU, CaseTypeID=ET_EnglandWales, AccessProfile=[SOLICITORH]}
+Sheet 'AuthorisationCaseType' row [[SOLICITORI]]: expected row has no match in actual: {CRUD=CRU, CaseTypeID=ET_EnglandWales, AccessProfile=[SOLICITORI]}
+Sheet 'AuthorisationCaseType' row [[SOLICITORJ]]: expected row has no match in actual: {CRUD=CRU, CaseTypeID=ET_EnglandWales, AccessProfile=[SOLICITORJ]}
+Sheet 'CaseEvent' row [UPDATE_ADMIN_DECISION_STATE] column 'Description': expected <> but was <UPDATE_ADMIN_DECISION_STATE>
+Sheet 'CaseEvent' row [UPDATE_NOTIFICATION_RESPONSE] column 'Description': expected <> but was <UPDATE_NOTIFICATION_RESPONSE>
+Sheet 'CaseEvent' row [WA_REVIEW_RULE21_REFERRAL] column 'Description': expected <> but was <WA_REVIEW_RULE21_REFERRAL>
+Sheet 'CaseEvent' row [claimantTseAllApplications] column 'Description': expected < > but was <All applications>
+Sheet 'CaseEvent' row [respondentTseAllApplications] column 'Description': expected < > but was <All applications>
+Sheet 'CaseEvent' row [viewClaimantTSEApplications] column 'Description': expected < > but was <View application>
+Sheet 'CaseEvent' row [viewRespondentTSEApplications] column 'Description': expected < > but was <View application>
+Sheet 'CaseEventToFields' row [amendRespondentRepresentativeContact|et3ResponseAddress] column 'retainHiddenValue': expected <Yes> but column is missing in actual
+Sheet 'CaseEventToFields' row [amendRespondentRepresentativeContact|et3ResponsePhone] column 'retainHiddenValue': expected <Yes> but column is missing in actual
+Sheet 'CaseType' row [ET_EnglandWales] column 'PrintableDocumentsUrl': expected <${CCD_DEF_URL}/callback/jurisdictions/EMPLOYMENT/case-types/ET_EnglandWales/documents> but column is missing in actual
+Sheet 'CaseTypeTab' row [CaseOverview|multipleReferenceLinkLabel]: unexpected row in actual: {CaseFieldID=multipleReferenceLinkLabel, CaseTypeID=ET_EnglandWales, Channel=CaseWorker, FieldShowCondition=caseType="Multiple" AND multipleReferenceLinkMarkUp !="", TabID=CaseOverview, TabLabel=Case Details, TabShowCondition=[STATE]!="AWAITING_SUBMISSION_TO_HMCTS"}
+Sheet 'ComplexTypes' row [RespondentRepresentative|nonMyHmctsOrganisationId]: expected row has no match in actual: {ID=RespondentRepresentative, ListElementCode=nonMyHmctsOrganisationId, FieldType=Text, FieldShowCondition=myHmctsYesNo="dummy", SecurityClassification=PUBLIC}
+Sheet 'ComplexTypes' row [UnavailabilityDateRange|unavailableFromDate]: expected row has no match in actual: {ID=UnavailabilityDateRange, ListElementCode=unavailableFromDate, FieldType=Date, ElementLabel=Unavailable from:, SecurityClassification=PUBLIC}
+Sheet 'ComplexTypes' row [UnavailabilityDateRange|unavailableToDate]: expected row has no match in actual: {ID=UnavailabilityDateRange, ListElementCode=unavailableToDate, FieldType=Date, ElementLabel=Unavailable to:, SecurityClassification=PUBLIC}
+Sheet 'ComplexTypes' row [nextHearingDetails|hearingDateTime] column 'FieldLabel': expected <Hearing Date and Time> but column is missing in actual
+Sheet 'ComplexTypes' row [nextHearingDetails|hearingDateTime] column 'FieldOrder': expected <2> but column is missing in actual
+Sheet 'ComplexTypes' row [nextHearingDetails|hearingID] column 'FieldLabel': expected <Hearing ID> but column is missing in actual
+Sheet 'ComplexTypes' row [nextHearingDetails|hearingID] column 'FieldOrder': expected <1> but column is missing in actual
+Sheet 'ComplexTypes' row [sendNotificationCollection|notificationSentFrom]: expected row has no match in actual: {ID=sendNotificationCollection, ListElementCode=notificationSentFrom, FieldType=Text, ElementLabel=Multiple ref, FieldShowCondition=sendNotificationNotify="dummy", SecurityClassification=PUBLIC}
+Sheet 'ComplexTypes' row [sendNotificationCollection|sendNotificationNotifyAll]: expected row has no match in actual: {ID=sendNotificationCollection, ListElementCode=sendNotificationNotifyAll, FieldType=Text, ElementLabel=To, FieldShowCondition=sendNotificationNotify="Lead and sub cases", SecurityClassification=PUBLIC}
+Sheet 'ComplexTypes' row [sendNotificationCollection|sendNotificationNotifyLeadCase]: expected row has no match in actual: {ID=sendNotificationCollection, ListElementCode=sendNotificationNotifyLeadCase, FieldType=Text, ElementLabel=To, FieldShowCondition=sendNotificationNotify="Lead case", SecurityClassification=PUBLIC}
+Sheet 'ComplexTypes' row [sendNotificationCollection|sendNotificationNotifySelected]: expected row has no match in actual: {ID=sendNotificationCollection, ListElementCode=sendNotificationNotifySelected, FieldType=Text, ElementLabel=To, FieldShowCondition=sendNotificationNotify="Selected cases", SecurityClassification=PUBLIC}
+Sheet 'SearchCriteria' row [{CaseTypeID=ET_EnglandWales, LiveTo=, OtherCaseReference=ethosCaseReference}]: expected row has no match in actual: {LiveTo=, CaseTypeID=ET_EnglandWales, OtherCaseReference=ethosCaseReference}
+Sheet 'SearchCriteria' row [{CaseTypeID=ET_EnglandWales, OtherCaseReference=ethosCaseReference}]: unexpected row in actual: {CaseTypeID=ET_EnglandWales, OtherCaseReference=ethosCaseReference}

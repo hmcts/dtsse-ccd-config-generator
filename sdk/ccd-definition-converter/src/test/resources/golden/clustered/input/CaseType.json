@@ -1,0 +1,10 @@
+[
+  {
+    "LiveFrom": "01/01/2017",
+    "ID": "Clustered",
+    "Name": "Clustered Case",
+    "Description": "Fixture case type exercising @JsonUnwrapped field clustering",
+    "JurisdictionID": "TEST",
+    "SecurityClassification": "Public"
+  }
+]

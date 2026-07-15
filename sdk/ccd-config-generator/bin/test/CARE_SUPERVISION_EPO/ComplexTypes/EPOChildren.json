@@ -1,0 +1,16 @@
+[
+  {
+    "ID": "EPOChildren",
+    "FieldType": "Text",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "description"
+  },
+  {
+    "ID": "EPOChildren",
+    "FieldType": "Text",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "descriptionNeeded"
+  }
+]

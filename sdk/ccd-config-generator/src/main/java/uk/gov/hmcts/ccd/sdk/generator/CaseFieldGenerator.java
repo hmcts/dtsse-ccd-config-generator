@@ -76,6 +76,11 @@ class CaseFieldGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
       if (fieldId.matches("\\[.+\\]") || unwrapped.isPresent()) {
         continue;
       }
+      // A gated-off field placed on an event (e.g. a Label) must not emit its explicit CaseField
+      // row either, mirroring the reflection filter that already drops gated-off CaseData members.
+      if (config.getGatedOffFieldIds().contains(fieldId)) {
+        continue;
+      }
 
       final uk.gov.hmcts.ccd.sdk.api.Field field = explicitFields.get(fieldId);
       Map<String, Object> fieldData = getField(config.getCaseType(), fieldId);

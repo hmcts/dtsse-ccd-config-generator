@@ -1,0 +1,10 @@
+[
+  {
+    "LiveFrom": "01/01/2017",
+    "ID": "RETRO",
+    "Name": "Retro Case",
+    "Description": "Retrofit round-trip fixture case type",
+    "JurisdictionID": "RT",
+    "SecurityClassification": "Public"
+  }
+]

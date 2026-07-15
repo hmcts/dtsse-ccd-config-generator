@@ -1,0 +1,62 @@
+Sheet 'AuthorisationCaseEvent' row [interlocSendToTcw|caseworker-sscs-clerk] column 'CRUD': expected <CRU> but was <R>
+Sheet 'AuthorisationCaseEvent' row [interlocSendToTcw|caseworker-sscs-clerk]: expected row has no match in actual: {CaseTypeID=Benefit, CaseEventID=interlocSendToTcw, AccessProfile=caseworker-sscs-clerk, CRUD=R}
+Sheet 'AuthorisationCaseEvent' row [interlocSendToTcw|caseworker-sscs-judge] column 'CRUD': expected <CRU> but was <R>
+Sheet 'AuthorisationCaseEvent' row [interlocSendToTcw|caseworker-sscs-judge]: expected row has no match in actual: {CaseTypeID=Benefit, CaseEventID=interlocSendToTcw, AccessProfile=caseworker-sscs-judge, CRUD=R}
+Sheet 'AuthorisationCaseType' row [caseworker-sscs-anonymouscitizen] column 'CRUD': expected <CRUD> but was <D>
+Sheet 'AuthorisationCaseType' row [caseworker-sscs-anonymouscitizen]: expected row has no match in actual: {CaseTypeID=Benefit, AccessProfile=caseworker-sscs-anonymouscitizen, CRUD=D}
+Sheet 'AuthorisationCaseType' row [caseworker-sscs-callagent] column 'CRUD': expected <CRU> but was <D>
+Sheet 'AuthorisationCaseType' row [caseworker-sscs-callagent]: expected row has no match in actual: {CaseTypeID=Benefit, AccessProfile=caseworker-sscs-callagent, CRUD=D}
+Sheet 'AuthorisationCaseType' row [caseworker-sscs-judge] column 'CRUD': expected <CRUD> but was <D>
+Sheet 'AuthorisationCaseType' row [caseworker-sscs-judge]: expected row has no match in actual: {CaseTypeID=Benefit, AccessProfile=caseworker-sscs-judge, CRUD=D}
+Sheet 'AuthorisationCaseType' row [caseworker-sscs-pcqextractor] column 'CRUD': expected <R> but was <D>
+Sheet 'AuthorisationCaseType' row [caseworker-sscs-pcqextractor]: expected row has no match in actual: {CaseTypeID=Benefit, AccessProfile=caseworker-sscs-pcqextractor, CRUD=D}
+Sheet 'AuthorisationCaseType' row [caseworker-sscs-superuser] column 'CRUD': expected <CRUD> but was <D>
+Sheet 'AuthorisationCaseType' row [caseworker-sscs-superuser]: expected row has no match in actual: {CaseTypeID=Benefit, AccessProfile=caseworker-sscs-superuser, CRUD=D}
+Sheet 'AuthorisationCaseType' row [caseworker-sscs] column 'CRUD': expected <CRUD> but was <D>
+Sheet 'AuthorisationCaseType' row [caseworker-sscs]: expected row has no match in actual: {CaseTypeID=Benefit, AccessProfile=caseworker-sscs, CRUD=D}
+Sheet 'CaseEvent' row [actionPostponementRequestWelsh]: expected row has no match in actual: {CaseTypeID=Benefit, ID=actionPostponementRequestWelsh, Name=Welsh- Action Postponement Req, Description=Welsh- Action Postponement Req, EventEnablingCondition=unprocessedPostponementRequest="Yes" AND interlocReviewState!="none" AND interlocReviewState!="awaitingAdminAction" AND interlocReviewState!="welshTranslation" AND interlocReviewState!="", PreConditionState(s)=*, PostConditionState=*, CallBackURLAboutToStartEvent=${CCD_DEF_TRIBUNALS_API_URL}/ccdAboutToStart, CallBackURLAboutToSubmitEvent=${CCD_DEF_TRIBUNALS_API_URL}/ccdAboutToSubmit, CallBackURLSubmittedEvent=${CCD_DEF_TRIBUNALS_API_URL}/send, ShowEventNotes=Y, SecurityClassification=PUBLIC, Publish=N}
+Sheet 'CaseEvent' row [actionPostponementRequest]: expected row has no match in actual: {CaseTypeID=Benefit, ID=actionPostponementRequest, Name=Action Postponement Request, Description=Action Postponement Request, EventEnablingCondition=unprocessedPostponementRequest="Yes" AND interlocReviewState!="none" AND interlocReviewState!="awaitingAdminAction" AND interlocReviewState!="welshTranslation" AND interlocReviewState!="", PreConditionState(s)=*, PostConditionState=*, CallBackURLAboutToStartEvent=${CCD_DEF_TRIBUNALS_API_URL}/ccdAboutToStart, CallBackURLAboutToSubmitEvent=${CCD_DEF_TRIBUNALS_API_URL}/ccdAboutToSubmit, CallBackURLSubmittedEvent=${CCD_DEF_TRIBUNALS_API_URL}/send, ShowEventNotes=Y, SecurityClassification=PUBLIC, Publish=N}
+Sheet 'CaseEvent' row [interlocSendToTcw] column 'PostConditionState': expected <*> but was <interlocutoryReviewState>
+Sheet 'CaseEvent' row [interlocSendToTcw] column 'PreConditionState(s)': expected <*> but was <interlocutoryReviewState>
+Sheet 'CaseEvent' row [interlocSendToTcw]: expected row has no match in actual: {CaseTypeID=Benefit, ID=interlocSendToTcw, Name=Send case to TCW, Description=Send case to TCW, PreConditionState(s)=interlocutoryReviewState, PostConditionState=interlocutoryReviewState, CallBackURLAboutToSubmitEvent=${CCD_DEF_TRIBUNALS_API_URL}/ccdAboutToSubmit, ShowEventNotes=Y, SecurityClassification=PUBLIC, Publish=N}
+Sheet 'CaseEvent' row [manageWelshDocuments]: expected row has no match in actual: {CaseTypeID=Benefit, ID=manageWelshDocuments, Name=Welsh – manage Welsh doc(s), Description=Manage Welsh document(s), PreConditionState(s)=*, PostConditionState=*, ShowEventNotes=Y, SecurityClassification=PUBLIC, Publish=N}
+Sheet 'CaseEvent' row [sendValidCaseToInterloc] column 'PostConditionState': unexpected column in actual with value <withDwp>
+Sheet 'CaseEventToFields' row [actionPostponementRequest|interlocReviewState] column 'Publish': expected <N> but was <Y>
+Sheet 'CaseEventToFields' row [adjournCase|adjournCaseTime] column ',ShowSummaryChangeOption': expected <Y> but column is missing in actual
+Sheet 'CaseEventToFields' row [caseUpdated|caseOutcome]: unexpected row in actual: {CaseEventID=caseUpdated, CaseFieldID=caseOutcome, CaseTypeID=Benefit, DisplayContext=OPTIONAL, PageID=1.0, PageLabel=Update case data, ShowSummaryChangeOption=Y}
+Sheet 'CaseEventToFields' row [caseUpdated|didPoAttend]: unexpected row in actual: {CaseEventID=caseUpdated, CaseFieldID=didPoAttend, CaseTypeID=Benefit, DisplayContext=OPTIONAL, PageID=1.0, PageLabel=Update case data, ShowSummaryChangeOption=Y}
+Sheet 'CaseEventToFields' row [createBundle|panel] column 'Publish': expected <N> but was <Y>
+Sheet 'CaseEventToFields' row [directionIssued|prePostHearing] column 'Publish': expected <N> but was <Y>
+Sheet 'CaseEventToFields' row [hmctsResponseReviewed|selectWhoReviewsCase] column 'Publish': expected <N> but was <Y>
+Sheet 'CaseEventToFields' row [manageWelshDocuments|uploadedWelshDocumentTypes] column 'Publish': expected <N> but was <Y>
+Sheet 'CaseEventToFields' row [postHearingRequest|postHearingRequestType] column 'Publish': expected <N> but was <Y>
+Sheet 'CaseEventToFields' row [reviewConfidentialityRequest|confidentialityRequestAppellantGrantedOrRefused] column 'ShowSummaryContentOption': expected <0> but column is missing in actual
+Sheet 'CaseEventToFields' row [reviewConfidentialityRequest|confidentialityRequestJointPartyGrantedOrRefused] column 'ShowSummaryContentOption': expected <0> but column is missing in actual
+Sheet 'CaseEventToFields' row [tcwReferToJudge|prePostHearing] column 'Publish': expected <N> but was <Y>
+Sheet 'CaseEventToFields' row [updateNotListable|interlocReviewState] column 'Publish': expected <N> but was <Y>
+Sheet 'CaseEventToFields' row [uploadWelshDocument|uploadedWelshDocumentTypes] column 'Publish': expected <N> but was <Y>
+Sheet 'CaseEventToFields' row [validSendToInterloc|interlocReviewState] column 'Publish': expected <N> but was <Y>
+Sheet 'CaseEventToFields' row [validSendToInterloc|prePostHearing] column 'Publish': expected <N> but was <Y>
+Sheet 'CaseField' row [SearchCriteria] column 'FieldType': expected <SearchCriteria > but was <SearchCriteria>
+Sheet 'CaseField' row [adjournCaseAdditionalDirections] column 'FieldTypeParameter': expected <TextArea> but was <Text>
+Sheet 'CaseField' row [adjournCaseReasons] column 'FieldTypeParameter': expected <TextArea> but was <Text>
+Sheet 'CaseField' row [writeFinalDecisionReasons] column 'FieldTypeParameter': expected <TextArea> but was <Text>
+Sheet 'CaseType' row [Benefit] column 'Name': expected <SSCS Case ${CCD_DEF_VERSION} nonprod> but was <SSCS Case ${CCD_DEF_VERSION} ${CCD_DEF_ENV}>
+Sheet 'CaseType' row [Benefit] column 'PrintableDocumentsUrl': expected <http://ccd-data-store-api-prod.service.core-compute-prod.internal/callback/jurisdictions/SSCS/case-types/Benefit/documents> but column is missing in actual
+Sheet 'CaseType' row [Benefit] column 'RetriesTimeoutURLPrintEvent': expected <5,10,15> but column is missing in actual
+Sheet 'CaseTypeTab' row [CaseHistory|caseHistory]: unexpected row in actual: {CaseFieldID=caseHistory, CaseTypeID=Benefit, Channel=CaseWorker, TabID=CaseHistory, TabLabel=History}
+Sheet 'ComplexTypes' row [appellant|confidentialityRequiredChangedDate]: expected row has no match in actual: {ID=appellant, ListElementCode=confidentialityRequiredChangedDate, FieldType=Text, ElementLabel=Confidentiality Confirmed, SecurityClassification=PUBLIC}
+Sheet 'ComplexTypes' row [appellant|confidentialityRequiredConfirmedDate] column 'DisplayContextParameter': expected <#DATETIMEDISPLAY(d MMM yyyy, h:mm:ss a)> but column is missing in actual
+Sheet 'ComplexTypes' row [judicialUserPanel|assignedTo] column 'FieldType': expected <JudicialUser> but was <Text>
+Sheet 'ComplexTypes' row [judicialUserPanel|panelMembers] column 'FieldTypeParameter': expected <JudicialUser> but was <Text>
+Sheet 'ComplexTypes' row [otherParty|confidentialityRequiredChangedDate]: expected row has no match in actual: {ID=otherParty, ListElementCode=confidentialityRequiredChangedDate, FieldType=Text, ElementLabel=Confidentiality Confirmed, SecurityClassification=PUBLIC}
+Sheet 'ComplexTypes' row [otherParty|confidentialityRequiredConfirmedDate] column 'DisplayContextParameter': expected <#DATETIMEDISPLAY(d MMM yyyy, h:mm:ss a)> but column is missing in actual
+Sheet 'ComplexTypes' row [panelMemberExclusions|excludedPanelMembers] column 'FieldTypeParameter': expected <JudicialUser> but was <Text>
+Sheet 'ComplexTypes' row [panelMemberExclusions|reservedPanelMembers] column 'FieldTypeParameter': expected <JudicialUser> but was <Text>
+Sheet 'ComplexTypes' row [reserveTo|reservedJudge] column 'FieldType': expected <JudicialUser> but was <Text>
+Sheet 'FixedLists' row [FL_selectWhoReviewsCase|postponementRequestInterlocSendToTcw]: expected row has no match in actual: {ID=FL_selectWhoReviewsCase, ListElementCode=postponementRequestInterlocSendToTcw, ListElement=Postponement request for interloc - send to TCW}
+Sheet 'FixedLists' row [FL_selectWhoReviewsCase|reviewByJudge]: expected row has no match in actual: {ID=FL_selectWhoReviewsCase, ListElementCode=reviewByJudge, ListElement=Review by Judge}
+Sheet 'FixedLists' row [FL_selectWhoReviewsCase|reviewByTcw]: expected row has no match in actual: {ID=FL_selectWhoReviewsCase, ListElementCode=reviewByTcw, ListElement=Review by TCW}
+Sheet 'SearchParty' row [Benefit|appeal.appellant.appointee.name.title,appeal.appellant.appointee.name.firstName,appeal.appellant.appointee.name.lastName|] column 'SearchPartyDoB': expected <appeal.appellant.appointee.identity.dob> but column is missing in actual
+Sheet 'SearchParty' row [Benefit|appeal.appellant.name.title,appeal.appellant.name.firstName,appeal.appellant.name.lastName|] column 'SearchPartyDoB': expected <appeal.appellant.identity.dob> but column is missing in actual
+Sheet 'SearchParty' row [Benefit|appeal.appellant.name.title,appeal.appellant.name.firstName,appeal.appellant.name.lastName|] column 'SearchPartyDoD': expected <dateOfAppellantDeath> but column is missing in actual

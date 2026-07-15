@@ -1,0 +1,207 @@
+# Converter Output Quality Review
+
+**Scope:** the ccd-definition-converter's emitted artefacts (retrofit companion sources + model diffs, and the generate-mode golden `expected-src`) measured against two mature hand-written config-generator services, **nfdiv-case-api** and **sptribs-case-api**. This is a *quality/adoptability* review, not a correctness review — the round-trip owns correctness.
+
+**Lanes reviewed in depth:** `sscs-common` (Benefit — small) and `civil-service` (CIVIL — huge). Spot-checked: `probate-back-office`, `et-ccd-callbacks`, `fpl-ccd-configuration`, plus the generate-mode goldens.
+
+**Resolved (not re-reported, verified below):** the `AccessNN` explosion + 50-plus opaque access classes has been replaced by the **composition scheme** — every field's residual is a union of named access-group classes (`@CCD(access = {DefaultAccess.class, CaseworkerCruAccess.class})`), built from mined groups + per-role atoms + a dedicated-class fallback, exactly as a hand-written HMCTS model composes access (`AccessClassComputer`, nfdiv-style). The earlier inline-`@Grant` approach was reverted by the maintainer in favour of this composition model. Annotation same-line placement is fixed. Regenerated `generated-config/` clones show the composition output; findings below record where the fix has landed.
+
+---
+
+## Ranked findings
+
+| # | Finding | Evidence (converter vs nfdiv/sptribs) | Severity for adoption | Recommended action | Effort |
+|---|---------|----------------------------------------|----------------------|--------------------|--------|
+| 1 | **Events emitted as chunked `EventsConfigNN` grab-bags of 40 events each, not one class per event** | `BenefitEventsConfig01..07`, `CIVILEventsConfig01..23` (40 events/class) vs nfdiv/sptribs strict **one `@Component` per event** (`ConfirmReceipt.java`, `CaseworkerAddNote.java`) | **High** | converter-emitter change: emit one class per event (fall back to a helper only past the method-size limit) | Large |
+| 2 | **Large events fragmented into `CIVILEvent_<NAME>_FieldsN.apply(fields)` static helper classes** | `CIVILEvent_CREATE_SDO_Fields1/2/3` (3 files, 581 lines) reassembled by `CREATE_SDO(...)` vs sptribs/nfdiv `CcdPageConfiguration` **page-per-concern** classes with meaningful names (`SolAboutTheSolicitor`, `SubjectDetails`) | **High** | converter-emitter change: split by CCD *page* into named page classes, not by arbitrary line budget | Large |
+| 3 | **Lowercase-initial generated companion classes** violate Java naming and will not pass most linters | `sscs .../domain/benefit.java`, `doc.java`, `otherPartySelection.java` (58 lowercase-initial classes in one package) vs every hand-written model class PascalCase | **High** | converter-emitter change: PascalCase the class, keep the definition ID via `@JsonProperty`/`@ComplexType(name=)` | Small |
+| 4 | **`FL_`-prefixed fixed-list enums** with a machine prefix no human would write | `FL_comparedToDWP`, `FL_withDwpWorkflow` (158 in sscs) vs nfdiv/sptribs enums named for the domain (`ApplicationType`, `SupplementaryCaseType`) | **Medium-High** | converter-emitter change: derive a domain name; reserve a prefix only for collision fallback | Medium |
+| 5 | **`AccessNN` numbered classes + a fat `@CCD(access={AccessNN.class})` import wall on the model** | `SscsCaseData.java` diff adds ~90 `import ...Access13;` lines; `Access2`/`Access50` opaque vs nfdiv `SolicitorAccess`, `CaseworkerAndSuperUserAccess` (semantic, 33 total) | **High** — **RESOLVED** | composition scheme: mined groups (`DefaultAccess` + content-named) + per-role atoms, no `AccessNN` — **assessed below: landed** | — |
+| 6 | **`CoreConfig` is one 1,400–1,900-line `configure()` monolith** — state grants + every tab + workbasket + search all inline | `BenefitCoreConfig` (1,454 lines), `CIVILCoreConfig` (1,895) vs nfdiv/sptribs split into `CaseTypeTab`, `SearchInputFields`, `RoleToAccessProfiles`, `WorkBasketInputFields` as separate `CCDConfig` beans, each delegating to small `buildXxxTab` helpers | **Medium** | converter-emitter change: emit separate `*Tab` / `*Search` / `*Workbasket` / `*RoleToAccessProfile` classes | Medium |
+| 7 | **State grants written as one flat `builder.grant(...)` per (state,role,perm) line** — no grouping, no access-class reuse | `BenefitCoreConfig` lines 36–227 (~190 individual `.grant()` calls) vs nfdiv state access expressed once via `@CCD(access={DefaultStateAccess.class})` on the `State` enum constant | **Medium** | SDK-idiom adoption: emit state-level access via `@CCD(access=...)` on generated `State` constants where the grant matrix is shared | Medium |
+| 8 | **Field predicates carry trailing `null, null, null, null` positional args** where a human uses the terse overload | `fields.mandatory(getX, "cond", null, null, null, null)` (sscs `BenefitEventsConfig01:200`) vs nfdiv `.mandatory(Solicitor::getEmail)` / `.optional(x, NEVER_SHOW)` | **Medium** | converter-emitter change: pick the shortest overload that fits; omit trailing nulls | Small |
+| 9 | **Raw page-id string literals with no constants and machine-ish values** (`"1.0"`, `"2.0"`, `"selectHearing"`) | sscs `fields.page("1.0")` vs nfdiv/sptribs `.page("SolAboutTheSolicitor", this::midEvent)` (semantic, sometimes constant-backed) | **Low-Medium** | inherent-to-generation (page ids come from the definition) — accept, but see verdict | — |
+| 10 | **No orienting narrative; every class stamped `do not edit by hand`** — the opposite of a file a team owns | Uniform `Generated by ccd-definition-converter — do not edit by hand` header vs hand-written files with no such banner and self-documenting structure | **Medium** (adoption blocker: signals "not yours") | retrofit-patch/emitter change: drop or soften the banner on artefacts intended for adoption | Small |
+| 11 | **`explicitGrants()` + per-event `.grant(...)` walls** repeat the full role matrix inline on every event | sscs `dwpActionDirection` lists 15 `.grant(...)` lines; civil similar, vs nfdiv `.grant(CREATE_READ_UPDATE, SOLICITOR, APPLICANT_2_SOLICITOR, CASE_WORKER).grantHistoryOnly(...)` (varargs roles, named permission sets) | **Medium** | converter-emitter change: use varargs-role `.grant(perms, roles...)` and a shared `Permissions`-style constant set | Medium |
+| 12 | **`AccessNN` renumbering is diff noise that swamps real signal** | et-ccd DIVERGENCE doc: raw diff "2341 lines / 508 hunks but almost all of it is Access-class renumbering"; had to be stripped to see the 12 genuine divergences | **Medium** (maintainability) — **RESOLVED** | resolved by finding #5's composition scheme (deterministic content-derived names; no per-run renumbering) | — |
+| 13 | **No typed getters in `CoreConfig` tabs/search — all string field IDs** | `BenefitCoreConfig.tab(...).field("summaryName")` — *however* this **matches** nfdiv/sptribs, which also use string IDs in tabs/search | **None** (converter matches house style here) | accept | — |
+
+---
+
+## Per-finding detail
+
+### 1. Chunked `EventsConfigNN` grab-bags vs one class per event — **High**
+
+The single largest structural gap. Both reference teams treat **one event = one class**, and it is not incidental — it is how they navigate, review, and assign ownership. nfdiv has 276 `implements CCDConfig` classes, sptribs 73, each a `@Component` whose whole job is one event.
+
+nfdiv `common/event/ConfirmReceipt.java` — the entire class:
+
+```java
+@Component
+public class ConfirmReceipt implements CCDConfig<CaseData, State, UserRole> {
+    public static final String CONFIRM_RECEIPT = "confirm-receipt";
+
+    @Override
+    public void configure(final ConfigBuilder<CaseData, State, UserRole> configBuilder) {
+        new PageBuilder(configBuilder
+            .event(CONFIRM_RECEIPT)
+            .forStates(Holding, AwaitingJsNullity)
+            .showCondition("applicationType=\"jointApplication\"")
+            .name("Confirm Receipt")
+            .grant(CREATE_READ_UPDATE, SOLICITOR, APPLICANT_2_SOLICITOR, CASE_WORKER)
+            .grantHistoryOnly(SUPER_USER, LEGAL_ADVISOR, JUDGE));
+    }
+}
+```
+
+The converter instead emits a `BenefitEventsConfig01` whose `configure()` is a 40-line dispatch list, followed by 40 private methods:
+
+```java
+public class BenefitEventsConfig01 implements CCDConfig<SscsCaseData, State, UserRole> {
+    @Override
+    public void configure(ConfigBuilder<...> builder) {
+        directionDueToday_nonprod(builder);
+        reviewBfDateRequired_nonprod(builder);
+        hearingToday_nonprod(builder);
+        // ... 37 more
+    }
+    private void directionDueToday_nonprod(ConfigBuilder<...> builder) { ... }
+```
+
+To find one event a maintainer must know which of `BenefitEventsConfig01..07` (or `CIVILEventsConfig01..23`) holds it — the numbering is packing order, carrying no meaning. Adding an event means editing a shared file and its dispatch list, guaranteeing merge contention (the exact thing per-event classes were adopted to avoid). **Cost of fixing:** the per-event method bodies already exist verbatim — promoting each to its own `@Component` class is largely mechanical (class-per-method + import hoisting). The only real decision is the fallback when a single event's `configure()` would exceed the JVM method-size limit — which is exactly what finding #2 is about.
+
+### 2. `Event_<NAME>_FieldsN` line-budget fragments vs page-per-concern classes — **High**
+
+For big events the converter splits *field placements* across arbitrarily-numbered static helpers and re-glues them:
+
+`CIVILEventsConfig13.CREATE_SDO(...)`:
+
+```java
+        .fields();
+    CIVILEvent_CREATE_SDO_Fields1.apply(fields);
+    CIVILEvent_CREATE_SDO_Fields2.apply(fields);
+    CIVILEvent_CREATE_SDO_Fields3.apply(fields);
+```
+
+`CIVILEvent_CREATE_SDO_Fields1` is a `final` class with a private ctor and one `static apply(FieldCollectionBuilder...)`. The split point is a line budget: `Fields1` ends mid-event and `Fields2` continues. The pages *are* right there in the data — `Fields1` alone contains `fields.page("SDO")`, `page("ClaimsTrack")`, `page("OrderType")`, `page("DisposalHearing")`. The converter had the natural seam (the CCD page) and split on line count instead.
+
+sptribs does exactly the page-per-concern decomposition the converter is missing — `SubjectDetails implements CcdPageConfiguration`:
+
+```java
+pageBuilder.page("subjectDetailsObject", this::midEvent)
+    .pageLabel("Who is the subject of this case?")
+    .complex(CaseData::getCicCase)
+        .mandatory(CicCase::getFullName)
+        .mandatory(CicCase::getEmail, "cicCaseContactPreferenceType = \"Email\"")
+    .done();
+```
+
+**Recommendation:** when an event is too large for one method, split by `page(...)` into `<Event><PageLabel>Page` classes (or `CcdPageConfiguration`-style `addTo`), not `FieldsN`. This makes each generated fragment a named, reviewable unit and matches both reference teams.
+
+### 3. Lowercase-initial companion classes — **High, cheap**
+
+The converter emits complex-type companions whose class name is the raw camelCase definition ID:
+
+`sscs .../ccd/domain/benefit.java`:
+
+```java
+@ComplexType(generate = true)
+public class benefit {
+    @CCD(label = "Benefit Code", showCondition = "code=\"DO_NOT_SHOW\"")
+    private String code;
+}
+```
+
+`class benefit`, `class doc`, `class otherPartySelection` — 58 lowercase-initial classes in the sscs domain package alone. No hand-written model in either reference service does this; it breaks `TypeName` lint rules and reads as a bug. The RETROFIT-REPORT itself documents the fallout: because `ModelSourceIndex` did a case-sensitive lookup, camelCase IDs failed to resolve to their real PascalCase classes and spurious lowercase companions were minted. The fix landed for *resolution*, but the *generate-a-new-companion* path still names the class after the raw ID. **Fix:** PascalCase the emitted class name and preserve the wire ID with `@ComplexType(name="benefit")` / `@JsonProperty` — the same pattern the SDK already uses for `@JsonProperty("some_field_id")` in the golden `CaseData` (`private String someFieldId;`).
+
+### 4. `FL_`-prefixed enum names — **Medium-High**
+
+Fixed lists become `FL_comparedToDWP`, `FL_withDwpWorkflow`, `FL_postHearingReviewType` — 158 of them in sscs. The `FL_` is a generator artefact; the enum body is clean and idiomatic:
+
+```java
+@Getter @AllArgsConstructor
+public enum FL_comparedToDWP implements HasLabel {
+    HIGHER("Higher", "higher"),
+    SAME("Same", "same"),
+    LOWER("Lower", "lower");
+}
+```
+
+Compare nfdiv's `ApplicationType`, `SupplementaryCaseType` — named for the concept, referenced from `@CCD(typeParameterOverride = "ApplicationType")`. Note the generate-mode golden already does the right thing (`ClaimType`, `YesOrNoChoice` — no prefix), so the retrofit `FL_` prefix is a retrofit-path divergence from the converter's own better generate-mode behaviour. **Fix:** derive the name from the definition ID (strip prefix, PascalCase); use a suffix/prefix only to break a genuine collision.
+
+### 5. `AccessNN` + import wall — **High — RESOLVED (composition scheme)**
+
+Pre-fix output: `SscsCaseData.java` gained ~90 `import uk.gov.hmcts.reform.sscs.ccd.config.Access13;`-style lines, and fields read `@CCD(label = "Appeal", access = {Access11.class})`. `Access2.java`/`Access50.java` were opaque — you had to open the class to learn it meant "CRUD for caseworker + judge + superuser". nfdiv's equivalent is `@CCD(access = {DefaultAccess.class, Applicant2Access.class})` — the name *is* the documentation, and there are 33 classes total, not 150+.
+
+**The composition scheme lands this and matches the nfdiv shape.** `AccessClassComputer` expresses every field's residual as a **union of named access-group classes**: per-role **atoms** (`CaseworkerCruAccess`, `CitizenRAccess`) plus **mined groups** — frequently co-occurring atom-sets carved out greedily, the most-used named `DefaultAccess` and the rest content-derived, gated on ≥ 3 fields / ≥ 2 atoms. The two concerns raised against the earlier inline-`@Grant` design are addressed by construction:
+- **No mega-names.** A field composes several *short* class names rather than one giant token; the per-field array is capped at 6 classes (`MAX_CLASSES_PER_FIELD`), and a residual that would need more falls back to *one* dedicated semantically-named class — never `AccessNN`, never a wall of role tokens. Names over 70 chars truncate to first-role + count + digest.
+- **No verbose inline blocks.** The inline-`@Grant` path was reverted; a many-role residual is now a readable `access = {DefaultAccess.class, JudgeCruAccess.class, …}` union (or a single dedicated class past the cap), not a 12-line `grants={...}` block.
+
+Determinism (finding #12): names derive from grant content sorted by role, independent of emit order, so the same residual yields the same class name across runs and case types — the `DefaultDefinitionLinkerTest` composition cases lock this in, and the round-trip baselines prove the resolved `AuthorisationCaseField` is byte-identical.
+
+### 6. `CoreConfig` monolith — **Medium**
+
+`BenefitCoreConfig.configure()` is 1,454 lines doing everything: `caseType`, `jurisdiction`, ~190 state `.grant()` calls, ~50 `builder.tab(...)` chains, `workBasketInputFields`, `workBasketResultFields`, `searchInputFields`, `roleToAccessProfile`. `CIVILCoreConfig` is 1,895 lines. Both reference teams split these into separate discoverable `CCDConfig` beans: nfdiv has `CaseTypeTab`, `ApplicationTab`, `SearchInputFields`, `SearchResultFields`, `WorkBasketInputFields`, `RoleToAccessProfiles` as distinct files, each with small `buildXxxTab` helpers. **Fix:** emit `<Case>Tabs`, `<Case>Search`, `<Case>Workbasket`, `<Case>RoleToAccessProfiles` as separate classes — the SDK already supports many `CCDConfig` beans (that's how the reference teams do it, and how the converter already emits many `EventsConfigNN`).
+
+### 7. Flat state-grant lists vs `@CCD` on `State` — **Medium**
+
+```java
+builder.grant(State.APPEAL_CREATED, Set.of(Permission.R), UserRole.GS_PROFILE);
+builder.grant(State.APPEAL_CREATED, Set.of(Permission.R), UserRole.CASEWORKER_RAS_VALIDATION);
+// ~190 more
+```
+
+nfdiv attaches state access declaratively to the enum constant instead:
+
+```java
+@CCD(label = "20 week holding period", hint = CASE_TITLE, access = {DefaultStateAccess.class})
+Holding,
+```
+
+Where a state's grant matrix recurs (it does — the reference teams factored `DefaultStateAccess`, `PreSubmissionStateAccess`), the converter could emit shared state-access classes and annotate the generated `State` constants, collapsing ~190 lines to a handful of annotations. **This is the state-level analogue of finding #5's field-level fix** and should reuse the same `AccessClassComputer` machinery.
+
+### 8. Trailing positional `null` args — **Medium, cheap**
+
+```java
+fields.mandatory(SscsCaseData::getDirectionTypeDl, "[STATE]=\"doNotUse\"", null, null, null, null);
+```
+
+vs nfdiv `.optional(OrganisationPolicy::getOrgPolicyReference, NEVER_SHOW)` / `.mandatory(Solicitor::getEmail)`. The converter always reaches for the widest overload and pads with `null`. **Fix:** select the narrowest overload that expresses the non-null args — a pure emitter change, no behaviour difference.
+
+### 9. Machine page IDs — **Low-Medium, largely inherent**
+
+`fields.page("1.0")`, `page("2.0")` come straight from the definition's `CaseEventToFields` PageID column, so the *value* is inherent to generation. But note some are meaningful (`page("selectHearing")`, `page("appealDetails")`) — where the definition supplied a semantic id the converter preserves it. This is acceptable; the reader's real orientation problem is #1/#2 (which class am I in), not the page id itself.
+
+### 10. `do not edit by hand` banner on adoption artefacts — **Medium**
+
+Every generated file carries `Generated by ccd-definition-converter — do not edit by hand.` For *generate-mode* (regenerated each build) that is correct. For *retrofit* output that a team is meant to **adopt and own**, the banner actively signals "this isn't yours, don't touch it" — the opposite of the goal. The reference files carry no such banner. **Fix:** on retrofit-adoption artefacts, drop the banner (or replace with a one-time provenance note), so the code reads as ownable.
+
+### 11. Repeated per-event grant walls — **Medium**
+
+sscs `dwpActionDirection` inlines 15 `.grant(Set.of(...), UserRole.X)` lines; the same role matrix repeats across dozens of events. nfdiv compresses this with varargs roles + named permission sets: `.grant(CREATE_READ_UPDATE, SOLICITOR, APPLICANT_2_SOLICITOR, CASE_WORKER).grantHistoryOnly(SUPER_USER, LEGAL_ADVISOR, JUDGE)`. The SDK supports the varargs form. **Fix:** group roles by permission set and emit a `Permissions`-style constants class (`CREATE_READ_UPDATE = Set.of(C,R,U)`), matching both reference teams.
+
+### 12. Access renumbering as diff noise — **Medium, resolved by #5**
+
+The et-ccd DIVERGENCE doc had to strip `access = { AccessNN.class }` before it could compare two case types, because per-run renumbering produced 508 hunks of pure churn masking 12 real divergences. Content-derived stable names (finding #5's fix) resolve this **only if** the names are deterministic across runs and across case types — worth an explicit regression test (same residual map → same class name regardless of emit order).
+
+### 13. String field IDs in tabs/search — **no gap**
+
+Worth stating explicitly so it isn't mistaken for a defect: `BenefitCoreConfig`'s tabs use `.field("summaryName")` string IDs rather than typed getters. **This matches the house standard** — both nfdiv (`tab/ApplicationTab`) and sptribs (`tab/CaseTypeTab`) reference tab/search fields by string ID (via `CaseFieldsConstants`), reserving typed getters for event *pages*. The converter is idiomatic here; do not "fix" it.
+
+---
+
+## Verdict — what stands between this output and "a team would happily own this code"
+
+The converter reproduces the *content* faithfully and its per-field `@CCD` annotations, enum bodies, and access-class shapes are already close to hand-written idiom (the generate-mode goldens are essentially indistinguishable from nfdiv). The gap is almost entirely **macro-structure and naming**, and it is concentrated in four things:
+
+1. **One class per event (#1) and page-per-concern splitting (#2).** This is the decisive adoptability gap. Until an event is a findable, named, individually-ownable class — instead of the Nth private method in `EventsConfig04` glued from `Fields1/2/3` — a team cannot navigate, review, or merge this code the way they navigate their own. Everything else is cosmetic by comparison.
+
+2. **Naming that reads as machine output (#3 lowercase classes, #4 `FL_`, #5 `AccessNN`).** The in-flight access-naming fix is the right move and, if it also caps derived-name length and considers grant cardinality for the inline/class choice, closes #5/#12. #3 and #4 are small, isolated emitter fixes that should ship alongside it — they are the most visibly "generated" thing left.
+
+3. **The `CoreConfig` monolith (#6/#7).** Splitting tabs/search/workbasket/state-access into separate beans is medium effort and brings the config surface in line with both reference teams.
+
+4. **The "do not edit by hand" banner (#10).** Cheap, but psychologically load-bearing for *adoption* specifically — the artefact must stop announcing that it is disposable.
+
+If findings #1, #2, #3, #4, and #10 are addressed and the in-flight #5 fix lands cleanly on the big case types, the retrofit output crosses from "clearly generated, tolerable to import" to "a team would recognise it as their own house style and maintain it directly." The terser-overload (#8) and grant-compression (#11) items are polish that would make a reviewer stop noticing it was generated at all.
+
+**Classification summary:** #1,#2,#3,#4,#6,#7,#8,#11 = converter-emitter changes · #5,#12 = in-flight (verify sufficiency on large types) · #7 partly + #11 = also lean on a shared `Permissions`/state-access SDK idiom the converter should adopt · #10 = retrofit-patch/emitter change · #9,#13 = inherent/accept.

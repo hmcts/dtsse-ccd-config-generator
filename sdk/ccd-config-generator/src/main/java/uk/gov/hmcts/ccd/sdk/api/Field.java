@@ -34,6 +34,8 @@ public class Field<Type, StateType, Parent, Grandparent> {
   boolean readOnly;
   private MidEvent midEventCallback;
   boolean retainHiddenValue;
+  Boolean publish;
+  String publishAs;
 
   Class<Type> clazz;
   @ToString.Exclude
@@ -112,6 +114,27 @@ public class Field<Type, StateType, Parent, Grandparent> {
 
     public FieldBuilder<Type, StateType, Parent, Grandparent> readOnly() {
       this.context = DisplayContext.ReadOnly;
+      return this;
+    }
+
+    /**
+     * Explicitly sets this field's {@code CaseEventToFields.Publish} column, overriding the
+     * event-level {@code publishToCamunda()} cascade for this field only: {@code false} opts the
+     * field out of a publishing event, {@code true} publishes it on a non-publishing event.
+     */
+    public FieldBuilder<Type, StateType, Parent, Grandparent> publish(boolean publish) {
+      this.publish = publish;
+      return this;
+    }
+
+    /**
+     * Sets this field's {@code CaseEventToFields.PublishAs} alias. Implies {@code publish(true)}
+     * per the definition-store parser, which treats {@code PublishAs} as meaningless without
+     * {@code Publish}.
+     */
+    public FieldBuilder<Type, StateType, Parent, Grandparent> publishAs(String publishAs) {
+      this.publishAs = publishAs;
+      this.publish = true;
       return this;
     }
   }

@@ -1,0 +1,78 @@
+[
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "RETRO",
+    "ID": "applicantName",
+    "Label": "Applicant name",
+    "FieldType": "Text",
+    "SecurityClassification": "Public"
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "RETRO",
+    "ID": "applicantEmail",
+    "Label": "Applicant email",
+    "HintText": "We only use this to contact you about the case",
+    "FieldType": "Email",
+    "SecurityClassification": "Public"
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "RETRO",
+    "ID": "claimType",
+    "Label": "Type of claim",
+    "FieldType": "FixedList",
+    "FieldTypeParameter": "ClaimType",
+    "SecurityClassification": "Public"
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "RETRO",
+    "ID": "documents",
+    "Label": "Documents",
+    "FieldType": "Collection",
+    "FieldTypeParameter": "Document",
+    "SecurityClassification": "Public"
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "RETRO",
+    "ID": "respondent",
+    "Label": "Respondent",
+    "FieldType": "Complex",
+    "FieldTypeParameter": "Party",
+    "SecurityClassification": "Public"
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "RETRO",
+    "ID": "hearingType",
+    "Label": "Hearing type",
+    "FieldType": "Text",
+    "SecurityClassification": "Public"
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "RETRO",
+    "ID": "hearingLength",
+    "Label": "Hearing length",
+    "FieldType": "Number",
+    "SecurityClassification": "Public"
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "RETRO",
+    "ID": "settledAmount",
+    "Label": "Settled amount",
+    "FieldType": "Text",
+    "SecurityClassification": "Public"
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "RETRO",
+    "ID": "extraCaseNote",
+    "Label": "Extra case note",
+    "FieldType": "TextArea",
+    "SecurityClassification": "Public"
+  }
+]

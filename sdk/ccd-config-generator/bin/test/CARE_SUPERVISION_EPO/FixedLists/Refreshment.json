@@ -1,0 +1,16 @@
+[
+  {
+    "LiveFrom": "01/01/2017",
+    "DisplayOrder": 1,
+    "ListElementCode": "Biscuit",
+    "ListElement": "Biscuit",
+    "ID": "Refreshment"
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "DisplayOrder": 2,
+    "ListElementCode": "Sandwich",
+    "ListElement": "Sandwich",
+    "ID": "Refreshment"
+  }
+]

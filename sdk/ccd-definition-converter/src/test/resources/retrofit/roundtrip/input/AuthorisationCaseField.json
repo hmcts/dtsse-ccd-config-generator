@@ -1,0 +1,72 @@
+[
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "RETRO",
+    "CaseFieldID": "applicantName",
+    "UserRole": "caseworker-rt",
+    "CRUD": "CRUD"
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "RETRO",
+    "CaseFieldID": "applicantName",
+    "UserRole": "citizen",
+    "CRUD": "CR"
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "RETRO",
+    "CaseFieldID": "applicantEmail",
+    "UserRole": "caseworker-rt",
+    "CRUD": "CRUD"
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "RETRO",
+    "CaseFieldID": "claimType",
+    "UserRole": "caseworker-rt",
+    "CRUD": "CRUD"
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "RETRO",
+    "CaseFieldID": "documents",
+    "UserRole": "caseworker-rt",
+    "CRUD": "CRUD"
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "RETRO",
+    "CaseFieldID": "respondent",
+    "UserRole": "caseworker-rt",
+    "CRUD": "CRUD"
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "RETRO",
+    "CaseFieldID": "hearingType",
+    "UserRole": "caseworker-rt",
+    "CRUD": "CRUD"
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "RETRO",
+    "CaseFieldID": "hearingLength",
+    "UserRole": "caseworker-rt",
+    "CRUD": "CRUD"
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "RETRO",
+    "CaseFieldID": "settledAmount",
+    "UserRole": "caseworker-rt",
+    "CRUD": "CRUD"
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "RETRO",
+    "CaseFieldID": "extraCaseNote",
+    "UserRole": "caseworker-rt",
+    "CRUD": "CRUD"
+  }
+]

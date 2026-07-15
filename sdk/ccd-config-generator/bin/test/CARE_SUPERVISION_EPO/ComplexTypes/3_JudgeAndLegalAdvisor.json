@@ -1,0 +1,38 @@
+[
+  {
+    "ID": "JudgeAndLegalAdvisor",
+    "FieldType": "Text",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "judgeLastName"
+  },
+  {
+    "ID": "JudgeAndLegalAdvisor",
+    "FieldType": "Text",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "legalAdvisorName"
+  },
+  {
+    "ID": "JudgeAndLegalAdvisor",
+    "FieldType": "FixedRadioList",
+    "FieldTypeParameter": "JudgeOrMagistrateTitle",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "judgeTitle"
+  },
+  {
+    "ID": "JudgeAndLegalAdvisor",
+    "FieldType": "Text",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "judgeFullName"
+  },
+  {
+    "ID": "JudgeAndLegalAdvisor",
+    "FieldType": "Text",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "otherTitle"
+  }
+]

@@ -1,0 +1,12 @@
+[
+  {
+    "CaseTypeID" : "CARE_SUPERVISION_EPO",
+    "Description" : "Attach scanned docs",
+    "ID" : "attachScannedDocs",
+    "LiveFrom" : "01/01/2017",
+    "Name" : "Attach scanned docs",
+    "PostConditionState" : "*",
+    "PreConditionState(s)" : "*",
+    "Publish": "N"
+  }
+]
