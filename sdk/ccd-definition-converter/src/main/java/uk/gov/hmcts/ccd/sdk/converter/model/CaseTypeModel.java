@@ -100,6 +100,19 @@ public class CaseTypeModel {
   List<PassthroughSheet> passthroughSheets;
 
   /**
+   * Derivable {@code CaseEventToComplexTypes} groups, keyed {@code eventId + '' + caseFieldId}.
+   * A group is present only when every one of the field's per-member event-override rows resolved to
+   * a typed getter chain and the field is placed as {@code COMPLEX} on the event (see
+   * {@code EventComplexTypeResolver} / {@code DefaultDefinitionLinker.buildEventToComplexTypesPassthrough}).
+   * The config emitter consults this when placing a COMPLEX field: a keyed group is emitted as
+   * {@code .complex(getter).<ctx>(member)…} builder chains rather than an empty {@code .complex(getter)}
+   * block, and its rows' non-derivable columns ({@code ID}, {@code FieldDisplayOrder}, exotic tail)
+   * are grafted over the generated rows. Groups that did not resolve stay whole-row passthrough.
+   */
+  @Builder.Default
+  Map<String, EventComplexTypeGroup> eventComplexTypeGroups = Map.of();
+
+  /**
    * Flat CCD field ID (e.g. {@code applicant1FirstName}) to the reference the config emitter
    * must use when placing that field on an event/tab/search: the unwrapped complex parent plus
    * the member getter. Populated only for fields folded into a {@code @JsonUnwrapped} cluster;

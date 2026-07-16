@@ -59,7 +59,7 @@ this page.** Each gap is classified one of five ways:
 | SearchAlias sheet | **Not supported** | — | No SDK generator; fails conversion with an `OMITTED_FAIL` gap (unless `--allow-gaps`) |
 | UserProfile sheet | **Not supported** | `USER_PROFILE_EXCLUDED` | Per-user default worklists; no generator; conversion still fails with an `OMITTED_FAIL` gap (unless `--allow-gaps`), but the comparator drops the sheet from both sides so an expected-side `UserProfile` no longer recurs as a residual ([maintainer decision 2026-07-16](userprofile-investigation.md)) |
 | AccessType / AccessTypeRole sheets | **Not supported** | — | Org group-access config; no generator; fails conversion with an `OMITTED_FAIL` gap (unless `--allow-gaps`) |
-| EventToComplexTypes rows (incl. exotic tail `SecurityClassification`/`Publish`/`ShowSummaryChangeOption`) | Fixed with passthrough | row | Byte-identical round-trip (zero residuals). SDK now has `.complex(parent).<ctx>(member).eventLabel/.eventHint/.pageId` for hand-written Java, but re-deriving each row's dotted `ListElementCode` into nested member getters (incl. through predefined types) is pure risk for zero residual gain — kept as row passthrough |
+| EventToComplexTypes per-member overrides | **Generated Java** (+ column-graft for the non-derivable tail) | Java / column-graft (fallback: row) | Emitted as `.complex(CaseData::getField).<ctx>(Type::getMember).eventLabel/.eventHint/.fieldShowCondition/.pageId` builder chains — the getter chain reproduces `DisplayContext`/`ListElementCode`/`EventElementLabel`/`EventHintText`/`FieldShowCondition`/`PageID`/`HintText`; the row's `ID` (arbitrary author data the SDK never writes), its `FieldDisplayOrder` (SDK uses a per-event counter, not the input's per-field restart — overwrite-grafted) and any exotic tail (`SecurityClassification`/`Publish`/`RetainHiddenValue`/`ShowSummaryChangeOption`/`ShowSummaryContentOption`/`DefaultValue`/`ElementLabel`/…) are grafted back over the generated rows. **Fallback to row passthrough** for a group that is not a plain `COMPLEX`-placed `CaseData` field, whose root/intermediate is `Collection`-typed (getter is `List<ListValue<X>>`, so `.complex(getter)` can't descend and `.list(getter)` would change rendering), whose dotted `ListElementCode` does not resolve through the typed complex-type graph, whose `DisplayContext` is not `OPTIONAL`/`MANDATORY`/`READONLY`, whose leaf member's `@CCD(hint)` the input row does not carry, or which has an `ID` collision / overlay-suffixed sibling. Byte-identical round-trip either way ([detail](#5-eventtocomplextypes-generated-java-vs-fallback)) |
 | Orphan ComplexTypes (nothing reachable references) | **Semantic, accepted** | `ORPHAN_COMPLEX_TYPE` | Not in `config.getTypes()`; the SDK generates no class/rows, so the input rows are dropped (advisory gap, "safe to delete") — no longer passed through |
 | Orphan-path FixedLists (reachable only via an orphan complex type) | **Semantic, accepted** | `ORPHAN_FIXED_LIST` | The SDK generates no enum; the input rows are dropped (advisory gap) — no longer passed through |
 | Predefined ComplexTypes redeclaration (member-by-member re-spelling of `Fee`/`Address`/…) | **Semantic, accepted** | `PREDEFINED_COMPLEX_TYPE_REDECLARATION` | The built-in `@ComplexType(generate=false)` type owns its definition; the redundant input rows are dropped (advisory gap) — no longer passed through |
@@ -380,6 +380,61 @@ and compute the target state in the callback (see nfdiv's `Applicant1Resubmit` f
 example and `SubmitConditionalOrder` for a multi-way computed state; sptribs'
 `CaseworkerCloseTheCase` corroborates).
 
+### 5. EventToComplexTypes: generated Java vs. fallback
+
+The `CaseEventToComplexTypes` sheet — per-member event display-context overrides scoped to one
+complex field on one event — is emitted as generated Java `.complex(...)` builder chains wherever a
+`(event, field)` group can be faithfully reproduced, falling back to a verbatim row passthrough only
+for groups that cannot.
+
+**Derivation.** For each `(event, field)` group the linker (`DefaultDefinitionLinker`
+/ `EventComplexTypeResolver`) walks every row's dotted `ListElementCode` segment-by-segment through
+the typed complex-type graph — generated `@ComplexType` classes by their model, SDK-predefined types
+(`uk.gov.hmcts.ccd.sdk.type.*`) by reflection — mirroring the SDK's exact member-naming math
+(`FieldUtils.getFieldId`: a generated member's id is its `javaName`, a predefined member's is its
+`@JsonProperty` value or field name; the getter is `get` + `StringUtils.capitalize` of the Java field
+name, so the input `OrganisationToAdd.OrganisationID` resolves to
+`.complex(ChangeOrganisationRequest::getOrganisationToAdd).<ctx>(Organisation::getOrganisationId)`).
+The emitter (`EventsConfigEmitter`) opens the field's existing `.complex(CaseData::getField)` block
+and places each member as `.optional`/`.mandatory`/`.readonly(Type::getMember)` carrying
+`.eventLabel`/`.eventHint`/`.fieldShowCondition`/`.pageId`. This reproduces `DisplayContext`,
+`ListElementCode`, `EventElementLabel`, `EventHintText`, `FieldShowCondition`, `PageID` and (via the
+generated member's `@CCD(hint)`) `HintText`.
+
+**Companion column-graft.** Three kinds of column the SDK generator *cannot* compute are grafted back
+over the generated rows, keyed on `(CaseEventID, CaseFieldID, ListElementCode)`:
+
+- **`ID`** — the row's declaring complex type. It is arbitrary author data the generator never emits
+  (e.g. ia's `lastModifiedApplication` field, declared type `makeAnApplication`, carries
+  `ID=decideAnApplication`), yet the comparator keys the sheet on it, so every derived row needs it
+  added.
+- **`FieldDisplayOrder`** — the input numbers members per complex field (restarting at 1, with author
+  gaps/duplicates), whereas the SDK stamps a per-event running counter; grafted with **overwrite** so
+  the input value wins.
+- **exotic tail** — `SecurityClassification`, `Publish`, `RetainHiddenValue`,
+  `ShowSummaryChangeOption`, `ShowSummaryContentOption`, `DefaultValue`, `ElementLabel`,
+  `FieldType`/`FieldTypeParameter`, `Comment`/`_comment`, `CaseTypeID`, `Page*` — none of which the
+  member builder expresses; grafted **additively**. (`LiveFrom` is stripped on both sides by
+  `LIVE_FROM`, so it is neither derived nor grafted.)
+
+**Fallback.** A whole group stays a verbatim, ID-keyed row passthrough — byte-identical to the
+pre-existing behaviour — when it is not derivable. The dominant cause is a **`Collection`-typed root
+or intermediate member**: its getter is `List<ListValue<X>>`, so `.complex(getter)` types the member
+builder on the list rather than the element `X` (a `.mandatory(X::getMember)` inside it would not
+compile) and `.list(getter)` would change the field's rendering. Other causes: the field is not
+placed as `DisplayContext=COMPLEX` on the event (no `.complex` block to attach to); a dotted
+`ListElementCode` does not resolve through the graph; a `DisplayContext` other than
+`OPTIONAL`/`MANDATORY`/`READONLY`; a leaf member's `@CCD(hint)` the input row does not carry (the SDK
+would emit an unreproducible `HintText`); more than one `ID` in the group, a same-`ListElementCode`
+collision surviving exact-duplicate dedup, or an overlay-suffixed sibling row targeting the same file.
+
+**Measured derived / fallback rows per fixture** (all seven round-trip byte-identically either way):
+ia 245 / 13, probate 24 / 294, et 380 / 624, sscs 56 / 690, fpl 868 / 1027, civil 333 / 1585,
+prl 402 / 5840. The high fallback counts on prl/sscs/probate are `Collection`-heavy definitions;
+civil's is dominated by complex members carrying a `@CCD(hint)` the event rows omit. Supporting the
+`Collection` case would require an SDK `.list(...)`-with-member-overrides path that preserves the
+`COMPLEX` rendering — a future enhancement.
+
 ## Constructs carried by passthrough (not expressed in Java)
 
 The converter reproduces these verbatim through `PassthroughMerger` (additive `JsonUtils.mergeInto`
@@ -399,7 +454,8 @@ and not-supported gaps respectively.)
 
 | Construct | Sheet(s) | Mechanism | Why there is no SDK API |
 |---|---|---|---|
-| EventToComplexTypes (incl. exotic tail) | `CaseEventToComplexTypes` (→ `EventToComplexTypes`) | row (per event/field) | Per-member event display-context overrides. Byte-identical round-trip (zero residuals); the SDK now has `.complex(parent).<ctx>(member).eventLabel/.eventHint/.pageId` for hand-written Java, but re-deriving each row's dotted `ListElementCode` into nested member getters (incl. through predefined types) is pure risk for zero residual gain, so the whole sheet stays a row passthrough. |
+| EventToComplexTypes — **derived-group tail** | `CaseEventToComplexTypes` (→ `EventToComplexTypes`) | column-graft (per event/field) | For a group emitted as generated `.complex(...)` Java (see [§5](#5-eventtocomplextypes-generated-java-vs-fallback)), the columns the generator cannot compute — the row's `ID` (added), its `FieldDisplayOrder` (overwritten) and any exotic tail (`SecurityClassification`/`Publish`/`RetainHiddenValue`/…, added) — are grafted onto the generated rows, keyed on `(CaseEventID, CaseFieldID, ListElementCode)`. |
+| EventToComplexTypes — **non-derivable group** | `CaseEventToComplexTypes` (→ `EventToComplexTypes`) | row (per event/field) | A whole `(event, field)` group the converter cannot express as builder chains stays a verbatim row passthrough (ID-keyed). Dominant cause: a `Collection`-typed root/intermediate member (getter `List<ListValue<X>>` — `.complex(getter)` can't descend, `.list(getter)` would change rendering); also non-`COMPLEX`-placed fields, unresolvable dotted `ListElementCode`s, `DisplayContext` outside `OPTIONAL`/`MANDATORY`/`READONLY`, a leaf member `@CCD(hint)` absent from the input row, `ID` collisions and overlay-suffixed siblings. |
 | Callback URLs (about-to-start / about-to-submit / submitted) + their `RetriesTimeout*` | `CaseEvent` | column-graft | The converter deliberately emits **no** SDK callback wiring, so the generator writes no `CallBackURL*`/`RetriesTimeout*`; the input values (env `${CCD_DEF_*}` placeholders included) are grafted back verbatim. |
 | Mid-event callback URL + its `RetriesTimeout*MidEvent` | `CaseEventToFields` | column-graft | Same: mid-event is a per-page property, carried verbatim per field row rather than wired (a bracketed metadata `CaseFieldID` such as `[STATE]` is skipped — the generator emits no row for it to graft onto). |
 
@@ -479,6 +535,14 @@ The following constructs used to live in this table and are now emitted as real 
   overwrite-graft is no longer produced for them: they emit `@CCD(typeOverride = FieldType.X)` (or, for
   `JudicialUser`, reference the SDK Java type directly). The retrofit `TypeReconciler` reconciles these
   conflicts via `typeOverride` too instead of flagging a manual model change.
+- **EventToComplexTypes per-member overrides** → `.complex(CaseData::getField).<ctx>(Type::getMember)`
+  builder chains carrying `.eventLabel`/`.eventHint`/`.fieldShowCondition`/`.pageId` (`FieldCollection`).
+  A derivable `(event, field)` group's whole-sheet row passthrough is replaced by generated Java plus a
+  narrow companion column-graft for the columns the generator cannot compute (`ID`, `FieldDisplayOrder`,
+  the exotic tail). Groups the converter cannot express stay a verbatim row passthrough — see
+  [§5](#5-eventtocomplextypes-generated-java-vs-fallback) for the full rule and the derived-vs-fallback
+  measurement. No SDK change was needed: the `.eventLabel`/`.eventHint`/`.pageId` member carriers already
+  existed (added in an earlier round for hand-written definitions).
 
 ## The generation-time environment gate
 

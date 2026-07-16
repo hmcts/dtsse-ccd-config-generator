@@ -52,6 +52,17 @@ final class SdkPredefinedTypes {
   }
 
   /**
+   * The full ID → Java FQN map of every SDK-predefined complex type. Used by
+   * {@code EventComplexTypeResolver} to reflect a predefined root type's members when deriving a
+   * {@code CaseEventToComplexTypes} getter chain.
+   *
+   * @return the predefined complex-type ID to FQN map
+   */
+  static Map<String, String> all() {
+    return BY_ID;
+  }
+
+  /**
    * The fully qualified Java type reference for a predefined complex-type ID.
    *
    * @param id the ComplexTypes sheet ID

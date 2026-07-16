@@ -21,6 +21,7 @@ import uk.gov.hmcts.ccd.sdk.converter.model.CaseTypeModel;
 import uk.gov.hmcts.ccd.sdk.converter.model.ClusteredFieldRef;
 import uk.gov.hmcts.ccd.sdk.converter.model.ComplexTypeAuthModel;
 import uk.gov.hmcts.ccd.sdk.converter.model.ComplexTypeModel;
+import uk.gov.hmcts.ccd.sdk.converter.model.EventComplexTypeGroup;
 import uk.gov.hmcts.ccd.sdk.converter.model.EventModel;
 import uk.gov.hmcts.ccd.sdk.converter.model.FieldModel;
 import uk.gov.hmcts.ccd.sdk.converter.model.FixedListModel;
@@ -162,7 +163,10 @@ public class DefaultDefinitionLinker implements DefinitionLinker {
     List<PassthroughSheet> passthroughSheets = buildPassthroughSheets(ir, options, gaps);
     passthroughSheets.addAll(complexTypeAuth.passthrough());
     passthroughSheets.addAll(fixedListPassthrough);
-    passthroughSheets.addAll(buildEventToComplexTypesPassthrough(ir, caseTypeId, options, gaps));
+    EventComplexTypeResult eventComplexTypes = buildEventToComplexTypesPassthrough(
+        ir, caseTypeId, options, gaps, events, allComplexTypes, clustered.caseFields(),
+        clustered.refs());
+    passthroughSheets.addAll(eventComplexTypes.passthrough());
     passthroughSheets.addAll(buildEventFieldColumnPassthrough(ir, caseTypeId, events, options, gaps));
     // State Description (@CCD(description)), RoleToAccessProfiles unregistered roles
     // (roleToAccessProfile(String)), the search extras (per-field lambda), the CaseRoles
@@ -216,6 +220,7 @@ public class DefaultDefinitionLinker implements DefinitionLinker {
         .categories(rowsFor(ir, SheetName.CATEGORY, caseTypeId))
         .passthroughSheets(passthroughSheets)
         .clusteredFieldRefs(clustered.refs())
+        .eventComplexTypeGroups(eventComplexTypes.groups())
         .build();
   }
 
@@ -1988,13 +1993,28 @@ public class DefaultDefinitionLinker implements DefinitionLinker {
    * @param gaps the gap collector
    * @return the passthrough sheets for EventToComplexTypes, one per (overlay, event, field)
    */
-  private List<PassthroughSheet> buildEventToComplexTypesPassthrough(
-      DefinitionIr ir, String caseTypeId, ConversionOptions options, GapCollector gaps) {
+  private EventComplexTypeResult buildEventToComplexTypesPassthrough(
+      DefinitionIr ir, String caseTypeId, ConversionOptions options, GapCollector gaps,
+      List<EventModel> events, List<ComplexTypeModel> complexTypes, List<FieldModel> caseFields,
+      Map<String, ClusteredFieldRef> clusteredRefs) {
     List<SheetRow> rows = ir.rowsForCaseType(SheetName.CASE_EVENT_TO_COMPLEX_TYPES, caseTypeId);
     if (rows.isEmpty()) {
-      return List.of();
+      return new EventComplexTypeResult(Map.of(), List.of());
     }
-    // Key by (overlay suffix, event, field) so each lands in the right per-event/per-field file.
+
+    final EventComplexTypeResolver resolver =
+        new EventComplexTypeResolver(complexTypes, SdkPredefinedTypes.all());
+    Map<String, FieldModel> fieldsById = new LinkedHashMap<>();
+    for (FieldModel field : caseFields) {
+      fieldsById.put(field.getId(), field);
+    }
+    Map<String, ClusteredFieldRef> refs = clusteredRefs == null ? Map.of() : clusteredRefs;
+    // (event, field) pairs placed as COMPLEX on that event — the emitter only opens a .complex block
+    // for these, so a member override can only attach to one of them.
+    Set<String> complexPlaced = complexPlacedFields(events);
+
+    // Key by (overlay suffix, event, field) so each lands in the right per-event/per-field file, as
+    // the whole-sheet passthrough did.
     Map<String, List<SheetRow>> byTarget = new LinkedHashMap<>();
     Map<String, String> suffixByTarget = new LinkedHashMap<>();
     for (SheetRow row : rows) {
@@ -2008,55 +2028,304 @@ public class DefaultDefinitionLinker implements DefinitionLinker {
       byTarget.computeIfAbsent(key, k -> new ArrayList<>()).add(row);
       suffixByTarget.put(key, suffix);
     }
+    // (event, field) targets that have an overlay-suffixed row: the base and suffixed groups both
+    // write CaseEventToComplexTypes/<event>/<field>.json, so deriving the base group (a column graft
+    // keyed on event/field/LEC) while the suffixed group stays a full-row passthrough (keyed on ID)
+    // would collide in mergeInto. Keep the whole (event, field) as a verbatim ID-keyed passthrough.
+    Set<String> targetsWithSuffix = new LinkedHashSet<>();
+    for (Map.Entry<String, String> suffixEntry : suffixByTarget.entrySet()) {
+      if (suffixEntry.getValue() != null) {
+        String[] targetParts = suffixEntry.getKey().split("\u001f", -1);
+        targetsWithSuffix.add(targetParts[1] + "\u001f" + targetParts[2]);
+      }
+    }
+
+    Map<String, EventComplexTypeGroup> groups = new LinkedHashMap<>();
     List<PassthroughSheet> sheets = new ArrayList<>();
+    int derivedRows = 0;
+    int fallbackRows = 0;
     for (Map.Entry<String, List<SheetRow>> entry : byTarget.entrySet()) {
       String[] parts = entry.getKey().split("\u001f", -1);
       String eventId = parts[1];
       String fieldId = parts[2];
       String suffix = suffixByTarget.get(entry.getKey());
-      List<Map<String, Object>> raw = new ArrayList<>();
-      for (SheetRow row : entry.getValue()) {
-        raw.add(new LinkedHashMap<>(row.getColumns()));
+      List<SheetRow> groupRows = entry.getValue();
+
+      // Only a base (non-overlay) group whose field is a plain COMPLEX-placed CaseData member is a
+      // candidate: an overlay-suffixed group would need a per-environment .complex block the emitter
+      // does not gate, and a clustered/overlay field has no plain getter to open the block on.
+      EventComplexTypeGroup group = null;
+      if (suffix == null
+          && !targetsWithSuffix.contains(eventId + "\u001f" + fieldId)
+          && complexPlaced.contains(eventId + "\u001f" + fieldId)
+          && !refs.containsKey(fieldId)) {
+        FieldModel field = fieldsById.get(fieldId);
+        if (field != null && (field.getOverlayTags() == null || field.getOverlayTags().isEmpty())) {
+          group = deriveEventComplexTypeGroup(resolver, field, eventId, groupRows);
+        }
       }
-      sheets.add(PassthroughSheet.builder()
-          .relativePath("CaseEventToComplexTypes/" + eventId + "/" + fieldId + ".json")
-          // ID (the complex-type member's declaring type) must be part of the merge key: one
-          // CaseFieldID can host more than one complex type across its nested members (e.g. a
-          // Collection field whose element type embeds another Collection of a different type), so
-          // two distinct types can each carry a member with the same ListElementCode (e.g. both
-          // declare an "address" or "firstName" member). Keying on
-          // (CaseEventID, CaseFieldID, ListElementCode) alone made those rows collide in
-          // mergeInto, silently dropping one row and grafting its columns onto the other's.
-          .primaryKeys(List.of(Columns.ID, Columns.CASE_EVENT_ID, Columns.CASE_FIELD_ID,
-              Columns.LIST_ELEMENT_CODE))
-          .overlaySuffix(suffix)
-          .overlayCondition(OverlayResolver.conditionFor(suffix, options))
-          .rows(raw)
-          .build());
+
+      if (group != null) {
+        groups.put(eventId + "\u001f" + fieldId, group);
+        derivedRows += groupRows.size();
+        // Companion graft: the columns the generator cannot compute for a derived row.
+        List<Map<String, Object>> graft = new ArrayList<>();
+        for (SheetRow row : groupRows) {
+          graft.add(etoctGraftRow(row));
+        }
+        sheets.add(PassthroughSheet.builder()
+            .relativePath("CaseEventToComplexTypes/" + eventId + "/" + fieldId + ".json")
+            // Keyed on the columns the generator DOES emit, so the graft merges onto the generated
+            // row rather than adding an orphan. (ID cannot be part of the key — the generator omits
+            // it — so it is grafted as a value instead.)
+            .primaryKeys(List.of(Columns.CASE_EVENT_ID, Columns.CASE_FIELD_ID,
+                Columns.LIST_ELEMENT_CODE))
+            // FieldDisplayOrder must overwrite the generator's per-event-counter value with the
+            // input's per-field value; every other grafted column is additive (the generator omits
+            // it), matching the whole-sheet passthrough's fidelity for those columns.
+            .overwriteColumns(List.of(Columns.FIELD_DISPLAY_ORDER))
+            .rows(graft)
+            .build());
+      } else {
+        fallbackRows += groupRows.size();
+        List<Map<String, Object>> raw = new ArrayList<>();
+        for (SheetRow row : groupRows) {
+          raw.add(new LinkedHashMap<>(row.getColumns()));
+        }
+        sheets.add(PassthroughSheet.builder()
+            .relativePath("CaseEventToComplexTypes/" + eventId + "/" + fieldId + ".json")
+            // ID (the complex-type member's declaring type) must be part of the merge key: one
+            // CaseFieldID can host more than one complex type across its nested members (e.g. a
+            // Collection field whose element type embeds another Collection of a different type), so
+            // two distinct types can each carry a member with the same ListElementCode (e.g. both
+            // declare an "address" or "firstName" member). Keying on
+            // (CaseEventID, CaseFieldID, ListElementCode) alone made those rows collide in
+            // mergeInto, silently dropping one row and grafting its columns onto the other's.
+            .primaryKeys(List.of(Columns.ID, Columns.CASE_EVENT_ID, Columns.CASE_FIELD_ID,
+                Columns.LIST_ELEMENT_CODE))
+            .overlaySuffix(suffix)
+            .overlayCondition(OverlayResolver.conditionFor(suffix, options))
+            .rows(raw)
+            .build());
+      }
     }
     gaps.add(GapEntry.builder()
         .sheet("EventToComplexTypes")
         .rowKey(caseTypeId)
         .column(null)
-        .value(null)
+        .value(derivedRows + " derived / " + fallbackRows + " passthrough")
         .category(GapCategory.UNSUPPORTED_SHEET)
-        .action(GapAction.PASSTHROUGH_ROW)
-        // The SDK now exposes per-member event overrides (.complex(parent).<ctx>(member) carrying
-        // .eventLabel/.eventHint/.pageId + show condition — see EventComplexMember SDK test), but the
-        // converter keeps the whole EventToComplexTypes sheet as a row-level passthrough: it already
-        // round-trips BYTE-IDENTICALLY (zero residuals in every fixture baseline), whereas re-emitting
-        // it as Java would require resolving each row's dotted ListElementCode into a nested member
-        // getter chain — including through predefined SDK complex types whose members the converter
-        // does not generate — for no fidelity gain and real regression risk. The exotic-tail columns
-        // (SecurityClassification/Publish/ShowSummaryChangeOption/RetainHiddenValue/DefaultValue) ride
-        // through on the same rows. Decision per the row-level-vs-column-graft rule: what stays
-        // byte-identical stays row-level passthrough.
-        .detail("EventToComplexTypes per-member event overrides carried as a byte-identical row-level"
-            + " passthrough (the SDK's .complex(...) member setters are available for hand-written"
-            + " Java but re-deriving nested member getters here is pure risk for zero residual gain); "
-            + rows.size() + " rows passed through as raw JSON")
+        .action(fallbackRows == 0 ? GapAction.CONDITIONAL_CODE : GapAction.PASSTHROUGH_ROW)
+        .detail("EventToComplexTypes per-member event overrides: " + derivedRows + " row(s) emitted"
+            + " as generated .complex(...) builder chains (ID / FieldDisplayOrder / any exotic tail"
+            + " column grafted back over the generated rows); " + fallbackRows + " row(s) kept as a"
+            + " verbatim row passthrough because their group is not derivable — the dominant cause is"
+            + " a Collection-typed root or intermediate member (its getter is List<ListValue<X>>, so"
+            + " a .complex(getter) member block would not compile and .list(getter) would change the"
+            + " field's rendering), plus groups not placed as COMPLEX on the event, dotted"
+            + " ListElementCodes that do not resolve through the typed complex-type graph,"
+            + " DisplayContexts other than OPTIONAL/MANDATORY/READONLY, a member @CCD(hint) the input"
+            + " row does not carry, an ID collision, or an overlay-suffixed sibling row")
         .build());
-    return sheets;
+    return new EventComplexTypeResult(groups, sheets);
+  }
+
+  /**
+   * The columns the {@code .complex(...)} member emission reproduces as generated Java for a derived
+   * {@code CaseEventToComplexTypes} row — everything {@code CaseEventToComplexTypesGenerator.expand}
+   * computes from the builder chain. These are NOT grafted for a derived row (the generator emits
+   * them); every OTHER column present on the input row IS grafted (see {@link #etoctGraftRow}).
+   * {@code LiveFrom} is stripped on both sides by {@code LiveFromRule}, so it is neither derived nor
+   * grafted. {@code HintText} is derived from the generated member's {@code @CCD(hint)}, so it is
+   * treated as derived too.
+   */
+  private static final Set<String> ETOCT_DERIVED_COLUMNS = Set.of(
+      Columns.CASE_EVENT_ID, Columns.CASE_FIELD_ID, Columns.LIST_ELEMENT_CODE,
+      Columns.DISPLAY_CONTEXT, Columns.EVENT_ELEMENT_LABEL, Columns.EVENT_HINT_TEXT,
+      Columns.FIELD_SHOW_CONDITION, Columns.PAGE_ID, Columns.HINT_TEXT, "LiveFrom");
+
+  /**
+   * The set of {@code eventId + <unit-separator> + caseFieldId} keys for fields placed as
+   * {@code DisplayContext=COMPLEX} on their event's pages — the only fields the config emitter opens
+   * a {@code .complex} block for, so the only ones a member override can attach to.
+   */
+  private Set<String> complexPlacedFields(List<EventModel> events) {
+    Set<String> placed = new LinkedHashSet<>();
+    for (EventModel event : events) {
+      if (event.getPages() == null) {
+        continue;
+      }
+      for (PageModel page : event.getPages()) {
+        if (page.getFields() == null) {
+          continue;
+        }
+        for (PageModel.PageField field : page.getFields()) {
+          if (field.getDisplayContext() != null
+              && "COMPLEX".equalsIgnoreCase(field.getDisplayContext().trim())) {
+            placed.add(event.getId() + "\u001f" + field.getCaseFieldId());
+          }
+        }
+      }
+    }
+    return placed;
+  }
+
+  /**
+   * Attempts to derive one {@code (event, field)} group into an {@link EventComplexTypeGroup},
+   * returning null when any row cannot be faithfully reproduced as a builder chain (so the caller
+   * keeps the whole group as a row passthrough).
+   */
+  private EventComplexTypeGroup deriveEventComplexTypeGroup(
+      EventComplexTypeResolver resolver, FieldModel field, String eventId,
+      List<SheetRow> allRows) {
+    String rootTypeId = resolver.rootTypeId(field);
+    if (rootTypeId == null) {
+      return null;
+    }
+    // Collapse rows that are exact duplicates up to a blank/absent column, exactly as the comparator
+    // does (dropExactDuplicates): a definition that ships the same keyed row in both a flat file and
+    // a fragment directory (civil/prl) imports as one, and both the generated side and this
+    // derivation must treat them as one. Only genuine content divergence survives.
+    List<SheetRow> groupRows = dedupeExactEtoctRows(allRows);
+    // A single declaring type per group: a nested member reached through more than one type could
+    // otherwise carry the same ListElementCode under different IDs (see the merge-key note), which a
+    // (event, field, LEC)-keyed graft cannot disambiguate — fall back so ID stays a passthrough key.
+    Set<String> ids = new LinkedHashSet<>();
+    for (SheetRow row : groupRows) {
+      row.getString(Columns.ID).ifPresent(ids::add);
+    }
+    if (ids.size() > 1) {
+      return null;
+    }
+    // A single surviving row per ListElementCode: the SDK generates one row per member placement,
+    // keyed on (CaseEventID, CaseFieldID, ListElementCode), so a group that (after dedup) still lists
+    // the same LEC twice with divergent content (civil's obligationWAFlag repeats each member as
+    // OPTIONAL-with-show-condition and again as MANDATORY) cannot round-trip through the builder — the
+    // two rows collapse to one generated row. Fall back so the ID-keyed passthrough reproduces both.
+    Set<String> seenLecs = new LinkedHashSet<>();
+    for (SheetRow row : groupRows) {
+      if (!seenLecs.add(row.getString(Columns.LIST_ELEMENT_CODE).orElse(""))) {
+        return null;
+      }
+    }
+    List<EventComplexTypeGroup.Member> members = new ArrayList<>();
+    for (SheetRow row : groupRows) {
+      String lec = row.getString(Columns.LIST_ELEMENT_CODE).orElse(null);
+      String contextMethod =
+          displayContextMethod(row.getString(Columns.DISPLAY_CONTEXT).orElse(null));
+      if (contextMethod == null) {
+        return null;
+      }
+      String showCondition = row.getString(Columns.FIELD_SHOW_CONDITION).orElse(null);
+      String eventLabel = row.getDisplayText(Columns.EVENT_ELEMENT_LABEL).orElse(null);
+      String eventHint = row.getDisplayText(Columns.EVENT_HINT_TEXT).orElse(null);
+      String pageId = row.getString(Columns.PAGE_ID).orElse(null);
+      Optional<EventComplexTypeGroup.Member> resolved = resolver.resolve(
+          rootTypeId, lec, contextMethod, showCondition, eventLabel, eventHint, pageId);
+      if (resolved.isEmpty()) {
+        return null;
+      }
+      // The generated leaf member's @CCD(hint) is emitted by the SDK as the row's HintText
+      // unconditionally; when the input row's HintText differs from it (the common case is the input
+      // carrying none while the ComplexTypes member declares one), the generated row would gain an
+      // unreproducible HintText, so fall back to a row passthrough for the whole group.
+      String rowHint = row.getDisplayText(Columns.HINT_TEXT).orElse(null);
+      if (!java.util.Objects.equals(blankToNull(resolved.get().getDeclaredHint()),
+          blankToNull(rowHint))) {
+        return null;
+      }
+      members.add(resolved.get());
+    }
+    return EventComplexTypeGroup.builder()
+        .eventId(eventId)
+        .caseFieldId(field.getId())
+        .rootGetter("get" + capitaliseEtoct(field.getJavaName()))
+        .members(members)
+        .build();
+  }
+
+  /**
+   * The builder method for a member's {@code DisplayContext}, or null when the context has no
+   * {@code .complex}-member equivalent ({@code COMPLEX} intermediate placeholders, blanks, unknowns),
+   * which forces the group to fall back to a row passthrough.
+   */
+  private String displayContextMethod(String displayContext) {
+    if (displayContext == null) {
+      return null;
+    }
+    return switch (displayContext.trim().toUpperCase()) {
+      case "OPTIONAL" -> "optional";
+      case "MANDATORY" -> "mandatory";
+      case "READONLY" -> "readonly";
+      default -> null;
+    };
+  }
+
+  /**
+   * The companion-graft row for a derived {@code CaseEventToComplexTypes} row: the merge-key
+   * columns, the {@code ID} the generator omits, the {@code FieldDisplayOrder} it computes wrongly,
+   * and every exotic tail column the generator never writes. The columns the generator DOES compute
+   * ({@link #ETOCT_DERIVED_COLUMNS}) are left out so the additive/overwrite merge cannot conflict
+   * with them.
+   */
+  private Map<String, Object> etoctGraftRow(SheetRow row) {
+    Map<String, Object> out = new LinkedHashMap<>();
+    out.put(Columns.CASE_EVENT_ID, row.getColumns().get(Columns.CASE_EVENT_ID));
+    out.put(Columns.CASE_FIELD_ID, row.getColumns().get(Columns.CASE_FIELD_ID));
+    out.put(Columns.LIST_ELEMENT_CODE, row.getColumns().get(Columns.LIST_ELEMENT_CODE));
+    for (Map.Entry<String, Object> column : row.getColumns().entrySet()) {
+      if (ETOCT_DERIVED_COLUMNS.contains(column.getKey())) {
+        continue;
+      }
+      out.put(column.getKey(), column.getValue());
+    }
+    return out;
+  }
+
+  /** Null when the string is null or blank, else the string — so an absent HintText column and a
+   * blank one compare equal (matching the comparator's EmptyStringAbsentRule tolerance). */
+  private static String blankToNull(String s) {
+    return s == null || s.isBlank() ? null : s;
+  }
+
+  /**
+   * Drops {@code CaseEventToComplexTypes} rows that are exact duplicates up to a blank/absent column
+   * of an earlier row, mirroring the comparator's {@code dropExactDuplicates}: a definition that
+   * ships the same keyed row in both a flat file and a fragment directory (civil/prl) imports as one,
+   * so the derivation must treat the repeat as one member, not a same-LEC collision.
+   */
+  private List<SheetRow> dedupeExactEtoctRows(List<SheetRow> rows) {
+    if (rows.size() < 2) {
+      return rows;
+    }
+    List<SheetRow> deduped = new ArrayList<>(rows.size());
+    List<Map<String, Object>> seen = new ArrayList<>(rows.size());
+    for (SheetRow row : rows) {
+      Map<String, Object> canonical = new LinkedHashMap<>();
+      for (Map.Entry<String, Object> column : row.getColumns().entrySet()) {
+        Object value = column.getValue();
+        boolean blankOrNull =
+            value == null || (value instanceof String string && string.isBlank());
+        if (!blankOrNull) {
+          canonical.put(column.getKey(), value);
+        }
+      }
+      if (!seen.contains(canonical)) {
+        seen.add(canonical);
+        deduped.add(row);
+      }
+    }
+    return deduped;
+  }
+
+  /**
+   * A capitalised getter fragment: {@code changeOrg} → {@code ChangeOrg}.
+   */
+  private String capitaliseEtoct(String s) {
+    if (s == null || s.isEmpty()) {
+      return s;
+    }
+    return Character.toUpperCase(s.charAt(0)) + s.substring(1);
   }
 
   /**
@@ -2203,5 +2472,15 @@ public class DefaultDefinitionLinker implements DefinitionLinker {
   /** The linked AuthorisationComplexType grants plus the residual (unresolvable) passthrough. */
   private record ComplexTypeAuthResult(
       List<ComplexTypeAuthModel> grants, List<PassthroughSheet> passthrough) {
+  }
+
+  /**
+   * The derived {@code CaseEventToComplexTypes} groups the config emitter turns into
+   * {@code .complex(...)} member chains (keyed {@code eventId + <unit-separator> + caseFieldId}),
+   * plus the passthrough sheets (companion column grafts for derived groups and verbatim row
+   * passthroughs for the rest). See {@link #buildEventToComplexTypesPassthrough}.
+   */
+  private record EventComplexTypeResult(
+      Map<String, EventComplexTypeGroup> groups, List<PassthroughSheet> passthrough) {
   }
 }

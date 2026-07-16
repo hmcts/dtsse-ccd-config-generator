@@ -18,6 +18,7 @@ import uk.gov.hmcts.ccd.sdk.converter.api.EmitContext;
 import uk.gov.hmcts.ccd.sdk.converter.api.SourceEmitter;
 import uk.gov.hmcts.ccd.sdk.converter.model.CaseTypeModel;
 import uk.gov.hmcts.ccd.sdk.converter.model.ClusteredFieldRef;
+import uk.gov.hmcts.ccd.sdk.converter.model.EventComplexTypeGroup;
 import uk.gov.hmcts.ccd.sdk.converter.model.EventModel;
 import uk.gov.hmcts.ccd.sdk.converter.model.FieldModel;
 import uk.gov.hmcts.ccd.sdk.converter.model.PageModel;
@@ -465,13 +466,16 @@ public class EventsConfigEmitter implements SourceEmitter {
     CodeBlock.Builder apply = CodeBlock.builder();
     emitPageHeader(apply, page);
 
-    int fieldCount = page.getFields() == null ? 0 : page.getFields().size();
-    if (fieldCount <= FIELDS_PER_HELPER) {
+    int weight = pageWeight(page, model, event);
+    if (weight <= FIELDS_PER_HELPER) {
       emitPageFields(apply, page.getFields(), model, caseData, context, event);
     } else {
       // Documented overflow: split this single page's placements across FieldsN fragment classes so
-      // each fragment's serializable getter lambdas stay under the bytecode cap.
-      List<List<PageModel.PageField>> groups = groupFields(page.getFields());
+      // each fragment's serializable getter lambdas stay under the bytecode cap. A COMPLEX field that
+      // carries derived CaseEventToComplexTypes member overrides emits one lambda per member, so it
+      // counts for its member total, not one, when budgeting the split (fpl's amendChildren places
+      // ~16 complex fields of ~27 members each on one page).
+      List<List<PageModel.PageField>> groups = groupFields(page.getFields(), model, event);
       for (int i = 0; i < groups.size(); i++) {
         CodeBlock.Builder fragBody = CodeBlock.builder();
         emitPageFields(fragBody, groups.get(i), model, caseData, context, event);
@@ -510,13 +514,62 @@ public class EventsConfigEmitter implements SourceEmitter {
   }
 
   /**
-   * Groups a page's fields into runs of at most {@link #FIELDS_PER_HELPER} so each generated
-   * fragment method stays under the bytecode limit.
+   * The lambda weight of a whole page: the sum of every field's {@link #fieldWeight}. Drives whether
+   * the page's placements are split across fragment classes to stay under the JVM's per-method
+   * bytecode cap.
    */
-  private List<List<PageModel.PageField>> groupFields(List<PageModel.PageField> fields) {
+  private int pageWeight(PageModel page, CaseTypeModel model, EventModel event) {
+    if (page.getFields() == null) {
+      return 0;
+    }
+    int weight = 0;
+    for (PageModel.PageField field : page.getFields()) {
+      weight += fieldWeight(field, model, event);
+    }
+    return weight;
+  }
+
+  /**
+   * The lambda weight of one field placement: 1 for an ordinary field, or 1 plus the derived
+   * complex-member count for a COMPLEX field that carries {@code CaseEventToComplexTypes} member
+   * overrides (each member emits its own serializable getter lambda inside the complex block).
+   */
+  private int fieldWeight(PageModel.PageField field, CaseTypeModel model, EventModel event) {
+    if (field.getDisplayContext() != null
+        && "COMPLEX".equalsIgnoreCase(field.getDisplayContext().trim())
+        && model.getEventComplexTypeGroups() != null) {
+      EventComplexTypeGroup group =
+          model.getEventComplexTypeGroups().get(event.getId() + "\u001f" + field.getCaseFieldId());
+      if (group != null) {
+        return 1 + group.getMembers().size();
+      }
+    }
+    return 1;
+  }
+
+  /**
+   * Groups a page's fields into runs whose cumulative {@link #fieldWeight} stays at or below
+   * {@link #FIELDS_PER_HELPER}, so each generated fragment method stays under the bytecode limit. A
+   * single field heavier than the budget on its own (a COMPLEX field with very many derived members)
+   * still occupies its own group rather than being split mid-field.
+   */
+  private List<List<PageModel.PageField>> groupFields(
+      List<PageModel.PageField> fields, CaseTypeModel model, EventModel event) {
     List<List<PageModel.PageField>> groups = new ArrayList<>();
-    for (int i = 0; i < fields.size(); i += FIELDS_PER_HELPER) {
-      groups.add(new ArrayList<>(fields.subList(i, Math.min(i + FIELDS_PER_HELPER, fields.size()))));
+    List<PageModel.PageField> current = new ArrayList<>();
+    int currentWeight = 0;
+    for (PageModel.PageField field : fields) {
+      int weight = fieldWeight(field, model, event);
+      if (!current.isEmpty() && currentWeight + weight > FIELDS_PER_HELPER) {
+        groups.add(current);
+        current = new ArrayList<>();
+        currentWeight = 0;
+      }
+      current.add(field);
+      currentWeight += weight;
+    }
+    if (!current.isEmpty()) {
+      groups.add(current);
     }
     return groups;
   }
@@ -718,18 +771,28 @@ public class EventsConfigEmitter implements SourceEmitter {
       }
       if (field.getDisplayContext() != null
           && "COMPLEX".equalsIgnoreCase(field.getDisplayContext().trim())) {
-        // A complex-typed field placed on a page with no per-member overrides: the SDK renders
-        // DisplayContext=COMPLEX only via a .complex(getter) block, so emit an empty one. Honour
-        // the input's ShowSummaryChangeOption via the two-arg complex(getter, summary) overload
-        // when it is N (the SDK otherwise defaults ShowSummaryChangeOption to Y).
+        // A complex-typed field placed on a page: the SDK renders DisplayContext=COMPLEX via a
+        // .complex(getter) block. When the CaseEventToComplexTypes sheet carries per-member event
+        // overrides for this (event, field) that the linker could derive, the block gains those
+        // members as .optional/.mandatory/.readonly(Type::getMember) calls (with .eventLabel /
+        // .eventHint / .fieldShowCondition / .pageId); otherwise the block stays empty. Honour the
+        // input's ShowSummaryChangeOption via the two-arg complex(getter, summary) overload when it
+        // is N (the SDK otherwise defaults ShowSummaryChangeOption to Y).
+        EventComplexTypeGroup group = model.getEventComplexTypeGroups() == null
+            ? null
+            : model.getEventComplexTypeGroups().get(event.getId() + "\u001f" + field.getCaseFieldId());
         CodeBlock.Builder complexStmt = CodeBlock.builder();
         if (Boolean.FALSE.equals(field.getShowSummary())) {
-          complexStmt.add("fields.complex($T::get$L, false).done()", caseData,
+          complexStmt.add("fields.complex($T::get$L, false)", caseData,
               capitalise(fieldModel.getJavaName()));
         } else {
-          complexStmt.add("fields.complex($T::get$L).done()", caseData,
+          complexStmt.add("fields.complex($T::get$L)", caseData,
               capitalise(fieldModel.getJavaName()));
         }
+        if (group != null) {
+          complexStmt.add(complexMemberChains(group, emitContext));
+        }
+        complexStmt.add(".done()");
         // The .complex(...).done() call returns the FieldCollectionBuilder, so the fluent
         // lastField() metadata setters act on the complex field just placed — emit its per-field
         // CaseEventToFields metadata as Java rather than via the retired column graft.
@@ -833,6 +896,65 @@ public class EventsConfigEmitter implements SourceEmitter {
 
   private static boolean notBlank(String s) {
     return s != null && !s.isEmpty();
+  }
+
+  /**
+   * The per-member override calls emitted inside a complex field's {@code fields.complex(getter)}
+   * block for a derived {@code CaseEventToComplexTypes} group: each member descends through its
+   * {@code .complex(hop)} chain (for a dotted {@code ListElementCode}), places the leaf via
+   * {@code .optional/.mandatory/.readonly(Type::getMember)}, carries its event-scoped
+   * {@code .eventLabel/.eventHint/.fieldShowCondition/.pageId}, then pops every hop it opened with
+   * {@code .done()} so the next member starts back at the root complex level. The enclosing block's
+   * own {@code .done()} is emitted by the caller.
+   *
+   * <p>The columns these calls reproduce ({@code DisplayContext}, {@code ListElementCode},
+   * {@code EventElementLabel}, {@code EventHintText}, {@code FieldShowCondition}, {@code PageID}) are
+   * exactly those the linker leaves out of the companion graft; the row's {@code ID},
+   * {@code FieldDisplayOrder} and any exotic tail are grafted back over the generated rows (see
+   * {@code DefaultDefinitionLinker.buildEventToComplexTypesPassthrough}).
+   *
+   * @param group the resolved member overrides for one complex field on one event
+   * @param context the emit context (for the model package the generated complex types live in)
+   * @return the chained member-override calls
+   */
+  private CodeBlock complexMemberChains(EventComplexTypeGroup group, EmitContext context) {
+    CodeBlock.Builder cb = CodeBlock.builder();
+    for (EventComplexTypeGroup.Member member : group.getMembers()) {
+      for (EventComplexTypeGroup.Hop hop : member.getHops()) {
+        cb.add("\n    .complex($T::$L)",
+            typeName(hop.getDeclaringType(), context), hop.getGetter());
+      }
+      cb.add("\n    .$L($T::$L)", member.getContextMethod(),
+          typeName(member.getLeafType(), context), member.getLeafGetter());
+      if (notBlank(member.getShowCondition())) {
+        cb.add("\n    .fieldShowCondition($S)", member.getShowCondition());
+      }
+      if (notBlank(member.getEventLabel())) {
+        cb.add("\n    .eventLabel($S)", member.getEventLabel());
+      }
+      if (notBlank(member.getEventHint())) {
+        cb.add("\n    .eventHint($S)", member.getEventHint());
+      }
+      if (notBlank(member.getPageId())) {
+        cb.add("\n    .pageId($S)", member.getPageId());
+      }
+      // Pop each nested .complex(hop) opened for this member, back to the root complex level.
+      for (int i = 0; i < member.getHops().size(); i++) {
+        cb.add(".done()");
+      }
+    }
+    return cb.build();
+  }
+
+  /**
+   * The {@code ClassName} for an {@link EventComplexTypeGroup.TypeRef}: the fully-qualified SDK
+   * predefined type, or a generated complex type by simple name in the model package.
+   */
+  private ClassName typeName(EventComplexTypeGroup.TypeRef ref, EmitContext context) {
+    if (ref.getPredefinedFqn() != null) {
+      return ClassName.bestGuess(ref.getPredefinedFqn());
+    }
+    return ClassName.get(context.modelPackage(), ref.getSimpleName());
   }
 
   private CodeBlock buildStateTargeting(EventModel event, ClassName state, EmitContext context) {
