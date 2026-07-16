@@ -17,4 +17,7 @@ public class FieldExtrasCaseData {
 
   @CCD(label = "A no-summary field")
   private String noSummaryField;
+
+  @CCD(label = "A field carrying a positional default")
+  private String positionalDefaultField;
 }
