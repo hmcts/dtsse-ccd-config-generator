@@ -57,12 +57,13 @@ import uk.gov.hmcts.ccd.sdk.converter.model.gap.GapEntry;
  * are recorded in {@link Result#summaryNote()} for the converter report.
  *
  * <p><b>Common-prefix elision.</b> Service teams' roles are conventionally namespaced
- * ({@code caseworker-probate-caseadmin}, {@code caseworker-probate-systemupdate}, …); when
- * (almost) every role participating in a case type's access classes shares a hyphen-delimited
- * prefix, that prefix is redundant in every derived name and is stripped before tokenisation (see
- * {@link #computeCommonPrefix} and {@link #stripCommonPrefix}). Concretely: the longest
- * hyphen-token prefix shared by at least {@link #COMMON_PREFIX_MIN_SHARE} of the distinct roles
- * across all residual atoms is computed once per case type (in {@link #compute}) and removed from
+ * ({@code caseworker-probate-caseadmin}, {@code caseworker-probate-systemupdate}, …); when a
+ * simple majority of the roles participating in a case type's access classes shares a
+ * hyphen-delimited prefix, that prefix is redundant in every derived name and is stripped before
+ * tokenisation (see {@link #computeCommonPrefix} and {@link #stripCommonPrefix}). Concretely: the
+ * longest hyphen-token prefix shared by more than {@link #COMMON_PREFIX_MIN_SHARE} of the distinct
+ * roles across all residual atoms — provided at least {@link #MIN_PREFIX_ROLES} roles carry it —
+ * is computed once per case type (in {@link #compute}) and removed from
  * each role before it is turned into a name token — {@code caseworker-probate-caseadmin} becomes
  * {@code Caseadmin} rather than {@code CaseworkerProbateCaseadmin}. A role that has no other
  * remainder (it <em>is</em> the prefix exactly, e.g. {@code caseworker-probate}) keeps its last
@@ -76,10 +77,20 @@ final class AccessClassComputer {
   /**
    * The minimum share of distinct roles (participating in some case type's access classes) that
    * must share a hyphen-token prefix before it is considered case-type-wide "common" and elided
-   * from derived names. Chosen conservatively above half so a prefix used by only a slim majority
-   * (which could still carry information distinguishing the minority) is left alone.
+   * from derived names. A simple majority: real service teams' role namespaces (e.g. probate's
+   * 11/18 = 61%) commonly fall short of a supermajority while still being the dominant, redundant
+   * prefix for most roles — stripping is per-role (only prefix-carrying roles are touched, see
+   * {@link #stripCommonPrefix}), so a bare majority is enough to be safe and deterministic.
    */
-  static final double COMMON_PREFIX_MIN_SHARE = 0.8;
+  static final double COMMON_PREFIX_MIN_SHARE = 0.5;
+
+  /**
+   * The minimum number of roles that must carry the candidate prefix, on top of clearing
+   * {@link #COMMON_PREFIX_MIN_SHARE}, before it qualifies. Guards tiny case types (e.g. 2 of 3
+   * roles sharing a prefix) where "majority" is a coincidence of a small sample rather than a
+   * real namespace convention.
+   */
+  static final int MIN_PREFIX_ROLES = 3;
 
   /** A group must be used by at least this many fields to earn a name (else its atoms stand alone). */
   static final int MIN_GROUP_FIELDS = 3;
@@ -615,18 +626,18 @@ final class AccessClassComputer {
   }
 
   /**
-   * The longest hyphen-token prefix shared by at least {@link #COMMON_PREFIX_MIN_SHARE} of the
-   * given roles, as a token list (e.g. {@code ["caseworker", "probate"]}), or empty when no
-   * prefix clears the bar or fewer than {@link #MIN_ROLES_FOR_COMMON_PREFIX} distinct roles are
-   * given.
+   * The longest hyphen-token prefix shared by more than {@link #COMMON_PREFIX_MIN_SHARE} of the
+   * given roles (and by at least {@link #MIN_PREFIX_ROLES} of them), as a token list (e.g.
+   * {@code ["caseworker", "probate"]}), or empty when no prefix clears both bars or fewer than
+   * {@link #MIN_ROLES_FOR_COMMON_PREFIX} distinct roles are given.
    *
    * <p>Deterministic greedy extension: at each depth, the roles still matching the prefix built
    * so far are grouped by their next hyphen token; since the groups at a given depth partition
-   * those roles, at most one group can hold &ge;{@code COMMON_PREFIX_MIN_SHARE} (&gt; half) of the
-   * <em>original</em> role count, so the winner (if any) is unambiguous — no tie-break is needed.
-   * The prefix is extended by that token and the pass repeats on the (shrinking) matching subset;
-   * it stops as soon as no token's share clears the bar or every matching role is exhausted of
-   * tokens.
+   * those roles, at most one group can hold &gt;{@code COMMON_PREFIX_MIN_SHARE} (a strict
+   * majority) of the <em>original</em> role count, so the winner (if any) is unambiguous — no
+   * tie-break is needed. The prefix is extended by that token and the pass repeats on the
+   * (shrinking) matching subset; it stops as soon as no token's group clears both the share and
+   * minimum-count bars, or every matching role is exhausted of tokens.
    *
    * @param roles the distinct role IDs participating in some case type's access-class residuals
    * @return the shared prefix, as hyphen tokens (never null; empty when none applies)
@@ -660,7 +671,9 @@ final class AccessClassComputer {
           best = entry;
         }
       }
-      if (best == null || (double) best.getValue().size() / total < COMMON_PREFIX_MIN_SHARE) {
+      if (best == null
+          || best.getValue().size() < MIN_PREFIX_ROLES
+          || (double) best.getValue().size() / total <= COMMON_PREFIX_MIN_SHARE) {
         break;
       }
       prefix.add(best.getKey());

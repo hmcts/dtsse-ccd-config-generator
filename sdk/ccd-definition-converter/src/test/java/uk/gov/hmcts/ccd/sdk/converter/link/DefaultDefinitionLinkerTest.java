@@ -817,7 +817,8 @@ class DefaultDefinitionLinkerTest {
   void commonRolePrefixIsElidedFromAtomNames() {
     GapCollector gaps = new GapCollector();
     // Every role sharing the "caseworker-probate-" prefix carries no information (maintainer
-    // directive): the derived atom names should drop it and keep only each role's remainder.
+    // directive): the derived atom names should drop it and keep only each role's remainder. A
+    // third prefixed role clears the MIN_PREFIX_ROLES floor alongside the >50% share bar.
     DefinitionIr ir = minimal("Minimal")
         .row(SheetName.CASE_FIELD,
             cols("CaseTypeID", "Minimal", "ID", "a", "Label", "A", "FieldType", "Text"))
@@ -827,15 +828,18 @@ class DefaultDefinitionLinkerTest {
         .row(SheetName.AUTHORISATION_CASE_FIELD,
             cols("CaseTypeID", "Minimal", "CaseFieldID", "a", "UserRole",
                 "caseworker-probate-systemupdate", "CRUD", "CU"))
+        .row(SheetName.AUTHORISATION_CASE_FIELD,
+            cols("CaseTypeID", "Minimal", "CaseFieldID", "a", "UserRole",
+                "caseworker-probate-caseadmin", "CRUD", "R"))
         .build();
 
     CaseTypeModel model = linker.link(ir, options("Minimal"), gaps);
 
-    // Both maintainer-example shapes resolve to short, prefix-free names: no "CaseworkerProbate"
-    // token survives in either atom.
+    // Every maintainer-example shape resolves to a short, prefix-free name: no "CaseworkerProbate"
+    // token survives in any atom.
     assertThat(model.getAccessClasses())
         .extracting(AccessClassModel::getClassName)
-        .containsExactlyInAnyOrder("RparobotCudAccess", "SystemupdateCuAccess");
+        .containsExactlyInAnyOrder("RparobotCudAccess", "SystemupdateCuAccess", "CaseadminRAccess");
   }
 
   @Test
@@ -843,7 +847,8 @@ class DefaultDefinitionLinkerTest {
     GapCollector gaps = new GapCollector();
     // "caseworker-probate" IS the shared prefix "caseworker-probate" exactly (no remainder), so
     // per the documented rule it keeps its last hyphen token ("probate") rather than collapsing
-    // to an empty name.
+    // to an empty name. A third prefixed role clears the MIN_PREFIX_ROLES floor alongside the
+    // >50% share bar.
     DefinitionIr ir = minimal("Minimal")
         .row(SheetName.CASE_FIELD,
             cols("CaseTypeID", "Minimal", "ID", "a", "Label", "A", "FieldType", "Text"))
@@ -853,20 +858,24 @@ class DefaultDefinitionLinkerTest {
         .row(SheetName.AUTHORISATION_CASE_FIELD,
             cols("CaseTypeID", "Minimal", "CaseFieldID", "a", "UserRole",
                 "caseworker-probate-caseadmin", "CRUD", "CRU"))
+        .row(SheetName.AUTHORISATION_CASE_FIELD,
+            cols("CaseTypeID", "Minimal", "CaseFieldID", "a", "UserRole",
+                "caseworker-probate-systemupdate", "CRUD", "CU"))
         .build();
 
     CaseTypeModel model = linker.link(ir, options("Minimal"), gaps);
 
     assertThat(model.getAccessClasses())
         .extracting(AccessClassModel::getClassName)
-        .containsExactlyInAnyOrder("ProbateRAccess", "CaseadminCruAccess");
+        .containsExactlyInAnyOrder("ProbateRAccess", "CaseadminCruAccess", "SystemupdateCuAccess");
   }
 
   @Test
   void mixedPrefixCaseTypeStripsNothingBelowTheShareBar() {
     GapCollector gaps = new GapCollector();
-    // Only 1 of 3 distinct roles shares "caseworker-probate-"; that is below the 80% bar, so no
-    // prefix is common and every role keeps its full token form.
+    // Only 1 of 3 distinct roles shares "caseworker-probate-"; that is below both the >50% share
+    // bar and the minimum-3-roles bar, so no prefix is common and every role keeps its full token
+    // form.
     DefinitionIr ir = minimal("Minimal")
         .row(SheetName.CASE_FIELD,
             cols("CaseTypeID", "Minimal", "ID", "a", "Label", "A", "FieldType", "Text"))
@@ -888,9 +897,56 @@ class DefaultDefinitionLinkerTest {
   }
 
   @Test
+  void simpleMajorityPrefixCaseTypeStripsTheMajorityRoles() {
+    GapCollector gaps = new GapCollector();
+    // Probate-shaped: 11 of 18 distinct roles (61%) carry "caseworker-probate-" — a simple
+    // majority but below a supermajority. That still clears the >50% bar (and the minimum-3-roles
+    // bar), so the 11 prefixed roles are stripped to their remainder while the 7 non-prefixed
+    // roles are left untouched. One role per field (distinct CRUD) so every residual stays within
+    // MAX_CLASSES_PER_FIELD and is named as a standalone atom rather than a dedicated fallback.
+    String[] prefixed = {
+        "administrationteam", "approver", "caa", "systemupdate", "issuinganddebugadmin",
+        "solicitor", "poarpasenior", "poarpaadmin", "exceptaide", "grantaide", "superuser",
+    };
+    String[] unprefixed = {
+        "citizen", "letteredexecutor", "unletteredexecutor", "solicitorora",
+        "caseworker-divorce-caseadmin", "caseworker-divorce-solicitor", "iac-legalrep-solicitor",
+    };
+    var builder = minimal("Minimal");
+    int i = 0;
+    for (String role : prefixed) {
+      String fieldId = "f" + (i++);
+      builder.row(SheetName.CASE_FIELD,
+              cols("CaseTypeID", "Minimal", "ID", fieldId, "Label", fieldId, "FieldType", "Text"))
+          .row(SheetName.AUTHORISATION_CASE_FIELD,
+              cols("CaseTypeID", "Minimal", "CaseFieldID", fieldId, "UserRole",
+                  "caseworker-probate-" + role, "CRUD", "R"));
+    }
+    for (String role : unprefixed) {
+      String fieldId = "f" + (i++);
+      builder.row(SheetName.CASE_FIELD,
+              cols("CaseTypeID", "Minimal", "ID", fieldId, "Label", fieldId, "FieldType", "Text"))
+          .row(SheetName.AUTHORISATION_CASE_FIELD,
+              cols("CaseTypeID", "Minimal", "CaseFieldID", fieldId, "UserRole", role, "CRUD", "R"));
+    }
+
+    CaseTypeModel model = linker.link(builder.build(), options("Minimal"), gaps);
+
+    List<String> names = model.getAccessClasses().stream()
+        .map(AccessClassModel::getClassName).toList();
+    // Prefixed roles: stripped, no "CaseworkerProbate" token survives.
+    assertThat(names).noneMatch(n -> n.contains("CaseworkerProbate"));
+    assertThat(names).contains("ApproverRAccess", "CaaRAccess", "SystemupdateRAccess");
+    // Roles outside the prefix (including other case types' full namespaces) are untouched.
+    assertThat(names).contains(
+        "CitizenRAccess", "CaseworkerDivorceCaseadminRAccess", "IacLegalrepSolicitorRAccess");
+  }
+
+  @Test
   void commonPrefixDerivationIsDeterministicAcrossRuns() {
     // Same input, run twice: the derived (prefix-stripped) names must match exactly, since the
-    // scheme has no randomness or hash-map-ordering dependence.
+    // scheme has no randomness or hash-map-ordering dependence. A third prefixed role clears the
+    // MIN_PREFIX_ROLES floor alongside the >50% share bar.
     DefinitionIr ir = minimal("Minimal")
         .row(SheetName.CASE_FIELD,
             cols("CaseTypeID", "Minimal", "ID", "a", "Label", "A", "FieldType", "Text"))
@@ -900,6 +956,9 @@ class DefaultDefinitionLinkerTest {
         .row(SheetName.AUTHORISATION_CASE_FIELD,
             cols("CaseTypeID", "Minimal", "CaseFieldID", "a", "UserRole",
                 "caseworker-probate-systemupdate", "CRUD", "CU"))
+        .row(SheetName.AUTHORISATION_CASE_FIELD,
+            cols("CaseTypeID", "Minimal", "CaseFieldID", "a", "UserRole",
+                "caseworker-probate-caseadmin", "CRUD", "R"))
         .build();
 
     CaseTypeModel first = linker.link(ir, options("Minimal"), new GapCollector());
@@ -912,7 +971,7 @@ class DefaultDefinitionLinkerTest {
     assertThat(firstNames).isEqualTo(secondNames);
     assertThat(first.getAccessClasses())
         .extracting(AccessClassModel::getClassName)
-        .containsExactlyInAnyOrder("RparobotCudAccess", "SystemupdateCuAccess");
+        .containsExactlyInAnyOrder("RparobotCudAccess", "SystemupdateCuAccess", "CaseadminRAccess");
   }
 
   @Test
