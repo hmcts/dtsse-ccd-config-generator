@@ -50,6 +50,3 @@ Note that this is a tightening of CCD's current implementation which allows mult
 CCD TTL increments update both `data.TTL.SystemTTL` and `case_data.resolved_ttl` in the same locked transaction. Because the
 JSON blob changes, its optimistic-lock version advances; a concurrent event using the previous version is rejected in full
 with HTTP 409. `case_revision` also advances and prevents out-of-order responses from restoring an older CCD pointer TTL.
-
-A genuine `resolved_ttl`-only update does not invalidate the unchanged blob version: it is serialised and the last
-committed value wins.
