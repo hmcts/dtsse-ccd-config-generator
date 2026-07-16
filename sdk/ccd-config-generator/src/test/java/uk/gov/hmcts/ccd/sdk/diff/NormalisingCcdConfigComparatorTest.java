@@ -886,6 +886,61 @@ public class NormalisingCcdConfigComparatorTest {
         assertThat(NormalisingCcdConfigComparator.compare(expected, actual).matches()).isFalse();
     }
 
+    // ---- CONDITIONAL_POST_STATE ----
+
+    @Test
+    public void conditionalPostStateCollapsingToPrimaryIsForgiven() {
+        // Expected carries a conditional grammar state(cond):priority;fallback; the SDK emits only
+        // the first token's primary state. The accepted-semantic-difference rule forgives it.
+        Map<String, List<Map<String, Object>>> expected = sheets("CaseEvent",
+            rows(row("ID", "startAppeal", "PostConditionState",
+                "appealStartedByAdmin(isAdmin=\"Yes\"):2;appealStarted")));
+        Map<String, List<Map<String, Object>>> actual = sheets("CaseEvent",
+            rows(row("ID", "startAppeal", "PostConditionState", "appealStartedByAdmin")));
+
+        ComparisonResult result = NormalisingCcdConfigComparator.compare(expected, actual);
+
+        assertThat(result.matches()).as(result.report()).isTrue();
+        assertThat(result.getAppliedRules())
+            .anySatisfy(rule -> assertThat(rule).startsWith("CONDITIONAL_POST_STATE"));
+    }
+
+    @Test
+    public void multiTargetPostStateWithoutConditionCollapsingToFirstIsForgiven() {
+        // A ;-separated multi-target with no parens: primary is the first token.
+        Map<String, List<Map<String, Object>>> expected = sheets("CaseEvent",
+            rows(row("ID", "decide", "PostConditionState", "Accepted;Rejected")));
+        Map<String, List<Map<String, Object>>> actual = sheets("CaseEvent",
+            rows(row("ID", "decide", "PostConditionState", "Accepted")));
+
+        ComparisonResult result = NormalisingCcdConfigComparator.compare(expected, actual);
+
+        assertThat(result.matches()).as(result.report()).isTrue();
+    }
+
+    @Test
+    public void conditionalPostStateWhosePrimaryDisagreesStillFails() {
+        // If the generated primary is NOT the first token's state, the collapse is not the accepted
+        // one and the diff must still fail (guards against a generator regression).
+        Map<String, List<Map<String, Object>>> expected = sheets("CaseEvent",
+            rows(row("ID", "decide", "PostConditionState", "Accepted(cond):1;Rejected")));
+        Map<String, List<Map<String, Object>>> actual = sheets("CaseEvent",
+            rows(row("ID", "decide", "PostConditionState", "Rejected")));
+
+        assertThat(NormalisingCcdConfigComparator.compare(expected, actual).matches()).isFalse();
+    }
+
+    @Test
+    public void reverseShapeGeneratedConditionalNotInInputStillFails() {
+        // The rule never touches the actual side: a plain expected vs a conditional actual must fail.
+        Map<String, List<Map<String, Object>>> expected = sheets("CaseEvent",
+            rows(row("ID", "decide", "PostConditionState", "Accepted")));
+        Map<String, List<Map<String, Object>>> actual = sheets("CaseEvent",
+            rows(row("ID", "decide", "PostConditionState", "Accepted(cond):1;Rejected")));
+
+        assertThat(NormalisingCcdConfigComparator.compare(expected, actual).matches()).isFalse();
+    }
+
     // ---- PRE_CONDITION_STATE_ORDER ----
 
     @Test
@@ -1503,6 +1558,64 @@ public class NormalisingCcdConfigComparatorTest {
             rows(row("CaseTypeID", "X", "AccessProfile", "caseworker", "CRUD", "")));
         Map<String, List<Map<String, Object>>> actual = sheets("AuthorisationCaseType",
             rows(row("CaseTypeID", "X", "AccessProfile", "caseworker", "CRUD", "R")));
+
+        assertThat(NormalisingCcdConfigComparator.compare(expected, actual).matches()).isFalse();
+    }
+
+    // ---- CRUD_LETTER_ORDER ----
+
+    @Test
+    public void crudLetterOrderDifferenceIsForgiven() {
+        // The importer parses CRUD as an order-independent set (AuthorisationParser#parseCrud uses
+        // String.contains per letter), so CUR and CRU grant identically.
+        Map<String, List<Map<String, Object>>> expected = sheets("AuthorisationCaseField",
+            rows(row("CaseFieldID", "f", "AccessProfile", "caseworker", "CRUD", "CUR")));
+        Map<String, List<Map<String, Object>>> actual = sheets("AuthorisationCaseField",
+            rows(row("CaseFieldID", "f", "AccessProfile", "caseworker", "CRUD", "CRU")));
+
+        ComparisonResult result = NormalisingCcdConfigComparator.compare(expected, actual);
+
+        assertThat(result.matches()).as(result.report()).isTrue();
+        assertThat(result.getAppliedRules())
+            .anySatisfy(rule -> assertThat(rule).startsWith("CRUD_LETTER_ORDER"));
+    }
+
+    @Test
+    public void crudLetterOrderIsCaseInsensitive() {
+        // The importer upper-cases before membership testing, so lower-case letters canonicalise too.
+        Map<String, List<Map<String, Object>>> expected = sheets("AuthorisationCaseEvent",
+            rows(row("CaseEventID", "e", "AccessProfile", "caseworker", "CRUD", "ucr")));
+        Map<String, List<Map<String, Object>>> actual = sheets("AuthorisationCaseEvent",
+            rows(row("CaseEventID", "e", "AccessProfile", "caseworker", "CRUD", "CRU")));
+
+        assertThat(NormalisingCcdConfigComparator.compare(expected, actual).matches())
+            .as("case-insensitive CRUD canonicalisation").isTrue();
+    }
+
+    @Test
+    public void crudLetterOrderKeepsAuthorisationComplexTypeRowsMatched() {
+        // CRUD is part of the AuthorisationComplexType primary key, so canonicalising in
+        // normaliseSheets (before matching) is what keeps an order-only difference from splitting
+        // the row into a no-match/unexpected pair.
+        Map<String, List<Map<String, Object>>> expected = sheets("AuthorisationComplexType",
+            rows(row("CaseFieldID", "f", "ListElementCode", "m", "AccessProfile", "caseworker",
+                "CRUD", "CUR")));
+        Map<String, List<Map<String, Object>>> actual = sheets("AuthorisationComplexType",
+            rows(row("CaseFieldID", "f", "ListElementCode", "m", "AccessProfile", "caseworker",
+                "CRUD", "CRU")));
+
+        ComparisonResult result = NormalisingCcdConfigComparator.compare(expected, actual);
+
+        assertThat(result.matches()).as(result.report()).isTrue();
+    }
+
+    @Test
+    public void genuineCrudSetDifferenceStillFails() {
+        // Different letters (not an anagram) sort to different strings and must still fail.
+        Map<String, List<Map<String, Object>>> expected = sheets("AuthorisationCaseType",
+            rows(row("CaseTypeID", "X", "AccessProfile", "caseworker", "CRUD", "D")));
+        Map<String, List<Map<String, Object>>> actual = sheets("AuthorisationCaseType",
+            rows(row("CaseTypeID", "X", "AccessProfile", "caseworker", "CRUD", "CRUD")));
 
         assertThat(NormalisingCcdConfigComparator.compare(expected, actual).matches()).isFalse();
     }

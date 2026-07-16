@@ -22,6 +22,7 @@ import uk.gov.hmcts.ccd.sdk.converter.model.PageModel;
 import uk.gov.hmcts.ccd.sdk.converter.model.PassthroughSheet;
 import uk.gov.hmcts.ccd.sdk.converter.model.RoleModel;
 import uk.gov.hmcts.ccd.sdk.converter.model.StateModel;
+import uk.gov.hmcts.ccd.sdk.converter.model.gap.GapAction;
 import uk.gov.hmcts.ccd.sdk.converter.model.gap.GapCategory;
 import uk.gov.hmcts.ccd.sdk.converter.model.gap.GapCollector;
 import uk.gov.hmcts.ccd.sdk.converter.model.gap.GapEntry;
@@ -667,6 +668,142 @@ class DefaultDefinitionLinkerTest {
 
     assertThat(model.getSearchCriteria()).hasSize(1);
     assertThat(model.getCategories()).hasSize(1);
+  }
+
+  @Test
+  void unsupportedWholeSheetsFailAsBlockingGapsWithNoPassthrough() {
+    // SearchAlias/UserProfile/AccessType/AccessTypeRole have no SDK API; they are no longer carried
+    // as raw-JSON passthrough — each becomes a blocking OMITTED_FAIL gap so a definition carrying one
+    // fails conversion unless --allow-gaps.
+    GapCollector gaps = new GapCollector();
+    DefinitionIr ir = minimal("Minimal")
+        .row(SheetName.SEARCH_ALIAS, cols("CaseTypeID", "Minimal", "SearchAliasFieldID", "ref"))
+        .row(SheetName.USER_PROFILE, cols("UserIDAMId", "a@b.com", "WorkBasketDefaultState", "Open"))
+        .row(SheetName.ACCESS_TYPE, cols("CaseTypeID", "Minimal", "AccessTypeID", "at"))
+        .row(SheetName.ACCESS_TYPE_ROLE,
+            cols("CaseTypeID", "Minimal", "AccessTypeID", "at", "RoleName", "r"))
+        .build();
+
+    CaseTypeModel model = linker.link(ir, options("Minimal"), gaps);
+
+    assertThat(model.getPassthroughSheets())
+        .noneMatch(p -> p.getRelativePath().matches(
+            "SearchAlias\\.json|UserProfile\\.json|AccessType\\.json|AccessTypeRole\\.json"));
+    assertThat(gaps.hasBlockingGaps()).isTrue();
+    for (String sheet : List.of("SearchAlias", "UserProfile", "AccessType", "AccessTypeRole")) {
+      assertThat(gaps.getEntries())
+          .as("OMITTED_FAIL gap for " + sheet)
+          .anyMatch(g -> sheet.equals(g.getSheet())
+              && g.getAction() == GapAction.OMITTED_FAIL
+              && g.getCategory() == GapCategory.UNSUPPORTED_SHEET);
+    }
+  }
+
+  @Test
+  void absentUnsupportedSheetsRecordNoGap() {
+    GapCollector gaps = new GapCollector();
+    DefinitionIr ir = minimal("Minimal").build();
+
+    linker.link(ir, options("Minimal"), gaps);
+
+    assertThat(gaps.hasBlockingGaps()).isFalse();
+  }
+
+  @Test
+  void mixedCaseRolesJurisdictionFailsAsBlockingGapWithNoGraft() {
+    // emitCaseRoleJurisdiction() is all-or-nothing: when only SOME CaseRoles rows carry a
+    // JurisdictionID it can't be used, and the mixed usage is now a blocking OMITTED_FAIL gap rather
+    // than a per-row column graft.
+    GapCollector gaps = new GapCollector();
+    DefinitionIr ir = minimal("Minimal")
+        .row(SheetName.CASE_ROLE,
+            cols("CaseTypeID", "Minimal", "ID", "[CLAIMANT]", "JurisdictionID", "TEST"))
+        .row(SheetName.CASE_ROLE, cols("CaseTypeID", "Minimal", "ID", "[DEFENDANT]"))
+        .build();
+
+    CaseTypeModel model = linker.link(ir, options("Minimal"), gaps);
+
+    assertThat(model.isEmitCaseRoleJurisdiction()).isFalse();
+    assertThat(model.getPassthroughSheets())
+        .noneMatch(p -> "CaseRoles.json".equals(p.getRelativePath()));
+    assertThat(gaps.getEntries())
+        .anyMatch(g -> "CaseRoles".equals(g.getSheet())
+            && g.getAction() == GapAction.OMITTED_FAIL);
+  }
+
+  @Test
+  void allRowsCaseRolesJurisdictionStillEmitsNativelyWithNoGap() {
+    // When EVERY CaseRoles row carries a JurisdictionID the native switch reproduces it and no gap
+    // is recorded — the deletion of the mixed-usage graft must not disturb this path.
+    GapCollector gaps = new GapCollector();
+    DefinitionIr ir = minimal("Minimal")
+        .row(SheetName.CASE_ROLE,
+            cols("CaseTypeID", "Minimal", "ID", "[CLAIMANT]", "JurisdictionID", "TEST"))
+        .row(SheetName.CASE_ROLE,
+            cols("CaseTypeID", "Minimal", "ID", "[DEFENDANT]", "JurisdictionID", "TEST"))
+        .build();
+
+    CaseTypeModel model = linker.link(ir, options("Minimal"), gaps);
+
+    assertThat(model.isEmitCaseRoleJurisdiction()).isTrue();
+    assertThat(gaps.getEntries())
+        .noneMatch(g -> "CaseRoles".equals(g.getSheet()));
+  }
+
+  @Test
+  void unknownFieldTypeFailsAsBlockingGapWithNoGraft() {
+    // A type with no Java carrier that is NOT a real FieldType constant can only be generated as
+    // String → FieldType=Text. It is no longer grafted back; it becomes a blocking OMITTED_FAIL gap.
+    GapCollector gaps = new GapCollector();
+    DefinitionIr ir = minimal("Minimal")
+        .row(SheetName.CASE_FIELD,
+            cols("CaseTypeID", "Minimal", "ID", "queries", "Label", "Queries",
+                "FieldType", "CaseQueriesCollection"))
+        .build();
+
+    CaseTypeModel model = linker.link(ir, options("Minimal"), gaps);
+
+    // The field is generated as String (the SDK cannot express the type); no CaseField overwrite
+    // graft is produced (attachAccessClasses rebuilds the model fields without the unknownType flag,
+    // so the gap — not the field flag — is the observable signal).
+    assertThat(model.getCaseFields()).singleElement()
+        .satisfies(f -> assertThat(f.getJavaType()).isEqualTo("String"));
+    assertThat(model.getPassthroughSheets())
+        .noneMatch(p -> "CaseField.json".equals(p.getRelativePath()));
+    assertThat(gaps.hasBlockingGaps()).isTrue();
+    assertThat(gaps.getEntries())
+        .anyMatch(g -> "CaseField".equals(g.getSheet())
+            && "FieldType".equals(g.getColumn())
+            && "CaseQueriesCollection".equals(g.getValue())
+            && g.getAction() == GapAction.OMITTED_FAIL);
+  }
+
+  @Test
+  void conditionalPostStateCollapsesToPrimaryAndRecordsConditionalCodeGap() {
+    // A conditional/multi post-state is no longer grafted: the event ends in the primary state and
+    // the loss is recorded as a CONDITIONAL_CODE gap (team must reimplement via aboutToSubmit).
+    GapCollector gaps = new GapCollector();
+    DefinitionIr ir = minimal("Minimal")
+        .row(SheetName.STATE, cols("CaseTypeID", "Minimal", "ID", "started", "Name", "Started"))
+        .row(SheetName.CASE_EVENT,
+            cols("CaseTypeID", "Minimal", "ID", "startAppeal", "Name", "Start",
+                "PreConditionState(s)", "", "PostConditionState",
+                "started(isAdmin=\"Yes\"):2;other"))
+        .build();
+
+    CaseTypeModel model = linker.link(ir, options("Minimal"), gaps);
+
+    EventModel event = model.getEvents().stream()
+        .filter(e -> "startAppeal".equals(e.getId())).findFirst().orElseThrow();
+    assertThat(event.getPostState()).isEqualTo("started");
+    // No PostConditionState overwrite graft is produced for the event.
+    assertThat(model.getPassthroughSheets())
+        .filteredOn(p -> "CaseEvent/startAppeal.json".equals(p.getRelativePath()))
+        .allSatisfy(p -> assertThat(p.getOverwriteColumns()).isEmpty());
+    assertThat(gaps.getEntries())
+        .anyMatch(g -> "CaseEvent".equals(g.getSheet())
+            && "PostConditionState".equals(g.getColumn())
+            && g.getAction() == GapAction.CONDITIONAL_CODE);
   }
 
   @Test

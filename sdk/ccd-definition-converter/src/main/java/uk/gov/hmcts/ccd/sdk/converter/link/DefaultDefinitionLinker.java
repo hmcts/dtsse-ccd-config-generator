@@ -175,15 +175,12 @@ public class DefaultDefinitionLinker implements DefinitionLinker {
     // SearchCasesResultFields role/useCase/ListElementCode/ResultsOrdering/DisplayContextParameter
     // are now all emitted via the SearchCases per-field lambda (see CoreConfigEmitter), so the sheet
     // needs no passthrough and no FieldShowCondition graft — buildSearchFieldPassthrough is retired.
-    passthroughSheets.addAll(
-        buildUnknownFieldTypePassthrough(ir, caseTypeId, caseFields, options));
-    // When only SOME CaseRoles rows carry a JurisdictionID the all-or-nothing generator switch
-    // cannot be used, so the column is grafted for those rows (a gap is recorded in
-    // allCaseRolesCarryJurisdiction); when every row carries it the switch is on and nothing is
-    // grafted.
-    if (!emitCaseRoleJurisdiction) {
-      passthroughSheets.addAll(buildCaseRoleColumnPassthrough(ir, caseTypeId, options));
-    }
+    // A genuinely-unknown FieldType (no Java carrier, not a real FieldType constant) is no longer
+    // grafted back over the SDK's String→Text inference: it now fails as an OMITTED_FAIL gap (recorded
+    // in buildFieldModel). When SOME but not all CaseRoles rows carry a JurisdictionID the
+    // all-or-nothing generator switch cannot be used, and that mixed usage is likewise now an
+    // OMITTED_FAIL gap (recorded in allCaseRolesCarryJurisdiction) rather than a per-row column graft.
+    // When every row carries it the native emitCaseRoleJurisdiction() switch reproduces it.
 
     return CaseTypeModel.builder()
         .caseTypeId(caseTypeId)
@@ -332,18 +329,13 @@ public class DefaultDefinitionLinker implements DefinitionLinker {
    * report writer writes (not merges) each sheet to its relative path, so two sheets on the same
    * {@code CaseEvent/<id>.json} would clobber one another.
    *
-   * <p>Two mechanisms combine on the one sheet:
-   * <ul>
-   *   <li><b>Overwrite</b> — a conditional or multi-target {@code PostConditionState} (the SDK's
-   *       {@code EventBuilder} models a single post-state, so the generator emits only the primary
-   *       state; a value such as {@code appealStartedByAdmin(isAdmin="Yes"):2;appealStarted} would
-   *       otherwise be lost). Named in {@code overwriteColumns} to replace the SDK's primary-only
-   *       value. Plain single-state values (which the SDK reproduces) are skipped.</li>
-   *   <li><b>Additive</b> — {@code SignificantEvent} and every callback URL / retry column
-   *       ({@link #CASE_EVENT_ADDITIVE_GRAFT_COLUMNS}), copied raw (JSON type and
-   *       {@code ${CCD_DEF_*}} placeholders preserved); the generator emits none of these, so the
-   *       additive graft can never shadow a generated value.</li>
-   * </ul>
+   * <p>This is now a purely <b>additive</b> graft: the callback URL / retry columns
+   * ({@link #CASE_EVENT_ADDITIVE_GRAFT_COLUMNS}) are copied raw (JSON type and {@code ${CCD_DEF_*}}
+   * placeholders preserved); the generator emits none of these, so the graft can never shadow a
+   * generated value. A conditional or multi-target {@code PostConditionState} is no longer grafted:
+   * the SDK's {@code EventBuilder} models a single post-state, so the generator emits only the
+   * primary state and the maintainer accepts the collapse as a semantic difference (forgiven by the
+   * {@code CONDITIONAL_POST_STATE} comparator rule — see {@link #parsePostState}).
    *
    * @param ir the definition IR
    * @param caseTypeId the case type being converted
@@ -358,25 +350,18 @@ public class DefaultDefinitionLinker implements DefinitionLinker {
       emittedEvents.add(event.getId());
     }
     Map<SuffixTarget, Map<String, Object>> byTarget = new LinkedHashMap<>();
-    Map<SuffixTarget, Boolean> overwritePostState = new LinkedHashMap<>();
     for (SheetRow row : ir.rowsForCaseType(SheetName.CASE_EVENT, caseTypeId)) {
       String eventId = row.getString(Columns.ID).orElse(null);
       if (eventId == null || !emittedEvents.contains(eventId)) {
         continue;
       }
-      String suffix = OverlayResolver.suffixFor(row.getOverlayTags(), options);
-      SuffixTarget key = new SuffixTarget(suffix, eventId);
       Map<String, Object> out = new LinkedHashMap<>();
       out.put(Columns.ID, eventId);
 
-      // Conditional/multi-target PostConditionState: overwrite the SDK's primary-only value. A
-      // plain single state (no '(' and no ';') is emitted faithfully, and '*' is handled by
-      // PostConditionNoChange, so those are skipped.
-      String postState = row.getString(Columns.POST_CONDITION_STATE).orElse(null);
-      if (postState != null && (postState.contains("(") || postState.contains(";"))) {
-        out.put(Columns.POST_CONDITION_STATE, postState);
-        overwritePostState.put(key, Boolean.TRUE);
-      }
+      // A conditional/multi-target PostConditionState is no longer grafted back over the SDK's
+      // primary-only value: the maintainer accepts the collapse to the single primary state as a
+      // semantic difference (see parsePostState's gap and the CONDITIONAL_POST_STATE comparator
+      // rule). The generator emits the primary state and the comparator forgives it.
 
       // Additive columns (SignificantEvent, callback URLs, retries): copy raw, guarding on the
       // string form only to skip blank/absent cells. Placeholders are preserved verbatim.
@@ -390,18 +375,16 @@ public class DefaultDefinitionLinker implements DefinitionLinker {
       if (out.size() <= 1) {
         continue;
       }
-      byTarget.put(key, out);
+      String suffix = OverlayResolver.suffixFor(row.getOverlayTags(), options);
+      byTarget.put(new SuffixTarget(suffix, eventId), out);
     }
     List<PassthroughSheet> sheets = new ArrayList<>();
     for (Map.Entry<SuffixTarget, Map<String, Object>> entry : byTarget.entrySet()) {
       String suffix = entry.getKey().suffix();
       String eventId = entry.getKey().target();
-      List<String> overwriteColumns = Boolean.TRUE.equals(overwritePostState.get(entry.getKey()))
-          ? List.of(Columns.POST_CONDITION_STATE) : List.of();
       sheets.add(PassthroughSheet.builder()
           .relativePath("CaseEvent/" + eventId + ".json")
           .primaryKeys(List.of(Columns.ID))
-          .overwriteColumns(overwriteColumns)
           .overlaySuffix(suffix)
           .overlayCondition(OverlayResolver.conditionFor(suffix, options))
           .rows(List.of(entry.getValue()))
@@ -1144,10 +1127,12 @@ public class DefaultDefinitionLinker implements DefinitionLinker {
           .column(Columns.FIELD_TYPE)
           .value(fieldType)
           .category(GapCategory.UNSUPPORTED_VALUE)
-          .action(GapAction.PASSTHROUGH_COLUMN)
+          .action(GapAction.OMITTED_FAIL)
           .detail("FieldType '" + fieldType + "' is not an SDK FieldType constant, a generated "
-              + "complex type, or a predefined type; the field is generated as String and the "
-              + "original FieldType is passed through as raw JSON")
+              + "complex type, or a predefined type, so the field can only be generated as String "
+              + "(FieldType=Text) — the original type is not supported. Conversion fails unless "
+              + "--allow-gaps is set (which keeps the String inference). Add the type as an SDK "
+              + "FieldType constant or model it as a complex type to convert it faithfully.")
           .build());
     }
 
@@ -1341,8 +1326,13 @@ public class DefaultDefinitionLinker implements DefinitionLinker {
   /**
    * Parses the post-condition state, which shares the pre-state token grammar and may list
    * several conditional alternatives (e.g. {@code stateA(cond):2;stateB}). The SDK models a
-   * single post-state per event, so the first token is used and any alternatives are recorded
-   * as a gap for the migrating team.
+   * single post-state per event, so the first token's state ID is used as the post-state and any
+   * conditional alternatives are dropped — a maintainer-accepted semantic difference. The regenerated
+   * definition transitions only to the primary state; the data store's runtime first-match-wins
+   * evaluation of the conditional alternatives (CasePostStateService) is lost, so a team relying on
+   * it must reimplement the transition in an aboutToSubmit callback. The loss is recorded as a
+   * {@code CONDITIONAL_CODE} gap (the migrating team must add the callback) and forgiven on the
+   * round-trip by the {@code CONDITIONAL_POST_STATE} comparator rule.
    *
    * @param raw the raw PostConditionState value
    * @param eventId the owning event, for gap reporting
@@ -1366,10 +1356,12 @@ public class DefaultDefinitionLinker implements DefinitionLinker {
           .column(Columns.POST_CONDITION_STATE)
           .value(raw)
           .category(GapCategory.UNSUPPORTED_VALUE)
-          .action(GapAction.PASSTHROUGH_COLUMN)
+          .action(GapAction.CONDITIONAL_CODE)
           .detail("Conditional/multiple post-condition states are not expressible via the SDK's "
-              + "single post-state builder; using '" + primary + "' and passing the original "
-              + "PostConditionState through as raw JSON")
+              + "single post-state builder; the event ends in the primary state '" + primary
+              + "' and the conditional alternatives are dropped (an accepted semantic difference). "
+              + "Reimplement the runtime transition in an aboutToSubmit callback that returns "
+              + ".state(<computed state>).")
           .build());
     }
     return primary;
@@ -1530,106 +1522,6 @@ public class DefaultDefinitionLinker implements DefinitionLinker {
   }
 
   /**
-   * Grafts the original {@code FieldType}/{@code FieldTypeParameter} back onto {@code CaseField}
-   * rows whose input type the SDK has no Java carrier for (a CCD-platform complex type such as
-   * {@code JudicialUser}, {@code CaseQueriesCollection} or {@code CaseHistoryViewer}). Such a field
-   * is generated as {@code String}, so the generator writes {@code FieldType=Text}; an additive
-   * passthrough could not correct that, so {@code FieldType}/{@code FieldTypeParameter} are named in
-   * {@code overwriteColumns} to restore the input value. The generator writes one
-   * {@code CaseField.json} keyed on {@code ID}.
-   *
-   * @param ir the definition IR
-   * @param caseTypeId the case type being converted
-   * @param caseFields the built field models (carry the {@code unknownType} flag)
-   * @param options the conversion options (for overlay suffix resolution)
-   * @return the CaseField FieldType passthrough sheets, one per overlay suffix, or empty
-   */
-  private List<PassthroughSheet> buildUnknownFieldTypePassthrough(
-      DefinitionIr ir, String caseTypeId, List<FieldModel> caseFields, ConversionOptions options) {
-    Set<String> unknownIds = new LinkedHashSet<>();
-    for (FieldModel field : caseFields) {
-      if (field.isUnknownType()) {
-        unknownIds.add(field.getId());
-      }
-    }
-    if (unknownIds.isEmpty()) {
-      return List.of();
-    }
-    Map<String, List<Map<String, Object>>> bySuffix = new LinkedHashMap<>();
-    for (SheetRow row : ir.rowsForCaseType(SheetName.CASE_FIELD, caseTypeId)) {
-      String id = row.getString(Columns.ID).orElse(null);
-      if (id == null || !unknownIds.contains(id)) {
-        continue;
-      }
-      String fieldType = row.getString(Columns.FIELD_TYPE).orElse(null);
-      if (fieldType == null) {
-        continue;
-      }
-      Map<String, Object> out = new LinkedHashMap<>();
-      out.put(Columns.ID, id);
-      out.put(Columns.FIELD_TYPE, fieldType);
-      row.getString(Columns.FIELD_TYPE_PARAMETER)
-          .ifPresent(p -> out.put(Columns.FIELD_TYPE_PARAMETER, p));
-      String suffix = OverlayResolver.suffixFor(row.getOverlayTags(), options);
-      bySuffix.computeIfAbsent(suffix, k -> new ArrayList<>()).add(out);
-    }
-    List<PassthroughSheet> sheets = new ArrayList<>();
-    for (Map.Entry<String, List<Map<String, Object>>> entry : bySuffix.entrySet()) {
-      String suffix = entry.getKey();
-      sheets.add(PassthroughSheet.builder()
-          .relativePath("CaseField.json")
-          .primaryKeys(List.of(Columns.ID))
-          .overwriteColumns(List.of(Columns.FIELD_TYPE, Columns.FIELD_TYPE_PARAMETER))
-          .overlaySuffix(suffix)
-          .overlayCondition(OverlayResolver.conditionFor(suffix, options))
-          .rows(entry.getValue())
-          .build());
-    }
-    return sheets;
-  }
-
-  /**
-   * Grafts the {@code JurisdictionID} column back onto {@code CaseRoles} rows. The SDK's
-   * {@code CaseRoleGenerator} emits only {@code ID}/{@code Name}/{@code Description} (a case role's
-   * jurisdiction is always the case type's, so the model carries no per-role jurisdiction), whereas
-   * a hand-written {@code CaseRoles} row carries {@code JurisdictionID} explicitly. The column is
-   * grafted additively (the generator omits it) so the round-trip reproduces the input.
-   *
-   * @param ir the definition IR
-   * @param caseTypeId the case type being converted
-   * @param options the conversion options (for overlay suffix resolution)
-   * @return the CaseRoles column-passthrough sheets, one per overlay suffix, or empty
-   */
-  private List<PassthroughSheet> buildCaseRoleColumnPassthrough(
-      DefinitionIr ir, String caseTypeId, ConversionOptions options) {
-    Map<String, List<Map<String, Object>>> bySuffix = new LinkedHashMap<>();
-    for (SheetRow row : ir.rowsForCaseType(SheetName.CASE_ROLE, caseTypeId)) {
-      String id = row.getString(Columns.ID).orElse(null);
-      Optional<String> jurisdiction = row.getString(Columns.JURISDICTION_ID);
-      if (id == null || jurisdiction.isEmpty()) {
-        continue;
-      }
-      String suffix = OverlayResolver.suffixFor(row.getOverlayTags(), options);
-      Map<String, Object> out = new LinkedHashMap<>();
-      out.put(Columns.ID, id);
-      out.put(Columns.JURISDICTION_ID, jurisdiction.get());
-      bySuffix.computeIfAbsent(suffix, k -> new ArrayList<>()).add(out);
-    }
-    List<PassthroughSheet> sheets = new ArrayList<>();
-    for (Map.Entry<String, List<Map<String, Object>>> entry : bySuffix.entrySet()) {
-      String suffix = entry.getKey();
-      sheets.add(PassthroughSheet.builder()
-          .relativePath("CaseRoles.json")
-          .primaryKeys(List.of(Columns.ID))
-          .overlaySuffix(suffix)
-          .overlayCondition(OverlayResolver.conditionFor(suffix, options))
-          .rows(entry.getValue())
-          .build());
-    }
-    return sheets;
-  }
-
-  /**
    * The banner from the {@code Banner} sheet, or null when the input carries no banner. The importer
    * allows exactly one banner per jurisdiction (four columns), reproduced via
    * {@code ConfigBuilder.banner(enabled, description, url, urlText)} rather than passthrough.
@@ -1717,10 +1609,12 @@ public class DefaultDefinitionLinker implements DefinitionLinker {
         .column(Columns.JURISDICTION_ID)
         .value(withId + "/" + total)
         .category(GapCategory.UNSUPPORTED_VALUE)
-        .action(GapAction.PASSTHROUGH_COLUMN)
+        .action(GapAction.OMITTED_FAIL)
         .detail("Only " + withId + " of " + total + " CaseRoles rows carry a JurisdictionID;"
-            + " emitCaseRoleJurisdiction() is all-or-nothing, so the column is grafted per-row via"
-            + " passthrough instead")
+            + " emitCaseRoleJurisdiction() is all-or-nothing (it stamps every generated row), so"
+            + " mixed usage is not supported. Conversion fails unless --allow-gaps is set (which"
+            + " omits the per-row JurisdictionID). Give every CaseRoles row a JurisdictionID to"
+            + " convert it via the native switch.")
         .build());
     return false;
   }
@@ -2040,17 +1934,17 @@ public class DefaultDefinitionLinker implements DefinitionLinker {
 
   private List<PassthroughSheet> buildPassthroughSheets(
       DefinitionIr ir, ConversionOptions options, GapCollector gaps) {
-    List<PassthroughSheet> sheets = new ArrayList<>();
-    // Banner is now emitted via builder.banner(...) (see buildBanner); no whole-sheet passthrough.
-    addWholeSheetPassthrough(ir, SheetName.SEARCH_ALIAS, "SearchAlias.json",
-        List.of(Columns.SEARCH_ALIAS_ID), options, gaps, sheets);
-    addWholeSheetPassthrough(ir, SheetName.USER_PROFILE, "UserProfile.json",
-        List.of(Columns.USER_IDAM_ID), options, gaps, sheets);
-    addWholeSheetPassthrough(ir, SheetName.ACCESS_TYPE, "AccessType.json",
-        List.of(Columns.ACCESS_TYPE_ID), options, gaps, sheets);
-    addWholeSheetPassthrough(ir, SheetName.ACCESS_TYPE_ROLE, "AccessTypeRole.json",
-        List.of(Columns.ACCESS_TYPE_ID, Columns.ROLE_NAME), options, gaps, sheets);
-    return sheets;
+    // Banner is now emitted via builder.banner(...) (see buildBanner). The former whole-sheet
+    // passthroughs for SearchAlias/UserProfile/AccessType/AccessTypeRole are retired: the SDK has no
+    // API for any of them, and silently carrying them through as raw JSON hid a construct the
+    // migrated Java definition cannot actually express. A definition that carries one of these sheets
+    // now surfaces as a blocking OMITTED_FAIL gap instead (fails the conversion unless --allow-gaps),
+    // so the migrating team makes a conscious decision about it rather than inheriting invisible JSON.
+    failUnsupportedSheet(ir, SheetName.SEARCH_ALIAS, gaps);
+    failUnsupportedSheet(ir, SheetName.USER_PROFILE, gaps);
+    failUnsupportedSheet(ir, SheetName.ACCESS_TYPE, gaps);
+    failUnsupportedSheet(ir, SheetName.ACCESS_TYPE_ROLE, gaps);
+    return new ArrayList<>();
   }
 
   /**
@@ -2082,47 +1976,32 @@ public class DefaultDefinitionLinker implements DefinitionLinker {
     };
   }
 
-  private void addWholeSheetPassthrough(
-      DefinitionIr ir,
-      SheetName sheet,
-      String relativePath,
-      List<String> primaryKeys,
-      ConversionOptions options,
-      GapCollector gaps,
-      List<PassthroughSheet> into) {
+  /**
+   * Records a blocking {@link GapAction#OMITTED_FAIL} gap for a sheet the SDK cannot express and the
+   * converter no longer passes through ({@code SearchAlias}, {@code UserProfile}, {@code AccessType},
+   * {@code AccessTypeRole}). When the input carries the sheet, the conversion fails unless
+   * {@code --allow-gaps} is set; when the sheet is absent, nothing is recorded.
+   *
+   * @param ir the definition IR
+   * @param sheet the unsupported sheet
+   * @param gaps the gap collector
+   */
+  private void failUnsupportedSheet(DefinitionIr ir, SheetName sheet, GapCollector gaps) {
     if (!ir.hasSheet(sheet)) {
       return;
     }
-    Map<String, List<SheetRow>> bySuffix = new LinkedHashMap<>();
-    for (SheetRow row : ir.rows(sheet)) {
-      String suffix = OverlayResolver.suffixFor(row.getOverlayTags(), options);
-      bySuffix.computeIfAbsent(suffix, k -> new ArrayList<>()).add(row);
-    }
-    for (Map.Entry<String, List<SheetRow>> entry : bySuffix.entrySet()) {
-      String suffix = entry.getKey();
-      OverlayCondition condition = OverlayResolver.conditionFor(suffix, options);
-      List<Map<String, Object>> rows = new ArrayList<>();
-      for (SheetRow row : entry.getValue()) {
-        rows.add(new LinkedHashMap<>(row.getColumns()));
-      }
-      into.add(PassthroughSheet.builder()
-          .relativePath(relativePath)
-          .primaryKeys(primaryKeys)
-          .overlaySuffix(suffix)
-          .overlayCondition(condition)
-          .rows(rows)
-          .build());
-      gaps.add(GapEntry.builder()
-          .sheet(sheet.getName())
-          .rowKey(relativePath)
-          .column(null)
-          .value(null)
-          .category(GapCategory.UNSUPPORTED_SHEET)
-          .action(GapAction.PASSTHROUGH_ROW)
-          .detail("Sheet " + sheet.getName() + " has no config-generator equivalent; its "
-              + entry.getValue().size() + " rows are passed through as raw JSON")
-          .build());
-    }
+    int rowCount = ir.rows(sheet).size();
+    gaps.add(GapEntry.builder()
+        .sheet(sheet.getName())
+        .rowKey(sheet.getName())
+        .column(null)
+        .value(String.valueOf(rowCount))
+        .category(GapCategory.UNSUPPORTED_SHEET)
+        .action(GapAction.OMITTED_FAIL)
+        .detail("Sheet " + sheet.getName() + " has no config-generator equivalent and is not"
+            + " supported: its " + rowCount + " row(s) cannot be expressed as Java. Conversion"
+            + " fails unless --allow-gaps is set (which omits the sheet entirely).")
+        .build());
   }
 
   /**

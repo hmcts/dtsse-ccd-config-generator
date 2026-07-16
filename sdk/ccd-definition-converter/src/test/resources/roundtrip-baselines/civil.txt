@@ -1,6 +1,3 @@
-Sheet 'AuthorisationCaseField' row [specResponselistYourEvidenceList|CITIZEN-CLAIMANT-PROFILE] column 'CRUD': expected <CUR> but was <CRU>
-Sheet 'AuthorisationCaseField' row [specResponselistYourEvidenceList|CITIZEN-DEFENDANT-PROFILE] column 'CRUD': expected <CUR> but was <CRU>
-Sheet 'AuthorisationCaseField' row [specResponselistYourEvidenceList|caseworker-civil-solicitor] column 'CRUD': expected <CUR> but was <CRU>
 Sheet 'AuthorisationCaseType' row [caseworker-approver] column 'CRUD': expected <D> but was <CRUD>
 Sheet 'AuthorisationCaseType' row [caseworker-approver]: expected row has no match in actual: {CaseTypeID=CIVIL, CRUD=CRUD, AccessProfile=caseworker-approver}
 Sheet 'AuthorisationCaseType' row [caseworker-caa] column 'CRUD': expected <D> but was <CRUD>
@@ -67,10 +64,14 @@ Sheet 'CaseField' row [hwfFeeType] column 'Publish': expected <Y> but column is 
 Sheet 'CaseField' row [nextHearingDetails] column 'Publish': expected <Y> but column is missing in actual
 Sheet 'CaseField' row [preTranslationDocumentType] column 'Publish': expected <Y> but column is missing in actual
 Sheet 'CaseField' row [qmApplicantSolicitorQueries] column 'CRUD': expected <CRUD> but column is missing in actual
+Sheet 'CaseField' row [qmApplicantSolicitorQueries] column 'FieldType': expected <CaseQueriesCollection> but was <Text>
 Sheet 'CaseField' row [qmLatestQuery] column 'CRUD': expected <CRUD> but column is missing in actual
 Sheet 'CaseField' row [qmRespondentSolicitor1Queries] column 'CRUD': expected <CRUD> but column is missing in actual
+Sheet 'CaseField' row [qmRespondentSolicitor1Queries] column 'FieldType': expected <CaseQueriesCollection> but was <Text>
 Sheet 'CaseField' row [qmRespondentSolicitor2Queries] column 'CRUD': expected <CRUD> but column is missing in actual
+Sheet 'CaseField' row [qmRespondentSolicitor2Queries] column 'FieldType': expected <CaseQueriesCollection> but was <Text>
 Sheet 'CaseField' row [queries] column 'CRUD': expected <CRUD> but column is missing in actual
+Sheet 'CaseField' row [queries] column 'FieldType': expected <CaseQueriesCollection> but was <Text>
 Sheet 'CaseField' row [respondent1LiPFinancialDetails] column 'Publish': expected <Y> but column is missing in actual
 Sheet 'CaseField' row [respondent1LiPResponse] column 'Publish': expected <Y> but column is missing in actual
 Sheet 'CaseField' row [respondent1Represented] column 'Publish': expected <Y> but column is missing in actual
@@ -199,3 +200,6 @@ Sheet 'RoleToAccessProfiles' row [[RESPONDENTSOLICITORONE]]: expected row has no
 Sheet 'RoleToAccessProfiles' row [[RESPONDENTSOLICITORTWO]]: expected row has no match in actual: {RoleName=[RESPONDENTSOLICITORTWO], Authorisation=, CaseTypeID=CIVIL, AccessProfiles=RES-SOL-TWO-SPEC-PROFILE, ReadOnly=N, Disabled=N, CaseAccessCategories=SPEC_CLAIM}
 Sheet 'SearchCriteria' row [{CaseTypeID=CIVIL, LiveTo=, OtherCaseReference=legacyCaseReference}]: expected row has no match in actual: {LiveTo=, CaseTypeID=CIVIL, OtherCaseReference=legacyCaseReference}
 Sheet 'SearchCriteria' row [{CaseTypeID=CIVIL, OtherCaseReference=legacyCaseReference}]: unexpected row in actual: {CaseTypeID=CIVIL, OtherCaseReference=legacyCaseReference}
+Sheet 'UserProfile' row [{UserIDAMId=hmcts.civil+organisation.1.solicitor.1@gmail.com, WorkBasketDefaultCaseType=CIVIL, WorkBasketDefaultJurisdiction=CIVIL, WorkBasketDefaultState=AWAITING_RESPONDENT_ACKNOWLEDGEMENT}]: expected row has no match in actual: {UserIDAMId=hmcts.civil+organisation.1.solicitor.1@gmail.com, WorkBasketDefaultJurisdiction=CIVIL, WorkBasketDefaultCaseType=CIVIL, WorkBasketDefaultState=AWAITING_RESPONDENT_ACKNOWLEDGEMENT}
+Sheet 'UserProfile' row [{UserIDAMId=hmcts.civil+organisation.2.solicitor.1@gmail.com, WorkBasketDefaultCaseType=CIVIL, WorkBasketDefaultJurisdiction=CIVIL, WorkBasketDefaultState=AWAITING_RESPONDENT_ACKNOWLEDGEMENT}]: expected row has no match in actual: {UserIDAMId=hmcts.civil+organisation.2.solicitor.1@gmail.com, WorkBasketDefaultJurisdiction=CIVIL, WorkBasketDefaultCaseType=CIVIL, WorkBasketDefaultState=AWAITING_RESPONDENT_ACKNOWLEDGEMENT}
+Sheet 'UserProfile' row [{UserIDAMId=solicitor@example.com, WorkBasketDefaultCaseType=CIVIL, WorkBasketDefaultJurisdiction=CIVIL, WorkBasketDefaultState=AWAITING_RESPONDENT_ACKNOWLEDGEMENT}]: expected row has no match in actual: {UserIDAMId=solicitor@example.com, WorkBasketDefaultJurisdiction=CIVIL, WorkBasketDefaultCaseType=CIVIL, WorkBasketDefaultState=AWAITING_RESPONDENT_ACKNOWLEDGEMENT}

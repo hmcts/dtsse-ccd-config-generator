@@ -6,7 +6,7 @@ definition to Java, compiles it, runs the SDK's `generateCCDConfig`, and semanti
 regenerated definition against the original input.
 
 **Every construct the SDK can express round-trips byte-identically, modulo the enumerated gaps on
-this page.** Each gap is classified one of four ways:
+this page.** Each gap is classified one of five ways:
 
 - **Not semantic** — a provably-equivalent spelling difference; the importer treats both forms
   identically. Forgiven by a named comparator rule (each rule class carries the justification in
@@ -16,6 +16,10 @@ this page.** Each gap is classified one of four ways:
 - **Fixed with passthrough** — the SDK has no API for the construct, so the converter carries the
   input JSON through verbatim (`PassthroughMerger` after generation). These round-trip **exactly** —
   the "gap" is only that the construct lives as JSON, not Java.
+- **Not supported** — the SDK has no API for the construct and the converter no longer carries it
+  through: it records a blocking `OMITTED_FAIL` gap, so a definition carrying it **fails conversion**
+  unless `--allow-gaps` is set (which omits it). Surfacing the gap forces a conscious migration
+  decision rather than inheriting invisible JSON.
 - **Open** — unabsorbed residual diffs on the real fixtures; not accepted, each a named
   SDK-structural limitation or fixture-data finding awaiting a decision or fix.
 
@@ -30,6 +34,7 @@ this page.** Each gap is classified one of four ways:
 | `Text` ≡ `String` collection element type | Not semantic | `COLLECTION_ELEMENT_TYPE` | Import identically |
 | Generator-written CCD defaults vs omitted columns; importer-ignored metadata; whitespace-only labels | Not semantic | `DEFAULTS` | Only fires when the other side omits the column (also strips ordering columns → display-order row below) |
 | Empty-`CRUD` authorisation row ≡ absent row | Not semantic | `EMPTY_CRUD_AUTHORISATION` | Importer rejects blank `CRUD`; grants nothing |
+| `CRUD` letter order (`CUR` ≡ `CRU`) | Not semantic | `CRUD_LETTER_ORDER` | Importer parses `CRUD` as an order-independent set (`String.contains` per letter); a genuine set difference still fails |
 | `""`/`null` ≡ absent column | Not semantic | `EMPTY_STRING_ABSENT` | Importer treats all identically |
 | `Complex`+parameter ≡ direct type-ID spelling | Not semantic | `FIELD_TYPE_COMPLEX` | Same complex-type reference |
 | Whitespace on identifier columns | Not semantic | `IDENTIFIER_WHITESPACE` | Importer trims identifiers for lookups |
@@ -51,15 +56,15 @@ this page.** Each gap is classified one of four ways:
 | Surplus `⊆ {C,R}` grants on `Label`/`READONLY` fields | **Semantic, accepted** | `IMMUTABLE_FIELD_CR` | Display permission on data-free fields |
 | Uniform vestigial `AuthorisationCaseState LiveTo` (probate's `01/01/2020` on every row) | **Semantic, accepted** | `LIVE_TO_VESTIGIAL` | Dead sheet-wide end-of-life the SDK can't emit; per-row divergent `LiveTo` still fails ([detail](#3-uniform-vestigial-authorisationcasestate-liveto)) |
 | Display-order renumbering (`*DisplayOrder`/`PageColumnNumber` never compared, any sheet) | **Semantic, accepted** | `DEFAULTS` + `CASE_TYPE_TAB` strips | Relative order preserved by row order (FixedLists actively sorted); `PageColumnNumber=2` flattened |
-| SearchAlias sheet | Fixed with passthrough | whole-sheet | No SDK generator |
-| UserProfile sheet | Fixed with passthrough | whole-sheet | Per-user default worklists; no generator |
-| AccessType / AccessTypeRole sheets | Fixed with passthrough | whole-sheet | Org group-access config; no generator (and NOT deprecated — importer + data store consume them) |
+| SearchAlias sheet | **Not supported** | — | No SDK generator; fails conversion with an `OMITTED_FAIL` gap (unless `--allow-gaps`) |
+| UserProfile sheet | **Not supported** | — | Per-user default worklists; no generator; fails conversion with an `OMITTED_FAIL` gap (unless `--allow-gaps`) |
+| AccessType / AccessTypeRole sheets | **Not supported** | — | Org group-access config; no generator; fails conversion with an `OMITTED_FAIL` gap (unless `--allow-gaps`) |
 | EventToComplexTypes rows (incl. exotic tail `SecurityClassification`/`Publish`/`ShowSummaryChangeOption`) | Fixed with passthrough | row | Byte-identical round-trip (zero residuals). SDK now has `.complex(parent).<ctx>(member).eventLabel/.eventHint/.pageId` for hand-written Java, but re-deriving each row's dotted `ListElementCode` into nested member getters (incl. through predefined types) is pure risk for zero residual gain — kept as row passthrough |
 | Orphan / illegal-ID / predefined ComplexTypes; orphan-path FixedLists | Fixed with passthrough | row | Unreachable or non-Java-representable declarations |
-| Conditional / multi-target `PostConditionState` | Fixed with passthrough | overwrite-graft | Runtime honours `state(cond):priority` (JEXL, first-match-wins); `EventBuilder` models one post-state |
+| Conditional / multi-target `PostConditionState` | **Semantic, accepted** | `CONDITIONAL_POST_STATE` | Runtime honours `state(cond):priority` (JEXL, first-match-wins); `EventBuilder` models one post-state, so the SDK emits only the primary and the alternatives are dropped ([detail](#4-conditional--multi-target-postconditionstate-collapse)) |
 | Callback URLs + retries (all phases, incl. mid-event) | Fixed with passthrough | column-graft | Deliberate: no SDK callback wiring emitted; input URLs carried byte-exactly, `${CCD_DEF_*}` included, and compared exactly. This is now the *only* `CaseEventToFields` column graft |
-| CaseRoles `JurisdictionID` (mixed usage only) | Fixed with passthrough | column-graft | `emitCaseRoleJurisdiction()` is all-or-nothing; all-rows usage emits natively |
-| Unknown / custom `FieldType` (no Java carrier, not a `FieldType` constant) | Fixed with passthrough | overwrite-graft | Original type replaces the `String`-inferred `Text`. Now that `CaseHistoryViewer`/`WaysToPay`/`JudicialUser`/… are real `FieldType` constants they take the `@CCD(typeOverride)` Java path instead; only genuinely unknown types graft |
+| CaseRoles `JurisdictionID` (mixed usage only) | **Not supported** | — | `emitCaseRoleJurisdiction()` is all-or-nothing; all-rows usage emits natively, mixed usage fails conversion with an `OMITTED_FAIL` gap (unless `--allow-gaps`) |
+| Unknown / custom `FieldType` (no Java carrier, not a `FieldType` constant) | **Not supported** | — | `CaseHistoryViewer`/`WaysToPay`/`JudicialUser`/… are real `FieldType` constants taking the `@CCD(typeOverride)` Java path; a genuinely unknown type can only be inferred as `String`→`Text`, so it fails conversion with an `OMITTED_FAIL` gap (unless `--allow-gaps`) |
 | `CaseEventToFields` `DefaultValue`/`RetainHiddenValue`/`FieldShowCondition`/label/hint/DCP/`ShowSummaryContentOption`/`NullifyByDefault` | Generated Java | — | Emitted via the all-context fluent `FieldCollectionBuilder` setters (`.defaultValue`/`.retainHiddenValue`/`.fieldShowCondition`/`.caseEventFieldLabel`/`.caseEventFieldHint`/`.displayContextParameter`/`.showSummaryContentOption`/`.nullifyByDefault`) — graft retired |
 | `SearchCasesResultFields` role/`UseCase`/`ListElementCode`/`ResultsOrdering`/DCP | Generated Java | — | Emitted via `searchCasesFields().field(id, label, f -> …)`; passthrough + `FieldShowCondition` graft retired |
 | `PrintableDocumentsUrl` (CaseType), `CanSaveDraft` (CaseEvent) | Generated Java | — | Emitted via `builder.printableDocumentsUrl(...)` / `EventBuilder.canSaveDraft()` |
@@ -77,8 +82,9 @@ The rules live in
 and are applied by `NormalisingCcdConfigComparator` before a diff is judged a failure. Each rule
 class carries the full justification in javadoc plus tests proving it absorbs exactly its shape and
 still fails on real drift. Most are genuinely cosmetic; a few (`CASE_HISTORY`,
-`TAB_READ_INJECTION`) are really narrowly-scoped *semantic* concessions — flagged in their bullets and
-kin to the accepted differences in tier 2. One bullet each:
+`TAB_READ_INJECTION`, `CONDITIONAL_POST_STATE`, `LIVE_TO_VESTIGIAL`) are really narrowly-scoped
+*semantic* concessions — flagged in their bullets and kin to the accepted differences in tier 2. One
+bullet each:
 
 - **`ACCESS_CONTROL_EXPANSION`** — expands the `UserRoles[]` and `AccessControl[]` array shorthands
   on the `Authorisation*` sheets into the flat per-role rows `ccd-definition-processor` produces at
@@ -140,6 +146,14 @@ kin to the accepted differences in tier 2. One bullet each:
   concession, not a cosmetic one; see [accepted difference 2](#2-display-order-renumbering).
 - **`EMPTY_CRUD_AUTHORISATION`** — drops an authorisation row whose `CRUD` is empty; the importer
   rejects blank `CRUD`, so such a row grants nothing and equals an absent row.
+- **`CRUD_LETTER_ORDER`** — canonicalises the letter order of the `CRUD` column on the five
+  authorisation sheets (`AuthorisationCaseType`/`Field`/`Event`/`State`/`ComplexType`). The importer
+  parses `CRUD` as an order-independent, case-insensitive *set* — `AuthorisationParser#parseCrud`
+  (`ccd-definition-store-api`) sets each flag by `crud.toUpperCase().contains("C"/"R"/"U"/"D")` — so
+  `CUR` and `CRU` grant identically. Both sides are rewritten to canonical `C,R,U,D` order before
+  matching (it runs in `normaliseSheets` because `CRUD` is part of the `AuthorisationComplexType`
+  primary key). A genuine set difference — a letter present on one side and absent on the other —
+  sorts to a different string and still fails; a non-CRUD value is left untouched.
 - **`EMPTY_STRING_ABSENT`** — an empty string or JSON `null` on one side equals an absent column on
   the other (and mutually blank/null columns collapse); the importer treats all identically.
 - **`FIELD_TYPE_COMPLEX`** — `FieldType=Complex, FieldTypeParameter=<TypeId>` ≡ `FieldType=<TypeId>`
@@ -173,6 +187,13 @@ kin to the accepted differences in tier 2. One bullet each:
   inconsistency; only one fires) differs by side and would spuriously mismatch.
 - **`POST_CONDITION_NO_CHANGE`** — `PostConditionState=*` equals the event's single pre-state;
   "no change" and "ends in that same state" are the same runtime behaviour.
+- **`CONDITIONAL_POST_STATE`** — a **semantic, accepted** concession (not cosmetic; see
+  [accepted difference 4](#4-conditional--multi-target-postconditionstate-collapse)): forgives an
+  expected conditional/multi-target `PostConditionState` (`state(cond):priority`, or `;`-separated
+  alternatives) collapsing to the single primary state the SDK's `EventBuilder` emits. Fires only on
+  `CaseEvent`, only when the actual side equals the expression's primary state; the reverse shape and
+  a disagreeing primary still fail. The runtime conditional transition is genuinely lost — a migrating
+  team reimplements it via an `aboutToSubmit` callback.
 - **`PRE_CONDITION_STATE_ORDER`** — `PreConditionState(s)` is an unordered set; the generator sorts
   it, the importer doesn't care.
 - **`REDUNDANT_FIELD_TYPE_PARAMETER`** — drops a `FieldTypeParameter` the importer ignores on
@@ -298,6 +319,36 @@ generated side also emits is left in place and still fails — so a regression t
 end-of-life date cannot hide behind this rule. This absorbed ~92% of probate's former residual (its
 baseline fell from 442 lines to 34).
 
+### 4. Conditional / multi-target `PostConditionState` collapse (`CONDITIONAL_POST_STATE`)
+
+A CCD `PostConditionState` may be conditional or multi-target: `;`-separated entries, each
+`state(enablingCondition):priority`, with a bare state as the default (priority 99). **The data store
+honours these at runtime**: `CasePostStateService` prioritises the entries and
+`CasePostStateEvaluationService` evaluates each JEXL condition first-match-wins, falling back to the
+default (see `ccd-data-store-api`; the entities are imported and stored by
+`ccd-definition-store-api`'s `EventPostStateParser`). So `startAppeal` ending in
+`appealStartedByAdmin(isAdmin="Yes"):2;appealStarted` genuinely transitions to different states
+depending on the case data at submit time.
+
+The SDK's `EventBuilder`, however, models a single static post-state per event, so the converter
+emits only the **primary** state (the first token's state ID — `DefaultDefinitionLinker#parsePostState`)
+and drops the conditional alternatives. The maintainer accepts this collapse **knowingly**: the
+regenerated definition transitions only to the primary state, and the runtime branch is lost. The
+converter records a `CONDITIONAL_CODE` gap for each affected event, and the round-trip diff is
+forgiven by the `CONDITIONAL_POST_STATE` comparator rule — which fires **only** on `CaseEvent`,
+**only** when the expected value is genuinely conditional/multi, and **only** when the actual value
+equals that expression's primary state. The reverse shape (a conditional the generator invented) and
+a primary that disagrees both still fail, so a generator regression cannot hide behind it.
+
+*What to do after migration*: a team that relies on the runtime conditional transition must
+reimplement it in an `aboutToSubmit` callback that inspects the case data and returns
+`AboutToStartOrSubmitResponse.<CaseData, State>builder().data(...).state(<computed state>).build()`.
+This is the SDK-native pattern the reference services use — declare the pre-state(s) with
+`forStates(...)`/`forStateTransition(...)`, register `.aboutToSubmitCallback(this::aboutToSubmit)`,
+and compute the target state in the callback (see nfdiv's `Applicant1Resubmit` for a two-branch
+example and `SubmitConditionalOrder` for a multi-way computed state; sptribs'
+`CaseworkerCloseTheCase` corroborates).
+
 ## Constructs carried by passthrough (not expressed in Java)
 
 The converter reproduces these verbatim through `PassthroughMerger` (additive `JsonUtils.mergeInto`
@@ -309,25 +360,39 @@ row (source: `DefaultDefinitionLinker`). *Mechanism* is the merge shape:
 - **row** — whole rows are added for records the generator omits.
 - **column-graft** — only the named columns are grafted, additively, onto a generator-emitted row
   (never overwriting a value the generator computed).
-- **overwrite-graft** — the named columns *replace* the generator's value on the matched row (used
-  where the SDK writes a forced default the input differs from).
+
+(The **overwrite-graft** shape — named columns *replacing* the generator's value on a matched row —
+is still supported by `PassthroughMerger` but currently has no producer: the two constructs that used
+it, the conditional `PostConditionState` and the unknown-`FieldType` graft, are now accepted-semantic
+and not-supported gaps respectively.)
 
 | Construct | Sheet(s) | Mechanism | Why there is no SDK API |
 |---|---|---|---|
-| SearchAlias | `SearchAlias` | whole-sheet | No `SearchAlias` generator. |
-| UserProfile | `UserProfile` | whole-sheet | No `UserProfile` generator (per-user default worklists). |
-| AccessType / AccessTypeRole | `AccessType`, `AccessTypeRole` | whole-sheet | No generator for org access-type config. |
 | EventToComplexTypes (incl. exotic tail) | `CaseEventToComplexTypes` (→ `EventToComplexTypes`) | row (per event/field) | Per-member event display-context overrides. Byte-identical round-trip (zero residuals); the SDK now has `.complex(parent).<ctx>(member).eventLabel/.eventHint/.pageId` for hand-written Java, but re-deriving each row's dotted `ListElementCode` into nested member getters (incl. through predefined types) is pure risk for zero residual gain, so the whole sheet stays a row passthrough. |
 | Orphan / illegal-ID / predefined ComplexTypes | `ComplexTypes` | row | A declared-but-unreachable complex type, one whose ID is not a legal Java identifier, or an explicit re-declaration of an SDK-predefined type is not emitted as a Java `@ComplexType`. |
 | Orphan-path FixedLists | `FixedLists` | row | A FixedList reachable only through an unreachable complex type generates no enum. |
-| Conditional / multi-target `PostConditionState` | `CaseEvent` | overwrite-graft | `EventBuilder` models a single post-state, so the generator emits only the primary state. |
 | Callback URLs (about-to-start / about-to-submit / submitted) + their `RetriesTimeout*` | `CaseEvent` | column-graft | The converter deliberately emits **no** SDK callback wiring, so the generator writes no `CallBackURL*`/`RetriesTimeout*`; the input values (env `${CCD_DEF_*}` placeholders included) are grafted back verbatim. |
 | Mid-event callback URL + its `RetriesTimeout*MidEvent` | `CaseEventToFields` | column-graft | Same: mid-event is a per-page property, carried verbatim per field row rather than wired (a bracketed metadata `CaseFieldID` such as `[STATE]` is skipped — the generator emits no row for it to graft onto). |
-| CaseRoles `JurisdictionID` (mixed usage only) | `CaseRoles` | column-graft | `emitCaseRoleJurisdiction()` is all-or-nothing; when only *some* rows carry `JurisdictionID` the switch cannot be used, so those rows are grafted (a gap records the mixed usage). When every row carries it, the switch is on and nothing is grafted. |
-| Unknown / custom `FieldType` (+`FieldTypeParameter`) | `CaseField` | overwrite-graft | A type with no Java carrier that is **not** a real `FieldType` enum constant is generated as `String` → `FieldType=Text`; the original type must replace that. `CaseHistoryViewer`/`WaysToPay`/`JudicialUser`/… are now completed `FieldType` constants, so they take the `@CCD(typeOverride = FieldType.X)` Java path instead — only genuinely unknown types still graft. |
 
 Anything not expressible as code *or* passthrough is an `OMITTED_FAIL` entry in the gap report and
 fails the conversion unless `--allow-gaps`.
+
+#### Not supported: fails conversion with a gap
+
+Six constructs that used to be carried by passthrough or a graft are now **not supported** — the
+converter records a blocking `OMITTED_FAIL` gap (category `UNSUPPORTED_SHEET`/`UNSUPPORTED_VALUE`) so
+a definition carrying one fails conversion unless `--allow-gaps` is set (which omits the construct
+entirely rather than fabricating it). The maintainer removed these because silently carrying them
+through as raw JSON hid a construct the migrated Java definition cannot express — surfacing them as
+an explicit gap makes the migrating team decide consciously.
+
+| Construct | Sheet(s) | Gap category | Notes |
+|---|---|---|---|
+| SearchAlias | `SearchAlias` | `UNSUPPORTED_SHEET` | No `SearchAlias` generator. |
+| UserProfile | `UserProfile` | `UNSUPPORTED_SHEET` | Per-user default worklists; no generator. Populated in most real fixtures, so its removal from passthrough is what forces those definitions to `--allow-gaps` (or a hand-authored UserProfile). |
+| AccessType / AccessTypeRole | `AccessType`, `AccessTypeRole` | `UNSUPPORTED_SHEET` | Org group-access config; no generator (and NOT deprecated — importer + data store consume them). |
+| CaseRoles `JurisdictionID` (mixed usage only) | `CaseRoles` | `UNSUPPORTED_VALUE` | `emitCaseRoleJurisdiction()` is all-or-nothing; when every row carries `JurisdictionID` the switch emits it natively, but *mixed* usage (only some rows) cannot be expressed and now fails. |
+| Unknown / custom `FieldType` (+`FieldTypeParameter`) | `CaseField` | `UNSUPPORTED_VALUE` | A type with no Java carrier that is **not** a real `FieldType` enum constant can only be inferred as `String`→`Text`. `CaseHistoryViewer`/`WaysToPay`/`JudicialUser`/… are completed `FieldType` constants taking the `@CCD(typeOverride)` Java path; a genuinely unknown type now fails. Add it as a `FieldType` constant or model it as a complex type to convert it faithfully. |
 
 ### Constructs moved from passthrough to generated Java
 
@@ -424,6 +489,33 @@ single win — the `SearchCasesResultFields` per-field lambda emits role/`UseCas
 shrinking civil, prl and ia. Earlier, probate had fallen from 442 to 34 once `LIVE_TO_VESTIGIAL`
 absorbed its uniform vestigial `AuthorisationCaseState LiveTo`. To regenerate a baseline after an
 intended change, run `GenerateGoldenFiles` with `-Djunit.jupiter.conditions.deactivate='*'`.)
+
+> **Baseline movement from the comparator/cleanup round (refresh pending).** These sizes predate the
+> round that (a) removed the whole-sheet `UserProfile`/`SearchAlias`/`AccessType`/`AccessTypeRole`
+> passthroughs, the mixed-usage `CaseRoles JurisdictionID` graft and the unknown-`FieldType` graft
+> (now [not-supported gaps](#not-supported-fails-conversion-with-a-gap)), and (b) reclassified the
+> conditional `PostConditionState` graft as an [accepted semantic difference](#4-conditional--multi-target-postconditionstate-collapse)
+> absorbed by `CONDITIONAL_POST_STATE`. The round-trip harness sets `--allow-gaps`, so conversion still
+> completes; the removed grafts previously made their construct round-trip clean, so removing them adds
+> residuals where the harness now omits the construct instead of grafting it:
+>
+> - **`CONDITIONAL_POST_STATE` (baseline-neutral).** The generated side carries the SDK primary state
+>   and the new rule forgives the collapse, so no net residual (ia 6, ET 16, prl 17 conditional events
+>   absorbed).
+> - **`CRUD_LETTER_ORDER` (removes 3).** Task 1 closes `civil`'s three `CUR`-vs-`CRU` lines.
+> - **`UserProfile` removal (adds residuals).** The generated side no longer emits these rows while the
+>   expected side still carries them: `fpl` +22, `probate` +38, `civil` +3, `sscs` +2, `prl` +1
+>   (`ia`/`ET` carry none).
+> - **Unknown-`FieldType` removal (adds residuals).** The field is now generated as `String`→`Text`
+>   with no graft restoring the original type, and no comparator rule forgives `Text`-vs-`<unknown>`:
+>   `fpl` +34, `civil` +4 (`CaseQueriesCollection`).
+> - **`SearchAlias`/`AccessType`/`AccessTypeRole` and mixed `CaseRoles JurisdictionID`:** zero usages
+>   across all seven fixtures, so no baseline movement.
+>
+> The net per-fixture baselines are refreshed by the integration step (`GenerateGoldenFiles`), not by
+> hand. These new `UserProfile`/`FieldType` residuals are the honest, intended cost of surfacing an
+> unsupported construct as a gap instead of silently carrying it as JSON the migrated Java cannot
+> express.
 
 The categories, all SDK-structural limitations or fixture-data findings (none are converter bugs):
 
