@@ -498,6 +498,16 @@ after generation), because the SDK has no API for them. They round-trip exactly 
 exceptions — but they live as JSON under `--passthrough-dir`, not as Java. Each construct below is one
 row (source: `DefaultDefinitionLinker`). *Mechanism* is the merge shape:
 
+> **Measured scale (all six service fixtures — Benefit, fpl, civil, ET_EnglandWales, probate, prl).**
+> Total passthrough artifacts: **~79**, breaking down as — `CaseEventToFields` column-grafts **57**
+> (callbacks + skipped-unwrapped-field metadata, mostly sscs's `writeFinalDecision`), `FixedLists`
+> ID-collision rows **15**, non-derivable `EventToComplexTypes` groups **6** (one summary row per
+> fixture; the underlying member rows are far fewer than the ~7.3k now emitted as Java), and
+> `AuthorisationComplexType` unresolved rows **1**. There is **no** `AuthorisationCaseField`
+> passthrough — the ~52k `AUTH_NOT_DERIVABLE` entries are report-only `ADVISORY` records of an
+> injected read the comparator forgives (see [§6](#authorisationcasefield-injected-read-records)),
+> not carried JSON.
+
 - **whole-sheet** — the entire sheet passes through (the generator emits nothing for it).
 - **row** — whole rows are added for records the generator omits.
 - **column-graft** — only the named columns are grafted, additively, onto a generator-emitted row
@@ -514,6 +524,9 @@ and not-supported gaps respectively.)
 | EventToComplexTypes — **non-derivable group** | `CaseEventToComplexTypes` (→ `EventToComplexTypes`) | row (per event/field) | A whole `(event, field)` group the converter cannot express as builder chains stays a verbatim row passthrough (ID-keyed). Causes: a non-`COMPLEX`-placed field, an unresolvable dotted `ListElementCode`, a `DisplayContext` outside `OPTIONAL`/`MANDATORY`/`READONLY`, a `ListElementCode` repeated within the group, a raw derivable-key value the generator would normalise (whitespace/case), or an overlay-suffixed sibling. (`Collection`-typed roots/intermediates and hint-cascade rows are now derived — see [§5](#5-eventtocomplextypes-generated-java-vs-fallback).) |
 | Callback URLs (about-to-start / about-to-submit / submitted) + their `RetriesTimeout*` | `CaseEvent` | column-graft | The converter deliberately emits **no** SDK callback wiring, so the generator writes no `CallBackURL*`/`RetriesTimeout*`; the input values (env `${CCD_DEF_*}` placeholders included) are grafted back verbatim. |
 | Mid-event callback URL + its `RetriesTimeout*MidEvent` | `CaseEventToFields` | column-graft | Same: mid-event is a per-page property, carried verbatim per field row rather than wired (a bracketed metadata `CaseFieldID` such as `[STATE]` is skipped — the generator emits no row for it to graft onto). |
+| Per-field metadata for a placement skipped as un-referenceable (`@JsonUnwrapped` parent whose getter the model suppresses with `@Getter(AccessLevel.NONE)`, or a bracketed metadata `CaseFieldID` like `[STATE]`) | `CaseEventToFields` | column-graft | No compilable typed getter reference exists for the field, so the placement is skipped in Java and the row's per-field display metadata is grafted back (sscs's `writeFinalDecision*` unwrapped members are the bulk of this). |
+| FixedList whose ID collides with a ComplexType ID | `FixedLists` | row | When a definition declares a FixedList and a ComplexType under the same ID (fpl's `*Selector`, civil's `Court`), the complex-type class takes the Java name, so no enum is generated and the list's rows are carried verbatim. |
+| `AuthorisationComplexType` rows with an unresolvable field/role | `AuthorisationComplexType` | row | Most rows emit via `grantComplexType(...)`; a row whose complex field does not resolve to a plain `CaseData` member, or whose role is not a registered `UserRole`, is carried verbatim (≈24 rows, all in prl). |
 
 Anything not expressible as code *or* passthrough is an `OMITTED_FAIL` entry in the gap report and
 fails the conversion unless `--allow-gaps`.
