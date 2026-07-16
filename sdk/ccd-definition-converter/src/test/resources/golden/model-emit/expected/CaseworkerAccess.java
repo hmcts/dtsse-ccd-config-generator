@@ -1,4 +1,4 @@
-package uk.gov.hmcts.test.config;
+package uk.gov.hmcts.test.config.access;
 
 import com.google.common.collect.HashMultimap;
 import com.google.common.collect.SetMultimap;

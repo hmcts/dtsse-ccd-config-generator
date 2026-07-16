@@ -35,7 +35,7 @@ public class AccessClassEmitter implements SourceEmitter {
 
   @Override
   public List<JavaFile> emit(CaseTypeModel model, EmitContext context) {
-    String configPkg = context.configPackage();
+    String configPkg = context.accessPackage();
     List<JavaFile> files = new ArrayList<>();
 
     // UserRole is always generated fresh (retrofit decision 3), so this is the generated enum in

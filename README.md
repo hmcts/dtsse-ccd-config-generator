@@ -915,10 +915,45 @@ which archetype fits which mode.
   --case-type    Asylum
   --output-src   /path/to/service/src/main/java
   --model-package  uk.gov.hmcts.ia.model
-  --config-package uk.gov.hmcts.ia.config
   --overlay-suffix prod=CCD_DEF_ENV:prod --overlay-suffix nonprod=!CCD_DEF_ENV:prod
   --report-dir   build/ccd-conversion'
 ```
+
+#### Generated package layout
+
+Generated code goes into the service's **main source tree** and is laid out to mirror the mature
+hand-written services (nfdiv/sptribs), so a team owns and edits it directly. The **root config
+package** is derived from `--model-package` by cutting it at its first `model` segment and appending
+`.ccd`:
+
+| `--model-package` | derived root package |
+|---|---|
+| `uk.gov.hmcts.probate.model.ccd.raw` | `uk.gov.hmcts.probate.ccd` |
+| `uk.gov.hmcts.divorce.divorcecase.model` | `uk.gov.hmcts.divorce.divorcecase.ccd` |
+| `uk.gov.hmcts.sscs.domain` (no `model` segment) | `uk.gov.hmcts.sscs.domain.ccd` |
+
+Override it with `--root-package <pkg>` (or the equivalent legacy `--config-package <pkg>`) when a
+team wants a specific home. Under `<root>` the converter emits:
+
+```
+<root>/                       config beans, one per concern (finding #6):
+  ├─ <Prefix>CaseType.java      case type + jurisdiction identity, flags, banner
+  ├─ <Prefix>Grants.java        state + complex-type grants
+  ├─ <Prefix>Tabs.java          tabs
+  ├─ <Prefix>WorkBasket.java    work-basket input/result fields
+  ├─ <Prefix>Search.java        search input/result, search-cases, criteria, parties
+  ├─ <Prefix>NoticeOfChange.java, <Prefix>RoleToAccessProfiles.java, <Prefix>Categories.java
+  ├─ event/                     one @Component CCDConfig per event (finding #1):
+  │    ├─ CreateCase.java          PascalCase of the event ID; ID as a `static final String` constant
+  │    └─ event/page/             one class per wizard page (finding #2):
+  │         └─ CreateCasePage1.java   `public static void apply(fields)` called by the event class
+  └─ access/                    HasAccessControl classes referenced by @CCD(access = {…})
+```
+
+Model classes (`CaseData`, complex types, `State`, `UserRole`, enums, `EnvironmentFlags`) stay in
+`--model-package`. Each config bean is emitted only when its concern carries content (`CaseType`
+always). A single wizard page large enough to overflow the JVM method-size limit on its own splits
+into documented `<Page>FieldsN` fragments within its page package — the only surviving numbered form.
 
 Key behaviours:
 
@@ -1055,13 +1090,19 @@ still-generated **companion sources** (config/enum/access), targeted at that mod
   --model-package     uk.gov.hmcts.reform.civil.model
   --model-class       CaseData
   --output-src        /path/to/civil-service/src/main/java
-  --config-package    uk.gov.hmcts.reform.civil.config
   --report-dir        build/retrofit'
 ```
 
-`--output-src` and `--config-package` are **required** in phase 2 (they receive the companion
-sources); `--report-only` short-circuits back to phase 1 and needs neither. Invalid combinations are
-rejected with a clear error.
+`--output-src` is **required** in phase 2 (it receives the companion sources); `--report-only`
+short-circuits back to phase 1 and needs neither. The root package for the companions follows the
+same rule as generate mode — derived from `--model-package` (here `uk.gov.hmcts.reform.civil.model`
+→ `uk.gov.hmcts.reform.civil.ccd`) unless `--root-package`/`--config-package` overrides it — so the
+companions land in the service's main source tree beside the model, laid out as documented under
+[Generated package layout](#generated-package-layout) (events in `<root>.event`, page classes in
+`<root>.event.page`, access classes in `<root>.access`, config beans split by concern in `<root>`).
+The retrofit clone-regeneration script writes exactly this tree (untracked in the clone's git
+status), retiring the old flat `generated-config/` directory. Invalid combinations are rejected with
+a clear error.
 
 **What the patch (`build/retrofit/retrofit.patch`) contains** — a unified diff, `git apply`-able from
 the model repo root, produced with JavaParser's `LexicalPreservingPrinter` (minimal churn — untouched

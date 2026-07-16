@@ -198,60 +198,74 @@ class CoreConfigEmitterTest {
         .build();
   }
 
-  @Test
-  void emitsExactlyOneFile() {
-    List<JavaFile> files = new CoreConfigEmitter().emit(minimalModel(),
-        EnvironmentFlagsEmitterTest.context());
-    assertThat(files).hasSize(1);
+  /** The concatenated source of every emitted file, for content assertions across the split beans. */
+  private static String allSrc(CaseTypeModel model) {
+    return new CoreConfigEmitter().emit(model, EnvironmentFlagsEmitterTest.context()).stream()
+        .map(JavaFile::toString)
+        .collect(java.util.stream.Collectors.joining("\n"));
+  }
+
+  private static String classNamed(CaseTypeModel model, String simpleName) {
+    return new CoreConfigEmitter().emit(model, EnvironmentFlagsEmitterTest.context()).stream()
+        .filter(f -> f.typeSpec().name().equals(simpleName))
+        .map(JavaFile::toString)
+        .findFirst()
+        .orElseThrow(() -> new AssertionError("no emitted class named " + simpleName));
   }
 
   @Test
-  void generatedClassNameIncludesCaseTypeId() {
-    String src = new CoreConfigEmitter().emit(minimalModel(),
-        EnvironmentFlagsEmitterTest.context()).get(0).toString();
-    assertThat(src).contains("class MinimalCoreConfig");
+  void caseTypeBeanAlwaysEmitted() {
+    // The monolith is split by concern (finding #6): identity/jurisdiction lives in its own
+    // <Prefix>CaseType bean, always present even when a case type carries no tabs/search/grants.
+    List<JavaFile> files = new CoreConfigEmitter().emit(minimalModel(),
+        EnvironmentFlagsEmitterTest.context());
+    assertThat(files).anySatisfy(f -> assertThat(f.typeSpec().name()).isEqualTo("MinimalCaseType"));
+  }
+
+  @Test
+  void concernsSplitIntoSeparateBeans() {
+    // A model carrying identity + tabs emits distinct CaseType and Tabs beans, not one CoreConfig.
+    List<String> names = new CoreConfigEmitter().emit(modelWithTabs(),
+            EnvironmentFlagsEmitterTest.context()).stream()
+        .map(f -> f.typeSpec().name())
+        .toList();
+    assertThat(names).contains("MinimalCaseType", "MinimalTabs");
+    assertThat(names).doesNotContain("MinimalCoreConfig");
   }
 
   @Test
   void generatedClassIsInConfigPackage() {
-    String src = new CoreConfigEmitter().emit(minimalModel(),
-        EnvironmentFlagsEmitterTest.context()).get(0).toString();
-    assertThat(src).contains("package " + EnvironmentFlagsEmitterTest.CONFIG_PKG);
+    assertThat(classNamed(minimalModel(), "MinimalCaseType"))
+        .contains("package " + EnvironmentFlagsEmitterTest.CONFIG_PKG);
   }
 
   @Test
   void generatedClassImplementsCcdConfig() {
-    String src = new CoreConfigEmitter().emit(minimalModel(),
-        EnvironmentFlagsEmitterTest.context()).get(0).toString();
-    assertThat(src).contains("implements CCDConfig");
+    assertThat(classNamed(minimalModel(), "MinimalCaseType")).contains("implements CCDConfig");
   }
 
   @Test
   void generatedConfigureEmitsCaseType() {
-    String src = new CoreConfigEmitter().emit(minimalModel(),
-        EnvironmentFlagsEmitterTest.context()).get(0).toString();
-    assertThat(src).contains("builder.caseType(\"Minimal\"");
+    assertThat(classNamed(minimalModel(), "MinimalCaseType"))
+        .contains("builder.caseType(\"Minimal\"");
   }
 
   @Test
   void generatedConfigureEmitsJurisdiction() {
-    String src = new CoreConfigEmitter().emit(minimalModel(),
-        EnvironmentFlagsEmitterTest.context()).get(0).toString();
-    assertThat(src).contains("builder.jurisdiction(\"TEST\"");
+    assertThat(classNamed(minimalModel(), "MinimalCaseType"))
+        .contains("builder.jurisdiction(\"TEST\"");
   }
 
   @Test
   void tabEmittedForModelWithTabs() {
-    String src = new CoreConfigEmitter().emit(modelWithTabs(),
-        EnvironmentFlagsEmitterTest.context()).get(0).toString();
+    String src = classNamed(modelWithTabs(), "MinimalTabs");
     assertThat(src).contains("builder.tab(\"summary\"");
     assertThat(src).contains(".field(\"applicantName\")");
   }
 
   @Test
   void stateGrantEmittedForStateAuthorisationRow() {
-    String src = new CoreConfigEmitter().emit(modelWithStateGrants(),
-        EnvironmentFlagsEmitterTest.context()).get(0).toString();
+    String src = classNamed(modelWithStateGrants(), "MinimalGrants");
     assertThat(src).contains("builder.grant(State.Open");
     assertThat(src).contains("UserRole.CASEWORKER_TEST");
   }
@@ -302,24 +316,21 @@ class CoreConfigEmitterTest {
         .passthroughSheets(List.of())
         .build();
 
-    String src = new CoreConfigEmitter().emit(model,
-        EnvironmentFlagsEmitterTest.context()).get(0).toString();
+    String src = classNamed(model, "MinimalGrants");
     assertThat(src).contains("UserRole.CREATOR");
   }
 
   @Test
   void explicitStateGrantsAlwaysEmitted() {
-    // A converted config reproduces the input's AuthorisationCaseState exactly, so the emitter
+    // A converted config reproduces the input's AuthorisationCaseState exactly, so the CaseType bean
     // must opt out of the SDK's event-derived state-permission broadening unconditionally.
-    String src = new CoreConfigEmitter().emit(minimalModel(),
-        EnvironmentFlagsEmitterTest.context()).get(0).toString();
-    assertThat(src).contains("builder.explicitStateGrants()");
+    assertThat(classNamed(minimalModel(), "MinimalCaseType"))
+        .contains("builder.explicitStateGrants()");
   }
 
   @Test
   void workBasketInputFieldEmitted() {
-    String src = new CoreConfigEmitter().emit(modelWithWorkBasket(),
-        EnvironmentFlagsEmitterTest.context()).get(0).toString();
+    String src = classNamed(modelWithWorkBasket(), "MinimalWorkBasket");
     assertThat(src).contains("builder.workBasketInputFields()");
     assertThat(src).contains(".field(\"applicantName\"");
   }
@@ -328,21 +339,19 @@ class CoreConfigEmitterTest {
   void roleScopedSearchFieldUsesThreeArgOverload() {
     // A search/workbasket row carrying a UserRole must be emitted via the role-scoped
     // field(id, label, role) overload; unscoped rows keep the two-arg form.
-    String src = new CoreConfigEmitter().emit(modelWithRoleScopedSearch(),
-        EnvironmentFlagsEmitterTest.context()).get(0).toString();
-    assertThat(src).contains("builder.workBasketInputFields()");
-    assertThat(src).contains(".field(\"applicantName\", \"Applicant name\")");
-    assertThat(src).contains(
+    String workBasket = classNamed(modelWithRoleScopedSearch(), "MinimalWorkBasket");
+    assertThat(workBasket).contains("builder.workBasketInputFields()");
+    assertThat(workBasket).contains(".field(\"applicantName\", \"Applicant name\")");
+    assertThat(workBasket).contains(
         ".field(\"claimType\", \"Type of claim\", UserRole.CASEWORKER_TEST)");
-    assertThat(src).contains("builder.searchInputFields()");
+    assertThat(classNamed(modelWithRoleScopedSearch(), "MinimalSearch"))
+        .contains("builder.searchInputFields()");
   }
 
   @Test
   void noSetCallbackHostEmitted() {
     // The converter emits no SDK callback wiring, so no setCallbackHost is emitted; every callback
     // column is carried through verbatim by passthrough instead.
-    String src = new CoreConfigEmitter().emit(minimalModel(),
-        EnvironmentFlagsEmitterTest.context()).get(0).toString();
-    assertThat(src).doesNotContain("setCallbackHost");
+    assertThat(allSrc(minimalModel())).doesNotContain("setCallbackHost");
   }
 }

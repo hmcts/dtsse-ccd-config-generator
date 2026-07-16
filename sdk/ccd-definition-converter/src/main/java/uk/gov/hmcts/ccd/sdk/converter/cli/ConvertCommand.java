@@ -53,8 +53,14 @@ public class ConvertCommand implements Callable<Integer> {
           + "package the team's existing model lives in.")
   String modelPackage;
 
-  @Option(names = "--config-package",
-      description = "Package for config and event classes (generate mode).")
+  @Option(names = {"--config-package", "--root-package"},
+      description = "Root package the generated CCD config lives under (events in <root>.event, "
+          + "page classes in <root>.event.page, access classes in <root>.access; tabs/search/"
+          + "workbasket/case-type config beans directly in <root>). When omitted it is DERIVED from "
+          + "--model-package: the model package is cut at its first '.model' segment and '.ccd' is "
+          + "appended (uk.gov.hmcts.probate.model.ccd.raw -> uk.gov.hmcts.probate.ccd); a model "
+          + "package with no '.model' segment gets '.ccd' appended verbatim. --root-package is an "
+          + "alias for this option.")
   String configPackage;
 
   @Option(names = "--retrofit", defaultValue = "false",
@@ -233,17 +239,18 @@ public class ConvertCommand implements Callable<Integer> {
       throw parameterError("--output-src is required for phase-2 retrofit (companion sources); "
           + "add --report-only to emit the report alone");
     }
-    if (configPackage == null) {
-      throw parameterError("--config-package is required for phase-2 retrofit (companion sources); "
-          + "add --report-only to emit the report alone");
-    }
-    requirePackage("--config-package", configPackage);
+    // In retrofit mode --model-package is the team's EXISTING model package, so a derived root would
+    // land the companion config beside the team's model; that is intentional and matches the
+    // maintainer's "companions in the service's main source tree" directive. --root-package /
+    // --config-package still overrides when the team wants a specific home.
+    String rootPackage = configPackage != null ? configPackage : deriveRootPackage(modelPackage);
+    requirePackage("--config-package", rootPackage);
     if (eventsPerConfig < 1) {
       throw parameterError("--events-per-config must be at least 1");
     }
     return builder
         .outputSrc(outputSrc)
-        .configPackage(configPackage)
+        .configPackage(rootPackage)
         .passthroughDir(passthroughDir != null
             ? passthroughDir
             : outputSrc.resolve("../resources/ccd-passthrough").normalize())
@@ -280,11 +287,9 @@ public class ConvertCommand implements Callable<Integer> {
     if (outputSrc == null) {
       throw parameterError("--output-src is required in generate mode");
     }
-    if (configPackage == null) {
-      throw parameterError("--config-package is required in generate mode");
-    }
     requirePackage("--model-package", modelPackage);
-    requirePackage("--config-package", configPackage);
+    String rootPackage = configPackage != null ? configPackage : deriveRootPackage(modelPackage);
+    requirePackage("--config-package", rootPackage);
     for (Path input : inputs) {
       if (!Files.isDirectory(input)) {
         throw parameterError("--input directory does not exist: " + input);
@@ -301,7 +306,7 @@ public class ConvertCommand implements Callable<Integer> {
         .caseTypeId(caseTypeId)
         .outputSrc(outputSrc)
         .modelPackage(modelPackage)
-        .configPackage(configPackage)
+        .configPackage(rootPackage)
         .overlaySuffixes(overlays)
         .passthroughDir(passthroughDir != null
             ? passthroughDir
@@ -311,6 +316,35 @@ public class ConvertCommand implements Callable<Integer> {
         .emitApplication(emitApplication)
         .allowGaps(allowGaps)
         .build();
+  }
+
+  /**
+   * Derives the root config package from the model package when neither {@code --root-package} nor
+   * {@code --config-package} is given.
+   *
+   * <p>The rule keeps the generated config a sibling of the model, under the service's own base
+   * package, exactly where the reference services keep theirs ({@code uk.gov.hmcts.divorce.divorce
+   * case} beside {@code …divorcecase.model}): the model package is truncated at its <em>first</em>
+   * {@code model} path segment and {@code .ccd} is appended, so
+   * {@code uk.gov.hmcts.probate.model.ccd.raw} yields {@code uk.gov.hmcts.probate.ccd}. A model
+   * package with no {@code model} segment simply gets {@code .ccd} appended.
+   *
+   * @param modelPackage the {@code --model-package} value
+   * @return the derived root config package
+   */
+  static String deriveRootPackage(String modelPackage) {
+    String[] segments = modelPackage.split("\\.");
+    StringBuilder base = new StringBuilder();
+    for (String segment : segments) {
+      if (segment.equals("model")) {
+        break;
+      }
+      if (base.length() > 0) {
+        base.append('.');
+      }
+      base.append(segment);
+    }
+    return base + ".ccd";
   }
 
   private void requirePackage(String option, String value) {

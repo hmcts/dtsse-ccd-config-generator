@@ -44,6 +44,40 @@ class ConvertCommandTest {
   }
 
   @Test
+  void derivesRootPackageFromModelPackageWhenNotGiven() {
+    // The root config package is derived from --model-package: the model package is cut at its first
+    // 'model' segment and '.ccd' appended, keeping the config a sibling of the model.
+    assertThat(ConvertCommand.deriveRootPackage("uk.gov.hmcts.probate.model.ccd.raw"))
+        .isEqualTo("uk.gov.hmcts.probate.ccd");
+    assertThat(ConvertCommand.deriveRootPackage("uk.gov.hmcts.divorce.divorcecase.model"))
+        .isEqualTo("uk.gov.hmcts.divorce.divorcecase.ccd");
+    // No 'model' segment: '.ccd' is appended verbatim.
+    assertThat(ConvertCommand.deriveRootPackage("uk.gov.hmcts.sscs.domain"))
+        .isEqualTo("uk.gov.hmcts.sscs.domain.ccd");
+  }
+
+  @Test
+  void derivedRootPackageDrivesConfigPackageWhenConfigOmitted() {
+    ConvertCommand command = parse(
+        "--input", tempDir.toString(),
+        "--output-src", tempDir.resolve("out").toString(),
+        "--model-package", "uk.gov.hmcts.probate.model.ccd.raw");
+    assertThat(command.buildOptions().getConfigPackage()).isEqualTo("uk.gov.hmcts.probate.ccd");
+  }
+
+  @Test
+  void rootPackageAliasOverridesDerivation() {
+    // --root-package is an alias for --config-package and overrides the derived value.
+    ConvertCommand command = parse(
+        "--input", tempDir.toString(),
+        "--output-src", tempDir.resolve("out").toString(),
+        "--model-package", "uk.gov.hmcts.probate.model.ccd.raw",
+        "--root-package", "uk.gov.hmcts.probate.definitions");
+    assertThat(command.buildOptions().getConfigPackage())
+        .isEqualTo("uk.gov.hmcts.probate.definitions");
+  }
+
+  @Test
   void parsesCustomOverlaySuffixes() {
     ConvertCommand command = parse(concat(validArgs(),
         "--overlay-suffix", "WA=WA_ENABLED:true",

@@ -329,6 +329,28 @@ carry enum `ListElement`/State `Name`+`Description` labels; wire event `CallBack
    root — and the real-javac compile is clean (0 errors). See RETROFIT-REPORT-Benefit.md. A2 (case-insensitive
    complex-type resolution) and Bug4 (unresolvable unwrapped-parent getters) were fixed in the same round.
 
+## Structural round (2026-07-16): companions restructured to reference-service layout
+
+The companion emission was reshaped to the mature-service idiom (nfdiv/sptribs) — the
+adoption-decisive change closing quality-review findings #1/#2/#6:
+
+- **One `@Component CCDConfig` class per event** in `<root>.event`, PascalCase-named from the event
+  ID with the ID as a `static final String` constant; the numbered `EventsConfigNN` grab-bags are
+  gone (finding #1).
+- **One class per wizard page** in `<root>.event.page` with a `public static apply(fields)` the
+  event class calls; the `<Page>FieldsN` line-budget fragment survives only for a single page that
+  alone overflows the JVM method limit (finding #2).
+- **Config split by concern** into `<Prefix>CaseType`/`Grants`/`Tabs`/`WorkBasket`/`Search`/
+  `NoticeOfChange`/`RoleToAccessProfiles`/`Categories` beans (finding #6); no `CoreConfig` monolith.
+- **Access classes** in `<root>.access`; **grants** use the concise `Permission.CR/CRU/CRUD` set
+  shortcuts with varargs roles (finding #5/#11).
+- The **root package is derived from `--model-package`** (`…model…` → `…ccd`), overridable with
+  `--root-package`, so companions land in the service's main source tree beside the model. The clone
+  regeneration writes this tree (untracked), retiring the flat `generated-config/` directory.
+
+Byte-identity across the golden fixtures is proven by `RoundTripTest` (unchanged JSON) and the shape
+by `GeneratedLayoutTest`; the seven real-fixture baselines are re-proven at integration.
+
 ## Artefacts
 
 - Per-lane reports + patches: `sdk/ccd-definition-converter/retrofit-reports/`

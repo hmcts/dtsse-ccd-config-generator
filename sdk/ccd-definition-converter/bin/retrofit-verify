@@ -22,7 +22,7 @@
 #     --case-type    CIVIL \
 #     --model-class  uk.gov.hmcts.reform.civil.model.CaseData \
 #     [--model-source-root <path>]   # default: <model-repo>/src/main/java \
-#     [--config-package    <pkg>]    # default: <modelPackage>.ccd.generated \
+#     [--config-package    <pkg>]    # default: <modelPackage> cut at '.model' + '.ccd' (CLI rule) \
 #     [--work-dir          <path>]   # default: <sdk build>/retrofit-verify/<case-type> \
 #     [--env KEY=VALUE]...           # default: CCD_DEF_ENV=nonprod \
 #     [--overlay-suffix suffix=[!]ENV:val]... \
@@ -100,7 +100,14 @@ MODEL_PACKAGE="${MODEL_CLASS_FQN%.*}"
 MODEL_REPO="$(cd "${MODEL_REPO}" && pwd)"
 : "${MODEL_SOURCE_ROOT:=${MODEL_REPO}/src/main/java}"
 [[ -d "${MODEL_SOURCE_ROOT}" ]] || die "model source root not found: ${MODEL_SOURCE_ROOT}"
-: "${CONFIG_PACKAGE:=${MODEL_PACKAGE}.ccd.generated}"
+# Default root config package: same rule the CLI applies (ConvertCommand.deriveRootPackage) — cut the
+# model package at its first '.model' segment and append '.ccd' (e.g. .../probate.model.ccd.raw ->
+# .../probate.ccd), else append '.ccd'. The events, page and access sub-packages sit beneath it.
+if [[ -z "${CONFIG_PACKAGE}" ]]; then
+  CONFIG_PACKAGE="${MODEL_PACKAGE%%.model.*}"
+  [[ "${CONFIG_PACKAGE}" == "${MODEL_PACKAGE}" ]] && CONFIG_PACKAGE="${MODEL_PACKAGE%.model}"
+  CONFIG_PACKAGE="${CONFIG_PACKAGE}.ccd"
+fi
 : "${WORK_DIR:=${CONVERTER_DIR}/build/retrofit-verify/${CASE_TYPE}}"
 
 # Default env / overlays mirror the RoundTripTest CIVIL entry.

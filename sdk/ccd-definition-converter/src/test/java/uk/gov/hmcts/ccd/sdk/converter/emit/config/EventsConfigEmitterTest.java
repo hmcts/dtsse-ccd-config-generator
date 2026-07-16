@@ -93,97 +93,61 @@ class EventsConfigEmitterTest {
     assertThat(files).isEmpty();
   }
 
-  @Test
-  void singleEventFitsInOneClass() {
-    List<JavaFile> files = new EventsConfigEmitter()
-        .emit(modelWithEvents(List.of(simpleEvent("createCase"))),
-            contextWith(40));
-    assertThat(files).hasSize(1);
-  }
-
-  @Test
-  void singleChunkClassNameHasNoNumberSuffix() {
-    String src = new EventsConfigEmitter()
-        .emit(modelWithEvents(List.of(simpleEvent("createCase"))),
-            contextWith(40))
-        .get(0).toString();
-    assertThat(src).contains("class MinimalEventsConfig");
-    assertThat(src).doesNotContain("MinimalEventsConfig01");
-  }
-
-  @Test
-  void exceedingChunkSizeProducesMultipleFiles() {
-    List<EventModel> events = new ArrayList<>();
-    for (int ii = 0; ii < 5; ii++) {
-      events.add(simpleEvent("event" + ii));
-    }
-    List<JavaFile> files = new EventsConfigEmitter()
-        .emit(modelWithEvents(events), contextWith(2));
-    // 5 events at chunk size 2 → 3 EventsConfigNN chunks. All five share one grant map (caseworker
-    // -test CRUD), which — being reused by ≥ 3 events — is factored into a single shared
-    // MinimalEventGrants helper class (finding #11), so the emitter also returns that 4th file.
-    List<String> chunkClasses = files.stream()
-        .map(f -> f.typeSpec().name())
-        .filter(n -> n.startsWith("MinimalEventsConfig"))
-        .toList();
-    assertThat(chunkClasses).hasSize(3);
-    assertThat(files).hasSize(4);
-  }
-
-  @Test
-  void multipleChunkClassNamesAreNumbered() {
-    List<EventModel> events = List.of(simpleEvent("ev1"), simpleEvent("ev2"), simpleEvent("ev3"));
-    List<String> names = new EventsConfigEmitter()
-        .emit(modelWithEvents(events), contextWith(2))
-        .stream()
+  /** The source of the emitted class with the given simple name. */
+  private static String classNamed(List<JavaFile> files, String simpleName) {
+    return files.stream()
+        .filter(f -> f.typeSpec().name().equals(simpleName))
         .map(JavaFile::toString)
-        .toList();
-    assertThat(names.get(0)).contains("class MinimalEventsConfig01");
-    assertThat(names.get(1)).contains("class MinimalEventsConfig02");
+        .findFirst()
+        .orElseThrow(() -> new AssertionError("no emitted class named " + simpleName));
+  }
+
+  /** The concatenated source of every emitted file (event class + its page classes). */
+  private static String allSrc(List<JavaFile> files) {
+    return files.stream().map(JavaFile::toString)
+        .collect(java.util.stream.Collectors.joining("\n"));
   }
 
   @Test
-  void generatedClassIsInConfigPackage() {
-    String src = new EventsConfigEmitter()
-        .emit(modelWithEvents(List.of(simpleEvent("createCase"))),
-            contextWith(40))
-        .get(0).toString();
-    assertThat(src).contains("package " + EnvironmentFlagsEmitterTest.CONFIG_PKG);
+  void oneClassPerEventNamedFromEventId() {
+    // Finding #1: one CCDConfig class per event, PascalCase-named from the event ID, replacing the
+    // numbered EventsConfigNN grab-bags.
+    List<JavaFile> files = new EventsConfigEmitter()
+        .emit(modelWithEvents(List.of(
+            simpleEvent("createCase"), simpleEvent("closeCase"))), contextWith(40));
+    List<String> names = files.stream().map(f -> f.typeSpec().name()).toList();
+    assertThat(names).containsExactlyInAnyOrder("CreateCase", "CloseCase");
+    assertThat(names).noneMatch(n -> n.startsWith("MinimalEventsConfig"));
+  }
+
+  @Test
+  void eventClassIsInEventPackage() {
+    String src = classNamed(new EventsConfigEmitter()
+        .emit(modelWithEvents(List.of(simpleEvent("createCase"))), contextWith(40)), "CreateCase");
+    assertThat(src).contains("package " + EnvironmentFlagsEmitterTest.CONFIG_PKG + ".event");
   }
 
   @Test
   void generatedClassImplementsCcdConfig() {
-    String src = new EventsConfigEmitter()
-        .emit(modelWithEvents(List.of(simpleEvent("createCase"))),
-            contextWith(40))
-        .get(0).toString();
+    String src = classNamed(new EventsConfigEmitter()
+        .emit(modelWithEvents(List.of(simpleEvent("createCase"))), contextWith(40)), "CreateCase");
     assertThat(src).contains("implements CCDConfig");
   }
 
   @Test
-  void generatedConfigureCallsEventMethods() {
-    String src = new EventsConfigEmitter()
-        .emit(modelWithEvents(List.of(simpleEvent("createCase"))),
-            contextWith(40))
-        .get(0).toString();
-    assertThat(src).contains("createCase(builder)");
-  }
-
-  @Test
-  void eventRegistrationContainsEventId() {
-    String src = new EventsConfigEmitter()
-        .emit(modelWithEvents(List.of(simpleEvent("createCase"))),
-            contextWith(40))
-        .get(0).toString();
-    assertThat(src).contains("builder.event(\"createCase\")");
+  void eventIdDeclaredAsConstantAndReferenced() {
+    // nfdiv idiom: the event class declares `public static final String CREATE_CASE = "createCase";`
+    // and configure() references the constant rather than a raw literal.
+    String src = classNamed(new EventsConfigEmitter()
+        .emit(modelWithEvents(List.of(simpleEvent("createCase"))), contextWith(40)), "CreateCase");
+    assertThat(src).contains("String CREATE_CASE = \"createCase\"");
+    assertThat(src).contains("builder.event(CREATE_CASE)");
   }
 
   @Test
   void eventGrantsAreEmitted() {
-    String src = new EventsConfigEmitter()
-        .emit(modelWithEvents(List.of(simpleEvent("createCase"))),
-            contextWith(40))
-        .get(0).toString();
+    String src = classNamed(new EventsConfigEmitter()
+        .emit(modelWithEvents(List.of(simpleEvent("createCase"))), contextWith(40)), "CreateCase");
     assertThat(src).contains("UserRole.CASEWORKER_TEST");
   }
 
@@ -192,15 +156,13 @@ class EventsConfigEmitterTest {
     // The converter emits .explicitGrants() on every event so event grants never cascade onto the
     // fields the event places; a converted config reproduces the input's AuthorisationCaseField
     // grants exactly rather than the SDK's event-grant union.
-    String src = new EventsConfigEmitter()
-        .emit(modelWithEvents(List.of(simpleEvent("createCase"))),
-            contextWith(40))
-        .get(0).toString();
+    String src = classNamed(new EventsConfigEmitter()
+        .emit(modelWithEvents(List.of(simpleEvent("createCase"))), contextWith(40)), "CreateCase");
     assertThat(src).contains(".explicitGrants()");
   }
 
   @Test
-  void eventWithPagesEmitsFieldsChain() {
+  void eventWithPagesEmitsFieldsChainAndPageClass() {
     PageModel.PageField field = PageModel.PageField.builder()
         .caseFieldId("applicantName")
         .displayContext("MANDATORY")
@@ -224,14 +186,19 @@ class EventsConfigEmitterTest {
         .fieldType("Text")
         .build();
 
-    String src = new EventsConfigEmitter()
-        .emit(modelWithEvents(List.of(event), List.of(applicantName)),
-            contextWith(40))
-        .get(0).toString();
+    List<JavaFile> files = new EventsConfigEmitter()
+        .emit(modelWithEvents(List.of(event), List.of(applicantName)), contextWith(40));
 
-    assertThat(src).contains(".fields()");
-    assertThat(src).contains(".page(\"1\")");
-    assertThat(src).contains(".mandatory(");
+    // The event class terminates its header at .fields() and delegates the page to its own class
+    // in <root>.event.page (finding #2).
+    String eventSrc = classNamed(files, "CreateCase");
+    assertThat(eventSrc).contains(".fields()");
+    assertThat(eventSrc).contains(".apply(fields)");
+    String pageSrc = classNamed(files, "CreateCasePage1");
+    assertThat(pageSrc).contains("package " + EnvironmentFlagsEmitterTest.CONFIG_PKG
+        + ".event.page");
+    assertThat(pageSrc).contains(".page(\"1\")");
+    assertThat(pageSrc).contains(".mandatory(");
   }
 
   @Test
@@ -268,7 +235,7 @@ class EventsConfigEmitterTest {
         .gaps(gaps)
         .build();
 
-    String src = new EventsConfigEmitter().emit(model, context).get(0).toString();
+    String src = allSrc(new EventsConfigEmitter().emit(model, context));
 
     // The placeable field is still emitted; the unplaceable one is not referenced by any getter.
     assertThat(src).contains("getApplicantName");
@@ -297,9 +264,8 @@ class EventsConfigEmitterTest {
             "!CCD_DEF_ENV:prod"))
         .build();
 
-    String src = new EventsConfigEmitter()
-        .emit(modelWithEvents(List.of(event)), contextWith(40))
-        .get(0).toString();
+    String src = classNamed(new EventsConfigEmitter()
+        .emit(modelWithEvents(List.of(event)), contextWith(40)), "DebugResetNonprod");
 
     assertThat(src).contains("if (EnvironmentFlags.flag(");
     assertThat(src).doesNotContain("if (!EnvironmentFlags.flag(");
@@ -319,9 +285,8 @@ class EventsConfigEmitterTest {
             "CCD_DEF_ENV:prod"))
         .build();
 
-    String src = new EventsConfigEmitter()
-        .emit(modelWithEvents(List.of(event)), contextWith(40))
-        .get(0).toString();
+    String src = classNamed(new EventsConfigEmitter()
+        .emit(modelWithEvents(List.of(event)), contextWith(40)), "ArchiveCaseProd");
 
     assertThat(src).contains("if (!EnvironmentFlags.flag(");
   }
@@ -351,9 +316,8 @@ class EventsConfigEmitterTest {
         .fieldType("Text")
         .build();
 
-    String src = new EventsConfigEmitter()
-        .emit(modelWithEvents(List.of(event), List.of(caseNotes2)), contextWith(40))
-        .get(0).toString();
+    String src = allSrc(new EventsConfigEmitter()
+        .emit(modelWithEvents(List.of(event), List.of(caseNotes2)), contextWith(40)));
 
     assertThat(src).contains("CaseData::getCase_notes_2");
     assertThat(src).doesNotContain("CaseData::getCase-notes-2");
@@ -385,9 +349,8 @@ class EventsConfigEmitterTest {
         .label("Some information")
         .build();
 
-    String src = new EventsConfigEmitter()
-        .emit(modelWithEvents(List.of(event), List.of(infoLabel)), contextWith(40))
-        .get(0).toString();
+    String src = allSrc(new EventsConfigEmitter()
+        .emit(modelWithEvents(List.of(event), List.of(infoLabel)), contextWith(40)));
 
     // Label fields are now real CaseData members referenced as readonly, not inline .label(...).
     assertThat(src).contains("readonly(CaseData::getInfoLabel)");
@@ -439,9 +402,7 @@ class EventsConfigEmitterTest {
         .passthroughSheets(List.of())
         .build();
 
-    String src = new EventsConfigEmitter()
-        .emit(model, contextWith(40))
-        .get(0).toString();
+    String src = classNamed(new EventsConfigEmitter().emit(model, contextWith(40)), "AddNotes");
 
     assertThat(src).contains("UserRole.CREATOR");
   }

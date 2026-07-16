@@ -24,7 +24,7 @@ public class CaseDataEmitter implements SourceEmitter {
   @Override
   public List<JavaFile> emit(CaseTypeModel model, EmitContext context) {
     String pkg = context.modelPackage();
-    FieldEmitHelper helper = new FieldEmitHelper(pkg, context.configPackage());
+    FieldEmitHelper helper = new FieldEmitHelper(pkg, context.accessPackage());
 
     List<FieldSpec> fields = new ArrayList<>();
     for (FieldModel field : model.getCaseFields()) {

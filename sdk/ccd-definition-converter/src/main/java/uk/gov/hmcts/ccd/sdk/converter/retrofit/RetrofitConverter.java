@@ -162,9 +162,12 @@ public final class RetrofitConverter {
     converter.convert(emitOptions);
 
     // Emit the annotation patch from the same parse/resolution + the rebound model's @CCD metadata.
+    // The access classes the model's @CCD(access = {…}) references live in <configPackage>.access
+    // (matching EmitContext.accessPackage() and AccessClassEmitter), so the patch's imports must
+    // point there, not at the root config package.
     RetrofitPatchEmitter emitter = new RetrofitPatchEmitter(
-        index, resolution, reboundHolder[0], root, options.getConfigPackage(), constructorLimit,
-        pathPrefix);
+        index, resolution, reboundHolder[0], root, options.getConfigPackage() + ".access",
+        constructorLimit, pathPrefix);
     RetrofitPatch patch = emitter.emit();
     writePatch(reportDir, patch);
     // Surface any synthesised-field name collisions the emitter skipped (finding B1) so they are not

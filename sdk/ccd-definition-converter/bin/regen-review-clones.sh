@@ -1,12 +1,20 @@
 #!/usr/bin/env bash
 #
-# regen-review-clones.sh — refresh the retrofit review clones' patch + companion `generated-config/`
-# after a converter change, in place, WITHOUT re-running the expensive full gCC verify (the
-# retrofit-verify stages 2–5 need a mavenLocal SDK publish + per-service build, which is intractable
-# offline; this script runs the converter's phase-2 emission — stage 1 of retrofit-verify — which is
-# what the converter change affects). RETROFIT-REPORT-NARRATIVE*.md files are preserved untouched.
+# regen-review-clones.sh — refresh the retrofit review clones' patch + companion sources after a
+# converter change, in place, WITHOUT re-running the expensive full gCC verify (the retrofit-verify
+# stages 2–5 need a mavenLocal SDK publish + per-service build, which is intractable offline; this
+# script runs the converter's phase-2 emission — stage 1 of retrofit-verify — which is what the
+# converter change affects). RETROFIT-REPORT-NARRATIVE*.md files are preserved untouched.
 #
-# Each lane regenerates: <clone>/generated-config/  (companion sources) and
+# STRUCTURAL ROUND (2026-07-16): the companion sources now follow the reference-service package
+# layout — one @Component per event in <root>.event, page classes in <root>.event.page, access
+# classes in <root>.access, config split by concern in <root> — rooted at each lane's derived `.ccd`
+# root package (config-package column below). At integration the orchestrator writes this tree into
+# the real service clone's MAIN source tree (untracked in the clone's git status), retiring the flat
+# generated-config/ directory; this offline refresh stages the same tree under the review clone for
+# inspection.
+#
+# Each lane regenerates: <clone>/companion/  (the reference-layout companion tree) and
 # ../patches/retrofit-<CaseType>.patch  (the model annotation patch).
 #
 # Usage: regen-review-clones.sh [lane-dir ...]   (default: all six)
@@ -55,9 +63,10 @@ run_lane() {
   ( cd "${REPO_ROOT}" && "${GRADLEW}" -q -p sdk :ccd-definition-converter:run \
       --args="$(printf '%q ' "${args[@]}")" )
 
-  # Sync companion sources + patch into the clone, preserving narratives.
-  rm -rf "${clone}/generated-config"
-  cp -a "${out}/companion" "${clone}/generated-config"
+  # Sync companion sources + patch into the clone, preserving narratives. The companion tree is the
+  # reference-service layout rooted at <root> (config-package); retire the old flat generated-config/.
+  rm -rf "${clone}/generated-config" "${clone}/companion"
+  cp -a "${out}/companion" "${clone}/companion"
   mkdir -p "${PATCHES}"
   cp "${out}/report/retrofit.patch" "${PATCHES}/retrofit-${casetype}.patch"
   echo ">> ${lane}: companion + patch refreshed"

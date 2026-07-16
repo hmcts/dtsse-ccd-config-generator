@@ -28,7 +28,7 @@ public class ComplexTypeEmitter implements SourceEmitter {
   @Override
   public List<JavaFile> emit(CaseTypeModel model, EmitContext context) {
     String pkg = context.modelPackage();
-    FieldEmitHelper helper = new FieldEmitHelper(pkg, context.configPackage(),
+    FieldEmitHelper helper = new FieldEmitHelper(pkg, context.accessPackage(),
         context.getOptions().getRetrofitTypeFqnOverrides());
     List<JavaFile> files = new ArrayList<>();
 

@@ -22,6 +22,40 @@ public class EmitContext {
   }
 
   /**
+   * The package the per-event {@code CCDConfig} classes (and their page classes) are emitted into:
+   * {@code <configPackage>.event}, mirroring the reference services' {@code <root>.event} idiom
+   * (nfdiv/sptribs). Being a sub-package of the (component-scanned) root config package, its beans
+   * are still discovered by the SDK generator.
+   *
+   * @return the event package
+   */
+  public String eventPackage() {
+    return configPackage() + ".event";
+  }
+
+  /**
+   * The package the per-wizard-page classes are emitted into: {@code <configPackage>.event.page},
+   * mirroring the reference services' {@code <root>.event.page} idiom. Page classes are plain
+   * static helpers referenced by their event class, not beans, so scanning is irrelevant to them.
+   *
+   * @return the page package
+   */
+  public String pagePackage() {
+    return eventPackage() + ".page";
+  }
+
+  /**
+   * The package the {@code HasAccessControl} access classes are emitted into:
+   * {@code <configPackage>.access}, mirroring the reference services' {@code <root>.access} /
+   * {@code <model>.access} idiom. The {@code @CCD(access = {…})} references on the model point here.
+   *
+   * @return the access package
+   */
+  public String accessPackage() {
+    return configPackage() + ".access";
+  }
+
+  /**
    * The {@code CaseData}-typed class the generated config binds its typed getters to. In generate
    * mode this is the freshly generated {@code <modelPackage>.CaseData}; in retrofit mode it is the
    * team's own root model class ({@link ConversionOptions#getRetrofitCaseDataClass()}), so the
