@@ -64,6 +64,7 @@
     "PageDisplayOrder": 1,
     "PageFieldDisplayOrder": 5,
     "PageID": 1,
-    "PublishAs": "aliasOnly"
+    "PublishAs": "aliasOnly",
+    "ShowSummaryChangeOption": "Y"
   }
 ]
