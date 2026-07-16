@@ -2041,6 +2041,176 @@ public class NormalisingCcdConfigComparatorTest {
             .as("identical keyed Jurisdiction rows match").isTrue();
     }
 
+    // ---- ORPHAN_COMPLEX_TYPE ----
+
+    @Test
+    public void orphanComplexTypeDeclarationIsDroppedFromExpected() {
+        // No CaseField references Orphan, so the generator emits no class or rows for it; the
+        // expected-only ComplexTypes rows are dropped as an accepted semantic difference.
+        Map<String, List<Map<String, Object>>> expected = new LinkedHashMap<>();
+        expected.put("CaseField",
+            rows(row("ID", "name", "FieldType", "Text")));
+        expected.put("ComplexTypes",
+            rows(row("ID", "Orphan", "ListElementCode", "field", "FieldType", "Text")));
+        Map<String, List<Map<String, Object>>> actual = new LinkedHashMap<>();
+        actual.put("CaseField", rows(row("ID", "name", "FieldType", "Text")));
+
+        ComparisonResult result = NormalisingCcdConfigComparator.compare(expected, actual);
+
+        assertThat(result.matches()).as(result.report()).isTrue();
+        assertThat(result.getAppliedRules())
+            .anySatisfy(rule -> assertThat(rule).startsWith("ORPHAN_COMPLEX_TYPE"));
+    }
+
+    @Test
+    public void reachableComplexTypeMissingFromActualStillFails() {
+        // The complex type IS reachable (a CaseField declares it), so a generated side that omits
+        // its rows is real drift — the rule must NOT drop it.
+        Map<String, List<Map<String, Object>>> expected = new LinkedHashMap<>();
+        expected.put("CaseField",
+            rows(row("ID", "outer", "FieldType", "Complex", "FieldTypeParameter", "Outer")));
+        expected.put("ComplexTypes",
+            rows(row("ID", "Outer", "ListElementCode", "field", "FieldType", "Text")));
+        Map<String, List<Map<String, Object>>> actual = new LinkedHashMap<>();
+        actual.put("CaseField",
+            rows(row("ID", "outer", "FieldType", "Complex", "FieldTypeParameter", "Outer")));
+
+        assertThat(NormalisingCcdConfigComparator.compare(expected, actual).matches()).isFalse();
+    }
+
+    @Test
+    public void nestedReachableComplexTypeIsNotDropped() {
+        // Reachability follows members transitively: Outer (referenced by a field) references Inner,
+        // so Inner is reachable too and must not be dropped even though no field names it directly.
+        Map<String, List<Map<String, Object>>> expected = new LinkedHashMap<>();
+        expected.put("CaseField",
+            rows(row("ID", "outer", "FieldType", "Complex", "FieldTypeParameter", "Outer")));
+        expected.put("ComplexTypes", rows(
+            row("ID", "Outer", "ListElementCode", "inner", "FieldType", "Complex",
+                "FieldTypeParameter", "Inner"),
+            row("ID", "Inner", "ListElementCode", "leaf", "FieldType", "Text")));
+        Map<String, List<Map<String, Object>>> actual = new LinkedHashMap<>();
+        actual.put("CaseField",
+            rows(row("ID", "outer", "FieldType", "Complex", "FieldTypeParameter", "Outer")));
+        // Actual omits BOTH types' rows; because both are reachable, neither drops → still fails.
+
+        assertThat(NormalisingCcdConfigComparator.compare(expected, actual).matches()).isFalse();
+    }
+
+    // ---- ORPHAN_FIXED_LIST ----
+
+    @Test
+    public void orphanFixedListDeclarationIsDroppedFromExpected() {
+        Map<String, List<Map<String, Object>>> expected = new LinkedHashMap<>();
+        expected.put("CaseField", rows(row("ID", "name", "FieldType", "Text")));
+        expected.put("FixedLists",
+            rows(row("ID", "OrphanList", "ListElementCode", "a", "ListElement", "A")));
+        Map<String, List<Map<String, Object>>> actual = new LinkedHashMap<>();
+        actual.put("CaseField", rows(row("ID", "name", "FieldType", "Text")));
+
+        ComparisonResult result = NormalisingCcdConfigComparator.compare(expected, actual);
+
+        assertThat(result.matches()).as(result.report()).isTrue();
+        assertThat(result.getAppliedRules())
+            .anySatisfy(rule -> assertThat(rule).startsWith("ORPHAN_FIXED_LIST"));
+    }
+
+    @Test
+    public void fixedListReachableViaComplexMemberIsNotDropped() {
+        // A fixed list referenced only through a member of a reachable complex type IS reachable;
+        // dropping it would be wrong. Actual omits its rows → real drift → still fails.
+        Map<String, List<Map<String, Object>>> expected = new LinkedHashMap<>();
+        expected.put("CaseField",
+            rows(row("ID", "outer", "FieldType", "Complex", "FieldTypeParameter", "Outer")));
+        expected.put("ComplexTypes",
+            rows(row("ID", "Outer", "ListElementCode", "choice", "FieldType", "FixedList",
+                "FieldTypeParameter", "ChoiceList")));
+        expected.put("FixedLists",
+            rows(row("ID", "ChoiceList", "ListElementCode", "a", "ListElement", "A")));
+        Map<String, List<Map<String, Object>>> actual = new LinkedHashMap<>();
+        actual.put("CaseField",
+            rows(row("ID", "outer", "FieldType", "Complex", "FieldTypeParameter", "Outer")));
+        actual.put("ComplexTypes",
+            rows(row("ID", "Outer", "ListElementCode", "choice", "FieldType", "FixedList",
+                "FieldTypeParameter", "ChoiceList")));
+
+        assertThat(NormalisingCcdConfigComparator.compare(expected, actual).matches()).isFalse();
+    }
+
+    @Test
+    public void fixedListReachedOnlyViaOrphanComplexMemberIsAnOrphan() {
+        // A fixed list referenced ONLY through a member of an UNreachable complex type is itself an
+        // orphan (matching the converter, which restricts the member scan to reachable types). Both
+        // the orphan complex type and the orphan-path fixed list are dropped, so the sides match.
+        Map<String, List<Map<String, Object>>> expected = new LinkedHashMap<>();
+        expected.put("CaseField", rows(row("ID", "name", "FieldType", "Text")));
+        expected.put("ComplexTypes",
+            rows(row("ID", "Unreached", "ListElementCode", "choice", "FieldType", "FixedList",
+                "FieldTypeParameter", "AnnexList")));
+        expected.put("FixedLists",
+            rows(row("ID", "AnnexList", "ListElementCode", "a", "ListElement", "A")));
+        Map<String, List<Map<String, Object>>> actual = new LinkedHashMap<>();
+        actual.put("CaseField", rows(row("ID", "name", "FieldType", "Text")));
+
+        ComparisonResult result = NormalisingCcdConfigComparator.compare(expected, actual);
+
+        assertThat(result.matches()).as(result.report()).isTrue();
+        assertThat(result.getAppliedRules())
+            .anySatisfy(rule -> assertThat(rule).startsWith("ORPHAN_FIXED_LIST"));
+    }
+
+    // ---- PREDEFINED_COMPLEX_TYPE_REDECLARATION ----
+
+    @Test
+    public void predefinedTypeRedeclarationIsDroppedFromExpected() {
+        // fpl/civil re-declare the SDK's Fee type member-by-member; the built-in type owns its
+        // definition and the generator emits no rows for it, so the redeclaration is dropped.
+        Map<String, List<Map<String, Object>>> expected = new LinkedHashMap<>();
+        expected.put("CaseField",
+            rows(row("ID", "fee", "FieldType", "Complex", "FieldTypeParameter", "Fee")));
+        expected.put("ComplexTypes",
+            rows(row("ID", "Fee", "ListElementCode", "calculatedAmount", "FieldType", "Text")));
+        Map<String, List<Map<String, Object>>> actual = new LinkedHashMap<>();
+        actual.put("CaseField",
+            rows(row("ID", "fee", "FieldType", "Complex", "FieldTypeParameter", "Fee")));
+
+        ComparisonResult result = NormalisingCcdConfigComparator.compare(expected, actual);
+
+        assertThat(result.matches()).as(result.report()).isTrue();
+        assertThat(result.getAppliedRules())
+            .anySatisfy(rule -> assertThat(rule).startsWith("PREDEFINED_COMPLEX_TYPE_REDECLARATION"));
+    }
+
+    @Test
+    public void predefinedTypeAlsoEmittedByGeneratorStillCompares() {
+        // If the generated side DID emit ComplexTypes rows under a predefined ID (a conflict — the
+        // type was generated after all), the rule must not mask it: a real column difference fails.
+        Map<String, List<Map<String, Object>>> expected = new LinkedHashMap<>();
+        expected.put("ComplexTypes",
+            rows(row("ID", "Fee", "ListElementCode", "amount", "FieldType", "Text")));
+        Map<String, List<Map<String, Object>>> actual = new LinkedHashMap<>();
+        actual.put("ComplexTypes",
+            rows(row("ID", "Fee", "ListElementCode", "amount", "FieldType", "Number")));
+
+        assertThat(NormalisingCcdConfigComparator.compare(expected, actual).matches()).isFalse();
+    }
+
+    @Test
+    public void nonPredefinedComplexTypeIsNotTreatedAsRedeclaration() {
+        // A reachable, non-predefined complex type the generated side omits is real drift, not a
+        // predefined redeclaration — it must still fail (guards against over-broad dropping).
+        Map<String, List<Map<String, Object>>> expected = new LinkedHashMap<>();
+        expected.put("CaseField",
+            rows(row("ID", "custom", "FieldType", "Complex", "FieldTypeParameter", "MyType")));
+        expected.put("ComplexTypes",
+            rows(row("ID", "MyType", "ListElementCode", "field", "FieldType", "Text")));
+        Map<String, List<Map<String, Object>>> actual = new LinkedHashMap<>();
+        actual.put("CaseField",
+            rows(row("ID", "custom", "FieldType", "Complex", "FieldTypeParameter", "MyType")));
+
+        assertThat(NormalisingCcdConfigComparator.compare(expected, actual).matches()).isFalse();
+    }
+
     // ---- helpers ----
 
     private static Map<String, Object> accessControl(List<String> roles, String crud) {

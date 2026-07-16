@@ -37,6 +37,12 @@ public final class NormalisingCcdConfigComparator {
     private static final List<NormalisationRule> RULES = List.of(
         new AccessControlExpansionRule(),
         new UserProfileExcludedRule(),
+        // Orphan / predefined-redeclaration declaration drops run in normaliseDefinition and read the
+        // raw CaseField/ComplexTypes type columns for reachability, so they precede any rule that
+        // rewrites those columns (e.g. FIELD_TYPE_COMPLEX, which only runs at matched-row time).
+        new OrphanComplexTypeRule(),
+        new OrphanFixedListRule(),
+        new PredefinedComplexTypeRedeclarationRule(),
         new IdentifierWhitespaceRule(),
         new KeyAliasRule(),
         new LiveFromRule(),

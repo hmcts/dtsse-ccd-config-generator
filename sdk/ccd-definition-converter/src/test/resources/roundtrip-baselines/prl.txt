@@ -10,7 +10,6 @@ Sheet 'CaseEventToFields' row [solicitorCreate|caseFromCourtNav] column 'Display
 Sheet 'CaseEventToFields' row [submitAndPay|helpWithFeesReferenceNumber] column 'DisplayContext': expected <Mandatory> but was <MANDATORY>
 Sheet 'CaseEventToFields' row [submitAndPay|helpWithFees] column 'DisplayContext': expected <Mandatory> but was <MANDATORY>
 Sheet 'CaseField' row [cafcassEmailAddress] column 'FieldTypeParameter': expected <Email> but was <Text>
-Sheet 'CaseField' row [fl404SchoolDirections&Details] column 'FieldTypeParameter': expected <schoolDirections&Details> but was <Text>
 Sheet 'CaseField' row [hasRespondentAttendedMiam] column 'ShowSummaryContentOption': expected <Y> but column is missing in actual
 Sheet 'CaseField' row [helpMiamCostsExemptionsLabel] column 'ShowSummaryContentOption': expected <Y> but column is missing in actual
 Sheet 'CaseField' row [otherEmailAddress] column 'FieldTypeParameter': expected <Email> but was <Text>

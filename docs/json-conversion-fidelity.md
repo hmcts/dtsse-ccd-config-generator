@@ -60,7 +60,10 @@ this page.** Each gap is classified one of five ways:
 | UserProfile sheet | **Not supported** | `USER_PROFILE_EXCLUDED` | Per-user default worklists; no generator; conversion still fails with an `OMITTED_FAIL` gap (unless `--allow-gaps`), but the comparator drops the sheet from both sides so an expected-side `UserProfile` no longer recurs as a residual ([maintainer decision 2026-07-16](userprofile-investigation.md)) |
 | AccessType / AccessTypeRole sheets | **Not supported** | — | Org group-access config; no generator; fails conversion with an `OMITTED_FAIL` gap (unless `--allow-gaps`) |
 | EventToComplexTypes rows (incl. exotic tail `SecurityClassification`/`Publish`/`ShowSummaryChangeOption`) | Fixed with passthrough | row | Byte-identical round-trip (zero residuals). SDK now has `.complex(parent).<ctx>(member).eventLabel/.eventHint/.pageId` for hand-written Java, but re-deriving each row's dotted `ListElementCode` into nested member getters (incl. through predefined types) is pure risk for zero residual gain — kept as row passthrough |
-| Orphan / illegal-ID / predefined ComplexTypes; orphan-path FixedLists | Fixed with passthrough | row | Unreachable or non-Java-representable declarations |
+| Orphan ComplexTypes (nothing reachable references) | **Semantic, accepted** | `ORPHAN_COMPLEX_TYPE` | Not in `config.getTypes()`; the SDK generates no class/rows, so the input rows are dropped (advisory gap, "safe to delete") — no longer passed through |
+| Orphan-path FixedLists (reachable only via an orphan complex type) | **Semantic, accepted** | `ORPHAN_FIXED_LIST` | The SDK generates no enum; the input rows are dropped (advisory gap) — no longer passed through |
+| Predefined ComplexTypes redeclaration (member-by-member re-spelling of `Fee`/`Address`/…) | **Semantic, accepted** | `PREDEFINED_COMPLEX_TYPE_REDECLARATION` | The built-in `@ComplexType(generate=false)` type owns its definition; the redundant input rows are dropped (advisory gap) — no longer passed through |
+| Illegal-ID ComplexTypes/FixedLists (ID not a legal Java identifier, e.g. prl's `schoolDirections&Details`, fpl's `Stoke-on-TrentDFJCourts`) | Generated Java | — | Generated under a sanitised PascalCase class/enum name with the raw ID carried on `@ComplexType(name)`; round-trips byte-identically (referencing field's `FieldType`/`FieldTypeParameter` preserved) |
 | Conditional / multi-target `PostConditionState` | **Semantic, accepted** | `CONDITIONAL_POST_STATE` | Runtime honours `state(cond):priority` (JEXL, first-match-wins); `EventBuilder` models one post-state, so the SDK emits only the primary and the alternatives are dropped ([detail](#4-conditional--multi-target-postconditionstate-collapse)) |
 | Callback URLs + retries (all phases, incl. mid-event) | Fixed with passthrough | column-graft | Deliberate: no SDK callback wiring emitted; input URLs carried byte-exactly, `${CCD_DEF_*}` included, and compared exactly. This is now the *only* `CaseEventToFields` column graft |
 | CaseRoles `JurisdictionID` (mixed usage only) | **Not supported** | — | `emitCaseRoleJurisdiction()` is all-or-nothing; all-rows usage emits natively, mixed usage fails conversion with an `OMITTED_FAIL` gap (unless `--allow-gaps`) |
@@ -185,6 +188,27 @@ bullet each:
   hold the input's exact per-row placement and compare directly — propagating would pick a page's
   "first" mid-event value, which on the rare page carrying two different mid-event URLs (a fixture
   inconsistency; only one fires) differs by side and would spuriously mismatch.
+- **`ORPHAN_COMPLEX_TYPE`** — a **semantic, accepted** concession: drops an expected-side
+  `ComplexTypes` declaration whose ID nothing reachable from a `CaseData` field references. The SDK
+  generates no class or rows for such an orphan (it is never in `config.getTypes()`), so the converter
+  drops it with an advisory gap and this rule forgives the expected-only rows. Self-contained: it
+  recomputes reachability from the expected definition's own sheets (`DeclarationReachability`,
+  mirroring `DefaultDefinitionLinker`) and drops a row only when its ID is genuinely unreachable **and**
+  the actual side emitted no row for it — a reachable type the generator failed to emit (real drift), or
+  a conflicting generated declaration, still fails.
+- **`ORPHAN_FIXED_LIST`** — a **semantic, accepted** concession: drops an expected-side `FixedLists`
+  declaration reachable only through an orphan complex type (or by nothing at all). The SDK generates no
+  enum for it. Same self-contained reachability guard as `ORPHAN_COMPLEX_TYPE`; a list referenced by a
+  field or a reachable complex member, or one whose ID also names a complex type (the collision case the
+  converter still passes through), is never dropped.
+- **`PREDEFINED_COMPLEX_TYPE_REDECLARATION`** — a **semantic, accepted** concession: drops an
+  expected-side `ComplexTypes` declaration that spells out, member by member, an SDK-predefined platform
+  type (fpl/civil's `Fee`, probate's `Address`). The built-in `@ComplexType(generate=false)` type owns
+  its definition, so `ComplexTypeGenerator` emits no rows and referencing fields resolve to the built-in
+  class; the converter drops the redundant rows with an advisory gap. The predefined ID set is reflected
+  from `uk.gov.hmcts.ccd.sdk.type` (`PredefinedComplexTypes`) — the SDK's own source of truth, never a
+  hand-coded list. Narrow: drops only when the actual side emitted no rows under that ID (a genuine
+  generated declaration under the same ID — a conflict — is left in place and any real difference fails).
 - **`POST_CONDITION_NO_CHANGE`** — `PostConditionState=*` equals the event's single pre-state;
   "no change" and "ends in that same state" are the same runtime behaviour.
 - **`CONDITIONAL_POST_STATE`** — a **semantic, accepted** concession (not cosmetic; see
@@ -376,8 +400,6 @@ and not-supported gaps respectively.)
 | Construct | Sheet(s) | Mechanism | Why there is no SDK API |
 |---|---|---|---|
 | EventToComplexTypes (incl. exotic tail) | `CaseEventToComplexTypes` (→ `EventToComplexTypes`) | row (per event/field) | Per-member event display-context overrides. Byte-identical round-trip (zero residuals); the SDK now has `.complex(parent).<ctx>(member).eventLabel/.eventHint/.pageId` for hand-written Java, but re-deriving each row's dotted `ListElementCode` into nested member getters (incl. through predefined types) is pure risk for zero residual gain, so the whole sheet stays a row passthrough. |
-| Orphan / illegal-ID / predefined ComplexTypes | `ComplexTypes` | row | A declared-but-unreachable complex type, one whose ID is not a legal Java identifier, or an explicit re-declaration of an SDK-predefined type is not emitted as a Java `@ComplexType`. |
-| Orphan-path FixedLists | `FixedLists` | row | A FixedList reachable only through an unreachable complex type generates no enum. |
 | Callback URLs (about-to-start / about-to-submit / submitted) + their `RetriesTimeout*` | `CaseEvent` | column-graft | The converter deliberately emits **no** SDK callback wiring, so the generator writes no `CallBackURL*`/`RetriesTimeout*`; the input values (env `${CCD_DEF_*}` placeholders included) are grafted back verbatim. |
 | Mid-event callback URL + its `RetriesTimeout*MidEvent` | `CaseEventToFields` | column-graft | Same: mid-event is a per-page property, carried verbatim per field row rather than wired (a bracketed metadata `CaseFieldID` such as `[STATE]` is skipped — the generator emits no row for it to graft onto). |
 
@@ -444,6 +466,13 @@ The following constructs used to live in this table and are now emitted as real 
   **only** the mid-event callback columns (no SDK API by design).
 - **`PrintableDocumentsUrl`** (CaseType) → `builder.printableDocumentsUrl(url)`; **`CanSaveDraft`**
   (CaseEvent) → `EventBuilder.canSaveDraft()`. Both were previously dropped residuals.
+- **Illegal-ID ComplexTypes / FixedLists** — a reachable complex type or referenced fixed list whose
+  CCD ID is not a legal Java identifier (prl's `schoolDirections&Details`, fpl's
+  `Stoke-on-TrentDFJCourts` / `HearingCancellationReasons-*`) is now generated under a sanitised
+  PascalCase class/enum name, with the raw wire ID carried on `@ComplexType(name)`. The SDK reads that
+  `name` for the emitted type/list ID and every referencing field's `FieldType`/`FieldTypeParameter`
+  (never the class name), so it round-trips byte-identically — the former row passthrough is deleted and
+  prl's `fl404SchoolDirections&Details` field (previously downgraded to `Text`) now resolves.
 - **Completed `FieldType` constants** — `CaseHistoryViewer`, `WaysToPay`, `DateTime`, `Number`, the
   `AddressUK`/`AddressGlobal`/`AddressGlobalUK` family, `Fee`, `Organisation(+Policy)`,
   `ChangeOrganisationRequest`, `JudicialUser` are now real `FieldType` enum constants, so an unknown-type
@@ -538,10 +567,13 @@ The categories, all SDK-structural limitations or fixture-data findings (none ar
   no SDK API and stays a residual. (`PrintableDocumentsUrl`, `CanSaveDraft` and the
   `CaseEventToFields` `ShowSummaryContentOption`/`NullifyByDefault`/`DefaultValue`/`RetainHiddenValue`
   columns are now all emitted as Java — see [Constructs moved from passthrough to generated Java](#constructs-moved-from-passthrough-to-generated-java).)
-- **Unreachable / non-Java complex types** (prl): whole `ComplexTypes` members with no match in the
-  generated definition — orphan/unreachable types — remain the bulk of prl's tail, routed to
-  passthrough. (Platform types such as `JudicialUser` are no longer carried as `Text`: they are now
-  real `FieldType` constants emitting `typeOverride`.)
+- **Orphan / predefined / illegal-ID complex types and fixed lists** are no longer residuals: an
+  orphan (unreachable) declaration and a redundant redeclaration of an SDK-predefined type are dropped
+  as accepted semantic differences (`ORPHAN_COMPLEX_TYPE`/`ORPHAN_FIXED_LIST`/
+  `PREDEFINED_COMPLEX_TYPE_REDECLARATION`), and an illegal-ID complex type or fixed list is generated as
+  Java via the `@ComplexType(name)` carrier — so prl's `schoolDirections&Details` field now round-trips.
+  (Platform types such as `JudicialUser` are likewise no longer carried as `Text`: they are real
+  `FieldType` constants emitting `typeOverride`.)
 
 ## What the round-trip does not prove
 
@@ -586,7 +618,9 @@ A conversion run (via `--report-dir`) writes:
 
 - **`gap-report.md`** — human-readable table of every construct the converter could not express
   directly in Java: sheet/row/column, action taken (`PASSTHROUGH_ROW`, `PASSTHROUGH_COLUMN`,
-  `CONDITIONAL_CODE`, or `OMITTED_FAIL`), and why.
+  `CONDITIONAL_CODE`, `ADVISORY`, or `OMITTED_FAIL`), and why. An `ADVISORY` entry is non-blocking —
+  it flags a redundant input declaration (an orphan or predefined-type redeclaration) that produces no
+  output and is safe to delete from the source definition.
 - **`gap-report.json`** — the same findings as structured data (`entries` plus `summary` counts),
   for tooling.
 

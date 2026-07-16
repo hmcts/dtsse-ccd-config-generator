@@ -297,7 +297,7 @@ class DefaultDefinitionLinkerTest {
     GapCollector gaps = new GapCollector();
     DefinitionIr ir = minimal("Minimal")
         // A CaseField references Outer so the Outer->Inner graph is reachable and generated
-        // (unreferenced complex types are passed through rather than emitted as classes).
+        // (an unreferenced complex type is dropped with an advisory gap, not emitted as a class).
         .row(SheetName.CASE_FIELD,
             cols("CaseTypeID", "Minimal", "ID", "outer", "Label", "Outer",
                 "FieldType", "Complex", "FieldTypeParameter", "Outer"))
@@ -323,6 +323,126 @@ class DefaultDefinitionLinkerTest {
     assertThat(depthById.get("Outer")).isEqualTo(1);
     assertThat(gaps.getEntries())
         .anyMatch(g -> "ComplexTypes".equals(g.getSheet()) && "AddressUK".equals(g.getValue()));
+  }
+
+  @Test
+  void orphanComplexTypeIsDroppedWithAdvisoryGapNotPassthrough() {
+    GapCollector gaps = new GapCollector();
+    DefinitionIr ir = minimal("Minimal")
+        // No CaseField references Orphan, so it is unreachable: the SDK generates no class for it.
+        .row(SheetName.CASE_FIELD,
+            cols("CaseTypeID", "Minimal", "ID", "name", "Label", "Name", "FieldType", "Text"))
+        .row(SheetName.COMPLEX_TYPES,
+            cols("ID", "Orphan", "ListElementCode", "field", "FieldType", "Text",
+                "ElementLabel", "Field"))
+        .build();
+
+    CaseTypeModel model = linker.link(ir, options("Minimal"), gaps);
+
+    // Dropped, not generated and not passed through — its absence is an accepted semantic difference.
+    assertThat(model.getComplexTypes()).extracting(ComplexTypeModel::getId).doesNotContain("Orphan");
+    assertThat(model.getPassthroughSheets())
+        .noneMatch(s -> s.getRelativePath().contains("ComplexTypes/Orphan"));
+    assertThat(gaps.getEntries()).anyMatch(g -> "ComplexTypes".equals(g.getSheet())
+        && "Orphan".equals(g.getValue()) && g.getAction() == GapAction.ADVISORY);
+  }
+
+  @Test
+  void predefinedComplexTypeRedeclarationIsDroppedWithAdvisoryGapNotPassthrough() {
+    GapCollector gaps = new GapCollector();
+    DefinitionIr ir = minimal("Minimal")
+        // A field references the built-in Fee type; the input also spells Fee's members out. The
+        // field resolves to the built-in class and the redundant member rows are dropped (advisory).
+        .row(SheetName.CASE_FIELD,
+            cols("CaseTypeID", "Minimal", "ID", "fee", "Label", "Fee",
+                "FieldType", "Complex", "FieldTypeParameter", "Fee"))
+        .row(SheetName.COMPLEX_TYPES,
+            cols("ID", "Fee", "ListElementCode", "calculatedAmount", "FieldType", "Text",
+                "ElementLabel", "Amount"))
+        .build();
+
+    CaseTypeModel model = linker.link(ir, options("Minimal"), gaps);
+
+    assertThat(model.getComplexTypes()).extracting(ComplexTypeModel::getId).doesNotContain("Fee");
+    assertThat(model.getPassthroughSheets())
+        .noneMatch(s -> s.getRelativePath().contains("ComplexTypes/Fee"));
+    assertThat(gaps.getEntries()).anyMatch(g -> "ComplexTypes".equals(g.getSheet())
+        && "Fee".equals(g.getValue()) && g.getAction() == GapAction.ADVISORY);
+  }
+
+  @Test
+  void illegalIdComplexTypeIsGeneratedWithSanitisedClassNameAndRawIdCarrier() {
+    GapCollector gaps = new GapCollector();
+    DefinitionIr ir = minimal("Minimal")
+        // prl's real case: a reachable complex type whose ID is not a legal Java identifier.
+        .row(SheetName.CASE_FIELD,
+            cols("CaseTypeID", "Minimal", "ID", "directions", "Label", "Directions",
+                "FieldType", "Collection", "FieldTypeParameter", "schoolDirections&Details"))
+        .row(SheetName.COMPLEX_TYPES,
+            cols("ID", "schoolDirections&Details", "ListElementCode", "detail", "FieldType", "Text",
+                "ElementLabel", "Detail"))
+        .build();
+
+    CaseTypeModel model = linker.link(ir, options("Minimal"), gaps);
+
+    // Generated (not passthrough) under a sanitised PascalCase class name; the raw wire ID is
+    // preserved on the model so ComplexTypeEmitter emits @ComplexType(name = "schoolDirections&Details").
+    ComplexTypeModel generated = model.getComplexTypes().stream()
+        .filter(ct -> "schoolDirections&Details".equals(ct.getId()))
+        .findFirst()
+        .orElseThrow();
+    assertThat(generated.getJavaClassName()).isEqualTo("SchoolDirectionsDetails");
+    assertThat(model.getPassthroughSheets())
+        .noneMatch(s -> s.getRelativePath().contains("schoolDirections"));
+    assertThat(gaps.getEntries()).anyMatch(g -> "ComplexTypes".equals(g.getSheet())
+        && "schoolDirections&Details".equals(g.getValue())
+        && g.getCategory() == GapCategory.IDENTIFIER_SANITISED);
+  }
+
+  @Test
+  void orphanFixedListIsDroppedWithAdvisoryGapNotPassthrough() {
+    GapCollector gaps = new GapCollector();
+    DefinitionIr ir = minimal("Minimal")
+        // No field references OrphanList; the SDK generates no enum for it.
+        .row(SheetName.CASE_FIELD,
+            cols("CaseTypeID", "Minimal", "ID", "name", "Label", "Name", "FieldType", "Text"))
+        .row(SheetName.FIXED_LISTS,
+            cols("ID", "OrphanList", "ListElementCode", "a", "ListElement", "A"))
+        .build();
+
+    CaseTypeModel model = linker.link(ir, options("Minimal"), gaps);
+
+    assertThat(model.getFixedLists()).extracting(FixedListModel::getId).doesNotContain("OrphanList");
+    assertThat(model.getPassthroughSheets())
+        .noneMatch(s -> s.getRelativePath().contains("FixedLists/OrphanList"));
+    assertThat(gaps.getEntries()).anyMatch(g -> "FixedLists".equals(g.getSheet())
+        && "OrphanList".equals(g.getValue()) && g.getAction() == GapAction.ADVISORY);
+  }
+
+  @Test
+  void illegalIdFixedListIsGeneratedWithSanitisedEnumNameAndRawIdCarrier() {
+    GapCollector gaps = new GapCollector();
+    DefinitionIr ir = minimal("Minimal")
+        // fpl's real case: a referenced fixed list whose ID is not a legal Java identifier.
+        .row(SheetName.CASE_FIELD,
+            cols("CaseTypeID", "Minimal", "ID", "court", "Label", "Court",
+                "FieldType", "FixedList", "FieldTypeParameter", "Stoke-on-TrentDFJCourts"))
+        .row(SheetName.FIXED_LISTS,
+            cols("ID", "Stoke-on-TrentDFJCourts", "ListElementCode", "338",
+                "ListElement", "Stoke-on-Trent"))
+        .build();
+
+    CaseTypeModel model = linker.link(ir, options("Minimal"), gaps);
+
+    // Generated as an enum (not passthrough) under a sanitised name; the raw list ID rides on the
+    // model so EnumEmitter emits @ComplexType(name = "Stoke-on-TrentDFJCourts").
+    FixedListModel generated = model.getFixedLists().stream()
+        .filter(fl -> "Stoke-on-TrentDFJCourts".equals(fl.getId()))
+        .findFirst()
+        .orElseThrow();
+    assertThat(IdentifierSanitiser.isLegalIdentifier(generated.getJavaClassName())).isTrue();
+    assertThat(model.getPassthroughSheets())
+        .noneMatch(s -> s.getRelativePath().contains("Stoke"));
   }
 
   @Test

@@ -98,10 +98,9 @@ public class DefaultDefinitionLinker implements DefinitionLinker {
     }
 
     Map<String, String> complexTypeRefs = new LinkedHashMap<>();
-    List<PassthroughSheet> complexTypePassthrough = new ArrayList<>();
     List<ComplexTypeModel> complexTypes =
         buildComplexTypes(ir, caseTypeId, options, gaps, fixedListEnumNames, complexTypeRefs,
-            complexTypePassthrough, usedTypeNames);
+            usedTypeNames);
 
     TypeMapper.EnumResolver enumResolver = fixedListEnumNames::get;
     TypeMapper.ComplexResolver complexResolver = complexTypeRefs::get;
@@ -163,7 +162,6 @@ public class DefaultDefinitionLinker implements DefinitionLinker {
     List<PassthroughSheet> passthroughSheets = buildPassthroughSheets(ir, options, gaps);
     passthroughSheets.addAll(complexTypeAuth.passthrough());
     passthroughSheets.addAll(fixedListPassthrough);
-    passthroughSheets.addAll(complexTypePassthrough);
     passthroughSheets.addAll(buildEventToComplexTypesPassthrough(ir, caseTypeId, options, gaps));
     passthroughSheets.addAll(buildEventFieldColumnPassthrough(ir, caseTypeId, events, options, gaps));
     // State Description (@CCD(description)), RoleToAccessProfiles unregistered roles
@@ -525,48 +523,32 @@ public class DefaultDefinitionLinker implements DefinitionLinker {
         continue;
       }
       if (!referenced.contains(id)) {
-        // A FixedList that no CaseField or ComplexType member references is not in the SDK
-        // generator's type set (config.getTypes()), so FixedListGenerator never emits an enum
-        // file for it. Reproduce the orphan list via passthrough instead of a generated enum that
-        // would have no counterpart on the generated side.
-        passthroughFixedList(id, entry.getValue(), options, passthrough);
+        // Orphan-path FixedList: no CaseField and no reachable ComplexType member references it, so
+        // it is not in the SDK generator's type set (config.getTypes()) and FixedListGenerator emits
+        // no enum file for it. It is no longer passed through — a list nothing references produces no
+        // generated output — so the converter drops it and records an advisory gap. The round-trip's
+        // ORPHAN_FIXED_LIST comparator rule forgives its expected-side absence (recomputing
+        // reachability from the input sheets, dropping only genuinely unreferenced lists).
         gaps.add(GapEntry.builder()
             .sheet("FixedLists")
             .rowKey(id)
             .column(Columns.ID)
             .value(id)
             .category(GapCategory.UNSUPPORTED_VALUE)
-            .action(GapAction.PASSTHROUGH_ROW)
-            .detail("FixedList '" + id + "' is not referenced by any field, so the SDK generates"
-                + " no enum for it; its rows are passed through as raw JSON")
-            .build());
-        continue;
-      }
-      if (!IdentifierSanitiser.isLegalIdentifier(id)) {
-        // The SDK's FixedListGenerator names the enum, its output file and every referencing
-        // field's FieldTypeParameter after the enum's simple class name, so a list whose ID is
-        // not a legal Java identifier (e.g. fpl's 'Stoke-on-TrentDFJCourts') cannot round-trip
-        // through a generated enum. Skip enum generation — TypeMapper.fixedList then falls back
-        // to String with typeOverride=FixedList and typeParameterOverride=<id>, preserving the
-        // field's FieldType/FieldTypeParameter — and pass the FixedLists rows through verbatim
-        // so the list definition itself is reproduced.
-        passthroughFixedList(id, entry.getValue(), options, passthrough);
-        gaps.add(GapEntry.builder()
-            .sheet("FixedLists")
-            .rowKey(id)
-            .column(Columns.ID)
-            .value(id)
-            .category(GapCategory.IDENTIFIER_SANITISED)
-            .action(GapAction.PASSTHROUGH_ROW)
-            .detail("FixedList ID '" + id + "' is not a legal Java identifier and cannot name a"
-                + " generated enum; the list rows are passed through as raw JSON and referencing"
-                + " fields keep the ID via typeParameterOverride")
+            .action(GapAction.ADVISORY)
+            .detail("FixedList '" + id + "' is not referenced by any field, so the SDK generates no"
+                + " enum for it. Orphan declaration, safe to delete: it is dropped (not passed"
+                + " through) and its absence is an accepted semantic difference")
             .build());
         continue;
       }
       // PascalCase the enum's Java name (dropping any machine FL_ prefix) and record it as the type
       // every referencing field resolves to; the wire ID stays `id` and round-trips via
-      // @ComplexType(name = id) (finding #4). enumNames maps ID -> Java enum name for TypeMapper.
+      // @ComplexType(name = id) (finding #4). This holds even when the ID is not a legal Java
+      // identifier (fpl's 'Stoke-on-TrentDFJCourts', 'HearingCancellationReasons-*'): the SDK reads
+      // @ComplexType(name) for the emitted FixedLists ID/file name and every referencing field's
+      // FieldTypeParameter — never the class name — so the sanitised enum name is invisible on the
+      // wire and the list round-trips byte-identically. enumNames maps ID -> Java enum name.
       String enumClassName = TypeClassNamer.allocate(TypeClassNamer.fixedListName(id), usedTypeNames);
       enumNames.put(id, enumClassName);
       Set<String> usedConstants = new LinkedHashSet<>();
@@ -670,11 +652,11 @@ public class DefaultDefinitionLinker implements DefinitionLinker {
     Set<String> referenced = new LinkedHashSet<>();
     // Every CaseField reference counts. But a reference from a ComplexTypes member counts only when
     // that complex type is itself reachable from a CaseData field: an unreachable complex type is
-    // passed through as raw JSON and never registered in the SDK's type set, so a FixedList it
-    // alone references (fpl's fl_Annex, reached only through the SharedStorage-only AnnexType) would
-    // get a generated enum with no counterpart FixedLists rows on the generated side. Restricting
-    // the ComplexTypes scan to reachable types makes such an orphan-path FixedList fall to the
-    // unreferenced branch (passthrough), matching what the generator actually emits.
+    // dropped (advisory) and never registered in the SDK's type set, so a FixedList it alone
+    // references (fpl's fl_Annex, reached only through the SharedStorage-only AnnexType) would get a
+    // generated enum with no counterpart FixedLists rows on the generated side. Restricting the
+    // ComplexTypes scan to reachable types makes such an orphan-path FixedList fall to the
+    // unreferenced branch (advisory drop), matching what the generator actually emits.
     Map<String, List<SheetRow>> complexById =
         groupById(ir.rowsForCaseType(SheetName.COMPLEX_TYPES, caseTypeId));
     Set<String> reachableComplex = reachableComplexTypes(ir, caseTypeId, complexById);
@@ -743,7 +725,8 @@ public class DefaultDefinitionLinker implements DefinitionLinker {
    * @param gaps the gap collector for identifier sanitisation and predefined-type notices
    * @param enumNames fixed list ID to generated enum name, for member type resolution
    * @param complexTypeRefs output map of complex type ID to its Java type reference
-   * @return the complex type models, one per distinct non-predefined ID
+   * @param usedTypeNames the running set of allocated companion class/enum names (mutated)
+   * @return the complex type models, one per distinct reachable non-predefined ID
    */
   private List<ComplexTypeModel> buildComplexTypes(
       DefinitionIr ir,
@@ -752,32 +735,33 @@ public class DefaultDefinitionLinker implements DefinitionLinker {
       GapCollector gaps,
       Map<String, String> enumNames,
       Map<String, String> complexTypeRefs,
-      List<PassthroughSheet> passthrough,
       Set<String> usedTypeNames) {
     Map<String, List<SheetRow>> byId =
         groupById(ir.rowsForCaseType(SheetName.COMPLEX_TYPES, caseTypeId));
 
     // The SDK's ConfigResolver only generates a ComplexTypes class for a type that some CaseData
     // field (directly or transitively) declares. A complex type declared on the sheet but never
-    // referenced (ia's 'caseFlag', 'appointment') yields no generated class, so its rows are
-    // reproduced via passthrough rather than a phantom generated type.
+    // referenced (ia's 'caseFlag', 'appointment') yields no generated class; such an orphan is
+    // dropped with an advisory gap rather than emitted as a phantom generated type.
     Set<String> reachable = reachableComplexTypes(ir, caseTypeId, byId);
 
     // Populate the resolver before building members (a complex type's member may reference a
     // sibling complex type). A predefined type maps to its SDK FQN; a generated type maps to a
     // PascalCase Java class name (finding #3) allocated collision-free, while the wire ID stays the
-    // sheet ID and round-trips via @ComplexType(name = id). Only types that will actually yield a
-    // generated class (non-predefined, reachable, legal identifier) are allocated a name; the rest
-    // are passed through below and dropped from the resolver, so no name is wasted.
+    // sheet ID and round-trips via @ComplexType(name = id). Every reachable non-predefined type is
+    // allocated a name — INCLUDING one whose ID is not a legal Java identifier (prl's
+    // 'schoolDirections&Details'): TypeClassNamer.complexTypeName PascalCases the ID into a legal
+    // class name and the raw ID is preserved via @ComplexType(name = id), which the SDK reads back
+    // for the emitted type ID and every referencing field's FieldType/FieldTypeParameter, so the
+    // rename round-trips exactly. An orphan (unreachable) type gets a temporary raw-ID mapping that
+    // keeps any member resolver lookup non-null until the type is dropped from the map below.
     for (String id : byId.keySet()) {
       if (SdkPredefinedTypes.isPredefined(id)) {
         complexTypeRefs.put(id, SdkPredefinedTypes.javaTypeFor(id));
-      } else if (reachable.contains(id) && IdentifierSanitiser.isLegalIdentifier(id)) {
+      } else if (reachable.contains(id)) {
         complexTypeRefs.put(id, TypeClassNamer.allocate(
             TypeClassNamer.complexTypeName(id), usedTypeNames));
       } else {
-        // Unreachable or illegal-identifier: passed through below; a temporary raw-ID mapping keeps
-        // any member resolver lookup non-null until the type is removed from the map.
         complexTypeRefs.put(id, id);
       }
     }
@@ -790,64 +774,70 @@ public class DefaultDefinitionLinker implements DefinitionLinker {
     for (Map.Entry<String, List<SheetRow>> entry : byId.entrySet()) {
       String id = entry.getKey();
       if (!SdkPredefinedTypes.isPredefined(id) && !reachable.contains(id)) {
-        // Unreferenced complex type: the SDK generates no class for it. Preserve its rows via
-        // passthrough and drop it from complexTypeRefs so nothing resolves to a phantom type.
+        // Orphan complex type: nothing reachable from a CaseData field references it, so the SDK
+        // generates no class for it. It is no longer passed through — a declaration that produces no
+        // generated output is dead weight in the migrated definition, so the converter drops it and
+        // records an advisory gap instead. The regenerated definition simply omits the orphan
+        // ComplexTypes rows; the round-trip's ORPHAN_COMPLEX_TYPE comparator rule forgives their
+        // expected-side absence (it recomputes reachability from the input sheets and only drops rows
+        // for a genuinely unreachable ID). Drop it from complexTypeRefs so nothing resolves to it.
         complexTypeRefs.remove(id);
-        passthroughComplexType(id, entry.getValue(), options, passthrough);
         gaps.add(GapEntry.builder()
             .sheet("ComplexTypes")
             .rowKey(id)
             .column("ID")
             .value(id)
             .category(GapCategory.UNSUPPORTED_VALUE)
-            .action(GapAction.PASSTHROUGH_ROW)
-            .detail("Complex type '" + id + "' is not referenced by any field, so the SDK"
-                + " generates no class for it; its rows are passed through as raw JSON")
+            .action(GapAction.ADVISORY)
+            .detail("Complex type '" + id + "' is not referenced by any field, so the SDK generates"
+                + " no class for it. Orphan declaration, safe to delete: it is dropped (not passed"
+                + " through) and its absence is an accepted semantic difference")
             .build());
         continue;
       }
       if (SdkPredefinedTypes.isPredefined(id)) {
         // The SDK ships this type with @ComplexType(generate = false), so ComplexTypeGenerator
         // emits NO ComplexTypes rows for it — the definition store learns the type from the SDK
-        // jar at runtime. But a definition that explicitly re-declares the type's members on its
-        // ComplexTypes sheet (fpl's Fee) imports those rows, so reproduce them verbatim via
-        // passthrough; the referencing field still resolves to the built-in class (complexTypeRefs
-        // above), so no class is generated and only the sheet rows are grafted back.
-        passthroughComplexType(id, entry.getValue(), options, passthrough);
+        // jar at runtime. A definition that explicitly re-declares the type's members on its own
+        // ComplexTypes sheet (fpl/civil's Fee, probate's Address) is a redundant redeclaration of a
+        // platform type: the referencing field already resolves to the built-in class
+        // (complexTypeRefs above). Those rows are no longer passed through — the built-in type owns
+        // its definition, so re-shipping the members is dead weight. The converter drops them and
+        // records an advisory gap; the round-trip's PREDEFINED_COMPLEX_TYPE_REDECLARATION comparator
+        // rule forgives their expected-side absence.
         gaps.add(GapEntry.builder()
             .sheet("ComplexTypes")
             .rowKey(id)
             .column("ID")
             .value(id)
             .category(GapCategory.UNSUPPORTED_VALUE)
-            .action(GapAction.PASSTHROUGH_ROW)
-            .detail("Complex type '" + id + "' is an SDK-predefined type; referencing fields map"
-                + " to the built-in class and no ComplexTypes class is generated, so the input's"
-                + " explicit ComplexTypes rows are passed through as raw JSON")
+            .action(GapAction.ADVISORY)
+            .detail("Complex type '" + id + "' is an SDK-predefined platform type; referencing"
+                + " fields map to the built-in class and no ComplexTypes class is generated."
+                + " Redundant redeclaration of a platform type, safe to delete: the input's explicit"
+                + " ComplexTypes rows are dropped (not passed through) and their absence is an"
+                + " accepted semantic difference")
             .build());
         continue;
       }
       if (!IdentifierSanitiser.isLegalIdentifier(id)) {
         // The complex-type ID is not a legal Java identifier (prl's 'schoolDirections&Details').
-        // The SDK derives the emitted CCD type ID from the generated class name, so sanitising the
-        // ID would change the round-tripped data; and a class named with the raw ID does not
-        // compile. Route the whole type through passthrough (as for an unreferenced type) — the
-        // referencing field falls back to a String carrier keeping its original FieldType via the
-        // unknown-type path, and the ComplexTypes rows are reproduced verbatim.
-        complexTypeRefs.remove(id);
-        passthroughComplexType(id, entry.getValue(), options, passthrough);
+        // A class cannot be named with the raw ID, but the SDK derives the emitted CCD type ID (and
+        // every referencing field's FieldType/FieldTypeParameter) from @ComplexType(name), NOT from
+        // the class name — so the type is generated under a sanitised PascalCase class name
+        // (allocated above) with @ComplexType(name = id) carrying the raw wire ID, exactly as a
+        // renamed FixedList enum does. It round-trips byte-identically and no longer falls to
+        // passthrough. Record the sanitisation as an advisory so the rename is visible in the report.
         gaps.add(GapEntry.builder()
             .sheet("ComplexTypes")
             .rowKey(id)
             .column("ID")
             .value(id)
             .category(GapCategory.IDENTIFIER_SANITISED)
-            .action(GapAction.PASSTHROUGH_ROW)
-            .detail("Complex type '" + id + "' is not a legal Java identifier, so no class can be"
-                + " generated without changing the emitted type ID; its rows are passed through as"
-                + " raw JSON and referencing fields carry the original FieldType")
+            .action(GapAction.CONDITIONAL_CODE)
+            .detail("Complex type ID '" + id + "' is not a legal Java identifier; the class is named "
+                + complexTypeRefs.get(id) + " and the exact ID is preserved via @ComplexType(name)")
             .build());
-        continue;
       }
       List<FieldModel> members = new ArrayList<>();
       Set<String> usedNames = new LinkedHashSet<>();
@@ -942,30 +932,6 @@ public class DefaultDefinitionLinker implements DefinitionLinker {
       }
     }
     return reachable;
-  }
-
-  private void passthroughComplexType(
-      String id, List<SheetRow> rows, ConversionOptions options,
-      List<PassthroughSheet> passthrough) {
-    Map<String, List<SheetRow>> bySuffix = new LinkedHashMap<>();
-    for (SheetRow row : rows) {
-      String suffix = OverlayResolver.suffixFor(row.getOverlayTags(), options);
-      bySuffix.computeIfAbsent(suffix, k -> new ArrayList<>()).add(row);
-    }
-    for (Map.Entry<String, List<SheetRow>> entry : bySuffix.entrySet()) {
-      String suffix = entry.getKey();
-      List<Map<String, Object>> raw = new ArrayList<>();
-      for (SheetRow row : entry.getValue()) {
-        raw.add(new LinkedHashMap<>(row.getColumns()));
-      }
-      passthrough.add(PassthroughSheet.builder()
-          .relativePath("ComplexTypes/" + id + ".json")
-          .primaryKeys(List.of(Columns.ID, Columns.LIST_ELEMENT_CODE))
-          .overlaySuffix(suffix)
-          .overlayCondition(OverlayResolver.conditionFor(suffix, options))
-          .rows(raw)
-          .build());
-    }
   }
 
   private Map<String, Integer> computeDepths(Map<String, List<SheetRow>> byId) {

@@ -300,6 +300,42 @@ class ModelEmitterGoldenTest {
     assertThat(actual).isEqualTo(expected);
   }
 
+  @Test
+  void complexTypeEmitterIllegalIdCarriesRawIdViaComplexTypeName() throws IOException {
+    // A reachable complex type whose ID is not a legal Java identifier (prl's
+    // 'schoolDirections&Details') is generated under a sanitised PascalCase class name, with the
+    // raw wire ID preserved on @ComplexType(name). The SDK reads that name for the emitted type ID
+    // and every referencing field's FieldType/FieldTypeParameter, so it round-trips byte-identically.
+    FieldModel member = FieldModel.builder()
+        .id("fl404SchoolDirections&DetailsComplex")
+        .javaName("fl404SchoolDirectionsDetailsComplex")
+        .javaType("String")
+        .fieldType("Text")
+        .label("Add directions and any further details")
+        .overlayTags(Set.of())
+        .build();
+    ComplexTypeModel illegalIdType = ComplexTypeModel.builder()
+        .id("schoolDirections&Details")
+        .javaClassName("SchoolDirectionsDetails")
+        .members(List.of(member))
+        .depth(0)
+        .build();
+    CaseTypeModel model = CaseTypeModel.builder()
+        .caseTypeId("TestCase")
+        .complexTypes(List.of(illegalIdType))
+        .build();
+
+    List<JavaFile> files = new ComplexTypeEmitter().emit(model, buildContext());
+
+    assertThat(files).hasSize(1);
+    // Class named sanely, not with the raw ID.
+    assertThat(files.get(0).typeSpec().name()).isEqualTo("SchoolDirectionsDetails");
+    String actual = normalise(files.get(0).toString());
+    assertThat(actual).isEqualTo(loadGolden("SchoolDirectionsDetails.java"));
+    // The raw wire ID is carried on the annotation, not the class name.
+    assertThat(actual).contains("name = \"schoolDirections&Details\"");
+  }
+
   // -----------------------------------------------------------------------
   // EnumEmitter golden tests
   // -----------------------------------------------------------------------
