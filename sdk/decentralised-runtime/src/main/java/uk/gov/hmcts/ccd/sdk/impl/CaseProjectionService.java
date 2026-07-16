@@ -31,6 +31,7 @@ import uk.gov.hmcts.ccd.sdk.config.CcdCaseDataMapperConfiguration;
 class CaseProjectionService {
 
   private static final TypeReference<Map<String, JsonNode>> JSON_NODE_MAP = new TypeReference<>() {};
+  private static final String TTL_FIELD = "TTL";
 
   private final CaseDataRepository caseDataRepository;
   private final ObjectMapper mapper;
@@ -67,6 +68,7 @@ class CaseProjectionService {
     long reference = caseDetails.getReference();
     String caseTypeId = caseDetails.getCaseTypeId();
     String state = caseDetails.getState();
+    JsonNode ttl = caseDetails.getData() == null ? null : caseDetails.getData().get(TTL_FIELD);
 
     CaseViewBinding binding = bindings.get(caseTypeId);
     if (binding == null) {
@@ -89,7 +91,12 @@ class CaseProjectionService {
         ))
         .orElse(projectedData);
 
-    caseDetails.setData(serialised);
+    var responseData = new HashMap<>(serialised);
+    responseData.remove(TTL_FIELD);
+    if (ttl != null && !ttl.isNull()) {
+      responseData.put(TTL_FIELD, ttl);
+    }
+    caseDetails.setData(responseData);
     return raw;
   }
 

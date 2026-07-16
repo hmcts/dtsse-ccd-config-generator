@@ -20,7 +20,9 @@ class CaseDataRepositoryTest {
   private final ResolvedConfigRegistry configRegistry = mock(ResolvedConfigRegistry.class);
   private final ObjectMapper mapper = new ObjectMapper();
 
-  private final CaseDataRepository repository = spy(new CaseDataRepository(jdbc, mapper, configRegistry));
+  private final CaseDataRepository repository = spy(
+      new CaseDataRepository(jdbc, mapper, configRegistry)
+  );
 
   @Test
   void getCaseWhenMissingReturnsNotFound() {

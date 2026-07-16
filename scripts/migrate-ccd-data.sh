@@ -98,12 +98,18 @@ COPY (
       created_date,
       security_classification,
       last_state_modified_date,
-      resolved_ttl,
+      NULLIF(jsonb_extract_path_text(data, 'TTL', 'SystemTTL'), '')::date AS system_ttl,
+      NULLIF(jsonb_extract_path_text(data, 'TTL', 'OverrideTTL'), '')::date AS override_ttl,
+      CASE LOWER(jsonb_extract_path_text(data, 'TTL', 'Suspended'))
+        WHEN 'yes' THEN true
+        WHEN 'no' THEN false
+        ELSE NULL
+      END AS ttl_suspended,
       last_modified,
       jurisdiction,
       case_type_id,
       state,
-      data,
+      data - 'TTL' AS data,
       COALESCE(supplementary_data, '{}'::jsonb) AS supplementary_data,
       id,
       version AS case_revision
@@ -122,7 +128,9 @@ COPY ccd.case_data (
     created_date,
     security_classification,
     last_state_modified_date,
-    resolved_ttl,
+    system_ttl,
+    override_ttl,
+    ttl_suspended,
     last_modified,
     jurisdiction,
     case_type_id,

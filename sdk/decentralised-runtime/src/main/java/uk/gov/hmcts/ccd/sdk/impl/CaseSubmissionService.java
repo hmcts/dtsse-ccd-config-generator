@@ -1,6 +1,7 @@
 package uk.gov.hmcts.ccd.sdk.impl;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import java.util.HashMap;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Supplier;
@@ -23,6 +24,8 @@ import uk.gov.hmcts.ccd.sdk.api.callback.SubmitResponse;
 @Service
 @RequiredArgsConstructor
 public class CaseSubmissionService {
+
+  private static final String TTL_FIELD = "TTL";
 
   private final ResolvedConfigRegistry resolvedConfigRegistry;
   private final DecentralisedSubmissionHandler submitHandler;
@@ -75,8 +78,13 @@ public class CaseSubmissionService {
       return new TransactionResult(existingEventId, Optional.empty());
     }
 
+    JsonNode authoritativeTtl = event.getCaseDetails().getData() == null
+        ? null
+        : event.getCaseDetails().getData().get(TTL_FIELD);
+
     // Delegate to the specific handler to apply the change
     var handlerResult = handler.apply(event, user.authToken());
+    restoreAuthoritativeTtl(event, authoritativeTtl);
     applyHandlerChanges(event, handlerResult);
 
     // Bookkeeping: update case_data metadata and optionally the legacy json blob
@@ -131,6 +139,20 @@ public class CaseSubmissionService {
         .map(classification -> SecurityClassification.valueOf(classification.name()))
         .ifPresent(event.getCaseDetails()::setSecurityClassification);
     handlerResult.eventMetadata().ifPresent(metadata -> applyEventMetadata(event, metadata));
+  }
+
+  private void restoreAuthoritativeTtl(DecentralisedCaseEvent event, JsonNode authoritativeTtl) {
+    var restoredData = new HashMap<String, JsonNode>();
+    if (event.getCaseDetails().getData() != null) {
+      restoredData.putAll(event.getCaseDetails().getData());
+    }
+
+    if (authoritativeTtl == null || authoritativeTtl.isNull()) {
+      restoredData.remove(TTL_FIELD);
+    } else {
+      restoredData.put(TTL_FIELD, authoritativeTtl);
+    }
+    event.getCaseDetails().setData(restoredData);
   }
 
   private void applyEventMetadata(DecentralisedCaseEvent event, EventMetadata eventMetadata) {

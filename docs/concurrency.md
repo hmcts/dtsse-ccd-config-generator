@@ -47,6 +47,15 @@ Note that this is a tightening of CCD's current implementation which allows mult
 
 ### TTL updates
 
-CCD TTL increments update both `data.TTL.SystemTTL` and `case_data.resolved_ttl` in the same locked transaction. Because the
-JSON blob changes, its optimistic-lock version advances; a concurrent event using the previous version is rejected in full
-with HTTP 409. `case_revision` also advances and prevents out-of-order responses from restoring an older CCD pointer TTL.
+CCD sends the calculated `data.TTL` object with each persistence request. The decentralised runtime treats its three values
+(`SystemTTL`, `OverrideTTL` and `Suspended`) as authoritative, stores them in typed `case_data` columns, and excludes `TTL`
+from the mutable JSON blob. Current-case reads reconstruct `data.TTL` from those columns; immutable `case_event` snapshots
+retain the reconstructed TTL for history and idempotent replay.
+
+The runtime retains CCD's incoming `TTL` node before invoking a callback or submit handler and restores that same node
+afterwards. Handler output therefore cannot replace the authoritative TTL values and requires no separate comparison.
+
+A TTL-only update therefore does not advance the JSON blob `version`. A change to the stored TTL tuple is accepted only when
+the request's `merge_revision` matches the current `case_revision`. A stale retry is still safe when its tuple is already the
+stored tuple. The committed `case_revision` returned over the persistence API remains CCD's freshness guard when it updates
+its case pointer, including its calculated `resolved_ttl`.

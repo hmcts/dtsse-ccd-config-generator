@@ -3,6 +3,7 @@ set client_min_messages to warning;
 update case_data
 set
     version = 11,
+    data = '{"subject":"first delta","TTL":{"SystemTTL":"2035-07-08","Suspended":"No"}}'::jsonb,
     last_modified = timestamp '2026-01-02 10:00:00'
 where id = 5601;
 

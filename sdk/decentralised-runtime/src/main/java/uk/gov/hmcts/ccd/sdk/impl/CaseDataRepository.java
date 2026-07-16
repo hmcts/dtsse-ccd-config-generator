@@ -51,7 +51,21 @@ class CaseDataRepository {
               jurisdiction,
               case_type_id,
               state,
-              data::text as case_data,
+              (
+                c.data || jsonb_strip_nulls(jsonb_build_object(
+                     'TTL', nullif(
+                       jsonb_strip_nulls(jsonb_build_object(
+                         'SystemTTL', to_char(c.system_ttl, 'YYYY-MM-DD'),
+                         'OverrideTTL', to_char(c.override_ttl, 'YYYY-MM-DD'),
+                         'Suspended', case c.ttl_suspended
+                                        when true then 'Yes'
+                                        when false then 'No'
+                                      end
+                       )),
+                       '{}'::jsonb
+                     )
+                   ))
+              )::text as case_data,
               security_classification::text,
               version,
               last_state_modified_date,
@@ -118,7 +132,9 @@ class CaseDataRepository {
         insert into ccd.case_data (
             last_modified,
             last_state_modified_date,
-            resolved_ttl,
+            system_ttl,
+            override_ttl,
+            ttl_suspended,
             jurisdiction,
             case_type_id,
             state,
@@ -132,12 +148,14 @@ class CaseDataRepository {
         values (
             (now() at time zone 'UTC'),
             (now() at time zone 'UTC'),
-            :resolved_ttl,
+            nullif(:authoritative_data::jsonb #>> '{TTL,SystemTTL}', '')::date,
+            nullif(:authoritative_data::jsonb #>> '{TTL,OverrideTTL}', '')::date,
+            nullif(:authoritative_data::jsonb #>> '{TTL,Suspended}', '')::boolean,
             :jurisdiction,
             :case_type_id,
             :state,
             -- On INSERT: if no data was provided, start with {}
-            case when :has_data then :data::jsonb else '{}'::jsonb end,
+            case when :has_data then :data::jsonb - 'TTL' else '{}'::jsonb end,
             :enforced_supplementary_data::jsonb,
             :reference,
             :security_classification::ccd.securityclassification,
@@ -149,11 +167,13 @@ class CaseDataRepository {
             do update set
                 state = excluded.state,
                 -- Update safety: never touch `data` unless explicitly provided
-                data = case when :has_data then :data::jsonb else case_data.data end,
+                data = case when :has_data then excluded.data else case_data.data end,
                 supplementary_data = case_data.supplementary_data
                     || :enforced_supplementary_data::jsonb,
                 security_classification = excluded.security_classification,
-                resolved_ttl = excluded.resolved_ttl,
+                system_ttl = excluded.system_ttl,
+                override_ttl = excluded.override_ttl,
+                ttl_suspended = excluded.ttl_suspended,
             last_modified = (now() at time zone 'UTC'),
             version = case
                         when
@@ -171,11 +191,18 @@ class CaseDataRepository {
                                          else case_data.last_state_modified_date
                                        end
             where case_data.version = excluded.version
+              and (
+                row(case_data.system_ttl, case_data.override_ttl, case_data.ttl_suspended)
+                  is not distinct from
+                row(excluded.system_ttl, excluded.override_ttl, excluded.ttl_suspended)
+                or case_data.case_revision = :merge_revision
+              )
             returning id;
         """;
 
     Map<String, Object> params = new HashMap<>();
-    params.put("resolved_ttl", event.getResolvedTtl());
+    params.put("authoritative_data", defaultMapper.writeValueAsString(event.getCaseDetails().getData()));
+    params.put("merge_revision", event.getMergeRevision());
     params.put("jurisdiction", event.getCaseDetails().getJurisdiction());
     params.put("case_type_id", event.getCaseDetails().getCaseTypeId());
     params.put("state", event.getCaseDetails().getState());

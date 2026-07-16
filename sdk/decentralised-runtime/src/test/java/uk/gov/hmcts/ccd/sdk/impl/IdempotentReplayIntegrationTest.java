@@ -1,8 +1,11 @@
 package uk.gov.hmcts.ccd.sdk.impl;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.google.common.collect.ImmutableSet;
 import java.time.LocalDate;
 import java.util.List;
@@ -21,6 +24,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
+import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import uk.gov.hmcts.ccd.data.casedetails.SecurityClassification;
@@ -54,6 +58,9 @@ class IdempotentReplayIntegrationTest {
   private NamedParameterJdbcTemplate jdbc;
 
   @Autowired
+  private ObjectMapper mapper;
+
+  @Autowired
   private CaseDataRepository repository;
 
   @Autowired
@@ -72,6 +79,7 @@ class IdempotentReplayIntegrationTest {
     DecentralisedCaseDetails latest = repository.getCase(CASE_REFERENCE);
     assertThat(latest.getCaseDetails().getVersion()).isEqualTo(3);
     assertThat(latest.getCaseDetails().getRevision()).isEqualTo(5L);
+    assertThat(latest.getCaseDetails().getData()).doesNotContainKey("TTL");
   }
 
   @Test
@@ -147,6 +155,135 @@ class IdempotentReplayIntegrationTest {
     assertThat(result.get("foo")).isEqualTo("bar");
     assertThat(result.get("existing_number")).isEqualTo("42");
     assertThat(result.get("hmcts_service_id")).isEqualTo("ABA1");
+  }
+
+  @Test
+  void upsertCaseStoresTtlColumnsOutsideCurrentJsonAndProjectsThemOnRead() {
+    long caseRef = UPSERT_CASE_REFERENCE + 3;
+    ObjectNode ttl = ttl("2030-01-01", "2031-02-03", true);
+    DecentralisedCaseEvent event = buildEvent(caseRef, "TestCase");
+    event.getCaseDetails().setData(Map.of("TTL", ttl));
+
+    ObjectNode dataUpdate = mapper.createObjectNode();
+    dataUpdate.put("subject", "A case");
+    dataUpdate.set("TTL", ttl("2099-12-31", null, false));
+
+    repository.upsertCase(event, Optional.of(dataUpdate));
+
+    Map<String, Object> stored = jdbc.queryForMap(
+        """
+        select system_ttl,
+               override_ttl,
+               ttl_suspended,
+               jsonb_exists(data, 'TTL') as data_contains_ttl,
+               data->>'subject' as subject,
+               version
+          from ccd.case_data
+         where reference = :reference
+        """,
+        Map.of("reference", caseRef)
+    );
+
+    assertThat(stored.get("system_ttl")).isEqualTo(java.sql.Date.valueOf("2030-01-01"));
+    assertThat(stored.get("override_ttl")).isEqualTo(java.sql.Date.valueOf("2031-02-03"));
+    assertThat(stored.get("ttl_suspended")).isEqualTo(true);
+    assertThat(stored.get("data_contains_ttl")).isEqualTo(false);
+    assertThat(stored.get("subject")).isEqualTo("A case");
+    assertThat(stored.get("version")).isEqualTo(1);
+
+    JsonNode projectedTtl = repository.getCase(caseRef).getCaseDetails().getData().get("TTL");
+    assertThat(projectedTtl.get("SystemTTL").asText()).isEqualTo("2030-01-01");
+    assertThat(projectedTtl.get("OverrideTTL").asText()).isEqualTo("2031-02-03");
+    assertThat(projectedTtl.get("Suspended").asText()).isEqualTo("Yes");
+  }
+
+  @Test
+  void ttlOnlyUpdateUsesMergeRevisionWithoutAdvancingBlobVersion() {
+    long caseRef = UPSERT_CASE_REFERENCE + 4;
+    seedCaseData(caseRef, caseRef, 7, 11);
+
+    DecentralisedCaseEvent event = buildEvent(caseRef, "TestCase");
+    event.getCaseDetails().setVersion(7);
+    event.setMergeRevision(11L);
+    event.getCaseDetails().setData(Map.of("TTL", ttl("2035-04-05", null, false)));
+
+    repository.upsertCase(event, Optional.empty());
+
+    Map<String, Object> stored = jdbc.queryForMap(
+        "select system_ttl, ttl_suspended, version, case_revision "
+            + "from ccd.case_data where reference = :reference",
+        Map.of("reference", caseRef)
+    );
+    assertThat(stored.get("system_ttl")).isEqualTo(java.sql.Date.valueOf("2035-04-05"));
+    assertThat(stored.get("ttl_suspended")).isEqualTo(false);
+    assertThat(stored.get("version")).isEqualTo(7);
+    assertThat(stored.get("case_revision")).isEqualTo(12L);
+  }
+
+  @Test
+  void rejectsDifferingTtlWhenMergeRevisionIsStale() {
+    long caseRef = UPSERT_CASE_REFERENCE + 5;
+    seedCaseData(caseRef, caseRef, 3, 8);
+
+    DecentralisedCaseEvent event = buildEvent(caseRef, "TestCase");
+    event.getCaseDetails().setVersion(3);
+    event.setMergeRevision(7L);
+    event.getCaseDetails().setData(Map.of("TTL", ttl("2040-01-01", null, false)));
+
+    assertThatThrownBy(() -> repository.upsertCase(event, Optional.empty()))
+        .isInstanceOf(EmptyResultDataAccessException.class);
+  }
+
+  @Test
+  void allowsAlreadyEqualTtlWhenMergeRevisionIsStale() {
+    long caseRef = UPSERT_CASE_REFERENCE + 6;
+    seedCaseData(caseRef, caseRef, 3, 8);
+    jdbc.update(
+        """
+        update ccd.case_data
+           set system_ttl = date '2040-01-01',
+               ttl_suspended = false
+         where reference = :reference
+        """,
+        Map.of("reference", caseRef)
+    );
+
+    DecentralisedCaseEvent event = buildEvent(caseRef, "TestCase");
+    event.getCaseDetails().setVersion(3);
+    event.setMergeRevision(7L);
+    event.getCaseDetails().setData(Map.of("TTL", ttl("2040-01-01", null, false)));
+
+    repository.upsertCase(event, Optional.empty());
+
+    Integer version = jdbc.queryForObject(
+        "select version from ccd.case_data where reference = :reference",
+        Map.of("reference", caseRef),
+        Integer.class
+    );
+    assertThat(version).isEqualTo(3);
+  }
+
+  @Test
+  void idempotentReplayKeepsHistoricalTtlRatherThanInjectingCurrentColumns() {
+    long caseRef = UPSERT_CASE_REFERENCE + 7;
+    seedCaseData(caseRef, caseRef, 3, 5);
+    jdbc.update(
+        "update ccd.case_data set system_ttl = date '2050-01-01' where reference = :reference",
+        Map.of("reference", caseRef)
+    );
+    long eventId = insertEvent(
+        caseRef,
+        caseRef,
+        2,
+        4,
+        UUID.randomUUID(),
+        "{\"TTL\":{\"SystemTTL\":\"2049-01-01\",\"Suspended\":\"No\"}}"
+    );
+
+    JsonNode replayedTtl = repository.caseDetailsAtEvent(caseRef, eventId)
+        .getCaseDetails().getData().get("TTL");
+
+    assertThat(replayedTtl.get("SystemTTL").asText()).isEqualTo("2049-01-01");
   }
 
   @Test
@@ -317,9 +454,32 @@ class IdempotentReplayIntegrationTest {
         .build();
   }
 
+  private ObjectNode ttl(String systemTtl, String overrideTtl, Boolean suspended) {
+    ObjectNode ttl = mapper.createObjectNode();
+    if (systemTtl != null) {
+      ttl.put("SystemTTL", systemTtl);
+    }
+    if (overrideTtl != null) {
+      ttl.put("OverrideTTL", overrideTtl);
+    }
+    if (suspended != null) {
+      ttl.put("Suspended", suspended ? "Yes" : "No");
+    }
+    return ttl;
+  }
+
   private long insertEvent(int version, long revision, UUID idempotencyKey) {
+    return insertEvent(CASE_ID, CASE_REFERENCE, version, revision, idempotencyKey, "{}");
+  }
+
+  private long insertEvent(long caseId,
+                           long caseReference,
+                           int version,
+                           long revision,
+                           UUID idempotencyKey,
+                           String data) {
     var params = new MapSqlParameterSource()
-        .addValue("case_data_id", CASE_ID)
+        .addValue("case_data_id", caseId)
         .addValue("case_type_version", 1)
         .addValue("event_id", "ev1")
         .addValue("summary", "summary")
@@ -327,7 +487,7 @@ class IdempotentReplayIntegrationTest {
         .addValue("user_id", "user-1")
         .addValue("case_type_id", "TestCase")
         .addValue("state_id", "Historical")
-        .addValue("data", "{}")
+        .addValue("data", data)
         .addValue("user_first_name", "Test")
         .addValue("user_last_name", "User")
         .addValue("event_name", "Event One")
@@ -384,7 +544,11 @@ class IdempotentReplayIntegrationTest {
   }
 
   @Configuration
-  @Import({CaseDataRepository.class, CaseReindexingService.class, DecentralisedDataConfiguration.class})
+  @Import({
+      CaseDataRepository.class,
+      CaseReindexingService.class,
+      DecentralisedDataConfiguration.class
+  })
   @ImportAutoConfiguration({
       DataSourceAutoConfiguration.class,
       JdbcTemplateAutoConfiguration.class,

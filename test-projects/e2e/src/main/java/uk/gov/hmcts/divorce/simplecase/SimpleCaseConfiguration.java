@@ -3,9 +3,11 @@ package uk.gov.hmcts.divorce.simplecase;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import uk.gov.hmcts.ccd.sdk.api.CCDConfig;
-import uk.gov.hmcts.ccd.sdk.api.ConfigBuilder;
 import uk.gov.hmcts.ccd.sdk.api.CaseDetails;
+import uk.gov.hmcts.ccd.sdk.api.DecentralisedConfigBuilder;
+import uk.gov.hmcts.ccd.sdk.api.EventPayload;
 import uk.gov.hmcts.ccd.sdk.api.callback.AboutToStartOrSubmitResponse;
+import uk.gov.hmcts.ccd.sdk.api.callback.SubmitResponse;
 import uk.gov.hmcts.divorce.common.ccd.PageBuilder;
 import uk.gov.hmcts.divorce.divorcecase.model.UserRole;
 import uk.gov.hmcts.divorce.simplecase.model.SimpleCaseData;
@@ -34,7 +36,9 @@ public class SimpleCaseConfiguration implements CCDConfig<SimpleCaseData, Simple
     public static final String FOLLOW_UP_CALLBACK_MARKER = "simple-case-follow-up-callback";
 
     @Override
-    public void configure(final ConfigBuilder<SimpleCaseData, SimpleCaseState, UserRole> configBuilder) {
+    public void configureDecentralised(
+        final DecentralisedConfigBuilder<SimpleCaseData, SimpleCaseState, UserRole> configBuilder
+    ) {
         configBuilder.setCallbackHost("http://localhost:4013");
         configBuilder.caseType(CASE_TYPE, CASE_TYPE_DESCRIPTION, "Additional simple case type for e2e tests");
         configBuilder.jurisdiction(JURISDICTION, "Family Divorce", "Family Divorce: simple case tests");
@@ -81,7 +85,7 @@ public class SimpleCaseConfiguration implements CCDConfig<SimpleCaseData, Simple
             .grantHistoryOnly(UserRole.SUPER_USER);
 
         configBuilder
-            .event(SUBMIT_TTL_DRAFT_EVENT)
+            .decentralisedEvent(SUBMIT_TTL_DRAFT_EVENT, this::submitTtlDraft)
             .forStateTransition(SimpleCaseState.DRAFT, SimpleCaseState.SUBMITTED)
             .ttlIncrement(SUBMITTED_TTL_DAYS)
             .name("Submit TTL draft")
@@ -106,6 +110,13 @@ public class SimpleCaseConfiguration implements CCDConfig<SimpleCaseData, Simple
             .field(SimpleCaseData::getSubject, "Subject");
         configBuilder.workBasketResultFields()
             .field(SimpleCaseData::getSubject, "Subject");
+    }
+
+    private SubmitResponse<SimpleCaseState> submitTtlDraft(
+        EventPayload<SimpleCaseData, SimpleCaseState> payload
+    ) {
+        log.info("Submit-handler TTL event invoked for case {}", payload.caseReference());
+        return SubmitResponse.defaultResponse();
     }
 
     private AboutToStartOrSubmitResponse<SimpleCaseData, SimpleCaseState> startCreation(

@@ -2766,11 +2766,11 @@ public class TestWithCCD extends CftlibTest {
     @SneakyThrows
     @Order(280)
     @Test
-    void ttlLifecyclePersistsDraftAndSubmittedResolvedTtlInServiceAndCcd() {
+    void ttlLifecyclePersistsAndProjectsDraftAndSubmittedTtlInServiceAndCcd() {
         LocalDate draftEventStartedOn = LocalDate.now();
         long reference = createTtlLifecycleCase("Draft which will be submitted");
 
-        assertResolvedTtlMatchesCaseDataAndBothDatabases(
+        assertTtlMatchesProjectionAndBothDatabases(
             reference,
             SimpleCaseState.DRAFT,
             SimpleCaseConfiguration.DRAFT_TTL_DAYS,
@@ -2785,7 +2785,7 @@ public class TestWithCCD extends CftlibTest {
             SimpleCaseState.SUBMITTED
         );
 
-        assertResolvedTtlMatchesCaseDataAndBothDatabases(
+        assertTtlMatchesProjectionAndBothDatabases(
             reference,
             SimpleCaseState.SUBMITTED,
             SimpleCaseConfiguration.SUBMITTED_TTL_DAYS,
@@ -2797,11 +2797,11 @@ public class TestWithCCD extends CftlibTest {
     @SneakyThrows
     @Order(281)
     @Test
-    void ttlLifecyclePersistsZeroResolvedTtlWhenDraftIsDeleted() {
+    void ttlLifecyclePersistsAndProjectsZeroTtlWhenDraftIsDeleted() {
         LocalDate draftEventStartedOn = LocalDate.now();
         long reference = createTtlLifecycleCase("Draft which will be deleted");
 
-        assertResolvedTtlMatchesCaseDataAndBothDatabases(
+        assertTtlMatchesProjectionAndBothDatabases(
             reference,
             SimpleCaseState.DRAFT,
             SimpleCaseConfiguration.DRAFT_TTL_DAYS,
@@ -2816,7 +2816,7 @@ public class TestWithCCD extends CftlibTest {
             SimpleCaseState.DELETE
         );
 
-        assertResolvedTtlMatchesCaseDataAndBothDatabases(
+        assertTtlMatchesProjectionAndBothDatabases(
             reference,
             SimpleCaseState.DELETE,
             SimpleCaseConfiguration.DELETED_TTL_DAYS,
@@ -2886,32 +2886,48 @@ public class TestWithCCD extends CftlibTest {
         }
     }
 
-    private void assertResolvedTtlMatchesCaseDataAndBothDatabases(long reference,
-                                                                   SimpleCaseState expectedState,
-                                                                   int ttlIncrementDays,
-                                                                   LocalDate eventStartedOn,
-                                                                   LocalDate eventCompletedOn) throws Exception {
+    private void assertTtlMatchesProjectionAndBothDatabases(long reference,
+                                                             SimpleCaseState expectedState,
+                                                             int ttlIncrementDays,
+                                                             LocalDate eventStartedOn,
+                                                             LocalDate eventCompletedOn) throws Exception {
         Map<String, Object> localCase = db.queryForMap(
             """
                 SELECT state,
-                       resolved_ttl,
-                       data #>> '{TTL,SystemTTL}' AS system_ttl
+                       system_ttl,
+                       override_ttl,
+                       ttl_suspended,
+                       jsonb_exists(data, 'TTL') AS data_contains_ttl
                   FROM ccd.case_data
                  WHERE reference = :reference
                 """,
             Map.of("reference", reference)
         );
 
-        LocalDate localResolvedTtl = ((java.sql.Date) localCase.get("resolved_ttl")).toLocalDate();
-        LocalDate caseDataSystemTtl = LocalDate.parse((String) localCase.get("system_ttl"));
+        LocalDate localSystemTtl = ((java.sql.Date) localCase.get("system_ttl")).toLocalDate();
+        CaseDetails projectedCase = ccdApi.getCase(
+            getAuthorisation("TEST_CASE_WORKER_USER@mailinator.com"),
+            getServiceAuth(),
+            String.valueOf(reference)
+        );
+        Map<String, Object> projectedTtl = mapper.convertValue(
+            projectedCase.getData().get("TTL"),
+            new TypeReference<>() {}
+        );
+        LocalDate projectedSystemTtl = LocalDate.parse((String) projectedTtl.get("SystemTTL"));
         LocalDate ccdResolvedTtl = readCcdResolvedTtl(reference);
 
         assertThat(localCase.get("state"), equalTo(expectedState.name()));
-        assertThat("The service resolved_ttl must match case data TTL.SystemTTL",
-            localResolvedTtl, equalTo(caseDataSystemTtl));
-        assertThat("CCD and the service must persist the same resolved_ttl",
-            ccdResolvedTtl, equalTo(localResolvedTtl));
-        assertThat(localResolvedTtl, allOf(
+        assertThat(localCase.get("override_ttl"), is(nullValue()));
+        assertThat(localCase.get("ttl_suspended"), equalTo(false));
+        assertThat("The service JSON blob must not duplicate TTL",
+            localCase.get("data_contains_ttl"), equalTo(false));
+        assertThat("The projected API TTL must come from the service columns",
+            projectedSystemTtl, equalTo(localSystemTtl));
+        assertThat(projectedTtl.get("Suspended"), equalTo("No"));
+        assertThat("CCD and the service must persist the same resolved TTL",
+            ccdResolvedTtl, equalTo(localSystemTtl));
+        assertThat(localSystemTtl, allOf(
             greaterThanOrEqualTo(eventStartedOn.plusDays(ttlIncrementDays)),
             lessThanOrEqualTo(eventCompletedOn.plusDays(ttlIncrementDays))
         ));

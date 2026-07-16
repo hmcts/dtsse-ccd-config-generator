@@ -84,12 +84,27 @@ class CcdDataMigrationTaskIntegrationTest {
 
   @Test
   void cutoverCopiesRemainingEventsRefreshesCaseDataAndMarksComplete() {
-    insertSourceCase(10, 1000000000000010L, 1, "Submitted", "{\"field\":\"one\"}");
-    insertSourceCaseEvent(101, 10, "create", "Submitted", "{\"field\":\"one\"}", minutesAgo(60));
+    insertSourceCase(
+        10,
+        1000000000000010L,
+        1,
+        "Submitted",
+        "{\"field\":\"one\",\"TTL\":{\"SystemTTL\":\"2030-01-01\",\"Suspended\":\"No\"}}"
+    );
+    insertSourceCaseEvent(
+        101,
+        10,
+        "create",
+        "Submitted",
+        "{\"field\":\"one\",\"TTL\":{\"SystemTTL\":\"2030-01-01\",\"Suspended\":\"No\"}}",
+        minutesAgo(60)
+    );
     task(PRELOAD_EVENTS, 1000, 10).runMigration();
 
-    updateSourceCase(10, 2, "Updated", "{\"field\":\"cutover\"}");
-    insertSourceCaseEvent(102, 10, "update", "Updated", "{\"field\":\"cutover\"}", LocalDateTime.now());
+    String cutoverData = "{\"field\":\"cutover\",\"TTL\":{"
+        + "\"SystemTTL\":\"2032-03-04\",\"OverrideTTL\":\"2033-05-06\",\"Suspended\":\"Yes\"}}";
+    updateSourceCase(10, 2, "Updated", cutoverData);
+    insertSourceCaseEvent(102, 10, "update", "Updated", cutoverData, LocalDateTime.now());
 
     CcdDataMigrationRunResult result = task(CUTOVER, 1000, 10).runMigration();
 
@@ -99,6 +114,12 @@ class CcdDataMigrationTaskIntegrationTest {
     assertThat(countRows("ccd.case_event")).isEqualTo(2);
     assertThat(targetCaseState(10)).isEqualTo("Updated");
     assertThat(targetCaseData(10)).isEqualTo("{\"field\": \"cutover\"}");
+    assertThat(targetCaseTtl(10)).containsExactly(
+        Map.entry("system_ttl", java.sql.Date.valueOf("2032-03-04")),
+        Map.entry("override_ttl", java.sql.Date.valueOf("2033-05-06")),
+        Map.entry("ttl_suspended", true)
+    );
+    assertThat(targetEventData(102)).contains("\"TTL\"");
     assertThat(caseEventRevision(101)).isEqualTo(1);
     assertThat(caseEventRevision(102)).isEqualTo(2);
     assertThat(caseRevision(10)).isEqualTo(CASE_REVISION_OFFSET + 2);
@@ -899,7 +920,9 @@ class CcdDataMigrationTaskIntegrationTest {
           created_date,
           security_classification,
           last_state_modified_date,
-          resolved_ttl,
+          system_ttl,
+          override_ttl,
+          ttl_suspended,
           last_modified,
           jurisdiction,
           case_type_id,
@@ -914,6 +937,8 @@ class CcdDataMigrationTaskIntegrationTest {
           timestamp '2024-01-01 00:00:00',
           'PUBLIC',
           timestamp '2024-01-01 00:00:00',
+          null,
+          null,
           null,
           timestamp '2024-01-01 00:00:00',
           :jurisdiction,
@@ -1204,6 +1229,17 @@ class CcdDataMigrationTaskIntegrationTest {
 
   private String targetCaseData(long id) {
     return jdbc.queryForObject("select data::text from ccd.case_data where id = :id", Map.of("id", id), String.class);
+  }
+
+  private Map<String, Object> targetCaseTtl(long id) {
+    return jdbc.queryForMap(
+        "select system_ttl, override_ttl, ttl_suspended from ccd.case_data where id = :id",
+        Map.of("id", id)
+    );
+  }
+
+  private String targetEventData(long id) {
+    return jdbc.queryForObject("select data::text from ccd.case_event where id = :id", Map.of("id", id), String.class);
   }
 
   private String progressStatus() {
