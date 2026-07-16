@@ -20,12 +20,14 @@ public record CcdDataMigrationTaskOptions(
     int maxBatchesPerRun,
     Duration maxRunTime,
     Duration statementTimeout,
+    Duration sourceEventSafetyWindow,
     String sourceJurisdiction,
     String fdwAdditionalSelectGrantee
 ) {
   private static final String TARGET_SCHEMA = "ccd";
   private static final String FDW_SCHEMA = "fdw_stage";
   private static final Duration DEFAULT_STATEMENT_TIMEOUT = Duration.ofMinutes(10);
+  private static final Duration DEFAULT_SOURCE_EVENT_SAFETY_WINDOW = Duration.ofMinutes(2);
 
   public CcdDataMigrationTaskOptions {
     taskName = requireText(taskName, "taskName");
@@ -51,6 +53,12 @@ public record CcdDataMigrationTaskOptions(
     }
     if (statementTimeout != null && !statementTimeout.isPositive()) {
       throw new IllegalArgumentException("statementTimeout must be positive when set");
+    }
+    sourceEventSafetyWindow = sourceEventSafetyWindow == null
+        ? DEFAULT_SOURCE_EVENT_SAFETY_WINDOW
+        : sourceEventSafetyWindow;
+    if (sourceEventSafetyWindow.isNegative()) {
+      throw new IllegalArgumentException("sourceEventSafetyWindow must be zero or greater");
     }
   }
 
@@ -131,6 +139,7 @@ public record CcdDataMigrationTaskOptions(
     private int maxBatchesPerRun = Integer.MAX_VALUE;
     private Duration maxRunTime;
     private Duration statementTimeout = DEFAULT_STATEMENT_TIMEOUT;
+    private Duration sourceEventSafetyWindow = DEFAULT_SOURCE_EVENT_SAFETY_WINDOW;
     private String sourceJurisdiction;
     private String fdwAdditionalSelectGrantee;
 
@@ -178,6 +187,11 @@ public record CcdDataMigrationTaskOptions(
       return this;
     }
 
+    public Builder sourceEventSafetyWindow(Duration sourceEventSafetyWindow) {
+      this.sourceEventSafetyWindow = sourceEventSafetyWindow;
+      return this;
+    }
+
     public Builder sourceJurisdiction(String sourceJurisdiction) {
       this.sourceJurisdiction = sourceJurisdiction;
       return this;
@@ -199,6 +213,7 @@ public record CcdDataMigrationTaskOptions(
           maxBatchesPerRun,
           maxRunTime,
           statementTimeout,
+          sourceEventSafetyWindow,
           sourceJurisdiction,
           fdwAdditionalSelectGrantee
       );

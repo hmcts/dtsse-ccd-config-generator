@@ -34,6 +34,7 @@ public class CcdDataMigrationTask implements Runnable {
   private static final String STATUS_PRELOAD = "PRELOAD";
   private static final String STATUS_CUTOVER = "CUTOVER";
   private static final String STATUS_COMPLETE = "COMPLETE";
+  private static final int SOURCE_EVENT_SAFETY_SCAN_LIMIT = 100_000;
 
   private final NamedParameterJdbcTemplate db;
   private final TransactionOperations transaction;
@@ -106,14 +107,15 @@ public class CcdDataMigrationTask implements Runnable {
   public final CcdDataMigrationRunResult runMigration() {
     log.info(
         "Starting CCD data migration task taskName={} mode={} caseTypeIds={} eventIdWindowSize={} "
-            + "significantItemIdWindowSize={} maxBatchesPerRun={} maxRunTime={}",
+            + "significantItemIdWindowSize={} maxBatchesPerRun={} maxRunTime={} sourceEventSafetyWindow={}",
         options.taskName(),
         options.mode(),
         options.caseTypeIds(),
         options.eventIdWindowSize(),
         options.significantItemIdWindowSize(),
         options.maxBatchesPerRun(),
-        options.maxRunTime()
+        options.maxRunTime(),
+        options.sourceEventSafetyWindow()
     );
 
     validateDecentralisedRuntimeDisabled();
@@ -153,27 +155,47 @@ public class CcdDataMigrationTask implements Runnable {
 
     prepareElasticsearchQueueForMigration();
     long targetEventHwm = sourceEventHighWaterMark();
-    CopyTotals totals = copyEventBatches(targetEventHwm, calculateStopAt());
+    validateSourceEventHighWaterMarkHasNotRegressed(targetEventHwm);
+    LocalDateTime stopAt = calculateStopAt();
+    BatchBudget batchBudget = new BatchBudget(options.maxBatchesPerRun());
+    CopyTotals totals = copyEventBatches(targetEventHwm, stopAt, batchBudget);
     long sourceEventHwm = sourceEventProgressHighWaterMark();
-    boolean caughtUp = sourceEventHwm >= targetEventHwm;
+    SignificantItemCopyTotals significantItemTotals = copySignificantItemBatches(sourceEventHwm, stopAt, batchBudget);
+    ValidationTotals eventValidationTotals = validateEventBatches(sourceEventHwm, stopAt, batchBudget);
+    ValidationTotals significantItemValidationTotals = validateSignificantItemBatches(stopAt, batchBudget);
+    boolean caughtUp = sourceEventHwm >= targetEventHwm
+        && significantItemTotals.caughtUp()
+        && eventValidationTotals.caughtUp()
+        && significantItemValidationTotals.caughtUp();
     log.info(
         "Completed CCD data migration preload taskName={} targetEventHwm={} batches={} cases={} events={} "
-            + "caughtUp={} stoppedByTimeLimit={}",
+            + "significantItems={} significantItemBatches={} validatedEventBatches={} "
+            + "validatedSignificantItemBatches={} caughtUp={} stoppedByTimeLimit={}",
         options.taskName(),
         targetEventHwm,
-        totals.batches(),
+        batchBudget.consumed(),
         0,
         totals.events(),
+        significantItemTotals.items(),
+        significantItemTotals.batches(),
+        eventValidationTotals.batches(),
+        significantItemValidationTotals.batches(),
         caughtUp,
         totals.stoppedByTimeLimit()
+            || significantItemTotals.stoppedByTimeLimit()
+            || eventValidationTotals.stoppedByTimeLimit()
+            || significantItemValidationTotals.stoppedByTimeLimit()
     );
     return new CcdDataMigrationRunResult(
         true,
-        totals.batches(),
+        batchBudget.consumed(),
         0,
         totals.events(),
         caughtUp,
         totals.stoppedByTimeLimit()
+            || significantItemTotals.stoppedByTimeLimit()
+            || eventValidationTotals.stoppedByTimeLimit()
+            || significantItemValidationTotals.stoppedByTimeLimit()
     );
   }
 
@@ -183,12 +205,24 @@ public class CcdDataMigrationTask implements Runnable {
       prepareCompleteProgressForNextCutover(progress.requiredCutoverEventHwm());
     }
 
+    if (progress.cutoverEventHwm() == null || STATUS_COMPLETE.equals(progress.status())) {
+      validateSourceEventHighWaterMarkHasNotRegressed(sourceEventHighWaterMark());
+      if (sourceHasFreshEvents()) {
+        log.info(
+            "CCD data migration cutover paused before capturing high-water mark taskName={} because source events "
+                + "inside safety window still exist",
+            options.taskName()
+        );
+        return new CcdDataMigrationRunResult(true, 0, 0, 0, false, false);
+      }
+    }
     prepareElasticsearchQueueForMigration();
     long cutoverEventHwm = progress.cutoverEventHwm() == null || STATUS_COMPLETE.equals(progress.status())
         ? captureCutoverEventHighWaterMark()
         : progress.cutoverEventHwm();
     LocalDateTime stopAt = calculateStopAt();
-    CopyTotals totals = copyEventBatches(cutoverEventHwm, stopAt);
+    BatchBudget batchBudget = new BatchBudget(options.maxBatchesPerRun());
+    CopyTotals totals = copyEventBatches(cutoverEventHwm, stopAt, batchBudget);
     long sourceEventHwm = sourceEventProgressHighWaterMark();
     if (totals.stoppedByTimeLimit() || sourceEventHwm < cutoverEventHwm) {
       log.info(
@@ -197,20 +231,20 @@ public class CcdDataMigrationTask implements Runnable {
           options.taskName(),
           cutoverEventHwm,
           sourceEventHwm,
-          totals.batches(),
+          batchBudget.consumed(),
           totals.events(),
           totals.stoppedByTimeLimit()
       );
       return new CcdDataMigrationRunResult(
           true,
-          totals.batches(),
+          batchBudget.consumed(),
           0,
           totals.events(),
           false,
           totals.stoppedByTimeLimit()
       );
     }
-    SignificantItemCopyTotals significantItemTotals = copySignificantItemBatches(cutoverEventHwm, stopAt);
+    SignificantItemCopyTotals significantItemTotals = copySignificantItemBatches(cutoverEventHwm, stopAt, batchBudget);
     if (!significantItemTotals.caughtUp()) {
       log.info(
           "CCD data migration cutover paused before final refresh taskName={} cutoverEventHwm={} "
@@ -223,23 +257,47 @@ public class CcdDataMigrationTask implements Runnable {
       );
       return new CcdDataMigrationRunResult(
           true,
-          totals.batches(),
+          batchBudget.consumed(),
           0,
           totals.events(),
           false,
           significantItemTotals.stoppedByTimeLimit()
       );
     }
+    ValidationTotals eventValidationTotals = validateEventBatches(cutoverEventHwm, stopAt, batchBudget);
+    ValidationTotals significantItemValidationTotals = validateSignificantItemBatches(stopAt, batchBudget);
+    if (!eventValidationTotals.caughtUp() || !significantItemValidationTotals.caughtUp()) {
+      log.info(
+          "CCD data migration cutover paused before final refresh taskName={} cutoverEventHwm={} "
+              + "validatedEventBatches={} validatedSignificantItemBatches={} stoppedByTimeLimit={}",
+          options.taskName(),
+          cutoverEventHwm,
+          eventValidationTotals.batches(),
+          significantItemValidationTotals.batches(),
+          eventValidationTotals.stoppedByTimeLimit() || significantItemValidationTotals.stoppedByTimeLimit()
+      );
+      return new CcdDataMigrationRunResult(
+          true,
+          batchBudget.consumed(),
+          0,
+          totals.events(),
+          false,
+          eventValidationTotals.stoppedByTimeLimit() || significantItemValidationTotals.stoppedByTimeLimit()
+      );
+    }
+    if (releaseCutoverHighWaterMarkIfSourceAdvanced(cutoverEventHwm)) {
+      return new CcdDataMigrationRunResult(true, batchBudget.consumed(), 0, totals.events(), false, false);
+    }
     final int refreshedCases = refreshCutoverCaseData();
     resetSequences();
-    completeCutover(cutoverEventHwm);
+    completeCutover(cutoverEventHwm, stopAt);
 
     log.info(
         "Completed CCD data migration cutover taskName={} cutoverEventHwm={} batches={} refreshedCases={} events={} "
             + "significantItems={} significantItemBatches={} stoppedByTimeLimit={}",
         options.taskName(),
         cutoverEventHwm,
-        totals.batches(),
+        batchBudget.consumed(),
         refreshedCases,
         totals.events(),
         significantItemTotals.items(),
@@ -248,7 +306,7 @@ public class CcdDataMigrationTask implements Runnable {
     );
     return new CcdDataMigrationRunResult(
         true,
-        totals.batches(),
+        batchBudget.consumed(),
         refreshedCases,
         totals.events(),
         !totals.stoppedByTimeLimit(),
@@ -261,14 +319,16 @@ public class CcdDataMigrationTask implements Runnable {
     long validationEventHwm = progress.cutoverEventHwm() == null
         ? sourceEventHighWaterMark()
         : progress.cutoverEventHwm();
-    validateFinal(validationEventHwm);
-    return new CcdDataMigrationRunResult(true, 0, 0, 0, true, false);
+    validateSourceEventHighWaterMarkHasNotRegressed(validationEventHwm);
+    BatchBudget batchBudget = new BatchBudget(options.maxBatchesPerRun());
+    validateFinal(validationEventHwm, calculateStopAt(), batchBudget);
+    return new CcdDataMigrationRunResult(true, batchBudget.consumed(), 0, 0, true, false);
   }
 
-  private CopyTotals copyEventBatches(long targetEventHwm, LocalDateTime stopAt) {
+  private CopyTotals copyEventBatches(long targetEventHwm, LocalDateTime stopAt, BatchBudget batchBudget) {
     var totals = new CopyTotals();
 
-    for (int i = 0; i < options.maxBatchesPerRun(); i++) {
+    while (batchBudget.hasRemaining()) {
       long sourceEventHwm = effectiveSourceEventHighWaterMark(targetEventHwm);
       if (sourceEventHwm >= targetEventHwm) {
         totals = totals.markCaughtUp();
@@ -283,6 +343,7 @@ public class CcdDataMigrationTask implements Runnable {
         updateSourceEventProgressHighWaterMark(batchEndEventHwm);
         return copiedEvents;
       });
+      batchBudget.consume();
       totals = totals.plus(events);
       log.info(
           "CCD data migration progress taskName={} mode={} sourceEventHwm={} targetEventHwm={} "
@@ -435,14 +496,18 @@ public class CcdDataMigrationTask implements Runnable {
     );
   }
 
-  private SignificantItemCopyTotals copySignificantItemBatches(long cutoverEventHwm, LocalDateTime stopAt) {
+  private SignificantItemCopyTotals copySignificantItemBatches(
+      long cutoverEventHwm,
+      LocalDateTime stopAt,
+      BatchBudget batchBudget
+  ) {
     long targetSignificantItemsHwm = sourceSignificantItemsHighWaterMark(cutoverEventHwm);
+    validateSignificantItemsHighWaterMarkHasNotRegressed(targetSignificantItemsHwm);
     var totals = new SignificantItemCopyTotals();
 
-    for (int i = 0; i < options.maxBatchesPerRun(); i++) {
+    while (batchBudget.hasRemaining()) {
       long significantItemsHwm = significantItemsProgressHighWaterMark();
       if (significantItemsHwm >= targetSignificantItemsHwm) {
-        validateSignificantItemCounts(cutoverEventHwm);
         return totals.markCaughtUp();
       }
       if (isTimeLimitReached(stopAt)) {
@@ -456,6 +521,7 @@ public class CcdDataMigrationTask implements Runnable {
         updateSignificantItemsProgressHighWaterMark(batchEndItemHwm);
         return copied;
       });
+      batchBudget.consume();
       totals = totals.plus(copiedItems);
       log.info(
           "CCD data migration significant item progress taskName={} cutoverEventHwm={} "
@@ -473,10 +539,241 @@ public class CcdDataMigrationTask implements Runnable {
       }
     }
     if (significantItemsProgressHighWaterMark() >= targetSignificantItemsHwm) {
-      validateSignificantItemCounts(cutoverEventHwm);
       return totals.markCaughtUp();
     }
     return totals;
+  }
+
+  private ValidationTotals validateEventBatches(
+      long targetEventHwm,
+      LocalDateTime stopAt,
+      BatchBudget batchBudget
+  ) {
+    var totals = new ValidationTotals();
+    while (batchBudget.hasRemaining()) {
+      long validatedEventHwm = validatedEventHighWaterMark();
+      if (validatedEventHwm >= targetEventHwm) {
+        return totals.markCaughtUp();
+      }
+      if (isTimeLimitReached(stopAt)) {
+        return totals.markStoppedByTimeLimit();
+      }
+
+      long batchEndEventHwm = nextLocalEventValidationHighWaterMark(validatedEventHwm, targetEventHwm);
+      if (batchEndEventHwm <= validatedEventHwm) {
+        updateValidatedEventHighWaterMark(targetEventHwm);
+        return totals.markCaughtUp();
+      }
+      validateEventCounts(validatedEventHwm, batchEndEventHwm);
+      updateValidatedEventHighWaterMark(batchEndEventHwm);
+      batchBudget.consume();
+      totals = totals.plus();
+      log.info(
+          "CCD data migration event validation progress taskName={} batchStartEventId={} batchEndEventHwm={} "
+              + "totalBatches={}",
+          options.taskName(),
+          validatedEventHwm + 1L,
+          batchEndEventHwm,
+          totals.batches()
+      );
+    }
+    return validatedEventHighWaterMark() >= targetEventHwm ? totals.markCaughtUp() : totals;
+  }
+
+  private long nextLocalEventValidationHighWaterMark(long validatedEventHwm, long targetEventHwm) {
+    Long hwm = db.queryForObject(
+        """
+        select coalesce(max(id), :validatedEventHwm)
+        from (
+          select ce.id
+          from ccd.case_event ce
+          join ccd.case_data cd on cd.id = ce.case_data_id
+          where cd.jurisdiction = :sourceJurisdiction
+            and cd.case_type_id in (:caseTypeIds)
+            and ce.case_type_id in (:caseTypeIds)
+            and ce.id > :validatedEventHwm
+            and ce.id <= :targetEventHwm
+          order by ce.id
+          limit :validationBatchSize
+        ) local_events
+        """,
+        baseParams()
+            .addValue("validatedEventHwm", validatedEventHwm)
+            .addValue("targetEventHwm", targetEventHwm)
+            .addValue("validationBatchSize", options.eventIdWindowSize()),
+        Long.class
+    );
+    return hwm == null ? validatedEventHwm : hwm;
+  }
+
+  private void validateEventCounts(long fromExclusiveEventHwm, long toInclusiveEventHwm) {
+    MapSqlParameterSource params = baseParams()
+        .addValue("fromExclusiveEventHwm", fromExclusiveEventHwm)
+        .addValue("toInclusiveEventHwm", toInclusiveEventHwm);
+    Long sourceCount = withMigrationStatementTimeout(() -> db.queryForObject(
+        """
+        select count(*)
+        from fdw_stage.case_event ce
+        join fdw_stage.case_data cd on cd.id = ce.case_data_id
+        where cd.jurisdiction = :sourceJurisdiction
+          and cd.case_type_id in (:caseTypeIds)
+          and ce.case_type_id in (:caseTypeIds)
+          and ce.id > :fromExclusiveEventHwm
+          and ce.id <= :toInclusiveEventHwm
+        """,
+        params,
+        Long.class
+    ));
+    Long targetCount = db.queryForObject(
+        """
+        select count(*)
+        from ccd.case_event ce
+        join ccd.case_data cd on cd.id = ce.case_data_id
+        where cd.jurisdiction = :sourceJurisdiction
+          and cd.case_type_id in (:caseTypeIds)
+          and ce.case_type_id in (:caseTypeIds)
+          and ce.id > :fromExclusiveEventHwm
+          and ce.id <= :toInclusiveEventHwm
+        """,
+        params,
+        Long.class
+    );
+
+    long sourceRows = sourceCount == null ? 0 : sourceCount;
+    long targetRows = targetCount == null ? 0 : targetCount;
+    if (sourceRows != targetRows) {
+      throw new CcdDataMigrationException(
+          "CCD data migration event count mismatch source=" + sourceRows
+              + " target=" + targetRows
+              + " fromExclusiveEventHwm=" + fromExclusiveEventHwm
+              + " toInclusiveEventHwm=" + toInclusiveEventHwm
+      );
+    }
+  }
+
+  private ValidationTotals validateSignificantItemBatches(LocalDateTime stopAt, BatchBudget batchBudget) {
+    long targetSignificantItemsHwm = significantItemsProgressHighWaterMark();
+    var totals = new ValidationTotals();
+    while (batchBudget.hasRemaining()) {
+      long validatedSignificantItemsHwm = validatedSignificantItemsHighWaterMark();
+      if (validatedSignificantItemsHwm >= targetSignificantItemsHwm) {
+        return totals.markCaughtUp();
+      }
+      if (isTimeLimitReached(stopAt)) {
+        return totals.markStoppedByTimeLimit();
+      }
+
+      long batchEndItemHwm = nextLocalSignificantItemValidationHighWaterMark(
+          validatedSignificantItemsHwm,
+          targetSignificantItemsHwm,
+          validatedEventHighWaterMark()
+      );
+      if (batchEndItemHwm <= validatedSignificantItemsHwm) {
+        updateValidatedSignificantItemsHighWaterMark(targetSignificantItemsHwm);
+        return totals.markCaughtUp();
+      }
+      validateSignificantItemCounts(validatedSignificantItemsHwm, batchEndItemHwm, validatedEventHighWaterMark());
+      updateValidatedSignificantItemsHighWaterMark(batchEndItemHwm);
+      batchBudget.consume();
+      totals = totals.plus();
+      log.info(
+          "CCD data migration significant item validation progress taskName={} batchStartItemId={} "
+              + "batchEndItemHwm={} totalBatches={}",
+          options.taskName(),
+          validatedSignificantItemsHwm + 1L,
+          batchEndItemHwm,
+          totals.batches()
+      );
+    }
+    return validatedSignificantItemsHighWaterMark() >= targetSignificantItemsHwm ? totals.markCaughtUp() : totals;
+  }
+
+  private long nextLocalSignificantItemValidationHighWaterMark(
+      long validatedSignificantItemsHwm,
+      long targetSignificantItemsHwm,
+      long eventHwm
+  ) {
+    Long hwm = db.queryForObject(
+        """
+        select coalesce(max(id), :validatedSignificantItemsHwm)
+        from (
+          select item.id
+          from ccd.case_event_significant_items item
+          join ccd.case_event ce on ce.id = item.case_event_id
+          join ccd.case_data cd on cd.id = ce.case_data_id
+          where cd.jurisdiction = :sourceJurisdiction
+            and cd.case_type_id in (:caseTypeIds)
+            and ce.case_type_id in (:caseTypeIds)
+            and ce.id <= :eventHwm
+            and item.id > :validatedSignificantItemsHwm
+            and item.id <= :targetSignificantItemsHwm
+          order by item.id
+          limit :validationBatchSize
+        ) local_items
+        """,
+        baseParams()
+            .addValue("validatedSignificantItemsHwm", validatedSignificantItemsHwm)
+            .addValue("targetSignificantItemsHwm", targetSignificantItemsHwm)
+            .addValue("eventHwm", eventHwm)
+            .addValue("validationBatchSize", options.significantItemIdWindowSize()),
+        Long.class
+    );
+    return hwm == null ? validatedSignificantItemsHwm : hwm;
+  }
+
+  private void validateSignificantItemCounts(
+      long fromExclusiveSignificantItemsHwm,
+      long toInclusiveSignificantItemsHwm,
+      long eventHwm
+  ) {
+    MapSqlParameterSource params = baseParams()
+        .addValue("fromExclusiveSignificantItemsHwm", fromExclusiveSignificantItemsHwm)
+        .addValue("toInclusiveSignificantItemsHwm", toInclusiveSignificantItemsHwm)
+        .addValue("eventHwm", eventHwm);
+    Long sourceCount = withMigrationStatementTimeout(() -> db.queryForObject(
+        """
+        select count(*)
+        from fdw_stage.case_event_significant_items item
+        join fdw_stage.case_event ce on ce.id = item.case_event_id
+        join fdw_stage.case_data cd on cd.id = ce.case_data_id
+        where cd.jurisdiction = :sourceJurisdiction
+          and cd.case_type_id in (:caseTypeIds)
+          and ce.case_type_id in (:caseTypeIds)
+          and ce.id <= :eventHwm
+          and item.id > :fromExclusiveSignificantItemsHwm
+          and item.id <= :toInclusiveSignificantItemsHwm
+        """,
+        params,
+        Long.class
+    ));
+    Long targetCount = db.queryForObject(
+        """
+        select count(*)
+        from ccd.case_event_significant_items item
+        join ccd.case_event ce on ce.id = item.case_event_id
+        join ccd.case_data cd on cd.id = ce.case_data_id
+        where cd.jurisdiction = :sourceJurisdiction
+          and cd.case_type_id in (:caseTypeIds)
+          and ce.case_type_id in (:caseTypeIds)
+          and ce.id <= :eventHwm
+          and item.id > :fromExclusiveSignificantItemsHwm
+          and item.id <= :toInclusiveSignificantItemsHwm
+        """,
+        params,
+        Long.class
+    );
+
+    long sourceRows = sourceCount == null ? 0 : sourceCount;
+    long targetRows = targetCount == null ? 0 : targetCount;
+    if (sourceRows != targetRows) {
+      throw new CcdDataMigrationException(
+          "CCD data migration significant item count mismatch source=" + sourceRows
+              + " target=" + targetRows
+              + " fromExclusiveSignificantItemsHwm=" + fromExclusiveSignificantItemsHwm
+              + " toInclusiveSignificantItemsHwm=" + toInclusiveSignificantItemsHwm
+              + " eventHwm=" + eventHwm
+      );
+    }
   }
 
   private int copySignificantItemBatch(
@@ -505,6 +802,7 @@ public class CcdDataMigrationTask implements Runnable {
         join ccd.case_event target_event on target_event.id = item.case_event_id
         where cd.jurisdiction = :sourceJurisdiction
           and cd.case_type_id in (:caseTypeIds)
+          and ce.case_type_id in (:caseTypeIds)
           and ce.id <= :cutoverEventHwm
           and item.id > :significantItemsHwm
           and item.id <= :targetSignificantItemsHwm
@@ -606,29 +904,129 @@ public class CcdDataMigrationTask implements Runnable {
   }
 
   private long sourceEventHighWaterMark() {
+    LocalDateTime sourceEventCreatedBefore = sourceEventCreatedBefore();
     return withMigrationStatementTimeout(() -> {
       Long hwm = db.queryForObject(
           """
-          select coalesce(max(id), 0)
-          from fdw_stage.case_event
+          with recent_events as materialized (
+            select ce.id, ce.created_date
+            from fdw_stage.case_event ce
+            order by ce.id desc
+            limit :sourceEventSafetyScanLimit
+          ),
+          recent_stats as (
+            select max(id) as max_event_hwm,
+                   min(id) as min_scanned_event_hwm,
+                   min(id) filter (where created_date >= :sourceEventCreatedBefore) as first_fresh_event_hwm,
+                   bool_and(created_date >= :sourceEventCreatedBefore) as all_scanned_events_are_fresh
+            from recent_events
+          )
+          select coalesce(
+                   case
+                     when first_fresh_event_hwm is null then max_event_hwm
+                     when all_scanned_events_are_fresh then :progressEventHwm
+                     else first_fresh_event_hwm - 1
+                   end,
+                   0
+                 )
+          from recent_stats
           """,
-          baseParams(),
+          baseParams()
+              .addValue("sourceEventCreatedBefore", sourceEventCreatedBefore)
+              .addValue("sourceEventSafetyScanLimit", SOURCE_EVENT_SAFETY_SCAN_LIMIT)
+              .addValue("progressEventHwm", sourceEventProgressHighWaterMark()),
           Long.class
       );
       return hwm == null ? 0 : hwm;
     });
   }
 
+  private boolean sourceHasFreshEvents() {
+    LocalDateTime sourceEventCreatedBefore = sourceEventCreatedBefore();
+    Boolean exists = withMigrationStatementTimeout(() -> db.queryForObject(
+        """
+        select exists (
+          select 1
+          from (
+            select ce.created_date
+            from fdw_stage.case_event ce
+            order by ce.id desc
+            limit :sourceEventSafetyScanLimit
+          ) recent_events
+          where created_date >= :sourceEventCreatedBefore
+        )
+        """,
+        baseParams()
+            .addValue("sourceEventCreatedBefore", sourceEventCreatedBefore)
+            .addValue("sourceEventSafetyScanLimit", SOURCE_EVENT_SAFETY_SCAN_LIMIT),
+        Boolean.class
+    ));
+    return Boolean.TRUE.equals(exists);
+  }
+
+  private boolean releaseCutoverHighWaterMarkIfSourceAdvanced(long cutoverEventHwm) {
+    long currentSourceEventHwm = sourceEventHighWaterMark();
+    boolean sourceHasFreshEvents = sourceHasFreshEvents();
+    if (currentSourceEventHwm <= cutoverEventHwm && !sourceHasFreshEvents) {
+      return false;
+    }
+
+    log.info(
+        "CCD data migration cutover high-water mark released taskName={} cutoverEventHwm={} "
+            + "currentSourceEventHwm={} sourceHasFreshEvents={}",
+        options.taskName(),
+        cutoverEventHwm,
+        currentSourceEventHwm,
+        sourceHasFreshEvents
+    );
+    releaseCutoverHighWaterMark(cutoverEventHwm);
+    return true;
+  }
+
+  private void releaseCutoverHighWaterMark(long cutoverEventHwm) {
+    db.update(
+        """
+        update ccd.ccd_data_migration_progress
+        set status = :status,
+            cutover_event_hwm = null,
+            source_event_hwm = greatest(source_event_hwm, :cutoverEventHwm),
+            updated_at = now() at time zone 'UTC'
+        where task_name = :taskName
+        """,
+        Map.of(
+            "taskName", options.taskName(),
+            "status", STATUS_PRELOAD,
+            "cutoverEventHwm", cutoverEventHwm
+        )
+    );
+  }
+
+  private void validateSourceEventHighWaterMarkHasNotRegressed(long currentSourceEventHwm) {
+    long progressEventHwm = sourceEventProgressHighWaterMark();
+    if (progressEventHwm > currentSourceEventHwm) {
+      throw new CcdDataMigrationException(
+          "CCD data migration source event high-water mark regressed taskName=" + options.taskName()
+              + " sourceEventHwm=" + progressEventHwm
+              + " currentSourceEventHwm=" + currentSourceEventHwm
+              + ". A lower source event may have become visible after progress advanced; investigate before retrying."
+      );
+    }
+  }
+
   private long localEventHighWaterMark() {
     return withMigrationStatementTimeout(() -> {
       Long hwm = db.queryForObject(
           """
-          select coalesce(max(ce.id), 0)
-          from ccd.case_event ce
-          join ccd.case_data cd on cd.id = ce.case_data_id
-          where cd.jurisdiction = :sourceJurisdiction
-            and cd.case_type_id in (:caseTypeIds)
-            and ce.case_type_id in (:caseTypeIds)
+          select coalesce((
+            select ce.id
+            from ccd.case_event ce
+            join ccd.case_data cd on cd.id = ce.case_data_id
+            where cd.jurisdiction = :sourceJurisdiction
+              and cd.case_type_id in (:caseTypeIds)
+              and ce.case_type_id in (:caseTypeIds)
+            order by ce.id desc
+            limit 1
+          ), 0)
           """,
           baseParams(),
           Long.class
@@ -678,12 +1076,75 @@ public class CcdDataMigrationTask implements Runnable {
     return hwm == null ? 0 : hwm;
   }
 
+  private long validatedEventHighWaterMark() {
+    Long hwm = db.queryForObject(
+        """
+        select validated_event_hwm
+        from ccd.ccd_data_migration_progress
+        where task_name = :taskName
+        """,
+        Map.of("taskName", options.taskName()),
+        Long.class
+    );
+    return hwm == null ? 0 : hwm;
+  }
+
+  private void updateValidatedEventHighWaterMark(long validatedEventHwm) {
+    db.update(
+        """
+        update ccd.ccd_data_migration_progress
+        set validated_event_hwm = greatest(validated_event_hwm, :validatedEventHwm),
+            updated_at = now() at time zone 'UTC'
+        where task_name = :taskName
+        """,
+        Map.of(
+            "taskName", options.taskName(),
+            "validatedEventHwm", validatedEventHwm
+        )
+    );
+  }
+
+  private long validatedSignificantItemsHighWaterMark() {
+    Long hwm = db.queryForObject(
+        """
+        select validated_significant_items_hwm
+        from ccd.ccd_data_migration_progress
+        where task_name = :taskName
+        """,
+        Map.of("taskName", options.taskName()),
+        Long.class
+    );
+    return hwm == null ? 0 : hwm;
+  }
+
+  private void updateValidatedSignificantItemsHighWaterMark(long validatedSignificantItemsHwm) {
+    db.update(
+        """
+        update ccd.ccd_data_migration_progress
+        set validated_significant_items_hwm = greatest(
+              validated_significant_items_hwm,
+              :validatedSignificantItemsHwm
+            ),
+            updated_at = now() at time zone 'UTC'
+        where task_name = :taskName
+        """,
+        Map.of(
+            "taskName", options.taskName(),
+            "validatedSignificantItemsHwm", validatedSignificantItemsHwm
+        )
+    );
+  }
+
   private long sourceSignificantItemsHighWaterMark(long cutoverEventHwm) {
     Long hwm = withMigrationStatementTimeout(() -> db.queryForObject(
         """
-        select coalesce(max(item.id), 0)
-        from fdw_stage.case_event_significant_items item
-        where item.case_event_id <= :cutoverEventHwm
+        select coalesce((
+          select item.id
+          from fdw_stage.case_event_significant_items item
+          where item.case_event_id <= :cutoverEventHwm
+          order by item.id desc
+          limit 1
+        ), 0)
         """,
         baseParams().addValue("cutoverEventHwm", cutoverEventHwm),
         Long.class
@@ -714,6 +1175,19 @@ public class CcdDataMigrationTask implements Runnable {
     );
   }
 
+  private void validateSignificantItemsHighWaterMarkHasNotRegressed(long currentSignificantItemsHwm) {
+    long progressSignificantItemsHwm = significantItemsProgressHighWaterMark();
+    if (progressSignificantItemsHwm > currentSignificantItemsHwm) {
+      throw new CcdDataMigrationException(
+          "CCD data migration significant-item high-water mark regressed taskName=" + options.taskName()
+              + " significantItemsHwm=" + progressSignificantItemsHwm
+              + " currentSignificantItemsHwm=" + currentSignificantItemsHwm
+              + ". A lower source significant item may have become visible after progress advanced; "
+              + "investigate before retrying."
+      );
+    }
+  }
+
   private long effectiveSourceEventHighWaterMark(long targetEventHwm) {
     long progressEventHwm = sourceEventProgressHighWaterMark();
     if (progressEventHwm > 0) {
@@ -742,6 +1216,7 @@ public class CcdDataMigrationTask implements Runnable {
 
   private long captureCutoverEventHighWaterMark() {
     long hwm = sourceEventHighWaterMark();
+    validateSourceEventHighWaterMarkHasNotRegressed(hwm);
     db.update(
         """
         update ccd.ccd_data_migration_progress
@@ -799,17 +1274,17 @@ public class CcdDataMigrationTask implements Runnable {
     );
   }
 
-  private void completeCutover(long cutoverEventHwm) {
+  private void completeCutover(long cutoverEventHwm, LocalDateTime stopAt) {
     transaction.execute(status -> {
       applyMigrationStatementTimeout();
-      validateFinal(cutoverEventHwm);
+      validateFinal(cutoverEventHwm, stopAt, new BatchBudget(options.maxBatchesPerRun()));
       enableElasticsearchQueueTrigger();
       markComplete();
       return null;
     });
   }
 
-  private void validateFinal(long eventHwm) {
+  private void validateFinal(long eventHwm, LocalDateTime stopAt, BatchBudget batchBudget) {
     log.info("CCD data migration final counts taskName={} caseData={}", options.taskName(), queryCounts("case_data"));
     log.info("CCD data migration final counts taskName={} caseEvent={}", options.taskName(), queryCounts("case_event"));
     log.info(
@@ -817,7 +1292,14 @@ public class CcdDataMigrationTask implements Runnable {
         options.taskName(),
         queryCounts("case_event_significant_items")
     );
-    validateSignificantItemCounts(eventHwm);
+    ValidationTotals eventValidationTotals = validateEventBatches(eventHwm, stopAt, batchBudget);
+    ValidationTotals significantItemValidationTotals = validateSignificantItemBatches(stopAt, batchBudget);
+    if (!eventValidationTotals.caughtUp() || !significantItemValidationTotals.caughtUp()) {
+      throw new CcdDataMigrationException(
+          "CCD data migration validation did not catch up before cutover completion taskName=" + options.taskName()
+              + " eventHwm=" + eventHwm
+      );
+    }
     long esQueueRows = countElasticsearchQueueRows();
     log.info("CCD data migration final counts taskName={} esQueue={}", options.taskName(), esQueueRows);
     if (esQueueRows > 0) {
@@ -843,6 +1325,7 @@ public class CcdDataMigrationTask implements Runnable {
           join ccd.case_data cd on cd.id = ce.case_data_id
           where cd.jurisdiction = :sourceJurisdiction
             and cd.case_type_id in (:caseTypeIds)
+            and ce.case_type_id in (:caseTypeIds)
           group by ce.case_type_id
           order by ce.case_type_id
           """;
@@ -853,50 +1336,13 @@ public class CcdDataMigrationTask implements Runnable {
           join ccd.case_data cd on cd.id = ce.case_data_id
           where cd.jurisdiction = :sourceJurisdiction
             and cd.case_type_id in (:caseTypeIds)
+            and ce.case_type_id in (:caseTypeIds)
           group by cd.case_type_id
           order by cd.case_type_id
           """;
       default -> throw new IllegalArgumentException("Unsupported table name: " + tableName);
     };
     return db.queryForList(sql, baseParams());
-  }
-
-  private void validateSignificantItemCounts(long eventHwm) {
-    MapSqlParameterSource params = baseParams().addValue("eventHwm", eventHwm);
-    Long sourceCount = db.queryForObject(
-        """
-        select count(*)
-        from fdw_stage.case_event_significant_items item
-        join fdw_stage.case_event ce on ce.id = item.case_event_id
-        join fdw_stage.case_data cd on cd.id = ce.case_data_id
-        where cd.jurisdiction = :sourceJurisdiction
-          and cd.case_type_id in (:caseTypeIds)
-          and ce.id <= :eventHwm
-        """,
-        params,
-        Long.class
-    );
-    Long targetCount = db.queryForObject(
-        """
-        select count(*)
-        from ccd.case_event_significant_items item
-        join ccd.case_event ce on ce.id = item.case_event_id
-        join ccd.case_data cd on cd.id = ce.case_data_id
-        where cd.jurisdiction = :sourceJurisdiction
-          and cd.case_type_id in (:caseTypeIds)
-          and ce.id <= :eventHwm
-        """,
-        params,
-        Long.class
-    );
-
-    long sourceRows = sourceCount == null ? 0 : sourceCount;
-    long targetRows = targetCount == null ? 0 : targetCount;
-    if (sourceRows != targetRows) {
-      throw new CcdDataMigrationException(
-          "CCD data migration significant item count mismatch source=" + sourceRows + " target=" + targetRows
-      );
-    }
   }
 
   private void resetSequences() {
@@ -978,6 +1424,9 @@ public class CcdDataMigrationTask implements Runnable {
             'status',
             'cutover_event_hwm',
             'source_event_hwm',
+            'significant_items_hwm',
+            'validated_event_hwm',
+            'validated_significant_items_hwm',
             'created_at',
             'updated_at'
           )
@@ -985,7 +1434,7 @@ public class CcdDataMigrationTask implements Runnable {
         Map.of("schema", TARGET_SCHEMA),
         Integer.class
     );
-    if (columnCount == null || columnCount != 7) {
+    if (columnCount == null || columnCount != 10) {
       throw new CcdDataMigrationException(
           "CCD data migration progress table is missing or incomplete. "
               + "Run the decentralised-runtime Flyway migrations before starting the task."
@@ -1017,7 +1466,9 @@ public class CcdDataMigrationTask implements Runnable {
                status,
                cutover_event_hwm,
                source_event_hwm,
-               significant_items_hwm
+               significant_items_hwm,
+               validated_event_hwm,
+               validated_significant_items_hwm
         from ccd.ccd_data_migration_progress
         where task_name = :taskName
         """,
@@ -1054,7 +1505,9 @@ public class CcdDataMigrationTask implements Runnable {
         rs.getString("status"),
         cutoverEventHwm,
         rs.getLong("source_event_hwm"),
-        rs.getLong("significant_items_hwm")
+        rs.getLong("significant_items_hwm"),
+        rs.getLong("validated_event_hwm"),
+        rs.getLong("validated_significant_items_hwm")
     );
   }
 
@@ -1277,6 +1730,10 @@ public class CcdDataMigrationTask implements Runnable {
     return options.maxRunTime() == null ? null : LocalDateTime.now(clock).plus(options.maxRunTime());
   }
 
+  private LocalDateTime sourceEventCreatedBefore() {
+    return LocalDateTime.now(clock).minus(options.sourceEventSafetyWindow());
+  }
+
   private boolean isTimeLimitReached(LocalDateTime stopAt) {
     return stopAt != null && !LocalDateTime.now(clock).isBefore(stopAt);
   }
@@ -1418,7 +1875,9 @@ public class CcdDataMigrationTask implements Runnable {
       String status,
       Long cutoverEventHwm,
       long sourceEventHwm,
-      long significantItemsHwm
+      long significantItemsHwm,
+      long validatedEventHwm,
+      long validatedSignificantItemsHwm
   ) {
     long requiredCutoverEventHwm() {
       if (cutoverEventHwm == null) {
@@ -1461,6 +1920,46 @@ public class CcdDataMigrationTask implements Runnable {
 
     private SignificantItemCopyTotals markStoppedByTimeLimit() {
       return new SignificantItemCopyTotals(batches, items, caughtUp, true);
+    }
+  }
+
+  private record ValidationTotals(long batches, boolean caughtUp, boolean stoppedByTimeLimit) {
+    private ValidationTotals() {
+      this(0, false, false);
+    }
+
+    private ValidationTotals plus() {
+      return new ValidationTotals(batches + 1, caughtUp, stoppedByTimeLimit);
+    }
+
+    private ValidationTotals markCaughtUp() {
+      return new ValidationTotals(batches, true, stoppedByTimeLimit);
+    }
+
+    private ValidationTotals markStoppedByTimeLimit() {
+      return new ValidationTotals(batches, caughtUp, true);
+    }
+  }
+
+  private static final class BatchBudget {
+    private int remaining;
+    private int consumed;
+
+    private BatchBudget(int remaining) {
+      this.remaining = remaining;
+    }
+
+    private boolean hasRemaining() {
+      return remaining > 0;
+    }
+
+    private void consume() {
+      remaining--;
+      consumed++;
+    }
+
+    private int consumed() {
+      return consumed;
     }
   }
 }

@@ -158,9 +158,10 @@ the FDW server; create it during setup with `FDW_ADDITIONAL_GRANTEE` or have Pla
 create it manually. The Java task does not create user mappings because they contain source database
 credentials. Leave it blank to skip the extra grant.
 
-For services using the Java task, `case_event_significant_items` is copied during `CUTOVER` after
-events have caught up. It uses one set-based insert query joined through the migrated target events
-up to the captured cutover event high-water mark, so the preload event walk is not restarted.
+For services using the Java task, `case_event_significant_items` is copied during preload and again
+during `CUTOVER` for the final delta. It uses resumable ID windows joined through migrated target
+events, and validation advances separate event and significant-item checkpoints so cutover only
+checks ranges that have not already been validated.
 
 Required environment variables:
 
