@@ -22,6 +22,7 @@ public class Field<Type, StateType, Parent, Grandparent> {
   String caseEventFieldLabel;
   String caseEventFieldHint;
   Type defaultValue;
+  String caseEventDefaultValue;
   boolean showSummary;
   int fieldDisplayOrder;
   int pageFieldDisplayOrder;
@@ -113,10 +114,14 @@ public class Field<Type, StateType, Parent, Grandparent> {
      * See {@link #defaultValue(Object)}. Accepts a plain string so a field whose {@code Type} is
      * not {@code String} (e.g. an enum) can still carry a literal {@code DefaultValue}, matching
      * the sheet column, which is untyped.
+     *
+     * <p>Unlike the {@code Type}-typed overload — whose value the long-standing positional
+     * {@code optional}/{@code mandatory} builders route to {@code CaseEventToComplexTypes} only —
+     * this opt-in setter writes the {@code CaseEventToFields.DefaultValue} column via a dedicated
+     * carrier, so a config that never calls it produces no {@code DefaultValue} on that sheet.
      */
-    @SuppressWarnings("unchecked")
     public FieldBuilder<Type, StateType, Parent, Grandparent> defaultValue(String defaultValue) {
-      this.defaultValue = (Type) defaultValue;
+      this.caseEventDefaultValue = defaultValue;
       return this;
     }
 
