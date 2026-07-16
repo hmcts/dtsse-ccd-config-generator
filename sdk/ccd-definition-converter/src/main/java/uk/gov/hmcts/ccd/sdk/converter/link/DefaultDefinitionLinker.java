@@ -58,19 +58,50 @@ public class DefaultDefinitionLinker implements DefinitionLinker {
     // type, and the SDK would generate two Java classes of the same name (a complex-type class
     // and an enum) that collide. The complex type wins; the colliding FixedList is generated no
     // enum and passed through instead, exactly as for an orphan or illegal-identifier list.
-    Set<String> complexTypeIds = complexTypeIds(ir, caseTypeId);
+    final Set<String> complexTypeIds = complexTypeIds(ir, caseTypeId);
 
+    // Companion class/enum names are PascalCased (finding #3/#4) and allocated collision-free
+    // against this shared set, seeded with the fixed generated type names so a list/type ID that
+    // PascalCases to one of them is deterministically suffixed rather than clashing. The set is
+    // shared across the fixed-list and complex-type passes so no FL enum and complex type collide.
+    Set<String> usedTypeNames = new LinkedHashSet<>();
+    usedTypeNames.add("CaseData");
+    usedTypeNames.add("State");
+    usedTypeNames.add("UserRole");
+
+    // In retrofit mode a generated companion must also avoid colliding with an existing model type of
+    // the same PascalCase name — but only with the OTHER kind, because a companion that matches its
+    // own kind binds to it and is never emitted (see RetrofitComplexTypeEmitter / the FixedList
+    // rebind). So the fixed-list pass reserves existing CLASS names and the complex-type pass reserves
+    // existing ENUM names; reserving the matching kind would wrongly suffix a reference to a
+    // never-emitted type. The CCD wire ID always round-trips via @ComplexType(name).
     Map<String, String> fixedListEnumNames = new LinkedHashMap<>();
     List<PassthroughSheet> fixedListPassthrough = new ArrayList<>();
-    List<FixedListModel> fixedLists =
+    if (options.getRetrofitReservedFixedListNames() != null) {
+      usedTypeNames.addAll(options.getRetrofitReservedFixedListNames());
+    }
+    final List<FixedListModel> fixedLists =
         buildFixedLists(ir, caseTypeId, options, gaps, fixedListEnumNames, fixedListPassthrough,
-            complexTypeIds);
+            complexTypeIds, usedTypeNames);
+    // Drop the reserved class names again before the complex-type pass: a complex type DOES bind to
+    // an existing class of the same name (no companion), so keeping them reserved would suffix its
+    // shared reference. The complex-type pass instead reserves existing enum names. Names actually
+    // allocated to fixed-list enums above stay in the set (they are no longer plain reservations).
+    if (options.getRetrofitReservedFixedListNames() != null) {
+      Set<String> allocatedFixedListNames = new LinkedHashSet<>(fixedListEnumNames.values());
+      options.getRetrofitReservedFixedListNames().stream()
+          .filter(name -> !allocatedFixedListNames.contains(name))
+          .forEach(usedTypeNames::remove);
+    }
+    if (options.getRetrofitReservedComplexTypeNames() != null) {
+      usedTypeNames.addAll(options.getRetrofitReservedComplexTypeNames());
+    }
 
     Map<String, String> complexTypeRefs = new LinkedHashMap<>();
     List<PassthroughSheet> complexTypePassthrough = new ArrayList<>();
     List<ComplexTypeModel> complexTypes =
         buildComplexTypes(ir, caseTypeId, options, gaps, fixedListEnumNames, complexTypeRefs,
-            complexTypePassthrough);
+            complexTypePassthrough, usedTypeNames);
 
     TypeMapper.EnumResolver enumResolver = fixedListEnumNames::get;
     TypeMapper.ComplexResolver complexResolver = complexTypeRefs::get;
@@ -104,12 +135,10 @@ public class DefaultDefinitionLinker implements DefinitionLinker {
     // types so CaseData stays within Java's field/constructor limits. Runs last, once every
     // field has its final id/javaName/access. Collision-avoidance uses the names already taken
     // by generated complex types, fixed-list enums and the State/UserRole enums.
-    Set<String> reservedTypeNames = new LinkedHashSet<>();
-    complexTypes.forEach(ct -> reservedTypeNames.add(ct.getId()));
-    fixedLists.forEach(fl -> reservedTypeNames.add(fl.getId()));
-    reservedTypeNames.add("CaseData");
-    reservedTypeNames.add("State");
-    reservedTypeNames.add("UserRole");
+    // Synthetic cluster types must avoid every already-allocated companion class/enum name. The
+    // shared usedTypeNames set already holds the PascalCase complex-type and fixed-list class names
+    // (plus CaseData/State/UserRole), so reuse it directly.
+    Set<String> reservedTypeNames = new LinkedHashSet<>(usedTypeNames);
     // Retrofit mode annotates the team's EXISTING model, which already carries its own
     // @JsonUnwrapped structure; synthesising fresh cluster complex types would invent members the
     // model does not have. So clustering is skipped and the flat fields are kept as-is — the
@@ -487,7 +516,7 @@ public class DefaultDefinitionLinker implements DefinitionLinker {
   private List<FixedListModel> buildFixedLists(
       DefinitionIr ir, String caseTypeId, ConversionOptions options, GapCollector gaps,
       Map<String, String> enumNames, List<PassthroughSheet> passthrough,
-      Set<String> complexTypeIds) {
+      Set<String> complexTypeIds, Set<String> usedTypeNames) {
     Map<String, List<SheetRow>> byId = groupById(ir.rowsForCaseType(SheetName.FIXED_LISTS, caseTypeId));
     Set<String> referenced = referencedTypeParameters(ir, caseTypeId);
     List<FixedListModel> lists = new ArrayList<>();
@@ -552,7 +581,11 @@ public class DefaultDefinitionLinker implements DefinitionLinker {
             .build());
         continue;
       }
-      enumNames.put(id, id);
+      // PascalCase the enum's Java name (dropping any machine FL_ prefix) and record it as the type
+      // every referencing field resolves to; the wire ID stays `id` and round-trips via
+      // @ComplexType(name = id) (finding #4). enumNames maps ID -> Java enum name for TypeMapper.
+      String enumClassName = TypeClassNamer.allocate(TypeClassNamer.fixedListName(id), usedTypeNames);
+      enumNames.put(id, enumClassName);
       Set<String> usedConstants = new LinkedHashSet<>();
       List<FixedListModel.Item> items = new ArrayList<>();
       Map<String, String> labelsByCode = new LinkedHashMap<>();
@@ -615,7 +648,11 @@ public class DefaultDefinitionLinker implements DefinitionLinker {
             .displayOrder(row.getInteger(Columns.DISPLAY_ORDER).orElse(null))
             .build());
       }
-      lists.add(FixedListModel.builder().id(id).items(items).build());
+      lists.add(FixedListModel.builder()
+          .id(id)
+          .javaClassName(enumNames.get(id))
+          .items(items)
+          .build());
     }
     return lists;
   }
@@ -732,7 +769,8 @@ public class DefaultDefinitionLinker implements DefinitionLinker {
       GapCollector gaps,
       Map<String, String> enumNames,
       Map<String, String> complexTypeRefs,
-      List<PassthroughSheet> passthrough) {
+      List<PassthroughSheet> passthrough,
+      Set<String> usedTypeNames) {
     Map<String, List<SheetRow>> byId =
         groupById(ir.rowsForCaseType(SheetName.COMPLEX_TYPES, caseTypeId));
 
@@ -742,10 +780,21 @@ public class DefaultDefinitionLinker implements DefinitionLinker {
     // reproduced via passthrough rather than a phantom generated type.
     Set<String> reachable = reachableComplexTypes(ir, caseTypeId, byId);
 
+    // Populate the resolver before building members (a complex type's member may reference a
+    // sibling complex type). A predefined type maps to its SDK FQN; a generated type maps to a
+    // PascalCase Java class name (finding #3) allocated collision-free, while the wire ID stays the
+    // sheet ID and round-trips via @ComplexType(name = id). Only types that will actually yield a
+    // generated class (non-predefined, reachable, legal identifier) are allocated a name; the rest
+    // are passed through below and dropped from the resolver, so no name is wasted.
     for (String id : byId.keySet()) {
       if (SdkPredefinedTypes.isPredefined(id)) {
         complexTypeRefs.put(id, SdkPredefinedTypes.javaTypeFor(id));
+      } else if (reachable.contains(id) && IdentifierSanitiser.isLegalIdentifier(id)) {
+        complexTypeRefs.put(id, TypeClassNamer.allocate(
+            TypeClassNamer.complexTypeName(id), usedTypeNames));
       } else {
+        // Unreachable or illegal-identifier: passed through below; a temporary raw-ID mapping keeps
+        // any member resolver lookup non-null until the type is removed from the map.
         complexTypeRefs.put(id, id);
       }
     }
@@ -872,6 +921,7 @@ public class DefaultDefinitionLinker implements DefinitionLinker {
       }
       models.add(ComplexTypeModel.builder()
           .id(id)
+          .javaClassName(complexTypeRefs.get(id))
           .members(members)
           .depth(depths.getOrDefault(id, 0))
           .build());

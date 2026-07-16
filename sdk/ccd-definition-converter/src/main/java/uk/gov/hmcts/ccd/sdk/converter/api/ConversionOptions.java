@@ -119,4 +119,30 @@ public class ConversionOptions {
    * prefix — paths relative to {@code --model-source-root}, the historical behaviour).
    */
   Path retrofitModelRepoRoot;
+
+  /**
+   * Retrofit mode: the simple names of every <em>enum</em> in the team's model, reserved when naming
+   * generated <em>complex-type</em> companions (finding #3). A complex-type companion is emitted only
+   * when the definition type does not bind to an existing model class (see
+   * {@code RetrofitComplexTypeEmitter}), so the sole same-named type it can clash with is an enum
+   * (e.g. the definition {@code benefit} complex type PascalCased to {@code Benefit} vs the sscs
+   * domain enum {@code Benefit}). Reserving these suffixes the companion ({@code Benefit2}) rather
+   * than emitting a {@code duplicate class}; the CCD wire ID round-trips via {@code @ComplexType(name)}.
+   * Model class names are deliberately NOT reserved here — a complex type matching an existing class
+   * binds to it (no companion), so reserving it would wrongly suffix the reference to a type that is
+   * never emitted. Null/empty in generate mode.
+   */
+  java.util.Set<String> retrofitReservedComplexTypeNames;
+
+  /**
+   * Retrofit mode: the simple names of <em>every</em> type in the team's model, reserved when naming
+   * generated <em>fixed-list</em> enum companions (finding #4). A fixed-list companion reuses a model
+   * enum only on an exact list-ID match (rebind drops those), so a machine {@code FL_}-prefixed or
+   * case-shifted ID emits a fresh companion that can collide with a model enum OR a class of the
+   * PascalCased name ({@code FL_amendReason} → {@code AmendReason} enum; {@code FL_caseOutcome} →
+   * {@code CaseOutcome} class). Reserving all names is safe because the only names that must stay free
+   * are the exact-ID reuses, which emit no companion. Broader than its complex-type counterpart
+   * {@link #retrofitReservedComplexTypeNames} for that reason. Null/empty in generate mode.
+   */
+  java.util.Set<String> retrofitReservedFixedListNames;
 }

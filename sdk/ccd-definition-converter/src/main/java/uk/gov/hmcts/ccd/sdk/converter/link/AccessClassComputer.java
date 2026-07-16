@@ -2,6 +2,7 @@ package uk.gov.hmcts.ccd.sdk.converter.link;
 
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -54,8 +55,31 @@ import uk.gov.hmcts.ccd.sdk.converter.model.gap.GapEntry;
  * <p>Only classes actually referenced by some field's cover are emitted (an atom always folded into a
  * group is never minted standalone). The per-case-type class counts and per-field array distribution
  * are recorded in {@link Result#summaryNote()} for the converter report.
+ *
+ * <p><b>Common-prefix elision.</b> Service teams' roles are conventionally namespaced
+ * ({@code caseworker-probate-caseadmin}, {@code caseworker-probate-systemupdate}, …); when
+ * (almost) every role participating in a case type's access classes shares a hyphen-delimited
+ * prefix, that prefix is redundant in every derived name and is stripped before tokenisation (see
+ * {@link #computeCommonPrefix} and {@link #stripCommonPrefix}). Concretely: the longest
+ * hyphen-token prefix shared by at least {@link #COMMON_PREFIX_MIN_SHARE} of the distinct roles
+ * across all residual atoms is computed once per case type (in {@link #compute}) and removed from
+ * each role before it is turned into a name token — {@code caseworker-probate-caseadmin} becomes
+ * {@code Caseadmin} rather than {@code CaseworkerProbateCaseadmin}. A role that has no other
+ * remainder (it <em>is</em> the prefix exactly, e.g. {@code caseworker-probate}) keeps its last
+ * hyphen token ({@code Probate}) so it still yields a non-empty, distinguishing name. Roles outside
+ * the prefix (e.g. {@code citizen}) are never touched. Grants themselves always key on the full,
+ * unstripped role id — only the derived class <em>name</em> is affected, so this cannot change what
+ * a class grants.
  */
 final class AccessClassComputer {
+
+  /**
+   * The minimum share of distinct roles (participating in some case type's access classes) that
+   * must share a hyphen-token prefix before it is considered case-type-wide "common" and elided
+   * from derived names. Chosen conservatively above half so a prefix used by only a slim majority
+   * (which could still carry information distinguishing the minority) is left alone.
+   */
+  static final double COMMON_PREFIX_MIN_SHARE = 0.8;
 
   /** A group must be used by at least this many fields to earn a name (else its atoms stand alone). */
   static final int MIN_GROUP_FIELDS = 3;
@@ -73,6 +97,14 @@ final class AccessClassComputer {
   private static final int MAX_GROUPS = 1024;
 
   private final GapCollector gaps;
+
+  /**
+   * The hyphen-tokens of the case type's common role prefix (e.g. {@code ["caseworker",
+   * "probate"]}), computed once per {@link #compute} call by {@link #computeCommonPrefix} and
+   * consumed by {@link #roleToken} via {@link #stripCommonPrefix}. Empty when no prefix clears the
+   * {@link #COMMON_PREFIX_MIN_SHARE} bar.
+   */
+  private List<String> commonPrefixTokens = List.of();
 
   AccessClassComputer(GapCollector gaps) {
     this.gaps = gaps;
@@ -140,6 +172,16 @@ final class AccessClassComputer {
     }
 
     List<Pattern> patterns = new ArrayList<>(patternsBySignature.values());
+
+    // Every role that will appear in some derived class name, so the common-prefix computation
+    // sees the same population that naming later tokenises.
+    Set<String> rolesInResiduals = new LinkedHashSet<>();
+    for (Pattern pattern : patterns) {
+      for (Atom atom : pattern.atoms) {
+        rolesInResiduals.add(atom.role());
+      }
+    }
+    commonPrefixTokens = computeCommonPrefix(rolesInResiduals);
 
     // 2. Mine frequently co-occurring atom-sets into groups (greedy: carve the highest-coverage
     //    bundle out of every pattern that contains it, then repeat).
@@ -509,8 +551,15 @@ final class AccessClassComputer {
    * A deterministic, content-derived class name for a multi-role grant map. A single-role map keeps
    * the {@code <Role>Access} form; a multi-role map is named from each role's short token plus its
    * CRUD in title case, sorted by role (e.g. {@code {caseworker=CRU, citizen=R}} ->
-   * {@code CaseworkerCruCitizenRAccess}). When that would exceed {@link #MAX_SEMANTIC_NAME} characters
-   * the name is truncated to the first role's token plus a role count and a short stable digest.
+   * {@code CaseworkerCruCitizenRAccess}). When every role in the map is granted the identical CRUD,
+   * that per-role repetition is itself redundant, so the shared CRUD token is written once at the
+   * end instead of after every role (e.g. {@code {caseworker=CRU, citizen=CRU}} ->
+   * {@code CaseworkerCitizenCruAccess} rather than {@code CaseworkerCruCitizenCruAccess}) — safe
+   * because the token stream still names the same roles in the same order, just without the
+   * repeated suffix, so no information is lost and no other construction can collide with it
+   * (collisions are caught by {@link #uniqueName} regardless). When that would exceed
+   * {@link #MAX_SEMANTIC_NAME} characters the name is truncated to the first role's token plus a
+   * role count and a short stable digest.
    *
    * @param residual the grant map (role id to CRUD)
    * @return the class name (without collision suffix)
@@ -525,9 +574,16 @@ final class AccessClassComputer {
       }
       return "Access" + digest(signature(residual));
     }
+    boolean uniformCrud = new HashSet<>(sorted.values()).size() == 1;
     StringBuilder full = new StringBuilder();
     for (Map.Entry<String, String> entry : sorted.entrySet()) {
-      full.append(roleToken(entry.getKey())).append(crudToken(entry.getValue()));
+      full.append(roleToken(entry.getKey()));
+      if (!uniformCrud) {
+        full.append(crudToken(entry.getValue()));
+      }
+    }
+    if (uniformCrud) {
+      full.append(crudToken(sorted.values().iterator().next()));
     }
     String candidate = full + "Access";
     if (candidate.length() <= MAX_SEMANTIC_NAME) {
@@ -540,10 +596,116 @@ final class AccessClassComputer {
 
   private static final int MAX_SEMANTIC_NAME = 70;
 
-  /** A role id turned into a PascalCase token (sanitised, brackets on case roles dropped). */
+  /**
+   * The minimum number of distinct roles a case type must have before common-prefix elision
+   * applies. With a single role there is nothing to compare it against — "the whole role is the
+   * prefix" would be a vacuous, misleading result — so {@link #computeCommonPrefix} declines
+   * below this bound and every role keeps its full token form.
+   */
+  private static final int MIN_ROLES_FOR_COMMON_PREFIX = 2;
+
+  /**
+   * A role id turned into a PascalCase token (sanitised, brackets on case roles dropped, the
+   * case type's common role-namespace prefix elided per {@link #stripCommonPrefix}).
+   */
   private String roleToken(String role) {
-    String base = IdentifierSanitiser.toMemberName(role.replace("[", "").replace("]", ""));
+    String cleaned = role.replace("[", "").replace("]", "");
+    String base = IdentifierSanitiser.toMemberName(stripCommonPrefix(cleaned));
     return toPascalCase(base);
+  }
+
+  /**
+   * The longest hyphen-token prefix shared by at least {@link #COMMON_PREFIX_MIN_SHARE} of the
+   * given roles, as a token list (e.g. {@code ["caseworker", "probate"]}), or empty when no
+   * prefix clears the bar or fewer than {@link #MIN_ROLES_FOR_COMMON_PREFIX} distinct roles are
+   * given.
+   *
+   * <p>Deterministic greedy extension: at each depth, the roles still matching the prefix built
+   * so far are grouped by their next hyphen token; since the groups at a given depth partition
+   * those roles, at most one group can hold &ge;{@code COMMON_PREFIX_MIN_SHARE} (&gt; half) of the
+   * <em>original</em> role count, so the winner (if any) is unambiguous — no tie-break is needed.
+   * The prefix is extended by that token and the pass repeats on the (shrinking) matching subset;
+   * it stops as soon as no token's share clears the bar or every matching role is exhausted of
+   * tokens.
+   *
+   * @param roles the distinct role IDs participating in some case type's access-class residuals
+   * @return the shared prefix, as hyphen tokens (never null; empty when none applies)
+   */
+  private List<String> computeCommonPrefix(Set<String> roles) {
+    List<List<String>> tokenLists = new ArrayList<>();
+    for (String role : roles) {
+      String cleaned = role.replace("[", "").replace("]", "");
+      if (!cleaned.isEmpty()) {
+        tokenLists.add(List.of(cleaned.split("-")));
+      }
+    }
+    int total = tokenLists.size();
+    if (total < MIN_ROLES_FOR_COMMON_PREFIX) {
+      return List.of();
+    }
+
+    List<String> prefix = new ArrayList<>();
+    List<List<String>> matching = tokenLists;
+    int depth = 0;
+    while (true) {
+      Map<String, List<List<String>>> byNextToken = new TreeMap<>();
+      for (List<String> tokens : matching) {
+        if (tokens.size() > depth) {
+          byNextToken.computeIfAbsent(tokens.get(depth), t -> new ArrayList<>()).add(tokens);
+        }
+      }
+      Map.Entry<String, List<List<String>>> best = null;
+      for (Map.Entry<String, List<List<String>>> entry : byNextToken.entrySet()) {
+        if (best == null || entry.getValue().size() > best.getValue().size()) {
+          best = entry;
+        }
+      }
+      if (best == null || (double) best.getValue().size() / total < COMMON_PREFIX_MIN_SHARE) {
+        break;
+      }
+      prefix.add(best.getKey());
+      matching = best.getValue();
+      depth++;
+    }
+    return List.copyOf(prefix);
+  }
+
+  /**
+   * Removes the case type's common role prefix ({@link #commonPrefixTokens}) from a role, per the
+   * maintainer's rule: a role strictly inside the prefix keeps only its remainder tokens; a role
+   * that IS the prefix exactly (no remainder) keeps its last token, so it still yields a
+   * non-empty, distinguishing name; a role outside the prefix (including one sharing only part of
+   * it) is returned unchanged.
+   *
+   * @param cleaned the role ID with case-role brackets already stripped
+   * @return the role's naming-relevant remainder
+   */
+  private String stripCommonPrefix(String cleaned) {
+    if (commonPrefixTokens.isEmpty()) {
+      return cleaned;
+    }
+    String[] tokens = cleaned.split("-");
+    int prefixLen = commonPrefixTokens.size();
+    for (int i = 0; i < prefixLen && i < tokens.length; i++) {
+      if (!tokens[i].equals(commonPrefixTokens.get(i))) {
+        return cleaned;
+      }
+    }
+    if (tokens.length < prefixLen) {
+      // Only partially overlaps the prefix — not the exact-prefix case, left untouched.
+      return cleaned;
+    }
+    if (tokens.length == prefixLen) {
+      return tokens[prefixLen - 1];
+    }
+    StringBuilder remainder = new StringBuilder();
+    for (int i = prefixLen; i < tokens.length; i++) {
+      if (i > prefixLen) {
+        remainder.append('-');
+      }
+      remainder.append(tokens[i]);
+    }
+    return remainder.toString();
   }
 
   // A CRUD string turned into a title-case token: "CRU" -> "Cru", "R" -> "R".

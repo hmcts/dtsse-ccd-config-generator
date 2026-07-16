@@ -14,8 +14,19 @@ import lombok.Value;
 @Builder
 public class ComplexTypeModel {
 
-  /** The ComplexTypes sheet ID — also the generated class's simple name. */
+  /**
+   * The ComplexTypes sheet ID — the CCD-facing type ID, preserved verbatim as the wire ID via
+   * {@code @ComplexType(name = id)} when it differs from {@link #javaClassName}.
+   */
   String id;
+
+  /**
+   * The generated class's Java-conventional (PascalCase) simple name. Decoupled from {@link #id} so
+   * a camelCase definition ID ({@code benefit}) yields a conventional class ({@code Benefit}) while
+   * the wire ID round-trips via {@code @ComplexType(name = id)}. Equals {@link #id} when the ID is
+   * already a well-formed class name.
+   */
+  String javaClassName;
 
   List<FieldModel> members;
 

@@ -812,4 +812,141 @@ class DefaultDefinitionLinkerTest {
     assertThat(model.getCaseFields()).allSatisfy(f ->
         assertThat(f.getAccessClassNames()).containsExactly("DefaultAccess"));
   }
+
+  @Test
+  void commonRolePrefixIsElidedFromAtomNames() {
+    GapCollector gaps = new GapCollector();
+    // Every role sharing the "caseworker-probate-" prefix carries no information (maintainer
+    // directive): the derived atom names should drop it and keep only each role's remainder.
+    DefinitionIr ir = minimal("Minimal")
+        .row(SheetName.CASE_FIELD,
+            cols("CaseTypeID", "Minimal", "ID", "a", "Label", "A", "FieldType", "Text"))
+        .row(SheetName.AUTHORISATION_CASE_FIELD,
+            cols("CaseTypeID", "Minimal", "CaseFieldID", "a", "UserRole",
+                "caseworker-probate-rparobot", "CRUD", "CUD"))
+        .row(SheetName.AUTHORISATION_CASE_FIELD,
+            cols("CaseTypeID", "Minimal", "CaseFieldID", "a", "UserRole",
+                "caseworker-probate-systemupdate", "CRUD", "CU"))
+        .build();
+
+    CaseTypeModel model = linker.link(ir, options("Minimal"), gaps);
+
+    // Both maintainer-example shapes resolve to short, prefix-free names: no "CaseworkerProbate"
+    // token survives in either atom.
+    assertThat(model.getAccessClasses())
+        .extracting(AccessClassModel::getClassName)
+        .containsExactlyInAnyOrder("RparobotCudAccess", "SystemupdateCuAccess");
+  }
+
+  @Test
+  void roleThatIsExactlyTheCommonPrefixKeepsItsLastToken() {
+    GapCollector gaps = new GapCollector();
+    // "caseworker-probate" IS the shared prefix "caseworker-probate" exactly (no remainder), so
+    // per the documented rule it keeps its last hyphen token ("probate") rather than collapsing
+    // to an empty name.
+    DefinitionIr ir = minimal("Minimal")
+        .row(SheetName.CASE_FIELD,
+            cols("CaseTypeID", "Minimal", "ID", "a", "Label", "A", "FieldType", "Text"))
+        .row(SheetName.AUTHORISATION_CASE_FIELD,
+            cols("CaseTypeID", "Minimal", "CaseFieldID", "a", "UserRole",
+                "caseworker-probate", "CRUD", "R"))
+        .row(SheetName.AUTHORISATION_CASE_FIELD,
+            cols("CaseTypeID", "Minimal", "CaseFieldID", "a", "UserRole",
+                "caseworker-probate-caseadmin", "CRUD", "CRU"))
+        .build();
+
+    CaseTypeModel model = linker.link(ir, options("Minimal"), gaps);
+
+    assertThat(model.getAccessClasses())
+        .extracting(AccessClassModel::getClassName)
+        .containsExactlyInAnyOrder("ProbateRAccess", "CaseadminCruAccess");
+  }
+
+  @Test
+  void mixedPrefixCaseTypeStripsNothingBelowTheShareBar() {
+    GapCollector gaps = new GapCollector();
+    // Only 1 of 3 distinct roles shares "caseworker-probate-"; that is below the 80% bar, so no
+    // prefix is common and every role keeps its full token form.
+    DefinitionIr ir = minimal("Minimal")
+        .row(SheetName.CASE_FIELD,
+            cols("CaseTypeID", "Minimal", "ID", "a", "Label", "A", "FieldType", "Text"))
+        .row(SheetName.AUTHORISATION_CASE_FIELD,
+            cols("CaseTypeID", "Minimal", "CaseFieldID", "a", "UserRole",
+                "caseworker-probate-caseadmin", "CRUD", "CRU"))
+        .row(SheetName.AUTHORISATION_CASE_FIELD,
+            cols("CaseTypeID", "Minimal", "CaseFieldID", "a", "UserRole", "citizen", "CRUD", "R"))
+        .row(SheetName.AUTHORISATION_CASE_FIELD,
+            cols("CaseTypeID", "Minimal", "CaseFieldID", "a", "UserRole", "solicitor", "CRUD", "R"))
+        .build();
+
+    CaseTypeModel model = linker.link(ir, options("Minimal"), gaps);
+
+    assertThat(model.getAccessClasses())
+        .extracting(AccessClassModel::getClassName)
+        .containsExactlyInAnyOrder(
+            "CaseworkerProbateCaseadminCruAccess", "CitizenRAccess", "SolicitorRAccess");
+  }
+
+  @Test
+  void commonPrefixDerivationIsDeterministicAcrossRuns() {
+    // Same input, run twice: the derived (prefix-stripped) names must match exactly, since the
+    // scheme has no randomness or hash-map-ordering dependence.
+    DefinitionIr ir = minimal("Minimal")
+        .row(SheetName.CASE_FIELD,
+            cols("CaseTypeID", "Minimal", "ID", "a", "Label", "A", "FieldType", "Text"))
+        .row(SheetName.AUTHORISATION_CASE_FIELD,
+            cols("CaseTypeID", "Minimal", "CaseFieldID", "a", "UserRole",
+                "caseworker-probate-rparobot", "CRUD", "CUD"))
+        .row(SheetName.AUTHORISATION_CASE_FIELD,
+            cols("CaseTypeID", "Minimal", "CaseFieldID", "a", "UserRole",
+                "caseworker-probate-systemupdate", "CRUD", "CU"))
+        .build();
+
+    CaseTypeModel first = linker.link(ir, options("Minimal"), new GapCollector());
+    CaseTypeModel second = linker.link(ir, options("Minimal"), new GapCollector());
+
+    List<String> firstNames = first.getAccessClasses().stream()
+        .map(AccessClassModel::getClassName).sorted().toList();
+    List<String> secondNames = second.getAccessClasses().stream()
+        .map(AccessClassModel::getClassName).sorted().toList();
+    assertThat(firstNames).isEqualTo(secondNames);
+    assertThat(first.getAccessClasses())
+        .extracting(AccessClassModel::getClassName)
+        .containsExactlyInAnyOrder("RparobotCudAccess", "SystemupdateCuAccess");
+  }
+
+  @Test
+  void uniformCrudAcrossMultiRoleGroupWritesCrudTokenOnce() {
+    GapCollector gaps = new GapCollector();
+    // Two groups qualify for mining (>=3 fields, >=2 atoms each): {caseworker=CRU, citizen=CRU}
+    // (uniform CRUD, 3 fields) and {solicitor=R, expert=R} (4 fields, so it wins DefaultAccess).
+    // The first group's content-derived name should then write its shared CRUD token once rather
+    // than repeating it per role.
+    var builder = minimal("Minimal");
+    for (String id : new String[] {"a", "b", "c"}) {
+      builder.row(SheetName.CASE_FIELD,
+          cols("CaseTypeID", "Minimal", "ID", id, "Label", id, "FieldType", "Text"))
+          .row(SheetName.AUTHORISATION_CASE_FIELD,
+              cols("CaseTypeID", "Minimal", "CaseFieldID", id, "UserRole", "caseworker",
+                  "CRUD", "CRU"))
+          .row(SheetName.AUTHORISATION_CASE_FIELD,
+              cols("CaseTypeID", "Minimal", "CaseFieldID", id, "UserRole", "citizen",
+                  "CRUD", "CRU"));
+    }
+    for (String id : new String[] {"d", "e", "f", "g"}) {
+      builder.row(SheetName.CASE_FIELD,
+          cols("CaseTypeID", "Minimal", "ID", id, "Label", id, "FieldType", "Text"))
+          .row(SheetName.AUTHORISATION_CASE_FIELD,
+              cols("CaseTypeID", "Minimal", "CaseFieldID", id, "UserRole", "solicitor",
+                  "CRUD", "R"))
+          .row(SheetName.AUTHORISATION_CASE_FIELD,
+              cols("CaseTypeID", "Minimal", "CaseFieldID", id, "UserRole", "expert",
+                  "CRUD", "R"));
+    }
+    CaseTypeModel model = linker.link(builder.build(), options("Minimal"), gaps);
+
+    assertThat(model.getAccessClasses())
+        .extracting(AccessClassModel::getClassName)
+        .contains("CaseworkerCitizenCruAccess", "DefaultAccess");
+  }
 }

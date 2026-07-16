@@ -13,6 +13,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -147,6 +148,43 @@ final class ModelSourceIndex {
 
   int parsedFileCount() {
     return parsedFileCount;
+  }
+
+  /**
+   * The simple names of every <em>enum</em> declared in the parsed model source. In retrofit mode
+   * the converter seeds its generated-companion name allocation with these: a companion complex type
+   * is emitted only when the definition type does <em>not</em> resolve to an existing model class
+   * (see {@code RetrofitComplexTypeEmitter}), so the only same-named existing type it can collide
+   * with is an enum (e.g. the definition {@code benefit} complex type PascalCased to {@code Benefit}
+   * vs the sscs domain enum {@code Benefit}). Reserving enum names suffixes such a companion
+   * ({@code Benefit2}) rather than emitting a {@code duplicate class}; the CCD wire ID round-trips
+   * via {@code @ComplexType(name)}. Model <em>class</em> names are deliberately NOT reserved — a
+   * definition complex type that matches an existing class binds to it (no companion), so reserving
+   * it would wrongly suffix the shared reference to a companion that is never emitted.
+   *
+   * @return the set of simple names of all parsed model enums
+   */
+  Set<String> enumSimpleNames() {
+    Set<String> names = new LinkedHashSet<>();
+    for (Map.Entry<String, List<Type>> entry : bySimpleName.entrySet()) {
+      if (entry.getValue().stream().anyMatch(Type::isEnum)) {
+        names.add(entry.getKey());
+      }
+    }
+    return names;
+  }
+
+  /**
+   * Every simple type name declared anywhere in the parsed model source. Reserved when naming
+   * generated <em>fixed-list</em> enum companions (finding #4): a fixed-list companion reuses a model
+   * enum only on an exact list-ID match, so a machine {@code FL_}-prefixed or case-shifted ID emits a
+   * fresh companion that can collide with a model enum OR class of the PascalCased name. Reserving all
+   * names is safe because the exact-ID reuses (the only names that must stay free) emit no companion.
+   *
+   * @return the set of simple names of all parsed model types
+   */
+  Set<String> allSimpleNames() {
+    return new LinkedHashSet<>(bySimpleName.keySet());
   }
 
   /**

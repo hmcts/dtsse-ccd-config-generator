@@ -121,6 +121,21 @@ public final class RetrofitConverter {
     fqnOverrides.putAll(index.topLevelFqnsOutside(modelPackage, packageHints));
     final ConversionOptions emitOptions = effective
         .retrofitTypeFqnOverrides(fqnOverrides)
+        // Reserve existing model names so a generated companion's PascalCase name (finding #3/#4) is
+        // suffixed rather than colliding with an unrelated existing type of the same name. The two
+        // companion kinds reserve different sets because each binds to (and so never re-emits) a
+        // model type it can reuse:
+        //   - a complex-type companion (a class) is emitted only when no model CLASS of that ID
+        //     exists (RetrofitComplexTypeEmitter binds the rest in place), so it can only clash with a
+        //     model ENUM (the definition 'benefit' complex type vs the domain enum Benefit). Reserving
+        //     class names here would wrongly suffix a reference to a bound, never-emitted type.
+        //   - a fixed-list companion (an enum) reuses a model enum only on an EXACT list-ID match
+        //     (rebind's hasEnum(id)); a machine 'FL_'/case-shifted ID (FL_amendReason, eventType) does
+        //     not match its PascalCased model twin (AmendReason, EventType), so a fresh companion is
+        //     emitted and can clash with EITHER a model enum or class. Reserving all model names is
+        //     safe: the only names it must stay free of are exact-ID reuses, which emit no companion.
+        .retrofitReservedComplexTypeNames(index.enumSimpleNames())
+        .retrofitReservedFixedListNames(index.allSimpleNames())
         .build();
 
     int constructorLimit = options.getRetrofitConstructorLimit();

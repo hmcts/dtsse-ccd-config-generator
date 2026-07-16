@@ -119,7 +119,15 @@ class EventsConfigEmitterTest {
     }
     List<JavaFile> files = new EventsConfigEmitter()
         .emit(modelWithEvents(events), contextWith(2));
-    assertThat(files).hasSize(3);
+    // 5 events at chunk size 2 → 3 EventsConfigNN chunks. All five share one grant map (caseworker
+    // -test CRUD), which — being reused by ≥ 3 events — is factored into a single shared
+    // MinimalEventGrants helper class (finding #11), so the emitter also returns that 4th file.
+    List<String> chunkClasses = files.stream()
+        .map(f -> f.typeSpec().name())
+        .filter(n -> n.startsWith("MinimalEventsConfig"))
+        .toList();
+    assertThat(chunkClasses).hasSize(3);
+    assertThat(files).hasSize(4);
   }
 
   @Test

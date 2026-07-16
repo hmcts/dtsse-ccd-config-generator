@@ -16,8 +16,21 @@ import lombok.Value;
 @Builder
 public class FixedListModel {
 
-  /** The FixedLists sheet ID — also the generated enum's simple name. */
+  /**
+   * The FixedLists sheet ID — the CCD-facing list ID, preserved verbatim as the wire ID via
+   * {@code @ComplexType(name = id)} (which the SDK's FixedListGenerator and CaseFieldGenerator read
+   * for the emitted list ID and referencing fields' FieldTypeParameter) when it differs from
+   * {@link #javaClassName}.
+   */
   String id;
+
+  /**
+   * The generated enum's Java-conventional (PascalCase) simple name, with any machine {@code FL_}
+   * prefix dropped. Decoupled from {@link #id} so {@code FL_comparedToDWP} yields the enum
+   * {@code ComparedToDWP} while the wire ID round-trips via {@code @ComplexType(name = id)}. Equals
+   * {@link #id} when the ID is already a well-formed enum name.
+   */
+  String javaClassName;
 
   List<Item> items;
 
