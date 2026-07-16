@@ -10,8 +10,8 @@ import uk.gov.hmcts.ccd.sdk.api.ConfigBuilder;
 import uk.gov.hmcts.reform.fpl.enums.UserRole;
 
 /**
- * Golden test for the {@code WaysToPay}/{@code JudicialUser} additions to
- * {@link uk.gov.hmcts.ccd.sdk.type.FieldType} and {@link uk.gov.hmcts.ccd.sdk.type.JudicialUser}
+ * Golden test for the {@code WaysToPay}/{@code JudicialUser}/{@code CaseQueriesCollection}
+ * additions to {@link uk.gov.hmcts.ccd.sdk.type.FieldType} and their predefined complex types
  * (see {@link FieldTypeCompletionCaseData}).
  */
 @Component
@@ -28,6 +28,7 @@ public class FieldTypeCompletionCaseType
         .grant(CRU, LOCAL_AUTHORITY)
         .fields()
         .optional(FieldTypeCompletionCaseData::getServiceRequest)
-        .optional(FieldTypeCompletionCaseData::getAllocatedJudge);
+        .optional(FieldTypeCompletionCaseData::getAllocatedJudge)
+        .optional(FieldTypeCompletionCaseData::getQueries);
   }
 }
