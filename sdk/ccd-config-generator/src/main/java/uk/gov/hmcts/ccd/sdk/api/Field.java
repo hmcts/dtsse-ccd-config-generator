@@ -41,6 +41,28 @@ public class Field<Type, StateType, Parent, Grandparent> {
   boolean nullifyByDefault;
   String eventComplexPageId;
 
+  /**
+   * Tri-state override for the {@code CaseEventToComplexTypes.HintText} of a complex-type member
+   * placed inside a {@code .complex(...)} scope, distinct from {@link #hint} (the member's declared
+   * {@code @CCD(hint)}, which {@code CaseEventToComplexTypesGenerator} otherwise cascades onto every
+   * event row that places the member). When {@link #eventComplexHintTextOverridden} is {@code false}
+   * (the default) that cascade applies unchanged, so output is byte-identical for every existing
+   * consumer. When it is {@code true}, this value replaces the cascade: a non-null value is emitted
+   * verbatim as the row's {@code HintText}; a null value suppresses the column entirely. Set via the
+   * fluent {@code hintText(String)} / {@code noHintText()} builder methods.
+   *
+   * <p>This is NOT the same column as {@code caseEventFieldHint} (set via {@code eventHint(...)}),
+   * which writes {@code CaseEventToComplexTypes.EventHintText} — the per-event hint override — rather
+   * than {@code HintText}, the field-level hint the generator derives from {@code @CCD(hint)}.
+   */
+  String eventComplexHintText;
+
+  /**
+   * Whether {@link #eventComplexHintText} overrides the cascaded {@code @CCD(hint)} for this member's
+   * {@code CaseEventToComplexTypes.HintText}. See {@link #eventComplexHintText}.
+   */
+  boolean eventComplexHintTextOverridden;
+
   Class<Type> clazz;
   @ToString.Exclude
   private FieldCollectionBuilder<Parent, StateType, Grandparent> parent;
@@ -150,6 +172,31 @@ public class Field<Type, StateType, Parent, Grandparent> {
      */
     public FieldBuilder<Type, StateType, Parent, Grandparent> showSummaryContentOption(int order) {
       this.showSummaryContentOption = order;
+      return this;
+    }
+
+    /**
+     * Overrides this complex-type member's {@code CaseEventToComplexTypes.HintText} with the given
+     * value, emitted verbatim on the member's event row instead of the {@code @CCD(hint)} the
+     * generator otherwise cascades. Use inside a {@code .complex(...)} member scope; distinct from
+     * {@link #hint} (the declared field hint) and from {@code caseEventFieldHint} (the
+     * {@code EventHintText} column set by the {@code FieldCollectionBuilder}'s {@code eventHint}).
+     * Passing {@code null} is equivalent to {@link #noHintText()}.
+     */
+    public FieldBuilder<Type, StateType, Parent, Grandparent> hintText(String hintText) {
+      this.eventComplexHintText = hintText;
+      this.eventComplexHintTextOverridden = true;
+      return this;
+    }
+
+    /**
+     * Suppresses this complex-type member's {@code CaseEventToComplexTypes.HintText} entirely,
+     * overriding the {@code @CCD(hint)} the generator would otherwise cascade onto the member's event
+     * row. Use inside a {@code .complex(...)} member scope. See {@link #hintText(String)}.
+     */
+    public FieldBuilder<Type, StateType, Parent, Grandparent> noHintText() {
+      this.eventComplexHintText = null;
+      this.eventComplexHintTextOverridden = true;
       return this;
     }
 

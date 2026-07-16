@@ -2119,13 +2119,16 @@ public class DefaultDefinitionLinker implements DefinitionLinker {
         .detail("EventToComplexTypes per-member event overrides: " + derivedRows + " row(s) emitted"
             + " as generated .complex(...) builder chains (ID / FieldDisplayOrder / any exotic tail"
             + " column grafted back over the generated rows); " + fallbackRows + " row(s) kept as a"
-            + " verbatim row passthrough because their group is not derivable — the dominant cause is"
-            + " a Collection-typed root or intermediate member (its getter is List<ListValue<X>>, so"
-            + " a .complex(getter) member block would not compile and .list(getter) would change the"
-            + " field's rendering), plus groups not placed as COMPLEX on the event, dotted"
-            + " ListElementCodes that do not resolve through the typed complex-type graph,"
-            + " DisplayContexts other than OPTIONAL/MANDATORY/READONLY, a member @CCD(hint) the input"
-            + " row does not carry, an ID collision, or an overlay-suffixed sibling row")
+            + " verbatim row passthrough because their group is not derivable. Collection-rooted and"
+            + " collection-intermediate groups are now derived (the element-typed"
+            + " .complex(getter, Element.class) scope walks into the ListValue element type) and a"
+            + " member @CCD(hint) the input row does not carry is now derived too (the tri-state"
+            + " .hintText/.noHintText setters override the cascade). The remaining fallback causes are:"
+            + " a group not placed as COMPLEX on the event, a dotted ListElementCode that does not"
+            + " resolve through the typed complex-type graph (unknown member, scalar intermediate, or a"
+            + " hop into a type the converter neither generated nor can reflect), a DisplayContext other"
+            + " than OPTIONAL/MANDATORY/READONLY, the same ListElementCode surviving twice with divergent"
+            + " content, or an overlay-suffixed sibling row on the same (event, field)")
         .build());
     return new EventComplexTypeResult(groups, sheets);
   }
@@ -2187,21 +2190,15 @@ public class DefaultDefinitionLinker implements DefinitionLinker {
     // a fragment directory (civil/prl) imports as one, and both the generated side and this
     // derivation must treat them as one. Only genuine content divergence survives.
     List<SheetRow> groupRows = dedupeExactEtoctRows(allRows);
-    // A single declaring type per group: a nested member reached through more than one type could
-    // otherwise carry the same ListElementCode under different IDs (see the merge-key note), which a
-    // (event, field, LEC)-keyed graft cannot disambiguate — fall back so ID stays a passthrough key.
-    Set<String> ids = new LinkedHashSet<>();
-    for (SheetRow row : groupRows) {
-      row.getString(Columns.ID).ifPresent(ids::add);
-    }
-    if (ids.size() > 1) {
-      return null;
-    }
     // A single surviving row per ListElementCode: the SDK generates one row per member placement,
     // keyed on (CaseEventID, CaseFieldID, ListElementCode), so a group that (after dedup) still lists
     // the same LEC twice with divergent content (civil's obligationWAFlag repeats each member as
     // OPTIONAL-with-show-condition and again as MANDATORY) cannot round-trip through the builder — the
     // two rows collapse to one generated row. Fall back so the ID-keyed passthrough reproduces both.
+    // With every LEC unique the (event, field, LEC)-keyed companion graft is unambiguous even when
+    // rows carry different IDs (a collection group lists one distinct-ID row per element member, e.g.
+    // sscs's otherParties: otherPartyName/name, otherPartyTitle/name.title, …), so ID no longer needs
+    // to be a group-uniqueness gate — each row's ID is grafted as a value onto its own generated row.
     Set<String> seenLecs = new LinkedHashSet<>();
     for (SheetRow row : groupRows) {
       if (!seenLecs.add(row.getString(Columns.LIST_ELEMENT_CODE).orElse(""))) {
@@ -2210,6 +2207,15 @@ public class DefaultDefinitionLinker implements DefinitionLinker {
     }
     List<EventComplexTypeGroup.Member> members = new ArrayList<>();
     for (SheetRow row : groupRows) {
+      // A derived row's key columns are re-emitted by the generator in canonical form — the trimmed
+      // member id / field id and the upper-cased DisplayContext. When the input row carries a raw
+      // value that only differs by surrounding whitespace or letter-case (ET's trailing-space LEC
+      // 'jurisdictionCodeLEV ', civil's leading-space CaseFieldID ' respondent1DQRemoteHearing',
+      // fpl's title-case DisplayContext 'Optional'), the derived row would not reproduce it
+      // byte-identically, so keep the whole group a verbatim row passthrough, which does.
+      if (rawDiffersFromCanonical(row)) {
+        return null;
+      }
       String lec = row.getString(Columns.LIST_ELEMENT_CODE).orElse(null);
       String contextMethod =
           displayContextMethod(row.getString(Columns.DISPLAY_CONTEXT).orElse(null));
@@ -2225,23 +2231,64 @@ public class DefaultDefinitionLinker implements DefinitionLinker {
       if (resolved.isEmpty()) {
         return null;
       }
-      // The generated leaf member's @CCD(hint) is emitted by the SDK as the row's HintText
-      // unconditionally; when the input row's HintText differs from it (the common case is the input
-      // carrying none while the ComplexTypes member declares one), the generated row would gain an
-      // unreproducible HintText, so fall back to a row passthrough for the whole group.
-      String rowHint = row.getDisplayText(Columns.HINT_TEXT).orElse(null);
-      if (!java.util.Objects.equals(blankToNull(resolved.get().getDeclaredHint()),
-          blankToNull(rowHint))) {
-        return null;
+      // The generated leaf member's @CCD(hint) cascades onto the row's HintText unless the placement
+      // overrides it. Carry the input row's HintText disposition per member (rather than falling
+      // back the whole group): row HintText equals the declared hint (both absent counts) → leave the
+      // cascade (unset); row carries a different HintText → .hintText(value); row carries none but the
+      // member declares a hint → .noHintText(). The emitter maps this to the SDK's tri-state setter.
+      String rowHint = blankToNull(row.getDisplayText(Columns.HINT_TEXT).orElse(null));
+      String declaredHint = blankToNull(resolved.get().getDeclaredHint());
+      EventComplexTypeGroup.Member member = resolved.get();
+      if (!java.util.Objects.equals(declaredHint, rowHint)) {
+        member = member.toBuilder().hintOverridden(true).hintText(rowHint).build();
       }
-      members.add(resolved.get());
+      members.add(member);
     }
     return EventComplexTypeGroup.builder()
         .eventId(eventId)
         .caseFieldId(field.getId())
         .rootGetter("get" + capitaliseEtoct(field.getJavaName()))
+        .rootElementType(resolver.rootElementType(field))
         .members(members)
         .build();
+  }
+
+  /**
+   * Whether a {@code CaseEventToComplexTypes} row carries a raw derivable-key value that the
+   * generator would re-emit in a different (canonical) form, so the derived {@code .complex(...)}
+   * chain could not reproduce the row byte-identically. The generator emits the trimmed
+   * {@code CaseFieldID}/{@code ListElementCode} (member ids resolve via the trimming
+   * {@code getString}) and the upper-cased {@code DisplayContext}; a raw value differing only by
+   * surrounding whitespace or letter-case (ET's trailing-space LEC {@code 'jurisdictionCodeLEV '},
+   * civil's leading-space {@code CaseFieldID}, fpl's title-case {@code DisplayContext=Optional})
+   * would be normalised away, so the whole group must stay a verbatim row passthrough. Interior
+   * content the generator preserves verbatim (labels, hints, show conditions) is not checked here.
+   */
+  private boolean rawDiffersFromCanonical(SheetRow row) {
+    return rawTrimDiffers(row, Columns.CASE_FIELD_ID)
+        || rawTrimDiffers(row, Columns.LIST_ELEMENT_CODE)
+        || rawCaseDiffers(row, Columns.DISPLAY_CONTEXT);
+  }
+
+  /** Whether the raw column value differs from its whitespace-trimmed form (the generator emits
+   * the trimmed id, so a surrounding-whitespace difference is unreproducible). */
+  private boolean rawTrimDiffers(SheetRow row, String column) {
+    Object raw = row.getColumns().get(column);
+    if (!(raw instanceof String s)) {
+      return false;
+    }
+    return !s.equals(s.trim());
+  }
+
+  /** Whether the raw column value differs from its upper-cased form (the generator upper-cases
+   * DisplayContext, so a title-case input like {@code Optional} is unreproducible). */
+  private boolean rawCaseDiffers(SheetRow row, String column) {
+    Object raw = row.getColumns().get(column);
+    if (!(raw instanceof String s)) {
+      return false;
+    }
+    String trimmed = s.trim();
+    return !trimmed.equals(trimmed.toUpperCase(java.util.Locale.ROOT));
   }
 
   /**

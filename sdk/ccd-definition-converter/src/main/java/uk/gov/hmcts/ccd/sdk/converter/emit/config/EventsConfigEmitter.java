@@ -780,6 +780,14 @@ public class EventsConfigEmitter implements SourceEmitter {
         EventComplexTypeGroup group = model.getEventComplexTypeGroups() == null
             ? null
             : model.getEventComplexTypeGroups().get(event.getId() + "\u001f" + field.getCaseFieldId());
+        // A Collection-rooted group's member chain cannot hang off the one-arg .complex(getter): that
+        // getter is typed List<ListValue<Element>>, so the scope would be on the List and a
+        // .mandatory(Element::getMember) inside would not compile. Instead the collection field's own
+        // COMPLEX CaseEventToFields row is still registered by the one-arg .complex(getter).done()
+        // (unchanged from the no-group collection case), and the element members are placed in a
+        // SEPARATE statement opening the element-typed .complex(getter, Element.class) scope — which
+        // registers no field, so it adds no second CaseEventToFields row.
+        boolean collectionRoot = group != null && group.getRootElementType() != null;
         CodeBlock.Builder complexStmt = CodeBlock.builder();
         if (Boolean.FALSE.equals(field.getShowSummary())) {
           complexStmt.add("fields.complex($T::get$L, false)", caseData,
@@ -788,7 +796,7 @@ public class EventsConfigEmitter implements SourceEmitter {
           complexStmt.add("fields.complex($T::get$L)", caseData,
               capitalise(fieldModel.getJavaName()));
         }
-        if (group != null) {
+        if (group != null && !collectionRoot) {
           complexStmt.add(complexMemberChains(group, emitContext));
         }
         complexStmt.add(".done()");
@@ -797,6 +805,14 @@ public class EventsConfigEmitter implements SourceEmitter {
         // CaseEventToFields metadata as Java rather than via the retired column graft.
         complexStmt.add(fieldMetadataChain(field));
         cb.addStatement("$L", complexStmt.build());
+        if (collectionRoot) {
+          CodeBlock.Builder elementStmt = CodeBlock.builder();
+          elementStmt.add("fields.complex($T::get$L, $T.class)", caseData,
+              capitalise(fieldModel.getJavaName()), typeName(group.getRootElementType(), emitContext));
+          elementStmt.add(complexMemberChains(group, emitContext));
+          elementStmt.add(".done()");
+          cb.addStatement("$L", elementStmt.build());
+        }
         continue;
       }
       // The SDK field builder defaults ShowSummaryChangeOption to Y; when the input explicitly
@@ -920,8 +936,15 @@ public class EventsConfigEmitter implements SourceEmitter {
     CodeBlock.Builder cb = CodeBlock.builder();
     for (EventComplexTypeGroup.Member member : group.getMembers()) {
       for (EventComplexTypeGroup.Hop hop : member.getHops()) {
-        cb.add("\n    .complex($T::$L)",
-            typeName(hop.getDeclaringType(), context), hop.getGetter());
+        if (hop.getElementType() != null) {
+          // A Collection hop descends into its element type via the two-arg element-typed scope.
+          cb.add("\n    .complex($T::$L, $T.class)",
+              typeName(hop.getDeclaringType(), context), hop.getGetter(),
+              typeName(hop.getElementType(), context));
+        } else {
+          cb.add("\n    .complex($T::$L)",
+              typeName(hop.getDeclaringType(), context), hop.getGetter());
+        }
       }
       cb.add("\n    .$L($T::$L)", member.getContextMethod(),
           typeName(member.getLeafType(), context), member.getLeafGetter());
@@ -933,6 +956,15 @@ public class EventsConfigEmitter implements SourceEmitter {
       }
       if (notBlank(member.getEventHint())) {
         cb.add("\n    .eventHint($S)", member.getEventHint());
+      }
+      // HintText tri-state: unset leaves the SDK's @CCD(hint) cascade; overridden emits either
+      // .hintText(value) (a differing HintText) or .noHintText() (suppress a would-be cascade).
+      if (member.isHintOverridden()) {
+        if (member.getHintText() != null) {
+          cb.add("\n    .hintText($S)", member.getHintText());
+        } else {
+          cb.add("\n    .noHintText()");
+        }
       }
       if (notBlank(member.getPageId())) {
         cb.add("\n    .pageId($S)", member.getPageId());

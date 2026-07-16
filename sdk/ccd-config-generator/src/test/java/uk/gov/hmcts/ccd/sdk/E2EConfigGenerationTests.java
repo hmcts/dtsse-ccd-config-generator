@@ -90,6 +90,30 @@ public class E2EConfigGenerationTests {
 
     @SneakyThrows
     @Test
+    public void emitsPerEventComplexCollectionElementOverrides() {
+        // The element members of a Collection field, overridden per event through the element-typed
+        // .complex(getter, Class) scope (plus a nested collection scope), must produce the
+        // CaseEventToComplexTypes rows in input shape (no index) with the HintText tri-state applied.
+        Map<String, File> actual = CcdConfigComparator.dirToMap(
+            new File(tmp.getRoot(), "EventComplexCollection/CaseEventToComplexTypes"));
+        Map<String, File> expected = CcdConfigComparator.resourcesDirToMap(
+            "EventComplexCollection/CaseEventToComplexTypes");
+        CcdConfigComparator.assertEquivalent(expected, actual, JSONCompareMode.NON_EXTENSIBLE);
+    }
+
+    @SneakyThrows
+    @Test
+    public void openingAnElementScopeLeavesTheCollectionFieldRowUntouched() {
+        // Opening a member scope on the collection via .complex(getter, Class) must register no root
+        // field, so the collection field's own CaseEventToFields row is byte-identical to what a bare
+        // .optional(getter) placement produces (no extra row, no showSummary/mutableList side effects).
+        File expected = resourceFile("EventComplexCollection/CaseEventToFields/create.json");
+        File actual = new File(tmp.getRoot(), "EventComplexCollection/CaseEventToFields/create.json");
+        CcdConfigComparator.assertEquals(expected, actual, JSONCompareMode.NON_EXTENSIBLE);
+    }
+
+    @SneakyThrows
+    @Test
     public void emitsConfiguredBanner() {
         File expected = resourceFile("BannerFeature/Banner.json");
         File actual = new File(tmp.getRoot(), "BannerFeature/Banner.json");

@@ -56,27 +56,61 @@ public final class EventComplexTypeResolver {
   }
 
   /**
-   * The complex-type ID a case field declares, or null when the field is not a directly-complex
-   * field the emitter can open a {@code .complex(getter)} member block on. Only a field whose
-   * {@code FieldType} directly names a walkable complex type qualifies: a {@code Collection} field's
-   * getter is typed {@code List<ListValue<X>>}, so {@code .complex(getter)} types the member builder
-   * on the list rather than the element {@code X} and a {@code .mandatory(X::getMember)} inside it
-   * would not compile — such groups stay a row passthrough.
+   * The walkable complex-type ID a case field declares, or null when the field is not one the
+   * emitter can open a {@code .complex(...)} member block on. A field whose {@code FieldType}
+   * directly names a walkable complex type resolves to that type; a {@code Collection} field
+   * ({@code FieldType=Collection}) resolves to its element type ({@code FieldTypeParameter}) — the
+   * emitter opens the scope with the two-arg element-typed {@code .complex(getter, Element.class)}
+   * overload rather than the one-arg form (see {@link #rootElementType}). A field naming neither
+   * (scalar, fixed list, unknown type) stays a row passthrough.
    *
    * @param field the case field
-   * @return the root complex-type ID, or null when the field is not a directly-walkable complex type
+   * @return the root walkable complex-type ID (its element type for a collection), or null
    */
   public String rootTypeId(FieldModel field) {
     String fieldType = field.getFieldType();
-    if (fieldType != null && isKnownType(fieldType)) {
+    if (fieldType == null) {
+      return null;
+    }
+    if (COLLECTION.equals(fieldType)) {
+      String elementId = field.getFieldTypeParameter();
+      return elementId != null && isKnownType(elementId) ? elementId : null;
+    }
+    if (isKnownType(fieldType)) {
       return fieldType;
     }
     return null;
   }
 
+  /**
+   * The element {@link EventComplexTypeGroup.TypeRef} of a {@code Collection}-typed root field, or
+   * null when the root is a scalar complex field. When non-null the emitter must open the root scope
+   * with the two-arg {@code .complex(getter, Element.class)} overload; when null the plain one-arg
+   * {@code .complex(getter)} suffices (see {@link #rootTypeId}).
+   *
+   * @param field the case field
+   * @return the element type ref for a resolvable collection root, else null
+   */
+  public EventComplexTypeGroup.TypeRef rootElementType(FieldModel field) {
+    if (!COLLECTION.equals(field.getFieldType())) {
+      return null;
+    }
+    String elementId = field.getFieldTypeParameter();
+    if (elementId == null) {
+      return null;
+    }
+    Object node = typeNode(elementId);
+    return node == null ? null : typeRefOf(node);
+  }
+
   private boolean isKnownType(String id) {
     return generatedById.containsKey(id) || predefinedFqnById.containsKey(id);
   }
+
+  /**
+   * The input {@code FieldType} value marking a collection member ({@code List<ListValue<X>>}).
+   */
+  private static final String COLLECTION = "Collection";
 
   /**
    * Resolves one {@code ListElementCode} into a getter chain rooted at {@code rootTypeId}.
@@ -127,7 +161,9 @@ public final class EventComplexTypeResolver {
             .declaredHint(member.declaredHint())
             .build());
       }
-      // An intermediate segment must resolve to a nested complex type to descend into.
+      // An intermediate segment must resolve to a nested complex type to descend into — either a
+      // scalar complex member or a Collection member (whose element type is walked into via the
+      // two-arg element-typed .complex(getter, Element.class) scope the emitter opens for it).
       Object next = member.nestedType;
       if (next == null) {
         return Optional.empty();
@@ -135,6 +171,7 @@ public final class EventComplexTypeResolver {
       hops.add(EventComplexTypeGroup.Hop.builder()
           .declaringType(typeRefOf(currentType))
           .getter(member.getter)
+          .elementType(member.collectionElementRef)
           .build());
       currentType = next;
     }
@@ -177,12 +214,18 @@ public final class EventComplexTypeResolver {
     if (typeNode instanceof ComplexTypeModel model) {
       for (FieldModel member : model.getMembers()) {
         if (segment.equals(member.getId())) {
-          Object nested = typeNode(nestedTypeId(member));
+          String nestedId = nestedTypeId(member);
+          Object nested = typeNode(nestedId);
+          // A Collection member descends into its element type via the two-arg element-typed
+          // .complex(getter, Element.class) scope; carry the element type ref so the emitter opens
+          // the hop with that overload. A scalar complex member carries none (one-arg .complex).
+          EventComplexTypeGroup.TypeRef elementRef =
+              COLLECTION.equals(member.getFieldType()) && nested != null ? typeRefOf(nested) : null;
           // The generated member's @CCD(hint) is emitted by CaseEventToComplexTypesGenerator as the
-          // row's HintText regardless of the event override, so it must match the input row's
-          // HintText or the group falls back (see deriveEventComplexTypeGroup).
+          // row's HintText unless the placement overrides it; carried so deriveEventComplexTypeGroup
+          // can pick the .hintText/.noHintText/unset disposition against the input row's HintText.
           return new ResolvedMember(
-              "get" + capitalise(member.getJavaName()), nested, member.getHint());
+              "get" + capitalise(member.getJavaName()), nested, member.getHint(), elementRef);
         }
       }
       return null;
@@ -190,24 +233,61 @@ public final class EventComplexTypeResolver {
     Class<?> clazz = (Class<?>) typeNode;
     for (Field field : allFields(clazz)) {
       if (segment.equals(effectiveId(field))) {
+        Class<?> elementClass = listValueElementType(field);
+        if (elementClass != null) {
+          // A predefined List<ListValue<X>> collection member: descend into the element type X via
+          // the two-arg element-typed scope when X is itself a reflectable complex type.
+          Object nested = isReflectableComplex(elementClass) ? elementClass : null;
+          EventComplexTypeGroup.TypeRef elementRef = nested == null ? null : typeRefOf(nested);
+          return new ResolvedMember(
+              "get" + capitalise(field.getName()), nested, null, elementRef);
+        }
         Class<?> fieldType = field.getType();
         Object nested = fieldType != null && isReflectableComplex(fieldType) ? fieldType : null;
         // A predefined SDK type carries no @CCD(hint) on its members, so no HintText leaks.
-        return new ResolvedMember("get" + capitalise(field.getName()), nested, null);
+        return new ResolvedMember("get" + capitalise(field.getName()), nested, null, null);
       }
     }
     return null;
   }
 
   /**
-   * The complex-type ID an intermediate generated member declares, for descending into a
-   * {@code .complex(hop)} — its {@code FieldType} when that directly names a complex type. A
-   * {@code Collection} member is not descended into (its getter is typed {@code List<ListValue<X>>},
-   * so a nested {@code .complex(hop)} on it would not compile); returning null makes any
-   * {@code ListElementCode} that would descend through a collection member fall back to a row
-   * passthrough.
+   * The element type {@code X} of a reflected {@code List<ListValue<X>>} collection member, or null
+   * when the field is not such a collection. Mirrors the SDK's own list-element resolution: a
+   * {@code Collection} member is a {@code java.util.List} whose element is a
+   * {@code uk.gov.hmcts.ccd.sdk.type.ListValue<X>}.
+   */
+  private Class<?> listValueElementType(Field field) {
+    if (!java.util.List.class.isAssignableFrom(field.getType())) {
+      return null;
+    }
+    if (!(field.getGenericType() instanceof java.lang.reflect.ParameterizedType listType)) {
+      return null;
+    }
+    java.lang.reflect.Type[] listArgs = listType.getActualTypeArguments();
+    if (listArgs.length != 1
+        || !(listArgs[0] instanceof java.lang.reflect.ParameterizedType listValueType)) {
+      return null;
+    }
+    if (!(listValueType.getRawType() instanceof Class<?> rawListValue)
+        || !rawListValue.getName().equals("uk.gov.hmcts.ccd.sdk.type.ListValue")) {
+      return null;
+    }
+    java.lang.reflect.Type[] elementArgs = listValueType.getActualTypeArguments();
+    return elementArgs.length == 1 && elementArgs[0] instanceof Class<?> element ? element : null;
+  }
+
+  /**
+   * The complex-type ID an intermediate generated member declares, for descending into it: its
+   * {@code FieldType} when that directly names a complex type, or its {@code FieldTypeParameter}
+   * (the element type) when it is a {@code Collection}. The emitter opens a collection hop with the
+   * two-arg element-typed {@code .complex(getter, Element.class)} scope and a scalar complex hop with
+   * the one-arg {@code .complex(getter)}.
    */
   private String nestedTypeId(FieldModel member) {
+    if (COLLECTION.equals(member.getFieldType())) {
+      return member.getFieldTypeParameter();
+    }
     return member.getFieldType();
   }
 
@@ -250,6 +330,7 @@ public final class EventComplexTypeResolver {
     return fields;
   }
 
-  private record ResolvedMember(String getter, Object nestedType, String declaredHint) {
+  private record ResolvedMember(String getter, Object nestedType, String declaredHint,
+      EventComplexTypeGroup.TypeRef collectionElementRef) {
   }
 }

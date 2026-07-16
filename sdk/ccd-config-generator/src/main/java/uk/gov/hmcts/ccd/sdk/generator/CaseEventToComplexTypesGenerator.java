@@ -83,7 +83,14 @@ class CaseEventToComplexTypesGenerator<T, S, R extends HasRole> implements
             data.put("PageID", field.getEventComplexPageId());
           }
           data.put("FieldDisplayOrder", field.getFieldDisplayOrder());
-          if (!Strings.isNullOrEmpty(field.getHint())) {
+          // HintText tri-state: an unset member (the default) cascades its declared @CCD(hint) onto
+          // the event row as before; a member placed with .hintText(value)/.noHintText() overrides
+          // that — a non-null value is emitted verbatim, a null value suppresses the column.
+          if (field.isEventComplexHintTextOverridden()) {
+            if (!Strings.isNullOrEmpty(field.getEventComplexHintText())) {
+              data.put("HintText", field.getEventComplexHintText());
+            }
+          } else if (!Strings.isNullOrEmpty(field.getHint())) {
             data.put("HintText", field.getHint());
           }
           if (null != field.getDefaultValue()) {

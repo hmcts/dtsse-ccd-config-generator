@@ -40,6 +40,16 @@ public class EventComplexTypeGroup {
   String rootGetter;
 
   /**
+   * The element type of the root field when it is a {@code Collection}
+   * ({@code List<ListValue<Element>>}), or null when the root is a scalar complex field. When
+   * non-null the emitter opens the root scope with the two-arg element-typed
+   * {@code .complex(rootGetter, Element.class)} overload (a one-arg {@code .complex(rootGetter)}
+   * would type the member builder on the {@code List} and not compile); when null it uses the plain
+   * one-arg {@code .complex(rootGetter)}.
+   */
+  TypeRef rootElementType;
+
+  /**
    * The per-member overrides, in input {@code FieldDisplayOrder} order.
    */
   List<Member> members;
@@ -49,7 +59,7 @@ public class EventComplexTypeGroup {
    * member, plus the member's event-scoped display metadata.
    */
   @Value
-  @Builder
+  @Builder(toBuilder = true)
   public static class Member {
 
     /**
@@ -97,11 +107,30 @@ public class EventComplexTypeGroup {
 
     /**
      * The generated leaf member's declared {@code @CCD(hint)}, which the SDK's
-     * {@code CaseEventToComplexTypesGenerator} emits as the row's {@code HintText} regardless of the
-     * event override. Carried so the linker can verify it matches the input row's {@code HintText}
-     * (falling back the whole group when it does not); not itself emitted by the member chain.
+     * {@code CaseEventToComplexTypesGenerator} cascades onto the row's {@code HintText} unless the
+     * member placement overrides it. Carried so the linker can compare it with the input row's
+     * {@code HintText} and pick the {@link #hintOverridden} disposition; not itself emitted by the
+     * member chain.
      */
     String declaredHint;
+
+    /**
+     * Whether the member placement must override the cascaded {@code HintText} with the fluent
+     * {@code .hintText(...)} / {@code .noHintText()} setters, rather than letting the leaf member's
+     * declared {@code @CCD(hint)} cascade. False when the input row's {@code HintText} already equals
+     * the declared hint (including both absent), so the cascade reproduces the row and no setter is
+     * emitted; true otherwise. See {@link #hintText}.
+     */
+    boolean hintOverridden;
+
+    /**
+     * The {@code HintText} value to emit when {@link #hintOverridden} is true: a non-null value maps
+     * to {@code .hintText(value)} (the input row carries a {@code HintText} differing from the
+     * declared hint), and null maps to {@code .noHintText()} (the input row carries no {@code HintText}
+     * but the leaf member declares one that would otherwise cascade). Ignored when
+     * {@link #hintOverridden} is false.
+     */
+    String hintText;
   }
 
   /**
@@ -120,6 +149,15 @@ public class EventComplexTypeGroup {
      * The getter for the nested complex member.
      */
     String getter;
+
+    /**
+     * The element type of this hop's member when it is a {@code Collection}
+     * ({@code List<ListValue<Element>>}), or null when the hop's member is a scalar nested complex
+     * field. When non-null the emitter opens this hop's scope with the two-arg element-typed
+     * {@code .complex(getter, Element.class)} overload; when null it uses the plain one-arg
+     * {@code .complex(getter)}.
+     */
+    TypeRef elementType;
   }
 
   /**

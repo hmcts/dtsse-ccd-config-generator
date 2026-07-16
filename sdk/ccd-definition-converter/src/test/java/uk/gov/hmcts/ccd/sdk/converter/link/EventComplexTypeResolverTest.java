@@ -158,21 +158,75 @@ class EventComplexTypeResolverTest {
   }
 
   @Test
-  void doesNotDescendThroughACollectionMember() {
-    // "children" is a Collection<Party> member; a nested .complex(hop) on its List<ListValue<Party>>
-    // getter would not compile, so the resolver must not descend into it — the whole path fails.
-    assertThat(resolver().resolve("Party", "children.firstName", "optional", null, null, null, null))
-        .isEmpty();
+  void descendsThroughACollectionMemberViaItsElementType() {
+    // "children" is a Collection<Party> member; the resolver now descends into the element type via
+    // the two-arg element-typed .complex(getter, Party.class) scope, so children.firstName resolves
+    // and the hop records the element type ref for the emitter.
+    Optional<EventComplexTypeGroup.Member> member = resolver().resolve(
+        "Party", "children.firstName", "mandatory", null, null, null, null);
+
+    assertThat(member).isPresent();
+    assertThat(member.get().getHops()).singleElement().satisfies(hop -> {
+      assertThat(hop.getDeclaringType().getSimpleName()).isEqualTo("Party");
+      assertThat(hop.getGetter()).isEqualTo("getChildren");
+      // The element-type ref drives the emitter's .complex(getter, Element.class) overload.
+      assertThat(hop.getElementType().getSimpleName()).isEqualTo("Party");
+    });
+    assertThat(member.get().getLeafType().getSimpleName()).isEqualTo("Party");
+    assertThat(member.get().getLeafGetter()).isEqualTo("getFirstName");
   }
 
   @Test
-  void collectionRootFieldIsNotDirectlyWalkable() {
-    // A Collection-typed CaseField's getter is List<ListValue<Party>>; rootTypeId returns null so
-    // the linker keeps the whole group a row passthrough rather than opening a .complex block.
+  void descendsThroughNestedCollectionInCollection() {
+    // A collection-in-collection path: children (Collection<Party>) . children (Collection<Party>)
+    // . firstName. Both hops descend via the element-typed scope and both carry an element-type ref.
+    Optional<EventComplexTypeGroup.Member> member = resolver().resolve(
+        "Party", "children.children.firstName", "optional", null, null, null, null);
+
+    assertThat(member).isPresent();
+    assertThat(member.get().getHops()).hasSize(2);
+    assertThat(member.get().getHops()).allSatisfy(hop -> {
+      assertThat(hop.getGetter()).isEqualTo("getChildren");
+      assertThat(hop.getElementType().getSimpleName()).isEqualTo("Party");
+    });
+    assertThat(member.get().getLeafGetter()).isEqualTo("getFirstName");
+  }
+
+  @Test
+  void collectionRootFieldResolvesToItsElementType() {
+    // A Collection-typed CaseField's getter is List<ListValue<Party>>; rootTypeId now returns the
+    // element type and rootElementType supplies the ref the emitter opens the element scope with.
     FieldModel collectionField = FieldModel.builder()
         .id("parties").javaName("parties")
         .fieldType("Collection").fieldTypeParameter("Party").build();
+    assertThat(resolver().rootTypeId(collectionField)).isEqualTo("Party");
+    assertThat(resolver().rootElementType(collectionField).getSimpleName()).isEqualTo("Party");
+
+    // A direct member of the collection element resolves with no hops (a root-level element member).
+    Optional<EventComplexTypeGroup.Member> member = resolver().resolve(
+        "Party", "firstName", "mandatory", null, null, null, null);
+    assertThat(member).isPresent();
+    assertThat(member.get().getHops()).isEmpty();
+    assertThat(member.get().getLeafGetter()).isEqualTo("getFirstName");
+  }
+
+  @Test
+  void scalarComplexRootHasNoElementType() {
+    // A scalar complex root uses the one-arg .complex(getter); rootElementType is null so the emitter
+    // does not open the element-typed scope.
+    FieldModel complexField = FieldModel.builder()
+        .id("party").javaName("party").fieldType("Party").build();
+    assertThat(resolver().rootElementType(complexField)).isNull();
+  }
+
+  @Test
+  void fallsBackWhenACollectionElementTypeIsUnknown() {
+    // A Collection whose element type is neither generated nor predefined cannot be walked.
+    FieldModel collectionField = FieldModel.builder()
+        .id("things").javaName("things")
+        .fieldType("Collection").fieldTypeParameter("NoSuchType").build();
     assertThat(resolver().rootTypeId(collectionField)).isNull();
+    assertThat(resolver().rootElementType(collectionField)).isNull();
   }
 
   @Test

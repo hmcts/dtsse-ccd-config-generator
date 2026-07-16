@@ -694,6 +694,102 @@ class DefaultDefinitionLinkerTest {
   }
 
   @Test
+  void derivesHintTriStateForComplexMemberOverrides() {
+    GapCollector gaps = new GapCollector();
+    // A complex field placed COMPLEX on an event, whose complex type declares two members with a
+    // @CCD(hint) (role, reference) and one without (name). Three ETOCT rows exercise the tri-state:
+    //   - role: input HintText equals the declared hint          → cascade (no override emitted)
+    //   - reference: input carries no HintText but member declares one → .noHintText()
+    //   - name: input carries a HintText, member declares none    → .hintText(value)
+    DefinitionIr ir = minimal("Minimal")
+        .row(SheetName.CASE_FIELD,
+            cols("CaseTypeID", "Minimal", "ID", "contact", "Label", "Contact",
+                "FieldType", "Contact"))
+        .row(SheetName.COMPLEX_TYPES,
+            cols("ID", "Contact", "ListElementCode", "name", "FieldType", "Text"))
+        .row(SheetName.COMPLEX_TYPES,
+            cols("ID", "Contact", "ListElementCode", "role", "FieldType", "Text",
+                "HintText", "The declared role hint"))
+        .row(SheetName.COMPLEX_TYPES,
+            cols("ID", "Contact", "ListElementCode", "reference", "FieldType", "Text",
+                "HintText", "The declared reference hint"))
+        .row(SheetName.CASE_EVENT,
+            cols("CaseTypeID", "Minimal", "ID", "createCase", "Name", "Create",
+                "PostConditionState", "Open"))
+        .row(SheetName.CASE_EVENT_TO_FIELDS,
+            cols("CaseTypeID", "Minimal", "CaseEventID", "createCase",
+                "CaseFieldID", "contact", "DisplayContext", "COMPLEX", "PageID", "1",
+                "PageFieldDisplayOrder", 1))
+        .row(SheetName.CASE_EVENT_TO_COMPLEX_TYPES,
+            cols("ID", "Contact", "CaseEventID", "createCase", "CaseFieldID", "contact",
+                "ListElementCode", "name", "DisplayContext", "MANDATORY",
+                "HintText", "An overriding hint", "FieldDisplayOrder", 1))
+        .row(SheetName.CASE_EVENT_TO_COMPLEX_TYPES,
+            cols("ID", "Contact", "CaseEventID", "createCase", "CaseFieldID", "contact",
+                "ListElementCode", "role", "DisplayContext", "OPTIONAL",
+                "HintText", "The declared role hint", "FieldDisplayOrder", 2))
+        .row(SheetName.CASE_EVENT_TO_COMPLEX_TYPES,
+            cols("ID", "Contact", "CaseEventID", "createCase", "CaseFieldID", "contact",
+                "ListElementCode", "reference", "DisplayContext", "READONLY",
+                "FieldDisplayOrder", 3))
+        .build();
+
+    CaseTypeModel model = linker.link(ir, options("Minimal"), gaps);
+
+    var group = model.getEventComplexTypeGroups().get("createCasecontact");
+    assertThat(group).as("the whole group derives (no fallback for a hint mismatch)").isNotNull();
+    assertThat(group.getRootElementType()).as("a scalar complex root has no element type").isNull();
+
+    var byGetter = new java.util.HashMap<String, uk.gov.hmcts.ccd.sdk.converter.model
+        .EventComplexTypeGroup.Member>();
+    group.getMembers().forEach(m -> byGetter.put(m.getLeafGetter(), m));
+
+    // role: input HintText == declared hint → cascade, no override.
+    assertThat(byGetter.get("getRole").isHintOverridden()).isFalse();
+    // name: input HintText present, no declared hint → .hintText(value).
+    assertThat(byGetter.get("getName").isHintOverridden()).isTrue();
+    assertThat(byGetter.get("getName").getHintText()).isEqualTo("An overriding hint");
+    // reference: no input HintText, declared hint present → .noHintText() (overridden, null value).
+    assertThat(byGetter.get("getReference").isHintOverridden()).isTrue();
+    assertThat(byGetter.get("getReference").getHintText()).isNull();
+  }
+
+  @Test
+  void derivesCollectionRootedComplexMemberGroup() {
+    GapCollector gaps = new GapCollector();
+    // A Collection-typed CaseField placed COMPLEX on an event, whose element type's members are
+    // overridden per event. The group now derives (rather than falling back) with the root element
+    // type recorded so the emitter opens the two-arg element-typed scope.
+    DefinitionIr ir = minimal("Minimal")
+        .row(SheetName.CASE_FIELD,
+            cols("CaseTypeID", "Minimal", "ID", "parties", "Label", "Parties",
+                "FieldType", "Collection", "FieldTypeParameter", "Party"))
+        .row(SheetName.COMPLEX_TYPES,
+            cols("ID", "Party", "ListElementCode", "partyName", "FieldType", "Text"))
+        .row(SheetName.CASE_EVENT,
+            cols("CaseTypeID", "Minimal", "ID", "createCase", "Name", "Create",
+                "PostConditionState", "Open"))
+        .row(SheetName.CASE_EVENT_TO_FIELDS,
+            cols("CaseTypeID", "Minimal", "CaseEventID", "createCase",
+                "CaseFieldID", "parties", "DisplayContext", "COMPLEX", "PageID", "1",
+                "PageFieldDisplayOrder", 1))
+        .row(SheetName.CASE_EVENT_TO_COMPLEX_TYPES,
+            cols("ID", "Party", "CaseEventID", "createCase", "CaseFieldID", "parties",
+                "ListElementCode", "partyName", "DisplayContext", "MANDATORY",
+                "FieldDisplayOrder", 1))
+        .build();
+
+    CaseTypeModel model = linker.link(ir, options("Minimal"), gaps);
+
+    var group = model.getEventComplexTypeGroups().get("createCaseparties");
+    assertThat(group).as("a collection-rooted group now derives").isNotNull();
+    assertThat(group.getRootElementType()).isNotNull();
+    assertThat(group.getRootElementType().getSimpleName()).isEqualTo("Party");
+    assertThat(group.getMembers()).singleElement()
+        .satisfies(m -> assertThat(m.getLeafGetter()).isEqualTo("getPartyName"));
+  }
+
+  @Test
   void dedupesAccessClassesAndAccountsForInjectedEventGrants() {
     GapCollector gaps = new GapCollector();
     // The converter emits .explicitGrants() on every event, so an event's role grant does NOT

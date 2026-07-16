@@ -10,6 +10,7 @@ import org.junit.jupiter.api.Test;
 import uk.gov.hmcts.ccd.sdk.converter.api.ConversionOptions;
 import uk.gov.hmcts.ccd.sdk.converter.api.EmitContext;
 import uk.gov.hmcts.ccd.sdk.converter.model.CaseTypeModel;
+import uk.gov.hmcts.ccd.sdk.converter.model.EventComplexTypeGroup;
 import uk.gov.hmcts.ccd.sdk.converter.model.EventModel;
 import uk.gov.hmcts.ccd.sdk.converter.model.FieldModel;
 import uk.gov.hmcts.ccd.sdk.converter.model.PageModel;
@@ -549,5 +550,83 @@ class EventsConfigEmitterTest {
     String src = classNamed(new EventsConfigEmitter().emit(model, contextWith(40)), "AddNotes");
 
     assertThat(src).contains("UserRole.CREATOR");
+  }
+
+  @Test
+  void collectionRootedGroupOpensElementTypedScopeAndEmitsHintTriState() {
+    // A Collection-rooted CaseEventToComplexTypes group: the collection field's own COMPLEX row is
+    // registered by the one-arg .complex(getter).done(), and the element members are placed in a
+    // SEPARATE statement opening the two-arg element-typed .complex(getter, Element.class) scope. A
+    // nested collection hop uses the same two-arg form; the hint tri-state emits .hintText/.noHintText.
+    EventComplexTypeGroup.TypeRef party =
+        EventComplexTypeGroup.TypeRef.builder().simpleName("Party").build();
+    EventComplexTypeGroup.TypeRef child =
+        EventComplexTypeGroup.TypeRef.builder().simpleName("Child").build();
+    EventComplexTypeGroup group = EventComplexTypeGroup.builder()
+        .eventId("createCase")
+        .caseFieldId("parties")
+        .rootGetter("getParties")
+        .rootElementType(party)
+        // A direct element member overriding its HintText.
+        .members(List.of(
+            EventComplexTypeGroup.Member.builder()
+                .hops(List.of())
+                .leafType(party)
+                .leafGetter("getPartyName")
+                .contextMethod("mandatory")
+                .hintOverridden(true)
+                .hintText("An overriding hint")
+                .build(),
+            // An element member suppressing a would-be cascade.
+            EventComplexTypeGroup.Member.builder()
+                .hops(List.of())
+                .leafType(party)
+                .leafGetter("getReference")
+                .contextMethod("readonly")
+                .hintOverridden(true)
+                .hintText(null)
+                .build(),
+            // A nested collection hop (Collection<Child>) descended via the element-typed scope.
+            EventComplexTypeGroup.Member.builder()
+                .hops(List.of(EventComplexTypeGroup.Hop.builder()
+                    .declaringType(party)
+                    .getter("getChildren")
+                    .elementType(child)
+                    .build()))
+                .leafType(child)
+                .leafGetter("getChildName")
+                .contextMethod("mandatory")
+                .build()))
+        .build();
+
+    PageModel.PageField field = PageModel.PageField.builder()
+        .caseFieldId("parties")
+        .displayContext("COMPLEX")
+        .build();
+    PageModel page = PageModel.builder().pageId("1").fields(List.of(field)).build();
+    EventModel event = EventModel.builder()
+        .id("createCase").javaName("createCase").name("Create Case")
+        .preStates(List.of()).postState("Open").grants(Map.of()).pages(List.of(page))
+        .build();
+    FieldModel parties = FieldModel.builder()
+        .id("parties").javaName("parties").fieldType("Collection").fieldTypeParameter("Party")
+        .build();
+    CaseTypeModel model = modelWithEvents(List.of(event), List.of(parties)).toBuilder()
+        .eventComplexTypeGroups(Map.of("createCaseparties", group))
+        .build();
+
+    String src = allSrc(new EventsConfigEmitter().emit(model, contextWith(40)));
+
+    // The collection field's own COMPLEX row is registered by the bare one-arg scope.
+    assertThat(src).contains("fields.complex(CaseData::getParties).done()");
+    // The element members hang off a separate element-typed scope.
+    assertThat(src).contains("fields.complex(CaseData::getParties, Party.class)");
+    assertThat(src).contains(".mandatory(Party::getPartyName)");
+    assertThat(src).contains(".hintText(\"An overriding hint\")");
+    assertThat(src).contains(".readonly(Party::getReference)");
+    assertThat(src).contains(".noHintText()");
+    // The nested collection hop opens its own two-arg element-typed scope.
+    assertThat(src).contains(".complex(Party::getChildren, Child.class)");
+    assertThat(src).contains(".mandatory(Child::getChildName)");
   }
 }
