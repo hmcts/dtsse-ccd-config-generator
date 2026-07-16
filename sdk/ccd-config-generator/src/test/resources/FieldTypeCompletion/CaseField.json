@@ -17,6 +17,14 @@
   },
   {
     "CaseTypeID": "FieldTypeCompletion",
+    "FieldType": "CaseQueriesCollection",
+    "ID": "queries",
+    "Label": "Queries",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public"
+  },
+  {
+    "CaseTypeID": "FieldTypeCompletion",
     "FieldType": "WaysToPay",
     "ID": "serviceRequest",
     "Label": "Service request",
