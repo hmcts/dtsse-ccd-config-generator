@@ -430,6 +430,34 @@ public class FieldCollection {
     }
 
     /**
+     * Overrides the most-recently-added complex-type member's {@code CaseEventToComplexTypes.HintText}
+     * with the given value, emitted verbatim on the member's event row instead of the member's
+     * declared {@code @CCD(hint)}, which {@code CaseEventToComplexTypesGenerator} otherwise cascades
+     * onto every event row placing the member. Usable after a member placement inside a
+     * {@code .complex(...)} scope ({@code optional}/{@code mandatory}/{@code readonly}).
+     *
+     * <p>DISTINCT from {@link #eventHint(String)}: that writes the {@code EventHintText} column (the
+     * per-event hint override), whereas this writes {@code HintText} (the field-level hint the
+     * generator derives from {@code @CCD(hint)}). Leaving it unset keeps today's cascade, byte-identical
+     * for every existing consumer. Passing {@code null} is equivalent to {@link #noHintText()}.
+     */
+    public FieldCollectionBuilder<Type, StateType, Parent> hintText(String hintText) {
+      lastField().hintText(hintText);
+      return this;
+    }
+
+    /**
+     * Suppresses the most-recently-added complex-type member's {@code CaseEventToComplexTypes.HintText}
+     * entirely, overriding the {@code @CCD(hint)} the generator would otherwise cascade onto the
+     * member's event row. Usable after a member placement inside a {@code .complex(...)} scope. See
+     * {@link #hintText(String)}.
+     */
+    public FieldCollectionBuilder<Type, StateType, Parent> noHintText() {
+      lastField().noHintText();
+      return this;
+    }
+
+    /**
      * Sets the most-recently-added field's {@code CaseEventToFields.DefaultValue} to a raw string,
      * verbatim — usable after any context-selecting call ({@code readonly}, {@code *NoSummary},
      * etc.) that returns this builder rather than the field, matching the sheet column, which is
@@ -526,6 +554,41 @@ public class FieldCollection {
 
     private FieldBuilder<?, StateType, Type, Parent> lastField() {
       return fields.get(fields.size() - 1);
+    }
+
+    /**
+     * Opens a member scope on the element type of a {@code Collection} field <em>without</em>
+     * registering the collection field itself, so per-member {@code CaseEventToComplexTypes}
+     * overrides can be attached to the elements of a {@code List<ListValue<U>>} field the author has
+     * already placed separately (via {@code .optional(getter)} / {@code .readonly(getter)} etc.).
+     *
+     * <p>This is the collection analogue of {@link #complex(TypedPropertyGetter)}: that overload
+     * registers a scalar complex field as a root {@code field(...)} and opens a scope on it, whereas
+     * a collection field's getter is typed {@code List<ListValue<U>>}, so a scope must be typed on the
+     * <em>element</em> {@code U} rather than the list. Because the field is placed elsewhere, this
+     * method registers no root field at all — mirroring how the {@code @JsonUnwrapped}-prefix branch
+     * of {@link #complex(TypedPropertyGetter, boolean, String, String, String, boolean)} skips its own
+     * {@code field(...)} call — so opening the scope has no effect on the collection field's own
+     * {@code CaseEventToFields} row (no extra field registration, and none of the {@code showSummary}/
+     * {@code mutableList} side effects {@link #list(TypedPropertyGetter)} applies). The
+     * {@code CaseEventToComplexTypesGenerator} walks the opened scope and composes dotted
+     * {@code ListElementCode}s from the member getters; collection elements need no index, so the rows
+     * come out in exactly the input shape.
+     *
+     * <p>The {@code elementClass} argument is required because the element type {@code U} is erased
+     * from the {@code List<ListValue<U>>} getter at runtime; it both types the returned member-scope
+     * builder and documents the element type at the call site. Nested collection members inside the
+     * opened scope get the same treatment by calling this overload again on the nested builder.
+     *
+     * @param getter the collection field's getter, typed {@code List<ListValue<U>>}
+     * @param elementClass the collection's element type {@code U}
+     * @param <U> the collection element type the member scope is opened on
+     * @return the member-scope builder for the element type
+     */
+    public <U> FieldCollectionBuilder<U, StateType, FieldCollectionBuilder<Type, StateType, Parent>> complex(
+        TypedPropertyGetter<Type, List<ListValue<U>>> getter, Class<U> elementClass) {
+      String fieldName = propertyUtils.getPropertyName(dataClass, getter);
+      return complex(fieldName, elementClass);
     }
 
     public <U> FieldCollectionBuilder<U, StateType, FieldCollectionBuilder<Type, StateType, Parent>> complex(
