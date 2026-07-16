@@ -971,9 +971,19 @@ Key behaviours:
   become environment-guarded Java (an `EnvironmentFlags.flag(...)` check), configured via
   repeatable `--overlay-suffix suffix=[!]ENV_VAR:value` (defaults ship for `prod`/`nonprod`).
 - **Gaps and passthrough** — anything the SDK cannot express in code (unsupported sheets like
-  `Banner`/`UserProfile`, unsupported columns, non-derivable authorisations) is written to a
+  `UserProfile`, unsupported columns, non-derivable authorisations) is written to a
   gap report (`gap-report.json`/`.md`) and, where safe, passed through as raw JSON to be merged
   into the generated definition after `generateCCDConfig` runs. Nothing is silently dropped.
+- **`UserProfile`** is a deliberate exception: the converter does **not** pass it through, so a
+  definition carrying the sheet fails conversion with an `OMITTED_FAIL` gap unless `--allow-gaps` is
+  set (see [`docs/userprofile-investigation.md`](docs/userprofile-investigation.md) for why —
+  in short, its rows are per-user, per-environment workbasket defaults, not case-type model, and
+  its one user-visible effect no longer appears to be consumed by current XUI). Migrating teams
+  should either **drop the sheet** or **hand-manage `UserProfile.json` per environment** outside the
+  generated definition. The importer only needs the `UserProfile` sheet/tab to be present, which
+  `ccd-definition-processor`'s `json2xlsx` already creates empty when the file is omitted —
+  `ccd-definition-processor`'s own README already treats `UserProfile.json` as an excludable,
+  environment-varying file (`-e 'UserProfile.json, *-nonprod.json'`) for non-prod builds.
 
 Correctness is proven by the `roundTripTest` task: it converts a definition to Java, compiles
 it, runs the generator, and semantically diffs the regenerated JSON against the input, tolerating

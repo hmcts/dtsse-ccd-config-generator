@@ -36,6 +36,7 @@ public final class NormalisingCcdConfigComparator {
 
     private static final List<NormalisationRule> RULES = List.of(
         new AccessControlExpansionRule(),
+        new UserProfileExcludedRule(),
         new IdentifierWhitespaceRule(),
         new KeyAliasRule(),
         new LiveFromRule(),

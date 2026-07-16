@@ -57,7 +57,7 @@ this page.** Each gap is classified one of five ways:
 | Uniform vestigial `AuthorisationCaseState LiveTo` (probate's `01/01/2020` on every row) | **Semantic, accepted** | `LIVE_TO_VESTIGIAL` | Dead sheet-wide end-of-life the SDK can't emit; per-row divergent `LiveTo` still fails ([detail](#3-uniform-vestigial-authorisationcasestate-liveto)) |
 | Display-order renumbering (`*DisplayOrder`/`PageColumnNumber` never compared, any sheet) | **Semantic, accepted** | `DEFAULTS` + `CASE_TYPE_TAB` strips | Relative order preserved by row order (FixedLists actively sorted); `PageColumnNumber=2` flattened |
 | SearchAlias sheet | **Not supported** | — | No SDK generator; fails conversion with an `OMITTED_FAIL` gap (unless `--allow-gaps`) |
-| UserProfile sheet | **Not supported** | — | Per-user default worklists; no generator; fails conversion with an `OMITTED_FAIL` gap (unless `--allow-gaps`) |
+| UserProfile sheet | **Not supported** | `USER_PROFILE_EXCLUDED` | Per-user default worklists; no generator; conversion still fails with an `OMITTED_FAIL` gap (unless `--allow-gaps`), but the comparator drops the sheet from both sides so an expected-side `UserProfile` no longer recurs as a residual ([maintainer decision 2026-07-16](userprofile-investigation.md)) |
 | AccessType / AccessTypeRole sheets | **Not supported** | — | Org group-access config; no generator; fails conversion with an `OMITTED_FAIL` gap (unless `--allow-gaps`) |
 | EventToComplexTypes rows (incl. exotic tail `SecurityClassification`/`Publish`/`ShowSummaryChangeOption`) | Fixed with passthrough | row | Byte-identical round-trip (zero residuals). SDK now has `.complex(parent).<ctx>(member).eventLabel/.eventHint/.pageId` for hand-written Java, but re-deriving each row's dotted `ListElementCode` into nested member getters (incl. through predefined types) is pure risk for zero residual gain — kept as row passthrough |
 | Orphan / illegal-ID / predefined ComplexTypes; orphan-path FixedLists | Fixed with passthrough | row | Unreachable or non-Java-representable declarations |
@@ -205,6 +205,13 @@ bullet each:
   the whitespace as insignificant.
 - **`STATE_DESCRIPTION`** — forgives a state `Description` that merely repeats `Name`, the
   generator's default.
+- **`USER_PROFILE_EXCLUDED`** — drops the whole `UserProfile` sheet from comparison, on both sides.
+  Maintainer decision 2026-07-16 following investigation
+  ([`docs/userprofile-investigation.md`](userprofile-investigation.md)): the sheet holds per-user
+  workbasket-filter defaults that are deployment config, not case-type model, and are functionally
+  dead in current XUI; the SDK still has no API for it, so conversion continues to hard-fail via the
+  existing `OMITTED_FAIL`/`UNSUPPORTED_SHEET` gap (unless `--allow-gaps`) — this rule only stops the
+  resulting expected-only rows from recurring as round-trip residuals.
 - **`TAB_READ_INJECTION`** — a **semantic superset**, not cosmetic: the generator's tab loop injects
   read (`R`) on every field of an unrestricted tab for every already-granted role. The rule *widens*
   an input grant by a surplus `R` and *removes* actual-only `R` rows for roles that already hold
@@ -389,7 +396,7 @@ an explicit gap makes the migrating team decide consciously.
 | Construct | Sheet(s) | Gap category | Notes |
 |---|---|---|---|
 | SearchAlias | `SearchAlias` | `UNSUPPORTED_SHEET` | No `SearchAlias` generator. |
-| UserProfile | `UserProfile` | `UNSUPPORTED_SHEET` | Per-user default worklists; no generator. Populated in most real fixtures, so its removal from passthrough is what forces those definitions to `--allow-gaps` (or a hand-authored UserProfile). |
+| UserProfile | `UserProfile` | `UNSUPPORTED_SHEET` | Per-user default worklists; no generator. Populated in most real fixtures, so its removal from passthrough is what forces those definitions to `--allow-gaps` (or a hand-authored UserProfile). **Maintainer decision 2026-07-16, kept after investigation** ([`docs/userprofile-investigation.md`](userprofile-investigation.md)): the sheet's payoff — pre-selecting a caseworker's workbasket filter — is functionally dead in current XUI (`ProfileService.get()` fetches it but no `case-list.component.ts`/toolkit code path consumes `profile.default.workbasket`); the rows are per-user, per-environment deployment data rather than case-type model (upstream `ccd-definition-processor` already treats `UserProfile.json` as environment-varying, excludable config); and fixture rows carry real staff/contractor emails (e.g. `nigel.dunne@solirius.com`, council addresses in fpl) that should not be baked into a shared Java definition. The comparator's `USER_PROFILE_EXCLUDED` rule drops the sheet from both sides so it stops recurring as a residual, but conversion still hard-fails on it as above. |
 | AccessType / AccessTypeRole | `AccessType`, `AccessTypeRole` | `UNSUPPORTED_SHEET` | Org group-access config; no generator (and NOT deprecated — importer + data store consume them). |
 | CaseRoles `JurisdictionID` (mixed usage only) | `CaseRoles` | `UNSUPPORTED_VALUE` | `emitCaseRoleJurisdiction()` is all-or-nothing; when every row carries `JurisdictionID` the switch emits it natively, but *mixed* usage (only some rows) cannot be expressed and now fails. |
 | Unknown / custom `FieldType` (+`FieldTypeParameter`) | `CaseField` | `UNSUPPORTED_VALUE` | A type with no Java carrier that is **not** a real `FieldType` enum constant can only be inferred as `String`→`Text`. `CaseHistoryViewer`/`WaysToPay`/`JudicialUser`/… are completed `FieldType` constants taking the `@CCD(typeOverride)` Java path; a genuinely unknown type now fails. Add it as a `FieldType` constant or model it as a complex type to convert it faithfully. |
@@ -474,11 +481,11 @@ demanding a baseline refresh — the ratchet only tightens). Current baseline si
 |----------|---------------:|
 | ia       |              4 |
 | probate  |              6 |
-| fpl      |             22 |
+| fpl      |             56 |
 | ET       |             33 |
-| sscs     |             57 |
+| sscs     |             55 |
 | prl      |            170 |
-| civil    |            201 |
+| civil    |            202 |
 
 (The M2-wiring round drove every fixture down by wiring the S-wave SDK features into the converter:
 `PrintableDocumentsUrl`/`CanSaveDraft`/`ShowSummaryContentOption` now emit as Java (et, sscs, probate,
@@ -503,9 +510,13 @@ intended change, run `GenerateGoldenFiles` with `-Djunit.jupiter.conditions.deac
 >   and the new rule forgives the collapse, so no net residual (ia 6, ET 16, prl 17 conditional events
 >   absorbed).
 > - **`CRUD_LETTER_ORDER` (removes 3).** Task 1 closes `civil`'s three `CUR`-vs-`CRU` lines.
-> - **`UserProfile` removal (adds residuals).** The generated side no longer emits these rows while the
->   expected side still carries them: `fpl` +22, `probate` +38, `civil` +3, `sscs` +2, `prl` +1
->   (`ia`/`ET` carry none).
+> - **`UserProfile` removal (net baseline-neutral).** The generated side no longer emits these rows
+>   while the expected side still carries them, which briefly added residuals: `fpl` +22,
+>   `probate` +38, `civil` +3, `sscs` +2, `prl` +1 (`ia`/`ET` carry none). The maintainer's decision
+>   (2026-07-16, after [investigation](userprofile-investigation.md)) was to keep the `OMITTED_FAIL`
+>   hard-fail on conversion but stop these expected-only rows recurring in every baseline: the
+>   `USER_PROFILE_EXCLUDED` comparator rule now drops the sheet from both sides before comparison, so
+>   the counts above are already absorbed out of the current baselines in the table above.
 > - **Unknown-`FieldType` removal (adds residuals).** The field is now generated as `String`→`Text`
 >   with no graft restoring the original type, and no comparator rule forgives `Text`-vs-`<unknown>`:
 >   `fpl` +34, `civil` +4 (`CaseQueriesCollection`).

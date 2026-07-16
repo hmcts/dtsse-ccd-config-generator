@@ -193,6 +193,48 @@ public class NormalisingCcdConfigComparatorTest {
         assertThat(result.getFailures()).anySatisfy(failure -> assertThat(failure).contains("LiveTo"));
     }
 
+    // ---- USER_PROFILE_EXCLUDED ----
+
+    @Test
+    public void userProfileSheetIsExcludedFromComparison() {
+        // Maintainer decision 2026-07-16 (docs/userprofile-investigation.md): the sheet is
+        // per-user/per-environment deployment data the SDK has no API for, so the comparator
+        // drops it from both sides rather than let it recur as a residual in every fixture.
+        Map<String, List<Map<String, Object>>> expected = sheets("UserProfile",
+            rows(row("UserIDAMId", "nigel.dunne@solirius.com",
+                "WorkBasketDefaultJurisdiction", "PROBATE",
+                "WorkBasketDefaultCaseType", "GrantOfRepresentation",
+                "WorkBasketDefaultState", "Open")));
+        Map<String, List<Map<String, Object>>> actual = sheets("UserProfile", rows());
+
+        ComparisonResult result = NormalisingCcdConfigComparator.compare(expected, actual);
+
+        assertThat(result.matches()).as(result.report()).isTrue();
+        assertThat(result.getAppliedRules())
+            .anySatisfy(rule -> assertThat(rule).startsWith("USER_PROFILE_EXCLUDED"));
+    }
+
+    @Test
+    public void userProfileExclusionDoesNotTouchOtherSheets() {
+        // The rule must be scoped to exactly the 'UserProfile' sheet: a genuine difference on any
+        // other sheet in the same comparison still fails.
+        Map<String, List<Map<String, Object>>> expected = new LinkedHashMap<>();
+        expected.put("UserProfile", rows(row("UserIDAMId", "someone@example.com",
+            "WorkBasketDefaultJurisdiction", "PROBATE",
+            "WorkBasketDefaultCaseType", "GrantOfRepresentation",
+            "WorkBasketDefaultState", "Open")));
+        expected.put("CaseEvent", rows(row("ID", "addNote", "Name", "Add note")));
+        Map<String, List<Map<String, Object>>> actual = new LinkedHashMap<>();
+        actual.put("CaseEvent", rows(row("ID", "addNote", "Name", "Added a note")));
+
+        ComparisonResult result = NormalisingCcdConfigComparator.compare(expected, actual);
+
+        assertThat(result.matches()).isFalse();
+        assertThat(result.getFailures()).anySatisfy(failure -> assertThat(failure).contains("'CaseEvent'"));
+        assertThat(result.getFailures())
+            .noneSatisfy(failure -> assertThat(failure).contains("'UserProfile'"));
+    }
+
     // ---- CONFLICTING_ELEMENT_LABELS ----
 
     @Test
