@@ -39,7 +39,13 @@ public class ConversionOptions {
   /** Events per generated CCDConfig class (method-per-event within each). */
   int eventsPerConfig;
 
-  /** Emit a minimal @SpringBootApplication for running the generator standalone. */
+  /**
+   * Emit a minimal @SpringBootApplication for running the generator standalone. Not for output
+   * destined for a service's source tree — a service's own @SpringBootApplication already
+   * discovers the generated CCDConfig beans via its component scan, and generateCCDConfig requires
+   * exactly one @SpringBootApplication under ccd.rootPackage. Used only by ad-hoc standalone runs
+   * and internal test harnesses (round-trip tests that compile generated sources in isolation).
+   */
   boolean emitApplication;
 
   /** Complete with OMITTED_FAIL gaps instead of failing the conversion. */

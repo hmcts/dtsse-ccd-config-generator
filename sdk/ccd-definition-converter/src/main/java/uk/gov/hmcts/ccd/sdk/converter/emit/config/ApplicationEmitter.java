@@ -16,9 +16,16 @@ import uk.gov.hmcts.ccd.sdk.converter.model.CaseTypeModel;
  *
  * <p>Conditionally emits a minimal {@code @SpringBootApplication} entry point into the config
  * package. Only active when {@link uk.gov.hmcts.ccd.sdk.converter.api.ConversionOptions
- * #isEmitApplication()} returns {@code true}. The generated class allows the service team to
- * run {@code generateCCDConfig} standalone (without the full service application context) by
- * starting this lightweight application.
+ * #isEmitApplication()} returns {@code true}.
+ *
+ * <p><b>Not used for output destined for a service's source tree.</b> A service already has its
+ * own {@code @SpringBootApplication}, and the SDK's {@code generateCCDConfig} task requires
+ * exactly one such class on the classpath under {@code ccd.rootPackage} — a second one alongside
+ * the service's real application class breaks that lookup. The generated {@code CCDConfig} beans
+ * live under the service's own base package, so its existing application's component scan
+ * discovers them without any extra wiring (see the retrofit/generate-mode docs). This emitter
+ * exists only for ad-hoc standalone runs and internal test harnesses (the round-trip tests, which
+ * compile generated sources in isolation with no service application to lean on).
  */
 public class ApplicationEmitter implements SourceEmitter {
 

@@ -146,6 +146,11 @@ CONVERT_ARGS=(
   --config-package "${CONFIG_PACKAGE}"
   --output-src "${COMPANION_SRC}"
   --report-dir "${CONVERSION_DIR}/report"
+  # Harness-only: stage 4 points ccd.rootPackage at CONFIG_PACKAGE (the companion package), not the
+  # service's own application's package, so generateCCDConfig's single-@SpringBootApplication lookup
+  # needs the converter's minimal one here. This is a throwaway work-dir copy, never a persisted
+  # service source tree, so it does not carry the "two @SpringBootApplication classes" problem that
+  # retrofit-reports/regen-review-clones.sh output must avoid.
   --emit-application
   --allow-gaps
 )

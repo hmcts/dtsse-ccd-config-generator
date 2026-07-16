@@ -277,6 +277,12 @@ Five issues blocked reaching the diff; all fixed in the converter/pipeline (**no
   IDAM's `IdamClient`/`OAuth2Configuration`; the pipeline additionally runs `gCC` with
   `spring.main.web-application-type=none`. Regressions in `ApplicationEmitterTest`
   (`doesNotComponentScanTheModelPackage`, `excludesPersistenceAutoConfigurationsSoNoDatabaseIsRequired`).
+  **Note (post-rollout maintainer decision):** the emitted `@SpringBootApplication` above is a
+  `bin/retrofit-verify` harness-only mechanism — its work-copy build has no service application to
+  lean on for the single-`@SpringBootApplication` lookup `generateCCDConfig` needs. It is never written
+  into a real service's source tree; there, the service's own existing `@SpringBootApplication`
+  discovers the companion `CCDConfig` beans through its normal component scan. See the README's
+  retrofit phase 2 *Wiring* note.
 
 ### Residual diff buckets (9,098 lines) — the follow-on work
 

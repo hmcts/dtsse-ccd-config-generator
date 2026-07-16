@@ -59,7 +59,7 @@ run_lane() {
     --model-repo-root "${REPO_ROOT}/${modelrepo}"
     --model-package "${modelpkg}" --model-class "${modelsimple}"
     --output-src "${out}/companion" --report-dir "${out}/report"
-    --emit-application --allow-gaps)
+    --allow-gaps)
   for o in ${overlays}; do args+=(--overlay-suffix "$o"); done
 
   ( cd "${REPO_ROOT}" && "${GRADLEW}" -q -p sdk :ccd-definition-converter:run \
@@ -73,6 +73,9 @@ run_lane() {
   [[ "${lane}" == "fpl-ccd-configuration" ]] && clonesrc="${clone}/service/src/main/java"
   [[ "${lane}" == "et-ccd-callbacks" ]] && clonesrc="${clone}/et-shared/src/main/java"
   mkdir -p "${clonesrc}"
+  # Remove any stale ConverterGeneratedApplication.java left over from a prior regen (the converter no
+  # longer emits it into service trees — a service must not carry two @SpringBootApplication classes).
+  find "${clonesrc}" -name 'ConverterGeneratedApplication.java' -delete
   cp -a "${out}/companion/." "${clonesrc}/"
   mkdir -p "${PATCHES}"
   cp "${out}/report/retrofit.patch" "${PATCHES}/retrofit-${casetype}.patch"

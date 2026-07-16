@@ -114,7 +114,12 @@ public class ConvertCommand implements Callable<Integer> {
   int eventsPerConfig;
 
   @Option(names = "--emit-application", defaultValue = "false",
-      description = "Also emit a minimal @SpringBootApplication for running the generator.")
+      description = "Also emit a minimal @SpringBootApplication for running the generator "
+          + "standalone (no service application context). NOT for output destined for a "
+          + "service's source tree: the generated CCDConfig beans are discovered by the "
+          + "service's OWN @SpringBootApplication via its existing component scan, and a "
+          + "second @SpringBootApplication class in the same tree is unsupported. Intended for "
+          + "ad-hoc standalone runs and internal test harnesses only.")
   boolean emitApplication;
 
   @Option(names = "--allow-gaps", defaultValue = "false",

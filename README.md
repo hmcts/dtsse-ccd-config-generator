@@ -1116,6 +1116,29 @@ The retrofit clone-regeneration script writes exactly this tree (untracked in th
 status), retiring the old flat `generated-config/` directory. Invalid combinations are rejected with
 a clear error.
 
+**Wiring — no generated application class.** The converter does **not** emit a
+`@SpringBootApplication` into the service's tree (that option, `--emit-application`, exists only for
+ad-hoc standalone runs and the converter's own test harnesses — see below). The generated
+`CCDConfig`/access/event `@Component` classes live under the service's own base package, so the
+service's **existing** `@SpringBootApplication` discovers them through its normal component scan —
+nothing extra to wire, in the common case. This matters because `generateCCDConfig` (`Main`) scans
+`ccd.rootPackage` for **exactly one** `@SpringBootApplication` class; a second one alongside the
+service's real application class breaks that lookup, which is exactly the failure mode this design
+avoids.
+
+The one thing worth checking per service: if a service's own application class narrows
+`scanBasePackages`/`@ComponentScan` to something that does **not** cover the derived companion root
+package (see the table above), add that package to the existing scan. Of the six pilot services,
+five already scan a package broad enough to cover their derived `.ccd` companion root
+(probate-back-office, sscs-common, civil-service, prl-cos-api, fpl-ccd-configuration all scan a
+common ancestor of their model package, e.g. `uk.gov.hmcts.reform.fpl`). **`et-ccd-callbacks` is the
+exception**: its `DocmosisApplication` lists explicit `scanBasePackages` (`uk.gov.hmcts.ethos`,
+`uk.gov.hmcts.ecm.common`, `uk.gov.hmcts.reform.document`, `uk.gov.hmcts.reform.authorisation`,
+`uk.gov.hmcts.reform.ccd.document`, `uk.gov.hmcts.reform.et.syaapi`, `uk.gov.hmcts.ccd.sdk`) that
+cover neither the model package (`uk.gov.hmcts.et.common.model.ccd`) nor the derived companion root
+(`uk.gov.hmcts.et.common.ccd`) — adopting the retrofit output there needs `uk.gov.hmcts.et.common`
+added to that list.
+
 **What the patch (`build/retrofit/retrofit.patch`) contains** — a unified diff, `git apply`-able from
 the model repo root, produced with JavaParser's `LexicalPreservingPrinter` (minimal churn — untouched
 lines are byte-preserved) and java-diff-utils:

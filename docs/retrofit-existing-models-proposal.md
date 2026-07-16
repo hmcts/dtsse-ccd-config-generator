@@ -867,8 +867,12 @@ All ten questions are now decided (or delegated as implementation detail):
    complex-type and enum resolution behaves identically through the subclass, as hoped. **Caveats
    found:** (a) each subclass needs `@EqualsAndHashCode(callSuper = true)` (a Lombok warning otherwise,
    harmless to generation); (b) the generator context needs an `ObjectMapper` on the classpath (the
-   SDK's runtime `CallbackController`/`CcdCallbackExecutor` require one) — supplied in real runs by the
-   converter's emitted `@SpringBootApplication`, so no action for teams. Not exercised in the spike:
+   SDK's runtime `CallbackController`/`CcdCallbackExecutor` require one) — in a real service this
+   comes from Spring Boot's own Jackson autoconfiguration on the service's existing
+   `@SpringBootApplication` (the converter does not emit one into the service tree; see *Wiring* under
+   the README's retrofit phase 2), so no action for teams. The spike's own harness stands in a minimal
+   `@SpringBootApplication` purely because it has no such service context to lean on. Not exercised
+   in the spike:
    per-case-type *divergence of a shared field's type/label* (both case types share identical base-field
    metadata here); that remains a per-field policy call when a real ET migration needs it, but is not a
    structural blocker.
