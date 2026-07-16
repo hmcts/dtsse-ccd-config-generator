@@ -51,11 +51,12 @@ run_lane() {
   local args=(--retrofit)
   IFS=',' read -ra defarr <<<"${defs}"
   for d in "${defarr[@]}"; do args+=(--input "${REPO_ROOT}/${d}"); done
+  # No --config-package: the CLI derives the root package from the model package (cut at the first
+  # .model segment, append .ccd — the structural-round rule), so companions land beside the model.
   args+=(--case-type "${casetype}"
     --model-source-root "${REPO_ROOT}/${srcroot}"
     --model-repo-root "${REPO_ROOT}/${modelrepo}"
     --model-package "${modelpkg}" --model-class "${modelsimple}"
-    --config-package "${configpkg}"
     --output-src "${out}/companion" --report-dir "${out}/report"
     --emit-application --allow-gaps)
   for o in ${overlays}; do args+=(--overlay-suffix "$o"); done
@@ -63,10 +64,15 @@ run_lane() {
   ( cd "${REPO_ROOT}" && "${GRADLEW}" -q -p sdk :ccd-definition-converter:run \
       --args="$(printf '%q ' "${args[@]}")" )
 
-  # Sync companion sources + patch into the clone, preserving narratives. The companion tree is the
-  # reference-service layout rooted at <root> (config-package); retire the old flat generated-config/.
+  # Sync companion sources + patch into the clone, preserving narratives. Companions go into the
+  # service's REAL main source tree (maintainer feedback point 1) — they show as untracked files in
+  # the clone's git status, exactly like code the team would own. Retire the old parking dirs.
   rm -rf "${clone}/generated-config" "${clone}/companion"
-  cp -a "${out}/companion" "${clone}/companion"
+  local clonesrc="${clone}/src/main/java"
+  [[ "${lane}" == "fpl-ccd-configuration" ]] && clonesrc="${clone}/service/src/main/java"
+  [[ "${lane}" == "et-ccd-callbacks" ]] && clonesrc="${clone}/et-shared/src/main/java"
+  mkdir -p "${clonesrc}"
+  cp -a "${out}/companion/." "${clonesrc}/"
   mkdir -p "${PATCHES}"
   cp "${out}/report/retrofit.patch" "${PATCHES}/retrofit-${casetype}.patch"
   echo ">> ${lane}: companion + patch refreshed"
