@@ -103,6 +103,30 @@ public class E2EConfigGenerationTests {
 
     @SneakyThrows
     @Test
+    public void preservesRenamedFixedListId() {
+        // A generated fixed-list enum with a PascalCase Java class name (RenamedFixedListChoice) but
+        // a distinct @ComplexType(name) list ID must emit that list ID — not the class name — as the
+        // FixedLists sheet ID and file name. This is the SDK half of the converter's FL_ rename
+        // (finding #4): the class is renamed for readability while the wire ID round-trips exactly.
+        File expected = resourceFile("RenamedFixedList/FixedLists/FL_renamedChoice.json");
+        File actual = new File(tmp.getRoot(), "RenamedFixedList/FixedLists/FL_renamedChoice.json");
+        CcdConfigComparator.assertEquals(expected, actual, JSONCompareMode.NON_EXTENSIBLE);
+        // The class-named file must NOT be produced.
+        assertFalse(new File(tmp.getRoot(),
+            "RenamedFixedList/FixedLists/RenamedFixedListChoice.json").exists());
+
+        // ...and the referencing CaseField's FieldTypeParameter must be the list ID too.
+        String caseField = Resources.toString(
+            new File(tmp.getRoot(), "RenamedFixedList/CaseField.json").toURI().toURL(),
+            StandardCharsets.UTF_8);
+        assertThat(caseField)
+            .contains("\"FieldTypeParameter\"")
+            .contains("FL_renamedChoice")
+            .doesNotContain("RenamedFixedListChoice");
+    }
+
+    @SneakyThrows
+    @Test
     public void mapsUnregisteredRolesToAccessProfiles() {
         // The two org/IDAM roles appear in RoleToAccessProfiles verbatim...
         File expectedProfiles = resourceFile("RoleMappings/RoleToAccessProfiles.json");
