@@ -52,7 +52,8 @@ run_lane() {
   IFS=',' read -ra defarr <<<"${defs}"
   for d in "${defarr[@]}"; do args+=(--input "${REPO_ROOT}/${d}"); done
   # No --config-package: the CLI derives the root package from the model package (cut at the first
-  # .model segment, append .ccd — the structural-round rule), so companions land beside the model.
+  # model/models/domain segment, append .ccd unless already present), so companions land beside the
+  # model.
   args+=(--case-type "${casetype}"
     --model-source-root "${REPO_ROOT}/${srcroot}"
     --model-repo-root "${REPO_ROOT}/${modelrepo}"

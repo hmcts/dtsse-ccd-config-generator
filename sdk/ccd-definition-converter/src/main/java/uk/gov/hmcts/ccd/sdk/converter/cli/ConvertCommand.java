@@ -57,10 +57,11 @@ public class ConvertCommand implements Callable<Integer> {
       description = "Root package the generated CCD config lives under (events in <root>.event, "
           + "page classes in <root>.event.page, access classes in <root>.access; tabs/search/"
           + "workbasket/case-type config beans directly in <root>). When omitted it is DERIVED from "
-          + "--model-package: the model package is cut at its first '.model' segment and '.ccd' is "
-          + "appended (uk.gov.hmcts.probate.model.ccd.raw -> uk.gov.hmcts.probate.ccd); a model "
-          + "package with no '.model' segment gets '.ccd' appended verbatim. --root-package is an "
-          + "alias for this option.")
+          + "--model-package: the model package is cut at its first 'model', 'models' or 'domain' "
+          + "segment, then '.ccd' is appended unless the result already ends with '.ccd' "
+          + "(uk.gov.hmcts.probate.model.ccd.raw -> uk.gov.hmcts.probate.ccd; "
+          + "uk.gov.hmcts.reform.sscs.ccd.domain -> uk.gov.hmcts.reform.sscs.ccd). --root-package is "
+          + "an alias for this option.")
   String configPackage;
 
   @Option(names = "--retrofit", defaultValue = "false",
@@ -318,6 +319,11 @@ public class ConvertCommand implements Callable<Integer> {
         .build();
   }
 
+  // Path segments that mark the model's own layer; the root config package is derived by cutting
+  // the model package at the first of these, so the config lands as a sibling of the model rather
+  // than nested inside it (uk.gov.hmcts.reform.sscs.ccd.domain -> ...sscs.ccd, not ...ccd.domain.ccd).
+  private static final List<String> MODEL_MARKER_SEGMENTS = List.of("model", "models", "domain");
+
   /**
    * Derives the root config package from the model package when neither {@code --root-package} nor
    * {@code --config-package} is given.
@@ -325,9 +331,11 @@ public class ConvertCommand implements Callable<Integer> {
    * <p>The rule keeps the generated config a sibling of the model, under the service's own base
    * package, exactly where the reference services keep theirs ({@code uk.gov.hmcts.divorce.divorce
    * case} beside {@code …divorcecase.model}): the model package is truncated at its <em>first</em>
-   * {@code model} path segment and {@code .ccd} is appended, so
-   * {@code uk.gov.hmcts.probate.model.ccd.raw} yields {@code uk.gov.hmcts.probate.ccd}. A model
-   * package with no {@code model} segment simply gets {@code .ccd} appended.
+   * {@link #MODEL_MARKER_SEGMENTS} segment ({@code model}, {@code models} or {@code domain}), so
+   * {@code uk.gov.hmcts.probate.model.ccd.raw} yields {@code uk.gov.hmcts.probate.ccd} and
+   * {@code uk.gov.hmcts.reform.sscs.ccd.domain} yields {@code uk.gov.hmcts.reform.sscs.ccd}.
+   * {@code .ccd} is then appended, unless the truncated package already ends with {@code .ccd}
+   * (as the sscs case does, since the marker segment sat past an existing {@code .ccd} segment).
    *
    * @param modelPackage the {@code --model-package} value
    * @return the derived root config package
@@ -336,7 +344,7 @@ public class ConvertCommand implements Callable<Integer> {
     String[] segments = modelPackage.split("\\.");
     StringBuilder base = new StringBuilder();
     for (String segment : segments) {
-      if (segment.equals("model")) {
+      if (MODEL_MARKER_SEGMENTS.contains(segment)) {
         break;
       }
       if (base.length() > 0) {
@@ -344,7 +352,7 @@ public class ConvertCommand implements Callable<Integer> {
       }
       base.append(segment);
     }
-    return base + ".ccd";
+    return base.toString().endsWith(".ccd") ? base.toString() : base + ".ccd";
   }
 
   private void requirePackage(String option, String value) {

@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.nio.file.Path;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import picocli.CommandLine;
@@ -45,15 +46,41 @@ class ConvertCommandTest {
 
   @Test
   void derivesRootPackageFromModelPackageWhenNotGiven() {
-    // The root config package is derived from --model-package: the model package is cut at its first
-    // 'model' segment and '.ccd' appended, keeping the config a sibling of the model.
+    // The root config package is derived from --model-package: the model package is cut at its
+    // first 'model', 'models' or 'domain' segment, then '.ccd' is appended unless the cut result
+    // already ends with '.ccd' — keeping the config a sibling of the model.
     assertThat(ConvertCommand.deriveRootPackage("uk.gov.hmcts.probate.model.ccd.raw"))
         .isEqualTo("uk.gov.hmcts.probate.ccd");
-    assertThat(ConvertCommand.deriveRootPackage("uk.gov.hmcts.divorce.divorcecase.model"))
-        .isEqualTo("uk.gov.hmcts.divorce.divorcecase.ccd");
-    // No 'model' segment: '.ccd' is appended verbatim.
-    assertThat(ConvertCommand.deriveRootPackage("uk.gov.hmcts.sscs.domain"))
-        .isEqualTo("uk.gov.hmcts.sscs.domain.ccd");
+    assertThat(ConvertCommand.deriveRootPackage("uk.gov.hmcts.reform.fpl.model"))
+        .isEqualTo("uk.gov.hmcts.reform.fpl.ccd");
+    // 'domain' segment sits past an existing '.ccd' segment: cutting there already lands on '.ccd',
+    // so it is not appended a second time.
+    assertThat(ConvertCommand.deriveRootPackage("uk.gov.hmcts.reform.sscs.ccd.domain"))
+        .isEqualTo("uk.gov.hmcts.reform.sscs.ccd");
+    // 'models' (plural) is recognised too, not just 'model'.
+    assertThat(ConvertCommand.deriveRootPackage("uk.gov.hmcts.reform.prl.models.dto.ccd"))
+        .isEqualTo("uk.gov.hmcts.reform.prl.ccd");
+    assertThat(ConvertCommand.deriveRootPackage("uk.gov.hmcts.reform.civil.model"))
+        .isEqualTo("uk.gov.hmcts.reform.civil.ccd");
+    assertThat(ConvertCommand.deriveRootPackage("uk.gov.hmcts.et.common.model.ccd"))
+        .isEqualTo("uk.gov.hmcts.et.common.ccd");
+    // No marker segment: '.ccd' is appended verbatim.
+    assertThat(ConvertCommand.deriveRootPackage("uk.gov.hmcts.foo.bar"))
+        .isEqualTo("uk.gov.hmcts.foo.bar.ccd");
+  }
+
+  @Test
+  void allDerivedRootPackagesSatisfyConfigResolverBasePackageConstraint() {
+    List<String> derived = List.of(
+        ConvertCommand.deriveRootPackage("uk.gov.hmcts.probate.model.ccd.raw"),
+        ConvertCommand.deriveRootPackage("uk.gov.hmcts.reform.fpl.model"),
+        ConvertCommand.deriveRootPackage("uk.gov.hmcts.reform.sscs.ccd.domain"),
+        ConvertCommand.deriveRootPackage("uk.gov.hmcts.reform.prl.models.dto.ccd"),
+        ConvertCommand.deriveRootPackage("uk.gov.hmcts.reform.civil.model"),
+        ConvertCommand.deriveRootPackage("uk.gov.hmcts.et.common.model.ccd"),
+        ConvertCommand.deriveRootPackage("uk.gov.hmcts.foo.bar"));
+    assertThat(derived).allSatisfy(pkg ->
+        assertThat(pkg).startsWith(ConvertCommand.REQUIRED_PACKAGE_PREFIX + "."));
   }
 
   @Test

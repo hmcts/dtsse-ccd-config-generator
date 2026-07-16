@@ -923,14 +923,16 @@ which archetype fits which mode.
 
 Generated code goes into the service's **main source tree** and is laid out to mirror the mature
 hand-written services (nfdiv/sptribs), so a team owns and edits it directly. The **root config
-package** is derived from `--model-package` by cutting it at its first `model` segment and appending
-`.ccd`:
+package** is derived from `--model-package` by cutting it at its first `model`, `models` or `domain`
+segment, then appending `.ccd` unless the cut result already ends with `.ccd`:
 
 | `--model-package` | derived root package |
 |---|---|
 | `uk.gov.hmcts.probate.model.ccd.raw` | `uk.gov.hmcts.probate.ccd` |
-| `uk.gov.hmcts.divorce.divorcecase.model` | `uk.gov.hmcts.divorce.divorcecase.ccd` |
-| `uk.gov.hmcts.sscs.domain` (no `model` segment) | `uk.gov.hmcts.sscs.domain.ccd` |
+| `uk.gov.hmcts.reform.fpl.model` | `uk.gov.hmcts.reform.fpl.ccd` |
+| `uk.gov.hmcts.reform.sscs.ccd.domain` | `uk.gov.hmcts.reform.sscs.ccd` |
+| `uk.gov.hmcts.reform.prl.models.dto.ccd` | `uk.gov.hmcts.reform.prl.ccd` |
+| `uk.gov.hmcts.foo.bar` (no marker segment) | `uk.gov.hmcts.foo.bar.ccd` |
 
 Override it with `--root-package <pkg>` (or the equivalent legacy `--config-package <pkg>`) when a
 team wants a specific home. Under `<root>` the converter emits:
