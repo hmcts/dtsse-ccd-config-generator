@@ -15,12 +15,22 @@ public enum GapAction {
    */
   MANUAL_PLACEMENT,
   /**
-   * Purely informational: the row is a redundant input declaration that produces no generated
-   * output and is neither passed through nor reproduced (the comparator forgives its absence as an
-   * accepted semantic difference). Example: an orphan complex-type/fixed-list declaration nothing
-   * reachable references, or a member-by-member redeclaration of an SDK-predefined platform type.
-   * Non-blocking — it never fails the conversion, and it flags the row as safe to delete from the
-   * source definition.
+   * Purely informational: a divergence that produces no generated output and is neither passed
+   * through nor separately reproduced — the comparator forgives it as an accepted semantic
+   * difference. Two shapes occur:
+   *
+   * <ul>
+   *   <li>a redundant input declaration safe to delete from the source (an orphan
+   *       complex-type/fixed-list nothing reachable references, or a member-by-member redeclaration
+   *       of an SDK-predefined platform type); and</li>
+   *   <li>a display-only over-grant the SDK injects that no config-generator construct can subtract —
+   *       notably the {@code AuthorisationCaseField} read the generator adds for a role that can see
+   *       a field via an unrestricted tab/search. The field/role's intended grant is still derived
+   *       into an {@code @CCD(access)} class; this record only notes the injected surplus (forgiven
+   *       by the {@code TAB_READ_INJECTION} comparator rule), so no row is passed through for it.</li>
+   * </ul>
+   *
+   * <p>Non-blocking — it never fails the conversion.
    */
   ADVISORY,
   /** Nothing could be done; conversion fails unless --allow-gaps is set. */

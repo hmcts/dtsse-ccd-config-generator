@@ -52,7 +52,7 @@ this page.** Each gap is classified one of five ways:
 | State `Description` repeating `Name` | Not semantic | `STATE_DESCRIPTION` | The generator default (a *differing* Description is emitted via `@CCD(description)`) |
 | `Yes`/`true` ≡ `Y` etc. on boolean columns | Not semantic | `YN_CANON` | Incl. `SignificantEvent`/`CanSaveDraft`/`EnableForDeletion`/`Shuttered`/`BannerEnabled` |
 | Injected `caseHistory` field/tab/auth rows (creates/widens `CRU`) | **Semantic, accepted** | `CASE_HISTORY` | CaseHistoryViewer carries no submitted data; grants are display-only |
-| Injected/widened read (`R`) on unrestricted-tab fields | **Semantic, accepted** | `TAB_READ_INJECTION` | Roles already event-granted gain tab-field visibility |
+| Injected/widened read (`R`) on unrestricted-tab fields | **Semantic, accepted** | `TAB_READ_INJECTION` | Roles already event-granted gain tab-field visibility; each (field, role) is an `AUTH_NOT_DERIVABLE`/`ADVISORY` report-only record — **no row is passed through** ([detail](#authorisationcasefield-injected-read-records)) |
 | Surplus `⊆ {C,R}` grants on `Label`/`READONLY` fields | **Semantic, accepted** | `IMMUTABLE_FIELD_CR` | Display permission on data-free fields |
 | Uniform vestigial `AuthorisationCaseState LiveTo` (probate's `01/01/2020` on every row) | **Semantic, accepted** | `LIVE_TO_VESTIGIAL` | Dead sheet-wide end-of-life the SDK can't emit; per-row divergent `LiveTo` still fails ([detail](#3-uniform-vestigial-authorisationcasestate-liveto)) |
 | Display-order renumbering (`*DisplayOrder`/`PageColumnNumber` never compared, any sheet) | **Semantic, accepted** | `DEFAULTS` + `CASE_TYPE_TAB` strips | Relative order preserved by row order (FixedLists actively sorted); `PageColumnNumber=2` flattened |
@@ -240,8 +240,13 @@ bullet each:
   read (`R`) on every field of an unrestricted tab for every already-granted role. The rule *widens*
   an input grant by a surplus `R` and *removes* actual-only `R` rows for roles that already hold
   another grant — so the regenerated definition grants read visibility on tab fields to roles the
-  input did not. `AccessClassComputer` records this as non-derivable (`AUTH_NOT_DERIVABLE`). Same
-  mechanism as `IMMUTABLE_FIELD_CR` below, scoped to tab-derived reads.
+  input did not. `AccessClassComputer` records each such (field, role) as an
+  `AUTH_NOT_DERIVABLE` / **`ADVISORY`** gap — report-only, since no access class can subtract the
+  injected read and (crucially) **no `AuthorisationCaseField` row is passed through**: the residual
+  derivation emits access classes only. This comparator rule is what makes the round-trip clean; the
+  gap entry is an honest record, not a load-bearing passthrough. Same mechanism as
+  `IMMUTABLE_FIELD_CR` below, scoped to tab-derived reads (see
+  [§ AuthorisationCaseField injected-read records](#authorisationcasefield-injected-read-records)).
 - **`YN_CANON`** — canonicalises `Yes`/`Y`/`true` and `No`/`N`/`false` (case-insensitively) to
   `Y`/`N` on genuinely boolean columns only — never on numeric look-alikes such as
   `ShowSummaryContentOption`. Covers the definition-time flags the converter emits via builder
@@ -456,6 +461,35 @@ two dominant fallback causes, ~4.5k rows flipped to derived). prl's residual is 
 `ordersHearingDetails`/`fl404CustomFields`-style groups that repeat a `ListElementCode` twice within
 an event (collapsing to one generated row) and members placed non-`COMPLEX`; the rest are the
 documented remaining causes above.
+
+### 6. AuthorisationCaseField injected-read records {#authorisationcasefield-injected-read-records}
+
+The SDK's `AuthorisationCaseFieldGenerator` unconditionally injects a read (`R`) on every field of an
+unrestricted `CaseTypeTab` for every role that already holds any grant (see the rule javadoc). An
+`@CCD(access)` class can only *add* permissions, so this injected read can never be subtracted;
+`AccessClassComputer.residual` therefore records each such `(field, role)` as an `AUTH_NOT_DERIVABLE`
+gap.
+
+**These records are report-only, not passthrough.** The residual derivation
+(`DefaultDefinitionLinker.deriveAccessClasses`) returns access classes and nothing else — it produces
+**no `AuthorisationCaseField` passthrough sheet** (empirically confirmed: no
+`base/AuthorisationCaseField.json` is ever written), and `GapCollector` acts on only one action —
+`OMITTED_FAIL`, via `hasBlockingGaps()`. What actually makes the round-trip clean is the
+`TAB_READ_INJECTION` comparator rule, which forgives exactly this injected-`R` divergence on both the
+matched-surplus and actual-only-row shapes. The gap entry is an honest "nothing is silently dropped"
+record; it is **not** load-bearing. Reclassifying it from `PASSTHROUGH_ROW` to `ADVISORY` left all
+seven round-trip baselines **byte-for-byte unchanged** (ia 4 / probate 6 / et 16 / fpl 21 / sscs 32 /
+prl 55 / civil 129).
+
+**The count, and what it is.** This is the dominant `AUTH_NOT_DERIVABLE` category by row count —
+**52,232 records across the six retrofit fixtures** (ia 15,823, prl 11,958, fpl 11,676, civil 7,615,
+et 3,595, sscs 323, probate 1,242). Every single one is the injected-read case: the `extra`
+permission is `{R}` for **100%** of them, because the converter's only injection into the derivation's
+`have` map is `Set.of('R')` from the tab and search loops — no other permission can appear there, so
+there is no other-cause subset. These are **not** un-converted JSON: no row is carried through, and
+the field/role's *intended* grant is derived into a genuine `@CCD(access)` class exactly as for any
+other field. The 52k figure is a gap-report artifact — a per-(field, role) note about a display-only
+over-grant the comparator forgives — not a measure of fidelity loss.
 
 ## Constructs carried by passthrough (not expressed in Java)
 
@@ -708,8 +742,12 @@ A conversion run (via `--report-dir`) writes:
 - **`gap-report.md`** — human-readable table of every construct the converter could not express
   directly in Java: sheet/row/column, action taken (`PASSTHROUGH_ROW`, `PASSTHROUGH_COLUMN`,
   `CONDITIONAL_CODE`, `ADVISORY`, or `OMITTED_FAIL`), and why. An `ADVISORY` entry is non-blocking —
-  it flags a redundant input declaration (an orphan or predefined-type redeclaration) that produces no
-  output and is safe to delete from the source definition.
+  it flags either a redundant input declaration (an orphan or predefined-type redeclaration) that
+  produces no output and is safe to delete, or a display-only over-grant the SDK injects and a
+  comparator rule forgives (the `AuthorisationCaseField` injected-read records — the dominant
+  `ADVISORY` category by count, see
+  [§ AuthorisationCaseField injected-read records](#authorisationcasefield-injected-read-records)).
+  No `ADVISORY` entry corresponds to a passed-through row.
 - **`gap-report.json`** — the same findings as structured data (`entries` plus `summary` counts),
   for tooling.
 

@@ -472,7 +472,15 @@ final class AccessClassComputer {
 
       if (!wantPerms.containsAll(havePerms)) {
         // The SDK injects a permission the definition does not grant; adding an access class
-        // cannot remove it, so record the field/role as not derivable.
+        // cannot remove it. The only permission this converter ever injects here is a tab/search
+        // read (see DefaultDefinitionLinker.deriveAccessClasses, whose tab/search loops add exactly
+        // Set.of('R')), so `extra` is always {R}: the read the AuthorisationCaseFieldGenerator adds
+        // for a role that can already see the field via an unrestricted tab or search. It is a
+        // display-only over-grant on a role that is otherwise granted the field, forgiven on the
+        // round-trip by the TAB_READ_INJECTION comparator rule — no AuthorisationCaseField row is
+        // written to passthrough for it (deriveAccessClasses emits only access classes), so this
+        // entry is a report-only ADVISORY record, not a passed-through row. Recording it keeps the
+        // "nothing is silently dropped" invariant honest without failing the conversion.
         Set<Character> extra = new LinkedHashSet<>(havePerms);
         extra.removeAll(wantPerms);
         gaps.add(GapEntry.builder()
@@ -481,10 +489,13 @@ final class AccessClassComputer {
             .column("CRUD")
             .value(CrudSet.format(wantPerms))
             .category(GapCategory.AUTH_NOT_DERIVABLE)
-            .action(GapAction.PASSTHROUGH_ROW)
+            .action(GapAction.ADVISORY)
             .detail("SDK injects " + CrudSet.format(extra) + " for role " + role
-                + " on field " + fieldId + " which the definition does not grant; the row is"
-                + " passed through so the intended grant is preserved")
+                + " on field " + fieldId + " which the definition does not grant: a display-only"
+                + " read the AuthorisationCaseFieldGenerator adds for a role that can see the field"
+                + " via an unrestricted tab/search. No access class can remove it; the divergence is"
+                + " forgiven by the TAB_READ_INJECTION comparator rule. Report-only — no row is"
+                + " passed through.")
             .build());
       }
 
