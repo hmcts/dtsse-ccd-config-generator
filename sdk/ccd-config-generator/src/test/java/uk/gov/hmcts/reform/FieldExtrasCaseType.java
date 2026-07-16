@@ -46,6 +46,10 @@ public class FieldExtrasCaseType
         // Positional defaultValue on a top-level field: routed to CaseEventToComplexTypes only, it
         // must leave no DefaultValue on this field's CaseEventToFields row (the consumer regression
         // that PR #1031's original applyDefaultValue introduced).
-        .optional(FieldExtrasCaseData::getPositionalDefaultField, null, "positional default");
+        .optional(FieldExtrasCaseData::getPositionalDefaultField, null, "positional default")
+        // PublishAs without publish(true): the definition store reads Publish and PublishAs as
+        // unrelated columns, so the alias must emit with no Publish=Y alongside it.
+        .optional(FieldExtrasCaseData::getAliasOnlyField)
+        .publishAs("aliasOnly");
   }
 }

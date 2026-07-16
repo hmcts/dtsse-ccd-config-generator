@@ -76,6 +76,20 @@ public interface ConfigBuilder<T, S, R extends HasRole> {
     // Default no-op for backward compatibility; implementations may override.
   }
 
+  /**
+   * Emit an {@code AuthorisationCaseType} row for the given case roles. By default case roles
+   * (the {@code [BRACKETED]} form) are excluded from {@code AuthorisationCaseType} because most
+   * CCD definitions authorise them only through case-role assignment (e.g.
+   * {@code CaseRoleToAccessProfile}), not static case-type authorisation. Some definitions grant a
+   * case role static case-type-level CRUD as well — call this to opt a role into that row, using
+   * its {@link HasRole#getCaseTypePermissions()} value (or {@code D} when shuttered) as the CRUD.
+   *
+   * @param roles case roles to include in {@code AuthorisationCaseType}
+   */
+  default void includeCaseRolesInCaseTypeAuthorisation(R... roles) {
+    // Default no-op for backward compatibility; implementations may override.
+  }
+
   void omitHistoryForRoles(R... roles);
 
   /**

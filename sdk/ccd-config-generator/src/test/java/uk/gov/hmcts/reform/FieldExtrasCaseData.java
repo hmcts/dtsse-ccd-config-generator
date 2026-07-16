@@ -20,4 +20,6 @@ public class FieldExtrasCaseData {
 
   @CCD(label = "A field carrying a positional default")
   private String positionalDefaultField;
+
+  private String aliasOnlyField;
 }

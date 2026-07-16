@@ -108,10 +108,9 @@ class CaseEventToFieldsGenerator<T, S, R extends HasRole> implements ConfigGener
     }
     Boolean explicit = field.getPublish();
     boolean publish = explicit != null ? explicit : event.isPublishToCamunda();
-    if (!publish) {
-      return;
+    if (publish) {
+      row.put("Publish", "Y");
     }
-    row.put("Publish", "Y");
     if (field.getPublishAs() != null) {
       row.put("PublishAs", field.getPublishAs());
     }

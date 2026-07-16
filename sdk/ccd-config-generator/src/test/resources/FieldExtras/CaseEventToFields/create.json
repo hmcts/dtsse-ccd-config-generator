@@ -53,5 +53,17 @@
     "PageFieldDisplayOrder": 2,
     "PageID": 1,
     "RetainHiddenValue": "Y"
+  },
+  {
+    "CaseEventID": "create",
+    "CaseFieldID": "aliasOnlyField",
+    "CaseTypeID": "FieldExtras",
+    "DisplayContext": "OPTIONAL",
+    "LiveFrom": "01/01/2017",
+    "PageColumnNumber": 1,
+    "PageDisplayOrder": 1,
+    "PageFieldDisplayOrder": 5,
+    "PageID": 1,
+    "PublishAs": "aliasOnly"
   }
 ]

@@ -181,13 +181,14 @@ public class Field<Type, StateType, Parent, Grandparent> {
     }
 
     /**
-     * Sets this field's {@code CaseEventToFields.PublishAs} alias. Implies {@code publish(true)}
-     * per the definition-store parser, which treats {@code PublishAs} as meaningless without
-     * {@code Publish}.
+     * Sets this field's {@code CaseEventToFields.PublishAs} alias. The definition store's
+     * {@code EventCaseFieldParser}/{@code PublishFieldsValidator} read and validate
+     * {@code Publish} and {@code PublishAs} as unrelated columns, so this does not imply
+     * {@code publish(true)}; call {@link #publish(boolean)} explicitly if the field should also
+     * publish.
      */
     public FieldBuilder<Type, StateType, Parent, Grandparent> publishAs(String publishAs) {
       this.publishAs = publishAs;
-      this.publish = true;
       return this;
     }
 
