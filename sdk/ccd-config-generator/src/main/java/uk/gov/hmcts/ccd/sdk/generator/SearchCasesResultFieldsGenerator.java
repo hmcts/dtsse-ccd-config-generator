@@ -52,11 +52,22 @@ class SearchCasesResultFieldsGenerator<T, S, R extends HasRole> implements
     if (null != field.getListElementCode()) {
       object.put("ListElementCode", field.getListElementCode());
     }
+    // The long-standing positional field(...) overloads render these two columns the historic
+    // (mis-wired) way: the column is gated on the positional carrier's presence but the emitted
+    // value is the ListElementCode. Reproducing that here verbatim keeps every existing consumer
+    // that uses the positional API byte-identical. The fluent field(id, label, Consumer) lambda
+    // routes through the dedicated carriers below, which emit the actual column value.
     if (null != field.getDisplayContextParameter()) {
-      object.put("DisplayContextParameter", field.getDisplayContextParameter());
+      object.put("DisplayContextParameter", field.getListElementCode());
     }
     if (null != field.getResultsOrdering()) {
-      object.put("ResultsOrdering", field.getResultsOrdering());
+      object.put("ResultsOrdering", field.getListElementCode());
+    }
+    if (null != field.getFluentDisplayContextParameter()) {
+      object.put("DisplayContextParameter", field.getFluentDisplayContextParameter());
+    }
+    if (null != field.getFluentResultsOrdering()) {
+      object.put("ResultsOrdering", field.getFluentResultsOrdering());
     }
     return object;
   }

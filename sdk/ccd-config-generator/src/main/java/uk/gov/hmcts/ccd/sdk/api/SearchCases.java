@@ -158,10 +158,12 @@ public class SearchCases<T, R extends HasRole> {
     }
 
     /**
-     * {@code DisplayContextParameter} for this row.
+     * {@code DisplayContextParameter} for this row. Unlike the positional {@code field(...)} overload
+     * — whose {@code displayContext} argument the generator renders the historic (mis-wired) way — this
+     * fluent setter routes to a dedicated carrier the generator emits verbatim into the column.
      */
     public ResultFieldBuilder<R> displayContextParameter(String displayContextParameter) {
-      field.displayContextParameter(displayContextParameter);
+      field.fluentDisplayContextParameter(displayContextParameter);
       return this;
     }
 
@@ -174,10 +176,12 @@ public class SearchCases<T, R extends HasRole> {
     }
 
     /**
-     * {@code ResultsOrdering} for this row.
+     * {@code ResultsOrdering} for this row. Unlike the positional {@code field(...)} overload — whose
+     * {@code resultsOrdering} argument the generator renders the historic (mis-wired) way — this fluent
+     * setter routes to a dedicated carrier the generator emits verbatim into the column.
      */
     public ResultFieldBuilder<R> resultsOrdering(String resultsOrdering) {
-      field.resultsOrdering(resultsOrdering);
+      field.fluentResultsOrdering(resultsOrdering);
       return this;
     }
 

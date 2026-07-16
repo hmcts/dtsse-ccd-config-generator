@@ -36,6 +36,11 @@ public class SearchCasesRoleCaseType
             f -> f.role(LOCAL_AUTHORITY).useCase("WORKBASKET"))
         // Same field, different role + use case: a distinct row.
         .field(SearchCasesRoleCaseData::getCaseName, "Case name",
-            f -> f.role(HMCTS_ADMIN).useCase("SEARCH"));
+            f -> f.role(HMCTS_ADMIN).useCase("SEARCH"))
+        // The fluent lambda carriers write the actual DisplayContextParameter/ResultsOrdering value,
+        // unlike the mis-wired positional field(...) overload. This pins that path emitting the real
+        // "#DATETIMEDISPLAY(...)"/"1:ASC" rather than echoing the ListElementCode.
+        .field("[CASE_REFERENCE]", "Case Number",
+            f -> f.displayContextParameter("#DATETIMEDISPLAY(d MMMM yyyy)").resultsOrdering("1:ASC"));
   }
 }
