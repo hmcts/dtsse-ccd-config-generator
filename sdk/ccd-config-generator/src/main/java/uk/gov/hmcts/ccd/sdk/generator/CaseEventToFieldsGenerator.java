@@ -210,13 +210,14 @@ class CaseEventToFieldsGenerator<T, S, R extends HasRole> implements ConfigGener
   }
 
   private void applyDefaultValue(Map<String, Object> row, Field field) {
-    if (field.getDefaultValue() == null) {
+    // Only the opt-in fluent defaultValue(String) setter populates caseEventDefaultValue; the
+    // long-standing positional optional/mandatory defaultValue argument sets Field.defaultValue,
+    // which feeds CaseEventToComplexTypes alone. Reading the dedicated carrier here keeps this
+    // sheet byte-identical for every consumer that never calls the new setter.
+    if (field.getCaseEventDefaultValue() == null) {
       return;
     }
-    String value = field.getDefaultValue() instanceof HasRole
-        ? ((HasRole) field.getDefaultValue()).getRole()
-        : field.getDefaultValue().toString();
-    row.put("DefaultValue", value);
+    row.put("DefaultValue", field.getCaseEventDefaultValue());
   }
 
 }
