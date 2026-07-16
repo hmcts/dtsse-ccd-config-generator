@@ -44,3 +44,23 @@ Viewers still get a coherent, monotonic history (“what happened, and in what o
 If, for example, a blob update and a case note insertion were to race, one acquires the case lock first. The other waits, then runs, and both succeed. The event log reflects the order they committed and accurately reflects the changes each made.
 
 Note that this is a tightening of CCD's current implementation which allows multiple event submissions to run in parallel, only one of which will commit.
+
+### TTL updates
+
+The resolved expiry date is stored in the `case_data.resolved_ttl` column and is written in the same transaction as the
+rest of the event. The case-level lock serialises these writes, and `case_revision` advances for every committed update so
+that the resulting event history and CCD's case pointer can be processed in commit order. CCD only applies a returned
+resolved TTL to its case pointer when the service revision is newer than the revision it has already processed, preventing
+out-of-order responses from restoring an older value.
+
+The `case_data.version` column remains the optimistic lock for the legacy JSON blob; a TTL column update does not, by
+itself, increment that version. Events configured using CCD's TTL increment are not normally column-only updates: CCD also
+updates `data.TTL.SystemTTL`, and the SDK's legacy submission path persists that changed JSON. If two such events start from
+the same blob version, the first event acquires the lock and advances the version when it commits. The second event then
+fails the version condition and the whole update, including `resolved_ttl`, is rejected with HTTP 409. TTL events that
+change case state receive the same protection through the state change.
+
+A native submit handler can instead produce a genuine metadata-only TTL update by leaving the legacy blob, state and
+security classification unchanged. Such updates are serialised and ordered by `case_revision`, but they do not invalidate
+the unchanged blob version: if more than one is accepted, the last committed TTL wins. Services must apply any stronger
+concurrency policy required by data they manage outside the legacy blob.
