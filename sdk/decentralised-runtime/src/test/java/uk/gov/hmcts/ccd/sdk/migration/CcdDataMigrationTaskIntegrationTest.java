@@ -109,6 +109,21 @@ class CcdDataMigrationTaskIntegrationTest {
   }
 
   @Test
+  void cutoverInsertsSourceCaseDataWithoutPreloadedEvents() {
+    insertSourceCase(10, 1000000000000010L, 2, "Updated", "{\"field\":\"source\"}");
+
+    CcdDataMigrationRunResult result = task(CUTOVER, 1000, 10).runMigration();
+
+    assertThat(result.caughtUp()).isTrue();
+    assertThat(result.casesProcessed()).isEqualTo(1);
+    assertThat(progressStatus()).isEqualTo("COMPLETE");
+    assertThat(countRows("ccd.case_data")).isEqualTo(1);
+    assertThat(targetCaseState(10)).isEqualTo("Updated");
+    assertThat(targetCaseData(10)).isEqualTo("{\"field\": \"source\"}");
+    assertThat(caseRevision(10)).isZero();
+  }
+
+  @Test
   void copiesSignificantItemsInSingleCutoverQuery() {
     insertSourceCase(10, 1000000000000010L, 1, "Submitted", "{\"field\":\"one\"}");
     insertSourceCaseEvent(101, 10, "create", "Submitted", "{\"field\":\"one\"}", minutesAgo(60));
