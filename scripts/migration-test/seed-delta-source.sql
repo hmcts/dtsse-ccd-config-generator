@@ -4,6 +4,7 @@ update case_data
 set
     version = 11,
     data = '{"subject":"first delta","TTL":{"SystemTTL":"2035-07-08","Suspended":"No"}}'::jsonb,
+    resolved_ttl = date '2035-07-08',
     last_modified = timestamp '2026-01-02 10:00:00'
 where id = 5601;
 
@@ -16,6 +17,7 @@ insert into case_data (
     case_type_id,
     state,
     data,
+    resolved_ttl,
     data_classification,
     supplementary_data,
     security_classification,
@@ -29,6 +31,7 @@ insert into case_data (
     :'case_type',
     'Submitted',
     '{}'::jsonb,
+    null,
     '{}'::jsonb,
     '{}'::jsonb,
     'PUBLIC',

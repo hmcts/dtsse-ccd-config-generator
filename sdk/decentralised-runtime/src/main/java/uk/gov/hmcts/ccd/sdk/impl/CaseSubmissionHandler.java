@@ -26,8 +26,8 @@ interface CaseSubmissionHandler {
    */
   record CaseSubmissionHandlerResult(
       /*
-       * Optional replacement payload for {@code ccd.case_data.data}. If empty, the legacy
-       * json blob is unchanged.
+       * Optional replacement payload for the non-reserved portion of {@code ccd.case_data.data}.
+       * If empty, that portion of the legacy JSON blob is unchanged.
        */
       Optional<JsonNode> dataUpdate,
       /*

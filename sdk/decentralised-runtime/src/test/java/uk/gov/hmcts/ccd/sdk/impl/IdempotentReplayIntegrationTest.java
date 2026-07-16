@@ -79,7 +79,6 @@ class IdempotentReplayIntegrationTest {
     DecentralisedCaseDetails latest = repository.getCase(CASE_REFERENCE);
     assertThat(latest.getCaseDetails().getVersion()).isEqualTo(3);
     assertThat(latest.getCaseDetails().getRevision()).isEqualTo(5L);
-    assertThat(latest.getCaseDetails().getData()).doesNotContainKey("TTL");
   }
 
   @Test
@@ -158,11 +157,12 @@ class IdempotentReplayIntegrationTest {
   }
 
   @Test
-  void upsertCaseStoresTtlColumnsOutsideCurrentJsonAndProjectsThemOnRead() {
+  void upsertCaseStoresAuthoritativeTtlAndResolvedTtlInsteadOfHandlerTtl() {
     long caseRef = UPSERT_CASE_REFERENCE + 3;
     ObjectNode ttl = ttl("2030-01-01", "2031-02-03", true);
     DecentralisedCaseEvent event = buildEvent(caseRef, "TestCase");
     event.getCaseDetails().setData(Map.of("TTL", ttl));
+    event.setResolvedTtl(LocalDate.of(2031, 2, 3));
 
     ObjectNode dataUpdate = mapper.createObjectNode();
     dataUpdate.put("subject", "A case");
@@ -172,10 +172,10 @@ class IdempotentReplayIntegrationTest {
 
     Map<String, Object> stored = jdbc.queryForMap(
         """
-        select system_ttl,
-               override_ttl,
-               ttl_suspended,
-               jsonb_exists(data, 'TTL') as data_contains_ttl,
+        select data #>> '{TTL,SystemTTL}' as system_ttl,
+               data #>> '{TTL,OverrideTTL}' as override_ttl,
+               data #>> '{TTL,Suspended}' as ttl_suspended,
+               resolved_ttl,
                data->>'subject' as subject,
                version
           from ccd.case_data
@@ -184,40 +184,87 @@ class IdempotentReplayIntegrationTest {
         Map.of("reference", caseRef)
     );
 
-    assertThat(stored.get("system_ttl")).isEqualTo(java.sql.Date.valueOf("2030-01-01"));
-    assertThat(stored.get("override_ttl")).isEqualTo(java.sql.Date.valueOf("2031-02-03"));
-    assertThat(stored.get("ttl_suspended")).isEqualTo(true);
-    assertThat(stored.get("data_contains_ttl")).isEqualTo(false);
+    assertThat(stored.get("system_ttl")).isEqualTo("2030-01-01");
+    assertThat(stored.get("override_ttl")).isEqualTo("2031-02-03");
+    assertThat(stored.get("ttl_suspended")).isEqualTo("Yes");
+    assertThat(stored.get("resolved_ttl")).isEqualTo(java.sql.Date.valueOf("2031-02-03"));
     assertThat(stored.get("subject")).isEqualTo("A case");
     assertThat(stored.get("version")).isEqualTo(1);
 
-    JsonNode projectedTtl = repository.getCase(caseRef).getCaseDetails().getData().get("TTL");
-    assertThat(projectedTtl.get("SystemTTL").asText()).isEqualTo("2030-01-01");
-    assertThat(projectedTtl.get("OverrideTTL").asText()).isEqualTo("2031-02-03");
-    assertThat(projectedTtl.get("Suspended").asText()).isEqualTo("Yes");
+    CaseDetails returned = repository.getCase(caseRef).getCaseDetails();
+    JsonNode returnedTtl = returned.getData().get("TTL");
+    assertThat(returnedTtl.get("SystemTTL").asText()).isEqualTo("2030-01-01");
+    assertThat(returnedTtl.get("OverrideTTL").asText()).isEqualTo("2031-02-03");
+    assertThat(returnedTtl.get("Suspended").asText()).isEqualTo("Yes");
+    assertThat(returned.getResolvedTTL())
+        .isEqualTo(LocalDate.of(2031, 2, 3));
+  }
+
+  @Test
+  void insertWithoutDataUpdateStoresTtlButNotNonReservedIncomingData() {
+    long caseRef = UPSERT_CASE_REFERENCE + 30;
+    DecentralisedCaseEvent event = buildEvent(caseRef, "TestCase");
+    event.getCaseDetails().setData(Map.of(
+        "subject", mapper.getNodeFactory().textNode("Submit handler create"),
+        "TTL", ttl("2034-01-02", null, false)
+    ));
+    event.setResolvedTtl(LocalDate.of(2034, 1, 2));
+
+    repository.upsertCase(event, Optional.empty());
+
+    Map<String, Object> stored = jdbc.queryForMap(
+        """
+        select data->>'subject' as subject,
+               data #>> '{TTL,SystemTTL}' as system_ttl,
+               resolved_ttl
+        from ccd.case_data
+        where reference = :reference
+        """,
+        Map.of("reference", caseRef)
+    );
+    assertThat(stored.get("subject")).isNull();
+    assertThat(stored.get("system_ttl")).isEqualTo("2034-01-02");
+    assertThat(stored.get("resolved_ttl")).isEqualTo(java.sql.Date.valueOf("2034-01-02"));
   }
 
   @Test
   void ttlOnlyUpdateUsesMergeRevisionWithoutAdvancingBlobVersion() {
     long caseRef = UPSERT_CASE_REFERENCE + 4;
-    seedCaseData(caseRef, caseRef, 7, 11);
+    seedCaseData(caseRef, caseRef, 7, 11, "{\"subject\":\"Existing case\"}", null);
+    Long currentRevision = caseRevision(caseRef);
 
     DecentralisedCaseEvent event = buildEvent(caseRef, "TestCase");
     event.getCaseDetails().setVersion(7);
-    event.setMergeRevision(11L);
+    event.setMergeRevision(currentRevision);
     event.getCaseDetails().setData(Map.of("TTL", ttl("2035-04-05", null, false)));
+    event.setResolvedTtl(LocalDate.of(2035, 4, 5));
 
     repository.upsertCase(event, Optional.empty());
 
     Map<String, Object> stored = jdbc.queryForMap(
-        "select system_ttl, ttl_suspended, version, case_revision "
+        "select data #>> '{TTL,SystemTTL}' as system_ttl, data->>'subject' as subject, "
+            + "resolved_ttl, version, case_revision "
             + "from ccd.case_data where reference = :reference",
         Map.of("reference", caseRef)
     );
-    assertThat(stored.get("system_ttl")).isEqualTo(java.sql.Date.valueOf("2035-04-05"));
-    assertThat(stored.get("ttl_suspended")).isEqualTo(false);
+    assertThat(stored.get("system_ttl")).isEqualTo("2035-04-05");
+    assertThat(stored.get("subject")).isEqualTo("Existing case");
+    assertThat(stored.get("resolved_ttl")).isEqualTo(java.sql.Date.valueOf("2035-04-05"));
     assertThat(stored.get("version")).isEqualTo(7);
-    assertThat(stored.get("case_revision")).isEqualTo(12L);
+    assertThat(stored.get("case_revision")).isEqualTo(currentRevision + 1);
+  }
+
+  @Test
+  void submitHandlerUpdateRemovesTtlWithoutChangingNonReservedDataOrBlobVersion() {
+    assertTtlRemoval(UPSERT_CASE_REFERENCE + 31, Optional.empty());
+  }
+
+  @Test
+  void legacyUpdateRemovesTtlWithoutChangingNonReservedDataOrBlobVersion() {
+    ObjectNode handlerData = mapper.createObjectNode()
+        .put("subject", "Existing case");
+    handlerData.set("TTL", ttl("2099-12-31", null, false));
+    assertTtlRemoval(UPSERT_CASE_REFERENCE + 32, Optional.of(handlerData));
   }
 
   @Test
@@ -229,6 +276,7 @@ class IdempotentReplayIntegrationTest {
     event.getCaseDetails().setVersion(3);
     event.setMergeRevision(7L);
     event.getCaseDetails().setData(Map.of("TTL", ttl("2040-01-01", null, false)));
+    event.setResolvedTtl(LocalDate.of(2040, 1, 1));
 
     assertThatThrownBy(() -> repository.upsertCase(event, Optional.empty()))
         .isInstanceOf(EmptyResultDataAccessException.class);
@@ -237,21 +285,20 @@ class IdempotentReplayIntegrationTest {
   @Test
   void allowsAlreadyEqualTtlWhenMergeRevisionIsStale() {
     long caseRef = UPSERT_CASE_REFERENCE + 6;
-    seedCaseData(caseRef, caseRef, 3, 8);
-    jdbc.update(
-        """
-        update ccd.case_data
-           set system_ttl = date '2040-01-01',
-               ttl_suspended = false
-         where reference = :reference
-        """,
-        Map.of("reference", caseRef)
+    seedCaseData(
+        caseRef,
+        caseRef,
+        3,
+        8,
+        "{\"TTL\":{\"SystemTTL\":\"2040-01-01\",\"Suspended\":\"No\"}}",
+        LocalDate.of(2040, 1, 1)
     );
 
     DecentralisedCaseEvent event = buildEvent(caseRef, "TestCase");
     event.getCaseDetails().setVersion(3);
     event.setMergeRevision(7L);
     event.getCaseDetails().setData(Map.of("TTL", ttl("2040-01-01", null, false)));
+    event.setResolvedTtl(LocalDate.of(2040, 1, 1));
 
     repository.upsertCase(event, Optional.empty());
 
@@ -264,15 +311,39 @@ class IdempotentReplayIntegrationTest {
   }
 
   @Test
-  void idempotentReplayKeepsHistoricalTtlRatherThanInjectingCurrentColumns() {
+  void rejectsDifferingResolvedTtlWhenJsonTtlIsEqualAndMergeRevisionIsStale() {
     long caseRef = UPSERT_CASE_REFERENCE + 7;
-    seedCaseData(caseRef, caseRef, 3, 5);
-    jdbc.update(
-        "update ccd.case_data set system_ttl = date '2050-01-01' where reference = :reference",
-        Map.of("reference", caseRef)
+    seedCaseData(
+        caseRef,
+        caseRef,
+        3,
+        8,
+        "{\"TTL\":{\"SystemTTL\":\"2040-01-01\",\"Suspended\":\"No\"}}",
+        LocalDate.of(2040, 1, 1)
+    );
+
+    DecentralisedCaseEvent event = buildEvent(caseRef, "TestCase");
+    event.getCaseDetails().setVersion(3);
+    event.setMergeRevision(7L);
+    event.getCaseDetails().setData(Map.of("TTL", ttl("2040-01-01", null, false)));
+    event.setResolvedTtl(LocalDate.of(2041, 1, 1));
+
+    assertThatThrownBy(() -> repository.upsertCase(event, Optional.empty()))
+        .isInstanceOf(EmptyResultDataAccessException.class);
+  }
+
+  @Test
+  void idempotentReplayKeepsHistoricalTtlRatherThanCurrentTtl() {
+    long caseRef = UPSERT_CASE_REFERENCE + 8;
+    seedCaseData(
+        caseRef,
+        caseRef,
+        3,
+        5,
+        "{\"TTL\":{\"SystemTTL\":\"2050-01-01\",\"Suspended\":\"No\"}}",
+        LocalDate.of(2050, 1, 1)
     );
     long eventId = insertEvent(
-        caseRef,
         caseRef,
         2,
         4,
@@ -397,11 +468,22 @@ class IdempotentReplayIntegrationTest {
   }
 
   private void seedCaseData(long caseId, long caseReference, int version, long revision) {
+    seedCaseData(caseId, caseReference, version, revision, "{}", null);
+  }
+
+  private void seedCaseData(long caseId,
+                            long caseReference,
+                            int version,
+                            long revision,
+                            String data,
+                            LocalDate resolvedTtl) {
     var params = new MapSqlParameterSource()
         .addValue("id", caseId)
         .addValue("reference", caseReference)
         .addValue("version", version)
-        .addValue("revision", revision);
+        .addValue("revision", revision)
+        .addValue("data", data)
+        .addValue("resolved_ttl", resolvedTtl);
 
     jdbc.update(
         """
@@ -413,6 +495,7 @@ class IdempotentReplayIntegrationTest {
           case_type_id,
           state,
           data,
+          resolved_ttl,
           supplementary_data,
           security_classification,
           case_revision,
@@ -426,7 +509,8 @@ class IdempotentReplayIntegrationTest {
           'TEST',
           'TestCase',
           'Submitted',
-          '{}'::jsonb,
+          :data::jsonb,
+          :resolved_ttl,
           '{}'::jsonb,
           'PUBLIC',
           :revision,
@@ -468,12 +552,59 @@ class IdempotentReplayIntegrationTest {
     return ttl;
   }
 
+  private Long caseRevision(long caseRef) {
+    return jdbc.queryForObject(
+        "select case_revision from ccd.case_data where reference = :reference",
+        Map.of("reference", caseRef),
+        Long.class
+    );
+  }
+
+  private void assertTtlRemoval(long caseRef, Optional<JsonNode> dataUpdate) {
+    seedCaseData(
+        caseRef,
+        caseRef,
+        7,
+        11,
+        "{\"subject\":\"Existing case\",\"TTL\":{\"SystemTTL\":\"2035-04-05\",\"Suspended\":\"No\"}}",
+        LocalDate.of(2035, 4, 5)
+    );
+    Long currentRevision = caseRevision(caseRef);
+    DecentralisedCaseEvent event = buildEvent(caseRef, "TestCase");
+    event.getCaseDetails().setVersion(7);
+    event.setMergeRevision(currentRevision);
+    event.getCaseDetails().setData(Map.of());
+
+    repository.upsertCase(event, dataUpdate);
+
+    Map<String, Object> stored = storedTtlMetadata(caseRef);
+    assertThat(stored.get("has_ttl")).isEqualTo(false);
+    assertThat(stored.get("subject")).isEqualTo("Existing case");
+    assertThat(stored.get("resolved_ttl")).isNull();
+    assertThat(stored.get("version")).isEqualTo(7);
+    assertThat(stored.get("case_revision")).isEqualTo(currentRevision + 1);
+  }
+
+  private Map<String, Object> storedTtlMetadata(long caseRef) {
+    return jdbc.queryForMap(
+        """
+        select jsonb_exists(data, 'TTL') as has_ttl,
+               data ->> 'subject' as subject,
+               resolved_ttl,
+               version,
+               case_revision
+          from ccd.case_data
+         where reference = :reference
+        """,
+        Map.of("reference", caseRef)
+    );
+  }
+
   private long insertEvent(int version, long revision, UUID idempotencyKey) {
-    return insertEvent(CASE_ID, CASE_REFERENCE, version, revision, idempotencyKey, "{}");
+    return insertEvent(CASE_ID, version, revision, idempotencyKey, "{}");
   }
 
   private long insertEvent(long caseId,
-                           long caseReference,
                            int version,
                            long revision,
                            UUID idempotencyKey,
@@ -544,11 +675,7 @@ class IdempotentReplayIntegrationTest {
   }
 
   @Configuration
-  @Import({
-      CaseDataRepository.class,
-      CaseReindexingService.class,
-      DecentralisedDataConfiguration.class
-  })
+  @Import({CaseDataRepository.class, CaseReindexingService.class, DecentralisedDataConfiguration.class})
   @ImportAutoConfiguration({
       DataSourceAutoConfiguration.class,
       JdbcTemplateAutoConfiguration.class,

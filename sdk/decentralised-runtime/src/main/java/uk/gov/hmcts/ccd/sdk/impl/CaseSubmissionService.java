@@ -78,13 +78,15 @@ public class CaseSubmissionService {
       return new TransactionResult(existingEventId, Optional.empty());
     }
 
-    JsonNode authoritativeTtl = event.getCaseDetails().getData() == null
-        ? null
-        : event.getCaseDetails().getData().get(TTL_FIELD);
+    boolean hasAuthoritativeTtl = event.getCaseDetails().getData() != null
+        && event.getCaseDetails().getData().containsKey(TTL_FIELD);
+    JsonNode authoritativeTtl = hasAuthoritativeTtl
+        ? event.getCaseDetails().getData().get(TTL_FIELD)
+        : null;
 
     // Delegate to the specific handler to apply the change
     var handlerResult = handler.apply(event, user.authToken());
-    restoreAuthoritativeTtl(event, authoritativeTtl);
+    restoreAuthoritativeTtl(event, hasAuthoritativeTtl, authoritativeTtl);
     applyHandlerChanges(event, handlerResult);
 
     // Bookkeeping: update case_data metadata and optionally the legacy json blob
@@ -141,16 +143,18 @@ public class CaseSubmissionService {
     handlerResult.eventMetadata().ifPresent(metadata -> applyEventMetadata(event, metadata));
   }
 
-  private void restoreAuthoritativeTtl(DecentralisedCaseEvent event, JsonNode authoritativeTtl) {
+  private void restoreAuthoritativeTtl(DecentralisedCaseEvent event,
+                                       boolean hasAuthoritativeTtl,
+                                       JsonNode authoritativeTtl) {
     var restoredData = new HashMap<String, JsonNode>();
     if (event.getCaseDetails().getData() != null) {
       restoredData.putAll(event.getCaseDetails().getData());
     }
 
-    if (authoritativeTtl == null || authoritativeTtl.isNull()) {
-      restoredData.remove(TTL_FIELD);
-    } else {
+    if (hasAuthoritativeTtl) {
       restoredData.put(TTL_FIELD, authoritativeTtl);
+    } else {
+      restoredData.remove(TTL_FIELD);
     }
     event.getCaseDetails().setData(restoredData);
   }

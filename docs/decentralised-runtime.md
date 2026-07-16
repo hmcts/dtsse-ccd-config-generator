@@ -41,9 +41,12 @@ The runtime provides a data persistence layer to handle the functions previously
 
 Case records are persisted and updated in the `ccd.case_data` table, including legacy JSON blobs and other case metadata.
 
-CCD's `data.TTL` object is normalised into the typed `system_ttl`, `override_ttl` and `ttl_suspended` columns. It is removed
-from the current JSON blob and reconstructed from those columns for current-case API reads. This keeps one local source of
-truth for the TTL inputs and allows a TTL-only write to use `merge_revision` without changing the blob `version`.
+CCD's incoming `data.TTL` object is reserved metadata. The runtime prevents callbacks and submit handlers from replacing it,
+stores it in the JSON blob, and returns it on current-case reads. CCD's calculated `resolvedTtl` is stored separately in the
+existing `resolved_ttl` column and mapped onto current-case `CaseDetails` objects.
+
+Changes to either TTL value use `merge_revision` as their freshness guard. The reserved `TTL` subdocument is excluded when
+calculating changes to the legacy JSON blob `version`.
 
 ### Event history
 
@@ -101,7 +104,7 @@ If an incoming request has already been processed, the runtime replays the store
 
 To fulfil the aforementioned responsibilities, the SDK provisions and manages a dedicated `ccd` schema within your application's database.
 
-- `case_data` stores CCD-compatible case metadata and the JSON payload, with TTL inputs normalised into typed columns.
+- `case_data` stores CCD-compatible case metadata, including `resolved_ttl`, and the JSON payload containing reserved `TTL`.
 - `case_event` mirrors CCD’s `case_event` table and adds an idempotency key.
 - `es_queue` tracks cases that require Elasticsearch indexing 
 - `message_queue_candidates` mirrors CCD’s Service Bus transactional outbox table.
@@ -119,9 +122,7 @@ erDiagram
         varchar state
         jsonb data
         jsonb supplementary_data
-        date system_ttl
-        date override_ttl
-        boolean ttl_suspended
+        date resolved_ttl
         bigint case_revision
     }
     CASE_EVENT {

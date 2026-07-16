@@ -380,77 +380,53 @@ assert_es_queue_empty_if_present() {
   fi
 }
 
-assert_ttl_normalisation() {
-  local source_ttl_rows target_ttl_rows target_blob_ttl_count target_resolved_ttl_column_count
-  local source_event_ttl target_event_ttl
+assert_ttl_preservation() {
+  local source_case_rows target_case_rows
+  local source_event_data target_event_data
 
-  echo "Validating current TTL is normalised and history TTL is preserved"
-  source_ttl_rows="$(psql_src --quiet -tA <<'SQL'
+  echo "Validating current and historical TTL subdocuments are preserved"
+  source_case_rows="$(psql_src --quiet -tA <<'SQL'
 select concat_ws(
     '|',
     id::text,
-    coalesce(nullif(jsonb_extract_path_text(data, 'TTL', 'SystemTTL'), '')::date::text, ''),
-    coalesce(nullif(jsonb_extract_path_text(data, 'TTL', 'OverrideTTL'), '')::date::text, ''),
-    coalesce((case lower(jsonb_extract_path_text(data, 'TTL', 'Suspended'))
-      when 'yes' then true
-      when 'no' then false
-      else null
-    end)::text, '')
+    data::text,
+    coalesce(resolved_ttl::text, '<null>')
 )
 from case_data
 where case_type_id = :'case_type'
 order by id;
 SQL
 )"
-  target_ttl_rows="$(psql_dst --quiet -tA <<'SQL'
+  target_case_rows="$(psql_dst --quiet -tA <<'SQL'
 select concat_ws(
     '|',
     id::text,
-    coalesce(system_ttl::text, ''),
-    coalesce(override_ttl::text, ''),
-    coalesce(ttl_suspended::text, '')
+    data::text,
+    coalesce(resolved_ttl::text, '<null>')
 )
 from ccd.case_data
 where case_type_id = :'case_type'
 order by id;
 SQL
 )"
-  target_blob_ttl_count="$(psql_dst --quiet -tA <<'SQL'
-select count(*)
-from ccd.case_data
-where case_type_id = :'case_type'
-  and data ? 'TTL';
-SQL
-)"
-  target_resolved_ttl_column_count="$(psql_dst --quiet -tA <<'SQL'
-select count(*)
-from information_schema.columns
-where table_schema = 'ccd'
-  and table_name = 'case_data'
-  and column_name = 'resolved_ttl';
-SQL
-)"
-  source_event_ttl="$(psql_src --quiet -tA <<'SQL'
-select data -> 'TTL'
+  source_event_data="$(psql_src --quiet -tA <<'SQL'
+select data::text
 from case_event
 where id = 9101;
 SQL
 )"
-  target_event_ttl="$(psql_dst --quiet -tA <<'SQL'
-select data -> 'TTL'
+  target_event_data="$(psql_dst --quiet -tA <<'SQL'
+select data::text
 from ccd.case_event
 where id = 9101;
 SQL
 )"
 
-  if [[ "$source_ttl_rows" != "$target_ttl_rows"
-      || "$target_blob_ttl_count" != "0"
-      || "$target_resolved_ttl_column_count" != "0"
-      || "$source_event_ttl" != "$target_event_ttl" ]]; then
+  if [[ "$source_case_rows" != "$target_case_rows"
+      || "$source_event_data" != "$target_event_data" ]]; then
     echo "TTL migration mismatch:" \
-      "source=${source_ttl_rows}, target=${target_ttl_rows}," \
-      "target_blob_ttl=${target_blob_ttl_count}, resolved_ttl_columns=${target_resolved_ttl_column_count}," \
-      "source_event_ttl=${source_event_ttl}, target_event_ttl=${target_event_ttl}" >&2
+      "source=${source_case_rows}, target=${target_case_rows}," \
+      "source_event_data=${source_event_data}, target_event_data=${target_event_data}" >&2
     exit 1
   fi
 }
@@ -489,6 +465,6 @@ assert_common_migration_state() {
   assert_no_orphans_or_duplicate_revisions
   assert_case_event_sequence_is_safe
   assert_es_queue_empty_if_present
-  assert_ttl_normalisation
+  assert_ttl_preservation
   assert_case_event_constraints_present
 }

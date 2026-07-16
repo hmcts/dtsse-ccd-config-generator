@@ -334,9 +334,7 @@ public class CcdDataMigrationTask implements Runnable {
             created_date,
             security_classification,
             last_state_modified_date,
-            system_ttl,
-            override_ttl,
-            ttl_suspended,
+            resolved_ttl,
             last_modified,
             jurisdiction,
             case_type_id,
@@ -352,18 +350,12 @@ public class CcdDataMigrationTask implements Runnable {
             cd.created_date,
             cd.security_classification,
             cd.last_state_modified_date,
-            nullif(cd.data #>> '{TTL,SystemTTL}', '')::date,
-            nullif(cd.data #>> '{TTL,OverrideTTL}', '')::date,
-            case lower(cd.data #>> '{TTL,Suspended}')
-              when 'yes' then true
-              when 'no' then false
-              else null
-            end,
+            cd.resolved_ttl,
             cd.last_modified,
             cd.jurisdiction,
             cd.case_type_id,
             cd.state,
-            cd.data - 'TTL',
+            cd.data,
             coalesce(cd.supplementary_data, jsonb_build_object()),
             cd.id,
             0
@@ -547,18 +539,12 @@ public class CcdDataMigrationTask implements Runnable {
             created_date = source.created_date,
             security_classification = source.security_classification,
             last_state_modified_date = source.last_state_modified_date,
-            system_ttl = nullif(source.data #>> '{TTL,SystemTTL}', '')::date,
-            override_ttl = nullif(source.data #>> '{TTL,OverrideTTL}', '')::date,
-            ttl_suspended = case lower(source.data #>> '{TTL,Suspended}')
-                              when 'yes' then true
-                              when 'no' then false
-                              else null
-                            end,
+            resolved_ttl = source.resolved_ttl,
             last_modified = source.last_modified,
             jurisdiction = source.jurisdiction,
             case_type_id = source.case_type_id,
             state = source.state,
-            data = source.data - 'TTL',
+            data = source.data,
             supplementary_data = coalesce(source.supplementary_data, jsonb_build_object())
         from fdw_stage.case_data source
         where target.id = source.id
@@ -570,9 +556,7 @@ public class CcdDataMigrationTask implements Runnable {
             target.created_date,
             target.security_classification,
             target.last_state_modified_date,
-            target.system_ttl,
-            target.override_ttl,
-            target.ttl_suspended,
+            target.resolved_ttl,
             target.last_modified,
             target.jurisdiction,
             target.case_type_id,
@@ -585,18 +569,12 @@ public class CcdDataMigrationTask implements Runnable {
             source.created_date,
             source.security_classification,
             source.last_state_modified_date,
-            nullif(source.data #>> '{TTL,SystemTTL}', '')::date,
-            nullif(source.data #>> '{TTL,OverrideTTL}', '')::date,
-            case lower(source.data #>> '{TTL,Suspended}')
-              when 'yes' then true
-              when 'no' then false
-              else null
-            end,
+            source.resolved_ttl,
             source.last_modified,
             source.jurisdiction,
             source.case_type_id,
             source.state,
-            source.data - 'TTL',
+            source.data,
             coalesce(source.supplementary_data, jsonb_build_object())
           )
         """,

@@ -68,7 +68,8 @@ class CaseProjectionService {
     long reference = caseDetails.getReference();
     String caseTypeId = caseDetails.getCaseTypeId();
     String state = caseDetails.getState();
-    JsonNode ttl = caseDetails.getData() == null ? null : caseDetails.getData().get(TTL_FIELD);
+    boolean hasTtl = caseDetails.getData() != null && caseDetails.getData().containsKey(TTL_FIELD);
+    JsonNode ttl = hasTtl ? caseDetails.getData().get(TTL_FIELD) : null;
 
     CaseViewBinding binding = bindings.get(caseTypeId);
     if (binding == null) {
@@ -93,7 +94,7 @@ class CaseProjectionService {
 
     var responseData = new HashMap<>(serialised);
     responseData.remove(TTL_FIELD);
-    if (ttl != null && !ttl.isNull()) {
+    if (hasTtl) {
       responseData.put(TTL_FIELD, ttl);
     }
     caseDetails.setData(responseData);

@@ -24,6 +24,7 @@ import uk.gov.hmcts.ccd.decentralised.dto.DecentralisedEventDetails;
 import uk.gov.hmcts.ccd.domain.model.definition.CaseDetails;
 import uk.gov.hmcts.ccd.sdk.ResolvedConfigRegistry;
 import uk.gov.hmcts.ccd.sdk.api.Event;
+import uk.gov.hmcts.ccd.sdk.api.callback.Submit;
 import uk.gov.hmcts.ccd.sdk.api.callback.SubmitResponse;
 import uk.gov.hmcts.reform.idam.client.models.UserInfo;
 
@@ -80,7 +81,7 @@ class CaseSubmissionServiceTest {
   void restoresIncomingTtlWhenLegacyCallbackOmitsIt() {
     DecentralisedCaseEvent event = event();
     event.getCaseDetails().setData(dataWithTtl("2030-01-01"));
-    prepareSubmission(event);
+    prepareSubmission(event, false);
     when(legacyHandler.apply(eq(event), eq("Bearer raw-token"))).thenAnswer(invocation -> {
       event.getCaseDetails().setData(Map.of());
       return handlerResult();
@@ -97,8 +98,8 @@ class CaseSubmissionServiceTest {
   void ignoresLegacyCallbackChangesToIncomingTtl() {
     DecentralisedCaseEvent event = event();
     event.getCaseDetails().setData(dataWithTtl("2030-01-01"));
-    JsonNode authoritativeTtl = event.getCaseDetails().getData().get("TTL");
-    prepareSubmission(event);
+    final JsonNode authoritativeTtl = event.getCaseDetails().getData().get("TTL");
+    prepareSubmission(event, false);
     when(legacyHandler.apply(eq(event), eq("Bearer raw-token"))).thenAnswer(invocation -> {
       event.getCaseDetails().setData(dataWithTtl("2031-01-01"));
       return handlerResult();
@@ -112,10 +113,27 @@ class CaseSubmissionServiceTest {
     verify(caseDataRepository).upsertCase(event, Optional.empty());
   }
 
-  private void prepareSubmission(DecentralisedCaseEvent event) {
+  @Test
+  void restoresIncomingTtlAfterSubmitHandler() {
+    DecentralisedCaseEvent event = event();
+    event.getCaseDetails().setData(dataWithTtl("2030-01-01"));
+    prepareSubmission(event, true);
+    when(submitHandler.apply(eq(event), eq("Bearer raw-token"))).thenAnswer(invocation -> {
+      event.getCaseDetails().setData(dataWithTtl("2031-01-01"));
+      return handlerResult();
+    });
+
+    service.submit(event, "raw-token", IDEMPOTENCY_KEY);
+
+    assertThat(event.getCaseDetails().getData().get("TTL").get("SystemTTL").asText())
+        .isEqualTo("2030-01-01");
+    verify(caseDataRepository).upsertCase(event, Optional.empty());
+  }
+
+  private void prepareSubmission(DecentralisedCaseEvent event, boolean useSubmitHandler) {
     Event<?, ?, ?> eventConfig = mock(Event.class);
     doReturn(eventConfig).when(resolvedConfigRegistry).getRequiredEvent("TestCase", "submit");
-    when(eventConfig.getSubmitHandler()).thenReturn(null);
+    doReturn(useSubmitHandler ? mock(Submit.class) : null).when(eventConfig).getSubmitHandler();
     when(idam.retrieveUser("raw-token")).thenReturn(new IdamService.User(
         "Bearer raw-token",
         new UserInfo("sub", "uid", "name", "given", "family", List.of("caseworker"))

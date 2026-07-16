@@ -47,15 +47,14 @@ Note that this is a tightening of CCD's current implementation which allows mult
 
 ### TTL updates
 
-CCD sends the calculated `data.TTL` object with each persistence request. The decentralised runtime treats its three values
-(`SystemTTL`, `OverrideTTL` and `Suspended`) as authoritative, stores them in typed `case_data` columns, and excludes `TTL`
-from the mutable JSON blob. Current-case reads reconstruct `data.TTL` from those columns; immutable `case_event` snapshots
-retain the reconstructed TTL for history and idempotent replay.
+CCD sends the authoritative `data.TTL` object and calculated `resolvedTtl` with each decentralised persistence request.
+The runtime stores them in `case_data.data` and `case_data.resolved_ttl` respectively. Current-case repository reads map both
+values, while immutable `case_event` snapshots retain the TTL subdocument for history and idempotent replay.
 
 The runtime retains CCD's incoming `TTL` node before invoking a callback or submit handler and restores that same node
-afterwards. Handler output therefore cannot replace the authoritative TTL values and requires no separate comparison.
+afterwards. Handler output therefore cannot replace the authoritative TTL values.
 
-A TTL-only update therefore does not advance the JSON blob `version`. A change to the stored TTL tuple is accepted only when
-the request's `merge_revision` matches the current `case_revision`. A stale retry is still safe when its tuple is already the
-stored tuple. The committed `case_revision` returned over the persistence API remains CCD's freshness guard when it updates
-its case pointer, including its calculated `resolved_ttl`.
+The reserved TTL subdocument is excluded when calculating changes to the legacy JSON blob `version`. A change to either
+stored TTL value is accepted only when the request's `merge_revision` matches the current `case_revision`; a stale retry is
+safe when both values are already stored. The committed `case_revision` returned over the persistence API remains CCD's
+freshness guard when it updates its case pointer.

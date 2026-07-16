@@ -234,6 +234,17 @@ echo "Running FDW migration script (apply mode)"
 run_fdw_migration
 assert_common_migration_state
 
+echo "Validating a full rerun repairs resolved_ttl when it is the only differing column"
+psql_dst --quiet <<'SQL'
+alter table ccd.case_data disable trigger user;
+update ccd.case_data
+set resolved_ttl = null
+where id = 5601;
+alter table ccd.case_data enable trigger user;
+SQL
+run_fdw_migration
+assert_common_migration_state
+
 seed_delta_source_data
 echo "Running FDW migration script (delta apply mode)"
 run_fdw_migration "DELTA_SINCE=${DELTA_SINCE}"

@@ -241,9 +241,7 @@ insert into :dst_schema.case_data (
     created_date,
     security_classification,
     last_state_modified_date,
-    system_ttl,
-    override_ttl,
-    ttl_suspended,
+    resolved_ttl,
     last_modified,
     jurisdiction,
     case_type_id,
@@ -259,18 +257,12 @@ select
     created_date,
     security_classification,
     last_state_modified_date,
-    nullif(data #>> '{TTL,SystemTTL}', '')::date,
-    nullif(data #>> '{TTL,OverrideTTL}', '')::date,
-    case lower(data #>> '{TTL,Suspended}')
-      when 'yes' then true
-      when 'no' then false
-      else null
-    end,
+    resolved_ttl,
     last_modified,
     jurisdiction,
     case_type_id,
     state,
-    data - 'TTL',
+    data,
     coalesce(supplementary_data, jsonb_build_object()),
     id,
     version
@@ -286,9 +278,7 @@ set
     created_date = excluded.created_date,
     security_classification = excluded.security_classification,
     last_state_modified_date = excluded.last_state_modified_date,
-    system_ttl = excluded.system_ttl,
-    override_ttl = excluded.override_ttl,
-    ttl_suspended = excluded.ttl_suspended,
+    resolved_ttl = excluded.resolved_ttl,
     last_modified = excluded.last_modified,
     jurisdiction = excluded.jurisdiction,
     case_type_id = excluded.case_type_id,
@@ -302,9 +292,7 @@ where (
     :dst_schema.case_data.last_modified,
     :dst_schema.case_data.case_revision,
     :dst_schema.case_data.state,
-    :dst_schema.case_data.system_ttl,
-    :dst_schema.case_data.override_ttl,
-    :dst_schema.case_data.ttl_suspended,
+    :dst_schema.case_data.resolved_ttl,
     :dst_schema.case_data.data,
     :dst_schema.case_data.supplementary_data
 ) is distinct from (
@@ -312,9 +300,7 @@ where (
     excluded.last_modified,
     excluded.case_revision,
     excluded.state,
-    excluded.system_ttl,
-    excluded.override_ttl,
-    excluded.ttl_suspended,
+    excluded.resolved_ttl,
     excluded.data,
     excluded.supplementary_data
 );
