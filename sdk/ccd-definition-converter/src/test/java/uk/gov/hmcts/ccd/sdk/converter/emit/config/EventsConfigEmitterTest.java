@@ -212,7 +212,54 @@ class EventsConfigEmitterTest {
   }
 
   @Test
-  void eventWithPagesEmitsFieldsChainAndPageClass() {
+  void multiPageEventEmitsFieldsChainAndPageClasses() {
+    // A two-page event terminates its header at .fields() and delegates each page to its own class
+    // in <root>.event.page (finding #2).
+    PageModel.PageField field1 = PageModel.PageField.builder()
+        .caseFieldId("applicantName")
+        .displayContext("MANDATORY")
+        .build();
+    PageModel.PageField field2 = PageModel.PageField.builder()
+        .caseFieldId("applicantEmail")
+        .displayContext("OPTIONAL")
+        .build();
+    PageModel page1 = PageModel.builder().pageId("1").fields(List.of(field1)).build();
+    PageModel page2 = PageModel.builder().pageId("2").fields(List.of(field2)).build();
+    EventModel event = EventModel.builder()
+        .id("createCase")
+        .javaName("createCase")
+        .name("Create Case")
+        .preStates(List.of())
+        .postState("Open")
+        .grants(Map.of())
+        .pages(List.of(page1, page2))
+        .build();
+    FieldModel applicantName = FieldModel.builder()
+        .id("applicantName").javaName("applicantName").fieldType("Text").build();
+    FieldModel applicantEmail = FieldModel.builder()
+        .id("applicantEmail").javaName("applicantEmail").fieldType("Text").build();
+
+    List<JavaFile> files = new EventsConfigEmitter()
+        .emit(modelWithEvents(List.of(event), List.of(applicantName, applicantEmail)),
+            contextWith(40));
+
+    String eventSrc = classNamed(files, "CreateCase");
+    assertThat(eventSrc).contains(".fields()");
+    assertThat(eventSrc).contains("CreateCasePage1.apply(fields)");
+    assertThat(eventSrc).contains("CreateCasePage2.apply(fields)");
+    // The placements live in the page classes, not the event class.
+    assertThat(eventSrc).doesNotContain(".mandatory(");
+    String pageSrc = classNamed(files, "CreateCasePage1");
+    assertThat(pageSrc).contains("package " + EnvironmentFlagsEmitterTest.CONFIG_PKG
+        + ".event.page");
+    assertThat(pageSrc).contains(".page(\"1\")");
+    assertThat(pageSrc).contains(".mandatory(");
+  }
+
+  @Test
+  void singlePageEventInlinesPageWithNoPageClass() {
+    // A one-page event inlines its page header and field chain into configure() — a page class
+    // would be pure indirection — so no page class is emitted and the event is the only file.
     PageModel.PageField field = PageModel.PageField.builder()
         .caseFieldId("applicantName")
         .displayContext("MANDATORY")
@@ -239,16 +286,63 @@ class EventsConfigEmitterTest {
     List<JavaFile> files = new EventsConfigEmitter()
         .emit(modelWithEvents(List.of(event), List.of(applicantName)), contextWith(40));
 
-    // The event class terminates its header at .fields() and delegates the page to its own class
-    // in <root>.event.page (finding #2).
+    // Only the event class is emitted — no page class exists to delegate to.
+    assertThat(files.stream().map(f -> f.typeSpec().name()).toList())
+        .containsExactly("CreateCase");
     String eventSrc = classNamed(files, "CreateCase");
+    assertThat(eventSrc).contains("var fields = builder.event(CREATE_CASE)");
     assertThat(eventSrc).contains(".fields()");
-    assertThat(eventSrc).contains(".apply(fields)");
-    String pageSrc = classNamed(files, "CreateCasePage1");
-    assertThat(pageSrc).contains("package " + EnvironmentFlagsEmitterTest.CONFIG_PKG
-        + ".event.page");
-    assertThat(pageSrc).contains(".page(\"1\")");
-    assertThat(pageSrc).contains(".mandatory(");
+    // The page header and placement are inlined directly, not delegated.
+    assertThat(eventSrc).contains("fields.page(\"1\")");
+    assertThat(eventSrc).contains("fields.mandatory(CaseData::getApplicantName)");
+    assertThat(eventSrc).doesNotContain(".apply(fields)");
+  }
+
+  @Test
+  void singlePageEventInlinesPageLabelAndShowConditionWithMidEventCallback() {
+    // A single-page event whose one page carries a page label and a show condition must inline both
+    // (fields.pageLabel / fields.showCondition) alongside the field chain. A mid-event callback URL
+    // is never SDK-wired — it is carried through verbatim on the CaseEventToFields column
+    // passthrough — so the inlined page still emits the bare fields.page(id) (no callback arg),
+    // exactly as the page class would have.
+    PageModel.PageField field = PageModel.PageField.builder()
+        .caseFieldId("applicantName")
+        .displayContext("MANDATORY")
+        .build();
+    PageModel page = PageModel.builder()
+        .pageId("selectHearing")
+        .label("Select a hearing")
+        .showCondition("applicantName=\"Yes\"")
+        .fields(List.of(field))
+        .build();
+    EventModel event = EventModel.builder()
+        .id("selectHearing")
+        .javaName("selectHearing")
+        .name("Select hearing")
+        .preStates(List.of())
+        .postState("Open")
+        .grants(Map.of())
+        .pages(List.of(page))
+        .build();
+    FieldModel applicantName = FieldModel.builder()
+        .id("applicantName")
+        .javaName("applicantName")
+        .fieldType("Text")
+        .build();
+
+    List<JavaFile> files = new EventsConfigEmitter()
+        .emit(modelWithEvents(List.of(event), List.of(applicantName)), contextWith(40));
+
+    assertThat(files.stream().map(f -> f.typeSpec().name()).toList())
+        .containsExactly("SelectHearing");
+    String eventSrc = classNamed(files, "SelectHearing");
+    assertThat(eventSrc).contains("fields.page(\"selectHearing\")");
+    assertThat(eventSrc).contains("fields.pageLabel(\"Select a hearing\")");
+    assertThat(eventSrc).contains("fields.showCondition(\"applicantName=\\\"Yes\\\"\")");
+    assertThat(eventSrc).contains("fields.mandatory(CaseData::getApplicantName)");
+    // No mid-event callback overload — page(id) only.
+    assertThat(eventSrc).doesNotContain("fields.page(\"selectHearing\",");
+    assertThat(eventSrc).doesNotContain(".apply(fields)");
   }
 
   @Test

@@ -34,7 +34,7 @@ import uk.gov.hmcts.ccd.sdk.converter.model.gap.GapEntry;
  * (nfdiv/sptribs) so each event is a findable, individually-ownable unit rather than the Nth private
  * method in a numbered grab-bag (finding #1).
  *
- * <p>Each event's wizard pages are split into their own <b>page classes</b> in
+ * <p>A <b>multi-page</b> event's wizard pages are split into their own <b>page classes</b> in
  * {@code <root>.event.page}, one per CCD page, referenced from the event class via a static
  * {@code apply(fields)} call (finding #2). This matches both reference teams' page-per-concern
  * decomposition and, because every page's serializable getter lambdas land in that page class's own
@@ -42,6 +42,14 @@ import uk.gov.hmcts.ccd.sdk.converter.model.gap.GapEntry;
  * limits. A single page large enough to overflow one method on its own (prl's {@code waManageOrders})
  * falls back to the documented {@code <Page>FieldsN} line-budget split <em>within</em> that page's
  * package — the only place the numbered-fragment form survives.
+ *
+ * <p>A <b>single-page</b> event carries no page class at all: its one page's field chain is inlined
+ * directly into the event class's {@code configure()} method (a page class would be pure
+ * indirection for one page). The inlined calls — {@code fields.page(id)}, the optional page label /
+ * show condition, then the placements — are byte-for-byte what the page class's {@code apply(fields)}
+ * would have run, so the regenerated definition is identical; a case type whose every event is
+ * single-page therefore produces no {@code <root>.event.page} package. The overflow split still
+ * applies to an oversized single page (fragments only, still no page class).
  */
 public class EventsConfigEmitter implements SourceEmitter {
 
@@ -316,7 +324,8 @@ public class EventsConfigEmitter implements SourceEmitter {
     CodeBlock header = headerBuilder.build();
 
     CodeBlock.Builder cb = CodeBlock.builder();
-    boolean hasPages = event.getPages() != null && !event.getPages().isEmpty();
+    List<PageModel> pages = event.getPages();
+    boolean hasPages = pages != null && !pages.isEmpty();
 
     // Callbacks (about-to-start/about-to-submit/submitted, their retry policies and per-page
     // mid-event URLs) are never emitted as SDK wiring: the converter carries every CallBackURL*
@@ -331,15 +340,30 @@ public class EventsConfigEmitter implements SourceEmitter {
     }
 
     // The header chain terminates at .fields(); the resulting FieldCollectionBuilder is stored in
-    // `fields` and each page is applied to it in turn via its own page class. Every .page()/.field()
-    // call returns the same builder, so page-per-class application is behaviourally identical to one
-    // long chain, but spreads each page's serializable getter lambdas into its own class.
-    // `var` avoids naming the deeply-nested FieldCollectionBuilder<…> generic type explicitly.
+    // `fields` and each page is applied to it in turn. Every .page()/.field() call returns the same
+    // builder, so the placement order is identical whether the calls are inlined here or run from a
+    // page class's apply(fields). `var` avoids naming the deeply-nested FieldCollectionBuilder<…>
+    // generic type explicitly.
     cb.add("var fields = $L", header);
     cb.add("\n    .fields()");
     cb.addStatement("");
 
-    for (PageModel page : event.getPages()) {
+    if (pages.size() == 1) {
+      // Single-page event: inline the page's header (page id, optional label / show condition) and
+      // its field chain directly into configure() rather than splitting it into its own page class.
+      // A page class earns its keep only when an event has several pages to separate; for one page
+      // the class is pure indirection. The emitted calls are identical to what the page class's
+      // apply(fields) would have run, so the regenerated definition is byte-identical, and no empty
+      // <root>.event.page package is created for a case type whose every event is single-page.
+      emitInlinePage(cb, pages.get(0), event, model, context, caseData, state, userRole,
+          pagePkg, eventClassName, pageClasses, usedPageNames);
+      return cb.build();
+    }
+
+    // Multi-page event: split each page into its own page class under <root>.event.page (finding
+    // #2), spreading each page's serializable getter lambdas into its own class so no one class
+    // approaches the JVM's 64 KB per-method / $deserializeLambda$ bytecode limits.
+    for (PageModel page : pages) {
       String pageClassName = uniqueName(
           pageClassName(eventClassName, page), usedPageNames);
       buildPageClass(
@@ -348,6 +372,55 @@ public class EventsConfigEmitter implements SourceEmitter {
       cb.addStatement("$T.apply(fields)", ClassName.get(pagePkg, pageClassName));
     }
     return cb.build();
+  }
+
+  /**
+   * Inlines a single-page event's placements into its {@code configure()} method, operating on the
+   * local {@code fields} builder. Emits the page header ({@code fields.page(id)}, the optional page
+   * label / show condition) and the page's field placements directly — no page class. The one
+   * exception is a single page whose placement count exceeds {@link #FIELDS_PER_HELPER}: even then
+   * the event has no <em>page</em> class, but the placements are split across {@code <Page>FieldsN}
+   * fragment classes (in the page package, appended to {@code pageClasses}) invoked in order, so no
+   * single method exceeds the bytecode cap. This mirrors the documented overflow split (finding #2)
+   * without reintroducing the one-page page class.
+   */
+  private void emitInlinePage(
+      CodeBlock.Builder cb, PageModel page, EventModel event, CaseTypeModel model,
+      EmitContext context, ClassName caseData, ClassName state, ClassName userRole, String pagePkg,
+      String eventClassName, List<TypeSpec> pageClasses, Set<String> usedPageNames) {
+
+    emitPageHeader(cb, page);
+    int fieldCount = page.getFields() == null ? 0 : page.getFields().size();
+    if (fieldCount <= FIELDS_PER_HELPER) {
+      emitPageFields(cb, page.getFields(), model, caseData, context, event);
+      return;
+    }
+
+    // Documented overflow: too many placements for configure()'s own bytecode budget. Split them
+    // across FieldsN fragment classes and invoke each inline; the fragment names are derived from
+    // the page-class name this event would otherwise have used, kept collision-free.
+    String base = uniqueName(pageClassName(eventClassName, page), usedPageNames);
+    ParameterizedTypeName fieldsType = fieldsBuilderType(caseData, state, userRole);
+    List<List<PageModel.PageField>> groups = groupFields(page.getFields());
+    for (int i = 0; i < groups.size(); i++) {
+      CodeBlock.Builder fragBody = CodeBlock.builder();
+      emitPageFields(fragBody, groups.get(i), model, caseData, context, event);
+      String fragName = base + "Fields" + (i + 1);
+      pageClasses.add(TypeSpec.classBuilder(fragName)
+          .addModifiers(Modifier.PUBLIC, Modifier.FINAL)
+          .addJavadoc(context.banner(model.getCaseTypeId(), null) + "\n\n"
+              + "<p>Field placements for page {@code $L} of event {@code $L} (part $L of $L).\n",
+              page.getPageId(), event.getId(), i + 1, groups.size())
+          .addMethod(MethodSpec.constructorBuilder().addModifiers(Modifier.PRIVATE).build())
+          .addMethod(MethodSpec.methodBuilder("apply")
+              .addModifiers(Modifier.PUBLIC, Modifier.STATIC)
+              .addParameter(fieldsType, "fields")
+              .addJavadoc("@param fields the event's field-collection builder\n")
+              .addCode(fragBody.build())
+              .build())
+          .build());
+      cb.addStatement("$T.apply(fields)", ClassName.get(pagePkg, fragName));
+    }
   }
 
   /**

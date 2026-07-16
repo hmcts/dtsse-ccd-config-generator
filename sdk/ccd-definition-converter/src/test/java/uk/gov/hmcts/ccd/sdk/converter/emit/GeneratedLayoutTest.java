@@ -20,7 +20,8 @@ import uk.gov.hmcts.ccd.sdk.converter.model.OverlayCondition;
  * contract the retrofit clone-regeneration relies on (findings #1/#2/#6). Runs the full converter
  * over the bundled {@code golden/minimal} fixture and asserts the emitted file tree matches the
  * reference-service idiom (nfdiv/sptribs): one event class per event under {@code <root>.event}, a
- * page class per wizard page under {@code <root>.event.page}, access classes under
+ * page class per wizard page under {@code <root>.event.page} for multi-page events (a single-page
+ * event inlines its one page into the event class instead), access classes under
  * {@code <root>.access}, the config split by concern under {@code <root>}, and the model classes
  * under {@code <modelPackage>}.
  *
@@ -75,11 +76,13 @@ class GeneratedLayoutTest {
         "uk/gov/hmcts/minimal/ccd/event/CreateCase.java",
         "uk/gov/hmcts/minimal/ccd/event/AddNotes.java",
         "uk/gov/hmcts/minimal/ccd/event/CloseCase.java");
-    // Page classes under <root>.event.page (finding #2): createCase has two pages, addNotes one.
+    // Page classes under <root>.event.page (finding #2) only for MULTI-page events: createCase has
+    // two pages so it keeps its page classes. A single-page event (addNotes) inlines its one page
+    // into the event class instead, so no AddNotesPage1 class is emitted.
     assertThat(tree).contains(
         "uk/gov/hmcts/minimal/ccd/event/page/CreateCasePage1.java",
-        "uk/gov/hmcts/minimal/ccd/event/page/CreateCasePage2.java",
-        "uk/gov/hmcts/minimal/ccd/event/page/AddNotesPage1.java");
+        "uk/gov/hmcts/minimal/ccd/event/page/CreateCasePage2.java");
+    assertThat(tree).noneMatch(p -> p.contains("AddNotesPage"));
     // Access classes under <root>.access.
     assertThat(tree).anyMatch(p -> p.startsWith("uk/gov/hmcts/minimal/ccd/access/"));
     // Config split by concern under <root> (finding #6): CaseType always, plus the concerns present.
@@ -108,5 +111,13 @@ class GeneratedLayoutTest {
     assertThat(createCase).contains("CreateCasePage1.apply(fields)");
     assertThat(createCase).contains(".grant(Permission.CRUD, UserRole.CASEWORKER_TEST)");
     assertThat(createCase).contains(".grant(Permission.CR, UserRole.CITIZEN)");
+
+    // A single-page event inlines its one page into configure() — the page header and field chain
+    // land directly on the local `fields` builder, with no page-class delegation.
+    String addNotes = Files.readString(
+        srcOut.resolve("uk/gov/hmcts/minimal/ccd/event/AddNotes.java"));
+    assertThat(addNotes).contains("var fields = builder.event(ADD_NOTES)");
+    assertThat(addNotes).contains("fields.page(");
+    assertThat(addNotes).doesNotContain(".apply(fields)");
   }
 }

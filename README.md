@@ -947,15 +947,20 @@ team wants a specific home. Under `<root>` the converter emits:
   ├─ <Prefix>NoticeOfChange.java, <Prefix>RoleToAccessProfiles.java, <Prefix>Categories.java
   ├─ event/                     one @Component CCDConfig per event (finding #1):
   │    ├─ CreateCase.java          PascalCase of the event ID; ID as a `static final String` constant
-  │    └─ event/page/             one class per wizard page (finding #2):
+  │    └─ event/page/             one class per wizard page, MULTI-page events only (finding #2):
   │         └─ CreateCasePage1.java   `public static void apply(fields)` called by the event class
   └─ access/                    HasAccessControl classes referenced by @CCD(access = {…})
 ```
 
 Model classes (`CaseData`, complex types, `State`, `UserRole`, enums, `EnvironmentFlags`) stay in
 `--model-package`. Each config bean is emitted only when its concern carries content (`CaseType`
-always). A single wizard page large enough to overflow the JVM method-size limit on its own splits
-into documented `<Page>FieldsN` fragments within its page package — the only surviving numbered form.
+always). A **single-page event** carries no page class: its one page's header (`page(id)`, optional
+page label / show condition) and field chain are inlined directly into the event class's
+`configure()` method — a page class would be pure indirection for one page — so a case type whose
+every event is single-page produces no `event/page/` package at all. **Multi-page** events keep the
+page-class split above. A single wizard page large enough to overflow the JVM method-size limit on
+its own splits into documented `<Page>FieldsN` fragments within its page package (the only surviving
+numbered form); this applies even to an oversized single page, which still gets no page class.
 
 Key behaviours:
 
