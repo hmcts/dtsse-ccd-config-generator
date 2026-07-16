@@ -379,7 +379,7 @@ public class EventsConfigEmitter implements SourceEmitter {
    * Inlines a single-page event's placements into its {@code configure()} method, operating on the
    * local {@code fields} builder. Emits the page header ({@code fields.page(id)}, the optional page
    * label / show condition) and the page's field placements directly — no page class. The one
-   * exception is a single page whose placement count exceeds {@link #FIELDS_PER_HELPER}: even then
+   * exception is a single page whose {@link #pageWeight weight} exceeds {@link #FIELDS_PER_HELPER}: even then
    * the event has no <em>page</em> class, but the placements are split across {@code <Page>FieldsN}
    * fragment classes (in the page package, appended to {@code pageClasses}) invoked in order, so no
    * single method exceeds the bytecode cap. This mirrors the documented overflow split (finding #2)
@@ -391,8 +391,7 @@ public class EventsConfigEmitter implements SourceEmitter {
       String eventClassName, List<TypeSpec> pageClasses, Set<String> usedPageNames) {
 
     emitPageHeader(cb, page);
-    int fieldCount = page.getFields() == null ? 0 : page.getFields().size();
-    if (fieldCount <= FIELDS_PER_HELPER) {
+    if (pageWeight(page, model, event) <= FIELDS_PER_HELPER) {
       emitPageFields(cb, page.getFields(), model, caseData, context, event);
       return;
     }
@@ -402,7 +401,7 @@ public class EventsConfigEmitter implements SourceEmitter {
     // the page-class name this event would otherwise have used, kept collision-free.
     String base = uniqueName(pageClassName(eventClassName, page), usedPageNames);
     ParameterizedTypeName fieldsType = fieldsBuilderType(caseData, state, userRole);
-    List<List<PageModel.PageField>> groups = groupFields(page.getFields());
+    List<List<PageModel.PageField>> groups = groupFields(page.getFields(), model, event);
     for (int i = 0; i < groups.size(); i++) {
       CodeBlock.Builder fragBody = CodeBlock.builder();
       emitPageFields(fragBody, groups.get(i), model, caseData, context, event);
