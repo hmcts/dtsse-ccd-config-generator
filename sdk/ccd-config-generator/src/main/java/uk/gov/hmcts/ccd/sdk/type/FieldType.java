@@ -48,5 +48,6 @@ public enum FieldType {
   OrganisationPolicy,
   ChangeOrganisationRequest,
   WaysToPay,
-  JudicialUser
+  JudicialUser,
+  CaseQueriesCollection
 }
