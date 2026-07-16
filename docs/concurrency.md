@@ -47,20 +47,9 @@ Note that this is a tightening of CCD's current implementation which allows mult
 
 ### TTL updates
 
-The resolved expiry date is stored in the `case_data.resolved_ttl` column and is written in the same transaction as the
-rest of the event. The case-level lock serialises these writes, and `case_revision` advances for every committed update so
-that the resulting event history and CCD's case pointer can be processed in commit order. CCD only applies a returned
-resolved TTL to its case pointer when the service revision is newer than the revision it has already processed, preventing
-out-of-order responses from restoring an older value.
+CCD TTL increments update both `data.TTL.SystemTTL` and `case_data.resolved_ttl` in the same locked transaction. Because the
+JSON blob changes, its optimistic-lock version advances; a concurrent event using the previous version is rejected in full
+with HTTP 409. `case_revision` also advances and prevents out-of-order responses from restoring an older CCD pointer TTL.
 
-The `case_data.version` column remains the optimistic lock for the legacy JSON blob; a TTL column update does not, by
-itself, increment that version. Events configured using CCD's TTL increment are not normally column-only updates: CCD also
-updates `data.TTL.SystemTTL`, and the SDK's legacy submission path persists that changed JSON. If two such events start from
-the same blob version, the first event acquires the lock and advances the version when it commits. The second event then
-fails the version condition and the whole update, including `resolved_ttl`, is rejected with HTTP 409. TTL events that
-change case state receive the same protection through the state change.
-
-A native submit handler can instead produce a genuine metadata-only TTL update by leaving the legacy blob, state and
-security classification unchanged. Such updates are serialised and ordered by `case_revision`, but they do not invalidate
-the unchanged blob version: if more than one is accepted, the last committed TTL wins. Services must apply any stronger
-concurrency policy required by data they manage outside the legacy blob.
+A genuine `resolved_ttl`-only update does not invalidate the unchanged blob version: it is serialised and the last
+committed value wins.
