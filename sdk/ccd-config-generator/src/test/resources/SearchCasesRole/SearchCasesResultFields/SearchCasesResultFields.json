@@ -1,5 +1,16 @@
 [
   {
+    "CaseFieldID": "[CASE_REFERENCE]",
+    "CaseTypeID": "SearchCasesRole",
+    "DisplayContextParameter": "#DATETIMEDISPLAY(d MMMM yyyy)",
+    "DisplayOrder": 4,
+    "Label": "Case Number",
+    "LiveFrom": "03/02/2021",
+    "ResultsOrdering": "1:ASC",
+    "UseCase": "orgcases",
+    "UserRole": ""
+  },
+  {
     "CaseFieldID": "caseName",
     "CaseTypeID": "SearchCasesRole",
     "DisplayOrder": 3,

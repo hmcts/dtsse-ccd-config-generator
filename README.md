@@ -551,6 +551,14 @@ The `searchCasesFields()` (`SearchCasesResultFields` sheet) builder takes the sa
         f -> f.role(CASEWORKER).useCase("WORKBASKET"));
 ```
 
+The `searchCasesFields()` sheet's `DisplayContextParameter`/`ResultsOrdering` columns have two entry points that render differently, so existing definitions stay byte-identical. The long-standing **positional** overload — `field(id, label, displayContext, listElementCode, resultsOrdering)` — preserves its historic (mis-wired) rendering: those two columns are emitted only when the corresponding argument is non-null, but the value written is always the row's `ListElementCode`. Use the **fluent** lambda when you want the actual column value:
+
+```java
+  builder.searchCasesFields()
+    .field("[CASE_REFERENCE]", "Case Number",
+        f -> f.displayContextParameter("#DATETIMEDISPLAY(d MMMM yyyy)").resultsOrdering("1:ASC"));
+```
+
 Similarly, the `searchParty()` builder can declare several parties that share a `SearchPartyName` as long as they point at different collections (`SearchPartyCollectionFieldName`) — each is emitted as its own `SearchParty` row.
 
 ### Adding tabs
