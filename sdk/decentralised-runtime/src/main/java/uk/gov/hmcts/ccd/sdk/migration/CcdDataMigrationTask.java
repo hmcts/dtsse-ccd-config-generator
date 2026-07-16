@@ -142,7 +142,7 @@ public class CcdDataMigrationTask implements Runnable {
 
   private CcdDataMigrationRunResult preloadEvents() {
     Progress progress = getOrCreateProgress();
-    if (STATUS_COMPLETE.equals(progress.status())) {
+    if (STATUS_CUTOVER.equals(progress.status()) || STATUS_COMPLETE.equals(progress.status())) {
       reopenPreload();
     } else if (!STATUS_PRELOAD.equals(progress.status())) {
       throw new CcdDataMigrationException(

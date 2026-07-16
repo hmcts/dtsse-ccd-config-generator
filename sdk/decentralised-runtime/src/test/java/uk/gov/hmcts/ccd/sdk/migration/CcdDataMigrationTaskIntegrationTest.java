@@ -423,6 +423,33 @@ class CcdDataMigrationTaskIntegrationTest {
   }
 
   @Test
+  void resumesPreloadAfterCutoverIsPaused() {
+    insertSourceCase(10, 1000000000000010L, 1, "Submitted", "{\"field\":\"one\"}");
+    insertSourceCaseEvent(101, 10, "create", "Submitted", "{\"field\":\"one\"}", minutesAgo(60));
+    insertSourceCaseEvent(102, 10, "update", "Updated", "{\"field\":\"two\"}", minutesAgo(30));
+
+    CcdDataMigrationRunResult cutover = task(CUTOVER, 101, 1).runMigration();
+
+    assertThat(cutover.caughtUp()).isFalse();
+    assertThat(progressStatus()).isEqualTo("CUTOVER");
+    assertThat(cutoverEventHwm()).isEqualTo(102);
+    assertThat(sourceEventHwm()).isEqualTo(101);
+
+    insertSourceCaseEvent(103, 10, "update", "Updated", "{\"field\":\"three\"}", LocalDateTime.now());
+
+    CcdDataMigrationRunResult preload = task(PRELOAD_EVENTS, 1000, 10).runMigration();
+
+    assertThat(preload.caughtUp()).isTrue();
+    assertThat(preload.eventsProcessed()).isEqualTo(2);
+    assertThat(progressStatus()).isEqualTo("PRELOAD");
+    assertThat(cutoverEventHwm()).isNull();
+    assertThat(sourceEventHwm()).isEqualTo(103);
+    assertThat(countRows("ccd.case_event")).isEqualTo(3);
+    assertThat(caseDataTriggerEnabled("trigger_enqueue_case_revision")).isFalse();
+    assertTargetProtectionsPresent();
+  }
+
+  @Test
   void skipsWhenAnotherInstanceHoldsTheAdvisoryLock() throws Exception {
     insertSourceCase(10, 1000000000000010L, 1, "Submitted", "{\"field\":\"one\"}");
 
@@ -1235,7 +1262,7 @@ class CcdDataMigrationTaskIntegrationTest {
     );
   }
 
-  private long cutoverEventHwm() {
+  private Long cutoverEventHwm() {
     return jdbc.queryForObject(
         "select cutover_event_hwm from ccd.ccd_data_migration_progress where task_name = :taskName",
         Map.of("taskName", "ccd-data-migration"),

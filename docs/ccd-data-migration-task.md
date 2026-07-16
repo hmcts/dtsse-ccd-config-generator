@@ -27,6 +27,11 @@ The task has one implementation with explicit modes:
 Do not switch to `CUTOVER` automatically from a scheduler. The operator must first freeze source
 writes for the selected case types and wait for in-flight source transactions to drain.
 
+If cutover is paused or interrupted before completion, switching back to `PRELOAD_EVENTS` is
+supported. The task keeps its event and significant-item progress, returns the status to `PRELOAD`,
+and clears the captured cutover event high-water mark. A later `CUTOVER` invocation therefore
+captures a fresh high-water mark after source writes have been frozen again.
+
 ## Safety Model
 
 The preload path keeps the target tables constraint-valid after every committed batch:
