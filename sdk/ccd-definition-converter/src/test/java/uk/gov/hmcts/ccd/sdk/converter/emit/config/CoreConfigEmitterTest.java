@@ -329,6 +329,80 @@ class CoreConfigEmitterTest {
   }
 
   @Test
+  void noCaseRoleAuthorisationEmittedWhenNoCaseRoleGrantsCaseTypePermissions() {
+    // minimalModel() carries no roles at all, so there is nothing to opt in.
+    String src = new CoreConfigEmitter().emit(minimalModel(),
+        EnvironmentFlagsEmitterTest.context()).get(0).toString();
+    assertThat(src).doesNotContain("includeCaseRolesInCaseTypeAuthorisation");
+  }
+
+  @Test
+  void caseRoleWithCaseTypePermissionsOptsIntoAuthorisation() {
+    // A case role ([SOLICITORA]) that the input's AuthorisationCaseType sheet grants static
+    // case-type-level CRUD to (ET/PRL's shape) must opt in explicitly, since the SDK's
+    // AuthorisationCaseTypeGenerator excludes case roles from that sheet by default.
+    CaseTypeModel model = withRoles(minimalModel(), List.of(
+        RoleModel.builder()
+            .id("[SOLICITORA]")
+            .javaConstant("SOLICITORA")
+            .caseTypePermissions("CRU")
+            .caseRole(true)
+            .build()));
+
+    String src = new CoreConfigEmitter().emit(model,
+        EnvironmentFlagsEmitterTest.context()).get(0).toString();
+    assertThat(src).contains("builder.includeCaseRolesInCaseTypeAuthorisation(UserRole.SOLICITORA)");
+  }
+
+  @Test
+  void caseRoleWithoutCaseTypePermissionsStaysExcluded() {
+    // A case role present only via other Authorisation* sheets (empty caseTypePermissions) must
+    // not be opted in — it never appeared on AuthorisationCaseType in the input.
+    CaseTypeModel model = withRoles(minimalModel(), List.of(
+        RoleModel.builder()
+            .id("[CREATOR]")
+            .javaConstant("CREATOR")
+            .caseTypePermissions("")
+            .caseRole(true)
+            .build()));
+
+    String src = new CoreConfigEmitter().emit(model,
+        EnvironmentFlagsEmitterTest.context()).get(0).toString();
+    assertThat(src).doesNotContain("includeCaseRolesInCaseTypeAuthorisation");
+  }
+
+  private static CaseTypeModel withRoles(CaseTypeModel base, List<RoleModel> roles) {
+    return CaseTypeModel.builder()
+        .caseTypeId(base.getCaseTypeId())
+        .caseTypeName(base.getCaseTypeName())
+        .caseTypeDescription(base.getCaseTypeDescription())
+        .jurisdictionId(base.getJurisdictionId())
+        .jurisdictionName(base.getJurisdictionName())
+        .jurisdictionDescription(base.getJurisdictionDescription())
+        .states(base.getStates())
+        .roles(roles)
+        .caseFields(base.getCaseFields())
+        .complexTypes(base.getComplexTypes())
+        .fixedLists(base.getFixedLists())
+        .events(base.getEvents())
+        .tabs(base.getTabs())
+        .searchInputFields(base.getSearchInputFields())
+        .searchResultFields(base.getSearchResultFields())
+        .workBasketInputFields(base.getWorkBasketInputFields())
+        .workBasketResultFields(base.getWorkBasketResultFields())
+        .searchCasesResultFields(base.getSearchCasesResultFields())
+        .stateAuthorisations(base.getStateAuthorisations())
+        .accessClasses(base.getAccessClasses())
+        .searchCriteria(base.getSearchCriteria())
+        .searchParties(base.getSearchParties())
+        .challengeQuestions(base.getChallengeQuestions())
+        .roleToAccessProfiles(base.getRoleToAccessProfiles())
+        .categories(base.getCategories())
+        .passthroughSheets(base.getPassthroughSheets())
+        .build();
+  }
+
+  @Test
   void workBasketInputFieldEmitted() {
     String src = classNamed(modelWithWorkBasket(), "MinimalWorkBasket");
     assertThat(src).contains("builder.workBasketInputFields()");

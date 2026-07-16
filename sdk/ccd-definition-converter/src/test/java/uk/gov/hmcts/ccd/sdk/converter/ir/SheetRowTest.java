@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.nio.file.Path;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
@@ -103,5 +104,28 @@ class SheetRowTest {
     SheetRow row = row(Map.of("Publish", "${CCD_DEF_PUBLISH}"));
 
     assertThat(row.getYesNo("Publish")).isEmpty();
+  }
+
+  @Test
+  void verbatimTextDistinguishesPresentEmptyFromAbsent() {
+    Map<String, Object> columns = new HashMap<>();
+    columns.put("Description", "");
+    columns.put("Blank", " ");
+    columns.put("Null", null);
+    SheetRow row = row(columns);
+
+    // Present but empty/blank: kept as an explicit value, not folded to absent.
+    assertThat(row.getVerbatimText("Description")).contains("");
+    assertThat(row.getVerbatimText("Blank")).contains(" ");
+    // Present but JSON null, and genuinely absent, both read as empty.
+    assertThat(row.getVerbatimText("Null")).isEmpty();
+    assertThat(row.getVerbatimText("Missing")).isEmpty();
+  }
+
+  @Test
+  void verbatimTextPreservesInteriorAndTrailingWhitespace() {
+    SheetRow row = row(Map.of("Description", "Update parent case data "));
+
+    assertThat(row.getVerbatimText("Description")).contains("Update parent case data ");
   }
 }

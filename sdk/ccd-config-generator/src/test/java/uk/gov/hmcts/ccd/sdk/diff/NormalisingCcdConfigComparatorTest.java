@@ -823,6 +823,49 @@ public class NormalisingCcdConfigComparatorTest {
         assertThat(NormalisingCcdConfigComparator.compare(expected, actual).matches()).isFalse();
     }
 
+    // ---- duplicate-row collapse (blank-vs-absent tolerant) ----
+
+    @Test
+    public void duplicateExpectedRowsDifferingOnlyByBlankVsAbsentColumnCollapseToOne() {
+        // prl ships the same EventToComplexTypes row from both a flat CaseEventToComplexTypes.json
+        // file and a CaseEventToComplexTypes/ fragment directory; one copy carries an empty
+        // EventElementLabel, the other omits the column entirely. Both import identically (see
+        // EMPTY_STRING_ABSENT), so the duplicate-collapse must tolerate that difference too,
+        // rather than treating them as a genuine same-key content conflict.
+        Map<String, List<Map<String, Object>>> expected = sheets("EventToComplexTypes",
+            rows(
+                row("ID", "Child", "CaseEventID", "childDetails", "CaseFieldID", "children",
+                    "ListElementCode", "firstName", "EventElementLabel", "", "DisplayContext", "OPTIONAL"),
+                row("ID", "Child", "CaseEventID", "childDetails", "CaseFieldID", "children",
+                    "ListElementCode", "firstName", "DisplayContext", "OPTIONAL")));
+        Map<String, List<Map<String, Object>>> actual = sheets("EventToComplexTypes",
+            rows(row("ID", "Child", "CaseEventID", "childDetails", "CaseFieldID", "children",
+                "ListElementCode", "firstName", "DisplayContext", "OPTIONAL")));
+
+        ComparisonResult result = NormalisingCcdConfigComparator.compare(expected, actual);
+
+        assertThat(result.matches()).as(result.report()).isTrue();
+    }
+
+    @Test
+    public void duplicateExpectedRowsWithGenuinelyConflictingColumnStillFail() {
+        // Same key, but the DisplayContext values themselves disagree (not merely blank-vs-absent)
+        // — a real same-key content conflict must remain visible, not collapse away.
+        Map<String, List<Map<String, Object>>> expected = sheets("EventToComplexTypes",
+            rows(
+                row("ID", "Child", "CaseEventID", "childDetails", "CaseFieldID", "children",
+                    "ListElementCode", "firstName", "DisplayContext", "OPTIONAL"),
+                row("ID", "Child", "CaseEventID", "childDetails", "CaseFieldID", "children",
+                    "ListElementCode", "firstName", "DisplayContext", "MANDATORY")));
+        Map<String, List<Map<String, Object>>> actual = sheets("EventToComplexTypes",
+            rows(row("ID", "Child", "CaseEventID", "childDetails", "CaseFieldID", "children",
+                "ListElementCode", "firstName", "DisplayContext", "OPTIONAL")));
+
+        ComparisonResult result = NormalisingCcdConfigComparator.compare(expected, actual);
+
+        assertThat(result.matches()).isFalse();
+    }
+
     // ---- STATE_DESCRIPTION ----
 
     @Test
@@ -900,6 +943,56 @@ public class NormalisingCcdConfigComparatorTest {
             rows(row("ID", "respondent", "Label", "Respondent", "FieldType", "Applicant")));
 
         assertThat(NormalisingCcdConfigComparator.compare(expected, actual).matches()).isFalse();
+    }
+
+    // ---- PUBLISH_IGNORED_ON_FIELD_SHEETS ----
+
+    @Test
+    public void publishIsStrippedFromTheCaseFieldSheet() {
+        // CaseFieldParser never reads ColumnName.PUBLISH and CaseFieldEntity has no publish field;
+        // Publish is a CaseEventToFields/EventToComplexTypes-only concept.
+        Map<String, List<Map<String, Object>>> expected = sheets("CaseField",
+            rows(row("ID", "docs", "Label", "Docs", "FieldType", "Text", "Publish", "Y")));
+        Map<String, List<Map<String, Object>>> actual = sheets("CaseField",
+            rows(row("ID", "docs", "Label", "Docs", "FieldType", "Text")));
+
+        ComparisonResult result = NormalisingCcdConfigComparator.compare(expected, actual);
+
+        assertThat(result.matches()).as(result.report()).isTrue();
+        assertThat(result.getAppliedRules())
+            .anySatisfy(rule -> assertThat(rule).startsWith("PUBLISH_IGNORED_ON_FIELD_SHEETS"));
+    }
+
+    @Test
+    public void publishIsStrippedFromTheComplexTypesSheet() {
+        // ComplexFieldTypeParser.parseComplexField never reads ColumnName.PUBLISH either; the
+        // per-nested-field Publish concept lives on EventToComplexTypes, not ComplexTypes.
+        Map<String, List<Map<String, Object>>> expected = sheets("ComplexTypes",
+            rows(row("ID", "Applicant", "ListElementCode", "name", "Label", "Name",
+                "FieldType", "Text", "Publish", "Y")));
+        Map<String, List<Map<String, Object>>> actual = sheets("ComplexTypes",
+            rows(row("ID", "Applicant", "ListElementCode", "name", "Label", "Name",
+                "FieldType", "Text")));
+
+        ComparisonResult result = NormalisingCcdConfigComparator.compare(expected, actual);
+
+        assertThat(result.matches()).as(result.report()).isTrue();
+    }
+
+    @Test
+    public void publishIsNotStrippedFromCaseEventToFields() {
+        // The strip is scoped to CaseField/ComplexTypes; on CaseEventToFields the importer DOES
+        // read Publish (EventCaseFieldParser), so a value present on only one side still fails.
+        Map<String, List<Map<String, Object>>> expected = sheets("CaseEventToFields",
+            rows(row("CaseEventID", "e", "CaseFieldID", "docs", "Publish", "Y")));
+        Map<String, List<Map<String, Object>>> actual = sheets("CaseEventToFields",
+            rows(row("CaseEventID", "e", "CaseFieldID", "docs")));
+
+        ComparisonResult result = NormalisingCcdConfigComparator.compare(expected, actual);
+
+        assertThat(result.matches()).isFalse();
+        assertThat(result.getFailures())
+            .anySatisfy(failure -> assertThat(failure).contains("Publish"));
     }
 
     // ---- POST_CONDITION_NO_CHANGE ----
@@ -1159,6 +1252,28 @@ public class NormalisingCcdConfigComparatorTest {
             rows(row("TabID", "overview", "CaseFieldID", "a", "TabLabel", "Different")));
 
         assertThat(NormalisingCcdConfigComparator.compare(expected, actual).matches()).isFalse();
+    }
+
+    @Test
+    public void caseTypeTabDifferingTabLabelOnNonFirstRowIsCollapsedToFirstRowValue() {
+        // The importer (AbstractDisplayGroupParser.parseGroup) reads a tab's TabLabel from only
+        // the group's first row; a hand-written definition may still carry a different (stale or
+        // heading-style) TabLabel on a later row of the same tab, which the importer never reads.
+        // civil's ClaimDetails tab and prl's confidentialDetails tab both ship this shape.
+        Map<String, List<Map<String, Object>>> expected = sheets("CaseTypeTab",
+            rows(
+                row("TabID", "overview", "CaseFieldID", "a", "TabLabel", "Overview"),
+                row("TabID", "overview", "CaseFieldID", "b", "TabLabel", "Overview details")));
+        Map<String, List<Map<String, Object>>> actual = sheets("CaseTypeTab",
+            rows(
+                row("TabID", "overview", "CaseFieldID", "a", "TabLabel", "Overview"),
+                row("TabID", "overview", "CaseFieldID", "b", "TabLabel", "Overview")));
+
+        ComparisonResult result = NormalisingCcdConfigComparator.compare(expected, actual);
+
+        assertThat(result.matches()).as(result.report()).isTrue();
+        assertThat(result.getAppliedRules())
+            .anySatisfy(rule -> assertThat(rule).startsWith("CASE_TYPE_TAB"));
     }
 
     // ---- TAB_READ_INJECTION ----

@@ -2,37 +2,14 @@ Sheet 'AuthorisationCaseEvent' row [interlocSendToTcw|caseworker-sscs-clerk] col
 Sheet 'AuthorisationCaseEvent' row [interlocSendToTcw|caseworker-sscs-clerk]: expected row has no match in actual: {CaseTypeID=Benefit, CaseEventID=interlocSendToTcw, AccessProfile=caseworker-sscs-clerk, CRUD=R}
 Sheet 'AuthorisationCaseEvent' row [interlocSendToTcw|caseworker-sscs-judge] column 'CRUD': expected <CRU> but was <R>
 Sheet 'AuthorisationCaseEvent' row [interlocSendToTcw|caseworker-sscs-judge]: expected row has no match in actual: {CaseTypeID=Benefit, CaseEventID=interlocSendToTcw, AccessProfile=caseworker-sscs-judge, CRUD=R}
-Sheet 'AuthorisationCaseType' row [caseworker-sscs-anonymouscitizen] column 'CRUD': expected <CRUD> but was <D>
-Sheet 'AuthorisationCaseType' row [caseworker-sscs-anonymouscitizen]: expected row has no match in actual: {CaseTypeID=Benefit, AccessProfile=caseworker-sscs-anonymouscitizen, CRUD=D}
-Sheet 'AuthorisationCaseType' row [caseworker-sscs-callagent] column 'CRUD': expected <CRU> but was <D>
-Sheet 'AuthorisationCaseType' row [caseworker-sscs-callagent]: expected row has no match in actual: {CaseTypeID=Benefit, AccessProfile=caseworker-sscs-callagent, CRUD=D}
-Sheet 'AuthorisationCaseType' row [caseworker-sscs-judge] column 'CRUD': expected <CRUD> but was <D>
-Sheet 'AuthorisationCaseType' row [caseworker-sscs-judge]: expected row has no match in actual: {CaseTypeID=Benefit, AccessProfile=caseworker-sscs-judge, CRUD=D}
-Sheet 'AuthorisationCaseType' row [caseworker-sscs-pcqextractor] column 'CRUD': expected <R> but was <D>
-Sheet 'AuthorisationCaseType' row [caseworker-sscs-pcqextractor]: expected row has no match in actual: {CaseTypeID=Benefit, AccessProfile=caseworker-sscs-pcqextractor, CRUD=D}
-Sheet 'AuthorisationCaseType' row [caseworker-sscs-superuser] column 'CRUD': expected <CRUD> but was <D>
-Sheet 'AuthorisationCaseType' row [caseworker-sscs-superuser]: expected row has no match in actual: {CaseTypeID=Benefit, AccessProfile=caseworker-sscs-superuser, CRUD=D}
-Sheet 'AuthorisationCaseType' row [caseworker-sscs] column 'CRUD': expected <CRUD> but was <D>
-Sheet 'AuthorisationCaseType' row [caseworker-sscs]: expected row has no match in actual: {CaseTypeID=Benefit, AccessProfile=caseworker-sscs, CRUD=D}
 Sheet 'CaseEvent' row [actionPostponementRequestWelsh]: expected row has no match in actual: {CaseTypeID=Benefit, ID=actionPostponementRequestWelsh, Name=Welsh- Action Postponement Req, Description=Welsh- Action Postponement Req, EventEnablingCondition=unprocessedPostponementRequest="Yes" AND interlocReviewState!="none" AND interlocReviewState!="awaitingAdminAction" AND interlocReviewState!="welshTranslation" AND interlocReviewState!="", PreConditionState(s)=*, PostConditionState=*, CallBackURLAboutToStartEvent=${CCD_DEF_TRIBUNALS_API_URL}/ccdAboutToStart, CallBackURLAboutToSubmitEvent=${CCD_DEF_TRIBUNALS_API_URL}/ccdAboutToSubmit, CallBackURLSubmittedEvent=${CCD_DEF_TRIBUNALS_API_URL}/send, ShowEventNotes=Y, SecurityClassification=PUBLIC, Publish=N}
 Sheet 'CaseEvent' row [actionPostponementRequest]: expected row has no match in actual: {CaseTypeID=Benefit, ID=actionPostponementRequest, Name=Action Postponement Request, Description=Action Postponement Request, EventEnablingCondition=unprocessedPostponementRequest="Yes" AND interlocReviewState!="none" AND interlocReviewState!="awaitingAdminAction" AND interlocReviewState!="welshTranslation" AND interlocReviewState!="", PreConditionState(s)=*, PostConditionState=*, CallBackURLAboutToStartEvent=${CCD_DEF_TRIBUNALS_API_URL}/ccdAboutToStart, CallBackURLAboutToSubmitEvent=${CCD_DEF_TRIBUNALS_API_URL}/ccdAboutToSubmit, CallBackURLSubmittedEvent=${CCD_DEF_TRIBUNALS_API_URL}/send, ShowEventNotes=Y, SecurityClassification=PUBLIC, Publish=N}
 Sheet 'CaseEvent' row [interlocSendToTcw]: expected row has no match in actual: {CaseTypeID=Benefit, ID=interlocSendToTcw, Name=Send case to TCW, Description=Send case to TCW, PreConditionState(s)=interlocutoryReviewState, PostConditionState=interlocutoryReviewState, CallBackURLAboutToSubmitEvent=${CCD_DEF_TRIBUNALS_API_URL}/ccdAboutToSubmit, ShowEventNotes=Y, SecurityClassification=PUBLIC, Publish=N}
 Sheet 'CaseEvent' row [manageWelshDocuments]: expected row has no match in actual: {CaseTypeID=Benefit, ID=manageWelshDocuments, Name=Welsh – manage Welsh doc(s), Description=Manage Welsh document(s), PreConditionState(s)=*, PostConditionState=*, ShowEventNotes=Y, SecurityClassification=PUBLIC, Publish=N}
 Sheet 'CaseEvent' row [sendValidCaseToInterloc] column 'PostConditionState': unexpected column in actual with value <withDwp>
-Sheet 'CaseEventToFields' row [actionPostponementRequest|interlocReviewState] column 'Publish': expected <N> but was <Y>
 Sheet 'CaseEventToFields' row [adjournCase|adjournCaseTime] column ',ShowSummaryChangeOption': expected <Y> but column is missing in actual
 Sheet 'CaseEventToFields' row [caseUpdated|caseOutcome]: unexpected row in actual: {CaseEventID=caseUpdated, CaseFieldID=caseOutcome, CaseTypeID=Benefit, DisplayContext=OPTIONAL, PageID=1.0, PageLabel=Update case data, ShowSummaryChangeOption=Y}
 Sheet 'CaseEventToFields' row [caseUpdated|didPoAttend]: unexpected row in actual: {CaseEventID=caseUpdated, CaseFieldID=didPoAttend, CaseTypeID=Benefit, DisplayContext=OPTIONAL, PageID=1.0, PageLabel=Update case data, ShowSummaryChangeOption=Y}
-Sheet 'CaseEventToFields' row [createBundle|panel] column 'Publish': expected <N> but was <Y>
-Sheet 'CaseEventToFields' row [directionIssued|prePostHearing] column 'Publish': expected <N> but was <Y>
-Sheet 'CaseEventToFields' row [hmctsResponseReviewed|selectWhoReviewsCase] column 'Publish': expected <N> but was <Y>
-Sheet 'CaseEventToFields' row [manageWelshDocuments|uploadedWelshDocumentTypes] column 'Publish': expected <N> but was <Y>
-Sheet 'CaseEventToFields' row [postHearingRequest|postHearingRequestType] column 'Publish': expected <N> but was <Y>
-Sheet 'CaseEventToFields' row [tcwReferToJudge|prePostHearing] column 'Publish': expected <N> but was <Y>
-Sheet 'CaseEventToFields' row [updateNotListable|interlocReviewState] column 'Publish': expected <N> but was <Y>
-Sheet 'CaseEventToFields' row [uploadWelshDocument|uploadedWelshDocumentTypes] column 'Publish': expected <N> but was <Y>
-Sheet 'CaseEventToFields' row [validSendToInterloc|interlocReviewState] column 'Publish': expected <N> but was <Y>
-Sheet 'CaseEventToFields' row [validSendToInterloc|prePostHearing] column 'Publish': expected <N> but was <Y>
 Sheet 'CaseField' row [SearchCriteria] column 'FieldType': expected <SearchCriteria > but was <SearchCriteria>
 Sheet 'CaseField' row [adjournCaseAdditionalDirections] column 'FieldTypeParameter': expected <TextArea> but was <Text>
 Sheet 'CaseField' row [adjournCaseReasons] column 'FieldTypeParameter': expected <TextArea> but was <Text>

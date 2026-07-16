@@ -238,8 +238,12 @@ public class EventsConfigEmitter implements SourceEmitter {
     headerBuilder.add("builder.event($L)", screamingSnake(event.getId()));
     headerBuilder.add("\n    .").add(buildStateTargeting(event, state, context));
     headerBuilder.add("\n    .name($S)", event.getName());
-    if (event.getDescription() != null && !event.getDescription().isEmpty()
-        && !event.getDescription().equals(event.getName())) {
+    // A present-but-empty/blank Description (as distinct from an absent one) must still be
+    // emitted explicitly: EventBuilder.name() defaults description to name whenever description
+    // is null, so skipping an empty description here would let that default silently overwrite
+    // authored blank text. Only a description that equals the name is skipped, relying on that
+    // same default rather than emitting a redundant explicit call.
+    if (event.getDescription() != null && !event.getDescription().equals(event.getName())) {
       headerBuilder.add("\n    .description($S)", event.getDescription());
     }
     if (event.getDisplayOrder() != null) {
@@ -686,9 +690,15 @@ public class EventsConfigEmitter implements SourceEmitter {
   /**
    * A {@code .publish(false)}/{@code .publish(true)}/{@code .publishAs(...)} chain for a field whose
    * per-field {@code Publish}/{@code PublishAs} overrides the event's {@code publishToCamunda()}
-   * cascade, or an empty block when the field matches the event default. {@code publishAs(...)}
-   * implies publish, so it is emitted alone when set; otherwise an explicit {@code publish(flag)} is
-   * emitted only when it differs from the event-level publish flag.
+   * cascade, or an empty block when the field matches the event default.
+   *
+   * <p>{@code Publish} and {@code PublishAs} are unrelated columns to the definition-store importer
+   * ({@code EventCaseFieldParser}/{@code PublishFieldsValidator} read and validate them
+   * independently — a row may carry {@code PublishAs} while {@code Publish} is {@code N} or absent),
+   * so {@code publishAs(...)} is emitted purely for the alias and never implies {@code publish}. An
+   * explicit {@code publish(flag)} is always emitted alongside it whenever the field's resolved
+   * publish intent (input {@code Publish=Y} → published; anything else → not) differs from the
+   * event-level default — this is what the retired {@code PUBLISH_CASCADE} rule used to forgive.
    *
    * @param field the page field
    * @param event the owning event (its publish flag is the field default)
@@ -696,19 +706,11 @@ public class EventsConfigEmitter implements SourceEmitter {
    */
   private CodeBlock publishChain(PageModel.PageField field, EventModel event) {
     CodeBlock.Builder cb = CodeBlock.builder();
-    if (notBlank(field.getPublishAs())) {
-      // PublishAs implies publish(true) and is emitted alone.
-      cb.add("\n    .publishAs($S)", field.getPublishAs());
-      return cb.build();
-    }
-    // The SDK's CaseEventToFieldsGenerator cascades the event's publishToCamunda() flag onto every
-    // non-complex field unless the field carries an explicit publish(...). The input's per-field
-    // intent is: Publish=Y → published; anything else (N or absent) → not published (this is what
-    // the retired PUBLISH_CASCADE rule forgave — an absent/N field on a publishing event). So emit
-    // an explicit publish(flag) whenever the field's desired value differs from the event default,
-    // which for a publishing event means publish(false) on every field the input did not publish.
     boolean eventPublishes = Boolean.TRUE.equals(event.getPublish());
     boolean fieldPublishes = Boolean.TRUE.equals(field.getPublish());
+    if (notBlank(field.getPublishAs())) {
+      cb.add("\n    .publishAs($S)", field.getPublishAs());
+    }
     if (fieldPublishes != eventPublishes) {
       cb.add("\n    .publish($L)", fieldPublishes);
     }

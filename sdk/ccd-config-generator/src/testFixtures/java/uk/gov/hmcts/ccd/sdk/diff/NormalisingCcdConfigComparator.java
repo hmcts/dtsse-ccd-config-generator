@@ -53,6 +53,7 @@ public final class NormalisingCcdConfigComparator {
         new StateDescriptionRule(),
         new FieldTypeComplexRule(),
         new RedundantFieldTypeParameterRule(),
+        new PublishIgnoredOnFieldSheetsRule(),
         new CollectionElementTypeRule(),
         new EmptyCrudAuthorisationRule(),
         new CrudLetterOrderRule(),
@@ -252,28 +253,45 @@ public final class NormalisingCcdConfigComparator {
     }
 
     /**
-     * Drops rows that are exactly equal (after normalisation) to an earlier row sharing the same
+     * Drops rows that are exactly equal (after normalisation, and after treating a blank/null
+     * column as equivalent to the column being entirely absent — the same tolerance
+     * {@link EmptyStringAbsentRule} applies across sides) to an earlier row sharing the same
      * primary key. The definition-store importer keys rows by their primary key and stores one per
      * key, so a definition that ships the same keyed row more than once — for example prl, which
      * lists many {@code CaseEventToComplexTypes} rows in both a flat {@code CaseEventToComplexTypes.json}
      * and a {@code CaseEventToComplexTypes/} fragment directory — collapses to a single row on
-     * import. Collapsing only *identical* duplicates keeps a genuine same-key content conflict (two
-     * rows differing in a column) visible, since those do not collapse.
+     * import. Collapsing only duplicates *up to blank-vs-absent* keeps a genuine same-key content
+     * conflict (two rows differing in a non-blank column) visible, since those do not collapse.
      *
      * @param rows the rows sharing a primary key, in order
-     * @return the rows with exact duplicates removed
+     * @return the rows with (blank-vs-absent-tolerant) duplicates removed
      */
     private static List<Map<String, Object>> dropExactDuplicates(List<Map<String, Object>> rows) {
         if (rows.size() < 2) {
             return rows;
         }
         List<Map<String, Object>> deduped = new ArrayList<>(rows.size());
+        List<Map<String, Object>> canonicalised = new ArrayList<>(rows.size());
         for (Map<String, Object> row : rows) {
-            if (!deduped.contains(row)) {
+            Map<String, Object> canonical = withoutBlankOrNullColumns(row);
+            if (!canonicalised.contains(canonical)) {
+                canonicalised.add(canonical);
                 deduped.add(row);
             }
         }
         return deduped;
+    }
+
+    private static Map<String, Object> withoutBlankOrNullColumns(Map<String, Object> row) {
+        Map<String, Object> result = new LinkedHashMap<>();
+        for (Map.Entry<String, Object> entry : row.entrySet()) {
+            Object value = entry.getValue();
+            boolean blankOrNull = value == null || (value instanceof String && ((String) value).isBlank());
+            if (!blankOrNull) {
+                result.put(entry.getKey(), value);
+            }
+        }
+        return result;
     }
 
     private static void compareRow(String sheet, String rowKey,

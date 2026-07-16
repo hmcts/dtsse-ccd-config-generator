@@ -144,6 +144,18 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements Decentralised
   }
 
   @Override
+  @SafeVarargs
+  public final void includeCaseRolesInCaseTypeAuthorisation(R... roles) {
+    for (R role : roles) {
+      if (!role.getRole().matches("\\[.+\\]")) {
+        throw new IllegalArgumentException(
+            "Case-type case-role authorisation requires a CCD case role: " + role.getRole());
+      }
+    }
+    config.caseRolesWithCaseTypeAuthorisation.addAll(Set.of(roles));
+  }
+
+  @Override
   public void explicitStateGrants() {
     config.explicitStateGrants = true;
   }

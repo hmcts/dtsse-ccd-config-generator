@@ -462,6 +462,39 @@ class DefaultDefinitionLinkerTest {
   }
 
   @Test
+  void readsCaseEventDescriptionVerbatimIncludingBlankAndTrailingWhitespace() {
+    GapCollector gaps = new GapCollector();
+    DefinitionIr ir = minimal("Minimal")
+        .row(SheetName.CASE_EVENT,
+            cols("CaseTypeID", "Minimal", "ID", "blankDescription", "Name", "Blank description",
+                "Description", " ", "PostConditionState", "*"))
+        .row(SheetName.CASE_EVENT,
+            cols("CaseTypeID", "Minimal", "ID", "trailingSpace", "Name", "Trailing space",
+                "Description", "Update parent case data ", "PostConditionState", "*"))
+        .row(SheetName.CASE_EVENT,
+            cols("CaseTypeID", "Minimal", "ID", "noDescription", "Name", "No description",
+                "PostConditionState", "*"))
+        .build();
+
+    CaseTypeModel model = linker.link(ir, options("Minimal"), gaps);
+
+    EventModel blank = model.getEvents().stream()
+        .filter(e -> e.getId().equals("blankDescription")).findFirst().orElseThrow();
+    // A blank-but-authored Description (e.g. civil's CHECK_AND_MARK_PAID_IN_FULL) must be kept
+    // verbatim rather than collapsed to null, or the generated builder would silently default it
+    // to the event's Name (EventBuilder.name()).
+    assertThat(blank.getDescription()).isEqualTo(" ");
+
+    EventModel trailing = model.getEvents().stream()
+        .filter(e -> e.getId().equals("trailingSpace")).findFirst().orElseThrow();
+    assertThat(trailing.getDescription()).isEqualTo("Update parent case data ");
+
+    EventModel noDescription = model.getEvents().stream()
+        .filter(e -> e.getId().equals("noDescription")).findFirst().orElseThrow();
+    assertThat(noDescription.getDescription()).isNull();
+  }
+
+  @Test
   void groupsPagesByPageIdAndAttachesComplexOverrides() {
     GapCollector gaps = new GapCollector();
     DefinitionIr ir = minimal("Minimal")
@@ -500,6 +533,44 @@ class DefaultDefinitionLinkerTest {
         .findFirst().orElseThrow();
     assertThat(midEventGraft.getRows()).anySatisfy(r ->
         assertThat(r).containsEntry("CallBackURLMidEvent", "${CCD_DEF_BASE_URL}/mid"));
+  }
+
+  @Test
+  void eventToComplexTypesPassthroughKeysOnIdSoDistinctMembersDoNotCollide() {
+    GapCollector gaps = new GapCollector();
+    // Two distinct complex types (Child, OtherPerson) both nest under the same event/field
+    // (childDetails/children) and both declare a member named "firstName". Without ID in the
+    // passthrough merge key, mergeInto would treat these as the same row (matching on
+    // CaseEventID+CaseFieldID+ListElementCode alone), silently dropping one and grafting its
+    // columns onto the other — see prl's real-world "children" field, which nests both a Child
+    // and an OtherPersonWhoLivesWithChild member sharing member names like "firstName"/"address".
+    DefinitionIr ir = minimal("Minimal")
+        .row(SheetName.CASE_EVENT,
+            cols("CaseTypeID", "Minimal", "ID", "createCase", "Name", "Create",
+                "PostConditionState", "Open"))
+        .row(SheetName.CASE_EVENT_TO_COMPLEX_TYPES,
+            cols("ID", "Child", "CaseEventID", "createCase", "CaseFieldID", "children",
+                "ListElementCode", "firstName", "DisplayContext", "OPTIONAL"))
+        .row(SheetName.CASE_EVENT_TO_COMPLEX_TYPES,
+            cols("ID", "OtherPerson", "CaseEventID", "createCase", "CaseFieldID", "children",
+                "ListElementCode", "firstName", "DisplayContext", "MANDATORY"))
+        .build();
+
+    CaseTypeModel model = linker.link(ir, options("Minimal"), gaps);
+
+    PassthroughSheet sheet = model.getPassthroughSheets().stream()
+        .filter(s -> s.getRelativePath().equals("CaseEventToComplexTypes/createCase/children.json"))
+        .findFirst().orElseThrow();
+    assertThat(sheet.getPrimaryKeys()).contains("ID");
+    assertThat(sheet.getRows()).hasSize(2);
+    assertThat(sheet.getRows()).anySatisfy(r -> {
+      assertThat(r).containsEntry("ID", "Child");
+      assertThat(r).containsEntry("DisplayContext", "OPTIONAL");
+    });
+    assertThat(sheet.getRows()).anySatisfy(r -> {
+      assertThat(r).containsEntry("ID", "OtherPerson");
+      assertThat(r).containsEntry("DisplayContext", "MANDATORY");
+    });
   }
 
   @Test
@@ -758,7 +829,7 @@ class DefaultDefinitionLinkerTest {
     DefinitionIr ir = minimal("Minimal")
         .row(SheetName.CASE_FIELD,
             cols("CaseTypeID", "Minimal", "ID", "queries", "Label", "Queries",
-                "FieldType", "CaseQueriesCollection"))
+                "FieldType", "SomeBespokeWidget"))
         .build();
 
     CaseTypeModel model = linker.link(ir, options("Minimal"), gaps);
@@ -774,7 +845,7 @@ class DefaultDefinitionLinkerTest {
     assertThat(gaps.getEntries())
         .anyMatch(g -> "CaseField".equals(g.getSheet())
             && "FieldType".equals(g.getColumn())
-            && "CaseQueriesCollection".equals(g.getValue())
+            && "SomeBespokeWidget".equals(g.getValue())
             && g.getAction() == GapAction.OMITTED_FAIL);
   }
 

@@ -1201,7 +1201,10 @@ public class DefaultDefinitionLinker implements DefinitionLinker {
           .id(eventId)
           .javaName(javaName)
           .name(row.getString(Columns.NAME).orElse(eventId))
-          .description(row.getString(Columns.DESCRIPTION).orElse(null))
+          // Read verbatim (getVerbatimText): a CaseEvent Description carrying significant
+          // whitespace (e.g. a trailing space) or authored as an explicit empty string must
+          // round-trip exactly rather than being read as null and defaulted to Name downstream.
+          .description(row.getVerbatimText(Columns.DESCRIPTION).orElse(null))
           .preStates(parsePreStates(row.getString(Columns.PRE_CONDITION_STATES).orElse("")))
           .postState(parsePostState(
               row.getString(Columns.POST_CONDITION_STATE).orElse(null), eventId, gaps))
@@ -2051,7 +2054,14 @@ public class DefaultDefinitionLinker implements DefinitionLinker {
       }
       sheets.add(PassthroughSheet.builder()
           .relativePath("CaseEventToComplexTypes/" + eventId + "/" + fieldId + ".json")
-          .primaryKeys(List.of(Columns.CASE_EVENT_ID, Columns.CASE_FIELD_ID,
+          // ID (the complex-type member's declaring type) must be part of the merge key: one
+          // CaseFieldID can host more than one complex type across its nested members (e.g. a
+          // Collection field whose element type embeds another Collection of a different type), so
+          // two distinct types can each carry a member with the same ListElementCode (e.g. both
+          // declare an "address" or "firstName" member). Keying on
+          // (CaseEventID, CaseFieldID, ListElementCode) alone made those rows collide in
+          // mergeInto, silently dropping one row and grafting its columns onto the other's.
+          .primaryKeys(List.of(Columns.ID, Columns.CASE_EVENT_ID, Columns.CASE_FIELD_ID,
               Columns.LIST_ELEMENT_CODE))
           .overlaySuffix(suffix)
           .overlayCondition(OverlayResolver.conditionFor(suffix, options))

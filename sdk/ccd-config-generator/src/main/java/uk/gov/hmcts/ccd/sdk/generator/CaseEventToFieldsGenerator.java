@@ -100,6 +100,11 @@ class CaseEventToFieldsGenerator<T, S, R extends HasRole> implements ConfigGener
    * With no explicit value the cascade applies as before. The definition store rejects a
    * {@code Publish} column on {@code COMPLEX} fields, so neither the cascade nor an explicit
    * override is written there.
+   *
+   * <p>{@code PublishAs} is written whenever set, independently of the resolved publish flag: the
+   * definition store's {@code EventCaseFieldParser}/{@code PublishFieldsValidator} read and
+   * validate {@code Publish} and {@code PublishAs} as unrelated columns (no rule ties one to the
+   * other), so a field can carry an alias while {@code Publish} is {@code N} or absent.
    */
   private void applyPublishFlag(Map<String, Object> row, Event<T, R, S> event, Field field) {
     String context = row.get("DisplayContext").toString();
@@ -108,10 +113,9 @@ class CaseEventToFieldsGenerator<T, S, R extends HasRole> implements ConfigGener
     }
     Boolean explicit = field.getPublish();
     boolean publish = explicit != null ? explicit : event.isPublishToCamunda();
-    if (!publish) {
-      return;
+    if (publish) {
+      row.put("Publish", "Y");
     }
-    row.put("Publish", "Y");
     if (field.getPublishAs() != null) {
       row.put("PublishAs", field.getPublishAs());
     }

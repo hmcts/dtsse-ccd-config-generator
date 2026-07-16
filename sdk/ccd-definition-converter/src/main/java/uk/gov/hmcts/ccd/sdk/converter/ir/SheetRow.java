@@ -92,6 +92,26 @@ public class SheetRow {
   }
 
   /**
+   * The verbatim value of a column, preserving a present-but-empty or blank value as distinct
+   * from the column being wholly absent. Unlike {@link #getDisplayText(String)} — which folds an
+   * empty string to "absent" for display-text columns such as {@code Label}, where the
+   * distinction has no meaning — some columns (e.g. CaseEvent's {@code Description}) can
+   * legitimately be authored as an explicit empty or whitespace-only string, and that authored
+   * value must round-trip unchanged rather than being read as null and silently defaulted
+   * downstream.
+   *
+   * @param column the definition column name
+   * @return the untrimmed string value, or empty only if the column is absent or JSON null
+   */
+  public Optional<String> getVerbatimText(String column) {
+    if (!columns.containsKey(column)) {
+      return Optional.empty();
+    }
+    Object value = columns.get(column);
+    return value == null ? Optional.empty() : Optional.of(String.valueOf(value));
+  }
+
+  /**
    * The value of a numeric column; JSON definitions carry numbers both as JSON numbers and
    * as strings. Excel-derived JSON (xlsx2json) represents all numbers as floating point, so
    * an integral value may arrive as {@code "1.0"}; that is accepted and truncated, while a

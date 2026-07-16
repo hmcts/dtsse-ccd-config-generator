@@ -6,41 +6,6 @@ Sheet 'CaseEventToFields' row [enterGrounds|refuseContactWithChildOrderType] col
 Sheet 'CaseEventToFields' row [enterGrounds|secureAccommodationOrderType] column 'Comments': expected <A control flag. Yes if order type of this case is secure accommodation order> but column is missing in actual
 Sheet 'CaseField' row [allocationDecision] column 'ShowSummaryContentOption': expected <Y> but column is missing in actual
 Sheet 'CaseField' row [judgeTitleAndName] column 'FieldShownCondition': expected <judgeTitleAndName="DO_NOT_SHOW"> but column is missing in actual
-Sheet 'CaseField' row [qmCaseQueriesCollectionBarrister] column 'FieldType': expected <CaseQueriesCollection> but was <Text>
-Sheet 'CaseField' row [qmCaseQueriesCollectionCafcassSol] column 'FieldType': expected <CaseQueriesCollection> but was <Text>
-Sheet 'CaseField' row [qmCaseQueriesCollectionCafcass] column 'FieldType': expected <CaseQueriesCollection> but was <Text>
-Sheet 'CaseField' row [qmCaseQueriesCollectionChildSolA] column 'FieldType': expected <CaseQueriesCollection> but was <Text>
-Sheet 'CaseField' row [qmCaseQueriesCollectionChildSolB] column 'FieldType': expected <CaseQueriesCollection> but was <Text>
-Sheet 'CaseField' row [qmCaseQueriesCollectionChildSolC] column 'FieldType': expected <CaseQueriesCollection> but was <Text>
-Sheet 'CaseField' row [qmCaseQueriesCollectionChildSolD] column 'FieldType': expected <CaseQueriesCollection> but was <Text>
-Sheet 'CaseField' row [qmCaseQueriesCollectionChildSolE] column 'FieldType': expected <CaseQueriesCollection> but was <Text>
-Sheet 'CaseField' row [qmCaseQueriesCollectionChildSolF] column 'FieldType': expected <CaseQueriesCollection> but was <Text>
-Sheet 'CaseField' row [qmCaseQueriesCollectionChildSolG] column 'FieldType': expected <CaseQueriesCollection> but was <Text>
-Sheet 'CaseField' row [qmCaseQueriesCollectionChildSolH] column 'FieldType': expected <CaseQueriesCollection> but was <Text>
-Sheet 'CaseField' row [qmCaseQueriesCollectionChildSolI] column 'FieldType': expected <CaseQueriesCollection> but was <Text>
-Sheet 'CaseField' row [qmCaseQueriesCollectionChildSolJ] column 'FieldType': expected <CaseQueriesCollection> but was <Text>
-Sheet 'CaseField' row [qmCaseQueriesCollectionChildSolK] column 'FieldType': expected <CaseQueriesCollection> but was <Text>
-Sheet 'CaseField' row [qmCaseQueriesCollectionChildSolL] column 'FieldType': expected <CaseQueriesCollection> but was <Text>
-Sheet 'CaseField' row [qmCaseQueriesCollectionChildSolM] column 'FieldType': expected <CaseQueriesCollection> but was <Text>
-Sheet 'CaseField' row [qmCaseQueriesCollectionChildSolN] column 'FieldType': expected <CaseQueriesCollection> but was <Text>
-Sheet 'CaseField' row [qmCaseQueriesCollectionChildSolO] column 'FieldType': expected <CaseQueriesCollection> but was <Text>
-Sheet 'CaseField' row [qmCaseQueriesCollectionEPSManaging] column 'FieldType': expected <CaseQueriesCollection> but was <Text>
-Sheet 'CaseField' row [qmCaseQueriesCollectionLABarrister] column 'FieldType': expected <CaseQueriesCollection> but was <Text>
-Sheet 'CaseField' row [qmCaseQueriesCollectionLAManaging] column 'FieldType': expected <CaseQueriesCollection> but was <Text>
-Sheet 'CaseField' row [qmCaseQueriesCollectionLAShared] column 'FieldType': expected <CaseQueriesCollection> but was <Text>
-Sheet 'CaseField' row [qmCaseQueriesCollectionLASol] column 'FieldType': expected <CaseQueriesCollection> but was <Text>
-Sheet 'CaseField' row [qmCaseQueriesCollectionSolicitorA] column 'FieldType': expected <CaseQueriesCollection> but was <Text>
-Sheet 'CaseField' row [qmCaseQueriesCollectionSolicitorB] column 'FieldType': expected <CaseQueriesCollection> but was <Text>
-Sheet 'CaseField' row [qmCaseQueriesCollectionSolicitorC] column 'FieldType': expected <CaseQueriesCollection> but was <Text>
-Sheet 'CaseField' row [qmCaseQueriesCollectionSolicitorD] column 'FieldType': expected <CaseQueriesCollection> but was <Text>
-Sheet 'CaseField' row [qmCaseQueriesCollectionSolicitorE] column 'FieldType': expected <CaseQueriesCollection> but was <Text>
-Sheet 'CaseField' row [qmCaseQueriesCollectionSolicitorF] column 'FieldType': expected <CaseQueriesCollection> but was <Text>
-Sheet 'CaseField' row [qmCaseQueriesCollectionSolicitorG] column 'FieldType': expected <CaseQueriesCollection> but was <Text>
-Sheet 'CaseField' row [qmCaseQueriesCollectionSolicitorH] column 'FieldType': expected <CaseQueriesCollection> but was <Text>
-Sheet 'CaseField' row [qmCaseQueriesCollectionSolicitorI] column 'FieldType': expected <CaseQueriesCollection> but was <Text>
-Sheet 'CaseField' row [qmCaseQueriesCollectionSolicitorJ] column 'FieldType': expected <CaseQueriesCollection> but was <Text>
-Sheet 'CaseField' row [qmCaseQueriesCollectionSolicitor] column 'FieldType': expected <CaseQueriesCollection> but was <Text>
-Sheet 'CaseTypeTab' row [JudicialMessagesTab|closedJudicialMessages] column 'TabLabel': expected <Closed messages> but was <Judicial messages>
 Sheet 'ComplexTypes' row [Direction|allParties_label] column 'comment': expected <Used in event to complex type to display All parties if direction is for all parties> but column is missing in actual
 Sheet 'ComplexTypes' row [HearingOrderForApproval|dateSent] column 'FieldShowCondition:': expected <judgeTitleAndName=""> but column is missing in actual
 Sheet 'ComplexTypes' row [HearingOrderForApproval|status] column 'FieldShowCondition:': expected <status!="APPROVED"> but column is missing in actual

@@ -20,7 +20,13 @@ import java.util.Set;
  *       tab, whereas hand-written definitions typically set it once (on the first field) and
  *       leave it out on the rest. The label describes the tab, not the field; it is propagated
  *       to every field row of the same {@code TabID} on each side before matching, exactly as
- *       {@link PageLabelPropagationRule} does for wizard pages.</li>
+ *       {@link PageLabelPropagationRule} does for wizard pages. The importer
+ *       ({@code AbstractDisplayGroupParser.parseGroup}) reads the tab's label from only the
+ *       group's first {@code DefinitionDataItem} ({@code sample.getString(displayGroupLabel)}),
+ *       so a differing {@code TabLabel} on a later row of the same tab is inert at runtime;
+ *       such a row's label is collapsed to the tab's first-row value on each side before
+ *       matching, the same way {@code PageLabelPropagationRule} collapses a conflicting
+ *       {@code PageLabel} to its page's first-field value.</li>
  *   <li><b>{@code TabFieldDisplayOrder}</b>: the generator renumbers a tab's fields sequentially
  *       from 1 (one row per declared field), so a hand-written definition that skips numbers or
  *       starts elsewhere produces a different-but-equivalent ordering. The column is ordering
@@ -29,7 +35,7 @@ import java.util.Set;
  * </ul>
  *
  * <p>Only these specific reconciliations are made: a {@code Channel} other than
- * {@code CaseWorker}, or a genuinely conflicting {@code TabLabel} on the same tab, still fails.</p>
+ * {@code CaseWorker} still fails.</p>
  */
 public final class CaseTypeTabRule implements NormalisationRule {
 
@@ -174,6 +180,17 @@ public final class CaseTypeTabRule implements NormalisationRule {
             Map<String, Object> values = tabValues.get(tabId);
             for (String column : TAB_SCOPED_COLUMNS) {
                 if (!row.containsKey(column) && values.containsKey(column)) {
+                    row.put(column, values.get(column));
+                    propagated++;
+                } else if (TAB_LABEL.equals(column) && row.containsKey(column)
+                    && values.containsKey(column)
+                    && !values.get(column).equals(row.get(column))) {
+                    // A tab may carry a different TabLabel on a non-first field row, but the
+                    // importer (AbstractDisplayGroupParser.parseGroup) reads the tab's label from
+                    // only the group's first row (sample.getString(displayGroupLabel)) — a later
+                    // row's differing label is never read. Collapse every row of the tab to that
+                    // first-row label on each side so the per-row variation does not surface as a
+                    // spurious mismatch, exactly as PageLabelPropagationRule does for PageLabel.
                     row.put(column, values.get(column));
                     propagated++;
                 }

@@ -68,7 +68,7 @@ public class CoreConfigEmitter implements SourceEmitter {
     ClassName state = context.stateClass();
     ClassName userRole = context.userRoleClass();
     ClassName configBuilder = ClassName.get("uk.gov.hmcts.ccd.sdk.api", "ConfigBuilder");
-    ClassName permission = ClassName.get("uk.gov.hmcts.ccd.sdk.api", "Permission");
+    final ClassName permission = ClassName.get("uk.gov.hmcts.ccd.sdk.api", "Permission");
     ClassName ccdConfig = ClassName.get("uk.gov.hmcts.ccd.sdk.api", "CCDConfig");
 
     ParameterizedTypeName builderType =
@@ -76,12 +76,16 @@ public class CoreConfigEmitter implements SourceEmitter {
     ParameterizedTypeName configType =
         ParameterizedTypeName.get(ccdConfig, caseData, state, userRole);
 
-    Map<String, String> roleConstants = buildRoleConstants(model);
+    final Map<String, String> roleConstants = buildRoleConstants(model);
     List<JavaFile> files = new ArrayList<>();
 
     // --- CaseType: identity, jurisdiction, definition flags, banner, explicitStateGrants ---
     CodeBlock.Builder caseTypeBody = CodeBlock.builder();
     emitCaseTypeIdentity(model, caseTypeBody);
+    // Case roles are excluded from AuthorisationCaseType by default; a definition that grants a
+    // case role static case-type-level CRUD (RoleModel.caseTypePermissions non-empty) opts that
+    // role in explicitly via the builder switch.
+    emitCaseRoleCaseTypeAuthorisation(model, caseTypeBody, userRole);
     files.add(configFile(configPkg, prefix + "CaseType", configType, builderType, caseTypeBody.build(),
         context, caseTypeId, "case-type and jurisdiction identity, definition flags and banner"));
 
@@ -312,6 +316,37 @@ public class CoreConfigEmitter implements SourceEmitter {
       index.put(role.getId(), role.getJavaConstant());
     }
     return index;
+  }
+
+  /**
+   * Emits {@code builder.includeCaseRolesInCaseTypeAuthorisation(UserRole.X, ...)} for every case
+   * role the input's {@code AuthorisationCaseType} sheet grants static case-type-level CRUD to
+   * (i.e. {@link RoleModel#getCaseTypePermissions()} is non-empty). The SDK's
+   * {@code AuthorisationCaseTypeGenerator} excludes case roles ({@code [BRACKETED]} form) from
+   * that sheet by default, since most definitions authorise them only via case-role assignment; a
+   * definition that also grants one a static row (ET's {@code [SOLICITORx]}, PRL's
+   * {@code [LASOLICITOR]}) must opt it in explicitly so the row round-trips.
+   */
+  private void emitCaseRoleCaseTypeAuthorisation(
+      CaseTypeModel model, CodeBlock.Builder cb, ClassName userRole) {
+    List<String> constants = new ArrayList<>();
+    for (RoleModel role : model.getRoles()) {
+      if (role.isCaseRole() && role.getCaseTypePermissions() != null
+          && !role.getCaseTypePermissions().isEmpty()) {
+        constants.add(role.getJavaConstant());
+      }
+    }
+    if (constants.isEmpty()) {
+      return;
+    }
+    CodeBlock.Builder args = CodeBlock.builder();
+    for (int i = 0; i < constants.size(); i++) {
+      if (i > 0) {
+        args.add(", ");
+      }
+      args.add("$T.$L", userRole, constants.get(i));
+    }
+    cb.addStatement("builder.includeCaseRolesInCaseTypeAuthorisation($L)", args.build());
   }
 
   private void missingRoleGap(

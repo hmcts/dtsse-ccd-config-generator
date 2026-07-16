@@ -12,6 +12,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -45,6 +46,12 @@ import uk.gov.hmcts.ccd.sdk.converter.model.gap.GapEntry;
  * <p>Top-level {@code .json} files that are not a recognised CCD sheet (e.g.
  * {@code ChangeHistory.json}) are recorded as {@link GapCategory#UNSUPPORTED_SHEET} gaps and
  * skipped. Non-JSON files and non-sheet directories (e.g. {@code env/}) are silently ignored.
+ *
+ * <p>A flat {@code X.json} file that collides with a sibling {@code X/} fragment directory is
+ * skipped entirely, mirroring {@code json2xlsx}: it groups sources by literal base name and, per
+ * group, writes the whole table to the sheet's fixed anchor cell, so the directory's later write
+ * (its custom sort always orders the flat file first) fully overwrites the flat file's rows —
+ * none of them reach the imported definition.
  */
 public class JsonDefinitionReader implements DefinitionReader {
 
@@ -69,10 +76,28 @@ public class JsonDefinitionReader implements DefinitionReader {
       return;
     }
     Arrays.sort(entries, Comparator.comparing(File::getName));
+    Set<String> directoryBaseNames = new HashSet<>();
+    for (File entry : entries) {
+      if (entry.isDirectory()) {
+        directoryBaseNames.add(entry.getName());
+      }
+    }
     for (File entry : entries) {
       if (entry.isDirectory()) {
         processSheetDirectory(entry.toPath(), options, gaps, rows);
       } else if (entry.getName().endsWith(".json")) {
+        // json2xlsx (ccd-definition-processor) groups source files by their literal file/directory
+        // base name and, for each group, calls SpreadsheetBuilder.updateSheetDataJson(sheetName, ...)
+        // — which writes the whole table to the sheet's fixed A4 anchor. Its custom path sort
+        // (toRelativePaths in file-utils.js) guarantees a flat "X.json" file always sorts, and is
+        // therefore always processed, before any path nested under a same-named "X/" directory; the
+        // directory's later write to the same anchor cell then fully overwrites the flat file's rows.
+        // A flat file whose base name collides with a sibling fragment directory never survives into
+        // the real xlsx, so its rows must not be aggregated here either — otherwise the "expected"
+        // side of a round-trip comparison carries phantom rows the real import discards.
+        if (directoryBaseNames.contains(stripJsonExtension(entry.getName()))) {
+          continue;
+        }
         processFlatFile(entry.toPath(), options, gaps, rows);
       }
     }

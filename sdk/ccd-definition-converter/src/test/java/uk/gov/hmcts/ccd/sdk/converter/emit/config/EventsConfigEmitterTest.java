@@ -161,6 +161,56 @@ class EventsConfigEmitterTest {
     assertThat(src).contains(".explicitGrants()");
   }
 
+  private static EventModel eventWithDescription(String id, String name, String description) {
+    return EventModel.builder()
+        .id(id)
+        .javaName(id)
+        .name(name)
+        .description(description)
+        .preStates(List.of())
+        .postState("Open")
+        .grants(Map.of("caseworker-test", "CRUD"))
+        .pages(List.of())
+        .build();
+  }
+
+  @Test
+  void blankDescriptionIsEmittedExplicitlyRatherThanDefaultingToName() {
+    // A CaseEvent authored with a blank/empty Description (civil's
+    // CHECK_AND_MARK_PAID_IN_FULL: Description=" ") must round-trip that blank value, not fall
+    // back to EventBuilder.name()'s implicit description-defaults-to-name behaviour.
+    EventModel event = eventWithDescription(
+        "checkPaidInFull", "Check and mark claimant paid", " ");
+
+    String src = new EventsConfigEmitter()
+        .emit(modelWithEvents(List.of(event)), contextWith(40))
+        .get(0).toString();
+
+    assertThat(src).contains(".description(\" \")");
+  }
+
+  @Test
+  void descriptionEqualToNameIsNotEmittedRedundantly() {
+    EventModel event = eventWithDescription("createCase", "Create case", "Create case");
+
+    String src = new EventsConfigEmitter()
+        .emit(modelWithEvents(List.of(event)), contextWith(40))
+        .get(0).toString();
+
+    assertThat(src).doesNotContain(".description(");
+  }
+
+  @Test
+  void nullDescriptionIsNotEmitted() {
+    EventModel event = eventWithDescription("createCase", "Create case", null);
+
+    String src = new EventsConfigEmitter()
+        .emit(modelWithEvents(List.of(event)), contextWith(40))
+        .get(0).toString();
+
+    assertThat(src).doesNotContain(".description(");
+  }
+
   @Test
   void eventWithPagesEmitsFieldsChainAndPageClass() {
     PageModel.PageField field = PageModel.PageField.builder()

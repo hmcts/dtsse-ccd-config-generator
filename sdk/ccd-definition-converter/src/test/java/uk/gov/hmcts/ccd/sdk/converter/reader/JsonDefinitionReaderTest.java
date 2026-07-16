@@ -212,6 +212,26 @@ class JsonDefinitionReaderTest {
   }
 
   @Test
+  void flatFileCollidingWithSameNamedFragmentDirectoryIsSkipped() throws Exception {
+    // json2xlsx groups source files by literal base name and, per group, rewrites the whole sheet
+    // from a fixed anchor cell; its file sort always processes a flat "X.json" before any path
+    // under a same-named "X/" directory, so the directory's later write to the same sheet fully
+    // overwrites the flat file's rows. None of the flat file's rows reach the real import — the
+    // reader must not aggregate them either, or the "expected" side of a round-trip comparison
+    // would carry phantom rows.
+    URL url = getClass().getClassLoader().getResource("reader-fixtures/flat-dir-collision");
+    Path input = Paths.get(url.toURI());
+    ConversionOptions opts = optionsFor(input, Map.of());
+    GapCollector gaps = new GapCollector();
+    DefinitionIr ir = reader.read(opts, gaps);
+
+    List<SheetRow> rows = ir.rows(SheetName.CASE_EVENT_TO_COMPLEX_TYPES);
+    assertThat(rows).hasSize(1);
+    assertThat(rows.get(0).getString("ID")).contains("dirOnlyRow");
+    assertThat(gaps.getEntries()).isEmpty();
+  }
+
+  @Test
   void fragmentSuffixMatchesLongestConfiguredSuffix() throws Exception {
     Path tmpDir = java.nio.file.Files.createTempDirectory("reader-test");
     Path sheetDir = java.nio.file.Files.createDirectory(tmpDir.resolve("CaseEvent"));

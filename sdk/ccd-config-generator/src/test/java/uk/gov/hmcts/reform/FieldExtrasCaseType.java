@@ -17,6 +17,11 @@ import uk.gov.hmcts.reform.fpl.enums.UserRole;
  * label/hint/showCondition/DisplayContextParameter, usable after a {@code readonly}/{@code
  * *NoSummary} call that returns the collection builder rather than the field. Each is default-off;
  * a config that does not call them produces no trace of the corresponding column.
+ *
+ * <p>Also exercises {@link uk.gov.hmcts.ccd.sdk.api.Field.FieldBuilder#publishAs(String)} called
+ * without {@code publish(true)}: the definition store's {@code Publish}/{@code PublishAs} columns
+ * are unrelated, so the field carries {@code PublishAs} with no {@code Publish} column at all
+ * (this event does not {@code publishToCamunda()}).
  */
 @Component
 public class FieldExtrasCaseType
@@ -42,6 +47,8 @@ public class FieldExtrasCaseType
         .displayContextParameter("#TEXTAREA")
         .retainHiddenValue()
         .mandatoryNoSummary(FieldExtrasCaseData::getNoSummaryField)
-        .defaultValue("no-summary default");
+        .defaultValue("no-summary default")
+        .optional(FieldExtrasCaseData::getPublishAliasField)
+        .publishAs("aliasOnly");
   }
 }

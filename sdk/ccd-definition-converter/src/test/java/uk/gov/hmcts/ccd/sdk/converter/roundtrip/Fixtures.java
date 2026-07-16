@@ -44,12 +44,19 @@ final class Fixtures {
       // time: N unless Work Allocation is enabled (bin/create-xlsx.sh). This non-WA run mirrors that
       // with CCD_DEF_PUBLISH=N so the expected side substitutes the placeholder to the same literal
       // the converter's static N produces (a ${...} Publish leaves publishToCamunda unset → N).
+      // sscs also ships AuthorisationCaseType shutter fragments (-shuttered/-nonshuttered, plus a
+      // -WA-nonprod-nonshuttered variant the -nonshuttered suffix also covers): the default build
+      // (bin/create-xlsx.sh, SHUTTERED unset) excludes *-shuttered.json. Model them as overlays keyed
+      // on CCD_DEF_SHUTTERED so a normal nonprod run (the flag unset → false) includes exactly the
+      // -nonshuttered set on both sides, mirroring the default build.
       new Fixture(
           "sscs",
           "test-projects/sscs-tribunals-case-api/definitions/benefit/sheets",
           "Benefit",
           Map.of("CCD_DEF_ENV", "nonprod", "CCD_DEF_PUBLISH", "N"),
-          Map.of()),
+          Map.of(
+              "shuttered", "CCD_DEF_SHUTTERED:true",
+              "nonshuttered", "!CCD_DEF_SHUTTERED:true")),
       // fpl ships complementary shutter fragments (AuthorisationCaseType-shuttered/-nonshuttered):
       // the default (non-shuttered) build excludes *-shuttered.json and the shuttered build excludes
       // *-nonshuttered.json (bin/build-shuttered-ccd-definition.sh). Model them as overlays keyed on
@@ -69,12 +76,19 @@ final class Fixtures {
           "ET_EnglandWales",
           Map.of("CCD_DEF_ENV", "nonprod"),
           Map.of()),
+      // Civil ships AuthorisationCaseType shutter fragments (-shuttered/-unshuttered): the default
+      // build (bin/build-release-ccd-definition.sh, activateShutter=false) excludes
+      // *-shuttered.json. Model them as overlays keyed on CCD_DEF_SHUTTERED so a normal nonprod run
+      // (the flag unset → false) includes exactly the -unshuttered set on both sides, mirroring the
+      // default build.
       new Fixture(
           "civil",
           "test-projects/civil-ccd-definition/ccd-definition/civil",
           "CIVIL",
           Map.of("CCD_DEF_ENV", "nonprod"),
-          Map.of()),
+          Map.of(
+              "shuttered", "CCD_DEF_SHUTTERED:true",
+              "unshuttered", "!CCD_DEF_SHUTTERED:true")),
       new Fixture(
           "prl",
           "test-projects/prl-ccd-definitions/definitions/private-law/json",
