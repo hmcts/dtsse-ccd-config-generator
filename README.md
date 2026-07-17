@@ -904,9 +904,6 @@ with the `ccd-definition-converter` SDK subproject. It runs in **two modes**:
   still-generated companion config/enum/access sources (phase 2). This is the path for the
   **team-owned-POJO** services (FPL, Civil, ET, SSCS) that already maintain a rich domain model.
 
-See [`docs/retrofit-existing-models-proposal.md`](docs/retrofit-existing-models-proposal.md) for
-which archetype fits which mode.
-
 ### Generate mode
 
 ```bash
@@ -981,9 +978,10 @@ Key behaviours:
   into the generated definition after `generateCCDConfig` runs. Nothing is silently dropped.
 - **`UserProfile`** is a deliberate exception: the converter does **not** pass it through, so a
   definition carrying the sheet fails conversion with an `OMITTED_FAIL` gap unless `--allow-gaps` is
-  set (see [`docs/userprofile-investigation.md`](docs/userprofile-investigation.md) for why —
-  in short, its rows are per-user, per-environment workbasket defaults, not case-type model, and
-  its one user-visible effect no longer appears to be consumed by current XUI). Migrating teams
+  set. Its rows are per-user, per-environment workbasket-filter defaults keyed on real IDAM emails —
+  environment/deployment config, not case-type model — and that one user-visible effect (the
+  case-list default filter) no longer appears to be consumed by current XUI code, which computes the
+  default a different way (maintainer decision 2026-07-16). Migrating teams
   should either **drop the sheet** or **hand-manage `UserProfile.json` per environment** outside the
   generated definition. The importer only needs the `UserProfile` sheet/tab to be present, which
   `ccd-definition-processor`'s `json2xlsx` already creates empty when the file is omitted —
@@ -1256,10 +1254,6 @@ Useful flags: `--model-source-root` (default `<model-repo>/src/main/java`), `--c
 convert|copy|patch|publish|generate` for debugging. Exit code: 0 = zero residual diffs, 1 = residual
 diffs, >1 = a pipeline stage failed. The comparator entry point is also runnable directly as
 `./gradlew -p sdk :ccd-definition-converter:retrofitVerify --args='…'`.
-
-See [`docs/retrofit-existing-models-proposal.md`](docs/retrofit-existing-models-proposal.md) §Phase 3
-for the Civil pilot outcome — how far each stage got, the converter bugs the pilot surfaced and fixed,
-and the residual blocker.
 
 ### Fidelity
 

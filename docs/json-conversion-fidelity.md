@@ -6,22 +6,22 @@ definition to Java, compiles it, runs the SDK's `generateCCDConfig`, and semanti
 regenerated definition against the original input.
 
 **Every construct the SDK can express round-trips byte-identically, modulo the enumerated gaps on
-this page.** Each gap is classified one of five ways:
+this page.** Each gap is classified one of three ways:
 
 - **Not semantic** — a provably-equivalent spelling difference; the importer treats both forms
   identically. Forgiven by a named comparator rule (each rule class carries the justification in
   javadoc plus absorb-and-still-fails tests).
 - **Semantic, accepted** — the regenerated definition genuinely differs, in a stated, bounded way
-  the maintainer has accepted as permanent.
+  the maintainer has accepted as permanent. Per-fixture residuals in this class are enumerated
+  line-by-line in the CI-ratcheted baselines (`roundtrip-baselines/`); a new residual fails CI.
 - **Fixed with passthrough** — the SDK has no API for the construct, so the converter carries the
   input JSON through verbatim (`PassthroughMerger` after generation). These round-trip **exactly** —
   the "gap" is only that the construct lives as JSON, not Java.
-- **Not supported** — the SDK has no API for the construct and the converter no longer carries it
-  through: it records a blocking `OMITTED_FAIL` gap, so a definition carrying it **fails conversion**
-  unless `--allow-gaps` is set (which omits it). Surfacing the gap forces a conscious migration
-  decision rather than inheriting invisible JSON.
-- **Open** — unabsorbed residual diffs on the real fixtures; not accepted, each a named
-  SDK-structural limitation or fixture-data finding awaiting a decision or fix.
+
+Separately, five constructs are **removed by design**: conversion hard-fails on them (an
+`OMITTED_FAIL` gap, escapable with `--allow-gaps`, which omits them) so a migrating team makes a
+conscious decision instead of inheriting invisible JSON — see
+[Removed constructs](#removed-constructs-conversion-fails-by-design).
 
 ## Gap classification
 
@@ -57,9 +57,6 @@ this page.** Each gap is classified one of five ways:
 | Uniform vestigial `AuthorisationCaseState LiveTo` (probate's `01/01/2020` on every row) | **Semantic, accepted** | `LIVE_TO_VESTIGIAL` | Dead sheet-wide end-of-life the SDK can't emit; per-row divergent `LiveTo` still fails ([detail](#3-uniform-vestigial-authorisationcasestate-liveto)) |
 | Display-order renumbering (`*DisplayOrder`/`PageColumnNumber` never compared, any sheet) | **Semantic, accepted** | `DEFAULTS` + `CASE_TYPE_TAB` strips | Relative order preserved by row order (FixedLists actively sorted); `PageColumnNumber=2` flattened. Includes `EventToComplexTypes` `FieldDisplayOrder` (SDK uses a per-event counter; relative member order preserved by emission order) |
 | `EventToComplexTypes` `ID` (declaring complex type) | **Semantic, accepted** | `EVENT_COMPLEX_TYPE_ID_IGNORED` | The importer never reads `ID` on this sheet — `EventCaseFieldComplexTypeParser` maps `ListElementCode`/labels/order/context but not `ColumnName.ID`, it is not a required column, and `EventComplexTypeEntity.id` is a DB-generated sequence — so it is arbitrary author metadata dropped from both sides. Scoped to this sheet only (`ID` is a real key on `CaseField`/`ComplexTypes`/…) |
-| SearchAlias sheet | **Not supported** | — | No SDK generator; fails conversion with an `OMITTED_FAIL` gap (unless `--allow-gaps`) |
-| UserProfile sheet | **Not supported** | `USER_PROFILE_EXCLUDED` | Per-user default worklists; no generator; conversion still fails with an `OMITTED_FAIL` gap (unless `--allow-gaps`), but the comparator drops the sheet from both sides so an expected-side `UserProfile` no longer recurs as a residual ([maintainer decision 2026-07-16](userprofile-investigation.md)) |
-| AccessType / AccessTypeRole sheets | **Not supported** | — | Org group-access config; no generator; fails conversion with an `OMITTED_FAIL` gap (unless `--allow-gaps`) |
 | EventToComplexTypes per-member overrides | **Generated Java** (+ column-graft for the non-derivable tail) | Java / column-graft (fallback: row) | Emitted as `.complex(CaseData::getField).<ctx>(Type::getMember).eventLabel/.eventHint/.fieldShowCondition/.pageId` builder chains — the getter chain reproduces `DisplayContext`/`ListElementCode`/`EventElementLabel`/`EventHintText`/`FieldShowCondition`/`PageID`/`HintText`. A `Collection`-typed root/intermediate is walked into via the element-typed `.complex(getter, Element.class)` scope, and a member `@CCD(hint)` the input row overrides is emitted via the tri-state `.hintText(...)`/`.noHintText()` carrier. The row's `ID` (importer-ignored author metadata — `EVENT_COMPLEX_TYPE_ID_IGNORED`) and its `FieldDisplayOrder` (re-derived by the SDK from a per-event counter; only relative member order matters — display-order-renumbering disposition) are accepted differences, no longer grafted; only an exotic tail (`SecurityClassification`/`Publish`/`RetainHiddenValue`/`ShowSummaryChangeOption`/`ShowSummaryContentOption`/`DefaultValue`/`ElementLabel`/…) is grafted back over the generated rows, and a derived group with no such tail leaves no passthrough carrier. **Fallback to row passthrough** for a group that is not a plain `COMPLEX`-placed `CaseData` field, whose dotted `ListElementCode` does not resolve through the typed complex-type graph, whose `DisplayContext` is not `OPTIONAL`/`MANDATORY`/`READONLY`, which repeats a `ListElementCode` within the group, which carries a raw derivable-key value the generator would normalise (whitespace/case), or which has an overlay-suffixed sibling. Byte-identical round-trip either way ([detail](#5-eventtocomplextypes-generated-java-vs-fallback)) |
 | Orphan ComplexTypes (nothing reachable references) | **Semantic, accepted** | `ORPHAN_COMPLEX_TYPE` | Not in `config.getTypes()`; the SDK generates no class/rows, so the input rows are dropped (advisory gap, "safe to delete") — no longer passed through |
 | Orphan-path FixedLists (reachable only via an orphan complex type) | **Semantic, accepted** | `ORPHAN_FIXED_LIST` | The SDK generates no enum; the input rows are dropped (advisory gap) — no longer passed through |
@@ -67,13 +64,11 @@ this page.** Each gap is classified one of five ways:
 | Illegal-ID ComplexTypes/FixedLists (ID not a legal Java identifier, e.g. prl's `schoolDirections&Details`, fpl's `Stoke-on-TrentDFJCourts`) | Generated Java | — | Generated under a sanitised PascalCase class/enum name with the raw ID carried on `@ComplexType(name)`; round-trips byte-identically (referencing field's `FieldType`/`FieldTypeParameter` preserved) |
 | Conditional / multi-target `PostConditionState` | **Semantic, accepted** | `CONDITIONAL_POST_STATE` | Runtime honours `state(cond):priority` (JEXL, first-match-wins); `EventBuilder` models one post-state, so the SDK emits only the primary and the alternatives are dropped ([detail](#4-conditional--multi-target-postconditionstate-collapse)) |
 | Callback URLs + retries (all phases, incl. mid-event) | Fixed with passthrough | column-graft | Deliberate: no SDK callback wiring emitted; input URLs carried byte-exactly, `${CCD_DEF_*}` included, and compared exactly. This is now the *only* `CaseEventToFields` column graft |
-| CaseRoles `JurisdictionID` (mixed usage only) | **Not supported** | — | `emitCaseRoleJurisdiction()` is all-or-nothing; all-rows usage emits natively, mixed usage fails conversion with an `OMITTED_FAIL` gap (unless `--allow-gaps`) |
-| Unknown / custom `FieldType` (no Java carrier, not a `FieldType` constant) | **Not supported** | — | `CaseHistoryViewer`/`WaysToPay`/`JudicialUser`/… are real `FieldType` constants taking the `@CCD(typeOverride)` Java path; a genuinely unknown type can only be inferred as `String`→`Text`, so it fails conversion with an `OMITTED_FAIL` gap (unless `--allow-gaps`) |
 | `CaseEventToFields` `DefaultValue`/`RetainHiddenValue`/`FieldShowCondition`/label/hint/DCP/`ShowSummaryContentOption`/`NullifyByDefault` | Generated Java | — | Emitted via the all-context fluent `FieldCollectionBuilder` setters (`.defaultValue`/`.retainHiddenValue`/`.fieldShowCondition`/`.caseEventFieldLabel`/`.caseEventFieldHint`/`.displayContextParameter`/`.showSummaryContentOption`/`.nullifyByDefault`) — graft retired |
 | `SearchCasesResultFields` role/`UseCase`/`ListElementCode`/`ResultsOrdering`/DCP | Generated Java | — | Emitted via `searchCasesFields().field(id, label, f -> …)`; passthrough + `FieldShowCondition` graft retired |
 | `PrintableDocumentsUrl` (CaseType), `CanSaveDraft` (CaseEvent) | Generated Java | — | Emitted via `builder.printableDocumentsUrl(...)` / `EventBuilder.canSaveDraft()` |
-| Overlay-only complex-type *members* (ET) | **Open** | — | Needs per-member `@CCD(gate)`; field-level gates cover everything else |
-| `CaseField`-sheet `ShowSummaryContentOption` (`Y`, fpl/prl) | **Open** | — | A CaseField-sheet flag distinct from the `CaseEventToFields` integer column now emitted; no SDK API |
+| Overlay-only complex-type *members* (ET) | **Semantic, accepted** | fixture baseline (ratchet) | Members reachable only through an env-gated field; carried as enumerated lines in the ET baseline — a per-member `@CCD(gate)` emission would close them, none scheduled |
+| `CaseField`-sheet `ShowSummaryContentOption` (`Y`, fpl/prl) | **Semantic, accepted** | fixture baseline (ratchet) | A CaseField-sheet flag distinct from the `CaseEventToFields` integer column (which is emitted); carried as enumerated baseline lines |
 
 Anything not in this table that survives normalisation is a **real fidelity gap** — the round-trip
 fails on it. Current open-gap totals per fixture are in
@@ -231,8 +226,7 @@ bullet each:
 - **`STATE_DESCRIPTION`** — forgives a state `Description` that merely repeats `Name`, the
   generator's default.
 - **`USER_PROFILE_EXCLUDED`** — drops the whole `UserProfile` sheet from comparison, on both sides.
-  Maintainer decision 2026-07-16 following investigation
-  ([`docs/userprofile-investigation.md`](userprofile-investigation.md)): the sheet holds per-user
+  Maintainer decision 2026-07-16: the sheet holds per-user
   workbasket-filter defaults that are deployment config, not case-type model, and are functionally
   dead in current XUI; the SDK still has no API for it, so conversion continues to hard-fail via the
   existing `OMITTED_FAIL`/`UNSUPPORTED_SHEET` gap (unless `--allow-gaps`) — this rule only stops the
@@ -541,19 +535,18 @@ dispositions respectively.)
 Anything not expressible as code *or* passthrough is an `OMITTED_FAIL` entry in the gap report and
 fails the conversion unless `--allow-gaps`.
 
-#### Not supported: fails conversion with a gap
+### Removed constructs (conversion fails by design) {#removed-constructs-conversion-fails-by-design}
 
-Six constructs that used to be carried by passthrough or a graft are now **not supported** — the
-converter records a blocking `OMITTED_FAIL` gap (category `UNSUPPORTED_SHEET`/`UNSUPPORTED_VALUE`) so
-a definition carrying one fails conversion unless `--allow-gaps` is set (which omits the construct
-entirely rather than fabricating it). The maintainer removed these because silently carrying them
-through as raw JSON hid a construct the migrated Java definition cannot express — surfacing them as
-an explicit gap makes the migrating team decide consciously.
+Five constructs are removed by design — the converter records a blocking `OMITTED_FAIL` gap
+(category `UNSUPPORTED_SHEET`/`UNSUPPORTED_VALUE`) so a definition carrying one fails conversion
+unless `--allow-gaps` is set (which omits the construct entirely rather than fabricating it).
+Silently carrying them through as raw JSON would hide a construct the migrated Java definition
+cannot express — surfacing them as an explicit gap makes the migrating team decide consciously.
 
 | Construct | Sheet(s) | Gap category | Notes |
 |---|---|---|---|
 | SearchAlias | `SearchAlias` | `UNSUPPORTED_SHEET` | No `SearchAlias` generator. |
-| UserProfile | `UserProfile` | `UNSUPPORTED_SHEET` | Per-user default worklists; no generator. Populated in most real fixtures, so its removal from passthrough is what forces those definitions to `--allow-gaps` (or a hand-authored UserProfile). **Maintainer decision 2026-07-16, kept after investigation** ([`docs/userprofile-investigation.md`](userprofile-investigation.md)): the sheet's payoff — pre-selecting a caseworker's workbasket filter — is functionally dead in current XUI (`ProfileService.get()` fetches it but no `case-list.component.ts`/toolkit code path consumes `profile.default.workbasket`); the rows are per-user, per-environment deployment data rather than case-type model (upstream `ccd-definition-processor` already treats `UserProfile.json` as environment-varying, excludable config); and fixture rows carry real staff/contractor emails (e.g. `nigel.dunne@solirius.com`, council addresses in fpl) that should not be baked into a shared Java definition. The comparator's `USER_PROFILE_EXCLUDED` rule drops the sheet from both sides so it stops recurring as a residual, but conversion still hard-fails on it as above. |
+| UserProfile | `UserProfile` | `UNSUPPORTED_SHEET` | Per-user default worklists; no generator. Populated in most real fixtures, so its removal from passthrough is what forces those definitions to `--allow-gaps` (or a hand-authored UserProfile). **Maintainer decision 2026-07-16, kept after investigation**: the sheet's payoff — pre-selecting a caseworker's workbasket filter — is functionally dead in current XUI (`ProfileService.get()` fetches it but no `case-list.component.ts`/toolkit code path consumes `profile.default.workbasket`); the rows are per-user, per-environment deployment data rather than case-type model (upstream `ccd-definition-processor` already treats `UserProfile.json` as environment-varying, excludable config); and fixture rows carry real staff/contractor emails (e.g. `nigel.dunne@solirius.com`, council addresses in fpl) that should not be baked into a shared Java definition. The comparator's `USER_PROFILE_EXCLUDED` rule drops the sheet from both sides so it stops recurring as a residual, but conversion still hard-fails on it as above. |
 | AccessType / AccessTypeRole | `AccessType`, `AccessTypeRole` | `UNSUPPORTED_SHEET` | Org group-access config; no generator (and NOT deprecated — importer + data store consume them). |
 | CaseRoles `JurisdictionID` (mixed usage only) | `CaseRoles` | `UNSUPPORTED_VALUE` | `emitCaseRoleJurisdiction()` is all-or-nothing; when every row carries `JurisdictionID` the switch emits it natively, but *mixed* usage (only some rows) cannot be expressed and now fails. |
 | Unknown / custom `FieldType` (+`FieldTypeParameter`) | `CaseField` | `UNSUPPORTED_VALUE` | A type with no Java carrier that is **not** a real `FieldType` enum constant can only be inferred as `String`→`Text`. `CaseHistoryViewer`/`WaysToPay`/`JudicialUser`/… are completed `FieldType` constants taking the `@CCD(typeOverride)` Java path; a genuinely unknown type now fails. Add it as a `FieldType` constant or model it as a complex type to convert it faithfully. |
@@ -691,7 +684,7 @@ intended change, run `GenerateGoldenFiles` with `-Djunit.jupiter.conditions.deac
 > - **`UserProfile` removal (net baseline-neutral).** The generated side no longer emits these rows
 >   while the expected side still carries them, which briefly added residuals: `fpl` +22,
 >   `probate` +38, `civil` +3, `sscs` +2, `prl` +1 (`ia`/`ET` carry none). The maintainer's decision
->   (2026-07-16, after [investigation](userprofile-investigation.md)) was to keep the `OMITTED_FAIL`
+>   (2026-07-16) was to keep the `OMITTED_FAIL`
 >   hard-fail on conversion but stop these expected-only rows recurring in every baseline: the
 >   `USER_PROFILE_EXCLUDED` comparator rule now drops the sheet from both sides before comparison, so
 >   the counts above are already absorbed out of the current baselines in the table above.
