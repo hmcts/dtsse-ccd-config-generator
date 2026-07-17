@@ -924,9 +924,11 @@ public class EventsConfigEmitter implements SourceEmitter {
    *
    * <p>The columns these calls reproduce ({@code DisplayContext}, {@code ListElementCode},
    * {@code EventElementLabel}, {@code EventHintText}, {@code FieldShowCondition}, {@code PageID}) are
-   * exactly those the linker leaves out of the companion graft; the row's {@code ID},
-   * {@code FieldDisplayOrder} and any exotic tail are grafted back over the generated rows (see
-   * {@code DefaultDefinitionLinker.buildEventToComplexTypesPassthrough}).
+   * exactly those the linker leaves out of the companion graft; only an exotic tail column is grafted
+   * back over the generated rows (see {@code DefaultDefinitionLinker.buildEventToComplexTypesPassthrough}).
+   * The row's {@code ID} (importer-ignored author metadata) and {@code FieldDisplayOrder} (re-derived by
+   * the SDK; only relative member order — this emission order — matters) are accepted differences the
+   * comparator discards, so a derived group with no exotic tail leaves no passthrough carrier.
    *
    * @param group the resolved member overrides for one complex field on one event
    * @param context the emit context (for the model package the generated complex types live in)

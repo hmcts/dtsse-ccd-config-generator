@@ -790,6 +790,85 @@ class DefaultDefinitionLinkerTest {
   }
 
   @Test
+  void derivedGroupWithNoExoticTailLeavesNoPassthroughCarrier() {
+    GapCollector gaps = new GapCollector();
+    // A fully-derivable group whose rows carry only generator-computed columns (LEC, DisplayContext)
+    // plus the two accepted-difference columns (ID, FieldDisplayOrder). The importer ignores ID on
+    // this sheet and the SDK re-derives FieldDisplayOrder, so neither is grafted; with nothing else
+    // to carry, the group emits its .complex(...) chain and NO passthrough file at all.
+    DefinitionIr ir = minimal("Minimal")
+        .row(SheetName.CASE_FIELD,
+            cols("CaseTypeID", "Minimal", "ID", "contact", "Label", "Contact",
+                "FieldType", "Contact"))
+        .row(SheetName.COMPLEX_TYPES,
+            cols("ID", "Contact", "ListElementCode", "name", "FieldType", "Text"))
+        .row(SheetName.CASE_EVENT,
+            cols("CaseTypeID", "Minimal", "ID", "createCase", "Name", "Create",
+                "PostConditionState", "Open"))
+        .row(SheetName.CASE_EVENT_TO_FIELDS,
+            cols("CaseTypeID", "Minimal", "CaseEventID", "createCase",
+                "CaseFieldID", "contact", "DisplayContext", "COMPLEX", "PageID", "1"))
+        .row(SheetName.CASE_EVENT_TO_COMPLEX_TYPES,
+            cols("ID", "Contact", "CaseEventID", "createCase", "CaseFieldID", "contact",
+                "ListElementCode", "name", "DisplayContext", "MANDATORY", "FieldDisplayOrder", 1))
+        .build();
+
+    CaseTypeModel model = linker.link(ir, options("Minimal"), gaps);
+
+    assertThat(model.getEventComplexTypeGroups().get("createCasecontact"))
+        .as("the group derives to a .complex(...) chain").isNotNull();
+    assertThat(model.getPassthroughSheets())
+        .as("no companion carrier is emitted when the row has no exotic tail")
+        .noneMatch(p -> p.getRelativePath()
+            .equals("CaseEventToComplexTypes/createCase/contact.json"));
+  }
+
+  @Test
+  void derivedGroupGraftsOnlyTheExoticTailAdditively() {
+    GapCollector gaps = new GapCollector();
+    // Same derivable group, but one row also carries an exotic tail column the generator never writes
+    // (SecurityClassification). Only that column is grafted -- not ID, not FieldDisplayOrder -- keyed
+    // on the generator-emitted columns, additively (no overwriteColumns).
+    DefinitionIr ir = minimal("Minimal")
+        .row(SheetName.CASE_FIELD,
+            cols("CaseTypeID", "Minimal", "ID", "contact", "Label", "Contact",
+                "FieldType", "Contact"))
+        .row(SheetName.COMPLEX_TYPES,
+            cols("ID", "Contact", "ListElementCode", "name", "FieldType", "Text"))
+        .row(SheetName.CASE_EVENT,
+            cols("CaseTypeID", "Minimal", "ID", "createCase", "Name", "Create",
+                "PostConditionState", "Open"))
+        .row(SheetName.CASE_EVENT_TO_FIELDS,
+            cols("CaseTypeID", "Minimal", "CaseEventID", "createCase",
+                "CaseFieldID", "contact", "DisplayContext", "COMPLEX", "PageID", "1"))
+        .row(SheetName.CASE_EVENT_TO_COMPLEX_TYPES,
+            cols("ID", "Contact", "CaseEventID", "createCase", "CaseFieldID", "contact",
+                "ListElementCode", "name", "DisplayContext", "MANDATORY", "FieldDisplayOrder", 1,
+                "SecurityClassification", "Private"))
+        .build();
+
+    CaseTypeModel model = linker.link(ir, options("Minimal"), gaps);
+
+    assertThat(model.getEventComplexTypeGroups().get("createCasecontact")).isNotNull();
+    PassthroughSheet sheet = model.getPassthroughSheets().stream()
+        .filter(s -> s.getRelativePath()
+            .equals("CaseEventToComplexTypes/createCase/contact.json"))
+        .findFirst().orElseThrow();
+    assertThat(sheet.getOverwriteColumns())
+        .as("the tail is grafted additively, never overwriting a generated value").isEmpty();
+    assertThat(sheet.getPrimaryKeys())
+        .containsExactly("CaseEventID", "CaseFieldID", "ListElementCode");
+    assertThat(sheet.getRows()).singleElement().satisfies(r -> {
+      assertThat(r).containsEntry("SecurityClassification", "Private");
+      assertThat(r).containsKeys("CaseEventID", "CaseFieldID", "ListElementCode");
+      assertThat(r).as("ID is an importer-ignored accepted difference, not grafted")
+          .doesNotContainKey("ID");
+      assertThat(r).as("FieldDisplayOrder joins the display-order disposition, not grafted")
+          .doesNotContainKey("FieldDisplayOrder");
+    });
+  }
+
+  @Test
   void dedupesAccessClassesAndAccountsForInjectedEventGrants() {
     GapCollector gaps = new GapCollector();
     // The converter emits .explicitGrants() on every event, so an event's role grant does NOT

@@ -866,6 +866,104 @@ public class NormalisingCcdConfigComparatorTest {
         assertThat(result.matches()).isFalse();
     }
 
+    // ---- EVENT_COMPLEX_TYPE_ID_IGNORED ----
+
+    @Test
+    public void eventToComplexTypesIdColumnIsDroppedFromBothSides() {
+        // The importer never reads ID on this sheet (EventCaseFieldComplexTypeParser maps LEC/labels/
+        // order/context but not ColumnName.ID), so the converter no longer grafts it onto a derived
+        // group's generated rows. The expected side (from the input) carries it; the generated side
+        // does not. Dropping it from both sides before matching lets the row match as an accepted
+        // difference rather than a residual.
+        Map<String, List<Map<String, Object>>> expected = sheets("EventToComplexTypes",
+            rows(row("ID", "Child", "CaseEventID", "childDetails", "CaseFieldID", "children",
+                "ListElementCode", "firstName", "DisplayContext", "OPTIONAL")));
+        Map<String, List<Map<String, Object>>> actual = sheets("EventToComplexTypes",
+            rows(row("CaseEventID", "childDetails", "CaseFieldID", "children",
+                "ListElementCode", "firstName", "DisplayContext", "OPTIONAL")));
+
+        ComparisonResult result = NormalisingCcdConfigComparator.compare(expected, actual);
+
+        assertThat(result.matches()).as(result.report()).isTrue();
+        assertThat(result.getAppliedRules())
+            .anySatisfy(rule -> assertThat(rule).startsWith("EVENT_COMPLEX_TYPE_ID_IGNORED"));
+    }
+
+    @Test
+    public void eventToComplexTypesGenuineColumnDifferenceStillFailsDespiteIdDrop() {
+        // Dropping ID must not mask a real difference on a column the importer DOES read: the rows
+        // match on (CaseEventID, CaseFieldID, ListElementCode), and a DisplayContext divergence fails.
+        Map<String, List<Map<String, Object>>> expected = sheets("EventToComplexTypes",
+            rows(row("ID", "Child", "CaseEventID", "childDetails", "CaseFieldID", "children",
+                "ListElementCode", "firstName", "DisplayContext", "OPTIONAL")));
+        Map<String, List<Map<String, Object>>> actual = sheets("EventToComplexTypes",
+            rows(row("CaseEventID", "childDetails", "CaseFieldID", "children",
+                "ListElementCode", "firstName", "DisplayContext", "MANDATORY")));
+
+        ComparisonResult result = NormalisingCcdConfigComparator.compare(expected, actual);
+
+        assertThat(result.matches()).isFalse();
+        assertThat(result.getFailures())
+            .anySatisfy(failure -> assertThat(failure).contains("DisplayContext"));
+    }
+
+    @Test
+    public void idIsNotDroppedFromTheComplexTypesSheet() {
+        // The drop is scoped to EventToComplexTypes only; on ComplexTypes ID is a real key, so two
+        // genuinely different declaring types must still fail rather than collapse together.
+        Map<String, List<Map<String, Object>>> expected = sheets("ComplexTypes",
+            rows(row("ID", "Applicant", "ListElementCode", "name", "FieldType", "Text")));
+        Map<String, List<Map<String, Object>>> actual = sheets("ComplexTypes",
+            rows(row("ID", "Respondent", "ListElementCode", "name", "FieldType", "Text")));
+
+        assertThat(NormalisingCcdConfigComparator.compare(expected, actual).matches()).isFalse();
+    }
+
+    @Test
+    public void reorderedSameLecMemberRowsWithinAGroupStillFail() {
+        // A fallback (non-derived) group can list the same ListElementCode twice under two declaring
+        // types (prl's children hosts both a Child and an OtherPersonWhoLivesWithChild firstName). With
+        // ID no longer in the key, those two rows share one (event, field, LEC) key and are matched by
+        // row order within the group. Swapping their order between the sides is a genuine reordering
+        // that must fail — confirming relative member order stays comparable after the ID drop.
+        Map<String, List<Map<String, Object>>> expected = sheets("EventToComplexTypes",
+            rows(
+                row("ID", "Child", "CaseEventID", "childDetails", "CaseFieldID", "children",
+                    "ListElementCode", "firstName", "DisplayContext", "OPTIONAL"),
+                row("ID", "OtherPerson", "CaseEventID", "childDetails", "CaseFieldID", "children",
+                    "ListElementCode", "firstName", "DisplayContext", "MANDATORY")));
+        Map<String, List<Map<String, Object>>> actual = sheets("EventToComplexTypes",
+            rows(
+                row("CaseEventID", "childDetails", "CaseFieldID", "children",
+                    "ListElementCode", "firstName", "DisplayContext", "MANDATORY"),
+                row("CaseEventID", "childDetails", "CaseFieldID", "children",
+                    "ListElementCode", "firstName", "DisplayContext", "OPTIONAL")));
+
+        assertThat(NormalisingCcdConfigComparator.compare(expected, actual).matches()).isFalse();
+    }
+
+    @Test
+    public void sameOrderSameLecMemberRowsWithinAGroupMatch() {
+        // The mirror of the reorder test: when the two same-LEC rows keep their input order on both
+        // sides, index-pairing lines them up and they match (ID dropped, DisplayContext equal).
+        Map<String, List<Map<String, Object>>> expected = sheets("EventToComplexTypes",
+            rows(
+                row("ID", "Child", "CaseEventID", "childDetails", "CaseFieldID", "children",
+                    "ListElementCode", "firstName", "DisplayContext", "OPTIONAL"),
+                row("ID", "OtherPerson", "CaseEventID", "childDetails", "CaseFieldID", "children",
+                    "ListElementCode", "firstName", "DisplayContext", "MANDATORY")));
+        Map<String, List<Map<String, Object>>> actual = sheets("EventToComplexTypes",
+            rows(
+                row("CaseEventID", "childDetails", "CaseFieldID", "children",
+                    "ListElementCode", "firstName", "DisplayContext", "OPTIONAL"),
+                row("CaseEventID", "childDetails", "CaseFieldID", "children",
+                    "ListElementCode", "firstName", "DisplayContext", "MANDATORY")));
+
+        ComparisonResult result = NormalisingCcdConfigComparator.compare(expected, actual);
+
+        assertThat(result.matches()).as(result.report()).isTrue();
+    }
+
     // ---- STATE_DESCRIPTION ----
 
     @Test

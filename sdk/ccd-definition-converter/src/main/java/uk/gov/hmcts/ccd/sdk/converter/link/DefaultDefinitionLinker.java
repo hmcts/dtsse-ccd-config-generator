@@ -2068,24 +2068,35 @@ public class DefaultDefinitionLinker implements DefinitionLinker {
       if (group != null) {
         groups.put(eventId + "\u001f" + fieldId, group);
         derivedRows += groupRows.size();
-        // Companion graft: the columns the generator cannot compute for a derived row.
+        // Companion graft: only the exotic tail columns the generator cannot compute. The row's ID
+        // is no longer grafted — the definition-store importer never reads it on this sheet (its
+        // EventCaseFieldComplexTypeParser maps ListElementCode/labels/order/context/show-condition but
+        // never ColumnName.ID, ID is not a required column for the sheet, and EventComplexTypeEntity's
+        // id is a DB-generated sequence), so it is arbitrary author metadata and an accepted
+        // difference the comparator drops on both sides (EVENT_COMPLEX_TYPE_ID_IGNORED). FieldDisplayOrder
+        // is no longer grafted either: the importer stores it verbatim but the SDK re-derives it from a
+        // per-event counter, and only the members' RELATIVE order matters (preserved by emitting members
+        // in input row order); it joins the display-order-renumbering disposition and is stripped on
+        // every sheet by DEFAULTS. So a derived group now emits a graft row ONLY when the input row
+        // carries an exotic tail column — most carriers disappear entirely.
         List<Map<String, Object>> graft = new ArrayList<>();
         for (SheetRow row : groupRows) {
-          graft.add(etoctGraftRow(row));
+          Map<String, Object> tail = etoctGraftRow(row);
+          if (tail != null) {
+            graft.add(tail);
+          }
         }
-        sheets.add(PassthroughSheet.builder()
-            .relativePath("CaseEventToComplexTypes/" + eventId + "/" + fieldId + ".json")
-            // Keyed on the columns the generator DOES emit, so the graft merges onto the generated
-            // row rather than adding an orphan. (ID cannot be part of the key — the generator omits
-            // it — so it is grafted as a value instead.)
-            .primaryKeys(List.of(Columns.CASE_EVENT_ID, Columns.CASE_FIELD_ID,
-                Columns.LIST_ELEMENT_CODE))
-            // FieldDisplayOrder must overwrite the generator's per-event-counter value with the
-            // input's per-field value; every other grafted column is additive (the generator omits
-            // it), matching the whole-sheet passthrough's fidelity for those columns.
-            .overwriteColumns(List.of(Columns.FIELD_DISPLAY_ORDER))
-            .rows(graft)
-            .build());
+        if (!graft.isEmpty()) {
+          sheets.add(PassthroughSheet.builder()
+              .relativePath("CaseEventToComplexTypes/" + eventId + "/" + fieldId + ".json")
+              // Keyed on the columns the generator DOES emit, so the tail merges onto the generated
+              // row rather than adding an orphan. Every tail column is additive (the generator omits
+              // it), so no overwriteColumns are needed.
+              .primaryKeys(List.of(Columns.CASE_EVENT_ID, Columns.CASE_FIELD_ID,
+                  Columns.LIST_ELEMENT_CODE))
+              .rows(graft)
+              .build());
+        }
       } else {
         fallbackRows += groupRows.size();
         List<Map<String, Object>> raw = new ArrayList<>();
@@ -2117,8 +2128,10 @@ public class DefaultDefinitionLinker implements DefinitionLinker {
         .category(GapCategory.UNSUPPORTED_SHEET)
         .action(fallbackRows == 0 ? GapAction.CONDITIONAL_CODE : GapAction.PASSTHROUGH_ROW)
         .detail("EventToComplexTypes per-member event overrides: " + derivedRows + " row(s) emitted"
-            + " as generated .complex(...) builder chains (ID / FieldDisplayOrder / any exotic tail"
-            + " column grafted back over the generated rows); " + fallbackRows + " row(s) kept as a"
+            + " as generated .complex(...) builder chains (only an exotic tail column is grafted back"
+            + " over the generated rows; the row's ID is an importer-ignored accepted difference and"
+            + " FieldDisplayOrder joins the display-order-renumbering disposition, so a derived group"
+            + " with no exotic tail leaves no passthrough carrier); " + fallbackRows + " row(s) kept as a"
             + " verbatim row passthrough because their group is not derivable. Collection-rooted and"
             + " collection-intermediate groups are now derived (the element-typed"
             + " .complex(getter, Element.class) scope walks into the ListValue element type) and a"
@@ -2134,18 +2147,33 @@ public class DefaultDefinitionLinker implements DefinitionLinker {
   }
 
   /**
-   * The columns the {@code .complex(...)} member emission reproduces as generated Java for a derived
-   * {@code CaseEventToComplexTypes} row — everything {@code CaseEventToComplexTypesGenerator.expand}
-   * computes from the builder chain. These are NOT grafted for a derived row (the generator emits
-   * them); every OTHER column present on the input row IS grafted (see {@link #etoctGraftRow}).
-   * {@code LiveFrom} is stripped on both sides by {@code LiveFromRule}, so it is neither derived nor
-   * grafted. {@code HintText} is derived from the generated member's {@code @CCD(hint)}, so it is
-   * treated as derived too.
+   * The columns a derived {@code CaseEventToComplexTypes} row does NOT graft back — everything the
+   * {@code .complex(...)} member emission or the comparator already accounts for, so grafting them
+   * would be redundant. Two kinds:
+   *
+   * <ul>
+   *   <li><b>Generator-computed</b>: the key columns plus {@code DisplayContext}/
+   *       {@code EventElementLabel}/{@code EventHintText}/{@code FieldShowCondition}/{@code PageID}/
+   *       {@code HintText} — all reproduced from the builder chain by
+   *       {@code CaseEventToComplexTypesGenerator.expand}. {@code LiveFrom} is stripped on both sides
+   *       by {@code LiveFromRule}, and {@code HintText} is derived from the member's {@code @CCD(hint)}.
+   *   </li>
+   *   <li><b>Accepted differences</b>: {@code ID} — arbitrary author metadata the importer never reads
+   *       on this sheet (see {@link #etoctGraftRow}), dropped from comparison by
+   *       {@code EVENT_COMPLEX_TYPE_ID_IGNORED}; and {@code FieldDisplayOrder} — re-derived by the SDK
+   *       from a per-event counter (only relative member order matters), stripped on every sheet by
+   *       {@code DEFAULTS}. Grafting either would merely re-inject a value the comparator discards.
+   *   </li>
+   * </ul>
+   *
+   * <p>Every OTHER column present on the input row IS an exotic tail column and IS grafted (see
+   * {@link #etoctGraftRow}).</p>
    */
   private static final Set<String> ETOCT_DERIVED_COLUMNS = Set.of(
       Columns.CASE_EVENT_ID, Columns.CASE_FIELD_ID, Columns.LIST_ELEMENT_CODE,
       Columns.DISPLAY_CONTEXT, Columns.EVENT_ELEMENT_LABEL, Columns.EVENT_HINT_TEXT,
-      Columns.FIELD_SHOW_CONDITION, Columns.PAGE_ID, Columns.HINT_TEXT, "LiveFrom");
+      Columns.FIELD_SHOW_CONDITION, Columns.PAGE_ID, Columns.HINT_TEXT, "LiveFrom",
+      Columns.ID, Columns.FIELD_DISPLAY_ORDER);
 
   /**
    * The set of {@code eventId + <unit-separator> + caseFieldId} keys for fields placed as
@@ -2309,23 +2337,42 @@ public class DefaultDefinitionLinker implements DefinitionLinker {
   }
 
   /**
-   * The companion-graft row for a derived {@code CaseEventToComplexTypes} row: the merge-key
-   * columns, the {@code ID} the generator omits, the {@code FieldDisplayOrder} it computes wrongly,
-   * and every exotic tail column the generator never writes. The columns the generator DOES compute
-   * ({@link #ETOCT_DERIVED_COLUMNS}) are left out so the additive/overwrite merge cannot conflict
-   * with them.
+   * The companion-graft row for a derived {@code CaseEventToComplexTypes} row, or {@code null} when
+   * the input row carries no exotic tail. The generator writes only the columns it computes from the
+   * builder chain ({@link #ETOCT_DERIVED_COLUMNS}) — which now also cover the two accepted-difference
+   * columns {@code ID} and {@code FieldDisplayOrder} that the definition-store importer either ignores
+   * ({@code ID}) or re-derives ({@code FieldDisplayOrder}). Every OTHER column present on the input row
+   * is an exotic tail column the generator never writes ({@code SecurityClassification}, {@code Publish},
+   * {@code RetainHiddenValue}, {@code ShowSummaryChangeOption}, {@code ShowSummaryContentOption},
+   * {@code DefaultValue}, …); those are grafted back over the generated row, additively (keyed on the
+   * columns the generator DOES emit). When the row has no such column there is nothing the generator
+   * cannot compute, so no graft row is produced at all and the derived group leaves no passthrough
+   * carrier behind.
    */
   private Map<String, Object> etoctGraftRow(SheetRow row) {
-    Map<String, Object> out = new LinkedHashMap<>();
-    out.put(Columns.CASE_EVENT_ID, row.getColumns().get(Columns.CASE_EVENT_ID));
-    out.put(Columns.CASE_FIELD_ID, row.getColumns().get(Columns.CASE_FIELD_ID));
-    out.put(Columns.LIST_ELEMENT_CODE, row.getColumns().get(Columns.LIST_ELEMENT_CODE));
+    Map<String, Object> tail = new LinkedHashMap<>();
     for (Map.Entry<String, Object> column : row.getColumns().entrySet()) {
       if (ETOCT_DERIVED_COLUMNS.contains(column.getKey())) {
         continue;
       }
-      out.put(column.getKey(), column.getValue());
+      // A blank/absent exotic column carries nothing the generator failed to write (the comparator
+      // treats blank and absent identically — EmptyStringAbsentRule), so it is not grafted; a row
+      // whose only extra columns are blank therefore leaves no carrier behind.
+      Object value = column.getValue();
+      if (value == null || (value instanceof String string && string.isBlank())) {
+        continue;
+      }
+      tail.put(column.getKey(), value);
     }
+    if (tail.isEmpty()) {
+      return null;
+    }
+    // Prepend the merge-key columns so the additive merge lands the tail on the generated row.
+    Map<String, Object> out = new LinkedHashMap<>();
+    out.put(Columns.CASE_EVENT_ID, row.getColumns().get(Columns.CASE_EVENT_ID));
+    out.put(Columns.CASE_FIELD_ID, row.getColumns().get(Columns.CASE_FIELD_ID));
+    out.put(Columns.LIST_ELEMENT_CODE, row.getColumns().get(Columns.LIST_ELEMENT_CODE));
+    out.putAll(tail);
     return out;
   }
 

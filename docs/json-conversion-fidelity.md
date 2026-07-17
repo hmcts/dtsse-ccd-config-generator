@@ -55,11 +55,12 @@ this page.** Each gap is classified one of five ways:
 | Injected/widened read (`R`) on unrestricted-tab fields | **Semantic, accepted** | `TAB_READ_INJECTION` | Roles already event-granted gain tab-field visibility; each (field, role) is an `AUTH_NOT_DERIVABLE`/`ADVISORY` report-only record — **no row is passed through** ([detail](#authorisationcasefield-injected-read-records)) |
 | Surplus `⊆ {C,R}` grants on `Label`/`READONLY` fields | **Semantic, accepted** | `IMMUTABLE_FIELD_CR` | Display permission on data-free fields |
 | Uniform vestigial `AuthorisationCaseState LiveTo` (probate's `01/01/2020` on every row) | **Semantic, accepted** | `LIVE_TO_VESTIGIAL` | Dead sheet-wide end-of-life the SDK can't emit; per-row divergent `LiveTo` still fails ([detail](#3-uniform-vestigial-authorisationcasestate-liveto)) |
-| Display-order renumbering (`*DisplayOrder`/`PageColumnNumber` never compared, any sheet) | **Semantic, accepted** | `DEFAULTS` + `CASE_TYPE_TAB` strips | Relative order preserved by row order (FixedLists actively sorted); `PageColumnNumber=2` flattened |
+| Display-order renumbering (`*DisplayOrder`/`PageColumnNumber` never compared, any sheet) | **Semantic, accepted** | `DEFAULTS` + `CASE_TYPE_TAB` strips | Relative order preserved by row order (FixedLists actively sorted); `PageColumnNumber=2` flattened. Includes `EventToComplexTypes` `FieldDisplayOrder` (SDK uses a per-event counter; relative member order preserved by emission order) |
+| `EventToComplexTypes` `ID` (declaring complex type) | **Semantic, accepted** | `EVENT_COMPLEX_TYPE_ID_IGNORED` | The importer never reads `ID` on this sheet — `EventCaseFieldComplexTypeParser` maps `ListElementCode`/labels/order/context but not `ColumnName.ID`, it is not a required column, and `EventComplexTypeEntity.id` is a DB-generated sequence — so it is arbitrary author metadata dropped from both sides. Scoped to this sheet only (`ID` is a real key on `CaseField`/`ComplexTypes`/…) |
 | SearchAlias sheet | **Not supported** | — | No SDK generator; fails conversion with an `OMITTED_FAIL` gap (unless `--allow-gaps`) |
 | UserProfile sheet | **Not supported** | `USER_PROFILE_EXCLUDED` | Per-user default worklists; no generator; conversion still fails with an `OMITTED_FAIL` gap (unless `--allow-gaps`), but the comparator drops the sheet from both sides so an expected-side `UserProfile` no longer recurs as a residual ([maintainer decision 2026-07-16](userprofile-investigation.md)) |
 | AccessType / AccessTypeRole sheets | **Not supported** | — | Org group-access config; no generator; fails conversion with an `OMITTED_FAIL` gap (unless `--allow-gaps`) |
-| EventToComplexTypes per-member overrides | **Generated Java** (+ column-graft for the non-derivable tail) | Java / column-graft (fallback: row) | Emitted as `.complex(CaseData::getField).<ctx>(Type::getMember).eventLabel/.eventHint/.fieldShowCondition/.pageId` builder chains — the getter chain reproduces `DisplayContext`/`ListElementCode`/`EventElementLabel`/`EventHintText`/`FieldShowCondition`/`PageID`/`HintText`. A `Collection`-typed root/intermediate is walked into via the element-typed `.complex(getter, Element.class)` scope, and a member `@CCD(hint)` the input row overrides is emitted via the tri-state `.hintText(...)`/`.noHintText()` carrier. The row's `ID` (arbitrary author data the SDK never writes), its `FieldDisplayOrder` (SDK uses a per-event counter, not the input's per-field restart — overwrite-grafted) and any exotic tail (`SecurityClassification`/`Publish`/`RetainHiddenValue`/`ShowSummaryChangeOption`/`ShowSummaryContentOption`/`DefaultValue`/`ElementLabel`/…) are grafted back over the generated rows. **Fallback to row passthrough** for a group that is not a plain `COMPLEX`-placed `CaseData` field, whose dotted `ListElementCode` does not resolve through the typed complex-type graph, whose `DisplayContext` is not `OPTIONAL`/`MANDATORY`/`READONLY`, which repeats a `ListElementCode` within the group, which carries a raw derivable-key value the generator would normalise (whitespace/case), or which has an overlay-suffixed sibling. Byte-identical round-trip either way ([detail](#5-eventtocomplextypes-generated-java-vs-fallback)) |
+| EventToComplexTypes per-member overrides | **Generated Java** (+ column-graft for the non-derivable tail) | Java / column-graft (fallback: row) | Emitted as `.complex(CaseData::getField).<ctx>(Type::getMember).eventLabel/.eventHint/.fieldShowCondition/.pageId` builder chains — the getter chain reproduces `DisplayContext`/`ListElementCode`/`EventElementLabel`/`EventHintText`/`FieldShowCondition`/`PageID`/`HintText`. A `Collection`-typed root/intermediate is walked into via the element-typed `.complex(getter, Element.class)` scope, and a member `@CCD(hint)` the input row overrides is emitted via the tri-state `.hintText(...)`/`.noHintText()` carrier. The row's `ID` (importer-ignored author metadata — `EVENT_COMPLEX_TYPE_ID_IGNORED`) and its `FieldDisplayOrder` (re-derived by the SDK from a per-event counter; only relative member order matters — display-order-renumbering disposition) are accepted differences, no longer grafted; only an exotic tail (`SecurityClassification`/`Publish`/`RetainHiddenValue`/`ShowSummaryChangeOption`/`ShowSummaryContentOption`/`DefaultValue`/`ElementLabel`/…) is grafted back over the generated rows, and a derived group with no such tail leaves no passthrough carrier. **Fallback to row passthrough** for a group that is not a plain `COMPLEX`-placed `CaseData` field, whose dotted `ListElementCode` does not resolve through the typed complex-type graph, whose `DisplayContext` is not `OPTIONAL`/`MANDATORY`/`READONLY`, which repeats a `ListElementCode` within the group, which carries a raw derivable-key value the generator would normalise (whitespace/case), or which has an overlay-suffixed sibling. Byte-identical round-trip either way ([detail](#5-eventtocomplextypes-generated-java-vs-fallback)) |
 | Orphan ComplexTypes (nothing reachable references) | **Semantic, accepted** | `ORPHAN_COMPLEX_TYPE` | Not in `config.getTypes()`; the SDK generates no class/rows, so the input rows are dropped (advisory gap, "safe to delete") — no longer passed through |
 | Orphan-path FixedLists (reachable only via an orphan complex type) | **Semantic, accepted** | `ORPHAN_FIXED_LIST` | The SDK generates no enum; the input rows are dropped (advisory gap) — no longer passed through |
 | Predefined ComplexTypes redeclaration (member-by-member re-spelling of `Fee`/`Address`/…) | **Semantic, accepted** | `PREDEFINED_COMPLEX_TYPE_REDECLARATION` | The built-in `@ComplexType(generate=false)` type owns its definition; the redundant input rows are dropped (advisory gap) — no longer passed through |
@@ -425,21 +426,29 @@ leaves the cascade (nothing emitted), a differing `HintText` emits `.hintText(va
 `HintText` against a member that declares one emits `.noHintText()` to suppress the cascade. This is
 distinct from `.eventHint(...)`, which writes the `EventHintText` column.
 
-**Companion column-graft.** Three kinds of column the SDK generator *cannot* compute are grafted back
-over the generated rows, keyed on `(CaseEventID, CaseFieldID, ListElementCode)`:
+**Companion column-graft.** A derived group now grafts back only its **exotic tail** — the columns the
+SDK generator *cannot* compute — keyed on `(CaseEventID, CaseFieldID, ListElementCode)` and merged
+**additively**: `SecurityClassification`, `Publish`, `RetainHiddenValue`, `ShowSummaryChangeOption`,
+`ShowSummaryContentOption`, `DefaultValue`, `ElementLabel`, `FieldType`/`FieldTypeParameter`,
+`Comment`/`_comment`, `CaseTypeID`, `Page*` — none of which the member builder expresses. When a
+derived group's rows carry no such column, **no passthrough carrier is produced at all** — the
+`.complex(...)` chain is the whole story. (`LiveFrom` is stripped on both sides by `LIVE_FROM`, so it
+is neither derived nor grafted.)
 
-- **`ID`** — the row's declaring complex type. It is arbitrary author data the generator never emits
-  (e.g. ia's `lastModifiedApplication` field, declared type `makeAnApplication`, carries
-  `ID=decideAnApplication`), yet the comparator keys the sheet on it, so every derived row needs it
-  added.
+Two columns the graft used to carry are now **accepted differences**, no longer grafted (maintainer
+decision, backed by the definition-store importer — see the accepted-differences table):
+
+- **`ID`** — the row's declaring complex type (e.g. ia's `lastModifiedApplication` field, declared type
+  `makeAnApplication`, carries `ID=decideAnApplication`). The importer's
+  `EventCaseFieldComplexTypeParser` never reads `ColumnName.ID` on this sheet, `ID` is not a required
+  column for it, and `EventComplexTypeEntity.id` is a DB-generated sequence — so it is arbitrary author
+  metadata that never reaches the imported definition. Dropped from comparison on both sides by
+  `EVENT_COMPLEX_TYPE_ID_IGNORED`, so it no longer needs adding to every derived row.
 - **`FieldDisplayOrder`** — the input numbers members per complex field (restarting at 1, with author
-  gaps/duplicates), whereas the SDK stamps a per-event running counter; grafted with **overwrite** so
-  the input value wins.
-- **exotic tail** — `SecurityClassification`, `Publish`, `RetainHiddenValue`,
-  `ShowSummaryChangeOption`, `ShowSummaryContentOption`, `DefaultValue`, `ElementLabel`,
-  `FieldType`/`FieldTypeParameter`, `Comment`/`_comment`, `CaseTypeID`, `Page*` — none of which the
-  member builder expresses; grafted **additively**. (`LiveFrom` is stripped on both sides by
-  `LIVE_FROM`, so it is neither derived nor grafted.)
+  gaps/duplicates), whereas the SDK stamps a per-event running counter. Only the members' **relative**
+  order matters (preserved by emitting members in input row order); the absolute value is not read for
+  ordering. It joins the display-order-renumbering disposition — stripped on every sheet by `DEFAULTS`
+  — so it is neither derived nor grafted.
 
 **Fallback.** A whole group stays a verbatim, ID-keyed row passthrough — byte-identical to the
 pre-existing behaviour — when it is not derivable. With collection roots/intermediates and the
@@ -514,13 +523,14 @@ row (source: `DefaultDefinitionLinker`). *Mechanism* is the merge shape:
   (never overwriting a value the generator computed).
 
 (The **overwrite-graft** shape — named columns *replacing* the generator's value on a matched row —
-is still supported by `PassthroughMerger` but currently has no producer: the two constructs that used
-it, the conditional `PostConditionState` and the unknown-`FieldType` graft, are now accepted-semantic
-and not-supported gaps respectively.)
+is still supported by `PassthroughMerger` but currently has no producer: the three constructs that used
+it — the conditional `PostConditionState`, the unknown-`FieldType` graft, and the derived-group
+`FieldDisplayOrder` overwrite — are now accepted-semantic, not-supported, and accepted-semantic
+dispositions respectively.)
 
 | Construct | Sheet(s) | Mechanism | Why there is no SDK API |
 |---|---|---|---|
-| EventToComplexTypes — **derived-group tail** | `CaseEventToComplexTypes` (→ `EventToComplexTypes`) | column-graft (per event/field) | For a group emitted as generated `.complex(...)` Java (see [§5](#5-eventtocomplextypes-generated-java-vs-fallback)), the columns the generator cannot compute — the row's `ID` (added), its `FieldDisplayOrder` (overwritten) and any exotic tail (`SecurityClassification`/`Publish`/`RetainHiddenValue`/…, added) — are grafted onto the generated rows, keyed on `(CaseEventID, CaseFieldID, ListElementCode)`. |
+| EventToComplexTypes — **derived-group tail** | `CaseEventToComplexTypes` (→ `EventToComplexTypes`) | column-graft (per event/field) | For a group emitted as generated `.complex(...)` Java (see [§5](#5-eventtocomplextypes-generated-java-vs-fallback)), only the **exotic tail** the generator cannot compute (`SecurityClassification`/`Publish`/`RetainHiddenValue`/…) is grafted onto the generated rows, additively, keyed on `(CaseEventID, CaseFieldID, ListElementCode)`. The row's `ID` (importer-ignored, `EVENT_COMPLEX_TYPE_ID_IGNORED`) and `FieldDisplayOrder` (SDK per-event counter; relative member order preserved by emission order — display-order disposition) are accepted differences, no longer grafted; a derived group with no exotic tail leaves **no carrier at all**. |
 | EventToComplexTypes — **non-derivable group** | `CaseEventToComplexTypes` (→ `EventToComplexTypes`) | row (per event/field) | A whole `(event, field)` group the converter cannot express as builder chains stays a verbatim row passthrough (ID-keyed). Causes: a non-`COMPLEX`-placed field, an unresolvable dotted `ListElementCode`, a `DisplayContext` outside `OPTIONAL`/`MANDATORY`/`READONLY`, a `ListElementCode` repeated within the group, a raw derivable-key value the generator would normalise (whitespace/case), or an overlay-suffixed sibling. (`Collection`-typed roots/intermediates and hint-cascade rows are now derived — see [§5](#5-eventtocomplextypes-generated-java-vs-fallback).) |
 | Callback URLs (about-to-start / about-to-submit / submitted) + their `RetriesTimeout*` | `CaseEvent` | column-graft | The converter deliberately emits **no** SDK callback wiring, so the generator writes no `CallBackURL*`/`RetriesTimeout*`; the input values (env `${CCD_DEF_*}` placeholders included) are grafted back verbatim. |
 | Mid-event callback URL + its `RetriesTimeout*MidEvent` | `CaseEventToFields` | column-graft | Same: mid-event is a per-page property, carried verbatim per field row rather than wired (a bracketed metadata `CaseFieldID` such as `[STATE]` is skipped — the generator emits no row for it to graft onto). |
@@ -607,8 +617,11 @@ The following constructs used to live in this table and are now emitted as real 
 - **EventToComplexTypes per-member overrides** → `.complex(CaseData::getField).<ctx>(Type::getMember)`
   builder chains carrying `.eventLabel`/`.eventHint`/`.fieldShowCondition`/`.pageId` (`FieldCollection`).
   A derivable `(event, field)` group's whole-sheet row passthrough is replaced by generated Java plus a
-  narrow companion column-graft for the columns the generator cannot compute (`ID`, `FieldDisplayOrder`,
-  the exotic tail). `Collection`-typed roots/intermediates are walked into via the element-typed
+  narrow companion column-graft for only the **exotic tail** the generator cannot compute — the row's
+  `ID` (importer-ignored, `EVENT_COMPLEX_TYPE_ID_IGNORED`) and `FieldDisplayOrder` (SDK per-event
+  counter; relative member order preserved by emission order) are accepted differences, no longer
+  grafted, so a derived group with no exotic tail leaves no carrier. `Collection`-typed
+  roots/intermediates are walked into via the element-typed
   `.complex(getter, Element.class)` scope, and a member `@CCD(hint)` the input row overrides is emitted
   via the tri-state `.hintText(...)`/`.noHintText()` carrier — both added to `FieldCollection`/`Field`
   in this round (the `.eventLabel`/`.eventHint`/`.pageId` member carriers already existed). Groups the

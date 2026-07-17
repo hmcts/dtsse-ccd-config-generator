@@ -15,7 +15,7 @@ Sheet 'ComplexTypes' row [ListingActionRequest|dateReviewed] column 'DisplayCont
 Sheet 'ComplexTypes' row [ListingActionRequest|dateSent] column 'DisplayContextParameter': expected <#DATETIMEDISPLAY(d LLL yyyy)> but column is missing in actual
 Sheet 'ComplexTypes' row [UploadedCaseManagementOrder|dateSent] column 'FieldShowCondition:': expected <judgeTitleAndName=""> but column is missing in actual
 Sheet 'ComplexTypes' row [UploadedCaseManagementOrder|status] column 'FieldShowCondition:': expected <status!="APPROVED"> but column is missing in actual
-Sheet 'EventToComplexTypes' row [LocalAuthority|||colleagues]: expected row has no match in actual: {ID=LocalAuthority, ListElementCode=colleagues, FieldType=Collection, FieldTypeParameter=Colleague, ElementLabel=Colleague, SecurityClassification=PUBLIC, FieldShowCondition=email="DO NOT SHOW"}
+Sheet 'EventToComplexTypes' row [|||colleagues]: expected row has no match in actual: {ListElementCode=colleagues, FieldType=Collection, FieldTypeParameter=Colleague, ElementLabel=Colleague, SecurityClassification=PUBLIC, FieldShowCondition=email="DO NOT SHOW"}
 Sheet 'FixedLists' row [HearingVenue|301] column 'LiveTo': expected <05/06/2022> but column is missing in actual
 Sheet 'FixedLists' row [HearingVenue|302] column 'LiveTo': expected <05/06/2022> but column is missing in actual
 Sheet 'FixedLists' row [RepresentativeRole|LA_BARRISTER]: unexpected row in actual: {ID=RepresentativeRole, ListElement=LA Barrister, ListElementCode=LA_BARRISTER}

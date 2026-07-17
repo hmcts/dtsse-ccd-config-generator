@@ -45,6 +45,7 @@ public final class NormalisingCcdConfigComparator {
         new PredefinedComplexTypeRedeclarationRule(),
         new IdentifierWhitespaceRule(),
         new KeyAliasRule(),
+        new EventComplexTypeIdIgnoredRule(),
         new LiveFromRule(),
         new LiveToVestigialRule(),
         new YnCanonRule(),
@@ -98,6 +99,13 @@ public final class NormalisingCcdConfigComparator {
         Map.entry("ComplexTypes", List.of("ID", "ListElementCode")),
         Map.entry("FixedLists", List.of("ID", "ListElementCode")),
         Map.entry("CaseTypeTab", List.of("TabID", "CaseFieldID")),
+        // ID stays a key column, but EVENT_COMPLEX_TYPE_ID_IGNORED strips it (both sides) from a
+        // DERIVED group before matching — the importer never reads it on this sheet, and a derived
+        // group's generated rows carry no ID, so its expected-side ID is dropped and the rows match on
+        // an empty ID token. A FALLBACK group keeps its ID (the verbatim passthrough carries it
+        // identically on both sides), so two rows sharing (event, field, LEC) under different declaring
+        // types (prl's children: Child + OtherPersonWhoLivesWithChild both name firstName) still
+        // disambiguate by ID rather than mis-pairing.
         Map.entry("EventToComplexTypes", List.of("ID", "CaseEventID", "CaseFieldID", "ListElementCode")),
         // Search/workbasket rows scope by role (UserRole/AccessProfile) and can repeat one
         // CaseFieldID with different ListElementCodes, so both discriminate the row identity
