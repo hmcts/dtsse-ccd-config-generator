@@ -65,6 +65,14 @@ run_lane() {
   ( cd "${REPO_ROOT}" && "${GRADLEW}" -q -p sdk :ccd-definition-converter:run \
       --args="$(printf '%q ' "${args[@]}")" )
 
+  # Refresh the clone's TRACKED state: reset every tracked modification back to the baseline and
+  # re-apply the FRESH patch. Without this the clone's model diff is forever the first patch ever
+  # applied — while companions and the patch file refresh — so the reviewable diff silently drifts
+  # from what the converter emits today (the cross-provenance desync that broke the prl migration:
+  # a stale patch's access imports against fresh companions).
+  git -C "${clone}" checkout -- .
+  git -C "${clone}" apply "${out}/report/retrofit.patch"
+
   # Sync companion sources + patch into the clone, preserving narratives. Companions go into the
   # service's REAL main source tree (maintainer feedback point 1) — they show as untracked files in
   # the clone's git status, exactly like code the team would own. Retire the old parking dirs.
