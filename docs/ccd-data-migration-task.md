@@ -69,7 +69,7 @@ state:
 * timestamps
 
 The migration configuration hash covers the migration identity. Runtime limits such as
-`eventIdWindowSize`, `maxBatchesPerRun`, `maxRunTime`, and `mode` can change between invocations.
+`eventIdWindowSize`, `significantItemIdWindowSize`, `maxBatchesPerRun`, `maxRunTime`, and `mode` can change between invocations.
 If the migration identity changes after a task has already created a progress row, the task fails
 fast rather than resuming under different source filters. Operators must either keep the same
 identity configuration or explicitly reset/use a new `task-name` after confirming the target state.
@@ -89,10 +89,21 @@ ccd:
       - ET_Scotland
     source-jurisdiction: EMPLOYMENT
     event-id-window-size: 1000000
+    significant-item-id-window-size: 100000
     max-batches-per-run: 100
     max-run-time: 4h
     case-revision-offset: 1000000000
+    fdw-additional-select-grantee: DTS JIT Access et DB Reader SC
 ```
+
+`fdw-additional-select-grantee` is optional. When set, the Java task grants the role local access to
+query the existing FDW tables after validating them: `USAGE` on the FDW staging schema, `USAGE` on
+the foreign server, and `SELECT` on `fdw_stage.case_data`, `fdw_stage.case_event`, and
+`fdw_stage.case_event_significant_items`. The role must already have a user mapping for the FDW
+server. Create it during FDW setup with `FDW_ADDITIONAL_GRANTEE` or have Platform Operations
+create it manually. The Java task does not create one because the mapping contains source database
+credentials. Leave it blank to skip the extra grant. As an environment variable, use
+`CCD_DATA_MIGRATION_FDW_ADDITIONAL_SELECT_GRANTEE`.
 
 For cutover, run the same task with:
 

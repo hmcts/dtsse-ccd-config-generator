@@ -37,6 +37,7 @@ import uk.gov.hmcts.ccd.sdk.config.DecentralisedDataConfiguration;
 class CcdDataMigrationTaskIntegrationTest {
   private static final long CASE_REVISION_OFFSET = 1_000_000_000L;
   private static final String PERF_CASE_TYPE = "PerfCase";
+  private static final String FDW_READER_ROLE = "DTS JIT Access et DB Reader SC\"; select 1; --";
 
   @Autowired
   private NamedParameterJdbcTemplate jdbc;
@@ -120,15 +121,91 @@ class CcdDataMigrationTaskIntegrationTest {
     assertThat(preloadResult.caughtUp()).isFalse();
     assertThat(countRows("ccd.case_event_significant_items")).isZero();
     assertThat(sourceEventHwm()).isEqualTo(101);
+    insertTargetSignificantItem(5001, 101, "Existing document", "http://dm-store/documents/existing");
 
     CcdDataMigrationRunResult cutoverResult = task(CUTOVER, 1000, 10).runMigration();
 
     assertThat(cutoverResult.caughtUp()).isTrue();
     assertThat(progressStatus()).isEqualTo("COMPLETE");
     assertThat(countRows("ccd.case_event_significant_items")).isEqualTo(2);
-    assertThat(significantItemDescription(5001)).isEqualTo("First document");
+    assertThat(significantItemDescription(5001)).isEqualTo("Existing document");
     assertThat(significantItemDescription(5002)).isEqualTo("Second document");
     assertThat(caseEventSignificantItemsSequenceLastValue()).isGreaterThanOrEqualTo(5002);
+  }
+
+  @Test
+  void togglesPreloadAndCutoverWithSignificantItemDelta() {
+    insertSourceCase(10, 1000000000000010L, 1, "Submitted", "{\"field\":\"one\"}");
+    insertSourceCaseEvent(101, 10, "create", "Submitted", "{\"field\":\"one\"}", minutesAgo(60));
+    insertSourceSignificantItem(5001, 101, "First document", "http://dm-store/documents/first");
+
+    CcdDataMigrationRunResult firstCutover = task(CUTOVER, 1000, 10).runMigration();
+
+    assertThat(firstCutover.caughtUp()).isTrue();
+    assertThat(progressStatus()).isEqualTo("COMPLETE");
+    assertThat(cutoverEventHwm()).isEqualTo(101);
+    assertThat(sourceEventHwm()).isEqualTo(101);
+    assertThat(significantItemsHwm()).isEqualTo(5001);
+    assertThat(countRows("ccd.case_event_significant_items")).isEqualTo(1);
+
+    updateSourceCase(10, 2, "Updated", "{\"field\":\"two\"}");
+    insertSourceCaseEvent(102, 10, "update", "Updated", "{\"field\":\"two\"}", minutesAgo(30));
+    insertSourceSignificantItem(5002, 102, "Second document", "http://dm-store/documents/second");
+    insertSourceSignificantItem(5003, 101, "Late old event document", "http://dm-store/documents/late-old-event");
+
+    CcdDataMigrationRunResult preload = task(PRELOAD_EVENTS, 1000, 10).runMigration();
+
+    assertThat(preload.caughtUp()).isTrue();
+    assertThat(progressStatus()).isEqualTo("PRELOAD");
+    assertThat(sourceEventHwm()).isEqualTo(102);
+    assertThat(significantItemsHwm()).isEqualTo(5001);
+    assertThat(countRows("ccd.case_event_significant_items")).isEqualTo(1);
+
+    CcdDataMigrationRunResult secondCutover = task(CUTOVER, 1000, 10).runMigration();
+
+    assertThat(secondCutover.caughtUp()).isTrue();
+    assertThat(progressStatus()).isEqualTo("COMPLETE");
+    assertThat(cutoverEventHwm()).isEqualTo(102);
+    assertThat(sourceEventHwm()).isEqualTo(102);
+    assertThat(significantItemsHwm()).isEqualTo(5003);
+    assertThat(countRows("ccd.case_event")).isEqualTo(2);
+    assertThat(countRows("ccd.case_event_significant_items")).isEqualTo(3);
+    assertThat(significantItemDescription(5001)).isEqualTo("First document");
+    assertThat(significantItemDescription(5002)).isEqualTo("Second document");
+    assertThat(significantItemDescription(5003)).isEqualTo("Late old event document");
+
+    updateSourceCase(10, 3, "Closed", "{\"field\":\"three\"}");
+    insertSourceCaseEvent(103, 10, "close", "Closed", "{\"field\":\"three\"}", LocalDateTime.now());
+
+    task(PRELOAD_EVENTS, 1000, 10).runMigration();
+    CcdDataMigrationRunResult thirdCutover = task(CUTOVER, 1000, 10).runMigration();
+
+    assertThat(thirdCutover.caughtUp()).isTrue();
+    assertThat(cutoverEventHwm()).isEqualTo(103);
+    assertThat(sourceEventHwm()).isEqualTo(103);
+    assertThat(significantItemsHwm()).isEqualTo(5003);
+    assertThat(countRows("ccd.case_event")).isEqualTo(3);
+    assertThat(countRows("ccd.case_event_significant_items")).isEqualTo(3);
+  }
+
+  @Test
+  void batchesSignificantItemsAcrossCutoverRuns() {
+    insertSourceCase(10, 1000000000000010L, 1, "Submitted", "{\"field\":\"one\"}");
+    insertSourceCaseEvent(101, 10, "create", "Submitted", "{\"field\":\"one\"}", minutesAgo(60));
+    insertSourceSignificantItem(5001, 101, "First document", "http://dm-store/documents/first");
+    insertSourceSignificantItem(10002, 101, "Second document", "http://dm-store/documents/second");
+
+    CcdDataMigrationRunResult firstCutover = task(CUTOVER, 1000, 1, 5001).runMigration();
+
+    assertThat(firstCutover.caughtUp()).isFalse();
+    assertThat(significantItemsHwm()).isEqualTo(5001);
+    assertThat(countRows("ccd.case_event_significant_items")).isEqualTo(1);
+
+    CcdDataMigrationRunResult secondCutover = task(CUTOVER, 1000, 1, 5001).runMigration();
+
+    assertThat(secondCutover.caughtUp()).isTrue();
+    assertThat(significantItemsHwm()).isEqualTo(10002);
+    assertThat(countRows("ccd.case_event_significant_items")).isEqualTo(2);
   }
 
   @Test
@@ -145,7 +222,7 @@ class CcdDataMigrationTaskIntegrationTest {
 
     assertThat(result.caughtUp()).isTrue();
     assertThat(result.eventsProcessed()).isZero();
-    assertThat(sourceEventHwm()).isZero();
+    assertThat(sourceEventHwm()).isEqualTo(101);
     assertThat(countRows("ccd.case_event")).isEqualTo(1);
     assertThat(countRows("ccd.case_event_significant_items")).isEqualTo(1);
     assertThat(significantItemDescription(5001)).isEqualTo("First document");
@@ -166,6 +243,27 @@ class CcdDataMigrationTaskIntegrationTest {
     assertThat(fdwTableExists("case_data")).isTrue();
     assertThat(fdwTableExists("case_event")).isTrue();
     assertThat(fdwTableExists("case_event_significant_items")).isTrue();
+  }
+
+  @Test
+  void grantsFdwSelectToConfiguredAdditionalGrantee() {
+    createRole(FDW_READER_ROLE);
+    createFdwUserMapping(FDW_READER_ROLE);
+    insertSourceCase(10, 1000000000000010L, 1, "Submitted", "{\"field\":\"one\"}");
+    insertSourceCaseEvent(101, 10, "create", "Submitted", "{\"field\":\"one\"}", minutesAgo(60));
+    insertSourceSignificantItem(5001, 101, "First document", "http://dm-store/documents/first");
+
+    var options = optionsBuilder(List.of("TestCase"))
+        .mode(PRELOAD_EVENTS)
+        .fdwAdditionalSelectGrantee(FDW_READER_ROLE)
+        .build();
+
+    CcdDataMigrationRunResult result = new CcdDataMigrationTask(jdbc, transactionManager, options).runMigration();
+
+    assertThat(result.caughtUp()).isTrue();
+    assertThat(countFdwRowsAsRole(FDW_READER_ROLE, "case_data")).isEqualTo(1);
+    assertThat(countFdwRowsAsRole(FDW_READER_ROLE, "case_event")).isEqualTo(1);
+    assertThat(countFdwRowsAsRole(FDW_READER_ROLE, "case_event_significant_items")).isEqualTo(1);
   }
 
   @Test
@@ -205,16 +303,19 @@ class CcdDataMigrationTaskIntegrationTest {
   }
 
   @Test
-  void completedCutoverRerunValidatesBeforeReEnablingElasticsearchQueueTrigger() {
+  void completedCutoverRerunDeletesMigratedQueueRowsAndEnablesElasticsearchQueueTrigger() {
+    insertSourceCase(10, 1000000000000010L, 1, "Submitted", "{\"field\":\"one\"}");
+    insertSourceCaseEvent(101, 10, "create", "Submitted", "{\"field\":\"one\"}", minutesAgo(60));
     insertTargetCase(10, 1000000000000010L, 1, "Submitted", "{\"field\":\"one\"}", 1);
     createCompleteProgress(101);
     jdbc.getJdbcTemplate().execute("alter table ccd.case_data disable trigger trigger_enqueue_case_revision");
 
-    assertThatThrownBy(() -> task(CUTOVER, 101, 10).runMigration())
-        .isInstanceOf(CcdDataMigrationException.class)
-        .hasMessageContaining("CCD data migration left 1 Elasticsearch queue rows");
+    CcdDataMigrationRunResult result = task(CUTOVER, 101, 10).runMigration();
 
-    assertThat(caseDataTriggerEnabled("trigger_enqueue_case_revision")).isFalse();
+    assertThat(result.caughtUp()).isTrue();
+    assertThat(cutoverEventHwm()).isEqualTo(101);
+    assertThat(countElasticsearchQueueRows("TestCase")).isZero();
+    assertThat(caseDataTriggerEnabled("trigger_enqueue_case_revision")).isTrue();
   }
 
   @Test
@@ -409,9 +510,19 @@ class CcdDataMigrationTaskIntegrationTest {
       int eventIdWindowSize,
       int maxBatchesPerRun
   ) {
+    return task(mode, eventIdWindowSize, maxBatchesPerRun, 100_000);
+  }
+
+  private CcdDataMigrationTask task(
+      CcdDataMigrationMode mode,
+      int eventIdWindowSize,
+      int maxBatchesPerRun,
+      int significantItemIdWindowSize
+  ) {
     var options = optionsBuilder(List.of("TestCase"))
         .mode(mode)
         .eventIdWindowSize(eventIdWindowSize)
+        .significantItemIdWindowSize(significantItemIdWindowSize)
         .maxBatchesPerRun(maxBatchesPerRun)
         .build();
     return new CcdDataMigrationTask(jdbc, transactionManager, options);
@@ -482,7 +593,7 @@ class CcdDataMigrationTaskIntegrationTest {
     jdbc.getJdbcTemplate().execute("""
         create user mapping for current_user
         server ccd_migration_test_server
-        options (user 'test', password 'test')
+        options (user 'test', password 'test', password_required 'false')
         """);
     jdbc.getJdbcTemplate().execute("""
         create foreign table fdw_stage.case_data (
@@ -534,6 +645,31 @@ class CcdDataMigrationTaskIntegrationTest {
     jdbc.update(
         """
         insert into source.case_event_significant_items (
+          id,
+          description,
+          "type",
+          url,
+          case_event_id
+        ) values (
+          :id,
+          :description,
+          'DOCUMENT',
+          :url,
+          :caseEventId
+        )
+        """,
+        new MapSqlParameterSource()
+            .addValue("id", id)
+            .addValue("description", description)
+            .addValue("url", url)
+            .addValue("caseEventId", caseEventId)
+    );
+  }
+
+  private void insertTargetSignificantItem(long id, long caseEventId, String description, String url) {
+    jdbc.update(
+        """
+        insert into ccd.case_event_significant_items (
           id,
           description,
           "type",
@@ -1107,6 +1243,14 @@ class CcdDataMigrationTaskIntegrationTest {
     );
   }
 
+  private long significantItemsHwm() {
+    return jdbc.queryForObject(
+        "select significant_items_hwm from ccd.ccd_data_migration_progress where task_name = :taskName",
+        Map.of("taskName", "ccd-data-migration"),
+        Long.class
+    );
+  }
+
   private long caseEventSequenceLastValue() {
     return jdbc.getJdbcTemplate().queryForObject("select last_value from ccd.case_event_id_seq", Long.class);
   }
@@ -1186,6 +1330,52 @@ class CcdDataMigrationTaskIntegrationTest {
         Map.of("tableName", tableName),
         Boolean.class
     ));
+  }
+
+  private void createRole(String roleName) {
+    Boolean exists = jdbc.queryForObject(
+        """
+        select exists (select 1 from pg_roles where rolname = :roleName)
+        """,
+        Map.of("roleName", roleName),
+        Boolean.class
+    );
+    if (!Boolean.TRUE.equals(exists)) {
+      jdbc.getJdbcTemplate().execute("create role " + quoteIdentifier(roleName));
+    }
+    jdbc.getJdbcTemplate().execute("grant " + quoteIdentifier(roleName) + " to current_user");
+  }
+
+  private void createFdwUserMapping(String roleName) {
+    jdbc.getJdbcTemplate().execute("""
+        create user mapping for """ + quoteIdentifier(roleName) + """
+        server ccd_migration_test_server
+        options (user 'test', password 'test', password_required 'false')
+        """);
+  }
+
+  private long countFdwRowsAsRole(String roleName, String tableName) {
+    if (!List.of("case_data", "case_event", "case_event_significant_items").contains(tableName)) {
+      throw new IllegalArgumentException("Unexpected FDW table name: " + tableName);
+    }
+
+    return jdbc.getJdbcTemplate().execute((Connection connection) -> {
+      try (var statement = connection.createStatement()) {
+        statement.execute("set role " + quoteIdentifier(roleName));
+        try {
+          try (var resultSet = statement.executeQuery("select count(*) from fdw_stage." + tableName)) {
+            resultSet.next();
+            return resultSet.getLong(1);
+          }
+        } finally {
+          statement.execute("reset role");
+        }
+      }
+    });
+  }
+
+  private static String quoteIdentifier(String identifier) {
+    return "\"" + identifier.replace("\"", "\"\"") + "\"";
   }
 
   private boolean caseDataTriggerEnabled(String triggerName) {

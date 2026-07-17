@@ -15,11 +15,13 @@ public class CcdDataMigrationProperties {
   private CcdDataMigrationMode mode = CcdDataMigrationMode.PRELOAD_EVENTS;
   private List<String> caseTypeIds = new ArrayList<>();
   private int eventIdWindowSize = 1_000_000;
+  private int significantItemIdWindowSize = 100_000;
   private long caseRevisionOffset = 1_000_000_000L;
   private int maxBatchesPerRun = Integer.MAX_VALUE;
   private Duration maxRunTime;
   private Duration statementTimeout = Duration.ofMinutes(10);
   private String sourceJurisdiction;
+  private String fdwAdditionalSelectGrantee;
 
   CcdDataMigrationTaskOptions toOptions() {
     if (caseTypeIds == null || caseTypeIds.isEmpty()) {
@@ -33,11 +35,13 @@ public class CcdDataMigrationProperties {
         .taskName(taskName)
         .mode(mode)
         .eventIdWindowSize(eventIdWindowSize)
+        .significantItemIdWindowSize(significantItemIdWindowSize)
         .caseRevisionOffset(caseRevisionOffset)
         .maxBatchesPerRun(maxBatchesPerRun)
         .maxRunTime(maxRunTime)
         .statementTimeout(statementTimeout)
         .sourceJurisdiction(sourceJurisdiction)
+        .fdwAdditionalSelectGrantee(fdwAdditionalSelectGrantee)
         .build();
   }
 

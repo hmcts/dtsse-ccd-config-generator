@@ -63,13 +63,37 @@ From the perspective of application development, callbacks therefore continue to
 >
 > CDAM attachment is separate from upload/storage. A document can be uploaded before it is attached to a case.
 >
-> CCD can attach documents it can see before it delegates a decentralised submit to the service. If the service
-> generates, uploads, bundles, or otherwise introduces a new durable document reference during its own submit handling,
-> the service must own CDAM attach for that document before committing the case data.
+> CCD can attach documents it can see before it delegates a decentralised submit to the service. The SDK also mirrors
+> CCD's central attach behaviour for documents newly introduced by an about-to-submit callback response, provided the
+> callback returns the CDAM `document_hash` alongside the document reference.
 >
 > The invariant is: do not commit case data containing a new document reference until CDAM attach has succeeded for the
-> same case id, case type and jurisdiction. Where possible, add documents as event input so CCD can attach them before
-> delegation. Where that is not possible, the decentralised service needs scoped CDAM `ATTACH` permission. See the
+> same case id, case type and jurisdiction. The SDK only attaches documents that are new in the about-to-submit callback
+> result; documents already present as event input are not re-attached by the SDK.
+>
+> When CDAM attach is enabled, the decentralised runtime requires the service application to provide an
+> `AuthTokenGenerator` bean. The SDK does not create an S2S token generator itself; it uses the service's configured S2S
+> identity for the `ServiceAuthorization` header on the CDAM attach call. The attach call itself uses the standard
+> `ccd-case-document-am-client`; services do not need to implement their own CDAM attach client. That service identity
+> still needs scoped CDAM `ATTACH` permission. See the
 > [decentralised runtime transaction boundary](./decentralised-runtime.md#transaction-control), and the ET/SP Tribs
 > permission example:
 > [hmcts/ccd-case-document-am-api#776](https://github.com/hmcts/ccd-case-document-am-api/pull/776).
+>
+> A typical service configuration is:
+>
+> ```java
+> @Bean
+> AuthTokenGenerator serviceAuthTokenGenerator(
+>     @Value("${idam.s2s-auth.secret}") String secret,
+>     @Value("${idam.s2s-auth.microservice}") String microService,
+>     ServiceAuthorisationApi serviceAuthorisationApi
+> ) {
+>   return AuthTokenGeneratorFactory.createDefaultGenerator(
+>       secret,
+>       microService,
+>       serviceAuthorisationApi,
+>       Duration.ofMinutes(5)
+>   );
+> }
+> ```

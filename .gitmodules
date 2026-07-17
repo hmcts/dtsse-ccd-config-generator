@@ -57,3 +57,7 @@
 	path = test-projects/prl-cos-api
 	url = git@github.com:hmcts/prl-cos-api.git
 	shallow = true
+[submodule "test-projects/pcs-frontend"]
+	path = test-projects/pcs-frontend
+	url = https://github.com/hmcts/pcs-frontend.git
+	branch = master

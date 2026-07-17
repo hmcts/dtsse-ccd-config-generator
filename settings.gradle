@@ -44,6 +44,9 @@ project(':et').projectDir = file('test-projects/et-ccd-callbacks')
 include 'et-shared'
 project(':et-shared').projectDir = file('test-projects/et-ccd-callbacks/et-shared')
 
+include 'ui-component-lib'
+project(':ui-component-lib').projectDir = file('frontend/ui-component-lib')
+
 if (file('ccd-data-store-api').exists()) {
     include 'ccd-data-store-api'
 }

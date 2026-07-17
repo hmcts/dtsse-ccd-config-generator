@@ -1,0 +1,40 @@
+{
+  "authorisedServices": [
+    {
+      "id": "ccd_data",
+      "caseTypeId": [
+        "*"
+      ],
+      "jurisdictionId": "*",
+      "permissions": [
+        "ATTACH",
+        "READ"
+      ]
+    },
+    {
+      "id": "nfdiv_case_api",
+      "caseTypeId": [
+        "*"
+      ],
+      "jurisdictionId": "EMPLOYMENT",
+      "permissions": [
+        "ATTACH",
+        "CREATE",
+        "READ"
+      ]
+    },
+    {
+      "id": "nfdiv_case_api",
+      "caseTypeId": [
+        "*"
+      ],
+      "jurisdictionId": "DIVORCE",
+      "permissions": [
+        "CREATE",
+        "READ",
+        "UPDATE",
+        "DELETE"
+      ]
+    }
+  ]
+}
