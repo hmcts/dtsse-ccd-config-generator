@@ -50,6 +50,6 @@
   },
   "devDependencies": {
     "nunjucks": "^3.2.4",
-    "typescript": "^5.8.2"
+    "typescript": "^7.0.0"
   }
 }
