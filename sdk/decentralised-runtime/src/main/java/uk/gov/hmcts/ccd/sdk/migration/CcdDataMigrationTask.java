@@ -142,7 +142,7 @@ public class CcdDataMigrationTask implements Runnable {
 
   private CcdDataMigrationRunResult preloadEvents() {
     Progress progress = getOrCreateProgress();
-    if (STATUS_COMPLETE.equals(progress.status())) {
+    if (STATUS_CUTOVER.equals(progress.status()) || STATUS_COMPLETE.equals(progress.status())) {
       reopenPreload();
     } else if (!STATUS_PRELOAD.equals(progress.status())) {
       throw new CcdDataMigrationException(
@@ -232,7 +232,7 @@ public class CcdDataMigrationTask implements Runnable {
     }
     final int refreshedCases = refreshCutoverCaseData();
     resetSequences();
-    completeCutover(cutoverEventHwm);
+    completeCutover();
 
     log.info(
         "Completed CCD data migration cutover taskName={} cutoverEventHwm={} batches={} refreshedCases={} events={} "
@@ -257,11 +257,8 @@ public class CcdDataMigrationTask implements Runnable {
   }
 
   private CcdDataMigrationRunResult validateOnly() {
-    Progress progress = getOrCreateProgress();
-    long validationEventHwm = progress.cutoverEventHwm() == null
-        ? sourceEventHighWaterMark()
-        : progress.cutoverEventHwm();
-    validateFinal(validationEventHwm);
+    getOrCreateProgress();
+    validateFinal();
     return new CcdDataMigrationRunResult(true, 0, 0, 0, true, false);
   }
 
@@ -442,7 +439,6 @@ public class CcdDataMigrationTask implements Runnable {
     for (int i = 0; i < options.maxBatchesPerRun(); i++) {
       long significantItemsHwm = significantItemsProgressHighWaterMark();
       if (significantItemsHwm >= targetSignificantItemsHwm) {
-        validateSignificantItemCounts(cutoverEventHwm);
         return totals.markCaughtUp();
       }
       if (isTimeLimitReached(stopAt)) {
@@ -473,7 +469,6 @@ public class CcdDataMigrationTask implements Runnable {
       }
     }
     if (significantItemsProgressHighWaterMark() >= targetSignificantItemsHwm) {
-      validateSignificantItemCounts(cutoverEventHwm);
       return totals.markCaughtUp();
     }
     return totals;
@@ -533,50 +528,80 @@ public class CcdDataMigrationTask implements Runnable {
   private int syncCaseDataForCutover() {
     return db.update(
         """
-        update ccd.case_data target
-        set reference = source.reference,
-            version = source.version,
-            created_date = source.created_date,
-            security_classification = source.security_classification,
-            last_state_modified_date = source.last_state_modified_date,
-            resolved_ttl = source.resolved_ttl,
-            last_modified = source.last_modified,
-            jurisdiction = source.jurisdiction,
-            case_type_id = source.case_type_id,
-            state = source.state,
-            data = source.data,
-            supplementary_data = coalesce(source.supplementary_data, jsonb_build_object())
+        insert into ccd.case_data as target (
+          reference,
+          version,
+          created_date,
+          security_classification,
+          last_state_modified_date,
+          resolved_ttl,
+          last_modified,
+          jurisdiction,
+          case_type_id,
+          state,
+          data,
+          supplementary_data,
+          id,
+          case_revision
+        )
+        select
+          source.reference,
+          source.version,
+          source.created_date,
+          source.security_classification,
+          source.last_state_modified_date,
+          source.resolved_ttl,
+          source.last_modified,
+          source.jurisdiction,
+          source.case_type_id,
+          source.state,
+          source.data,
+          coalesce(source.supplementary_data, jsonb_build_object()),
+          source.id,
+          0
         from fdw_stage.case_data source
-        where target.id = source.id
-          and source.jurisdiction = :sourceJurisdiction
+        where source.jurisdiction = :sourceJurisdiction
           and source.case_type_id in (:caseTypeIds)
-          and (
-            target.reference,
-            target.version,
-            target.created_date,
-            target.security_classification,
-            target.last_state_modified_date,
-            target.resolved_ttl,
-            target.last_modified,
-            target.jurisdiction,
-            target.case_type_id,
-            target.state,
-            target.data,
-            target.supplementary_data
-          ) is distinct from (
-            source.reference,
-            source.version,
-            source.created_date,
-            source.security_classification,
-            source.last_state_modified_date,
-            source.resolved_ttl,
-            source.last_modified,
-            source.jurisdiction,
-            source.case_type_id,
-            source.state,
-            source.data,
-            coalesce(source.supplementary_data, jsonb_build_object())
-          )
+        on conflict (id) do update
+        set reference = excluded.reference,
+            version = excluded.version,
+            created_date = excluded.created_date,
+            security_classification = excluded.security_classification,
+            last_state_modified_date = excluded.last_state_modified_date,
+            resolved_ttl = excluded.resolved_ttl,
+            last_modified = excluded.last_modified,
+            jurisdiction = excluded.jurisdiction,
+            case_type_id = excluded.case_type_id,
+            state = excluded.state,
+            data = excluded.data,
+            supplementary_data = excluded.supplementary_data
+        where (
+          target.reference,
+          target.version,
+          target.created_date,
+          target.security_classification,
+          target.last_state_modified_date,
+          target.resolved_ttl,
+          target.last_modified,
+          target.jurisdiction,
+          target.case_type_id,
+          target.state,
+          target.data,
+          target.supplementary_data
+        ) is distinct from (
+          excluded.reference,
+          excluded.version,
+          excluded.created_date,
+          excluded.security_classification,
+          excluded.last_state_modified_date,
+          excluded.resolved_ttl,
+          excluded.last_modified,
+          excluded.jurisdiction,
+          excluded.case_type_id,
+          excluded.state,
+          excluded.data,
+          excluded.supplementary_data
+        )
         """,
         baseParams()
     );
@@ -799,103 +824,19 @@ public class CcdDataMigrationTask implements Runnable {
     );
   }
 
-  private void completeCutover(long cutoverEventHwm) {
+  private void completeCutover() {
     transaction.execute(status -> {
       applyMigrationStatementTimeout();
-      validateFinal(cutoverEventHwm);
+      validateFinal();
       enableElasticsearchQueueTrigger();
       markComplete();
       return null;
     });
   }
 
-  private void validateFinal(long eventHwm) {
-    log.info("CCD data migration final counts taskName={} caseData={}", options.taskName(), queryCounts("case_data"));
-    log.info("CCD data migration final counts taskName={} caseEvent={}", options.taskName(), queryCounts("case_event"));
-    log.info(
-        "CCD data migration final counts taskName={} caseEventSignificantItems={}",
-        options.taskName(),
-        queryCounts("case_event_significant_items")
-    );
-    validateSignificantItemCounts(eventHwm);
-    long esQueueRows = countElasticsearchQueueRows();
-    log.info("CCD data migration final counts taskName={} esQueue={}", options.taskName(), esQueueRows);
-    if (esQueueRows > 0) {
-      throw new CcdDataMigrationException(
-          "CCD data migration left " + esQueueRows + " Elasticsearch queue rows"
-      );
-    }
-  }
-
-  private List<Map<String, Object>> queryCounts(String tableName) {
-    String sql = switch (tableName) {
-      case "case_data" -> """
-          select case_type_id, count(*) as count
-          from ccd.case_data
-          where jurisdiction = :sourceJurisdiction
-            and case_type_id in (:caseTypeIds)
-          group by case_type_id
-          order by case_type_id
-          """;
-      case "case_event" -> """
-          select ce.case_type_id, count(*) as count
-          from ccd.case_event ce
-          join ccd.case_data cd on cd.id = ce.case_data_id
-          where cd.jurisdiction = :sourceJurisdiction
-            and cd.case_type_id in (:caseTypeIds)
-          group by ce.case_type_id
-          order by ce.case_type_id
-          """;
-      case "case_event_significant_items" -> """
-          select cd.case_type_id, count(*) as count
-          from ccd.case_event_significant_items item
-          join ccd.case_event ce on ce.id = item.case_event_id
-          join ccd.case_data cd on cd.id = ce.case_data_id
-          where cd.jurisdiction = :sourceJurisdiction
-            and cd.case_type_id in (:caseTypeIds)
-          group by cd.case_type_id
-          order by cd.case_type_id
-          """;
-      default -> throw new IllegalArgumentException("Unsupported table name: " + tableName);
-    };
-    return db.queryForList(sql, baseParams());
-  }
-
-  private void validateSignificantItemCounts(long eventHwm) {
-    MapSqlParameterSource params = baseParams().addValue("eventHwm", eventHwm);
-    Long sourceCount = db.queryForObject(
-        """
-        select count(*)
-        from fdw_stage.case_event_significant_items item
-        join fdw_stage.case_event ce on ce.id = item.case_event_id
-        join fdw_stage.case_data cd on cd.id = ce.case_data_id
-        where cd.jurisdiction = :sourceJurisdiction
-          and cd.case_type_id in (:caseTypeIds)
-          and ce.id <= :eventHwm
-        """,
-        params,
-        Long.class
-    );
-    Long targetCount = db.queryForObject(
-        """
-        select count(*)
-        from ccd.case_event_significant_items item
-        join ccd.case_event ce on ce.id = item.case_event_id
-        join ccd.case_data cd on cd.id = ce.case_data_id
-        where cd.jurisdiction = :sourceJurisdiction
-          and cd.case_type_id in (:caseTypeIds)
-          and ce.id <= :eventHwm
-        """,
-        params,
-        Long.class
-    );
-
-    long sourceRows = sourceCount == null ? 0 : sourceCount;
-    long targetRows = targetCount == null ? 0 : targetCount;
-    if (sourceRows != targetRows) {
-      throw new CcdDataMigrationException(
-          "CCD data migration significant item count mismatch source=" + sourceRows + " target=" + targetRows
-      );
+  private void validateFinal() {
+    if (hasElasticsearchQueueRows()) {
+      throw new CcdDataMigrationException("CCD data migration left Elasticsearch queue rows");
     }
   }
 
@@ -934,19 +875,21 @@ public class CcdDataMigrationTask implements Runnable {
     );
   }
 
-  private long countElasticsearchQueueRows() {
-    Long rows = db.queryForObject(
+  private boolean hasElasticsearchQueueRows() {
+    Boolean rowsExist = db.queryForObject(
         """
-        select count(*)
-        from ccd.es_queue queue
-        join ccd.case_data case_data on case_data.reference = queue.reference
-        where case_data.jurisdiction = :sourceJurisdiction
-          and case_data.case_type_id in (:caseTypeIds)
+        select exists (
+          select 1
+          from ccd.es_queue queue
+          join ccd.case_data case_data on case_data.reference = queue.reference
+          where case_data.jurisdiction = :sourceJurisdiction
+            and case_data.case_type_id in (:caseTypeIds)
+        )
         """,
         baseParams(),
-        Long.class
+        Boolean.class
     );
-    return rows == null ? 0 : rows;
+    return Boolean.TRUE.equals(rowsExist);
   }
 
   private void disableCaseDataRevisionTrigger() {

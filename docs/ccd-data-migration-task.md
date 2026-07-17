@@ -27,6 +27,11 @@ The task has one implementation with explicit modes:
 Do not switch to `CUTOVER` automatically from a scheduler. The operator must first freeze source
 writes for the selected case types and wait for in-flight source transactions to drain.
 
+If cutover is paused or interrupted before completion, switching back to `PRELOAD_EVENTS` is
+supported. The task keeps its event and significant-item progress, returns the status to `PRELOAD`,
+and clears the captured cutover event high-water mark. A later `CUTOVER` invocation therefore
+captures a fresh high-water mark after source writes have been frozen again.
+
 ## Safety Model
 
 The preload path keeps the target tables constraint-valid after every committed batch:
@@ -42,7 +47,7 @@ Preloaded `case_data` is provisional. Its purpose is to satisfy the event FK. Ev
 batch inserts missing parent source `case_data` rows for that batch. Significant items are copied
 only during `CUTOVER`, using one `insert into ... select` query that reads source significant items
 and joins through already migrated target events up to the captured cutover event high-water mark.
-`CUTOVER` then overwrites target `case_data` columns from source and sets
+`CUTOVER` then upserts every selected source `case_data` row into the target and sets
 `case_data.case_revision = max(case_event.case_revision) + caseRevisionOffset`.
 
 The runtime `case_data` revision trigger is deliberately disabled only inside the cutover refresh
@@ -167,9 +172,9 @@ period. Run `CUTOVER` explicitly during the agreed downtime window.
 
 ## Validation
 
-After cutover, the task logs final `case_data`, `case_event`, and `case_event_significant_items`
-counts for the selected case types. It also compares source and target significant-item counts up to
-the captured cutover event high-water mark.
+After cutover, the task verifies that no Elasticsearch queue rows remain for the selected case types
+before re-enabling the queue trigger. Full-table source and target counts are not performed because
+they are unbounded on production-scale CCD data.
 
 ## Performance Harness
 
