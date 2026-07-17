@@ -298,6 +298,25 @@ class RetrofitRoundTripTest {
           .contains("extraCaseNote");
     }
 
+    // The CaseEventToComplexTypes chain for changeOrganisationRequestField must bind to the TEAM's
+    // own model classes (real getters, e.g. getOrganisationID) — never the SDK-predefined types of the
+    // same complex-type IDs (getOrganisationId), which would be a method reference the team-typed
+    // .complex(...) scope does not accept. This is the SDK-type-vs-model-type binding defect (probate
+    // conflict #4 / prl bug class 6); the source-level check pins it independently of the compile gate.
+    String updateCaseCompanion = Files.readString(companionSrc
+        .resolve(configPackage.replace('.', '/'))
+        .resolve("event/UpdateCase.java"));
+    assertThat(updateCaseCompanion)
+        .as("the member chain must import + reference the team's own model classes")
+        .contains("import uk.gov.hmcts.rt.model.caseaccess.ChangeOrganisationRequest;")
+        .contains("import uk.gov.hmcts.rt.model.caseaccess.Organisation;")
+        .contains("Organisation::getOrganisationID")
+        .contains("ChangeOrganisationRequest::getOrganisationToAdd");
+    assertThat(updateCaseCompanion)
+        .as("the member chain must NOT bind to the SDK-predefined types of the shared complex-type IDs")
+        .doesNotContain("uk.gov.hmcts.ccd.sdk.type.Organisation")
+        .doesNotContain("::getOrganisationId");
+
     // Apply the patch to a copy of the model tree (parsing the unified diff, no git), then place the
     // patched model and the companion sources under one compile root.
     copyTree(modelSrc, patchedModel);

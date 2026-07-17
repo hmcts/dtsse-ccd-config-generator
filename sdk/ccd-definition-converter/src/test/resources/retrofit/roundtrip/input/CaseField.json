@@ -74,5 +74,13 @@
     "Label": "Extra case note",
     "FieldType": "TextArea",
     "SecurityClassification": "Public"
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "RETRO",
+    "ID": "changeOrganisationRequestField",
+    "Label": "Change organisation request",
+    "FieldType": "ChangeOrganisationRequest",
+    "SecurityClassification": "Public"
   }
 ]

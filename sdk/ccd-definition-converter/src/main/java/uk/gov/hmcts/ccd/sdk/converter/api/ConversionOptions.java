@@ -151,4 +151,13 @@ public class ConversionOptions {
    * {@link #retrofitReservedComplexTypeNames} for that reason. Null/empty in generate mode.
    */
   java.util.Set<String> retrofitReservedFixedListNames;
+
+  /**
+   * Retrofit mode: a view of the team's declared model classes, consulted by the linker's
+   * {@code EventComplexTypeResolver} so a {@code CaseEventToComplexTypes} member chain binds to the
+   * class the complex field is <em>actually declared as</em> (its real getters) rather than the
+   * SDK-predefined type of the same complex-type ID or a similarly-named synthesised sibling. Null in
+   * generate mode, where the resolver walks only generated complex types and reflected SDK types.
+   */
+  uk.gov.hmcts.ccd.sdk.converter.model.RetrofitModelTypeGraph retrofitModelTypeGraph;
 }

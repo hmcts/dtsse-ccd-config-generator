@@ -162,8 +162,10 @@ public class EventComplexTypeGroup {
 
   /**
    * A reference to a complex type the emitter must name in a {@code $T::$L} method reference: a
-   * generated complex type in the model package (identified by its simple class name) or an
-   * SDK-predefined type (identified by its fully-qualified name).
+   * generated complex type in the model package (identified by its simple class name), an
+   * SDK-predefined type (identified by its fully-qualified name), or — in retrofit mode — the team's
+   * own declared model class (identified by its fully-qualified name via {@link #modelFqn}, which may
+   * live in any sub-package, not just the model package).
    */
   @Value
   @Builder
@@ -178,5 +180,14 @@ public class EventComplexTypeGroup {
      * Simple class name for a generated complex type in the model package, else null.
      */
     String simpleName;
+
+    /**
+     * Fully-qualified name of the team's own declared model class this member chain binds to in
+     * retrofit mode, else null. Takes precedence over {@link #simpleName}/{@link #predefinedFqn} when
+     * present so a {@code CaseEventToComplexTypes} chain references the class the field is actually
+     * typed as (e.g. the team's {@code model.caseaccess.Organisation}, getter {@code getOrganisationID})
+     * rather than the SDK-predefined type of the same complex-type ID ({@code getOrganisationId}).
+     */
+    String modelFqn;
   }
 }

@@ -980,10 +980,15 @@ public class EventsConfigEmitter implements SourceEmitter {
   }
 
   /**
-   * The {@code ClassName} for an {@link EventComplexTypeGroup.TypeRef}: the fully-qualified SDK
-   * predefined type, or a generated complex type by simple name in the model package.
+   * The {@code ClassName} for an {@link EventComplexTypeGroup.TypeRef}: the team's own declared model
+   * class by its fully-qualified name (retrofit mode — it may live in any sub-package), else the
+   * fully-qualified SDK predefined type, else a generated complex type by simple name in the model
+   * package.
    */
   private ClassName typeName(EventComplexTypeGroup.TypeRef ref, EmitContext context) {
+    if (ref.getModelFqn() != null) {
+      return ClassName.bestGuess(ref.getModelFqn());
+    }
     if (ref.getPredefinedFqn() != null) {
       return ClassName.bestGuess(ref.getPredefinedFqn());
     }

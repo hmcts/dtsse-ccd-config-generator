@@ -136,6 +136,11 @@ public final class RetrofitConverter {
         //     safe: the only names it must stay free of are exact-ID reuses, which emit no companion.
         .retrofitReservedComplexTypeNames(index.enumSimpleNames())
         .retrofitReservedFixedListNames(index.allSimpleNames())
+        // Bind CaseEventToComplexTypes member chains to the team's ACTUAL declared model classes
+        // (real getters, e.g. getOrganisationID) rather than the SDK-predefined type of a shared
+        // complex-type ID or a similarly-named synthesised sibling. A member with no Java backing on
+        // the real class makes the group fall back to a row passthrough — no broken reference emitted.
+        .retrofitModelTypeGraph(new RetrofitEventComplexTypeGraph(index, resolution))
         .build();
 
     int constructorLimit = options.getRetrofitConstructorLimit();

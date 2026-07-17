@@ -7,6 +7,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import uk.gov.hmcts.rt.enums.ClaimType;
+import uk.gov.hmcts.rt.model.caseaccess.ChangeOrganisationRequest;
 import uk.gov.hmcts.rt.model.common.DocItem;
 import uk.gov.hmcts.rt.model.common.Party;
 import uk.gov.hmcts.rt.model.event.HearingData;
@@ -46,6 +47,14 @@ public class CaseData {
   // Prefixed @JsonUnwrapped sub-object: flattens to hearingType / hearingLength.
   @JsonUnwrapped(prefix = "hearing")
   private HearingData hearingData;
+
+  // A complex field whose declared type is the TEAM's own ChangeOrganisationRequest (not the SDK
+  // predefined type of the same complex-type ID). Its CaseEventToComplexTypes member chain
+  // (OrganisationToAdd.OrganisationID / .OrganisationName / CaseRoleId) must bind to the team's
+  // classes and their real getters (getOrganisationID) — binding to the SDK class emits
+  // getOrganisationId on a team-typed scope, a compile error. Exercises the SDK-type-vs-model-type
+  // binding defect (probate conflict #4 / prl bug class 6).
+  private ChangeOrganisationRequest changeOrganisationRequestField;
 
   // UNMATCHED_JAVA_FIELD: no definition row, so the patch adds @CCD(ignore = true) to stop the SDK
   // reflecting it into a spurious CaseField.

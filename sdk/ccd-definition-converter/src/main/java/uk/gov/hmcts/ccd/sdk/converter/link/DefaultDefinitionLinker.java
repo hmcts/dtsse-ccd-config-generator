@@ -2002,8 +2002,12 @@ public class DefaultDefinitionLinker implements DefinitionLinker {
       return new EventComplexTypeResult(Map.of(), List.of());
     }
 
-    final EventComplexTypeResolver resolver =
-        new EventComplexTypeResolver(complexTypes, SdkPredefinedTypes.all());
+    // In retrofit mode the model type graph binds each complex field's root and member chain to the
+    // team's actual declared classes (real getters), so a shared complex-type ID (Organisation,
+    // AddressUK, ChangeOrganisationRequest) does not select the SDK-predefined type over the team's
+    // own same-shaped class. Null in generate mode → the resolver keeps its generated/SDK-only walk.
+    final EventComplexTypeResolver resolver = new EventComplexTypeResolver(
+        complexTypes, SdkPredefinedTypes.all(), options.getRetrofitModelTypeGraph());
     Map<String, FieldModel> fieldsById = new LinkedHashMap<>();
     for (FieldModel field : caseFields) {
       fieldsById.put(field.getId(), field);
@@ -2209,8 +2213,11 @@ public class DefaultDefinitionLinker implements DefinitionLinker {
   private EventComplexTypeGroup deriveEventComplexTypeGroup(
       EventComplexTypeResolver resolver, FieldModel field, String eventId,
       List<SheetRow> allRows) {
-    String rootTypeId = resolver.rootTypeId(field);
-    if (rootTypeId == null) {
+    // The type node the member chains bind to: in retrofit mode the team's actual declared model
+    // class for this field (real getters, e.g. getOrganisationID), else the generated / SDK-predefined
+    // type named by the field's CCD FieldType. Null when the field is not COMPLEX-walkable.
+    Object rootNode = resolver.rootNode(field);
+    if (rootNode == null) {
       return null;
     }
     // Collapse rows that are exact duplicates up to a blank/absent column, exactly as the comparator
@@ -2255,7 +2262,7 @@ public class DefaultDefinitionLinker implements DefinitionLinker {
       String eventHint = row.getDisplayText(Columns.EVENT_HINT_TEXT).orElse(null);
       String pageId = row.getString(Columns.PAGE_ID).orElse(null);
       Optional<EventComplexTypeGroup.Member> resolved = resolver.resolve(
-          rootTypeId, lec, contextMethod, showCondition, eventLabel, eventHint, pageId);
+          rootNode, lec, contextMethod, showCondition, eventLabel, eventHint, pageId);
       if (resolved.isEmpty()) {
         return null;
       }
