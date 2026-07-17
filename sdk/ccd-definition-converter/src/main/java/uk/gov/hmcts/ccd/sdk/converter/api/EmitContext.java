@@ -52,7 +52,21 @@ public class EmitContext {
    * @return the access package
    */
   public String accessPackage() {
-    return configPackage() + ".access";
+    return accessPackage(configPackage());
+  }
+
+  /**
+   * The access-class package for a given root config package — the single source of truth both the
+   * companion emitter ({@link #accessPackage()} → {@code AccessClassEmitter}) and the retrofit patch
+   * emitter (which imports the {@code @CCD(access = {…})} classes) resolve through, so the patch's
+   * imports and the emitted files can never land in different packages (the {@code ccd.config} vs
+   * {@code ccd.access} split that broke the prl retrofit when the two derivations drifted apart).
+   *
+   * @param configPackage the root config package
+   * @return the access package {@code <configPackage>.access}
+   */
+  public static String accessPackage(String configPackage) {
+    return configPackage + ".access";
   }
 
   /**

@@ -112,6 +112,47 @@ class SynthesisPlacementTest {
   }
 
   @Test
+  void suffixesTheExtraClassNameOnlyForAForeignSameNamedType(@TempDir Path work) throws Exception {
+    Path src = work.resolve("src");
+    // A genuinely hand-written team class named CaseDataExtra sits in the model package: the overflow
+    // companion the patch adds must NOT clash with it, so the name is suffixed to CaseDataExtra2.
+    write(src, "m", "CaseDataExtra", "package m;\nimport lombok.Data;\n"
+        + "/** A team-owned class, not the converter's. */\n@Data\n"
+        + "public class CaseDataExtra {\n  private String teamField;\n}\n");
+    write(src, "m", "CaseData", rootClass("@Data\n@Builder\n@AllArgsConstructor", 100, ""));
+    ModelSourceIndex index = ModelSourceIndex.parse(src);
+    ModelSourceIndex.Type root = index.byFqn("m.CaseData").orElseThrow();
+
+    SynthesisPlacement.Plan plan = new SynthesisPlacement(index, 200).plan(root, synthFields(150));
+
+    assertThat(plan.overflow).isTrue();
+    assertThat(plan.extraClassName)
+        .as("a foreign same-named class must force a suffix").isEqualTo("CaseDataExtra2");
+  }
+
+  @Test
+  void reusesTheExtraClassNameWhenTheSameNamedTypeIsOurOwnPriorCompanion(@TempDir Path work)
+      throws Exception {
+    Path src = work.resolve("src");
+    // Bug B: a CaseDataExtra left in the model tree by a PRIOR converter run (carrying the overflow
+    // marker) must be recognised as our own, so the name is REUSED (the patch recreates it in place)
+    // rather than bumped to CaseDataExtra2 — which would desync the CaseData field from the freshly
+    // generated event classes that reference the base name, and strand the old companion.
+    write(src, "m", "CaseDataExtra", "package m;\nimport lombok.Data;\n"
+        + "/**\n * Overflow companion.\n *\n * <p>" + SynthesisPlacement.EXTRA_CLASS_MARKER + "\n */\n"
+        + "@Data\npublic class CaseDataExtra {\n  private String staleFromPriorRun;\n}\n");
+    write(src, "m", "CaseData", rootClass("@Data\n@Builder\n@AllArgsConstructor", 100, ""));
+    ModelSourceIndex index = ModelSourceIndex.parse(src);
+    ModelSourceIndex.Type root = index.byFqn("m.CaseData").orElseThrow();
+
+    SynthesisPlacement.Plan plan = new SynthesisPlacement(index, 200).plan(root, synthFields(150));
+
+    assertThat(plan.overflow).isTrue();
+    assertThat(plan.extraClassName)
+        .as("our own prior overflow companion must not force a suffix").isEqualTo("CaseDataExtra");
+  }
+
+  @Test
   void borderlineWithNoUsableHostFallsBackToCaseDataExtra(@TempDir Path work) throws Exception {
     Path src = work.resolve("src");
     // A @JsonCreator+@Builder host (B3 idiom) is NOT a usable synthesis host, and it is the only

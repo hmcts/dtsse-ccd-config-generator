@@ -55,9 +55,17 @@ class RetrofitRoundTripTest {
   private static final Path FIXTURE =
       Path.of("src/test/resources/retrofit/roundtrip").toAbsolutePath();
 
+  /**
+   * The class-javadoc marker the emitted overflow companion carries so a later run recognises its own
+   * prior companion (Bug B). Kept in lockstep with {@code SynthesisPlacement.EXTRA_CLASS_MARKER},
+   * which is package-private to the converter's retrofit package (this test lives in {@code roundtrip}).
+   */
+  private static final String OVERFLOW_COMPANION_MARKER =
+      "ccd-definition-converter:retrofit-overflow-companion";
+
   @Test
   void retrofitRoundTripsWithZeroDiffs(@TempDir Path work) throws Exception {
-    runRoundTrip(work, 0, false);
+    runRoundTrip(work, 0, false, false);
   }
 
   /**
@@ -72,16 +80,147 @@ class RetrofitRoundTripTest {
   @Test
   void retrofitRoundTripsViaCaseDataExtraWhenConstructorLimitTripped(@TempDir Path work)
       throws Exception {
-    runRoundTrip(work, 3, true);
+    runRoundTrip(work, 3, true, false);
   }
 
-  private void runRoundTrip(Path work, int constructorLimit, boolean expectCaseDataExtra)
+  /**
+   * Bug B regression: a {@code CaseDataExtra} left in the model tree by a PRIOR converter run must be
+   * recognised as this converter's own overflow companion and its name REUSED — the fresh patch
+   * recreates it in place — rather than bumped to {@code CaseDataExtra2}. A bump would desync the
+   * {@code CaseData} field (which the patch would then wire on {@code CaseDataExtra2}) from the freshly
+   * generated event classes (which reference the base {@code CaseDataExtra}), stranding the old
+   * companion as dead code and breaking compilation — the exact prl regression. The overflow case is
+   * driven with a seeded stale companion; the output must emit exactly ONE companion class, wired on
+   * {@code CaseData} under the base name, with every reference on that name, and still round-trip
+   * (compile + zero diffs).
+   */
+  @Test
+  void reusesTheOverflowCompanionNameWhenAStaleOneIsInTheModelTree(@TempDir Path work)
       throws Exception {
+    runRoundTrip(work, 3, true, true);
+  }
+
+  /**
+   * Bug A regression: the annotation patch's {@code @CCD(access = {…})} references and their imports
+   * must agree, in package AND name, with the access classes actually emitted into the companion tree
+   * — both are resolved through the single {@link uk.gov.hmcts.ccd.sdk.converter.api.EmitContext#accessPackage}
+   * source of truth. (The prl migration broke when the patch imported {@code …ccd.config.X} while the
+   * companions were emitted under {@code …ccd.access}, and when a name the patch referenced resolved
+   * to no emitted file.) Asserts every access class the patch imports/references lives in
+   * {@code <configPackage>.access} and maps to an emitted {@code .java} file.
+   */
+  @Test
+  void patchAndCompanionAccessClassesAgreeInPackageAndName(@TempDir Path work) throws Exception {
     Path input = FIXTURE.resolve("input");
     Path modelSrc = FIXTURE.resolve("model/src");
     String caseTypeId = "RETRO";
     String modelPackage = "uk.gov.hmcts.rt.model";
     String configPackage = "uk.gov.hmcts.rt.config";
+    String accessPackage = configPackage + ".access";
+
+    Path companionSrc = work.resolve("companion");
+    Map<String, OverlayCondition> suffixes = new java.util.LinkedHashMap<>();
+    suffixes.put("prod", OverlayCondition.parse("CCD_DEF_ENV:prod"));
+    suffixes.put("nonprod", OverlayCondition.parse("!CCD_DEF_ENV:prod"));
+    ConversionOptions options = ConversionOptions.builder()
+        .inputs(List.of(input))
+        .caseTypeId(caseTypeId)
+        .outputSrc(companionSrc)
+        .modelPackage(modelPackage)
+        .configPackage(configPackage)
+        .overlaySuffixes(suffixes)
+        .passthroughDir(work.resolve("passthrough"))
+        .reportDir(work.resolve("report"))
+        .eventsPerConfig(40)
+        .allowGaps(true)
+        .retrofit(true)
+        .retrofitCaseDataClass("CaseData")
+        .build();
+
+    DefinitionIr ir = new JsonDefinitionReader().read(options, new GapCollector());
+    RetrofitPatch patch = new RetrofitConverter(
+        ir, caseTypeId, options, modelSrc, modelPackage, "CaseData")
+        .run(work.resolve("report")).patch();
+
+    // The access class simple names actually emitted into the companion tree, keyed by simple name.
+    java.util.Set<String> emitted = new java.util.HashSet<>();
+    Path accessDir = companionSrc.resolve(accessPackage.replace('.', '/'));
+    try (Stream<Path> walk = Files.walk(accessDir)) {
+      walk.filter(p -> p.getFileName().toString().endsWith(".java"))
+          .forEach(p -> emitted.add(
+              p.getFileName().toString().replace(".java", "")));
+    }
+    assertThat(emitted).as("the fixture must emit access classes to exercise this").isNotEmpty();
+
+    String diff = patch.unifiedDiff();
+    // 1. Every access import the patch adds points at <configPackage>.access — never .config or any
+    //    other package (the ccd.config-vs-ccd.access split), and its class resolves to an emitted file.
+    java.util.List<String> accessImports = diff.lines()
+        .filter(l -> l.startsWith("+import ") && l.contains("Access;"))
+        .map(l -> l.substring("+import ".length()).replace(";", "").trim())
+        .filter(fqn -> fqn.endsWith("Access"))
+        .collect(java.util.stream.Collectors.toList());
+    assertThat(accessImports).as("the patch must import the access classes it references").isNotEmpty();
+    for (String fqn : accessImports) {
+      int lastDot = fqn.lastIndexOf('.');
+      String pkg = fqn.substring(0, lastDot);
+      String simple = fqn.substring(lastDot + 1);
+      assertThat(pkg)
+          .as("access import %s must live in the emitted access package", fqn)
+          .isEqualTo(accessPackage);
+      assertThat(emitted)
+          .as("access import %s must resolve to an emitted companion file", fqn)
+          .contains(simple);
+    }
+    // 2. Every simple name referenced inside @CCD(access = {…}) maps to an emitted file too.
+    java.util.regex.Matcher m = java.util.regex.Pattern
+        .compile("access = \\{([^}]*)\\}").matcher(diff);
+    java.util.Set<String> referenced = new java.util.LinkedHashSet<>();
+    while (m.find()) {
+      for (String token : m.group(1).split(",")) {
+        String name = token.trim().replace(".class", "");
+        if (!name.isEmpty()) {
+          referenced.add(name);
+        }
+      }
+    }
+    assertThat(referenced).isNotEmpty();
+    assertThat(emitted)
+        .as("every access name the patch references must be an emitted companion file")
+        .containsAll(referenced);
+  }
+
+  private void runRoundTrip(Path work, int constructorLimit, boolean expectCaseDataExtra,
+      boolean seedStaleCompanion)
+      throws Exception {
+    Path input = FIXTURE.resolve("input");
+    String caseTypeId = "RETRO";
+    String modelPackage = "uk.gov.hmcts.rt.model";
+    String configPackage = "uk.gov.hmcts.rt.config";
+
+    // Normally the read-only fixture model is the source. To exercise Bug B, copy it to a writable
+    // tree and drop in a stale CaseDataExtra.java (as a prior run's patch would have left) carrying
+    // the overflow marker, so this run must recognise it as its own and reuse the base name.
+    Path modelSrc = FIXTURE.resolve("model/src");
+    if (seedStaleCompanion) {
+      Path writableModel = work.resolve("seeded-model");
+      copyTree(modelSrc, writableModel);
+      Path stale = writableModel.resolve(modelPackage.replace('.', '/')).resolve("CaseDataExtra.java");
+      Files.createDirectories(stale.getParent());
+      Files.writeString(stale,
+          "package " + modelPackage + ";\n\n"
+          + "import lombok.Data;\n\n"
+          + "/**\n"
+          + " * Stale overflow companion from a prior converter run.\n"
+          + " *\n"
+          + " * <p>" + OVERFLOW_COMPANION_MARKER + "\n"
+          + " */\n"
+          + "@Data\n"
+          + "public class CaseDataExtra {\n"
+          + "  private String staleFieldFromPriorRun;\n"
+          + "}\n");
+      modelSrc = writableModel;
+    }
 
     Path companionSrc = work.resolve("companion");
     Path patchedModel = work.resolve("model");
@@ -135,8 +274,28 @@ class RetrofitRoundTripTest {
           .contains("@JsonUnwrapped private CaseDataExtra caseDataExtra;");
       assertThat(patch.files())
           .anySatisfy(f -> assertThat(f.relativePath()).endsWith("CaseDataExtra.java"));
+      // Single-name allocation: no CaseDataExtra2 anywhere in the patch, and exactly one companion
+      // class file (whether or not a stale one was seeded — a bump would produce both a CaseDataExtra2
+      // reference and leave the seeded CaseDataExtra behind, the desync this guards against).
+      assertThat(patch.unifiedDiff()).doesNotContain("CaseDataExtra2");
+      assertThat(patch.files())
+          .filteredOn(f -> f.relativePath().endsWith("CaseDataExtra.java")
+              || f.relativePath().endsWith("CaseDataExtra2.java"))
+          .hasSize(1);
     } else {
       assertThat(patch.unifiedDiff()).doesNotContain("CaseDataExtra");
+    }
+    if (seedStaleCompanion) {
+      // The fresh companion recreated at the base name overwrites the seeded one: it must carry the
+      // real synthesised member, never the prior run's placeholder field.
+      String companion = patch.files().stream()
+          .filter(f -> f.relativePath().endsWith("CaseDataExtra.java"))
+          .map(RetrofitPatch.FilePatch::patchedContent)
+          .findFirst()
+          .orElseThrow(() -> new AssertionError("CaseDataExtra.java not in patch"));
+      assertThat(companion)
+          .doesNotContain("staleFieldFromPriorRun")
+          .contains("extraCaseNote");
     }
 
     // Apply the patch to a copy of the model tree (parsing the unified diff, no git), then place the

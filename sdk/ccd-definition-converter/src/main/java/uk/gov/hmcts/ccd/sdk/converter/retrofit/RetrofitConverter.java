@@ -164,9 +164,12 @@ public final class RetrofitConverter {
     // Emit the annotation patch from the same parse/resolution + the rebound model's @CCD metadata.
     // The access classes the model's @CCD(access = {…}) references live in <configPackage>.access
     // (matching EmitContext.accessPackage() and AccessClassEmitter), so the patch's imports must
-    // point there, not at the root config package.
+    // point there, not at the root config package. Both derivations go through the single
+    // EmitContext.accessPackage(root) source of truth so the patch's imports and the emitted access
+    // files can never drift into different packages (the ccd.config-vs-ccd.access split, Bug A).
     RetrofitPatchEmitter emitter = new RetrofitPatchEmitter(
-        index, resolution, reboundHolder[0], root, options.getConfigPackage() + ".access",
+        index, resolution, reboundHolder[0], root,
+        uk.gov.hmcts.ccd.sdk.converter.api.EmitContext.accessPackage(options.getConfigPackage()),
         constructorLimit, pathPrefix);
     RetrofitPatch patch = emitter.emit();
     writePatch(reportDir, patch);

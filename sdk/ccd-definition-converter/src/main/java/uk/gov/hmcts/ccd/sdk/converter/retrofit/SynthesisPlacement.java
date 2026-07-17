@@ -48,6 +48,17 @@ final class SynthesisPlacement {
    */
   static final String EXTRA_MEMBER = "caseDataExtra";
 
+  /**
+   * A stable marker the emitted overflow companion carries in its class javadoc, so a later run can
+   * recognise its OWN previously-generated companion in the team's model tree and reuse the base name
+   * rather than bumping to {@code CaseDataExtra2} (Bug B: a suffix bumped by a fossil companion left
+   * the patch's {@code CaseData} field on {@code CaseDataExtra2} while the freshly-generated event
+   * classes referenced {@code CaseDataExtra} — a name desync — and stranded the prior companion as
+   * dead code). Matched against the file's raw text, so it survives the index parse dropping comments.
+   */
+  static final String EXTRA_CLASS_MARKER =
+      "ccd-definition-converter:retrofit-overflow-companion";
+
   private final ModelSourceIndex index;
   private final int limit;
 
@@ -225,13 +236,48 @@ final class SynthesisPlacement {
     return builder && !type.decl.getConstructors().isEmpty();
   }
 
+  /**
+   * The overflow companion's simple name: the base {@code CaseDataExtra} unless a <em>foreign</em>
+   * (hand-written) type of that name already sits in the model package, in which case the name is
+   * suffixed to avoid a genuine collision.
+   *
+   * <p>Crucially, a companion THIS converter emitted on a prior run (recognised by
+   * {@link #EXTRA_CLASS_MARKER} in its source) is NOT a collision: the patch recreates it as a new
+   * file, so bumping the suffix on account of it would (a) desync the name from the freshly-generated
+   * event classes that reference the base name and (b) strand the old companion as dead code (Bug B).
+   * Reusing the base name lets the fresh patch overwrite the stale companion in place and keeps every
+   * reference on one name.
+   */
   private String uniqueExtraClassName(String packageName) {
     String candidate = EXTRA_CLASS_BASE;
     int suffix = 2;
-    while (index.byFqn(packageName + "." + candidate).isPresent()) {
+    while (isForeignType(packageName + "." + candidate)) {
       candidate = EXTRA_CLASS_BASE + suffix++;
     }
     return candidate;
+  }
+
+  /**
+   * Whether a same-named type exists in the model source that is NOT this converter's own prior
+   * overflow companion — i.e. a real collision that warrants a suffix. A prior-run companion (its
+   * source carrying {@link #EXTRA_CLASS_MARKER}) is treated as absent, so the name is reused and the
+   * fresh patch replaces it. Matched against the file's raw text because the index parse drops
+   * comments, so the marker is not visible on the parsed declaration.
+   */
+  private boolean isForeignType(String fqn) {
+    ModelSourceIndex.Type existing = index.byFqn(fqn).orElse(null);
+    if (existing == null) {
+      return false;
+    }
+    if (existing.file == null) {
+      return true;
+    }
+    try {
+      return !java.nio.file.Files.readString(existing.file).contains(EXTRA_CLASS_MARKER);
+    } catch (java.io.IOException e) {
+      // Unreadable → treat as a real, foreign type (conservative: suffix rather than risk clobbering).
+      return true;
+    }
   }
 
   /**
