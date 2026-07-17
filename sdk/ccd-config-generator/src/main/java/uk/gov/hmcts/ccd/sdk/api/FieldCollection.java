@@ -575,18 +575,22 @@ public class FieldCollection {
      * {@code ListElementCode}s from the member getters; collection elements need no index, so the rows
      * come out in exactly the input shape.
      *
-     * <p>The {@code elementClass} argument is required because the element type {@code U} is erased
-     * from the {@code List<ListValue<U>>} getter at runtime; it both types the returned member-scope
-     * builder and documents the element type at the call site. Nested collection members inside the
-     * opened scope get the same treatment by calling this overload again on the nested builder.
+     * <p>The {@code elementClass} argument alone determines the element type {@code U}: it both
+     * types the returned member-scope builder and documents the element type at the call site. The
+     * getter is deliberately typed to accept any {@code List} — services annotated in place carry
+     * collections in their own wrapper idioms ({@code List<ListValue<U>>}, sscs's
+     * {@code List<CcdValue<U>>}, civil/prl's {@code List<Element<U>>}, or a bare {@code List<U>}),
+     * and the scope only needs the field's name plus the element class, never the wrapper. Nested
+     * collection members inside the opened scope get the same treatment by calling this overload
+     * again on the nested builder.
      *
-     * @param getter the collection field's getter, typed {@code List<ListValue<U>>}
+     * @param getter the collection field's getter
      * @param elementClass the collection's element type {@code U}
      * @param <U> the collection element type the member scope is opened on
      * @return the member-scope builder for the element type
      */
     public <U> FieldCollectionBuilder<U, StateType, FieldCollectionBuilder<Type, StateType, Parent>> complex(
-        TypedPropertyGetter<Type, List<ListValue<U>>> getter, Class<U> elementClass) {
+        TypedPropertyGetter<Type, ? extends List<?>> getter, Class<U> elementClass) {
       String fieldName = propertyUtils.getPropertyName(dataClass, getter);
       return complex(fieldName, elementClass);
     }
