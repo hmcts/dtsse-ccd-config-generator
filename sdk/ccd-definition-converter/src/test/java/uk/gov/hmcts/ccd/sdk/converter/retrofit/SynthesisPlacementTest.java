@@ -153,6 +153,65 @@ class SynthesisPlacementTest {
   }
 
   @Test
+  void dropsAllArgsConstructorWhenOwnFieldCountExceedsLimitAndSuperBuilderCovers(@TempDir Path work)
+      throws Exception {
+    Path src = work.resolve("src");
+    // prl's CaseData shape: @AllArgsConstructor + @SuperBuilder(toBuilder), own field count already
+    // over the limit. A CaseDataExtra member cannot help — the all-args constructor counts every own
+    // field regardless — so the fix is to DROP @AllArgsConstructor (the @SuperBuilder survives it and
+    // covers construction), not to overflow.
+    write(src, "m", "CaseData",
+        rootClass("@Data\n@AllArgsConstructor\n@SuperBuilder(toBuilder = true)", 260, ""));
+    ModelSourceIndex index = ModelSourceIndex.parse(src);
+    ModelSourceIndex.Type root = index.byFqn("m.CaseData").orElseThrow();
+
+    SynthesisPlacement.Plan plan = new SynthesisPlacement(index, 250).plan(root, synthFields(5));
+
+    assertThat(plan.dropAllArgsConstructor).as("drop @AllArgsConstructor rather than overflow").isTrue();
+    assertThat(plan.overflow).isFalse();
+    assertThat(plan.extraClassName).isNull();
+    assertThat(plan.existingHost).isNull();
+  }
+
+  @Test
+  void doesNotDropAllArgsConstructorWhenAPositionalNewCallSiteReliesOnIt(@TempDir Path work)
+      throws Exception {
+    Path src = work.resolve("src");
+    // The same over-limit @AllArgsConstructor + @SuperBuilder shape, but a positional new CaseData(...)
+    // call elsewhere in the model relies on the all-args constructor: dropping it would break that
+    // call, so placement must NOT drop — it falls back to the overflow path instead.
+    write(src, "m", "CaseData",
+        rootClass("@Data\n@AllArgsConstructor\n@SuperBuilder(toBuilder = true)", 260, ""));
+    write(src, "m", "Caller", "package m;\npublic class Caller {\n"
+        + "  Object make() { return new CaseData(\"a\", \"b\"); }\n}\n");
+    ModelSourceIndex index = ModelSourceIndex.parse(src);
+    ModelSourceIndex.Type root = index.byFqn("m.CaseData").orElseThrow();
+
+    SynthesisPlacement.Plan plan = new SynthesisPlacement(index, 250).plan(root, synthFields(5));
+
+    assertThat(plan.dropAllArgsConstructor).as("a positional new call site blocks the drop").isFalse();
+    assertThat(plan.overflow).as("falls back to overflow when the drop is unsafe").isTrue();
+  }
+
+  @Test
+  void doesNotDropAllArgsConstructorWhenABuilderWouldRegenerateIt(@TempDir Path work) throws Exception {
+    Path src = work.resolve("src");
+    // @Builder (class-level) + @AllArgsConstructor with NO explicit constructor: dropping
+    // @AllArgsConstructor is insufficient because @Builder regenerates a per-field all-args
+    // constructor from the fields, so the class would still exceed the limit. Placement must not claim
+    // the drop fixes it — it overflows instead.
+    write(src, "m", "CaseData", rootClass("@Data\n@Builder\n@AllArgsConstructor", 260, ""));
+    ModelSourceIndex index = ModelSourceIndex.parse(src);
+    ModelSourceIndex.Type root = index.byFqn("m.CaseData").orElseThrow();
+
+    SynthesisPlacement.Plan plan = new SynthesisPlacement(index, 250).plan(root, synthFields(5));
+
+    assertThat(plan.dropAllArgsConstructor)
+        .as("@Builder regenerates the all-args constructor, so dropping is insufficient").isFalse();
+    assertThat(plan.overflow).isTrue();
+  }
+
+  @Test
   void borderlineWithNoUsableHostFallsBackToCaseDataExtra(@TempDir Path work) throws Exception {
     Path src = work.resolve("src");
     // A @JsonCreator+@Builder host (B3 idiom) is NOT a usable synthesis host, and it is the only

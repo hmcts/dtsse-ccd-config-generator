@@ -91,5 +91,13 @@
     "Label": "Change organisation request",
     "FieldType": "ChangeOrganisationRequest",
     "SecurityClassification": "Public"
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "RETRO",
+    "ID": "TTL",
+    "Label": "Set up TTL",
+    "FieldType": "Text",
+    "SecurityClassification": "Public"
   }
 ]

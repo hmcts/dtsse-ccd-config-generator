@@ -114,15 +114,22 @@ final class RetrofitModelRebinder {
     Set<String> placeableIds = new java.util.HashSet<>();
     synthesised.forEach(f -> placeableIds.add(f.getId()));
     SynthesisPlacement.Plan plan = placement.plan(rootType, synthesised);
+    // The case-insensitive collision rename the patch emitter applies (probate's TTL beside ttl),
+    // keyed by field id → the Java member it lands under, so the config's get<member> matches.
+    Map<String, String> renamedMemberById = renamedMembers(synthesised, plan);
 
     for (FieldModel field : model.getCaseFields()) {
       ResolvedProperty property = properties.get(field.getId());
       if (property == null) {
         // Unmatched definition field: the patch synthesises it onto the model class named after the
-        // linker's javaName, so keep the field (and its javaName) unchanged. When the B2 overflow
-        // plan fires, the field lives on CaseDataExtra instead, so reference it through the
-        // prefix-less @JsonUnwrapped parent.
-        reboundFields.add(field);
+        // linker's javaName — unless a case-insensitive collision forced a rename (probate's TTL), in
+        // which case the field lands under, and the config must reference, the renamed member. When the
+        // B2 overflow plan fires the field lives on CaseDataExtra/the host instead, so reference it
+        // through the prefix-less @JsonUnwrapped parent.
+        String member = renamedMemberById.getOrDefault(field.getId(), field.getJavaName());
+        FieldModel placed = member.equals(field.getJavaName())
+            ? field : field.toBuilder().javaName(member).build();
+        reboundFields.add(placed);
         if (plan.overflow && placeableIds.contains(field.getId())) {
           if (plan.existingHost != null) {
             // B2 borderline: the synthesised field lives on an EXISTING prefix-less @JsonUnwrapped
@@ -131,7 +138,7 @@ final class RetrofitModelRebinder {
                 .parentGetter(getter(plan.existingHost.memberName))
                 .clusterType(plan.existingHost.type.simpleName)
                 .clusterTypePackage(plan.existingHost.type.packageName)
-                .memberGetter(getter(field.getJavaName()))
+                .memberGetter(getter(member))
                 .build());
           } else {
             // Common overflow: the field lives on the added CaseDataExtra class, reached via the added
@@ -140,7 +147,7 @@ final class RetrofitModelRebinder {
                 .parentGetter(getter(SynthesisPlacement.EXTRA_MEMBER))
                 .clusterType(plan.extraClassName)
                 .clusterTypePackage(rootType.packageName)
-                .memberGetter(getter(field.getJavaName()))
+                .memberGetter(getter(member))
                 .build());
           }
         }
@@ -349,6 +356,36 @@ final class RetrofitModelRebinder {
     row.put("UserRole", grant.getRole());
     row.put("CRUD", grant.getCrud());
     return row;
+  }
+
+  /**
+   * The case-insensitive collision rename the patch emitter applies to the synthesised fields (finding:
+   * probate's {@code TTL} synthesised beside the existing {@code ttl}, renamed to a collision-free
+   * member), keyed by field id → the Java member name the field lands under. The config's typed getter
+   * ({@code get<member>}) must reference exactly that member. The rename target is the class the fields
+   * are actually synthesised onto — the existing host (borderline nest), else the fresh
+   * {@code CaseDataExtra} (common overflow, no existing members so no rename), else the root — computed
+   * with the same pure {@link SynthesisPlacement#renameCaseInsensitiveCollisions} the emitter uses, so
+   * both sides agree.
+   */
+  private Map<String, String> renamedMembers(
+      List<FieldModel> synthesised, SynthesisPlacement.Plan plan) {
+    Map<String, String> byId = new LinkedHashMap<>();
+    if (synthesised.isEmpty()) {
+      return byId;
+    }
+    List<FieldModel> renamed;
+    if (plan.overflow && plan.existingHost != null) {
+      renamed = placement.renameCaseInsensitiveCollisions(plan.existingHost.type, synthesised);
+    } else if (plan.overflow) {
+      renamed = synthesised; // fresh CaseDataExtra class: no existing members to collide with.
+    } else {
+      renamed = placement.renameCaseInsensitiveCollisions(rootType, synthesised);
+    }
+    for (FieldModel field : renamed) {
+      byId.put(field.getId(), field.getJavaName());
+    }
+    return byId;
   }
 
   /**

@@ -537,6 +537,41 @@ final class ModelSourceIndex {
   }
 
   /**
+   * Whether any parsed model source makes a positional {@code new <Class>(...)} call (with at least
+   * one argument) for {@code target}'s simple name. Used to decide whether it is safe to drop a
+   * {@code @AllArgsConstructor} the patch would otherwise leave oversized (the constructor-limit
+   * fix): a positional {@code new} call relies on the all-args constructor, so removing it would break
+   * that call. A no-arg {@code new <Class>()} is unaffected (a {@code @NoArgsConstructor}/builder
+   * keeps that path) and does not block the drop.
+   *
+   * <p>Matched by simple name (object-creation expressions in the parsed source rarely qualify the
+   * type), which is conservative — a same-named class in another package with a positional
+   * {@code new} would also block the drop, erring toward the safe overflow fallback rather than a
+   * broken constructor.
+   *
+   * @param target the class whose all-args constructor might be dropped
+   * @return true when a positional {@code new <target>(...)} appears anywhere in the parsed source
+   */
+  boolean hasPositionalConstructorCall(Type target) {
+    String targetSimple = target.simpleName;
+    Set<CompilationUnit> scanned = java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<>());
+    for (Type candidate : byFqn.values()) {
+      if (!scanned.add(candidate.unit)) {
+        continue;
+      }
+      boolean found = candidate.unit
+          .findAll(com.github.javaparser.ast.expr.ObjectCreationExpr.class)
+          .stream()
+          .anyMatch(expr -> expr.getType().getNameAsString().equals(targetSimple)
+              && !expr.getArguments().isEmpty());
+      if (found) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /**
    * Whether the model exposes a public getter for {@code fieldName} on {@code owner} (or a
    * superclass) that the SDK's {@code PropertyUtils} would map back to that exact field — i.e. a
    * {@code get<Field>()}/{@code is<Field>()} the config can reference as {@code Owner::get<Field>}.

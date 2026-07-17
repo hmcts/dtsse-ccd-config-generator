@@ -219,6 +219,27 @@ class RetrofitPatchEmitterGoldenTest {
   }
 
   @Test
+  void synthesisesIntoDataClassWithFinalFieldsAndConstructorLevelBuilder() {
+    // Defect 2 (fpl RespondentParty/ChildParty): FinalFieldParty is @Data with a private-final field
+    // and a constructor-level @Builder. A definition-only member (synthLabel) MUST be synthesised onto
+    // it as a NON-final field (which compiles and is set via the Lombok setter) — the over-broad
+    // "any final field" guard used to reject this shape and drop the member to a gap.
+    RetrofitPatchEmitter emitter = buildEmitter();
+    RetrofitPatch patch = emitter.emit();
+    String finalFieldPartyPatched = patch.files().stream()
+        .filter(f -> f.relativePath().endsWith("common/FinalFieldParty.java"))
+        .map(RetrofitPatch.FilePatch::patchedContent)
+        .findFirst()
+        .orElseThrow(() -> new AssertionError("FinalFieldParty.java not in patch"));
+    assertThat(finalFieldPartyPatched)
+        .contains("synthesised definition-only fields")
+        .contains("private String synthLabel;");
+    // It must NOT be routed to a @Value/final-field manual-placement gap.
+    assertThat(emitter.gaps())
+        .noneMatch(g -> "FinalFieldParty/synthLabel".equals(g.getRowKey()));
+  }
+
+  @Test
   void synthesisesDefinitionOnlyFieldInDelimitedBlock() {
     String diff = emitPatch().unifiedDiff();
     assertThat(diff).contains("synthesised definition-only fields");

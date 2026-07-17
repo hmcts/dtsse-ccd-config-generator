@@ -59,4 +59,11 @@ public class CaseData {
   // UNMATCHED_JAVA_FIELD: no definition row, so the patch adds @CCD(ignore = true) to stop the SDK
   // reflecting it into a spurious CaseField.
   private String internalScratch;
+
+  // Lombok case-insensitive accessor collision (probate's TTL/ttl): this existing lower-case field
+  // has no definition row (UNMATCHED_JAVA_FIELD → @CCD(ignore = true)), while the definition declares
+  // a separate CaseField "TTL" with no model field. Synthesising a field literally named "TTL" beside
+  // this "ttl" would collapse to a single Lombok getTtl(), silently dropping one accessor — so the
+  // synthesised field must be renamed (keeping @JsonProperty("TTL")) to a collision-free member.
+  private String ttl;
 }

@@ -27,4 +27,10 @@ public class Party {
   // and its annotated member is followed by MORE unchanged lines than the diff's context window, so
   // the "\ No newline at end of file" marker must not be misplaced on the wrong hunk line.
   private NoTrailingNewlineHost noTrailingNewlineHost;
+
+  // A member whose type (FinalFieldParty) is @Data with private-final fields and a constructor-level
+  // @Builder (fpl's RespondentParty shape): a definition-only member of it MUST be synthesised (a
+  // non-final field compiles and is set via the setter), NOT dropped by the old "any final field"
+  // guard.
+  private FinalFieldParty finalFieldParty;
 }

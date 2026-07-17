@@ -82,5 +82,12 @@
     "CaseFieldID": "changeOrganisationRequestField",
     "UserRole": "caseworker-rt",
     "CRUD": "CRUD"
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "RETRO",
+    "CaseFieldID": "TTL",
+    "UserRole": "caseworker-rt",
+    "CRUD": "CRUD"
   }
 ]

@@ -70,7 +70,24 @@ class RetrofitRoundTripTest {
 
   @Test
   void retrofitRoundTripsWithZeroDiffs(@TempDir Path work) throws Exception {
-    runRoundTrip(work, 0, false, false);
+    runRoundTrip(work, 0, false, false, false);
+  }
+
+  /**
+   * Constructor-limit drop proof (prl's {@code CaseData}): with the root rewritten to
+   * {@code @AllArgsConstructor} + {@code @SuperBuilder} and a low constructor-limit, the class trips
+   * the JVM/Lombok all-args-constructor limit. Because a {@code CaseDataExtra} member cannot help a
+   * class whose OWN field count exceeds the limit (the all-args constructor counts every own field
+   * wherever the synthesised ones live), the fix is to DROP {@code @AllArgsConstructor} — the
+   * {@code @SuperBuilder} covers construction and nothing constructs the class positionally. The
+   * synthesised fields are placed directly on the root and the annotation (and its now-unused import)
+   * are removed; the whole round-trip (compile — proving the dropped constructor no longer exceeds the
+   * limit — plus zero diffs) is the bar.
+   */
+  @Test
+  void retrofitDropsAllArgsConstructorWhenSuperBuilderRootTripsTheLimit(@TempDir Path work)
+      throws Exception {
+    runRoundTrip(work, 3, false, false, true);
   }
 
   /**
@@ -85,7 +102,7 @@ class RetrofitRoundTripTest {
   @Test
   void retrofitRoundTripsViaCaseDataExtraWhenConstructorLimitTripped(@TempDir Path work)
       throws Exception {
-    runRoundTrip(work, 3, true, false);
+    runRoundTrip(work, 3, true, false, false);
   }
 
   /**
@@ -102,7 +119,7 @@ class RetrofitRoundTripTest {
   @Test
   void reusesTheOverflowCompanionNameWhenAStaleOneIsInTheModelTree(@TempDir Path work)
       throws Exception {
-    runRoundTrip(work, 3, true, true);
+    runRoundTrip(work, 3, true, true, false);
   }
 
   /**
@@ -196,7 +213,7 @@ class RetrofitRoundTripTest {
   }
 
   private void runRoundTrip(Path work, int constructorLimit, boolean expectCaseDataExtra,
-      boolean seedStaleCompanion)
+      boolean seedStaleCompanion, boolean superBuilderDrop)
       throws Exception {
     Path input = FIXTURE.resolve("input");
     String caseTypeId = "RETRO";
@@ -224,6 +241,25 @@ class RetrofitRoundTripTest {
           + "public class CaseDataExtra {\n"
           + "  private String staleFieldFromPriorRun;\n"
           + "}\n");
+      modelSrc = writableModel;
+    }
+    if (superBuilderDrop) {
+      // Rewrite the fixture CaseData to prl's shape: @AllArgsConstructor + @SuperBuilder(toBuilder).
+      // With a low constructor-limit the class trips the JVM limit, and because @SuperBuilder (not a
+      // per-field @Builder) covers construction, the fix is to DROP @AllArgsConstructor rather than
+      // overflow into a CaseDataExtra member.
+      Path writableModel = work.resolve("superbuilder-model");
+      copyTree(modelSrc, writableModel);
+      Path caseData = writableModel.resolve(modelPackage.replace('.', '/')).resolve("CaseData.java");
+      String source = Files.readString(caseData);
+      String rewritten = source
+          .replace("import lombok.Builder;", "import lombok.experimental.SuperBuilder;")
+          .replace("@Builder(toBuilder = true)", "@SuperBuilder(toBuilder = true)");
+      assertThat(rewritten).as("the fixture CaseData must be rewritten to @SuperBuilder")
+          .contains("@SuperBuilder(toBuilder = true)")
+          .contains("@AllArgsConstructor")
+          .doesNotContain("@Builder(toBuilder = true)");
+      Files.writeString(caseData, rewritten);
       modelSrc = writableModel;
     }
 
@@ -301,8 +337,39 @@ class RetrofitRoundTripTest {
           .filteredOn(f -> f.relativePath().endsWith("CaseDataExtra.java")
               || f.relativePath().endsWith("CaseDataExtra2.java"))
           .hasSize(1);
+    } else if (superBuilderDrop) {
+      // Constructor-limit drop: no CaseDataExtra overflow — the patch removes @AllArgsConstructor (and
+      // its now-unused import) and synthesises directly onto the root. The @SuperBuilder stays.
+      assertThat(patch.unifiedDiff()).doesNotContain("CaseDataExtra");
+      RetrofitPatch.FilePatch caseDataPatch = patch.files().stream()
+          .filter(f -> f.relativePath().endsWith("model/CaseData.java"))
+          .findFirst()
+          .orElseThrow(() -> new AssertionError("CaseData.java not in patch"));
+      // The class-level @AllArgsConstructor declaration and its import are removed. (The class javadoc
+      // still mentions "{@code @AllArgsConstructor}" as prose — assert on the real declaration/import
+      // lines, not any '@AllArgsConstructor' substring.)
+      assertThat(caseDataPatch.patchedContent().lines())
+          .noneMatch(l -> l.strip().equals("@AllArgsConstructor"));
+      assertThat(caseDataPatch.patchedContent())
+          .doesNotContain("import lombok.AllArgsConstructor;")
+          .contains("@SuperBuilder(toBuilder = true)")
+          .contains("synthesised definition-only fields");
     } else {
       assertThat(patch.unifiedDiff()).doesNotContain("CaseDataExtra");
+      // Lombok case-insensitive accessor collision: the definition-only field "TTL" is synthesised
+      // onto the root beside the existing lower-case "ttl" member. Naming it literally "TTL" would
+      // collapse to a single Lombok getTtl() and drop an accessor, so it must be renamed to a
+      // collision-free member while keeping @JsonProperty("TTL") so the CCD wire ID is unchanged. The
+      // whole round-trip (compile + zero diffs) proves the rename resolves and the ids still match.
+      assertThat(patch.unifiedDiff())
+          .contains("@JsonProperty(\"TTL\")")
+          .doesNotContain("private String TTL;");
+      // The synthesised member is renamed (not the exact id) — some suffixed form the config also
+      // references. The existing lower-case ttl stays ignored, never re-declared.
+      assertThat(patch.files())
+          .anySatisfy(f -> assertThat(f.patchedContent())
+              .contains("private String ttl;")
+              .contains("@CCD(ignore = true)"));
     }
     if (seedStaleCompanion) {
       // The fresh companion recreated at the base name overwrites the seeded one: it must carry the

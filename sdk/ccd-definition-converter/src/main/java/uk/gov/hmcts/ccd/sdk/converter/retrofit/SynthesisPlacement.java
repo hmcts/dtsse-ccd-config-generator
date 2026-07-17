@@ -101,15 +101,35 @@ final class SynthesisPlacement {
      * fields to the limited root class.
      */
     final ExistingHost existingHost;
+    /**
+     * True when the root class trips the limit but the fix is to <em>drop</em> its
+     * {@code @AllArgsConstructor} rather than overflow into a {@code CaseDataExtra} member: the
+     * class's construction goes through a builder ({@code @SuperBuilder}, or a {@code @Builder} bound
+     * to an explicit constructor) that survives the drop, and no all-args {@code new X(...)} call site
+     * relies on the removed constructor (finding: prl's {@code CaseData}, {@code @AllArgsConstructor}
+     * + {@code @SuperBuilder}, whose 253 own fields already exceed the limit so a {@code CaseDataExtra}
+     * member cannot help — the widened all-args constructor still counts every own field). When true,
+     * {@link #overflow} is false: the synthesised fields are placed directly onto the root and the
+     * patch removes the class-level {@code @AllArgsConstructor}.
+     */
+    final boolean dropAllArgsConstructor;
 
     Plan(boolean overflow, String extraClassName, boolean borderlineStillOverLimit,
         int existingSlots, int synthesisedSlots, ExistingHost existingHost) {
+      this(overflow, extraClassName, borderlineStillOverLimit, existingSlots, synthesisedSlots,
+          existingHost, false);
+    }
+
+    Plan(boolean overflow, String extraClassName, boolean borderlineStillOverLimit,
+        int existingSlots, int synthesisedSlots, ExistingHost existingHost,
+        boolean dropAllArgsConstructor) {
       this.overflow = overflow;
       this.extraClassName = extraClassName;
       this.borderlineStillOverLimit = borderlineStillOverLimit;
       this.existingSlots = existingSlots;
       this.synthesisedSlots = synthesisedSlots;
       this.existingHost = existingHost;
+      this.dropAllArgsConstructor = dropAllArgsConstructor;
     }
   }
 
@@ -150,6 +170,15 @@ final class SynthesisPlacement {
     if (!generatesAllArgsConstructor(root) || existing + synthSlots <= limit) {
       return new Plan(false, null, false, existing, synthSlots, null);
     }
+    // The class trips the limit. Prefer simply DROPPING its @AllArgsConstructor when that is safe and
+    // sufficient: the class builds through a builder that survives the drop and nothing constructs it
+    // positionally. This is the correct fix for a class whose OWN field count already exceeds the
+    // limit (prl's CaseData: 253 own fields + @AllArgsConstructor + @SuperBuilder), where a
+    // CaseDataExtra member cannot help — the all-args constructor counts every own field regardless of
+    // where the synthesised ones live, so it must be removed, not worked around.
+    if (canSafelyDropAllArgsConstructor(root)) {
+      return new Plan(false, null, false, existing, synthSlots, null, true);
+    }
     // The root loses all synthesised fields and gains exactly one unwrapped member; it is still over
     // the limit only if it was already within one slot of it.
     boolean borderline = existing + 1 > limit;
@@ -167,6 +196,54 @@ final class SynthesisPlacement {
       return new Plan(true, uniqueExtraClassName(root.packageName), true, existing, synthSlots, null);
     }
     return new Plan(true, uniqueExtraClassName(root.packageName), false, existing, synthSlots, null);
+  }
+
+  /**
+   * Whether the root class's {@code @AllArgsConstructor} can be safely dropped from the patch to keep
+   * it under the constructor-argument limit — the correct fix when its OWN field count already
+   * exceeds the limit, so no {@code CaseDataExtra} overflow member can help (the generated all-args
+   * constructor counts every own field wherever the synthesised ones are placed). Dropping it is
+   * chosen only when it is both <em>sufficient</em> and <em>safe</em>:
+   *
+   * <ul>
+   *   <li><b>sufficient</b> — removing {@code @AllArgsConstructor} actually eliminates the oversized
+   *       constructor: no other Lombok annotation regenerates a per-field all-args constructor. A
+   *       {@code @SuperBuilder} generates only a builder-argument constructor, so the drop suffices
+   *       (prl's {@code CaseData}); a class-level {@code @Builder}/{@code @Value} with NO explicit
+   *       constructor would regenerate the all-args form after the drop, so it does NOT suffice.</li>
+   *   <li><b>safe</b> — construction still has a path after the drop (a {@code @SuperBuilder}/
+   *       {@code @Builder}, a {@code @NoArgsConstructor}, or a hand-written constructor), and nothing
+   *       relies on the removed all-args constructor: no positional {@code new <Class>(...)} call site
+   *       in the parsed model, and no subclass makes a positional {@code super(...)} call this class's
+   *       all-args constructor would satisfy.</li>
+   * </ul>
+   *
+   * <p>When the drop is not both, the caller falls back to the {@code CaseDataExtra} overflow path
+   * (and its still-over-limit gap when even that cannot help).
+   */
+  private boolean canSafelyDropAllArgsConstructor(ModelSourceIndex.Type root) {
+    if (!hasAnnotation(root, "AllArgsConstructor")) {
+      return false;
+    }
+    // Sufficient: without @AllArgsConstructor, the class must not still generate a per-field all-args
+    // constructor from a class-level @Builder/@Value that has no explicit constructor.
+    boolean plainBuilder = hasAnnotation(root, "Builder");
+    boolean value = hasAnnotation(root, "Value");
+    boolean explicitCtor = !root.decl.getConstructors().isEmpty();
+    boolean regeneratesAllArgs = (plainBuilder || value) && !explicitCtor;
+    if (regeneratesAllArgs) {
+      return false;
+    }
+    // Safe: some construction path survives the drop.
+    boolean superBuilder = hasAnnotation(root, "SuperBuilder");
+    boolean noArgs = hasAnnotation(root, "NoArgsConstructor");
+    boolean hasConstructionPath = superBuilder || plainBuilder || noArgs || explicitCtor;
+    if (!hasConstructionPath) {
+      return false;
+    }
+    // Safe: nothing relies on the all-args constructor being present.
+    return !index.hasPositionalConstructorCall(root)
+        && !index.hasSubtypeWithExplicitSuperCall(root);
   }
 
   /**
@@ -376,6 +453,65 @@ final class SynthesisPlacement {
           : index.resolve(current.unit, extended.get(0)).orElse(null);
     }
     return names;
+  }
+
+  /**
+   * Renames any synthesised field whose Java name collides <em>case-insensitively</em> with a field
+   * already declared on the target class (or a Lombok-visible superclass) — the Lombok
+   * accessor-collision bug (finding: probate's {@code TTL} synthesised beside the existing {@code ttl},
+   * and {@code boEmailGrantReissuedNotificationRequested} beside {@code boEmailGrantReIssuedNotificationRequested}).
+   * Lombok derives one accessor per <em>case-insensitive</em> name (both {@code ttl}/{@code TTL} map to
+   * {@code getTtl()}), so two fields differing only in case silently collapse to a single generated
+   * getter/setter and one field's accessor is dropped — a getter the companion config then references
+   * fails to resolve, or the wrong field is bound. Exact same-name collisions are handled separately
+   * (dropped, since the existing member already carries the data); this handles the different-name,
+   * same-ignoring-case case by RENAMING the synthesised field to a deterministic collision-free name.
+   *
+   * <p>The rename preserves the field {@code id} (the CCD wire ID), so the emitter still adds a
+   * {@code @JsonProperty("<id>")} — {@code javaName != id} — keeping the definition field ID and the
+   * JSON wire format unchanged; only the Java member/accessor name changes. The scheme appends the
+   * smallest numeric suffix from 2 that is free case-insensitively among the declared names AND the
+   * other synthesised names, so it is deterministic and itself collision-free. Because it is a pure
+   * function of (declared names, synthesised set), the patch emitter and the {@link RetrofitModelRebinder}
+   * compute the identical rename independently — the config's {@code get<RenamedName>} reference and the
+   * synthesised member name always agree.
+   *
+   * @param target      the class the fields are synthesised onto
+   * @param synthesised the placeable synthesised fields (exact-name collisions already dropped)
+   * @return the fields with case-insensitively-colliding Java names renamed (order preserved)
+   */
+  List<FieldModel> renameCaseInsensitiveCollisions(
+      ModelSourceIndex.Type target, List<FieldModel> synthesised) {
+    if (target == null || synthesised.isEmpty()) {
+      return synthesised;
+    }
+    Set<String> declaredLower = new java.util.HashSet<>();
+    for (String name : declaredFieldNames(target)) {
+      declaredLower.add(name.toLowerCase(java.util.Locale.ROOT));
+    }
+    // Track the case-insensitive names already taken by earlier synthesised fields too, so two
+    // synthesised fields cannot themselves collide after renaming.
+    Set<String> takenLower = new java.util.HashSet<>(declaredLower);
+    List<FieldModel> result = new ArrayList<>(synthesised.size());
+    for (FieldModel field : synthesised) {
+      String javaName = field.getJavaName();
+      String lower = javaName.toLowerCase(java.util.Locale.ROOT);
+      if (!declaredLower.contains(lower)) {
+        // No collision with an existing declared member. Still reserve its case-folded name so a later
+        // synthesised field cannot collide with it.
+        takenLower.add(lower);
+        result.add(field);
+        continue;
+      }
+      String renamed = javaName;
+      int suffix = 2;
+      while (takenLower.contains(renamed.toLowerCase(java.util.Locale.ROOT))) {
+        renamed = javaName + suffix++;
+      }
+      takenLower.add(renamed.toLowerCase(java.util.Locale.ROOT));
+      result.add(field.toBuilder().javaName(renamed).build());
+    }
+    return result;
   }
 
   static List<FieldModel> copy(List<FieldModel> fields) {

@@ -202,7 +202,8 @@ public final class RetrofitPatchEmitter {
         // Prefix-less unwrapping flattens the added members to the same CCD IDs, and the config
         // references them through that member's existing getter.
         SynthesisPlacement.ExistingHost host = plan.existingHost;
-        List<FieldModel> hostPlaceable = dropExistingFieldCollisions(host.type, placeable);
+        List<FieldModel> hostPlaceable = placement.renameCaseInsensitiveCollisions(
+            host.type, dropExistingFieldCollisions(host.type, placeable));
         editsFor(byFile, host.type.file).synthesise(host.type.simpleName, hostPlaceable);
         gaps.add(GapEntry.builder()
             .sheet("CaseField")
@@ -242,8 +243,32 @@ public final class RetrofitPatchEmitter {
                   + "to compile.")
               .build());
         }
+      } else if (plan.dropAllArgsConstructor) {
+        // The root's OWN field count already exceeds the constructor limit, so no CaseDataExtra member
+        // can help — the generated all-args constructor counts every own field wherever the
+        // synthesised ones live. The class builds through a builder that survives the drop and nothing
+        // constructs it positionally (SynthesisPlacement verified both), so the safe fix is to remove
+        // its @AllArgsConstructor: synthesise directly onto the root and drop the annotation.
+        editsFor(byFile, rootType.file).synthesise(rootType.simpleName,
+            placement.renameCaseInsensitiveCollisions(rootType, placeable));
+        editsFor(byFile, rootType.file).removeTypeAnnotation("AllArgsConstructor");
+        gaps.add(GapEntry.builder()
+            .sheet("CaseField")
+            .rowKey(rootType.simpleName)
+            .column("FieldType")
+            .value("(constructor limit)")
+            .category(GapCategory.UNSUPPORTED_VALUE)
+            .action(GapAction.ADVISORY)
+            .detail(rootType.simpleName + " has more fields than the JVM/Lombok all-args constructor "
+                + "limit allows, so the patch drops its @AllArgsConstructor. This is safe here: the "
+                + "class is constructed through its builder (verified no positional new "
+                + rootType.simpleName + "(...) call site and no subclass super(...) call relies on the "
+                + "all-args constructor). If code later needs an all-args constructor, use the builder "
+                + "or add an explicit constructor.")
+            .build());
       } else {
-        editsFor(byFile, rootType.file).synthesise(rootType.simpleName, placeable);
+        editsFor(byFile, rootType.file).synthesise(rootType.simpleName,
+            placement.renameCaseInsensitiveCollisions(rootType, placeable));
       }
     }
 
@@ -435,6 +460,11 @@ public final class RetrofitPatchEmitter {
                 .build());
           }
         } else {
+          // Case-insensitive-collision renaming (probate's TTL/ttl) is applied only on the root
+          // CaseData paths, where the rebinder mirrors the rename so the config's typed getter matches
+          // the renamed member. A complex-type member's companion getter reference is derived from the
+          // linked model (not the rebinder), so renaming here would desync it — and no real lane has a
+          // complex-member case-insensitive collision, so this path keeps the exact-collision drop only.
           editsFor(byFile, complexClass.file)
               .synthesise(complexClass.simpleName,
                   dropExistingFieldCollisions(complexClass, synthesised));
@@ -471,13 +501,18 @@ public final class RetrofitPatchEmitter {
           + "appending a field would make the generated builder pass an argument the constructor does "
           + "not declare. Add the field and extend the constructor by hand.";
     }
-    if (hasFinalFields(complexClass) && !complexClass.decl.getConstructors().isEmpty()) {
-      // A @Value class (or one whose fields are otherwise final) makes the synthesised field final
-      // too; a hand-written explicit constructor that does not assign it leaves it "might not have
-      // been initialized" (Civil's Bundle: @Value + a @JsonCreator Bundle(value) ctor that only sets
-      // value). Route to manual placement rather than synthesising an uninitialisable final field.
-      return "which is a @Value/final-field class with a hand-written constructor that would not "
-          + "initialise the synthesised final field. Add the field and update the constructor by hand.";
+    if (forcesFieldsFinal(complexClass) && !complexClass.decl.getConstructors().isEmpty()) {
+      // A @Value class makes EVERY field private final — including the synthesised one — so a
+      // hand-written explicit constructor that does not assign it leaves it "might not have been
+      // initialized" (Civil's Bundle: @Value + a @JsonCreator ctor that only sets its declared field).
+      // Route to manual placement rather than synthesising an uninitialisable final field.
+      //
+      // A class that merely DECLARES some fields final (fpl's RespondentParty/ChildParty: @Data with
+      // `private final` members and a constructor-level @Builder) is NOT this case: the synthesised
+      // field is emitted non-final, so it compiles and is set via the Lombok setter/left null —
+      // verified against Lombok. Only @Value (which forces the new field final too) is unsafe.
+      return "which is a @Value class whose hand-written constructor would not initialise the "
+          + "synthesised final field. Add the field and update the constructor by hand.";
     }
     if (generatesAllArgsConstructor(complexClass)
         && index.hasSubtypeWithExplicitSuperCall(complexClass)) {
@@ -489,18 +524,16 @@ public final class RetrofitPatchEmitter {
   }
 
   /**
-   * Whether a class's fields are final — either declared {@code @Value} (Lombok makes every field
-   * {@code private final}) or {@code @Data} with explicitly-final fields. A synthesised field on such
-   * a class becomes final too, so any explicit constructor must assign it or the class does not
-   * compile.
+   * Whether a class forces <em>every</em> field {@code private final}, so a synthesised (non-final)
+   * field would itself become final and need constructor initialisation. That is Lombok
+   * {@code @Value} (which makes all fields final); it is NOT a {@code @Data} class that merely
+   * declares some individual fields {@code final} (fpl's {@code RespondentParty}/{@code ChildParty}),
+   * because there the synthesised field stays non-final and compiles/sets fine — the over-broad
+   * "any final field" test wrongly routed those complex-type members to a gap, dropping every
+   * definition-only member of {@code RespondentParty}/{@code ChildParty}/{@code Solicitor}/etc.
    */
-  private static boolean hasFinalFields(ModelSourceIndex.Type target) {
-    if (hasTypeAnnotation(target.decl, "Value")) {
-      return true;
-    }
-    return target.decl.getFields().stream()
-        .filter(f -> !f.isStatic())
-        .anyMatch(FieldDeclaration::isFinal);
+  private static boolean forcesFieldsFinal(ModelSourceIndex.Type target) {
+    return hasTypeAnnotation(target.decl, "Value");
   }
 
   /**
@@ -652,7 +685,6 @@ public final class RetrofitPatchEmitter {
     boolean needsJsonPropertyImport = false;
     boolean needsFieldTypeImport = false;
     Set<String> accessClasses = new LinkedHashSet<>();
-    Set<String> typeImports = new LinkedHashSet<>();
 
     // Collect one insertion (own-line block of annotation text) per field, keyed by the 1-based
     // source line its FIRST token (existing annotation, else modifier/type) begins on — so the
@@ -699,10 +731,44 @@ public final class RetrofitPatchEmitter {
       }
     }
 
-    // Insert bottom-up (line numbers descending) so an earlier insertion never shifts a later
-    // field's still-to-be-processed line number.
-    for (Map.Entry<Integer, List<String>> entry : insertionsByLine.entrySet()) {
-      sourceLines.addAll(entry.getKey() - 1, entry.getValue());
+    // Class-level annotation removals (the constructor-limit @AllArgsConstructor drop): find each
+    // matching top-level annotation that sits alone on its own line and delete that whole line. Only a
+    // solo annotation line is removed — an annotation sharing a line with other tokens is left as-is
+    // (no such case arises for the @AllArgsConstructor this targets, and skipping keeps the edit safe).
+    Set<Integer> linesToDelete = new java.util.TreeSet<>(Comparator.reverseOrder());
+    if (!edits.removeTypeAnnotations.isEmpty()) {
+      for (TypeDeclaration<?> type : unit.getTypes()) {
+        type.getAnnotations().forEach(a -> {
+          String simple = a.getNameAsString();
+          simple = simple.contains(".") ? simple.substring(simple.lastIndexOf('.') + 1) : simple;
+          if (!edits.removeTypeAnnotations.contains(simple)) {
+            return;
+          }
+          int begin = a.getBegin().map(p -> p.line).orElse(-1);
+          int end = a.getEnd().map(p -> p.line).orElse(-1);
+          if (begin < 1 || begin != end) {
+            return;
+          }
+          if (sourceLines.get(begin - 1).trim().equals(a.toString())) {
+            linesToDelete.add(begin);
+          }
+        });
+      }
+    }
+
+    // Apply inserts and deletes in one strictly-descending pass over 1-based line numbers so an
+    // earlier edit never shifts a later, still-to-be-applied line number. Insertion lines (a field's
+    // first line) and deletion lines (a solo class-level annotation) are disjoint, so each line is
+    // handled exactly once.
+    java.util.NavigableSet<Integer> touched = new java.util.TreeSet<>(Comparator.reverseOrder());
+    touched.addAll(insertionsByLine.keySet());
+    touched.addAll(linesToDelete);
+    for (int line : touched) {
+      if (linesToDelete.contains(line)) {
+        sourceLines.remove(line - 1);
+      } else {
+        sourceLines.addAll(line - 1, insertionsByLine.get(line));
+      }
     }
     String printed = String.join("\n", sourceLines) + (droppedTrailingNewline ? "\n" : "");
     boolean needsJsonUnwrappedImport = false;
@@ -710,6 +776,7 @@ public final class RetrofitPatchEmitter {
     // Synthesised definition-only fields: build one clearly-delimited block and insert it before
     // the target class's closing brace (textually, so the marker comments and indentation are
     // exactly as intended and the diff is one contiguous hunk at the end of the class body).
+    Set<String> typeImports = new LinkedHashSet<>();
     if (!edits.synthesise.isEmpty()) {
       ImportBinder binder = new ImportBinder(existingImports(unit));
       SynthResult synth = renderSynthBlock(edits, binder);
@@ -752,10 +819,48 @@ public final class RetrofitPatchEmitter {
     printed = addImports(printed, needsCcdImport, needsJsonPropertyImport, needsFieldTypeImport,
         needsJsonUnwrappedImport, needsJsonIgnoreImport, accessClasses, typeImports);
 
+    // A dropped class-level annotation leaves its import unused; strip it so checkstyle's unused-import
+    // rule stays clean (the retrofitted teams run maxWarnings=0). Only remove an import whose type no
+    // longer appears anywhere else in the printed source.
+    for (String removed : edits.removeTypeAnnotations) {
+      if (!linesToDelete.isEmpty()) {
+        printed = removeUnusedAnnotationImport(printed, removed);
+      }
+    }
+
     if (printed.equals(original)) {
       return null;
     }
     return new RetrofitPatch.FilePatch(relative, original, printed);
+  }
+
+  /**
+   * Removes the {@code import …<simpleName>;} line for a dropped class-level annotation when the
+   * simple name no longer appears as an {@code @}-annotation anywhere in {@code source} — so removing
+   * the last {@code @AllArgsConstructor} also removes its now-unused import (checkstyle's unused-import
+   * rule, {@code maxWarnings=0} on the retrofitted teams). If the annotation still appears (another
+   * type in the file uses it, or it was imported for another reason) the import is kept.
+   */
+  private static String removeUnusedAnnotationImport(String source, String simpleName) {
+    // Look for a real annotation use — an "@Name" whose token is exactly the simple name (not a
+    // longer identifier, not inside {@code @Name} javadoc). If any remains, keep the import.
+    java.util.regex.Matcher use = java.util.regex.Pattern
+        .compile("@" + java.util.regex.Pattern.quote(simpleName) + "\\b").matcher(source);
+    while (use.find()) {
+      int at = use.start();
+      // Skip a javadoc {@code @AllArgsConstructor} reference: the '@' is preceded by "{@code ".
+      String before = source.substring(Math.max(0, at - 8), at);
+      if (!before.contains("{@code")) {
+        return source;
+      }
+    }
+    List<String> lines = new ArrayList<>(Arrays.asList(source.split("\n", -1)));
+    lines.removeIf(line -> {
+      String t = line.trim();
+      return t.startsWith("import ")
+          && (t.endsWith("." + simpleName + ";") || t.equals("import " + simpleName + ";"));
+    });
+    return String.join("\n", lines);
   }
 
   private SynthResult renderSynthBlock(FileEdits edits, ImportBinder binder) {
@@ -1163,6 +1268,12 @@ public final class RetrofitPatchEmitter {
     private final List<ComplexTypeAuthGetter> delegatingGetters = new ArrayList<>();
     /** Simple name of a CaseDataExtra class to add as a prefix-less @JsonUnwrapped member (B2). */
     private String unwrappedMemberType;
+    /**
+     * Class-level annotation simple names to remove from the top-level type — currently only
+     * {@code AllArgsConstructor}, dropped when the root class exceeds the constructor-argument limit
+     * and building goes through a builder (the constructor-limit fix).
+     */
+    private final Set<String> removeTypeAnnotations = new LinkedHashSet<>();
 
     FileEdits(Path file) {
       this.file = file;
@@ -1189,6 +1300,10 @@ public final class RetrofitPatchEmitter {
 
     void addDelegatingGetter(ComplexTypeAuthGetter getter) {
       this.delegatingGetters.add(getter);
+    }
+
+    void removeTypeAnnotation(String simpleName) {
+      this.removeTypeAnnotations.add(simpleName);
     }
   }
 
