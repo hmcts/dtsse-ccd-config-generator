@@ -65,13 +65,12 @@ run_lane() {
   ( cd "${REPO_ROOT}" && "${GRADLEW}" -q -p sdk :ccd-definition-converter:run \
       --args="$(printf '%q ' "${args[@]}")" )
 
-  # Refresh the clone's TRACKED state: reset every tracked modification back to the baseline and
-  # re-apply the FRESH patch. Without this the clone's model diff is forever the first patch ever
-  # applied — while companions and the patch file refresh — so the reviewable diff silently drifts
-  # from what the converter emits today (the cross-provenance desync that broke the prl migration:
-  # a stale patch's access imports against fresh companions).
+  # Refresh the clone's TRACKED state: reset every tracked modification back to the baseline. The
+  # FRESH patch is applied at the END of the sync (after the untracked-file prune) because the patch
+  # can CREATE files — e.g. the synthesised overflow companion — which land as untracked and must
+  # not be swept by the prune. Without the reset the clone's model diff is forever the first patch
+  # ever applied — the cross-provenance desync that broke the prl migration.
   git -C "${clone}" checkout -- .
-  git -C "${clone}" apply "${out}/report/retrofit.patch"
 
   # Sync companion sources + patch into the clone, preserving narratives. Companions go into the
   # service's REAL main source tree (maintainer feedback point 1) — they show as untracked files in
@@ -107,6 +106,9 @@ run_lane() {
     mkdir -p "${clone}/resources"
     cp -a "${out}/resources/ccd-passthrough" "${clone}/resources/"
   fi
+  # Apply the fresh patch LAST: its new-file hunks (the synthesised overflow companion) land as
+  # untracked files and must not be swept by the untracked-prune above.
+  git -C "${clone}" apply "${out}/report/retrofit.patch"
   mkdir -p "${PATCHES}"
   cp "${out}/report/retrofit.patch" "${PATCHES}/retrofit-${casetype}.patch"
   echo ">> ${lane}: companion + patch refreshed"
