@@ -158,8 +158,8 @@ public final class RetrofitConverter {
     Converter converter = ConverterFactory.create(emitOptions,
             List.of(new RetrofitComplexTypeEmitter(index, modelPackage)))
         .toBuilder()
-        .modelTransform(model -> {
-          CaseTypeModel rebound = rebinder.rebind(model);
+        .modelTransform((model, gaps) -> {
+          CaseTypeModel rebound = rebinder.rebind(model, gaps);
           reboundHolder[0] = rebound;
           return rebound;
         })

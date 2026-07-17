@@ -5,7 +5,7 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.function.UnaryOperator;
+import java.util.function.BiFunction;
 import lombok.Builder;
 import lombok.Value;
 import uk.gov.hmcts.ccd.sdk.converter.api.ConversionOptions;
@@ -34,9 +34,10 @@ public class Converter {
   /**
    * Optional transform applied to the linked model before emission. Retrofit mode uses it to rebind
    * the model's getters/fields onto the team's existing classes (see {@code RetrofitModelRebinder}).
-   * Null / identity in generate mode.
+   * Receives the linked model and the shared {@link GapCollector} (so the rebind can record gaps for,
+   * e.g., a complex-type grant it must route to passthrough). Null / identity in generate mode.
    */
-  private final UnaryOperator<CaseTypeModel> modelTransform;
+  private final BiFunction<CaseTypeModel, GapCollector, CaseTypeModel> modelTransform;
 
   /**
    * Runs the full conversion.
@@ -51,7 +52,7 @@ public class Converter {
     DefinitionIr ir = reader.read(options, gaps);
     CaseTypeModel model = linker.link(ir, options, gaps);
     if (modelTransform != null) {
-      model = modelTransform.apply(model);
+      model = modelTransform.apply(model, gaps);
     }
 
     EmitContext context = EmitContext.builder()

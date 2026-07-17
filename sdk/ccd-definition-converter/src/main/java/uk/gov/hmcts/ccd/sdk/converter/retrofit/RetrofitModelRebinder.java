@@ -7,8 +7,15 @@ import java.util.Set;
 import java.util.TreeSet;
 import uk.gov.hmcts.ccd.sdk.converter.model.CaseTypeModel;
 import uk.gov.hmcts.ccd.sdk.converter.model.ClusteredFieldRef;
+import uk.gov.hmcts.ccd.sdk.converter.model.ComplexTypeAuthGetter;
+import uk.gov.hmcts.ccd.sdk.converter.model.ComplexTypeAuthModel;
 import uk.gov.hmcts.ccd.sdk.converter.model.FieldModel;
 import uk.gov.hmcts.ccd.sdk.converter.model.FixedListModel;
+import uk.gov.hmcts.ccd.sdk.converter.model.PassthroughSheet;
+import uk.gov.hmcts.ccd.sdk.converter.model.gap.GapAction;
+import uk.gov.hmcts.ccd.sdk.converter.model.gap.GapCategory;
+import uk.gov.hmcts.ccd.sdk.converter.model.gap.GapCollector;
+import uk.gov.hmcts.ccd.sdk.converter.model.gap.GapEntry;
 
 /**
  * Rebinds a linked {@link CaseTypeModel} for retrofit config emission so its typed getters reference
@@ -63,12 +70,24 @@ final class RetrofitModelRebinder {
   }
 
   /**
-   * Rebinds the model.
+   * Rebinds the model (no gap collector — used by unit tests that don't exercise the complex-type
+   * grant reclassification).
    *
    * @param model the linked model (produced with {@code retrofit=true}, so already unclustered)
    * @return a rebound model whose fields/getters target the team's existing model
    */
   CaseTypeModel rebind(CaseTypeModel model) {
+    return rebind(model, new GapCollector());
+  }
+
+  /**
+   * Rebinds the model.
+   *
+   * @param model the linked model (produced with {@code retrofit=true}, so already unclustered)
+   * @param gaps the shared gap collector, for complex-type grants routed to passthrough
+   * @return a rebound model whose fields/getters target the team's existing model
+   */
+  CaseTypeModel rebind(CaseTypeModel model, GapCollector gaps) {
     Map<String, ClusteredFieldRef> refs = new LinkedHashMap<>();
     List<FieldModel> reboundFields = new java.util.ArrayList<>();
     // Fields the config must NOT place via a typed getter because the @JsonUnwrapped parent they are
@@ -182,12 +201,154 @@ final class RetrofitModelRebinder {
       }
     }
 
+    // AuthorisationComplexType grants: the linker marked every grant resolvable (retrofit skips
+    // clustering, so its resolvable-field set could not see @JsonUnwrapped folding). Re-classify each
+    // grant against the model the config actually binds to: a field reached only through a
+    // @JsonUnwrapped member has no direct CaseData::getX getter, so the patch must synthesise a
+    // delegating one; a field whose unwrap chain has an unresolvable getter cannot be referenced at
+    // all and its grant is routed to the raw-JSON passthrough.
+    GrantRebind grantRebind = rebindComplexTypeGrants(model, reboundFields, refs, unplaceable, gaps);
+
     return model.toBuilder()
         .caseFields(reboundFields)
         .fixedLists(reboundLists)
         .clusteredFieldRefs(refs)
         .unplaceableFieldIds(unplaceable)
+        .complexTypeAuthorisations(grantRebind.grants)
+        .complexTypeAuthGetters(grantRebind.getters)
+        .passthroughSheets(grantRebind.passthrough)
         .build();
+  }
+
+  /** The re-classified grants, synthesised delegating getters and augmented passthrough. */
+  private static final class GrantRebind {
+    final List<ComplexTypeAuthModel> grants;
+    final Map<String, ComplexTypeAuthGetter> getters;
+    final List<PassthroughSheet> passthrough;
+
+    GrantRebind(List<ComplexTypeAuthModel> grants, Map<String, ComplexTypeAuthGetter> getters,
+        List<PassthroughSheet> passthrough) {
+      this.grants = grants;
+      this.getters = getters;
+      this.passthrough = passthrough;
+    }
+  }
+
+  /**
+   * Re-classifies the linked {@code AuthorisationComplexType} grants against the team's real model.
+   * Each grant's complex CaseField is one of:
+   * <ul>
+   *   <li><b>a direct member of the root class</b> — {@code CaseData::get<Member>} resolves; keep the
+   *       grant unchanged, no delegating getter needed;</li>
+   *   <li><b>reached through a {@code @JsonUnwrapped} member</b> whose whole getter chain resolves
+   *       (its {@link ClusteredFieldRef} is present) — the flat id has NO direct getter, so record a
+   *       {@link ComplexTypeAuthGetter} the patch emits as a delegating {@code get<FieldId>()} and
+   *       keep the grant (the config references the delegating getter);</li>
+   *   <li><b>otherwise ungrantable</b> (the field was never resolved, or its unwrap chain has an
+   *       unresolvable getter) — drop the grant to a raw-JSON {@code AuthorisationComplexType}
+   *       passthrough row and record a gap, never emitting a getter that fails to compile/resolve.</li>
+   * </ul>
+   */
+  private GrantRebind rebindComplexTypeGrants(CaseTypeModel model, List<FieldModel> reboundFields,
+      Map<String, ClusteredFieldRef> refs, Set<String> unplaceable, GapCollector gaps) {
+    List<ComplexTypeAuthModel> grants = model.getComplexTypeAuthorisations();
+    List<PassthroughSheet> passthrough = model.getPassthroughSheets() == null
+        ? new java.util.ArrayList<>() : new java.util.ArrayList<>(model.getPassthroughSheets());
+    if (grants == null || grants.isEmpty()) {
+      return new GrantRebind(grants == null ? List.of() : grants, Map.of(), passthrough);
+    }
+    Map<String, FieldModel> fieldsById = new LinkedHashMap<>();
+    for (FieldModel field : reboundFields) {
+      fieldsById.put(field.getId(), field);
+    }
+    List<ComplexTypeAuthModel> grantable = new java.util.ArrayList<>();
+    Map<String, ComplexTypeAuthGetter> getters = new LinkedHashMap<>();
+    List<Map<String, Object>> residualRows = new java.util.ArrayList<>();
+    for (ComplexTypeAuthModel grant : grants) {
+      String fieldId = grant.getCaseFieldId();
+      ClusteredFieldRef ref = refs.get(fieldId);
+      boolean present = fieldsById.containsKey(fieldId);
+      if (present && ref != null && !unplaceable.contains(fieldId)) {
+        // Reached through a @JsonUnwrapped member whose whole getter chain resolves (the ref is only
+        // recorded then — hopChainGettersResolvable): the flat id has NO direct CaseData getter, so
+        // synthesise a delegating one and keep the grant referencing it by that method name.
+        getters.put(fieldId, delegatingGetterFor(fieldId, ref));
+        grantable.add(grant);
+      } else if (present && ref == null) {
+        // A direct member the config references as CaseData::get<Member>: either a resolved model
+        // member, or an unmatched definition field the patch synthesises onto the root class (whose
+        // Lombok @Data getter then resolves — fpl's TTL / placementsNonConfidential). Grantable as-is.
+        grantable.add(grant);
+      } else {
+        // Ungrantable: the field is absent from the model, or its @JsonUnwrapped parent's getter is
+        // suppressed (unplaceable — no resolvable hop chain, so not even a delegating getter can reach
+        // it). No compilable CaseData getter can back it, so route the grant to raw-JSON passthrough
+        // rather than emit a grantComplexType that fails to compile or resolve at generation.
+        residualRows.add(residualGrantRow(model.getCaseTypeId(), grant));
+      }
+    }
+    if (!residualRows.isEmpty()) {
+      passthrough.add(PassthroughSheet.builder()
+          .relativePath("AuthorisationComplexType/role.json")
+          .primaryKeys(List.of("CaseTypeID", "CaseFieldID", "ListElementCode", "CRUD", "UserRole"))
+          .rows(residualRows)
+          .build());
+      gaps.add(GapEntry.builder()
+          .sheet("AuthorisationComplexType")
+          .rowKey(model.getCaseTypeId())
+          .column("CaseFieldID")
+          .value(residualRows.size() + " grant(s) routed to passthrough")
+          .category(GapCategory.UNSUPPORTED_VALUE)
+          .action(GapAction.PASSTHROUGH_ROW)
+          .detail("AuthorisationComplexType: " + residualRows.size() + " grant(s) on a complex field "
+              + "the team model exposes no compilable getter for (unresolved field, or a "
+              + "@JsonUnwrapped parent whose getter chain does not resolve) were routed to raw-JSON "
+              + "passthrough rather than emitted as a grantComplexType that would fail at "
+              + "generation. Add a getter on the root case-data class by hand if a typed grant is "
+              + "wanted.")
+          .build());
+    }
+    return new GrantRebind(grantable, getters, passthrough);
+  }
+
+  /**
+   * Builds a delegating getter descriptor for a grant field reached through a {@code @JsonUnwrapped}
+   * chain. Its name is {@code get} + PascalCase(fieldId) (decapitalises back to the CCD id via the
+   * SDK's {@code derivePropertyName}); its body invokes the parent getter, each intermediate hop
+   * getter, then the leaf member getter; its return type is the leaf field's declared Java type when
+   * known, else {@code Object} (the SDK never invokes the getter — it only reads the method name).
+   */
+  private ComplexTypeAuthGetter delegatingGetterFor(String fieldId, ClusteredFieldRef ref) {
+    List<String> chain = new java.util.ArrayList<>();
+    chain.add(ref.getParentGetter());
+    if (ref.getParentHops() != null) {
+      ref.getParentHops().forEach(hop -> chain.add(hop.getGetter()));
+    }
+    chain.add(ref.getMemberGetter());
+    // Return Object, not the linker's javaType: the definition-inferred type (a ListValue-based
+    // collection) differs from the model member's real return type (an Element-based one), so
+    // declaring it would not compile. The SDK never invokes the getter — grantComplexType only reads
+    // the method NAME off the serialized lambda — so Object is both safe and always-compilable, and
+    // any reference type the delegation yields is assignable to it.
+    return ComplexTypeAuthGetter.builder()
+        .caseFieldId(fieldId)
+        .getterName(getter(fieldId))
+        .returnTypeSource("Object")
+        .delegationChain(chain)
+        .build();
+  }
+
+  /**
+   * A flat {@code role}-shape {@code AuthorisationComplexType} passthrough row for a dropped grant.
+   */
+  private static Map<String, Object> residualGrantRow(String caseTypeId, ComplexTypeAuthModel grant) {
+    Map<String, Object> row = new LinkedHashMap<>();
+    row.put("CaseTypeID", caseTypeId);
+    row.put("CaseFieldID", grant.getCaseFieldId());
+    row.put("ListElementCode", grant.getListElementCode());
+    row.put("UserRole", grant.getRole());
+    row.put("CRUD", grant.getCrud());
+    return row;
   }
 
   /**

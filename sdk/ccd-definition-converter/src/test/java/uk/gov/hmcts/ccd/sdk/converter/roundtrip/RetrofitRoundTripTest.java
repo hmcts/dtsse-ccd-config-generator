@@ -46,7 +46,12 @@ import uk.gov.hmcts.ccd.sdk.diff.NormalisingCcdConfigComparator;
  *   <li><b>synthesised definition-only field placed on an event</b> — {@code extraCaseNote};</li>
  *   <li><b>complex type with member labels</b> — {@code Party.fullName}/{@code partyEmail};</li>
  *   <li><b>reusable @JsonProperty state enum</b> — {@code State} ({@code PREPARE_FOR_HEARING});</li>
- *   <li><b>fixed list matched to an existing model enum</b> — {@code ClaimType}.</li>
+ *   <li><b>fixed list matched to an existing model enum</b> — {@code ClaimType};</li>
+ *   <li><b>AuthorisationComplexType grant on a {@code @JsonUnwrapped}-reached complex field</b> —
+ *       {@code hearingParty} (a {@code Party} member of the unwrapped {@code hearingData}, so it has
+ *       no direct {@code CaseData} getter): the patch must synthesise a {@code @JsonIgnore} delegating
+ *       {@code getHearingParty()} so {@code grantComplexType(CaseData::getHearingParty, …)} resolves
+ *       at generation rather than emitting a multi-hop lambda the SDK cannot resolve.</li>
  * </ul>
  */
 @Tag("round-trip")
@@ -265,6 +270,20 @@ class RetrofitRoundTripTest {
         .contains("@CCD(ignore = true)")
         .contains("extraCaseNote");
 
+    // The AuthorisationComplexType grant on hearingParty (a Complex field reached only through the
+    // @JsonUnwrapped hearingData member — no direct CaseData getter) must NOT emit a multi-hop lambda
+    // grantComplexType(caseData -> …), which the SDK's serialized-lambda resolver cannot resolve at
+    // generation. Instead the patch synthesises a @JsonIgnore delegating getter on CaseData and the
+    // config references it as a plain method reference.
+    assertThat(patch.unifiedDiff())
+        .as("patch must synthesise a delegating getter for the @JsonUnwrapped-reached grant field")
+        .contains("public Object getHearingParty()")
+        .contains("return getHearingData().getParty();");
+    assertThat(anyCompanionContains(companionSrc, "grantComplexType(CaseData::getHearingParty"))
+        .as("the grant must reference the delegating getter as a plain method reference")
+        .isTrue();
+    assertNoLambdaGrants(companionSrc);
+
     if (expectCaseDataExtra) {
       // B2: the synthesised extraCaseNote is moved to an added CaseDataExtra class and the root gains
       // one prefix-less @JsonUnwrapped member — NOT an in-class synthesised block.
@@ -388,6 +407,44 @@ class RetrofitRoundTripTest {
       return path.substring(2);
     }
     return path;
+  }
+
+  /** Whether any emitted {@code .java} companion source contains {@code needle}. */
+  private static boolean anyCompanionContains(Path companionSrc, String needle) throws Exception {
+    try (Stream<Path> walk = Files.walk(companionSrc)) {
+      for (Path file : walk.filter(p -> p.getFileName().toString().endsWith(".java")).toList()) {
+        if (Files.readString(file).contains(needle)) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  /**
+   * Guard against an emitter regression: NO emitted companion source may call {@code grantComplexType(}
+   * with a lambda argument ({@code grantComplexType(x -> …)}). The SDK's {@code PropertyUtils} resolves
+   * the getter by introspecting a serialized lambda, which requires a real {@code Type::method}
+   * reference — a synthetic lambda method fails to resolve at generation, so a multi-hop-lambda grant
+   * compiles but blows up when {@code generateCCDConfig} runs. Scans every {@code .java} companion and
+   * fails on the first {@code grantComplexType(} whose argument list contains {@code ->}.
+   */
+  private static void assertNoLambdaGrants(Path companionSrc) throws Exception {
+    java.util.regex.Pattern lambdaGrant =
+        java.util.regex.Pattern.compile("grantComplexType\\([^;]*->");
+    List<String> offenders = new ArrayList<>();
+    try (Stream<Path> walk = Files.walk(companionSrc)) {
+      for (Path file : walk.filter(p -> p.getFileName().toString().endsWith(".java")).toList()) {
+        String source = Files.readString(file);
+        if (lambdaGrant.matcher(source).find()) {
+          offenders.add(companionSrc.relativize(file).toString());
+        }
+      }
+    }
+    assertThat(offenders)
+        .as("no companion source may emit a multi-hop-lambda grantComplexType (unresolvable by the "
+            + "SDK's serialized-lambda getter resolver at generation time)")
+        .isEmpty();
   }
 
   private static void copyTree(Path from, Path to) throws Exception {

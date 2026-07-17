@@ -46,6 +46,15 @@
   {
     "LiveFrom": "01/01/2017",
     "CaseTypeID": "RETRO",
+    "ID": "hearingParty",
+    "Label": "Hearing party",
+    "FieldType": "Complex",
+    "FieldTypeParameter": "Party",
+    "SecurityClassification": "Public"
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "RETRO",
     "ID": "hearingType",
     "Label": "Hearing type",
     "FieldType": "Text",
