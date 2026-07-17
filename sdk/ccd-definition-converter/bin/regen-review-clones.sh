@@ -73,10 +73,32 @@ run_lane() {
   [[ "${lane}" == "fpl-ccd-configuration" ]] && clonesrc="${clone}/service/src/main/java"
   [[ "${lane}" == "et-ccd-callbacks" ]] && clonesrc="${clone}/et-shared/src/main/java"
   mkdir -p "${clonesrc}"
-  # Remove any stale ConverterGeneratedApplication.java left over from a prior regen (the converter no
-  # longer emits it into service trees — a service must not carry two @SpringBootApplication classes).
+  # Clean-sync the generated content before copying: an overlay copy never deletes, so output files
+  # retired by converter changes (page classes inlined away, graft sheets no longer emitted, the old
+  # ConverterGeneratedApplication) would otherwise accumulate in the clone forever and misrepresent
+  # what the converter produces today. Generated companion files are precisely the clone-UNTRACKED
+  # java files under the source root (the team's model files are tracked — e.g. sscs's
+  # ccd.domain model lives INSIDE the companion root package, so path-based deletion is unsafe):
+  # prune any untracked java file the fresh output no longer produces.
+  ( cd "${out}/companion" && find . -type f ) | sed 's|^\./||' | sort > "${out}/companion.manifest"
+  srcrel="${clonesrc#"${clone}"/}"
+  git -C "${clone}" ls-files --others --exclude-standard -- "${srcrel}" | while read -r untracked; do
+    rel="${untracked#"${srcrel}"/}"
+    if ! grep -qxF "${rel}" "${out}/companion.manifest"; then
+      rm -f "${clone}/${untracked}"
+    fi
+  done
+  find "${clonesrc}" -type d -empty -delete 2>/dev/null || true
   find "${clonesrc}" -name 'ConverterGeneratedApplication.java' -delete
   cp -a "${out}/companion/." "${clonesrc}/"
+  # Passthrough resources are wholly generated: replace, never overlay. (Older script versions never
+  # copied resources at all, leaving clones with fossilised graft files from retired converter
+  # versions — CaseEventToFields metadata grafts, pre-disposition ComplexTypes rows, etc.)
+  rm -rf "${clone}/resources/ccd-passthrough"
+  if [[ -d "${out}/resources/ccd-passthrough" ]]; then
+    mkdir -p "${clone}/resources"
+    cp -a "${out}/resources/ccd-passthrough" "${clone}/resources/"
+  fi
   mkdir -p "${PATCHES}"
   cp "${out}/report/retrofit.patch" "${PATCHES}/retrofit-${casetype}.patch"
   echo ">> ${lane}: companion + patch refreshed"
@@ -84,7 +106,9 @@ run_lane() {
 
 if [[ $# -gt 0 ]]; then
   for want in "$@"; do
-    for spec in "${LANES[@]}"; do [[ "${spec%%|*}" == "${want}" ]] && run_lane "${spec}"; done
+    for spec in "${LANES[@]}"; do
+      if [[ "${spec%%|*}" == "${want}" ]]; then run_lane "${spec}"; fi
+    done
   done
 else
   for spec in "${LANES[@]}"; do run_lane "${spec}"; done
