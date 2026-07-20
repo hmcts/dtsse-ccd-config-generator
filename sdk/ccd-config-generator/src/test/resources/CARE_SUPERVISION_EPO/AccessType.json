@@ -1,0 +1,13 @@
+[ {
+  "AccessDefault" : "Yes",
+  "AccessMandatory" : "Yes",
+  "AccessTypeID" : "SOLICITOR_ORG_POLICY",
+  "CaseTypeID" : "CARE_SUPERVISION_EPO",
+  "Description" : "Solicitor access type description",
+  "Display" : "Yes",
+  "DisplayOrder" : 1,
+  "HintText" : "Solicitor access type hint",
+  "LiveFrom" : "01/01/2017",
+  "LiveTo" : "",
+  "OrganisationProfileID" : "SOLICITOR_PROFILE"
+} ]

@@ -1,0 +1,12 @@
+[ {
+  "AccessTypeID" : "SOLICITOR_ORG_POLICY",
+  "CaseAccessGroupIDTemplate" : "CARE_SUPERVISION_EPO:$ORGID$",
+  "CaseAssignedRoleField" : "applicant1OrganisationPolicy",
+  "CaseTypeID" : "CARE_SUPERVISION_EPO",
+  "GroupAccessEnabled" : "Yes",
+  "GroupRoleName" : "caseworker-approver-group",
+  "LiveFrom" : "01/01/2017",
+  "LiveTo" : "",
+  "OrganisationalRoleName" : "caseworker-approver",
+  "OrganisationProfileID" : "SOLICITOR_PROFILE"
+} ]
