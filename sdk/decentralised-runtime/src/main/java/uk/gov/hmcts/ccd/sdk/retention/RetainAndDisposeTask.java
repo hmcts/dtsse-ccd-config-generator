@@ -2,10 +2,6 @@ package uk.gov.hmcts.ccd.sdk.retention;
 
 import static uk.gov.hmcts.ccd.sdk.RetainAndDisposePolicy.DISPOSAL_STATE_ID;
 
-import java.sql.Connection;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
-import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
@@ -16,6 +12,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.transaction.support.TransactionTemplate;
 import uk.gov.hmcts.ccd.sdk.RetainAndDisposePolicy;
+import uk.gov.hmcts.ccd.sdk.impl.PostgresAdvisoryLock;
 
 @Slf4j
 @RequiredArgsConstructor
@@ -38,15 +35,14 @@ public final class RetainAndDisposeTask implements Runnable {
     }
     log.info("Starting retain and dispose task caseTypeIds={}", caseTypeIds);
 
-    AdvisoryLock taskLock = tryLock();
-    if (taskLock == null) {
+    boolean acquired = new PostgresAdvisoryLock(dataSource).runIfAcquired(
+        LOCK_NAMESPACE,
+        LOCK_NAME,
+        () -> runWithLock(caseTypeIds)
+    );
+    if (!acquired) {
       log.warn("Retain and dispose task is already running for caseTypeIds={}; skipping this invocation",
           caseTypeIds);
-      return;
-    }
-
-    try (taskLock) {
-      runWithLock(caseTypeIds);
     }
   }
 
@@ -119,76 +115,6 @@ public final class RetainAndDisposeTask implements Runnable {
     );
     failures.stream().skip(1).map(CaseFailure::exception).forEach(aggregate::addSuppressed);
     return aggregate;
-  }
-
-  private AdvisoryLock tryLock() {
-    Connection connection = null;
-    try {
-      connection = dataSource.getConnection();
-      try (PreparedStatement statement = connection.prepareStatement(
-          "select pg_try_advisory_lock(hashtext(?), hashtext(?))"
-      )) {
-        statement.setString(1, LOCK_NAMESPACE);
-        statement.setString(2, LOCK_NAME);
-        try (ResultSet result = statement.executeQuery()) {
-          if (result.next() && result.getBoolean(1)) {
-            return new AdvisoryLock(connection);
-          }
-        }
-      }
-      connection.close();
-      return null;
-    } catch (SQLException exception) {
-      closeLockConnection(connection);
-      throw new IllegalStateException("Could not acquire retain and dispose advisory lock", exception);
-    }
-  }
-
-  private void closeLockConnection(Connection connection) {
-    if (connection == null) {
-      return;
-    }
-    try {
-      connection.close();
-    } catch (SQLException closeException) {
-      log.warn("Failed to close retain and dispose advisory lock connection", closeException);
-    }
-  }
-
-  private void abortLockConnection(Connection connection) {
-    try {
-      connection.abort(Runnable::run);
-    } catch (SQLException abortException) {
-      log.warn("Failed to abort retain and dispose advisory lock connection", abortException);
-      closeLockConnection(connection);
-    }
-  }
-
-  @RequiredArgsConstructor
-  private final class AdvisoryLock implements AutoCloseable {
-    private final Connection connection;
-
-    @Override
-    public void close() {
-      boolean unlocked = false;
-      try (PreparedStatement statement = connection.prepareStatement(
-          "select pg_advisory_unlock(hashtext(?), hashtext(?))"
-      )) {
-        statement.setString(1, LOCK_NAMESPACE);
-        statement.setString(2, LOCK_NAME);
-        try (ResultSet result = statement.executeQuery()) {
-          unlocked = result.next() && result.getBoolean(1);
-        }
-      } catch (SQLException exception) {
-        log.warn("Failed to release retain and dispose advisory lock", exception);
-      } finally {
-        if (unlocked) {
-          closeLockConnection(connection);
-        } else {
-          abortLockConnection(connection);
-        }
-      }
-    }
   }
 
   private record CaseFailure(long caseReference, String operation, RuntimeException exception) {
