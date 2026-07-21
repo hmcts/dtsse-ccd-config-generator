@@ -13,6 +13,7 @@ import uk.gov.hmcts.divorce.simplecase.model.SimpleCaseState;
 
 import java.util.EnumSet;
 import static uk.gov.hmcts.divorce.divorcecase.model.access.Permissions.CREATE_READ_UPDATE;
+import static uk.gov.hmcts.divorce.divorcecase.model.UserRole.SYSTEMUPDATE;
 
 @Component
 @Slf4j
@@ -23,6 +24,7 @@ public class SimpleCaseConfiguration implements CCDConfig<SimpleCaseData, Simple
     public static final String JURISDICTION = "DIVORCE";
     public static final String CREATE_EVENT = "create-simple-case";
     public static final String FOLLOW_UP_EVENT = "simple-case-follow-up";
+    public static final String DISPOSAL_EVENT = "simple-case-mark-for-disposal";
     public static final String START_CALLBACK_MARKER = "simple-case-start";
     public static final String SUBMIT_CALLBACK_MARKER = "simple-case-creation";
     public static final String FOLLOW_UP_CALLBACK_MARKER = "simple-case-follow-up-callback";
@@ -64,6 +66,14 @@ public class SimpleCaseConfiguration implements CCDConfig<SimpleCaseData, Simple
             .optional(SimpleCaseData::getFollowUpNote)
             .optional(SimpleCaseData::getFollowUpMarker)
             .done();
+
+        configBuilder
+            .event(DISPOSAL_EVENT)
+            .forStateTransition(SimpleCaseState.FOLLOW_UP, SimpleCaseState.DELETING)
+            .ttlIncrement(0)
+            .name("Mark simple case for disposal")
+            .description("Move a simple case into its disposal state")
+            .grant(CREATE_READ_UPDATE, SYSTEMUPDATE);
 
         configBuilder.searchInputFields()
             .field(SimpleCaseData::getSubject, "Subject");
@@ -132,4 +142,5 @@ public class SimpleCaseConfiguration implements CCDConfig<SimpleCaseData, Simple
             .state(SimpleCaseState.FOLLOW_UP)
             .build();
     }
+
 }
