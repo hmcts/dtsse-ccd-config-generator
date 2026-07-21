@@ -1,5 +1,8 @@
 package uk.gov.hmcts.ccd.sdk.retention;
 
+import static uk.gov.hmcts.ccd.sdk.RetainAndDisposePolicy.DISPOSAL_EVENT_ID;
+import static uk.gov.hmcts.ccd.sdk.RetainAndDisposePolicy.DISPOSAL_STATE_ID;
+
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import feign.FeignException;
@@ -26,7 +29,7 @@ class CoreCaseDataRetainAndDisposeClient {
       .maximumSize(1)
       .build();
 
-  void moveToTerminalState(RetainAndDisposeCase disposalCase, String eventId, String terminalState) {
+  void markForDisposal(RetainAndDisposeCase disposalCase) {
     SystemUser systemUser = systemUser();
     String serviceAuthorization = authTokenGenerator.generate();
     String caseReference = String.valueOf(disposalCase.reference());
@@ -38,7 +41,7 @@ class CoreCaseDataRetainAndDisposeClient {
         disposalCase.jurisdiction(),
         disposalCase.caseTypeId(),
         caseReference,
-        eventId
+        DISPOSAL_EVENT_ID
     );
     if (startEvent == null || startEvent.getCaseDetails() == null
         || startEvent.getToken() == null || startEvent.getToken().isBlank()) {
@@ -46,7 +49,7 @@ class CoreCaseDataRetainAndDisposeClient {
     }
 
     CaseDataContent content = CaseDataContent.builder()
-        .event(Event.builder().id(eventId).build())
+        .event(Event.builder().id(DISPOSAL_EVENT_ID).build())
         .data(startEvent.getCaseDetails().getData())
         .eventToken(startEvent.getToken())
         .ignoreWarning(false)
@@ -61,11 +64,11 @@ class CoreCaseDataRetainAndDisposeClient {
         false,
         content
     );
-    if (result == null || !terminalState.equals(result.getState())) {
+    if (result == null || !DISPOSAL_STATE_ID.equals(result.getState())) {
       String actualState = result == null ? null : result.getState();
       throw new IllegalStateException(
-          "CCD event " + eventId + " left case " + caseReference + " in state " + actualState
-              + " instead of " + terminalState
+          "CCD event " + DISPOSAL_EVENT_ID + " left case " + caseReference + " in state " + actualState
+              + " instead of " + DISPOSAL_STATE_ID
       );
     }
   }

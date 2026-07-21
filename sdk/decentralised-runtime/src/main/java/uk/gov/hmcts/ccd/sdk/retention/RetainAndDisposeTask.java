@@ -1,6 +1,5 @@
 package uk.gov.hmcts.ccd.sdk.retention;
 
-import static uk.gov.hmcts.ccd.sdk.RetainAndDisposePolicy.DISPOSAL_EVENT_ID;
 import static uk.gov.hmcts.ccd.sdk.RetainAndDisposePolicy.DISPOSAL_STATE_ID;
 
 import java.sql.Connection;
@@ -57,7 +56,7 @@ public final class RetainAndDisposeTask implements Runnable {
     int transitioned = 0;
     for (RetainAndDisposeCase candidate : candidates) {
       try {
-        ccdClient.moveToTerminalState(candidate, DISPOSAL_EVENT_ID, DISPOSAL_STATE_ID);
+        ccdClient.markForDisposal(candidate);
         transitioned++;
       } catch (RuntimeException exception) {
         log.error("Failed to move retain and dispose candidate {} to terminal state", candidate.reference(), exception);
