@@ -16,7 +16,7 @@ public interface RetainAndDisposePolicy {
   /**
    * Returns the complete set of case references currently eligible for disposal.
    */
-  List<Long> findCandidates();
+  List<Long> findCandidatesForDisposal();
 
   /**
    * Deletes service-owned data associated with a case before the SDK deletes its local CCD data.

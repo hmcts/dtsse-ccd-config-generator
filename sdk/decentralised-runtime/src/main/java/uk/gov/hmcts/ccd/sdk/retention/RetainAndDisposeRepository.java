@@ -6,8 +6,10 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 
+@RequiredArgsConstructor
 class RetainAndDisposeRepository {
 
   private static final String SELECT_CASES_BY_REFERENCE = """
@@ -31,10 +33,6 @@ class RetainAndDisposeRepository {
       """;
 
   private final NamedParameterJdbcTemplate db;
-
-  RetainAndDisposeRepository(NamedParameterJdbcTemplate db) {
-    this.db = db;
-  }
 
   List<RetainAndDisposeCase> findCases(Collection<Long> caseReferences) {
     if (caseReferences.isEmpty()) {

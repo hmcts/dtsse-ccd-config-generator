@@ -20,12 +20,12 @@ Implement `RetainAndDisposePolicy` as a Spring bean:
 ```java
 public interface RetainAndDisposePolicy {
   Set<String> caseTypes();
-  List<Long> findCandidates();
+  List<Long> findCandidatesForDisposal();
   default void dispose(long caseReference) { }
 }
 ```
 
-`findCandidates()` returns the case references currently eligible for disposal. Policy selection is service-owned and may query the local database directly. Cases outside `caseTypes()` are rejected; references no longer present locally are ignored.
+`findCandidatesForDisposal()` returns the case references currently eligible for disposal. Policy selection is service-owned and may query the local database directly. Cases outside `caseTypes()` are rejected; references no longer present locally are ignored.
 
 Keeping eligibility policy in application code means a policy change is an ordinary reviewed and versioned code change. The new rule is evaluated against existing cases on the next run; changing it does not require a data migration that triggers an event across every existing case merely to rewrite retention data.
 

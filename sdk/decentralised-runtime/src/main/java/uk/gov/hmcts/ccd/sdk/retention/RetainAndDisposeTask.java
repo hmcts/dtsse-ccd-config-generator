@@ -11,6 +11,7 @@ import java.util.Set;
 import java.util.TreeSet;
 import java.util.stream.Collectors;
 import javax.sql.DataSource;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -103,7 +104,7 @@ public final class RetainAndDisposeTask implements Runnable {
 
   private List<RetainAndDisposeCase> selectCandidates(Set<String> caseTypeIds) {
     List<Long> candidateReferences = List.copyOf(Objects.requireNonNull(
-        policy.findCandidates(),
+        policy.findCandidatesForDisposal(),
         "Retain and dispose policy returned a null candidate list"
     ));
     List<RetainAndDisposeCase> cases = repository.findCases(candidateReferences);
@@ -205,12 +206,9 @@ public final class RetainAndDisposeTask implements Runnable {
     }
   }
 
+  @RequiredArgsConstructor
   private final class AdvisoryLock implements AutoCloseable {
     private final Connection connection;
-
-    private AdvisoryLock(Connection connection) {
-      this.connection = connection;
-    }
 
     @Override
     public void close() {

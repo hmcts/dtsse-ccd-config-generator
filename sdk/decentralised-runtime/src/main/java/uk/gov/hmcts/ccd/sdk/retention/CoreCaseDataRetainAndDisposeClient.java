@@ -4,6 +4,7 @@ import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import feign.FeignException;
 import java.time.Duration;
+import lombok.RequiredArgsConstructor;
 import uk.gov.hmcts.reform.authorisation.generators.AuthTokenGenerator;
 import uk.gov.hmcts.reform.ccd.client.CoreCaseDataApi;
 import uk.gov.hmcts.reform.ccd.client.model.CaseDataContent;
@@ -12,6 +13,7 @@ import uk.gov.hmcts.reform.ccd.client.model.Event;
 import uk.gov.hmcts.reform.ccd.client.model.StartEventResponse;
 import uk.gov.hmcts.reform.idam.client.IdamClient;
 
+@RequiredArgsConstructor
 class CoreCaseDataRetainAndDisposeClient {
 
   private final CoreCaseDataApi coreCaseDataApi;
@@ -23,20 +25,6 @@ class CoreCaseDataRetainAndDisposeClient {
       .expireAfterWrite(Duration.ofMinutes(30))
       .maximumSize(1)
       .build();
-
-  CoreCaseDataRetainAndDisposeClient(
-      CoreCaseDataApi coreCaseDataApi,
-      AuthTokenGenerator authTokenGenerator,
-      IdamClient idamClient,
-      String username,
-      String password
-  ) {
-    this.coreCaseDataApi = coreCaseDataApi;
-    this.authTokenGenerator = authTokenGenerator;
-    this.idamClient = idamClient;
-    this.username = username;
-    this.password = password;
-  }
 
   void moveToTerminalState(RetainAndDisposeCase disposalCase, String eventId, String terminalState) {
     SystemUser systemUser = systemUser();

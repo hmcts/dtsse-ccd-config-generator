@@ -261,7 +261,7 @@ public class TestWithCCD extends CftlibTest {
         }
 
         @Override
-        public List<Long> findCandidates() {
+        public List<Long> findCandidatesForDisposal() {
             return candidates;
         }
     }
