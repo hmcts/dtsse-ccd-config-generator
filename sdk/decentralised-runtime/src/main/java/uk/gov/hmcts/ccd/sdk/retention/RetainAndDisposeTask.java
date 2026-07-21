@@ -1,7 +1,5 @@
 package uk.gov.hmcts.ccd.sdk.retention;
 
-import static uk.gov.hmcts.ccd.sdk.RetainAndDisposePolicy.DISPOSAL_STATE_ID;
-
 import java.util.List;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
@@ -50,7 +48,7 @@ public final class RetainAndDisposeTask implements Runnable {
       Set<String> caseTypeIds,
       RetainAndDisposeFailures failures
   ) {
-    List<RetainAndDisposeCase> candidates = repository.findCases(
+    List<RetainAndDisposeCase> candidates = repository.resolveCandidates(
         policy.findCandidatesForDisposal(),
         caseTypeIds
     );
@@ -64,7 +62,7 @@ public final class RetainAndDisposeTask implements Runnable {
       Set<String> caseTypeIds,
       RetainAndDisposeFailures failures
   ) {
-    List<RetainAndDisposeCase> terminalCases = repository.findCasesInState(caseTypeIds, DISPOSAL_STATE_ID);
+    List<RetainAndDisposeCase> terminalCases = repository.findPendingDisposalCases(caseTypeIds);
     log.info("Reconciling pending disposal cases count={} caseTypeIds={}", terminalCases.size(), caseTypeIds);
     for (RetainAndDisposeCase terminalCase : terminalCases) {
       failures.attempt(
@@ -83,7 +81,7 @@ public final class RetainAndDisposeTask implements Runnable {
     }
     transaction.executeWithoutResult(ignored -> {
       policy.dispose(disposalCase.reference());
-      repository.deleteCase(disposalCase.reference(), disposalCase.caseTypeId(), DISPOSAL_STATE_ID);
+      repository.deletePendingDisposalCase(disposalCase);
     });
     log.info("Deleted local case after CCD returned not found caseReference={} caseTypeId={}",
         disposalCase.reference(), disposalCase.caseTypeId());

@@ -1,5 +1,7 @@
 package uk.gov.hmcts.ccd.sdk.retention;
 
+import static uk.gov.hmcts.ccd.sdk.RetainAndDisposePolicy.DISPOSAL_STATE_ID;
+
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.Collection;
@@ -19,14 +21,14 @@ class RetainAndDisposeRepository {
         and case_type_id in (:caseTypeIds)
       order by reference asc
       """;
-  private static final String SELECT_CASES_IN_STATE = """
+  private static final String SELECT_PENDING_DISPOSAL_CASES = """
       select reference, jurisdiction, case_type_id
       from ccd.case_data
       where case_type_id in (:caseTypeIds)
         and state = :state
       order by reference asc
       """;
-  private static final String DELETE_CASE = """
+  private static final String DELETE_PENDING_DISPOSAL_CASE = """
       delete from ccd.case_data
       where reference = :caseReference
         and case_type_id = :caseTypeId
@@ -35,7 +37,7 @@ class RetainAndDisposeRepository {
 
   private final NamedParameterJdbcTemplate db;
 
-  List<RetainAndDisposeCase> findCases(Collection<Long> caseReferences, Set<String> caseTypeIds) {
+  List<RetainAndDisposeCase> resolveCandidates(Collection<Long> caseReferences, Set<String> caseTypeIds) {
     if (caseReferences.isEmpty()) {
       return List.of();
     }
@@ -46,21 +48,27 @@ class RetainAndDisposeRepository {
     );
   }
 
-  List<RetainAndDisposeCase> findCasesInState(Set<String> caseTypeIds, String state) {
+  List<RetainAndDisposeCase> findPendingDisposalCases(Set<String> caseTypeIds) {
     return db.query(
-        SELECT_CASES_IN_STATE,
-        Map.of("caseTypeIds", caseTypeIds, "state", state),
+        SELECT_PENDING_DISPOSAL_CASES,
+        Map.of("caseTypeIds", caseTypeIds, "state", DISPOSAL_STATE_ID),
         (resultSet, rowNumber) -> mapCase(resultSet)
     );
   }
 
-  void deleteCase(long caseReference, String caseTypeId, String state) {
+  void deletePendingDisposalCase(RetainAndDisposeCase disposalCase) {
     int deleted = db.update(
-        DELETE_CASE,
-        Map.of("caseReference", caseReference, "caseTypeId", caseTypeId, "state", state)
+        DELETE_PENDING_DISPOSAL_CASE,
+        Map.of(
+            "caseReference", disposalCase.reference(),
+            "caseTypeId", disposalCase.caseTypeId(),
+            "state", DISPOSAL_STATE_ID
+        )
     );
     if (deleted != 1) {
-      throw new IllegalStateException("Expected to delete local case " + caseReference + " but deleted " + deleted);
+      throw new IllegalStateException(
+          "Expected to delete local case " + disposalCase.reference() + " but deleted " + deleted
+      );
     }
   }
 
