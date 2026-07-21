@@ -6,7 +6,7 @@ import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
-import org.springframework.transaction.support.TransactionTemplate;
+import org.springframework.transaction.support.TransactionOperations;
 import uk.gov.hmcts.ccd.sdk.RetainAndDisposePolicy;
 import uk.gov.hmcts.ccd.sdk.config.DecentralisedDataConfiguration;
 import uk.gov.hmcts.ccd.sdk.impl.PostgresAdvisoryLock;
@@ -41,14 +41,14 @@ public class RetainAndDisposeAutoConfiguration {
       NamedParameterJdbcTemplate jdbcTemplate,
       CoreCaseDataRetainAndDisposeClient ccdClient,
       DataSource dataSource,
-      TransactionTemplate transactionTemplate
+      TransactionOperations transaction
   ) {
     RetainAndDisposeRepository repository = new RetainAndDisposeRepository(jdbcTemplate);
     return new RetainAndDisposeTask(
         policy,
         repository,
         ccdClient,
-        new RetainAndDisposeCaseReconciler(policy, repository, ccdClient, transactionTemplate),
+        transaction,
         new PostgresAdvisoryLock(dataSource)
     );
   }

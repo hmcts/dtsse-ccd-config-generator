@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.transaction.support.TransactionOperations;
 import uk.gov.hmcts.ccd.sdk.RetainAndDisposePolicy;
 import uk.gov.hmcts.ccd.sdk.impl.PostgresAdvisoryLock;
 
@@ -19,7 +20,7 @@ public final class RetainAndDisposeTask implements Runnable {
   private final RetainAndDisposePolicy policy;
   private final RetainAndDisposeRepository repository;
   private final CoreCaseDataRetainAndDisposeClient ccdClient;
-  private final RetainAndDisposeCaseReconciler caseReconciler;
+  private final TransactionOperations transaction;
   private final PostgresAdvisoryLock advisoryLock;
 
   @Override
@@ -69,8 +70,22 @@ public final class RetainAndDisposeTask implements Runnable {
       failures.attempt(
           terminalCase.reference(),
           "reconcilePendingDisposal",
-          () -> caseReconciler.reconcile(terminalCase)
+          () -> reconcile(terminalCase)
       );
     }
+  }
+
+  private void reconcile(RetainAndDisposeCase disposalCase) {
+    if (ccdClient.exists(disposalCase)) {
+      log.info("Retaining local case still present in CCD caseReference={} caseTypeId={}",
+          disposalCase.reference(), disposalCase.caseTypeId());
+      return;
+    }
+    transaction.executeWithoutResult(ignored -> {
+      policy.dispose(disposalCase.reference());
+      repository.deleteCase(disposalCase.reference(), disposalCase.caseTypeId(), DISPOSAL_STATE_ID);
+    });
+    log.info("Deleted local case after CCD returned not found caseReference={} caseTypeId={}",
+        disposalCase.reference(), disposalCase.caseTypeId());
   }
 }
