@@ -38,7 +38,7 @@ public final class RetainAndDisposeTask implements Runnable {
         }
     );
     if (!acquired) {
-      log.warn("Retain and dispose task is already running for caseTypeIds={}; skipping this invocation",
+      log.info("Retain and dispose task is already running for caseTypeIds={}; skipping this invocation",
           caseTypeIds);
     } else {
       log.info("Completed retain and dispose task caseTypeIds={}", caseTypeIds);
@@ -53,8 +53,9 @@ public final class RetainAndDisposeTask implements Runnable {
         policy.findCandidatesForDisposal(),
         caseTypeIds
     );
+    log.info("Found retain and dispose candidates count={} caseTypeIds={}", candidates.size(), caseTypeIds);
     for (RetainAndDisposeCase candidate : candidates) {
-      failures.attempt(candidate.reference(), "mark for disposal", () -> ccdClient.markForDisposal(candidate));
+      failures.attempt(candidate.reference(), "markForDisposal", () -> ccdClient.markForDisposal(candidate));
     }
   }
 
@@ -63,8 +64,13 @@ public final class RetainAndDisposeTask implements Runnable {
       RetainAndDisposeFailures failures
   ) {
     List<RetainAndDisposeCase> terminalCases = repository.findCasesInState(caseTypeIds, DISPOSAL_STATE_ID);
+    log.info("Reconciling pending disposal cases count={} caseTypeIds={}", terminalCases.size(), caseTypeIds);
     for (RetainAndDisposeCase terminalCase : terminalCases) {
-      failures.attempt(terminalCase.reference(), "reconcile disposal", () -> caseReconciler.reconcile(terminalCase));
+      failures.attempt(
+          terminalCase.reference(),
+          "reconcilePendingDisposal",
+          () -> caseReconciler.reconcile(terminalCase)
+      );
     }
   }
 }

@@ -14,7 +14,8 @@ final class RetainAndDisposeFailures {
     try {
       action.run();
     } catch (RuntimeException exception) {
-      log.error("Failed to {} case {}", operation, caseReference, exception);
+      log.error("Retain and dispose operation failed operation={} caseReference={}",
+          operation, caseReference, exception);
       failures.add(new Failure(caseReference, operation, exception));
     }
   }
