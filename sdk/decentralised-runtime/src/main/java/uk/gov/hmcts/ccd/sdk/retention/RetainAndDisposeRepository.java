@@ -6,7 +6,6 @@ import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 
@@ -18,13 +17,6 @@ class RetainAndDisposeRepository {
       where reference in (:caseReferences)
       order by reference asc
       """;
-  private static final String COUNT_CASES_BY_TYPE = """
-      select case_type_id, count(*) as case_count
-      from ccd.case_data
-      where case_type_id in (:caseTypeIds)
-      group by case_type_id
-      order by case_type_id asc
-      """;
   private static final String SELECT_CASES_IN_STATE = """
       select reference, jurisdiction, case_type_id, state
       from ccd.case_data
@@ -32,15 +24,11 @@ class RetainAndDisposeRepository {
         and state = :state
       order by reference asc
       """;
-  private static final String LOCK_CASE = """
-      select reference, jurisdiction, case_type_id, state
-      from ccd.case_data
-      where reference = :caseReference
-      for update
-      """;
   private static final String DELETE_CASE = """
       delete from ccd.case_data
       where reference = :caseReference
+        and case_type_id in (:caseTypeIds)
+        and state = :state
       """;
 
   private final NamedParameterJdbcTemplate db;
@@ -66,18 +54,6 @@ class RetainAndDisposeRepository {
     return cases;
   }
 
-  Map<String, Long> countCases(Set<String> caseTypeIds) {
-    Map<String, Long> counts = new LinkedHashMap<>();
-    db.query(
-        COUNT_CASES_BY_TYPE,
-        Map.of("caseTypeIds", caseTypeIds),
-        resultSet -> {
-          counts.put(resultSet.getString("case_type_id"), resultSet.getLong("case_count"));
-        }
-    );
-    return counts;
-  }
-
   List<RetainAndDisposeCase> findCasesInState(Set<String> caseTypeIds, String state) {
     return db.query(
         SELECT_CASES_IN_STATE,
@@ -86,17 +62,11 @@ class RetainAndDisposeRepository {
     );
   }
 
-  Optional<RetainAndDisposeCase> lockCase(long caseReference) {
-    List<RetainAndDisposeCase> cases = db.query(
-        LOCK_CASE,
-        Map.of("caseReference", caseReference),
-        (resultSet, rowNumber) -> mapCase(resultSet)
+  void deleteCase(long caseReference, Set<String> caseTypeIds, String state) {
+    int deleted = db.update(
+        DELETE_CASE,
+        Map.of("caseReference", caseReference, "caseTypeIds", caseTypeIds, "state", state)
     );
-    return cases.stream().findFirst();
-  }
-
-  void deleteCase(long caseReference) {
-    int deleted = db.update(DELETE_CASE, Map.of("caseReference", caseReference));
     if (deleted != 1) {
       throw new RetainAndDisposeException("Expected to delete local case " + caseReference + " but deleted " + deleted);
     }

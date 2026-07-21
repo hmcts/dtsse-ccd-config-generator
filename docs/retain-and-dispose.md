@@ -27,7 +27,7 @@ public interface RetainAndDisposePolicy {
 }
 ```
 
-`findCandidates()` must return the complete, ordered list of case references currently eligible for disposal. Policy selection is service-owned and may query the local database directly. It must not return nulls, duplicates, missing cases or cases outside `caseTypes()`.
+`findCandidates()` returns the case references currently eligible for disposal. Policy selection is service-owned and may query the local database directly. Cases outside `caseTypes()` are rejected; references no longer present locally are ignored.
 
 Keeping eligibility policy in application code means a policy change is an ordinary reviewed and versioned code change. The new rule is evaluated against existing cases on the next run; changing it does not require a data migration that triggers an event across every existing case merely to rewrite retention data.
 
@@ -51,11 +51,10 @@ When one policy bean exists, the SDK provides the `retainAndDisposeTask` `Runnab
 For each run, the SDK:
 
 1. Acquires a non-blocking PostgreSQL advisory lock for the service database. A concurrent invocation exits without processing.
-2. Loads and validates the policy's complete candidate list in a repeatable-read transaction.
-3. Aborts before any CCD calls if the policy selected every local case for any non-empty case type.
-4. Triggers the configured terminal event for each candidate and verifies the resulting state.
-5. Reads every local case in the terminal state through CCD as the configured system user.
-6. Retains the local case after a successful CCD read. Only a CCD `404` permits local deletion.
-7. Calls `dispose()` and deletes `ccd.case_data` in one transaction.
+2. Resolves the policy's candidate references against the local database.
+3. Triggers the configured terminal event for each candidate and verifies the resulting state.
+4. Reads every local case in the terminal state through CCD as the configured system user.
+5. Retains the local case after a successful CCD read. Only a CCD `404` permits local deletion.
+6. Calls `dispose()` and conditionally deletes `ccd.case_data` by case type and terminal state in one transaction.
 
 Failures for an individual case do not prevent other cases being attempted, but the task fails after processing so the scheduler can report and retry the run.

@@ -58,7 +58,6 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.*;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyInt;
@@ -2833,15 +2832,6 @@ public class TestWithCCD extends CftlibTest {
                 Map.of("reference", deletedReference),
                 Integer.class
             ), equalTo(0));
-
-            List<Long> everyCase = db.queryForList(
-                "select reference from ccd.case_data where case_type_id = :caseType order by reference asc",
-                Map.of("caseType", SimpleCaseConfiguration.CASE_TYPE),
-                Long.class
-            );
-            retainAndDisposePolicy.candidates(everyCase.toArray(Long[]::new));
-            RuntimeException failure = assertThrows(RuntimeException.class, retainAndDisposeTask::run);
-            assertThat(failure.getMessage(), containsString("selected every case"));
         } finally {
             retainAndDisposePolicy.candidates();
             db.update(

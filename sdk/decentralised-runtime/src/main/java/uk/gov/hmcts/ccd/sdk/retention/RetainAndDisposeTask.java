@@ -5,8 +5,6 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -16,7 +14,6 @@ import java.util.stream.Collectors;
 import javax.sql.DataSource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.transaction.PlatformTransactionManager;
-import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.support.TransactionTemplate;
 import uk.gov.hmcts.ccd.sdk.RetainAndDisposePolicy;
 
@@ -30,7 +27,6 @@ public final class RetainAndDisposeTask implements Runnable {
   private final RetainAndDisposeRepository repository;
   private final CcdRetainAndDisposeClient ccdClient;
   private final DataSource dataSource;
-  private final TransactionTemplate candidateTransaction;
   private final TransactionTemplate deletionTransaction;
 
   RetainAndDisposeTask(
@@ -44,9 +40,6 @@ public final class RetainAndDisposeTask implements Runnable {
     this.repository = repository;
     this.ccdClient = ccdClient;
     this.dataSource = dataSource;
-    this.candidateTransaction = new TransactionTemplate(transactionManager);
-    this.candidateTransaction.setIsolationLevel(TransactionDefinition.ISOLATION_REPEATABLE_READ);
-    this.candidateTransaction.setReadOnly(true);
     this.deletionTransaction = new TransactionTemplate(transactionManager);
   }
 
@@ -68,10 +61,7 @@ public final class RetainAndDisposeTask implements Runnable {
   }
 
   private void runWithLock(PolicyConfiguration configuration) {
-    List<RetainAndDisposeCase> candidates = Objects.requireNonNull(
-        candidateTransaction.execute(status -> selectCandidates(configuration)),
-        "Candidate selection transaction returned no result"
-    );
+    List<RetainAndDisposeCase> candidates = selectCandidates(configuration);
     List<CaseFailure> failures = new ArrayList<>();
     int transitioned = 0;
     for (RetainAndDisposeCase candidate : candidates) {
@@ -113,67 +103,34 @@ public final class RetainAndDisposeTask implements Runnable {
   }
 
   private List<RetainAndDisposeCase> selectCandidates(PolicyConfiguration configuration) {
-    List<Long> candidateReferences = validateCandidateReferences(policy.findCandidates());
+    List<Long> candidateReferences = List.copyOf(Objects.requireNonNull(
+        policy.findCandidates(),
+        "Retain and dispose policy returned a null candidate list"
+    ));
     Map<Long, RetainAndDisposeCase> cases = repository.findCases(candidateReferences);
 
-    Set<Long> missingReferences = new TreeSet<>(candidateReferences);
-    missingReferences.removeAll(cases.keySet());
-    if (!missingReferences.isEmpty()) {
-      throw new RetainAndDisposeException("Retain and dispose policy returned unknown cases " + missingReferences);
-    }
-
-    Map<String, List<Long>> referencesOutsidePolicy = cases.values().stream()
+    List<Long> referencesOutsidePolicy = cases.values().stream()
         .filter(disposalCase -> !configuration.caseTypeIds().contains(disposalCase.caseTypeId()))
-        .collect(Collectors.groupingBy(
-            RetainAndDisposeCase::caseTypeId,
-            LinkedHashMap::new,
-            Collectors.mapping(RetainAndDisposeCase::reference, Collectors.toList())
-        ));
+        .map(RetainAndDisposeCase::reference)
+        .toList();
     if (!referencesOutsidePolicy.isEmpty()) {
       throw new RetainAndDisposeException(
           "Retain and dispose policy returned cases outside its case types " + referencesOutsidePolicy
       );
     }
-
-    if (!candidateReferences.isEmpty()) {
-      assertPolicyDoesNotSelectEveryCase(configuration.caseTypeIds(), cases.values());
-    }
-    List<RetainAndDisposeCase> orderedCases = candidateReferences.stream().map(cases::get).toList();
-    return orderedCases;
-  }
-
-  private void assertPolicyDoesNotSelectEveryCase(
-      Set<String> caseTypeIds,
-      Iterable<RetainAndDisposeCase> candidates
-  ) {
-    Map<String, Long> totalCounts = repository.countCases(caseTypeIds);
-    Map<String, Long> candidateCounts = new LinkedHashMap<>();
-    for (RetainAndDisposeCase candidate : candidates) {
-      candidateCounts.merge(candidate.caseTypeId(), 1L, Long::sum);
-    }
-
-    List<String> fullySelectedCaseTypes = caseTypeIds.stream()
-        .filter(caseTypeId -> totalCounts.getOrDefault(caseTypeId, 0L) > 0)
-        .filter(caseTypeId -> totalCounts.get(caseTypeId).equals(candidateCounts.getOrDefault(caseTypeId, 0L)))
-        .sorted()
-        .toList();
-    if (!fullySelectedCaseTypes.isEmpty()) {
-      throw new RetainAndDisposeException(
-          "Retain and dispose policy selected every case for case types " + fullySelectedCaseTypes
-      );
-    }
+    return List.copyOf(cases.values());
   }
 
   private boolean deleteLocalCase(RetainAndDisposeCase terminalCase, PolicyConfiguration configuration) {
-    Boolean deleted = deletionTransaction.execute(status -> repository.lockCase(terminalCase.reference())
-        .filter(lockedCase -> configuration.caseTypeIds().contains(lockedCase.caseTypeId()))
-        .filter(lockedCase -> configuration.terminalState().equals(lockedCase.state()))
-        .map(lockedCase -> {
-          policy.dispose(lockedCase.reference());
-          repository.deleteCase(lockedCase.reference());
-          return true;
-        })
-        .orElse(false));
+    Boolean deleted = deletionTransaction.execute(status -> {
+      policy.dispose(terminalCase.reference());
+      repository.deleteCase(
+          terminalCase.reference(),
+          configuration.caseTypeIds(),
+          configuration.terminalState()
+      );
+      return true;
+    });
     return Boolean.TRUE.equals(deleted);
   }
 
@@ -191,26 +148,6 @@ public final class RetainAndDisposeTask implements Runnable {
         requireText(policy.terminalState(), "terminal state"),
         requireText(policy.terminalEvent(), "terminal event")
     );
-  }
-
-  private List<Long> validateCandidateReferences(List<Long> candidateReferences) {
-    if (candidateReferences == null) {
-      throw new RetainAndDisposeException("Retain and dispose policy returned a null candidate list");
-    }
-    List<Long> copy = new ArrayList<>(candidateReferences.size());
-    Set<Long> uniqueReferences = new HashSet<>();
-    for (Long candidateReference : candidateReferences) {
-      if (candidateReference == null) {
-        throw new RetainAndDisposeException("Retain and dispose policy returned a null case reference");
-      }
-      if (!uniqueReferences.add(candidateReference)) {
-        throw new RetainAndDisposeException(
-            "Retain and dispose policy returned duplicate case reference " + candidateReference
-        );
-      }
-      copy.add(candidateReference);
-    }
-    return List.copyOf(copy);
   }
 
   private String requireText(String value, String description) {
