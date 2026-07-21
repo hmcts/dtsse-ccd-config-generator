@@ -78,6 +78,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
 import org.junit.jupiter.api.TestMethodOrder;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.config.BeanPostProcessor;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
@@ -115,7 +116,6 @@ import uk.gov.hmcts.ccd.sdk.type.CaseLink;
 import uk.gov.hmcts.ccd.sdk.type.ListValue;
 import uk.gov.hmcts.ccd.sdk.CaseReindexingService;
 import uk.gov.hmcts.ccd.sdk.RetainAndDisposePolicy;
-import uk.gov.hmcts.ccd.sdk.retention.RetainAndDisposeTask;
 import uk.gov.hmcts.ccd.sdk.taskmanagement.model.TaskAction;
 import uk.gov.hmcts.reform.ccd.client.CoreCaseDataApi;
 import uk.gov.hmcts.reform.ccd.client.model.CaseDataContent;
@@ -157,7 +157,8 @@ public class TestWithCCD extends CftlibTest {
     private CaseReindexingService reindexQueueService;
 
     @Autowired
-    private RetainAndDisposeTask retainAndDisposeTask;
+    @Qualifier("retainAndDisposeTask")
+    private Runnable retainAndDisposeTask;
 
     @Autowired
     private CftlibRetainAndDisposePolicy retainAndDisposePolicy;

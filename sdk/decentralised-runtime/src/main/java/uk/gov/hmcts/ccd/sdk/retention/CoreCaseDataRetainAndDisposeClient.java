@@ -91,12 +91,6 @@ class CoreCaseDataRetainAndDisposeClient {
   }
 
   private SystemUser systemUser() {
-    if (username == null || username.isBlank() || password == null || password.isBlank()) {
-      throw new IllegalStateException(
-          "Retain and dispose system user credentials must be configured with "
-              + "ccd.decentralised-runtime.retain-and-dispose.system-user.username and password"
-      );
-    }
     return systemUsers.get(username, ignored -> loadSystemUser());
   }
 

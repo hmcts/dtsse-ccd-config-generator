@@ -10,7 +10,7 @@ import uk.gov.hmcts.ccd.sdk.impl.PostgresAdvisoryLock;
 
 @Slf4j
 @RequiredArgsConstructor
-public final class RetainAndDisposeTask implements Runnable {
+final class RetainAndDisposeTask implements Runnable {
 
   private static final String LOCK_NAMESPACE = "ccd-retain-and-dispose";
   private static final String LOCK_NAME = "task";

@@ -1,6 +1,6 @@
 package uk.gov.hmcts.ccd.sdk;
 
-import java.util.List;
+import java.util.Collection;
 import java.util.Set;
 
 /**
@@ -19,7 +19,7 @@ public interface RetainAndDisposePolicy {
   /**
    * Returns the complete set of case references currently eligible for disposal.
    */
-  List<Long> findCandidatesForDisposal();
+  Collection<Long> findCandidatesForDisposal();
 
   /**
    * Deletes service-owned data associated with a case before the SDK deletes its local CCD data.
