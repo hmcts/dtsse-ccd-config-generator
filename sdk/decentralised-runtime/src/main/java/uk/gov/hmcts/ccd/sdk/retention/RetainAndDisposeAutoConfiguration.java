@@ -9,6 +9,7 @@ import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.transaction.support.TransactionTemplate;
 import uk.gov.hmcts.ccd.sdk.RetainAndDisposePolicy;
 import uk.gov.hmcts.ccd.sdk.config.DecentralisedDataConfiguration;
+import uk.gov.hmcts.ccd.sdk.impl.PostgresAdvisoryLock;
 import uk.gov.hmcts.reform.authorisation.generators.AuthTokenGenerator;
 import uk.gov.hmcts.reform.ccd.client.CoreCaseDataApi;
 import uk.gov.hmcts.reform.idam.client.IdamClient;
@@ -42,12 +43,13 @@ public class RetainAndDisposeAutoConfiguration {
       DataSource dataSource,
       TransactionTemplate transactionTemplate
   ) {
+    RetainAndDisposeRepository repository = new RetainAndDisposeRepository(jdbcTemplate);
     return new RetainAndDisposeTask(
         policy,
-        new RetainAndDisposeRepository(jdbcTemplate),
+        repository,
         ccdClient,
-        dataSource,
-        transactionTemplate
+        new RetainAndDisposeCaseReconciler(policy, repository, ccdClient, transactionTemplate),
+        new PostgresAdvisoryLock(dataSource)
     );
   }
 }
