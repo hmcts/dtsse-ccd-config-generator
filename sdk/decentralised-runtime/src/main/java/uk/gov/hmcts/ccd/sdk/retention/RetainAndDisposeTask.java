@@ -13,11 +13,11 @@ import java.util.stream.Collectors;
 import javax.sql.DataSource;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 import uk.gov.hmcts.ccd.sdk.RetainAndDisposePolicy;
 
 @Slf4j
+@RequiredArgsConstructor
 public final class RetainAndDisposeTask implements Runnable {
 
   private static final String LOCK_NAMESPACE = "ccd-retain-and-dispose";
@@ -30,20 +30,6 @@ public final class RetainAndDisposeTask implements Runnable {
   private final CoreCaseDataRetainAndDisposeClient ccdClient;
   private final DataSource dataSource;
   private final TransactionTemplate deletionTransaction;
-
-  RetainAndDisposeTask(
-      RetainAndDisposePolicy policy,
-      RetainAndDisposeRepository repository,
-      CoreCaseDataRetainAndDisposeClient ccdClient,
-      DataSource dataSource,
-      PlatformTransactionManager transactionManager
-  ) {
-    this.policy = policy;
-    this.repository = repository;
-    this.ccdClient = ccdClient;
-    this.dataSource = dataSource;
-    this.deletionTransaction = new TransactionTemplate(transactionManager);
-  }
 
   @Override
   public void run() {
@@ -107,18 +93,7 @@ public final class RetainAndDisposeTask implements Runnable {
         policy.findCandidatesForDisposal(),
         "Retain and dispose policy returned a null candidate list"
     ));
-    List<RetainAndDisposeCase> cases = repository.findCases(candidateReferences);
-
-    List<Long> referencesOutsidePolicy = cases.stream()
-        .filter(disposalCase -> !caseTypeIds.contains(disposalCase.caseTypeId()))
-        .map(RetainAndDisposeCase::reference)
-        .toList();
-    if (!referencesOutsidePolicy.isEmpty()) {
-      throw new IllegalStateException(
-          "Retain and dispose policy returned cases outside its case types " + referencesOutsidePolicy
-      );
-    }
-    return cases;
+    return repository.findCases(candidateReferences, caseTypeIds);
   }
 
   private void deleteLocalCase(RetainAndDisposeCase terminalCase) {

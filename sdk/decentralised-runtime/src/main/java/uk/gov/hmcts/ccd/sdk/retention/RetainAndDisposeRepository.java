@@ -16,6 +16,7 @@ class RetainAndDisposeRepository {
       select reference, jurisdiction, case_type_id
       from ccd.case_data
       where reference in (:caseReferences)
+        and case_type_id in (:caseTypeIds)
       order by reference asc
       """;
   private static final String SELECT_CASES_IN_STATE = """
@@ -34,13 +35,13 @@ class RetainAndDisposeRepository {
 
   private final NamedParameterJdbcTemplate db;
 
-  List<RetainAndDisposeCase> findCases(Collection<Long> caseReferences) {
+  List<RetainAndDisposeCase> findCases(Collection<Long> caseReferences, Set<String> caseTypeIds) {
     if (caseReferences.isEmpty()) {
       return List.of();
     }
     return db.query(
         SELECT_CASES_BY_REFERENCE,
-        Map.of("caseReferences", caseReferences),
+        Map.of("caseReferences", caseReferences, "caseTypeIds", caseTypeIds),
         (resultSet, rowNumber) -> mapCase(resultSet)
     );
   }

@@ -6,7 +6,7 @@ import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
-import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import uk.gov.hmcts.ccd.sdk.RetainAndDisposePolicy;
 import uk.gov.hmcts.ccd.sdk.config.DecentralisedDataConfiguration;
 import uk.gov.hmcts.reform.authorisation.generators.AuthTokenGenerator;
@@ -40,14 +40,14 @@ public class RetainAndDisposeAutoConfiguration {
       NamedParameterJdbcTemplate jdbcTemplate,
       CoreCaseDataRetainAndDisposeClient ccdClient,
       DataSource dataSource,
-      PlatformTransactionManager transactionManager
+      TransactionTemplate transactionTemplate
   ) {
     return new RetainAndDisposeTask(
         policy,
         new RetainAndDisposeRepository(jdbcTemplate),
         ccdClient,
         dataSource,
-        transactionManager
+        transactionTemplate
     );
   }
 }
