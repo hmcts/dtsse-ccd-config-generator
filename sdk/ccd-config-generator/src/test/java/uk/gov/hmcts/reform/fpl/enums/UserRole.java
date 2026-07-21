@@ -2,6 +2,7 @@ package uk.gov.hmcts.reform.fpl.enums;
 
 import com.google.common.collect.ImmutableList;
 import uk.gov.hmcts.ccd.sdk.api.CCD;
+import uk.gov.hmcts.ccd.sdk.api.CCDAccessGroup;
 import uk.gov.hmcts.ccd.sdk.api.HasLabel;
 import uk.gov.hmcts.ccd.sdk.api.HasRole;
 
@@ -15,21 +16,27 @@ public enum UserRole implements HasRole {
     BULK_SCAN("caseworker-publiclaw-bulkscan", "R"),
     BULK_SCAN_SYSTEM_UPDATE("caseworker-publiclaw-bulkscansystemupdate"),
     CASE_ACCESS_ADMINISTRATOR("caseworker-caa"),
-    CASE_ACCESS_APPROVER("caseworker-approver"),
+    CASE_ACCESS_APPROVER("caseworker-approver", "CRU", AccessGroups.SOLICITOR_ORG_POLICY),
     @CCD(label = "Solicitor", hint = "Solicitor role")
     CCD_SOLICITOR("[SOLICITOR]");
 
 
     private final String role;
     private final String casetypePermissions;
+    private final CCDAccessGroup accessGroup;
 
     UserRole(String role) {
         this(role, "CRU");
     }
 
     UserRole(String role, String casetypePermissions) {
+        this(role, casetypePermissions, null);
+    }
+
+    UserRole(String role, String casetypePermissions, CCDAccessGroup accessGroup) {
         this.role = role;
         this.casetypePermissions = casetypePermissions;
+        this.accessGroup = accessGroup;
     }
 
     public String getRole() {
@@ -39,6 +46,11 @@ public enum UserRole implements HasRole {
     @Override
     public String getCaseTypePermissions() {
         return casetypePermissions;
+    }
+
+    @Override
+    public CCDAccessGroup getAccessGroup() {
+        return accessGroup;
     }
 
     public List<String> getRoles() {
