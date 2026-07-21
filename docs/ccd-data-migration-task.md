@@ -20,7 +20,7 @@ The task has one implementation with explicit modes:
   mark and inserts provisional parent `case_data` rows so the target FK remains valid.
 * `CUTOVER`: explicit operator action during downtime. Captures the cutover event high-water mark,
   copies the final event delta, copies linked `case_event_significant_items` in a single set-based
-  query, refreshes target `case_data` from source, sets final case revisions, resets sequences,
+  query, reconciles target `case_data` with source, sets final case revisions, resets sequences,
   validates, and marks the migration complete.
 * `VALIDATE_ONLY`: runs final source-vs-target validation without copying data.
 
@@ -47,8 +47,15 @@ Preloaded `case_data` is provisional. Its purpose is to satisfy the event FK. Ev
 batch inserts missing parent source `case_data` rows for that batch. Significant items are copied
 only during `CUTOVER`, using one `insert into ... select` query that reads source significant items
 and joins through already migrated target events up to the captured cutover event high-water mark.
-`CUTOVER` then upserts every selected source `case_data` row into the target and sets
+`CUTOVER` stages every selected source `case_data` row in its final refresh transaction, upserts that
+stable set into the target, and deletes target cases in the configured jurisdiction and case types
+that are no longer present in source. The existing foreign-key cascades remove their case events and
+event dependants. It then sets
 `case_data.case_revision = max(case_event.case_revision) + caseRevisionOffset`.
+
+The source write freeze must include retain-and-dispose work, and operators must wait for its
+in-flight transactions to drain. A source case deleted after the cutover snapshot cannot be observed
+by that cutover run.
 
 The runtime `case_data` revision trigger is deliberately disabled only inside the cutover refresh
 transaction so the final source-derived revision can be written. The trigger is re-enabled before the

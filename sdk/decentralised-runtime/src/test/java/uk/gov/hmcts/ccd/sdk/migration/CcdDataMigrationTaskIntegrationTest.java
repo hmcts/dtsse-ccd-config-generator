@@ -109,6 +109,41 @@ class CcdDataMigrationTaskIntegrationTest {
   }
 
   @Test
+  void cutoverDeletesPreloadedCasesDisposedFromSourceAndCascadesTheirEvents() {
+    insertSourceCase(10, 1000000000000010L, 1, "Submitted", "{\"field\":\"one\"}");
+    insertSourceCaseEvent(101, 10, "create", "Submitted", "{\"field\":\"one\"}", minutesAgo(60));
+    task(PRELOAD_EVENTS, 1000, 10).runMigration();
+    insertTargetSignificantItem(5001, 101, "Preloaded document", "http://dm-store/documents/preloaded");
+
+    insertTargetCase(20, 1000000000000020L, 1, "Submitted", "{\"field\":\"other-type\"}", "OtherCase", 1);
+    insertTargetCase(
+        30,
+        1000000000000030L,
+        1,
+        "Submitted",
+        "{\"field\":\"other-jurisdiction\"}",
+        "OTHER",
+        "TestCase",
+        1
+    );
+
+    jdbc.getJdbcTemplate().execute("delete from source.case_event where case_data_id = 10");
+    jdbc.getJdbcTemplate().execute("delete from source.case_data where id = 10");
+
+    CcdDataMigrationRunResult result = task(CUTOVER, 1000, 10).runMigration();
+
+    assertThat(result.caughtUp()).isTrue();
+    assertThat(result.casesProcessed()).isEqualTo(1);
+    assertThat(progressStatus()).isEqualTo("COMPLETE");
+    assertThat(countRows("ccd.case_data")).isEqualTo(2);
+    assertThat(countRows("ccd.case_event")).isZero();
+    assertThat(countRows("ccd.case_event_significant_items")).isZero();
+    assertThat(targetCaseState(20)).isEqualTo("Submitted");
+    assertThat(targetCaseState(30)).isEqualTo("Submitted");
+    assertTargetProtectionsPresent();
+  }
+
+  @Test
   void cutoverInsertsSourceCaseDataWithoutPreloadedEvents() {
     insertSourceCase(10, 1000000000000010L, 2, "Updated", "{\"field\":\"source\"}");
 

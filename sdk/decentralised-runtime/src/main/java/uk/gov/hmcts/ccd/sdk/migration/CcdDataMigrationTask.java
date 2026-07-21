@@ -230,17 +230,18 @@ public class CcdDataMigrationTask implements Runnable {
           significantItemTotals.stoppedByTimeLimit()
       );
     }
-    final int refreshedCases = refreshCutoverCaseData();
+    CutoverCaseRefreshTotals caseRefreshTotals = refreshCutoverCaseData();
     resetSequences();
     completeCutover();
 
     log.info(
-        "Completed CCD data migration cutover taskName={} cutoverEventHwm={} batches={} refreshedCases={} events={} "
-            + "significantItems={} significantItemBatches={} stoppedByTimeLimit={}",
+        "Completed CCD data migration cutover taskName={} cutoverEventHwm={} batches={} refreshedCases={} "
+            + "deletedCases={} events={} significantItems={} significantItemBatches={} stoppedByTimeLimit={}",
         options.taskName(),
         cutoverEventHwm,
         totals.batches(),
-        refreshedCases,
+        caseRefreshTotals.refreshedCases(),
+        caseRefreshTotals.deletedCases(),
         totals.events(),
         significantItemTotals.items(),
         significantItemTotals.batches(),
@@ -249,7 +250,7 @@ public class CcdDataMigrationTask implements Runnable {
     return new CcdDataMigrationRunResult(
         true,
         totals.batches(),
-        refreshedCases,
+        caseRefreshTotals.totalCases(),
         totals.events(),
         !totals.stoppedByTimeLimit(),
         totals.stoppedByTimeLimit()
@@ -511,18 +512,39 @@ public class CcdDataMigrationTask implements Runnable {
     );
   }
 
-  private int refreshCutoverCaseData() {
+  private CutoverCaseRefreshTotals refreshCutoverCaseData() {
     return transaction.execute(status -> {
       applyMigrationStatementTimeout();
+      stageCutoverCaseData();
       disableCaseDataRevisionTrigger();
       try {
         int refreshedCases = syncCaseDataForCutover();
+        int deletedCases = deleteTargetCasesMissingAtCutover();
         updateCaseRevisionsForCutover();
-        return refreshedCases;
+        return new CutoverCaseRefreshTotals(refreshedCases, deletedCases);
       } finally {
         enableCaseDataRevisionTrigger();
       }
     });
+  }
+
+  private void stageCutoverCaseData() {
+    db.update(
+        """
+        create temporary table ccd_data_migration_cutover_cases
+        on commit drop
+        as
+        select source.*
+        from fdw_stage.case_data source
+        where source.jurisdiction = :sourceJurisdiction
+          and source.case_type_id in (:caseTypeIds)
+        """,
+        baseParams()
+    );
+    db.getJdbcTemplate().execute(
+        "create unique index on ccd_data_migration_cutover_cases (id)"
+    );
+    db.getJdbcTemplate().execute("analyze ccd_data_migration_cutover_cases");
   }
 
   private int syncCaseDataForCutover() {
@@ -559,9 +581,7 @@ public class CcdDataMigrationTask implements Runnable {
           coalesce(source.supplementary_data, jsonb_build_object()),
           source.id,
           0
-        from fdw_stage.case_data source
-        where source.jurisdiction = :sourceJurisdiction
-          and source.case_type_id in (:caseTypeIds)
+        from ccd_data_migration_cutover_cases source
         on conflict (id) do update
         set reference = excluded.reference,
             version = excluded.version,
@@ -602,6 +622,22 @@ public class CcdDataMigrationTask implements Runnable {
           excluded.data,
           excluded.supplementary_data
         )
+        """,
+        baseParams()
+    );
+  }
+
+  private int deleteTargetCasesMissingAtCutover() {
+    return db.update(
+        """
+        delete from ccd.case_data target
+        where target.jurisdiction = :sourceJurisdiction
+          and target.case_type_id in (:caseTypeIds)
+          and not exists (
+            select 1
+            from ccd_data_migration_cutover_cases source
+            where source.id = target.id
+          )
         """,
         baseParams()
     );
@@ -1404,6 +1440,12 @@ public class CcdDataMigrationTask implements Runnable {
 
     private SignificantItemCopyTotals markStoppedByTimeLimit() {
       return new SignificantItemCopyTotals(batches, items, caughtUp, true);
+    }
+  }
+
+  private record CutoverCaseRefreshTotals(int refreshedCases, int deletedCases) {
+    private int totalCases() {
+      return refreshedCases + deletedCases;
     }
   }
 }
