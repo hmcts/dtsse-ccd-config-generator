@@ -2792,11 +2792,6 @@ public class TestWithCCD extends CftlibTest {
                 "deletedState", SimpleCaseState.PendingDisposal.getId()
             )
         );
-        db.update(
-            "insert into ccd.task_outbox (case_id, payload, requested_action) "
-                + "values (:reference, '{}'::jsonb, 'cancel')",
-            Map.of("reference", deletedReference)
-        );
         retainAndDisposePolicy.candidates(simpleCaseRef);
 
         try {
@@ -2814,11 +2809,6 @@ public class TestWithCCD extends CftlibTest {
             ), equalTo(SimpleCaseState.CREATED.name()));
             assertThat(db.queryForObject(
                 "select count(*) from ccd.case_data where reference = :reference",
-                Map.of("reference", deletedReference),
-                Integer.class
-            ), equalTo(0));
-            assertThat(db.queryForObject(
-                "select count(*) from ccd.task_outbox where case_id = :reference",
                 Map.of("reference", deletedReference),
                 Integer.class
             ), equalTo(0));

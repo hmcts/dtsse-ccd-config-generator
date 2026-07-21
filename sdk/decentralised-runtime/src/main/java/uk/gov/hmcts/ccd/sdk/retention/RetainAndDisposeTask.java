@@ -11,7 +11,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
-import java.util.TreeSet;
 import java.util.stream.Collectors;
 import javax.sql.DataSource;
 import lombok.RequiredArgsConstructor;
@@ -34,7 +33,10 @@ public final class RetainAndDisposeTask implements Runnable {
 
   @Override
   public void run() {
-    Set<String> caseTypeIds = validateCaseTypes();
+    Set<String> caseTypeIds = policy.caseTypes();
+    if (caseTypeIds.isEmpty()) {
+      throw new IllegalStateException("Retain and dispose policy case types must not be empty");
+    }
     log.info("Starting retain and dispose task caseTypeIds={}", caseTypeIds);
 
     AdvisoryLock taskLock = tryLock();
@@ -106,25 +108,6 @@ public final class RetainAndDisposeTask implements Runnable {
           DISPOSAL_STATE_ID
       );
     });
-  }
-
-  private Set<String> validateCaseTypes() {
-    Set<String> caseTypeIds = policy.caseTypes();
-    if (caseTypeIds == null || caseTypeIds.isEmpty()) {
-      throw new IllegalStateException("Retain and dispose policy case types must not be empty");
-    }
-    TreeSet<String> canonicalCaseTypeIds = new TreeSet<>();
-    for (String caseTypeId : caseTypeIds) {
-      canonicalCaseTypeIds.add(requireText(caseTypeId, "case type"));
-    }
-    return Set.copyOf(canonicalCaseTypeIds);
-  }
-
-  private String requireText(String value, String description) {
-    if (value == null || value.isBlank()) {
-      throw new IllegalStateException("Retain and dispose policy " + description + " must not be blank");
-    }
-    return value;
   }
 
   private IllegalStateException aggregateFailures(List<CaseFailure> failures) {
