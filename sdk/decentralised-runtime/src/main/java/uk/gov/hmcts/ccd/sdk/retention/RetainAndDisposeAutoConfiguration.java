@@ -4,7 +4,6 @@ import javax.sql.DataSource;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -19,8 +18,7 @@ import uk.gov.hmcts.reform.idam.client.IdamClient;
 public class RetainAndDisposeAutoConfiguration {
 
   @Bean
-  @ConditionalOnMissingBean(CcdRetainAndDisposeClient.class)
-  CcdRetainAndDisposeClient ccdRetainAndDisposeClient(
+  CoreCaseDataRetainAndDisposeClient ccdRetainAndDisposeClient(
       CoreCaseDataApi coreCaseDataApi,
       AuthTokenGenerator authTokenGenerator,
       IdamClient idamClient,
@@ -40,7 +38,7 @@ public class RetainAndDisposeAutoConfiguration {
   RetainAndDisposeTask retainAndDisposeTask(
       RetainAndDisposePolicy policy,
       NamedParameterJdbcTemplate jdbcTemplate,
-      CcdRetainAndDisposeClient ccdClient,
+      CoreCaseDataRetainAndDisposeClient ccdClient,
       DataSource dataSource,
       PlatformTransactionManager transactionManager
   ) {

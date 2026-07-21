@@ -26,14 +26,14 @@ public final class RetainAndDisposeTask implements Runnable {
 
   private final RetainAndDisposePolicy policy;
   private final RetainAndDisposeRepository repository;
-  private final CcdRetainAndDisposeClient ccdClient;
+  private final CoreCaseDataRetainAndDisposeClient ccdClient;
   private final DataSource dataSource;
   private final TransactionTemplate deletionTransaction;
 
   RetainAndDisposeTask(
       RetainAndDisposePolicy policy,
       RetainAndDisposeRepository repository,
-      CcdRetainAndDisposeClient ccdClient,
+      CoreCaseDataRetainAndDisposeClient ccdClient,
       DataSource dataSource,
       PlatformTransactionManager transactionManager
   ) {

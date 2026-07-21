@@ -12,17 +12,14 @@ import uk.gov.hmcts.reform.ccd.client.model.Event;
 import uk.gov.hmcts.reform.ccd.client.model.StartEventResponse;
 import uk.gov.hmcts.reform.idam.client.IdamClient;
 
-class CoreCaseDataRetainAndDisposeClient implements CcdRetainAndDisposeClient {
-
-  private static final String BEARER_PREFIX = "Bearer ";
-  private static final String CACHE_KEY = "system-user";
+class CoreCaseDataRetainAndDisposeClient {
 
   private final CoreCaseDataApi coreCaseDataApi;
   private final AuthTokenGenerator authTokenGenerator;
   private final IdamClient idamClient;
   private final String username;
   private final String password;
-  private final Cache<String, SystemUser> systemUserCache = Caffeine.newBuilder()
+  private final Cache<String, SystemUser> systemUsers = Caffeine.newBuilder()
       .expireAfterWrite(Duration.ofMinutes(30))
       .maximumSize(1)
       .build();
@@ -41,8 +38,7 @@ class CoreCaseDataRetainAndDisposeClient implements CcdRetainAndDisposeClient {
     this.password = password;
   }
 
-  @Override
-  public void moveToTerminalState(RetainAndDisposeCase disposalCase, String eventId, String terminalState) {
+  void moveToTerminalState(RetainAndDisposeCase disposalCase, String eventId, String terminalState) {
     SystemUser systemUser = systemUser();
     String serviceAuthorization = authTokenGenerator.generate();
     String caseReference = String.valueOf(disposalCase.reference());
@@ -86,8 +82,7 @@ class CoreCaseDataRetainAndDisposeClient implements CcdRetainAndDisposeClient {
     }
   }
 
-  @Override
-  public boolean exists(RetainAndDisposeCase disposalCase) {
+  boolean exists(RetainAndDisposeCase disposalCase) {
     SystemUser systemUser = systemUser();
     try {
       coreCaseDataApi.readForCaseWorker(
@@ -105,33 +100,25 @@ class CoreCaseDataRetainAndDisposeClient implements CcdRetainAndDisposeClient {
   }
 
   private SystemUser systemUser() {
-    return systemUserCache.get(CACHE_KEY, ignored -> loadSystemUser());
-  }
-
-  private SystemUser loadSystemUser() {
     if (username == null || username.isBlank() || password == null || password.isBlank()) {
       throw new IllegalStateException(
           "Retain and dispose system user credentials must be configured with "
               + "ccd.decentralised-runtime.retain-and-dispose.system-user.username and password"
       );
     }
+    return systemUsers.get(username, ignored -> loadSystemUser());
+  }
 
-    String authorization = bearer(idamClient.getAccessToken(username, password));
+  private SystemUser loadSystemUser() {
+    String authorization = idamClient.getAccessToken(username, password);
+    if (authorization == null || authorization.isBlank()) {
+      throw new IllegalStateException("IDAM returned an empty retain and dispose system user token");
+    }
     String userId = idamClient.getUserInfo(authorization).getUid();
     if (userId == null || userId.isBlank()) {
       throw new IllegalStateException("Retain and dispose system user has no IDAM user ID");
     }
     return new SystemUser(authorization, userId);
-  }
-
-  private String bearer(String token) {
-    if (token == null || token.isBlank()) {
-      throw new IllegalStateException("IDAM returned an empty retain and dispose system user token");
-    }
-    if (token.regionMatches(true, 0, BEARER_PREFIX, 0, BEARER_PREFIX.length())) {
-      return BEARER_PREFIX + token.substring(BEARER_PREFIX.length());
-    }
-    return BEARER_PREFIX + token;
   }
 
   private record SystemUser(String authorization, String userId) {
