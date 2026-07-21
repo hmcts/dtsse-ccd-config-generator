@@ -1,5 +1,8 @@
 package uk.gov.hmcts.ccd.sdk.retention;
 
+import static uk.gov.hmcts.ccd.sdk.RetainAndDisposePolicy.DISPOSAL_EVENT_ID;
+import static uk.gov.hmcts.ccd.sdk.RetainAndDisposePolicy.DISPOSAL_STATE_ID;
+
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -22,8 +25,6 @@ public final class RetainAndDisposeTask implements Runnable {
 
   private static final String LOCK_NAMESPACE = "ccd-retain-and-dispose";
   private static final String LOCK_NAME = "task";
-  private static final String TERMINAL_EVENT = "MarkForDisposal";
-  private static final String TERMINAL_STATE = "PendingDisposal";
 
   private final RetainAndDisposePolicy policy;
   private final RetainAndDisposeRepository repository;
@@ -54,7 +55,7 @@ public final class RetainAndDisposeTask implements Runnable {
     int transitioned = 0;
     for (RetainAndDisposeCase candidate : candidates) {
       try {
-        ccdClient.moveToTerminalState(candidate, TERMINAL_EVENT, TERMINAL_STATE);
+        ccdClient.moveToTerminalState(candidate, DISPOSAL_EVENT_ID, DISPOSAL_STATE_ID);
         transitioned++;
       } catch (RuntimeException exception) {
         log.error("Failed to move retain and dispose candidate {} to terminal state", candidate.reference(), exception);
@@ -62,7 +63,7 @@ public final class RetainAndDisposeTask implements Runnable {
       }
     }
 
-    List<RetainAndDisposeCase> terminalCases = repository.findCasesInState(caseTypeIds, TERMINAL_STATE);
+    List<RetainAndDisposeCase> terminalCases = repository.findCasesInState(caseTypeIds, DISPOSAL_STATE_ID);
     int deleted = 0;
     for (RetainAndDisposeCase terminalCase : terminalCases) {
       try {
@@ -102,7 +103,7 @@ public final class RetainAndDisposeTask implements Runnable {
       repository.deleteCase(
           terminalCase.reference(),
           terminalCase.caseTypeId(),
-          TERMINAL_STATE
+          DISPOSAL_STATE_ID
       );
     });
   }

@@ -19,6 +19,8 @@ Implement `RetainAndDisposePolicy` as a Spring bean:
 
 ```java
 public interface RetainAndDisposePolicy {
+  String DISPOSAL_EVENT_ID = "MarkForDisposal";
+  String DISPOSAL_STATE_ID = "PendingDisposal";
   Set<String> caseTypes();
   List<Long> findCandidatesForDisposal();
   default void dispose(long caseReference) { }

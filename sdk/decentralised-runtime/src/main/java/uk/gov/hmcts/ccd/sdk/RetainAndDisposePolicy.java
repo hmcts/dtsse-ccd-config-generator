@@ -8,6 +8,9 @@ import java.util.Set;
  */
 public interface RetainAndDisposePolicy {
 
+  String DISPOSAL_EVENT_ID = "MarkForDisposal";
+  String DISPOSAL_STATE_ID = "PendingDisposal";
+
   /**
    * Case types governed by this policy.
    */

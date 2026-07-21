@@ -12,6 +12,7 @@ import uk.gov.hmcts.divorce.simplecase.model.SimpleCaseData;
 import uk.gov.hmcts.divorce.simplecase.model.SimpleCaseState;
 
 import java.util.EnumSet;
+import static uk.gov.hmcts.ccd.sdk.RetainAndDisposePolicy.DISPOSAL_EVENT_ID;
 import static uk.gov.hmcts.divorce.divorcecase.model.access.Permissions.CREATE_READ_UPDATE;
 import static uk.gov.hmcts.divorce.divorcecase.model.UserRole.SYSTEMUPDATE;
 
@@ -24,7 +25,6 @@ public class SimpleCaseConfiguration implements CCDConfig<SimpleCaseData, Simple
     public static final String JURISDICTION = "DIVORCE";
     public static final String CREATE_EVENT = "create-simple-case";
     public static final String FOLLOW_UP_EVENT = "simple-case-follow-up";
-    public static final String DISPOSAL_EVENT = "MarkForDisposal";
     public static final String START_CALLBACK_MARKER = "simple-case-start";
     public static final String SUBMIT_CALLBACK_MARKER = "simple-case-creation";
     public static final String FOLLOW_UP_CALLBACK_MARKER = "simple-case-follow-up-callback";
@@ -68,7 +68,7 @@ public class SimpleCaseConfiguration implements CCDConfig<SimpleCaseData, Simple
             .done();
 
         configBuilder
-            .event(DISPOSAL_EVENT)
+            .event(DISPOSAL_EVENT_ID)
             .forStateTransition(SimpleCaseState.FOLLOW_UP, SimpleCaseState.PendingDisposal)
             .ttlIncrement(0)
             .name("Mark simple case for disposal")
