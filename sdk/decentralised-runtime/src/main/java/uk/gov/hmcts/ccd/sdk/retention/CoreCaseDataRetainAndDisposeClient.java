@@ -20,7 +20,8 @@ class CoreCaseDataRetainAndDisposeClient implements CcdRetainAndDisposeClient {
   private final CoreCaseDataApi coreCaseDataApi;
   private final AuthTokenGenerator authTokenGenerator;
   private final IdamClient idamClient;
-  private final RetainAndDisposeProperties properties;
+  private final String username;
+  private final String password;
   private final Cache<String, SystemUser> systemUserCache = Caffeine.newBuilder()
       .expireAfterWrite(Duration.ofMinutes(30))
       .maximumSize(1)
@@ -30,12 +31,14 @@ class CoreCaseDataRetainAndDisposeClient implements CcdRetainAndDisposeClient {
       CoreCaseDataApi coreCaseDataApi,
       AuthTokenGenerator authTokenGenerator,
       IdamClient idamClient,
-      RetainAndDisposeProperties properties
+      String username,
+      String password
   ) {
     this.coreCaseDataApi = coreCaseDataApi;
     this.authTokenGenerator = authTokenGenerator;
     this.idamClient = idamClient;
-    this.properties = properties;
+    this.username = username;
+    this.password = password;
   }
 
   @Override
@@ -55,7 +58,7 @@ class CoreCaseDataRetainAndDisposeClient implements CcdRetainAndDisposeClient {
     );
     if (startEvent == null || startEvent.getCaseDetails() == null
         || startEvent.getToken() == null || startEvent.getToken().isBlank()) {
-      throw new RetainAndDisposeException("CCD returned an invalid start-event response for case " + caseReference);
+      throw new IllegalStateException("CCD returned an invalid start-event response for case " + caseReference);
     }
 
     CaseDataContent content = CaseDataContent.builder()
@@ -76,7 +79,7 @@ class CoreCaseDataRetainAndDisposeClient implements CcdRetainAndDisposeClient {
     );
     if (result == null || !terminalState.equals(result.getState())) {
       String actualState = result == null ? null : result.getState();
-      throw new RetainAndDisposeException(
+      throw new IllegalStateException(
           "CCD event " + eventId + " left case " + caseReference + " in state " + actualState
               + " instead of " + terminalState
       );
@@ -106,11 +109,8 @@ class CoreCaseDataRetainAndDisposeClient implements CcdRetainAndDisposeClient {
   }
 
   private SystemUser loadSystemUser() {
-    RetainAndDisposeProperties.SystemUser credentials = properties.systemUser();
-    String username = credentials == null ? null : credentials.username();
-    String password = credentials == null ? null : credentials.password();
     if (username == null || username.isBlank() || password == null || password.isBlank()) {
-      throw new RetainAndDisposeException(
+      throw new IllegalStateException(
           "Retain and dispose system user credentials must be configured with "
               + "ccd.decentralised-runtime.retain-and-dispose.system-user.username and password"
       );
@@ -119,14 +119,14 @@ class CoreCaseDataRetainAndDisposeClient implements CcdRetainAndDisposeClient {
     String authorization = bearer(idamClient.getAccessToken(username, password));
     String userId = idamClient.getUserInfo(authorization).getUid();
     if (userId == null || userId.isBlank()) {
-      throw new RetainAndDisposeException("Retain and dispose system user has no IDAM user ID");
+      throw new IllegalStateException("Retain and dispose system user has no IDAM user ID");
     }
     return new SystemUser(authorization, userId);
   }
 
   private String bearer(String token) {
     if (token == null || token.isBlank()) {
-      throw new RetainAndDisposeException("IDAM returned an empty retain and dispose system user token");
+      throw new IllegalStateException("IDAM returned an empty retain and dispose system user token");
     }
     if (token.regionMatches(true, 0, BEARER_PREFIX, 0, BEARER_PREFIX.length())) {
       return BEARER_PREFIX + token.substring(BEARER_PREFIX.length());

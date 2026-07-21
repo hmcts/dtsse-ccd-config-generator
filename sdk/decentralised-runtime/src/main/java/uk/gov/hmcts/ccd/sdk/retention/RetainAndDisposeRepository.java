@@ -3,7 +3,6 @@ package uk.gov.hmcts.ccd.sdk.retention;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.Collection;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -12,13 +11,13 @@ import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 class RetainAndDisposeRepository {
 
   private static final String SELECT_CASES_BY_REFERENCE = """
-      select reference, jurisdiction, case_type_id, state
+      select reference, jurisdiction, case_type_id
       from ccd.case_data
       where reference in (:caseReferences)
       order by reference asc
       """;
   private static final String SELECT_CASES_IN_STATE = """
-      select reference, jurisdiction, case_type_id, state
+      select reference, jurisdiction, case_type_id
       from ccd.case_data
       where case_type_id in (:caseTypeIds)
         and state = :state
@@ -27,7 +26,7 @@ class RetainAndDisposeRepository {
   private static final String DELETE_CASE = """
       delete from ccd.case_data
       where reference = :caseReference
-        and case_type_id in (:caseTypeIds)
+        and case_type_id = :caseTypeId
         and state = :state
       """;
 
@@ -37,21 +36,15 @@ class RetainAndDisposeRepository {
     this.db = db;
   }
 
-  Map<Long, RetainAndDisposeCase> findCases(Collection<Long> caseReferences) {
+  List<RetainAndDisposeCase> findCases(Collection<Long> caseReferences) {
     if (caseReferences.isEmpty()) {
-      return Map.of();
+      return List.of();
     }
-
-    Map<Long, RetainAndDisposeCase> cases = new LinkedHashMap<>();
-    db.query(
+    return db.query(
         SELECT_CASES_BY_REFERENCE,
         Map.of("caseReferences", caseReferences),
-        resultSet -> {
-          RetainAndDisposeCase disposalCase = mapCase(resultSet);
-          cases.put(disposalCase.reference(), disposalCase);
-        }
+        (resultSet, rowNumber) -> mapCase(resultSet)
     );
-    return cases;
   }
 
   List<RetainAndDisposeCase> findCasesInState(Set<String> caseTypeIds, String state) {
@@ -62,13 +55,13 @@ class RetainAndDisposeRepository {
     );
   }
 
-  void deleteCase(long caseReference, Set<String> caseTypeIds, String state) {
+  void deleteCase(long caseReference, String caseTypeId, String state) {
     int deleted = db.update(
         DELETE_CASE,
-        Map.of("caseReference", caseReference, "caseTypeIds", caseTypeIds, "state", state)
+        Map.of("caseReference", caseReference, "caseTypeId", caseTypeId, "state", state)
     );
     if (deleted != 1) {
-      throw new RetainAndDisposeException("Expected to delete local case " + caseReference + " but deleted " + deleted);
+      throw new IllegalStateException("Expected to delete local case " + caseReference + " but deleted " + deleted);
     }
   }
 
@@ -76,8 +69,7 @@ class RetainAndDisposeRepository {
     return new RetainAndDisposeCase(
         resultSet.getLong("reference"),
         resultSet.getString("jurisdiction"),
-        resultSet.getString("case_type_id"),
-        resultSet.getString("state")
+        resultSet.getString("case_type_id")
     );
   }
 }

@@ -1,18 +1,15 @@
-# Testing style guide
+# Testing Strategy
 
-## Test behaviour rather than implementation
+The SDK's tests are primarily [Cftlib](https://github.com/hmcts/rse-cft-lib)-based functional tests
+that run against an isolated full CCD stack.
 
-Mocks must be avoided unless there is no practical alternative to achieve a required test scenario.
+Test behaviour rather than implementation. Avoid mocks unless there is no practical integration or full-stack route.
 
-The SDK's tests are primarily [Cftlib](https://github.com/hmcts/rse-cft-lib)-based functional tests that run against an isolated full CCD stack.
-
-Prefer Spring integration tests or `e2e:cftlibTest` full-stack tests for SDK behaviour.
-
-Prefer adding new assertions to existing tests where appropriate.
+Prefer Spring integration tests or `e2e:cftlibTest` full-stack tests for SDK behaviour; prefer adding new assertions to existing tests where appropriate.
 
 Config generator changes should be covered by extending the existing JSON diff-based golden files.
 
-Changes that deviate from this strategy must provide justification or will not be accepted.
+Changes that deviate from this strategy should explain why in the PR.
 
 ## Data Migration and CCD Definition Diff Checks
 

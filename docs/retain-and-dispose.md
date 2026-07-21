@@ -6,8 +6,8 @@ Services remain responsible for defining retention policies for their case types
 
 A decentralised service must provide:
 
-1. A terminal state, such as `Deleting`.
-2. An event, such as `MarkForDisposal`, that transitions an eligible case into that state.
+1. The terminal state `PendingDisposal`.
+2. The event `MarkForDisposal`, which transitions an eligible case into that state.
 3. A TTL increment of `0` on that event, and not on other events.
 4. A system user that can trigger the event and read cases in the terminal state.
 
@@ -20,8 +20,6 @@ Implement `RetainAndDisposePolicy` as a Spring bean:
 ```java
 public interface RetainAndDisposePolicy {
   Set<String> caseTypes();
-  String terminalState();
-  String terminalEvent();
   List<Long> findCandidates();
   default void dispose(long caseReference) { }
 }
@@ -31,7 +29,7 @@ public interface RetainAndDisposePolicy {
 
 Keeping eligibility policy in application code means a policy change is an ordinary reviewed and versioned code change. The new rule is evaluated against existing cases on the next run; changing it does not require a data migration that triggers an event across every existing case merely to rewrite retention data.
 
-`dispose()` is optional. The SDK invokes it in the same database transaction as the deletion from `ccd.case_data`, allowing service tables to be cleaned up before the SDK's cascading deletion. Services whose tables use cascading foreign keys can use the default implementation.
+`dispose()` is optional and must only perform cleanup in the service database. The SDK invokes it in the same transaction as the deletion from `ccd.case_data`, allowing service tables to be cleaned up before the SDK's cascading deletion. Services whose tables use cascading foreign keys can use the default implementation.
 
 Configure the system user with:
 
@@ -52,7 +50,7 @@ For each run, the SDK:
 
 1. Acquires a non-blocking PostgreSQL advisory lock for the service database. A concurrent invocation exits without processing.
 2. Resolves the policy's candidate references against the local database.
-3. Triggers the configured terminal event for each candidate and verifies the resulting state.
+3. Triggers `MarkForDisposal` for each candidate and verifies the resulting `PendingDisposal` state.
 4. Reads every local case in the terminal state through CCD as the configured system user.
 5. Retains the local case after a successful CCD read. Only a CCD `404` permits local deletion.
 6. Calls `dispose()` and conditionally deletes `ccd.case_data` by case type and terminal state in one transaction.

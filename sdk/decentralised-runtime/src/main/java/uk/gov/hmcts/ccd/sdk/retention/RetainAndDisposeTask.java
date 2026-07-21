@@ -6,7 +6,6 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.TreeSet;
@@ -22,6 +21,8 @@ public final class RetainAndDisposeTask implements Runnable {
 
   private static final String LOCK_NAMESPACE = "ccd-retain-and-dispose";
   private static final String LOCK_NAME = "task";
+  private static final String TERMINAL_EVENT = "MarkForDisposal";
+  private static final String TERMINAL_STATE = "PendingDisposal";
 
   private final RetainAndDisposePolicy policy;
   private final RetainAndDisposeRepository repository;
@@ -45,28 +46,28 @@ public final class RetainAndDisposeTask implements Runnable {
 
   @Override
   public void run() {
-    PolicyConfiguration configuration = validatePolicy();
-    log.info("Starting retain and dispose task caseTypeIds={}", configuration.caseTypeIds());
+    Set<String> caseTypeIds = validateCaseTypes();
+    log.info("Starting retain and dispose task caseTypeIds={}", caseTypeIds);
 
     AdvisoryLock taskLock = tryLock();
     if (taskLock == null) {
       log.warn("Retain and dispose task is already running for caseTypeIds={}; skipping this invocation",
-          configuration.caseTypeIds());
+          caseTypeIds);
       return;
     }
 
     try (taskLock) {
-      runWithLock(configuration);
+      runWithLock(caseTypeIds);
     }
   }
 
-  private void runWithLock(PolicyConfiguration configuration) {
-    List<RetainAndDisposeCase> candidates = selectCandidates(configuration);
+  private void runWithLock(Set<String> caseTypeIds) {
+    List<RetainAndDisposeCase> candidates = selectCandidates(caseTypeIds);
     List<CaseFailure> failures = new ArrayList<>();
     int transitioned = 0;
     for (RetainAndDisposeCase candidate : candidates) {
       try {
-        ccdClient.moveToTerminalState(candidate, configuration.terminalEvent(), configuration.terminalState());
+        ccdClient.moveToTerminalState(candidate, TERMINAL_EVENT, TERMINAL_STATE);
         transitioned++;
       } catch (RuntimeException exception) {
         log.error("Failed to move retain and dispose candidate {} to terminal state", candidate.reference(), exception);
@@ -74,14 +75,12 @@ public final class RetainAndDisposeTask implements Runnable {
       }
     }
 
-    List<RetainAndDisposeCase> terminalCases = repository.findCasesInState(
-        configuration.caseTypeIds(),
-        configuration.terminalState()
-    );
+    List<RetainAndDisposeCase> terminalCases = repository.findCasesInState(caseTypeIds, TERMINAL_STATE);
     int deleted = 0;
     for (RetainAndDisposeCase terminalCase : terminalCases) {
       try {
-        if (!ccdClient.exists(terminalCase) && deleteLocalCase(terminalCase, configuration)) {
+        if (!ccdClient.exists(terminalCase)) {
+          deleteLocalCase(terminalCase);
           deleted++;
         }
       } catch (RuntimeException exception) {
@@ -102,66 +101,60 @@ public final class RetainAndDisposeTask implements Runnable {
     );
   }
 
-  private List<RetainAndDisposeCase> selectCandidates(PolicyConfiguration configuration) {
+  private List<RetainAndDisposeCase> selectCandidates(Set<String> caseTypeIds) {
     List<Long> candidateReferences = List.copyOf(Objects.requireNonNull(
         policy.findCandidates(),
         "Retain and dispose policy returned a null candidate list"
     ));
-    Map<Long, RetainAndDisposeCase> cases = repository.findCases(candidateReferences);
+    List<RetainAndDisposeCase> cases = repository.findCases(candidateReferences);
 
-    List<Long> referencesOutsidePolicy = cases.values().stream()
-        .filter(disposalCase -> !configuration.caseTypeIds().contains(disposalCase.caseTypeId()))
+    List<Long> referencesOutsidePolicy = cases.stream()
+        .filter(disposalCase -> !caseTypeIds.contains(disposalCase.caseTypeId()))
         .map(RetainAndDisposeCase::reference)
         .toList();
     if (!referencesOutsidePolicy.isEmpty()) {
-      throw new RetainAndDisposeException(
+      throw new IllegalStateException(
           "Retain and dispose policy returned cases outside its case types " + referencesOutsidePolicy
       );
     }
-    return List.copyOf(cases.values());
+    return cases;
   }
 
-  private boolean deleteLocalCase(RetainAndDisposeCase terminalCase, PolicyConfiguration configuration) {
-    Boolean deleted = deletionTransaction.execute(status -> {
+  private void deleteLocalCase(RetainAndDisposeCase terminalCase) {
+    deletionTransaction.executeWithoutResult(status -> {
       policy.dispose(terminalCase.reference());
       repository.deleteCase(
           terminalCase.reference(),
-          configuration.caseTypeIds(),
-          configuration.terminalState()
+          terminalCase.caseTypeId(),
+          TERMINAL_STATE
       );
-      return true;
     });
-    return Boolean.TRUE.equals(deleted);
   }
 
-  private PolicyConfiguration validatePolicy() {
+  private Set<String> validateCaseTypes() {
     Set<String> caseTypeIds = policy.caseTypes();
     if (caseTypeIds == null || caseTypeIds.isEmpty()) {
-      throw new RetainAndDisposeException("Retain and dispose policy case types must not be empty");
+      throw new IllegalStateException("Retain and dispose policy case types must not be empty");
     }
     TreeSet<String> canonicalCaseTypeIds = new TreeSet<>();
     for (String caseTypeId : caseTypeIds) {
       canonicalCaseTypeIds.add(requireText(caseTypeId, "case type"));
     }
-    return new PolicyConfiguration(
-        Set.copyOf(canonicalCaseTypeIds),
-        requireText(policy.terminalState(), "terminal state"),
-        requireText(policy.terminalEvent(), "terminal event")
-    );
+    return Set.copyOf(canonicalCaseTypeIds);
   }
 
   private String requireText(String value, String description) {
     if (value == null || value.isBlank()) {
-      throw new RetainAndDisposeException("Retain and dispose policy " + description + " must not be blank");
+      throw new IllegalStateException("Retain and dispose policy " + description + " must not be blank");
     }
     return value;
   }
 
-  private RetainAndDisposeException aggregateFailures(List<CaseFailure> failures) {
+  private IllegalStateException aggregateFailures(List<CaseFailure> failures) {
     String summary = failures.stream()
         .map(failure -> failure.caseReference() + " (" + failure.operation() + ")")
         .collect(Collectors.joining(", "));
-    RetainAndDisposeException aggregate = new RetainAndDisposeException(
+    IllegalStateException aggregate = new IllegalStateException(
         "Retain and dispose failed for " + failures.size() + " case operations: " + summary,
         failures.getFirst().exception()
     );
@@ -188,7 +181,7 @@ public final class RetainAndDisposeTask implements Runnable {
       return null;
     } catch (SQLException exception) {
       closeLockConnection(connection);
-      throw new RetainAndDisposeException("Could not acquire retain and dispose advisory lock", exception);
+      throw new IllegalStateException("Could not acquire retain and dispose advisory lock", exception);
     }
   }
 
@@ -240,13 +233,6 @@ public final class RetainAndDisposeTask implements Runnable {
         }
       }
     }
-  }
-
-  private record PolicyConfiguration(
-      Set<String> caseTypeIds,
-      String terminalState,
-      String terminalEvent
-  ) {
   }
 
   private record CaseFailure(long caseReference, String operation, RuntimeException exception) {

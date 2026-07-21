@@ -261,16 +261,6 @@ public class TestWithCCD extends CftlibTest {
         }
 
         @Override
-        public String terminalState() {
-            return SimpleCaseState.DELETING.name();
-        }
-
-        @Override
-        public String terminalEvent() {
-            return SimpleCaseConfiguration.DISPOSAL_EVENT;
-        }
-
-        @Override
         public List<Long> findCandidates() {
             return candidates;
         }
@@ -2799,7 +2789,7 @@ public class TestWithCCD extends CftlibTest {
                 "jurisdiction", SimpleCaseConfiguration.JURISDICTION,
                 "caseType", SimpleCaseConfiguration.CASE_TYPE,
                 "untouchedState", SimpleCaseState.CREATED.name(),
-                "deletedState", SimpleCaseState.DELETING.name()
+                "deletedState", SimpleCaseState.PendingDisposal.getId()
             )
         );
         db.update(
@@ -2816,7 +2806,7 @@ public class TestWithCCD extends CftlibTest {
                 "select state from ccd.case_data where reference = :reference",
                 Map.of("reference", simpleCaseRef),
                 String.class
-            ), equalTo(SimpleCaseState.DELETING.name()));
+            ), equalTo(SimpleCaseState.PendingDisposal.getId()));
             assertThat(db.queryForObject(
                 "select state from ccd.case_data where reference = :reference",
                 Map.of("reference", untouchedReference),

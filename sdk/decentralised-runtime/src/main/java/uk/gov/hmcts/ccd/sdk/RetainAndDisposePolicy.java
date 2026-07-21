@@ -14,16 +14,6 @@ public interface RetainAndDisposePolicy {
   Set<String> caseTypes();
 
   /**
-   * Terminal state used while CCD disposes its copy of a case.
-   */
-  String terminalState();
-
-  /**
-   * CCD event that moves an eligible case into {@link #terminalState()}.
-   */
-  String terminalEvent();
-
-  /**
    * Returns the complete set of case references currently eligible for disposal.
    */
   List<Long> findCandidates();
@@ -31,8 +21,9 @@ public interface RetainAndDisposePolicy {
   /**
    * Deletes service-owned data associated with a case before the SDK deletes its local CCD data.
    *
-   * <p>The callback runs in the same database transaction as the deletion from {@code ccd.case_data}.
-   * Services that rely entirely on cascading foreign keys do not need to override it.</p>
+   * <p>The callback runs in the same database transaction as the deletion from {@code ccd.case_data}
+   * and must only modify the service database. Services that rely entirely on cascading foreign keys
+   * do not need to override it.</p>
    */
   default void dispose(long caseReference) {
     // Default database cleanup is provided by cascading foreign keys.

@@ -24,7 +24,7 @@ public class SimpleCaseConfiguration implements CCDConfig<SimpleCaseData, Simple
     public static final String JURISDICTION = "DIVORCE";
     public static final String CREATE_EVENT = "create-simple-case";
     public static final String FOLLOW_UP_EVENT = "simple-case-follow-up";
-    public static final String DISPOSAL_EVENT = "simple-case-mark-for-disposal";
+    public static final String DISPOSAL_EVENT = "MarkForDisposal";
     public static final String START_CALLBACK_MARKER = "simple-case-start";
     public static final String SUBMIT_CALLBACK_MARKER = "simple-case-creation";
     public static final String FOLLOW_UP_CALLBACK_MARKER = "simple-case-follow-up-callback";
@@ -69,7 +69,7 @@ public class SimpleCaseConfiguration implements CCDConfig<SimpleCaseData, Simple
 
         configBuilder
             .event(DISPOSAL_EVENT)
-            .forStateTransition(SimpleCaseState.FOLLOW_UP, SimpleCaseState.DELETING)
+            .forStateTransition(SimpleCaseState.FOLLOW_UP, SimpleCaseState.PendingDisposal)
             .ttlIncrement(0)
             .name("Mark simple case for disposal")
             .description("Move a simple case into its disposal state")
