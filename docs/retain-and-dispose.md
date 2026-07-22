@@ -75,6 +75,8 @@ ccd:
       mode: dry-run
       cron: "0 0 2 * * *"
       zone: UTC
+      maximum-candidate-percentage: 5
+      minimum-candidate-count: 10
       system-user:
         username: ${SYSTEM_USER}
         password: ${SYSTEM_USER_PASSWORD}
@@ -87,6 +89,15 @@ ccd:
 | `off` | Default. The retain and dispose auto-configuration is not loaded. |
 | `dry-run` | Reports what would be marked, retained or deleted without changing CCD or local data. |
 | `live` | Marks eligible cases, confirms they are readable and reconciles expired local cases against CCD. |
+
+## Candidate circuit breaker
+
+Before marking any cases, the task groups the resolved candidates by case type and current state and compares each
+group with all local cases in the same case type and state whose resolved TTL is null. It aborts the whole run when a
+group contains at least `minimum-candidate-count` candidates and exceeds `maximum-candidate-percentage` of that
+population. `maximum-candidate-percentage` defaults to `5` and `minimum-candidate-count` defaults to `10`. Set
+`maximum-candidate-percentage` to `100` to disable the percentage circuit breaker. The same check runs in `dry-run`,
+allowing an unsafe policy change to be detected before enabling live disposal.
 
 ## SDK task
 
@@ -104,10 +115,11 @@ class SchedulingConfiguration {
 On each run, `retainAndDisposeTask`:
 
 1. Acquires a non-blocking database lock. A concurrent invocation exits without processing.
-2. Resolves references returned by `findCandidatesForDisposal()` against the configured case types, ignoring cases that already have a resolved TTL.
-3. Triggers `MarkForDisposal` for each candidate and verifies it enters `PendingDisposal`.
-4. Reads each unconfirmed local `PendingDisposal` case from CCD using the configured system user. If the read succeeds, it triggers `ConfirmDisposal` to set the resolved TTL. If the read fails, including with a `404`, the task reports missing system-user read permission and aborts before reconciliation. The TTL remains null and the case cannot be deleted.
-5. If CCD returns `404` for an expired confirmed case, invokes `dispose()` and deletes the local `ccd.case_data` row in one transaction.
+2. Resolves references returned by `findCandidatesForDisposal()` against the configured case types, ignoring cases that are already pending disposal or have a resolved TTL.
+3. Applies the candidate percentage circuit breaker across the complete candidate set.
+4. Triggers `MarkForDisposal` for each candidate and verifies it enters `PendingDisposal`.
+5. Reads each unconfirmed local `PendingDisposal` case from CCD using the configured system user. If the read succeeds, it triggers `ConfirmDisposal` to set the resolved TTL. If the read fails, including with a `404`, the task reports missing system-user read permission and aborts before reconciliation. The TTL remains null and the case cannot be deleted.
+6. If CCD returns `404` for an expired confirmed case, invokes `dispose()` and deletes the local `ccd.case_data` row in one transaction.
 
 In `dry-run`, the task acquires the same lock and performs the same candidate resolution and CCD reads, but only logs the action that would be taken. It never triggers either event, invokes `dispose()` or deletes local data. Because candidate cases are not moved into `PendingDisposal`, dry run can only assess confirmation and deletion for cases that are already in that state.
 

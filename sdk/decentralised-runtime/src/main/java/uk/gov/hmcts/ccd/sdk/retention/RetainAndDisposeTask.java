@@ -1,8 +1,11 @@
 package uk.gov.hmcts.ccd.sdk.retention;
 
+import static java.util.stream.Collectors.counting;
+import static java.util.stream.Collectors.groupingBy;
 import static uk.gov.hmcts.ccd.sdk.RetainAndDisposePolicy.DISPOSAL_STATE_ID;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -33,7 +36,7 @@ final class RetainAndDisposeTask implements Runnable {
   @Override
   public void run() {
     Mode mode = properties.getMode();
-    properties.validateCredentials();
+    properties.validate();
 
     Set<String> caseTypeIds = policy.caseTypes();
     log.info("Starting retain and dispose task mode={} caseTypeIds={}", mode, caseTypeIds);
@@ -60,6 +63,7 @@ final class RetainAndDisposeTask implements Runnable {
         policy.findCandidatesForDisposal(),
         caseTypeIds
     );
+    checkCandidatePercentage(candidates);
     log.info("Found retain and dispose candidates count={} caseTypeIds={}", candidates.size(), caseTypeIds);
     for (RetainAndDisposeCase candidate : candidates) {
       if (mode == Mode.DRY_RUN) {
@@ -67,6 +71,34 @@ final class RetainAndDisposeTask implements Runnable {
             candidate.reference(), candidate.caseTypeId());
       } else {
         attempt(candidate.reference(), "markForDisposal", () -> ccdClient.markForDisposal(candidate));
+      }
+    }
+  }
+
+  private void checkCandidatePercentage(List<RetainAndDisposeCase> candidates) {
+    if (properties.getMaximumCandidatePercentage() == 100) {
+      return;
+    }
+    Map<CandidateCohort, Long> candidateCounts = candidates.stream()
+        .collect(groupingBy(CandidateCohort::from, counting()));
+    for (Map.Entry<CandidateCohort, Long> entry : candidateCounts.entrySet()) {
+      long candidateCount = entry.getValue();
+      if (candidateCount < properties.getMinimumCandidateCount()) {
+        continue;
+      }
+      CandidateCohort cohort = entry.getKey();
+      long totalCount = repository.countCasesInState(cohort.caseTypeId(), cohort.state());
+      if (candidateCount * 100 > totalCount * properties.getMaximumCandidatePercentage()) {
+        log.error(
+            "Retain and dispose candidate circuit breaker tripped caseTypeId={} state={} candidateCount={} "
+                + "totalCount={} maximumCandidatePercentage={}. Aborting before marking any cases",
+            cohort.caseTypeId(), cohort.state(), candidateCount, totalCount,
+            properties.getMaximumCandidatePercentage()
+        );
+        throw new IllegalStateException(
+            "Retain and dispose candidates exceed the configured maximum percentage for case type "
+                + cohort.caseTypeId() + " in state " + cohort.state()
+        );
       }
     }
   }
@@ -150,5 +182,11 @@ final class RetainAndDisposeTask implements Runnable {
     });
     log.info("Deleted local case after CCD returned not found caseReference={} caseTypeId={}",
         disposalCase.reference(), disposalCase.caseTypeId());
+  }
+
+  private record CandidateCohort(String caseTypeId, String state) {
+    private static CandidateCohort from(RetainAndDisposeCase disposalCase) {
+      return new CandidateCohort(disposalCase.caseTypeId(), disposalCase.state());
+    }
   }
 }

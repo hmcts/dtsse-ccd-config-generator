@@ -18,22 +18,24 @@ class RetainAndDisposeRepository {
       return List.of();
     }
     return db.sql("""
-            select reference, jurisdiction, case_type_id
+            select reference, jurisdiction, case_type_id, state
             from ccd.case_data
             where reference in (:caseReferences)
               and case_type_id in (:caseTypeIds)
+              and state <> :disposalState
               and resolved_ttl is null
             order by reference asc
             """)
         .param("caseReferences", caseReferences)
         .param("caseTypeIds", caseTypeIds)
+        .param("disposalState", DISPOSAL_STATE_ID)
         .query(RetainAndDisposeCase.class)
         .list();
   }
 
   List<RetainAndDisposeCase> findUnconfirmedPendingDisposalCases(Set<String> caseTypeIds) {
     return db.sql("""
-            select reference, jurisdiction, case_type_id
+            select reference, jurisdiction, case_type_id, state
             from ccd.case_data
             where case_type_id in (:caseTypeIds)
               and state = :state
@@ -48,7 +50,7 @@ class RetainAndDisposeRepository {
 
   List<RetainAndDisposeCase> findExpiredPendingDisposalCases(Set<String> caseTypeIds) {
     return db.sql("""
-            select reference, jurisdiction, case_type_id
+            select reference, jurisdiction, case_type_id, state
             from ccd.case_data
             where case_type_id in (:caseTypeIds)
               and state = :state
@@ -59,6 +61,20 @@ class RetainAndDisposeRepository {
         .param("state", DISPOSAL_STATE_ID)
         .query(RetainAndDisposeCase.class)
         .list();
+  }
+
+  long countCasesInState(String caseTypeId, String state) {
+    return db.sql("""
+            select count(*)
+            from ccd.case_data
+            where case_type_id = :caseTypeId
+              and state = :state
+              and resolved_ttl is null
+            """)
+        .param("caseTypeId", caseTypeId)
+        .param("state", state)
+        .query(Long.class)
+        .single();
   }
 
   void deletePendingDisposalCase(RetainAndDisposeCase disposalCase) {

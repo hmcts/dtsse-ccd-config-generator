@@ -2810,6 +2810,13 @@ public class TestWithCCD extends CftlibTest {
         );
 
         try {
+            retainAndDisposeProperties.setMinimumCandidateCount(1);
+            retainAndDisposeProperties.setMode(RetainAndDisposeProperties.Mode.LIVE);
+            assertThat(assertThrows(IllegalStateException.class, retainAndDisposeTask::run).getMessage(),
+                containsString("configured maximum percentage"));
+            assertRetainAndDisposeDidNotMutate(simpleCaseRef, initialState, deletedReference);
+
+            retainAndDisposeProperties.setMinimumCandidateCount(10);
             retainAndDisposeProperties.setMode(RetainAndDisposeProperties.Mode.DRY_RUN);
             retainAndDisposeTask.run();
             assertRetainAndDisposeDidNotMutate(simpleCaseRef, initialState, deletedReference);
@@ -2869,6 +2876,7 @@ public class TestWithCCD extends CftlibTest {
             ), equalTo(0));
         } finally {
             retainAndDisposeProperties.setMode(RetainAndDisposeProperties.Mode.LIVE);
+            retainAndDisposeProperties.setMinimumCandidateCount(10);
             retainAndDisposePolicy.candidates();
             db.update(
                 "delete from ccd.case_data where reference in (:references)",
