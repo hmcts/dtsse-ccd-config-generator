@@ -33,7 +33,10 @@ final class RetainAndDisposeTask implements Runnable {
   @Override
   public void run() {
     Mode mode = properties.getMode();
-    properties.validate();
+    if (mode == Mode.OFF) {
+      log.info("Retain and dispose task is disabled");
+      return;
+    }
 
     Set<String> caseTypeIds = policy.caseTypes();
     log.info("Starting retain and dispose task mode={} caseTypeIds={}", mode, caseTypeIds);

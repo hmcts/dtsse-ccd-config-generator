@@ -49,6 +49,7 @@ public class RetainAndDisposeAutoConfiguration {
       DataSource dataSource,
       TransactionOperations transaction
   ) {
+    properties.validate();
     RetainAndDisposeRepository repository = new RetainAndDisposeRepository(jdbcClient);
     return new RetainAndDisposeTask(
         properties,

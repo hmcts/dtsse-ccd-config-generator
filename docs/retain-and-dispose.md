@@ -123,4 +123,6 @@ On each run, `retainAndDisposeTask`:
 
 In `dry-run`, the task acquires the same lock and performs the same candidate resolution and CCD reads, but only logs the action that would be taken. It never triggers either event, invokes `dispose()` or deletes local data. Because candidate cases are not moved into `PendingDisposal`, dry run can only assess confirmation and deletion for cases that are already in that state.
 
-Failures for an individual case do not prevent other cases being attempted. Each failure is logged and the case remains eligible for a later run.
+Failures while marking, confirming or reconciling an individual case are logged and do not prevent other cases being
+attempted. A system-user visibility failure during the confirmation safety check aborts the current run before
+reconciliation.
