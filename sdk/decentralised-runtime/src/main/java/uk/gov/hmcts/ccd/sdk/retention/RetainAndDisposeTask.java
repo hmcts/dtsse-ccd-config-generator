@@ -82,7 +82,12 @@ final class RetainAndDisposeTask implements Runnable {
   }
 
   private void confirm(RetainAndDisposeCase disposalCase, Mode mode) {
-    ccdClient.verifyReadable(disposalCase);
+    if (!ccdClient.isReadable(disposalCase)) {
+      throw new IllegalStateException(
+          "System user cannot read unconfirmed pending disposal case " + disposalCase.reference()
+              + "; refusing to set its disposal TTL"
+      );
+    }
     if (mode == Mode.DRY_RUN) {
       log.info("Dry run would confirm case for disposal caseReference={} caseTypeId={}",
           disposalCase.reference(), disposalCase.caseTypeId());
@@ -118,7 +123,7 @@ final class RetainAndDisposeTask implements Runnable {
   }
 
   private void reconcile(RetainAndDisposeCase disposalCase, Mode mode) {
-    if (ccdClient.exists(disposalCase)) {
+    if (ccdClient.isReadable(disposalCase)) {
       log.info("Retaining local case still present in CCD caseReference={} caseTypeId={}",
           disposalCase.reference(), disposalCase.caseTypeId());
       return;

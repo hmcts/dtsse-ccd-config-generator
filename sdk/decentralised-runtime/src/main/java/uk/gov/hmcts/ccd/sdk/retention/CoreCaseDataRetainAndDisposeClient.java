@@ -38,19 +38,7 @@ class CoreCaseDataRetainAndDisposeClient {
     triggerEvent(disposalCase, CONFIRM_DISPOSAL_EVENT_ID);
   }
 
-  void verifyReadable(RetainAndDisposeCase disposalCase) {
-    try {
-      read(disposalCase);
-    } catch (FeignException.NotFound exception) {
-      throw new IllegalStateException(
-          "System user cannot read unconfirmed pending disposal case " + disposalCase.reference()
-              + "; refusing to set its disposal TTL",
-          exception
-      );
-    }
-  }
-
-  boolean exists(RetainAndDisposeCase disposalCase) {
+  boolean isReadable(RetainAndDisposeCase disposalCase) {
     try {
       read(disposalCase);
       return true;
