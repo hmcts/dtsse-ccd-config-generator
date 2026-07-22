@@ -106,7 +106,7 @@ On each run, `retainAndDisposeTask`:
 1. Acquires a non-blocking database lock. A concurrent invocation exits without processing.
 2. Resolves references returned by `findCandidatesForDisposal()` against the configured case types, ignoring cases that already have a resolved TTL.
 3. Triggers `MarkForDisposal` for each candidate and verifies it enters `PendingDisposal`.
-4. Reads each unconfirmed local `PendingDisposal` case from CCD using the configured system user. If the read succeeds, it triggers `ConfirmDisposal` to set the resolved TTL. If the read fails, including with a `404`, the TTL remains null and the case cannot be deleted.
+4. Reads each unconfirmed local `PendingDisposal` case from CCD using the configured system user. If the read succeeds, it triggers `ConfirmDisposal` to set the resolved TTL. If the read fails, including with a `404`, the task reports missing system-user read permission and aborts before reconciliation. The TTL remains null and the case cannot be deleted.
 5. If CCD returns `404` for an expired confirmed case, invokes `dispose()` and deletes the local `ccd.case_data` row in one transaction.
 
 In `dry-run`, the task acquires the same lock and performs the same candidate resolution and CCD reads, but only logs the action that would be taken. It never triggers either event, invokes `dispose()` or deletes local data. Because candidate cases are not moved into `PendingDisposal`, dry run can only assess confirmation and deletion for cases that are already in that state.

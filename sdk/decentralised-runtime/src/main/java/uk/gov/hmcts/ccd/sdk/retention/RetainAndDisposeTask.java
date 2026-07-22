@@ -1,5 +1,7 @@
 package uk.gov.hmcts.ccd.sdk.retention;
 
+import static uk.gov.hmcts.ccd.sdk.RetainAndDisposePolicy.DISPOSAL_STATE_ID;
+
 import java.util.List;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
@@ -73,6 +75,7 @@ final class RetainAndDisposeTask implements Runnable {
     List<RetainAndDisposeCase> unconfirmedCases = repository.findUnconfirmedPendingDisposalCases(caseTypeIds);
     log.info("Confirming pending disposal cases count={} caseTypeIds={}", unconfirmedCases.size(), caseTypeIds);
     for (RetainAndDisposeCase unconfirmedCase : unconfirmedCases) {
+      requireReadable(unconfirmedCase);
       attempt(
           unconfirmedCase.reference(),
           "confirmDisposal",
@@ -81,13 +84,21 @@ final class RetainAndDisposeTask implements Runnable {
     }
   }
 
-  private void confirm(RetainAndDisposeCase disposalCase, Mode mode) {
+  private void requireReadable(RetainAndDisposeCase disposalCase) {
     if (!ccdClient.isReadable(disposalCase)) {
+      log.error(
+          "Retain and dispose visibility check failed for caseReference={}. Check that the configured system user "
+              + "has R permission on caseTypeId={} state={}. Aborting before reconciliation",
+          disposalCase.reference(), disposalCase.caseTypeId(), DISPOSAL_STATE_ID
+      );
       throw new IllegalStateException(
-          "System user cannot read unconfirmed pending disposal case " + disposalCase.reference()
-              + "; refusing to set its disposal TTL"
+          "Retain and dispose system user cannot read case type " + disposalCase.caseTypeId()
+              + " in state " + DISPOSAL_STATE_ID
       );
     }
+  }
+
+  private void confirm(RetainAndDisposeCase disposalCase, Mode mode) {
     if (mode == Mode.DRY_RUN) {
       log.info("Dry run would confirm case for disposal caseReference={} caseTypeId={}",
           disposalCase.reference(), disposalCase.caseTypeId());

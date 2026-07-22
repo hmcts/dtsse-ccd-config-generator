@@ -58,6 +58,7 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.*;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyInt;
@@ -2788,16 +2789,12 @@ public class TestWithCCD extends CftlibTest {
                 :untouched, :untouched, 1, 'PUBLIC', :jurisdiction, :caseType, :untouchedState, '{}'::jsonb, null
             ),
             (
-                :unconfirmed, :unconfirmed, 1, 'PUBLIC', :jurisdiction, :caseType, :deletedState, '{}'::jsonb, null
-            ),
-            (
                 :deleted, :deleted, 1, 'PUBLIC', :jurisdiction, :caseType, :deletedState, '{}'::jsonb,
                 current_date - 1
             )
             """,
             Map.of(
                 "untouched", untouchedReference,
-                "unconfirmed", unconfirmedReference,
                 "deleted", deletedReference,
                 "jurisdiction", SimpleCaseConfiguration.JURISDICTION,
                 "caseType", SimpleCaseConfiguration.CASE_TYPE,
@@ -2817,7 +2814,38 @@ public class TestWithCCD extends CftlibTest {
             retainAndDisposeTask.run();
             assertRetainAndDisposeDidNotMutate(simpleCaseRef, initialState, deletedReference);
 
+            db.update(
+                """
+                insert into ccd.case_data (
+                    id, reference, version, security_classification, jurisdiction, case_type_id, state, data
+                ) values (
+                    :reference, :reference, 1, 'PUBLIC', :jurisdiction, :caseType, :state, '{}'::jsonb
+                )
+                """,
+                Map.of(
+                    "reference", unconfirmedReference,
+                    "jurisdiction", SimpleCaseConfiguration.JURISDICTION,
+                    "caseType", SimpleCaseConfiguration.CASE_TYPE,
+                    "state", SimpleCaseState.PendingDisposal.getId()
+                )
+            );
             retainAndDisposeProperties.setMode(RetainAndDisposeProperties.Mode.LIVE);
+            assertThrows(IllegalStateException.class, retainAndDisposeTask::run);
+            assertThat(db.queryForObject(
+                "select count(*) from ccd.case_data where reference = :reference",
+                Map.of("reference", deletedReference),
+                Integer.class
+            ), equalTo(1));
+            assertThat(db.queryForObject(
+                "select resolved_ttl is null from ccd.case_data where reference = :reference",
+                Map.of("reference", unconfirmedReference),
+                Boolean.class
+            ), equalTo(true));
+            db.update(
+                "delete from ccd.case_data where reference = :reference",
+                Map.of("reference", unconfirmedReference)
+            );
+
             retainAndDisposeTask.run();
             assertThat(db.queryForObject(
                 "select state from ccd.case_data where reference = :reference",
@@ -2834,11 +2862,6 @@ public class TestWithCCD extends CftlibTest {
                 Map.of("reference", untouchedReference),
                 String.class
             ), equalTo(SimpleCaseState.CREATED.name()));
-            assertThat(db.queryForObject(
-                "select resolved_ttl is null from ccd.case_data where reference = :reference",
-                Map.of("reference", unconfirmedReference),
-                Boolean.class
-            ), equalTo(true));
             assertThat(db.queryForObject(
                 "select count(*) from ccd.case_data where reference = :reference",
                 Map.of("reference", deletedReference),
