@@ -91,7 +91,7 @@ ccd:
 
 The SDK performs a statistical check of the references returned by `findCandidatesForDisposal()`.
 
-A run is aborted if more than `maximum-candidate-percentage` of cases in a given state are returned as eligible - default 5%.
+A run is aborted if more than `maximum-candidate-percentage` of cases of a given case type & state are returned as eligible - default 5%.
 
 Eg. in the preceding Java policy the run would log an error and abort if more than 5% of all cases in the `DRAFT` state were returned as eligible for disposal.
 
@@ -116,7 +116,7 @@ On each run, `retainAndDisposeTask`:
 2. Resolves references returned by `findCandidatesForDisposal()`.
 3. Applies circuit breaker checks
 4. Triggers `MarkForDisposal` for each candidate and verifies it enters `PendingDisposal`.
-5. Reads each unconfirmed local `PendingDisposal` case from CCD using the configured system user. If the read succeeds, it triggers `ConfirmDisposal` to set the resolved TTL. If the read fails, including with a `404`, the task reports missing system-user read permission and aborts. The TTL remains null and the case cannot be deleted.
+5. Reads each unconfirmed local `PendingDisposal` case from CCD using the configured system user. If the read succeeds, it triggers `ConfirmDisposal` to set the resolved TTL. If the read fails with a `404` not found, the task reports missing system-user read permission and aborts. The TTL remains null and the case cannot be deleted.
 6. If CCD returns `404` for an expired confirmed case, invokes `dispose()` and deletes the local `ccd.case_data` row in one transaction.
 
 In `dry-run`, the task acquires the same lock and performs the same candidate resolution and CCD reads, but only logs the action that would be taken. It never triggers either event, invokes `dispose()` or deletes local data. Because candidate cases are not moved into `PendingDisposal`, dry run can only assess confirmation and deletion for cases that are already in that state.
