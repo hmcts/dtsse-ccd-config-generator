@@ -124,7 +124,7 @@ public class CcdDataMigrationTask implements Runnable {
         this::runMigrationWithLock
     );
     if (result.isEmpty()) {
-      log.warn("CCD data migration taskName={} is already running; skipping this invocation", options.taskName());
+      log.info("CCD data migration taskName={} is already running; skipping this invocation", options.taskName());
       return CcdDataMigrationRunResult.skippedLocked();
     }
     return result.get();
