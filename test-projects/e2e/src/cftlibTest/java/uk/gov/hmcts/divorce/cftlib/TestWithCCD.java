@@ -116,6 +116,7 @@ import uk.gov.hmcts.ccd.sdk.type.CaseLink;
 import uk.gov.hmcts.ccd.sdk.type.ListValue;
 import uk.gov.hmcts.ccd.sdk.CaseReindexingService;
 import uk.gov.hmcts.ccd.sdk.RetainAndDisposePolicy;
+import uk.gov.hmcts.ccd.sdk.retention.RetainAndDisposeProperties;
 import uk.gov.hmcts.ccd.sdk.taskmanagement.model.TaskAction;
 import uk.gov.hmcts.reform.ccd.client.CoreCaseDataApi;
 import uk.gov.hmcts.reform.ccd.client.model.CaseDataContent;
@@ -134,6 +135,8 @@ import uk.gov.hmcts.rse.ccd.lib.test.CftlibTest;
     "ccd.servicebus.destination=ccd-case-events-test",
     "ccd.servicebus.scheduler-enabled=true",
     "ccd.servicebus.schedule=*/1 * * * * *",
+    "ccd.decentralised-runtime.retain-and-dispose.mode=live",
+    "ccd.decentralised-runtime.retain-and-dispose.cron=-",
     "ccd.decentralised-runtime.retain-and-dispose.system-user.username=dummysystemupdate@test.com",
     "ccd.decentralised-runtime.retain-and-dispose.system-user.password=password",
     "spring.autoconfigure.exclude=com.azure.spring.cloud.autoconfigure.implementation.jms.ServiceBusJmsAutoConfiguration"
@@ -162,6 +165,9 @@ public class TestWithCCD extends CftlibTest {
 
     @Autowired
     private CftlibRetainAndDisposePolicy retainAndDisposePolicy;
+
+    @Autowired
+    private RetainAndDisposeProperties retainAndDisposeProperties;
 
     @Autowired
     private JmsTemplate jmsTemplate;
@@ -2794,10 +2800,23 @@ public class TestWithCCD extends CftlibTest {
             )
         );
         retainAndDisposePolicy.candidates(simpleCaseRef);
+        String initialState = db.queryForObject(
+            "select state from ccd.case_data where reference = :reference",
+            Map.of("reference", simpleCaseRef),
+            String.class
+        );
 
         try {
+            retainAndDisposeProperties.setMode(RetainAndDisposeProperties.Mode.OFF);
             retainAndDisposeTask.run();
+            assertRetainAndDisposeDidNotMutate(simpleCaseRef, initialState, deletedReference);
 
+            retainAndDisposeProperties.setMode(RetainAndDisposeProperties.Mode.DRY_RUN);
+            retainAndDisposeTask.run();
+            assertRetainAndDisposeDidNotMutate(simpleCaseRef, initialState, deletedReference);
+
+            retainAndDisposeProperties.setMode(RetainAndDisposeProperties.Mode.LIVE);
+            retainAndDisposeTask.run();
             assertThat(db.queryForObject(
                 "select state from ccd.case_data where reference = :reference",
                 Map.of("reference", simpleCaseRef),
@@ -2814,12 +2833,27 @@ public class TestWithCCD extends CftlibTest {
                 Integer.class
             ), equalTo(0));
         } finally {
+            retainAndDisposeProperties.setMode(RetainAndDisposeProperties.Mode.LIVE);
             retainAndDisposePolicy.candidates();
             db.update(
                 "delete from ccd.case_data where reference in (:references)",
                 Map.of("references", List.of(untouchedReference, deletedReference))
             );
         }
+    }
+
+    private void assertRetainAndDisposeDidNotMutate(long candidateReference, String candidateState,
+                                                      long pendingDisposalReference) {
+        assertThat(db.queryForObject(
+            "select state from ccd.case_data where reference = :reference",
+            Map.of("reference", candidateReference),
+            String.class
+        ), equalTo(candidateState));
+        assertThat(db.queryForObject(
+            "select count(*) from ccd.case_data where reference = :reference",
+            Map.of("reference", pendingDisposalReference),
+            Integer.class
+        ), equalTo(1));
     }
 
     @SneakyThrows
