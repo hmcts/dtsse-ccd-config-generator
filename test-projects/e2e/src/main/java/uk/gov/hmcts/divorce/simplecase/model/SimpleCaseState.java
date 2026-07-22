@@ -2,7 +2,6 @@ package uk.gov.hmcts.divorce.simplecase.model;
 
 import com.fasterxml.jackson.annotation.JsonValue;
 
-@SuppressWarnings("PMD.FieldNamingConventions")
 public enum SimpleCaseState {
     DRAFT,
     CREATED,
