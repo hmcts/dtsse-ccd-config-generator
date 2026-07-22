@@ -11,19 +11,49 @@ A decentralised service must provide:
 3. A TTL increment of `0` on that event, and not on other events.
 4. A system user that can trigger the event and read cases in the terminal state.
 
-Only states permitted by the service's policy should be able to transition into the terminal state.
+Services should configure only the permitted CCD states to transition into the terminal state.
 
 ## Service policy
 
-Implement `RetainAndDisposePolicy` as a Spring bean:
+Implement `RetainAndDisposePolicy` as a Spring bean.
+
+For example, this policy identifies draft cases older than 365 days:
 
 ```java
-public interface RetainAndDisposePolicy {
-  String DISPOSAL_EVENT_ID = "MarkForDisposal";
-  String DISPOSAL_STATE_ID = "PendingDisposal";
-  Set<String> caseTypes();
-  Collection<Long> findCandidatesForDisposal();
-  default void dispose(long caseReference) { }
+@Component
+@RequiredArgsConstructor
+public class ExampleRetainAndDisposePolicy implements RetainAndDisposePolicy {
+
+  private static final int DRAFT_RETENTION_DAYS = 365;
+  private static final Set<String> CASE_TYPES = Set.of(
+      "EXAMPLE_CASE_TYPE"
+  );
+
+  private final NamedParameterJdbcTemplate jdbc;
+
+  @Override
+  public Set<String> caseTypes() {
+    return CASE_TYPES;
+  }
+
+  @Override
+  public List<Long> findCandidatesForDisposal() {
+    return jdbc.queryForList(
+        """
+            select reference
+            from ccd.case_data
+            where case_type_id in (:caseTypeIds)
+              and state = 'DRAFT'
+              and created_date::date + :retentionDays < current_date
+            order by reference asc
+            """,
+        Map.of(
+            "caseTypeIds", CASE_TYPES,
+            "retentionDays", DRAFT_RETENTION_DAYS
+        ),
+        Long.class
+    );
+  }
 }
 ```
 
@@ -48,13 +78,13 @@ ccd:
 
 When one policy bean exists, the SDK provides the `retainAndDisposeTask` `Runnable`. The service is responsible for invoking this task, normally from a nightly scheduled job.
 
-For each run, the SDK:
+On each run, `retainAndDisposeTask`:
 
-1. Acquires a non-blocking PostgreSQL advisory lock for the service database. A concurrent invocation exits without processing.
-2. Resolves the policy's candidate references against the local database.
-3. Triggers `MarkForDisposal` for each candidate and verifies the resulting `PendingDisposal` state.
-4. Reads every local case in the terminal state through CCD as the configured system user.
-5. Retains the local case after a successful CCD read. Only a CCD `404` permits local deletion.
-6. Calls `dispose()` and conditionally deletes `ccd.case_data` by case type and terminal state in one transaction.
+1. Acquires a non-blocking database lock. A concurrent invocation exits without processing.
+2. Resolves the references returned by `findCandidatesForDisposal()` against the configured case types.
+3. Triggers `MarkForDisposal` for each candidate and verifies it enters `PendingDisposal`.
+4. Reads each local `PendingDisposal` case from CCD using the configured system user.
+5. Retains the local case when CCD returns it. Only a CCD `404` permits deletion.
+6. On a `404`, invokes `dispose()` and conditionally deletes the local `ccd.case_data` row by case type and state in one transaction.
 
-Failures for an individual case do not prevent other cases being attempted, but the task fails after processing so the scheduler can report and retry the run.
+Failures for an individual case do not prevent other cases being attempted. Each failure is logged, then the task fails after processing so the scheduler can report and retry the run.
