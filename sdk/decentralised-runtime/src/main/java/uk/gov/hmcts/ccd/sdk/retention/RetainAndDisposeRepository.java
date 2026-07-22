@@ -16,13 +16,23 @@ class RetainAndDisposeRepository {
       from ccd.case_data
       where reference in (:caseReferences)
         and case_type_id in (:caseTypeIds)
+        and resolved_ttl is null
       order by reference asc
       """;
-  private static final String SELECT_PENDING_DISPOSAL_CASES = """
+  private static final String SELECT_UNCONFIRMED_PENDING_DISPOSAL_CASES = """
       select reference, jurisdiction, case_type_id
       from ccd.case_data
       where case_type_id in (:caseTypeIds)
         and state = :state
+        and resolved_ttl is null
+      order by reference asc
+      """;
+  private static final String SELECT_EXPIRED_PENDING_DISPOSAL_CASES = """
+      select reference, jurisdiction, case_type_id
+      from ccd.case_data
+      where case_type_id in (:caseTypeIds)
+        and state = :state
+        and resolved_ttl < current_date
       order by reference asc
       """;
   private static final String DELETE_PENDING_DISPOSAL_CASE = """
@@ -30,6 +40,7 @@ class RetainAndDisposeRepository {
       where reference = :reference
         and case_type_id = :caseTypeId
         and state = :state
+        and resolved_ttl < current_date
       """;
 
   private final JdbcClient db;
@@ -45,8 +56,16 @@ class RetainAndDisposeRepository {
         .list();
   }
 
-  List<RetainAndDisposeCase> findPendingDisposalCases(Set<String> caseTypeIds) {
-    return db.sql(SELECT_PENDING_DISPOSAL_CASES)
+  List<RetainAndDisposeCase> findUnconfirmedPendingDisposalCases(Set<String> caseTypeIds) {
+    return db.sql(SELECT_UNCONFIRMED_PENDING_DISPOSAL_CASES)
+        .param("caseTypeIds", caseTypeIds)
+        .param("state", DISPOSAL_STATE_ID)
+        .query(RetainAndDisposeCase.class)
+        .list();
+  }
+
+  List<RetainAndDisposeCase> findExpiredPendingDisposalCases(Set<String> caseTypeIds) {
+    return db.sql(SELECT_EXPIRED_PENDING_DISPOSAL_CASES)
         .param("caseTypeIds", caseTypeIds)
         .param("state", DISPOSAL_STATE_ID)
         .query(RetainAndDisposeCase.class)

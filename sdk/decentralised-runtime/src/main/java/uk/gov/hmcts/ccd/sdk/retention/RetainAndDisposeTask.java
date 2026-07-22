@@ -41,7 +41,8 @@ final class RetainAndDisposeTask implements Runnable {
         LOCK_NAME,
         () -> {
           markEligibleCasesForDisposal(caseTypeIds, mode);
-          reconcilePendingDisposalCases(caseTypeIds, mode);
+          confirmPendingDisposalCases(caseTypeIds, mode);
+          reconcileExpiredPendingDisposalCases(caseTypeIds, mode);
         }
     );
     if (!acquired) {
@@ -68,9 +69,32 @@ final class RetainAndDisposeTask implements Runnable {
     }
   }
 
-  private void reconcilePendingDisposalCases(Set<String> caseTypeIds, Mode mode) {
-    List<RetainAndDisposeCase> terminalCases = repository.findPendingDisposalCases(caseTypeIds);
-    log.info("Reconciling pending disposal cases count={} caseTypeIds={}", terminalCases.size(), caseTypeIds);
+  private void confirmPendingDisposalCases(Set<String> caseTypeIds, Mode mode) {
+    List<RetainAndDisposeCase> unconfirmedCases = repository.findUnconfirmedPendingDisposalCases(caseTypeIds);
+    log.info("Confirming pending disposal cases count={} caseTypeIds={}", unconfirmedCases.size(), caseTypeIds);
+    for (RetainAndDisposeCase unconfirmedCase : unconfirmedCases) {
+      attempt(
+          unconfirmedCase.reference(),
+          "confirmDisposal",
+          () -> confirm(unconfirmedCase, mode)
+      );
+    }
+  }
+
+  private void confirm(RetainAndDisposeCase disposalCase, Mode mode) {
+    ccdClient.verifyReadable(disposalCase);
+    if (mode == Mode.DRY_RUN) {
+      log.info("Dry run would confirm case for disposal caseReference={} caseTypeId={}",
+          disposalCase.reference(), disposalCase.caseTypeId());
+    } else {
+      ccdClient.confirmDisposal(disposalCase);
+    }
+  }
+
+  private void reconcileExpiredPendingDisposalCases(Set<String> caseTypeIds, Mode mode) {
+    List<RetainAndDisposeCase> terminalCases = repository.findExpiredPendingDisposalCases(caseTypeIds);
+    log.info("Reconciling expired pending disposal cases count={} caseTypeIds={}",
+        terminalCases.size(), caseTypeIds);
     for (RetainAndDisposeCase terminalCase : terminalCases) {
       attempt(
           terminalCase.reference(),

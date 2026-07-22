@@ -1,5 +1,6 @@
 package uk.gov.hmcts.ccd.sdk.retention;
 
+import static uk.gov.hmcts.ccd.sdk.RetainAndDisposePolicy.CONFIRM_DISPOSAL_EVENT_ID;
 import static uk.gov.hmcts.ccd.sdk.RetainAndDisposePolicy.DISPOSAL_EVENT_ID;
 import static uk.gov.hmcts.ccd.sdk.RetainAndDisposePolicy.DISPOSAL_STATE_ID;
 
@@ -30,6 +31,35 @@ class CoreCaseDataRetainAndDisposeClient {
       .build();
 
   void markForDisposal(RetainAndDisposeCase disposalCase) {
+    triggerEvent(disposalCase, DISPOSAL_EVENT_ID);
+  }
+
+  void confirmDisposal(RetainAndDisposeCase disposalCase) {
+    triggerEvent(disposalCase, CONFIRM_DISPOSAL_EVENT_ID);
+  }
+
+  void verifyReadable(RetainAndDisposeCase disposalCase) {
+    try {
+      read(disposalCase);
+    } catch (FeignException.NotFound exception) {
+      throw new IllegalStateException(
+          "System user cannot read unconfirmed pending disposal case " + disposalCase.reference()
+              + "; refusing to set its disposal TTL",
+          exception
+      );
+    }
+  }
+
+  boolean exists(RetainAndDisposeCase disposalCase) {
+    try {
+      read(disposalCase);
+      return true;
+    } catch (FeignException.NotFound exception) {
+      return false;
+    }
+  }
+
+  private void triggerEvent(RetainAndDisposeCase disposalCase, String eventId) {
     SystemUser systemUser = systemUser();
     String serviceAuthorization = authTokenGenerator.generate();
     String caseReference = String.valueOf(disposalCase.reference());
@@ -41,7 +71,7 @@ class CoreCaseDataRetainAndDisposeClient {
         disposalCase.jurisdiction(),
         disposalCase.caseTypeId(),
         caseReference,
-        DISPOSAL_EVENT_ID
+        eventId
     );
     if (startEvent == null || startEvent.getCaseDetails() == null
         || startEvent.getToken() == null || startEvent.getToken().isBlank()) {
@@ -49,7 +79,7 @@ class CoreCaseDataRetainAndDisposeClient {
     }
 
     CaseDataContent content = CaseDataContent.builder()
-        .event(Event.builder().id(DISPOSAL_EVENT_ID).build())
+        .event(Event.builder().id(eventId).build())
         .data(startEvent.getCaseDetails().getData())
         .eventToken(startEvent.getToken())
         .ignoreWarning(false)
@@ -67,27 +97,22 @@ class CoreCaseDataRetainAndDisposeClient {
     if (result == null || !DISPOSAL_STATE_ID.equals(result.getState())) {
       String actualState = result == null ? null : result.getState();
       throw new IllegalStateException(
-          "CCD event " + DISPOSAL_EVENT_ID + " left case " + caseReference + " in state " + actualState
+          "CCD event " + eventId + " left case " + caseReference + " in state " + actualState
               + " instead of " + DISPOSAL_STATE_ID
       );
     }
   }
 
-  boolean exists(RetainAndDisposeCase disposalCase) {
+  private void read(RetainAndDisposeCase disposalCase) {
     SystemUser systemUser = systemUser();
-    try {
-      coreCaseDataApi.readForCaseWorker(
-          systemUser.authorization(),
-          authTokenGenerator.generate(),
-          systemUser.userId(),
-          disposalCase.jurisdiction(),
-          disposalCase.caseTypeId(),
-          String.valueOf(disposalCase.reference())
-      );
-      return true;
-    } catch (FeignException.NotFound exception) {
-      return false;
-    }
+    coreCaseDataApi.readForCaseWorker(
+        systemUser.authorization(),
+        authTokenGenerator.generate(),
+        systemUser.userId(),
+        disposalCase.jurisdiction(),
+        disposalCase.caseTypeId(),
+        String.valueOf(disposalCase.reference())
+    );
   }
 
   private SystemUser systemUser() {

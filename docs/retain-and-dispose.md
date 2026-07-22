@@ -14,10 +14,10 @@ A decentralised service must provide:
 
 1. The terminal state `PendingDisposal`.
 2. The event `MarkForDisposal`, which transitions an eligible case into `PendingDisposal` from eligible prior states, for example `Draft`.
-3. A TTL increment of `0` on that event, and not on other events.
-4. A system user that can trigger the event and read cases in the terminal state.
+3. The event `ConfirmDisposal`, which transitions `PendingDisposal` to itself and has a TTL increment of `0`. This is the only event that sets the disposal TTL.
+4. A system user that can trigger both events and read cases in the `PendingDisposal` state.
 
-Services should configure only the permitted CCD states to transition into the terminal state.
+`MarkForDisposal` must not have a TTL increment. Services should configure only the permitted CCD states to transition into the terminal state, and candidate cases must not already have a resolved TTL.
 
 ## Service policy
 
@@ -88,7 +88,7 @@ ccd:
 | --- | --- |
 | `off` | Default. The retain and dispose auto-configuration is not loaded. |
 | `dry-run` | Reports what would be marked, retained or deleted without changing CCD or local data. |
-| `live` | Marks eligible cases and reconciles local terminal cases against CCD. |
+| `live` | Marks eligible cases, confirms they are readable and reconciles expired local cases against CCD. |
 
 ## SDK task
 
@@ -106,12 +106,14 @@ class SchedulingConfiguration {
 On each run, `retainAndDisposeTask`:
 
 1. Acquires a non-blocking database lock. A concurrent invocation exits without processing.
-2. Resolves the references returned by `findCandidatesForDisposal()` against the configured case types.
+2. Resolves references returned by `findCandidatesForDisposal()` against the configured case types, ignoring cases that already have a resolved TTL.
 3. Triggers `MarkForDisposal` for each candidate and verifies it enters `PendingDisposal`.
-4. Reads each local `PendingDisposal` case from CCD using the configured system user.
-5. Retains the local case when CCD returns it. Only a CCD `404` permits deletion.
-6. On a `404`, invokes `dispose()` and conditionally deletes the local `ccd.case_data` row by case type and state in one transaction.
+4. Reads each unconfirmed local `PendingDisposal` case from CCD using the configured system user. If the read succeeds, it triggers `ConfirmDisposal` to set the resolved TTL. If the read fails, including with a `404`, the TTL remains null and the case cannot be deleted.
+5. Once a confirmed TTL has expired, reads the case from CCD again. If CCD returns it, the local case is retained.
+6. If CCD returns `404` for an expired confirmed case, invokes `dispose()` and conditionally deletes the local `ccd.case_data` row by case type, state and expired TTL in one transaction.
 
-In `dry-run`, the task acquires the same lock and performs the same candidate resolution and CCD existence reads, but only logs the action that would be taken. It never triggers `MarkForDisposal`, invokes `dispose()` or deletes local data. Because candidate cases are not moved into `PendingDisposal`, dry run can only assess deletion for cases that are already in that state.
+CCD uses `404` both when a case does not exist and when the system user cannot read it. Requiring a successful read before setting the TTL prevents missing terminal-state read permissions from making an unconfirmed case eligible for deletion.
+
+In `dry-run`, the task acquires the same lock and performs the same candidate resolution and CCD reads, but only logs the action that would be taken. It never triggers either event, invokes `dispose()` or deletes local data. Because candidate cases are not moved into `PendingDisposal`, dry run can only assess confirmation and deletion for cases that are already in that state.
 
 Failures for an individual case do not prevent other cases being attempted. Each failure is logged and the case remains eligible for a later run.

@@ -9,6 +9,7 @@ import java.util.Set;
 public interface RetainAndDisposePolicy {
 
   String DISPOSAL_EVENT_ID = "MarkForDisposal";
+  String CONFIRM_DISPOSAL_EVENT_ID = "ConfirmDisposal";
   String DISPOSAL_STATE_ID = "PendingDisposal";
 
   /**

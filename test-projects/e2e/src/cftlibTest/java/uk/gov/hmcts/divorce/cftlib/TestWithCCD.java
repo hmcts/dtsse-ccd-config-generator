@@ -2777,21 +2777,27 @@ public class TestWithCCD extends CftlibTest {
     void retainAndDisposeTaskOnlyDeletesCasesMissingFromCcd() {
         assertThat("Simple case must be ready for disposal", simpleCaseRef, greaterThan(0L));
         long untouchedReference = 9999000000000012L;
+        long unconfirmedReference = 9999000000000020L;
         long deletedReference = 9999000000000004L;
         db.update(
             """
             insert into ccd.case_data (
-                id, reference, version, security_classification, jurisdiction, case_type_id, state, data
+                id, reference, version, security_classification, jurisdiction, case_type_id, state, data, resolved_ttl
             ) values
             (
-                :untouched, :untouched, 1, 'PUBLIC', :jurisdiction, :caseType, :untouchedState, '{}'::jsonb
+                :untouched, :untouched, 1, 'PUBLIC', :jurisdiction, :caseType, :untouchedState, '{}'::jsonb, null
             ),
             (
-                :deleted, :deleted, 1, 'PUBLIC', :jurisdiction, :caseType, :deletedState, '{}'::jsonb
+                :unconfirmed, :unconfirmed, 1, 'PUBLIC', :jurisdiction, :caseType, :deletedState, '{}'::jsonb, null
+            ),
+            (
+                :deleted, :deleted, 1, 'PUBLIC', :jurisdiction, :caseType, :deletedState, '{}'::jsonb,
+                current_date - 1
             )
             """,
             Map.of(
                 "untouched", untouchedReference,
+                "unconfirmed", unconfirmedReference,
                 "deleted", deletedReference,
                 "jurisdiction", SimpleCaseConfiguration.JURISDICTION,
                 "caseType", SimpleCaseConfiguration.CASE_TYPE,
@@ -2819,10 +2825,20 @@ public class TestWithCCD extends CftlibTest {
                 String.class
             ), equalTo(SimpleCaseState.PendingDisposal.getId()));
             assertThat(db.queryForObject(
+                "select resolved_ttl = current_date from ccd.case_data where reference = :reference",
+                Map.of("reference", simpleCaseRef),
+                Boolean.class
+            ), equalTo(true));
+            assertThat(db.queryForObject(
                 "select state from ccd.case_data where reference = :reference",
                 Map.of("reference", untouchedReference),
                 String.class
             ), equalTo(SimpleCaseState.CREATED.name()));
+            assertThat(db.queryForObject(
+                "select resolved_ttl is null from ccd.case_data where reference = :reference",
+                Map.of("reference", unconfirmedReference),
+                Boolean.class
+            ), equalTo(true));
             assertThat(db.queryForObject(
                 "select count(*) from ccd.case_data where reference = :reference",
                 Map.of("reference", deletedReference),
@@ -2833,7 +2849,7 @@ public class TestWithCCD extends CftlibTest {
             retainAndDisposePolicy.candidates();
             db.update(
                 "delete from ccd.case_data where reference in (:references)",
-                Map.of("references", List.of(untouchedReference, deletedReference))
+                Map.of("references", List.of(untouchedReference, unconfirmedReference, deletedReference))
             );
         }
     }
