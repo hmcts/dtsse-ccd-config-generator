@@ -63,18 +63,35 @@ class RetainAndDisposeRepository {
         .list();
   }
 
-  long countCasesInState(String caseTypeId, String state) {
+  List<CandidatePopulation> findCandidatePopulations(Collection<Long> caseReferences) {
+    if (caseReferences.isEmpty()) {
+      return List.of();
+    }
     return db.sql("""
-            select count(*)
-            from ccd.case_data
-            where case_type_id = :caseTypeId
-              and state = :state
-              and resolved_ttl is null
+            with candidate_counts as (
+              select case_type_id, state, count(*) as candidate_count
+              from ccd.case_data
+              where reference in (:caseReferences)
+                and state <> :disposalState
+                and resolved_ttl is null
+              group by case_type_id, state
+            )
+            select candidates.case_type_id,
+                   candidates.state,
+                   candidates.candidate_count,
+                   count(*) as total_count
+            from candidate_counts candidates
+            join ccd.case_data population
+              on population.case_type_id = candidates.case_type_id
+             and population.state = candidates.state
+             and population.resolved_ttl is null
+            group by candidates.case_type_id, candidates.state, candidates.candidate_count
+            order by candidates.case_type_id asc, candidates.state asc
             """)
-        .param("caseTypeId", caseTypeId)
-        .param("state", state)
-        .query(Long.class)
-        .single();
+        .param("caseReferences", caseReferences)
+        .param("disposalState", DISPOSAL_STATE_ID)
+        .query(CandidatePopulation.class)
+        .list();
   }
 
   void deletePendingDisposalCase(RetainAndDisposeCase disposalCase) {
@@ -94,5 +111,13 @@ class RetainAndDisposeRepository {
           "Expected to delete local case " + disposalCase.reference() + " but deleted " + deleted
       );
     }
+  }
+
+  record CandidatePopulation(
+      String caseTypeId,
+      String state,
+      long candidateCount,
+      long totalCount
+  ) {
   }
 }
