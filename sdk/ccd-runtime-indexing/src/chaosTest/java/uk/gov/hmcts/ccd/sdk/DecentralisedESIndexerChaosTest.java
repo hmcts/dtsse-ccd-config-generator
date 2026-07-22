@@ -59,7 +59,7 @@ class DecentralisedESIndexerChaosTest {
   private static final HttpClient HTTP = HttpClient.newHttpClient();
 
   @Container
-  private static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:16-alpine")
+  private static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:15-alpine")
       .withDatabaseName("ccd");
 
   @Container
