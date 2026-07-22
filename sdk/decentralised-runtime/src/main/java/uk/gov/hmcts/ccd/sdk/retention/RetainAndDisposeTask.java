@@ -4,9 +4,11 @@ import java.util.List;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.transaction.support.TransactionOperations;
 import uk.gov.hmcts.ccd.sdk.RetainAndDisposePolicy;
 import uk.gov.hmcts.ccd.sdk.impl.PostgresAdvisoryLock;
+import uk.gov.hmcts.ccd.sdk.retention.RetainAndDisposeProperties.Mode;
 
 @Slf4j
 @RequiredArgsConstructor
@@ -15,52 +17,68 @@ final class RetainAndDisposeTask implements Runnable {
   private static final String LOCK_NAMESPACE = "ccd-retain-and-dispose";
   private static final String LOCK_NAME = "task";
 
+  private final RetainAndDisposeProperties properties;
   private final RetainAndDisposePolicy policy;
   private final RetainAndDisposeRepository repository;
   private final CoreCaseDataRetainAndDisposeClient ccdClient;
   private final TransactionOperations transaction;
   private final PostgresAdvisoryLock advisoryLock;
 
+  @Scheduled(
+      cron = "${ccd.decentralised-runtime.retain-and-dispose.cron:0 0 2 * * *}",
+      zone = "${ccd.decentralised-runtime.retain-and-dispose.zone:UTC}"
+  )
   @Override
   public void run() {
+    Mode mode = properties.getMode();
+    if (mode == Mode.OFF) {
+      return;
+    }
+    properties.validateCredentials();
+
     Set<String> caseTypeIds = policy.caseTypes();
-    log.info("Starting retain and dispose task caseTypeIds={}", caseTypeIds);
+    log.info("Starting retain and dispose task mode={} caseTypeIds={}", mode, caseTypeIds);
 
     boolean acquired = advisoryLock.runIfAcquired(
         LOCK_NAMESPACE,
         LOCK_NAME,
         () -> {
-          markEligibleCasesForDisposal(caseTypeIds);
-          reconcilePendingDisposalCases(caseTypeIds);
+          markEligibleCasesForDisposal(caseTypeIds, mode);
+          reconcilePendingDisposalCases(caseTypeIds, mode);
         }
     );
     if (!acquired) {
-      log.info("Retain and dispose task is already running for caseTypeIds={}; skipping this invocation",
-          caseTypeIds);
+      log.info("Retain and dispose task is already running mode={} caseTypeIds={}; skipping this invocation",
+          mode, caseTypeIds);
     } else {
-      log.info("Completed retain and dispose task caseTypeIds={}", caseTypeIds);
+      log.info("Completed retain and dispose task mode={} caseTypeIds={}", mode, caseTypeIds);
     }
   }
 
-  private void markEligibleCasesForDisposal(Set<String> caseTypeIds) {
+  private void markEligibleCasesForDisposal(Set<String> caseTypeIds, Mode mode) {
     List<RetainAndDisposeCase> candidates = repository.resolveCandidates(
         policy.findCandidatesForDisposal(),
         caseTypeIds
     );
     log.info("Found retain and dispose candidates count={} caseTypeIds={}", candidates.size(), caseTypeIds);
     for (RetainAndDisposeCase candidate : candidates) {
-      attempt(candidate.reference(), "markForDisposal", () -> ccdClient.markForDisposal(candidate));
+      if (mode == Mode.DRY_RUN) {
+        log.info("Dry run would mark case for disposal caseReference={} caseTypeId={}",
+            candidate.reference(), candidate.caseTypeId());
+      } else {
+        attempt(candidate.reference(), "markForDisposal", () -> ccdClient.markForDisposal(candidate));
+      }
     }
   }
 
-  private void reconcilePendingDisposalCases(Set<String> caseTypeIds) {
+  private void reconcilePendingDisposalCases(Set<String> caseTypeIds, Mode mode) {
     List<RetainAndDisposeCase> terminalCases = repository.findPendingDisposalCases(caseTypeIds);
     log.info("Reconciling pending disposal cases count={} caseTypeIds={}", terminalCases.size(), caseTypeIds);
     for (RetainAndDisposeCase terminalCase : terminalCases) {
       attempt(
           terminalCase.reference(),
           "reconcilePendingDisposal",
-          () -> reconcile(terminalCase)
+          () -> reconcile(terminalCase, mode)
       );
     }
   }
@@ -78,9 +96,19 @@ final class RetainAndDisposeTask implements Runnable {
     }
   }
 
-  private void reconcile(RetainAndDisposeCase disposalCase) {
+  private void reconcile(RetainAndDisposeCase disposalCase, Mode mode) {
     if (ccdClient.exists(disposalCase)) {
-      log.info("Retaining local case still present in CCD caseReference={} caseTypeId={}",
+      if (mode == Mode.DRY_RUN) {
+        log.info("Dry run would retain local case still present in CCD caseReference={} caseTypeId={}",
+            disposalCase.reference(), disposalCase.caseTypeId());
+      } else {
+        log.info("Retaining local case still present in CCD caseReference={} caseTypeId={}",
+            disposalCase.reference(), disposalCase.caseTypeId());
+      }
+      return;
+    }
+    if (mode == Mode.DRY_RUN) {
+      log.info("Dry run would delete local case after CCD returned not found caseReference={} caseTypeId={}",
           disposalCase.reference(), disposalCase.caseTypeId());
       return;
     }

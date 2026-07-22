@@ -2,6 +2,7 @@ package uk.gov.hmcts.ccd.sdk.retention;
 
 import javax.sql.DataSource;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnSingleCandidate;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
@@ -16,6 +17,9 @@ import uk.gov.hmcts.reform.idam.client.IdamClient;
 
 @AutoConfiguration(after = DecentralisedDataConfiguration.class)
 @ConditionalOnSingleCandidate(RetainAndDisposePolicy.class)
+@ConditionalOnExpression(
+    "!'${ccd.decentralised-runtime.retain-and-dispose.mode:off}'.equalsIgnoreCase('off')"
+)
 @EnableConfigurationProperties(RetainAndDisposeProperties.class)
 public class RetainAndDisposeAutoConfiguration {
 
@@ -38,6 +42,7 @@ public class RetainAndDisposeAutoConfiguration {
 
   @Bean
   Runnable retainAndDisposeTask(
+      RetainAndDisposeProperties properties,
       RetainAndDisposePolicy policy,
       JdbcClient jdbcClient,
       CoreCaseDataRetainAndDisposeClient ccdClient,
@@ -46,6 +51,7 @@ public class RetainAndDisposeAutoConfiguration {
   ) {
     RetainAndDisposeRepository repository = new RetainAndDisposeRepository(jdbcClient);
     return new RetainAndDisposeTask(
+        properties,
         policy,
         repository,
         ccdClient,
