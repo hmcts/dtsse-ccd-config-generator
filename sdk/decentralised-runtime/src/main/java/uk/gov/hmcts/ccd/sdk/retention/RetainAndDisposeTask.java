@@ -70,7 +70,12 @@ final class RetainAndDisposeTask implements Runnable {
         log.info("Dry run would mark case for disposal caseReference={} caseTypeId={}",
             candidate.reference(), candidate.caseTypeId());
       } else {
-        attempt(candidate.reference(), "markForDisposal", () -> ccdClient.markForDisposal(candidate));
+        try {
+          ccdClient.markForDisposal(candidate);
+        } catch (RuntimeException exception) {
+          log.error("Failed to mark case for disposal caseReference={} caseTypeId={}",
+              candidate.reference(), candidate.caseTypeId(), exception);
+        }
       }
     }
   }
@@ -108,11 +113,12 @@ final class RetainAndDisposeTask implements Runnable {
     log.info("Confirming pending disposal cases count={} caseTypeIds={}", unconfirmedCases.size(), caseTypeIds);
     for (RetainAndDisposeCase unconfirmedCase : unconfirmedCases) {
       requireReadable(unconfirmedCase);
-      attempt(
-          unconfirmedCase.reference(),
-          "confirmDisposal",
-          () -> confirm(unconfirmedCase, mode)
-      );
+      try {
+        confirm(unconfirmedCase, mode);
+      } catch (RuntimeException exception) {
+        log.error("Failed to confirm case for disposal caseReference={} caseTypeId={}",
+            unconfirmedCase.reference(), unconfirmedCase.caseTypeId(), exception);
+      }
     }
   }
 
@@ -144,24 +150,12 @@ final class RetainAndDisposeTask implements Runnable {
     log.info("Checking expired pending disposal cases for local deletion count={} caseTypeIds={}",
         terminalCases.size(), caseTypeIds);
     for (RetainAndDisposeCase terminalCase : terminalCases) {
-      attempt(
-          terminalCase.reference(),
-          "deleteLocalCaseIfMissingFromCcd",
-          () -> deleteLocalCaseIfMissingFromCcd(terminalCase, mode)
-      );
-    }
-  }
-
-  private void attempt(
-      long caseReference,
-      String operation,
-      Runnable action
-  ) {
-    try {
-      action.run();
-    } catch (RuntimeException exception) {
-      log.error("Retain and dispose operation failed operation={} caseReference={}",
-          operation, caseReference, exception);
+      try {
+        deleteLocalCaseIfMissingFromCcd(terminalCase, mode);
+      } catch (RuntimeException exception) {
+        log.error("Failed to check or delete local case caseReference={} caseTypeId={}",
+            terminalCase.reference(), terminalCase.caseTypeId(), exception);
+      }
     }
   }
 
