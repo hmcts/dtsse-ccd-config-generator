@@ -92,7 +92,7 @@ ccd:
 
 ## SDK task
 
-When one policy bean exists and the mode is `dry-run` or `live`, the SDK schedules the task using the configured cron expression and time zone. The cron defaults to `0 0 2 * * *` and the time zone defaults to `UTC`.
+When one policy bean exists and the mode is `dry-run` or `live`, the SDK schedules the task using the configured cron expression and time zone. The cron defaults to `0 0 2 * * *` and the time zone defaults to `UTC`, meaning the task runs every day at 02:00 UTC.
 
 The consuming application must enable Spring scheduling. For example:
 
