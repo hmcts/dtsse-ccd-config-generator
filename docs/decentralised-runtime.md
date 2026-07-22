@@ -97,6 +97,8 @@ If an incoming request has already been processed, the runtime replays the store
 
 To fulfil the aforementioned responsibilities, the SDK provisions and manages a dedicated `ccd` schema within your application's database.
 
+The SDK targets PostgreSQL 15 for the decentralised runtime. Service-owned databases should use PostgreSQL 15 as the supported baseline.
+
 - `case_data` mirrors CCD’s `case_data` table, including metadata such as state, security classification, TTL and the JSON payload.
 - `case_event` mirrors CCD’s `case_event` table and adds an idempotency key.
 - `es_queue` tracks cases that require Elasticsearch indexing 

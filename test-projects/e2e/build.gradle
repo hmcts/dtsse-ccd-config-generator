@@ -169,6 +169,7 @@ tasks.withType(CftlibExec).configureEach {
   group = 'ccd tasks'
   dependsOn tasks.named('generateJsonLegacyDefinitions')
   authMode = AuthMode.Local
+  environment 'POSTGRES_VERSION', '15'
   environment 'CCD_DECENTRALISED_CASE-TYPE-SERVICE-URLS_E2E', 'http://localhost:4013'
   environment 'CCD_DECENTRALISED_CASE-TYPE-SERVICE-URLS_case-type-a', 'http://localhost:4013'
   environment 'CCD_DECENTRALISED_CASE-TYPE-SERVICE-URLS_case-type-b', 'http://localhost:4013'
