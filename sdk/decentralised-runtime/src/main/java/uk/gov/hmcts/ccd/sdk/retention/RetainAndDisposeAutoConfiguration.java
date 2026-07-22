@@ -1,9 +1,9 @@
 package uk.gov.hmcts.ccd.sdk.retention;
 
 import javax.sql.DataSource;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnSingleCandidate;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.transaction.support.TransactionOperations;
@@ -16,6 +16,7 @@ import uk.gov.hmcts.reform.idam.client.IdamClient;
 
 @AutoConfiguration(after = DecentralisedDataConfiguration.class)
 @ConditionalOnSingleCandidate(RetainAndDisposePolicy.class)
+@EnableConfigurationProperties(RetainAndDisposeProperties.class)
 public class RetainAndDisposeAutoConfiguration {
 
   @Bean
@@ -23,15 +24,15 @@ public class RetainAndDisposeAutoConfiguration {
       CoreCaseDataApi coreCaseDataApi,
       AuthTokenGenerator authTokenGenerator,
       IdamClient idamClient,
-      @Value("${ccd.decentralised-runtime.retain-and-dispose.system-user.username}") String username,
-      @Value("${ccd.decentralised-runtime.retain-and-dispose.system-user.password}") String password
+      RetainAndDisposeProperties properties
   ) {
+    RetainAndDisposeProperties.SystemUser systemUser = properties.getSystemUser();
     return new CoreCaseDataRetainAndDisposeClient(
         coreCaseDataApi,
         authTokenGenerator,
         idamClient,
-        username,
-        password
+        systemUser.getUsername(),
+        systemUser.getPassword()
     );
   }
 
