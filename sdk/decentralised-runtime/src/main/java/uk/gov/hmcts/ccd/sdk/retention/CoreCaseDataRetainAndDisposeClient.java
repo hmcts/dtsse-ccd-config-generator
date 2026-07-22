@@ -93,12 +93,9 @@ class CoreCaseDataRetainAndDisposeClient {
 
   private void read(RetainAndDisposeCase disposalCase) {
     SystemUser systemUser = systemUser();
-    coreCaseDataApi.readForCaseWorker(
+    coreCaseDataApi.getCase(
         systemUser.authorization(),
         authTokenGenerator.generate(),
-        systemUser.userId(),
-        disposalCase.jurisdiction(),
-        disposalCase.caseTypeId(),
         String.valueOf(disposalCase.reference())
     );
   }
