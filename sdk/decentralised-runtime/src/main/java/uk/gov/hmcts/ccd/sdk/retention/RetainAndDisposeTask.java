@@ -95,13 +95,8 @@ final class RetainAndDisposeTask implements Runnable {
 
   private void reconcile(RetainAndDisposeCase disposalCase, Mode mode) {
     if (ccdClient.exists(disposalCase)) {
-      if (mode == Mode.DRY_RUN) {
-        log.info("Dry run would retain local case still present in CCD caseReference={} caseTypeId={}",
-            disposalCase.reference(), disposalCase.caseTypeId());
-      } else {
-        log.info("Retaining local case still present in CCD caseReference={} caseTypeId={}",
-            disposalCase.reference(), disposalCase.caseTypeId());
-      }
+      log.info("Retaining local case still present in CCD caseReference={} caseTypeId={}",
+          disposalCase.reference(), disposalCase.caseTypeId());
       return;
     }
     if (mode == Mode.DRY_RUN) {
