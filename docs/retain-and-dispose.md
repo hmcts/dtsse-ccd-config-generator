@@ -17,8 +17,6 @@ A decentralised service must provide:
 3. The event `ConfirmDisposal`, which transitions `PendingDisposal` to itself and has a TTL increment of `0`. This is the only event that sets the disposal TTL.
 4. A system user that can trigger both events and read cases in the `PendingDisposal` state.
 
-`MarkForDisposal` must not have a TTL increment. Services should configure only the permitted CCD states to transition into the terminal state, and candidate cases must not already have a resolved TTL.
-
 ## Service policy
 
 Implement `RetainAndDisposePolicy` as a Spring bean.
@@ -109,10 +107,7 @@ On each run, `retainAndDisposeTask`:
 2. Resolves references returned by `findCandidatesForDisposal()` against the configured case types, ignoring cases that already have a resolved TTL.
 3. Triggers `MarkForDisposal` for each candidate and verifies it enters `PendingDisposal`.
 4. Reads each unconfirmed local `PendingDisposal` case from CCD using the configured system user. If the read succeeds, it triggers `ConfirmDisposal` to set the resolved TTL. If the read fails, including with a `404`, the TTL remains null and the case cannot be deleted.
-5. Once a confirmed TTL has expired, reads the case from CCD again. If CCD returns it, the local case is retained.
-6. If CCD returns `404` for an expired confirmed case, invokes `dispose()` and conditionally deletes the local `ccd.case_data` row by case type, state and expired TTL in one transaction.
-
-CCD uses `404` both when a case does not exist and when the system user cannot read it. Requiring a successful read before setting the TTL prevents missing terminal-state read permissions from making an unconfirmed case eligible for deletion.
+5. If CCD returns `404` for an expired confirmed case, invokes `dispose()` and deletes the local `ccd.case_data` row in one transaction.
 
 In `dry-run`, the task acquires the same lock and performs the same candidate resolution and CCD reads, but only logs the action that would be taken. It never triggers either event, invokes `dispose()` or deletes local data. Because candidate cases are not moved into `PendingDisposal`, dry run can only assess confirmation and deletion for cases that are already in that state.
 
