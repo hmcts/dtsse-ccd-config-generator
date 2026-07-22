@@ -1,5 +1,7 @@
 package uk.gov.hmcts.ccd.sdk.impl;
 
+import static java.util.Objects.requireNonNull;
+
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -28,7 +30,7 @@ public final class PostgresAdvisoryLock {
       if (lock == null) {
         return Optional.empty();
       }
-      return Optional.of(operation.get());
+      return Optional.of(requireNonNull(operation.get(), "PostgreSQL advisory lock operation returned null"));
     } catch (SQLException exception) {
       throw new IllegalStateException(
           "Could not use PostgreSQL advisory lock namespace=" + namespace + " name=" + name,
