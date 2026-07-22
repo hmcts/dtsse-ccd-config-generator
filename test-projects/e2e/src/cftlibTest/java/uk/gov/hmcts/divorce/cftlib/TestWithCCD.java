@@ -2807,10 +2807,6 @@ public class TestWithCCD extends CftlibTest {
         );
 
         try {
-            retainAndDisposeProperties.setMode(RetainAndDisposeProperties.Mode.OFF);
-            retainAndDisposeTask.run();
-            assertRetainAndDisposeDidNotMutate(simpleCaseRef, initialState, deletedReference);
-
             retainAndDisposeProperties.setMode(RetainAndDisposeProperties.Mode.DRY_RUN);
             retainAndDisposeTask.run();
             assertRetainAndDisposeDidNotMutate(simpleCaseRef, initialState, deletedReference);

@@ -31,9 +31,6 @@ final class RetainAndDisposeTask implements Runnable {
   @Override
   public void run() {
     Mode mode = properties.getMode();
-    if (mode == Mode.OFF) {
-      return;
-    }
     properties.validateCredentials();
 
     Set<String> caseTypeIds = policy.caseTypes();
