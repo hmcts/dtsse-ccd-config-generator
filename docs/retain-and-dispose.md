@@ -85,7 +85,7 @@ ccd:
 | --- | --- |
 | `off` | Default. The retain and dispose auto-configuration is not loaded. |
 | `dry-run` | Reports what would be marked, retained or deleted without changing CCD or local data. |
-| `live` | Marks eligible cases, confirms they are readable and reconciles expired local cases against CCD. |
+| `live` | Marks eligible cases, confirms they are readable and deletes expired local cases that are missing from CCD. |
 
 ## Circuit breakers
 
@@ -121,6 +121,5 @@ On each run, `retainAndDisposeTask`:
 
 In `dry-run`, the task acquires the same lock and performs the same candidate resolution and CCD reads, but only logs the action that would be taken. It never triggers either event, invokes `dispose()` or deletes local data. Because candidate cases are not moved into `PendingDisposal`, dry run can only assess confirmation and deletion for cases that are already in that state.
 
-Failures while marking, confirming or reconciling an individual case are logged and do not prevent other cases being
+Failures while marking, confirming or deleting an individual local case are logged and do not prevent other cases being
 attempted. A system-user visibility failure during the confirmation safety check aborts the current run.
-reconciliation.

@@ -47,7 +47,7 @@ final class RetainAndDisposeTask implements Runnable {
         () -> {
           markEligibleCasesForDisposal(caseTypeIds, mode);
           confirmPendingDisposalCases(caseTypeIds, mode);
-          reconcileExpiredPendingDisposalCases(caseTypeIds, mode);
+          deleteExpiredLocalCasesMissingFromCcd(caseTypeIds, mode);
         }
     );
     if (!acquired) {
@@ -120,7 +120,7 @@ final class RetainAndDisposeTask implements Runnable {
     if (!ccdClient.isReadable(disposalCase)) {
       log.error(
           "Retain and dispose visibility check failed for caseReference={}. Check that the configured system user "
-              + "has R permission on caseTypeId={} state={}. Aborting before reconciliation",
+              + "has R permission on caseTypeId={} state={}. Aborting before local deletion",
           disposalCase.reference(), disposalCase.caseTypeId(), DISPOSAL_STATE_ID
       );
       throw new IllegalStateException(
@@ -139,15 +139,15 @@ final class RetainAndDisposeTask implements Runnable {
     }
   }
 
-  private void reconcileExpiredPendingDisposalCases(Set<String> caseTypeIds, Mode mode) {
+  private void deleteExpiredLocalCasesMissingFromCcd(Set<String> caseTypeIds, Mode mode) {
     List<RetainAndDisposeCase> terminalCases = repository.findExpiredPendingDisposalCases(caseTypeIds);
-    log.info("Reconciling expired pending disposal cases count={} caseTypeIds={}",
+    log.info("Checking expired pending disposal cases for local deletion count={} caseTypeIds={}",
         terminalCases.size(), caseTypeIds);
     for (RetainAndDisposeCase terminalCase : terminalCases) {
       attempt(
           terminalCase.reference(),
-          "reconcilePendingDisposal",
-          () -> reconcile(terminalCase, mode)
+          "deleteLocalCaseIfMissingFromCcd",
+          () -> deleteLocalCaseIfMissingFromCcd(terminalCase, mode)
       );
     }
   }
@@ -165,7 +165,7 @@ final class RetainAndDisposeTask implements Runnable {
     }
   }
 
-  private void reconcile(RetainAndDisposeCase disposalCase, Mode mode) {
+  private void deleteLocalCaseIfMissingFromCcd(RetainAndDisposeCase disposalCase, Mode mode) {
     if (ccdClient.isReadable(disposalCase)) {
       log.info("Retaining local case still present in CCD caseReference={} caseTypeId={}",
           disposalCase.reference(), disposalCase.caseTypeId());
