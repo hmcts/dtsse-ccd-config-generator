@@ -30,10 +30,8 @@ final class RetainAndDisposeTask implements Runnable {
         LOCK_NAMESPACE,
         LOCK_NAME,
         () -> {
-          RetainAndDisposeFailures failures = new RetainAndDisposeFailures();
-          markEligibleCasesForDisposal(caseTypeIds, failures);
-          reconcilePendingDisposalCases(caseTypeIds, failures);
-          failures.throwIfAny();
+          markEligibleCasesForDisposal(caseTypeIds);
+          reconcilePendingDisposalCases(caseTypeIds);
         }
     );
     if (!acquired) {
@@ -44,32 +42,39 @@ final class RetainAndDisposeTask implements Runnable {
     }
   }
 
-  private void markEligibleCasesForDisposal(
-      Set<String> caseTypeIds,
-      RetainAndDisposeFailures failures
-  ) {
+  private void markEligibleCasesForDisposal(Set<String> caseTypeIds) {
     List<RetainAndDisposeCase> candidates = repository.resolveCandidates(
         policy.findCandidatesForDisposal(),
         caseTypeIds
     );
     log.info("Found retain and dispose candidates count={} caseTypeIds={}", candidates.size(), caseTypeIds);
     for (RetainAndDisposeCase candidate : candidates) {
-      failures.attempt(candidate.reference(), "markForDisposal", () -> ccdClient.markForDisposal(candidate));
+      attempt(candidate.reference(), "markForDisposal", () -> ccdClient.markForDisposal(candidate));
     }
   }
 
-  private void reconcilePendingDisposalCases(
-      Set<String> caseTypeIds,
-      RetainAndDisposeFailures failures
-  ) {
+  private void reconcilePendingDisposalCases(Set<String> caseTypeIds) {
     List<RetainAndDisposeCase> terminalCases = repository.findPendingDisposalCases(caseTypeIds);
     log.info("Reconciling pending disposal cases count={} caseTypeIds={}", terminalCases.size(), caseTypeIds);
     for (RetainAndDisposeCase terminalCase : terminalCases) {
-      failures.attempt(
+      attempt(
           terminalCase.reference(),
           "reconcilePendingDisposal",
           () -> reconcile(terminalCase)
       );
+    }
+  }
+
+  private void attempt(
+      long caseReference,
+      String operation,
+      Runnable action
+  ) {
+    try {
+      action.run();
+    } catch (RuntimeException exception) {
+      log.error("Retain and dispose operation failed operation={} caseReference={}",
+          operation, caseReference, exception);
     }
   }
 
