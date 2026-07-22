@@ -1,21 +1,21 @@
 # Retain and dispose
 
-Services remain responsible for defining retention policies, implemented in code rather than configuration.
+Decentralised Services remain responsible for defining retention policies, implemented in code rather than configuration.
 
-A policy change is therefore a code change; it does not require a data migration that triggers an event across every existing case merely to rewrite retention TTLs.
+An advantage is that retention policy changes are code changes; migrations of existing cases are not required.
 
-The central retain and dispose component remains responsible for retention overrides, retention via linked cases and disposal of centrally held resources such as documents and the central case pointer.
+The central retain and dispose component remains responsible for retention via linked cases and disposal of centrally held resources such as documents and CCD case pointers.
 
 Decentralised services are responsible for the deletion of locally held case data within their own databases.
 
 ## CCD definition configuration
 
-A decentralised service must provide:
+A decentralised case type must provide:
 
 1. The terminal state `PendingDisposal`.
-2. The event `MarkForDisposal`, which transitions an eligible case into `PendingDisposal` from eligible prior states, for example `Draft`.
+2. The event `MarkForDisposal`, which transitions an eligible case into `PendingDisposal` from eligible prior states, for example `Draft` if you wish to dispose of inactive drafts.
 3. The event `ConfirmDisposal`, which transitions `PendingDisposal` to itself and has a TTL increment of `0`. This is the only event that sets the disposal TTL.
-4. A system user that can trigger both events and read cases in the `PendingDisposal` state.
+4. A system user that can trigger `MarkForDisposal` and `ConfirmDisposal` events and read cases in the `PendingDisposal` state.
 
 ## Service policy
 
@@ -61,10 +61,10 @@ public class ExampleRetainAndDisposePolicy implements RetainAndDisposePolicy {
 }
 ```
 
-`findCandidatesForDisposal()` returns the case references currently eligible for disposal. Policy selection is service-owned and may query the local database directly. References outside `caseTypes()` or no longer present locally are ignored.
+`findCandidatesForDisposal()` returns case references eligible for disposal.
 
+`dispose(long caseReference)` is a hook for performing cleanup in the service database, invoked in the same transaction as the sdk deletes from its `ccd` tables, allowing service tables to be cleaned up before the SDK's cascading deletion.
 
-`dispose()` is optional and must only perform cleanup in the service database. The SDK invokes it in the same transaction as the deletion from `ccd.case_data`, allowing service tables to be cleaned up before the SDK's cascading deletion. Services whose tables use cascading foreign keys can use the default implementation.
 
 Configure the execution mode, schedule and system user with:
 
@@ -74,9 +74,6 @@ ccd:
     retain-and-dispose:
       mode: dry-run
       cron: "0 0 2 * * *"
-      zone: UTC
-      maximum-candidate-percentage: 5
-      minimum-candidate-count: 10
       system-user:
         username: ${SYSTEM_USER}
         password: ${SYSTEM_USER_PASSWORD}
@@ -90,18 +87,19 @@ ccd:
 | `dry-run` | Reports what would be marked, retained or deleted without changing CCD or local data. |
 | `live` | Marks eligible cases, confirms they are readable and reconciles expired local cases against CCD. |
 
-## Candidate circuit breaker
+## Circuit breakers
 
-Before marking any cases, the task groups the resolved candidates by case type and current state and compares each
-group with all local cases in the same case type and state whose resolved TTL is null. It aborts the whole run when a
-group contains at least `minimum-candidate-count` candidates and exceeds `maximum-candidate-percentage` of that
-population. `maximum-candidate-percentage` defaults to `5` and `minimum-candidate-count` defaults to `10`. Set
-`maximum-candidate-percentage` to `100` to disable the percentage circuit breaker. The same check runs in `dry-run`,
-allowing an unsafe policy change to be detected before enabling live disposal.
+The SDK performs a statistical check of the references returned by `findCandidatesForDisposal()`.
 
-## SDK task
+A run is aborted if more than `maximum-candidate-percentage` of cases in a given state are returned as eligible - default 5%.
 
-When one policy bean exists and the mode is `dry-run` or `live`, the SDK schedules the task using the configured cron expression and time zone. The cron defaults to `0 0 2 * * *` and the time zone defaults to `UTC`, meaning the task runs every day at 02:00 UTC.
+Eg. in the preceding Java policy the run would log an error and abort if more than 5% of all cases in the `DRAFT` state were returned as eligible for disposal.
+
+The same check runs in `dry-run`, allowing policy changes to be tested before enablement.
+
+To handle low population case types the circuit breaker only applies once `minimum-candidate-count` is reached: default 10
+
+## Scheduling
 
 The consuming application must enable Spring scheduling. For example:
 
@@ -114,15 +112,15 @@ class SchedulingConfiguration {
 
 On each run, `retainAndDisposeTask`:
 
-1. Acquires a non-blocking database lock. A concurrent invocation exits without processing.
-2. Resolves references returned by `findCandidatesForDisposal()` against the configured case types, ignoring cases that are already pending disposal or have a resolved TTL.
-3. Applies the candidate percentage circuit breaker across the complete candidate set.
+1. Acquires a database lock to prevent parallel invocations.
+2. Resolves references returned by `findCandidatesForDisposal()`.
+3. Applies circuit breaker checks
 4. Triggers `MarkForDisposal` for each candidate and verifies it enters `PendingDisposal`.
-5. Reads each unconfirmed local `PendingDisposal` case from CCD using the configured system user. If the read succeeds, it triggers `ConfirmDisposal` to set the resolved TTL. If the read fails, including with a `404`, the task reports missing system-user read permission and aborts before reconciliation. The TTL remains null and the case cannot be deleted.
+5. Reads each unconfirmed local `PendingDisposal` case from CCD using the configured system user. If the read succeeds, it triggers `ConfirmDisposal` to set the resolved TTL. If the read fails, including with a `404`, the task reports missing system-user read permission and aborts. The TTL remains null and the case cannot be deleted.
 6. If CCD returns `404` for an expired confirmed case, invokes `dispose()` and deletes the local `ccd.case_data` row in one transaction.
 
 In `dry-run`, the task acquires the same lock and performs the same candidate resolution and CCD reads, but only logs the action that would be taken. It never triggers either event, invokes `dispose()` or deletes local data. Because candidate cases are not moved into `PendingDisposal`, dry run can only assess confirmation and deletion for cases that are already in that state.
 
 Failures while marking, confirming or reconciling an individual case are logged and do not prevent other cases being
-attempted. A system-user visibility failure during the confirmation safety check aborts the current run before
+attempted. A system-user visibility failure during the confirmation safety check aborts the current run.
 reconciliation.
