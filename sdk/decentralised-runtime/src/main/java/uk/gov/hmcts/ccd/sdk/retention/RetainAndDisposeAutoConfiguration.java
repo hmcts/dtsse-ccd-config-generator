@@ -5,7 +5,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnSingleCandidate;
 import org.springframework.context.annotation.Bean;
-import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
+import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.transaction.support.TransactionOperations;
 import uk.gov.hmcts.ccd.sdk.RetainAndDisposePolicy;
 import uk.gov.hmcts.ccd.sdk.config.DecentralisedDataConfiguration;
@@ -38,12 +38,12 @@ public class RetainAndDisposeAutoConfiguration {
   @Bean
   Runnable retainAndDisposeTask(
       RetainAndDisposePolicy policy,
-      NamedParameterJdbcTemplate jdbcTemplate,
+      JdbcClient jdbcClient,
       CoreCaseDataRetainAndDisposeClient ccdClient,
       DataSource dataSource,
       TransactionOperations transaction
   ) {
-    RetainAndDisposeRepository repository = new RetainAndDisposeRepository(jdbcTemplate);
+    RetainAndDisposeRepository repository = new RetainAndDisposeRepository(jdbcClient);
     return new RetainAndDisposeTask(
         policy,
         repository,
