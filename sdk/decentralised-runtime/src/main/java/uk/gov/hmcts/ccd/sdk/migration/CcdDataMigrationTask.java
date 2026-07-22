@@ -230,18 +230,17 @@ public class CcdDataMigrationTask implements Runnable {
           significantItemTotals.stoppedByTimeLimit()
       );
     }
-    CutoverCaseRefreshTotals caseRefreshTotals = refreshCutoverCaseData();
+    int reconciledCases = refreshCutoverCaseData();
     resetSequences();
     completeCutover();
 
     log.info(
-        "Completed CCD data migration cutover taskName={} cutoverEventHwm={} batches={} refreshedCases={} "
-            + "deletedCases={} events={} significantItems={} significantItemBatches={} stoppedByTimeLimit={}",
+        "Completed CCD data migration cutover taskName={} cutoverEventHwm={} batches={} reconciledCases={} "
+            + "events={} significantItems={} significantItemBatches={} stoppedByTimeLimit={}",
         options.taskName(),
         cutoverEventHwm,
         totals.batches(),
-        caseRefreshTotals.refreshedCases(),
-        caseRefreshTotals.deletedCases(),
+        reconciledCases,
         totals.events(),
         significantItemTotals.items(),
         significantItemTotals.batches(),
@@ -250,7 +249,7 @@ public class CcdDataMigrationTask implements Runnable {
     return new CcdDataMigrationRunResult(
         true,
         totals.batches(),
-        caseRefreshTotals.totalCases(),
+        reconciledCases,
         totals.events(),
         !totals.stoppedByTimeLimit(),
         totals.stoppedByTimeLimit()
@@ -512,45 +511,73 @@ public class CcdDataMigrationTask implements Runnable {
     );
   }
 
-  private CutoverCaseRefreshTotals refreshCutoverCaseData() {
+  private int refreshCutoverCaseData() {
     return transaction.execute(status -> {
       applyMigrationStatementTimeout();
-      stageCutoverCaseData();
       disableCaseDataRevisionTrigger();
       try {
-        int refreshedCases = syncCaseDataForCutover();
-        int deletedCases = deleteTargetCasesMissingAtCutover();
+        int reconciledCases = mergeCaseDataForCutover();
+        reconciledCases += deleteTargetCasesMissingAtCutover();
         updateCaseRevisionsForCutover();
-        return new CutoverCaseRefreshTotals(refreshedCases, deletedCases);
+        return reconciledCases;
       } finally {
         enableCaseDataRevisionTrigger();
       }
     });
   }
 
-  private void stageCutoverCaseData() {
-    db.update(
-        """
-        create temporary table ccd_data_migration_cutover_cases
-        on commit drop
-        as
-        select source.*
-        from fdw_stage.case_data source
-        where source.jurisdiction = :sourceJurisdiction
-          and source.case_type_id in (:caseTypeIds)
-        """,
-        baseParams()
-    );
-    db.getJdbcTemplate().execute(
-        "create unique index on ccd_data_migration_cutover_cases (id)"
-    );
-    db.getJdbcTemplate().execute("analyze ccd_data_migration_cutover_cases");
-  }
-
-  private int syncCaseDataForCutover() {
+  private int mergeCaseDataForCutover() {
     return db.update(
         """
-        insert into ccd.case_data as target (
+        merge into ccd.case_data target
+        using (
+          select source.*
+          from fdw_stage.case_data source
+          where source.jurisdiction = :sourceJurisdiction
+            and source.case_type_id in (:caseTypeIds)
+        ) source
+        on target.id = source.id
+        when matched and (
+          target.reference,
+          target.version,
+          target.created_date,
+          target.security_classification,
+          target.last_state_modified_date,
+          target.resolved_ttl,
+          target.last_modified,
+          target.jurisdiction,
+          target.case_type_id,
+          target.state,
+          target.data,
+          target.supplementary_data
+        ) is distinct from (
+          source.reference,
+          source.version,
+          source.created_date,
+          source.security_classification,
+          source.last_state_modified_date,
+          source.resolved_ttl,
+          source.last_modified,
+          source.jurisdiction,
+          source.case_type_id,
+          source.state,
+          source.data,
+          coalesce(source.supplementary_data, jsonb_build_object())
+        )
+        then update set
+          reference = source.reference,
+          version = source.version,
+          created_date = source.created_date,
+          security_classification = source.security_classification,
+          last_state_modified_date = source.last_state_modified_date,
+          resolved_ttl = source.resolved_ttl,
+          last_modified = source.last_modified,
+          jurisdiction = source.jurisdiction,
+          case_type_id = source.case_type_id,
+          state = source.state,
+          data = source.data,
+          supplementary_data = coalesce(source.supplementary_data, jsonb_build_object())
+        when not matched then insert (
           reference,
           version,
           created_date,
@@ -565,8 +592,7 @@ public class CcdDataMigrationTask implements Runnable {
           supplementary_data,
           id,
           case_revision
-        )
-        select
+        ) values (
           source.reference,
           source.version,
           source.created_date,
@@ -581,46 +607,6 @@ public class CcdDataMigrationTask implements Runnable {
           coalesce(source.supplementary_data, jsonb_build_object()),
           source.id,
           0
-        from ccd_data_migration_cutover_cases source
-        on conflict (id) do update
-        set reference = excluded.reference,
-            version = excluded.version,
-            created_date = excluded.created_date,
-            security_classification = excluded.security_classification,
-            last_state_modified_date = excluded.last_state_modified_date,
-            resolved_ttl = excluded.resolved_ttl,
-            last_modified = excluded.last_modified,
-            jurisdiction = excluded.jurisdiction,
-            case_type_id = excluded.case_type_id,
-            state = excluded.state,
-            data = excluded.data,
-            supplementary_data = excluded.supplementary_data
-        where (
-          target.reference,
-          target.version,
-          target.created_date,
-          target.security_classification,
-          target.last_state_modified_date,
-          target.resolved_ttl,
-          target.last_modified,
-          target.jurisdiction,
-          target.case_type_id,
-          target.state,
-          target.data,
-          target.supplementary_data
-        ) is distinct from (
-          excluded.reference,
-          excluded.version,
-          excluded.created_date,
-          excluded.security_classification,
-          excluded.last_state_modified_date,
-          excluded.resolved_ttl,
-          excluded.last_modified,
-          excluded.jurisdiction,
-          excluded.case_type_id,
-          excluded.state,
-          excluded.data,
-          excluded.supplementary_data
         )
         """,
         baseParams()
@@ -635,8 +621,10 @@ public class CcdDataMigrationTask implements Runnable {
           and target.case_type_id in (:caseTypeIds)
           and not exists (
             select 1
-            from ccd_data_migration_cutover_cases source
+            from fdw_stage.case_data source
             where source.id = target.id
+              and source.jurisdiction = :sourceJurisdiction
+              and source.case_type_id in (:caseTypeIds)
           )
         """,
         baseParams()
@@ -661,6 +649,7 @@ public class CcdDataMigrationTask implements Runnable {
         where target.id = event_counts.case_data_id
           and target.jurisdiction = :sourceJurisdiction
           and target.case_type_id in (:caseTypeIds)
+          and target.case_revision is distinct from event_counts.max_revision + :caseRevisionOffset
         """,
         baseParams().addValue("caseRevisionOffset", options.caseRevisionOffset())
     );
@@ -1443,9 +1432,4 @@ public class CcdDataMigrationTask implements Runnable {
     }
   }
 
-  private record CutoverCaseRefreshTotals(int refreshedCases, int deletedCases) {
-    private int totalCases() {
-      return refreshedCases + deletedCases;
-    }
-  }
 }

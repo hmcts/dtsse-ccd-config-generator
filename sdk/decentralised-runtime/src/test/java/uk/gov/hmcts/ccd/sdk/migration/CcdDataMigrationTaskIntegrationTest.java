@@ -31,7 +31,7 @@ import org.springframework.transaction.PlatformTransactionManager;
 import uk.gov.hmcts.ccd.sdk.config.DecentralisedDataConfiguration;
 
 @SpringBootTest(classes = CcdDataMigrationTaskIntegrationTest.TestConfig.class, properties = {
-    "spring.datasource.url=jdbc:tc:postgresql:16-alpine:///ccd",
+    "spring.datasource.url=jdbc:tc:postgresql:15-alpine:///ccd",
     "spring.datasource.driver-class-name=org.testcontainers.jdbc.ContainerDatabaseDriver"
 })
 class CcdDataMigrationTaskIntegrationTest {
@@ -156,6 +156,20 @@ class CcdDataMigrationTaskIntegrationTest {
     assertThat(targetCaseState(10)).isEqualTo("Updated");
     assertThat(targetCaseData(10)).isEqualTo("{\"field\": \"source\"}");
     assertThat(caseRevision(10)).isZero();
+  }
+
+  @Test
+  void cutoverDoesNotUpdateUnchangedCaseData() {
+    insertSourceCase(10, 1000000000000010L, 1, "Submitted", "{\"field\":\"same\"}");
+    insertTargetCase(10, 1000000000000010L, 1, "Submitted", "{\"field\":\"same\"}", 0);
+    long rowVersionBeforeCutover = targetCaseRowVersion(10);
+
+    CcdDataMigrationRunResult result = task(CUTOVER, 1000, 10).runMigration();
+
+    assertThat(result.casesProcessed()).isZero();
+    assertThat(targetCaseRowVersion(10)).isEqualTo(rowVersionBeforeCutover);
+    assertThat(targetCaseState(10)).isEqualTo("Submitted");
+    assertThat(targetCaseData(10)).isEqualTo("{\"field\": \"same\"}");
   }
 
   @Test
@@ -1281,6 +1295,14 @@ class CcdDataMigrationTaskIntegrationTest {
 
   private String targetCaseData(long id) {
     return jdbc.queryForObject("select data::text from ccd.case_data where id = :id", Map.of("id", id), String.class);
+  }
+
+  private long targetCaseRowVersion(long id) {
+    return jdbc.queryForObject(
+        "select xmin::text::bigint from ccd.case_data where id = :id",
+        Map.of("id", id),
+        Long.class
+    );
   }
 
   private String progressStatus() {

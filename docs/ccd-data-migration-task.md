@@ -47,10 +47,9 @@ Preloaded `case_data` is provisional. Its purpose is to satisfy the event FK. Ev
 batch inserts missing parent source `case_data` rows for that batch. Significant items are copied
 only during `CUTOVER`, using one `insert into ... select` query that reads source significant items
 and joins through already migrated target events up to the captured cutover event high-water mark.
-`CUTOVER` stages every selected source `case_data` row in its final refresh transaction, upserts that
-stable set into the target, and deletes target cases in the configured jurisdiction and case types
-that are no longer present in source. The existing foreign-key cascades remove their case events and
-event dependants. It then sets
+`CUTOVER` uses a filtered `MERGE` from the source `case_data` table to update changed rows and insert
+missing rows, followed by a scoped delete of target-only rows. The existing foreign-key cascades
+remove deleted cases' events and event dependants. It then sets
 `case_data.case_revision = max(case_event.case_revision) + caseRevisionOffset`.
 
 The source write freeze must include retain-and-dispose work, and operators must wait for its
