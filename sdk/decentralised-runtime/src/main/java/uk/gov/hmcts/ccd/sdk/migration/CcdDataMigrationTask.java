@@ -4,8 +4,6 @@ import static uk.gov.hmcts.ccd.sdk.migration.CcdDataMigrationMode.CUTOVER;
 import static uk.gov.hmcts.ccd.sdk.migration.CcdDataMigrationMode.PRELOAD_EVENTS;
 import static uk.gov.hmcts.ccd.sdk.migration.CcdDataMigrationMode.VALIDATE_ONLY;
 
-import java.sql.Connection;
-import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.Clock;
@@ -13,6 +11,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.function.BooleanSupplier;
 import java.util.function.Supplier;
 import javax.sql.DataSource;
@@ -24,6 +23,7 @@ import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionOperations;
 import org.springframework.transaction.support.TransactionTemplate;
+import uk.gov.hmcts.ccd.sdk.impl.PostgresAdvisoryLock;
 
 @Slf4j
 public class CcdDataMigrationTask implements Runnable {
@@ -118,12 +118,19 @@ public class CcdDataMigrationTask implements Runnable {
 
     validateDecentralisedRuntimeDisabled();
     validateProgressTableReady();
-    AdvisoryLock migrationLock = tryLock();
-    if (migrationLock == null) {
-      log.warn("CCD data migration taskName={} is already running; skipping this invocation", options.taskName());
+    Optional<CcdDataMigrationRunResult> result = advisoryLock().runIfAcquired(
+        options.taskName(),
+        options.canonicalCaseTypeIds(),
+        this::runMigrationWithLock
+    );
+    if (result.isEmpty()) {
+      log.info("CCD data migration taskName={} is already running; skipping this invocation", options.taskName());
       return CcdDataMigrationRunResult.skippedLocked();
     }
+    return result.get();
+  }
 
+  private CcdDataMigrationRunResult runMigrationWithLock() {
     try {
       validateFdwReady();
       return switch (options.mode()) {
@@ -135,8 +142,6 @@ public class CcdDataMigrationTask implements Runnable {
       throw ex;
     } catch (Exception ex) {
       throw new CcdDataMigrationException("CCD data migration failed", ex);
-    } finally {
-      migrationLock.close();
     }
   }
 
@@ -1274,55 +1279,12 @@ public class CcdDataMigrationTask implements Runnable {
         .addValue("sourceJurisdiction", options.sourceJurisdiction());
   }
 
-  private AdvisoryLock tryLock() {
+  private PostgresAdvisoryLock advisoryLock() {
     DataSource dataSource = db.getJdbcTemplate().getDataSource();
     if (dataSource == null) {
       throw new CcdDataMigrationException("NamedParameterJdbcTemplate must expose a DataSource");
     }
-
-    Connection connection = null;
-    try {
-      connection = dataSource.getConnection();
-      try (PreparedStatement statement = connection.prepareStatement(
-          "select pg_try_advisory_lock(hashtext(?), hashtext(?))"
-      )) {
-        statement.setString(1, options.taskName());
-        statement.setString(2, options.canonicalCaseTypeIds());
-        try (ResultSet result = statement.executeQuery()) {
-          if (result.next() && result.getBoolean(1)) {
-            return new AdvisoryLock(connection);
-          }
-        }
-      }
-      connection.close();
-      return null;
-    } catch (SQLException ex) {
-      closeLockConnection(connection);
-      throw new CcdDataMigrationException(
-          "Could not acquire CCD data migration advisory lock taskName=" + options.taskName(),
-          ex
-      );
-    }
-  }
-
-  private void closeLockConnection(Connection connection) {
-    if (connection == null) {
-      return;
-    }
-    try {
-      connection.close();
-    } catch (SQLException closeEx) {
-      log.warn("Failed to close CCD data migration lock connection taskName={}", options.taskName(), closeEx);
-    }
-  }
-
-  private void abortLockConnection(Connection connection) {
-    try {
-      connection.abort(Runnable::run);
-    } catch (SQLException abortEx) {
-      log.warn("Failed to abort CCD data migration lock connection taskName={}", options.taskName(), abortEx);
-      closeLockConnection(connection);
-    }
+    return new PostgresAdvisoryLock(dataSource);
   }
 
   private static PlatformTransactionManager defaultTransactionManager(NamedParameterJdbcTemplate db) {
@@ -1344,36 +1306,6 @@ public class CcdDataMigrationTask implements Runnable {
 
   private static boolean isTrue(String value) {
     return value != null && Boolean.parseBoolean(value);
-  }
-
-  private final class AdvisoryLock implements AutoCloseable {
-    private final Connection connection;
-
-    private AdvisoryLock(Connection connection) {
-      this.connection = connection;
-    }
-
-    @Override
-    public void close() {
-      boolean unlocked = false;
-      try (PreparedStatement statement = connection.prepareStatement(
-          "select pg_advisory_unlock(hashtext(?), hashtext(?))"
-      )) {
-        statement.setString(1, options.taskName());
-        statement.setString(2, options.canonicalCaseTypeIds());
-        try (ResultSet result = statement.executeQuery()) {
-          unlocked = result.next() && result.getBoolean(1);
-        }
-      } catch (SQLException ex) {
-        log.warn("Failed to release CCD data migration advisory lock taskName={}", options.taskName(), ex);
-      } finally {
-        if (unlocked) {
-          closeLockConnection(connection);
-        } else {
-          abortLockConnection(connection);
-        }
-      }
-    }
   }
 
   private record Progress(
