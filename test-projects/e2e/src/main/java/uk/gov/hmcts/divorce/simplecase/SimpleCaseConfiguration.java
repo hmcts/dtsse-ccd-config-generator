@@ -12,6 +12,10 @@ import uk.gov.hmcts.divorce.simplecase.model.SimpleCaseData;
 import uk.gov.hmcts.divorce.simplecase.model.SimpleCaseState;
 
 import java.util.EnumSet;
+
+import static uk.gov.hmcts.ccd.sdk.RetainAndDisposePolicy.CONFIRM_DISPOSAL_EVENT_ID;
+import static uk.gov.hmcts.ccd.sdk.RetainAndDisposePolicy.DISPOSAL_EVENT_ID;
+import static uk.gov.hmcts.divorce.divorcecase.model.UserRole.SYSTEMUPDATE;
 import static uk.gov.hmcts.divorce.divorcecase.model.access.Permissions.CREATE_READ_UPDATE;
 
 @Component
@@ -64,6 +68,21 @@ public class SimpleCaseConfiguration implements CCDConfig<SimpleCaseData, Simple
             .optional(SimpleCaseData::getFollowUpNote)
             .optional(SimpleCaseData::getFollowUpMarker)
             .done();
+
+        configBuilder
+            .event(DISPOSAL_EVENT_ID)
+            .forStateTransition(SimpleCaseState.FOLLOW_UP, SimpleCaseState.PendingDisposal)
+            .name("Mark simple case for disposal")
+            .description("Move a simple case into its disposal state")
+            .grant(CREATE_READ_UPDATE, SYSTEMUPDATE);
+
+        configBuilder
+            .event(CONFIRM_DISPOSAL_EVENT_ID)
+            .forStateTransition(SimpleCaseState.PendingDisposal, SimpleCaseState.PendingDisposal)
+            .ttlIncrement(0)
+            .name("Confirm simple case disposal")
+            .description("Set the disposal TTL after verifying the case is readable")
+            .grant(CREATE_READ_UPDATE, SYSTEMUPDATE);
 
         configBuilder.searchInputFields()
             .field(SimpleCaseData::getSubject, "Subject");
@@ -132,4 +151,5 @@ public class SimpleCaseConfiguration implements CCDConfig<SimpleCaseData, Simple
             .state(SimpleCaseState.FOLLOW_UP)
             .build();
     }
+
 }
