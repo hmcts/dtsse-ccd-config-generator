@@ -22,7 +22,7 @@ dependencies {
     implementation 'com.github.hmcts:ccd-case-document-am-client:1.59.2'
     implementation 'com.github.hmcts:service-auth-provider-java-client:5.3.4'
     implementation group: 'com.github.ben-manes.caffeine', name: 'caffeine'
-    compileOnly 'io.github.openfeign:feign-core:13.12'
+    compileOnly 'io.github.openfeign:feign-core:13.13'
     compileOnly 'org.projectlombok:lombok:1.18.46'
 
     annotationProcessor 'org.projectlombok:lombok:1.18.46'
