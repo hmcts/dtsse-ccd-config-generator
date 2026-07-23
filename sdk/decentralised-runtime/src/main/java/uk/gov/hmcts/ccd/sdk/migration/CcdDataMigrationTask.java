@@ -517,6 +517,7 @@ public class CcdDataMigrationTask implements Runnable {
       disableCaseDataRevisionTrigger();
       try {
         int refreshedCases = syncCaseDataForCutover();
+        deleteCasesRemovedFromSource();
         updateCaseRevisionsForCutover();
         return refreshedCases;
       } finally {
@@ -605,6 +606,25 @@ public class CcdDataMigrationTask implements Runnable {
         """,
         baseParams()
     );
+  }
+
+  private int deleteCasesRemovedFromSource() {
+    int deletedCases = db.update(
+        """
+        delete from ccd.case_data target
+        where target.jurisdiction = :sourceJurisdiction
+          and target.case_type_id in (:caseTypeIds)
+          and target.id not in (
+            select source.id
+            from fdw_stage.case_data source
+            where source.jurisdiction = :sourceJurisdiction
+              and source.case_type_id in (:caseTypeIds)
+          )
+        """,
+        baseParams()
+    );
+    log.info("Deleted CCD cases removed from source taskName={} cases={}", options.taskName(), deletedCases);
+    return deletedCases;
   }
 
   private int updateCaseRevisionsForCutover() {

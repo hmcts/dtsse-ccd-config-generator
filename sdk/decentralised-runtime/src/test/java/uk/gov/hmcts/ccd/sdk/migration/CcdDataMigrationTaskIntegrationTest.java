@@ -124,6 +124,35 @@ class CcdDataMigrationTaskIntegrationTest {
   }
 
   @Test
+  void cutoverDeletesCasesRemovedFromSourceWithoutDeletingCasesOutsideTheMigrationScope() {
+    insertSourceCase(10, 1000000000000010L, 1, "Submitted", "{\"field\":\"one\"}");
+    insertSourceCaseEvent(101, 10, "create", "Submitted", "{\"field\":\"one\"}", minutesAgo(60));
+    task(PRELOAD_EVENTS, 1000, 10).runMigration();
+
+    insertTargetCase(20, 1000000000000020L, 1, "Submitted", "{\"field\":\"other-type\"}", "OtherCase", 1);
+    insertTargetCase(
+        30,
+        1000000000000030L,
+        1,
+        "Submitted",
+        "{\"field\":\"other-jurisdiction\"}",
+        "OTHER",
+        "TestCase",
+        1
+    );
+    jdbc.getJdbcTemplate().execute("delete from source.case_event where case_data_id = 10");
+    jdbc.getJdbcTemplate().execute("delete from source.case_data where id = 10");
+
+    CcdDataMigrationRunResult result = task(CUTOVER, 1000, 10).runMigration();
+
+    assertThat(result.caughtUp()).isTrue();
+    assertThat(countRows("ccd.case_data")).isEqualTo(2);
+    assertThat(countRows("ccd.case_event")).isZero();
+    assertThat(targetCaseState(20)).isEqualTo("Submitted");
+    assertThat(targetCaseState(30)).isEqualTo("Submitted");
+  }
+
+  @Test
   void copiesSignificantItemsInSingleCutoverQuery() {
     insertSourceCase(10, 1000000000000010L, 1, "Submitted", "{\"field\":\"one\"}");
     insertSourceCaseEvent(101, 10, "create", "Submitted", "{\"field\":\"one\"}", minutesAgo(60));
