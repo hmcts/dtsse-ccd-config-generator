@@ -73,7 +73,7 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements Decentralised
     config.categories = buildBuilders(categories, CaseCategoryBuilder::build);
     config.searchCriteria = buildBuilders(searchCriteria, SearchCriteriaBuilder::build);
     config.searchParties = buildBuilders(searchParty, SearchPartyBuilder::build);
-    config.noticeOfChange = noticeOfChangeBuilder == null ? null : noticeOfChangeBuilder.build();
+    config.noticeOfChange = noticeOfChangeBuilder == null ? null : noticeOfChangeBuilder.build(config.caseType);
     config.complexTypeAuthorisations = Lists.newArrayList(complexTypeAuthorisations);
 
     return config;
