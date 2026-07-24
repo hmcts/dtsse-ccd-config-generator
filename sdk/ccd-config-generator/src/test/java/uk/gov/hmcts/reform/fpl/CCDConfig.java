@@ -177,8 +177,8 @@ public class CCDConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<CaseData, S
             .optional(OrganisationPolicy::getOrgPolicyReference, null, null, "Org ref", "Sol org ref")
             .done()
           .done()
-        .optional(CaseData::getCaseName)
-        .optionalWithLabel(CaseData::getGatekeeperEmail, "Gate keeper email")
+        .optional(CaseData::getCaseName).publishAs("caseNameAlias")
+        .optionalWithLabel(CaseData::getGatekeeperEmail, "Gate keeper email").publish(false)
         .mandatoryWithoutDefaultValue(CaseData::getAllocatedJudge, "hearingPreferencesWelsh=\"yes\"", "Judge is bilingual", true)
         .mandatoryWithLabel(CaseData::getCaseLocalAuthority, "Please enter a case local authority");
 
@@ -416,7 +416,7 @@ public class CCDConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<CaseData, S
         .grant(CRU, HMCTS_ADMIN)
         .fields()
         .page("SetAField")
-        .optional(CaseData::getAField);
+        .optional(CaseData::getAField).publish(true);
 
     builder.event("listApplicantsEvent")
         .forAllStates()

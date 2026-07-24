@@ -18,7 +18,7 @@ class SearchCasesResultFieldsGenerator<T, S, R extends HasRole> implements
     ConfigGenerator<T, S, R> {
 
   public void write(File root, ResolvedCCDConfig<T, S, R> config) {
-    List<SearchCasesResultField> fields = config.getSearchCaseResultFields().stream()
+    List<SearchCasesResultField<R>> fields = config.getSearchCaseResultFields().stream()
         .flatMap(x -> x.getFields().stream())
         .toList();
 
@@ -31,26 +31,43 @@ class SearchCasesResultFieldsGenerator<T, S, R extends HasRole> implements
       Path tabDir = Paths.get(root.getPath(), "SearchCasesResultFields");
       tabDir.toFile().mkdirs();
       Path output = tabDir.resolve("SearchCasesResultFields.json");
-      JsonUtils.mergeInto(output, jsonFields, new AddMissing(), "CaseFieldID");
+      // UseCase and UserRole are part of the row identity: the same CaseFieldID legitimately appears
+      // once per (UseCase, AccessProfile) it is exposed under. Keying only on CaseFieldID collapsed
+      // those to one last-wins row. Both columns retain their historic values (UseCase=orgcases,
+      // empty UserRole) unless a field opts in, so the extra keys never tie apart existing configs
+      // and the emitted JSON stays byte-identical for them.
+      JsonUtils.mergeInto(output, jsonFields, new AddMissing(), "CaseFieldID", "UseCase", "UserRole");
     }
   }
 
-  private static Map<String, Object> buildField(String caseType, SearchCasesResultField field, int order) {
+  private static <R extends HasRole> Map<String, Object> buildField(
+      String caseType, SearchCasesResultField<R> field, int order) {
     Map<String, Object> object = JsonUtils.caseRow(caseType, "03/02/2021");
-    object.put("UserRole", "");
+    object.put("UserRole", field.getUserRole() == null ? "" : field.getUserRole().getRole());
     object.put("CaseFieldID", field.getId());
     object.put("Label", field.getLabel());
     object.put("DisplayOrder", order);
-    object.put("UseCase", "orgcases");
+    object.put("UseCase", field.getUseCase() == null ? "orgcases" : field.getUseCase());
 
     if (null != field.getListElementCode()) {
       object.put("ListElementCode", field.getListElementCode());
     }
+    // The long-standing positional field(...) overloads render these two columns the historic
+    // (mis-wired) way: the column is gated on the positional carrier's presence but the emitted
+    // value is the ListElementCode. Reproducing that here verbatim keeps every existing consumer
+    // that uses the positional API byte-identical. The fluent field(id, label, Consumer) lambda
+    // routes through the dedicated carriers below, which emit the actual column value.
     if (null != field.getDisplayContextParameter()) {
       object.put("DisplayContextParameter", field.getListElementCode());
     }
     if (null != field.getResultsOrdering()) {
       object.put("ResultsOrdering", field.getListElementCode());
+    }
+    if (null != field.getFluentDisplayContextParameter()) {
+      object.put("DisplayContextParameter", field.getFluentDisplayContextParameter());
+    }
+    if (null != field.getFluentResultsOrdering()) {
+      object.put("ResultsOrdering", field.getFluentResultsOrdering());
     }
     return object;
   }

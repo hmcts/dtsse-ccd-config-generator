@@ -29,6 +29,11 @@ class FixedListGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
     for (Class<?> c : config.getTypes().keySet()) {
       ComplexType complexType = c.getAnnotation(ComplexType.class);
       if (c.isEnum() && (complexType == null || complexType.generate())) {
+        // The FixedLists ID (and output file name) is the enum's @ComplexType(name) when set,
+        // otherwise its simple class name. This lets a generated enum carry a Java-conventional
+        // PascalCase class name while preserving the original CCD list ID as the wire ID.
+        String listId = complexType != null && !isNullOrEmpty(complexType.name())
+            ? complexType.name() : c.getSimpleName();
         List<Map<String, Object>> fields = Lists.newArrayList();
 
         int order = 1;
@@ -51,12 +56,12 @@ class FixedListGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
           fields.add(value);
           value.put("ListElement", label);
           value.put("LiveFrom", JsonUtils.DEFAULT_LIVE_FROM);
-          value.put("ID", c.getSimpleName());
+          value.put("ID", listId);
           value.put("ListElementCode", enumConstant);
           value.put("DisplayOrder", order++);
         }
 
-        Path path = Paths.get(dir.getPath(), c.getSimpleName() + ".json");
+        Path path = Paths.get(dir.getPath(), listId + ".json");
         JsonUtils.mergeInto(path, fields, new AddMissing(), "ListElementCode");
       }
     }

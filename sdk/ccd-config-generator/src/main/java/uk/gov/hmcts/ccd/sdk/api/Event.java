@@ -34,6 +34,8 @@ public class Event<T, R extends HasRole, S> {
   private boolean explicitGrants;
   private boolean showSummary;
   private boolean showEventNotes;
+  private boolean significant;
+  private boolean canSaveDraft;
   private boolean publishToCamunda;
   private Integer ttlIncrement;
   private AboutToStart<T, S> aboutToStartCallback;
@@ -119,6 +121,27 @@ public class Event<T, R extends HasRole, S> {
 
     public EventBuilder<T, R, S> showSummary() {
       this.showSummary = true;
+      return this;
+    }
+
+    /**
+     * Sets the CaseEvent sheet's {@code SignificantEvent} flag to {@code Y}. Not consumed by the
+     * definition-store importer or data-store at runtime; a definition-time marker some services
+     * use to flag events of note in their own tooling.
+     */
+    public EventBuilder<T, R, S> significant() {
+      this.significant = true;
+      return this;
+    }
+
+    /**
+     * Sets the CaseEvent sheet's {@code CanSaveDraft} flag to {@code Y}, allowing the caseworker
+     * to save a partially-completed submission and resume it later. The definition-store importer
+     * rejects this on any event with a pre-state ({@code EventEntityCanSaveDraftValidatorImpl}):
+     * it is only valid on create events.
+     */
+    public EventBuilder<T, R, S> canSaveDraft() {
+      this.canSaveDraft = true;
       return this;
     }
 

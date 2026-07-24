@@ -1,0 +1,11 @@
+[
+  {
+    "Description": "Small columns 2 case type",
+    "ID": "SmallColumns2",
+    "JurisdictionID": "SMALLCOLUMNS2",
+    "LiveFrom": "01/01/2017",
+    "Name": "Small columns 2",
+    "PrintableDocumentsUrl": "http://localhost:4013/documents/print",
+    "SecurityClassification": "Public"
+  }
+]
