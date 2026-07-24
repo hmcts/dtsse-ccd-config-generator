@@ -1,8 +1,9 @@
-package uk.gov.hmcts.ccd.sdk;
+package uk.gov.hmcts.ccd.sdk.runtime.noc;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.util.List;
@@ -10,17 +11,16 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
-import uk.gov.hmcts.ccd.sdk.api.CCDConfig;
-import uk.gov.hmcts.ccd.sdk.api.ConfigBuilder;
-import uk.gov.hmcts.ccd.sdk.api.HasRole;
-import uk.gov.hmcts.ccd.sdk.api.Permission;
+import uk.gov.hmcts.ccd.sdk.ResolvedCCDConfig;
+import uk.gov.hmcts.ccd.sdk.ResolvedConfigRegistry;
+import uk.gov.hmcts.ccd.sdk.api.NoticeOfChange;
 import uk.gov.hmcts.ccd.sdk.api.noc.NocAnswer;
 import uk.gov.hmcts.ccd.sdk.api.noc.NocAnswersRequest;
 import uk.gov.hmcts.ccd.sdk.api.noc.NocAnswersResponse;
+import uk.gov.hmcts.ccd.sdk.api.noc.NocEndpoint;
 import uk.gov.hmcts.ccd.sdk.api.noc.NocOrganisation;
 import uk.gov.hmcts.ccd.sdk.api.noc.NocSubmissionResponse;
 import uk.gov.hmcts.ccd.sdk.impl.IdamService;
-import uk.gov.hmcts.ccd.sdk.runtime.noc.NocController;
 import uk.gov.hmcts.reform.authorisation.validators.AuthTokenValidator;
 import uk.gov.hmcts.reform.idam.client.IdamClient;
 import uk.gov.hmcts.reform.idam.client.models.UserInfo;
@@ -93,54 +93,35 @@ class NocControllerTest {
         .isEqualTo(HttpStatus.UNAUTHORIZED);
   }
 
+  @Test
+  void shouldNormaliseServiceAuthorizationBearerPrefix() {
+    when(authTokenValidator.getServiceName(SERVICE_AUTHORISATION)).thenReturn("xui_webapp");
+
+    var response = controller.verifyAnswers("bearerservice-token", AUTHORISATION, request("Sam"));
+
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+    verify(authTokenValidator).getServiceName(SERVICE_AUTHORISATION);
+  }
+
   private static NocAnswersRequest request(String firstName) {
     return new NocAnswersRequest(1234567890123456L, List.of(new NocAnswer("first-name", firstName)));
   }
 
+  @SuppressWarnings({"rawtypes", "unchecked"})
   private static ResolvedConfigRegistry registry() {
-    ResolvedCCDConfig<CaseData, State, Role> config = new ConfigResolver<CaseData, State, Role>(
-        List.of(new NocConfig())
-    ).resolveCCDConfig();
+    NocEndpoint endpoint = NocEndpoint.builder()
+        .caseTypeId("PCS")
+        .validate((context, request) -> "Sam".equals(request.answers().getFirst().value())
+            ? NocAnswersResponse.verified(new NocOrganisation("ORG1", "Org 1"))
+            : NocAnswersResponse.answersNotMatchedAnyLitigant())
+        .submit((context, request) -> NocSubmissionResponse.approved(CASE_ROLE))
+        .build();
+    NoticeOfChange noticeOfChange = new NoticeOfChange();
+    noticeOfChange.setEndpoint(endpoint);
+    ResolvedCCDConfig config = mock(ResolvedCCDConfig.class);
+    when(config.getCaseType()).thenReturn("PCS");
+    when(config.getNoticeOfChange()).thenReturn(noticeOfChange);
     return new ResolvedConfigRegistry(List.of(config));
-  }
-
-  private static class NocConfig implements CCDConfig<CaseData, State, Role> {
-    @Override
-    public void configure(ConfigBuilder<CaseData, State, Role> builder) {
-      builder.caseType("PCS", "PCS", "PCS");
-      builder.noticeOfChange()
-          .validate((context, request) -> "Sam".equals(request.answers().getFirst().value())
-              ? NocAnswersResponse.verified(new NocOrganisation("ORG1", "Org 1"))
-              : NocAnswersResponse.answersNotMatchedAnyLitigant())
-          .submit((context, request) -> NocSubmissionResponse.approved(CASE_ROLE));
-    }
-  }
-
-  private static class CaseData {
-  }
-
-  private enum State {
-    CREATED
-  }
-
-  private enum Role implements HasRole {
-    USER("caseworker");
-
-    private final String role;
-
-    Role(String role) {
-      this.role = role;
-    }
-
-    @Override
-    public String getRole() {
-      return role;
-    }
-
-    @Override
-    public String getCaseTypePermissions() {
-      return Permission.toString(Permission.CRU);
-    }
   }
 
   private static class StubIdamClient extends IdamClient {

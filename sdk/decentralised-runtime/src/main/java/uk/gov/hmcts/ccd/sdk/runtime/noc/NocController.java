@@ -135,6 +135,10 @@ public class NocController {
   }
 
   private String asBearerToken(String token) {
-    return token.regionMatches(true, 0, "Bearer", 0, "Bearer".length()) ? token : "Bearer " + token;
+    String trimmedToken = token.trim();
+    String tokenValue = trimmedToken.regionMatches(true, 0, "Bearer", 0, "Bearer".length())
+        ? trimmedToken.substring("Bearer".length()).trim()
+        : trimmedToken;
+    return "Bearer " + tokenValue;
   }
 }

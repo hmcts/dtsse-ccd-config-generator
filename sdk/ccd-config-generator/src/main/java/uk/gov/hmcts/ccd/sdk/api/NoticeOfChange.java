@@ -47,7 +47,13 @@ public class NoticeOfChange<T, R extends HasRole> {
     }
 
     public NoticeOfChange<T, R> build(String caseTypeId) {
-      if (validationHandler != null || submissionHandler != null) {
+      if ((validationHandler == null) != (submissionHandler == null)) {
+        throw new IllegalStateException(
+            "Notice of Change validation and submission handlers must both be configured"
+        );
+      }
+
+      if (validationHandler != null) {
         noticeOfChange.endpoint = NocEndpoint.builder()
             .caseTypeId(caseTypeId)
             .validate(validationHandler)

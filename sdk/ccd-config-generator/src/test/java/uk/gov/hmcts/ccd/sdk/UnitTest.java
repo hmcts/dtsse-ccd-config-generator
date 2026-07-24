@@ -13,6 +13,7 @@ import uk.gov.hmcts.reform.fpl.enums.UserRole;
 import uk.gov.hmcts.reform.fpl.model.CaseData;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 public class UnitTest {
 
@@ -66,5 +67,23 @@ public class UnitTest {
     assertThat(resolved.getNoticeOfChange().getEndpoint()).isNotNull();
     assertThat(resolved.getNoticeOfChange().getEndpoint().caseTypeId()).isEqualTo("TEST");
     assertThat(resolved.getNoticeOfChange().getEndpoint().isAuthorisedService("xui_webapp")).isTrue();
+  }
+
+  @Test
+  public void configBuilderRequiresBothNoticeOfChangeRuntimeHandlers() {
+    class NocConfig implements CCDConfig<CaseData, State, UserRole> {
+      @Override
+      public void configure(ConfigBuilder<CaseData, State, UserRole> builder) {
+        builder.caseType("TEST", "Test", "Test case type");
+        builder.noticeOfChange()
+            .submit((context, request) -> NocSubmissionResponse.approved("[DEFENDANTSOLICITOR]"));
+      }
+    }
+
+    ConfigResolver<CaseData, State, UserRole> generator = new ConfigResolver<>(List.of(new NocConfig()));
+
+    assertThatThrownBy(generator::resolveCCDConfig)
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessage("Notice of Change validation and submission handlers must both be configured");
   }
 }
