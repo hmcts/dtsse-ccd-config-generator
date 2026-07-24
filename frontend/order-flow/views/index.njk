@@ -1,4 +1,5 @@
 {% extends "govuk/template.njk" %}
+{% from "govuk/components/date-input/macro.njk" import govukDateInput %}
 
 {% block pageTitle %}ProseMirror editor{% endblock %}
 
@@ -13,12 +14,28 @@
 {% block content %}
   <div class="govuk-grid-row">
     <div class="govuk-grid-column-two-thirds">
-      <div id="editor"></div>
+      <form id="order-form" novalidate>
+        {{ govukDateInput({
+          id: "order-date",
+          namePrefix: "order-date",
+          fieldset: {
+            legend: {
+              text: "Order date",
+              classes: "govuk-fieldset__legend--m"
+            }
+          },
+          hint: {
+            text: "For example, 27 3 2007"
+          }
+        }) }}
 
-      <div id="content" hidden>
-        <h3>Hello ProseMirror</h3>
-        <p>This is editable text. Select some text or just start typing.</p>
-      </div>
+        <div id="editor"></div>
+
+        <div id="content" hidden>
+          <h3>Hello ProseMirror</h3>
+          <p>This is editable text. Select some text or just start typing.</p>
+        </div>
+      </form>
     </div>
   </div>
 {% endblock %}
