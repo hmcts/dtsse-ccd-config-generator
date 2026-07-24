@@ -1,0 +1,16 @@
+[
+  {
+    "PreConditionState(s)": "*",
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "PostConditionState": "*",
+    "Description": "Add allocated judge to a case",
+    "DisplayOrder": 1,
+    "EndButtonLabel": "Save and continue",
+    "ID": "allocatedJudge",
+    "SecurityClassification": "Public",
+    "Name": "Allocated Judge",
+    "EventEnablingCondition": "allocatedJudge=\"\"",
+    "Publish": "N"
+  }
+]

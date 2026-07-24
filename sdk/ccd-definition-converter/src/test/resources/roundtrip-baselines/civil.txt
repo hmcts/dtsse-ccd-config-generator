@@ -1,0 +1,129 @@
+Sheet 'CaseEvent' row [JUDICIAL_REFERRAL] column 'publish': expected <Y> but column is missing in actual
+Sheet 'CaseEvent' row [NOTIFY_CLAIMANT_TRANSLATED_DOCUMENT_UPLOADED] column 'Name': expected <Email: Document uploaded > but was <Email: Document uploaded>
+Sheet 'CaseEventToFields' row [CASE_PROCEEDS_IN_CASEMAN|CaseAccessCategory] column 'DisplayContext': expected <Mandatory> but was <MANDATORY>
+Sheet 'CaseEventToFields' row [CASE_PROCEEDS_IN_CASEMAN|claimProceedsInCasemanLR] column 'DisplayContext': expected <Mandatory> but was <MANDATORY>
+Sheet 'CaseEventToFields' row [CASE_PROCEEDS_IN_CASEMAN|claimProceedsInCaseman] column 'DisplayContext': expected <Mandatory> but was <MANDATORY>
+Sheet 'CaseEventToFields' row [CHANGE_LANGUAGE_PREFERENCE|changeLanguagePreference] column 'DisplayContext': expected <Mandatory> but was <MANDATORY>
+Sheet 'CaseEventToFields' row [CHANGE_SOLICITOR_EMAIL|isApplicant1] column 'retainHiddenValues': expected <Y> but column is missing in actual
+Sheet 'CaseEventToFields' row [CHANGE_SOLICITOR_EMAIL|isRespondent1] column 'retainHiddenValues': expected <Y> but column is missing in actual
+Sheet 'CaseEventToFields' row [CHANGE_SOLICITOR_EMAIL|isRespondent2] column 'retainHiddenValues': expected <Y> but column is missing in actual
+Sheet 'CaseEventToFields' row [CHANGE_SOLICITOR_EMAIL|specApplicantCorrespondenceAddressdetails] column 'retainHiddenValues': expected <Y> but column is missing in actual
+Sheet 'CaseEventToFields' row [CHANGE_SOLICITOR_EMAIL|specRespondent2CorrespondenceAddressdetails] column 'retainHiddenValues': expected <Y> but column is missing in actual
+Sheet 'CaseEventToFields' row [CHANGE_SOLICITOR_EMAIL|specRespondentCorrespondenceAddressdetails] column 'retainHiddenValues': expected <Y> but column is missing in actual
+Sheet 'CaseEventToFields' row [CLAIMANT_RESPONSE_SPEC|applicant1DQFutureApplications] column 'PageShowCondition': expected <> but was <applicantDefenceResponseDocumentAndDQFlag ="Yes" AND (responseClaimTrack ="FAST_CLAIM" OR responseClaimTrack ="MULTI_CLAIM" OR responseClaimTrack ="INTERMEDIATE_CLAIM")>
+Sheet 'CaseEventToFields' row [CREATE_CLAIM_SPEC|respondentSolicitor2EmailAddress] column 'HintText': expected <Don't show> but column is missing in actual
+Sheet 'CaseEventToFields' row [DEFENDANT_RESPONSE_SPEC|respondent1DQFutureApplications] column 'PageShowCondition': expected <> but was <showConditionFlags CONTAINS "SOMEONE_DISPUTES" AND (responseClaimTrack="FAST_CLAIM" OR responseClaimTrack="MULTI_CLAIM" OR responseClaimTrack="INTERMEDIATE_CLAIM")>
+Sheet 'CaseEventToFields' row [DEFENDANT_RESPONSE_SPEC|respondent2CourtOrderDetails] column 'PageShowCondition': expected <> but was <showConditionFlags CONTAINS "NEED_FINANCIAL_DETAILS_2">
+Sheet 'CaseEventToFields' row [DEFENDANT_RESPONSE_SPEC|respondent2DQFutureApplications] column 'PageShowCondition': expected <> but was <showConditionFlags CONTAINS "SOMEONE_DISPUTES" AND (responseClaimTrack="FAST_CLAIM" OR responseClaimTrack="MULTI_CLAIM" OR responseClaimTrack="INTERMEDIATE_CLAIM")>
+Sheet 'CaseEventToFields' row [DEFENDANT_RESPONSE_SPEC|responseClaimMediationSpecLabel2] column 'PageShowCondition': expected <> but was <showConditionFlags CONTAINS "CAN_ANSWER_RESPONDENT_1" OR showConditionFlags CONTAINS "SOMEONE_DISPUTES" AND responseClaimTrack = "SMALL_CLAIM" AND showCarmFields="No" AND respondentClaimResponseTypeForSpecGeneric != "FULL_ADMISSION">
+Sheet 'CaseEventToFields' row [EVIDENCE_UPLOAD_APPLICANT|notificationText] column 'DisplayContext': expected <readonly> but was <READONLY>
+Sheet 'CaseEventToFields' row [GENERATE_DIRECTIONS_ORDER|selectTemplateLabel] column 'EventHintText': expected <Select a template to download a Word document and edit offline> but column is missing in actual
+Sheet 'CaseEventToFields' row [queryManagementRespondQuery|preStayState] column 'PageShowShowCondition': expected <QueryManagementComponentLauncher="DUMMY_VALUE_TO_HIDE_PAGE"> but column is missing in actual
+Sheet 'CaseField' row [claimantGaAppDetails] column 'ElementLabel': expected <Application Type> but column is missing in actual
+Sheet 'CaseField' row [gaDetailsMasterCollection] column 'ElementLabel': expected <Application Type> but column is missing in actual
+Sheet 'CaseField' row [gaDetailsTranslationCollection] column 'ElementLabel': expected <Application Type> but column is missing in actual
+Sheet 'CaseField' row [generalAppDetailsOfOrderColl] column 'FieldTypeParameter': expected <TextArea> but was <Text>
+Sheet 'CaseField' row [generalAppReasonsOfOrderColl] column 'FieldTypeParameter': expected <TextArea> but was <Text>
+Sheet 'CaseField' row [generalAppStatementOfTruthConsent] column 'ListElementCode': expected <ConsentAgreementCheckBox> but column is missing in actual
+Sheet 'CaseField' row [qmApplicantSolicitorQueries] column 'CRUD': expected <CRUD> but column is missing in actual
+Sheet 'CaseField' row [qmLatestQuery] column 'CRUD': expected <CRUD> but column is missing in actual
+Sheet 'CaseField' row [qmRespondentSolicitor1Queries] column 'CRUD': expected <CRUD> but column is missing in actual
+Sheet 'CaseField' row [qmRespondentSolicitor2Queries] column 'CRUD': expected <CRUD> but column is missing in actual
+Sheet 'CaseField' row [queries] column 'CRUD': expected <CRUD> but column is missing in actual
+Sheet 'CaseField' row [respondentSolGaAppDetails] column 'ElementLabel': expected <Application Type> but column is missing in actual
+Sheet 'CaseField' row [respondentSolTwoGaAppDetails] column 'ElementLabel': expected <Application Type> but column is missing in actual
+Sheet 'CaseField' row [specApplicant1DQDisclosureOfElectronicDocuments] column 'comment_': expected <workaround for generation of claimant DQs> but column is missing in actual
+Sheet 'CaseTypeTab' row [ApplicationsSpec|claimantGaAppDetails] column 'UserRoles': expected <[APP-SOL-SPEC-PROFILE]> but column is missing in actual
+Sheet 'CaseTypeTab' row [ApplicationsStaff|gaDetailsMasterCollection] column 'UserRoles': expected <[GS_profile]> but column is missing in actual
+Sheet 'CaseTypeTab' row [Applications|claimantGaAppDetails] column 'UserRoles': expected <[APP-SOL-UNSPEC-PROFILE]> but column is missing in actual
+Sheet 'CaseTypeTab' row [CaseHistory|caseHistory]: unexpected row in actual: {CaseFieldID=caseHistory, CaseTypeID=CIVIL, Channel=CaseWorker, TabID=CaseHistory, TabLabel=History}
+Sheet 'CaseTypeTab' row [ClaimDetails|contactDetailsChangedLabel] column 'Searchable': expected <N> but column is missing in actual
+Sheet 'CaseTypeTab' row [ClaimDetails|manageContactDetailsEventUsed] column 'Searchable': expected <N> but column is missing in actual
+Sheet 'CaseTypeTab' row [GAApplicationsRespOneSpec|respondentSolGaAppDetails] column 'UserRoles': expected <[RES-SOL-ONE-SPEC-PROFILE]> but column is missing in actual
+Sheet 'CaseTypeTab' row [GAApplicationsRespOne|respondentSolGaAppDetails] column 'UserRoles': expected <[RES-SOL-ONE-UNSPEC-PROFILE]> but column is missing in actual
+Sheet 'CaseTypeTab' row [GAApplicationsRespTwoSpec|respondentSolTwoGaAppDetails] column 'UserRoles': expected <[RES-SOL-TWO-SPEC-PROFILE]> but column is missing in actual
+Sheet 'CaseTypeTab' row [GAApplicationsRespTwo|respondentSolTwoGaAppDetails] column 'UserRoles': expected <[RES-SOL-TWO-UNSPEC-PROFILE]> but column is missing in actual
+Sheet 'ChallengeQuestion' row [NoCChallenge|clientName] column 'IgnoreNULLFields': expected <Yes> but column is missing in actual
+Sheet 'ComplexTypes' row [CaseLocationCivil|baseLocation] column 'CaseFieldID': expected <baseLocation> but column is missing in actual
+Sheet 'ComplexTypes' row [CaseLocationCivil|region] column 'CaseFieldID': expected <region> but column is missing in actual
+Sheet 'ComplexTypes' row [CaseManagementCategoryElement|code] column 'Label': expected <Civil> but column is missing in actual
+Sheet 'ComplexTypes' row [CaseManagementCategoryElement|label] column 'Label': expected <Civil> but column is missing in actual
+Sheet 'ComplexTypes' row [CourtLocation|applicantPreferredCourtLocationList] column 'DisplayContext': expected <MANDATORY> but column is missing in actual
+Sheet 'ComplexTypes' row [ExpertDetails|estimatedCost] column 'Label': expected <Estimated cost> but column is missing in actual
+Sheet 'ComplexTypes' row [ExpertDetails|expertName] column 'Label': expected <Expert name> but column is missing in actual
+Sheet 'ComplexTypes' row [ExpertDetails|fieldofExpertise] column 'Label': expected <Field of expertise> but column is missing in actual
+Sheet 'ComplexTypes' row [GeneralApplicationDetailsGAspec|caseLink] column 'Label': expected <Application ID> but column is missing in actual
+Sheet 'ComplexTypes' row [GeneralApplicationDetailsGAspec|caseState] column 'Label': expected <Status> but column is missing in actual
+Sheet 'ComplexTypes' row [GeneralApplicationDetailsGAspec|generalAppSubmittedDateGAspec] column 'Label': expected <Submitted on> but column is missing in actual
+Sheet 'ComplexTypes' row [GeneralApplicationGAspec|generalAppDetailsOfOrderColl] column 'FieldTypeParameter': expected <TextArea> but was <Text>
+Sheet 'ComplexTypes' row [GeneralApplicationGAspec|generalAppReasonsOfOrderColl] column 'FieldTypeParameter': expected <TextArea> but was <Text>
+Sheet 'ComplexTypes' row [GeneralApplicationTypesGAspec|typeOfApplicationToBeCreated]: expected row has no match in actual: {ID=GeneralApplicationTypesGAspec, ListElementCode=typeOfApplicationToBeCreated, FieldType=MultiSelectList, FieldTypeParameter=GeneralApplicationTypesGAspec, SecurityClassification=PUBLIC, Searchable=N}
+Sheet 'ComplexTypes' row [HearingSupportRequirementsListDJ|hearingDates] column 'CaseEventID': expected <DEFAULT_JUDGEMENT> but column is missing in actual
+Sheet 'ComplexTypes' row [HearingSupportRequirementsListDJ|hearingDates] column 'CaseFieldID': expected <hearingDates> but column is missing in actual
+Sheet 'ComplexTypes' row [HearingSupportRequirementsListDJ|hearingLengthEstimate] column 'CaseEventID': expected <DEFAULT_JUDGEMENT> but column is missing in actual
+Sheet 'ComplexTypes' row [HearingSupportRequirementsListDJ|hearingLengthEstimate] column 'CaseFieldID': expected <hearingLengthEstimate> but column is missing in actual
+Sheet 'ComplexTypes' row [HearingSupportRequirementsListDJ|hearingPreferredEmail] column 'CaseEventID': expected <DEFAULT_JUDGEMENT> but column is missing in actual
+Sheet 'ComplexTypes' row [HearingSupportRequirementsListDJ|hearingPreferredEmail] column 'CaseFieldID': expected <hearingPreferredEmail> but column is missing in actual
+Sheet 'ComplexTypes' row [HearingSupportRequirementsListDJ|hearingPreferredLocation] column 'DefaultHidden': expected <No> but column is missing in actual
+Sheet 'ComplexTypes' row [HearingSupportRequirementsListDJ|hearingPreferredTelephoneNumber1] column 'CaseEventID': expected <DEFAULT_JUDGEMENT> but column is missing in actual
+Sheet 'ComplexTypes' row [HearingSupportRequirementsListDJ|hearingPreferredTelephoneNumber1] column 'CaseFieldID': expected <hearingPreferredTelephoneNumber1> but column is missing in actual
+Sheet 'ComplexTypes' row [HearingSupportRequirementsListDJ|hearingTypeTelephoneHearing] column 'CaseEventID': expected <DEFAULT_JUDGEMENT> but column is missing in actual
+Sheet 'ComplexTypes' row [HearingSupportRequirementsListDJ|hearingTypeTelephoneHearing] column 'CaseFieldID': expected <hearingTypeTelephoneHearing> but column is missing in actual
+Sheet 'ComplexTypes' row [HearingSupportRequirementsListDJ|hearingType] column 'CaseEventID': expected <DEFAULT_JUDGEMENT> but column is missing in actual
+Sheet 'ComplexTypes' row [HearingSupportRequirementsListDJ|hearingType] column 'CaseFieldID': expected <hearingType> but column is missing in actual
+Sheet 'ComplexTypes' row [HearingSupportRequirementsListDJ|hearingUnavailableDates] column 'CaseEventID': expected <DEFAULT_JUDGEMENT> but column is missing in actual
+Sheet 'ComplexTypes' row [HearingSupportRequirementsListDJ|hearingUnavailableDates] column 'CaseFieldID': expected <hearingUnavailableDates> but column is missing in actual
+Sheet 'ComplexTypes' row [HearingSupportRequirementsListDJ|hoursEstimateOther] column 'CaseEventID': expected <DEFAULT_JUDGEMENT> but column is missing in actual
+Sheet 'ComplexTypes' row [HearingSupportRequirementsListDJ|hoursEstimateOther] column 'CaseFieldID': expected <hoursEstimateOther> but column is missing in actual
+Sheet 'ComplexTypes' row [MarkJudgmentPaid|confirmFullPaymentMade] column 'Definition': expected <I confirm that this judgment has been satisfied and can be marked as paid in full> but column is missing in actual
+Sheet 'ComplexTypes' row [MarkJudgmentPaid|dateOfFullPaymentMade] column 'Definition': expected <Enter the date the judgment was paid in full> but column is missing in actual
+Sheet 'ComplexTypes' row [NotifyClaimCoS|cosDateDeemedServedForDefendant] column 'Definition': expected <Enter the date of service> but column is missing in actual
+Sheet 'ComplexTypes' row [NotifyClaimCoS|cosDateOfServiceForDefendant] column 'Definition': expected <Enter the date you served the documents> but column is missing in actual
+Sheet 'ComplexTypes' row [NotifyClaimCoS|cosRecipientServeLocationOwnerType] column 'Definition': expected <Select the person at whose location you served the documents> but column is missing in actual
+Sheet 'ComplexTypes' row [NotifyClaimCoS|cosRecipientServeLocationTypeOther] column 'Definition': expected <Other> but column is missing in actual
+Sheet 'ComplexTypes' row [NotifyClaimCoS|cosRecipientServeLocationType] column 'Definition': expected <Select the type of location where you served the documents> but column is missing in actual
+Sheet 'ComplexTypes' row [NotifyClaimCoS|cosRecipientServeLocation] column 'Definition': expected <Enter the details of where you served the documents> but column is missing in actual
+Sheet 'ComplexTypes' row [NotifyClaimCoS|cosRecipientServeType] column 'Definition': expected <Select an option for how you served the documents> but column is missing in actual
+Sheet 'ComplexTypes' row [NotifyClaimCoS|cosRecipient] column 'Definition': expected <Enter the name of the person you served the documents to> but column is missing in actual
+Sheet 'ComplexTypes' row [NotifyClaimCoS|cosSenderFirm] column 'Definition': expected <Enter the name of your firm> but column is missing in actual
+Sheet 'ComplexTypes' row [NotifyClaimCoS|cosSenderStatementOfTruthLabel] column 'Definition': expected <Confirm that you believe that the facts stated in the certificate are true> but column is missing in actual
+Sheet 'ComplexTypes' row [NotifyClaimCoS|cosSender] column 'Definition': expected <Enter your name> but column is missing in actual
+Sheet 'ComplexTypes' row [NotifyClaimCoS|cosServedDocumentFiles] column 'Definition': expected <Enter details of the documents you served> but column is missing in actual
+Sheet 'ComplexTypes' row [NotifyClaimCoS|cosUISenderStatementOfTruthLabel] column 'Definition': expected <Confirm that you believe that the facts stated in the certificate are true> but column is missing in actual
+Sheet 'ComplexTypes' row [NotifyClaimDetailsCoS|cosDateDeemedServedForDefendant] column 'Definition': expected <Enter the date you served the documents> but column is missing in actual
+Sheet 'ComplexTypes' row [NotifyClaimDetailsCoS|cosDateOfServiceForDefendant] column 'Definition': expected <Enter the date you served the documents> but column is missing in actual
+Sheet 'ComplexTypes' row [NotifyClaimDetailsCoS|cosRecipientServeLocationOwnerType] column 'Definition': expected <Select the person at whose location you served the documents> but column is missing in actual
+Sheet 'ComplexTypes' row [NotifyClaimDetailsCoS|cosRecipientServeLocationTypeOther] column 'Definition': expected <Other> but column is missing in actual
+Sheet 'ComplexTypes' row [NotifyClaimDetailsCoS|cosRecipientServeLocationType] column 'Definition': expected <Select the type of location where you served the documents> but column is missing in actual
+Sheet 'ComplexTypes' row [NotifyClaimDetailsCoS|cosRecipientServeLocation] column 'Definition': expected <Enter the details of where you served the documents> but column is missing in actual
+Sheet 'ComplexTypes' row [NotifyClaimDetailsCoS|cosRecipientServeType] column 'Definition': expected <Select an option for how you served the documents> but column is missing in actual
+Sheet 'ComplexTypes' row [NotifyClaimDetailsCoS|cosRecipient] column 'Definition': expected <Enter the name of the person you served the documents to> but column is missing in actual
+Sheet 'ComplexTypes' row [NotifyClaimDetailsCoS|cosSenderFirm] column 'Definition': expected <Enter the name of your firm> but column is missing in actual
+Sheet 'ComplexTypes' row [NotifyClaimDetailsCoS|cosSenderStatementOfTruthLabel] column 'Definition': expected <Confirm that you believe that the facts stated in the application are true> but column is missing in actual
+Sheet 'ComplexTypes' row [NotifyClaimDetailsCoS|cosSender] column 'Definition': expected <Enter your name> but column is missing in actual
+Sheet 'ComplexTypes' row [NotifyClaimDetailsCoS|cosServedDocumentFiles] column 'Definition': expected <Enter details of the documents you served> but column is missing in actual
+Sheet 'ComplexTypes' row [NotifyClaimDetailsCoS|cosUISenderStatementOfTruthLabel] column 'Definition': expected <Confirm that you believe that the facts stated in the certificate are true> but column is missing in actual
+Sheet 'ComplexTypes' row [RespondToClaimAdmitPartLRspec|whenWillThisAmountBePaid] column 'Label': expected <When will this amount be paid?> but column is missing in actual
+Sheet 'ComplexTypes' row [RespondToClaim|howMuchWasPaid] column 'Label': expected <How much was paid?> but column is missing in actual
+Sheet 'ComplexTypes' row [RespondToClaim|whenWasThisAmountPaid] column 'Label': expected <When was this amount paid?> but column is missing in actual
+Sheet 'ComplexTypes' row [UnavailableDate|who] column 'DisplayContext': expected <OPTIONAL> but column is missing in actual
+Sheet 'ComplexTypes' row [VulnerabilityQuestions|vulnerabilityAdjustments] column 'DisplayContext': expected <MANDATORY> but column is missing in actual
+Sheet 'EventToComplexTypes' row [ObligationWAFlag|ORDER_REVIEW_OBLIGATION_CHECK|obligationWAFlag|currentDate]: expected row has no match in actual: {ID=ObligationWAFlag, CaseEventID=ORDER_REVIEW_OBLIGATION_CHECK, CaseFieldID=obligationWAFlag, ListElementCode=currentDate, DisplayContext=MANDATORY}
+Sheet 'EventToComplexTypes' row [ObligationWAFlag|ORDER_REVIEW_OBLIGATION_CHECK|obligationWAFlag|obligationReasonDisplayValue]: expected row has no match in actual: {ID=ObligationWAFlag, CaseEventID=ORDER_REVIEW_OBLIGATION_CHECK, CaseFieldID=obligationWAFlag, ListElementCode=obligationReasonDisplayValue, DisplayContext=MANDATORY}
+Sheet 'EventToComplexTypes' row [ObligationWAFlag|ORDER_REVIEW_OBLIGATION_CHECK|obligationWAFlag|obligationReason]: expected row has no match in actual: {ID=ObligationWAFlag, CaseEventID=ORDER_REVIEW_OBLIGATION_CHECK, CaseFieldID=obligationWAFlag, ListElementCode=obligationReason, DisplayContext=MANDATORY}
+Sheet 'EventToComplexTypes' row [RequestedCourtLocationLRspec|CLAIMANT_RESPONSE_SPEC|applicant1DQRequestedCourt|responseCourtLocations] column 'EventElementLabel': unexpected column in actual with value <Please select your preferred court hearing location>
+Sheet 'EventToComplexTypes' row [RequestedCourtLocationLRspec|CLAIMANT_RESPONSE_SPEC|applicant1DQRequestedCourt|responseCourtLocations] column 'EventHintText': unexpected column in actual with value <Where the defendant is an individual or a sole trader, the case will be held at the defendant's preferred court.>
+Sheet 'EventToComplexTypes' row [RequestedCourtLocationLRspec|CLAIMANT_RESPONSE_SPEC|applicant1DQRequestedCourt|responseCourtLocations]: expected row has no match in actual: {ID=RequestedCourtLocationLRspec, CaseEventID=CLAIMANT_RESPONSE_SPEC, CaseFieldID=applicant1DQRequestedCourt, ListElementCode=responseCourtLocations, EventElementLabel=Please select your preferred court hearing location, EventHintText=Where the defendant is an individual or a sole trader, the case will be held at the defendant's preferred court., DisplayContext=MANDATORY}
+Sheet 'FixedLists' row [DisposalHearingMethodInPerson|hearingMethodDrop]: expected row has no match in actual: {ID=DisposalHearingMethodInPerson, ListElementCode=hearingMethodDrop, ListElement=Hearing Method}
+Sheet 'FixedLists' row [DisposalHearingMethodVideoConferenceHearingDJ|videoTheCourt] column 'HintText': expected <Parties must file at court details of their respective relevant telephone numbers by 4.00 pm 7 days before the disposal hearing so that the court may telephone them to join them to the disposal hearing> but column is missing in actual
+Sheet 'FixedLists' row [FastTrackMethodInPerson|hearingMethodDrop]: expected row has no match in actual: {ID=FastTrackMethodInPerson, ListElementCode=hearingMethodDrop, ListElement=Hearing Method}
+Sheet 'FixedLists' row [InterestClaimFrom|FROM_A_SPECIFIC_DATE] column 'HintText': expected <For example, the date an invoice was overdue, or the date that you told someone they owed you money.> but column is missing in actual
+Sheet 'FixedLists' row [InterestClaimFrom|FROM_CLAIM_SUBMIT_DATE] column 'HintText': expected <The interest will then be calculated up until the claim is settled or a judgment has been made.> but column is missing in actual
+Sheet 'FixedLists' row [InterestClaimUntil|UNTIL_CLAIM_SUBMIT_DATE] column 'HintText': expected <When you submit the claim.> but column is missing in actual
+Sheet 'FixedLists' row [InterestOptions|BREAK_DOWN_INTEREST] column 'HintText': expected <You can only use this service if any claim for interest is made at the same rate and from the same date. To claim interest at different rates or for different periods of time, you should issue your claim on paper> but column is missing in actual
+Sheet 'FixedLists' row [SmallClaimsMethodInPerson|hearingMethodDrop]: expected row has no match in actual: {ID=SmallClaimsMethodInPerson, ListElementCode=hearingMethodDrop, ListElement=Hearing Method}
+Sheet 'RoleToAccessProfiles' row [[APPLICANTSOLICITORONE]]: expected row has no match in actual: {RoleName=[APPLICANTSOLICITORONE], Authorisation=, CaseTypeID=CIVIL, AccessProfiles=APP-SOL-SPEC-PROFILE,payment-access, ReadOnly=N, Disabled=N, CaseAccessCategories=SPEC_CLAIM}
+Sheet 'RoleToAccessProfiles' row [[RESPONDENTSOLICITORONE]]: expected row has no match in actual: {RoleName=[RESPONDENTSOLICITORONE], Authorisation=, CaseTypeID=CIVIL, AccessProfiles=RES-SOL-ONE-SPEC-PROFILE, ReadOnly=N, Disabled=N, CaseAccessCategories=SPEC_CLAIM}
+Sheet 'RoleToAccessProfiles' row [[RESPONDENTSOLICITORTWO]]: expected row has no match in actual: {RoleName=[RESPONDENTSOLICITORTWO], Authorisation=, CaseTypeID=CIVIL, AccessProfiles=RES-SOL-TWO-SPEC-PROFILE, ReadOnly=N, Disabled=N, CaseAccessCategories=SPEC_CLAIM}
+Sheet 'SearchCriteria' row [{CaseTypeID=CIVIL, LiveTo=, OtherCaseReference=legacyCaseReference}]: expected row has no match in actual: {LiveTo=, CaseTypeID=CIVIL, OtherCaseReference=legacyCaseReference}
+Sheet 'SearchCriteria' row [{CaseTypeID=CIVIL, OtherCaseReference=legacyCaseReference}]: unexpected row in actual: {CaseTypeID=CIVIL, OtherCaseReference=legacyCaseReference}

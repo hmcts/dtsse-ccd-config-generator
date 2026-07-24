@@ -1,0 +1,10 @@
+[
+  {
+    "CaseTypeID": "RoleMappings",
+    "Description": "Solicitor role",
+    "ID": "[SOLICITOR]",
+    "JurisdictionID": "ROLEMAP",
+    "LiveFrom": "01/01/2017",
+    "Name": "Solicitor"
+  }
+]

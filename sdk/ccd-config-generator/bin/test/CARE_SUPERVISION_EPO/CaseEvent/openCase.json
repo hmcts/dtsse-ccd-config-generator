@@ -1,0 +1,18 @@
+[
+  {
+    "CallBackURLSubmittedEvent": "${CCD_DEF_CASE_SERVICE_BASE_URL}/callbacks/submitted?eventId=openCase",
+    "LiveFrom": "01/01/2017",
+    "Description": "Create a new case – add a title",
+    "DisplayOrder": 1,
+    "RetriesTimeoutURLAboutToSubmitEvent": "1,2,3,4,5",
+    "EndButtonLabel": "Save and continue",
+    "SecurityClassification": "Public",
+    "Name": "Start application",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "PostConditionState": "Open",
+    "ID": "openCase",
+    "RetriesTimeoutURLSubmittedEvent": "1,2,3,4,5",
+    "CallBackURLAboutToSubmitEvent": "${CCD_DEF_CASE_SERVICE_BASE_URL}/callbacks/about-to-submit?eventId=openCase",
+    "Publish": "N"
+  }
+]

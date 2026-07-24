@@ -1,0 +1,17 @@
+[
+  {
+    "ID": "NoticeOfProceedings",
+    "FieldType": "JudgeAndLegalAdvisor",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "judgeAndLegalAdvisor"
+  },
+  {
+    "ID": "NoticeOfProceedings",
+    "FieldType": "Collection",
+    "FieldTypeParameter": "ProceedingType",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "proceedingTypes"
+  }
+]

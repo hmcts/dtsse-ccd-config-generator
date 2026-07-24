@@ -155,13 +155,18 @@ public class JsonUtils {
     for (Map<String, Object> generatedField : generated) {
       Optional<Map<String, Object>> existingMatch = existing.stream().filter(x -> {
         for (String primaryKey : primaryKeys) {
-          if (!x.containsKey(primaryKey)) {
-            return !generatedField.containsKey(primaryKey);
+          boolean inExisting = x.containsKey(primaryKey);
+          boolean inGenerated = generatedField.containsKey(primaryKey);
+          // Absent on both sides = the two rows agree on this key (both null); keep comparing the
+          // remaining keys rather than short-circuiting to a match, so a later key can still tell two
+          // rows apart (e.g. two unscoped rows that share CaseFieldID/UserRole but differ only by
+          // ListElementCode). Present on one side only = definitely different rows.
+          if (!inExisting || !inGenerated) {
+            if (inExisting != inGenerated) {
+              return false;
+            }
+            continue;
           }
-          if (!generatedField.containsKey(primaryKey)) {
-            return !x.containsKey(primaryKey);
-          }
-
           if (!x.get(primaryKey).equals(generatedField.get(primaryKey).toString())) {
             return false;
           }

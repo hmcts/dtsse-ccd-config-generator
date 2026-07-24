@@ -1,0 +1,18 @@
+[
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "RETRO",
+    "CaseFieldID": "hearingParty",
+    "ListElementCode": "fullName",
+    "UserRole": "caseworker-rt",
+    "CRUD": "CRU"
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "RETRO",
+    "CaseFieldID": "hearingParty",
+    "ListElementCode": "partyEmail",
+    "UserRole": "caseworker-rt",
+    "CRUD": "R"
+  }
+]

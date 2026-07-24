@@ -1,0 +1,15 @@
+[
+  {
+    "PreConditionState(s)": "Gatekeeping;Submitted",
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "PostConditionState": "*",
+    "Description": "Add case notes",
+    "DisplayOrder": 1,
+    "EndButtonLabel": "Save and continue",
+    "ID": "addNotes",
+    "SecurityClassification": "Public",
+    "Name": "Add case notes",
+    "Publish": "Y"
+  }
+]

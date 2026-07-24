@@ -1,0 +1,78 @@
+[
+  {
+    "PageID": "AllocatedJudge",
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "CaseFieldID": "organisationPolicy",
+    "CaseEventID": "allocatedJudge",
+    "PageColumnNumber": 1,
+    "PageFieldDisplayOrder": 1,
+    "DisplayContext": "COMPLEX",
+    "ShowSummaryChangeOption": "Y",
+    "PageDisplayOrder": 1,
+    "CaseEventFieldHint" : "Event hint",
+    "RetainHiddenValue" : "Y",
+    "CaseEventFieldLabel" : "Event label"
+  },
+  {
+    "PageID": "AllocatedJudge",
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "CaseFieldID": "allocatedJudgeLabel",
+    "CaseEventID": "allocatedJudge",
+    "PageColumnNumber": 1,
+    "PageFieldDisplayOrder": 2,
+    "DisplayContext": "READONLY",
+    "PageDisplayOrder": 1
+  },
+  {
+    "PageID": "AllocatedJudge",
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "CaseFieldID": "allocatedJudge",
+    "CaseEventID": "allocatedJudge",
+    "PageColumnNumber": 1,
+    "PageFieldDisplayOrder": 3,
+    "DisplayContext": "COMPLEX",
+    "PageDisplayOrder": 1
+  },
+  {
+    "CaseEventID" : "allocatedJudge",
+    "CaseFieldID" : "caseNotesLabel1",
+    "CaseTypeID" : "CARE_SUPERVISION_EPO",
+    "DisplayContext" : "READONLY",
+    "LiveFrom" : "01/01/2017",
+    "PageColumnNumber" : 1,
+    "PageDisplayOrder" : 2,
+    "PageFieldDisplayOrder": 1,
+    "PageID" : "<Notes>",
+    "CallBackURLMidEvent": "${CCD_DEF_CASE_SERVICE_BASE_URL}/callbacks/mid-event?page=%3CNotes%3E&eventId=allocatedJudge",
+    "ShowSummaryChangeOption" : "Y"
+  },
+  {
+    "CaseEventID" : "allocatedJudge",
+    "CaseFieldID" : "caseNotes",
+    "CaseTypeID" : "CARE_SUPERVISION_EPO",
+    "DisplayContext" : "MANDATORY",
+    "LiveFrom" : "01/01/2017",
+    "PageColumnNumber" : 1,
+    "PageDisplayOrder" : 2,
+    "PageFieldDisplayOrder": 2,
+    "PageID" : "<Notes>",
+    "ShowSummaryChangeOption" : "Y"
+  },
+  {
+    "CaseEventFieldLabel" : "Allocated case name",
+    "CaseEventFieldHint" : "A hint",
+    "CaseEventID" : "allocatedJudge",
+    "CaseFieldID" : "caseName",
+    "CaseTypeID" : "CARE_SUPERVISION_EPO",
+    "DisplayContext" : "OPTIONAL",
+    "LiveFrom" : "01/01/2017",
+    "PageColumnNumber" : 1,
+    "PageFieldDisplayOrder": 4,
+    "PageDisplayOrder" : 1,
+    "PageID" : "AllocatedJudge",
+    "ShowSummaryChangeOption" : "Y"
+  }
+]

@@ -1,0 +1,2 @@
+uk.gov.hmcts.ccd.sdk.taskmanagement.TaskManagementAutoConfiguration
+uk.gov.hmcts.ccd.sdk.taskmanagement.delay.DelayUntilAutoConfiguration

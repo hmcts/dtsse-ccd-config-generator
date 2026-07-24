@@ -1,0 +1,4 @@
+Sheet 'CaseEventToFields' row [customiseHearingBundle|customAppAdditionalEvidenceDocs] column ',ShowSummaryChangeOption': expected <N> but column is missing in actual
+Sheet 'CaseEventToFields' row [updateDetentionLocation|appellantAddressTitle] column 'Retries': expected <5, 5, 5, 5> but column is missing in actual
+Sheet 'CaseField' row [SearchCriteria] column 'OtherCaseReference': expected <appealNumber.value> but column is missing in actual
+Sheet 'CaseField' row [paymentAccountList] column 'Value': expected <Select a number> but column is missing in actual

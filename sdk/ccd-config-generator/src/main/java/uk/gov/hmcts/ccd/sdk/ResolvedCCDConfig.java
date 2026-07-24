@@ -15,6 +15,7 @@ import java.util.Set;
 import java.util.function.Function;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
+import uk.gov.hmcts.ccd.sdk.api.Banner;
 import uk.gov.hmcts.ccd.sdk.api.CCD;
 import uk.gov.hmcts.ccd.sdk.api.CaseCategory;
 import uk.gov.hmcts.ccd.sdk.api.CaseRoleToAccessProfile;
@@ -42,6 +43,7 @@ public class ResolvedCCDConfig<T, S, R extends HasRole> {
   Set<String> rolesWithNoHistory;
   Set<R> shutterServiceForRoles = new HashSet<>();
   Set<R> shutterServiceExcludedRoles = new HashSet<>();
+  Set<R> caseRolesWithCaseTypeAuthorisation = new HashSet<>();
   String caseType = "";
   String callbackHost = "";
   String caseName = "";
@@ -51,7 +53,22 @@ public class ResolvedCCDConfig<T, S, R extends HasRole> {
   String jurDesc = "";
   String hmctsServiceId = "";
   boolean shutterService = false;
+  boolean explicitStateGrants = false;
+  boolean emitCaseRoleJurisdiction = false;
+  boolean jurisdictionShuttered = false;
+  boolean enableForDeletion = false;
+  String printableDocumentsUrl = "";
   Map<String, String> stateLabels = new HashMap<>();
+
+  /**
+   * CCD IDs of {@code @CCD(gate)} fields whose gate is inactive in the current environment. Empty
+   * when nothing is gated off (the common case). Generators that place fields by ID — the
+   * CaseEventToFields, AuthorisationCaseField event/tab/search, CaseTypeTab and search/work-basket
+   * generators — skip a placement whose ID is in this set, so a gated-off field leaves no dangling
+   * row referencing a CaseField the reflection filter already suppressed. Populated once at build
+   * time (see {@code ConfigBuilderImpl.build}).
+   */
+  Set<String> gatedOffFieldIds = new HashSet<>();
 
   Table<S, R, Set<Permission>> stateRolePermissions = HashBasedTable.create();
 
@@ -63,13 +80,14 @@ public class ResolvedCCDConfig<T, S, R extends HasRole> {
   List<Search<T, R>> workBasketInputFields;
   List<Search<T, R>> searchResultFields;
   List<Search<T, R>> searchInputFields;
-  List<SearchCases> searchCaseResultFields;
+  List<SearchCases<T, R>> searchCaseResultFields;
   List<CaseRoleToAccessProfile> caseRoleToAccessProfiles;
   List<CaseCategory> categories;
   List<SearchCriteria> searchCriteria;
   List<SearchParty> searchParties;
   NoticeOfChange<T, R> noticeOfChange;
   List<ComplexTypeAuthorisation<R>> complexTypeAuthorisations;
+  Banner banner;
 
   public Optional<String> labelForState(String stateId) {
     return Optional.ofNullable(stateLabels.get(stateId));
@@ -84,14 +102,20 @@ public class ResolvedCCDConfig<T, S, R extends HasRole> {
   void resolveStateLabels() {
     Object[] constants = stateClass.getEnumConstants();
     for (Object constant : constants) {
+      // Keyed by toString() to match the runtime lookup in AuditEventService, which resolves labels
+      // by String.valueOf(currentView.getState()). This is a runtime lookup map, not generated
+      // output, so the keying is intentionally left as-is; only the reflection below is corrected.
       String stateId = constant.toString();
-      stateLabels.putIfAbsent(stateId, resolvedEnumStateLabel(stateId));
+      stateLabels.putIfAbsent(stateId, resolvedEnumStateLabel(constant, stateId));
     }
   }
 
-  private String resolvedEnumStateLabel(String stateId) {
+  private String resolvedEnumStateLabel(Object constant, String stateId) {
     try {
-      Field field = stateClass.getField(stateId);
+      // Look the enum field up via Enum.name(), never toString(): an enum whose toString() is
+      // overridden (e.g. an @JsonValue toString() returning a lowercase id) would otherwise throw
+      // NoSuchFieldException here and silently lose its @CCD label.
+      Field field = stateClass.getField(((Enum<?>) constant).name());
       CCD ccd = field.getAnnotation(CCD.class);
       if (ccd != null && !ccd.label().isBlank()) {
         return ccd.label();

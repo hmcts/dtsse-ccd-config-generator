@@ -1,0 +1,9 @@
+[
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "Minimal",
+    "CaseFieldID": "debugNote",
+    "UserRole": "caseworker-test",
+    "CRUD": "CRUD"
+  }
+]

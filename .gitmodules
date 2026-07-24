@@ -1,6 +1,7 @@
 [submodule "test-builds/fpl-ccd-configuration"]
 	path = test-builds/fpl-ccd-configuration
-	url = https://github.com/banderous/fpl-ccd-configuration.git
+	url = git@github.com:hmcts/fpl-ccd-configuration.git
+	shallow = true
 [submodule "test-projects/pcs-api"]
 	path = test-projects/pcs-api
 	url = git@github.com:hmcts/pcs-api.git
@@ -24,6 +25,38 @@
 	path = wa-task-management-api
 	url = git@github.com:hmcts/wa-task-management-api.git
 	branch = decentralisation-poc
+[submodule "test-projects/ia-ccd-definitions"]
+	path = test-projects/ia-ccd-definitions
+	url = git@github.com:hmcts/ia-ccd-definitions.git
+	shallow = true
+[submodule "test-projects/sscs-tribunals-case-api"]
+	path = test-projects/sscs-tribunals-case-api
+	url = git@github.com:hmcts/sscs-tribunals-case-api.git
+	shallow = true
+[submodule "test-projects/civil-ccd-definition"]
+	path = test-projects/civil-ccd-definition
+	url = git@github.com:hmcts/civil-ccd-definition.git
+	shallow = true
+[submodule "test-projects/prl-ccd-definitions"]
+	path = test-projects/prl-ccd-definitions
+	url = git@github.com:hmcts/prl-ccd-definitions.git
+	shallow = true
+[submodule "test-projects/probate-back-office"]
+	path = test-projects/probate-back-office
+	url = git@github.com:hmcts/probate-back-office.git
+	shallow = true
+[submodule "test-projects/civil-service"]
+	path = test-projects/civil-service
+	url = git@github.com:hmcts/civil-service.git
+	shallow = true
+[submodule "test-projects/sscs-common"]
+	path = test-projects/sscs-common
+	url = git@github.com:hmcts/sscs-common.git
+	shallow = true
+[submodule "test-projects/prl-cos-api"]
+	path = test-projects/prl-cos-api
+	url = git@github.com:hmcts/prl-cos-api.git
+	shallow = true
 [submodule "test-projects/pcs-frontend"]
 	path = test-projects/pcs-frontend
 	url = https://github.com/hmcts/pcs-frontend.git

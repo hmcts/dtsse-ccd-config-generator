@@ -1,0 +1,19 @@
+[
+  { "ID": "Party", "ListElementCode": "name", "FieldType": "Text", "ElementLabel": "Name" },
+  { "ID": "Party", "ListElementCode": "role", "FieldType": "Text", "ElementLabel": "Role" },
+  { "ID": "Party", "ListElementCode": "attachments", "FieldType": "Collection", "FieldTypeParameter": "Document", "ElementLabel": "Attachments" },
+  { "ID": "Party", "ListElementCode": "wrap", "FieldType": "Wrapper", "ElementLabel": "A builder-idiom wrapper" },
+  { "ID": "Party", "ListElementCode": "costs", "FieldType": "RecoverableCosts", "ElementLabel": "An all-args-with-subclass-super complex type" },
+  { "ID": "Party", "ListElementCode": "holder", "FieldType": "ValueHolder", "ElementLabel": "A @Value complex type" },
+  { "ID": "Party", "ListElementCode": "noTrailingNewlineHost", "FieldType": "NoTrailingNewlineHost", "ElementLabel": "No-newline-at-EOF regression host" },
+  { "ID": "Party", "ListElementCode": "finalFieldParty", "FieldType": "FinalFieldParty", "ElementLabel": "A @Data final-field builder-idiom complex type" },
+  { "ID": "FinalFieldParty", "ListElementCode": "existingFinal", "FieldType": "Text", "ElementLabel": "Existing final field" },
+  { "ID": "FinalFieldParty", "ListElementCode": "synthLabel", "FieldType": "Text", "ElementLabel": "A definition-only member that must be synthesised onto the final-field class" },
+  { "ID": "Wrapper", "ListElementCode": "newDetail", "FieldType": "Text", "ElementLabel": "A definition-only member" },
+  { "ID": "RecoverableCosts", "ListElementCode": "band", "FieldType": "Text", "ElementLabel": "Band" },
+  { "ID": "RecoverableCosts", "ListElementCode": "reasons", "FieldType": "Text", "ElementLabel": "Reasons" },
+  { "ID": "RecoverableCosts", "ListElementCode": "bandLabel", "FieldType": "Text", "ElementLabel": "A definition-only member the subclass-super guard must not synthesise" },
+  { "ID": "ValueHolder", "ListElementCode": "held", "FieldType": "Text", "ElementLabel": "Held" },
+  { "ID": "ValueHolder", "ListElementCode": "stitchStatus", "FieldType": "Text", "ElementLabel": "A definition-only member the @Value/final-field guard must not synthesise" },
+  { "ID": "NoTrailingNewlineHost", "ListElementCode": "orphanField", "FieldType": "Text", "ElementLabel": "Regression fixture for the no-newline-at-EOF marker bug" }
+]

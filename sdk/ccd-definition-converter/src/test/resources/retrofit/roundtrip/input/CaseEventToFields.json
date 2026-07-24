@@ -1,0 +1,96 @@
+[
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "RETRO",
+    "CaseEventID": "createCase",
+    "CaseFieldID": "applicantName",
+    "DisplayContext": "MANDATORY",
+    "PageID": "1",
+    "PageLabel": "Applicant details",
+    "PageFieldDisplayOrder": 1,
+    "PageDisplayOrder": 1
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "RETRO",
+    "CaseEventID": "createCase",
+    "CaseFieldID": "applicantEmail",
+    "DisplayContext": "OPTIONAL",
+    "PageID": "1",
+    "PageFieldDisplayOrder": 2
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "RETRO",
+    "CaseEventID": "createCase",
+    "CaseFieldID": "claimType",
+    "DisplayContext": "MANDATORY",
+    "PageID": "1",
+    "PageFieldDisplayOrder": 3
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "RETRO",
+    "CaseEventID": "createCase",
+    "CaseFieldID": "documents",
+    "DisplayContext": "OPTIONAL",
+    "PageID": "1",
+    "PageFieldDisplayOrder": 4
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "RETRO",
+    "CaseEventID": "createCase",
+    "CaseFieldID": "hearingType",
+    "DisplayContext": "OPTIONAL",
+    "PageID": "2",
+    "PageLabel": "Hearing",
+    "PageFieldDisplayOrder": 1,
+    "PageDisplayOrder": 2
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "RETRO",
+    "CaseEventID": "createCase",
+    "CaseFieldID": "hearingLength",
+    "DisplayContext": "OPTIONAL",
+    "PageID": "2",
+    "PageFieldDisplayOrder": 2
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "RETRO",
+    "CaseEventID": "createCase",
+    "CaseFieldID": "settledAmount",
+    "DisplayContext": "OPTIONAL",
+    "PageID": "2",
+    "PageFieldDisplayOrder": 3
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "RETRO",
+    "CaseEventID": "updateCase",
+    "CaseFieldID": "extraCaseNote",
+    "DisplayContext": "OPTIONAL",
+    "PageID": "1",
+    "PageFieldDisplayOrder": 1
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "RETRO",
+    "CaseEventID": "updateCase",
+    "CaseFieldID": "changeOrganisationRequestField",
+    "DisplayContext": "COMPLEX",
+    "PageID": "1",
+    "PageFieldDisplayOrder": 2
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "RETRO",
+    "CaseEventID": "updateCase",
+    "CaseFieldID": "TTL",
+    "DisplayContext": "OPTIONAL",
+    "PageID": "1",
+    "PageFieldDisplayOrder": 2
+  }
+]

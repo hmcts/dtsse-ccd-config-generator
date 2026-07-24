@@ -1,0 +1,80 @@
+[
+  {
+    "ID": "ApplicantParty",
+    "FieldType": "EmailAddress",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "email"
+  },
+  {
+    "ID": "ApplicantParty",
+    "FieldType": "Text",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "partyId"
+  },
+  {
+    "ID": "ApplicantParty",
+    "FieldType": "FixedRadioList",
+    "FieldTypeParameter": "PartyType",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "partyType"
+  },
+  {
+    "ID": "ApplicantParty",
+    "FieldType": "Telephone",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "mobileNumber"
+  },
+  {
+    "ID": "ApplicantParty",
+    "FieldType": "Text",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "clientCode"
+  },
+  {
+    "ID": "ApplicantParty",
+    "FieldType": "Text",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "jobTitle"
+  },
+  {
+    "ID": "ApplicantParty",
+    "FieldType": "Text",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "customerReference"
+  },
+  {
+    "ID": "ApplicantParty",
+    "FieldType": "Text",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "pbaNumber"
+  },
+  {
+    "ID": "ApplicantParty",
+    "FieldType": "Text",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "organisationName"
+  },
+  {
+    "ID": "ApplicantParty",
+    "FieldType": "Telephone",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "telephoneNumber"
+  },
+  {
+    "ID": "ApplicantParty",
+    "FieldType": "Address",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "address"
+  }
+]

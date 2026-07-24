@@ -1,0 +1,67 @@
+[
+  {
+    "ID": "ScannedDocument",
+    "FieldTypeParameter": "ScannedDocumentType",
+    "FieldType": "FixedList",
+    "ElementLabel": "Select document type",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "type"
+  },
+  {
+    "ID": "ScannedDocument",
+    "FieldType": "Text",
+    "ElementLabel": "Document subtype",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "subtype"
+  },
+  {
+    "ID": "ScannedDocument",
+    "FieldType": "Document",
+    "ElementLabel": "Scanned document url",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "url"
+  },
+  {
+    "ID": "ScannedDocument",
+    "FieldType": "Text",
+    "ElementLabel": "Document control number",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "controlNumber"
+  },
+  {
+    "ID": "ScannedDocument",
+    "FieldType": "Text",
+    "ElementLabel": "File Name",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "fileName"
+  },
+  {
+    "ID": "ScannedDocument",
+    "FieldType": "DateTime",
+    "ElementLabel": "Scanned date",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "scannedDate"
+  },
+  {
+    "ID": "ScannedDocument",
+    "FieldType": "DateTime",
+    "ElementLabel": "Delivery date",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "deliveryDate"
+  },
+  {
+    "ID": "ScannedDocument",
+    "FieldType": "Text",
+    "ElementLabel": "Exception record reference",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "exceptionRecordReference"
+  }
+]

@@ -1,0 +1,54 @@
+[
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "CaseFieldID": "caseName",
+    "DisplayOrder": 1,
+    "Label": "Case name"
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "CaseFieldID": "familyManCaseNumber",
+    "DisplayOrder": 2,
+    "Label": "FamilyMan case number"
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "CaseFieldID": "[STATE]",
+    "DisplayOrder": 3,
+    "Label": "State"
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "CaseFieldID": "caseLocalAuthority",
+    "DisplayOrder": 4,
+    "Label": "Local authority"
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "CaseFieldID": "dateAndTimeSubmitted",
+    "DisplayOrder": 5,
+    "DisplayContextParameter" : "#DATETIMEDISPLAY(d  MMMM yyyy)",
+    "Label": "Date submitted",
+    "ResultsOrdering" : "1:DESC"
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "CaseFieldID": "evidenceHandled",
+    "DisplayOrder": 6,
+    "Label": "Supplementary evidence handled",
+    "ResultsOrdering" : "2:ASC"
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "CaseFieldID": "hearingPreferencesWelsh",
+    "DisplayOrder": 7,
+    "Label": "Is in Welsh"
+  }
+]

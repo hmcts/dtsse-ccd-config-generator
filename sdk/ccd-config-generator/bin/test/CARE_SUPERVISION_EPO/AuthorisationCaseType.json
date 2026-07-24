@@ -1,0 +1,50 @@
+[
+  {
+    "UserRole": "caseworker-publiclaw-solicitor",
+    "CRUD": "CRU",
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "CARE_SUPERVISION_EPO"
+  },
+  {
+    "UserRole": "caseworker-publiclaw-courtadmin",
+    "CRUD": "CRU",
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "CARE_SUPERVISION_EPO"
+  },
+  {
+    "UserRole": "caseworker-publiclaw-cafcass",
+    "CRUD": "CRU",
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "CARE_SUPERVISION_EPO"
+  },
+  {
+    "UserRole": "caseworker-publiclaw-systemupdate",
+    "CRUD": "CRU",
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "CARE_SUPERVISION_EPO"
+  },
+  {
+    "UserRole": "caseworker-publiclaw-bulkscan",
+    "CRUD": "R",
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "CARE_SUPERVISION_EPO"
+  },
+  {
+    "UserRole": "caseworker-publiclaw-bulkscansystemupdate",
+    "CRUD": "CRU",
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "CARE_SUPERVISION_EPO"
+  },
+  {
+    "CRUD" : "CRU",
+    "CaseTypeID" : "CARE_SUPERVISION_EPO",
+    "LiveFrom" : "01/01/2017",
+    "UserRole" : "caseworker-caa"
+  },
+  {
+    "CRUD" : "D",
+    "CaseTypeID" : "CARE_SUPERVISION_EPO",
+    "LiveFrom" : "01/01/2017",
+    "UserRole" : "caseworker-approver"
+  }
+]

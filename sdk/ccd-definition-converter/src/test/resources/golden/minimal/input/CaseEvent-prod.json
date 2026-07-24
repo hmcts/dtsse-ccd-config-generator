@@ -1,0 +1,14 @@
+[
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "Minimal",
+    "ID": "archiveCase",
+    "Name": "Archive case",
+    "Description": "Archive a closed case (production only)",
+    "DisplayOrder": 4,
+    "PreConditionState(s)": "Closed",
+    "PostConditionState": "*",
+    "SecurityClassification": "Public",
+    "ShowSummary": "N"
+  }
+]

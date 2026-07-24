@@ -1,0 +1,55 @@
+Sheet 'AuthorisationCaseEvent' row [confidentialityCheck|caseworker-privatelaw-courtadmin] column 'CRUD': expected <CRU> but was <R>
+Sheet 'AuthorisationCaseEvent' row [confidentialityCheck|caseworker-privatelaw-courtadmin]: expected row has no match in actual: {CaseTypeID=PRLAPPS, CaseEventID=confidentialityCheck, CRUD=R, AccessProfile=caseworker-privatelaw-courtadmin}
+Sheet 'AuthorisationCaseEvent' row [reopenClosedCases|caseworker-privatelaw-courtadmin] column 'CRUD': expected <CRU> but was <R>
+Sheet 'AuthorisationCaseEvent' row [reopenClosedCases|caseworker-privatelaw-courtadmin]: expected row has no match in actual: {CaseTypeID=PRLAPPS, CaseEventID=reopenClosedCases, CRUD=R, AccessProfile=caseworker-privatelaw-courtadmin}
+Sheet 'AuthorisationCaseEvent' row [serviceOfDocumentsConfCheck|caseworker-privatelaw-courtadmin] column 'CRUD': expected <CRU> but was <R>
+Sheet 'AuthorisationCaseEvent' row [serviceOfDocumentsConfCheck|caseworker-privatelaw-courtadmin]: expected row has no match in actual: {CaseTypeID=PRLAPPS, CaseEventID=serviceOfDocumentsConfCheck, CRUD=R, AccessProfile=caseworker-privatelaw-courtadmin}
+Sheet 'CaseEvent' row [returnToPreviousState] column 'CallBackURLSubmitted': expected <${CCD_DEF_COS_URL}/returnToPreviousState/submitted> but column is missing in actual
+Sheet 'CaseEventToFields' row [adminCreate|caseFromCourtNav] column 'DisplayContext': expected <Mandatory> but was <MANDATORY>
+Sheet 'CaseEventToFields' row [solicitorCreate|caseFromCourtNav] column 'DisplayContext': expected <Mandatory> but was <MANDATORY>
+Sheet 'CaseEventToFields' row [submitAndPay|helpWithFeesReferenceNumber] column 'DisplayContext': expected <Mandatory> but was <MANDATORY>
+Sheet 'CaseEventToFields' row [submitAndPay|helpWithFees] column 'DisplayContext': expected <Mandatory> but was <MANDATORY>
+Sheet 'CaseField' row [cafcassEmailAddress] column 'FieldTypeParameter': expected <Email> but was <Text>
+Sheet 'CaseField' row [hasRespondentAttendedMiam] column 'ShowSummaryContentOption': expected <Y> but column is missing in actual
+Sheet 'CaseField' row [helpMiamCostsExemptionsLabel] column 'ShowSummaryContentOption': expected <Y> but column is missing in actual
+Sheet 'CaseField' row [otherEmailAddress] column 'FieldTypeParameter': expected <Email> but was <Text>
+Sheet 'CaseField' row [respondentNameForResponseLabel10] column 'ShowSummaryContentOption': expected <Y> but column is missing in actual
+Sheet 'CaseField' row [respondentNameForResponseLabel1] column 'ShowSummaryContentOption': expected <Y> but column is missing in actual
+Sheet 'CaseField' row [respondentNameForResponseLabel2] column 'ShowSummaryContentOption': expected <Y> but column is missing in actual
+Sheet 'CaseField' row [respondentNameForResponseLabel3] column 'ShowSummaryContentOption': expected <Y> but column is missing in actual
+Sheet 'CaseField' row [respondentNameForResponseLabel4] column 'ShowSummaryContentOption': expected <Y> but column is missing in actual
+Sheet 'CaseField' row [respondentNameForResponseLabel5] column 'ShowSummaryContentOption': expected <Y> but column is missing in actual
+Sheet 'CaseField' row [respondentNameForResponseLabel6] column 'ShowSummaryContentOption': expected <Y> but column is missing in actual
+Sheet 'CaseField' row [respondentNameForResponseLabel7] column 'ShowSummaryContentOption': expected <Y> but column is missing in actual
+Sheet 'CaseField' row [respondentNameForResponseLabel8] column 'ShowSummaryContentOption': expected <Y> but column is missing in actual
+Sheet 'CaseField' row [respondentNameForResponseLabel9] column 'ShowSummaryContentOption': expected <Y> but column is missing in actual
+Sheet 'CaseField' row [respondentNameForResponseLabel] column 'ShowSummaryContentOption': expected <Y> but column is missing in actual
+Sheet 'CaseField' row [respondentReasonNotAttendingMiam] column 'ShowSummaryContentOption': expected <Y> but column is missing in actual
+Sheet 'CaseField' row [respondentWillingToAttendMiam] column 'ShowSummaryContentOption': expected <Y> but column is missing in actual
+Sheet 'CaseField' row [soaCafcassEmailAddressList] column 'FieldTypeParameter': expected <Email> but was <Text>
+Sheet 'CaseField' row [soaOtherEmailAddressList] column 'FieldTypeParameter': expected <Email> but was <Text>
+Sheet 'CaseField' row [whatIsMiamLabel] column 'ShowSummaryContentOption': expected <Y> but column is missing in actual
+Sheet 'CaseRoles' row [[CREATOR]] column 'Description': expected <Role to create events when explicit access users create cases > but was <Role to create events when explicit access users create cases>
+Sheet 'CaseTypeTab' row [CaseHistory|caseHistory]: unexpected row in actual: {CaseFieldID=caseHistory, CaseTypeID=PRLAPPS, Channel=CaseWorker, TabID=CaseHistory, TabLabel=History}
+Sheet 'ComplexTypes' row [ConfirmRecipients|cafcassEmailAddressList] column 'FieldTypeParameter': expected <Email> but was <Text>
+Sheet 'ComplexTypes' row [ConfirmRecipients|otherEmailAddressList] column 'FieldTypeParameter': expected <Email> but was <Text>
+Sheet 'ComplexTypes' row [DateFinalDecisionWasMade|finalDecisionDate] column 'DisplayContextParameter': expected <#DATETIMEENTRY(dd-MM-yyyy hh:mm)> but column is missing in actual
+Sheet 'ComplexTypes' row [DraftOrder|underTakingExpiryDateTime] column 'DisplayContextParameter': expected <#DATETIMEENTRY(dd-MM-yyyy hh:mm a)> but column is missing in actual
+Sheet 'ComplexTypes' row [FL400|fl404bDateAndTimeOfNextHearing] column 'DisplayContextParameter': expected <#DATETIMEENTRY(dd-MM-yyyy hh:mm)> but column is missing in actual
+Sheet 'ComplexTypes' row [FL400|fl404bDateOrderEnd] column 'DisplayContextParameter': expected <#DATETIMEENTRY(dd-MM-yyyy hh:mm a)> but column is missing in actual
+Sheet 'ComplexTypes' row [FL400|fl404bOccupationDate1] column 'DisplayContextParameter': expected <#DATETIMEENTRY(dd-MM-yyyy hh:mm a)> but column is missing in actual
+Sheet 'ComplexTypes' row [FL400|fl404bOccupationDate2] column 'DisplayContextParameter': expected <#DATETIMEENTRY(dd-MM-yyyy hh:mm a)> but column is missing in actual
+Sheet 'ComplexTypes' row [FL400|orderSpecifiedDateTime] column 'DisplayContextParameter': expected <#DATETIMEENTRY(dd-MM-yyyy hh:mm a)> but column is missing in actual
+Sheet 'ComplexTypes' row [HearingDateTimeOption|hearingDateTimeOption] column 'DisplayContextParameter': expected <#DATETIMEENTRY(dd-MM-yyyy hh:mm a)> but column is missing in actual
+Sheet 'ComplexTypes' row [ManageDocuments|restrictedDetails] column 'DisplayContext': expected <OPTIONAL> but column is missing in actual
+Sheet 'ComplexTypes' row [RequestFurtherInformationDetailsType|reviewByDate] column 'DisplayContextParameter': expected <#DATETIMEENTRY(dd-MM-yyyy)> but column is missing in actual
+Sheet 'ComplexTypes' row [StmtOfServiceAddRecipient|servedDateTimeOption] column 'DisplayContextParameter': expected <#DATETIMEENTRY(dd-MM-yyyy hh:mm a)> but column is missing in actual
+Sheet 'FixedLists' row [CafcassServiceApplicationEnum|cafcass] column 'HintText': expected <Add the email address of the Cafcass support officer.> but column is missing in actual
+Sheet 'FixedLists' row [RelationshipsEnum|guardian] column 'HintText': expected <Someone who represents the rights of a child, may be appointed by a parent, special guardian or the court> but column is missing in actual
+Sheet 'FixedLists' row [RelationshipsEnum|specialGuardian] column 'HintText': expected <Someone who represents the rights of a child, appointed by the court> but column is missing in actual
+Sheet 'FixedLists' row [RelationshipsEnum|stepMother] column 'HintText': expected <Test Hint> but column is missing in actual
+Sheet 'RoleToAccessProfiles' row [hmcts-admin]: expected row has no match in actual: {CaseTypeID=PRLAPPS, RoleName=hmcts-admin, ReadOnly=Y, AccessProfiles=GS_profile}
+Sheet 'RoleToAccessProfiles' row [hmcts-judiciary]: expected row has no match in actual: {CaseTypeID=PRLAPPS, RoleName=hmcts-judiciary, ReadOnly=Y, AccessProfiles=GS_profile}
+Sheet 'RoleToAccessProfiles' row [hmcts-legal-operations]: expected row has no match in actual: {CaseTypeID=PRLAPPS, RoleName=hmcts-legal-operations, ReadOnly=Y, AccessProfiles=GS_profile}
+Sheet 'SearchCriteria' row [{CaseTypeID=PRLAPPS, LiveTo=, OtherCaseReference=familymanCaseNumber}]: expected row has no match in actual: {LiveTo=, CaseTypeID=PRLAPPS, OtherCaseReference=familymanCaseNumber}
+Sheet 'SearchCriteria' row [{CaseTypeID=PRLAPPS, OtherCaseReference=familymanCaseNumber}]: unexpected row in actual: {CaseTypeID=PRLAPPS, OtherCaseReference=familymanCaseNumber}

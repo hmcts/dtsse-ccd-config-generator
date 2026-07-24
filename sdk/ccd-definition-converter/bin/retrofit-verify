@@ -1,0 +1,338 @@
+#!/usr/bin/env bash
+#
+# retrofit-verify — end-to-end verification of a retrofitted CCD service (proposal decisions 5 & 9,
+# phase 3). Given a MODEL repo checkout and a DEFINITION repo checkout, it:
+#
+#   1. runs the converter in retrofit mode against the definition, emitting retrofit.patch +
+#      companion config/enum/access sources;
+#   2. COPIES the model repo to a work dir (never mutating the original / any submodule) and applies
+#      retrofit.patch to the copy;
+#   3. publishes the SDK to mavenLocal;
+#   4. wires the SDK into the COPIED service build (plugin + companion sources) with a minimal
+#      appended snippet, and runs generateCCDConfig (gCC) there;
+#   5. diffs the generated definition against the definition repo via the RetrofitVerifyCli,
+#      printing the residual summary.
+#
+# The model/definition checkouts are treated as READ-ONLY. All mutation happens in the work copy.
+#
+# Usage:
+#   retrofit-verify \
+#     --model-repo   <path/to/service checkout> \
+#     --definition   <path/to/definition dir>   [--definition <dir>...] \
+#     --case-type    CIVIL \
+#     --model-class  uk.gov.hmcts.reform.civil.model.CaseData \
+#     [--model-source-root <path>]   # default: <model-repo>/src/main/java \
+#     [--config-package    <pkg>]    # default: <modelPackage> cut at '.model' + '.ccd' (CLI rule) \
+#     [--work-dir          <path>]   # default: <sdk build>/retrofit-verify/<case-type> \
+#     [--env KEY=VALUE]...           # default: CCD_DEF_ENV=nonprod \
+#     [--overlay-suffix suffix=[!]ENV:val]... \
+#     [--type-package-hint TypeName=fully.qualified.package]...  # disambiguate simple type names \
+#     [--gradle-arg <arg>]...        # extra args forwarded to the service's gCC invocation \
+#     [--skip-publish]               # reuse an already-published mavenLocal SDK \
+#     [--stop-after <stage>]         # convert|copy|patch|publish|generate (for debugging)
+#
+# Exit code: 0 = zero residual diffs, 1 = residual diffs remain, >1 = a pipeline stage failed.
+
+set -euo pipefail
+
+# --------------------------------------------------------------------------------------------------
+# Locate the SDK root (this script lives at sdk/ccd-definition-converter/bin/retrofit-verify).
+# --------------------------------------------------------------------------------------------------
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+CONVERTER_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
+SDK_DIR="$(cd "${CONVERTER_DIR}/.." && pwd)"
+REPO_ROOT="$(cd "${SDK_DIR}/.." && pwd)"
+GRADLEW="${REPO_ROOT}/gradlew"
+
+# --------------------------------------------------------------------------------------------------
+# Argument parsing.
+# --------------------------------------------------------------------------------------------------
+MODEL_REPO=""
+DEFINITIONS=()
+CASE_TYPE=""
+MODEL_CLASS_FQN=""
+MODEL_SOURCE_ROOT=""
+CONFIG_PACKAGE=""
+WORK_DIR=""
+ENV_ARGS=()
+OVERLAY_ARGS=()
+GRADLE_ARGS=()
+TYPE_HINTS=()
+SKIP_PUBLISH=0
+STOP_AFTER=""
+
+die() { echo "retrofit-verify: $*" >&2; exit 2; }
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --model-repo)        MODEL_REPO="$2"; shift 2 ;;
+    --definition)        DEFINITIONS+=("$2"); shift 2 ;;
+    --case-type)         CASE_TYPE="$2"; shift 2 ;;
+    --model-class)       MODEL_CLASS_FQN="$2"; shift 2 ;;
+    --model-source-root) MODEL_SOURCE_ROOT="$2"; shift 2 ;;
+    --config-package)    CONFIG_PACKAGE="$2"; shift 2 ;;
+    --work-dir)          WORK_DIR="$2"; shift 2 ;;
+    --env)               ENV_ARGS+=("$2"); shift 2 ;;
+    --overlay-suffix)    OVERLAY_ARGS+=("$2"); shift 2 ;;
+    --gradle-arg)        GRADLE_ARGS+=("$2"); shift 2 ;;
+    --type-package-hint) TYPE_HINTS+=("$2"); shift 2 ;;
+    --skip-publish)      SKIP_PUBLISH=1; shift ;;
+    --stop-after)        STOP_AFTER="$2"; shift 2 ;;
+    -h|--help)           sed -n '2,40p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    *)                   die "unknown argument: $1" ;;
+  esac
+done
+
+[[ -n "${MODEL_REPO}" ]]      || die "--model-repo is required"
+[[ ${#DEFINITIONS[@]} -gt 0 ]] || die "--definition is required"
+[[ -n "${CASE_TYPE}" ]]       || die "--case-type is required"
+[[ -n "${MODEL_CLASS_FQN}" ]] || die "--model-class is required (fully-qualified, e.g. a.b.CaseData)"
+[[ -d "${MODEL_REPO}" ]]      || die "--model-repo is not a directory: ${MODEL_REPO}"
+for d in "${DEFINITIONS[@]}"; do
+  [[ -d "$d" ]] || die "--definition is not a directory: $d"
+done
+
+# Derive the model package + simple name from the FQN.
+MODEL_CLASS="${MODEL_CLASS_FQN##*.}"
+MODEL_PACKAGE="${MODEL_CLASS_FQN%.*}"
+[[ "${MODEL_PACKAGE}" != "${MODEL_CLASS_FQN}" ]] || die "--model-class must be fully qualified"
+
+MODEL_REPO="$(cd "${MODEL_REPO}" && pwd)"
+: "${MODEL_SOURCE_ROOT:=${MODEL_REPO}/src/main/java}"
+[[ -d "${MODEL_SOURCE_ROOT}" ]] || die "model source root not found: ${MODEL_SOURCE_ROOT}"
+# Default root config package: same rule the CLI applies (ConvertCommand.deriveRootPackage) — cut the
+# model package at its first '.model' segment and append '.ccd' (e.g. .../probate.model.ccd.raw ->
+# .../probate.ccd), else append '.ccd'. The events, page and access sub-packages sit beneath it.
+if [[ -z "${CONFIG_PACKAGE}" ]]; then
+  CONFIG_PACKAGE="${MODEL_PACKAGE%%.model.*}"
+  [[ "${CONFIG_PACKAGE}" == "${MODEL_PACKAGE}" ]] && CONFIG_PACKAGE="${MODEL_PACKAGE%.model}"
+  CONFIG_PACKAGE="${CONFIG_PACKAGE}.ccd"
+fi
+: "${WORK_DIR:=${CONVERTER_DIR}/build/retrofit-verify/${CASE_TYPE}}"
+
+# Default env / overlays mirror the RoundTripTest CIVIL entry.
+[[ ${#ENV_ARGS[@]} -gt 0 ]] || ENV_ARGS=("CCD_DEF_ENV=nonprod")
+
+CONVERSION_DIR="${WORK_DIR}/conversion"        # retrofit.patch + companion sources
+COMPANION_SRC="${CONVERSION_DIR}/companion"    # generated config/enum/access
+PATCH_FILE="${CONVERSION_DIR}/report/retrofit.patch"
+MODEL_COPY="${WORK_DIR}/model-copy"            # writable copy of the service repo
+GEN_OUT="${WORK_DIR}/generated"                # gCC output root
+
+stage()  { echo; echo "########## retrofit-verify [$1] ##########"; }
+info()   { echo ">> $*"; }
+stop_if() { [[ "${STOP_AFTER}" == "$1" ]] && { info "stopping after stage '$1' as requested"; exit 0; } || true; }
+
+# Build the shared --input / --overlay-suffix argument lists (used by both convert + verify).
+DEF_ARGS=()
+for d in "${DEFINITIONS[@]}"; do DEF_ARGS+=(--input "$(cd "$d" && pwd)"); done
+CONV_OVERLAY_ARGS=()
+for o in "${OVERLAY_ARGS[@]:-}"; do [[ -n "$o" ]] && CONV_OVERLAY_ARGS+=(--overlay-suffix "$o"); done
+
+# --------------------------------------------------------------------------------------------------
+# Stage 1 — run the converter in retrofit mode (phase 2: patch + companion sources).
+# --------------------------------------------------------------------------------------------------
+stage "1/5 convert (retrofit)"
+rm -rf "${CONVERSION_DIR}"
+mkdir -p "${CONVERSION_DIR}"
+CONVERT_ARGS=(
+  --retrofit
+  "${DEF_ARGS[@]}"
+  --case-type "${CASE_TYPE}"
+  --model-source-root "${MODEL_SOURCE_ROOT}"
+  --model-repo-root "${MODEL_REPO}"
+  --model-package "${MODEL_PACKAGE}"
+  --model-class "${MODEL_CLASS}"
+  --config-package "${CONFIG_PACKAGE}"
+  --output-src "${COMPANION_SRC}"
+  --report-dir "${CONVERSION_DIR}/report"
+  # Harness-only: stage 4 points ccd.rootPackage at CONFIG_PACKAGE (the companion package), not the
+  # service's own application's package, so generateCCDConfig's single-@SpringBootApplication lookup
+  # needs the converter's minimal one here. This is a throwaway work-dir copy, never a persisted
+  # service source tree, so it does not carry the "two @SpringBootApplication classes" problem that
+  # retrofit-reports/regen-review-clones.sh output must avoid.
+  --emit-application
+  --allow-gaps
+)
+for o in "${CONV_OVERLAY_ARGS[@]:-}"; do [[ -n "$o" ]] && CONVERT_ARGS+=("$o"); done
+for h in "${TYPE_HINTS[@]:-}"; do [[ -n "$h" ]] && CONVERT_ARGS+=(--type-package-hint "$h"); done
+
+info "convert-ccd-definition ${CONVERT_ARGS[*]}"
+( cd "${REPO_ROOT}" && "${GRADLEW}" -q -p sdk :ccd-definition-converter:run \
+    --args="$(printf '%q ' "${CONVERT_ARGS[@]}")" )
+[[ -f "${PATCH_FILE}" ]] || die "converter did not emit ${PATCH_FILE}"
+PATCH_FILES_TOUCHED=$(grep -c '^--- ' "${PATCH_FILE}" || true)
+info "emitted retrofit.patch (${PATCH_FILES_TOUCHED} file(s)) + companion sources under ${COMPANION_SRC}"
+stop_if convert
+
+# --------------------------------------------------------------------------------------------------
+# Stage 2 — COPY the model repo to the work dir (never touch the original / the submodule).
+# --------------------------------------------------------------------------------------------------
+stage "2/5 copy model repo"
+rm -rf "${MODEL_COPY}"
+mkdir -p "${MODEL_COPY}"
+# Copy the working tree but skip heavy build artefacts and VCS metadata. rsync keeps this fast on
+# re-runs; fall back to cp -a where rsync is unavailable.
+if command -v rsync >/dev/null 2>&1; then
+  rsync -a --delete \
+    --exclude '.git' --exclude 'build' --exclude '.gradle' --exclude 'bin' \
+    --exclude 'node_modules' \
+    "${MODEL_REPO}/" "${MODEL_COPY}/"
+else
+  cp -a "${MODEL_REPO}/." "${MODEL_COPY}/"
+  rm -rf "${MODEL_COPY}/.git" "${MODEL_COPY}/build" "${MODEL_COPY}/.gradle"
+fi
+info "copied ${MODEL_REPO} -> ${MODEL_COPY}"
+stop_if copy
+
+# --------------------------------------------------------------------------------------------------
+# Stage 3 — apply retrofit.patch to the COPY. git apply is fine here (and needs no repo): the copy
+# is not a workspace repo (its .git was excluded), so this never touches tracked history.
+# --------------------------------------------------------------------------------------------------
+stage "3/5 apply patch"
+# The converter is now passed --model-repo-root, so the patch paths are rooted at the MODEL REPO root
+# (a/<sourceRootRel>/<pkg>/… — e.g. a/service/src/main/java/…) uniformly across every lane. Apply
+# from the copied repo root; --model-source-root is still validated to live under --model-repo.
+case "${MODEL_SOURCE_ROOT}" in
+  "${MODEL_REPO}/"*) : ;;
+  "${MODEL_REPO}")   : ;;
+  *) die "--model-source-root (${MODEL_SOURCE_ROOT}) must live under --model-repo (${MODEL_REPO})" ;;
+esac
+PATCH_ROOT="${MODEL_COPY}"
+info "applying $(basename "${PATCH_FILE}") under ${PATCH_ROOT}"
+# NB: no --recount. The converter emits correct hunk headers; --recount mis-counts across the many
+# concatenated single-file diffs (it treats a following file's `--- a/…` header as hunk body) and
+# spuriously rejects. Plain `git apply` honours the emitted counts and applies cleanly.
+if git -C "${PATCH_ROOT}" apply --check "${PATCH_FILE}" 2>/tmp/retrofit-apply-check.txt; then
+  git -C "${PATCH_ROOT}" apply "${PATCH_FILE}"
+  info "patch applied cleanly"
+else
+  echo "retrofit-verify: patch did NOT apply cleanly. git apply --check output:" >&2
+  cat /tmp/retrofit-apply-check.txt >&2
+  echo "retrofit-verify: retrying with --reject to surface conflicting hunks..." >&2
+  git -C "${PATCH_ROOT}" apply --reject "${PATCH_FILE}" || true
+  find "${PATCH_ROOT}" -name '*.rej' -print >&2 || true
+  die "patch application failed (see .rej files above)"
+fi
+stop_if patch
+
+# --------------------------------------------------------------------------------------------------
+# Stage 4 — publish the SDK to mavenLocal, then wire it into the copied build + run gCC.
+# --------------------------------------------------------------------------------------------------
+stage "4/5 publish SDK + generate"
+if [[ "${SKIP_PUBLISH}" -eq 0 ]]; then
+  info "publishing SDK to mavenLocal"
+  ( cd "${REPO_ROOT}" && "${GRADLEW}" -q -p sdk publishToMavenLocal )
+else
+  info "--skip-publish set; reusing existing mavenLocal SDK"
+fi
+
+# Determine the SDK version the plugin will request (RELEASE_VERSION or DEV-SNAPSHOT fallback).
+SDK_VERSION="${RELEASE_VERSION:-DEV-SNAPSHOT}"
+SDK_VERSION="${SDK_VERSION//refs\/tags\//}"
+
+# Wire the SDK into the copied build with a Gradle INIT SCRIPT rather than editing build.gradle. An
+# init script sidesteps the "buildscript{} must precede plugins{}" ordering rule (which broke a
+# naive append) and keeps the service's own build file byte-for-byte untouched — the minimal
+# footprint the proposal asks for. It: adds mavenLocal to the plugin + dependency resolvers, applies
+# hmcts.ccd.sdk on the root project, adds the companion generated sources as an extra main srcDir,
+# and configures the ccd extension so gCC writes the converted case type into GEN_OUT. rootPackage
+# points at the companion config package so the SDK's Main finds the single generated
+# @SpringBootApplication (not the service's own).
+INIT_SCRIPT="${WORK_DIR}/retrofit-verify-init.gradle"
+cat > "${INIT_SCRIPT}" <<EOF
+// Auto-generated by retrofit-verify. Wires the mavenLocal SDK into the copied service build.
+initscript {
+    repositories { mavenLocal(); gradlePluginPortal(); mavenCentral() }
+    dependencies { classpath "com.github.hmcts.rse-cft-lib:ccd-gradle-plugin:${SDK_VERSION}" }
+}
+allprojects {
+    repositories { mavenLocal() }
+    // Retrofit annotates the model with hundreds of definition-only synthesised fields, so a Lombok
+    // @Data / @ToString root case-type class (e.g. Civil's CaseData, ~1,100 fields once patched)
+    // generates a toString()/equals() as one deeply-nested binary expression. javac attributes that
+    // expression recursively (Attr.visitBinary), so past ~1k operands it overflows the compiler
+    // thread's default stack (a StackOverflowError in the compiler, not the model). Fork javac with a
+    // larger stack so the generated accessor methods attribute cleanly — this only affects how the
+    // copied service is compiled here, never the service's own build.
+    tasks.withType(JavaCompile).configureEach {
+        options.fork = true
+        options.forkOptions.jvmArgs = (options.forkOptions.jvmArgs ?: []) + ['-Xss128m']
+    }
+}
+rootProject {
+    afterEvaluate { p ->
+        p.pluginManager.apply(uk.gov.hmcts.ccd.sdk.CcdSdkPlugin)
+        p.sourceSets.main.java.srcDir(p.file("${COMPANION_SRC}"))
+        p.ccd {
+            configDir = p.file("${GEN_OUT}")
+            rootPackage = "${CONFIG_PACKAGE}"
+            caseType = "${CASE_TYPE}"
+        }
+        // The generator's Spring context has no web tier: run it as WebApplicationType.NONE so no
+        // embedded server / web-security chain starts on the real service's classpath. Complements
+        // the autoconfiguration excludes the converter bakes into ConverterGeneratedApplication.
+        p.tasks.named("generateCCDConfig") {
+            it.systemProperty("spring.main.web-application-type", "none")
+        }
+    }
+}
+EOF
+info "wrote init script ${INIT_SCRIPT}"
+
+# Run gCC inside the copied service. gCC is a JavaExec that only depends on compileJava, so the
+# team's tests/linters do not run anyway — but exclude the common quality gates defensively in case
+# a team wired them onto the compile path. `-x` on a task the service does NOT define is a hard
+# error in Gradle, so intersect the candidate excludes with the project's actual task list first.
+rm -rf "${GEN_OUT}"; mkdir -p "${GEN_OUT}"
+GCC_ENV=()
+for e in "${ENV_ARGS[@]}"; do GCC_ENV+=("$e"); done
+
+info "resolving which quality-gate tasks exist to exclude"
+EXISTING_TASKS="$( (cd "${MODEL_COPY}" && ./gradlew --init-script "${INIT_SCRIPT}" tasks --all --no-daemon -q 2>/dev/null) \
+  | awk '{print $1}' || true)"
+EXCLUDES=()
+for t in test checkstyleMain checkstyleTest checkstyleIntegrationTest checkstyleContractTest \
+         spotlessCheck spotlessJavaCheck spotbugsMain pmdMain forbiddenApisMain; do
+  if grep -qx "$t" <<<"${EXISTING_TASKS}"; then EXCLUDES+=(-x "$t"); fi
+done
+info "excluding: ${EXCLUDES[*]:-<none>}"
+
+info "running generateCCDConfig in ${MODEL_COPY} (env: ${GCC_ENV[*]})"
+(
+  cd "${MODEL_COPY}"
+  export "${GCC_ENV[@]}"
+  # Expand arrays only when non-empty ("${arr[@]:-}" would inject a spurious empty-string arg,
+  # which gradle rejects as "empty path").
+  ./gradlew --init-script "${INIT_SCRIPT}" generateCCDConfig --no-daemon \
+    ${EXCLUDES[@]+"${EXCLUDES[@]}"} \
+    ${GRADLE_ARGS[@]+"${GRADLE_ARGS[@]}"} \
+    || die "generateCCDConfig failed in the copied service (see output above)"
+)
+[[ -d "${GEN_OUT}/${CASE_TYPE}" ]] || die "gCC produced no ${CASE_TYPE}/ output under ${GEN_OUT}"
+info "generated definition under ${GEN_OUT}/${CASE_TYPE}"
+stop_if generate
+
+# --------------------------------------------------------------------------------------------------
+# Stage 5 — diff the generated definition against the definition repo.
+# --------------------------------------------------------------------------------------------------
+stage "5/5 verify (diff)"
+VERIFY_ARGS=("${DEF_ARGS[@]/--input/--definition}")
+VERIFY_ARGS+=(--case-type "${CASE_TYPE}" --generated-dir "${GEN_OUT}")
+for e in "${ENV_ARGS[@]}"; do VERIFY_ARGS+=(--env "$e"); done
+for o in "${OVERLAY_ARGS[@]:-}"; do [[ -n "$o" ]] && VERIFY_ARGS+=(--overlay-suffix "$o"); done
+
+info "retrofitVerify ${VERIFY_ARGS[*]}"
+set +e
+( cd "${REPO_ROOT}" && "${GRADLEW}" -q -p sdk :ccd-definition-converter:retrofitVerify \
+    --args="$(printf '%q ' "${VERIFY_ARGS[@]}")" )
+VERIFY_RC=$?
+set -e
+
+echo
+if [[ ${VERIFY_RC} -eq 0 ]]; then
+  echo "retrofit-verify: ${CASE_TYPE} is SEMANTICALLY EQUIVALENT (0 residual diffs)."
+else
+  echo "retrofit-verify: ${CASE_TYPE} has residual diffs (see the summary above); exit ${VERIFY_RC}."
+fi
+exit ${VERIFY_RC}

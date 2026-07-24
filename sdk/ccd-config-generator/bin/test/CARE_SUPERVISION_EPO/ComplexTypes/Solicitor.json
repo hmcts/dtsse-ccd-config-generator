@@ -1,0 +1,44 @@
+[
+  {
+    "ID": "Solicitor",
+    "FieldType": "Text",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "email"
+  },
+  {
+    "ID": "Solicitor",
+    "FieldType": "Text",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "telephone"
+  },
+  {
+    "ID": "Solicitor",
+    "FieldType": "Text",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "name"
+  },
+  {
+    "ID": "Solicitor",
+    "FieldType": "Text",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "mobile"
+  },
+  {
+    "ID": "Solicitor",
+    "FieldType": "Text",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "dx"
+  },
+  {
+    "ID": "Solicitor",
+    "FieldType": "Text",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public",
+    "ListElementCode": "reference"
+  }
+]

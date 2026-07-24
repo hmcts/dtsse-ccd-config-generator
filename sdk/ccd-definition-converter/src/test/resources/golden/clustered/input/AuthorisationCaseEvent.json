@@ -1,0 +1,9 @@
+[
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "Clustered",
+    "CaseEventID": "createCase",
+    "UserRole": "caseworker-test",
+    "CRUD": "CRUD"
+  }
+]

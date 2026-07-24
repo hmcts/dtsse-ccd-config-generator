@@ -76,6 +76,11 @@ class CaseFieldGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
       if (fieldId.matches("\\[.+\\]") || unwrapped.isPresent()) {
         continue;
       }
+      // A gated-off field placed on an event (e.g. a Label) must not emit its explicit CaseField
+      // row either, mirroring the reflection filter that already drops gated-off CaseData members.
+      if (config.getGatedOffFieldIds().contains(fieldId)) {
+        continue;
+      }
 
       final uk.gov.hmcts.ccd.sdk.api.Field field = explicitFields.get(fieldId);
       Map<String, Object> fieldData = getField(config.getCaseType(), fieldId);
@@ -193,8 +198,13 @@ class CaseFieldGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
       type = resolveSimpleType(field, target, type, annotation);
     }
 
+    // For a complex-typed field, @ComplexType(name) overrides the FieldType with the CCD type ID.
+    // An enum may now also carry @ComplexType(name) to preserve a renamed FixedList's list ID, but
+    // there the name is the FieldTypeParameter (a FixedRadioList), NOT the FieldType — so exclude
+    // enums, whose FieldType stays FixedList/FixedRadioList as resolveSimpleType decided.
     ComplexType complexType = field.getType().getAnnotation(ComplexType.class);
-    if (complexType != null && !Strings.isNullOrEmpty(complexType.name())) {
+    if (complexType != null && !Strings.isNullOrEmpty(complexType.name())
+        && !field.getType().isEnum()) {
       type = complexType.name();
     }
 
@@ -225,7 +235,11 @@ class CaseFieldGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
       CCD annotation) {
     ComplexType complexType = field.getType().getAnnotation(ComplexType.class);
     if (field.getType().isEnum() && (complexType == null || complexType.generate())) {
-      target.putIfAbsent("FieldTypeParameter", field.getType().getSimpleName());
+      // The list ID a FixedRadioList field references is the enum's @ComplexType(name) when set
+      // (a PascalCase-renamed enum preserving its original CCD list ID), else the simple name.
+      String listId = complexType != null && !Strings.isNullOrEmpty(complexType.name())
+          ? complexType.name() : field.getType().getSimpleName();
+      target.putIfAbsent("FieldTypeParameter", listId);
       return "FixedRadioList";
     }
     return switch (inferredType) {

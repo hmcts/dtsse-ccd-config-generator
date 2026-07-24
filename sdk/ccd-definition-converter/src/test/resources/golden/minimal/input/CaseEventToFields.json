@@ -1,0 +1,61 @@
+[
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "Minimal",
+    "CaseEventID": "createCase",
+    "CaseFieldID": "applicantName",
+    "DisplayContext": "MANDATORY",
+    "PageID": "1",
+    "PageLabel": "Applicant details",
+    "PageFieldDisplayOrder": 1,
+    "PageDisplayOrder": 1
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "Minimal",
+    "CaseEventID": "createCase",
+    "CaseFieldID": "applicantEmail",
+    "DisplayContext": "OPTIONAL",
+    "PageID": "1",
+    "PageFieldDisplayOrder": 2
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "Minimal",
+    "CaseEventID": "createCase",
+    "CaseFieldID": "claimType",
+    "DisplayContext": "MANDATORY",
+    "PageID": "2",
+    "PageLabel": "Claim details",
+    "PageFieldDisplayOrder": 1,
+    "PageDisplayOrder": 2,
+    "CallBackURLMidEvent": "${CCD_DEF_BASE_URL}/create/mid-event"
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "Minimal",
+    "CaseEventID": "createCase",
+    "CaseFieldID": "isUrgent",
+    "DisplayContext": "MANDATORY",
+    "PageID": "2",
+    "PageFieldDisplayOrder": 2
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "Minimal",
+    "CaseEventID": "addNotes",
+    "CaseFieldID": "notes",
+    "DisplayContext": "MANDATORY",
+    "PageID": "1",
+    "PageFieldDisplayOrder": 1
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "Minimal",
+    "CaseEventID": "addNotes",
+    "CaseFieldID": "case-notes-2",
+    "DisplayContext": "MANDATORY",
+    "PageID": "1",
+    "PageFieldDisplayOrder": 2
+  }
+]

@@ -10,6 +10,7 @@ import java.util.Map;
 import lombok.SneakyThrows;
 import org.springframework.stereotype.Component;
 import uk.gov.hmcts.ccd.sdk.ResolvedCCDConfig;
+import uk.gov.hmcts.ccd.sdk.StateId;
 import uk.gov.hmcts.ccd.sdk.api.CCD;
 import uk.gov.hmcts.ccd.sdk.api.HasRole;
 
@@ -23,7 +24,7 @@ class StateGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, S, R
     if (config.getStateClass().isEnum()) {
       for (Object enumConstant : config.getStateClass().getEnumConstants()) {
         Map<String, Object> field = enumToJsonMap(config.getCaseType(), config.getStateClass(), enumConstant,
-            enumConstant.toString());
+            StateId.of(enumConstant));
         field.put("DisplayOrder", i++);
         result.add(field);
       }
@@ -39,15 +40,20 @@ class StateGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, S, R
     Map<String, Object> field = JsonUtils.caseRow(caseType);
     field.put("ID", id);
 
-    CCD ccd = enumType.getField(enumConstant.toString()).getAnnotation(CCD.class);
+    // Read the constant's annotation via Enum.name(), not toString(): an enum whose toString() is
+    // overridden (e.g. an @JsonValue toString() returning the lowercase id) would otherwise throw
+    // NoSuchFieldException here.
+    CCD ccd = enumType.getField(((Enum<?>) enumConstant).name()).getAnnotation(CCD.class);
     String name = ccd != null && !Strings.isNullOrEmpty(ccd.label()) ? ccd.label() :
-        enumConstant.toString();
+        id;
     field.put("Name", name);
-    field.put("Description", name);
-    String desc = ccd != null ? ccd.hint() : "";
+    // Description defaults to Name (today's behaviour); @CCD#description() overrides it.
+    String description = ccd != null && !Strings.isNullOrEmpty(ccd.description()) ? ccd.description() : name;
+    field.put("Description", description);
+    String hint = ccd != null ? ccd.hint() : "";
 
-    if (!Strings.isNullOrEmpty(desc)) {
-      field.put("TitleDisplay", desc);
+    if (!Strings.isNullOrEmpty(hint)) {
+      field.put("TitleDisplay", hint);
     }
 
     return field;
