@@ -31,7 +31,7 @@ public class AccessTypeGenerator<T, S, R extends HasRole> implements ConfigGener
     final List<Map<String, Object>> rows = config.getAccessTypes().stream()
         .map(o -> toJson(config.getCaseType(), o))
         .collect(toList());
-    mergeInto(path, rows, new AddMissing(), false, "AccessTypeID");
+    mergeInto(path, rows, new AddMissing(), false, "AccessTypeID", "OrganisationProfileID");
   }
 
   private static Map<String, Object> toJson(String caseType, AccessType accessType) {

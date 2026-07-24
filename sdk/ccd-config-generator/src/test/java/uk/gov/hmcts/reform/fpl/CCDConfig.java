@@ -220,6 +220,24 @@ public class CCDConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<CaseData, S
       .groupAccessEnabled(true)
       .caseAccessGroupIdTemplate("CARE_SUPERVISION_EPO:$ORGID$");
 
+    // Same access type for a second org profile: must produce a distinct row per profile.
+    builder.accessType("SOLICITOR_ORG_POLICY")
+      .organisationProfileId("LOCALAUTH_PROFILE")
+      .accessMandatory(true)
+      .accessDefault(true)
+      .display(true)
+      .description("Solicitor access type description")
+      .hintText("Solicitor access type hint")
+      .displayOrder(1);
+
+    builder.accessTypeRole("SOLICITOR_ORG_POLICY")
+      .organisationProfileId("LOCALAUTH_PROFILE")
+      .organisationalRoleName("caseworker-approver")
+      .groupRoleName("caseworker-approver-group")
+      .caseAssignedRoleField("applicant1OrganisationPolicy")
+      .groupAccessEnabled(true)
+      .caseAccessGroupIdTemplate("CARE_SUPERVISION_EPO:$ORGID$");
+
     SearchCriteriaField searchCriteriaField1 =
       SearchCriteriaField.builder()
           .otherCaseReference("legacyCaseReference")
