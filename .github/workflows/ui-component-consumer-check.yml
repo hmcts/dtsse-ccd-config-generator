@@ -1,0 +1,51 @@
+name: UI component consumer check
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/ui-component-consumer-check.yml'
+      - '.gitmodules'
+      - 'frontend/ui-component-lib/**'
+      - 'gradle/**'
+      - 'gradlew'
+      - 'settings.gradle'
+      - 'test-projects/pcs-frontend'
+  push:
+    branches:
+      - master
+    paths:
+      - '.github/workflows/ui-component-consumer-check.yml'
+      - '.gitmodules'
+      - 'frontend/ui-component-lib/**'
+      - 'gradle/**'
+      - 'gradlew'
+      - 'settings.gradle'
+      - 'test-projects/pcs-frontend'
+
+permissions:
+  contents: read
+
+jobs:
+  pcs-frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          submodules: true
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v5
+        with:
+          distribution: zulu
+          java-version: 21
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: frontend/ui-component-lib/package-lock.json
+
+      - name: Check UI component package and PCS consumer
+        run: ./gradlew :ui-component-lib:check

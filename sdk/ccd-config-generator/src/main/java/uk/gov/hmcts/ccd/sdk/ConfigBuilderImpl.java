@@ -135,6 +135,11 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements Decentralised
   }
 
   @Override
+  public void shutterServiceExclude(R... roles) {
+    config.shutterServiceExcludedRoles.addAll(Set.of(roles));
+  }
+
+  @Override
   public void omitHistoryForRoles(R... roles) {
     omitHistoryForRoles.addAll(Set.of(roles));
   }

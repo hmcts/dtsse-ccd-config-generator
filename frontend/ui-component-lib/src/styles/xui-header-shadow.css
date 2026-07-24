@@ -1,0 +1,224 @@
+:host {
+  display: block;
+}
+
+@font-face {
+  font-family: "GDS Transport";
+  font-style: normal;
+  font-weight: 400;
+  src: url("./fonts/gds-transport-regular.woff2") format("woff2");
+  font-display: fallback;
+}
+
+@font-face {
+  font-family: "GDS Transport";
+  font-style: normal;
+  font-weight: 700;
+  src: url("./fonts/gds-transport-bold.woff2") format("woff2");
+  font-display: fallback;
+}
+
+.xui-header {
+  -moz-osx-font-smoothing: grayscale;
+  -webkit-font-smoothing: antialiased;
+  color: #0b0c0c;
+  display: block;
+  font-family: "GDS Transport", arial, sans-serif;
+  min-width: 1020px;
+}
+
+.xui-header,
+.xui-header * {
+  box-sizing: border-box;
+}
+
+.xui-header__surface {
+  background-color: #202020;
+  display: block;
+}
+
+.xui-header--judicial .xui-header__surface {
+  background-color: #8d0f0e;
+}
+
+.xui-header .govuk-skip-link {
+  display: block;
+  font-size: 0;
+  height: 0;
+  overflow: hidden;
+}
+
+.xui-header .govuk-skip-link:focus {
+  align-items: center;
+  background-color: #fd0;
+  color: #0b0c0c;
+  display: flex;
+  font-size: 16px;
+  height: 41px;
+  padding-left: 15px;
+  text-decoration: underline;
+  width: 100%;
+}
+
+.xui-header .hmcts-header__container,
+.xui-header .hmcts-primary-navigation__container {
+  margin: 0 30px;
+  width: calc(100% - 60px);
+}
+
+.xui-header .hmcts-header {
+  background-color: #0b0c0c;
+  box-sizing: content-box;
+  display: block;
+  height: 40px;
+  padding-top: 10px;
+}
+
+.xui-header--judicial .hmcts-header {
+  height: 38px;
+}
+
+.xui-header .hmcts-header__container {
+  height: 40px;
+  position: relative;
+}
+
+.xui-header--judicial .hmcts-header__container {
+  height: 38px;
+}
+
+.xui-header .hmcts-header__logo,
+.xui-header .hmcts-header .govuk-header__logo {
+  display: block;
+  float: left;
+  padding-bottom: 10px;
+}
+
+.xui-header .hmcts-header .govuk-header__logo {
+  width: 160px;
+}
+
+.xui-header .judicial-header__logo {
+  left: 0;
+  position: absolute;
+  top: 0;
+}
+
+.xui-header .judicial-header__logo img {
+  display: block;
+}
+
+.xui-header .hmcts-header__link,
+.xui-header .govuk-header__link {
+  border-bottom: 1px solid transparent;
+  color: #fff;
+  display: inline-block;
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 30px;
+  margin: 0 0 -1px;
+  text-decoration: none;
+}
+
+.xui-header .govuk-header__logotype-text {
+  color: #fff;
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 30px;
+}
+
+.xui-header .hmcts-header__link:hover,
+.xui-header .govuk-header__link:hover {
+  border-color: #fff;
+}
+
+.xui-header .hmcts-header__content {
+  display: block;
+  float: right;
+  padding-bottom: 10px;
+}
+
+.xui-header .hmcts-header__navigation {
+  margin-top: 3px;
+}
+
+.xui-header .hmcts-header__navigation-list,
+.xui-header .hmcts-primary-navigation__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.xui-header .hmcts-header__navigation-item,
+.xui-header .hmcts-primary-navigation__item {
+  margin: 0;
+  padding: 0;
+}
+
+.xui-header .hmcts-header__navigation-link {
+  color: #fff;
+  font-size: 19px;
+  font-weight: 400;
+  line-height: 25px;
+  text-decoration: underline;
+}
+
+.xui-header .hmcts-primary-navigation {
+  background-color: transparent;
+  clear: both;
+}
+
+.xui-header .hmcts-primary-navigation__container {
+  align-items: stretch;
+  display: flex;
+  height: 50px;
+}
+
+.xui-header .hmcts-primary-navigation__container > .govuk-header__logo {
+  flex: 0 0 160px;
+  padding-right: 15px;
+}
+
+.xui-header .hmcts-primary-navigation__nav {
+  align-items: stretch;
+  display: flex;
+  flex: 1;
+  justify-content: space-between;
+  min-width: 0;
+}
+
+.xui-header .hmcts-primary-navigation__list {
+  display: flex;
+}
+
+.xui-header .hmcts-primary-navigation__list--right {
+  margin-left: auto;
+}
+
+.xui-header .hmcts-primary-navigation__item {
+  margin-right: 20px;
+}
+
+.xui-header .hmcts-primary-navigation__item:last-child {
+  margin-right: 0;
+}
+
+.xui-header .hmcts-primary-navigation__link {
+  color: #fff;
+  display: block;
+  font-size: 19px;
+  font-weight: 700;
+  line-height: 25px;
+  padding: 12px 0 13px;
+  text-decoration: underline;
+}
+
+.xui-header .hmcts-header__link:focus,
+.xui-header .govuk-header__link:focus,
+.xui-header .hmcts-header__navigation-link:focus,
+.xui-header .hmcts-primary-navigation__link:focus {
+  background-color: #fd0;
+  color: #0b0c0c;
+  outline: 3px solid #fd0;
+  outline-offset: 0;
+}

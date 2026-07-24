@@ -34,7 +34,7 @@ import uk.gov.hmcts.ccd.sdk.api.HasRole;
 import uk.gov.hmcts.ccd.sdk.config.DecentralisedDataConfiguration;
 
 @SpringBootTest(classes = IdempotentReplayIntegrationTest.TestConfig.class, properties = {
-    "spring.datasource.url=jdbc:tc:postgresql:16-alpine:///ccd",
+    "spring.datasource.url=jdbc:tc:postgresql:15-alpine:///ccd",
     "spring.datasource.driver-class-name=org.testcontainers.jdbc.ContainerDatabaseDriver"
 })
 class IdempotentReplayIntegrationTest {

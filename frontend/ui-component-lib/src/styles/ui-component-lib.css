@@ -1,0 +1,104 @@
+@font-face {
+  font-family: "GDS Transport";
+  font-style: normal;
+  font-weight: 400;
+  src: url("./fonts/gds-transport-regular.woff2") format("woff2");
+  font-display: fallback;
+}
+
+@font-face {
+  font-family: "GDS Transport";
+  font-style: normal;
+  font-weight: 700;
+  src: url("./fonts/gds-transport-bold.woff2") format("woff2");
+  font-display: fallback;
+}
+
+.ui-component-lib-footer,
+.ui-component-lib-footer * {
+  box-sizing: border-box;
+}
+
+.ui-component-lib-footer {
+  -moz-osx-font-smoothing: grayscale;
+  -webkit-font-smoothing: antialiased;
+  background-color: #f3f2f1;
+  border-top: 10px solid #1d70b8;
+  color: #0b0c0c;
+  display: block;
+  font-family: "GDS Transport", arial, sans-serif;
+  font-size: 16px;
+  line-height: 20px;
+  min-width: 1020px;
+  padding: 40px 0 25px;
+}
+
+.ui-component-lib-footer .govuk-width-container {
+  margin: 0 auto;
+  max-width: 1920px;
+  min-width: 900px;
+  padding: 0 30px;
+}
+
+.ui-component-lib-footer .govuk-footer__meta {
+  align-items: flex-end;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin: 0 -15px;
+  max-width: 1860px;
+  min-width: 960px;
+  padding: 0 15px;
+}
+
+.ui-component-lib-footer .govuk-footer__meta-item {
+  margin: 0 15px 25px;
+  min-width: 0;
+}
+
+.ui-component-lib-footer .govuk-footer__meta-item--grow {
+  flex: 1;
+  flex-basis: 320px;
+}
+
+.ui-component-lib-footer .hmcts-footer__list {
+  display: flex;
+  flex-wrap: wrap;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.ui-component-lib-footer .hmcts-footer__list-item {
+  margin: 0 15px 5px 0;
+}
+
+.ui-component-lib-footer .govuk-section-break--l {
+  border: 0;
+  border-top: 1px solid #bfc1c3;
+  margin: 30px 0;
+}
+
+.ui-component-lib-footer .govuk-footer__link {
+  color: #0b0c0c;
+  text-decoration: underline;
+}
+
+.ui-component-lib-footer .govuk-footer__link:focus {
+  background-color: #fd0;
+  color: #0b0c0c;
+  outline: 3px solid #fd0;
+  outline-offset: 0;
+}
+
+.ui-component-lib-footer .visuallyhidden {
+  border: 0;
+  clip: rect(0 0 0 0);
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  padding: 0;
+  position: absolute;
+  white-space: nowrap;
+  width: 1px;
+}

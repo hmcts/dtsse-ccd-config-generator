@@ -6,6 +6,7 @@ import java.util.function.Supplier;
 import uk.gov.hmcts.ccd.decentralised.dto.DecentralisedCaseEvent;
 import uk.gov.hmcts.ccd.sdk.api.EventMetadata;
 import uk.gov.hmcts.ccd.sdk.api.callback.SubmitResponse;
+import uk.gov.hmcts.reform.ccd.client.model.SignificantItem;
 
 /**
  * Defines a single submission flow. Implementations decide how to apply an event
@@ -13,7 +14,7 @@ import uk.gov.hmcts.ccd.sdk.api.callback.SubmitResponse;
  */
 interface CaseSubmissionHandler {
 
-  CaseSubmissionHandlerResult apply(DecentralisedCaseEvent event);
+  CaseSubmissionHandlerResult apply(DecentralisedCaseEvent event, String authorisation);
 
   /**
    * Result returned by a submission handler after it has prepared all in-transaction mutations.
@@ -41,6 +42,10 @@ interface CaseSubmissionHandler {
        * Optional replacement values for the case event audit metadata.
        */
       Optional<EventMetadata> eventMetadata,
+      /*
+       * Optional CCD significant item to associate with the created audit event.
+       */
+      Optional<SignificantItem> significantItem,
       /*
        * Deferred response builder executed post-transaction by {@link CaseSubmissionService}.
        */

@@ -44,6 +44,7 @@ import uk.gov.hmcts.ccd.sdk.api.callback.AboutToStartOrSubmitResponse;
 import uk.gov.hmcts.ccd.sdk.api.callback.AboutToSubmit;
 import uk.gov.hmcts.ccd.sdk.api.callback.Submitted;
 import uk.gov.hmcts.ccd.sdk.config.CcdCaseDataMapperConfiguration;
+import uk.gov.hmcts.reform.ccd.client.model.SignificantItem;
 import uk.gov.hmcts.reform.ccd.client.model.SubmittedCallbackResponse;
 
 @Component
@@ -73,7 +74,10 @@ public class JsonCallbackBridge {
     this.requestMapper = mapper.copy()
         .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
         .setSerializationInclusion(JsonInclude.Include.ALWAYS);
-    this.httpClient = HttpClient.newHttpClient();
+    // Application Gateway rejects the h2c upgrade attempted by the default client for HTTP URLs.
+    this.httpClient = HttpClient.newBuilder()
+        .version(HttpClient.Version.HTTP_1_1)
+        .build();
     this.routes = indexPostRoutes(handlerMapping);
     this.localCallbackPlaceholder = normalisePlaceholderName(
         environment.getProperty(LOCAL_CALLBACK_PLACEHOLDER, "")
@@ -133,7 +137,12 @@ public class JsonCallbackBridge {
         .dataClassification((Map<String, Object>) callbackResponse.get("data_classification"))
         .securityClassification((String) callbackResponse.get("security_classification"))
         .errorMessageOverride((String) callbackResponse.get("error_message_override"))
+        .significantItem(significantItem(callbackResponse.get("significant_item")))
         .build();
+  }
+
+  private SignificantItem significantItem(Object value) {
+    return value == null ? null : mapper.convertValue(value, SignificantItem.class);
   }
 
   private Object invoke(String callbackUrl,
