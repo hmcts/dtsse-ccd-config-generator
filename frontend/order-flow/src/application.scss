@@ -1,0 +1,31 @@
+@use "govuk-frontend/dist/govuk/index" as *;
+
+#editor {
+  @include govuk-font($size: 19);
+
+  border: 1px solid govuk-colour("black", $variant: "tint-80");
+  color: govuk-colour("black");
+}
+
+.ProseMirror {
+  min-height: 12rem;
+  padding: govuk-spacing(4);
+  outline: none;
+}
+
+.ProseMirror-focused {
+  outline: $govuk-focus-width solid $govuk-focus-colour;
+  outline-offset: -$govuk-focus-width;
+}
+
+.ProseMirror h3 {
+  @include govuk-font($size: 19, $weight: bold);
+}
+
+.ProseMirror > :first-child {
+  margin-top: 0;
+}
+
+.ProseMirror > :last-child {
+  margin-bottom: 0;
+}

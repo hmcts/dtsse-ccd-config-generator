@@ -47,6 +47,9 @@ project(':et-shared').projectDir = file('test-projects/et-ccd-callbacks/et-share
 include 'ui-component-lib'
 project(':ui-component-lib').projectDir = file('frontend/ui-component-lib')
 
+include 'order-flow'
+project(':order-flow').projectDir = file('frontend/order-flow')
+
 if (file('ccd-data-store-api').exists()) {
     include 'ccd-data-store-api'
 }
