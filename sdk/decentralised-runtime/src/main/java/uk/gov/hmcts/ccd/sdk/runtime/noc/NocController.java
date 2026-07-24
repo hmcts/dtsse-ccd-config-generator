@@ -4,6 +4,7 @@ import static org.springframework.http.HttpHeaders.AUTHORIZATION;
 
 import java.util.List;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -27,6 +28,11 @@ import uk.gov.hmcts.reform.authorisation.validators.AuthTokenValidator;
 
 @RestController
 @ConditionalOnBean({ResolvedConfigRegistry.class, AuthTokenValidator.class, IdamService.class})
+@ConditionalOnProperty(
+    prefix = "ccd.decentralised-runtime.noc",
+    name = "enabled",
+    havingValue = "true"
+)
 @RequestMapping("/noc")
 public class NocController {
 
