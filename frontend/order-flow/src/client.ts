@@ -1,10 +1,20 @@
 import { initAll } from "govuk-frontend";
+import { baseKeymap } from "prosemirror-commands";
+import { dropCursor } from "prosemirror-dropcursor";
+import {
+  buildInputRules,
+  buildKeymap,
+  buildMenuItems,
+} from "prosemirror-example-setup";
+import { gapCursor } from "prosemirror-gapcursor";
+import { history } from "prosemirror-history";
+import { keymap } from "prosemirror-keymap";
+import { menuBar } from "prosemirror-menu";
 import { DOMParser, Schema } from "prosemirror-model";
-import { EditorState } from "prosemirror-state";
+import { EditorState, Plugin } from "prosemirror-state";
 import { EditorView } from "prosemirror-view";
 import { schema } from "prosemirror-schema-basic";
 import { addListNodes } from "prosemirror-schema-list";
-import { exampleSetup } from "prosemirror-example-setup";
 
 import "prosemirror-view/style/prosemirror.css";
 import "prosemirror-menu/style/menu.css";
@@ -32,7 +42,25 @@ const editorSchema = new Schema({
 
 const state = EditorState.create({
   doc: DOMParser.fromSchema(editorSchema).parse(content),
-  plugins: exampleSetup({ schema: editorSchema }),
+  plugins: [
+    buildInputRules(editorSchema),
+    keymap(buildKeymap(editorSchema)),
+    keymap(baseKeymap),
+    dropCursor(),
+    gapCursor(),
+    menuBar({
+      floating: true,
+      content: buildMenuItems(editorSchema).fullMenu,
+    }),
+    history(),
+    new Plugin({
+      props: {
+        attributes: {
+          class: "ProseMirror-example-setup-style",
+        },
+      },
+    }),
+  ],
 });
 
 new EditorView(editor, { state });
