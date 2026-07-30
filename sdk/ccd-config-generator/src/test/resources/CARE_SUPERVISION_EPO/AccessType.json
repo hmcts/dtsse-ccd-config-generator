@@ -22,4 +22,16 @@
   "LiveFrom" : "01/01/2017",
   "LiveTo" : "",
   "OrganisationProfileID" : "LOCALAUTH_PROFILE"
+}, {
+  "AccessDefault" : "Yes",
+  "AccessMandatory" : "Yes",
+  "AccessTypeID" : "APPROVER_CREATE_CASES",
+  "CaseTypeID" : "CARE_SUPERVISION_EPO",
+  "Description" : "Access to create cases",
+  "Display" : "Yes",
+  "DisplayOrder" : 1,
+  "HintText" : "Access to create cases",
+  "LiveFrom" : "01/01/2017",
+  "LiveTo" : "",
+  "OrganisationProfileID" : "LOCALAUTH_PROFILE"
 } ]

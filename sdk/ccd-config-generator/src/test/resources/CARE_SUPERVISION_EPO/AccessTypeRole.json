@@ -1,7 +1,7 @@
 [ {
   "AccessTypeID" : "SOLICITOR_ORG_POLICY",
   "CaseAccessGroupIDTemplate" : "CARE_SUPERVISION_EPO:$ORGID$",
-  "CaseAssignedRoleField" : "applicant1OrganisationPolicy",
+  "CaseAssignedRoleField" : "organisationPolicy",
   "CaseTypeID" : "CARE_SUPERVISION_EPO",
   "GroupAccessEnabled" : "Yes",
   "GroupRoleName" : "caseworker-approver-group",
@@ -12,10 +12,21 @@
 }, {
   "AccessTypeID" : "SOLICITOR_ORG_POLICY",
   "CaseAccessGroupIDTemplate" : "CARE_SUPERVISION_EPO:$ORGID$",
-  "CaseAssignedRoleField" : "applicant1OrganisationPolicy",
+  "CaseAssignedRoleField" : "organisationPolicy",
   "CaseTypeID" : "CARE_SUPERVISION_EPO",
   "GroupAccessEnabled" : "Yes",
   "GroupRoleName" : "caseworker-approver-group",
+  "LiveFrom" : "01/01/2017",
+  "LiveTo" : "",
+  "OrganisationalRoleName" : "caseworker-approver",
+  "OrganisationProfileID" : "LOCALAUTH_PROFILE"
+}, {
+  "AccessTypeID" : "APPROVER_CREATE_CASES",
+  "CaseAccessGroupIDTemplate" : "",
+  "CaseAssignedRoleField" : "",
+  "CaseTypeID" : "CARE_SUPERVISION_EPO",
+  "GroupAccessEnabled" : "No",
+  "GroupRoleName" : "",
   "LiveFrom" : "01/01/2017",
   "LiveTo" : "",
   "OrganisationalRoleName" : "caseworker-approver",

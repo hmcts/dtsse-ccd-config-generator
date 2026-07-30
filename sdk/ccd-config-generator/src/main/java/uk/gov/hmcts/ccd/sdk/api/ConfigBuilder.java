@@ -73,6 +73,13 @@ public interface ConfigBuilder<T, S, R extends HasRole> {
 
   AccessTypeRoleBuilder accessTypeRole(String accessTypeId);
 
+  /**
+   * Declares access types via {@link CCDAccessGroup} constants instead of the
+   * {@link #accessType} / {@link #accessTypeRole} builders. Rows added by those builders take
+   * precedence for a given {@code (AccessTypeID, OrganisationProfileID)} pair.
+   */
+  void accessGroups(CCDAccessGroup<T>... groups);
+
   SearchCriteria.SearchCriteriaBuilder searchCriteria();
 
   SearchParty.SearchPartyBuilder searchParty();
