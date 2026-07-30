@@ -265,6 +265,9 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements Decentralised
     Map<String, AccessType> derivedAccessTypes = new LinkedHashMap<>();
     List<AccessTypeRole> derivedRoles = Lists.newArrayList();
     Set<String> claimedKeys = new HashSet<>();
+    Map<Integer, String> claimedDisplayOrders = Maps.newHashMap();
+    config.accessTypes.forEach(accessType -> claimedDisplayOrders.put(accessType.getDisplayOrder(),
+        accessTypeKey(accessType.getAccessTypeId(), accessType.getOrganisationProfileId())));
 
     for (CCDAccessGroup<T> group : accessGroups) {
       String caseAssignedRoleField = resolveCaseAssignedRoleField(group);
@@ -275,7 +278,8 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements Decentralised
             "Access type '%s' declares no organisation profiles", group.getAccessTypeId()));
       }
 
-      for (String organisationProfileId : organisationProfileIds) {
+      for (int i = 0; i < organisationProfileIds.size(); i++) {
+        String organisationProfileId = organisationProfileIds.get(i);
         String key = accessTypeKey(group.getAccessTypeId(), organisationProfileId);
         if (!claimedKeys.add(key)) {
           throw new IllegalStateException(String.format(
@@ -284,6 +288,17 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements Decentralised
         }
 
         if (!existingAccessTypeKeys.contains(key)) {
+          // The definition store requires a unique DisplayOrder per AccessType row, so a group
+          // spanning N profiles occupies N consecutive slots from its declared order.
+          int displayOrder = group.getDisplayOrder() + i;
+          String clash = claimedDisplayOrders.putIfAbsent(displayOrder, key);
+          if (clash != null) {
+            throw new IllegalStateException(String.format(
+                "Access type '%s' for organisation profile '%s' reuses DisplayOrder %d, already "
+                    + "taken by '%s'", group.getAccessTypeId(), organisationProfileId, displayOrder,
+                clash));
+          }
+
           derivedAccessTypes.put(key, AccessType.builder()
               .accessTypeId(group.getAccessTypeId())
               .organisationProfileId(organisationProfileId)
@@ -292,7 +307,7 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements Decentralised
               .display(group.isDisplay())
               .description(group.getDescription())
               .hintText(group.getHintText())
-              .displayOrder(group.getDisplayOrder())
+              .displayOrder(displayOrder)
               .liveTo(group.getLiveTo())
               .build());
         }

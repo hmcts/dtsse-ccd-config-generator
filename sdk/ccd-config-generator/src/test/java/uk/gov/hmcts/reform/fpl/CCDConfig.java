@@ -214,7 +214,7 @@ public class CCDConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<CaseData, S
       .display(false)
       .description("Bulk scan access type description")
       .hintText("Bulk scan access type hint")
-      .displayOrder(2);
+      .displayOrder(10);
 
     builder.accessTypeRole("BULK_SCAN_ORG")
       .organisationProfileId("BULK_SCAN_PROFILE")
@@ -228,7 +228,7 @@ public class CCDConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<CaseData, S
       .display(true)
       .description("Explicitly configured, overrides the enum")
       .hintText("Solicitor access type hint")
-      .displayOrder(1);
+      .displayOrder(11);
 
     SearchCriteriaField searchCriteriaField1 =
       SearchCriteriaField.builder()
