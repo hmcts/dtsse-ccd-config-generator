@@ -245,26 +245,46 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements Decentralised
   /**
    * Translate registered {@link CCDAccessGroup}s into the same {@code AccessType} /
    * {@code AccessTypeRole} model objects the explicit builder calls produce, so the existing
-   * generators emit identical JSON. One row pair is emitted per organisation profile, since CCD
-   * keys both on {@code (AccessTypeID, OrganisationProfileID)}. Explicit builder rows win: a pair
-   * already configured via {@link #accessType} is not re-added.
+   * generators emit identical JSON. One row is emitted per organisation profile, since CCD keys both
+   * on {@code (AccessTypeID, OrganisationProfileID)}.
+   *
+   * <p>Explicit builder rows win, per row type: a pair already configured via {@link #accessType} is
+   * not derived again, and likewise for {@link #accessTypeRole}. Two groups claiming the same pair is
+   * a configuration error rather than a silent drop, since losing a row here is invisible until
+   * users are missing access.</p>
    */
   private void deriveAccessTypesFromGroups() {
-    Set<String> existingKeys = config.accessTypes.stream()
+    Set<String> existingAccessTypeKeys = config.accessTypes.stream()
         .map(accessType -> accessTypeKey(accessType.getAccessTypeId(),
             accessType.getOrganisationProfileId()))
+        .collect(Collectors.toCollection(HashSet::new));
+    Set<String> existingRoleKeys = config.accessTypeRoles.stream()
+        .map(role -> accessTypeKey(role.getAccessTypeId(), role.getOrganisationProfileId()))
         .collect(Collectors.toCollection(HashSet::new));
 
     Map<String, AccessType> derivedAccessTypes = new LinkedHashMap<>();
     List<AccessTypeRole> derivedRoles = Lists.newArrayList();
+    Set<String> claimedKeys = new HashSet<>();
 
     for (CCDAccessGroup<T> group : accessGroups) {
       String caseAssignedRoleField = resolveCaseAssignedRoleField(group);
+      List<String> organisationProfileIds = group.getOrganisationProfileIds();
 
-      for (String organisationProfileId : group.getOrganisationProfileIds()) {
+      if (organisationProfileIds == null || organisationProfileIds.isEmpty()) {
+        throw new IllegalStateException(String.format(
+            "Access type '%s' declares no organisation profiles", group.getAccessTypeId()));
+      }
+
+      for (String organisationProfileId : organisationProfileIds) {
         String key = accessTypeKey(group.getAccessTypeId(), organisationProfileId);
-        if (!existingKeys.contains(key)) {
-          derivedAccessTypes.putIfAbsent(key, AccessType.builder()
+        if (!claimedKeys.add(key)) {
+          throw new IllegalStateException(String.format(
+              "Duplicate access type '%s' for organisation profile '%s'",
+              group.getAccessTypeId(), organisationProfileId));
+        }
+
+        if (!existingAccessTypeKeys.contains(key)) {
+          derivedAccessTypes.put(key, AccessType.builder()
               .accessTypeId(group.getAccessTypeId())
               .organisationProfileId(organisationProfileId)
               .accessMandatory(group.isAccessMandatory())
@@ -277,16 +297,18 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements Decentralised
               .build());
         }
 
-        derivedRoles.add(AccessTypeRole.builder()
-            .accessTypeId(group.getAccessTypeId())
-            .organisationProfileId(organisationProfileId)
-            .organisationalRoleName(roleName(group.getOrganisationalRoleName()))
-            .groupRoleName(roleName(group.getGroupRoleName()))
-            .caseAssignedRoleField(caseAssignedRoleField)
-            .groupAccessEnabled(group.isGroupAccessEnabled())
-            .caseAccessGroupIdTemplate(group.getCaseAccessGroupIdTemplate())
-            .liveTo(group.getLiveTo())
-            .build());
+        if (!existingRoleKeys.contains(key)) {
+          derivedRoles.add(AccessTypeRole.builder()
+              .accessTypeId(group.getAccessTypeId())
+              .organisationProfileId(organisationProfileId)
+              .organisationalRoleName(roleName(group.getOrganisationalRoleName()))
+              .groupRoleName(roleName(group.getGroupRoleName()))
+              .caseAssignedRoleField(caseAssignedRoleField)
+              .groupAccessEnabled(group.isGroupAccessEnabled())
+              .caseAccessGroupIdTemplate(group.getCaseAccessGroupIdTemplate())
+              .liveTo(group.getLiveTo())
+              .build());
+        }
       }
     }
 

@@ -1,4 +1,15 @@
 [ {
+  "AccessTypeID" : "BULK_SCAN_ORG",
+  "CaseAccessGroupIDTemplate" : "",
+  "CaseAssignedRoleField" : "",
+  "CaseTypeID" : "CARE_SUPERVISION_EPO",
+  "GroupAccessEnabled" : "No",
+  "GroupRoleName" : "",
+  "LiveFrom" : "01/01/2017",
+  "LiveTo" : "",
+  "OrganisationalRoleName" : "caseworker-publiclaw-bulkscan",
+  "OrganisationProfileID" : "BULK_SCAN_PROFILE"
+}, {
   "AccessTypeID" : "SOLICITOR_ORG_POLICY",
   "CaseAccessGroupIDTemplate" : "CARE_SUPERVISION_EPO:$ORGID$",
   "CaseAssignedRoleField" : "organisationPolicy",

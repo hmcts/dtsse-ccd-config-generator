@@ -206,6 +206,30 @@ public class CCDConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<CaseData, S
 
     builder.accessGroups(AccessGroups.values());
 
+    // Builder-declared access type: keeps the non-enum path covered.
+    builder.accessType("BULK_SCAN_ORG")
+      .organisationProfileId("BULK_SCAN_PROFILE")
+      .accessMandatory(false)
+      .accessDefault(false)
+      .display(false)
+      .description("Bulk scan access type description")
+      .hintText("Bulk scan access type hint")
+      .displayOrder(2);
+
+    builder.accessTypeRole("BULK_SCAN_ORG")
+      .organisationProfileId("BULK_SCAN_PROFILE")
+      .organisationalRoleName("caseworker-publiclaw-bulkscan");
+
+    // Same pair as AccessGroups.SOLICITOR_ORG_POLICY declares: the builder row must win.
+    builder.accessType("SOLICITOR_ORG_POLICY")
+      .organisationProfileId("LOCALAUTH_PROFILE")
+      .accessMandatory(true)
+      .accessDefault(true)
+      .display(true)
+      .description("Explicitly configured, overrides the enum")
+      .hintText("Solicitor access type hint")
+      .displayOrder(1);
+
     SearchCriteriaField searchCriteriaField1 =
       SearchCriteriaField.builder()
           .otherCaseReference("legacyCaseReference")
