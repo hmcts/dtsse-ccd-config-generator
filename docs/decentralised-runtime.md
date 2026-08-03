@@ -16,6 +16,21 @@ ccd {
 
 Setting `decentralised = true` adds the [decentralised-runtime](../sdk/decentralised-runtime) as a dependency to your project.
 
+## Native Notice of Change endpoints
+
+The native Notice of Change controller is disabled by default, so applications that do not use the feature do not register
+the `/noc/verify-noc-answers` or `/noc/noc-requests` routes.
+
+Applications providing both `validate(...)` and `submit(...)` handlers through `builder.noticeOfChange()` must explicitly
+enable the controller:
+
+```yaml
+ccd:
+  decentralised-runtime:
+    noc:
+      enabled: true
+```
+
 ## Case views
 
 Services must provide a [`CaseView<CaseType, StateEnum>`](../sdk/decentralised-runtime/src/main/java/uk/gov/hmcts/ccd/sdk/CaseView.java) implementation per case type.
