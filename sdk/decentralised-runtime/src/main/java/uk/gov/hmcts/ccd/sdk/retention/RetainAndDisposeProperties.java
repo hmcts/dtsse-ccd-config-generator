@@ -1,7 +1,7 @@
 package uk.gov.hmcts.ccd.sdk.retention;
 
-import java.util.HashMap;
 import java.util.Map;
+import java.util.TreeMap;
 import lombok.Getter;
 import lombok.Setter;
 import org.springframework.boot.context.properties.ConfigurationProperties;
@@ -18,7 +18,8 @@ public class RetainAndDisposeProperties {
   private String cron = "0 0 2 * * *";
   private String zone = "UTC";
   private int maximumCandidatePercentage = 5;
-  private final Map<String, Integer> maximumCandidatePercentageByState = new HashMap<>();
+  private final Map<String, Integer> maximumCandidatePercentageByState =
+      new TreeMap<>(String.CASE_INSENSITIVE_ORDER);
   private int minimumCandidateCount = 10;
   private final SystemUser systemUser = new SystemUser();
 
@@ -49,11 +50,7 @@ public class RetainAndDisposeProperties {
   }
 
   int maximumCandidatePercentageFor(String state) {
-    return maximumCandidatePercentageByState.entrySet().stream()
-        .filter(entry -> entry.getKey().equalsIgnoreCase(state))
-        .map(Map.Entry::getValue)
-        .findFirst()
-        .orElse(maximumCandidatePercentage);
+    return maximumCandidatePercentageByState.getOrDefault(state, maximumCandidatePercentage);
   }
 
   public enum Mode {
