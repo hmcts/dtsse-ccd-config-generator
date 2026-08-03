@@ -44,6 +44,22 @@ AboutToSubmit and Submitted callbacks are consolidated into a single 'Submit' op
 Submit combines validation and persistence in a single step; services can validate the incoming event payload, rejecting it or accepting and persisting it.
 
 
+## Case search
+
+CCD Data Store still exposes a legacy case-search path backed by the central Postgres `case_data` table.
+
+The following CCD endpoints cannot be used to search for cases owned by a decentralised service:
+
+| API surface | Method and path |
+| --- | --- |
+| Standard case API | `GET /caseworkers/{uid}/jurisdictions/{jid}/case-types/{ctid}/cases` |
+| Standard case API | `GET /citizens/{uid}/jurisdictions/{jid}/case-types/{ctid}/cases` |
+| Standard case API | `GET /caseworkers/{uid}/jurisdictions/{jid}/case-types/{ctid}/cases/pagination_metadata` |
+| Standard case API | `GET /citizens/{uid}/jurisdictions/{jid}/case-types/{ctid}/cases/pagination_metadata` |
+| Aggregated UI API | `GET /aggregated/caseworkers/{uid}/jurisdictions/{jid}/case-types/{ctid}/cases` |
+
+Decentralised services should either use CCD's elasticsearch endpoints or, for system access, query their database directly.
+
 ## Callback emulation
 
 To keep existing applications working without large-scale changes, the SDK provides callback emulation.
