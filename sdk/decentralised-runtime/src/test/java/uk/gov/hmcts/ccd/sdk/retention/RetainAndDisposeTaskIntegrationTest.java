@@ -140,7 +140,7 @@ class RetainAndDisposeTaskIntegrationTest {
 
   @Test
   void appliesMaximumCandidatePercentageOverrideForState() {
-    properties.getMaximumCandidatePercentageByState().put("Delete", 100);
+    properties.getMaximumCandidatePercentageByState().put("delete", 100);
     RetainAndDisposeCase deleteCandidate = insertPopulation("CaseTypeA", "Delete", 10, 10);
     RetainAndDisposeCase draftCandidate = insertPopulation("CaseTypeA", "Draft", 20, 1);
 

@@ -110,7 +110,8 @@ ccd:
         Delete: 100
 ```
 
-State-specific values must be between 0 and 100. A state without an override uses `maximum-candidate-percentage`.
+State IDs are matched case-insensitively and values must be between 0 and 100.
+A state without an override uses `maximum-candidate-percentage`.
 If any case type and state exceeds its applicable percentage, the whole run is aborted before any cases are marked.
 
 ## Scheduling

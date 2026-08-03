@@ -22,6 +22,8 @@ class RetainAndDisposePropertiesTest {
         .orElseThrow(() -> new AssertionError("Retain and dispose properties were not bound"));
 
     assertThat(properties.maximumCandidatePercentageFor("Delete")).isEqualTo(100);
+    assertThat(properties.maximumCandidatePercentageFor("delete")).isEqualTo(100);
+    assertThat(properties.maximumCandidatePercentageFor("DELETE")).isEqualTo(100);
     assertThat(properties.maximumCandidatePercentageFor("Draft")).isEqualTo(5);
   }
 

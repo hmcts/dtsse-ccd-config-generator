@@ -49,7 +49,11 @@ public class RetainAndDisposeProperties {
   }
 
   int maximumCandidatePercentageFor(String state) {
-    return maximumCandidatePercentageByState.getOrDefault(state, maximumCandidatePercentage);
+    return maximumCandidatePercentageByState.entrySet().stream()
+        .filter(entry -> entry.getKey().equalsIgnoreCase(state))
+        .map(Map.Entry::getValue)
+        .findFirst()
+        .orElse(maximumCandidatePercentage);
   }
 
   public enum Mode {
