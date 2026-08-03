@@ -44,6 +44,22 @@ AboutToSubmit and Submitted callbacks are consolidated into a single 'Submit' op
 Submit combines validation and persistence in a single step; services can validate the incoming event payload, rejecting it or accepting and persisting it.
 
 
+## Case search
+
+CCD Data Store still exposes a legacy case-search path backed by the central Postgres `case_data` table.
+
+The following CCD endpoints cannot be used to search for cases owned by a decentralised service:
+
+| Method and path |
+| --- |
+| [`GET /caseworkers/{uid}/jurisdictions/{jid}/case-types/{ctid}/cases`](https://github.com/hmcts/ccd-data-store-api/blob/master/src/main/java/uk/gov/hmcts/ccd/endpoint/std/CaseDetailsEndpoint.java#L431) |
+| [`GET /citizens/{uid}/jurisdictions/{jid}/case-types/{ctid}/cases`](https://github.com/hmcts/ccd-data-store-api/blob/master/src/main/java/uk/gov/hmcts/ccd/endpoint/std/CaseDetailsEndpoint.java#L451) |
+| [`GET /caseworkers/{uid}/jurisdictions/{jid}/case-types/{ctid}/cases/pagination_metadata`](https://github.com/hmcts/ccd-data-store-api/blob/master/src/main/java/uk/gov/hmcts/ccd/endpoint/std/CaseDetailsEndpoint.java#L475) |
+| [`GET /citizens/{uid}/jurisdictions/{jid}/case-types/{ctid}/cases/pagination_metadata`](https://github.com/hmcts/ccd-data-store-api/blob/master/src/main/java/uk/gov/hmcts/ccd/endpoint/std/CaseDetailsEndpoint.java#L487) |
+| [`GET /aggregated/caseworkers/{uid}/jurisdictions/{jid}/case-types/{ctid}/cases`](https://github.com/hmcts/ccd-data-store-api/blob/master/src/main/java/uk/gov/hmcts/ccd/endpoint/ui/QueryEndpoint.java#L156) |
+
+Decentralised services should either use CCD's elasticsearch endpoints or, for system access, query their database directly.
+
 ## Callback emulation
 
 To keep existing applications working without large-scale changes, the SDK provides callback emulation.
