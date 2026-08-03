@@ -50,13 +50,13 @@ CCD Data Store still exposes a legacy case-search path backed by the central Pos
 
 The following CCD endpoints cannot be used to search for cases owned by a decentralised service:
 
-| API surface | Method and path |
-| --- | --- |
-| Standard case API | `GET /caseworkers/{uid}/jurisdictions/{jid}/case-types/{ctid}/cases` |
-| Standard case API | `GET /citizens/{uid}/jurisdictions/{jid}/case-types/{ctid}/cases` |
-| Standard case API | `GET /caseworkers/{uid}/jurisdictions/{jid}/case-types/{ctid}/cases/pagination_metadata` |
-| Standard case API | `GET /citizens/{uid}/jurisdictions/{jid}/case-types/{ctid}/cases/pagination_metadata` |
-| Aggregated UI API | `GET /aggregated/caseworkers/{uid}/jurisdictions/{jid}/case-types/{ctid}/cases` |
+| Method and path |
+| --- |
+| [`GET /caseworkers/{uid}/jurisdictions/{jid}/case-types/{ctid}/cases`](https://github.com/hmcts/ccd-data-store-api/blob/master/src/main/java/uk/gov/hmcts/ccd/endpoint/std/CaseDetailsEndpoint.java#L431) |
+| [`GET /citizens/{uid}/jurisdictions/{jid}/case-types/{ctid}/cases`](https://github.com/hmcts/ccd-data-store-api/blob/master/src/main/java/uk/gov/hmcts/ccd/endpoint/std/CaseDetailsEndpoint.java#L451) |
+| [`GET /caseworkers/{uid}/jurisdictions/{jid}/case-types/{ctid}/cases/pagination_metadata`](https://github.com/hmcts/ccd-data-store-api/blob/master/src/main/java/uk/gov/hmcts/ccd/endpoint/std/CaseDetailsEndpoint.java#L475) |
+| [`GET /citizens/{uid}/jurisdictions/{jid}/case-types/{ctid}/cases/pagination_metadata`](https://github.com/hmcts/ccd-data-store-api/blob/master/src/main/java/uk/gov/hmcts/ccd/endpoint/std/CaseDetailsEndpoint.java#L487) |
+| [`GET /aggregated/caseworkers/{uid}/jurisdictions/{jid}/case-types/{ctid}/cases`](https://github.com/hmcts/ccd-data-store-api/blob/master/src/main/java/uk/gov/hmcts/ccd/endpoint/ui/QueryEndpoint.java#L156) |
 
 Decentralised services should either use CCD's elasticsearch endpoints or, for system access, query their database directly.
 
