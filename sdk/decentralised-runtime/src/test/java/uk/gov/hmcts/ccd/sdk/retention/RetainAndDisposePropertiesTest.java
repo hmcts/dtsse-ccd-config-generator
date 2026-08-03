@@ -7,7 +7,10 @@ import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.context.properties.bind.Bindable;
 import org.springframework.boot.context.properties.bind.Binder;
+import org.springframework.boot.context.properties.source.ConfigurationPropertySources;
 import org.springframework.boot.context.properties.source.MapConfigurationPropertySource;
+import org.springframework.core.env.StandardEnvironment;
+import org.springframework.core.env.SystemEnvironmentPropertySource;
 
 class RetainAndDisposePropertiesTest {
 
@@ -25,6 +28,22 @@ class RetainAndDisposePropertiesTest {
     assertThat(properties.maximumCandidatePercentageFor("delete")).isEqualTo(100);
     assertThat(properties.maximumCandidatePercentageFor("DELETE")).isEqualTo(100);
     assertThat(properties.maximumCandidatePercentageFor("Draft")).isEqualTo(5);
+  }
+
+  @Test
+  void bindsMaximumCandidatePercentageByStateFromEnvironmentVariable() {
+    var environment = new StandardEnvironment();
+    environment.getPropertySources().addFirst(new SystemEnvironmentPropertySource(
+        "test-systemEnvironment",
+        Map.of("CCD_DECENTRALISEDRUNTIME_RETAINANDDISPOSE_MAXIMUMCANDIDATEPERCENTAGEBYSTATE_DELETE", "100")
+    ));
+    ConfigurationPropertySources.attach(environment);
+
+    RetainAndDisposeProperties properties = Binder.get(environment)
+        .bind(RetainAndDisposeProperties.PREFIX, Bindable.of(RetainAndDisposeProperties.class))
+        .orElseThrow(() -> new AssertionError("Retain and dispose properties were not bound"));
+
+    assertThat(properties.maximumCandidatePercentageFor("Delete")).isEqualTo(100);
   }
 
   @Test
