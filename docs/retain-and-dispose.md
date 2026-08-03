@@ -106,7 +106,6 @@ default safeguard for other states. For example, an explicit deletion state can 
 ccd:
   decentralised-runtime:
     retain-and-dispose:
-      maximum-candidate-percentage: 5
       maximum-candidate-percentage-by-state:
         Delete: 100
 ```
