@@ -1,5 +1,7 @@
 package uk.gov.hmcts.ccd.sdk.retention;
 
+import java.util.Map;
+import java.util.TreeMap;
 import lombok.Getter;
 import lombok.Setter;
 import org.springframework.boot.context.properties.ConfigurationProperties;
@@ -16,6 +18,8 @@ public class RetainAndDisposeProperties {
   private String cron = "0 0 2 * * *";
   private String zone = "UTC";
   private int maximumCandidatePercentage = 5;
+  private final Map<String, Integer> maximumCandidatePercentageByState =
+      new TreeMap<>(String.CASE_INSENSITIVE_ORDER);
   private int minimumCandidateCount = 10;
   private final SystemUser systemUser = new SystemUser();
 
@@ -28,9 +32,25 @@ public class RetainAndDisposeProperties {
     if (maximumCandidatePercentage < 0 || maximumCandidatePercentage > 100) {
       throw new IllegalStateException(PREFIX + ".maximum-candidate-percentage must be between 0 and 100");
     }
+    maximumCandidatePercentageByState.forEach((state, percentage) -> {
+      if (!StringUtils.hasText(state)) {
+        throw new IllegalStateException(
+            PREFIX + ".maximum-candidate-percentage-by-state must not contain a blank state"
+        );
+      }
+      if (percentage == null || percentage < 0 || percentage > 100) {
+        throw new IllegalStateException(
+            PREFIX + ".maximum-candidate-percentage-by-state[" + state + "] must be between 0 and 100"
+        );
+      }
+    });
     if (minimumCandidateCount < 1) {
       throw new IllegalStateException(PREFIX + ".minimum-candidate-count must be at least 1");
     }
+  }
+
+  int maximumCandidatePercentageFor(String state) {
+    return maximumCandidatePercentageByState.getOrDefault(state, maximumCandidatePercentage);
   }
 
   public enum Mode {

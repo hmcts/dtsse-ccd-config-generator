@@ -81,24 +81,25 @@ final class RetainAndDisposeTask implements Runnable {
   }
 
   private void checkCandidatePercentage(List<RetainAndDisposeCase> candidates) {
-    if (properties.getMaximumCandidatePercentage() == 100) {
-      return;
-    }
     List<Long> candidateReferences = candidates.stream()
         .map(RetainAndDisposeCase::reference)
         .toList();
     for (RetainAndDisposeRepository.CandidatePopulation population
         : repository.findCandidatePopulations(candidateReferences)) {
+      int maximumCandidatePercentage = properties.maximumCandidatePercentageFor(population.state());
+      if (maximumCandidatePercentage == 100) {
+        continue;
+      }
       if (population.candidateCount() < properties.getMinimumCandidateCount()) {
         continue;
       }
       if (population.candidateCount() * 100
-          > population.totalCount() * properties.getMaximumCandidatePercentage()) {
+          > population.totalCount() * maximumCandidatePercentage) {
         log.error(
             "Retain and dispose candidate circuit breaker tripped caseTypeId={} state={} candidateCount={} "
                 + "totalCount={} maximumCandidatePercentage={}. Aborting before marking any cases",
             population.caseTypeId(), population.state(), population.candidateCount(), population.totalCount(),
-            properties.getMaximumCandidatePercentage()
+            maximumCandidatePercentage
         );
         throw new IllegalStateException(
             "Retain and dispose candidates exceed the configured maximum percentage for case type "

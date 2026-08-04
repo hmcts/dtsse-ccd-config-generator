@@ -62,6 +62,7 @@ class RetainAndDisposeTaskIntegrationTest {
     policy.clear();
     properties.setMode(RetainAndDisposeProperties.Mode.LIVE);
     properties.setMaximumCandidatePercentage(5);
+    properties.getMaximumCandidatePercentageByState().clear();
     properties.setMinimumCandidateCount(1);
     nextReference = 1_000_000_000_000_000L;
 
@@ -135,6 +136,36 @@ class RetainAndDisposeTaskIntegrationTest {
     task.run();
 
     verify(ccdClient).markForDisposal(candidate);
+  }
+
+  @Test
+  void appliesMaximumCandidatePercentageOverrideForState() {
+    properties.getMaximumCandidatePercentageByState().put("delete", 100);
+    RetainAndDisposeCase deleteCandidate = insertPopulation("CaseTypeA", "Delete", 10, 10);
+    RetainAndDisposeCase draftCandidate = insertPopulation("CaseTypeA", "Draft", 20, 1);
+
+    task.run();
+
+    verify(ccdClient).markForDisposal(deleteCandidate);
+    verify(ccdClient).markForDisposal(draftCandidate);
+  }
+
+  @Test
+  void stateOverrideDoesNotPreventAnotherStateFromAbortingRun() {
+    properties.getMaximumCandidatePercentageByState().put("Delete", 100);
+    insertPopulation("CaseTypeA", "Delete", 10, 10);
+    insertPopulation("CaseTypeA", "Draft", 20, 2);
+
+    assertCircuitBreakerTrips();
+  }
+
+  @Test
+  void stateOverrideCanEnableCircuitBreakerWhenGlobalPercentageIsOneHundred() {
+    properties.setMaximumCandidatePercentage(100);
+    properties.getMaximumCandidatePercentageByState().put("Draft", 5);
+    insertPopulation("CaseTypeA", "Draft", 20, 2);
+
+    assertCircuitBreakerTrips();
   }
 
   private void assertCircuitBreakerTrips() {
