@@ -169,7 +169,21 @@ class DecentralisedESIndexer implements SmartLifecycle, DisposableBean {
       return;
     }
     if (running.compareAndSet(false, true)) {
+      checkElasticSearchConnection();
       workerExecutor.submit(this::listenAndPoll);
+    }
+  }
+
+  private void checkElasticSearchConnection() {
+    try {
+      if (client.ping().value()) {
+        log.info("Decentralised ES indexer successfully connected to Elasticsearch");
+      } else {
+        log.warn("Decentralised ES indexer could not connect to Elasticsearch on startup; indexing will retry");
+      }
+    } catch (Exception ex) {
+      log.warn("Decentralised ES indexer could not connect to Elasticsearch on startup; indexing will retry: {}",
+          ex.getMessage());
     }
   }
 
