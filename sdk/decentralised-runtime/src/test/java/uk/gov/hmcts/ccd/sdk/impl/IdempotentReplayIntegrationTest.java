@@ -31,7 +31,7 @@ import uk.gov.hmcts.ccd.sdk.CaseReindexingService;
 import uk.gov.hmcts.ccd.sdk.ResolvedCCDConfig;
 import uk.gov.hmcts.ccd.sdk.ResolvedConfigRegistry;
 import uk.gov.hmcts.ccd.sdk.api.HasRole;
-import uk.gov.hmcts.ccd.sdk.config.DecentralisedDataConfiguration;
+import uk.gov.hmcts.ccd.sdk.config.DecentralisedFlywayAutoConfiguration;
 
 @SpringBootTest(classes = IdempotentReplayIntegrationTest.TestConfig.class, properties = {
     "spring.datasource.url=jdbc:tc:postgresql:15-alpine:///ccd",
@@ -384,8 +384,9 @@ class IdempotentReplayIntegrationTest {
   }
 
   @Configuration
-  @Import({CaseDataRepository.class, CaseReindexingService.class, DecentralisedDataConfiguration.class})
+  @Import({CaseDataRepository.class, CaseReindexingService.class})
   @ImportAutoConfiguration({
+      DecentralisedFlywayAutoConfiguration.class,
       DataSourceAutoConfiguration.class,
       JdbcTemplateAutoConfiguration.class,
       DataSourceTransactionManagerAutoConfiguration.class,

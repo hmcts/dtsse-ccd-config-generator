@@ -21,13 +21,12 @@ import org.springframework.boot.autoconfigure.jdbc.JdbcTemplateAutoConfiguration
 import org.springframework.boot.autoconfigure.transaction.TransactionAutoConfiguration;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 import uk.gov.hmcts.ccd.sdk.RetainAndDisposePolicy;
-import uk.gov.hmcts.ccd.sdk.config.DecentralisedDataConfiguration;
+import uk.gov.hmcts.ccd.sdk.config.DecentralisedFlywayAutoConfiguration;
 import uk.gov.hmcts.ccd.sdk.impl.PostgresAdvisoryLock;
 
 @SpringBootTest(classes = RetainAndDisposeTaskIntegrationTest.TestConfig.class, properties = {
@@ -209,8 +208,8 @@ class RetainAndDisposeTaskIntegrationTest {
   }
 
   @Configuration
-  @Import(DecentralisedDataConfiguration.class)
   @ImportAutoConfiguration({
+      DecentralisedFlywayAutoConfiguration.class,
       DataSourceAutoConfiguration.class,
       DataSourceTransactionManagerAutoConfiguration.class,
       JdbcTemplateAutoConfiguration.class,

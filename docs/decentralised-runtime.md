@@ -116,8 +116,8 @@ The SDK targets PostgreSQL 15 for the decentralised runtime. Service-owned datab
 
 The SDK runs its Flyway migrations before the application's Flyway migrations. This allows an application-owned migration
 to add service-specific indexes or constraints to SDK-managed tables while keeping the two migration histories separate.
-Spring Boot `@DataJpaTest` and `@JdbcTest` slices automatically include the same ordering, so tests do not need to import
-the SDK Flyway auto-configuration explicitly.
+Spring Boot `@JdbcTest`, `@DataJdbcTest`, `@DataJpaTest` and `@JooqTest` slices automatically include the same ordering,
+so tests do not need to import the SDK Flyway auto-configuration explicitly.
 
 An application that supplies its own `FlywayMigrationStrategy` takes ownership of migration execution and must preserve
 the SDK-before-application ordering.

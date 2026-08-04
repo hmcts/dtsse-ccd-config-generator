@@ -24,11 +24,10 @@ import org.springframework.boot.autoconfigure.jdbc.JdbcTemplateAutoConfiguration
 import org.springframework.boot.autoconfigure.transaction.TransactionAutoConfiguration;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.transaction.PlatformTransactionManager;
-import uk.gov.hmcts.ccd.sdk.config.DecentralisedDataConfiguration;
+import uk.gov.hmcts.ccd.sdk.config.DecentralisedFlywayAutoConfiguration;
 
 @SpringBootTest(classes = CcdDataMigrationTaskIntegrationTest.TestConfig.class, properties = {
     "spring.datasource.url=jdbc:tc:postgresql:15-alpine:///ccd",
@@ -1499,8 +1498,8 @@ class CcdDataMigrationTaskIntegrationTest {
   }
 
   @Configuration
-  @Import(DecentralisedDataConfiguration.class)
   @ImportAutoConfiguration({
+      DecentralisedFlywayAutoConfiguration.class,
       DataSourceAutoConfiguration.class,
       DataSourceTransactionManagerAutoConfiguration.class,
       JdbcTemplateAutoConfiguration.class,
