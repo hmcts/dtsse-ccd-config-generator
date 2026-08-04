@@ -7,6 +7,7 @@ import com.sun.net.httpserver.HttpServer;
 import java.io.IOException;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
+import java.net.ServerSocket;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -77,6 +78,23 @@ class DecentralisedESIndexerTest {
     } finally {
       indexer.destroy();
       elasticsearch.stop(0);
+    }
+  }
+
+  @Test
+  void logsWarningAndContinuesWhenElasticsearchIsUnreachable(CapturedOutput output) throws Exception {
+    int unavailablePort = findUnavailablePort();
+    DecentralisedESIndexer indexer = createIndexer("http://localhost:" + unavailablePort);
+
+    try {
+      indexer.start();
+
+      assertThat(indexer.isRunning()).isTrue();
+      assertThat(output)
+          .contains("could not connect to Elasticsearch on startup; indexing will retry")
+          .contains("ConnectException");
+    } finally {
+      indexer.destroy();
     }
   }
 
@@ -186,11 +204,15 @@ class DecentralisedESIndexerTest {
   }
 
   private DecentralisedESIndexer createIndexer(HttpServer elasticsearch) {
+    return createIndexer("http://localhost:" + elasticsearch.getAddress().getPort());
+  }
+
+  private DecentralisedESIndexer createIndexer(String elasticsearchHost) {
     return new DecentralisedESIndexer(
         dataSource,
         new JdbcTemplate(dataSource),
         new TransactionTemplate(new DataSourceTransactionManager(dataSource)),
-        "http://localhost:" + elasticsearch.getAddress().getPort(),
+        elasticsearchHost,
         1_000,
         1_000,
         30,
@@ -198,5 +220,11 @@ class DecentralisedESIndexerTest {
         100,
         10_000,
         "1m");
+  }
+
+  private int findUnavailablePort() throws IOException {
+    try (ServerSocket socket = new ServerSocket(0, 0, InetAddress.getLoopbackAddress())) {
+      return socket.getLocalPort();
+    }
   }
 }

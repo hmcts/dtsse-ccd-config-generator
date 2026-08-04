@@ -182,8 +182,7 @@ class DecentralisedESIndexer implements SmartLifecycle, DisposableBean {
         log.warn("Decentralised ES indexer could not connect to Elasticsearch on startup; indexing will retry");
       }
     } catch (Exception ex) {
-      log.warn("Decentralised ES indexer could not connect to Elasticsearch on startup; indexing will retry: {}",
-          ex.getMessage());
+      log.warn("Decentralised ES indexer could not connect to Elasticsearch on startup; indexing will retry", ex);
     }
   }
 
