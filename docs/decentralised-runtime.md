@@ -114,6 +114,14 @@ To fulfil the aforementioned responsibilities, the SDK provisions and manages a 
 
 The SDK targets PostgreSQL 15 for the decentralised runtime. Service-owned databases should use PostgreSQL 15 as the supported baseline.
 
+The SDK runs its Flyway migrations before the application's Flyway migrations. This allows an application-owned migration
+to add service-specific indexes or constraints to SDK-managed tables while keeping the two migration histories separate.
+Spring Boot `@DataJpaTest` and `@JdbcTest` slices automatically include the same ordering, so tests do not need to import
+the SDK Flyway auto-configuration explicitly.
+
+An application that supplies its own `FlywayMigrationStrategy` takes ownership of migration execution and must preserve
+the SDK-before-application ordering.
+
 - `case_data` mirrors CCD’s `case_data` table, including metadata such as state, security classification, TTL and the JSON payload.
 - `case_event` mirrors CCD’s `case_event` table and adds an idempotency key.
 - `es_queue` tracks cases that require Elasticsearch indexing 
