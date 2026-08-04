@@ -39,7 +39,7 @@ import org.testcontainers.elasticsearch.ElasticsearchContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.utility.DockerImageName;
-import uk.gov.hmcts.ccd.sdk.config.DecentralisedDataConfiguration;
+import uk.gov.hmcts.ccd.sdk.config.DecentralisedFlywayAutoConfiguration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
@@ -786,13 +786,14 @@ class DecentralisedESIndexerChaosTest {
 
   @SpringBootConfiguration
   @ImportAutoConfiguration({
+      DecentralisedFlywayAutoConfiguration.class,
       DataSourceAutoConfiguration.class,
       DataSourceTransactionManagerAutoConfiguration.class,
       JdbcTemplateAutoConfiguration.class,
       TransactionAutoConfiguration.class,
       FlywayAutoConfiguration.class
   })
-  @Import({CaseReindexingService.class, DecentralisedDataConfiguration.class, DecentralisedESIndexer.class})
+  @Import({CaseReindexingService.class, DecentralisedESIndexer.class})
   static class ChaosApplication {
   }
 }

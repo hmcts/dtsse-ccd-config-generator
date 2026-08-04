@@ -9,13 +9,13 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.transaction.support.TransactionOperations;
 import uk.gov.hmcts.ccd.sdk.RetainAndDisposePolicy;
-import uk.gov.hmcts.ccd.sdk.config.DecentralisedDataConfiguration;
+import uk.gov.hmcts.ccd.sdk.config.DecentralisedFlywayAutoConfiguration;
 import uk.gov.hmcts.ccd.sdk.impl.PostgresAdvisoryLock;
 import uk.gov.hmcts.reform.authorisation.generators.AuthTokenGenerator;
 import uk.gov.hmcts.reform.ccd.client.CoreCaseDataApi;
 import uk.gov.hmcts.reform.idam.client.IdamClient;
 
-@AutoConfiguration(after = DecentralisedDataConfiguration.class)
+@AutoConfiguration(after = DecentralisedFlywayAutoConfiguration.class)
 @ConditionalOnSingleCandidate(RetainAndDisposePolicy.class)
 @ConditionalOnExpression(
     "!'${ccd.decentralised-runtime.retain-and-dispose.mode:off}'.equalsIgnoreCase('off')"
