@@ -29,12 +29,12 @@ dependencies {
 
     implementation('co.elastic.clients:elasticsearch-java') {
         version {
-            strictly '9.4.2'
+            strictly '9.4.4'
         }
     }
     implementation('co.elastic.clients:elasticsearch-rest5-client') {
         version {
-            strictly '9.4.2'
+            strictly '9.4.4'
         }
     }
 
