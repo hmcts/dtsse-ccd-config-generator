@@ -99,6 +99,27 @@ The same check runs in `dry-run`, allowing policy changes to be tested before en
 
 To handle low population case types the circuit breaker only applies once `minimum-candidate-count` is reached: default 10
 
+Use `maximum-candidate-percentage-by-state` when all cases in a state are expected to be eligible while retaining the
+default safeguard for other states. For example, an explicit deletion state can allow all of its cases to proceed:
+
+```yaml
+ccd:
+  decentralised-runtime:
+    retain-and-dispose:
+      maximum-candidate-percentage-by-state:
+        Delete: 100
+```
+
+State IDs are matched case-insensitively and values must be between 0 and 100.
+A state without an override uses `maximum-candidate-percentage`.
+An override applies to every case type returned by the policy whose state ID matches the configured key.
+If any case type and state exceeds its applicable percentage, the whole run is aborted before any cases are marked.
+
+Simple state IDs can also be configured using a standard Spring Boot environment variable. For example, the `Delete`
+override above is `CCD_DECENTRALISEDRUNTIME_RETAINANDDISPOSE_MAXIMUMCANDIDATEPERCENTAGEBYSTATE_DELETE=100`.
+For state IDs containing underscores or other property-name separators, use YAML or `SPRING_APPLICATION_JSON` so the
+state ID is preserved as a map key.
+
 ## Scheduling
 
 The consuming application must enable Spring scheduling. For example:
