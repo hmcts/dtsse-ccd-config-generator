@@ -7,6 +7,7 @@ import org.gradle.api.Plugin;
 import org.gradle.api.Project;
 import org.gradle.api.Task;
 import org.gradle.api.artifacts.Configuration;
+import org.gradle.api.artifacts.ExternalModuleDependency;
 import org.gradle.api.artifacts.repositories.MavenArtifactRepository;
 import org.gradle.api.artifacts.repositories.MavenRepositoryContentDescriptor;
 import org.gradle.api.file.DirectoryProperty;
@@ -17,7 +18,8 @@ import org.gradle.api.tasks.SourceSetContainer;
 
 public class CcdSdkPlugin implements Plugin<Project> {
 
-  private static final String DEFAULT_ELASTICSEARCH_CLIENT_VERSION = "9.4.5";
+  private static final String ELASTICSEARCH_CLIENT_VERSION_RANGE = "[9, 10)";
+  private static final String PREFERRED_ELASTICSEARCH_CLIENT_VERSION = "9.4.5";
 
   public void apply(Project project) {
     project.getPlugins().apply(JavaPlugin.class);
@@ -84,15 +86,12 @@ public class CcdSdkPlugin implements Plugin<Project> {
         project.getDependencies().add("implementation", "com.github.hmcts:decentralised-runtime:"
             + version);
         String dependencyNotation = "com.github.hmcts:ccd-runtime-indexing:" + version;
+        addElasticsearchClientDependency(project);
         if (config.runtimeIndexing) {
           project.getDependencies().add("implementation", dependencyNotation);
-          addElasticsearchClientDependencies(project, "implementation", config.elasticsearchClientVersion);
         } else {
-          project.getPluginManager().withPlugin("com.github.hmcts.rse-cft-lib", plugin -> {
-            project.getDependencies().add("cftlibImplementation", dependencyNotation);
-            addElasticsearchClientDependencies(project, "cftlibImplementation",
-                config.elasticsearchClientVersion);
-          });
+          project.getPluginManager().withPlugin("com.github.hmcts.rse-cft-lib", plugin ->
+              project.getDependencies().add("cftlibImplementation", dependencyNotation));
         }
         // Surface that we are decentralised to the spring boot apps.
         // This is an env var since it needs to be read beyond the application's classpath
@@ -116,13 +115,14 @@ public class CcdSdkPlugin implements Plugin<Project> {
     return implementationVersion != null ? implementationVersion : "DEV-SNAPSHOT";
   }
 
-  private void addElasticsearchClientDependencies(Project project, String configuration, String version) {
-    if (version == null || !version.matches("9\\..+")) {
-      throw new IllegalArgumentException("ccd.elasticsearchClientVersion must be a 9.x version");
-    }
-    // Explicit dependencies override versions managed by the Spring dependency-management plugin.
-    project.getDependencies().add(configuration, "co.elastic.clients:elasticsearch-java:" + version);
-    project.getDependencies().add(configuration, "co.elastic.clients:elasticsearch-rest5-client:" + version);
+  private void addElasticsearchClientDependency(Project project) {
+    ExternalModuleDependency dependency = (ExternalModuleDependency) project.getDependencies()
+        .create("co.elastic.clients:elasticsearch-java");
+    dependency.version(version -> {
+      version.strictly(ELASTICSEARCH_CLIENT_VERSION_RANGE);
+      version.prefer(PREFERRED_ELASTICSEARCH_CLIENT_VERSION);
+    });
+    project.getDependencies().add("implementation", dependency);
   }
 
   @Data
@@ -134,7 +134,6 @@ public class CcdSdkPlugin implements Plugin<Project> {
     private boolean decentralised = false;
     private boolean caseEventServiceBus = false;
     private boolean runtimeIndexing = false;
-    private String elasticsearchClientVersion = DEFAULT_ELASTICSEARCH_CLIENT_VERSION;
 
     public CCDConfig() {
     }
