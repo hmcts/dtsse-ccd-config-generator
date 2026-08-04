@@ -115,10 +115,7 @@ public class CcdSdkPlugin implements Plugin<Project> {
   private void addElasticsearchClientDependency(Project project) {
     ExternalModuleDependency dependency = (ExternalModuleDependency) project.getDependencies()
         .create("co.elastic.clients:elasticsearch-java");
-    dependency.version(version -> {
-      version.strictly("[9, 10)");
-      version.prefer("9.4.5");
-    });
+    dependency.version(version -> version.strictly("[9, 10)"));
     project.getDependencies().add("implementation", dependency);
   }
 
