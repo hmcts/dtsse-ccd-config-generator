@@ -3,9 +3,12 @@ package uk.gov.hmcts.ccd.sdk.impl.json;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.sun.net.httpserver.HttpServer;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.net.InetSocketAddress;
+import java.net.http.HttpTimeoutException;
 import java.util.Map;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -116,6 +119,36 @@ class JsonCallbackBridgeTest {
     assertThatThrownBy(() -> bridge.invoke("/callback", Map.of()))
         .isInstanceOf(IllegalStateException.class)
         .hasMessage("No absolute external URL found for JSON callback /callback");
+  }
+
+  @Test
+  void timesOutSlowExternalCallbackUsingConfiguredTimeout() throws Exception {
+    HttpServer server = HttpServer.create(new InetSocketAddress(0), 0);
+    server.createContext("/callback", exchange -> {
+      try {
+        Thread.sleep(1_000);
+      } catch (InterruptedException e) {
+        Thread.currentThread().interrupt();
+      }
+      exchange.sendResponseHeaders(200, 0);
+      exchange.close();
+    });
+    server.start();
+    try {
+      JsonCallbackBridge bridge = bridgeWith(
+          new MockEnvironment().withProperty("decentralisation.external-callback-timeout", "100ms")
+      );
+
+      assertThatThrownBy(() -> bridge.invoke(
+          "http://localhost:%s/callback".formatted(server.getAddress().getPort()),
+          Map.of()
+      ))
+          .isInstanceOf(IllegalStateException.class)
+          .hasMessageStartingWith("External JSON callback timed out")
+          .hasCauseInstanceOf(HttpTimeoutException.class);
+    } finally {
+      server.stop(0);
+    }
   }
 
   private JsonCallbackBridge bridgeWith(MockEnvironment environment, Object... controllers) {

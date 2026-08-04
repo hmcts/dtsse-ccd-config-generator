@@ -14,12 +14,15 @@ import java.net.URISyntaxException;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.net.http.HttpTimeoutException;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import lombok.SneakyThrows;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.context.properties.bind.Bindable;
 import org.springframework.boot.context.properties.bind.Binder;
@@ -48,12 +51,15 @@ import uk.gov.hmcts.reform.ccd.client.model.SignificantItem;
 import uk.gov.hmcts.reform.ccd.client.model.SubmittedCallbackResponse;
 
 @Component
+@Slf4j
 public class JsonCallbackBridge {
 
   private static final TypeReference<Map<String, Object>> MAP = new TypeReference<>() {};
   private static final String SERVICE_AUTHORIZATION = "ServiceAuthorization";
   private static final String LOCAL_CALLBACK_PLACEHOLDER = "decentralisation.local-callback-placeholder";
   private static final String EXTERNAL_CALLBACK_BASE_URLS = "decentralisation.external-callback-base-urls";
+  private static final String EXTERNAL_CALLBACK_TIMEOUT = "decentralisation.external-callback-timeout";
+  private static final Duration DEFAULT_EXTERNAL_CALLBACK_TIMEOUT = Duration.ofSeconds(30);
 
   private final ApplicationContext applicationContext;
   private final ObjectMapper mapper;
@@ -62,6 +68,7 @@ public class JsonCallbackBridge {
   private final Map<String, List<HandlerMethod>> routes;
   private final String localCallbackPlaceholder;
   private final Map<String, String> externalCallbackBaseUrls;
+  private final Duration externalCallbackTimeout;
 
   JsonCallbackBridge(ApplicationContext applicationContext,
                      @Qualifier(CcdCaseDataMapperConfiguration.CCD_CASE_DATA_OBJECT_MAPPER)
@@ -74,9 +81,11 @@ public class JsonCallbackBridge {
     this.requestMapper = mapper.copy()
         .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
         .setSerializationInclusion(JsonInclude.Include.ALWAYS);
+    this.externalCallbackTimeout = externalCallbackTimeout(environment);
     // Application Gateway rejects the h2c upgrade attempted by the default client for HTTP URLs.
     this.httpClient = HttpClient.newBuilder()
         .version(HttpClient.Version.HTTP_1_1)
+        .connectTimeout(externalCallbackTimeout)
         .build();
     this.routes = indexPostRoutes(handlerMapping);
     this.localCallbackPlaceholder = normalisePlaceholderName(
@@ -339,6 +348,9 @@ public class JsonCallbackBridge {
       assertSuccessfulResponse(callbackUrl, HttpStatusCode.valueOf(response.statusCode()));
       String body = response.body();
       return body == null || body.isBlank() ? null : mapper.readValue(body, Object.class);
+    } catch (HttpTimeoutException e) {
+      log.warn("External JSON callback timed out after {}: {}", externalCallbackTimeout, callbackUrl);
+      throw new IllegalStateException("External JSON callback timed out " + callbackUrl, e);
     } catch (IOException e) {
       throw new IllegalStateException("Unable to invoke external JSON callback " + callbackUrl, e);
     } catch (InterruptedException e) {
@@ -349,6 +361,7 @@ public class JsonCallbackBridge {
 
   private HttpRequest externalRequest(URI uri, Map<String, Object> payload, HttpHeaders headers) throws IOException {
     HttpRequest.Builder request = HttpRequest.newBuilder(uri)
+        .timeout(externalCallbackTimeout)
         .header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
         .POST(HttpRequest.BodyPublishers.ofByteArray(requestMapper.writeValueAsBytes(payload)));
     copyHeader(request, headers, HttpHeaders.AUTHORIZATION);
@@ -456,6 +469,12 @@ public class JsonCallbackBridge {
         .bind(EXTERNAL_CALLBACK_BASE_URLS, Bindable.mapOf(String.class, String.class))
         .orElse(Map.of());
     return Map.copyOf(values);
+  }
+
+  private Duration externalCallbackTimeout(Environment environment) {
+    return Binder.get(environment)
+        .bind(EXTERNAL_CALLBACK_TIMEOUT, Bindable.of(Duration.class))
+        .orElse(DEFAULT_EXTERNAL_CALLBACK_TIMEOUT);
   }
 
   private Optional<URI> absoluteUri(String value) {
