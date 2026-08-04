@@ -95,6 +95,8 @@ public final class RetrofitEventComplexTypeGraph implements RetrofitModelTypeGra
     // and the group falls back to a row passthrough.
     ModelSourceIndex.Type nested = null;
     if (member.declared instanceof ClassOrInterfaceType cit) {
+      // elementType already unwraps a {id, value} element wrapper; a SCALAR complex member is never
+      // wrapper-unwrapped, since CCD only wraps collection ELEMENTS.
       nested = (collection
           ? elementType(member.context, cit)
           : index.resolve(member.context, cit))
@@ -190,7 +192,120 @@ public final class RetrofitEventComplexTypeGraph implements RetrofitModelTypeGra
       return Optional.empty();
     }
     ClassOrInterfaceType inner = firstTypeArgument(element.get()).orElse(element.get());
-    return index.resolve(context, inner);
+    // A collection element that is itself a hand-rolled {id, value} wrapper unwraps to its value type:
+    // CCD serialises every collection element as {id, value}, so the member namespace a
+    // CaseEventToComplexTypes ListElementCode addresses is rooted at the VALUE type, not the wrapper.
+    // The generic form (List<ListValue<X>>, List<CcdValue<X>>) is already unwrapped by the type-argument
+    // step above; sscs instead declares non-generic wrappers (List<HearingOutcome> where HearingOutcome
+    // holds a single HearingOutcomeDetails value), which that step cannot see through.
+    return index.resolve(context, inner).map(this::unwrapValueWrapper);
+  }
+
+  /**
+   * Unwraps a hand-rolled CCD collection-element wrapper to the type its {@code value} member holds,
+   * or returns the type unchanged when it is not such a wrapper.
+   *
+   * <p>The discriminator is deliberately strict: the type's serialisable members, across its whole
+   * {@code extends} chain, must be exactly {@code value} (optionally alongside CCD's element
+   * {@code id}), and {@code value} must resolve to another parsed model class. A type that merely
+   * happens to have a {@code value} member alongside real data members is not a wrapper and is left
+   * alone; a {@code value} typed as a String/enum/JDK type resolves to nothing and is likewise left
+   * alone, so {@code MultiBundleConfig}-style value objects are unaffected.
+   *
+   * <p>An inherited {@code value} may be declared against a type variable
+   * ({@code SscsDocument extends AbstractDocument<SscsDocumentDetails>}, where {@code AbstractDocument}
+   * declares {@code D value}), so type arguments are carried down the chain and substituted.
+   */
+  private ModelSourceIndex.Type unwrapValueWrapper(ModelSourceIndex.Type element) {
+    Set<String> memberIds = new java.util.LinkedHashSet<>();
+    BoundType valueType = null;
+    Map<String, BoundType> bindings = Map.of();
+    ModelSourceIndex.Type current = element;
+    int guard = 0;
+    Set<String> visited = new java.util.HashSet<>();
+    while (current != null && guard++ < 20 && visited.add(current.fqn)) {
+      for (FieldDeclaration field : declaredFields(current)) {
+        if (isIgnored(field)) {
+          continue;
+        }
+        for (VariableDeclarator var : field.getVariables()) {
+          String id = effectiveId(field, var);
+          memberIds.add(id);
+          if ("value".equals(id) && valueType == null) {
+            valueType = substitute(var.getType(), current.unit, bindings);
+          }
+        }
+      }
+      bindings = superclassBindings(current, bindings);
+      current = superclassOf(current).orElse(null);
+    }
+    if (valueType == null || !WRAPPER_MEMBER_IDS.containsAll(memberIds)) {
+      return element;
+    }
+    if (!(valueType.type instanceof ClassOrInterfaceType cit)) {
+      return element;
+    }
+    return index.resolve(valueType.context, cit)
+        .filter(t -> !t.isEnum())
+        .orElse(element);
+  }
+
+  /**
+   * The member ids a CCD collection-element wrapper may carry: the value payload plus the element id
+   * CCD assigns each collection entry.
+   */
+  private static final Set<String> WRAPPER_MEMBER_IDS = Set.of("value", "id");
+
+  /**
+   * An AST type together with the compilation unit it was written in, so it resolves in the right
+   * import scope after being carried across files by type-argument substitution.
+   */
+  private record BoundType(Type type, com.github.javaparser.ast.CompilationUnit context) {
+  }
+
+  /**
+   * Resolves a declared type through the current type-variable bindings: a bare simple name matching a
+   * bound type variable becomes that binding (with the unit it was written in), else the type as-is.
+   */
+  private BoundType substitute(
+      Type declared, com.github.javaparser.ast.CompilationUnit context,
+      Map<String, BoundType> bindings) {
+    if (declared instanceof ClassOrInterfaceType cit && cit.getTypeArguments().isEmpty()) {
+      BoundType bound = bindings.get(cit.getNameAsString());
+      if (bound != null) {
+        return bound;
+      }
+    }
+    return new BoundType(declared, context);
+  }
+
+  /**
+   * The type-variable bindings a type's {@code extends} clause imposes on its superclass: the
+   * superclass's declared type parameters mapped to the arguments the subclass supplies, each
+   * substituted through the bindings already in force so a chain of generic subclasses composes.
+   */
+  private Map<String, BoundType> superclassBindings(
+      ModelSourceIndex.Type type, Map<String, BoundType> inherited) {
+    if (!type.decl.isClassOrInterfaceDeclaration()) {
+      return Map.of();
+    }
+    var extended = type.decl.asClassOrInterfaceDeclaration().getExtendedTypes();
+    if (extended.isEmpty()) {
+      return Map.of();
+    }
+    ClassOrInterfaceType supertype = extended.get(0);
+    List<Type> args = supertype.getTypeArguments().map(ArrayList::new).orElseGet(ArrayList::new);
+    Optional<ModelSourceIndex.Type> resolvedSuper = index.resolve(type.unit, supertype);
+    if (args.isEmpty() || resolvedSuper.isEmpty()
+        || !resolvedSuper.get().decl.isClassOrInterfaceDeclaration()) {
+      return Map.of();
+    }
+    var params = resolvedSuper.get().decl.asClassOrInterfaceDeclaration().getTypeParameters();
+    Map<String, BoundType> bindings = new java.util.LinkedHashMap<>();
+    for (int i = 0; i < params.size() && i < args.size(); i++) {
+      bindings.put(params.get(i).getNameAsString(), substitute(args.get(i), type.unit, inherited));
+    }
+    return bindings;
   }
 
   private static Optional<ClassOrInterfaceType> firstTypeArgument(ClassOrInterfaceType type) {

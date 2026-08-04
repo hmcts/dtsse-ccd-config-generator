@@ -183,4 +183,103 @@ class RetrofitEventComplexTypeGraphTest {
     assertThat(member.getLeafType().getModelFqn()).isNull();
     assertThat(member.getLeafGetter()).isEqualTo("getOrganisationId");
   }
+
+  @Test
+  void unwrapsANonGenericCollectionElementWrapperToItsValueType(@TempDir Path work)
+      throws Exception {
+    Path src = work.resolve("src");
+    // sscs's collection idiom: the element type is the team's OWN non-generic wrapper holding a single
+    // `value`, rather than a generic List<ListValue<X>>. CCD serialises every collection element as
+    // {id, value}, so the ListElementCode namespace is rooted at the VALUE type — the chain must walk
+    // HearingOutcomeDetails, not the HearingOutcome wrapper (which declares no such members).
+    write(src, "m", "HearingOutcomeDetails", "package m;\nimport lombok.Data;\n@Data\n"
+        + "public class HearingOutcomeDetails {\n  private String hearingOutcomeId;\n}\n");
+    write(src, "m", "HearingOutcome", "package m;\npublic class HearingOutcome {\n"
+        + "  private HearingOutcomeDetails value;\n"
+        + "  public HearingOutcomeDetails getValue() { return value; }\n}\n");
+    write(src, "m", "CaseData", "package m;\nimport java.util.List;\nimport lombok.Data;\n@Data\n"
+        + "public class CaseData {\n  private List<HearingOutcome> hearingOutcomes;\n}\n");
+
+    EventComplexTypeResolver resolver = resolverFor(src);
+    FieldModel field = FieldModel.builder()
+        .id("hearingOutcomes").javaName("hearingOutcomes")
+        .fieldType("Collection").fieldTypeParameter("hearingOutcomeDetails").build();
+
+    // The element-typed scope the emitter opens names the VALUE type, so the generated
+    // .complex(getter, HearingOutcomeDetails.class) walks the members the definition addresses.
+    assertThat(resolver.rootElementType(field).getModelFqn()).isEqualTo("m.HearingOutcomeDetails");
+    EventComplexTypeGroup.Member member = resolve(resolver, field, "hearingOutcomeId");
+    assertThat(member.getLeafType().getModelFqn()).isEqualTo("m.HearingOutcomeDetails");
+    assertThat(member.getLeafGetter()).isEqualTo("getHearingOutcomeId");
+  }
+
+  @Test
+  void unwrapsAWrapperWhoseValueIsInheritedThroughAGenericSuperclass(@TempDir Path work)
+      throws Exception {
+    Path src = work.resolve("src");
+    // sscs's second wrapper shape: the wrapper declares no members itself — `value` is inherited from a
+    // generic superclass and typed as the type VARIABLE D, bound by the subclass's extends clause. The
+    // binding must be substituted to reach SscsDocumentDetails.
+    write(src, "m", "SscsDocumentDetails", "package m;\nimport lombok.Data;\n@Data\n"
+        + "public class SscsDocumentDetails {\n  private String documentType;\n}\n");
+    write(src, "m", "AbstractDocument", "package m;\npublic class AbstractDocument<D> {\n"
+        + "  private String id;\n  private D value;\n"
+        + "  public D getValue() { return value; }\n}\n");
+    write(src, "m", "SscsDocument", "package m;\n"
+        + "public class SscsDocument extends AbstractDocument<SscsDocumentDetails> {\n}\n");
+    write(src, "m", "CaseData", "package m;\nimport java.util.List;\nimport lombok.Data;\n@Data\n"
+        + "public class CaseData {\n  private List<SscsDocument> sscsDocument;\n}\n");
+
+    EventComplexTypeResolver resolver = resolverFor(src);
+    FieldModel field = FieldModel.builder()
+        .id("sscsDocument").javaName("sscsDocument")
+        .fieldType("Collection").fieldTypeParameter("documentDetails").build();
+
+    assertThat(resolver.rootElementType(field).getModelFqn()).isEqualTo("m.SscsDocumentDetails");
+    EventComplexTypeGroup.Member member = resolve(resolver, field, "documentType");
+    assertThat(member.getLeafGetter()).isEqualTo("getDocumentType");
+  }
+
+  @Test
+  void doesNotUnwrapAnElementThatMerelyHasAValueMemberAlongsideRealData(@TempDir Path work)
+      throws Exception {
+    Path src = work.resolve("src");
+    // The guard against over-unwrapping: an element type whose members are `value` PLUS real data is a
+    // genuine complex type, not a CCD {id, value} wrapper. Unwrapping it would silently retarget every
+    // member chain onto the wrong class, so the walk must stay on the element type itself.
+    write(src, "m", "Amount", "package m;\nimport lombok.Data;\n@Data\n"
+        + "public class Amount {\n  private String currency;\n}\n");
+    write(src, "m", "Payment", "package m;\nimport lombok.Data;\n@Data\n"
+        + "public class Payment {\n  private Amount value;\n  private String reference;\n}\n");
+    write(src, "m", "CaseData", "package m;\nimport java.util.List;\nimport lombok.Data;\n@Data\n"
+        + "public class CaseData {\n  private List<Payment> payments;\n}\n");
+
+    EventComplexTypeResolver resolver = resolverFor(src);
+    FieldModel field = FieldModel.builder()
+        .id("payments").javaName("payments")
+        .fieldType("Collection").fieldTypeParameter("Payment").build();
+
+    assertThat(resolver.rootElementType(field).getModelFqn()).isEqualTo("m.Payment");
+    assertThat(resolve(resolver, field, "reference").getLeafGetter()).isEqualTo("getReference");
+  }
+
+  @Test
+  void doesNotUnwrapAWrapperWhoseValueIsAScalar(@TempDir Path work) throws Exception {
+    Path src = work.resolve("src");
+    // A single-`value` type whose value is a String is a value object (sscs's MultiBundleConfig,
+    // YesNo), not a complex-element wrapper: there is nothing to walk into, so it must be left alone
+    // rather than collapsing to an unresolvable node.
+    write(src, "m", "MultiBundleConfig", "package m;\nimport lombok.Data;\n@Data\n"
+        + "public class MultiBundleConfig {\n  private String value;\n}\n");
+    write(src, "m", "CaseData", "package m;\nimport java.util.List;\nimport lombok.Data;\n@Data\n"
+        + "public class CaseData {\n  private List<MultiBundleConfig> multiBundleConfiguration;\n}\n");
+
+    EventComplexTypeResolver resolver = resolverFor(src);
+    FieldModel field = FieldModel.builder()
+        .id("multiBundleConfiguration").javaName("multiBundleConfiguration")
+        .fieldType("Collection").fieldTypeParameter("MultiBundleConfig").build();
+
+    assertThat(resolver.rootElementType(field).getModelFqn()).isEqualTo("m.MultiBundleConfig");
+    assertThat(resolve(resolver, field, "value").getLeafGetter()).isEqualTo("getValue");
+  }
 }
