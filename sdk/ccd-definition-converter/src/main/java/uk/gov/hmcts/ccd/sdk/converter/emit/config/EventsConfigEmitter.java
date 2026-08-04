@@ -982,8 +982,10 @@ public class EventsConfigEmitter implements SourceEmitter {
   /**
    * The {@code ClassName} for an {@link EventComplexTypeGroup.TypeRef}: the team's own declared model
    * class by its fully-qualified name (retrofit mode — it may live in any sub-package), else the
-   * fully-qualified SDK predefined type, else a generated complex type by simple name in the model
-   * package.
+   * fully-qualified SDK predefined type, else a generated complex type resolved through
+   * {@link EmitContext#modelTypeClass} — which honours the retrofit FQN overrides, so a type the team
+   * declares outside the model package is imported from where it really is rather than from the model
+   * package where nothing of that name exists.
    */
   private ClassName typeName(EventComplexTypeGroup.TypeRef ref, EmitContext context) {
     if (ref.getModelFqn() != null) {
@@ -992,7 +994,7 @@ public class EventsConfigEmitter implements SourceEmitter {
     if (ref.getPredefinedFqn() != null) {
       return ClassName.bestGuess(ref.getPredefinedFqn());
     }
-    return ClassName.get(context.modelPackage(), ref.getSimpleName());
+    return context.modelTypeClass(ref.getSimpleName());
   }
 
   private CodeBlock buildStateTargeting(EventModel event, ClassName state, EmitContext context) {

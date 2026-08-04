@@ -28,19 +28,19 @@ GRADLEW="${REPO_ROOT}/gradlew"
 REPORTS="${CONVERTER_DIR}/retrofit-reports"
 PATCHES="${REPORTS}/patches"
 
-# lane | model-repo | model-source-root (rel to repo root) | definition dir(s, comma-sep) | case-type | model-class FQN | config-package | overlays (space-sep, may be empty) | env (space-sep)
+# lane | model-repo | model-source-root (rel to repo root) | definition dir(s, comma-sep) | case-type | model-class FQN | config-package | overlays (space-sep, may be empty) | env (space-sep) | type-package hints (space-sep Type=package, may be empty)
 LANES=(
   "probate-back-office|test-projects/probate-back-office|test-projects/probate-back-office/src/main/java|test-projects/probate-back-office/ccdImports/configFiles/CCD_Probate_Backoffice|GrantOfRepresentation|uk.gov.hmcts.probate.model.ccd.raw.request.CaseData|uk.gov.hmcts.probate.ccd.config|unshutter=!CCD_DEF_SHUTTERED:true shutter=CCD_DEF_SHUTTERED:true|CCD_DEF_ENV=nonprod CCD_DEF_PUBLISH=N"
   "fpl-ccd-configuration|test-builds/fpl-ccd-configuration|test-builds/fpl-ccd-configuration/service/src/main/java|test-builds/fpl-ccd-configuration/ccd-definition|CARE_SUPERVISION_EPO|uk.gov.hmcts.reform.fpl.model.CaseData|uk.gov.hmcts.reform.fpl.model|shuttered=CCD_DEF_SHUTTERED:true nonshuttered=!CCD_DEF_SHUTTERED:true|CCD_DEF_ENV=nonprod"
   "sscs-common|test-projects/sscs-common|test-projects/sscs-common/src/main/java|test-projects/sscs-tribunals-case-api/definitions/benefit/sheets|Benefit|uk.gov.hmcts.reform.sscs.ccd.domain.SscsCaseData|uk.gov.hmcts.reform.sscs.ccd.domain||CCD_DEF_ENV=nonprod CCD_DEF_PUBLISH=N"
   "et-ccd-callbacks|test-projects/et-ccd-callbacks|test-projects/et-ccd-callbacks/et-shared/src/main/java|test-projects/et-ccd-callbacks/ccd-definitions/jurisdictions/england-wales/json|ET_EnglandWales|uk.gov.hmcts.et.common.model.ccd.CaseData|uk.gov.hmcts.et.common.ccd.config||CCD_DEF_ENV=nonprod"
-  "prl-cos-api|test-projects/prl-cos-api|test-projects/prl-cos-api/src/main/java|test-projects/prl-ccd-definitions/definitions/private-law/json|PRLAPPS|uk.gov.hmcts.reform.prl.models.dto.ccd.CaseData|uk.gov.hmcts.reform.prl.ccd.config||CCD_DEF_ENV=nonprod"
+  "prl-cos-api|test-projects/prl-cos-api|test-projects/prl-cos-api/src/main/java|test-projects/prl-ccd-definitions/definitions/private-law/json|PRLAPPS|uk.gov.hmcts.reform.prl.models.dto.ccd.CaseData|uk.gov.hmcts.reform.prl.ccd.config||CCD_DEF_ENV=nonprod|Miam=uk.gov.hmcts.reform.prl.models.complextypes.citizen.response.miam"
   "civil-service|test-projects/civil-service|test-projects/civil-service/src/main/java|test-projects/civil-ccd-definition/ccd-definition/civil|CIVIL|uk.gov.hmcts.reform.civil.model.CaseData|uk.gov.hmcts.reform.civil.model||CCD_DEF_ENV=nonprod"
 )
 
 run_lane() {
   local spec="$1"
-  IFS='|' read -r lane modelrepo srcroot defs casetype modelclass configpkg overlays env <<<"${spec}"
+  IFS='|' read -r lane modelrepo srcroot defs casetype modelclass configpkg overlays env hints <<<"${spec}"
   local clone="${REPORTS}/${lane}"
   local modelpkg="${modelclass%.*}"
   local modelsimple="${modelclass##*.}"
@@ -61,6 +61,7 @@ run_lane() {
     --output-src "${out}/companion" --report-dir "${out}/report"
     --allow-gaps)
   for o in ${overlays}; do args+=(--overlay-suffix "$o"); done
+  for h in ${hints-}; do args+=(--type-package-hint "$h"); done
 
   ( cd "${REPO_ROOT}" && "${GRADLEW}" -q -p sdk :ccd-definition-converter:run \
       --args="$(printf '%q ' "${args[@]}")" )

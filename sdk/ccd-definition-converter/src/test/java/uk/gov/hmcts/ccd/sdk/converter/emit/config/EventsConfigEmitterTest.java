@@ -629,4 +629,59 @@ class EventsConfigEmitterTest {
     assertThat(src).contains(".complex(Party::getChildren, Child.class)");
     assertThat(src).contains(".mandatory(Child::getChildName)");
   }
+
+  @Test
+  void groupMemberTypeIsImportedFromTheRetrofitOverridePackage() {
+    // In retrofit mode a group's element/leaf type is often a class the team declares OUTSIDE the
+    // model package (prl's WelshNeed/FurtherEvidence in models.complextypes for a models.dto.ccd
+    // model package). Defaulting the reference to the model package imports a type that exists
+    // nowhere, so every such reference fails to compile; the emitter must resolve it through the same
+    // retrofitTypeFqnOverrides map the complex-type emitter uses.
+    EventComplexTypeGroup.TypeRef party =
+        EventComplexTypeGroup.TypeRef.builder().simpleName("Party").build();
+    EventComplexTypeGroup group = EventComplexTypeGroup.builder()
+        .eventId("createCase")
+        .caseFieldId("parties")
+        .rootGetter("getParties")
+        .rootElementType(party)
+        .members(List.of(EventComplexTypeGroup.Member.builder()
+            .hops(List.of())
+            .leafType(party)
+            .leafGetter("getPartyName")
+            .contextMethod("mandatory")
+            .build()))
+        .build();
+
+    PageModel.PageField field = PageModel.PageField.builder()
+        .caseFieldId("parties")
+        .displayContext("COMPLEX")
+        .build();
+    PageModel page = PageModel.builder().pageId("1").fields(List.of(field)).build();
+    EventModel event = EventModel.builder()
+        .id("createCase").javaName("createCase").name("Create Case")
+        .preStates(List.of()).postState("Open").grants(Map.of()).pages(List.of(page))
+        .build();
+    FieldModel parties = FieldModel.builder()
+        .id("parties").javaName("parties").fieldType("Collection").fieldTypeParameter("Party")
+        .build();
+    CaseTypeModel model = modelWithEvents(List.of(event), List.of(parties)).toBuilder()
+        .eventComplexTypeGroups(Map.of("createCaseparties", group))
+        .build();
+
+    ConversionOptions opts = ConversionOptions.builder()
+        .modelPackage(EnvironmentFlagsEmitterTest.MODEL_PKG)
+        .configPackage(EnvironmentFlagsEmitterTest.CONFIG_PKG)
+        .eventsPerConfig(40)
+        .retrofitTypeFqnOverrides(Map.of("Party", "uk.gov.hmcts.test.other.Party"))
+        .build();
+    EmitContext context = EmitContext.builder()
+        .options(opts)
+        .gaps(new GapCollector())
+        .build();
+
+    String src = allSrc(new EventsConfigEmitter().emit(model, context));
+
+    assertThat(src).contains("import uk.gov.hmcts.test.other.Party;");
+    assertThat(src).doesNotContain("import " + EnvironmentFlagsEmitterTest.MODEL_PKG + ".Party;");
+  }
 }

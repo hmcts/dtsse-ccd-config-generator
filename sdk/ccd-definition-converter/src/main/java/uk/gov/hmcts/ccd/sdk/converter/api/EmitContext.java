@@ -70,6 +70,26 @@ public class EmitContext {
   }
 
   /**
+   * The {@code ClassName} for a model type known only by its simple name: the FQN the retrofit
+   * override map gives it, else {@code <modelPackage>.<simpleName>}.
+   *
+   * <p>In retrofit mode a definition complex-type ID may name a class the team declares in some other
+   * sub-package ({@code models.complextypes.WelshNeed} for a {@code models.dto.ccd} model package), or
+   * a PascalCase class whose camelCase ID no longer emits a companion. Defaulting such a reference to
+   * the model package emits an import of a type that exists nowhere. {@code ComplexTypeEmitter} has
+   * always resolved member types through this map; going through the same lookup here keeps every
+   * emitter's imports pointing at the one place the class actually is.
+   *
+   * @param simpleName the type's simple name
+   * @return the class name to reference
+   */
+  public ClassName modelTypeClass(String simpleName) {
+    String fqn = options.getRetrofitTypeFqnOverrides() == null
+        ? null : options.getRetrofitTypeFqnOverrides().get(simpleName);
+    return fqn == null ? ClassName.get(modelPackage(), simpleName) : ClassName.bestGuess(fqn);
+  }
+
+  /**
    * The {@code CaseData}-typed class the generated config binds its typed getters to. In generate
    * mode this is the freshly generated {@code <modelPackage>.CaseData}; in retrofit mode it is the
    * team's own root model class ({@link ConversionOptions#getRetrofitCaseDataClass()}), so the
