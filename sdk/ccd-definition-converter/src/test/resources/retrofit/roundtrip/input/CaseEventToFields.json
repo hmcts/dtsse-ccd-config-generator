@@ -79,10 +79,19 @@
     "LiveFrom": "01/01/2017",
     "CaseTypeID": "RETRO",
     "CaseEventID": "updateCase",
+    "CaseFieldID": "secondaryClaimType",
+    "DisplayContext": "OPTIONAL",
+    "PageID": "1",
+    "PageFieldDisplayOrder": 2
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "RETRO",
+    "CaseEventID": "updateCase",
     "CaseFieldID": "changeOrganisationRequestField",
     "DisplayContext": "COMPLEX",
     "PageID": "1",
-    "PageFieldDisplayOrder": 2
+    "PageFieldDisplayOrder": 3
   },
   {
     "LiveFrom": "01/01/2017",

@@ -197,9 +197,9 @@ public class NormalisingCcdConfigComparatorTest {
 
     @Test
     public void userProfileSheetIsExcludedFromComparison() {
-        // Maintainer decision 2026-07-16 (docs/userprofile-investigation.md): the sheet is
-        // per-user/per-environment deployment data the SDK has no API for, so the comparator
-        // drops it from both sides rather than let it recur as a residual in every fixture.
+        // Maintainer decision 2026-07-16: the sheet is per-user/per-environment deployment data
+        // the SDK has no API for, so the comparator drops it from both sides rather than let it
+        // recur as a residual in every fixture.
         Map<String, List<Map<String, Object>>> expected = sheets("UserProfile",
             rows(row("UserIDAMId", "nigel.dunne@solirius.com",
                 "WorkBasketDefaultJurisdiction", "PROBATE",

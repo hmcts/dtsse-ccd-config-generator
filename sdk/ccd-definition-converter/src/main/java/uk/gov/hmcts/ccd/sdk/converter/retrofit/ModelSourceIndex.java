@@ -178,13 +178,78 @@ final class ModelSourceIndex {
    * Every simple type name declared anywhere in the parsed model source. Reserved when naming
    * generated <em>fixed-list</em> enum companions (finding #4): a fixed-list companion reuses a model
    * enum only on an exact list-ID match, so a machine {@code FL_}-prefixed or case-shifted ID emits a
-   * fresh companion that can collide with a model enum OR class of the PascalCased name. Reserving all
-   * names is safe because the exact-ID reuses (the only names that must stay free) emit no companion.
+   * fresh companion that can collide with a model enum OR class of the PascalCased name.
+   *
+   * <p>Callers MUST exclude the IDs that {@link #boundFixedListNames(java.util.Collection)} reports,
+   * because reserving a name the rebinder then binds-rather-than-emits renames the reference to a
+   * companion that is never generated — see that method for the failure this prevents.
    *
    * @return the set of simple names of all parsed model types
    */
   Set<String> allSimpleNames() {
     return new LinkedHashSet<>(bySimpleName.keySet());
+  }
+
+  /**
+   * The subset of {@code fixedListIds} that {@link RetrofitModelRebinder} will <em>bind</em> to an
+   * existing model type instead of emitting a companion enum for — i.e. those naming a top-level model
+   * type outright. These names must NOT be reserved during companion naming.
+   *
+   * <p>Reserving them desyncs the two halves of the decision: the namer bumps the reference to
+   * {@code <Id>2} (the name is "taken"), then the rebinder drops the list because the model already
+   * declares that type, so nothing is ever emitted under the suffixed name and every reference to it
+   * fails to compile. This is exactly the prl breakage — 34 patch-imported {@code …2} enums
+   * ({@code AllocatedJudgeTypeEnum2}, {@code YesNoDontKnow2}, {@code UrgencyTimeFrameType2}, …) that
+   * no file declared, plus 4 in fpl and 1 in Civil. Excluding them leaves the reference on the model's
+   * own type, which is the type the definition list means: the ID matches the model enum name exactly,
+   * and the wire ID round-trips because the SDK reads the list ID from the enum it reflects.
+   *
+   * <p>Uses the same {@link #hasTopLevelType} predicate the rebinder's drop test uses, so the two can
+   * never drift apart again.
+   *
+   * @param fixedListIds the definition's FixedList IDs
+   * @return those IDs that bind to an existing top-level model type (never reserve these)
+   */
+  Set<String> boundFixedListNames(java.util.Collection<String> fixedListIds) {
+    Set<String> bound = new LinkedHashSet<>();
+    for (String id : fixedListIds) {
+      if (id != null && hasTopLevelType(id)) {
+        bound.add(id);
+      }
+    }
+    return bound;
+  }
+
+  /**
+   * The subset of {@code complexTypeIds} that {@link RetrofitComplexTypeEmitter} will <em>bind</em> to
+   * an existing model class instead of emitting a companion for. The PascalCase name these would be
+   * allocated must NOT be reserved, for the same reason as
+   * {@link #boundFixedListNames(java.util.Collection)}.
+   *
+   * <p>prl is the case in point: it declares BOTH a {@code class OrderAppliedFor} and an
+   * {@code enum OrderAppliedFor}, and the definition has a complex type of that ID. The complex type
+   * binds to the class (so no companion is emitted), but the enum of the same name was reserved — so
+   * the reference was renamed {@code OrderAppliedFor2} and pointed at a file that never exists.
+   *
+   * <p>Uses the same {@link #complexTypeClass} lookup the emitter's filter uses, including its
+   * case-insensitive fallback, so the reserve decision and the emit decision cannot diverge.
+   *
+   * @param complexTypeIds the definition's ComplexTypes IDs
+   * @param packageHint the model package, preferred on an ambiguous simple name
+   * @return the PascalCase names of complex types that bind to an existing class (never reserve these)
+   */
+  Set<String> boundComplexTypeNames(java.util.Collection<String> complexTypeIds, String packageHint) {
+    Set<String> bound = new LinkedHashSet<>();
+    for (String id : complexTypeIds) {
+      if (id == null) {
+        continue;
+      }
+      // Reserve-side names are the PascalCased class name the namer would allocate; the bind test is
+      // the emitter's own, on the raw definition ID.
+      complexTypeClass(id, packageHint)
+          .ifPresent(type -> bound.add(type.simpleName));
+    }
+    return bound;
   }
 
   /**

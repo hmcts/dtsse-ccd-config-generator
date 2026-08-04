@@ -79,6 +79,13 @@
   {
     "LiveFrom": "01/01/2017",
     "CaseTypeID": "RETRO",
+    "CaseFieldID": "secondaryClaimType",
+    "UserRole": "caseworker-rt",
+    "CRUD": "CRUD"
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "RETRO",
     "CaseFieldID": "changeOrganisationRequestField",
     "UserRole": "caseworker-rt",
     "CRUD": "CRUD"

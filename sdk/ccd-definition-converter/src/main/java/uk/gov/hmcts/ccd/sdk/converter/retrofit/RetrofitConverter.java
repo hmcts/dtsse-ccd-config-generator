@@ -129,13 +129,15 @@ public final class RetrofitConverter {
         //     exists (RetrofitComplexTypeEmitter binds the rest in place), so it can only clash with a
         //     model ENUM (the definition 'benefit' complex type vs the domain enum Benefit). Reserving
         //     class names here would wrongly suffix a reference to a bound, never-emitted type.
-        //   - a fixed-list companion (an enum) reuses a model enum only on an EXACT list-ID match
-        //     (rebind's hasEnum(id)); a machine 'FL_'/case-shifted ID (FL_amendReason, eventType) does
-        //     not match its PascalCased model twin (AmendReason, EventType), so a fresh companion is
-        //     emitted and can clash with EITHER a model enum or class. Reserving all model names is
-        //     safe: the only names it must stay free of are exact-ID reuses, which emit no companion.
-        .retrofitReservedComplexTypeNames(index.enumSimpleNames())
-        .retrofitReservedFixedListNames(index.allSimpleNames())
+        //   - a fixed-list companion (an enum) reuses a model type only on an EXACT list-ID match
+        //     (rebind's hasTopLevelType(id)); a machine 'FL_'/case-shifted ID (FL_amendReason,
+        //     eventType) does not match its PascalCased model twin (AmendReason, EventType), so a
+        //     fresh companion is emitted and can clash with EITHER a model enum or class. All model
+        //     names are reserved EXCEPT the exact-ID matches: those bind to the model's own type and
+        //     emit no companion, so reserving them would rename the reference to a '<Id>2' companion
+        //     that is never generated (the prl/fpl/Civil 'cannot find symbol' break).
+        .retrofitReservedComplexTypeNames(reservedComplexTypeNames(index))
+        .retrofitReservedFixedListNames(reservedFixedListNames(index))
         // Bind CaseEventToComplexTypes member chains to the team's ACTUAL declared model classes
         // (real getters, e.g. getOrganisationID) rather than the SDK-predefined type of a shared
         // complex-type ID or a similarly-named synthesised sibling. A member with no Java backing on
@@ -223,6 +225,59 @@ public final class RetrofitConverter {
     }
     String prefix = repo.relativize(source).toString().replace('\\', '/');
     return prefix.isEmpty() ? "" : prefix + "/";
+  }
+
+  /**
+   * The model type names to reserve when naming generated fixed-list companions: every model type name
+   * EXCEPT those a definition FixedList ID matches exactly.
+   *
+   * <p>An exact match is bound, not emitted ({@link RetrofitModelRebinder} drops the list because the
+   * model already declares that top-level type), so reserving its name would make the namer bump the
+   * reference to {@code <Id>2} — a companion nothing ever generates, leaving every reference to it
+   * uncompilable. Both halves of that decision now read the same
+   * {@link ModelSourceIndex#hasTopLevelType} predicate via
+   * {@link ModelSourceIndex#boundFixedListNames}, so they cannot drift apart.
+   *
+   * @param index the parsed model index
+   * @return the names to reserve
+   */
+  private java.util.Set<String> reservedFixedListNames(ModelSourceIndex index) {
+    java.util.Set<String> reserved = new java.util.LinkedHashSet<>(index.allSimpleNames());
+    reserved.removeAll(index.boundFixedListNames(
+        sheetIds(uk.gov.hmcts.ccd.sdk.converter.ir.SheetName.FIXED_LISTS)));
+    return reserved;
+  }
+
+  /**
+   * The model ENUM names to reserve when naming generated complex-type companions: every model enum
+   * name EXCEPT those whose definition complex type binds to an existing model class.
+   *
+   * <p>The complex-type pass reserves only enums (a complex type binding to a class emits no companion),
+   * but a model declaring BOTH a class and an enum of one name — prl's {@code OrderAppliedFor} — hit the
+   * same desync: bound to the class, yet renamed against the enum to a companion never emitted.
+   *
+   * @param index the parsed model index
+   * @return the enum names to reserve
+   */
+  private java.util.Set<String> reservedComplexTypeNames(ModelSourceIndex index) {
+    java.util.Set<String> reserved = new java.util.LinkedHashSet<>(index.enumSimpleNames());
+    reserved.removeAll(index.boundComplexTypeNames(
+        sheetIds(uk.gov.hmcts.ccd.sdk.converter.ir.SheetName.COMPLEX_TYPES), modelPackage));
+    return reserved;
+  }
+
+  /**
+   * The distinct {@code ID} column values on a sheet for this case type.
+   *
+   * @param sheet the sheet to read IDs from
+   * @return the distinct IDs, in encounter order
+   */
+  private java.util.Set<String> sheetIds(uk.gov.hmcts.ccd.sdk.converter.ir.SheetName sheet) {
+    java.util.Set<String> ids = new java.util.LinkedHashSet<>();
+    for (uk.gov.hmcts.ccd.sdk.converter.ir.SheetRow row : ir.rowsForCaseType(sheet, caseTypeId)) {
+      row.getString(uk.gov.hmcts.ccd.sdk.converter.ir.Columns.ID).ifPresent(ids::add);
+    }
+    return ids;
   }
 
   private void writePatch(Path reportDir, RetrofitPatch patch) {

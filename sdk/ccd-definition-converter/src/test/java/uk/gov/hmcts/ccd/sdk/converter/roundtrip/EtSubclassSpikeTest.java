@@ -28,7 +28,9 @@ import uk.gov.hmcts.ccd.sdk.diff.NormalisingCcdConfigComparator;
  *       through both subclasses (same ComplexTypes rows, same FixedList).</li>
  * </ul>
  *
- * <p>Outcome recorded in {@code docs/retrofit-existing-models-proposal.md} under decision 7.
+ * <p>Validates the maintainer's chosen shape for ET's two case types sharing one model: a base class
+ * carrying the common fields, with one thin subclass per case type carrying that case type's own
+ * fields — rather than a bespoke enum-driven mode or a second generated model.
  */
 @Tag("round-trip")
 class EtSubclassSpikeTest {

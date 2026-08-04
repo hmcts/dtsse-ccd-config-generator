@@ -7,10 +7,9 @@ import java.util.Map;
  * USER_PROFILE_EXCLUDED — drops the {@code UserProfile} sheet from comparison entirely, on both
  * sides.
  *
- * <p><strong>Maintainer decision (2026-07-16)</strong>, following
- * {@code docs/userprofile-investigation.md}: a {@code UserProfile} row maps one IDAM user to a
- * workbasket-filter default, which is per-user, per-environment deployment data, not case-type
- * model — and grepping current {@code ccd-case-ui-toolkit}/{@code rpx-xui-webapp} found no code
+ * <p><strong>Maintainer decision (2026-07-16)</strong>: a {@code UserProfile} row maps one IDAM
+ * user to a workbasket-filter default, which is per-user, per-environment deployment data, not
+ * case-type model — and grepping current {@code ccd-case-ui-toolkit}/{@code rpx-xui-webapp} found no code
  * path that still consumes it (XUI computes the case-list default a different way). Fixture rows
  * also carry real staff/contractor emails that do not belong in a portable Java definition. The
  * SDK still has no API to express per-user workbasket defaults, so the converter continues to
