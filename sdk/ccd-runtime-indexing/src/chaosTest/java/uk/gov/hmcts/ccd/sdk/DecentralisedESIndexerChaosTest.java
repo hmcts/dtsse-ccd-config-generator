@@ -64,7 +64,7 @@ class DecentralisedESIndexerChaosTest {
 
   @Container
   private static final ElasticsearchContainer ELASTICSEARCH = new ElasticsearchContainer(
-      DockerImageName.parse("docker.elastic.co/elasticsearch/elasticsearch:9.4.5"))
+      DockerImageName.parse("docker.elastic.co/elasticsearch/elasticsearch:9.4.2"))
       .withNetwork(NETWORK)
       .withNetworkAliases("elasticsearch")
       .withEnv("xpack.security.enabled", "false");
