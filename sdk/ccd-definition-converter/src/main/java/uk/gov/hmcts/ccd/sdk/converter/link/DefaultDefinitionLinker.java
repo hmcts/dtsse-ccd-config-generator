@@ -8,6 +8,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.function.Consumer;
 import uk.gov.hmcts.ccd.sdk.converter.api.ConversionOptions;
 import uk.gov.hmcts.ccd.sdk.converter.api.DefinitionLinker;
 import uk.gov.hmcts.ccd.sdk.converter.ir.AuthorisationRows;
@@ -2048,12 +2049,42 @@ public class DefaultDefinitionLinker implements DefinitionLinker {
     List<PassthroughSheet> sheets = new ArrayList<>();
     int derivedRows = 0;
     int fallbackRows = 0;
+    // Fallback rows tallied by generalised cause, with one worked example each, so the gap report
+    // says WHY the residual passthrough exists and which cause is worth attacking next.
+    Map<String, Integer> fallbackCauseRows = new LinkedHashMap<>();
+    Map<String, String> fallbackExamples = new LinkedHashMap<>();
     for (Map.Entry<String, List<SheetRow>> entry : byTarget.entrySet()) {
       String[] parts = entry.getKey().split("\u001f", -1);
       String eventId = parts[1];
       String fieldId = parts[2];
       String suffix = suffixByTarget.get(entry.getKey());
       List<SheetRow> groupRows = entry.getValue();
+      // The first reason recorded for this group — why it could not be derived. Kept per group so the
+      // gap report can tally CAUSES rather than only counting fallback rows: without this a fallback
+      // is just a number and reducing it is guesswork.
+      final String[] groupReason = {null};
+      final Consumer<String> reason = r -> {
+        if (groupReason[0] == null) {
+          groupReason[0] = r;
+        }
+      };
+      final String target = eventId + ((char) 0x1f) + fieldId;
+      if (suffix != null) {
+        reason.accept("overlay-suffixed group (suffix '" + suffix + "')");
+      } else if (targetsWithSuffix.contains(target)) {
+        reason.accept("an overlay-suffixed sibling row targets the same (event, field)");
+      } else if (!complexPlaced.contains(target)) {
+        reason.accept("field is not placed as DisplayContext=COMPLEX on this event");
+      } else if (refs.containsKey(fieldId)) {
+        reason.accept("field is clustered (@JsonUnwrapped), so it has no plain getter");
+      } else if (fieldsById.get(fieldId) == null) {
+        reason.accept("no CaseField row declares this field");
+      } else {
+        FieldModel declared = fieldsById.get(fieldId);
+        if (declared.getOverlayTags() != null && !declared.getOverlayTags().isEmpty()) {
+          reason.accept("field itself is overlay-gated");
+        }
+      }
 
       // Only a base (non-overlay) group whose field is a plain COMPLEX-placed CaseData member is a
       // candidate: an overlay-suffixed group would need a per-environment .complex block the emitter
@@ -2065,7 +2096,7 @@ public class DefaultDefinitionLinker implements DefinitionLinker {
           && !refs.containsKey(fieldId)) {
         FieldModel field = fieldsById.get(fieldId);
         if (field != null && (field.getOverlayTags() == null || field.getOverlayTags().isEmpty())) {
-          group = deriveEventComplexTypeGroup(resolver, field, eventId, groupRows);
+          group = deriveEventComplexTypeGroup(resolver, field, eventId, groupRows, reason);
         }
       }
 
@@ -2103,6 +2134,10 @@ public class DefaultDefinitionLinker implements DefinitionLinker {
         }
       } else {
         fallbackRows += groupRows.size();
+        String cause = groupReason[0] == null ? "unrecorded" : groupReason[0];
+        fallbackCauseRows.merge(generaliseEtoctCause(cause), groupRows.size(), Integer::sum);
+        fallbackExamples.putIfAbsent(generaliseEtoctCause(cause),
+            eventId + "/" + fieldId + ": " + cause);
         List<Map<String, Object>> raw = new ArrayList<>();
         for (SheetRow row : groupRows) {
           raw.add(new LinkedHashMap<>(row.getColumns()));
@@ -2145,9 +2180,53 @@ public class DefaultDefinitionLinker implements DefinitionLinker {
             + " resolve through the typed complex-type graph (unknown member, scalar intermediate, or a"
             + " hop into a type the converter neither generated nor can reflect), a DisplayContext other"
             + " than OPTIONAL/MANDATORY/READONLY, the same ListElementCode surviving twice with divergent"
-            + " content, or an overlay-suffixed sibling row on the same (event, field)")
+            + " content, or an overlay-suffixed sibling row on the same (event, field)."
+            + formatEtoctCauses(fallbackCauseRows, fallbackExamples))
         .build());
     return new EventComplexTypeResult(groups, sheets);
+  }
+
+  /**
+   * Renders the fallback-cause tally, highest row count first, each with one worked example.
+   */
+  private String formatEtoctCauses(Map<String, Integer> causeRows, Map<String, String> examples) {
+    if (causeRows.isEmpty()) {
+      return "";
+    }
+    StringBuilder out = new StringBuilder(" Fallback rows by cause: ");
+    causeRows.entrySet().stream()
+        .sorted(Map.Entry.<String, Integer>comparingByValue().reversed())
+        .forEach(e -> out.append(e.getValue()).append(" row(s) — ").append(e.getKey())
+            .append(" (e.g. ").append(examples.get(e.getKey())).append("); "));
+    return out.toString();
+  }
+
+  /**
+   * Collapses a per-group fallback reason to its cause class, so causes tally instead of every group
+   * reporting a unique string. The quoted specifics (member name, type, ListElementCode) are what make
+   * two instances of the same cause look different, so they are stripped here and kept only in the one
+   * retained worked example per cause.
+   */
+  private String generaliseEtoctCause(String reason) {
+    if (reason.startsWith("member '")) {
+      return "member not found on the bound type";
+    }
+    if (reason.startsWith("intermediate segment '")) {
+      return "intermediate segment is not a walkable complex type";
+    }
+    if (reason.startsWith("unsupported DisplayContext")) {
+      return "unsupported DisplayContext";
+    }
+    if (reason.startsWith("duplicate ListElementCode")) {
+      return "duplicate ListElementCode with divergent content";
+    }
+    if (reason.startsWith("root field type")) {
+      return "root field type is not a walkable complex type";
+    }
+    if (reason.startsWith("overlay-suffixed group")) {
+      return "overlay-suffixed group";
+    }
+    return reason;
   }
 
   /**
@@ -2212,12 +2291,13 @@ public class DefaultDefinitionLinker implements DefinitionLinker {
    */
   private EventComplexTypeGroup deriveEventComplexTypeGroup(
       EventComplexTypeResolver resolver, FieldModel field, String eventId,
-      List<SheetRow> allRows) {
+      List<SheetRow> allRows, Consumer<String> reason) {
     // The type node the member chains bind to: in retrofit mode the team's actual declared model
     // class for this field (real getters, e.g. getOrganisationID), else the generated / SDK-predefined
     // type named by the field's CCD FieldType. Null when the field is not COMPLEX-walkable.
     Object rootNode = resolver.rootNode(field);
     if (rootNode == null) {
+      reason.accept("root field type '" + field.getFieldType() + "' is not a walkable complex type");
       return null;
     }
     // Collapse rows that are exact duplicates up to a blank/absent column, exactly as the comparator
@@ -2237,6 +2317,8 @@ public class DefaultDefinitionLinker implements DefinitionLinker {
     Set<String> seenLecs = new LinkedHashSet<>();
     for (SheetRow row : groupRows) {
       if (!seenLecs.add(row.getString(Columns.LIST_ELEMENT_CODE).orElse(""))) {
+        reason.accept("duplicate ListElementCode '"
+            + row.getString(Columns.LIST_ELEMENT_CODE).orElse("") + "' with divergent content");
         return null;
       }
     }
@@ -2249,12 +2331,15 @@ public class DefaultDefinitionLinker implements DefinitionLinker {
       // fpl's title-case DisplayContext 'Optional'), the derived row would not reproduce it
       // byte-identically, so keep the whole group a verbatim row passthrough, which does.
       if (rawDiffersFromCanonical(row)) {
+        reason.accept("row carries a non-canonical raw key value (whitespace/letter-case)");
         return null;
       }
       String lec = row.getString(Columns.LIST_ELEMENT_CODE).orElse(null);
       String contextMethod =
           displayContextMethod(row.getString(Columns.DISPLAY_CONTEXT).orElse(null));
       if (contextMethod == null) {
+        reason.accept("unsupported DisplayContext '"
+            + row.getString(Columns.DISPLAY_CONTEXT).orElse("") + "'");
         return null;
       }
       String showCondition = row.getString(Columns.FIELD_SHOW_CONDITION).orElse(null);
@@ -2262,7 +2347,7 @@ public class DefaultDefinitionLinker implements DefinitionLinker {
       String eventHint = row.getDisplayText(Columns.EVENT_HINT_TEXT).orElse(null);
       String pageId = row.getString(Columns.PAGE_ID).orElse(null);
       Optional<EventComplexTypeGroup.Member> resolved = resolver.resolve(
-          rootNode, lec, contextMethod, showCondition, eventLabel, eventHint, pageId);
+          rootNode, lec, contextMethod, showCondition, eventLabel, eventHint, pageId, reason);
       if (resolved.isEmpty()) {
         return null;
       }

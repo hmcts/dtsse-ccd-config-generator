@@ -210,22 +210,42 @@ public final class EventComplexTypeResolver {
   public Optional<EventComplexTypeGroup.Member> resolve(
       Object rootNode, String listElementCode, String contextMethod,
       String showCondition, String eventLabel, String eventHint, String pageId) {
+    return resolve(rootNode, listElementCode, contextMethod, showCondition, eventLabel, eventHint,
+        pageId, r -> { });
+  }
+
+  /**
+   * As {@link #resolve(Object, String, String, String, String, String, String)}, but reports why
+   * resolution failed. The reason names the exact segment and the type it could not be resolved
+   * against, which is what makes a passthrough fallback diagnosable rather than merely counted.
+   *
+   * @param unresolved receives a human-readable reason when resolution fails
+   */
+  public Optional<EventComplexTypeGroup.Member> resolve(
+      Object rootNode, String listElementCode, String contextMethod,
+      String showCondition, String eventLabel, String eventHint, String pageId,
+      java.util.function.Consumer<String> unresolved) {
     if (listElementCode == null || listElementCode.isEmpty()) {
+      unresolved.accept("empty ListElementCode");
       return Optional.empty();
     }
     String[] segments = listElementCode.split("\\.", -1);
     List<EventComplexTypeGroup.Hop> hops = new ArrayList<>();
     Object currentType = rootNode;
     if (currentType == null) {
+      unresolved.accept("no root type node");
       return Optional.empty();
     }
     for (int i = 0; i < segments.length; i++) {
       String segment = segments[i];
       if (segment.isEmpty()) {
+        unresolved.accept("empty segment in '" + listElementCode + "'");
         return Optional.empty();
       }
       ResolvedMember member = member(currentType, segment);
       if (member == null) {
+        unresolved.accept("member '" + segment + "' not found on " + describe(currentType)
+            + " (resolving '" + listElementCode + "')");
         return Optional.empty();
       }
       boolean last = i == segments.length - 1;
@@ -247,6 +267,8 @@ public final class EventComplexTypeResolver {
       // two-arg element-typed .complex(getter, Element.class) scope the emitter opens for it).
       Object next = member.nestedType;
       if (next == null) {
+        unresolved.accept("intermediate segment '" + segment + "' on " + describe(currentType)
+            + " is not a walkable complex type (resolving '" + listElementCode + "')");
         return Optional.empty();
       }
       hops.add(EventComplexTypeGroup.Hop.builder()
@@ -256,7 +278,24 @@ public final class EventComplexTypeResolver {
           .build());
       currentType = next;
     }
+    unresolved.accept("no leaf segment in '" + listElementCode + "'");
     return Optional.empty();
+  }
+
+  /**
+   * A short human-readable name for a type node, for diagnostics.
+   */
+  private String describe(Object typeNode) {
+    if (typeNode instanceof RetrofitModelTypeGraph.Handle handle) {
+      return "model class " + handle.fqn();
+    }
+    if (typeNode instanceof ComplexTypeModel model) {
+      return "generated complex type " + model.getId();
+    }
+    if (typeNode instanceof Class<?> clazz) {
+      return "predefined type " + clazz.getName();
+    }
+    return String.valueOf(typeNode);
   }
 
   /**
