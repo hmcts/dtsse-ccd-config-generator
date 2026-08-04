@@ -1,7 +1,6 @@
-Sheet 'CaseEventToFields' row [amendRespondentRepresentativeContact|et3ResponseAddress] column 'retainHiddenValue': expected <Yes> but column is missing in actual
-Sheet 'CaseEventToFields' row [amendRespondentRepresentativeContact|et3ResponsePhone] column 'retainHiddenValue': expected <Yes> but column is missing in actual
+Sheet 'CaseEventToFields' row [amendRepresentativeContact|et3ResponseAddress] column 'retainHiddenValue': expected <Yes> but column is missing in actual
+Sheet 'CaseEventToFields' row [amendRepresentativeContact|et3ResponsePhone] column 'retainHiddenValue': expected <Yes> but column is missing in actual
 Sheet 'CaseTypeTab' row [CaseOverview|multipleReferenceLinkLabel]: unexpected row in actual: {CaseFieldID=multipleReferenceLinkLabel, CaseTypeID=ET_EnglandWales, Channel=CaseWorker, FieldShowCondition=caseType="Multiple" AND multipleReferenceLinkMarkUp !="", TabID=CaseOverview, TabLabel=Case Details, TabShowCondition=[STATE]!="AWAITING_SUBMISSION_TO_HMCTS"}
-Sheet 'ComplexTypes' row [RespondentRepresentative|nonMyHmctsOrganisationId]: expected row has no match in actual: {ID=RespondentRepresentative, ListElementCode=nonMyHmctsOrganisationId, FieldType=Text, FieldShowCondition=myHmctsYesNo="dummy", SecurityClassification=PUBLIC}
 Sheet 'ComplexTypes' row [UnavailabilityDateRange|unavailableFromDate]: expected row has no match in actual: {ID=UnavailabilityDateRange, ListElementCode=unavailableFromDate, FieldType=Date, ElementLabel=Unavailable from:, SecurityClassification=PUBLIC}
 Sheet 'ComplexTypes' row [UnavailabilityDateRange|unavailableToDate]: expected row has no match in actual: {ID=UnavailabilityDateRange, ListElementCode=unavailableToDate, FieldType=Date, ElementLabel=Unavailable to:, SecurityClassification=PUBLIC}
 Sheet 'ComplexTypes' row [nextHearingDetails|hearingDateTime] column 'FieldLabel': expected <Hearing Date and Time> but column is missing in actual
