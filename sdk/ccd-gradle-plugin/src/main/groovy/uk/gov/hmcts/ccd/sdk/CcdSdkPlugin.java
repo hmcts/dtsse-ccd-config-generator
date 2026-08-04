@@ -18,9 +18,6 @@ import org.gradle.api.tasks.SourceSetContainer;
 
 public class CcdSdkPlugin implements Plugin<Project> {
 
-  private static final String ELASTICSEARCH_CLIENT_VERSION_RANGE = "[9, 10)";
-  private static final String PREFERRED_ELASTICSEARCH_CLIENT_VERSION = "9.4.5";
-
   public void apply(Project project) {
     project.getPlugins().apply(JavaPlugin.class);
 
@@ -119,8 +116,8 @@ public class CcdSdkPlugin implements Plugin<Project> {
     ExternalModuleDependency dependency = (ExternalModuleDependency) project.getDependencies()
         .create("co.elastic.clients:elasticsearch-java");
     dependency.version(version -> {
-      version.strictly(ELASTICSEARCH_CLIENT_VERSION_RANGE);
-      version.prefer(PREFERRED_ELASTICSEARCH_CLIENT_VERSION);
+      version.strictly("[9, 10)");
+      version.prefer("9.4.5");
     });
     project.getDependencies().add("implementation", dependency);
   }
