@@ -12,7 +12,7 @@ public interface HasRole {
    * present, the SDK derives the matching {@code AccessType} and {@code AccessTypeRole} rows at
    * build time, using this role's {@link #getRole()} as the {@code OrganisationalRoleName}.
    */
-  default CCDAccessGroup<?> getAccessGroup() {
+  default CCDAccessGroup getAccessGroup() {
     return null;
   }
 }

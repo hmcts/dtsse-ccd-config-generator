@@ -1,7 +1,7 @@
 [ {
   "AccessTypeID" : "SOLICITOR_ORG_POLICY",
-  "CaseAccessGroupIDTemplate" : "CARE_SUPERVISION_EPO:$ORGID$",
-  "CaseAssignedRoleField" : "organisationPolicy",
+  "CaseAccessGroupIDTemplate" : "PUBLICLAW:CARE_SUPERVISION_EPO:caseworker-approver-group:$ORGID$",
+  "CaseAssignedRoleField" : "[SOLICITOR]",
   "CaseTypeID" : "CARE_SUPERVISION_EPO",
   "GroupAccessEnabled" : "Yes",
   "GroupRoleName" : "caseworker-approver-group",

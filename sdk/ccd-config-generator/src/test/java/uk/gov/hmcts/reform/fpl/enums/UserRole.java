@@ -23,7 +23,7 @@ public enum UserRole implements HasRole {
 
     private final String role;
     private final String casetypePermissions;
-    private final CCDAccessGroup<?> accessGroup;
+    private final CCDAccessGroup accessGroup;
     UserRole(String role) {
         this(role, "CRU");
     }

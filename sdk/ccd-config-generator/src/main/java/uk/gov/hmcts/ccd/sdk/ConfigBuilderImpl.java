@@ -209,7 +209,14 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements Decentralised
 
   @Override
   public CaseRoleToAccessProfileBuilder<R> caseRoleToAccessProfile(R caseRole) {
-    var builder = CaseRoleToAccessProfileBuilder.builder(caseRole);
+    var builder = CaseRoleToAccessProfileBuilder.<R>builder(caseRole);
+    caseRoleToAccessProfiles.add(builder);
+    return builder;
+  }
+
+  @Override
+  public CaseRoleToAccessProfileBuilder<R> roleToAccessProfile(HasRole role) {
+    var builder = CaseRoleToAccessProfileBuilder.<R>builder(role);
     caseRoleToAccessProfiles.add(builder);
     return builder;
   }
@@ -240,6 +247,12 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements Decentralised
    * {@code AccessType} / {@code AccessTypeRole} model objects the explicit builder calls produce,
    * so the existing generators emit identical JSON. Explicit builder rows take precedence: an
    * access type already configured via {@link #accessType} is not re-added.
+   *
+   * <p>Each distinct group role also gets a {@code RoleToAccessProfiles} row. The definition store
+   * does not validate {@code GroupRoleName} against that sheet, so an unmapped group role imports
+   * cleanly and then grants nothing at runtime; deriving the row makes that failure impossible
+   * rather than silent. A row the config already declared for the same role wins, so a team needing
+   * non-default authorisations can still declare it by hand.
    */
   private void deriveAccessTypesFromRoles() {
     R[] roles = config.getRoleClass().getEnumConstants();
@@ -250,13 +263,15 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements Decentralised
     Set<String> existingAccessTypeIds = config.accessTypes.stream()
         .map(AccessType::getAccessTypeId)
         .collect(Collectors.toCollection(HashSet::new));
+    Set<String> mappedRoleNames = config.caseRoleToAccessProfiles.stream()
+        .map(profile -> profile.getRole().getRole())
+        .collect(Collectors.toCollection(HashSet::new));
 
     Map<String, AccessType> derivedAccessTypes = new LinkedHashMap<>();
     List<AccessTypeRole> derivedRoles = Lists.newArrayList();
 
     for (R role : roles) {
-      @SuppressWarnings("unchecked")
-      CCDAccessGroup<T> group = (CCDAccessGroup<T>) role.getAccessGroup();
+      CCDAccessGroup group = role.getAccessGroup();
       if (group == null) {
         continue;
       }
@@ -275,23 +290,56 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements Decentralised
             .build());
       }
 
-      String caseAssignedRoleField =
-          propertyUtils.getPropertyName(config.caseClass, group.getCaseAssignedRoleField());
+      HasRole groupRole = requireResolvedRole(group, "groupRoleName", group.getGroupRoleName());
+      HasRole caseAssignedRole =
+          requireResolvedRole(group, "caseAssignedRoleField", group.getCaseAssignedRoleField());
 
       derivedRoles.add(AccessTypeRole.builder()
           .accessTypeId(group.getAccessTypeId())
           .organisationProfileId(group.getOrganisationProfileId())
           .organisationalRoleName(role.getRole())
-          .groupRoleName(group.getGroupRoleName().getRole())
-          .caseAssignedRoleField(caseAssignedRoleField)
+          .groupRoleName(groupRole.getRole())
+          .caseAssignedRoleField(caseAssignedRole.getRole())
           .groupAccessEnabled(group.isGroupAccessEnabled())
           .caseAccessGroupIdTemplate(group.getCaseAccessGroupIdTemplate())
           .liveTo(group.getLiveTo())
           .build());
+
+      if (mappedRoleNames.add(groupRole.getRole())) {
+        List<String> accessProfiles = group.getGroupRoleAccessProfiles();
+        if (accessProfiles == null || accessProfiles.isEmpty()) {
+          throw new IllegalStateException(
+              ("Access group %s must declare at least one access profile for group role %s: without"
+                  + " a RoleToAccessProfiles mapping the group role grants no access at runtime.")
+                  .formatted(group.getAccessTypeId(), groupRole.getRole()));
+        }
+        config.caseRoleToAccessProfiles.add(
+            CaseRoleToAccessProfileBuilder.<R>builder(groupRole)
+                .accessProfiles(accessProfiles.toArray(String[]::new))
+                .build());
+      }
     }
 
     config.accessTypes.addAll(derivedAccessTypes.values());
     config.accessTypeRoles.addAll(derivedRoles);
+  }
+
+  /**
+   * Guard against the circular static initialisation between an access group and the role class that
+   * references it. A group whose role members are captured as constructor arguments rather than
+   * resolved lazily reads {@code null} for whichever enum initialises second; left unchecked that
+   * would emit a silently empty column. See {@link CCDAccessGroup#getCaseAssignedRoleField()}.
+   */
+  private static HasRole requireResolvedRole(CCDAccessGroup group, String member, HasRole role) {
+    if (role == null) {
+      throw new IllegalStateException(
+          ("Access group %s resolved %s to null. This is usually circular enum initialisation: the"
+              + " access group and the role class reference each other, so a role captured as a"
+              + " constructor argument is null in whichever initialises second. Override the getter on"
+              + " the constant to resolve the role lazily instead.")
+              .formatted(group.getAccessTypeId(), member));
+    }
+    return role;
   }
 
   @Override

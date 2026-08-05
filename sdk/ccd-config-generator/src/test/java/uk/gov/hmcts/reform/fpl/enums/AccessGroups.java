@@ -1,20 +1,23 @@
 package uk.gov.hmcts.reform.fpl.enums;
 
+import java.util.List;
 import lombok.Getter;
 import uk.gov.hmcts.ccd.sdk.api.CCDAccessGroup;
 import uk.gov.hmcts.ccd.sdk.api.HasRole;
-import uk.gov.hmcts.ccd.sdk.api.TypedPropertyGetter;
-import uk.gov.hmcts.reform.fpl.model.CaseData;
 
 /**
  * Organisational access groups declared as enum constants. A role attaches to one of these via
- * {@link UserRole#getAccessGroup()}; the SDK then derives the AccessType + AccessTypeRole rows.
+ * {@link UserRole#getAccessGroup()}; the SDK then derives the AccessType + AccessTypeRole rows, plus
+ * the group role's RoleToAccessProfiles row.
  *
- * <p>{@code caseAssignedRoleField} is a type-safe method reference to a real {@link CaseData} field
- * ({@code CaseData::getOrganisationPolicy}); the SDK resolves it to the CCD field id at build time.</p>
+ * <p>{@code caseAssignedRoleField} is the case role carried by the OrganisationPolicy's
+ * {@code OrgPolicyCaseAssignedRole} — a role name, not a field name, despite the column's title. It
+ * is resolved by a per-constant override rather than a constructor argument because it points back
+ * into {@link UserRole}, which references this enum: a constructor argument would be read during a
+ * circular static initialisation and come out null.</p>
  */
 @Getter
-public enum AccessGroups implements CCDAccessGroup<CaseData> {
+public enum AccessGroups implements CCDAccessGroup {
 
   SOLICITOR_ORG_POLICY(
       "SOLICITOR_PROFILE",
@@ -25,9 +28,14 @@ public enum AccessGroups implements CCDAccessGroup<CaseData> {
       "Solicitor access type hint",
       1,
       GroupRole.CASE_ACCESS_APPROVER_GROUP,
-      CaseData::getOrganisationPolicy,
+      List.of("access-profile"),
       true,
-      "CARE_SUPERVISION_EPO:$ORGID$");
+      "PUBLICLAW:CARE_SUPERVISION_EPO:caseworker-approver-group:$ORGID$") {
+    @Override
+    public HasRole getCaseAssignedRoleField() {
+      return UserRole.CCD_SOLICITOR;
+    }
+  };
 
   private final String organisationProfileId;
   private final boolean accessMandatory;
@@ -37,13 +45,13 @@ public enum AccessGroups implements CCDAccessGroup<CaseData> {
   private final String hintText;
   private final int displayOrder;
   private final HasRole groupRoleName;
-  private final TypedPropertyGetter<CaseData, ?> caseAssignedRoleField;
+  private final List<String> groupRoleAccessProfiles;
   private final boolean groupAccessEnabled;
   private final String caseAccessGroupIdTemplate;
 
   AccessGroups(String organisationProfileId, boolean accessMandatory, boolean accessDefault,
                boolean display, String description, String hintText, int displayOrder,
-               HasRole groupRoleName, TypedPropertyGetter<CaseData, ?> caseAssignedRoleField,
+               HasRole groupRoleName, List<String> groupRoleAccessProfiles,
                boolean groupAccessEnabled, String caseAccessGroupIdTemplate) {
     this.organisationProfileId = organisationProfileId;
     this.accessMandatory = accessMandatory;
@@ -53,7 +61,7 @@ public enum AccessGroups implements CCDAccessGroup<CaseData> {
     this.hintText = hintText;
     this.displayOrder = displayOrder;
     this.groupRoleName = groupRoleName;
-    this.caseAssignedRoleField = caseAssignedRoleField;
+    this.groupRoleAccessProfiles = groupRoleAccessProfiles;
     this.groupAccessEnabled = groupAccessEnabled;
     this.caseAccessGroupIdTemplate = caseAccessGroupIdTemplate;
   }
