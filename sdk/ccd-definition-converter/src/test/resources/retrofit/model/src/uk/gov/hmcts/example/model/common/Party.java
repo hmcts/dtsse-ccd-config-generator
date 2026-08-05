@@ -33,4 +33,13 @@ public class Party {
   // non-final field compiles and is set via the setter), NOT dropped by the old "any final field"
   // guard.
   private FinalFieldParty finalFieldParty;
+
+  // A member whose type (BuilderBoundParty) is @Data @Builder bound to a hand-written multi-arg
+  // @JsonCreator (sscs's Appeal shape): a definition-only member of it MUST be synthesised AND the
+  // bound constructor widened to take it, keeping the builder binding valid.
+  private BuilderBoundParty builderBoundParty;
+
+  // A member whose type has TWO non-delegating constructors, where the shorter one's widened form
+  // collides with the longer one's narrow overload — the overload-collision guard must suppress it.
+  private TwoConstructorParty twoConstructorParty;
 }

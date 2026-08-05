@@ -9,6 +9,8 @@ import com.github.javaparser.ParseResult;
 import com.github.javaparser.ParserConfiguration;
 import com.github.javaparser.StaticJavaParser;
 import com.github.javaparser.ast.CompilationUnit;
+import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
+import com.github.javaparser.ast.body.ConstructorDeclaration;
 import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.TypeDeclaration;
 import java.io.IOException;
@@ -66,6 +68,8 @@ public final class RetrofitPatchEmitter {
       "// ==== ccd-definition-converter: synthesised definition-only fields (retrofit) ====";
   private static final String SYNTH_END =
       "// ==== end synthesised definition-only fields ====";
+  /** Checkstyle's line-length ceiling, which emitted lines must respect in the team's repo too. */
+  private static final int MAX_EMITTED_LINE = 120;
 
   private final ModelSourceIndex index;
   private final Map<String, ResolvedProperty> properties;
@@ -74,6 +78,7 @@ public final class RetrofitPatchEmitter {
   private final CcdAnnotationRenderer renderer;
   private final TypeReconciler reconciler;
   private final SynthesisPlacement placement;
+  private final ValueWrapperUnwrapper unwrapper;
   /** The team model package — companion complex types/enums are emitted here. */
   private final String modelPackage;
   /**
@@ -127,6 +132,7 @@ public final class RetrofitPatchEmitter {
     this.renderer = new CcdAnnotationRenderer(configPackage);
     this.reconciler = new TypeReconciler(index);
     this.placement = new SynthesisPlacement(index, constructorLimit);
+    this.unwrapper = new ValueWrapperUnwrapper(index);
     this.modelPackage = rootType != null ? rootType.packageName : null;
     this.pathPrefix = normalisePrefix(pathPrefix);
   }
@@ -406,7 +412,17 @@ public final class RetrofitPatchEmitter {
         // (see the retrofit companion emitter), not patched here.
         continue;
       }
-      ModelSourceIndex.Type complexClass = type.get();
+      // A definition complex type used as a Collection's element type addresses its members on the
+      // element's VALUE class, because CCD serialises every collection element as {id, value}: sscs's
+      // 'Bundle' ComplexTypes rows (title, documents, stitchStatus, …) describe BundleDetails, while
+      // the model's Bundle is a hand-rolled wrapper declaring only `BundleDetails value`. Annotating
+      // the wrapper made every one of those members look definition-only, so they were routed to
+      // synthesis and then REFUSED by the wrapper's @Value + single-arg @JsonCreator idiom — 111
+      // members across 22 sscs classes reported as "add the field by hand" when the fields already
+      // existed on the *Details class. Unwrapping here targets the same class the
+      // CaseEventToComplexTypes member walk already targets (RetrofitEventComplexTypeGraph), so the
+      // two agree and the members are annotated in place instead.
+      ModelSourceIndex.Type complexClass = unwrapper.unwrap(type.get());
       // Resolve the complex class's own members so we know which are matched vs unmatched-Java.
       PropertyResolver.Resolution memberResolution =
           new PropertyResolver(index).resolve(complexClass);
@@ -439,6 +455,23 @@ public final class RetrofitPatchEmitter {
       }
       if (!synthesised.isEmpty()) {
         String unsafeReason = synthesisUnsafeReason(complexClass);
+        // A constructor-bound idiom (a builder bound to a hand-written constructor, or a @Value class
+        // whose constructor must initialise every final field) does not have to be refused: widening
+        // that constructor with the synthesised fields as trailing parameters keeps the builder
+        // binding valid and initialises the new final fields. Verified against Lombok 1.18.38 — a
+        // @Value @Builder(toBuilder = true) class with an EXTENDED @JsonCreator constructor compiles,
+        // and builder()/toBuilder() both set the added field. Only the subclass-super(...) case
+        // genuinely cannot be repaired from this class alone (the fix belongs in the subclass), so it
+        // stays a gap.
+        if (unsafeReason != null && constructorExtensionRepairs(complexClass)) {
+          String collision = narrowOverloadCollision(complexClass, synthesised);
+          if (collision == null) {
+            editsFor(byFile, complexClass.file).extendConstructors(complexClass.simpleName);
+            unsafeReason = null;
+          } else {
+            unsafeReason = collision;
+          }
+        }
         if (unsafeReason != null) {
           // Appending a field to this class would break its constructor contract (finding B3/B4):
           // either a hand-written single-arg @JsonCreator + @Builder idiom Lombok binds the builder
@@ -474,15 +507,42 @@ public final class RetrofitPatchEmitter {
   }
 
   /**
+   * Whether widening this class's hand-written constructor(s) repairs the reason synthesis was
+   * refused.
+   *
+   * <p>True for the three constructor-bound idioms — a {@code @Builder} bound to a hand-written
+   * {@code @JsonCreator} constructor, a {@code @Builder} bound to any hand-written constructor, and a
+   * {@code @Value} class whose constructor must initialise every final field: appending the
+   * synthesised fields as trailing constructor parameters (plus their {@code this.x = x;}
+   * assignments) keeps the builder's binding valid and initialises the new final fields.
+   *
+   * <p>False when a subclass calls this class's constructor positionally via {@code super(...)}: the
+   * widened constructor leaves that call unresolved, and the repair belongs in the SUBCLASS, not
+   * here — so that case remains a gap for manual placement. Also false when the class declares no
+   * constructor at all (nothing to widen; Lombok generates the all-args form from the fields, which
+   * already takes the new field).
+   */
+  private boolean constructorExtensionRepairs(ModelSourceIndex.Type complexClass) {
+    if (complexClass.decl.getConstructors().isEmpty()) {
+      return false;
+    }
+    return !index.hasSubtypeWithExplicitSuperCall(complexClass);
+  }
+
+  /**
    * A human-readable reason why appending a synthesised field to {@code complexClass} would break its
-   * compilation, or null when synthesis is safe. Two cases:
+   * compilation, or null when synthesis is safe.
+   *
+   * <p>Most of these reasons are now REPAIRED rather than reported: see
+   * {@link #constructorExtensionRepairs}, which widens the hand-written constructor so the field can
+   * be synthesised after all. Two shapes survive to the gap report:
    * <ul>
-   *   <li>a hand-written single-arg {@code @JsonCreator} + {@code @Builder} idiom (finding B3) —
-   *       {@link #hasBuilderBoundJsonCreator};</li>
-   *   <li>a Lombok all-args constructor a subclass calls positionally via {@code super(...)} (finding
-   *       B4) — {@link ModelSourceIndex#hasSubtypeWithExplicitSuperCall}. Growing the all-args
-   *       constructor by one parameter leaves the subclass's fixed-arity {@code super(...)} with no
-   *       matching constructor.</li>
+   *   <li>a Lombok all-args constructor a subclass calls positionally via {@code super(...)}
+   *       ({@link ModelSourceIndex#hasSubtypeWithExplicitSuperCall}) — growing the constructor leaves
+   *       the subclass's fixed-arity {@code super(...)} unresolved and the fix belongs in the
+   *       subclass;</li>
+   *   <li>a class where the widening's narrow delegating overloads would collide
+   *       ({@link #narrowOverloadCollision}).</li>
    * </ul>
    */
   private String synthesisUnsafeReason(ModelSourceIndex.Type complexClass) {
@@ -786,6 +846,17 @@ public final class RetrofitPatchEmitter {
       needsFieldTypeImport |= synth.usesFieldType;
       accessClasses.addAll(synth.accessClasses);
       typeImports.addAll(synth.typeImports);
+      // A constructor-bound idiom (builder bound to a hand-written constructor, or @Value whose
+      // constructor must initialise every final field) needs its constructor widened to match the
+      // fields just added, else the class no longer compiles. Re-parses the printed text so the
+      // synthesised fields are in scope and the constructor positions are the post-insert ones.
+      if (edits.extendConstructorsOf != null) {
+        SynthResult ctorImports = new SynthResult();
+        printed = extendConstructors(
+            printed, edits.extendConstructorsOf, edits.synthesise, binder, ctorImports);
+        needsJsonPropertyImport |= ctorImports.usesJsonProperty;
+        typeImports.addAll(ctorImports.typeImports);
+      }
     }
 
     // B2 overflow: instead of a synthesised block, add ONE prefix-less @JsonUnwrapped member of the
@@ -861,6 +932,292 @@ public final class RetrofitPatchEmitter {
           && (t.endsWith("." + simpleName + ";") || t.equals("import " + simpleName + ";"));
     });
     return String.join("\n", lines);
+  }
+
+  /**
+   * Widens every hand-written constructor of {@code targetClass} so it also takes the synthesised
+   * fields, keeping a builder bound to that constructor valid and initialising the new final fields
+   * of a {@code @Value} class.
+   *
+   * <p>Each constructor gains one trailing {@code @JsonProperty("<id>") <Type> <name>} parameter per
+   * synthesised field and one trailing {@code this.<name> = <name>;} assignment. Both edits are made
+   * textually on the already-printed source (the same approach the rest of this emitter uses) so
+   * every untouched line stays byte-identical and the diff is minimal:
+   * <ul>
+   *   <li>the parameter list is extended at the {@code )} that closes it, matching the existing
+   *       parameters' own indentation when they are written one-per-line (the sscs idiom) so the
+   *       widened list keeps the team's formatting;</li>
+   *   <li>the assignments are inserted immediately before the constructor body's closing brace.</li>
+   * </ul>
+   *
+   * <p>Constructors are rewritten in DESCENDING source position so an earlier rewrite never shifts a
+   * later, still-to-be-applied offset. A compact constructor that delegates to another via
+   * {@code this(...)} is skipped: widening it would leave the delegation short of arguments, and the
+   * constructor it delegates to is itself widened, so the field is still initialised.
+   */
+  private String extendConstructors(
+      String printed, String targetClass, List<FieldModel> synthesised, ImportBinder binder,
+      SynthResult imports) {
+    CompilationUnit unit = parseCompilationUnit(printed, targetClass);
+    Optional<ClassOrInterfaceDeclaration> target = unit.getClassByName(targetClass);
+    if (target.isEmpty()) {
+      return printed;
+    }
+    List<ConstructorDeclaration> constructors = new ArrayList<>(target.get().getConstructors());
+    // Descending by start position: rewrite the last constructor first so earlier offsets hold.
+    constructors.sort(Comparator.comparingInt(
+        (ConstructorDeclaration c) -> c.getBegin().map(p -> p.line).orElse(0)).reversed());
+    for (ConstructorDeclaration ctor : constructors) {
+      if (!widensTo(ctor)) {
+        continue;
+      }
+      // Every widened constructor gets its narrow overload: a class whose overloads would collide is
+      // refused up front by narrowOverloadCollision, so this is unconditional here.
+      printed = widenConstructor(printed, ctor, synthesised, binder, imports, true);
+    }
+    return printed;
+  }
+
+  /**
+   * A human-readable reason why this class's constructors cannot be widened <em>with</em> their narrow
+   * delegating overloads, or null when they can.
+   *
+   * <p>The overloads are what keep existing positional call sites compiling, so they are not optional:
+   * if one cannot be emitted because the post-widening class would already declare that signature, the
+   * class must be refused rather than patched. Suppressing just the overload would be worse than a
+   * compile error — an existing {@code new Address(a, b)} call would silently rebind to the WIDENED
+   * one-arg constructor, quietly assigning {@code b} to the synthesised field instead of the second.
+   *
+   * <p>Two shapes collide: a sibling that delegates via {@code this(...)} keeps its original signature
+   * (so re-creating it clashes), and the widened form of a shorter sibling can land on exactly the
+   * signature a longer sibling's overload would occupy (a two-constructor class whose signatures differ
+   * by one parameter of the synthesised field's type).
+   */
+  private String narrowOverloadCollision(
+      ModelSourceIndex.Type complexClass, List<FieldModel> synthesised) {
+    List<ConstructorDeclaration> constructors = complexClass.decl.getConstructors();
+    Set<String> postEditSignatures = new LinkedHashSet<>();
+    for (ConstructorDeclaration ctor : constructors) {
+      postEditSignatures.add(widensTo(ctor) ? widenedSignature(ctor, synthesised)
+          : parameterSignature(ctor));
+    }
+    for (ConstructorDeclaration ctor : constructors) {
+      if (widensTo(ctor) && postEditSignatures.contains(parameterSignature(ctor))) {
+        return "whose constructor (" + parameterSignature(ctor) + ") cannot keep a delegating overload "
+            + "of its original signature — another constructor would already declare it after "
+            + "widening, so existing positional call sites would silently rebind to a different "
+            + "constructor. Add the field and update the constructors by hand.";
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Whether {@link #widenConstructor} will actually widen this constructor — it declines a constructor
+   * that delegates to a sibling via {@code this(...)} (the sibling is widened instead) and one with an
+   * empty parameter list (nothing to append an argument to).
+   */
+  private static boolean widensTo(ConstructorDeclaration ctor) {
+    return !delegatesToSiblingConstructor(ctor) && !ctor.getParameters().isEmpty();
+  }
+
+  /**
+   * A constructor's parameter-type list as source strings, used to compare signatures. Source strings
+   * rather than resolved erasures: the emitter has no symbol solver, and a conservative
+   * false-positive match only costs one skipped narrow overload.
+   */
+  private static String parameterSignature(ConstructorDeclaration ctor) {
+    List<String> types = new ArrayList<>();
+    ctor.getParameters().forEach(param -> types.add(simpleTypeName(param.getType().asString())));
+    return String.join(",", types);
+  }
+
+  /** The signature a widened constructor ends up with: its own parameters plus the synthesised ones. */
+  private static String widenedSignature(
+      ConstructorDeclaration ctor, List<FieldModel> synthesised) {
+    List<String> types = new ArrayList<>();
+    ctor.getParameters().forEach(param -> types.add(simpleTypeName(param.getType().asString())));
+    synthesised.forEach(
+        field -> types.add(simpleTypeName(SyntheticFieldTypes.javaType(field))));
+    return String.join(",", types);
+  }
+
+  /**
+   * A type's package qualifiers stripped, so a synthesised {@code java.time.LocalDate} parameter
+   * compares equal to an existing source-level {@code LocalDate} one when checking for a signature
+   * clash. Collapsing distinct types that share a simple name is acceptable: the only cost of a false
+   * match is one narrow overload not emitted.
+   */
+  private static String simpleTypeName(String type) {
+    StringBuilder out = new StringBuilder();
+    int segmentStart = 0;
+    for (int i = 0; i <= type.length(); i++) {
+      boolean boundary = i == type.length() || !isTypeNameChar(type.charAt(i));
+      if (boundary) {
+        String segment = type.substring(segmentStart, i);
+        int lastDot = segment.lastIndexOf('.');
+        out.append(lastDot < 0 ? segment : segment.substring(lastDot + 1));
+        if (i < type.length() && type.charAt(i) != ' ') {
+          out.append(type.charAt(i));
+        }
+        segmentStart = i + 1;
+      }
+    }
+    return out.toString();
+  }
+
+  private static boolean isTypeNameChar(char c) {
+    return Character.isJavaIdentifierPart(c) || c == '.';
+  }
+
+  /**
+   * Whether a constructor's first statement delegates to a sibling constructor ({@code this(...)}).
+   * Such a constructor must NOT be widened: the sibling it delegates to is widened instead, and
+   * adding parameters here would make the {@code this(...)} call short of arguments.
+   */
+  private static boolean delegatesToSiblingConstructor(ConstructorDeclaration ctor) {
+    return ctor.getBody().getStatements().stream().findFirst()
+        .map(first -> first.isExplicitConstructorInvocationStmt()
+            && first.asExplicitConstructorInvocationStmt().isThis())
+        .orElse(false);
+  }
+
+  /**
+   * Appends the synthesised fields to one constructor's parameter list and assignment body, returning
+   * the rewritten source. Offsets are taken from the parsed positions of the last parameter and the
+   * body's closing brace, so the edit touches only those two points.
+   *
+   * <p>A NARROW delegating overload preserving the original signature is added alongside, so every
+   * existing positional {@code new <Class>(...)} call site still compiles. That matters twice over:
+   * prl's own tests construct these classes positionally ({@code new WithoutNoticeOrderDetails(Yes)}),
+   * and a retrofitted model may be a PUBLISHED library (sscs-common) whose callers are not even in the
+   * parsed source, so no scan of this repo could prove the widened arity is unused. Verified against
+   * Lombok 1.18.38: with two constructors present, {@code @Builder}/{@code @Jacksonized} bind to the
+   * {@code @JsonCreator}-annotated one, so {@code builder()}/{@code toBuilder()} still set the added
+   * fields, and the narrow overload passes {@code null} for them.
+   */
+  private String widenConstructor(
+      String printed, ConstructorDeclaration ctor, List<FieldModel> synthesised,
+      ImportBinder binder, SynthResult imports, boolean addNarrowOverload) {
+    if (ctor.getParameters().isEmpty()) {
+      // Nothing to widen: a no-arg constructor cannot carry the field, and adding an assignment
+      // would reference a parameter that does not exist.
+      return printed;
+    }
+    List<String> lines = new ArrayList<>(Arrays.asList(printed.split("\n", -1)));
+    Optional<com.github.javaparser.Position> bodyEnd = ctor.getBody().getEnd();
+    if (bodyEnd.isEmpty()) {
+      return printed;
+    }
+    int closeLine = bodyEnd.get().line;
+
+    // 1. The narrow delegating overload, inserted AFTER the constructor's closing brace — the latest
+    //    of the three edit points, so applying it first leaves every earlier offset valid.
+    if (addNarrowOverload) {
+      lines.addAll(closeLine, renderNarrowOverload(ctor, synthesised, lines, closeLine));
+    }
+
+    // 2. Assignments, inserted before the body's closing brace (before the parameter list edit: it
+    //    is later in the file, so applying it first leaves the parameter offsets valid).
+    String bodyIndent = ctor.getBody().getStatements().stream().findFirst()
+        .flatMap(s -> s.getBegin())
+        .map(p -> " ".repeat(p.column - 1))
+        .orElse(leadingWhitespace(lines.get(closeLine - 1)) + "    ");
+    List<String> assignments = new ArrayList<>();
+    for (FieldModel field : synthesised) {
+      String name = field.getJavaName();
+      assignments.add(bodyIndent + "this." + name + " = " + name + ";");
+    }
+    lines.addAll(closeLine - 1, assignments);
+
+    // 3. Parameters, appended at the ')' that closes the parameter list.
+    var lastParam = ctor.getParameter(ctor.getParameters().size() - 1);
+    Optional<com.github.javaparser.Position> paramEnd = lastParam.getEnd();
+    Optional<com.github.javaparser.Position> paramStart = lastParam.getBegin();
+    if (paramEnd.isEmpty() || paramStart.isEmpty()) {
+      return String.join("\n", lines);
+    }
+    // One-per-line parameter lists (the sscs @JsonProperty idiom) keep that shape: continue at the
+    // column the existing parameters start on. A single-line list stays on its line.
+    boolean onePerLine = ctor.getParameters().size() > 1
+        && !ctor.getParameter(0).getBegin().map(p -> p.line)
+            .equals(paramStart.map(p -> p.line));
+    String paramIndent = " ".repeat(paramStart.get().column - 1);
+    List<String> rendered = new ArrayList<>();
+    for (FieldModel field : synthesised) {
+      String javaType = bindTypeReferences(SyntheticFieldTypes.javaType(field), binder, imports);
+      rendered.add("@JsonProperty(\"" + field.getId() + "\") " + javaType + " "
+          + field.getJavaName());
+    }
+    imports.usesJsonProperty = true;
+    int lastParamLine = paramEnd.get().line;
+    String line = lines.get(lastParamLine - 1);
+    int insertAt = paramEnd.get().column;
+    String head = line.substring(0, insertAt);
+    String tail = line.substring(insertAt);
+    if (onePerLine) {
+      List<String> replacement = new ArrayList<>();
+      replacement.add(head + ",");
+      for (int i = 0; i < rendered.size(); i++) {
+        boolean last = i == rendered.size() - 1;
+        replacement.add(paramIndent + rendered.get(i) + (last ? tail : ","));
+      }
+      lines.remove(lastParamLine - 1);
+      lines.addAll(lastParamLine - 1, replacement);
+    } else {
+      lines.set(lastParamLine - 1, head + ", " + String.join(", ", rendered) + tail);
+    }
+    return String.join("\n", lines);
+  }
+
+  /**
+   * The narrow delegating overload for one widened constructor: the ORIGINAL parameter list, a body
+   * that forwards to the widened constructor passing {@code null} for each synthesised field, and a
+   * comment saying why it exists.
+   *
+   * <p>It carries no annotations. {@code @JsonCreator} must stay on exactly one constructor (the
+   * widened one, so Jackson and Lombok's {@code @Builder} both bind there), and {@code @JsonProperty}
+   * on the parameters of a non-creator constructor is meaningless. {@code null} is always a legal
+   * argument because every type {@link SyntheticFieldTypes} declares is a reference type.
+   */
+  private List<String> renderNarrowOverload(
+      ConstructorDeclaration ctor, List<FieldModel> synthesised, List<String> lines, int closeLine) {
+    List<String> params = new ArrayList<>();
+    List<String> args = new ArrayList<>();
+    ctor.getParameters().forEach(param -> {
+      params.add(param.getType().asString() + " " + param.getNameAsString());
+      args.add(param.getNameAsString());
+    });
+    synthesised.forEach(field -> args.add("null"));
+    String access = ctor.getAccessSpecifier().asString();
+    String signature = (access.isEmpty() ? "" : access + " ")
+        + ctor.getNameAsString() + "(" + String.join(", ", params) + ") {";
+    String indent = leadingWhitespace(lines.get(closeLine - 1));
+    List<String> out = new ArrayList<>();
+    out.add("");
+    out.add(indent + "/** Retained so existing positional call sites still compile. */");
+    if ((indent + signature).length() <= MAX_EMITTED_LINE) {
+      out.add(indent + signature);
+    } else {
+      // Too long for one line: one parameter per line, aligned under the '(' as the team's own
+      // multi-line constructors are.
+      String open = (access.isEmpty() ? "" : access + " ") + ctor.getNameAsString() + "(";
+      String continuation = indent + " ".repeat(open.length());
+      for (int i = 0; i < params.size(); i++) {
+        String prefix = i == 0 ? indent + open : continuation;
+        String suffix = i == params.size() - 1 ? ") {" : ",";
+        out.add(prefix + params.get(i) + suffix);
+      }
+    }
+    // Delegate at the same column the widened constructor's own statements sit at, so the overload
+    // matches the team's indentation width (prl indents 4, sscs 4, the SDK 2).
+    String bodyIndent = ctor.getBody().getStatements().stream().findFirst()
+        .flatMap(s -> s.getBegin())
+        .map(p -> " ".repeat(p.column - 1))
+        .orElse(indent + "  ");
+    out.add(bodyIndent + "this(" + String.join(", ", args) + ");");
+    out.add(indent + "}");
+    return out;
   }
 
   private SynthResult renderSynthBlock(FileEdits edits, ImportBinder binder) {
@@ -1274,6 +1631,12 @@ public final class RetrofitPatchEmitter {
      * and building goes through a builder (the constructor-limit fix).
      */
     private final Set<String> removeTypeAnnotations = new LinkedHashSet<>();
+    /**
+     * The class whose hand-written constructor(s) must be widened to accept the synthesised fields,
+     * or null when synthesis needs no constructor change. Set only for the builder-bound /
+     * {@code @Value} idioms that would otherwise refuse synthesis.
+     */
+    private String extendConstructorsOf;
 
     FileEdits(Path file) {
       this.file = file;
@@ -1292,6 +1655,14 @@ public final class RetrofitPatchEmitter {
 
     void synthesise(String targetClass, List<FieldModel> fields) {
       this.synthesise.addAll(fields);
+    }
+
+    /**
+     * Records that {@code targetClass}'s hand-written constructor(s) must be widened to take the
+     * synthesised fields as trailing parameters.
+     */
+    void extendConstructors(String targetClass) {
+      this.extendConstructorsOf = targetClass;
     }
 
     void addUnwrappedMember(String extraClassType) {

@@ -8,6 +8,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import uk.gov.hmcts.rt.enums.ClaimType;
 import uk.gov.hmcts.rt.model.caseaccess.ChangeOrganisationRequest;
+import uk.gov.hmcts.rt.model.common.BoundParty;
 import uk.gov.hmcts.rt.model.common.DocItem;
 import uk.gov.hmcts.rt.model.common.Party;
 import uk.gov.hmcts.rt.model.event.HearingData;
@@ -43,6 +44,11 @@ public class CaseData {
 
   // Nested complex type: its members are annotated on the Party class.
   private Party respondent;
+
+  // A nested complex type whose builder Lombok binds to a hand-written @JsonCreator constructor, with a
+  // definition-only member: the patch synthesises the field, widens that constructor, and adds a narrow
+  // delegating overload so BoundPartyCaller's positional `new BoundParty("x")` still compiles.
+  private BoundParty boundParty;
 
   // Prefixed @JsonUnwrapped sub-object: flattens to hearingType / hearingLength.
   @JsonUnwrapped(prefix = "hearing")

@@ -6,10 +6,10 @@ import lombok.Value;
 
 /**
  * A {@code @Value} complex type (Lombok makes every field {@code private final}) with a hand-written
- * {@code @JsonCreator} constructor that assigns only its declared field, as Civil's {@code Bundle}
- * does. A synthesised field would be final too and the constructor would not initialise it —
- * "variable might not have been initialized" — so the retrofit patch must NOT synthesise into it,
- * routing the member to a MANUAL_PLACEMENT gap instead (the @Value/final-field guard).
+ * single-line {@code @JsonCreator} constructor that assigns only its declared field, as Civil's
+ * {@code Bundle} does. A synthesised field is final too, so the constructor MUST be widened to
+ * initialise it — the patch appends the parameter and its assignment rather than refusing the member,
+ * and the single-line parameter list stays on one line.
  */
 @Value
 public class ValueHolder {

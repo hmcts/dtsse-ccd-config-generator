@@ -407,6 +407,21 @@ class RetrofitRoundTripTest {
     // patched model and the companion sources under one compile root.
     copyTree(modelSrc, patchedModel);
     applyUnifiedDiff(patch, patchedModel);
+
+    // BoundParty's builder-bound @JsonCreator constructor must be WIDENED to take the definition-only
+    // member (else Lombok's builder passes an argument it does not declare) and must keep a narrow
+    // delegating overload of its original signature (else BoundPartyCaller's positional
+    // `new BoundParty("x")` — prl's UrgencyGeneratorTest shape — stops compiling). The compile below is
+    // the real gate; these assertions name the mechanism so a regression reports the cause, not just
+    // "compilation failed".
+    String boundParty = Files.readString(
+        patchedModel.resolve("uk/gov/hmcts/rt/model/common/BoundParty.java"));
+    assertThat(boundParty)
+        .contains("private String boundNote;")
+        .contains("@JsonProperty(\"boundNote\") String boundNote)")
+        .contains("this.boundNote = boundNote;")
+        .contains("public BoundParty(String boundName) {")
+        .contains("this(boundName, null);");
     copyTree(patchedModel, combinedSrc);
     copyTree(companionSrc, combinedSrc);
 

@@ -14,5 +14,21 @@
     "FieldType": "Email",
     "ElementLabel": "Email address",
     "SecurityClassification": "Public"
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "ID": "BoundParty",
+    "ListElementCode": "boundName",
+    "FieldType": "Text",
+    "ElementLabel": "Bound name",
+    "SecurityClassification": "Public"
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "ID": "BoundParty",
+    "ListElementCode": "boundNote",
+    "FieldType": "Text",
+    "ElementLabel": "Bound note",
+    "SecurityClassification": "Public"
   }
 ]

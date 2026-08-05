@@ -151,26 +151,97 @@ class RetrofitPatchEmitterGoldenTest {
   }
 
   @Test
-  void doesNotSynthesiseIntoBuilderBoundJsonCreatorClassAndReportsGap() {
-    // Bug B3 (sscs): a complex type using the hand-written single-arg @JsonCreator + @Builder idiom
-    // (Wrapper, like SSCS's Bundle/ScannedDocument) must NOT receive a synthesised field — appending
-    // one breaks the builder's constructor binding. The member routes to a MANUAL_PLACEMENT gap; the
-    // Wrapper file is not part of the patch at all.
+  void addressesCollectionElementWrapperMembersOnItsValueClass() {
+    // Bug (sscs): a definition complex type whose model class is a hand-rolled {id, value} collection
+    // -element wrapper (Wrapper, like SSCS's Bundle/ScannedDocument) has its ComplexTypes rows
+    // describing the VALUE class (WrapperDetails), because CCD roots a collection element's member
+    // namespace at `value`. The patch must annotate/synthesise onto WrapperDetails, NOT onto the
+    // wrapper — targeting the wrapper made every member look definition-only and refused them all as
+    // builder-binding breaks (111 members across 22 sscs classes reported as "add the field by hand"
+    // when the fields already existed on the *Details class).
     RetrofitPatchEmitter emitter = buildEmitter();
     RetrofitPatch patch = emitter.emit();
-    // Wrapper may still be touched (its unmatched `value` member gets @CCD(ignore=true)), but it must
-    // NOT gain a synthesised field — that is the builder-breaking edit.
+
+    String detailsPatched = patch.files().stream()
+        .filter(f -> f.relativePath().endsWith("common/WrapperDetails.java"))
+        .map(RetrofitPatch.FilePatch::patchedContent)
+        .findFirst()
+        .orElseThrow(() -> new AssertionError("WrapperDetails.java not in patch"));
+    // The existing member is annotated in place (not synthesised), and only the genuinely
+    // definition-only member is added.
+    assertThat(detailsPatched)
+        .contains("@CCD(label = \"A member the definition addresses on the wrapper's value class\")")
+        .contains("synthesised definition-only fields")
+        .contains("private String newDetail;");
+
+    // The wrapper itself gains no synthesised field and no widened constructor.
     patch.files().stream()
         .filter(f -> f.relativePath().endsWith("common/Wrapper.java"))
         .forEach(f -> assertThat(f.patchedContent())
             .doesNotContain("synthesised definition-only fields")
             .doesNotContain("newDetail"));
+    // And nothing is routed to a manual-placement gap: the members are all placed.
+    assertThat(emitter.gaps())
+        .noneMatch(g -> g.getRowKey() != null && g.getRowKey().startsWith("Wrapper/"));
+  }
+
+  @Test
+  void widensBuilderBoundJsonCreatorConstructorForSynthesisedMember() {
+    // A @Data @Builder complex type whose builder Lombok binds to a hand-written multi-arg
+    // @JsonCreator constructor (sscs's Appeal shape) is NOT refused: the patch synthesises the
+    // definition-only member AND widens the bound constructor to take it, so the generated builder
+    // still calls a constructor of matching arity. Verified against Lombok 1.18.38 — an extended
+    // @JsonCreator constructor compiles and both builder() and toBuilder() set the added field.
+    RetrofitPatchEmitter emitter = buildEmitter();
+    RetrofitPatch patch = emitter.emit();
+    String patched = patch.files().stream()
+        .filter(f -> f.relativePath().endsWith("common/BuilderBoundParty.java"))
+        .map(RetrofitPatch.FilePatch::patchedContent)
+        .findFirst()
+        .orElseThrow(() -> new AssertionError("BuilderBoundParty.java not in patch"));
+
+    assertThat(patched)
+        .contains("synthesised definition-only fields")
+        .contains("private String panelComposition;")
+        // The parameter is appended with its CCD id as @JsonProperty, keeping the team's
+        // one-parameter-per-line shape.
+        .contains("@JsonProperty(\"benefitType\") String benefitType,")
+        .contains("@JsonProperty(\"panelComposition\") String panelComposition)")
+        // …and assigned in the body, so the field is actually initialised.
+        .contains("this.panelComposition = panelComposition;")
+        // …and the original 2-arg signature survives as a delegating overload, so callers outside the
+        // parsed source (sscs-common is a published library) still compile.
+        .contains("public BuilderBoundParty(String appellantName, String benefitType) {")
+        .contains("this(appellantName, benefitType, null);");
+    // The existing assignments are untouched.
+    assertThat(patched).contains("this.benefitType = benefitType;");
+    assertThat(emitter.gaps())
+        .noneMatch(g -> "BuilderBoundParty/panelComposition".equals(g.getRowKey()));
+  }
+
+  @Test
+  void refusesWideningWhenANarrowOverloadWouldCollideWithAnotherConstructor() {
+    // Two hand-written non-delegating constructors differing by one String. Widening both makes the
+    // SHORTER one's widened form (String, String) occupy exactly the signature the LONGER one's narrow
+    // overload needs. Emitting the patch anyway is not an option in either direction: keeping both
+    // overloads declares the same constructor twice (does not compile), and suppressing one silently
+    // rebinds every existing `new TwoConstructorParty(a, b)` to the widened 1-arg constructor, which
+    // would assign b to the synthesised field instead of `secondary`. So the class is refused whole and
+    // the member routed to a manual-placement gap.
+    RetrofitPatchEmitter emitter = buildEmitter();
+    RetrofitPatch patch = emitter.emit();
+    patch.files().stream()
+        .filter(f -> f.relativePath().endsWith("common/TwoConstructorParty.java"))
+        .forEach(f -> assertThat(f.patchedContent())
+            .doesNotContain("synthesised definition-only fields")
+            .doesNotContain("tertiary")
+            .doesNotContain("Retained so existing positional call sites"));
     assertThat(emitter.gaps())
         .anySatisfy(g -> {
-          assertThat(g.getRowKey()).isEqualTo("Wrapper/newDetail");
+          assertThat(g.getRowKey()).isEqualTo("TwoConstructorParty/tertiary");
           assertThat(g.getAction())
               .isEqualTo(uk.gov.hmcts.ccd.sdk.converter.model.gap.GapAction.MANUAL_PLACEMENT);
-          assertThat(g.getDetail()).contains("@JsonCreator").contains("@Builder");
+          assertThat(g.getDetail()).contains("delegating overload");
         });
   }
 
@@ -197,25 +268,34 @@ class RetrofitPatchEmitterGoldenTest {
   }
 
   @Test
-  void doesNotSynthesiseIntoValueClassWithHandwrittenConstructorAndReportsGap() {
-    // The @Value/final-field guard (civil's Bundle): ValueHolder is @Value (final fields) with a
-    // hand-written @JsonCreator that assigns only `held`. A synthesised final field would be left
-    // uninitialised, so `stitchStatus` must route to a MANUAL_PLACEMENT gap and ValueHolder must not
-    // gain a synthesised field.
+  void widensValueClassConstructorSoTheSynthesisedFinalFieldIsInitialised() {
+    // civil's Bundle shape: ValueHolder is @Value (Lombok makes EVERY field private final) with a
+    // hand-written single-line @JsonCreator that assigns only `held`. The synthesised field is final
+    // too, so the constructor is widened to initialise it rather than the member being refused. The
+    // parameter list was written on one line, so it stays on one line.
     RetrofitPatchEmitter emitter = buildEmitter();
     RetrofitPatch patch = emitter.emit();
-    patch.files().stream()
+    String patched = patch.files().stream()
         .filter(f -> f.relativePath().endsWith("common/ValueHolder.java"))
-        .forEach(f -> assertThat(f.patchedContent())
-            .doesNotContain("synthesised definition-only fields")
-            .doesNotContain("stitchStatus"));
+        .map(RetrofitPatch.FilePatch::patchedContent)
+        .findFirst()
+        .orElseThrow(() -> new AssertionError("ValueHolder.java not in patch"));
+
+    assertThat(patched)
+        .contains("synthesised definition-only fields")
+        .contains("private String stitchStatus;")
+        .contains("public ValueHolder(@JsonProperty(\"held\") String held, "
+            + "@JsonProperty(\"stitchStatus\") String stitchStatus) {")
+        .contains("this.stitchStatus = stitchStatus;")
+        .contains("this.held = held;")
+        // The narrow delegating overload keeps `new ValueHolder(held)` call sites compiling. It is
+        // unannotated: @JsonCreator stays on the widened constructor alone so Jackson and Lombok's
+        // @Builder both bind there.
+        .contains("/** Retained so existing positional call sites still compile. */")
+        .contains("public ValueHolder(String held) {")
+        .contains("this(held, null);");
     assertThat(emitter.gaps())
-        .anySatisfy(g -> {
-          assertThat(g.getRowKey()).isEqualTo("ValueHolder/stitchStatus");
-          assertThat(g.getAction())
-              .isEqualTo(uk.gov.hmcts.ccd.sdk.converter.model.gap.GapAction.MANUAL_PLACEMENT);
-          assertThat(g.getDetail()).contains("@Value").contains("final");
-        });
+        .noneMatch(g -> "ValueHolder/stitchStatus".equals(g.getRowKey()));
   }
 
   @Test
