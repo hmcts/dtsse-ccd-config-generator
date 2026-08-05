@@ -11,6 +11,7 @@ import uk.gov.hmcts.rt.model.caseaccess.ChangeOrganisationRequest;
 import uk.gov.hmcts.rt.model.common.BoundParty;
 import uk.gov.hmcts.rt.model.common.DocItem;
 import uk.gov.hmcts.rt.model.common.Party;
+import uk.gov.hmcts.rt.model.common.SuperCosts;
 import uk.gov.hmcts.rt.model.event.HearingData;
 
 /**
@@ -49,6 +50,11 @@ public class CaseData {
   // definition-only member: the patch synthesises the field, widens that constructor, and adds a narrow
   // delegating overload so BoundPartyCaller's positional `new BoundParty("x")` still compiles.
   private BoundParty boundParty;
+
+  // A nested complex type whose Lombok-generated all-args constructor a subclass (SuperCostsSection)
+  // calls positionally via super(...), with a definition-only member: the patch synthesises the field
+  // and adds a narrow explicit constructor to THIS class so the untouched subclass still compiles.
+  private SuperCosts superCosts;
 
   // Prefixed @JsonUnwrapped sub-object: flattens to hearingType / hearingLength.
   @JsonUnwrapped(prefix = "hearing")

@@ -460,17 +460,9 @@ public final class RetrofitPatchEmitter {
         // that constructor with the synthesised fields as trailing parameters keeps the builder
         // binding valid and initialises the new final fields. Verified against Lombok 1.18.38 — a
         // @Value @Builder(toBuilder = true) class with an EXTENDED @JsonCreator constructor compiles,
-        // and builder()/toBuilder() both set the added field. Only the subclass-super(...) case
-        // genuinely cannot be repaired from this class alone (the fix belongs in the subclass), so it
-        // stays a gap.
-        if (unsafeReason != null && constructorExtensionRepairs(complexClass)) {
-          String collision = narrowOverloadCollision(complexClass, synthesised);
-          if (collision == null) {
-            editsFor(byFile, complexClass.file).extendConstructors(complexClass.simpleName);
-            unsafeReason = null;
-          } else {
-            unsafeReason = collision;
-          }
+        // and builder()/toBuilder() both set the added field.
+        if (unsafeReason != null) {
+          unsafeReason = repairConstructors(byFile, complexClass, synthesised);
         }
         if (unsafeReason != null) {
           // Appending a field to this class would break its constructor contract (finding B3/B4):
@@ -507,42 +499,141 @@ public final class RetrofitPatchEmitter {
   }
 
   /**
-   * Whether widening this class's hand-written constructor(s) repairs the reason synthesis was
-   * refused.
+   * Plans whatever constructor edits let the synthesised fields be added to {@code complexClass}
+   * after all, returning null once the class is safe to patch or a gap reason when it is not.
    *
-   * <p>True for the three constructor-bound idioms — a {@code @Builder} bound to a hand-written
-   * {@code @JsonCreator} constructor, a {@code @Builder} bound to any hand-written constructor, and a
-   * {@code @Value} class whose constructor must initialise every final field: appending the
-   * synthesised fields as trailing constructor parameters (plus their {@code this.x = x;}
-   * assignments) keeps the builder's binding valid and initialises the new final fields.
+   * <p>Two independent repairs, either or both of which a class may need:
+   * <ul>
+   *   <li><b>Widening</b> — every hand-written constructor gains the synthesised fields as trailing
+   *       parameters plus a NARROW delegating overload of its original signature. That keeps a
+   *       {@code @Builder} bound to the constructor valid, initialises a {@code @Value} class's new
+   *       final field, and leaves existing positional call sites (including a subclass's
+   *       {@code super(...)}) binding to the overload.</li>
+   *   <li><b>A narrow all-args constructor</b> — when the class's all-args constructor is
+   *       LOMBOK-GENERATED and a subclass calls it positionally via {@code super(...)}, that generated
+   *       constructor silently grows with the new field and the subclass's fixed-arity call loses its
+   *       target. There is no source constructor to widen, so the patch adds one: an explicit
+   *       constructor over the pre-synthesis field list delegating {@code this(<fields>, null…)}
+   *       (civil's {@code FixedRecoverableCosts}, whose {@code FixedRecoverableCostsSection} calls
+   *       {@code super(5 args)}). Verified against Lombok 1.18.38: the narrow constructor coexists with
+   *       an explicit {@code @AllArgsConstructor}, the unchanged subclass binds to it, and
+   *       {@code builder()}/{@code toBuilder()} still set every field.</li>
+   * </ul>
    *
-   * <p>False when a subclass calls this class's constructor positionally via {@code super(...)}: the
-   * widened constructor leaves that call unresolved, and the repair belongs in the SUBCLASS, not
-   * here — so that case remains a gap for manual placement. Also false when the class declares no
-   * constructor at all (nothing to widen; Lombok generates the all-args form from the fields, which
-   * already takes the new field).
+   * <p>The narrow all-args repair requires the {@code @AllArgsConstructor} to be EXPLICIT. A class
+   * that only carries {@code @Builder}/{@code @Value} gets its all-args constructor by INFERENCE, and
+   * Lombok infers one only while the class declares no constructor at all — adding the narrow one
+   * suppresses it and the generated builder no longer compiles (verified: {@code constructor
+   * BuilderOnly … required: String,String found: String,String,String}). Such a class stays a gap.
    */
-  private boolean constructorExtensionRepairs(ModelSourceIndex.Type complexClass) {
-    if (complexClass.decl.getConstructors().isEmpty()) {
-      return false;
+  private String repairConstructors(
+      Map<Path, FileEdits> byFile, ModelSourceIndex.Type complexClass,
+      List<FieldModel> synthesised) {
+    boolean widenable = !complexClass.decl.getConstructors().isEmpty();
+    boolean needsNarrowAllArgs = generatesAllArgsConstructor(complexClass)
+        && index.hasSubtypeWithExplicitSuperCall(complexClass);
+
+    NarrowAllArgsPlan narrowAllArgs = null;
+    if (needsNarrowAllArgs) {
+      if (!hasTypeAnnotation(complexClass.decl, "AllArgsConstructor")) {
+        return "whose INFERRED all-args constructor (from @Builder/@Value, with no explicit "
+            + "@AllArgsConstructor) a subclass calls positionally via super(...); appending a field "
+            + "widens it, and adding a narrow constructor to bind that call would suppress Lombok's "
+            + "inference and break the builder. Add the field and update the subclass by hand.";
+      }
+      narrowAllArgs = planNarrowAllArgsConstructor(complexClass, synthesised);
+      if (narrowAllArgs == null) {
+        return "whose Lombok all-args constructor a subclass calls positionally via super(...), and "
+            + "whose pre-synthesis field list cannot be expressed as an explicit constructor. Add the "
+            + "field and update the subclass constructor by hand.";
+      }
     }
-    return !index.hasSubtypeWithExplicitSuperCall(complexClass);
+    if (!widenable && narrowAllArgs == null) {
+      return null;
+    }
+
+    String collision = constructorRepairCollision(complexClass, synthesised, narrowAllArgs);
+    if (collision != null) {
+      return collision;
+    }
+    FileEdits edits = editsFor(byFile, complexClass.file);
+    if (widenable) {
+      edits.extendConstructors(complexClass.simpleName);
+    }
+    if (narrowAllArgs != null) {
+      edits.addNarrowAllArgs(narrowAllArgs);
+    }
+    return null;
+  }
+
+  /**
+   * The explicit constructor to add over {@code complexClass}'s PRE-synthesis field list, or null when
+   * the class has no such list to express.
+   *
+   * <p>Mirrors what Lombok's {@code @AllArgsConstructor} itself generates: one parameter per
+   * non-static field in declaration order, skipping an initialised {@code final} field (Lombok never
+   * takes a parameter for one). Because the synthesised fields are appended at the END of the class
+   * body, the class's existing fields ARE the pre-synthesis list, so the delegation passes {@code null}
+   * for each synthesised field at the tail.
+   *
+   * <p>Null (so the class stays a gap) when the field list is empty — the narrow constructor would be a
+   * no-arg one, clashing with the {@code @NoArgsConstructor} these classes carry — or when
+   * {@code @AllArgsConstructor} names an explicit {@code access} level, since guessing the visibility
+   * of the constructor a subclass binds to is not a safe edit.
+   */
+  private static NarrowAllArgsPlan planNarrowAllArgsConstructor(
+      ModelSourceIndex.Type complexClass, List<FieldModel> synthesised) {
+    boolean customAccess = complexClass.decl.getAnnotations().stream()
+        .filter(a -> a.getNameAsString().endsWith("AllArgsConstructor"))
+        .anyMatch(a -> a.toString().contains("access"));
+    if (customAccess) {
+      return null;
+    }
+    List<String> params = new ArrayList<>();
+    List<String> args = new ArrayList<>();
+    List<String> types = new ArrayList<>();
+    for (FieldDeclaration field : complexClass.decl.getFields()) {
+      if (field.isStatic()) {
+        continue;
+      }
+      for (var variable : field.getVariables()) {
+        if (field.isFinal() && variable.getInitializer().isPresent()) {
+          continue;
+        }
+        String type = variable.getType().asString();
+        types.add(simpleTypeName(type));
+        params.add(type + " " + variable.getNameAsString());
+        args.add(variable.getNameAsString());
+      }
+    }
+    if (params.isEmpty()) {
+      return null;
+    }
+    synthesised.forEach(field -> args.add("null"));
+    // Indent the added constructor like the class's own members, and its body one level deeper —
+    // deriving the width from the first field's column keeps the team's indentation (prl/sscs 4, SDK 2).
+    String indent = complexClass.decl.getFields().stream().findFirst()
+        .flatMap(FieldDeclaration::getBegin)
+        .map(p -> " ".repeat(p.column - 1))
+        .orElse("  ");
+    return new NarrowAllArgsPlan(
+        complexClass.simpleName, params, args, String.join(",", types), indent);
   }
 
   /**
    * A human-readable reason why appending a synthesised field to {@code complexClass} would break its
    * compilation, or null when synthesis is safe.
    *
-   * <p>Most of these reasons are now REPAIRED rather than reported: see
-   * {@link #constructorExtensionRepairs}, which widens the hand-written constructor so the field can
-   * be synthesised after all. Two shapes survive to the gap report:
+   * <p>Every reason returned here is passed through {@link #repairConstructors}, which widens the
+   * hand-written constructors and/or adds a narrow all-args constructor so the field can be synthesised
+   * after all. Only two shapes survive to the gap report:
    * <ul>
-   *   <li>a Lombok all-args constructor a subclass calls positionally via {@code super(...)}
-   *       ({@link ModelSourceIndex#hasSubtypeWithExplicitSuperCall}) — growing the constructor leaves
-   *       the subclass's fixed-arity {@code super(...)} unresolved and the fix belongs in the
-   *       subclass;</li>
-   *   <li>a class where the widening's narrow delegating overloads would collide
-   *       ({@link #narrowOverloadCollision}).</li>
+   *   <li>a class whose all-args constructor a subclass calls via {@code super(...)} but whose
+   *       all-args form is INFERRED from {@code @Builder}/{@code @Value} rather than declared with
+   *       {@code @AllArgsConstructor} — the narrow constructor that would bind that call suppresses the
+   *       inference and breaks the builder;</li>
+   *   <li>a class where the repair's narrow constructors would collide with each other or with an
+   *       existing signature ({@link #constructorRepairCollision}).</li>
    * </ul>
    */
   private String synthesisUnsafeReason(ModelSourceIndex.Type complexClass) {
@@ -576,6 +667,8 @@ public final class RetrofitPatchEmitter {
     }
     if (generatesAllArgsConstructor(complexClass)
         && index.hasSubtypeWithExplicitSuperCall(complexClass)) {
+      // Repaired by repairConstructors in the PARENT file (a narrow all-args constructor the
+      // unchanged subclass binds to), except for the inferred-@Builder shape it refuses by name.
       return "whose Lombok all-args constructor a subclass calls positionally via super(...); "
           + "appending a field would widen that constructor and leave the subclass's super(...) call "
           + "with no matching constructor. Add the field and update the subclass constructor by hand.";
@@ -857,6 +950,12 @@ public final class RetrofitPatchEmitter {
         needsJsonPropertyImport |= ctorImports.usesJsonProperty;
         typeImports.addAll(ctorImports.typeImports);
       }
+      // A class whose all-args constructor is Lombok-generated and called positionally by a subclass
+      // gets an explicit narrow constructor over its pre-synthesis field list, so that super(...) call
+      // keeps a target once the generated constructor grows.
+      if (edits.narrowAllArgs != null) {
+        printed = insertBeforeClassEnd(printed, renderNarrowAllArgs(edits.narrowAllArgs));
+      }
     }
 
     // B2 overflow: instead of a synthesised block, add ONE prefix-less @JsonUnwrapped member of the
@@ -979,22 +1078,25 @@ public final class RetrofitPatchEmitter {
   }
 
   /**
-   * A human-readable reason why this class's constructors cannot be widened <em>with</em> their narrow
-   * delegating overloads, or null when they can.
+   * A human-readable reason why this class's constructor repairs cannot all be emitted, or null when
+   * they can.
    *
-   * <p>The overloads are what keep existing positional call sites compiling, so they are not optional:
-   * if one cannot be emitted because the post-widening class would already declare that signature, the
-   * class must be refused rather than patched. Suppressing just the overload would be worse than a
-   * compile error — an existing {@code new Address(a, b)} call would silently rebind to the WIDENED
-   * one-arg constructor, quietly assigning {@code b} to the synthesised field instead of the second.
+   * <p>The narrow constructors are what keep existing positional call sites compiling, so they are not
+   * optional: if one cannot be emitted because the post-repair class would already declare that
+   * signature, the class must be refused rather than patched. Suppressing just the narrow constructor
+   * would be worse than a compile error — an existing {@code new Address(a, b)} call would silently
+   * rebind to the WIDENED one-arg constructor, quietly assigning {@code b} to the synthesised field
+   * instead of the second.
    *
-   * <p>Two shapes collide: a sibling that delegates via {@code this(...)} keeps its original signature
-   * (so re-creating it clashes), and the widened form of a shorter sibling can land on exactly the
+   * <p>Three shapes collide: a sibling that delegates via {@code this(...)} keeps its original signature
+   * (so re-creating it clashes); the widened form of a shorter sibling can land on exactly the
    * signature a longer sibling's overload would occupy (a two-constructor class whose signatures differ
-   * by one parameter of the synthesised field's type).
+   * by one parameter of the synthesised field's type); and an added narrow all-args constructor can
+   * duplicate a signature an existing or widened constructor already occupies.
    */
-  private String narrowOverloadCollision(
-      ModelSourceIndex.Type complexClass, List<FieldModel> synthesised) {
+  private String constructorRepairCollision(
+      ModelSourceIndex.Type complexClass, List<FieldModel> synthesised,
+      NarrowAllArgsPlan narrowAllArgs) {
     List<ConstructorDeclaration> constructors = complexClass.decl.getConstructors();
     Set<String> postEditSignatures = new LinkedHashSet<>();
     for (ConstructorDeclaration ctor : constructors) {
@@ -1008,6 +1110,14 @@ public final class RetrofitPatchEmitter {
             + "widening, so existing positional call sites would silently rebind to a different "
             + "constructor. Add the field and update the constructors by hand.";
       }
+      if (widensTo(ctor)) {
+        postEditSignatures.add(parameterSignature(ctor));
+      }
+    }
+    if (narrowAllArgs != null && postEditSignatures.contains(narrowAllArgs.signature)) {
+      return "whose Lombok all-args constructor a subclass calls positionally via super(...), but "
+          + "whose narrow replacement (" + narrowAllArgs.signature + ") would duplicate a constructor "
+          + "the class already declares. Add the field and update the subclass constructor by hand.";
     }
     return null;
   }
@@ -1218,6 +1328,39 @@ public final class RetrofitPatchEmitter {
     out.add(bodyIndent + "this(" + String.join(", ", args) + ");");
     out.add(indent + "}");
     return out;
+  }
+
+  /**
+   * Renders the added narrow all-args constructor: the class's pre-synthesis parameter list delegating
+   * {@code this(<those args>, null…)} to the constructor Lombok now generates over the widened field
+   * list.
+   *
+   * <p>It carries no annotations. {@code @AllArgsConstructor} stays on the class and Jackson keeps
+   * binding through the builder / setters, so annotating this one would only add a second creator.
+   * {@code null} is always a legal argument because every type {@link SyntheticFieldTypes} declares is
+   * a reference type.
+   */
+  private static String renderNarrowAllArgs(NarrowAllArgsPlan plan) {
+    String indent = plan.indent;
+    String open = "public " + plan.className + "(";
+    List<String> out = new ArrayList<>();
+    out.add(indent + "/** Retained so a subclass's positional super(...) call still binds. */");
+    String signature = open + String.join(", ", plan.params) + ") {";
+    if ((indent + signature).length() <= MAX_EMITTED_LINE) {
+      out.add(indent + signature);
+    } else {
+      // Too long for one line: one parameter per line, aligned under the '(' as the team's own
+      // multi-line constructors are.
+      String continuation = indent + " ".repeat(open.length());
+      for (int i = 0; i < plan.params.size(); i++) {
+        String prefix = i == 0 ? indent + open : continuation;
+        String suffix = i == plan.params.size() - 1 ? ") {" : ",";
+        out.add(prefix + plan.params.get(i) + suffix);
+      }
+    }
+    out.add(indent + indent + "this(" + String.join(", ", plan.args) + ");");
+    out.add(indent + "}");
+    return String.join("\n", out) + "\n";
   }
 
   private SynthResult renderSynthBlock(FileEdits edits, ImportBinder binder) {
@@ -1637,6 +1780,13 @@ public final class RetrofitPatchEmitter {
      * {@code @Value} idioms that would otherwise refuse synthesis.
      */
     private String extendConstructorsOf;
+    /**
+     * The narrow all-args constructor to ADD, or null when none is needed. Distinct from
+     * {@code extendConstructorsOf}: that widens constructors the team wrote, whereas this one exists
+     * to bind a subclass's {@code super(...)} to the pre-synthesis field list of a class whose
+     * all-args constructor Lombok generates (so there is no source constructor to widen).
+     */
+    private NarrowAllArgsPlan narrowAllArgs;
 
     FileEdits(Path file) {
       this.file = file;
@@ -1665,6 +1815,13 @@ public final class RetrofitPatchEmitter {
       this.extendConstructorsOf = targetClass;
     }
 
+    /**
+     * Records the narrow all-args constructor to add so a subclass's {@code super(...)} still binds.
+     */
+    void addNarrowAllArgs(NarrowAllArgsPlan plan) {
+      this.narrowAllArgs = plan;
+    }
+
     void addUnwrappedMember(String extraClassType) {
       this.unwrappedMemberType = extraClassType;
     }
@@ -1675,6 +1832,29 @@ public final class RetrofitPatchEmitter {
 
     void removeTypeAnnotation(String simpleName) {
       this.removeTypeAnnotations.add(simpleName);
+    }
+  }
+
+  /**
+   * The narrow all-args constructor to add to a class whose Lombok-generated all-args constructor a
+   * subclass calls positionally: the pre-synthesis parameter list, the delegation arguments (those
+   * parameters plus one {@code null} per synthesised field), the parameter-type signature used for
+   * collision detection, and the indent the class's own members sit at.
+   */
+  private static final class NarrowAllArgsPlan {
+    private final String className;
+    private final List<String> params;
+    private final List<String> args;
+    private final String signature;
+    private final String indent;
+
+    NarrowAllArgsPlan(
+        String className, List<String> params, List<String> args, String signature, String indent) {
+      this.className = className;
+      this.params = params;
+      this.args = args;
+      this.signature = signature;
+      this.indent = indent;
     }
   }
 

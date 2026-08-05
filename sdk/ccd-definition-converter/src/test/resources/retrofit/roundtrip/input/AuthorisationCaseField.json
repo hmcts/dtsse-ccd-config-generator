@@ -51,6 +51,13 @@
   {
     "LiveFrom": "01/01/2017",
     "CaseTypeID": "RETRO",
+    "CaseFieldID": "superCosts",
+    "UserRole": "caseworker-rt",
+    "CRUD": "CRUD"
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "RETRO",
     "CaseFieldID": "hearingParty",
     "UserRole": "caseworker-rt",
     "CRUD": "CRUD"

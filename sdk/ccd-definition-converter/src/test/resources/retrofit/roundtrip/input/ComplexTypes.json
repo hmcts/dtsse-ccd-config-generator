@@ -30,5 +30,29 @@
     "FieldType": "Text",
     "ElementLabel": "Bound note",
     "SecurityClassification": "Public"
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "ID": "SuperCosts",
+    "ListElementCode": "band",
+    "FieldType": "Text",
+    "ElementLabel": "Band",
+    "SecurityClassification": "Public"
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "ID": "SuperCosts",
+    "ListElementCode": "reasons",
+    "FieldType": "Text",
+    "ElementLabel": "Reasons",
+    "SecurityClassification": "Public"
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "ID": "SuperCosts",
+    "ListElementCode": "costsLabel",
+    "FieldType": "Text",
+    "ElementLabel": "Costs label",
+    "SecurityClassification": "Public"
   }
 ]

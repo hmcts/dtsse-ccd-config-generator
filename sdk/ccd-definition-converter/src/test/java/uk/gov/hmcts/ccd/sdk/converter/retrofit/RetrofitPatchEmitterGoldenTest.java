@@ -246,24 +246,53 @@ class RetrofitPatchEmitterGoldenTest {
   }
 
   @Test
-  void doesNotSynthesiseIntoClassWithSubclassPositionalSuperCallAndReportsGap() {
-    // Bug B4 (civil): RecoverableCosts is @AllArgsConstructor and its subclass RecoverableCostsSection
-    // calls super(band, reasons) positionally. Synthesising `bandLabel` would widen the all-args
-    // constructor to 3 args and break that fixed-arity super call, so the member must route to a
-    // MANUAL_PLACEMENT gap and RecoverableCosts must not gain a synthesised field.
+  void addsNarrowAllArgsConstructorSoASubclassPositionalSuperCallStillBinds() {
+    // Bug B4 (civil's FixedRecoverableCosts): RecoverableCosts is @AllArgsConstructor and its subclass
+    // RecoverableCostsSection calls super(band, reasons) positionally. Synthesising `bandLabel` widens
+    // the GENERATED all-args constructor to 3 args, so the patch adds an explicit narrow constructor
+    // over the pre-synthesis field list delegating this(band, reasons, null) — the subclass binds to
+    // that and needs no edit of its own.
+    RetrofitPatchEmitter emitter = buildEmitter();
+    RetrofitPatch patch = emitter.emit();
+    String patched = patch.files().stream()
+        .filter(f -> f.relativePath().endsWith("common/RecoverableCosts.java"))
+        .map(RetrofitPatch.FilePatch::patchedContent)
+        .findFirst()
+        .orElseThrow();
+    assertThat(patched)
+        .contains("private String bandLabel;")
+        .contains("/** Retained so a subclass's positional super(...) call still binds. */")
+        .contains("public RecoverableCosts(String band, String reasons) {")
+        .contains("this(band, reasons, null);");
+    // The subclass itself must be untouched — that is what also protects subclasses outside the
+    // parsed source tree (a published model jar's consumers).
+    assertThat(patch.files())
+        .noneMatch(f -> f.relativePath().endsWith("common/RecoverableCostsSection.java"));
+    assertThat(emitter.gaps())
+        .noneSatisfy(g -> assertThat(g.getRowKey()).isEqualTo("RecoverableCosts/bandLabel"));
+  }
+
+  @Test
+  void refusesNarrowAllArgsConstructorWhenTheAllArgsFormIsInferredFromBuilder() {
+    // BuilderOnlyCosts is @Data @Builder with NO explicit @AllArgsConstructor, so Lombok INFERS its
+    // all-args constructor — and only while the class declares no constructor at all. Adding the narrow
+    // constructor that would bind BuilderOnlyCostsSection's super(cap, note) suppresses that inference
+    // and the generated builder stops compiling (verified against Lombok 1.18.38), so this shape must
+    // stay a MANUAL_PLACEMENT gap.
     RetrofitPatchEmitter emitter = buildEmitter();
     RetrofitPatch patch = emitter.emit();
     patch.files().stream()
-        .filter(f -> f.relativePath().endsWith("common/RecoverableCosts.java"))
+        .filter(f -> f.relativePath().endsWith("common/BuilderOnlyCosts.java"))
         .forEach(f -> assertThat(f.patchedContent())
             .doesNotContain("synthesised definition-only fields")
-            .doesNotContain("bandLabel"));
+            .doesNotContain("capLabel")
+            .doesNotContain("Retained so a subclass's positional super(...) call still binds"));
     assertThat(emitter.gaps())
         .anySatisfy(g -> {
-          assertThat(g.getRowKey()).isEqualTo("RecoverableCosts/bandLabel");
+          assertThat(g.getRowKey()).isEqualTo("BuilderOnlyCosts/capLabel");
           assertThat(g.getAction())
               .isEqualTo(uk.gov.hmcts.ccd.sdk.converter.model.gap.GapAction.MANUAL_PLACEMENT);
-          assertThat(g.getDetail()).contains("super(");
+          assertThat(g.getDetail()).contains("INFERRED all-args constructor");
         });
   }
 

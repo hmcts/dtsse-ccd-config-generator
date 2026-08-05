@@ -16,8 +16,14 @@ public class Party {
   private List<DocItem> attachments;
 
   // A member whose type (RecoverableCosts) is @AllArgsConstructor with a subclass calling super(...)
-  // positionally: a definition-only member of RecoverableCosts must NOT be synthesised into it (B4).
+  // positionally (B4): a definition-only member of it MUST be synthesised, with a narrow explicit
+  // constructor added to the PARENT so the unchanged subclass's super(...) still binds.
   private RecoverableCosts costs;
+
+  // The same subclass-super(...) shape but with the all-args constructor INFERRED from @Builder rather
+  // than declared: unrepairable (the narrow constructor would suppress the inference), so its
+  // definition-only member must still route to a gap.
+  private BuilderOnlyCosts builderOnlyCosts;
 
   // A member whose type (ValueHolder) is @Value with a hand-written @JsonCreator: a definition-only
   // member of ValueHolder must NOT be synthesised into it (final field would be uninitialised).

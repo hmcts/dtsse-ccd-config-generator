@@ -422,6 +422,21 @@ class RetrofitRoundTripTest {
         .contains("this.boundNote = boundNote;")
         .contains("public BoundParty(String boundName) {")
         .contains("this(boundName, null);");
+    // SuperCosts's all-args constructor is LOMBOK-GENERATED (nothing to widen) and SuperCostsSection
+    // calls it positionally via super(band, reasons) — civil's FixedRecoverableCosts shape. The patch
+    // must add a narrow explicit constructor over the pre-synthesis field list, and must leave the
+    // SUBCLASS untouched: that is what protects subclasses outside the parsed source tree too. Again the
+    // compile below is the real gate.
+    String superCosts = Files.readString(
+        patchedModel.resolve("uk/gov/hmcts/rt/model/common/SuperCosts.java"));
+    assertThat(superCosts)
+        .contains("private String costsLabel;")
+        .contains("public SuperCosts(String band, String reasons) {")
+        .contains("this(band, reasons, null);");
+    assertThat(Files.readString(
+        patchedModel.resolve("uk/gov/hmcts/rt/model/common/SuperCostsSection.java")))
+        .doesNotContain("costsLabel")
+        .contains("super(band, reasons);");
     copyTree(patchedModel, combinedSrc);
     copyTree(companionSrc, combinedSrc);
 

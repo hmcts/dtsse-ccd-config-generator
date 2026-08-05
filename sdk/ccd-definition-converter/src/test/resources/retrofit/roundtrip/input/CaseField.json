@@ -55,6 +55,15 @@
   {
     "LiveFrom": "01/01/2017",
     "CaseTypeID": "RETRO",
+    "ID": "superCosts",
+    "Label": "Super costs",
+    "FieldType": "Complex",
+    "FieldTypeParameter": "SuperCosts",
+    "SecurityClassification": "Public"
+  },
+  {
+    "LiveFrom": "01/01/2017",
+    "CaseTypeID": "RETRO",
     "ID": "hearingParty",
     "Label": "Hearing party",
     "FieldType": "Complex",

@@ -35,7 +35,11 @@ LANES=(
   "sscs-common|test-projects/sscs-common|test-projects/sscs-common/src/main/java|test-projects/sscs-tribunals-case-api/definitions/benefit/sheets|Benefit|uk.gov.hmcts.reform.sscs.ccd.domain.SscsCaseData|uk.gov.hmcts.reform.sscs.ccd.domain||CCD_DEF_ENV=nonprod CCD_DEF_PUBLISH=N"
   "et-ccd-callbacks|test-projects/et-ccd-callbacks|test-projects/et-ccd-callbacks/et-shared/src/main/java|test-projects/et-ccd-callbacks/ccd-definitions/jurisdictions/england-wales/json|ET_EnglandWales|uk.gov.hmcts.et.common.model.ccd.CaseData|uk.gov.hmcts.et.common.ccd.config||CCD_DEF_ENV=nonprod"
   "prl-cos-api|test-projects/prl-cos-api|test-projects/prl-cos-api/src/main/java|test-projects/prl-ccd-definitions/definitions/private-law/json|PRLAPPS|uk.gov.hmcts.reform.prl.models.dto.ccd.CaseData|uk.gov.hmcts.reform.prl.ccd.config||CCD_DEF_ENV=nonprod|Miam=uk.gov.hmcts.reform.prl.models.complextypes.citizen.response.miam"
-  "civil-service|test-projects/civil-service|test-projects/civil-service/src/main/java|test-projects/civil-ccd-definition/ccd-definition/civil|CIVIL|uk.gov.hmcts.reform.civil.model.CaseData|uk.gov.hmcts.reform.civil.model||CCD_DEF_ENV=nonprod"
+  # Civil needs --type-package-hint for two AMBIGUOUS type names: HearingLength exists in both
+  # enums.dq and ga.model.genapplication, and CaseLocationCivil in both model.defaultjudgment and
+  # model.genapplication. Without the hints the generated complex types reference them unqualified and
+  # the clone does not compile (nothing to do with the model patch — these are companion sources).
+  "civil-service|test-projects/civil-service|test-projects/civil-service/src/main/java|test-projects/civil-ccd-definition/ccd-definition/civil|CIVIL|uk.gov.hmcts.reform.civil.model.CaseData|uk.gov.hmcts.reform.civil.model||CCD_DEF_ENV=nonprod|HearingLength=uk.gov.hmcts.reform.civil.enums.dq CaseLocationCivil=uk.gov.hmcts.reform.civil.model.defaultjudgment"
 )
 
 run_lane() {
