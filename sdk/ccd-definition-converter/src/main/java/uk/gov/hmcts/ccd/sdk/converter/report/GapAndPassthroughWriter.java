@@ -68,6 +68,7 @@ public class GapAndPassthroughWriter implements ReportWriter {
       entry.put("relativePath", sheet.getRelativePath());
       entry.put("primaryKeys", sheet.getPrimaryKeys());
       entry.put("overwriteColumns", sheet.getOverwriteColumns());
+      entry.put("columnsOnly", sheet.isColumnsOnly());
       entry.put("overlaySuffix", sheet.getOverlaySuffix());
       if (sheet.getOverlayCondition() != null) {
         entry.put("envVar", sheet.getOverlayCondition().getEnvVar());

@@ -43,4 +43,20 @@ public class PassthroughSheet {
    */
   @Builder.Default
   List<String> overwriteColumns = java.util.List.of();
+
+  /**
+   * Whether this sheet grafts COLUMNS onto rows the generator already emitted and must never ADD a
+   * row. False (the default) keeps {@code JsonUtils.mergeInto}'s row-adding behaviour, which is what
+   * a whole-sheet or row-level passthrough wants.
+   *
+   * <p>A column graft carries only the merge key plus the grafted columns, so when no generated row
+   * matches the key, adding it writes a row that is missing every other column the sheet requires —
+   * for {@code CaseEventToFields} that means no {@code CaseEventID}, {@code CaseTypeID},
+   * {@code DisplayContext} or {@code PageID}, which the definition store rejects. That is strictly
+   * worse than dropping the graft: the grafted column is unreproducible either way, but the orphan
+   * row corrupts a sheet that was otherwise correct. So a columns-only sheet skips unmatched rows
+   * and the {@code CaseEventToFields} mid-event graft sets this.
+   */
+  @Builder.Default
+  boolean columnsOnly = false;
 }

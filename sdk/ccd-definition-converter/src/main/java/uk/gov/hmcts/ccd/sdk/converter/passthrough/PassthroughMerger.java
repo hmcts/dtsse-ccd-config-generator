@@ -83,6 +83,12 @@ public final class PassthroughMerger {
 
       String[] primaryKeys = toPrimaryKeys(entry);
       Path targetFile = generatedDir.resolve(relativePath);
+      if (isColumnsOnly(entry)) {
+        rows = retainMatchedRows(rows, targetFile, primaryKeys);
+        if (rows.isEmpty()) {
+          continue;
+        }
+      }
       try {
         // The generator only creates a sheet's directory when it emits at least one row for it;
         // a passthrough-only sheet (e.g. an EventToComplexTypes file for an event the generator
@@ -102,6 +108,63 @@ public final class PassthroughMerger {
         throw new RuntimeException("Failed merging " + sourceFile + " into " + targetFile, ex);
       }
     }
+  }
+
+  /**
+   * Drops the passthrough rows no generated row matches, for a columns-only sheet.
+   *
+   * <p>{@code JsonUtils.mergeInto} appends an unmatched row, which is right for a whole-sheet or
+   * row-level passthrough but wrong for a column graft: the graft carries only the merge key plus
+   * the grafted columns, so appending it writes a row missing every other column the sheet requires
+   * (see {@link uk.gov.hmcts.ccd.sdk.converter.model.PassthroughSheet#isColumnsOnly()}). The key
+   * comparison mirrors {@code mergeInto}'s exactly — string-compared, and a key absent on both sides
+   * counts as agreement — so a row kept here is a row that will match there.
+   *
+   * @return the subset of {@code rows} that has a generated row to graft onto
+   */
+  private static List<Map<String, Object>> retainMatchedRows(
+      List<Map<String, Object>> rows, Path targetFile, String[] primaryKeys) {
+    List<Map<String, Object>> existing;
+    try {
+      existing = java.nio.file.Files.isRegularFile(targetFile)
+          ? MAPPER.readValue(targetFile.toFile(), LIST_MAP_TYPE)
+          : List.of();
+    } catch (IOException ex) {
+      throw new UncheckedIOException("Failed reading generated file: " + targetFile, ex);
+    }
+    List<Map<String, Object>> kept = new java.util.ArrayList<>(rows.size());
+    for (Map<String, Object> row : rows) {
+      if (existing.stream().anyMatch(candidate -> matchesOn(candidate, row, primaryKeys))) {
+        kept.add(row);
+      }
+    }
+    return kept;
+  }
+
+  /**
+   * Whether two rows agree on every primary key, using {@code JsonUtils.mergeInto}'s rules.
+   */
+  private static boolean matchesOn(
+      Map<String, Object> existing, Map<String, Object> incoming, String[] primaryKeys) {
+    for (String key : primaryKeys) {
+      boolean inExisting = existing.containsKey(key);
+      boolean inIncoming = incoming.containsKey(key);
+      if (!inExisting || !inIncoming) {
+        if (inExisting != inIncoming) {
+          return false;
+        }
+        continue;
+      }
+      if (!existing.get(key).equals(incoming.get(key).toString())) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  private static boolean isColumnsOnly(Map<String, Object> entry) {
+    Object raw = entry.get("columnsOnly");
+    return raw instanceof Boolean && (Boolean) raw;
   }
 
   private static boolean isActive(String overlaySuffix, String envVar,

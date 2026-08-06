@@ -204,6 +204,99 @@ class PassthroughMergerTest {
     assertThat(result.get(0)).containsEntry("ID", "newField");
   }
 
+  /**
+   * A columns-only sheet grafts onto rows the generator emitted and never appends an orphan.
+   *
+   * <p>The real shape is the {@code CaseEventToFields} mid-event graft: it carries only
+   * {@code CaseFieldID} plus {@code CallBackURLMidEvent}, so appending an unmatched row writes a row
+   * with no {@code CaseEventID}/{@code CaseTypeID}/{@code DisplayContext} — invalid definition JSON,
+   * and strictly worse than dropping a graft that was unreproducible either way.
+   */
+  @Test
+  void columnsOnlySheetGraftsMatchedRowsAndSkipsUnmatchedOnes() throws IOException {
+    Path generatedDir = tempDir.resolve("generated-columns-only");
+    Files.createDirectories(generatedDir.resolve("CaseEventToFields"));
+    Map<String, Object> placed = new LinkedHashMap<>();
+    placed.put("CaseEventID", "writeFinalDecision");
+    placed.put("CaseFieldID", "placedField");
+    placed.put("CaseTypeID", "Benefit");
+    placed.put("DisplayContext", "MANDATORY");
+    MAPPER.writeValue(generatedDir.resolve("CaseEventToFields/writeFinalDecision.json").toFile(),
+        new ArrayList<>(List.of(placed)));
+
+    Path passthroughDir = tempDir.resolve("passthrough-columns-only");
+    Path baseDir = passthroughDir.resolve("base/CaseEventToFields");
+    Files.createDirectories(baseDir);
+    MAPPER.writeValue(baseDir.resolve("writeFinalDecision.json").toFile(), List.of(
+        row("CaseFieldID", "placedField", "CallBackURLMidEvent", "http://api/mid?pageId=a"),
+        row("CaseFieldID", "unplacedField", "CallBackURLMidEvent", "http://api/mid?pageId=b")));
+
+    Map<String, Object> entry = manifestEntry(
+        "CaseEventToFields/writeFinalDecision.json", List.of("CaseFieldID"), null, null, null, null);
+    entry.put("columnsOnly", true);
+    writeManifest(passthroughDir, List.of(entry));
+
+    PassthroughMerger.merge(passthroughDir, generatedDir);
+
+    List<Map<String, Object>> result = MAPPER.readValue(
+        generatedDir.resolve("CaseEventToFields/writeFinalDecision.json").toFile(), LIST_MAP_TYPE);
+    assertThat(result).hasSize(1);
+    assertThat(result.get(0))
+        .containsEntry("CaseFieldID", "placedField")
+        .containsEntry("CaseEventID", "writeFinalDecision")
+        .containsEntry("CallBackURLMidEvent", "http://api/mid?pageId=a");
+  }
+
+  /**
+   * Without the flag the same sheet appends the unmatched row — the behaviour every whole-sheet and
+   * row-level passthrough relies on, and the reason the fix is opt-in rather than merger-wide.
+   */
+  @Test
+  void rowAddingSheetStillAppendsUnmatchedRows() throws IOException {
+    Path generatedDir = tempDir.resolve("generated-row-adding");
+    Files.createDirectories(generatedDir);
+    List<Map<String, Object>> existing = new ArrayList<>();
+    existing.add(row("ID", "field1", "Label", "Generated"));
+    MAPPER.writeValue(generatedDir.resolve("CaseField.json").toFile(), existing);
+
+    Path passthroughDir = tempDir.resolve("passthrough-row-adding");
+    Path baseDir = passthroughDir.resolve("base");
+    Files.createDirectories(baseDir);
+    MAPPER.writeValue(baseDir.resolve("CaseField.json").toFile(),
+        List.of(row("ID", "field2", "Label", "Passthrough")));
+
+    writeManifest(passthroughDir, List.of(
+        manifestEntry("CaseField.json", List.of("ID"), null, null, null, null)));
+
+    PassthroughMerger.merge(passthroughDir, generatedDir);
+
+    List<Map<String, Object>> result = MAPPER.readValue(
+        generatedDir.resolve("CaseField.json").toFile(), LIST_MAP_TYPE);
+    assertThat(result).hasSize(2);
+  }
+
+  /** A columns-only sheet whose target file the generator never wrote grafts nothing at all. */
+  @Test
+  void columnsOnlySheetSkipsEntirelyWhenNoTargetFileExists() throws IOException {
+    Path generatedDir = tempDir.resolve("generated-no-target");
+    Files.createDirectories(generatedDir);
+
+    Path passthroughDir = tempDir.resolve("passthrough-no-target");
+    Path baseDir = passthroughDir.resolve("base/CaseEventToFields");
+    Files.createDirectories(baseDir);
+    MAPPER.writeValue(baseDir.resolve("neverEmitted.json").toFile(), List.of(
+        row("CaseFieldID", "someField", "CallBackURLMidEvent", "http://api/mid")));
+
+    Map<String, Object> entry = manifestEntry(
+        "CaseEventToFields/neverEmitted.json", List.of("CaseFieldID"), null, null, null, null);
+    entry.put("columnsOnly", true);
+    writeManifest(passthroughDir, List.of(entry));
+
+    PassthroughMerger.merge(passthroughDir, generatedDir);
+
+    assertThat(generatedDir.resolve("CaseEventToFields/neverEmitted.json")).doesNotExist();
+  }
+
   // --- helpers ---
 
   private Map<String, Object> row(String key1, Object val1, String key2, Object val2) {
