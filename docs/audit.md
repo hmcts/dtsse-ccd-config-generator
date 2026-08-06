@@ -40,17 +40,10 @@ Note that `TRUNCATE` does not run row-level triggers and is not audited.
 
 ## Zero downtime rollout
 
-The runtime upgrade and trigger migration must be deployed in separate releases. A trigger migration takes effect for
-the whole database as soon as the first upgraded application instance runs Flyway. Combining both changes in one rolling
-deployment would leave older instances writing without `ccd.case_event_id`, and the trigger would reject their writes.
+The SDK upgrade and trigger migration must be deployed in separate releases.
 
-1. Deploy the updated decentralised runtime, without any audit triggers, to every application instance and background
-   writer. Verify that all event transactions provide `ccd.case_event_id`.
-2. In a later release, deploy the Flyway migration that adds the audit triggers.
-
-Do not roll back to a runtime that predates the audit context while triggers are active. Rolling back the trigger
-release to the preceding, audit-aware runtime release is safe. Before rolling back any further, deploy a migration that
-drops the triggers; Flyway does not reverse an applied trigger migration when application binaries are rolled back.
+1. Deploy the latest decentralised runtime, without any audit triggers, to every application instance.
+2. In a later release deploy the Flyway migration that adds the audit triggers.
 
 ## Querying changes
 
