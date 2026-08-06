@@ -964,6 +964,80 @@ public class NormalisingCcdConfigComparatorTest {
         assertThat(result.matches()).as(result.report()).isTrue();
     }
 
+    // ---- EVENT_COMPLEX_TYPE_INERT_COLUMNS ----
+
+    @Test
+    public void eventToComplexTypesCaseTypeIdColumnIsDroppedFromBothSides() {
+        // The importer never reads a case type off this sheet: EventParser.parseCaseEventComplexTypes
+        // groups the rows by (CaseEventID, CaseFieldID) alone and the complex-type parser never touches
+        // ColumnName.CASE_TYPE_ID; ColumnName.isRequired has no CASE_EVENT_TO_COMPLEX_TYPES branch, so
+        // the column is not even required here. Hand-written definitions carry it on a handful of rows
+        // (sscs's Benefit on exactly one of 746); the generator writes it on none.
+        Map<String, List<Map<String, Object>>> expected = sheets("EventToComplexTypes",
+            rows(row("CaseTypeID", "Benefit", "CaseEventID", "caseUpdated", "CaseFieldID", "appeal",
+                "ListElementCode", "appellant", "DisplayContext", "OPTIONAL")));
+        Map<String, List<Map<String, Object>>> actual = sheets("EventToComplexTypes",
+            rows(row("CaseEventID", "caseUpdated", "CaseFieldID", "appeal",
+                "ListElementCode", "appellant", "DisplayContext", "OPTIONAL")));
+
+        ComparisonResult result = NormalisingCcdConfigComparator.compare(expected, actual);
+
+        assertThat(result.matches()).as(result.report()).isTrue();
+        assertThat(result.getAppliedRules())
+            .anySatisfy(rule -> assertThat(rule).startsWith("EVENT_COMPLEX_TYPE_INERT_COLUMNS"));
+    }
+
+    @Test
+    public void eventToComplexTypesWizardPageColumnsAreDroppedFromBothSides() {
+        // WizardPageParser is the only reader of PageLabel/PageDisplayOrder/PageFieldDisplayOrder and
+        // its constructor pins sheetName = SheetName.CASE_EVENT_TO_FIELDS, so a page's label and
+        // ordering come from the event's CaseEventToFields rows — a complex-type member row carrying
+        // them changes nothing on import. sscs's writeFinalDecision/otherPartyAttendedQuestions carries
+        // exactly this stray trio, and it was the last passthrough on the sheet for Benefit.
+        Map<String, List<Map<String, Object>>> expected = sheets("EventToComplexTypes",
+            rows(row("CaseEventID", "writeFinalDecision", "CaseFieldID", "otherPartyAttendedQuestions",
+                "ListElementCode", "otherPartyName", "DisplayContext", "OPTIONAL",
+                "PageLabel", "Type of hearing", "PageDisplayOrder", 3, "PageFieldDisplayOrder", 4)));
+        Map<String, List<Map<String, Object>>> actual = sheets("EventToComplexTypes",
+            rows(row("CaseEventID", "writeFinalDecision", "CaseFieldID", "otherPartyAttendedQuestions",
+                "ListElementCode", "otherPartyName", "DisplayContext", "OPTIONAL")));
+
+        ComparisonResult result = NormalisingCcdConfigComparator.compare(expected, actual);
+
+        assertThat(result.matches()).as(result.report()).isTrue();
+        assertThat(result.getAppliedRules())
+            .anySatisfy(rule -> assertThat(rule).startsWith("EVENT_COMPLEX_TYPE_INERT_COLUMNS"));
+    }
+
+    @Test
+    public void caseTypeIdIsNotDroppedFromTheCaseEventToFieldsSheet() {
+        // The drop is scoped to EventToComplexTypes only. On CaseEventToFields the importer requires
+        // CaseTypeID (ColumnName.isRequired), so a divergence there must still fail.
+        Map<String, List<Map<String, Object>>> expected = sheets("CaseEventToFields",
+            rows(row("CaseTypeID", "Benefit", "CaseEventID", "caseUpdated", "CaseFieldID", "appeal")));
+        Map<String, List<Map<String, Object>>> actual = sheets("CaseEventToFields",
+            rows(row("CaseEventID", "caseUpdated", "CaseFieldID", "appeal")));
+
+        assertThat(NormalisingCcdConfigComparator.compare(expected, actual).matches()).isFalse();
+    }
+
+    @Test
+    public void pageLabelIsNotDroppedFromTheCaseEventToFieldsSheet() {
+        // Where WizardPageParser DOES read it, a divergent PageLabel is real drift: the page would
+        // import with a different heading. (PageLabelPropagationRule only collapses a page's rows onto
+        // one another; it never forgives a wholly absent label.)
+        Map<String, List<Map<String, Object>>> expected = sheets("CaseEventToFields",
+            rows(row("CaseTypeID", "Benefit", "CaseEventID", "writeFinalDecision",
+                "CaseFieldID", "otherPartyAttendedQuestions", "PageID", "1",
+                "PageLabel", "Type of hearing")));
+        Map<String, List<Map<String, Object>>> actual = sheets("CaseEventToFields",
+            rows(row("CaseTypeID", "Benefit", "CaseEventID", "writeFinalDecision",
+                "CaseFieldID", "otherPartyAttendedQuestions", "PageID", "1",
+                "PageLabel", "Something else")));
+
+        assertThat(NormalisingCcdConfigComparator.compare(expected, actual).matches()).isFalse();
+    }
+
     // ---- STATE_DESCRIPTION ----
 
     @Test

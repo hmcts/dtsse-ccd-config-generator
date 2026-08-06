@@ -863,6 +863,87 @@ class DefaultDefinitionLinkerTest {
   }
 
   @Test
+  void leavesNoGraftForCaseTypeIdOnComplexTypeRows() {
+    GapCollector gaps = new GapCollector();
+    // sscs's last CaseEventToComplexTypes file (caseUpdated/appeal) existed solely to carry
+    // "CaseTypeID": "Benefit" on one of the case type's 746 rows — evidently copied down from a
+    // spreadsheet template. The importer never reads a case type off this sheet:
+    // EventParser.parseCaseEventComplexTypes groups the rows by (CaseEventID, CaseFieldID) alone and
+    // the complex-type parser never touches ColumnName.CASE_TYPE_ID; ColumnName.isRequired has no
+    // CASE_EVENT_TO_COMPLEX_TYPES branch at all, so unlike CaseEvent/CaseField/CaseEventToFields the
+    // column is not even required here. So it must not hold a whole verbatim file alive.
+    DefinitionIr ir = minimal("Minimal")
+        .row(SheetName.CASE_FIELD,
+            cols("CaseTypeID", "Minimal", "ID", "contact", "Label", "Contact",
+                "FieldType", "Contact"))
+        .row(SheetName.COMPLEX_TYPES,
+            cols("ID", "Contact", "ListElementCode", "name", "FieldType", "Text"))
+        .row(SheetName.CASE_EVENT,
+            cols("CaseTypeID", "Minimal", "ID", "createCase", "Name", "Create",
+                "PostConditionState", "Open"))
+        .row(SheetName.CASE_EVENT_TO_FIELDS,
+            cols("CaseTypeID", "Minimal", "CaseEventID", "createCase",
+                "CaseFieldID", "contact", "DisplayContext", "COMPLEX", "PageID", "1",
+                "PageFieldDisplayOrder", 1))
+        .row(SheetName.CASE_EVENT_TO_COMPLEX_TYPES,
+            cols("ID", "Contact", "CaseTypeID", "Minimal", "CaseEventID", "createCase",
+                "CaseFieldID", "contact", "ListElementCode", "name", "DisplayContext", "MANDATORY",
+                "FieldDisplayOrder", 1))
+        .build();
+
+    CaseTypeModel model = linker.link(ir, options("Minimal"), gaps);
+
+    var group = model.getEventComplexTypeGroups().get("createCasecontact");
+    assertThat(group).as("the row derives").isNotNull();
+    assertThat(group.getMembers()).hasSize(1);
+
+    assertThat(model.getPassthroughSheets())
+        .as("CaseTypeID alone leaves no carrier: no CaseEventToComplexTypes file is written")
+        .noneMatch(s -> s.getRelativePath().contains("CaseEventToComplexTypes"));
+  }
+
+  @Test
+  void leavesNoGraftForWizardPageColumnsOnComplexTypeRows() {
+    GapCollector gaps = new GapCollector();
+    // sscs's other last CaseEventToComplexTypes file
+    // (writeFinalDecision/otherPartyAttendedQuestions) existed solely to carry the wizard-page trio
+    // PageLabel/PageDisplayOrder/PageFieldDisplayOrder on two of the case type's 746 rows. Those
+    // columns have exactly one reader in the importer — WizardPageParser, whose constructor pins
+    // sheetName = SheetName.CASE_EVENT_TO_FIELDS alongside displayGroupLabel = PAGE_LABEL etc. — so a
+    // page's label and ordering come from the event's CaseEventToFields rows and a complex-type member
+    // row carrying them changes nothing on import. A member's own position comes from
+    // FieldDisplayOrder, which is derived. So they must not hold a whole verbatim file alive either.
+    DefinitionIr ir = minimal("Minimal")
+        .row(SheetName.CASE_FIELD,
+            cols("CaseTypeID", "Minimal", "ID", "contact", "Label", "Contact",
+                "FieldType", "Contact"))
+        .row(SheetName.COMPLEX_TYPES,
+            cols("ID", "Contact", "ListElementCode", "name", "FieldType", "Text"))
+        .row(SheetName.CASE_EVENT,
+            cols("CaseTypeID", "Minimal", "ID", "createCase", "Name", "Create",
+                "PostConditionState", "Open"))
+        .row(SheetName.CASE_EVENT_TO_FIELDS,
+            cols("CaseTypeID", "Minimal", "CaseEventID", "createCase",
+                "CaseFieldID", "contact", "DisplayContext", "COMPLEX", "PageID", "1",
+                "PageLabel", "Type of hearing", "PageFieldDisplayOrder", 1))
+        .row(SheetName.CASE_EVENT_TO_COMPLEX_TYPES,
+            cols("ID", "Contact", "CaseEventID", "createCase", "CaseFieldID", "contact",
+                "ListElementCode", "name", "DisplayContext", "MANDATORY", "FieldDisplayOrder", 1,
+                "PageLabel", "Type of hearing", "PageDisplayOrder", 3, "PageFieldDisplayOrder", 4))
+        .build();
+
+    CaseTypeModel model = linker.link(ir, options("Minimal"), gaps);
+
+    var group = model.getEventComplexTypeGroups().get("createCasecontact");
+    assertThat(group).as("the row derives").isNotNull();
+    assertThat(group.getMembers()).hasSize(1);
+
+    assertThat(model.getPassthroughSheets())
+        .as("the page trio alone leaves no carrier: no CaseEventToComplexTypes file is written")
+        .noneMatch(s -> s.getRelativePath().contains("CaseEventToComplexTypes"));
+  }
+
+  @Test
   void derivesCollectionRootedComplexMemberGroup() {
     GapCollector gaps = new GapCollector();
     // A Collection-typed CaseField placed COMPLEX on an event, whose element type's members are

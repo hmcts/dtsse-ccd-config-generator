@@ -2281,13 +2281,26 @@ public class DefaultDefinitionLinker implements DefinitionLinker {
    *       on this sheet (see {@link #etoctGraftRow}), dropped from comparison by
    *       {@code EVENT_COMPLEX_TYPE_ID_IGNORED}; {@code FieldDisplayOrder} — re-derived by the SDK
    *       from a per-event counter (only relative member order matters), stripped on every sheet by
-   *       {@code DEFAULTS}; and {@code ShowSummaryChangeOption} — read by
+   *       {@code DEFAULTS}; {@code ShowSummaryChangeOption} — read by
    *       {@code EventCaseFieldParser} on {@code CaseEventToFields} but NOT by
    *       {@code EventCaseFieldComplexTypeParser} on this sheet, which maps only
    *       LEC/label/hint/live-from/live-to/order/default-value/display-context/show-condition/
    *       publish/publish-as/retain-hidden-value. It is importer-ignored here exactly like
-   *       {@code ID}, and {@code DEFAULTS} already forgives both Y and N. Grafting any of the three
-   *       would merely re-inject a value the comparator discards.
+   *       {@code ID}, and {@code DEFAULTS} already forgives both Y and N; and
+   *       {@code CaseTypeID}/{@code CaseTypeId} — importer-ignored on this sheet for the same reason
+   *       ({@code EventParser.parseCaseEventComplexTypes} groups the rows by
+   *       {@code (CaseEventID, CaseFieldID)} alone and hands them to the complex-type parser, which
+   *       never reads the column; {@code ColumnName.isRequired} has no
+   *       {@code CASE_EVENT_TO_COMPLEX_TYPES} branch, so unlike {@code CaseEvent}/{@code CaseField}/
+   *       {@code CaseEventToFields} it is not even required here). The case type is already implied by
+   *       the sheet's position in the definition, and the SDK generator writes it on no
+   *       {@code CaseEventToComplexTypes} row; and {@code PageLabel}/{@code PageDisplayOrder}/
+   *       {@code PageFieldDisplayOrder} — importer-ignored here too, since {@code WizardPageParser} is
+   *       their only reader and it is pinned to {@code SheetName.CASE_EVENT_TO_FIELDS}: a page's label
+   *       and ordering come from the event's {@code CaseEventToFields} rows, never from a member row.
+   *       All four are dropped from comparison by {@code EVENT_COMPLEX_TYPE_INERT_COLUMNS} (the two
+   *       display-order columns additionally by {@code DEFAULTS}), so grafting any of them would merely
+   *       re-inject a value the comparator discards.
    *   </li>
    * </ul>
    *
@@ -2304,7 +2317,9 @@ public class DefaultDefinitionLinker implements DefinitionLinker {
       Columns.DISPLAY_CONTEXT, Columns.EVENT_ELEMENT_LABEL, Columns.EVENT_HINT_TEXT,
       Columns.FIELD_SHOW_CONDITION, Columns.PAGE_ID, Columns.HINT_TEXT, "LiveFrom",
       Columns.ID, Columns.FIELD_DISPLAY_ORDER, Columns.SHOW_SUMMARY_CHANGE_OPTION,
-      Columns.RETAIN_HIDDEN_VALUE);
+      Columns.RETAIN_HIDDEN_VALUE,
+      Columns.CASE_TYPE_ID, Columns.CASE_TYPE_ID_LOWER,
+      Columns.PAGE_LABEL, Columns.PAGE_DISPLAY_ORDER, Columns.PAGE_FIELD_DISPLAY_ORDER);
 
   /**
    * The merge key for a DERIVED group's companion tail-graft: the columns the SDK generator itself

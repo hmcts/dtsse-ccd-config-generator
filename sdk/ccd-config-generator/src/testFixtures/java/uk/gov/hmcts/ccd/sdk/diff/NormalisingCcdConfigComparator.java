@@ -51,6 +51,7 @@ public final class NormalisingCcdConfigComparator {
         new ShowConditionWhitespaceRule(),
         new KeyAliasRule(),
         new EventComplexTypeIdIgnoredRule(),
+        new EventComplexTypeInertColumnsRule(),
         new LiveFromRule(),
         new LiveToVestigialRule(),
         new YnCanonRule(),
