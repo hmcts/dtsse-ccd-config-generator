@@ -100,6 +100,9 @@ MODEL_PACKAGE="${MODEL_CLASS_FQN%.*}"
 MODEL_REPO="$(cd "${MODEL_REPO}" && pwd)"
 : "${MODEL_SOURCE_ROOT:=${MODEL_REPO}/src/main/java}"
 [[ -d "${MODEL_SOURCE_ROOT}" ]] || die "model source root not found: ${MODEL_SOURCE_ROOT}"
+# Absolutise: the converter and gradle both run from other working directories, so a relative
+# --model-source-root would resolve against the wrong cwd downstream.
+MODEL_SOURCE_ROOT="$(cd "${MODEL_SOURCE_ROOT}" && pwd)"
 # Default root config package: same rule the CLI applies (ConvertCommand.deriveRootPackage) — cut the
 # model package at its first '.model' segment and append '.ccd' (e.g. .../probate.model.ccd.raw ->
 # .../probate.ccd), else append '.ccd'. The events, page and access sub-packages sit beneath it.
@@ -108,6 +111,30 @@ if [[ -z "${CONFIG_PACKAGE}" ]]; then
   [[ "${CONFIG_PACKAGE}" == "${MODEL_PACKAGE}" ]] && CONFIG_PACKAGE="${MODEL_PACKAGE%.model}"
   CONFIG_PACKAGE="${CONFIG_PACKAGE}.ccd"
 fi
+# Work out which GRADLE PROJECT owns the model source root. Single-project services (civil, prl,
+# probate) keep the model in the root project, but multi-project ones do not: ET's model lives in
+# et-shared/src/main/java, compiled by :et-shared. The SDK plugin, the companion sources and gCC must
+# all land on that project — wiring them onto the root instead leaves the patched model compiling with
+# no ccd-config-generator on its classpath (and no companion sources), which is exactly the
+# "package uk.gov.hmcts.ccd.sdk.api does not exist" failure. Walk up from the source root to the
+# nearest directory carrying a build script; its path relative to the repo root is the project path
+# (Gradle's default projectDir convention, which every lane follows).
+MODEL_PROJECT_DIR="${MODEL_SOURCE_ROOT}"
+while [[ "${MODEL_PROJECT_DIR}" != "${MODEL_REPO}" ]] \
+    && [[ ! -f "${MODEL_PROJECT_DIR}/build.gradle" ]] \
+    && [[ ! -f "${MODEL_PROJECT_DIR}/build.gradle.kts" ]]; do
+  MODEL_PROJECT_DIR="$(dirname "${MODEL_PROJECT_DIR}")"
+done
+MODEL_PROJECT_REL="${MODEL_PROJECT_DIR#"${MODEL_REPO}"}"
+MODEL_PROJECT_REL="${MODEL_PROJECT_REL#/}"
+if [[ -z "${MODEL_PROJECT_REL}" ]]; then
+  MODEL_PROJECT_PATH=":"
+  GCC_TASK=":generateCCDConfig"
+else
+  MODEL_PROJECT_PATH=":${MODEL_PROJECT_REL//\//:}"
+  GCC_TASK="${MODEL_PROJECT_PATH}:generateCCDConfig"
+fi
+
 : "${WORK_DIR:=${CONVERTER_DIR}/build/retrofit-verify/${CASE_TYPE}}"
 
 # Default env / overlays mirror the RoundTripTest CIVIL entry.
@@ -116,6 +143,10 @@ fi
 CONVERSION_DIR="${WORK_DIR}/conversion"        # retrofit.patch + companion sources
 COMPANION_SRC="${CONVERSION_DIR}/companion"    # generated config/enum/access
 PATCH_FILE="${CONVERSION_DIR}/report/retrofit.patch"
+# Where the converter writes passthrough resources. Kept in step with ConvertCommand's default
+# (<output-src>/../resources/ccd-passthrough) rather than passing --passthrough-dir, so the lane
+# exercises the same layout a retrofitted service gets.
+PASSTHROUGH_DIR="${CONVERSION_DIR}/resources/ccd-passthrough"
 MODEL_COPY="${WORK_DIR}/model-copy"            # writable copy of the service repo
 GEN_OUT="${WORK_DIR}/generated"                # gCC output root
 
@@ -231,6 +262,20 @@ fi
 SDK_VERSION="${RELEASE_VERSION:-DEV-SNAPSHOT}"
 SDK_VERSION="${SDK_VERSION//refs\/tags\//}"
 
+# The SDK declares its Spring dependencies VERSIONLESS and gets versions from the Spring Boot BOM via
+# io.spring.dependency-management (sdk/build.gradle). That plugin resolves versions at build time
+# WITHOUT writing them into the published pom/module metadata, so a consumer that has no Spring Boot
+# dependency management of its own cannot resolve the SDK's transitive Spring deps at all
+# ("Could not find org.springframework.boot:spring-boot-starter-web:"). Boot-application lanes
+# (civil, prl, et, fpl, probate) carry that management already; plain java-library model lanes
+# (sscs-common) do not. So the init script supplies the same BOM, but only to projects with neither
+# Spring plugin applied — never overriding a service's own pinned Boot version. Read the version from
+# sdk/build.gradle so the two never drift.
+BOOT_VERSION="$(sed -n 's/.*id("org.springframework.boot") version "\([0-9][0-9.]*\)".*/\1/p' \
+  "${SDK_DIR}/build.gradle" | head -1)"
+[[ -n "${BOOT_VERSION}" ]] || die "could not read the Spring Boot version from ${SDK_DIR}/build.gradle"
+info "Spring Boot BOM version for unmanaged consumers: ${BOOT_VERSION}"
+
 # Wire the SDK into the copied build with a Gradle INIT SCRIPT rather than editing build.gradle. An
 # init script sidesteps the "buildscript{} must precede plugins{}" ordering rule (which broke a
 # naive append) and keeps the service's own build file byte-for-byte untouched — the minimal
@@ -248,6 +293,35 @@ initscript {
 }
 allprojects {
     repositories { mavenLocal() }
+    // Supply the Spring Boot BOM to consumers that manage no Spring versions themselves, so the SDK's
+    // versionless transitive Spring dependencies resolve (see the BOOT_VERSION note above). Gated on
+    // BOTH Spring plugins being absent, so a Boot service keeps its own pinned versions untouched.
+    afterEvaluate { p ->
+        if (!p.pluginManager.hasPlugin('io.spring.dependency-management')
+                && !p.pluginManager.hasPlugin('org.springframework.boot')) {
+            p.configurations.configureEach { c ->
+                if (c.canBeResolved) {
+                    c.resolutionStrategy.eachDependency { d ->
+                        if (d.requested.group.startsWith('org.springframework.boot')
+                                && !d.requested.version) {
+                            d.useVersion("${BOOT_VERSION}")
+                            d.because 'retrofit-verify: SDK publishes versionless Spring deps'
+                        }
+                    }
+                }
+            }
+            // Only where an 'implementation' configuration exists. allprojects visits container
+            // projects too, and a multi-project service's root often applies no java plugin at all
+            // (fpl's root 'FPL' holds only :service and :ccd-definition), so adding to it threw
+            // "Configuration with name 'implementation' not found" and failed configuration for the
+            // whole build. A project with no implementation configuration compiles nothing, so it
+            // needs no BOM.
+            if (p.configurations.findByName('implementation') != null) {
+                p.dependencies.add('implementation',
+                    p.dependencies.platform("org.springframework.boot:spring-boot-dependencies:${BOOT_VERSION}"))
+            }
+        }
+    }
     // Retrofit annotates the model with hundreds of definition-only synthesised fields, so a Lombok
     // @Data / @ToString root case-type class (e.g. Civil's CaseData, ~1,100 fields once patched)
     // generates a toString()/equals() as one deeply-nested binary expression. javac attributes that
@@ -260,9 +334,33 @@ allprojects {
         options.forkOptions.jvmArgs = (options.forkOptions.jvmArgs ?: []) + ['-Xss128m']
     }
 }
-rootProject {
+// Wire the SDK into the project that OWNS the model source root (see the MODEL_PROJECT_PATH note
+// above) — the root project for single-project services, :et-shared for ET. gCC must run in the same
+// project as the patched model so both the generator jar and the companion sources are on its
+// compile classpath.
+allprojects {
     afterEvaluate { p ->
-        p.pluginManager.apply(uk.gov.hmcts.ccd.sdk.CcdSdkPlugin)
+        if (p.path != "${MODEL_PROJECT_PATH}") { return }
+        // A service may already apply hmcts.ccd.sdk itself (ET pins a build that does, from its own
+        // plugins{} block at a released version). Applying it again fails hard on "a task with that
+        // name already exists", so only apply it where it is absent. Where it IS present the ccd
+        // extension and generateCCDConfig task already exist and are reconfigured below — but the
+        // plugin came from the SERVICE's declared version, so also substitute the generator artifact
+        // to the mavenLocal build under test, otherwise gCC runs the released SDK and the lane
+        // measures the wrong code.
+        if (!p.pluginManager.hasPlugin('hmcts.ccd.sdk')) {
+            p.pluginManager.apply(uk.gov.hmcts.ccd.sdk.CcdSdkPlugin)
+        } else {
+            p.configurations.configureEach { c ->
+                c.resolutionStrategy.eachDependency { d ->
+                    if (d.requested.group == 'com.github.hmcts'
+                            && d.requested.name == 'ccd-config-generator') {
+                        d.useVersion("${SDK_VERSION}")
+                        d.because 'retrofit-verify: measure the SDK under test, not the pinned release'
+                    }
+                }
+            }
+        }
         p.sourceSets.main.java.srcDir(p.file("${COMPANION_SRC}"))
         p.ccd {
             configDir = p.file("${GEN_OUT}")
@@ -298,13 +396,13 @@ for t in test checkstyleMain checkstyleTest checkstyleIntegrationTest checkstyle
 done
 info "excluding: ${EXCLUDES[*]:-<none>}"
 
-info "running generateCCDConfig in ${MODEL_COPY} (env: ${GCC_ENV[*]})"
+info "running ${GCC_TASK} in ${MODEL_COPY} (env: ${GCC_ENV[*]})"
 (
   cd "${MODEL_COPY}"
   export "${GCC_ENV[@]}"
   # Expand arrays only when non-empty ("${arr[@]:-}" would inject a spurious empty-string arg,
   # which gradle rejects as "empty path").
-  ./gradlew --init-script "${INIT_SCRIPT}" generateCCDConfig --no-daemon \
+  ./gradlew --init-script "${INIT_SCRIPT}" "${GCC_TASK}" --no-daemon \
     ${EXCLUDES[@]+"${EXCLUDES[@]}"} \
     ${GRADLE_ARGS[@]+"${GRADLE_ARGS[@]}"} \
     || die "generateCCDConfig failed in the copied service (see output above)"
@@ -319,6 +417,13 @@ stop_if generate
 stage "5/5 verify (diff)"
 VERIFY_ARGS=("${DEF_ARGS[@]/--input/--definition}")
 VERIFY_ARGS+=(--case-type "${CASE_TYPE}" --generated-dir "${GEN_OUT}")
+# Graft the passthrough resources onto gCC's output BEFORE diffing. A retrofitted service ships them
+# and merges them in its own generateCCDConfig.doLast, so the definition a deployment imports is
+# generated rows PLUS passthrough — diffing the raw gCC tree reports every verbatim-passthrough row
+# and column as residual (~430 lines on sscs alone). The merge is additive, so this is idempotent.
+[[ -f "${PASSTHROUGH_DIR}/manifest.json" ]] \
+  && VERIFY_ARGS+=(--passthrough-dir "${PASSTHROUGH_DIR}") \
+  || info "no passthrough manifest under ${PASSTHROUGH_DIR}; diffing gCC output as-is"
 for e in "${ENV_ARGS[@]}"; do VERIFY_ARGS+=(--env "$e"); done
 for o in "${OVERLAY_ARGS[@]:-}"; do [[ -n "$o" ]] && VERIFY_ARGS+=(--overlay-suffix "$o"); done
 

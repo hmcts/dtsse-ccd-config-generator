@@ -1,6 +1,5 @@
 package uk.gov.hmcts.ccd.sdk.converter.roundtrip;
 
-import java.io.File;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -11,6 +10,7 @@ import uk.gov.hmcts.ccd.sdk.converter.api.ConversionOptions;
 import uk.gov.hmcts.ccd.sdk.converter.ir.DefinitionIr;
 import uk.gov.hmcts.ccd.sdk.converter.model.OverlayCondition;
 import uk.gov.hmcts.ccd.sdk.converter.model.gap.GapCollector;
+import uk.gov.hmcts.ccd.sdk.converter.passthrough.PassthroughMerger;
 import uk.gov.hmcts.ccd.sdk.converter.reader.JsonDefinitionReader;
 import uk.gov.hmcts.ccd.sdk.diff.ComparisonResult;
 import uk.gov.hmcts.ccd.sdk.diff.NormalisingCcdConfigComparator;
@@ -35,11 +35,25 @@ import uk.gov.hmcts.ccd.sdk.diff.NormalisingCcdConfigComparator;
  * build (which owns the team's full compile classpath, solving the classpath problem of
  * proposal §5). This CLI only reads that output directory back and compares.
  *
+ * <p><b>Passthrough is merged first.</b> A retrofitted service ships the converter's passthrough
+ * resources and merges them into gCC's output exactly as the documented
+ * {@code generateCCDConfig.doLast} snippet does, so the definition a real deployment imports is the
+ * generated rows PLUS the passthrough graft. Diffing gCC's raw output would therefore report every
+ * verbatim-passthrough row and column as residual even though the pipeline reproduces it correctly
+ * — on sscs that alone was ~430 lines (289 {@code CaseEvent} callback URLs, 117
+ * {@code CallBackURLMidEvent}, 26 {@code CaseEventToComplexTypes} rows). Given
+ * {@code --passthrough-dir} this CLI runs {@link PassthroughMerger} over the generated tree before
+ * aggregating, with {@code --env} exported as system properties so suffix-tagged entries resolve
+ * under the same environment the generation ran in — the same order
+ * {@code RoundTripRunner}/{@code RetrofitRoundTripTest} use. The merge is additive
+ * ({@code JsonUtils.mergeInto}), so re-running verify over an already-merged tree is a no-op.
+ *
  * <p>Invoked from Gradle:
  * <pre>
  *   ./gradlew -p sdk :ccd-definition-converter:retrofitVerify --args='\
  *       --definition &lt;definition-dir&gt; --case-type CIVIL \
- *       --generated-dir &lt;gCC-output-root&gt; --env CCD_DEF_ENV=nonprod'
+ *       --generated-dir &lt;gCC-output-root&gt; --passthrough-dir &lt;ccd-passthrough&gt; \
+ *       --env CCD_DEF_ENV=nonprod'
  * </pre>
  * Exit code is 0 when the definitions are semantically equivalent, 1 when residual diffs remain,
  * and 2 on a usage/IO error. The residual summary is printed to stdout regardless so the
@@ -89,6 +103,13 @@ public final class RetrofitVerifyCli {
       return 2;
     }
 
+    if (parsed.passthroughDir != null) {
+      int rc = mergePassthrough(parsed.passthroughDir, actualDir, parsed.env);
+      if (rc != 0) {
+        return rc;
+      }
+    }
+
     DefinitionIr ir = new JsonDefinitionReader().read(options, new GapCollector());
     Map<String, List<Map<String, Object>>> expected =
         ExpectedDefinitionBuilder.build(ir, parsed.caseType, options, parsed.env);
@@ -98,6 +119,40 @@ public final class RetrofitVerifyCli {
     ComparisonResult result = NormalisingCcdConfigComparator.compare(expected, actual);
     printSummary(parsed, actualDir, expected, actual, result);
     return result.matches() ? 0 : 1;
+  }
+
+  /**
+   * Grafts the converter's passthrough resources onto the generated tree, reproducing what a
+   * retrofitted service's own {@code generateCCDConfig.doLast} block does before its definition is
+   * imported.
+   *
+   * <p>The env map is exported as system properties for the duration of the merge:
+   * {@link uk.gov.hmcts.ccd.sdk.converter.model.OverlayCondition} reads a system property before an
+   * environment variable, and this process cannot set the latter — so a suffix-tagged entry would
+   * otherwise be judged against the harness's environment rather than the one gCC generated under.
+   *
+   * @return 0 on success, 2 when the passthrough directory is unusable
+   */
+  private static int mergePassthrough(Path passthroughDir, Path actualDir, Map<String, String> env) {
+    if (!Files.isDirectory(passthroughDir)) {
+      System.err.println("retrofit-verify: --passthrough-dir is not a directory: " + passthroughDir);
+      return 2;
+    }
+    if (!Files.isRegularFile(passthroughDir.resolve("manifest.json"))) {
+      System.err.println("retrofit-verify: no manifest.json under " + passthroughDir
+          + " (was the converter run with --passthrough-dir?)");
+      return 2;
+    }
+    env.forEach(System::setProperty);
+    try {
+      PassthroughMerger.merge(passthroughDir, actualDir);
+    } catch (RuntimeException e) {
+      System.err.println("retrofit-verify: passthrough merge failed: " + e.getMessage());
+      return 2;
+    } finally {
+      env.keySet().forEach(System::clearProperty);
+    }
+    return 0;
   }
 
   private static void printSummary(
@@ -110,6 +165,8 @@ public final class RetrofitVerifyCli {
     System.out.println("=== retrofit-verify: " + parsed.caseType + " ===");
     System.out.println("  definition repo : " + parsed.definitions);
     System.out.println("  generated dir   : " + actualDir);
+    System.out.println("  passthrough     : "
+        + (parsed.passthroughDir == null ? "<not merged>" : parsed.passthroughDir + " (merged)"));
     System.out.println("  env             : " + parsed.env);
     System.out.println("  expected sheets : " + expected.size()
         + " (" + rowCount(expected) + " rows)");
@@ -151,8 +208,8 @@ public final class RetrofitVerifyCli {
 
   private static String usage() {
     return "usage: retrofit-verify --definition <dir> [--definition <dir>...] "
-        + "--case-type <ID> --generated-dir <dir> [--env KEY=VALUE...] "
-        + "[--overlay-suffix suffix=[!]ENV_VAR:value...]";
+        + "--case-type <ID> --generated-dir <dir> [--passthrough-dir <dir>] "
+        + "[--env KEY=VALUE...] [--overlay-suffix suffix=[!]ENV_VAR:value...]";
   }
 
   /** Parsed command-line arguments. */
@@ -160,6 +217,7 @@ public final class RetrofitVerifyCli {
     private final List<Path> definitions = new ArrayList<>();
     private String caseType;
     private Path generatedDir;
+    private Path passthroughDir;
     private final Map<String, String> env = new LinkedHashMap<>();
     private final Map<String, String> overlaySuffixes = new LinkedHashMap<>();
 
@@ -171,6 +229,7 @@ public final class RetrofitVerifyCli {
           case "--definition" -> a.definitions.add(Path.of(requireValue(argv, ++i, flag)));
           case "--case-type" -> a.caseType = requireValue(argv, ++i, flag);
           case "--generated-dir" -> a.generatedDir = Path.of(requireValue(argv, ++i, flag));
+          case "--passthrough-dir" -> a.passthroughDir = Path.of(requireValue(argv, ++i, flag));
           case "--env" -> putKeyValue(a.env, requireValue(argv, ++i, flag), flag);
           case "--overlay-suffix" -> putKeyValue(a.overlaySuffixes, requireValue(argv, ++i, flag), flag);
           default -> throw new IllegalArgumentException("unknown argument: " + flag);
