@@ -475,6 +475,37 @@ Members carry their per-event label and hint fluently with `.eventLabel(...)` an
 
 `.pageId(...)` sets the member row's `PageID`. The definition-store `EventToComplexTypes` parser does not read `PageID`, so this value does not change how CCD renders the member — it exists purely so a hand-authored definition carrying `PageID` on member rows round-trips through the SDK byte-for-byte. Rarely used columns not read by that parser (`SecurityClassification`, `Publish`, `ShowSummaryChangeOption` — each under ~1.5% of observed member rows) are intentionally left as raw passthrough rather than given SDK setters.
 
+##### Opening a member scope without placing the field
+
+`.complex(getter)` does two things: it registers a `CaseEventToFields` row for the field with `DisplayContext=COMPLEX`, *and* it opens the member scope. When you want only the second — because the event places the field in a different context, or does not place it at all — use `.complexScope(getter)`, which opens the scope and registers nothing:
+
+```java
+  builder.event("updateOtherPartyData")
+    ...
+    .fields()
+      // The field's own row keeps the context you asked for...
+      .readonly(CaseData::getAppeal)
+      // ...and the member overrides go in a separate, non-registering scope.
+      .complexScope(CaseData::getAppeal)
+        .mandatory(Appeal::getBenefitType)
+        .optional(Appeal::getReference)
+      .done()
+    ;
+```
+
+For a `List<ListValue<X>>` field the equivalent is the element-typed `.complex(getter, X.class)`, which likewise registers nothing and types the scope on the element rather than the list.
+
+`.complexMember(getter)` places a member with `DisplayContext=COMPLEX` *without* opening a nested scope — for an intermediate that carries a `COMPLEX` row of its own alongside dotted rows for its leaves. The two compose on the same member:
+
+```java
+      .complexScope(CaseData::getPoDetails)
+        .complexMember(PoDetails::getContact)      // the intermediate's own COMPLEX row
+        .complex(PoDetails::getContact)            // ...and descend into it
+          .optional(Contact::getPhone)
+        .done()
+      .done()
+```
+
 #### Per-field defaults and hidden-value retention
 
 A field placed on an event can set its `CaseEventToFields.DefaultValue` to a raw string with

@@ -262,6 +262,64 @@ public class FieldCollection {
       return field(getter, DisplayContext.ReadOnly, false);
     }
 
+    /**
+     * Places a complex-type member with {@code DisplayContext=COMPLEX} — the member-row analogue of
+     * {@link #optional}/{@link #mandatory}/{@link #readonly}, for a member the author wants rendered
+     * as a complex container in its own right rather than as an editable leaf.
+     *
+     * <p>Distinct from {@link #complex(TypedPropertyGetter)}: that opens a nested member scope and
+     * registers no row of its own, so a member reached only by descending through it produces no
+     * {@code CaseEventToComplexTypes} row for the intermediate itself. This registers the member as a
+     * placed field, so {@code CaseEventToComplexTypesGenerator} writes its row with
+     * {@code DisplayContext=COMPLEX} (it emits {@code field.getContext()} verbatim, and
+     * {@link DisplayContext#Complex} is a legal member context to the definition-store importer —
+     * sscs's {@code confirmPoAttendance/presentingOfficersDetails} ships {@code contact.phone} and
+     * {@code contact.mobile} exactly this way). The two compose: descend with {@code complex(...)},
+     * then place the intermediate itself with this when the input carries a row for it.
+     *
+     * <p>Only meaningful inside a {@code complex(...)} member scope. At the top level a field's
+     * {@code CaseEventToFields} {@code DisplayContext} already defaults to {@code COMPLEX} when no
+     * context is set (see {@code CaseEventToFieldsGenerator.resolveDisplayContext}), and a top-level
+     * complex placement is spelled {@code complex(getter)}.
+     *
+     * @param getter the member getter
+     * @return this builder, so the fluent per-member metadata setters apply to the member just placed
+     */
+    public FieldCollectionBuilder<Type, StateType, Parent> complexMember(
+        TypedPropertyGetter<Type, ?> getter) {
+      return field(getter, DisplayContext.Complex, true);
+    }
+
+    /**
+     * Opens a member scope on a scalar complex field <em>without</em> registering the field itself —
+     * the scalar analogue of {@link #complex(TypedPropertyGetter, Class)}, whose javadoc explains the
+     * mechanism in full for collections.
+     *
+     * <p>{@link #complex(TypedPropertyGetter)} does both jobs at once: it registers a root
+     * {@code field(...)} with {@code DisplayContext=COMPLEX} <em>and</em> opens the scope. That is the
+     * right default, but it makes the two inseparable, so a field the definition places as
+     * {@code READONLY}/{@code MANDATORY}/{@code OPTIONAL} on an event while still carrying per-member
+     * {@code CaseEventToComplexTypes} overrides is inexpressible: {@code complex(getter)} would
+     * manufacture a {@code COMPLEX} {@code CaseEventToFields} row the definition does not have, and
+     * placing it with {@code readonly(getter)} alone leaves nowhere to hang the members. Splitting the
+     * scope out lets the author place the field with the context the definition asks for and open the
+     * member scope separately (sscs's {@code updateOtherPartyData/appeal} is {@code READONLY} on the
+     * event yet carries {@code benefitType} member rows).
+     *
+     * <p>Deliberately a distinct name rather than an overload: a
+     * {@code complex(TypedPropertyGetter<Type, U>, Class<U>)} signature would erase to the same
+     * descriptor as the existing collection overload.
+     *
+     * @param getter the scalar complex field's getter
+     * @param <U> the complex field's type, which the returned member scope is typed on
+     * @return the member-scope builder for the field's type
+     */
+    public <U> FieldCollectionBuilder<U, StateType, FieldCollectionBuilder<Type, StateType, Parent>> complexScope(
+        TypedPropertyGetter<Type, U> getter) {
+      Class<U> c = propertyUtils.getPropertyType(dataClass, getter);
+      return complex(propertyUtils.getPropertyName(dataClass, getter), c);
+    }
+
     public <U> FieldCollectionBuilder<U, StateType, FieldCollectionBuilder<Type, StateType, Parent>> list(
         TypedPropertyGetter<Type, List<ListValue<U>>> getter) {
       return list(getter, null);
