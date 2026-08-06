@@ -28,14 +28,19 @@
 # branch that already has an open PR — and the PR's diff-since-last-review is precisely the delta
 # between the two generations of converter output.
 #
-# The plugin version is NOT touched. Everything on the converter branch since the 96.1 publish
-# (ff547414) is converter-only — `git diff ff547414..HEAD -- sdk/ccd-config-generator` is two test
-# files — so the published SDK artifact the PRs pin is still the right one. Only generated output moved.
+# The pinned SDK version IS rewritten, to --sdk-version. It used to be left alone, on the grounds that
+# everything on the converter branch since the 96.1 publish was converter-only; that stopped being true
+# once the branch added ConfigBuilder API the generated companions call (complexScope/complexMember —
+# `git diff <old publish>..HEAD -- sdk/ccd-config-generator/src/main`). Regenerated output pinned to an
+# SDK that predates the API it calls does not compile, so the two move together. Pass the version the
+# publish workflow produced for the converter commit being regenerated from; omit it to keep whatever
+# each branch pins today (correct only when no SDK main-source change is involved).
 #
 # Nothing is pushed automatically: the script prepares each commit and prints its push command,
 # because these branches feed open PRs and the operator should read the diffstat first.
 #
-# Usage: refresh-migration-branches.sh [lane ...]   (default: the four lanes with OPEN PRs)
+# Usage: refresh-migration-branches.sh [--sdk-version <version>] [lane ...]
+#        (default lanes: the four with OPEN PRs)
 
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -54,6 +59,7 @@ LANES=(
 )
 
 BRANCH=ccd-config-generator-migration
+SDK_VERSION=""
 
 run_lane() {
   IFS='|' read -r lane clonerel srcroot remote casetype <<<"$1"
@@ -129,6 +135,21 @@ run_lane() {
       git -C "${wt}" checkout "${tip}" -- "$f"
       echo "  build wiring preserved: $f"
     done <<<"${buildfiles}"
+    # Then re-pin the SDK, in the files just taken from the tip. Both spellings the branches use: the
+    # plugin id's `version '…'` and ET's explicit ccd-config-generator dependency coordinate. Matched on
+    # the json-definition-converter- prefix the publish workflow derives from the branch ref, so nothing
+    # else in the build file can be caught by it.
+    if [[ -n "${SDK_VERSION}" ]]; then
+      while read -r f; do
+        [[ -z "$f" ]] && continue
+        perl -pi -e "s/json-definition-converter-[0-9]+\.[0-9]+-[0-9a-f]{8}/${SDK_VERSION}/g" \
+          "${wt}/$f"
+      done <<<"${buildfiles}"
+      local pinned
+      pinned="$(grep -rl "${SDK_VERSION}" "${wt}" --include='*.gradle' | wc -l)"
+      [[ "${pinned}" -gt 0 ]] || { echo "!! SDK re-pin matched nothing in ${lane}'s build files"; return 1; }
+      echo "  SDK re-pinned to ${SDK_VERSION} in ${pinned} build file(s)"
+    fi
   fi
 
   # The tree is what we built from the base; the parent is the branch's existing tip. commit-tree
@@ -152,9 +173,9 @@ produces now rather than what it produced when the PR was opened. The tree is a 
 regeneration from this branch's base, so nothing from the previous generation survives
 as a fossil; the hand-written build wiring is carried over unchanged.
 
-The pinned SDK artifact is deliberately untouched: everything on the converter branch
-since that publish is converter-only, so the published plugin the build resolves is
-still the right one. Only generated output moved.
+The pinned SDK artifact moves with it${SDK_VERSION:+ (now ${SDK_VERSION})}: the branch adds ConfigBuilder
+API the generated companions call, so the regenerated output and the SDK it resolves
+against have to be the same generation.
 
 DO NOT MERGE — this is for review of the migration's shape and fidelity, not to land.
 EOF
@@ -168,6 +189,13 @@ EOF
   echo "  PUSH:   git -C ${wt} push ${remote} HEAD:${BRANCH}"
   echo "  CLEANUP after push:   git -C ${clone} worktree remove --force ${wt}"
 }
+
+while [[ $# -gt 0 && "$1" == --* ]]; do
+  case "$1" in
+    --sdk-version) SDK_VERSION="$2"; shift 2 ;;
+    *) echo "unknown option: $1" >&2; exit 2 ;;
+  esac
+done
 
 if [[ $# -gt 0 ]]; then
   for want in "$@"; do
