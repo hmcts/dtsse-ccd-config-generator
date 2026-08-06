@@ -19,12 +19,12 @@ Each audit entry contains:
 | `old_values` | Complete row before an update or delete, represented as JSONB |
 | `new_values` | Complete row after an insert or update, represented as JSONB |
 
-An update that leaves the entire row unchanged is not recorded. A statement affecting several rows produces one audit
-entry per row.
+Every inserted, updated or deleted row produces one audit entry, including an update that leaves the stored values
+unchanged. A statement affecting several rows produces one audit entry per row.
 
 ## Enabling a table
 
-Add the trigger in an application Flyway migration:
+Enable auditing for a table by adding the trigger in an application Flyway migration:
 
 ```sql
 create trigger ccd_audit_row_changes
@@ -37,6 +37,20 @@ Audited writes must use the same database transaction as the decentralised event
 outside an event context are rejected.
 
 Note that `TRUNCATE` does not run row-level triggers and is not audited.
+
+## Zero downtime rollout
+
+The runtime upgrade and trigger migration must be deployed in separate releases. A trigger migration takes effect for
+the whole database as soon as the first upgraded application instance runs Flyway. Combining both changes in one rolling
+deployment would leave older instances writing without `ccd.case_event_id`, and the trigger would reject their writes.
+
+1. Deploy the updated decentralised runtime, without any audit triggers, to every application instance and background
+   writer. Verify that all event transactions provide `ccd.case_event_id`.
+2. In a later release, deploy the Flyway migration that adds the audit triggers.
+
+Do not roll back to a runtime that predates the audit context while triggers are active. Rolling back the trigger
+release to the preceding, audit-aware runtime release is safe. Before rolling back any further, deploy a migration that
+drops the triggers; Flyway does not reverse an applied trigger migration when application binaries are rolled back.
 
 ## Querying changes
 

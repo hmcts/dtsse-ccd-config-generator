@@ -55,10 +55,6 @@ begin
             hint = 'Perform this write inside a CCD case event transaction';
     end if;
 
-    if tg_op = 'UPDATE' and old is not distinct from new then
-        return new;
-    end if;
-
     insert into ccd.audit_log (
         case_event_id,
         table_schema,

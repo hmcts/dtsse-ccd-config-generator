@@ -52,7 +52,8 @@ class DatabaseAuditIntegrationTest {
         create table public.audit_test (
           id bigint primary key,
           note text not null,
-          enabled boolean not null
+          enabled boolean not null,
+          metadata json not null
         )
         """);
     jdbc.execute("""
@@ -64,10 +65,13 @@ class DatabaseAuditIntegrationTest {
   }
 
   @Test
-  void recordsCompleteRowsForInsertUpdateAndDeleteAndSkipsNoOpUpdates() throws Exception {
+  void recordsCompleteRowsForInsertUpdateDeleteAndNoOpUpdates() throws Exception {
     long caseEventId = transaction.execute(status -> {
       long reservedId = reserveEventContext();
-      jdbc.update("insert into audit_test(id, note, enabled) values (1, 'before', true)");
+      jdbc.update("""
+          insert into audit_test(id, note, enabled, metadata)
+          values (1, 'before', true, '{"source":"test"}'::json)
+          """);
       jdbc.update("update audit_test set note = 'after' where id = 1");
       jdbc.update("update audit_test set note = 'after' where id = 1");
       jdbc.update("delete from audit_test where id = 1");
@@ -77,26 +81,33 @@ class DatabaseAuditIntegrationTest {
 
     List<AuditRow> rows = loadAuditRows(caseEventId);
     assertThat(rows).extracting(AuditRow::operation)
-        .containsExactly("INSERT", "UPDATE", "DELETE");
+        .containsExactly("INSERT", "UPDATE", "UPDATE", "DELETE");
 
     assertThat(rows.get(0).oldValues()).isNull();
     assertThat(json(rows.get(0).newValues()))
         .containsEntry("id", 1)
         .containsEntry("note", "before")
-        .containsEntry("enabled", true);
+        .containsEntry("enabled", true)
+        .containsEntry("metadata", Map.of("source", "test"));
 
     assertThat(json(rows.get(1).oldValues())).containsEntry("note", "before");
     assertThat(json(rows.get(1).newValues())).containsEntry("note", "after");
 
-    assertThat(json(rows.get(2).oldValues())).containsEntry("note", "after");
-    assertThat(rows.get(2).newValues()).isNull();
+    assertThat(json(rows.get(2).oldValues())).isEqualTo(json(rows.get(2).newValues()));
+
+    assertThat(json(rows.get(3).oldValues())).containsEntry("note", "after");
+    assertThat(rows.get(3).newValues()).isNull();
   }
 
   @Test
   void predicateBasedUpdateCreatesOneEntryPerAffectedRow() {
     long caseEventId = transaction.execute(status -> {
       long reservedId = reserveEventContext();
-      jdbc.update("insert into audit_test(id, note, enabled) values (1, 'one', true), (2, 'two', true)");
+      jdbc.update("""
+          insert into audit_test(id, note, enabled, metadata) values
+            (1, 'one', true, '{}'::json),
+            (2, 'two', true, '{}'::json)
+          """);
       jdbc.update("update audit_test set enabled = false where enabled = true");
       insertEvent(reservedId, 1);
       return reservedId;
@@ -113,7 +124,7 @@ class DatabaseAuditIntegrationTest {
   @Test
   void rejectsAuditedWritesWithoutCaseEventContext() {
     assertThatThrownBy(() -> jdbc.update(
-        "insert into audit_test(id, note, enabled) values (1, 'outside event', true)"
+        "insert into audit_test(id, note, enabled, metadata) values (1, 'outside event', true, '{}'::json)"
     ))
         .isInstanceOf(DataIntegrityViolationException.class)
         .hasMessageContaining("requires a CCD case event context");
@@ -128,7 +139,10 @@ class DatabaseAuditIntegrationTest {
           "select set_config('ccd.audit_disabled', 'true', true)",
           String.class
       );
-      jdbc.update("insert into audit_test(id, note, enabled) values (1, 'maintenance', true)");
+      jdbc.update("""
+          insert into audit_test(id, note, enabled, metadata)
+          values (1, 'maintenance', true, '{}'::json)
+          """);
     });
 
     assertThat(jdbc.queryForObject("select count(*) from audit_test", Integer.class)).isOne();
@@ -139,7 +153,10 @@ class DatabaseAuditIntegrationTest {
   void unresolvedCaseEventReferenceRollsBackAtCommit() {
     assertThatThrownBy(() -> transaction.executeWithoutResult(status -> {
       reserveEventContext();
-      jdbc.update("insert into audit_test(id, note, enabled) values (1, 'orphaned', true)");
+      jdbc.update("""
+          insert into audit_test(id, note, enabled, metadata)
+          values (1, 'orphaned', true, '{}'::json)
+          """);
     })).isInstanceOf(DataIntegrityViolationException.class);
 
     assertThat(jdbc.queryForObject("select count(*) from audit_test", Integer.class)).isZero();
