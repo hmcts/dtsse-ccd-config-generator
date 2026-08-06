@@ -1,0 +1,133 @@
+import groovy.json.JsonSlurper
+
+plugins {
+    id 'base'
+}
+
+def packageMetadata = new JsonSlurper().parse(file('package.json'))
+def packageTarball = layout.buildDirectory.file(
+    "distributions/hmcts-cft-cft-ui-component-lib-${packageMetadata.version}.tgz"
+)
+def consumerSourceDir = rootProject.file('test-projects/pcs-frontend')
+def consumerCheckoutDir = layout.buildDirectory.dir('pcs-consumer').get().asFile
+
+def yarnCommand = { Exec task, List<String> arguments ->
+    task.doFirst {
+        def yarnRelease = fileTree(new File(consumerCheckoutDir, '.yarn/releases')) {
+            include 'yarn-*.cjs'
+        }.singleFile
+        task.commandLine(['node', yarnRelease.absolutePath] + arguments)
+    }
+}
+
+tasks.register('npmInstall', Exec) {
+    workingDir projectDir
+    commandLine 'npm', 'ci'
+}
+
+tasks.register('npmTest', Exec) {
+    dependsOn 'npmInstall'
+    workingDir projectDir
+    commandLine 'npm', 'test'
+}
+
+tasks.register('npmPack', Exec) {
+    dependsOn 'npmTest'
+    workingDir projectDir
+    doFirst {
+        packageTarball.get().asFile.parentFile.mkdirs()
+        delete packageTarball
+    }
+    commandLine 'npm', 'pack', '--pack-destination', packageTarball.get().asFile.parentFile
+}
+
+tasks.register('initPcsConsumerSubmodule', Exec) {
+    workingDir rootProject.projectDir
+    commandLine 'git', 'submodule', 'update', '--init', '--', 'test-projects/pcs-frontend'
+}
+
+tasks.register('cleanPcsConsumer', Delete) {
+    delete consumerCheckoutDir
+}
+
+tasks.register('preparePcsConsumer', Sync) {
+    dependsOn 'initPcsConsumerSubmodule', 'cleanPcsConsumer'
+    from consumerSourceDir
+    into consumerCheckoutDir
+    exclude '.git', '.env', 'node_modules/**', 'build/**', 'dist/**',
+        'coverage/**', 'test-results/**', 'allure-*/**'
+}
+
+tasks.register('installPcsConsumerPackage', Exec) { task ->
+    dependsOn 'preparePcsConsumer', 'npmPack'
+    workingDir consumerCheckoutDir
+    environment 'HUSKY', '0'
+    environment 'YARN_ENABLE_IMMUTABLE_INSTALLS', 'false'
+    yarnCommand(task, [
+        'add',
+        "@hmcts-cft/cft-ui-component-lib@file:${packageTarball.get().asFile.absolutePath}"
+    ])
+}
+
+tasks.register('pcsConsumerServerBuild', Exec) { task ->
+    dependsOn 'installPcsConsumerPackage'
+    workingDir consumerCheckoutDir
+    yarnCommand(task, ['build:server'])
+}
+
+tasks.register('pcsConsumerAssetsBuild', Exec) { task ->
+    dependsOn 'pcsConsumerServerBuild'
+    workingDir consumerCheckoutDir
+    yarnCommand(task, ['build:prod'])
+}
+
+tasks.register('pcsConsumerCheck', Exec) {
+    group = 'verification'
+    description = 'Renders the real PCS legal-representative template with the packed library.'
+    dependsOn 'pcsConsumerAssetsBuild'
+    workingDir consumerCheckoutDir
+    commandLine 'node', '-e', '''
+const path = require('node:path');
+const nunjucks = require('nunjucks');
+const ui = require('@hmcts-cft/cft-ui-component-lib');
+const header = ui.buildHeaderModel({
+  xuiBaseUrl: 'https://manage-case.example',
+  user: { roles: ['pui-case-manager', 'caseworker-pcs-solicitor'] }
+});
+const cftMacro = require.resolve('@hmcts-cft/cft-ui-component-lib/nunjucks/xui-header/macro.njk');
+const environment = nunjucks.configure([
+  path.join(process.cwd(), 'src/main/views'),
+  path.join(process.cwd(), 'src/main/steps'),
+  path.resolve(path.dirname(cftMacro), '..'),
+  path.resolve(path.dirname(require.resolve('@ministryofjustice/frontend/moj/template.njk')), '..')
+], { autoescape: true });
+environment.addGlobal('govukRebrand', true);
+const html = environment.render('stepsTemplate.njk', {
+  isLegalRepresentative: true,
+  headerModel: header,
+  footerModel: ui.buildFooterModel(),
+  sessionTimeout: {},
+  step: { title: 'UI component integration check', fields: {} },
+  t: (_key, fallback) => typeof fallback === 'string' ? fallback : ''
+});
+if (!html.includes('shadowrootmode="open"')) throw new Error('PCS did not render the header');
+if (!html.includes('ui-component-lib-footer')) throw new Error('PCS did not render the footer');
+if (!html.includes('/assets/ui-component-lib/ui-component-lib.css')) throw new Error('PCS omitted the stylesheet');
+if (!html.includes('href="/logout"')) throw new Error('PCS omitted the logout link');
+require.resolve('@hmcts-cft/cft-ui-component-lib/styles/ui-component-lib.css');
+require.resolve('@hmcts-cft/cft-ui-component-lib/styles/xui-header.css');
+'''
+}
+
+tasks.register('pcsConsumerRun', Exec) { task ->
+    group = 'application'
+    description = 'Starts disposable PCS with the locally packed library.'
+    dependsOn 'pcsConsumerAssetsBuild'
+    workingDir consumerCheckoutDir
+    environment 'USE_VAULT', 'false'
+    yarnCommand(task, ['start:dev:pcs-local'])
+}
+
+tasks.named('check') {
+    dependsOn 'pcsConsumerCheck'
+}

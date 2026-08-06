@@ -1,0 +1,50 @@
+[
+  {
+    "CRUD" : "D",
+    "CaseTypeID" : "Shuttered",
+    "LiveFrom" : "01/01/2017",
+    "UserRole" : "caseworker-approver"
+  },
+  {
+    "CRUD" : "D",
+    "CaseTypeID" : "Shuttered",
+    "LiveFrom" : "01/01/2017",
+    "UserRole" : "caseworker-caa"
+  },
+  {
+    "CRUD" : "D",
+    "CaseTypeID" : "Shuttered",
+    "LiveFrom" : "01/01/2017",
+    "UserRole" : "caseworker-publiclaw-bulkscan"
+  },
+  {
+    "CRUD" : "D",
+    "CaseTypeID" : "Shuttered",
+    "LiveFrom" : "01/01/2017",
+    "UserRole" : "caseworker-publiclaw-bulkscansystemupdate"
+  },
+  {
+    "CRUD" : "D",
+    "CaseTypeID" : "Shuttered",
+    "LiveFrom" : "01/01/2017",
+    "UserRole" : "caseworker-publiclaw-cafcass"
+  },
+  {
+    "CRUD" : "D",
+    "CaseTypeID" : "Shuttered",
+    "LiveFrom" : "01/01/2017",
+    "UserRole" : "caseworker-publiclaw-courtadmin"
+  },
+  {
+    "CRUD" : "D",
+    "CaseTypeID" : "Shuttered",
+    "LiveFrom" : "01/01/2017",
+    "UserRole" : "caseworker-publiclaw-solicitor"
+  },
+  {
+    "CRUD" : "CRU",
+    "CaseTypeID" : "Shuttered",
+    "LiveFrom" : "01/01/2017",
+    "UserRole" : "caseworker-publiclaw-systemupdate"
+  }
+]

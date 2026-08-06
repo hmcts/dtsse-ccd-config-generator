@@ -12,6 +12,7 @@ PG_PASSWORD="${PG_PASSWORD:-postgres}"
 CASE_TYPE="${CASE_TYPE:-CriminalInjuriesCompensation}"
 OTHER_CASE_TYPE="${OTHER_CASE_TYPE:-OtherCaseType}"
 FDW_SCHEMA="${FDW_SCHEMA:-fdw_stage}"
+CASE_REVISION_OFFSET="${CASE_REVISION_OFFSET:-1000000000}"
 
 export PGPASSWORD="$PG_PASSWORD"
 
@@ -31,6 +32,8 @@ init_migration_test_env() {
 }
 
 cleanup_temp_dbs() {
+  local exit_code=$?
+
   for db in "$SRC_DB" "$DST_DB"; do
     "$PSQL_BIN" -d "${BASE_DSN}/postgres" "${BASE_CONN_ARGS[@]}" --set=ON_ERROR_STOP=on --command \
       "select pg_terminate_backend(pid) from pg_stat_activity where datname = '${db}' and pid <> pg_backend_pid();" \
@@ -39,6 +42,8 @@ cleanup_temp_dbs() {
 
   "$DROPDB_BIN" "${BASE_CONN_ARGS[@]}" --if-exists "$SRC_DB" >/dev/null 2>&1 || true
   "$DROPDB_BIN" "${BASE_CONN_ARGS[@]}" --if-exists "$DST_DB" >/dev/null 2>&1 || true
+
+  return "$exit_code"
 }
 
 psql_src() {
@@ -47,6 +52,7 @@ psql_src() {
     --no-psqlrc \
     --set=case_type="$CASE_TYPE" \
     --set=other_case_type="$OTHER_CASE_TYPE" \
+    --set=case_revision_offset="$CASE_REVISION_OFFSET" \
     "$@"
 }
 
@@ -56,6 +62,7 @@ psql_dst() {
     --no-psqlrc \
     --set=case_type="$CASE_TYPE" \
     --set=other_case_type="$OTHER_CASE_TYPE" \
+    --set=case_revision_offset="$CASE_REVISION_OFFSET" \
     "$@"
 }
 
@@ -85,8 +92,32 @@ clear_target_data() {
   echo "Ensuring target database is empty"
   psql_dst <<'SQL'
 set client_min_messages to warning;
+delete from ccd.case_event_significant_items;
 delete from ccd.case_event;
 delete from ccd.case_data;
+SQL
+}
+
+install_trigger_guards() {
+  echo "Installing target trigger guards"
+  psql_dst <<'SQL'
+create or replace function ccd.fail_if_migration_trigger_fires()
+returns trigger as $$
+begin
+    raise exception 'Migration write trigger fired on %.% during %',
+        tg_table_schema, tg_table_name, tg_op;
+end;
+$$ language plpgsql;
+
+drop trigger if exists migration_test_case_data_guard on ccd.case_data;
+create trigger migration_test_case_data_guard
+before insert or update on ccd.case_data
+for each row execute function ccd.fail_if_migration_trigger_fires();
+
+drop trigger if exists migration_test_case_event_guard on ccd.case_event;
+create trigger migration_test_case_event_guard
+before insert or update on ccd.case_event
+for each row execute function ccd.fail_if_migration_trigger_fires();
 SQL
 }
 
@@ -115,7 +146,7 @@ SQL
 }
 
 assert_migrated_counts_match_source() {
-  local src_cases src_events dst_cases dst_events
+  local src_cases src_events src_significant_items dst_cases dst_events dst_significant_items
 
   echo "Validating migrated record counts"
   src_cases="$(psql_src --quiet -tA <<'SQL'
@@ -127,6 +158,16 @@ SQL
   src_events="$(psql_src --quiet -tA <<'SQL'
 select count(*)
 from case_event ce
+join case_data cd
+  on cd.id = ce.case_data_id
+where cd.case_type_id = :'case_type';
+SQL
+)"
+  src_significant_items="$(psql_src --quiet -tA <<'SQL'
+select count(*)
+from case_event_significant_items item
+join case_event ce
+  on ce.id = item.case_event_id
 join case_data cd
   on cd.id = ce.case_data_id
 where cd.case_type_id = :'case_type';
@@ -146,9 +187,22 @@ join ccd.case_data cd
 where cd.case_type_id = :'case_type';
 SQL
 )"
+  dst_significant_items="$(psql_dst --quiet -tA <<'SQL'
+select count(*)
+from ccd.case_event_significant_items item
+join ccd.case_event ce
+  on ce.id = item.case_event_id
+join ccd.case_data cd
+  on cd.id = ce.case_data_id
+where cd.case_type_id = :'case_type';
+SQL
+)"
 
-  if [[ "$src_cases" != "$dst_cases" || "$src_events" != "$dst_events" ]]; then
-    echo "Count mismatch after migration: source=${src_cases}/${src_events} target=${dst_cases}/${dst_events}" >&2
+  if [[ "$src_cases" != "$dst_cases"
+      || "$src_events" != "$dst_events"
+      || "$src_significant_items" != "$dst_significant_items" ]]; then
+    echo "Count mismatch after migration: source=${src_cases}/${src_events}/${src_significant_items}" \
+      "target=${dst_cases}/${dst_events}/${dst_significant_items}" >&2
     exit 1
   fi
 }
@@ -168,19 +222,32 @@ SQL
     echo "Out-of-scope parent event was migrated despite misleading event case_type_id" >&2
     exit 1
   fi
+
+  copied_count="$(psql_dst --quiet -tA <<'SQL'
+select count(*)
+from ccd.case_event_significant_items
+where id = 8199;
+SQL
+)"
+
+  if [[ "$copied_count" != "0" ]]; then
+    echo "Out-of-scope parent significant item was migrated despite misleading event case_type_id" >&2
+    exit 1
+  fi
 }
 
 assert_case_revision_alignment() {
   local mismatch_count
 
-  echo "Validating migrated case revisions match event counts and max revisions"
+  echo "Validating migrated case revisions match event revisions plus offset"
   mismatch_count="$(psql_dst --quiet -tA <<'SQL'
 with revision_check as (
     select
         cd.id,
         cd.case_revision,
         count(ce.id)::bigint as event_count,
-        coalesce(max(ce.case_revision), 0)::bigint as max_event_revision
+        coalesce(max(ce.case_revision), 0)::bigint as max_event_revision,
+        coalesce(max(ce.case_revision), 0)::bigint + :'case_revision_offset'::bigint as expected_case_revision
     from ccd.case_data cd
     left join ccd.case_event ce
       on ce.case_data_id = cd.id
@@ -189,8 +256,8 @@ with revision_check as (
 )
 select count(*)
 from revision_check
-where case_revision is distinct from event_count
-   or case_revision is distinct from max_event_revision;
+where case_revision is distinct from expected_case_revision
+   or event_count is distinct from max_event_revision;
 SQL
 )"
 
@@ -230,7 +297,7 @@ SQL
 }
 
 assert_no_orphans_or_duplicate_revisions() {
-  local orphan_count duplicate_count
+  local orphan_count significant_item_orphan_count duplicate_count
 
   echo "Validating no orphan events or duplicate event revisions"
   orphan_count="$(psql_dst --quiet -tA <<'SQL'
@@ -239,6 +306,14 @@ from ccd.case_event ce
 left join ccd.case_data cd
   on cd.id = ce.case_data_id
 where cd.id is null;
+SQL
+)"
+  significant_item_orphan_count="$(psql_dst --quiet -tA <<'SQL'
+select count(*)
+from ccd.case_event_significant_items item
+left join ccd.case_event ce
+  on ce.id = item.case_event_id
+where ce.id is null;
 SQL
 )"
   duplicate_count="$(psql_dst --quiet -tA <<'SQL'
@@ -255,24 +330,36 @@ from (
 SQL
 )"
 
-  if [[ "$orphan_count" != "0" || "$duplicate_count" != "0" ]]; then
-    echo "Invalid event state: orphans=${orphan_count}, duplicate revisions=${duplicate_count}" >&2
+  if [[ "$orphan_count" != "0" || "$significant_item_orphan_count" != "0" || "$duplicate_count" != "0" ]]; then
+    echo "Invalid event state: orphans=${orphan_count}, significant_item_orphans=${significant_item_orphan_count}," \
+      "duplicate revisions=${duplicate_count}" >&2
     exit 1
   fi
 }
 
 assert_case_event_sequence_is_safe() {
-  local sequence_is_safe
+  local sequence_is_safe significant_item_sequence_is_safe
 
   echo "Validating case_event_id_seq is above migrated event ids"
   sequence_is_safe="$(psql_dst --quiet -tA <<'SQL'
-select last_value >= (select max(id) from ccd.case_event)
+select last_value >= (select coalesce(max(id), 1) from ccd.case_event)
 from ccd.case_event_id_seq;
 SQL
 )"
 
   if [[ "$sequence_is_safe" != "t" ]]; then
     echo "case_event_id_seq was not reset above migrated event ids" >&2
+    exit 1
+  fi
+
+  significant_item_sequence_is_safe="$(psql_dst --quiet -tA <<'SQL'
+select last_value >= (select coalesce(max(id), 1) from ccd.case_event_significant_items)
+from ccd.case_event_significant_items_id_seq;
+SQL
+)"
+
+  if [[ "$significant_item_sequence_is_safe" != "t" ]]; then
+    echo "case_event_significant_items_id_seq was not reset above migrated significant item ids" >&2
     exit 1
   fi
 }

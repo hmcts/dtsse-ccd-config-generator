@@ -3,7 +3,12 @@ package uk.gov.hmcts.ccd.sdk.impl.json;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.sun.net.httpserver.HttpServer;
+import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.net.InetSocketAddress;
+import java.net.http.HttpTimeoutException;
 import java.util.Map;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -15,10 +20,14 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping;
+import uk.gov.hmcts.ccd.sdk.api.CaseDetails;
+import uk.gov.hmcts.ccd.sdk.api.callback.AboutToStartOrSubmitResponse;
+import uk.gov.hmcts.ccd.sdk.config.CcdCaseDataMapperConfiguration;
 
 class JsonCallbackBridgeTest {
 
-  private final ObjectMapper mapper = new ObjectMapper();
+  private final ObjectMapper mapper = new CcdCaseDataMapperConfiguration()
+      .ccdCaseDataObjectMapper(new ObjectMapper().setSerializationInclusion(JsonInclude.Include.NON_EMPTY));
 
   @AfterEach
   void resetRequestContext() {
@@ -65,12 +74,81 @@ class JsonCallbackBridgeTest {
   }
 
   @Test
+  void preservesEmptyNestedCaseDataObjectsInLocalCallbackResponse() {
+    JsonCallbackBridge bridge = bridgeWith(
+        new MockEnvironment().withProperty("decentralisation.local-callback-placeholder", "ET_COS_URL"),
+        new LocalCallbackController()
+    );
+    CaseDetails<Object, Object> caseDetails = CaseDetails.builder()
+        .data(new NocCaseData(null))
+        .build();
+
+    AboutToStartOrSubmitResponse response = bridge.aboutToSubmit(
+        "${ET_COS_URL}/callbacks/noc-about-to-submit",
+        "local"
+    ).handle(caseDetails, null);
+
+    NocCaseData responseData = (NocCaseData) response.getData();
+    assertThat(responseData.changeOrganisationRequestField().OrganisationToAdd()).isNotNull();
+  }
+
+  @Test
+  void mapsSignificantItemFromLocalCallbackResponse() {
+    JsonCallbackBridge bridge = bridgeWith(
+        new MockEnvironment().withProperty("decentralisation.local-callback-placeholder", "ET_COS_URL"),
+        new LocalCallbackController()
+    );
+    CaseDetails<Object, Object> caseDetails = CaseDetails.builder()
+        .data(Map.of())
+        .build();
+
+    AboutToStartOrSubmitResponse response = bridge.aboutToSubmit(
+        "${ET_COS_URL}/callbacks/significant-item",
+        "local"
+    ).handle(caseDetails, null);
+
+    assertThat(response.getSignificantItem().getType()).isEqualTo("DOCUMENT");
+    assertThat(response.getSignificantItem().getDescription()).isEqualTo("Generated document");
+    assertThat(response.getSignificantItem().getUrl()).isEqualTo("http://dm-store/documents/123");
+  }
+
+  @Test
   void failsFastWhenCallbackIsNeitherLocalNorAbsoluteExternalUrl() {
     JsonCallbackBridge bridge = bridgeWith(new MockEnvironment());
 
     assertThatThrownBy(() -> bridge.invoke("/callback", Map.of()))
         .isInstanceOf(IllegalStateException.class)
         .hasMessage("No absolute external URL found for JSON callback /callback");
+  }
+
+  @Test
+  void timesOutSlowExternalCallbackUsingConfiguredTimeout() throws Exception {
+    HttpServer server = HttpServer.create(new InetSocketAddress(0), 0);
+    server.createContext("/callback", exchange -> {
+      try {
+        Thread.sleep(1_000);
+      } catch (InterruptedException e) {
+        Thread.currentThread().interrupt();
+      }
+      exchange.sendResponseHeaders(200, 0);
+      exchange.close();
+    });
+    server.start();
+    try {
+      JsonCallbackBridge bridge = bridgeWith(
+          new MockEnvironment().withProperty("decentralisation.external-callback-timeout", "100ms")
+      );
+
+      assertThatThrownBy(() -> bridge.invoke(
+          "http://localhost:%s/callback".formatted(server.getAddress().getPort()),
+          Map.of()
+      ))
+          .isInstanceOf(IllegalStateException.class)
+          .hasMessageStartingWith("External JSON callback timed out")
+          .hasCauseInstanceOf(HttpTimeoutException.class);
+    } finally {
+      server.stop(0);
+    }
   }
 
   private JsonCallbackBridge bridgeWith(MockEnvironment environment, Object... controllers) {
@@ -104,5 +182,36 @@ class JsonCallbackBridgeTest {
     Map<String, Object> aboutToSubmit(@RequestBody Map<String, Object> request) {
       return Map.of("source", "local", "event_id", request.get("event_id"));
     }
+
+    @PostMapping("/noc-about-to-submit")
+    NocCallbackResponse nocAboutToSubmit(@RequestBody Map<String, Object> request) {
+      return new NocCallbackResponse(new NocCaseData(
+          new ChangeOrganisationRequestField(new OrganisationToAdd(null))
+      ));
+    }
+
+    @PostMapping("/significant-item")
+    Map<String, Object> significantItem(@RequestBody Map<String, Object> request) {
+      return Map.of(
+          "data", Map.of(),
+          "significant_item", Map.of(
+              "type", "DOCUMENT",
+              "description", "Generated document",
+              "url", "http://dm-store/documents/123"
+          )
+      );
+    }
+  }
+
+  private record NocCallbackResponse(NocCaseData data) {
+  }
+
+  private record NocCaseData(ChangeOrganisationRequestField changeOrganisationRequestField) {
+  }
+
+  private record ChangeOrganisationRequestField(OrganisationToAdd OrganisationToAdd) {
+  }
+
+  private record OrganisationToAdd(@JsonProperty("OrganisationID") String organisationId) {
   }
 }

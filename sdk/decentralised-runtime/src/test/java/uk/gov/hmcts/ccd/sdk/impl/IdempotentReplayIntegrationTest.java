@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.ImmutableSet;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -26,13 +27,14 @@ import uk.gov.hmcts.ccd.data.casedetails.SecurityClassification;
 import uk.gov.hmcts.ccd.decentralised.dto.DecentralisedCaseDetails;
 import uk.gov.hmcts.ccd.decentralised.dto.DecentralisedCaseEvent;
 import uk.gov.hmcts.ccd.domain.model.definition.CaseDetails;
+import uk.gov.hmcts.ccd.sdk.CaseReindexingService;
 import uk.gov.hmcts.ccd.sdk.ResolvedCCDConfig;
 import uk.gov.hmcts.ccd.sdk.ResolvedConfigRegistry;
 import uk.gov.hmcts.ccd.sdk.api.HasRole;
-import uk.gov.hmcts.ccd.sdk.config.DecentralisedDataConfiguration;
+import uk.gov.hmcts.ccd.sdk.config.DecentralisedFlywayAutoConfiguration;
 
 @SpringBootTest(classes = IdempotentReplayIntegrationTest.TestConfig.class, properties = {
-    "spring.datasource.url=jdbc:tc:postgresql:16-alpine:///ccd",
+    "spring.datasource.url=jdbc:tc:postgresql:15-alpine:///ccd",
     "spring.datasource.driver-class-name=org.testcontainers.jdbc.ContainerDatabaseDriver"
 })
 class IdempotentReplayIntegrationTest {
@@ -44,12 +46,18 @@ class IdempotentReplayIntegrationTest {
   private static final long CASE_REFERENCE_A = 1111000000000000L;
   private static final long CASE_REFERENCE_B = 2222000000000000L;
   private static final long UPSERT_CASE_REFERENCE = 3333000000000000L;
+  private static final long REINDEX_CASE_REFERENCE = 4444000000000000L;
+  private static final long LOWER_PRIORITY_REINDEX_CASE_REFERENCE = 5555000000000000L;
+  private static final long LIVE_UPDATE_AFTER_REINDEX_CASE_REFERENCE = 6666000000000000L;
 
   @Autowired
   private NamedParameterJdbcTemplate jdbc;
 
   @Autowired
   private CaseDataRepository repository;
+
+  @Autowired
+  private CaseReindexingService reindexingService;
 
   @Test
   void idempotentReplayReturnsEventVersionAndRevision() {
@@ -141,23 +149,114 @@ class IdempotentReplayIntegrationTest {
     assertThat(result.get("hmcts_service_id")).isEqualTo("ABA1");
   }
 
-  private void seedCaseData(int version, long revision) {
-    seedCaseData(CASE_ID, CASE_REFERENCE, version, revision);
+  @Test
+  void reindexingAdvancesExistingQueueRowToLatestRevision() {
+    seedCaseData(REINDEX_CASE_REFERENCE, REINDEX_CASE_REFERENCE, 1, 5);
+    jdbc.update(
+        """
+        update ccd.es_queue
+           set case_revision = :stale_revision,
+               enqueued_at = now() - interval '1 minute'
+         where reference = :reference
+        """,
+        Map.of(
+            "reference", REINDEX_CASE_REFERENCE,
+            "stale_revision", 2
+        )
+    );
+
+    reindexingService.enqueueCasesModifiedSince(LocalDate.now().minusDays(1));
+
+    Long queuedRevision = jdbc.queryForObject(
+        "select case_revision from ccd.es_queue where reference = :reference",
+        Map.of("reference", REINDEX_CASE_REFERENCE),
+        Long.class
+    );
+    assertThat(queuedRevision).isEqualTo(5L);
+
+    Boolean keptLiveQueuePriority = jdbc.queryForObject(
+        """
+        select enqueued_at < now()
+        from ccd.es_queue
+        where reference = :reference
+        """,
+        Map.of("reference", REINDEX_CASE_REFERENCE),
+        Boolean.class
+    );
+    assertThat(keptLiveQueuePriority).isTrue();
   }
 
-  private DecentralisedCaseEvent buildEvent(long caseReference, String caseType) {
-    var caseDetails = new CaseDetails();
-    caseDetails.setReference(caseReference);
-    caseDetails.setJurisdiction("TEST");
-    caseDetails.setCaseTypeId(caseType);
-    caseDetails.setState("Submitted");
-    caseDetails.setVersion(1);
-    caseDetails.setSecurityClassification(SecurityClassification.PUBLIC);
+  @Test
+  void reindexingPlacesNewQueueRowsBehindLiveCaseUpdates() {
+    seedCaseData(LOWER_PRIORITY_REINDEX_CASE_REFERENCE, LOWER_PRIORITY_REINDEX_CASE_REFERENCE, 1, 5);
+    jdbc.update(
+        "delete from ccd.es_queue where reference = :reference",
+        Map.of("reference", LOWER_PRIORITY_REINDEX_CASE_REFERENCE)
+    );
 
-    return DecentralisedCaseEvent.builder()
-        .caseDetails(caseDetails)
-        .internalCaseId(caseReference)
-        .build();
+    reindexingService.enqueueCasesModifiedSince(LocalDate.now().minusDays(1));
+
+    Boolean lowerPriorityByDefault = jdbc.queryForObject(
+        """
+        select enqueued_at >= now() + interval '5 hours'
+        from ccd.es_queue
+        where reference = :reference
+        """,
+        Map.of("reference", LOWER_PRIORITY_REINDEX_CASE_REFERENCE),
+        Boolean.class
+    );
+    assertThat(lowerPriorityByDefault).isTrue();
+  }
+
+  @Test
+  void liveCaseUpdateRestoresQueuePriorityAfterReindexingQueuedTheCase() {
+    seedCaseData(LIVE_UPDATE_AFTER_REINDEX_CASE_REFERENCE, LIVE_UPDATE_AFTER_REINDEX_CASE_REFERENCE, 1, 5);
+    jdbc.update(
+        "delete from ccd.es_queue where reference = :reference",
+        Map.of("reference", LIVE_UPDATE_AFTER_REINDEX_CASE_REFERENCE)
+    );
+
+    reindexingService.enqueueCasesModifiedSince(LocalDate.now().minusDays(1));
+
+    Boolean lowerPriorityAfterReindex = jdbc.queryForObject(
+        """
+        select enqueued_at >= now() + interval '5 hours'
+        from ccd.es_queue
+        where reference = :reference
+        """,
+        Map.of("reference", LIVE_UPDATE_AFTER_REINDEX_CASE_REFERENCE),
+        Boolean.class
+    );
+    assertThat(lowerPriorityAfterReindex).isTrue();
+
+    jdbc.update(
+        """
+        update ccd.case_data
+           set case_revision = :revision,
+               last_modified = now()
+         where reference = :reference
+        """,
+        Map.of(
+            "reference", LIVE_UPDATE_AFTER_REINDEX_CASE_REFERENCE,
+            "revision", 6
+        )
+    );
+
+    Map<String, Object> queued = jdbc.queryForMap(
+        """
+        select case_revision,
+               enqueued_at < now() + interval '1 minute' as live_priority
+        from ccd.es_queue
+        where reference = :reference
+        """,
+        Map.of("reference", LIVE_UPDATE_AFTER_REINDEX_CASE_REFERENCE)
+    );
+    assertThat(queued.get("case_revision")).isEqualTo(6L);
+    assertThat(queued.get("live_priority")).isEqualTo(true);
+  }
+
+  private void seedCaseData(int version, long revision) {
+    seedCaseData(CASE_ID, CASE_REFERENCE, version, revision);
   }
 
   private void seedCaseData(long caseId, long caseReference, int version, long revision) {
@@ -201,6 +300,21 @@ class IdempotentReplayIntegrationTest {
         """,
         params
     );
+  }
+
+  private DecentralisedCaseEvent buildEvent(long caseReference, String caseType) {
+    var caseDetails = new CaseDetails();
+    caseDetails.setReference(caseReference);
+    caseDetails.setJurisdiction("TEST");
+    caseDetails.setCaseTypeId(caseType);
+    caseDetails.setState("Submitted");
+    caseDetails.setVersion(1);
+    caseDetails.setSecurityClassification(SecurityClassification.PUBLIC);
+
+    return DecentralisedCaseEvent.builder()
+        .caseDetails(caseDetails)
+        .internalCaseId(caseReference)
+        .build();
   }
 
   private long insertEvent(int version, long revision, UUID idempotencyKey) {
@@ -270,8 +384,9 @@ class IdempotentReplayIntegrationTest {
   }
 
   @Configuration
-  @Import({CaseDataRepository.class, DecentralisedDataConfiguration.class})
+  @Import({CaseDataRepository.class, CaseReindexingService.class})
   @ImportAutoConfiguration({
+      DecentralisedFlywayAutoConfiguration.class,
       DataSourceAutoConfiguration.class,
       JdbcTemplateAutoConfiguration.class,
       DataSourceTransactionManagerAutoConfiguration.class,

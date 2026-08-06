@@ -84,7 +84,7 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements Decentralised
     deriveAccessTypesFromRoles();
     config.searchCriteria = buildBuilders(searchCriteria, SearchCriteriaBuilder::build);
     config.searchParties = buildBuilders(searchParty, SearchPartyBuilder::build);
-    config.noticeOfChange = noticeOfChangeBuilder == null ? null : noticeOfChangeBuilder.build();
+    config.noticeOfChange = noticeOfChangeBuilder == null ? null : noticeOfChangeBuilder.build(config.caseType);
     config.complexTypeAuthorisations = Lists.newArrayList(complexTypeAuthorisations);
 
     return config;
@@ -143,6 +143,11 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements Decentralised
   @Override
   public void shutterService(R... roles) {
     config.shutterServiceForRoles.addAll(Set.of(roles));
+  }
+
+  @Override
+  public void shutterServiceExclude(R... roles) {
+    config.shutterServiceExcludedRoles.addAll(Set.of(roles));
   }
 
   @Override

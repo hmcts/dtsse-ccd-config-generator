@@ -13,15 +13,15 @@ import uk.gov.hmcts.ccd.sdk.api.ComplexType;
 @ComplexType(name = "CaseLocation")
 public class CaseLocation {
 
-  @JsonProperty("Region")
+  @JsonProperty("region")
   private String region;
 
-  @JsonProperty("BaseLocation")
+  @JsonProperty("baseLocation")
   private String baseLocation;
 
   @JsonCreator
-  public CaseLocation(@JsonProperty("Region") String region,
-                      @JsonProperty("BaseLocation") String baseLocation) {
+  public CaseLocation(@JsonProperty("region") String region,
+                      @JsonProperty("baseLocation") String baseLocation) {
     this.region = region;
     this.baseLocation = baseLocation;
   }

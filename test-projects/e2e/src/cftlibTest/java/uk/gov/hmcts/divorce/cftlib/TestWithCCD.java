@@ -30,6 +30,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
 import java.util.HashMap;
@@ -57,6 +58,7 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.*;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyInt;
@@ -77,6 +79,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
 import org.junit.jupiter.api.TestMethodOrder;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.config.BeanPostProcessor;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
@@ -93,6 +96,7 @@ import uk.gov.hmcts.divorce.simplecase.model.SimpleCaseState;
 import uk.gov.hmcts.divorce.sow014.nfd.CaseworkerMaintainCaseLink;
 import uk.gov.hmcts.divorce.sow014.nfd.CaseworkerOverrideEventMetadata;
 import uk.gov.hmcts.divorce.sow014.nfd.CaseworkerPopulateSearchCriteria;
+import uk.gov.hmcts.divorce.sow014.nfd.CaseworkerSignificantItem;
 import uk.gov.hmcts.divorce.sow014.nfd.DecentralisedCaseworkerAddNote;
 import uk.gov.hmcts.divorce.sow014.nfd.DecentralisedCaseworkerAddNoteFailure;
 import uk.gov.hmcts.divorce.sow014.nfd.DecentralisedOverrideEventMetadata;
@@ -112,6 +116,8 @@ import uk.gov.hmcts.divorce.jsonlegacy.JsonLegacyCcdConfig;
 import uk.gov.hmcts.ccd.sdk.type.CaseLink;
 import uk.gov.hmcts.ccd.sdk.type.ListValue;
 import uk.gov.hmcts.ccd.sdk.CaseReindexingService;
+import uk.gov.hmcts.ccd.sdk.RetainAndDisposePolicy;
+import uk.gov.hmcts.ccd.sdk.retention.RetainAndDisposeProperties;
 import uk.gov.hmcts.ccd.sdk.taskmanagement.model.TaskAction;
 import uk.gov.hmcts.reform.ccd.client.CoreCaseDataApi;
 import uk.gov.hmcts.reform.ccd.client.model.CaseDataContent;
@@ -130,6 +136,10 @@ import uk.gov.hmcts.rse.ccd.lib.test.CftlibTest;
     "ccd.servicebus.destination=ccd-case-events-test",
     "ccd.servicebus.scheduler-enabled=true",
     "ccd.servicebus.schedule=*/1 * * * * *",
+    "ccd.decentralised-runtime.retain-and-dispose.mode=live",
+    "ccd.decentralised-runtime.retain-and-dispose.cron=-",
+    "ccd.decentralised-runtime.retain-and-dispose.system-user.username=dummysystemupdate@test.com",
+    "ccd.decentralised-runtime.retain-and-dispose.system-user.password=password",
     "spring.autoconfigure.exclude=com.azure.spring.cloud.autoconfigure.implementation.jms.ServiceBusJmsAutoConfiguration"
 })
 @Slf4j
@@ -151,14 +161,26 @@ public class TestWithCCD extends CftlibTest {
     private CaseReindexingService reindexQueueService;
 
     @Autowired
+    @Qualifier("retainAndDisposeTask")
+    private Runnable retainAndDisposeTask;
+
+    @Autowired
+    private CftlibRetainAndDisposePolicy retainAndDisposePolicy;
+
+    @Autowired
+    private RetainAndDisposeProperties retainAndDisposeProperties;
+
+    @Autowired
     private JmsTemplate jmsTemplate;
 
     private long firstEventId;
     private static final String BASE_URL = "http://localhost:4452";
     private static final String SERVICE_BASE_URL = "http://localhost:4013";
+    private static final String CDAM_BASE_URL = "http://localhost:4455";
     private static final String EXTERNAL_CALLBACK_HOST = "127.0.0.1";
     private static final int EXTERNAL_CALLBACK_PORT = 4014;
     private static final String ELASTICSEARCH_BASE_URL = "http://localhost:9200";
+    private static final Duration ELASTICSEARCH_ASSERTION_TIMEOUT = Duration.ofSeconds(75);
     private static final String TASK_MANAGEMENT_BASE_URL = "http://localhost:8087";
     private static final String ACCEPT_CREATE_CASE =
         "application/vnd.uk.gov.hmcts.ccd-data-store-api.create-case.v2+json;charset=UTF-8";
@@ -226,6 +248,29 @@ public class TestWithCCD extends CftlibTest {
                     return bean;
                 }
             };
+        }
+
+        @Bean
+        CftlibRetainAndDisposePolicy retainAndDisposePolicy() {
+            return new CftlibRetainAndDisposePolicy();
+        }
+    }
+
+    static class CftlibRetainAndDisposePolicy implements RetainAndDisposePolicy {
+        private List<Long> candidates = List.of();
+
+        void candidates(Long... caseReferences) {
+            candidates = List.of(caseReferences);
+        }
+
+        @Override
+        public Set<String> caseTypes() {
+            return Set.of(SimpleCaseConfiguration.CASE_TYPE);
+        }
+
+        @Override
+        public List<Long> findCandidatesForDisposal() {
+            return candidates;
         }
     }
 
@@ -557,7 +602,7 @@ public class TestWithCCD extends CftlibTest {
     void searchCases() {
         // Give some time to index the case created by the previous test
         await()
-            .timeout(Duration.ofSeconds(10))
+            .atMost(ELASTICSEARCH_ASSERTION_TIMEOUT)
             .ignoreExceptions()
             .until(this::caseAppearsInSearch);
     }
@@ -719,7 +764,7 @@ public class TestWithCCD extends CftlibTest {
         try (var esClient = HttpClientBuilder.create().build()) {
             await()
                 .pollInterval(Duration.ofSeconds(1))
-                .atMost(Duration.ofSeconds(15))
+                .atMost(ELASTICSEARCH_ASSERTION_TIMEOUT)
                 .untilAsserted(() -> {
                     var esRequest = new HttpGet(ELASTICSEARCH_BASE_URL + "/e2e_cases/_doc/" + caseDataId);
                     try (var esResponse = esClient.execute(esRequest)) {
@@ -771,15 +816,22 @@ public class TestWithCCD extends CftlibTest {
         assertThat("Supplementary data response should contain foo", supplementaryData.path("foo").asInt(-1),
             equalTo(expectedFooValue));
 
-        Integer fooInDb = db.queryForObject(
-            "SELECT (supplementary_data->>'foo')::integer FROM ccd.case_data WHERE reference = :ref",
-            Map.of("ref", caseRef),
-            Integer.class);
-        assertThat("Supplementary data in datastore should reflect update", fooInDb, equalTo(expectedFooValue));
+        Map<String, Object> row = db.queryForMap(
+            """
+                SELECT (supplementary_data->>'foo')::integer AS foo,
+                       trim(both '"' from to_json(coalesce(last_modified, created_date))::text) AS last_modified
+                 FROM ccd.case_data
+                 WHERE reference = :ref
+                """,
+            Map.of("ref", caseRef)
+        );
+        assertThat("Supplementary data in datastore should reflect update",
+            row.get("foo"), equalTo(expectedFooValue));
+        String expectedLastModified = (String) row.get("last_modified");
 
         await()
             .pollInterval(Duration.ofSeconds(1))
-            .atMost(Duration.ofSeconds(15))
+            .atMost(ELASTICSEARCH_ASSERTION_TIMEOUT)
             .untilAsserted(() -> {
                 var esRequest = new HttpGet(ELASTICSEARCH_BASE_URL + "/e2e_cases/_doc/" + caseDataId);
                 var esResponse = HttpClientBuilder.create().build().execute(esRequest);
@@ -788,6 +840,14 @@ public class TestWithCCD extends CftlibTest {
                 var esPayload = mapper.readTree(EntityUtils.toString(esResponse.getEntity()));
                 var source = esPayload.path("_source");
                 assertThat("Elasticsearch document should contain _source", source.isMissingNode(), is(false));
+
+                assertThat("Elasticsearch _source should expose Logstash-compatible id field",
+                    source.has("id"), is(true));
+                assertThat("Elasticsearch _source should not expose internal case_data_id field",
+                    source.has("case_data_id"), is(false));
+                assertThat("Elasticsearch last_modified should match case_data.last_modified",
+                    source.path("last_modified").asText(), equalTo(expectedLastModified));
+
                 var fooValue = source.path("supplementary_data").path("foo").asInt(-1);
                 assertThat("Supplementary data in Elasticsearch should reflect latest value",
                     fooValue, equalTo(expectedFooValue));
@@ -959,6 +1019,34 @@ public class TestWithCCD extends CftlibTest {
 
     @SneakyThrows
     @Order(16)
+    @Test
+    public void callbackSignificantItemIsReturnedInEventHistory() {
+        String user = "TEST_CASE_WORKER_USER@mailinator.com";
+        var start = ccdApi.startEvent(
+            getAuthorisation(user),
+            getServiceAuth(),
+            String.valueOf(caseRef),
+            CaseworkerSignificantItem.EVENT_ID);
+
+        var request = prepareEventRequestWithToken(
+            user,
+            CaseworkerSignificantItem.EVENT_ID,
+            Map.of("note", "Significant item test"),
+            start.getToken());
+
+        var response = HttpClientBuilder.create().build().execute(request);
+        assertThat(response.getStatusLine().getStatusCode(), equalTo(201));
+
+        var submittedEvent = getLatestAuditEvent(user, caseRef, CaseworkerSignificantItem.EVENT_ID);
+        var significantItem = significantItemFrom(submittedEvent);
+
+        assertThat(significantItem.get("type"), equalTo("DOCUMENT"));
+        assertThat(significantItem.get("description"), equalTo(CaseworkerSignificantItem.DESCRIPTION));
+        assertThat(significantItem.get("url"), equalTo(CaseworkerSignificantItem.URL));
+    }
+
+    @SneakyThrows
+    @Order(17)
     @Test
     public void testSubmittedCallback() {
         var token = ccdApi.startEvent(
@@ -1967,21 +2055,64 @@ public class TestWithCCD extends CftlibTest {
         String token,
         long reference
     ) {
-        var body = Map.of(
-            "data", data,
-            "event", Map.of(
-                "id", eventId,
-                "summary", "summary",
-                "description", "description"
-            ),
-            "event_token", token,
-            "ignore_warning", false
-        );
+        return prepareEventRequestWithToken(user, eventId, data, token, reference, null);
+    }
+
+    @SneakyThrows
+    private HttpPost prepareEventRequestWithToken(
+        String user,
+        String eventId,
+        Map<String, ?> data,
+        String token,
+        long reference,
+        String onBehalfOfToken
+    ) {
+        var body = new LinkedHashMap<String, Object>();
+        body.put("data", data);
+        body.put("event", Map.of(
+            "id", eventId,
+            "summary", "summary",
+            "description", "description"
+        ));
+        body.put("event_token", token);
+        body.put("ignore_warning", false);
+        if (onBehalfOfToken != null) {
+            body.put("on_behalf_of_token", onBehalfOfToken);
+        }
 
         var e = buildRequest(user, BASE_URL + "/cases/" + reference + "/events", HttpPost::new);
         withCcdAccept(e, ACCEPT_CREATE_EVENT);
         e.setEntity(new StringEntity(mapper.writeValueAsString(body), ContentType.APPLICATION_JSON));
         return e;
+    }
+
+    @SneakyThrows
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> getLatestAuditEvent(String user, long reference, String eventId) {
+        var get = buildRequest(user, BASE_URL + "/cases/" + reference + "/events", HttpGet::new);
+        withCcdAccept(get, ACCEPT_CASE_EVENTS);
+
+        try (var response = HttpClientBuilder.create().build().execute(get)) {
+            Map<String, Object> result =
+                mapper.readValue(EntityUtils.toString(response.getEntity()), new TypeReference<>() {});
+            assertThat(response.getStatusLine().getStatusCode(), equalTo(200));
+            var auditEvents = (List<Map<String, Object>>) result.get("auditEvents");
+            return auditEvents.stream()
+                .filter(event -> eventId.equals(event.get("id")))
+                .findFirst()
+                .orElseThrow();
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> significantItemFrom(Map<String, Object> event) {
+        Map<String, Object> significantItem = (Map<String, Object>) event.get("significant_item");
+        if (significantItem == null) {
+            significantItem = (Map<String, Object>) event.get("significantItem");
+        }
+        assertThat("Significant item should be present in event history: " + event,
+            significantItem, is(notNullValue()));
+        return significantItem;
     }
 
     private void assertLatestEventMetadata(String eventId, String expectedSummary, String expectedDescription) {
@@ -2164,9 +2295,13 @@ public class TestWithCCD extends CftlibTest {
     @Order(19)
     @Test
     public void testDecentralisedEventStartAndSubmitHandlers() throws Exception {
+        String submittingUser = "TEST_CASE_WORKER_USER@mailinator.com";
+        String submittingUserToken = getAuthorisation(submittingUser);
+        var submittingUserInfo = idam.getUserInfo(submittingUserToken);
+
         // Verify start handler pre-populates data
         var start = ccdApi.startEvent(
-            getAuthorisation("TEST_CASE_WORKER_USER@mailinator.com"),
+            submittingUserToken,
             getServiceAuth(), String.valueOf(caseRef), DecentralisedCaseworkerAddNote.CASEWORKER_DECENTRALISED_ADD_NOTE);
 
         var startData = mapper.readValue(mapper.writeValueAsString(start.getCaseDetails().getData()), CaseData.class);
@@ -2197,6 +2332,59 @@ public class TestWithCCD extends CftlibTest {
         String lastNoteSql = "SELECT note FROM case_notes WHERE reference = :ref ORDER BY id DESC LIMIT 1";
         String latestNote = db.queryForObject(lastNoteSql, Map.of("ref", caseRef), String.class);
         assertThat(latestNote, equalTo(noteText));
+
+        var submittedEvent = getLatestAuditEvent(
+            submittingUser,
+            caseRef,
+            DecentralisedCaseworkerAddNote.CASEWORKER_DECENTRALISED_ADD_NOTE);
+
+        assertThat(submittedEvent.get("user_id"), equalTo(submittingUserInfo.getUid()));
+        assertThat(submittedEvent.get("user_first_name"), equalTo(submittingUserInfo.getGivenName()));
+        assertThat(submittedEvent.get("user_last_name"), equalTo(submittingUserInfo.getFamilyName()));
+        assertThat(submittedEvent.get("proxied_by"), nullValue());
+        assertThat(submittedEvent.get("proxied_by_first_name"), nullValue());
+        assertThat(submittedEvent.get("proxied_by_last_name"), nullValue());
+    }
+
+    @Order(19)
+    @Test
+    public void decentralisedEventHistoryPreservesOnBehalfUserAndProxy() throws Exception {
+        String submittingUser = "TEST_CASE_WORKER_USER@mailinator.com";
+        String onBehalfOfUser = "TEST_SOLICITOR@mailinator.com";
+        String submittingUserToken = getAuthorisation(submittingUser);
+        String onBehalfOfUserToken = getAuthorisation(onBehalfOfUser);
+        var submittingUserInfo = idam.getUserInfo(submittingUserToken);
+        var onBehalfOfUserInfo = idam.getUserInfo(onBehalfOfUserToken);
+        long proxiedCaseRef = createAdditionalCase(onBehalfOfUser);
+
+        var start = ccdApi.startEvent(
+            submittingUserToken,
+            getServiceAuth(),
+            String.valueOf(proxiedCaseRef),
+            DecentralisedCaseworkerAddNote.CASEWORKER_DECENTRALISED_ADD_NOTE);
+
+        var request = prepareEventRequestWithToken(
+            submittingUser,
+            DecentralisedCaseworkerAddNote.CASEWORKER_DECENTRALISED_ADD_NOTE,
+            Map.of("note", "Decentralised proxied history test"),
+            start.getToken(),
+            proxiedCaseRef,
+            onBehalfOfUserToken);
+
+        var response = HttpClientBuilder.create().build().execute(request);
+        assertThat(response.getStatusLine().getStatusCode(), equalTo(201));
+
+        var submittedEvent = getLatestAuditEvent(
+            submittingUser,
+            proxiedCaseRef,
+            DecentralisedCaseworkerAddNote.CASEWORKER_DECENTRALISED_ADD_NOTE);
+
+        assertThat(submittedEvent.get("user_id"), equalTo(onBehalfOfUserInfo.getUid()));
+        assertThat(submittedEvent.get("user_first_name"), equalTo(onBehalfOfUserInfo.getGivenName()));
+        assertThat(submittedEvent.get("user_last_name"), equalTo(onBehalfOfUserInfo.getFamilyName()));
+        assertThat(submittedEvent.get("proxied_by"), equalTo(submittingUserInfo.getUid()));
+        assertThat(submittedEvent.get("proxied_by_first_name"), equalTo(submittingUserInfo.getGivenName()));
+        assertThat(submittedEvent.get("proxied_by_last_name"), equalTo(submittingUserInfo.getFamilyName()));
     }
 
     @Order(19)
@@ -2404,7 +2592,7 @@ public class TestWithCCD extends CftlibTest {
 
         await()
             .pollInterval(Duration.ofSeconds(1))
-            .atMost(Duration.ofSeconds(30))
+            .atMost(ELASTICSEARCH_ASSERTION_TIMEOUT)
             .untilAsserted(() -> assertThat(
                 "Elasticsearch revision should match datastore before reindexing",
                 fetchElasticsearchDocument(caseDataId).path("case_revision").asInt(),
@@ -2583,6 +2771,132 @@ public class TestWithCCD extends CftlibTest {
         assertThat(updatedCase.getState(), equalTo(SimpleCaseState.FOLLOW_UP.name()));
         assertThat(updatedData.getFollowUpMarker(), equalTo(SimpleCaseConfiguration.FOLLOW_UP_CALLBACK_MARKER));
         assertThat(updatedData.getFollowUpNote(), containsString("Follow up detail"));
+    }
+
+    @Order(34)
+    @Test
+    void retainAndDisposeTaskOnlyDeletesCasesMissingFromCcd() {
+        assertThat("Simple case must be ready for disposal", simpleCaseRef, greaterThan(0L));
+        long untouchedReference = 9999000000000012L;
+        long unconfirmedReference = 9999000000000020L;
+        long deletedReference = 9999000000000004L;
+        db.update(
+            """
+            insert into ccd.case_data (
+                id, reference, version, security_classification, jurisdiction, case_type_id, state, data, resolved_ttl
+            ) values
+            (
+                :untouched, :untouched, 1, 'PUBLIC', :jurisdiction, :caseType, :untouchedState, '{}'::jsonb, null
+            ),
+            (
+                :deleted, :deleted, 1, 'PUBLIC', :jurisdiction, :caseType, :deletedState, '{}'::jsonb,
+                current_date - 1
+            )
+            """,
+            Map.of(
+                "untouched", untouchedReference,
+                "deleted", deletedReference,
+                "jurisdiction", SimpleCaseConfiguration.JURISDICTION,
+                "caseType", SimpleCaseConfiguration.CASE_TYPE,
+                "untouchedState", SimpleCaseState.CREATED.name(),
+                "deletedState", SimpleCaseState.PendingDisposal.getId()
+            )
+        );
+        retainAndDisposePolicy.candidates(simpleCaseRef);
+        String initialState = db.queryForObject(
+            "select state from ccd.case_data where reference = :reference",
+            Map.of("reference", simpleCaseRef),
+            String.class
+        );
+
+        try {
+            retainAndDisposeProperties.setMinimumCandidateCount(1);
+            retainAndDisposeProperties.setMode(RetainAndDisposeProperties.Mode.LIVE);
+            assertThat(assertThrows(IllegalStateException.class, retainAndDisposeTask::run).getMessage(),
+                containsString("configured maximum percentage"));
+            assertRetainAndDisposeDidNotMutate(simpleCaseRef, initialState, deletedReference);
+
+            retainAndDisposeProperties.setMinimumCandidateCount(10);
+            retainAndDisposeProperties.setMode(RetainAndDisposeProperties.Mode.DRY_RUN);
+            retainAndDisposeTask.run();
+            assertRetainAndDisposeDidNotMutate(simpleCaseRef, initialState, deletedReference);
+
+            db.update(
+                """
+                insert into ccd.case_data (
+                    id, reference, version, security_classification, jurisdiction, case_type_id, state, data
+                ) values (
+                    :reference, :reference, 1, 'PUBLIC', :jurisdiction, :caseType, :state, '{}'::jsonb
+                )
+                """,
+                Map.of(
+                    "reference", unconfirmedReference,
+                    "jurisdiction", SimpleCaseConfiguration.JURISDICTION,
+                    "caseType", SimpleCaseConfiguration.CASE_TYPE,
+                    "state", SimpleCaseState.PendingDisposal.getId()
+                )
+            );
+            retainAndDisposeProperties.setMode(RetainAndDisposeProperties.Mode.LIVE);
+            assertThrows(IllegalStateException.class, retainAndDisposeTask::run);
+            assertThat(db.queryForObject(
+                "select count(*) from ccd.case_data where reference = :reference",
+                Map.of("reference", deletedReference),
+                Integer.class
+            ), equalTo(1));
+            assertThat(db.queryForObject(
+                "select resolved_ttl is null from ccd.case_data where reference = :reference",
+                Map.of("reference", unconfirmedReference),
+                Boolean.class
+            ), equalTo(true));
+            db.update(
+                "delete from ccd.case_data where reference = :reference",
+                Map.of("reference", unconfirmedReference)
+            );
+
+            retainAndDisposeTask.run();
+            assertThat(db.queryForObject(
+                "select state from ccd.case_data where reference = :reference",
+                Map.of("reference", simpleCaseRef),
+                String.class
+            ), equalTo(SimpleCaseState.PendingDisposal.getId()));
+            assertThat(db.queryForObject(
+                "select resolved_ttl = current_date from ccd.case_data where reference = :reference",
+                Map.of("reference", simpleCaseRef),
+                Boolean.class
+            ), equalTo(true));
+            assertThat(db.queryForObject(
+                "select state from ccd.case_data where reference = :reference",
+                Map.of("reference", untouchedReference),
+                String.class
+            ), equalTo(SimpleCaseState.CREATED.name()));
+            assertThat(db.queryForObject(
+                "select count(*) from ccd.case_data where reference = :reference",
+                Map.of("reference", deletedReference),
+                Integer.class
+            ), equalTo(0));
+        } finally {
+            retainAndDisposeProperties.setMode(RetainAndDisposeProperties.Mode.LIVE);
+            retainAndDisposeProperties.setMinimumCandidateCount(10);
+            retainAndDisposePolicy.candidates();
+            db.update(
+                "delete from ccd.case_data where reference in (:references)",
+                Map.of("references", List.of(untouchedReference, unconfirmedReference, deletedReference))
+            );
+        }
+    }
+
+    private void assertRetainAndDisposeDidNotMutate(long candidateReference, String candidateState,
+                                                      long pendingDisposalReference) {
+        assertThat(db.queryForObject(
+            "select state from ccd.case_data where reference = :reference",
+            Map.of("reference", candidateReference),
+            String.class
+        ), equalTo(candidateState));
+        assertThat(db.queryForObject(
+            "select count(*) from ccd.case_data where reference = :reference",
+            Map.of("reference", pendingDisposalReference),
+            Integer.class
+        ), equalTo(1));
     }
 
     @SneakyThrows
@@ -2889,6 +3203,90 @@ public class TestWithCCD extends CftlibTest {
     @SneakyThrows
     @Order(214)
     @Test
+    void legacyJsonCallbackAddsAcasStyleDocumentAndSdkAttachesIt() {
+        BaseJsonLegacyController.reset();
+
+        Map<String, Object> existingDocument = BaseJsonLegacyController.acasDocumentCollectionItem(
+            "event-input-acas-document",
+            BaseJsonLegacyController.EVENT_INPUT_DOCUMENT_ID
+        );
+
+        var response = submitJsonLegacyEventForCaseType(
+            JsonLegacyCcdConfig.CASE_TYPE_A,
+            Map.of(
+                "note", BaseJsonLegacyController.ACAS_DOCUMENT_NOTE,
+                "documentCollection", List.of(existingDocument)
+            ),
+            201
+        );
+
+        assertThat(BaseJsonLegacyController.aboutToSubmitAttempts, equalTo(1));
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> data = (Map<String, Object>) response.get("data");
+        JsonNode responseData = mapper.valueToTree(data);
+        assertThat(responseData.findValues("document_hash"), is(empty()));
+        assertThat(responseData.toString(), containsString(BaseJsonLegacyController.EVENT_INPUT_DOCUMENT_ID));
+        assertThat(responseData.toString(), containsString(BaseJsonLegacyController.CALLBACK_DOCUMENT_ID));
+
+        JsonNode storedData = mapper.readTree(storedData(JsonLegacyCcdConfig.CASE_TYPE_A));
+        assertThat(storedData.findValues("document_hash"), is(empty()));
+        assertThat(storedData.toString(), containsString(BaseJsonLegacyController.EVENT_INPUT_DOCUMENT_ID));
+        assertThat(storedData.toString(), containsString(BaseJsonLegacyController.CALLBACK_DOCUMENT_ID));
+
+        JsonNode cdamDocument = fetchCdamDocument(BaseJsonLegacyController.CALLBACK_DOCUMENT_ID);
+        assertThat(cdamDocument.path("metadata").path("case_type_id").asText(),
+            equalTo(JsonLegacyCcdConfig.CASE_TYPE_A));
+        assertThat(cdamDocument.path("metadata").path("jurisdiction").asText(), equalTo("EMPLOYMENT"));
+    }
+
+    @SneakyThrows
+    private JsonNode fetchCdamDocument(String documentId) {
+        var request = new HttpGet(CDAM_BASE_URL + "/cases/documents/" + documentId);
+        request.addHeader("Authorization", getAuthorisation("TEST_CASE_WORKER_USER@mailinator.com"));
+        request.addHeader("ServiceAuthorization", cftlib().generateDummyS2SToken("nfdiv_case_api"));
+
+        try (CloseableHttpResponse response = HttpClientBuilder.create().build().execute(request)) {
+            String responseBody = EntityUtils.toString(response.getEntity());
+            assertThat("CDAM document metadata response: " + responseBody,
+                response.getStatusLine().getStatusCode(), equalTo(200));
+            return mapper.readTree(responseBody);
+        }
+    }
+
+    @SneakyThrows
+    @Order(215)
+    @Test
+    void legacyJsonCallbackAddsDocumentWithNullHashAndSdkAttachesIt() {
+        BaseJsonLegacyController.reset();
+
+        var response = submitJsonLegacyEventForCaseType(
+            JsonLegacyCcdConfig.CASE_TYPE_A,
+            Map.of("note", BaseJsonLegacyController.ACAS_DOCUMENT_WITH_NULL_HASH_NOTE),
+            201
+        );
+
+        assertThat(BaseJsonLegacyController.aboutToSubmitAttempts, equalTo(1));
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> data = (Map<String, Object>) response.get("data");
+        JsonNode responseData = mapper.valueToTree(data);
+        assertThat(responseData.findValues("document_hash"), is(empty()));
+        assertThat(responseData.toString(), containsString(BaseJsonLegacyController.NULL_HASH_CALLBACK_DOCUMENT_ID));
+
+        JsonNode storedData = mapper.readTree(storedData(JsonLegacyCcdConfig.CASE_TYPE_A));
+        assertThat(storedData.findValues("document_hash"), is(empty()));
+        assertThat(storedData.toString(), containsString(BaseJsonLegacyController.NULL_HASH_CALLBACK_DOCUMENT_ID));
+
+        JsonNode cdamDocument = fetchCdamDocument(BaseJsonLegacyController.NULL_HASH_CALLBACK_DOCUMENT_ID);
+        assertThat(cdamDocument.path("metadata").path("case_type_id").asText(),
+            equalTo(JsonLegacyCcdConfig.CASE_TYPE_A));
+        assertThat(cdamDocument.path("metadata").path("jurisdiction").asText(), equalTo("EMPLOYMENT"));
+    }
+
+    @SneakyThrows
+    @Order(216)
+    @Test
     void submittedRetriesAndDuplicateJsonLegacySubmissionDoesNotReRun() {
         for (String caseType : jsonLegacyCaseTypes()) {
             BaseJsonLegacyController.reset();
@@ -2929,7 +3327,7 @@ public class TestWithCCD extends CftlibTest {
     }
 
     @SneakyThrows
-    @Order(215)
+    @Order(217)
     @Test
     void jsonDefinitionAuditHistoryUsesStateLabel() {
         for (String caseType : jsonLegacyCaseTypes()) {

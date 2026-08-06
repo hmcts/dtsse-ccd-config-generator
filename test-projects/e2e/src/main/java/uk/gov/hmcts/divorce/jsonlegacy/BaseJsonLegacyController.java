@@ -1,5 +1,10 @@
 package uk.gov.hmcts.divorce.jsonlegacy;
 
+import java.math.BigInteger;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -15,6 +20,12 @@ import org.springframework.web.bind.annotation.RequestHeader;
 public abstract class BaseJsonLegacyController {
 
   public static final String MARKER = "json-legacy-about-to-submit";
+  public static final String ACAS_DOCUMENT_NOTE = "json-legacy-acas-cdam-document";
+  public static final String ACAS_DOCUMENT_WITH_NULL_HASH_NOTE = "json-legacy-acas-cdam-document-null-hash";
+  public static final String EVENT_INPUT_DOCUMENT_ID = "11111111-1111-1111-1111-111111111111";
+  public static final String CALLBACK_DOCUMENT_ID = "22222222-2222-2222-2222-222222222222";
+  public static final String NULL_HASH_CALLBACK_DOCUMENT_ID = "33333333-3333-3333-3333-333333333333";
+  public static final String CALLBACK_DOCUMENT_HASH = documentHashToken(CALLBACK_DOCUMENT_ID, "EMPLOYMENT", "case-type-a");
   public static final String CONFIRMATION_HEADER = "# JSON legacy submitted";
   public static final String CONFIRMATION_BODY = "JSON legacy submitted callback ran";
   public static final String EXTERNAL_CONFIRMATION_HEADER = "# JSON legacy external submitted";
@@ -43,9 +54,72 @@ public abstract class BaseJsonLegacyController {
     }
 
     data.put("setInAboutToSubmit", MARKER);
+    if (ACAS_DOCUMENT_NOTE.equals(data.get("note"))) {
+      addAcasVisibleDocument(data, "callback-acas-document", CALLBACK_DOCUMENT_ID, CALLBACK_DOCUMENT_HASH);
+    } else if (ACAS_DOCUMENT_WITH_NULL_HASH_NOTE.equals(data.get("note"))) {
+      addAcasVisibleDocument(data, "callback-acas-document-null-hash", NULL_HASH_CALLBACK_DOCUMENT_ID, null);
+    }
     aboutToSubmitSawAuthorisation = authorisation != null && !authorisation.isBlank();
     aboutToSubmitSawServiceAuthorisation = serviceAuthorisation != null && !serviceAuthorisation.isBlank();
     return ResponseEntity.ok(aboutToSubmitResponse(data, List.of()));
+  }
+
+  public static Map<String, Object> acasDocumentCollectionItem(String id, String documentId, String hashToken) {
+    String documentBaseUrl = "http://localhost/documents/" + documentId;
+    Map<String, Object> uploadedDocument = new LinkedHashMap<>(Map.of(
+        "document_url", documentBaseUrl,
+        "document_binary_url", documentBaseUrl + "/binary",
+        "document_filename", id + ".pdf"
+    ));
+    uploadedDocument.put("document_hash", hashToken);
+
+    return acasDocumentCollectionItem(id, uploadedDocument);
+  }
+
+  public static Map<String, Object> acasDocumentCollectionItem(String id, String documentId) {
+    String documentBaseUrl = "http://localhost/documents/" + documentId;
+    return acasDocumentCollectionItem(id, new LinkedHashMap<>(Map.of(
+        "document_url", documentBaseUrl,
+        "document_binary_url", documentBaseUrl + "/binary",
+        "document_filename", id + ".pdf"
+    )));
+  }
+
+  private static Map<String, Object> acasDocumentCollectionItem(String id, Map<String, Object> uploadedDocument) {
+    return new LinkedHashMap<>(Map.of(
+        "id", id,
+        "value", new LinkedHashMap<>(Map.of(
+            "documentType", "ET1",
+            "uploadedDocument", uploadedDocument
+        ))
+    ));
+  }
+
+  private void addAcasVisibleDocument(Map<String, Object> data, String id, String documentId, String hashToken) {
+    List<Object> documentCollection = new ArrayList<>();
+    Object existing = data.get("documentCollection");
+    if (existing instanceof List<?> list) {
+      documentCollection.addAll(list);
+    }
+
+    documentCollection.add(acasDocumentCollectionItem(id, documentId, hashToken));
+    data.put("documentCollection", documentCollection);
+  }
+
+  private static String documentHashToken(String documentId, String jurisdiction, String caseType) {
+    String cdamSalt = System.getenv().getOrDefault("CASE_DOCUMENT_AM_API_S2S_SECRET", "AABBCCDDEEFFGGHH");
+    String tokenSource = cdamSalt + documentId + jurisdiction + caseType;
+    try {
+      MessageDigest digest = MessageDigest.getInstance("SHA-256");
+      byte[] hash = digest.digest(tokenSource.getBytes(StandardCharsets.UTF_8));
+      StringBuilder hex = new StringBuilder(new BigInteger(1, hash).toString(16));
+      while (hex.length() < 32) {
+        hex.insert(0, "0");
+      }
+      return hex.toString();
+    } catch (NoSuchAlgorithmException e) {
+      throw new IllegalStateException("SHA-256 is not available", e);
+    }
   }
 
   @PostMapping("/submitted")

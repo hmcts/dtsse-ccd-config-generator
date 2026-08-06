@@ -8,10 +8,12 @@ set -euo pipefail
 # Populates:
 #   ccd.case_data
 #   ccd.case_event
+#   ccd.case_event_significant_items
 #
 # From remote source tables:
 #   FDW_SCHEMA.case_data
 #   FDW_SCHEMA.case_event
+#   FDW_SCHEMA.case_event_significant_items
 #
 # Requires the FDW objects to have already been created by:
 #   ./setup-ccd-data-fdw.sh --apply
@@ -29,6 +31,7 @@ DST_SCHEMA="${DST_SCHEMA:-ccd}"
 FDW_SCHEMA="${FDW_SCHEMA:-fdw_stage}"
 
 CASE_TYPE_IDS_SQL="${CASE_TYPE_IDS_SQL:-'TEST_CASE_TYPE'}"
+CASE_REVISION_OFFSET="${CASE_REVISION_OFFSET:-1000000000}"
 
 # Optional. Empty means full load.
 # Example: DELTA_SINCE="2026-04-30 10:00:00"
@@ -56,11 +59,13 @@ Environment variables:
   DST_SCHEMA
   FDW_SCHEMA
   CASE_TYPE_IDS_SQL
+  CASE_REVISION_OFFSET optional; defaults to 1000000000
   DELTA_SINCE optional, e.g. "2026-04-30 10:00:00"
 
 Example:
   export DST_DSN='postgresql://user:pass@dest.postgres.database.azure.com:5432/appdb?sslmode=require'
   export CASE_TYPE_IDS_SQL="'ET_EnglandWales','ET_Scotland','ET_Admin'"
+  export CASE_REVISION_OFFSET='1000000000'
 
   ./scripts/migrate-ccd-data-fdw.sh
   ./scripts/migrate-ccd-data-fdw.sh --apply
@@ -97,6 +102,13 @@ require_psql() {
   fi
 }
 
+validate_case_revision_offset() {
+  if [[ ! "$CASE_REVISION_OFFSET" =~ ^[0-9]+$ ]]; then
+    log "ERROR: CASE_REVISION_OFFSET must be a non-negative integer"
+    exit 1
+  fi
+}
+
 psql_dst() {
   psql "$DST_DSN" \
     --set=ON_ERROR_STOP=on \
@@ -104,6 +116,7 @@ psql_dst() {
     --set=dst_schema="$DST_SCHEMA" \
     --set=fdw_schema="$FDW_SCHEMA" \
     --set=case_type_ids="$CASE_TYPE_IDS_SQL" \
+    --set=case_revision_offset="$CASE_REVISION_OFFSET" \
     --set=delta_since="$DELTA_SINCE" \
     "$@"
 }
@@ -143,14 +156,14 @@ SQL
   fi
 
   missing_table_count="$(psql_dst --quiet -tA <<'SQL'
-select 2 - count(*)
+select 3 - count(*)
 from (
   select c.relname
   from pg_foreign_table ft
   join pg_class c on c.oid = ft.ftrelid
   join pg_namespace n on n.oid = c.relnamespace
   where n.nspname = :'fdw_schema'
-    and c.relname in ('case_data', 'case_event')
+    and c.relname in ('case_data', 'case_event', 'case_event_significant_items')
 ) as fdw_tables;
 SQL
 )"
@@ -177,6 +190,7 @@ and (
 );
 
 select 'source case_event' as table_name, 'unknown - slow query' as count;
+select 'source case_event_significant_items' as table_name, 'unknown - slow query' as count;
 
 select 'target case_data' as table_name, count(*)
 from :dst_schema.case_data
@@ -185,6 +199,12 @@ where case_type_id in (:case_type_ids);
 select 'target case_event' as table_name, count(*)
 from :dst_schema.case_event
 where case_type_id in (:case_type_ids);
+
+select 'target case_event_significant_items' as table_name, count(*)
+from :dst_schema.case_event_significant_items item
+join :dst_schema.case_event ce
+  on ce.id = item.case_event_id
+where ce.case_type_id in (:case_type_ids);
 SQL
 }
 
@@ -192,10 +212,17 @@ prepare_target() {
   log "Dropping constraints/indexes that block placeholder event revisions..."
 
   psql_dst <<'SQL'
+begin;
+
 alter table :dst_schema.case_event
 drop constraint if exists case_event_case_data_id_fkey;
 
 drop index if exists :dst_schema.idx_case_event_case_data_revision_unique;
+
+alter table :dst_schema.case_event
+disable trigger user;
+
+commit;
 SQL
 
   CONSTRAINTS_DROPPED=true
@@ -284,6 +311,9 @@ load_case_events() {
   log "Loading/upserting case_event with temporary version/case_revision values..."
 
   psql_dst <<'SQL'
+begin;
+set local session_replication_role = replica;
+
 insert into :dst_schema.case_event (
     id,
     created_date,
@@ -335,6 +365,7 @@ from :fdw_schema.case_event ce
 join :dst_schema.case_data cd
   on cd.id = ce.case_data_id
 where cd.case_type_id in (:case_type_ids)
+and ce.case_type_id in (:case_type_ids)
 and (
     nullif(:'delta_since', '') is null
     or ce.created_date >= nullif(:'delta_since', '')::timestamp
@@ -359,6 +390,52 @@ set
     proxied_by = excluded.proxied_by,
     proxied_by_first_name = excluded.proxied_by_first_name,
     proxied_by_last_name = excluded.proxied_by_last_name;
+
+commit;
+SQL
+}
+
+load_case_event_significant_items() {
+  log "Loading/upserting case_event_significant_items..."
+
+  psql_dst <<'SQL'
+begin;
+set local session_replication_role = replica;
+
+insert into :dst_schema.case_event_significant_items (
+    id,
+    description,
+    "type",
+    url,
+    case_event_id
+)
+select
+    item.id,
+    item.description,
+    item."type"::text:::"dst_schema".significant_item_type,
+    item.url,
+    item.case_event_id
+from :fdw_schema.case_event_significant_items item
+join :fdw_schema.case_event ce
+  on ce.id = item.case_event_id
+join :dst_schema.case_event target_event
+  on target_event.id = item.case_event_id
+join :dst_schema.case_data cd
+  on cd.id = target_event.case_data_id
+where cd.case_type_id in (:case_type_ids)
+and ce.case_type_id in (:case_type_ids)
+and (
+    nullif(:'delta_since', '') is null
+    or ce.created_date >= nullif(:'delta_since', '')::timestamp
+)
+on conflict (id) do update
+set
+    description = excluded.description,
+    "type" = excluded."type",
+    url = excluded.url,
+    case_event_id = excluded.case_event_id;
+
+commit;
 SQL
 }
 
@@ -368,6 +445,9 @@ recalculate_revisions() {
   psql_dst <<'SQL'
 create index if not exists idx_tmp_case_event_case_data_id_id
 on :dst_schema.case_event (case_data_id, id);
+
+begin;
+set local session_replication_role = replica;
 
 update :dst_schema.case_event t
 set
@@ -385,11 +465,13 @@ from (
 ) s
 where t.id = s.id;
 
+commit;
+
 begin;
 set local session_replication_role = replica;
 
 update :dst_schema.case_data cd
-set case_revision = evt.event_count
+set case_revision = evt.event_count + (:case_revision_offset)::bigint
 from (
     select
         case_data_id,
@@ -405,9 +487,9 @@ SQL
 }
 
 validate_no_orphans() {
-  log "Checking for orphaned case_event rows..."
+  log "Checking for orphaned case_event and significant item rows..."
 
-  local orphan_count
+  local orphan_count significant_item_orphan_count
 
   orphan_count="$(psql_dst --quiet -tA <<'SQL'
 select count(*)
@@ -419,8 +501,18 @@ where d.id is null
 SQL
 )"
 
-  if [[ "$orphan_count" != "0" ]]; then
-    log "ERROR: Found ${orphan_count} orphaned case_event rows. Not restoring FK."
+  significant_item_orphan_count="$(psql_dst --quiet -tA <<'SQL'
+select count(*)
+from :dst_schema.case_event_significant_items item
+left join :dst_schema.case_event ce
+  on ce.id = item.case_event_id
+where ce.id is null;
+SQL
+)"
+
+  if [[ "$orphan_count" != "0" || "$significant_item_orphan_count" != "0" ]]; then
+    log "ERROR: Found orphan rows: case_event=${orphan_count}, significant_items=${significant_item_orphan_count}."
+    log "Not restoring FK."
     exit 1
   fi
 }
@@ -437,6 +529,9 @@ add constraint case_event_case_data_id_fkey
 foreign key (case_data_id)
 references :dst_schema.case_data(id)
 on delete cascade;
+
+alter table :dst_schema.case_event
+enable trigger user;
 SQL
   then
     CONSTRAINTS_DROPPED=false
@@ -452,6 +547,12 @@ reset_sequences() {
 select setval(
   format('%I.case_event_id_seq', :'dst_schema')::regclass,
   (select coalesce(max(id), 1) from :dst_schema.case_event),
+  true
+);
+
+select setval(
+  format('%I.case_event_significant_items_id_seq', :'dst_schema')::regclass,
+  (select coalesce(max(id), 1) from :dst_schema.case_event_significant_items),
   true
 );
 SQL
@@ -473,12 +574,26 @@ where case_type_id in (:case_type_ids)
 group by case_type_id
 order by case_type_id;
 
+select 'target case_event_significant_items by case_type' as check_name, ce.case_type_id, count(*)
+from :dst_schema.case_event_significant_items item
+join :dst_schema.case_event ce
+  on ce.id = item.case_event_id
+where ce.case_type_id in (:case_type_ids)
+group by ce.case_type_id
+order by ce.case_type_id;
+
 select 'orphan case_event rows' as check_name, count(*)
 from :dst_schema.case_event e
 left join :dst_schema.case_data d
   on d.id = e.case_data_id
 where d.id is null
   and e.case_type_id in (:case_type_ids);
+
+select 'orphan case_event_significant_items rows' as check_name, count(*)
+from :dst_schema.case_event_significant_items item
+left join :dst_schema.case_event ce
+  on ce.id = item.case_event_id
+where ce.id is null;
 
 select 'duplicate event revisions' as check_name, count(*)
 from (
@@ -502,7 +617,8 @@ with case_revision_check as (
         cd.id,
         cd.case_revision,
         count(ce.id)::bigint as event_count,
-        coalesce(max(ce.case_revision), 0)::bigint as max_event_revision
+        coalesce(max(ce.case_revision), 0)::bigint as max_event_revision,
+        coalesce(max(ce.case_revision), 0)::bigint + (:case_revision_offset)::bigint as expected_case_revision
     from :dst_schema.case_data cd
     left join :dst_schema.case_event ce
       on ce.case_data_id = cd.id
@@ -511,8 +627,8 @@ with case_revision_check as (
 )
 select count(*)
 from case_revision_check
-where case_revision is distinct from event_count
-   or case_revision is distinct from max_event_revision;
+where case_revision is distinct from expected_case_revision
+   or event_count is distinct from max_event_revision;
 SQL
 )"
 
@@ -545,8 +661,10 @@ cleanup_on_exit() {
 main() {
   parse_args "$@"
   require_psql
+  validate_case_revision_offset
 
   log "DELTA_SINCE=${DELTA_SINCE:-<empty: full load>}"
+  log "CASE_REVISION_OFFSET=${CASE_REVISION_OFFSET}"
 
   validate_connection
   validate_can_disable_triggers
@@ -563,9 +681,13 @@ main() {
   prepare_target
   load_case_data
   load_case_events
+  load_case_event_significant_items
 
   # Important: catch parent cases created while events were being copied.
   load_case_data
+  # Then catch events for cases loaded or updated by the second case_data pass.
+  load_case_events
+  load_case_event_significant_items
 
   recalculate_revisions
   validate_no_orphans

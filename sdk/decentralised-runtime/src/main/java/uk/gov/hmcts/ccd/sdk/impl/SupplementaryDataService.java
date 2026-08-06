@@ -51,7 +51,9 @@ class SupplementaryDataService {
             );
             var updatedValue = ndb.queryForObject(
                 """
-                    UPDATE ccd.case_data SET supplementary_data = jsonb_set_lax(
+                    UPDATE ccd.case_data SET
+                        last_modified = (now() at time zone 'UTC'),
+                        supplementary_data = jsonb_set_lax(
                         -- Create the top level entry as a map if it doesn't exist.
                         jsonb_set(
                             supplementary_data,

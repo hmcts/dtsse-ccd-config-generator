@@ -15,6 +15,11 @@ gradle.beforeProject { p ->
         // Prevent subproject build.gradle from failing on wrapper { }.
         p.ext.wrapper = { Closure c -> }
     }
+    if (p.path == ':et-shared') {
+        def etProject = gradle.rootProject.findProject(':et')
+        p.ext.jacksonVersion = etProject.jacksonVersion
+        p.ext.jacksonAnnotationsVersion = etProject.jacksonAnnotationsVersion
+    }
 }
 
 include 'test-projects'
@@ -38,6 +43,9 @@ include 'et'
 project(':et').projectDir = file('test-projects/et-ccd-callbacks')
 include 'et-shared'
 project(':et-shared').projectDir = file('test-projects/et-ccd-callbacks/et-shared')
+
+include 'ui-component-lib'
+project(':ui-component-lib').projectDir = file('frontend/ui-component-lib')
 
 if (file('ccd-data-store-api').exists()) {
     include 'ccd-data-store-api'

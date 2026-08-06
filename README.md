@@ -82,11 +82,19 @@ For decentralised services you can opt in to specialised runtime features:
 ```groovy
 ccd {
   decentralised = true
-  runtimeIndexing = true // brings the decentralised Elasticsearch indexer into the main runtime classpath
+  runtimeIndexing = true // brings ccd-runtime-indexing into the main runtime classpath
 }
 ```
 
-When `runtimeIndexing` is enabled the decentralised indexer now relies on Spring’s scheduling infrastructure. Ensure the application that boots the SDK is annotated with `@EnableScheduling` so the indexer starts and stops with the rest of the Spring context.
+When `runtimeIndexing` is enabled the decentralised indexer uses PostgreSQL `LISTEN`/`NOTIFY` for low latency indexing,
+with `ccd.sdk.decentralised.poll-interval-ms` as a fallback.
+
+Set `ELASTIC_SEARCH_HOSTS` to the Elasticsearch HTTP endpoint or a comma-separated list of endpoints. For example:
+`ELASTIC_SEARCH_HOSTS=http://es-1:9200,http://es-2:9200`.
+
+The indexer is enabled by default. To leave the runtime indexing library on the classpath while temporarily
+disabling the decentralised Elasticsearch indexer, set
+`CCD_SDK_DECENTRALISED_ES_INDEXER_ENABLED=false`.
 
 ### Config generation
 
@@ -440,6 +448,15 @@ Individual roles can be shuttered with:
 ```java
   configBuilder.shutterService(UserRole.SOLICITOR);
 ```
+
+Roles can be excluded from a shutter with `shutterServiceExclude`, so they keep their normal permissions instead of being set to DELETE. The exclusion applies whether the shutter was requested for the whole service (`shutterService()`) or for individual roles (`shutterService(UserRole.SOLICITOR)`), and takes precedence over both:
+
+```java
+  configBuilder.shutterService();
+  configBuilder.shutterServiceExclude(UserRole.CASEWORKER_WA_TASK_CONFIGURATION);
+```
+
+This is typically used to keep `caseworker-wa-task-configuration` out of a shutter, as dropping that role to DELETE can cause issues for Work Allocation / Task Management.
 
 ## Unwrapped types
 

@@ -7,6 +7,7 @@ import java.util.Map;
 import lombok.Builder;
 import lombok.Data;
 import uk.gov.hmcts.ccd.sdk.api.EventMetadata;
+import uk.gov.hmcts.reform.ccd.client.model.SignificantItem;
 
 @Builder
 @Data
@@ -31,4 +32,6 @@ public class AboutToStartOrSubmitResponse<T, S> {
   @JsonIgnore
   private EventMetadata eventMetadata;
 
+  @JsonProperty("significant_item")
+  private SignificantItem significantItem;
 }

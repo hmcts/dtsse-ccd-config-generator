@@ -1,0 +1,31 @@
+name: Elasticsearch Indexing Chaos
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - '.github/workflows/es-indexing-chaos.yml'
+      - 'sdk/ccd-runtime-indexing/**'
+      - 'sdk/decentralised-runtime/src/main/resources/dataruntime-db/migration/**'
+  merge_group:
+
+jobs:
+  chaos:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+      - name: Set up JDK
+        uses: actions/setup-java@v5
+        with:
+          distribution: zulu
+          java-version: 21
+          cache: gradle
+
+      - name: Run Elasticsearch indexing chaos tests
+        run: ./gradlew -p sdk :ccd-runtime-indexing:chaosTest

@@ -7,6 +7,7 @@ import org.gradle.api.Plugin;
 import org.gradle.api.Project;
 import org.gradle.api.Task;
 import org.gradle.api.artifacts.Configuration;
+import org.gradle.api.artifacts.ExternalModuleDependency;
 import org.gradle.api.artifacts.repositories.MavenArtifactRepository;
 import org.gradle.api.artifacts.repositories.MavenRepositoryContentDescriptor;
 import org.gradle.api.file.DirectoryProperty;
@@ -81,7 +82,8 @@ public class CcdSdkPlugin implements Plugin<Project> {
         String version = getVersion();
         project.getDependencies().add("implementation", "com.github.hmcts:decentralised-runtime:"
             + version);
-        String dependencyNotation = "com.github.hmcts:cftlib-dev-only:" + version;
+        String dependencyNotation = "com.github.hmcts:ccd-runtime-indexing:" + version;
+        addElasticsearchClientDependency(project);
         if (config.runtimeIndexing) {
           project.getDependencies().add("implementation", dependencyNotation);
         } else {
@@ -108,6 +110,13 @@ public class CcdSdkPlugin implements Plugin<Project> {
   private String getVersion() {
     String implementationVersion = getClass().getPackage().getImplementationVersion();
     return implementationVersion != null ? implementationVersion : "DEV-SNAPSHOT";
+  }
+
+  private void addElasticsearchClientDependency(Project project) {
+    ExternalModuleDependency dependency = (ExternalModuleDependency) project.getDependencies()
+        .create("co.elastic.clients:elasticsearch-java");
+    dependency.version(version -> version.strictly("[9, 10)"));
+    project.getDependencies().add("implementation", dependency);
   }
 
   @Data

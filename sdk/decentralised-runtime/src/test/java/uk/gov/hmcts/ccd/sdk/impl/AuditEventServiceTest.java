@@ -5,10 +5,12 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.Optional;
+import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.http.HttpStatus;
@@ -16,6 +18,7 @@ import org.springframework.jdbc.core.RowMapper;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.web.server.ResponseStatusException;
 import uk.gov.hmcts.ccd.sdk.ResolvedConfigRegistry;
+import uk.gov.hmcts.reform.ccd.client.model.SignificantItem;
 
 class AuditEventServiceTest {
 
@@ -39,5 +42,28 @@ class AuditEventServiceTest {
           org.assertj.core.api.Assertions.assertThat(rse.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
           org.assertj.core.api.Assertions.assertThat(rse.getReason()).isEqualTo("History event not found");
         });
+  }
+
+  @Test
+  void saveAuditRecordRejectsInvalidSignificantItemUrlBeforePersistingEvent() {
+    var significantItem = SignificantItem.builder()
+        .type("DOCUMENT")
+        .description("Generated document")
+        .url("not a url")
+        .build();
+
+    assertThatThrownBy(() -> service.saveAuditRecord(
+        null,
+        null,
+        null,
+        UUID.randomUUID(),
+        Optional.of(significantItem)
+    ))
+        .isInstanceOf(CallbackValidationException.class)
+        .satisfies(ex -> org.assertj.core.api.Assertions.assertThat(
+            ((CallbackValidationException) ex).getErrors()
+        ).containsExactly("Significant item URL is not valid"));
+
+    verifyNoInteractions(ndb);
   }
 }

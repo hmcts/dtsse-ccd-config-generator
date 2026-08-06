@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.core.ResolvableType;
 import org.springframework.stereotype.Service;
 import org.springframework.util.ClassUtils;
@@ -18,6 +19,7 @@ import uk.gov.hmcts.ccd.sdk.CaseView;
 import uk.gov.hmcts.ccd.sdk.CaseViewRequest;
 import uk.gov.hmcts.ccd.sdk.ResolvedCCDConfig;
 import uk.gov.hmcts.ccd.sdk.ResolvedConfigRegistry;
+import uk.gov.hmcts.ccd.sdk.config.CcdCaseDataMapperConfiguration;
 
 /**
  * Central place for loading {@link DecentralisedCaseDetails} with the
@@ -37,6 +39,7 @@ class CaseProjectionService {
   private final GlobalSearchProcessorService globalSearchProcessorService;
 
   CaseProjectionService(CaseDataRepository caseDataRepository,
+                        @Qualifier(CcdCaseDataMapperConfiguration.CCD_CASE_DATA_OBJECT_MAPPER)
                         ObjectMapper mapper,
                         List<CaseView<?, ?>> caseViews,
                         ResolvedConfigRegistry configRegistry,

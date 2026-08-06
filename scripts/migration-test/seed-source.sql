@@ -1,5 +1,6 @@
 set client_min_messages to warning;
 
+delete from case_event_significant_items where case_event_id in (9101, 9102, 9103, 9104, 9199);
 delete from case_event where case_data_id in (5601, 5602, 5603, 5604);
 delete from case_data where id in (5601, 5602, 5603, 5604);
 
@@ -159,4 +160,30 @@ insert into case_event (
     'PUBLIC',
     'summary',
     'description'
+);
+
+insert into case_event_significant_items (
+    id,
+    description,
+    "type",
+    url,
+    case_event_id
+) values (
+    8101,
+    'Main document',
+    'DOCUMENT',
+    'http://dm-store/documents/8101',
+    9102
+), (
+    8102,
+    'Extra document',
+    'DOCUMENT',
+    'http://dm-store/documents/8102',
+    9104
+), (
+    8199,
+    'Out of scope document',
+    'DOCUMENT',
+    'http://dm-store/documents/8199',
+    9199
 );
