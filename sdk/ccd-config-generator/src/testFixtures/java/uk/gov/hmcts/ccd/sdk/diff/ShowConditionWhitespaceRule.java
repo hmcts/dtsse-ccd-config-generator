@@ -1,5 +1,6 @@
 package uk.gov.hmcts.ccd.sdk.diff;
 
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -13,6 +14,12 @@ import java.util.Set;
  * trims both sides of the recognised show-condition columns before comparison, so an otherwise
  * identical expression matches. It only trims — an expression that differs by anything other than
  * surrounding whitespace still fails, and non-condition columns are untouched.</p>
+ *
+ * <p>The trim runs in {@link #normaliseSheets}, before rows are keyed, because
+ * {@code FieldShowCondition} is part of the {@code EventToComplexTypes} primary key: a leading
+ * space would otherwise produce two different row keys for the same logical row and neither side
+ * would find its match. Trimming earlier is strictly safer than trimming on matched pairs — every
+ * row is normalised whether or not it pairs up.</p>
  */
 public final class ShowConditionWhitespaceRule implements NormalisationRule {
 
@@ -26,13 +33,16 @@ public final class ShowConditionWhitespaceRule implements NormalisationRule {
     }
 
     @Override
-    public void normaliseMatchedRows(String sheetName,
-                                     String rowKey,
-                                     Map<String, Object> expectedRow,
-                                     Map<String, Object> actualRow,
-                                     RuleApplications recorder) {
-        trim(sheetName, expectedRow, recorder);
-        trim(sheetName, actualRow, recorder);
+    public void normaliseSheets(String sheetName,
+                                List<Map<String, Object>> expectedRows,
+                                List<Map<String, Object>> actualRows,
+                                RuleApplications recorder) {
+        for (Map<String, Object> row : expectedRows) {
+            trim(sheetName, row, recorder);
+        }
+        for (Map<String, Object> row : actualRows) {
+            trim(sheetName, row, recorder);
+        }
     }
 
     private void trim(String sheetName, Map<String, Object> row, RuleApplications recorder) {

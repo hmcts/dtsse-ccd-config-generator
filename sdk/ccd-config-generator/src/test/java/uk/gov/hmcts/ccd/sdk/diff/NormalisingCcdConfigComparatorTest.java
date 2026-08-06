@@ -1978,6 +1978,25 @@ public class NormalisingCcdConfigComparatorTest {
         assertThat(NormalisingCcdConfigComparator.compare(expected, actual).matches()).isFalse();
     }
 
+    @Test
+    public void whitespaceIsTrimmedBeforeRowsAreKeyedOnTheShowCondition() {
+        // FieldShowCondition is part of the EventToComplexTypes primary key, so the trim has to
+        // happen in normaliseSheets — trimming on matched pairs would be too late: the untrimmed
+        // and trimmed forms would key differently and neither row would find its match.
+        Map<String, List<Map<String, Object>>> expected = sheets("EventToComplexTypes",
+            rows(row("CaseEventID", "e", "CaseFieldID", "f", "ListElementCode", "m",
+                "FieldShowCondition", " f.m=\"Yes\"", "FieldDisplayOrder", 1)));
+        Map<String, List<Map<String, Object>>> actual = sheets("EventToComplexTypes",
+            rows(row("CaseEventID", "e", "CaseFieldID", "f", "ListElementCode", "m",
+                "FieldShowCondition", "f.m=\"Yes\"", "FieldDisplayOrder", 1)));
+
+        ComparisonResult result = NormalisingCcdConfigComparator.compare(expected, actual);
+
+        assertThat(result.matches()).as(result.report()).isTrue();
+        assertThat(result.getAppliedRules())
+            .anySatisfy(rule -> assertThat(rule).startsWith("SHOW_CONDITION_WHITESPACE"));
+    }
+
     // ---- ACCESS_CONTROL_EXPANSION ----
 
     @Test

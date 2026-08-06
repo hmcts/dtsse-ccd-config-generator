@@ -44,6 +44,11 @@ public final class NormalisingCcdConfigComparator {
         new OrphanFixedListRule(),
         new PredefinedComplexTypeRedeclarationRule(),
         new IdentifierWhitespaceRule(),
+        // Canonicalises show-condition whitespace before anything reads those columns: it is part of
+        // the EventToComplexTypes row key AND part of the key EVENT_COMPLEX_TYPE_ID_IGNORED uses to
+        // tell a derived row from a passed-through one, so an untrimmed value must not survive to
+        // either.
+        new ShowConditionWhitespaceRule(),
         new KeyAliasRule(),
         new EventComplexTypeIdIgnoredRule(),
         new LiveFromRule(),
@@ -64,7 +69,6 @@ public final class NormalisingCcdConfigComparator {
         new CollectionElementTypeRule(),
         new EmptyCrudAuthorisationRule(),
         new CrudLetterOrderRule(),
-        new ShowConditionWhitespaceRule(),
         new PostConditionNoChangeRule(),
         new ConditionalPostStateRule(),
         new PreConditionStateOrderRule(),
@@ -106,7 +110,16 @@ public final class NormalisingCcdConfigComparator {
         // identically on both sides), so two rows sharing (event, field, LEC) under different declaring
         // types (prl's children: Child + OtherPersonWhoLivesWithChild both name firstName) still
         // disambiguate by ID rather than mis-pairing.
-        Map.entry("EventToComplexTypes", List.of("ID", "CaseEventID", "CaseFieldID", "ListElementCode")),
+        //
+        // FieldShowCondition is a key for the same reason the SDK's own
+        // CaseEventToComplexTypesGenerator merges this sheet on it: one member can be placed TWICE on
+        // an event under the same declaring type, distinguished only by its show condition (civil's
+        // ORDER_REVIEW_OBLIGATION_CHECK/obligationWAFlag lists each member once OPTIONAL with a
+        // condition and once MANDATORY without). ID cannot separate those — it is identical — so
+        // without this column both rows land in one bucket and get paired positionally, reporting
+        // spurious DisplayContext/FieldShowCondition/Publish mismatches in both directions.
+        Map.entry("EventToComplexTypes",
+            List.of("ID", "CaseEventID", "CaseFieldID", "ListElementCode", "FieldShowCondition")),
         // Search/workbasket rows scope by role (UserRole/AccessProfile) and can repeat one
         // CaseFieldID with different ListElementCodes, so both discriminate the row identity
         // (KEY_ALIAS canonicalises UserRole to AccessProfile before this key is computed).
