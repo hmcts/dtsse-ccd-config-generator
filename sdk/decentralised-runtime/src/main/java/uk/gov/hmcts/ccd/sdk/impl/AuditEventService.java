@@ -98,6 +98,7 @@ class AuditEventService {
 
   @SneakyThrows
   public long saveAuditRecord(
+      long caseEventId,
       DecentralisedCaseEvent event,
       IdamService.User user,
       uk.gov.hmcts.ccd.domain.model.definition.CaseDetails currentView,
@@ -112,6 +113,7 @@ class AuditEventService {
     var eventDetails = event.getEventDetails();
     var sql = """
         insert into ccd.case_event (
+          id,
           data,
           event_id,
           user_id,
@@ -133,6 +135,7 @@ class AuditEventService {
           proxied_by_first_name,
           proxied_by_last_name)
         values (
+          :id,
           :data::jsonb,
           :event_id,
           :user_id,
@@ -180,6 +183,7 @@ class AuditEventService {
     }
 
     var params = new MapSqlParameterSource()
+        .addValue("id", caseEventId)
         .addValue("data", defaultMapper.writeValueAsString(currentView.getData()))
         .addValue("event_id", eventDetails.getEventId())
         .addValue("user_id", auditUserId)

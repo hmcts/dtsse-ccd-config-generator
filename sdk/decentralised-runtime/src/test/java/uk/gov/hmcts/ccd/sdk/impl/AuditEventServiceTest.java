@@ -53,6 +53,7 @@ class AuditEventServiceTest {
         .build();
 
     assertThatThrownBy(() -> service.saveAuditRecord(
+        123L,
         null,
         null,
         null,

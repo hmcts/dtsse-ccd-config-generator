@@ -1,6 +1,7 @@
 package uk.gov.hmcts.ccd.sdk.retention;
 
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.verify;
@@ -52,6 +53,7 @@ class RetainAndDisposeTaskIntegrationTest {
       mock(CoreCaseDataRetainAndDisposeClient.class);
 
   private RetainAndDisposeTask task;
+  private TransactionTemplate transaction;
   private long nextReference;
 
   @BeforeEach
@@ -64,13 +66,27 @@ class RetainAndDisposeTaskIntegrationTest {
     properties.getMaximumCandidatePercentageByState().clear();
     properties.setMinimumCandidateCount(1);
     nextReference = 1_000_000_000_000_000L;
+    transaction = new TransactionTemplate(transactionManager);
+
+    jdbc.getJdbcTemplate().execute("""
+        create table if not exists disposal_audit_test (
+          reference bigint primary key references ccd.case_data(reference) on delete cascade,
+          details text not null
+        )
+        """);
+    jdbc.getJdbcTemplate().execute("drop trigger if exists ccd_audit_row_changes on disposal_audit_test");
+    jdbc.getJdbcTemplate().execute("""
+        create trigger ccd_audit_row_changes
+        after insert or update or delete on disposal_audit_test
+        for each row execute function ccd.audit_row_change()
+        """);
 
     task = new RetainAndDisposeTask(
         properties,
         policy,
         new RetainAndDisposeRepository(JdbcClient.create(dataSource)),
         ccdClient,
-        new TransactionTemplate(transactionManager),
+        transaction,
         new PostgresAdvisoryLock(dataSource)
     );
   }
@@ -167,6 +183,35 @@ class RetainAndDisposeTaskIntegrationTest {
     assertCircuitBreakerTrips();
   }
 
+  @Test
+  void disposalBypassesAuditWhileCascadingServiceData() {
+    long reference = insertExpiredPendingDisposalCase("CaseTypeA");
+    policy.caseTypes.add("CaseTypeA");
+    transaction.executeWithoutResult(status -> {
+      jdbc.getJdbcTemplate().queryForObject(
+          "select set_config('ccd.audit_disabled', 'true', true)",
+          String.class
+      );
+      jdbc.getJdbcTemplate().update(
+          "insert into disposal_audit_test(reference, details) values (?, 'delete me')",
+          reference
+      );
+    });
+
+    task.run();
+
+    assertThat(jdbc.getJdbcTemplate().queryForObject(
+        "select count(*) from ccd.case_data where reference = ?",
+        Integer.class,
+        reference
+    )).isZero();
+    assertThat(jdbc.getJdbcTemplate().queryForObject(
+        "select count(*) from disposal_audit_test where reference = ?",
+        Integer.class,
+        reference
+    )).isZero();
+  }
+
   private void assertCircuitBreakerTrips() {
     assertThatThrownBy(task::run)
         .isInstanceOf(IllegalStateException.class)
@@ -198,6 +243,23 @@ class RetainAndDisposeTaskIntegrationTest {
     for (int index = 0; index < count; index++) {
       insertCase(caseTypeId, state, true);
     }
+  }
+
+  private long insertExpiredPendingDisposalCase(String caseTypeId) {
+    long reference = nextReference++;
+    jdbc.getJdbcTemplate().update(
+        """
+        insert into ccd.case_data (
+          id, reference, version, security_classification, jurisdiction, case_type_id, state, data, resolved_ttl
+        ) values (?, ?, 1, 'PUBLIC', ?, ?, ?, '{}'::jsonb, current_date - 1)
+        """,
+        reference,
+        reference,
+        JURISDICTION,
+        caseTypeId,
+        RetainAndDisposePolicy.DISPOSAL_STATE_ID
+    );
+    return reference;
   }
 
   private long insertCase(String caseTypeId, String state, boolean resolved) {
