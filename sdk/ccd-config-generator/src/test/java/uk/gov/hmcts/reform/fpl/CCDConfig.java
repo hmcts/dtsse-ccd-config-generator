@@ -34,6 +34,7 @@ import uk.gov.hmcts.ccd.sdk.api.ConfigBuilder;
 import uk.gov.hmcts.ccd.sdk.type.Organisation;
 import uk.gov.hmcts.ccd.sdk.type.OrganisationPolicy;
 import uk.gov.hmcts.reform.ccd.client.model.SubmittedCallbackResponse;
+import uk.gov.hmcts.reform.fpl.access.GroupAccess;
 import uk.gov.hmcts.reform.fpl.access.SolicitorAccess;
 import uk.gov.hmcts.reform.fpl.enums.State;
 import uk.gov.hmcts.reform.fpl.enums.UserRole;
@@ -159,6 +160,8 @@ public class CCDConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<CaseData, S
         .grant(CRU, HMCTS_ADMIN)
         .grant(R, LOCAL_AUTHORITY)
         .grant(new SolicitorAccess())
+        // A group role granted the same way a UserRole would be. See GroupAccess.
+        .grant(new GroupAccess())
         .publishToCamunda()
         .fields()
         .optional(CaseData::getCaseNotes)
