@@ -46,7 +46,7 @@ class EtSubclassSpikeTest {
     Path classesOut = work.resolve("classes");
     Path defOut = work.resolve("definition");
     ClassLoader generated = GeneratedSourceCompiler.compile(src, classesOut);
-    GeneratorRunner.generate(generated, defOut, "uk.gov.hmcts.ccd.sdk", CONFIG_PKG, MODEL_PKG);
+    GeneratorRunner.generate(generated, defOut, CONFIG_PKG, MODEL_PKG);
 
     Set<String> ew = caseFieldIds(defOut, "ET_EnglandWales");
     Set<String> scotland = caseFieldIds(defOut, "ET_Scotland");
@@ -179,12 +179,21 @@ class EtSubclassSpikeTest {
     write(src, CONFIG_PKG, "ScotlandConfig.java", configSource(
         "ScotlandConfig", "ScotlandCaseData", "ET_Scotland"));
 
-    // A @SpringBootApplication so the generator context autoconfigures the ObjectMapper the SDK's
-    // runtime beans need (matching what the converter's ApplicationEmitter emits for real runs).
+    // The entry point shape the converter's ApplicationEmitter emits for real runs: a plain
+    // @SpringBootConfiguration (no autoconfiguration, which a real service classpath would take as a
+    // licence to start datasources and web servers during a one-shot generation run), scanning the
+    // generator's own package rather than the SDK root, plus an @Import for CCDDefinitionGenerator,
+    // which is a @Configuration in that unscanned root package. Scanning the root instead would
+    // sweep in the runtime callback beans, whose @Autowired ObjectMapper nothing then supplies.
     write(src, CONFIG_PKG, "SpikeApplication.java", """
         package %s;
-        import org.springframework.boot.autoconfigure.SpringBootApplication;
-        @SpringBootApplication(scanBasePackages = {"uk.gov.hmcts.ccd.sdk", "%s", "%s"})
+        import org.springframework.boot.SpringBootConfiguration;
+        import org.springframework.context.annotation.ComponentScan;
+        import org.springframework.context.annotation.Import;
+        import uk.gov.hmcts.ccd.sdk.CCDDefinitionGenerator;
+        @SpringBootConfiguration
+        @ComponentScan(basePackages = {"uk.gov.hmcts.ccd.sdk.generator", "%s", "%s"})
+        @Import(CCDDefinitionGenerator.class)
         public class SpikeApplication { }
         """.formatted(CONFIG_PKG, CONFIG_PKG, MODEL_PKG));
   }

@@ -41,7 +41,9 @@ import uk.gov.hmcts.ccd.sdk.diff.NormalisingCcdConfigComparator;
 @Tag("round-trip")
 class RoundTripTest {
 
-  /** Consumed by {@link #realFixtureResidualsMatchBaseline} via {@link FieldSource}. */
+  /**
+   * Consumed by {@link #realFixtureResidualsMatchBaseline} via {@link FieldSource}.
+   */
   static final List<Fixtures.Fixture> FIXTURES = Fixtures.ALL;
 
   @Test
@@ -86,13 +88,13 @@ class RoundTripTest {
    */
   private static void assertGoldenRoundTrips(Path input, String caseTypeId, Path work,
                                              Map<String, String> env) {
-    Path srcOut = work.resolve("src");
-    Path classesOut = work.resolve("classes");
-    Path defOut = work.resolve("definition");
-    Path passthrough = work.resolve("passthrough");
-    Path report = work.resolve("report");
-    String modelPackage = "uk.gov.hmcts.roundtrip.model";
-    String configPackage = "uk.gov.hmcts.roundtrip.config";
+    final Path srcOut = work.resolve("src");
+    final Path classesOut = work.resolve("classes");
+    final Path defOut = work.resolve("definition");
+    final Path passthrough = work.resolve("passthrough");
+    final Path report = work.resolve("report");
+    final String modelPackage = "uk.gov.hmcts.roundtrip.model";
+    final String configPackage = "uk.gov.hmcts.roundtrip.config";
 
     Map<String, OverlayCondition> suffixes = new java.util.LinkedHashMap<>();
     suffixes.put("prod", OverlayCondition.parse("CCD_DEF_ENV:prod"));
@@ -119,7 +121,7 @@ class RoundTripTest {
     env.forEach(System::setProperty);
     try {
       GeneratorRunner.generate(
-          generated, defOut, "uk.gov.hmcts.ccd.sdk", configPackage, modelPackage);
+          generated, defOut, configPackage, modelPackage);
       uk.gov.hmcts.ccd.sdk.converter.passthrough.PassthroughMerger.merge(
           passthrough, defOut.resolve(caseTypeId));
     } finally {

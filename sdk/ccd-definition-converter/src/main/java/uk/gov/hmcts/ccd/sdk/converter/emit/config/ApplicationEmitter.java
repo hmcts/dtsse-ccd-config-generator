@@ -42,8 +42,14 @@ public class ApplicationEmitter implements SourceEmitter {
       return List.of();
     }
 
-    ClassName springBootApplication =
-        ClassName.get("org.springframework.boot.autoconfigure", "SpringBootApplication");
+    ClassName springBootConfiguration =
+        ClassName.get("org.springframework.boot", "SpringBootConfiguration");
+    ClassName componentScan =
+        ClassName.get("org.springframework.context.annotation", "ComponentScan");
+    ClassName importAnnotation =
+        ClassName.get("org.springframework.context.annotation", "Import");
+    ClassName definitionGenerator =
+        ClassName.get("uk.gov.hmcts.ccd.sdk", "CCDDefinitionGenerator");
     ClassName springApplication =
         ClassName.get("org.springframework.boot", "SpringApplication");
 
@@ -59,9 +65,9 @@ public class ApplicationEmitter implements SourceEmitter {
             ClassName.get(context.configPackage(), "ConverterGeneratedApplication"))
         .build();
 
-    // The SDK generator beans live in uk.gov.hmcts.ccd.sdk(.generator); the generated CCDConfig /
+    // The SDK generator beans live in uk.gov.hmcts.ccd.sdk.generator; the generated CCDConfig /
     // Access beans live in the config package. Both must be component-scanned so the standalone run
-    // resolves the CCDConfig beans and the CCDDefinitionGenerator. The MODEL package is deliberately
+    // resolves the CCDConfig beans and the generator's writers. The MODEL package is deliberately
     // NOT scanned: model classes are POJOs the SDK reflects by type (referenced by import from the
     // CCDConfig beans, loaded by the classloader), never Spring-wired. In generate mode the model
     // package holds only generated data classes so scanning it was harmless; in retrofit mode it is
@@ -70,43 +76,58 @@ public class ApplicationEmitter implements SourceEmitter {
     // fail to start. Dropping it is safe for both modes (the config package is scanned directly, even
     // when it is a sub-package of the model package).
     //
-    // Exclude the persistence autoconfigurations. generateCCDConfig only needs the CCDConfig beans
-    // and the CCDDefinitionGenerator — never a database. But in retrofit mode this class runs on the
-    // real service's classpath (Spring Data JPA, Flyway, a JDBC driver, the service's
-    // application.yaml), so Spring Boot would otherwise stand up a DataSource / EntityManagerFactory
-    // / Flyway migrator and fail with no database to connect to (Civil: "Driver … claims to not
-    // accept jdbcUrl jdbc:postgresql://:/cmc"). The same applies to Spring Security / OAuth2 client
-    // autoconfiguration: the service's application.yaml carries client-registration properties, so
-    // Spring builds a clientRegistrationRepository whose issuer/redirect URI reads an unresolved
-    // ${idam.web.url} placeholder and fails ("Illegal character in path … ${idam.web.url}/o"). The
-    // generator authenticates nothing, so those are excluded too. Excluding by name (excludeName, not
-    // the typed exclude) keeps the emitter free of a compile dependency on those classes; an exclude
-    // of an autoconfiguration not on the classpath is silently ignored, so each is a no-op for a
-    // service that does not carry that dependency. Web/servlet autoconfiguration is additionally
-    // switched off by running the generated app with WebApplicationType.NONE (the pipeline sets
-    // spring.main.web-application-type=none), so no embedded server or web-security chain starts.
-    AnnotationSpec springBootApp = AnnotationSpec.builder(springBootApplication)
-        .addMember("scanBasePackages", "{$S, $S}",
-            "uk.gov.hmcts.ccd.sdk", context.configPackage())
-        .addMember("excludeName", "{$S, $S, $S, $S, $S, $S, $S, $S, $S, $S, $S, $S}",
-            "org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration",
-            "org.springframework.boot.autoconfigure.orm.jpa.HibernateJpaAutoConfiguration",
-            "org.springframework.boot.autoconfigure.data.jpa.JpaRepositoriesAutoConfiguration",
-            "org.springframework.boot.autoconfigure.jdbc.DataSourceTransactionManagerAutoConfiguration",
-            "org.springframework.boot.autoconfigure.flyway.FlywayAutoConfiguration",
-            "org.springframework.boot.autoconfigure.security.servlet.SecurityAutoConfiguration",
-            "org.springframework.boot.autoconfigure.security.oauth2.client.OAuth2ClientAutoConfiguration",
-            "org.springframework.boot.autoconfigure.security.oauth2.resource.OAuth2ResourceServerAutoConfiguration",
-            "org.springframework.boot.autoconfigure.security.oauth2.client.reactive."
-                + "ReactiveOAuth2ClientAutoConfiguration",
-            "org.springframework.boot.autoconfigure.security.reactive.ReactiveSecurityAutoConfiguration",
-            "uk.gov.hmcts.reform.idam.client.IdamClient",
-            "uk.gov.hmcts.reform.idam.client.OAuth2Configuration")
+    // NO AUTOCONFIGURATION AT ALL — @SpringBootConfiguration + @ComponentScan rather than
+    // @SpringBootApplication (which is those two plus @EnableAutoConfiguration).
+    // generateCCDConfig needs exactly two things from the context: the generated CCDConfig beans and
+    // the SDK's CCDDefinitionGenerator. Both are plain @Component/@Configuration classes with no
+    // property injection and no infrastructure dependency (JsonUtils builds its own ObjectMapper),
+    // which the round-trip harness proves: GeneratorRunner drives all seven fixtures through a bare
+    // AnnotationConfigApplicationContext that only component-scans, with no Boot and no
+    // autoconfiguration whatsoever.
+    //
+    // Autoconfiguration is therefore pure liability in retrofit mode, where this class runs on the
+    // real service's full classpath and application.yaml. Every attempt to keep it and exclude the
+    // harmful parts by name failed on the NEXT service, because the harmful set is whatever jars that
+    // service happens to pin: DataSource/Hibernate/Flyway (Civil: "Driver … claims to not accept
+    // jdbcUrl jdbc:postgresql://:/cmc"), Spring Security/OAuth2 client (an unresolved ${idam.web.url}
+    // placeholder: "Illegal character in path … ${idam.web.url}/o"), then a THIRD-PARTY
+    // autoconfiguration whose own beans are unsatisfiable — probate's lifeevents client demanding a
+    // ClientRegistrationRepository that excluding the OAuth2 autoconfiguration had just removed. The
+    // blocklist could not converge: naming a third-party class is itself unsafe, since Spring's
+    // AutoConfigurationImportSelector.handleInvalidExcludes fails the context outright when an
+    // excluded class is on the classpath but is not an autoconfiguration candidate, and whether it
+    // counts as one depends on the pinned version (idam-java-client 3.0.5 ships the Boot 3
+    // AutoConfiguration.imports entry; 2.1.2 registers only via legacy spring.factories, so naming it
+    // hard-failed on prl and worked everywhere else).
+    //
+    // Importing nothing removes the entire failure class rather than its current instance: no
+    // DataSource, no Flyway, no security chain, no third-party client beans, no embedded server —
+    // and nothing left for a future service's dependencies to drag in.
+    //
+    // The scan is uk.gov.hmcts.ccd.sdk.GENERATOR, not the root sdk package, for the same reason:
+    // the root package also holds the runtime callback layer (CallbackController, CcdCallbackExecutor)
+    // whose constructor takes an @Autowired ObjectMapper. With autoconfiguration gone there is no
+    // Jackson bean to satisfy it, so scanning the root package failed the context on probate
+    // ("Error creating bean with name 'callbackController' … No qualifying bean of type ObjectMapper").
+    // Those beans serve live callback traffic and are irrelevant to a one-shot generation run.
+    // CCDDefinitionGenerator itself sits in the ROOT package, so it is @Imported by type rather than
+    // reached by the scan — it is a @Configuration class, and its only collaborator
+    // (JSONConfigGenerator) is in .generator along with the 24 sheet writers, none of which take
+    // anything but each other (JsonUtils builds its own ObjectMapper internally).
+    AnnotationSpec bootConfiguration = AnnotationSpec.builder(springBootConfiguration).build();
+    AnnotationSpec scan = AnnotationSpec.builder(componentScan)
+        .addMember("basePackages", "{$S, $S}",
+            "uk.gov.hmcts.ccd.sdk.generator", context.configPackage())
+        .build();
+    AnnotationSpec importGenerator = AnnotationSpec.builder(importAnnotation)
+        .addMember("value", "$T.class", definitionGenerator)
         .build();
 
     TypeSpec appClass = TypeSpec.classBuilder("ConverterGeneratedApplication")
         .addModifiers(Modifier.PUBLIC)
-        .addAnnotation(springBootApp)
+        .addAnnotation(bootConfiguration)
+        .addAnnotation(scan)
+        .addAnnotation(importGenerator)
         .addJavadoc(
             "Generated by ccd-definition-converter — do not edit by hand.\n"
                 + "\n"

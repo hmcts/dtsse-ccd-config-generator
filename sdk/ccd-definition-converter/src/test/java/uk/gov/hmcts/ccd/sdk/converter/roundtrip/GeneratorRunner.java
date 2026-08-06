@@ -13,8 +13,30 @@ import java.nio.file.Path;
  * classloader as its bean classloader and scans both the SDK packages and the generated
  * packages. The generator bean is then invoked reflectively to avoid a hard compile-time link
  * to types the child classloader owns.
+ *
+ * <p>The SDK side of the wiring lives HERE rather than in each caller's argument list, so the
+ * harness context has exactly the shape {@code ApplicationEmitter} emits for a real service. The
+ * two must not drift: a harness that resolves beans the emitted application cannot is a green test
+ * over a broken generated app, which is precisely what happened before — callers each passed the
+ * root {@code uk.gov.hmcts.ccd.sdk} package, which also holds the runtime callback layer
+ * ({@code CallbackController}, {@code CcdCallbackExecutor}) whose constructor takes an
+ * {@code @Autowired ObjectMapper}. That resolved only by accident, from the autoconfiguration the
+ * emitted app no longer applies.
  */
 final class GeneratorRunner {
+
+  /**
+   * The generator's own beans: {@code JSONConfigGenerator} plus the 24 sheet writers. Deliberately
+   * NOT the root {@code uk.gov.hmcts.ccd.sdk} package — see the class javadoc.
+   */
+  static final String SDK_GENERATOR_PACKAGE = "uk.gov.hmcts.ccd.sdk.generator";
+
+  /**
+   * A {@code @Configuration} class in the root SDK package, so narrowing the scan to
+   * {@link #SDK_GENERATOR_PACKAGE} would lose it. Registered by type instead, exactly as the
+   * emitted application {@code @Import}s it.
+   */
+  static final String SDK_GENERATOR_CONFIG = "uk.gov.hmcts.ccd.sdk.CCDDefinitionGenerator";
 
   private GeneratorRunner() {
   }
@@ -24,9 +46,18 @@ final class GeneratorRunner {
    *
    * @param generatedClassLoader classloader exposing the compiled generated classes
    * @param outputDir directory the definition JSON tree is written to
-   * @param scanPackages base packages to component-scan (SDK + generated model/config)
+   * @param configPackages base packages of the GENERATED model/config classes to component-scan.
+   *     The SDK's own packages are added by this method and must not be passed in.
    */
-  static void generate(ClassLoader generatedClassLoader, Path outputDir, String... scanPackages) {
+  static void generate(ClassLoader generatedClassLoader, Path outputDir, String... configPackages) {
+    String[] scanPackages = new String[configPackages.length + 1];
+    scanPackages[0] = SDK_GENERATOR_PACKAGE;
+    System.arraycopy(configPackages, 0, scanPackages, 1, configPackages.length);
+    run(generatedClassLoader, outputDir, scanPackages);
+  }
+
+  private static void run(
+      ClassLoader generatedClassLoader, Path outputDir, String[] scanPackages) {
     ClassLoader previous = Thread.currentThread().getContextClassLoader();
     Thread.currentThread().setContextClassLoader(generatedClassLoader);
     try {
@@ -40,11 +71,13 @@ final class GeneratorRunner {
       Method scan = contextClass.getMethod("scan", String[].class);
       scan.invoke(context, (Object) scanPackages);
 
+      Class<?> generatorClass = generatedClassLoader.loadClass(SDK_GENERATOR_CONFIG);
+      Method register = contextClass.getMethod("register", Class[].class);
+      register.invoke(context, (Object) new Class<?>[] {generatorClass});
+
       Method refresh = contextClass.getMethod("refresh");
       refresh.invoke(context);
 
-      Class<?> generatorClass =
-          generatedClassLoader.loadClass("uk.gov.hmcts.ccd.sdk.CCDDefinitionGenerator");
       Method getBean = contextClass.getMethod("getBean", Class.class);
       Object generator = getBean.invoke(context, generatorClass);
 

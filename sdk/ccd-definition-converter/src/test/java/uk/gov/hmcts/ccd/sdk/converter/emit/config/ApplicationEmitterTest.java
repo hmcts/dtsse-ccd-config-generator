@@ -58,21 +58,49 @@ class ApplicationEmitterTest {
   }
 
   @Test
-  void generatedClassHasSpringBootApplicationAnnotation() {
+  void generatedClassIsASpringBootConfigurationNotAFullApplication() {
+    // @SpringBootConfiguration + @ComponentScan, deliberately WITHOUT @EnableAutoConfiguration:
+    // Main locates the entry point by @SpringBootConfiguration (which @SpringBootApplication is
+    // meta-annotated with), so this still boots.
     String src = new ApplicationEmitter()
         .emit(EnvironmentFlagsEmitterTest.minimalModel(), contextWithApplicationEmit(true))
         .get(0).toString();
-    assertThat(src).contains("@SpringBootApplication");
+    assertThat(src).contains("@SpringBootConfiguration");
+    assertThat(src).contains("@ComponentScan");
+    assertThat(src).doesNotContain("@SpringBootApplication");
+    assertThat(src).doesNotContain("EnableAutoConfiguration");
   }
 
   @Test
-  void scansSdkAndConfigPackagesSoTheGeneratorResolvesItsBeans() {
+  void scansSdkGeneratorAndConfigPackagesSoTheGeneratorResolvesItsBeans() {
     String src = new ApplicationEmitter()
         .emit(EnvironmentFlagsEmitterTest.minimalModel(), contextWithApplicationEmit(true))
         .get(0).toString();
-    assertThat(src).contains("scanBasePackages");
-    assertThat(src).contains("uk.gov.hmcts.ccd.sdk");
+    assertThat(src).contains("basePackages");
+    assertThat(src).contains("uk.gov.hmcts.ccd.sdk.generator");
     assertThat(src).contains(EnvironmentFlagsEmitterTest.CONFIG_PKG);
+  }
+
+  @Test
+  void doesNotComponentScanTheSdkRootPackageWhichHoldsTheRuntimeCallbackBeans() {
+    // The root uk.gov.hmcts.ccd.sdk package also holds the runtime callback layer
+    // (CallbackController, CcdCallbackExecutor), whose constructor takes an @Autowired ObjectMapper.
+    // With no autoconfiguration there is no Jackson bean to satisfy it, so scanning the root package
+    // failed the context on probate. Those beans serve live callback traffic, not generation.
+    String src = new ApplicationEmitter()
+        .emit(EnvironmentFlagsEmitterTest.minimalModel(), contextWithApplicationEmit(true))
+        .get(0).toString();
+    assertThat(src).doesNotContain("\"uk.gov.hmcts.ccd.sdk\"");
+  }
+
+  @Test
+  void importsTheDefinitionGeneratorByTypeSinceItLivesInTheUnscannedRootPackage() {
+    // CCDDefinitionGenerator is a @Configuration in the root sdk package, so narrowing the scan to
+    // .generator would lose it — @Import registers exactly that one class without its neighbours.
+    String src = new ApplicationEmitter()
+        .emit(EnvironmentFlagsEmitterTest.minimalModel(), contextWithApplicationEmit(true))
+        .get(0).toString();
+    assertThat(src).contains("@Import(CCDDefinitionGenerator.class)");
   }
 
   @Test
@@ -83,24 +111,28 @@ class ApplicationEmitterTest {
     String src = new ApplicationEmitter()
         .emit(EnvironmentFlagsEmitterTest.minimalModel(), contextWithApplicationEmit(true))
         .get(0).toString();
-    int scanStart = src.indexOf("scanBasePackages");
+    int scanStart = src.indexOf("basePackages");
     int scanEnd = src.indexOf('}', scanStart);
     String scanMember = src.substring(scanStart, scanEnd);
     assertThat(scanMember).doesNotContain(EnvironmentFlagsEmitterTest.MODEL_PKG);
   }
 
   @Test
-  void excludesPersistenceAutoConfigurationsSoNoDatabaseIsRequired() {
-    // generateCCDConfig never touches a database, but in retrofit mode the generated app runs on the
-    // service's classpath (JPA/Flyway/JDBC driver + application.yaml); without excluding these the
-    // context stands up a DataSource/Flyway migrator and fails with no database to connect to.
+  void importsNoAutoConfigurationRatherThanExcludingTheHarmfulOnesByName() {
+    // generateCCDConfig needs only the CCDConfig beans and the CCDDefinitionGenerator, neither of
+    // which requires any infrastructure — the round-trip harness runs all seven fixtures through a
+    // bare component-scanning context with no Boot at all. In retrofit mode this class runs on the
+    // real service's classpath, where autoconfiguration is pure liability: an exclude blocklist had to
+    // grow for each new service (DataSource/Flyway on Civil, OAuth2 on several, then probate's
+    // third-party lifeevents client demanding the very ClientRegistrationRepository that excluding
+    // OAuth2 removed) and naming a third-party class is itself unsafe (Spring fails the context when
+    // an excluded class is present but is not an autoconfiguration candidate — version-dependent).
+    // Importing nothing removes the failure class instead of its current instance.
     String src = new ApplicationEmitter()
         .emit(EnvironmentFlagsEmitterTest.minimalModel(), contextWithApplicationEmit(true))
         .get(0).toString();
-    assertThat(src).contains("excludeName");
-    assertThat(src).contains("DataSourceAutoConfiguration");
-    assertThat(src).contains("HibernateJpaAutoConfiguration");
-    assertThat(src).contains("FlywayAutoConfiguration");
+    assertThat(src).doesNotContain("excludeName");
+    assertThat(src).doesNotContain("AutoConfiguration");
   }
 
   @Test

@@ -56,13 +56,13 @@ final class RoundTripRunner {
    * @param work    a fresh, empty working directory (per-run; usually a {@code @TempDir})
    */
   static List<String> residuals(Fixtures.Fixture fixture, Path work) {
-    Path srcOut = work.resolve("src");
-    Path classesOut = work.resolve("classes");
-    Path defOut = work.resolve("definition");
-    Path passthrough = work.resolve("passthrough");
-    Path report = work.resolve("report");
-    String modelPackage = "uk.gov.hmcts.roundtrip.model";
-    String configPackage = "uk.gov.hmcts.roundtrip.config";
+    final Path srcOut = work.resolve("src");
+    final Path classesOut = work.resolve("classes");
+    final Path defOut = work.resolve("definition");
+    final Path passthrough = work.resolve("passthrough");
+    final Path report = work.resolve("report");
+    final String modelPackage = "uk.gov.hmcts.roundtrip.model";
+    final String configPackage = "uk.gov.hmcts.roundtrip.config";
 
     // The prod/nonprod env suffixes every fixture uses, plus any fixture-specific overlay suffixes
     // (e.g. shutter fragments). Configuring a suffix makes both the converter's overlay guard and the
@@ -95,7 +95,7 @@ final class RoundTripRunner {
     env.forEach(System::setProperty);
     try {
       GeneratorRunner.generate(
-          generated, defOut, "uk.gov.hmcts.ccd.sdk", configPackage, modelPackage);
+          generated, defOut, configPackage, modelPackage);
       uk.gov.hmcts.ccd.sdk.converter.passthrough.PassthroughMerger.merge(
           passthrough, defOut.resolve(fixture.caseTypeId()));
     } finally {
