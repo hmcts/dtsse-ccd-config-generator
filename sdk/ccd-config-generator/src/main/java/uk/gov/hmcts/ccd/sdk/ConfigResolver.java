@@ -3,10 +3,12 @@ package uk.gov.hmcts.ccd.sdk;
 import com.fasterxml.jackson.annotation.JsonUnwrapped;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Maps;
+import com.google.common.collect.Sets;
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
 import java.util.Collection;
 import java.util.Map;
+import java.util.Set;
 import lombok.SneakyThrows;
 import org.springframework.core.ResolvableType;
 import org.springframework.util.ClassUtils;
@@ -57,12 +59,14 @@ class ConfigResolver<T, S, R extends HasRole> {
 
   public static Map<Class, Integer> resolve(Class dataClass, String basePackage) {
     Map<Class, Integer> result = Maps.newHashMap();
-    resolve(dataClass, result, 0);
+    resolve(dataClass, result, 0, Sets.newLinkedHashSet());
     result = Maps.filterKeys(result, x -> x.getPackageName().startsWith(basePackage));
     return result;
   }
 
-  private static void resolve(Class dataClass, Map<Class, Integer> result, int level) {
+  private static void resolve(
+      Class dataClass, Map<Class, Integer> result, int level, Set<Class> path) {
+    path.add(dataClass);
     ReflectionUtils.doWithFields(
         dataClass,
         field -> {
@@ -74,7 +78,17 @@ class ConfigResolver<T, S, R extends HasRole> {
             if (null == unwrapped && (!result.containsKey(c) || result.get(c) < level)) {
               result.put(c, level);
             }
-            resolve(c, result, level + 1);
+            // Only descend into a type not already on the current path. The walk covers EVERY field
+            // type, not just those under basePackage (that filter is applied to the result, after
+            // the walk), so it reaches JDK and third-party internals — and a reference cycle there
+            // recursed until the stack was exhausted. A single java.util.Date field is enough:
+            // Date -> BaseCalendar$Date -> Era -> CalendarDate -> Era (prl's Document.
+            // documentCreatedOn). Guarding on the path rather than on every class visited keeps the
+            // existing revisit-at-a-deeper-level behaviour that establishes ComplexTypes ordering
+            // intact; only the infinite regress is cut.
+            if (!path.contains(c)) {
+              resolve(c, result, level + 1, path);
+            }
           }
         },
         // Exclude gated-off fields so a complex type reachable ONLY through a field whose
@@ -84,6 +98,7 @@ class ConfigResolver<T, S, R extends HasRole> {
         // change the emitted complex-type set for existing definitions.
         field -> !Modifier.isStatic(field.getModifiers())
             && !FieldUtils.isFieldGatedOff(field));
+    path.remove(dataClass);
   }
 
   public static Class getComplexType(Class c, Field field) {
