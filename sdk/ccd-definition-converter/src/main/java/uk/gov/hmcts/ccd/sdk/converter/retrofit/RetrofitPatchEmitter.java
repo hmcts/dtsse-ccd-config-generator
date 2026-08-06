@@ -28,7 +28,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
 import uk.gov.hmcts.ccd.sdk.converter.model.CaseTypeModel;
-import uk.gov.hmcts.ccd.sdk.converter.model.ComplexTypeAuthGetter;
+import uk.gov.hmcts.ccd.sdk.converter.model.DelegatingGetter;
 import uk.gov.hmcts.ccd.sdk.converter.model.ComplexTypeModel;
 import uk.gov.hmcts.ccd.sdk.converter.model.FieldModel;
 import uk.gov.hmcts.ccd.sdk.converter.model.gap.GapAction;
@@ -284,9 +284,9 @@ public final class RetrofitPatchEmitter {
     // serialized-lambda resolver fails at generation. Each is @JsonIgnore (adds no Jackson property)
     // and delegates through the model's real parent/member getters (mirroring fpl's own
     // getOrderCollection()); the SDK reads CaseFields from FIELDS not getters, so it adds no CaseField.
-    if (rootType != null && model.getComplexTypeAuthGetters() != null
-        && !model.getComplexTypeAuthGetters().isEmpty()) {
-      for (ComplexTypeAuthGetter getter : model.getComplexTypeAuthGetters().values()) {
+    if (rootType != null && model.getDelegatingGetters() != null
+        && !model.getDelegatingGetters().isEmpty()) {
+      for (DelegatingGetter getter : model.getDelegatingGetters().values()) {
         editsFor(byFile, rootType.file).addDelegatingGetter(getter);
       }
     }
@@ -1422,11 +1422,11 @@ public final class RetrofitPatchEmitter {
    * the serialized lambda), so the return type merely has to compile.
    */
   private SynthResult renderDelegatingGetters(
-      List<ComplexTypeAuthGetter> getters, ImportBinder binder) {
+      List<DelegatingGetter> getters, ImportBinder binder) {
     SynthResult result = new SynthResult();
     StringBuilder text = new StringBuilder();
     text.append("  ").append(SYNTH_BEGIN).append('\n');
-    for (ComplexTypeAuthGetter getter : getters) {
+    for (DelegatingGetter getter : getters) {
       String returnType = bindTypeReferences(getter.getReturnTypeSource(), binder, result);
       StringBuilder chain = new StringBuilder();
       for (int i = 0; i < getter.getDelegationChain().size(); i++) {
@@ -1765,7 +1765,7 @@ public final class RetrofitPatchEmitter {
     private final Set<String> ignore = new LinkedHashSet<>();
     private final List<FieldModel> synthesise = new ArrayList<>();
     /** Delegating getters to add for @JsonUnwrapped-reached complex-type grants (retrofit). */
-    private final List<ComplexTypeAuthGetter> delegatingGetters = new ArrayList<>();
+    private final List<DelegatingGetter> delegatingGetters = new ArrayList<>();
     /** Simple name of a CaseDataExtra class to add as a prefix-less @JsonUnwrapped member (B2). */
     private String unwrappedMemberType;
     /**
@@ -1826,7 +1826,7 @@ public final class RetrofitPatchEmitter {
       this.unwrappedMemberType = extraClassType;
     }
 
-    void addDelegatingGetter(ComplexTypeAuthGetter getter) {
+    void addDelegatingGetter(DelegatingGetter getter) {
       this.delegatingGetters.add(getter);
     }
 

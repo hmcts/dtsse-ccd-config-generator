@@ -7,7 +7,7 @@ import java.util.Set;
 import java.util.TreeSet;
 import uk.gov.hmcts.ccd.sdk.converter.model.CaseTypeModel;
 import uk.gov.hmcts.ccd.sdk.converter.model.ClusteredFieldRef;
-import uk.gov.hmcts.ccd.sdk.converter.model.ComplexTypeAuthGetter;
+import uk.gov.hmcts.ccd.sdk.converter.model.DelegatingGetter;
 import uk.gov.hmcts.ccd.sdk.converter.model.ComplexTypeAuthModel;
 import uk.gov.hmcts.ccd.sdk.converter.model.FieldModel;
 import uk.gov.hmcts.ccd.sdk.converter.model.FixedListModel;
@@ -222,7 +222,7 @@ final class RetrofitModelRebinder {
         .clusteredFieldRefs(refs)
         .unplaceableFieldIds(unplaceable)
         .complexTypeAuthorisations(grantRebind.grants)
-        .complexTypeAuthGetters(grantRebind.getters)
+        .delegatingGetters(grantRebind.getters)
         .passthroughSheets(grantRebind.passthrough)
         .build();
   }
@@ -230,10 +230,10 @@ final class RetrofitModelRebinder {
   /** The re-classified grants, synthesised delegating getters and augmented passthrough. */
   private static final class GrantRebind {
     final List<ComplexTypeAuthModel> grants;
-    final Map<String, ComplexTypeAuthGetter> getters;
+    final Map<String, DelegatingGetter> getters;
     final List<PassthroughSheet> passthrough;
 
-    GrantRebind(List<ComplexTypeAuthModel> grants, Map<String, ComplexTypeAuthGetter> getters,
+    GrantRebind(List<ComplexTypeAuthModel> grants, Map<String, DelegatingGetter> getters,
         List<PassthroughSheet> passthrough) {
       this.grants = grants;
       this.getters = getters;
@@ -249,7 +249,7 @@ final class RetrofitModelRebinder {
    *       grant unchanged, no delegating getter needed;</li>
    *   <li><b>reached through a {@code @JsonUnwrapped} member</b> whose whole getter chain resolves
    *       (its {@link ClusteredFieldRef} is present) — the flat id has NO direct getter, so record a
-   *       {@link ComplexTypeAuthGetter} the patch emits as a delegating {@code get<FieldId>()} and
+   *       {@link DelegatingGetter} the patch emits as a delegating {@code get<FieldId>()} and
    *       keep the grant (the config references the delegating getter);</li>
    *   <li><b>otherwise ungrantable</b> (the field was never resolved, or its unwrap chain has an
    *       unresolvable getter) — drop the grant to a raw-JSON {@code AuthorisationComplexType}
@@ -269,7 +269,7 @@ final class RetrofitModelRebinder {
       fieldsById.put(field.getId(), field);
     }
     List<ComplexTypeAuthModel> grantable = new java.util.ArrayList<>();
-    Map<String, ComplexTypeAuthGetter> getters = new LinkedHashMap<>();
+    Map<String, DelegatingGetter> getters = new LinkedHashMap<>();
     List<Map<String, Object>> residualRows = new java.util.ArrayList<>();
     for (ComplexTypeAuthModel grant : grants) {
       String fieldId = grant.getCaseFieldId();
@@ -325,7 +325,7 @@ final class RetrofitModelRebinder {
    * getter, then the leaf member getter; its return type is the leaf field's declared Java type when
    * known, else {@code Object} (the SDK never invokes the getter — it only reads the method name).
    */
-  private ComplexTypeAuthGetter delegatingGetterFor(String fieldId, ClusteredFieldRef ref) {
+  private DelegatingGetter delegatingGetterFor(String fieldId, ClusteredFieldRef ref) {
     List<String> chain = new java.util.ArrayList<>();
     chain.add(ref.getParentGetter());
     if (ref.getParentHops() != null) {
@@ -337,7 +337,7 @@ final class RetrofitModelRebinder {
     // declaring it would not compile. The SDK never invokes the getter — grantComplexType only reads
     // the method NAME off the serialized lambda — so Object is both safe and always-compilable, and
     // any reference type the delegation yields is assignable to it.
-    return ComplexTypeAuthGetter.builder()
+    return DelegatingGetter.builder()
         .caseFieldId(fieldId)
         .getterName(getter(fieldId))
         .returnTypeSource("Object")

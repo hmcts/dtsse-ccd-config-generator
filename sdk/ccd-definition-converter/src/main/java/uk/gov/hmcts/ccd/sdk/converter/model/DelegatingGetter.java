@@ -26,7 +26,7 @@ import lombok.Value;
  */
 @Value
 @Builder
-public class ComplexTypeAuthGetter {
+public class DelegatingGetter {
 
   /**
    * The complex CaseField id the grant restricts, e.g. {@code placement}.

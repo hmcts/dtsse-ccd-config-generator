@@ -272,8 +272,8 @@ public class CoreConfigEmitter implements SourceEmitter {
     // Retrofit: a grant on a complex field reached only through a @JsonUnwrapped member has no direct
     // CaseData::getX getter, so the patch synthesises a delegating getter and we reference it by that
     // name here (never a multi-hop lambda, which the SDK's serialized-lambda resolver cannot resolve).
-    Map<String, uk.gov.hmcts.ccd.sdk.converter.model.ComplexTypeAuthGetter> authGetters =
-        model.getComplexTypeAuthGetters() == null ? Map.of() : model.getComplexTypeAuthGetters();
+    Map<String, uk.gov.hmcts.ccd.sdk.converter.model.DelegatingGetter> authGetters =
+        model.getDelegatingGetters() == null ? Map.of() : model.getDelegatingGetters();
     String prefix = Names.toClassName(model.getCaseTypeId());
     List<ClassName> helpers = new ArrayList<>();
     int index = 0;
@@ -293,7 +293,7 @@ public class CoreConfigEmitter implements SourceEmitter {
         CodeBlock permSet = crudToPermissionSet(grant.getCrud(), permission);
         // Reference the delegating getter the patch synthesises for a @JsonUnwrapped-reached field
         // (keyed by CCD id), else the field's own getter. Always a plain Type::method reference.
-        uk.gov.hmcts.ccd.sdk.converter.model.ComplexTypeAuthGetter authGetter =
+        uk.gov.hmcts.ccd.sdk.converter.model.DelegatingGetter authGetter =
             authGetters.get(grant.getCaseFieldId());
         String getterName = authGetter != null
             ? authGetter.getGetterName() : "get" + capitalise(member.getJavaName());

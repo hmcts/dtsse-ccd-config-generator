@@ -67,13 +67,13 @@ public class CaseTypeModel {
    * Delegating no-arg getters the retrofit patch synthesises on the root case-data class so a
    * {@code grantComplexType} can reference a complex field reached only through a
    * {@code @JsonUnwrapped} member by a real {@code CaseData::getX} method reference (never a multi-hop
-   * lambda, which the SDK cannot resolve — see {@link ComplexTypeAuthGetter}). Keyed by CCD field id.
+   * lambda, which the SDK cannot resolve — see {@link DelegatingGetter}). Keyed by CCD field id.
    * When a grant's field id is present, the config emitter references the delegating getter name
    * rather than the (nonexistent) direct getter; empty in generate mode and for fields with a direct
    * getter.
    */
   @Builder.Default
-  Map<String, ComplexTypeAuthGetter> complexTypeAuthGetters = Map.of();
+  Map<String, DelegatingGetter> delegatingGetters = Map.of();
 
   /** CaseField rows that become members of the generated CaseData class. */
   List<FieldModel> caseFields;
