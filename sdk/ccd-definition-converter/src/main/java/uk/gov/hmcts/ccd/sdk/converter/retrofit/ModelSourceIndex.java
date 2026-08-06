@@ -717,6 +717,138 @@ final class ModelSourceIndex {
   private Set<String> calledMethodNames;
 
   /**
+   * Whether {@code owner}'s own source refers to the field {@code memberName} as a bare identifier
+   * anywhere OUTSIDE its own declaration — the third way a retype breaks compilation, alongside the
+   * accessor call and the constructor binding {@link #calledMethodNames} and the constructor checks
+   * cover.
+   *
+   * <p>A hand-written method inside the declaring class reaches its own field directly, with no
+   * accessor to intercept: fpl's {@code CaseData.getOrders()} returns {@code ordersSolicitor} as an
+   * {@code Orders}, and {@code HearingDocuments} passes {@code caseSummaryListLA} to
+   * {@code defaultIfNull(…, new ArrayList<>())} typed on the field. Retyping the declaration alone
+   * leaves both uncompilable ("OrdersSolicitor cannot be converted to Orders").
+   *
+   * <p>Scoped to the declaring type's own compilation unit because that is where an unqualified field
+   * reference can resolve; matched on {@link com.github.javaparser.ast.expr.NameExpr} and on
+   * {@code this.<field>}. A reference sitting inside a {@code VariableDeclarator} of the same name is
+   * skipped — that is the declaration (or its initialiser, which the retype rewrites in step with the
+   * type), not a use. The AST is never mutated here: it is the same tree the emitter renders the
+   * patched declarations from.
+   *
+   * @param owner the type declaring the field
+   * @param memberName the field name a retype would re-declare
+   * @return true when the declaring source reads or writes the field directly
+   */
+  boolean referencesFieldDirectly(Type owner, String memberName) {
+    boolean bare = owner.unit.findAll(com.github.javaparser.ast.expr.NameExpr.class).stream()
+        .filter(name -> name.getNameAsString().equals(memberName))
+        .anyMatch(name -> !inOwnDeclarator(name, memberName));
+    boolean qualified = owner.unit.findAll(com.github.javaparser.ast.expr.FieldAccessExpr.class)
+        .stream()
+        .anyMatch(access -> access.getNameAsString().equals(memberName)
+            && access.getScope().isThisExpr());
+    return bare || qualified;
+  }
+
+  /**
+   * The other class in {@code owner}'s own {@code extends} hierarchy that ALSO declares a field called
+   * {@code memberName}, or empty when the name is declared only once in that hierarchy — the fourth way
+   * a retype breaks compilation.
+   *
+   * <p>Lombok generates a getter and setter per declaration, so a name declared on both a class and an
+   * ancestor/descendant of it yields two accessor pairs of the SAME signature, one overriding the other.
+   * That only compiles while the two declarations share a type. Retyping one and not the other makes the
+   * subclass getter's return type incompatible with the one it overrides, and the two setters clash on
+   * erasure: ET declares {@code referralCollection} on both {@code CaseData} and {@code BaseCaseData}
+   * ("getReferralCollection() in CaseData cannot override getReferralCollection() in BaseCaseData" plus
+   * "setReferralCollection(List&lt;ReferralDetails&gt;) … have the same erasure, yet neither overrides
+   * the other"), and {@code documentCollection} on both {@code BaseCaseData} and its subclass
+   * {@code MultipleData} — so BOTH directions have to be checked, not just the ancestors.
+   *
+   * <p>Ancestors are walked through {@code extends} from {@code owner}; descendants are found by
+   * scanning for parsed classes that declare the same field name (a cheap string check) and only then
+   * resolving their {@code extends} chain to see whether it reaches {@code owner} — so the resolution
+   * cost is paid for a handful of same-named candidates rather than every parsed class.
+   *
+   * @param owner the type declaring the field a retype would re-declare
+   * @param memberName the field name
+   * @return the other declaring class in the same hierarchy, or empty when there is none
+   */
+  Optional<Type> shadowedFieldDeclaration(Type owner, String memberName) {
+    Optional<Type> ancestor = ancestorDeclaring(owner, memberName);
+    if (ancestor.isPresent()) {
+      return ancestor;
+    }
+    Set<CompilationUnit> scanned = java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<>());
+    for (Type candidate : byFqn.values()) {
+      if (candidate.fqn.equals(owner.fqn) || !scanned.add(candidate.unit)) {
+        continue;
+      }
+      if (!declaresField(candidate, memberName)) {
+        continue;
+      }
+      if (ancestorDeclaring(candidate, memberName).map(t -> t.fqn.equals(owner.fqn)).orElse(false)
+          || reaches(candidate, owner)) {
+        return Optional.of(candidate);
+      }
+    }
+    return Optional.empty();
+  }
+
+  /**
+   * The nearest strict ancestor of {@code type} declaring {@code memberName}, walking {@code extends}.
+   */
+  private Optional<Type> ancestorDeclaring(Type type, String memberName) {
+    Type current = superclassOf(type);
+    int guard = 0;
+    Set<String> visited = new java.util.HashSet<>();
+    while (current != null && guard++ < 20 && visited.add(current.fqn)) {
+      if (declaresField(current, memberName)) {
+        return Optional.of(current);
+      }
+      current = superclassOf(current);
+    }
+    return Optional.empty();
+  }
+
+  /**
+   * Whether {@code type}'s {@code extends} chain reaches {@code target}.
+   */
+  private boolean reaches(Type type, Type target) {
+    Type current = superclassOf(type);
+    int guard = 0;
+    Set<String> visited = new java.util.HashSet<>();
+    while (current != null && guard++ < 20 && visited.add(current.fqn)) {
+      if (current.fqn.equals(target.fqn)) {
+        return true;
+      }
+      current = superclassOf(current);
+    }
+    return false;
+  }
+
+  /**
+   * {@code type}'s resolved superclass, or null when it has none inside the parsed source.
+   */
+  private Type superclassOf(Type type) {
+    if (!type.decl.isClassOrInterfaceDeclaration()) {
+      return null;
+    }
+    var extended = type.decl.asClassOrInterfaceDeclaration().getExtendedTypes();
+    return extended.isEmpty() ? null : resolve(type.unit, extended.get(0)).orElse(null);
+  }
+
+  /**
+   * Whether {@code node} sits inside the declaration of the field {@code memberName} itself.
+   */
+  private static boolean inOwnDeclarator(
+      com.github.javaparser.ast.Node node, String memberName) {
+    return node.findAncestor(com.github.javaparser.ast.body.VariableDeclarator.class)
+        .map(declarator -> declarator.getNameAsString().equals(memberName))
+        .orElse(false);
+  }
+
+  /**
    * The getter suppressions {@link #hasResolvableGetter} has resolved a placement through, which the
    * patch must delete. Off by default (an inert plan nothing reads) so the matcher's report-only pass,
    * generate mode and unit tests keep the historical refuse-and-fall-back answer; the retrofit

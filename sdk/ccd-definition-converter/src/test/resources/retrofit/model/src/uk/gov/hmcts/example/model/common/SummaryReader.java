@@ -11,4 +11,13 @@ public class SummaryReader {
     SharedSummary summary = party.getReadSummary();
     return summary == null ? null : "read";
   }
+
+  /**
+   * Sets {@code Party.builderSetSummary} through a Lombok builder method named after the field, which
+   * carries no {@code get}/{@code set} prefix for the accessor check to match on. Re-declaring the
+   * field changes that method's parameter type, so the call would stop compiling.
+   */
+  public Party build(SharedSummary summary) {
+    return Party.builder().builderSetSummary(summary).build();
+  }
 }

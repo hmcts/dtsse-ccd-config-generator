@@ -34,7 +34,10 @@ LANES=(
   "fpl-ccd-configuration|test-builds/fpl-ccd-configuration|test-builds/fpl-ccd-configuration/service/src/main/java|test-builds/fpl-ccd-configuration/ccd-definition|CARE_SUPERVISION_EPO|uk.gov.hmcts.reform.fpl.model.CaseData|uk.gov.hmcts.reform.fpl.model|shuttered=CCD_DEF_SHUTTERED:true nonshuttered=!CCD_DEF_SHUTTERED:true|CCD_DEF_ENV=nonprod"
   "sscs-common|test-projects/sscs-common|test-projects/sscs-common/src/main/java|test-projects/sscs-tribunals-case-api/definitions/benefit/sheets|Benefit|uk.gov.hmcts.reform.sscs.ccd.domain.SscsCaseData|uk.gov.hmcts.reform.sscs.ccd.domain||CCD_DEF_ENV=nonprod CCD_DEF_PUBLISH=N"
   "et-ccd-callbacks|test-projects/et-ccd-callbacks|test-projects/et-ccd-callbacks/et-shared/src/main/java|test-projects/et-ccd-callbacks/ccd-definitions/jurisdictions/england-wales/json|ET_EnglandWales|uk.gov.hmcts.et.common.model.ccd.CaseData|uk.gov.hmcts.et.common.ccd.config||CCD_DEF_ENV=nonprod"
-  "prl-cos-api|test-projects/prl-cos-api|test-projects/prl-cos-api/src/main/java|test-projects/prl-ccd-definitions/definitions/private-law/json|PRLAPPS|uk.gov.hmcts.reform.prl.models.dto.ccd.CaseData|uk.gov.hmcts.reform.prl.ccd.config||CCD_DEF_ENV=nonprod|Miam=uk.gov.hmcts.reform.prl.models.complextypes.citizen.response.miam"
+  "prl-cos-api|test-projects/prl-cos-api|test-projects/prl-cos-api/src/main/java|test-projects/prl-ccd-definitions/definitions/private-law/json|PRLAPPS|uk.gov.hmcts.reform.prl.models.dto.ccd.CaseData|uk.gov.hmcts.reform.prl.ccd.config||CCD_DEF_ENV=nonprod|Miam=uk.gov.hmcts.reform.prl.models.complextypes.citizen.response.miam User=uk.gov.hmcts.reform.prl.models.complextypes.citizen"
+  # prl's User is ambiguous the same way (models.user.User and models.complextypes.citizen.User); the
+  # hint names the one the team's PartyDetails imports, so the generated PartyDetails* companions
+  # reference the same class the model does rather than failing to resolve it at all.
   # Civil needs --type-package-hint for two AMBIGUOUS type names: HearingLength exists in both
   # enums.dq and ga.model.genapplication, and CaseLocationCivil in both model.defaultjudgment and
   # model.genapplication. Without the hints the generated complex types reference them unqualified and

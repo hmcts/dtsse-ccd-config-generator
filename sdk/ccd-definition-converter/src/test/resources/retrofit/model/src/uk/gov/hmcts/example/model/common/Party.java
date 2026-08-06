@@ -76,6 +76,29 @@ public class Party {
   // changes what that call returns, so it must be refused and reported rather than breaking the build.
   private SharedSummary readSummary;
 
+  // The same shape again, but reached with no accessor at all: the hand-written getter below returns
+  // this field DIRECTLY as a SharedSummary (fpl's CaseData.getOrders() shape). Retyping the
+  // declaration alone leaves that return uncompilable, so it must be refused too.
+  private SharedSummary inlineReadSummary;
+
+  // And the same shape reached through a Lombok @Builder setter named after the field, which carries
+  // no get/set prefix for the accessor check to see (fpl's .respondents(…) shape).
+  private SharedSummary builderSetSummary;
+
+  /**
+   * Reads {@link #inlineReadSummary} directly, with no accessor to intercept the retype.
+   */
+  public SharedSummary resolveInlineSummary() {
+    return inlineReadSummary != null ? inlineReadSummary : new SharedSummary();
+  }
+
+  // Two members whose types declare the SAME field names in one extends hierarchy (ET's
+  // BaseCaseData/CaseData shape): Lombok's per-declaration accessor pairs override each other, so
+  // retyping either declaration alone breaks the override. Refused in both directions.
+  private ShadowBase shadowBase;
+
+  private ShadowChild shadowChild;
+
   // A member whose type carries a MARKER @JsonInclude (= ALWAYS): its synthesised members must each
   // carry @JsonInclude(NON_NULL) so the published wire payload gains no null properties.
   private AlwaysIncludedParty alwaysIncluded;

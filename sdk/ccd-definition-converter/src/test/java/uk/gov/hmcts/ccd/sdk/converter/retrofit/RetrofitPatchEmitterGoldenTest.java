@@ -338,6 +338,92 @@ class RetrofitPatchEmitterGoldenTest {
         });
   }
 
+  @Test
+  void refusesToRetypeAFieldTheDeclaringClassReadsDirectlyAndReportsIt() {
+    // Party.resolveInlineSummary() returns inlineReadSummary as a SharedSummary with no accessor in
+    // between (fpl's CaseData.getOrders() shape, which returned the retyped ordersSolicitor as an
+    // Orders). The accessor check cannot see this — there is no get/set call — so the refusal must also
+    // look for the field read as a bare identifier inside its own declaring source.
+    RetrofitPatchEmitter emitter = buildEmitter();
+    RetrofitPatch patch = emitter.emit();
+    assertThat(patchedFile(patch, "common/Party.java"))
+        .contains("private SharedSummary inlineReadSummary;")
+        .doesNotContain("InlineReadSummaryCT inlineReadSummary;");
+    assertThat(emitter.gaps())
+        .anySatisfy(g -> {
+          assertThat(g.getSheet()).isEqualTo("ComplexTypes");
+          assertThat(g.getRowKey()).isEqualTo("Party/inlineReadSummary");
+          assertThat(g.getAction())
+              .isEqualTo(uk.gov.hmcts.ccd.sdk.converter.model.gap.GapAction.MANUAL_PLACEMENT);
+          assertThat(g.getDetail())
+              .contains("inlineReadSummaryCT")
+              .contains("read directly by hand-written code in Party")
+              .contains("SharedSummary");
+        });
+  }
+
+  @Test
+  void refusesToRetypeAFieldSetThroughABuilderMethodNamedAfterItAndReportsIt() {
+    // SummaryReader.build() calls Party.builder().builderSetSummary(summary) — a Lombok @Builder setter
+    // named after the FIELD, with no get/set prefix for the accessor check to match (fpl's
+    // .respondents(respondentsInCase) shape). The retype changes that parameter's type.
+    RetrofitPatchEmitter emitter = buildEmitter();
+    RetrofitPatch patch = emitter.emit();
+    assertThat(patchedFile(patch, "common/Party.java"))
+        .contains("private SharedSummary builderSetSummary;")
+        .doesNotContain("BuilderSetSummaryCT builderSetSummary;");
+    assertThat(emitter.gaps())
+        .anySatisfy(g -> {
+          assertThat(g.getSheet()).isEqualTo("ComplexTypes");
+          assertThat(g.getRowKey()).isEqualTo("Party/builderSetSummary");
+          assertThat(g.getAction())
+              .isEqualTo(uk.gov.hmcts.ccd.sdk.converter.model.gap.GapAction.MANUAL_PLACEMENT);
+          assertThat(g.getDetail())
+              .contains("builderSetSummaryCT")
+              .contains(".builderSetSummary(…)")
+              .contains("SharedSummary");
+        });
+  }
+
+  @Test
+  void refusesToRetypeAFieldShadowedElsewhereInItsHierarchyAndReportsIt() {
+    // ShadowBase/ShadowChild declare the same two field names, so Lombok generates an overriding
+    // accessor pair per declaration (ET's BaseCaseData/CaseData shape). Retyping either declaration
+    // alone breaks the override, so both directions must refuse: the definition addresses
+    // baseAddressedSummary on the SUPERCLASS (shadowed by a descendant) and childAddressedSummary on
+    // the SUBCLASS (shadowed by an ancestor).
+    RetrofitPatchEmitter emitter = buildEmitter();
+    RetrofitPatch patch = emitter.emit();
+    assertThat(patchedFile(patch, "common/ShadowBase.java"))
+        .contains("private SharedSummary baseAddressedSummary;")
+        .doesNotContain("BaseShadowSummaryCT");
+    assertThat(patchedFile(patch, "common/ShadowChild.java"))
+        .contains("private SharedSummary childAddressedSummary;")
+        .doesNotContain("ChildShadowSummaryCT");
+    assertThat(emitter.gaps())
+        .anySatisfy(g -> {
+          assertThat(g.getRowKey()).isEqualTo("ShadowBase/baseAddressedSummary");
+          assertThat(g.getDetail())
+              .contains("declared on both ShadowBase and ShadowChild");
+        })
+        .anySatisfy(g -> {
+          assertThat(g.getRowKey()).isEqualTo("ShadowChild/childAddressedSummary");
+          assertThat(g.getDetail())
+              .contains("declared on both ShadowChild and ShadowBase");
+        });
+  }
+
+  @Test
+  void stillRetypesAFieldNothingReadsDirectly() {
+    // The counterpart to the two refusals above: firstSummary/secondSummary are read by nothing at all,
+    // so the new checks must not widen into a blanket refusal. Pinned separately from the retype test
+    // so a regression here names the cause.
+    RetrofitPatch patch = emitPatch();
+    assertThat(patchedFile(patch, "common/Party.java"))
+        .contains("private FirstSummaryCT firstSummary;")
+        .contains("private SecondSummaryCT secondSummary;");
+  }
+
   /** The patched content of one file in the patch, failing clearly when the patch does not touch it. */
   private static String patchedFile(RetrofitPatch patch, String pathSuffix) {
     return patch.files().stream()

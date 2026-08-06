@@ -724,11 +724,41 @@ public final class RetrofitPatchEmitter {
           + declaredClass.simpleName + " would stop compiling. Re-declare the field and update its "
           + "callers by hand";
     }
+    // A Lombok @Builder setter is named after the FIELD, with no get/set prefix for the check above to
+    // catch: fpl calls .respondents(respondentsInCase) on an OtherApplicationsBundle builder, typed on
+    // the field the retype re-declares ("List<Element<Respondent>> cannot be converted to
+    // List<Element<RespondentNew>>"). Same name-only matching, and conservative in the same direction.
+    if (called.contains(property.memberName)) {
+      return "is set through a builder method named after it (." + property.memberName + "(…)), which "
+          + "the retype changes the parameter type of — every caller passing the old "
+          + declaredClass.simpleName + " would stop compiling. Re-declare the field and update its "
+          + "callers by hand";
+    }
     Optional<ModelSourceIndex.Type> owner = ownerType(property);
     if (owner.isEmpty()) {
       return null; // no parsed owner to inspect; the declaration edit itself stands alone
     }
     ModelSourceIndex.Type ownerClass = owner.get();
+    // A hand-written method in the declaring class reaches the field directly, with no accessor to
+    // intercept — fpl's CaseData.getOrders() returns the retyped ordersSolicitor as an Orders, and
+    // HearingDocuments passes caseSummaryListLA into a generic defaultIfNull(…) inferred from it.
+    if (index.referencesFieldDirectly(ownerClass, property.memberName)) {
+      return "is read directly by hand-written code in " + ownerClass.simpleName
+          + ", which the retype changes the type of — that code would stop compiling against the old "
+          + declaredClass.simpleName + ". Re-declare the field and update it by hand";
+    }
+    // The same field name declared TWICE in one extends hierarchy: Lombok generates an accessor pair
+    // per declaration, one overriding the other, which only compiles while the two share a type.
+    // Retyping one leaves ET's "getReferralCollection() in CaseData cannot override
+    // getReferralCollection() in BaseCaseData" (and the setters clash on erasure).
+    Optional<ModelSourceIndex.Type> shadowed =
+        index.shadowedFieldDeclaration(ownerClass, property.memberName);
+    if (shadowed.isPresent()) {
+      return "is declared on both " + ownerClass.simpleName + " and " + shadowed.get().simpleName
+          + " in one class hierarchy, where Lombok generates an overriding accessor pair per "
+          + "declaration — retyping one alone makes the override incompatible. Re-declare BOTH fields "
+          + "and update their callers by hand";
+    }
     // Compared through retypeTarget's own descent, not on the parameter's raw name: sscs's NotePad
     // declares 'List<AppealNote> notesCollection' and assigns it from a @JsonCreator parameter typed
     // 'List<Note>', whose raw name is List. Retyping only the field leaves the assignment
