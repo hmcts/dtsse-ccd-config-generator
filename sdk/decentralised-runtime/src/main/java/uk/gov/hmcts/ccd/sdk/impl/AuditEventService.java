@@ -96,7 +96,6 @@ class AuditEventService {
     }
   }
 
-  @SneakyThrows
   public long saveAuditRecord(
       long caseEventId,
       DecentralisedCaseEvent event,
@@ -104,6 +103,29 @@ class AuditEventService {
       uk.gov.hmcts.ccd.domain.model.definition.CaseDetails currentView,
       UUID idempotencyKey,
       Optional<uk.gov.hmcts.reform.ccd.client.model.SignificantItem> significantItem
+  ) {
+    return persistAuditRecord(caseEventId, event, user, currentView, idempotencyKey, significantItem, true);
+  }
+
+  long saveSystemAuditRecord(
+      long caseEventId,
+      DecentralisedCaseEvent event,
+      IdamService.User user,
+      uk.gov.hmcts.ccd.domain.model.definition.CaseDetails currentView,
+      UUID idempotencyKey
+  ) {
+    return persistAuditRecord(caseEventId, event, user, currentView, idempotencyKey, Optional.empty(), false);
+  }
+
+  @SneakyThrows
+  private long persistAuditRecord(
+      long caseEventId,
+      DecentralisedCaseEvent event,
+      IdamService.User user,
+      uk.gov.hmcts.ccd.domain.model.definition.CaseDetails currentView,
+      UUID idempotencyKey,
+      Optional<uk.gov.hmcts.reform.ccd.client.model.SignificantItem> significantItem,
+      boolean publish
   ) {
     significantItem.ifPresent(this::validateSignificantItem);
 
@@ -208,7 +230,7 @@ class AuditEventService {
     var inserted = ndb.queryForObject(sql, params, this::mapInsertedAuditEvent);
     significantItem.ifPresent(item -> saveSignificantItem(inserted.id(), item));
 
-    if (this.publisher.isPresent()) {
+    if (publish && this.publisher.isPresent()) {
       log.info(
           "Publishing event {} for case reference: {}",
           eventDetails.getEventId(),
@@ -223,9 +245,15 @@ class AuditEventService {
           inserted.id(),
           inserted.createdDate()
       );
-    } else {
+    } else if (publish) {
       log.info(
           "Message publishing disabled, skipping event publication for case reference: {}",
+          currentView.getReference()
+      );
+    } else {
+      log.info(
+          "Skipping publication for system event {} on case reference: {}",
+          eventDetails.getEventId(),
           currentView.getReference()
       );
     }
