@@ -133,11 +133,11 @@ class RetrofitRoundTripTest {
    */
   @Test
   void patchAndCompanionAccessClassesAgreeInPackageAndName(@TempDir Path work) throws Exception {
-    Path input = FIXTURE.resolve("input");
+    final Path input = FIXTURE.resolve("input");
     Path modelSrc = FIXTURE.resolve("model/src");
-    String caseTypeId = "RETRO";
+    final String caseTypeId = "RETRO";
     String modelPackage = "uk.gov.hmcts.rt.model";
-    String configPackage = "uk.gov.hmcts.rt.config";
+    final String configPackage = "uk.gov.hmcts.rt.config";
     String accessPackage = configPackage + ".access";
 
     Path companionSrc = work.resolve("companion");
@@ -215,10 +215,10 @@ class RetrofitRoundTripTest {
   private void runRoundTrip(Path work, int constructorLimit, boolean expectCaseDataExtra,
       boolean seedStaleCompanion, boolean superBuilderDrop)
       throws Exception {
-    Path input = FIXTURE.resolve("input");
-    String caseTypeId = "RETRO";
+    final Path input = FIXTURE.resolve("input");
+    final String caseTypeId = "RETRO";
     String modelPackage = "uk.gov.hmcts.rt.model";
-    String configPackage = "uk.gov.hmcts.rt.config";
+    final String configPackage = "uk.gov.hmcts.rt.config";
 
     // Normally the read-only fixture model is the source. To exercise Bug B, copy it to a writable
     // tree and drop in a stale CaseDataExtra.java (as a prior run's patch would have left) carrying
@@ -264,10 +264,10 @@ class RetrofitRoundTripTest {
     }
 
     Path companionSrc = work.resolve("companion");
-    Path patchedModel = work.resolve("model");
-    Path combinedSrc = work.resolve("src");
-    Path classesOut = work.resolve("classes");
-    Path defOut = work.resolve("definition");
+    final Path patchedModel = work.resolve("model");
+    final Path combinedSrc = work.resolve("src");
+    final Path classesOut = work.resolve("classes");
+    final Path defOut = work.resolve("definition");
     Path passthrough = work.resolve("passthrough");
     Path report = work.resolve("report");
 
@@ -445,7 +445,7 @@ class RetrofitRoundTripTest {
     env.forEach(System::setProperty);
     try {
       GeneratorRunner.generate(
-          generated, defOut, "uk.gov.hmcts.ccd.sdk", configPackage, modelPackage);
+          generated, defOut, configPackage, modelPackage);
       uk.gov.hmcts.ccd.sdk.converter.passthrough.PassthroughMerger.merge(
           passthrough, defOut.resolve(caseTypeId));
     } finally {
@@ -506,7 +506,9 @@ class RetrofitRoundTripTest {
     return path;
   }
 
-  /** Whether any emitted {@code .java} companion source contains {@code needle}. */
+  /**
+   * Whether any emitted {@code .java} companion source contains {@code needle}.
+   */
   private static boolean anyCompanionContains(Path companionSrc, String needle) throws Exception {
     try (Stream<Path> walk = Files.walk(companionSrc)) {
       for (Path file : walk.filter(p -> p.getFileName().toString().endsWith(".java")).toList()) {

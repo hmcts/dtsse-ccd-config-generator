@@ -48,4 +48,31 @@ public class Party {
   // A member whose type has TWO non-delegating constructors, where the shorter one's widened form
   // collides with the longer one's narrow overload — the overload-collision guard must suppress it.
   private TwoConstructorParty twoConstructorParty;
+
+  // A member whose definition complex type ID is camelCase (noticeDetails) while the class is
+  // PascalCase — the SDK would emit the type as 'NoticeDetails' without a class-level
+  // @ComplexType(name) pin.
+  private NoticeDetails noticeDetails;
+
+  // A member whose type already carries a team-written @ComplexType: the ID pin must refuse it (a
+  // second annotation would not compile), which is also what makes the op idempotent.
+  private PinnedByTeamCT pinnedByTeam;
+
+  // Two collection members whose element wrappers hold ONE shared payload class: only the first
+  // definition type can pin its ID onto SharedDetails, so the second must be reported as a gap.
+  private List<FirstSharedCT> firstShared;
+
+  private List<SecondSharedCT> secondShared;
+
+  // Two members whose definition complex types (firstSummaryCT/secondSummaryCT) have NO model class,
+  // so the converter generates a companion for each — but both members are declared as one shared
+  // SharedSummary (sscs's ten dwp*DocumentCT / one DwpResponseDocument shape). Only a per-FIELD retype
+  // can bind them, since one class can carry only one @ComplexType(name).
+  private SharedSummary firstSummary;
+
+  private SharedSummary secondSummary;
+
+  // The same shape, but something in the model calls this member's getter (SummaryReader): the retype
+  // changes what that call returns, so it must be refused and reported rather than breaking the build.
+  private SharedSummary readSummary;
 }

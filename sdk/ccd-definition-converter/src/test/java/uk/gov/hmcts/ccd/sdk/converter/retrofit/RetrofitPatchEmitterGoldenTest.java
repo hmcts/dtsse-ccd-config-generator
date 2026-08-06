@@ -31,6 +31,14 @@ class RetrofitPatchEmitterGoldenTest {
   private static final String CONFIG_PACKAGE = "uk.gov.hmcts.example.config";
 
   private RetrofitPatchEmitter buildEmitter() {
+    return buildEmitter(RetrofitPinnedNames.empty());
+  }
+
+  /**
+   * The same wiring, with the naming-strategy names the {@code CaseEventToComplexTypes} member walk
+   * relied on — which the patch must pin as explicit {@code @JsonProperty} annotations.
+   */
+  private RetrofitPatchEmitter buildEmitter(RetrofitPinnedNames pinnedNames) {
     Map<String, OverlayCondition> overlays = new LinkedHashMap<>();
     overlays.put("prod", OverlayCondition.parse("CCD_DEF_ENV:prod"));
     overlays.put("nonprod", OverlayCondition.parse("!CCD_DEF_ENV:prod"));
@@ -54,12 +62,8 @@ class RetrofitPatchEmitterGoldenTest {
         new RetrofitModelRebinder(matcher.index(), matcher.resolution());
     CaseTypeModel rebound = rebinder.rebind(linked);
 
-    return new RetrofitPatchEmitter(
-        matcher.index(), matcher.resolution(), rebound, matcher.root(), CONFIG_PACKAGE);
-  }
-
-  private RetrofitPatch emitPatch() {
-    return buildEmitter().emit();
+    return new RetrofitPatchEmitter(matcher.index(), matcher.resolution(), rebound, matcher.root(),
+        CONFIG_PACKAGE, 0, "", pinnedNames);
   }
 
   private RetrofitPatchEmitter buildEmitter(int constructorLimit, String pathPrefix) {
@@ -84,6 +88,10 @@ class RetrofitPatchEmitterGoldenTest {
         new RetrofitModelRebinder(matcher.index(), matcher.resolution(), matcher.root()).rebind(linked);
     return new RetrofitPatchEmitter(matcher.index(), matcher.resolution(), rebound,
         matcher.root(), CONFIG_PACKAGE, constructorLimit, pathPrefix);
+  }
+
+  private RetrofitPatch emitPatch() {
+    return buildEmitter().emit();
   }
 
   @Test
@@ -183,6 +191,160 @@ class RetrofitPatchEmitterGoldenTest {
     // And nothing is routed to a manual-placement gap: the members are all placed.
     assertThat(emitter.gaps())
         .noneMatch(g -> g.getRowKey() != null && g.getRowKey().startsWith("Wrapper/"));
+  }
+
+  @Test
+  void pinsTheDefinitionsOwnComplexTypeIdOntoTheClassThatBacksIt() {
+    // Binding a definition complex type to a model class fixes that type's MEMBERS but not its ID:
+    // ComplexTypeGenerator names the emitted type c.getSimpleName() unless the class carries
+    // @ComplexType(name). CCD ComplexTypes IDs are overwhelmingly camelCase (108 of sscs's 118) while
+    // model classes are PascalCase — the very divergence ModelSourceIndex.complexTypeClass's
+    // case-insensitive fallback exists to bridge — so every bound class emitted its type under an ID the
+    // definition never mentions. generate = true is mandatory: the attribute DEFAULTS to false and
+    // ComplexTypeGenerator skips a named-but-not-generate type entirely, so a bare name would trade a
+    // wrong ID for no rows at all.
+    String patched = patchedFile(emitPatch(), "common/NoticeDetails.java");
+    assertThat(patched)
+        .contains("@ComplexType(name = \"noticeDetails\", generate = true)")
+        .contains("import uk.gov.hmcts.ccd.sdk.api.ComplexType;");
+  }
+
+  @Test
+  void suppressesTheImplicitCollectionElementWrapperWithGenerateFalse() {
+    // The second half of the ID pin. CCD serialises collection elements as {id, value}, so a definition
+    // addresses a collection element type's members on its VALUE class — but ConfigResolver.resolve
+    // registers a NON-GENERIC wrapper as a complex type in its own right (unlike List<ListValue<X>>,
+    // whose generic element it descends through), emitting a spurious {value}/{id,value} row. sscs had 36
+    // such wrapper-shaped generated types against exactly ONE wrapper-shaped definition type.
+    // @ComplexType(name = <id>, generate = false) suppresses the row while `name` still gives
+    // CaseFieldGenerator.resolveCollectionType the right FieldTypeParameter for every List<Wrapper> field
+    // — which is why the wrapper is named at all rather than simply ignored.
+    RetrofitPatch patch = emitPatch();
+    assertThat(patchedFile(patch, "common/Wrapper.java"))
+        .contains("@ComplexType(name = \"Wrapper\", generate = false)");
+    // Its VALUE class carries the generate = true half, so the type's rows come from the class the
+    // definition's member rows actually describe.
+    assertThat(patchedFile(patch, "common/WrapperDetails.java"))
+        .contains("@ComplexType(name = \"Wrapper\", generate = true)");
+  }
+
+  @Test
+  void refusesToPinOverAComplexTypeAnnotationTheClassAlreadyCarries() {
+    // Idempotency, and the team's own choices: PinnedByTeamCT already declares
+    // @ComplexType(name = "teamsOwnChoice"), so the definition ID pinnedByTeamCT must NOT be pinned — a
+    // second class-level @ComplexType would not even compile, and overwriting the team's name/label/
+    // border is not the patch's call. The same guard makes re-applying the patch a no-op.
+    //
+    // NOTE ON THE FIXTURE: PinnedByTeamCT is named to match the definition ID pinnedByTeamCT
+    // case-insensitively, because that is the only way complexTypeClass binds an ID to a class — a
+    // PascalCase name unrelated to the ID never reaches the pin at all, so the refusal would be
+    // untested (verified: with the guard removed the test still passed until the class was renamed).
+    // The file IS still patched — its `note` member gains the definition's @CCD(label) like any other
+    // matched member. Only the CLASS-LEVEL pin is refused, so assert on that: exactly the one
+    // @ComplexType the team wrote, and no added line carrying the definition ID.
+    RetrofitPatch patch = emitPatch();
+    assertThat(complexTypeAnnotations(patchedFile(patch, "common/PinnedByTeamCT.java")))
+        .containsExactly("@ComplexType(name = \"teamsOwnChoice\", generate = true)");
+    assertThat(addedLines(patch.unifiedDiff())).noneMatch(l -> l.contains("pinnedByTeamCT"));
+  }
+
+  /**
+   * The class-level {@code @ComplexType} annotation lines in a patched file — matched as whole
+   * declaration lines, so a mention of the annotation in the class's own javadoc is not counted.
+   */
+  private static java.util.List<String> complexTypeAnnotations(String patched) {
+    return patched.lines()
+        .map(String::trim)
+        .filter(l -> l.startsWith("@ComplexType("))
+        .toList();
+  }
+
+  @Test
+  void reportsOneClassBackingTwoDefinitionComplexTypesRatherThanPickingSilently() {
+    // sscs's real shape: ten dwp*DocumentCT types plus tl1FormCT and appendix12DocumentCT are declared
+    // separately in the definition but modelled by one class. A class carries only ONE
+    // @ComplexType(name), so the second definition type to reach it cannot be pinned. Picking silently
+    // would leave the loser emitting under the winner's ID with no trace; the collision is reported as a
+    // MANUAL_PLACEMENT gap instead, so the team sees the one thing only they can decide — split the class
+    // or add a per-field type override.
+    RetrofitPatchEmitter emitter = buildEmitter();
+    RetrofitPatch patch = emitter.emit();
+    // Exactly one of the two IDs wins on the shared payload class, never both.
+    assertThat(complexTypeAnnotations(patchedFile(patch, "common/SharedDetails.java")))
+        .containsExactly("@ComplexType(name = \"firstSharedCT\", generate = true)");
+    // Each WRAPPER is a distinct class, so both are still suppressed — the collision is on the value
+    // class alone.
+    assertThat(patchedFile(patch, "common/FirstSharedCT.java"))
+        .contains("@ComplexType(name = \"firstSharedCT\", generate = false)");
+    assertThat(patchedFile(patch, "common/SecondSharedCT.java"))
+        .contains("@ComplexType(name = \"secondSharedCT\", generate = false)");
+    // The loser is reported, naming both types and the class they share.
+    assertThat(emitter.gaps())
+        .anySatisfy(g -> {
+          assertThat(g.getSheet()).isEqualTo("ComplexTypes");
+          assertThat(g.getRowKey()).isEqualTo("secondSharedCT");
+          assertThat(g.getAction())
+              .isEqualTo(uk.gov.hmcts.ccd.sdk.converter.model.gap.GapAction.MANUAL_PLACEMENT);
+          assertThat(g.getDetail())
+              .contains("firstSharedCT")
+              .contains("secondSharedCT")
+              .contains("SharedDetails");
+        });
+  }
+
+  @Test
+  void retypesAFieldToTheGeneratedCompanionWhenItsDefinitionTypeHasNoModelClass() {
+    // firstSummaryCT/secondSummaryCT have no model class, so the converter generates a companion for
+    // each — but Party declares BOTH members as one shared SharedSummary (sscs's ten dwp*DocumentCT /
+    // one DwpResponseDocument shape). Nothing pointed the fields at the companions, so the SDK emitted
+    // FieldType=SharedSummary and the definition's own rows had no counterpart. Re-declaring each field
+    // as its own companion is the only binding that works here: a class carries one @ComplexType(name),
+    // and typeOverride takes a FieldType enum constant, which a definition ID is not.
+    RetrofitPatchEmitter emitter = buildEmitter();
+    RetrofitPatch patch = emitter.emit();
+    String patched = patchedFile(patch, "common/Party.java");
+    assertThat(patched)
+        .contains("private FirstSummaryCT firstSummary;")
+        .contains("private SecondSummaryCT secondSummary;")
+        // The shared class is left exactly as it was — the retype needs no pin on it.
+        .doesNotContain("private SharedSummary firstSummary;")
+        .doesNotContain("private SharedSummary secondSummary;");
+    // The companions are generated into the model package, which is Party's OWN package's parent, so
+    // the retype adds the import it needs.
+    assertThat(patched).contains("import " + MODEL_PACKAGE + ".FirstSummaryCT;");
+  }
+
+  @Test
+  void refusesToRetypeAFieldWhoseAccessorsTheModelCallsAndReportsIt() {
+    // SummaryReader assigns party.getReadSummary() to a SharedSummary. Re-declaring the field changes
+    // what that getter returns, so the call stops compiling — the patch must leave the declaration alone
+    // and report the row rather than emit a break. Matched by method NAME alone (the index has no symbol
+    // solver), which is deliberately conservative.
+    RetrofitPatchEmitter emitter = buildEmitter();
+    RetrofitPatch patch = emitter.emit();
+    assertThat(patchedFile(patch, "common/Party.java"))
+        .contains("private SharedSummary readSummary;")
+        .doesNotContain("ReadSummaryCT readSummary;");
+    assertThat(emitter.gaps())
+        .anySatisfy(g -> {
+          assertThat(g.getSheet()).isEqualTo("ComplexTypes");
+          assertThat(g.getRowKey()).isEqualTo("Party/readSummary");
+          assertThat(g.getAction())
+              .isEqualTo(uk.gov.hmcts.ccd.sdk.converter.model.gap.GapAction.MANUAL_PLACEMENT);
+          assertThat(g.getDetail())
+              .contains("readSummaryCT")
+              .contains("get/setReadSummary")
+              .contains("SharedSummary");
+        });
+  }
+
+  /** The patched content of one file in the patch, failing clearly when the patch does not touch it. */
+  private static String patchedFile(RetrofitPatch patch, String pathSuffix) {
+    return patch.files().stream()
+        .filter(f -> f.relativePath().endsWith(pathSuffix))
+        .map(RetrofitPatch.FilePatch::patchedContent)
+        .findFirst()
+        .orElseThrow(() -> new AssertionError(pathSuffix + " not in patch"));
   }
 
   @Test
@@ -374,6 +536,157 @@ class RetrofitPatchEmitterGoldenTest {
   }
 
   @Test
+  void plansExactlyTheSynthesisedMembersItCommitsToAdding() {
+    // The CaseEventToComplexTypes member walk is built against the model as the applied PATCH will
+    // leave it, so it reads this plan (RetrofitPlannedSynthesis) to resolve a member the patch is about
+    // to add. The plan must therefore agree with the patch EXACTLY: every member reported here has to be
+    // one the emitter really adds, or the graph would emit a getter reference to a field that never
+    // exists. It comes from the emitter's own planning pass, not a re-derivation, so the refusals below
+    // are excluded by construction.
+    RetrofitPatchEmitter emitter = buildEmitter();
+    RetrofitPlannedSynthesis planned = emitter.planSynthesisedMembers();
+
+    // Members the emitter commits to (each pinned by its own test above): the narrow-all-args repair,
+    // the widened @JsonCreator, the widened @Value constructor, the final-field @Data class, and the
+    // collection-element wrapper's VALUE class.
+    assertThat(planned.member("uk.gov.hmcts.example.model.common.RecoverableCosts", "bandLabel"))
+        .get()
+        .satisfies(m -> assertThat(m.javaName()).isEqualTo("bandLabel"));
+    assertThat(planned.member(
+        "uk.gov.hmcts.example.model.common.BuilderBoundParty", "panelComposition")).isPresent();
+    assertThat(planned.member("uk.gov.hmcts.example.model.common.ValueHolder", "stitchStatus"))
+        .isPresent();
+    assertThat(planned.member("uk.gov.hmcts.example.model.common.FinalFieldParty", "synthLabel"))
+        .isPresent();
+    assertThat(planned.member("uk.gov.hmcts.example.model.common.WrapperDetails", "newDetail"))
+        .isPresent();
+
+    // Members the emitter REFUSES — the inferred-all-args guard and the overload-collision guard both
+    // route theirs to a MANUAL_PLACEMENT gap, so neither may appear.
+    assertThat(planned.member("uk.gov.hmcts.example.model.common.BuilderOnlyCosts", "capLabel"))
+        .isEmpty();
+    assertThat(planned.member("uk.gov.hmcts.example.model.common.TwoConstructorParty", "tertiary"))
+        .isEmpty();
+    // The wrapper class itself is never a synthesis target — its members belong to the value class.
+    assertThat(planned.member("uk.gov.hmcts.example.model.common.Wrapper", "newDetail")).isEmpty();
+  }
+
+  @Test
+  void pinsExactlyTheNamingStrategyNamesTheMemberWalkReliedOn() {
+    // The mirror of the plan above, in the opposite direction: there the PATCH decides and the graph
+    // follows; here the GRAPH decides (its CaseEventToComplexTypes walk resolved a member under an id
+    // the SDK would not derive) and the patch must follow by pinning that id as an explicit
+    // @JsonProperty. The SDK reads @JsonProperty only off the field and the read method, so resolving
+    // WITHOUT pinning would emit NamedAddress::getAddressLine1 and have the SDK regenerate the id
+    // 'addressLine1' — silently changing the CCD field id. The pin is a Jackson no-op (a field-level
+    // @JsonProperty already overrides the class strategy, and the value pinned IS what that strategy
+    // produces) that makes the blind generator agree.
+    RetrofitPinnedNames pinned = RetrofitPinnedNames.empty();
+    pinned.record(MODEL_PACKAGE + ".common.NamedAddress", "addressLine1", "AddressLine1");
+    pinned.record(MODEL_PACKAGE + ".common.NamedAddress", "postTown", "PostTown");
+    // A field that already carries its OWN @JsonProperty, recorded here to prove the emitter's
+    // independent refusal even if a caller asked for it (the graph never records such a field).
+    pinned.record(MODEL_PACKAGE + ".common.AnnotatedNamedAddress", "county", "County");
+    String diff = buildEmitter(pinned).emit().unifiedDiff();
+
+    // Each recorded name gains the id the graph matched, and the import the class lacked is added.
+    assertThat(pinAnnotations(diff))
+        .containsExactly("@JsonProperty(\"AddressLine1\")", "@JsonProperty(\"PostTown\")");
+    assertThat(fileHunk(diff, "common/NamedAddress.java"))
+        .contains("+import com.fasterxml.jackson.annotation.JsonProperty;");
+    // NOTHING beyond that: `county` on AnnotatedNamedAddress already carries @JsonProperty("CountyName"),
+    // which by Jackson's precedence decided its id. A second annotation would not even compile.
+    assertThat(diff).doesNotContain("AnnotatedNamedAddress.java");
+    // The pinned names are the ones the graph recorded, so the patch and the emitted config agree: the
+    // config references NamedAddress::getAddressLine1 and the SDK regenerates the id 'AddressLine1'.
+    assertThat(fileHunk(diff, "common/NamedAddress.java"))
+        .contains("+  @JsonProperty(\"AddressLine1\")")
+        .contains("+  @JsonProperty(\"PostTown\")")
+        .doesNotContain("County");
+  }
+
+  /**
+   * The added field-level {@code @JsonProperty} pins, excluding constructor-parameter
+   * annotations.
+   */
+  private static java.util.List<String> pinAnnotations(String diff) {
+    return addedLines(diff).stream()
+        .filter(l -> l.startsWith("+  @JsonProperty("))
+        .map(l -> l.substring(3))
+        .toList();
+  }
+
+  /** The single-file section of a multi-file unified diff, for file-scoped assertions. */
+  private static String fileHunk(String diff, String pathSuffix) {
+    java.util.List<String> lines = diff.lines().toList();
+    StringBuilder hunk = new StringBuilder();
+    boolean inFile = false;
+    for (String line : lines) {
+      if (line.startsWith("--- a/")) {
+        inFile = line.endsWith(pathSuffix);
+      }
+      if (inFile) {
+        hunk.append(line).append('\n');
+      }
+    }
+    assertThat(hunk.length()).as("diff must contain a hunk for %s", pathSuffix).isPositive();
+    return hunk.toString();
+  }
+
+  @Test
+  void pinsNothingWhenTheMemberWalkNeededNoNamingStrategy() {
+    // Demand-driven, never speculative: with an empty record — every real-world class whose members the
+    // walk resolved by their own names — the patch adds no @JsonProperty at all, and no @JsonNaming
+    // class in the model is touched. A speculative pass over every @JsonNaming class would rewrite
+    // classes no row depends on.
+    String diff = emitPatch().unifiedDiff();
+    assertThat(pinAnnotations(diff)).isEmpty();
+    assertThat(diff).doesNotContain("NamedAddress.java");
+  }
+
+  @Test
+  void pinsAnIdThatCameFromACreatorParameterNotAClassNamingStrategy() {
+    // fpl's immutable Address: the id the walk matched came from a @JsonProperty on the @JsonCreator
+    // PARAMETER, and the class carries no @JsonNaming at all. The pin must carry the id the GRAPH
+    // recorded — the emitter re-deriving it from a naming strategy pinned nothing here, which is not a
+    // missed row but the trap itself: the walk had already committed the config to
+    // CreatorNamedAddress::getAddressLine1, so an unpinned field left the SDK regenerating the CCD id
+    // 'addressLine1' and silently changed it (fpl's whole 364-row category regressed this way, +203
+    // residual diff lines on a lane whose passthrough had just dropped).
+    RetrofitPinnedNames pinned = RetrofitPinnedNames.empty();
+    pinned.record(MODEL_PACKAGE + ".common.CreatorNamedAddress", "addressLine1", "AddressLine1");
+    pinned.record(MODEL_PACKAGE + ".common.CreatorNamedAddress", "postTown", "PostTown");
+    String diff = buildEmitter(pinned).emit().unifiedDiff();
+
+    assertThat(pinAnnotations(diff))
+        .containsExactly("@JsonProperty(\"AddressLine1\")", "@JsonProperty(\"PostTown\")");
+    assertThat(fileHunk(diff, "common/CreatorNamedAddress.java"))
+        .contains("+  @JsonProperty(\"AddressLine1\")")
+        .contains("+  @JsonProperty(\"PostTown\")")
+        // The class already imports JsonProperty for its creator parameters; a second import would not
+        // compile.
+        .doesNotContain("+import com.fasterxml.jackson.annotation.JsonProperty;");
+  }
+
+  @Test
+  void refusesToPinAStrategyItCannotEvaluate() {
+    // probate's shape: the owning class declares a team-written @JsonNaming strategy, arbitrary Java the
+    // converter cannot evaluate. Even if a name were recorded against it, no pin may be written — a
+    // guessed @JsonProperty would change the CCD field id, which is strictly worse than the passthrough
+    // it would be replacing. Pinning is not safe even with the id in hand: a field-level @JsonProperty
+    // OVERRIDES the class strategy, so writing one onto a class whose strategy the converter cannot
+    // evaluate could change the runtime payload rather than being the no-op every pin must be. (The
+    // graph never records such a class in the first place; this pins the emitter's own independent
+    // refusal, so neither half can start guessing alone.)
+    RetrofitPinnedNames pinned = RetrofitPinnedNames.empty();
+    pinned.record(MODEL_PACKAGE + ".common.CustomNamedAddress", "addressLine1", "AddressLine1");
+    String diff = buildEmitter(pinned).emit().unifiedDiff();
+
+    assertThat(pinAnnotations(diff)).isEmpty();
+    assertThat(diff).doesNotContain("CustomNamedAddress.java");
+  }
+
+  @Test
   void doesNotReAnnotateFieldsAlreadyCarryingCcd() {
     // The golden model's auditOnly carries @CCD(ignore = true); it must never be re-annotated (the
     // patch adds no new line mentioning it).
@@ -464,7 +777,8 @@ class RetrofitPatchEmitterGoldenTest {
     java.util.List<String> lines = diff.lines().collect(java.util.stream.Collectors.toList());
     int hunkStart = lines.indexOf("+++ b/uk/gov/hmcts/example/model/common/NoTrailingNewlineHost.java");
     assertThat(hunkStart).isGreaterThanOrEqualTo(0);
-    int nextFileHeader = lines.subList(hunkStart + 1, lines.size()).indexOf("--- a/uk/gov/hmcts/example/model/common/Party.java");
+    int nextFileHeader = lines.subList(hunkStart + 1, lines.size())
+        .indexOf("--- a/uk/gov/hmcts/example/model/common/Party.java");
     java.util.List<String> hostHunkLines = nextFileHeader < 0
         ? lines.subList(hunkStart, lines.size())
         : lines.subList(hunkStart, hunkStart + 1 + nextFileHeader);

@@ -6,6 +6,7 @@ import static uk.gov.hmcts.ccd.sdk.converter.link.IrBuilder.cols;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
 import uk.gov.hmcts.ccd.sdk.converter.api.ConversionOptions;
@@ -20,6 +21,7 @@ import uk.gov.hmcts.ccd.sdk.converter.model.FixedListModel;
 import uk.gov.hmcts.ccd.sdk.converter.model.OverlayCondition;
 import uk.gov.hmcts.ccd.sdk.converter.model.PageModel;
 import uk.gov.hmcts.ccd.sdk.converter.model.PassthroughSheet;
+import uk.gov.hmcts.ccd.sdk.converter.model.RetrofitModelTypeGraph;
 import uk.gov.hmcts.ccd.sdk.converter.model.RoleModel;
 import uk.gov.hmcts.ccd.sdk.converter.model.StateModel;
 import uk.gov.hmcts.ccd.sdk.converter.model.gap.GapAction;
@@ -694,6 +696,46 @@ class DefaultDefinitionLinkerTest {
   }
 
   @Test
+  void eventToComplexTypesPassthroughKeysOnShowConditionSoRepeatedMembersDoNotCollide() {
+    GapCollector gaps = new GapCollector();
+    // civil's real ORDER_REVIEW_OBLIGATION_CHECK/obligationWAFlag: the SAME member is listed twice
+    // under the same declaring type -- once OPTIONAL with a show condition, once MANDATORY without.
+    // ID cannot separate them (it is identical), so without FieldShowCondition in the merge key
+    // mergeInto matches the two rows and silently drops the MANDATORY one. Measured across the six
+    // review lanes, adding it takes significant row loss from civil 4 / prl 7 down to civil 1 / prl 2.
+    DefinitionIr ir = minimal("Minimal")
+        .row(SheetName.CASE_EVENT,
+            cols("CaseTypeID", "Minimal", "ID", "check", "Name", "Check",
+                "PostConditionState", "Open"))
+        .row(SheetName.CASE_EVENT_TO_COMPLEX_TYPES,
+            cols("ID", "ObligationData", "CaseEventID", "check", "CaseFieldID", "obligationWAFlag",
+                "ListElementCode", "obligationReason", "DisplayContext", "OPTIONAL",
+                "FieldShowCondition", "obligationWAFlagReason=\"OTHER\""))
+        .row(SheetName.CASE_EVENT_TO_COMPLEX_TYPES,
+            cols("ID", "ObligationData", "CaseEventID", "check", "CaseFieldID", "obligationWAFlag",
+                "ListElementCode", "obligationReason", "DisplayContext", "MANDATORY"))
+        .build();
+
+    CaseTypeModel model = linker.link(ir, options("Minimal"), gaps);
+
+    PassthroughSheet sheet = model.getPassthroughSheets().stream()
+        .filter(s -> s.getRelativePath()
+            .equals("CaseEventToComplexTypes/check/obligationWAFlag.json"))
+        .findFirst().orElseThrow();
+    assertThat(sheet.getPrimaryKeys())
+        .as("ID stays (it separates distinct declaring types) and FieldShowCondition joins it")
+        .containsExactly("ID", "CaseEventID", "CaseFieldID", "ListElementCode",
+            "FieldShowCondition");
+    assertThat(sheet.getRows()).hasSize(2);
+    assertThat(sheet.getRows()).anySatisfy(r -> {
+      assertThat(r).containsEntry("DisplayContext", "OPTIONAL");
+      assertThat(r).containsEntry("FieldShowCondition", "obligationWAFlagReason=\"OTHER\"");
+    });
+    assertThat(sheet.getRows()).anySatisfy(r ->
+        assertThat(r).containsEntry("DisplayContext", "MANDATORY"));
+  }
+
+  @Test
   void derivesHintTriStateForComplexMemberOverrides() {
     GapCollector gaps = new GapCollector();
     // A complex field placed COMPLEX on an event, whose complex type declares two members with a
@@ -752,6 +794,72 @@ class DefaultDefinitionLinkerTest {
     // reference: no input HintText, declared hint present → .noHintText() (overridden, null value).
     assertThat(byGetter.get("getReference").isHintOverridden()).isTrue();
     assertThat(byGetter.get("getReference").getHintText()).isNull();
+  }
+
+  @Test
+  void derivesRetainHiddenValueAndLeavesNoGraftForShowSummaryChangeOption() {
+    GapCollector gaps = new GapCollector();
+    // sscs's residual CaseEventToComplexTypes tail, both columns on one group:
+    //   - RetainHiddenValue: the importer DOES read it on this sheet (EventCaseFieldComplexTypeParser
+    //     maps it), and the SDK writes it from the same applyMetadata the CaseEventToFields rows use,
+    //     so a Y row derives via .retainHiddenValue() and an N row leaves the flag unset.
+    //   - ShowSummaryChangeOption: EventCaseFieldParser reads it on CaseEventToFields, but the
+    //     complex-type parser never does — importer-ignored here, like ID.
+    // Neither may leave a passthrough carrier behind: that would be the whole point of deriving them.
+    DefinitionIr ir = minimal("Minimal")
+        .row(SheetName.CASE_FIELD,
+            cols("CaseTypeID", "Minimal", "ID", "contact", "Label", "Contact",
+                "FieldType", "Contact"))
+        .row(SheetName.COMPLEX_TYPES,
+            cols("ID", "Contact", "ListElementCode", "name", "FieldType", "Text"))
+        .row(SheetName.COMPLEX_TYPES,
+            cols("ID", "Contact", "ListElementCode", "role", "FieldType", "Text"))
+        .row(SheetName.COMPLEX_TYPES,
+            cols("ID", "Contact", "ListElementCode", "reference", "FieldType", "Text"))
+        .row(SheetName.CASE_EVENT,
+            cols("CaseTypeID", "Minimal", "ID", "createCase", "Name", "Create",
+                "PostConditionState", "Open"))
+        .row(SheetName.CASE_EVENT_TO_FIELDS,
+            cols("CaseTypeID", "Minimal", "CaseEventID", "createCase",
+                "CaseFieldID", "contact", "DisplayContext", "COMPLEX", "PageID", "1",
+                "PageFieldDisplayOrder", 1))
+        // Yes → derived as .retainHiddenValue(); also carries the importer-ignored SSCO=Y.
+        .row(SheetName.CASE_EVENT_TO_COMPLEX_TYPES,
+            cols("ID", "Contact", "CaseEventID", "createCase", "CaseFieldID", "contact",
+                "ListElementCode", "name", "DisplayContext", "MANDATORY",
+                "FieldShowCondition", "role=\"x\"", "RetainHiddenValue", "Yes",
+                "ShowSummaryChangeOption", "Y", "FieldDisplayOrder", 1))
+        // No → the flag stays unset, matching the generator's write-only-when-true behaviour.
+        .row(SheetName.CASE_EVENT_TO_COMPLEX_TYPES,
+            cols("ID", "Contact", "CaseEventID", "createCase", "CaseFieldID", "contact",
+                "ListElementCode", "role", "DisplayContext", "OPTIONAL",
+                "RetainHiddenValue", "No", "FieldDisplayOrder", 2))
+        // SSCO=N alone: nothing to derive and nothing to graft — the row leaves no carrier at all.
+        .row(SheetName.CASE_EVENT_TO_COMPLEX_TYPES,
+            cols("ID", "Contact", "CaseEventID", "createCase", "CaseFieldID", "contact",
+                "ListElementCode", "reference", "DisplayContext", "READONLY",
+                "ShowSummaryChangeOption", "N", "FieldDisplayOrder", 3))
+        .build();
+
+    CaseTypeModel model = linker.link(ir, options("Minimal"), gaps);
+
+    var group = model.getEventComplexTypeGroups().get("createCasecontact");
+    assertThat(group).as("all three rows derive").isNotNull();
+    assertThat(group.getMembers()).hasSize(3);
+
+    var byGetter = new java.util.HashMap<String, uk.gov.hmcts.ccd.sdk.converter.model
+        .EventComplexTypeGroup.Member>();
+    group.getMembers().forEach(m -> byGetter.put(m.getLeafGetter(), m));
+
+    assertThat(byGetter.get("getName").isRetainHiddenValue())
+        .as("RetainHiddenValue=Yes derives the flag").isTrue();
+    assertThat(byGetter.get("getRole").isRetainHiddenValue())
+        .as("RetainHiddenValue=No leaves the flag unset, so no column is written").isFalse();
+    assertThat(byGetter.get("getReference").isRetainHiddenValue()).isFalse();
+
+    // Neither column leaves a passthrough carrier: no CaseEventToComplexTypes file is written at all.
+    assertThat(model.getPassthroughSheets())
+        .noneMatch(s -> s.getRelativePath().contains("CaseEventToComplexTypes"));
   }
 
   @Test
@@ -857,7 +965,7 @@ class DefaultDefinitionLinkerTest {
     assertThat(sheet.getOverwriteColumns())
         .as("the tail is grafted additively, never overwriting a generated value").isEmpty();
     assertThat(sheet.getPrimaryKeys())
-        .containsExactly("CaseEventID", "CaseFieldID", "ListElementCode");
+        .containsExactly("CaseEventID", "CaseFieldID", "ListElementCode", "FieldShowCondition");
     assertThat(sheet.getRows()).singleElement().satisfies(r -> {
       assertThat(r).containsEntry("SecurityClassification", "Private");
       assertThat(r).containsKeys("CaseEventID", "CaseFieldID", "ListElementCode");
@@ -865,7 +973,214 @@ class DefaultDefinitionLinkerTest {
           .doesNotContainKey("ID");
       assertThat(r).as("FieldDisplayOrder joins the display-order disposition, not grafted")
           .doesNotContainKey("FieldDisplayOrder");
+      assertThat(r).as("a key column the generated row also omits stays ABSENT, not blank:"
+              + " mergeInto's matcher counts absent-on-both as agreement but blank-vs-absent as a"
+              + " mismatch, so a blank here would orphan the graft")
+          .doesNotContainKey("FieldShowCondition");
     });
+  }
+
+  @Test
+  void derivedGraftCarriesShowConditionAsAKeyWhenTheRowHasOne() {
+    GapCollector gaps = new GapCollector();
+    // FieldShowCondition is a merge key on this sheet (it is what separates the same-ListElementCode
+    // rows real definitions ship -- civil's obligationWAFlag repeats each member as
+    // OPTIONAL-with-show-condition and again as MANDATORY). The generator writes it from the builder
+    // chain, so when the input row carries one the graft must too, or the merge orphans.
+    DefinitionIr ir = minimal("Minimal")
+        .row(SheetName.CASE_FIELD,
+            cols("CaseTypeID", "Minimal", "ID", "contact", "Label", "Contact",
+                "FieldType", "Contact"))
+        .row(SheetName.COMPLEX_TYPES,
+            cols("ID", "Contact", "ListElementCode", "name", "FieldType", "Text"))
+        .row(SheetName.CASE_EVENT,
+            cols("CaseTypeID", "Minimal", "ID", "createCase", "Name", "Create",
+                "PostConditionState", "Open"))
+        .row(SheetName.CASE_EVENT_TO_FIELDS,
+            cols("CaseTypeID", "Minimal", "CaseEventID", "createCase",
+                "CaseFieldID", "contact", "DisplayContext", "COMPLEX", "PageID", "1"))
+        .row(SheetName.CASE_EVENT_TO_COMPLEX_TYPES,
+            cols("ID", "Contact", "CaseEventID", "createCase", "CaseFieldID", "contact",
+                "ListElementCode", "name", "DisplayContext", "MANDATORY",
+                "FieldShowCondition", "contactName=\"y\"", "SecurityClassification", "Private"))
+        .build();
+
+    CaseTypeModel model = linker.link(ir, options("Minimal"), gaps);
+
+    assertThat(model.getEventComplexTypeGroups().get("createCasecontact")).isNotNull();
+    PassthroughSheet sheet = model.getPassthroughSheets().stream()
+        .filter(s -> s.getRelativePath()
+            .equals("CaseEventToComplexTypes/createCase/contact.json"))
+        .findFirst().orElseThrow();
+    assertThat(sheet.getRows()).singleElement().satisfies(r ->
+        assertThat(r).containsEntry("FieldShowCondition", "contactName=\"y\""));
+  }
+
+  @Test
+  void unresolvableMemberFallsBackAloneWithoutDraggingItsSiblingsAlong() {
+    GapCollector gaps = new GapCollector();
+    // Two members under one derivable (event, field): "name" resolves through the complex-type graph,
+    // "mystery" does not (no such member on Contact). Every gate used to refuse the WHOLE group, so one
+    // unresolvable member sent all its siblings to the verbatim passthrough -- across the six review
+    // lanes that cost 5609 passthrough rows where 1408 was enough. Now only the unresolvable row falls
+    // back and its siblings still derive into .complex(...) calls.
+    DefinitionIr ir = minimal("Minimal")
+        .row(SheetName.CASE_FIELD,
+            cols("CaseTypeID", "Minimal", "ID", "contact", "Label", "Contact",
+                "FieldType", "Contact"))
+        .row(SheetName.COMPLEX_TYPES,
+            cols("ID", "Contact", "ListElementCode", "name", "FieldType", "Text"))
+        .row(SheetName.CASE_EVENT,
+            cols("CaseTypeID", "Minimal", "ID", "createCase", "Name", "Create",
+                "PostConditionState", "Open"))
+        .row(SheetName.CASE_EVENT_TO_FIELDS,
+            cols("CaseTypeID", "Minimal", "CaseEventID", "createCase",
+                "CaseFieldID", "contact", "DisplayContext", "COMPLEX", "PageID", "1"))
+        .row(SheetName.CASE_EVENT_TO_COMPLEX_TYPES,
+            cols("ID", "Contact", "CaseEventID", "createCase", "CaseFieldID", "contact",
+                "ListElementCode", "name", "DisplayContext", "MANDATORY", "FieldDisplayOrder", 1,
+                "SecurityClassification", "Private"))
+        .row(SheetName.CASE_EVENT_TO_COMPLEX_TYPES,
+            cols("ID", "Contact", "CaseEventID", "createCase", "CaseFieldID", "contact",
+                "ListElementCode", "mystery", "DisplayContext", "OPTIONAL", "FieldDisplayOrder", 2))
+        .build();
+
+    CaseTypeModel model = linker.link(ir, options("Minimal"), gaps);
+
+    var group = model.getEventComplexTypeGroups().values().stream()
+        .filter(g -> "contact".equals(g.getCaseFieldId())).findFirst().orElseThrow();
+    assertThat(group.getMembers())
+        .as("the resolvable member derives; the unresolvable one is simply absent")
+        .singleElement().satisfies(m -> assertThat(m.getLeafGetter()).isEqualTo("getName"));
+
+    // ONE sheet for the path, never two: GapAndPassthroughWriter keys both its output file and its
+    // manifest entry on the relative path, so a second sheet would overwrite the first and the
+    // manifest would then merge the survivor twice.
+    assertThat(model.getPassthroughSheets())
+        .filteredOn(s -> s.getRelativePath()
+            .equals("CaseEventToComplexTypes/createCase/contact.json"))
+        .hasSize(1);
+    PassthroughSheet sheet = model.getPassthroughSheets().stream()
+        .filter(s -> s.getRelativePath()
+            .equals("CaseEventToComplexTypes/createCase/contact.json"))
+        .findFirst().orElseThrow();
+    assertThat(sheet.getPrimaryKeys())
+        .as("a verbatim row shares the file, so ID rejoins the key -- the graft rows are unaffected"
+            + " because neither they nor the generated rows they land on carry one")
+        .containsExactly("ID", "CaseEventID", "CaseFieldID", "ListElementCode",
+            "FieldShowCondition");
+    assertThat(sheet.getRows()).hasSize(2);
+    assertThat(sheet.getRows()).anySatisfy(r -> {
+      assertThat(r).as("the derived member's tail-graft carries only the exotic column")
+          .containsEntry("SecurityClassification", "Private");
+      assertThat(r).containsEntry("ListElementCode", "name");
+      assertThat(r).doesNotContainKey("ID");
+    });
+    assertThat(sheet.getRows()).anySatisfy(r -> {
+      assertThat(r).as("the unresolvable member is passed through verbatim, ID included")
+          .containsEntry("ID", "Contact");
+      assertThat(r).containsEntry("ListElementCode", "mystery");
+      assertThat(r).containsEntry("DisplayContext", "OPTIONAL");
+    });
+    assertThat(gaps.getEntries())
+        .filteredOn(e -> "EventToComplexTypes".equals(e.getSheet()))
+        .singleElement()
+        .satisfies(e -> assertThat(e.getValue()).isEqualTo("1 derived / 1 passthrough"));
+  }
+
+  @Test
+  void repeatedMemberUnderDivergentShowConditionsDerives() {
+    GapCollector gaps = new GapCollector();
+    // civil's ORDER_REVIEW_OBLIGATION_CHECK/obligationWAFlag shape: the same member placed twice, once
+    // OPTIONAL with a show condition and once MANDATORY without. This IS expressible -- the SDK's
+    // FieldCollection.createField appends unconditionally (no dedupe) and
+    // CaseEventToComplexTypesGenerator merges on the show condition -- so the duplicate gate keys on
+    // (ListElementCode, FieldShowCondition), not ListElementCode alone, and both placements derive.
+    DefinitionIr ir = minimal("Minimal")
+        .row(SheetName.CASE_FIELD,
+            cols("CaseTypeID", "Minimal", "ID", "contact", "Label", "Contact",
+                "FieldType", "Contact"))
+        .row(SheetName.COMPLEX_TYPES,
+            cols("ID", "Contact", "ListElementCode", "name", "FieldType", "Text"))
+        .row(SheetName.CASE_EVENT,
+            cols("CaseTypeID", "Minimal", "ID", "check", "Name", "Check",
+                "PostConditionState", "Open"))
+        .row(SheetName.CASE_EVENT_TO_FIELDS,
+            cols("CaseTypeID", "Minimal", "CaseEventID", "check",
+                "CaseFieldID", "contact", "DisplayContext", "COMPLEX", "PageID", "1"))
+        .row(SheetName.CASE_EVENT_TO_COMPLEX_TYPES,
+            cols("ID", "Contact", "CaseEventID", "check", "CaseFieldID", "contact",
+                "ListElementCode", "name", "DisplayContext", "OPTIONAL",
+                "FieldShowCondition", "contactName=\"OTHER\"", "FieldDisplayOrder", 1))
+        .row(SheetName.CASE_EVENT_TO_COMPLEX_TYPES,
+            cols("ID", "Contact", "CaseEventID", "check", "CaseFieldID", "contact",
+                "ListElementCode", "name", "DisplayContext", "MANDATORY", "FieldDisplayOrder", 2))
+        .build();
+
+    CaseTypeModel model = linker.link(ir, options("Minimal"), gaps);
+
+    var group = model.getEventComplexTypeGroups().values().stream()
+        .filter(g -> "contact".equals(g.getCaseFieldId())).findFirst().orElseThrow();
+    assertThat(group.getMembers()).hasSize(2);
+    assertThat(group.getMembers()).allSatisfy(m ->
+        assertThat(m.getLeafGetter()).isEqualTo("getName"));
+    assertThat(group.getMembers()).extracting("showCondition")
+        .containsExactly("contactName=\"OTHER\"", null);
+    assertThat(model.getPassthroughSheets())
+        .as("both placements derive, and neither row carries an exotic tail to graft")
+        .noneMatch(s -> s.getRelativePath()
+            .equals("CaseEventToComplexTypes/check/contact.json"));
+  }
+
+  @Test
+  void twoRowsAgreeingOnTheGeneratorKeyWithDivergentContentRefuseTheWholeGroup() {
+    GapCollector gaps = new GapCollector();
+    // The one refusal that stays group-wide: two rows agreeing on BOTH (ListElementCode,
+    // FieldShowCondition) -- the generator's own merge key for the sheet -- yet differing in content.
+    // They would collapse into one generated row, and a colliding row kept as a passthrough would merge
+    // ONTO the derived row (same key, and a row need not carry an ID to separate them) instead of
+    // standing alongside it. So the group derives nothing and every row is passed through verbatim.
+    DefinitionIr ir = minimal("Minimal")
+        .row(SheetName.CASE_FIELD,
+            cols("CaseTypeID", "Minimal", "ID", "contact", "Label", "Contact",
+                "FieldType", "Contact"))
+        .row(SheetName.COMPLEX_TYPES,
+            cols("ID", "Contact", "ListElementCode", "name", "FieldType", "Text"))
+        .row(SheetName.CASE_EVENT,
+            cols("CaseTypeID", "Minimal", "ID", "createCase", "Name", "Create",
+                "PostConditionState", "Open"))
+        .row(SheetName.CASE_EVENT_TO_FIELDS,
+            cols("CaseTypeID", "Minimal", "CaseEventID", "createCase",
+                "CaseFieldID", "contact", "DisplayContext", "COMPLEX", "PageID", "1"))
+        .row(SheetName.CASE_EVENT_TO_COMPLEX_TYPES,
+            cols("ID", "Contact", "CaseEventID", "createCase", "CaseFieldID", "contact",
+                "ListElementCode", "name", "DisplayContext", "OPTIONAL", "FieldDisplayOrder", 1))
+        .row(SheetName.CASE_EVENT_TO_COMPLEX_TYPES,
+            cols("ID", "Contact", "CaseEventID", "createCase", "CaseFieldID", "contact",
+                "ListElementCode", "name", "DisplayContext", "MANDATORY", "FieldDisplayOrder", 2))
+        .build();
+
+    CaseTypeModel model = linker.link(ir, options("Minimal"), gaps);
+
+    assertThat(model.getEventComplexTypeGroups())
+        .as("a divergent collision on the generator's key is not per-row recoverable").isEmpty();
+    PassthroughSheet sheet = model.getPassthroughSheets().stream()
+        .filter(s -> s.getRelativePath()
+            .equals("CaseEventToComplexTypes/createCase/contact.json"))
+        .findFirst().orElseThrow();
+    assertThat(sheet.getRows()).as("both rows survive verbatim, ID and display order included")
+        .hasSize(2);
+    assertThat(sheet.getRows()).allSatisfy(r -> assertThat(r).containsEntry("ID", "Contact"));
+    assertThat(gaps.getEntries())
+        .filteredOn(e -> "EventToComplexTypes".equals(e.getSheet()))
+        .singleElement()
+        .satisfies(e -> {
+          assertThat(e.getValue()).isEqualTo("0 derived / 2 passthrough");
+          // The cause tally, not the static prose (which names every cause) -- so this pins that the
+          // refusal was attributed to the collision rather than to some other gate.
+          assertThat(e.getDetail())
+              .contains("2 row(s) — duplicate ListElementCode with divergent content");
+        });
   }
 
   @Test
@@ -1510,5 +1825,310 @@ class DefaultDefinitionLinkerTest {
     assertThat(model.getAccessClasses())
         .extracting(AccessClassModel::getClassName)
         .contains("CaseworkerCitizenCruAccess", "DefaultAccess");
+  }
+
+  @Test
+  void derivesGroupWhoseRootIsPlacedInANonComplexContext() {
+    GapCollector gaps = new GapCollector();
+    // sscs's updateOtherPartyData/appeal: the root field is placed READONLY on the event yet still
+    // carries per-member CaseEventToComplexTypes overrides. The old gate refused to derive unless the
+    // placement was DisplayContext=COMPLEX, because .complex(getter) both registers the root field
+    // AND opens the member scope — deriving would have rewritten the READONLY row to COMPLEX. The
+    // scope is now opened by a NON-REGISTERING opener (.complexScope), so the placement's context is
+    // irrelevant and the group derives.
+    DefinitionIr ir = minimal("Minimal")
+        .row(SheetName.CASE_FIELD,
+            cols("CaseTypeID", "Minimal", "ID", "appeal", "Label", "Appeal",
+                "FieldType", "Appeal"))
+        .row(SheetName.COMPLEX_TYPES,
+            cols("ID", "Appeal", "ListElementCode", "benefitType", "FieldType", "Text"))
+        .row(SheetName.CASE_EVENT,
+            cols("CaseTypeID", "Minimal", "ID", "createCase", "Name", "Create",
+                "PostConditionState", "Open"))
+        .row(SheetName.CASE_EVENT_TO_FIELDS,
+            cols("CaseTypeID", "Minimal", "CaseEventID", "createCase",
+                "CaseFieldID", "appeal", "DisplayContext", "READONLY", "PageID", "1",
+                "PageFieldDisplayOrder", 1))
+        .row(SheetName.CASE_EVENT_TO_COMPLEX_TYPES,
+            cols("ID", "Appeal", "CaseEventID", "createCase", "CaseFieldID", "appeal",
+                "ListElementCode", "benefitType", "DisplayContext", "MANDATORY",
+                "FieldDisplayOrder", 1))
+        .build();
+
+    CaseTypeModel model = linker.link(ir, options("Minimal"), gaps);
+
+    var group = model.getEventComplexTypeGroups().get("createCaseappeal");
+    assertThat(group).as("a non-COMPLEX placement no longer blocks derivation").isNotNull();
+    assertThat(group.getMembers()).singleElement()
+        .satisfies(m -> assertThat(m.getLeafGetter()).isEqualTo("getBenefitType"));
+    // The placement itself is untouched: the emitter puts the scope in a separate statement, so the
+    // page field keeps the context the input asked for.
+    assertThat(model.getEvents().get(0).getPages().get(0).getFields())
+        .singleElement()
+        .extracting(PageModel.PageField::getDisplayContext).isEqualTo("READONLY");
+  }
+
+  @Test
+  void derivesGroupWhoseRootNoPagePlacesAtAll() {
+    GapCollector gaps = new GapCollector();
+    // sscs's dwpUploadResponse/otherParties: the event carries CaseEventToComplexTypes member rows for
+    // a field that has NO CaseEventToFields row at all — no wizard page places it. The old gate needed
+    // a COMPLEX placement to hang the scope off; a non-registering opener needs only the event's
+    // the fields builder, which exists as long as the event places SOME page. The emitter emits these as
+    // orphan scopes after the page fields.
+    DefinitionIr ir = minimal("Minimal")
+        .row(SheetName.CASE_FIELD,
+            cols("CaseTypeID", "Minimal", "ID", "summary", "Label", "Summary", "FieldType", "Text"))
+        .row(SheetName.CASE_FIELD,
+            cols("CaseTypeID", "Minimal", "ID", "otherParties", "Label", "Other parties",
+                "FieldType", "Collection", "FieldTypeParameter", "Party"))
+        .row(SheetName.COMPLEX_TYPES,
+            cols("ID", "Party", "ListElementCode", "partyName", "FieldType", "Text"))
+        .row(SheetName.CASE_EVENT,
+            cols("CaseTypeID", "Minimal", "ID", "createCase", "Name", "Create",
+                "PostConditionState", "Open"))
+        .row(SheetName.CASE_EVENT_TO_FIELDS,
+            cols("CaseTypeID", "Minimal", "CaseEventID", "createCase",
+                "CaseFieldID", "summary", "DisplayContext", "OPTIONAL", "PageID", "1",
+                "PageFieldDisplayOrder", 1))
+        .row(SheetName.CASE_EVENT_TO_COMPLEX_TYPES,
+            cols("ID", "Party", "CaseEventID", "createCase", "CaseFieldID", "otherParties",
+                "ListElementCode", "partyName", "DisplayContext", "OPTIONAL",
+                "FieldDisplayOrder", 1))
+        .build();
+
+    CaseTypeModel model = linker.link(ir, options("Minimal"), gaps);
+
+    var group = model.getEventComplexTypeGroups().get("createCaseotherParties");
+    assertThat(group).as("an unplaced root still derives — the scope registers no field").isNotNull();
+    assertThat(group.getRootElementType()).as("collection root → element-typed scope").isNotNull();
+    assertThat(group.getMembers()).singleElement()
+        .satisfies(m -> assertThat(m.getLeafGetter()).isEqualTo("getPartyName"));
+    // Deriving must not invent a placement: the page still places only the field the input placed.
+    assertThat(model.getEvents().get(0).getPages().get(0).getFields())
+        .extracting(PageModel.PageField::getCaseFieldId).containsExactly("summary");
+  }
+
+  @Test
+  void derivesMemberPlacedAsComplexInItsOwnRight() {
+    GapCollector gaps = new GapCollector();
+    // sscs's confirmPoAttendance/presentingOfficersDetails: an INTERMEDIATE member (contact) carries a
+    // DisplayContext=COMPLEX row of its own alongside the dotted contact.phone rows beneath it. The
+    // generator always emitted the member's context verbatim, so COMPLEX was never the obstacle —
+    // what was missing was an SDK placement setting Complex context WITHOUT opening a nested scope.
+    // That is .complexMember(getter), so this member now derives instead of falling back.
+    DefinitionIr ir = minimal("Minimal")
+        .row(SheetName.CASE_FIELD,
+            cols("CaseTypeID", "Minimal", "ID", "poDetails", "Label", "PO details",
+                "FieldType", "PoDetails"))
+        .row(SheetName.COMPLEX_TYPES,
+            cols("ID", "PoDetails", "ListElementCode", "contact", "FieldType", "Contact"))
+        .row(SheetName.COMPLEX_TYPES,
+            cols("ID", "Contact", "ListElementCode", "phone", "FieldType", "Text"))
+        .row(SheetName.CASE_EVENT,
+            cols("CaseTypeID", "Minimal", "ID", "createCase", "Name", "Create",
+                "PostConditionState", "Open"))
+        .row(SheetName.CASE_EVENT_TO_FIELDS,
+            cols("CaseTypeID", "Minimal", "CaseEventID", "createCase",
+                "CaseFieldID", "poDetails", "DisplayContext", "COMPLEX", "PageID", "1",
+                "PageFieldDisplayOrder", 1))
+        .row(SheetName.CASE_EVENT_TO_COMPLEX_TYPES,
+            cols("ID", "PoDetails", "CaseEventID", "createCase", "CaseFieldID", "poDetails",
+                "ListElementCode", "contact", "DisplayContext", "COMPLEX",
+                "FieldDisplayOrder", 1))
+        .row(SheetName.CASE_EVENT_TO_COMPLEX_TYPES,
+            cols("ID", "Contact", "CaseEventID", "createCase", "CaseFieldID", "poDetails",
+                "ListElementCode", "contact.phone", "DisplayContext", "OPTIONAL",
+                "FieldDisplayOrder", 2))
+        .build();
+
+    CaseTypeModel model = linker.link(ir, options("Minimal"), gaps);
+
+    var group = model.getEventComplexTypeGroups().get("createCasepoDetails");
+    assertThat(group).isNotNull();
+    assertThat(group.getMembers()).hasSize(2);
+    var contact = group.getMembers().stream()
+        .filter(m -> m.getHops().isEmpty()).findFirst().orElseThrow();
+    assertThat(contact.getLeafGetter()).isEqualTo("getContact");
+    assertThat(contact.getContextMethod())
+        .as("a COMPLEX member row places with Complex context but opens no nested scope")
+        .isEqualTo("complexMember");
+    // Nothing falls back: the whole group is code.
+    assertThat(model.getPassthroughSheets())
+        .noneMatch(p -> p.getRelativePath()
+            .equals("CaseEventToComplexTypes/createCase/poDetails.json"));
+  }
+
+  @Test
+  void derivesGroupOnAnEventWithNoPagesAtAll() {
+    GapCollector gaps = new GapCollector();
+    // probate's boFindMatchedCaseGrantRegistrarEscalation/caseMatches: the event has NO
+    // CaseEventToFields rows at all, yet carries member overrides. EventBuilder.fields() hands back
+    // the event's collection builder without registering anything, so the emitter can open a bare
+    // .fields() and hang the non-registering scope off it — a page-less event is not a refusal.
+    DefinitionIr ir = minimal("Minimal")
+        .row(SheetName.CASE_FIELD,
+            cols("CaseTypeID", "Minimal", "ID", "contact", "Label", "Contact",
+                "FieldType", "Contact"))
+        .row(SheetName.COMPLEX_TYPES,
+            cols("ID", "Contact", "ListElementCode", "name", "FieldType", "Text"))
+        .row(SheetName.CASE_EVENT,
+            cols("CaseTypeID", "Minimal", "ID", "silentEvent", "Name", "Silent",
+                "PostConditionState", "Open"))
+        .row(SheetName.CASE_EVENT_TO_COMPLEX_TYPES,
+            cols("ID", "Contact", "CaseEventID", "silentEvent", "CaseFieldID", "contact",
+                "ListElementCode", "name", "DisplayContext", "MANDATORY", "FieldDisplayOrder", 1))
+        .build();
+
+    CaseTypeModel model = linker.link(ir, options("Minimal"), gaps);
+
+    var group = model.getEventComplexTypeGroups().get("silentEventcontact");
+    assertThat(group).as("a page-less event still derives").isNotNull();
+    assertThat(group.getMembers()).singleElement()
+        .satisfies(m -> assertThat(m.getLeafGetter()).isEqualTo("getName"));
+    assertThat(model.getEvents().get(0).getPages())
+        .as("deriving must not invent a page").isNullOrEmpty();
+    assertThat(model.getPassthroughSheets())
+        .noneMatch(p -> p.getRelativePath()
+            .equals("CaseEventToComplexTypes/silentEvent/contact.json"));
+  }
+
+  @Test
+  void groupNamingAnUndeclaredEventFallsBackWithNoEventReason() {
+    GapCollector gaps = new GapCollector();
+    // The last placement-shaped refusal: a member row naming an event no CaseEvent row declares. There
+    // is no generated .event(...) block at all, so there is nothing to open a scope on and the rows
+    // stay verbatim.
+    DefinitionIr ir = minimal("Minimal")
+        .row(SheetName.CASE_FIELD,
+            cols("CaseTypeID", "Minimal", "ID", "contact", "Label", "Contact",
+                "FieldType", "Contact"))
+        .row(SheetName.COMPLEX_TYPES,
+            cols("ID", "Contact", "ListElementCode", "name", "FieldType", "Text"))
+        .row(SheetName.CASE_EVENT_TO_COMPLEX_TYPES,
+            cols("ID", "Contact", "CaseEventID", "ghostEvent", "CaseFieldID", "contact",
+                "ListElementCode", "name", "DisplayContext", "MANDATORY", "FieldDisplayOrder", 1))
+        .build();
+
+    CaseTypeModel model = linker.link(ir, options("Minimal"), gaps);
+
+    assertThat(model.getEventComplexTypeGroups()).doesNotContainKey("ghostEventcontact");
+    assertThat(model.getPassthroughSheets())
+        .anyMatch(p -> p.getRelativePath()
+            .equals("CaseEventToComplexTypes/ghostEvent/contact.json"));
+    assertThat(gaps.getEntries())
+        .filteredOn(g -> "EventToComplexTypes".equals(g.getSheet()))
+        .singleElement()
+        .satisfies(g -> assertThat(g.getDetail())
+            .contains("no CaseEvent row declares this event, so there is no event to place a scope on"));
+  }
+
+  /**
+   * A minimal retrofit graph that answers only {@code rootPlacement}, so a test can pin how the
+   * linker roots a group's scope without also standing up a parsed model source tree. Every other
+   * query returns "no binding", which puts the member walk on the generated-complex-type path.
+   */
+  private static ConversionOptions retrofitOptionsWithPlacement(
+      RetrofitModelTypeGraph.RootPlacement placement) {
+    return ConversionOptions.builder()
+        .caseTypeId("Minimal")
+        .modelPackage("uk.gov.hmcts.test.model")
+        .configPackage("uk.gov.hmcts.test.config")
+        .retrofit(true)
+        .retrofitModelTypeGraph(new RetrofitModelTypeGraph() {
+          @Override
+          public Optional<Handle> rootHandle(String caseFieldId) {
+            return Optional.empty();
+          }
+
+          @Override
+          public boolean rootIsCollection(String caseFieldId) {
+            return false;
+          }
+
+          @Override
+          public Optional<MemberResolution> member(Handle owner, String segment) {
+            return Optional.empty();
+          }
+
+          @Override
+          public Optional<Handle> complexTypeHandle(String complexTypeId) {
+            return Optional.empty();
+          }
+
+          @Override
+          public Optional<RootPlacement> rootPlacement(String caseFieldId) {
+            return Optional.of(placement);
+          }
+        })
+        .build();
+  }
+
+  private static DefinitionIr irWithOneMemberOverride() {
+    return IrBuilder.builder()
+        .row(SheetName.JURISDICTION, cols("ID", "TEST", "Name", "Test Jurisdiction"))
+        .row(SheetName.CASE_TYPE,
+            cols("ID", "Minimal", "Name", "Case", "JurisdictionID", "TEST"))
+        .row(SheetName.CASE_FIELD,
+            cols("CaseTypeID", "Minimal", "ID", "applicant1DQHearing", "Label", "Hearing",
+                "FieldType", "Hearing"))
+        .row(SheetName.COMPLEX_TYPES,
+            cols("ID", "Hearing", "ListElementCode", "hearingLength", "FieldType", "Text"))
+        .row(SheetName.CASE_EVENT,
+            cols("CaseTypeID", "Minimal", "ID", "createCase", "Name", "Create",
+                "PostConditionState", "Open"))
+        .row(SheetName.CASE_EVENT_TO_COMPLEX_TYPES,
+            cols("ID", "Hearing", "CaseEventID", "createCase", "CaseFieldID", "applicant1DQHearing",
+                "ListElementCode", "hearingLength", "DisplayContext", "MANDATORY",
+                "FieldDisplayOrder", 1))
+        .build();
+  }
+
+  @Test
+  void rootsAGroupThroughTheUnwrappedHopsTheModelDeclares() {
+    GapCollector gaps = new GapCollector();
+    // Civil's applicant1DQHearing: declared on model.dq.Applicant1DQ, reached through CaseData's
+    // @JsonUnwrapped applicant1DQ. The group must carry the hop so the emitter descends the holder —
+    // CaseData::getApplicant1DQHearing does not compile.
+    ConversionOptions options = retrofitOptionsWithPlacement(
+        RetrofitModelTypeGraph.RootPlacement.of("getApplicant1DQHearing",
+            List.of(new RetrofitModelTypeGraph.PlacementHop(
+                "getApplicant1DQ", "uk.gov.hmcts.test.model.dq.Applicant1DQ"))));
+
+    CaseTypeModel model = linker.link(irWithOneMemberOverride(), options, gaps);
+
+    var group = model.getEventComplexTypeGroups().get("createCaseapplicant1DQHearing");
+    assertThat(group).as("a hop-rooted group still derives").isNotNull();
+    assertThat(group.getRootGetter()).isEqualTo("getApplicant1DQHearing");
+    assertThat(group.getRootHops()).singleElement().satisfies(hop -> {
+      assertThat(hop.getGetter()).isEqualTo("getApplicant1DQ");
+      assertThat(hop.getTargetType().getModelFqn())
+          .isEqualTo("uk.gov.hmcts.test.model.dq.Applicant1DQ");
+    });
+    assertThat(model.getPassthroughSheets())
+        .noneMatch(p -> p.getRelativePath()
+            .equals("CaseEventToComplexTypes/createCase/applicant1DQHearing.json"));
+  }
+
+  @Test
+  void refusesTheWholeGroupWhenTheModelExposesNoCompilableGetterChain() {
+    GapCollector gaps = new GapCollector();
+    // The holder's getter is suppressed, so no method reference can open the scope. The group must fall
+    // back verbatim — the same refusal the rebinder applies to the PAGE placement of that field, so the
+    // two placements of one field cannot disagree.
+    ConversionOptions options =
+        retrofitOptionsWithPlacement(RetrofitModelTypeGraph.RootPlacement.unreachable());
+
+    CaseTypeModel model = linker.link(irWithOneMemberOverride(), options, gaps);
+
+    assertThat(model.getEventComplexTypeGroups())
+        .doesNotContainKey("createCaseapplicant1DQHearing");
+    assertThat(model.getPassthroughSheets())
+        .anyMatch(p -> p.getRelativePath()
+            .equals("CaseEventToComplexTypes/createCase/applicant1DQHearing.json"));
+    assertThat(gaps.getEntries())
+        .filteredOn(g -> "EventToComplexTypes".equals(g.getSheet()))
+        .anySatisfy(g -> assertThat(g.getDetail())
+            .contains("the model exposes no compilable getter chain to this field"));
   }
 }

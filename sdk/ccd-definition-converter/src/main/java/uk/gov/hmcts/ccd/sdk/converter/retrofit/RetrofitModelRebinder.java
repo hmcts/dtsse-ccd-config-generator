@@ -7,8 +7,8 @@ import java.util.Set;
 import java.util.TreeSet;
 import uk.gov.hmcts.ccd.sdk.converter.model.CaseTypeModel;
 import uk.gov.hmcts.ccd.sdk.converter.model.ClusteredFieldRef;
-import uk.gov.hmcts.ccd.sdk.converter.model.DelegatingGetter;
 import uk.gov.hmcts.ccd.sdk.converter.model.ComplexTypeAuthModel;
+import uk.gov.hmcts.ccd.sdk.converter.model.DelegatingGetter;
 import uk.gov.hmcts.ccd.sdk.converter.model.FieldModel;
 import uk.gov.hmcts.ccd.sdk.converter.model.FixedListModel;
 import uk.gov.hmcts.ccd.sdk.converter.model.PassthroughSheet;
@@ -216,15 +216,73 @@ final class RetrofitModelRebinder {
     // all and its grant is routed to the raw-JSON passthrough.
     GrantRebind grantRebind = rebindComplexTypeGrants(model, reboundFields, refs, unplaceable, gaps);
 
+    // Tab fields carrying a DisplayContextParameter need the same treatment: the DCP is the one
+    // tab-field attribute only the TYPED overload field(getter, showCondition, displayContext) can
+    // carry, so those fields cannot fall back to the string path — and a field reached only through a
+    // @JsonUnwrapped member has no CaseData::getX to reference. Reuse the grants' delegating-getter
+    // mechanism (one shared map, so a field needed by both a grant and a tab gets exactly one getter).
+    Map<String, DelegatingGetter> delegatingGetters = new LinkedHashMap<>(grantRebind.getters);
+    delegatingGetters.putAll(tabDelegatingGetters(model, refs, unplaceable, delegatingGetters));
+
     return model.toBuilder()
         .caseFields(reboundFields)
         .fixedLists(reboundLists)
         .clusteredFieldRefs(refs)
         .unplaceableFieldIds(unplaceable)
         .complexTypeAuthorisations(grantRebind.grants)
-        .delegatingGetters(grantRebind.getters)
+        .delegatingGetters(delegatingGetters)
         .passthroughSheets(grantRebind.passthrough)
         .build();
+  }
+
+  /**
+   * The delegating getters the tab emitter needs: one per DisplayContextParameter-carrying tab field
+   * that the team's model reaches only through a {@code @JsonUnwrapped} member.
+   *
+   * <p>Only DCP-carrying fields are covered, deliberately. A DCP-less tab field round-trips through
+   * the cheap string overload ({@code field(id)} / {@code field(id, showCondition)}), and every typed
+   * getter is a serializable lambda — synthesising getters for whole large tabs would push the config
+   * class's {@code $deserializeLambda$} over the 64KB method limit ("code too large"), the very
+   * regression the DCP-only typed path in {@code CoreConfigEmitter.emitTabs} guards against.
+   *
+   * <p>A field whose unwrap chain has an unresolvable getter ({@code unplaceable}) gets none: no
+   * compilable delegation body exists, so the emitter leaves it on the string path and its DCP stays
+   * an unreproducible residual, exactly as for a non-member field.
+   *
+   * @param existing the getters already decided (grants), so a field needed twice is not re-added
+   * @return CCD field id → delegating getter, for the tab fields that need one
+   */
+  private Map<String, DelegatingGetter> tabDelegatingGetters(CaseTypeModel model,
+      Map<String, ClusteredFieldRef> refs, Set<String> unplaceable,
+      Map<String, DelegatingGetter> existing) {
+    Map<String, DelegatingGetter> getters = new LinkedHashMap<>();
+    if (model.getTabs() == null) {
+      return getters;
+    }
+    for (uk.gov.hmcts.ccd.sdk.converter.model.TabModel tab : model.getTabs()) {
+      if (tab.getFields() == null) {
+        continue;
+      }
+      for (uk.gov.hmcts.ccd.sdk.converter.model.TabModel.TabField field : tab.getFields()) {
+        String dcp = field.getDisplayContextParameter();
+        if (dcp == null || dcp.isEmpty()) {
+          continue;
+        }
+        // A labelled tab field is emitted through label(...), which takes a string id and no DCP at
+        // all, so a getter for it would be unused (and its DCP is a residual either way).
+        if (field.getLabel() != null && !field.getLabel().isEmpty()) {
+          continue;
+        }
+        String fieldId = field.getCaseFieldId();
+        ClusteredFieldRef ref = refs.get(fieldId);
+        if (ref == null || unplaceable.contains(fieldId)
+            || existing.containsKey(fieldId) || getters.containsKey(fieldId)) {
+          continue;
+        }
+        getters.put(fieldId, delegatingGetterFor(fieldId, ref));
+      }
+    }
+    return getters;
   }
 
   /** The re-classified grants, synthesised delegating getters and augmented passthrough. */

@@ -37,7 +37,23 @@ final class Annotations {
    * @return the annotation expression, or empty
    */
   static Optional<AnnotationExpr> find(BodyDeclaration<?> decl, String simpleName) {
-    for (AnnotationExpr ann : decl.getAnnotations()) {
+    return find(decl.getAnnotations(), simpleName);
+  }
+
+  /**
+   * The annotation of the given simple name in an annotation list, if present.
+   *
+   * <p>Taken as a list rather than a declaration so it also serves nodes that are not
+   * {@link BodyDeclaration}s — notably a constructor {@link com.github.javaparser.ast.body.Parameter},
+   * where {@code @JsonProperty} on a {@code @JsonCreator} parameter names the property for Jackson.
+   *
+   * @param annotations the annotations to search
+   * @param simpleName the annotation's simple name
+   * @return the annotation expression, or empty
+   */
+  static Optional<AnnotationExpr> find(
+      Iterable<? extends AnnotationExpr> annotations, String simpleName) {
+    for (AnnotationExpr ann : annotations) {
       if (ann.getNameAsString().equals(simpleName)
           || ann.getNameAsString().endsWith("." + simpleName)) {
         return Optional.of(ann);

@@ -253,6 +253,54 @@ final class ModelSourceIndex {
   }
 
   /**
+   * A {@code derivedName → boundClassFqn} map for every definition complex type that BINDS to an
+   * existing model class whose real simple name differs from the name the linker derives for it.
+   *
+   * <p>{@link uk.gov.hmcts.ccd.sdk.converter.link.TypeClassNamer#complexTypeName} PascalCases a
+   * definition ID by upper-casing the leading character of each alphanumeric run, so ET's
+   * {@code et3CaseDetailsLinksStatuses} becomes {@code Et3CaseDetailsLinksStatuses} — while the class
+   * it binds to (via {@link #complexTypeClass}'s case-insensitive fallback) is the acronym-cased
+   * {@code ET3CaseDetailsLinksStatuses}. Because the type binds, no companion is emitted under the
+   * derived name, so every reference to it (a companion complex type's member, a synthesised field)
+   * resolved to a {@code modelPackage.Et3CaseDetailsLinksStatuses} that exists nowhere:
+   * {@code cannot find symbol}.
+   *
+   * <p>{@link #caseInsensitiveClassAliases()} does not cover this: it only aliases a class's
+   * DECAPITALISED simple name, which handles a camelCase ID whose class differs from it in the leading
+   * character alone ({@code panel → Panel}). Any other case divergence — an embedded acronym — needs
+   * the definition ID itself as the starting point, which is what this does.
+   *
+   * @param complexTypeIds the definition's ComplexTypes IDs
+   * @param packageHint the model package, preferred on an ambiguous simple name
+   * @return derived reference name → bound class FQN, for the ids where the two names differ
+   */
+  Map<String, String> complexTypeIdClassAliases(java.util.Collection<String> complexTypeIds,
+      String packageHint) {
+    Map<String, String> aliases = new LinkedHashMap<>();
+    for (String id : complexTypeIds) {
+      if (id == null) {
+        continue;
+      }
+      Optional<Type> bound = complexTypeClass(id, packageHint);
+      if (bound.isEmpty()) {
+        // No model class: a companion IS emitted under the derived name, so no alias is wanted.
+        continue;
+      }
+      String derived = uk.gov.hmcts.ccd.sdk.converter.link.TypeClassNamer.complexTypeName(id);
+      if (derived.isEmpty() || derived.equals(bound.get().simpleName)) {
+        continue;
+      }
+      // Never shadow a type the model really declares under the derived name — that reference is
+      // already correct and rebinding it would point it somewhere else.
+      if (bySimpleName.containsKey(derived)) {
+        continue;
+      }
+      aliases.putIfAbsent(derived, bound.get().fqn);
+    }
+    return aliases;
+  }
+
+  /**
    * The type with a fully-qualified name, if parsed.
    *
    * @param fqn the fully-qualified class name
@@ -635,6 +683,37 @@ final class ModelSourceIndex {
     }
     return false;
   }
+
+  /**
+   * Every method NAME called anywhere in the parsed model source, computed once on first use.
+   *
+   * <p>Used by the retrofit retype planner: re-declaring a field as a generated companion class
+   * changes the type its accessors return and take, so any caller that reads
+   * {@code getDwpAT38Document()} into a {@code DwpResponseDocument} (or passes one to the setter) stops
+   * compiling. Matched by NAME alone, with no receiver-type resolution — the index has no symbol
+   * solver — which is deliberately conservative: an unrelated class's identically-named accessor also
+   * blocks the retype, erring toward leaving the team's declaration alone.
+   *
+   * @return the set of called method names
+   */
+  Set<String> calledMethodNames() {
+    if (calledMethodNames == null) {
+      Set<String> names = new LinkedHashSet<>();
+      Set<CompilationUnit> scanned =
+          java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<>());
+      for (Type candidate : byFqn.values()) {
+        if (!scanned.add(candidate.unit)) {
+          continue;
+        }
+        candidate.unit.findAll(com.github.javaparser.ast.expr.MethodCallExpr.class)
+            .forEach(call -> names.add(call.getNameAsString()));
+      }
+      calledMethodNames = names;
+    }
+    return calledMethodNames;
+  }
+
+  private Set<String> calledMethodNames;
 
   /**
    * Whether the model exposes a public getter for {@code fieldName} on {@code owner} (or a

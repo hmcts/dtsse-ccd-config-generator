@@ -1,6 +1,7 @@
 package uk.gov.hmcts.ccd.sdk.converter.retrofit;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.entry;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -41,11 +42,28 @@ class RetrofitEventComplexTypeGraphTest {
 
   /** A model where a complex field's declared type is the team's OWN same-shaped class. */
   private EventComplexTypeResolver resolverFor(Path src) throws Exception {
+    return resolverFor(src, RetrofitPlannedSynthesis.empty());
+  }
+
+  /** The same wiring, with the patch's planned field synthesis fed to the graph. */
+  private EventComplexTypeResolver resolverFor(Path src, RetrofitPlannedSynthesis planned)
+      throws Exception {
+    return resolverFor(src, planned, RetrofitPinnedNames.empty());
+  }
+
+  /**
+   * The same wiring, collecting the {@code @JsonNaming}-derived names the walk relies on into the
+   * given sink so a test can assert the graph records exactly what the patch must pin.
+   */
+  private EventComplexTypeResolver resolverFor(
+      Path src, RetrofitPlannedSynthesis planned, RetrofitPinnedNames pinned) throws Exception {
     ModelSourceIndex index = ModelSourceIndex.parse(src);
     PropertyResolver.Resolution resolution =
         new PropertyResolver(index).resolve(index.byFqn("m.CaseData").orElseThrow());
-    return new EventComplexTypeResolver(
-        List.of(), PREDEFINED, new RetrofitEventComplexTypeGraph(index, resolution));
+    return new EventComplexTypeResolver(List.of(), PREDEFINED,
+        new RetrofitEventComplexTypeGraph(index, resolution,
+            index.byFqn("m.CaseData").orElseThrow(), planned, RetrofitPlannedRetypes.empty(),
+            pinned));
   }
 
   private EventComplexTypeGroup.Member resolve(
@@ -158,6 +176,340 @@ class RetrofitEventComplexTypeGraphTest {
         "mandatory", null, null, null, null)).isPresent();
     assertThat(resolver.resolve(resolver.rootNode(field), "withDrawApplicationHeadingLabel",
         "mandatory", null, null, null, null)).isEmpty();
+  }
+
+  @Test
+  void resolvesAMemberTheRetrofitPatchIsAboutToSynthesise(@TempDir Path work) throws Exception {
+    Path src = work.resolve("src");
+    // The ordering defect (civil's FixedRecoverableCosts.bandLabel): the definition declares a member
+    // the parsed class does not, but the SAME run's patch synthesises it as a real field. The walk reads
+    // the model as PARSED, so without the plan the row fell back to a verbatim passthrough even though
+    // the patched model has the field. With the plan the member resolves to the getter the patch's field
+    // name yields, and carries the planned @CCD(hint).
+    write(src, "m", "FixedRecoverableCosts", "package m;\nimport lombok.Data;\n@Data\n"
+        + "public class FixedRecoverableCosts {\n  private String band;\n}\n");
+    write(src, "m", "CaseData", "package m;\nimport lombok.Data;\n@Data\npublic class CaseData {\n"
+        + "  private FixedRecoverableCosts applicant1DQFixedRecoverableCosts;\n}\n");
+
+    RetrofitPlannedSynthesis planned = RetrofitPlannedSynthesis.empty();
+    planned.record("m.FixedRecoverableCosts", FieldModel.builder()
+        .id("bandLabel").javaName("bandLabel").fieldType("Text").hint("Planned hint").build());
+
+    EventComplexTypeResolver resolver = resolverFor(src, planned);
+    FieldModel field = FieldModel.builder()
+        .id("applicant1DQFixedRecoverableCosts").javaName("applicant1DQFixedRecoverableCosts")
+        .fieldType("FixedRecoverableCosts").build();
+
+    // The declared member still resolves normally…
+    assertThat(resolve(resolver, field, "band").getLeafGetter()).isEqualTo("getBand");
+    // …and so does the one the patch adds.
+    EventComplexTypeGroup.Member member = resolve(resolver, field, "bandLabel");
+    assertThat(member.getHops()).isEmpty();
+    assertThat(member.getLeafGetter()).isEqualTo("getBandLabel");
+    assertThat(member.getLeafType().getModelFqn()).isEqualTo("m.FixedRecoverableCosts");
+    assertThat(member.getDeclaredHint()).isEqualTo("Planned hint");
+
+    // Without the plan the SAME code falls back — the behaviour the fix replaces.
+    assertThat(resolverFor(src).resolve(resolverFor(src).rootNode(field), "bandLabel",
+        "mandatory", null, null, null, null)).isEmpty();
+  }
+
+  @Test
+  void doesNotResolveBeneathAPlannedSynthesisedMemberOfANonComplexType(@TempDir Path work)
+      throws Exception {
+    Path src = work.resolve("src");
+    // A planned member whose declared type is a SCALAR is a leaf: nothing can be addressed beneath it,
+    // so a dotted code through one must still fall back rather than invent a hop.
+    write(src, "m", "Party", "package m;\nimport lombok.Data;\n@Data\n"
+        + "public class Party {\n  private String name;\n}\n");
+    write(src, "m", "CaseData", "package m;\nimport lombok.Data;\n@Data\npublic class CaseData {\n"
+        + "  private Party applicant;\n}\n");
+
+    RetrofitPlannedSynthesis planned = RetrofitPlannedSynthesis.empty();
+    planned.record("m.Party", FieldModel.builder()
+        .id("contactEmail").javaName("contactEmail").fieldType("Text").build());
+
+    EventComplexTypeResolver resolver = resolverFor(src, planned);
+    FieldModel field = FieldModel.builder()
+        .id("applicant").javaName("applicant").fieldType("Party").build();
+
+    // The planned member itself resolves as a leaf…
+    assertThat(resolve(resolver, field, "contactEmail").getLeafGetter())
+        .isEqualTo("getContactEmail");
+    // …but a segment beneath it does not.
+    assertThat(resolver.resolve(resolver.rootNode(field), "contactEmail.local",
+        "mandatory", null, null, null, null)).isEmpty();
+  }
+
+  @Test
+  void resolvesBeneathAPlannedSynthesisedMemberIntoTheTeamsOwnClass(@TempDir Path work)
+      throws Exception {
+    Path src = work.resolve("src");
+    // sscs's supporter.name.firstName shape: the definition declares a member the model does not, the
+    // patch synthesises it as a real field, and the type BENEATH it is a class the team already declares
+    // — under a camelCase definition id ('name') against a PascalCase class (Name), which only the
+    // by-id lookup's case-insensitive fallback binds. The walk must descend PAST the synthesised member
+    // and land on the team's Name (real getter getFirstName) rather than fall back: 9 sscs
+    // EventToComplexTypes rows were passed through as raw JSON for exactly this reason.
+    write(src, "m", "Name", "package m;\nimport lombok.Data;\n@Data\n"
+        + "public class Name {\n  private String firstName;\n}\n");
+    write(src, "m", "Appeal", "package m;\nimport lombok.Data;\n@Data\n"
+        + "public class Appeal {\n  private String benefitType;\n}\n");
+    write(src, "m", "CaseData", "package m;\nimport lombok.Data;\n@Data\npublic class CaseData {\n"
+        + "  private Appeal appeal;\n}\n");
+
+    RetrofitPlannedSynthesis planned = RetrofitPlannedSynthesis.empty();
+    planned.record("m.Appeal", FieldModel.builder()
+        .id("appellantName").javaName("appellantName").fieldType("name").build());
+
+    EventComplexTypeResolver resolver = resolverFor(src, planned);
+    FieldModel field = FieldModel.builder()
+        .id("appeal").javaName("appeal").fieldType("Appeal").build();
+
+    EventComplexTypeGroup.Member member = resolve(resolver, field, "appellantName.firstName");
+    assertThat(member.getLeafGetter()).isEqualTo("getFirstName");
+    assertThat(member.getLeafType().getModelFqn()).isEqualTo("m.Name");
+    assertThat(member.getHops()).hasSize(1);
+    assertThat(member.getHops().get(0).getGetter()).isEqualTo("getAppellantName");
+    assertThat(member.getHops().get(0).getDeclaringType().getModelFqn()).isEqualTo("m.Appeal");
+    // The hop is a SCALAR complex member, so no element-typed scope is opened for it.
+    assertThat(member.getHops().get(0).getElementType()).isNull();
+
+    // Without the plan the same code falls back — the behaviour the fix replaces.
+    EventComplexTypeResolver unplanned = resolverFor(src);
+    assertThat(unplanned.resolve(unplanned.rootNode(field), "appellantName.firstName",
+        "mandatory", null, null, null, null)).isEmpty();
+  }
+
+  @Test
+  void resolvesAMemberByItsClassJsonNamingStrategyAndRecordsThePinItRelieson(@TempDir Path work)
+      throws Exception {
+    Path src = work.resolve("src");
+    // Civil's Address: the class carries @JsonNaming(UpperCamelCaseStrategy), so field addressLine1
+    // serialises — and appears in the definition's ListElementCode — as AddressLine1. Both the SDK's
+    // PropertyUtils.getPropertyName and this converter's own id rule are naming-strategy BLIND, so the
+    // walk must apply the strategy to resolve the segment AND record the reliance so the patch pins the
+    // name with an explicit @JsonProperty. Resolving without pinning would emit
+    // Address::getAddressLine1 and have the SDK regenerate the id 'addressLine1' — silently changing
+    // the CCD field id, a fidelity regression strictly worse than the passthrough it replaces.
+    write(src, "m", "Address", "package m;\n"
+        + "import com.fasterxml.jackson.databind.PropertyNamingStrategies;\n"
+        + "import com.fasterxml.jackson.databind.annotation.JsonNaming;\nimport lombok.Data;\n@Data\n"
+        + "@JsonNaming(PropertyNamingStrategies.UpperCamelCaseStrategy.class)\n"
+        + "public class Address {\n  private String addressLine1;\n  private String PostCode;\n}\n");
+    write(src, "m", "CaseData", "package m;\nimport lombok.Data;\n@Data\npublic class CaseData {\n"
+        + "  private Address applicantAddress;\n}\n");
+
+    RetrofitPinnedNames pinned = RetrofitPinnedNames.empty();
+    EventComplexTypeResolver resolver =
+        resolverFor(src, RetrofitPlannedSynthesis.empty(), pinned);
+    FieldModel field = FieldModel.builder()
+        .id("applicantAddress").javaName("applicantAddress").fieldType("AddressUK").build();
+
+    EventComplexTypeGroup.Member member = resolve(resolver, field, "AddressLine1");
+    assertThat(member.getHops()).isEmpty();
+    assertThat(member.getLeafType().getModelFqn()).isEqualTo("m.Address");
+    // The getter is the JAVA field's, not the strategy's name — the pin is what reconciles the two, and
+    // it carries the strategy's own id so the patch has nothing to re-derive.
+    assertThat(member.getLeafGetter()).isEqualTo("getAddressLine1");
+    assertThat(pinned.idsFor("m.Address")).containsExactly(entry("addressLine1", "AddressLine1"));
+
+    // A field whose own name already equals the segment resolves by the exact rule and is NOT pinned:
+    // only names an actual resolved walk depended on are pinned, never every field of the class.
+    assertThat(resolve(resolver, field, "PostCode").getLeafGetter()).isEqualTo("getPostCode");
+    assertThat(pinned.javaNamesFor("m.Address")).containsExactly("addressLine1");
+  }
+
+  @Test
+  void leavesAFieldCarryingItsOwnJsonPropertyToThatAnnotation(@TempDir Path work) throws Exception {
+    Path src = work.resolve("src");
+    // Jackson's precedence: an explicit field-level @JsonProperty overrides the class-level
+    // @JsonNaming. The walk must honour that — the field resolves under its @JsonProperty value and
+    // NOT under the strategy's name for it, and needs no pin (the annotation is already there).
+    write(src, "m", "Address", "package m;\n"
+        + "import com.fasterxml.jackson.annotation.JsonProperty;\n"
+        + "import com.fasterxml.jackson.databind.PropertyNamingStrategies;\n"
+        + "import com.fasterxml.jackson.databind.annotation.JsonNaming;\nimport lombok.Data;\n@Data\n"
+        + "@JsonNaming(PropertyNamingStrategies.UpperCamelCaseStrategy.class)\n"
+        + "public class Address {\n"
+        + "  @JsonProperty(\"AddressTown\") private String postTown;\n}\n");
+    write(src, "m", "CaseData", "package m;\nimport lombok.Data;\n@Data\npublic class CaseData {\n"
+        + "  private Address applicantAddress;\n}\n");
+
+    RetrofitPinnedNames pinned = RetrofitPinnedNames.empty();
+    EventComplexTypeResolver resolver =
+        resolverFor(src, RetrofitPlannedSynthesis.empty(), pinned);
+    FieldModel field = FieldModel.builder()
+        .id("applicantAddress").javaName("applicantAddress").fieldType("AddressUK").build();
+
+    assertThat(resolve(resolver, field, "AddressTown").getLeafGetter()).isEqualTo("getPostTown");
+    assertThat(resolver.resolve(resolver.rootNode(field), "PostTown",
+        "mandatory", null, null, null, null)).isEmpty();
+    assertThat(pinned.isEmpty()).isTrue();
+  }
+
+  @Test
+  void resolvesAMemberByItsCreatorParameterJsonPropertyAndRecordsThePin(@TempDir Path work)
+      throws Exception {
+    Path src = work.resolve("src");
+    // fpl's Address: an immutable value class whose @JsonProperty lives on the @JsonCreator
+    // CONSTRUCTOR PARAMETERS, not the fields. Jackson honours it for both directions, so the member
+    // really does appear in the definition as AddressLine1 — but the SDK's PropertyUtils.getPropertyName
+    // reads @JsonProperty only off the field and the read method, so the walk saw nothing and the row
+    // fell back to a verbatim passthrough (364 of fpl's EventToComplexTypes fallbacks). Same contract as
+    // the @JsonNaming path: resolve AND pin, or the SDK would regenerate the id 'addressLine1'.
+    write(src, "m", "Address", "package m;\n"
+        + "import com.fasterxml.jackson.annotation.JsonCreator;\n"
+        + "import com.fasterxml.jackson.annotation.JsonProperty;\nimport lombok.Data;\n@Data\n"
+        + "public class Address {\n"
+        + "  private final String addressLine1;\n  private final String postTown;\n"
+        + "  @JsonCreator\n  public Address(@JsonProperty(\"AddressLine1\") String addressLine1,\n"
+        + "      @JsonProperty(\"PostTown\") String postTown) {\n"
+        + "    this.addressLine1 = addressLine1;\n    this.postTown = postTown;\n  }\n}\n");
+    write(src, "m", "CaseData", "package m;\nimport lombok.Data;\n@Data\npublic class CaseData {\n"
+        + "  private Address applicantAddress;\n}\n");
+
+    RetrofitPinnedNames pinned = RetrofitPinnedNames.empty();
+    EventComplexTypeResolver resolver =
+        resolverFor(src, RetrofitPlannedSynthesis.empty(), pinned);
+    FieldModel field = FieldModel.builder()
+        .id("applicantAddress").javaName("applicantAddress").fieldType("AddressUK").build();
+
+    EventComplexTypeGroup.Member member = resolve(resolver, field, "AddressLine1");
+    assertThat(member.getLeafType().getModelFqn()).isEqualTo("m.Address");
+    // The getter is the JAVA field's; the pin is what makes the SDK regenerate the parameter's id. The
+    // ID is recorded alongside the name because there is no class naming strategy here for the patch to
+    // re-derive it from — recording only the name pinned nothing at all and silently changed the id.
+    assertThat(pinned.idsFor("m.Address")).containsExactly(entry("addressLine1", "AddressLine1"));
+    assertThat(member.getLeafGetter()).isEqualTo("getAddressLine1");
+
+    // Only names an actual resolved walk depended on are pinned — not every creator parameter.
+    assertThat(resolve(resolver, field, "PostTown").getLeafGetter()).isEqualTo("getPostTown");
+    assertThat(pinned.idsFor("m.Address"))
+        .containsOnly(entry("addressLine1", "AddressLine1"), entry("postTown", "PostTown"));
+  }
+
+  @Test
+  void ignoresACreatorParameterThatDoesNotNameTheFieldItAssigns(@TempDir Path work)
+      throws Exception {
+    Path src = work.resolve("src");
+    // Matching is by parameter NAME, not position: a creator whose parameter is named for something
+    // other than the field must not bind it. Positional matching would silently mis-bind a reordered
+    // constructor and pin the wrong id — strictly worse than the passthrough it replaces. Here the
+    // field's own @JsonProperty also outranks the parameter's, exactly as it does for Jackson.
+    write(src, "m", "Address", "package m;\n"
+        + "import com.fasterxml.jackson.annotation.JsonCreator;\n"
+        + "import com.fasterxml.jackson.annotation.JsonProperty;\nimport lombok.Data;\n@Data\n"
+        + "public class Address {\n"
+        + "  private final String addressLine1;\n"
+        + "  @JsonProperty(\"PostTown\") private final String postTown;\n"
+        + "  @JsonCreator\n  public Address(@JsonProperty(\"AddressLine1\") String line1,\n"
+        + "      @JsonProperty(\"AddressTown\") String postTown) {\n"
+        + "    this.addressLine1 = line1;\n    this.postTown = postTown;\n  }\n}\n");
+    write(src, "m", "CaseData", "package m;\nimport lombok.Data;\n@Data\npublic class CaseData {\n"
+        + "  private Address applicantAddress;\n}\n");
+
+    RetrofitPinnedNames pinned = RetrofitPinnedNames.empty();
+    EventComplexTypeResolver resolver =
+        resolverFor(src, RetrofitPlannedSynthesis.empty(), pinned);
+    FieldModel field = FieldModel.builder()
+        .id("applicantAddress").javaName("applicantAddress").fieldType("AddressUK").build();
+
+    // Parameter 'line1' names no field, so AddressLine1 does not resolve.
+    assertThat(resolver.resolve(resolver.rootNode(field), "AddressLine1",
+        "mandatory", null, null, null, null)).isEmpty();
+    // The field's own @JsonProperty wins over the creator parameter's AddressTown, and needs no pin.
+    assertThat(resolver.resolve(resolver.rootNode(field), "AddressTown",
+        "mandatory", null, null, null, null)).isEmpty();
+    assertThat(resolve(resolver, field, "PostTown").getLeafGetter()).isEqualTo("getPostTown");
+    assertThat(pinned.isEmpty()).isTrue();
+  }
+
+  @Test
+  void ignoresAConstructorParameterWhenTheConstructorIsNotAJsonCreator(@TempDir Path work)
+      throws Exception {
+    Path src = work.resolve("src");
+    // Without @JsonCreator, Jackson never consults the constructor's parameter annotations for
+    // deserialisation naming and the SDK certainly does not — the definition segment would be the
+    // field's own name, so binding it here would pin an id the input never carried.
+    write(src, "m", "Address", "package m;\n"
+        + "import com.fasterxml.jackson.annotation.JsonProperty;\nimport lombok.Data;\n@Data\n"
+        + "public class Address {\n  private final String addressLine1;\n"
+        + "  public Address(@JsonProperty(\"AddressLine1\") String addressLine1) {\n"
+        + "    this.addressLine1 = addressLine1;\n  }\n}\n");
+    write(src, "m", "CaseData", "package m;\nimport lombok.Data;\n@Data\npublic class CaseData {\n"
+        + "  private Address applicantAddress;\n}\n");
+
+    RetrofitPinnedNames pinned = RetrofitPinnedNames.empty();
+    EventComplexTypeResolver resolver =
+        resolverFor(src, RetrofitPlannedSynthesis.empty(), pinned);
+    FieldModel field = FieldModel.builder()
+        .id("applicantAddress").javaName("applicantAddress").fieldType("AddressUK").build();
+
+    assertThat(resolver.resolve(resolver.rootNode(field), "AddressLine1",
+        "mandatory", null, null, null, null)).isEmpty();
+    assertThat(pinned.isEmpty()).isTrue();
+  }
+
+  @Test
+  void resolvesASnakeCaseStrategyMemberExactlyAsJacksonTranslatesIt(@TempDir Path work)
+      throws Exception {
+    Path src = work.resolve("src");
+    // The other statically-evaluable strategy, with Jackson's own translation (a '_' before each
+    // upper-case RUN, everything lower-cased): postTown → post_town, and the run-collapsing case
+    // hmctsDXNumber → hmcts_dxnumber (NOT hmcts_dx_number). NamingStrategyTest cross-checks the
+    // translation against real Jackson; this pins that the WALK uses it.
+    write(src, "m", "Address", "package m;\n"
+        + "import com.fasterxml.jackson.databind.PropertyNamingStrategies;\n"
+        + "import com.fasterxml.jackson.databind.annotation.JsonNaming;\nimport lombok.Data;\n@Data\n"
+        + "@JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)\n"
+        + "public class Address {\n  private String postTown;\n  private String hmctsDXNumber;\n}\n");
+    write(src, "m", "CaseData", "package m;\nimport lombok.Data;\n@Data\npublic class CaseData {\n"
+        + "  private Address applicantAddress;\n}\n");
+
+    RetrofitPinnedNames pinned = RetrofitPinnedNames.empty();
+    EventComplexTypeResolver resolver =
+        resolverFor(src, RetrofitPlannedSynthesis.empty(), pinned);
+    FieldModel field = FieldModel.builder()
+        .id("applicantAddress").javaName("applicantAddress").fieldType("AddressUK").build();
+
+    assertThat(resolve(resolver, field, "post_town").getLeafGetter()).isEqualTo("getPostTown");
+    assertThat(resolve(resolver, field, "hmcts_dxnumber").getLeafGetter())
+        .isEqualTo("getHmctsDXNumber");
+    assertThat(pinned.javaNamesFor("m.Address"))
+        .containsExactly("postTown", "hmctsDXNumber");
+  }
+
+  @Test
+  void refusesToGuessACustomNamingStrategyItCannotEvaluate(@TempDir Path work) throws Exception {
+    Path src = work.resolve("src");
+    // probate's @JsonNaming(RegularCaseNamingStrategy.class): a team's own strategy class is arbitrary
+    // Java the converter cannot evaluate without running it. It must NOT be guessed at (a wrong guess
+    // would pin a wrong @JsonProperty and change the CCD id); the member simply does not resolve and
+    // the row keeps its pre-existing verbatim passthrough.
+    write(src, "m", "RegularCaseNamingStrategy", "package m;\n"
+        + "import com.fasterxml.jackson.databind.PropertyNamingStrategies;\n"
+        + "public class RegularCaseNamingStrategy extends PropertyNamingStrategies.NamingBase {\n"
+        + "  @Override public String translate(String in) { return in; }\n}\n");
+    write(src, "m", "Address", "package m;\n"
+        + "import com.fasterxml.jackson.databind.annotation.JsonNaming;\nimport lombok.Data;\n@Data\n"
+        + "@JsonNaming(RegularCaseNamingStrategy.class)\n"
+        + "public class Address {\n  private String addressLine1;\n}\n");
+    write(src, "m", "CaseData", "package m;\nimport lombok.Data;\n@Data\npublic class CaseData {\n"
+        + "  private Address applicantAddress;\n}\n");
+
+    RetrofitPinnedNames pinned = RetrofitPinnedNames.empty();
+    EventComplexTypeResolver resolver =
+        resolverFor(src, RetrofitPlannedSynthesis.empty(), pinned);
+    FieldModel field = FieldModel.builder()
+        .id("applicantAddress").javaName("applicantAddress").fieldType("AddressUK").build();
+
+    assertThat(resolver.resolve(resolver.rootNode(field), "AddressLine1",
+        "mandatory", null, null, null, null)).isEmpty();
+    assertThat(pinned.isEmpty()).isTrue();
+    // The field's own name still resolves — refusing to guess the strategy costs nothing else.
+    assertThat(resolve(resolver, field, "addressLine1").getLeafGetter())
+        .isEqualTo("getAddressLine1");
   }
 
   @Test
@@ -281,5 +633,82 @@ class RetrofitEventComplexTypeGraphTest {
 
     assertThat(resolver.rootElementType(field).getModelFqn()).isEqualTo("m.MultiBundleConfig");
     assertThat(resolve(resolver, field, "value").getLeafGetter()).isEqualTo("getValue");
+  }
+
+  @Test
+  void rootsAScopeAtTheClassThatDeclaresTheFieldNotTheCaseDataClass(@TempDir Path work)
+      throws Exception {
+    Path src = work.resolve("src");
+    // Civil's shape: the complex field is declared on a @JsonUnwrapped holder's class, so CaseData has
+    // NO getter of its own for it. The scope must open the holder first (getApplicant1DQ) and invoke
+    // the field's getter on the holder's class — otherwise the emitted CaseData::getApplicant1DQHearing
+    // does not compile.
+    write(src, "m", "Hearing", "package m;\nimport lombok.Data;\n@Data\n"
+        + "public class Hearing {\n  private String hearingLength;\n}\n");
+    write(src, "m/dq", "Applicant1DQ", "package m.dq;\nimport lombok.Data;\nimport m.Hearing;\n@Data\n"
+        + "public class Applicant1DQ {\n  private Hearing applicant1DQHearing;\n}\n");
+    write(src, "m", "CaseData", "package m;\n"
+        + "import com.fasterxml.jackson.annotation.JsonUnwrapped;\nimport lombok.Data;\n"
+        + "import m.dq.Applicant1DQ;\n@Data\npublic class CaseData {\n"
+        + "  @JsonUnwrapped private Applicant1DQ applicant1DQ;\n}\n");
+
+    EventComplexTypeResolver resolver = resolverFor(src);
+    FieldModel field = FieldModel.builder()
+        .id("applicant1DQHearing").javaName("applicant1DQHearing").fieldType("Hearing").build();
+
+    Optional<EventComplexTypeResolver.RootPlacement> placement = resolver.rootPlacement(field);
+    assertThat(placement).isPresent();
+    assertThat(placement.get().getter()).isEqualTo("getApplicant1DQHearing");
+    assertThat(placement.get().hops()).singleElement().satisfies(hop -> {
+      assertThat(hop.getGetter()).isEqualTo("getApplicant1DQ");
+      assertThat(hop.getTargetType().getModelFqn()).isEqualTo("m.dq.Applicant1DQ");
+    });
+    // The member walk still binds to the field's own declared type, independent of the placement.
+    assertThat(resolve(resolver, field, "hearingLength").getLeafGetter())
+        .isEqualTo("getHearingLength");
+  }
+
+  @Test
+  void refusesTheWholeGroupWhenAnUnwrappedHoldersGetterIsSuppressed(@TempDir Path work)
+      throws Exception {
+    Path src = work.resolve("src");
+    // The holder is reachable in JSON (Jackson reads the field) but has NO compilable getter, so no
+    // method reference can open the scope. The group must refuse to derive and stay a verbatim
+    // passthrough — the same refusal RetrofitModelRebinder applies to a clustered PAGE field, so the
+    // two placements of one field cannot disagree.
+    write(src, "m", "Hearing", "package m;\nimport lombok.Data;\n@Data\n"
+        + "public class Hearing {\n  private String hearingLength;\n}\n");
+    write(src, "m/dq", "Applicant1DQ", "package m.dq;\nimport lombok.Data;\nimport m.Hearing;\n@Data\n"
+        + "public class Applicant1DQ {\n  private Hearing applicant1DQHearing;\n}\n");
+    write(src, "m", "CaseData", "package m;\n"
+        + "import com.fasterxml.jackson.annotation.JsonUnwrapped;\n"
+        + "import lombok.AccessLevel;\nimport lombok.Data;\nimport lombok.Getter;\n"
+        + "import m.dq.Applicant1DQ;\n@Data\npublic class CaseData {\n"
+        + "  @JsonUnwrapped @Getter(AccessLevel.NONE) private Applicant1DQ applicant1DQ;\n}\n");
+
+    EventComplexTypeResolver resolver = resolverFor(src);
+    FieldModel field = FieldModel.builder()
+        .id("applicant1DQHearing").javaName("applicant1DQHearing").fieldType("Hearing").build();
+
+    assertThat(resolver.rootPlacement(field)).isEmpty();
+  }
+
+  @Test
+  void keepsTheDefinitionDerivedGetterForAFieldTheModelDoesNotDeclare(@TempDir Path work)
+      throws Exception {
+    Path src = work.resolve("src");
+    // A definition-only complex field: the patch synthesises it onto the root class, so the graph has
+    // no binding and the linker keeps its own CCD-id-derived getter, rooted directly on CaseData.
+    write(src, "m", "CaseData", "package m;\nimport lombok.Data;\n@Data\n"
+        + "public class CaseData {\n  private String unrelated;\n}\n");
+
+    EventComplexTypeResolver resolver = resolverFor(src);
+    FieldModel field = FieldModel.builder()
+        .id("synthesisedThing").javaName("synthesisedThing").fieldType("Thing").build();
+
+    Optional<EventComplexTypeResolver.RootPlacement> placement = resolver.rootPlacement(field);
+    assertThat(placement).isPresent();
+    assertThat(placement.get().getter()).isEqualTo("getSynthesisedThing");
+    assertThat(placement.get().hops()).isEmpty();
   }
 }

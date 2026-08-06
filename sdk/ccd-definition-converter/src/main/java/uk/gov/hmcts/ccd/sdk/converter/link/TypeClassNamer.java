@@ -15,7 +15,7 @@ import java.util.Set;
  * {@code enum FL_comparedToDWP} into {@code class Benefit}, {@code enum ComparedToDWP} — matching
  * every hand-written HMCTS model — without touching any CCD-facing identifier.
  */
-final class TypeClassNamer {
+public final class TypeClassNamer {
 
   /**
    * The machine prefix sscs (and similar teams) stamp on fixed-list IDs; dropped from the derived
@@ -32,10 +32,15 @@ final class TypeClassNamer {
    * the first letter of each run (so {@code otherPartySelection} → {@code OtherPartySelection},
    * {@code benefit} → {@code Benefit}).
    *
+   * <p>Public because retrofit mode must be able to ask the same question the linker asks: given a
+   * definition complex-type ID, what name will a reference to it be emitted under? Retrofit binds the
+   * ID to the team's existing class, whose real simple name may differ from this one, and needs the
+   * two to line up (see {@code ModelSourceIndex.complexTypeIdClassAliases}).
+   *
    * @param id the ComplexTypes sheet ID
    * @return the PascalCase Java class name (before collision resolution)
    */
-  static String complexTypeName(String id) {
+  public static String complexTypeName(String id) {
     return pascalCase(id);
   }
 

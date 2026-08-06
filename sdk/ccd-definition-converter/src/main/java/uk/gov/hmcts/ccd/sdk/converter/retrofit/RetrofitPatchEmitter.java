@@ -13,6 +13,7 @@ import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.ConstructorDeclaration;
 import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.TypeDeclaration;
+import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
@@ -27,9 +28,10 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
+import uk.gov.hmcts.ccd.sdk.converter.ir.Columns;
 import uk.gov.hmcts.ccd.sdk.converter.model.CaseTypeModel;
-import uk.gov.hmcts.ccd.sdk.converter.model.DelegatingGetter;
 import uk.gov.hmcts.ccd.sdk.converter.model.ComplexTypeModel;
+import uk.gov.hmcts.ccd.sdk.converter.model.DelegatingGetter;
 import uk.gov.hmcts.ccd.sdk.converter.model.FieldModel;
 import uk.gov.hmcts.ccd.sdk.converter.model.gap.GapAction;
 import uk.gov.hmcts.ccd.sdk.converter.model.gap.GapCategory;
@@ -89,6 +91,61 @@ public final class RetrofitPatchEmitter {
   private final String pathPrefix;
   /** Gaps recorded while planning (e.g. a synthesised field skipped on a name collision). */
   private final List<GapEntry> gaps = new ArrayList<>();
+  /**
+   * The complex-type members {@link #planComplexTypeMembers} decided to synthesise, recorded as it
+   * decides so the {@code CaseEventToComplexTypes} member walk can resolve them too — see
+   * {@link RetrofitPlannedSynthesis} and {@link #planSynthesisedMembers}.
+   */
+  private final RetrofitPlannedSynthesis plannedSynthesis = RetrofitPlannedSynthesis.empty();
+  /**
+   * Model class FQN → the class-level {@code @ComplexType} pin {@link #planComplexTypeId} recorded for
+   * it. Kept alongside the per-file edits because the collision that matters is per CLASS, not per
+   * file: two definition complex types backed by one class can only pin one ID, and this map is what
+   * detects the second attempt.
+   */
+  private final Map<String, ComplexTypeIdPlan> complexTypeIdPins = new LinkedHashMap<>();
+  /**
+   * The definition complex types with no model class of their own, which the converter emits as
+   * generated companions ({@link RetrofitComplexTypeEmitter} filters on exactly the complement of
+   * {@link #planComplexTypeMembers}'s own lookup, so a companion exists for precisely these IDs).
+   * {@link #planRetypes} re-declares the fields that reference them as the companion, which is the only
+   * thing that makes the companion reachable at all.
+   */
+  private final Map<String, ComplexTypeModel> companionComplexTypes = new LinkedHashMap<>();
+  /**
+   * The field re-declarations {@link #planRetypes} decided on, recorded as it decides so the
+   * {@code CaseEventToComplexTypes} member walk descends into the companion rather than the class the
+   * parsed source still names — see {@link RetrofitPlannedRetypes}.
+   */
+  private final RetrofitPlannedRetypes plannedRetypes = RetrofitPlannedRetypes.empty();
+  /**
+   * Every ID the definition's {@code ComplexTypes} sheet declares. A class whose own simple name is one
+   * of these is never renamed to a different ID: that name already has a definition row of its own.
+   */
+  private final Set<String> definitionComplexTypeIds = new LinkedHashSet<>();
+  /**
+   * The naming-strategy-derived names the {@code CaseEventToComplexTypes} member walk relied on, which
+   * this patch pins with an explicit {@code @JsonProperty} so the naming-strategy-blind SDK generator
+   * derives the same CCD id. Empty for the throwaway planning instance (whose graph has not run yet)
+   * and in generate mode. See {@link RetrofitPinnedNames}.
+   */
+  private final RetrofitPinnedNames pinnedNames;
+  /**
+   * The SAME {@code simpleName → fqn} decisions the companion/config emitters bind their type
+   * references with ({@code ConversionOptions.retrofitTypeFqnOverrides}), consulted before this
+   * emitter's own index lookup.
+   *
+   * <p>Without it the two paths resolve an ambiguous simple name independently and can disagree:
+   * prl declares {@code Miam} in both {@code complextypes.applicationtab} and
+   * {@code complextypes.citizen.response.miam}. The overrides map (which honours
+   * {@code --type-package-hint}) picks the citizen one, so the config emitter emits
+   * {@code Miam::getAttendedMiam} — while {@link ModelSourceIndex#fqnForSimpleName} knows nothing of
+   * the hint and, finding neither candidate under the model package, takes the first arbitrarily, so
+   * the patch declared the synthesised field as {@code applicationtab.Miam}, which has no such member:
+   * {@code no suitable method found for mandatory(Miam::getAttendedMiam)}. Sharing one map is what
+   * makes the two impossible to disagree (the same principle as {@link RetrofitPinnedNames}).
+   */
+  private final Map<String, String> typeFqnOverrides;
 
   // Parse the files we edit at a modern language level (real service models use sealed classes,
   // records, switch patterns — Civil's model/Result.java is a sealed interface), with lexical
@@ -114,6 +171,21 @@ public final class RetrofitPatchEmitter {
   }
 
   /**
+   * Creates a patch emitter with no naming-strategy pins — for the throwaway planning pass, whose
+   * member walk has not run yet, and for tests exercising no {@code @JsonNaming} model.
+   *
+   * @param constructorLimit the field-count threshold for CaseDataExtra overflow; {@code <= 0} uses
+   *                          the default
+   * @param pathPrefix the source-root path relative to the repo root, prepended to every diff path
+   */
+  RetrofitPatchEmitter(ModelSourceIndex index, PropertyResolver.Resolution resolution,
+      CaseTypeModel model, ModelSourceIndex.Type rootType, String configPackage,
+      int constructorLimit, String pathPrefix) {
+    this(index, resolution, model, rootType, configPackage, constructorLimit, pathPrefix,
+        RetrofitPinnedNames.empty());
+  }
+
+  /**
    * Creates a patch emitter with an explicit constructor-limit override (finding B2) and a path
    * prefix rooting the emitted diff at the model repo root (patch-root consistency).
    *
@@ -121,10 +193,30 @@ public final class RetrofitPatchEmitter {
    *                          the default
    * @param pathPrefix the source-root path relative to the repo root (e.g. {@code service/src/main/java/}),
    *                   prepended to every emitted diff path; empty when repo root == source root
+   * @param pinnedNames the naming-strategy-derived names the {@code CaseEventToComplexTypes} member
+   *                    walk relied on, which this patch pins with an explicit {@code @JsonProperty};
+   *                    must come from the SAME run's graph so reliance and pin cannot disagree
    */
   RetrofitPatchEmitter(ModelSourceIndex index, PropertyResolver.Resolution resolution,
       CaseTypeModel model, ModelSourceIndex.Type rootType, String configPackage,
-      int constructorLimit, String pathPrefix) {
+      int constructorLimit, String pathPrefix, RetrofitPinnedNames pinnedNames) {
+    this(index, resolution, model, rootType, configPackage, constructorLimit, pathPrefix,
+        pinnedNames, Map.of());
+  }
+
+  /**
+   * Creates a patch emitter that binds bare type references with the same FQN decisions the
+   * companion/config emitters use.
+   *
+   * @param typeFqnOverrides the run's {@code ConversionOptions.retrofitTypeFqnOverrides} — see
+   *                         {@link #typeFqnOverrides} for why sharing this map is load-bearing
+   */
+  RetrofitPatchEmitter(ModelSourceIndex index, PropertyResolver.Resolution resolution,
+      CaseTypeModel model, ModelSourceIndex.Type rootType, String configPackage,
+      int constructorLimit, String pathPrefix, RetrofitPinnedNames pinnedNames,
+      Map<String, String> typeFqnOverrides) {
+    this.typeFqnOverrides = typeFqnOverrides == null ? Map.of() : typeFqnOverrides;
+    this.pinnedNames = pinnedNames;
     this.index = index;
     this.properties = resolution.properties;
     this.model = model;
@@ -189,6 +281,17 @@ public final class RetrofitPatchEmitter {
 
     // 3. Complex-type members: annotate/ignore/synthesise on each resolved model complex class.
     planComplexTypeMembers(byFile);
+
+    // 3a. Re-declare fields whose definition complex type has no model class as the generated companion
+    // emitted for it. Must run AFTER step 3, which populates the companion set from the same lookup it
+    // skips on, and after step 1's @CCD annotations, whose insertions the retype's whole-line rewrite is
+    // ordered against at render time.
+    planRetypes(byFile);
+
+    // 3b. Pin the @JsonNaming-derived member names the CaseEventToComplexTypes walk resolved through
+    // a class-level naming strategy. Must run AFTER step 3 so a field that is also a definition
+    // complex-type member keeps that plan's own @JsonProperty rather than gaining a second one.
+    planPinnedNames(byFile);
 
     // 4. Synthesised definition-only fields onto the root model class.
     List<FieldModel> synthesised = new ArrayList<>();
@@ -397,11 +500,429 @@ public final class RetrofitPatchEmitter {
     return gaps;
   }
 
+  /**
+   * Runs <em>only</em> the complex-type member planning and returns the members this patch would
+   * synthesise, so the {@code CaseEventToComplexTypes} member walk can be built against the model as
+   * the applied patch will leave it (see {@link RetrofitPlannedSynthesis}).
+   *
+   * <p>This is the same {@link #planComplexTypeMembers} the real {@link #emit()} runs, not a
+   * re-derivation, so the graph can never resolve a member the patch declines to add. The planned file
+   * edits are discarded — the emitter instance this is called on is a throwaway whose gaps the real
+   * run records again — and nothing is rendered or written.
+   *
+   * @return the members the patch would synthesise onto the team's complex classes
+   */
+  RetrofitPlannedSynthesis planSynthesisedMembers() {
+    Map<Path, FileEdits> discarded = new LinkedHashMap<>();
+    planComplexTypeMembers(discarded);
+    // Runs here too so {@link #plannedRetypes()} is populated on the same throwaway instance: the graph
+    // needs BOTH plans, and running them from one pass is what keeps the plan the walk resolves against
+    // identical to the one the real emit produces.
+    planRetypes(discarded);
+    return plannedSynthesis;
+  }
+
+  /**
+   * The field re-declarations this patch will make, valid once {@link #planSynthesisedMembers()} (or a
+   * full {@link #emit()}) has run on this instance.
+   *
+   * @return the planned retypes, empty when the definition needs none
+   */
+  RetrofitPlannedRetypes plannedRetypes() {
+    return plannedRetypes;
+  }
+
+  /**
+   * Re-declares each field whose definition complex type has no model class of its own as the generated
+   * companion class the converter emits for that type.
+   *
+   * <p>Binding is otherwise one-directional: {@link RetrofitComplexTypeEmitter} generates a companion
+   * for every definition complex type {@link #planComplexTypeMembers} could not find a class for, but
+   * nothing pointed the team's field at it, so {@code CaseFieldGenerator.resolveType} kept emitting the
+   * declared class's own Java simple name as the {@code FieldType} and the companion was dead code —
+   * 668 of 781 companions across the sweep. Rewriting the declaration is what closes that loop, and it
+   * is the ONLY thing that can: {@code @CCD(typeOverride)} takes a {@code FieldType} enum constant, and
+   * a definition type ID like {@code dwpAT38DocumentCT} is not one (which is why {@link TypeReconciler}
+   * leaves such a field alone), while the collection case already works through the {@code String}
+   * {@code typeParameterOverride}.
+   *
+   * <p>It also resolves, rather than contradicts, the collision {@link #planComplexTypeId} refuses:
+   * sscs backs ten {@code dwp*DocumentCT} definition types with one {@code DwpResponseDocument}, and a
+   * class can carry only one {@code @ComplexType(name)}. Giving each FIELD its own companion needs no
+   * shared class to name, and reproduces members the team's class does not have at all (each
+   * {@code dwp*DocumentCT} declares its own {@code Label} member).
+   *
+   * <p>Refused, leaving the declaration exactly as it is, when:
+   * <ul>
+   *   <li>the declared type is not a parsed model class — a field declared {@code String} or as an
+   *       SDK-predefined type disagrees with the definition about far more than a name, and silently
+   *       swapping a platform type for a generated companion is not a safe edit;</li>
+   *   <li>the declared type IS already the companion (idempotency, as every op must be);</li>
+   *   <li>anything in the parsed source calls the member's accessors — the retype changes what
+   *       {@code getDwpAT38Document()} returns and what its setter takes, so a caller assigning it to
+   *       the old type stops compiling ({@link ModelSourceIndex#calledMethodNames});</li>
+   *   <li>the owning class has a constructor parameter of the old type for this member, is instantiated
+   *       positionally, or has a subclass calling {@code super(...)} positionally — each binds the
+   *       field's type into a signature the retype changes out from under.</li>
+   * </ul>
+   * Each refusal is reported as a gap so the row is visible rather than silently conceded, and is NOT
+   * recorded in the plan: the member walk must keep resolving such a field against the class the source
+   * still names.
+   */
+  private void planRetypes(Map<Path, FileEdits> byFile) {
+    for (FieldModel field : model.getCaseFields()) {
+      ResolvedProperty property = properties.get(field.getId());
+      if (property == null) {
+        continue; // definition-only: synthesised with the definition's own type already
+      }
+      ComplexTypeModel companion = companionFor(field);
+      if (companion == null) {
+        continue;
+      }
+      planRetype(byFile, property, companion, "CaseField", field.getId(), field.getId());
+    }
+    for (ComplexTypeModel complexType : model.getComplexTypes()) {
+      Optional<ModelSourceIndex.Type> type =
+          index.complexTypeClass(complexType.getId(), modelPackage);
+      if (type.isEmpty()) {
+        continue; // the companion case itself — its own members are generated, not patched
+      }
+      // The same class planComplexTypeMembers annotates, reached the same way, so a member is retyped
+      // on exactly the class whose members carry this definition type's @CCD.
+      ModelSourceIndex.Type complexClass = unwrapper.unwrap(type.get());
+      PropertyResolver.Resolution memberResolution =
+          new PropertyResolver(index).resolve(complexClass);
+      for (FieldModel member : complexType.getMembers()) {
+        ResolvedProperty property = memberResolution.properties.get(member.getId());
+        if (property == null) {
+          continue;
+        }
+        ComplexTypeModel companion = companionFor(member);
+        if (companion == null) {
+          continue;
+        }
+        planRetype(byFile, property, companion, "ComplexTypes",
+            complexType.getId() + "/" + member.getId(), null);
+      }
+    }
+  }
+
+  /**
+   * The generated companion a field's definition type refers to, or null when the field's type has a
+   * model class of its own (or is a platform/leaf type). A collection field is decided on its ELEMENT
+   * type — the class CCD addresses the members on — exactly as {@code resolveCollectionType} derives
+   * the {@code FieldTypeParameter} from the element class.
+   */
+  private ComplexTypeModel companionFor(FieldModel field) {
+    String parameter = field.getFieldTypeParameter();
+    String typeId = parameter != null && !parameter.isEmpty() ? parameter : field.getFieldType();
+    return typeId == null ? null : companionComplexTypes.get(typeId);
+  }
+
+  /**
+   * Records one field's retype, applying the refusals documented on {@link #planRetypes}.
+   *
+   * @param sheet the gap sheet a refusal is reported against
+   * @param rowKey the gap row key a refusal is reported against
+   * @param caseFieldId the CCD case-field id when this is a root field, null for a complex-type member
+   */
+  private void planRetype(Map<Path, FileEdits> byFile, ResolvedProperty property,
+      ComplexTypeModel companion, String sheet, String rowKey, String caseFieldId) {
+    String target = companionSimpleName(companion);
+    com.github.javaparser.ast.type.Type declared = retypeTarget(property.declaredType);
+    if (!(declared instanceof ClassOrInterfaceType cit)) {
+      // Null (a generic or raw token the single-name substitution cannot express) or a primitive/array
+      // declaration. Either way there is no token to rewrite, and the definition type keeps no
+      // counterpart — report it rather than dropping the row silently.
+      recordRetypeGap(sheet, rowKey, companion.getId(), property, target,
+          "is declared as " + property.declaredType
+              + ", whose type token the retype cannot rewrite without moving type arguments onto "
+              + target + ". Re-declare the field by hand");
+      return;
+    }
+    if (target.equals(cit.getNameAsString())) {
+      return; // already the companion: a re-applied patch is a no-op
+    }
+    Optional<ModelSourceIndex.Type> declaredClass = index.resolve(property.context, cit);
+    if (declaredClass.isEmpty()) {
+      // Declared as String, an SDK-predefined type, or anything else outside the parsed model. The
+      // definition and the model disagree about the field's shape, not merely its name; report it and
+      // leave the declaration alone.
+      recordRetypeGap(sheet, rowKey, companion.getId(), property, target,
+          "is declared as " + cit.getNameAsString() + ", which is not a model class — the definition "
+              + "type and the declared type disagree on more than the name. Re-declare the field as "
+              + target + " by hand, or give the definition type a model class");
+      return;
+    }
+    String refusal = retypeRefusal(property, declaredClass.get());
+    if (refusal != null) {
+      recordRetypeGap(sheet, rowKey, companion.getId(), property, target, refusal);
+      return;
+    }
+    boolean recorded = caseFieldId != null
+        ? plannedRetypes.recordRootField(
+            ownerFqnOf(property, declaredClass.get()), property.memberName, caseFieldId,
+            new RetrofitPlannedRetypes.Retype(target, companion.getId()))
+        : plannedRetypes.recordMember(
+            ownerFqnOf(property, declaredClass.get()), property.memberName,
+            new RetrofitPlannedRetypes.Retype(target, companion.getId()));
+    if (!recorded) {
+      // Another definition type already claimed this member (a root CaseData field that is also a
+      // member of a complex type bound to the root class). Recording first and editing only on success
+      // is what keeps the plan and the rendered declaration from naming two different companions.
+      return;
+    }
+    editsFor(byFile, property.ownerFile).retype(property.memberName, target);
+  }
+
+  /**
+   * Why re-declaring {@code property} would not compile, or null when the edit is safe.
+   */
+  private String retypeRefusal(ResolvedProperty property, ModelSourceIndex.Type declaredClass) {
+    String accessorSuffix = capitalise(property.memberName);
+    Set<String> called = index.calledMethodNames();
+    if (called.contains("get" + accessorSuffix) || called.contains("set" + accessorSuffix)) {
+      return "has accessors called from the model source (get/set" + accessorSuffix + "), which the "
+          + "retype changes the type of — every caller assigning the old "
+          + declaredClass.simpleName + " would stop compiling. Re-declare the field and update its "
+          + "callers by hand";
+    }
+    Optional<ModelSourceIndex.Type> owner = ownerType(property);
+    if (owner.isEmpty()) {
+      return null; // no parsed owner to inspect; the declaration edit itself stands alone
+    }
+    ModelSourceIndex.Type ownerClass = owner.get();
+    // Compared through retypeTarget's own descent, not on the parameter's raw name: sscs's NotePad
+    // declares 'List<AppealNote> notesCollection' and assigns it from a @JsonCreator parameter typed
+    // 'List<Note>', whose raw name is List. Retyping only the field leaves the assignment
+    // 'List<Note> cannot be converted to List<AppealNote>'.
+    boolean boundByConstructor = ownerClass.decl.getConstructors().stream()
+        .flatMap(ctor -> ctor.getParameters().stream())
+        .anyMatch(p -> p.getNameAsString().equals(property.memberName)
+            && retypeTarget(p.getType()) instanceof ClassOrInterfaceType t
+            && t.getNameAsString().equals(declaredClass.simpleName));
+    if (boundByConstructor) {
+      return "is assigned by a hand-written constructor parameter naming "
+          + declaredClass.simpleName + " on " + ownerClass.simpleName
+          + ", which the retype would no longer match. Re-declare the field and widen that "
+          + "constructor by hand";
+    }
+    if (index.hasPositionalConstructorCall(ownerClass)) {
+      return "is declared on " + ownerClass.simpleName + ", which is instantiated positionally — the "
+          + "retype changes one all-args constructor parameter's type and breaks that call. "
+          + "Re-declare the field and update the call site by hand";
+    }
+    if (index.hasSubtypeWithExplicitSuperCall(ownerClass)) {
+      return "is declared on " + ownerClass.simpleName + ", whose all-args constructor a subclass "
+          + "calls positionally via super(...) — the retype changes one parameter's type and breaks "
+          + "that call. Re-declare the field and update the subclass by hand";
+    }
+    return null;
+  }
+
+  /**
+   * The parsed class a resolved property was declared on, matched by simple name and confirmed by the
+   * file it was resolved from so a same-named class elsewhere cannot stand in for it.
+   */
+  private Optional<ModelSourceIndex.Type> ownerType(ResolvedProperty property) {
+    return index.bySimpleName(property.ownerSimpleName, modelPackage)
+        .filter(t -> t.file.equals(property.ownerFile));
+  }
+
+  /**
+   * The FQN the member walk will look this property's owner up by: the parsed owner's own FQN when it
+   * is resolvable, else the declaring class's package with the resolved owner simple name — the graph
+   * keys on {@code ModelSourceIndex.Type.fqn}, so a mismatch here silently loses the plan.
+   */
+  private String ownerFqnOf(ResolvedProperty property, ModelSourceIndex.Type declaredClass) {
+    return ownerType(property)
+        .map(t -> t.fqn)
+        .orElse(declaredClass.packageName + "." + property.ownerSimpleName);
+  }
+
+  /**
+   * The generated companion's Java simple name, derived exactly as {@code ComplexTypeEmitter} does.
+   */
+  private static String companionSimpleName(ComplexTypeModel companion) {
+    return companion.getJavaClassName() != null && !companion.getJavaClassName().isEmpty()
+        ? companion.getJavaClassName()
+        : companion.getId();
+  }
+
+  private void recordRetypeGap(String sheet, String rowKey, String definitionId,
+      ResolvedProperty property, String target, String reason) {
+    gaps.add(GapEntry.builder()
+        .sheet(sheet)
+        .rowKey(rowKey)
+        .column(Columns.FIELD_TYPE)
+        .value(definitionId)
+        .category(GapCategory.UNSUPPORTED_VALUE)
+        .action(GapAction.MANUAL_PLACEMENT)
+        .detail("Definition complex type '" + definitionId + "' has no model class, so it is emitted "
+            + "as the generated companion " + target + "; but " + property.ownerSimpleName + "."
+            + property.memberName + " " + reason + ". Until then the SDK emits this field's FieldType "
+            + "as its declared class and the definition's '" + definitionId + "' rows have no "
+            + "counterpart.")
+        .build());
+  }
+
+  private static String capitalise(String value) {
+    return value.isEmpty() ? value
+        : Character.toUpperCase(value.charAt(0)) + value.substring(1);
+  }
+
+  /**
+   * Pins an explicit {@code @JsonProperty} on every field the {@code CaseEventToComplexTypes} member
+   * walk resolved under an id the SDK would not derive — a class-level {@code @JsonNaming} strategy's
+   * name for the field, or a {@code @JsonProperty} on the matching {@code @JsonCreator} constructor
+   * parameter — carrying the id the walk itself matched.
+   *
+   * <p>Without this the config would emit {@code Address::getAddressLine1} while the SDK, which reads
+   * {@code @JsonProperty} only off the field and the read method, regenerated the CCD id
+   * {@code addressLine1} — silently changing the field id rather than failing to compile. The pin is a
+   * Jackson no-op (a field-level {@code @JsonProperty} already overrides both idioms, and the value
+   * pinned is the one they produce) and makes the SDK derive the definition's id. The full argument, and
+   * why reliance and pin are recorded as one decision, is in {@link RetrofitPinnedNames}.
+   *
+   * <p>Nothing is pinned speculatively: only names an actual resolved member walk depended on appear
+   * here, so a renaming class no {@code CaseEventToComplexTypes} row reaches is left untouched.
+   */
+  private void planPinnedNames(Map<Path, FileEdits> byFile) {
+    for (String ownerFqn : pinnedNames.ownerFqns()) {
+      Optional<ModelSourceIndex.Type> owner = index.byFqn(ownerFqn);
+      if (owner.isEmpty()) {
+        continue;
+      }
+      ModelSourceIndex.Type type = owner.get();
+      if (carriesAnUnevaluableNamingStrategy(type)) {
+        // A team-written @JsonNaming class is arbitrary Java the converter cannot evaluate, so it
+        // cannot know what this class currently serialises the field as — and a field-level
+        // @JsonProperty OVERRIDES the class strategy, so pinning here could change the runtime payload
+        // rather than being the no-op every pin is required to be. Refused independently of the graph,
+        // which also declines to resolve such a member (RetrofitEventComplexTypeGraph): neither half
+        // may start guessing alone.
+        continue;
+      }
+      // The id itself comes from the walk, NOT from re-deriving the idiom here: the walk resolves some
+      // members through a class @JsonNaming and others through a @JsonCreator parameter's own
+      // @JsonProperty, and re-deriving the strategy silently pinned nothing at all for the latter.
+      pinnedNames.idsFor(ownerFqn)
+          .forEach((javaName, id) -> editsFor(byFile, type.file).pinName(javaName, id));
+    }
+  }
+
+  /**
+   * Plans the class-level {@code @ComplexType} that pins a definition complex type's own ID onto the
+   * model class(es) backing it, so the SDK emits the type under the ID the definition uses rather than
+   * under the class's Java simple name.
+   *
+   * <p>Binding a definition type to an existing class fixes the type's <em>members</em> but not its
+   * <em>ID</em>: {@code ComplexTypeGenerator} names the emitted type {@code c.getSimpleName()} unless
+   * the class carries {@code @ComplexType(name)}. A CCD ComplexTypes ID is routinely camelCase
+   * ({@code appeal}, {@code name}, {@code correspondence}) while the class is PascalCase — the very
+   * divergence {@link ModelSourceIndex#complexTypeClass}'s case-insensitive fallback exists to bridge —
+   * so every such type was emitted under a name the definition never mentions. The definition's own
+   * rows then had no counterpart and the generated rows no home: measured on sscs, 354 ComplexTypes
+   * diff lines and 54 {@code CaseField} {@code FieldType} lines ({@code expected <appeal> but was
+   * <Appeal>}) are exactly this.
+   *
+   * <p>Two classes may need annotating, because CCD serialises collection elements as
+   * {@code {id, value}} and so addresses a collection element type's members on its value class:
+   * <ul>
+   *   <li>the <b>value</b> class carries {@code (name = <id>, generate = true)} — its members ARE the
+   *       definition's rows, so it must emit them under the definition's ID. {@code generate = true} is
+   *       mandatory: the attribute defaults to {@code false} and both {@code ComplexTypeGenerator} and
+   *       {@code FixedListGenerator} skip a named-but-not-generate type entirely;</li>
+   *   <li>the <b>wrapper</b> class, when the value class was reached by unwrapping one, carries
+   *       {@code (name = <id>, generate = false)}. The definition never declares the wrapper — CCD's
+   *       element envelope is implicit — yet {@code ConfigResolver} registers a non-generic wrapper as a
+   *       complex type in its own right (unlike {@code List<ListValue<X>>}, whose generic element it
+   *       descends through), emitting a spurious {@code {value}} row. {@code generate = false}
+   *       suppresses that row while {@code name} still gives {@code resolveCollectionType} the right
+   *       {@code FieldTypeParameter} for every {@code List<Wrapper>} field.</li>
+   * </ul>
+   *
+   * <p>Refused, leaving the class exactly as it is today, when:
+   * <ul>
+   *   <li>the class's simple name already IS the definition ID (nothing to pin — and no diff churn);</li>
+   *   <li>the class already carries a {@code @ComplexType} (a team's own, or this patch re-applied:
+   *       every patch op is required to be idempotent);</li>
+   *   <li>the definition ALSO declares a complex type whose ID is exactly the class's simple name —
+   *       pinning would rename the type out from under that other definition row;</li>
+   *   <li>a second definition type already claimed this class (the one-class-many-IDs collision: sscs
+   *       backs ten {@code dwp*DocumentCT} types with a single {@code DwpResponseDocument}). Only one ID
+   *       can win, so rather than pick silently the collision is reported as a gap.</li>
+   * </ul>
+   */
+  private void planComplexTypeId(Map<Path, FileEdits> byFile, String definitionId,
+      ModelSourceIndex.Type boundClass, ModelSourceIndex.Type valueClass) {
+    if (definitionId == null || definitionId.isEmpty()) {
+      return;
+    }
+    // Renaming the value class is only needed when its Java name is not already the definition ID —
+    // and only meaningful when no other definition row owns that Java name.
+    if (!definitionId.equals(valueClass.simpleName)
+        && !definitionComplexTypeIds.contains(valueClass.simpleName)) {
+      pinComplexTypeId(byFile, definitionId, valueClass, true);
+    }
+    // The wrapper is suppressed whatever it is called, because the definition has no row for CCD's
+    // implicit element envelope — so unlike the rename above, name equality is beside the point.
+    if (!valueClass.fqn.equals(boundClass.fqn)) {
+      pinComplexTypeId(byFile, definitionId, boundClass, false);
+    }
+  }
+
+  /**
+   * Records the {@code @ComplexType(name = definitionId, generate = generate)} to add to one class,
+   * applying the refusals documented on {@link #planComplexTypeId}.
+   */
+  private void pinComplexTypeId(Map<Path, FileEdits> byFile, String definitionId,
+      ModelSourceIndex.Type type, boolean generate) {
+    if (Annotations.has(type.decl, "ComplexType")) {
+      return; // team-written, or this patch already applied
+    }
+    ComplexTypeIdPlan planned = new ComplexTypeIdPlan(definitionId, generate);
+    ComplexTypeIdPlan existing = complexTypeIdPins.putIfAbsent(type.fqn, planned);
+    if (existing == null) {
+      editsFor(byFile, type.file).nameComplexType(type.simpleName, planned);
+      return;
+    }
+    if (!existing.equals(planned)) {
+      gaps.add(GapEntry.builder()
+          .sheet("ComplexTypes")
+          .rowKey(definitionId)
+          .column("ID")
+          .value(definitionId)
+          .category(GapCategory.UNSUPPORTED_VALUE)
+          .action(GapAction.MANUAL_PLACEMENT)
+          .detail("Complex types '" + existing.definitionId() + "' and '" + definitionId
+              + "' both bind to " + type.simpleName + ", which can carry only one @ComplexType(name);"
+              + " give each definition type its own model class or a per-field typeParameterOverride")
+          .build());
+    }
+  }
+
+  /**
+   * Whether a class carries a {@code @JsonNaming} the converter cannot statically evaluate — a
+   * team-written strategy class rather than one of Jackson's own.
+   */
+  private static boolean carriesAnUnevaluableNamingStrategy(ModelSourceIndex.Type type) {
+    return Annotations.has(type.decl, "JsonNaming") && NamingStrategy.of(type).isEmpty();
+  }
+
   private void planComplexTypeMembers(Map<Path, FileEdits> byFile) {
     // Prefer a complex-type class in the team's model package; the root class's package is the
     // anchor (e.g. uk.gov.hmcts.reform.civil.model). Falling back to null hint would let a
     // same-named type in an unrelated package win.
     String modelPackage = rootType != null ? rootType.packageName : null;
+    for (ComplexTypeModel complexType : model.getComplexTypes()) {
+      definitionComplexTypeIds.add(complexType.getId());
+      // The same lookup the loop below skips on, run up front so every retype decision — including one
+      // made while planning the FIRST complex type's members — sees the complete companion set.
+      if (index.complexTypeClass(complexType.getId(), modelPackage).isEmpty()) {
+        companionComplexTypes.put(complexType.getId(), complexType);
+      }
+    }
     for (ComplexTypeModel complexType : model.getComplexTypes()) {
       Optional<ModelSourceIndex.Type> type =
           index.complexTypeClass(complexType.getId(), modelPackage);
@@ -423,6 +944,10 @@ public final class RetrofitPatchEmitter {
       // CaseEventToComplexTypes member walk already targets (RetrofitEventComplexTypeGraph), so the
       // two agree and the members are annotated in place instead.
       ModelSourceIndex.Type complexClass = unwrapper.unwrap(type.get());
+      // The class BINDS to this definition type, but the SDK derives the emitted ComplexTypes ID from
+      // the class's Java simple name — so a bound class whose name differs from the definition ID emits
+      // the type under the wrong ID. Pin the ID with a class-level @ComplexType(name).
+      planComplexTypeId(byFile, complexType.getId(), type.get(), complexClass);
       // Resolve the complex class's own members so we know which are matched vs unmatched-Java.
       PropertyResolver.Resolution memberResolution =
           new PropertyResolver(index).resolve(complexClass);
@@ -490,9 +1015,18 @@ public final class RetrofitPatchEmitter {
           // the renamed member. A complex-type member's companion getter reference is derived from the
           // linked model (not the rebinder), so renaming here would desync it — and no real lane has a
           // complex-member case-insensitive collision, so this path keeps the exact-collision drop only.
-          editsFor(byFile, complexClass.file)
-              .synthesise(complexClass.simpleName,
-                  dropExistingFieldCollisions(complexClass, synthesised));
+          List<FieldModel> placeable = dropExistingFieldCollisions(complexClass, synthesised);
+          editsFor(byFile, complexClass.file).synthesise(complexClass.simpleName, placeable);
+          // The patch adds these as real fields, so after it is applied the member IS addressable as
+          // <complexClass>::get<JavaName>. Record them so the CaseEventToComplexTypes member walk —
+          // which reads the model as PARSED, i.e. pre-patch — resolves them instead of dropping the
+          // row to a verbatim passthrough (civil: 939 → 700 fallback rows). Recorded only here, where
+          // the emitter has COMMITTED to adding the field: the refusal branch above and
+          // dropExistingFieldCollisions both exclude members, and a graph that resolved those would
+          // emit a getter reference to a field the patch never adds.
+          for (FieldModel member : placeable) {
+            plannedSynthesis.record(complexClass.fqn, member);
+          }
         }
       }
     }
@@ -843,10 +1377,39 @@ public final class RetrofitPatchEmitter {
     // source line its FIRST token (existing annotation, else modifier/type) begins on — so the
     // block lands directly above that line, below any annotations the field already carries.
     Map<Integer, List<String>> insertionsByLine = new TreeMap<>(Comparator.reverseOrder());
+    // Retypes are the one op that rewrites a token on the declaration line itself rather than inserting
+    // whole lines above it, so they are collected as (1-based line → replacement of that line) and
+    // applied before the insertion pass — which keys on the SAME original line numbers, so rewriting a
+    // line in place cannot shift them.
+    Map<Integer, String> retypedLines = new TreeMap<>();
+    // The companion classes a retype points at, so their imports can be added when the retyped field's
+    // own class does not already live in the model package the companions are emitted into.
+    Set<String> retypeTargets = new LinkedHashSet<>();
 
     for (TypeDeclaration<?> type : unit.getTypes()) {
       for (FieldDeclaration fieldDecl : type.getFields()) {
         String member = fieldDecl.getVariable(0).getNameAsString();
+        int pinLine = fieldFirstLine(fieldDecl);
+        // Re-declare the field as the generated companion class backing its definition complex type.
+        // Planned in planRetypes (which refuses every shape where this would not compile); applied here
+        // by replacing exactly the declared type's own token range on its own line, so a comment, an
+        // initialiser or a same-named token elsewhere on the line is untouched.
+        String retypeTo = edits.retype.get(member);
+        if (retypeTo != null
+            && replaceDeclaredTypeToken(fieldDecl, retypeTo, sourceLines, retypedLines)) {
+          retypeTargets.add(retypeTo);
+        }
+        // A naming-strategy pin is independent of the @CCD idempotency rule below: it exists so the
+        // SDK derives the right CCD id, which an existing @CCD does not supply. It is still skipped
+        // when the field already carries a @JsonProperty — that annotation already governs the id
+        // (and a re-run must be a no-op).
+        String pinId = edits.pinNames.get(member);
+        if (pinId != null && !hasAnnotation(fieldDecl, "JsonProperty")) {
+          insertionsByLine.computeIfAbsent(pinLine, k -> new ArrayList<>())
+              .addAll(indentEachLine(List.of("@JsonProperty(\"" + pinId + "\")"),
+                  leadingWhitespace(sourceLines.get(pinLine - 1))));
+          needsJsonPropertyImport = true;
+        }
         // Skip fields already carrying @CCD (idempotency rule).
         if (hasAnnotation(fieldDecl, "CCD")) {
           continue;
@@ -884,6 +1447,30 @@ public final class RetrofitPatchEmitter {
       }
     }
 
+    // Class-level @ComplexType additions (the definition-ID pin): one own-line annotation directly
+    // above the type declaration's own first line, below any annotations it already carries — the same
+    // by-original-line insertion the field annotations use, so it joins the single descending pass
+    // below and every untouched line stays byte-identical.
+    boolean needsComplexTypeImport = false;
+    if (!edits.nameComplexTypes.isEmpty()) {
+      for (TypeDeclaration<?> type : unit.getTypes()) {
+        ComplexTypeIdPlan plan = edits.nameComplexTypes.get(type.getNameAsString());
+        if (plan == null) {
+          continue;
+        }
+        int typeLine = type.getBegin().map(p -> p.line).orElse(-1);
+        if (typeLine < 1) {
+          continue;
+        }
+        insertionsByLine.computeIfAbsent(typeLine, k -> new ArrayList<>())
+            .addAll(indentEachLine(
+                List.of("@ComplexType(name = \"" + plan.definitionId() + "\", generate = "
+                    + plan.generate() + ")"),
+                leadingWhitespace(sourceLines.get(typeLine - 1))));
+        needsComplexTypeImport = true;
+      }
+    }
+
     // Class-level annotation removals (the constructor-limit @AllArgsConstructor drop): find each
     // matching top-level annotation that sits alone on its own line and delete that whole line. Only a
     // solo annotation line is removed — an annotation sharing a line with other tokens is left as-is
@@ -910,17 +1497,25 @@ public final class RetrofitPatchEmitter {
     }
 
     // Apply inserts and deletes in one strictly-descending pass over 1-based line numbers so an
-    // earlier edit never shifts a later, still-to-be-applied line number. Insertion lines (a field's
-    // first line) and deletion lines (a solo class-level annotation) are disjoint, so each line is
-    // handled exactly once.
+    // earlier edit never shifts a later, still-to-be-applied line number. A line can be both: a
+    // class-level insertion is keyed on the type declaration's own first line, which is its first
+    // existing annotation — the very line a removal may target. Deleting before inserting at the same
+    // index leaves the added annotation where the removed one was.
+    // In-place declaration rewrites first: replacing a line changes no line NUMBER, so every insertion
+    // and deletion index collected above still points at the line it was computed from.
+    for (Map.Entry<Integer, String> retyped : retypedLines.entrySet()) {
+      sourceLines.set(retyped.getKey() - 1, retyped.getValue());
+    }
     java.util.NavigableSet<Integer> touched = new java.util.TreeSet<>(Comparator.reverseOrder());
     touched.addAll(insertionsByLine.keySet());
     touched.addAll(linesToDelete);
     for (int line : touched) {
       if (linesToDelete.contains(line)) {
         sourceLines.remove(line - 1);
-      } else {
-        sourceLines.addAll(line - 1, insertionsByLine.get(line));
+      }
+      List<String> added = insertionsByLine.get(line);
+      if (added != null) {
+        sourceLines.addAll(line - 1, added);
       }
     }
     String printed = String.join("\n", sourceLines) + (droppedTrailingNewline ? "\n" : "");
@@ -985,7 +1580,22 @@ public final class RetrofitPatchEmitter {
       typeImports.addAll(getters.typeImports);
     }
 
+    // A retyped field now names a generated companion class. The companions are emitted into the model
+    // package, so a field declared in a SUB-package (or any other package) needs an import for it; a
+    // field already in the model package needs none, and adding one there would be an unused-import
+    // checkstyle failure in the team's repo.
+    String filePackage = unit.getPackageDeclaration()
+        .map(p -> p.getNameAsString()).orElse(null);
+    if (!retypeTargets.isEmpty() && modelPackage != null && !modelPackage.equals(filePackage)) {
+      for (String target : retypeTargets) {
+        typeImports.add("import " + modelPackage + "." + target + ";");
+      }
+    }
+
     // Add imports on the printed text (doing it textually keeps the diff minimal and deterministic).
+    if (needsComplexTypeImport) {
+      typeImports.add("import uk.gov.hmcts.ccd.sdk.api.ComplexType;");
+    }
     printed = addImports(printed, needsCcdImport, needsJsonPropertyImport, needsFieldTypeImport,
         needsJsonUnwrappedImport, needsJsonIgnoreImport, accessClasses, typeImports);
 
@@ -1456,10 +2066,14 @@ public final class RetrofitPatchEmitter {
     }
     String rewritten = javaType;
     for (String simple : bareSimpleTypeNames(javaType)) {
-      // A type the model source actually declares → its real FQN (an existing model class in another
-      // sub-package). Otherwise a companion type freshly emitted into the model package.
-      String fqn = index.fqnForSimpleName(simple, modelPackage)
-          .orElse(modelPackage + "." + simple);
+      // The companion/config emitters' own decision first (it honours --type-package-hint and so is
+      // the only path that can disambiguate a simple name declared in two packages), then a type the
+      // model source declares → its real FQN (an existing model class in another sub-package),
+      // otherwise a companion type freshly emitted into the model package.
+      String fqn = typeFqnOverrides.containsKey(simple)
+          ? typeFqnOverrides.get(simple)
+          : index.fqnForSimpleName(simple, modelPackage)
+              .orElse(modelPackage + "." + simple);
       String reference = binder.reference(fqn);
       if (!reference.equals(simple)) {
         // Qualify the token in the type string (word-boundary match so a substring is not touched).
@@ -1541,6 +2155,126 @@ public final class RetrofitPatchEmitter {
         .anyMatch(a -> a.getNameAsString().equals(simpleName)
             || a.getNameAsString().endsWith("." + simpleName));
   }
+
+  /**
+   * Rewrites a field declaration's declared type to {@code targetSimpleName}, recording the replaced
+   * source line in {@code retypedLines}.
+   *
+   * <p>The token replaced is the type the SDK actually reads for the field's {@code FieldType}: the
+   * declared type itself for a scalar field, and the ELEMENT type for a collection
+   * ({@code List<X>} → {@code List<Target>}, {@code List<ListValue<X>>} → {@code List<ListValue<Target>>}),
+   * mirroring {@code CaseFieldGenerator.resolveCollectionType}'s own descent and {@link TypeInference}'s.
+   * The replacement is made by the token's own source RANGE rather than by string search, so a
+   * same-named token elsewhere on the line (a trailing comment, an initialiser,
+   * {@code Foo foo = new Foo()}) is left alone.
+   *
+   * <p>Refused — leaving the declaration exactly as it is — when the type token does not begin and end on
+   * one line, or its recorded text does not match the source at that range. Both mean the emitter's
+   * column arithmetic cannot be trusted for this declaration, and a wrong splice would produce
+   * uncompilable Java rather than a diff a reviewer can read.
+   *
+   * @return true when the declaration was rewritten, false when the retype was refused or was a no-op
+   */
+  private static boolean replaceDeclaredTypeToken(FieldDeclaration fieldDecl,
+      String targetSimpleName, List<String> sourceLines, Map<Integer, String> retypedLines) {
+    com.github.javaparser.ast.type.Type declared = fieldDecl.getVariable(0).getType();
+    com.github.javaparser.ast.type.Type target = retypeTarget(declared);
+    if (!(target instanceof ClassOrInterfaceType cit)) {
+      return false;
+    }
+    // The NAME node, not the whole type: List<ListValue<Foo>>'s element name is 'Foo' and must be
+    // replaced without disturbing its own (absent) type arguments.
+    com.github.javaparser.ast.expr.SimpleName name = cit.getName();
+    Optional<com.github.javaparser.Range> range = name.getRange();
+    if (range.isEmpty()) {
+      return false;
+    }
+    com.github.javaparser.Range r = range.get();
+    if (r.begin.line != r.end.line) {
+      return false;
+    }
+    int lineNumber = r.begin.line;
+    // A line already rewritten by another member's retype would make these columns stale; two fields
+    // never share a declaration line in practice, so refuse rather than compound the arithmetic.
+    if (retypedLines.containsKey(lineNumber) || lineNumber < 1 || lineNumber > sourceLines.size()) {
+      return false;
+    }
+    if (targetSimpleName.equals(name.getIdentifier())) {
+      // Already declared as the companion — a re-applied patch must be a no-op, like every other op.
+      return false;
+    }
+    String line = sourceLines.get(lineNumber - 1);
+    int from = r.begin.column - 1;
+    int to = r.end.column; // JavaParser's end column is inclusive; substring's end is exclusive.
+    if (from < 0 || to > line.length() || from >= to) {
+      return false;
+    }
+    if (!line.substring(from, to).equals(name.getIdentifier())) {
+      return false;
+    }
+    retypedLines.put(lineNumber, line.substring(0, from) + targetSimpleName + line.substring(to));
+    return true;
+  }
+
+  /**
+   * The type node a retype must rewrite: the declared type for a scalar field, else the collection's
+   * element type, descending one further level through a generic element wrapper
+   * ({@code List<ListValue<X>>} → {@code X}) exactly as {@code CaseFieldGenerator}'s
+   * {@code hasGenerics()} guard and {@link TypeInference#inferCollection} do.
+   *
+   * <p>Returns null — no rewritable token — whenever the token the descent lands on carries type
+   * arguments of its own, or the declaration is a raw collection with none. Both mean the declared
+   * shape is deeper or vaguer than the SDK's single level of descent resolves, so no single name
+   * substitution reproduces the definition type: sscs's
+   * {@code List<CcdValue<CcdValue<String>>>} descends to {@code CcdValue<String>}, and renaming THAT
+   * token yields {@code List<CcdValue<HearingVenueEpimsId<String>>>} — a type that does not take
+   * parameters, and a model copy that no longer compiles.
+   */
+  private static com.github.javaparser.ast.type.Type retypeTarget(
+      com.github.javaparser.ast.type.Type declared) {
+    if (!(declared instanceof ClassOrInterfaceType cit)) {
+      return declared;
+    }
+    if (!isCollectionRawType(cit)) {
+      // A scalar declaration: its own name is the token, but only when it is not itself generic —
+      // renaming Wrapper in Wrapper<Foo> would move the parameters onto a non-generic companion.
+      return cit.getTypeArguments().isPresent() ? null : cit;
+    }
+    Optional<ClassOrInterfaceType> element = firstTypeArgument(cit);
+    if (element.isEmpty()) {
+      return null; // a raw collection names no element type to rewrite
+    }
+    // A generic element wrapper (ListValue<X>, Element<X>) is descended through to X; a concrete
+    // element class IS the type the SDK names, so it is the token to replace.
+    Optional<ClassOrInterfaceType> inner = firstTypeArgument(element.get());
+    if (inner.isPresent()) {
+      return inner.get().getTypeArguments().isPresent() ? null : inner.get();
+    }
+    return element.get();
+  }
+
+  /** The first type argument of a parameterised type, when it is itself a class/interface type. */
+  private static Optional<ClassOrInterfaceType> firstTypeArgument(ClassOrInterfaceType type) {
+    return type.getTypeArguments()
+        .flatMap(args -> args.isEmpty() ? Optional.empty() : Optional.of(args.get(0)))
+        .filter(t -> t instanceof ClassOrInterfaceType)
+        .map(t -> (ClassOrInterfaceType) t);
+  }
+
+  /**
+   * Whether a type's raw name is one of the collection types the SDK treats structurally, mirroring
+   * {@link TypeInference}'s own set.
+   */
+  private static boolean isCollectionRawType(ClassOrInterfaceType type) {
+    return COLLECTION_RAW_TYPES.contains(type.getNameAsString());
+  }
+
+  /**
+   * Collection raw types the SDK treats structurally, mirroring {@link TypeInference}.
+   */
+  private static final Set<String> COLLECTION_RAW_TYPES = Set.of(
+      "List", "Set", "Collection", "ArrayList", "LinkedList", "HashSet", "LinkedHashSet",
+      "SortedSet", "TreeSet");
 
   /**
    * The 1-based source line a field declaration's own text begins on — its first existing
@@ -1763,6 +2497,20 @@ public final class RetrofitPatchEmitter {
     private final Path file;
     private final Map<String, AnnotationPlan> annotate = new LinkedHashMap<>();
     private final Set<String> ignore = new LinkedHashSet<>();
+    /**
+     * Java field name → the {@code @JsonProperty} id to pin on it, for fields the
+     * {@code CaseEventToComplexTypes} walk resolved through a class-level {@code @JsonNaming}
+     * strategy (see {@link RetrofitPinnedNames}). These fields receive ONLY a {@code @JsonProperty} —
+     * they are not definition complex-type members, so they get no {@code @CCD}.
+     */
+    private final Map<String, String> pinNames = new LinkedHashMap<>();
+    /**
+     * Java field name → the generated companion class simple name to <em>re-declare</em> it as, for a
+     * field whose definition complex type has no model class of its own (see
+     * {@link RetrofitPlannedRetypes}). Unlike every other op here this rewrites a token on the
+     * declaration line itself rather than inserting lines above it.
+     */
+    private final Map<String, String> retype = new LinkedHashMap<>();
     private final List<FieldModel> synthesise = new ArrayList<>();
     /** Delegating getters to add for @JsonUnwrapped-reached complex-type grants (retrofit). */
     private final List<DelegatingGetter> delegatingGetters = new ArrayList<>();
@@ -1774,6 +2522,12 @@ public final class RetrofitPatchEmitter {
      * and building goes through a builder (the constructor-limit fix).
      */
     private final Set<String> removeTypeAnnotations = new LinkedHashSet<>();
+    /**
+     * Class simple name → the class-level {@code @ComplexType} to add to it, pinning the CCD type ID
+     * the definition uses for a model class whose Java name differs from it (see
+     * {@link #planComplexTypeId}).
+     */
+    private final Map<String, ComplexTypeIdPlan> nameComplexTypes = new LinkedHashMap<>();
     /**
      * The class whose hand-written constructor(s) must be widened to accept the synthesised fields,
      * or null when synthesis needs no constructor change. Set only for the builder-bound /
@@ -1833,6 +2587,34 @@ public final class RetrofitPatchEmitter {
     void removeTypeAnnotation(String simpleName) {
       this.removeTypeAnnotations.add(simpleName);
     }
+
+    /**
+     * Records the class-level {@code @ComplexType(name = …, generate = true)} pinning the definition's
+     * own type ID onto a model class whose Java simple name differs from it.
+     */
+    void nameComplexType(String className, ComplexTypeIdPlan plan) {
+      nameComplexTypes.putIfAbsent(className, plan);
+    }
+
+    /**
+     * Records that a field must carry an explicit {@code @JsonProperty} pinning the id its class's
+     * {@code @JsonNaming} strategy already produces. Skipped when the field is also being annotated,
+     * because that plan carries its own {@code renameTo} and would emit a second annotation.
+     */
+    void pinName(String member, String id) {
+      if (!annotate.containsKey(member)) {
+        pinNames.putIfAbsent(member, id);
+      }
+    }
+
+    /**
+     * Records that a field must be re-declared as the generated companion class backing its definition
+     * complex type. First write wins, matching {@link RetrofitPlannedRetypes}'s own single-claim rule so
+     * the patch and the graph agree on which companion a member points at.
+     */
+    void retype(String member, String targetSimpleName) {
+      retype.putIfAbsent(member, targetSimpleName);
+    }
   }
 
   /**
@@ -1856,6 +2638,18 @@ public final class RetrofitPatchEmitter {
       this.signature = signature;
       this.indent = indent;
     }
+  }
+
+  /**
+   * A planned class-level {@code @ComplexType} pinning a definition complex type's ID onto the model
+   * class that backs it, for a class whose Java simple name is not that ID.
+   *
+   * @param definitionId the ComplexTypes sheet ID the SDK must emit for this class
+   * @param generate whether the class's own members are emitted as that type's rows (true for the value
+   *     class), or the type is named only so collection fields reference it while emitting no rows of
+   *     its own (false for a {@code {id, value}} wrapper)
+   */
+  private record ComplexTypeIdPlan(String definitionId, boolean generate) {
   }
 
   /**

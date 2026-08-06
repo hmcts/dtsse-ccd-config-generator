@@ -165,8 +165,7 @@ public class DefaultDefinitionLinker implements DefinitionLinker {
     passthroughSheets.addAll(complexTypeAuth.passthrough());
     passthroughSheets.addAll(fixedListPassthrough);
     EventComplexTypeResult eventComplexTypes = buildEventToComplexTypesPassthrough(
-        ir, caseTypeId, options, gaps, events, allComplexTypes, clustered.caseFields(),
-        clustered.refs());
+        ir, caseTypeId, options, gaps, events, allComplexTypes, clustered.caseFields());
     passthroughSheets.addAll(eventComplexTypes.passthrough());
     passthroughSheets.addAll(buildEventFieldColumnPassthrough(ir, caseTypeId, events, options, gaps));
     // State Description (@CCD(description)), RoleToAccessProfiles unregistered roles
@@ -1996,8 +1995,7 @@ public class DefaultDefinitionLinker implements DefinitionLinker {
    */
   private EventComplexTypeResult buildEventToComplexTypesPassthrough(
       DefinitionIr ir, String caseTypeId, ConversionOptions options, GapCollector gaps,
-      List<EventModel> events, List<ComplexTypeModel> complexTypes, List<FieldModel> caseFields,
-      Map<String, ClusteredFieldRef> clusteredRefs) {
+      List<EventModel> events, List<ComplexTypeModel> complexTypes, List<FieldModel> caseFields) {
     List<SheetRow> rows = ir.rowsForCaseType(SheetName.CASE_EVENT_TO_COMPLEX_TYPES, caseTypeId);
     if (rows.isEmpty()) {
       return new EventComplexTypeResult(Map.of(), List.of());
@@ -2013,10 +2011,23 @@ public class DefaultDefinitionLinker implements DefinitionLinker {
     for (FieldModel field : caseFields) {
       fieldsById.put(field.getId(), field);
     }
-    Map<String, ClusteredFieldRef> refs = clusteredRefs == null ? Map.of() : clusteredRefs;
-    // (event, field) pairs placed as COMPLEX on that event — the emitter only opens a .complex block
-    // for these, so a member override can only attach to one of them.
-    Set<String> complexPlaced = complexPlacedFields(events);
+    // The events this case type declares. Membership is the ONLY placement-shaped requirement left:
+    // the old DisplayContext=COMPLEX placement gate is gone, because the scope is now opened by a
+    // NON-REGISTERING opener (.complexScope, or the element-typed .complex(getter, Element.class))
+    // that adds no CaseEventToFields row of its own. So it no longer matters which context the event
+    // places the field in, whether any page places it, or even whether the event places anything at
+    // all — EventBuilder.fields() hands back the event's collection builder without registering
+    // anything, so a page-less event can carry a scope too (probate's
+    // boFindMatchedCaseGrantRegistrarEscalation/caseMatches).
+    // A field the team's model reaches only through a @JsonUnwrapped holder is no longer excluded
+    // either: the scope opens the holder first with a further NON-REGISTERING .complex(holderGetter)
+    // hop, and the hop chain comes from the same placement decision the page field uses (see
+    // EventComplexTypeResolver.rootPlacement), so the two cannot disagree. Only a holder whose getter
+    // the model suppresses still refuses, inside the derivation.
+    Set<String> declaredEvents = new LinkedHashSet<>();
+    for (EventModel event : events) {
+      declaredEvents.add(event.getId());
+    }
 
     // Key by (overlay suffix, event, field) so each lands in the right per-event/per-field file, as
     // the whole-sheet passthrough did.
@@ -2073,10 +2084,8 @@ public class DefaultDefinitionLinker implements DefinitionLinker {
         reason.accept("overlay-suffixed group (suffix '" + suffix + "')");
       } else if (targetsWithSuffix.contains(target)) {
         reason.accept("an overlay-suffixed sibling row targets the same (event, field)");
-      } else if (!complexPlaced.contains(target)) {
-        reason.accept("field is not placed as DisplayContext=COMPLEX on this event");
-      } else if (refs.containsKey(fieldId)) {
-        reason.accept("field is clustered (@JsonUnwrapped), so it has no plain getter");
+      } else if (!declaredEvents.contains(eventId)) {
+        reason.accept("no CaseEvent row declares this event, so there is no event to place a scope on");
       } else if (fieldsById.get(fieldId) == null) {
         reason.accept("no CaseField row declares this field");
       } else {
@@ -2086,23 +2095,39 @@ public class DefaultDefinitionLinker implements DefinitionLinker {
         }
       }
 
-      // Only a base (non-overlay) group whose field is a plain COMPLEX-placed CaseData member is a
-      // candidate: an overlay-suffixed group would need a per-environment .complex block the emitter
-      // does not gate, and a clustered/overlay field has no plain getter to open the block on.
+      // Any base (non-overlay) group whose field is a plain (non-clustered, non-overlay-gated)
+      // CaseData member is a candidate, WHATEVER DisplayContext the event places the field in — or
+      // even if the event does not place it at all. The member scope is opened by a NON-REGISTERING
+      // opener, so it neither adds a CaseEventToFields row nor forces an existing one to COMPLEX. The
+      // remaining exclusions are structural rather than contextual: an overlay-suffixed group would
+      // need a per-environment scope the emitter does not gate, an overlay-gated field is not a
+      // CaseData member at all so there is no getter to open the scope on, and a group naming an event
+      // no CaseEvent row declares has no event to place a scope on.
       EventComplexTypeGroup group = null;
+      // The rows of this group that could not be derived and stay verbatim passthroughs. When nothing
+      // derives this is the whole group; when the group derives partially it is only the unresolvable
+      // members.
+      List<SheetRow> unresolvedRows = groupRows;
       if (suffix == null
           && !targetsWithSuffix.contains(eventId + "\u001f" + fieldId)
-          && complexPlaced.contains(eventId + "\u001f" + fieldId)
-          && !refs.containsKey(fieldId)) {
+          && declaredEvents.contains(eventId)) {
         FieldModel field = fieldsById.get(fieldId);
         if (field != null && (field.getOverlayTags() == null || field.getOverlayTags().isEmpty())) {
-          group = deriveEventComplexTypeGroup(resolver, field, eventId, groupRows, reason);
+          EtoctDerivation derivation =
+              deriveEventComplexTypeGroup(resolver, field, eventId, groupRows, reason);
+          group = derivation.group();
+          unresolvedRows = derivation.unresolved();
         }
       }
 
+      // One sheet per (overlay, event, field): the derived members' companion tail-graft and the
+      // unresolved members' verbatim rows share it. They MUST share it — GapAndPassthroughWriter keys
+      // its output file (and its manifest entry) on the relative path, so a second sheet for the same
+      // path would overwrite the first and the manifest would then merge the survivor twice.
+      List<Map<String, Object>> passthroughRows = new ArrayList<>();
       if (group != null) {
         groups.put(eventId + "\u001f" + fieldId, group);
-        derivedRows += groupRows.size();
+        derivedRows += groupRows.size() - unresolvedRows.size();
         // Companion graft: only the exotic tail columns the generator cannot compute. The row's ID
         // is no longer grafted — the definition-store importer never reads it on this sheet (its
         // EventCaseFieldComplexTypeParser maps ListElementCode/labels/order/context/show-condition but
@@ -2112,50 +2137,46 @@ public class DefaultDefinitionLinker implements DefinitionLinker {
         // is no longer grafted either: the importer stores it verbatim but the SDK re-derives it from a
         // per-event counter, and only the members' RELATIVE order matters (preserved by emitting members
         // in input row order); it joins the display-order-renumbering disposition and is stripped on
-        // every sheet by DEFAULTS. So a derived group now emits a graft row ONLY when the input row
+        // every sheet by DEFAULTS. So a derived member emits a graft row ONLY when its input row
         // carries an exotic tail column — most carriers disappear entirely.
-        List<Map<String, Object>> graft = new ArrayList<>();
+        // Identity, not equality: the graft must skip exactly the row instances the derivation handed
+        // back, independent of whether two rows happen to carry equal columns.
+        Set<SheetRow> unresolvedIdentities =
+            java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<>());
+        unresolvedIdentities.addAll(unresolvedRows);
         for (SheetRow row : groupRows) {
+          if (unresolvedIdentities.contains(row)) {
+            continue;
+          }
           Map<String, Object> tail = etoctGraftRow(row);
           if (tail != null) {
-            graft.add(tail);
+            passthroughRows.add(tail);
           }
         }
-        if (!graft.isEmpty()) {
-          sheets.add(PassthroughSheet.builder()
-              .relativePath("CaseEventToComplexTypes/" + eventId + "/" + fieldId + ".json")
-              // Keyed on the columns the generator DOES emit, so the tail merges onto the generated
-              // row rather than adding an orphan. Every tail column is additive (the generator omits
-              // it), so no overwriteColumns are needed.
-              .primaryKeys(List.of(Columns.CASE_EVENT_ID, Columns.CASE_FIELD_ID,
-                  Columns.LIST_ELEMENT_CODE))
-              .rows(graft)
-              .build());
-        }
-      } else {
-        fallbackRows += groupRows.size();
+      }
+      if (!unresolvedRows.isEmpty()) {
+        fallbackRows += unresolvedRows.size();
         String cause = groupReason[0] == null ? "unrecorded" : groupReason[0];
-        fallbackCauseRows.merge(generaliseEtoctCause(cause), groupRows.size(), Integer::sum);
+        fallbackCauseRows.merge(generaliseEtoctCause(cause), unresolvedRows.size(), Integer::sum);
         fallbackExamples.putIfAbsent(generaliseEtoctCause(cause),
             eventId + "/" + fieldId + ": " + cause);
-        List<Map<String, Object>> raw = new ArrayList<>();
-        for (SheetRow row : groupRows) {
-          raw.add(new LinkedHashMap<>(row.getColumns()));
+        for (SheetRow row : unresolvedRows) {
+          passthroughRows.add(new LinkedHashMap<>(row.getColumns()));
         }
+      }
+      if (!passthroughRows.isEmpty()) {
         sheets.add(PassthroughSheet.builder()
             .relativePath("CaseEventToComplexTypes/" + eventId + "/" + fieldId + ".json")
-            // ID (the complex-type member's declaring type) must be part of the merge key: one
-            // CaseFieldID can host more than one complex type across its nested members (e.g. a
-            // Collection field whose element type embeds another Collection of a different type), so
-            // two distinct types can each carry a member with the same ListElementCode (e.g. both
-            // declare an "address" or "firstName" member). Keying on
-            // (CaseEventID, CaseFieldID, ListElementCode) alone made those rows collide in
-            // mergeInto, silently dropping one row and grafting its columns onto the other's.
-            .primaryKeys(List.of(Columns.ID, Columns.CASE_EVENT_ID, Columns.CASE_FIELD_ID,
-                Columns.LIST_ELEMENT_CODE))
+            // ETOCT_FALLBACK_MERGE_KEYS whenever a verbatim row is present, so ID still separates two
+            // members of different declaring types under the same ListElementCode. Graft rows sharing
+            // the file are unaffected by the extra key column: neither they nor the generated rows they
+            // land on carry an ID, and mergeInto counts absent-on-both as agreement. A graft-only sheet
+            // keeps the narrower set — see both constants' javadoc.
+            .primaryKeys(unresolvedRows.isEmpty()
+                ? ETOCT_GRAFT_MERGE_KEYS : ETOCT_FALLBACK_MERGE_KEYS)
             .overlaySuffix(suffix)
             .overlayCondition(OverlayResolver.conditionFor(suffix, options))
-            .rows(raw)
+            .rows(passthroughRows)
             .build());
       }
     }
@@ -2171,15 +2192,30 @@ public class DefaultDefinitionLinker implements DefinitionLinker {
             + " over the generated rows; the row's ID is an importer-ignored accepted difference and"
             + " FieldDisplayOrder joins the display-order-renumbering disposition, so a derived group"
             + " with no exotic tail leaves no passthrough carrier); " + fallbackRows + " row(s) kept as a"
-            + " verbatim row passthrough because their group is not derivable. Collection-rooted and"
+            + " verbatim row passthrough. Fallback is per MEMBER, not per group: an unresolvable row"
+            + " falls back alone while its siblings still derive, and the two share one"
+            + " CaseEventToComplexTypes/<event>/<field>.json (the verbatim row keeps ID as a merge key,"
+            + " which the grafts are indifferent to since neither they nor the generated rows they land"
+            + " on carry one). Only two refusals remain group-wide: a root type that is not"
+            + " COMPLEX-walkable (no scope to open) and two rows agreeing on the generator's own"
+            + " (ListElementCode, FieldShowCondition) key yet differing in content (they would collapse"
+            + " into one generated row, so a passthrough would merge onto its derived twin instead of"
+            + " standing alongside it). Collection-rooted and"
             + " collection-intermediate groups are now derived (the element-typed"
             + " .complex(getter, Element.class) scope walks into the ListValue element type) and a"
             + " member @CCD(hint) the input row does not carry is now derived too (the tri-state"
-            + " .hintText/.noHintText setters override the cascade). The remaining fallback causes are:"
-            + " a group not placed as COMPLEX on the event, a dotted ListElementCode that does not"
+            + " .hintText/.noHintText setters override the cascade). The DisplayContext the event"
+            + " places the root field in is no longer a fallback cause at all — the member scope is"
+            + " opened by a non-registering opener (.complexScope, or the element-typed"
+            + " .complex(getter, Element.class)), so a root placed OPTIONAL/READONLY/MANDATORY, or not"
+            + " placed by any page, derives just the same — and neither is having any placement at all,"
+            + " since EventBuilder.fields() yields a scope-able builder on a page-less event too. The"
+            + " remaining fallback causes are:"
+            + " a group naming an event no CaseEvent row declares, a dotted ListElementCode that does not"
             + " resolve through the typed complex-type graph (unknown member, scalar intermediate, or a"
-            + " hop into a type the converter neither generated nor can reflect), a DisplayContext other"
-            + " than OPTIONAL/MANDATORY/READONLY, the same ListElementCode surviving twice with divergent"
+            + " hop into a type the converter neither generated nor can reflect), a member DisplayContext"
+            + " other than OPTIONAL/MANDATORY/READONLY/COMPLEX, the same ListElementCode surviving twice"
+            + " with divergent"
             + " content, or an overlay-suffixed sibling row on the same (event, field)."
             + formatEtoctCauses(fallbackCauseRows, fallbackExamples))
         .build());
@@ -2243,11 +2279,22 @@ public class DefaultDefinitionLinker implements DefinitionLinker {
    *   </li>
    *   <li><b>Accepted differences</b>: {@code ID} — arbitrary author metadata the importer never reads
    *       on this sheet (see {@link #etoctGraftRow}), dropped from comparison by
-   *       {@code EVENT_COMPLEX_TYPE_ID_IGNORED}; and {@code FieldDisplayOrder} — re-derived by the SDK
+   *       {@code EVENT_COMPLEX_TYPE_ID_IGNORED}; {@code FieldDisplayOrder} — re-derived by the SDK
    *       from a per-event counter (only relative member order matters), stripped on every sheet by
-   *       {@code DEFAULTS}. Grafting either would merely re-inject a value the comparator discards.
+   *       {@code DEFAULTS}; and {@code ShowSummaryChangeOption} — read by
+   *       {@code EventCaseFieldParser} on {@code CaseEventToFields} but NOT by
+   *       {@code EventCaseFieldComplexTypeParser} on this sheet, which maps only
+   *       LEC/label/hint/live-from/live-to/order/default-value/display-context/show-condition/
+   *       publish/publish-as/retain-hidden-value. It is importer-ignored here exactly like
+   *       {@code ID}, and {@code DEFAULTS} already forgives both Y and N. Grafting any of the three
+   *       would merely re-inject a value the comparator discards.
    *   </li>
    * </ul>
+   *
+   * <p>{@code RetainHiddenValue} is deliberately NOT here: the importer does read it on this sheet,
+   * and the member placement derives it via {@code .retainHiddenValue()} — the same
+   * {@code applyMetadata} the {@code CaseEventToFields} rows go through — so it needs no graft
+   * either.</p>
    *
    * <p>Every OTHER column present on the input row IS an exotic tail column and IS grafted (see
    * {@link #etoctGraftRow}).</p>
@@ -2256,40 +2303,91 @@ public class DefaultDefinitionLinker implements DefinitionLinker {
       Columns.CASE_EVENT_ID, Columns.CASE_FIELD_ID, Columns.LIST_ELEMENT_CODE,
       Columns.DISPLAY_CONTEXT, Columns.EVENT_ELEMENT_LABEL, Columns.EVENT_HINT_TEXT,
       Columns.FIELD_SHOW_CONDITION, Columns.PAGE_ID, Columns.HINT_TEXT, "LiveFrom",
-      Columns.ID, Columns.FIELD_DISPLAY_ORDER);
+      Columns.ID, Columns.FIELD_DISPLAY_ORDER, Columns.SHOW_SUMMARY_CHANGE_OPTION,
+      Columns.RETAIN_HIDDEN_VALUE);
 
   /**
-   * The set of {@code eventId + <unit-separator> + caseFieldId} keys for fields placed as
-   * {@code DisplayContext=COMPLEX} on their event's pages — the only fields the config emitter opens
-   * a {@code .complex} block for, so the only ones a member override can attach to.
+   * The merge key for a DERIVED group's companion tail-graft: the columns the SDK generator itself
+   * writes for the row, so the tail lands on the generated row instead of appending an orphan.
+   *
+   * <p>{@code ID} is absent because the generator emits none on this sheet — keying on it would make
+   * the graft present-on-one-side-only, which {@code JsonUtils.mergeInto} treats as a definite
+   * non-match. (That asymmetry is exactly what {@code EVENT_COMPLEX_TYPE_ID_IGNORED} keys off to
+   * tell a derived group from a fallback one.) {@code DefaultValue} is absent for the same reason in
+   * reverse: it is an exotic tail column this graft carries as PAYLOAD (the derived
+   * {@code .complex(...)} emission never calls {@code .defaultValue(...)} on a member, so the
+   * generated row never has it), and a payload column cannot also be a key.</p>
+   *
+   * @see #ETOCT_FALLBACK_MERGE_KEYS
    */
-  private Set<String> complexPlacedFields(List<EventModel> events) {
-    Set<String> placed = new LinkedHashSet<>();
-    for (EventModel event : events) {
-      if (event.getPages() == null) {
-        continue;
-      }
-      for (PageModel page : event.getPages()) {
-        if (page.getFields() == null) {
-          continue;
-        }
-        for (PageModel.PageField field : page.getFields()) {
-          if (field.getDisplayContext() != null
-              && "COMPLEX".equalsIgnoreCase(field.getDisplayContext().trim())) {
-            placed.add(event.getId() + "\u001f" + field.getCaseFieldId());
-          }
-        }
-      }
-    }
-    return placed;
+  private static final List<String> ETOCT_GRAFT_MERGE_KEYS = List.of(
+      Columns.CASE_EVENT_ID, Columns.CASE_FIELD_ID, Columns.LIST_ELEMENT_CODE,
+      Columns.FIELD_SHOW_CONDITION);
+
+  /**
+   * The merge key for a FALLBACK group's verbatim row passthrough — the graft key plus {@code ID}.
+   *
+   * <p>{@code FieldShowCondition} joins the key because it, not {@code ID}, is what actually
+   * separates the same-{@code ListElementCode} rows real definitions ship. Measured across the six
+   * review lanes, counting only collisions whose rows differ in a column the comparator does NOT
+   * drop (so genuine loss, not {@code ID}/{@code FieldDisplayOrder} churn), after the
+   * {@link #dedupeExactEtoctRows} pre-pass:</p>
+   *
+   * <pre>
+   *   (ID, ev, fld, LEC)         civil 4 lost, prl 7 lost
+   *   (ID, ev, fld, LEC, show)   civil 1 lost, prl 2 lost   &lt;- this key set
+   *   (    ev, fld, LEC, show)   civil 1 lost, prl 4 lost
+   * </pre>
+   *
+   * <p>So {@code ID} is retained: dropping it costs prl two rows, its {@code childDetails/children}
+   * group hosting both a {@code Child} and an {@code OtherPersonWhoLivesWithChild} member named
+   * {@code firstName}/{@code lastName} — the very case {@code EVENT_COMPLEX_TYPE_ID_IGNORED}
+   * documents. Adding {@code FieldShowCondition} is what recovers the rest: civil's
+   * {@code ORDER_REVIEW_OBLIGATION_CHECK/obligationWAFlag} repeats each member as
+   * OPTIONAL-with-show-condition and again as MANDATORY, and without it the MANDATORY row is
+   * silently dropped. {@code DefaultValue} — the fifth key the generator itself uses — is excluded
+   * because it demonstrably recovers nothing here (civil 1, prl 2 either way; only 31 rows across
+   * all six lanes carry the column) and it cannot be a key on the graft path at all.</p>
+   *
+   * <p>The one irreducible residue is civil's
+   * {@code CLAIMANT_RESPONSE_SPEC/applicant1DQRequestedCourt:responseCourtLocations} plus three prl
+   * rows: same key, divergent content, no column to separate them. Those keep whole-group fallback.</p>
+   */
+  private static final List<String> ETOCT_FALLBACK_MERGE_KEYS = List.of(
+      Columns.ID, Columns.CASE_EVENT_ID, Columns.CASE_FIELD_ID, Columns.LIST_ELEMENT_CODE,
+      Columns.FIELD_SHOW_CONDITION);
+
+  /**
+   * The outcome of attempting to derive one {@code (event, field)} group: the members that resolved
+   * into builder-chain calls, plus the input rows that did not and must stay verbatim row
+   * passthroughs.
+   *
+   * <p>Per-member rather than whole-group: every gate in {@link #deriveEventComplexTypeGroup} used to
+   * refuse the entire group, so one unresolvable member (a label-only pseudo-member, a
+   * {@code DisplayContext=COMPLEX} intermediate, a hop into an unreflectable type) dragged all its
+   * siblings into the passthrough. Splitting them is safe because
+   * {@link #ETOCT_FALLBACK_MERGE_KEYS} is a superset of {@link #ETOCT_GRAFT_MERGE_KEYS}: the derived
+   * members' companion tail-graft and the unresolved rows land in the same
+   * {@code CaseEventToComplexTypes/<event>/<field>.json} without either clobbering the other, since a
+   * graft row carries no {@code ID} (so it never matches a passed-through row, which does) and a
+   * passed-through row's own key is unique among the rows kept.</p>
+   *
+   * @param group   the derivable members as a builder-chain group, or null when none resolved
+   * @param unresolved the input rows that could not be derived, in input order
+   */
+  private record EtoctDerivation(EventComplexTypeGroup group, List<SheetRow> unresolved) {
   }
 
   /**
-   * Attempts to derive one {@code (event, field)} group into an {@link EventComplexTypeGroup},
-   * returning null when any row cannot be faithfully reproduced as a builder chain (so the caller
-   * keeps the whole group as a row passthrough).
+   * Attempts to derive one {@code (event, field)} group, returning the members that resolved plus the
+   * rows that did not (which the caller keeps as a verbatim row passthrough).
+   *
+   * <p>Group-wide refusals still exist where a per-member split would be unsound — an unwalkable root
+   * type (no scope to open at all), and the same {@code (ListElementCode, FieldShowCondition)}
+   * surviving twice with divergent content (the two rows would collapse into one generated row).
+   * Everything else is decided per row.</p>
    */
-  private EventComplexTypeGroup deriveEventComplexTypeGroup(
+  private EtoctDerivation deriveEventComplexTypeGroup(
       EventComplexTypeResolver resolver, FieldModel field, String eventId,
       List<SheetRow> allRows, Consumer<String> reason) {
     // The type node the member chains bind to: in retrofit mode the team's actual declared model
@@ -2298,41 +2396,56 @@ public class DefaultDefinitionLinker implements DefinitionLinker {
     Object rootNode = resolver.rootNode(field);
     if (rootNode == null) {
       reason.accept("root field type '" + field.getFieldType() + "' is not a walkable complex type");
-      return null;
+      return new EtoctDerivation(null, allRows);
+    }
+    // How the emitted scope reaches the field itself. In retrofit mode the field may be declared on a
+    // @JsonUnwrapped member's class rather than on the root case-data class, so the opener must descend
+    // that member first (civil's applicant1DQHearing on Applicant1DQ, via CaseData.applicant1DQ);
+    // empty means the model exposes no compilable path at all (a hop's getter suppressed by
+    // @Getter(AccessLevel.NONE)), so the whole group must stay a verbatim passthrough.
+    Optional<EventComplexTypeResolver.RootPlacement> rootPlacement = resolver.rootPlacement(field);
+    if (rootPlacement.isEmpty()) {
+      reason.accept("the model exposes no compilable getter chain to this field "
+          + "(a @JsonUnwrapped parent's getter is suppressed)");
+      return new EtoctDerivation(null, allRows);
     }
     // Collapse rows that are exact duplicates up to a blank/absent column, exactly as the comparator
     // does (dropExactDuplicates): a definition that ships the same keyed row in both a flat file and
     // a fragment directory (civil/prl) imports as one, and both the generated side and this
     // derivation must treat them as one. Only genuine content divergence survives.
     List<SheetRow> groupRows = dedupeExactEtoctRows(allRows);
-    // A single surviving row per ListElementCode: the SDK generates one row per member placement,
-    // keyed on (CaseEventID, CaseFieldID, ListElementCode), so a group that (after dedup) still lists
-    // the same LEC twice with divergent content (civil's obligationWAFlag repeats each member as
-    // OPTIONAL-with-show-condition and again as MANDATORY) cannot round-trip through the builder — the
-    // two rows collapse to one generated row. Fall back so the ID-keyed passthrough reproduces both.
-    // With every LEC unique the (event, field, LEC)-keyed companion graft is unambiguous even when
-    // rows carry different IDs (a collection group lists one distinct-ID row per element member, e.g.
-    // sscs's otherParties: otherPartyName/name, otherPartyTitle/name.title, …), so ID no longer needs
-    // to be a group-uniqueness gate — each row's ID is grafted as a value onto its own generated row.
-    Set<String> seenLecs = new LinkedHashSet<>();
+    // A single surviving row per (ListElementCode, FieldShowCondition) — the generator's own merge key
+    // for this sheet, minus the columns it does not vary per member. Placing the same member twice IS
+    // expressible (FieldCollection.createField appends unconditionally, and
+    // CaseEventToComplexTypesGenerator merges on the show condition), so civil's obligationWAFlag —
+    // each member once as OPTIONAL-with-condition and again as MANDATORY — round-trips fine. What does
+    // NOT is two rows agreeing on both columns yet differing in content: they collapse into one
+    // generated row. That stays a WHOLE-group refusal rather than a per-row one, because a colliding
+    // row kept as a passthrough would merge onto the derived row it collides with (both carry the same
+    // key and a row need not carry an ID to separate them) instead of standing alongside it.
+    Set<String> seenPlacements = new LinkedHashSet<>();
     for (SheetRow row : groupRows) {
-      if (!seenLecs.add(row.getString(Columns.LIST_ELEMENT_CODE).orElse(""))) {
+      String placement = row.getString(Columns.LIST_ELEMENT_CODE).orElse("")
+          + '' + blankToEmpty(row.getString(Columns.FIELD_SHOW_CONDITION).orElse(null));
+      if (!seenPlacements.add(placement)) {
         reason.accept("duplicate ListElementCode '"
             + row.getString(Columns.LIST_ELEMENT_CODE).orElse("") + "' with divergent content");
-        return null;
+        return new EtoctDerivation(null, allRows);
       }
     }
     List<EventComplexTypeGroup.Member> members = new ArrayList<>();
+    List<SheetRow> unresolved = new ArrayList<>();
     for (SheetRow row : groupRows) {
       // A derived row's key columns are re-emitted by the generator in canonical form — the trimmed
       // member id / field id and the upper-cased DisplayContext. When the input row carries a raw
       // value that only differs by surrounding whitespace or letter-case (ET's trailing-space LEC
       // 'jurisdictionCodeLEV ', civil's leading-space CaseFieldID ' respondent1DQRemoteHearing',
       // fpl's title-case DisplayContext 'Optional'), the derived row would not reproduce it
-      // byte-identically, so keep the whole group a verbatim row passthrough, which does.
+      // byte-identically, so keep THIS ROW a verbatim passthrough, which does.
       if (rawDiffersFromCanonical(row)) {
         reason.accept("row carries a non-canonical raw key value (whitespace/letter-case)");
-        return null;
+        unresolved.add(row);
+        continue;
       }
       String lec = row.getString(Columns.LIST_ELEMENT_CODE).orElse(null);
       String contextMethod =
@@ -2340,7 +2453,8 @@ public class DefaultDefinitionLinker implements DefinitionLinker {
       if (contextMethod == null) {
         reason.accept("unsupported DisplayContext '"
             + row.getString(Columns.DISPLAY_CONTEXT).orElse("") + "'");
-        return null;
+        unresolved.add(row);
+        continue;
       }
       String showCondition = row.getString(Columns.FIELD_SHOW_CONDITION).orElse(null);
       String eventLabel = row.getDisplayText(Columns.EVENT_ELEMENT_LABEL).orElse(null);
@@ -2349,7 +2463,8 @@ public class DefaultDefinitionLinker implements DefinitionLinker {
       Optional<EventComplexTypeGroup.Member> resolved = resolver.resolve(
           rootNode, lec, contextMethod, showCondition, eventLabel, eventHint, pageId, reason);
       if (resolved.isEmpty()) {
-        return null;
+        unresolved.add(row);
+        continue;
       }
       // The generated leaf member's @CCD(hint) cascades onto the row's HintText unless the placement
       // overrides it. Carry the input row's HintText disposition per member (rather than falling
@@ -2362,15 +2477,35 @@ public class DefaultDefinitionLinker implements DefinitionLinker {
       if (!java.util.Objects.equals(declaredHint, rowHint)) {
         member = member.toBuilder().hintOverridden(true).hintText(rowHint).build();
       }
+      // RetainHiddenValue is a real importer-read column on this sheet, and the SDK writes it from
+      // the same applyMetadata the CaseEventToFields rows use — so a Y row derives via
+      // .retainHiddenValue() instead of needing a column graft. N/absent leave the flag unset,
+      // which is what the generator (write-only-when-true) and the importer (nullable) both mean.
+      if (row.getYesNo(Columns.RETAIN_HIDDEN_VALUE).orElse(Boolean.FALSE)) {
+        member = member.toBuilder().retainHiddenValue(true).build();
+      }
       members.add(member);
     }
-    return EventComplexTypeGroup.builder()
-        .eventId(eventId)
-        .caseFieldId(field.getId())
-        .rootGetter("get" + capitaliseEtoct(field.getJavaName()))
-        .rootElementType(resolver.rootElementType(field))
-        .members(members)
-        .build();
+    if (members.isEmpty()) {
+      // Nothing resolved: no .complex(...) scope to open, so there is no group and every row (the
+      // originals, not the deduped set — the passthrough reproduces the input verbatim) falls back.
+      return new EtoctDerivation(null, allRows);
+    }
+    return new EtoctDerivation(
+        EventComplexTypeGroup.builder()
+            .eventId(eventId)
+            .caseFieldId(field.getId())
+            .rootGetter(rootPlacement.get().getter())
+            .rootHops(rootPlacement.get().hops())
+            .rootElementType(resolver.rootElementType(field))
+            .members(members)
+            .build(),
+        unresolved);
+  }
+
+  /** The string, or empty when null or blank — so absent and blank collapse to one placement key. */
+  private static String blankToEmpty(String s) {
+    return s == null || s.isBlank() ? "" : s;
   }
 
   /**
@@ -2413,8 +2548,18 @@ public class DefaultDefinitionLinker implements DefinitionLinker {
 
   /**
    * The builder method for a member's {@code DisplayContext}, or null when the context has no
-   * {@code .complex}-member equivalent ({@code COMPLEX} intermediate placeholders, blanks, unknowns),
-   * which forces the group to fall back to a row passthrough.
+   * member-placement equivalent (blanks, unknowns), which forces the row to fall back to a
+   * passthrough.
+   *
+   * <p>{@code COMPLEX} maps to {@code .complexMember(getter)}, which places the member with
+   * {@code DisplayContext.Complex} <em>without</em> opening a nested scope on it — the row shape
+   * sscs's {@code confirmPoAttendance/presentingOfficersDetails} ships, where an intermediate
+   * ({@code contact}) carries a {@code COMPLEX} row of its own alongside dotted rows for its leaves
+   * ({@code contact.phone}, {@code contact.mobile}). Before {@code complexMember} existed the only way
+   * to reach a member was {@code .complex(getter)}, which opens a scope, so a bare {@code COMPLEX}
+   * member row with no leaves under it was inexpressible and the whole row fell back;
+   * {@code CaseEventToComplexTypesGenerator} has always emitted {@code field.getContext()} verbatim, so
+   * the {@code COMPLEX} value itself was never the obstacle.
    */
   private String displayContextMethod(String displayContext) {
     if (displayContext == null) {
@@ -2424,6 +2569,7 @@ public class DefaultDefinitionLinker implements DefinitionLinker {
       case "OPTIONAL" -> "optional";
       case "MANDATORY" -> "mandatory";
       case "READONLY" -> "readonly";
+      case "COMPLEX" -> "complexMember";
       default -> null;
     };
   }
@@ -2459,11 +2605,19 @@ public class DefaultDefinitionLinker implements DefinitionLinker {
     if (tail.isEmpty()) {
       return null;
     }
-    // Prepend the merge-key columns so the additive merge lands the tail on the generated row.
+    // Prepend the merge-key columns so the additive merge lands the tail on the generated row. Every
+    // ETOCT_GRAFT_MERGE_KEYS column must be present here or mergeInto's matcher sees it as
+    // present-on-one-side-only and appends an orphan instead of merging — except that a key the
+    // generated row also omits (a member with no show condition) must stay ABSENT rather than blank,
+    // since the matcher counts absent-on-both as agreement but blank-vs-absent as a mismatch.
     Map<String, Object> out = new LinkedHashMap<>();
     out.put(Columns.CASE_EVENT_ID, row.getColumns().get(Columns.CASE_EVENT_ID));
     out.put(Columns.CASE_FIELD_ID, row.getColumns().get(Columns.CASE_FIELD_ID));
     out.put(Columns.LIST_ELEMENT_CODE, row.getColumns().get(Columns.LIST_ELEMENT_CODE));
+    String showCondition = blankToNull(row.getString(Columns.FIELD_SHOW_CONDITION).orElse(null));
+    if (showCondition != null) {
+      out.put(Columns.FIELD_SHOW_CONDITION, showCondition);
+    }
     out.putAll(tail);
     return out;
   }
@@ -2522,7 +2676,9 @@ public class DefaultDefinitionLinker implements DefinitionLinker {
    * {@code EventsConfigEmitter.fieldMetadataChain} for placed fields, so only the per-page mid-event
    * callback columns — which the converter deliberately emits no wiring for — remain grafted here.
    * Passing the input rows through (AddMissing) grafts those onto the generated rows without
-   * overwriting the values the SDK computes, and adds rows for fields the SDK omits.
+   * overwriting the values the SDK computes. The sheet is {@code columnsOnly}: a row the SDK did not
+   * emit is skipped, not appended, because these rows carry no columns beyond the merge key and the
+   * mid-event URL.
    *
    * @param ir the definition IR
    * @param caseTypeId the case type being converted
@@ -2566,11 +2722,9 @@ public class DefaultDefinitionLinker implements DefinitionLinker {
       }
       // Skip CCD metadata placeholders ([STATE], [CASE_REFERENCE], …): the SDK never emits a
       // CaseEventToFields row for them, so a column graft keyed on CaseFieldID has no generated row
-      // to merge into and PassthroughMerger would ADD an unkeyable orphan row. This only bites now
-      // that mid-event callbacks are carried here (a metadata field can carry a page's mid-event
-      // URL); when the page has another, real field it carries the same page-scoped URL and grafts
-      // there instead, and when [STATE] is the page's only field the mid-event URL is genuinely
-      // unreproducible via passthrough — the same outcome as before callbacks were carried.
+      // to merge into. The columnsOnly flag on the emitted sheet now catches this class of row
+      // generally, but excluding them here keeps them out of the shipped passthrough resources
+      // entirely rather than writing rows the merger will discard.
       if (fieldId.startsWith("[") && fieldId.endsWith("]")) {
         continue;
       }
@@ -2604,6 +2758,12 @@ public class DefaultDefinitionLinker implements DefinitionLinker {
         sheets.add(PassthroughSheet.builder()
             .relativePath("CaseEventToFields/" + eventId + ".json")
             .primaryKeys(List.of(Columns.CASE_FIELD_ID))
+            // A column graft, never a row source: these rows carry only CaseFieldID plus the
+            // mid-event columns, so a row the SDK did not emit must be skipped rather than appended
+            // as a CaseEventID-less orphan (see PassthroughSheet.columnsOnly). Fields the SDK omits
+            // from an event's CaseEventToFields — a Label-only page, a field placed on no page —
+            // genuinely cannot carry their page's mid-event URL through passthrough.
+            .columnsOnly(true)
             .overlaySuffix(suffix)
             .overlayCondition(OverlayResolver.conditionFor(suffix, options))
             .rows(raw)

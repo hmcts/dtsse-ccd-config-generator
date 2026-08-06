@@ -9,8 +9,11 @@ import java.util.Map;
 import uk.gov.hmcts.ccd.sdk.converter.Converter;
 import uk.gov.hmcts.ccd.sdk.converter.ConverterFactory;
 import uk.gov.hmcts.ccd.sdk.converter.api.ConversionOptions;
+import uk.gov.hmcts.ccd.sdk.converter.api.EmitContext;
 import uk.gov.hmcts.ccd.sdk.converter.ir.DefinitionIr;
+import uk.gov.hmcts.ccd.sdk.converter.link.DefaultDefinitionLinker;
 import uk.gov.hmcts.ccd.sdk.converter.model.CaseTypeModel;
+import uk.gov.hmcts.ccd.sdk.converter.model.gap.GapCollector;
 
 /**
  * Phase-2 retrofit orchestrator: runs the matcher once (parsing the model source), then reuses that
@@ -116,10 +119,19 @@ public final class RetrofitConverter {
     // ({@code Panel}, {@code Name}) — whose camelCase companion is no longer generated — rather than a
     // dangling {@code modelPackage.panel}. Sibling FQNs win on a key clash (they name a concrete
     // out-of-package location; an alias is only a case-normalisation of an in/near-package class).
+    //
+    // A third source covers the case neither of those two reaches: a definition complex type that
+    // BINDS to an existing class whose real simple name differs from the linker's derived name by more
+    // than the leading character (ET's et3CaseDetailsLinksStatuses → Et3CaseDetailsLinksStatuses vs the
+    // model's acronym-cased ET3CaseDetailsLinksStatuses). Nothing is emitted under the derived name, so
+    // without the alias every reference to it is a cannot-find-symbol. Applied FIRST so a concrete
+    // out-of-package sibling FQN still wins on a key clash, as before.
     Map<String, String> fqnOverrides = new java.util.LinkedHashMap<>();
+    fqnOverrides.putAll(index.complexTypeIdClassAliases(
+        sheetIds(uk.gov.hmcts.ccd.sdk.converter.ir.SheetName.COMPLEX_TYPES), modelPackage));
     fqnOverrides.putAll(index.caseInsensitiveClassAliases());
     fqnOverrides.putAll(index.topLevelFqnsOutside(modelPackage, packageHints));
-    final ConversionOptions emitOptions = effective
+    final ConversionOptions planOptions = effective
         .retrofitTypeFqnOverrides(fqnOverrides)
         // Reserve existing model names so a generated companion's PascalCase name (finding #3/#4) is
         // suffixed rather than colliding with an unrelated existing type of the same name. The two
@@ -138,15 +150,40 @@ public final class RetrofitConverter {
         //     that is never generated (the prl/fpl/Civil 'cannot find symbol' break).
         .retrofitReservedComplexTypeNames(reservedComplexTypeNames(index))
         .retrofitReservedFixedListNames(reservedFixedListNames(index))
-        // Bind CaseEventToComplexTypes member chains to the team's ACTUAL declared model classes
-        // (real getters, e.g. getOrganisationID) rather than the SDK-predefined type of a shared
-        // complex-type ID or a similarly-named synthesised sibling. A member with no Java backing on
-        // the real class makes the group fall back to a row passthrough — no broken reference emitted.
-        .retrofitModelTypeGraph(new RetrofitEventComplexTypeGraph(index, resolution))
         .build();
 
     int constructorLimit = options.getRetrofitConstructorLimit();
     String pathPrefix = patchPathPrefix(options);
+    // Bind CaseEventToComplexTypes member chains to the team's ACTUAL declared model classes (real
+    // getters, e.g. getOrganisationID) rather than the SDK-predefined type of a shared complex-type ID
+    // or a similarly-named synthesised sibling. A member with no Java backing on the real class makes
+    // that row fall back to a row passthrough — no broken reference is ever emitted.
+    //
+    // The graph binds against the model as the applied PATCH will leave it, so it must know which
+    // members the patch synthesises — but the patch is emitted from the REBOUND model, which the
+    // conversion below produces. The dependency is not actually circular:
+    // planComplexTypeMembers reads only model.getComplexTypes(), which the rebinder passes through
+    // untouched and which the linker builds before its CaseEventToComplexTypes pass. So a linking pass
+    // that emits nothing yields a model whose complex types already equal the final ones, and planning
+    // against it gives the same answer the real patch will.
+    //
+    // The reverse direction runs through pinnedNames: where the walk resolves a member only via its
+    // class's @JsonNaming strategy (Civil's Address.addressLine1 serialising as AddressLine1), it
+    // records that reliance HERE and the patch below pins it with an explicit @JsonProperty. Both the
+    // SDK and this converter are naming-strategy blind, so resolving without pinning would emit
+    // Address::getAddressLine1 and regenerate the id 'addressLine1' — silently changing the CCD field
+    // id. One shared instance, written by the graph during the conversion and read by the patch
+    // emitter after it, is what makes the two impossible to disagree (see RetrofitPinnedNames).
+    final RetrofitPinnedNames pinnedNames = RetrofitPinnedNames.empty();
+    // One throwaway planning pass yields BOTH plans the graph needs, so the synthesis it resolves and
+    // the retypes it descends through can never come from two different plannings of the same model.
+    RetrofitPatchEmitter planner =
+        planner(planOptions, index, resolution, root, constructorLimit, pathPrefix);
+    RetrofitPlannedSynthesis plannedSynthesis = planner.planSynthesisedMembers();
+    final ConversionOptions emitOptions = planOptions.toBuilder()
+        .retrofitModelTypeGraph(new RetrofitEventComplexTypeGraph(index, resolution, root,
+            plannedSynthesis, planner.plannedRetypes(), pinnedNames))
+        .build();
     RetrofitModelRebinder rebinder =
         new RetrofitModelRebinder(index, resolution, root, constructorLimit);
 
@@ -174,10 +211,14 @@ public final class RetrofitConverter {
     // point there, not at the root config package. Both derivations go through the single
     // EmitContext.accessPackage(root) source of truth so the patch's imports and the emitted access
     // files can never drift into different packages (the ccd.config-vs-ccd.access split, Bug A).
+    // pinnedNames is fully populated by now: the conversion above ran the member walk that fills it.
+    // Hand the patch emitter the SAME type-FQN decisions the companion/config emitters bound their
+    // references with, so a simple name declared in two packages (prl's Miam) cannot be declared one
+    // way in the patched model and referenced the other way in the generated config.
     RetrofitPatchEmitter emitter = new RetrofitPatchEmitter(
         index, resolution, reboundHolder[0], root,
-        uk.gov.hmcts.ccd.sdk.converter.api.EmitContext.accessPackage(options.getConfigPackage()),
-        constructorLimit, pathPrefix);
+        EmitContext.accessPackage(options.getConfigPackage()),
+        constructorLimit, pathPrefix, pinnedNames, fqnOverrides);
     RetrofitPatch patch = emitter.emit();
     writePatch(reportDir, patch);
     // Surface any synthesised-field name collisions the emitter skipped (finding B1) so they are not
@@ -225,6 +266,37 @@ public final class RetrofitConverter {
     }
     String prefix = repo.relativize(source).toString().replace('\\', '/');
     return prefix.isEmpty() ? "" : prefix + "/";
+  }
+
+  /**
+   * A throwaway patch emitter to plan against, so the {@code CaseEventToComplexTypes} member walk sees
+   * the model as the applied patch will leave it: the complex-type members the patch synthesises (see
+   * {@link RetrofitPlannedSynthesis}) and the fields it re-declares as generated companions (see
+   * {@link RetrofitPlannedRetypes}). Without the plans the walk resolves the PARSED source and emits a
+   * getter reference to a field the patch has changed or has not added.
+   *
+   * <p>The plan comes from a throwaway link + rebind of the same definition: the emitter needs a
+   * rebound model, and the real run's model is only produced by the conversion that consumes this plan.
+   * That is not circular — {@link RetrofitPatchEmitter#planSynthesisedMembers} reads only the model's
+   * case fields and complex types, which {@link RetrofitModelRebinder} passes through untouched and
+   * which the linker builds before its {@code CaseEventToComplexTypes} pass — so this pass, which emits
+   * nothing and writes no report, yields exactly the types the real run will plan against.
+   *
+   * @return the throwaway planner, whose plans the real run's emitter re-derives identically
+   */
+  private RetrofitPatchEmitter planner(ConversionOptions planOptions,
+      ModelSourceIndex index, PropertyResolver.Resolution resolution, ModelSourceIndex.Type root,
+      int constructorLimit, String pathPrefix) {
+    GapCollector planGaps = new GapCollector();
+    CaseTypeModel linked =
+        new DefaultDefinitionLinker().link(ir, planOptions, planGaps);
+    CaseTypeModel rebound = new RetrofitModelRebinder(index, resolution, root, constructorLimit)
+        .rebind(linked, planGaps);
+    // Same overrides as the real emit below, so the plan the member walk resolves against and the
+    // patch that realises it cannot bind a type reference differently.
+    return new RetrofitPatchEmitter(index, resolution, rebound, root,
+        EmitContext.accessPackage(options.getConfigPackage()), constructorLimit, pathPrefix,
+        RetrofitPinnedNames.empty(), planOptions.getRetrofitTypeFqnOverrides());
   }
 
   /**

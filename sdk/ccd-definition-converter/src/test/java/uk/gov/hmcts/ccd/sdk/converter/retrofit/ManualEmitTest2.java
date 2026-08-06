@@ -13,30 +13,30 @@ import uk.gov.hmcts.ccd.sdk.converter.reader.JsonDefinitionReader;
 
 public class ManualEmitTest2 {
   public static void main(String[] args) throws Exception {
-    Path MODEL_ROOT = Path.of("/tmp/civilrepro4/model/src").toAbsolutePath();
-    Path DEFINITION = Path.of("/tmp/civilrepro4/definition").toAbsolutePath();
-    String MODEL_PACKAGE = "uk.gov.hmcts.reform.civil.model";
-    String CONFIG_PACKAGE = "uk.gov.hmcts.reform.civil.model.ccd.generated";
+    Path modelRoot = Path.of("/tmp/civilrepro4/model/src").toAbsolutePath();
+    Path definition = Path.of("/tmp/civilrepro4/definition").toAbsolutePath();
+    String modelPackage = "uk.gov.hmcts.reform.civil.model";
+    String configPackage = "uk.gov.hmcts.reform.civil.model.ccd.generated";
     Map<String, OverlayCondition> overlays = new LinkedHashMap<>();
     overlays.put("prod", OverlayCondition.parse("CCD_DEF_ENV:prod"));
     overlays.put("nonprod", OverlayCondition.parse("!CCD_DEF_ENV:prod"));
     ConversionOptions options = ConversionOptions.builder()
-        .inputs(java.util.List.of(DEFINITION))
+        .inputs(java.util.List.of(definition))
         .caseTypeId("REPRO")
-        .modelPackage(MODEL_PACKAGE)
-        .configPackage(CONFIG_PACKAGE)
+        .modelPackage(modelPackage)
+        .configPackage(configPackage)
         .overlaySuffixes(overlays)
         .retrofit(true)
         .retrofitCaseDataClass("CorrectEmail")
         .build();
     DefinitionIr ir = new JsonDefinitionReader().read(options, new GapCollector());
-    RetrofitMatcher matcher = new RetrofitMatcher(ir, "REPRO", MODEL_ROOT, MODEL_PACKAGE, "CorrectEmail");
+    RetrofitMatcher matcher = new RetrofitMatcher(ir, "REPRO", modelRoot, modelPackage, "CorrectEmail");
     matcher.match();
     CaseTypeModel linked = new DefaultDefinitionLinker().link(ir, options, new GapCollector());
     RetrofitModelRebinder rebinder = new RetrofitModelRebinder(matcher.index(), matcher.resolution());
     CaseTypeModel rebound = rebinder.rebind(linked);
     RetrofitPatchEmitter emitter = new RetrofitPatchEmitter(
-        matcher.index(), matcher.resolution(), rebound, matcher.root(), CONFIG_PACKAGE);
+        matcher.index(), matcher.resolution(), rebound, matcher.root(), configPackage);
     RetrofitPatch patch = emitter.emit();
     for (RetrofitPatch.FilePatch fp : patch.files()) {
       System.out.println("=== " + fp.relativePath() + " ===");

@@ -585,6 +585,7 @@ class EventsConfigEmitterTest {
                 .contextMethod("readonly")
                 .hintOverridden(true)
                 .hintText(null)
+                .retainHiddenValue(true)
                 .build(),
             // A nested collection hop (Collection<Child>) descended via the element-typed scope.
             EventComplexTypeGroup.Member.builder()
@@ -625,6 +626,8 @@ class EventsConfigEmitterTest {
     assertThat(src).contains(".hintText(\"An overriding hint\")");
     assertThat(src).contains(".readonly(Party::getReference)");
     assertThat(src).contains(".noHintText()");
+    // RetainHiddenValue is a real importer-read column on this sheet, derived rather than grafted.
+    assertThat(src).contains(".retainHiddenValue()");
     // The nested collection hop opens its own two-arg element-typed scope.
     assertThat(src).contains(".complex(Party::getChildren, Child.class)");
     assertThat(src).contains(".mandatory(Child::getChildName)");
@@ -683,5 +686,328 @@ class EventsConfigEmitterTest {
 
     assertThat(src).contains("import uk.gov.hmcts.test.other.Party;");
     assertThat(src).doesNotContain("import " + EnvironmentFlagsEmitterTest.MODEL_PKG + ".Party;");
+  }
+
+  @Test
+  void scalarRootedGroupOnANonComplexPlacementOpensAScopeWithoutChangingTheFieldRow() {
+    // sscs updateOtherPartyData/appeal: the complex field is placed READONLY yet still carries
+    // per-member CaseEventToComplexTypes overrides. Its own CaseEventToFields row must stay READONLY,
+    // so the members hang off a SEPARATE non-registering .complexScope(getter) statement rather than a
+    // .complex(getter) block, which would force the row to COMPLEX.
+    EventComplexTypeGroup.TypeRef appeal =
+        EventComplexTypeGroup.TypeRef.builder().simpleName("Appeal").build();
+    EventComplexTypeGroup group = EventComplexTypeGroup.builder()
+        .eventId("createCase")
+        .caseFieldId("appeal")
+        .rootGetter("getAppeal")
+        .members(List.of(EventComplexTypeGroup.Member.builder()
+            .hops(List.of())
+            .leafType(appeal)
+            .leafGetter("getBenefitType")
+            .contextMethod("mandatory")
+            .build()))
+        .build();
+
+    PageModel.PageField field = PageModel.PageField.builder()
+        .caseFieldId("appeal")
+        .displayContext("READONLY")
+        .build();
+    PageModel page = PageModel.builder().pageId("1").fields(List.of(field)).build();
+    EventModel event = EventModel.builder()
+        .id("createCase").javaName("createCase").name("Create Case")
+        .preStates(List.of()).postState("Open").grants(Map.of()).pages(List.of(page))
+        .build();
+    FieldModel appealField = FieldModel.builder()
+        .id("appeal").javaName("appeal").fieldType("Appeal")
+        .build();
+    CaseTypeModel model = modelWithEvents(List.of(event), List.of(appealField)).toBuilder()
+        .eventComplexTypeGroups(Map.of("createCaseappeal", group))
+        .build();
+
+    String src = allSrc(new EventsConfigEmitter().emit(model, contextWith(40)));
+
+    // The placement keeps its own context — no .complex(getter) block anywhere.
+    assertThat(src).contains("fields.readonly(CaseData::getAppeal)");
+    assertThat(src).doesNotContain("fields.complex(CaseData::getAppeal)");
+    // The members hang off the non-registering scalar scope.
+    assertThat(src).contains("fields.complexScope(CaseData::getAppeal)");
+    assertThat(src).contains(".mandatory(Appeal::getBenefitType)");
+  }
+
+  @Test
+  void hopRootedGroupDescendsTheUnwrappedHolderBeforeOpeningTheMemberScope() {
+    // Civil DEFENDANT_RESPONSE/applicant1DQHearing: in retrofit mode the complex field is declared on a
+    // @JsonUnwrapped holder's class, so CaseData has no getter for it. The scope must descend the holder
+    // with a further NON-REGISTERING .complex(holderGetter) hop and invoke the field's getter on the
+    // holder's type — CaseData::getApplicant1DQHearing does not compile. One .done() closes the member
+    // scope and one more closes each hop back to the case-data class.
+    EventComplexTypeGroup.TypeRef holder = EventComplexTypeGroup.TypeRef.builder()
+        .modelFqn("uk.gov.hmcts.test.model.dq.Applicant1DQ").build();
+    EventComplexTypeGroup.TypeRef hearing =
+        EventComplexTypeGroup.TypeRef.builder().simpleName("Hearing").build();
+    EventComplexTypeGroup group = EventComplexTypeGroup.builder()
+        .eventId("createCase")
+        .caseFieldId("applicant1DQHearing")
+        .rootGetter("getApplicant1DQHearing")
+        .rootHops(List.of(EventComplexTypeGroup.RootHop.builder()
+            .getter("getApplicant1DQ")
+            .targetType(holder)
+            .build()))
+        .members(List.of(EventComplexTypeGroup.Member.builder()
+            .hops(List.of())
+            .leafType(hearing)
+            .leafGetter("getHearingLength")
+            .contextMethod("optional")
+            .build()))
+        .build();
+
+    // The event places a different field, so the group is emitted as an orphan scope.
+    PageModel.PageField placed = PageModel.PageField.builder()
+        .caseFieldId("summary").displayContext("READONLY").build();
+    PageModel page = PageModel.builder().pageId("1").fields(List.of(placed)).build();
+    EventModel event = EventModel.builder()
+        .id("createCase").javaName("createCase").name("Create Case")
+        .preStates(List.of()).postState("Open").grants(Map.of()).pages(List.of(page))
+        .build();
+    FieldModel summary = FieldModel.builder()
+        .id("summary").javaName("summary").fieldType("Text").build();
+    FieldModel hearingField = FieldModel.builder()
+        .id("applicant1DQHearing").javaName("applicant1DQHearing").fieldType("Hearing").build();
+    CaseTypeModel model = modelWithEvents(List.of(event), List.of(summary, hearingField)).toBuilder()
+        .eventComplexTypeGroups(Map.of("createCaseapplicant1DQHearing", group))
+        .build();
+
+    String src = allSrc(new EventsConfigEmitter().emit(model, contextWith(40)));
+
+    assertThat(src).contains("fields.complex(CaseData::getApplicant1DQ)");
+    assertThat(src).contains(".complexScope(Applicant1DQ::getApplicant1DQHearing)");
+    assertThat(src).contains(".optional(Hearing::getHearingLength)");
+    // Never rooted on the case-data class — that is exactly the reference that would not compile.
+    assertThat(src).doesNotContain("CaseData::getApplicant1DQHearing");
+    // The holder's type is imported from its own sub-package, not assumed to sit beside CaseData.
+    assertThat(src).contains("import uk.gov.hmcts.test.model.dq.Applicant1DQ;");
+    // Two .done() calls: one closing the member scope, one closing the hop.
+    assertThat(src).contains(".optional(Hearing::getHearingLength).done().done()");
+  }
+
+  @Test
+  void groupOnAFieldNoPagePlacesAtAllEmitsAnOrphanScope() {
+    // sscs dwpUploadResponse/otherParties (52 of its 60 residual rows): the event carries member
+    // overrides for a field none of its pages place. There is no placement to anchor the scope to, so
+    // it is emitted standalone after every page has been applied. A non-registering scope adds no
+    // CaseEventToFields row, so it cannot disturb the placements above it.
+    EventComplexTypeGroup.TypeRef party =
+        EventComplexTypeGroup.TypeRef.builder().simpleName("Party").build();
+    EventComplexTypeGroup group = EventComplexTypeGroup.builder()
+        .eventId("createCase")
+        .caseFieldId("otherParties")
+        .rootGetter("getOtherParties")
+        .rootElementType(party)
+        .members(List.of(EventComplexTypeGroup.Member.builder()
+            .hops(List.of())
+            .leafType(party)
+            .leafGetter("getPartyName")
+            .contextMethod("optional")
+            .build()))
+        .build();
+
+    // The page places a DIFFERENT field; otherParties is placed nowhere.
+    PageModel.PageField placed = PageModel.PageField.builder()
+        .caseFieldId("summary")
+        .displayContext("READONLY")
+        .build();
+    PageModel page = PageModel.builder().pageId("1").fields(List.of(placed)).build();
+    EventModel event = EventModel.builder()
+        .id("createCase").javaName("createCase").name("Create Case")
+        .preStates(List.of()).postState("Open").grants(Map.of()).pages(List.of(page))
+        .build();
+    FieldModel summary = FieldModel.builder()
+        .id("summary").javaName("summary").fieldType("Text").build();
+    FieldModel otherParties = FieldModel.builder()
+        .id("otherParties").javaName("otherParties").fieldType("Collection")
+        .fieldTypeParameter("Party").build();
+    CaseTypeModel model =
+        modelWithEvents(List.of(event), List.of(summary, otherParties)).toBuilder()
+            .eventComplexTypeGroups(Map.of("createCaseotherParties", group))
+            .build();
+
+    String src = allSrc(new EventsConfigEmitter().emit(model, contextWith(40)));
+
+    // No placement is invented for the orphan root — only the element-typed scope.
+    assertThat(src).doesNotContain("fields.optional(CaseData::getOtherParties)");
+    assertThat(src).doesNotContain("fields.complex(CaseData::getOtherParties).done()");
+    assertThat(src).contains("fields.complex(CaseData::getOtherParties, Party.class)");
+    assertThat(src).contains(".optional(Party::getPartyName)");
+  }
+
+  @Test
+  void manyOrphanScopesAreSplitOutOfConfigureIntoScopesClasses() {
+    // prl's editAndApproveAnOrder: 39 orphan groups, ~700 member lambdas, all previously inlined into
+    // configure(), which the javac emitted as "code too large" (the 64 KB per-method cap, the same one
+    // the page path already splits for). Each scope registers nothing, so hoisting the runs into
+    // <Event>ScopesN.apply(fields) cannot change the generated definition.
+    List<EventComplexTypeGroup> groups = new ArrayList<>();
+    List<FieldModel> fields = new ArrayList<>();
+    Map<String, EventComplexTypeGroup> byKey = new java.util.LinkedHashMap<>();
+    EventComplexTypeGroup.TypeRef party =
+        EventComplexTypeGroup.TypeRef.builder().simpleName("Party").build();
+    // 40 groups × 5 members = 200 lambdas, comfortably over the 120 per-helper budget.
+    for (int i = 0; i < 40; i++) {
+      String fieldId = "orphan" + i;
+      List<EventComplexTypeGroup.Member> members = new ArrayList<>();
+      for (int m = 0; m < 5; m++) {
+        members.add(EventComplexTypeGroup.Member.builder()
+            .hops(List.of())
+            .leafType(party)
+            .leafGetter("getMember" + m)
+            .contextMethod("optional")
+            .build());
+      }
+      groups.add(EventComplexTypeGroup.builder()
+          .eventId("createCase")
+          .caseFieldId(fieldId)
+          .rootGetter("get" + Character.toUpperCase(fieldId.charAt(0)) + fieldId.substring(1))
+          .rootElementType(party)
+          .members(members)
+          .build());
+      fields.add(FieldModel.builder()
+          .id(fieldId).javaName(fieldId).fieldType("Collection").fieldTypeParameter("Party")
+          .build());
+      byKey.put("createCase" + fieldId, groups.get(i));
+    }
+
+    PageModel page = PageModel.builder().pageId("1").fields(List.of(PageModel.PageField.builder()
+        .caseFieldId("summary").displayContext("READONLY").build())).build();
+    EventModel event = EventModel.builder()
+        .id("createCase").javaName("createCase").name("Create Case")
+        .preStates(List.of()).postState("Open").grants(Map.of()).pages(List.of(page))
+        .build();
+    fields.add(FieldModel.builder().id("summary").javaName("summary").fieldType("Text").build());
+    CaseTypeModel model = modelWithEvents(List.of(event), fields).toBuilder()
+        .eventComplexTypeGroups(byKey)
+        .build();
+
+    List<JavaFile> files = new EventsConfigEmitter().emit(model, contextWith(40));
+    List<String> names = files.stream().map(f -> f.typeSpec().name()).toList();
+    assertThat(names).as("the runs are hoisted into numbered Scopes classes")
+        .contains("CreateCaseScopes1", "CreateCaseScopes2");
+
+    String eventSrc = files.stream().filter(f -> f.typeSpec().name().equals("CreateCase"))
+        .map(JavaFile::toString).findFirst().orElseThrow();
+    assertThat(eventSrc).as("configure() invokes them rather than inlining the lambdas")
+        .contains("CreateCaseScopes1.apply(fields)");
+    assertThat(eventSrc).doesNotContain("Party::getMember0");
+
+    // Every group still reaches the builder exactly once, so the definition is unchanged.
+    String allSrc = allSrc(files);
+    for (int i = 0; i < 40; i++) {
+      String opener = "fields.complex(CaseData::getOrphan" + i + ", Party.class)";
+      assertThat(allSrc).as("group " + i + " must still be emitted").contains(opener);
+    }
+  }
+
+  @Test
+  void complexMemberContextEmitsAMemberRowWithoutOpeningANestedScope() {
+    // sscs confirmPoAttendance/presentingOfficersDetails: an intermediate (contact) carries a
+    // DisplayContext=COMPLEX row of its OWN alongside dotted rows for its leaves. .complexMember places
+    // the member with Complex context and opens no scope, so the two compose on one intermediate.
+    EventComplexTypeGroup.TypeRef details =
+        EventComplexTypeGroup.TypeRef.builder().simpleName("PoDetails").build();
+    EventComplexTypeGroup.TypeRef contact =
+        EventComplexTypeGroup.TypeRef.builder().simpleName("Contact").build();
+    EventComplexTypeGroup group = EventComplexTypeGroup.builder()
+        .eventId("createCase")
+        .caseFieldId("presentingOfficersDetails")
+        .rootGetter("getPresentingOfficersDetails")
+        .members(List.of(
+            // The intermediate as a COMPLEX member row in its own right.
+            EventComplexTypeGroup.Member.builder()
+                .hops(List.of())
+                .leafType(details)
+                .leafGetter("getContact")
+                .contextMethod("complexMember")
+                .build(),
+            // ...and descended into for its leaf, which emits the dotted ListElementCode.
+            EventComplexTypeGroup.Member.builder()
+                .hops(List.of(EventComplexTypeGroup.Hop.builder()
+                    .declaringType(details)
+                    .getter("getContact")
+                    .build()))
+                .leafType(contact)
+                .leafGetter("getPhone")
+                .contextMethod("optional")
+                .build()))
+        .build();
+
+    PageModel.PageField field = PageModel.PageField.builder()
+        .caseFieldId("presentingOfficersDetails")
+        .displayContext("COMPLEX")
+        .build();
+    PageModel page = PageModel.builder().pageId("1").fields(List.of(field)).build();
+    EventModel event = EventModel.builder()
+        .id("createCase").javaName("createCase").name("Create Case")
+        .preStates(List.of()).postState("Open").grants(Map.of()).pages(List.of(page))
+        .build();
+    FieldModel po = FieldModel.builder()
+        .id("presentingOfficersDetails").javaName("presentingOfficersDetails")
+        .fieldType("PoDetails").build();
+    CaseTypeModel model = modelWithEvents(List.of(event), List.of(po)).toBuilder()
+        .eventComplexTypeGroups(Map.of("createCasepresentingOfficersDetails", group))
+        .build();
+
+    String src = allSrc(new EventsConfigEmitter().emit(model, contextWith(40)));
+
+    assertThat(src).contains(".complexMember(PoDetails::getContact)");
+    assertThat(src).contains(".complex(PoDetails::getContact)");
+    assertThat(src).contains(".optional(Contact::getPhone)");
+  }
+
+  @Test
+  void groupOnAPageLessEventOpensABareFieldsScope() {
+    // probate boFindMatchedCaseGrantRegistrarEscalation/caseMatches: the event places NO pages at all,
+    // yet carries member overrides. EventBuilder.fields() returns the event's collection builder
+    // without registering anything, so the emitter opens a bare .fields() purely to hang the
+    // non-registering scope off — and only when there IS a scope to hang, so an event that genuinely
+    // places nothing keeps its old terminating-statement shape.
+    EventComplexTypeGroup.TypeRef caseMatch =
+        EventComplexTypeGroup.TypeRef.builder().simpleName("CaseMatch").build();
+    EventComplexTypeGroup group = EventComplexTypeGroup.builder()
+        .eventId("escalate")
+        .caseFieldId("caseMatches")
+        .rootGetter("getCaseMatches")
+        .rootElementType(caseMatch)
+        .members(List.of(EventComplexTypeGroup.Member.builder()
+            .hops(List.of())
+            .leafType(caseMatch)
+            .leafGetter("getCaseLink")
+            .contextMethod("readonly")
+            .build()))
+        .build();
+
+    EventModel escalate = EventModel.builder()
+        .id("escalate").javaName("escalate").name("Escalate")
+        .preStates(List.of()).postState("Open").grants(Map.of()).pages(List.of())
+        .build();
+    // A second page-less event with NO group, to prove the bare .fields() is not emitted gratuitously.
+    EventModel quiet = EventModel.builder()
+        .id("quiet").javaName("quiet").name("Quiet")
+        .preStates(List.of()).postState("Open").grants(Map.of()).pages(List.of())
+        .build();
+    FieldModel caseMatches = FieldModel.builder()
+        .id("caseMatches").javaName("caseMatches").fieldType("Collection")
+        .fieldTypeParameter("CaseMatch").build();
+    CaseTypeModel model =
+        modelWithEvents(List.of(escalate, quiet), List.of(caseMatches)).toBuilder()
+            .eventComplexTypeGroups(Map.of("escalate\u001fcaseMatches", group))
+            .build();
+
+    String src = allSrc(new EventsConfigEmitter().emit(model, contextWith(40)));
+
+    assertThat(src).contains("fields.complex(CaseData::getCaseMatches, CaseMatch.class)");
+    assertThat(src).contains(".readonly(CaseMatch::getCaseLink)");
+    // No placement is invented for the root, and the group's own event is the only one that gains a
+    // fields builder.
+    assertThat(src).doesNotContain("fields.readonly(CaseData::getCaseMatches)");
+    assertThat(src).containsOnlyOnce("var fields = ");
   }
 }

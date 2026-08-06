@@ -34,10 +34,33 @@ public class EventComplexTypeGroup {
   String caseFieldId;
 
   /**
-   * The {@code CaseData} getter for the complex field, e.g.
+   * The getter for the complex field, invoked on the last {@link #rootHops} hop's target type — or
+   * directly on {@code CaseData} when there are no hops, e.g.
    * {@code getChangeOrganisationRequestField}.
    */
   String rootGetter;
+
+  /**
+   * The non-registering {@code .complex(...)} hops between {@code CaseData} and the class that
+   * declares the complex field, empty (the common case) when the field is a direct member of the root
+   * case-data class.
+   *
+   * <p>Non-empty only in retrofit mode, where the team's model reaches a flat CCD field through a
+   * {@code @JsonUnwrapped} member (civil's {@code applicant1DQHearing}, declared on {@code Applicant1DQ}
+   * and reached via {@code CaseData.applicant1DQ}) or through the {@code CaseDataExtra} holder the patch
+   * adds when synthesising every unmatched field onto the root class would break its constructor
+   * contract. Each hop is emitted as {@code .complex(PrevType::getHop)}, which registers no
+   * {@code CaseEventToFields} row for a {@code @JsonUnwrapped} member — the SDK's
+   * {@code FieldCollectionBuilder.complex(getter)} skips registration and shares the parent's field
+   * collections when the member carries the annotation — so the hops are as invisible to the generated
+   * definition as the {@link #rootGetter}'s own non-registering opener is.
+   *
+   * <p>This is what makes the group's root reference identical to the one the page-field placement uses
+   * for the same field: both come from the retrofit rebinder's single placement decision, so a group can
+   * never emit {@code CaseData::getApplicant1DQHearing} for a getter only {@code Applicant1DQ} declares.
+   */
+  @Builder.Default
+  List<RootHop> rootHops = List.of();
 
   /**
    * The element type of the root field when it is a {@code Collection}
@@ -131,6 +154,38 @@ public class EventComplexTypeGroup {
      * {@link #hintOverridden} is false.
      */
     String hintText;
+
+    /**
+     * Whether the row carries {@code RetainHiddenValue=Y}, emitted as {@code .retainHiddenValue()} on
+     * the member placement. The SDK's {@code CaseEventToFieldsGenerator.applyMetadata} — which
+     * {@code CaseEventToComplexTypesGenerator} shares — writes the column only when the flag is true,
+     * matching the importer, which reads it as a nullable Boolean on this sheet. So {@code N}/absent
+     * both leave the flag unset and no column is written.
+     */
+    boolean retainHiddenValue;
+  }
+
+  /**
+   * One hop from {@code CaseData} down to the class declaring the group's root complex field: the
+   * getter to invoke, and the type it returns (which the next hop's getter — or {@link #rootGetter} —
+   * is invoked on). See {@link #rootHops}.
+   */
+  @Value
+  @Builder
+  public static class RootHop {
+
+    /**
+     * The getter for the {@code @JsonUnwrapped} (or holder) member this hop descends through. Invoked
+     * on the case-data class for the first hop, and on the previous hop's {@link #targetType}
+     * thereafter — so the chain needs no {@code TypeRef} for the case-data class itself.
+     */
+    String getter;
+
+    /**
+     * The type the {@link #getter} returns: what the next hop's getter, or the group's
+     * {@link #rootGetter}, is invoked on.
+     */
+    TypeRef targetType;
   }
 
   /**

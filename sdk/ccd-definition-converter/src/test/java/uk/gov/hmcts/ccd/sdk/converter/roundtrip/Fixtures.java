@@ -13,7 +13,9 @@ import java.util.Map;
  */
 final class Fixtures {
 
-  /** Repository root, two levels up from the {@code sdk/ccd-definition-converter} module dir. */
+  /**
+   * Repository root, two levels up from the {@code sdk/ccd-definition-converter} module dir.
+   */
   static final Path REPO_ROOT = Path.of("..", "..").toAbsolutePath().normalize();
 
   /**

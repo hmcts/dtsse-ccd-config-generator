@@ -161,6 +161,56 @@ public final class EventComplexTypeResolver {
     return node == null ? null : typeRefOf(node);
   }
 
+  /**
+   * How the emitted config must reach the root complex field itself: its getter plus the
+   * non-registering {@code @JsonUnwrapped} hops to descend first. In generate mode (and for a field the
+   * team's model does not declare) this is simply {@code get} + the field's {@code javaName} invoked on
+   * the case-data class, with no hops — the historical behaviour. In retrofit mode the model graph
+   * answers instead, because the field may be declared on a {@code @JsonUnwrapped} member's class
+   * rather than on the root: civil's {@code applicant1DQHearing} lives on {@code Applicant1DQ}, reached
+   * via {@code CaseData.applicant1DQ}, so {@code CaseData::getApplicant1DQHearing} does not compile.
+   *
+   * <p>Empty when the model declares the field but exposes no compilable path to it (a
+   * {@code @JsonUnwrapped} hop's getter suppressed by {@code @Getter(AccessLevel.NONE)}) — the caller
+   * must then keep the whole group a verbatim row passthrough, since no reference it could emit would
+   * compile.
+   *
+   * @param field the root complex field
+   * @return how to reach it, or empty when nothing compilable reaches it
+   */
+  public Optional<RootPlacement> rootPlacement(FieldModel field) {
+    if (modelGraph != null) {
+      Optional<RetrofitModelTypeGraph.RootPlacement> bound = modelGraph.rootPlacement(field.getId());
+      if (bound.isPresent()) {
+        RetrofitModelTypeGraph.RootPlacement placement = bound.get();
+        if (!placement.reachable()) {
+          return Optional.empty();
+        }
+        List<EventComplexTypeGroup.RootHop> hops = new ArrayList<>();
+        for (RetrofitModelTypeGraph.PlacementHop hop : placement.hops()) {
+          hops.add(EventComplexTypeGroup.RootHop.builder()
+              .getter(hop.getter())
+              .targetType(EventComplexTypeGroup.TypeRef.builder().modelFqn(hop.targetFqn()).build())
+              .build());
+        }
+        return Optional.of(new RootPlacement(placement.getter(), hops));
+      }
+      // No model binding (a definition-only field the patch synthesises onto the root class): fall
+      // through to the definition-derived getter, which the patch makes resolve.
+    }
+    return Optional.of(new RootPlacement("get" + capitalise(field.getJavaName()), List.of()));
+  }
+
+  /**
+   * How the config reaches a root complex field: its getter, plus the non-registering hops to open
+   * before invoking it (empty for a field declared directly on the case-data class).
+   *
+   * @param getter the field's own getter
+   * @param hops the {@code @JsonUnwrapped} hops to descend first, outermost first
+   */
+  public record RootPlacement(String getter, List<EventComplexTypeGroup.RootHop> hops) {
+  }
+
   private boolean isKnownType(String id) {
     return generatedById.containsKey(id) || predefinedFqnById.containsKey(id);
   }
@@ -299,6 +349,28 @@ public final class EventComplexTypeResolver {
   }
 
   /**
+   * The type node for a complex-type ID reached by ID rather than off a parsed member: in retrofit mode
+   * the team's own declared class for that ID when it has one, else the generated / SDK-predefined type.
+   *
+   * <p>Preferring the model class is the same precedence {@link #rootNode} applies to a root field, for
+   * the same reason: the team's class is what the emitted {@code Type::getMember} reference must compile
+   * against. Null when the ID names no walkable type at all (a scalar {@code FieldType} — {@code Text},
+   * {@code Date} — which is how a synthesised leaf member stays a leaf).
+   */
+  private Object byTypeId(String typeId) {
+    if (typeId == null || typeId.isEmpty()) {
+      return null;
+    }
+    if (modelGraph != null) {
+      Optional<RetrofitModelTypeGraph.Handle> bound = modelGraph.complexTypeHandle(typeId);
+      if (bound.isPresent()) {
+        return bound.get();
+      }
+    }
+    return typeNode(typeId);
+  }
+
+  /**
    * A type node the walk descends through: a {@link ComplexTypeModel} or a reflected {@link Class}.
    */
   private Object typeNode(String typeId) {
@@ -342,7 +414,15 @@ public final class EventComplexTypeResolver {
         return null;
       }
       RetrofitModelTypeGraph.MemberResolution m = resolved.get();
-      RetrofitModelTypeGraph.Handle nested = m.nested();
+      Object nested = m.nested();
+      if (nested == null) {
+        // A member the retrofit patch SYNTHESISES has no parsed type to hand back, only the
+        // complex-type ID its field is declared with. Descend by that ID: the team's own class for it
+        // when the model declares one (so the chain keeps referencing real getters), else the generated
+        // companion / SDK-predefined type the converter emits it as. Null for a scalar's ID, which
+        // leaves the member a leaf.
+        nested = byTypeId(m.nestedTypeId());
+      }
       EventComplexTypeGroup.TypeRef elementRef =
           m.collection() && nested != null ? typeRefOf(nested) : null;
       return new ResolvedMember(m.getter(), nested, m.declaredHint(), elementRef);

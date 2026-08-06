@@ -3,8 +3,10 @@ package uk.gov.hmcts.ccd.sdk.converter.retrofit;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.nio.file.Path;
+import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 /**
  * Pins {@link ModelSourceIndex#topLevelFqnsOutside} — the cross-package type-FQN map the retrofit
@@ -90,5 +92,68 @@ class ModelSourceIndexTest {
   void returnsEmptyForAComplexTypeIdWithNoModelClass() {
     ModelSourceIndex index = ModelSourceIndex.parse(MODEL_ROOT);
     assertThat(index.complexTypeClass("noSuchComplexType", "uk.gov.hmcts.example.model")).isEmpty();
+  }
+
+  @Test
+  void aliasesADerivedNameToTheAcronymCasedClassTheComplexTypeBindsTo(@TempDir Path work)
+      throws Exception {
+    // ET: the ComplexTypes ID et3CaseDetailsLinksStatuses PascalCases (TypeClassNamer) to
+    // Et3CaseDetailsLinksStatuses, while the class it binds to is the acronym-cased
+    // ET3CaseDetailsLinksStatuses. No companion is emitted under the derived name (the type binds), so
+    // without this alias every reference to it resolved to a modelPackage.Et3CaseDetailsLinksStatuses
+    // that exists nowhere — cannot find symbol.
+    Path src = work.resolve("src");
+    write(src, "m/types", "ET3CaseDetailsLinksStatuses",
+        "package m.types;\npublic class ET3CaseDetailsLinksStatuses { private String a; }\n");
+    ModelSourceIndex index = ModelSourceIndex.parse(src);
+
+    assertThat(index.complexTypeIdClassAliases(List.of("et3CaseDetailsLinksStatuses"), "m"))
+        .containsEntry("Et3CaseDetailsLinksStatuses", "m.types.ET3CaseDetailsLinksStatuses");
+  }
+
+  @Test
+  void aliasesNothingWhenTheDerivedNameAlreadyMatchesTheBoundClass(@TempDir Path work)
+      throws Exception {
+    // A camelCase ID whose class differs only in the leading character is already handled by the
+    // derived name itself, so no alias is wanted (aliasing it would be a no-op entry at best).
+    Path src = work.resolve("src");
+    write(src, "m/types", "Party", "package m.types;\npublic class Party { private String a; }\n");
+    ModelSourceIndex index = ModelSourceIndex.parse(src);
+
+    assertThat(index.complexTypeIdClassAliases(List.of("party"), "m")).isEmpty();
+  }
+
+  @Test
+  void aliasesNothingForADefinitionOnlyComplexType(@TempDir Path work) throws Exception {
+    // No model class → a companion IS generated under the derived name, so an alias would redirect a
+    // reference away from the class that is about to be emitted.
+    Path src = work.resolve("src");
+    write(src, "m/types", "Party", "package m.types;\npublic class Party { private String a; }\n");
+    ModelSourceIndex index = ModelSourceIndex.parse(src);
+
+    assertThat(index.complexTypeIdClassAliases(List.of("noSuchComplexType"), "m")).isEmpty();
+  }
+
+  @Test
+  void neverShadowsATypeTheModelDeclaresUnderTheDerivedName(@TempDir Path work) throws Exception {
+    // The model declares BOTH the acronym-cased class the ID binds to AND an unrelated type under the
+    // derived name. A reference to the derived name is already correct; rebinding it would silently
+    // point it at the other class.
+    Path src = work.resolve("src");
+    write(src, "m/types", "ET3Links",
+        "package m.types;\npublic class ET3Links { private String a; }\n");
+    write(src, "m/other", "Et3Links",
+        "package m.other;\npublic class Et3Links { private String b; }\n");
+    ModelSourceIndex index = ModelSourceIndex.parse(src);
+
+    assertThat(index.complexTypeIdClassAliases(List.of("et3Links"), "m"))
+        .doesNotContainKey("Et3Links");
+  }
+
+  private static void write(Path root, String pkgPath, String simpleName, String body)
+      throws Exception {
+    Path dir = root.resolve(pkgPath);
+    java.nio.file.Files.createDirectories(dir);
+    java.nio.file.Files.writeString(dir.resolve(simpleName + ".java"), body);
   }
 }

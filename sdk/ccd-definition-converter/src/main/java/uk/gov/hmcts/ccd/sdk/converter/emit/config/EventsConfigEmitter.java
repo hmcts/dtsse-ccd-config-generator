@@ -335,8 +335,23 @@ public class EventsConfigEmitter implements SourceEmitter {
     // unchanged. Adopting the SDK's in-process callbacks is a later, per-event step.
 
     if (!hasPages) {
-      cb.add("$L", header);
-      cb.addStatement("");
+      // A page-less event may still carry derived CaseEventToComplexTypes member overrides (probate's
+      // boFindMatchedCaseGrantRegistrarEscalation/caseMatches, et's importFile/caseImporterFile). Those
+      // need a `fields` builder to open a scope on, and EventBuilder.fields() supplies one without
+      // registering anything: it just returns the collection builder the event was constructed with, so
+      // a bare `.fields()` on an event with no placements adds no CaseEventToFields row. Emit the
+      // header-plus-fields form only when there is a scope to hang off it, so an event that genuinely
+      // places nothing keeps its terminating-statement shape byte-for-byte.
+      if (hasOrphanScopes(event, model)) {
+        cb.add("var fields = $L", header);
+        cb.add("\n    .fields()");
+        cb.addStatement("");
+        emitOrphanScopes(cb, event, model, caseData, state, userRole, context, pagePkg,
+            eventClassName, pageClasses, usedPageNames);
+      } else {
+        cb.add("$L", header);
+        cb.addStatement("");
+      }
       return cb.build();
     }
 
@@ -358,6 +373,8 @@ public class EventsConfigEmitter implements SourceEmitter {
       // <root>.event.page package is created for a case type whose every event is single-page.
       emitInlinePage(cb, pages.get(0), event, model, context, caseData, state, userRole,
           pagePkg, eventClassName, pageClasses, usedPageNames);
+      emitOrphanScopes(cb, event, model, caseData, state, userRole, context, pagePkg,
+          eventClassName, pageClasses, usedPageNames);
       return cb.build();
     }
 
@@ -372,7 +389,153 @@ public class EventsConfigEmitter implements SourceEmitter {
           pageClasses);
       cb.addStatement("$T.apply(fields)", ClassName.get(pagePkg, pageClassName));
     }
+    emitOrphanScopes(cb, event, model, caseData, state, userRole, context, pagePkg,
+        eventClassName, pageClasses, usedPageNames);
     return cb.build();
+  }
+
+  /**
+   * Emits a member scope for every derived group on this event whose root field <em>no page places at
+   * all</em> — the orphan case, and the largest single chunk of the residual
+   * {@code CaseEventToComplexTypes} passthrough (52 of sscs's 60 rows: {@code dwpUploadResponse} and
+   * {@code otherParties}, which carry member overrides while the event's pages never place the field).
+   *
+   * <p>Nothing anchors these to a placement, so they are emitted last, after every page has been
+   * applied. That is sound because a non-registering scope contributes no {@code CaseEventToFields}
+   * row, so it cannot disturb the page/field display ordering the placements above established — the
+   * only thing it feeds is {@code CaseEventToComplexTypesGenerator}, whose row order is per
+   * {@code (event, field)} and whose {@code FieldDisplayOrder} the comparator discards as re-derived.
+   * The scope inherits the last page's {@code pageId}, which is likewise unread for these rows unless
+   * a member sets {@code .pageId(...)} explicitly (which {@link #complexMemberChains} emits from the
+   * input's own {@code PageID}).
+   *
+   * <p>Emitted inline on the event's {@code fields} builder rather than into a page class: an orphan
+   * group belongs to no page, and page classes are keyed on pages. On an event with no pages at all
+   * (probate's {@code boFindMatchedCaseGrantRegistrarEscalation}) the caller emits a bare
+   * {@code .fields()} to obtain that builder, which registers nothing.
+   */
+  private void emitOrphanScopes(
+      CodeBlock.Builder cb, EventModel event, CaseTypeModel model, ClassName caseData,
+      ClassName state, ClassName userRole, EmitContext context, String pagePkg,
+      String eventClassName, List<TypeSpec> pageClasses, Set<String> usedPageNames) {
+    List<EventComplexTypeGroup> orphans = orphanScopes(event, model);
+    int weight = 0;
+    for (EventComplexTypeGroup group : orphans) {
+      weight += 1 + group.getMembers().size();
+    }
+    if (weight <= FIELDS_PER_HELPER) {
+      for (EventComplexTypeGroup group : orphans) {
+        emitMemberScope(cb, group, caseData, context);
+      }
+      return;
+    }
+
+    // Documented overflow, the same one the page path already handles: each member inside a scope is
+    // its own serializable getter lambda, and an event with many orphan groups (prl's
+    // editAndApproveAnOrder: 39 groups, ~700 lambdas) blows configure()'s 64 KB bytecode budget
+    // ("code too large"). Split the runs across <Event>ScopesN classes invoked in order — the scopes
+    // register nothing, so moving them out of configure() cannot alter the generated definition.
+    ParameterizedTypeName fieldsType = fieldsBuilderType(caseData, state, userRole);
+    String base = uniqueName(eventClassName + "Scopes", usedPageNames);
+    List<List<EventComplexTypeGroup>> groups = groupOrphanScopes(orphans);
+    for (int i = 0; i < groups.size(); i++) {
+      CodeBlock.Builder fragBody = CodeBlock.builder();
+      for (EventComplexTypeGroup group : groups.get(i)) {
+        emitMemberScope(fragBody, group, caseData, context);
+      }
+      String fragName = base + (i + 1);
+      pageClasses.add(TypeSpec.classBuilder(fragName)
+          .addModifiers(Modifier.PUBLIC, Modifier.FINAL)
+          .addJavadoc(context.banner(model.getCaseTypeId(), null) + "\n\n"
+              + "<p>Non-registering complex-member scopes for event {@code $L} whose root field no "
+              + "page places (part $L of $L).\n", event.getId(), i + 1, groups.size())
+          .addMethod(MethodSpec.constructorBuilder().addModifiers(Modifier.PRIVATE).build())
+          .addMethod(MethodSpec.methodBuilder("apply")
+              .addModifiers(Modifier.PUBLIC, Modifier.STATIC)
+              .addParameter(fieldsType, "fields")
+              .addJavadoc("@param fields the event's field-collection builder\n")
+              .addCode(fragBody.build())
+              .build())
+          .build());
+      cb.addStatement("$T.apply(fields)", ClassName.get(pagePkg, fragName));
+    }
+  }
+
+  /**
+   * Groups orphan scopes into runs whose cumulative lambda weight (one per member, plus the opener)
+   * stays at or below {@link #FIELDS_PER_HELPER}, mirroring {@link #groupFields}. A single group
+   * heavier than the budget occupies its own run rather than being split mid-scope — the scope's
+   * {@code .done()} chain has to stay in one method.
+   */
+  private List<List<EventComplexTypeGroup>> groupOrphanScopes(
+      List<EventComplexTypeGroup> orphans) {
+    List<List<EventComplexTypeGroup>> groups = new ArrayList<>();
+    List<EventComplexTypeGroup> current = new ArrayList<>();
+    int currentWeight = 0;
+    for (EventComplexTypeGroup group : orphans) {
+      int weight = 1 + group.getMembers().size();
+      if (!current.isEmpty() && currentWeight + weight > FIELDS_PER_HELPER) {
+        groups.add(current);
+        current = new ArrayList<>();
+        currentWeight = 0;
+      }
+      current.add(group);
+      currentWeight += weight;
+    }
+    if (!current.isEmpty()) {
+      groups.add(current);
+    }
+    return groups;
+  }
+
+  /**
+   * Whether this event has any group whose root no page places — i.e. whether
+   * {@link #emitOrphanScopes} would emit anything. Consulted on the page-less path, where the
+   * {@code var fields = ….fields()} preamble is worth emitting only if a scope will follow it.
+   */
+  private boolean hasOrphanScopes(EventModel event, CaseTypeModel model) {
+    return !orphanScopes(event, model).isEmpty();
+  }
+
+  /**
+   * The derived groups on this event whose root field no page places <em>in a form that emits the
+   * scope</em>, in model order.
+   *
+   * <p>"Placed" means specifically that {@link #emitPageFields} emits the group's member scope beside
+   * the placement. A retrofit field reached through a {@code @JsonUnwrapped} holder (a
+   * {@code ClusteredFieldRef}) is placed by the clustered branch, which emits only the placement chain
+   * and never the scope — so its group is an orphan here and is emitted after the pages, opening the
+   * holder hops itself (see {@link #emitMemberScope}). Without this the group would be emitted by
+   * neither path and its {@code CaseEventToComplexTypes} rows would vanish from the generated
+   * definition rather than falling back to a passthrough.
+   */
+  private List<EventComplexTypeGroup> orphanScopes(EventModel event, CaseTypeModel model) {
+    Map<String, EventComplexTypeGroup> groups = model.getEventComplexTypeGroups();
+    if (groups == null || groups.isEmpty()) {
+      return List.of();
+    }
+    Map<String, ClusteredFieldRef> refs = model.getClusteredFieldRefs() == null
+        ? Map.of() : model.getClusteredFieldRefs();
+    Set<String> placed = new LinkedHashSet<>();
+    if (event.getPages() != null) {
+      for (PageModel page : event.getPages()) {
+        if (page.getFields() == null) {
+          continue;
+        }
+        for (PageModel.PageField field : page.getFields()) {
+          if (!refs.containsKey(field.getCaseFieldId())) {
+            placed.add(field.getCaseFieldId());
+          }
+        }
+      }
+    }
+    List<EventComplexTypeGroup> orphans = new ArrayList<>();
+    for (EventComplexTypeGroup group : groups.values()) {
+      if (event.getId().equals(group.getEventId()) && !placed.contains(group.getCaseFieldId())) {
+        orphans.add(group);
+      }
+    }
+    return orphans;
   }
 
   /**
@@ -530,20 +693,17 @@ public class EventsConfigEmitter implements SourceEmitter {
 
   /**
    * The lambda weight of one field placement: 1 for an ordinary field, or 1 plus the derived
-   * complex-member count for a COMPLEX field that carries {@code CaseEventToComplexTypes} member
-   * overrides (each member emits its own serializable getter lambda inside the complex block).
+   * complex-member count when the field carries {@code CaseEventToComplexTypes} member overrides (each
+   * member emits its own serializable getter lambda inside the scope).
+   *
+   * <p>The member count is added regardless of the placement's {@code DisplayContext}: a group is now
+   * emitted beside a non-{@code COMPLEX} placement too, via a separate {@code .complexScope(getter)}
+   * statement, and those lambdas land in the same method as the placement, so they must be budgeted
+   * for either way.
    */
   private int fieldWeight(PageModel.PageField field, CaseTypeModel model, EventModel event) {
-    if (field.getDisplayContext() != null
-        && "COMPLEX".equalsIgnoreCase(field.getDisplayContext().trim())
-        && model.getEventComplexTypeGroups() != null) {
-      EventComplexTypeGroup group =
-          model.getEventComplexTypeGroups().get(event.getId() + "\u001f" + field.getCaseFieldId());
-      if (group != null) {
-        return 1 + group.getMembers().size();
-      }
-    }
-    return 1;
+    EventComplexTypeGroup group = groupFor(model, event, field.getCaseFieldId());
+    return group == null ? 1 : 1 + group.getMembers().size();
   }
 
   /**
@@ -777,9 +937,7 @@ public class EventsConfigEmitter implements SourceEmitter {
         // .eventHint / .fieldShowCondition / .pageId); otherwise the block stays empty. Honour the
         // input's ShowSummaryChangeOption via the two-arg complex(getter, summary) overload when it
         // is N (the SDK otherwise defaults ShowSummaryChangeOption to Y).
-        EventComplexTypeGroup group = model.getEventComplexTypeGroups() == null
-            ? null
-            : model.getEventComplexTypeGroups().get(event.getId() + "\u001f" + field.getCaseFieldId());
+        EventComplexTypeGroup group = groupFor(model, event, field.getCaseFieldId());
         // A Collection-rooted group's member chain cannot hang off the one-arg .complex(getter): that
         // getter is typed List<ListValue<Element>>, so the scope would be on the List and a
         // .mandatory(Element::getMember) inside would not compile. Instead the collection field's own
@@ -806,12 +964,7 @@ public class EventsConfigEmitter implements SourceEmitter {
         complexStmt.add(fieldMetadataChain(field));
         cb.addStatement("$L", complexStmt.build());
         if (collectionRoot) {
-          CodeBlock.Builder elementStmt = CodeBlock.builder();
-          elementStmt.add("fields.complex($T::get$L, $T.class)", caseData,
-              capitalise(fieldModel.getJavaName()), typeName(group.getRootElementType(), emitContext));
-          elementStmt.add(complexMemberChains(group, emitContext));
-          elementStmt.add(".done()");
-          cb.addStatement("$L", elementStmt.build());
+          emitMemberScope(cb, group, caseData, emitContext);
         }
         continue;
       }
@@ -832,10 +985,92 @@ public class EventsConfigEmitter implements SourceEmitter {
       stmt.add(fieldMetadataChain(field));
       stmt.add(publishChain(field, event));
       cb.addStatement("$L", stmt.build());
+      // The field is placed in a NON-COMPLEX context (sscs's updateOtherPartyData places `appeal` as
+      // READONLY) yet still carries derived CaseEventToComplexTypes member overrides. Its own row must
+      // stay in the context above — a .complex(getter) block would force it to COMPLEX — so the members
+      // go in a SEPARATE statement opening a non-registering scope, exactly as the collection-rooted
+      // COMPLEX case above does. That decoupling is the whole point: the placement emits the
+      // CaseEventToFields row, the scope emits the CaseEventToComplexTypes rows, and neither implies
+      // the other.
+      EventComplexTypeGroup placedGroup = groupFor(model, event, field.getCaseFieldId());
+      if (placedGroup != null) {
+        emitMemberScope(cb, placedGroup, caseData, emitContext);
+      }
     }
     if (openParent != null) {
       cb.addStatement("$L", cluster.add(".done()").build());
     }
+  }
+
+  /**
+   * The derived {@code CaseEventToComplexTypes} member group for one {@code (event, field)} pair, or
+   * null when the linker derived none.
+   */
+  private EventComplexTypeGroup groupFor(CaseTypeModel model, EventModel event, String caseFieldId) {
+    if (model.getEventComplexTypeGroups() == null) {
+      return null;
+    }
+    return model.getEventComplexTypeGroups().get(event.getId() + ((char) 0x1f) + caseFieldId);
+  }
+
+  /**
+   * Emits one derived member group as a standalone statement opening a <em>non-registering</em> member
+   * scope on the group's root field, then placing every member inside it.
+   *
+   * <p>This is the single primitive every {@code CaseEventToComplexTypes} shape reduces to. The SDK's
+   * one-arg {@code .complex(getter)} does two jobs at once — it registers a root
+   * {@code field(name).context(Complex)} AND opens a member scope — so using it to reach members
+   * manufactures a {@code DisplayContext=COMPLEX} {@code CaseEventToFields} row whether or not the
+   * input has one. The openers used here register nothing:
+   *
+   * <ul>
+   *   <li>a {@code Collection}-rooted group opens the element-typed
+   *   {@code .complex(getter, Element.class)} scope — also the only form that type-checks, since the
+   *   getter is a {@code List<…>} and a scope on the list could not place {@code Element::getMember};</li>
+   *   <li>a scalar-rooted group opens {@code .complexScope(getter)}, the scalar analogue.</li>
+   * </ul>
+   *
+   * <p>Because neither registers a field, the group's root keeps whatever {@code CaseEventToFields} row
+   * the input gave it — {@code COMPLEX}, {@code READONLY}, {@code OPTIONAL}, or none at all — and the
+   * caller is free to emit that row separately (or not at all, for an orphan group; see
+   * {@link #emitOrphanScopes}).
+   *
+   * <p>A retrofit group whose root field the team's model declares on a {@code @JsonUnwrapped}
+   * member's class rather than on the root case-data class opens that member first, one
+   * {@code .complex(PrevType::getHop)} per {@link EventComplexTypeGroup#getRootHops() hop} — the same
+   * shape {@link #emitPageFields} emits for a page field behind the same holder, so the two placements
+   * of one field agree by construction. Those hops register nothing either: the SDK's
+   * {@code FieldCollectionBuilder.complex(getter)} skips field registration and shares the parent's
+   * field collections when the member carries {@code @JsonUnwrapped}. Each opened hop is closed with
+   * its own trailing {@code .done()}.
+   */
+  private void emitMemberScope(
+      CodeBlock.Builder cb, EventComplexTypeGroup group, ClassName caseData,
+      EmitContext emitContext) {
+    CodeBlock.Builder scope = CodeBlock.builder();
+    List<EventComplexTypeGroup.RootHop> rootHops = group.getRootHops() == null
+        ? List.<EventComplexTypeGroup.RootHop>of() : group.getRootHops();
+    // The type the root getter is invoked on: the case-data class directly, or the last hop's target.
+    ClassName rootOwner = caseData;
+    for (int i = 0; i < rootHops.size(); i++) {
+      EventComplexTypeGroup.RootHop hop = rootHops.get(i);
+      scope.add(i == 0 ? "fields.complex($T::$L)" : "\n    .complex($T::$L)",
+          rootOwner, hop.getGetter());
+      rootOwner = typeName(hop.getTargetType(), emitContext);
+    }
+    String opener = rootHops.isEmpty() ? "fields." : "\n    .";
+    if (group.getRootElementType() != null) {
+      scope.add(opener + "complex($T::$L, $T.class)", rootOwner, group.getRootGetter(),
+          typeName(group.getRootElementType(), emitContext));
+    } else {
+      scope.add(opener + "complexScope($T::$L)", rootOwner, group.getRootGetter());
+    }
+    scope.add(complexMemberChains(group, emitContext));
+    // One .done() closes the member scope, plus one per root hop back to the case-data class.
+    for (int i = 0; i <= rootHops.size(); i++) {
+      scope.add(".done()");
+    }
+    cb.addStatement("$L", scope.build());
   }
 
   /**
@@ -967,6 +1202,9 @@ public class EventsConfigEmitter implements SourceEmitter {
         } else {
           cb.add("\n    .noHintText()");
         }
+      }
+      if (member.isRetainHiddenValue()) {
+        cb.add("\n    .retainHiddenValue()");
       }
       if (notBlank(member.getPageId())) {
         cb.add("\n    .pageId($S)", member.getPageId());

@@ -1,6 +1,8 @@
 package uk.gov.hmcts.ccd.sdk.converter.retrofit;
 
 import com.github.javaparser.ast.body.FieldDeclaration;
+import com.github.javaparser.ast.body.MethodDeclaration;
+import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
@@ -433,26 +435,88 @@ final class SynthesisPlacement {
    * emitter (which skips + reports the collision) and the rebinder (which must NOT emit a config
    * reference to a field the patch did not place), so both agree on the placeable set.
    *
+   * <p>Property names already served by an INHERITED ACCESSOR count as declared too, even though no
+   * field carries them. A synthesised field's Lombok getter must override that accessor, and it can
+   * only do so if the return types are compatible — which the definition's own FieldType has no
+   * reason to be. fpl declares {@code default YesNo getNeedTranslation()} on the
+   * {@code TranslatableItem} interface, computed from another field; the definition's matching
+   * {@code needTranslation} row resolves to the SDK's {@code YesOrNo}, so synthesising the field onto
+   * the seven implementors produced {@code getNeedTranslation() … cannot implement
+   * getNeedTranslation() in TranslatableItem: return type YesOrNo is not compatible with YesNo} and
+   * failed the whole compile. Treating those names as taken routes them down the existing
+   * skip-and-report path, where the gap tells the maintainer to annotate the real member by hand.
+   *
    * @param target the class synthesised fields would be appended to
-   * @return the declared field names on the class and its superclasses
+   * @return the declared field names on the class and its superclasses, plus inherited-accessor
+   *     property names
    */
   Set<String> declaredFieldNames(ModelSourceIndex.Type target) {
     Set<String> names = new java.util.LinkedHashSet<>();
-    ModelSourceIndex.Type current = target;
-    int guard = 0;
-    while (current != null && guard++ < 20) {
-      for (FieldDeclaration fieldDecl : current.decl.getFields()) {
-        fieldDecl.getVariables().forEach(v -> names.add(v.getNameAsString()));
-      }
-      if (!current.decl.isClassOrInterfaceDeclaration()) {
-        break;
-      }
-      var extended = current.decl.asClassOrInterfaceDeclaration().getExtendedTypes();
-      current = extended.isEmpty()
-          ? null
-          : index.resolve(current.unit, extended.get(0)).orElse(null);
-    }
+    collectDeclaredNames(target, names, new java.util.HashSet<>(), 0);
     return names;
+  }
+
+  /**
+   * Walks the supertype graph — superclass AND implemented interfaces — collecting declared field
+   * names plus the property names of any accessor declared on a supertype.
+   *
+   * <p>Interfaces are followed as well as the superclass chain because a default method on an
+   * interface is exactly as binding on the synthesised field's generated accessor as an inherited
+   * class method. Only SUPERTYPE accessors are collected, never the target's own: a getter the
+   * target declares itself sits alongside its own field, and the field-name check above already
+   * covers that case.
+   *
+   * @param type      the type to walk, or null to stop
+   * @param names     accumulator of taken names
+   * @param seen      types already walked, guarding against interface-graph cycles and re-walks
+   * @param depth     current depth, 0 for the target itself
+   */
+  private void collectDeclaredNames(
+      ModelSourceIndex.Type type, Set<String> names, Set<String> seen, int depth) {
+    if (type == null || depth > 20 || !seen.add(type.fqn)) {
+      return;
+    }
+    for (FieldDeclaration fieldDecl : type.decl.getFields()) {
+      fieldDecl.getVariables().forEach(v -> names.add(v.getNameAsString()));
+    }
+    if (depth > 0) {
+      for (MethodDeclaration method : type.decl.getMethods()) {
+        propertyNameOfAccessor(method).ifPresent(names::add);
+      }
+    }
+    if (!type.decl.isClassOrInterfaceDeclaration()) {
+      return;
+    }
+    var decl = type.decl.asClassOrInterfaceDeclaration();
+    for (ClassOrInterfaceType supertype : decl.getExtendedTypes()) {
+      collectDeclaredNames(
+          index.resolve(type.unit, supertype).orElse(null), names, seen, depth + 1);
+    }
+    for (ClassOrInterfaceType supertype : decl.getImplementedTypes()) {
+      collectDeclaredNames(
+          index.resolve(type.unit, supertype).orElse(null), names, seen, depth + 1);
+    }
+  }
+
+  /**
+   * The bean property name of a no-arg {@code getX()}/{@code isX()} accessor, or empty when the
+   * method is not one. Static methods are excluded (they are never overridden by an instance
+   * accessor) as are any taking parameters.
+   */
+  private static java.util.Optional<String> propertyNameOfAccessor(MethodDeclaration method) {
+    if (method.isStatic() || !method.getParameters().isEmpty()) {
+      return java.util.Optional.empty();
+    }
+    String name = method.getNameAsString();
+    String bare;
+    if (name.startsWith("get") && name.length() > 3) {
+      bare = name.substring(3);
+    } else if (name.startsWith("is") && name.length() > 2) {
+      bare = name.substring(2);
+    } else {
+      return java.util.Optional.empty();
+    }
+    return java.util.Optional.of(Character.toLowerCase(bare.charAt(0)) + bare.substring(1));
   }
 
   /**

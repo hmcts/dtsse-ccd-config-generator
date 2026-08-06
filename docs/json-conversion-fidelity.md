@@ -62,7 +62,7 @@ conscious decision instead of inheriting invisible JSON — see
 | Predefined ComplexTypes redeclaration (member-by-member re-spelling of `Fee`/`Address`/…) | **Semantic, accepted** | `PREDEFINED_COMPLEX_TYPE_REDECLARATION` | The built-in `@ComplexType(generate=false)` type owns its definition; the redundant input rows are dropped (advisory gap) — no longer passed through |
 | Conditional / multi-target `PostConditionState` | **Semantic, accepted** | `CONDITIONAL_POST_STATE` | Runtime honours `state(cond):priority` (JEXL, first-match-wins); `EventBuilder` models one post-state, so the SDK emits only the primary and the alternatives are dropped ([detail](#4-conditional--multi-target-postconditionstate-collapse)) |
 | Callback URLs + retries (all phases, incl. mid-event) | Fixed with passthrough | column-graft | Deliberate: no SDK callback wiring emitted; input URLs carried byte-exactly, `${CCD_DEF_*}` included, and compared exactly |
-| Non-derivable `EventToComplexTypes` groups | Fixed with passthrough | row | A `(event, field)` group the `.complex(...)` member chains cannot express — non-`COMPLEX` placement, unresolvable dotted `ListElementCode`, non-O/M/R `DisplayContext`, a repeated `ListElementCode`, raw whitespace/case key quirks, or an overlay-suffixed sibling ([detail](#5-eventtocomplextypes-generated-java-vs-fallback)) |
+| Non-derivable `EventToComplexTypes` groups | Fixed with passthrough | row | A `(event, field)` group the member chains cannot express — unresolvable dotted `ListElementCode`, an undeclared field or event, non-O/M/R/C `DisplayContext`, a repeated `ListElementCode`, raw whitespace/case key quirks, or an overlay-suffixed sibling. The root field's placement context is **no longer** a cause ([detail](#5-eventtocomplextypes-generated-java-vs-fallback)) |
 | `EventToComplexTypes` exotic-tail columns on derived groups | Fixed with passthrough | column-graft | `SecurityClassification`/`Publish`/`RetainHiddenValue`/… on a member-override row; grafted additively over the generated row (a group with no tail leaves no carrier) |
 | FixedList whose ID collides with a ComplexType ID | Fixed with passthrough | row | The complex-type class takes the Java name, so no enum is generated; the list rows are carried verbatim (fpl `*Selector`, civil `Court`) |
 | `AuthorisationComplexType` rows with an unresolvable field/role | Fixed with passthrough | row | Most rows emit via `grantComplexType(...)`; a row whose field is not a plain `CaseData` member or whose role is unregistered is carried verbatim (~24 rows, prl) |
@@ -395,10 +395,38 @@ the typed complex-type graph — generated `@ComplexType` classes by their model
 `@JsonProperty` value or field name; the getter is `get` + `StringUtils.capitalize` of the Java field
 name, so the input `OrganisationToAdd.OrganisationID` resolves to
 `.complex(ChangeOrganisationRequest::getOrganisationToAdd).<ctx>(Organisation::getOrganisationId)`).
-The emitter (`EventsConfigEmitter`) opens the field's existing `.complex(CaseData::getField)` block
-and places each member as `.optional`/`.mandatory`/`.readonly(Type::getMember)` carrying
+The emitter (`EventsConfigEmitter`) opens a member scope on the field and places each member as
+`.optional`/`.mandatory`/`.readonly`/`.complexMember(Type::getMember)` carrying
 `.eventLabel`/`.eventHint`/`.fieldShowCondition`/`.pageId`. This reproduces `DisplayContext`,
 `ListElementCode`, `EventElementLabel`, `EventHintText`, `FieldShowCondition`, `PageID` and `HintText`.
+
+**Decoupling the scope from the placement.** `FieldCollection.complex(getter)` does two jobs at once:
+it registers a root `CaseEventToFields` row with `DisplayContext=COMPLEX` *and* opens a member scope.
+That coupling was the single largest fallback cause — deriving a group whose root the event places as
+`OPTIONAL`/`READONLY`/`MANDATORY` (sscs's `updateOtherPartyData/appeal`), or does not place at all
+(sscs's `dwpUploadResponse/otherParties`), would have manufactured a `COMPLEX` placement the input
+never had. The fix is a **non-registering scope opener**: the scalar
+`FieldCollection.complexScope(getter)` and the pre-existing element-typed
+`complex(getter, Element.class)` both open a member scope without registering any field, so they add
+no `CaseEventToFields` row. Only `CaseEventToComplexTypesGenerator` reads
+`FieldCollection.getComplexFields()`, so such a scope reaches that sheet and nothing else. The
+placement therefore emits the `CaseEventToFields` row and a **separate** statement emits the members;
+neither implies the other. Three previously-unreachable shapes fall out of this one primitive:
+
+- **Non-`COMPLEX` placement** — the root keeps the context the input asked for; the members go in a
+  separate `fields.complexScope(getter)` statement.
+- **No placement at all** — the group is emitted as an *orphan scope* after every page has been
+  applied. Sound because a non-registering scope contributes no `CaseEventToFields` row, so it cannot
+  disturb the display ordering the placements established. On an event with **no pages at all**
+  (probate's `boFindMatchedCaseGrantRegistrarEscalation`) the emitter opens a bare `.fields()` purely
+  to obtain the builder — `EventBuilder.fields()` returns the event's pre-built collection builder and
+  registers nothing — and only does so when there is a scope to hang off it.
+- **A member placed `COMPLEX` in its own right** — sscs's
+  `confirmPoAttendance/presentingOfficersDetails`, where `contact` carries a `COMPLEX` row alongside
+  dotted `contact.phone` rows. `FieldCollection.complexMember(getter)` places with
+  `DisplayContext.Complex` *without* opening a nested scope, so the two compose on one intermediate.
+  (The generator always emitted `field.getContext()` verbatim, so the `COMPLEX` value itself was never
+  the obstacle — the missing piece was an SDK placement that sets it without also opening a scope.)
 
 **Collection roots and intermediates.** A `Collection`-typed root or intermediate member (getter
 `List<ListValue<X>>`) is walked into via a dedicated SDK affordance rather than being rejected: the
@@ -445,25 +473,37 @@ decision, backed by the definition-store importer — see the accepted-differenc
   — so it is neither derived nor grafted.
 
 **Fallback.** A whole group stays a verbatim, ID-keyed row passthrough — byte-identical to the
-pre-existing behaviour — when it is not derivable. With collection roots/intermediates and the
-hint-cascade now derived (above), the remaining causes are: the field is not placed as
-`DisplayContext=COMPLEX` on the event (no `.complex` block to attach to); a dotted `ListElementCode`
-does not resolve through the graph (an unknown member, a scalar intermediate, or a hop into a type the
-converter neither generated nor can reflect); a `DisplayContext` other than
-`OPTIONAL`/`MANDATORY`/`READONLY`; a same-`ListElementCode` collision surviving exact-duplicate dedup
-(the two rows collapse to one generated row); a raw derivable-key value the generator would normalise
-away (surrounding whitespace on `CaseFieldID`/`ListElementCode`, or a title-case `DisplayContext`);
-or an overlay-suffixed sibling row targeting the same file. (An `ID` collision is no longer a cause —
-every surviving `ListElementCode` is unique within a group, so the `(event, field, LEC)`-keyed graft
-disambiguates rows that carry different `ID`s.)
+pre-existing behaviour — when it is not derivable. **No placement shape is a cause any more**: with the
+scope decoupled from the placement (above), whatever `DisplayContext` the event places the root field
+in, and whether any page places it at all, is irrelevant. The remaining causes are all *resolution* or
+*structural* failures:
+
+- a dotted `ListElementCode` does not resolve through the typed graph — an unknown member, a scalar
+  intermediate, or a hop into a type the converter neither generated nor can reflect (prl's
+  `applicantOrganisationPolicy:lastNoCRequestedBy` against the predefined `OrganisationPolicy`);
+- no `CaseField` row declares the field (civil's `CREATE_SDO/disposalHearingStandardDisposalOrder`);
+- no `CaseEvent` row declares the event, so there is no generated `.event(...)` block to place a scope
+  on. Two flavours, both irreducible: rows naming an event **nothing** declares (probate's 30
+  `boFindMatchedCase*RegistrarEscalation` rows are dead definition data), and rows naming an event
+  declared for a **sibling case type** (et's `importFile` belongs to `ET_EnglandWales_Multiple`);
+- a member `DisplayContext` outside `OPTIONAL`/`MANDATORY`/`READONLY`/`COMPLEX`;
+- a same-`ListElementCode` collision surviving exact-duplicate dedup (the two rows collapse to one
+  generated row, so a passthrough would merge onto its derived twin instead of standing alongside it);
+- a raw derivable-key value the generator would normalise away (surrounding whitespace on
+  `CaseFieldID`/`ListElementCode`, or a title-case `DisplayContext`);
+- an overlay-suffixed group, or an overlay-suffixed sibling row targeting the same file (the emitter
+  does not per-environment-gate a member scope).
+
+(An `ID` collision is no longer a cause — every surviving `ListElementCode` is unique within a group,
+so the `(event, field, LEC)`-keyed graft disambiguates rows that carry different `ID`s.)
 
 **Measured derived / fallback rows per fixture** (all seven round-trip byte-identically either way):
-ia 258 / 0, probate 283 / 35, et 717 / 287, sscs 682 / 64, fpl 1649 / 246, civil 1843 / 667,
-prl 1932 / 4310. Collection-rooted groups and hint-cascade rows are now generated Java (they were the
-two dominant fallback causes, ~4.5k rows flipped to derived). prl's residual is dominated by
-`ordersHearingDetails`/`fl404CustomFields`-style groups that repeat a `ListElementCode` twice within
-an event (collapsing to one generated row) and members placed non-`COMPLEX`; the rest are the
-documented remaining causes above.
+ia 258 / 0, sscs 746 / 0, probate 288 / 30, fpl 1876 / 19, civil 2367 / 143, et 870 / 144,
+prl 5768 / 474. Decoupling the scope from the placement flipped a further ~4.9k rows to derived and
+took **sscs to zero** (its whole 60-row residual was the three placement shapes: 52 unplaced, 6
+non-`COMPLEX`, 2 `COMPLEX`-member). prl's residual is now dominated by unresolvable dotted paths
+against SDK-predefined types and by groups repeating a `ListElementCode` twice within an event; et's
+and civil's by overlay-suffixed groups.
 
 ### 6. AuthorisationCaseField injected-read records {#authorisationcasefield-injected-read-records}
 
@@ -504,8 +544,9 @@ row (source: `DefaultDefinitionLinker`). *Mechanism* is the merge shape:
 > **Measured scale (all six service fixtures — Benefit, fpl, civil, ET_EnglandWales, probate, prl).**
 > Total passthrough artifacts: **~79**, breaking down as — `CaseEventToFields` column-grafts **57**
 > (callbacks + skipped-unwrapped-field metadata, mostly sscs's `writeFinalDecision`), `FixedLists`
-> ID-collision rows **15**, non-derivable `EventToComplexTypes` groups **6** (one summary row per
-> fixture; the underlying member rows are far fewer than the ~7.3k now emitted as Java), and
+> ID-collision rows **15**, non-derivable `EventToComplexTypes` groups **5** (one summary row per
+> fixture *with* a residual — ia and sscs now have none; the underlying member rows total 810 against
+> the ~12.2k now emitted as Java), and
 > `AuthorisationComplexType` unresolved rows **1**. There is **no** `AuthorisationCaseField`
 > passthrough — the ~52k `AUTH_NOT_DERIVABLE` entries are report-only `ADVISORY` records of an
 > injected read the comparator forgives (see [§6](#authorisationcasefield-injected-read-records)),
@@ -525,7 +566,7 @@ dispositions respectively.)
 | Construct | Sheet(s) | Mechanism | Why there is no SDK API |
 |---|---|---|---|
 | EventToComplexTypes — **derived-group tail** | `CaseEventToComplexTypes` (→ `EventToComplexTypes`) | column-graft (per event/field) | For a group emitted as generated `.complex(...)` Java (see [§5](#5-eventtocomplextypes-generated-java-vs-fallback)), only the **exotic tail** the generator cannot compute (`SecurityClassification`/`Publish`/`RetainHiddenValue`/…) is grafted onto the generated rows, additively, keyed on `(CaseEventID, CaseFieldID, ListElementCode)`. The row's `ID` (importer-ignored, `EVENT_COMPLEX_TYPE_ID_IGNORED`) and `FieldDisplayOrder` (SDK per-event counter; relative member order preserved by emission order — display-order disposition) are accepted differences, no longer grafted; a derived group with no exotic tail leaves **no carrier at all**. |
-| EventToComplexTypes — **non-derivable group** | `CaseEventToComplexTypes` (→ `EventToComplexTypes`) | row (per event/field) | A whole `(event, field)` group the converter cannot express as builder chains stays a verbatim row passthrough (ID-keyed). Causes: a non-`COMPLEX`-placed field, an unresolvable dotted `ListElementCode`, a `DisplayContext` outside `OPTIONAL`/`MANDATORY`/`READONLY`, a `ListElementCode` repeated within the group, a raw derivable-key value the generator would normalise (whitespace/case), or an overlay-suffixed sibling. (`Collection`-typed roots/intermediates and hint-cascade rows are now derived — see [§5](#5-eventtocomplextypes-generated-java-vs-fallback).) |
+| EventToComplexTypes — **non-derivable group** | `CaseEventToComplexTypes` (→ `EventToComplexTypes`) | row (per event/field) | A whole `(event, field)` group the converter cannot express as builder chains stays a verbatim row passthrough (ID-keyed). Causes: an unresolvable dotted `ListElementCode`, a field no `CaseField` row declares, an event no `CaseEvent` row declares (dead rows, or an event belonging to a sibling case type), a `DisplayContext` outside `OPTIONAL`/`MANDATORY`/`READONLY`/`COMPLEX`, a `ListElementCode` repeated within the group, a raw derivable-key value the generator would normalise (whitespace/case), or an overlay-suffixed sibling. (`Collection`-typed roots/intermediates, hint-cascade rows, and every root-placement shape — non-`COMPLEX`, unplaced, page-less — are now derived; see [§5](#5-eventtocomplextypes-generated-java-vs-fallback).) |
 | Callback URLs (about-to-start / about-to-submit / submitted) + their `RetriesTimeout*` | `CaseEvent` | column-graft | The converter deliberately emits **no** SDK callback wiring, so the generator writes no `CallBackURL*`/`RetriesTimeout*`; the input values (env `${CCD_DEF_*}` placeholders included) are grafted back verbatim. |
 | Mid-event callback URL + its `RetriesTimeout*MidEvent` | `CaseEventToFields` | column-graft | Same: mid-event is a per-page property, carried verbatim per field row rather than wired (a bracketed metadata `CaseFieldID` such as `[STATE]` is skipped — the generator emits no row for it to graft onto). |
 | Per-field metadata for a placement skipped as un-referenceable (`@JsonUnwrapped` parent whose getter the model suppresses with `@Getter(AccessLevel.NONE)`, or a bracketed metadata `CaseFieldID` like `[STATE]`) | `CaseEventToFields` | column-graft | No compilable typed getter reference exists for the field, so the placement is skipped in Java and the row's per-field display metadata is grafted back (sscs's `writeFinalDecision*` unwrapped members are the bulk of this). |

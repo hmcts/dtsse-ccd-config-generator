@@ -10,7 +10,6 @@ import uk.gov.hmcts.ccd.sdk.converter.model.AccessClassModel;
 import uk.gov.hmcts.ccd.sdk.converter.model.gap.GapAction;
 import uk.gov.hmcts.ccd.sdk.converter.model.gap.GapCategory;
 import uk.gov.hmcts.ccd.sdk.converter.model.gap.GapCollector;
-import uk.gov.hmcts.ccd.sdk.converter.model.gap.GapEntry;
 
 /**
  * Direct unit tests for {@link AccessClassComputer}'s common-role-prefix elision, exercised
@@ -87,7 +86,7 @@ class AccessClassComputerTest {
   }
 
   @Test
-  void aDefinitionGrantBeyondTheInjectedReadStillDerivesToAnAccessClassWithNoGap() {
+  void definitionGrantBeyondTheInjectedReadStillDerivesToAnAccessClassWithNoGap() {
     // Sanity guard on the residual maths: when the definition grants MORE than the injected R
     // (CRU vs injected R), the surplus is derivable to an access class and produces no gap at all —
     // the ADVISORY path fires strictly for the injected-only-R over-grant, nothing else.
