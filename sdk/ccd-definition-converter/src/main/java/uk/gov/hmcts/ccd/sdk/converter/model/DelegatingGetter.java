@@ -6,17 +6,25 @@ import lombok.Value;
 
 /**
  * A delegating no-arg getter the retrofit patch synthesises on the team's root case-data class so a
- * {@code grantComplexType} can reference the complex field by a real {@code CaseData::getX} method
- * reference.
+ * builder call needing a real {@code CaseData::getX} method reference can address a flat CCD field
+ * the team's model only reaches through a {@code @JsonUnwrapped} member.
  *
- * <p>An {@code AuthorisationComplexType} grant restricts a complex CaseField (its
- * {@link ComplexTypeAuthModel#getCaseFieldId()}). In retrofit mode the granted field is frequently
- * reachable only through a {@code @JsonUnwrapped} member of the root class (fpl's
- * {@code placement}/{@code courtBundleListV2}/{@code hiddenApplicationsBundle} live on
- * {@code PlacementEventData}/{@code HearingDocuments}/{@code RemovalToolData}), so the flat CCD field
- * id has no direct getter on {@code CaseData}. The SDK's {@code grantComplexType} resolves the getter
- * by introspecting a serialized lambda, which needs a REAL {@code Type::method} reference — a
- * multi-hop lambda ({@code caseData -> caseData.getX().getY()}) fails at generation
+ * <p>Two builder APIs take a typed getter for a flat field id and so need this:
+ * <ul>
+ *   <li>{@code grantComplexType} — an {@code AuthorisationComplexType} grant restricts a complex
+ *       CaseField (its {@link ComplexTypeAuthModel#getCaseFieldId()}); fpl's
+ *       {@code placement}/{@code courtBundleListV2}/{@code hiddenApplicationsBundle} live on
+ *       {@code PlacementEventData}/{@code HearingDocuments}/{@code RemovalToolData}.</li>
+ *   <li>{@code Tab.TabBuilder.field(getter, showCondition, displayContext)} — the only tab overload
+ *       carrying a {@code DisplayContextParameter}; prl's {@code restrictedDocuments} /
+ *       {@code confidentialDocuments} live on {@code ReviewDocuments}, {@code messages} on
+ *       {@code SendOrReplyMessage}, {@code confidentialCheckFailed} on
+ *       {@code ServiceOfApplication}.</li>
+ * </ul>
+ *
+ * <p>In both cases the flat CCD field id has no direct getter on {@code CaseData}. The SDK resolves
+ * the getter by introspecting a serialized lambda, which needs a REAL {@code Type::method} reference —
+ * a multi-hop lambda ({@code caseData -> caseData.getX().getY()}) fails at generation
  * ({@code PropertyUtils.resolveGetterMethod} cannot resolve a synthetic lambda method). So the patch
  * adds a delegating getter {@code getFieldId()} that returns {@code getParent()[.getHop()]*.getMember()}
  * (mirroring how fpl's own {@code getOrderCollection()} delegates), and the config emits
@@ -29,14 +37,15 @@ import lombok.Value;
 public class DelegatingGetter {
 
   /**
-   * The complex CaseField id the grant restricts, e.g. {@code placement}.
+   * The flat CaseField id the getter stands in for, e.g. {@code placement}.
    */
   String caseFieldId;
 
   /**
    * The delegating getter's method name, {@code get} + PascalCase({@link #caseFieldId}). Decapitalises
    * back to the CCD field id via the SDK's {@code PropertyUtils.derivePropertyName}, so the generated
-   * {@code AuthorisationComplexType} row carries the correct {@code CaseFieldID}.
+   * row ({@code AuthorisationComplexType}'s {@code CaseFieldID}, {@code CaseTypeTab}'s
+   * {@code CaseFieldID}) carries the correct id.
    */
   String getterName;
 

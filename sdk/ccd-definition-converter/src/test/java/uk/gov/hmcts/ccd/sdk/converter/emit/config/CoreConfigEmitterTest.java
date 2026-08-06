@@ -264,6 +264,70 @@ class CoreConfigEmitterTest {
   }
 
   @Test
+  void dcpTabFieldOnAnUnwrappedMemberUsesTheDelegatingGetter() {
+    // Retrofit: the DisplayContextParameter is carried ONLY by the typed overload
+    // field(getter, showCondition, displayContext), but a field the team's model reaches through a
+    // @JsonUnwrapped member has no CaseData::get<Member>. Where the rebinder synthesised a
+    // delegating getter on the root class, the typed reference must name THAT method.
+    String src = classNamed(tabWithDcpField(true), "MinimalTabs");
+    assertThat(src).contains(".field(CaseData::getRestrictedDocuments, \"\", \"Table\")");
+  }
+
+  @Test
+  void dcpTabFieldOnAnUnwrappedMemberWithoutADelegatingGetterFallsBackToTheStringPath() {
+    // No delegating getter (an unresolvable hop chain) means the field is not typed-referenceable at
+    // all: emitting CaseData::getReviewDocuments would be prl's "invalid method reference" break. The
+    // string overload is the only correct emission, forfeiting the DCP as a documented residual.
+    String src = classNamed(tabWithDcpField(false), "MinimalTabs");
+    assertThat(src).doesNotContain("CaseData::");
+    assertThat(src).contains(".field(\"restrictedDocuments\")");
+  }
+
+  /**
+   * A one-tab model whose sole field carries a DisplayContextParameter and is reached only through a
+   * {@code @JsonUnwrapped} member, with or without a synthesised delegating getter for it.
+   */
+  private static CaseTypeModel tabWithDcpField(boolean withDelegatingGetter) {
+    TabModel tab = TabModel.builder()
+        .tabId("summary")
+        .label("Summary")
+        .displayOrder(1)
+        .fields(List.of(TabModel.TabField.builder()
+            .caseFieldId("restrictedDocuments")
+            .displayOrder(1)
+            .displayContextParameter("Table")
+            .build()))
+        .build();
+    Map<String, uk.gov.hmcts.ccd.sdk.converter.model.DelegatingGetter> getters =
+        withDelegatingGetter
+            ? Map.of("restrictedDocuments",
+                uk.gov.hmcts.ccd.sdk.converter.model.DelegatingGetter.builder()
+                    .caseFieldId("restrictedDocuments")
+                    .getterName("getRestrictedDocuments")
+                    .returnTypeSource("Object")
+                    .delegationChain(List.of("getReviewDocuments", "getRestrictedDocuments"))
+                    .build())
+            : Map.of();
+    return withTabs(minimalModel(), List.of(tab)).toBuilder()
+        // javaName deliberately differs from the CCD id (a @JsonProperty-renamed member), so the
+        // assertions prove the emitted getter name comes from the delegating getter rather than
+        // coinciding with the member's own get<JavaName>.
+        .caseFields(List.of(uk.gov.hmcts.ccd.sdk.converter.model.FieldModel.builder()
+            .id("restrictedDocuments")
+            .javaName("restrictedDocs")
+            .fieldType("Collection")
+            .build()))
+        .clusteredFieldRefs(Map.of("restrictedDocuments",
+            uk.gov.hmcts.ccd.sdk.converter.model.ClusteredFieldRef.builder()
+                .parentGetter("getReviewDocuments")
+                .clusterType("ReviewDocuments")
+                .memberGetter("getRestrictedDocs")
+                .build()))
+        .delegatingGetters(getters)
+        .build();
+  }
+
+  @Test
   void stateGrantEmittedForStateAuthorisationRow() {
     String src = classNamed(modelWithStateGrants(), "MinimalGrants");
     assertThat(src).contains("builder.grant(State.Open");

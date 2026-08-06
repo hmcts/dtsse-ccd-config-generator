@@ -462,6 +462,16 @@ public class CoreConfigEmitter implements SourceEmitter {
         membersById.put(field.getId(), field);
       }
     }
+    // Retrofit: a field the team's model reaches only through a @JsonUnwrapped member has NO direct
+    // CaseData::get<Member> getter, so the typed overload below cannot name it — prl's
+    // restrictedDocuments/confidentialDocuments live on ReviewDocuments, messages on
+    // SendOrReplyMessage. The rebinder records a delegating getter the patch synthesises on the root
+    // class for exactly these (keyed by CCD id); reference it by that name. Where none exists the
+    // field is not typed-referenceable at all and must stay on the string path below.
+    Map<String, uk.gov.hmcts.ccd.sdk.converter.model.DelegatingGetter> delegating =
+        model.getDelegatingGetters() == null ? Map.of() : model.getDelegatingGetters();
+    java.util.Set<String> unwrapped = model.getClusteredFieldRefs() == null
+        ? java.util.Set.of() : model.getClusteredFieldRefs().keySet();
     for (TabModel tab : model.getTabs()) {
       // The SDK derives tab display order from the order tabs are declared here, so tabs are
       // emitted in ascending display order (see sortedByDisplayOrder) and there is no
@@ -493,7 +503,8 @@ public class CoreConfigEmitter implements SourceEmitter {
           // unreproducible residual, noted in the fidelity doc).
           cb.add("\n    .label($S, $S, $S)",
               field.getCaseFieldId(), nullToEmpty(field.getShowCondition()), field.getLabel());
-        } else if (hasDcp && member != null) {
+        } else if (hasDcp && member != null && typedTabGetter(field, member, delegating,
+            unwrapped) != null) {
           // A DisplayContextParameter is the only tab-field attribute the string overloads cannot
           // carry, and only the typed-getter overload field(getter, showCondition, displayContext)
           // does. Use it solely for member fields that actually carry a DCP: the getter resolves
@@ -502,8 +513,8 @@ public class CoreConfigEmitter implements SourceEmitter {
           // cheap string path for the common (DCP-less) case matters — every typed getter is a
           // serializable lambda, and a large tab (ia's overview: 862 fields) would otherwise
           // overflow the class's synthesised $deserializeLambda$ ("code too large").
-          String getter = "get" + capitalise(member.getJavaName());
-          cb.add("\n    .field($T::$L, $S, $S)", caseData, getter,
+          cb.add("\n    .field($T::$L, $S, $S)", caseData,
+              typedTabGetter(field, member, delegating, unwrapped),
               nullToEmpty(field.getShowCondition()), field.getDisplayContextParameter());
         } else if (hasShowCondition) {
           // id + showCondition round-trips through the string overload; a DisplayContextParameter
@@ -516,6 +527,37 @@ public class CoreConfigEmitter implements SourceEmitter {
       }
       cb.addStatement("");
     }
+  }
+
+  /**
+   * The method name a DisplayContextParameter-carrying tab field can be typed-referenced by on the
+   * root case-data class, or {@code null} when no such method exists (so the caller must fall back to
+   * the string overload, forfeiting the DCP as a documented residual).
+   *
+   * <p>Three cases:
+   * <ul>
+   *   <li>the retrofit rebinder recorded a delegating getter for it (a {@code @JsonUnwrapped}-reached
+   *       field whose whole hop chain resolves) → that getter's name, which the patch synthesises on
+   *       the root class;</li>
+   *   <li>the field is reached through a {@code @JsonUnwrapped} member with NO delegating getter →
+   *       null: {@code get<Member>} is declared on the parent's class, not the root, so emitting it
+   *       against {@code CaseData} is the "cannot find symbol / invalid method reference" break;</li>
+   *   <li>otherwise a direct member of the root class → its own {@code get<JavaName>}.</li>
+   * </ul>
+   */
+  private String typedTabGetter(TabModel.TabField field,
+      uk.gov.hmcts.ccd.sdk.converter.model.FieldModel member,
+      Map<String, uk.gov.hmcts.ccd.sdk.converter.model.DelegatingGetter> delegating,
+      java.util.Set<String> unwrapped) {
+    uk.gov.hmcts.ccd.sdk.converter.model.DelegatingGetter getter =
+        delegating.get(field.getCaseFieldId());
+    if (getter != null) {
+      return getter.getGetterName();
+    }
+    if (unwrapped.contains(field.getCaseFieldId())) {
+      return null;
+    }
+    return "get" + capitalise(member.getJavaName());
   }
 
   private void emitSearchBuilder(
