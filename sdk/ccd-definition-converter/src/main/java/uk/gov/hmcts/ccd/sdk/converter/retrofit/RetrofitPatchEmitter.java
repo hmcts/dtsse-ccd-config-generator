@@ -13,6 +13,7 @@ import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.ConstructorDeclaration;
 import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.TypeDeclaration;
+import com.github.javaparser.ast.expr.AnnotationExpr;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -314,6 +315,9 @@ public final class RetrofitPatchEmitter {
         List<FieldModel> hostPlaceable = placement.renameCaseInsensitiveCollisions(
             host.type, dropExistingFieldCollisions(host.type, placeable));
         editsFor(byFile, host.type.file).synthesise(host.type.simpleName, hostPlaceable);
+        if (synthesisedFieldsNeedNonNull(host.type.decl)) {
+          editsFor(byFile, host.type.file).includeSynthesisedWhenNonNull();
+        }
         gaps.add(GapEntry.builder()
             .sheet("CaseField")
             .rowKey(rootType.simpleName)
@@ -360,6 +364,9 @@ public final class RetrofitPatchEmitter {
         // its @AllArgsConstructor: synthesise directly onto the root and drop the annotation.
         editsFor(byFile, rootType.file).synthesise(rootType.simpleName,
             placement.renameCaseInsensitiveCollisions(rootType, placeable));
+        if (synthesisedFieldsNeedNonNull(rootType.decl)) {
+          editsFor(byFile, rootType.file).includeSynthesisedWhenNonNull();
+        }
         editsFor(byFile, rootType.file).removeTypeAnnotation("AllArgsConstructor");
         gaps.add(GapEntry.builder()
             .sheet("CaseField")
@@ -378,6 +385,9 @@ public final class RetrofitPatchEmitter {
       } else {
         editsFor(byFile, rootType.file).synthesise(rootType.simpleName,
             placement.renameCaseInsensitiveCollisions(rootType, placeable));
+        if (synthesisedFieldsNeedNonNull(rootType.decl)) {
+          editsFor(byFile, rootType.file).includeSynthesisedWhenNonNull();
+        }
       }
     }
 
@@ -428,8 +438,11 @@ public final class RetrofitPatchEmitter {
    * wrapped in a {@code @Data} class with the imports its field types need.
    */
   private RetrofitPatch.FilePatch renderExtraClass(String className, List<FieldModel> fields) {
-    // A fresh file starts with no imports, so the binder has a clean slate.
-    SynthResult synth = renderSynthFields(fields, "  ", new ImportBinder(new LinkedHashMap<>()));
+    // A fresh file starts with no imports, so the binder has a clean slate. The class this emitter
+    // writes carries no @JsonInclude, so its defaults leave nulls out of nothing and the fields need
+    // no per-field inclusion setting.
+    SynthResult synth =
+        renderSynthFields(fields, "  ", new ImportBinder(new LinkedHashMap<>()), false);
     StringBuilder body = new StringBuilder();
     body.append("package ").append(modelPackage).append(";\n\n");
     List<String> imports = new ArrayList<>();
@@ -1017,6 +1030,9 @@ public final class RetrofitPatchEmitter {
           // complex-member case-insensitive collision, so this path keeps the exact-collision drop only.
           List<FieldModel> placeable = dropExistingFieldCollisions(complexClass, synthesised);
           editsFor(byFile, complexClass.file).synthesise(complexClass.simpleName, placeable);
+          if (synthesisedFieldsNeedNonNull(complexClass.decl)) {
+            editsFor(byFile, complexClass.file).includeSynthesisedWhenNonNull();
+          }
           // The patch adds these as real fields, so after it is applied the member IS addressable as
           // <complexClass>::get<JavaName>. Record them so the CaseEventToComplexTypes member walk —
           // which reads the model as PARSED, i.e. pre-patch — resolves them instead of dropping the
@@ -1277,6 +1293,31 @@ public final class RetrofitPatchEmitter {
   }
 
   /**
+   * Whether fields synthesised onto {@code decl} must each carry their own
+   * {@code @JsonInclude(NON_NULL)}: true when the class carries a MARKER {@code @JsonInclude} — the
+   * annotation with no value, which means {@code ALWAYS} and so serialises nulls.
+   *
+   * <p>Without this, synthesis changes the class's wire payload. A definition-only field is by
+   * definition one the team's code never populates, so on an ALWAYS class every instance gains a
+   * {@code "<id>": null} property. On a published library like sscs-common that is a breaking change
+   * to every consumer's JSON — and it is observable in the team's own tests (sscs-common's
+   * {@code should_deserialise_and_serialise} asserts a deserialise/serialise round trip against
+   * fixture JSON, which fails with {@code Expected: pcqId but none found} once {@code Appellant},
+   * {@code Appointee}, {@code Representative} and {@code OverrideFields} each gain a null property).
+   *
+   * <p>A class-level {@code @JsonInclude(NON_NULL)} / {@code NON_ABSENT} / {@code NON_EMPTY} already
+   * suppresses the null, so it needs nothing; a per-field annotation would be redundant. The CCD
+   * definition is unaffected either way — the SDK derives {@code CaseField} rows from FIELDS, and
+   * reads no Jackson inclusion setting.
+   */
+  private static boolean synthesisedFieldsNeedNonNull(TypeDeclaration<?> decl) {
+    return decl.getAnnotations().stream()
+        .filter(a -> a.getNameAsString().equals("JsonInclude")
+            || a.getNameAsString().endsWith(".JsonInclude"))
+        .anyMatch(AnnotationExpr::isMarkerAnnotationExpr);
+  }
+
+  /**
    * Drops from the synthesise list any field whose Java name already names a declared field on the
    * target class (or a superclass in the parsed source). Synthesis fills the definition-only gap —
    * fields the resolver could NOT bind to a model property — but a field can be unresolved yet still
@@ -1525,6 +1566,7 @@ public final class RetrofitPatchEmitter {
     // the target class's closing brace (textually, so the marker comments and indentation are
     // exactly as intended and the diff is one contiguous hunk at the end of the class body).
     Set<String> typeImports = new LinkedHashSet<>();
+    boolean needsJsonIncludeImport = false;
     if (!edits.synthesise.isEmpty()) {
       ImportBinder binder = new ImportBinder(existingImports(unit));
       SynthResult synth = renderSynthBlock(edits, binder);
@@ -1532,6 +1574,7 @@ public final class RetrofitPatchEmitter {
       needsCcdImport |= synth.usesCcd;
       needsJsonPropertyImport |= synth.usesJsonProperty;
       needsFieldTypeImport |= synth.usesFieldType;
+      needsJsonIncludeImport |= synth.usesJsonInclude;
       accessClasses.addAll(synth.accessClasses);
       typeImports.addAll(synth.typeImports);
       // A constructor-bound idiom (builder bound to a hand-written constructor, or @Value whose
@@ -1597,7 +1640,8 @@ public final class RetrofitPatchEmitter {
       typeImports.add("import uk.gov.hmcts.ccd.sdk.api.ComplexType;");
     }
     printed = addImports(printed, needsCcdImport, needsJsonPropertyImport, needsFieldTypeImport,
-        needsJsonUnwrappedImport, needsJsonIgnoreImport, accessClasses, typeImports);
+        needsJsonUnwrappedImport, needsJsonIgnoreImport, needsJsonIncludeImport, accessClasses,
+        typeImports);
 
     // A dropped class-level annotation leaves its import unused; strip it so checkstyle's unused-import
     // rule stays clean (the retrofitted teams run maxWarnings=0). Only remove an import whose type no
@@ -1974,12 +2018,14 @@ public final class RetrofitPatchEmitter {
   }
 
   private SynthResult renderSynthBlock(FileEdits edits, ImportBinder binder) {
-    SynthResult fields = renderSynthFields(edits.synthesise, "  ", binder);
+    SynthResult fields =
+        renderSynthFields(edits.synthesise, "  ", binder, edits.synthesisedNeedsNonNull);
     SynthResult wrapped = new SynthResult();
     wrapped.text = "  " + SYNTH_BEGIN + '\n' + fields.text + "  " + SYNTH_END + '\n';
     wrapped.usesCcd = fields.usesCcd;
     wrapped.usesJsonProperty = fields.usesJsonProperty;
     wrapped.usesFieldType = fields.usesFieldType;
+    wrapped.usesJsonInclude = fields.usesJsonInclude;
     wrapped.accessClasses.addAll(fields.accessClasses);
     wrapped.typeImports.addAll(fields.typeImports);
     return wrapped;
@@ -1992,12 +2038,20 @@ public final class RetrofitPatchEmitter {
    * through {@code binder} so a simple name already bound to a different type in the compilation
    * unit is written fully-qualified (finding C1) rather than emitting a clashing import. Shared by
    * the in-class synthesised block and the added {@code CaseDataExtra} class body.
+   *
+   * <p>When {@code nonNull} is set each field additionally carries {@code @JsonInclude(NON_NULL)}, so
+   * synthesising onto a class that serialises nulls does not add a null property to the team's wire
+   * payload — see {@link #synthesisedFieldsNeedNonNull}.
    */
   private SynthResult renderSynthFields(
-      List<FieldModel> synthesised, String indent, ImportBinder binder) {
+      List<FieldModel> synthesised, String indent, ImportBinder binder, boolean nonNull) {
     SynthResult result = new SynthResult();
     StringBuilder text = new StringBuilder();
     for (FieldModel field : synthesised) {
+      if (nonNull) {
+        text.append(indent).append("@JsonInclude(JsonInclude.Include.NON_NULL)\n");
+        result.usesJsonInclude = true;
+      }
       boolean renamed = !field.getJavaName().equals(field.getId());
       if (renamed) {
         text.append(indent).append("@JsonProperty(\"").append(field.getId()).append("\")\n");
@@ -2320,10 +2374,14 @@ public final class RetrofitPatchEmitter {
    * skipping ones already present. Keeps the emitted diff minimal and deterministic.
    */
   private String addImports(String source, boolean ccd, boolean jsonProperty, boolean fieldType,
-      boolean jsonUnwrapped, boolean jsonIgnore, Set<String> accessClasses, Set<String> typeImports) {
+      boolean jsonUnwrapped, boolean jsonIgnore, boolean jsonInclude, Set<String> accessClasses,
+      Set<String> typeImports) {
     List<String> wanted = new ArrayList<>();
     if (ccd) {
       wanted.add("import uk.gov.hmcts.ccd.sdk.api.CCD;");
+    }
+    if (jsonInclude) {
+      wanted.add("import com.fasterxml.jackson.annotation.JsonInclude;");
     }
     if (fieldType) {
       wanted.add("import uk.gov.hmcts.ccd.sdk.type.FieldType;");
@@ -2512,6 +2570,13 @@ public final class RetrofitPatchEmitter {
      */
     private final Map<String, String> retype = new LinkedHashMap<>();
     private final List<FieldModel> synthesise = new ArrayList<>();
+    /**
+     * True when the class receiving the synthesised block serialises null-valued properties (a
+     * class-level {@code @JsonInclude} with no explicit value, i.e. ALWAYS). Each synthesised field
+     * then carries its own {@code @JsonInclude(NON_NULL)} — see
+     * {@link #synthesisedFieldsNeedNonNull}.
+     */
+    private boolean synthesisedNeedsNonNull;
     /** Delegating getters to add for @JsonUnwrapped-reached complex-type grants (retrofit). */
     private final List<DelegatingGetter> delegatingGetters = new ArrayList<>();
     /** Simple name of a CaseDataExtra class to add as a prefix-less @JsonUnwrapped member (B2). */
@@ -2559,6 +2624,14 @@ public final class RetrofitPatchEmitter {
 
     void synthesise(String targetClass, List<FieldModel> fields) {
       this.synthesise.addAll(fields);
+    }
+
+    /**
+     * Records that the class receiving the synthesised block serialises null-valued properties, so
+     * each synthesised field needs its own {@code @JsonInclude(NON_NULL)}.
+     */
+    void includeSynthesisedWhenNonNull() {
+      this.synthesisedNeedsNonNull = true;
     }
 
     /**
@@ -2670,6 +2743,7 @@ public final class RetrofitPatchEmitter {
     boolean usesCcd;
     boolean usesJsonProperty;
     boolean usesFieldType;
+    boolean usesJsonInclude;
     final Set<String> accessClasses = new LinkedHashSet<>();
     /** Fully-qualified imports for synthesised-field types declared by simple name. */
     final Set<String> typeImports = new LinkedHashSet<>();

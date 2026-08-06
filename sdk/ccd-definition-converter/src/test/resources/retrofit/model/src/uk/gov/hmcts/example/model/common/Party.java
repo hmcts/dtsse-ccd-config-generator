@@ -75,4 +75,12 @@ public class Party {
   // The same shape, but something in the model calls this member's getter (SummaryReader): the retype
   // changes what that call returns, so it must be refused and reported rather than breaking the build.
   private SharedSummary readSummary;
+
+  // A member whose type carries a MARKER @JsonInclude (= ALWAYS): its synthesised members must each
+  // carry @JsonInclude(NON_NULL) so the published wire payload gains no null properties.
+  private AlwaysIncludedParty alwaysIncluded;
+
+  // The same with a VALUED @JsonInclude(NON_NULL): nulls are already suppressed class-wide, so no
+  // per-field annotation is added.
+  private NonNullIncludedParty nonNullIncluded;
 }

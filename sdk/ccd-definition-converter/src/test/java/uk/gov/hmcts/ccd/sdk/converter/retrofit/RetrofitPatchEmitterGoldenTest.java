@@ -511,6 +511,60 @@ class RetrofitPatchEmitterGoldenTest {
   }
 
   @Test
+  void marksSynthesisedFieldsNonNullOnClassesThatSerialiseNulls() {
+    // sscs Appellant/Appointee/Representative/OverrideFields: a class-level @JsonInclude with NO
+    // value means ALWAYS, so a synthesised definition-only field — which the team's code never
+    // populates — would add "<id>": null to every serialised instance. On a published library that
+    // is a breaking wire-format change (it surfaced as `Expected: pcqId but none found` in sscs's own
+    // should_deserialise_and_serialise). Each synthesised field therefore carries its own
+    // @JsonInclude(NON_NULL), and the file gains the import. The CCD definition is unaffected: the
+    // SDK derives CaseField rows from FIELDS and reads no Jackson inclusion setting.
+    RetrofitPatch patch = emitPatch();
+    String alwaysPatched = patchedContent(patch, "common/AlwaysIncludedParty.java");
+    assertThat(alwaysPatched)
+        .contains("synthesised definition-only fields")
+        .contains("@JsonInclude(JsonInclude.Include.NON_NULL)")
+        .contains("private String alwaysSynthField;")
+        .contains("import com.fasterxml.jackson.annotation.JsonInclude;");
+  }
+
+  @Test
+  void leavesSynthesisedFieldsUnannotatedWhenTheClassAlreadySuppressesNulls() {
+    // The complement: a VALUED @JsonInclude(NON_NULL) already suppresses nulls class-wide, so the
+    // per-field annotation would be redundant noise. Pins that the fix keys on the MARKER form alone
+    // rather than annotating every synthesis site.
+    RetrofitPatch patch = emitPatch();
+    RetrofitPatch.FilePatch file = filePatch(patch, "common/NonNullIncludedParty.java");
+    assertThat(file.patchedContent())
+        .contains("synthesised definition-only fields")
+        .contains("private String nonNullSynthField;");
+    // Asserted over ADDED lines only: the class's own declaration is literally
+    // `@JsonInclude(JsonInclude.Include.NON_NULL)`, so the whole-file text cannot distinguish.
+    assertThat(addedLines(file)).noneMatch(l -> l.contains("@JsonInclude"));
+  }
+
+  private static String patchedContent(RetrofitPatch patch, String pathSuffix) {
+    return filePatch(patch, pathSuffix).patchedContent();
+  }
+
+  private static RetrofitPatch.FilePatch filePatch(RetrofitPatch patch, String pathSuffix) {
+    return patch.files().stream()
+        .filter(f -> f.relativePath().endsWith(pathSuffix))
+        .findFirst()
+        .orElseThrow(() -> new AssertionError(pathSuffix + " not in patch"));
+  }
+
+  /** The lines this file patch adds — the original's own lines are excluded. */
+  private static java.util.List<String> addedLines(RetrofitPatch.FilePatch file) {
+    java.util.Set<String> original = file.originalContent().lines()
+        .map(String::trim)
+        .collect(java.util.stream.Collectors.toSet());
+    return file.patchedContent().lines()
+        .filter(l -> !original.contains(l.trim()))
+        .collect(java.util.stream.Collectors.toList());
+  }
+
+  @Test
   void synthesisesDefinitionOnlyFieldInDelimitedBlock() {
     String diff = emitPatch().unifiedDiff();
     assertThat(diff).contains("synthesised definition-only fields");
