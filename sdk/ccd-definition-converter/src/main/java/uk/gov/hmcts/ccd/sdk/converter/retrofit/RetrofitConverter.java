@@ -91,6 +91,13 @@ public final class RetrofitConverter {
     final PropertyResolver.Resolution resolution = matcher.resolution();
     final ModelSourceIndex.Type root = matcher.root();
 
+    // Let the placements resolve through a @JsonUnwrapped member whose Lombok getter the model
+    // suppresses, on the understanding that the patch below deletes the suppression. Installed HERE —
+    // after the matcher's report-only match above, whose measured floors must keep reflecting the model
+    // as it stands, and before any placement runs — so every placement records into the one plan the
+    // patch realises. See RetrofitUnsuppressedGetters for why the removal is wire-format-neutral.
+    index.repairSuppressedGetters(RetrofitUnsuppressedGetters.empty());
+
     // Reuse the team's State enum only when it is directly reusable (every definition state ID
     // resolves — proposal decision 3); otherwise generate a fresh State enum. The config binds to
     // whichever via EmitContext.stateClass().

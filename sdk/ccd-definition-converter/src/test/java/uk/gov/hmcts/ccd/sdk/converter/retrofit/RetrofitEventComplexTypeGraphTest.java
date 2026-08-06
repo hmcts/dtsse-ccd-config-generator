@@ -694,6 +694,50 @@ class RetrofitEventComplexTypeGraphTest {
   }
 
   @Test
+  void derivesTheGroupWhenTheSuppressedHoldersGetterWillBeRepaired(@TempDir Path work)
+      throws Exception {
+    Path src = work.resolve("src");
+    // sscs's shape (writeFinalDecision/otherPartyAttendedQuestions): the same suppressed-getter holder
+    // as above, but with the retrofit repair enabled. The patch will delete the
+    // @Getter(AccessLevel.NONE) — safe because @JsonUnwrapped already makes the field a visible
+    // property off the FIELD, so serialisation is unchanged — and the group therefore derives instead of
+    // holding a verbatim passthrough file alive. See RetrofitUnsuppressedGetters.
+    write(src, "m", "Hearing", "package m;\nimport lombok.Data;\n@Data\n"
+        + "public class Hearing {\n  private String hearingLength;\n}\n");
+    write(src, "m/dq", "Applicant1DQ", "package m.dq;\nimport lombok.Data;\nimport m.Hearing;\n@Data\n"
+        + "public class Applicant1DQ {\n  private Hearing applicant1DQHearing;\n}\n");
+    write(src, "m", "CaseData", "package m;\n"
+        + "import com.fasterxml.jackson.annotation.JsonUnwrapped;\n"
+        + "import lombok.AccessLevel;\nimport lombok.Data;\nimport lombok.Getter;\n"
+        + "import m.dq.Applicant1DQ;\n@Data\npublic class CaseData {\n"
+        + "  @JsonUnwrapped\n"
+        + "  @Getter(AccessLevel.NONE)\n"
+        + "  private Applicant1DQ applicant1DQ;\n}\n");
+
+    ModelSourceIndex index = ModelSourceIndex.parse(src);
+    RetrofitUnsuppressedGetters repairs = RetrofitUnsuppressedGetters.empty();
+    index.repairSuppressedGetters(repairs);
+    PropertyResolver.Resolution resolution =
+        new PropertyResolver(index).resolve(index.byFqn("m.CaseData").orElseThrow());
+    EventComplexTypeResolver resolver = new EventComplexTypeResolver(List.of(), PREDEFINED,
+        new RetrofitEventComplexTypeGraph(index, resolution,
+            index.byFqn("m.CaseData").orElseThrow(), RetrofitPlannedSynthesis.empty(),
+            RetrofitPlannedRetypes.empty(), RetrofitPinnedNames.empty()));
+    FieldModel field = FieldModel.builder()
+        .id("applicant1DQHearing").javaName("applicant1DQHearing").fieldType("Hearing").build();
+
+    Optional<EventComplexTypeResolver.RootPlacement> placement = resolver.rootPlacement(field);
+    assertThat(placement).as("the refusal is lifted by the planned repair").isPresent();
+    assertThat(placement.get().hops()).singleElement()
+        .satisfies(hop -> assertThat(hop.getGetter()).isEqualTo("getApplicant1DQ"));
+    // Resolving recorded the reliance, so the patch removes exactly this suppression.
+    assertThat(repairs.all()).singleElement()
+        .satisfies(u -> assertThat(u.memberName()).isEqualTo("applicant1DQ"));
+    assertThat(resolve(resolver, field, "hearingLength").getLeafGetter())
+        .isEqualTo("getHearingLength");
+  }
+
+  @Test
   void keepsTheDefinitionDerivedGetterForAFieldTheModelDoesNotDeclare(@TempDir Path work)
       throws Exception {
     Path src = work.resolve("src");

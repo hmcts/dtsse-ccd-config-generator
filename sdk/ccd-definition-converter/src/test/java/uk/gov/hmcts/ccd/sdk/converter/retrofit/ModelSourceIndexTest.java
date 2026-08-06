@@ -150,6 +150,129 @@ class ModelSourceIndexTest {
         .doesNotContainKey("Et3Links");
   }
 
+  // ---- suppressed-getter repair (RetrofitUnsuppressedGetters) ----
+
+  /**
+   * sscs's {@code SscsCaseData} shape: a {@code @JsonUnwrapped} member whose Lombok getter is
+   * suppressed, with a differently-named hand-written accessor that {@code PropertyUtils} would map to
+   * a non-existent field. The class-level {@code @Data} is what would otherwise generate the getter.
+   */
+  private static final String SUPPRESSED_UNWRAPPED_CASE_DATA = "package m;\n"
+      + "import com.fasterxml.jackson.annotation.JsonUnwrapped;\n"
+      + "import lombok.AccessLevel;\nimport lombok.Data;\nimport lombok.Getter;\n"
+      + "@Data\npublic class CaseData {\n"
+      + "  @JsonUnwrapped\n"
+      + "  @Getter(AccessLevel.NONE)\n"
+      + "  private FinalDecision finalDecisionCaseData;\n"
+      + "  public FinalDecision getSscsFinalDecisionCaseData() { return finalDecisionCaseData; }\n"
+      + "}\n";
+
+  @Test
+  void refusesASuppressedGetterUntilTheRepairIsEnabled(@TempDir Path work) throws Exception {
+    // The historical answer, which every non-retrofit caller (the matcher's report-only pass, generate
+    // mode) must keep seeing: the getter does not exist, so the placement refuses and the row falls back
+    // to verbatim passthrough rather than emitting an invalid method reference.
+    Path src = work.resolve("src");
+    write(src, "m", "FinalDecision",
+        "package m;\nimport lombok.Data;\n@Data\npublic class FinalDecision { private String a; }\n");
+    write(src, "m", "CaseData", SUPPRESSED_UNWRAPPED_CASE_DATA);
+    ModelSourceIndex index = ModelSourceIndex.parse(src);
+
+    assertThat(index.hasResolvableGetter(index.byFqn("m.CaseData").orElseThrow(),
+        "finalDecisionCaseData")).isFalse();
+    assertThat(index.unsuppressedGetters().isEmpty())
+        .as("nothing is planned when the repair is off")
+        .isTrue();
+  }
+
+  @Test
+  void resolvesASuppressedUnwrappedGetterAndRecordsTheRepair(@TempDir Path work) throws Exception {
+    // With the repair on, the getter resolves BECAUSE the patch will delete the suppression — and the
+    // reliance is recorded at that moment, so the patch removes exactly what was relied on.
+    Path src = work.resolve("src");
+    write(src, "m", "FinalDecision",
+        "package m;\nimport lombok.Data;\n@Data\npublic class FinalDecision { private String a; }\n");
+    write(src, "m", "CaseData", SUPPRESSED_UNWRAPPED_CASE_DATA);
+    ModelSourceIndex index = ModelSourceIndex.parse(src);
+    index.repairSuppressedGetters(RetrofitUnsuppressedGetters.empty());
+
+    assertThat(index.hasResolvableGetter(index.byFqn("m.CaseData").orElseThrow(),
+        "finalDecisionCaseData")).isTrue();
+    assertThat(index.unsuppressedGetters().all()).singleElement().satisfies(u -> {
+      assertThat(u.ownerFqn()).isEqualTo("m.CaseData");
+      assertThat(u.memberName()).isEqualTo("finalDecisionCaseData");
+      assertThat(u.file().getFileName().toString()).isEqualTo("CaseData.java");
+    });
+  }
+
+  @Test
+  void neverUnsuppressesAFieldJacksonCannotAlreadySee(@TempDir Path work) throws Exception {
+    // No @JsonUnwrapped: the field is private with no getter, so it is invisible to Jackson today and
+    // un-suppressing it would start serialising a brand-new property. The repair must refuse, leaving
+    // the placement to fall back as before.
+    Path src = work.resolve("src");
+    write(src, "m", "CaseData", "package m;\n"
+        + "import lombok.AccessLevel;\nimport lombok.Data;\nimport lombok.Getter;\n"
+        + "@Data\npublic class CaseData {\n"
+        + "  @Getter(AccessLevel.NONE)\n"
+        + "  private String secret;\n}\n");
+    ModelSourceIndex index = ModelSourceIndex.parse(src);
+    index.repairSuppressedGetters(RetrofitUnsuppressedGetters.empty());
+
+    assertThat(index.hasResolvableGetter(index.byFqn("m.CaseData").orElseThrow(), "secret"))
+        .isFalse();
+    assertThat(index.unsuppressedGetters().isEmpty()).isTrue();
+  }
+
+  @Test
+  void refusesToRepairASuppressionSharingItsLineWithTheDeclaration(@TempDir Path work)
+      throws Exception {
+    // The patch deletes a WHOLE line, so it can only remove a suppression that sits alone on one. This
+    // predicate is checked here, at record time, precisely so a placement can never resolve through a
+    // repair the emitter would then decline to make.
+    Path src = work.resolve("src");
+    write(src, "m", "FinalDecision",
+        "package m;\nimport lombok.Data;\n@Data\npublic class FinalDecision { private String a; }\n");
+    write(src, "m", "CaseData", "package m;\n"
+        + "import com.fasterxml.jackson.annotation.JsonUnwrapped;\n"
+        + "import lombok.AccessLevel;\nimport lombok.Data;\nimport lombok.Getter;\n"
+        + "@Data\npublic class CaseData {\n"
+        + "  @JsonUnwrapped @Getter(AccessLevel.NONE) private FinalDecision finalDecisionCaseData;\n"
+        + "}\n");
+    ModelSourceIndex index = ModelSourceIndex.parse(src);
+    index.repairSuppressedGetters(RetrofitUnsuppressedGetters.empty());
+
+    assertThat(index.hasResolvableGetter(index.byFqn("m.CaseData").orElseThrow(),
+        "finalDecisionCaseData")).isFalse();
+    assertThat(index.unsuppressedGetters().isEmpty()).isTrue();
+  }
+
+  @Test
+  void leavesAHandWrittenGetterOfTheStandardNameAlone(@TempDir Path work) throws Exception {
+    // The getter already exists, so the suppression is irrelevant and nothing must be edited: an
+    // un-suppression here would make Lombok generate a duplicate method.
+    Path src = work.resolve("src");
+    write(src, "m", "FinalDecision",
+        "package m;\nimport lombok.Data;\n@Data\npublic class FinalDecision { private String a; }\n");
+    write(src, "m", "CaseData", "package m;\n"
+        + "import com.fasterxml.jackson.annotation.JsonUnwrapped;\n"
+        + "import lombok.AccessLevel;\nimport lombok.Data;\nimport lombok.Getter;\n"
+        + "@Data\npublic class CaseData {\n"
+        + "  @JsonUnwrapped\n"
+        + "  @Getter(AccessLevel.NONE)\n"
+        + "  private FinalDecision finalDecisionCaseData;\n"
+        + "  public FinalDecision getFinalDecisionCaseData() { return finalDecisionCaseData; }\n"
+        + "}\n");
+    ModelSourceIndex index = ModelSourceIndex.parse(src);
+    index.repairSuppressedGetters(RetrofitUnsuppressedGetters.empty());
+
+    assertThat(index.hasResolvableGetter(index.byFqn("m.CaseData").orElseThrow(),
+        "finalDecisionCaseData")).isTrue();
+    assertThat(index.unsuppressedGetters().isEmpty())
+        .as("an existing getter needs no repair")
+        .isTrue();
+  }
+
   private static void write(Path root, String pkgPath, String simpleName, String body)
       throws Exception {
     Path dir = root.resolve(pkgPath);

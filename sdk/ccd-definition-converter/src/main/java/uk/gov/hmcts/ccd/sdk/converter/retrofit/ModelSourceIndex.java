@@ -5,6 +5,7 @@ import com.github.javaparser.ParseResult;
 import com.github.javaparser.ParserConfiguration;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.ImportDeclaration;
+import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import java.io.IOException;
@@ -716,6 +717,45 @@ final class ModelSourceIndex {
   private Set<String> calledMethodNames;
 
   /**
+   * The getter suppressions {@link #hasResolvableGetter} has resolved a placement through, which the
+   * patch must delete. Off by default (an inert plan nothing reads) so the matcher's report-only pass,
+   * generate mode and unit tests keep the historical refuse-and-fall-back answer; the retrofit
+   * conversion installs the real plan via {@link #repairSuppressedGetters}.
+   */
+  private RetrofitUnsuppressedGetters unsuppressedGetters = RetrofitUnsuppressedGetters.empty();
+  private boolean repairSuppressedGetters;
+  /**
+   * Source lines of the files a getter repair inspects, cached (see {@link #sourceLines}).
+   */
+  private final Map<Path, List<String>> sourceLinesByFile = new LinkedHashMap<>();
+  /**
+   * Files re-parsed WITH source positions for a getter repair, cached (see {@link #positionedUnit}).
+   */
+  private final Map<Path, CompilationUnit> positionedUnits = new LinkedHashMap<>();
+
+  /**
+   * Installs the plan {@link #hasResolvableGetter} records relied-upon getter un-suppressions into,
+   * enabling the repair. Called once per retrofit run by {@link RetrofitConverter}, before any
+   * placement runs, so every call site (the member walk, the page placement and the synthesis host
+   * choice) reads and records through the SAME plan the patch then realises.
+   *
+   * @param plan the plan to record into
+   */
+  void repairSuppressedGetters(RetrofitUnsuppressedGetters plan) {
+    this.unsuppressedGetters = plan;
+    this.repairSuppressedGetters = true;
+  }
+
+  /**
+   * The getter un-suppressions the placements have relied on so far, for the patch emitter to realise.
+   *
+   * @return the plan, empty when the repair is off or nothing needed it
+   */
+  RetrofitUnsuppressedGetters unsuppressedGetters() {
+    return unsuppressedGetters;
+  }
+
+  /**
    * Whether the model exposes a public getter for {@code fieldName} on {@code owner} (or a
    * superclass) that the SDK's {@code PropertyUtils} would map back to that exact field — i.e. a
    * {@code get<Field>()}/{@code is<Field>()} the config can reference as {@code Owner::get<Field>}.
@@ -730,9 +770,19 @@ final class ModelSourceIndex {
    * for such a field is an "invalid method reference" compile error (finding Bug4). This lets the
    * rebinder detect that case and route the affected placements away from the missing getter.
    *
+   * <p>A suppressed getter on a {@code @JsonUnwrapped} field is instead <em>repaired</em>: the retrofit
+   * patch deletes the {@code @Getter(AccessLevel.NONE)} so Lombok generates the getter the placement
+   * needs, and this method answers true. The reliance is recorded in
+   * {@link RetrofitUnsuppressedGetters} at the moment it flips the answer, so the patch removes exactly
+   * the suppressions the placements relied on and no others — see that class for why the removal is
+   * wire-format-neutral, and why it is scoped to unwrapped fields. Without a plan wired in (generate
+   * mode, the matcher's report-only pass, most unit tests) the suppression stands and the answer is
+   * false, i.e. the historical refuse-and-fall-back behaviour.
+   *
    * @param owner the class the field is declared on (walked up its {@code extends} chain)
    * @param fieldName the Java field name whose getter is needed
-   * @return true when a name-matching public getter exists (Lombok-generated or hand-written)
+   * @return true when a name-matching public getter exists (Lombok-generated or hand-written), or when
+   *     the patch will make Lombok generate one by un-suppressing it
    */
   boolean hasResolvableGetter(Type owner, String fieldName) {
     String capitalised = fieldName.isEmpty() ? fieldName
@@ -755,6 +805,11 @@ final class ModelSourceIndex {
       if (declaresField(current, fieldName)) {
         boolean lombokGetters = hasTypeLevelGetterGeneration(current);
         boolean suppressed = fieldGetterSuppressed(current, fieldName);
+        if (repairSuppressedGetters && lombokGetters && suppressed
+            && canUnsuppress(current, fieldName)) {
+          unsuppressedGetters.record(current, fieldName);
+          return true;
+        }
         return lombokGetters && !suppressed;
       }
       if (!current.decl.isClassOrInterfaceDeclaration()) {
@@ -764,6 +819,108 @@ final class ModelSourceIndex {
       current = extended.isEmpty() ? null : resolve(current.unit, extended.get(0)).orElse(null);
     }
     return false;
+  }
+
+  /**
+   * Whether a suppressed getter can be repaired by deleting the {@code @Getter(AccessLevel.NONE)}
+   * rather than refusing the placement. Two conditions:
+   *
+   * <ul>
+   *   <li>the field carries {@code @JsonUnwrapped} — Jackson already treats it as a visible property
+   *       off the FIELD, so adding the getter cannot change the wire format (see
+   *       {@link RetrofitUnsuppressedGetters}). An un-annotated private field with no getter is
+   *       invisible to Jackson today and un-suppressing it would start serialising a brand-new
+   *       property, so it is left refused;</li>
+   *   <li>the suppressing annotation sits ALONE on its own source line — which is what the patch
+   *       deletes. This is deliberately the same predicate {@code RetrofitPatchEmitter.renderFile}
+   *       applies (the trimmed source line equals the annotation's own text), read off the same file,
+   *       so a placement can never resolve through a repair the patch then declines to make. Where the
+   *       shapes could differ they differ safely: this index's parser pretty-prints the annotation
+   *       while the emitter's lexically-preserving parser reproduces the source verbatim, so an oddly
+   *       spaced {@code @Getter( AccessLevel.NONE )} fails HERE and the placement refuses as before.</li>
+   * </ul>
+   */
+  private boolean canUnsuppress(Type type, String fieldName) {
+    for (FieldDeclaration field : type.decl.getFields()) {
+      if (field.getVariables().stream().noneMatch(v -> v.getNameAsString().equals(fieldName))) {
+        continue;
+      }
+      boolean unwrapped = field.getAnnotations().stream().anyMatch(a -> {
+        String name = a.getNameAsString();
+        return name.equals("JsonUnwrapped") || name.endsWith(".JsonUnwrapped");
+      });
+      return unwrapped && suppressionIsSoloOnItsLine(type.file, fieldName);
+    }
+    return false;
+  }
+
+  /**
+   * Whether the field's {@code @Getter(AccessLevel.NONE)} occupies a whole source line by itself — the
+   * precondition the patch's line-deletion needs.
+   *
+   * <p>This index's own parser stores no token ranges (a deliberate heap trade-off: Civil parses 3500+
+   * files), so the AST it holds has no source positions to check. The one file in question is therefore
+   * re-parsed WITH positions, cached — only files that actually reach here are re-read, a handful per
+   * run. The check is then the same one {@code RetrofitPatchEmitter.renderFile} applies (the trimmed
+   * source line equals the annotation's own text) against the same file, so a placement cannot resolve
+   * through a repair the emitter would decline to make.
+   */
+  private boolean suppressionIsSoloOnItsLine(Path file, String fieldName) {
+    List<String> lines = sourceLines(file);
+    CompilationUnit positioned = positionedUnit(file);
+    if (positioned == null || lines.isEmpty()) {
+      return false;
+    }
+    for (TypeDeclaration<?> decl : positioned.findAll(TypeDeclaration.class)) {
+      for (FieldDeclaration field : decl.getFields()) {
+        if (field.getVariables().stream().noneMatch(v -> v.getNameAsString().equals(fieldName))) {
+          continue;
+        }
+        for (com.github.javaparser.ast.expr.AnnotationExpr a : field.getAnnotations()) {
+          String name = a.getNameAsString();
+          boolean isGetter = name.equals("Getter") || name.endsWith(".Getter");
+          if (!isGetter || !a.toString().contains("NONE")) {
+            continue;
+          }
+          int begin = a.getBegin().map(p -> p.line).orElse(-1);
+          int end = a.getEnd().map(p -> p.line).orElse(-1);
+          if (begin >= 1 && begin == end && begin <= lines.size()
+              && lines.get(begin - 1).trim().equals(a.toString())) {
+            return true;
+          }
+        }
+      }
+    }
+    return false;
+  }
+
+  /**
+   * The source lines of a parsed file, cached — read only for the handful of files a repair touches.
+   */
+  private List<String> sourceLines(Path file) {
+    return sourceLinesByFile.computeIfAbsent(file, f -> {
+      try {
+        return Files.readAllLines(f);
+      } catch (IOException e) {
+        return List.of();
+      }
+    });
+  }
+
+  /**
+   * One file re-parsed with source positions, cached. Null when it cannot be read or parsed (the caller
+   * then refuses the repair, which is the safe direction).
+   */
+  private CompilationUnit positionedUnit(Path file) {
+    return positionedUnits.computeIfAbsent(file, f -> {
+      JavaParser positioning = new JavaParser(new ParserConfiguration()
+          .setLanguageLevel(ParserConfiguration.LanguageLevel.JAVA_21));
+      try {
+        return positioning.parse(f).getResult().orElse(null);
+      } catch (IOException e) {
+        return null;
+      }
+    });
   }
 
   private static boolean declaresField(Type type, String fieldName) {

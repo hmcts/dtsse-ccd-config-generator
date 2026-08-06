@@ -73,6 +73,13 @@ public final class RetrofitPatchEmitter {
       "// ==== end synthesised definition-only fields ====";
   /** Checkstyle's line-length ceiling, which emitted lines must respect in the team's repo too. */
   private static final int MAX_EMITTED_LINE = 120;
+  /**
+   * Types an annotation is normally referenced WITH, whose import a removal may also leave unused:
+   * deleting {@code @Getter(AccessLevel.NONE)} typically removes the file's only mention of
+   * {@code AccessLevel}. Each is only dropped when the printed source no longer names it at all.
+   */
+  private static final Map<String, Set<String>> ANNOTATION_ARGUMENT_TYPES =
+      Map.of("Getter", Set.of("AccessLevel"));
 
   private final ModelSourceIndex index;
   private final Map<String, ResolvedProperty> properties;
@@ -131,6 +138,13 @@ public final class RetrofitPatchEmitter {
    * and in generate mode. See {@link RetrofitPinnedNames}.
    */
   private final RetrofitPinnedNames pinnedNames;
+  /**
+   * The {@code @Getter(AccessLevel.NONE)} suppressions the placements resolved through, which this
+   * patch deletes so Lombok generates the getters the emitted config references. Read off the index
+   * itself, so the plan the patch realises is by construction the one the placements recorded into —
+   * see {@link RetrofitUnsuppressedGetters}.
+   */
+  private final RetrofitUnsuppressedGetters unsuppressedGetters;
   /**
    * The SAME {@code simpleName → fqn} decisions the companion/config emitters bind their type
    * references with ({@code ConversionOptions.retrofitTypeFqnOverrides}), consulted before this
@@ -218,6 +232,7 @@ public final class RetrofitPatchEmitter {
       Map<String, String> typeFqnOverrides) {
     this.typeFqnOverrides = typeFqnOverrides == null ? Map.of() : typeFqnOverrides;
     this.pinnedNames = pinnedNames;
+    this.unsuppressedGetters = index.unsuppressedGetters();
     this.index = index;
     this.properties = resolution.properties;
     this.model = model;
@@ -389,6 +404,15 @@ public final class RetrofitPatchEmitter {
           editsFor(byFile, rootType.file).includeSynthesisedWhenNonNull();
         }
       }
+    }
+
+    // 4a. Un-suppress the Lombok getters the placements above resolved through: delete the
+    // @Getter(AccessLevel.NONE) from each @JsonUnwrapped member ModelSourceIndex recorded while
+    // answering hasResolvableGetter. Recorded, not re-derived, so the patch removes exactly the
+    // suppressions the member walk / page placement / synthesis host choice relied on — see
+    // RetrofitUnsuppressedGetters. Runs after every planning step so nothing recorded is missed.
+    for (RetrofitUnsuppressedGetters.Unsuppression u : unsuppressedGetters.all()) {
+      editsFor(byFile, u.file()).removeFieldAnnotation(u.memberName(), "Getter");
     }
 
     // 5. Delegating no-arg getters on the root class for AuthorisationComplexType grants whose complex
@@ -1426,11 +1450,43 @@ public final class RetrofitPatchEmitter {
     // The companion classes a retype points at, so their imports can be added when the retyped field's
     // own class does not already live in the model package the companions are emitted into.
     Set<String> retypeTargets = new LinkedHashSet<>();
+    // Whole source lines to delete, collected from both the class-level and the field-level annotation
+    // removals and applied in the single descending pass below.
+    Set<Integer> linesToDelete = new java.util.TreeSet<>(Comparator.reverseOrder());
+    // The annotation simple names actually deleted, so their now-possibly-unused imports can be
+    // stripped (checkstyle's unused-import rule, maxWarnings=0 on the retrofitted teams).
+    Set<String> deletedAnnotations = new LinkedHashSet<>();
 
     for (TypeDeclaration<?> type : unit.getTypes()) {
       for (FieldDeclaration fieldDecl : type.getFields()) {
         String member = fieldDecl.getVariable(0).getNameAsString();
         int pinLine = fieldFirstLine(fieldDecl);
+        // Field-level annotation removals: the getter-suppressing @Getter(AccessLevel.NONE) on a
+        // @JsonUnwrapped member whose getter a placement resolved through (see
+        // RetrofitUnsuppressedGetters). Deletes only a solo annotation line, exactly as the class-level
+        // removal below does — every occurrence in the retrofitted models is one, and skipping a shared
+        // line would leave the placement referencing a getter Lombok does not generate, so the shape is
+        // vetted BEFORE the plan is committed: ModelSourceIndex.suppressionIsSoloOnItsLine applies this
+        // same predicate to the same file, and refuses the placement when it does not hold.
+        Set<String> removeOnField = edits.removeFieldAnnotations.get(member);
+        if (removeOnField != null) {
+          for (AnnotationExpr a : fieldDecl.getAnnotations()) {
+            String simple = a.getNameAsString();
+            simple = simple.contains(".") ? simple.substring(simple.lastIndexOf('.') + 1) : simple;
+            if (!removeOnField.contains(simple)) {
+              continue;
+            }
+            int begin = a.getBegin().map(p -> p.line).orElse(-1);
+            int end = a.getEnd().map(p -> p.line).orElse(-1);
+            if (begin < 1 || begin != end) {
+              continue;
+            }
+            if (sourceLines.get(begin - 1).trim().equals(a.toString())) {
+              linesToDelete.add(begin);
+              deletedAnnotations.add(simple);
+            }
+          }
+        }
         // Re-declare the field as the generated companion class backing its definition complex type.
         // Planned in planRetypes (which refuses every shape where this would not compile); applied here
         // by replacing exactly the declared type's own token range on its own line, so a comment, an
@@ -1516,7 +1572,6 @@ public final class RetrofitPatchEmitter {
     // matching top-level annotation that sits alone on its own line and delete that whole line. Only a
     // solo annotation line is removed — an annotation sharing a line with other tokens is left as-is
     // (no such case arises for the @AllArgsConstructor this targets, and skipping keeps the edit safe).
-    Set<Integer> linesToDelete = new java.util.TreeSet<>(Comparator.reverseOrder());
     if (!edits.removeTypeAnnotations.isEmpty()) {
       for (TypeDeclaration<?> type : unit.getTypes()) {
         type.getAnnotations().forEach(a -> {
@@ -1532,6 +1587,7 @@ public final class RetrofitPatchEmitter {
           }
           if (sourceLines.get(begin - 1).trim().equals(a.toString())) {
             linesToDelete.add(begin);
+            deletedAnnotations.add(simple);
           }
         });
       }
@@ -1643,12 +1699,16 @@ public final class RetrofitPatchEmitter {
         needsJsonUnwrappedImport, needsJsonIgnoreImport, needsJsonIncludeImport, accessClasses,
         typeImports);
 
-    // A dropped class-level annotation leaves its import unused; strip it so checkstyle's unused-import
-    // rule stays clean (the retrofitted teams run maxWarnings=0). Only remove an import whose type no
-    // longer appears anywhere else in the printed source.
-    for (String removed : edits.removeTypeAnnotations) {
-      if (!linesToDelete.isEmpty()) {
-        printed = removeUnusedAnnotationImport(printed, removed);
+    // A dropped annotation leaves its import unused; strip it so checkstyle's unused-import rule stays
+    // clean (the retrofitted teams run maxWarnings=0). Only remove an import whose type no longer
+    // appears anywhere else in the printed source — the last @Getter(AccessLevel.NONE) in a file also
+    // takes lombok.Getter with it, but sscs keeps 21 more of them, so both imports rightly stay.
+    for (String removed : deletedAnnotations) {
+      printed = removeUnusedAnnotationImport(printed, removed);
+      // The suppressing annotation's ARGUMENT type goes unused with it: @Getter(AccessLevel.NONE) is
+      // the only reference to lombok.AccessLevel in most models.
+      for (String argType : ANNOTATION_ARGUMENT_TYPES.getOrDefault(removed, Set.of())) {
+        printed = removeUnusedTypeImport(printed, argType);
       }
     }
 
@@ -1683,6 +1743,36 @@ public final class RetrofitPatchEmitter {
       String t = line.trim();
       return t.startsWith("import ")
           && (t.endsWith("." + simpleName + ";") || t.equals("import " + simpleName + ";"));
+    });
+    return String.join("\n", lines);
+  }
+
+  /**
+   * Removes the {@code import …<simpleName>;} line for a type a dropped annotation referenced, when the
+   * simple name no longer appears as an identifier anywhere else in {@code source} — so deleting a
+   * file's last {@code @Getter(AccessLevel.NONE)} also drops its now-unused {@code lombok.AccessLevel}
+   * import. Conservative: any remaining mention (another suppression, an {@code AccessLevel.PRIVATE}
+   * elsewhere, a javadoc reference) keeps the import.
+   */
+  private static String removeUnusedTypeImport(String source, String simpleName) {
+    List<String> lines = new ArrayList<>(Arrays.asList(source.split("\n", -1)));
+    String importSuffix = "." + simpleName + ";";
+    // Scan every non-import line for the identifier; if it still occurs, the import is still needed.
+    java.util.regex.Pattern use =
+        java.util.regex.Pattern.compile("\\b" + java.util.regex.Pattern.quote(simpleName) + "\\b");
+    for (String line : lines) {
+      String trimmed = line.trim();
+      if (trimmed.startsWith("import ") && trimmed.endsWith(importSuffix)) {
+        continue;
+      }
+      if (use.matcher(line).find()) {
+        return source;
+      }
+    }
+    lines.removeIf(line -> {
+      String t = line.trim();
+      return t.startsWith("import ")
+          && (t.endsWith(importSuffix) || t.equals("import " + simpleName + ";"));
     });
     return String.join("\n", lines);
   }
@@ -2588,6 +2678,12 @@ public final class RetrofitPatchEmitter {
      */
     private final Set<String> removeTypeAnnotations = new LinkedHashSet<>();
     /**
+     * Java field name → annotation simple names to remove from that field's declaration — currently
+     * only {@code Getter}, dropping the {@code @Getter(AccessLevel.NONE)} that suppresses the getter a
+     * placement resolved through (see {@link RetrofitUnsuppressedGetters}).
+     */
+    private final Map<String, Set<String>> removeFieldAnnotations = new LinkedHashMap<>();
+    /**
      * Class simple name → the class-level {@code @ComplexType} to add to it, pinning the CCD type ID
      * the definition uses for a model class whose Java name differs from it (see
      * {@link #planComplexTypeId}).
@@ -2659,6 +2755,15 @@ public final class RetrofitPatchEmitter {
 
     void removeTypeAnnotation(String simpleName) {
       this.removeTypeAnnotations.add(simpleName);
+    }
+
+    /**
+     * Records that a field declaration must lose an annotation — the getter-suppressing
+     * {@code @Getter(AccessLevel.NONE)} on a {@code @JsonUnwrapped} member whose getter a placement
+     * resolved through.
+     */
+    void removeFieldAnnotation(String member, String simpleName) {
+      removeFieldAnnotations.computeIfAbsent(member, k -> new LinkedHashSet<>()).add(simpleName);
     }
 
     /**
