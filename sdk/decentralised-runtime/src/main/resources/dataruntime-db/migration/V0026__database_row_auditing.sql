@@ -28,10 +28,7 @@ declare
 begin
     audit_disabled := nullif(current_setting('ccd.audit_disabled', true), '');
     if lower(coalesce(audit_disabled, 'false')) in ('true', 'on', '1') then
-        if tg_op = 'DELETE' then
-            return old;
-        end if;
-        return new;
+        return null;
     end if;
 
     begin
@@ -71,9 +68,6 @@ begin
         case when tg_op in ('INSERT', 'UPDATE') then to_jsonb(new) end
     );
 
-    if tg_op = 'DELETE' then
-        return old;
-    end if;
-    return new;
+    return null;
 end;
 $$;
