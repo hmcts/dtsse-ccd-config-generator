@@ -872,6 +872,54 @@ Only 6 of et's 62 surplus IDs exist anywhere in its definition; the other 56 are
 has never heard of. These need a model-side rename by hand — the retrofit report flags each one as
 "reconcile the model type by hand" rather than guessing a binding.
 
+### Measured 2026-08-07 — `typeParameterClass` reachability round
+
+| Lane | Case type | Before | After | Δ |
+|---|---|---:|---:|---:|
+| sscs | `Benefit` | 1,704 | **615** | −1,089 |
+| probate | `GrantOfRepresentation` | 595 | **196** | −399 |
+| fpl | `CARE_SUPERVISION_EPO` | 2,277 | **1,894** | −383 |
+| civil | `CIVIL` | 2,106 | **1,921** | −185 |
+| prl | `PRLAPPS` | 2,390 | **2,352** | −38 |
+| et | `ET_EnglandWales` | 468 | **468** | 0 |
+| **total** | | **9,540** | **7,446** | **−2,094 (−22%)** |
+
+**The largest single round so far, and it closes the dominant `FixedLists` cause.** Per lane those rows
+went sscs 1,461 → 372, fpl 1,116 → 733, civil 1,094 → 909, probate 517 → 118, prl 142 → 108, et 3 → 3.
+
+`typeParameterOverride` only writes the `FieldTypeParameter` **column**. The `FixedLists`/`ComplexTypes`
+**rows** come from `ConfigResolver.resolve`'s reflection walk over the types `CaseData` *declares*, so a
+leaf field carrying only the override references a list nothing generates. That is precisely the shape
+reference data takes in these models: sscs really spells it `private String hearingEpimsId`, with 160-odd
+venue codes loaded at runtime via `VenueService`. Retyping the field to the companion enum was the
+obvious fix and the wrong one — it changes every caller and every serialised payload in a published jar.
+
+`@CCD(typeParameterClass = X.class)` instead makes X reachable exactly as a declared field type is,
+resolved *alongside* the declared type rather than instead of it so a `Collection<X>` field can do both.
+It reaches nothing for a field the definition excludes (`ignore`, `@JsonIgnore`, a non-matching `gate`),
+since an omitted field is never walked — the round above is what makes that true. The converter names
+the generated companion on any field whose override points at an ID no model type serves, mirroring
+`RetrofitModelRebinder`'s companion-drop conditions exactly, so it can never name a class that was never
+emitted; a list a model enum already serves is left alone, because declaration already reaches it.
+
+**One latent SDK defect surfaced on the way and is fixed in the same round.** Two reachable classes can
+map to a single CCD ID — the same simple name in different packages (prl has two `DocumentDetails`), or
+the same `@ComplexType(name)` — and merge into one output file under
+`JsonUtils.mergeInto(…, new AddMissing(), …)`, first writer winning. The reachable-type map was a
+`HashMap` keyed on `Class`, so the winner followed identity-hash iteration order: it varied between JVM
+runs and rehashed whenever an unrelated type became reachable. Adding the new enums flipped prl's pair,
+and the unannotated class blanked the annotated one's `ElementLabel`s down to the `" "` placeholder. The
+map is now insertion-ordered (`ComplexTypeGenerator` collects into a `LinkedHashMap` rather than losing
+that order again through `Collectors.toMap`), and `AddMissingPreferringLabels` lets a real label displace
+the placeholder from either side, so the outcome no longer depends on order at all. Two real labels still
+disagree rather than silently merging. prl `ComplexTypes` 708 → 704 — below where it sat *before* this
+round. `ConfigResolverOrderTest` pins the ordering; `JsonUtilsTest` pins the merge in both directions.
+
+**The `FixedLists` tails that remain** — civil 909, fpl 733, sscs 372, probate 118, prl 108 — no longer
+share this cause and need their own decomposition. sscs's own remainder is now led by `State` labels
+(65 lines, deliberately held back from this change) and `eventType`'s 247 unexpected rows, a constant-set
+divergence that is not safely automatable because their code switches on the enum.
+
 ## What the round-trip does not prove
 
 The proof is narrower than "the seven fixtures round-trip byte-clean" — know its limits before
