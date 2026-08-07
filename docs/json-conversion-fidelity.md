@@ -771,9 +771,10 @@ share one root cause:
 
 `ComplexTypes`' 2,890 lines are led by whole types the SDK emits that the definition never declares
 (ET 447 unexpected rows, of which `AdhocReportType` alone is 141, `ListingData` 35 — internal report
-models reachable from `CaseData` but absent from the definition; they need `@CCD(ignore = true)`), and
-by per-member column divergence (prl 465, fpl 167, civil 121 — `Searchable`, `FieldType`,
-`ElementLabel`, `FieldShowCondition`).
+models reachable from `CaseData` but absent from the definition), and by per-member column divergence
+(prl 465, fpl 167, civil 121 — `Searchable`, `FieldType`, `ElementLabel`, `FieldShowCondition`). The
+first group splits in two, and only one half is automatable — see the ignored-field reachability round
+below.
 
 ### Measured 2026-08-07 — FixedLists `ListElement` label round
 
@@ -827,6 +828,49 @@ make).
 **Residual tail: 94 lines** (sscs 44, civil 34, prl 9, fpl 6, probate 1) — lists whose ID is *also* a
 `ComplexTypes` ID, where the complex-type class takes the name and no enum is generated at all
 (civil's `GeneralApplicationTypesGAspec`, `Language`), so there is no constant to pin.
+
+### Measured 2026-08-07 — ignored-field reachability round
+
+| Lane | Case type | Before | After | Δ |
+|---|---|---:|---:|---:|
+| civil | `CIVIL` | 2,190 | **2,106** | −84 |
+| et | `ET_EnglandWales` | 552 | **468** | −84 |
+| prl | `PRLAPPS` | 2,463 | **2,390** | −73 |
+| sscs | `Benefit` | 1,707 | **1,704** | −3 |
+| probate | `GrantOfRepresentation` | 598 | **595** | −3 |
+| fpl | `CARE_SUPERVISION_EPO` | 2,277 | **2,277** | 0 |
+| **total** | | **9,787** | **9,540** | **−247 (−3%)** |
+
+Unlike the two rounds above, this one is an **SDK** change, not a patch-emission change: the patches
+already carried the right annotations (et's alone has 163 `@CCD(ignore = true)`), and the generator
+emitted the rows anyway.
+
+`ConfigResolver.resolve` walks `CaseData`'s field graph to build the reachable-type set behind
+`getTypes()`, whose only two consumers are `ComplexTypeGenerator` and `FixedListGenerator`. Its field
+predicate filtered `isFieldGatedOff` but deliberately *not* `isFieldIgnored` — so a complex type
+reachable **only** through `@CCD(ignore = true)`/`@JsonIgnore` fields still emitted a full set of
+`ComplexTypes` rows, declaring a type no `CaseField` row references (those same fields are already
+dropped from `CaseField`, `AuthorisationCaseField` and `CaseEventToFields`). Swapping the predicate to
+`isFieldIgnored` subsumes the gated-off case, so `@CCD(gate)`'s documented promise — "excluded from
+complex-type member emission and from complex-type reachability" — now holds for `ignore` too. A type
+reached by an ignored field *and* a live one is unaffected; `IgnoredReachGenerationTest` pins all three
+polarities.
+
+**This closes the half of the unexpected-`ComplexTypes` bucket that reachability can close.** Per lane
+those rows went civil 207 → 156, prl 179 → 104, et 447 → 363, probate 50 → 47, sscs 45 → 45,
+fpl 156 → 156.
+
+**What remains is a type-*naming* divergence, and it is not automatable.** The surviving types are
+reached by **live** fields, so filtering is right to leave them — the definition simply calls the type
+something the model's Java type cannot produce. et's remainder is dominated by one subtree: the live
+fields `printHearingDetails`/`printHearingCollection` are declared `ListingData`, but the definition
+types them `ListingType` — which is not an SDK `FieldType` constant, so it cannot be expressed as
+`@CCD(typeOverride)` either, and `AdhocReportType` (141 lines) hangs beneath it. Same signature for
+`UpdateReferralType` (live `ListTypeItem<UpdateReferralType> updateReferralCollection`, 13 lines) and
+`UploadedDocumentType` (live `et1VettingDocument`, which the definition types `Document`, 6 lines).
+Only 6 of et's 62 surplus IDs exist anywhere in its definition; the other 56 are types the definition
+has never heard of. These need a model-side rename by hand — the retrofit report flags each one as
+"reconcile the model type by hand" rather than guessing a binding.
 
 ## What the round-trip does not prove
 
