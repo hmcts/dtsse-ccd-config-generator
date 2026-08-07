@@ -247,6 +247,29 @@ public class Application {
 
 `LocalDateTime` classes are mapped to the CCD `DateTime` type so the complex type `Application` will have a single `DateTime` field.
 
+### Naming a type no field declares
+
+`typeParameterOverride` only writes the `FieldTypeParameter` column; the `FixedLists`/`ComplexTypes`
+**rows** come from the types reflection reaches from the case-data class. So a field that names a list
+without declaring it — the shape reference data really takes, where the codes are loaded at runtime and
+the field stays a `String` — references a list nothing generates. `typeParameterClass` names the class
+supplying those rows, making it reachable exactly as a declared field type is:
+
+```java
+  @CCD(
+    label = "Hearing venue",
+    typeOverride = FixedList,
+    typeParameterOverride = "FL_hearingVenues",
+    typeParameterClass = HearingVenues.class
+  )
+  private String hearingVenue;
+```
+
+`HearingVenues` is an ordinary `HasLabel` enum carrying `@ComplexType(name = "FL_hearingVenues")`, so
+its rows are emitted under the ID the field references. The field keeps its declared type, so no caller
+or serialised payload changes. It has no effect on a field the definition excludes (`ignore` or a
+non-matching `gate`) — an omitted field reaches nothing.
+
 ### Generation-time environment gates
 
 `@CCD(gate = "[!]ENV_VAR:value")` makes a field part of the generated definition only when an

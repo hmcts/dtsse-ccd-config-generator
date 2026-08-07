@@ -356,8 +356,9 @@ public final class RetrofitPatchEmitter {
       if (property == null) {
         continue; // synthesised below
       }
+      FieldModel annotated = withTypeParameterClass(field);
       editsFor(byFile, property.ownerFile)
-          .annotate(property.memberName, field, renameFor(property, field));
+          .annotate(property.memberName, annotated, renameFor(property, annotated));
     }
 
     // 2. Unmatched Java fields → @CCD(ignore = true).
@@ -1110,6 +1111,44 @@ public final class RetrofitPatchEmitter {
   }
 
   /**
+   * Names the companion enum behind a field's {@code typeParameterOverride} as
+   * {@code @CCD(typeParameterClass)}, when nothing in the model declares that type.
+   *
+   * <p>A {@code typeParameterOverride} only writes the {@code FieldTypeParameter} column, while the
+   * {@code FixedLists} rows come from the types reachable by reflection from the case-data class. So a
+   * field left as {@code String} — which is how a team really models a large reference-data list, and
+   * which the SDK cannot infer a list from — referenced a list whose rows nothing generated. Naming the
+   * companion makes it reachable without retyping the field, so no caller or serialised payload in the
+   * team's model changes.
+   *
+   * <p>Only ever names a companion that IS emitted: when {@link #backingEnum} finds a model enum the
+   * SDK already reaches it through that enum (which the rebinder's drop relies on), and the two must
+   * not disagree about which list an enum serves. A list absent from the definition's own set gets
+   * nothing rather than a guess at a class name.
+   */
+  private FieldModel withTypeParameterClass(FieldModel field) {
+    String listId = field.getTypeParameterOverride();
+    if (listId == null || listId.isEmpty() || field.getTypeParameterClassName() != null) {
+      return field;
+    }
+    if (backingEnum(listId) != null) {
+      return field; // a model enum serves this ID: reflection reaches it as a declared type already
+    }
+    // Name it only when a companion is actually emitted for the ID. RetrofitModelRebinder drops a list
+    // whose ID names an existing top-level model type (fpl's HearingVenue is a @Data address class, not
+    // an enum) or which binds by declaration — in both cases no companion is generated, and naming one
+    // would emit a @CCD referencing a class that does not exist.
+    if (index.hasTopLevelType(listId) || declaredTypeBindings.containsKey(listId)) {
+      return field;
+    }
+    return definitionFixedLists.stream()
+        .filter(list -> listId.equals(list.getId()))
+        .findFirst()
+        .map(list -> field.toBuilder().typeParameterClassName(list.getJavaClassName()).build())
+        .orElse(field);
+  }
+
+  /**
    * The model enum backing a definition {@code FixedLists} ID: the declared-type binding when there is
    * one, else the enum whose simple name is the ID itself.
    */
@@ -1180,7 +1219,7 @@ public final class RetrofitPatchEmitter {
           // as the root CaseData fields are reconciled in RetrofitModelRebinder — so a nested
           // List<Wrapper> member (SSCS's ReasonableAdjustmentsLetters.List<Correspondence>) gets its
           // typeParameterOverride instead of a bare label-only @CCD.
-          FieldModel reconciled = reconciler.reconcile(member, property);
+          FieldModel reconciled = withTypeParameterClass(reconciler.reconcile(member, property));
           editsFor(byFile, property.ownerFile)
               .annotate(property.memberName, reconciled, renameFor(property, reconciled));
         }
@@ -1633,6 +1672,9 @@ public final class RetrofitPatchEmitter {
     // The companion classes a retype points at, so their imports can be added when the retyped field's
     // own class does not already live in the model package the companions are emitted into.
     Set<String> retypeTargets = new LinkedHashSet<>();
+    // Likewise for the companion enums named by @CCD(typeParameterClass) rather than declared, which
+    // need the same cross-package import even though the field's own type is unchanged.
+    Set<String> typeParameterClasses = new LinkedHashSet<>();
     // Whole source lines to delete, collected from both the class-level and the field-level annotation
     // removals and applied in the single descending pass below.
     Set<Integer> linesToDelete = new java.util.TreeSet<>(Comparator.reverseOrder());
@@ -1709,6 +1751,9 @@ public final class RetrofitPatchEmitter {
             added.add(ccd);
             needsCcdImport = true;
             needsFieldTypeImport |= renderer.usesFieldType(field);
+            if (field.getTypeParameterClassName() != null) {
+              typeParameterClasses.add(field.getTypeParameterClassName());
+            }
             if (field.getAccessClassNames() != null) {
               accessClasses.addAll(field.getAccessClassNames());
             }
@@ -1882,6 +1927,16 @@ public final class RetrofitPatchEmitter {
         .map(p -> p.getNameAsString()).orElse(null);
     if (!retypeTargets.isEmpty() && modelPackage != null && !modelPackage.equals(filePackage)) {
       for (String target : retypeTargets) {
+        typeImports.add("import " + modelPackage + "." + target + ";");
+      }
+    }
+
+    // Same rule for a @CCD(typeParameterClass) reference: the class named is a companion enum in the
+    // model package, so a field declared in another package needs the import. Unlike a retype the
+    // field's own declared type is untouched — only the annotation names the class.
+    if (!typeParameterClasses.isEmpty() && modelPackage != null
+        && !modelPackage.equals(filePackage)) {
+      for (String target : typeParameterClasses) {
         typeImports.add("import " + modelPackage + "." + target + ";");
       }
     }

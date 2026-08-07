@@ -42,6 +42,19 @@ public class FieldModel {
   /** Value for @CCD(typeParameterOverride), or null. */
   String typeParameterOverride;
 
+  /**
+   * Simple name of the companion enum backing {@link #typeParameterOverride}, emitted as
+   * {@code @CCD(typeParameterClass)}; null when the field declares the type itself (so reflection
+   * already reaches it) or no companion is generated for the ID.
+   *
+   * <p>Retrofit-only. A {@code typeParameterOverride} is just a string written into the
+   * {@code FieldTypeParameter} column, whereas the {@code FixedLists} rows come from the types
+   * reachable from the case-data class — so a {@code String} field carrying only the override names a
+   * list whose rows nothing generates. Naming the class closes that gap without retyping the field,
+   * which would change every caller and serialised payload in the team's model.
+   */
+  String typeParameterClassName;
+
   String label;
   String hint;
   String showCondition;

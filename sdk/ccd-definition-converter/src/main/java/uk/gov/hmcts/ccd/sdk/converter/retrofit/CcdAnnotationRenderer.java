@@ -113,6 +113,9 @@ final class CcdAnnotationRenderer {
     if (field.getTypeParameterOverride() != null && !field.getTypeParameterOverride().isEmpty()) {
       members.add("typeParameterOverride = " + quote(field.getTypeParameterOverride()));
     }
+    if (field.getTypeParameterClassName() != null && !field.getTypeParameterClassName().isEmpty()) {
+      members.add("typeParameterClass = " + field.getTypeParameterClassName() + ".class");
+    }
     if (field.getGate() != null && !field.getGate().isEmpty()) {
       members.add("gate = " + quote(field.getGate()));
     }

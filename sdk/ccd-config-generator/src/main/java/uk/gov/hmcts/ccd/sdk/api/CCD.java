@@ -42,6 +42,32 @@ public @interface CCD {
 
   String typeParameterOverride() default "";
 
+  /**
+   * The class that declares the type {@link #typeParameterOverride()} names, when no field in the
+   * model <em>declares</em> that type. Setting it makes the class part of the generated definition:
+   * it is reached by complex-type resolution exactly as a declared field type is, so an enum emits
+   * its {@code FixedLists} rows and a class its {@code ComplexTypes} rows. {@link Void} (the
+   * default) means the field reaches no additional type.
+   *
+   * <p>Needed because {@code typeParameterOverride} is only a string written into the
+   * {@code FieldTypeParameter} column, while {@code FixedLists}/{@code ComplexTypes} rows come from
+   * reflection over the types reachable from the case-data class. A field declared as a
+   * {@code String} carrying {@code typeParameterOverride} therefore emits a
+   * {@code FieldTypeParameter} referencing a list the definition never declares — the reference is
+   * there but the rows behind it are not.
+   *
+   * <p>This is the shape a large reference-data list takes in a hand-written definition: the field
+   * is a {@code String} because no team would spell 160-odd venue codes as an enum, so the list
+   * exists only in the definition. Naming the enum here keeps the field's declared type — and hence
+   * every caller and serialised payload — untouched, while the enum supplies the rows and, through
+   * {@code @ComplexType(name)}, the list ID.
+   *
+   * <p>The class is reached only when the field itself is part of the definition: an
+   * {@code ignore = true}, {@code @JsonIgnore} or gated-off field reaches nothing, exactly as it
+   * contributes no rows of its own.
+   */
+  Class<?> typeParameterClass() default Void.class;
+
   String categoryID() default "";
 
   Class<? extends HasAccessControl>[] access() default {};

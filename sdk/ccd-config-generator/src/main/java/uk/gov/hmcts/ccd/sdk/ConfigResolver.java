@@ -13,6 +13,7 @@ import lombok.SneakyThrows;
 import org.springframework.core.ResolvableType;
 import org.springframework.util.ClassUtils;
 import org.springframework.util.ReflectionUtils;
+import uk.gov.hmcts.ccd.sdk.api.CCD;
 import uk.gov.hmcts.ccd.sdk.api.CCDConfig;
 import uk.gov.hmcts.ccd.sdk.api.HasRole;
 
@@ -70,8 +71,15 @@ class ConfigResolver<T, S, R extends HasRole> {
     ReflectionUtils.doWithFields(
         dataClass,
         field -> {
-          Class c = getComplexType(dataClass, field);
-          if (null != c && !c.equals(dataClass)) {
+          // A field may name a type it does not declare, via @CCD(typeParameterClass): the field is a
+          // String (or another leaf) carrying typeParameterOverride, and the class supplying the rows
+          // for that list ID is reachable nowhere else. Resolve it alongside the declared type rather
+          // than instead of it — a Collection<X> field can legitimately do both.
+          Class declared = getComplexType(dataClass, field);
+          for (Class c : new Class[] {declared, typeParameterClass(field)}) {
+            if (null == c || c.equals(dataClass)) {
+              continue;
+            }
             JsonUnwrapped unwrapped = field.getAnnotation(JsonUnwrapped.class);
 
             // unwrapped properties are automatically ignored as complex types
@@ -100,6 +108,18 @@ class ConfigResolver<T, S, R extends HasRole> {
         field -> !Modifier.isStatic(field.getModifiers())
             && !FieldUtils.isFieldIgnored(field));
     path.remove(dataClass);
+  }
+
+  /**
+   * The class named by {@code @CCD(typeParameterClass)} on this field, or null when unset. Void is
+   * the annotation's "unset" marker and never a reachable type.
+   */
+  private static Class<?> typeParameterClass(Field field) {
+    CCD annotation = field.getAnnotation(CCD.class);
+    if (annotation == null || Void.class.equals(annotation.typeParameterClass())) {
+      return null;
+    }
+    return annotation.typeParameterClass();
   }
 
   public static Class getComplexType(Class c, Field field) {

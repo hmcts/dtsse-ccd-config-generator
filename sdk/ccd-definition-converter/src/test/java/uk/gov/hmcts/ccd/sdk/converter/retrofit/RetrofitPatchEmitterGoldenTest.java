@@ -149,6 +149,16 @@ class RetrofitPatchEmitterGoldenTest {
         .collect(java.util.stream.Collectors.toList());
   }
 
+  /** The lines this file patch adds — the original's own lines are excluded. */
+  private static java.util.List<String> addedLines(RetrofitPatch.FilePatch file) {
+    java.util.Set<String> original = file.originalContent().lines()
+        .map(String::trim)
+        .collect(java.util.stream.Collectors.toSet());
+    return file.patchedContent().lines()
+        .filter(l -> !original.contains(l.trim()))
+        .collect(java.util.stream.Collectors.toList());
+  }
+
   @Test
   void writesTypeParameterOverrideOnNestedComplexTypeCollectionMember() {
     // Bug A2 (sscs): a concrete value-wrapper collection member of a COMPLEX TYPE (Party.attachments
@@ -339,6 +349,50 @@ class RetrofitPatchEmitterGoldenTest {
     RetrofitPatch patch = emitPatch();
     assertThat(patchedFile(patch, "enums/HandoffReasonId.java"))
         .contains("@ComplexType(name = \"handoffReasonFixedList\", generate = true)");
+  }
+
+  @Test
+  void namesTheCompanionBehindAFixedListNoFieldDeclares() {
+    // sscs's hearingEpimsId shape, and the largest single cause of residual across the lanes (~1,095
+    // lines on sscs alone): 160-odd venue codes are loaded at runtime, so the team really models the
+    // field as a String. A typeParameterOverride only writes the FieldTypeParameter column, while the
+    // FixedLists ROWS come from the types reflection reaches — so the field named a list nothing
+    // generated. @CCD(typeParameterClass) makes the generated companion reachable without retyping the
+    // field, which would change every caller and serialised payload in a published jar.
+    RetrofitPatch patch = emitPatch();
+    String patched = patchedFile(patch, "model/CaseData.java");
+    assertThat(patched)
+        .contains("typeParameterOverride = \"FL_hearingVenues\"")
+        .contains("typeParameterClass = HearingVenues.class")
+        // The declaration is untouched — that is the point of naming the class rather than retyping.
+        .contains("private String hearingVenue;");
+  }
+
+  @Test
+  void namesTheCompanionOnAComplexTypeMemberAndImportsItAcrossPackages() {
+    // The same reach gap on a nested member rather than a root field, so the two annotate sites cannot
+    // drift apart. Party.crossKind is declared as the CLASS CrossKindPayload while the definition says
+    // FixedList(crossKindFixedList) — the cross-kind binding is refused, so a companion enum IS
+    // generated for that ID and naming it is what makes its rows appear. The companion lands in the
+    // model package, which is Party's own package's parent, so the patch must add the import too.
+    String patched = patchedFile(emitPatch(), "common/Party.java");
+    assertThat(patched)
+        .contains("typeParameterClass = CrossKindFixedList.class")
+        .contains("import " + MODEL_PACKAGE + ".CrossKindFixedList;");
+  }
+
+  @Test
+  void namesNoCompanionForAListAModelEnumAlreadyServes() {
+    // The guard: a list whose rows come from a model enum is ALREADY reachable as a declared field type,
+    // so naming a class here would either name one that was never generated (the rebinder drops the
+    // companion whenever an enum serves the ID) or disagree with the FixedLists pin about which list
+    // that enum serves. ClaimType is reached by its own field's declaration; handoffReasonFixedList is
+    // bound by declaration to HandoffReasonId, which the patch pins the ID onto instead.
+    String diff = emitPatch().unifiedDiff();
+    assertThat(addedLines(diff))
+        .noneMatch(l -> l.contains("typeParameterClass = ClaimType.class"))
+        .noneMatch(l -> l.contains("typeParameterClass = HandoffReasonId.class"))
+        .noneMatch(l -> l.contains("typeParameterClass = HandoffReasonFixedList.class"));
   }
 
   @Test
@@ -811,15 +865,6 @@ class RetrofitPatchEmitterGoldenTest {
         .orElseThrow(() -> new AssertionError(pathSuffix + " not in patch"));
   }
 
-  /** The lines this file patch adds — the original's own lines are excluded. */
-  private static java.util.List<String> addedLines(RetrofitPatch.FilePatch file) {
-    java.util.Set<String> original = file.originalContent().lines()
-        .map(String::trim)
-        .collect(java.util.stream.Collectors.toSet());
-    return file.patchedContent().lines()
-        .filter(l -> !original.contains(l.trim()))
-        .collect(java.util.stream.Collectors.toList());
-  }
 
   @Test
   void synthesisesDefinitionOnlyFieldInDelimitedBlock() {

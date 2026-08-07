@@ -49,6 +49,12 @@ public class CaseData extends BaseCaseData {
   // The pin must match rows on the raw ListElementCode too, not just the sanitised constant.
   private CamelConstantList camelConstant;
 
+  // A large reference-data FixedList the team really models as a String (sscs's hearingEpimsId, 160-odd
+  // venue codes loaded at runtime): nothing DECLARES the list's type, so reflection reaches no rows for
+  // it and the typeParameterOverride alone names a list the SDK never emits. The patch must name the
+  // generated companion with @CCD(typeParameterClass) rather than retype the field.
+  private String hearingVenue;
+
   // Rule: generic wrapper collection List<ListValue<Party>> -> Collection of Party (EXACT when the
   // definition's FieldTypeParameter is Party).
   private List<ListValue<Party>> parties;

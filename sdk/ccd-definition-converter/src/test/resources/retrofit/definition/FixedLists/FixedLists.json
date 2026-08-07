@@ -2,6 +2,8 @@
   { "ID": "handoffReasonFixedList", "ListElementCode": "INTERPRETER", "ListElement": "Interpreter required" },
   { "ID": "handoffReasonFixedList", "ListElementCode": "TRUST_CORP", "ListElement": "Trust corporation" },
   { "ID": "crossKindFixedList", "ListElementCode": "ONE", "ListElement": "One" },
+  { "ID": "FL_hearingVenues", "ListElementCode": "219164", "ListElement": "Aberdeen" },
+  { "ID": "FL_hearingVenues", "ListElementCode": "450049", "ListElement": "Aldershot" },
   { "ID": "ClaimType", "ListElementCode": "PERSONAL_INJURY", "ListElement": "Personal injury" },
   { "ID": "ClaimType", "ListElementCode": "CONTRACT", "ListElement": "A \"contract\" dispute,\nover multiple lines" },
   { "ID": "ClaimType", "ListElementCode": "DEBT", "ListElement": "DEBT" },
