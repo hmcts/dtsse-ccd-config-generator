@@ -13,6 +13,7 @@ import uk.gov.hmcts.ccd.sdk.converter.api.EmitContext;
 import uk.gov.hmcts.ccd.sdk.converter.ir.DefinitionIr;
 import uk.gov.hmcts.ccd.sdk.converter.link.DefaultDefinitionLinker;
 import uk.gov.hmcts.ccd.sdk.converter.model.CaseTypeModel;
+import uk.gov.hmcts.ccd.sdk.converter.model.FixedListModel;
 import uk.gov.hmcts.ccd.sdk.converter.model.gap.GapCollector;
 
 /**
@@ -232,6 +233,9 @@ public final class RetrofitConverter {
     // emitters. The rebind rewrites getters/fields onto the team's model and drops any FixedList
     // reused from a model enum. We capture the rebound model for the patch emitter.
     CaseTypeModel[] reboundHolder = new CaseTypeModel[1];
+    // The linker's own fixed lists, captured before the rebind below drops the ones a model enum already
+    // serves — those are exactly the enums whose constants carry the definition's ListElement labels.
+    List<FixedListModel>[] linkedFixedLists = new List[1];
     // Append the companion complex-type emitter for the DEFINITION-ONLY complex types (those with no
     // model class). It needs the parsed index + model package, so it is passed in here rather than
     // wired in the static ConverterFactory.
@@ -239,6 +243,7 @@ public final class RetrofitConverter {
             List.of(new RetrofitComplexTypeEmitter(index, modelPackage, declaredBindings.keySet())))
         .toBuilder()
         .modelTransform((model, gaps) -> {
+          linkedFixedLists[0] = model.getFixedLists();
           CaseTypeModel rebound = rebinder.rebind(model, gaps);
           reboundHolder[0] = rebound;
           return rebound;
@@ -261,6 +266,7 @@ public final class RetrofitConverter {
         EmitContext.accessPackage(options.getConfigPackage()),
         constructorLimit, pathPrefix, pinnedNames, fqnOverrides);
     emitter.bindDeclaredTypes(declaredBindings);
+    emitter.bindDefinitionFixedLists(linkedFixedLists[0]);
     RetrofitPatch patch = emitter.emit();
     writePatch(reportDir, patch);
     // Surface any synthesised-field name collisions the emitter skipped (finding B1) so they are not
@@ -345,6 +351,9 @@ public final class RetrofitConverter {
         EmitContext.accessPackage(options.getConfigPackage()), constructorLimit, pathPrefix,
         RetrofitPinnedNames.empty(), planOptions.getRetrofitTypeFqnOverrides());
     planner.bindDeclaredTypes(declaredBindings);
+    // The LINKED lists, not the rebound ones: the rebind drops exactly the lists a model enum already
+    // serves, which is the set whose constants the label pin targets.
+    planner.bindDefinitionFixedLists(linked.getFixedLists());
     return planner;
   }
 

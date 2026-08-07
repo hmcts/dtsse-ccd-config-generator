@@ -753,13 +753,8 @@ for `ComplexTypes`).
 `FixedLists` now leads five of the six lanes. Its 6,480 lines are three shapes, and the dominant two
 share one root cause:
 
-- **`ListElement` label (≈2,205 lines** — prl 949, civil 546, fpl 482, sscs 210, probate 18**).**
-  `FixedListGenerator` reads a constant's label from `HasLabel.getLabel()`, `@CCD(label)`, `@CCD(hint)`,
-  else the constant name itself. Teams' enums carry a label but not through that contract — fpl's
-  `ApplicationDocumentType` has `getLabel(Language)`, prl's `SpokenOrWrittenWelshEnum` exposes
-  `@JsonValue getDisplayedValue()` — so the generator falls through to the constant and emits
-  `ListElement == ListElementCode`. Not yet fixed: it needs either a generated `HasLabel` delegating to
-  the team's existing label member, or a `FixedListGenerator` that reads a `@CCD`-marked accessor.
+- **`ListElement` label (2,111 lines** — prl 940, civil 512, fpl 477, sscs 165, probate 17**).**
+  **Fixed** in the round below.
 - **List declared but not emitted (≈2,760 no-match lines)** — and **≈1,500 emitted under the wrong ID**
   (the mirror image, an unexpected actual row). Both are the *same* miss: the field referencing the list
   is declared as `String` carrying `@CCD(typeOverride = FixedList, typeParameterOverride = "<id>")`, so
@@ -779,6 +774,59 @@ share one root cause:
 models reachable from `CaseData` but absent from the definition; they need `@CCD(ignore = true)`), and
 by per-member column divergence (prl 465, fpl 167, civil 121 — `Searchable`, `FieldType`,
 `ElementLabel`, `FieldShowCondition`).
+
+### Measured 2026-08-07 — FixedLists `ListElement` label round
+
+| Lane | Case type | Before | After | Δ |
+|---|---|---:|---:|---:|
+| prl | `PRLAPPS` | 3,403 | **2,463** | −940 |
+| civil | `CIVIL` | 2,702 | **2,190** | −512 |
+| fpl | `CARE_SUPERVISION_EPO` | 2,754 | **2,277** | −477 |
+| sscs | `Benefit` | 1,872 | **1,707** | −165 |
+| probate | `GrantOfRepresentation` | 615 | **598** | −17 |
+| et | `ET_EnglandWales` | 552 | **552** | 0 |
+| **total** | | **11,898** | **9,787** | **−2,111 (−18%)** |
+
+`FixedListGenerator` resolves a constant's `ListElement` through exactly one contract —
+`HasLabel.getLabel()`, then `@CCD(label)`, then `@CCD(hint)`, then the constant itself
+(`generator/FixedListGenerator.java:44-53`). **Not one enum** across the six lanes implements
+`HasLabel`, yet 430 of them carry a display label by some other means: prl's `getDisplayedValue()`
+behind a `@JsonValue` (255 files), fpl's `getLabel(Language)` (arity 1, so not the interface method), a
+bare `label`/`value`/`description` constructor field (298 in prl alone). The generator sees none of
+those and falls through to the constant name, so every such list emitted
+`ListElement == ListElementCode`.
+
+The fix needs **no SDK change**: `@CCD` carries no `@Target`, and `FixedListGenerator:42` already reads
+`c.getField(enumName).getAnnotation(CCD.class)` — so the patch pins `@CCD(label = …)` per enum
+constant. **The label is copied from the definition, never read off the team's accessor.** Teaching
+the patch to call whichever member holds the label would have to *guess* among several plausible ones,
+and guessing wrong writes a wrong label into the definition silently; the definition's own
+`ListElement` for that `(ID, ListElementCode)` is by construction the string the round-trip must
+reproduce, so copying it is correct by construction rather than by inference.
+
+Two shapes of the teams' source had to be handled to make the patch compile:
+
+- **A row is matched on the raw `ListElementCode` as well as on the sanitised constant name.** Teams
+  spell the constant either way — prl writes the code verbatim (`nonMolestationOrderFL401A`), civil
+  upper-snakes it (`PERSONAL_INJURY`, which is also what the converter's own generate-mode sanitiser
+  produces). Matching only the sanitised form silently missed most of prl (its first measured pass
+  closed only 128 of its 940 lines).
+- **A source line shared by several constants is split first.** `@CCD` is not `@Repeatable`, so
+  `LISTING, RELISTING` on one line cannot take two annotations above it; the line is rewritten to one
+  constant per line, each constant's text taken as the verbatim column slice and the trailing `,`/`;`
+  carried onto the last emitted line. Anything the split cannot reproduce byte-for-byte (a constant
+  with a body, an interleaved comment) is refused rather than guessed — an unpinned constant costs one
+  residual line, a mangled one breaks the team's build.
+
+A constant is left alone when it already carries a `@CCD` (team-written, or the patch already applied),
+when the definition's label already equals the constant name (the generator's own fallback is right and
+the annotation would be pure noise in the team's diff), or when the enum implements `HasLabel` (the
+generator reads that first, so the pin would be shadowed and the patch would claim a fix it did not
+make).
+
+**Residual tail: 94 lines** (sscs 44, civil 34, prl 9, fpl 6, probate 1) — lists whose ID is *also* a
+`ComplexTypes` ID, where the complex-type class takes the name and no enum is generated at all
+(civil's `GeneralApplicationTypesGAspec`, `Language`), so there is no constant to pin.
 
 ## What the round-trip does not prove
 

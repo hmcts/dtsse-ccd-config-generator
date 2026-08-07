@@ -160,8 +160,13 @@ final class CcdAnnotationRenderer {
    * (e.g. a multi-line label). JavaPoet's {@code $S} does this for generate mode; the retrofit
    * renderer must match so the emitted {@code @CCD(...)} parses (a raw {@code \n} inside the quotes
    * is a lexical error — the bug this fixes, hit on Civil's multi-line labels).
+   *
+   * <p>Package-private rather than private because the FixedLists {@code ListElement} pin renders its
+   * own {@code @CCD(label = …)} onto enum constants (see {@code RetrofitPatchEmitter}), and those labels
+   * carry exactly the same punctuation — quotes, apostrophes, multi-line text — so both paths must
+   * escape identically.
    */
-  private static String quote(String value) {
+  static String quote(String value) {
     StringBuilder out = new StringBuilder(value.length() + 2);
     out.append('"');
     for (int i = 0; i < value.length(); i++) {

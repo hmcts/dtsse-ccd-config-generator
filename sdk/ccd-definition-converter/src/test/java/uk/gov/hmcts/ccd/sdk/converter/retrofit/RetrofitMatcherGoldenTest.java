@@ -55,18 +55,20 @@ class RetrofitMatcherGoldenTest {
     RetrofitReport report = run(MODEL_ROOT, "uk.gov.hmcts.example.model", "CaseData");
 
     assertThat(report.isMapBased()).isFalse();
-    // 13 CaseField rows, 1 is a Label -> 12 data-bearing.
-    assertThat(report.getTotalDefinitionFields()).isEqualTo(13);
+    // 17 CaseField rows, 1 is a Label -> 16 data-bearing.
+    assertThat(report.getTotalDefinitionFields()).isEqualTo(17);
     assertThat(report.getLabelFields()).isEqualTo(1);
-    assertThat(report.getDataBearingFields()).isEqualTo(12);
+    assertThat(report.getDataBearingFields()).isEqualTo(16);
 
-    // 8 exact, 2 type-conflict (documents concrete wrapper AND dateOfBirth date/dateTime),
-    // 2 unmatched (extraSynthField + confidentialData, which collides with the @JsonUnwrapped parent).
+    // 12 exact (incl. the four FixedList-label pin fixtures — labelBearing, annotated, sharedLine,
+    // camelConstant — whose model enums match by name), 2 type-conflict (documents concrete wrapper
+    // AND dateOfBirth date/dateTime), 2 unmatched (extraSynthField + confidentialData, which collides
+    // with the @JsonUnwrapped parent).
     assertThat(report.getUnmatchedDefinitionFields()).isEqualTo(2);
     assertThat(report.getTypeConflicts()).isEqualTo(2);
-    assertThat(report.getExactMatches()).isEqualTo(8);
+    assertThat(report.getExactMatches()).isEqualTo(12);
     assertThat(report.getExactMatches() + report.getTypeConflicts()
-        + report.getUnmatchedDefinitionFields()).isEqualTo(12);
+        + report.getUnmatchedDefinitionFields()).isEqualTo(16);
   }
 
   @Test

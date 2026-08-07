@@ -11,6 +11,8 @@ import com.github.javaparser.StaticJavaParser;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.ConstructorDeclaration;
+import com.github.javaparser.ast.body.EnumConstantDeclaration;
+import com.github.javaparser.ast.body.EnumDeclaration;
 import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.expr.AnnotationExpr;
@@ -34,6 +36,7 @@ import uk.gov.hmcts.ccd.sdk.converter.model.CaseTypeModel;
 import uk.gov.hmcts.ccd.sdk.converter.model.ComplexTypeModel;
 import uk.gov.hmcts.ccd.sdk.converter.model.DelegatingGetter;
 import uk.gov.hmcts.ccd.sdk.converter.model.FieldModel;
+import uk.gov.hmcts.ccd.sdk.converter.model.FixedListModel;
 import uk.gov.hmcts.ccd.sdk.converter.model.gap.GapAction;
 import uk.gov.hmcts.ccd.sdk.converter.model.gap.GapCategory;
 import uk.gov.hmcts.ccd.sdk.converter.model.gap.GapEntry;
@@ -143,6 +146,12 @@ public final class RetrofitPatchEmitter {
    * real backing class must not ALSO be generated as a standalone companion.
    */
   private Map<String, ModelSourceIndex.Type> declaredTypeBindings = Map.of();
+  /**
+   * The definition's fixed lists as the linker produced them — before the rebinder drops the ones a model
+   * enum already serves — supplying the {@code ListElement} labels pinned onto those enums' constants.
+   * See {@link #bindDefinitionFixedLists} for why the pre-drop list is the load-bearing one.
+   */
+  private List<FixedListModel> definitionFixedLists = List.of();
   /**
    * The naming-strategy-derived names the {@code CaseEventToComplexTypes} member walk relied on, which
    * this patch pins with an explicit {@code @JsonProperty} so the naming-strategy-blind SDK generator
@@ -271,6 +280,22 @@ public final class RetrofitPatchEmitter {
   }
 
   /**
+   * Installs the definition's fixed lists as the LINKER produced them, before
+   * {@link RetrofitModelRebinder} drops the ones a model enum already serves.
+   *
+   * <p>Load-bearing that this is the pre-drop list: the rebinder removes exactly the lists whose rows the
+   * team's own enum emits (so no companion is generated for them), which is precisely the set whose
+   * constants need the {@code @CCD(label)} pin. Reading {@code model.getFixedLists()} instead would see
+   * only the companion-backed remainder and pin nothing where it matters — the whole ≈2,205-line bucket.
+   *
+   * @param lists the linked model's fixed lists, or null to leave label pinning off (generate mode, the
+   *              report-only pass, and tests that do not exercise it)
+   */
+  void bindDefinitionFixedLists(List<FixedListModel> lists) {
+    this.definitionFixedLists = lists == null ? List.of() : lists;
+  }
+
+  /**
    * The bindings this emitter resolved, for {@link RetrofitConverter} to hand the companion emitter and
    * the reserved-name sets so they agree on which IDs have a backing class.
    *
@@ -364,6 +389,10 @@ public final class RetrofitPatchEmitter {
     // as. Must run AFTER step 3, whose complex-type pins take precedence in complexTypeIdPins: a type
     // reachable as both is a complex type first (only ComplexTypeGenerator emits its members).
     planFixedListIds(byFile);
+
+    // 3d. Pin the definition's ListElement onto each constant of every model enum backing a FixedLists
+    // ID. Must run AFTER 3c so an enum's ID pin and its label pins resolve the same list.
+    planFixedListLabels(byFile);
 
     // 4. Synthesised definition-only fields onto the root model class.
     List<FieldModel> synthesised = new ArrayList<>();
@@ -1053,6 +1082,48 @@ public final class RetrofitPatchEmitter {
   }
 
   /**
+   * Pins the definition's own {@code ListElement} onto each constant of every model enum backing a
+   * {@code FixedLists} ID, as {@code @CCD(label = …)}.
+   *
+   * <p>Covers both ways an enum comes to back a list: the name match (the enum's simple name IS the ID,
+   * which is most of them — prl's {@code PartyEnum}, {@code Gender}) and the declared-type binding
+   * {@link RetrofitTypeBinder} established for the IDs no name reaches. Either way the enum emits the
+   * list's rows, so either way its constants must carry the labels.
+   *
+   * <p>Runs AFTER {@link #planFixedListIds} so a bound enum is already pinned to its ID; the label pins
+   * are independent of that annotation (they sit on the constants, not the type) but the two must agree
+   * on WHICH list an enum serves, so both resolve it through the same lookup order. See
+   * {@link RetrofitFixedListLabels} for why the label is copied from the definition rather than read off
+   * whatever accessor the team's enum happens to carry.
+   */
+  private void planFixedListLabels(Map<Path, FileEdits> byFile) {
+    for (FixedListModel list : definitionFixedLists) {
+      ModelSourceIndex.Type type = backingEnum(list.getId());
+      if (type == null) {
+        continue; // no model enum: the list is served by a generated companion, which carries its own
+      }
+      Map<String, String> pins = RetrofitFixedListLabels.pins(type, list);
+      if (!pins.isEmpty()) {
+        editsFor(byFile, type.file).labelFixedList(type.simpleName, pins);
+      }
+    }
+  }
+
+  /**
+   * The model enum backing a definition {@code FixedLists} ID: the declared-type binding when there is
+   * one, else the enum whose simple name is the ID itself.
+   */
+  private ModelSourceIndex.Type backingEnum(String id) {
+    ModelSourceIndex.Type bound = declaredTypeBindings.get(id);
+    if (bound != null && bound.isEnum()) {
+      return bound;
+    }
+    return index.bySimpleName(id, modelPackage)
+        .filter(ModelSourceIndex.Type::isEnum)
+        .orElse(null);
+  }
+
+  /**
    * Whether a class carries a {@code @JsonNaming} the converter cannot statically evaluate — a
    * team-written strategy class rather than one of Jackson's own.
    */
@@ -1677,6 +1748,18 @@ public final class RetrofitPatchEmitter {
                     + plan.generate() + ")"),
                 leadingWhitespace(sourceLines.get(typeLine - 1))));
         needsComplexTypeImport = true;
+      }
+    }
+
+    // Per-enum-constant @CCD(label) additions (the FixedLists ListElement pin).
+    if (!edits.fixedListLabels.isEmpty()) {
+      for (TypeDeclaration<?> type : unit.getTypes()) {
+        Map<String, String> labels = edits.fixedListLabels.get(type.getNameAsString());
+        if (labels == null || !type.isEnumDeclaration()) {
+          continue;
+        }
+        needsCcdImport |= planConstantLabels(type.asEnumDeclaration(), labels, sourceLines,
+            insertionsByLine, linesToDelete);
       }
     }
 
@@ -2504,6 +2587,115 @@ public final class RetrofitPatchEmitter {
         .line;
   }
 
+  /**
+   * Plans the per-constant {@code @CCD(label)} insertions for one enum, returning whether any were
+   * planned (so the caller can add the {@code CCD} import).
+   *
+   * <p>The constants are grouped by the source line they begin on, because teams write enums both
+   * ways: one constant per line (civil's {@code AllocatedTrack}) and several to a line (civil's
+   * {@code ListingOrRelisting}: {@code LISTING, RELISTING}). A per-line insertion above a shared line
+   * would stack every one of that line's annotations above the same line — {@code @CCD} is not
+   * {@code @Repeatable}, so that does not compile. A shared line is therefore rewritten into one
+   * constant per line instead; see {@link #splitSharedConstantLine}.
+   */
+  private boolean planConstantLabels(EnumDeclaration decl, Map<String, String> labels,
+      List<String> sourceLines, Map<Integer, List<String>> insertionsByLine,
+      Set<Integer> linesToDelete) {
+    Map<Integer, List<EnumConstantDeclaration>> byLine = new TreeMap<>();
+    for (EnumConstantDeclaration constant : decl.getEntries()) {
+      int line = constant.getBegin().map(p -> p.line).orElse(-1);
+      if (line >= 1 && line <= sourceLines.size()) {
+        byLine.computeIfAbsent(line, k -> new ArrayList<>()).add(constant);
+      }
+    }
+
+    boolean planned = false;
+    for (Map.Entry<Integer, List<EnumConstantDeclaration>> entry : byLine.entrySet()) {
+      int line = entry.getKey();
+      List<EnumConstantDeclaration> constants = entry.getValue();
+      if (constants.stream().noneMatch(c -> labels.containsKey(c.getNameAsString()))) {
+        continue;
+      }
+      String indent = leadingWhitespace(sourceLines.get(line - 1));
+
+      // The common shape: the constant owns its line, so the annotation is inserted above it exactly
+      // as a field's is — below any annotation the constant already carries, since the insertion is
+      // keyed on the constant's begin line, which IS that annotation's line when it has one.
+      if (constants.size() == 1) {
+        String label = labels.get(constants.get(0).getNameAsString());
+        insertionsByLine.computeIfAbsent(line, k -> new ArrayList<>())
+            .addAll(indentEachLine(List.of(labelAnnotation(label)), indent));
+        planned = true;
+        continue;
+      }
+
+      List<String> rewritten =
+          splitSharedConstantLine(sourceLines.get(line - 1), constants, labels, indent);
+      if (rewritten == null) {
+        continue; // a shape the split cannot reproduce verbatim: leave the line alone
+      }
+      linesToDelete.add(line);
+      insertionsByLine.computeIfAbsent(line, k -> new ArrayList<>()).addAll(rewritten);
+      planned = true;
+    }
+    return planned;
+  }
+
+  /**
+   * Rewrites one source line holding several enum constants into one line per constant, each carrying
+   * its own {@code @CCD(label)} where the pin has one, and returns the replacement lines — or
+   * {@code null} to refuse the line.
+   *
+   * <p>Each constant's text is taken as the VERBATIM column slice of the original line, so arguments
+   * and formatting survive untouched; whatever follows the last constant (a {@code ,} continuing onto
+   * the next line, a {@code ;} closing the constant list, or nothing) is carried onto the last emitted
+   * line. Refused rather than guessed when the line is not a plain comma-separated run of
+   * single-line, unannotated constants — anything else (a constant with a body, a whole enum written
+   * on one line, an interleaved comment) could not be reproduced byte-for-byte, and an unpinned
+   * constant only costs a residual diff line whereas a mangled one breaks the team's build.
+   */
+  private static List<String> splitSharedConstantLine(String line,
+      List<EnumConstantDeclaration> constants, Map<String, String> labels, String indent) {
+    List<String> texts = new ArrayList<>();
+    int cursor = 0;
+    for (EnumConstantDeclaration constant : constants) {
+      if (!constant.getAnnotations().isEmpty()) {
+        return null;
+      }
+      Optional<com.github.javaparser.Position> begin = constant.getBegin();
+      Optional<com.github.javaparser.Position> end = constant.getEnd();
+      if (begin.isEmpty() || end.isEmpty() || begin.get().line != end.get().line) {
+        return null;
+      }
+      int from = begin.get().column - 1;
+      int to = end.get().column;
+      if (from < cursor || to > line.length() || to <= from) {
+        return null;
+      }
+      String between = line.substring(cursor, from);
+      if (cursor == 0 ? !between.isBlank() : !between.strip().equals(",")) {
+        return null;
+      }
+      texts.add(line.substring(from, to));
+      cursor = to;
+    }
+
+    String tail = line.substring(cursor);
+    List<String> out = new ArrayList<>();
+    for (int i = 0; i < constants.size(); i++) {
+      String label = labels.get(constants.get(i).getNameAsString());
+      if (label != null) {
+        out.add(indent + labelAnnotation(label));
+      }
+      out.add(indent + texts.get(i) + (i < constants.size() - 1 ? "," : tail));
+    }
+    return out;
+  }
+
+  private static String labelAnnotation(String label) {
+    return "@CCD(label = " + CcdAnnotationRenderer.quote(label) + ")";
+  }
+
   /** The leading run of spaces/tabs on a source line — the indent an inserted line above it must
    * match so the added annotation lines up with the field it decorates. */
   private static String leadingWhitespace(String line) {
@@ -2761,6 +2953,13 @@ public final class RetrofitPatchEmitter {
      */
     private final Map<String, ComplexTypeIdPlan> nameComplexTypes = new LinkedHashMap<>();
     /**
+     * Enum simple name → (constant name → the {@code @CCD(label)} to pin on it), carrying the
+     * definition's own {@code ListElement} onto the constants of a model enum backing a
+     * {@code FixedLists} ID (see {@link RetrofitFixedListLabels}). Keyed per enum because one file can
+     * declare several, and per constant because the annotation goes on the constant, not the type.
+     */
+    private final Map<String, Map<String, String>> fixedListLabels = new LinkedHashMap<>();
+    /**
      * The class whose hand-written constructor(s) must be widened to accept the synthesised fields,
      * or null when synthesis needs no constructor change. Set only for the builder-bound /
      * {@code @Value} idioms that would otherwise refuse synthesis.
@@ -2843,6 +3042,18 @@ public final class RetrofitPatchEmitter {
      */
     void nameComplexType(String className, ComplexTypeIdPlan plan) {
       nameComplexTypes.putIfAbsent(className, plan);
+    }
+
+    /**
+     * Records the per-constant {@code @CCD(label = …)} pins carrying the definition's {@code ListElement}
+     * onto a model enum's constants. First write wins per enum, matching the ID pin's own single-claim
+     * rule: an enum reached by two definition IDs pins the first one's ID, so it must pin that same
+     * list's labels rather than a second list's.
+     */
+    void labelFixedList(String enumSimpleName, Map<String, String> labelsByConstant) {
+      if (!labelsByConstant.isEmpty()) {
+        fixedListLabels.putIfAbsent(enumSimpleName, labelsByConstant);
+      }
     }
 
     /**

@@ -6,7 +6,11 @@ import com.fasterxml.jackson.annotation.JsonUnwrapped;
 import java.time.LocalDate;
 import java.util.List;
 import uk.gov.hmcts.ccd.sdk.api.CCD;
+import uk.gov.hmcts.example.enums.AnnotatedList;
+import uk.gov.hmcts.example.enums.CamelConstantList;
 import uk.gov.hmcts.example.enums.ClaimType;
+import uk.gov.hmcts.example.enums.LabelBearingList;
+import uk.gov.hmcts.example.enums.SharedLineList;
 import uk.gov.hmcts.example.model.common.DocItem;
 import uk.gov.hmcts.example.model.common.ListValue;
 import uk.gov.hmcts.example.model.common.Party;
@@ -32,6 +36,18 @@ public class CaseData extends BaseCaseData {
   // Rule: enum -> FixedRadioList. Definition declares FixedList for it (TYPE conflict is allowed to
   // be EXACT because both list flavours are reachable from an enum via override).
   private ClaimType claimType;
+
+  // Refusal: implements HasLabel, which FixedListGenerator reads before @CCD(label), so no pin.
+  private LabelBearingList labelBearing;
+
+  // Refusal: its constant already carries a team-written @CCD, which the pin must not duplicate.
+  private AnnotatedList annotated;
+
+  // The pin must split its shared constant line before annotating (@CCD is not @Repeatable).
+  private SharedLineList sharedLine;
+
+  // The pin must match rows on the raw ListElementCode too, not just the sanitised constant.
+  private CamelConstantList camelConstant;
 
   // Rule: generic wrapper collection List<ListValue<Party>> -> Collection of Party (EXACT when the
   // definition's FieldTypeParameter is Party).

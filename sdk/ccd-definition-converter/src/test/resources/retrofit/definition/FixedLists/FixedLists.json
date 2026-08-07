@@ -1,5 +1,15 @@
 [
   { "ID": "handoffReasonFixedList", "ListElementCode": "INTERPRETER", "ListElement": "Interpreter required" },
   { "ID": "handoffReasonFixedList", "ListElementCode": "TRUST_CORP", "ListElement": "Trust corporation" },
-  { "ID": "crossKindFixedList", "ListElementCode": "ONE", "ListElement": "One" }
+  { "ID": "crossKindFixedList", "ListElementCode": "ONE", "ListElement": "One" },
+  { "ID": "ClaimType", "ListElementCode": "PERSONAL_INJURY", "ListElement": "Personal injury" },
+  { "ID": "ClaimType", "ListElementCode": "CONTRACT", "ListElement": "A \"contract\" dispute,\nover multiple lines" },
+  { "ID": "ClaimType", "ListElementCode": "DEBT", "ListElement": "DEBT" },
+  { "ID": "LabelBearingList", "ListElementCode": "FIRST", "ListElement": "The first one" },
+  { "ID": "AnnotatedList", "ListElementCode": "KEPT", "ListElement": "Definition label" },
+  { "ID": "SharedLineList", "ListElementCode": "FIRST", "ListElement": "The very first" },
+  { "ID": "SharedLineList", "ListElementCode": "SECOND", "ListElement": "SECOND" },
+  { "ID": "SharedLineList", "ListElementCode": "THIRD", "ListElement": "The third" },
+  { "ID": "CamelConstantList", "ListElementCode": "nonMolestationOrder", "ListElement": "Non-molestation order (FL404A)" },
+  { "ID": "CamelConstantList", "ListElementCode": "occupationOrder", "ListElement": "Occupation order (FL404)" }
 ]

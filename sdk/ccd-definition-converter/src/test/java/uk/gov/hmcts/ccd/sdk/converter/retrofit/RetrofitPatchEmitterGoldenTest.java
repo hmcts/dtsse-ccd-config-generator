@@ -74,6 +74,7 @@ class RetrofitPatchEmitterGoldenTest {
     RetrofitPatchEmitter emitter = new RetrofitPatchEmitter(matcher.index(), matcher.resolution(),
         rebound, matcher.root(), CONFIG_PACKAGE, 0, "", pinnedNames);
     emitter.bindDeclaredTypes(declaredBindings);
+    emitter.bindDefinitionFixedLists(linked.getFixedLists());
     return emitter;
   }
 
@@ -362,6 +363,83 @@ class RetrofitPatchEmitterGoldenTest {
         .findFirst();
     patched.ifPresent(content -> assertThat(complexTypeAnnotations(content))
         .noneMatch(a -> a.contains("\"" + definitionId + "\"")));
+  }
+
+  @Test
+  void pinsTheDefinitionsListElementOntoEachEnumConstant() {
+    // FixedListGenerator resolves a constant's ListElement through HasLabel → @CCD(label) → @CCD(hint) →
+    // the constant name. Teams carry labels outside that contract (prl's getDisplayedValue() behind a
+    // @JsonValue, fpl's getLabel(Language)), so the generator falls through and emits
+    // ListElement == ListElementCode. The label is copied from the DEFINITION rather than read off
+    // whichever accessor the team happens to have: the definition's own ListElement is by construction
+    // the string the round-trip must reproduce, so no guess about which member is the CCD label can be
+    // wrong. ClaimType is reached by name (its simple name IS the list ID)...
+    String claimType = patchedContent(emitPatch(), "enums/ClaimType.java");
+    assertThat(claimType).contains("@CCD(label = \"Personal injury\")");
+    // ...and every character that would break the literal is escaped, exactly as the field renderer
+    // does it — the labels come from the same definition and carry the same punctuation.
+    assertThat(claimType).contains("@CCD(label = \"A \\\"contract\\\" dispute,\\nover multiple lines\")");
+    // A constant whose definition label already equals its name needs no pin: the generator's own
+    // fallback emits the right value, so annotating it would be pure noise in the team's diff.
+    assertThat(claimType).doesNotContain("@CCD(label = \"DEBT\")");
+    // ...while HandoffReasonId is reached only by the declaration binding. Both emit their list's rows,
+    // so both need the labels.
+    assertThat(patchedContent(emitPatch(), "enums/HandoffReasonId.java"))
+        .contains("@CCD(label = \"Interpreter required\")")
+        .contains("@CCD(label = \"Trust corporation\")");
+    // A row is matched on the raw ListElementCode as well as on the sanitised constant name, because
+    // teams spell the constant either way — prl writes the code verbatim, civil upper-snakes it. An
+    // annotation the constant already carries is kept: the pin goes above the constant's begin line,
+    // which IS that annotation's line, so the two stack in source order.
+    assertThat(patchedContent(emitPatch(), "enums/CamelConstantList.java"))
+        .contains("  @CCD(label = \"Non-molestation order (FL404A)\")\n"
+            + "  @JsonProperty(\"nonMolestationOrder\")\n"
+            + "  nonMolestationOrder,")
+        .contains("@CCD(label = \"Occupation order (FL404)\")");
+  }
+
+  @Test
+  void splitsAConstantLineSharedBySeveralConstantsBeforePinningLabels() {
+    // @CCD is not @Repeatable, so `FIRST, SECOND, THIRD;` on one line cannot take two annotations
+    // above it — the line is rewritten to one constant per line first. Each constant's text is the
+    // verbatim column slice of the original, and the trailing `;` closing the constant list rides on
+    // the last emitted line, so nothing but the line breaks and the pins changes.
+    assertThat(patchedContent(emitPatch(), "enums/SharedLineList.java"))
+        .contains("  @CCD(label = \"The very first\")\n"
+            + "  FIRST,\n"
+            + "  SECOND,\n"
+            + "  @CCD(label = \"The third\")\n"
+            + "  THIRD;\n");
+  }
+
+  @Test
+  void refusesToPinLabelsOnEnumsTheGeneratorAlreadyReadsALabelFrom() {
+    // HasLabel wins in FixedListGenerator's own resolution order, so a @CCD(label) here would be read
+    // by nothing — pinning it would dirty the team's source while claiming a fix it did not make.
+    // Asserted as "the patch does not pin here", which a refusal satisfies either by leaving the file out
+    // of the patch entirely (the usual outcome — nothing else about these enums needs changing) or by
+    // patching it for some other reason while adding no label.
+    RetrofitPatch patch = emitPatch();
+    contentIfPatched(patch, "enums/LabelBearingList.java")
+        .ifPresent(content -> assertThat(content).doesNotContain("@CCD(label"));
+    // And a constant already carrying a team-written @CCD keeps exactly that one: a second annotation
+    // would not compile, and overwriting the team's label would be the patch making a product decision.
+    contentIfPatched(patch, "enums/AnnotatedList.java").ifPresent(content -> {
+      assertThat(content).contains("@CCD(label = \"Team's own label\")");
+      assertThat(content).doesNotContain("Definition label");
+    });
+  }
+
+  /**
+   * The patched content of the file whose path ends with {@code pathSuffix}, or empty when the patch
+   * does not touch it — unlike {@link #patchedContent}, which requires the file to be patched.
+   */
+  private static java.util.Optional<String> contentIfPatched(
+      RetrofitPatch patch, String pathSuffix) {
+    return patch.files().stream()
+        .filter(f -> f.relativePath().endsWith(pathSuffix))
+        .map(RetrofitPatch.FilePatch::patchedContent)
+        .findFirst();
   }
 
   @Test
