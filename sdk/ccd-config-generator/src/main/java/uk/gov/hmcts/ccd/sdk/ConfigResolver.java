@@ -91,13 +91,14 @@ class ConfigResolver<T, S, R extends HasRole> {
             }
           }
         },
-        // Exclude gated-off fields so a complex type reachable ONLY through a field whose
-        // @CCD(gate) is inactive contributes no ComplexTypes rows (matching how it is dropped from
-        // CaseField/AuthorisationCaseField). Only the gate is filtered here, not ignore/JsonIgnore:
-        // this predicate historically never filtered ignored fields, and adding that now would
-        // change the emitted complex-type set for existing definitions.
+        // Exclude every field the definition does not contain — @JsonIgnore, @CCD(ignore = true) and
+        // an inactive @CCD(gate) alike — so a complex type reachable ONLY through such fields
+        // contributes no ComplexTypes (or FixedLists) rows, matching how those fields are already
+        // dropped from CaseField/AuthorisationCaseField/CaseEventToFields. An ignored field is not
+        // part of the generated definition, so neither is a type nothing else reaches: emitting rows
+        // for it declares a complex type no field references.
         field -> !Modifier.isStatic(field.getModifiers())
-            && !FieldUtils.isFieldGatedOff(field));
+            && !FieldUtils.isFieldIgnored(field));
     path.remove(dataClass);
   }
 
