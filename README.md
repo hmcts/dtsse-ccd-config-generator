@@ -1300,21 +1300,23 @@ rows), role-scoped search/workbasket fields round-trip through the SDK's role-sc
 through verbatim passthrough. The array shorthands (`UserRoles[]` and `AccessControl[]`) that
 definitions use to grant many roles in one row — which `ccd-definition-processor` flattens at build
 time — are now expanded on both sides across every `Authorisation*` sheet, so grants encoded that
-way round-trip exactly. Two categories of genuine semantic difference are accepted as permanent,
-each absorbed by a narrowly-scoped comparator rule so the round-trip tests pass while the difference
-stays visible in the gap report: the SDK's event-level `publishToCamunda()` switch publishes every
-non-complex field of a publishing event rather than only the fields the input marked `Publish=Y`
-(`PUBLISH_CASCADE`); and the SDK grants `CR` on immutable Label/READONLY display fields to any role
-that holds a grant on the event where the field is read-only, regardless of the input's narrower
-per-field grants (`IMMUTABLE_FIELD_CR`). Callbacks are no longer rewritten at all: the converter emits
-no SDK callback wiring and carries every callback column through verbatim via passthrough, so the
-`CALLBACK_URL` normalisation rule is retired and callback URLs (including per-page mid-event URLs, with
-their `${CCD_DEF_*}` placeholders) now round-trip byte-for-byte and are compared exactly. Seven
-real-service fixture tests (ia/sscs/fpl/ET/civil/prl/probate) convert, compile and round-trip
-end-to-end, with residuals of 5/66/24/34/211/199/442 diff lines. The fixtures stay `@Disabled` for the
-genuinely structural tails — env-gated overlay-only CaseData fields, `PublishAs` (separate PR), a
-vestigial `AuthorisationCaseState LiveTo`, and `src/main` SDK-generator limitations — each itemised in
-the tests' `@Disabled` reasons and in the fidelity doc.
+way round-trip exactly. Genuine semantic differences are accepted only where the SDK's generation model
+makes them structural, each absorbed by a narrowly-scoped comparator rule so the round-trip tests pass
+while the difference stays visible in the gap report — the largest being that the SDK grants `CR` on
+immutable Label/READONLY display fields to any role that holds a grant on the event where the field is
+read-only, regardless of the input's narrower per-field grants (`IMMUTABLE_FIELD_CR`). (The former
+per-field `Publish` cascade is no longer among them: the SDK carries a per-field
+`publish(boolean)`/`publishAs(String)` API and `PUBLISH_CASCADE` is retired.) Callbacks are no longer
+rewritten at all: the converter emits no SDK callback wiring and carries every callback column through
+verbatim via passthrough, so the `CALLBACK_URL` normalisation rule is retired and callback URLs
+(including per-page mid-event URLs, with their `${CCD_DEF_*}` placeholders) now round-trip byte-for-byte
+and are compared exactly. Seven real-service fixture tests (ia/sscs/fpl/ET/civil/prl/probate) convert,
+compile and round-trip end-to-end and are all **enabled**, each gating its residuals against a
+checked-in baseline under `src/test/resources/roundtrip-baselines/` (ia 4, probate 6, ET 15, fpl 21,
+sscs 32, prl 55, civil 126 — 259 lines total). The baseline file *is* the enumerated list of that
+fixture's open gaps; the test fails on a new diff and on a vanished one, so the ratchet only tightens.
+Retrofit mode is measured separately by `bin/retrofit-verify` and is much further from zero (11,898
+lines across the six service lanes) — see the fidelity doc's retrofit-lane section.
 
 ## Where to get help
 

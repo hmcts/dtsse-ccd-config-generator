@@ -525,7 +525,7 @@ seven round-trip baselines **byte-for-byte unchanged** (ia 4 / probate 6 / et 16
 prl 55 / civil 129).
 
 **The count, and what it is.** This is the dominant `AUTH_NOT_DERIVABLE` category by row count —
-**52,232 records across the six retrofit fixtures** (ia 15,823, prl 11,958, fpl 11,676, civil 7,615,
+**52,232 records across the seven fixtures** (ia 15,823, prl 11,958, fpl 11,676, civil 7,615,
 et 3,595, sscs 323, probate 1,242). Every single one is the injected-read case: the `extra`
 permission is `{R}` for **100%** of them, because the converter's only injection into the derivation's
 `have` map is `Set.of('R')` from the tab and search loops — no other permission can appear there, so
@@ -622,11 +622,16 @@ demanding a baseline refresh — the ratchet only tightens). Current baseline si
 |----------|---------------:|
 | ia       |              4 |
 | probate  |              6 |
-| fpl      |             56 |
-| ET       |             33 |
-| sscs     |             55 |
-| prl      |            170 |
-| civil    |            202 |
+| ET       |             15 |
+| fpl      |             21 |
+| sscs     |             32 |
+| prl      |             55 |
+| civil    |            126 |
+
+Total **259**. These are the *generate*-mode fixtures — the converter emits a fresh model and the
+round-trip compares that against the input. Retrofit mode (annotating a team's **existing** model) is
+measured separately and is much further from zero; see
+[Retrofit-lane residual](#retrofit-lane-residual).
 
 (The M2-wiring round drove every fixture down by wiring the S-wave SDK features into the converter:
 `PrintableDocumentsUrl`/`CanSaveDraft`/`ShowSummaryContentOption` now emit as Java (et, sscs, probate,
@@ -638,10 +643,11 @@ shrinking civil, prl and ia. Earlier, probate had fallen from 442 to 34 once `LI
 absorbed its uniform vestigial `AuthorisationCaseState LiveTo`. To regenerate a baseline after an
 intended change, run `GenerateGoldenFiles` with `-Djunit.jupiter.conditions.deactivate='*'`.)
 
-> **Baseline movement from the comparator/cleanup round (refresh pending).** These sizes predate the
+> **Baseline movement from the comparator/cleanup round (absorbed — the table above is current).**
+> The sizes above already include the
 > round that (a) removed the whole-sheet `UserProfile`/`SearchAlias`/`AccessType`/`AccessTypeRole`
 > passthroughs, the mixed-usage `CaseRoles JurisdictionID` graft and the unknown-`FieldType` graft
-> (now [not-supported gaps](#not-supported-fails-conversion-with-a-gap)), and (b) reclassified the
+> (now [removed constructs](#removed-constructs-conversion-fails-by-design)), and (b) reclassified the
 > conditional `PostConditionState` graft as an [accepted semantic difference](#4-conditional--multi-target-postconditionstate-collapse)
 > absorbed by `CONDITIONAL_POST_STATE`. The round-trip harness sets `--allow-gaps`, so conversion still
 > completes; the removed grafts previously made their construct round-trip clean, so removing them adds
@@ -684,6 +690,95 @@ The categories, all SDK-structural limitations or fixture-data findings (none ar
   Java via the `@ComplexType(name)` carrier — so prl's `schoolDirections&Details` field now round-trips.
   (Platform types such as `JudicialUser` are likewise no longer carried as `Text`: they are real
   `FieldType` constants emitting `typeOverride`.)
+
+## Retrofit-lane residual {#retrofit-lane-residual}
+
+Everything above measures **generate** mode: the converter emits a fresh model, so it controls every
+Java name and type and the round-trip can reach single-digit residuals. **Retrofit** mode annotates a
+service's *existing* model, which it does not control — the team's classes have their own names,
+kinds, field types and Lombok idioms — so its residual is a different, much larger number, measured
+by a different harness (`bin/retrofit-verify`, one lane per service, diffing the definition against
+`generateCCDConfig` output from the patched model inside the service's own build).
+
+The lane residual is **not** ratcheted in CI (the lanes need a service checkout and a
+`publishToMavenLocal`); it is measured by hand and recorded here.
+
+### Measured 2026-08-07 — declaration-binding round
+
+| Lane | Case type | Before | After | Δ |
+|---|---|---:|---:|---:|
+| civil | `CIVIL` | 5,397 | **2,702** | −2,695 |
+| sscs | `Benefit` | 3,529 | **1,872** | −1,657 |
+| fpl | `CARE_SUPERVISION_EPO` | 3,063 | **2,754** | −309 |
+| prl | `PRLAPPS` | 3,889 | **3,403** | −486 |
+| et | `ET_EnglandWales` | 1,317 | **552** | −765 |
+| probate | `GrantOfRepresentation` | 747 | **615** | −132 |
+| **total** | | **17,942** | **11,898** | **−6,044 (−34%)** |
+
+The change: `ModelSourceIndex.complexTypeClass` matched a `ComplexTypes`/`FixedLists` ID to a model
+class **by simple name only** (exactly, then case-insensitively). Real definitions name their types
+independently of the classes behind them — probate's `ExecutorApplying` is
+`AdditionalExecutorApplying`, ET's `ClaimantIndividual` is `ClaimantIndType`, fpl's
+`CafcassEnglandOffices` is `EnglandOffices`, probate's `handoffReasonFixedList` is the enum
+`HandoffReasonId` — and every miss cost twice over: the ID emitted an orphan companion nothing
+referenced, *and* the real class emitted a full set of rows under an ID the definition never mentions.
+
+`RetrofitTypeBinder` reads the declaration instead of the name: a `CaseField` or `ComplexTypes` member
+row whose `FieldTypeParameter` (or `FieldType`) is the ID names a field, and that field's declared
+Java type is the class CCD addresses the type's members on. The ID is then pinned onto that class as
+`@ComplexType(name = <id>, generate = true)` through the same machinery the case-divergence bindings
+already use — so no field declaration is rewritten and, unlike a retype, it cannot break a caller in a
+published jar. It resolves to a **fixpoint** (a member row can only be read once its owning type has a
+class, so a nested chain of divergently-named types binds one level per pass) and refuses any binding
+that is not unambiguous: a name-based binding already exists, referencing fields disagree, the class's
+own simple name is itself a definition ID, two IDs claim one class, or the kind mismatches the
+generator that emits the type (an enum for `FixedLists`; a **class** — not an interface, not a record —
+for `ComplexTypes`).
+
+> The pin changes the wire-visible `ComplexTypes`/`FixedLists` ID a class emits under. That is the
+> point (it makes it match the definition), but a team that serialises the class elsewhere under its
+> Java name should check per lane before adopting the patch.
+
+### Post-fix residual decomposition
+
+| Lane | FixedLists | ComplexTypes | other |
+|---|---:|---:|---:|
+| civil | 1,639 | 540 | 523 |
+| sscs | 1,629 | 100 | 143 |
+| fpl | 1,592 | 875 | 287 |
+| prl | 1,083 | 780 | 1,540 |
+| probate | 534 | 72 | 9 |
+| et | 3 | 523 | 26 |
+
+`FixedLists` now leads five of the six lanes. Its 6,480 lines are three shapes, and the dominant two
+share one root cause:
+
+- **`ListElement` label (≈2,205 lines** — prl 949, civil 546, fpl 482, sscs 210, probate 18**).**
+  `FixedListGenerator` reads a constant's label from `HasLabel.getLabel()`, `@CCD(label)`, `@CCD(hint)`,
+  else the constant name itself. Teams' enums carry a label but not through that contract — fpl's
+  `ApplicationDocumentType` has `getLabel(Language)`, prl's `SpokenOrWrittenWelshEnum` exposes
+  `@JsonValue getDisplayedValue()` — so the generator falls through to the constant and emits
+  `ListElement == ListElementCode`. Not yet fixed: it needs either a generated `HasLabel` delegating to
+  the team's existing label member, or a `FixedListGenerator` that reads a `@CCD`-marked accessor.
+- **List declared but not emitted (≈2,760 no-match lines)** — and **≈1,500 emitted under the wrong ID**
+  (the mirror image, an unexpected actual row). Both are the *same* miss: the field referencing the list
+  is declared as `String` carrying `@CCD(typeOverride = FixedList, typeParameterOverride = "<id>")`, so
+  there is no enum for the binder to bind and no Java type to pin the ID onto — the definition's list
+  rows have no counterpart, while the team's real enum (which some *other* field is typed as) emits
+  under its own Java simple name. This accounts for **1,108 of sscs's 1,112**, 791 of fpl's 882, 399 of
+  probate's 429, 194 of civil's 282 and 36 of prl's 55 no-match lines, and for the unexpected side, 802
+  of civil's 806, 220 of fpl's 228 and 71 of prl's 75. A `typeParameterOverride` naming a list the model
+  *does* have an enum for is a retype-or-pin opportunity the binder currently cannot see, because it
+  only reads declared types, not overrides.
+- **Constant-set divergence within a correctly-bound list** — the small tail: the enum and the
+  definition list agree on the ID but not on the constants (sscs's `eventType`, 247 lines: the model
+  enum carries every event the service knows, the definition list a subset).
+
+`ComplexTypes`' 2,890 lines are led by whole types the SDK emits that the definition never declares
+(ET 447 unexpected rows, of which `AdhocReportType` alone is 141, `ListingData` 35 — internal report
+models reachable from `CaseData` but absent from the definition; they need `@CCD(ignore = true)`), and
+by per-member column divergence (prl 465, fpl 167, civil 121 — `Searchable`, `FieldType`,
+`ElementLabel`, `FieldShowCondition`).
 
 ## What the round-trip does not prove
 
