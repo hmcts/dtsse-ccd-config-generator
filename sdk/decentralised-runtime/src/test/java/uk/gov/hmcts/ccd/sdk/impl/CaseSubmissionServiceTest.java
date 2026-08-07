@@ -35,7 +35,6 @@ class CaseSubmissionServiceTest {
   private final IdempotencyEnforcer idempotencyEnforcer = mock(IdempotencyEnforcer.class);
   private final TransactionTemplate transactionTemplate = mock(TransactionTemplate.class);
   private final AuditEventService auditEventService = mock(AuditEventService.class);
-  private final DatabaseAuditContext databaseAuditContext = mock(DatabaseAuditContext.class);
   private final CaseDataRepository caseDataRepository = mock(CaseDataRepository.class);
   private final CaseProjectionService caseProjectionService = mock(CaseProjectionService.class);
 
@@ -47,7 +46,6 @@ class CaseSubmissionServiceTest {
       idempotencyEnforcer,
       transactionTemplate,
       auditEventService,
-      databaseAuditContext,
       caseDataRepository,
       caseProjectionService
   );
@@ -64,7 +62,7 @@ class CaseSubmissionServiceTest {
     ));
     when(idempotencyEnforcer.lockCaseAndGetExistingEvent(IDEMPOTENCY_KEY, 123456789L))
         .thenReturn(Optional.empty());
-    when(databaseAuditContext.reserveCaseEventId()).thenReturn(42L);
+    when(auditEventService.reserveCaseEventId()).thenReturn(42L);
     when(legacyHandler.apply(eq(event), eq("Bearer raw-token"))).thenReturn(handlerResult());
     when(caseProjectionService.load(123456789L)).thenReturn(savedCaseDetails());
     when(transactionTemplate.execute(any())).thenAnswer(invocation ->
@@ -103,7 +101,7 @@ class CaseSubmissionServiceTest {
 
     service.submit(event, "raw-token", IDEMPOTENCY_KEY);
 
-    verifyNoInteractions(databaseAuditContext, auditEventService, legacyHandler);
+    verifyNoInteractions(auditEventService, legacyHandler);
   }
 
   private DecentralisedCaseEvent event() {

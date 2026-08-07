@@ -31,7 +31,6 @@ public class CaseSubmissionService {
   private final IdempotencyEnforcer idempotencyEnforcer;
   private final TransactionTemplate transactionTemplate;
   private final AuditEventService auditEventService;
-  private final DatabaseAuditContext databaseAuditContext;
   private final CaseDataRepository caseDataRepository;
   private final CaseProjectionService caseProjectionService;
 
@@ -76,7 +75,7 @@ public class CaseSubmissionService {
       return new TransactionResult(existingEventId, Optional.empty());
     }
 
-    long caseEventId = databaseAuditContext.reserveCaseEventId();
+    long caseEventId = auditEventService.reserveCaseEventId();
 
     // Delegate to the specific handler to apply the change
     var handlerResult = handler.apply(event, user.authToken());

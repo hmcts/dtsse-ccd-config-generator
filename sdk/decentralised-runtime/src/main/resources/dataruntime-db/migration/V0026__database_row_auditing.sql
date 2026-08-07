@@ -28,20 +28,10 @@ declare
 begin
     audit_disabled := nullif(current_setting('ccd.audit_disabled', true), '');
     if lower(coalesce(audit_disabled, 'false')) in ('true', 'on', '1') then
-        if tg_op = 'DELETE' then
-            return old;
-        end if;
-        return new;
+        return null;
     end if;
 
-    begin
-        audit_case_event_id := nullif(current_setting('ccd.case_event_id', true), '')::bigint;
-    exception
-        when invalid_text_representation then
-            raise exception using
-                errcode = '23514',
-                message = 'Invalid ccd.case_event_id audit context';
-    end;
+    audit_case_event_id := nullif(current_setting('ccd.case_event_id', true), '')::bigint;
 
     if audit_case_event_id is null then
         raise exception using
@@ -71,9 +61,6 @@ begin
         case when tg_op in ('INSERT', 'UPDATE') then to_jsonb(new) end
     );
 
-    if tg_op = 'DELETE' then
-        return old;
-    end if;
-    return new;
+    return null;
 end;
 $$;

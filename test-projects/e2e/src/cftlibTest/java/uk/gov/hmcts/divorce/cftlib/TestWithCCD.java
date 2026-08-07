@@ -2958,13 +2958,14 @@ public class TestWithCCD extends CftlibTest {
     private long createAuditedCaseNote(long reference) {
         return transactionTemplate.execute(status -> {
             Long caseEventId = db.getJdbcTemplate().queryForObject(
-                "select nextval('ccd.case_event_id_seq')",
+                """
+                select set_config(
+                    'ccd.case_event_id',
+                    nextval('ccd.case_event_id_seq')::text,
+                    true
+                )::bigint
+                """,
                 Long.class
-            );
-            db.getJdbcTemplate().queryForObject(
-                "select set_config('ccd.case_event_id', ?, true)",
-                String.class,
-                String.valueOf(caseEventId)
             );
             db.update(
                 "insert into case_notes(reference, author, note) values (:reference, 'disposer', 'dispose me')",

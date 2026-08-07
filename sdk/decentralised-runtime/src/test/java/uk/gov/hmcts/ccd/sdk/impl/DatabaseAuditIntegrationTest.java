@@ -172,13 +172,16 @@ class DatabaseAuditIntegrationTest {
   }
 
   private long reserveEventContext() {
-    Long caseEventId = jdbc.queryForObject("select nextval('ccd.case_event_id_seq')", Long.class);
-    jdbc.queryForObject(
-        "select set_config('ccd.case_event_id', ?, true)",
-        String.class,
-        String.valueOf(caseEventId)
+    return jdbc.queryForObject(
+        """
+        select set_config(
+            'ccd.case_event_id',
+            nextval('ccd.case_event_id_seq')::text,
+            true
+        )::bigint
+        """,
+        Long.class
     );
-    return caseEventId;
   }
 
   private void insertEvent(long caseEventId, long caseRevision) {
