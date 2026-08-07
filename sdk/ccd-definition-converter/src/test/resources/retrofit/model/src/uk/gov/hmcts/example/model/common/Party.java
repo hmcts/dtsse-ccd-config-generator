@@ -58,6 +58,30 @@ public class Party {
   // second annotation would not compile), which is also what makes the op idempotent.
   private PinnedByTeamCT pinnedByTeam;
 
+  // A member whose definition complex type ID (executorApplying) shares NOTHING with the class name, so
+  // no name-based lookup can reach it: RetrofitTypeBinder binds the ID by DECLARATION instead and the
+  // patch pins it onto this class, rather than generating a companion nothing references.
+  private AdditionalExecutorApplying executorApplying;
+
+  // The same shape on a FixedList: the definition's handoffReasonFixedList is declared as the model enum
+  // HandoffReasonId.
+  private uk.gov.hmcts.example.enums.HandoffReasonId handoffReason;
+
+  // Two members referencing ONE definition type (disagreeingCT) as two different classes: unanimity is
+  // required, so the ID must stay unbound.
+  private DeclaredOne disagreeingOne;
+
+  private DeclaredTwo disagreeingTwo;
+
+  // Two divergently-named definition types both declared as ONE class: neither can be bound, since the
+  // class carries only one @ComplexType(name).
+  private TwiceClaimedPayload firstClaiming;
+
+  private TwiceClaimedPayload secondClaiming;
+
+  // A definition FixedLists ID declared as a CLASS: the kinds disagree, so the binding is refused.
+  private CrossKindPayload crossKind;
+
   // Two collection members whose element wrappers hold ONE shared payload class: only the first
   // definition type can pin its ID onto SharedDetails, so the second must be reported as a gap.
   private List<FirstSharedCT> firstShared;

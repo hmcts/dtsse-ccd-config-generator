@@ -50,6 +50,14 @@ final class RetrofitModelRebinder {
   private final TypeReconciler reconciler;
   private final SynthesisPlacement placement;
   private final ModelSourceIndex.Type rootType;
+  /**
+   * The FixedList IDs bound to an existing model enum by DECLARATION rather than by name — the enum a
+   * referencing field is typed as, when the list's ID is not that enum's simple name
+   * ({@link RetrofitTypeBinder}). Dropped from the emitted lists for the same reason as an exact
+   * name match: the model already declares the enum, so the SDK reflects it off the annotated field
+   * and a generated companion would be a second, unreferenced enum. Empty unless the run installs it.
+   */
+  private Set<String> declaredBoundFixedListIds = java.util.Set.of();
 
   RetrofitModelRebinder(ModelSourceIndex index, PropertyResolver.Resolution resolution) {
     this(index, resolution, null);
@@ -67,6 +75,16 @@ final class RetrofitModelRebinder {
     this.reconciler = new TypeReconciler(index);
     this.placement = new SynthesisPlacement(index, constructorLimit);
     this.rootType = rootType;
+  }
+
+  /**
+   * Installs the FixedList IDs bound to a model enum by declaration, so no companion enum is generated
+   * for them (see {@link #declaredBoundFixedListIds}).
+   *
+   * @param ids the bound FixedList IDs
+   */
+  void bindDeclaredFixedLists(Set<String> ids) {
+    this.declaredBoundFixedListIds = ids == null ? java.util.Set.of() : ids;
   }
 
   /**
@@ -203,7 +221,14 @@ final class RetrofitModelRebinder {
       // type is an enum the SDK reflects it from the annotated field (proposal decision 3); when it is
       // a non-enum class the list rows still round-trip via the field's typeParameterOverride /
       // passthrough, but no colliding enum is generated either way.
-      if (!index.hasTopLevelType(list.getId())) {
+      //
+      // The same drop applies when the list binds to a model enum by DECLARATION rather than by name
+      // (probate's handoffReasonFixedList is modelled by the enum HandoffReasonId): the patch pins the
+      // list ID onto that enum with @ComplexType(name), so the SDK emits the rows under the definition's
+      // ID off the team's own enum — generating a companion as well would leave a second enum that
+      // nothing references and no rows for the ID the definition uses.
+      if (!index.hasTopLevelType(list.getId())
+          && !declaredBoundFixedListIds.contains(list.getId())) {
         reboundLists.add(list);
       }
     }

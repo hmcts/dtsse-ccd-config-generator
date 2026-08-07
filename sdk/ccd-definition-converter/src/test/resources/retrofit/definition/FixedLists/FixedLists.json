@@ -1,0 +1,5 @@
+[
+  { "ID": "handoffReasonFixedList", "ListElementCode": "INTERPRETER", "ListElement": "Interpreter required" },
+  { "ID": "handoffReasonFixedList", "ListElementCode": "TRUST_CORP", "ListElement": "Trust corporation" },
+  { "ID": "crossKindFixedList", "ListElementCode": "ONE", "ListElement": "One" }
+]

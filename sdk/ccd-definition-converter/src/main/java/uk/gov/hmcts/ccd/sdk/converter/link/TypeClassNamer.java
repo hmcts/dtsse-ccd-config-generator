@@ -51,10 +51,16 @@ public final class TypeClassNamer {
    * {@code PostponementReason}). A well-formed domain ID (nfdiv-style {@code ApplicationType}) is
    * returned unchanged.
    *
+   * <p>Public for the same reason as {@link #complexTypeName}: retrofit binds a list ID to the team's
+   * existing enum, whose real simple name may differ from this one, and must alias the two — keyed on
+   * exactly the name a reference to the list is emitted under, prefix-stripping included
+   * ({@code FL_commRequestTopic} is referenced as {@code CommRequestTopic}, not
+   * {@code FLCommRequestTopic}).
+   *
    * @param id the FixedLists sheet ID
    * @return the PascalCase Java enum name (before collision resolution)
    */
-  static String fixedListName(String id) {
+  public static String fixedListName(String id) {
     if (id != null && id.startsWith(FIXED_LIST_MACHINE_PREFIX)) {
       String stripped = id.substring(FIXED_LIST_MACHINE_PREFIX.length());
       String candidate = pascalCase(stripped);

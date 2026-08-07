@@ -132,6 +132,18 @@ public final class RetrofitPatchEmitter {
    */
   private final Set<String> definitionComplexTypeIds = new LinkedHashSet<>();
   /**
+   * Definition type ID → the model type its own referencing field is declared as, for the IDs no
+   * name-based lookup reaches ({@link RetrofitTypeBinder}). Empty unless the run installs it, so
+   * generate mode, the matcher's report-only pass and every test that does not exercise it keep the
+   * historical name-only behaviour.
+   *
+   * <p>These are pinned with {@code @ComplexType(name = <id>, generate = true)} exactly as the
+   * name-matched bindings are — the pin is what makes the SDK emit the type under the definition's ID
+   * instead of the class's Java name — and are excluded from the companion set, because a type with a
+   * real backing class must not ALSO be generated as a standalone companion.
+   */
+  private Map<String, ModelSourceIndex.Type> declaredTypeBindings = Map.of();
+  /**
    * The naming-strategy-derived names the {@code CaseEventToComplexTypes} member walk relied on, which
    * this patch pins with an explicit {@code @JsonProperty} so the naming-strategy-blind SDK generator
    * derives the same CCD id. Empty for the throwaway planning instance (whose graph has not run yet)
@@ -245,6 +257,45 @@ public final class RetrofitPatchEmitter {
     this.pathPrefix = normalisePrefix(pathPrefix);
   }
 
+  /**
+   * Installs the declared-type bindings for the definition IDs no name-based lookup reaches, so those
+   * types are pinned onto the classes their referencing fields name instead of being emitted as
+   * companions nothing references. Called once per retrofit run by {@link RetrofitConverter}, on BOTH
+   * the throwaway planning emitter and the real one, so the plan the member walk resolves against and
+   * the patch that realises it bind every ID the same way.
+   *
+   * @param bindings definition ID → bound model type, from {@link RetrofitTypeBinder}
+   */
+  void bindDeclaredTypes(Map<String, ModelSourceIndex.Type> bindings) {
+    this.declaredTypeBindings = bindings == null ? Map.of() : bindings;
+  }
+
+  /**
+   * The bindings this emitter resolved, for {@link RetrofitConverter} to hand the companion emitter and
+   * the reserved-name sets so they agree on which IDs have a backing class.
+   *
+   * @return definition ID → bound model type
+   */
+  Map<String, ModelSourceIndex.Type> declaredTypeBindings() {
+    return declaredTypeBindings;
+  }
+
+  /**
+   * The model class backing a definition complex type: the name-based match if there is one, else the
+   * class its referencing field is declared as ({@link RetrofitTypeBinder}).
+   *
+   * <p>Every decision keyed on "does this ID have a model class" goes through here, so the companion
+   * set, the retype set and the ID pin cannot disagree about a given ID — the disagreement that leaves a
+   * generated companion referenced by nothing.
+   */
+  private Optional<ModelSourceIndex.Type> boundClass(String definitionId) {
+    Optional<ModelSourceIndex.Type> named = index.complexTypeClass(definitionId, modelPackage);
+    if (named.isPresent()) {
+      return named;
+    }
+    return Optional.ofNullable(declaredTypeBindings.get(definitionId));
+  }
+
   /** Normalises a path prefix to empty or a single-trailing-slash form with no leading slash. */
   private static String normalisePrefix(String prefix) {
     if (prefix == null || prefix.isBlank()) {
@@ -308,6 +359,11 @@ public final class RetrofitPatchEmitter {
     // a class-level naming strategy. Must run AFTER step 3 so a field that is also a definition
     // complex-type member keeps that plan's own @JsonProperty rather than gaining a second one.
     planPinnedNames(byFile);
+
+    // 3c. Pin the definition's FixedList IDs onto the model enums their referencing fields are declared
+    // as. Must run AFTER step 3, whose complex-type pins take precedence in complexTypeIdPins: a type
+    // reachable as both is a complex type first (only ComplexTypeGenerator emits its members).
+    planFixedListIds(byFile);
 
     // 4. Synthesised definition-only fields onto the root model class.
     List<FieldModel> synthesised = new ArrayList<>();
@@ -619,8 +675,7 @@ public final class RetrofitPatchEmitter {
       planRetype(byFile, property, companion, "CaseField", field.getId(), field.getId());
     }
     for (ComplexTypeModel complexType : model.getComplexTypes()) {
-      Optional<ModelSourceIndex.Type> type =
-          index.complexTypeClass(complexType.getId(), modelPackage);
+      Optional<ModelSourceIndex.Type> type = boundClass(complexType.getId());
       if (type.isEmpty()) {
         continue; // the companion case itself — its own members are generated, not patched
       }
@@ -970,6 +1025,34 @@ public final class RetrofitPatchEmitter {
   }
 
   /**
+   * Pins each definition {@code FixedLists} ID onto the model enum its referencing field is declared as,
+   * for the IDs no name match reaches — probate's {@code handoffReasonFixedList} against the model's
+   * {@code HandoffReasonId}, {@code enablementTypeFixedList} against
+   * {@code ParagraphDetailEnablementType}.
+   *
+   * <p>The same {@code @ComplexType(name = <id>, generate = true)} the complex-type pin uses, because
+   * {@code FixedListGenerator} reads the list ID from exactly that annotation, falling back to the
+   * enum's simple name — the identical divergence, on the identical mechanism. {@code generate = true}
+   * is as mandatory here as there: the attribute defaults to false and the generator skips a
+   * named-but-not-generate type entirely.
+   *
+   * <p>Without the pin the team's enum emits its rows under its Java name (an ID the definition never
+   * mentions) while the definition's own rows are answered by a generated companion enum that the retype
+   * usually cannot point the field at — so the definition ID gets no rows at all. Pinning fixes both
+   * sides at once, and {@link RetrofitModelRebinder} drops the companion for a pinned ID so only one
+   * enum ever carries it.
+   */
+  private void planFixedListIds(Map<Path, FileEdits> byFile) {
+    for (Map.Entry<String, ModelSourceIndex.Type> binding : declaredTypeBindings.entrySet()) {
+      ModelSourceIndex.Type type = binding.getValue();
+      if (!type.isEnum()) {
+        continue; // a complex-type binding, already pinned by planComplexTypeMembers
+      }
+      pinComplexTypeId(byFile, binding.getKey(), type, true);
+    }
+  }
+
+  /**
    * Whether a class carries a {@code @JsonNaming} the converter cannot statically evaluate — a
    * team-written strategy class rather than one of Jackson's own.
    */
@@ -986,13 +1069,12 @@ public final class RetrofitPatchEmitter {
       definitionComplexTypeIds.add(complexType.getId());
       // The same lookup the loop below skips on, run up front so every retype decision — including one
       // made while planning the FIRST complex type's members — sees the complete companion set.
-      if (index.complexTypeClass(complexType.getId(), modelPackage).isEmpty()) {
+      if (boundClass(complexType.getId()).isEmpty()) {
         companionComplexTypes.put(complexType.getId(), complexType);
       }
     }
     for (ComplexTypeModel complexType : model.getComplexTypes()) {
-      Optional<ModelSourceIndex.Type> type =
-          index.complexTypeClass(complexType.getId(), modelPackage);
+      Optional<ModelSourceIndex.Type> type = boundClass(complexType.getId());
       if (type.isEmpty()) {
         // No top-level model CLASS for this definition complex type (absent, or only a nested/
         // interface type shares the name — e.g. Civil's Hearing interface nested in the sealed
@@ -2406,49 +2488,8 @@ public final class RetrofitPatchEmitter {
    */
   private static com.github.javaparser.ast.type.Type retypeTarget(
       com.github.javaparser.ast.type.Type declared) {
-    if (!(declared instanceof ClassOrInterfaceType cit)) {
-      return declared;
-    }
-    if (!isCollectionRawType(cit)) {
-      // A scalar declaration: its own name is the token, but only when it is not itself generic —
-      // renaming Wrapper in Wrapper<Foo> would move the parameters onto a non-generic companion.
-      return cit.getTypeArguments().isPresent() ? null : cit;
-    }
-    Optional<ClassOrInterfaceType> element = firstTypeArgument(cit);
-    if (element.isEmpty()) {
-      return null; // a raw collection names no element type to rewrite
-    }
-    // A generic element wrapper (ListValue<X>, Element<X>) is descended through to X; a concrete
-    // element class IS the type the SDK names, so it is the token to replace.
-    Optional<ClassOrInterfaceType> inner = firstTypeArgument(element.get());
-    if (inner.isPresent()) {
-      return inner.get().getTypeArguments().isPresent() ? null : inner.get();
-    }
-    return element.get();
+    return RetrofitTypeTokens.elementToken(declared);
   }
-
-  /** The first type argument of a parameterised type, when it is itself a class/interface type. */
-  private static Optional<ClassOrInterfaceType> firstTypeArgument(ClassOrInterfaceType type) {
-    return type.getTypeArguments()
-        .flatMap(args -> args.isEmpty() ? Optional.empty() : Optional.of(args.get(0)))
-        .filter(t -> t instanceof ClassOrInterfaceType)
-        .map(t -> (ClassOrInterfaceType) t);
-  }
-
-  /**
-   * Whether a type's raw name is one of the collection types the SDK treats structurally, mirroring
-   * {@link TypeInference}'s own set.
-   */
-  private static boolean isCollectionRawType(ClassOrInterfaceType type) {
-    return COLLECTION_RAW_TYPES.contains(type.getNameAsString());
-  }
-
-  /**
-   * Collection raw types the SDK treats structurally, mirroring {@link TypeInference}.
-   */
-  private static final Set<String> COLLECTION_RAW_TYPES = Set.of(
-      "List", "Set", "Collection", "ArrayList", "LinkedList", "HashSet", "LinkedHashSet",
-      "SortedSet", "TreeSet");
 
   /**
    * The 1-based source line a field declaration's own text begins on — its first existing

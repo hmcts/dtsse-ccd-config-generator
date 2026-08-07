@@ -60,10 +60,21 @@ class RetrofitPatchEmitterGoldenTest {
     CaseTypeModel linked = new DefaultDefinitionLinker().link(ir, options, new GapCollector());
     RetrofitModelRebinder rebinder =
         new RetrofitModelRebinder(matcher.index(), matcher.resolution());
+    // The same declaration bindings RetrofitConverter computes once and hands to every consumer: the
+    // definition IDs no name lookup reaches, bound to the class their referencing field is declared as.
+    Map<String, ModelSourceIndex.Type> declaredBindings =
+        new RetrofitTypeBinder(matcher.index(), MODEL_PACKAGE)
+            .bind(ir, "EXAMPLE", matcher.resolution().properties);
+    rebinder.bindDeclaredFixedLists(declaredBindings.entrySet().stream()
+        .filter(e -> e.getValue().isEnum())
+        .map(Map.Entry::getKey)
+        .collect(java.util.stream.Collectors.toSet()));
     CaseTypeModel rebound = rebinder.rebind(linked);
 
-    return new RetrofitPatchEmitter(matcher.index(), matcher.resolution(), rebound, matcher.root(),
-        CONFIG_PACKAGE, 0, "", pinnedNames);
+    RetrofitPatchEmitter emitter = new RetrofitPatchEmitter(matcher.index(), matcher.resolution(),
+        rebound, matcher.root(), CONFIG_PACKAGE, 0, "", pinnedNames);
+    emitter.bindDeclaredTypes(declaredBindings);
+    return emitter;
   }
 
   private RetrofitPatchEmitter buildEmitter(int constructorLimit, String pathPrefix) {
@@ -290,6 +301,88 @@ class RetrofitPatchEmitterGoldenTest {
               .contains("secondSharedCT")
               .contains("SharedDetails");
         });
+  }
+
+  @Test
+  void pinsAnIdNoNameLookupReachesOntoTheClassItsReferencingFieldIsDeclaredAs() {
+    // The single largest category of retrofit residual (4,400 of 7,119 diff lines across the
+    // probate/ET/fpl/prl lanes). complexTypeClass matches an ID to a class by simple name — exactly, then
+    // case-insensitively — which reaches noticeDetails → NoticeDetails but nothing further. Real
+    // definitions name their types independently of the classes behind them (probate's executorApplying is
+    // modelled by AdditionalExecutorApplying), and the miss costs twice over: a companion is generated for
+    // the ID that nothing references (so the SDK never reflects it and it emits no rows at all) while the
+    // real class emits a full set of rows under its Java name, an ID the definition never mentions.
+    //
+    // The definition itself says what backs the type: the field referencing it is DECLARED as the class.
+    // So the ID is pinned onto that class with the same @ComplexType(name, generate = true) the
+    // name-bound IDs get — which fixes ComplexTypes, FixedLists AND the CaseField FieldType/
+    // FieldTypeParameter columns at once, since CaseFieldGenerator reads the same annotation.
+    RetrofitPatch patch = emitPatch();
+    assertThat(patchedFile(patch, "common/AdditionalExecutorApplying.java"))
+        .contains("@ComplexType(name = \"executorApplying\", generate = true)")
+        .contains("import uk.gov.hmcts.ccd.sdk.api.ComplexType;");
+    // No field declaration is rewritten, so unlike the retype this cannot break a caller in a published
+    // jar — and its member is annotated in place on the class the definition's rows describe.
+    assertThat(patchedFile(patch, "common/Party.java"))
+        .contains("private AdditionalExecutorApplying executorApplying;");
+  }
+
+  @Test
+  void pinsAFixedListIdNoNameLookupReachesOntoTheEnumItsReferencingFieldIsDeclaredAs() {
+    // The FixedLists half, on the identical mechanism: FixedListGenerator reads the list ID from the same
+    // class-level @ComplexType(name), falling back to the enum's simple name. probate's
+    // handoffReasonFixedList is declared as HandoffReasonId, so without the pin the definition's list is
+    // answered by a companion enum the retype usually cannot point the field at (196 refusals across the
+    // lanes, 141 of them "has accessors called from the model source") while the team's enum emits under
+    // its own name.
+    RetrofitPatch patch = emitPatch();
+    assertThat(patchedFile(patch, "enums/HandoffReasonId.java"))
+        .contains("@ComplexType(name = \"handoffReasonFixedList\", generate = true)");
+  }
+
+  @Test
+  void refusesToBindAnIdTwoReferencingFieldsDeclareDifferently() {
+    // Unanimity: disagreeingCT is referenced by one field declared as DeclaredOne and another as
+    // DeclaredTwo. There is no single backing class, so binding to whichever row was read first would pin
+    // an ID onto a class only half the definition's references agree with. Left to the companion path.
+    RetrofitPatch patch = emitPatch();
+    assertNoPinOn(patch, "common/DeclaredOne.java", "disagreeingCT");
+    assertNoPinOn(patch, "common/DeclaredTwo.java", "disagreeingCT");
+  }
+
+  /**
+   * Asserts a class carries no {@code @ComplexType} pin for a definition ID — whether because the patch
+   * leaves the file untouched entirely (the usual outcome for a refused binding: nothing else about the
+   * class needs changing) or because it patches it for other reasons but adds no pin.
+   */
+  private static void assertNoPinOn(RetrofitPatch patch, String pathSuffix, String definitionId) {
+    java.util.Optional<String> patched = patch.files().stream()
+        .filter(f -> f.relativePath().endsWith(pathSuffix))
+        .map(RetrofitPatch.FilePatch::patchedContent)
+        .findFirst();
+    patched.ifPresent(content -> assertThat(complexTypeAnnotations(content))
+        .noneMatch(a -> a.contains("\"" + definitionId + "\"")));
+  }
+
+  @Test
+  void refusesToBindTwoIdsToOneDeclaredClass() {
+    // The declaration-bound counterpart of the name-bound one-class-many-IDs collision: firstClaimingCT
+    // and secondClaimingCT are both declared as TwiceClaimedPayload, which carries only one
+    // @ComplexType(name). Neither is bound — picking a winner here would be arbitrary, and would silently
+    // move the loser's rows onto the winner's ID.
+    RetrofitPatch patch = emitPatch();
+    assertNoPinOn(patch, "common/TwiceClaimedPayload.java", "firstClaimingCT");
+    assertNoPinOn(patch, "common/TwiceClaimedPayload.java", "secondClaimingCT");
+  }
+
+  @Test
+  void refusesToBindAFixedListIdToAClassOrAComplexTypeIdToAnEnum() {
+    // Kind must match the generator that will emit the type: FixedListGenerator selects on isEnum and
+    // ComplexTypeGenerator on the absence of it, so pinning crossKindFixedList onto the CLASS
+    // CrossKindPayload would name a type the OTHER generator emits — the list would still get no rows
+    // while the class's own moved to an ID the definition uses for something else.
+    RetrofitPatch patch = emitPatch();
+    assertNoPinOn(patch, "common/CrossKindPayload.java", "crossKindFixedList");
   }
 
   @Test

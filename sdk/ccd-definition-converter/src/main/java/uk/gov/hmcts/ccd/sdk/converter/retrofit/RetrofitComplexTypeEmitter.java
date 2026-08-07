@@ -27,6 +27,7 @@ public final class RetrofitComplexTypeEmitter implements SourceEmitter {
 
   private final ModelSourceIndex index;
   private final String modelPackage;
+  private final java.util.Set<String> declaredBoundIds;
   private final ComplexTypeEmitter delegate = new ComplexTypeEmitter();
 
   /**
@@ -36,13 +37,29 @@ public final class RetrofitComplexTypeEmitter implements SourceEmitter {
    * @param modelPackage the team model package, preferred when a simple name is ambiguous
    */
   public RetrofitComplexTypeEmitter(ModelSourceIndex index, String modelPackage) {
+    this(index, modelPackage, java.util.Set.of());
+  }
+
+  /**
+   * Creates the emitter with the IDs bound to a model class by DECLARATION as well as by name.
+   *
+   * @param declaredBoundIds the definition complex-type IDs {@code RetrofitTypeBinder} bound to the
+   *                         class their referencing field is declared as. These must not be emitted as
+   *                         companions: the patch pins the ID onto that real class, so a companion would
+   *                         be a second class carrying the same {@code @ComplexType(name)} — duplicate
+   *                         rows at best, and a class nothing references at worst
+   */
+  public RetrofitComplexTypeEmitter(ModelSourceIndex index, String modelPackage,
+      java.util.Set<String> declaredBoundIds) {
     this.index = index;
     this.modelPackage = modelPackage;
+    this.declaredBoundIds = declaredBoundIds == null ? java.util.Set.of() : declaredBoundIds;
   }
 
   @Override
   public List<JavaFile> emit(CaseTypeModel model, EmitContext context) {
     List<ComplexTypeModel> definitionOnly = model.getComplexTypes().stream()
+        .filter(ct -> !declaredBoundIds.contains(ct.getId()))
         .filter(ct -> index.complexTypeClass(ct.getId(), modelPackage).isEmpty())
         .toList();
     CaseTypeModel filtered = model.toBuilder().complexTypes(definitionOnly).build();

@@ -133,7 +133,34 @@ public final class RetrofitConverter {
     // model's acronym-cased ET3CaseDetailsLinksStatuses). Nothing is emitted under the derived name, so
     // without the alias every reference to it is a cannot-find-symbol. Applied FIRST so a concrete
     // out-of-package sibling FQN still wins on a key clash, as before.
+    // A definition type ID no name-based lookup reaches, bound instead to the class its own referencing
+    // field is DECLARED as (probate's ExecutorApplying → AdditionalExecutorApplying, its
+    // handoffReasonFixedList → HandoffReasonId). The patch pins the definition's ID onto that class with
+    // @ComplexType(name), so the SDK emits the type under the ID the definition uses; without the
+    // binding the ID gets a companion nothing references while the real class emits under its Java name
+    // — the largest single category of retrofit residual (see RetrofitTypeBinder).
+    //
+    // Computed HERE, once, from the root resolution, and handed to every consumer below: the companion
+    // filter, the reserved-name sets, the type aliases, the rebinder's FixedList drop and BOTH patch
+    // emitters. One derivation, so no two of them can disagree about which IDs have a backing class.
+    final Map<String, ModelSourceIndex.Type> declaredBindings =
+        new RetrofitTypeBinder(index, modelPackage).bind(ir, caseTypeId, resolution.properties);
+
     Map<String, String> fqnOverrides = new java.util.LinkedHashMap<>();
+    // A reference to a declared-bound ID must resolve to the class it binds to, not to a companion that
+    // is no longer emitted for it — the same aliasing the name-bound IDs get below, keyed on the ID's
+    // own derived companion name.
+    // Keyed per KIND, because the two namers differ: a fixed list's reference name strips the machine
+    // 'FL_' prefix (FL_commRequestTopic → CommRequestTopic), so keying it on the complex-type namer
+    // (FLCommRequestTopic) aliases a name nothing ever emits while the real reference stays dangling.
+    declaredBindings.forEach((id, type) -> {
+      String derived = type.isEnum()
+          ? uk.gov.hmcts.ccd.sdk.converter.link.TypeClassNamer.fixedListName(id)
+          : uk.gov.hmcts.ccd.sdk.converter.link.TypeClassNamer.complexTypeName(id);
+      if (!derived.isEmpty() && !derived.equals(type.simpleName)) {
+        fqnOverrides.putIfAbsent(derived, type.fqn);
+      }
+    });
     fqnOverrides.putAll(index.complexTypeIdClassAliases(
         sheetIds(uk.gov.hmcts.ccd.sdk.converter.ir.SheetName.COMPLEX_TYPES), modelPackage));
     fqnOverrides.putAll(index.caseInsensitiveClassAliases());
@@ -155,8 +182,14 @@ public final class RetrofitConverter {
         //     names are reserved EXCEPT the exact-ID matches: those bind to the model's own type and
         //     emit no companion, so reserving them would rename the reference to a '<Id>2' companion
         //     that is never generated (the prl/fpl/Civil 'cannot find symbol' break).
-        .retrofitReservedComplexTypeNames(reservedComplexTypeNames(index))
-        .retrofitReservedFixedListNames(reservedFixedListNames(index))
+        //
+        // A declared-bound ID emits no companion either (the patch pins its ID onto the real class), so
+        // that class's name must not be reserved for the same reason: reserving it would bump a reference
+        // to a '<Name>2' companion nothing generates.
+        .retrofitReservedComplexTypeNames(
+            withoutBoundNames(reservedComplexTypeNames(index), declaredBindings))
+        .retrofitReservedFixedListNames(
+            withoutBoundNames(reservedFixedListNames(index), declaredBindings))
         .build();
 
     int constructorLimit = options.getRetrofitConstructorLimit();
@@ -185,7 +218,7 @@ public final class RetrofitConverter {
     // One throwaway planning pass yields BOTH plans the graph needs, so the synthesis it resolves and
     // the retypes it descends through can never come from two different plannings of the same model.
     RetrofitPatchEmitter planner =
-        planner(planOptions, index, resolution, root, constructorLimit, pathPrefix);
+        planner(planOptions, index, resolution, root, constructorLimit, pathPrefix, declaredBindings);
     RetrofitPlannedSynthesis plannedSynthesis = planner.planSynthesisedMembers();
     final ConversionOptions emitOptions = planOptions.toBuilder()
         .retrofitModelTypeGraph(new RetrofitEventComplexTypeGraph(index, resolution, root,
@@ -193,6 +226,7 @@ public final class RetrofitConverter {
         .build();
     RetrofitModelRebinder rebinder =
         new RetrofitModelRebinder(index, resolution, root, constructorLimit);
+    rebinder.bindDeclaredFixedLists(declaredBoundEnumIds(declaredBindings));
 
     // Emit companion sources: the Converter runs reader → linker (retrofit: unclustered) → rebind →
     // emitters. The rebind rewrites getters/fields onto the team's model and drops any FixedList
@@ -202,7 +236,7 @@ public final class RetrofitConverter {
     // model class). It needs the parsed index + model package, so it is passed in here rather than
     // wired in the static ConverterFactory.
     Converter converter = ConverterFactory.create(emitOptions,
-            List.of(new RetrofitComplexTypeEmitter(index, modelPackage)))
+            List.of(new RetrofitComplexTypeEmitter(index, modelPackage, declaredBindings.keySet())))
         .toBuilder()
         .modelTransform((model, gaps) -> {
           CaseTypeModel rebound = rebinder.rebind(model, gaps);
@@ -226,6 +260,7 @@ public final class RetrofitConverter {
         index, resolution, reboundHolder[0], root,
         EmitContext.accessPackage(options.getConfigPackage()),
         constructorLimit, pathPrefix, pinnedNames, fqnOverrides);
+    emitter.bindDeclaredTypes(declaredBindings);
     RetrofitPatch patch = emitter.emit();
     writePatch(reportDir, patch);
     // Surface any synthesised-field name collisions the emitter skipped (finding B1) so they are not
@@ -289,21 +324,65 @@ public final class RetrofitConverter {
    * which the linker builds before its {@code CaseEventToComplexTypes} pass — so this pass, which emits
    * nothing and writes no report, yields exactly the types the real run will plan against.
    *
+   * @param declaredBindings the same declared-type bindings the real emit uses — the plan must resolve
+   *                         a bound ID to the model class the patch will pin it onto, not to a companion
    * @return the throwaway planner, whose plans the real run's emitter re-derives identically
    */
   private RetrofitPatchEmitter planner(ConversionOptions planOptions,
       ModelSourceIndex index, PropertyResolver.Resolution resolution, ModelSourceIndex.Type root,
-      int constructorLimit, String pathPrefix) {
+      int constructorLimit, String pathPrefix,
+      Map<String, ModelSourceIndex.Type> declaredBindings) {
     GapCollector planGaps = new GapCollector();
     CaseTypeModel linked =
         new DefaultDefinitionLinker().link(ir, planOptions, planGaps);
-    CaseTypeModel rebound = new RetrofitModelRebinder(index, resolution, root, constructorLimit)
-        .rebind(linked, planGaps);
+    RetrofitModelRebinder planRebinder =
+        new RetrofitModelRebinder(index, resolution, root, constructorLimit);
+    planRebinder.bindDeclaredFixedLists(declaredBoundEnumIds(declaredBindings));
+    CaseTypeModel rebound = planRebinder.rebind(linked, planGaps);
     // Same overrides as the real emit below, so the plan the member walk resolves against and the
     // patch that realises it cannot bind a type reference differently.
-    return new RetrofitPatchEmitter(index, resolution, rebound, root,
+    RetrofitPatchEmitter planner = new RetrofitPatchEmitter(index, resolution, rebound, root,
         EmitContext.accessPackage(options.getConfigPackage()), constructorLimit, pathPrefix,
         RetrofitPinnedNames.empty(), planOptions.getRetrofitTypeFqnOverrides());
+    planner.bindDeclaredTypes(declaredBindings);
+    return planner;
+  }
+
+  /**
+   * The declared-bound IDs whose bound model type is an ENUM: the {@code FixedLists} half of the
+   * binding, which {@link RetrofitModelRebinder} needs so it drops those lists (the patch pins the ID
+   * onto the model enum, so emitting a companion enum for it too would duplicate the type).
+   *
+   * @param declaredBindings the bindings
+   * @return the enum-valued IDs
+   */
+  private java.util.Set<String> declaredBoundEnumIds(
+      Map<String, ModelSourceIndex.Type> declaredBindings) {
+    java.util.Set<String> ids = new java.util.LinkedHashSet<>();
+    declaredBindings.forEach((id, type) -> {
+      if (type.isEnum()) {
+        ids.add(id);
+      }
+    });
+    return ids;
+  }
+
+  /**
+   * A reserved-name set minus the simple names of the declared-bound classes.
+   *
+   * <p>Reserving a bound class's name makes the namer bump every reference to it to {@code <Name>2} — a
+   * companion nothing generates, so every such reference fails to compile. Exactly the desync documented
+   * on {@link ModelSourceIndex#boundFixedListNames}, reached by the new binding path.
+   *
+   * @param reserved the reserved names
+   * @param declaredBindings the declared-type bindings
+   * @return the reserved names with the bound classes' names removed
+   */
+  private java.util.Set<String> withoutBoundNames(java.util.Set<String> reserved,
+      Map<String, ModelSourceIndex.Type> declaredBindings) {
+    java.util.Set<String> narrowed = new java.util.LinkedHashSet<>(reserved);
+    declaredBindings.values().forEach(type -> narrowed.remove(type.simpleName));
+    return narrowed;
   }
 
   /**
