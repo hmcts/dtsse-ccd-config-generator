@@ -67,7 +67,7 @@ class DatabaseAuditIntegrationTest {
   @Test
   void recordsCompleteRowsForInsertUpdateDeleteAndNoOpUpdates() throws Exception {
     long caseEventId = transaction.execute(status -> {
-      long reservedId = reserveEventContext();
+      final long reservedId = reserveEventContext();
       jdbc.update("""
           insert into audit_test(id, note, enabled, metadata)
           values (1, 'before', true, '{"source":"test"}'::json)

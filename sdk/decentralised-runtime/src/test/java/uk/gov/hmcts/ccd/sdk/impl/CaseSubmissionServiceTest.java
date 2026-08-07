@@ -52,7 +52,7 @@ class CaseSubmissionServiceTest {
 
   @Test
   void passesNormalisedUserTokenToSubmissionHandler() {
-    DecentralisedCaseEvent event = event();
+    final DecentralisedCaseEvent event = event();
     Event<?, ?, ?> eventConfig = mock(Event.class);
     doReturn(eventConfig).when(resolvedConfigRegistry).getRequiredEvent("TestCase", "submit");
     when(eventConfig.getSubmitHandler()).thenReturn(null);
@@ -84,7 +84,7 @@ class CaseSubmissionServiceTest {
 
   @Test
   void idempotentReplayDoesNotReserveAnotherEventId() {
-    DecentralisedCaseEvent event = event();
+    final DecentralisedCaseEvent event = event();
     Event<?, ?, ?> eventConfig = mock(Event.class);
     doReturn(eventConfig).when(resolvedConfigRegistry).getRequiredEvent("TestCase", "submit");
     when(eventConfig.getSubmitHandler()).thenReturn(null);

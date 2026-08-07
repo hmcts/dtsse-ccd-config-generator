@@ -3,6 +3,7 @@ package uk.gov.hmcts.ccd.sdk.impl;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
@@ -42,7 +43,6 @@ class SystemCaseEventServiceImplTest {
 
   private final TransactionTemplate transactionTemplate = mock(TransactionTemplate.class);
   private final IdempotencyEnforcer idempotencyEnforcer = mock(IdempotencyEnforcer.class);
-  private final DatabaseAuditContext databaseAuditContext = mock(DatabaseAuditContext.class);
   private final CaseDataRepository caseDataRepository = mock(CaseDataRepository.class);
   private final AuditEventService auditEventService = mock(AuditEventService.class);
   private final ResolvedConfigRegistry configRegistry = mock(ResolvedConfigRegistry.class);
@@ -52,7 +52,6 @@ class SystemCaseEventServiceImplTest {
       "pcs-api",
       transactionTemplate,
       idempotencyEnforcer,
-      databaseAuditContext,
       provider(caseDataRepository),
       provider(auditEventService),
       provider(configRegistry),
@@ -243,7 +242,7 @@ class SystemCaseEventServiceImplTest {
     );
 
     assertThat(result).isEqualTo(new uk.gov.hmcts.ccd.sdk.SystemCaseEventResult(CASE_REFERENCE, 99L, true));
-    verifyNoInteractions(databaseAuditContext, caseDataRepository, auditEventService, configRegistry);
+    verifyNoInteractions(caseDataRepository, auditEventService, configRegistry);
   }
 
   @Test
@@ -276,7 +275,8 @@ class SystemCaseEventServiceImplTest {
         .hasMessage("System case event action must return an outcome");
 
     verify(caseDataRepository, never()).upsertCase(any(), any());
-    verifyNoInteractions(auditEventService);
+    verify(auditEventService).reserveCaseEventId();
+    verify(auditEventService, never()).saveSystemAuditRecord(anyLong(), any(), any(), any(), any());
   }
 
   private void givenNewEvent() {
@@ -286,7 +286,7 @@ class SystemCaseEventServiceImplTest {
     doReturn(config).when(configRegistry).getRequired("TestCase");
     when(config.getCaseClass()).thenReturn((Class) TestCaseData.class);
     when(config.getStateClass()).thenReturn((Class) TestState.class);
-    when(databaseAuditContext.reserveCaseEventId()).thenReturn(42L);
+    when(auditEventService.reserveCaseEventId()).thenReturn(42L);
   }
 
   private DecentralisedCaseDetails caseDetails() {

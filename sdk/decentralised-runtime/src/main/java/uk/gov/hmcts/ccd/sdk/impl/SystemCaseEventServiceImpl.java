@@ -34,7 +34,6 @@ class SystemCaseEventServiceImpl implements SystemCaseEventService {
   private final String serviceId;
   private final TransactionTemplate transactionTemplate;
   private final IdempotencyEnforcer idempotencyEnforcer;
-  private final DatabaseAuditContext databaseAuditContext;
   private final ObjectProvider<CaseDataRepository> caseDataRepository;
   private final ObjectProvider<AuditEventService> auditEventService;
   private final ObjectProvider<ResolvedConfigRegistry> configRegistry;
@@ -44,7 +43,6 @@ class SystemCaseEventServiceImpl implements SystemCaseEventService {
       @Value("${ccd.decentralised-runtime.system-events.service-id:}") String serviceId,
       TransactionTemplate transactionTemplate,
       IdempotencyEnforcer idempotencyEnforcer,
-      DatabaseAuditContext databaseAuditContext,
       ObjectProvider<CaseDataRepository> caseDataRepository,
       ObjectProvider<AuditEventService> auditEventService,
       ObjectProvider<ResolvedConfigRegistry> configRegistry,
@@ -53,7 +51,6 @@ class SystemCaseEventServiceImpl implements SystemCaseEventService {
     this.serviceId = serviceId;
     this.transactionTemplate = transactionTemplate;
     this.idempotencyEnforcer = idempotencyEnforcer;
-    this.databaseAuditContext = databaseAuditContext;
     this.caseDataRepository = caseDataRepository;
     this.auditEventService = auditEventService;
     this.configRegistry = configRegistry;
@@ -114,7 +111,8 @@ class SystemCaseEventServiceImpl implements SystemCaseEventService {
 
     CaseDetails currentCase = caseDataRepository.getObject().getCase(caseReference).getCaseDetails();
     ResolvedCCDConfig<?, ?, ?> config = configRegistry.getObject().getRequired(currentCase.getCaseTypeId());
-    final long caseEventId = databaseAuditContext.reserveCaseEventId();
+    AuditEventService auditEvents = auditEventService.getObject();
+    final long caseEventId = auditEvents.reserveCaseEventId();
 
     SystemCaseEventContext<T, S> context = context(caseReference, currentCase, config);
     SystemCaseEventOutcome<S> outcome = action.execute(context);
@@ -136,7 +134,7 @@ class SystemCaseEventServiceImpl implements SystemCaseEventService {
 
     caseDataRepository.getObject().upsertCase(caseEvent, Optional.empty());
     CaseDetails savedCase = caseDataRepository.getObject().getCase(caseReference).getCaseDetails();
-    auditEventService.getObject().saveSystemAuditRecord(
+    auditEvents.saveSystemAuditRecord(
         caseEventId,
         caseEvent,
         systemUser(),
