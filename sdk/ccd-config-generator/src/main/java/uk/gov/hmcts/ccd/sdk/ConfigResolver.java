@@ -59,7 +59,13 @@ class ConfigResolver<T, S, R extends HasRole> {
 
 
   public static Map<Class, Integer> resolve(Class dataClass, String basePackage) {
-    Map<Class, Integer> result = Maps.newHashMap();
+    // Insertion-ordered: the generators iterate this map, and two reachable classes can share one
+    // CCD ID (the same simple name in different packages, or the same @ComplexType(name)), in which
+    // case they merge into one output file and whichever is visited first wins. A HashMap keyed on
+    // Class orders by identity hash, which varies between JVM runs and shifts whenever an unrelated
+    // type becomes reachable — so the definition generated from unchanged source was not stable.
+    // Walk order is.
+    Map<Class, Integer> result = Maps.newLinkedHashMap();
     resolve(dataClass, result, 0, Sets.newLinkedHashSet());
     result = Maps.filterKeys(result, x -> x.getPackageName().startsWith(basePackage));
     return result;

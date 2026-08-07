@@ -5,6 +5,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -12,7 +13,7 @@ import org.springframework.stereotype.Component;
 import uk.gov.hmcts.ccd.sdk.ResolvedCCDConfig;
 import uk.gov.hmcts.ccd.sdk.api.ComplexType;
 import uk.gov.hmcts.ccd.sdk.api.HasRole;
-import uk.gov.hmcts.ccd.sdk.generator.JsonUtils.AddMissing;
+import uk.gov.hmcts.ccd.sdk.generator.JsonUtils.AddMissingPreferringLabels;
 
 @Component
 class ComplexTypeGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, S, R> {
@@ -20,8 +21,11 @@ class ComplexTypeGenerator<T, S, R extends HasRole> implements ConfigGenerator<T
   public void write(File root, ResolvedCCDConfig<T, S, R> config) {
     File complexTypes = new File(root, "ComplexTypes");
     complexTypes.mkdir();
+    // Collect into a LinkedHashMap: two reachable classes can share one CCD ID and merge into a
+    // single file, first writer winning, so the resolver's stable walk order must survive to here.
     Map<Class, Integer> types = config.getTypes().entrySet().stream().filter(x -> !x.getKey().isEnum())
-        .collect(Collectors.toMap(x -> x.getKey(), x -> x.getValue()));
+        .collect(Collectors.toMap(x -> x.getKey(), x -> x.getValue(),
+            (a, b) -> a, LinkedHashMap::new));
 
     if (types.isEmpty()) {
       return;
@@ -60,7 +64,7 @@ class ComplexTypeGenerator<T, S, R extends HasRole> implements ConfigGenerator<T
       }
 
       sortComplexTypesByDisplayOrder(fields);
-      JsonUtils.mergeInto(path, fields, new AddMissing(), false, "ListElementCode");
+      JsonUtils.mergeInto(path, fields, new AddMissingPreferringLabels(), false, "ListElementCode");
     }
   }
 
