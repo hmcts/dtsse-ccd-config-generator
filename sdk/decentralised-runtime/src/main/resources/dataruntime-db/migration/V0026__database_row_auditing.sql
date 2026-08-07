@@ -31,14 +31,7 @@ begin
         return null;
     end if;
 
-    begin
-        audit_case_event_id := nullif(current_setting('ccd.case_event_id', true), '')::bigint;
-    exception
-        when invalid_text_representation then
-            raise exception using
-                errcode = '23514',
-                message = 'Invalid ccd.case_event_id audit context';
-    end;
+    audit_case_event_id := nullif(current_setting('ccd.case_event_id', true), '')::bigint;
 
     if audit_case_event_id is null then
         raise exception using
