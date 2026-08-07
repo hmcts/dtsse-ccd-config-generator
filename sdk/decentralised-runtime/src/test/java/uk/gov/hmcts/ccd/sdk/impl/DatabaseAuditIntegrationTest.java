@@ -19,6 +19,7 @@ import org.springframework.boot.autoconfigure.jdbc.JdbcTemplateAutoConfiguration
 import org.springframework.boot.autoconfigure.transaction.TransactionAutoConfiguration;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.dao.DataAccessException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -56,12 +57,29 @@ class DatabaseAuditIntegrationTest {
           metadata json not null
         )
         """);
-    jdbc.execute("""
-        create trigger ccd_audit_row_changes
-        after insert or update or delete on public.audit_test
-        for each row execute function ccd.audit_row_change()
-        """);
+    jdbc.execute("select ccd.attach_case_event_auditing_v1('public.audit_test'::regclass)");
     insertCase();
+  }
+
+  @Test
+  void rejectsAttachingAuditingMoreThanOnce() {
+    assertThatThrownBy(() ->
+        jdbc.execute("select ccd.attach_case_event_auditing_v1('public.audit_test'::regclass)"))
+        .isInstanceOfSatisfying(DataAccessException.class, exception ->
+            assertThat(exception.getRootCause())
+                .hasMessageContaining("trigger \"ccd_audit_row_changes\"")
+                .hasMessageContaining("already exists"));
+
+    assertThat(jdbc.queryForObject(
+        """
+        select count(*)
+        from pg_trigger
+        where tgrelid = 'public.audit_test'::regclass
+          and tgname = 'ccd_audit_row_changes'
+          and not tgisinternal
+        """,
+        Integer.class
+    )).isOne();
   }
 
   @Test

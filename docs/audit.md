@@ -24,14 +24,13 @@ unchanged. A statement affecting several rows produces one audit entry per row.
 
 ## Enabling a table
 
-Enable auditing for a table by adding the trigger in an application Flyway migration:
+Enable auditing for a table by calling the runtime helper in an application Flyway migration:
 
 ```sql
-create trigger ccd_audit_row_changes
-    after insert or update or delete on case_notes
-    for each row
-    execute function ccd.audit_row_change();
+select ccd.attach_case_event_auditing_v1('public.case_notes'::regclass);
 ```
+
+Calling the helper more than once for the same table fails because the audit trigger already exists.
 
 Audited writes must use the same database transaction as the decentralised event; attempted writes to audited tables
 outside an event context are rejected.
