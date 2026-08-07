@@ -920,6 +920,45 @@ share this cause and need their own decomposition. sscs's own remainder is now l
 (65 lines, deliberately held back from this change) and `eventType`'s 247 unexpected rows, a constant-set
 divergence that is not safely automatable because their code switches on the enum.
 
+### Measured 2026-08-07 — `State` label round
+
+| Lane | Case type | Before | After | Δ |
+|---|---|---:|---:|---:|
+| sscs | `Benefit` | 615 | **552** | −63 |
+| civil | `CIVIL` | 1,921 | **1,864** | −57 |
+| prl | `PRLAPPS` | 2,352 | **2,308** | −44 |
+| fpl | `CARE_SUPERVISION_EPO` | 1,894 | **1,871** | −23 |
+| et | `ET_EnglandWales` | 468 | 468 | 0 |
+| probate | `GrantOfRepresentation` | 196 | 196 | 0 |
+| **total** | | **7,446** | **7,259** | **−187** |
+
+**The `State` sheet's three display columns, closed in one pass with no SDK change.** `StateGenerator`
+resolves all three off `@CCD` on the constant — `label()` → `Name` (falling back to the state ID),
+`description()` → `Description` (falling back to the *resolved* `Name`), `hint()` → `TitleDisplay`
+(the column omitted entirely when empty). A team's own State enum carries none of them: sscs spells its
+display names in a separate lookup, civil's live only in the definition. So every reused state emitted
+`Name == Description == <the state ID>` and no `TitleDisplay` at all — 62 states × three columns.
+
+The values are copied from the definition's own `State` row rather than inferred from whatever accessor
+the team happens to carry, for the same reason as the `FixedLists` round above: that row *is* the string
+the round-trip must reproduce, so the pin is correct by construction. `RetrofitStateLabels` bridges CCD
+state ID → Java constant through `StateEnumAnalyser.stateIdToConstant` — the same derivation the emitted
+config references its constants through, so the two can never disagree about which constant a state is
+(sscs writes `APPEAL_CREATED("appealCreated")` behind a `@JsonValue toString()`). It refuses a constant
+that already carries a `@CCD`, one with no definition row, and any column whose value already equals the
+generator's unaided fallback.
+
+A State enum is frequently *also* reachable as a declared field type (sscs declares `private State state`),
+so both this pass and the `FixedLists` label pass want the same constant, and `@CCD` is not `@Repeatable`.
+They share one per-constant claim and this pass takes it, since the `State` sheet's three columns are always
+compared whereas a definition-less fixed list is an unexpected row whichever `ListElement` it carries. fpl
+came in one line better than predicted for exactly this reason: its `ChangeClosedStateList|PREPARE_FOR_HEARING`
+row is backed by the same enum, so labelling the constants fixed that row too. No sheet regressed in any lane.
+
+**The residual `State` lines are all one shape** — 22 `unexpected row in actual`, model constants with no
+definition row (civil 18, sscs 2, prl 2, fpl 0). Closing those needs `StateGenerator` to honour
+`@CCD(ignore)` on a state constant, which it has no handling for today; deliberately held back.
+
 ## What the round-trip does not prove
 
 The proof is narrower than "the seven fixtures round-trip byte-clean" — know its limits before

@@ -9,6 +9,7 @@
   { "CaseTypeID": "EXAMPLE", "ID": "sharedLine", "FieldType": "FixedList", "FieldTypeParameter": "SharedLineList", "Label": "Shared line" },
   { "CaseTypeID": "EXAMPLE", "ID": "camelConstant", "FieldType": "FixedRadioList", "FieldTypeParameter": "CamelConstantList", "Label": "Camel constant" },
   { "CaseTypeID": "EXAMPLE", "ID": "hearingVenue", "FieldType": "FixedList", "FieldTypeParameter": "FL_hearingVenues", "Label": "Hearing venue" },
+  { "CaseTypeID": "EXAMPLE", "ID": "state", "FieldType": "FixedList", "FieldTypeParameter": "State", "Label": "State" },
   { "CaseTypeID": "EXAMPLE", "ID": "parties", "FieldType": "Collection", "FieldTypeParameter": "Party", "Label": "Parties" },
   { "CaseTypeID": "EXAMPLE", "ID": "documents", "FieldType": "Collection", "FieldTypeParameter": "Document", "Label": "Documents" },
   { "CaseTypeID": "EXAMPLE", "ID": "hearingType", "FieldType": "Text", "Label": "Hearing type" },

@@ -13,5 +13,7 @@
   { "ID": "SharedLineList", "ListElementCode": "SECOND", "ListElement": "SECOND" },
   { "ID": "SharedLineList", "ListElementCode": "THIRD", "ListElement": "The third" },
   { "ID": "CamelConstantList", "ListElementCode": "nonMolestationOrder", "ListElement": "Non-molestation order (FL404A)" },
-  { "ID": "CamelConstantList", "ListElementCode": "occupationOrder", "ListElement": "Occupation order (FL404)" }
+  { "ID": "CamelConstantList", "ListElementCode": "occupationOrder", "ListElement": "Occupation order (FL404)" },
+  { "ID": "State", "ListElementCode": "Open", "ListElement": "An open case" },
+  { "ID": "State", "ListElementCode": "CLOSED", "ListElement": "A closed case" }
 ]

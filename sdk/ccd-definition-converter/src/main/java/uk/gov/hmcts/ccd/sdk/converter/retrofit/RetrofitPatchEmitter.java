@@ -153,6 +153,16 @@ public final class RetrofitPatchEmitter {
    */
   private List<FixedListModel> definitionFixedLists = List.of();
   /**
+   * The team's State enum when the run REUSES it, else null — supplying the constants that carry the
+   * definition's {@code State} sheet labels. See {@link #bindReusedStateEnum}.
+   */
+  private ModelSourceIndex.Type stateEnum;
+  /**
+   * CCD state ID → Java constant name for that reused enum, empty when none is reused.
+   * See {@link #bindReusedStateEnum}.
+   */
+  private Map<String, String> stateConstantsByStateId = Map.of();
+  /**
    * The naming-strategy-derived names the {@code CaseEventToComplexTypes} member walk relied on, which
    * this patch pins with an explicit {@code @JsonProperty} so the naming-strategy-blind SDK generator
    * derives the same CCD id. Empty for the throwaway planning instance (whose graph has not run yet)
@@ -296,6 +306,26 @@ public final class RetrofitPatchEmitter {
   }
 
   /**
+   * Installs the team's State enum as the one this run REUSES, with the CCD-ID → constant-name mapping
+   * the reuse resolved through, so the definition's {@code State} sheet labels can be pinned onto its
+   * constants.
+   *
+   * <p>Load-bearing that the caller passes these only on the reuse decision (every definition state ID
+   * resolves — proposal decision 3). When the converter generates a fresh State enum instead, that
+   * generated enum carries the same three columns itself and the team's enum must be left alone; passing
+   * nothing here is what expresses that.
+   *
+   * @param stateEnumFqn the reused enum's FQN, or null to leave state-label pinning off (generate mode,
+   *                     a conflicting enum, the report-only pass, and tests that do not exercise it)
+   * @param constantByStateId CCD state ID → Java constant name, from {@code StateEnumAnalyser}
+   */
+  void bindReusedStateEnum(String stateEnumFqn, Map<String, String> constantByStateId) {
+    this.stateEnum = stateEnumFqn == null ? null : index.byFqn(stateEnumFqn).orElse(null);
+    this.stateConstantsByStateId =
+        constantByStateId == null ? Map.of() : constantByStateId;
+  }
+
+  /**
    * The bindings this emitter resolved, for {@link RetrofitConverter} to hand the companion emitter and
    * the reserved-name sets so they agree on which IDs have a backing class.
    *
@@ -391,7 +421,15 @@ public final class RetrofitPatchEmitter {
     // reachable as both is a complex type first (only ComplexTypeGenerator emits its members).
     planFixedListIds(byFile);
 
-    // 3d. Pin the definition's ListElement onto each constant of every model enum backing a FixedLists
+    // 3d. Pin the definition's State sheet Name/TitleDisplay/Description onto the constants of the
+    // team's reused State enum. Runs BEFORE the FixedLists labels because a constant carries at most one
+    // @CCD (it is not @Repeatable) so the two passes share one per-constant claim, and the State sheet's
+    // three columns are always compared whereas a State enum that ALSO backs a fixed list is the rarer
+    // case. Pins are merged per CONSTANT, not per enum, so an enum serving both roles still gets every
+    // label either pass can supply.
+    planStateLabels(byFile);
+
+    // 3e. Pin the definition's ListElement onto each constant of every model enum backing a FixedLists
     // ID. Must run AFTER 3c so an enum's ID pin and its label pins resolve the same list.
     planFixedListLabels(byFile);
 
@@ -1105,8 +1143,42 @@ public final class RetrofitPatchEmitter {
       }
       Map<String, String> pins = RetrofitFixedListLabels.pins(type, list);
       if (!pins.isEmpty()) {
-        editsFor(byFile, type.file).labelFixedList(type.simpleName, pins);
+        Map<String, List<String>> members = new LinkedHashMap<>();
+        pins.forEach((constant, label) ->
+            members.put(constant, List.of("label = " + CcdAnnotationRenderer.quote(label))));
+        editsFor(byFile, type.file).annotateConstants(type.simpleName, members);
       }
+    }
+  }
+
+  /**
+   * Pins the definition's own {@code State} sheet {@code Name}/{@code TitleDisplay}/{@code Description}
+   * onto each constant of the team's reused State enum, as
+   * {@code @CCD(label = …, hint = …, description = …)}.
+   *
+   * <p>Only ever runs for an enum the conversion actually REUSES as the case type's State: the
+   * {@code retrofitStateConstants} map is installed by {@link RetrofitConverter} on exactly that
+   * decision (every definition state ID resolves), and is empty when the converter generates a fresh
+   * State enum instead — which carries these same three columns itself, emitted by {@code EnumEmitter}.
+   * So the two can never both claim a state's labels.
+   *
+   * <p>Runs BEFORE {@link #planFixedListLabels}: a State enum is frequently also reachable as a
+   * declared field type, so both passes want the same constant, and a constant carries at most one
+   * {@code @CCD} ({@code @CCD} is not {@code @Repeatable}). First write wins per constant and this pass
+   * takes it — the State sheet's three columns are always compared. See {@link RetrofitStateLabels}.
+   */
+  private void planStateLabels(Map<Path, FileEdits> byFile) {
+    if (stateConstantsByStateId.isEmpty() || model.getStates() == null) {
+      return;
+    }
+    ModelSourceIndex.Type type = stateEnum;
+    if (type == null) {
+      return;
+    }
+    Map<String, List<String>> pins =
+        RetrofitStateLabels.pins(type, model.getStates(), stateConstantsByStateId);
+    if (!pins.isEmpty()) {
+      editsFor(byFile, type.file).annotateConstants(type.simpleName, pins);
     }
   }
 
@@ -1796,10 +1868,10 @@ public final class RetrofitPatchEmitter {
       }
     }
 
-    // Per-enum-constant @CCD(label) additions (the FixedLists ListElement pin).
-    if (!edits.fixedListLabels.isEmpty()) {
+    // Per-enum-constant @CCD additions (the FixedLists ListElement pin and the State sheet labels).
+    if (!edits.constantAnnotations.isEmpty()) {
       for (TypeDeclaration<?> type : unit.getTypes()) {
-        Map<String, String> labels = edits.fixedListLabels.get(type.getNameAsString());
+        Map<String, List<String>> labels = edits.constantAnnotations.get(type.getNameAsString());
         if (labels == null || !type.isEnumDeclaration()) {
           continue;
         }
@@ -2653,7 +2725,7 @@ public final class RetrofitPatchEmitter {
    * {@code @Repeatable}, so that does not compile. A shared line is therefore rewritten into one
    * constant per line instead; see {@link #splitSharedConstantLine}.
    */
-  private boolean planConstantLabels(EnumDeclaration decl, Map<String, String> labels,
+  private boolean planConstantLabels(EnumDeclaration decl, Map<String, List<String>> labels,
       List<String> sourceLines, Map<Integer, List<String>> insertionsByLine,
       Set<Integer> linesToDelete) {
     Map<Integer, List<EnumConstantDeclaration>> byLine = new TreeMap<>();
@@ -2677,9 +2749,9 @@ public final class RetrofitPatchEmitter {
       // as a field's is — below any annotation the constant already carries, since the insertion is
       // keyed on the constant's begin line, which IS that annotation's line when it has one.
       if (constants.size() == 1) {
-        String label = labels.get(constants.get(0).getNameAsString());
+        List<String> members = labels.get(constants.get(0).getNameAsString());
         insertionsByLine.computeIfAbsent(line, k -> new ArrayList<>())
-            .addAll(indentEachLine(List.of(labelAnnotation(label)), indent));
+            .addAll(indentEachLine(List.of(labelAnnotation(members, indent.length())), indent));
         planned = true;
         continue;
       }
@@ -2710,7 +2782,7 @@ public final class RetrofitPatchEmitter {
    * constant only costs a residual diff line whereas a mangled one breaks the team's build.
    */
   private static List<String> splitSharedConstantLine(String line,
-      List<EnumConstantDeclaration> constants, Map<String, String> labels, String indent) {
+      List<EnumConstantDeclaration> constants, Map<String, List<String>> labels, String indent) {
     List<String> texts = new ArrayList<>();
     int cursor = 0;
     for (EnumConstantDeclaration constant : constants) {
@@ -2738,17 +2810,24 @@ public final class RetrofitPatchEmitter {
     String tail = line.substring(cursor);
     List<String> out = new ArrayList<>();
     for (int i = 0; i < constants.size(); i++) {
-      String label = labels.get(constants.get(i).getNameAsString());
-      if (label != null) {
-        out.add(indent + labelAnnotation(label));
+      List<String> members = labels.get(constants.get(i).getNameAsString());
+      if (members != null) {
+        out.addAll(indentEachLine(List.of(labelAnnotation(members, indent.length())), indent));
       }
       out.add(indent + texts.get(i) + (i < constants.size() - 1 ? "," : tail));
     }
     return out;
   }
 
-  private static String labelAnnotation(String label) {
-    return "@CCD(label = " + CcdAnnotationRenderer.quote(label) + ")";
+  /**
+   * The {@code @CCD(...)} for an enum constant, wrapped one member per continuation line when the
+   * single-line form would breach the house line limit — through the same renderer a field's annotation
+   * uses, so a three-member state pin carrying fpl's multi-line {@code TitleDisplay} lays out the same
+   * way a long field annotation does. Returned with no leading indent on the first line; the caller
+   * applies its placement indent to every line.
+   */
+  private static String labelAnnotation(List<String> members, int baseIndentLength) {
+    return CcdAnnotationRenderer.renderWrapped("CCD", members, baseIndentLength);
   }
 
   /** The leading run of spaces/tabs on a source line — the indent an inserted line above it must
@@ -3008,12 +3087,15 @@ public final class RetrofitPatchEmitter {
      */
     private final Map<String, ComplexTypeIdPlan> nameComplexTypes = new LinkedHashMap<>();
     /**
-     * Enum simple name → (constant name → the {@code @CCD(label)} to pin on it), carrying the
-     * definition's own {@code ListElement} onto the constants of a model enum backing a
-     * {@code FixedLists} ID (see {@link RetrofitFixedListLabels}). Keyed per enum because one file can
-     * declare several, and per constant because the annotation goes on the constant, not the type.
+     * Enum simple name → (constant name → the {@code @CCD(...)} members to pin on it): the definition's
+     * own {@code ListElement} for a constant of an enum backing a {@code FixedLists} ID
+     * ({@link RetrofitFixedListLabels}), and the {@code State} sheet's
+     * {@code Name}/{@code TitleDisplay}/{@code Description} for a constant of the reused State enum
+     * ({@link RetrofitStateLabels}). Keyed per enum because one file can declare several, and per
+     * constant because the annotation goes on the constant, not the type — and because a single
+     * {@code @CCD} per constant is all that compiles, so the two sources must share one claim.
      */
-    private final Map<String, Map<String, String>> fixedListLabels = new LinkedHashMap<>();
+    private final Map<String, Map<String, List<String>>> constantAnnotations = new LinkedHashMap<>();
     /**
      * The class whose hand-written constructor(s) must be widened to accept the synthesised fields,
      * or null when synthesis needs no constructor change. Set only for the builder-bound /
@@ -3100,15 +3182,20 @@ public final class RetrofitPatchEmitter {
     }
 
     /**
-     * Records the per-constant {@code @CCD(label = …)} pins carrying the definition's {@code ListElement}
-     * onto a model enum's constants. First write wins per enum, matching the ID pin's own single-claim
-     * rule: an enum reached by two definition IDs pins the first one's ID, so it must pin that same
-     * list's labels rather than a second list's.
+     * Records the per-constant {@code @CCD(...)} member pins for one model enum. First write wins per
+     * CONSTANT, matching the ID pin's own single-claim rule (an enum reached by two definition IDs pins
+     * the first one's ID, so it must pin that same list's labels rather than a second list's) while
+     * still letting two enums in one file, or two claims on two different constants of one enum, both
+     * land. Per-constant rather than per-enum because the constant is what carries the annotation, and
+     * an enum can legitimately be reached as both the reused State and a fixed list.
      */
-    void labelFixedList(String enumSimpleName, Map<String, String> labelsByConstant) {
-      if (!labelsByConstant.isEmpty()) {
-        fixedListLabels.putIfAbsent(enumSimpleName, labelsByConstant);
+    void annotateConstants(String enumSimpleName, Map<String, List<String>> membersByConstant) {
+      if (membersByConstant.isEmpty()) {
+        return;
       }
+      Map<String, List<String>> existing =
+          constantAnnotations.computeIfAbsent(enumSimpleName, k -> new LinkedHashMap<>());
+      membersByConstant.forEach(existing::putIfAbsent);
     }
 
     /**

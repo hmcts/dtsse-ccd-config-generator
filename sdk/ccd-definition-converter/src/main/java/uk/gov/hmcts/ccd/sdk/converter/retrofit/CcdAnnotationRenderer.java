@@ -61,8 +61,12 @@ final class CcdAnnotationRenderer {
    * (indented by {@link #CONTINUATION_INDENT} relative to the annotation's own placement indent,
    * closing paren back at that indent) when the single-line form would not fit
    * {@link #MAX_LINE_LENGTH} columns at {@code baseIndentLength}.
+   *
+   * <p>Package-private rather than private so the enum-constant pins — which build their members
+   * themselves rather than from a {@link FieldModel} — wrap by exactly the same rule as a field's
+   * annotation. fpl's state {@code TitleDisplay} markup alone is longer than the line limit.
    */
-  private static String renderWrapped(String simpleName, List<String> members, int baseIndentLength) {
+  static String renderWrapped(String simpleName, List<String> members, int baseIndentLength) {
     String singleLine = "@" + simpleName + "(" + String.join(", ", members) + ")";
     if (baseIndentLength + singleLine.length() <= MAX_LINE_LENGTH) {
       return singleLine;

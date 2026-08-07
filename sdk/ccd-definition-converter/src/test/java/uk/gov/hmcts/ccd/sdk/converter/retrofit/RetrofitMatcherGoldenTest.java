@@ -55,20 +55,21 @@ class RetrofitMatcherGoldenTest {
     RetrofitReport report = run(MODEL_ROOT, "uk.gov.hmcts.example.model", "CaseData");
 
     assertThat(report.isMapBased()).isFalse();
-    // 18 CaseField rows, 1 is a Label -> 17 data-bearing.
-    assertThat(report.getTotalDefinitionFields()).isEqualTo(18);
+    // 19 CaseField rows, 1 is a Label -> 18 data-bearing.
+    assertThat(report.getTotalDefinitionFields()).isEqualTo(19);
     assertThat(report.getLabelFields()).isEqualTo(1);
-    assertThat(report.getDataBearingFields()).isEqualTo(17);
+    assertThat(report.getDataBearingFields()).isEqualTo(18);
 
-    // 12 exact (incl. the four FixedList-label pin fixtures — labelBearing, annotated, sharedLine,
-    // camelConstant — whose model enums match by name), 3 type-conflict (documents concrete wrapper,
-    // dateOfBirth date/dateTime, AND hearingVenue String/FixedList), 2 unmatched (extraSynthField +
-    // confidentialData, which collides with the @JsonUnwrapped parent).
+    // 13 exact (incl. the four FixedList-label pin fixtures — labelBearing, annotated, sharedLine,
+    // camelConstant — whose model enums match by name, and `state`, the State enum declared as an
+    // ordinary field), 3 type-conflict (documents concrete wrapper, dateOfBirth date/dateTime, AND
+    // hearingVenue String/FixedList), 2 unmatched (extraSynthField + confidentialData, which collides
+    // with the @JsonUnwrapped parent).
     assertThat(report.getUnmatchedDefinitionFields()).isEqualTo(2);
     assertThat(report.getTypeConflicts()).isEqualTo(3);
-    assertThat(report.getExactMatches()).isEqualTo(12);
+    assertThat(report.getExactMatches()).isEqualTo(13);
     assertThat(report.getExactMatches() + report.getTypeConflicts()
-        + report.getUnmatchedDefinitionFields()).isEqualTo(17);
+        + report.getUnmatchedDefinitionFields()).isEqualTo(18);
   }
 
   @Test

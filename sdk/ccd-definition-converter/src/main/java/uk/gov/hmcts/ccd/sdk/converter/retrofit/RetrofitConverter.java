@@ -267,6 +267,16 @@ public final class RetrofitConverter {
         constructorLimit, pathPrefix, pinnedNames, fqnOverrides);
     emitter.bindDeclaredTypes(declaredBindings);
     emitter.bindDefinitionFixedLists(linkedFixedLists[0]);
+    // The State sheet's Name/TitleDisplay/Description are pinned onto the team's own constants only when
+    // this run REUSES their enum — read off the very options the reuse decision above wrote, so the
+    // patch and the emitted config cannot diverge about which enum (and which constants) is the State.
+    // When a fresh State enum is generated instead it carries those three columns itself (EnumEmitter),
+    // and the team's enum is just another model type whose constants must be left untouched.
+    if (planOptions.getRetrofitStateClass() != null) {
+      emitter.bindReusedStateEnum(
+          planOptions.getRetrofitStateClassPackage() + "." + planOptions.getRetrofitStateClass(),
+          planOptions.getRetrofitStateConstants());
+    }
     RetrofitPatch patch = emitter.emit();
     writePatch(reportDir, patch);
     // Surface any synthesised-field name collisions the emitter skipped (finding B1) so they are not

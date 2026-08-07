@@ -11,6 +11,7 @@ import uk.gov.hmcts.example.enums.CamelConstantList;
 import uk.gov.hmcts.example.enums.ClaimType;
 import uk.gov.hmcts.example.enums.LabelBearingList;
 import uk.gov.hmcts.example.enums.SharedLineList;
+import uk.gov.hmcts.example.enums.State;
 import uk.gov.hmcts.example.model.common.DocItem;
 import uk.gov.hmcts.example.model.common.ListValue;
 import uk.gov.hmcts.example.model.common.Party;
@@ -54,6 +55,11 @@ public class CaseData extends BaseCaseData {
   // it and the typeParameterOverride alone names a list the SDK never emits. The patch must name the
   // generated companion with @CCD(typeParameterClass) rather than retype the field.
   private String hearingVenue;
+
+  // The State enum declared as an ordinary field, as sscs really does: reflection then reaches it as a
+  // fixed list the definition also has rows for, so the State-label pin and the FixedLists-label pin
+  // both want its constants and precedence decides (State wins).
+  private State state;
 
   // Rule: generic wrapper collection List<ListValue<Party>> -> Collection of Party (EXACT when the
   // definition's FieldTypeParameter is Party).

@@ -30,6 +30,8 @@ class RetrofitPatchEmitterGoldenTest {
   private static final String MODEL_PACKAGE = "uk.gov.hmcts.example.model";
   private static final String CONFIG_PACKAGE = "uk.gov.hmcts.example.config";
 
+  private static final String STATE_ENUM = "uk.gov.hmcts.example.enums.State";
+
   private RetrofitPatchEmitter buildEmitter() {
     return buildEmitter(RetrofitPinnedNames.empty());
   }
@@ -75,6 +77,12 @@ class RetrofitPatchEmitterGoldenTest {
         rebound, matcher.root(), CONFIG_PACKAGE, 0, "", pinnedNames);
     emitter.bindDeclaredTypes(declaredBindings);
     emitter.bindDefinitionFixedLists(linked.getFixedLists());
+    // The reused-State wiring RetrofitConverter installs when the team's enum resolves every definition
+    // state. Bound unconditionally here (the fixture's enum conflicts on Withdrawn, which is what the
+    // matcher test asserts) so the emitter's own behaviour is pinned: what the converter decides is
+    // covered by its own gate, and every constant with no definition row is refused anyway.
+    emitter.bindReusedStateEnum(STATE_ENUM,
+        new StateEnumAnalyser(matcher.index()).stateIdToConstant(MODEL_PACKAGE));
     return emitter;
   }
 
@@ -450,6 +458,93 @@ class RetrofitPatchEmitterGoldenTest {
             + "  @JsonProperty(\"nonMolestationOrder\")\n"
             + "  nonMolestationOrder,")
         .contains("@CCD(label = \"Occupation order (FL404)\")");
+  }
+
+  @Test
+  void pinsTheDefinitionsStateNameTitleDisplayAndDescriptionOntoTheReusedStateEnum() {
+    // StateGenerator reads all three State-sheet columns off @CCD on the constant — label() → Name
+    // (falling back to the state ID), description() → Description (falling back to the resolved Name),
+    // hint() → TitleDisplay (the column is simply absent without one). A team's own State enum carries
+    // none of them, so every reused state emitted Name == Description == the state ID and no
+    // TitleDisplay at all. As with the FixedLists labels the values are copied from the definition, so
+    // no SDK change is needed and no guess about which accessor holds the display name can be wrong.
+    String state = patchedContent(emitPatch(), "enums/State.java");
+
+    // Only the columns the generator would not already produce unaided are pinned. OPEN's state ID IS
+    // its Name ("Open"), which is exactly what label() falls back to, so only its Description is
+    // written — the pin never repeats a value the fallback already gets right.
+    assertThat(state).contains("  @CCD(description = \"The case is open\")\n"
+        + "  @JsonProperty(\"Open\")\n"
+        + "  OPEN,");
+
+    // Members in EnumEmitter's own order (label, hint, description) so a retrofitted constant reads
+    // exactly like a generated one; wrapped one per line by the same rule a long field annotation uses,
+    // since a real TitleDisplay is markup that blows past the house line limit on its own. The pin lands
+    // above the constant's begin line, which IS its existing @JsonProperty's line, so the two stack in
+    // source order.
+    assertThat(state).contains("  @CCD(\n"
+        + "          label = \"Case management\",\n"
+        + "          hint = \"# #${[CASE_REFERENCE]} <br/> ${applicantName}: awaiting case management "
+        + "directions\"\n"
+        + "  )\n"
+        + "  @JsonProperty(\"PREPARE_FOR_HEARING\")\n"
+        + "  CASE_MANAGEMENT,");
+    // ...and NOT a description, because "Case management" is what StateGenerator already defaults the
+    // Description to once that label is pinned. Pinning it would be noise in the team's diff.
+    assertThat(state).doesNotContain("description = \"Case management\"");
+
+    // All three at once, escaped through the same quoting the field renderer uses.
+    assertThat(state).contains("@CCD(label = \"Closed\", hint = \"# ${[CASE_REFERENCE]}\", "
+        + "description = \"The \\\"final\\\" state\")");
+
+    // A constant the team already annotated is left alone — @CCD is not @Repeatable, so a second one
+    // would not compile — and a constant with no definition row (STAYED) is a constant-set divergence,
+    // reported elsewhere, not something to guess a label for. Withdrawn is the mirror case: a definition
+    // state with no constant, which the reuse decision itself gates on.
+    assertThat(state).contains("  @CCD(label = \"Stayed by the team\")\n  STAYED,");
+    assertThat(state).doesNotContain("Withdrawn");
+    // OPEN, CASE_MANAGEMENT, the team's own STAYED, CLOSED — and nothing else.
+    assertThat(state.split("@CCD\\(", -1)).hasSize(5);
+  }
+
+  @Test
+  void theStateLabelsWinTheConstantWhenTheStateEnumAlsoBacksAFixedList() {
+    // A State enum is frequently ALSO reachable as a declared field type (sscs declares
+    // `private State state`), so reflection emits a FixedLists/State and BOTH pins want the same
+    // constant. Only one @CCD per constant compiles, so they share one per-constant claim and the State
+    // sheet takes it: those three columns are always compared, whereas a fixed list the definition does
+    // not reference is an unexpected row whichever ListElement it carries.
+    String state = patchedContent(emitPatch(), "enums/State.java");
+
+    assertThat(state).contains("@CCD(description = \"The case is open\")");
+    assertThat(state).doesNotContain("An open case");
+    // CLOSED's State row gives it all three columns, so the list's own label loses there too.
+    assertThat(state).doesNotContain("A closed case");
+
+    // And the fixed-list pass really does reach this enum — so the assertions above are a precedence
+    // result, not a pass that never ran. With no State reused, its labels are exactly what lands.
+    RetrofitPatchEmitter listOnly = buildEmitter();
+    listOnly.bindReusedStateEnum(null, Map.of());
+    assertThat(patchedContent(listOnly.emit(), "enums/State.java"))
+        .contains("@CCD(label = \"An open case\")")
+        .contains("@CCD(label = \"A closed case\")");
+  }
+
+  @Test
+  void pinsNoStateLabelsWhenTheRunGeneratesItsOwnState() {
+    // The pins apply only to an enum this run REUSES as the case type's State. When the converter
+    // generates a fresh State enum instead (any definition state the team's enum cannot express), that
+    // enum carries these same three columns itself and the team's is just another model type — which
+    // must gain none of the State sheet's values, whatever else the other passes do to it.
+    RetrofitPatchEmitter emitter = buildEmitter();
+    emitter.bindReusedStateEnum(null, Map.of());
+
+    String state = patchedContent(emitter.emit(), "enums/State.java");
+    assertThat(state)
+        .doesNotContain("The case is open")
+        .doesNotContain("Case management")
+        .doesNotContain("${[CASE_REFERENCE]}")
+        .doesNotContain("final\\\" state");
   }
 
   @Test

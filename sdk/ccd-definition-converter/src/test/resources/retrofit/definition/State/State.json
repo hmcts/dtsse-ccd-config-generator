@@ -1,6 +1,18 @@
 [
-  { "CaseTypeID": "EXAMPLE", "ID": "Open", "Name": "Open" },
-  { "CaseTypeID": "EXAMPLE", "ID": "PREPARE_FOR_HEARING", "Name": "Case management" },
-  { "CaseTypeID": "EXAMPLE", "ID": "CLOSED", "Name": "Closed" },
+  { "CaseTypeID": "EXAMPLE", "ID": "Open", "Name": "Open", "Description": "The case is open" },
+  {
+    "CaseTypeID": "EXAMPLE",
+    "ID": "PREPARE_FOR_HEARING",
+    "Name": "Case management",
+    "TitleDisplay": "# #${[CASE_REFERENCE]} <br/> ${applicantName}: awaiting case management directions",
+    "Description": "Case management"
+  },
+  {
+    "CaseTypeID": "EXAMPLE",
+    "ID": "CLOSED",
+    "Name": "Closed",
+    "TitleDisplay": "# ${[CASE_REFERENCE]}",
+    "Description": "The \"final\" state"
+  },
   { "CaseTypeID": "EXAMPLE", "ID": "Withdrawn", "Name": "Withdrawn" }
 ]
