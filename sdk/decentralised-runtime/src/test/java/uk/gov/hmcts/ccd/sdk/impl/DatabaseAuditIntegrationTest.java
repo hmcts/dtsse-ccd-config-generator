@@ -57,14 +57,14 @@ class DatabaseAuditIntegrationTest {
           metadata json not null
         )
         """);
-    jdbc.execute("select ccd.attach_case_event_auditing_v1('public.audit_test'::regclass)");
+    jdbc.execute("call ccd.attach_case_event_auditing_v1('public.audit_test'::regclass)");
     insertCase();
   }
 
   @Test
   void rejectsAttachingAuditingMoreThanOnce() {
     assertThatThrownBy(() ->
-        jdbc.execute("select ccd.attach_case_event_auditing_v1('public.audit_test'::regclass)"))
+        jdbc.execute("call ccd.attach_case_event_auditing_v1('public.audit_test'::regclass)"))
         .isInstanceOfSatisfying(DataAccessException.class, exception ->
             assertThat(exception.getRootCause())
                 .hasMessageContaining("trigger \"ccd_audit_row_changes\"")

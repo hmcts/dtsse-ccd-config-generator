@@ -27,7 +27,7 @@ unchanged. A statement affecting several rows produces one audit entry per row.
 Enable auditing for a table by calling the runtime helper in an application Flyway migration:
 
 ```sql
-select ccd.attach_case_event_auditing_v1('public.case_notes'::regclass);
+call ccd.attach_case_event_auditing_v1('public.case_notes'::regclass);
 ```
 
 Calling the helper more than once for the same table fails because the audit trigger already exists.

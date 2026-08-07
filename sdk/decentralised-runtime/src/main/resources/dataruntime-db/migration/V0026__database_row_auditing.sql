@@ -65,8 +65,7 @@ begin
 end;
 $$;
 
-create function ccd.attach_case_event_auditing_v1(target_table regclass)
-returns void
+create procedure ccd.attach_case_event_auditing_v1(target_table regclass)
 language plpgsql
 security invoker
 as $$
