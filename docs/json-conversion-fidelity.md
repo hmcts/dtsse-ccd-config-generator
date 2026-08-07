@@ -959,6 +959,67 @@ row is backed by the same enum, so labelling the constants fixed that row too. N
 definition row (civil 18, sscs 2, prl 2, fpl 0). Closing those needs `StateGenerator` to honour
 `@CCD(ignore)` on a state constant, which it has no handling for today; deliberately held back.
 
+### Measured 2026-08-07 — fixed-list reachability round
+
+| Lane | Case type | Before | After | Δ |
+|---|---|---:|---:|---:|
+| civil | `CIVIL` | 1,864 | **1,212** | −652 |
+| fpl | `CARE_SUPERVISION_EPO` | 1,871 | **1,730** | −141 |
+| sscs | `Benefit` | 552 | **501** | −51 |
+| prl | `PRLAPPS` | 2,308 | **2,274** | −34 |
+| et | `ET_EnglandWales` | 468 | 468 | 0 |
+| probate | `GrantOfRepresentation` | 196 | 196 | 0 |
+| **total** | | **7,259** | **6,381** | **−878** |
+
+**An SDK fix: a fixed list is emitted for the lists the definition references, not for every enum
+reflection reaches.** `FixedListGenerator` walked `ResolvedCCDConfig.getTypes()` and emitted a
+`FixedLists` sheet for every enum in it. That set is a *reachability* set — `ConfigResolver` puts an
+enum in it as soon as some field anywhere **declares** it — and reachability is not the same question
+as whether the definition has a list. A field is free to declare an enum and then declare itself to be
+something else, which sscs does 250-odd times:
+
+```java
+@CCD(typeOverride = FieldType.Text)
+private DirectionType directionType;
+```
+
+The definition really does type that column `Text`, and `CaseFieldGenerator.populateFieldMetadata`
+faithfully emits `Text` — but the enum stayed reachable, so its list came out anyway. Same shape reached
+through the member path: civil's `HelpWithFeesDetails.hwfCaseEvent` is a `@CCD(typeOverride = Text)`
+`CaseEvent`, and that one member was dragging a 603-row `CaseEvent` list into the definition. Others carry
+an enum purely as an in-Java value that CCD never sees.
+
+The live set is now derived from what each field declares itself to **be**: `CaseFieldGenerator`
+`.referencedTypeParameters` unions the `FieldTypeParameter` of every emitted row — the case fields, the
+members of every complex type, and the fields placed explicitly on events — and `FixedListGenerator`
+emits a list only when its ID is in that union. This reads the emitted rows rather than re-deriving type
+logic, so it cannot disagree with what the definition says: `typeOverride` short-circuits
+`populateFieldMetadata` before any type resolution, so the row's `FieldTypeParameter` already *is* the
+answer. It is per-field-then-unioned, not `typeOverride`-alone: sscs's `postponementEvent` is a genuine
+`FixedList` of `eventType`, so that enum survives on the strength of that one field even though ten
+others carry it as `Text`. And it is the exact converse of `@CCD(typeParameterClass)` from the round
+above, which makes a list reachable that the Java type alone would not reach.
+
+Two subtleties the fpl fixture found, both recorded in the code:
+
+- **A `@ComplexType(generate = false)` type must still be walked.** It emits no `ComplexTypes` rows of
+  its own (the definition declares it elsewhere), so `ComplexTypeGenerator` skips it — but it is still a
+  type in the definition and its members still reference their lists. fpl's
+  `@ComplexType(name = "StandardDirectionOrder") Order.orderStatus` is the **only** reference to the
+  `OrderStatus` list; mirroring the emission skip dropped it.
+- **An enum must be skipped.** `ConfigResolver` descends into an enum's own instance fields, so fpl's
+  `RepresentativeRole` — whose constructor carries `private final Type type` and
+  `private final Set<CaseRole> caseRoles` — made `Type` and `CaseRole` reachable although no field
+  anywhere references either and the fpl definition has no such lists. Both golden fixtures
+  (`CARE_SUPERVISION_EPO/FixedLists/Type.json`, `CaseRole.json`) were spurious and are deleted.
+
+`FixedLists` fell civil 909 → 257, fpl 732 → 591, sscs 372 → 321, prl 108 → 74. Only that sheet moved and
+no sheet regressed in any lane. What survives is not a reachability question: sscs's `eventType` 255 is the
+genuine constant-set divergence (261 model constants against 15 definition rows — their code switches on
+the enum, so it cannot be narrowed automatically), fpl's `HearingVenue` 405 and `Order` 47 and probate's
+`documentUploadTypeEnum` 61 are lists whose referencing field is live, and the `FL_*` tail is the
+label-mismatch shape the next round addresses.
+
 ## What the round-trip does not prove
 
 The proof is narrower than "the seven fixtures round-trip byte-clean" — know its limits before

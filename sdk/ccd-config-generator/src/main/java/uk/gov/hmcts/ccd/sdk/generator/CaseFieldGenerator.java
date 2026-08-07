@@ -14,6 +14,7 @@ import java.lang.reflect.Field;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Collection;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -108,6 +109,58 @@ class CaseFieldGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
 
 
     return result;
+  }
+
+  /**
+   * Every {@code FieldTypeParameter} the generated definition references — across the case fields,
+   * the members of every generated complex type, and the fields placed explicitly on events.
+   *
+   * <p>A {@code FixedLists} ID only means anything to CCD when some field's
+   * {@code FieldTypeParameter} names it; a list nothing references is inert. Reflection over the
+   * Java model reaches an enum whenever a field <em>declares</em> it, which is not the same thing: a
+   * field may declare an enum and then override what it is, as sscs's
+   * {@code @CCD(typeOverride = FieldType.Text) private DirectionType directionType} does (the
+   * definition really does type that column {@code Text}), or carry the enum purely as an in-Java
+   * value. Reachability alone therefore declares lists the definition does not have.
+   *
+   * <p>Deriving the live set from what each field declares itself to <em>be</em> keeps every list a
+   * field genuinely references — sscs's {@code postponementEvent} is a real {@code FixedList} of
+   * {@code eventType}, so that enum survives on the strength of that one field even though ten
+   * others carry it as {@code Text} — and drops the rest. This is the converse of
+   * {@code @CCD(typeParameterClass)}, which makes a list reachable that the Java type alone would
+   * not reach.
+   *
+   * @param config the resolved configuration
+   * @return the referenced type-parameter IDs, in walk order
+   */
+  static <T, S, R extends HasRole> Set<String> referencedTypeParameters(
+      ResolvedCCDConfig<T, S, R> config) {
+    Set<String> ids = new LinkedHashSet<>();
+    collectTypeParameters(ids, toComplex(config.getCaseClass(), config.getCaseType()));
+    for (Class<?> c : config.getTypes().keySet()) {
+      // An enum has no members to reference anything — and walking one would be actively wrong,
+      // since the resolver descends into an enum's own instance fields, so a constructor-carried
+      // `private final Type type` makes Type reachable while the definition has no such list.
+      // A @ComplexType(generate = false) type IS walked: it emits no ComplexTypes rows of its own
+      // because the definition declares it elsewhere (hand-maintained or platform-predefined), but
+      // it is still a type in the definition and its members still reference their lists — fpl's
+      // StandardDirectionOrder.orderStatus is the only reference to the OrderStatus list.
+      if (c.isEnum()) {
+        continue;
+      }
+      collectTypeParameters(ids, toComplex(c, config.getCaseType()));
+    }
+    collectTypeParameters(ids, getExplicitFields(config));
+    return ids;
+  }
+
+  private static void collectTypeParameters(Set<String> ids, List<Map<String, Object>> rows) {
+    for (Map<String, Object> row : rows) {
+      Object parameter = row.get("FieldTypeParameter");
+      if (parameter != null && !Strings.isNullOrEmpty(parameter.toString())) {
+        ids.add(parameter.toString());
+      }
+    }
   }
 
   private static List<Map<String, Object>> buildComplexFields(
