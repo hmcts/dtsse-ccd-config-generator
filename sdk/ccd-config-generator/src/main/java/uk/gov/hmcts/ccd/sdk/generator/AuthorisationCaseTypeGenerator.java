@@ -29,12 +29,21 @@ class AuthorisationCaseTypeGenerator<T, S, R extends HasRole> implements ConfigG
             .filter(name -> !Strings.isNullOrEmpty(name))
             .collect(Collectors.toSet());
 
+    // Case roles the service has explicitly opted in to case-type ACLs, for users whose only
+    // surviving role on a case is a case role (see ConfigBuilder#grantCaseTypeAccessToCaseRoles).
+    Set<String> optedInCaseRoles = config.getCaseTypeAclCaseRoles().stream()
+        .map(HasRole::getRole)
+        .collect(Collectors.toSet());
+
     List<Map<String, Object>> result = Lists.newArrayList();
     if (roleEnum.isEnum()) {
       for (Object enumConstant : roleEnum.getEnumConstants()) {
         if (enumConstant instanceof HasRole r) {
-          // Add non case roles, plus bracketed roles used as organisation/group access-type roles.
-          if (!r.getRole().matches("\\[.+\\]") || accessTypeRoleNames.contains(r.getRole())) {
+          // Add non case roles, plus bracketed roles used as organisation/group access-type
+          // roles, plus case roles the service explicitly opted in.
+          if (!r.getRole().matches("\\[.+\\]")
+              || accessTypeRoleNames.contains(r.getRole())
+              || optedInCaseRoles.contains(r.getRole())) {
             boolean shuttered = config.isShutterService() || config.getShutterServiceForRoles().contains(r);
             Map<String, Object> entry = JsonUtils.caseRow(config.getCaseType());
             entry.put("UserRole", r.getRole());

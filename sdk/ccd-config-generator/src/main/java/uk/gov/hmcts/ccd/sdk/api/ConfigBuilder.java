@@ -35,6 +35,17 @@ public interface ConfigBuilder<T, S, R extends HasRole> {
   void omitHistoryForRoles(R... roles);
 
   /**
+   * Grants the given case (bracketed) roles a case-type ACL row. Case roles are normally
+   * excluded from AuthorisationCaseType because their holders also carry an unfiltered
+   * identity-level role that passes case-type authorisation. Services whose users hold only
+   * group-filtered organisation roles (Group Access) must opt case roles such as [CREATOR]
+   * in, so they can pass case-type authorisation on cases that have no case access groups.
+   */
+  default void grantCaseTypeAccessToCaseRoles(R... roles) {
+    // Implementations that generate AuthorisationCaseType may override this.
+  }
+
+  /**
    * Set AuthorisationCaseState explicitly.
    * Note that additional AuthorisationCaseState permissions are inferred based on grants of
    * event-level permissions.

@@ -147,6 +147,11 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements Decentralised
   }
 
   @Override
+  public void grantCaseTypeAccessToCaseRoles(R... roles) {
+    config.caseTypeAclCaseRoles.addAll(Set.of(roles));
+  }
+
+  @Override
   public void omitHistoryForRoles(R... roles) {
     omitHistoryForRoles.addAll(Set.of(roles));
   }
