@@ -50,6 +50,14 @@ public interface ConfigBuilder<T, S, R extends HasRole> {
   void omitHistoryForRoles(R... roles);
 
   /**
+   * Give these case (bracketed) roles a row in AuthorisationCaseType, which otherwise excludes
+   * them. Needed where a user's only role on a case is a case role - [CREATOR] on a case with no
+   * case access groups, say - since without a row they fail case-type authorisation.
+   */
+  default void grantCaseTypeAccessToCaseRoles(R... roles) {
+  }
+
+  /**
    * Set AuthorisationCaseState explicitly.
    * Note that additional AuthorisationCaseState permissions are inferred based on grants of
    * event-level permissions.

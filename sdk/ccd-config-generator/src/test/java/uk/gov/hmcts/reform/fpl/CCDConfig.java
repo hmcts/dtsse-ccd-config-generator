@@ -129,6 +129,7 @@ public class CCDConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<CaseData, S
 
     builder.grant(Open, Set.of(R), LOCAL_AUTHORITY);
     builder.shutterService(CASE_ACCESS_APPROVER);
+    builder.grantCaseTypeAccessToCaseRoles(UserRole.CCD_SOLICITOR);
 
     // Events
     buildUniversalEvents();

@@ -44,6 +44,7 @@ public class ResolvedCCDConfig<T, S, R extends HasRole> {
   Set<String> rolesWithNoHistory;
   Set<R> shutterServiceForRoles = new HashSet<>();
   Set<R> shutterServiceExcludedRoles = new HashSet<>();
+  Set<R> caseTypeAclCaseRoles = new HashSet<>();
   String caseType = "";
   String callbackHost = "";
   String caseName = "";

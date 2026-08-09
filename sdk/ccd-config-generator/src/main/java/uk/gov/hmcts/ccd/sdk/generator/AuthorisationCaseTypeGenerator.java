@@ -6,6 +6,8 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 import org.springframework.stereotype.Component;
 import uk.gov.hmcts.ccd.sdk.ResolvedCCDConfig;
 import uk.gov.hmcts.ccd.sdk.api.HasRole;
@@ -15,12 +17,17 @@ class AuthorisationCaseTypeGenerator<T, S, R extends HasRole> implements ConfigG
   public void write(File root, ResolvedCCDConfig<T, S, R> config) {
 
     Class<?> roleEnum = config.getRoleClass();
+
+    // Case roles are excluded below; these are the ones the service opted back in.
+    Set<String> optedInCaseRoles = config.getCaseTypeAclCaseRoles().stream()
+        .map(HasRole::getRole)
+        .collect(Collectors.toSet());
+
     List<Map<String, Object>> result = Lists.newArrayList();
     if (roleEnum.isEnum()) {
       for (Object enumConstant : roleEnum.getEnumConstants()) {
         if (enumConstant instanceof HasRole r) {
-          // Add non case roles.
-          if (!r.getRole().matches("\\[.+\\]")) {
+          if (!r.getRole().matches("\\[.+\\]") || optedInCaseRoles.contains(r.getRole())) {
             boolean shuttered =
                 (config.isShutterService() || config.getShutterServiceForRoles().contains(r))
                     && !config.getShutterServiceExcludedRoles().contains(r);
