@@ -140,6 +140,28 @@ public class E2EConfigGenerationTests {
 
     @SneakyThrows
     @Test
+    public void distinguishesTheSummaryFlagOnAComplexMemberPlacement() {
+        // .complexMember/.complexMemberNoSummary differ only in ShowSummaryChangeOption, a column
+        // CaseEventToComplexTypes has no concept of — so the pair is observable only where a member
+        // lands on CaseEventToFields, which is what a prefix-less @JsonUnwrapped holder does to its
+        // members. Stated here as well as in the snapshot so the intent survives a snapshot refresh.
+        String rows = com.google.common.io.Files.asCharSource(
+            new File(tmp.getRoot(), "EventComplexScope/CaseEventToFields/create.json"),
+            StandardCharsets.UTF_8).read();
+
+        assertThat(rows.replaceAll("\\s+", ""))
+            .as("the default variant carries the flag")
+            .contains("\"CaseFieldID\":\"jointPartyBenefitType\",\"CaseTypeID\":\"EventComplexScope\","
+                + "\"DisplayContext\":\"COMPLEX\"")
+            .contains("\"PageFieldDisplayOrder\":2,\"PageID\":1,\"ShowSummaryChangeOption\":\"Y\"")
+            .as("and the NoSummary variant omits it while keeping the COMPLEX context")
+            .contains("\"CaseFieldID\":\"jointPartyDetails\",\"CaseTypeID\":\"EventComplexScope\","
+                + "\"DisplayContext\":\"COMPLEX\"")
+            .contains("\"PageFieldDisplayOrder\":3,\"PageID\":1}");
+    }
+
+    @SneakyThrows
+    @Test
     public void emitsConfiguredBanner() {
         File expected = resourceFile("BannerFeature/Banner.json");
         File actual = new File(tmp.getRoot(), "BannerFeature/Banner.json");
