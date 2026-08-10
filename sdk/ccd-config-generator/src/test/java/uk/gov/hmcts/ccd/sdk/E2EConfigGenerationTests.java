@@ -114,6 +114,32 @@ public class E2EConfigGenerationTests {
 
     @SneakyThrows
     @Test
+    public void emitsScalarScopeMemberOverridesIncludingAComplexMemberRow() {
+        // A scalar complex field scoped via .complexScope(getter): its members must emit their
+        // CaseEventToComplexTypes rows exactly as a .complex(getter) scope would, including a member
+        // placed as DisplayContext=COMPLEX in its own right via .complexMember(getter) alongside the
+        // dotted row for a leaf descended through that same intermediate.
+        Map<String, File> actual = CcdConfigComparator.dirToMap(
+            new File(tmp.getRoot(), "EventComplexScope/CaseEventToComplexTypes"));
+        Map<String, File> expected = CcdConfigComparator.resourcesDirToMap(
+            "EventComplexScope/CaseEventToComplexTypes");
+        CcdConfigComparator.assertEquivalent(expected, actual, JSONCompareMode.NON_EXTENSIBLE);
+    }
+
+    @SneakyThrows
+    @Test
+    public void openingAScalarScopeLeavesTheComplexFieldRowUntouched() {
+        // The whole point of .complexScope(getter): unlike .complex(getter) it registers no root
+        // field, so the field's own CaseEventToFields row keeps the READONLY context its single
+        // .readonly(getter) placement gave it rather than being forced to COMPLEX, and no second row
+        // appears.
+        File expected = resourceFile("EventComplexScope/CaseEventToFields/create.json");
+        File actual = new File(tmp.getRoot(), "EventComplexScope/CaseEventToFields/create.json");
+        CcdConfigComparator.assertEquals(expected, actual, JSONCompareMode.NON_EXTENSIBLE);
+    }
+
+    @SneakyThrows
+    @Test
     public void emitsConfiguredBanner() {
         File expected = resourceFile("BannerFeature/Banner.json");
         File actual = new File(tmp.getRoot(), "BannerFeature/Banner.json");
