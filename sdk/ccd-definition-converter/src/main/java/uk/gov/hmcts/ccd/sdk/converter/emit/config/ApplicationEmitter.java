@@ -46,6 +46,12 @@ public class ApplicationEmitter implements SourceEmitter {
         ClassName.get("org.springframework.boot", "SpringBootConfiguration");
     ClassName componentScan =
         ClassName.get("org.springframework.context.annotation", "ComponentScan");
+    ClassName componentScans =
+        ClassName.get("org.springframework.context.annotation", "ComponentScans");
+    ClassName filterType =
+        ClassName.get("org.springframework.context.annotation", "FilterType");
+    ClassName ccdConfig =
+        ClassName.get("uk.gov.hmcts.ccd.sdk.api", "CCDConfig");
     ClassName importAnnotation =
         ClassName.get("org.springframework.context.annotation", "Import");
     ClassName definitionGenerator =
@@ -75,6 +81,17 @@ public class ApplicationEmitter implements SourceEmitter {
     // Mapper etc.) whose own dependencies are not on the scan path, so scanning it made the context
     // fail to start. Dropping it is safe for both modes (the config package is scanned directly, even
     // when it is a sub-package of the model package).
+    //
+    // The config-package scan takes only CCDConfig implementations, with default filters OFF. Naming
+    // a package is not enough to bound what a scan picks up, because a service can own beans INSIDE
+    // the companion root package: sscs-common declares its model at ...sscs.ccd.domain, so the derived
+    // root package is ...sscs.ccd — which also contains the library's own ...sscs.ccd.client.CcdClient
+    // and ...sscs.ccd.config. An unfiltered scan instantiated CcdClient and failed the context on its
+    // CcdRequestDetails constructor parameter, a bean the service supplies from application config it
+    // has no reason to provide for a generation run. Filtering by type rather than by package makes the
+    // scan pick up exactly what generation consumes, whatever else happens to share the package —
+    // every emitted config class implements CCDConfig, and the access classes are referenced by type
+    // from those configs rather than autowired.
     //
     // NO AUTOCONFIGURATION AT ALL — @SpringBootConfiguration + @ComponentScan rather than
     // @SpringBootApplication (which is those two plus @EnableAutoConfiguration).
@@ -115,9 +132,17 @@ public class ApplicationEmitter implements SourceEmitter {
     // (JSONConfigGenerator) is in .generator along with the 24 sheet writers, none of which take
     // anything but each other (JsonUtils builds its own ObjectMapper internally).
     AnnotationSpec bootConfiguration = AnnotationSpec.builder(springBootConfiguration).build();
-    AnnotationSpec scan = AnnotationSpec.builder(componentScan)
-        .addMember("basePackages", "{$S, $S}",
-            "uk.gov.hmcts.ccd.sdk.generator", context.configPackage())
+    AnnotationSpec generatorScan = AnnotationSpec.builder(componentScan)
+        .addMember("basePackages", "$S", "uk.gov.hmcts.ccd.sdk.generator")
+        .build();
+    AnnotationSpec configScan = AnnotationSpec.builder(componentScan)
+        .addMember("basePackages", "$S", context.configPackage())
+        .addMember("useDefaultFilters", "false")
+        .addMember("includeFilters", "@$T.Filter(type = $T.ASSIGNABLE_TYPE, classes = $T.class)",
+            componentScan, filterType, ccdConfig)
+        .build();
+    AnnotationSpec scan = AnnotationSpec.builder(componentScans)
+        .addMember("value", "{$L, $L}", generatorScan, configScan)
         .build();
     AnnotationSpec importGenerator = AnnotationSpec.builder(importAnnotation)
         .addMember("value", "$T.class", definitionGenerator)

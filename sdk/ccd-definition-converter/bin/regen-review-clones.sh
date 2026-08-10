@@ -66,6 +66,15 @@ run_lane() {
     --model-repo-root "${REPO_ROOT}/${modelrepo}"
     --model-package "${modelpkg}" --model-class "${modelsimple}"
     --output-src "${out}/companion" --report-dir "${out}/report"
+    # The companion tree carries its OWN generation entry point, and the migration branch points
+    # ccd.rootPackage at the companion package so Main finds that one rather than the service's.
+    # Leaving it out (on the reasoning that a service already has an application class) is what made
+    # every migration branch fail generateCCDConfig: pointing rootPackage at the service's real
+    # @SpringBootApplication boots the whole service — probate died on its lifeevents client's TLS
+    # certificate and a LaunchDarkly 401 — which is precisely the autoconfiguration failure class the
+    # minimal entry point exists to avoid, and retrofit-verify avoids by doing exactly this. sscs-common
+    # made it unavoidable: it is a library with no application class anywhere, so "found 0".
+    --emit-application
     --allow-gaps)
   for o in ${overlays}; do args+=(--overlay-suffix "$o"); done
   for h in ${hints-}; do args+=(--type-package-hint "$h"); done
@@ -104,7 +113,6 @@ run_lane() {
     fi
   done
   find "${clonesrc}" -type d -empty -delete 2>/dev/null || true
-  find "${clonesrc}" -name 'ConverterGeneratedApplication.java' -delete
   cp -a "${out}/companion/." "${clonesrc}/"
   # Passthrough resources are wholly generated: replace, never overlay. (Older script versions never
   # copied resources at all, leaving clones with fossilised graft files from retired converter

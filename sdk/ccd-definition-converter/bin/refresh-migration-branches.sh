@@ -164,19 +164,83 @@ run_lane() {
       echo "  build wiring preserved: $f"
     done <<<"${buildfiles}"
     # Then re-pin the SDK, in the files just taken from the tip. Both spellings the branches use: the
-    # plugin id's `version '…'` and ET's explicit ccd-config-generator dependency coordinate. Matched on
-    # the json-definition-converter- prefix the publish workflow derives from the branch ref, so nothing
-    # else in the build file can be caught by it.
+    # plugin id's `version '…'` and ET's explicit ccd-config-generator dependency coordinate.
+    #
+    # Matched on the LINE (the plugin id, or the ccd-config-generator coordinate) and on the publish
+    # workflow's version SHAPE — `<branch-ref>-<run>.<attempt>-<sha8>` — not on a particular branch
+    # prefix. It used to be anchored on `json-definition-converter-`, which silently stopped matching
+    # anything the moment the pins moved to the SDK-only branch's publish (sdk-migration-features-…),
+    # so a re-pin to a THIRD version would have left every branch on the second one. The line guard is
+    # what keeps sscs's `ccdPassthrough … name: 'ccd-definition-converter'` coordinate out of it: that
+    # one pins the CONVERTER artifact, which only the converter branch publishes, so it must not move
+    # with the SDK.
     if [[ -n "${SDK_VERSION}" ]]; then
       while read -r f; do
         [[ -z "$f" ]] && continue
-        perl -pi -e "s/json-definition-converter-[0-9]+\.[0-9]+-[0-9a-f]{8}/${SDK_VERSION}/g" \
+        perl -pi -e "s/'[^']*-[0-9]+\.[0-9]+-[0-9a-f]{8}'/'${SDK_VERSION}'/g
+                     if /hmcts\.ccd\.sdk|name: 'ccd-config-generator'/" \
           "${wt}/$f"
       done <<<"${buildfiles}"
       local pinned
       pinned="$(grep -rl "${SDK_VERSION}" "${wt}" --include='*.gradle' | wc -l)"
       [[ "${pinned}" -gt 0 ]] || { echo "!! SDK re-pin matched nothing in ${lane}'s build files"; return 1; }
       echo "  SDK re-pinned to ${SDK_VERSION} in ${pinned} build file(s)"
+    fi
+
+    # ccd.rootPackage must name the COMPANION package, whose ConverterGeneratedApplication is the
+    # generation entry point, not the service's own base package. Rewritten here rather than trusted
+    # from the old tip because the tip's value was hand-written before the companion layout settled and
+    # is wrong on every lane: it pointed Main's single-@SpringBootConfiguration lookup at the service's
+    # real application, which boots the entire service (probate: lifeevents TLS + LaunchDarkly 401) or,
+    # on sscs-common, at a package with no application class at all — and its ...ccd.domain.ccd spelling
+    # names a directory the converter has never emitted. Derived from the companion tree just staged, so
+    # it cannot drift from what was actually generated.
+    local rootpkg entrypoint
+    entrypoint="$(cd "${wt}" && find . -name 'ConverterGeneratedApplication.java' -print | head -1)"
+    if [[ -n "${entrypoint}" ]]; then
+      rootpkg="$(sed -n 's/^package \(.*\);$/\1/p' "${wt}/${entrypoint}")"
+      [[ -n "${rootpkg}" ]] || { echo "!! could not read the entry point's package"; return 1; }
+      # Rewrite where the line exists; INSERT into the ccd { } block where it does not. et-ccd-callbacks
+      # sets no rootPackage at all and so inherits the plugin's `uk.gov.hmcts` default — which scans the
+      # whole tree and finds the service's own application. A rewrite-only pass matches nothing there and
+      # would leave the lane broken while reporting success, so absence is handled, not assumed away.
+      while read -r f; do
+        [[ -z "$f" ]] && continue
+        if grep -q "^\s*rootPackage\s*=" "${wt}/$f"; then
+          perl -pi -e "s/^(\s*rootPackage\s*=\s*)'[^']*'/\${1}'${rootpkg}'/" "${wt}/$f"
+        else
+          perl -0pi -e "s/(\nccd \{\n)/\${1}    rootPackage = '${rootpkg}'\n/" "${wt}/$f"
+        fi
+      done <<<"${buildfiles}"
+      grep -rq "rootPackage = '${rootpkg}'" "${wt}" --include='*.gradle' \
+        || { echo "!! rootPackage rewrite matched nothing in ${lane}'s build files"; return 1; }
+      echo "  ccd.rootPackage -> ${rootpkg} (companion entry point)"
+
+      # Generation has no web tier, so run it with WebApplicationType.NONE. Without this the emitted
+      # entry point starts, deduces a SERVLET application from the service's classpath (spring-webmvc is
+      # on it), and then fails with "no ServletWebServerFactory bean defined" — because opting out of
+      # autoconfiguration is exactly what removes that factory. sscs-common already carried the line by
+      # hand and so was the only lane that got this far; retrofit-verify sets it from its init script,
+      # which is why the harness never saw it. Added to the build file holding the ccd block, next to
+      # the rootPackage it belongs with.
+      while read -r f; do
+        [[ -z "$f" ]] && continue
+        grep -q "rootPackage = '${rootpkg}'" "${wt}/$f" || continue
+        grep -q 'web-application-type' "${wt}/$f" && continue
+        cat >> "${wt}/$f" <<'GRADLE'
+
+// The generator's Spring context has no web tier: run it with no embedded server. The generated
+// entry point takes no autoconfiguration, so nothing supplies a ServletWebServerFactory and Boot
+// would otherwise fail on deducing a servlet application from the service's classpath.
+tasks.named('generateCCDConfig') {
+    systemProperty 'spring.main.web-application-type', 'none'
+}
+GRADLE
+        echo "  generateCCDConfig -> web-application-type=none in $f"
+      done <<<"${buildfiles}"
+    else
+      echo "  !! no ConverterGeneratedApplication in the companion tree — generateCCDConfig will fail"
+      return 1
     fi
   fi
 
@@ -228,7 +292,10 @@ done
 if [[ $# -gt 0 ]]; then
   for want in "$@"; do
     for spec in "${LANES[@]}"; do
-      [[ "${spec%%|*}" == "${want}" ]] && run_lane "${spec}"
+      # `[[ … ]] && run_lane` as the loop's last command makes the SCRIPT's exit status that of the
+      # final non-matching test, so a wholly successful named-lane run exited 1 — an exit code that
+      # lies about the outcome. An if statement has no such fall-through status.
+      if [[ "${spec%%|*}" == "${want}" ]]; then run_lane "${spec}"; fi
     done
   done
 else

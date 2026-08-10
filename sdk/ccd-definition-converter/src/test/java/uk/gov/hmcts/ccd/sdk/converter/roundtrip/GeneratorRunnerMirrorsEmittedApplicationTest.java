@@ -84,6 +84,17 @@ class GeneratorRunnerMirrorsEmittedApplicationTest {
   }
 
   @Test
+  void theEmittedApplicationFiltersItsConfigScanWhereTheHarnessNeedNot() {
+    // A DELIBERATE, recorded divergence rather than drift. The emitted app narrows its config-package
+    // scan to CCDConfig types, because on a real service that package can also hold the team's own
+    // beans (sscs-common's ...sscs.ccd.client.CcdClient sits inside the derived companion root). The
+    // harness scans a throwaway compiled tree containing nothing BUT generated classes, so there is
+    // nothing for a filter to exclude — every class the scan can reach is one the filter would keep.
+    // Asserted so that if the emitter's filter is ever removed, this test says why it was there.
+    assertThat(emittedApplicationSource()).contains("useDefaultFilters = false");
+  }
+
+  @Test
   void neitherTheHarnessNorTheEmittedApplicationScansTheSdkRootPackage() {
     // The root package holds the runtime callback layer, whose ObjectMapper nothing supplies once
     // autoconfiguration is gone. Asserted on both sides because either one drifting hides the other.

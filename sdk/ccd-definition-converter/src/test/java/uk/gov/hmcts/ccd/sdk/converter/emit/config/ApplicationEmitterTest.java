@@ -136,6 +136,24 @@ class ApplicationEmitterTest {
   }
 
   @Test
+  void scansTheConfigPackageForCcdConfigTypesOnlyNotForWhateverElseSharesThePackage() {
+    // Naming a package does not bound what a scan instantiates, and the companion root package is not
+    // always exclusively generated: sscs-common declares its model at ...sscs.ccd.domain, so the
+    // derived root is ...sscs.ccd — which also holds the library's own ...sscs.ccd.client.CcdClient.
+    // An unfiltered scan created that bean and failed the context on its CcdRequestDetails constructor
+    // parameter, config a generation run has no reason to supply. Filtering by type instead makes the
+    // scan pick up exactly what generation consumes whatever else lives alongside it.
+    String src = new ApplicationEmitter()
+        .emit(EnvironmentFlagsEmitterTest.minimalModel(), contextWithApplicationEmit(true))
+        .get(0).toString();
+    assertThat(src).contains("useDefaultFilters = false");
+    assertThat(src).contains("FilterType.ASSIGNABLE_TYPE");
+    assertThat(src).contains("CCDConfig.class");
+    // The SDK generator scan must stay unfiltered — its beans are the sheet writers, not CCDConfigs.
+    assertThat(src).contains("@ComponentScan(basePackages = \"uk.gov.hmcts.ccd.sdk.generator\")");
+  }
+
+  @Test
   void generatedClassHasMainMethod() {
     String src = new ApplicationEmitter()
         .emit(EnvironmentFlagsEmitterTest.minimalModel(), contextWithApplicationEmit(true))
