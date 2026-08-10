@@ -52,12 +52,27 @@ public class FieldUtils {
    * #collectGatedOffFieldIds} already filtered them; this is the same predicate, applied where the
    * rows are actually produced.
    *
+   * <p>A field a subclass redeclares <em>hides</em> the superclass one: Java resolves the name to
+   * the subclass's field and Jackson sees a single property, so only the most-derived declaration is
+   * case data. {@link ReflectionUtils#doWithFields} walks subclass-first and reports both, which
+   * emitted two rows for one property — sscs's {@code JointParty} redeclares {@code Entity}'s
+   * {@code id}/{@code identity}/{@code name}/{@code address}/{@code contact} to give each a
+   * {@code @JsonProperty("jointParty…")} ID, and the hidden {@code Entity} fields emitted a second
+   * row apiece under their own unprefixed IDs. Keeping the first declaration seen keeps the one Java
+   * itself resolves to.
+   *
    * @param caseDataClass the case-data or complex-type class
-   * @return its non-static, non-ignored fields
+   * @return its non-static, non-ignored, non-hidden fields, most-derived declaration first
    */
   public static List<Field> getCaseFields(Class caseDataClass) {
     List<Field> fields = new ArrayList<>();
-    ReflectionUtils.doWithFields(caseDataClass, fields::add,
+    Set<String> declared = new LinkedHashSet<>();
+    ReflectionUtils.doWithFields(caseDataClass,
+        field -> {
+          if (declared.add(field.getName())) {
+            fields.add(field);
+          }
+        },
         field -> !Modifier.isStatic(field.getModifiers()));
     return fields.stream()
         .filter(f -> !isFieldIgnored(f))

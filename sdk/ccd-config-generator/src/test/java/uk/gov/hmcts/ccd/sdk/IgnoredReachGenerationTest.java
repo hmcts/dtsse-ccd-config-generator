@@ -71,4 +71,21 @@ public class IgnoredReachGenerationTest {
         assertThat(new File(caseType, "ComplexTypes/IgnoredReachShared.json"))
             .content().doesNotContain("NOT_A_MEMBER");
     }
+
+    /**
+     * A field a subclass redeclares emits ONE row, carrying the subclass declaration's metadata —
+     * the hidden superclass field is not a separate property. Reflection over the hierarchy reaches
+     * both; see {@link uk.gov.hmcts.reform.IgnoredReachBase}.
+     */
+    @Test
+    @SneakyThrows
+    public void emitsOneRowForARedeclaredFieldCarryingTheSubclassDeclaration() {
+        File out = tmp.newFolder();
+        generator.generateAllCaseTypesToJSON(out);
+
+        assertThat(new File(out, "IgnoredReach/ComplexTypes/IgnoredReachShared.json"))
+            .content()
+            .contains("A shared detail")
+            .doesNotContain("The hidden declaration");
+    }
 }
