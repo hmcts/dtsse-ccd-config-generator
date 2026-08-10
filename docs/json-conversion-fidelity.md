@@ -1020,6 +1020,102 @@ the enum, so it cannot be narrowed automatically), fpl's `HearingVenue` 405 and 
 `documentUploadTypeEnum` 61 are lists whose referencing field is live, and the `FL_*` tail is the
 label-mismatch shape the next round addresses.
 
+### Measured 2026-08-10 — code pins, synthesised constants, and the companion redirect
+
+| Lane | Case type | Before | After | Δ |
+|---|---|---:|---:|---:|
+| prl | `PRLAPPS` | 2,340 | **2,136** | −204 |
+| probate | `GrantOfRepresentation` | 206 | **125** | −81 |
+| sscs | `Benefit` | 211 | **188** | −23 |
+| et | `ET_EnglandWales` | 468 | 468 | 0 |
+| fpl | `CARE_SUPERVISION_EPO` | 1,599 | 1,599 | 0 |
+| **total** | | **4,824** | **4,516** | **−308** |
+
+Read the earlier tables in this section against their own baselines, not against this one: the rounds
+above were measured before a per-lane flag correction, so their absolute numbers are not comparable with
+these. Every lane in this table was re-measured at the same commit with byte-identical
+`bin/retrofit-verify` invocations on both sides. `civil` is absent because its lane cannot be measured at
+all — stage 4 fails inside the service's own Spring context (`InterlocutoryJudgementDocMapper` needs a
+`DeadlineExtensionCalculatorService` bean), which predates this work.
+
+**Four things closed the `FixedLists` half of the tail, all about the one column nothing could pin.**
+`FixedListGenerator` derives `ListElementCode` from the enum *constant* — it puts the constant into the
+row map and lets Jackson serialise it — so `@CCD(label)` reaches `ListElement` while the code was out of
+reach, and an enum spelling its codes in the team's own house style was refused outright (a list of wrong
+codes being worse than no list):
+
+- **A `@JsonProperty` on the constant redirects the emitted code**, so such an enum can back the
+  definition's list after all. This one is not runtime-neutral — it changes how the team's type
+  serialises everywhere, not just what the generator emits. The value comes from the definition, which
+  is what that CCD column already carries on the wire, so the redirect aligns the Java type with its own
+  data; it is still a change to a published contract and is reported as one. Refused wherever no pin can
+  work: a `@JsonValue` anywhere on the enum (it beats a constant's `@JsonProperty`), a definition code
+  with no constant, two codes claiming one constant, a constant already pinned elsewhere.
+- **A list the enum *almost* covers gets its missing constant synthesised.** The definition holds the
+  code and the label, and the generator derives the whole list from the constant set, so the faithful
+  reproduction of a fifteen-row list by a fourteen-constant enum is a fifteenth constant. The
+  constructor call copies the argument *shape* of the constants already there — same count, all string
+  literals — so it compiles for the same reason its siblings do. What each position *means* is decided
+  by evidence from the enum's own constants: a position is the code when every constant with a
+  definition row passes its own code there, and the label when most pass their own label. The bars
+  differ deliberately — a code is machine-exact, so one dissenter disqualifies the position, while a
+  label is prose a team copied and copies drift. A position no rule claims is refused rather than filled
+  with a guess, since a wrong value would land in a field of the team's model. A constant is also
+  refused when one already there passes this row's label, which is what separates a genuine gap (sscs's
+  `ScannedDocumentType` really lacks `otherPartyHearingPreferences`) from a value the enum simply spells
+  differently (all four of civil's were restatements of constants already present).
+- **A list no field declares can name the team's own enum.** Reflection reaches an enum only from a
+  field that *declares* it, so sscs's `private String type` carrying
+  `typeParameterOverride = "ScannedDocumentType"` left the real 14-constant enum unreferenced and
+  generated no rows for the list at all.
+- **An oversized enum's field points at the companion instead.** A `FixedRadioList` whose declared type
+  is a team enum needs no override to round-trip, so when the binder refused that enum for declaring
+  more constants than the definition has codes, the refusal only half-landed: the companion carrying the
+  definition's real codes was emitted but referenced by nothing, while the team's enum still emitted a
+  full set of rows under its own Java name. Both halves are now written — `typeParameterOverride` naming
+  the list ID and `typeParameterClass` naming the companion — so the generator reads the companion for
+  this column's list while the field's declared type, and every caller and serialised payload, is left
+  alone.
+
+**Two defects that redirect then unmasked, each costing a lane, both upstream of it.**
+
+- **probate: the binder read a column CCD ignores.** `FieldTypeParser` computes
+  `isList(baseType) ? listReference(base, parameter) : baseType` and re-reads `FieldTypeParameter` only
+  when the base type is `Collection` — so a `FieldTypeParameter` on a row whose `FieldType` is itself a
+  complex type is a column nothing looks at, and real definitions carry vestigial values there.
+  probate's `originalDocuments` row names `ProbateDocument` in that dead column, which fabricated a
+  second candidate class and refused a binding that was in fact unanimous; the whole `Document` class
+  then emitted its members under an ID the definition has no rows for. `ComplexTypes` `Document` 5 → 0
+  and `ProbateDocument` 5 → 0, `FixedLists` `DocumentType` 71 → 0.
+- **prl: an arbitrary same-simple-name tie-break annotated the twin nothing reaches.**
+  `topLevelClassBySimpleName` fell through to the first-parsed candidate when neither lived under the
+  model package — prl has eight such pairs, a `models.complextypes` class beside a `models.dto.cafcass`
+  one of the same name — so the patch annotated one class while the reached one kept its bare members,
+  and the ID's rows came out unannotated. Ties are now settled from the declared type of the
+  definition's own referencing field, installed before binding because `complexTypeClass` is the lookup
+  `bind` itself asks. Unanimity-gated, and a tie-break only: a blanket refusal here instead broke the
+  lane's build, because the companions' own member types are ambiguous too. `ComplexTypes` 705 → 499,
+  led by `OrderDetails` 94 → 1, `Child` 56 → 1, `ProceedingDetails` 28 → 1, `InterpreterNeed` 10 → 1.
+  Two `EventToComplexTypes` `HintText` lines appear in exchange (91 → 93): reaching the right class
+  means emitting its members' metadata, and the definition does not carry those two hints on the nested
+  row.
+- **sscs: a `@JsonValue` enum's labels had nothing to key on.** Such an enum emits a constructor field
+  rather than the constant name, so its codes already match the definition and it needs no code pin —
+  but nothing about a constant's *name* says which definition row it carries, so every label fell back
+  and the list emitted `ListElement == ListElementCode` (`SendToFirstTierActions` names
+  `DECISION_REMADE` and emits `remade`). The row is now resolved per constant from the argument position
+  that provably carries the definition's codes: a position qualifies only when its string literals map
+  constants to codes one-to-one and cover every row, and two qualifying positions that disagree refuse
+  the enum. Nothing is inferred from a parameter name or an ordinal, and only the definition's own label
+  is ever written. sscs `FixedLists` 33 → 10.
+
+What survives in these three lanes is not a pinning question. probate's remaining 125 is led by ~114
+lines whose types are jar-resident (outside the patched source tree), plus `HandoffReasonId` 24 and
+`handoffReasonFixedList` 24; prl's 2,136 is still dominated by `ComplexTypes` 499 and the unresolvable
+dotted-path tail; sscs's 188 is led by 26 `DisplayContext: expected <COMPLEX> but was <OPTIONAL>` lines
+and the `AbstractDocumentDetails` three-IDs-one-parent problem. The 22 `State` extra-constant lines noted
+in the round above are unchanged and still need `StateGenerator` to honour `@CCD(ignore)`.
+
 ## What the round-trip does not prove
 
 The proof is narrower than "the seven fixtures round-trip byte-clean" — know its limits before
