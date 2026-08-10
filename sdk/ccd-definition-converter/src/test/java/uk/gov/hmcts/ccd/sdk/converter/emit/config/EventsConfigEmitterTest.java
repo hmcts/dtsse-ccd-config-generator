@@ -786,6 +786,37 @@ class EventsConfigEmitterTest {
   }
 
   @Test
+  void aClusteredComplexLeafWithoutASummaryFlagTakesTheNoSummaryVariant() {
+    // The clustered branch selects the *NoSummary sibling by name whenever the input row carries
+    // ShowSummaryChangeOption=N, since the SDK otherwise defaults the flag to Y. COMPLEX has to
+    // compose the same way as every other context — probate ships 41 such rows and et 26 — so a
+    // COMPLEX method name with no NoSummary sibling would emit a call that does not compile.
+    PageModel.PageField leaf = PageModel.PageField.builder()
+        .caseFieldId("jointPartyAddress")
+        .displayContext("COMPLEX")
+        .showSummary(false)
+        .build();
+    PageModel page = PageModel.builder().pageId("1").fields(List.of(leaf)).build();
+    EventModel event = EventModel.builder()
+        .id("caseUpdated").javaName("caseUpdated").name("Update case data")
+        .preStates(List.of()).postState("Open").grants(Map.of()).pages(List.of(page))
+        .build();
+    CaseTypeModel model = modelWithEvents(List.of(event), List.of(
+        FieldModel.builder().id("jointPartyAddress").javaName("address").fieldType("Address")
+            .build()))
+        .toBuilder()
+        .clusteredFieldRefs(Map.of(
+            "jointPartyAddress", ClusteredFieldRef.builder()
+                .parentGetter("getJointParty").clusterType("JointParty")
+                .memberGetter("getAddress").build()))
+        .build();
+
+    String src = allSrc(new EventsConfigEmitter().emit(model, contextWith(40)));
+
+    assertThat(src).contains(".complexMemberNoSummary(JointParty::getAddress)");
+  }
+
+  @Test
   void hopRootedGroupDescendsTheUnwrappedHolderBeforeOpeningTheMemberScope() {
     // Civil DEFENDANT_RESPONSE/applicant1DQHearing: in retrofit mode the complex field is declared on a
     // @JsonUnwrapped holder's class, so CaseData has no getter for it. The scope must descend the holder

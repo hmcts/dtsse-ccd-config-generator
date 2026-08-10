@@ -27,6 +27,10 @@ import uk.gov.hmcts.reform.fpl.enums.UserRole;
  *   right. {@code benefitType} gets a {@code COMPLEX} row AND is descended into for
  *   {@code benefitType.code}, proving the two compose on one intermediate (sscs's
  *   {@code confirmPoAttendance/presentingOfficersDetails} ships {@code contact.*} this way).</li>
+ *   <li>{@code .complexMemberNoSummary(getter)} — the same placement with
+ *   {@code ShowSummaryChangeOption=N}. Only visible on {@code CaseEventToFields}, which is the sheet
+ *   a member of a prefix-less {@code @JsonUnwrapped} holder lands on, so {@code jointParty}'s two
+ *   members are placed through the holder scope: one with each variant.</li>
  * </ul>
  */
 @Component
@@ -57,6 +61,13 @@ public class EventComplexScopeCaseType
             .mandatory(EventComplexScopeBenefit::getCode)
           .done()
           .optional(EventComplexScopeAppeal::getReference)
+        .done()
+        // The prefix-less unwrapped holder: entering it registers no field of its own, and the
+        // members placed inside splice back into the case type's CaseEventToFields rows, where the
+        // summary flag is the only thing separating the two COMPLEX placement variants.
+        .complex(EventComplexScopeCaseData::getJointParty)
+          .complexMember(EventComplexScopeJointParty::getJointPartyBenefitType)
+          .complexMemberNoSummary(EventComplexScopeJointParty::getJointPartyDetails)
         .done();
   }
 }
