@@ -1116,6 +1116,57 @@ dotted-path tail; sscs's 188 is led by 26 `DisplayContext: expected <COMPLEX> bu
 and the `AbstractDocumentDetails` three-IDs-one-parent problem. The 22 `State` extra-constant lines noted
 in the round above are unchanged and still need `StateGenerator` to honour `@CCD(ignore)`.
 
+### Measured 2026-08-10 — a generic field resolved to its bound, not its type argument
+
+| lane | before | after | delta |
+| --- | --- | --- | --- |
+| sscs | 188 | **161** | −27 |
+| prl | 2,136 | 2,136 | 0 |
+| fpl | 1,599 | 1,599 | 0 |
+| probate | 125 | 125 | 0 |
+| et | 468 | **490** | +22 |
+| **total** | **4,516** | **4,511** | **−5** |
+
+One line in the SDK, and the only fix so far that moved a lane in each direction. `ConfigResolver`
+resolved a **collection** field's element type against the class it was reached through, but read a
+non-collection field as bare `field.getType()`. On a field whose declared type is a *type variable*,
+that yields the variable's **erasure** — its bound — never the type argument the subclass supplied.
+
+sscs's document hierarchy is the shape that exposes it: `AbstractDocument<D extends
+AbstractDocumentDetails>` holds a `private D value`, and each document kind subclasses it
+(`SscsWelshDocument extends AbstractDocument<SscsWelshDocumentDetails>`). Every subclass's `value`
+resolved to `AbstractDocumentDetails`, which broke the definition in **both** directions at once: the
+bound became reachable in its own right and emitted its 16 members under an ID no definition row names,
+while each type argument became reachable nowhere and emitted no rows at all. `sscsDocument` was the
+one that looked correct, and only by accident — `CorDocumentDetails.document` declares a concrete
+`SscsDocumentDetails`, so that one subclass was reachable by another route. `sscsWelshDocuments` (9
+rows) and `dwpDocuments` (14) had no such route and produced no `ComplexTypes` file whatsoever. That is
+39 of sscs's 99 `ComplexTypes` lines, from one expression.
+
+Resolving the field against its declaring class — exactly what the collection branch beside it already
+did — closes it: the spurious parent ID is gone and both subclass IDs now emit. `ResolvableType.resolve()`
+returns null for a variable no implementation class binds, so a genuinely raw or wildcard use still
+falls back to the erasure; that fallback is now the narrow case rather than the universal one.
+
+**et's +22 is over-generation this unmasked, not a regression it caused.** ET wraps with
+`GenericTypeItem<T>`, whose `value` erased to `Object` — outside `basePackage`, so filtered from the
+result and invisible. With the type argument resolved, `DocumentType` is reachable for the first time,
+and nothing pins it: the definition addresses those members as `DocumentUpload` (19 rows, backed by a
+generated companion) while the model's own `DocumentType` (22 rows, a near-superset — it adds
+`creationDate`, `ownerDocument`, `tornadoEmbeddedPdfUrl`) now emits under its Java simple name. Those
+22 lines are the existing same-members-two-IDs problem becoming visible, and they belong with et's
+`ComplexTypes` 439 rather than with this fix. The five-lane total still falls.
+
+What remains of the sscs cluster is 14 lines and a genuinely different problem: **CCD flattens
+inheritance, and the definition does not give each subclass ID the same slice of the parent.**
+`dwpDocuments` declares 14 of the parent's members and `sscsWelshDocuments` 9, so a shared parent class
+emits members into both IDs that only one of them declares (`sscsWelshDocuments` gains `dateApproved`,
+`avDocumentLink`, `controlNumber` and six more). Nothing about a field on `AbstractDocumentDetails` says
+which subclass IDs should carry it; expressing that needs per-subclass member suppression, which the SDK
+has no form for today. One further line is a label collision of the same origin: both subclasses inherit
+`documentType`, but the definition parameterises it as `documentTypeWelsh` on one and `documentTypeDwp`
+on the other, and a single inherited field can carry only one `typeParameterOverride`.
+
 ## What the round-trip does not prove
 
 The proof is narrower than "the seven fixtures round-trip byte-clean" — know its limits before
