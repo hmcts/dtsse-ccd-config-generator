@@ -14,6 +14,9 @@ import uk.gov.hmcts.ccd.sdk.api.ComplexType;
 @ComplexType(name = "IgnoredReachShared", generate = true)
 public class IgnoredReachShared {
 
+  /** A static on a complex type — the sscs shape exactly; see {@link IgnoredReachCaseData}. */
+  private static final int NOT_A_MEMBER = 1;
+
   @CCD(label = "A shared detail")
   private String sharedDetail;
 }
