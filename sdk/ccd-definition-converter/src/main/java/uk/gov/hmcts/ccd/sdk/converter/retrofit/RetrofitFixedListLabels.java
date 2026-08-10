@@ -147,13 +147,22 @@ final class RetrofitFixedListLabels {
    * pinned to where {@link #codePins} makes a pin, else the {@code @JsonProperty} it already carries, else
    * its own name. Used to decide whether a label pin is still needed — the generator's label fallback
    * emits this same value.
+   *
+   * <p>An EXISTING {@code @JsonProperty} only counts when the enum actually honours it. A
+   * {@code @JsonValue} takes precedence over one, so on such an enum the constant still emits its own
+   * name and the definition's label is still needed — prl's {@code DocumentPartyEnum} pins
+   * {@code @JsonProperty("Court")} on {@code COURT} but serialises through a {@code @JsonValue}
+   * {@code getDisplayedValue()}, so the emitted code is {@code COURT} and the label {@code "Court"} must
+   * be pinned. Reading the annotation blindly dropped that pin and cost a residual line.
    */
   private static Map<String, String> emittedCodes(ModelSourceIndex.Type type, FixedListModel list) {
     Map<String, String> emitted = new LinkedHashMap<>();
-    for (EnumConstantDeclaration constant : type.decl.asEnumDeclaration().getEntries()) {
-      Annotations.find(constant, "JsonProperty")
-          .flatMap(Annotations::stringValue)
-          .ifPresent(pinned -> emitted.put(constant.getNameAsString(), pinned));
+    if (!redirectsItsSerialisedValue(type.decl.asEnumDeclaration())) {
+      for (EnumConstantDeclaration constant : type.decl.asEnumDeclaration().getEntries()) {
+        Annotations.find(constant, "JsonProperty")
+            .flatMap(Annotations::stringValue)
+            .ifPresent(pinned -> emitted.put(constant.getNameAsString(), pinned));
+      }
     }
     codePins(type, list).forEach((constant, code) -> emitted.put(constant, code));
     return emitted;

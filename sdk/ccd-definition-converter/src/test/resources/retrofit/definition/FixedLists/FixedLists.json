@@ -23,6 +23,7 @@
   { "ID": "SharedLineList", "ListElementCode": "THIRD", "ListElement": "The third" },
   { "ID": "CamelConstantList", "ListElementCode": "nonMolestationOrder", "ListElement": "Non-molestation order (FL404A)" },
   { "ID": "CamelConstantList", "ListElementCode": "occupationOrder", "ListElement": "Occupation order (FL404)" },
+  { "ID": "ShadowedPinList", "ListElementCode": "COURT", "ListElement": "Court" },
   { "ID": "State", "ListElementCode": "Open", "ListElement": "An open case" },
   { "ID": "State", "ListElementCode": "CLOSED", "ListElement": "A closed case" }
 ]

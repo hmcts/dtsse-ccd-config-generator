@@ -11,6 +11,7 @@ import uk.gov.hmcts.example.enums.CamelConstantList;
 import uk.gov.hmcts.example.enums.ClaimType;
 import uk.gov.hmcts.example.enums.LabelBearingList;
 import uk.gov.hmcts.example.enums.SharedLineList;
+import uk.gov.hmcts.example.enums.ShadowedPinList;
 import uk.gov.hmcts.example.enums.State;
 import uk.gov.hmcts.example.model.common.DocItem;
 import uk.gov.hmcts.example.model.common.ListValue;
@@ -49,6 +50,11 @@ public class CaseData extends BaseCaseData {
 
   // The pin must match rows on the raw ListElementCode too, not just the sanitised constant.
   private CamelConstantList camelConstant;
+
+  // The label pin must read the code the constant REALLY emits: this enum carries a per-constant
+  // @JsonProperty that its own @JsonValue overrides (prl's DocumentPartyEnum), so the emitted code is
+  // COURT and the definition's "Court" label still needs pinning.
+  private ShadowedPinList shadowedPin;
 
   // A large reference-data FixedList the team really models as a String (sscs's hearingEpimsId, 160-odd
   // venue codes loaded at runtime): nothing DECLARES the list's type, so reflection reaches no rows for

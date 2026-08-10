@@ -438,6 +438,18 @@ class RetrofitPatchEmitterGoldenTest {
   }
 
   @Test
+  void pinsALabelWhoseConstantsExistingJsonPropertyItsJsonValueOverrides() {
+    // Regression (prl DocumentPartyEnum, one residual line): deciding whether a label pin is still needed
+    // means knowing the code the constant REALLY emits, and an existing @JsonProperty only tells you that
+    // when the enum honours it. ShadowedPinList pins @JsonProperty("Court") onto COURT and serialises
+    // through a @JsonValue getDisplayedValue(), so the emitted code is COURT, not Court. Reading the
+    // annotation blindly concluded the constant already emitted `Court`, matched the definition's
+    // ListElement, and dropped the very pin that column needed.
+    assertThat(patchedContent(emitPatch(), "enums/ShadowedPinList.java"))
+        .contains("@CCD(label = \"Court\")");
+  }
+
+  @Test
   void refusesToNameAnEnumThatRedirectsItsSerialisedCode() {
     // The refusal a code pin cannot lift: a @JsonValue takes precedence over a constant's
     // @JsonProperty, so what the enum emits is a method's return value and nothing pinned on the
