@@ -431,6 +431,11 @@ public final class RetrofitPatchEmitter {
       }
     }
 
+    // 3y. Suppress the ComplexTypes rows of every reachable model class the definition never declares.
+    // Must run AFTER step 3 (which fills definitionComplexTypeIds and takes the real ID pins, which
+    // win) and after 3z (whose ignore decisions remove fields from the SDK's reachability walk).
+    planSuppressedComplexTypes(byFile, inherited);
+
     // 3a. Re-declare fields whose definition complex type has no model class as the generated companion
     // emitted for it. Must run AFTER step 3, which populates the companion set from the same lookup it
     // skips on, and after step 1's @CCD annotations, whose insertions the retype's whole-line rewrite is
@@ -1118,6 +1123,81 @@ public final class RetrofitPatchEmitter {
               + " give each definition type its own model class or a per-field typeParameterOverride")
           .build());
     }
+  }
+
+  /**
+   * Suppresses the {@code ComplexTypes} rows of every model class the SDK's reachability walk reaches
+   * but the definition never declares a {@code ComplexTypes} ID for.
+   *
+   * <p>Step 3 pins each definition complex type onto the model class that binds it, so those types
+   * emit their rows under the definition's own ID. But the walk reaches more than the definition
+   * declares: a team's own copy of a type the definition store knows natively (sscs declares no
+   * {@code ComplexTypes} rows for its {@code DocumentLink}, {@code DynamicList}, {@code CaseLink} …
+   * because the importer resolves those built-in), and the {@code {id, value}} envelope class of every
+   * collection (the definition declares the element type; CCD's collection envelope is implicit). The
+   * SDK knows neither, so {@code ComplexTypeGenerator} emits a full set of rows for each under its
+   * Java simple name — rows the input has no counterpart for, and the largest single group of sscs's
+   * residual diff.
+   *
+   * <p>{@code @ComplexType(generate = false)} is exactly the lever for this, and a NAME-LESS one is
+   * inert everywhere else: of the five SDK sites reading the annotation, three
+   * ({@code CaseFieldGenerator}'s {@code FieldType} / collection {@code FieldTypeParameter} overrides
+   * and the {@code FixedList} list ID) are guarded on a non-empty {@code name()} or apply to enums
+   * only, and {@code FixedListGenerator} likewise. {@code CaseFieldGenerator.referencedTypeParameters}
+   * deliberately still walks a {@code generate = false} class, so its members' fixed lists keep their
+   * {@code FixedLists} rows.
+   *
+   * <p>Only suppression is ever planned here, never a rename: a class the definition does not declare
+   * has no ID to be named after. Where a definition ID DOES exist for the class, step 3's pin already
+   * holds the {@code complexTypeIdPins} slot and {@link #pinComplexTypeId} leaves it alone.
+   */
+  private void planSuppressedComplexTypes(
+      Map<Path, FileEdits> byFile, RetrofitInheritedMembers inherited) {
+    if (rootType == null) {
+      return;
+    }
+    // The fields step 2/3 decided to ignore leave the SDK's walk too, so a class only such a field
+    // names is not reachable in the patched model and needs no suppression.
+    Set<String> ignoredMembers = new LinkedHashSet<>();
+    for (RetrofitInheritedMembers.Decision decision : inherited.decisions()) {
+      if (decision.base().isIgnore()) {
+        ignoredMembers.add(decision.base().ownerFqn() + "#" + decision.base().memberName());
+      }
+    }
+    for (ModelSourceIndex.Type reachable
+        : new RetrofitReachableTypes(index).from(rootType, ignoredMembers)) {
+      if (!reachable.isClass() || reachable.fqn.equals(rootType.fqn)) {
+        continue;
+      }
+      if (declaresComplexTypeId(reachable) || complexTypeIdPins.containsKey(reachable.fqn)) {
+        // A definition type binds here, or step 3 already claimed the class for one under another
+        // name — either way its rows are accounted for and the ID pin must stand.
+        continue;
+      }
+      // Null ID: a suppression, not a rename — the renderer emits a name-less @ComplexType.
+      pinComplexTypeId(byFile, null, reachable, false);
+    }
+  }
+
+  /**
+   * Whether the definition declares a {@code ComplexTypes} ID this class would emit its rows under —
+   * matched case-insensitively because that is how {@link ModelSourceIndex#complexTypeClass} binds an
+   * ID to a class, so a case-only difference is the same type by the linker's own reckoning.
+   *
+   * <p>An ID the linker DROPPED is not a declaration: an orphan complex type nothing reachable
+   * references is removed from the model (and forgiven on the expected side), so a class matching only
+   * such an ID still emits rows nothing accounts for. Testing membership of the live
+   * {@code definitionComplexTypeIds} — populated from the linked model, post-drop — is what makes
+   * sscs's {@code HearingRecordingDetails} a plain suppression rather than a spurious rename onto the
+   * orphan {@code hearingRecordingDetails}.
+   */
+  private boolean declaresComplexTypeId(ModelSourceIndex.Type type) {
+    for (String id : definitionComplexTypeIds) {
+      if (id.equalsIgnoreCase(type.simpleName)) {
+        return true;
+      }
+    }
+    return false;
   }
 
   /**
@@ -2021,10 +2101,17 @@ public final class RetrofitPatchEmitter {
         if (typeLine < 1) {
           continue;
         }
+        // A suppression-only pin carries no definition ID (see planSuppressedComplexTypes) and must
+        // NOT name the type: an empty name() is what makes it inert everywhere except
+        // ComplexTypeGenerator — CaseFieldGenerator's FieldType/FieldTypeParameter overrides are all
+        // guarded on a non-empty name(), so leaving it off keeps every referencing field's type
+        // derivation exactly as it is today.
+        String pin = plan.definitionId() == null || plan.definitionId().isEmpty()
+            ? "@ComplexType(generate = " + plan.generate() + ")"
+            : "@ComplexType(name = \"" + plan.definitionId() + "\", generate = "
+                + plan.generate() + ")";
         insertionsByLine.computeIfAbsent(typeLine, k -> new ArrayList<>())
-            .addAll(indentEachLine(
-                List.of("@ComplexType(name = \"" + plan.definitionId() + "\", generate = "
-                    + plan.generate() + ")"),
+            .addAll(indentEachLine(List.of(pin),
                 leadingWhitespace(sourceLines.get(typeLine - 1))));
         needsComplexTypeImport = true;
       }

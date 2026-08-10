@@ -259,6 +259,41 @@ class RetrofitPatchEmitterGoldenTest {
   }
 
   @Test
+  void suppressesReachableModelClassesTheDefinitionNeverDeclares() {
+    // The SDK's reachability walk reaches more classes than the definition declares ComplexTypes IDs
+    // for, and ComplexTypeGenerator emits a full row set for each under its Java simple name. Two
+    // shapes, both in this fixture and both all over sscs (15 spurious generated types):
+    //   - Document: the team's own copy of a type the definition store knows natively (sscs's
+    //     DocumentLink/DynamicList/CaseLink), so the definition declares no rows for it; and
+    //   - DocItem: the {id, value} envelope of a collection, which CCD leaves implicit — the definition
+    //     addresses the element's members on the value class, never the envelope.
+    // The pin is NAME-LESS: with no definition ID there is nothing to name the type after, and an empty
+    // name() is what keeps it inert outside ComplexTypeGenerator (CaseFieldGenerator's FieldType and
+    // FieldTypeParameter overrides are all guarded on a non-empty name), so the referencing fields'
+    // type derivation is untouched.
+    RetrofitPatch patch = emitPatch();
+    assertThat(complexTypeAnnotations(patchedFile(patch, "common/Document.java")))
+        .containsExactly("@ComplexType(generate = false)");
+    assertThat(complexTypeAnnotations(patchedFile(patch, "common/DocItem.java")))
+        .containsExactly("@ComplexType(generate = false)");
+    assertThat(patchedFile(patch, "common/Document.java"))
+        .contains("import uk.gov.hmcts.ccd.sdk.api.ComplexType;");
+
+    // A class the definition DOES declare keeps its rows: suppression is only ever for a type nothing
+    // in the definition accounts for, so Party (declared verbatim) and NoticeDetails (declared
+    // camelCase, pinned by name) are both left generating.
+    assertThat(complexTypeAnnotations(patchedFile(patch, "common/Party.java"))).isEmpty();
+    assertThat(complexTypeAnnotations(patchedFile(patch, "common/NoticeDetails.java")))
+        .containsExactly("@ComplexType(name = \"noticeDetails\", generate = true)");
+    // …including one bound by DECLARATION rather than name, whose ID pin the suppression pass must not
+    // pre-empt: executorApplying shares nothing with AdditionalExecutorApplying, so a name-based check
+    // alone would suppress the very class step 3 just named.
+    assertThat(complexTypeAnnotations(
+        patchedFile(patch, "common/AdditionalExecutorApplying.java")))
+        .containsExactly("@ComplexType(name = \"executorApplying\", generate = true)");
+  }
+
+  @Test
   void refusesToPinOverAComplexTypeAnnotationTheClassAlreadyCarries() {
     // Idempotency, and the team's own choices: PinnedByTeamCT already declares
     // @ComplexType(name = "teamsOwnChoice"), so the definition ID pinnedByTeamCT must NOT be pinned — a
