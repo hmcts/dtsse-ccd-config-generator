@@ -1209,6 +1209,10 @@ public final class RetrofitPatchEmitter {
    * rather than a guess at a class name.
    */
   private FieldModel withTypeParameterClass(FieldModel field, ResolvedProperty property) {
+    return withBackingEnum(withCompanionOverride(field, property), property);
+  }
+
+  private FieldModel withBackingEnum(FieldModel field, ResolvedProperty property) {
     String listId = field.getTypeParameterOverride();
     if (listId == null || listId.isEmpty() || field.getTypeParameterClassName() != null) {
       return field;
@@ -1256,6 +1260,72 @@ public final class RetrofitPatchEmitter {
         .findFirst()
         .map(list -> field.toBuilder().typeParameterClassName(list.getJavaClassName()).build())
         .orElse(field);
+  }
+
+  /**
+   * Points a field at the companion enum for its list when the field DECLARES a team enum that cannot
+   * serve the list — the enum the binder refused because it declares more constants than the definition
+   * has codes.
+   *
+   * <p>Without this the refusal only half-lands. A {@code FixedRadioList} field whose declared type is an
+   * enum needs no {@code typeParameterOverride} to round-trip normally — the SDK derives the
+   * {@code FieldTypeParameter} from the declared enum itself ({@code CaseFieldGenerator.resolveSimpleType})
+   * — so the linker emits none, and there is no override for {@link #withTypeParameterClass} to attach a
+   * class to. The result is the worst of both: the companion holding the definition's real codes is
+   * emitted but referenced by nothing (so contributes no rows), while the team's enum still emits a full
+   * set of rows under its own Java name. sscs's {@code HmcHearingType} — 3 constants against the 2-code
+   * {@code FL_hmcHearingType} — showed exactly that, its residual rising rather than falling.
+   *
+   * <p>So both halves are written explicitly: the {@code typeParameterOverride} names the definition's
+   * list ID, and {@code typeParameterClass} names the companion that carries its codes. The field's own
+   * declared type is left alone, so no caller or serialised payload changes; only what the generator
+   * reads for this column's list does.
+   *
+   * <p>Scoped to exactly the refusal that creates the situation: the field declares an enum, the
+   * definition has a list of that {@code FieldTypeParameter}, no binding was made for it, and a companion
+   * IS emitted for the ID. Where the team's enum does serve the list it keeps serving it, pinned by
+   * {@link #planFixedListIds} as before.
+   */
+  private FieldModel withCompanionOverride(FieldModel field, ResolvedProperty property) {
+    String listId = field.getFieldTypeParameter();
+    if (listId == null || listId.isEmpty()
+        || field.getTypeParameterOverride() != null
+        || field.getTypeParameterClassName() != null
+        || declaredTypeBindings.containsKey(listId)) {
+      return field;
+    }
+    // Only when the field's own declared type is the enum that would otherwise answer the list, and the
+    // definition really declares that list. A companion is emitted for the ID precisely because no
+    // binding claimed it — the rebinder's drop test — and its Java name is the linker's.
+    ModelSourceIndex.Type declared = declaredEnum(property);
+    if (declared == null || index.hasTopLevelType(listId)) {
+      return field;
+    }
+    return RetrofitFixedListLabels.byId(definitionFixedLists, listId)
+        .filter(list -> !RetrofitFixedListLabels.reproducesTheListExactly(declared, list))
+        .map(list -> field.toBuilder()
+            .typeParameterOverride(listId)
+            .typeParameterClassName(list.getJavaClassName())
+            .build())
+        .orElse(field);
+  }
+
+  /**
+   * The model enum a resolved property's declaration names, or null when it declares no enum in the
+   * parsed model. Read through the same token descent {@link #declares} uses.
+   */
+  private ModelSourceIndex.Type declaredEnum(ResolvedProperty property) {
+    if (property == null) {
+      return null;
+    }
+    com.github.javaparser.ast.type.Type token =
+        RetrofitTypeTokens.elementToken(property.declaredType);
+    if (!(token instanceof ClassOrInterfaceType cit)) {
+      return null;
+    }
+    return index.resolve(property.context, cit)
+        .filter(ModelSourceIndex.Type::isEnum)
+        .orElse(null);
   }
 
   /**

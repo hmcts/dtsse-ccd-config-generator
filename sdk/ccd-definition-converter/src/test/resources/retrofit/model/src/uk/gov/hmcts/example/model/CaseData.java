@@ -13,6 +13,7 @@ import uk.gov.hmcts.example.enums.LabelBearingList;
 import uk.gov.hmcts.example.enums.SharedLineList;
 import uk.gov.hmcts.example.enums.ShadowedPinList;
 import uk.gov.hmcts.example.enums.State;
+import uk.gov.hmcts.example.enums.TeamOwnVocabulary;
 import uk.gov.hmcts.example.model.common.DocItem;
 import uk.gov.hmcts.example.model.common.ListValue;
 import uk.gov.hmcts.example.model.common.Party;
@@ -55,6 +56,12 @@ public class CaseData extends BaseCaseData {
   // @JsonProperty that its own @JsonValue overrides (prl's DocumentPartyEnum), so the emitted code is
   // COURT and the definition's "Court" label still needs pinning.
   private ShadowedPinList shadowedPin;
+
+  // A team enum declaring MORE constants than the definition's list has codes (sscs's EventType, 261
+  // against 15). FixedListGenerator emits one row per constant with no filter, so pinning the list's ID
+  // onto this enum turns a list with no rows into a list with WRONG rows. The binding must be refused
+  // and the field pointed at the companion the refusal leaves in place instead.
+  private TeamOwnVocabulary oversized;
 
   // A large reference-data FixedList the team really models as a String (sscs's hearingEpimsId, 160-odd
   // venue codes loaded at runtime): nothing DECLARES the list's type, so reflection reaches no rows for

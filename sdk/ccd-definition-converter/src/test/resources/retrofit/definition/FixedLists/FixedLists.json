@@ -18,6 +18,8 @@
   { "ID": "UnsynthesisableType", "ListElementCode": "firstSort", "ListElement": "First sort" },
   { "ID": "UnsynthesisableType", "ListElementCode": "secondSort", "ListElement": "Second sort" },
   { "ID": "UnsynthesisableType", "ListElementCode": "thirdSort", "ListElement": "Third sort" },
+  { "ID": "FL_oversizedList", "ListElementCode": "FIRST_CODE", "ListElement": "First code" },
+  { "ID": "FL_oversizedList", "ListElementCode": "SECOND_CODE", "ListElement": "Second code" },
   { "ID": "FL_hearingVenues", "ListElementCode": "219164", "ListElement": "Aberdeen" },
   { "ID": "FL_hearingVenues", "ListElementCode": "450049", "ListElement": "Aldershot" },
   { "ID": "ClaimType", "ListElementCode": "PERSONAL_INJURY", "ListElement": "Personal injury" },

@@ -766,6 +766,31 @@ class RetrofitPatchEmitterGoldenTest {
   }
 
   @Test
+  void refusesToPinAListIdOntoAnEnumDeclaringMoreConstantsThanTheListHasCodes() {
+    // FixedListGenerator emits one row per enum constant and takes no filter, so the ID pin decides
+    // which enum IS the list — wholesale. TeamOwnVocabulary carries the definition's two codes plus two of
+    // the team's own (sscs's EventType: 261 constants against a 15-code list, 255 diff lines), so
+    // pinning FL_oversizedList onto it would turn a list with no rows into a list with WRONG rows.
+    // Unlike @CCD(typeParameterClass), which makes an unreachable list reachable and where a superset is
+    // strictly better than nothing, this is the definitive answer being wrong.
+    RetrofitPatch patch = emitPatch();
+    assertNoPinOn(patch, "enums/TeamOwnVocabulary.java", "FL_oversizedList");
+    // Refusing loses nothing: the ID stays unbound, so RetrofitModelRebinder keeps its companion, and
+    // the field that DECLARES the team's enum is pointed at that companion — both halves, because a
+    // FixedRadioList field needs no typeParameterOverride to round-trip normally (the SDK derives the
+    // column from the declared enum), so without the override there is nothing to attach a class to and
+    // the companion would be emitted with nothing referencing it while the team's enum emitted four rows
+    // under its own Java name. sscs's HmcHearingType regressed exactly that way.
+    assertThat(patchedContent(patch, "model/CaseData.java"))
+        .contains("typeParameterOverride = \"FL_oversizedList\"")
+        .contains("typeParameterClass = OversizedList.class");
+    // And the field keeps its declared type: nothing about how the team's code reads or serialises this
+    // property changes, only which enum the generator reads the list's rows from.
+    assertThat(patchedContent(patch, "model/CaseData.java"))
+        .contains("private TeamOwnVocabulary oversized;");
+  }
+
+  @Test
   void refusesToBindAFixedListIdToAClassOrAComplexTypeIdToAnEnum() {
     // Kind must match the generator that will emit the type: FixedListGenerator selects on isEnum and
     // ComplexTypeGenerator on the absence of it, so pinning crossKindFixedList onto the CLASS

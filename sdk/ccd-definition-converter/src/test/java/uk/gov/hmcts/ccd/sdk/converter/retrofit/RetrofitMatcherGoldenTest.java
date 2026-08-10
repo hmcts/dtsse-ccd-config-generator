@@ -55,21 +55,23 @@ class RetrofitMatcherGoldenTest {
     RetrofitReport report = run(MODEL_ROOT, "uk.gov.hmcts.example.model", "CaseData");
 
     assertThat(report.isMapBased()).isFalse();
-    // 20 CaseField rows, 1 is a Label -> 19 data-bearing.
-    assertThat(report.getTotalDefinitionFields()).isEqualTo(20);
+    // 21 CaseField rows, 1 is a Label -> 20 data-bearing.
+    assertThat(report.getTotalDefinitionFields()).isEqualTo(21);
     assertThat(report.getLabelFields()).isEqualTo(1);
-    assertThat(report.getDataBearingFields()).isEqualTo(19);
+    assertThat(report.getDataBearingFields()).isEqualTo(20);
 
-    // 14 exact (incl. the five FixedList-label pin fixtures — labelBearing, annotated, sharedLine,
-    // camelConstant, shadowedPin — whose model enums match by name, and `state`, the State enum declared
-    // as an ordinary field), 3 type-conflict (documents concrete wrapper, dateOfBirth date/dateTime, AND
-    // hearingVenue String/FixedList), 2 unmatched (extraSynthField + confidentialData, which collides
-    // with the @JsonUnwrapped parent).
+    // 15 exact (incl. the five FixedList-label pin fixtures — labelBearing, annotated, sharedLine,
+    // camelConstant, shadowedPin — whose model enums match by name; `state`, the State enum declared
+    // as an ordinary field; and `oversized`, whose declared enum resolves to the same FixedRadioList
+    // the definition declares, the OVERSIZE being a binding question rather than a matching one),
+    // 3 type-conflict (documents concrete wrapper, dateOfBirth date/dateTime, AND hearingVenue
+    // String/FixedList), 2 unmatched (extraSynthField + confidentialData, which collides with the
+    // @JsonUnwrapped parent).
     assertThat(report.getUnmatchedDefinitionFields()).isEqualTo(2);
     assertThat(report.getTypeConflicts()).isEqualTo(3);
-    assertThat(report.getExactMatches()).isEqualTo(14);
+    assertThat(report.getExactMatches()).isEqualTo(15);
     assertThat(report.getExactMatches() + report.getTypeConflicts()
-        + report.getUnmatchedDefinitionFields()).isEqualTo(19);
+        + report.getUnmatchedDefinitionFields()).isEqualTo(20);
   }
 
   @Test
