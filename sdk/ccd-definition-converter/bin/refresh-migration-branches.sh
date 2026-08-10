@@ -40,7 +40,7 @@
 # because these branches feed open PRs and the operator should read the diffstat first.
 #
 # Usage: refresh-migration-branches.sh [--sdk-version <version>] [lane ...]
-#        (default lanes: the four with OPEN PRs)
+#        (default lanes: every lane whose migration PR is OPEN, asked of GitHub at run time)
 
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -71,13 +71,24 @@ run_lane() {
   [[ -d "${review}" ]] || { echo "!! no review clone at ${review}"; return 1; }
   [[ -d "${clone}" ]]  || { echo "!! no service clone at ${clone}"; return 1; }
 
+  # The tip to build on is the REMOTE's, fetched now, never the clone's local branch ref. The local ref
+  # is whatever the operator last checked out and goes stale the moment a refresh is pushed from a
+  # worktree (the push updates the remote, not the clone's branch). Committing onto a stale local ref
+  # produces a commit whose parent is not the remote tip, so the push is a non-fast-forward and the only
+  # ways out are a force-push over an open PR or discarding the work. Fetch, then read the
+  # remote-tracking ref.
+  local first base tip remoteref
+  git -C "${clone}" fetch -q "${remote}" "${BRANCH}" || { echo "!! fetch ${remote} ${BRANCH} failed"; return 1; }
+  remoteref="refs/remotes/${remote}/${BRANCH}"
+  git -C "${clone}" rev-parse --verify -q "${remoteref}" >/dev/null \
+    || { echo "!! no ${remoteref} after fetch"; return 1; }
+
   # The branch's base: the commit its first migration commit was built on. Derived, not assumed, so
   # this stays correct if the branch is later rebased onto a newer upstream.
-  local first base tip
-  first="$(git -C "${clone}" log --format=%H --grep='as Java config' -1 "${BRANCH}")"
+  first="$(git -C "${clone}" log --format=%H --grep='as Java config' -1 "${remoteref}")"
   [[ -n "${first}" ]] || { echo "!! no migration commit found on ${lane}"; return 1; }
   base="$(git -C "${clone}" rev-parse "${first}^")"
-  tip="$(git -C "${clone}" rev-parse "${BRANCH}")"
+  tip="$(git -C "${clone}" rev-parse "${remoteref}")"
   echo "  base $(git -C "${clone}" log --oneline -1 "${base}")"
   echo "  old tip $(git -C "${clone}" log --oneline -1 "${tip}")"
 
@@ -100,11 +111,24 @@ run_lane() {
   echo "  companions: ${n} java files"
 
   # 2. passthrough resources — wholly generated, replace outright.
-  rm -rf "${wt}/resources/ccd-passthrough"
+  #
+  # The DESTINATION is read off the branch, not hardcoded: the mergePassthrough task in each branch's
+  # build.gradle takes the directory as a literal argument, and that build file is carried over from the
+  # old tip verbatim (below), so writing the tree anywhere else silently breaks the merge — sscs keeps
+  # its passthrough under ccd-definition/, everyone else under resources/. Derived from the old tip's
+  # own tree so it follows the branch if a service moves it again.
+  # (No `grep -m1`: closing the pipe early SIGPIPEs git ls-tree, and under `set -e -o pipefail` a
+  # failing command substitution aborts the whole lane silently.)
+  local ptparent
+  ptparent="$(git -C "${clone}" ls-tree -r --name-only "${tip}" \
+    | sed -n 's|/ccd-passthrough/.*||p' | head -1)"
+  [[ -n "${ptparent}" ]] || ptparent="resources"
+  rm -rf "${wt:?}/${ptparent}/ccd-passthrough"
   if [[ -d "${review}/resources/ccd-passthrough" ]]; then
-    mkdir -p "${wt}/resources"
-    cp -a "${review}/resources/ccd-passthrough" "${wt}/resources/"
-    echo "  passthrough: $(find "${wt}/resources/ccd-passthrough" -type f | wc -l) files"
+    mkdir -p "${wt}/${ptparent}"
+    cp -a "${review}/resources/ccd-passthrough" "${wt}/${ptparent}/"
+    echo "  passthrough: $(find "${wt}/${ptparent}/ccd-passthrough" -type f | wc -l) files" \
+      "-> ${ptparent}/ccd-passthrough"
   fi
 
   # 3. the model annotation patch = the review clone's tracked modifications. Applied as a diff rather
@@ -204,9 +228,23 @@ if [[ $# -gt 0 ]]; then
     done
   done
 else
+  # Default = the lanes with an OPEN PR, checked against GitHub rather than hardcoded: the previous
+  # hardcoded skip list said sscs's PR was closed long after it was reopened as #1958, so the default
+  # run silently left the branch behind every converter change. A lane whose PR state can't be read
+  # (no gh, no auth, no network) is RUN rather than skipped — refreshing a lane with no open PR wastes a
+  # worktree, but skipping one that has an open PR leaves it showing stale converter output.
   for spec in "${LANES[@]}"; do
     lane="${spec%%|*}"
-    [[ "${lane}" == "sscs-common" || "${lane}" == "civil-service" ]] && continue  # PRs closed
+    clonerel="$(echo "${spec}" | cut -d'|' -f2)"
+    repo="hmcts/$(basename "${clonerel}")"
+    if command -v gh >/dev/null 2>&1; then
+      open="$(gh pr list --repo "${repo}" --head "${BRANCH}" --state open --json number \
+        --jq 'length' 2>/dev/null || echo unknown)"
+      if [[ "${open}" == "0" ]]; then
+        echo "########## ${lane}: no open ${BRANCH} PR on ${repo} — skipped"
+        continue
+      fi
+    fi
     run_lane "${spec}"
   done
 fi
