@@ -17,6 +17,16 @@
     "Disabled": "N",
     "LiveFrom": "01/01/2017",
     "ReadOnly": "N",
+    "RoleName": "[SOLICITOR]"
+  },
+  {
+    "AccessProfiles": "access-profile",
+    "Authorisation": "",
+    "CaseAccessCategories": "",
+    "CaseTypeID": "CARE_SUPERVISION_EPO",
+    "Disabled": "N",
+    "LiveFrom": "01/01/2017",
+    "ReadOnly": "N",
     "RoleName": "caseworker-approver-group"
   },
   {
