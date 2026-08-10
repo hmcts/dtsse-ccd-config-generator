@@ -536,6 +536,23 @@ class RetrofitPatchEmitterGoldenTest {
   }
 
   @Test
+  void addsNoConstantForACodeTheEnumAlreadySaysAnotherWay() {
+    // Adding a constant closes a GAP — a value the CCD column carries that the enum cannot name. Here it
+    // can: RestatedType has no constant named HOUR_1, but SIXTY_MINUTES already passes that row's label,
+    // so adding one would put two ways to say "1 hour" into a published enum AND still leave
+    // SIXTY_MINUTES emitting an extra row. Found on civil, whose HearingLengthFinalOrderList declares
+    // nineteen constants for a six-code list.
+    // Over ADDED lines only: the fixture's own javadoc names HOUR_1 to explain itself, so the whole-file
+    // text cannot distinguish a declared constant from a documented one.
+    assertThat(addedLines(filePatch(emitPatch(), "callback/RestatedType.java")))
+        .noneMatch(l -> l.contains("HOUR_1"))
+        .noneMatch(l -> l.contains("@JsonProperty"));
+    assertThat(patchedFile(emitPatch(), "common/Party.java"))
+        .doesNotContain("RestatedType.class")
+        .contains("private String restatedType;");
+  }
+
+  @Test
   void namesNoCompanionForAListAModelEnumAlreadyServes() {
     // The guard: a list whose rows come from a model enum is ALREADY reachable as a declared field type,
     // so naming a class here would either name one that was never generated (the rebinder drops the

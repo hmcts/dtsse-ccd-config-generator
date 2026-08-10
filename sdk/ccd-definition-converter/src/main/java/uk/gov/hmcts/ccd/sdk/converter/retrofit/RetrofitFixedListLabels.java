@@ -373,6 +373,15 @@ final class RetrofitFixedListLabels {
    * constants up by, so an added constant is indistinguishable from one the team had written. Refused when
    * that name is not available: it must not collide with a constant already declared (which would not
    * compile) nor with one already claimed by another code in this same list.
+   *
+   * <p><b>And refused when the enum already says this.</b> A constant is added to close a GAP in the
+   * model — a value the CCD column carries that the enum cannot name. If a constant already there passes
+   * this row's own label, the value is not missing: the team models it under another name, and the
+   * definition merely spells its code differently. civil's {@code HearingLengthFinalOrderList} declares
+   * nineteen constants for a six-code list, so adding {@code HOUR_1("1 hour")} beside the existing
+   * {@code MINUTES_60("1 hour")} would put two ways to say one thing into a published enum and still leave
+   * the seventeen extra constants emitting extra rows. That is a code-spelling divergence to report, or a
+   * pin for the team to make deliberately — not a constant to synthesise.
    */
   private static AddedConstant plannedConstant(EnumDeclaration decl, FixedListModel list,
       FixedListModel.Item item, Set<String> claimed) {
@@ -384,6 +393,9 @@ final class RetrofitFixedListLabels {
       if (existing.getNameAsString().equals(name)) {
         return null; // matched already if it were this code's; here it belongs to another code
       }
+    }
+    if (item.getLabel() != null && alreadySaysThis(decl, item.getLabel())) {
+      return null;
     }
     List<String> arguments = synthesisedArguments(decl, list, item);
     return arguments == null
@@ -452,6 +464,19 @@ final class RetrofitFixedListLabels {
       arguments.add(CcdAnnotationRenderer.quote(value));
     }
     return arguments;
+  }
+
+  /**
+   * Whether some constant already declared passes this label as one of its own arguments — the test for
+   * "the enum already models this value, under another name". Compared case-insensitively for the same
+   * reason a label vote is: what a team copied into its own source drifts in case.
+   */
+  private static boolean alreadySaysThis(EnumDeclaration decl, String label) {
+    return decl.getEntries().stream()
+        .flatMap(entry -> entry.getArguments().stream())
+        .filter(StringLiteralExpr.class::isInstance)
+        .map(argument -> ((StringLiteralExpr) argument).asString())
+        .anyMatch(passed -> passed.equalsIgnoreCase(label));
   }
 
   /** The definition row each of a list's constants carries, keyed by both spellings a team may use. */

@@ -25,6 +25,7 @@
   { "ID": "Party", "ListElementCode": "partialCodeType", "FieldType": "FixedList", "FieldTypeParameter": "PartialCodeType", "ElementLabel": "A fixed list one of whose codes has no constant" },
   { "ID": "Party", "ListElementCode": "unsynthesisableType", "FieldType": "FixedList", "FieldTypeParameter": "UnsynthesisableType", "ElementLabel": "A fixed list whose missing constant cannot be declared" },
   { "ID": "Party", "ListElementCode": "pinnedCodeType", "FieldType": "FixedList", "FieldTypeParameter": "PinnedCodeType", "ElementLabel": "A fixed list whose codes its constants pin rather than name" },
+  { "ID": "Party", "ListElementCode": "restatedType", "FieldType": "FixedList", "FieldTypeParameter": "RestatedType", "ElementLabel": "A fixed list whose missing code the enum already says another way" },
   { "ID": "executorApplying", "ListElementCode": "applyingExecutorName", "FieldType": "Text", "ElementLabel": "Applying executor name" },
   { "ID": "disagreeingCT", "ListElementCode": "detail", "FieldType": "Text", "ElementLabel": "Detail" },
   { "ID": "firstClaimingCT", "ListElementCode": "detail", "FieldType": "Text", "ElementLabel": "Detail" },

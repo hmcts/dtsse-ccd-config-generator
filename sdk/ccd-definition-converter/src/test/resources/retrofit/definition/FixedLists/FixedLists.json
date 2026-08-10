@@ -13,6 +13,8 @@
   { "ID": "PartialCodeType", "ListElementCode": "thirdKind", "ListElement": "Third kind" },
   { "ID": "PinnedCodeType", "ListElementCode": "alphaTopic", "ListElement": "Alpha topic" },
   { "ID": "PinnedCodeType", "ListElementCode": "betaTopic", "ListElement": "Beta topic" },
+  { "ID": "RestatedType", "ListElementCode": "FIFTEEN_MINUTES", "ListElement": "15 minutes" },
+  { "ID": "RestatedType", "ListElementCode": "HOUR_1", "ListElement": "1 hour" },
   { "ID": "UnsynthesisableType", "ListElementCode": "firstSort", "ListElement": "First sort" },
   { "ID": "UnsynthesisableType", "ListElementCode": "secondSort", "ListElement": "Second sort" },
   { "ID": "UnsynthesisableType", "ListElementCode": "thirdSort", "ListElement": "Third sort" },

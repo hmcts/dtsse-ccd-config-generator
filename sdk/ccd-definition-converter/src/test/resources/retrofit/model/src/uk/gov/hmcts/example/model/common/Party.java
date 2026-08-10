@@ -109,6 +109,10 @@ public class Party {
   // its own @JsonProperty. Nothing is added: a constant carries a code when it emits it.
   private String pinnedCodeType;
 
+  // The refusal that separates a GAP from a spelling difference: the missing code's value is already
+  // there under another constant's name, so adding one would say the same thing twice.
+  private String restatedType;
+
   // Two collection members whose element wrappers hold ONE shared payload class: only the first
   // definition type can pin its ID onto SharedDetails, so the second must be reported as a gap.
   private List<FirstSharedCT> firstShared;
