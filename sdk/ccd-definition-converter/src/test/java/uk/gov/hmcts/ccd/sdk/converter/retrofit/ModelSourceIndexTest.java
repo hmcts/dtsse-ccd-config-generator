@@ -273,6 +273,82 @@ class ModelSourceIndexTest {
         .isTrue();
   }
 
+  // ---- same-simple-name tie-break (preferDeclaredClasses) ----
+
+  @Test
+  void reportsWhenATopLevelClassNameIsAmbiguous() {
+    // DupType is declared in model.pkga AND model.pkgb; Party once. The binder asks this before
+    // spending a declaration on a preference.
+    ModelSourceIndex index = ModelSourceIndex.parse(MODEL_ROOT);
+    assertThat(index.isAmbiguousTopLevelClassName("DupType")).isTrue();
+    assertThat(index.isAmbiguousTopLevelClassName("Party")).isFalse();
+    assertThat(index.isAmbiguousTopLevelClassName("NoSuchType")).isFalse();
+  }
+
+  @Test
+  void resolvesATiedSimpleNameToThePreferredDeclaredClass(@TempDir Path work) throws Exception {
+    // prl's OtherDocuments: two top-level classes, NEITHER under the model package (which is
+    // models.dto.ccd, a sibling of both), so the package-hint branch does not fire and the resolution
+    // fell through to an arbitrary first-parsed pick. When the pick is the twin the definition's own
+    // field does NOT declare, the patch annotates a class nothing reaches and the reached one keeps its
+    // bare enum member — the generator then emits BOTH lists (69 correct rows + 72 spurious).
+    Path src = work.resolve("src");
+    write(src, "m/complextypes", "OtherDocuments",
+        "package m.complextypes;\npublic class OtherDocuments { private String a; }\n");
+    write(src, "m/dto/cafcass", "OtherDocuments",
+        "package m.dto.cafcass;\npublic class OtherDocuments { private String b; }\n");
+
+    ModelSourceIndex index = ModelSourceIndex.parse(src);
+    index.preferDeclaredClasses(List.of("m.complextypes.OtherDocuments"));
+    assertThat(index.complexTypeClass("OtherDocuments", "m.dto.ccd"))
+        .isPresent()
+        .get()
+        .extracting(t -> t.fqn)
+        .isEqualTo("m.complextypes.OtherDocuments");
+
+    // And the other way round, to prove the preference is what decides it rather than parse order.
+    ModelSourceIndex other = ModelSourceIndex.parse(src);
+    other.preferDeclaredClasses(List.of("m.dto.cafcass.OtherDocuments"));
+    assertThat(other.complexTypeClass("OtherDocuments", "m.dto.ccd"))
+        .get()
+        .extracting(t -> t.fqn)
+        .isEqualTo("m.dto.cafcass.OtherDocuments");
+  }
+
+  @Test
+  void packageHintStillOutranksAPreference(@TempDir Path work) throws Exception {
+    // The preference is the LAST resort, consulted only where the existing rules leave the tie open. A
+    // candidate under the requested package still wins, so no lane that resolves today can move.
+    Path src = work.resolve("src");
+    write(src, "m/model/pkga", "DupType",
+        "package m.model.pkga;\npublic class DupType { private String a; }\n");
+    write(src, "m/other", "DupType", "package m.other;\npublic class DupType { private String b; }\n");
+
+    ModelSourceIndex index = ModelSourceIndex.parse(src);
+    index.preferDeclaredClasses(List.of("m.other.DupType"));
+
+    assertThat(index.complexTypeClass("DupType", "m.model"))
+        .get()
+        .extracting(t -> t.fqn)
+        .isEqualTo("m.model.pkga.DupType");
+  }
+
+  @Test
+  void preferenceNeverRemovesAResolutionItDoesNotCover() {
+    // The tie-break is additive: an ID whose name is not ambiguous, and an ambiguous one with no
+    // preference installed, both resolve exactly as before. A refusal here instead of a redirect broke
+    // the prl lane's build — ambiguous IDs routed to companions whose own member types are also
+    // ambiguous (ServingRespondentsEnum, ServeOrderDetails) and so unresolvable.
+    ModelSourceIndex index = ModelSourceIndex.parse(MODEL_ROOT);
+    index.preferDeclaredClasses(List.of("uk.gov.hmcts.example.model.pkgb.DupType"));
+
+    assertThat(index.complexTypeClass("Party", "uk.gov.hmcts.example.model")).isPresent();
+
+    ModelSourceIndex unhinted = ModelSourceIndex.parse(MODEL_ROOT);
+    assertThat(index.complexTypeClass("DupType", "uk.gov.hmcts.example.model")).isPresent();
+    assertThat(unhinted.complexTypeClass("DupType", "uk.gov.hmcts.example.model")).isPresent();
+  }
+
   private static void write(Path root, String pkgPath, String simpleName, String body)
       throws Exception {
     Path dir = root.resolve(pkgPath);

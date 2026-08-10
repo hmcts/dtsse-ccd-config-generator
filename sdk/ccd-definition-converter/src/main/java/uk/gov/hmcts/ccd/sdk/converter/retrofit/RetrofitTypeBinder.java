@@ -64,7 +64,16 @@ import uk.gov.hmcts.ccd.sdk.converter.ir.SheetRow;
  *       silently resolved;</li>
  *   <li><b>kind must match.</b> A {@code FixedLists} ID binds only to an enum and a {@code ComplexTypes}
  *       ID only to a class: {@code FixedListGenerator} and {@code ComplexTypeGenerator} select on
- *       exactly that, so a cross-kind pin would name a type the other generator emits.</li>
+ *       exactly that, so a cross-kind pin would name a type the other generator emits;</li>
+ *   <li><b>a fixed list's enum must not declare more constants than the list has codes.</b>
+ *       {@code FixedListGenerator} emits one row per constant and offers no way to exclude one, so
+ *       pinning an enum that merely CONTAINS the definition's codes emits every extra constant as a row
+ *       CCD does not have. sscs's {@code EventType} — 261 constants of internal event catalogue against
+ *       a 15-row {@code eventType} picklist of the same name — cost 255 diff lines that way, over half
+ *       that lane's residual. Such an ID goes to the companion path instead, which generates an enum of
+ *       exactly the definition's codes and points each referencing field at it with
+ *       {@code @CCD(typeParameterClass)}; the list is still emitted in full and the team's own enum is
+ *       left alone. See {@link RetrofitFixedListLabels#reproducesTheListExactly}.</li>
  * </ul>
  */
 final class RetrofitTypeBinder {
@@ -118,12 +127,13 @@ final class RetrofitTypeBinder {
     // binds one level per pass, so a single pass would stop at the first miss and leave the rest of the
     // chain to the companion path. Passes are bounded by the number of unbound IDs — each pass either
     // binds at least one or stops — so the loop terminates on any definition.
+    Map<String, Integer> listCodeCounts = codeCountsByListId(ir, caseTypeId);
     Map<String, ModelSourceIndex.Type> bound = new LinkedHashMap<>();
     while (!unbound.isEmpty()) {
       Map<String, List<ModelSourceIndex.Type>> candidates =
           collectReferences(ir, caseTypeId, unbound, rootProperties, bound);
       Map<String, ModelSourceIndex.Type> pass =
-          decide(candidates, complexTypeIds, fixedListIds);
+          decide(candidates, complexTypeIds, fixedListIds, listCodeCounts);
       if (pass.isEmpty()) {
         break;
       }
@@ -135,6 +145,49 @@ final class RetrofitTypeBinder {
       bound.keySet().retainAll(unique.keySet());
     }
     return bound;
+  }
+
+  /**
+   * The class FQNs to prefer when a definition ID's simple name is shared by several top-level model
+   * classes and nothing else separates them — read, like every binding here, from the declared type of
+   * the definition's OWN referencing field.
+   *
+   * <p>Computed and installed BEFORE {@link #bind}, because {@code complexTypeClass} is the lookup bind
+   * itself asks whether an ID is already reached: an arbitrary tie-break there both hides the ID from the
+   * binder and gives the rest of the converter the wrong class. prl's {@code OtherDocuments} is the case
+   * — one in {@code models.complextypes} that {@code CaseData} reaches, one in {@code models.dto.cafcass}
+   * that nothing reaches — and source-scan order chose the latter.
+   *
+   * <p>Root {@code CaseField} rows only. A member-row reference would need the owning type resolved
+   * first, which is the fixpoint {@code bind} runs — and running it against a lookup this is still
+   * deciding would be circular. An ambiguous ID reached only from member rows therefore keeps whatever
+   * the existing tie-break gives it, unchanged.
+   *
+   * @param ir the parsed definition
+   * @param caseTypeId the case type being converted
+   * @param rootProperties the root model class's resolved properties
+   * @return the FQNs to prefer on a tie
+   */
+  Set<String> declaredClassPreferences(DefinitionIr ir, String caseTypeId,
+      Map<String, ResolvedProperty> rootProperties) {
+    Map<String, Set<String>> byId = new LinkedHashMap<>();
+    for (SheetRow row : ir.rowsForCaseType(SheetName.CASE_FIELD, caseTypeId)) {
+      String typeId = referencedTypeId(row);
+      if (typeId == null || !index.isAmbiguousTopLevelClassName(typeId)) {
+        continue;
+      }
+      row.getString(Columns.ID)
+          .map(rootProperties::get)
+          .flatMap(this::declaredType)
+          .ifPresent(type ->
+              byId.computeIfAbsent(typeId, k -> new LinkedHashSet<>()).add(type.fqn));
+    }
+    // Only where every referencing field agrees, for the same reason decide() insists on unanimity: two
+    // fields declared differently give the ID no single backing, and picking one would be the arbitrary
+    // choice this exists to remove.
+    Set<String> preferred = new LinkedHashSet<>();
+    byId.values().stream().filter(fqns -> fqns.size() == 1).forEach(preferred::addAll);
+    return preferred;
   }
 
   /**
@@ -207,7 +260,7 @@ final class RetrofitTypeBinder {
    */
   private Map<String, ModelSourceIndex.Type> decide(
       Map<String, List<ModelSourceIndex.Type>> candidates, Set<String> complexTypeIds,
-      Set<String> fixedListIds) {
+      Set<String> fixedListIds, Map<String, Integer> listCodeCounts) {
     Map<String, ModelSourceIndex.Type> bound = new LinkedHashMap<>();
     for (Map.Entry<String, List<ModelSourceIndex.Type>> entry : candidates.entrySet()) {
       final String definitionId = entry.getKey();
@@ -230,9 +283,69 @@ final class RetrofitTypeBinder {
       if (fixedListIds.contains(definitionId) ? !type.isEnum() : !type.isClass()) {
         continue;
       }
+      // A FixedList pin must reproduce the list EXACTLY, because it decides which enum IS the list and
+      // FixedListGenerator then emits one row per constant with no filter available. An enum whose
+      // constant set merely CONTAINS the definition's codes emits the extras as rows CCD never had —
+      // sscs's 261-constant EventType against the 15-row eventType picklist it shares a name with,
+      // 246 spurious rows. Refusing here routes the ID to the companion path, which generates an enum
+      // of exactly the definition's codes that each referencing field is pointed at with
+      // @CCD(typeParameterClass) — so the list is still emitted, correctly, and the team's enum is
+      // untouched. Counted on the definition's own rows, since the linker has not run yet.
+      if (fixedListIds.contains(definitionId)
+          && !reproducesExactly(type, listCodeCounts.get(definitionId))) {
+        continue;
+      }
       bound.put(definitionId, type);
     }
     return bound;
+  }
+
+  /**
+   * Whether pinning this enum to a list of {@code codeCount} codes emits no row the definition lacks.
+   *
+   * <p>Only the count is compared, and only in one direction. {@code FixedListGenerator} emits exactly
+   * one row per enum constant, so an enum declaring MORE constants than the list has codes necessarily
+   * emits rows the definition does not have, whatever those constants are named — that is the whole
+   * failure this refuses, and it needs no name matching to establish. Declaring the same number or fewer
+   * is left to pass: the codes are then reconciled name-by-name downstream by
+   * {@link RetrofitFixedListLabels}, which pins the spellings that differ, adds a constant for a code
+   * genuinely absent, and refuses the enum outright where neither works.
+   *
+   * <p>Counted from the definition's rows rather than the linked {@code FixedListModel} because the
+   * bindings are derived before the linker runs — {@link RetrofitConverter} computes them once from the
+   * root resolution and hands the same answer to every consumer.
+   *
+   * @param type the candidate model enum
+   * @param codeCount the number of distinct {@code ListElementCode}s the definition's list declares, or
+   *     null when the definition has no rows for the ID at all
+   * @return true when the enum declares no more constants than the list has codes
+   */
+  private boolean reproducesExactly(ModelSourceIndex.Type type, Integer codeCount) {
+    if (codeCount == null || codeCount == 0) {
+      return false; // no rows to reproduce: pinning could only add spurious ones
+    }
+    return type.decl.asEnumDeclaration().getEntries().size() <= codeCount;
+  }
+
+  /**
+   * The number of distinct {@code ListElementCode}s each {@code FixedLists} ID declares.
+   *
+   * @param ir the parsed definition
+   * @param caseTypeId the case type being converted
+   * @return list ID → distinct code count
+   */
+  private Map<String, Integer> codeCountsByListId(DefinitionIr ir, String caseTypeId) {
+    Map<String, Set<String>> codes = new LinkedHashMap<>();
+    for (SheetRow row : ir.rowsForCaseType(SheetName.FIXED_LISTS, caseTypeId)) {
+      String id = row.getString(Columns.ID).orElse(null);
+      String code = row.getString(Columns.LIST_ELEMENT_CODE).orElse(null);
+      if (id != null && code != null) {
+        codes.computeIfAbsent(id, k -> new LinkedHashSet<>()).add(code);
+      }
+    }
+    Map<String, Integer> counts = new LinkedHashMap<>();
+    codes.forEach((id, set) -> counts.put(id, set.size()));
+    return counts;
   }
 
   /**
@@ -273,16 +386,43 @@ final class RetrofitTypeBinder {
   }
 
   /**
-   * The definition type ID a row references: its {@code FieldTypeParameter}, or its {@code FieldType}
-   * when that is itself a declared complex type rather than a CCD base type (a {@code Complex} field
-   * carries the type ID in {@code FieldType} in some definition layouts).
+   * The definition type ID a row references, read the way CCD itself reads it: the
+   * {@code FieldTypeParameter} only when the {@code FieldType} is one that PARAMETERISES — a
+   * {@code Collection} or one of the list types — and otherwise the {@code FieldType}, which for a
+   * complex field carries the type ID directly.
+   *
+   * <p>The kind check is not cosmetic: {@code FieldTypeParser} (the definition-store importer) computes
+   * {@code isList(baseType) ? listReference(baseType, parameter) : baseType} and reads the parameter
+   * again only for {@code Collection}, so a {@code FieldTypeParameter} sitting on a row whose
+   * {@code FieldType} is a complex type is a column CCD never looks at. Real definitions carry such
+   * vestigial values, and taking one at face value here is worse than useless — it fabricates a
+   * reference. probate's {@code originalDocuments} row is {@code FieldType: OriginalDocuments} with a
+   * leftover {@code FieldTypeParameter: ProbateDocument}: read literally, {@code ProbateDocument}
+   * appeared to be referenced by a field declared {@code OriginalDocuments} as well as by the four
+   * {@code Collection<ProbateDocument>} fields declared {@code Document}, so the unanimity refusal
+   * discarded a binding that was in fact unanimous, and the whole {@code Document} class emitted its
+   * members under the wrong ID.
    */
   private String referencedTypeId(SheetRow row) {
-    String parameter = row.getString(Columns.FIELD_TYPE_PARAMETER).orElse(null);
-    if (parameter != null && !parameter.isEmpty()) {
-      return parameter;
+    String fieldType = row.getString(Columns.FIELD_TYPE).orElse(null);
+    if (parameterises(fieldType)) {
+      String parameter = row.getString(Columns.FIELD_TYPE_PARAMETER).orElse(null);
+      if (parameter != null && !parameter.isEmpty()) {
+        return parameter;
+      }
     }
-    return row.getString(Columns.FIELD_TYPE).orElse(null);
+    return fieldType;
+  }
+
+  /**
+   * Whether a {@code FieldType} is one whose {@code FieldTypeParameter} names another type — the CCD
+   * base types {@code FieldTypeParser} reads the column for.
+   */
+  private static boolean parameterises(String fieldType) {
+    return "Collection".equals(fieldType)
+        || "FixedList".equals(fieldType)
+        || "FixedRadioList".equals(fieldType)
+        || "MultiSelectList".equals(fieldType);
   }
 
   /**

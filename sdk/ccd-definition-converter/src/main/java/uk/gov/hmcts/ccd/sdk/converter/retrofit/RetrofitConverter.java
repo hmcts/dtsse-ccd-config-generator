@@ -144,8 +144,15 @@ public final class RetrofitConverter {
     // Computed HERE, once, from the root resolution, and handed to every consumer below: the companion
     // filter, the reserved-name sets, the type aliases, the rebinder's FixedList drop and BOTH patch
     // emitters. One derivation, so no two of them can disagree about which IDs have a backing class.
+    RetrofitTypeBinder binder = new RetrofitTypeBinder(index, modelPackage);
+    // Settle the same-simple-name ties FIRST, from the declarations of the definition's own referencing
+    // fields. complexTypeClass is the lookup the binding itself — and the companion filter, the member
+    // walk and both patch emitters — ask whether an ID already has a class, so an arbitrary tie-break
+    // there is invisible to every one of them. See ModelSourceIndex#preferDeclaredClasses.
+    index.preferDeclaredClasses(
+        binder.declaredClassPreferences(ir, caseTypeId, resolution.properties));
     final Map<String, ModelSourceIndex.Type> declaredBindings =
-        new RetrofitTypeBinder(index, modelPackage).bind(ir, caseTypeId, resolution.properties);
+        binder.bind(ir, caseTypeId, resolution.properties);
 
     Map<String, String> fqnOverrides = new java.util.LinkedHashMap<>();
     // A reference to a declared-bound ID must resolve to the class it binds to, not to a companion that

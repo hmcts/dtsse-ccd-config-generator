@@ -79,6 +79,10 @@ final class ModelSourceIndex {
 
   private final Map<String, List<Type>> bySimpleName = new LinkedHashMap<>();
   private final Map<String, Type> byFqn = new LinkedHashMap<>();
+  /**
+   * FQNs to prefer when a simple name ties; see {@link #preferDeclaredClasses}.
+   */
+  private Set<String> preferredClassFqns = Set.of();
   private final JavaParser parser;
   private int parsedFileCount;
   private Path sourceRoot;
@@ -580,6 +584,9 @@ final class ModelSourceIndex {
    * The single top-level class among {@code candidates}, preferring one in {@code packageHint}. Used
    * by {@link #complexTypeClass} for both the exact and the case-insensitive (camelCase-ID →
    * PascalCase-class) lookup so both apply the same top-level-class + package-hint rules.
+   *
+   * <p>When two or more top-level classes share the name and the package hint picks none of them, an
+   * installed tie-break wins before source-scan order does. See {@link #preferDeclaredClasses}.
    */
   private Optional<Type> topLevelClassBySimpleName(List<Type> candidates, String packageHint) {
     if (candidates == null || candidates.isEmpty()) {
@@ -599,7 +606,54 @@ final class ModelSourceIndex {
         }
       }
     }
+    if (classes.size() > 1) {
+      for (Type candidate : classes) {
+        if (preferredClassFqns.contains(candidate.fqn)) {
+          return Optional.of(candidate);
+        }
+      }
+    }
     return Optional.of(classes.get(0));
+  }
+
+  /**
+   * Installs the FQNs to prefer when a simple name is shared by several top-level classes and the
+   * package hint separates none of them.
+   *
+   * <p>The tie matters more than it looks. The class a definition ID resolves to is the one that carries
+   * {@code @ComplexType(name = <id>)}, has its members annotated, and receives synthesised fields — so
+   * picking the wrong twin annotates a class the definition does not describe while the class it does
+   * describe emits its members under a Java name CCD never mentions, costing the rows twice over. prl
+   * declares {@code OtherDocuments} in both {@code models.complextypes} — which {@code CaseData} reaches
+   * through {@code List<Element<OtherDocuments>>} — and {@code models.dto.cafcass}, which it does not
+   * reach at all; neither package sits under the model package, so the tie fell to source-scan order and
+   * landed on the unreachable one, and 72 spurious {@code DocTypeOtherDocumentsEnum} rows followed.
+   *
+   * <p>The preference comes from {@link RetrofitTypeBinder}, which reads the declared type of the
+   * definition's OWN referencing field, so it cannot name a class the definition never points at. Only a
+   * tie-break: an unambiguous name, or one the package hint resolves, is unaffected, so no lane that
+   * resolves today can be moved by this.
+   *
+   * @param fqns the fully-qualified names to prefer on an otherwise-arbitrary tie
+   */
+  void preferDeclaredClasses(java.util.Collection<String> fqns) {
+    preferredClassFqns = fqns == null ? Set.of() : new LinkedHashSet<>(fqns);
+  }
+
+  /**
+   * Whether a simple name is carried by more than one top-level CLASS, so
+   * {@link #topLevelClassBySimpleName} would settle it on scan order alone. The predicate
+   * {@link RetrofitTypeBinder#declaredClassPreferences} selects the IDs worth a preference by.
+   *
+   * @param simpleName the name to test
+   * @return true when two or more top-level classes share it
+   */
+  boolean isAmbiguousTopLevelClassName(String simpleName) {
+    List<Type> candidates = bySimpleName.get(simpleName);
+    if (candidates == null) {
+      return false;
+    }
+    return candidates.stream().filter(Type::isTopLevel).filter(Type::isClass).count() > 1;
   }
 
   /**
