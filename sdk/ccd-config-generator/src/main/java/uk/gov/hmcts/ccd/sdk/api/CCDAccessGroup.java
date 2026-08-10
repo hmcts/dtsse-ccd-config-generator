@@ -12,10 +12,12 @@ import java.util.List;
  * shared by several roles.</p>
  *
  * <p>Every role-valued member is a {@link HasRole} rather than a free-text name, so a group
- * configuration cannot reference a role that does not exist. Group roles are deliberately declared
- * in their own enum rather than the case's role class: they take part in no case-type authorisation,
- * so registering them as {@code UserRole}s would emit spurious {@code AuthorisationCaseType} and
- * {@code CaseRoles} rows.</p>
+ * configuration cannot reference a role that does not exist. All of them — the organisational role
+ * that carries the group, the group role it mints, and the case role naming the OrganisationPolicy —
+ * belong in the case's role class. Only that class is iterated to derive access types, so a role
+ * declared elsewhere is silently ignored; and the group role needs the {@code AuthorisationCaseType}
+ * row that role-class membership produces, because CCD checks the case type ACL before the event ACL.
+ * Group roles are ordinary organisational roles that happen to be minted per organisation by PRM.</p>
  */
 public interface CCDAccessGroup {
 
@@ -42,6 +44,9 @@ public interface CCDAccessGroup {
    * with no {@code RoleToAccessProfiles} mapping imports cleanly and then silently grants nothing at
    * runtime. To close that gap the SDK emits the mapping itself, from
    * {@link #getGroupRoleAccessProfiles()}.</p>
+   *
+   * <p><strong>Resolve this lazily</strong>, for the reason given on
+   * {@link #getCaseAssignedRoleField()}.</p>
    */
   HasRole getGroupRoleName();
 
@@ -56,11 +61,11 @@ public interface CCDAccessGroup {
    * carried by {@link uk.gov.hmcts.ccd.sdk.type.OrganisationPolicy#getOrgPolicyCaseAssignedRole()} —
    * typically a bracketed case role such as {@code [SOLICITOR]}.</p>
    *
-   * <p><strong>Resolve this lazily.</strong> The role returned here normally lives in the case's role
-   * class, which in turn references this access group via {@link HasRole#getAccessGroup()} — a
-   * circular static initialisation. If an implementing enum captures the role in a constructor
-   * argument, whichever class initialises second reads {@code null}, because the JVM does not re-enter
-   * an in-progress {@code <clinit>}. Override this method on the constant instead, so the reference is
+   * <p><strong>Resolve this lazily.</strong> The role returned here lives in the case's role class,
+   * which in turn references this access group via {@link HasRole#getAccessGroup()} — a circular
+   * static initialisation. If an implementing enum captures the role in a constructor argument,
+   * whichever class initialises second reads {@code null}, because the JVM does not re-enter an
+   * in-progress {@code <clinit>}. Override this method on the constant instead, so the reference is
    * read at build time when both enums are fully initialised:</p>
    *
    * <pre>{@code

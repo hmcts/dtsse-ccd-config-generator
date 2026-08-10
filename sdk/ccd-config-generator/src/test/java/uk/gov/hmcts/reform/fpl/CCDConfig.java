@@ -15,6 +15,7 @@ import static uk.gov.hmcts.reform.fpl.enums.UserRole.BULK_SCAN_SYSTEM_UPDATE;
 import static uk.gov.hmcts.reform.fpl.enums.UserRole.CAFCASS;
 import static uk.gov.hmcts.reform.fpl.enums.UserRole.CASE_ACCESS_ADMINISTRATOR;
 import static uk.gov.hmcts.reform.fpl.enums.UserRole.CASE_ACCESS_APPROVER;
+import static uk.gov.hmcts.reform.fpl.enums.UserRole.CASE_ACCESS_APPROVER_GROUP;
 import static uk.gov.hmcts.reform.fpl.enums.UserRole.CCD_SOLICITOR;
 import static uk.gov.hmcts.reform.fpl.enums.UserRole.HMCTS_ADMIN;
 import static uk.gov.hmcts.reform.fpl.enums.UserRole.LOCAL_AUTHORITY;
@@ -34,7 +35,6 @@ import uk.gov.hmcts.ccd.sdk.api.ConfigBuilder;
 import uk.gov.hmcts.ccd.sdk.type.Organisation;
 import uk.gov.hmcts.ccd.sdk.type.OrganisationPolicy;
 import uk.gov.hmcts.reform.ccd.client.model.SubmittedCallbackResponse;
-import uk.gov.hmcts.reform.fpl.access.GroupAccess;
 import uk.gov.hmcts.reform.fpl.access.SolicitorAccess;
 import uk.gov.hmcts.reform.fpl.enums.State;
 import uk.gov.hmcts.reform.fpl.enums.UserRole;
@@ -160,8 +160,8 @@ public class CCDConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<CaseData, S
         .grant(CRU, HMCTS_ADMIN)
         .grant(R, LOCAL_AUTHORITY)
         .grant(new SolicitorAccess())
-        // A group role granted the same way a UserRole would be. See GroupAccess.
-        .grant(new GroupAccess())
+        // The group role PRM mints from the access type, granted like any other role.
+        .grant(CRU, CASE_ACCESS_APPROVER_GROUP)
         .publishToCamunda()
         .fields()
         .optional(CaseData::getCaseNotes)

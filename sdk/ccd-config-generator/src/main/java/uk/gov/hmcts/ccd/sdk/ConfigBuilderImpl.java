@@ -220,13 +220,6 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements Decentralised
   }
 
   @Override
-  public CaseRoleToAccessProfileBuilder<R> roleToAccessProfile(HasRole role) {
-    var builder = CaseRoleToAccessProfileBuilder.<R>builder(role);
-    caseRoleToAccessProfiles.add(builder);
-    return builder;
-  }
-
-  @Override
   public CaseCategoryBuilder<R> categories(R caseRole) {
     var builder = CaseCategoryBuilder.builder(caseRole);
     categories.add(builder);

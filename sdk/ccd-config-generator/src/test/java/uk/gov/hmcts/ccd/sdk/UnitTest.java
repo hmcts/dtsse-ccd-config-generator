@@ -10,7 +10,6 @@ import uk.gov.hmcts.ccd.sdk.api.noc.NocOrganisation;
 import uk.gov.hmcts.ccd.sdk.api.noc.NocSubmissionResponse;
 import uk.gov.hmcts.example.missingcomplex.Applicant;
 import uk.gov.hmcts.example.missingcomplex.MissingComplex;
-import uk.gov.hmcts.reform.fpl.enums.GroupRole;
 import uk.gov.hmcts.reform.fpl.enums.State;
 import uk.gov.hmcts.reform.fpl.enums.UserRole;
 import uk.gov.hmcts.reform.fpl.model.CaseData;
@@ -171,7 +170,7 @@ public class UnitTest {
 
     @Override
     public CCDAccessGroup getAccessGroup() {
-      return new TestAccessGroup(GroupRole.CASE_ACCESS_APPROVER_GROUP, List.of());
+      return new TestAccessGroup(UserRole.CASE_ACCESS_APPROVER_GROUP, List.of());
     }
   }
 
@@ -220,7 +219,7 @@ public class UnitTest {
 
     @Override
     public HasRole getGroupRoleName() {
-      return GroupRole.CASE_ACCESS_APPROVER_GROUP;
+      return UserRole.CASE_ACCESS_APPROVER_GROUP;
     }
 
     @Override
