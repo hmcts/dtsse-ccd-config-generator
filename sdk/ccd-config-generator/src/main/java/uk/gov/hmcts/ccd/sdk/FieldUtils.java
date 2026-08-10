@@ -38,9 +38,27 @@ public class FieldUtils {
     return null != cf && !EnvironmentGate.matches(cf.gate());
   }
 
+  /**
+   * The case-data members of a class: every instance field it or a supertype declares, minus those
+   * ignored.
+   *
+   * <p>Static fields are not case data — they belong to the class, not to a case, and Jackson never
+   * serialises them — so they are excluded. Nothing declares them {@code @JsonIgnore}, because on a
+   * hand-written model the question never arises; but a retrofitted model is a real service's code,
+   * and real classes carry constants and loggers beside their data. sscs's Lombok {@code @Slf4j}
+   * loggers emitted {@code ComplexTypes} rows of {@code FieldType=Logger}, and
+   * {@code CorrespondenceDetails}' private {@code DateTimeFormatter} one of
+   * {@code FieldType=DateTimeFormatter} — types no CCD definition can name. {@link
+   * #collectGatedOffFieldIds} already filtered them; this is the same predicate, applied where the
+   * rows are actually produced.
+   *
+   * @param caseDataClass the case-data or complex-type class
+   * @return its non-static, non-ignored fields
+   */
   public static List<Field> getCaseFields(Class caseDataClass) {
     List<Field> fields = new ArrayList<>();
-    ReflectionUtils.doWithFields(caseDataClass, fields::add, field -> true);
+    ReflectionUtils.doWithFields(caseDataClass, fields::add,
+        field -> !Modifier.isStatic(field.getModifiers()));
     return fields.stream()
         .filter(f -> !isFieldIgnored(f))
         .collect(Collectors.toList());

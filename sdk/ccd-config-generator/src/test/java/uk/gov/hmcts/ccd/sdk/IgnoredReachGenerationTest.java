@@ -53,4 +53,22 @@ public class IgnoredReachGenerationTest {
             .doesNotContain("IgnoredReachNested.json")
             .contains("IgnoredReachShared.json");
     }
+
+    /**
+     * A static field is not case data and emits no row, on the case-data class or a complex type.
+     * The snapshot compare above already fails if one does, but only as an unexplained extra row;
+     * named here so the reason is legible. See {@code IgnoredReachCaseData.ONLY_A_CONSTANT}.
+     */
+    @Test
+    @SneakyThrows
+    public void emitsNoRowForAStaticFieldOnEitherTheCaseDataOrAComplexType() {
+        File out = tmp.newFolder();
+        generator.generateAllCaseTypesToJSON(out);
+        File caseType = new File(out, "IgnoredReach");
+
+        assertThat(new File(caseType, "CaseField.json"))
+            .content().doesNotContain("ONLY_A_CONSTANT");
+        assertThat(new File(caseType, "ComplexTypes/IgnoredReachShared.json"))
+            .content().doesNotContain("NOT_A_MEMBER");
+    }
 }
