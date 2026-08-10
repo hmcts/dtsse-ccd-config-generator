@@ -11,11 +11,14 @@ import uk.gov.hmcts.ccd.sdk.api.HasRole;
  * the group role's RoleToAccessProfiles row.
  *
  * <p>Both role-valued members point back into {@link UserRole}, which references this enum, so both
- * are resolved by a per-constant override rather than a constructor argument: a constructor argument
- * would be read during the circular static initialisation and come out null. {@code groupRoleName} is
- * the role PRM mints per organisation; {@code caseAssignedRoleField} is the case role carried by the
- * OrganisationPolicy's {@code OrgPolicyCaseAssignedRole} — a role name, not a field name, despite the
- * column's title.</p>
+ * are implemented as methods rather than constructor arguments: a constructor argument would be read
+ * during the circular static initialisation and come out null, whereas a method body is not evaluated
+ * until build time. {@code groupRoleName} is the role PRM mints per organisation;
+ * {@code caseAssignedRoleField} is the case role carried by the OrganisationPolicy's
+ * {@code OrgPolicyCaseAssignedRole} — a role name, not a field name, despite the column's title.</p>
+ *
+ * <p>An enum whose constants need different roles can {@code switch (this)} in the same method body;
+ * what matters is only that the read happens at build time rather than during initialisation.</p>
  */
 @Getter
 public enum AccessGroups implements CCDAccessGroup {
@@ -30,17 +33,7 @@ public enum AccessGroups implements CCDAccessGroup {
       1,
       List.of("access-profile"),
       true,
-      "PUBLICLAW:CARE_SUPERVISION_EPO:caseworker-approver-group:$ORGID$") {
-    @Override
-    public HasRole getGroupRoleName() {
-      return UserRole.CASE_ACCESS_APPROVER_GROUP;
-    }
-
-    @Override
-    public HasRole getCaseAssignedRoleField() {
-      return UserRole.CCD_SOLICITOR;
-    }
-  };
+      "PUBLICLAW:CARE_SUPERVISION_EPO:caseworker-approver-group:$ORGID$");
 
   private final String organisationProfileId;
   private final boolean accessMandatory;
@@ -72,5 +65,15 @@ public enum AccessGroups implements CCDAccessGroup {
   @Override
   public String getAccessTypeId() {
     return name();
+  }
+
+  @Override
+  public HasRole getGroupRoleName() {
+    return UserRole.CASE_ACCESS_APPROVER_GROUP;
+  }
+
+  @Override
+  public HasRole getCaseAssignedRoleField() {
+    return UserRole.CCD_SOLICITOR;
   }
 }

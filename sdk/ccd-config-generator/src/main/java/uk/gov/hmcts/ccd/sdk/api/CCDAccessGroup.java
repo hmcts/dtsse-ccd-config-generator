@@ -45,8 +45,8 @@ public interface CCDAccessGroup {
    * runtime. To close that gap the SDK emits the mapping itself, from
    * {@link #getGroupRoleAccessProfiles()}.</p>
    *
-   * <p><strong>Resolve this lazily</strong>, for the reason given on
-   * {@link #getCaseAssignedRoleField()}.</p>
+   * <p><strong>Implement this as a method, not a constructor argument</strong>, for the reason given
+   * on {@link #getCaseAssignedRoleField()}.</p>
    */
   HasRole getGroupRoleName();
 
@@ -61,21 +61,21 @@ public interface CCDAccessGroup {
    * carried by {@link uk.gov.hmcts.ccd.sdk.type.OrganisationPolicy#getOrgPolicyCaseAssignedRole()} —
    * typically a bracketed case role such as {@code [SOLICITOR]}.</p>
    *
-   * <p><strong>Resolve this lazily.</strong> The role returned here lives in the case's role class,
-   * which in turn references this access group via {@link HasRole#getAccessGroup()} — a circular
-   * static initialisation. If an implementing enum captures the role in a constructor argument,
-   * whichever class initialises second reads {@code null}, because the JVM does not re-enter an
-   * in-progress {@code <clinit>}. Override this method on the constant instead, so the reference is
-   * read at build time when both enums are fully initialised:</p>
+   * <p><strong>Implement this as a method, not a constructor argument.</strong> The role returned
+   * here lives in the case's role class, which in turn references this access group via
+   * {@link HasRole#getAccessGroup()} — a circular static initialisation. A role captured in a
+   * constructor argument reads {@code null} in whichever class initialises second, because the JVM
+   * does not re-enter an in-progress {@code <clinit>}. A method body is not evaluated until build
+   * time, by which point both enums are fully initialised:</p>
    *
    * <pre>{@code
-   * MY_ACCESS_TYPE("SOLICITOR_PROFILE", ...) {
-   *   @Override
-   *   public HasRole getCaseAssignedRoleField() {
-   *     return UserRole.CCD_SOLICITOR;
-   *   }
+   * @Override
+   * public HasRole getCaseAssignedRoleField() {
+   *   return UserRole.CCD_SOLICITOR;
    * }
    * }</pre>
+   *
+   * <p>Constants needing different roles can {@code switch (this)} in that body.</p>
    */
   HasRole getCaseAssignedRoleField();
 
