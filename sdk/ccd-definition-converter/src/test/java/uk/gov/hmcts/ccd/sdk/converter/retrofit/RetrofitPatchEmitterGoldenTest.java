@@ -469,19 +469,70 @@ class RetrofitPatchEmitterGoldenTest {
   }
 
   @Test
-  void refusesToNameAnEnumMissingOneOfTheDefinitionsCodes() {
-    // Every code must be reachable, not most: PartialCodeType has constants for firstKind and secondKind
-    // but none for thirdKind. Pinning the two that match would emit a list right about two rows and
-    // missing the third — the same defect the refusal exists to prevent, at smaller scale. A missing
-    // constant is a constant-set divergence to report, not a code to pin.
+  void addsTheConstantAnEnumIsMissingForOneOfTheDefinitionsCodes() {
+    // Every code must be accounted for, not most — but a code with no constant is not a mystery: the
+    // definition holds its code and label, and the SDK derives the whole list from the constant set, so
+    // the faithful reproduction of a three-row list by a two-constant enum IS a third constant.
+    // PartialCodeType has firstKind and secondKind but none for thirdKind; the constant is added, and the
+    // list then round-trips in full instead of being refused for the one row.
+    String partial = patchedContent(emitPatch(), "callback/PartialCodeType.java");
+    // Declared after the last existing constant, which gives up the `;` terminator to it. Its
+    // constructor call copies its siblings' SHAPE — one string literal — and the value is the
+    // definition's own code, because every existing constant provably passes its own code there.
+    assertThat(partial)
+        .contains("  SECOND_KIND(\"secondKind\"),\n"
+            + "  @JsonProperty(\"thirdKind\")\n"
+            + "  @CCD(label = \"Third kind\")\n"
+            + "  THIRD_KIND(\"thirdKind\");")
+        .contains("import com.fasterxml.jackson.annotation.JsonProperty;");
+    // The two constants that already matched are pinned as they would be on any house-style enum.
+    assertThat(partial)
+        .contains("  @JsonProperty(\"firstKind\")\n  @CCD(label = \"First kind\")\n"
+            + "  FIRST_KIND(\"firstKind\"),");
+    // With every code now reachable, the enum is named like any other.
+    assertThat(patchedFile(emitPatch(), "common/Party.java"))
+        .contains("typeParameterClass = PartialCodeType.class")
+        .contains("private String partialCodeType;");
+  }
+
+  @Test
+  void addsNoConstantForACodeAnExistingConstantAlreadyPins() {
+    // Regression (sscs CommunicationRequestTopic, five duplicated rows): a constant carries a code when it
+    // EMITS it, which it does by its name OR by a @JsonProperty the enum honours. PinnedCodeType names
+    // ALPHA_TOPIC_LONG_NAME and pins `alphaTopic`, so resolving by name alone concluded the code had no
+    // constant and added a second one emitting it — two rows for one code, worse than the label
+    // divergence the addition was closing.
+    String pinned = patchedContent(emitPatch(), "callback/PinnedCodeType.java");
+    assertThat(pinned)
+        .doesNotContain("ALPHA_TOPIC(")
+        .doesNotContain("BETA_TOPIC(")
+        // Nor is a second @JsonProperty added to a constant that already carries the right one: the
+        // annotation is not @Repeatable, so that would not even compile.
+        .doesNotContain("@JsonProperty(\"alphaTopic\")\n  @JsonProperty");
+    // Its labels ARE pinned — the constant emits `alphaTopic`, so the generator's fallback would put that
+    // in the ListElement column where the definition says "Alpha topic".
+    assertThat(pinned).contains("@CCD(label = \"Alpha topic\")");
+    // And with every code accounted for, the enum is named.
+    assertThat(patchedFile(emitPatch(), "common/Party.java"))
+        .contains("typeParameterClass = PinnedCodeType.class");
+  }
+
+  @Test
+  void refusesToAddAConstantWhoseConstructorArgumentsCannotBeEstablished() {
+    // The refusal synthesis does NOT lift. UnsynthesisableType is missing thirdSort, but its constants
+    // pass a Category reference alongside the code: what a new constant should pass there is a guess —
+    // the definition says nothing about it and no unanimous rule claims the position. A guess that fails
+    // to compile breaks the team's build, and one that compiles puts a wrong value in their model, so the
+    // enum stays refused and the constant-set divergence is reported instead.
     String patched = patchedFile(emitPatch(), "common/Party.java");
     assertThat(patched)
-        .doesNotContain("PartialCodeType.class")
-        .contains("private String partialCodeType;");
-    // Nor is a code pinned onto the two constants that DO match: pinning them is what would emit the
+        .doesNotContain("UnsynthesisableType.class")
+        .contains("private String unsynthesisableType;");
+    // And nothing is pinned onto the constants that DO match: pinning them is what would emit the
     // two-right-one-missing list. The refusal is all-or-nothing, per enum, not per constant.
-    assertThat(patchedContent(emitPatch(), "callback/PartialCodeType.java"))
-        .doesNotContain("@JsonProperty");
+    assertThat(patchedContent(emitPatch(), "callback/UnsynthesisableType.java"))
+        .doesNotContain("@JsonProperty")
+        .doesNotContain("THIRD_SORT");
   }
 
   @Test

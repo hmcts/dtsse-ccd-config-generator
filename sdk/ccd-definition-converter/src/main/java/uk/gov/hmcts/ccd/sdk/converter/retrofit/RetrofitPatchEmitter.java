@@ -1154,6 +1154,11 @@ public final class RetrofitPatchEmitter {
       if (!codes.isEmpty()) {
         editsFor(byFile, type.file).pinConstantCodes(type.simpleName, codes);
       }
+      List<RetrofitFixedListLabels.AddedConstant> added =
+          RetrofitFixedListLabels.constantsToAdd(type, list);
+      if (!added.isEmpty()) {
+        editsFor(byFile, type.file).addConstants(type.simpleName, added);
+      }
     }
   }
 
@@ -1939,6 +1944,22 @@ public final class RetrofitPatchEmitter {
           continue;
         }
         ConstantPins pinned = planConstantPins(type.asEnumDeclaration(), labels, codes, sourceLines,
+            insertionsByLine, linesToDelete);
+        needsCcdImport |= pinned.ccd();
+        needsJsonPropertyImport |= pinned.jsonProperty();
+      }
+    }
+
+    // Constants ADDED for definition codes the enum models none for, declared after the last existing
+    // constant with their own code and label pins.
+    if (!edits.addConstants.isEmpty()) {
+      for (TypeDeclaration<?> type : unit.getTypes()) {
+        List<RetrofitFixedListLabels.AddedConstant> added =
+            edits.addConstants.getOrDefault(type.getNameAsString(), List.of());
+        if (!type.isEnumDeclaration() || added.isEmpty()) {
+          continue;
+        }
+        ConstantPins pinned = planAddedConstants(type.asEnumDeclaration(), added, sourceLines,
             insertionsByLine, linesToDelete);
         needsCcdImport |= pinned.ccd();
         needsJsonPropertyImport |= pinned.jsonProperty();
@@ -2914,6 +2935,78 @@ public final class RetrofitPatchEmitter {
     return out;
   }
 
+  /**
+   * Declares the constants a list needs and the enum lacks, after the last existing constant.
+   *
+   * <p><b>How the edit is made.</b> A constant list ends in {@code ;} (or, in an enum with no members, at
+   * the closing brace). The last constant's line is rewritten to end in {@code ,} and the new constants
+   * follow, the last of them carrying whatever terminated the original line — so the added text is one
+   * contiguous hunk at the end of the constant list and nothing before it moves. Refused when that
+   * terminator is not on the last constant's own line, or when the last constant shares its line with
+   * another (the shared-line split may already own it): those need a rewrite this cannot make
+   * byte-faithfully, and an unmade addition costs residual lines whereas a mangled one breaks the build.
+   *
+   * @return which imports the added constants' own pins make the file need
+   */
+  private ConstantPins planAddedConstants(EnumDeclaration decl,
+      List<RetrofitFixedListLabels.AddedConstant> added, List<String> sourceLines,
+      Map<Integer, List<String>> insertionsByLine, Set<Integer> linesToDelete) {
+    List<EnumConstantDeclaration> entries = decl.getEntries();
+    if (entries.isEmpty()) {
+      return new ConstantPins(false, false);
+    }
+    EnumConstantDeclaration last = entries.get(entries.size() - 1);
+    int line = last.getEnd().map(p -> p.line).orElse(-1);
+    if (line < 1 || line > sourceLines.size()
+        || entries.stream().filter(c -> c.getEnd().map(p -> p.line).orElse(-1) == line).count() > 1) {
+      return new ConstantPins(false, false);
+    }
+    String text = sourceLines.get(line - 1);
+    int endColumn = last.getEnd().map(p -> p.column).orElse(-1);
+    if (endColumn < 1 || endColumn > text.length()) {
+      return new ConstantPins(false, false);
+    }
+    // What follows the last constant on its line: the `;` closing the list, or nothing when the enum
+    // declares no members and the list runs to the closing brace.
+    String terminator = text.substring(endColumn);
+    if (!terminator.isBlank() && !terminator.strip().equals(";")) {
+      return new ConstantPins(false, false);
+    }
+
+    String indent = leadingWhitespace(text);
+    boolean ccd = false;
+    boolean jsonProperty = false;
+    List<String> declared = new ArrayList<>();
+    for (int i = 0; i < added.size(); i++) {
+      RetrofitFixedListLabels.AddedConstant constant = added.get(i);
+      List<String> annotations = new ArrayList<>();
+      // The code pin is needed unless the constant name IS the code, exactly as for a declared constant.
+      if (constant.code() != null && !constant.code().equals(constant.name())) {
+        annotations.add("@JsonProperty(" + CcdAnnotationRenderer.quote(constant.code()) + ")");
+        jsonProperty = true;
+      }
+      Optional<String> label = RetrofitFixedListLabels.labelFor(constant);
+      if (label.isPresent()) {
+        annotations.add(labelAnnotation(
+            List.of("label = " + CcdAnnotationRenderer.quote(label.get())), indent.length()));
+        ccd = true;
+      }
+      declared.addAll(indentEachLine(annotations, indent));
+      declared.add(indent + constant.name() + "(" + String.join(", ", constant.arguments()) + ")"
+          + (i < added.size() - 1 ? "," : terminator));
+    }
+
+    // Rewrite the last existing constant's line to continue the list, then insert the new declarations
+    // after it. Both are keyed on the same line: the deletion removes the original, the insertion writes
+    // the rewritten form and the additions in its place.
+    linesToDelete.add(line);
+    List<String> replacement = new ArrayList<>();
+    replacement.add(text.substring(0, endColumn) + ",");
+    replacement.addAll(declared);
+    insertionsByLine.computeIfAbsent(line, k -> new ArrayList<>()).addAll(replacement);
+    return new ConstantPins(ccd, jsonProperty);
+  }
+
   /** Which imports a run of per-constant annotation insertions makes the file need. */
   private record ConstantPins(boolean ccd, boolean jsonProperty) {
   }
@@ -3204,6 +3297,12 @@ public final class RetrofitPatchEmitter {
      */
     private final Map<String, Map<String, String>> constantCodes = new LinkedHashMap<>();
     /**
+     * Enum simple name → the constants to ADD to it, for definition codes the enum models none for. See
+     * {@link RetrofitFixedListLabels#constantsToAdd}.
+     */
+    private final Map<String, List<RetrofitFixedListLabels.AddedConstant>> addConstants =
+        new LinkedHashMap<>();
+    /**
      * The class whose hand-written constructor(s) must be widened to accept the synthesised fields,
      * or null when synthesis needs no constructor change. Set only for the builder-bound /
      * {@code @Value} idioms that would otherwise refuse synthesis.
@@ -3318,6 +3417,19 @@ public final class RetrofitPatchEmitter {
       Map<String, String> existing =
           constantCodes.computeIfAbsent(enumSimpleName, k -> new LinkedHashMap<>());
       codeByConstant.forEach(existing::putIfAbsent);
+    }
+
+    /**
+     * Records the constants to ADD to one model enum. First write wins per enum, for the same reason the
+     * pins' does: an enum reached by two definition IDs serves the first one's list, so only that list's
+     * missing codes become constants.
+     */
+    void addConstants(
+        String enumSimpleName, List<RetrofitFixedListLabels.AddedConstant> constants) {
+      if (constants.isEmpty()) {
+        return;
+      }
+      addConstants.putIfAbsent(enumSimpleName, constants);
     }
 
     /**

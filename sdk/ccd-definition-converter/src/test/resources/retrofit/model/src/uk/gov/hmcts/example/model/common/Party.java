@@ -97,9 +97,17 @@ public class Party {
   // @JsonProperty, so no pin can reach the emitted code and the list would still be wrong. Refused.
   private String jsonValuedType;
 
-  // And the shape where one of the definition's codes has no constant to pin at all: pinning the rest
-  // would emit a list right about some rows and missing another, so the enum is refused outright.
+  // And the shape where one of the definition's codes has no constant to pin at all: the missing constant
+  // is ADDED (its constructor call copied in shape from its siblings) so the whole list round-trips.
   private String partialCodeType;
+
+  // The refusal that survives synthesis: a missing constant whose constructor takes an argument nothing
+  // can establish a value for, so it cannot be declared and the enum is refused outright.
+  private String unsynthesisableType;
+
+  // And the enum that models every code without NAMING any constant after one — each pins its code with
+  // its own @JsonProperty. Nothing is added: a constant carries a code when it emits it.
+  private String pinnedCodeType;
 
   // Two collection members whose element wrappers hold ONE shared payload class: only the first
   // definition type can pin its ID onto SharedDetails, so the second must be reported as a gap.
