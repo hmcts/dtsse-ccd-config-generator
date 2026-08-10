@@ -291,6 +291,19 @@ public class FieldCollection {
     }
 
     /**
+     * {@link #complexMember} with {@code ShowSummaryChangeOption=N} — the {@code *NoSummary} sibling
+     * every other placement method has, so a caller selecting the variant by name for any context
+     * reaches one for {@code COMPLEX} too.
+     *
+     * @param getter the member getter
+     * @return this builder, so the fluent per-member metadata setters apply to the member just placed
+     */
+    public FieldCollectionBuilder<Type, StateType, Parent> complexMemberNoSummary(
+        TypedPropertyGetter<Type, ?> getter) {
+      return field(getter, DisplayContext.Complex, false);
+    }
+
+    /**
      * Opens a member scope on a scalar complex field <em>without</em> registering the field itself —
      * the scalar analogue of {@link #complex(TypedPropertyGetter, Class)}, whose javadoc explains the
      * mechanism in full for collections.

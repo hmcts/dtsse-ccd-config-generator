@@ -10,6 +10,7 @@ import org.junit.jupiter.api.Test;
 import uk.gov.hmcts.ccd.sdk.converter.api.ConversionOptions;
 import uk.gov.hmcts.ccd.sdk.converter.api.EmitContext;
 import uk.gov.hmcts.ccd.sdk.converter.model.CaseTypeModel;
+import uk.gov.hmcts.ccd.sdk.converter.model.ClusteredFieldRef;
 import uk.gov.hmcts.ccd.sdk.converter.model.EventComplexTypeGroup;
 import uk.gov.hmcts.ccd.sdk.converter.model.EventModel;
 import uk.gov.hmcts.ccd.sdk.converter.model.FieldModel;
@@ -732,6 +733,56 @@ class EventsConfigEmitterTest {
     // The members hang off the non-registering scalar scope.
     assertThat(src).contains("fields.complexScope(CaseData::getAppeal)");
     assertThat(src).contains(".mandatory(Appeal::getBenefitType)");
+  }
+
+  @Test
+  void aClusteredLeafPlacedComplexKeepsThatContext() {
+    // sscs caseUpdated/jointPartyAddress: the field is reached through a prefix-less @JsonUnwrapped
+    // holder, so it is placed inside the holder's member scope — and the input places it COMPLEX. The
+    // top-level path spells that .complex(getter), which both registers the row AND opens a scope; a
+    // clustered leaf is already inside a scope, so it needs the row alone. Collapsing COMPLEX to
+    // .optional here wrote DisplayContext=OPTIONAL over every such row.
+    PageModel.PageField complexLeaf = PageModel.PageField.builder()
+        .caseFieldId("jointPartyAddress")
+        .displayContext("COMPLEX")
+        .showCondition("jointParty=\"Yes\"")
+        .build();
+    PageModel.PageField optionalLeaf = PageModel.PageField.builder()
+        .caseFieldId("jointParty")
+        .displayContext("OPTIONAL")
+        .build();
+    PageModel page = PageModel.builder()
+        .pageId("1").fields(List.of(complexLeaf, optionalLeaf)).build();
+    EventModel event = EventModel.builder()
+        .id("caseUpdated").javaName("caseUpdated").name("Update case data")
+        .preStates(List.of()).postState("Open").grants(Map.of()).pages(List.of(page))
+        .build();
+    CaseTypeModel model = modelWithEvents(List.of(event), List.of(
+        FieldModel.builder().id("jointPartyAddress").javaName("address").fieldType("Address")
+            .build(),
+        FieldModel.builder().id("jointParty").javaName("hasJointParty").fieldType("YesOrNo")
+            .build()))
+        .toBuilder()
+        .clusteredFieldRefs(Map.of(
+            "jointPartyAddress", ClusteredFieldRef.builder()
+                .parentGetter("getJointParty").clusterType("JointParty")
+                .memberGetter("getAddress").build(),
+            "jointParty", ClusteredFieldRef.builder()
+                .parentGetter("getJointParty").clusterType("JointParty")
+                .memberGetter("getHasJointParty").build()))
+        .build();
+
+    String src = allSrc(new EventsConfigEmitter().emit(model, contextWith(40)));
+
+    // The COMPLEX leaf is placed as a member row without opening a nested scope on it, and its
+    // per-field metadata still chains onto the placement.
+    assertThat(src).contains(".complexMember(JointParty::getAddress)");
+    assertThat(src).contains(".fieldShowCondition(\"jointParty=\\\"Yes\\\"\")");
+    // A sibling in another context is unaffected, and both stay inside the one holder scope.
+    assertThat(src).contains(".optional(JointParty::getHasJointParty)");
+    assertThat(src).containsOnlyOnce("fields.complex(CaseData::getJointParty)");
+    // Nothing opens a scope on the leaf itself — that would register a second, nested row.
+    assertThat(src).doesNotContain(".complex(JointParty::getAddress)");
   }
 
   @Test

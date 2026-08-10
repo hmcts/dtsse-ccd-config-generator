@@ -1297,6 +1297,13 @@ public class EventsConfigEmitter implements SourceEmitter {
       case "MANDATORY" -> "mandatory";
       case "READONLY" -> "readonly";
       case "HIDDEN" -> "optional";
+      // A field the input places as COMPLEX inside a @JsonUnwrapped parent's member scope. The
+      // top-level path never reaches here — it takes the .complex(getter) branch above, which both
+      // registers the COMPLEX row and opens a scope — but a clustered leaf is already inside its
+      // parent's scope, so it needs the row WITHOUT a scope: .complexMember(getter). Collapsing it to
+      // .optional here wrote DisplayContext=OPTIONAL over every one of them (26 rows on sscs, where
+      // jointParty's members are reached through a prefix-less @JsonUnwrapped holder).
+      case "COMPLEX" -> "complexMember";
       default -> "optional";
     };
   }
