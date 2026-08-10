@@ -88,14 +88,18 @@ public class Party {
   private String scannedDocumentType;
 
   // The same shape whose enum spells the definition's codes in the team's own house style: the SDK emits
-  // ListElementCode as the CONSTANT name and nothing can pin any other value, so naming this enum would
-  // emit a list of wrong codes where today it emits none. Refused.
+  // ListElementCode as whatever Jackson serialises the constant as, so each constant is pinned to its
+  // definition code and the enum can then be named.
   private String houseStyleType;
 
   // And the same shape whose constant NAMES do match the definition's codes, but which carries a
-  // @JsonValue redirecting what Jackson serialises them as: the emitted ListElementCode is `first`, not
-  // FIRST, so the name match passes while the list would still be wrong. Refused.
+  // @JsonValue redirecting what Jackson serialises them as: @JsonValue wins over a constant's
+  // @JsonProperty, so no pin can reach the emitted code and the list would still be wrong. Refused.
   private String jsonValuedType;
+
+  // And the shape where one of the definition's codes has no constant to pin at all: pinning the rest
+  // would emit a list right about some rows and missing another, so the enum is refused outright.
+  private String partialCodeType;
 
   // Two collection members whose element wrappers hold ONE shared payload class: only the first
   // definition type can pin its ID onto SharedDetails, so the second must be reported as a gap.

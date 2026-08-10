@@ -22,6 +22,7 @@
   { "ID": "Party", "ListElementCode": "scannedDocumentType", "FieldType": "FixedList", "FieldTypeParameter": "ScannedDocumentType", "ElementLabel": "A fixed list modelled as an enum no field declares" },
   { "ID": "Party", "ListElementCode": "houseStyleType", "FieldType": "FixedList", "FieldTypeParameter": "HouseStyleType", "ElementLabel": "A fixed list whose enum spells its codes in house style" },
   { "ID": "Party", "ListElementCode": "jsonValuedType", "FieldType": "FixedList", "FieldTypeParameter": "JsonValuedType", "ElementLabel": "A fixed list whose enum redirects its serialised code" },
+  { "ID": "Party", "ListElementCode": "partialCodeType", "FieldType": "FixedList", "FieldTypeParameter": "PartialCodeType", "ElementLabel": "A fixed list one of whose codes has no constant" },
   { "ID": "executorApplying", "ListElementCode": "applyingExecutorName", "FieldType": "Text", "ElementLabel": "Applying executor name" },
   { "ID": "disagreeingCT", "ListElementCode": "detail", "FieldType": "Text", "ElementLabel": "Detail" },
   { "ID": "firstClaimingCT", "ListElementCode": "detail", "FieldType": "Text", "ElementLabel": "Detail" },

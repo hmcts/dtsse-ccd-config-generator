@@ -1121,19 +1121,21 @@ public final class RetrofitPatchEmitter {
   }
 
   /**
-   * Pins the definition's own {@code ListElement} onto each constant of every model enum backing a
-   * {@code FixedLists} ID, as {@code @CCD(label = …)}.
+   * Pins the definition's own {@code ListElement} and {@code ListElementCode} onto each constant of every
+   * model enum backing a {@code FixedLists} ID — the label as {@code @CCD(label = …)}, the code as
+   * {@code @JsonProperty}.
    *
    * <p>Covers both ways an enum comes to back a list: the name match (the enum's simple name IS the ID,
    * which is most of them — prl's {@code PartyEnum}, {@code Gender}) and the declared-type binding
    * {@link RetrofitTypeBinder} established for the IDs no name reaches. Either way the enum emits the
-   * list's rows, so either way its constants must carry the labels.
+   * list's rows, so either way its constants must carry the labels and codes.
    *
-   * <p>Runs AFTER {@link #planFixedListIds} so a bound enum is already pinned to its ID; the label pins
+   * <p>Runs AFTER {@link #planFixedListIds} so a bound enum is already pinned to its ID; the constant pins
    * are independent of that annotation (they sit on the constants, not the type) but the two must agree
    * on WHICH list an enum serves, so both resolve it through the same lookup order. See
-   * {@link RetrofitFixedListLabels} for why the label is copied from the definition rather than read off
-   * whatever accessor the team's enum happens to carry.
+   * {@link RetrofitFixedListLabels} for why both values are copied from the definition rather than read
+   * off whatever accessors the team's enum happens to carry, and for why the code pin — unlike the label
+   * — changes how the team's own type serialises.
    */
   private void planFixedListLabels(Map<Path, FileEdits> byFile) {
     for (FixedListModel list : definitionFixedLists) {
@@ -1147,6 +1149,10 @@ public final class RetrofitPatchEmitter {
         pins.forEach((constant, label) ->
             members.put(constant, List.of("label = " + CcdAnnotationRenderer.quote(label))));
         editsFor(byFile, type.file).annotateConstants(type.simpleName, members);
+      }
+      Map<String, String> codes = RetrofitFixedListLabels.codePins(type, list);
+      if (!codes.isEmpty()) {
+        editsFor(byFile, type.file).pinConstantCodes(type.simpleName, codes);
       }
     }
   }
@@ -1217,12 +1223,13 @@ public final class RetrofitPatchEmitter {
       if (declares(property, backing)) {
         return field;
       }
-      // Only when the enum's constants ARE the definition's ListElementCodes: the code is the one column
-      // of a fixed list nothing can pin, so an enum spelling its codes in the team's own house style would
-      // emit a list of WRONG rows where today it emits none. See
-      // RetrofitFixedListLabels#codesMatchConstantNames.
+      // Only when the enum can be made to emit the definition's own ListElementCodes: a constant is
+      // pinned to its code with @JsonProperty where the team spells it in its own house style (sscs's
+      // CHERISHED for the definition's `cherished`), but an enum whose codes no pin can reach — a
+      // @JsonValue takes precedence over the pin, a code has no constant at all — would emit a list of
+      // WRONG rows where today it emits none. See RetrofitFixedListLabels#canEmitTheDefinitionsCodes.
       boolean reproducesTheList = RetrofitFixedListLabels.byId(definitionFixedLists, listId)
-          .filter(list -> RetrofitFixedListLabels.codesMatchConstantNames(backing, list))
+          .filter(list -> RetrofitFixedListLabels.canEmitTheDefinitionsCodes(backing, list))
           .isPresent();
       if (!reproducesTheList) {
         return field;
@@ -1920,15 +1927,21 @@ public final class RetrofitPatchEmitter {
       }
     }
 
-    // Per-enum-constant @CCD additions (the FixedLists ListElement pin and the State sheet labels).
-    if (!edits.constantAnnotations.isEmpty()) {
+    // Per-enum-constant additions: the @CCD carrying the FixedLists ListElement pin or the State sheet
+    // labels, and the @JsonProperty carrying the FixedLists ListElementCode.
+    if (!edits.constantAnnotations.isEmpty() || !edits.constantCodes.isEmpty()) {
       for (TypeDeclaration<?> type : unit.getTypes()) {
-        Map<String, List<String>> labels = edits.constantAnnotations.get(type.getNameAsString());
-        if (labels == null || !type.isEnumDeclaration()) {
+        String name = type.getNameAsString();
+        Map<String, List<String>> labels =
+            edits.constantAnnotations.getOrDefault(name, Map.of());
+        Map<String, String> codes = edits.constantCodes.getOrDefault(name, Map.of());
+        if (!type.isEnumDeclaration() || (labels.isEmpty() && codes.isEmpty())) {
           continue;
         }
-        needsCcdImport |= planConstantLabels(type.asEnumDeclaration(), labels, sourceLines,
+        ConstantPins pinned = planConstantPins(type.asEnumDeclaration(), labels, codes, sourceLines,
             insertionsByLine, linesToDelete);
+        needsCcdImport |= pinned.ccd();
+        needsJsonPropertyImport |= pinned.jsonProperty();
       }
     }
 
@@ -2766,19 +2779,20 @@ public final class RetrofitPatchEmitter {
   }
 
   /**
-   * Plans the per-constant {@code @CCD(label)} insertions for one enum, returning whether any were
-   * planned (so the caller can add the {@code CCD} import).
+   * Plans the per-constant annotation insertions for one enum — the {@code @CCD(label)} carrying the
+   * definition's {@code ListElement} and the {@code @JsonProperty} carrying its {@code ListElementCode} —
+   * and reports which imports the file now needs.
    *
    * <p>The constants are grouped by the source line they begin on, because teams write enums both
    * ways: one constant per line (civil's {@code AllocatedTrack}) and several to a line (civil's
    * {@code ListingOrRelisting}: {@code LISTING, RELISTING}). A per-line insertion above a shared line
-   * would stack every one of that line's annotations above the same line — {@code @CCD} is not
-   * {@code @Repeatable}, so that does not compile. A shared line is therefore rewritten into one
-   * constant per line instead; see {@link #splitSharedConstantLine}.
+   * would stack every one of that line's annotations above the same line — neither {@code @CCD} nor
+   * {@code @JsonProperty} is {@code @Repeatable}, so that does not compile. A shared line is therefore
+   * rewritten into one constant per line instead; see {@link #splitSharedConstantLine}.
    */
-  private boolean planConstantLabels(EnumDeclaration decl, Map<String, List<String>> labels,
-      List<String> sourceLines, Map<Integer, List<String>> insertionsByLine,
-      Set<Integer> linesToDelete) {
+  private ConstantPins planConstantPins(EnumDeclaration decl, Map<String, List<String>> labels,
+      Map<String, String> codes, List<String> sourceLines,
+      Map<Integer, List<String>> insertionsByLine, Set<Integer> linesToDelete) {
     Map<Integer, List<EnumConstantDeclaration>> byLine = new TreeMap<>();
     for (EnumConstantDeclaration constant : decl.getEntries()) {
       int line = constant.getBegin().map(p -> p.line).orElse(-1);
@@ -2787,42 +2801,74 @@ public final class RetrofitPatchEmitter {
       }
     }
 
-    boolean planned = false;
+    boolean ccd = false;
+    boolean jsonProperty = false;
     for (Map.Entry<Integer, List<EnumConstantDeclaration>> entry : byLine.entrySet()) {
       int line = entry.getKey();
       List<EnumConstantDeclaration> constants = entry.getValue();
-      if (constants.stream().noneMatch(c -> labels.containsKey(c.getNameAsString()))) {
+      if (constants.stream().noneMatch(c -> labels.containsKey(c.getNameAsString())
+          || codes.containsKey(c.getNameAsString()))) {
         continue;
       }
       String indent = leadingWhitespace(sourceLines.get(line - 1));
 
-      // The common shape: the constant owns its line, so the annotation is inserted above it exactly
-      // as a field's is — below any annotation the constant already carries, since the insertion is
+      // The common shape: the constant owns its line, so the annotations are inserted above it exactly
+      // as a field's are — below any annotation the constant already carries, since the insertion is
       // keyed on the constant's begin line, which IS that annotation's line when it has one.
       if (constants.size() == 1) {
-        List<String> members = labels.get(constants.get(0).getNameAsString());
-        insertionsByLine.computeIfAbsent(line, k -> new ArrayList<>())
-            .addAll(indentEachLine(List.of(labelAnnotation(members, indent.length())), indent));
-        planned = true;
+        List<String> added = constantAnnotationLines(constants.get(0), labels, codes, indent);
+        insertionsByLine.computeIfAbsent(line, k -> new ArrayList<>()).addAll(added);
+        ccd |= labels.containsKey(constants.get(0).getNameAsString());
+        jsonProperty |= codes.containsKey(constants.get(0).getNameAsString());
         continue;
       }
 
       List<String> rewritten =
-          splitSharedConstantLine(sourceLines.get(line - 1), constants, labels, indent);
+          splitSharedConstantLine(sourceLines.get(line - 1), constants, labels, codes, indent);
       if (rewritten == null) {
         continue; // a shape the split cannot reproduce verbatim: leave the line alone
       }
       linesToDelete.add(line);
       insertionsByLine.computeIfAbsent(line, k -> new ArrayList<>()).addAll(rewritten);
-      planned = true;
+      for (EnumConstantDeclaration constant : constants) {
+        ccd |= labels.containsKey(constant.getNameAsString());
+        jsonProperty |= codes.containsKey(constant.getNameAsString());
+      }
     }
-    return planned;
+    return new ConstantPins(ccd, jsonProperty);
+  }
+
+  /**
+   * The annotation lines to insert above one enum constant: its {@code @JsonProperty} code pin first
+   * (so the Jackson annotation reads above the CCD one, matching how the converter's own generated enums
+   * are laid out), then its {@code @CCD}. Either may be absent — a constant can need its code pinned and
+   * not its label, or the reverse.
+   *
+   * <p>The code pin is skipped when the constant already carries a {@code @JsonProperty}: that annotation
+   * is not {@code @Repeatable} and already governs what Jackson emits, so a second would not compile and
+   * re-applying the patch must be a no-op. The plan only ever reaches here with a pin whose value the
+   * existing annotation already agrees with (see
+   * {@link RetrofitFixedListLabels#canEmitTheDefinitionsCodes}), so nothing is lost by skipping it.
+   */
+  private static List<String> constantAnnotationLines(EnumConstantDeclaration constant,
+      Map<String, List<String>> labels, Map<String, String> codes, String indent) {
+    String name = constant.getNameAsString();
+    List<String> annotations = new ArrayList<>();
+    String code = codes.get(name);
+    if (code != null && !Annotations.has(constant, "JsonProperty")) {
+      annotations.add("@JsonProperty(" + CcdAnnotationRenderer.quote(code) + ")");
+    }
+    List<String> members = labels.get(name);
+    if (members != null) {
+      annotations.add(labelAnnotation(members, indent.length()));
+    }
+    return indentEachLine(annotations, indent);
   }
 
   /**
    * Rewrites one source line holding several enum constants into one line per constant, each carrying
-   * its own {@code @CCD(label)} where the pin has one, and returns the replacement lines — or
-   * {@code null} to refuse the line.
+   * its own {@code @JsonProperty}/{@code @CCD} where the plan has one, and returns the replacement lines
+   * — or {@code null} to refuse the line.
    *
    * <p>Each constant's text is taken as the VERBATIM column slice of the original line, so arguments
    * and formatting survive untouched; whatever follows the last constant (a {@code ,} continuing onto
@@ -2833,7 +2879,8 @@ public final class RetrofitPatchEmitter {
    * constant only costs a residual diff line whereas a mangled one breaks the team's build.
    */
   private static List<String> splitSharedConstantLine(String line,
-      List<EnumConstantDeclaration> constants, Map<String, List<String>> labels, String indent) {
+      List<EnumConstantDeclaration> constants, Map<String, List<String>> labels,
+      Map<String, String> codes, String indent) {
     List<String> texts = new ArrayList<>();
     int cursor = 0;
     for (EnumConstantDeclaration constant : constants) {
@@ -2861,13 +2908,14 @@ public final class RetrofitPatchEmitter {
     String tail = line.substring(cursor);
     List<String> out = new ArrayList<>();
     for (int i = 0; i < constants.size(); i++) {
-      List<String> members = labels.get(constants.get(i).getNameAsString());
-      if (members != null) {
-        out.addAll(indentEachLine(List.of(labelAnnotation(members, indent.length())), indent));
-      }
+      out.addAll(constantAnnotationLines(constants.get(i), labels, codes, indent));
       out.add(indent + texts.get(i) + (i < constants.size() - 1 ? "," : tail));
     }
     return out;
+  }
+
+  /** Which imports a run of per-constant annotation insertions makes the file need. */
+  private record ConstantPins(boolean ccd, boolean jsonProperty) {
   }
 
   /**
@@ -3148,6 +3196,14 @@ public final class RetrofitPatchEmitter {
      */
     private final Map<String, Map<String, List<String>>> constantAnnotations = new LinkedHashMap<>();
     /**
+     * Enum simple name → (constant name → the {@code ListElementCode} to pin on it as
+     * {@code @JsonProperty}). Kept separate from {@code constantAnnotations} because this is a DIFFERENT
+     * annotation, not another {@code @CCD} member: a constant can carry both, and the two are decided
+     * independently (a constant may need its code pinned and not its label, or the reverse). See
+     * {@link RetrofitFixedListLabels#codePins}.
+     */
+    private final Map<String, Map<String, String>> constantCodes = new LinkedHashMap<>();
+    /**
      * The class whose hand-written constructor(s) must be widened to accept the synthesised fields,
      * or null when synthesis needs no constructor change. Set only for the builder-bound /
      * {@code @Value} idioms that would otherwise refuse synthesis.
@@ -3247,6 +3303,21 @@ public final class RetrofitPatchEmitter {
       Map<String, List<String>> existing =
           constantAnnotations.computeIfAbsent(enumSimpleName, k -> new LinkedHashMap<>());
       membersByConstant.forEach(existing::putIfAbsent);
+    }
+
+    /**
+     * Records the per-constant {@code @JsonProperty} pinning the definition's own
+     * {@code ListElementCode}. First write wins per constant, for the same reason the label pins do: an
+     * enum reached by two definition IDs serves the first one's list, so a second list's codes must not
+     * overwrite the first's.
+     */
+    void pinConstantCodes(String enumSimpleName, Map<String, String> codeByConstant) {
+      if (codeByConstant.isEmpty()) {
+        return;
+      }
+      Map<String, String> existing =
+          constantCodes.computeIfAbsent(enumSimpleName, k -> new LinkedHashMap<>());
+      codeByConstant.forEach(existing::putIfAbsent);
     }
 
     /**

@@ -407,32 +407,69 @@ class RetrofitPatchEmitterGoldenTest {
   }
 
   @Test
-  void refusesToNameAnEnumWhoseConstantsAreNotTheDefinitionsCodes() {
-    // The same reach gap, refused: FixedListGenerator emits ListElementCode as the CONSTANT NAME and
-    // nothing in the SDK can express any other value (unlike the ListElement label, which @CCD(label)
-    // pins). So an enum whose codes the team spells in its own house style — sscs's ScannedDocumentType
-    // carries the definition's `cherished` as a constructor field while the constant is CHERISHED — cannot
-    // supply this list's rows at all: naming it would trade a list with no rows for a list of WRONG rows,
-    // which is strictly worse. The list stays unreferenced and its rows remain a reported residual.
-    String patched = patchedFile(emitPatch(), "common/Party.java");
-    assertThat(patched)
-        .doesNotContain("HouseStyleType.class")
-        .doesNotContain("import uk.gov.hmcts.example.callback.HouseStyleType;")
-        // Still carries the ID as an override, exactly as before: only the class naming is refused.
+  void pinsTheDefinitionsCodeOntoAnEnumSpellingItInItsOwnHouseStyle() {
+    // FixedListGenerator does not read the ListElementCode off any SDK annotation — it puts the enum
+    // CONSTANT into the row map and lets Jackson serialise it. That serialisation IS the seam: a
+    // @JsonProperty on the constant redirects the emitted code. So an enum whose codes the team spells in
+    // its own house style (sscs's ScannedDocumentType carries the definition's `cherished` as a
+    // constructor field while the constant is CHERISHED) can supply the list's rows after all — each
+    // constant is pinned to its definition code, and the enum is then named like any other.
+    //
+    // Unlike the label pin this is NOT runtime-neutral: it changes how the team's own enum serialises
+    // everywhere, not just what the generator emits. The value comes from the definition, which is what
+    // that column already carries on the wire, so the redirect aligns the type with its own data.
+    String houseStyle = patchedContent(emitPatch(), "callback/HouseStyleType.java");
+    // Both pins land on each constant, code first: the label pin follows the CODE, not the constant
+    // name — once FIRST_STYLE emits `firstStyle`, the generator's own fallback emits `firstStyle` as the
+    // ListElement too, so "First style" still needs pinning, and would NOT have been pinned by a
+    // comparison against the constant name.
+    assertThat(houseStyle)
+        .contains("  @JsonProperty(\"firstStyle\")\n  @CCD(label = \"First style\")\n"
+            + "  FIRST_STYLE(\"firstStyle\"),")
+        .contains("  @JsonProperty(\"secondStyle\")\n  @CCD(label = \"Second style\")\n"
+            + "  SECOND_STYLE(\"secondStyle\");")
+        .contains("import com.fasterxml.jackson.annotation.JsonProperty;");
+    // With its codes reachable, the enum is named by the field that only carried its ID.
+    assertThat(patchedFile(emitPatch(), "common/Party.java"))
+        .contains("typeParameterClass = HouseStyleType.class")
+        .contains("import uk.gov.hmcts.example.callback.HouseStyleType;")
+        // Named, not retyped: the declaration is what a published jar's callers bind to.
         .contains("private String houseStyleType;");
   }
 
   @Test
   void refusesToNameAnEnumThatRedirectsItsSerialisedCode() {
-    // The same refusal where a NAME comparison would wrongly pass: FixedListGenerator puts the enum
-    // CONSTANT into the row map and lets Jackson serialise it, so a @JsonValue redirects the emitted
-    // ListElementCode away from the constant name — sscs's DocumentTabChoice really emits
-    // document/internalDocument for REGULAR/INTERNAL. This fixture's constants ARE the definition's codes
-    // (FIRST/SECOND), so only reading the @JsonValue catches that the list would still be wrong.
+    // The refusal a code pin cannot lift: a @JsonValue takes precedence over a constant's
+    // @JsonProperty, so what the enum emits is a method's return value and nothing pinned on the
+    // constants can change it — sscs's DocumentTabChoice really emits document/internalDocument for
+    // REGULAR/INTERNAL. This fixture's constants ARE the definition's codes (FIRST/SECOND), so only
+    // reading the @JsonValue catches that the list would still be wrong.
     String patched = patchedFile(emitPatch(), "common/Party.java");
     assertThat(patched)
         .doesNotContain("JsonValuedType.class")
         .contains("private String jsonValuedType;");
+    // And no code is pinned onto its constants either: a @JsonProperty the @JsonValue overrides is a
+    // change to the team's published serialisation that buys nothing, and would misrepresent the list as
+    // fixed. (The LABEL pins are unaffected and still emitted — they are read off the definition and are
+    // correct for this enum however its codes serialise.)
+    assertThat(patchedContent(emitPatch(), "callback/JsonValuedType.java"))
+        .doesNotContain("@JsonProperty");
+  }
+
+  @Test
+  void refusesToNameAnEnumMissingOneOfTheDefinitionsCodes() {
+    // Every code must be reachable, not most: PartialCodeType has constants for firstKind and secondKind
+    // but none for thirdKind. Pinning the two that match would emit a list right about two rows and
+    // missing the third — the same defect the refusal exists to prevent, at smaller scale. A missing
+    // constant is a constant-set divergence to report, not a code to pin.
+    String patched = patchedFile(emitPatch(), "common/Party.java");
+    assertThat(patched)
+        .doesNotContain("PartialCodeType.class")
+        .contains("private String partialCodeType;");
+    // Nor is a code pinned onto the two constants that DO match: pinning them is what would emit the
+    // two-right-one-missing list. The refusal is all-or-nothing, per enum, not per constant.
+    assertThat(patchedContent(emitPatch(), "callback/PartialCodeType.java"))
+        .doesNotContain("@JsonProperty");
   }
 
   @Test
@@ -1103,14 +1140,25 @@ class RetrofitPatchEmitterGoldenTest {
   }
 
   /**
-   * The added field-level {@code @JsonProperty} pins, excluding constructor-parameter
-   * annotations.
+   * The added field-level {@code @JsonProperty} pins, excluding constructor-parameter annotations and
+   * the ENUM-CONSTANT pins that carry a fixed list's {@code ListElementCode}. The two are unrelated
+   * concerns that happen to share an annotation: this one makes a naming strategy's already-effective id
+   * explicit (a Jackson no-op), the other deliberately redirects a constant's serialised code. The
+   * fixture keeps every fixed-list enum in {@code …example.callback}, so scoping by that package
+   * separates them without the diff having to say which types are enums.
    */
   private static java.util.List<String> pinAnnotations(String diff) {
-    return addedLines(diff).stream()
-        .filter(l -> l.startsWith("+  @JsonProperty("))
-        .map(l -> l.substring(3))
-        .toList();
+    java.util.List<String> pins = new java.util.ArrayList<>();
+    boolean inFieldFile = false;
+    for (String line : diff.lines().toList()) {
+      if (line.startsWith("--- a/")) {
+        inFieldFile = !line.contains("/callback/");
+      }
+      if (inFieldFile && line.startsWith("+  @JsonProperty(")) {
+        pins.add(line.substring(3));
+      }
+    }
+    return pins;
   }
 
   /** The single-file section of a multi-file unified diff, for file-scoped assertions. */

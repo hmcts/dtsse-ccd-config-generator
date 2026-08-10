@@ -3,8 +3,9 @@ package uk.gov.hmcts.example.callback;
 /**
  * The same shape as {@link ScannedDocumentType} — a fixed list modelled as an enum no field declares —
  * except that the team spells the definition's ListElementCodes in its own house style, carrying them as
- * a constructor field. FixedListGenerator emits ListElementCode as the CONSTANT NAME and nothing can pin
- * any other value, so naming this enum would emit a list of wrong codes where today it emits none.
+ * a constructor field. FixedListGenerator emits whatever Jackson serialises the constant as, so each
+ * constant is pinned to its definition code with a {@code @JsonProperty} and the enum can then supply
+ * the list's rows.
  */
 public enum HouseStyleType {
   FIRST_STYLE("firstStyle"),
