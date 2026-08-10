@@ -117,11 +117,15 @@ run_lane() {
   # old tip verbatim (below), so writing the tree anywhere else silently breaks the merge — sscs keeps
   # its passthrough under ccd-definition/, everyone else under resources/. Derived from the old tip's
   # own tree so it follows the branch if a service moves it again.
-  # (No `grep -m1`: closing the pipe early SIGPIPEs git ls-tree, and under `set -e -o pipefail` a
-  # failing command substitution aborts the whole lane silently.)
+  # (Nothing that closes the pipe early — no `grep -m1`, no `head -1`: the reader exiting first SIGPIPEs
+  # whatever is upstream of it, and under `set -e -o pipefail` a failing command substitution aborts the
+  # whole lane silently. It only LOOKS harmless on a small tree, whose ls-tree output fits the pipe
+  # buffer and so completes before the reader leaves; prl's 1226 files do not. So the whole stream is
+  # read and the first line taken with a parameter expansion instead.)
   local ptparent
   ptparent="$(git -C "${clone}" ls-tree -r --name-only "${tip}" \
-    | sed -n 's|/ccd-passthrough/.*||p' | head -1)"
+    | sed -n 's|/ccd-passthrough/.*||p')"
+  ptparent="${ptparent%%$'\n'*}"
   [[ -n "${ptparent}" ]] || ptparent="resources"
   rm -rf "${wt:?}/${ptparent}/ccd-passthrough"
   if [[ -d "${review}/resources/ccd-passthrough" ]]; then
