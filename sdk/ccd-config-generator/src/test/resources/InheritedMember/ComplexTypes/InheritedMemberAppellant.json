@@ -22,5 +22,14 @@
     "ListElementCode": "organisation",
     "LiveFrom": "01/01/2017",
     "SecurityClassification": "Public"
+  },
+  {
+    "ElementLabel": "Appellant role",
+    "FieldType": "FixedList",
+    "FieldTypeParameter": "FL_inheritedMemberRoles",
+    "ID": "InheritedMemberAppellant",
+    "ListElementCode": "role",
+    "LiveFrom": "01/01/2017",
+    "SecurityClassification": "Public"
   }
 ]

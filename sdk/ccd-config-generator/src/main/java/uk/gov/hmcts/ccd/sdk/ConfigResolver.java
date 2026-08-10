@@ -82,7 +82,7 @@ class ConfigResolver<T, S, R extends HasRole> {
           // for that list ID is reachable nowhere else. Resolve it alongside the declared type rather
           // than instead of it — a Collection<X> field can legitimately do both.
           Class declared = getComplexType(dataClass, field);
-          for (Class c : new Class[] {declared, typeParameterClass(field)}) {
+          for (Class c : new Class[] {declared, typeParameterClass(dataClass, field)}) {
             if (null == c || c.equals(dataClass)) {
               continue;
             }
@@ -111,17 +111,32 @@ class ConfigResolver<T, S, R extends HasRole> {
         // dropped from CaseField/AuthorisationCaseField/CaseEventToFields. An ignored field is not
         // part of the generated definition, so neither is a type nothing else reaches: emitting rows
         // for it declares a complex type no field references.
+        //
+        // Read through dataClass, the class this walk was entered with, so an inherited field the
+        // definition configures per subclass is judged by the configuration that subclass supplies
+        // (see FieldUtils#ccdAnnotation): a declaration marked ignore = true because MOST subclasses
+        // have no row for it still reaches its types through the one subclass that does.
         field -> !Modifier.isStatic(field.getModifiers())
-            && !FieldUtils.isFieldIgnored(field));
+            && !FieldUtils.isFieldIgnored(dataClass, field));
     path.remove(dataClass);
   }
 
   /**
-   * The class named by {@code @CCD(typeParameterClass)} on this field, or null when unset. Void is
-   * the annotation's "unset" marker and never a reachable type.
+   * The class named by {@code @CCD(typeParameterClass)} on this field as reached through
+   * {@code owner}, or null when unset. Void is the annotation's "unset" marker and never a reachable
+   * type.
+   *
+   * <p>Read through {@code owner} rather than off the declaration, because an INHERITED field's
+   * configuration can be supplied per subclass by a class-level {@code @CCD(member)} — and the class
+   * supplying a fixed list's rows is then reachable only through that override. sscs's abstract
+   * {@code Party} declares {@code ibcRole}, which the definition has a row for under
+   * {@code appellant} only, so {@code Appellant} carries the whole
+   * {@code typeOverride/typeParameterOverride/typeParameterClass} triple while the declaration itself
+   * is {@code ignore = true}: reading the declaring field found no {@code typeParameterClass} at all
+   * and {@code FL_ibcRoles} emitted no {@code FixedLists} rows.
    */
-  private static Class<?> typeParameterClass(Field field) {
-    CCD annotation = field.getAnnotation(CCD.class);
+  private static Class<?> typeParameterClass(Class<?> owner, Field field) {
+    CCD annotation = FieldUtils.ccdAnnotation(owner, field);
     if (annotation == null || Void.class.equals(annotation.typeParameterClass())) {
       return null;
     }

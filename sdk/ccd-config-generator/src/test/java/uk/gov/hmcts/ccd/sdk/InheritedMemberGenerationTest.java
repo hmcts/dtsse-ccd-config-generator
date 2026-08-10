@@ -103,6 +103,40 @@ public class InheritedMemberGenerationTest {
     }
 
     /**
+     * A type reachable only through an override is reachable: {@code ConfigResolver}'s walk reads
+     * {@code @CCD} through the class it entered with too, so a member whose declaration is
+     * {@code ignore = true} for everyone else still reaches the list the one subclass that has a row
+     * for it names.
+     *
+     * <p>This was the sscs {@code FL_ibcRoles} regression, and it only appears once overrides exist:
+     * moving a claim off a shared declaration is exactly what leaves that declaration ignored.
+     */
+    @Test
+    @SneakyThrows
+    public void reachesAListNamedOnlyByAnOverride() {
+        File out = tmp.newFolder();
+        generator.generateAllCaseTypesToJSON(out);
+        File caseType = new File(out, "InheritedMember");
+
+        assertThat(new File(caseType, "FixedLists/FL_inheritedMemberRoles.json"))
+            .as("the list the override names must emit its rows")
+            .content()
+            .contains("I am appealing for myself")
+            .contains("I am appealing as a guardian");
+
+        assertThat(new File(caseType, "ComplexTypes/InheritedMemberAppellant.json"))
+            .as("and the row it types carries the override's whole configuration")
+            .content()
+            .contains("Appellant role")
+            .contains("FL_inheritedMemberRoles");
+
+        assertThat(new File(caseType, "ComplexTypes/InheritedMemberRepresentative.json"))
+            .as("while the subclasses the definition has no role row for still drop it")
+            .content()
+            .doesNotContain("role");
+    }
+
+    /**
      * An override naming a field the class declares itself, or one no supertype declares, is inert —
      * so it fails generation rather than silently leaving a definition short a column.
      */
