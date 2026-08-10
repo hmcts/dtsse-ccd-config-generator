@@ -29,7 +29,9 @@ import uk.gov.hmcts.ccd.sdk.converter.retrofit.ModelSourceIndex.Type;
  *       flatten with no capitalisation change).</li>
  *   <li><b>Superclass fields</b> are included, subclass-first — {@code FieldUtils.getCaseFields}
  *       delegates to Spring's {@code ReflectionUtils.doWithFields}, which walks up the
- *       {@code extends} chain.</li>
+ *       {@code extends} chain. A field name a subclass re-declares HIDES the superclass's
+ *       declaration: only the most-derived one is a property, matching {@code getCaseFields}'s own
+ *       by-name dedupe (the walk reports both declarations, and Java field hiding means one).</li>
  *   <li><b>{@code @JsonIgnore}</b> (present in any form) or <b>{@code @CCD(ignore = true)}</b>
  *       excludes a field — {@code FieldUtils.isFieldIgnored}. Static fields are excluded too
  *       (Jackson never serialises them and the SDK's clustering walk skips them).</li>
@@ -74,7 +76,7 @@ final class PropertyResolver {
    */
   Resolution resolve(Type root) {
     Resolution resolution = new Resolution();
-    walk(root, "", resolution, new LinkedHashSet<>(), true, null);
+    walk(root, root, "", resolution, new LinkedHashSet<>(), true, null, new LinkedHashSet<>());
     return resolution;
   }
 
@@ -82,14 +84,23 @@ final class PropertyResolver {
    * Walks a type and its superclass chain, collecting fields under the running {@code prefix}.
    *
    * @param type the type to walk
+   * @param enteredWith the class the walk was entered with — the root, or the unwrapped member's
+   *                    declared type — which stays fixed as the superclass chain is climbed, because
+   *                    that is the class the SDK reads an inherited member's configuration through
    * @param prefix the {@code @JsonUnwrapped} prefix composed so far
    * @param resolution the accumulating result
    * @param visiting cycle guard of FQNs on the current path
    * @param countSuperclasses true only for the root's own extends chain (so nested unwrapped
    *                          sub-objects' superclasses do not inflate the reported chain depth)
+   * @param declaredNames the Java field NAMES already collected on this chain, so a name a subclass
+   *                      re-declares hides the superclass's declaration rather than adding a second
+   *                      property — Java field hiding, which the SDK's {@code getCaseFields} dedupe
+   *                      mirrors (sscs's {@code JointParty} re-declares five of {@code Entity}'s
+   *                      members to give each a {@code @JsonProperty})
    */
-  private void walk(Type type, String prefix, Resolution resolution, Set<String> visiting,
-      boolean countSuperclasses, ResolvedProperty.UnwrapRef unwrap) {
+  private void walk(Type type, Type enteredWith, String prefix, Resolution resolution,
+      Set<String> visiting, boolean countSuperclasses, ResolvedProperty.UnwrapRef unwrap,
+      Set<String> declaredNames) {
     if (type == null || !visiting.add(type.fqn)) {
       // Guard against a cyclic @JsonUnwrapped/extends graph (defensive; real models are acyclic).
       return;
@@ -97,27 +108,38 @@ final class PropertyResolver {
     // Subclass fields are collected before the superclass is walked; putIfAbsent then keeps the
     // subclass's field when both declare the same CCD ID — matching ReflectionUtils.doWithFields,
     // which visits the subclass first.
-    collectFields(type, prefix, resolution, visiting, unwrap);
+    collectFields(type, enteredWith, prefix, resolution, visiting, unwrap, declaredNames);
 
     Optional<Type> superType = superclassOf(type);
     if (superType.isPresent()) {
       if (countSuperclasses) {
         resolution.superclassCount++;
       }
-      walk(superType.get(), prefix, resolution, visiting, countSuperclasses, unwrap);
+      walk(superType.get(), enteredWith, prefix, resolution, visiting, countSuperclasses, unwrap,
+          declaredNames);
     }
 
     visiting.remove(type.fqn);
   }
 
-  private void collectFields(Type type, String prefix, Resolution resolution,
-      Set<String> visiting, ResolvedProperty.UnwrapRef unwrap) {
+  private void collectFields(Type type, Type enteredWith, String prefix, Resolution resolution,
+      Set<String> visiting, ResolvedProperty.UnwrapRef unwrap, Set<String> declaredNames) {
     for (FieldDeclaration field : type.decl.findAll(FieldDeclaration.class)) {
       // findAll descends into nested classes; keep only fields declared directly on this type.
       if (!field.getParentNode().map(p -> p == type.decl).orElse(false)) {
         continue;
       }
       if (field.hasModifier(Modifier.Keyword.STATIC)) {
+        continue;
+      }
+      // A name a subclass already declared HIDES this declaration — only the most-derived one is a
+      // real property, so the superclass's is not a second member. Recorded for every field on the
+      // chain, ignored ones included: hiding is a Java-language fact, decided before any annotation
+      // is read.
+      boolean hidden = !field.getVariables().stream()
+          .map(VariableDeclarator::getNameAsString)
+          .allMatch(declaredNames::add);
+      if (hidden) {
         continue;
       }
       if (Annotations.has(field, "JsonUnwrapped")) {
@@ -131,8 +153,8 @@ final class PropertyResolver {
       for (VariableDeclarator var : field.getVariables()) {
         String id = fieldId(field, var, prefix);
         resolution.properties.putIfAbsent(id, new ResolvedProperty(
-            id, type.simpleName, var.getNameAsString(), var.getType(), type.unit, unwrap,
-            type.file));
+            id, type.simpleName, type.fqn, enteredWith.fqn, var.getNameAsString(), var.getType(),
+            type.unit, unwrap, type.file));
       }
     }
   }
@@ -162,7 +184,10 @@ final class PropertyResolver {
                   new ResolvedProperty.Hop(var.getNameAsString(), t.simpleName, t.packageName);
               ResolvedProperty.UnwrapRef childRef = unwrap != null ? unwrap.plus(hop)
                   : new ResolvedProperty.UnwrapRef(java.util.List.of(hop));
-              walk(t, composed, resolution, visiting, false, childRef);
+              // A fresh hiding scope AND a fresh entered-with class: the unwrapped type's own walk is
+              // a separate getCaseFields call in the SDK, so its members' configuration is read
+              // through IT, not through the class holding the unwrapped member.
+              walk(t, t, composed, resolution, visiting, false, childRef, new LinkedHashSet<>());
             }));
   }
 

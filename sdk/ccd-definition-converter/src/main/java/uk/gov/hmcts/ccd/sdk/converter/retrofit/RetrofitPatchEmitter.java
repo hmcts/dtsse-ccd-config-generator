@@ -374,7 +374,14 @@ public final class RetrofitPatchEmitter {
   public RetrofitPatch emit() {
     // Plan the edits per source file. A file may host the root class, complex-type classes and/or
     // @JsonUnwrapped sub-objects, so accumulate all field edits keyed by the file they live in.
-    Map<Path, FileEdits> byFile = new LinkedHashMap<>();
+    final Map<Path, FileEdits> byFile = new LinkedHashMap<>();
+
+    // Every claim about a field goes through here rather than straight onto its declaration, so a
+    // member several classes INHERIT is decided once with all their claims in hand: one annotation on
+    // the shared declaration when they agree, and a class-level @CCD(member = …) on each class that
+    // does not (see RetrofitInheritedMembers). Committed to the per-file edits below, after all four
+    // claim sites have run.
+    RetrofitInheritedMembers inherited = new RetrofitInheritedMembers(renderer);
 
     // 1. Matched/conflict CaseData fields → @CCD; the root class also receives synthesised fields.
     Map<String, FieldModel> caseFieldsById = new LinkedHashMap<>();
@@ -387,8 +394,7 @@ public final class RetrofitPatchEmitter {
         continue; // synthesised below
       }
       FieldModel annotated = withTypeParameterClass(field, property);
-      editsFor(byFile, property.ownerFile)
-          .annotate(property.memberName, annotated, renameFor(property, annotated));
+      inherited.annotate(property, annotated, renameFor(property, annotated));
     }
 
     // 2. Unmatched Java fields → @CCD(ignore = true).
@@ -398,12 +404,32 @@ public final class RetrofitPatchEmitter {
     // unmatched Java.
     for (ResolvedProperty property : properties.values()) {
       if (!definitionIds.contains(property.ccdId)) {
-        editsFor(byFile, property.ownerFile).ignore(property.memberName);
+        inherited.ignore(property);
       }
     }
 
     // 3. Complex-type members: annotate/ignore/synthesise on each resolved model complex class.
-    planComplexTypeMembers(byFile);
+    planComplexTypeMembers(byFile, inherited);
+
+    // 3z. Commit the field claims: one @CCD per declaration, plus a class-level @CCD(member = …) on
+    // each class whose rows the definition configures differently. Runs after every claim site so no
+    // decision is taken on a partial view.
+    for (RetrofitInheritedMembers.Decision decision : inherited.decisions()) {
+      RetrofitInheritedMembers.Claim base = decision.base();
+      if (base.isIgnore()) {
+        editsFor(byFile, base.ownerFile()).ignore(base.memberName());
+      } else {
+        editsFor(byFile, base.ownerFile()).annotate(base.memberName(), base.field(),
+            base.renameTo());
+      }
+      for (RetrofitInheritedMembers.Claim override : decision.overrides()) {
+        index.byFqn(override.reachedThroughFqn()).ifPresent(type ->
+            editsFor(byFile, type.file).overrideMember(type.simpleName,
+                new MemberOverridePlan(override.memberName(),
+                    inherited.overrideMembers(override), inherited.usesFieldType(override),
+                    inherited.accessClasses(override))));
+      }
+    }
 
     // 3a. Re-declare fields whose definition complex type has no model class as the generated companion
     // emitted for it. Must run AFTER step 3, which populates the companion set from the same lookup it
@@ -675,7 +701,9 @@ public final class RetrofitPatchEmitter {
    */
   RetrofitPlannedSynthesis planSynthesisedMembers() {
     Map<Path, FileEdits> discarded = new LinkedHashMap<>();
-    planComplexTypeMembers(discarded);
+    // A throwaway collector too: this pass is only after the synthesised members and retypes, so the
+    // field claims it makes are discarded along with the edits.
+    planComplexTypeMembers(discarded, new RetrofitInheritedMembers(renderer));
     // Runs here too so {@link #plannedRetypes()} is populated on the same throwaway instance: the graph
     // needs BOTH plans, and running them from one pass is what keeps the plan the walk resolves against
     // identical to the one the real emit produces.
@@ -1370,7 +1398,8 @@ public final class RetrofitPatchEmitter {
     return Annotations.has(type.decl, "JsonNaming") && NamingStrategy.of(type).isEmpty();
   }
 
-  private void planComplexTypeMembers(Map<Path, FileEdits> byFile) {
+  private void planComplexTypeMembers(Map<Path, FileEdits> byFile,
+      RetrofitInheritedMembers inherited) {
     // Prefer a complex-type class in the team's model package; the root class's package is the
     // anchor (e.g. uk.gov.hmcts.reform.civil.model). Falling back to null hint would let a
     // same-named type in an unrelated package win.
@@ -1421,14 +1450,13 @@ public final class RetrofitPatchEmitter {
           // typeParameterOverride instead of a bare label-only @CCD.
           FieldModel reconciled =
               withTypeParameterClass(reconciler.reconcile(member, property), property);
-          editsFor(byFile, property.ownerFile)
-              .annotate(property.memberName, reconciled, renameFor(property, reconciled));
+          inherited.annotate(property, reconciled, renameFor(property, reconciled));
         }
       }
       // Unmatched Java members of the complex class → ignore.
       for (ResolvedProperty property : memberResolution.properties.values()) {
         if (!definedMembers.contains(property.ccdId)) {
-          editsFor(byFile, property.ownerFile).ignore(property.memberName);
+          inherited.ignore(property);
         }
       }
       // Definition members with no model field → synthesise onto the complex class.
@@ -1999,6 +2027,41 @@ public final class RetrofitPatchEmitter {
                     + plan.generate() + ")"),
                 leadingWhitespace(sourceLines.get(typeLine - 1))));
         needsComplexTypeImport = true;
+      }
+    }
+
+    // Class-level @CCD(member = …) overrides: one per inherited member this class needs configured
+    // differently from the field's own declaration, which says one thing for every subclass at once
+    // (see RetrofitInheritedMembers and CCD#member()). Placed like the @ComplexType pin — own-line,
+    // above the type declaration's own first line — and repeatable, so several stack.
+    if (!edits.memberOverrides.isEmpty()) {
+      for (TypeDeclaration<?> type : unit.getTypes()) {
+        List<MemberOverridePlan> overrides = edits.memberOverrides.get(type.getNameAsString());
+        if (overrides == null || overrides.isEmpty()) {
+          continue;
+        }
+        int typeLine = type.getBegin().map(p -> p.line).orElse(-1);
+        if (typeLine < 1) {
+          continue;
+        }
+        String indent = leadingWhitespace(sourceLines.get(typeLine - 1));
+        List<String> rendered = new ArrayList<>();
+        for (MemberOverridePlan plan : overrides) {
+          // Idempotency, per member rather than per class: a class may already carry the team's own
+          // override for one member and still need one for another.
+          if (hasMemberOverride(type, plan.memberName())) {
+            continue;
+          }
+          rendered.add(
+              CcdAnnotationRenderer.renderWrapped("CCD", plan.members(), indent.length()));
+          needsCcdImport = true;
+          needsFieldTypeImport |= plan.usesFieldType();
+          accessClasses.addAll(plan.accessClasses());
+        }
+        if (!rendered.isEmpty()) {
+          insertionsByLine.computeIfAbsent(typeLine, k -> new ArrayList<>())
+              .addAll(indentEachLine(rendered, indent));
+        }
       }
     }
 
@@ -2778,6 +2841,24 @@ public final class RetrofitPatchEmitter {
   }
 
   /**
+   * Whether a type already carries a class-level {@code @CCD(member = "<memberName>")} — the team's
+   * own, or this patch re-applied. Matched on the member NAME, not on the whole annotation, because a
+   * class can carry several and each configures a different inherited member.
+   */
+  private static boolean hasMemberOverride(TypeDeclaration<?> type, String memberName) {
+    for (AnnotationExpr ann : type.getAnnotations()) {
+      String simple = ann.getNameAsString();
+      if (!simple.equals("CCD") && !simple.endsWith(".CCD")) {
+        continue;
+      }
+      if (Annotations.stringMember(ann, "member").filter(memberName::equals).isPresent()) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /**
    * Rewrites a field declaration's declared type to {@code targetSimpleName}, recording the replaced
    * source line in {@code retypedLines}.
    *
@@ -3379,6 +3460,12 @@ public final class RetrofitPatchEmitter {
      */
     private String extendConstructorsOf;
     /**
+     * Class simple name → the class-level {@code @CCD(member = …)} overrides to add to it: one per
+     * inherited member this class needs configured differently from the field's own declaration (see
+     * {@link RetrofitInheritedMembers}). Each entry is a rendered member list, {@code member} first.
+     */
+    private final Map<String, List<MemberOverridePlan>> memberOverrides = new LinkedHashMap<>();
+    /**
      * The narrow all-args constructor to ADD, or null when none is needed. Distinct from
      * {@code extendConstructorsOf}: that widens constructors the team wrote, whereas this one exists
      * to bind a subclass's {@code super(...)} to the pre-synthesis field list of a class whose
@@ -3447,6 +3534,14 @@ public final class RetrofitPatchEmitter {
      */
     void removeFieldAnnotation(String member, String simpleName) {
       removeFieldAnnotations.computeIfAbsent(member, k -> new LinkedHashSet<>()).add(simpleName);
+    }
+
+    /**
+     * Records a class-level {@code @CCD(member = …)} override on {@code className}, configuring one
+     * member it inherits for its own rows only.
+     */
+    void overrideMember(String className, MemberOverridePlan plan) {
+      memberOverrides.computeIfAbsent(className, k -> new ArrayList<>()).add(plan);
     }
 
     /**
@@ -3544,6 +3639,19 @@ public final class RetrofitPatchEmitter {
       this.signature = signature;
       this.indent = indent;
     }
+  }
+
+  /**
+   * One class-level {@code @CCD(member = …)} to add: the inherited member it configures (so a re-run
+   * can see it is already there), its rendered annotation members, and the imports it needs.
+   *
+   * @param memberName the inherited member this override configures
+   * @param members the rendered {@code @CCD} members, {@code member} first
+   * @param usesFieldType whether the rendered members reference {@code FieldType}
+   * @param accessClasses the access-class simple names the rendered members reference
+   */
+  private record MemberOverridePlan(String memberName, List<String> members, boolean usesFieldType,
+                                    Set<String> accessClasses) {
   }
 
   /**

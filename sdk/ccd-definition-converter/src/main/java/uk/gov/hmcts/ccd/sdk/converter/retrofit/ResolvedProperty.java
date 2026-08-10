@@ -29,6 +29,22 @@ final class ResolvedProperty {
   final String ownerSimpleName;
 
   /**
+   * FQN of the class declaring the field. Differs from {@link #reachedThroughFqn} exactly when the
+   * field is INHERITED — one Java declaration serving several CCD members, which the definition may
+   * configure differently per subclass (see {@code CCD#member()}).
+   */
+  final String ownerFqn;
+
+  /**
+   * FQN of the class the SDK's {@code getCaseFields} walk was entered with when it reached this
+   * field: the root model class, or — for an {@code @JsonUnwrapped} leaf — the unwrapped member's
+   * declared type. This is the class an inherited member's per-subclass configuration is read
+   * <em>through</em>, so it is the class a class-level {@code @CCD(member)} override must be placed
+   * on.
+   */
+  final String reachedThroughFqn;
+
+  /**
    * The Java field name (before any {@code @JsonProperty} rename).
    */
   final String memberName;
@@ -52,10 +68,13 @@ final class ResolvedProperty {
    */
   final Path ownerFile;
 
-  ResolvedProperty(String ccdId, String ownerSimpleName, String memberName, Type declaredType,
+  ResolvedProperty(String ccdId, String ownerSimpleName, String ownerFqn, String reachedThroughFqn,
+      String memberName, Type declaredType,
       CompilationUnit context, UnwrapRef unwrap, Path ownerFile) {
     this.ccdId = ccdId;
     this.ownerSimpleName = ownerSimpleName;
+    this.ownerFqn = ownerFqn;
+    this.reachedThroughFqn = reachedThroughFqn;
     this.memberName = memberName;
     this.declaredType = declaredType;
     this.context = context;
