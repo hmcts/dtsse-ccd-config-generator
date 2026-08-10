@@ -82,6 +82,21 @@ public class Party {
   // A definition FixedLists ID declared as a CLASS: the kinds disagree, so the binding is refused.
   private CrossKindPayload crossKind;
 
+  // A definition FixedList the team DOES model as an enum — but NO field declares it, so reflection
+  // reaches no rows for it (sscs's ScannedDocumentDetails.type). The patch must name the TEAM's enum
+  // rather than a companion, with the import for ITS package (…example.callback), not the model one.
+  private String scannedDocumentType;
+
+  // The same shape whose enum spells the definition's codes in the team's own house style: the SDK emits
+  // ListElementCode as the CONSTANT name and nothing can pin any other value, so naming this enum would
+  // emit a list of wrong codes where today it emits none. Refused.
+  private String houseStyleType;
+
+  // And the same shape whose constant NAMES do match the definition's codes, but which carries a
+  // @JsonValue redirecting what Jackson serialises them as: the emitted ListElementCode is `first`, not
+  // FIRST, so the name match passes while the list would still be wrong. Refused.
+  private String jsonValuedType;
+
   // Two collection members whose element wrappers hold ONE shared payload class: only the first
   // definition type can pin its ID onto SharedDetails, so the second must be reported as a gap.
   private List<FirstSharedCT> firstShared;

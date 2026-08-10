@@ -43,9 +43,8 @@ public class FieldModel {
   String typeParameterOverride;
 
   /**
-   * Simple name of the companion enum backing {@link #typeParameterOverride}, emitted as
-   * {@code @CCD(typeParameterClass)}; null when the field declares the type itself (so reflection
-   * already reaches it) or no companion is generated for the ID.
+   * Simple name of the enum backing {@link #typeParameterOverride}, emitted as
+   * {@code @CCD(typeParameterClass)}; null when no class is known to serve the ID.
    *
    * <p>Retrofit-only. A {@code typeParameterOverride} is just a string written into the
    * {@code FieldTypeParameter} column, whereas the {@code FixedLists} rows come from the types
@@ -54,6 +53,16 @@ public class FieldModel {
    * which would change every caller and serialised payload in the team's model.
    */
   String typeParameterClassName;
+
+  /**
+   * Package of {@link #typeParameterClassName} when it is one of the team's OWN enums rather than a
+   * generated companion; null for a companion, which is emitted into the model package.
+   *
+   * <p>Retrofit-only. A team's enum lives wherever the team put it — sscs's {@code ScannedDocumentType}
+   * is in {@code …ccd.callback} while the field naming it is in {@code …ccd.domain} — so the import the
+   * patch adds has to be the enum's real package, not the companions' one.
+   */
+  String typeParameterClassPackage;
 
   String label;
   String hint;

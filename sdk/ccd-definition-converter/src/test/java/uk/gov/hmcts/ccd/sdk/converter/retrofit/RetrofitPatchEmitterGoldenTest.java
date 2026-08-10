@@ -390,6 +390,52 @@ class RetrofitPatchEmitterGoldenTest {
   }
 
   @Test
+  void namesTheTeamsOwnEnumForAListNoFieldDeclares() {
+    // The other half of the same reach gap, and the one a companion cannot close: the team DOES model the
+    // list as an enum, but every column typed by it is a String carrying only the ID as a
+    // typeParameterOverride (sscs's ScannedDocumentDetails.type, with the real 14-constant enum sitting
+    // unreferenced in …ccd.callback). Reflection reaches an enum only from a field's DECLARED type, so
+    // nothing generated the list's rows — and no companion is generated either, since an enum of that
+    // name already exists. Naming the team's own enum is the only thing that makes its rows appear, and
+    // the import must be for ITS package rather than the companions' model package.
+    String patched = patchedFile(emitPatch(), "common/Party.java");
+    assertThat(patched)
+        .contains("typeParameterClass = ScannedDocumentType.class")
+        .contains("import uk.gov.hmcts.example.callback.ScannedDocumentType;")
+        // Named, not retyped: the declaration is what a published jar's callers bind to.
+        .contains("private String scannedDocumentType;");
+  }
+
+  @Test
+  void refusesToNameAnEnumWhoseConstantsAreNotTheDefinitionsCodes() {
+    // The same reach gap, refused: FixedListGenerator emits ListElementCode as the CONSTANT NAME and
+    // nothing in the SDK can express any other value (unlike the ListElement label, which @CCD(label)
+    // pins). So an enum whose codes the team spells in its own house style — sscs's ScannedDocumentType
+    // carries the definition's `cherished` as a constructor field while the constant is CHERISHED — cannot
+    // supply this list's rows at all: naming it would trade a list with no rows for a list of WRONG rows,
+    // which is strictly worse. The list stays unreferenced and its rows remain a reported residual.
+    String patched = patchedFile(emitPatch(), "common/Party.java");
+    assertThat(patched)
+        .doesNotContain("HouseStyleType.class")
+        .doesNotContain("import uk.gov.hmcts.example.callback.HouseStyleType;")
+        // Still carries the ID as an override, exactly as before: only the class naming is refused.
+        .contains("private String houseStyleType;");
+  }
+
+  @Test
+  void refusesToNameAnEnumThatRedirectsItsSerialisedCode() {
+    // The same refusal where a NAME comparison would wrongly pass: FixedListGenerator puts the enum
+    // CONSTANT into the row map and lets Jackson serialise it, so a @JsonValue redirects the emitted
+    // ListElementCode away from the constant name — sscs's DocumentTabChoice really emits
+    // document/internalDocument for REGULAR/INTERNAL. This fixture's constants ARE the definition's codes
+    // (FIRST/SECOND), so only reading the @JsonValue catches that the list would still be wrong.
+    String patched = patchedFile(emitPatch(), "common/Party.java");
+    assertThat(patched)
+        .doesNotContain("JsonValuedType.class")
+        .contains("private String jsonValuedType;");
+  }
+
+  @Test
   void namesNoCompanionForAListAModelEnumAlreadyServes() {
     // The guard: a list whose rows come from a model enum is ALREADY reachable as a declared field type,
     // so naming a class here would either name one that was never generated (the rebinder drops the
