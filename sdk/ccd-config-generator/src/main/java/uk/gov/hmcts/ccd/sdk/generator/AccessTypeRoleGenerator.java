@@ -31,8 +31,11 @@ public class AccessTypeRoleGenerator<T, S, R extends HasRole> implements ConfigG
     final List<Map<String, Object>> rows = config.getAccessTypeRoles().stream()
         .map(role -> toJson(config.getCaseType(), role))
         .collect(toList());
+    // OrganisationProfileID is part of the key for the same reason as in AccessTypeGenerator: roles
+    // carrying one access type across several organisation profiles share AccessTypeID,
+    // OrganisationalRoleName and GroupRoleName, and would otherwise collapse into a single row.
     mergeInto(path, rows, new AddMissing(), false,
-        "AccessTypeID", "OrganisationalRoleName", "GroupRoleName");
+        "AccessTypeID", "OrganisationProfileID", "OrganisationalRoleName", "GroupRoleName");
   }
 
   private static Map<String, Object> toJson(String caseType, AccessTypeRole accessTypeRole) {

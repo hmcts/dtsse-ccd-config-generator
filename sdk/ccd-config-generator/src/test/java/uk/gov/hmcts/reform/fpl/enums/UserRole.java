@@ -16,7 +16,8 @@ public enum UserRole implements HasRole {
     BULK_SCAN("caseworker-publiclaw-bulkscan", "R"),
     BULK_SCAN_SYSTEM_UPDATE("caseworker-publiclaw-bulkscansystemupdate"),
     CASE_ACCESS_ADMINISTRATOR("caseworker-caa"),
-    CASE_ACCESS_APPROVER("caseworker-approver", "CRU", AccessGroups.SOLICITOR_ORG_POLICY),
+    CASE_ACCESS_APPROVER("caseworker-approver", "CRU",
+        AccessGroups.SOLICITOR_ORG_POLICY, AccessGroups.LOCAL_AUTHORITY_ORG_POLICY),
     CASE_ACCESS_APPROVER_GROUP("caseworker-approver-group"),
     @CCD(label = "Solicitor", hint = "Solicitor role")
     CCD_SOLICITOR("[SOLICITOR]");
@@ -24,19 +25,15 @@ public enum UserRole implements HasRole {
 
     private final String role;
     private final String casetypePermissions;
-    private final CCDAccessGroup accessGroup;
+    private final List<CCDAccessGroup> accessGroups;
     UserRole(String role) {
         this(role, "CRU");
     }
 
-    UserRole(String role, String casetypePermissions) {
-        this(role, casetypePermissions, null);
-    }
-
-    UserRole(String role, String casetypePermissions, CCDAccessGroup accessGroup) {
+    UserRole(String role, String casetypePermissions, CCDAccessGroup... accessGroups) {
         this.role = role;
         this.casetypePermissions = casetypePermissions;
-        this.accessGroup = accessGroup;
+        this.accessGroups = List.of(accessGroups);
     }
 
     public String getRole() {
@@ -49,8 +46,8 @@ public enum UserRole implements HasRole {
     }
 
     @Override
-    public CCDAccessGroup getAccessGroup() {
-        return accessGroup;
+    public List<CCDAccessGroup> getAccessGroups() {
+        return accessGroups;
     }
 
     public List<String> getRoles() {

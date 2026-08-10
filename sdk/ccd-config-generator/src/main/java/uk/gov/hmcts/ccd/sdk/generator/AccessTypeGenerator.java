@@ -31,7 +31,11 @@ public class AccessTypeGenerator<T, S, R extends HasRole> implements ConfigGener
     final List<Map<String, Object>> rows = config.getAccessTypes().stream()
         .map(o -> toJson(config.getCaseType(), o))
         .collect(toList());
-    mergeInto(path, rows, new AddMissing(), false, "AccessTypeID");
+    // Keyed on AccessTypeID + OrganisationProfileID to match the definition store, whose
+    // AccessTypesValidator treats (caseType, jurisdiction, accessTypeId, organisationProfileId) as
+    // the identity. On AccessTypeID alone the same access type offered to a second organisation
+    // profile would merge into the first row instead of being emitted.
+    mergeInto(path, rows, new AddMissing(), false, "AccessTypeID", "OrganisationProfileID");
   }
 
   private static Map<String, Object> toJson(String caseType, AccessType accessType) {

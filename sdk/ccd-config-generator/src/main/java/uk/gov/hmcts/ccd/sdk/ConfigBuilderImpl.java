@@ -3,6 +3,7 @@ package uk.gov.hmcts.ccd.sdk;
 import static uk.gov.hmcts.ccd.sdk.api.Event.ATTACH_SCANNED_DOCS;
 import static uk.gov.hmcts.ccd.sdk.api.Event.HANDLE_EVIDENCE;
 
+import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
@@ -251,6 +252,12 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements Decentralised
    * cleanly and then grants nothing at runtime; deriving the row makes that failure impossible
    * rather than silent. A row the config already declared for the same role wins, so a team needing
    * non-default authorisations can still declare it by hand.
+   *
+   * <p>An access type is keyed on {@code (accessTypeId, organisationProfileId)} throughout, matching
+   * the definition store: {@code AccessTypesValidator} groups by
+   * {@code AccessTypeEntity.UniqueIdentifier(caseType, jurisdiction, accessTypeId,
+   * organisationProfileId)}. Keying on {@code accessTypeId} alone silently drops the same logical
+   * access type offered to a second organisation profile.
    */
   private void deriveAccessTypesFromRoles() {
     R[] roles = config.getRoleClass().getEnumConstants();
@@ -258,68 +265,76 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements Decentralised
       return;
     }
 
-    Set<String> existingAccessTypeIds = config.accessTypes.stream()
-        .map(AccessType::getAccessTypeId)
+    Set<List<String>> existingAccessTypeKeys = config.accessTypes.stream()
+        .map(ConfigBuilderImpl::accessTypeKey)
         .collect(Collectors.toCollection(HashSet::new));
     Set<String> mappedRoleNames = config.caseRoleToAccessProfiles.stream()
         .map(profile -> profile.getRole().getRole())
         .collect(Collectors.toCollection(HashSet::new));
 
-    Map<String, AccessType> derivedAccessTypes = new LinkedHashMap<>();
+    Map<List<String>, AccessType> derivedAccessTypes = new LinkedHashMap<>();
     List<AccessTypeRole> derivedRoles = Lists.newArrayList();
 
     for (R role : roles) {
-      CCDAccessGroup group = role.getAccessGroup();
-      if (group == null) {
-        continue;
-      }
+      for (CCDAccessGroup group : role.getAccessGroups()) {
+        if (group == null) {
+          continue;
+        }
 
-      if (!existingAccessTypeIds.contains(group.getAccessTypeId())) {
-        derivedAccessTypes.putIfAbsent(group.getAccessTypeId(), AccessType.builder()
+        List<String> key = List.of(group.getAccessTypeId(),
+            Strings.nullToEmpty(group.getOrganisationProfileId()));
+        if (!existingAccessTypeKeys.contains(key)) {
+          derivedAccessTypes.putIfAbsent(key, AccessType.builder()
+              .accessTypeId(group.getAccessTypeId())
+              .organisationProfileId(group.getOrganisationProfileId())
+              .accessMandatory(group.isAccessMandatory())
+              .accessDefault(group.isAccessDefault())
+              .display(group.isDisplay())
+              .description(group.getDescription())
+              .hintText(group.getHintText())
+              .displayOrder(group.getDisplayOrder())
+              .liveTo(group.getLiveTo())
+              .build());
+        }
+
+        HasRole groupRole = requireResolvedRole(group, "groupRoleName", group.getGroupRoleName());
+        HasRole caseAssignedRole =
+            requireResolvedRole(group, "caseAssignedRoleField", group.getCaseAssignedRoleField());
+
+        derivedRoles.add(AccessTypeRole.builder()
             .accessTypeId(group.getAccessTypeId())
             .organisationProfileId(group.getOrganisationProfileId())
-            .accessMandatory(group.isAccessMandatory())
-            .accessDefault(group.isAccessDefault())
-            .display(group.isDisplay())
-            .description(group.getDescription())
-            .hintText(group.getHintText())
-            .displayOrder(group.getDisplayOrder())
+            .organisationalRoleName(role.getRole())
+            .groupRoleName(groupRole.getRole())
+            .caseAssignedRoleField(caseAssignedRole.getRole())
+            .groupAccessEnabled(group.isGroupAccessEnabled())
+            .caseAccessGroupIdTemplate(group.getCaseAccessGroupIdTemplate())
             .liveTo(group.getLiveTo())
             .build());
-      }
 
-      HasRole groupRole = requireResolvedRole(group, "groupRoleName", group.getGroupRoleName());
-      HasRole caseAssignedRole =
-          requireResolvedRole(group, "caseAssignedRoleField", group.getCaseAssignedRoleField());
-
-      derivedRoles.add(AccessTypeRole.builder()
-          .accessTypeId(group.getAccessTypeId())
-          .organisationProfileId(group.getOrganisationProfileId())
-          .organisationalRoleName(role.getRole())
-          .groupRoleName(groupRole.getRole())
-          .caseAssignedRoleField(caseAssignedRole.getRole())
-          .groupAccessEnabled(group.isGroupAccessEnabled())
-          .caseAccessGroupIdTemplate(group.getCaseAccessGroupIdTemplate())
-          .liveTo(group.getLiveTo())
-          .build());
-
-      if (mappedRoleNames.add(groupRole.getRole())) {
-        List<String> accessProfiles = group.getGroupRoleAccessProfiles();
-        if (accessProfiles == null || accessProfiles.isEmpty()) {
-          throw new IllegalStateException(
-              ("Access group %s must declare at least one access profile for group role %s: without"
-                  + " a RoleToAccessProfiles mapping the group role grants no access at runtime.")
-                  .formatted(group.getAccessTypeId(), groupRole.getRole()));
+        if (mappedRoleNames.add(groupRole.getRole())) {
+          List<String> accessProfiles = group.getGroupRoleAccessProfiles();
+          if (accessProfiles == null || accessProfiles.isEmpty()) {
+            throw new IllegalStateException(
+                ("Access group %s must declare at least one access profile for group role %s: without"
+                    + " a RoleToAccessProfiles mapping the group role grants no access at runtime.")
+                    .formatted(group.getAccessTypeId(), groupRole.getRole()));
+          }
+          config.caseRoleToAccessProfiles.add(
+              CaseRoleToAccessProfileBuilder.<R>builder(groupRole)
+                  .accessProfiles(accessProfiles.toArray(String[]::new))
+                  .build());
         }
-        config.caseRoleToAccessProfiles.add(
-            CaseRoleToAccessProfileBuilder.<R>builder(groupRole)
-                .accessProfiles(accessProfiles.toArray(String[]::new))
-                .build());
       }
     }
 
     config.accessTypes.addAll(derivedAccessTypes.values());
     config.accessTypeRoles.addAll(derivedRoles);
+  }
+
+  private static List<String> accessTypeKey(AccessType accessType) {
+    return List.of(accessType.getAccessTypeId(),
+        Strings.nullToEmpty(accessType.getOrganisationProfileId()));
   }
 
   /**

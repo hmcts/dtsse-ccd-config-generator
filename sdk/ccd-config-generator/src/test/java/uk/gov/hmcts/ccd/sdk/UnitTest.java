@@ -2,6 +2,8 @@ package uk.gov.hmcts.ccd.sdk;
 
 import java.util.List;
 import org.junit.Test;
+import uk.gov.hmcts.ccd.sdk.api.AccessType;
+import uk.gov.hmcts.ccd.sdk.api.AccessTypeRole;
 import uk.gov.hmcts.ccd.sdk.api.CCDAccessGroup;
 import uk.gov.hmcts.ccd.sdk.api.CCDConfig;
 import uk.gov.hmcts.ccd.sdk.api.ConfigBuilder;
@@ -16,6 +18,7 @@ import uk.gov.hmcts.reform.fpl.model.CaseData;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.groups.Tuple.tuple;
 
 public class UnitTest {
 
@@ -134,6 +137,57 @@ public class UnitTest {
         .hasMessageContaining("must declare at least one access profile");
   }
 
+  /**
+   * The definition store keys an access type on (caseType, jurisdiction, accessTypeId,
+   * organisationProfileId), so one access type offered to several organisation profiles is several
+   * rows. Deriving on accessTypeId alone kept only the first.
+   */
+  @Test
+  public void derivesOneAccessTypePerOrganisationProfile() {
+    class MultiProfileConfig implements CCDConfig<CaseData, State, MultiProfileRole> {
+      @Override
+      public void configure(ConfigBuilder<CaseData, State, MultiProfileRole> builder) {
+        builder.caseType("TEST", "Test", "Test case type");
+      }
+    }
+
+    ResolvedCCDConfig<CaseData, State, MultiProfileRole> resolved =
+        new ConfigResolver<>(List.of(new MultiProfileConfig())).resolveCCDConfig();
+
+    assertThat(resolved.getAccessTypes())
+        .extracting(AccessType::getAccessTypeId, AccessType::getOrganisationProfileId)
+        .containsExactly(
+            tuple("TEST_ACCESS_TYPE", "SOLICITOR_PROFILE"),
+            tuple("TEST_ACCESS_TYPE", "LOCALAUTH_PROFILE"));
+    assertThat(resolved.getAccessTypeRoles())
+        .extracting(AccessTypeRole::getAccessTypeId, AccessTypeRole::getOrganisationProfileId)
+        .containsExactly(
+            tuple("TEST_ACCESS_TYPE", "SOLICITOR_PROFILE"),
+            tuple("TEST_ACCESS_TYPE", "LOCALAUTH_PROFILE"));
+  }
+
+  /** A role carrying one access type across two organisation profiles. */
+  private enum MultiProfileRole implements HasRole {
+    ATTACHED;
+
+    @Override
+    public String getRole() {
+      return "[ATTACHED]";
+    }
+
+    @Override
+    public String getCaseTypePermissions() {
+      return "CRU";
+    }
+
+    @Override
+    public List<CCDAccessGroup> getAccessGroups() {
+      return List.of(
+          new TestAccessGroup(UserRole.CCD_SOLICITOR, List.of("access-profile"), "SOLICITOR_PROFILE"),
+          new TestAccessGroup(UserRole.CCD_SOLICITOR, List.of("access-profile"), "LOCALAUTH_PROFILE"));
+    }
+  }
+
   /** A role whose access group never resolves its caseAssignedRoleField. */
   private enum UnresolvedRole implements HasRole {
     ATTACHED;
@@ -149,8 +203,8 @@ public class UnitTest {
     }
 
     @Override
-    public CCDAccessGroup getAccessGroup() {
-      return new TestAccessGroup(null, List.of("access-profile"));
+    public List<CCDAccessGroup> getAccessGroups() {
+      return List.of(new TestAccessGroup(null, List.of("access-profile")));
     }
   }
 
@@ -169,13 +223,17 @@ public class UnitTest {
     }
 
     @Override
-    public CCDAccessGroup getAccessGroup() {
-      return new TestAccessGroup(UserRole.CASE_ACCESS_APPROVER_GROUP, List.of());
+    public List<CCDAccessGroup> getAccessGroups() {
+      return List.of(new TestAccessGroup(UserRole.CASE_ACCESS_APPROVER_GROUP, List.of()));
     }
   }
 
-  private record TestAccessGroup(HasRole caseAssignedRoleField, List<String> accessProfiles)
-      implements CCDAccessGroup {
+  private record TestAccessGroup(HasRole caseAssignedRoleField, List<String> accessProfiles,
+                                 String organisationProfileId) implements CCDAccessGroup {
+
+    TestAccessGroup(HasRole caseAssignedRoleField, List<String> accessProfiles) {
+      this(caseAssignedRoleField, accessProfiles, "SOLICITOR_PROFILE");
+    }
 
     @Override
     public String getAccessTypeId() {
@@ -184,7 +242,7 @@ public class UnitTest {
 
     @Override
     public String getOrganisationProfileId() {
-      return "SOLICITOR_PROFILE";
+      return organisationProfileId;
     }
 
     @Override

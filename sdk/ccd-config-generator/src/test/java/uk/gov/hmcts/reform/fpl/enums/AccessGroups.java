@@ -6,9 +6,14 @@ import uk.gov.hmcts.ccd.sdk.api.CCDAccessGroup;
 import uk.gov.hmcts.ccd.sdk.api.HasRole;
 
 /**
- * Organisational access groups declared as enum constants. A role attaches to one of these via
- * {@link UserRole#getAccessGroup()}; the SDK then derives the AccessType + AccessTypeRole rows, plus
+ * Organisational access groups declared as enum constants. A role attaches to these via
+ * {@link UserRole#getAccessGroups()}; the SDK then derives the AccessType + AccessTypeRole rows, plus
  * the group role's RoleToAccessProfiles row.
+ *
+ * <p>The two constants here share an {@code accessTypeId} and differ only by organisation profile,
+ * covering the case the definition store treats as two distinct access types — its
+ * {@code AccessTypesValidator} keys on {@code (caseType, jurisdiction, accessTypeId,
+ * organisationProfileId)} — and which earlier collapsed to a single generated row.</p>
  *
  * <p>Both role-valued members point back into {@link UserRole}, which references this enum, so both
  * are implemented as methods rather than constructor arguments: a constructor argument would be read
@@ -24,6 +29,7 @@ import uk.gov.hmcts.ccd.sdk.api.HasRole;
 public enum AccessGroups implements CCDAccessGroup {
 
   SOLICITOR_ORG_POLICY(
+      "org-policy-access",
       "SOLICITOR_PROFILE",
       true,
       true,
@@ -33,8 +39,22 @@ public enum AccessGroups implements CCDAccessGroup {
       1,
       List.of("access-profile"),
       true,
+      "PUBLICLAW:CARE_SUPERVISION_EPO:caseworker-approver-group:$ORGID$"),
+
+  LOCAL_AUTHORITY_ORG_POLICY(
+      "org-policy-access",
+      "LOCALAUTH_PROFILE",
+      true,
+      true,
+      true,
+      "Local authority access type description",
+      "Local authority access type hint",
+      2,
+      List.of("access-profile"),
+      true,
       "PUBLICLAW:CARE_SUPERVISION_EPO:caseworker-approver-group:$ORGID$");
 
+  private final String accessTypeId;
   private final String organisationProfileId;
   private final boolean accessMandatory;
   private final boolean accessDefault;
@@ -46,10 +66,11 @@ public enum AccessGroups implements CCDAccessGroup {
   private final boolean groupAccessEnabled;
   private final String caseAccessGroupIdTemplate;
 
-  AccessGroups(String organisationProfileId, boolean accessMandatory, boolean accessDefault,
-               boolean display, String description, String hintText, int displayOrder,
-               List<String> groupRoleAccessProfiles, boolean groupAccessEnabled,
+  AccessGroups(String accessTypeId, String organisationProfileId, boolean accessMandatory,
+               boolean accessDefault, boolean display, String description, String hintText,
+               int displayOrder, List<String> groupRoleAccessProfiles, boolean groupAccessEnabled,
                String caseAccessGroupIdTemplate) {
+    this.accessTypeId = accessTypeId;
     this.organisationProfileId = organisationProfileId;
     this.accessMandatory = accessMandatory;
     this.accessDefault = accessDefault;
@@ -60,11 +81,6 @@ public enum AccessGroups implements CCDAccessGroup {
     this.groupRoleAccessProfiles = groupRoleAccessProfiles;
     this.groupAccessEnabled = groupAccessEnabled;
     this.caseAccessGroupIdTemplate = caseAccessGroupIdTemplate;
-  }
-
-  @Override
-  public String getAccessTypeId() {
-    return name();
   }
 
   @Override

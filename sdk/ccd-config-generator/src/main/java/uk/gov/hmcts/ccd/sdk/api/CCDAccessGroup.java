@@ -8,8 +8,12 @@ import java.util.List;
  *
  * <p>A single constant carries the whole {@code AccessType} row plus the group-level portion of the
  * {@code AccessTypeRole} row. The per-role {@code OrganisationalRoleName} comes from the
- * {@link HasRole} that attaches to it via {@link HasRole#getAccessGroup()}, so one constant can be
- * shared by several roles.</p>
+ * {@link HasRole} that attaches to it via {@link HasRole#getAccessGroups()}, so one constant can be
+ * shared by several roles, and one role can carry several constants.</p>
+ *
+ * <p>An access type is identified by {@code (accessTypeId, organisationProfileId)}, so the same
+ * logical access type offered to several organisation profiles needs one constant per profile,
+ * all of them typically attached to the same role.</p>
  *
  * <p>Every role-valued member is a {@link HasRole} rather than a free-text name, so a group
  * configuration cannot reference a role that does not exist. All of them — the organisational role
@@ -63,7 +67,7 @@ public interface CCDAccessGroup {
    *
    * <p><strong>Implement this as a method, not a constructor argument.</strong> The role returned
    * here lives in the case's role class, which in turn references this access group via
-   * {@link HasRole#getAccessGroup()} — a circular static initialisation. A role captured in a
+   * {@link HasRole#getAccessGroups()} — a circular static initialisation. A role captured in a
    * constructor argument reads {@code null} in whichever class initialises second, because the JVM
    * does not re-enter an in-progress {@code <clinit>}. A method body is not evaluated until build
    * time, by which point both enums are fully initialised:</p>
