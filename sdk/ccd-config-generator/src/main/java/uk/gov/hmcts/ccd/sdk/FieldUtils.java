@@ -19,10 +19,23 @@ import uk.gov.hmcts.ccd.sdk.api.CCD;
 public class FieldUtils {
 
   public static boolean isFieldIgnored(Field field) {
-    CCD cf = field.getAnnotation(CCD.class);
+    return isFieldIgnored(field.getDeclaringClass(), field);
+  }
+
+  /**
+   * Whether this field contributes no rows when reached through {@code owner} — {@code @JsonIgnore},
+   * {@code @CCD(ignore = true)} or an inactive {@code @CCD(gate)}, taking {@code owner}'s
+   * {@code @CCD(member)} override into account (see {@link CCD#member()}).
+   *
+   * @param owner the class the field is being reached through
+   * @param field the reflected case-data field
+   * @return true when the field is not part of the generated definition here
+   */
+  public static boolean isFieldIgnored(Class<?> owner, Field field) {
+    CCD cf = ccdAnnotation(owner, field);
 
     return null != field.getAnnotation(JsonIgnore.class) || (null != cf && cf.ignore())
-        || isFieldGatedOff(field);
+        || (null != cf && !EnvironmentGate.matches(cf.gate()));
   }
 
   /**
@@ -36,6 +49,58 @@ public class FieldUtils {
   public static boolean isFieldGatedOff(Field field) {
     CCD cf = field.getAnnotation(CCD.class);
     return null != cf && !EnvironmentGate.matches(cf.gate());
+  }
+
+  /**
+   * The {@code @CCD} configuration for this field as reached through {@code owner}: the class-level
+   * {@code @CCD(member = "<name>")} override declared by {@code owner} or a subclass of the field's
+   * declaring class, else the field's own annotation.
+   *
+   * <p>An override REPLACES rather than merges with the field's annotation, so the subclass states
+   * the member's whole configuration and nothing carries over invisibly — the same all-or-nothing
+   * rule as re-declaring the field would give. See {@link CCD#member()} for why the class-level form
+   * exists.
+   *
+   * @param owner the class the field is being reached through
+   * @param field the reflected case-data field
+   * @return the effective annotation, or null when neither form is present
+   */
+  public static CCD ccdAnnotation(Class<?> owner, Field field) {
+    Class<?> declaring = field.getDeclaringClass();
+    // Only a class BELOW the declaration can override it, and the nearest such class wins.
+    for (Class<?> c = owner; c != null && c != declaring; c = c.getSuperclass()) {
+      for (CCD candidate : c.getDeclaredAnnotationsByType(CCD.class)) {
+        if (candidate.member().equals(field.getName())) {
+          return candidate;
+        }
+      }
+    }
+    return field.getAnnotation(CCD.class);
+  }
+
+  /**
+   * Fails generation when a class-level {@code @CCD(member)} names nothing it can configure: a field
+   * the class declares itself (annotate it directly), or one no supertype declares (a typo, or a
+   * member since renamed). Either way the override is silently inert, and a definition quietly
+   * missing a {@code FieldShowCondition} is far worse than a build that says so.
+   */
+  private static void validateMemberOverrides(Class<?> owner) {
+    for (Class<?> c = owner; c != null && c != Object.class; c = c.getSuperclass()) {
+      for (CCD override : c.getDeclaredAnnotationsByType(CCD.class)) {
+        if (override.member().isEmpty()) {
+          continue;
+        }
+        Field target = ReflectionUtils.findField(c, override.member());
+        if (target == null || target.getDeclaringClass() == c) {
+          throw new IllegalStateException(
+              ("@CCD(member = \"%s\") on %s must name a field a SUPERCLASS declares; %s")
+                  .formatted(override.member(), c.getName(), target == null
+                      ? "no supertype declares that field"
+                      : "%s declares it itself, so annotate the field directly"
+                          .formatted(c.getSimpleName())));
+        }
+      }
+    }
   }
 
   /**
@@ -65,6 +130,7 @@ public class FieldUtils {
    * @return its non-static, non-ignored, non-hidden fields, most-derived declaration first
    */
   public static List<Field> getCaseFields(Class caseDataClass) {
+    validateMemberOverrides(caseDataClass);
     List<Field> fields = new ArrayList<>();
     Set<String> declared = new LinkedHashSet<>();
     ReflectionUtils.doWithFields(caseDataClass,
@@ -75,7 +141,7 @@ public class FieldUtils {
         },
         field -> !Modifier.isStatic(field.getModifiers()));
     return fields.stream()
-        .filter(f -> !isFieldIgnored(f))
+        .filter(f -> !isFieldIgnored(caseDataClass, f))
         .collect(Collectors.toList());
   }
 
