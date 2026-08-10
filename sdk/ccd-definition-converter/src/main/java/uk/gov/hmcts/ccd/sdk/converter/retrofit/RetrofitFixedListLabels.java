@@ -218,8 +218,11 @@ final class RetrofitFixedListLabels {
    */
   private static Map<String, String> emittedCodes(ModelSourceIndex.Type type, FixedListModel list) {
     Map<String, String> emitted = new LinkedHashMap<>();
-    if (!redirectsItsSerialisedValue(type.decl.asEnumDeclaration())) {
-      for (EnumConstantDeclaration constant : type.decl.asEnumDeclaration().getEntries()) {
+    EnumDeclaration decl = type.decl.asEnumDeclaration();
+    if (redirectsItsSerialisedValue(decl)) {
+      emitted.putAll(serialisedCodesFromArguments(decl, list));
+    } else {
+      for (EnumConstantDeclaration constant : decl.getEntries()) {
         Annotations.find(constant, "JsonProperty")
             .flatMap(Annotations::stringValue)
             .ifPresent(pinned -> emitted.put(constant.getNameAsString(), pinned));
@@ -227,6 +230,93 @@ final class RetrofitFixedListLabels {
     }
     codePins(type, list).forEach((constant, code) -> emitted.put(constant, code));
     return emitted;
+  }
+
+  /**
+   * The code each constant of a {@code @JsonValue} enum emits, resolved from the constructor argument
+   * position that provably carries the definition's own codes.
+   *
+   * <p><b>Why this is needed.</b> A {@code @JsonValue} enum emits a constructor field, not the constant,
+   * so nothing about the constant's NAME says which row it carries — sscs's
+   * {@code SendToFirstTierActions} names {@code DECISION_REMADE} and emits {@code remade} through
+   * {@code @JsonValue toString()}. Its codes are therefore already right and it needs no code pin (which
+   * is why {@link #match} refuses it), but its LABELS still fall back to the code and the list emits
+   * {@code ListElement == ListElementCode}. Resolving the row per constant is the whole of what the label
+   * pin needs.
+   *
+   * <p><b>Resolved by evidence, not by name or ordinal.</b> A position qualifies only when the string
+   * literals passed there map constants to the definition's codes ONE-TO-ONE and cover EVERY code — that
+   * position is then literally the code column, whatever the field or parameter behind it is called.
+   * Extra constants passing something that is not a code are normal (they emit an extra row, a reported
+   * residual) and simply carry no row. Two positions that qualify but DISAGREE about which constant emits
+   * which code refuse the enum rather than pick one.
+   *
+   * <p>Nothing wrong can be written even where the {@code @JsonValue} returns some other field: the pin
+   * only ever sets {@code ListElement} to the definition's own label for the resolved row, and
+   * {@code ListElementCode} is not something a pin can move on such an enum.
+   */
+  private static Map<String, String> serialisedCodesFromArguments(
+      EnumDeclaration decl, FixedListModel list) {
+    List<EnumConstantDeclaration> entries = new ArrayList<>(decl.getEntries());
+    if (entries.isEmpty()) {
+      return Map.of();
+    }
+    int arity = entries.get(0).getArguments().size();
+    if (arity == 0) {
+      return Map.of(); // nothing is passed, so no position can carry the code
+    }
+    for (EnumConstantDeclaration entry : entries) {
+      if (entry.getArguments().size() != arity || entry.getClassBody().isNonEmpty()) {
+        return Map.of(); // mixed arity or a constant body: positions are not comparable
+      }
+    }
+    Set<String> codes = new LinkedHashSet<>();
+    for (FixedListModel.Item item : list.getItems()) {
+      if (item.getCode() != null) {
+        codes.add(item.getCode());
+      }
+    }
+    if (codes.isEmpty()) {
+      return Map.of();
+    }
+    Map<String, String> resolved = null;
+    for (int position = 0; position < arity; position++) {
+      Map<String, String> candidate = codeCarryingPosition(entries, position, codes);
+      if (candidate == null) {
+        continue;
+      }
+      if (resolved != null && !resolved.equals(candidate)) {
+        return Map.of();
+      }
+      resolved = candidate;
+    }
+    return resolved == null ? Map.of() : resolved;
+  }
+
+  /**
+   * The constant → code mapping one argument position establishes, or null when that position is not the
+   * code column: a code passed by two constants (not one-to-one) or a code no constant passes (not
+   * covering the list).
+   */
+  private static Map<String, String> codeCarryingPosition(
+      List<EnumConstantDeclaration> entries, int position, Set<String> codes) {
+    Map<String, String> byConstant = new LinkedHashMap<>();
+    Set<String> claimed = new LinkedHashSet<>();
+    for (EnumConstantDeclaration entry : entries) {
+      Expression argument = entry.getArguments().get(position);
+      if (!(argument instanceof StringLiteralExpr literal)) {
+        continue;
+      }
+      String passed = literal.asString();
+      if (!codes.contains(passed)) {
+        continue;
+      }
+      if (!claimed.add(passed)) {
+        return null;
+      }
+      byConstant.put(entry.getNameAsString(), passed);
+    }
+    return claimed.containsAll(codes) ? byConstant : null;
   }
 
   /**
@@ -257,6 +347,49 @@ final class RetrofitFixedListLabels {
    */
   static boolean canEmitTheDefinitionsCodes(ModelSourceIndex.Type type, FixedListModel list) {
     return match(type, list) != null;
+  }
+
+  /**
+   * Whether an enum reproduces a list EXACTLY — every one of the definition's codes emitted, and no row
+   * the definition does not have.
+   *
+   * <p>{@link #canEmitTheDefinitionsCodes} asks only the first half, because that is the whole question
+   * for {@code @CCD(typeParameterClass)}: naming an enum from a field makes a list REACHABLE that had no
+   * rows at all, so a superset emits the definition's rows plus some extras — strictly better than the
+   * nothing it replaces, and the extras are a reported residual. Pinning
+   * {@code @ComplexType(name = <id>)} onto a team enum is a different bargain: the pin DECIDES which enum
+   * is the list, so a superset is not an improvement on nothing, it is the definitive answer being wrong.
+   *
+   * <p><b>Why the constant set has to match, not merely cover.</b> {@code FixedListGenerator} emits one
+   * row per enum constant and offers no filter — there is no annotation, and no SDK seam, that says
+   * "these five constants are the list and those two hundred are not". So the pin's blast radius is the
+   * whole enum. sscs's {@code EventType} is the case that forces this: 261 constants modelling the
+   * service's internal event catalogue ({@code SYSTEM_MAINTENANCE}, {@code attachRoboticsJson},
+   * {@code cohQuestionDeadlineElapsed}), against a 15-row {@code eventType} picklist it shares a name
+   * with and nothing else. Pinning it emitted 246 rows CCD has never contained — 255 diff lines, over
+   * half that lane's residual, from one binding.
+   *
+   * <p><b>Refusing does not lose the list.</b> The ID falls back to the companion path, which generates
+   * an enum of exactly the definition's codes and labels, and
+   * {@link RetrofitPatchEmitter#withTypeParameterClass} names it from each referencing field with
+   * {@code @CCD(typeParameterClass)} — so the 15 rows are emitted, correctly, and the team's own enum is
+   * left entirely alone (no {@code @ComplexType}, no serialisation change, no new constants). That is the
+   * path probate and fpl already take for most of their lists.
+   *
+   * @param type the model enum a definition ID would be pinned to
+   * @param list the definition's rows for that ID
+   * @return true when the enum's constants and the list's codes are the same set
+   */
+  static boolean reproducesTheListExactly(ModelSourceIndex.Type type, FixedListModel list) {
+    Match match = match(type, list);
+    if (match == null) {
+      return false;
+    }
+    // Every constant the enum will declare once the patch is applied — those already there plus any the
+    // match plans to add — must be one the definition has a code for. Counting is enough, and is what the
+    // generator does: it walks the constants, so one row comes out per constant either way.
+    long declared = type.decl.asEnumDeclaration().getEntries().size() + match.toAdd().size();
+    return declared == match.constantByCode().size();
   }
 
   /**
