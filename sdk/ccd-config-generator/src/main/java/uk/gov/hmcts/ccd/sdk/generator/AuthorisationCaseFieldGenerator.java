@@ -2,6 +2,7 @@ package uk.gov.hmcts.ccd.sdk.generator;
 
 import static com.google.common.base.Strings.isNullOrEmpty;
 import static org.apache.commons.lang3.StringUtils.capitalize;
+import static uk.gov.hmcts.ccd.sdk.FieldUtils.ccdAnnotation;
 import static uk.gov.hmcts.ccd.sdk.FieldUtils.getCaseFields;
 import static uk.gov.hmcts.ccd.sdk.FieldUtils.getFieldId;
 import static uk.gov.hmcts.ccd.sdk.FieldUtils.isUnwrappedField;
@@ -189,8 +190,10 @@ class AuthorisationCaseFieldGenerator<T, S, R extends HasRole> implements Config
   ) {
 
     for (java.lang.reflect.Field field : getCaseFields(parent)) {
-      CCD ccdAnnotation = field.getAnnotation(CCD.class);
-      Class<? extends HasAccessControl>[] access = mergeAccess(defaultAccessControl, ccdAnnotation);
+      // Through the owner, so a class-level @CCD(member) override supplies this member's access
+      // here as it supplies its metadata -- see CCD#member().
+      CCD ccd = ccdAnnotation(parent, field);
+      Class<? extends HasAccessControl>[] access = mergeAccess(defaultAccessControl, ccd);
       JsonUnwrapped unwrapped = field.getAnnotation(JsonUnwrapped.class);
 
       if (null != unwrapped) {

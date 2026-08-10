@@ -1,11 +1,40 @@
 package uk.gov.hmcts.ccd.sdk.api;
 
+import java.lang.annotation.Repeatable;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import uk.gov.hmcts.ccd.sdk.type.FieldType;
 
 @Retention(RetentionPolicy.RUNTIME)
+@Repeatable(CCD.MemberOverrides.class)
 public @interface CCD {
+
+  /**
+   * The name of an inherited field this annotation configures, when the annotation is placed on a
+   * CLASS rather than on a field. Empty (the default) is the ordinary field-level form.
+   *
+   * <p>A field declared once on a shared superclass is one Java member but several CCD members: it
+   * emits a row under every complex type that reaches it, and a hand-written definition is free to
+   * give those rows different metadata, or to omit some of them. sscs's abstract {@code Entity}
+   * declares {@code identity}/{@code name}/{@code address}/{@code contact}/{@code organisation} for
+   * {@code Appellant}, {@code Appointee}, {@code OtherParty}, {@code Representative} and
+   * {@code JointParty} alike, and the definition puts {@code FieldShowCondition} on
+   * {@code representative}'s five rows only. A field-level annotation cannot say that — it says one
+   * thing for every subclass at once.
+   *
+   * <p>Placed on the subclass, this annotation says it for that subclass alone: it REPLACES the
+   * inherited field's own {@code @CCD} wherever rows are produced through this class (its
+   * {@code ComplexTypes} members, its {@code CaseField} rows when reached
+   * {@code @JsonUnwrapped}, and the access those rows derive), leaving every other subclass on the
+   * field's own declaration. {@code ignore = true} in this form drops the member from this class
+   * only — the shape {@code JointParty} needs, whose inherited {@code Party} members the definition
+   * has no fields for.
+   *
+   * <p>It configures an inherited member, not a declared one: a class can always annotate its own
+   * field directly. Naming a field the class declares itself, or one no supertype declares, is a
+   * configuration error and fails generation rather than silently doing nothing.
+   */
+  String member() default "";
 
   /**
    * Primary human readable description field. This property will populate different fields in different contexts:
@@ -105,4 +134,13 @@ public @interface CCD {
   int max() default Integer.MAX_VALUE;
 
   boolean retainHiddenValue() default false;
+
+  /**
+   * Container for repeated class-level {@link CCD} annotations, so one class can override several
+   * inherited members. Never written by hand — {@code @Repeatable} makes the compiler produce it.
+   */
+  @Retention(RetentionPolicy.RUNTIME)
+  @interface MemberOverrides {
+    CCD[] value();
+  }
 }

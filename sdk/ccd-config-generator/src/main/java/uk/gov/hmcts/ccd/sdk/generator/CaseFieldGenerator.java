@@ -1,5 +1,6 @@
 package uk.gov.hmcts.ccd.sdk.generator;
 
+import static uk.gov.hmcts.ccd.sdk.FieldUtils.ccdAnnotation;
 import static uk.gov.hmcts.ccd.sdk.FieldUtils.getCaseFields;
 import static uk.gov.hmcts.ccd.sdk.FieldUtils.getFieldId;
 import static uk.gov.hmcts.ccd.sdk.FieldUtils.isUnwrappedField;
@@ -216,7 +217,9 @@ class CaseFieldGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
 
   private static void populateFieldMetadata(
       Map<String, Object> target, Class<?> ownerClass, Field field) {
-    CCD annotation = field.getAnnotation(CCD.class);
+    // Read through the owner, not off the field: an inherited member's configuration may be
+    // overridden per subclass by a class-level @CCD(member) -- see CCD#member().
+    CCD annotation = ccdAnnotation(ownerClass, field);
     JsonUtils.applyCcdAnnotation(target, annotation);
     JsonUtils.ensureDefaultLabel(target);
 
