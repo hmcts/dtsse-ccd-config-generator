@@ -129,8 +129,8 @@ class ConfigResolver<T, S, R extends HasRole> {
   }
 
   public static Class getComplexType(Class c, Field field) {
+    ResolvableType fieldType = ResolvableType.forField(field, c);
     if (Collection.class.isAssignableFrom(field.getType())) {
-      ResolvableType fieldType = ResolvableType.forField(field, c);
       ResolvableType elementType = fieldType.getGeneric(0);
       if (elementType.hasGenerics()) {
         elementType = elementType.getGeneric(0);
@@ -142,7 +142,18 @@ class ConfigResolver<T, S, R extends HasRole> {
       }
       return resolved;
     }
-    return field.getType();
+    // Resolve a non-collection field against the class we reached it through, exactly as the
+    // collection branch above already does. field.getType() on a field whose type is a type
+    // variable yields its ERASURE — the bound — not the type argument the subclass supplied. A
+    // generic wrapper hierarchy (sscs: AbstractDocument<D extends AbstractDocumentDetails> with a
+    // `private D value`, subclassed as AbstractDocument<SscsWelshDocumentDetails>) therefore
+    // resolved every subclass's value field to the bound: the bound became reachable and emitted
+    // its members under an ID no definition row names, while every type argument became reachable
+    // nowhere and emitted nothing at all. Only a subclass separately reachable through some
+    // concrete declaration survived. resolve() returns null for a variable no implementation class
+    // binds (a genuinely raw or unresolvable use), so fall back to the erasure there.
+    Class<?> resolved = fieldType.resolve();
+    return resolved != null ? resolved : field.getType();
   }
 
   private static Class<?> resolveGenericArgument(
