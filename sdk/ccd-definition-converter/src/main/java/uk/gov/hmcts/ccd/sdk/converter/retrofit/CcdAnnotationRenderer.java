@@ -99,6 +99,7 @@ final class CcdAnnotationRenderer {
     addString(members, "showCondition", field.getShowCondition());
     addString(members, "regex", field.getRegex());
     addString(members, "categoryID", field.getCategoryId());
+    addString(members, "displayContextParameter", field.getDisplayContextParameter());
     if (Boolean.FALSE.equals(field.getSearchable())) {
       members.add("searchable = false");
     }

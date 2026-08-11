@@ -69,6 +69,19 @@ class CcdAnnotationRendererTest {
   }
 
   @Test
+  void rendersTheDisplayContextParameter() {
+    // sscs's appellant/otherParty confidentialityRequiredConfirmedDate members: the definition puts a
+    // date format on the ComplexTypes row, and @CCD(displayContextParameter) is the only way the SDK
+    // can reproduce it on a complex-type member (that sheet has no builder).
+    FieldModel field = field()
+        .displayContextParameter("#DATETIMEDISPLAY(d MMM yyyy, h:mm:ss a)")
+        .build();
+
+    assertThat(renderer.renderMembers(field)).containsExactly(
+        "displayContextParameter = \"#DATETIMEDISPLAY(d MMM yyyy, h:mm:ss a)\"");
+  }
+
+  @Test
   void returnsNullWhenNoMemberIsWarranted() {
     FieldModel field = field().build();
     assertThat(renderer.render(field, 4)).isNull();
