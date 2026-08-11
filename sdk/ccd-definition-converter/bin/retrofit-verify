@@ -154,6 +154,23 @@ stage()  { echo; echo "########## retrofit-verify [$1] ##########"; }
 info()   { echo ">> $*"; }
 stop_if() { [[ "${STOP_AFTER}" == "$1" ]] && { info "stopping after stage '$1' as requested"; exit 0; } || true; }
 
+# Quote args for Gradle's --args= string, which Gradle splits on unquoted whitespace and unwraps
+# single/double quotes from. `printf '%q'` is WRONG here: bash escapes '!' as '\!' (history-expansion
+# safety), and Gradle passes the backslash straight through — so a negated overlay predicate
+# '!CCD_DEF_PUBLISH:Y' reached picocli as '\!CCD_DEF_PUBLISH:Y', whose leading character is no longer
+# '!'. OverlayCondition.parse then read the whole thing as a non-negated predicate on an env var
+# literally named '\!CCD_DEF_PUBLISH', which never matches: every negated overlay fragment was
+# emitted behind a guard that is false in all environments, so its events never registered.
+# Single-quoting instead (with embedded quotes escaped the POSIX way) is inert to bash history rules
+# and survives Gradle's splitter verbatim.
+gradle_args() {
+  local out="" a
+  for a in "$@"; do
+    out+="'${a//\'/\'\\\'\'}' "
+  done
+  printf '%s' "${out}"
+}
+
 # Build the shared --input / --overlay-suffix argument lists (used by both convert + verify).
 DEF_ARGS=()
 for d in "${DEFINITIONS[@]}"; do DEF_ARGS+=(--input "$(cd "$d" && pwd)"); done
@@ -436,7 +453,7 @@ for o in "${OVERLAY_ARGS[@]:-}"; do [[ -n "$o" ]] && VERIFY_ARGS+=(--overlay-suf
 info "retrofitVerify ${VERIFY_ARGS[*]}"
 set +e
 ( cd "${REPO_ROOT}" && "${GRADLEW}" -q -p sdk :ccd-definition-converter:retrofitVerify \
-    --args="$(printf '%q ' "${VERIFY_ARGS[@]}")" )
+    --args="$(gradle_args "${VERIFY_ARGS[@]}")" )
 VERIFY_RC=$?
 set -e
 
