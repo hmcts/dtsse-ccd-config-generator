@@ -62,7 +62,7 @@ class AuthorisationCaseStateGenerator<T, S, R extends HasRole> implements Config
       String enumFieldName = ((Enum)state).name();
       CCD ccd = config.getStateClass().getField(enumFieldName).getAnnotation(CCD.class);
 
-      if (null != ccd) {
+      if (null != ccd && !ccd.ignore()) {
         for (var klass : ccd.access()) {
           HasAccessControl accessHolder = BeanUtils.instantiateClass(klass);
           SetMultimap<HasRole, Permission> roleGrants = accessHolder.getGrants();
@@ -77,6 +77,13 @@ class AuthorisationCaseStateGenerator<T, S, R extends HasRole> implements Config
     for (Cell<S, R, Set<Permission>> stateRolePermission : config.getStateRolePermissions().cellSet()) {
       if (stateRolePermission.getColumnKey().toString().matches("\\[.*?\\]")) {
         // Ignore CCD roles.
+        continue;
+      }
+      // A state suppressed by @CCD(ignore) emits no State row, so it can carry no grants either —
+      // the importer would reject an AuthorisationCaseState row naming a state that does not exist.
+      // Filtered here rather than at the source so it covers grants derived from event permissions
+      // above as well as those declared on the constant's own access classes.
+      if (StateGenerator.isIgnored(config.getStateClass(), stateRolePermission.getRowKey())) {
         continue;
       }
       Map<String, Object> permission = JsonUtils.caseRow(config.getCaseType());
