@@ -701,8 +701,27 @@ class RetrofitPatchEmitterGoldenTest {
     // state with no constant, which the reuse decision itself gates on.
     assertThat(state).contains("  @CCD(label = \"Stayed by the team\")\n  STAYED,");
     assertThat(state).doesNotContain("Withdrawn");
-    // OPEN, CASE_MANAGEMENT, the team's own STAYED, CLOSED — and nothing else.
-    assertThat(state.split("@CCD\\(", -1)).hasSize(5);
+    // OPEN, CASE_MANAGEMENT, the team's own STAYED, LEGACY_COMPOSITE's ignore pin, CLOSED — and nothing
+    // else. No label is guessed for a constant with no definition row: LEGACY_COMPOSITE's annotation is
+    // the ignore pin alone (see pinsIgnoreOnAStateConstantTheDefinitionHasNoRowFor).
+    assertThat(state.split("@CCD\\(", -1)).hasSize(6);
+  }
+
+  @Test
+  void pinsIgnoreOnAStateConstantTheDefinitionHasNoRowFor() {
+    // StateGenerator emits one State row per constant with no filter, so a constant no case type declares
+    // emits a state the definition never had — sscs's @JsonEnumDefaultValue `unknown` and its legacy
+    // composite `withdrawnRevisedStruckOutLapsedState`, civil's 18. The team's own code switches on them
+    // so they cannot be deleted; @CCD(ignore = true) is how the constant declares it contributes nothing.
+    String state = patchedContent(emitPatch(), "enums/State.java");
+
+    assertThat(state).contains("  @CCD(ignore = true)\n  LEGACY_COMPOSITE,");
+    // Refused where a @CCD already exists — @CCD is not @Repeatable — even though STAYED is the same
+    // divergence. The team's annotation stands and the residual row is the honest outcome.
+    assertThat(state).contains("  @CCD(label = \"Stayed by the team\")\n  STAYED,");
+    // And a constant the definition DOES declare is never ignored, whatever else it is pinned.
+    assertThat(state).doesNotContain("ignore = true, label")
+        .doesNotContain("label = \"Case management\", ignore");
   }
 
   @Test

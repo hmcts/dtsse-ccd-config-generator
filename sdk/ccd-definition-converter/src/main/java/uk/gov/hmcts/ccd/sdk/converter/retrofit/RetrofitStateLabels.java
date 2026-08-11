@@ -3,8 +3,10 @@ package uk.gov.hmcts.ccd.sdk.converter.retrofit;
 import com.github.javaparser.ast.body.EnumConstantDeclaration;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import uk.gov.hmcts.ccd.sdk.converter.model.StateModel;
 
 /**
@@ -38,8 +40,9 @@ import uk.gov.hmcts.ccd.sdk.converter.model.StateModel;
  * <ul>
  *   <li>it already carries a {@code @CCD} annotation — team-written, or this patch already applied
  *       ({@code @CCD} is not {@code @Repeatable}, so a second one would not compile);</li>
- *   <li>the definition has no state row for it, which is a constant-set divergence reported elsewhere
- *       (sscs's {@code unknown}, civil's 18 unused states) and not a label problem;</li>
+ *   <li>the definition has no state row for it, which is a constant-set divergence and not a label
+ *       problem — {@link #ignorePins} pins {@code ignore = true} on those instead (sscs's
+ *       {@code unknown}, civil's 18 unused states);</li>
  *   <li>every column already matches the fallback the generator produces unaided — a {@code Name} equal
  *       to the state ID, a {@code Description} equal to the resolved {@code Name}, an absent
  *       {@code TitleDisplay} — in which case the annotation would be pure noise.</li>
@@ -95,6 +98,56 @@ final class RetrofitStateLabels {
       if (!members.isEmpty()) {
         pins.put(name, members);
       }
+    }
+    return pins;
+  }
+
+  /**
+   * The {@code @CCD(ignore = true)} pins for constants the definition has NO state row for — the other
+   * half of the same divergence {@link #pins} abstains on.
+   *
+   * <p>{@code StateGenerator} emits one {@code State} row per enum constant, so a team enum carrying a
+   * constant no case type declares emits a state the definition never had: sscs's {@code unknown} (an
+   * {@code @JsonEnumDefaultValue} sentinel) and {@code withdrawnRevisedStruckOutLapsedState} (a legacy
+   * composite), civil's 18. Deleting them is not open to the converter — the team's own code switches on
+   * them — and there is no per-case-type filter, so the constant must declare that it contributes nothing
+   * to the definition. That is exactly {@code @CCD(ignore = true)}, which
+   * {@code StateGenerator.isIgnored} honours (and which also drops the constant's
+   * {@code AuthorisationCaseState} rows, since a grant on a non-existent state fails to import).
+   *
+   * <p>Refused for a constant already carrying a {@code @CCD} — team-written, or this patch already
+   * applied, and {@code @CCD} is not {@code @Repeatable} so a second would not compile. Nothing here can
+   * collide with {@link #pins}: the two partition the constants on whether the definition has a row.
+   *
+   * @param type the model enum being reused as the case type's State
+   * @param states the definition's State sheet rows, as the linker modelled them
+   * @param constantByStateId CCD state ID → Java constant name, from {@link StateEnumAnalyser}
+   * @return constant name → the {@code @CCD} members to pin, empty when every constant has a state row
+   */
+  static Map<String, List<String>> ignorePins(ModelSourceIndex.Type type, List<StateModel> states,
+      Map<String, String> constantByStateId) {
+    if (type == null || states == null || constantByStateId == null || !type.isEnum()) {
+      return Map.of();
+    }
+    Set<String> declaredConstants = new LinkedHashSet<>();
+    for (StateModel state : states) {
+      String constant = constantByStateId.get(state.getId());
+      if (constant != null) {
+        declaredConstants.add(constant);
+      }
+    }
+    // An empty definition State sheet is not evidence that every constant is unused — it means the
+    // states were not read (or resolved) at all, and ignoring the whole enum would erase the sheet.
+    if (declaredConstants.isEmpty()) {
+      return Map.of();
+    }
+    Map<String, List<String>> pins = new LinkedHashMap<>();
+    for (EnumConstantDeclaration constant : type.decl.asEnumDeclaration().getEntries()) {
+      String name = constant.getNameAsString();
+      if (declaredConstants.contains(name) || Annotations.has(constant, "CCD")) {
+        continue;
+      }
+      pins.put(name, List.of("ignore = true"));
     }
     return pins;
   }

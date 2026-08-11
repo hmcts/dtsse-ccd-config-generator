@@ -9,7 +9,9 @@ import uk.gov.hmcts.ccd.sdk.api.CCD;
  * {@code @JsonProperty} so its CCD id is {@code PREPARE_FOR_HEARING} (proposal decision 3 / StateId).
  *
  * <p>{@code STAYED} additionally carries a team-written {@code @CCD}, which the State-label pin must
- * leave alone — {@code @CCD} is not {@code @Repeatable}, so a second one would not compile.
+ * leave alone — {@code @CCD} is not {@code @Repeatable}, so a second one would not compile. It also has
+ * no definition state row, so it is the refusal case for the {@code ignore = true} pin;
+ * {@code LEGACY_COMPOSITE} is the same divergence unannotated, and so takes the pin.
  */
 public enum State {
 
@@ -21,6 +23,8 @@ public enum State {
 
   @CCD(label = "Stayed by the team")
   STAYED,
+
+  LEGACY_COMPOSITE,
 
   CLOSED
 }

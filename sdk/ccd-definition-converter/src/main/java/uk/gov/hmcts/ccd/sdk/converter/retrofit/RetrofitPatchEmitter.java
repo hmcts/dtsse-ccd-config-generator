@@ -1289,7 +1289,8 @@ public final class RetrofitPatchEmitter {
   /**
    * Pins the definition's own {@code State} sheet {@code Name}/{@code TitleDisplay}/{@code Description}
    * onto each constant of the team's reused State enum, as
-   * {@code @CCD(label = …, hint = …, description = …)}.
+   * {@code @CCD(label = …, hint = …, description = …)} — and {@code @CCD(ignore = true)} on each constant
+   * the definition has no state row for at all.
    *
    * <p>Only ever runs for an enum the conversion actually REUSES as the case type's State: the
    * {@code retrofitStateConstants} map is installed by {@link RetrofitConverter} on exactly that
@@ -1314,6 +1315,15 @@ public final class RetrofitPatchEmitter {
         RetrofitStateLabels.pins(type, model.getStates(), stateConstantsByStateId);
     if (!pins.isEmpty()) {
       editsFor(byFile, type.file).annotateConstants(type.simpleName, pins);
+    }
+    // The other half of the same divergence: a constant the definition has NO state row for emits a
+    // State row the definition never had, because StateGenerator emits one per constant with no filter.
+    // The team's own code switches on those constants so they cannot be deleted — @CCD(ignore = true) is
+    // how the constant declares it contributes nothing to the definition.
+    Map<String, List<String>> ignored =
+        RetrofitStateLabels.ignorePins(type, model.getStates(), stateConstantsByStateId);
+    if (!ignored.isEmpty()) {
+      editsFor(byFile, type.file).annotateConstants(type.simpleName, ignored);
     }
   }
 
