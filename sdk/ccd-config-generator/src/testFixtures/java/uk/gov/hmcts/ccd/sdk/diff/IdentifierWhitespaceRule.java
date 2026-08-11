@@ -23,10 +23,15 @@ import java.util.Set;
 public final class IdentifierWhitespaceRule implements NormalisationRule {
 
     // Columns whose value is an identifier the importer trims: sheet IDs, cross-sheet field/event/
-    // state/tab references, and the ListElementCode/FieldTypeParameter that name a FixedList or
-    // ComplexType. Deliberately excludes prose columns (Label/ElementLabel/Value/*ShowCondition).
+    // state/tab references, and the FieldType/FieldTypeParameter/ListElementCode that name a
+    // FixedList or ComplexType. FieldType belongs here for the same reason as its sibling
+    // FieldTypeParameter — it is a lookup key into ComplexTypes/FixedLists, and the SDK necessarily
+    // emits it trimmed because it derives the name from a Java type (sscs authors both ID and
+    // FieldType of its SearchCriteria CaseField as "SearchCriteria " with a trailing space; the ID
+    // already matches across the trim, and the type reference resolves identically once imported).
+    // Deliberately excludes prose columns (Label/ElementLabel/Value/*ShowCondition).
     private static final Set<String> IDENTIFIER_COLUMNS = Set.of(
-        "ID", "ListElementCode", "FieldTypeParameter", "CaseFieldID", "CaseEventID",
+        "ID", "ListElementCode", "FieldType", "FieldTypeParameter", "CaseFieldID", "CaseEventID",
         "CaseStateID", "TabID");
 
     @Override

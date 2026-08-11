@@ -60,6 +60,7 @@ public final class NormalisingCcdConfigComparator {
         new ConflictingElementLabelsRule(),
         new CaseEventMidEventRule(),
         new CaseEventRetriesRule(),
+        new CaseTypePrintRetriesRule(),
         new CaseHistoryRule(),
         new NumericStringsRule(),
         new EmptyStringAbsentRule(),

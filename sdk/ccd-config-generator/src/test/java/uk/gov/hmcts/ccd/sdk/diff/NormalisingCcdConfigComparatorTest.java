@@ -88,6 +88,40 @@ public class NormalisingCcdConfigComparatorTest {
         assertThat(NormalisingCcdConfigComparator.compare(expected, actual).matches()).isFalse();
     }
 
+    @Test
+    public void searchPartyDateColumnCasingIsCanonicalised() {
+        // ColumnName.SEARCH_PARTY_DOB/DOD spell these SearchPartyDOB/DOD and the generator emits that
+        // casing; sscs authors SearchPartyDoB/DoD. DefinitionDataItem.findAttribute resolves the header
+        // through ColumnName.equalsColumnNameOrAlias, which compares case-insensitively, so the two
+        // spellings are one column.
+        Map<String, List<Map<String, Object>>> expected = sheets("SearchParty",
+            rows(row("CaseTypeID", "Benefit", "SearchPartyName", "appeal.appellant.name.firstName",
+                "SearchPartyDoB", "appeal.appellant.identity.dob",
+                "SearchPartyDoD", "dateOfAppellantDeath")));
+        Map<String, List<Map<String, Object>>> actual = sheets("SearchParty",
+            rows(row("CaseTypeID", "Benefit", "SearchPartyName", "appeal.appellant.name.firstName",
+                "SearchPartyDOB", "appeal.appellant.identity.dob",
+                "SearchPartyDOD", "dateOfAppellantDeath")));
+
+        ComparisonResult result = NormalisingCcdConfigComparator.compare(expected, actual);
+
+        assertThat(result.matches()).as(result.report()).isTrue();
+        assertThat(result.getAppliedRules()).anySatisfy(rule -> assertThat(rule).startsWith("KEY_ALIAS"));
+    }
+
+    @Test
+    public void differentSearchPartyDateStillFailsAcrossCasing() {
+        // Canonicalising the header must not mask a genuinely different dot-notation path.
+        Map<String, List<Map<String, Object>>> expected = sheets("SearchParty",
+            rows(row("CaseTypeID", "Benefit", "SearchPartyName", "appeal.appellant.name.firstName",
+                "SearchPartyDoB", "appeal.appellant.identity.dob")));
+        Map<String, List<Map<String, Object>>> actual = sheets("SearchParty",
+            rows(row("CaseTypeID", "Benefit", "SearchPartyName", "appeal.appellant.name.firstName",
+                "SearchPartyDOB", "appeal.appointee.identity.dob")));
+
+        assertThat(NormalisingCcdConfigComparator.compare(expected, actual).matches()).isFalse();
+    }
+
     // ---- LIVE_FROM ----
 
     @Test
@@ -2204,6 +2238,86 @@ public class NormalisingCcdConfigComparatorTest {
         assertThat(result.matches()).as(result.report()).isTrue();
         assertThat(result.getAppliedRules())
             .anySatisfy(rule -> assertThat(rule).startsWith("CASE_EVENT_MID_EVENT"));
+    }
+
+    @Test
+    public void trailingWhitespaceOnFieldTypeIsAbsorbed() {
+        // sscs authors both the ID and the FieldType of its SearchCriteria CaseField with a trailing
+        // space. FieldType is a lookup key into ComplexTypes, and the SDK derives it from a Java type
+        // so it can only ever emit the trimmed form; the importer trims every cell, so the reference
+        // resolves identically either way.
+        Map<String, List<Map<String, Object>>> expected = sheets("CaseField",
+            rows(row("ID", "SearchCriteria ", "Label", "Search Criteria",
+                "FieldType", "SearchCriteria ")));
+        Map<String, List<Map<String, Object>>> actual = sheets("CaseField",
+            rows(row("ID", "SearchCriteria", "Label", "Search Criteria",
+                "FieldType", "SearchCriteria")));
+
+        ComparisonResult result = NormalisingCcdConfigComparator.compare(expected, actual);
+
+        assertThat(result.matches()).as(result.report()).isTrue();
+        assertThat(result.getAppliedRules())
+            .anySatisfy(rule -> assertThat(rule).startsWith("IDENTIFIER_WHITESPACE"));
+    }
+
+    @Test
+    public void differingFieldTypeStillFails() {
+        // Trimming must not blunt the column: a genuinely different type reference is a real diff.
+        Map<String, List<Map<String, Object>>> expected = sheets("CaseField",
+            rows(row("ID", "note", "Label", "Note", "FieldType", "TextArea ")));
+        Map<String, List<Map<String, Object>>> actual = sheets("CaseField",
+            rows(row("ID", "note", "Label", "Note", "FieldType", "Text")));
+
+        assertThat(NormalisingCcdConfigComparator.compare(expected, actual).matches()).isFalse();
+    }
+
+    // ---- CASE_TYPE_PRINT_RETRIES ----
+
+    @Test
+    public void vestigialPrintRetriesColumnOnCaseTypeIsDropped() {
+        // probate carries RetriesTimeoutURLPrintEvent on the CaseType sheet. CaseTypeParser
+        // .parsePrintWebhook reads only PrintableDocumentsUrl and attaches no timeouts, so the
+        // importer discards the column and the SDK has no way (and no reason) to emit it.
+        Map<String, List<Map<String, Object>>> expected = sheets("CaseType",
+            rows(row("ID", "GrantOfRepresentation", "Name", "Grant of representation",
+                "PrintableDocumentsUrl", "${CCD_DEF_BASE_URL}/print",
+                "RetriesTimeoutURLPrintEvent", "5,10,15")));
+        Map<String, List<Map<String, Object>>> actual = sheets("CaseType",
+            rows(row("ID", "GrantOfRepresentation", "Name", "Grant of representation",
+                "PrintableDocumentsUrl", "${CCD_DEF_BASE_URL}/print")));
+
+        ComparisonResult result = NormalisingCcdConfigComparator.compare(expected, actual);
+
+        assertThat(result.matches()).as(result.report()).isTrue();
+        assertThat(result.getAppliedRules())
+            .anySatisfy(rule -> assertThat(rule).startsWith("CASE_TYPE_PRINT_RETRIES"));
+    }
+
+    @Test
+    public void printableDocumentsUrlDifferenceStillFails() {
+        // The rule drops only the retry column; the print URL the importer really does read is
+        // compared exactly.
+        Map<String, List<Map<String, Object>>> expected = sheets("CaseType",
+            rows(row("ID", "GrantOfRepresentation", "Name", "Grant of representation",
+                "PrintableDocumentsUrl", "${CCD_DEF_BASE_URL}/print",
+                "RetriesTimeoutURLPrintEvent", "5,10,15")));
+        Map<String, List<Map<String, Object>>> actual = sheets("CaseType",
+            rows(row("ID", "GrantOfRepresentation", "Name", "Grant of representation",
+                "PrintableDocumentsUrl", "http://legacy/print")));
+
+        assertThat(NormalisingCcdConfigComparator.compare(expected, actual).matches()).isFalse();
+    }
+
+    @Test
+    public void printRetriesOnOtherSheetsAreUntouched() {
+        // Scoped to CaseType: an unexpected column of the same name elsewhere must still surface.
+        Map<String, List<Map<String, Object>>> expected = sheets("CaseEvent",
+            rows(row("ID", "addNote", "Name", "Add note")));
+        Map<String, List<Map<String, Object>>> actual = sheets("CaseEvent",
+            rows(row("ID", "addNote", "Name", "Add note",
+                "RetriesTimeoutURLPrintEvent", "5,10,15")));
+
+        assertThat(NormalisingCcdConfigComparator.compare(expected, actual).matches()).isFalse();
     }
 
     @Test

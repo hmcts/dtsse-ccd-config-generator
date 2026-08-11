@@ -25,6 +25,14 @@ import java.util.Objects;
  * {@code CaseTypeId} while its {@code CaseField} uses {@code CaseTypeID}, yet both import into the
  * same case type). The generator always emits {@code CaseTypeID}, so the lower-case-d spelling is
  * renamed to the canonical {@code CaseTypeID} on both sides.</p>
+ *
+ * <p>The same treatment applies to the SearchParty sheet's date-of-birth/date-of-death headers.
+ * {@code ColumnName.SEARCH_PARTY_DOB}/{@code SEARCH_PARTY_DOD} spell them {@code SearchPartyDOB}/
+ * {@code SearchPartyDOD} and the generator's {@code SearchPartyGenerator} emits that casing, while
+ * sscs's definition authors them {@code SearchPartyDoB}/{@code SearchPartyDoD}. The importer reads
+ * either — {@code DefinitionDataItem.findAttribute} resolves the header through
+ * {@code ColumnName.equalsColumnNameOrAlias}, which compares with {@code equalsIgnoreCase} — so the
+ * two spellings name one column. Both sides are renamed to the canonical upper-case form.</p>
  */
 public final class KeyAliasRule implements NormalisationRule {
 
@@ -32,6 +40,11 @@ public final class KeyAliasRule implements NormalisationRule {
     private static final String ACCESS_PROFILE = "AccessProfile";
     private static final String CASE_TYPE_ID_LOWER = "CaseTypeId";
     private static final String CASE_TYPE_ID = "CaseTypeID";
+
+    // SearchParty date columns, authored either way; the importer matches headers case-insensitively.
+    private static final Map<String, String> SEARCH_PARTY_DATE_ALIASES = Map.of(
+        "SearchPartyDoB", "SearchPartyDOB",
+        "SearchPartyDoD", "SearchPartyDOD");
 
     @Override
     public String name() {
@@ -62,6 +75,28 @@ public final class KeyAliasRule implements NormalisationRule {
         if ("CaseField".equals(sheetName)) {
             canonicaliseNameToLabel(sheetName, "expected", expectedRows, recorder);
             canonicaliseNameToLabel(sheetName, "actual", actualRows, recorder);
+        }
+        if ("SearchParty".equals(sheetName)) {
+            canonicaliseSearchPartyDates(sheetName, "expected", expectedRows, recorder);
+            canonicaliseSearchPartyDates(sheetName, "actual", actualRows, recorder);
+        }
+    }
+
+    private void canonicaliseSearchPartyDates(String sheetName, String side,
+                                              List<Map<String, Object>> rows,
+                                              RuleApplications recorder) {
+        int renamed = 0;
+        for (Map<String, Object> row : rows) {
+            for (Map.Entry<String, String> alias : SEARCH_PARTY_DATE_ALIASES.entrySet()) {
+                if (row.containsKey(alias.getKey()) && !row.containsKey(alias.getValue())) {
+                    row.put(alias.getValue(), row.remove(alias.getKey()));
+                    renamed++;
+                }
+            }
+        }
+        if (renamed > 0) {
+            recorder.record(this, "canonicalised SearchParty date column casing on " + renamed
+                + " row(s) of sheet '" + sheetName + "' (" + side + ")");
         }
     }
 
