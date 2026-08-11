@@ -322,6 +322,136 @@ class JsonDefinitionReaderTest {
     assertThat(ir.rows(SheetName.CASE_TYPE)).hasSize(1);
   }
 
+  // --- inert-column tests ---
+
+  @Test
+  void keyNamingNoCcdColumnIsDroppedAndReportedAsAdvisory() throws Exception {
+    // sscs's real CaseEventToFields row for adjournCase/adjournCaseTime, trimmed: a stray comma
+    // swallowed into the key. json2xlsx builds each row as headers.map(key => record[key]) against
+    // ccd-template.xlsx, so the typo'd key matches no header, no cell is written, and the definition
+    // store never sees the value — the row's correctly-spelled ShowSummaryChangeOption is the only
+    // one that has ever applied. Reading the typo'd key would make the converter emit a definition
+    // the team's own pipeline does not produce.
+    Path tmpDir = java.nio.file.Files.createTempDirectory("reader-test");
+    java.nio.file.Files.writeString(tmpDir.resolve("CaseEventToFields.json"),
+        "[{\"CaseEventID\":\"adjournCase\",\"CaseFieldID\":\"adjournCaseTime\","
+            + "\",ShowSummaryChangeOption\":\"Y\",\"DisplayContext\":\"OPTIONAL\"}]");
+    ConversionOptions opts = optionsFor(tmpDir, Map.of());
+    GapCollector gaps = new GapCollector();
+    DefinitionIr ir = reader.read(opts, gaps);
+
+    SheetRow row = ir.rows(SheetName.CASE_EVENT_TO_FIELDS).get(0);
+    assertThat(row.getColumns()).containsOnlyKeys(
+        "CaseEventID", "CaseFieldID", "DisplayContext");
+    assertThat(gaps.getEntries()).hasSize(1);
+    assertThat(gaps.getEntries().get(0).getCategory()).isEqualTo(GapCategory.UNSUPPORTED_COLUMN);
+    assertThat(gaps.getEntries().get(0).getAction()).isEqualTo(GapAction.ADVISORY);
+    assertThat(gaps.getEntries().get(0).getSheet()).isEqualTo("CaseEventToFields");
+    assertThat(gaps.getEntries().get(0).getRowKey()).isEqualTo("adjournCase|adjournCaseTime");
+    assertThat(gaps.getEntries().get(0).getColumn()).isEqualTo(",ShowSummaryChangeOption");
+    assertThat(gaps.getEntries().get(0).getValue()).isEqualTo("Y");
+    // The punctuation makes the author's intent unambiguous, so the report names the column the row
+    // has silently never had rather than just calling the key unrecognised.
+    assertThat(gaps.getEntries().get(0).getDetail())
+        .contains("ShowSummaryChangeOption")
+        .contains("stray punctuation");
+  }
+
+  @Test
+  void columnNamesAreMatchedCaseInsensitivelyLikeTheImporter() throws Exception {
+    // ColumnName.equalsColumnNameOrAlias compares equalsIgnoreCase and json2xlsx writes under the
+    // template's own header casing, so sscs's SearchPartyDoB imports exactly as SearchPartyDOB would.
+    // Dropping it as unknown would delete a value the real definition applies.
+    Path tmpDir = java.nio.file.Files.createTempDirectory("reader-test");
+    java.nio.file.Files.writeString(tmpDir.resolve("SearchParty.json"),
+        "[{\"CaseTypeID\":\"Benefit\",\"SearchPartyDoB\":\"appellantDob\","
+            + "\"searchpartyname\":\"appellantName\"}]");
+    ConversionOptions opts = optionsFor(tmpDir, Map.of());
+    GapCollector gaps = new GapCollector();
+    DefinitionIr ir = reader.read(opts, gaps);
+
+    assertThat(ir.rows(SheetName.SEARCH_PARTY).get(0).getColumns())
+        .containsOnlyKeys("CaseTypeID", "SearchPartyDoB", "searchpartyname");
+    assertThat(gaps.getEntries()).isEmpty();
+  }
+
+  @Test
+  void authorsInlineDocumentationIsDroppedWithoutAGapEntry() throws Exception {
+    // Civil annotates rows with _Comment/_Category/_Definition and fpl with Comment/Comments; these
+    // are as inert as a typo but deliberately so. Reporting several hundred of them would bury the
+    // handful of findings that are real, so they are dropped silently.
+    Path tmpDir = java.nio.file.Files.createTempDirectory("reader-test");
+    java.nio.file.Files.writeString(tmpDir.resolve("CaseField.json"),
+        "[{\"ID\":\"applicantName\",\"_Comment\":\"why\",\"Comment\":\"who\","
+            + "\"Comments\":\"when\",\"comment_\":\"where\",\"_Category\":\"party\"}]");
+    ConversionOptions opts = optionsFor(tmpDir, Map.of());
+    GapCollector gaps = new GapCollector();
+    DefinitionIr ir = reader.read(opts, gaps);
+
+    assertThat(ir.rows(SheetName.CASE_FIELD).get(0).getColumns()).containsOnlyKeys("ID");
+    assertThat(gaps.getEntries()).isEmpty();
+  }
+
+  @Test
+  void json2xlsxStageColumnsSurviveDespiteNotBeingTemplateHeaders() throws Exception {
+    // AccessControl/UserRoles/UserRole match no header in ccd-template.xlsx, but they are not inert:
+    // ccd-definition-processor's access-control-transformer runs BEFORE updateSheetDataJson and
+    // expands them into per-role rows, renaming UserRole to AccessProfile. Dropping them would
+    // discard every access grant in an fpl-style definition.
+    Path tmpDir = java.nio.file.Files.createTempDirectory("reader-test");
+    java.nio.file.Files.writeString(tmpDir.resolve("AuthorisationCaseField.json"),
+        "[{\"CaseFieldID\":\"applicantName\",\"UserRoles\":[\"caseworker\"],\"CRUD\":\"CRU\"}]");
+    ConversionOptions opts = optionsFor(tmpDir, Map.of());
+    GapCollector gaps = new GapCollector();
+    DefinitionIr ir = reader.read(opts, gaps);
+
+    assertThat(ir.rows(SheetName.AUTHORISATION_CASE_FIELD).get(0).getColumns())
+        .containsOnlyKeys("CaseFieldID", "UserRoles", "CRUD");
+    assertThat(gaps.getEntries()).isEmpty();
+  }
+
+  @Test
+  void inertKeysInFragmentDirectoriesAreDroppedToo() throws Exception {
+    // The fragment layout is where sscs and fpl actually author their rows, so the drop cannot live
+    // on the flat-file path alone.
+    Path tmpDir = java.nio.file.Files.createTempDirectory("reader-test");
+    Path sheetDir = java.nio.file.Files.createDirectory(tmpDir.resolve("CaseEventToFields"));
+    java.nio.file.Files.writeString(sheetDir.resolve("writeAdjournmentNotice.json"),
+        "[{\"CaseEventID\":\"adjournCase\",\"CaseFieldID\":\"adjournCaseTime\","
+            + "\",ShowSummaryChangeOption\":\"Y\"}]");
+    ConversionOptions opts = optionsFor(tmpDir, Map.of());
+    GapCollector gaps = new GapCollector();
+    DefinitionIr ir = reader.read(opts, gaps);
+
+    assertThat(ir.rows(SheetName.CASE_EVENT_TO_FIELDS).get(0).getColumns())
+        .containsOnlyKeys("CaseEventID", "CaseFieldID");
+    assertThat(gaps.getEntries()).hasSize(1);
+    assertThat(gaps.getEntries().get(0).getDetail())
+        .contains("writeAdjournmentNotice.json");
+  }
+
+  @Test
+  void misspeltColumnNameIsReportedWithoutGuessingTheIntendedColumn() throws Exception {
+    // fpl's FieldShownCondition and civil's PageShowShowCondition misspell the column name itself,
+    // not its punctuation. They are dropped for the same reason, but the report makes no claim about
+    // which column was meant: a nearest-name search over 119 columns sounds equally confident when
+    // it is wrong, and the reader has no basis to distinguish a misspelling from an unrelated key.
+    Path tmpDir = java.nio.file.Files.createTempDirectory("reader-test");
+    java.nio.file.Files.writeString(tmpDir.resolve("CaseEventToFields.json"),
+        "[{\"CaseEventID\":\"e\",\"CaseFieldID\":\"f\",\"FieldShownCondition\":\"x = \\\"y\\\"\"}]");
+    ConversionOptions opts = optionsFor(tmpDir, Map.of());
+    GapCollector gaps = new GapCollector();
+    DefinitionIr ir = reader.read(opts, gaps);
+
+    assertThat(ir.rows(SheetName.CASE_EVENT_TO_FIELDS).get(0).getColumns())
+        .containsOnlyKeys("CaseEventID", "CaseFieldID");
+    assertThat(gaps.getEntries()).hasSize(1);
+    assertThat(gaps.getEntries().get(0).getColumn()).isEqualTo("FieldShownCondition");
+    assertThat(gaps.getEntries().get(0).getDetail())
+        .contains("names no CCD column")
+        .doesNotContain("stray punctuation");
+  }
+
   // --- malformed JSON test ---
 
   @Test

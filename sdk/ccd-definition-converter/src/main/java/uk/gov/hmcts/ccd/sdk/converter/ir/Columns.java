@@ -130,6 +130,15 @@ public final class Columns {
   public static final String SEARCH_PARTY_POST_CODE = "SearchPartyPostCode";
   public static final String SEARCH_PARTY_DOB = "SearchPartyDOB";
   public static final String SEARCH_PARTY_DOD = "SearchPartyDOD";
+  /**
+   * Both casings occur in real definitions (sscs authors {@code SearchPartyDoB}, others
+   * {@code SearchPartyDOB}) and the importer accepts either: {@code ColumnName
+   * .equalsColumnNameOrAlias} matches {@code equalsIgnoreCase}, and json2xlsx writes the value
+   * under the template's own upper-case header regardless. Read via these aliases so a
+   * lower-case-'o' definition still wires the builder call.
+   */
+  public static final String SEARCH_PARTY_DOB_ALIAS = "SearchPartyDoB";
+  public static final String SEARCH_PARTY_DOD_ALIAS = "SearchPartyDoD";
   public static final String SEARCH_PARTY_COLLECTION_FIELD_NAME = "SearchPartyCollectionFieldName";
   public static final String OTHER_CASE_REFERENCE = "OtherCaseReference";
   public static final String EVENT_ENABLING_CONDITION = "EventEnablingCondition";

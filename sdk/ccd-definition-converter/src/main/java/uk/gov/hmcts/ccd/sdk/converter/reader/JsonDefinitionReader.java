@@ -47,6 +47,10 @@ import uk.gov.hmcts.ccd.sdk.converter.model.gap.GapEntry;
  * {@code ChangeHistory.json}) are recorded as {@link GapCategory#UNSUPPORTED_SHEET} gaps and
  * skipped. Non-JSON files and non-sheet directories (e.g. {@code env/}) are silently ignored.
  *
+ * <p>Row keys that name no CCD column are dropped as the row is read, because {@code json2xlsx}
+ * writes no cell for them and the definition store therefore never sees their values — see
+ * {@link #dropInertColumns} and {@link ColumnVocabulary}.
+ *
  * <p>A flat {@code X.json} file that collides with a sibling {@code X/} fragment directory is
  * skipped entirely, mirroring {@code json2xlsx}: it groups sources by literal base name and, per
  * group, writes the whole table to the sheet's fixed anchor cell, so the directory's later write
@@ -117,6 +121,7 @@ public class JsonDefinitionReader implements DefinitionReader {
     Set<String> overlayTags = extractOverlayTags(baseName, options);
     List<Map<String, Object>> parsed = parseJsonFile(file);
     for (Map<String, Object> col : parsed) {
+      dropInertColumns(sheet.get(), col, file, gaps);
       rows.put(sheet.get(), SheetRow.builder()
           .sheet(sheet.get())
           .columns(col)
@@ -143,6 +148,7 @@ public class JsonDefinitionReader implements DefinitionReader {
       Set<String> overlayTags = extractOverlayTags(fragmentName, options);
       List<Map<String, Object>> parsed = parseJsonFile(fragment);
       for (Map<String, Object> col : parsed) {
+        dropInertColumns(sheet, col, fragment, gaps);
         rows.put(sheet, SheetRow.builder()
             .sheet(sheet)
             .columns(col)
@@ -151,6 +157,75 @@ public class JsonDefinitionReader implements DefinitionReader {
             .build());
       }
     }
+  }
+
+  /**
+   * Removes the row's keys that name no CCD column, so the IR carries only what the real import
+   * would see.
+   *
+   * <p>{@code json2xlsx} builds each spreadsheet row as {@code headers.map(key => record[key])}
+   * against {@code ccd-template.xlsx}'s header row, so a key naming no column contributes no cell —
+   * its value never reaches the xlsx, let alone the definition store. Honouring one here would make
+   * the converter emit a definition the team's own pipeline does not produce; leaving it on the row
+   * would put it on the round-trip's expected side, which the real xlsx never had. sscs's
+   * {@code CaseEventToFields} row for {@code adjournCase/adjournCaseTime} carries both
+   * {@code ",ShowSummaryChangeOption"} and a correctly-spelled {@code ShowSummaryChangeOption} — the
+   * typo'd twin has been doing nothing since it was written, and after this so has the converter's
+   * reading of it.
+   *
+   * <p>Reported as {@link GapCategory#UNSUPPORTED_COLUMN} / {@link GapAction#ADVISORY}: advisory
+   * because there is nothing to reproduce or pass through — the value is unreachable by
+   * construction, so the finding is about the definition, not about a converter limitation. The
+   * authors' own inline documentation is dropped silently ({@link ColumnVocabulary#isDocumentation}),
+   * since several hundred {@code _Comment} entries would bury the handful of real findings.
+   *
+   * @param sheet the sheet the row belongs to
+   * @param row the parsed row, mutated in place
+   * @param source the file the row came from, for the gap detail
+   * @param gaps the collector to record droppings on
+   */
+  private void dropInertColumns(
+      SheetName sheet, Map<String, Object> row, Path source, GapCollector gaps) {
+    for (String key : ColumnVocabulary.unknownKeys(row)) {
+      Object value = row.remove(key);
+      if (ColumnVocabulary.isDocumentation(key)) {
+        continue;
+      }
+      String intended = ColumnVocabulary.punctuationTypoOf(key);
+      gaps.add(GapEntry.builder()
+          .sheet(sheet.getName())
+          .rowKey(rowKeyOf(row))
+          .column(key)
+          .value(value == null ? null : String.valueOf(value))
+          .category(GapCategory.UNSUPPORTED_COLUMN)
+          .action(GapAction.ADVISORY)
+          .detail(intended == null
+              ? "Key '" + key + "' in " + source.getFileName() + " names no CCD column, so"
+                  + " json2xlsx writes no cell for it and the definition store never sees the value."
+                  + " Dropped; it has no effect on the imported definition either."
+              : "Key '" + key + "' in " + source.getFileName() + " is '" + intended + "' with stray"
+                  + " punctuation, so json2xlsx matches no header and writes no cell: this row has"
+                  + " never had the " + intended + " the definition appears to set. Dropped to match"
+                  + " the real import; fix the key in the definition to actually apply it.")
+          .build());
+    }
+  }
+
+  /**
+   * A best-effort human-readable key for a row, for gap reporting only: the row's own {@code ID}, or
+   * the event/field pair that identifies the per-sheet row shapes carrying most inert keys.
+   */
+  private String rowKeyOf(Map<String, Object> row) {
+    Object id = row.get("ID");
+    if (id != null) {
+      return String.valueOf(id);
+    }
+    Object event = row.get("CaseEventID");
+    Object field = row.get("CaseFieldID");
+    if (event != null && field != null) {
+      return event + "|" + field;
+    }
+    return String.valueOf(field != null ? field : row.get("TabID"));
   }
 
   private List<Path> collectFragmentFiles(Path dir) {
