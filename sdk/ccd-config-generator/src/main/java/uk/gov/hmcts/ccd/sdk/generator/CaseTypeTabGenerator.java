@@ -28,7 +28,10 @@ class CaseTypeTabGenerator<T, S, R extends HasRole> implements ConfigGenerator<T
 
     int tabDisplayOrder = 1;
     // For backwards compatibility we automatically define a history tab as the first tab if the app doesn't set one.
-    if (config.getTabs().stream().noneMatch(x -> x.getTabID().equals("CaseHistory"))) {
+    // The check is on the tab ID, so a case type that shows caseHistory from a differently-named tab
+    // of its own still gets this one and ends up with two History tabs; noCaseHistoryTab() opts out.
+    if (!config.isNoCaseHistoryTab()
+        && config.getTabs().stream().noneMatch(x -> x.getTabID().equals("CaseHistory"))) {
       result.add(buildField(config.getCaseType(), "CaseHistory", "caseHistory", "History", 1, 1, ""));
       tabDisplayOrder = 2;
     }

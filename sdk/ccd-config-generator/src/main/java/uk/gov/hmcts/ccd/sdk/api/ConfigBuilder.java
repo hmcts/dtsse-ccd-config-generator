@@ -111,6 +111,24 @@ public interface ConfigBuilder<T, S, R extends HasRole> {
   }
 
   /**
+   * Suppress the {@code CaseHistory} tab the generator adds when no tab declares that ID.
+   *
+   * <p>By default {@code CaseTypeTabGenerator} prepends a tab {@code TabID=CaseHistory} placing the
+   * {@code caseHistory} field, for backwards compatibility with case types that never declared one.
+   * The check is on the tab's ID, so a case type that shows case history from tabs of its own — sscs
+   * places {@code caseHistory} on a per-role {@code eventHistory_<role>} tab — still gets the
+   * injected tab, and the service renders two History tabs where the hand-written definition had
+   * one. Call this to opt out; the {@code caseHistory} {@code CaseField} row and its authorisations
+   * are unaffected, so the field remains available to whichever tab does place it.
+   *
+   * <p>Only the injected tab is suppressed: a case type that declares {@code TabID=CaseHistory}
+   * itself is emitted as declared whether or not this is called.
+   */
+  default void noCaseHistoryTab() {
+    // Default no-op for backward compatibility; implementations may override.
+  }
+
+  /**
    * Emit the {@code JurisdictionID} column on generated {@code CaseRoles} rows. By default the
    * column is omitted so that output is byte-identical to before this option existed; call this to
    * opt in when a definition needs the jurisdiction stamped on each case role.
