@@ -52,4 +52,32 @@ final class OverlayResolver {
     }
     return options.getOverlaySuffixes().get(suffix);
   }
+
+  /**
+   * Whether a row may contribute to a sheet the SDK emits unconditionally — true for a base row and
+   * for a suffixed row whose predicate is active in the convert-time environment.
+   *
+   * <p>Several sheets have no per-row environment switch in the SDK at all: role-to-access-profile
+   * mappings, state authorisations, search-party definitions and per-field event placements are
+   * emitted from static configuration, so a definition that splits them across mutually-exclusive
+   * overlay fragments (sscs's {@code -nonWA} against {@code -WA-nonprod}) can only be reproduced by
+   * admitting the fragment that the build being converted would actually have used. Admitting both
+   * halves produces a definition that is wrong in every environment: the two collide and the loser's
+   * rows survive as grants and placements a real build never emits.
+   *
+   * <p>This is the same rule the case-type grant loop and the overlay-only {@code CaseField} path
+   * already apply; it is factored here because six further row loops need it identically.
+   *
+   * @param overlayTags the row's overlay tags
+   * @param options the conversion configuration carrying the suffix-to-predicate map
+   * @return true when the row contributes, false when its overlay predicate is inactive
+   */
+  static boolean isActiveRow(Set<String> overlayTags, ConversionOptions options) {
+    String suffix = suffixFor(overlayTags, options);
+    if (suffix == null) {
+      return true;
+    }
+    OverlayCondition condition = conditionFor(suffix, options);
+    return condition == null || condition.isActive();
+  }
 }

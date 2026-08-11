@@ -87,11 +87,21 @@ final class RoundTripRunner {
         .allowGaps(true)
         .build();
 
-    Converter converter = ConverterFactory.create(options);
-    converter.convert(options);
+    // Conversion itself must run under the fixture's environment, not just generation: sheets the SDK
+    // emits unconditionally (role mappings, state authorisations, event field placements) are resolved
+    // at convert time, so the linker drops the overlay half a real build of THIS environment would not
+    // have used (see OverlayResolver.isActiveRow). Judging those predicates against the harness's
+    // ambient environment instead would emit the wrong half — for a prod fixture, every -prod fragment.
+    Map<String, String> env = fixture.env();
+    env.forEach(System::setProperty);
+    try {
+      Converter converter = ConverterFactory.create(options);
+      converter.convert(options);
+    } finally {
+      env.keySet().forEach(System::clearProperty);
+    }
 
     ClassLoader generated = GeneratedSourceCompiler.compile(srcOut, classesOut);
-    Map<String, String> env = fixture.env();
     env.forEach(System::setProperty);
     try {
       GeneratorRunner.generate(

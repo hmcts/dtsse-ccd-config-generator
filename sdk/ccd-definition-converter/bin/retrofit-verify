@@ -187,10 +187,16 @@ CONVERT_ARGS=(
 )
 for o in "${CONV_OVERLAY_ARGS[@]:-}"; do [[ -n "$o" ]] && CONVERT_ARGS+=("$o"); done
 for h in "${TYPE_HINTS[@]:-}"; do [[ -n "$h" ]] && CONVERT_ARGS+=(--type-package-hint "$h"); done
+# Conversion must target the same environment stage 4 generates under. Sheets the SDK emits
+# unconditionally (role mappings, state authorisations, event field placements) are resolved at
+# convert time, keeping only the overlay half a real build of THIS environment used — so a converter
+# judging those predicates against the ambient shell would bake in the wrong half and the diff would
+# blame the SDK for a conversion choice.
+for e in "${ENV_ARGS[@]}"; do CONVERT_ARGS+=(--env "$e"); done
 
 info "convert-ccd-definition ${CONVERT_ARGS[*]}"
 ( cd "${REPO_ROOT}" && "${GRADLEW}" -q -p sdk :ccd-definition-converter:run \
-    --args="$(printf '%q ' "${CONVERT_ARGS[@]}")" )
+    --args="$(gradle_args "${CONVERT_ARGS[@]}")" )
 [[ -f "${PATCH_FILE}" ]] || die "converter did not emit ${PATCH_FILE}"
 PATCH_FILES_TOUCHED=$(grep -c '^--- ' "${PATCH_FILE}" || true)
 info "emitted retrofit.patch (${PATCH_FILES_TOUCHED} file(s)) + companion sources under ${COMPANION_SRC}"

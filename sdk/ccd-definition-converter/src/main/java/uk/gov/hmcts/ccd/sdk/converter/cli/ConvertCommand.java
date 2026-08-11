@@ -126,6 +126,16 @@ public class ConvertCommand implements Callable<Integer> {
       description = "Complete with unresolvable gaps reported instead of failing.")
   boolean allowGaps;
 
+  @Option(names = "--env",
+      description = "Environment the converted definition targets, KEY=VALUE (may repeat). Sheets "
+          + "the SDK emits unconditionally (role-to-access-profile mappings, state authorisations, "
+          + "event field placements) are resolved at conversion time, keeping only the overlay "
+          + "fragment a real build of this environment would have used — so a definition that "
+          + "splits them across mutually-exclusive fragments needs the target environment here. "
+          + "Applied as system properties, which OverlayCondition reads before the real "
+          + "environment. Without it, those predicates are judged against the ambient environment.")
+  Map<String, String> env = new LinkedHashMap<>();
+
   public static void main(String[] args) {
     System.exit(new CommandLine(new ConvertCommand())
         .setCaseInsensitiveEnumValuesAllowed(true)
@@ -134,6 +144,9 @@ public class ConvertCommand implements Callable<Integer> {
 
   @Override
   public Integer call() {
+    // Set before any option-building so every overlay predicate — in both the retrofit and the
+    // plain conversion path — resolves against the requested environment.
+    env.forEach(System::setProperty);
     if (retrofit) {
       return runRetrofit();
     }

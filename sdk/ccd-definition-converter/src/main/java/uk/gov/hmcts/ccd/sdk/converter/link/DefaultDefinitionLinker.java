@@ -9,6 +9,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.function.Consumer;
+import java.util.stream.Collectors;
 import uk.gov.hmcts.ccd.sdk.converter.api.ConversionOptions;
 import uk.gov.hmcts.ccd.sdk.converter.api.DefinitionLinker;
 import uk.gov.hmcts.ccd.sdk.converter.ir.AuthorisationRows;
@@ -111,23 +112,23 @@ public class DefaultDefinitionLinker implements DefinitionLinker {
         buildCaseFields(ir, caseTypeId, options, gaps, enumResolver, complexResolver);
     final List<StateModel> states = buildStates(ir, caseTypeId, gaps);
     List<EventModel> events = buildEvents(ir, caseTypeId, options, gaps);
-    List<TabModel> tabs = buildTabs(ir, caseTypeId);
+    List<TabModel> tabs = buildTabs(ir, caseTypeId, options);
 
     List<SearchFieldModel> searchInput =
-        buildSearchFields(ir, caseTypeId, SheetName.SEARCH_INPUT_FIELD, false);
+        buildSearchFields(ir, caseTypeId, SheetName.SEARCH_INPUT_FIELD, false, options);
     List<SearchFieldModel> searchResult =
-        buildSearchFields(ir, caseTypeId, SheetName.SEARCH_RESULT_FIELD, false);
+        buildSearchFields(ir, caseTypeId, SheetName.SEARCH_RESULT_FIELD, false, options);
     List<SearchFieldModel> workBasketInput =
-        buildSearchFields(ir, caseTypeId, SheetName.WORK_BASKET_INPUT_FIELD, false);
+        buildSearchFields(ir, caseTypeId, SheetName.WORK_BASKET_INPUT_FIELD, false, options);
     List<SearchFieldModel> workBasketResult =
-        buildSearchFields(ir, caseTypeId, SheetName.WORK_BASKET_RESULT_FIELDS, false);
+        buildSearchFields(ir, caseTypeId, SheetName.WORK_BASKET_RESULT_FIELDS, false, options);
     final List<SearchFieldModel> searchCasesResult =
-        buildSearchFields(ir, caseTypeId, SheetName.SEARCH_CASES_RESULT_FIELDS, true);
+        buildSearchFields(ir, caseTypeId, SheetName.SEARCH_CASES_RESULT_FIELDS, true, options);
 
     final List<RoleModel> roles = buildRoles(ir, caseTypeId, options, gaps);
 
     AccessDerivation access = deriveAccessClasses(
-        ir, caseTypeId, caseFields, events, tabs,
+        ir, caseTypeId, caseFields, events, tabs, options,
         List.of(searchInput, searchResult, workBasketInput, workBasketResult), gaps);
     final List<FieldModel> caseFieldsWithAccess =
         attachAccessClasses(caseFields, access.fieldClassNames);
@@ -210,14 +211,14 @@ public class DefaultDefinitionLinker implements DefinitionLinker {
         .workBasketInputFields(workBasketInput)
         .workBasketResultFields(workBasketResult)
         .searchCasesResultFields(searchCasesResult)
-        .stateAuthorisations(rowsFor(ir, SheetName.AUTHORISATION_CASE_STATE, caseTypeId))
+        .stateAuthorisations(activeRows(ir, SheetName.AUTHORISATION_CASE_STATE, caseTypeId, options))
         .accessClasses(access.accessClasses)
         .accessSummaryNote(access.summaryNote)
-        .searchCriteria(rowsFor(ir, SheetName.SEARCH_CRITERIA, caseTypeId))
-        .searchParties(rowsFor(ir, SheetName.SEARCH_PARTY, caseTypeId))
-        .challengeQuestions(rowsFor(ir, SheetName.CHALLENGE_QUESTION, caseTypeId))
-        .roleToAccessProfiles(rowsFor(ir, SheetName.ROLE_TO_ACCESS_PROFILES, caseTypeId))
-        .categories(rowsFor(ir, SheetName.CATEGORY, caseTypeId))
+        .searchCriteria(activeRows(ir, SheetName.SEARCH_CRITERIA, caseTypeId, options))
+        .searchParties(activeRows(ir, SheetName.SEARCH_PARTY, caseTypeId, options))
+        .challengeQuestions(activeRows(ir, SheetName.CHALLENGE_QUESTION, caseTypeId, options))
+        .roleToAccessProfiles(activeRows(ir, SheetName.ROLE_TO_ACCESS_PROFILES, caseTypeId, options))
+        .categories(activeRows(ir, SheetName.CATEGORY, caseTypeId, options))
         .passthroughSheets(passthroughSheets)
         .clusteredFieldRefs(clustered.refs())
         .eventComplexTypeGroups(eventComplexTypes.groups())
@@ -1139,11 +1140,12 @@ public class DefaultDefinitionLinker implements DefinitionLinker {
       DefinitionIr ir, String caseTypeId, ConversionOptions options, GapCollector gaps) {
     List<SheetRow> eventRows = ir.rowsForCaseType(SheetName.CASE_EVENT, caseTypeId);
     Map<String, List<SheetRow>> fieldRowsByEvent =
-        groupBy(ir.rowsForCaseType(SheetName.CASE_EVENT_TO_FIELDS, caseTypeId), Columns.CASE_EVENT_ID);
+        groupBy(activeRows(ir, SheetName.CASE_EVENT_TO_FIELDS, caseTypeId, options),
+            Columns.CASE_EVENT_ID);
     Map<String, List<SheetRow>> complexRowsByEvent =
         groupBy(ir.rowsForCaseType(SheetName.CASE_EVENT_TO_COMPLEX_TYPES, caseTypeId),
             Columns.CASE_EVENT_ID);
-    Map<String, Map<String, String>> grantsByEvent = eventGrants(ir, caseTypeId);
+    Map<String, Map<String, String>> grantsByEvent = eventGrants(ir, caseTypeId, options);
 
     Set<String> usedNames = new LinkedHashSet<>();
     List<EventModel> events = new ArrayList<>();
@@ -1241,9 +1243,15 @@ public class DefaultDefinitionLinker implements DefinitionLinker {
     return candidate;
   }
 
-  private Map<String, Map<String, String>> eventGrants(DefinitionIr ir, String caseTypeId) {
+  private Map<String, Map<String, String>> eventGrants(
+      DefinitionIr ir, String caseTypeId, ConversionOptions options) {
     Map<String, Map<String, String>> grants = new LinkedHashMap<>();
     for (SheetRow row : ir.rowsForCaseType(SheetName.AUTHORISATION_CASE_EVENT, caseTypeId)) {
+      // Event grants are emitted as static .grant(...) calls, so mutually-exclusive overlay halves
+      // would otherwise both contribute and collide last-wins — see OverlayResolver.isActiveRow.
+      if (!OverlayResolver.isActiveRow(row.getOverlayTags(), options)) {
+        continue;
+      }
       Optional<String> eventId = row.getString(Columns.CASE_EVENT_ID);
       if (eventId.isEmpty()) {
         continue;
@@ -1433,9 +1441,12 @@ public class DefaultDefinitionLinker implements DefinitionLinker {
     return overrides;
   }
 
-  private List<TabModel> buildTabs(DefinitionIr ir, String caseTypeId) {
+  private List<TabModel> buildTabs(
+      DefinitionIr ir, String caseTypeId, ConversionOptions options) {
+    // Tabs are static builder calls, so an inactive overlay half must not place a field on a tab
+    // the active build never renders — see OverlayResolver.isActiveRow.
     Map<String, List<SheetRow>> byTab =
-        groupBy(ir.rowsForCaseType(SheetName.CASE_TYPE_TAB, caseTypeId), Columns.TAB_ID);
+        groupBy(activeRows(ir, SheetName.CASE_TYPE_TAB, caseTypeId, options), Columns.TAB_ID);
     List<TabModel> tabs = new ArrayList<>();
     for (Map.Entry<String, List<SheetRow>> entry : byTab.entrySet()) {
       List<SheetRow> rows = entry.getValue();
@@ -1471,9 +1482,15 @@ public class DefaultDefinitionLinker implements DefinitionLinker {
   }
 
   private List<SearchFieldModel> buildSearchFields(
-      DefinitionIr ir, String caseTypeId, SheetName sheet, boolean cases) {
+      DefinitionIr ir, String caseTypeId, SheetName sheet, boolean cases,
+      ConversionOptions options) {
     List<SearchFieldModel> fields = new ArrayList<>();
     for (SheetRow row : ir.rowsForCaseType(sheet, caseTypeId)) {
+      // These sheets are emitted from static SearchBuilder calls, so an inactive overlay half must
+      // not contribute a field the active build never shows — see OverlayResolver.isActiveRow.
+      if (!OverlayResolver.isActiveRow(row.getOverlayTags(), options)) {
+        continue;
+      }
       // Both the four SearchBuilder sheets (cases=false) and SearchCasesResultFields (cases=true)
       // now carry ListElementCode / ResultsOrdering / DisplayContextParameter (and, for cases, a
       // role/UserRole scope and the UseCase) via their per-field lambda, so every row is emitted as
@@ -1731,6 +1748,7 @@ public class DefaultDefinitionLinker implements DefinitionLinker {
       List<FieldModel> caseFields,
       List<EventModel> events,
       List<TabModel> tabs,
+      ConversionOptions options,
       List<List<SearchFieldModel>> searchSheets,
       GapCollector gaps) {
     List<String> fieldIds = caseFields.stream().map(FieldModel::getId).toList();
@@ -1738,6 +1756,12 @@ public class DefaultDefinitionLinker implements DefinitionLinker {
 
     Map<String, Map<String, String>> desired = new LinkedHashMap<>();
     for (SheetRow row : ir.rowsForCaseType(SheetName.AUTHORISATION_CASE_FIELD, caseTypeId)) {
+      // Field grants become @CCD(access) classes, which are static — so only the overlay half the
+      // build being converted would use may contribute (see OverlayResolver.isActiveRow). Admitting
+      // both halves derives an access class no real build's definition matches.
+      if (!OverlayResolver.isActiveRow(row.getOverlayTags(), options)) {
+        continue;
+      }
       Optional<String> fieldId = row.getString(Columns.CASE_FIELD_ID);
       if (fieldId.isEmpty()) {
         continue;
@@ -2803,8 +2827,21 @@ public class DefaultDefinitionLinker implements DefinitionLinker {
     return sheets;
   }
 
-  private List<SheetRow> rowsFor(DefinitionIr ir, SheetName sheet, String caseTypeId) {
-    return ir.rowsForCaseType(sheet, caseTypeId);
+  /**
+   * The rows of a sheet the SDK emits unconditionally, with inactive overlay fragments dropped.
+   *
+   * <p>These sheets have no per-row environment switch in the generated config, so only the fragment
+   * a real build of this environment would have used may contribute — see
+   * {@link OverlayResolver#isActiveRow}. Reading every fragment as a base row instead makes the
+   * generated definition wrong in every environment, because mutually-exclusive halves (sscs splits
+   * its role mappings and state authorisations across {@code -nonWA} and {@code -WA-nonprod}) both
+   * survive.
+   */
+  private List<SheetRow> activeRows(
+      DefinitionIr ir, SheetName sheet, String caseTypeId, ConversionOptions options) {
+    return ir.rowsForCaseType(sheet, caseTypeId).stream()
+        .filter(row -> OverlayResolver.isActiveRow(row.getOverlayTags(), options))
+        .collect(Collectors.toList());
   }
 
   private Map<String, List<SheetRow>> groupById(List<SheetRow> rows) {

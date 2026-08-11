@@ -114,8 +114,17 @@ class RoundTripTest {
         .allowGaps(true)
         .build();
 
-    Converter converter = ConverterFactory.create(options);
-    converter.convert(options);
+    // Conversion runs under the target environment too, not only generation: sheets the SDK emits
+    // unconditionally are resolved at convert time and keep only the overlay half a real build of
+    // this environment would have used (see OverlayResolver.isActiveRow) — so a prod round-trip must
+    // convert under prod or it emits the nonprod half's rows.
+    env.forEach(System::setProperty);
+    try {
+      Converter converter = ConverterFactory.create(options);
+      converter.convert(options);
+    } finally {
+      env.keySet().forEach(System::clearProperty);
+    }
 
     ClassLoader generated = GeneratedSourceCompiler.compile(srcOut, classesOut);
     env.forEach(System::setProperty);
