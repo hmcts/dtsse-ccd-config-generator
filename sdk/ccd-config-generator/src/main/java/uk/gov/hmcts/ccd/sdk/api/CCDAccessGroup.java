@@ -7,15 +7,10 @@ import java.util.List;
  * {@link ConfigBuilder#accessType} / {@link ConfigBuilder#accessTypeRole} builder calls.
  *
  * <p>A single constant carries the whole {@code AccessType} row plus the group-level portion of the
- * {@code AccessTypeRole} row. The per-role {@code OrganisationalRoleName} comes from the
- * {@link HasRole} that attaches to it via {@link HasRole#getAccessGroup()}, so one constant can be
- * shared by several roles.</p>
- *
- * <p>Every role-valued member is a {@link HasRole} rather than a free-text name, so a group
- * configuration cannot reference a role that does not exist. Group roles are deliberately declared
- * in their own enum rather than the case's role class: they take part in no case-type authorisation,
- * so registering them as {@code UserRole}s would emit spurious {@code AuthorisationCaseType} and
- * {@code CaseRoles} rows.</p>
+ * {@code AccessTypeRole} row. The per-role {@code OrganisationalRoleName} or {@code GroupRoleName}
+ * comes from the {@link HasRole} that attaches to it via {@link HasRole#getAccessGroup()}: when
+ * {@link #isGroupAccessEnabled()} is {@code true} the role's name is emitted as
+ * {@code GroupRoleName}; otherwise it is emitted as {@code OrganisationalRoleName}.</p>
  */
 public interface CCDAccessGroup {
 
@@ -34,16 +29,6 @@ public interface CCDAccessGroup {
   String getHintText();
 
   int getDisplayOrder();
-
-  /**
-   * The group role this access type mints, emitted as {@code GroupRoleName}.
-   *
-   * <p>The definition store performs <em>no</em> referential check on this column, so a group role
-   * with no {@code RoleToAccessProfiles} mapping imports cleanly and then silently grants nothing at
-   * runtime. To close that gap the SDK emits the mapping itself, from
-   * {@link #getGroupRoleAccessProfiles()}.</p>
-   */
-  HasRole getGroupRoleName();
 
   /**
    * The case role identifying which {@code OrganisationPolicy} supplies the organisation ID,
@@ -74,14 +59,7 @@ public interface CCDAccessGroup {
    */
   HasRole getCaseAssignedRoleField();
 
-  /**
-   * The access profiles the group role resolves to, used to emit its {@code RoleToAccessProfiles}
-   * row. Must be non-empty: without that mapping the minted group role assignment resolves to no
-   * access profile and the whole access type is inert.
-   */
-  List<String> getGroupRoleAccessProfiles();
-
-  boolean isGroupAccessEnabled();
+  Boolean isGroupAccessEnabled();
 
   String getCaseAccessGroupIdTemplate();
 

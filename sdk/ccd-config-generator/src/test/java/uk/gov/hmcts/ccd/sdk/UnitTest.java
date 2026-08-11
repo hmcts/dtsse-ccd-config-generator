@@ -10,7 +10,6 @@ import uk.gov.hmcts.ccd.sdk.api.noc.NocOrganisation;
 import uk.gov.hmcts.ccd.sdk.api.noc.NocSubmissionResponse;
 import uk.gov.hmcts.example.missingcomplex.Applicant;
 import uk.gov.hmcts.example.missingcomplex.MissingComplex;
-import uk.gov.hmcts.reform.fpl.enums.GroupRole;
 import uk.gov.hmcts.reform.fpl.enums.State;
 import uk.gov.hmcts.reform.fpl.enums.UserRole;
 import uk.gov.hmcts.reform.fpl.model.CaseData;
@@ -113,26 +112,64 @@ public class UnitTest {
         .hasMessageContaining("circular enum initialisation");
   }
 
-  /**
-   * Without a RoleToAccessProfiles mapping the group role assignment PRM mints resolves to no access
-   * profile, leaving the access type inert. The definition store does not check GroupRoleName against
-   * that sheet, so the SDK has to.
-   */
   @Test
-  public void rejectsAnAccessGroupWithNoAccessProfiles() {
-    class NoProfilesConfig implements CCDConfig<CaseData, State, NoProfilesRole> {
+  public void defaultsAccessProfilesToGetAccessProfiles() {
+    class DefaultProfilesConfig implements CCDConfig<CaseData, State, UserRole> {
       @Override
-      public void configure(ConfigBuilder<CaseData, State, NoProfilesRole> builder) {
+      public void configure(ConfigBuilder<CaseData, State, UserRole> builder) {
+        builder.caseType("TEST", "Test", "Test case type");
+        builder.caseRoleToAccessProfile(UserRole.LOCAL_AUTHORITY);
+      }
+    }
+
+    ConfigResolver<CaseData, State, UserRole> generator =
+        new ConfigResolver<>(List.of(new DefaultProfilesConfig()));
+    ResolvedCCDConfig<CaseData, State, UserRole> resolved = generator.resolveCCDConfig();
+
+    List<String> profiles = resolved.getCaseRoleToAccessProfiles().stream()
+        .filter(p -> p.getRole().getRole().equals(UserRole.LOCAL_AUTHORITY.getRole()))
+        .findFirst().orElseThrow().getAccessProfiles();
+    assertThat(profiles).containsExactly(UserRole.LOCAL_AUTHORITY.getRole());
+  }
+
+  @Test
+  public void explicitAccessProfilesReplaceDefault() {
+    class ExplicitProfilesConfig implements CCDConfig<CaseData, State, UserRole> {
+      @Override
+      public void configure(ConfigBuilder<CaseData, State, UserRole> builder) {
+        builder.caseType("TEST", "Test", "Test case type");
+        builder.caseRoleToAccessProfile(UserRole.LOCAL_AUTHORITY)
+            .accessProfiles("custom-profile-1", "custom-profile-2");
+      }
+    }
+
+    ConfigResolver<CaseData, State, UserRole> generator =
+        new ConfigResolver<>(List.of(new ExplicitProfilesConfig()));
+    ResolvedCCDConfig<CaseData, State, UserRole> resolved = generator.resolveCCDConfig();
+
+    List<String> profiles = resolved.getCaseRoleToAccessProfiles().stream()
+        .filter(p -> p.getRole().getRole().equals(UserRole.LOCAL_AUTHORITY.getRole()))
+        .findFirst().orElseThrow().getAccessProfiles();
+    assertThat(profiles).containsExactly("custom-profile-1", "custom-profile-2");
+  }
+
+  @Test
+  public void derivesRoleToAccessProfilesUsingRoleGetAccessProfiles() {
+    class DerivedConfig implements CCDConfig<CaseData, State, UserRole> {
+      @Override
+      public void configure(ConfigBuilder<CaseData, State, UserRole> builder) {
         builder.caseType("TEST", "Test", "Test case type");
       }
     }
 
-    ConfigResolver<CaseData, State, NoProfilesRole> generator =
-        new ConfigResolver<>(List.of(new NoProfilesConfig()));
+    ConfigResolver<CaseData, State, UserRole> generator =
+        new ConfigResolver<>(List.of(new DerivedConfig()));
+    ResolvedCCDConfig<CaseData, State, UserRole> resolved = generator.resolveCCDConfig();
 
-    assertThatThrownBy(generator::resolveCCDConfig)
-        .isInstanceOf(IllegalStateException.class)
-        .hasMessageContaining("must declare at least one access profile");
+    List<String> profiles = resolved.getCaseRoleToAccessProfiles().stream()
+        .filter(p -> p.getRole().getRole().equals(UserRole.CASE_ACCESS_APPROVER.getRole()))
+        .findFirst().orElseThrow().getAccessProfiles();
+    assertThat(profiles).containsExactly(UserRole.CASE_ACCESS_APPROVER.getRole());
   }
 
   /** A role whose access group never resolves its caseAssignedRoleField. */
@@ -152,26 +189,6 @@ public class UnitTest {
     @Override
     public CCDAccessGroup getAccessGroup() {
       return new TestAccessGroup(null, List.of("access-profile"));
-    }
-  }
-
-  /** A role whose access group declares no access profiles for its group role. */
-  private enum NoProfilesRole implements HasRole {
-    ATTACHED;
-
-    @Override
-    public String getRole() {
-      return "[ATTACHED]";
-    }
-
-    @Override
-    public String getCaseTypePermissions() {
-      return "CRU";
-    }
-
-    @Override
-    public CCDAccessGroup getAccessGroup() {
-      return new TestAccessGroup(GroupRole.CASE_ACCESS_APPROVER_GROUP, List.of());
     }
   }
 
@@ -219,22 +236,12 @@ public class UnitTest {
     }
 
     @Override
-    public HasRole getGroupRoleName() {
-      return GroupRole.CASE_ACCESS_APPROVER_GROUP;
-    }
-
-    @Override
     public HasRole getCaseAssignedRoleField() {
       return caseAssignedRoleField;
     }
 
     @Override
-    public List<String> getGroupRoleAccessProfiles() {
-      return accessProfiles;
-    }
-
-    @Override
-    public boolean isGroupAccessEnabled() {
+    public Boolean isGroupAccessEnabled() {
       return true;
     }
 

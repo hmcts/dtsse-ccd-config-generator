@@ -1,6 +1,5 @@
 package uk.gov.hmcts.reform.fpl.enums;
 
-import java.util.List;
 import lombok.Getter;
 import uk.gov.hmcts.ccd.sdk.api.CCDAccessGroup;
 import uk.gov.hmcts.ccd.sdk.api.HasRole;
@@ -27,8 +26,6 @@ public enum AccessGroups implements CCDAccessGroup {
       "Solicitor access type description",
       "Solicitor access type hint",
       1,
-      GroupRole.CASE_ACCESS_APPROVER_GROUP,
-      List.of("access-profile"),
       true,
       "PUBLICLAW:CARE_SUPERVISION_EPO:caseworker-approver-group:$ORGID$") {
     @Override
@@ -44,15 +41,12 @@ public enum AccessGroups implements CCDAccessGroup {
   private final String description;
   private final String hintText;
   private final int displayOrder;
-  private final HasRole groupRoleName;
-  private final List<String> groupRoleAccessProfiles;
-  private final boolean groupAccessEnabled;
+  private final Boolean groupAccessEnabled;
   private final String caseAccessGroupIdTemplate;
 
   AccessGroups(String organisationProfileId, boolean accessMandatory, boolean accessDefault,
                boolean display, String description, String hintText, int displayOrder,
-               HasRole groupRoleName, List<String> groupRoleAccessProfiles,
-               boolean groupAccessEnabled, String caseAccessGroupIdTemplate) {
+               Boolean groupAccessEnabled, String caseAccessGroupIdTemplate) {
     this.organisationProfileId = organisationProfileId;
     this.accessMandatory = accessMandatory;
     this.accessDefault = accessDefault;
@@ -60,8 +54,6 @@ public enum AccessGroups implements CCDAccessGroup {
     this.description = description;
     this.hintText = hintText;
     this.displayOrder = displayOrder;
-    this.groupRoleName = groupRoleName;
-    this.groupRoleAccessProfiles = groupRoleAccessProfiles;
     this.groupAccessEnabled = groupAccessEnabled;
     this.caseAccessGroupIdTemplate = caseAccessGroupIdTemplate;
   }
@@ -69,5 +61,10 @@ public enum AccessGroups implements CCDAccessGroup {
   @Override
   public String getAccessTypeId() {
     return name();
+  }
+
+  @Override
+  public Boolean isGroupAccessEnabled() {
+    return groupAccessEnabled;
   }
 }

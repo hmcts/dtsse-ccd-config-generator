@@ -1,9 +1,17 @@
 package uk.gov.hmcts.ccd.sdk.api;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import java.util.List;
+
 @ComplexType(generate = false)
 public interface HasRole {
 
   String getRole();
+
+  @JsonIgnore
+  default List<String> getAccessProfiles() {
+    return List.of(getRole());
+  }
 
   String getCaseTypePermissions();
 

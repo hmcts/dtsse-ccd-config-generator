@@ -1,5 +1,6 @@
 package uk.gov.hmcts.ccd.sdk;
 
+import static java.util.Objects.isNull;
 import static uk.gov.hmcts.ccd.sdk.api.Event.ATTACH_SCANNED_DOCS;
 import static uk.gov.hmcts.ccd.sdk.api.Event.HANDLE_EVIDENCE;
 
@@ -295,32 +296,29 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements Decentralised
             .build());
       }
 
-      HasRole groupRole = requireResolvedRole(group, "groupRoleName", group.getGroupRoleName());
       HasRole caseAssignedRole =
           requireResolvedRole(group, "caseAssignedRoleField", group.getCaseAssignedRoleField());
 
-      derivedRoles.add(AccessTypeRole.builder()
-          .accessTypeId(group.getAccessTypeId())
-          .organisationProfileId(group.getOrganisationProfileId())
-          .organisationalRoleName(role.getRole())
-          .groupRoleName(groupRole.getRole())
-          .caseAssignedRoleField(caseAssignedRole.getRole())
-          .groupAccessEnabled(group.isGroupAccessEnabled())
-          .caseAccessGroupIdTemplate(group.getCaseAccessGroupIdTemplate())
-          .liveTo(group.getLiveTo())
-          .build());
+      AccessTypeRole accessTypeRole = AccessTypeRole.builder()
+        .accessTypeId(group.getAccessTypeId())
+        .organisationProfileId(group.getOrganisationProfileId())
+        .caseAssignedRoleField(caseAssignedRole.getRole())
+        .groupAccessEnabled(Boolean.TRUE.equals(group.isGroupAccessEnabled()))
+        .caseAccessGroupIdTemplate(group.getCaseAccessGroupIdTemplate())
+        .liveTo(group.getLiveTo())
+        .build();
+      if (isNull(group.isGroupAccessEnabled())) {
+        accessTypeRole.setOrganisationalRoleName(role.getRole());
+        accessTypeRole.setGroupAccessEnabled(Boolean.TRUE.equals(group.isGroupAccessEnabled()));
+      } else {
+        accessTypeRole.setGroupRoleName(role.getRole());
+      }
+      derivedRoles.add(accessTypeRole);
 
-      if (mappedRoleNames.add(groupRole.getRole())) {
-        List<String> accessProfiles = group.getGroupRoleAccessProfiles();
-        if (accessProfiles == null || accessProfiles.isEmpty()) {
-          throw new IllegalStateException(
-              ("Access group %s must declare at least one access profile for group role %s: without"
-                  + " a RoleToAccessProfiles mapping the group role grants no access at runtime.")
-                  .formatted(group.getAccessTypeId(), groupRole.getRole()));
-        }
+
+      if (mappedRoleNames.add(role.getRole())) {
         config.caseRoleToAccessProfiles.add(
-            CaseRoleToAccessProfileBuilder.<R>builder(groupRole)
-                .accessProfiles(accessProfiles.toArray(String[]::new))
+            CaseRoleToAccessProfileBuilder.<R>builder(role)
                 .build());
       }
     }

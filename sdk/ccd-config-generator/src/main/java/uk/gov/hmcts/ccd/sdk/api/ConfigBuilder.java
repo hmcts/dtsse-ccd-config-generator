@@ -84,11 +84,7 @@ public interface ConfigBuilder<T, S, R extends HasRole> {
 
   /**
    * Declare a {@code RoleToAccessProfiles} mapping for a role that is <em>not</em> a member of the
-   * case's role class — chiefly the group roles referenced by {@code AccessTypeRole.GroupRoleName}.
-   *
-   * <p>Such roles must not be added to the role class: that class is enum-iterated to emit
-   * {@code AuthorisationCaseType} and {@code CaseRoles} rows, and group roles take part in neither.
-   * This method emits only the {@code RoleToAccessProfiles} row and registers no role.</p>
+   * case's role class — for example a role used only in access-type configuration.
    *
    * <p>Named distinctly from {@link #caseRoleToAccessProfile(HasRole)} because, with
    * {@code R extends HasRole}, the two would share an erasure and could not be overloads.</p>

@@ -10,9 +10,8 @@ import lombok.Data;
 public class CaseRoleToAccessProfile<R extends HasRole> {
   /**
    * The role this mapping is keyed on. Typed {@link HasRole} rather than {@code R} because
-   * {@code RoleToAccessProfiles} also maps roles outside the case's role class — group roles
-   * referenced by {@code AccessTypeRole.GroupRoleName}, which must not be registered as
-   * {@code UserRole}s. Only {@link HasRole#getRole()} is ever read from it.
+   * {@code RoleToAccessProfiles} also maps roles outside the case's role class.
+   * Only {@link HasRole#getRole()} is ever read from it.
    */
   private HasRole role;
   private List<String> authorisation;
@@ -25,10 +24,10 @@ public class CaseRoleToAccessProfile<R extends HasRole> {
   public static class CaseRoleToAccessProfileBuilder<R extends HasRole> {
 
     public static <R extends HasRole> CaseRoleToAccessProfileBuilder<R> builder(HasRole role) {
-      CaseRoleToAccessProfileBuilder<R> result = CaseRoleToAccessProfile.builder();
+      CaseRoleToAccessProfileBuilder<R> result = (CaseRoleToAccessProfileBuilder<R>) CaseRoleToAccessProfile.builder();
       result.role = role;
       result.authorisation = new ArrayList<>();
-      result.accessProfiles = new ArrayList<>();
+      result.accessProfiles = new ArrayList<>(role.getAccessProfiles());
       result.caseAccessCategories = new ArrayList<>();
       return result;
     }
@@ -40,7 +39,7 @@ public class CaseRoleToAccessProfile<R extends HasRole> {
     }
 
     public CaseRoleToAccessProfileBuilder<R> accessProfiles(String... profiles) {
-      accessProfiles.addAll(List.of(profiles));
+      accessProfiles = new ArrayList<>(List.of(profiles));
 
       return this;
     }
