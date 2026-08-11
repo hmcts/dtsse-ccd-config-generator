@@ -30,8 +30,19 @@ public class EventModel {
   /** Parsed PreConditionState(s): empty = initial event, ["*"] = all states. */
   List<String> preStates;
 
-  /** PostConditionState; "*" means no state change. */
+  /** PostConditionState; "*" means no state change, null means the column was absent. */
   String postState;
+
+  /**
+   * Whether the input's CaseEvent row carried no {@code PostConditionState} at all — emitted via
+   * {@code EventBuilder.postStateFromCallback()} so the generator omits the column too.
+   *
+   * <p>An absent column is a third runtime behaviour, distinct from both a concrete state and
+   * {@code *}: the state the about-to-submit callback returned is the only one applied. Without this
+   * flag the generator flattens it to {@code *} (or to the pre-state), writing a column the
+   * hand-written definition deliberately omitted.
+   */
+  boolean postStateFromCallback;
 
   Integer displayOrder;
 

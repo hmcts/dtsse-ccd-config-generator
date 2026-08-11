@@ -59,6 +59,18 @@ public class CaseTypeModel {
   boolean emitCaseRoleJurisdiction;
 
   /**
+   * Whether the emitter must call {@code builder.noCaseHistoryTab()} to suppress the
+   * {@code TabID=CaseHistory} tab the generator injects when no tab declares that ID.
+   *
+   * <p>True whenever the input's {@code CaseTypeTab} sheet has no such tab, which is exactly when
+   * the generator would inject one the input does not have. A definition that shows case history
+   * from a tab of its own name — sscs's per-role {@code eventHistory_<role>} — is the case that makes
+   * this necessary rather than cosmetic: without the switch the migrated service renders two History
+   * tabs.
+   */
+  boolean noCaseHistoryTab;
+
+  /**
    * AuthorisationComplexType grants emitted via {@code builder.grantComplexType(...)}.
    */
   List<ComplexTypeAuthModel> complexTypeAuthorisations;

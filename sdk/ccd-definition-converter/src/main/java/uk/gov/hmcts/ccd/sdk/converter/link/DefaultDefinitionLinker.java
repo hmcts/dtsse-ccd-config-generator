@@ -194,6 +194,9 @@ public class DefaultDefinitionLinker implements DefinitionLinker {
         .jurisdictionShuttered(jurisdiction != null && rowFlag(jurisdiction, Columns.SHUTTERED))
         .printableDocumentsUrl(caseType.getString(Columns.PRINTABLE_DOCUMENTS_URL).orElse(null))
         .emitCaseRoleJurisdiction(emitCaseRoleJurisdiction)
+        // The generator injects a TabID=CaseHistory tab unless a tab declares that ID; suppress it
+        // whenever the input has no such tab, which is exactly when the injection is a divergence.
+        .noCaseHistoryTab(tabs.stream().noneMatch(t -> "CaseHistory".equals(t.getTabId())))
         .complexTypeAuthorisations(complexTypeAuth.grants())
         .jurisdictionId(jurisdiction == null ? null : jurisdiction.getString(Columns.ID).orElse(null))
         .jurisdictionName(jurisdiction == null ? null : jurisdiction.getString(Columns.NAME).orElse(null))
@@ -1181,6 +1184,11 @@ public class DefaultDefinitionLinker implements DefinitionLinker {
           .preStates(parsePreStates(row.getString(Columns.PRE_CONDITION_STATES).orElse("")))
           .postState(parsePostState(
               row.getString(Columns.POST_CONDITION_STATE).orElse(null), eventId, gaps))
+          // An absent (or blank) PostConditionState is not the same as '*': the case ends in
+          // whatever state the about-to-submit callback returned. Emitted as
+          // postStateFromCallback() so the generator omits the column rather than writing '*'.
+          .postStateFromCallback(
+              row.getString(Columns.POST_CONDITION_STATE).map(String::isBlank).orElse(true))
           .displayOrder(row.getInteger(Columns.DISPLAY_ORDER).orElse(null))
           .showCondition(row.getString(Columns.EVENT_ENABLING_CONDITION).orElse(null))
           .showSummary(row.getYesNo(Columns.SHOW_SUMMARY).orElse(null))

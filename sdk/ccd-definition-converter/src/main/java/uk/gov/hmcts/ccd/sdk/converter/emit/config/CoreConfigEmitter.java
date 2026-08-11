@@ -185,6 +185,12 @@ public class CoreConfigEmitter implements SourceEmitter {
     if (model.isEmitCaseRoleJurisdiction()) {
       cb.addStatement("builder.emitCaseRoleJurisdiction()");
     }
+    // Suppress the generator's injected TabID=CaseHistory tab when the input declares no such tab.
+    // The injection is keyed on the tab ID, so a definition that places caseHistory on a tab of its
+    // own naming (sscs's per-role eventHistory_<role>) would otherwise gain a second History tab.
+    if (model.isNoCaseHistoryTab()) {
+      cb.addStatement("builder.noCaseHistoryTab()");
+    }
     // The jurisdiction-wide XUI service-notice banner (one per jurisdiction), reproduced via the
     // builder rather than a whole-sheet passthrough.
     emitBanner(model, cb);

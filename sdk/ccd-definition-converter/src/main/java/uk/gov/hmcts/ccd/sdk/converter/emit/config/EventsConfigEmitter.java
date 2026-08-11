@@ -288,6 +288,12 @@ public class EventsConfigEmitter implements SourceEmitter {
     if (event.getTtlIncrement() != null) {
       headerBuilder.add("\n    .ttlIncrement($L)", event.getTtlIncrement());
     }
+    if (event.isPostStateFromCallback()) {
+      // The input omits PostConditionState, meaning the about-to-submit callback's returned state is
+      // the only one applied. The builder's state targeting can only say "this state" or "*", so the
+      // column is suppressed rather than mis-declared.
+      headerBuilder.add("\n    .postStateFromCallback()");
+    }
 
     // Explicit grants on every event. A converted config must reproduce the input's
     // AuthorisationCaseField grants EXACTLY, so an event's role grants must NOT cascade onto the
