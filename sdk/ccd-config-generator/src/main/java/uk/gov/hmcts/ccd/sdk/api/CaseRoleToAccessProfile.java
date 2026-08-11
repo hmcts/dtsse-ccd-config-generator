@@ -9,10 +9,9 @@ import lombok.Data;
 @Data
 public class CaseRoleToAccessProfile<R extends HasRole> {
   /**
-   * The role this mapping is keyed on. Typed {@link HasRole} rather than {@code R} so the SDK can
-   * derive a mapping for a role reached through {@link CCDAccessGroup}, whose members are
-   * {@code HasRole}-typed because that interface is not generic in the role class. Only
-   * {@link HasRole#getRole()} is ever read from it.
+   * The role this mapping is keyed on. Typed {@link HasRole} rather than {@code R} because
+   * {@code RoleToAccessProfiles} also maps roles outside the case's role class.
+   * Only {@link HasRole#getRole()} is ever read from it.
    */
   private HasRole role;
   private List<String> authorisation;
@@ -28,7 +27,7 @@ public class CaseRoleToAccessProfile<R extends HasRole> {
       CaseRoleToAccessProfileBuilder<R> result = CaseRoleToAccessProfile.builder();
       result.role = role;
       result.authorisation = new ArrayList<>();
-      result.accessProfiles = new ArrayList<>();
+      result.accessProfiles = new ArrayList<>(role.getAccessProfiles());
       result.caseAccessCategories = new ArrayList<>();
       return result;
     }
@@ -39,8 +38,13 @@ public class CaseRoleToAccessProfile<R extends HasRole> {
       return this;
     }
 
+    /**
+     * Set the access profiles, <em>replacing</em> the default seeded from
+     * {@link HasRole#getAccessProfiles()} rather than adding to it. Unlike the other varargs methods
+     * here, calling this twice keeps only the last set.
+     */
     public CaseRoleToAccessProfileBuilder<R> accessProfiles(String... profiles) {
-      accessProfiles.addAll(List.of(profiles));
+      accessProfiles = new ArrayList<>(List.of(profiles));
 
       return this;
     }

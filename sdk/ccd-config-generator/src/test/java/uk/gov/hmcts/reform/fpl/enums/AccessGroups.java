@@ -1,29 +1,24 @@
 package uk.gov.hmcts.reform.fpl.enums;
 
-import java.util.List;
 import lombok.Getter;
 import uk.gov.hmcts.ccd.sdk.api.CCDAccessGroup;
-import uk.gov.hmcts.ccd.sdk.api.HasRole;
 
 /**
  * Organisational access groups declared as enum constants. A role attaches to these via
  * {@link UserRole#getAccessGroups()}; the SDK then derives the AccessType + AccessTypeRole rows, plus
- * the group role's RoleToAccessProfiles row.
+ * that role's RoleToAccessProfiles row.
  *
  * <p>The two constants here share an {@code accessTypeId} and differ only by organisation profile,
  * covering the case the definition store treats as two distinct access types — its
  * {@code AccessTypesValidator} keys on {@code (caseType, jurisdiction, accessTypeId,
  * organisationProfileId)} — and which earlier collapsed to a single generated row.</p>
  *
- * <p>Both role-valued members point back into {@link UserRole}, which references this enum, so both
- * are implemented as methods rather than constructor arguments: a constructor argument would be read
- * during the circular static initialisation and come out null, whereas a method body is not evaluated
- * until build time. {@code groupRoleName} is the role PRM mints per organisation;
+ * <p>Every member is a constructor argument: nothing here refers back to {@link UserRole}, so the two
+ * enums are no longer circularly initialised and no member needs a lazily-resolving method body.
  * {@code caseAssignedRoleField} is the case role carried by the OrganisationPolicy's
- * {@code OrgPolicyCaseAssignedRole} — a role name, not a field name, despite the column's title.</p>
- *
- * <p>An enum whose constants need different roles can {@code switch (this)} in the same method body;
- * what matters is only that the read happens at build time rather than during initialisation.</p>
+ * {@code OrgPolicyCaseAssignedRole} — a role name, not a field name, despite the column's title —
+ * given as a literal rather than {@code UserRole.CCD_SOLICITOR.getRole()}, which would read a null
+ * constant mid-initialisation.</p>
  */
 @Getter
 public enum AccessGroups implements CCDAccessGroup {
@@ -37,9 +32,9 @@ public enum AccessGroups implements CCDAccessGroup {
       "Solicitor access type description",
       "Solicitor access type hint",
       1,
-      List.of("access-profile"),
+      "[SOLICITOR]",
       true,
-      "PUBLICLAW:CARE_SUPERVISION_EPO:caseworker-approver-group:$ORGID$"),
+      "PUBLICLAW:CARE_SUPERVISION_EPO:caseworker-approver:$ORGID$"),
 
   LOCAL_AUTHORITY_ORG_POLICY(
       "org-policy-access",
@@ -50,9 +45,9 @@ public enum AccessGroups implements CCDAccessGroup {
       "Local authority access type description",
       "Local authority access type hint",
       2,
-      List.of("access-profile"),
+      "[SOLICITOR]",
       true,
-      "PUBLICLAW:CARE_SUPERVISION_EPO:caseworker-approver-group:$ORGID$");
+      "PUBLICLAW:CARE_SUPERVISION_EPO:caseworker-approver:$ORGID$");
 
   private final String accessTypeId;
   private final String organisationProfileId;
@@ -62,13 +57,13 @@ public enum AccessGroups implements CCDAccessGroup {
   private final String description;
   private final String hintText;
   private final int displayOrder;
-  private final List<String> groupRoleAccessProfiles;
+  private final String caseAssignedRoleField;
   private final boolean groupAccessEnabled;
   private final String caseAccessGroupIdTemplate;
 
   AccessGroups(String accessTypeId, String organisationProfileId, boolean accessMandatory,
                boolean accessDefault, boolean display, String description, String hintText,
-               int displayOrder, List<String> groupRoleAccessProfiles, boolean groupAccessEnabled,
+               int displayOrder, String caseAssignedRoleField, boolean groupAccessEnabled,
                String caseAccessGroupIdTemplate) {
     this.accessTypeId = accessTypeId;
     this.organisationProfileId = organisationProfileId;
@@ -78,18 +73,8 @@ public enum AccessGroups implements CCDAccessGroup {
     this.description = description;
     this.hintText = hintText;
     this.displayOrder = displayOrder;
-    this.groupRoleAccessProfiles = groupRoleAccessProfiles;
+    this.caseAssignedRoleField = caseAssignedRoleField;
     this.groupAccessEnabled = groupAccessEnabled;
     this.caseAccessGroupIdTemplate = caseAccessGroupIdTemplate;
-  }
-
-  @Override
-  public HasRole getGroupRoleName() {
-    return UserRole.CASE_ACCESS_APPROVER_GROUP;
-  }
-
-  @Override
-  public HasRole getCaseAssignedRoleField() {
-    return UserRole.CCD_SOLICITOR;
   }
 }
