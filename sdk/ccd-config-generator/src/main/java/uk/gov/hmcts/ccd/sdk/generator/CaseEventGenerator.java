@@ -82,7 +82,11 @@ class CaseEventGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
       data.put("PreConditionState(s)", getPreStateString(event.getPreState(), allStates));
     }
 
-    data.put("PostConditionState", getPostStateString(event.getPostState()));
+    // An absent column is a third behaviour distinct from both a concrete state and '*': the state
+    // is whatever the about-to-submit callback returned. See EventBuilder.postStateFromCallback().
+    if (!event.isPostStateFromCallback()) {
+      data.put("PostConditionState", getPostStateString(event.getPostState()));
+    }
     data.put("SecurityClassification", "Public");
 
     addCallbackIfConfigured(data, callbackHost, event,
