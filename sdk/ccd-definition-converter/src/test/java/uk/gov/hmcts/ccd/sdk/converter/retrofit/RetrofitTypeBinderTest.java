@@ -153,6 +153,43 @@ class RetrofitTypeBinderTest {
   }
 
   /**
+   * sscs's shape, and the commonest one of all: a camelCase definition ID against the PascalCase class
+   * it names. The ComplexTypes id {@code name} owns the class {@code Name}, so the id
+   * {@code jointPartyName} — whose only referencing field, {@code JointParty.name}, is declared
+   * {@code Name} — must NOT also bind to it. The refusal was case-SENSITIVE, so it missed this: `Name`
+   * was pinned {@code @ComplexType(name = "jointPartyName")}, {@code CaseField[jointPartyName]} emitted
+   * {@code FieldType=name}, the three {@code jointPartyName|*} rows had no counterpart at all, and
+   * {@code name|title} inherited jointPartyName's FixedList typing where the definition has Text.
+   */
+  @Test
+  void refusesToBindAnIdToAClassAnotherIdNamesCaseInsensitively(@TempDir Path work)
+      throws Exception {
+    Path src = work.resolve("src");
+    write(src, "m", "Name", "package m;\nimport lombok.Data;\n"
+        + "@Data\npublic class Name { private String title; }\n");
+    write(src, "m", "JointParty", "package m;\nimport lombok.Data;\n"
+        + "@Data\npublic class JointParty { private Name name; }\n");
+    write(src, "m", "CaseData", "package m;\nimport lombok.Data;\n"
+        + "@Data\npublic class CaseData { private JointParty jointParty; }\n");
+    ModelSourceIndex index = ModelSourceIndex.parse(src);
+    Map<String, ResolvedProperty> properties = rootProperties(index, "m.CaseData");
+
+    DefinitionIr definition = ir(
+        List.of(row("jointParty", "JointParty", null)),
+        List.of(
+            // Both are definition complex types. `name` resolves to the class Name case-insensitively,
+            // exactly as ModelSourceIndex.complexTypeClass does, so that row owns it.
+            member("JointParty", "name", "jointPartyName"),
+            member("name", "title", "Text"),
+            member("jointPartyName", "title", "FixedList(FL_titles)")));
+
+    Map<String, ModelSourceIndex.Type> bound =
+        new RetrofitTypeBinder(index, MODEL_PACKAGE).bind(definition, "EXAMPLE", properties);
+
+    assertThat(bound).doesNotContainKey("jointPartyName");
+  }
+
+  /**
    * Unanimity-gated for the same reason a binding is: two fields referencing one ambiguous ID while
    * declaring different classes have no answer to give, so the existing tie-break is left to decide.
    */

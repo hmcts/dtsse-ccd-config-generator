@@ -272,7 +272,16 @@ final class RetrofitTypeBinder {
       }
       ModelSourceIndex.Type type = entry.getValue().get(0);
       // The class's own simple name is a definition ID in its own right: that row owns the class.
-      if (complexTypeIds.contains(type.simpleName) || fixedListIds.contains(type.simpleName)) {
+      // Matched case-INSENSITIVELY, because that is how {@link ModelSourceIndex#complexTypeClass}
+      // resolves an ID to a class, and this refusal exists precisely to defer to that resolution. A
+      // case-sensitive test misses the commonest shape of all — a camelCase definition ID against the
+      // PascalCase class it names. sscs's ComplexTypes id `name` owns the class `Name`, so the id
+      // `jointPartyName` (whose only referencing field, JointParty.name, is declared `Name`) was bound
+      // to it too: `Name` was then pinned @ComplexType(name = "jointPartyName"), so CaseField
+      // [jointPartyName] emitted FieldType=name, the three jointPartyName|* rows had no counterpart,
+      // and `name|title` inherited jointPartyName's FixedList typing.
+      if (containsIgnoringCase(complexTypeIds, type.simpleName)
+          || containsIgnoringCase(fixedListIds, type.simpleName)) {
         continue;
       }
       // Kind must match what the name-based lookup would have accepted, which is what the generator that
@@ -298,6 +307,23 @@ final class RetrofitTypeBinder {
       bound.put(definitionId, type);
     }
     return bound;
+  }
+
+  /**
+   * Whether any of {@code ids} equals {@code name} ignoring case — the same match
+   * {@link ModelSourceIndex#complexTypeClass} makes when resolving a definition ID to a class.
+   *
+   * @param ids the definition IDs to test against
+   * @param name the candidate class's simple name
+   * @return true when some ID names this class case-insensitively
+   */
+  private static boolean containsIgnoringCase(Set<String> ids, String name) {
+    for (String id : ids) {
+      if (id.equalsIgnoreCase(name)) {
+        return true;
+      }
+    }
+    return false;
   }
 
   /**
