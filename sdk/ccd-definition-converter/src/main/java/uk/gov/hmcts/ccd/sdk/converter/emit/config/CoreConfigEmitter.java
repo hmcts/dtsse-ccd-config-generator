@@ -925,9 +925,9 @@ public class CoreConfigEmitter implements SourceEmitter {
           cb.add("\n    .searchPartyAddressLine1($S)", v));
       row.getString(Columns.SEARCH_PARTY_POST_CODE).ifPresent(v ->
           cb.add("\n    .searchPartyPostCode($S)", v));
-      row.getString(Columns.SEARCH_PARTY_DOB).ifPresent(v ->
+      row.getString(Columns.SEARCH_PARTY_DOB, Columns.SEARCH_PARTY_DOB_ALIAS).ifPresent(v ->
           cb.add("\n    .searchPartyDOB($S)", v));
-      row.getString(Columns.SEARCH_PARTY_DOD).ifPresent(v ->
+      row.getString(Columns.SEARCH_PARTY_DOD, Columns.SEARCH_PARTY_DOD_ALIAS).ifPresent(v ->
           cb.add("\n    .searchPartyDOD($S)", v));
       row.getString(Columns.SEARCH_PARTY_COLLECTION_FIELD_NAME).ifPresent(v ->
           cb.add("\n    .searchPartyCollectionFieldName($S)", v));

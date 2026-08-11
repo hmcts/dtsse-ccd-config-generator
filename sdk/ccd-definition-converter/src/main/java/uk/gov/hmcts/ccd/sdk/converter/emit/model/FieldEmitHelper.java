@@ -97,6 +97,11 @@ final class FieldEmitHelper {
       ab.addMember("categoryID", "$S", field.getCategoryId());
       hasAny = true;
     }
+    if (field.getDisplayContextParameter() != null
+        && !field.getDisplayContextParameter().isEmpty()) {
+      ab.addMember("displayContextParameter", "$S", field.getDisplayContextParameter());
+      hasAny = true;
+    }
     if (Boolean.FALSE.equals(field.getSearchable())) {
       ab.addMember("searchable", "$L", false);
       hasAny = true;

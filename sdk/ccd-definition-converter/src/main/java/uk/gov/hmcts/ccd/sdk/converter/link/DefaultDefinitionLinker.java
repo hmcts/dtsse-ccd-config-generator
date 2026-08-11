@@ -1125,6 +1125,8 @@ public class DefaultDefinitionLinker implements DefinitionLinker {
         .showCondition(row.getString(Columns.FIELD_SHOW_CONDITION).orElse(null))
         .regex(row.getString(Columns.REGULAR_EXPRESSION).orElse(null))
         .categoryId(row.getString(Columns.CATEGORY_ID).orElse(null))
+        .displayContextParameter(
+            row.getString(Columns.DISPLAY_CONTEXT_PARAMETER).orElse(null))
         .searchable(row.getYesNo(Columns.SEARCHABLE).orElse(null))
         .retainHiddenValue(row.getYesNo(Columns.RETAIN_HIDDEN_VALUE).orElse(null))
         .min(row.getInteger(Columns.MIN).orElse(null))
@@ -1926,6 +1928,7 @@ public class DefaultDefinitionLinker implements DefinitionLinker {
           .showCondition(field.getShowCondition())
           .regex(field.getRegex())
           .categoryId(field.getCategoryId())
+          .displayContextParameter(field.getDisplayContextParameter())
           .searchable(field.getSearchable())
           .retainHiddenValue(field.getRetainHiddenValue())
           .min(field.getMin())

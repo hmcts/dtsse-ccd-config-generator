@@ -245,6 +245,7 @@ final class FieldClusterer {
         && Objects.equals(a.getShowCondition(), b.getShowCondition())
         && Objects.equals(a.getRegex(), b.getRegex())
         && Objects.equals(a.getCategoryId(), b.getCategoryId())
+        && Objects.equals(a.getDisplayContextParameter(), b.getDisplayContextParameter())
         && Objects.equals(a.getSearchable(), b.getSearchable())
         && Objects.equals(a.getRetainHiddenValue(), b.getRetainHiddenValue())
         && Objects.equals(a.getMin(), b.getMin())

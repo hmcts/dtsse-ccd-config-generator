@@ -486,6 +486,63 @@ class CoreConfigEmitterTest {
         .contains("builder.searchInputFields()");
   }
 
+  private static CaseTypeModel modelWithSearchParty(String dobColumn, String dodColumn) {
+    Map<String, Object> cols = new LinkedHashMap<>();
+    cols.put("SearchPartyName", "appeal.appellant.name.firstName");
+    cols.put(dobColumn, "appeal.appellant.identity.dob");
+    cols.put(dodColumn, "dateOfAppellantDeath");
+    SheetRow row = SheetRow.builder()
+        .sheet(SheetName.SEARCH_PARTY)
+        .columns(cols)
+        .overlayTags(Set.of())
+        .source(null)
+        .build();
+    CaseTypeModel base = minimalModel();
+    return CaseTypeModel.builder()
+        .caseTypeId(base.getCaseTypeId())
+        .caseTypeName(base.getCaseTypeName())
+        .caseTypeDescription(base.getCaseTypeDescription())
+        .jurisdictionId(base.getJurisdictionId())
+        .jurisdictionName(base.getJurisdictionName())
+        .jurisdictionDescription(base.getJurisdictionDescription())
+        .states(base.getStates())
+        .roles(base.getRoles())
+        .caseFields(base.getCaseFields())
+        .complexTypes(base.getComplexTypes())
+        .fixedLists(base.getFixedLists())
+        .events(base.getEvents())
+        .tabs(base.getTabs())
+        .searchInputFields(base.getSearchInputFields())
+        .searchResultFields(base.getSearchResultFields())
+        .workBasketInputFields(base.getWorkBasketInputFields())
+        .workBasketResultFields(base.getWorkBasketResultFields())
+        .searchCasesResultFields(base.getSearchCasesResultFields())
+        .stateAuthorisations(base.getStateAuthorisations())
+        .accessClasses(base.getAccessClasses())
+        .searchCriteria(base.getSearchCriteria())
+        .searchParties(List.of(row))
+        .challengeQuestions(base.getChallengeQuestions())
+        .roleToAccessProfiles(base.getRoleToAccessProfiles())
+        .categories(base.getCategories())
+        .passthroughSheets(base.getPassthroughSheets())
+        .build();
+  }
+
+  @Test
+  void searchPartyDateColumnsEmittedForEitherCasing() {
+    // The importer matches column names case-insensitively (ColumnName.equalsColumnNameOrAlias) and
+    // json2xlsx writes the value under the template's own upper-case header, so both spellings are
+    // the same column. sscs authors SearchPartyDoB/DoD; other definitions use SearchPartyDOB/DOD.
+    // Reading only the upper-case form silently dropped the builder call for the sscs spelling.
+    for (String[] casing : new String[][] {
+        {"SearchPartyDOB", "SearchPartyDOD"}, {"SearchPartyDoB", "SearchPartyDoD"}}) {
+      String src = classNamed(modelWithSearchParty(casing[0], casing[1]), "MinimalSearch");
+      assertThat(src).as(casing[0])
+          .contains(".searchPartyDOB(\"appeal.appellant.identity.dob\")");
+      assertThat(src).as(casing[1]).contains(".searchPartyDOD(\"dateOfAppellantDeath\")");
+    }
+  }
+
   @Test
   void noSetCallbackHostEmitted() {
     // The converter emits no SDK callback wiring, so no setCallbackHost is emitted; every callback

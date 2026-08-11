@@ -69,6 +69,20 @@ public class FieldModel {
   String showCondition;
   String regex;
   String categoryId;
+
+  /**
+   * The row's {@code DisplayContextParameter}, emitted as {@code @CCD(displayContextParameter)}, or
+   * null when absent.
+   *
+   * <p>Carried for {@code ComplexTypes} members above all: a complex-type member has no builder, so
+   * the annotation is the only place its display directive can live, and the importer reads the
+   * column on that sheet. On the {@code CaseField} sheet the importer ignores the column (see the
+   * comparator's {@code DefaultsRule}), so a CaseField row's DCP neither needs nor gets reproducing —
+   * it is populated uniformly here because {@code buildFieldModel} serves both sheets, and an inert
+   * annotation member on a CaseData field is harmless.
+   */
+  String displayContextParameter;
+
   Boolean searchable;
   Boolean retainHiddenValue;
   Integer min;
