@@ -5,6 +5,7 @@ import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import uk.gov.hmcts.ccd.sdk.converter.model.FieldModel;
 
@@ -457,6 +458,135 @@ final class SynthesisPlacement {
   }
 
   /**
+   * How a set of synthesised fields reconciles against the names their target class already declares:
+   * the ones that can be placed — with an exact-name collision against a differently-named CCD member
+   * resolved by RENAMING — and the ones that cannot and must be reported instead.
+   *
+   * @param placeable the fields to synthesise, in order, some possibly renamed
+   * @param dropped the fields whose Java name is taken by a member that already carries the same CCD
+   *     id (or by an inherited accessor), which the caller reports rather than adds
+   */
+  record DeclaredNameCollisions(List<FieldModel> placeable, List<FieldModel> dropped) {
+  }
+
+  /**
+   * Reconciles synthesised fields against the names {@code target} (or a supertype) already declares.
+   *
+   * <p>An exact Java-name collision is not always a collision on the WIRE. sscs's {@code Party}
+   * declares {@code @JsonProperty("confidentialityRequiredConfirmedDate") LocalDateTime
+   * confidentialityRequiredChangedDate} — the Java name of one CCD member and the id of another — and
+   * the definition also lists a {@code confidentialityRequiredChangedDate} member on both
+   * {@code appellant} and {@code otherParty}. Dropping the synthesised field on the strength of the
+   * name alone left those two members with no field at all, so the SDK emitted no rows for them: four
+   * residual lines that no hand-annotation of the existing member could fix, because that member
+   * serialises under a different id.
+   *
+   * <p>So when the declared member pins its own id with an explicit {@code @JsonProperty} and that id
+   * is NOT the synthesised field's, the two are different CCD members and both must exist: the
+   * synthesised one is renamed to a collision-free Java name, and {@link
+   * RetrofitPatchEmitter#renderSynthFields} then writes {@code @JsonProperty("<id>")} on it (as it does
+   * for any field whose Java name is not its id), so the wire id is exactly the definition's.
+   *
+   * <p>The rename is deliberately conditional on an EXPLICIT {@code @JsonProperty}. Without one, a
+   * declared member's wire id is its field name only in the absence of a class-level naming strategy,
+   * which this cannot see — so the two members might really be the same one, and adding a second field
+   * for it would emit a duplicate CCD row and a second wire property. Those keep the existing
+   * skip-and-report behaviour, as do names served by an inherited accessor rather than a field (fpl's
+   * {@code TranslatableItem.getNeedTranslation}), where there is no member id to compare at all.
+   *
+   * <p>Pure in (declared names, synthesised set), like {@link #renameCaseInsensitiveCollisions}, so the
+   * emitter and the {@link RetrofitModelRebinder} derive the same names independently.
+   *
+   * @param target the class the fields would be synthesised onto
+   * @param synthesised the definition-only fields to place
+   * @return the placeable fields (renamed where needed) and the ones to report
+   */
+  DeclaredNameCollisions reconcileDeclaredNames(
+      ModelSourceIndex.Type target, List<FieldModel> synthesised) {
+    Set<String> declared = target == null ? Set.of() : declaredFieldNames(target);
+    if (declared.isEmpty() || synthesised.isEmpty()) {
+      return new DeclaredNameCollisions(synthesised, List.of());
+    }
+    Map<String, String> pinnedIds = pinnedMemberIds(target);
+    // Suffixes are searched case-insensitively against both the declared names and the names already
+    // taken by earlier synthesised fields, so a rename here cannot collide with a Lombok accessor
+    // either (see renameCaseInsensitiveCollisions, which runs after this on the root paths).
+    Set<String> takenLower = new java.util.HashSet<>();
+    declared.forEach(name -> takenLower.add(name.toLowerCase(java.util.Locale.ROOT)));
+    List<FieldModel> placeable = new ArrayList<>();
+    List<FieldModel> dropped = new ArrayList<>();
+    for (FieldModel field : synthesised) {
+      String javaName = field.getJavaName();
+      if (!declared.contains(javaName)) {
+        takenLower.add(javaName.toLowerCase(java.util.Locale.ROOT));
+        placeable.add(field);
+        continue;
+      }
+      String pinnedId = pinnedIds.get(javaName);
+      if (pinnedId == null || pinnedId.equals(field.getId())) {
+        dropped.add(field);
+        continue;
+      }
+      String renamed = freeName(javaName, takenLower);
+      takenLower.add(renamed.toLowerCase(java.util.Locale.ROOT));
+      placeable.add(field.toBuilder().javaName(renamed).build());
+    }
+    return new DeclaredNameCollisions(placeable, dropped);
+  }
+
+  /**
+   * The CCD id each declared field pins with its own {@code @JsonProperty}, keyed by Java field name,
+   * across the target and its supertypes. Only explicitly pinned ids appear: a field without the
+   * annotation has no id this can state with certainty (a class-level naming strategy would move it),
+   * and {@link #reconcileDeclaredNames} treats an absent entry as "cannot tell".
+   */
+  private Map<String, String> pinnedMemberIds(ModelSourceIndex.Type target) {
+    Map<String, String> byName = new java.util.LinkedHashMap<>();
+    collectPinnedMemberIds(target, byName, new java.util.HashSet<>(), 0);
+    return byName;
+  }
+
+  private void collectPinnedMemberIds(
+      ModelSourceIndex.Type type, Map<String, String> byName, Set<String> seen, int depth) {
+    if (type == null || depth > 20 || !seen.add(type.fqn)) {
+      return;
+    }
+    for (FieldDeclaration fieldDecl : type.decl.getFields()) {
+      Annotations.find(fieldDecl, "JsonProperty")
+          .flatMap(Annotations::stringValue)
+          .filter(id -> !id.isEmpty())
+          .ifPresent(id -> fieldDecl.getVariables()
+              .forEach(v -> byName.putIfAbsent(v.getNameAsString(), id)));
+    }
+    if (!type.decl.isClassOrInterfaceDeclaration()) {
+      return;
+    }
+    var decl = type.decl.asClassOrInterfaceDeclaration();
+    for (ClassOrInterfaceType supertype : decl.getExtendedTypes()) {
+      collectPinnedMemberIds(
+          index.resolve(type.unit, supertype).orElse(null), byName, seen, depth + 1);
+    }
+    for (ClassOrInterfaceType supertype : decl.getImplementedTypes()) {
+      collectPinnedMemberIds(
+          index.resolve(type.unit, supertype).orElse(null), byName, seen, depth + 1);
+    }
+  }
+
+  /**
+   * {@code base}, else {@code base} with the smallest numeric suffix from 2 that is free
+   * case-insensitively among {@code takenLower} — the one rename scheme both collision passes use, so
+   * the name a field lands under is a pure function of the names around it.
+   */
+  private static String freeName(String base, Set<String> takenLower) {
+    String candidate = base;
+    int suffix = 2;
+    while (takenLower.contains(candidate.toLowerCase(java.util.Locale.ROOT))) {
+      candidate = base + suffix++;
+    }
+    return candidate;
+  }
+
+  /**
    * Walks the supertype graph — superclass AND implemented interfaces — collecting declared field
    * names plus the property names of any accessor declared on a supertype.
    *
@@ -567,11 +697,7 @@ final class SynthesisPlacement {
         result.add(field);
         continue;
       }
-      String renamed = javaName;
-      int suffix = 2;
-      while (takenLower.contains(renamed.toLowerCase(java.util.Locale.ROOT))) {
-        renamed = javaName + suffix++;
-      }
+      String renamed = freeName(javaName, takenLower);
       takenLower.add(renamed.toLowerCase(java.util.Locale.ROOT));
       result.add(field.toBuilder().javaName(renamed).build());
     }

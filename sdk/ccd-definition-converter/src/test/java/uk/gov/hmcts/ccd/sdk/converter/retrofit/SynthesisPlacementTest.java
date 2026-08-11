@@ -235,4 +235,99 @@ class SynthesisPlacementTest {
     assertThat(plan.existingHost).as("no @JsonCreator/@Builder host is usable").isNull();
     assertThat(plan.extraClassName).isEqualTo("CaseDataExtra");
   }
+
+  private static FieldModel field(String id) {
+    return FieldModel.builder()
+        .id(id).javaName(id).fieldType("DateTime").javaType("LocalDateTime").build();
+  }
+
+  @Test
+  void renamesAnExactCollisionWithAMemberPinnedToADifferentCcdId(@TempDir Path work) throws Exception {
+    Path src = work.resolve("src");
+    // sscs's Party: the Java name of one CCD member is the ID of ANOTHER. Party declares
+    // @JsonProperty("confidentialityRequiredConfirmedDate") LocalDateTime
+    // confidentialityRequiredChangedDate, and the definition lists BOTH ids as members of appellant and
+    // otherParty. Dropping the synthesised field on the strength of the Java name left the
+    // ...ChangedDate member with no field at all, so the SDK emitted no row for it — and no
+    // hand-annotation of the existing member could fix that, because it serialises under the other id.
+    write(src, "m", "Party", "package m;\n"
+        + "import com.fasterxml.jackson.annotation.JsonProperty;\n"
+        + "import java.time.LocalDateTime;\nimport lombok.Data;\n@Data\npublic class Party {\n"
+        + "  @JsonProperty(\"confidentialityRequiredConfirmedDate\")\n"
+        + "  private LocalDateTime confidentialityRequiredChangedDate;\n}\n");
+    ModelSourceIndex index = ModelSourceIndex.parse(src);
+    ModelSourceIndex.Type party = index.byFqn("m.Party").orElseThrow();
+
+    SynthesisPlacement.DeclaredNameCollisions resolved = new SynthesisPlacement(index, 250)
+        .reconcileDeclaredNames(party, List.of(field("confidentialityRequiredChangedDate")));
+
+    assertThat(resolved.dropped()).isEmpty();
+    assertThat(resolved.placeable()).singleElement().satisfies(placed -> {
+      // Renamed, so it compiles beside the existing member; the id is untouched, so the emitter writes
+      // @JsonProperty("confidentialityRequiredChangedDate") and the wire id is the definition's.
+      assertThat(placed.getJavaName()).isEqualTo("confidentialityRequiredChangedDate2");
+      assertThat(placed.getId()).isEqualTo("confidentialityRequiredChangedDate");
+    });
+  }
+
+  @Test
+  void dropsAnExactCollisionWithAMemberCarryingNoIdPin(@TempDir Path work) throws Exception {
+    Path src = work.resolve("src");
+    // Without a @JsonProperty the declared member's wire id is its field name only in the absence of a
+    // class-level naming strategy, which this cannot see — so the two may well be the SAME member, and
+    // adding a second field would emit a duplicate CCD row and a second wire property. Keep dropping.
+    write(src, "m", "Party", "package m;\nimport java.time.LocalDateTime;\nimport lombok.Data;\n"
+        + "@Data\npublic class Party {\n  private LocalDateTime someDate;\n}\n");
+    ModelSourceIndex index = ModelSourceIndex.parse(src);
+    ModelSourceIndex.Type party = index.byFqn("m.Party").orElseThrow();
+
+    SynthesisPlacement.DeclaredNameCollisions resolved = new SynthesisPlacement(index, 250)
+        .reconcileDeclaredNames(party, List.of(field("someDate")));
+
+    assertThat(resolved.placeable()).isEmpty();
+    assertThat(resolved.dropped()).singleElement()
+        .satisfies(dropped -> assertThat(dropped.getId()).isEqualTo("someDate"));
+  }
+
+  @Test
+  void dropsAnExactCollisionWithAMemberPinnedToTheSameCcdId(@TempDir Path work) throws Exception {
+    Path src = work.resolve("src");
+    // The member pins the very id being synthesised, so it IS this definition member — already carrying
+    // the data, just missing @CCD. A second field would be a duplicate.
+    write(src, "m", "Party", "package m;\n"
+        + "import com.fasterxml.jackson.annotation.JsonProperty;\n"
+        + "import java.time.LocalDateTime;\nimport lombok.Data;\n@Data\npublic class Party {\n"
+        + "  @JsonProperty(\"someDate\")\n  private LocalDateTime someDate;\n}\n");
+    ModelSourceIndex index = ModelSourceIndex.parse(src);
+    ModelSourceIndex.Type party = index.byFqn("m.Party").orElseThrow();
+
+    SynthesisPlacement.DeclaredNameCollisions resolved = new SynthesisPlacement(index, 250)
+        .reconcileDeclaredNames(party, List.of(field("someDate")));
+
+    assertThat(resolved.placeable()).isEmpty();
+    assertThat(resolved.dropped()).hasSize(1);
+  }
+
+  @Test
+  void findsAPinnedIdOnASuperclassMember(@TempDir Path work) throws Exception {
+    Path src = work.resolve("src");
+    // The collision the sscs lane actually hits is INHERITED: Appellant/OtherParty extend Party, and
+    // declaredFieldNames walks the superclass, so the pinned-id lookup has to walk it too or the rename
+    // decision falls back to dropping on exactly the case it exists for.
+    write(src, "m", "Party", "package m;\n"
+        + "import com.fasterxml.jackson.annotation.JsonProperty;\n"
+        + "import java.time.LocalDateTime;\nimport lombok.Data;\n@Data\npublic class Party {\n"
+        + "  @JsonProperty(\"confirmedDate\")\n  private LocalDateTime changedDate;\n}\n");
+    write(src, "m", "Appellant", "package m;\nimport lombok.Data;\n@Data\n"
+        + "public class Appellant extends Party {\n  private String name;\n}\n");
+    ModelSourceIndex index = ModelSourceIndex.parse(src);
+    ModelSourceIndex.Type appellant = index.byFqn("m.Appellant").orElseThrow();
+
+    SynthesisPlacement.DeclaredNameCollisions resolved = new SynthesisPlacement(index, 250)
+        .reconcileDeclaredNames(appellant, List.of(field("changedDate")));
+
+    assertThat(resolved.dropped()).isEmpty();
+    assertThat(resolved.placeable()).singleElement()
+        .satisfies(placed -> assertThat(placed.getJavaName()).isEqualTo("changedDate2"));
+  }
 }

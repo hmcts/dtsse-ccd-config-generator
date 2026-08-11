@@ -118,17 +118,21 @@ final class RetrofitModelRebinder {
     // @JsonUnwrapped member. The config must then reference each moved field through that parent
     // (.complex(CaseData::getCaseDataExtra).x(CaseDataExtra::getMember)), so compute the same plan
     // the patch emitter does and record a ClusteredFieldRef for each moved field.
-    Set<String> declaredOnRoot = rootType == null
-        ? java.util.Set.of() : placement.declaredFieldNames(rootType);
-    List<FieldModel> synthesised = new java.util.ArrayList<>();
+    List<FieldModel> unmatched = new java.util.ArrayList<>();
     for (FieldModel field : model.getCaseFields()) {
-      // Mirror the patch emitter's placeable set: unmatched fields, minus those whose Java name
-      // collides with an existing declared member (finding B1 — the patch skips those, so the config
-      // must not reference them through the CaseDataExtra parent either).
-      if (properties.get(field.getId()) == null && !declaredOnRoot.contains(field.getJavaName())) {
-        synthesised.add(field);
+      if (properties.get(field.getId()) == null) {
+        unmatched.add(field);
       }
     }
+    // Mirror the patch emitter's placeable set: unmatched fields, minus those whose Java name collides
+    // with an existing declared member the patch therefore skips (finding B1 — the config must not
+    // reference a field the patch never adds), with an exact collision against a member pinned to a
+    // DIFFERENT CCD id renamed rather than dropped, exactly as the emitter renames it.
+    SynthesisPlacement.DeclaredNameCollisions reconciled =
+        placement.reconcileDeclaredNames(rootType, unmatched);
+    // Carries the reconciled javaName, so renamedMembers below — which keys by id — hands the loop the
+    // member name the patch actually declares, exact-collision rename included.
+    List<FieldModel> synthesised = reconciled.placeable();
     Set<String> placeableIds = new java.util.HashSet<>();
     synthesised.forEach(f -> placeableIds.add(f.getId()));
     SynthesisPlacement.Plan plan = placement.plan(rootType, synthesised);
@@ -450,6 +454,11 @@ final class RetrofitModelRebinder {
    * {@code CaseDataExtra} (common overflow, no existing members so no rename), else the root — computed
    * with the same pure {@link SynthesisPlacement#renameCaseInsensitiveCollisions} the emitter uses, so
    * both sides agree.
+   *
+   * <p>On the borderline-host path the emitter reconciles against the HOST class's declared names too
+   * (the fields move onto it, not onto the root), so that is mirrored here: a field the host renames is
+   * referenced under the renamed member, and one the host drops keeps its own name and is simply never
+   * referenced — the same as before, since the patch adds no field for it either.
    */
   private Map<String, String> renamedMembers(
       List<FieldModel> synthesised, SynthesisPlacement.Plan plan) {
@@ -459,7 +468,8 @@ final class RetrofitModelRebinder {
     }
     List<FieldModel> renamed;
     if (plan.overflow && plan.existingHost != null) {
-      renamed = placement.renameCaseInsensitiveCollisions(plan.existingHost.type, synthesised);
+      renamed = placement.renameCaseInsensitiveCollisions(plan.existingHost.type,
+          placement.reconcileDeclaredNames(plan.existingHost.type, synthesised).placeable());
     } else if (plan.overflow) {
       renamed = synthesised; // fresh CaseDataExtra class: no existing members to collide with.
     } else {

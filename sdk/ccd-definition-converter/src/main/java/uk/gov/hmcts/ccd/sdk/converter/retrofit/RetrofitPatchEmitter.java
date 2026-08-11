@@ -1578,11 +1578,13 @@ public final class RetrofitPatchEmitter {
                 .build());
           }
         } else {
-          // Case-insensitive-collision renaming (probate's TTL/ttl) is applied only on the root
+          // Case-INSENSITIVE-collision renaming (probate's TTL/ttl) is applied only on the root
           // CaseData paths, where the rebinder mirrors the rename so the config's typed getter matches
-          // the renamed member. A complex-type member's companion getter reference is derived from the
-          // linked model (not the rebinder), so renaming here would desync it — and no real lane has a
-          // complex-member case-insensitive collision, so this path keeps the exact-collision drop only.
+          // the renamed member; no real lane has a complex-member case-insensitive collision. The
+          // exact-name reconciliation below does rename (sscs's Party.confidentialityRequiredChangedDate
+          // pinned to a different id), and that rename is safe here because every getter reference to a
+          // synthesised complex member comes from plannedSynthesis.record just below — which is fed the
+          // placeable list, renames and all.
           List<FieldModel> placeable = dropExistingFieldCollisions(complexClass, synthesised);
           editsFor(byFile, complexClass.file).synthesise(complexClass.simpleName, placeable);
           if (synthesisedFieldsNeedNonNull(complexClass.decl)) {
@@ -1873,54 +1875,44 @@ public final class RetrofitPatchEmitter {
   }
 
   /**
-   * Drops from the synthesise list any field whose Java name already names a declared field on the
-   * target class (or a superclass in the parsed source). Synthesis fills the definition-only gap —
-   * fields the resolver could NOT bind to a model property — but a field can be unresolved yet still
-   * <em>declared</em>: a {@code @JsonUnwrapped} parent (prl's {@code CaseData.allegationOfHarm}, whose
-   * leaves are resolved through it, so the parent itself is never a leaf property) or a
-   * {@code @JsonProperty}-renamed member whose CCD id the definition also lists as a separate field
-   * (prl's {@code Court.courtName}). Re-declaring it produces {@code variable X is already defined}
-   * (the prl compile break, finding B1). Skip it and record a gap so the drop is visible — the
-   * existing member already carries the data; the field just needs {@code @CCD} the operator can add
-   * (mirrors the Civil PascalCase-collision fix, generalised from resolved to <em>declared</em>
-   * members).
+   * Resolves the synthesise list against the names the target class (or a superclass in the parsed
+   * source) already declares. Synthesis fills the definition-only gap — fields the resolver could NOT
+   * bind to a model property — but a field can be unresolved yet still <em>declared</em>: a
+   * {@code @JsonUnwrapped} parent (prl's {@code CaseData.allegationOfHarm}, whose leaves are resolved
+   * through it, so the parent itself is never a leaf property) or a {@code @JsonProperty}-renamed
+   * member whose CCD id the definition also lists as a separate field (prl's {@code Court.courtName}).
+   * Re-declaring the name produces {@code variable X is already defined} (the prl compile break,
+   * finding B1).
+   *
+   * <p>Where the declared member pins a DIFFERENT id with its own {@code @JsonProperty}, the two are
+   * distinct CCD members and {@link SynthesisPlacement#reconcileDeclaredNames} renames the synthesised
+   * one instead of dropping it — sscs's {@code Party.confidentialityRequiredChangedDate}, which
+   * serialises as {@code confidentialityRequiredConfirmedDate}. Everything else is skipped with a gap
+   * so the drop is visible — the existing member already carries the data; the field just needs
+   * {@code @CCD} the operator can add (mirrors the Civil PascalCase-collision fix, generalised from
+   * resolved to <em>declared</em> members).
    */
   private List<FieldModel> dropExistingFieldCollisions(
       ModelSourceIndex.Type target, List<FieldModel> synthesised) {
-    Set<String> declared = declaredFieldNames(target);
-    if (declared.isEmpty()) {
-      return synthesised;
+    SynthesisPlacement.DeclaredNameCollisions resolved =
+        placement.reconcileDeclaredNames(target, synthesised);
+    for (FieldModel field : resolved.dropped()) {
+      gaps.add(GapEntry.builder()
+          .sheet("CaseField")
+          .rowKey(field.getId())
+          .column("FieldType")
+          .value(field.getFieldType())
+          .category(GapCategory.UNSUPPORTED_VALUE)
+          .action(GapAction.OMITTED_FAIL)
+          .detail("Definition field '" + field.getId() + "' would be synthesised as member '"
+              + field.getJavaName() + "' onto " + target.simpleName + ", which already declares a "
+              + "field of that name (e.g. a @JsonUnwrapped parent or a member whose own CCD id this "
+              + "cannot tell apart from it); skipped to avoid a duplicate-field compile error. "
+              + "Annotate the existing member with @CCD by hand if it should carry this definition "
+              + "field's metadata.")
+          .build());
     }
-    List<FieldModel> kept = new ArrayList<>();
-    for (FieldModel field : synthesised) {
-      if (declared.contains(field.getJavaName())) {
-        gaps.add(GapEntry.builder()
-            .sheet("CaseField")
-            .rowKey(field.getId())
-            .column("FieldType")
-            .value(field.getFieldType())
-            .category(GapCategory.UNSUPPORTED_VALUE)
-            .action(GapAction.OMITTED_FAIL)
-            .detail("Definition field '" + field.getId() + "' would be synthesised as member '"
-                + field.getJavaName() + "' onto " + target.simpleName + ", which already declares a "
-                + "field of that name (e.g. a @JsonUnwrapped parent or a @JsonProperty-renamed "
-                + "member); skipped to avoid a duplicate-field compile error. Annotate the existing "
-                + "member with @CCD by hand if it should carry this definition field's metadata.")
-            .build());
-        continue;
-      }
-      kept.add(field);
-    }
-    return kept;
-  }
-
-  /**
-   * The Java field names declared directly on a type and every superclass reachable in the parsed
-   * source — the names a synthesised field must not collide with. Delegates to
-   * {@link SynthesisPlacement#declaredFieldNames} so the emitter and the rebinder agree.
-   */
-  private Set<String> declaredFieldNames(ModelSourceIndex.Type target) {
-    return placement.declaredFieldNames(target);
+    return resolved.placeable();
   }
 
   private FileEdits editsFor(Map<Path, FileEdits> byFile, Path file) {
