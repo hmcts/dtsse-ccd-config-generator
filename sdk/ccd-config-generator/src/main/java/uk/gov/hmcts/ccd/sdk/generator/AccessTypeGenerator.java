@@ -42,7 +42,9 @@ public class AccessTypeGenerator<T, S, R extends HasRole> implements ConfigGener
     Map<String, Object> row = JsonUtils.caseRow(caseType);
 
     row.put("AccessTypeID", accessType.getAccessTypeId());
-    row.put("OrganisationProfileID", accessType.getOrganisationProfileId());
+    // nullToEmpty because OrganisationProfileID is a merge key: a JSON null here reads back as null
+    // on the next run and NPEs in JsonUtils.mergeInto's primary-key comparison.
+    row.put("OrganisationProfileID", nullToEmpty(accessType.getOrganisationProfileId()));
     row.put("AccessMandatory", JsonUtils.yesNo(accessType.isAccessMandatory()));
     row.put("AccessDefault", JsonUtils.yesNo(accessType.isAccessDefault()));
     row.put("Display", JsonUtils.yesNo(accessType.isDisplay()));
