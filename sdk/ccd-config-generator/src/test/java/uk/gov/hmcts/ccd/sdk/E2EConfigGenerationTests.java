@@ -244,6 +244,31 @@ public class E2EConfigGenerationTests {
 
     @SneakyThrows
     @Test
+    public void grantsAFieldWhoseIdCollidesWithAnUnwrappedContainerName() {
+        // See uk.gov.hmcts.reform.UnwrappedCollisionCaseData: the @JsonUnwrapped container's member
+        // name is caseOutcome and, being prefix-less, so is the ID of a real leaf inside it. The
+        // container emits no CaseField row and so must carry no grants, but the leaf must keep its
+        // own — a suppression keyed on the Java member name alone dropped every caseOutcome row
+        // while its identically-configured sibling didPoAttend kept hers, leaving a field the
+        // CaseField sheet declares that no role could read.
+        File expected = resourceFile(
+            "UnwrappedCollision/AuthorisationCaseField/caseworker-publiclaw-solicitor.json");
+        File actual = new File(tmp.getRoot(),
+            "UnwrappedCollision/AuthorisationCaseField/caseworker-publiclaw-solicitor.json");
+        CcdConfigComparator.assertEquals(expected, actual, JSONCompareMode.NON_EXTENSIBLE);
+
+        // ...and the container itself is still suppressed: no row names the holder, which would
+        // reference a CaseField the reflection walk never emits.
+        String caseFields = Resources.toString(
+            new File(tmp.getRoot(), "UnwrappedCollision/CaseField.json").toURI().toURL(),
+            StandardCharsets.UTF_8);
+        assertThat(caseFields)
+            .contains("\"ID\": \"caseOutcome\"")
+            .contains("\"ID\": \"didPoAttend\"");
+    }
+
+    @SneakyThrows
+    @Test
     public void honoursExplicitStateDescription() {
         // CaseManagement carries @CCD(description = ...); Open has none and must default to Name.
         File expected = resourceFile("StateDescription/State.json");

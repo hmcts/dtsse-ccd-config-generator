@@ -3,7 +3,7 @@ package uk.gov.hmcts.ccd.sdk.generator;
 import static uk.gov.hmcts.ccd.sdk.FieldUtils.ccdAnnotation;
 import static uk.gov.hmcts.ccd.sdk.FieldUtils.getCaseFields;
 import static uk.gov.hmcts.ccd.sdk.FieldUtils.getFieldId;
-import static uk.gov.hmcts.ccd.sdk.FieldUtils.isUnwrappedField;
+import static uk.gov.hmcts.ccd.sdk.FieldUtils.isUnwrappedContainerId;
 
 import com.fasterxml.jackson.annotation.JsonUnwrapped;
 import com.google.common.base.Strings;
@@ -73,9 +73,12 @@ class CaseFieldGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
 
     List<Map<String, Object>> result = Lists.newArrayList();
     for (String fieldId : explicitFields.keySet()) {
-      Optional<JsonUnwrapped> unwrapped = isUnwrappedField(config.getCaseClass(), fieldId);
-      // Don't export inbuilt metadata fields. Ignore unwrapped complex types
-      if (fieldId.matches("\\[.+\\]") || unwrapped.isPresent()) {
+      // Don't export inbuilt metadata fields, nor an @JsonUnwrapped container's own name (which the
+      // reflection walk emits no row for). Tested through isUnwrappedContainerId rather than name
+      // alone so a real field whose CCD ID collides with a container's Java member name keeps its
+      // row — see that method. Harmless here today only because such a field also arrives via the
+      // reflection path; correct for the same reason regardless.
+      if (fieldId.matches("\\[.+\\]") || isUnwrappedContainerId(config.getCaseClass(), fieldId)) {
         continue;
       }
       // A gated-off field placed on an event (e.g. a Label) must not emit its explicit CaseField
