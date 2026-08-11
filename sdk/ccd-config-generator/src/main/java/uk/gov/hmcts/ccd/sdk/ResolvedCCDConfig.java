@@ -56,6 +56,7 @@ public class ResolvedCCDConfig<T, S, R extends HasRole> {
   boolean shutterService = false;
   boolean explicitStateGrants = false;
   boolean emitCaseRoleJurisdiction = false;
+  boolean noCaseHistoryTab = false;
   boolean jurisdictionShuttered = false;
   boolean enableForDeletion = false;
   Map<String, String> stateLabels = new HashMap<>();
