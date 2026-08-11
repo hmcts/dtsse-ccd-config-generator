@@ -99,6 +99,22 @@ public @interface CCD {
 
   String categoryID() default "";
 
+  /**
+   * The field's {@code DisplayContextParameter} column — the display/entry directive CCD applies to
+   * the field wherever it is shown, e.g. {@code #DATETIMEDISPLAY(d MMM yyyy, h:mm:ss a)} on a
+   * {@code DateTime} member or {@code #TABLE(...)} on a collection. Empty (the default) writes no
+   * column.
+   *
+   * <p>This is the member-level form of the same directive {@link FieldCollection}'s tab, event and
+   * search builders already carry per placement. It matters most on {@code ComplexTypes} members,
+   * which have no builder at all: the definition-store importer reads the column on that sheet
+   * ({@code ComplexFieldTypeParser}), so the date format a hand-written definition puts on
+   * {@code appellant.confidentialityRequiredConfirmedDate} is expressible only here. On the
+   * {@code CaseField} sheet the importer ignores the column, so setting it there is harmless but
+   * inert — the placement builders are what drive display on a page or tab.
+   */
+  String displayContextParameter() default "";
+
   Class<? extends HasAccessControl>[] access() default {};
 
   boolean inheritAccessFromParent() default true;

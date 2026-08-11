@@ -126,6 +126,13 @@ public class JsonUtils {
     if (!Strings.isNullOrEmpty(annotation.categoryID())) {
       target.put("CategoryID", annotation.categoryID());
     }
+    if (!Strings.isNullOrEmpty(annotation.displayContextParameter())) {
+      // Reaches ComplexTypes member rows through ComplexTypeGenerator -> CaseFieldGenerator
+      // .toComplex, the only place a complex-type member's metadata can come from (there is no
+      // builder for it). The importer reads the column on that sheet; on the CaseField sheet it
+      // ignores it, so the column is inert there rather than wrong.
+      target.put("DisplayContextParameter", annotation.displayContextParameter());
+    }
     if (annotation.min() > Integer.MIN_VALUE) {
       target.put("Min", annotation.min());
     }

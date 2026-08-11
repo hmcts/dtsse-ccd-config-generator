@@ -267,7 +267,50 @@ class CaseFieldGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
       type = complexType.name();
     }
 
-    return type;
+    return withNamedComplexType(field, target, type, annotation);
+  }
+
+  /**
+   * The CCD type ID a class-valued {@code @CCD(typeParameterClass)} names, when the class carries a
+   * {@code @ComplexType(name)} the declared type does not supply — else {@code inferredType}
+   * unchanged.
+   *
+   * <p>{@code typeParameterClass} already makes such a class part of the definition (it is walked by
+   * complex-type resolution exactly as a declared field type is, so it emits its {@code ComplexTypes}
+   * rows). This is the other half: the field must also be TYPED as it, or the definition declares a
+   * complex type nothing references while the field's column names the declared class's own ID
+   * instead.
+   *
+   * <p>The case is a definition complex type whose members the team's class does not model, addressed
+   * on a field the model already declares as something else — sscs's {@code jointPartyName} (three
+   * members, its {@code title} a {@code FixedList}) addressed on a {@code Name} field, where
+   * {@code Name} is separately the model class for the definition's own {@code name} type (four
+   * members, {@code title} a {@code Text}). One class cannot carry both IDs, and
+   * {@code typeOverride} cannot express either: it takes a {@link FieldType} constant, and a
+   * definition type ID is not one. Naming the class here leaves the field's declared type — and hence
+   * every caller and serialised payload — untouched, while the named class supplies both the rows and
+   * this column's type ID.
+   *
+   * <p>An enum is excluded, as it is where {@code @ComplexType(name)} is read off the declared type:
+   * for an enum the name is the list ID, i.e. the {@code FieldTypeParameter}, which the FixedList
+   * branches already write. On a {@code Collection} field the named class is likewise the ELEMENT
+   * type, so it supplies the {@code FieldTypeParameter} rather than the {@code FieldType}.
+   */
+  private static String withNamedComplexType(
+      Field field, Map<String, Object> target, String inferredType, CCD annotation) {
+    if (annotation == null || Void.class.equals(annotation.typeParameterClass())
+        || annotation.typeParameterClass().isEnum()) {
+      return inferredType;
+    }
+    ComplexType named = annotation.typeParameterClass().getAnnotation(ComplexType.class);
+    if (named == null || Strings.isNullOrEmpty(named.name())) {
+      return inferredType;
+    }
+    if (Collection.class.isAssignableFrom(field.getType())) {
+      target.put("FieldTypeParameter", named.name());
+      return inferredType;
+    }
+    return named.name();
   }
 
   private static String resolveCollectionType(
