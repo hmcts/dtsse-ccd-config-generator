@@ -3218,9 +3218,11 @@ public final class RetrofitPatchEmitter {
     for (int i = 0; i < added.size(); i++) {
       RetrofitFixedListLabels.AddedConstant constant = added.get(i);
       List<String> annotations = new ArrayList<>();
-      // The code pin is needed unless the constant name IS the code, exactly as for a declared constant.
-      if (constant.code() != null && !constant.code().equals(constant.name())) {
-        annotations.add("@JsonProperty(" + CcdAnnotationRenderer.quote(constant.code()) + ")");
+      // The code pin is needed unless the constant name IS the code, exactly as for a declared constant —
+      // or unless the enum serialises through a @JsonValue, where the code rides in the constructor
+      // argument and no pin can move it. Both decisions are the matcher's; see AddedConstant#pinnedCode.
+      if (constant.pinnedCode() != null) {
+        annotations.add("@JsonProperty(" + CcdAnnotationRenderer.quote(constant.pinnedCode()) + ")");
         jsonProperty = true;
       }
       Optional<String> label = RetrofitFixedListLabels.labelFor(constant);

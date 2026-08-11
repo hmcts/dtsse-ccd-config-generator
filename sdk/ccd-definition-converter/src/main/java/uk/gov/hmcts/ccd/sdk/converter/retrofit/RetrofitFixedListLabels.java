@@ -3,6 +3,8 @@ package uk.gov.hmcts.ccd.sdk.converter.retrofit;
 import com.github.javaparser.ast.body.EnumConstantDeclaration;
 import com.github.javaparser.ast.body.EnumDeclaration;
 import com.github.javaparser.ast.expr.Expression;
+import com.github.javaparser.ast.expr.IntegerLiteralExpr;
+import com.github.javaparser.ast.expr.LongLiteralExpr;
 import com.github.javaparser.ast.expr.StringLiteralExpr;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -178,22 +180,84 @@ final class RetrofitFixedListLabels {
    *     new constant or cannot take one
    */
   static List<AddedConstant> constantsToAdd(ModelSourceIndex.Type type, FixedListModel list) {
+    if (type == null || list == null || list.getItems() == null || !type.isEnum()) {
+      return List.of();
+    }
+    if (redirectsItsSerialisedValue(type.decl.asEnumDeclaration())) {
+      return constantsToAddToSerialisedEnum(type.decl.asEnumDeclaration(), list);
+    }
     Match match = match(type, list);
     return match == null ? List.of() : match.toAdd();
+  }
+
+  /**
+   * The constants to add to a {@code @JsonValue} enum — the one shape {@link #match} refuses outright and
+   * so used to answer this question with nothing.
+   *
+   * <p><b>Why the refusal must not reach here.</b> {@code match} refuses a {@code @JsonValue} enum
+   * because no {@code @JsonProperty} pin can move what such an enum emits, so the CODES it emits are
+   * whatever they are. That is a fact about pinning, not about the constant SET: sscs's
+   * {@code InterlocReviewState} emits its {@code ccdDefinition} constructor field, which really does carry
+   * seven of {@code FL_interlocWorkflow}'s eight codes exactly — and has no constant at all for
+   * {@code interlocutoryReview}, so the SDK emits a seven-row list where CCD has eight. Routing the add
+   * decision through the pin refusal cost that row, and adding the constant is what recovers it: no pin is
+   * needed, because the constant carries its code the same way its siblings do — in the constructor
+   * argument the {@code @JsonValue} returns.
+   *
+   * <p><b>Which codes are already covered is read from the ARGUMENTS, not from constant names.</b> On such
+   * an enum the name says nothing about the row — sscs's {@code SendToFirstTierActions} names
+   * {@code DECISION_REMADE} for the code {@code remade} — so concluding from the names that a code has no
+   * constant would add a second constant emitting a code the enum already emits, two rows for one code.
+   * The code-carrying position is resolved the same way {@link #serialisedCodesFromArguments} resolves it,
+   * with the one difference that it need not cover EVERY code: a code with no constant is precisely the
+   * case here, so full coverage is a bar the enum this exists for can never meet. Refusing when no position
+   * qualifies is what keeps this sound — an added constant's code argument is only right if the position it
+   * goes in is the one the {@code @JsonValue} returns.
+   *
+   * <p>Each candidate then goes through {@link #plannedConstant} on the same terms as any other, so the
+   * argument shape is copied rather than inferred and a code the enum already models under another name is
+   * left alone — with the one difference that no {@code @JsonProperty} is planned.
+   */
+  private static List<AddedConstant> constantsToAddToSerialisedEnum(
+      EnumDeclaration decl, FixedListModel list) {
+    Map<String, String> emitted = codesFromArguments(decl, list, false);
+    if (emitted.isEmpty()) {
+      return List.of(); // no position provably carries the codes: what a new constant would pass is a guess
+    }
+    Set<String> covered = new LinkedHashSet<>(emitted.values());
+    List<AddedConstant> toAdd = new ArrayList<>();
+    Set<String> claimed = new LinkedHashSet<>();
+    for (FixedListModel.Item item : list.getItems()) {
+      if (item.getCode() == null || !covered.add(item.getCode())) {
+        continue;
+      }
+      AddedConstant added = plannedConstant(decl, list, item, claimed, false);
+      if (added == null) {
+        continue; // this code cannot be named; the missing row stays a reported residual
+      }
+      toAdd.add(added);
+      claimed.add(added.name());
+    }
+    return toAdd;
   }
 
   /**
    * One constant to add to a team's enum so it can name a definition code it has none for.
    *
    * @param name the constant name to declare, sanitised from the code
-   * @param code the definition's {@code ListElementCode}, pinned with {@code @JsonProperty} whenever the
-   *     constant name would not serialise as it
+   * @param pinnedCode the definition's {@code ListElementCode} to write as {@code @JsonProperty}, or null
+   *     when no pin is needed or possible — the constant name already serialises as the code, or the enum
+   *     emits a {@code @JsonValue} that no pin can move (there the code rides in the constructor
+   *     argument instead, see {@link #constantsToAddToSerialisedEnum})
+   * @param emittedCode the code this constant will actually emit once declared, which is what decides
+   *     whether its label needs pinning ({@link #labelFor})
    * @param label the definition's {@code ListElement}, pinned with {@code @CCD(label)} on the same terms
    *     an existing constant's is
    * @param arguments the constructor arguments to declare it with, already rendered as Java expressions
    *     in parameter order — copied in shape from the constants already there, never inferred
    */
-  record AddedConstant(String name, String code, String label, List<String> arguments) {
+  record AddedConstant(String name, String pinnedCode, String emittedCode, String label,
+      List<String> arguments) {
   }
 
   /**
@@ -257,6 +321,23 @@ final class RetrofitFixedListLabels {
    */
   private static Map<String, String> serialisedCodesFromArguments(
       EnumDeclaration decl, FixedListModel list) {
+    return codesFromArguments(decl, list, true);
+  }
+
+  /**
+   * The constant → code mapping the enum's own arguments establish.
+   *
+   * @param decl the enum
+   * @param list the definition's rows for the ID it backs
+   * @param mustCoverEveryCode whether a position qualifies only when every one of the definition's codes is
+   *     passed by some constant. True for reading what the enum EMITS today ({@link
+   *     #serialisedCodesFromArguments}): a position covering only half the list is as likely to be some
+   *     other field that happens to collide, and a wrong reading there mis-pins labels. False for deciding
+   *     what to ADD ({@link #constantsToAddToSerialisedEnum}), where a code no constant passes is the whole
+   *     point and full coverage is unmeetable by construction.
+   */
+  private static Map<String, String> codesFromArguments(
+      EnumDeclaration decl, FixedListModel list, boolean mustCoverEveryCode) {
     List<EnumConstantDeclaration> entries = new ArrayList<>(decl.getEntries());
     if (entries.isEmpty()) {
       return Map.of();
@@ -281,7 +362,8 @@ final class RetrofitFixedListLabels {
     }
     Map<String, String> resolved = null;
     for (int position = 0; position < arity; position++) {
-      Map<String, String> candidate = codeCarryingPosition(entries, position, codes);
+      Map<String, String> candidate =
+          codeCarryingPosition(entries, position, codes, mustCoverEveryCode);
       if (candidate == null) {
         continue;
       }
@@ -295,20 +377,17 @@ final class RetrofitFixedListLabels {
 
   /**
    * The constant → code mapping one argument position establishes, or null when that position is not the
-   * code column: a code passed by two constants (not one-to-one) or a code no constant passes (not
-   * covering the list).
+   * code column: a code passed by two constants (not one-to-one), or — when {@code mustCoverEveryCode} —
+   * a code no constant passes. With that bar relaxed the position must still be claimed by at least one
+   * constant, so a position holding nothing from this list at all never qualifies.
    */
-  private static Map<String, String> codeCarryingPosition(
-      List<EnumConstantDeclaration> entries, int position, Set<String> codes) {
+  private static Map<String, String> codeCarryingPosition(List<EnumConstantDeclaration> entries,
+      int position, Set<String> codes, boolean mustCoverEveryCode) {
     Map<String, String> byConstant = new LinkedHashMap<>();
     Set<String> claimed = new LinkedHashSet<>();
     for (EnumConstantDeclaration entry : entries) {
-      Expression argument = entry.getArguments().get(position);
-      if (!(argument instanceof StringLiteralExpr literal)) {
-        continue;
-      }
-      String passed = literal.asString();
-      if (!codes.contains(passed)) {
+      String passed = literalToken(entry.getArguments().get(position));
+      if (passed == null || !codes.contains(passed)) {
         continue;
       }
       if (!claimed.add(passed)) {
@@ -316,7 +395,41 @@ final class RetrofitFixedListLabels {
       }
       byConstant.put(entry.getNameAsString(), passed);
     }
-    return claimed.containsAll(codes) ? byConstant : null;
+    if (mustCoverEveryCode) {
+      return claimed.containsAll(codes) ? byConstant : null;
+    }
+    return claimed.isEmpty() ? null : byConstant;
+  }
+
+  /**
+   * The literal an argument passes, as its SOURCE TOKEN, or null when it is not a literal this can read.
+   *
+   * <p>Numeric literals count, not only strings. sscs's {@code AdjournCaseDaysOffset} declares
+   * {@code TWENTY_EIGHT_DAYS(28, "28 days")} — an {@code Integer ccdDefinition} behind a
+   * {@code @JsonValue toString()} returning {@code String.valueOf(ccdDefinition)} — against a list whose
+   * codes are {@code 0}/{@code 14}/{@code 21}/{@code 28} and whose labels are {@code Other}/
+   * {@code 14 days}/…. Reading only {@code StringLiteralExpr} found no code-carrying position on such an
+   * enum, so no constant resolved to a row and every label pin was dropped: eight residual lines across
+   * that enum and {@code AdjournCaseNextHearingPeriod}.
+   *
+   * <p><b>Why the source token rather than the parsed value.</b> The comparison is against the
+   * definition's {@code ListElementCode}, which is text, and what a {@code @JsonValue} returning
+   * {@code String.valueOf(n)} emits is the token as written. sscs's {@code BenefitCode} is the case that
+   * makes this matter: it passes {@code UC(1, …)} against definition codes spelled {@code 001}, and the
+   * parsed values would match while the emitted code would be {@code 1}. Comparing tokens refuses that
+   * enum, which is right — no pin on it can make the SDK emit {@code 001}.
+   */
+  private static String literalToken(Expression argument) {
+    if (argument instanceof StringLiteralExpr string) {
+      return string.asString();
+    }
+    if (argument instanceof IntegerLiteralExpr integer) {
+      return integer.getValue();
+    }
+    if (argument instanceof LongLiteralExpr number) {
+      return number.getValue();
+    }
+    return null;
   }
 
   /**
@@ -331,7 +444,7 @@ final class RetrofitFixedListLabels {
     if (added.label() == null) {
       return Optional.empty();
     }
-    String willEmit = added.code() == null ? added.name() : added.code();
+    String willEmit = added.emittedCode() == null ? added.name() : added.emittedCode();
     return added.label().equals(willEmit) ? Optional.empty() : Optional.of(added.label());
   }
 
@@ -477,7 +590,7 @@ final class RetrofitFixedListLabels {
         // No constant models this code. Add one where the enum's existing constants show exactly how,
         // else refuse: a code the enum can neither name nor be given a name for is a constant-set
         // divergence to report.
-        AddedConstant added = plannedConstant(decl, list, item, claimed);
+        AddedConstant added = plannedConstant(decl, list, item, claimed, true);
         if (added == null) {
           return null;
         }
@@ -517,7 +630,7 @@ final class RetrofitFixedListLabels {
    * pin for the team to make deliberately — not a constant to synthesise.
    */
   private static AddedConstant plannedConstant(EnumDeclaration decl, FixedListModel list,
-      FixedListModel.Item item, Set<String> claimed) {
+      FixedListModel.Item item, Set<String> claimed, boolean pinnable) {
     String name = item.getJavaConstant();
     if (name == null || name.isEmpty() || claimed.contains(name)) {
       return null;
@@ -531,9 +644,15 @@ final class RetrofitFixedListLabels {
       return null;
     }
     List<String> arguments = synthesisedArguments(decl, list, item);
-    return arguments == null
-        ? null
-        : new AddedConstant(name, item.getCode(), item.getLabel(), arguments);
+    if (arguments == null) {
+      return null;
+    }
+    // The pin is only how a NAME-serialised enum is redirected to a code it is not named after. A
+    // @JsonValue enum emits a constructor argument, which synthesisedArguments has already filled with
+    // this row's own code, so it emits the code with no annotation at all — and a @JsonProperty there
+    // would be dead weight on the team's published type, claiming a redirect Jackson never performs.
+    String pinnedCode = pinnable && !name.equals(item.getCode()) ? item.getCode() : null;
+    return new AddedConstant(name, pinnedCode, item.getCode(), item.getLabel(), arguments);
   }
 
   /**
@@ -542,13 +661,15 @@ final class RetrofitFixedListLabels {
    *
    * <p><b>The shape is copied, not inferred.</b> The one thing that makes an added constant compile is
    * passing what its siblings pass: the same argument COUNT, of the same kind. So every existing constant
-   * must pass the same number of arguments and every one of those must be a string literal — the shape
-   * that covers the plain {@code CODE("code")} and {@code CODE("code", "Label")} idioms teams write, and
-   * whose constructor (hand-written or Lombok-generated, parameters named anything) is guaranteed to
-   * accept another all-strings call of that arity. Anything else is refused: a constant with a body, a
-   * non-literal argument (an enum reference, a concatenation, another constant), a varargs or mixed-arity
-   * call, or a no-argument enum where there is nothing to copy — for those, what a new constant would have
-   * to pass is a guess, and a guess that fails to compile breaks the team's build for a residual line.
+   * must pass the same number of arguments and every one of those must be a literal this can read — the
+   * shape that covers the plain {@code CODE("code")}, {@code CODE("code", "Label")} and
+   * {@code DAYS_28(28, "28 days")} idioms teams write, and whose constructor (hand-written or
+   * Lombok-generated, parameters named anything) is guaranteed to accept another call of that arity with
+   * the same literal kind in each position. Anything else is refused: a constant with a body, a non-literal
+   * argument (an enum reference, a concatenation, another constant), a varargs or mixed-arity call, a
+   * position whose kind is not consistent across constants, or a no-argument enum where there is nothing to
+   * copy — for those, what a new constant would have to pass is a guess, and a guess that fails to compile
+   * breaks the team's build for a residual line.
    *
    * <p><b>What each position means is decided by evidence from the enum's own constants.</b> A position is
    * the CODE when every constant the definition has a row for passes its own code there, and the LABEL
@@ -572,31 +693,57 @@ final class RetrofitFixedListLabels {
       return null; // nothing to copy: whether the constructor takes arguments cannot be established
     }
     for (EnumConstantDeclaration entry : entries) {
-      if (entry.getArguments().size() != arity
-          || entry.getClassBody().isNonEmpty()
-          || entry.getArguments().stream().anyMatch(a -> !(a instanceof StringLiteralExpr))) {
+      if (entry.getArguments().size() != arity || entry.getClassBody().isNonEmpty()) {
         return null;
+      }
+      for (int position = 0; position < arity; position++) {
+        // Same kind in this position across every constant, so what to write there is copied rather than
+        // chosen: a String literal stays quoted, an int literal is written bare.
+        if (literalToken(entry.getArguments().get(position)) == null
+            || isStringLiteral(entry, position) != isStringLiteral(entries.get(0), position)) {
+          return null;
+        }
       }
     }
     // Only constants the definition HAS a row for can testify about what a position means, since the
     // test is whether the constant passes ITS OWN code or label there. An enum with extra constants is
     // normal (every candidate has some) and they simply do not vote.
+    //
+    // The row is found by name where the enum's constants are named after their codes, and by the code the
+    // constant PASSES where they are not: a @JsonValue enum names DECISION_REMADE for the code `remade`,
+    // so a name-only lookup produced no witnesses at all and nothing could ever be added to such an enum
+    // — which is exactly the shape sscs's InterlocReviewState needs a constant added to.
     Map<String, FixedListModel.Item> rowByConstant = rowByConstant(list);
-    List<EnumConstantDeclaration> witnesses = entries.stream()
-        .filter(entry -> rowByConstant.containsKey(entry.getNameAsString()))
-        .toList();
-    if (witnesses.isEmpty()) {
+    Map<String, String> byArgument = codesFromArguments(decl, list, false);
+    Map<EnumConstantDeclaration, FixedListModel.Item> rowByWitness = new LinkedHashMap<>();
+    for (EnumConstantDeclaration entry : entries) {
+      FixedListModel.Item row = rowByConstant.get(entry.getNameAsString());
+      if (row == null && byArgument.containsKey(entry.getNameAsString())) {
+        row = rowByConstant.get(byArgument.get(entry.getNameAsString()));
+      }
+      if (row != null) {
+        rowByWitness.put(entry, row);
+      }
+    }
+    if (rowByWitness.isEmpty()) {
       return null;
     }
     List<String> arguments = new ArrayList<>();
     for (int position = 0; position < arity; position++) {
-      String value = unanimousArgument(witnesses, rowByConstant, position, item);
+      String value = unanimousArgument(rowByWitness, position, item);
       if (value == null) {
         return null;
       }
-      arguments.add(CcdAnnotationRenderer.quote(value));
+      arguments.add(isStringLiteral(entries.get(0), position)
+          ? CcdAnnotationRenderer.quote(value)
+          : value);
     }
     return arguments;
+  }
+
+  /** Whether a constant passes a String literal (rather than a numeric one) in a given position. */
+  private static boolean isStringLiteral(EnumConstantDeclaration entry, int position) {
+    return entry.getArguments().get(position) instanceof StringLiteralExpr;
   }
 
   /**
@@ -607,8 +754,8 @@ final class RetrofitFixedListLabels {
   private static boolean alreadySaysThis(EnumDeclaration decl, String label) {
     return decl.getEntries().stream()
         .flatMap(entry -> entry.getArguments().stream())
-        .filter(StringLiteralExpr.class::isInstance)
-        .map(argument -> ((StringLiteralExpr) argument).asString())
+        .map(RetrofitFixedListLabels::literalToken)
+        .filter(java.util.Objects::nonNull)
         .anyMatch(passed -> passed.equalsIgnoreCase(label));
   }
 
@@ -643,15 +790,15 @@ final class RetrofitFixedListLabels {
    * the same reason. None of the drift is propagated: what gets written is the DEFINITION's value, which
    * is also what the pins put in the emitted row.
    */
-  private static String unanimousArgument(List<EnumConstantDeclaration> witnesses,
-      Map<String, FixedListModel.Item> rowByConstant, int position, FixedListModel.Item item) {
+  private static String unanimousArgument(
+      Map<EnumConstantDeclaration, FixedListModel.Item> rowByWitness, int position,
+      FixedListModel.Item item) {
     boolean code = true;
     boolean empty = true;
     int labelled = 0;
-    for (EnumConstantDeclaration witness : witnesses) {
-      Expression argument = witness.getArguments().get(position);
-      String passed = ((StringLiteralExpr) argument).asString();
-      FixedListModel.Item own = rowByConstant.get(witness.getNameAsString());
+    for (Map.Entry<EnumConstantDeclaration, FixedListModel.Item> witness : rowByWitness.entrySet()) {
+      String passed = literalToken(witness.getKey().getArguments().get(position));
+      FixedListModel.Item own = witness.getValue();
       code &= passed.equals(own.getCode());
       empty &= passed.isEmpty();
       if (own.getLabel() != null && passed.equalsIgnoreCase(own.getLabel())) {
@@ -664,7 +811,7 @@ final class RetrofitFixedListLabels {
     if (code && item.getCode() != null) {
       return item.getCode();
     }
-    if (labelled * 2 > witnesses.size() && item.getLabel() != null) {
+    if (labelled * 2 > rowByWitness.size() && item.getLabel() != null) {
       return item.getLabel();
     }
     return null;
