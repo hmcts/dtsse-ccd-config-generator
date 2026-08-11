@@ -57,13 +57,22 @@ class RetrofitEventComplexTypeGraphTest {
    */
   private EventComplexTypeResolver resolverFor(
       Path src, RetrofitPlannedSynthesis planned, RetrofitPinnedNames pinned) throws Exception {
+    return resolverFor(src, planned, pinned, RetrofitPlannedHints.empty());
+  }
+
+  /**
+   * The same wiring again, with the hints the patch will pin on existing members — which the walk must
+   * prefer over the parsed declaration, because they cascade onto every event row placing the member.
+   */
+  private EventComplexTypeResolver resolverFor(Path src, RetrofitPlannedSynthesis planned,
+      RetrofitPinnedNames pinned, RetrofitPlannedHints hints) throws Exception {
     ModelSourceIndex index = ModelSourceIndex.parse(src);
     PropertyResolver.Resolution resolution =
         new PropertyResolver(index).resolve(index.byFqn("m.CaseData").orElseThrow());
     return new EventComplexTypeResolver(List.of(), PREDEFINED,
         new RetrofitEventComplexTypeGraph(index, resolution,
             index.byFqn("m.CaseData").orElseThrow(), planned, RetrofitPlannedRetypes.empty(),
-            pinned));
+            hints, pinned));
   }
 
   private EventComplexTypeGroup.Member resolve(
@@ -212,6 +221,37 @@ class RetrofitEventComplexTypeGraphTest {
     // Without the plan the SAME code falls back — the behaviour the fix replaces.
     assertThat(resolverFor(src).resolve(resolverFor(src).rootNode(field), "bandLabel",
         "mandatory", null, null, null, null)).isEmpty();
+  }
+
+  @Test
+  void reportsTheHintThePatchWillPinOnAnExistingMemberRatherThanTheParsedOne(@TempDir Path work)
+      throws Exception {
+    Path src = work.resolve("src");
+    // sscs's rip1Document: the team's field carries no @CCD(hint), but the definition's ComplexTypes row
+    // has a HintText, so the SAME run's patch is about to pin it. The hint does not stay on that row —
+    // the SDK cascades it onto every CaseEventToComplexTypes row placing the member — so a caller
+    // deciding a placement's .hintText/.noHintText disposition against the PARSED hint concludes
+    // "equal, leave the cascade unset" and emits a HintText the definition never had.
+    write(src, "m", "AudioVideo", "package m;\nimport lombok.Data;\n@Data\n"
+        + "public class AudioVideo {\n  private String rip1Document;\n  private String other;\n}\n");
+    write(src, "m", "CaseData", "package m;\nimport lombok.Data;\n@Data\npublic class CaseData {\n"
+        + "  private AudioVideo audioVideo;\n}\n");
+
+    RetrofitPlannedHints hints = RetrofitPlannedHints.empty();
+    hints.record("m.AudioVideo", "rip1Document", "Document must be PDF formatted");
+
+    EventComplexTypeResolver resolver = resolverFor(
+        src, RetrofitPlannedSynthesis.empty(), RetrofitPinnedNames.empty(), hints);
+    FieldModel field = FieldModel.builder()
+        .id("audioVideo").javaName("audioVideo").fieldType("AudioVideo").build();
+
+    assertThat(resolve(resolver, field, "rip1Document").getDeclaredHint())
+        .isEqualTo("Document must be PDF formatted");
+    // A member the patch pins no hint on still reports the parsed declaration — absent means "the source
+    // stands", not "no hint".
+    assertThat(resolve(resolver, field, "other").getDeclaredHint()).isNull();
+    // And without the plan the same member reads as unhinted: the behaviour the fix replaces.
+    assertThat(resolve(resolverFor(src), field, "rip1Document").getDeclaredHint()).isNull();
   }
 
   @Test
@@ -722,7 +762,8 @@ class RetrofitEventComplexTypeGraphTest {
     EventComplexTypeResolver resolver = new EventComplexTypeResolver(List.of(), PREDEFINED,
         new RetrofitEventComplexTypeGraph(index, resolution,
             index.byFqn("m.CaseData").orElseThrow(), RetrofitPlannedSynthesis.empty(),
-            RetrofitPlannedRetypes.empty(), RetrofitPinnedNames.empty()));
+            RetrofitPlannedRetypes.empty(), RetrofitPlannedHints.empty(),
+            RetrofitPinnedNames.empty()));
     FieldModel field = FieldModel.builder()
         .id("applicant1DQHearing").javaName("applicant1DQHearing").fieldType("Hearing").build();
 

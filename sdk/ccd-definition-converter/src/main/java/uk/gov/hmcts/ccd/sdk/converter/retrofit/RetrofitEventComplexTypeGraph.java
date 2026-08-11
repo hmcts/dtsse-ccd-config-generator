@@ -69,6 +69,14 @@ public final class RetrofitEventComplexTypeGraph implements RetrofitModelTypeGra
    */
   private final RetrofitPlannedRetypes plannedRetypes;
   /**
+   * The {@code @CCD(hint)} values the patch will pin onto existing members. Consulted in preference to
+   * the parsed declaration because a member's hint CASCADES onto every {@code CaseEventToComplexTypes}
+   * row placing it, and the linker decides each placement's {@code .hintText}/{@code .noHintText}
+   * disposition by comparing the event row's own {@code HintText} against this one — see
+   * {@link RetrofitPlannedHints}.
+   */
+  private final RetrofitPlannedHints plannedHints;
+  /**
    * Where this walk records each {@code @JsonNaming}-derived name it resolves a member by, so the
    * patch pins it with an explicit {@code @JsonProperty} — see {@link RetrofitPinnedNames}.
    */
@@ -84,7 +92,7 @@ public final class RetrofitEventComplexTypeGraph implements RetrofitModelTypeGra
   public RetrofitEventComplexTypeGraph(
       ModelSourceIndex index, PropertyResolver.Resolution resolution) {
     this(index, resolution, null, RetrofitPlannedSynthesis.empty(),
-        RetrofitPlannedRetypes.empty(), RetrofitPinnedNames.empty());
+        RetrofitPlannedRetypes.empty(), RetrofitPlannedHints.empty(), RetrofitPinnedNames.empty());
   }
 
   /**
@@ -101,18 +109,22 @@ public final class RetrofitEventComplexTypeGraph implements RetrofitModelTypeGra
    * @param plannedRetypes the fields the patch emitter has committed to re-declaring as a generated
    *                       companion, which this walk must therefore stop resolving against the class
    *                       the parsed source names
+   * @param plannedHints the hints the patch emitter has committed to pinning on existing members, which
+   *                     cascade onto the event rows placing them
    * @param pinnedNames collects the naming-strategy-derived names this walk relies on, which the
    *                    patch must pin; the two must be fed to the same patch run
    */
   RetrofitEventComplexTypeGraph(ModelSourceIndex index, PropertyResolver.Resolution resolution,
       ModelSourceIndex.Type root, RetrofitPlannedSynthesis plannedSynthesis,
-      RetrofitPlannedRetypes plannedRetypes, RetrofitPinnedNames pinnedNames) {
+      RetrofitPlannedRetypes plannedRetypes, RetrofitPlannedHints plannedHints,
+      RetrofitPinnedNames pinnedNames) {
     this.index = index;
     this.propertiesById = resolution.properties;
     this.unwrapper = new ValueWrapperUnwrapper(index);
     this.root = root;
     this.plannedSynthesis = plannedSynthesis;
     this.plannedRetypes = plannedRetypes;
+    this.plannedHints = plannedHints;
     this.pinnedNames = pinnedNames;
   }
 
@@ -201,6 +213,13 @@ public final class RetrofitEventComplexTypeGraph implements RetrofitModelTypeGra
     String getter = "get" + capitalise(member.fieldName);
     boolean collection = member.declared instanceof ClassOrInterfaceType cit
         && COLLECTIONS.contains(cit.getNameAsString());
+    // The hint the member will CARRY once the patch is applied, not the one it carries now: a member's
+    // hint cascades onto every event row that places it, and the caller decides each placement's
+    // .hintText/.noHintText disposition by comparing the row's own HintText against this one. Reading
+    // the parsed declaration where the patch is about to pin a hint yields "equal, leave the cascade
+    // unset" and then emits a HintText the definition never had — see RetrofitPlannedHints.
+    String declaredHint =
+        plannedHints.forMember(ownerType.fqn, member.fieldName).orElse(member.declaredHint);
     Optional<RetrofitPlannedRetypes.Retype> retyped =
         plannedRetypes.forMember(ownerType.fqn, member.fieldName);
     if (retyped.isPresent()) {
@@ -208,7 +227,7 @@ public final class RetrofitEventComplexTypeGraph implements RetrofitModelTypeGra
       // keeps its name), but the type to descend into is the companion's — named by its definition
       // complex-type id, exactly as a synthesised member's is, because the companion is generated output
       // with no parsed class to hand back.
-      return Optional.of(new MemberResolution(getter, null, collection, member.declaredHint,
+      return Optional.of(new MemberResolution(getter, null, collection, declaredHint,
           retyped.get().definitionId()));
     }
     // The nested type to descend into for a further segment: the collection element type for a
@@ -226,7 +245,7 @@ public final class RetrofitEventComplexTypeGraph implements RetrofitModelTypeGra
           .orElse(null);
     }
     return Optional.of(new MemberResolution(
-        getter, nested == null ? null : new TypeHandle(nested), collection, member.declaredHint));
+        getter, nested == null ? null : new TypeHandle(nested), collection, declaredHint));
   }
 
   @Override

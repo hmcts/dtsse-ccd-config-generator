@@ -130,6 +130,12 @@ public final class RetrofitPatchEmitter {
    */
   private final RetrofitPlannedRetypes plannedRetypes = RetrofitPlannedRetypes.empty();
   /**
+   * The {@code @CCD(hint)} values this patch will pin onto existing complex-type members, read by the
+   * {@code CaseEventToComplexTypes} walk because a member's hint CASCADES onto every event row placing it.
+   * See {@link RetrofitPlannedHints}.
+   */
+  private final RetrofitPlannedHints plannedHints = RetrofitPlannedHints.empty();
+  /**
    * Every ID the definition's {@code ComplexTypes} sheet declares. A class whose own simple name is one
    * of these is never renamed to a different ID: that name already has a definition row of its own.
    */
@@ -724,6 +730,16 @@ public final class RetrofitPatchEmitter {
    */
   RetrofitPlannedRetypes plannedRetypes() {
     return plannedRetypes;
+  }
+
+  /**
+   * The complex-type member hints this patch will pin, valid once {@link #planSynthesisedMembers()} (or a
+   * full {@link #emit()}) has run on this instance.
+   *
+   * @return the planned hints, empty when the patch pins none
+   */
+  RetrofitPlannedHints plannedHints() {
+    return plannedHints;
   }
 
   /**
@@ -1530,6 +1546,12 @@ public final class RetrofitPatchEmitter {
           // typeParameterOverride instead of a bare label-only @CCD.
           FieldModel reconciled =
               withTypeParameterClass(reconciler.reconcile(member, property), property);
+          // A pinned hint does not stay on this ComplexTypes row: the SDK cascades it onto every
+          // CaseEventToComplexTypes row that PLACES the member, unless the placement overrides it. The
+          // linker chooses between cascade / .hintText(v) / .noHintText() by comparing the event row's
+          // HintText against the member's declared hint, so it must compare against the hint this patch
+          // is about to pin rather than the one the source currently reads — see RetrofitPlannedHints.
+          plannedHints.record(property.ownerFqn, property.memberName, reconciled.getHint());
           inherited.annotate(property, reconciled, renameFor(property, reconciled));
         }
       }

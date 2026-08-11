@@ -230,7 +230,7 @@ public final class RetrofitConverter {
     RetrofitPlannedSynthesis plannedSynthesis = planner.planSynthesisedMembers();
     final ConversionOptions emitOptions = planOptions.toBuilder()
         .retrofitModelTypeGraph(new RetrofitEventComplexTypeGraph(index, resolution, root,
-            plannedSynthesis, planner.plannedRetypes(), pinnedNames))
+            plannedSynthesis, planner.plannedRetypes(), planner.plannedHints(), pinnedNames))
         .build();
     RetrofitModelRebinder rebinder =
         new RetrofitModelRebinder(index, resolution, root, constructorLimit);
