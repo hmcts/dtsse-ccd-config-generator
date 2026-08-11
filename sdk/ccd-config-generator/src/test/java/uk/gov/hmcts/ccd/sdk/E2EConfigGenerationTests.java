@@ -269,6 +269,25 @@ public class E2EConfigGenerationTests {
 
     @SneakyThrows
     @Test
+    public void honoursIgnoreOnStateConstants() {
+        // See uk.gov.hmcts.reform.IgnoredStateState: Unknown and LegacyComposite carry
+        // @CCD(ignore = true), so neither emits a State row and the surviving constants renumber
+        // (DisplayOrder 1, 2 — a suppressed constant consumes no index).
+        File expectedState = resourceFile("IgnoredState/State.json");
+        File actualState = new File(tmp.getRoot(), "IgnoredState/State.json");
+        CcdConfigComparator.assertEquals(expectedState, actualState, JSONCompareMode.NON_EXTENSIBLE);
+
+        // ...and neither carries AuthorisationCaseState rows, by either grant path: Unknown is the
+        // post-state of the `reopen` event (an event-derived grant), LegacyComposite declares
+        // @CCD(access = SolicitorAccess.class) (a constant-declared grant). A row naming a state the
+        // State sheet no longer declares would fail to import.
+        File expectedAuth = resourceFile("IgnoredState/AuthorisationCaseState.json");
+        File actualAuth = new File(tmp.getRoot(), "IgnoredState/AuthorisationCaseState.json");
+        CcdConfigComparator.assertEquals(expectedAuth, actualAuth, JSONCompareMode.NON_EXTENSIBLE);
+    }
+
+    @SneakyThrows
+    @Test
     public void honoursExplicitStateDescription() {
         // CaseManagement carries @CCD(description = ...); Open has none and must default to Name.
         File expected = resourceFile("StateDescription/State.json");
