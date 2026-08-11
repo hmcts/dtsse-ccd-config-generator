@@ -209,4 +209,61 @@ public class FieldUtils {
     ReflectionUtils.makeAccessible(field);
     return Optional.ofNullable(field.getAnnotation(JsonUnwrapped.class));
   }
+
+  /**
+   * Whether an {@code @JsonUnwrapped} container's own name has leaked into an ID-keyed table and must
+   * be suppressed: {@code true} only when {@code fieldId} names an unwrapped member AND is not itself
+   * an ID the reflection walk emits a {@code CaseField} row for.
+   *
+   * <p>{@link #isUnwrappedField} alone is not that test, because it resolves a CCD field <em>ID</em>
+   * through {@link ReflectionUtils#findField}, which matches on Java member <em>name</em>. The two
+   * namespaces are independent, and a real model collides them: sscs declares
+   * {@code @JsonUnwrapped private CaseOutcome caseOutcome} whose own {@code CaseOutcome.caseOutcome}
+   * leaf therefore has CCD ID {@code caseOutcome} — so a name-only test discarded every
+   * {@code AuthorisationCaseField} row for a field the {@code CaseField} sheet does emit, producing a
+   * definition whose grants no role could exercise. Its sibling leaf {@code didPoAttend}, with
+   * identical access classes in the same container, was unaffected — the collision was the whole
+   * difference. {@code jointParty} collides the same way via {@code @JsonProperty("jointParty")}.
+   *
+   * <p>The suppression itself must stay: an unwrapped container emits no row of its own, so a
+   * placement that registers the container by name (a {@code .complex(getter)} root placement) would
+   * otherwise emit a row referencing a {@code CaseField} that does not exist.
+   *
+   * @param caseDataClass the case-data class
+   * @param fieldId a CCD field ID from an ID-keyed table
+   * @return true when the ID is an unwrapped container's name and not an emitted field ID
+   */
+  public static boolean isUnwrappedContainerId(Class caseDataClass, String fieldId) {
+    return isUnwrappedField(caseDataClass, fieldId).isPresent()
+        && !caseFieldIds(caseDataClass).contains(fieldId);
+  }
+
+  /**
+   * Every CCD field ID the reflection walk emits a {@code CaseField} row for, descending
+   * {@code @JsonUnwrapped} members with prefix accumulation exactly as
+   * {@link uk.gov.hmcts.ccd.sdk.generator.CaseFieldGenerator} does — so an unwrapped leaf appears
+   * under its flattened ID and an unwrapped container appears not at all.
+   *
+   * @param caseDataClass the case-data class
+   * @return the emitted field IDs
+   */
+  public static Set<String> caseFieldIds(Class caseDataClass) {
+    Set<String> ids = new LinkedHashSet<>();
+    collectCaseFieldIds(caseDataClass, "", ids);
+    return ids;
+  }
+
+  private static void collectCaseFieldIds(Class dataClass, String prefix, Set<String> ids) {
+    for (Field field : getCaseFields(dataClass)) {
+      JsonUnwrapped unwrapped = field.getAnnotation(JsonUnwrapped.class);
+      if (null != unwrapped) {
+        String newPrefix = prefix.isEmpty()
+            ? unwrapped.prefix()
+            : prefix.concat(capitalize(unwrapped.prefix()));
+        collectCaseFieldIds(field.getType(), newPrefix, ids);
+      } else {
+        ids.add(getFieldId(field, prefix));
+      }
+    }
+  }
 }

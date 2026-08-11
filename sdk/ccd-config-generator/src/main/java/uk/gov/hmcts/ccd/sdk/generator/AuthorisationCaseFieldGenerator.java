@@ -2,6 +2,7 @@ package uk.gov.hmcts.ccd.sdk.generator;
 
 import static com.google.common.base.Strings.isNullOrEmpty;
 import static org.apache.commons.lang3.StringUtils.capitalize;
+import static uk.gov.hmcts.ccd.sdk.FieldUtils.caseFieldIds;
 import static uk.gov.hmcts.ccd.sdk.FieldUtils.ccdAnnotation;
 import static uk.gov.hmcts.ccd.sdk.FieldUtils.getCaseFields;
 import static uk.gov.hmcts.ccd.sdk.FieldUtils.getFieldId;
@@ -24,7 +25,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
-import java.util.Optional;
 import java.util.Set;
 import org.apache.commons.lang3.ArrayUtils;
 import org.springframework.beans.BeanUtils;
@@ -146,6 +146,9 @@ class AuthorisationCaseFieldGenerator<T, S, R extends HasRole> implements Config
 
     File folder = new File(root.getPath(), "AuthorisationCaseField");
     folder.mkdir();
+    // Hoisted out of the per-row loop: the walk is over the whole case-data class, and a real model
+    // has thousands of rows across dozens of roles.
+    Set<String> emittedFieldIds = caseFieldIds(config.getCaseClass());
     for (String role : fieldRolePermissions.columnKeySet()) {
       List<Map<String, Object>> permissions = Lists.newArrayList();
       Map<String, Set<Permission>> rolePermissions = fieldRolePermissions.column(role);
@@ -167,9 +170,12 @@ class AuthorisationCaseFieldGenerator<T, S, R extends HasRole> implements Config
           permission.put("CaseFieldID", field);
           permission.put("CRUD", Permission.toString(fieldPermission));
 
-          Optional<JsonUnwrapped> unwrapped = isUnwrappedField(config.getCaseClass(), field);
-
-          if (unwrapped.isEmpty()) {
+          // Suppress the row only for an @JsonUnwrapped CONTAINER's own name, which emits no
+          // CaseField row to grant on. A name-only test also discarded rows for a real field whose
+          // CCD ID happens to equal a container's Java member name — see
+          // FieldUtils.isUnwrappedContainerId.
+          if (!isUnwrappedField(config.getCaseClass(), field).isPresent()
+              || emittedFieldIds.contains(field)) {
             permissions.add(permission);
           }
         }
