@@ -93,7 +93,7 @@ public class UnitTest {
   }
 
   @Test
-  public void defaultsAccessProfilesToGetAccessProfiles() {
+  public void defaultsAccessProfilesToTheRoleName() {
     class DefaultProfilesConfig implements CCDConfig<CaseData, State, UserRole> {
       @Override
       public void configure(ConfigBuilder<CaseData, State, UserRole> builder) {
@@ -134,7 +134,7 @@ public class UnitTest {
   }
 
   @Test
-  public void derivesRoleToAccessProfilesUsingRoleGetAccessProfiles() {
+  public void derivesRoleToAccessProfilesUsingTheRoleName() {
     class DerivedConfig implements CCDConfig<CaseData, State, UserRole> {
       @Override
       public void configure(ConfigBuilder<CaseData, State, UserRole> builder) {

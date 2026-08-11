@@ -247,8 +247,8 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements Decentralised
    * so the existing generators emit identical JSON. Explicit builder rows take precedence: an
    * access type already configured via {@link #accessType} is not re-added.
    *
-   * <p>Each attaching role also gets a {@code RoleToAccessProfiles} row, resolving to
-   * {@link HasRole#getAccessProfiles()}. The definition store does not validate
+   * <p>Each attaching role also gets a {@code RoleToAccessProfiles} row, resolving to the role's own
+   * name. The definition store does not validate
    * {@code GroupRoleName} against that sheet, so an unmapped group role imports cleanly and then
    * grants nothing at runtime; deriving the row makes that failure impossible rather than silent. A
    * row the config already declared for the same role wins, so a team needing non-default

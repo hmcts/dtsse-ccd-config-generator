@@ -1,6 +1,5 @@
 package uk.gov.hmcts.ccd.sdk.api;
 
-import com.fasterxml.jackson.annotation.JsonIgnore;
 import java.util.List;
 
 @ComplexType(generate = false)
@@ -9,16 +8,6 @@ public interface HasRole {
   String getRole();
 
   String getCaseTypePermissions();
-
-  /**
-   * The access profiles this role resolves to in its {@code RoleToAccessProfiles} row, defaulting to
-   * the role's own name. Overridden by {@link ConfigBuilder#caseRoleToAccessProfile} when a row is
-   * declared explicitly.
-   */
-  @JsonIgnore
-  default List<String> getAccessProfiles() {
-    return List.of(getRole());
-  }
 
   /**
    * The organisational access groups this role participates in, empty if none. For each one the SDK

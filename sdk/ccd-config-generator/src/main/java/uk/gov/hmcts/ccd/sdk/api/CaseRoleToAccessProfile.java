@@ -27,7 +27,7 @@ public class CaseRoleToAccessProfile<R extends HasRole> {
       CaseRoleToAccessProfileBuilder<R> result = CaseRoleToAccessProfile.builder();
       result.role = role;
       result.authorisation = new ArrayList<>();
-      result.accessProfiles = new ArrayList<>(role.getAccessProfiles());
+      result.accessProfiles = new ArrayList<>(List.of(role.getRole()));
       result.caseAccessCategories = new ArrayList<>();
       return result;
     }
@@ -39,9 +39,9 @@ public class CaseRoleToAccessProfile<R extends HasRole> {
     }
 
     /**
-     * Set the access profiles, <em>replacing</em> the default seeded from
-     * {@link HasRole#getAccessProfiles()} rather than adding to it. Unlike the other varargs methods
-     * here, calling this twice keeps only the last set.
+     * Set the access profiles, <em>replacing</em> the default seeded from {@link HasRole#getRole()}
+     * rather than adding to it. Unlike the other varargs methods here, calling this twice keeps only
+     * the last set.
      */
     public CaseRoleToAccessProfileBuilder<R> accessProfiles(String... profiles) {
       accessProfiles = new ArrayList<>(List.of(profiles));
