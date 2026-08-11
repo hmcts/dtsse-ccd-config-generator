@@ -161,6 +161,11 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements Decentralised
   }
 
   @Override
+  public void noCaseHistoryTab() {
+    config.noCaseHistoryTab = true;
+  }
+
+  @Override
   public void emitCaseRoleJurisdiction() {
     config.emitCaseRoleJurisdiction = true;
   }
