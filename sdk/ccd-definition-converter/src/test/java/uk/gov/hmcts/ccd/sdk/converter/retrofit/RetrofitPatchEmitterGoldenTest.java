@@ -877,102 +877,82 @@ class RetrofitPatchEmitterGoldenTest {
   }
 
   @Test
-  void refusesToRetypeAFieldWhoseAccessorsTheModelCallsAndReportsIt() {
+  void namesTheCompanionOnAFieldWhoseAccessorsTheModelCallsRatherThanRetypingIt() {
     // SummaryReader assigns party.getReadSummary() to a SharedSummary. Re-declaring the field changes
-    // what that getter returns, so the call stops compiling — the patch must leave the declaration alone
-    // and report the row rather than emit a break. Matched by method NAME alone (the index has no symbol
-    // solver), which is deliberately conservative.
+    // what that getter returns, so the call stops compiling — the patch must leave the declaration alone.
+    // Matched by method NAME alone (the index has no symbol solver), which is deliberately conservative.
+    // The refusal is then COVERED rather than reported: @CCD(typeParameterClass) names the companion, so
+    // the SDK reads its @ComplexType(name) as this column's FieldType and the companion emits the
+    // definition's rows, while the declared type — and every caller — is untouched.
     RetrofitPatchEmitter emitter = buildEmitter();
     RetrofitPatch patch = emitter.emit();
     assertThat(patchedFile(patch, "common/Party.java"))
         .contains("private SharedSummary readSummary;")
-        .doesNotContain("ReadSummaryCT readSummary;");
-    assertThat(emitter.gaps())
-        .anySatisfy(g -> {
-          assertThat(g.getSheet()).isEqualTo("ComplexTypes");
-          assertThat(g.getRowKey()).isEqualTo("Party/readSummary");
-          assertThat(g.getAction())
-              .isEqualTo(uk.gov.hmcts.ccd.sdk.converter.model.gap.GapAction.MANUAL_PLACEMENT);
-          assertThat(g.getDetail())
-              .contains("readSummaryCT")
-              .contains("get/setReadSummary")
-              .contains("SharedSummary");
-        });
+        .doesNotContain("ReadSummaryCT readSummary;")
+        .contains("typeParameterClass = ReadSummaryCT.class");
+    assertNoGapFor(emitter, "Party/readSummary");
   }
 
   @Test
-  void refusesToRetypeAFieldTheDeclaringClassReadsDirectlyAndReportsIt() {
+  void namesTheCompanionOnAFieldTheDeclaringClassReadsDirectlyRatherThanRetypingIt() {
     // Party.resolveInlineSummary() returns inlineReadSummary as a SharedSummary with no accessor in
     // between (fpl's CaseData.getOrders() shape, which returned the retyped ordersSolicitor as an
     // Orders). The accessor check cannot see this — there is no get/set call — so the refusal must also
-    // look for the field read as a bare identifier inside its own declaring source.
+    // look for the field read as a bare identifier inside its own declaring source. Covered by naming the
+    // companion, which needs no declaration change and so has none of the retype's refusals.
     RetrofitPatchEmitter emitter = buildEmitter();
     RetrofitPatch patch = emitter.emit();
     assertThat(patchedFile(patch, "common/Party.java"))
         .contains("private SharedSummary inlineReadSummary;")
-        .doesNotContain("InlineReadSummaryCT inlineReadSummary;");
-    assertThat(emitter.gaps())
-        .anySatisfy(g -> {
-          assertThat(g.getSheet()).isEqualTo("ComplexTypes");
-          assertThat(g.getRowKey()).isEqualTo("Party/inlineReadSummary");
-          assertThat(g.getAction())
-              .isEqualTo(uk.gov.hmcts.ccd.sdk.converter.model.gap.GapAction.MANUAL_PLACEMENT);
-          assertThat(g.getDetail())
-              .contains("inlineReadSummaryCT")
-              .contains("read directly by hand-written code in Party")
-              .contains("SharedSummary");
-        });
+        .doesNotContain("InlineReadSummaryCT inlineReadSummary;")
+        .contains("typeParameterClass = InlineReadSummaryCT.class");
+    assertNoGapFor(emitter, "Party/inlineReadSummary");
   }
 
   @Test
-  void refusesToRetypeAFieldSetThroughABuilderMethodNamedAfterItAndReportsIt() {
+  void namesTheCompanionOnAFieldSetThroughABuilderMethodNamedAfterItRatherThanRetypingIt() {
     // SummaryReader.build() calls Party.builder().builderSetSummary(summary) — a Lombok @Builder setter
     // named after the FIELD, with no get/set prefix for the accessor check to match (fpl's
-    // .respondents(respondentsInCase) shape). The retype changes that parameter's type.
+    // .respondents(respondentsInCase) shape). The retype changes that parameter's type, so it is refused
+    // and covered by naming the companion instead.
     RetrofitPatchEmitter emitter = buildEmitter();
     RetrofitPatch patch = emitter.emit();
     assertThat(patchedFile(patch, "common/Party.java"))
         .contains("private SharedSummary builderSetSummary;")
-        .doesNotContain("BuilderSetSummaryCT builderSetSummary;");
-    assertThat(emitter.gaps())
-        .anySatisfy(g -> {
-          assertThat(g.getSheet()).isEqualTo("ComplexTypes");
-          assertThat(g.getRowKey()).isEqualTo("Party/builderSetSummary");
-          assertThat(g.getAction())
-              .isEqualTo(uk.gov.hmcts.ccd.sdk.converter.model.gap.GapAction.MANUAL_PLACEMENT);
-          assertThat(g.getDetail())
-              .contains("builderSetSummaryCT")
-              .contains(".builderSetSummary(…)")
-              .contains("SharedSummary");
-        });
+        .doesNotContain("BuilderSetSummaryCT builderSetSummary;")
+        .contains("typeParameterClass = BuilderSetSummaryCT.class");
+    assertNoGapFor(emitter, "Party/builderSetSummary");
   }
 
   @Test
-  void refusesToRetypeAFieldShadowedElsewhereInItsHierarchyAndReportsIt() {
+  void namesTheCompanionOnAFieldShadowedElsewhereInItsHierarchyRatherThanRetypingIt() {
     // ShadowBase/ShadowChild declare the same two field names, so Lombok generates an overriding
     // accessor pair per declaration (ET's BaseCaseData/CaseData shape). Retyping either declaration
     // alone breaks the override, so both directions must refuse: the definition addresses
     // baseAddressedSummary on the SUPERCLASS (shadowed by a descendant) and childAddressedSummary on
-    // the SUBCLASS (shadowed by an ancestor).
+    // the SUBCLASS (shadowed by an ancestor). Each refusal is covered on the declaration the definition
+    // actually addresses, by naming its companion — which leaves both declarations, and so the override
+    // pair, exactly as they were.
     RetrofitPatchEmitter emitter = buildEmitter();
     RetrofitPatch patch = emitter.emit();
     assertThat(patchedFile(patch, "common/ShadowBase.java"))
         .contains("private SharedSummary baseAddressedSummary;")
-        .doesNotContain("BaseShadowSummaryCT");
+        .doesNotContain("BaseShadowSummaryCT baseAddressedSummary;")
+        .contains("typeParameterClass = BaseShadowSummaryCT.class");
     assertThat(patchedFile(patch, "common/ShadowChild.java"))
         .contains("private SharedSummary childAddressedSummary;")
-        .doesNotContain("ChildShadowSummaryCT");
-    assertThat(emitter.gaps())
-        .anySatisfy(g -> {
-          assertThat(g.getRowKey()).isEqualTo("ShadowBase/baseAddressedSummary");
-          assertThat(g.getDetail())
-              .contains("declared on both ShadowBase and ShadowChild");
-        })
-        .anySatisfy(g -> {
-          assertThat(g.getRowKey()).isEqualTo("ShadowChild/childAddressedSummary");
-          assertThat(g.getDetail())
-              .contains("declared on both ShadowChild and ShadowBase");
-        });
+        .doesNotContain("ChildShadowSummaryCT childAddressedSummary;")
+        .contains("typeParameterClass = ChildShadowSummaryCT.class");
+    assertNoGapFor(emitter, "ShadowBase/baseAddressedSummary");
+    assertNoGapFor(emitter, "ShadowChild/childAddressedSummary");
+  }
+
+  /**
+   * Asserts no gap was recorded for a row key — the retype refusal was COVERED by naming the companion
+   * on the field's {@code @CCD}, so there is nothing left for a human to place by hand.
+   */
+  private static void assertNoGapFor(RetrofitPatchEmitter emitter, String rowKey) {
+    assertThat(emitter.gaps()).noneSatisfy(g -> assertThat(g.getRowKey()).isEqualTo(rowKey));
   }
 
   @Test

@@ -136,6 +136,24 @@ public final class RetrofitPatchEmitter {
    */
   private final RetrofitPlannedHints plannedHints = RetrofitPlannedHints.empty();
   /**
+   * The retype refusals {@link #planRetype} recorded, keyed {@code ownerFile#memberName} of the field
+   * that references the definition type. Read by {@link #withComplexCompanion} so the field instead
+   * NAMES the companion with {@code @CCD(typeParameterClass)} — which needs no declaration change and so
+   * has none of the retype's refusals — and, for those it does not cover, reported as gaps at the end of
+   * {@link #emit()}.
+   */
+  private final Map<String, RefusedRetype> refusedRetypes = new LinkedHashMap<>();
+  /**
+   * The {@code ownerFile#memberName} keys {@link #withComplexCompanion} named a companion on, so a
+   * refusal it covered is not also reported as a gap.
+   */
+  private final Set<String> companionNamedFields = new LinkedHashSet<>();
+
+  /** A refused retype, held until it is known whether the companion-naming fallback covers it. */
+  private record RefusedRetype(String sheet, String rowKey, String definitionId,
+      ResolvedProperty property, String target, String reason) {
+  }
+  /**
    * Every ID the definition's {@code ComplexTypes} sheet declares. A class whose own simple name is one
    * of these is never renamed to a different ID: that name already has a definition row of its own.
    */
@@ -382,6 +400,15 @@ public final class RetrofitPatchEmitter {
     // @JsonUnwrapped sub-objects, so accumulate all field edits keyed by the file they live in.
     final Map<Path, FileEdits> byFile = new LinkedHashMap<>();
 
+    // 0. Which definition complex types have a model class and which are emitted as companions, then
+    // which fields can be re-declared as their companion. Both run BEFORE the annotation claims below
+    // because a field whose retype is REFUSED is annotated differently — it names the companion with
+    // @CCD(typeParameterClass) instead (see withComplexCompanion) — so the claim cannot be made until
+    // the retype decision exists. The file edits either pass records are independent of the other's:
+    // a retype rewrites a token on the declaration line in place, an annotation inserts lines above it.
+    indexDefinitionComplexTypes();
+    planRetypes(byFile);
+
     // Every claim about a field goes through here rather than straight onto its declaration, so a
     // member several classes INHERIT is decided once with all their claims in hand: one annotation on
     // the shared declaration when they agree, and a class-level @CCD(member = …) on each class that
@@ -442,11 +469,7 @@ public final class RetrofitPatchEmitter {
     // win) and after 3z (whose ignore decisions remove fields from the SDK's reachability walk).
     planSuppressedComplexTypes(byFile, inherited);
 
-    // 3a. Re-declare fields whose definition complex type has no model class as the generated companion
-    // emitted for it. Must run AFTER step 3, which populates the companion set from the same lookup it
-    // skips on, and after step 1's @CCD annotations, whose insertions the retype's whole-line rewrite is
-    // ordered against at render time.
-    planRetypes(byFile);
+    // (Retypes were planned in step 0, before the annotation claims that read their outcome.)
 
     // 3b. Pin the @JsonNaming-derived member names the CaseEventToComplexTypes walk resolved through
     // a class-level naming strategy. Must run AFTER step 3 so a field that is also a definition
@@ -588,6 +611,10 @@ public final class RetrofitPatchEmitter {
         editsFor(byFile, rootType.file).addDelegatingGetter(getter);
       }
     }
+
+    // 6. Report the retype refusals the companion-naming fallback did not cover. Last, so the report
+    // states what the patch actually did rather than what one pass decided in isolation.
+    reportUncoveredRetypeRefusals();
 
     // Render each touched file.
     List<RetrofitPatch.FilePatch> filePatches = new ArrayList<>();
@@ -988,7 +1015,32 @@ public final class RetrofitPatchEmitter {
         : companion.getId();
   }
 
+  /**
+   * Records a retype refusal, to be reported as a gap only if {@link #withComplexCompanion} does not
+   * then cover it by NAMING the companion on the field's {@code @CCD} — a fallback that changes no
+   * declaration and so has none of the retype's refusals, and which reproduces both the type's rows and
+   * this column's type ID. Flushed by {@link #reportUncoveredRetypeRefusals()} once every annotation
+   * claim has been made, so the report describes what the patch actually did.
+   */
   private void recordRetypeGap(String sheet, String rowKey, String definitionId,
+      ResolvedProperty property, String target, String reason) {
+    refusedRetypes.putIfAbsent(refusedRetypeKey(property),
+        new RefusedRetype(sheet, rowKey, definitionId, property, target, reason));
+  }
+
+  /** Reports every retype refusal the companion-naming fallback did not cover. */
+  private void reportUncoveredRetypeRefusals() {
+    for (Map.Entry<String, RefusedRetype> entry : refusedRetypes.entrySet()) {
+      if (companionNamedFields.contains(entry.getKey())) {
+        continue;
+      }
+      RefusedRetype refused = entry.getValue();
+      recordRetypeGapEntry(refused.sheet(), refused.rowKey(), refused.definitionId(),
+          refused.property(), refused.target(), refused.reason());
+    }
+  }
+
+  private void recordRetypeGapEntry(String sheet, String rowKey, String definitionId,
       ResolvedProperty property, String target, String reason) {
     gaps.add(GapEntry.builder()
         .sheet(sheet)
@@ -1343,7 +1395,60 @@ public final class RetrofitPatchEmitter {
    * rather than a guess at a class name.
    */
   private FieldModel withTypeParameterClass(FieldModel field, ResolvedProperty property) {
-    return withBackingEnum(withCompanionOverride(field, property), property);
+    return withComplexCompanion(withBackingEnum(withCompanionOverride(field, property), property),
+        property);
+  }
+
+  /**
+   * Names the generated companion CLASS behind a field's definition complex type as
+   * {@code @CCD(typeParameterClass)}, for a field whose {@link #planRetype re-declaration} as that
+   * companion was refused.
+   *
+   * <p>The retype is the primary fix and stays so: it makes the companion the field's actual type, which
+   * is what the SDK reflects. But it is refused wherever rewriting the declaration would not compile —
+   * a caller of the accessors, a constructor parameter bound to the old type, a positional instantiation
+   * — and until now a refusal left the definition type with no counterpart at all: the companion was
+   * emitted and referenced by nothing, while the declared class emitted rows under its own ID.
+   *
+   * <p>Naming the companion covers exactly that case. {@code typeParameterClass} makes the class part of
+   * the definition (complex-type resolution walks it like a declared type, so it emits its
+   * {@code ComplexTypes} rows) and {@code CaseFieldGenerator.resolveFieldType} reads its
+   * {@code @ComplexType(name)} as this column's {@code FieldType} — while the field's declared type, and
+   * so every caller and serialised payload, is untouched. sscs's {@code JointParty.name} is the case:
+   * declared {@code Name} (the model class for the definition's own four-member {@code name} type) but
+   * addressed by the definition's three-member {@code jointPartyName}, whose {@code title} is a
+   * {@code FixedList} where {@code name}'s is {@code Text}. One class cannot carry both IDs, and
+   * {@code RoboticsJsonMapper} calls {@code getName()}, so the retype is rightly refused.
+   *
+   * <p>Skipped when the field already carries a {@code typeParameterClass} (the FixedList paths above
+   * name an enum on the same member, and only one class fits), when the retype was NOT refused — a
+   * retyped field needs nothing, its declared type IS the companion — and when the field carries a
+   * {@code typeOverride}, which short-circuits type resolution entirely
+   * ({@code CaseFieldGenerator.populateFieldMetadata} returns before it reads the named class), so the
+   * annotation would be inert and the refusal is still the honest thing to report. A COLLECTION field's
+   * override is the exception the SDK makes too: there the named class is the element type, supplying the
+   * {@code FieldTypeParameter} the override already writes, and the {@code FieldType} stays
+   * {@code Collection}.
+   */
+  private FieldModel withComplexCompanion(FieldModel field, ResolvedProperty property) {
+    if (property == null || field.getTypeParameterClassName() != null) {
+      return field;
+    }
+    if (field.getTypeOverride() != null && !field.getTypeOverride().isEmpty()
+        && !"Collection".equals(field.getTypeOverride())) {
+      return field;
+    }
+    RefusedRetype refused = refusedRetypes.get(refusedRetypeKey(property));
+    if (refused == null) {
+      return field;
+    }
+    companionNamedFields.add(refusedRetypeKey(property));
+    return field.toBuilder().typeParameterClassName(refused.target()).build();
+  }
+
+  /** The key a retype refusal and its covering annotation are matched on: the field itself. */
+  private static String refusedRetypeKey(ResolvedProperty property) {
+    return property.ownerFile + "#" + property.memberName;
   }
 
   private FieldModel withBackingEnum(FieldModel field, ResolvedProperty property) {
@@ -1504,20 +1609,31 @@ public final class RetrofitPatchEmitter {
     return Annotations.has(type.decl, "JsonNaming") && NamingStrategy.of(type).isEmpty();
   }
 
+  /**
+   * Records every definition {@code ComplexTypes} ID, and which of them have no model class and so are
+   * emitted as generated companions — the same lookup {@link #planComplexTypeMembers} skips on, so the
+   * companion set is exactly its complement.
+   *
+   * <p>Split out and run first because BOTH the retype plan and the annotation claims read it: a retype
+   * points a field's declaration at its companion, and a field whose retype is refused instead NAMES the
+   * companion in its {@code @CCD}. Neither decision can be taken on a partially-filled set.
+   */
+  private void indexDefinitionComplexTypes() {
+    for (ComplexTypeModel complexType : model.getComplexTypes()) {
+      definitionComplexTypeIds.add(complexType.getId());
+      if (boundClass(complexType.getId()).isEmpty()) {
+        companionComplexTypes.put(complexType.getId(), complexType);
+      }
+    }
+  }
+
   private void planComplexTypeMembers(Map<Path, FileEdits> byFile,
       RetrofitInheritedMembers inherited) {
     // Prefer a complex-type class in the team's model package; the root class's package is the
     // anchor (e.g. uk.gov.hmcts.reform.civil.model). Falling back to null hint would let a
     // same-named type in an unrelated package win.
     String modelPackage = rootType != null ? rootType.packageName : null;
-    for (ComplexTypeModel complexType : model.getComplexTypes()) {
-      definitionComplexTypeIds.add(complexType.getId());
-      // The same lookup the loop below skips on, run up front so every retype decision — including one
-      // made while planning the FIRST complex type's members — sees the complete companion set.
-      if (boundClass(complexType.getId()).isEmpty()) {
-        companionComplexTypes.put(complexType.getId(), complexType);
-      }
-    }
+    indexDefinitionComplexTypes();
     for (ComplexTypeModel complexType : model.getComplexTypes()) {
       Optional<ModelSourceIndex.Type> type = boundClass(complexType.getId());
       if (type.isEmpty()) {
