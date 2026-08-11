@@ -51,6 +51,9 @@ conscious decision instead of inheriting invisible JSON — see
 | Whitespace inside show conditions | Not semantic | `SHOW_CONDITION_WHITESPACE` | Expression parser ignores it |
 | State `Description` repeating `Name` | Not semantic | `STATE_DESCRIPTION` | The generator default (a *differing* Description is emitted via `@CCD(description)`) |
 | `Yes`/`true` ≡ `Y` etc. on boolean columns | Not semantic | `YN_CANON` | Incl. `SignificantEvent`/`CanSaveDraft`/`EnableForDeletion`/`Shuttered`/`BannerEnabled` |
+| `CaseType`-sheet `RetriesTimeoutURLPrintEvent` | Not semantic | `CASE_TYPE_PRINT_RETRIES` | The importer's `CaseTypeParser.parsePrintWebhook` builds the print webhook from `PrintableDocumentsUrl` alone and attaches no timeouts |
+| `EventToComplexTypes` `CaseTypeID` and wizard-page columns | Not semantic | `EVENT_COMPLEX_TYPE_INERT_COLUMNS` | `CaseTypeID` is implied by traversal; `PageLabel`/`PageDisplayOrder`/`PageFieldDisplayOrder` are only read on `CaseEventToFields` |
+| `Publish` on the `CaseField`/`ComplexTypes` sheets | Not semantic | `PUBLISH_IGNORED_ON_FIELD_SHEETS` | Publishing is a per-placement property; neither sheet's parser reads the column and neither entity carries it |
 | Injected `caseHistory` field/tab/auth rows (creates/widens `CRU`) | **Semantic, accepted** | `CASE_HISTORY` | CaseHistoryViewer carries no submitted data; grants are display-only |
 | Injected/widened read (`R`) on unrestricted-tab fields | **Semantic, accepted** | `TAB_READ_INJECTION` | Roles already event-granted gain tab-field visibility; each (field, role) is an `AUTH_NOT_DERIVABLE`/`ADVISORY` report-only record — **no row is passed through** ([detail](#authorisationcasefield-injected-read-records)) |
 | Surplus `⊆ {C,R}` grants on `Label`/`READONLY` fields | **Semantic, accepted** | `IMMUTABLE_FIELD_CR` | Display permission on data-free fields |
@@ -101,7 +104,22 @@ bullet each:
   not a cosmetic rewrite: on `AuthorisationCaseField` the rule *creates* a `CRU` grant row for any role
   that had none, and *widens* an input's narrower `⊆ {C,R,U}` grant up to `CRU` — so the regenerated
   definition grants more/wider `caseHistory` permissions than the input. Accepted because the
-  CaseHistoryViewer field carries no submitted case data.
+  CaseHistoryViewer field carries no submitted case data. The injected *tab* half is no longer
+  unconditional: `CaseTypeTabGenerator` checks only the tab's **ID**, so a case type that shows case
+  history from a tab of its own — sscs places `caseHistory` on a per-role `eventHistory_<role>` tab —
+  used to get a second History tab it never had. `ConfigBuilder.noCaseHistoryTab()` opts out of the
+  injected tab alone (the `caseHistory` `CaseField` row and its authorisations are unaffected, so the
+  field stays available to whichever tab does place it), and the converter calls it whenever the input
+  declares no `TabID=CaseHistory`.
+- **`CASE_TYPE_PRINT_RETRIES`** — drops `RetriesTimeoutURLPrintEvent` from the `CaseType` sheet. The
+  print webhook is the one webhook the importer builds without timeouts:
+  `CaseTypeParser.parsePrintWebhook` constructs its `WebhookEntity` from `PrintableDocumentsUrl`
+  alone, where its sibling `parseGetCaseWebhook` calls
+  `WebhookParser.parseWebhook(…, CALLBACK_GET_CASE_URL, RETRIES_GET_CASE_URL)` — and no `ColumnName`
+  constant for a print-retries column exists at all (`CaseTypeParserTest` pins zero timeouts on the
+  parsed print webhook). The column nonetheless survives in `ccd-template.xlsx`'s header row, so
+  probate's `5,10,15` round-trips into the sheet and is then discarded by the importer. Scoped to the
+  `CaseType` sheet and that one column; the print URL itself compares normally.
 - **`CASE_TYPE_TAB`** — reconciles equivalent tab-metadata spellings: the `Channel=CaseWorker`
   default, `TabLabel`/`TabShowCondition` propagated to every field row (first non-blank wins; a
   genuine conflict still fails), the generator's role-scoped-tab encoding (role appended to `TabID`,
@@ -155,13 +173,32 @@ bullet each:
   sorts to a different string and still fails; a non-CRUD value is left untouched.
 - **`EMPTY_STRING_ABSENT`** — an empty string or JSON `null` on one side equals an absent column on
   the other (and mutually blank/null columns collapse); the importer treats all identically.
+- **`EVENT_COMPLEX_TYPE_INERT_COLUMNS`** — drops, from both sides of the
+  `EventToComplexTypes`/`CaseEventToComplexTypes` sheet, the columns the importer never reads there:
+  `CaseTypeID` (and its legacy `CaseTypeId` spelling) and the wizard-page columns `PageLabel`,
+  `PageDisplayOrder`, `PageFieldDisplayOrder`. `EventParser.parseCaseEventComplexTypes` groups the
+  sheet by `(CaseEventID, CaseFieldID)` and `EventCaseFieldComplexTypeParser` maps only
+  `ListElementCode`, `EventElementLabel`, `EventHintText`, `LiveFrom`/`LiveTo`, `FieldDisplayOrder`,
+  `DefaultValue`, the display context, `FieldShowCondition`, `Publish`/`PublishAs` and
+  `RetainHiddenValue` — so the case type is implied by the traversal that reached the row
+  (`ColumnName.isRequired` has no `CASE_EVENT_TO_COMPLEX_TYPES` branch for it), and the page columns
+  are read only by `WizardPageParser`, whose constructor pins `sheetName = SheetName.CASE_EVENT_TO_FIELDS`.
+  `FieldDisplayOrder` (an accepted display-order difference) and `PageID` are deliberately left alone.
 - **`FIELD_TYPE_COMPLEX`** — `FieldType=Complex, FieldTypeParameter=<TypeId>` ≡ `FieldType=<TypeId>`
   — the same complex-type reference, two spellings.
 - **`IDENTIFIER_WHITESPACE`** — trims leading/trailing whitespace on identifier columns
-  (`ID`/`ListElementCode`/`FieldTypeParameter`/`CaseFieldID`/`CaseEventID`/`CaseStateID`/`TabID`);
-  the importer trims identifier cells for cross-sheet lookups. Never touches prose columns.
+  (`ID`/`ListElementCode`/`FieldType`/`FieldTypeParameter`/`CaseFieldID`/`CaseEventID`/`CaseStateID`/
+  `TabID`); the importer trims identifier cells for cross-sheet lookups. `FieldType` belongs there
+  for the same reason as `FieldTypeParameter` — it is a lookup key into `ComplexTypes`/`FixedLists`,
+  and the SDK necessarily emits it trimmed because it derives the name from a Java type (sscs authors
+  both the `ID` and the `FieldType` of its `SearchCriteria` `CaseField` as `"SearchCriteria "`, with a
+  trailing space). Never touches prose columns.
 - **`KEY_ALIAS`** — canonicalises legacy column aliases the importer accepts interchangeably:
-  `UserRole`→`AccessProfile`, `Name`→`Label` (CaseField), `CaseTypeId`→`CaseTypeID`.
+  `UserRole`→`AccessProfile`, `Name`→`Label` (CaseField), `CaseTypeId`→`CaseTypeID`, and on the
+  `SearchParty` sheet the date-of-birth/date-of-death header casing — `ColumnName.SEARCH_PARTY_DOB`/
+  `SEARCH_PARTY_DOD` spell them `SearchPartyDOB`/`SearchPartyDOD` and `SearchPartyGenerator` emits
+  that casing, while sscs authors them `SearchPartyDoB`/`SearchPartyDoD`; the importer matches
+  headers case-insensitively, so both import.
 - **`LIVE_FROM`** — strips the mandatory-but-meaningless `LiveFrom` from both sides. `LiveTo` is
   deliberately left alone — an end-of-life date is behavioural — bar the one narrow accepted
   exception `LIVE_TO_VESTIGIAL` below.
@@ -214,6 +251,14 @@ bullet each:
   `CaseEvent`, only when the actual side equals the expression's primary state; the reverse shape and
   a disagreeing primary still fail. The runtime conditional transition is genuinely lost — a migrating
   team reimplements it via an `aboutToSubmit` callback.
+- **`PUBLISH_IGNORED_ON_FIELD_SHEETS`** — drops a `Publish` column on the `CaseField` or
+  `ComplexTypes` sheet from whichever side carries it. Publishing is a per-*placement* property: the
+  column exists only on `CaseEventToFields` (`EventCaseFieldParser` → `EventCaseFieldEntity.publish`)
+  and `EventToComplexTypes` (`EventCaseFieldComplexTypeParser` → `EventComplexTypeEntity.publish`),
+  where it compares normally. Neither `CaseFieldParser.parseCaseField` nor
+  `ComplexFieldTypeParser.parseComplexField` reads `ColumnName.PUBLISH`, and neither
+  `CaseFieldEntity` nor `ComplexFieldEntity` has a field for it, so a `Publish` on a declaration row
+  is inert. Scoped by a private `FIELD_SHEETS = Set.of("CaseField", "ComplexTypes")`.
 - **`PRE_CONDITION_STATE_ORDER`** — `PreConditionState(s)` is an unordered set; the generator sorts
   it, the importer doesn't care.
 - **`REDUNDANT_FIELD_TYPE_PARAMETER`** — drops a `FieldTypeParameter` the importer ignores on
@@ -271,6 +316,17 @@ Two mechanical consequences worth knowing:
 - **Row order within a sheet is never compared** — matching is purely key-based and generated rows are
   read in sorted-path order. Any sheet whose on-screen order the store derives from row position (see
   [accepted difference 2](#2-display-order-renumbering)) is therefore unverified for ordering.
+- **The `CaseType` sheet's `Name` is compared un-substituted.** Every other interpreted column has its
+  `${CCD_DEF_*}` placeholders resolved on the expected side before comparison, because the importer
+  reads a resolved value (`Publish` also holds a placeholder in sscs, but is parsed through
+  `getYesNo`, so the generator emits a resolved `Y`/`N`). `Name` is different: the linker reads it
+  straight into `caseTypeName` and `CoreConfigEmitter` emits it as a string literal with placeholders
+  intact, so a migrated service keeps its own `${CCD_DEF_*}` values and one build serves every
+  environment. Substituting only the expected side manufactured a diff for whichever variables the
+  harness happens to pass — sscs's `"SSCS Case ${CCD_DEF_VERSION} ${CCD_DEF_ENV}"` diverged on
+  `CCD_DEF_ENV` alone while its five placeholder-bearing `CaseField` labels did not, purely because
+  their variables were absent from the map (`RAW_CASE_TYPE_COLUMNS` in `ExpectedDefinitionBuilder`,
+  shared by the in-JVM harness and the retrofit lanes).
 
 ## Accepted semantic differences
 
@@ -370,6 +426,15 @@ forgiven by the `CONDITIONAL_POST_STATE` comparator rule — which fires **only*
 **only** when the expected value is genuinely conditional/multi, and **only** when the actual value
 equals that expression's primary state. The reverse shape (a conditional the generator invented) and
 a primary that disagrees both still fail, so a generator regression cannot hide behind it.
+
+A *third* shape — no `PostConditionState` column at all — is now expressible rather than collapsed.
+An absent column is distinct from both a concrete state and `*`: the data store applies only the
+state the about-to-submit callback returned, so writing any value there would force a
+definition-declared transition the hand-written definition deliberately omitted.
+`EventBuilder.postStateFromCallback()` suppresses the column entirely while leaving the pre-state
+alone, so an event available in one state does not become available in all
+([`CaseEventGeneratorTest`](../sdk/ccd-config-generator/src/test/java/uk/gov/hmcts/ccd/sdk/generator/CaseEventGeneratorTest.java)
+pins all three behaviours); the converter emits it for an event whose input carries no post-state.
 
 *What to do after migration*: a team that relies on the runtime conditional transition must
 reimplement it in an `aboutToSubmit` callback that inspects the case data and returns
@@ -609,6 +674,34 @@ matches, so ungated definitions regenerate byte-identically. The converter emits
 `GatedFieldGenerationTest` (both gate polarities snapshotted) and the minimal golden fixture's
 nonprod-only field in both round-trip environments.
 
+### Overlay fragments the SDK has no per-row switch for
+
+The gate is a per-*field* mechanism, and several sheets have no per-row environment switch in the SDK
+at all: role-to-access-profile mappings, state authorisations, search-party definitions and per-field
+event placements are emitted from static configuration. A definition that splits those across
+mutually-exclusive overlay fragments (sscs's `-nonWA` against `-WA-nonprod`) is therefore reproducible
+only by admitting the fragment the build being converted would actually have used — admitting both
+halves produces a definition wrong in *every* environment, because the two collide and the loser's
+rows survive as grants and placements a real build never emits. `OverlayResolver.isActiveRow` applies
+that rule (true for a base row, and for a suffixed row whose predicate is active in the convert-time
+environment) across the seven row loops that need it, and the new repeatable `--env KEY=VALUE` option
+names the target environment: the values are applied as system properties, which `OverlayCondition`
+reads before the real environment. Without `--env` those predicates are judged against the ambient
+environment.
+
+A separate read-time filter sits upstream of all of this. A row key that names no CCD column never
+reaches an imported definition — `json2xlsx` builds each spreadsheet row as
+`headers.map(key => record[key])` against the sheet's header row in `ccd-template.xlsx`, so a key
+matching no header contributes no cell and is gone before the xlsx exists. `ColumnVocabulary` (in the
+reader) decides which keys those are, matching the importer's own `ColumnName` vocabulary
+case-insensitively as `equalsColumnNameOrAlias` does, and `JsonDefinitionReader` drops them. Real
+definitions carry two shapes: inline documentation the authors know CCD ignores (`Comment`, civil's
+`_Comment`/`_Category`/`_Definition`), dropped silently, and typos they do not — sscs's
+`",ShowSummaryChangeOption"` (a stray comma swallowed into the key), fpl's `FieldShownCondition` and
+`"FieldShowCondition:"`, civil's `PageShowShowCondition` and `retainHiddenValues` — reported as
+advisory gaps, since a key one edit from a real column is a finding worth handing back to the team:
+the definition plainly meant it and has silently not had it.
+
 ## Remaining residual tails
 
 Seven real fixtures convert, compile and round-trip end-to-end, and each is now an **enabled**
@@ -618,17 +711,17 @@ file *is* the enumerated, reviewed list of that fixture's open gaps; the test pa
 residuals equal the baseline exactly (a new diff fails as a regression, a vanished diff fails
 demanding a baseline refresh — the ratchet only tightens). Current baseline sizes:
 
-| Fixture  | Residual lines |
-|----------|---------------:|
-| ia       |              4 |
-| probate  |              6 |
-| ET       |             15 |
-| fpl      |             21 |
-| sscs     |             32 |
-| prl      |             55 |
-| civil    |            126 |
+| Fixture  | Residual lines | Led by |
+|----------|---------------:|---|
+| ia       |              1 | one `SearchCriteria`/`OtherCaseReference` row |
+| probate  |              6 | five `[STATE]` `CaseEventToFields` no-match rows, plus one `MaNDATORY` typo |
+| ET       |             10 | two `retainHiddenValue`, `UnavailabilityDateRange` ×2, `sendNotificationCollection` ×4, two `SearchCriteria` `LiveTo=` rows |
+| fpl      |              7 | `caseProgressionReport` pre-states, `colleaguesToNotify` `Label`, `allocationDecision ShowSummaryContentOption`, one `colleagues` `EventToComplexTypes` row, two `HearingVenue LiveTo`, `RepresentativeRole`/`LA_BARRISTER` |
+| sscs     |             11 | three `TextArea`-vs-`Text` `FieldTypeParameter`, two `confidentialityRequiredChangedDate` no-match, four `JudicialUser`-vs-`Text`, three `FL_selectWhoReviewsCase` |
+| prl      |             43 | `CaseField` 20 (16 of them `ShowSummaryContentOption`), `AuthorisationCaseEvent` 6, `FixedLists`/`CaseEventToFields` 4 each |
+| civil    |             89 | `ComplexTypes` 36 (`Label` 11, `CaseFieldID` 10, `CaseEventID` 8), `CaseField` 13, `CaseEventToFields` 12, `CaseTypeTab` 9, `FixedLists` 8 |
 
-Total **259**. These are the *generate*-mode fixtures — the converter emits a fresh model and the
+Total **167** (measured 2026-08-11 from the checked-in baseline files). These are the *generate*-mode fixtures — the converter emits a fresh model and the
 round-trip compares that against the input. Retrofit mode (annotating a team's **existing** model) is
 measured separately and is much further from zero; see
 [Retrofit-lane residual](#retrofit-lane-residual).
@@ -1034,9 +1127,10 @@ label-mismatch shape the next round addresses.
 Read the earlier tables in this section against their own baselines, not against this one: the rounds
 above were measured before a per-lane flag correction, so their absolute numbers are not comparable with
 these. Every lane in this table was re-measured at the same commit with byte-identical
-`bin/retrofit-verify` invocations on both sides. `civil` is absent because its lane cannot be measured at
-all — stage 4 fails inside the service's own Spring context (`InterlocutoryJudgementDocMapper` needs a
-`DeadlineExtensionCalculatorService` bean), which predates this work.
+`bin/retrofit-verify` invocations on both sides. `civil` is absent because at the time of this round its
+lane could not be measured at all — stage 4 failed inside the service's own Spring context
+(`InterlocutoryJudgementDocMapper` needed a `DeadlineExtensionCalculatorService` bean), which predated
+this work. **That is no longer true**; see the 2026-08-11 round below.
 
 **Four things closed the `FixedLists` half of the tail, all about the one column nothing could pin.**
 `FixedListGenerator` derives `ListElementCode` from the enum *constant* — it puts the constant into the
@@ -1163,9 +1257,161 @@ inheritance, and the definition does not give each subclass ID the same slice of
 emits members into both IDs that only one of them declares (`sscsWelshDocuments` gains `dateApproved`,
 `avDocumentLink`, `controlNumber` and six more). Nothing about a field on `AbstractDocumentDetails` says
 which subclass IDs should carry it; expressing that needs per-subclass member suppression, which the SDK
-has no form for today. One further line is a label collision of the same origin: both subclasses inherit
+had no form for at the time of this round — the class-level `@CCD(member = …)` in the round below is
+that form. One further line is a label collision of the same origin: both subclasses inherit
 `documentType`, but the definition parameterises it as `documentTypeWelsh` on one and `documentTypeDwp`
-on the other, and a single inherited field can carry only one `typeParameterOverride`.
+on the other, and a single inherited field can carry only one field-level `typeParameterOverride` —
+which the same class-level override now settles per subclass.
+
+### Measured 2026-08-11 — per-subclass overrides, reachability suppression, and the first clean lane
+
+| Lane | Case type | Before | After | Δ |
+|---|---|---:|---:|---:|
+| sscs | `Benefit` | 161 | **0** | −161 |
+| probate | `GrantOfRepresentation` | 125 | **58** | −67 |
+| et | `ET_EnglandWales` | 490 | **146** | −344 |
+| fpl | `CARE_SUPERVISION_EPO` | 1,599 | **569** | −1,030 |
+| prl | `PRLAPPS` | 2,136 | **1,477** | −659 |
+| civil | `CIVIL` | *unmeasurable* | **539** | — |
+| **total (five comparable lanes)** | | **4,511** | **2,250** | **−2,261 (−50%)** |
+
+**sscs is the first lane to reach zero** — `bin/retrofit-verify` reports `SEMANTICALLY EQUIVALENT`, i.e.
+a real service's own model, annotated by the patch and built in its own repo, regenerates its
+hand-written definition exactly. That is the first end-to-end proof that retrofit mode can be complete
+for a lane rather than merely close, and it is the lane that had the shared-jar and abstract-hierarchy
+problems the earlier rounds called structural.
+
+**civil is measurable for the first time.** Its stage-4 blocker was never in the converter's output: the
+lane booted the *service's* Spring context, so the service's own `@Component`s were instantiated and
+`InterlocutoryJudgementDocMapper` demanded a bean the lane has no reason to create.
+`ApplicationEmitter` now emits `ConverterGeneratedApplication` with a **filtered** component scan —
+`@ComponentScan(basePackages = <model package>, useDefaultFilters = false, includeFilters = @Filter(ASSIGNABLE_TYPE, CCDConfig.class))`
+beside the generator's own package — so only `CCDConfig` beans are picked up, and the lane's init script
+sets `spring.main.web-application-type=none`. All five stages now run and civil reports 539.
+
+**The SDK gained the forms these lanes needed.** Each is narrow, default-off and pinned:
+
+- **A subclass can configure a member it inherits.** `@CCD` is now `@Repeatable` and legal on a class,
+  where `member = "<inherited field name>"` says which inherited member it configures. A field declared
+  once on a shared superclass is one Java member but several CCD members — it emits a row under every
+  complex type that reaches it, and a hand-written definition is free to give those rows different
+  metadata or to omit some. sscs's abstract `Entity` declares `identity`/`name`/`address`/`contact`/
+  `organisation` for `Appellant`, `Appointee`, `OtherParty`, `Representative` and `JointParty` alike,
+  and the definition puts a `FieldShowCondition` on `representative`'s five rows only. Placed on the
+  subclass, the annotation **replaces** the inherited field's own `@CCD` wherever rows are produced
+  through that class (its `ComplexTypes` members, its `CaseField` rows when reached `@JsonUnwrapped`,
+  and the access those rows derive), leaving every other subclass on the field's own declaration;
+  `ignore = true` in this form drops the member from that class alone — the shape `JointParty` needs,
+  whose inherited `Party` members the definition has no fields for. Naming a field the class declares
+  itself, or one no supertype declares, is a configuration error and fails generation rather than
+  silently doing nothing. The retrofit patch emits these overrides.
+- **A static field is no longer case data.** A static belongs to the class, not to a case, and Jackson
+  never serialises one. `getCaseFields` reflected over every field regardless while its sibling
+  `collectGatedOffFieldIds` already excluded statics; the predicate is now applied where the rows are
+  produced. Nothing in a hand-written model raises the question, but a retrofitted model is real code:
+  sscs's Lombok `@Slf4j` loggers emitted `ComplexTypes` rows of `FieldType=Logger`, and
+  `CorrespondenceDetails`' private `DateTimeFormatter` one of `FieldType=DateTimeFormatter` — types no
+  definition can name.
+- **A field a subclass redeclares emits one row.** A redeclared field *hides* the superclass one: Java
+  resolves the name to the subclass's field and Jackson sees a single property, so only the most-derived
+  declaration is case data. `ReflectionUtils.doWithFields` walks subclass-first and reports both, so one
+  property emitted two rows. sscs's `JointParty` redeclares the `id`/`identity`/`name`/`address`/
+  `contact` it inherits purely to give each a `@JsonProperty("jointParty…")` ID; because `SscsCaseData`
+  holds `JointParty` `@JsonUnwrapped` with no prefix, the hidden declarations emitted a second
+  `CaseField` row apiece under IDs the definition has no field for. Keeping the first declaration seen
+  keeps the one Java itself resolves to, so the row carries the subclass's metadata.
+- **A field ID colliding with an unwrapped container's *name* keeps its grants.**
+  `isUnwrappedField` resolves a CCD field ID through `ReflectionUtils.findField`, which matches on Java
+  member name — two independent namespaces a real model collides: sscs declares
+  `@JsonUnwrapped private CaseOutcome caseOutcome`, whose prefix-less `caseOutcome` leaf therefore has
+  CCD ID `caseOutcome`. A name-only test discarded every `AuthorisationCaseField` row for a field the
+  `CaseField` sheet *does* emit, producing grants no role could exercise, while its
+  identically-configured sibling `didPoAttend` was unaffected (`jointParty` collides the same way via
+  `@JsonProperty`). The suppression itself has to stay — an unwrapped container emits no `CaseField` row,
+  so a placement registering it by name would reference a field that does not exist — so
+  `FieldUtils.isUnwrappedContainerId` tests both halves: *names an unwrapped member* **and** *is not
+  itself an emitted field ID*, over a new `caseFieldIds()` walk mirroring `CaseFieldGenerator`'s prefix
+  accumulation (hoisted out of the per-row loop; a real model has thousands of rows across dozens of
+  roles).
+- **`@CCD(displayContextParameter)`** carries the column on a member, where no builder exists.
+  `ComplexFieldTypeParser` reads `DisplayContextParameter` on the `ComplexTypes` sheet, so the date
+  format a hand-written definition puts on `appellant.confidentialityRequiredConfirmedDate` is
+  expressible only there. (On the `CaseField` sheet the importer ignores it, so setting it is harmless
+  but inert — the placement builders drive display on a page or tab.) The retrofit patch renders it.
+- **`@CCD(typeParameterClass)`** names the class declaring the type `typeParameterOverride` spells, when
+  no field in the model *declares* it — see the [reachability round](#measured-2026-08-07--typeparameterclass-reachability-round);
+  the retrofit side now also uses it to point an oversized enum's field at the emitted companion.
+- **`complexMemberNoSummary`** completes the placement API: a clustered leaf sits inside its holder's
+  member scope and needs the `COMPLEX` row *without* opening one, and `displayContextToMethod` had no
+  `COMPLEX` case, so every such row regenerated as `DisplayContext=OPTIONAL`. probate and et both ship
+  `COMPLEX` rows with `ShowSummaryChangeOption=N`, hence the `*NoSummary` sibling.
+- **`@CCD(ignore)` on a `State` enum constant** drops the constant's `State` row *and* its
+  `AuthorisationCaseState` rows (a grant on a state that does not exist fails to import). A service
+  reusing an existing enum has constants no case type declares — an `@JsonEnumDefaultValue UNKNOWN`
+  sentinel, a legacy composite state — which cannot be deleted because its own code still switches on
+  them. This closes the 22 `State` extra-constant lines the earlier rounds carried, and the patch pins
+  them.
+
+**Converter- and retrofit-side rounds behind the rest of the drop.** `RetrofitReachableTypes` mirrors
+`ConfigResolver.resolve` so the patch can see the same class set the generator will (declared field
+types plus collection element types through one generic wrapper, up the `extends` chain, path-guarded,
+`@JsonUnwrapped` holders descended into but not recorded) and gives each reachable class no definition ID
+binds a **name-less** `@ComplexType(generate = false)`: the SDK's walk reaches more classes than the
+definition declares IDs for, in two shapes — a team's own copy of a type the store knows natively
+(sscs's `DocumentLink`, `DynamicList`, `CaseLink`) and the `{id, value}` envelope of a collection, which
+CCD leaves implicit. sscs generated 127 `ComplexTypes` against 118 declared IDs, and those 15 extras
+were the largest single group of its residual. Alongside: the binder refuses an ID whose target class
+another ID already names case-insensitively; a synthesised field colliding with a member pinned to a
+different ID is renamed; numeric enum constructor arguments are read (previously only string literals
+were); constants are added to `@JsonValue` enums; the hint the patch is *about to pin* is read rather
+than the one the source declares; and `regen-review-clones.sh` passes `--emit-application` while
+`refresh-migration-branches.sh` derives `ccd.rootPackage` from the emitted class's own package instead
+of trusting the hand-written value — the three wiring causes that had made `generateCCDConfig` fail on
+every migration branch since it was opened.
+
+**Two harness defects were masking real numbers, and both invalidate earlier comparisons.**
+`printf '%q'` is wrong for Gradle's `--args=` string: bash escapes `!` as `\!` for history-expansion
+safety and Gradle forwards the backslash verbatim, so `!CCD_DEF_PUBLISH:Y` reached picocli as
+`\!CCD_DEF_PUBLISH:Y` and `OverlayCondition.parse` read it as a **non**-negated predicate on an env var
+literally named `\!CCD_DEF_PUBLISH` — every negated overlay fragment in every lane was emitted behind a
+permanently false guard. Single-quoting is inert to bash's history rules and survives Gradle's splitter
+unchanged. Separately, sscs's lane declared no overlay suffixes at all while the in-JVM fixture declared
+the shutter pair, so every `-shuttered` and `-WA-` fragment read as a base row: the mutually-exclusive
+halves both survived, collided last-wins in the `UserRole` enum's `caseTypePermissions`, and produced 16
+`AuthorisationCaseType`/`AuthorisationCaseEvent` lines the in-JVM baseline never showed. Its suffix set
+now matches the fixture exactly — eight entries, because `extractOverlayTags` takes the **longest**
+configured suffix, so each `-WA-` spelling needs its own (without `GS-WA-nonprod`, that file would match
+plain `nonprod` and lose its WA condition). `CCD_DEF_PUBLISH` is the right variable to key them on rather
+than one of our own invention: `create-xlsx.sh:128-136` derives both from its `WA_ENABLED` argument in
+one branch (WA on sets `CCD_DEF_PUBLISH=Y` and excludes `*-nonWA*`; WA off sets `N` and excludes
+`*-WA-*`), and prod additionally forces `N` at `:140`, so `CCD_DEF_PUBLISH:Y` implies nonprod and one
+predicate expresses the exclusion exactly.
+
+The lanes are now measured by
+[`bin/verify-all-lanes.sh`](../sdk/ccd-definition-converter/bin/verify-all-lanes.sh), which runs the
+full five-stage pipeline per lane and **parses** the `LANES` table out of `regen-review-clones.sh`
+rather than copying it, so a lane's model repo, definition dirs, overlays, env and type hints cannot
+drift between the two scripts. Only the first lane publishes the SDK to mavenLocal. `ia` is
+deliberately absent: it has no typed model to annotate (map-based `CaseData`), so its measure is the
+generate-mode round-trip.
+
+**What remains, by sheet.**
+
+| Lane | Residual | Leading sheets |
+|---|---:|---|
+| sscs | **0** | — |
+| probate | 58 | `FixedLists` 33, `ComplexTypes` 17, `CaseEventToFields` 6, `CaseField` 2 |
+| et | 146 | `ComplexTypes` 137 (`Bundle` 21, `HearingDetails` 17, `BundleDetails` 17, `FlagDetailType` 16, `UpdateReferralType` 13), `FixedLists` 3, `SearchCriteria`/`CaseField`/`CaseEventToFields` 2 each |
+| civil | 539 | `FixedLists` 196 (`TranslatedDocumentType` 19, `DocumentType` 16, `CosRecipientServeLocationType` 12, `ClaimTypeUnSpec`/`ClaimTypeUnspec` 9 each), `CaseField` 153, `ComplexTypes` 148, `CaseEventToFields` 12, `AuthorisationCaseType` 10, `CaseTypeTab` 9 |
+| fpl | 569 | `FixedLists` 436 (`HearingVenue` **405**, `CMOStatus` 6, `YesNo` 4), `ComplexTypes` 64, `CaseField` 36, `AuthorisationCaseField` 17, `EventToComplexTypes` 14 |
+| prl | 1,477 | `AuthorisationCaseField` **782** (every one an expected row with no match), `ComplexTypes` 287, `CaseField` 257, `FixedLists` 135, `AuthorisationCaseEvent` 6 |
+
+Three of these are now single-shape tails rather than mixed ones. fpl's `HearingVenue` 405 is one
+reference-data list — 405 venue codes the definition holds and no enum does. prl's 782
+`AuthorisationCaseField` no-match lines are a *single* category (an expected grant the regenerated
+definition does not produce at all), not scattered column divergence, and are the largest remaining
+block in any lane. et's `ComplexTypes` 137 is the same-members-two-IDs problem across five types,
+awaiting a rename-versus-accept decision per type.
 
 ## What the round-trip does not prove
 
