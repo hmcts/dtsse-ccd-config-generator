@@ -47,10 +47,22 @@ final class Fixtures {
       // with CCD_DEF_PUBLISH=N so the expected side substitutes the placeholder to the same literal
       // the converter's static N produces (a ${...} Publish leaves publishToCamunda unset → N).
       // sscs also ships AuthorisationCaseType shutter fragments (-shuttered/-nonshuttered, plus a
-      // -WA-nonprod-nonshuttered variant the -nonshuttered suffix also covers): the default build
-      // (bin/create-xlsx.sh, SHUTTERED unset) excludes *-shuttered.json. Model them as overlays keyed
-      // on CCD_DEF_SHUTTERED so a normal nonprod run (the flag unset → false) includes exactly the
-      // -nonshuttered set on both sides, mirroring the default build.
+      // -WA-nonprod-nonshuttered variant): the default build (bin/create-xlsx.sh, SHUTTERED unset)
+      // excludes *-shuttered.json. Model them as overlays keyed on CCD_DEF_SHUTTERED so a normal
+      // nonprod run (the flag unset → false) includes exactly the -nonshuttered set on both sides,
+      // mirroring the default build.
+      //
+      // The Work Allocation fragments are the other complementary pair, and CCD_DEF_PUBLISH is the
+      // right variable to key them on rather than a flag of our own invention: create-xlsx.sh:128-136
+      // derives BOTH from its WA_ENABLED argument in the same branch — WA on sets CCD_DEF_PUBLISH=Y
+      // and excludes *-nonWA*, WA off sets N and excludes *-WA-*. Prod additionally forces N
+      // (:140), so CCD_DEF_PUBLISH:Y implies nonprod and a single-variable predicate expresses the
+      // *-WA-* exclusion exactly. Every -WA- spelling needs its own entry because extractOverlayTags
+      // takes the LONGEST configured suffix: without GS-WA-nonprod, AuthorisationCaseField-GS-WA-
+      // nonprod.json would match plain nonprod and lose its WA condition. WA-nonprod-nonshuttered is
+      // a conjunction a single predicate cannot express; keying it on WA is right for every run here
+      // (all non-shuttered) and the shutter half is the exclusion the shuttered build applies anyway.
+      // test-preview is excluded by *preview.json in prod builds only, i.e. it is a nonprod overlay.
       new Fixture(
           "sscs",
           "test-projects/sscs-tribunals-case-api/definitions/benefit/sheets",
@@ -58,7 +70,13 @@ final class Fixtures {
           Map.of("CCD_DEF_ENV", "nonprod", "CCD_DEF_PUBLISH", "N"),
           Map.of(
               "shuttered", "CCD_DEF_SHUTTERED:true",
-              "nonshuttered", "!CCD_DEF_SHUTTERED:true")),
+              "nonshuttered", "!CCD_DEF_SHUTTERED:true",
+              "nonWA", "!CCD_DEF_PUBLISH:Y",
+              "WA-nonprod", "CCD_DEF_PUBLISH:Y",
+              "GS-WA-nonprod", "CCD_DEF_PUBLISH:Y",
+              "WA-fee-paid-nonprod", "CCD_DEF_PUBLISH:Y",
+              "WA-nonprod-nonshuttered", "CCD_DEF_PUBLISH:Y",
+              "test-preview", "!CCD_DEF_ENV:prod")),
       // fpl ships complementary shutter fragments (AuthorisationCaseType-shuttered/-nonshuttered):
       // the default (non-shuttered) build excludes *-shuttered.json and the shuttered build excludes
       // *-nonshuttered.json (bin/build-shuttered-ccd-definition.sh). Model them as overlays keyed on

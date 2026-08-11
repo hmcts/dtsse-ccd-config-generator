@@ -40,6 +40,24 @@ final class ExpectedDefinitionBuilder {
       Columns.CALLBACK_URL_SUBMITTED_EVENT,
       Columns.CALLBACK_URL_MID_EVENT);
 
+  /**
+   * The CaseType sheet's {@code Name}, which is likewise carried verbatim: the linker reads it
+   * straight into {@code caseTypeName} and {@code CoreConfigEmitter} emits it as a
+   * {@code builder.caseType(...)} string literal, placeholders intact — a migrated service keeps
+   * its own {@code ${CCD_DEF_*}} values in the generated Java so one build serves every
+   * environment. Substituting only the expected side would manufacture a diff for whichever
+   * variables the harness happens to pass (sscs's {@code SSCS Case ${CCD_DEF_VERSION}
+   * ${CCD_DEF_ENV}} diverges on {@code CCD_DEF_ENV} alone, while its five placeholder-bearing
+   * {@code CaseField.Label} cells do not, purely because their variables are absent from the map).
+   *
+   * <p>Scoped to this sheet rather than added to the global set: {@code Name} on other sheets is
+   * not necessarily carried verbatim, and interpreted columns must stay substituted — {@code
+   * Publish} also holds {@code ${CCD_DEF_PUBLISH}} but the linker parses it through
+   * {@code getYesNo}, so the generator emits a resolved {@code Y}/{@code N} the expected side has
+   * to match.
+   */
+  private static final Set<String> RAW_CASE_TYPE_COLUMNS = Set.of(Columns.NAME);
+
   private ExpectedDefinitionBuilder() {
   }
 
@@ -75,12 +93,13 @@ final class ExpectedDefinitionBuilder {
         }
       }
       List<Map<String, Object>> substituted = Substitutor.injectEnvironmentVariables(env, rows);
-      // Restore the raw (un-substituted) callback URL columns: the converter carries them through
-      // verbatim, so both sides must hold the original ${CCD_DEF_*} value (see RAW_CALLBACK_COLUMNS).
+      // Restore the raw (un-substituted) columns the converter carries through verbatim, so both
+      // sides hold the original ${CCD_DEF_*} value (see RAW_CALLBACK_COLUMNS, RAW_CASE_TYPE_COLUMNS).
+      Set<String> raw = sheet == SheetName.CASE_TYPE ? RAW_CASE_TYPE_COLUMNS : RAW_CALLBACK_COLUMNS;
       for (int i = 0; i < substituted.size(); i++) {
         Map<String, Object> original = rows.get(i);
         Map<String, Object> out = substituted.get(i);
-        for (String column : RAW_CALLBACK_COLUMNS) {
+        for (String column : raw) {
           if (original.containsKey(column)) {
             out.put(column, original.get(column));
           }
