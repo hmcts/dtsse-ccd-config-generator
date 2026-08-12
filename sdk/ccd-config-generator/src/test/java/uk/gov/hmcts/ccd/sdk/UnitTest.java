@@ -305,7 +305,7 @@ public class UnitTest {
 
     @Override
     public String getCaseAccessGroupIdTemplate() {
-      return "TEST:TEST:caseworker-approver-group:$ORGID$";
+      return "TEST:TEST:[ATTACHED]:$ORGID$";
     }
   }
 }

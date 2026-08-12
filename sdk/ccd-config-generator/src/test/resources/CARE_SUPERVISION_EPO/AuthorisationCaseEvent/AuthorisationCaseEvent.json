@@ -25,7 +25,7 @@
     "CaseEventID": "addNotes",
     "CaseTypeID": "CARE_SUPERVISION_EPO",
     "LiveFrom": "01/01/2017",
-    "UserRole": "caseworker-approver-group"
+    "UserRole": "caseworker-approver"
   },
   {
     "CRUD": "R",

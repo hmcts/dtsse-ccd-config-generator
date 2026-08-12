@@ -18,7 +18,6 @@ public enum UserRole implements HasRole {
     CASE_ACCESS_ADMINISTRATOR("caseworker-caa"),
     CASE_ACCESS_APPROVER("caseworker-approver", "CRU",
         AccessGroups.SOLICITOR_ORG_POLICY, AccessGroups.LOCAL_AUTHORITY_ORG_POLICY),
-    CASE_ACCESS_APPROVER_GROUP("caseworker-approver-group"),
     @CCD(label = "Solicitor", hint = "Solicitor role")
     CCD_SOLICITOR("[SOLICITOR]");
 

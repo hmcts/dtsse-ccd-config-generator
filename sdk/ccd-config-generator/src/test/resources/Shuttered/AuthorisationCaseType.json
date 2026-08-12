@@ -9,12 +9,6 @@
     "CRUD" : "D",
     "CaseTypeID" : "Shuttered",
     "LiveFrom" : "01/01/2017",
-    "UserRole" : "caseworker-approver-group"
-  },
-  {
-    "CRUD" : "D",
-    "CaseTypeID" : "Shuttered",
-    "LiveFrom" : "01/01/2017",
     "UserRole" : "caseworker-caa"
   },
   {

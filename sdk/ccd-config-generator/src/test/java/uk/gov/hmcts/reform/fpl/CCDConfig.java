@@ -15,7 +15,6 @@ import static uk.gov.hmcts.reform.fpl.enums.UserRole.BULK_SCAN_SYSTEM_UPDATE;
 import static uk.gov.hmcts.reform.fpl.enums.UserRole.CAFCASS;
 import static uk.gov.hmcts.reform.fpl.enums.UserRole.CASE_ACCESS_ADMINISTRATOR;
 import static uk.gov.hmcts.reform.fpl.enums.UserRole.CASE_ACCESS_APPROVER;
-import static uk.gov.hmcts.reform.fpl.enums.UserRole.CASE_ACCESS_APPROVER_GROUP;
 import static uk.gov.hmcts.reform.fpl.enums.UserRole.CCD_SOLICITOR;
 import static uk.gov.hmcts.reform.fpl.enums.UserRole.HMCTS_ADMIN;
 import static uk.gov.hmcts.reform.fpl.enums.UserRole.LOCAL_AUTHORITY;
@@ -160,8 +159,10 @@ public class CCDConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<CaseData, S
         .grant(CRU, HMCTS_ADMIN)
         .grant(R, LOCAL_AUTHORITY)
         .grant(new SolicitorAccess())
-        // The group role PRM mints from the access type, granted like any other role.
-        .grant(CRU, CASE_ACCESS_APPROVER_GROUP)
+        // The role the access groups attach to, whose name PRM mints group role assignments under.
+        // Granted here so the generated output pins that it carries event, state and field ACLs:
+        // a matched group role assignment resolves through them like any other.
+        .grant(CRU, CASE_ACCESS_APPROVER)
         .publishToCamunda()
         .fields()
         .optional(CaseData::getCaseNotes)
