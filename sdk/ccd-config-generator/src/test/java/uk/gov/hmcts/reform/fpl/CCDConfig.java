@@ -159,9 +159,6 @@ public class CCDConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<CaseData, S
         .grant(CRU, HMCTS_ADMIN)
         .grant(R, LOCAL_AUTHORITY)
         .grant(new SolicitorAccess())
-        // The role the access groups attach to, whose name PRM mints group role assignments under.
-        // Granted here so the generated output pins that it carries event, state and field ACLs:
-        // a matched group role assignment resolves through them like any other.
         .grant(CRU, CASE_ACCESS_APPROVER)
         .publishToCamunda()
         .fields()
