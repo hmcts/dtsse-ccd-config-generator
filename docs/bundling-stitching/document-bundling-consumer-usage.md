@@ -150,9 +150,9 @@ public class BundlingConfig {
   1 GB output, 1,000 pages, one-minute end-to-end timeout) — override with `.limits(...)` if you
   have evidence you need to.
 
-## 4. Trigger from a CCD event and attach the result
+## 4. Trigger from a CCD event or a task scheduler, and attach the result
 
-A full event class in the e2e project's style (decentralised event, package
+A full event class in the e2e project's style (package
 `uk.gov.hmcts.divorce.bundling`):
 
 ```java
