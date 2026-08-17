@@ -24,3 +24,7 @@
 	path = wa-task-management-api
 	url = git@github.com:hmcts/wa-task-management-api.git
 	branch = decentralisation-poc
+[submodule "test-projects/pcs-frontend"]
+	path = test-projects/pcs-frontend
+	url = https://github.com/hmcts/pcs-frontend.git
+	branch = master

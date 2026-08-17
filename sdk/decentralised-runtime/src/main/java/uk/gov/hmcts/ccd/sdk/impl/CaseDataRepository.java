@@ -121,6 +121,7 @@ class CaseDataRepository {
             jurisdiction,
             case_type_id,
             state,
+            resolved_ttl,
             data,
             supplementary_data,
             reference,
@@ -134,6 +135,7 @@ class CaseDataRepository {
             :jurisdiction,
             :case_type_id,
             :state,
+            :resolved_ttl,
             -- On INSERT: if no data was provided, start with {}
             case when :has_data then :data::jsonb else '{}'::jsonb end,
             :enforced_supplementary_data::jsonb,
@@ -146,6 +148,7 @@ class CaseDataRepository {
         on conflict (reference)
             do update set
                 state = excluded.state,
+                resolved_ttl = excluded.resolved_ttl,
                 -- Update safety: never touch `data` unless explicitly provided
                 data = case when :has_data then :data::jsonb else case_data.data end,
                 supplementary_data = case_data.supplementary_data
@@ -156,6 +159,7 @@ class CaseDataRepository {
                         when
                           ((:has_data and case_data.data is distinct from excluded.data)
                           or case_data.state is distinct from excluded.state
+                          or case_data.resolved_ttl is distinct from excluded.resolved_ttl
                           or case_data.security_classification is distinct from excluded.security_classification)
                         then
                           case_data.version + 1
@@ -175,6 +179,7 @@ class CaseDataRepository {
     params.put("jurisdiction", event.getCaseDetails().getJurisdiction());
     params.put("case_type_id", event.getCaseDetails().getCaseTypeId());
     params.put("state", event.getCaseDetails().getState());
+    params.put("resolved_ttl", event.getResolvedTtl());
     params.put("data", dataUpdate.map(this::serialiseJsonNode).orElse(null));
     params.put("has_data", dataUpdate.isPresent());
     params.put("reference", event.getCaseDetails().getReference());

@@ -3,17 +3,24 @@ package uk.gov.hmcts.ccd.sdk;
 import static uk.gov.hmcts.ccd.sdk.api.Event.ATTACH_SCANNED_DOCS;
 import static uk.gov.hmcts.ccd.sdk.api.Event.HANDLE_EVIDENCE;
 
+import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import java.util.Collection;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import uk.gov.hmcts.ccd.sdk.api.AccessType;
+import uk.gov.hmcts.ccd.sdk.api.AccessType.AccessTypeBuilder;
+import uk.gov.hmcts.ccd.sdk.api.AccessTypeRole;
+import uk.gov.hmcts.ccd.sdk.api.AccessTypeRole.AccessTypeRoleBuilder;
 import uk.gov.hmcts.ccd.sdk.api.Banner;
+import uk.gov.hmcts.ccd.sdk.api.CCDAccessGroup;
 import uk.gov.hmcts.ccd.sdk.api.CaseCategory.CaseCategoryBuilder;
 import uk.gov.hmcts.ccd.sdk.api.CaseRoleToAccessProfile.CaseRoleToAccessProfileBuilder;
 import uk.gov.hmcts.ccd.sdk.api.ComplexTypeAuthorisation;
@@ -47,6 +54,8 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements Decentralised
   final List<SearchCasesBuilder<T, R>> searchCaseResultFields = Lists.newArrayList();
   final List<CaseRoleToAccessProfileBuilder<R>> caseRoleToAccessProfiles = Lists.newArrayList();
   final List<CaseCategoryBuilder<R>> categories = Lists.newArrayList();
+  final List<AccessTypeBuilder> accessTypes = Lists.newArrayList();
+  final List<AccessTypeRoleBuilder> accessTypeRoles = Lists.newArrayList();
   final List<SearchCriteriaBuilder> searchCriteria = Lists.newArrayList();
   final List<SearchPartyBuilder> searchParty = Lists.newArrayList();
   final Set<R> omitHistoryForRoles = new HashSet<>();
@@ -72,9 +81,12 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements Decentralised
     config.rolesWithNoHistory = omitHistoryForRoles.stream().map(HasRole::getRole).collect(Collectors.toSet());
     config.caseRoleToAccessProfiles = buildBuilders(caseRoleToAccessProfiles, CaseRoleToAccessProfileBuilder::build);
     config.categories = buildBuilders(categories, CaseCategoryBuilder::build);
+    config.accessTypes = buildBuilders(accessTypes, AccessTypeBuilder::build);
+    config.accessTypeRoles = buildBuilders(accessTypeRoles, AccessTypeRoleBuilder::build);
+    deriveAccessTypesFromRoles();
     config.searchCriteria = buildBuilders(searchCriteria, SearchCriteriaBuilder::build);
     config.searchParties = buildBuilders(searchParty, SearchPartyBuilder::build);
-    config.noticeOfChange = noticeOfChangeBuilder == null ? null : noticeOfChangeBuilder.build();
+    config.noticeOfChange = noticeOfChangeBuilder == null ? null : noticeOfChangeBuilder.build(config.caseType);
     config.complexTypeAuthorisations = Lists.newArrayList(complexTypeAuthorisations);
     // Resolve @CCD(gate) fields against the current environment once, so every ID-based generator
     // gates the same set. Empty unless a field is gated off, keeping ungated definitions unchanged.
@@ -249,7 +261,7 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements Decentralised
 
   @Override
   public CaseRoleToAccessProfileBuilder<R> caseRoleToAccessProfile(R caseRole) {
-    var builder = CaseRoleToAccessProfileBuilder.builder(caseRole);
+    var builder = CaseRoleToAccessProfileBuilder.<R>builder(caseRole);
     caseRoleToAccessProfiles.add(builder);
     return builder;
   }
@@ -266,6 +278,109 @@ public class ConfigBuilderImpl<T, S, R extends HasRole> implements Decentralised
     var builder = CaseCategoryBuilder.builder(caseRole);
     categories.add(builder);
     return builder;
+  }
+
+  @Override
+  public AccessTypeBuilder accessType(String accessTypeId) {
+    var builder = AccessTypeBuilder.builder(accessTypeId);
+    accessTypes.add(builder);
+    return builder;
+  }
+
+  @Override
+  public AccessTypeRoleBuilder accessTypeRole(String accessTypeId) {
+    var builder = AccessTypeRoleBuilder.builder(accessTypeId);
+    accessTypeRoles.add(builder);
+    return builder;
+  }
+
+  /**
+   * Translate any {@link CCDAccessGroup} attached to a role enum constant into the same
+   * {@code AccessType} / {@code AccessTypeRole} model objects the explicit builder calls produce,
+   * so the existing generators emit identical JSON. Explicit builder rows take precedence: an
+   * access type already configured via {@link #accessType} is not re-added.
+   *
+   * <p>Each attaching role also gets a {@code RoleToAccessProfiles} row, resolving to the role's own
+   * name. The definition store does not validate
+   * {@code GroupRoleName} against that sheet, so an unmapped group role imports cleanly and then
+   * grants nothing at runtime; deriving the row makes that failure impossible rather than silent. A
+   * row the config already declared for the same role wins, so a team needing non-default
+   * authorisations or access profiles can still declare it by hand.
+   *
+   * <p>An access type is keyed on {@code (accessTypeId, organisationProfileId)} throughout, matching
+   * the definition store: {@code AccessTypesValidator} groups by
+   * {@code AccessTypeEntity.UniqueIdentifier(caseType, jurisdiction, accessTypeId,
+   * organisationProfileId)}. Keying on {@code accessTypeId} alone silently drops the same logical
+   * access type offered to a second organisation profile.
+   */
+  private void deriveAccessTypesFromRoles() {
+    R[] roles = config.getRoleClass().getEnumConstants();
+    if (roles == null) {
+      return;
+    }
+
+    Set<List<String>> existingAccessTypeKeys = config.accessTypes.stream()
+        .map(ConfigBuilderImpl::accessTypeKey)
+        .collect(Collectors.toCollection(HashSet::new));
+    // A mapping declared against a literal role name carries no HasRole constant, so read its name
+    // from roleName instead — the same either/or RoleToAccessProfilesGenerator emits the row from.
+    Set<String> mappedRoleNames = config.caseRoleToAccessProfiles.stream()
+        .map(profile -> profile.getRole() != null ? profile.getRole().getRole() : profile.getRoleName())
+        .collect(Collectors.toCollection(HashSet::new));
+
+    Map<List<String>, AccessType> derivedAccessTypes = new LinkedHashMap<>();
+    List<AccessTypeRole> derivedRoles = Lists.newArrayList();
+
+    for (R role : roles) {
+      for (CCDAccessGroup group : role.getAccessGroups()) {
+        if (group == null) {
+          continue;
+        }
+
+        List<String> key = List.of(group.getAccessTypeId(),
+            Strings.nullToEmpty(group.getOrganisationProfileId()));
+        if (!existingAccessTypeKeys.contains(key)) {
+          derivedAccessTypes.putIfAbsent(key, AccessType.builder()
+              .accessTypeId(group.getAccessTypeId())
+              .organisationProfileId(group.getOrganisationProfileId())
+              .accessMandatory(group.isAccessMandatory())
+              .accessDefault(group.isAccessDefault())
+              .display(group.isDisplay())
+              .description(group.getDescription())
+              .hintText(group.getHintText())
+              .displayOrder(group.getDisplayOrder())
+              .liveTo(group.getLiveTo())
+              .build());
+        }
+
+        AccessTypeRoleBuilder rowBuilder = AccessTypeRole.builder()
+            .accessTypeId(group.getAccessTypeId())
+            .organisationProfileId(group.getOrganisationProfileId())
+            .caseAssignedRoleField(group.getCaseAssignedRoleField())
+            .groupAccessEnabled(group.isGroupAccessEnabled())
+            .caseAccessGroupIdTemplate(group.getCaseAccessGroupIdTemplate())
+            .liveTo(group.getLiveTo());
+        if (group.isGroupAccessEnabled()) {
+          rowBuilder.groupRoleName(role.getRole());
+        } else {
+          rowBuilder.organisationalRoleName(role.getRole());
+        }
+        derivedRoles.add(rowBuilder.build());
+
+        if (mappedRoleNames.add(role.getRole())) {
+          config.caseRoleToAccessProfiles.add(
+              CaseRoleToAccessProfileBuilder.<R>builder(role).build());
+        }
+      }
+    }
+
+    config.accessTypes.addAll(derivedAccessTypes.values());
+    config.accessTypeRoles.addAll(derivedRoles);
+  }
+
+  private static List<String> accessTypeKey(AccessType accessType) {
+    return List.of(accessType.getAccessTypeId(),
+        Strings.nullToEmpty(accessType.getOrganisationProfileId()));
   }
 
   @Override

@@ -8,7 +8,12 @@ import lombok.Data;
 @Builder
 @Data
 public class CaseRoleToAccessProfile<R extends HasRole> {
-  private R role;
+  /**
+   * The role this mapping is keyed on. Typed {@link HasRole} rather than {@code R} because
+   * {@code RoleToAccessProfiles} also maps roles outside the case's role class.
+   * Only {@link HasRole#getRole()} is ever read from it.
+   */
+  private HasRole role;
   /**
    * The literal role name for a mapping declared against a plain string rather than a
    * {@link HasRole} constant. When set, {@link #role} is {@code null} and the generator emits this
@@ -25,11 +30,11 @@ public class CaseRoleToAccessProfile<R extends HasRole> {
 
   public static class CaseRoleToAccessProfileBuilder<R extends HasRole> {
 
-    public static <R extends HasRole> CaseRoleToAccessProfileBuilder<R> builder(R role) {
+    public static <R extends HasRole> CaseRoleToAccessProfileBuilder<R> builder(HasRole role) {
       CaseRoleToAccessProfileBuilder<R> result = CaseRoleToAccessProfile.builder();
       result.role = role;
       result.authorisation = new ArrayList<>();
-      result.accessProfiles = new ArrayList<>();
+      result.accessProfiles = new ArrayList<>(List.of(role.getRole()));
       result.caseAccessCategories = new ArrayList<>();
       return result;
     }
@@ -56,8 +61,13 @@ public class CaseRoleToAccessProfile<R extends HasRole> {
       return this;
     }
 
+    /**
+     * Set the access profiles, <em>replacing</em> the default seeded from {@link HasRole#getRole()}
+     * rather than adding to it. Unlike the other varargs methods here, calling this twice keeps only
+     * the last set.
+     */
     public CaseRoleToAccessProfileBuilder<R> accessProfiles(String... profiles) {
-      accessProfiles.addAll(List.of(profiles));
+      accessProfiles = new ArrayList<>(List.of(profiles));
 
       return this;
     }

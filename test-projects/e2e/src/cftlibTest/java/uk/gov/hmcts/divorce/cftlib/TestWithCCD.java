@@ -30,6 +30,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
 import java.util.HashMap;
@@ -57,6 +58,7 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.*;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyInt;
@@ -77,6 +79,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
 import org.junit.jupiter.api.TestMethodOrder;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.config.BeanPostProcessor;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
@@ -113,6 +116,8 @@ import uk.gov.hmcts.divorce.jsonlegacy.JsonLegacyCcdConfig;
 import uk.gov.hmcts.ccd.sdk.type.CaseLink;
 import uk.gov.hmcts.ccd.sdk.type.ListValue;
 import uk.gov.hmcts.ccd.sdk.CaseReindexingService;
+import uk.gov.hmcts.ccd.sdk.RetainAndDisposePolicy;
+import uk.gov.hmcts.ccd.sdk.retention.RetainAndDisposeProperties;
 import uk.gov.hmcts.ccd.sdk.taskmanagement.model.TaskAction;
 import uk.gov.hmcts.reform.ccd.client.CoreCaseDataApi;
 import uk.gov.hmcts.reform.ccd.client.model.CaseDataContent;
@@ -131,6 +136,10 @@ import uk.gov.hmcts.rse.ccd.lib.test.CftlibTest;
     "ccd.servicebus.destination=ccd-case-events-test",
     "ccd.servicebus.scheduler-enabled=true",
     "ccd.servicebus.schedule=*/1 * * * * *",
+    "ccd.decentralised-runtime.retain-and-dispose.mode=live",
+    "ccd.decentralised-runtime.retain-and-dispose.cron=-",
+    "ccd.decentralised-runtime.retain-and-dispose.system-user.username=dummysystemupdate@test.com",
+    "ccd.decentralised-runtime.retain-and-dispose.system-user.password=password",
     "spring.autoconfigure.exclude=com.azure.spring.cloud.autoconfigure.implementation.jms.ServiceBusJmsAutoConfiguration"
 })
 @Slf4j
@@ -150,6 +159,16 @@ public class TestWithCCD extends CftlibTest {
 
     @Autowired
     private CaseReindexingService reindexQueueService;
+
+    @Autowired
+    @Qualifier("retainAndDisposeTask")
+    private Runnable retainAndDisposeTask;
+
+    @Autowired
+    private CftlibRetainAndDisposePolicy retainAndDisposePolicy;
+
+    @Autowired
+    private RetainAndDisposeProperties retainAndDisposeProperties;
 
     @Autowired
     private JmsTemplate jmsTemplate;
@@ -229,6 +248,29 @@ public class TestWithCCD extends CftlibTest {
                     return bean;
                 }
             };
+        }
+
+        @Bean
+        CftlibRetainAndDisposePolicy retainAndDisposePolicy() {
+            return new CftlibRetainAndDisposePolicy();
+        }
+    }
+
+    static class CftlibRetainAndDisposePolicy implements RetainAndDisposePolicy {
+        private List<Long> candidates = List.of();
+
+        void candidates(Long... caseReferences) {
+            candidates = List.of(caseReferences);
+        }
+
+        @Override
+        public Set<String> caseTypes() {
+            return Set.of(SimpleCaseConfiguration.CASE_TYPE);
+        }
+
+        @Override
+        public List<Long> findCandidatesForDisposal() {
+            return candidates;
         }
     }
 
@@ -2729,6 +2771,132 @@ public class TestWithCCD extends CftlibTest {
         assertThat(updatedCase.getState(), equalTo(SimpleCaseState.FOLLOW_UP.name()));
         assertThat(updatedData.getFollowUpMarker(), equalTo(SimpleCaseConfiguration.FOLLOW_UP_CALLBACK_MARKER));
         assertThat(updatedData.getFollowUpNote(), containsString("Follow up detail"));
+    }
+
+    @Order(34)
+    @Test
+    void retainAndDisposeTaskOnlyDeletesCasesMissingFromCcd() {
+        assertThat("Simple case must be ready for disposal", simpleCaseRef, greaterThan(0L));
+        long untouchedReference = 9999000000000012L;
+        long unconfirmedReference = 9999000000000020L;
+        long deletedReference = 9999000000000004L;
+        db.update(
+            """
+            insert into ccd.case_data (
+                id, reference, version, security_classification, jurisdiction, case_type_id, state, data, resolved_ttl
+            ) values
+            (
+                :untouched, :untouched, 1, 'PUBLIC', :jurisdiction, :caseType, :untouchedState, '{}'::jsonb, null
+            ),
+            (
+                :deleted, :deleted, 1, 'PUBLIC', :jurisdiction, :caseType, :deletedState, '{}'::jsonb,
+                current_date - 1
+            )
+            """,
+            Map.of(
+                "untouched", untouchedReference,
+                "deleted", deletedReference,
+                "jurisdiction", SimpleCaseConfiguration.JURISDICTION,
+                "caseType", SimpleCaseConfiguration.CASE_TYPE,
+                "untouchedState", SimpleCaseState.CREATED.name(),
+                "deletedState", SimpleCaseState.PendingDisposal.getId()
+            )
+        );
+        retainAndDisposePolicy.candidates(simpleCaseRef);
+        String initialState = db.queryForObject(
+            "select state from ccd.case_data where reference = :reference",
+            Map.of("reference", simpleCaseRef),
+            String.class
+        );
+
+        try {
+            retainAndDisposeProperties.setMinimumCandidateCount(1);
+            retainAndDisposeProperties.setMode(RetainAndDisposeProperties.Mode.LIVE);
+            assertThat(assertThrows(IllegalStateException.class, retainAndDisposeTask::run).getMessage(),
+                containsString("configured maximum percentage"));
+            assertRetainAndDisposeDidNotMutate(simpleCaseRef, initialState, deletedReference);
+
+            retainAndDisposeProperties.setMinimumCandidateCount(10);
+            retainAndDisposeProperties.setMode(RetainAndDisposeProperties.Mode.DRY_RUN);
+            retainAndDisposeTask.run();
+            assertRetainAndDisposeDidNotMutate(simpleCaseRef, initialState, deletedReference);
+
+            db.update(
+                """
+                insert into ccd.case_data (
+                    id, reference, version, security_classification, jurisdiction, case_type_id, state, data
+                ) values (
+                    :reference, :reference, 1, 'PUBLIC', :jurisdiction, :caseType, :state, '{}'::jsonb
+                )
+                """,
+                Map.of(
+                    "reference", unconfirmedReference,
+                    "jurisdiction", SimpleCaseConfiguration.JURISDICTION,
+                    "caseType", SimpleCaseConfiguration.CASE_TYPE,
+                    "state", SimpleCaseState.PendingDisposal.getId()
+                )
+            );
+            retainAndDisposeProperties.setMode(RetainAndDisposeProperties.Mode.LIVE);
+            assertThrows(IllegalStateException.class, retainAndDisposeTask::run);
+            assertThat(db.queryForObject(
+                "select count(*) from ccd.case_data where reference = :reference",
+                Map.of("reference", deletedReference),
+                Integer.class
+            ), equalTo(1));
+            assertThat(db.queryForObject(
+                "select resolved_ttl is null from ccd.case_data where reference = :reference",
+                Map.of("reference", unconfirmedReference),
+                Boolean.class
+            ), equalTo(true));
+            db.update(
+                "delete from ccd.case_data where reference = :reference",
+                Map.of("reference", unconfirmedReference)
+            );
+
+            retainAndDisposeTask.run();
+            assertThat(db.queryForObject(
+                "select state from ccd.case_data where reference = :reference",
+                Map.of("reference", simpleCaseRef),
+                String.class
+            ), equalTo(SimpleCaseState.PendingDisposal.getId()));
+            assertThat(db.queryForObject(
+                "select resolved_ttl = current_date from ccd.case_data where reference = :reference",
+                Map.of("reference", simpleCaseRef),
+                Boolean.class
+            ), equalTo(true));
+            assertThat(db.queryForObject(
+                "select state from ccd.case_data where reference = :reference",
+                Map.of("reference", untouchedReference),
+                String.class
+            ), equalTo(SimpleCaseState.CREATED.name()));
+            assertThat(db.queryForObject(
+                "select count(*) from ccd.case_data where reference = :reference",
+                Map.of("reference", deletedReference),
+                Integer.class
+            ), equalTo(0));
+        } finally {
+            retainAndDisposeProperties.setMode(RetainAndDisposeProperties.Mode.LIVE);
+            retainAndDisposeProperties.setMinimumCandidateCount(10);
+            retainAndDisposePolicy.candidates();
+            db.update(
+                "delete from ccd.case_data where reference in (:references)",
+                Map.of("references", List.of(untouchedReference, unconfirmedReference, deletedReference))
+            );
+        }
+    }
+
+    private void assertRetainAndDisposeDidNotMutate(long candidateReference, String candidateState,
+                                                      long pendingDisposalReference) {
+        assertThat(db.queryForObject(
+            "select state from ccd.case_data where reference = :reference",
+            Map.of("reference", candidateReference),
+            String.class
+        ), equalTo(candidateState));
+        assertThat(db.queryForObject(
+            "select count(*) from ccd.case_data where reference = :reference",
+            Map.of("reference", pendingDisposalReference),
+            Integer.class
+        ), equalTo(1));
     }
 
     @SneakyThrows

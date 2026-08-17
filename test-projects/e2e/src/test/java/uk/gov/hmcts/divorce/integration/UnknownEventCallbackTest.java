@@ -19,7 +19,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.MOCK)
 @AutoConfigureMockMvc
 @TestPropertySource(properties = {
-    "spring.datasource.url=jdbc:tc:postgresql:16-alpine:///e2e",
+    "spring.datasource.url=jdbc:tc:postgresql:15-alpine:///e2e",
     "spring.datasource.driverClassName=org.testcontainers.jdbc.ContainerDatabaseDriver",
     "spring.jms.servicebus.enabled=false",
     "spring.autoconfigure.exclude=com.azure.spring.cloud.autoconfigure.implementation.jms.ServiceBusJmsAutoConfiguration",

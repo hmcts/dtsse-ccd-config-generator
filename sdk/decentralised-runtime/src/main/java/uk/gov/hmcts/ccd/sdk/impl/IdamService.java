@@ -9,14 +9,14 @@ import uk.gov.hmcts.reform.idam.client.IdamClient;
 import uk.gov.hmcts.reform.idam.client.models.UserInfo;
 
 @Service("CcdSdkIdamService")
-class IdamService {
+public class IdamService {
 
   private static final String BEARER_PREFIX = "Bearer ";
 
   private final IdamClient idamClient;
   private final Cache<String, User> userCache;
 
-  IdamService(
+  public IdamService(
       IdamClient idamClient,
       @Value("${ccd.decentralised-runtime.idam-cache.max-size:500}") long cacheMaxSize,
       @Value("${ccd.decentralised-runtime.idam-cache.ttl-seconds:120}") long cacheTtlSeconds) {
