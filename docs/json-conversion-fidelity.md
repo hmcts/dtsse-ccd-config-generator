@@ -1,9 +1,17 @@
 # JSON → Java Conversion: Round-Trip Fidelity
 
 `ccd-definition-converter` converts a hand-written JSON CCD definition into config-generator
-Java. The `round-trip` test suite (`RoundTripTest`) is the correctness proof: it converts a real
-definition to Java, compiles it, runs the SDK's `generateCCDConfig`, and semantically diffs the
-regenerated definition against the original input.
+Java. The correctness proof in both directions is a round-trip: convert a real definition to Java,
+compile it, run the SDK's `generateCCDConfig`, and semantically diff the regenerated definition against
+the original input.
+
+It runs in two modes, and **which mode measures a service depends on whether it has a typed model**:
+
+- **Retrofit** — annotate the service's *existing* model in place. This is what all but one service in
+  the programme migrates by, so its [lane residual](#retrofit-lane-residual) is that service's number.
+- **Generate** — emit a fresh model. The mode for a service with no typed model to annotate, which is
+  `ia` alone (map-based `CaseData`). For the other six fixtures generate mode is the converter's own
+  in-CI [regression gate](#remaining-residual-tails), not a migration measure.
 
 **Every construct the SDK can express round-trips byte-identically, modulo the enumerated gaps on
 this page.** Each gap is classified one of three ways:
@@ -687,39 +695,49 @@ the definition plainly meant it and has silently not had it.
 
 ## Remaining residual tails
 
-Seven real fixtures convert, compile and round-trip end-to-end, and each is an **enabled**
-`RoundTripTest` case that gates its residuals against a checked-in baseline under
-`sdk/ccd-definition-converter/src/test/resources/roundtrip-baselines/<fixture>.txt`. The baseline
-file *is* the enumerated, reviewed list of that fixture's open gaps; the test passes iff the observed
-residuals equal the baseline exactly (a new diff fails as a regression, a vanished diff fails
-demanding a baseline refresh — the ratchet only tightens). Current baseline sizes:
+**Only one service is measured by generate mode: `ia`.** Generate mode emits a fresh model, so it is
+the mode for a service with no typed model to annotate — `ia`'s `CaseData` is map-based, so there is
+nothing for the retrofit patch to put annotations on and the generated model is what it would adopt.
+Every other service in the programme keeps its own model, so **its** number is its
+[retrofit-lane residual](#retrofit-lane-residual), not the figure in the table below.
 
-| Fixture  | Residual lines | Led by |
-|----------|---------------:|---|
-| ia       |              1 | one `SearchCriteria`/`OtherCaseReference` row |
-| probate  |              6 | five `[STATE]` `CaseEventToFields` no-match rows, plus one `MaNDATORY` typo |
-| ET       |             10 | two `retainHiddenValue`, `UnavailabilityDateRange` ×2, `sendNotificationCollection` ×4, two `SearchCriteria` `LiveTo=` rows |
-| fpl      |              7 | `caseProgressionReport` pre-states, `colleaguesToNotify` `Label`, `allocationDecision ShowSummaryContentOption`, one `colleagues` `EventToComplexTypes` row, two `HearingVenue LiveTo`, `RepresentativeRole`/`LA_BARRISTER` |
-| sscs     |             11 | three `TextArea`-vs-`Text` `FieldTypeParameter`, two `confidentialityRequiredChangedDate` no-match, four `JudicialUser`-vs-`Text`, three `FL_selectWhoReviewsCase` |
-| prl      |             43 | `CaseField` 20 (16 of them `ShowSummaryContentOption`), `AuthorisationCaseEvent` 6, `FixedLists`/`CaseEventToFields` 4 each |
-| civil    |             89 | `ComplexTypes` 36 (`Label` 11, `CaseFieldID` 10, `CaseEventID` 8), `CaseField` 13, `CaseEventToFields` 12, `CaseTypeTab` 9, `FixedLists` 8 |
+**`ia` generate-mode residual: 1 line** — a single `SearchCriteria`/`OtherCaseReference` row.
 
-Total **167** (measured 2026-08-11 from the checked-in baseline files). These are the *generate*-mode fixtures — the converter emits a fresh model and the
-round-trip compares that against the input. Retrofit mode (annotating a team's **existing** model) is
-measured separately and is much further from zero; see
-[Retrofit-lane residual](#retrofit-lane-residual).
+The other six fixtures still run in generate mode, but as the **converter's own regression gate**
+rather than as a measure of what a team will ship: they exercise every emitter against six real
+hand-written definitions in a harness that needs no service checkout, which is what makes the
+comparator rules and accepted differences on this page testable in CI at all. All seven are enabled
+`RoundTripTest` cases gating residuals against a checked-in baseline under
+`sdk/ccd-definition-converter/src/test/resources/roundtrip-baselines/<fixture>.txt`. The baseline file
+*is* the enumerated, reviewed list of that fixture's open gaps; the test passes iff the observed
+residuals equal the baseline exactly (a new diff fails as a regression, a vanished diff fails demanding
+a baseline refresh — the ratchet only tightens).
 
-To regenerate a baseline after an intended change, run `GenerateGoldenFiles` with
-`-Djunit.jupiter.conditions.deactivate='*'`.
+| Fixture  | Baseline | Purpose | Led by |
+|----------|---------:|---|---|
+| ia       |        1 | **the service's measure** | one `SearchCriteria`/`OtherCaseReference` row |
+| probate  |        6 | regression gate | five `[STATE]` `CaseEventToFields` no-match rows, plus one `MaNDATORY` typo |
+| fpl      |        7 | regression gate | `caseProgressionReport` pre-states, `colleaguesToNotify` `Label`, `allocationDecision ShowSummaryContentOption`, one `colleagues` `EventToComplexTypes` row, two `HearingVenue LiveTo`, `RepresentativeRole`/`LA_BARRISTER` |
+| et       |       10 | regression gate | two `retainHiddenValue`, `UnavailabilityDateRange` ×2, `sendNotificationCollection` ×4, two `SearchCriteria` `LiveTo=` rows |
+| sscs     |       11 | regression gate | three `TextArea`-vs-`Text` `FieldTypeParameter`, two `confidentialityRequiredChangedDate` no-match, four `JudicialUser`-vs-`Text`, three `FL_selectWhoReviewsCase` |
+| prl      |       43 | regression gate | `CaseField` 20 (16 of them `ShowSummaryContentOption`), `AuthorisationCaseEvent` 6, `FixedLists`/`CaseEventToFields` 4 each |
+| civil    |       89 | regression gate | `ComplexTypes` 36 (`Label` 11, `CaseFieldID` 10, `CaseEventID` 8), `CaseField` 13, `CaseEventToFields` 12, `CaseTypeTab` 9, `FixedLists` 8 |
 
-The categories, all SDK-structural limitations or fixture-data findings (none are converter bugs):
+167 lines in total (measured 2026-08-11 from the checked-in baseline files) — but that total is a
+property of the test suite, not of any migration: 166 of it belongs to services that will ship the
+retrofit output instead. To regenerate a baseline after an intended change, run `GenerateGoldenFiles`
+with `-Djunit.jupiter.conditions.deactivate='*'`.
 
-- **Complex-type members that are themselves overlay-only** (ET: `UnavailabilityDateRange`,
+The categories behind those baselines, all SDK-structural limitations or fixture-data findings (none
+are converter bugs):
+
+- **Complex-type members that are themselves overlay-only** (et: `UnavailabilityDateRange`,
   `sendNotificationCollection`) — `@CCD(gate)` gates a `CaseData` field; a shared complex class
   would need per-member gates. Routed to passthrough today; imperfect when the gate is on.
 - **`CaseField`-sheet `ShowSummaryContentOption=Y`** (fpl, prl): a `CaseField`-sheet flag distinct
   from the numeric `CaseEventToFields.ShowSummaryContentOption` column (which is emitted as Java);
   it has no SDK API and stays a residual.
+
 Three shapes that look like they belong here are **not** residuals: an orphan (unreachable) complex
 type or fixed list and a redundant redeclaration of an SDK-predefined type are dropped as accepted
 semantic differences (`ORPHAN_COMPLEX_TYPE`/`ORPHAN_FIXED_LIST`/
@@ -729,15 +747,16 @@ as `JudicialUser` are real `FieldType` constants emitting `typeOverride` rather 
 
 ## Retrofit-lane residual {#retrofit-lane-residual}
 
-Everything above measures **generate** mode: the converter emits a fresh model, so it controls every
-Java name and type and the round-trip reaches single-digit residuals. **Retrofit** mode annotates a
-service's *existing* model, which it does not control — the team's classes have their own names,
-kinds, field types and Lombok idioms — so its residual is a different, larger number, measured by a
-different harness (`bin/retrofit-verify`, one lane per service, diffing the definition against
-`generateCCDConfig` output from the patched model inside the service's own build).
+**This is the number for every service except `ia`.** Retrofit mode annotates a service's *existing*
+model, which the converter does not control — the team's classes have their own names, kinds, field
+types and Lombok idioms — where generate mode emits a fresh model and controls every name and type.
+Generate-mode figures for these six services are therefore not their migration measure; they are the
+converter's regression gate (see [above](#remaining-residual-tails)).
 
-The lane residual is **not** ratcheted in CI (the lanes need a service checkout and a
-`publishToMavenLocal`); it is measured by hand and recorded here.
+The lanes are measured by a separate harness — `bin/retrofit-verify`, one lane per service, diffing the
+definition against `generateCCDConfig` output from the patched model inside the service's own build.
+That needs a service checkout and a `publishToMavenLocal`, so the lane residual is **not** ratcheted in
+CI; it is measured by hand and recorded here.
 
 ### Per-lane residual (measured 2026-08-11)
 
