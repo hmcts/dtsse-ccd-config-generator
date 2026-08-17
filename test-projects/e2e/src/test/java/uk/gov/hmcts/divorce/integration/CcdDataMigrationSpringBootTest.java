@@ -12,7 +12,7 @@ import uk.gov.hmcts.ccd.sdk.migration.CcdDataMigrationTask;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.MOCK)
 @TestPropertySource(properties = {
-    "spring.datasource.url=jdbc:tc:postgresql:16-alpine:///e2e",
+    "spring.datasource.url=jdbc:tc:postgresql:15-alpine:///e2e",
     "spring.datasource.driverClassName=org.testcontainers.jdbc.ContainerDatabaseDriver",
     "spring.jms.servicebus.enabled=false",
     "spring.autoconfigure.exclude=com.azure.spring.cloud.autoconfigure.implementation.jms.ServiceBusJmsAutoConfiguration",

@@ -16,6 +16,21 @@ ccd {
 
 Setting `decentralised = true` adds the [decentralised-runtime](../sdk/decentralised-runtime) as a dependency to your project.
 
+## Native Notice of Change endpoints
+
+The native Notice of Change controller is disabled by default, so applications that do not use the feature do not register
+the `/noc/verify-noc-answers` or `/noc/noc-requests` routes.
+
+Applications providing both `validate(...)` and `submit(...)` handlers through `builder.noticeOfChange()` must explicitly
+enable the controller:
+
+```yaml
+ccd:
+  decentralised-runtime:
+    noc:
+      enabled: true
+```
+
 ## Case views
 
 Services must provide a [`CaseView<CaseType, StateEnum>`](../sdk/decentralised-runtime/src/main/java/uk/gov/hmcts/ccd/sdk/CaseView.java) implementation per case type.
@@ -96,6 +111,16 @@ If an incoming request has already been processed, the runtime replays the store
 ### SDK managed database schema
 
 To fulfil the aforementioned responsibilities, the SDK provisions and manages a dedicated `ccd` schema within your application's database.
+
+The SDK targets PostgreSQL 15 for the decentralised runtime. Service-owned databases should use PostgreSQL 15 as the supported baseline.
+
+The SDK runs its Flyway migrations before the application's Flyway migrations. This allows an application-owned migration
+to add service-specific indexes or constraints to SDK-managed tables while keeping the two migration histories separate.
+Spring Boot `@JdbcTest`, `@DataJdbcTest`, `@DataJpaTest` and `@JooqTest` slices automatically include the same ordering,
+so tests do not need to import the SDK Flyway auto-configuration explicitly.
+
+An application that supplies its own `FlywayMigrationStrategy` takes ownership of migration execution and must preserve
+the SDK-before-application ordering.
 
 - `case_data` mirrors CCD’s `case_data` table, including metadata such as state, security classification, TTL and the JSON payload.
 - `case_event` mirrors CCD’s `case_event` table and adds an idempotency key.

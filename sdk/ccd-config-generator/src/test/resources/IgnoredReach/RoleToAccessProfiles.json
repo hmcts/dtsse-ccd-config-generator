@@ -1,1 +1,12 @@
-[ ]
+[
+  {
+    "AccessProfiles": "caseworker-approver",
+    "Authorisation": "",
+    "CaseAccessCategories": "",
+    "CaseTypeID": "IgnoredReach",
+    "Disabled": "N",
+    "LiveFrom": "01/01/2017",
+    "ReadOnly": "N",
+    "RoleName": "caseworker-approver"
+  }
+]
