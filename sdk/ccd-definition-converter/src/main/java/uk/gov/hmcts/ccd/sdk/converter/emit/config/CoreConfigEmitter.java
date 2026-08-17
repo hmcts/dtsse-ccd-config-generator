@@ -825,14 +825,17 @@ public class CoreConfigEmitter implements SourceEmitter {
           }
         }
       });
-      row.getString(Columns.ACCESS_PROFILES).ifPresent(profiles -> {
-        for (String part : profiles.split(",")) {
-          String trimmed = part.trim();
-          if (!trimmed.isEmpty()) {
-            cb.add("\n    .accessProfiles($S)", trimmed);
-          }
-        }
-      });
+      // Unlike .authorisation()/.caseAccessCategories(), which append, the SDK's
+      // accessProfiles(String...) REPLACES the builder's list, and the HasRole-keyed builder
+      // (caseRoleToAccessProfile) seeds that list with the role's own name. The whole column must
+      // therefore go through a single varargs call: one call per profile would keep only the last,
+      // and omitting the call would leave the seeded role name behind. An absent or empty column is
+      // emitted as an explicit empty call for the same reason — it is what clears the seed, so the
+      // generated AccessProfiles stays empty like the input's rather than defaulting to the role
+      // name. On the string-keyed roleToAccessProfile path the seed is empty and the empty call is a
+      // no-op, so one emission rule covers both.
+      cb.add("\n    .accessProfiles($L)",
+          stringArgs(splitColumn(row.getString(Columns.ACCESS_PROFILES).orElse(null))));
       row.getString(Columns.CASE_ACCESS_CATEGORIES).ifPresent(cats -> {
         for (String part : cats.split(",")) {
           String trimmed = part.trim();
@@ -853,6 +856,41 @@ public class CoreConfigEmitter implements SourceEmitter {
       });
       cb.addStatement("");
     }
+  }
+
+  /**
+   * Splits a comma-separated definition column into its non-blank trimmed entries, in order.
+   *
+   * @param value the raw column value, may be null
+   * @return the entries, empty when the column is absent, empty or wholly blank
+   */
+  private static List<String> splitColumn(String value) {
+    List<String> parts = new ArrayList<>();
+    if (value == null) {
+      return parts;
+    }
+    for (String part : value.split(",")) {
+      String trimmed = part.trim();
+      if (!trimmed.isEmpty()) {
+        parts.add(trimmed);
+      }
+    }
+    return parts;
+  }
+
+  /**
+   * A comma-separated list of string literals for a varargs call, e.g. {@code "a", "b"}; empty for
+   * an empty list, which emits a no-argument varargs call.
+   *
+   * @param values the literal values
+   * @return the argument list as a code block
+   */
+  private static CodeBlock stringArgs(List<String> values) {
+    CodeBlock.Builder args = CodeBlock.builder();
+    for (int i = 0; i < values.size(); i++) {
+      args.add(i == 0 ? "$S" : ", $S", values.get(i));
+    }
+    return args.build();
   }
 
   private void emitCategories(
