@@ -74,7 +74,7 @@ final class RoundTripRunner {
     fixture.extraSuffixes().forEach((name, spec) -> suffixes.put(name, OverlayCondition.parse(spec)));
 
     ConversionOptions options = ConversionOptions.builder()
-        .inputs(List.of(fixture.input()))
+        .inputs(fixture.inputs())
         .caseTypeId(fixture.caseTypeId())
         .outputSrc(srcOut)
         .modelPackage(modelPackage)

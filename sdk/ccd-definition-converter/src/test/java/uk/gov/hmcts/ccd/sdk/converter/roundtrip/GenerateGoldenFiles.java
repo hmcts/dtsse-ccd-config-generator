@@ -1,6 +1,5 @@
 package uk.gov.hmcts.ccd.sdk.converter.roundtrip;
 
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import org.junit.jupiter.api.Disabled;
@@ -35,7 +34,7 @@ class GenerateGoldenFiles {
     StringBuilder summary = new StringBuilder("Regenerated round-trip baselines:\n");
     int regenerated = 0;
     for (Fixtures.Fixture fixture : Fixtures.ALL) {
-      if (!Files.isDirectory(fixture.input())) {
+      if (!fixture.available()) {
         summary.append(String.format("  %-8s SKIPPED (submodule not initialised)%n", fixture.name()));
         continue;
       }

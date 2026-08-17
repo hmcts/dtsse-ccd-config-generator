@@ -21,7 +21,7 @@ jobs:
         fetch-depth: 0
         submodules: false
     - name: Init fixture submodules
-      # All seven round-trip fixtures; the sdk build itself needs no submodules. Each fixture's
+      # All eight round-trip fixtures; the sdk build itself needs no submodules. Each fixture's
       # RoundTripTest case asserts its residuals against a checked-in baseline, so every one must be
       # present for the ratchet to genuinely gate here (an uninitialised submodule would only skip
       # via Assumptions, silently dropping that fixture's coverage). actions/checkout's token
@@ -36,7 +36,8 @@ jobs:
           test-projects/et-ccd-callbacks \
           test-projects/civil-ccd-definition \
           test-projects/prl-ccd-definitions \
-          test-projects/probate-back-office
+          test-projects/probate-back-office \
+          test-projects/finrem-ccd-definitions
     - name: Set up JDK
       uses: actions/setup-java@v5
       with:

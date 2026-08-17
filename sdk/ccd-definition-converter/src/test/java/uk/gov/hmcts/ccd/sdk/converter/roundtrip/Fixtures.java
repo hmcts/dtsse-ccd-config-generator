@@ -5,7 +5,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * The seven real service-definition fixtures the round-trip suite gates against. Each lives in a
+ * The eight real service-definition fixtures the round-trip suite gates against. Each lives in a
  * git submodule under {@code test-projects/}/{@code test-builds/}; the entries are shared by
  * {@link RoundTripTest} (which asserts each fixture's residuals against its checked-in baseline)
  * and {@link GenerateGoldenFiles} (which regenerates those baselines on demand), so the two never
@@ -19,19 +19,41 @@ final class Fixtures {
   static final Path REPO_ROOT = Path.of("..", "..").toAbsolutePath().normalize();
 
   /**
-   * One fixture: the baseline file name, the submodule input directory (relative to the repo
+   * One fixture: the baseline file name, the submodule input directories (relative to the repo
    * root), the case type to convert, the environment map, and any fixture-specific overlay
    * suffixes beyond prod/nonprod (shutter fragments).
+   *
+   * <p>{@code relativeInputs} is a list because a definition repo does not always build one case
+   * type from one directory: finrem's build copies a shared {@code definitions/common/json} tree
+   * into the per-case-type tree ({@code yarn copy-common-components-contested}) before invoking
+   * {@code json2xlsx}, and the copies are gitignored — so the two roots must both be read to see
+   * what the real xlsx contains. Every other fixture passes a single root. The list mirrors the
+   * comma-separated definition-dir column in {@code bin/regen-review-clones.sh}'s {@code LANES}
+   * table, so a fixture and its retrofit lane can describe the same input set.
    */
   record Fixture(
       String name,
-      String relativeInput,
+      List<String> relativeInputs,
       String caseTypeId,
       Map<String, String> env,
       Map<String, String> extraSuffixes) {
 
-    Path input() {
-      return REPO_ROOT.resolve(relativeInput);
+    /** Convenience for the common single-root case. */
+    Fixture(String name, String relativeInput, String caseTypeId,
+            Map<String, String> env, Map<String, String> extraSuffixes) {
+      this(name, List.of(relativeInput), caseTypeId, env, extraSuffixes);
+    }
+
+    List<Path> inputs() {
+      return relativeInputs.stream().map(REPO_ROOT::resolve).toList();
+    }
+
+    /**
+     * Whether every input root exists, i.e. the fixture's submodule is initialised. A fixture whose
+     * submodule is absent skips rather than fails, so a fresh checkout without submodules builds.
+     */
+    boolean available() {
+      return inputs().stream().allMatch(java.nio.file.Files::isDirectory);
     }
   }
 
@@ -130,7 +152,61 @@ final class Fixtures {
           Map.of("CCD_DEF_ENV", "nonprod", "CCD_DEF_PUBLISH", "N"),
           Map.of(
               "shutter", "CCD_DEF_SHUTTERED:true",
-              "unshutter", "!CCD_DEF_SHUTTERED:true")));
+              "unshutter", "!CCD_DEF_SHUTTERED:true")),
+      // finrem ships TWO case types from one definition repo — FinancialRemedyContested
+      // (definitions/contested/json) and FinancialRemedyMVP2, the consented one
+      // (definitions/consented/json) — plus a THIRD, shared tree, definitions/common/json, whose
+      // fragments the build copies into whichever per-case-type tree it is about to build
+      // (`yarn copy-common-components-contested`, package.json). Those copies are gitignored
+      // (.gitignore: definitions/*/json/**/*-common*), so the common tree must be passed as a second
+      // input root or the fixture reads a definition the real xlsx does not have. This entry covers
+      // the contested type, the larger of the two (944 CaseField rows against consented's 309) and
+      // the one whose tree carries every sheet the consented tree does (plus Categories, which the
+      // consented tree lacks).
+      //
+      // Every common fragment addresses its rows to CaseTypeID=${CCD_DEF_CASE_TYPE_ID}, which
+      // bin/contested/generate-excel-contested.sh sets to the case type it is building. CCD_DEF_
+      // CASE_TYPE_ID is in this entry's env map for that reason, but it is NOT sufficient today:
+      // the env map is only applied by ExpectedDefinitionBuilder (via Substitutor) on the expected
+      // side of the comparison, while the converter's own read path never substitutes — the linker
+      // reads raw IR rows, so DefinitionIr.rowsForCaseType compares the literal string
+      // "${CCD_DEF_CASE_TYPE_ID}" against "FinancialRemedyContested" and discards every shared row
+      // as another type's. Measured on this tree: a converter run over both roots emits no FR_close
+      // event and none of the 12 shared CaseFields, and the two shared ComplexTypes (FR_caseMetrics,
+      // FR_binFileUrls — which carry no CaseTypeID column and so survive the filter) are reported as
+      // orphans precisely because the fields that would reference them were dropped. Pre-substituting
+      // the placeholder on disk and re-running produces both FRCloseCommon and the shared CaseData
+      // fields, which isolates the cause to the missing convert-side substitution. So this fixture
+      // is expected to show a large residual until the converter substitutes ${CCD_DEF_*} on the
+      // read path (or DefinitionIr resolves the placeholder before filtering); see the report
+      // accompanying this wiring. finrem is the first fixture to exercise a placeholder CaseTypeID —
+      // no other fixture's definition uses one.
+      //
+      // Overlay suffixes beyond prod/nonprod, all from the contested tree:
+      //   - common: the shared fragments above. They are unconditional in a real build (copied in
+      //     every time, no glob excludes them), so the predicate is one that is always true in this
+      //     fixture's environment.
+      //   - newPaperCase / manageScannedDocs: feature-flag fragments no generate-excel script
+      //     excludes, i.e. likewise unconditionally included today.
+      //   - express-v2-nonprod: nonprod-only, and it needs its own entry rather than matching plain
+      //     `nonprod` because extractOverlayTags takes the LONGEST configured suffix — without it,
+      //     AuthorisationCaseEvent-express-v2-nonprod.json would still read as nonprod, which is the
+      //     same condition, but the suffix would then be unconfigured and resolveSheetAndSuffix
+      //     rejects an unknown suffix outright.
+      // The consented tree's extra `wa-nonprod` suffix is not configured here because this entry
+      // does not read that tree; a consented fixture would add it keyed the way sscs keys WA.
+      new Fixture(
+          "finrem",
+          List.of(
+              "test-projects/finrem-ccd-definitions/definitions/contested/json",
+              "test-projects/finrem-ccd-definitions/definitions/common/json"),
+          "FinancialRemedyContested",
+          Map.of("CCD_DEF_ENV", "nonprod", "CCD_DEF_CASE_TYPE_ID", "FinancialRemedyContested"),
+          Map.of(
+              "common", "!CCD_DEF_ENV:__never__",
+              "newPaperCase", "!CCD_DEF_ENV:__never__",
+              "manageScannedDocs", "!CCD_DEF_ENV:__never__",
+              "express-v2-nonprod", "!CCD_DEF_ENV:prod")));
 
   private Fixtures() {
   }

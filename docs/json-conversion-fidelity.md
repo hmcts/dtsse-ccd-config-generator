@@ -10,7 +10,7 @@ It runs in two modes, and **which mode measures a service depends on whether it 
 - **Retrofit** — annotate the service's *existing* model in place. This is what all but one service in
   the programme migrates by, so its [lane residual](#retrofit-lane-residual) is that service's number.
 - **Generate** — emit a fresh model. The mode for a service with no typed model to annotate, which is
-  `ia` alone (map-based `CaseData`). For the other six fixtures generate mode is the converter's own
+  `ia` alone (map-based `CaseData`). For the other seven fixtures generate mode is the converter's own
   in-CI [regression gate](#remaining-residual-tails), not a migration measure.
 
 **Every construct the SDK can express round-trips byte-identically, modulo the enumerated gaps on
@@ -703,10 +703,10 @@ Every other service in the programme keeps its own model, so **its** number is i
 
 **`ia` generate-mode residual: 1 line** — a single `SearchCriteria`/`OtherCaseReference` row.
 
-The other six fixtures still run in generate mode, but as the **converter's own regression gate**
-rather than as a measure of what a team will ship: they exercise every emitter against six real
+The other seven fixtures still run in generate mode, but as the **converter's own regression gate**
+rather than as a measure of what a team will ship: they exercise every emitter against seven real
 hand-written definitions in a harness that needs no service checkout, which is what makes the
-comparator rules and accepted differences on this page testable in CI at all. All seven are enabled
+comparator rules and accepted differences on this page testable in CI at all. All eight are enabled
 `RoundTripTest` cases gating residuals against a checked-in baseline under
 `sdk/ccd-definition-converter/src/test/resources/roundtrip-baselines/<fixture>.txt`. The baseline file
 *is* the enumerated, reviewed list of that fixture's open gaps; the test passes iff the observed
@@ -722,11 +722,30 @@ a baseline refresh — the ratchet only tightens).
 | sscs     |       11 | regression gate | three `TextArea`-vs-`Text` `FieldTypeParameter`, two `confidentialityRequiredChangedDate` no-match, four `JudicialUser`-vs-`Text`, three `FL_selectWhoReviewsCase` |
 | prl      |       43 | regression gate | `CaseField` 20 (16 of them `ShowSummaryContentOption`), `AuthorisationCaseEvent` 6, `FixedLists`/`CaseEventToFields` 4 each |
 | civil    |       89 | regression gate | `ComplexTypes` 36 (`Label` 11, `CaseFieldID` 10, `CaseEventID` 8), `CaseField` 13, `CaseEventToFields` 12, `CaseTypeTab` 9, `FixedLists` 8 |
+| finrem   |      133 | regression gate | `FixedLists` 63 and `ComplexTypes` 18 (all no-match, all on the `CU_fl_`/`CU_ct_` citizen-upload types), `AuthorisationCaseField` 22 (17 `CRUD`), `CaseTypeTab` 16 (all `DisplayContextParameter` missing), `CaseEventToFields` 13 no-match, one `CaseEvent` `Name` with a trailing space |
 
-167 lines in total (measured 2026-08-11 from the checked-in baseline files) — but that total is a
-property of the test suite, not of any migration: 166 of it belongs to services that will ship the
+300 lines in total (measured 2026-08-17 from the checked-in baseline files) — but that total is a
+property of the test suite, not of any migration: 299 of it belongs to services that will ship the
 retrofit output instead. To regenerate a baseline after an intended change, run `GenerateGoldenFiles`
 with `-Djunit.jupiter.conditions.deactivate='*'`.
+
+finrem is the only fixture reading **two** definition roots: its build copies the shared
+`definitions/common/json` tree into the per-case-type tree before each xlsx build
+(`yarn copy-common-components-contested`) and gitignores the copies, so the common tree is passed as a
+second input or the fixture reads a definition the real xlsx does not have. It is also the first
+fixture whose definition addresses rows to a `CaseTypeID` *placeholder* (`${CCD_DEF_CASE_TYPE_ID}`);
+the converter's read path does not substitute `${CCD_DEF_*}`, so `DefinitionIr.rowsForCaseType`
+compares the literal placeholder against the case type. Its baseline is measured with that gap
+present.
+
+finrem was also the first fixture to reach `FieldUtils.isUnwrappedField` with a JDK-owned class:
+`CaseEventToComplexTypesGenerator.expand` passes the member's *own* type as the lookup class, so
+`ordersToSend`'s `ListElementCode`s of the form `value.documentName` — a collection wrapper spelled
+out in the path, seven rows of `FR_sendOrder` — resolved `String`'s private `value`. The lookup asked
+for accessibility it never used, so the hit threw `InaccessibleObjectException` and aborted generation
+for the whole case type. Only the terminal segment is safe by luck; no other fixture has a
+*non-terminal* `value` segment. Fixed by not calling `makeAccessible` (reading an annotation never
+needs it); pinned by the `JdkNamedMember` case type in `E2EConfigGenerationTests`.
 
 The categories behind those baselines, all SDK-structural limitations or fixture-data findings (none
 are converter bugs):
@@ -1043,10 +1062,10 @@ number when it does not:
 
 ## What the round-trip does not prove
 
-The proof is narrower than "the seven fixtures round-trip byte-clean" — know its limits before
+The proof is narrower than "the eight fixtures round-trip byte-clean" — know its limits before
 trusting it:
 
-- **The fixtures gate CI against a baseline, not against zero.** All seven real fixtures are enabled
+- **The fixtures gate CI against a baseline, not against zero.** All eight real fixtures are enabled
   `RoundTripTest` cases in the `roundTripTest` task (the round-trip GitHub workflow initialises every
   fixture submodule and runs them), alongside the bundled golden fixtures (`minimal` in both env
   polarities, `clustered` in nonprod, which must round-trip *clean*) and the `GatedField` gate-polarity

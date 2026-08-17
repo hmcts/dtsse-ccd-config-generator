@@ -17,7 +17,7 @@
 # Each lane regenerates: <clone>/companion/  (the reference-layout companion tree) and
 # ../patches/retrofit-<CaseType>.patch  (the model annotation patch).
 #
-# Usage: regen-review-clones.sh [lane-dir ...]   (default: all six)
+# Usage: regen-review-clones.sh [lane-dir ...]   (default: every lane in the LANES table below)
 
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -63,6 +63,32 @@ LANES=(
   # model.genapplication. Without the hints the generated complex types reference them unqualified and
   # the clone does not compile (nothing to do with the model patch — these are companion sources).
   "civil-service|test-projects/civil-service|test-projects/civil-service/src/main/java|test-projects/civil-ccd-definition/ccd-definition/civil|CIVIL|uk.gov.hmcts.reform.civil.model.CaseData|uk.gov.hmcts.reform.civil.model||CCD_DEF_ENV=nonprod|HearingLength=uk.gov.hmcts.reform.civil.enums.dq CaseLocationCivil=uk.gov.hmcts.reform.civil.model.defaultjudgment"
+  # finrem's suffix set must match Fixtures.java's finrem entry exactly, for the reason the sscs note
+  # above spells out: a suffix Fixtures declares and this table does not makes every fragment carrying
+  # it read as a base row here, so both halves of a mutually-exclusive pair survive and collide.
+  # It is the ONLY lane with two definition roots: the build copies the shared definitions/common/json
+  # tree into the per-case-type tree before each xlsx build (`yarn copy-common-components-contested`)
+  # and gitignores the copies, so the common tree is passed as a second --input. Its fragments address
+  # their rows to CaseTypeID=${CCD_DEF_CASE_TYPE_ID}, hence that variable in the env column — but note
+  # that --env alone does NOT currently rescue those rows: the converter's read path does not
+  # substitute ${CCD_DEF_*}, so DefinitionIr.rowsForCaseType compares the literal placeholder against
+  # the case type and drops every shared row (measured: no FR_close event, none of the 12 shared
+  # CaseFields, and the 2 shared ComplexTypes reported as orphans). Expect a correspondingly inflated
+  # residual on this lane's first run until convert-side substitution lands.
+  # `common`, `newPaperCase` and `manageScannedDocs` are unconditional in a real build
+  # (no generate-excel script excludes them), so each is keyed to an always-true predicate;
+  # express-v2-nonprod is a nonprod overlay needing its own key because extractOverlayTags takes the
+  # LONGEST configured suffix.
+  # The service also ships a SECOND case type, FinancialRemedyMVP2 (consented), off the same
+  # FinremCaseData model; it would be a second lane over definitions/consented/json, adding that
+  # tree's `wa-nonprod` suffix.
+  # No --type-package-hint yet, deliberately: the model has exactly two ambiguous simple names
+  # (Document in model.ccd and model.document; UploadedDraftOrder in draftorders.upload.agreed and
+  # .suggested), but no ComplexTypes or FixedLists ID in either definition tree PascalCases to either,
+  # and Document is an SDK-predefined FieldType constant — so the resolver is not asked to bind either
+  # name. Civil's and prl's hints were each added after an observed resolution failure; add these two
+  # the same way if this lane's first measured run needs them.
+  "finrem-case-orchestration-service|test-projects/finrem-case-orchestration-service|test-projects/finrem-case-orchestration-service/src/main/java|test-projects/finrem-ccd-definitions/definitions/contested/json,test-projects/finrem-ccd-definitions/definitions/common/json|FinancialRemedyContested|uk.gov.hmcts.reform.finrem.caseorchestration.model.ccd.FinremCaseData|uk.gov.hmcts.reform.finrem.caseorchestration.ccd|common=!CCD_DEF_ENV:__never__ newPaperCase=!CCD_DEF_ENV:__never__ manageScannedDocs=!CCD_DEF_ENV:__never__ express-v2-nonprod=!CCD_DEF_ENV:prod|CCD_DEF_ENV=nonprod CCD_DEF_CASE_TYPE_ID=FinancialRemedyContested"
 )
 
 run_lane() {

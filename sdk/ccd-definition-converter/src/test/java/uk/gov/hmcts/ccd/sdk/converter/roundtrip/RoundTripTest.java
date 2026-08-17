@@ -2,7 +2,6 @@ package uk.gov.hmcts.ccd.sdk.converter.roundtrip;
 
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
@@ -26,7 +25,7 @@ import uk.gov.hmcts.ccd.sdk.diff.NormalisingCcdConfigComparator;
  * input with {@link NormalisingCcdConfigComparator}. Any difference the documented
  * normalisation rules do not explain is a residual.
  *
- * <p>The bundled {@code golden/*} fixtures must round-trip with <em>zero</em> residuals. The seven
+ * <p>The bundled {@code golden/*} fixtures must round-trip with <em>zero</em> residuals. The eight
  * real service fixtures (git submodules under {@code test-projects/}/{@code test-builds/}) each
  * gate their residuals against a checked-in per-fixture baseline under
  * {@code src/test/resources/roundtrip-baselines/}: the test passes iff the observed residuals equal
@@ -72,7 +71,7 @@ class RoundTripTest {
   @ParameterizedTest(name = "{0}")
   @FieldSource("FIXTURES")
   void realFixtureResidualsMatchBaseline(Fixtures.Fixture fixture, @TempDir Path work) {
-    assumeTrue(Files.isDirectory(fixture.input()),
+    assumeTrue(fixture.available(),
         fixture.name() + " submodule not initialised; skipping");
 
     List<String> residuals = RoundTripRunner.residuals(fixture, work);

@@ -61,3 +61,11 @@
 	path = test-projects/pcs-frontend
 	url = https://github.com/hmcts/pcs-frontend.git
 	branch = master
+[submodule "test-projects/finrem-ccd-definitions"]
+	path = test-projects/finrem-ccd-definitions
+	url = git@github.com:hmcts/finrem-ccd-definitions.git
+	shallow = true
+[submodule "test-projects/finrem-case-orchestration-service"]
+	path = test-projects/finrem-case-orchestration-service
+	url = git@github.com:hmcts/finrem-case-orchestration-service.git
+	shallow = true
