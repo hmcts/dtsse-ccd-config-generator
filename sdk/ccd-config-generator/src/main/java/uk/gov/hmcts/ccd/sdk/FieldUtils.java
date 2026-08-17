@@ -201,12 +201,30 @@ public class FieldUtils {
     return null == prefix || prefix.isEmpty() ? name : prefix.concat(capitalize(name));
   }
 
+  /**
+   * The {@code @JsonUnwrapped} annotation on {@code caseDataClass}'s member named {@code fieldName},
+   * or empty when there is no such member or it is not unwrapped.
+   *
+   * <p>Reading an annotation never needs the member to be accessible, and this must not ask for
+   * accessibility it does not use: {@code fieldName} arrives from a caller-supplied path segment and
+   * {@code caseDataClass} from a model field's own type, so the lookup can legitimately land on a
+   * JDK-owned class. {@code CaseEventToComplexTypesGenerator} reaches here with the member type as
+   * the lookup class, so a definition whose {@code ListElementCode} has a non-terminal segment named
+   * {@code value} — finrem's {@code ordersToSend.value.documentName} and its six siblings, a
+   * collection wrapper spelled out in the path — resolves {@code String.value} and used to abort the
+   * whole generator run with {@code InaccessibleObjectException: module java.base does not "opens
+   * java.lang"}. Every caller wants only the annotation, so simply not calling
+   * {@code makeAccessible} makes such a hit answer "not unwrapped" rather than kill the build.
+   *
+   * @param caseDataClass the class to resolve the member against
+   * @param fieldName a Java member name
+   * @return the member's {@code @JsonUnwrapped}, if it has one
+   */
   public static Optional<JsonUnwrapped> isUnwrappedField(Class caseDataClass, String fieldName) {
     Field field = ReflectionUtils.findField(caseDataClass, fieldName);
     if (field == null) {
       return Optional.empty();
     }
-    ReflectionUtils.makeAccessible(field);
     return Optional.ofNullable(field.getAnnotation(JsonUnwrapped.class));
   }
 

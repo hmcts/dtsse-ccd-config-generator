@@ -403,6 +403,23 @@ public class E2EConfigGenerationTests {
     }
 
     @SneakyThrows
+    @Test
+    public void descendsThroughAComplexMemberNamedAfterAJdkField() {
+        // See uk.gov.hmcts.reform.JdkNamedMemberWrapper: descending through a complex member named
+        // `value` makes CaseEventToComplexTypesGenerator resolve that name against the member's own
+        // type, hitting String's private `value`. Asking for accessibility on the hit threw
+        // InaccessibleObjectException and aborted generation for every case type here, so this
+        // asserting at all is most of the regression test; the golden file pins the rows the descent
+        // must still emit. Real shape: finrem addresses ordersToSend with ListElementCodes like
+        // value.documentName across seven FR_sendOrder rows.
+        Map<String, File> actual = CcdConfigComparator.dirToMap(
+            new File(tmp.getRoot(), "JdkNamedMember/CaseEventToComplexTypes"));
+        Map<String, File> expected = CcdConfigComparator.resourcesDirToMap(
+            "JdkNamedMember/CaseEventToComplexTypes");
+        CcdConfigComparator.assertEquivalent(expected, actual, JSONCompareMode.NON_EXTENSIBLE);
+    }
+
+    @SneakyThrows
     private File resourceFile(String resourcePath) {
         URL url = Resources.getResource(resourcePath);
         return new File(url.toURI());
