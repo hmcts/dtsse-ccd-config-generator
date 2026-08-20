@@ -1,0 +1,2 @@
+// Standalone characterisation harness; deliberately NOT part of the sdk or root builds.
+rootProject.name = 'bundling-characterisation'
