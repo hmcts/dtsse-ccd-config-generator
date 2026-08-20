@@ -1,0 +1,76 @@
+{
+  "pageCount" : 4,
+  "pageLabels" : null,
+  "pages" : [
+    {
+      "page" : 1,
+      "text" : "CASE: <<caseReference>>\nIN THE FAMILY COURT\nBETWEEN\n<<applicantFName>> <<applicantLName>>\nPetitioner\n-And-\n<<respondentFName>> << respondentLName>>\nRespondent\nAPPLICATION AND COURT ORDER",
+      "pageNumberStamps" : [ ],
+      "images" : [ ]
+    },
+    {
+      "page" : 2,
+      "text" : "2\nTitle of the bundle",
+      "pageNumberStamps" : [
+        {
+          "value" : 2,
+          "x" : 20,
+          "y" : 772
+        }
+      ],
+      "images" : [ ]
+    },
+    {
+      "page" : 3,
+      "text" : "3\nTitle of the bundle",
+      "pageNumberStamps" : [
+        {
+          "value" : 3,
+          "x" : 20,
+          "y" : 772
+        }
+      ],
+      "images" : [ ]
+    },
+    {
+      "page" : 4,
+      "text" : "4\nText",
+      "pageNumberStamps" : [
+        {
+          "value" : 4,
+          "x" : 20,
+          "y" : 822
+        }
+      ],
+      "images" : [ ]
+    }
+  ],
+  "outline" : [
+    {
+      "title" : "Title of the bundle",
+      "bold" : false,
+      "targetPage" : 1,
+      "children" : [
+        {
+          "title" : "Cover Page",
+          "bold" : true,
+          "targetPage" : 1,
+          "children" : [ ]
+        },
+        {
+          "title" : "Bundle Doc 1",
+          "bold" : true,
+          "targetPage" : 2,
+          "children" : [ ]
+        },
+        {
+          "title" : "Bundle Doc 2",
+          "bold" : true,
+          "targetPage" : 4,
+          "children" : [ ]
+        }
+      ]
+    }
+  ],
+  "links" : [ ]
+}

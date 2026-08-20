@@ -26,6 +26,12 @@ management:
     case-document-am-api:
       enabled: ${ENABLE_CDAM:true}
 spring:
+  servlet:
+    multipart:
+      # The dm-store stub receives the embedded CDAM's document uploads (stitched bundles run to
+      # several megabytes); the default 1MB multipart ceiling would reject them.
+      max-file-size: 100MB
+      max-request-size: 100MB
   datasource:
     url: jdbc:postgresql://localhost:6432/nfd
     username: postgres
@@ -359,6 +365,29 @@ core_case_data:
   search:
     page_size: ${CCD_SEARCH_PAGE_SIZE:50}
     total_max_results: ${CCD_SEARCH_MAX_RESULTS:250}
+
+ccd:
+  bundling:
+    docmosis:
+      # The e2e app hosts its own Docmosis stub (DocmosisStubController), preserving the
+      # "runs locally without shared services" goal. Office conversion round-trips through it.
+      convert-endpoint: ${DOCMOSIS_ENDPOINT:http://localhost:4013/stub/rs/convert}
+      render-endpoint: ${DOCMOSIS_RENDER_ENDPOINT:http://localhost:4013/stub/rs/render}
+      access-key: ${DOCMOSIS_ACCESS_KEY:stub-access-key}
+    cdam:
+      jurisdiction-id: DIVORCE
+      case-type-id: E2E
+      classification: PUBLIC
+      # The bundle event is a decentralised submit handler, so no platform component ever sees
+      # the stitched document in case data: the destination must attach it to the case itself
+      # (CDAM attachToCase) or CDAM disposes of the unattached upload at TTL expiry. Requires the
+      # service's S2S identity to hold CDAM ATTACH permission — granted for nfdiv_case_api by
+      # src/cftlib/resources/cdam-service-config-override/service_config.json here.
+      attach-to-case: true
+    job:
+      # The durable job runner is not exercised here (rendering is synchronous). This umbrella
+      # flag backs off every outbox bean and the module-owned ccd_bundle_job Flyway migration.
+      enabled: false
 
 task-management:
   api:

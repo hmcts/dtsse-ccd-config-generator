@@ -73,10 +73,15 @@ dependencies {
 
   implementation 'com.github.hmcts:ccd-case-document-am-client:1.59.2'
   implementation 'com.github.hmcts:core-case-data-store-client:5.3.0'
+  implementation 'com.github.hmcts:document-bundling:DEV-SNAPSHOT'
   implementation 'com.github.hmcts:idam-java-client:3.0.5'
   implementation 'com.github.hmcts.java-logging:logging:8.0.0'
   implementation 'com.github.hmcts:service-auth-provider-java-client:5.3.4'
   implementation 'com.github.hmcts:task-management:DEV-SNAPSHOT'
+
+  // Same PDFBox version as document-bundling: the Docmosis stub controller generates PDFs with it
+  // and the cftlibTest suite asserts semantically on stitched output.
+  implementation 'org.apache.pdfbox:pdfbox:3.0.8'
 
   implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.9.0'
 
@@ -105,7 +110,9 @@ dependencies {
   cftlibTestImplementation platform('org.junit:junit-bom')
   cftlibTestImplementation 'org.junit.platform:junit-platform-console'
   cftlibTestImplementation 'jakarta.jms:jakarta.jms-api:3.1.0'
+  cftlibTestImplementation 'com.github.hmcts:document-bundling:DEV-SNAPSHOT'
   cftlibTestImplementation 'com.github.hmcts:task-management:DEV-SNAPSHOT'
+  cftlibTestImplementation 'org.apache.pdfbox:pdfbox:3.0.8'
 }
 
 springBoot {
@@ -121,8 +128,11 @@ tasks.withType(JavaExec).configureEach {
 }
 
 // cftlib starts ccd-case-document-am-api from a generated manifest classpath. Prepend a test-only
-// service_config.json override so nfdiv_case_api can ATTACH EMPLOYMENT documents for the legacy
-// callback CDAM attach regression without changing the global e2e S2S identity.
+// service_config.json override granting nfdiv_case_api the CDAM permissions the e2e suites need:
+// ATTACH for the legacy callback CDAM attach regression (EMPLOYMENT documents) and CREATE/READ
+// for the document-bundling upload/download tests (DIVORCE/E2E), without changing the global e2e
+// S2S identity. Note CDAM only honours the FIRST authorisedServices entry per service id, so the
+// grants must live in one wildcard-jurisdiction entry.
 tasks.named('writeManifestccd-case-document-am-api').configure {
   doLast {
     def manifest = layout.buildDirectory.file('cftlib/ccd-case-document-am-api').get().asFile

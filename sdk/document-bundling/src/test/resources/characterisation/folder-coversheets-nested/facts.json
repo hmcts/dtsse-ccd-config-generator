@@ -1,0 +1,163 @@
+{
+  "pageCount" : 6,
+  "pageLabels" : null,
+  "pages" : [
+    {
+      "page" : 1,
+      "text" : "This is the description, it should really be wrapped but it is not currently. The table limit is 255\ncharacters anyway.\nIndex Page\nTotal Pages\nFolder 1\nThis is a doc inside a folder 2 pages\nFolder 2\nThis is a doc inside a subfolder 1 page",
+      "pageNumberStamps" : [ ],
+      "images" : [ ]
+    },
+    {
+      "page" : 2,
+      "text" : "Folder 1\nBack to index",
+      "pageNumberStamps" : [ ],
+      "images" : [ ]
+    },
+    {
+      "page" : 3,
+      "text" : "Title of the bundle\n3",
+      "pageNumberStamps" : [
+        {
+          "value" : 3,
+          "x" : 20,
+          "y" : 20
+        }
+      ],
+      "images" : [ ]
+    },
+    {
+      "page" : 4,
+      "text" : "Title of the bundle\n4",
+      "pageNumberStamps" : [
+        {
+          "value" : 4,
+          "x" : 20,
+          "y" : 20
+        }
+      ],
+      "images" : [ ]
+    },
+    {
+      "page" : 5,
+      "text" : "Folder 2\nBack to index",
+      "pageNumberStamps" : [ ],
+      "images" : [ ]
+    },
+    {
+      "page" : 6,
+      "text" : "Text\n6",
+      "pageNumberStamps" : [
+        {
+          "value" : 6,
+          "x" : 20,
+          "y" : 20
+        }
+      ],
+      "images" : [ ]
+    }
+  ],
+  "outline" : [
+    {
+      "title" : "Title of the bundle",
+      "bold" : false,
+      "targetPage" : 1,
+      "children" : [
+        {
+          "title" : "Index Page",
+          "bold" : true,
+          "targetPage" : 1,
+          "children" : [ ]
+        },
+        {
+          "title" : "Folder 1",
+          "bold" : true,
+          "targetPage" : 2,
+          "children" : [
+            {
+              "title" : "This is a doc inside a folder",
+              "bold" : true,
+              "targetPage" : 3,
+              "children" : [ ]
+            },
+            {
+              "title" : "Folder 2",
+              "bold" : true,
+              "targetPage" : 5,
+              "children" : [
+                {
+                  "title" : "This is a doc inside a subfolder",
+                  "bold" : true,
+                  "targetPage" : 6,
+                  "children" : [ ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "links" : [
+    {
+      "sourcePage" : 1,
+      "rect" : [
+        50,
+        608,
+        572,
+        626
+      ],
+      "targetPage" : 2
+    },
+    {
+      "sourcePage" : 1,
+      "rect" : [
+        50,
+        572,
+        572,
+        590
+      ],
+      "targetPage" : 3
+    },
+    {
+      "sourcePage" : 1,
+      "rect" : [
+        50,
+        536,
+        572,
+        554
+      ],
+      "targetPage" : 5
+    },
+    {
+      "sourcePage" : 1,
+      "rect" : [
+        50,
+        500,
+        572,
+        518
+      ],
+      "targetPage" : 6
+    },
+    {
+      "sourcePage" : 2,
+      "rect" : [
+        572,
+        305,
+        730,
+        323
+      ],
+      "targetPage" : 1
+    },
+    {
+      "sourcePage" : 5,
+      "rect" : [
+        572,
+        305,
+        730,
+        323
+      ],
+      "targetPage" : 1
+    }
+  ]
+}

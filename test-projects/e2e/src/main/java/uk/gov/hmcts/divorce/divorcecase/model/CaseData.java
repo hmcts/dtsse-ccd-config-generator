@@ -11,6 +11,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import uk.gov.hmcts.ccd.sdk.External;
 import uk.gov.hmcts.ccd.sdk.api.CCD;
+import uk.gov.hmcts.divorce.bundling.model.CaseBundle;
 import uk.gov.hmcts.ccd.sdk.type.CaseLink;
 import uk.gov.hmcts.ccd.sdk.type.ComponentLauncher;
 import uk.gov.hmcts.ccd.sdk.type.FieldType;
@@ -132,6 +133,17 @@ public class CaseData {
         typeOverride = FieldType.Document
     )
     private Document testDocument;
+
+    @CCD(
+        label = "Case bundles",
+        typeOverride = FieldType.Collection,
+        typeParameterOverride = "CaseBundle",
+        // Internal only: CaseworkerAccess would grant READ to CITIZEN/SOLICITOR, exposing the
+        // stitched bundle's binary link. Bundle access is governed entirely by this field's ACLs.
+        access = {CaseworkerAndSuperUserAccess.class}
+    )
+    @External
+    private List<ListValue<CaseBundle>> caseBundles;
 
     @JsonIgnore
     public static String formatCaseRef(long caseId) {

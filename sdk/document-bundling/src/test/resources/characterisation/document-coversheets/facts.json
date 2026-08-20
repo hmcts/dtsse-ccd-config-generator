@@ -1,0 +1,64 @@
+{
+  "pageCount" : 4,
+  "pageLabels" : null,
+  "pages" : [
+    {
+      "page" : 1,
+      "text" : "Document",
+      "pageNumberStamps" : [ ],
+      "images" : [ ]
+    },
+    {
+      "page" : 2,
+      "text" : "2\nText",
+      "pageNumberStamps" : [
+        {
+          "value" : 2,
+          "x" : 20,
+          "y" : 822
+        }
+      ],
+      "images" : [ ]
+    },
+    {
+      "page" : 3,
+      "text" : "Document",
+      "pageNumberStamps" : [ ],
+      "images" : [ ]
+    },
+    {
+      "page" : 4,
+      "text" : "4\nText",
+      "pageNumberStamps" : [
+        {
+          "value" : 4,
+          "x" : 20,
+          "y" : 822
+        }
+      ],
+      "images" : [ ]
+    }
+  ],
+  "outline" : [
+    {
+      "title" : "Title of the bundle",
+      "bold" : false,
+      "targetPage" : 1,
+      "children" : [
+        {
+          "title" : "Document",
+          "bold" : true,
+          "targetPage" : 1,
+          "children" : [ ]
+        },
+        {
+          "title" : "Document",
+          "bold" : true,
+          "targetPage" : 3,
+          "children" : [ ]
+        }
+      ]
+    }
+  ],
+  "links" : [ ]
+}

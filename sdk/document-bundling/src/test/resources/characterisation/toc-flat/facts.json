@@ -1,0 +1,97 @@
+{
+  "pageCount" : 4,
+  "pageLabels" : null,
+  "pages" : [
+    {
+      "page" : 1,
+      "text" : "This is the description, it should really be wrapped but it is not currently. The table limit is 255\ncharacters anyway.\nIndex Page\nTotal Pages\nBundle Doc 1 2 pages\nBundle Doc 2 1 page",
+      "pageNumberStamps" : [ ],
+      "images" : [ ]
+    },
+    {
+      "page" : 2,
+      "text" : "2\nTitle of the bundle",
+      "pageNumberStamps" : [
+        {
+          "value" : 2,
+          "x" : 20,
+          "y" : 772
+        }
+      ],
+      "images" : [ ]
+    },
+    {
+      "page" : 3,
+      "text" : "3\nTitle of the bundle",
+      "pageNumberStamps" : [
+        {
+          "value" : 3,
+          "x" : 20,
+          "y" : 772
+        }
+      ],
+      "images" : [ ]
+    },
+    {
+      "page" : 4,
+      "text" : "4\nText",
+      "pageNumberStamps" : [
+        {
+          "value" : 4,
+          "x" : 20,
+          "y" : 822
+        }
+      ],
+      "images" : [ ]
+    }
+  ],
+  "outline" : [
+    {
+      "title" : "Title of the bundle",
+      "bold" : false,
+      "targetPage" : 1,
+      "children" : [
+        {
+          "title" : "Index Page",
+          "bold" : true,
+          "targetPage" : 1,
+          "children" : [ ]
+        },
+        {
+          "title" : "Bundle Doc 1",
+          "bold" : true,
+          "targetPage" : 2,
+          "children" : [ ]
+        },
+        {
+          "title" : "Bundle Doc 2",
+          "bold" : true,
+          "targetPage" : 4,
+          "children" : [ ]
+        }
+      ]
+    }
+  ],
+  "links" : [
+    {
+      "sourcePage" : 1,
+      "rect" : [
+        50,
+        626,
+        572,
+        644
+      ],
+      "targetPage" : 2
+    },
+    {
+      "sourcePage" : 1,
+      "rect" : [
+        50,
+        608,
+        572,
+        626
+      ],
+      "targetPage" : 4
+    }
+  ]
+}
