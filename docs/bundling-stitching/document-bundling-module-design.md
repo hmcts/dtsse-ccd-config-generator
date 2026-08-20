@@ -7,6 +7,10 @@
 **Primary inputs:** the current `em-stitching-api`, `em-ccd-orchestrator`, the
 [one-click bundle requirements](oneclick-bundle-requirements-DRAFT.xlsx), and initial service-team feedback
 
+**As-built companions:** [low-level design](document-bundling-lld.md) ·
+[consumer usage](document-bundling-consumer-usage.md) ·
+[developer reference](document-bundling-for-devs.md)
+
 ## Summary
 
 Add a document-bundling module to the CCD SDK that lets a consuming service describe a legal bundle, supply its

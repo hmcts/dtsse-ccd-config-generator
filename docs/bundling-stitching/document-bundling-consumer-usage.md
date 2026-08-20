@@ -2,7 +2,9 @@
 
 **Status:** Draft, tracking the API published in `sdk/document-bundling`
 
-**Companion to:** [the module design](document-bundling-module-design.md)
+**Companions:** [the module design](document-bundling-module-design.md) ·
+[low-level design](document-bundling-lld.md) ·
+[developer reference](document-bundling-for-devs.md)
 
 This document shows what integrating the document-bundling module looks like from a consuming
 service's point of view. The worked example targets the `e2e` test project
