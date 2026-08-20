@@ -159,6 +159,7 @@ public class CCDConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<CaseData, S
         .grant(CRU, HMCTS_ADMIN)
         .grant(R, LOCAL_AUTHORITY)
         .grant(new SolicitorAccess())
+        .grant(CRU, CASE_ACCESS_APPROVER)
         .publishToCamunda()
         .fields()
         .optional(CaseData::getCaseNotes)
@@ -188,6 +189,11 @@ public class CCDConfig implements uk.gov.hmcts.ccd.sdk.api.CCDConfig<CaseData, S
       .accessProfiles("access-profile", "access-profile2")
       .authorisation("authorisation", "authorisation2")
       .caseAccessCategories("case-access-category", "case-access-category2");
+
+    // The case role an access group names as its CaseAssignedRoleField has to appear here: the
+    // definition store validates that column against RoleToAccessProfiles.RoleName.
+    builder.caseRoleToAccessProfile(CCD_SOLICITOR)
+      .accessProfiles("access-profile");
 
     builder.caseRoleToAccessProfile(CASE_ACCESS_ADMINISTRATOR)
       .accessProfiles("access-profile")
