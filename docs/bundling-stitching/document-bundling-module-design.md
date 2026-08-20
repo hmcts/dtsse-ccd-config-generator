@@ -158,8 +158,9 @@ a document that failed to stitch.
 ### Publish atomically
 
 Only publish an output after validation and rendering complete. A failed job must not replace the last successful bundle.
-The destination returns its reference only after storage succeeds. The consumer then attaches it to its case through its
-normal transactional/event mechanism.
+The destination returns its reference only after storage succeeds — and, for decentralised submit-handler events, only
+after the document is attached to its case (see [Output storage](#output-storage)). The consumer persists the bundle
+metadata through its normal transactional/event mechanism.
 
 ## Proposed Architecture
 
@@ -339,6 +340,7 @@ BundleDocument.builder()
     .date(recording.date())
     .reference(new DocumentReference("case-documents", recording.id().toString()))
     .media(MediaPlaceholder.builder()
+        .mediaType("audio/mpeg")                     // routes the media handler; the file is never fetched
         .accessUrl(recording.playbackUrl())          // required: where a reader plays/downloads it
         .duration(recording.duration())              // optional metadata rendered on the page
         .note("Playback requires case access")       // optional bounded text
@@ -461,14 +463,41 @@ One divergence from the current service is deliberate:
 `em-stitching-api` hardcodes `Classification.PUBLIC` on upload (`CdamService.java:120`); the SDK's CDAM destination
 requires the upload classification to be explicit configuration.
 
-Attaching the stored metadata to the case takes two shapes, depending on whether the consumer uses decentralised
-persistence:
+**A CDAM upload alone is not durable.** CDAM disposes of a document that is never associated with a case once its
+time-to-live expires, and the association — a dm-store metadata `PATCH` writing `case_id` — is made only through
+CDAM's `PATCH /cases/documents/attachToCase`, which requires the calling service's S2S identity to hold CDAM's
+`ATTACH` permission (`checkServicePermission(..., Permission.ATTACH, ...)` in `CaseDocumentAmController`; in CDAM's
+shipped `service_config.json` only `ccd_data` holds it). So attachment takes exactly two shapes, decided by who can
+make that call:
 
-* A service that is not decentralised invokes a CCD case event to save the bundle reference into its case data.
-* A decentralised service can have its case data modified from library code and re-saved directly, with an empty audit
-  case event recorded so the creation still appears in the case history.
+* **Attachment by case-data submission** (the centralised/legacy-callback shape): the consumer writes the stored
+  document — `CcdBundle.stitchedDocument`, whose `document_hash` carries the CDAM hash token from `StoredBundle` —
+  into case data through a path the platform scans for new documents. For a callback event persisted by
+  ccd-data-store, data-store performs the attach as `ccd_data` (this is how `em-stitching-api`'s output is attached
+  today: the orchestrator writes the stitched document into case data through a CCD event). For a legacy-callback
+  event on a decentralised service, the decentralised runtime's `CdamAttachService` scans the about-to-submit
+  response and performs the attach with the service's own S2S identity.
+* **Attach-at-upload** (the decentralised submit-handler shape): a decentralised submit handler owns its persistence,
+  so no platform component ever sees the stitched document in case data — nothing scans, nothing attaches, and the
+  upload would silently die at TTL expiry. The SDK's CDAM destination therefore attaches the document itself,
+  immediately after the upload, when `CdamUploadSettings.attachToCase`
+  (`ccd.bundling.cdam.attach-to-case`) is set: it calls CDAM's `attachToCase` with the fresh document's hash token
+  and the case reference from the `BundleExecutionContext` (required in this mode, checked before the upload so a
+  failure never leaves an orphan). This requires the service's S2S identity to be onboarded with CDAM `ATTACH`
+  permission — the same onboarding the decentralised runtime's own `ccd.decentralised-runtime.cdam-attach` feature
+  requires.
 
-The SDK should ship attachment adapters for both shapes; the renderer itself stays unaware of either.
+These are the two attachment adapters this design ships. Persisting the bundle *metadata* — the `CcdBundle` — remains
+the consumer's event mechanism in both shapes (case-data field, or a service-owned table projected by a case view);
+the renderer itself stays unaware of either.
+
+Attach-at-upload is **at-least-once, not exactly-once**. A failed attach leaves the upload unattached and CDAM
+disposes of it at TTL expiry — nothing published, a retried job uploads afresh. But once the attach call succeeds the
+document is permanently associated with the case, while the consumer's own record of the bundle (case data or job
+row) commits separately: a crash between the successful attach and that record, or a lease-reclaimed job rendering
+twice, leaves an attached document nothing references — an invisible duplicate on the case's document store,
+harmless but real. Consumers' case data only ever references the recorded document; making the attach and the record
+atomic across two services has no practical mechanism, so the semantics are stated rather than hidden.
 
 ### Result and lifecycle
 
@@ -862,7 +891,8 @@ service's own logs.
 | Unsupported media type (no registered handler) | Fail; error names the media type, the document, and the registered handlers |
 | Media document without an access URL | Fail request validation before any resolution |
 | Empty expected section | Omit section, or render the visible empty-section page, per the section policy |
-| Transient source/converter/storage failure | Bounded outbox retry; then fail carrying the transient history |
+| Transient source/converter/storage failure (`STORAGE_FAILED`: 5xx, I/O) | Bounded outbox retry; then fail carrying the transient history |
+| Permanent storage/attach rejection (`STORAGE_REJECTED`: 4xx from the CDAM upload or attach — missing `ATTACH` onboarding, invalid coordinates or case reference) | Fail, publish nothing; never retried — an unchanged retry cannot succeed and would orphan a fresh upload per attempt |
 | Hard timeout (one minute end-to-end) | Fail, publish nothing; error carries per-stage timings showing where the time went |
 | Output validation failure | Fail, publish nothing |
 | Case changed during generation | Execution-time selection makes the list compiled at execution authoritative; the generation report records exactly what was stitched |
@@ -1005,6 +1035,14 @@ SDK resolves them to explicit destinations during copy); unresolvable table-of-c
 detached page that navigates nowhere (the SDK drops or repairs such links deterministically); and `PDFWatermark`
 overwrites its input file in place, swallowing errors (the SDK never mutates sources and propagates failures).
 
+Adversarial review of the ported code then established two further production defects worth naming. First,
+`PDFWatermark`'s in-place save corrupts the watermarked document's text layer (PDFBox is still lazily reading the
+same file it overwrites; compressed streams truncate and embedded fonts fail), so watermarked pages in today's
+production bundles can lose searchable/copyable/screen-readable text entirely — the SDK writes the overlay to a
+separate file and keeps the text readable. Second, `PDFUtility`'s folder cover-sheet "Back to index" link passes its
+coordinate arguments swapped, drawing the link off the page where it can never be clicked — the SDK places it on-page.
+Both are deliberate, documented divergences from the golden output.
+
 This makes rendering parity provable before any consumer migrates — the Phase 2 old/new comparison then validates
 integration and data mapping rather than rendering — and the parity suite outlives the service's retirement as the
 SDK's permanent regression bed.
@@ -1073,10 +1111,17 @@ SDK's permanent regression bed.
     `sdk/task-management`; consumers with their own reliable job mechanism may call the renderer directly.
 13. **Audit.** Bundle creation is recorded as a case event in the service's audit history. Failures are logged. The
     outbox record is the secondary record showing current status. Deletion events are never a concern of this library.
-14. **Bundle attachment.** Two shapes, by persistence model. A service that is not decentralised invokes a CCD case
-    event to save the bundle into its case data; a decentralised service has its case data modified from library code
-    and re-saved, with an empty audit case event recorded. The SDK ships attachment adapters for both (see
-    [Output storage](#output-storage)).
+14. **Bundle attachment.** Two shapes, by persistence model, because CDAM disposes of a never-attached upload at TTL
+    expiry and only holders of CDAM's `ATTACH` permission can attach. A service whose event is persisted through a
+    platform-scanned path (data-store callbacks, or the decentralised runtime's legacy-callback attach) attaches by
+    returning `CcdBundle.stitchedDocument` — with its `document_hash` — in case data. A decentralised submit-handler
+    event has no scanner, so the SDK's CDAM destination attaches at upload when
+    `ccd.bundling.cdam.attach-to-case` is set, using the context's case reference and the upload's hash token; this
+    requires the service's S2S identity to be onboarded with CDAM `ATTACH` (see
+    [Output storage](#output-storage)). Attach-at-upload is at-least-once: a crash between a successful attach and
+    the consumer's own record (or a lease-reclaimed double render) can leave an attached document nothing
+    references — a harmless duplicate; case data only ever references the recorded document. Persisting the bundle
+    metadata remains the consumer's event mechanism in both shapes.
 15. **Document selection at execution.** `BundleDocumentSelector` is an overridable base case: the SDK default returns
     the request as submitted, and overriding it moves list compilation to execution time. One worker code path either
     way.
