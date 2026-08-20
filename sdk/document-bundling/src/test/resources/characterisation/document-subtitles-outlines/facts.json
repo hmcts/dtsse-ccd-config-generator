@@ -1,0 +1,441 @@
+{
+  "pageCount" : 12,
+  "pageLabels" : null,
+  "pages" : [
+    {
+      "page" : 1,
+      "text" : "Bundle of documents whose outlines must survive stitching.\nIndex Page\nTotal Pages\nOutlined Document 5 pages\nTitle of the bundle\nCover Page\nIndex Page\nFolder 1\nBundle Doc 1\nSlide 1\nBundle Doc 2\nOutline With Actions 3 pages\n2001: A Space Odyssey\nlink to IMDB\ninstant info\n3-Iron\nlink to IMDB\ninstant info\nOutline With Named Destinations 3 pages\nlink to test",
+      "pageNumberStamps" : [ ],
+      "images" : [ ]
+    },
+    {
+      "page" : 2,
+      "text" : "CASE: <<caseReference>>\nIN THE FAMILY COURT\nBETWEEN\n<<applicantFName>> <<applicantLName>>\nPetitioner\n-And-\n<<respondentFName>> << respondentLName>>\nRespondent\nAPPLICATION AND COURT ORDER",
+      "pageNumberStamps" : [ ],
+      "images" : [ ]
+    },
+    {
+      "page" : 3,
+      "text" : "This is the description, it should really be wrapped but it is not currently. The table limit is\n255 characters anyway.\nIndex Page\nTotal Pages\nFolder 1\nBundle Doc 1 1 page\nSlide 1\nBundle Doc 2 1 page",
+      "pageNumberStamps" : [ ],
+      "images" : [ ]
+    },
+    {
+      "page" : 4,
+      "text" : "Folder 1\nBack to index",
+      "pageNumberStamps" : [ ],
+      "images" : [ ]
+    },
+    {
+      "page" : 5,
+      "text" : "basic_concepts/cursor.rb\nWe normally write our documents from top to bottom and it is no different with Prawn. Even if the\norigin is on the bottom left corner we still fill the page from the top to the bottom. In other words the\ncursor for inserting content starts on the top of the page.\nMost of the functions that insert content on the page will start at the current cursor position and\nproceed to the bottom of the page.\nThe following snippet shows how the cursor behaves when we add some text to the page and\ndemonstrates some of the helpers to manage the cursor position. The cursor method returns the\ncurrent cursor position.\nstroke_axis\ntext \"the cursor is here: #{cursor}\"\ntext \"now it is here: #{cursor}\"\nmove_down 200\ntext \"on the first move the cursor went down to: #{cursor}\"\nmove_up 100\ntext \"on the second move the cursor went up to: #{cursor}\"\nmove_cursor_to 50\ntext \"on the last move the cursor went directly to: #{cursor}\"\nthe cursor is here: 383.9795\nnow it is here: 370.10749999999996\n300\non the second move the cursor went up to: 242.36349999999993\n200\non the first move the cursor went down to: 156.23549999999994\n100\non the last move the cursor went directly to: 50.0\n100 200 300 400 500",
+      "pageNumberStamps" : [ ],
+      "images" : [ ]
+    },
+    {
+      "page" : 6,
+      "text" : "Text",
+      "pageNumberStamps" : [ ],
+      "images" : [ ]
+    },
+    {
+      "page" : 7,
+      "text" : "2001: A Space Odyssey\n- Kubrick, Stanley\n- United Kingdom\n- United States",
+      "pageNumberStamps" : [ ],
+      "images" : [ ]
+    },
+    {
+      "page" : 8,
+      "text" : "3-Iron\n- Ki-Duk, Kim\n- South Korea",
+      "pageNumberStamps" : [ ],
+      "images" : [ ]
+    },
+    {
+      "page" : 9,
+      "text" : "",
+      "pageNumberStamps" : [ ],
+      "images" : [ ]
+    },
+    {
+      "page" : 10,
+      "text" : "Spartacus\nYear: 1960\nDuration: 184\nGo to original document",
+      "pageNumberStamps" : [ ],
+      "images" : [
+        {
+          "width" : 200,
+          "height" : 289,
+          "pixelSha256" : "px:ba3c9d34b88f9f114f0128b45013cea081753cbdacd3b354ca8427b9fc3f4e70"
+        }
+      ]
+    },
+    {
+      "page" : 11,
+      "text" : "",
+      "pageNumberStamps" : [ ],
+      "images" : [ ]
+    },
+    {
+      "page" : 12,
+      "text" : "",
+      "pageNumberStamps" : [ ],
+      "images" : [ ]
+    }
+  ],
+  "outline" : [
+    {
+      "title" : "Outline bundle",
+      "bold" : false,
+      "targetPage" : 1,
+      "children" : [
+        {
+          "title" : "Index Page",
+          "bold" : true,
+          "targetPage" : 1,
+          "children" : [ ]
+        },
+        {
+          "title" : "Outlined Document",
+          "bold" : true,
+          "targetPage" : 2,
+          "children" : [
+            {
+              "title" : "Title of the bundle",
+              "bold" : false,
+              "targetPage" : 2,
+              "children" : [
+                {
+                  "title" : "Cover Page",
+                  "bold" : true,
+                  "targetPage" : 2,
+                  "children" : [ ]
+                },
+                {
+                  "title" : "Index Page",
+                  "bold" : true,
+                  "targetPage" : 3,
+                  "children" : [ ]
+                },
+                {
+                  "title" : "Folder 1",
+                  "bold" : true,
+                  "targetPage" : 4,
+                  "children" : [
+                    {
+                      "title" : "Bundle Doc 1",
+                      "bold" : true,
+                      "targetPage" : 5,
+                      "children" : [
+                        {
+                          "title" : "Slide 1",
+                          "bold" : false,
+                          "targetPage" : 5,
+                          "children" : [ ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "title" : "Bundle Doc 2",
+                  "bold" : true,
+                  "targetPage" : 6,
+                  "children" : [ ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "title" : "Outline With Actions",
+          "bold" : true,
+          "targetPage" : 7,
+          "children" : [
+            {
+              "title" : "2001: A Space Odyssey",
+              "bold" : false,
+              "targetPage" : 7,
+              "children" : [
+                {
+                  "title" : "link to IMDB",
+                  "bold" : true,
+                  "targetPage" : null,
+                  "children" : [ ]
+                },
+                {
+                  "title" : "instant info",
+                  "bold" : false,
+                  "targetPage" : 7,
+                  "children" : [ ]
+                }
+              ]
+            },
+            {
+              "title" : "3-Iron",
+              "bold" : false,
+              "targetPage" : 8,
+              "children" : [
+                {
+                  "title" : "link to IMDB",
+                  "bold" : true,
+                  "targetPage" : null,
+                  "children" : [ ]
+                },
+                {
+                  "title" : "instant info",
+                  "bold" : false,
+                  "targetPage" : 8,
+                  "children" : [ ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "title" : "Outline With Named Destinations",
+          "bold" : true,
+          "targetPage" : 10,
+          "children" : [
+            {
+              "title" : "link to test",
+              "bold" : false,
+              "targetPage" : null,
+              "children" : [ ]
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "links" : [
+    {
+      "sourcePage" : 1,
+      "rect" : [
+        50,
+        644,
+        572,
+        662
+      ],
+      "targetPage" : 2
+    },
+    {
+      "sourcePage" : 1,
+      "rect" : [
+        45,
+        626,
+        572,
+        644
+      ],
+      "targetPage" : 2
+    },
+    {
+      "sourcePage" : 1,
+      "rect" : [
+        60,
+        608,
+        572,
+        626
+      ],
+      "targetPage" : 2
+    },
+    {
+      "sourcePage" : 1,
+      "rect" : [
+        60,
+        590,
+        572,
+        608
+      ],
+      "targetPage" : 3
+    },
+    {
+      "sourcePage" : 1,
+      "rect" : [
+        60,
+        572,
+        572,
+        590
+      ],
+      "targetPage" : 4
+    },
+    {
+      "sourcePage" : 1,
+      "rect" : [
+        75,
+        554,
+        572,
+        572
+      ],
+      "targetPage" : 5
+    },
+    {
+      "sourcePage" : 1,
+      "rect" : [
+        90,
+        536,
+        572,
+        554
+      ],
+      "targetPage" : 5
+    },
+    {
+      "sourcePage" : 1,
+      "rect" : [
+        60,
+        518,
+        572,
+        536
+      ],
+      "targetPage" : 6
+    },
+    {
+      "sourcePage" : 1,
+      "rect" : [
+        50,
+        500,
+        572,
+        518
+      ],
+      "targetPage" : 7
+    },
+    {
+      "sourcePage" : 1,
+      "rect" : [
+        45,
+        482,
+        572,
+        500
+      ],
+      "targetPage" : 7
+    },
+    {
+      "sourcePage" : 1,
+      "rect" : [
+        60,
+        464,
+        572,
+        482
+      ],
+      "targetPage" : null
+    },
+    {
+      "sourcePage" : 1,
+      "rect" : [
+        60,
+        446,
+        572,
+        464
+      ],
+      "targetPage" : 7
+    },
+    {
+      "sourcePage" : 1,
+      "rect" : [
+        45,
+        428,
+        572,
+        446
+      ],
+      "targetPage" : 8
+    },
+    {
+      "sourcePage" : 1,
+      "rect" : [
+        60,
+        410,
+        572,
+        428
+      ],
+      "targetPage" : null
+    },
+    {
+      "sourcePage" : 1,
+      "rect" : [
+        60,
+        392,
+        572,
+        410
+      ],
+      "targetPage" : 8
+    },
+    {
+      "sourcePage" : 1,
+      "rect" : [
+        50,
+        374,
+        572,
+        392
+      ],
+      "targetPage" : 10
+    },
+    {
+      "sourcePage" : 1,
+      "rect" : [
+        45,
+        356,
+        572,
+        374
+      ],
+      "targetPage" : null
+    },
+    {
+      "sourcePage" : 3,
+      "rect" : [
+        45,
+        608,
+        572,
+        626
+      ],
+      "targetPage" : 4
+    },
+    {
+      "sourcePage" : 3,
+      "rect" : [
+        45,
+        572,
+        572,
+        590
+      ],
+      "targetPage" : 5
+    },
+    {
+      "sourcePage" : 3,
+      "rect" : [
+        45,
+        554,
+        572,
+        572
+      ],
+      "targetPage" : 5
+    },
+    {
+      "sourcePage" : 3,
+      "rect" : [
+        45,
+        518,
+        572,
+        536
+      ],
+      "targetPage" : 6
+    },
+    {
+      "sourcePage" : 4,
+      "rect" : [
+        487,
+        62,
+        572,
+        80
+      ],
+      "targetPage" : 3
+    },
+    {
+      "sourcePage" : 10,
+      "rect" : [
+        36,
+        658,
+        163,
+        671
+      ],
+      "targetPage" : null
+    }
+  ]
+}

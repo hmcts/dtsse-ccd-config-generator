@@ -1,0 +1,144 @@
+{
+  "pageCount" : 7,
+  "pageLabels" : null,
+  "pages" : [
+    {
+      "page" : 1,
+      "text" : "This is the description, it should really be wrapped but it is not currently. The table limit is 255\ncharacters anyway.\nIndex Page\nTotal Pages\nFolder 1\nBundle Doc 1 2 pages\nBundle Doc 2 1 page",
+      "pageNumberStamps" : [ ],
+      "images" : [ ]
+    },
+    {
+      "page" : 2,
+      "text" : "Folder 1\nBack to index",
+      "pageNumberStamps" : [ ],
+      "images" : [ ]
+    },
+    {
+      "page" : 3,
+      "text" : "Bundle Doc 1\nBack to index",
+      "pageNumberStamps" : [ ],
+      "images" : [ ]
+    },
+    {
+      "page" : 4,
+      "text" : "Title of the bundle",
+      "pageNumberStamps" : [ ],
+      "images" : [ ]
+    },
+    {
+      "page" : 5,
+      "text" : "Title of the bundle",
+      "pageNumberStamps" : [ ],
+      "images" : [ ]
+    },
+    {
+      "page" : 6,
+      "text" : "Bundle Doc 2\nBack to index",
+      "pageNumberStamps" : [ ],
+      "images" : [ ]
+    },
+    {
+      "page" : 7,
+      "text" : "Text",
+      "pageNumberStamps" : [ ],
+      "images" : [ ]
+    }
+  ],
+  "outline" : [
+    {
+      "title" : "Title of the bundle",
+      "bold" : false,
+      "targetPage" : 1,
+      "children" : [
+        {
+          "title" : "Index Page",
+          "bold" : true,
+          "targetPage" : 1,
+          "children" : [ ]
+        },
+        {
+          "title" : "Folder 1",
+          "bold" : true,
+          "targetPage" : 2,
+          "children" : [
+            {
+              "title" : "Bundle Doc 1",
+              "bold" : true,
+              "targetPage" : 3,
+              "children" : [ ]
+            }
+          ]
+        },
+        {
+          "title" : "Bundle Doc 2",
+          "bold" : true,
+          "targetPage" : 6,
+          "children" : [ ]
+        }
+      ]
+    }
+  ],
+  "links" : [
+    {
+      "sourcePage" : 1,
+      "rect" : [
+        50,
+        608,
+        572,
+        626
+      ],
+      "targetPage" : 2
+    },
+    {
+      "sourcePage" : 1,
+      "rect" : [
+        50,
+        572,
+        572,
+        590
+      ],
+      "targetPage" : 4
+    },
+    {
+      "sourcePage" : 1,
+      "rect" : [
+        50,
+        536,
+        572,
+        554
+      ],
+      "targetPage" : 7
+    },
+    {
+      "sourcePage" : 2,
+      "rect" : [
+        572,
+        305,
+        730,
+        323
+      ],
+      "targetPage" : 1
+    },
+    {
+      "sourcePage" : 3,
+      "rect" : [
+        572,
+        305,
+        730,
+        323
+      ],
+      "targetPage" : 1
+    },
+    {
+      "sourcePage" : 6,
+      "rect" : [
+        572,
+        305,
+        730,
+        323
+      ],
+      "targetPage" : 1
+    }
+  ]
+}
