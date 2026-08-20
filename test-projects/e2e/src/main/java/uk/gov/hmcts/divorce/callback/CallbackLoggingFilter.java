@@ -27,7 +27,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 @Component
 public class CallbackLoggingFilter extends OncePerRequestFilter {
 
-    private static final Path LOG_FILE = Paths.get("build", "logs", "http-traffic.log");
+    /** Where the JSON-lines traffic log lands, relative to the working directory; the cftlib
+     * tests share this JVM, so they resolve the same file through this constant. */
+    public static final Path LOG_FILE = Paths.get("build", "logs", "http-traffic.log");
     private static final ReentrantLock FILE_LOCK = new ReentrantLock();
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 

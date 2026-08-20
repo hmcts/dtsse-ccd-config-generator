@@ -11,6 +11,7 @@ import jakarta.jms.ConnectionFactory;
 import jakarta.jms.Message;
 
 import java.net.InetSocketAddress;
+import java.nio.file.Files;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -38,6 +39,11 @@ import java.util.stream.StreamSupport;
 
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.pdfbox.Loader;
+import org.apache.pdfbox.pdmodel.PDDocument;
+import org.apache.pdfbox.pdmodel.interactive.documentnavigation.outline.PDOutlineItem;
+import org.apache.pdfbox.pdmodel.interactive.documentnavigation.outline.PDOutlineNode;
+import org.apache.pdfbox.text.PDFTextStripper;
 import org.apache.http.NameValuePair;
 import org.apache.http.client.methods.CloseableHttpResponse;
 import org.apache.http.client.methods.HttpGet;
@@ -88,6 +94,14 @@ import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.jms.core.JmsTemplate;
 import org.springframework.jms.core.MessagePostProcessor;
 import org.springframework.test.context.TestPropertySource;
+import uk.gov.hmcts.ccd.sdk.bundling.cdam.BundlingAuthenticationProvider;
+import uk.gov.hmcts.divorce.bundling.CaseworkerCreateBundle;
+import uk.gov.hmcts.divorce.bundling.CaseworkerCreateBundleMissingDocument;
+import uk.gov.hmcts.divorce.bundling.DocmosisStubController;
+import uk.gov.hmcts.divorce.bundling.FixtureDocumentResolver;
+import uk.gov.hmcts.divorce.bundling.model.CaseBundle;
+import uk.gov.hmcts.divorce.callback.CallbackLoggingFilter;
+import uk.gov.hmcts.divorce.stubs.StubDocumentStore;
 import uk.gov.hmcts.divorce.divorcecase.model.CaseData;
 import uk.gov.hmcts.divorce.divorcecase.NoFaultDivorce;
 import uk.gov.hmcts.divorce.simplecase.SimpleCaseConfiguration;
@@ -172,6 +186,15 @@ public class TestWithCCD extends CftlibTest {
 
     @Autowired
     private JmsTemplate jmsTemplate;
+
+    @Autowired
+    private BundlingAuthenticationProvider bundlingAuthenticationProvider;
+
+    @Autowired
+    private StubDocumentStore stubDocumentStore;
+
+    @Autowired
+    private DocmosisStubController docmosisStub;
 
     private long firstEventId;
     private static final String BASE_URL = "http://localhost:4452";
@@ -2485,6 +2508,178 @@ public class TestWithCCD extends CftlibTest {
         assertThat(after, equalTo(before));
     }
 
+    @Order(35)
+    @Test
+    public void createBundleStitchesPublishesToCdamAndAttachesToCase() throws Exception {
+        String user = "TEST_CASE_WORKER_USER@mailinator.com";
+        int conversionsBefore = docmosisStub.convertedSources().size();
+
+        var request = prepareEventRequest(user, CaseworkerCreateBundle.CASEWORKER_CREATE_BUNDLE, Map.of());
+        var response = HttpClientBuilder.create().build().execute(request);
+        var responseBody = EntityUtils.toString(response.getEntity());
+        assertThat("bundle event should succeed: " + responseBody,
+            response.getStatusLine().getStatusCode(), equalTo(201));
+
+        Map<String, Object> payload = mapper.readValue(responseBody, new TypeReference<>() {});
+        @SuppressWarnings("unchecked")
+        Map<String, Object> afterSubmit = (Map<String, Object>) payload.get("after_submit_callback_response");
+        assertThat(afterSubmit, is(notNullValue()));
+        assertThat(afterSubmit.get("confirmation_header"), equalTo("Hearing bundle created"));
+
+        // The case's bundle collection holds the platform-shaped bundle with its CDAM links.
+        var c = ccdApi.getCase(getAuthorisation(user), getServiceAuth(), String.valueOf(caseRef));
+        var caseData = mapper.readValue(mapper.writeValueAsString(c.getData()), CaseData.class);
+        assertThat(caseData.getCaseBundles(), hasSize(1));
+        CaseBundle bundle = caseData.getCaseBundles().get(0).getValue();
+        assertThat(bundle.getStitchStatus(), equalTo("DONE"));
+        assertThat(bundle.getTitle(), equalTo(CaseworkerCreateBundle.BUNDLE_TITLE));
+        assertThat(bundle.getFileName(), equalTo("case-" + caseRef + "-hearing-bundle.pdf"));
+        assertThat(bundle.getStitchedDocument(), is(notNullValue()));
+        String documentUrl = bundle.getStitchedDocument().getUrl();
+        assertThat(documentUrl, containsString("/documents/"));
+        assertThat(bundle.getStitchedDocument().getBinaryUrl(), equalTo(documentUrl + "/binary"));
+        assertThat(bundle.getStitchedDocument().getFilename(), equalTo(bundle.getFileName()));
+
+        // The folders echo mirrors the requested tree.
+        assertThat(bundle.getFolders(), hasSize(3));
+        assertThat(bundle.getFolders().get(0).getValue().getName(),
+            equalTo(CaseworkerCreateBundle.APPLICATIONS_SECTION));
+        assertThat(bundle.getFolders().get(0).getValue().getDocuments(), hasSize(3));
+        assertThat(bundle.getFolders().get(2).getValue().getName(),
+            equalTo(CaseworkerCreateBundle.CORRESPONDENCE_SECTION));
+
+        // The stitched document is genuinely attached to the case: the SDK's CDAM destination
+        // called the real embedded CDAM's attachToCase (hash token verified, nfdiv_case_api's
+        // ATTACH permission exercised), which PATCHed case_id into the dm-store record. Without
+        // this, the unattached upload would be disposed of at TTL expiry and the bundle's links
+        // would die — the stub's TTL is deliberately realistic, not far-future.
+        String documentId = documentUrl.substring(documentUrl.length() - 36);
+        var storedDocument = stubDocumentStore.find(documentId).orElseThrow(
+            () -> new AssertionError("stitched document " + documentId + " missing from dm-store stub"));
+        assertThat("attach must record the case reference on the stored document",
+            storedDocument.metadata().get("case_id"), equalTo(String.valueOf(caseRef)));
+        assertThat(storedDocument.metadata().get("case_type_id"), equalTo("E2E"));
+        assertThat(storedDocument.metadata().get("jurisdiction"), equalTo("DIVORCE"));
+
+        // And CDAM itself reads the document back as case-attached.
+        JsonNode cdamMetadata = fetchCdamDocument(documentId);
+        assertThat(cdamMetadata.path("metadata").path("case_id").asText(),
+            equalTo(String.valueOf(caseRef)));
+
+        // Download the stitched binary through the real embedded CDAM instance. The document is
+        // attached now, so CDAM authorises the download through case visibility (data-store's
+        // case-document check), not the unattached-document TTL window.
+        var download = new HttpGet(CDAM_BASE_URL + "/cases/documents/" + documentId + "/binary");
+        download.addHeader("Authorization", getAuthorisation(user));
+        download.addHeader("ServiceAuthorization", bundlingAuthenticationProvider.serviceToken());
+        byte[] pdfBytes;
+        try (var downloadResponse = HttpClientBuilder.create().build().execute(download)) {
+            assertThat("stitched binary should download through CDAM",
+                downloadResponse.getStatusLine().getStatusCode(), equalTo(200));
+            pdfBytes = EntityUtils.toByteArray(downloadResponse.getEntity());
+        }
+        assertThat(new String(pdfBytes, 0, 5, StandardCharsets.US_ASCII), equalTo("%PDF-"));
+
+        // Semantic PDF assertions: page count, contents, section/media/placeholder text,
+        // the Docmosis-stub conversion marker, and the bookmark tree.
+        try (PDDocument stitched = Loader.loadPDF(pdfBytes)) {
+            assertThat("bundle should contain the sources plus generated pages",
+                stitched.getNumberOfPages(), greaterThanOrEqualTo(15));
+
+            String text = new PDFTextStripper().getText(stitched);
+            assertThat(text, containsString(CaseworkerCreateBundle.BUNDLE_TITLE));
+            assertThat(text, containsString(CaseworkerCreateBundle.APPLICATIONS_SECTION));
+            assertThat(text, containsString(CaseworkerCreateBundle.EVIDENCE_SECTION));
+            assertThat(text, containsString(CaseworkerCreateBundle.CORRESPONDENCE_SECTION));
+            assertThat(text, containsString(CaseworkerCreateBundle.POTENTIAL_ENERGY_TITLE));
+            assertThat(text, containsString(CaseworkerCreateBundle.MEDICAL_REPORT_TITLE));
+            assertThat(text, containsString(CaseworkerCreateBundle.FLYING_PIG_TITLE));
+            // The office document went through the app's Docmosis stub.
+            assertThat(text, containsString("Stubbed Docmosis conversion of wordDocument2.docx"));
+            // The MP3 is a generated link page, never fetched.
+            assertThat(text, containsString(CaseworkerCreateBundle.HEARING_RECORDING_TITLE));
+            assertThat(text, containsString("Media type: audio/mpeg"));
+            assertThat(text, containsString(CaseworkerCreateBundle.HEARING_RECORDING_NOTE));
+            assertThat(text, containsString(CaseworkerCreateBundle.HEARING_RECORDING_URL));
+            // The expected-but-empty section renders the standard visible placeholder.
+            assertThat(text, containsString("There are no documents in this section."));
+
+            var outline = stitched.getDocumentCatalog().getDocumentOutline();
+            assertThat("stitched bundle should carry PDF bookmarks", outline, is(notNullValue()));
+            List<String> bookmarks = collectBookmarkTitles(outline);
+            assertThat(bookmarks, hasItems(
+                CaseworkerCreateBundle.APPLICATIONS_SECTION,
+                CaseworkerCreateBundle.EVIDENCE_SECTION,
+                CaseworkerCreateBundle.CORRESPONDENCE_SECTION,
+                CaseworkerCreateBundle.POTENTIAL_ENERGY_TITLE,
+                CaseworkerCreateBundle.HEARING_RECORDING_TITLE));
+        }
+
+        // The office document went through the app's Docmosis stub during THIS event: the stub
+        // records every conversion in-process, so unlike a grep of the append-only traffic log,
+        // earlier runs cannot satisfy this.
+        List<String> conversions = docmosisStub.convertedSources();
+        assertThat("this event should have driven exactly one Docmosis conversion",
+            conversions.size(), equalTo(conversionsBefore + 1));
+        assertThat(conversions.get(conversionsBefore), equalTo("wordDocument2.docx"));
+
+        // The CDAM upload went through the embedded stack: ccd-case-document-am-api delegated
+        // the blob to its dm-store (this app), so the upload is captured in the HTTP traffic
+        // log carrying this run's fresh document id.
+        try (var httpTraffic = Files.lines(CallbackLoggingFilter.LOG_FILE.toAbsolutePath())) {
+            assertThat("CDAM upload should be captured in http-traffic.log",
+                httpTraffic.anyMatch(line ->
+                    line.contains("\"uri\":\"/documents\"")
+                        && line.contains("\"method\":\"POST\"")
+                        && line.contains(documentId)),
+                equalTo(true));
+        }
+    }
+
+    @Order(36)
+    @Test
+    public void createBundleWithMissingDocumentSurfacesErrorAndPublishesNothing() throws Exception {
+        String user = "TEST_CASE_WORKER_USER@mailinator.com";
+        String sqlCountByCase = "SELECT count(*) FROM case_bundles WHERE reference = :ref";
+        Integer before = db.queryForObject(sqlCountByCase, Map.of("ref", caseRef), Integer.class);
+
+        var request = prepareEventRequest(
+            user, CaseworkerCreateBundleMissingDocument.CASEWORKER_CREATE_BUNDLE_MISSING_DOC, Map.of());
+        var response = HttpClientBuilder.create().build().execute(request);
+        var responseBody = EntityUtils.toString(response.getEntity());
+        assertThat("bundle event should be rejected: " + responseBody,
+            response.getStatusLine().getStatusCode(), equalTo(422));
+
+        Map<String, Object> payload = mapper.readValue(responseBody, new TypeReference<>() {});
+        @SuppressWarnings("unchecked")
+        List<String> callbackErrors = (List<String>) payload.get("callbackErrors");
+        assertThat("the error should name the missing document and the typed reason",
+            callbackErrors, hasItem(allOf(
+                containsString("DOCUMENT_NOT_FOUND"),
+                containsString(CaseworkerCreateBundleMissingDocument.MISSING_DOCUMENT_ID),
+                containsString(FixtureDocumentResolver.PROVIDER))));
+
+        // Nothing was published and the previous bundle is untouched.
+        Integer after = db.queryForObject(sqlCountByCase, Map.of("ref", caseRef), Integer.class);
+        assertThat(after, equalTo(before));
+        var c = ccdApi.getCase(getAuthorisation(user), getServiceAuth(), String.valueOf(caseRef));
+        var caseData = mapper.readValue(mapper.writeValueAsString(c.getData()), CaseData.class);
+        assertThat(caseData.getCaseBundles(), hasSize(before));
+        assertThat("the earlier successful bundle must be untouched", before, greaterThan(0));
+        assertThat(caseData.getCaseBundles().get(0).getValue().getStitchStatus(), equalTo("DONE"));
+    }
+
+    private static List<String> collectBookmarkTitles(PDOutlineNode node) {
+        List<String> titles = new ArrayList<>();
+        PDOutlineItem child = node.getFirstChild();
+        while (child != null) {
+            titles.add(child.getTitle());
+            titles.addAll(collectBookmarkTitles(child));
+            child = child.getNextSibling();
+        }
+        return titles;
+    }
+
     @Order(21)
     @Test
     public void shouldPersistCaseLinksAndUpdateDerivedTable() throws Exception {
@@ -3238,6 +3433,9 @@ public class TestWithCCD extends CftlibTest {
         assertThat(cdamDocument.path("metadata").path("case_type_id").asText(),
             equalTo(JsonLegacyCcdConfig.CASE_TYPE_A));
         assertThat(cdamDocument.path("metadata").path("jurisdiction").asText(), equalTo("EMPLOYMENT"));
+        // The attach genuinely happened: the runtime's CdamAttachService PATCHed case_id.
+        assertThat(cdamDocument.path("metadata").path("case_id").asText(),
+            equalTo(String.valueOf(jsonLegacyCaseRef())));
     }
 
     @SneakyThrows
@@ -3282,6 +3480,9 @@ public class TestWithCCD extends CftlibTest {
         assertThat(cdamDocument.path("metadata").path("case_type_id").asText(),
             equalTo(JsonLegacyCcdConfig.CASE_TYPE_A));
         assertThat(cdamDocument.path("metadata").path("jurisdiction").asText(), equalTo("EMPLOYMENT"));
+        // The attach genuinely happened: the runtime's CdamAttachService PATCHed case_id.
+        assertThat(cdamDocument.path("metadata").path("case_id").asText(),
+            equalTo(String.valueOf(jsonLegacyCaseRef())));
     }
 
     @SneakyThrows

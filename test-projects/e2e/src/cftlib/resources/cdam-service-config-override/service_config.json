@@ -16,20 +16,9 @@
       "caseTypeId": [
         "*"
       ],
-      "jurisdictionId": "EMPLOYMENT",
+      "jurisdictionId": "*",
       "permissions": [
         "ATTACH",
-        "CREATE",
-        "READ"
-      ]
-    },
-    {
-      "id": "nfdiv_case_api",
-      "caseTypeId": [
-        "*"
-      ],
-      "jurisdictionId": "DIVORCE",
-      "permissions": [
         "CREATE",
         "READ",
         "UPDATE",
