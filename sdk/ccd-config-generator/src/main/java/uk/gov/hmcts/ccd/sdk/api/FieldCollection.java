@@ -533,6 +533,14 @@ public class FieldCollection {
      * verbatim — usable after any context-selecting call ({@code readonly}, {@code *NoSummary},
      * etc.) that returns this builder rather than the field, matching the sheet column, which is
      * untyped.
+     *
+     * <p>Writes {@code CaseEventToFields.DefaultValue} for a top-level field and
+     * {@code CaseEventToComplexTypes.DefaultValue} for a member placed inside a {@code .complex(...)}
+     * scope, following the sheet the placement itself lands on. Both sheets carry the column, and the
+     * raw form is the only one that reaches a member default the definition expresses as a case-role
+     * literal rather than as a {@code HasRole} constant — finrem's {@code manageInterveners} places
+     * {@code intervener1.intervenerOrganisation.OrgPolicyCaseAssignedRole} with
+     * {@code DefaultValue=[INTVRSOLICITOR1]}, a role its {@code UserRole} enum does not declare.
      */
     public FieldCollectionBuilder<Type, StateType, Parent> defaultValue(String defaultValue) {
       lastField().defaultValue(defaultValue);
