@@ -51,7 +51,9 @@ jobs:
       with:
         distribution: 'zulu'
         java-version: 21
-        cache: gradle
+    - name: Set up Gradle
+      if: steps.changes.outputs.docs_only != 'true'
+      uses: gradle/actions/setup-gradle@v5
     - name: Az CLI login
       if: steps.changes.outputs.docs_only != 'true'
       uses: azure/login@532459ea530d8321f2fb9bb10d1e0bcf23869a43
@@ -177,7 +179,9 @@ jobs:
       with:
         distribution: 'zulu'
         java-version: 21
-        cache: gradle
+    - name: Set up Gradle
+      if: steps.changes.outputs.docs_only != 'true'
+      uses: gradle/actions/setup-gradle@v5
     - name: Az CLI login
       if: steps.changes.outputs.docs_only != 'true'
       uses: azure/login@532459ea530d8321f2fb9bb10d1e0bcf23869a43
