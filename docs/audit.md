@@ -32,10 +32,19 @@ call ccd.attach_case_event_auditing_v1('public.case_notes'::regclass);
 
 Calling the helper more than once for the same table fails because the audit trigger already exists.
 
-Audited writes must use the same database transaction as the decentralised event; attempted writes to audited tables
-outside an event context are rejected.
+Audited `INSERT`, `UPDATE` and `DELETE` operations must use the same database transaction as the decentralised event;
+attempted operations outside an event context are rejected.
 
-Note that `TRUNCATE` does not run row-level triggers and is not audited.
+`TRUNCATE` is an exception. PostgreSQL does not run row-level triggers for `TRUNCATE`, so it is neither audited nor
+rejected when there is no event context. Services must not use `TRUNCATE` on audited tables outside deliberate database
+maintenance.
+
+## Trust boundary
+
+This feature provides a transactionally consistent, event-linked history of application data changes. It is not a
+tamper-resistant database security audit log. Code running with the service database credentials is inside the trust
+boundary: it can set `ccd.audit_disabled`, and a table owner or database administrator can disable the triggers or alter
+the audit data.
 
 ## Zero downtime rollout
 
