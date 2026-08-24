@@ -61,6 +61,13 @@ public class JsonDefinitionReader implements DefinitionReader {
 
   private static final ObjectMapper MAPPER = new ObjectMapper();
 
+  /**
+   * The environment placeholder a shared definition fragment addresses its rows to instead of naming
+   * a case type it does not belong to. Substituted at read time — see
+   * {@link #resolveCaseTypePlaceholder}.
+   */
+  private static final String CASE_TYPE_ID_PLACEHOLDER = "${CCD_DEF_CASE_TYPE_ID}";
+
   @Override
   public DefinitionIr read(ConversionOptions options, GapCollector gaps) {
     ListMultimap<SheetName, SheetRow> rows = LinkedListMultimap.create();
@@ -121,6 +128,7 @@ public class JsonDefinitionReader implements DefinitionReader {
     Set<String> overlayTags = extractOverlayTags(baseName, options);
     List<Map<String, Object>> parsed = parseJsonFile(file);
     for (Map<String, Object> col : parsed) {
+      resolveCaseTypePlaceholder(col, options.getCaseTypeId());
       dropInertColumns(sheet.get(), col, file, gaps);
       rows.put(sheet.get(), SheetRow.builder()
           .sheet(sheet.get())
@@ -148,6 +156,7 @@ public class JsonDefinitionReader implements DefinitionReader {
       Set<String> overlayTags = extractOverlayTags(fragmentName, options);
       List<Map<String, Object>> parsed = parseJsonFile(fragment);
       for (Map<String, Object> col : parsed) {
+        resolveCaseTypePlaceholder(col, options.getCaseTypeId());
         dropInertColumns(sheet, col, fragment, gaps);
         rows.put(sheet, SheetRow.builder()
             .sheet(sheet)
@@ -184,6 +193,7 @@ public class JsonDefinitionReader implements DefinitionReader {
    * @param source the file the row came from, for the gap detail
    * @param gaps the collector to record droppings on
    */
+
   private void dropInertColumns(
       SheetName sheet, Map<String, Object> row, Path source, GapCollector gaps) {
     for (String key : ColumnVocabulary.unknownKeys(row)) {
@@ -208,6 +218,45 @@ public class JsonDefinitionReader implements DefinitionReader {
                   + " never had the " + intended + " the definition appears to set. Dropped to match"
                   + " the real import; fix the key in the definition to actually apply it.")
           .build());
+    }
+  }
+
+  /**
+   * Resolves {@code ${CCD_DEF_CASE_TYPE_ID}} to the case type being converted, wherever it appears
+   * as a whole cell value.
+   *
+   * <p>A definition split across several case types keeps their shared rows in a tree that names no
+   * case type of its own, because the same row has to become a row of whichever case type is being
+   * built. finrem does this: {@code definitions/common/json} is copied into
+   * {@code definitions/contested/json} or {@code definitions/consented/json} by
+   * {@code yarn copy-common-components-*} and the build then sets the variable —
+   * {@code CCD_DEF_CASE_TYPE_ID=FinancialRemedyContested yarn json2xlsx -D definitions/contested/json}
+   * — so its 33 {@code CaseTypeID} cells resolve differently per build. Read literally, the
+   * placeholder matches no case type at all and {@link DefinitionIr#rowsForCaseType} drops every
+   * shared row: 13 {@code CaseField}s including both {@code OrganisationPolicy} fields, and the 17
+   * {@code AuthorisationCaseField} rows granting them.
+   *
+   * <p>Resolved here, once, rather than at each of the reads that compare a row's case type: the
+   * value is settled for the whole conversion by {@code --case-type}, and the expected side of
+   * {@code retrofit-verify} is read through this same reader, so both sides substitute alike or
+   * neither does.
+   *
+   * <p>Only this one variable is substituted. Every other {@code ${CCD_DEF_*}} is genuinely deferred
+   * to deployment — a callback host, or sscs's {@code ${CCD_DEF_PUBLISH}}, which {@link SheetRow}
+   * deliberately reads as <em>absent</em> so the placeholder round-trips instead of collapsing to a
+   * literal {@code N} the definition never stated.
+   *
+   * @param row the parsed row, mutated in place
+   * @param caseTypeId the case type being converted, or null when the conversion names none
+   */
+  private void resolveCaseTypePlaceholder(Map<String, Object> row, String caseTypeId) {
+    if (caseTypeId == null || caseTypeId.isBlank()) {
+      return;
+    }
+    for (Map.Entry<String, Object> cell : row.entrySet()) {
+      if (CASE_TYPE_ID_PLACEHOLDER.equals(cell.getValue())) {
+        cell.setValue(caseTypeId);
+      }
     }
   }
 

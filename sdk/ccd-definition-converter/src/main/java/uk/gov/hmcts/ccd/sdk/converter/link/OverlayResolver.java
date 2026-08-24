@@ -1,5 +1,6 @@
 package uk.gov.hmcts.ccd.sdk.converter.link;
 
+import java.util.LinkedHashSet;
 import java.util.Set;
 import uk.gov.hmcts.ccd.sdk.converter.api.ConversionOptions;
 import uk.gov.hmcts.ccd.sdk.converter.model.OverlayCondition;
@@ -89,5 +90,35 @@ final class OverlayResolver {
     }
     OverlayCondition condition = conditionFor(suffix, options);
     return condition == null || condition.isActive();
+  }
+
+  /**
+   * The row's overlay tags with the inert ones removed — those whose predicate holds in every
+   * environment, and which therefore gate nothing.
+   *
+   * <p>Carried on a model rather than merely consulted, because a tag surviving onto a
+   * {@code FieldModel} makes the field overlay-gated for every downstream path that asks: it is
+   * refused a {@code CaseEventToComplexTypes} scope, kept out of the emitted case-data class, and
+   * excluded from clustering. A fragment split out for editorial reasons must not trigger any of
+   * that — finrem's {@code CaseField-common.json} names the {@code common} suffix purely because the
+   * shared tree is copied in by {@code yarn copy-common-components-*}, and its rows ship in every
+   * build.
+   *
+   * @param overlayTags the row's overlay tags
+   * @param options the conversion configuration carrying the suffix-to-predicate map
+   * @return the tags that genuinely gate, empty when none do
+   */
+  static Set<String> gatingTags(Set<String> overlayTags, ConversionOptions options) {
+    if (overlayTags == null || overlayTags.isEmpty() || options.getOverlaySuffixes() == null) {
+      return overlayTags == null ? Set.of() : overlayTags;
+    }
+    Set<String> gating = new LinkedHashSet<>();
+    for (String tag : overlayTags) {
+      OverlayCondition condition = options.getOverlaySuffixes().get(tag);
+      if (condition == null || !condition.isUnconditionallyTrue()) {
+        gating.add(tag);
+      }
+    }
+    return gating;
   }
 }

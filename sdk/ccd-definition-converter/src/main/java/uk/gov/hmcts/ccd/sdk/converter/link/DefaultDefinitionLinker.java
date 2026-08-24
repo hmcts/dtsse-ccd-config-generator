@@ -898,6 +898,7 @@ public class DefaultDefinitionLinker implements DefinitionLinker {
             // type would need the same @CCD(gate) attribute on the generated complex class member.
             // Overlay-only complex-type members keep their existing passthrough routing (null gate).
             null,
+            options,
             enumResolver,
             complexResolver));
       }
@@ -1024,6 +1025,7 @@ public class DefaultDefinitionLinker implements DefinitionLinker {
           gaps,
           "CaseField",
           gate,
+          options,
           enumResolver,
           complexResolver));
     }
@@ -1059,6 +1061,7 @@ public class DefaultDefinitionLinker implements DefinitionLinker {
       GapCollector gaps,
       String sheet,
       String gate,
+      ConversionOptions options,
       TypeMapper.EnumResolver enumResolver,
       TypeMapper.ComplexResolver complexResolver) {
     // A CaseData member must be a resolvable JavaBean property: the SDK's PropertyUtils resolves a
@@ -1136,7 +1139,9 @@ public class DefaultDefinitionLinker implements DefinitionLinker {
         // tags: CaseDataEmitter emits it like any other member and every downstream path (event
         // placement, access-class attachment) treats it normally. An ungated overlay row keeps its
         // tags so it still routes to passthrough.
-        .overlayTags(gate != null ? new LinkedHashSet<>() : new LinkedHashSet<>(row.getOverlayTags()))
+        .overlayTags(gate != null
+            ? new LinkedHashSet<>()
+            : new LinkedHashSet<>(OverlayResolver.gatingTags(row.getOverlayTags(), options)))
         .gate(gate)
         .build();
   }
