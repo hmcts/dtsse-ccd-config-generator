@@ -33,6 +33,16 @@ final class OverlayResolver {
     }
     for (String tag : overlayTags) {
       if (options.getOverlaySuffixes().containsKey(tag)) {
+        // An unconditionally-true predicate is not an environment switch at all: the fragment ships
+        // in every build and was split out for editorial reasons (finrem's `common`, `newPaperCase`
+        // and `manageScannedDocs`). Reporting it as BASE is what lets its rows derive as plain Java —
+        // a suffix, however inert, otherwise refuses whole CaseEventToComplexTypes groups and forces
+        // a verbatim passthrough that gates nothing. Skipped rather than returned so a row carrying
+        // both an inert and a real suffix still reports the real one.
+        OverlayCondition condition = options.getOverlaySuffixes().get(tag);
+        if (condition != null && condition.isUnconditionallyTrue()) {
+          continue;
+        }
         return tag;
       }
     }

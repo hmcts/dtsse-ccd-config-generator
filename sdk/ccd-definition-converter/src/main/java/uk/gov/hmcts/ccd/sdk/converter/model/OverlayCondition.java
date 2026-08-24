@@ -17,9 +17,30 @@ import lombok.Value;
 @Value
 public class OverlayCondition {
 
+  /**
+   * The reserved expected-value sentinel naming a value the variable is never given, so
+   * {@code !VAR:__never__} is the canonical spelling of "always active".
+   *
+   * <p>Some overlay fragments are not per-environment at all: no build script ever excludes them, and
+   * they are split out purely for editorial reasons (finrem's {@code common}, {@code newPaperCase} and
+   * {@code manageScannedDocs}). They still need a suffix so the converter recognises the fragment, and
+   * the sentinel is how a suffix says "this one is unconditional".
+   */
+  public static final String NEVER = "__never__";
+
   String envVar;
   String expectedValue;
   boolean negated;
+
+  /**
+   * Whether this predicate holds in EVERY environment, so the rows it guards are unconditional and
+   * may be emitted as plain Java rather than environment-gated passthrough.
+   *
+   * @return true for the {@code !VAR:__never__} sentinel spelling
+   */
+  public boolean isUnconditionallyTrue() {
+    return negated && NEVER.equalsIgnoreCase(expectedValue);
+  }
 
   /**
    * Parses the CLI predicate syntax.
