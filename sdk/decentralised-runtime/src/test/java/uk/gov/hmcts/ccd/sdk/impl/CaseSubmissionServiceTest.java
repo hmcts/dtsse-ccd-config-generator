@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import java.util.List;
@@ -61,6 +62,7 @@ class CaseSubmissionServiceTest {
     ));
     when(idempotencyEnforcer.lockCaseAndGetExistingEvent(IDEMPOTENCY_KEY, 123456789L))
         .thenReturn(Optional.empty());
+    when(auditEventService.reserveCaseEventId()).thenReturn(42L);
     when(legacyHandler.apply(eq(event), eq("Bearer raw-token"))).thenReturn(handlerResult());
     when(caseProjectionService.load(123456789L)).thenReturn(savedCaseDetails());
     when(transactionTemplate.execute(any())).thenAnswer(invocation ->
@@ -70,6 +72,36 @@ class CaseSubmissionServiceTest {
     service.submit(event, "raw-token", IDEMPOTENCY_KEY);
 
     verify(legacyHandler).apply(event, "Bearer raw-token");
+    verify(auditEventService).saveAuditRecord(
+        eq(42L),
+        eq(event),
+        any(IdamService.User.class),
+        any(CaseDetails.class),
+        eq(IDEMPOTENCY_KEY),
+        eq(Optional.empty())
+    );
+  }
+
+  @Test
+  void idempotentReplayDoesNotReserveAnotherEventId() {
+    DecentralisedCaseEvent event = event();
+    Event<?, ?, ?> eventConfig = mock(Event.class);
+    doReturn(eventConfig).when(resolvedConfigRegistry).getRequiredEvent("TestCase", "submit");
+    when(eventConfig.getSubmitHandler()).thenReturn(null);
+    when(idam.retrieveUser("raw-token")).thenReturn(new IdamService.User(
+        "Bearer raw-token",
+        new UserInfo("sub", "uid", "name", "given", "family", List.of("caseworker"))
+    ));
+    when(idempotencyEnforcer.lockCaseAndGetExistingEvent(IDEMPOTENCY_KEY, 123456789L))
+        .thenReturn(Optional.of(99L));
+    when(caseDataRepository.caseDetailsAtEvent(123456789L, 99L)).thenReturn(savedCaseDetails());
+    when(transactionTemplate.execute(any())).thenAnswer(invocation ->
+        invocation.<TransactionCallback<?>>getArgument(0).doInTransaction(null)
+    );
+
+    service.submit(event, "raw-token", IDEMPOTENCY_KEY);
+
+    verifyNoInteractions(auditEventService, legacyHandler);
   }
 
   private DecentralisedCaseEvent event() {

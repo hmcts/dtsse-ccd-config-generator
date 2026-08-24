@@ -23,6 +23,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 import uk.gov.hmcts.ccd.data.casedetails.SecurityClassification;
 import uk.gov.hmcts.ccd.decentralised.dto.DecentralisedAuditEvent;
@@ -41,6 +43,20 @@ class AuditEventService {
   private final ObjectMapper defaultMapper;
   private final Optional<MessagePublisher> publisher;
   private final ResolvedConfigRegistry registry;
+
+  @Transactional(propagation = Propagation.MANDATORY)
+  long reserveCaseEventId() {
+    return ndb.getJdbcTemplate().queryForObject(
+        """
+        select set_config(
+            'ccd.case_event_id',
+            nextval('ccd.case_event_id_seq')::text,
+            true
+        )::bigint
+        """,
+        Long.class
+    );
+  }
 
   public List<DecentralisedAuditEvent> loadHistory(long caseRef) {
     final String sql = """
@@ -98,6 +114,7 @@ class AuditEventService {
 
   @SneakyThrows
   public long saveAuditRecord(
+      long caseEventId,
       DecentralisedCaseEvent event,
       IdamService.User user,
       uk.gov.hmcts.ccd.domain.model.definition.CaseDetails currentView,
@@ -112,6 +129,7 @@ class AuditEventService {
     var eventDetails = event.getEventDetails();
     var sql = """
         insert into ccd.case_event (
+          id,
           data,
           event_id,
           user_id,
@@ -133,6 +151,7 @@ class AuditEventService {
           proxied_by_first_name,
           proxied_by_last_name)
         values (
+          :id,
           :data::jsonb,
           :event_id,
           :user_id,
@@ -180,6 +199,7 @@ class AuditEventService {
     }
 
     var params = new MapSqlParameterSource()
+        .addValue("id", caseEventId)
         .addValue("data", defaultMapper.writeValueAsString(currentView.getData()))
         .addValue("event_id", eventDetails.getEventId())
         .addValue("user_id", auditUserId)
