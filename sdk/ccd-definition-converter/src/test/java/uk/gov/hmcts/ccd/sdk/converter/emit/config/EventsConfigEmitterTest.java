@@ -578,7 +578,9 @@ class EventsConfigEmitterTest {
                 .hintOverridden(true)
                 .hintText("An overriding hint")
                 .build(),
-            // An element member suppressing a would-be cascade.
+            // An element member suppressing a would-be cascade, and carrying a DefaultValue that is a
+            // case-role literal — the shape finrem's manageInterveners ships, emitted through the
+            // raw-string setter so the brackets survive rather than being read as a HasRole.
             EventComplexTypeGroup.Member.builder()
                 .hops(List.of())
                 .leafType(party)
@@ -586,6 +588,7 @@ class EventsConfigEmitterTest {
                 .contextMethod("readonly")
                 .hintOverridden(true)
                 .hintText(null)
+                .defaultValue("[INTVRSOLICITOR1]")
                 .retainHiddenValue(true)
                 .build(),
             // A nested collection hop (Collection<Child>) descended via the element-typed scope.
@@ -627,8 +630,10 @@ class EventsConfigEmitterTest {
     assertThat(src).contains(".hintText(\"An overriding hint\")");
     assertThat(src).contains(".readonly(Party::getReference)");
     assertThat(src).contains(".noHintText()");
-    // RetainHiddenValue is a real importer-read column on this sheet, derived rather than grafted.
+    // RetainHiddenValue and DefaultValue are real importer-read columns on this sheet, derived rather
+    // than grafted — a member whose only tail column was DefaultValue leaves no carrier file at all.
     assertThat(src).contains(".retainHiddenValue()");
+    assertThat(src).contains(".defaultValue(\"[INTVRSOLICITOR1]\")");
     // The nested collection hop opens its own two-arg element-typed scope.
     assertThat(src).contains(".complex(Party::getChildren, Child.class)");
     assertThat(src).contains(".mandatory(Child::getChildName)");

@@ -1164,7 +1164,8 @@ public class EventsConfigEmitter implements SourceEmitter {
    * own {@code .done()} is emitted by the caller.
    *
    * <p>The columns these calls reproduce ({@code DisplayContext}, {@code ListElementCode},
-   * {@code EventElementLabel}, {@code EventHintText}, {@code FieldShowCondition}, {@code PageID}) are
+   * {@code EventElementLabel}, {@code EventHintText}, {@code FieldShowCondition}, {@code HintText},
+   * {@code RetainHiddenValue}, {@code DefaultValue}, {@code PageID}) are
    * exactly those the linker leaves out of the companion graft; only an exotic tail column is grafted
    * back over the generated rows (see {@code DefaultDefinitionLinker.buildEventToComplexTypesPassthrough}).
    * The row's {@code ID} (importer-ignored author metadata) and {@code FieldDisplayOrder} (re-derived by
@@ -1212,6 +1213,12 @@ public class EventsConfigEmitter implements SourceEmitter {
         } else {
           cb.add("\n    .noHintText()");
         }
+      }
+      if (notBlank(member.getDefaultValue())) {
+        // The raw-string setter, never the Type-typed overload: the typed one unwraps a HasRole via
+        // getRole(), and a member default is routinely a bare case-role literal the definition names
+        // rather than a constant the team's role enum declares (finrem's [INTVRSOLICITOR1]).
+        cb.add("\n    .defaultValue($S)", member.getDefaultValue());
       }
       if (member.isRetainHiddenValue()) {
         cb.add("\n    .retainHiddenValue()");

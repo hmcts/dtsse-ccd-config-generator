@@ -129,6 +129,16 @@ public class EventComplexTypeGroup {
     String pageId;
 
     /**
+     * {@code DefaultValue}, or null. Emitted as the SDK's raw-string {@code .defaultValue(String)}
+     * setter rather than the {@code Type}-typed overload, because a member default is routinely a
+     * case-role literal — finrem's {@code manageInterveners} places
+     * {@code intervener1.intervenerOrganisation.OrgPolicyCaseAssignedRole} with
+     * {@code [INTVRSOLICITOR1]} — and the typed overload unwraps a {@code HasRole} through
+     * {@code getRole()}, which no literal the definition names has.
+     */
+    String defaultValue;
+
+    /**
      * The generated leaf member's declared {@code @CCD(hint)}, which the SDK's
      * {@code CaseEventToComplexTypesGenerator} cascades onto the row's {@code HintText} unless the
      * member placement overrides it. Carried so the linker can compare it with the input row's

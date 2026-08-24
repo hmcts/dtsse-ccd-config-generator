@@ -863,6 +863,75 @@ class DefaultDefinitionLinkerTest {
   }
 
   @Test
+  void derivesDefaultValueOnComplexTypeRowsAndLeavesNoGraft() {
+    GapCollector gaps = new GapCollector();
+    // finrem's last five CaseEventToComplexTypes files (manageInterveners/intervener1..4 and
+    // nocRequest/changeOrganisationRequestField) existed solely to carry DefaultValue on one row each:
+    // manageInterveners defaults intervenerOrganisation.OrgPolicyCaseAssignedRole to the matching
+    // [INTVRSOLICITORn] role, and nocRequest defaults ApprovalStatus to 1. The importer DOES read the
+    // column on this sheet (EventCaseFieldComplexTypeParser maps default-value), and the member
+    // placement derives it via the SDK's raw-string .defaultValue(String) setter — the raw form
+    // precisely so that a bracketed case-role literal is emitted verbatim rather than being read as a
+    // HasRole and unwrapped through getRole(). So it must not hold a whole verbatim file alive.
+    DefinitionIr ir = minimal("Minimal")
+        .row(SheetName.CASE_FIELD,
+            cols("CaseTypeID", "Minimal", "ID", "contact", "Label", "Contact",
+                "FieldType", "Contact"))
+        .row(SheetName.COMPLEX_TYPES,
+            cols("ID", "Contact", "ListElementCode", "name", "FieldType", "Text"))
+        .row(SheetName.COMPLEX_TYPES,
+            cols("ID", "Contact", "ListElementCode", "role", "FieldType", "Text"))
+        .row(SheetName.COMPLEX_TYPES,
+            cols("ID", "Contact", "ListElementCode", "reference", "FieldType", "Text"))
+        .row(SheetName.CASE_EVENT,
+            cols("CaseTypeID", "Minimal", "ID", "createCase", "Name", "Create",
+                "PostConditionState", "Open"))
+        .row(SheetName.CASE_EVENT_TO_FIELDS,
+            cols("CaseTypeID", "Minimal", "CaseEventID", "createCase",
+                "CaseFieldID", "contact", "DisplayContext", "COMPLEX", "PageID", "1",
+                "PageFieldDisplayOrder", 1))
+        // A case-role literal, alongside a show condition — the exact finrem intervener1 row shape.
+        .row(SheetName.CASE_EVENT_TO_COMPLEX_TYPES,
+            cols("ID", "Contact", "CaseEventID", "createCase", "CaseFieldID", "contact",
+                "ListElementCode", "role", "DisplayContext", "OPTIONAL",
+                "FieldShowCondition", "name=\"IMPOSSIBLAW\"",
+                "DefaultValue", "[INTVRSOLICITOR1]", "FieldDisplayOrder", 1))
+        // A plain scalar default — nocRequest's ApprovalStatus.
+        .row(SheetName.CASE_EVENT_TO_COMPLEX_TYPES,
+            cols("ID", "Contact", "CaseEventID", "createCase", "CaseFieldID", "contact",
+                "ListElementCode", "name", "DisplayContext", "OPTIONAL",
+                "DefaultValue", "1", "FieldDisplayOrder", 2))
+        // A blank default carries nothing the generator failed to write, so it stays unset rather than
+        // emitting .defaultValue("") — which would write a column the input row does not have.
+        .row(SheetName.CASE_EVENT_TO_COMPLEX_TYPES,
+            cols("ID", "Contact", "CaseEventID", "createCase", "CaseFieldID", "contact",
+                "ListElementCode", "reference", "DisplayContext", "READONLY",
+                "DefaultValue", "", "FieldDisplayOrder", 3))
+        .build();
+
+    CaseTypeModel model = linker.link(ir, options("Minimal"), gaps);
+
+    var group = model.getEventComplexTypeGroups().get("createCasecontact");
+    assertThat(group).as("all three rows derive").isNotNull();
+    assertThat(group.getMembers()).hasSize(3);
+
+    var byGetter = new java.util.HashMap<String, uk.gov.hmcts.ccd.sdk.converter.model
+        .EventComplexTypeGroup.Member>();
+    group.getMembers().forEach(m -> byGetter.put(m.getLeafGetter(), m));
+
+    assertThat(byGetter.get("getRole").getDefaultValue())
+        .as("a case-role literal is carried verbatim, brackets and all")
+        .isEqualTo("[INTVRSOLICITOR1]");
+    assertThat(byGetter.get("getName").getDefaultValue()).isEqualTo("1");
+    assertThat(byGetter.get("getReference").getDefaultValue())
+        .as("a blank DefaultValue leaves the member's default unset").isNull();
+
+    assertThat(model.getPassthroughSheets())
+        .as("DefaultValue alone leaves no carrier: no CaseEventToComplexTypes file is written")
+        .noneMatch(s -> s.getRelativePath().contains("CaseEventToComplexTypes"));
+  }
+
+  @Test
   void leavesNoGraftForCaseTypeIdOnComplexTypeRows() {
     GapCollector gaps = new GapCollector();
     // sscs's last CaseEventToComplexTypes file (caseUpdated/appeal) existed solely to carry

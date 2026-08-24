@@ -2239,7 +2239,9 @@ public class DefaultDefinitionLinker implements DefinitionLinker {
             + " collection-intermediate groups are now derived (the element-typed"
             + " .complex(getter, Element.class) scope walks into the ListValue element type) and a"
             + " member @CCD(hint) the input row does not carry is now derived too (the tri-state"
-            + " .hintText/.noHintText setters override the cascade). The DisplayContext the event"
+            + " .hintText/.noHintText setters override the cascade), as is a member DefaultValue (the"
+            + " raw-string .defaultValue(String) setter, so a case-role literal is emitted verbatim)."
+            + " The DisplayContext the event"
             + " places the root field in is no longer a fallback cause at all — the member scope is"
             + " opened by a non-registering opener (.complexScope, or the element-typed"
             + " .complex(getter, Element.class)), so a root placed OPTIONAL/READONLY/MANDATORY, or not"
@@ -2339,10 +2341,17 @@ public class DefaultDefinitionLinker implements DefinitionLinker {
    *   </li>
    * </ul>
    *
-   * <p>{@code RetainHiddenValue} is deliberately NOT here: the importer does read it on this sheet,
-   * and the member placement derives it via {@code .retainHiddenValue()} — the same
-   * {@code applyMetadata} the {@code CaseEventToFields} rows go through — so it needs no graft
-   * either.</p>
+   * <p>{@code RetainHiddenValue} and {@code DefaultValue} are here for a third reason: the importer
+   * genuinely reads both on this sheet, and the member placement derives both — {@code Y} via
+   * {@code .retainHiddenValue()}, a default via the raw-string {@code .defaultValue(String)} setter —
+   * so a row carrying either needs no graft. {@code DefaultValue} is what makes the difference between
+   * a derived group that leaves a carrier and one that leaves none at all: the only
+   * {@code CaseEventToComplexTypes} rows finrem's contested definition ships with a tail beyond the
+   * generator's reach were its five {@code DefaultValue}-carrying member rows
+   * ({@code manageInterveners/intervener1..4}'s {@code intervenerOrganisation.OrgPolicyCaseAssignedRole}
+   * defaulting to the matching {@code [INTVRSOLICITORn]} role, and
+   * {@code nocRequest/changeOrganisationRequestField}'s {@code ApprovalStatus} defaulting to
+   * {@code 1}), each of which needed a whole passthrough file for that one column.</p>
    *
    * <p>Every OTHER column present on the input row IS an exotic tail column and IS grafted (see
    * {@link #etoctGraftRow}).</p>
@@ -2352,7 +2361,7 @@ public class DefaultDefinitionLinker implements DefinitionLinker {
       Columns.DISPLAY_CONTEXT, Columns.EVENT_ELEMENT_LABEL, Columns.EVENT_HINT_TEXT,
       Columns.FIELD_SHOW_CONDITION, Columns.PAGE_ID, Columns.HINT_TEXT, "LiveFrom",
       Columns.ID, Columns.FIELD_DISPLAY_ORDER, Columns.SHOW_SUMMARY_CHANGE_OPTION,
-      Columns.RETAIN_HIDDEN_VALUE,
+      Columns.RETAIN_HIDDEN_VALUE, Columns.DEFAULT_VALUE,
       Columns.CASE_TYPE_ID, Columns.CASE_TYPE_ID_LOWER,
       Columns.PAGE_LABEL, Columns.PAGE_DISPLAY_ORDER, Columns.PAGE_FIELD_DISPLAY_ORDER);
 
@@ -2363,10 +2372,13 @@ public class DefaultDefinitionLinker implements DefinitionLinker {
    * <p>{@code ID} is absent because the generator emits none on this sheet — keying on it would make
    * the graft present-on-one-side-only, which {@code JsonUtils.mergeInto} treats as a definite
    * non-match. (That asymmetry is exactly what {@code EVENT_COMPLEX_TYPE_ID_IGNORED} keys off to
-   * tell a derived group from a fallback one.) {@code DefaultValue} is absent for the same reason in
-   * reverse: it is an exotic tail column this graft carries as PAYLOAD (the derived
-   * {@code .complex(...)} emission never calls {@code .defaultValue(...)} on a member, so the
-   * generated row never has it), and a payload column cannot also be a key.</p>
+   * tell a derived group from a fallback one.) {@code DefaultValue} — the fifth key the generator
+   * itself uses — is absent for the mirror-image reason: the derived {@code .complex(...)} emission
+   * calls {@code .defaultValue(...)} on the member, so the generated row carries it while this graft,
+   * which no longer treats it as tail at all (see {@link #ETOCT_DERIVED_COLUMNS}), does not — and a
+   * key present on one side only is that same definite non-match. The four columns kept already
+   * identify the generated row uniquely, since a member differing only in its default would have to
+   * repeat a {@code ListElementCode} the derivation refuses to collapse.</p>
    *
    * @see #ETOCT_FALLBACK_MERGE_KEYS
    */
@@ -2397,7 +2409,8 @@ public class DefaultDefinitionLinker implements DefinitionLinker {
    * OPTIONAL-with-show-condition and again as MANDATORY, and without it the MANDATORY row is
    * silently dropped. {@code DefaultValue} — the fifth key the generator itself uses — is excluded
    * because it demonstrably recovers nothing here (civil 1, prl 2 either way; only 31 rows across
-   * all six lanes carry the column) and it cannot be a key on the graft path at all.</p>
+   * all six lanes carry the column) and it is not a key on the graft path this set must stay a
+   * superset of.</p>
    *
    * <p>The one irreducible residue is civil's
    * {@code CLAIMANT_RESPONSE_SPEC/applicant1DQRequestedCourt:responseCourtLocations} plus three prl
@@ -2534,6 +2547,17 @@ public class DefaultDefinitionLinker implements DefinitionLinker {
       if (row.getYesNo(Columns.RETAIN_HIDDEN_VALUE).orElse(Boolean.FALSE)) {
         member = member.toBuilder().retainHiddenValue(true).build();
       }
+      // DefaultValue is a real importer-read column on this sheet (EventCaseFieldComplexTypeParser
+      // maps it), and the member placement derives it via the SDK's raw-string .defaultValue(String)
+      // setter — the same all-context FieldCollectionBuilder setter the CaseEventToFields placements
+      // use, which CaseEventToComplexTypesGenerator reads for a member. So a row carrying one needs no
+      // column graft, which is what stops finrem's five DefaultValue-only member rows
+      // (manageInterveners/intervener1..4 and nocRequest/changeOrganisationRequestField) from each
+      // leaving a passthrough carrier behind for that one column.
+      String defaultValue = blankToNull(row.getString(Columns.DEFAULT_VALUE).orElse(null));
+      if (defaultValue != null) {
+        member = member.toBuilder().defaultValue(defaultValue).build();
+      }
       members.add(member);
     }
     if (members.isEmpty()) {
@@ -2629,10 +2653,11 @@ public class DefaultDefinitionLinker implements DefinitionLinker {
    * the input row carries no exotic tail. The generator writes only the columns it computes from the
    * builder chain ({@link #ETOCT_DERIVED_COLUMNS}) — which now also cover the two accepted-difference
    * columns {@code ID} and {@code FieldDisplayOrder} that the definition-store importer either ignores
-   * ({@code ID}) or re-derives ({@code FieldDisplayOrder}). Every OTHER column present on the input row
-   * is an exotic tail column the generator never writes ({@code SecurityClassification}, {@code Publish},
-   * {@code RetainHiddenValue}, {@code ShowSummaryChangeOption}, {@code ShowSummaryContentOption},
-   * {@code DefaultValue}, …); those are grafted back over the generated row, additively (keyed on the
+   * ({@code ID}) or re-derives ({@code FieldDisplayOrder}) — and the two the member placement derives
+   * outright, {@code RetainHiddenValue} and {@code DefaultValue}. Every OTHER column present on the
+   * input row is an exotic tail column the generator never writes ({@code SecurityClassification},
+   * {@code Publish}, {@code ShowSummaryContentOption}, …); those are grafted back over the generated
+   * row, additively (keyed on the
    * columns the generator DOES emit). When the row has no such column there is nothing the generator
    * cannot compute, so no graft row is produced at all and the derived group leaves no passthrough
    * carrier behind.
