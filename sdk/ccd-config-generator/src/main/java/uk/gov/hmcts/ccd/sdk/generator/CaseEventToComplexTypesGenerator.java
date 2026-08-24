@@ -93,10 +93,22 @@ class CaseEventToComplexTypesGenerator<T, S, R extends HasRole> implements
           } else if (!Strings.isNullOrEmpty(field.getHint())) {
             data.put("HintText", field.getHint());
           }
-          if (null != field.getDefaultValue()) {
-            String value = field.getDefaultValue() instanceof HasRole
-                             ? ((HasRole) field.getDefaultValue()).getRole()
-                             : field.getDefaultValue().toString();
+          // DefaultValue comes from either carrier: the typed one the long-standing positional
+          // optional/mandatory(getter, showCondition, defaultValue) overloads populate, or the raw
+          // string one the fluent defaultValue(String) setter populates. A member is reachable only
+          // through a .complex(...) scope, whose fields never appear on CaseEventToFields, so reading
+          // the raw carrier here cannot double-write the column across the two sheets — and it is what
+          // lets a member carry a default the typed setter cannot express: an @JsonUnwrapped-free
+          // role literal such as finrem's [INTVRSOLICITOR1] on
+          // manageInterveners/intervener1.intervenerOrganisation.OrgPolicyCaseAssignedRole names a
+          // case role the definition declares, not a HasRole constant the config does.
+          Object defaultValue = null != field.getDefaultValue()
+                                  ? field.getDefaultValue()
+                                  : field.getCaseEventDefaultValue();
+          if (null != defaultValue) {
+            String value = defaultValue instanceof HasRole
+                             ? ((HasRole) defaultValue).getRole()
+                             : defaultValue.toString();
             data.put("DefaultValue", value);
           }
         }
