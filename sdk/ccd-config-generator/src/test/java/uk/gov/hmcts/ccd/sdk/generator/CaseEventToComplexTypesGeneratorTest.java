@@ -30,6 +30,65 @@ public class CaseEventToComplexTypesGeneratorTest {
     public TemporaryFolder tmp = new TemporaryFolder();
 
     /**
+     * A complex-type member placed with the fluent {@code defaultValue(String)} setter must write the
+     * member row's {@code DefaultValue} verbatim.
+     *
+     * <p>This is the column that decides whether a hand-written definition's member row can be
+     * expressed in Java at all. finrem's {@code manageInterveners/intervener1} carries
+     * {@code DefaultValue=[INTVRSOLICITOR1]} on
+     * {@code intervenerOrganisation.OrgPolicyCaseAssignedRole}, and the retrofit converter has to emit
+     * every column of a member row as Java or fall back to shipping the whole row as raw definition
+     * JSON alongside the generated config.
+     *
+     * <p>The value is emitted as the raw string it was given: a role-shaped default like
+     * {@code [INTVRSOLICITOR1]} is a case-role literal the definition names, not a
+     * {@code HasRole} the config declares, so it must survive untranslated.
+     */
+    @Test
+    public void writesTheMemberDefaultValueVerbatim() {
+        ConfigBuilderImpl<EventComplexMemberCaseData, EventComplexMemberState, UserRole> builder =
+            newBuilder();
+        builder.event("create")
+            .forState(EventComplexMemberState.Open)
+            .name("Create")
+            .grant(CRU, LOCAL_AUTHORITY)
+            .fields()
+            .complex(EventComplexMemberCaseData::getContact)
+            .optional(EventComplexMemberContact::getReference)
+            .defaultValue("[INTVRSOLICITOR1]")
+            .done();
+
+        assertThat(memberRows(builder, "create", "contact"))
+            .singleElement()
+            .satisfies(row -> {
+                assertThat(row).containsEntry("ListElementCode", "reference");
+                assertThat(row).containsEntry("DefaultValue", "[INTVRSOLICITOR1]");
+            });
+    }
+
+    /**
+     * A member placed without the setter carries no {@code DefaultValue} column at all — not an empty
+     * one — so a definition row that has no such column still compares equal to the generated row.
+     */
+    @Test
+    public void omitsTheMemberDefaultValueColumnWhenUnset() {
+        ConfigBuilderImpl<EventComplexMemberCaseData, EventComplexMemberState, UserRole> builder =
+            newBuilder();
+        builder.event("create")
+            .forState(EventComplexMemberState.Open)
+            .name("Create")
+            .grant(CRU, LOCAL_AUTHORITY)
+            .fields()
+            .complex(EventComplexMemberCaseData::getContact)
+            .optional(EventComplexMemberContact::getReference)
+            .done();
+
+        assertThat(memberRows(builder, "create", "contact"))
+            .singleElement()
+            .satisfies(row -> assertThat(row).doesNotContainKey("DefaultValue"));
+    }
+
+    /**
      * A member placed with {@code publish(...)} and {@code publishAs(...)} writes both columns, which
      * the definition store's {@code EventCaseFieldComplexTypeParser} reads on this sheet.
      */
