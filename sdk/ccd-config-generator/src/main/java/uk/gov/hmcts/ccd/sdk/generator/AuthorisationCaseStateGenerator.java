@@ -83,7 +83,7 @@ class AuthorisationCaseStateGenerator<T, S, R extends HasRole> implements Config
       // the importer would reject an AuthorisationCaseState row naming a state that does not exist.
       // Filtered here rather than at the source so it covers grants derived from event permissions
       // above as well as those declared on the constant's own access classes.
-      if (StateGenerator.isIgnored(config.getStateClass(), stateRolePermission.getRowKey())) {
+      if (StateGenerator.isIgnored(stateRolePermission.getRowKey())) {
         continue;
       }
       Map<String, Object> permission = JsonUtils.caseRow(config.getCaseType());

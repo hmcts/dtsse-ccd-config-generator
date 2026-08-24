@@ -23,7 +23,7 @@ class StateGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, S, R
     int i = 1;
     if (config.getStateClass().isEnum()) {
       for (Object enumConstant : config.getStateClass().getEnumConstants()) {
-        if (isIgnored(config.getStateClass(), enumConstant)) {
+        if (isIgnored(enumConstant)) {
           continue;
         }
         Map<String, Object> field = enumToJsonMap(config.getCaseType(), config.getStateClass(), enumConstant,
@@ -54,13 +54,31 @@ class StateGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, S, R
    * {@link uk.gov.hmcts.ccd.sdk.StateId}: an enum with an {@code @JsonValue toString()} returning
    * the lowercase id would otherwise throw {@code NoSuchFieldException}.
    *
-   * @param enumType the state enum class
+   * <p>Read off the constant's OWN {@link Enum#getDeclaringClass()}, not the case type's declared
+   * state class, because the two are not always the same enum. {@code forStates(...)} takes the
+   * state type as a generic parameter, and a shared {@code EnumSet} constant declared on one state
+   * enum can be handed to an event on a case type parameterised by a different one — erasure means
+   * nothing rejects it at compile time. nfdiv does exactly this: its {@code NFD_ExceptionRecord}
+   * case type is {@code CCDConfig<ExceptionRecord, ExceptionRecordState, UserRole>}, yet
+   * {@code CompleteAwaitingPaymentDcnProcessing} configures an event on it with
+   * {@code forStates(State.POST_SUBMISSION_STATES)} — constants of the unrelated {@code State} enum.
+   * Those constants reach the {@code AuthorisationCaseState} rows, so looking {@code Holding} up on
+   * {@code ExceptionRecordState} threw {@code NoSuchFieldException} and failed the whole build.
+   * {@link uk.gov.hmcts.ccd.sdk.StateId#of} already resolves the emitted state ID via the declaring
+   * class for the same reason; this makes the ignore test agree with it.
+   *
+   * <p>A non-enum argument (the state type need not be an enum — {@link #write} guards on
+   * {@code isEnum()}) carries no annotation and so is never ignored.
+   *
    * @param enumConstant the constant to test
    * @return true when the constant carries {@code @CCD(ignore = true)}
    */
   @SneakyThrows
-  static boolean isIgnored(Class<?> enumType, Object enumConstant) {
-    CCD ccd = enumType.getField(((Enum<?>) enumConstant).name()).getAnnotation(CCD.class);
+  static boolean isIgnored(Object enumConstant) {
+    if (!(enumConstant instanceof Enum<?> e)) {
+      return false;
+    }
+    CCD ccd = e.getDeclaringClass().getField(e.name()).getAnnotation(CCD.class);
     return ccd != null && ccd.ignore();
   }
 
