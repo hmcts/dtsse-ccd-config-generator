@@ -103,7 +103,7 @@ jobs:
 
       - name: Set up Gradle
         if: steps.changes.outputs.docs_only != 'true'
-        uses: gradle/actions/setup-gradle@v5
+        uses: gradle/actions/setup-gradle@v6
 
       - name: Run ${{ matrix.module }}:integration
         if: ${{ matrix.runIntegration && steps.changes.outputs.docs_only != 'true' }}

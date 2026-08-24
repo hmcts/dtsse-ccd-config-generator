@@ -46,7 +46,7 @@ jobs:
 
       - name: Set up Gradle
         if: steps.changes.outputs.docs_only != 'true'
-        uses: gradle/actions/setup-gradle@v5
+        uses: gradle/actions/setup-gradle@v6
 
       - name: Run pcs:cftlibTest
         if: steps.changes.outputs.docs_only != 'true'
