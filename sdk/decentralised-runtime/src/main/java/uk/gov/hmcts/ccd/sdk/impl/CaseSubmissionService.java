@@ -75,6 +75,8 @@ public class CaseSubmissionService {
       return new TransactionResult(existingEventId, Optional.empty());
     }
 
+    long caseEventId = auditEventService.reserveCaseEventId();
+
     // Delegate to the specific handler to apply the change
     var handlerResult = handler.apply(event, user.authToken());
     applyHandlerChanges(event, handlerResult);
@@ -83,6 +85,7 @@ public class CaseSubmissionService {
     upsertCase(event, handlerResult.dataUpdate());
     DecentralisedCaseDetails savedCaseDetails = caseProjectionService.load(event.getCaseDetails().getReference());
     auditEventService.saveAuditRecord(
+        caseEventId,
         event,
         user,
         savedCaseDetails.getCaseDetails(),

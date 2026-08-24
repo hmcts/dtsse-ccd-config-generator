@@ -88,6 +88,7 @@ import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.jms.core.JmsTemplate;
 import org.springframework.jms.core.MessagePostProcessor;
 import org.springframework.test.context.TestPropertySource;
+import org.springframework.transaction.support.TransactionTemplate;
 import uk.gov.hmcts.divorce.divorcecase.model.CaseData;
 import uk.gov.hmcts.divorce.divorcecase.NoFaultDivorce;
 import uk.gov.hmcts.divorce.simplecase.SimpleCaseConfiguration;
@@ -169,6 +170,9 @@ public class TestWithCCD extends CftlibTest {
 
     @Autowired
     private RetainAndDisposeProperties retainAndDisposeProperties;
+
+    @Autowired
+    private TransactionTemplate transactionTemplate;
 
     @Autowired
     private JmsTemplate jmsTemplate;
@@ -2344,6 +2348,35 @@ public class TestWithCCD extends CftlibTest {
         assertThat(submittedEvent.get("proxied_by"), nullValue());
         assertThat(submittedEvent.get("proxied_by_first_name"), nullValue());
         assertThat(submittedEvent.get("proxied_by_last_name"), nullValue());
+
+        var databaseAudit = db.queryForMap(
+            """
+            select audit.operation::text as operation,
+                   audit.table_schema,
+                   audit.table_name,
+                   audit.old_values::text as old_values,
+                   audit.new_values::text as new_values
+            from ccd.audit_log audit
+            join ccd.case_event event on event.id = audit.case_event_id
+            join ccd.case_data case_data on case_data.id = event.case_data_id
+            where case_data.reference = :reference
+              and event.event_id = :eventId
+            order by audit.id desc
+            limit 1
+            """,
+            Map.of(
+                "reference", caseRef,
+                "eventId", DecentralisedCaseworkerAddNote.CASEWORKER_DECENTRALISED_ADD_NOTE
+            )
+        );
+        assertThat(databaseAudit.get("operation"), equalTo("INSERT"));
+        assertThat(databaseAudit.get("table_schema"), equalTo("public"));
+        assertThat(databaseAudit.get("table_name"), equalTo("case_notes"));
+        assertThat(databaseAudit.get("old_values"), nullValue());
+        JsonNode newValues = mapper.readTree((String) databaseAudit.get("new_values"));
+        assertThat(newValues.path("reference").asLong(), equalTo(caseRef));
+        assertThat(newValues.path("note").asText(), equalTo(noteText));
+        assertThat(newValues.path("author").asText(), equalTo(submittingUserInfo.getName()));
     }
 
     @Order(19)
@@ -2456,6 +2489,7 @@ public class TestWithCCD extends CftlibTest {
     public void testDecentralisedSubmitHandlerErrorsAreRolledBack() throws Exception {
         String sqlCountByCase = "SELECT count(*) FROM case_notes WHERE reference = :ref";
         Integer before = db.queryForObject(sqlCountByCase, Map.of("ref", caseRef), Integer.class);
+        Integer auditsBefore = auditCountForCase(caseRef);
 
         var start = ccdApi.startEvent(
             getAuthorisation("TEST_CASE_WORKER_USER@mailinator.com"),
@@ -2483,6 +2517,7 @@ public class TestWithCCD extends CftlibTest {
 
         Integer after = db.queryForObject(sqlCountByCase, Map.of("ref", caseRef), Integer.class);
         assertThat(after, equalTo(before));
+        assertThat(auditCountForCase(caseRef), equalTo(auditsBefore));
     }
 
     @Order(21)
@@ -2802,6 +2837,12 @@ public class TestWithCCD extends CftlibTest {
                 "deletedState", SimpleCaseState.PendingDisposal.getId()
             )
         );
+        long deletedCaseEventId = createAuditedCaseNote(deletedReference);
+        assertThat(db.queryForObject(
+            "select count(*) from ccd.audit_log where case_event_id = :eventId",
+            Map.of("eventId", deletedCaseEventId),
+            Integer.class
+        ), equalTo(1));
         retainAndDisposePolicy.candidates(simpleCaseRef);
         String initialState = db.queryForObject(
             "select state from ccd.case_data where reference = :reference",
@@ -2874,6 +2915,21 @@ public class TestWithCCD extends CftlibTest {
                 Map.of("reference", deletedReference),
                 Integer.class
             ), equalTo(0));
+            assertThat(db.queryForObject(
+                "select count(*) from case_notes where reference = :reference",
+                Map.of("reference", deletedReference),
+                Integer.class
+            ), equalTo(0));
+            assertThat(db.queryForObject(
+                "select count(*) from ccd.case_event where id = :eventId",
+                Map.of("eventId", deletedCaseEventId),
+                Integer.class
+            ), equalTo(0));
+            assertThat(db.queryForObject(
+                "select count(*) from ccd.audit_log where case_event_id = :eventId",
+                Map.of("eventId", deletedCaseEventId),
+                Integer.class
+            ), equalTo(0));
         } finally {
             retainAndDisposeProperties.setMode(RetainAndDisposeProperties.Mode.LIVE);
             retainAndDisposeProperties.setMinimumCandidateCount(10);
@@ -2897,6 +2953,59 @@ public class TestWithCCD extends CftlibTest {
             Map.of("reference", pendingDisposalReference),
             Integer.class
         ), equalTo(1));
+    }
+
+    private long createAuditedCaseNote(long reference) {
+        return transactionTemplate.execute(status -> {
+            Long caseEventId = db.getJdbcTemplate().queryForObject(
+                """
+                select set_config(
+                    'ccd.case_event_id',
+                    nextval('ccd.case_event_id_seq')::text,
+                    true
+                )::bigint
+                """,
+                Long.class
+            );
+            db.update(
+                "insert into case_notes(reference, author, note) values (:reference, 'disposer', 'dispose me')",
+                Map.of("reference", reference)
+            );
+            db.update(
+                """
+                insert into ccd.case_event (
+                  id, security_classification, case_data_id, case_type_version, event_id, user_id,
+                  case_type_id, state_id, data, user_first_name, user_last_name, event_name,
+                  state_name, version, case_revision, idempotency_key
+                ) values (
+                  :id, 'PUBLIC', :reference, 1, 'audit-disposal-test', 'disposer', :caseType,
+                  :state, '{}'::jsonb, 'Test', 'Disposer', 'Audit disposal test', :state, 1, 1, :key
+                )
+                """,
+                Map.of(
+                    "id", caseEventId,
+                    "reference", reference,
+                    "caseType", SimpleCaseConfiguration.CASE_TYPE,
+                    "state", SimpleCaseState.PendingDisposal.getId(),
+                    "key", UUID.randomUUID()
+                )
+            );
+            return caseEventId;
+        });
+    }
+
+    private int auditCountForCase(long reference) {
+        return db.queryForObject(
+            """
+            select count(*)
+            from ccd.audit_log audit
+            join ccd.case_event event on event.id = audit.case_event_id
+            join ccd.case_data case_data on case_data.id = event.case_data_id
+            where case_data.reference = :reference
+            """,
+            Map.of("reference", reference),
+            Integer.class
+        );
     }
 
     @SneakyThrows
@@ -3469,11 +3578,20 @@ public class TestWithCCD extends CftlibTest {
     @Order(300)
     @Test
     void cascadingDeleteRemovesAllCaseData() {
-        db.getJdbcTemplate().execute("DELETE FROM ccd.case_data");
+        transactionTemplate.executeWithoutResult(status -> {
+            db.getJdbcTemplate().queryForObject(
+                "select set_config('ccd.audit_disabled', 'true', true)",
+                String.class
+            );
+            db.getJdbcTemplate().execute("DELETE FROM ccd.case_data");
+        });
 
         Integer caseDataCount = db.getJdbcTemplate()
             .queryForObject("SELECT COUNT(*) FROM ccd.case_data", Integer.class);
         assertThat("Case data table should be empty after delete", caseDataCount, equalTo(0));
+        Integer auditCount = db.getJdbcTemplate()
+            .queryForObject("SELECT COUNT(*) FROM ccd.audit_log", Integer.class);
+        assertThat("Audit data should be empty after case deletion", auditCount, equalTo(0));
     }
 
 }

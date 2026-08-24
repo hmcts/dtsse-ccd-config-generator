@@ -172,6 +172,7 @@ final class RetainAndDisposeTask implements Runnable {
       return;
     }
     transaction.executeWithoutResult(ignored -> {
+      repository.disableDatabaseAuditForTransaction();
       policy.dispose(disposalCase.reference());
       repository.deletePendingDisposalCase(disposalCase);
     });
