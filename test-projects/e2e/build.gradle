@@ -81,7 +81,7 @@ dependencies {
   implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.9.0'
 
   implementation 'com.github.ben-manes.caffeine:caffeine:3.2.4'
-  implementation 'com.google.guava:guava:33.6.0-jre'
+  implementation 'com.google.guava:guava:33.7.1-jre'
 
   implementation 'org.projectlombok:lombok'
   annotationProcessor 'org.projectlombok:lombok'
@@ -94,6 +94,8 @@ dependencies {
     exclude group: 'junit', module: 'junit'
     exclude group: 'org.junit.vintage', module: 'junit-vintage-engine'
   }
+  testImplementation 'org.springframework.boot:spring-boot-starter-data-jdbc'
+  testImplementation 'org.springframework.boot:spring-boot-starter-data-jpa'
 
   testImplementation 'org.apache.httpcomponents:httpclient:4.5.14'
   testImplementation 'org.testcontainers:testcontainers:2.0.5'

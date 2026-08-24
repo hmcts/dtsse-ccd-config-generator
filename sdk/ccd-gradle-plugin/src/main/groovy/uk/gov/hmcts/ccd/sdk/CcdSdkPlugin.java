@@ -7,6 +7,7 @@ import org.gradle.api.Plugin;
 import org.gradle.api.Project;
 import org.gradle.api.Task;
 import org.gradle.api.artifacts.Configuration;
+import org.gradle.api.artifacts.ExternalModuleDependency;
 import org.gradle.api.artifacts.repositories.MavenArtifactRepository;
 import org.gradle.api.artifacts.repositories.MavenRepositoryContentDescriptor;
 import org.gradle.api.file.DirectoryProperty;
@@ -82,20 +83,13 @@ public class CcdSdkPlugin implements Plugin<Project> {
         project.getDependencies().add("implementation", "com.github.hmcts:decentralised-runtime:"
             + version);
         String dependencyNotation = "com.github.hmcts:ccd-runtime-indexing:" + version;
+        addElasticsearchClientDependency(project);
         if (config.runtimeIndexing) {
           project.getDependencies().add("implementation", dependencyNotation);
         } else {
           project.getPluginManager().withPlugin("com.github.hmcts.rse-cft-lib", plugin ->
               project.getDependencies().add("cftlibImplementation", dependencyNotation));
         }
-        project.getConfigurations().configureEach(configuration ->
-            configuration.getResolutionStrategy().eachDependency(details -> {
-              if ("co.elastic.clients".equals(details.getRequested().getGroup())
-                  && ("elasticsearch-java".equals(details.getRequested().getName())
-                  || "elasticsearch-rest5-client".equals(details.getRequested().getName()))) {
-                details.useVersion("9.4.2");
-              }
-            }));
         // Surface that we are decentralised to the spring boot apps.
         // This is an env var since it needs to be read beyond the application's classpath
         // to shut off the default cftlib elasticsearch indexer when decentralised)
@@ -116,6 +110,13 @@ public class CcdSdkPlugin implements Plugin<Project> {
   private String getVersion() {
     String implementationVersion = getClass().getPackage().getImplementationVersion();
     return implementationVersion != null ? implementationVersion : "DEV-SNAPSHOT";
+  }
+
+  private void addElasticsearchClientDependency(Project project) {
+    ExternalModuleDependency dependency = (ExternalModuleDependency) project.getDependencies()
+        .create("co.elastic.clients:elasticsearch-java");
+    dependency.version(version -> version.strictly("[9, 10)"));
+    project.getDependencies().add("implementation", dependency);
   }
 
   @Data

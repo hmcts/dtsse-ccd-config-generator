@@ -12,6 +12,7 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import uk.gov.hmcts.ccd.sdk.api.CCD;
+import uk.gov.hmcts.ccd.sdk.type.CaseAccessGroup;
 import uk.gov.hmcts.ccd.sdk.type.ChangeOrganisationRequest;
 import uk.gov.hmcts.ccd.sdk.type.DynamicList;
 import uk.gov.hmcts.ccd.sdk.type.DynamicMultiSelectList;
@@ -124,6 +125,8 @@ public class CaseData {
   private final uk.gov.hmcts.ccd.sdk.type.SearchParty searchParty;
   @JsonProperty("SearchCriteria")
   private final uk.gov.hmcts.ccd.sdk.type.SearchCriteria searchCriteria;
+  @JsonProperty("CaseAccessGroups")
+  private final List<ListValue<CaseAccessGroup>> caseAccessGroups;
 
   private final Proceeding proceeding;
 
