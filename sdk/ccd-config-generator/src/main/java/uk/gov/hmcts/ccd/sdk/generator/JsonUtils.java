@@ -94,6 +94,14 @@ public class JsonUtils {
     return condition ? "Y" : "N";
   }
 
+  public static String yesNo(boolean condition) {
+    return condition ? "Yes" : "No";
+  }
+
+  public static String nullToEmpty(String value) {
+    return value == null ? "" : value;
+  }
+
   static void applyCcdAnnotation(Map<String, Object> target, CCD annotation) {
     if (annotation == null) {
       return;
