@@ -298,11 +298,21 @@ public final class EventComplexTypeResolver {
             + " (resolving '" + listElementCode + "')");
         return Optional.empty();
       }
+      // The member may be declared not on currentType but inside an @JsonUnwrapped container it
+      // holds, which Jackson flattens so the ListElementCode names no segment for it. Each container
+      // becomes a transparent hop, and the getter's owner moves to the innermost one.
+      Object owner = currentType;
+      for (Object container : member.unwrappedContainers()) {
+        hops.add(EventComplexTypeGroup.Hop.builder()
+            .unwrappedType(typeRefOf(container))
+            .build());
+        owner = container;
+      }
       boolean last = i == segments.length - 1;
       if (last) {
         return Optional.of(EventComplexTypeGroup.Member.builder()
             .hops(hops)
-            .leafType(typeRefOf(currentType))
+            .leafType(typeRefOf(owner))
             .leafGetter(member.getter)
             .contextMethod(contextMethod)
             .showCondition(showCondition)
@@ -322,7 +332,7 @@ public final class EventComplexTypeResolver {
         return Optional.empty();
       }
       hops.add(EventComplexTypeGroup.Hop.builder()
-          .declaringType(typeRefOf(currentType))
+          .declaringType(typeRefOf(owner))
           .getter(member.getter)
           .elementType(member.collectionElementRef)
           .build());
@@ -425,7 +435,8 @@ public final class EventComplexTypeResolver {
       }
       EventComplexTypeGroup.TypeRef elementRef =
           m.collection() && nested != null ? typeRefOf(nested) : null;
-      return new ResolvedMember(m.getter(), nested, m.declaredHint(), elementRef);
+      return new ResolvedMember(m.getter(), nested, m.declaredHint(), elementRef,
+          List.copyOf(m.unwrappedContainers()));
     }
     if (typeNode instanceof ComplexTypeModel model) {
       for (FieldModel member : model.getMembers()) {
@@ -547,6 +558,11 @@ public final class EventComplexTypeResolver {
   }
 
   private record ResolvedMember(String getter, Object nestedType, String declaredHint,
-      EventComplexTypeGroup.TypeRef collectionElementRef) {
+      EventComplexTypeGroup.TypeRef collectionElementRef, List<Object> unwrappedContainers) {
+
+    ResolvedMember(String getter, Object nestedType, String declaredHint,
+        EventComplexTypeGroup.TypeRef collectionElementRef) {
+      this(getter, nestedType, declaredHint, collectionElementRef, List.of());
+    }
   }
 }

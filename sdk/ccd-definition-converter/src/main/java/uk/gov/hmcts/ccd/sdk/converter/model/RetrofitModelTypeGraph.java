@@ -1,5 +1,6 @@
 package uk.gov.hmcts.ccd.sdk.converter.model;
 
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -193,6 +194,7 @@ public interface RetrofitModelTypeGraph {
     private final boolean collection;
     private final String declaredHint;
     private final String nestedTypeId;
+    private final List<Handle> unwrappedContainers;
 
     /**
      * Creates a member resolution for a member read off the parsed model, whose nested type is
@@ -222,11 +224,40 @@ public interface RetrofitModelTypeGraph {
      */
     public MemberResolution(String getter, Handle nested, boolean collection, String declaredHint,
         String nestedTypeId) {
+      this(getter, nested, collection, declaredHint, nestedTypeId, List.of());
+    }
+
+    /**
+     * Creates a member resolution reached by descending one or more {@code @JsonUnwrapped}
+     * containers, which Jackson flattens into the owner's namespace so the definition's
+     * {@code ListElementCode} names no segment for them. {@code getter} is declared on the INNERMOST
+     * container, not on the type the walk started from.
+     *
+     * @param getter the member's getter name, declared on the innermost container
+     * @param nested the parsed nested type, or null when named by {@code nestedTypeId} or a leaf
+     * @param collection whether the member is a {@code Collection}
+     * @param declaredHint the member's declared {@code @CCD(hint)}, or null
+     * @param nestedTypeId the definition complex-type ID to descend by when {@code nested} is null
+     * @param unwrappedContainers the containers descended to reach the member, outermost first;
+     *     empty when the member is declared on the owner itself
+     */
+    public MemberResolution(String getter, Handle nested, boolean collection, String declaredHint,
+        String nestedTypeId, List<Handle> unwrappedContainers) {
       this.getter = getter;
       this.nested = nested;
       this.collection = collection;
       this.declaredHint = declaredHint;
       this.nestedTypeId = nestedTypeId;
+      this.unwrappedContainers = unwrappedContainers == null ? List.of() : unwrappedContainers;
+    }
+
+    /**
+     * The {@code @JsonUnwrapped} containers descended to reach this member, outermost first.
+     *
+     * @return the containers, empty when the member is declared on the owner itself
+     */
+    public List<Handle> unwrappedContainers() {
+      return unwrappedContainers;
     }
 
     /**

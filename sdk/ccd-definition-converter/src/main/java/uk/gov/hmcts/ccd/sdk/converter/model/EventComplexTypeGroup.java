@@ -196,6 +196,19 @@ public class EventComplexTypeGroup {
   public static class Hop {
 
     /**
+     * When set, this hop is an {@code @JsonUnwrapped} container rather than a path segment: Jackson
+     * flattens its members into the parent's namespace, so the definition's {@code ListElementCode}
+     * names no segment for it and the emitter opens it with the SDK's transparent
+     * {@code unwrappedScope(Type.class)} instead of {@code .complex(Owner::getter)}.
+     *
+     * <p>Addressed by type, not by getter, because an unwrapped container is exactly where a
+     * name-matching getter tends not to exist — Lombok's {@code @Getter(AccessLevel.NONE)} suppresses
+     * it (finrem's {@code Court} does this for its {@code DefaultCourtListWrapper}). When set,
+     * {@link #declaringType} and {@link #getter} are both unused.
+     */
+    TypeRef unwrappedType;
+
+    /**
      * The type the {@link #getter} is invoked on.
      */
     TypeRef declaringType;

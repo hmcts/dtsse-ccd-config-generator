@@ -245,7 +245,8 @@ public final class RetrofitEventComplexTypeGraph implements RetrofitModelTypeGra
           .orElse(null);
     }
     return Optional.of(new MemberResolution(
-        getter, nested == null ? null : new TypeHandle(nested), collection, declaredHint));
+        getter, nested == null ? null : new TypeHandle(nested), collection, declaredHint, null,
+        member.unwrappedContainers().stream().map(t -> (Handle) new TypeHandle(t)).toList()));
   }
 
   @Override
@@ -271,9 +272,37 @@ public final class RetrofitEventComplexTypeGraph implements RetrofitModelTypeGra
    * discovery.
    */
   private Optional<MemberField> findMember(ModelSourceIndex.Type owner, String segment) {
+    return findMember(owner, segment, new java.util.ArrayList<>(), new java.util.HashSet<>());
+  }
+
+  /**
+   * {@link #findMember(ModelSourceIndex.Type, String)}, additionally descending
+   * {@code @JsonUnwrapped} members.
+   *
+   * <p>Jackson flattens an unwrapped container's members into the owner's namespace, so a
+   * {@code ListElementCode} addresses them with no segment of their own: finrem's {@code FR_manageHearings}
+   * asks for {@code workingHearing.hearingCourtSelection.nottinghamCourtList}, and
+   * {@code nottinghamCourtList} is declared not on {@code Court} but on the
+   * {@code @JsonUnwrapped DefaultCourtListWrapper} it holds. A declared-fields-plus-superclasses walk
+   * cannot see it, so every such row fell back to a raw-JSON passthrough (76 of finrem's, across four
+   * events) even though the member is real and the path is exactly what Jackson produces.
+   *
+   * <p>Containers are accumulated outermost-first and handed back on the hit, because the caller must
+   * reproduce the same transparency: the getter is declared on the innermost container, and the SDK
+   * needs a {@code unwrappedScope} opener for each hop so none of them contributes a path segment.
+   * Depth-first per class — own fields, then unwrapped containers, then the superclass — so a member
+   * declared directly on the owner always wins over a flattened namesake.
+   *
+   * @param owner the type to search
+   * @param segment the effective CCD id to find
+   * @param containers accumulates the unwrapped containers descended, outermost first
+   * @param visited guards against cycles across both the {@code extends} chain and the containers
+   * @return the member and the containers reached through, or empty
+   */
+  private Optional<MemberField> findMember(ModelSourceIndex.Type owner, String segment,
+      java.util.List<ModelSourceIndex.Type> containers, java.util.Set<String> visited) {
     ModelSourceIndex.Type current = owner;
     int guard = 0;
-    java.util.Set<String> visited = new java.util.HashSet<>();
     while (current != null && guard++ < 20 && visited.add(current.fqn)) {
       // A class-level @JsonNaming renames every field Jackson serialises off this class, so the
       // definition's segment may be the STRATEGY's name for a field rather than the field's own
@@ -291,7 +320,8 @@ public final class RetrofitEventComplexTypeGraph implements RetrofitModelTypeGra
         for (VariableDeclarator var : field.getVariables()) {
           if (segment.equals(effectiveId(field, var))) {
             return Optional.of(new MemberField(
-                var.getNameAsString(), var.getType(), current.unit, declaredHint));
+                var.getNameAsString(), var.getType(), current.unit, declaredHint,
+                java.util.List.copyOf(containers)));
           }
           if (matchesNamingStrategy(strategy, field, var, segment)
               || matchesCreatorParameter(current, field, var, segment)) {
@@ -303,8 +333,32 @@ public final class RetrofitEventComplexTypeGraph implements RetrofitModelTypeGra
             // to re-derive and cannot disagree with whichever idiom resolved it.
             pinnedNames.record(current.fqn, var.getNameAsString(), segment);
             return Optional.of(new MemberField(
-                var.getNameAsString(), var.getType(), current.unit, declaredHint));
+                var.getNameAsString(), var.getType(), current.unit, declaredHint,
+                java.util.List.copyOf(containers)));
           }
+        }
+      }
+      // Own fields exhausted: descend this class's @JsonUnwrapped containers before its superclass,
+      // so a member declared directly on the owner always beats a flattened namesake.
+      for (FieldDeclaration field : declaredFields(current)) {
+        if (isIgnored(field) || !Annotations.has(field, "JsonUnwrapped")) {
+          continue;
+        }
+        for (VariableDeclarator var : field.getVariables()) {
+          if (!(var.getType() instanceof ClassOrInterfaceType cit)) {
+            continue;
+          }
+          Optional<ModelSourceIndex.Type> container =
+              index.resolve(current.unit, cit).filter(t -> !t.isEnum());
+          if (container.isEmpty()) {
+            continue;
+          }
+          containers.add(container.get());
+          Optional<MemberField> hit = findMember(container.get(), segment, containers, visited);
+          if (hit.isPresent()) {
+            return hit;
+          }
+          containers.remove(containers.size() - 1);
         }
       }
       current = superclassOf(current).orElse(null);
@@ -464,6 +518,7 @@ public final class RetrofitEventComplexTypeGraph implements RetrofitModelTypeGra
 
   /** A member field matched by CCD id: its Java name, declared type, declaring unit and hint. */
   private record MemberField(String fieldName, Type declared,
-      com.github.javaparser.ast.CompilationUnit context, String declaredHint) {
+      com.github.javaparser.ast.CompilationUnit context, String declaredHint,
+      java.util.List<ModelSourceIndex.Type> unwrappedContainers) {
   }
 }

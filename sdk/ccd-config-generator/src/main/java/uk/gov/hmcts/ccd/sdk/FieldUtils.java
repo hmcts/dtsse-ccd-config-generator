@@ -229,6 +229,35 @@ public class FieldUtils {
   }
 
   /**
+   * The {@code @JsonUnwrapped} member of {@code owner} declared with {@code unwrappedType}, when
+   * exactly one is.
+   *
+   * <p>Addresses an unwrapped container by TYPE rather than by member name, which is the only handle
+   * a caller has when no getter maps to the member's name. Lombok's
+   * {@code @Getter(AccessLevel.NONE)} suppresses the generated accessor, and a hand-written
+   * replacement is free to be named something else: finrem's {@code Court} suppresses the getter for
+   * its {@code @JsonUnwrapped DefaultCourtListWrapper courtListWrapper} and exposes a
+   * lazily-initialising {@code getDefaultCourtListWrapper()} instead, whose name derives the member
+   * {@code defaultCourtListWrapper} — which does not exist. A name-keyed lookup therefore cannot
+   * reach the container at all, and the scope opened for it stops being transparent.
+   *
+   * <p>Empty when no member matches, and equally when more than one does: two unwrapped members of
+   * the same type are indistinguishable by type alone, so picking one arbitrarily would silently
+   * place fields under the wrong container.
+   *
+   * @param owner the class declaring the unwrapped member
+   * @param unwrappedType the unwrapped member's declared type
+   * @return the matching member, or empty unless exactly one matches
+   */
+  public static Optional<Field> unwrappedFieldOfType(Class owner, Class<?> unwrappedType) {
+    List<Field> matches = getCaseFields(owner).stream()
+        .filter(f -> f.getAnnotation(JsonUnwrapped.class) != null)
+        .filter(f -> f.getType().equals(unwrappedType))
+        .toList();
+    return matches.size() == 1 ? Optional.of(matches.get(0)) : Optional.empty();
+  }
+
+  /**
    * Whether an {@code @JsonUnwrapped} container's own name has leaked into an ID-keyed table and must
    * be suppressed: {@code true} only when {@code fieldId} names an unwrapped member AND is not itself
    * an ID the reflection walk emits a {@code CaseField} row for.

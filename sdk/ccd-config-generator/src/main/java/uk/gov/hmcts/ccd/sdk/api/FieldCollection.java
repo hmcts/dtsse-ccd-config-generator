@@ -3,6 +3,7 @@ package uk.gov.hmcts.ccd.sdk.api;
 import static com.google.common.base.Strings.isNullOrEmpty;
 import static org.apache.commons.lang3.StringUtils.capitalize;
 import static uk.gov.hmcts.ccd.sdk.FieldUtils.isUnwrappedField;
+import static uk.gov.hmcts.ccd.sdk.FieldUtils.unwrappedFieldOfType;
 
 import com.fasterxml.jackson.annotation.JsonUnwrapped;
 import java.util.ArrayList;
@@ -719,18 +720,9 @@ public class FieldCollection {
           complex(fieldName, c);
 
       if (isUnwrapped.isPresent()) {
-        String prefix = isUnwrapped.get().prefix();
-        builder.unwrappedParentPrefix = isNullOrEmpty(unwrappedParentPrefix)
-            ? prefix
-            : unwrappedParentPrefix.concat(capitalize(prefix));
-        builder.fields = fields;
-        builder.explicitFields = explicitFields;
-        builder.complexFields = complexFields;
-        builder.rootFieldname = null;
-        builder.order = order;
-        builder.pageDisplayOrder = pageDisplayOrder;
-        builder.fieldDisplayOrder = fieldDisplayOrder;
-        complexFields.remove(builder);
+        // Root-level container: its members ARE case-data fields, so the scope carries no root field
+        // name at all and CaseEventToComplexTypes emits nothing for them.
+        spliceUnwrapped(builder, isUnwrapped.get().prefix(), null);
       }
 
       return builder;
@@ -755,6 +747,70 @@ public class FieldCollection {
         result.fieldDisplayOrder = this.fieldDisplayOrder;
       }
       return result;
+    }
+
+    /**
+     * Merges an {@code @JsonUnwrapped} container's scope into this one, so the container contributes
+     * no segment to any member path below it — the builder shares this scope's field lists and drops
+     * out of {@code complexFields} entirely, leaving nothing for
+     * {@code CaseEventToComplexTypesGenerator.expand} to append a locator segment for. That mirrors
+     * Jackson, which flattens the container's members into the parent's namespace.
+     *
+     * <p>{@code rootFieldname} is the caller's choice because the two callers need opposite things.
+     * A root-level container passes null: its members are case-data fields in their own right, and
+     * {@code CaseEventToComplexTypes} emits no row for them. A container nested inside a complex
+     * scope must instead INHERIT the enclosing scope's name — the members it splices in land in that
+     * scope's field list, and {@code expand} reads {@code getParent().getRootFieldname()} for every
+     * one of them, so a null there is dereferenced rather than skipped.
+     *
+     * @param builder the container's scope, already created against this one
+     * @param prefix the container's {@code @JsonUnwrapped} prefix, accumulated onto any outer one
+     * @param rootFieldname the name the spliced scope reports, or null for a root-level container
+     */
+    private <U> void spliceUnwrapped(
+        FieldCollectionBuilder<U, StateType, FieldCollectionBuilder<Type, StateType, Parent>> builder,
+        String prefix, String rootFieldname) {
+      builder.unwrappedParentPrefix = isNullOrEmpty(unwrappedParentPrefix)
+          ? prefix
+          : unwrappedParentPrefix.concat(capitalize(prefix));
+      builder.fields = fields;
+      builder.explicitFields = explicitFields;
+      builder.complexFields = complexFields;
+      builder.rootFieldname = rootFieldname;
+      builder.order = order;
+      builder.pageDisplayOrder = pageDisplayOrder;
+      builder.fieldDisplayOrder = fieldDisplayOrder;
+      complexFields.remove(builder);
+    }
+
+    /**
+     * Opens a transparent member scope on a nested {@code @JsonUnwrapped} container, addressed by its
+     * declared TYPE.
+     *
+     * <p>{@link #complex(TypedPropertyGetter)} already splices an unwrapped container away when the
+     * getter's derived member name carries {@code @JsonUnwrapped} — but that needs a getter whose
+     * name maps to the member, and an unwrapped container is exactly where one is most often absent
+     * ({@code @Getter(AccessLevel.NONE)}, or a differently-named hand-written accessor). Without this
+     * overload such a member is unreachable: opening the scope through the accessor that does exist
+     * names a member that does not, so the scope stays opaque and every path below it gains a segment
+     * the definition never had.
+     *
+     * @param unwrappedType the container's declared type; the owner must declare exactly one
+     *                      {@code @JsonUnwrapped} member of it
+     * @param <U> the container type the returned member scope is typed on
+     * @return the member-scope builder for the container's type
+     * @throws IllegalArgumentException when the owner declares no single such member
+     */
+    public <U> FieldCollectionBuilder<U, StateType, FieldCollectionBuilder<Type, StateType, Parent>> unwrappedScope(
+        Class<U> unwrappedType) {
+      java.lang.reflect.Field member = unwrappedFieldOfType(dataClass, unwrappedType)
+          .orElseThrow(() -> new IllegalArgumentException(
+              dataClass.getName() + " declares no single @JsonUnwrapped member of type "
+                  + unwrappedType.getName()));
+      FieldCollectionBuilder<U, StateType, FieldCollectionBuilder<Type, StateType, Parent>> builder =
+          complex(member.getName(), unwrappedType);
+      spliceUnwrapped(builder, member.getAnnotation(JsonUnwrapped.class).prefix(), this.rootFieldname);
+      return builder;
     }
 
     public FieldCollectionBuilder<Type, StateType, Parent> label(String id, String value) {

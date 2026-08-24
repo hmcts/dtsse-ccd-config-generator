@@ -1179,7 +1179,11 @@ public class EventsConfigEmitter implements SourceEmitter {
     CodeBlock.Builder cb = CodeBlock.builder();
     for (EventComplexTypeGroup.Member member : group.getMembers()) {
       for (EventComplexTypeGroup.Hop hop : member.getHops()) {
-        if (hop.getElementType() != null) {
+        if (hop.getUnwrappedType() != null) {
+          // An @JsonUnwrapped container: opened transparently so it contributes no ListElementCode
+          // segment, and addressed by type because its getter is routinely suppressed.
+          cb.add("\n    .unwrappedScope($T.class)", typeName(hop.getUnwrappedType(), context));
+        } else if (hop.getElementType() != null) {
           // A Collection hop descends into its element type via the two-arg element-typed scope.
           cb.add("\n    .complex($T::$L, $T.class)",
               typeName(hop.getDeclaringType(), context), hop.getGetter(),
