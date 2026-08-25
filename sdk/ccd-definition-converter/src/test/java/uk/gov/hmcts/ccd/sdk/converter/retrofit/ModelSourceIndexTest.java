@@ -387,6 +387,38 @@ class ModelSourceIndexTest {
     assertThat(unhinted.complexTypeClass("DupType", "uk.gov.hmcts.example.model")).isPresent();
   }
 
+  @Test
+  void enumerationReportsEveryTwinWhereTheSingleLookupCanOnlyReportOne(@TempDir Path work)
+      throws Exception {
+    // A FixedLists ID's rows come from whichever same-named enum the SDK's reachability walk arrives at,
+    // so a pin has to reach all of them. bySimpleName answers with one — its package hint is a PREFIX
+    // test, which separates neither twin when both sit under the model package — and Civil has five such
+    // pairs (AssistedCostTypesList in enums.finalorders and ga.enums.dq, and four more). Enumerating is
+    // what makes the label pin independent of that tie.
+    Path src = work.resolve("src");
+    write(src, "m/model/deep", "CostType", "package m.model.deep;\npublic enum CostType { A }\n");
+    write(src, "m/model", "CostType", "package m.model;\npublic enum CostType { A }\n");
+    // A same-named CLASS is not a candidate: FixedListGenerator emits lists from enums only.
+    write(src, "m/model", "HolderType", "package m.model;\npublic class HolderType { }\n");
+    write(src, "m/model/deep", "HolderType",
+        "package m.model.deep;\npublic enum HolderType { B }\n");
+
+    ModelSourceIndex index = ModelSourceIndex.parse(src);
+
+    assertThat(index.enumsBySimpleName("CostType"))
+        .as("both twins must be reported; a pin on only one leaves the other emitting its"
+            + " constant names as labels")
+        .extracting(t -> t.fqn)
+        .containsExactlyInAnyOrder("m.model.CostType", "m.model.deep.CostType");
+    assertThat(index.enumsBySimpleName("HolderType"))
+        .as("a class of the same name emits no fixed list and is never a candidate")
+        .extracting(t -> t.fqn)
+        .containsExactly("m.model.deep.HolderType");
+    assertThat(index.enumsBySimpleName("NoSuchType"))
+        .as("an unknown name is empty, not null")
+        .isEmpty();
+  }
+
   private static void write(Path root, String pkgPath, String simpleName, String body)
       throws Exception {
     Path dir = root.resolve(pkgPath);

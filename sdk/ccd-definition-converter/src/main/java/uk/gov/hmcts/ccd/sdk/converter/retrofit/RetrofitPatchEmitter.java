@@ -1320,6 +1320,10 @@ public final class RetrofitPatchEmitter {
    * {@link RetrofitTypeBinder} established for the IDs no name reaches. Either way the enum emits the
    * list's rows, so either way its constants must carry the labels and codes.
    *
+   * <p>A name match is resolved to EVERY enum of that name rather than to one of them, because the SDK
+   * reflects whichever twin its reachability walk arrives at and the two are indistinguishable from here
+   * — see {@link #backingEnums}.
+   *
    * <p>Runs AFTER {@link #planFixedListIds} so a bound enum is already pinned to its ID; the constant pins
    * are independent of that annotation (they sit on the constants, not the type) but the two must agree
    * on WHICH list an enum serves, so both resolve it through the same lookup order. See
@@ -1329,25 +1333,26 @@ public final class RetrofitPatchEmitter {
    */
   private void planFixedListLabels(Map<Path, FileEdits> byFile) {
     for (FixedListModel list : definitionFixedLists) {
-      ModelSourceIndex.Type type = backingEnum(list.getId());
-      if (type == null) {
-        continue; // no model enum: the list is served by a generated companion, which carries its own
-      }
-      Map<String, String> pins = RetrofitFixedListLabels.pins(type, list);
-      if (!pins.isEmpty()) {
-        Map<String, List<String>> members = new LinkedHashMap<>();
-        pins.forEach((constant, label) ->
-            members.put(constant, List.of("label = " + CcdAnnotationRenderer.quote(label))));
-        editsFor(byFile, type.file).annotateConstants(type.simpleName, members);
-      }
-      Map<String, String> codes = RetrofitFixedListLabels.codePins(type, list);
-      if (!codes.isEmpty()) {
-        editsFor(byFile, type.file).pinConstantCodes(type.simpleName, codes);
-      }
-      List<RetrofitFixedListLabels.AddedConstant> added =
-          RetrofitFixedListLabels.constantsToAdd(type, list);
-      if (!added.isEmpty()) {
-        editsFor(byFile, type.file).addConstants(type.simpleName, added);
+      // Every enum that can emit this ID's rows, not just the one a tie-break picks: which twin the SDK
+      // reflects is a property of the case-data graph, and a pin on the twin it does not reach leaves the
+      // list's labels exactly as divergent as before. See #backingEnums.
+      for (ModelSourceIndex.Type type : backingEnums(list.getId())) {
+        Map<String, String> pins = RetrofitFixedListLabels.pins(type, list);
+        if (!pins.isEmpty()) {
+          Map<String, List<String>> members = new LinkedHashMap<>();
+          pins.forEach((constant, label) ->
+              members.put(constant, List.of("label = " + CcdAnnotationRenderer.quote(label))));
+          editsFor(byFile, type.file).annotateConstants(type.simpleName, members);
+        }
+        Map<String, String> codes = RetrofitFixedListLabels.codePins(type, list);
+        if (!codes.isEmpty()) {
+          editsFor(byFile, type.file).pinConstantCodes(type.simpleName, codes);
+        }
+        List<RetrofitFixedListLabels.AddedConstant> added =
+            RetrofitFixedListLabels.constantsToAdd(type, list);
+        if (!added.isEmpty()) {
+          editsFor(byFile, type.file).addConstants(type.simpleName, added);
+        }
       }
     }
   }
@@ -1554,8 +1559,34 @@ public final class RetrofitPatchEmitter {
     if (declared == null || index.hasTopLevelType(listId)) {
       return field;
     }
+    // The question is whether the declared enum SERVES this list ID — not whether it happens to
+    // reproduce the list's codes. Those are different questions, and asking the second one left the
+    // definition's rows with no counterpart at all wherever the answers diverged.
+    //
+    // An enum serves the ID only if the SDK will emit the list off it, which needs the ID pinned onto it:
+    // either a declared-type binding (returned above) or the ID being the enum's own simple name (the
+    // hasTopLevelType return above). Neither holds here, so nothing can make the declared enum answer
+    // for this list — whatever its constants are. Meanwhile a companion IS generated for the ID, on
+    // exactly the rebinder's drop test this path already mirrors.
+    //
+    // Testing reproduction instead assumed the only reason a list reaches here unbound is the binder's
+    // superset refusal. It is not: the binder also refuses when the enum is claimed by ANOTHER
+    // definition ID (Civil's ComplexityBand is named by five separate lists — ComplexityBand,
+    // FastTrackComplexityBand, FinalOrdersIntermediateComplexityBand, ComplexityBandIntermediate,
+    // IntermediateComplexityBand — all with the same BAND_1..BAND_4 codes, and one enum can carry one
+    // @ComplexType(name)); when two referencing fields declare different enums (PaymentTypeList, read
+    // from DJPaymentTypeSelection and PaymentType); and when two IDs claim one enum (TrialReadyList and
+    // GAHearingScheduleGAspec both read from YesOrNo). In each of those the enum reproduces the codes
+    // EXACTLY, so the old filter dropped the override — and the companion carrying the definition's
+    // rows was emitted referenced by nothing, contributing no rows, while the definition's own rows had
+    // no counterpart. 23 diff lines across seven Civil lists, all of the same shape.
+    //
+    // The two guards above are what establish that no enum serves the ID, and they are exactly the two
+    // ways {@link #backingEnum} resolves one: the {@code declaredTypeBindings} early return covers a
+    // declared-type binding, and {@code hasTopLevelType} covers the ID naming a type itself. So reaching
+    // this point IS "no enum serves this list", and no further test on the declared enum's contents can
+    // add anything.
     return RetrofitFixedListLabels.byId(definitionFixedLists, listId)
-        .filter(list -> !RetrofitFixedListLabels.reproducesTheListExactly(declared, list))
         .map(list -> field.toBuilder()
             .typeParameterOverride(listId)
             .typeParameterClassName(list.getJavaClassName())
@@ -1613,6 +1644,32 @@ public final class RetrofitPatchEmitter {
     return index.bySimpleName(id, modelPackage)
         .filter(ModelSourceIndex.Type::isEnum)
         .orElse(null);
+  }
+
+  /**
+   * EVERY model enum that can emit a definition {@code FixedLists} ID's rows: the declared-type binding
+   * when there is one, else every enum whose simple name IS the ID.
+   *
+   * <p>{@link #backingEnum} answers with the ONE enum the rest of the emitter reasons about — the type a
+   * retype points a field at, the type an ID is pinned onto — and for that a single answer is required,
+   * since only one class can take a name. The constant pins are the opposite case: they annotate
+   * declarations rather than choose between them, and the enum whose annotations actually reach the
+   * definition is the one the SDK's reachability walk arrives at, which depends on the case-data graph
+   * rather than on any lookup here. Where a name is shared, one answer is therefore a guess, and a wrong
+   * guess writes every label of the list onto a type that emits no rows. See
+   * {@link ModelSourceIndex#enumsBySimpleName} for the five Civil pairs and why annotating a twin the SDK
+   * never reflects costs nothing.
+   *
+   * <p>A declared binding is exempt because it is not a guess: the ID is pinned with
+   * {@code @ComplexType(name)} onto exactly that enum, so that enum — and no twin of it — emits the
+   * list's rows whatever the walk reaches.
+   */
+  private List<ModelSourceIndex.Type> backingEnums(String id) {
+    ModelSourceIndex.Type bound = declaredTypeBindings.get(id);
+    if (bound != null && bound.isEnum()) {
+      return List.of(bound);
+    }
+    return index.enumsBySimpleName(id);
   }
 
   /**

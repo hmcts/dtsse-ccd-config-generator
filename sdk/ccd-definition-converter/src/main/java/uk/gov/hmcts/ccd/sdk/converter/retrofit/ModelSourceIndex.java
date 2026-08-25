@@ -329,6 +329,51 @@ final class ModelSourceIndex {
   }
 
   /**
+   * EVERY enum declared under a simple name, in scan order — not the one a tie-break picks.
+   *
+   * <p><b>Why all of them.</b> {@code FixedListGenerator} derives a list's ID from the enum it
+   * reflects: its {@code @ComplexType(name)} when pinned, else its simple NAME. So a model that
+   * declares the same enum name twice has two types that emit rows into one {@code FixedLists} ID, and
+   * which of them the SDK reaches is decided by the case-data graph, not by anything this index can see.
+   * Civil declares five such pairs — {@code AssistedCostTypesList} in both {@code enums.finalorders}
+   * (7 constants, reached from {@code CaseDataCaseProgression.assistedOrderCostList}) and
+   * {@code ga.enums.dq} (6 constants, reached only from {@code GeneralApplicationCaseData}, which is a
+   * different case type's root and so not reflected for {@code CIVIL} at all) — plus
+   * {@code HearingLengthFinalOrderList}, {@code OrderMadeOnTypes},
+   * {@code DisposalHearingBundleType} and {@code DisposalHearingFinalDisposalHearingTimeEstimate}.
+   *
+   * <p>{@link #bySimpleName} answers such a name with ONE candidate, and for these it cannot answer
+   * correctly: the package hint is a prefix test against the model package and separates neither twin
+   * (both {@code …civil.enums.finalorders} and {@code …civil.ga.enums.dq} sit outside
+   * {@code …civil.model}), so the tie fell to source-scan order. Pinning a definition's labels onto the
+   * loser leaves the reflected twin unannotated, emitting {@code ListElement == ListElementCode} for
+   * every row while the annotated twin contributes nothing — the labels are written, and none of them
+   * reach the definition.
+   *
+   * <p>Two twins can also BOTH be reflected, which no single choice can cover.
+   * {@code DisposalHearingBundleType} is that shape: {@code DisposalHearingBundle} declares the
+   * {@code enums.sdo} twin and {@code DisposalHearingBundleDJ} the {@code enums.dj} one, both reachable
+   * from {@code CivilCaseData}, and {@code JsonUtils.mergeInto} is first-writer-wins per
+   * {@code ListElementCode} — so an unpinned twin visited first fixes the row and the pinned one is
+   * merged away. Annotating every twin is what makes the outcome independent of both the tie-break and
+   * the merge order.
+   *
+   * <p>Pinning a twin the SDK never reaches is inert: it emits no rows, so the annotation changes
+   * nothing. That asymmetry is why enumerating is safe where choosing is not — the cost of a
+   * superfluous pin is a dormant annotation, the cost of a missed one is every label of the list.
+   *
+   * @param simpleName the enum's simple name
+   * @return every enum of that name, empty when none is declared
+   */
+  List<Type> enumsBySimpleName(String simpleName) {
+    List<Type> candidates = bySimpleName.get(simpleName);
+    if (candidates == null) {
+      return List.of();
+    }
+    return candidates.stream().filter(Type::isEnum).toList();
+  }
+
+  /**
    * Whether the parsed model declares a top-level type (class, interface or enum) with the given
    * simple name anywhere. Used to detect that generating a fresh FixedList enum would collide with an
    * EXISTING top-level type — e.g. fpl's {@code HearingVenue} is a {@code @Data} address class, not an
