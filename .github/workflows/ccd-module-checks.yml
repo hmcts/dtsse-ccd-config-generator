@@ -82,7 +82,7 @@ jobs:
             echo "docs_only=true" >> "$GITHUB_OUTPUT"
           fi
           non_doc_files=$(echo "$files" | grep -vE '\.md$' || true)
-          if [ -n "$non_doc_files" ] && ! echo "$non_doc_files" | grep -vE '^${{ matrix.changePath }}(/|$)' >/dev/null; then
+          if echo "$non_doc_files" | grep -E '^${{ matrix.changePath }}(/|$)' >/dev/null; then
             echo "module_changed=true" >> "$GITHUB_OUTPUT"
           else
             echo "module_changed=false" >> "$GITHUB_OUTPUT"
@@ -96,10 +96,14 @@ jobs:
 
       - name: Set up JDK
         if: steps.changes.outputs.docs_only != 'true'
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@v6
         with:
           distribution: 'zulu'
           java-version: 21
+
+      - name: Set up Gradle
+        if: steps.changes.outputs.docs_only != 'true'
+        uses: gradle/actions/setup-gradle@v6
 
       - name: Run ${{ matrix.module }}:integration
         if: ${{ matrix.runIntegration && steps.changes.outputs.docs_only != 'true' }}

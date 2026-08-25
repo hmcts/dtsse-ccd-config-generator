@@ -3,14 +3,23 @@ package uk.gov.hmcts.ccd.sdk;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.sun.net.httpserver.HttpServer;
+import java.io.IOException;
+import java.net.InetAddress;
+import java.net.InetSocketAddress;
+import java.net.ServerSocket;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.springframework.transaction.support.TransactionTemplate;
 
+@ExtendWith(OutputCaptureExtension.class)
 class DecentralisedESIndexerTest {
   private final DriverManagerDataSource dataSource = new DriverManagerDataSource();
 
@@ -38,6 +47,55 @@ class DecentralisedESIndexerTest {
     contextRunner
         .withPropertyValues("ccd.sdk.decentralised.es-indexer.enabled=true")
         .run(context -> assertThat(context).hasSingleBean(DecentralisedESIndexer.class));
+  }
+
+  @Test
+  void logsSuccessfulElasticsearchConnectionOnStartup(CapturedOutput output) throws Exception {
+    HttpServer elasticsearch = startElasticsearchServer(200);
+    DecentralisedESIndexer indexer = createIndexer(elasticsearch);
+
+    try {
+      indexer.start();
+
+      assertThat(output).contains("Decentralised ES indexer successfully connected to Elasticsearch");
+    } finally {
+      indexer.destroy();
+      elasticsearch.stop(0);
+    }
+  }
+
+  @Test
+  void logsWarningAndContinuesWhenElasticsearchConnectionFails(CapturedOutput output) throws Exception {
+    HttpServer elasticsearch = startElasticsearchServer(500);
+    DecentralisedESIndexer indexer = createIndexer(elasticsearch);
+
+    try {
+      indexer.start();
+
+      assertThat(indexer.isRunning()).isTrue();
+      assertThat(output)
+          .contains("could not connect to Elasticsearch on startup; indexing will retry");
+    } finally {
+      indexer.destroy();
+      elasticsearch.stop(0);
+    }
+  }
+
+  @Test
+  void logsWarningAndContinuesWhenElasticsearchIsUnreachable(CapturedOutput output) throws Exception {
+    int unavailablePort = findUnavailablePort();
+    DecentralisedESIndexer indexer = createIndexer("http://localhost:" + unavailablePort);
+
+    try {
+      indexer.start();
+
+      assertThat(indexer.isRunning()).isTrue();
+      assertThat(output)
+          .contains("could not connect to Elasticsearch on startup; indexing will retry")
+          .contains("ConnectException");
+    } finally {
+      indexer.destroy();
+    }
   }
 
   @Test
@@ -132,5 +190,41 @@ class DecentralisedESIndexerTest {
         .isEqualTo(DecentralisedESIndexer.BulkActionOutcome.RETRYABLE);
     assertThat(DecentralisedESIndexer.classifyBulkActionStatus(500))
         .isEqualTo(DecentralisedESIndexer.BulkActionOutcome.RETRYABLE);
+  }
+
+  private HttpServer startElasticsearchServer(int status) throws IOException {
+    HttpServer server = HttpServer.create(new InetSocketAddress(InetAddress.getLoopbackAddress(), 0), 0);
+    server.createContext("/", exchange -> {
+      exchange.getResponseHeaders().add("X-Elastic-Product", "Elasticsearch");
+      exchange.sendResponseHeaders(status, -1);
+      exchange.close();
+    });
+    server.start();
+    return server;
+  }
+
+  private DecentralisedESIndexer createIndexer(HttpServer elasticsearch) {
+    return createIndexer("http://localhost:" + elasticsearch.getAddress().getPort());
+  }
+
+  private DecentralisedESIndexer createIndexer(String elasticsearchHost) {
+    return new DecentralisedESIndexer(
+        dataSource,
+        new JdbcTemplate(dataSource),
+        new TransactionTemplate(new DataSourceTransactionManager(dataSource)),
+        elasticsearchHost,
+        1_000,
+        1_000,
+        30,
+        25,
+        100,
+        10_000,
+        "1m");
+  }
+
+  private int findUnavailablePort() throws IOException {
+    try (ServerSocket socket = new ServerSocket(0, 0, InetAddress.getLoopbackAddress())) {
+      return socket.getLocalPort();
+    }
   }
 }

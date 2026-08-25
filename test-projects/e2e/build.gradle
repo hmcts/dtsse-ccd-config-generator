@@ -75,13 +75,13 @@ dependencies {
   implementation 'com.github.hmcts:core-case-data-store-client:5.3.0'
   implementation 'com.github.hmcts:idam-java-client:3.0.5'
   implementation 'com.github.hmcts.java-logging:logging:8.0.0'
-  implementation 'com.github.hmcts:service-auth-provider-java-client:5.3.4'
+  implementation 'com.github.hmcts:service-auth-provider-java-client:5.3.5'
   implementation 'com.github.hmcts:task-management:DEV-SNAPSHOT'
 
   implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.9.0'
 
   implementation 'com.github.ben-manes.caffeine:caffeine:3.2.4'
-  implementation 'com.google.guava:guava:33.6.0-jre'
+  implementation 'com.google.guava:guava:33.7.1-jre'
 
   implementation 'org.projectlombok:lombok'
   annotationProcessor 'org.projectlombok:lombok'

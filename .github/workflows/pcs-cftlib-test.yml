@@ -7,6 +7,9 @@ on:
 jobs:
   pcs-cftlib-test:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
@@ -39,10 +42,26 @@ jobs:
 
       - name: Set up JDK
         if: steps.changes.outputs.docs_only != 'true'
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@v6
         with:
           distribution: 'zulu'
           java-version: 21
+
+      - name: Set up Gradle
+        if: steps.changes.outputs.docs_only != 'true'
+        uses: gradle/actions/setup-gradle@v6
+
+      - name: Az CLI login
+        if: steps.changes.outputs.docs_only != 'true'
+        uses: azure/login@532459ea530d8321f2fb9bb10d1e0bcf23869a43
+        with:
+          client-id: 7dbe3da2-315b-4937-bac6-3ab22a9c7b91
+          tenant-id: 531ff96d-0ae9-462a-8d2d-bec7c0b42082
+          allow-no-subscriptions: true
+
+      - name: ACR Login
+        if: steps.changes.outputs.docs_only != 'true'
+        run: az acr login --name hmctsprod
 
       - name: Run pcs:cftlibTest
         if: steps.changes.outputs.docs_only != 'true'
