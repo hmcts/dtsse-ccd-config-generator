@@ -63,7 +63,7 @@ class CcdDataMigrationTaskIntegrationTest {
   void preloadsEventsBySourceHighWaterMarkWithoutDroppingTargetProtections() {
     insertSourceCase(10, 1000000000000010L, 1, "Submitted", "{\"field\":\"one\"}");
     insertSourceCaseEvent(101, 10, "create", "Submitted", "{\"field\":\"one\"}", minutesAgo(60));
-    insertSourceCaseEvent(102, 10, "update", "Updated", "{\"field\":\"two\"}", LocalDateTime.now());
+    insertSourceCaseEvent(102, 10, "update", "Updated", "{\"field\":\"two\"}", minutesAgo(5));
 
     CcdDataMigrationRunResult result = task(PRELOAD_EVENTS, 1000, 10).runMigration();
 
@@ -79,6 +79,33 @@ class CcdDataMigrationTaskIntegrationTest {
     assertElasticsearchQueueEmpty();
     assertThat(caseDataTriggerEnabled("trigger_enqueue_case_revision")).isFalse();
     assertTargetProtectionsPresent();
+  }
+
+  @Test
+  void preloadTransactionMarginAllowsLowerIdEventToBecomeVisibleBeforeWatermarkAdvances() {
+    insertSourceCase(10, 1000000000000010L, 1, "Submitted", "{\"field\":\"one\"}");
+    insertSourceCaseEvent(101, 10, "create", "Submitted", "{\"field\":\"one\"}", minutesAgo(10));
+    insertSourceCaseEvent(103, 10, "close", "Closed", "{\"field\":\"three\"}", minutesAgo(1));
+
+    CcdDataMigrationRunResult firstPreload = task(PRELOAD_EVENTS, 1000, 10).runMigration();
+
+    assertThat(firstPreload.eventsProcessed()).isEqualTo(1);
+    assertThat(sourceEventHwm()).isEqualTo(101);
+    assertThat(countRows("ccd.case_event")).isEqualTo(1);
+
+    insertSourceCaseEvent(102, 10, "update", "Updated", "{\"field\":\"two\"}", minutesAgo(5));
+
+    CcdDataMigrationRunResult secondPreload = task(PRELOAD_EVENTS, 1000, 10).runMigration();
+
+    assertThat(secondPreload.eventsProcessed()).isEqualTo(1);
+    assertThat(sourceEventHwm()).isEqualTo(102);
+    assertThat(countRows("ccd.case_event")).isEqualTo(2);
+
+    CcdDataMigrationRunResult cutover = task(CUTOVER, 1000, 10).runMigration();
+
+    assertThat(cutover.caughtUp()).isTrue();
+    assertThat(cutoverEventHwm()).isEqualTo(103);
+    assertThat(countRows("ccd.case_event")).isEqualTo(3);
   }
 
   @Test
@@ -478,7 +505,7 @@ class CcdDataMigrationTaskIntegrationTest {
     assertThat(cutoverEventHwm()).isEqualTo(102);
     assertThat(sourceEventHwm()).isEqualTo(101);
 
-    insertSourceCaseEvent(103, 10, "update", "Updated", "{\"field\":\"three\"}", LocalDateTime.now());
+    insertSourceCaseEvent(103, 10, "update", "Updated", "{\"field\":\"three\"}", minutesAgo(5));
 
     CcdDataMigrationRunResult preload = task(PRELOAD_EVENTS, 1000, 10).runMigration();
 
@@ -1494,7 +1521,11 @@ class CcdDataMigrationTaskIntegrationTest {
   }
 
   private LocalDateTime minutesAgo(int minutes) {
-    return LocalDateTime.now().minusMinutes(minutes);
+    return jdbc.queryForObject(
+        "select localtimestamp - (:minutes * interval '1 minute')",
+        Map.of("minutes", minutes),
+        LocalDateTime.class
+    );
   }
 
   @Configuration
