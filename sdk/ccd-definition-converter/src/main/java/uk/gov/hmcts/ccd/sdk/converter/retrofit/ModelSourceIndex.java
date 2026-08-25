@@ -585,8 +585,28 @@ final class ModelSourceIndex {
    * by {@link #complexTypeClass} for both the exact and the case-insensitive (camelCase-ID →
    * PascalCase-class) lookup so both apply the same top-level-class + package-hint rules.
    *
-   * <p>When two or more top-level classes share the name and the package hint picks none of them, an
-   * installed tie-break wins before source-scan order does. See {@link #preferDeclaredClasses}.
+   * <p>When two or more top-level classes share the name, the installed tie-break is consulted FIRST —
+   * ahead of the package hint, and not merely ahead of source-scan order. The hint is a prefix test
+   * against the model package, so it cannot separate twins that both sit under it: Civil declares
+   * {@code Bundle} in both {@code …civil.model} (13 fields, reached from {@code CaseData.caseBundles} —
+   * the class the definition's {@code Bundle} describes) and {@code …civil.model.bundle} (a 1-field
+   * EM-stitching DTO nothing reaches), and {@code …civil.model.bundle} <em>starts with</em>
+   * {@code …civil.model}, so whichever of the two the source walk saw first satisfied the hint and
+   * returned before any preference was read. The DTO won: it took {@code @ComplexType(name = "Bundle")}
+   * plus 14 synthesised fields on {@code BundleDetails}, every label, searchable and show-condition the
+   * patch wrote landed on a class nothing reaches, and the reachable twin — left unannotated — emitted
+   * its 13 members under its Java name instead. {@code BundleFolder} and {@code BundleSubfolder}
+   * followed, reachable only through the dead {@code BundleDetails.folders}. That is the same failure
+   * {@link #preferDeclaredClasses} was introduced for (prl's {@code OtherDocuments}); it went on
+   * misfiring wherever the losing twin sat in a SUB-package of the model package rather than outside it.
+   *
+   * <p>The preference wins over the hint rather than the reverse because of what each knows. A hint is a
+   * heuristic about where a team keeps its model; the preference is read from the declared type of the
+   * definition's OWN referencing field, and only where every referencing root field agrees, so it cannot
+   * name a class the definition does not point at. Where the definition has spoken, that outranks a
+   * guess by locality. Ordering it first is also the narrower change: a preference exists only for a
+   * name that is ambiguous AND unanimously referenced, so every resolution that has no preference — the
+   * overwhelming majority — still follows the hint exactly as before.
    */
   private Optional<Type> topLevelClassBySimpleName(List<Type> candidates, String packageHint) {
     if (candidates == null || candidates.isEmpty()) {
@@ -599,16 +619,16 @@ final class ModelSourceIndex {
     if (classes.isEmpty()) {
       return Optional.empty();
     }
-    if (packageHint != null) {
+    if (classes.size() > 1) {
       for (Type candidate : classes) {
-        if (candidate.packageName.startsWith(packageHint)) {
+        if (preferredClassFqns.contains(candidate.fqn)) {
           return Optional.of(candidate);
         }
       }
     }
-    if (classes.size() > 1) {
+    if (packageHint != null) {
       for (Type candidate : classes) {
-        if (preferredClassFqns.contains(candidate.fqn)) {
+        if (candidate.packageName.startsWith(packageHint)) {
           return Optional.of(candidate);
         }
       }
@@ -631,8 +651,14 @@ final class ModelSourceIndex {
    *
    * <p>The preference comes from {@link RetrofitTypeBinder}, which reads the declared type of the
    * definition's OWN referencing field, so it cannot name a class the definition never points at. Only a
-   * tie-break: an unambiguous name, or one the package hint resolves, is unaffected, so no lane that
-   * resolves today can be moved by this.
+   * tie-break: an unambiguous name is unaffected, so no lane that resolves unambiguously today can be
+   * moved by this.
+   *
+   * <p>It is consulted BEFORE the package hint, not after — see
+   * {@link #topLevelClassBySimpleName}. Ordered after it, the preference was dead exactly where the
+   * losing twin sat in a sub-package of the model package, because the hint's prefix test admits both
+   * twins and returns on the first: Civil's two {@code Bundle}s are that shape, and prl's
+   * {@code OtherDocuments} was only ever fixed because BOTH its packages sit outside the model package.
    *
    * @param fqns the fully-qualified names to prefer on an otherwise-arbitrary tie
    */

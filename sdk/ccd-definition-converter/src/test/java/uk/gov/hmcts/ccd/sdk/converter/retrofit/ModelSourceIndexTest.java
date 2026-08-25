@@ -316,16 +316,54 @@ class ModelSourceIndexTest {
   }
 
   @Test
-  void packageHintStillOutranksAPreference(@TempDir Path work) throws Exception {
-    // The preference is the LAST resort, consulted only where the existing rules leave the tie open. A
-    // candidate under the requested package still wins, so no lane that resolves today can move.
+  void aPreferenceOutranksThePackageHint(@TempDir Path work) throws Exception {
+    // A preference beats the package hint, because the hint cannot be trusted to separate twins: it is
+    // a PREFIX test against the model package, and every caller passes the model package itself, so a
+    // twin in a sub-package of it satisfies the hint just as the one directly in it does. Whichever the
+    // source walk reached first then won and returned before the preference was read.
+    //
+    // Civil's two Bundles are that shape — model.Bundle (13 fields, reached from CaseData.caseBundles)
+    // and model.bundle.Bundle (a 1-field EM-stitching DTO nothing reaches) — and the DTO won: it took
+    // @ComplexType(name = "Bundle") and 14 synthesised fields while the class the definition describes
+    // emitted its members under its Java name. A preference is read from the declared type of the
+    // definition's own referencing field, and only where every referencing field agrees, so where one
+    // exists it is better evidence than the hint's locality guess.
+    Path src = work.resolve("src");
+    write(src, "m/model", "DupType",
+        "package m.model;\npublic class DupType { private String a; }\n");
+    write(src, "m/model/sub", "DupType",
+        "package m.model.sub;\npublic class DupType { private String b; }\n");
+
+    ModelSourceIndex index = ModelSourceIndex.parse(src);
+    index.preferDeclaredClasses(List.of("m.model.sub.DupType"));
+
+    assertThat(index.complexTypeClass("DupType", "m.model"))
+        .get()
+        .extracting(t -> t.fqn)
+        .isEqualTo("m.model.sub.DupType");
+
+    // And the other way round, to prove the preference is what decides it rather than parse order —
+    // which for this shape cannot separate the twins at all, since both satisfy the prefix hint.
+    ModelSourceIndex reversed = ModelSourceIndex.parse(src);
+    reversed.preferDeclaredClasses(List.of("m.model.DupType"));
+    assertThat(reversed.complexTypeClass("DupType", "m.model"))
+        .get()
+        .extracting(t -> t.fqn)
+        .isEqualTo("m.model.DupType");
+  }
+
+  @Test
+  void thePackageHintStillDecidesWhereNoPreferenceCoversTheTie(@TempDir Path work) throws Exception {
+    // Reordering the two rules must not cost the hint its reach where it is the only evidence there is:
+    // a candidate under the requested package still beats one outside it whenever the installed
+    // preference names neither.
     Path src = work.resolve("src");
     write(src, "m/model/pkga", "DupType",
         "package m.model.pkga;\npublic class DupType { private String a; }\n");
     write(src, "m/other", "DupType", "package m.other;\npublic class DupType { private String b; }\n");
 
     ModelSourceIndex index = ModelSourceIndex.parse(src);
-    index.preferDeclaredClasses(List.of("m.other.DupType"));
+    index.preferDeclaredClasses(List.of("m.unrelated.DupType"));
 
     assertThat(index.complexTypeClass("DupType", "m.model"))
         .get()

@@ -280,8 +280,27 @@ final class RetrofitTypeBinder {
       // to it too: `Name` was then pinned @ComplexType(name = "jointPartyName"), so CaseField
       // [jointPartyName] emitted FieldType=name, the three jointPartyName|* rows had no counterpart,
       // and `name|title` inherited jointPartyName's FixedList typing.
-      if (containsIgnoringCase(complexTypeIds, type.simpleName)
-          || containsIgnoringCase(fixedListIds, type.simpleName)) {
+      //
+      // The ID being decided is excluded from that test, because it cannot be a rival claimant to its
+      // own backing type — and only a RIVAL is a reason to refuse. Counting it made the ID refuse
+      // itself, and did so precisely for the IDs whose only defect is a case difference: the FixedLists
+      // gate above admits an ID to `unbound` on a case-SENSITIVE test (hasTopLevelType), so Civil's
+      // `ClaimTypeUnSpec` arrives here unbound because no type is spelled that way, and then matched
+      // the enum `ClaimTypeUnspec` case-insensitively — against itself — and was dropped. The list was
+      // left with no binding at all: the enum kept its zero @CCD annotations while the patch pinned
+      // 1,761 labels elsewhere, so FixedListGenerator fell through to its constant-name fallback and
+      // emitted `BREACH_OF_CONTRACT | BREACH_OF_CONTRACT` under the ID `ClaimTypeUnspec` where the
+      // definition has `BREACH_OF_CONTRACT | Breach of contract` under `ClaimTypeUnSpec` — the ID and
+      // every label diverging together. `CoscRpaStatus`/`CoscRPAStatus` and
+      // `courtStaffNextSteps`/`CourtStaffNextSteps` are the same shape, as are sscs's `eventType`,
+      // `documentType`, `hearingType` and `correspondenceType`, prl's 17 `MIAM*`/`*Enum` lists and
+      // finrem's two. Nested enums were never affected — Civil's `Party.Type` is unambiguous and pins
+      // its 22 labels correctly — which is why the failure reads as though it were about ambiguity.
+      //
+      // The sscs guard is untouched: there `name` and `jointPartyName` are genuinely DIFFERENT IDs, so
+      // `name` still owns the class `Name` and `jointPartyName` is still refused.
+      if (claimedByAnotherId(complexTypeIds, type.simpleName, definitionId)
+          || claimedByAnotherId(fixedListIds, type.simpleName, definitionId)) {
         continue;
       }
       // Kind must match what the name-based lookup would have accepted, which is what the generator that
@@ -310,16 +329,25 @@ final class RetrofitTypeBinder {
   }
 
   /**
-   * Whether any of {@code ids} equals {@code name} ignoring case — the same match
-   * {@link ModelSourceIndex#complexTypeClass} makes when resolving a definition ID to a class.
+   * Whether some definition ID OTHER than {@code definitionId} names {@code name} ignoring case — i.e.
+   * whether a rival row already owns the candidate type. The comparison is the case-insensitive one
+   * {@link ModelSourceIndex#complexTypeClass} makes when resolving a definition ID to a class, so this
+   * refusal defers to exactly the resolution that would win.
+   *
+   * <p>{@code definitionId} is excluded rather than counted: an ID is not its own rival, and the whole
+   * point of the binding is to give it the type its referencing field declares. Including it turned the
+   * refusal on the very IDs it was meant to protect — those differing from their type's name by case
+   * alone, which the case-sensitive FixedLists gate in {@link #bind} leaves unbound (Civil's
+   * {@code ClaimTypeUnSpec} against the enum {@code ClaimTypeUnspec}).
    *
    * @param ids the definition IDs to test against
-   * @param name the candidate class's simple name
-   * @return true when some ID names this class case-insensitively
+   * @param name the candidate type's simple name
+   * @param definitionId the ID currently being decided, which cannot be its own rival
+   * @return true when a different ID names this type case-insensitively
    */
-  private static boolean containsIgnoringCase(Set<String> ids, String name) {
+  private static boolean claimedByAnotherId(Set<String> ids, String name, String definitionId) {
     for (String id : ids) {
-      if (id.equalsIgnoreCase(name)) {
+      if (id.equalsIgnoreCase(name) && !id.equals(definitionId)) {
         return true;
       }
     }
