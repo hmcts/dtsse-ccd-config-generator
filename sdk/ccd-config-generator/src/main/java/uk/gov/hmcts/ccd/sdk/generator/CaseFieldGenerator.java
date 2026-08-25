@@ -318,10 +318,25 @@ class CaseFieldGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
     String type = "Collection";
     Class<?> elementClass = resolveCollectionElementType(dataClass, field);
     ComplexType complexType = elementClass.getAnnotation(ComplexType.class);
-    if (complexType != null && !Strings.isNullOrEmpty(complexType.name())) {
-      target.put("FieldTypeParameter", complexType.name());
-    } else {
-      target.put("FieldTypeParameter", elementClass.getSimpleName());
+    // The element type supplies the parameter only when the field has not already named one. An
+    // explicit @CCD(typeParameterOverride) is the field's own statement of which definition type it
+    // references, and it outranks whatever the Java element type happens to be — the scalar branch in
+    // resolveSimpleType has always deferred this way (putIfAbsent), and a collection is no different.
+    //
+    // Overwriting it did not merely mislabel one column, it manufactured a FixedLists list. Civil's
+    // RequirementsLip.requirements is a List<SupportRequirements> that the definition types
+    // MultiSelectList of HearingSupportRequirements — a differently-named list carrying the same five
+    // codes, for which the field is pinned typeParameterOverride = "HearingSupportRequirements".
+    // Clobbering that back to the element's simple name both wrote the wrong FieldTypeParameter and,
+    // because referencedTypeParameters derives the live set from these columns, made
+    // SupportRequirements look referenced — so the definition gained a five-row list it never declared
+    // while HearingSupportRequirements went unreferenced.
+    if (!target.containsKey("FieldTypeParameter")) {
+      if (complexType != null && !Strings.isNullOrEmpty(complexType.name())) {
+        target.put("FieldTypeParameter", complexType.name());
+      } else {
+        target.put("FieldTypeParameter", elementClass.getSimpleName());
+      }
     }
 
     // Any collection of enum constants is a MultiSelectList, whatever the collection interface. The

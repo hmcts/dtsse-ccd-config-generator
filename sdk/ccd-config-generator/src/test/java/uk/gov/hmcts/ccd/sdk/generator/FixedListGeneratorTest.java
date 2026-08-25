@@ -63,6 +63,17 @@ public class FixedListGeneratorTest {
         private Nested nested;
     }
 
+    /**
+     * A collection of enum constants the field retargets at a differently-named list — Civil's
+     * {@code RequirementsLip.requirements}, a {@code List<SupportRequirements>} the definition types
+     * {@code MultiSelectList} of {@code HearingSupportRequirements}. The retargeted list is the one
+     * referenced; the element enum's own list is not.
+     */
+    static class CaseDataWithRetargetedCollection {
+        @CCD(typeParameterOverride = "HearingSupportRequirements")
+        private List<Colour> requirements;
+    }
+
     @Test
     public void emitsNoListForAnEnumEveryFieldOverridesToSomethingElse() {
         assertThat(listsFor(CaseDataWithOverriddenEnum.class, Colour.class)).isEmpty();
@@ -78,6 +89,11 @@ public class FixedListGeneratorTest {
     public void emitsAListReferencedOnlyByAComplexTypeMember() {
         assertThat(listsFor(CaseDataWithNestedEnum.class, Nested.class, Shape.class))
             .containsExactly("Shape.json");
+    }
+
+    @Test
+    public void emitsNoListForACollectionEnumRetargetedAtAnotherList() {
+        assertThat(listsFor(CaseDataWithRetargetedCollection.class, Colour.class)).isEmpty();
     }
 
     @SneakyThrows
