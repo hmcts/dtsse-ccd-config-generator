@@ -1,10 +1,15 @@
 package uk.gov.hmcts.ccd.sdk.impl;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
@@ -14,6 +19,7 @@ import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.http.HttpStatus;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.web.server.ResponseStatusException;
@@ -29,6 +35,22 @@ class AuditEventServiceTest {
       Optional.empty(),
       mock(ResolvedConfigRegistry.class)
   );
+
+  @Test
+  void reservesCaseEventIdAndSetsAuditContextInOneQuery() {
+    JdbcTemplate jdbc = mock(JdbcTemplate.class);
+    when(ndb.getJdbcTemplate()).thenReturn(jdbc);
+    when(jdbc.queryForObject(anyString(), eq(Long.class))).thenReturn(123L);
+
+    assertThat(service.reserveCaseEventId()).isEqualTo(123L);
+
+    verify(jdbc).queryForObject(
+        argThat(sql -> sql.contains("set_config(")
+            && sql.contains("nextval('ccd.case_event_id_seq')::text")),
+        eq(Long.class)
+    );
+    verifyNoMoreInteractions(jdbc);
+  }
 
   @Test
   void loadHistoryEventWhenMissingReturnsNotFound() {
@@ -53,6 +75,7 @@ class AuditEventServiceTest {
         .build();
 
     assertThatThrownBy(() -> service.saveAuditRecord(
+        123L,
         null,
         null,
         null,
