@@ -49,6 +49,31 @@ public class GapAndPassthroughWriter implements ReportWriter {
     writeReports(model, gaps, options);
   }
 
+  /**
+   * Rewrites {@code gap-report.json} and {@code gap-report.md} alone, leaving the passthrough output
+   * untouched — for a caller that records further findings after the pipeline has already written its
+   * reports.
+   *
+   * <p>Retrofit mode is that caller. Its annotation patch is emitted from the REBOUND model, which only
+   * the conversion produces, so {@code RetrofitPatchEmitter} necessarily runs after
+   * {@link uk.gov.hmcts.ccd.sdk.converter.Converter#convert} has written the reports — and every gap the
+   * emitter records (a synthesised field dropped on a declared-name collision, a refused complex-type
+   * retype the companion-naming fallback did not cover) therefore reached stdout and nothing else. The
+   * findings were real and the report that is supposed to enumerate them omitted them, which is precisely
+   * the sort of silent hole the gap report exists to prevent.
+   *
+   * <p>Only the reports are rewritten because the passthrough content is a pure function of the model,
+   * which has not changed; re-emitting it would be identical bytes for no reason.
+   *
+   * @param model the model the reports describe
+   * @param gaps the collector, now including the later findings
+   * @param options the conversion options, supplying the report directory
+   */
+  public void rewriteGapReports(
+      CaseTypeModel model, GapCollector gaps, ConversionOptions options) {
+    writeReports(model, gaps, options);
+  }
+
   private void writePassthrough(CaseTypeModel model, ConversionOptions options) {
     Path passthroughDir = options.getPassthroughDir();
     List<Map<String, Object>> manifest = new ArrayList<>();

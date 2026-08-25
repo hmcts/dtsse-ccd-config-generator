@@ -444,6 +444,25 @@ public final class RetrofitPatchEmitter {
     // 3. Complex-type members: annotate/ignore/synthesise on each resolved model complex class.
     planComplexTypeMembers(byFile, inherited);
 
+    // 3x. Reconcile the ROOT class's definition-only fields against the names it already declares, so
+    // any member the root itself already has a provably-identical field for is CLAIMED as an adoption
+    // here rather than left to step 4. The reconciliation has to precede 3z because an adoption is a
+    // claim about a declaration like any other — one that must be weighed against the
+    // @CCD(ignore = true) step 2 makes about the same field — and 3z is where the claims are settled.
+    // Only the decision is hoisted; the placement it feeds (which class the surviving fields land on,
+    // and the constructor-limit plan) still happens in step 4. Safe to compute this early because it is
+    // a pure function of the resolved properties and the model's case fields, neither of which any step
+    // between here and there touches.
+    List<FieldModel> synthesised = new ArrayList<>();
+    for (FieldModel field : model.getCaseFields()) {
+      if (!properties.containsKey(field.getId())) {
+        synthesised.add(field);
+      }
+    }
+    final List<FieldModel> rootPlaceable = rootType == null || synthesised.isEmpty()
+        ? synthesised
+        : dropExistingFieldCollisions(byFile, inherited, rootType, synthesised);
+
     // 3z. Commit the field claims: one @CCD per declaration, plus a class-level @CCD(member = …) on
     // each class whose rows the definition configures differently. Runs after every claim site so no
     // decision is taken on a partial view.
@@ -493,16 +512,11 @@ public final class RetrofitPatchEmitter {
     // ID. Must run AFTER 3c so an enum's ID pin and its label pins resolve the same list.
     planFixedListLabels(byFile);
 
-    // 4. Synthesised definition-only fields onto the root model class.
-    List<FieldModel> synthesised = new ArrayList<>();
-    for (FieldModel field : model.getCaseFields()) {
-      if (!properties.containsKey(field.getId())) {
-        synthesised.add(field);
-      }
-    }
+    // 4. Synthesised definition-only fields onto the root model class. The placeable set was reconciled
+    // against the root's declared names in 3x, whose adoption claims 3z has since settled.
     RetrofitPatch.FilePatch extraClassFile = null;
     if (rootType != null && !synthesised.isEmpty()) {
-      List<FieldModel> placeable = dropExistingFieldCollisions(rootType, synthesised);
+      List<FieldModel> placeable = rootPlaceable;
       SynthesisPlacement.Plan plan = placement.plan(rootType, placeable);
       if (plan.overflow && plan.existingHost != null) {
         // B2 borderline: even the single added @JsonUnwrapped CaseDataExtra member would tip the root
@@ -512,7 +526,7 @@ public final class RetrofitPatchEmitter {
         // references them through that member's existing getter.
         SynthesisPlacement.ExistingHost host = plan.existingHost;
         List<FieldModel> hostPlaceable = placement.renameCaseInsensitiveCollisions(
-            host.type, dropExistingFieldCollisions(host.type, placeable));
+            host.type, reportExistingFieldCollisions(host.type, placeable));
         editsFor(byFile, host.type.file).synthesise(host.type.simpleName, hostPlaceable);
         if (synthesisedFieldsNeedNonNull(host.type.decl)) {
           editsFor(byFile, host.type.file).includeSynthesisedWhenNonNull();
@@ -1733,7 +1747,8 @@ public final class RetrofitPatchEmitter {
           // pinned to a different id), and that rename is safe here because every getter reference to a
           // synthesised complex member comes from plannedSynthesis.record just below — which is fed the
           // placeable list, renames and all.
-          List<FieldModel> placeable = dropExistingFieldCollisions(complexClass, synthesised);
+          List<FieldModel> placeable =
+              dropExistingFieldCollisions(byFile, inherited, complexClass, synthesised);
           editsFor(byFile, complexClass.file).synthesise(complexClass.simpleName, placeable);
           if (synthesisedFieldsNeedNonNull(complexClass.decl)) {
             editsFor(byFile, complexClass.file).includeSynthesisedWhenNonNull();
@@ -2035,16 +2050,72 @@ public final class RetrofitPatchEmitter {
    * <p>Where the declared member pins a DIFFERENT id with its own {@code @JsonProperty}, the two are
    * distinct CCD members and {@link SynthesisPlacement#reconcileDeclaredNames} renames the synthesised
    * one instead of dropping it — sscs's {@code Party.confidentialityRequiredChangedDate}, which
-   * serialises as {@code confidentialityRequiredConfirmedDate}. Everything else is skipped with a gap
-   * so the drop is visible — the existing member already carries the data; the field just needs
-   * {@code @CCD} the operator can add (mirrors the Civil PascalCase-collision fix, generalised from
-   * resolved to <em>declared</em> members).
+   * serialises as {@code confidentialityRequiredConfirmedDate}.
+   *
+   * <p>Where the declared member provably IS the definition member — its own {@code @JsonProperty}, or
+   * one on its {@code @JsonCreator} parameter, states exactly the definition's id — the field is ADOPTED:
+   * it receives the definition's {@code @CCD} (and the {@code @JsonProperty} pin the SDK needs when the
+   * id came from the creator parameter) rather than the {@code @CCD(ignore = true)} an unmatched Java
+   * field would get. Civil's {@code GAHearingDetails} is why: eleven of its members were routed to
+   * synthesis because their PascalCase definition ids resolve to no field, dropped here on the camelCase
+   * name clash, and then marked ignored by the unmatched-Java pass — so the class ended up carrying
+   * {@code @JsonProperty("HearingPreferencesPreferredType") @CCD(ignore = true)} on the very field the
+   * definition's row needed, and the row had no counterpart. Adoption is the annotate-the-existing-member
+   * treatment the gap text used to ask the operator to perform by hand, taken automatically wherever the
+   * identity can be proved; {@link SynthesisPlacement#reconcileDeclaredNames} documents the guard and why
+   * anything weaker keeps being dropped.
+   *
+   * <p>Everything else is still skipped with a gap so the drop is visible — the existing member already
+   * carries the data; the field just needs {@code @CCD} the operator can add (mirrors the Civil
+   * PascalCase-collision fix, generalised from resolved to <em>declared</em> members).
+   *
+   * @param byFile the per-file edits, so a class touched only by an adoption still reaches the renderer
+   * @param inherited the claim collector the adoptions are recorded into; the caller must not yet have
+   *     settled its decisions, or an adoption would be committed after the annotation it must outrank
+   * @param target the class the fields would be synthesised onto
+   * @param synthesised the definition-only fields to place
+   * @return the fields still to synthesise
    */
-  private List<FieldModel> dropExistingFieldCollisions(
+  private List<FieldModel> dropExistingFieldCollisions(Map<Path, FileEdits> byFile,
+      RetrofitInheritedMembers inherited, ModelSourceIndex.Type target,
+      List<FieldModel> synthesised) {
+    SynthesisPlacement.DeclaredNameCollisions resolved =
+        placement.reconcileDeclaredNames(target, synthesised);
+    for (SynthesisPlacement.Adoption adoption : resolved.adopted()) {
+      adoptExistingMember(byFile, inherited, target, adoption);
+    }
+    reportDroppedCollisions(target, resolved.dropped());
+    return resolved.placeable();
+  }
+
+  /**
+   * The reconciliation for a target whose claims are already settled, where an adoption can no longer be
+   * made: every collision is reported, adoptable or not.
+   *
+   * <p>Only the constructor-limit borderline host reaches this. Its target class is not chosen until the
+   * placement plan runs — which needs the placeable set the reconciliation produces — so the host's own
+   * collisions cannot be known before the claims are committed. A collision there is also vanishingly
+   * unlikely to be adoptable: the host is a prefix-less {@code @JsonUnwrapped} member's class, whose
+   * members flatten into the ROOT's id space, so a definition member colliding with one of its fields
+   * would already have resolved as a root property rather than reaching synthesis at all.
+   *
+   * @param target the class the fields would be synthesised onto
+   * @param synthesised the definition-only fields to place
+   * @return the fields still to synthesise
+   */
+  private List<FieldModel> reportExistingFieldCollisions(
       ModelSourceIndex.Type target, List<FieldModel> synthesised) {
     SynthesisPlacement.DeclaredNameCollisions resolved =
         placement.reconcileDeclaredNames(target, synthesised);
-    for (FieldModel field : resolved.dropped()) {
+    List<FieldModel> unplaced = new ArrayList<>(resolved.dropped());
+    resolved.adopted().forEach(adoption -> unplaced.add(adoption.field()));
+    reportDroppedCollisions(target, unplaced);
+    return resolved.placeable();
+  }
+
+  /** Records the skip-and-report gap for each definition member no field could be added for. */
+  private void reportDroppedCollisions(ModelSourceIndex.Type target, List<FieldModel> dropped) {
+    for (FieldModel field : dropped) {
       gaps.add(GapEntry.builder()
           .sheet("CaseField")
           .rowKey(field.getId())
@@ -2060,7 +2131,46 @@ public final class RetrofitPatchEmitter {
               + "field's metadata.")
           .build());
     }
-    return resolved.placeable();
+  }
+
+  /**
+   * Claims the definition's {@code @CCD} onto the field the target class already declares for an adopted
+   * member, plus the {@code @JsonProperty} pin the SDK needs to derive the definition's id from it.
+   *
+   * <p>Routed through {@link RetrofitInheritedMembers} rather than written straight to the file edits,
+   * for the same reason every other claim is: the adopted field may be declared on a shared superclass
+   * that several complex types reach, and the definition may configure their rows differently — one
+   * annotation on the declaration cannot say that, and a class-level {@code @CCD(member = …)} must. This
+   * claim also has to be weighed against the {@code @CCD(ignore = true)} the unmatched-Java pass makes
+   * about the same declaration through the same class; the "annotate wins" rule there resolves it, which
+   * is exactly the contradiction that left Civil's {@code GAHearingDetails} members ignored.
+   *
+   * <p>The claim is made with {@code reachedThroughFqn} equal to the declaring class's own FQN, because
+   * the ownership question adoption answers is per DECLARATION: the id proof came from the field's own
+   * annotations (or its declaring class's creator), not from the path the type was reached by.
+   *
+   * <p>The {@code @JsonProperty} pin is stated unconditionally as the claim's rename, and is the same
+   * no-op it is on {@link #planPinnedNames}'s path: the emitter skips it when the field already carries
+   * the annotation, and where it does not the value pinned is the one the creator parameter already
+   * produces. Without it the SDK — which reads {@code @JsonProperty} only off the field and the read
+   * method — would derive the field's own camelCase name and emit the row under an id the definition
+   * never mentions, which is a fidelity regression rather than a missing row.
+   */
+  private void adoptExistingMember(Map<Path, FileEdits> byFile,
+      RetrofitInheritedMembers inherited, ModelSourceIndex.Type target,
+      SynthesisPlacement.Adoption adoption) {
+    ModelSourceIndex.Type owner = adoption.declaringType();
+    FieldModel member = adoption.field();
+    String memberName = member.getJavaName();
+    // A hint pinned here cascades onto every CaseEventToComplexTypes row placing the member, exactly as
+    // it does for a resolved member (see RetrofitPlannedHints), so the linker compares the event row's
+    // HintText against the hint this patch is about to pin rather than the one the source reads today.
+    plannedHints.record(owner.fqn, memberName, member.getHint());
+    inherited.annotateDeclared(owner, memberName, member, member.getId());
+    // Adoption adds no field, so nothing here needs the synthesis block, the constructor repairs or a
+    // plannedSynthesis record — the member walk resolves this member off the parsed source already. The
+    // file is registered so a class whose ONLY edit is an adoption still reaches the renderer.
+    editsFor(byFile, target.file);
   }
 
   private FileEdits editsFor(Map<Path, FileEdits> byFile, Path file) {

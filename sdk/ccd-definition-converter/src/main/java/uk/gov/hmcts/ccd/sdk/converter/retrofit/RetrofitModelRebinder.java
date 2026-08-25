@@ -128,6 +128,12 @@ final class RetrofitModelRebinder {
     // with an existing declared member the patch therefore skips (finding B1 — the config must not
     // reference a field the patch never adds), with an exact collision against a member pinned to a
     // DIFFERENT CCD id renamed rather than dropped, exactly as the emitter renames it.
+    //
+    // A member the emitter ADOPTS onto the existing declaration is excluded here too, and correctly so:
+    // it is not a field the patch adds, it is one the model already declares under that very Java name.
+    // The rebind loop below reaches it by the ordinary unresolved path — the field id keeps its own
+    // javaName, no rename applies, and the overflow routing skips it because it stays on the root
+    // whatever the placement plan does with the fields that really are being synthesised.
     SynthesisPlacement.DeclaredNameCollisions reconciled =
         placement.reconcileDeclaredNames(rootType, unmatched);
     // Carries the reconciled javaName, so renamedMembers below — which keys by id — hands the loop the

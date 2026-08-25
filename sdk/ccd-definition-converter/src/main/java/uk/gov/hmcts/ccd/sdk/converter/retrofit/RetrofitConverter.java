@@ -15,6 +15,7 @@ import uk.gov.hmcts.ccd.sdk.converter.link.DefaultDefinitionLinker;
 import uk.gov.hmcts.ccd.sdk.converter.model.CaseTypeModel;
 import uk.gov.hmcts.ccd.sdk.converter.model.FixedListModel;
 import uk.gov.hmcts.ccd.sdk.converter.model.gap.GapCollector;
+import uk.gov.hmcts.ccd.sdk.converter.report.GapAndPassthroughWriter;
 
 /**
  * Phase-2 retrofit orchestrator: runs the matcher once (parsing the model source), then reuses that
@@ -243,6 +244,11 @@ public final class RetrofitConverter {
     // The linker's own fixed lists, captured before the rebind below drops the ones a model enum already
     // serves — those are exactly the enums whose constants carry the definition's ListElement labels.
     List<FixedListModel>[] linkedFixedLists = new List[1];
+    // The pipeline's own gap collector. The patch emitter below necessarily runs AFTER the conversion —
+    // it needs the rebound model, which only the conversion produces — and so after the report writer
+    // has already written gap-report.json/md. Its findings must still land in the report, so the shared
+    // collector is captured here and the reports are rewritten once the emitter has recorded into it.
+    GapCollector[] pipelineGaps = new GapCollector[1];
     // Append the companion complex-type emitter for the DEFINITION-ONLY complex types (those with no
     // model class). It needs the parsed index + model package, so it is passed in here rather than
     // wired in the static ConverterFactory.
@@ -251,6 +257,7 @@ public final class RetrofitConverter {
         .toBuilder()
         .modelTransform((model, gaps) -> {
           linkedFixedLists[0] = model.getFixedLists();
+          pipelineGaps[0] = gaps;
           CaseTypeModel rebound = rebinder.rebind(model, gaps);
           reboundHolder[0] = rebound;
           return rebound;
@@ -292,6 +299,16 @@ public final class RetrofitConverter {
       System.err.printf("Retrofit: %d synthesised field(s) skipped on name collisions for %s "
           + "(see gap details):%n", emitter.gaps().size(), caseTypeId);
       emitter.gaps().forEach(g -> System.err.println("  - " + g.getDetail()));
+    }
+    // Fold the emitter's findings into the pipeline's collector and rewrite the reports over the ones the
+    // conversion wrote a moment ago. Until this ran, every gap the patch emitter recorded — the dropped
+    // collisions above and the uncovered retype refusals — existed only on stderr: gap-report.json listed
+    // none of them, so the machine-readable record of what the retrofit could not express was incomplete
+    // for exactly the findings a maintainer has to act on by hand.
+    if (pipelineGaps[0] != null && !emitter.gaps().isEmpty()) {
+      emitter.gaps().forEach(pipelineGaps[0]::add);
+      new GapAndPassthroughWriter()
+          .rewriteGapReports(reboundHolder[0], pipelineGaps[0], emitOptions);
     }
     return new Result(report, patch);
   }

@@ -89,6 +89,27 @@ final class RetrofitInheritedMembers {
   }
 
   /**
+   * Records a claim about a field that was NOT resolved as a property: the declaration a definition-only
+   * member was ADOPTED onto, because the class already declares the very field the member describes (see
+   * {@code RetrofitPatchEmitter#adoptExistingMember}).
+   *
+   * <p>Taken as raw pieces rather than a {@link ResolvedProperty} because there is no resolved property
+   * to hand — the whole reason the member reached synthesis is that {@code PropertyResolver} matched
+   * nothing for its id. Reached-through is the declaring class itself: the identity proof came from the
+   * field's own annotations, not from the path its type was reached by.
+   *
+   * @param declaringType the parsed class declaring the existing field
+   * @param memberName the Java field name
+   * @param field the definition metadata the field must carry
+   * @param renameTo the {@code @JsonProperty} id to pin
+   */
+  void annotateDeclared(ModelSourceIndex.Type declaringType, String memberName, FieldModel field,
+      String renameTo) {
+    claim(new Claim(declaringType.fqn, declaringType.file, memberName, declaringType.fqn, field,
+        renameTo));
+  }
+
+  /**
    * Records that the definition has no row for this field as reached through
    * {@code property.reachedThroughFqn} — {@code @CCD(ignore = true)} on the declaration when that
    * holds everywhere, and a scoped {@code @CCD(member, ignore = true)} when it does not.

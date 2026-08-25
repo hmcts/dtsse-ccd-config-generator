@@ -1,11 +1,14 @@
 package uk.gov.hmcts.ccd.sdk.converter.retrofit;
 
+import com.github.javaparser.ast.body.ConstructorDeclaration;
 import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
+import com.github.javaparser.ast.body.Parameter;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import uk.gov.hmcts.ccd.sdk.converter.model.FieldModel;
 
@@ -460,13 +463,30 @@ final class SynthesisPlacement {
   /**
    * How a set of synthesised fields reconciles against the names their target class already declares:
    * the ones that can be placed — with an exact-name collision against a differently-named CCD member
-   * resolved by RENAMING — and the ones that cannot and must be reported instead.
+   * resolved by RENAMING — the ones whose existing member can be proved to BE the definition member and
+   * so is annotated in place, and the ones neither treatment fits, which must be reported instead.
    *
    * @param placeable the fields to synthesise, in order, some possibly renamed
-   * @param dropped the fields whose Java name is taken by a member that already carries the same CCD
-   *     id (or by an inherited accessor), which the caller reports rather than adds
+   * @param adopted the definition members whose existing declared field is provably the same CCD member
+   *     ({@link Adoption}), which the caller annotates rather than adds
+   * @param dropped the fields whose Java name is taken by a member this cannot prove either way (or by
+   *     an inherited accessor), which the caller reports rather than adds
    */
-  record DeclaredNameCollisions(List<FieldModel> placeable, List<FieldModel> dropped) {
+  record DeclaredNameCollisions(
+      List<FieldModel> placeable, List<Adoption> adopted, List<FieldModel> dropped) {
+  }
+
+  /**
+   * A definition-only member whose target class already declares the very field it describes: the
+   * definition's metadata plus the Java member name to hang it on. The name is carried explicitly
+   * because the field may be declared on a SUPERCLASS of the synthesis target, and it is that
+   * declaration the caller must annotate.
+   *
+   * @param field the definition member, whose {@code javaName} is the colliding name
+   * @param declaringType the parsed type declaring the existing field — the target itself or a
+   *     supertype
+   */
+  record Adoption(FieldModel field, ModelSourceIndex.Type declaringType) {
   }
 
   /**
@@ -494,26 +514,67 @@ final class SynthesisPlacement {
    * skip-and-report behaviour, as do names served by an inherited accessor rather than a field (fpl's
    * {@code TranslatableItem.getNeedTranslation}), where there is no member id to compare at all.
    *
+   * <p><b>And where the existing member is provably the definition's own, it is ADOPTED rather than
+   * dropped.</b> A drop leaves the definition member with no field the SDK will emit a row for, so the
+   * definition's row has no counterpart and the member shows up as residual diff — even though the class
+   * already has exactly the field it needs. That is the state Civil's {@code GAHearingDetails} was in:
+   * its definition type declares eleven members whose {@code ListElementCode} is PascalCase
+   * ({@code HearingPreferencesPreferredType}, {@code SupportRequirement}, {@code HearingDuration}, …)
+   * while the class declares them camelCase ({@code hearingPreferencesPreferredType}, …) and pins each
+   * PascalCase id on its {@code @JsonCreator} parameter. The linker derives the synthesised field's Java
+   * name from the id by lower-casing the leading character, which lands on the declared name — so
+   * {@link RetrofitPatchEmitter#planComplexTypeMembers} routed all eleven to synthesis (the resolver keys
+   * on the id, and {@code PropertyResolver} reads {@code @JsonProperty} only off the FIELD, so the
+   * PascalCase ids resolved to nothing) and this method then dropped all eleven on the name clash. Both
+   * halves were right about their own half and wrong together: {@code GeneralApplication}'s
+   * {@code CaseAccessCategory} makes twelve, and twelve residual {@code ComplexTypes} diff lines.
+   *
+   * <p>Adoption is gated on the existing field's own wire id being EXACTLY the definition member's id,
+   * established from the two idioms Jackson honours and the SDK's {@code PropertyUtils.getPropertyName}
+   * can also see or be made to see:
+   * <ul>
+   *   <li>the field's own {@code @JsonProperty} equals the id — the SDK reads that annotation off the
+   *       field, so it already derives the definition's id and one {@code @CCD} completes the row; or</li>
+   *   <li>a {@code @JsonProperty} on the matching {@code @JsonCreator} CONSTRUCTOR PARAMETER equals the
+   *       id (Civil's shape) — Jackson honours it in both directions, so the field genuinely serialises
+   *       under the definition's id, and the emitter pins it on the field as well so the
+   *       creator-parameter-blind SDK derives the same id. The pin is a Jackson no-op: a field-level
+   *       {@code @JsonProperty} outranks the parameter's and carries the identical value. This is the
+   *       same reliance-plus-pin pairing {@link RetrofitPinnedNames} documents for the member walk.</li>
+   * </ul>
+   *
+   * <p>Anything weaker stays dropped, because a wrong adoption is worse than a missing row: it silently
+   * attaches one definition member's label, hint, show-condition and access to a DIFFERENT wire property.
+   * So a bare declared name whose id is only its field name by assumption is not adopted (a class-level
+   * naming strategy this cannot evaluate would move it), nor is a name served by an inherited accessor
+   * with no field to annotate at all, nor a field whose {@code @JsonProperty} names some other id — that
+   * last one is a genuinely different member, and the rename above is its answer.
+   *
    * <p>Pure in (declared names, synthesised set), like {@link #renameCaseInsensitiveCollisions}, so the
-   * emitter and the {@link RetrofitModelRebinder} derive the same names independently.
+   * emitter and the {@link RetrofitModelRebinder} derive the same names independently. Adoption changes
+   * no Java name, so the rebinder's view of which fields exist under which member is unaffected: an
+   * adopted member is one the model already declares.
    *
    * @param target the class the fields would be synthesised onto
    * @param synthesised the definition-only fields to place
-   * @return the placeable fields (renamed where needed) and the ones to report
+   * @return the placeable fields (renamed where needed), the ones to annotate in place, and the ones to
+   *     report
    */
   DeclaredNameCollisions reconcileDeclaredNames(
       ModelSourceIndex.Type target, List<FieldModel> synthesised) {
     Set<String> declared = target == null ? Set.of() : declaredFieldNames(target);
     if (declared.isEmpty() || synthesised.isEmpty()) {
-      return new DeclaredNameCollisions(synthesised, List.of());
+      return new DeclaredNameCollisions(synthesised, List.of(), List.of());
     }
     Map<String, String> pinnedIds = pinnedMemberIds(target);
+    Map<String, DeclaredField> declaredFields = declaredFieldsByName(target);
     // Suffixes are searched case-insensitively against both the declared names and the names already
     // taken by earlier synthesised fields, so a rename here cannot collide with a Lombok accessor
     // either (see renameCaseInsensitiveCollisions, which runs after this on the root paths).
     Set<String> takenLower = new java.util.HashSet<>();
     declared.forEach(name -> takenLower.add(name.toLowerCase(java.util.Locale.ROOT)));
     List<FieldModel> placeable = new ArrayList<>();
+    List<Adoption> adopted = new ArrayList<>();
     List<FieldModel> dropped = new ArrayList<>();
     for (FieldModel field : synthesised) {
       String javaName = field.getJavaName();
@@ -523,15 +584,116 @@ final class SynthesisPlacement {
         continue;
       }
       String pinnedId = pinnedIds.get(javaName);
-      if (pinnedId == null || pinnedId.equals(field.getId())) {
-        dropped.add(field);
+      if (pinnedId != null && !pinnedId.equals(field.getId())) {
+        String renamed = freeName(javaName, takenLower);
+        takenLower.add(renamed.toLowerCase(java.util.Locale.ROOT));
+        placeable.add(field.toBuilder().javaName(renamed).build());
         continue;
       }
-      String renamed = freeName(javaName, takenLower);
-      takenLower.add(renamed.toLowerCase(java.util.Locale.ROOT));
-      placeable.add(field.toBuilder().javaName(renamed).build());
+      DeclaredField existing = declaredFields.get(javaName);
+      if (existing != null && serialisesUnder(existing, field.getId())) {
+        adopted.add(new Adoption(field, existing.declaringType()));
+        continue;
+      }
+      dropped.add(field);
     }
-    return new DeclaredNameCollisions(placeable, dropped);
+    return new DeclaredNameCollisions(placeable, adopted, dropped);
+  }
+
+  /**
+   * One existing field declaration a synthesised name collided with, and the parsed type declaring it —
+   * which may be a supertype of the synthesis target, since {@link #declaredFieldNames} walks the whole
+   * supertype graph and it is the DECLARATION that must be annotated.
+   */
+  private record DeclaredField(
+      ModelSourceIndex.Type declaringType, FieldDeclaration decl, String memberName) {
+  }
+
+  /**
+   * Whether {@code existing} provably serialises under {@code id} — the adoption guard documented on
+   * {@link #reconcileDeclaredNames}. True only when the id is stated by an explicit
+   * {@code @JsonProperty}, either on the field itself or on the matching {@code @JsonCreator}
+   * constructor parameter; never inferred from the field's bare name, which a class-level
+   * {@code @JsonNaming} this cannot evaluate would move.
+   */
+  private static boolean serialisesUnder(DeclaredField existing, String id) {
+    Optional<String> onField = Annotations.find(existing.decl(), "JsonProperty")
+        .flatMap(Annotations::stringValue)
+        .filter(value -> !value.isEmpty());
+    if (onField.isPresent()) {
+      return onField.get().equals(id);
+    }
+    return creatorParameterId(existing).filter(id::equals).isPresent();
+  }
+
+  /**
+   * The id a {@code @JsonProperty} on the matching {@code @JsonCreator} constructor parameter gives an
+   * existing field, or empty when its declaring class has no such creator.
+   *
+   * <p>Matched by parameter NAME, not position — the parameter must be named for the field it assigns,
+   * which is the convention every hand-written creator here follows, and a positional match would
+   * mis-bind a constructor whose parameters are reordered. This mirrors
+   * {@code RetrofitEventComplexTypeGraph}'s own creator-parameter lookup, which resolves member-walk
+   * segments through the same idiom.
+   */
+  private static Optional<String> creatorParameterId(DeclaredField existing) {
+    // getConstructors(), not findAll(): the latter descends into nested classes, where a creator
+    // parameter of the same name belongs to a different type entirely.
+    for (ConstructorDeclaration ctor : existing.declaringType().decl.getConstructors()) {
+      if (!Annotations.has(ctor, "JsonCreator")) {
+        continue;
+      }
+      for (Parameter parameter : ctor.getParameters()) {
+        if (!parameter.getNameAsString().equals(existing.memberName())) {
+          continue;
+        }
+        Optional<String> id = Annotations.find(parameter.getAnnotations(), "JsonProperty")
+            .flatMap(Annotations::stringValue)
+            .filter(value -> !value.isEmpty());
+        if (id.isPresent()) {
+          return id;
+        }
+      }
+    }
+    return Optional.empty();
+  }
+
+  /**
+   * The field declarations behind the names {@link #declaredFieldNames} collected, keyed by Java member
+   * name across the target and its supertypes, first (most-derived) declaration winning — Java field
+   * hiding, so the declaration that is actually the property is the one recorded. Names served only by
+   * an inherited ACCESSOR have no entry, which is what makes them unadoptable: there is no field to
+   * carry an annotation.
+   */
+  private Map<String, DeclaredField> declaredFieldsByName(ModelSourceIndex.Type target) {
+    Map<String, DeclaredField> byName = new java.util.LinkedHashMap<>();
+    collectDeclaredFields(target, byName, new java.util.HashSet<>(), 0);
+    return byName;
+  }
+
+  private void collectDeclaredFields(
+      ModelSourceIndex.Type type, Map<String, DeclaredField> byName, Set<String> seen, int depth) {
+    if (type == null || depth > 20 || !seen.add(type.fqn)) {
+      return;
+    }
+    for (FieldDeclaration fieldDecl : type.decl.getFields()) {
+      for (var var : fieldDecl.getVariables()) {
+        byName.putIfAbsent(var.getNameAsString(),
+            new DeclaredField(type, fieldDecl, var.getNameAsString()));
+      }
+    }
+    if (!type.decl.isClassOrInterfaceDeclaration()) {
+      return;
+    }
+    var decl = type.decl.asClassOrInterfaceDeclaration();
+    for (ClassOrInterfaceType supertype : decl.getExtendedTypes()) {
+      collectDeclaredFields(
+          index.resolve(type.unit, supertype).orElse(null), byName, seen, depth + 1);
+    }
+    for (ClassOrInterfaceType supertype : decl.getImplementedTypes()) {
+      collectDeclaredFields(
+          index.resolve(type.unit, supertype).orElse(null), byName, seen, depth + 1);
+    }
   }
 
   /**

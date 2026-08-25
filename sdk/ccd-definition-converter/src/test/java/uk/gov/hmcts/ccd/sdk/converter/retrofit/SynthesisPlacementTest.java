@@ -290,10 +290,11 @@ class SynthesisPlacementTest {
   }
 
   @Test
-  void dropsAnExactCollisionWithAMemberPinnedToTheSameCcdId(@TempDir Path work) throws Exception {
+  void adoptsAnExactCollisionWithAMemberPinnedToTheSameCcdId(@TempDir Path work) throws Exception {
     Path src = work.resolve("src");
     // The member pins the very id being synthesised, so it IS this definition member — already carrying
-    // the data, just missing @CCD. A second field would be a duplicate.
+    // the data, just missing @CCD. A second field would be a duplicate, so the existing one is ADOPTED:
+    // the emitter annotates the declaration instead of adding a field or reporting a gap.
     write(src, "m", "Party", "package m;\n"
         + "import com.fasterxml.jackson.annotation.JsonProperty;\n"
         + "import java.time.LocalDateTime;\nimport lombok.Data;\n@Data\npublic class Party {\n"
@@ -305,7 +306,109 @@ class SynthesisPlacementTest {
         .reconcileDeclaredNames(party, List.of(field("someDate")));
 
     assertThat(resolved.placeable()).isEmpty();
-    assertThat(resolved.dropped()).hasSize(1);
+    assertThat(resolved.dropped()).isEmpty();
+    assertThat(resolved.adopted()).singleElement().satisfies(adoption -> {
+      assertThat(adoption.field().getId()).isEqualTo("someDate");
+      assertThat(adoption.declaringType().fqn).isEqualTo("m.Party");
+    });
+  }
+
+  /**
+   * Civil's {@code GAHearingDetails}, the case the adoption path exists for. Its definition type declares
+   * eleven members under PascalCase {@code ListElementCode}s while the class declares them camelCase and
+   * pins each id on its {@code @JsonCreator} parameter. {@code PropertyResolver} reads
+   * {@code @JsonProperty} only off the FIELD, so the PascalCase ids resolved to nothing and every one was
+   * routed to synthesis; the camelCase Java name the linker derives from the id then collided with the
+   * declared field and all eleven were dropped, leaving the definition's rows with no counterpart while
+   * the unmatched-Java pass marked the very fields they needed {@code @CCD(ignore = true)}.
+   *
+   * <p>The creator parameter is what proves the field serialises under the definition's id, so the field
+   * is adopted and the emitter annotates it — pinning the id on the field as well, since the SDK cannot
+   * see a creator parameter either.
+   */
+  @Test
+  void adoptsACollisionWhoseIdIsPinnedOnTheJsonCreatorParameter(@TempDir Path work) throws Exception {
+    Path src = work.resolve("src");
+    write(src, "m", "GAHearingDetails", "package m;\n"
+        + "import com.fasterxml.jackson.annotation.JsonCreator;\n"
+        + "import com.fasterxml.jackson.annotation.JsonProperty;\n"
+        + "import java.time.LocalDateTime;\nimport lombok.Data;\n@Data\n"
+        + "public class GAHearingDetails {\n"
+        + "  private LocalDateTime hearingDuration;\n"
+        + "  @JsonCreator\n"
+        + "  GAHearingDetails(@JsonProperty(\"HearingDuration\") LocalDateTime hearingDuration) {\n"
+        + "    this.hearingDuration = hearingDuration;\n  }\n}\n");
+    ModelSourceIndex index = ModelSourceIndex.parse(src);
+    ModelSourceIndex.Type details = index.byFqn("m.GAHearingDetails").orElseThrow();
+    // The definition member: id HearingDuration, javaName as the linker derives it (leading char lowered).
+    FieldModel member = FieldModel.builder().id("HearingDuration").javaName("hearingDuration")
+        .fieldType("DateTime").javaType("LocalDateTime").build();
+
+    SynthesisPlacement.DeclaredNameCollisions resolved = new SynthesisPlacement(index, 250)
+        .reconcileDeclaredNames(details, List.of(member));
+
+    assertThat(resolved.placeable()).isEmpty();
+    assertThat(resolved.dropped()).isEmpty();
+    assertThat(resolved.adopted()).singleElement().satisfies(adoption -> {
+      assertThat(adoption.field().getId()).isEqualTo("HearingDuration");
+      assertThat(adoption.field().getJavaName()).isEqualTo("hearingDuration");
+      assertThat(adoption.declaringType().fqn).isEqualTo("m.GAHearingDetails");
+    });
+  }
+
+  /**
+   * The guard's refusal side. A creator parameter naming a DIFFERENT id does not prove the field is the
+   * definition's member — it proves the opposite — so the field must not be adopted. Adopting on the
+   * strength of the name alone would attach this definition member's label, hint, show-condition and
+   * access to a field that serialises as something else entirely, which is worse than the missing row a
+   * drop leaves: the row would exist and be wrong, and nothing downstream would say so.
+   */
+  @Test
+  void refusesToAdoptWhenTheCreatorParameterPinsADifferentId(@TempDir Path work) throws Exception {
+    Path src = work.resolve("src");
+    write(src, "m", "GAHearingDetails", "package m;\n"
+        + "import com.fasterxml.jackson.annotation.JsonCreator;\n"
+        + "import com.fasterxml.jackson.annotation.JsonProperty;\n"
+        + "import java.time.LocalDateTime;\nimport lombok.Data;\n@Data\n"
+        + "public class GAHearingDetails {\n"
+        + "  private LocalDateTime hearingDuration;\n"
+        + "  @JsonCreator\n"
+        + "  GAHearingDetails(@JsonProperty(\"SomethingElse\") LocalDateTime hearingDuration) {\n"
+        + "    this.hearingDuration = hearingDuration;\n  }\n}\n");
+    ModelSourceIndex index = ModelSourceIndex.parse(src);
+    ModelSourceIndex.Type details = index.byFqn("m.GAHearingDetails").orElseThrow();
+    FieldModel member = FieldModel.builder().id("HearingDuration").javaName("hearingDuration")
+        .fieldType("DateTime").javaType("LocalDateTime").build();
+
+    SynthesisPlacement.DeclaredNameCollisions resolved = new SynthesisPlacement(index, 250)
+        .reconcileDeclaredNames(details, List.of(member));
+
+    assertThat(resolved.adopted()).isEmpty();
+    assertThat(resolved.placeable()).isEmpty();
+    assertThat(resolved.dropped()).singleElement()
+        .satisfies(dropped -> assertThat(dropped.getId()).isEqualTo("HearingDuration"));
+  }
+
+  /**
+   * The other refusal the guard has to make: a declared field with NO id pin at all. Its wire id is its
+   * own name only in the absence of a class-level {@code @JsonNaming} this cannot evaluate, so whether it
+   * is the definition's member is genuinely unknown — and an unknown is not a proof. Stays dropped, with
+   * the gap that asks a maintainer to decide.
+   */
+  @Test
+  void refusesToAdoptAnUnpinnedFieldWhoseNameMerelyMatches(@TempDir Path work) throws Exception {
+    Path src = work.resolve("src");
+    write(src, "m", "Party", "package m;\nimport java.time.LocalDateTime;\nimport lombok.Data;\n"
+        + "@Data\npublic class Party {\n  private LocalDateTime someDate;\n}\n");
+    ModelSourceIndex index = ModelSourceIndex.parse(src);
+    ModelSourceIndex.Type party = index.byFqn("m.Party").orElseThrow();
+
+    SynthesisPlacement.DeclaredNameCollisions resolved = new SynthesisPlacement(index, 250)
+        .reconcileDeclaredNames(party, List.of(field("someDate")));
+
+    assertThat(resolved.adopted()).isEmpty();
+    assertThat(resolved.dropped()).singleElement()
+        .satisfies(dropped -> assertThat(dropped.getId()).isEqualTo("someDate"));
   }
 
   @Test
