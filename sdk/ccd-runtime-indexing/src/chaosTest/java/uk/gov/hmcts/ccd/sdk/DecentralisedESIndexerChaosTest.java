@@ -289,6 +289,7 @@ class DecentralisedESIndexerChaosTest {
       JsonNode document = fetchDocument(CASE_INDEX, 3001);
       assertThat(document.path("data").path("marker").asText()).isEqualTo("valid-behind-poison");
     });
+    assertQueueEventuallyEmpty();
   }
 
   @Test
