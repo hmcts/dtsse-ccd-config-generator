@@ -208,6 +208,80 @@ class RetrofitTypeBinderTest {
   }
 
   /**
+   * An ID refused for want of unanimity is REPORTED, not merely skipped.
+   *
+   * <p>The refusal's cost is paid far from its cause: the unbound type is left unpatched, so its
+   * definition-only members are never synthesised and every {@code CaseEventToComplexTypes} row
+   * addressing one falls back to a passthrough blaming "member not found on the bound type" — naming
+   * the class the members are missing from rather than the ID that failed to bind. finrem's
+   * {@code FR_manageCaseDocuments} is this shape: {@code manageCaseDocumentCollection} declares
+   * {@code List<UploadCaseDocumentCollection>} while {@code manageScannedDocumentCollection} declares
+   * {@code List<ManageScannedDocumentCollection>}, and the 26 rows that result had no stated cause
+   * between them.
+   */
+  @Test
+  void reportsAnIdWhoseReferencingFieldsDisagree(@TempDir Path work) throws Exception {
+    Path src = work.resolve("src");
+    write(src, "m", "UploadWrapper", "package m;\nimport lombok.Data;\n"
+        + "@Data\npublic class UploadWrapper { private String value; }\n");
+    write(src, "m", "ScannedWrapper", "package m;\nimport lombok.Data;\n"
+        + "@Data\npublic class ScannedWrapper { private String value; }\n");
+    write(src, "m", "CaseData", "package m;\nimport lombok.Data;\nimport java.util.List;\n"
+        + "@Data\npublic class CaseData {\n"
+        + "  private List<UploadWrapper> uploads;\n"
+        + "  private List<ScannedWrapper> scanned;\n"
+        + "}\n");
+    ModelSourceIndex index = ModelSourceIndex.parse(src);
+    Map<String, ResolvedProperty> properties = rootProperties(index, "m.CaseData");
+
+    // Both collections name the same definition element type, so neither declaration can back it.
+    DefinitionIr definition = ir(
+        List.of(row("uploads", "Collection", "SharedDocs"),
+            row("scanned", "Collection", "SharedDocs")),
+        List.of(member("SharedDocs", "docType", "Text")));
+
+    RetrofitTypeBinder binder = new RetrofitTypeBinder(index, MODEL_PACKAGE);
+    Map<String, ModelSourceIndex.Type> bound = binder.bind(definition, "EXAMPLE", properties);
+
+    assertThat(bound).doesNotContainKey("SharedDocs");
+    assertThat(binder.ambiguities())
+        .singleElement()
+        .satisfies(ambiguity -> {
+          assertThat(ambiguity.definitionId()).isEqualTo("SharedDocs");
+          assertThat(ambiguity.declaredTypes())
+              .containsExactlyInAnyOrder("m.UploadWrapper", "m.ScannedWrapper");
+        });
+  }
+
+  /**
+   * An ID every referencing field agrees on binds, and reports no ambiguity — so the report carries
+   * only genuine divergences rather than one entry per multiply-referenced type.
+   */
+  @Test
+  void reportsNoAmbiguityWhenReferencingFieldsAgree(@TempDir Path work) throws Exception {
+    Path src = work.resolve("src");
+    write(src, "m", "SharedWrapper", "package m;\nimport lombok.Data;\n"
+        + "@Data\npublic class SharedWrapper { private String value; }\n");
+    write(src, "m", "CaseData", "package m;\nimport lombok.Data;\nimport java.util.List;\n"
+        + "@Data\npublic class CaseData {\n"
+        + "  private List<SharedWrapper> first;\n"
+        + "  private List<SharedWrapper> second;\n"
+        + "}\n");
+    ModelSourceIndex index = ModelSourceIndex.parse(src);
+    Map<String, ResolvedProperty> properties = rootProperties(index, "m.CaseData");
+
+    DefinitionIr definition = ir(
+        List.of(row("first", "Collection", "SharedDocs"),
+            row("second", "Collection", "SharedDocs")),
+        List.of(member("SharedDocs", "docType", "Text")));
+
+    RetrofitTypeBinder binder = new RetrofitTypeBinder(index, MODEL_PACKAGE);
+    binder.bind(definition, "EXAMPLE", properties);
+
+    assertThat(binder.ambiguities()).isEmpty();
+  }
+
+  /**
    * Unanimity-gated for the same reason a binding is: two fields referencing one ambiguous ID while
    * declaring different classes have no answer to give, so the existing tie-break is left to decide.
    */

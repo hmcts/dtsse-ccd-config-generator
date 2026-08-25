@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import uk.gov.hmcts.ccd.sdk.converter.Converter;
@@ -14,7 +15,10 @@ import uk.gov.hmcts.ccd.sdk.converter.ir.DefinitionIr;
 import uk.gov.hmcts.ccd.sdk.converter.link.DefaultDefinitionLinker;
 import uk.gov.hmcts.ccd.sdk.converter.model.CaseTypeModel;
 import uk.gov.hmcts.ccd.sdk.converter.model.FixedListModel;
+import uk.gov.hmcts.ccd.sdk.converter.model.gap.GapAction;
+import uk.gov.hmcts.ccd.sdk.converter.model.gap.GapCategory;
 import uk.gov.hmcts.ccd.sdk.converter.model.gap.GapCollector;
+import uk.gov.hmcts.ccd.sdk.converter.model.gap.GapEntry;
 import uk.gov.hmcts.ccd.sdk.converter.report.GapAndPassthroughWriter;
 
 /**
@@ -305,8 +309,32 @@ public final class RetrofitConverter {
     // collisions above and the uncovered retype refusals — existed only on stderr: gap-report.json listed
     // none of them, so the machine-readable record of what the retrofit could not express was incomplete
     // for exactly the findings a maintainer has to act on by hand.
-    if (pipelineGaps[0] != null && !emitter.gaps().isEmpty()) {
+    // The binder's refusals travel the same route, and for the same reason: an ID it could not bind
+    // silently costs the whole complex type its patch, and the passthrough rows that result each blame
+    // "member not found on the bound type" — naming the class the members are missing from rather than
+    // the ID that failed to bind to it. Recorded here, where the pipeline collector exists, so the one
+    // finding a maintainer can actually act on is in the machine-readable report.
+    List<GapEntry> binderGaps = new ArrayList<>();
+    for (RetrofitTypeBinder.Ambiguity ambiguity : binder.ambiguities()) {
+      binderGaps.add(GapEntry.builder()
+          .sheet("ComplexTypes")
+          .rowKey(ambiguity.definitionId())
+          .column("FieldTypeParameter")
+          .value(String.join(", ", ambiguity.declaredTypes()))
+          .category(GapCategory.UNSUPPORTED_VALUE)
+          .action(GapAction.MANUAL_PLACEMENT)
+          .detail("Definition type '" + ambiguity.definitionId() + "' is referenced by fields declared"
+              + " as more than one model type (" + String.join(", ", ambiguity.declaredTypes())
+              + "), so no single class backs it and the type is left unpatched: its definition-only"
+              + " members are not synthesised and every CaseEventToComplexTypes row addressing one"
+              + " falls back to a verbatim passthrough. Give each definition type its own model class,"
+              + " or point the divergent field at the shared one with a per-field"
+              + " typeParameterOverride.")
+          .build());
+    }
+    if (pipelineGaps[0] != null && (!emitter.gaps().isEmpty() || !binderGaps.isEmpty())) {
       emitter.gaps().forEach(pipelineGaps[0]::add);
+      binderGaps.forEach(pipelineGaps[0]::add);
       new GapAndPassthroughWriter()
           .rewriteGapReports(reboundHolder[0], pipelineGaps[0], emitOptions);
     }

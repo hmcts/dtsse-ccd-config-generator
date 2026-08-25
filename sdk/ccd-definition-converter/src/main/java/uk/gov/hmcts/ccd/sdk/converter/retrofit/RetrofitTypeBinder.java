@@ -2,6 +2,7 @@ package uk.gov.hmcts.ccd.sdk.converter.retrofit;
 
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -82,12 +83,45 @@ final class RetrofitTypeBinder {
   record Binding(String definitionId, ModelSourceIndex.Type type) {
   }
 
+  /**
+   * A definition ID no class could be bound to because its referencing fields disagree about which
+   * model type backs it.
+   *
+   * @param definitionId the definition type ID left unbound
+   * @param declaredTypes the distinct model types its referencing fields are declared as, in the
+   *     order the references were gathered
+   */
+  record Ambiguity(String definitionId, List<String> declaredTypes) {
+  }
+
   private final ModelSourceIndex index;
   private final String modelPackage;
+  private final Map<String, Ambiguity> ambiguities = new LinkedHashMap<>();
 
   RetrofitTypeBinder(ModelSourceIndex index, String modelPackage) {
     this.index = index;
     this.modelPackage = modelPackage;
+  }
+
+  /**
+   * The IDs {@link #bind} refused for want of unanimity among their referencing fields.
+   *
+   * <p>Reported rather than left silent because the consequences are severe and land far from the
+   * cause. An unbound ID has no class, so the patch emitter skips the whole complex type: its
+   * definition-only members are never offered to synthesis, and every
+   * {@code CaseEventToComplexTypes} row addressing one falls back to a verbatim passthrough with the
+   * downstream reason "member not found on the bound type". The class the members really live on is
+   * meanwhile left unclaimed and suppressed with a name-less {@code @ComplexType(generate = false)},
+   * so nothing in the output points at the ID that could not be bound. finrem's
+   * {@code FR_manageCaseDocuments} is referenced by {@code manageCaseDocumentCollection} declared
+   * {@code List<UploadCaseDocumentCollection>} and by {@code manageScannedDocumentCollection}
+   * declared {@code List<ManageScannedDocumentCollection>} — 26 passthrough rows with no stated
+   * cause between them.
+   *
+   * @return the refused IDs and the rival declarations, empty when every ID bound
+   */
+  Collection<Ambiguity> ambiguities() {
+    return ambiguities.values();
   }
 
   /**
@@ -268,6 +302,10 @@ final class RetrofitTypeBinder {
       Set<String> distinct = new LinkedHashSet<>();
       entry.getValue().forEach(type -> distinct.add(type.fqn));
       if (distinct.size() != 1) {
+        // Recorded, not merely skipped: see ambiguities(). Only a genuine rivalry lands here — a
+        // single referencing field, or several agreeing, binds normally — so every entry is a real
+        // divergence between the definition and the model rather than converter indecision.
+        ambiguities.put(definitionId, new Ambiguity(definitionId, List.copyOf(distinct)));
         continue;
       }
       ModelSourceIndex.Type type = entry.getValue().get(0);
