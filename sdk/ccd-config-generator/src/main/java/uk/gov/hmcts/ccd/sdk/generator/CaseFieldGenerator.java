@@ -324,7 +324,19 @@ class CaseFieldGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
       target.put("FieldTypeParameter", elementClass.getSimpleName());
     }
 
-    if (Set.class.isAssignableFrom(field.getType()) && elementClass.isEnum()) {
+    // Any collection of enum constants is a MultiSelectList, whatever the collection interface. The
+    // distinction that matters to CCD is the wire shape, and Set and List of the same enum serialise
+    // identically — Jackson writes ["CODE_A","CODE_B"] for both. What produces the Collection shape,
+    // [{"id":…,"value":…}], is the ListValue<T> wrapper, which neither has.
+    //
+    // Gating on Set therefore did not select a legitimate alternative typing for List<Enum>; it
+    // produced a definition that cannot be imported. Collection carrying a FixedLists parameter
+    // resolves to the type reference Collection-<list>, which no base type declares, so the import
+    // fails outright. FPL shows the cost on a live service: its Orders class declares
+    // List<OrderType> orderType beside two siblings that carry typeOverride = MultiSelectList
+    // explicitly, its own show conditions read orderType CONTAINS …, and its hand-written definition
+    // says MultiSelectList — while the generator emitted Collection, the hand-written file masking it.
+    if (elementClass.isEnum()) {
       type = "MultiSelectList";
     }
     return type;
@@ -353,7 +365,15 @@ class CaseFieldGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
       }
       case "LocalDate" -> "Date";
       case "LocalDateTime" -> "DateTime";
-      case "int", "float", "double", "Integer", "Float", "Double", "Long", "long" -> "Number";
+      // BigDecimal belongs here as much as the primitives do — it is the type a service reaches for
+      // when a Number field holds money, and the converter's own TypeInference has always counted it
+      // among the numeric types. Omitting it here did not fall back to something merely imprecise: the
+      // switch's default yields the inferred type verbatim, so the field emitted FieldType=BigDecimal,
+      // a name the definition store's base types do not contain, and the whole import failed with
+      // "Missing field type". Civil declares six of them (totalClaimAmount, totalInterest and the
+      // defaultJudgementOverallTotal family) against a definition that asks for Number.
+      case "int", "float", "double", "Integer", "Float", "Double", "Long", "long",
+           "BigDecimal" -> "Number";
       default -> inferredType;
     };
   }
