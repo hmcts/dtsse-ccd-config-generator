@@ -42,18 +42,34 @@ public class ComplexTypeEmitter implements SourceEmitter {
       }
 
       // The class is named with the Java-conventional PascalCase name (finding #3); the CCD-facing
-      // type ID is preserved as the wire ID via @ComplexType(name = id) whenever it differs, which
-      // the SDK's ComplexTypeGenerator/CaseFieldGenerator read for the emitted ComplexTypes ID and
-      // every referencing field's FieldType/FieldTypeParameter, so the rename round-trips exactly.
+      // type ID is pinned as the wire ID via @ComplexType(name = id) ALWAYS, not only when the two
+      // differ, because the SDK reads the name for two distinct purposes and only one of them can
+      // fall back to the class name.
+      //
+      // ComplexTypeGenerator and CaseFieldGenerator.resolveFieldType both default to the simple
+      // class name when name is absent, so on a same-named type a pinned name is inert there. But
+      // CaseFieldGenerator.withNamedComplexType — which resolves the FieldType of a field carrying
+      // @CCD(typeParameterClass = <companion>) — has no such fallback: it returns the DECLARED
+      // type's ID unless the named companion supplies a name, since the whole point of that path is
+      // that the field is typed as something other than the companion. An absent name there is
+      // indistinguishable from "this class names no CCD type", so the column silently keeps the
+      // declared class's ID.
+      //
+      // That path is reached whenever RetrofitPatchEmitter.withComplexCompanion covers a refused
+      // retype, and it is the common case for a family of types whose IDs are ALREADY legal
+      // PascalCase and so would never trip an inequality test — CIVIL's *LRspec/*GAspec types
+      // (HearingLRspec, HomeDetailsLRspec, UserDetails, OtherRemedyFee). respondent1DQHearingFast-
+      // Claim declares Hearing and is addressed by the definition's HearingLRspec; its accessors
+      // have callers, so the retype is refused and the field is covered by
+      // @CCD(typeParameterClass = HearingLRspec.class). With the name conditional the field emitted
+      // FieldType=Hearing while the ComplexTypes rows were already correct under HearingLRspec.
       String className = ct.getJavaClassName() != null ? ct.getJavaClassName() : ct.getId();
       TypeSpec.Builder classBuilder = TypeSpec.classBuilder(className)
           .addModifiers(Modifier.PUBLIC)
           .addJavadoc(context.banner(model.getCaseTypeId(), "ComplexTypes"));
       LombokAnnotations.applyDataClass(classBuilder, fields.size());
       AnnotationSpec.Builder complexTypeAnn = AnnotationSpec.builder(ClassName.get(ComplexType.class));
-      if (!className.equals(ct.getId())) {
-        complexTypeAnn.addMember("name", "$S", ct.getId());
-      }
+      complexTypeAnn.addMember("name", "$S", ct.getId());
       complexTypeAnn.addMember("generate", "$L", true);
       classBuilder.addAnnotation(complexTypeAnn.build());
       classBuilder.addFields(fields);

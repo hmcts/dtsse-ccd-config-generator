@@ -15,6 +15,7 @@ import uk.gov.hmcts.ccd.sdk.api.ComplexType;
 @NoArgsConstructor
 @AllArgsConstructor
 @ComplexType(
+        name = "TestAddress",
         generate = true
 )
 public class TestAddress {

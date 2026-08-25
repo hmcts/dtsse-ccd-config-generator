@@ -336,9 +336,80 @@ class ModelEmitterGoldenTest {
     assertThat(actual).contains("name = \"schoolDirections&Details\"");
   }
 
+  @Test
+  void complexTypeEmitterPinsNameEvenWhenClassNameEqualsId() {
+    // A type whose ID is already legal PascalCase still pins @ComplexType(name), because
+    // CaseFieldGenerator.withNamedComplexType — the path a field covered by
+    // @CCD(typeParameterClass = <companion>) resolves its FieldType through — returns the DECLARED
+    // type's ID unless the named companion supplies a name, with no fall back to the simple class
+    // name. CIVIL's HearingLRspec is the case: respondent1DQHearingFastClaim declares Hearing and is
+    // addressed by HearingLRspec, whose retype is refused because its accessors have callers, so the
+    // field emitted FieldType=Hearing while its ComplexTypes rows were correct.
+    FieldModel member = FieldModel.builder()
+        .id("hearingLength")
+        .javaName("hearingLength")
+        .javaType("String")
+        .fieldType("Text")
+        .overlayTags(Set.of())
+        .build();
+    ComplexTypeModel sameNamedType = ComplexTypeModel.builder()
+        .id("HearingLRspec")
+        .javaClassName("HearingLRspec")
+        .members(List.of(member))
+        .depth(0)
+        .build();
+    CaseTypeModel model = CaseTypeModel.builder()
+        .caseTypeId("CIVIL")
+        .complexTypes(List.of(sameNamedType))
+        .build();
+
+    List<JavaFile> files = new ComplexTypeEmitter().emit(model, buildContext());
+
+    assertThat(files).hasSize(1);
+    assertThat(files.get(0).typeSpec().name()).isEqualTo("HearingLRspec");
+    assertThat(files.get(0).toString())
+        .contains("name = \"HearingLRspec\"")
+        .contains("generate = true");
+  }
+
   // -----------------------------------------------------------------------
   // EnumEmitter golden tests
   // -----------------------------------------------------------------------
+
+  @Test
+  void enumEmitterPinsNameWithGenerateEvenWhenClassNameEqualsId() {
+    // As for complex types, the list ID is pinned rather than left to a class-name coincidence — and
+    // generate = true must ride along in the same annotation. ComplexType.generate() defaults to
+    // false, and FixedListGenerator/CaseFieldGenerator only treat an enum as a generated fixed list
+    // when it has no @ComplexType or one with generate() true, so a name-only annotation would drop
+    // the FixedLists rows and stop referencing fields resolving to FixedRadioList.
+    FixedListModel.Item item = FixedListModel.Item.builder()
+        .code("YES")
+        .label("Yes")
+        .javaConstant("YES")
+        .displayOrder(1)
+        .build();
+    FixedListModel sameNamedList = FixedListModel.builder()
+        .id("YesOrNoChoice")
+        .items(List.of(item))
+        .build();
+    CaseTypeModel model = CaseTypeModel.builder()
+        .caseTypeId("CIVIL")
+        .fixedLists(List.of(sameNamedList))
+        .states(List.of())
+        .roles(List.of())
+        .build();
+
+    JavaFile list = new EnumEmitter().emit(model, buildContext()).stream()
+        .filter(f -> f.typeSpec().name().equals("YesOrNoChoice"))
+        .findFirst()
+        .orElseThrow();
+
+    assertThat(list.toString())
+        .contains("name = \"YesOrNoChoice\"")
+        .contains("generate = true");
+  }
+
 
   @Test
   void enumEmitterFixedListNonIdentifierMatchesGolden() throws IOException {

@@ -74,25 +74,25 @@ public class EnumEmitter implements SourceEmitter {
         .anyMatch(item -> !item.getJavaConstant().equals(item.getCode()));
 
     // The enum is named with the Java-conventional PascalCase name (finding #4, FL_ prefix dropped);
-    // the CCD-facing list ID is preserved as the wire ID via @ComplexType(name = id) whenever it
-    // differs, which the SDK's FixedListGenerator reads for the emitted FixedLists ID and file name
-    // and CaseFieldGenerator reads for referencing fields' FieldTypeParameter, so the rename
-    // round-trips exactly.
+    // the CCD-facing list ID is pinned as the wire ID via @ComplexType(name = id) ALWAYS, not only
+    // when the two differ, matching ComplexTypeEmitter — the wire ID is then stated by the emitted
+    // source rather than inferred from a class-name coincidence that no longer holds the moment the
+    // Java name is derived differently.
+    //
+    // generate = true must accompany the name in the SAME annotation: the SDK's FixedListGenerator
+    // and CaseFieldGenerator only treat an enum as a generated fixed list when it carries no
+    // @ComplexType at all, or one whose generate() is true. ComplexType.generate() defaults to
+    // FALSE, so an annotation added for the name alone would flip every generated list off — the
+    // FixedLists rows would vanish and referencing fields would stop resolving to FixedRadioList.
     String enumClassName = fl.getJavaClassName() != null ? fl.getJavaClassName() : fl.getId();
     TypeSpec.Builder enumBuilder = TypeSpec.enumBuilder(enumClassName)
         .addModifiers(Modifier.PUBLIC)
         .addSuperinterface(ClassName.get(HasLabel.class))
-        .addJavadoc(banner);
-    if (!enumClassName.equals(fl.getId())) {
-      // generate = true is required: the SDK's FixedListGenerator and CaseFieldGenerator only treat
-      // an enum as a generated fixed list when it has no @ComplexType or one with generate() true.
-      // (An enum with no @ComplexType at all defaults to "generate"; adding name= flips generate to
-      // its false default unless we set it explicitly.)
-      enumBuilder.addAnnotation(AnnotationSpec.builder(ClassName.get(ComplexType.class))
-          .addMember("name", "$S", fl.getId())
-          .addMember("generate", "$L", true)
-          .build());
-    }
+        .addJavadoc(banner)
+        .addAnnotation(AnnotationSpec.builder(ClassName.get(ComplexType.class))
+            .addMember("name", "$S", fl.getId())
+            .addMember("generate", "$L", true)
+            .build());
 
     if (needsCodeField) {
       // Two-arg constructor: label + code. @JsonValue on code field.
