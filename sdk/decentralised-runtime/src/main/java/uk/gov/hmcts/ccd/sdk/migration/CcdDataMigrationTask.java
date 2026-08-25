@@ -157,7 +157,7 @@ public class CcdDataMigrationTask implements Runnable {
     }
 
     prepareElasticsearchQueueForMigration();
-    long targetEventHwm = sourceEventHighWaterMark();
+    long targetEventHwm = preloadSourceEventHighWaterMark();
     CopyTotals totals = copyEventBatches(targetEventHwm, calculateStopAt());
     long sourceEventHwm = sourceEventProgressHighWaterMark();
     boolean caughtUp = sourceEventHwm >= targetEventHwm;
@@ -667,6 +667,22 @@ public class CcdDataMigrationTask implements Runnable {
       );
       return hwm == null ? 0 : hwm;
     });
+  }
+
+  private long preloadSourceEventHighWaterMark() {
+    return withMigrationStatementTimeout(() -> db.query(
+        """
+        select id
+        from fdw_stage.case_event
+        where created_date < (
+          select localtimestamp - interval '2 minutes'
+        )
+        order by id desc
+        limit 1
+        """,
+        baseParams(),
+        resultSet -> resultSet.next() ? resultSet.getLong("id") : 0
+    ));
   }
 
   private long localEventHighWaterMark() {
