@@ -845,6 +845,31 @@ class RetrofitPatchEmitterGoldenTest {
   }
 
   @Test
+  void namesTheCompanionOnAFieldWhoseDeclaredEnumIsClaimedByARivalListId() {
+    // The superset refusal is not the only way a list reaches the companion path with a field that
+    // DECLARES an enum, and the fix is owed to every way — not just that one. Here CaseData.rivalBand
+    // declares ComplexityBand, whose constants ARE exactly RivalComplexityBand's codes; the binding is
+    // refused because the enum's own simple name is the definition list ID ComplexityBand, so that row
+    // owns the class and one class carries one @ComplexType(name).
+    //
+    // Civil is five lists deep in this shape — ComplexityBand, FastTrackComplexityBand,
+    // FinalOrdersIntermediateComplexityBand, ComplexityBandIntermediate, IntermediateComplexityBand, all
+    // BAND_1..BAND_4 against one enum — and PaymentTypeList (two fields declaring two different enums)
+    // and TrialReadyList/GAHearingScheduleGAspec (two IDs claiming YesOrNo) are the other two shapes.
+    // Testing whether the declared enum REPRODUCES the list dropped the override in every one of them,
+    // because the answer was "yes" and the question was the wrong one: what matters is whether an enum
+    // SERVES the ID, and none does here — no binding, and the ID is not the enum's name.
+    RetrofitPatch patch = emitPatch();
+    assertNoPinOn(patch, "enums/ComplexityBand.java", "RivalComplexityBand");
+    assertThat(patchedContent(patch, "model/CaseData.java"))
+        .contains("typeParameterOverride = \"RivalComplexityBand\"")
+        .contains("typeParameterClass = RivalComplexityBand.class")
+        // The declared type is untouched: only which enum the generator reads this column's list from
+        // changes, so no caller or serialised payload does.
+        .contains("private ComplexityBand rivalBand;");
+  }
+
+  @Test
   void refusesToBindAFixedListIdToAClassOrAComplexTypeIdToAnEnum() {
     // Kind must match the generator that will emit the type: FixedListGenerator selects on isEnum and
     // ComplexTypeGenerator on the absence of it, so pinning crossKindFixedList onto the CLASS

@@ -9,6 +9,7 @@ import uk.gov.hmcts.ccd.sdk.api.CCD;
 import uk.gov.hmcts.example.enums.AnnotatedList;
 import uk.gov.hmcts.example.enums.CamelConstantList;
 import uk.gov.hmcts.example.enums.ClaimType;
+import uk.gov.hmcts.example.enums.ComplexityBand;
 import uk.gov.hmcts.example.enums.LabelBearingList;
 import uk.gov.hmcts.example.enums.SharedLineList;
 import uk.gov.hmcts.example.enums.ShadowedPinList;
@@ -62,6 +63,16 @@ public class CaseData extends BaseCaseData {
   // onto this enum turns a list with no rows into a list with WRONG rows. The binding must be refused
   // and the field pointed at the companion the refusal leaves in place instead.
   private TeamOwnVocabulary oversized;
+
+  // The other reason a list reaches the companion path unbound, and the one the reproduction test got
+  // wrong: this enum's constants ARE exactly rivalBand's codes, but the enum's own simple name is a
+  // definition list ID in its own right (ComplexityBand), so that list owns the class and
+  // RetrofitTypeBinder refuses to pin RivalComplexityBand onto it as well. Civil's five *ComplexityBand
+  // lists against one ComplexityBand enum. A companion IS generated for the refused ID, so this field
+  // must be pointed at it — testing whether the declared enum reproduces the codes said "yes" and
+  // dropped the override, leaving the companion referenced by nothing and rivalBand's rows with no
+  // counterpart.
+  private ComplexityBand rivalBand;
 
   // A large reference-data FixedList the team really models as a String (sscs's hearingEpimsId, 160-odd
   // venue codes loaded at runtime): nothing DECLARES the list's type, so reflection reaches no rows for

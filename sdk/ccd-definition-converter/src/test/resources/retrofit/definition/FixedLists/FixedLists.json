@@ -33,6 +33,10 @@
   { "ID": "CamelConstantList", "ListElementCode": "nonMolestationOrder", "ListElement": "Non-molestation order (FL404A)" },
   { "ID": "CamelConstantList", "ListElementCode": "occupationOrder", "ListElement": "Occupation order (FL404)" },
   { "ID": "ShadowedPinList", "ListElementCode": "COURT", "ListElement": "Court" },
+  { "ID": "ComplexityBand", "ListElementCode": "BAND_1", "ListElement": "Band 1" },
+  { "ID": "ComplexityBand", "ListElementCode": "BAND_2", "ListElement": "Band 2" },
+  { "ID": "RivalComplexityBand", "ListElementCode": "BAND_1", "ListElement": "band 1, spelled the rival's way" },
+  { "ID": "RivalComplexityBand", "ListElementCode": "BAND_2", "ListElement": "band 2, spelled the rival's way" },
   { "ID": "State", "ListElementCode": "Open", "ListElement": "An open case" },
   { "ID": "State", "ListElementCode": "CLOSED", "ListElement": "A closed case" }
 ]

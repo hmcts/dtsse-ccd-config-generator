@@ -10,6 +10,7 @@
   { "CaseTypeID": "EXAMPLE", "ID": "camelConstant", "FieldType": "FixedRadioList", "FieldTypeParameter": "CamelConstantList", "Label": "Camel constant" },
   { "CaseTypeID": "EXAMPLE", "ID": "shadowedPin", "FieldType": "FixedRadioList", "FieldTypeParameter": "ShadowedPinList", "Label": "Shadowed pin" },
   { "CaseTypeID": "EXAMPLE", "ID": "oversized", "FieldType": "FixedRadioList", "FieldTypeParameter": "FL_oversizedList", "Label": "Oversized" },
+  { "CaseTypeID": "EXAMPLE", "ID": "rivalBand", "FieldType": "FixedRadioList", "FieldTypeParameter": "RivalComplexityBand", "Label": "Rival band" },
   { "CaseTypeID": "EXAMPLE", "ID": "hearingVenue", "FieldType": "FixedList", "FieldTypeParameter": "FL_hearingVenues", "Label": "Hearing venue" },
   { "CaseTypeID": "EXAMPLE", "ID": "state", "FieldType": "FixedList", "FieldTypeParameter": "State", "Label": "State" },
   { "CaseTypeID": "EXAMPLE", "ID": "parties", "FieldType": "Collection", "FieldTypeParameter": "Party", "Label": "Parties" },
