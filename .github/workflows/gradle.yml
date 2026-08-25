@@ -47,7 +47,7 @@ jobs:
       run: echo "Docs-only change; skipping build."
     - name: Set up JDK
       if: steps.changes.outputs.docs_only != 'true'
-      uses: actions/setup-java@v5
+      uses: actions/setup-java@v6
       with:
         distribution: 'zulu'
         java-version: 21
@@ -175,7 +175,7 @@ jobs:
       run: sudo apt-get update && sudo apt-get install -y postgresql-client
     - name: Set up JDK
       if: steps.changes.outputs.docs_only != 'true'
-      uses: actions/setup-java@v5
+      uses: actions/setup-java@v6
       with:
         distribution: 'zulu'
         java-version: 21
