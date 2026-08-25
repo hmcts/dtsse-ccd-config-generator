@@ -17,7 +17,8 @@ writes for the selected case types have been frozen.
 The task has one implementation with explicit modes:
 
 * `PRELOAD_EVENTS`: scheduled before cutover. Copies immutable source events by event ID high-water
-  mark and inserts provisional parent `case_data` rows so the target FK remains valid.
+  mark, subject to a transaction margin, and inserts provisional parent `case_data` rows so the
+  target FK remains valid.
 * `CUTOVER`: explicit operator action during downtime. Captures the cutover event high-water mark,
   copies the final event delta, copies linked `case_event_significant_items` in a single set-based
   query, refreshes target `case_data` from source, sets final case revisions, resets sequences,
@@ -42,6 +43,13 @@ The preload path keeps the target tables constraint-valid after every committed 
 * `case_event.version` and `case_event.case_revision` are calculated before insert
 * `case_event` user triggers are not disabled
 * resume position is stored as a source `case_event.id` window position after each committed batch
+
+The preload high-water mark excludes events created within the last two minutes. This is four times
+CCD's default 30-second transaction timeout and reduces the risk of advancing past a lower-ID event
+whose transaction commits after a higher-ID event. The source does not expose transaction commit
+timestamps through the FDW table, so `case_event.created_date` is used as the available proxy.
+`CUTOVER` does not apply the margin because source writes must be frozen and in-flight transactions
+drained first.
 
 Preloaded `case_data` is provisional. Its purpose is to satisfy the event FK. Every copied event
 batch inserts missing parent source `case_data` rows for that batch. Significant items are copied
@@ -75,7 +83,8 @@ state:
 * timestamps
 
 The migration configuration hash covers the migration identity. Runtime limits such as
-`eventIdWindowSize`, `significantItemIdWindowSize`, `maxBatchesPerRun`, `maxRunTime`, and `mode` can change between invocations.
+`eventIdWindowSize`, `significantItemIdWindowSize`, `maxBatchesPerRun`,
+`maxRunTime`, and `mode` can change between invocations.
 If the migration identity changes after a task has already created a progress row, the task fails
 fast rather than resuming under different source filters. Operators must either keep the same
 identity configuration or explicitly reset/use a new `task-name` after confirming the target state.
