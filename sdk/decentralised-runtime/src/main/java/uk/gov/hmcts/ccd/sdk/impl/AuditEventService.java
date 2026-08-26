@@ -64,13 +64,8 @@ class AuditEventService {
              significant_item.url as significant_item_url
       from ccd.case_event ce
            join ccd.case_data cd on cd.id = ce.case_data_id
-           left join lateral (
-             select item.description, item."type", item.url
-             from ccd.case_event_significant_items item
-             where item.case_event_id = ce.id
-             order by item.id desc
-             limit 1
-           ) significant_item on true
+           left join ccd.case_event_significant_items significant_item
+             on significant_item.case_event_id = ce.id
       where cd.reference = :caseRef
       %s
       order by ce.id desc
