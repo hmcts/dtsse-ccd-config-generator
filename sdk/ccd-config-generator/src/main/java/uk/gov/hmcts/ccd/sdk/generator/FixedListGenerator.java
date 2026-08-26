@@ -67,6 +67,20 @@ class FixedListGenerator<T, S, R extends HasRole> implements ConfigGenerator<T, 
           Map<String, Object> value = Maps.newHashMap();
           fields.add(value);
           value.put("ListElement", label);
+          // HintText is its own column, carrying text the definition states alongside the label rather
+          // than instead of it: Civil's InterestClaimFrom labels FROM_CLAIM_SUBMIT_DATE "The date you
+          // submit the claim. …" and hints "The interest will then be calculated up until the claim is
+          // settled or a judgment has been made." — the hint a shorter restatement, both present.
+          //
+          // Only emitted where the label came from somewhere else, because the chain above already
+          // spends the hint as a label of last resort. A constant declaring nothing but a hint has that
+          // hint standing in for its label, and writing it here as well would put one string in both
+          // columns, which no definition does and which would silently change output for every such
+          // constant already relying on the fallback.
+          if (annotation != null && !isNullOrEmpty(annotation.hint())
+              && !annotation.hint().equals(label)) {
+            value.put("HintText", annotation.hint());
+          }
           value.put("LiveFrom", JsonUtils.DEFAULT_LIVE_FROM);
           value.put("ID", listId);
           value.put("ListElementCode", enumConstant);
