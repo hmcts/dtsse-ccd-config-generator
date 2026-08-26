@@ -65,6 +65,7 @@ class AuditEventService {
       from ccd.case_event ce
            left join ccd.case_event_significant_items significant_item
              on significant_item.case_event_id = ce.id
+      -- Resolve the case ID once so PostgreSQL can preserve the (case_data_id, id desc) index order.
       where ce.case_data_id = (
         select cd.id
         from ccd.case_data cd
