@@ -1023,15 +1023,18 @@ public class TestWithCCD extends CftlibTest {
 
         var persistenceGet = new HttpGet(
             SERVICE_BASE_URL + "/ccd-persistence/cases/" + caseRef + "/history/" + firstEventId);
-        var persistenceResponse = HttpClientBuilder.create().build().execute(persistenceGet);
-        assertThat(persistenceResponse.getStatusLine().getStatusCode(), equalTo(200));
 
-        Map<String, Object> persistenceResult = mapper.readValue(
-            EntityUtils.toString(persistenceResponse.getEntity()), new TypeReference<>() {});
-        Map persistenceEvent = (Map) persistenceResult.get("event");
-        assertThat(persistenceEvent.get("data"), instanceOf(Map.class));
-        assertThat(((Map) persistenceEvent.get("data")).get("applicationType"), equalTo("soleApplication"));
-        assertThat(persistenceEvent.get("data_classification"), instanceOf(Map.class));
+        try (var httpClient = HttpClientBuilder.create().build();
+             var persistenceResponse = httpClient.execute(persistenceGet)) {
+            assertThat(persistenceResponse.getStatusLine().getStatusCode(), equalTo(200));
+
+            Map<String, Object> persistenceResult = mapper.readValue(
+                EntityUtils.toString(persistenceResponse.getEntity()), new TypeReference<>() {});
+            Map persistenceEvent = (Map) persistenceResult.get("event");
+            assertThat(persistenceEvent.get("data"), instanceOf(Map.class));
+            assertThat(((Map) persistenceEvent.get("data")).get("applicationType"), equalTo("soleApplication"));
+            assertThat(persistenceEvent.get("data_classification"), instanceOf(Map.class));
+        }
     }
 
     @SneakyThrows
