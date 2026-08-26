@@ -2217,8 +2217,8 @@ public final class RetrofitPatchEmitter {
       RetrofitInheritedMembers inherited, ModelSourceIndex.Type target,
       SynthesisPlacement.Adoption adoption) {
     ModelSourceIndex.Type owner = adoption.declaringType();
-    FieldModel member = adoption.field();
-    String memberName = member.getJavaName();
+    String memberName = adoption.field().getJavaName();
+    FieldModel member = reconcileAdopted(adoption, owner, memberName);
     // A hint pinned here cascades onto every CaseEventToComplexTypes row placing the member, exactly as
     // it does for a resolved member (see RetrofitPlannedHints), so the linker compares the event row's
     // HintText against the hint this patch is about to pin rather than the one the source reads today.
@@ -2228,6 +2228,46 @@ public final class RetrofitPatchEmitter {
     // plannedSynthesis record — the member walk resolves this member off the parsed source already. The
     // file is registered so a class whose ONLY edit is an adoption still reaches the renderer.
     editsFor(byFile, target.file);
+  }
+
+  /**
+   * Reconciles an adopted member's definition metadata against the type the existing field is really
+   * declared as — the same {@link TypeReconciler} pass plus {@link #withTypeParameterClass} claim every
+   * RESOLVED member gets, applied on the one path that was reaching the renderer without them.
+   *
+   * <p>Adoption alone lands the definition's {@code @CCD} on a declaration the definition was never
+   * written against. The linker chose that metadata for a FRESH field of the definition's own type, and
+   * the field it lands on is whatever the team already wrote — so where the two types disagree the
+   * annotation has to state the divergence, or the SDK types the column off the declared Java type and
+   * the definition's type has no counterpart. Every other path already reconciles for exactly this
+   * reason ({@link #planComplexTypeMembers} for a complex member, {@link RetrofitModelRebinder} for a
+   * root field); synthesis needs no reconciliation because the field it adds IS of the definition's
+   * type. Adoption is the third case and had neither property.
+   *
+   * <p>A {@code FixedList} member is where the omission shows, because the SDK derives a
+   * {@code FieldTypeParameter} from a declared enum with no annotation at all
+   * ({@code CaseFieldGenerator.resolveSimpleType}) — so an un-reconciled adoption silently emits the
+   * list under the ENUM's Java name while the definition addresses it by another. Civil's
+   * {@code GAHearingDetails} carries four: {@code HearingPreferencesPreferredType} is declared
+   * {@code GAHearingType} where the definition says {@code GAHearingTypeGAspec}, {@code HearingDuration}
+   * is {@code GAHearingDuration} against {@code GAHearingDurationGAspec}, {@code SupportRequirement} is
+   * {@code List<GAHearingSupportRequirements>} against {@code GAHearingSupportRequirementsGAspec}. Each
+   * emitted a full phantom list under the enum's name and left the definition's own list with nothing —
+   * and the class reaches this path rather than the resolved one for a reason unrelated to types: its
+   * PascalCase ids live only on {@code @JsonCreator} parameters, so the resolver binds no property and
+   * every one of its members arrives as definition-only (see {@link #dropExistingFieldCollisions}).
+   *
+   * <p>The reconciliation is read through a {@link ResolvedProperty} standing for the existing
+   * declaration, which is what both passes take and what makes them agree with the resolved path by
+   * construction rather than by a parallel implementation. {@code reachedThroughFqn} is the declaring
+   * class's own FQN for the same reason {@link #adoptExistingMember} makes its claim there: the identity
+   * adoption proved is per DECLARATION.
+   */
+  private FieldModel reconcileAdopted(SynthesisPlacement.Adoption adoption,
+      ModelSourceIndex.Type owner, String memberName) {
+    ResolvedProperty property = new ResolvedProperty(adoption.field().getId(), owner.simpleName,
+        owner.fqn, owner.fqn, memberName, adoption.declaredType(), owner.unit, null, owner.file);
+    return withTypeParameterClass(reconciler.reconcile(adoption.field(), property), property);
   }
 
   private FileEdits editsFor(Map<Path, FileEdits> byFile, Path file) {

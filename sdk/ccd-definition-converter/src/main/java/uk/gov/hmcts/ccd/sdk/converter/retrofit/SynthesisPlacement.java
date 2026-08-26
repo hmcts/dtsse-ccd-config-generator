@@ -5,6 +5,7 @@ import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.Parameter;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
+import com.github.javaparser.ast.type.Type;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -482,11 +483,19 @@ final class SynthesisPlacement {
    * because the field may be declared on a SUPERCLASS of the synthesis target, and it is that
    * declaration the caller must annotate.
    *
+   * <p>{@code declaredType} is the existing field's own Java type, carried because adoption annotates a
+   * declaration the definition's metadata was never written for: the linker chose that metadata for a
+   * FRESH field of the definition's type, and the type it lands on is whatever the team already wrote.
+   * Where the two disagree the {@code @CCD} has to say so, exactly as a resolved member's does, and the
+   * caller cannot recover the type from the {@code field} — its {@code fieldType} is the definition's
+   * side of precisely the disagreement.
+   *
    * @param field the definition member, whose {@code javaName} is the colliding name
    * @param declaringType the parsed type declaring the existing field — the target itself or a
    *     supertype
+   * @param declaredType the existing field's declared Java type
    */
-  record Adoption(FieldModel field, ModelSourceIndex.Type declaringType) {
+  record Adoption(FieldModel field, ModelSourceIndex.Type declaringType, Type declaredType) {
   }
 
   /**
@@ -592,7 +601,7 @@ final class SynthesisPlacement {
       }
       DeclaredField existing = declaredFields.get(javaName);
       if (existing != null && serialisesUnder(existing, field.getId())) {
-        adopted.add(new Adoption(field, existing.declaringType()));
+        adopted.add(new Adoption(field, existing.declaringType(), existing.declaredType()));
         continue;
       }
       dropped.add(field);
@@ -605,8 +614,8 @@ final class SynthesisPlacement {
    * which may be a supertype of the synthesis target, since {@link #declaredFieldNames} walks the whole
    * supertype graph and it is the DECLARATION that must be annotated.
    */
-  private record DeclaredField(
-      ModelSourceIndex.Type declaringType, FieldDeclaration decl, String memberName) {
+  private record DeclaredField(ModelSourceIndex.Type declaringType, FieldDeclaration decl,
+      String memberName, Type declaredType) {
   }
 
   /**
@@ -679,7 +688,7 @@ final class SynthesisPlacement {
     for (FieldDeclaration fieldDecl : type.decl.getFields()) {
       for (var var : fieldDecl.getVariables()) {
         byName.putIfAbsent(var.getNameAsString(),
-            new DeclaredField(type, fieldDecl, var.getNameAsString()));
+            new DeclaredField(type, fieldDecl, var.getNameAsString(), var.getType()));
       }
     }
     if (!type.decl.isClassOrInterfaceDeclaration()) {

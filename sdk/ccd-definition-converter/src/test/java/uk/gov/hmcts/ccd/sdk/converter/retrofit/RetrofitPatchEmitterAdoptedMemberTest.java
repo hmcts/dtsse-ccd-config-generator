@@ -80,6 +80,37 @@ class RetrofitPatchEmitterAdoptedMemberTest {
   }
 
   /**
+   * The other half of the same adoption: the definition's metadata must be RECONCILED against the type the
+   * existing field is really declared as, not copied onto it verbatim.
+   *
+   * <p>Adoption lands the definition's {@code @CCD} on a declaration the definition was never written
+   * against, so where the two types disagree the annotation has to say so — exactly as it does for a
+   * resolved member. A {@code FixedList} is where the omission bites, because the SDK derives a
+   * {@code FieldTypeParameter} from a declared enum with NO annotation at all
+   * ({@code CaseFieldGenerator.resolveSimpleType}): an un-reconciled adoption emits the list under the
+   * enum's own Java name and leaves the definition's list with no counterpart at all. Civil's
+   * {@code GAHearingDetails} carries three of these — {@code HearingPreferencesPreferredType} declared
+   * {@code GAHearingType} where the definition says {@code GAHearingTypeGAspec},
+   * {@code HearingDuration} declared {@code GAHearingDuration} against {@code GAHearingDurationGAspec},
+   * {@code SupportRequirement} declared {@code List<GAHearingSupportRequirements>} against
+   * {@code GAHearingSupportRequirementsGAspec} — each emitting a full phantom list and losing the
+   * definition's own.
+   */
+  @Test
+  void reconcilesAnAdoptedMembersListAgainstTheEnumTheFieldReallyDeclares(@TempDir Path work)
+      throws Exception {
+    Path model = work.resolve("model/src");
+    writeCreatorPinnedEnumDetails(model);
+
+    String diff = emit(model, fixedListDefinition(work));
+
+    assertThat(diff).as("the definition's list id must be named, not the declared enum's")
+        .contains("typeParameterOverride = \"HearingTypeGAspec\"");
+    assertThat(diff).as("and the companion carrying its codes must be pointed at")
+        .contains("typeParameterClass = HearingTypeGAspec.class");
+  }
+
+  /**
    * The model: Civil's {@code GAHearingDetails} shape reduced to one member — a camelCase field whose CCD
    * id is stated only by its {@code @JsonCreator} parameter, and a second field that really is unmatched
    * so the ignore path is exercised either way.
@@ -104,6 +135,60 @@ class RetrofitPatchEmitterAdoptedMemberTest {
         + "}\n");
   }
 
+  /**
+   * The same creator-pinned shape with the member typed as one of the team's own ENUMS whose name is not
+   * the definition's list id — Civil's {@code hearingPreferencesPreferredType}, declared
+   * {@code GAHearingType} where the definition's list is {@code GAHearingTypeGAspec}.
+   */
+  private void writeCreatorPinnedEnumDetails(Path model) throws Exception {
+    write(model, "m", "HearingType", "package m;\npublic enum HearingType {\n"
+        + "    IN_PERSON,\n    VIDEO\n}\n");
+    write(model, "m", "GAHearingDetails", "package m;\n"
+        + "import com.fasterxml.jackson.annotation.JsonCreator;\n"
+        + "import com.fasterxml.jackson.annotation.JsonProperty;\n"
+        + "import lombok.Data;\n"
+        + "@Data\n"
+        + "public class GAHearingDetails {\n"
+        + "    private HearingType hearingPreferencesPreferredType;\n"
+        + "    @JsonCreator\n"
+        + "    GAHearingDetails(@JsonProperty(\"HearingPreferencesPreferredType\")"
+        + " HearingType hearingPreferencesPreferredType) {\n"
+        + "        this.hearingPreferencesPreferredType = hearingPreferencesPreferredType;\n"
+        + "    }\n"
+        + "}\n");
+    write(model, "m", "CaseData", "package m;\nimport lombok.Data;\n@Data\n"
+        + "public class CaseData {\n"
+        + "    private String applicantName;\n"
+        + "    private GAHearingDetails generalAppHearingDetails;\n"
+        + "}\n");
+  }
+
+  /**
+   * A definition whose adopted member is a {@code FixedRadioList} of a list id NO model enum is named
+   * after — so only the reconciliation can make the emitted column reference it.
+   */
+  private Path fixedListDefinition(Path work) throws Exception {
+    Path definition = work.resolve("definition");
+    writeSheet(definition, "CaseType", "[{ \"ID\": \"EXAMPLE\", \"Name\": \"Example\","
+        + " \"Description\": \"Adopted-member fixture\", \"JurisdictionID\": \"EX\" }]");
+    writeSheet(definition, "CaseField",
+        "[{ \"CaseTypeID\": \"EXAMPLE\", \"ID\": \"applicantName\", \"FieldType\": \"Text\","
+        + " \"Label\": \"Applicant name\" },"
+        + "{ \"CaseTypeID\": \"EXAMPLE\", \"ID\": \"generalAppHearingDetails\","
+        + " \"FieldType\": \"GAHearingDetails\", \"Label\": \"Hearing details\" }]");
+    writeSheet(definition, "ComplexTypes",
+        "[{ \"ID\": \"GAHearingDetails\","
+        + " \"ListElementCode\": \"HearingPreferencesPreferredType\","
+        + " \"FieldType\": \"FixedRadioList\", \"FieldTypeParameter\": \"HearingTypeGAspec\","
+        + " \"ElementLabel\": \"Preferred type of hearing\", \"Searchable\": \"N\" }]");
+    writeSheet(definition, "FixedLists",
+        "[{ \"ID\": \"HearingTypeGAspec\", \"ListElementCode\": \"IN_PERSON\","
+        + " \"ListElement\": \"In person\" },"
+        + "{ \"ID\": \"HearingTypeGAspec\", \"ListElementCode\": \"VIDEO\","
+        + " \"ListElement\": \"Video\" }]");
+    return definition.toAbsolutePath();
+  }
+
   /** Runs reader → linker → rebind → patch emitter, as {@link RetrofitConverter} does. */
   private String emit(Path modelRoot, Path definition) {
     ConversionOptions options = ConversionOptions.builder()
@@ -123,8 +208,13 @@ class RetrofitPatchEmitterAdoptedMemberTest {
     CaseTypeModel linked = new DefaultDefinitionLinker().link(ir, options, new GapCollector());
     CaseTypeModel rebound = new RetrofitModelRebinder(matcher.index(), matcher.resolution(),
         matcher.root()).rebind(linked);
-    return new RetrofitPatchEmitter(matcher.index(), matcher.resolution(), rebound, matcher.root(),
-        CONFIG_PACKAGE, 0, "", RetrofitPinnedNames.empty(), Map.of()).emit().unifiedDiff();
+    RetrofitPatchEmitter emitter =
+        new RetrofitPatchEmitter(matcher.index(), matcher.resolution(), rebound, matcher.root(),
+            CONFIG_PACKAGE, 0, "", RetrofitPinnedNames.empty(), Map.of());
+    // The pre-drop lists, as every caller binds them: the rebinder removes exactly the lists a model
+    // enum already serves, and it is the remainder a retargeted field must be pointed at.
+    emitter.bindDefinitionFixedLists(linked.getFixedLists());
+    return emitter.emit().unifiedDiff();
   }
 
   /**
