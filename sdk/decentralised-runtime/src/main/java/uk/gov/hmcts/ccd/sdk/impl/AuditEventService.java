@@ -74,6 +74,8 @@ class AuditEventService {
       %s
       order by ce.id desc
       """;
+  // We create two different final SQL queries rather than parameterising the template at runtime for performance;
+  // fetching a single event vs bulk require different optimal query plans.
   private static final String LOAD_HISTORY_SQL = LOAD_HISTORY_SQL_TEMPLATE.formatted(
       "'{}'::jsonb",
       ""
