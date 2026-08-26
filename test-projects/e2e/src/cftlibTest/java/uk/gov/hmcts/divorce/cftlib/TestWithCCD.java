@@ -537,9 +537,10 @@ public class TestWithCCD extends CftlibTest {
         assertThat(response.getStatusLine().getStatusCode(), equalTo(200));
         var auditEvents = (List) result.get("auditEvents");
         assertThat(auditEvents.size(), equalTo(3));
-        var eventData = ((Map)auditEvents.get(0)).get("data");
-        var caseData = mapper.readValue(mapper.writeValueAsString(eventData), CaseData.class);
-        assertThat(caseData.getNotes().size(), equalTo(2));
+        for (Object event : auditEvents) {
+            assertThat(((Map) event).get("data"), equalTo(Map.of()));
+            assertThat(((Map) event).get("data_classification"), equalTo(Map.of()));
+        }
         var firstEvent = (Map) auditEvents.getLast();
         // First event should be in the 'Holding' state
         assertThat(firstEvent.get("state_id"), equalTo("Submitted"));
@@ -1019,6 +1020,21 @@ public class TestWithCCD extends CftlibTest {
         // The 'event_id' is the string identifier from the definition
         assertThat(event.get("event_id"), equalTo("create-test-application"));
         assertThat(event.get("event_name"), equalTo("Create test case"));
+
+        var persistenceGet = new HttpGet(
+            SERVICE_BASE_URL + "/ccd-persistence/cases/" + caseRef + "/history/" + firstEventId);
+
+        try (var httpClient = HttpClientBuilder.create().build();
+             var persistenceResponse = httpClient.execute(persistenceGet)) {
+            assertThat(persistenceResponse.getStatusLine().getStatusCode(), equalTo(200));
+
+            Map<String, Object> persistenceResult = mapper.readValue(
+                EntityUtils.toString(persistenceResponse.getEntity()), new TypeReference<>() {});
+            Map persistenceEvent = (Map) persistenceResult.get("event");
+            assertThat(persistenceEvent.get("data"), instanceOf(Map.class));
+            assertThat(((Map) persistenceEvent.get("data")).get("applicationType"), equalTo("soleApplication"));
+            assertThat(persistenceEvent.get("data_classification"), instanceOf(Map.class));
+        }
     }
 
     @SneakyThrows
