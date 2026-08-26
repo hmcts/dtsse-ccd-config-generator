@@ -39,6 +39,43 @@ import uk.gov.hmcts.reform.ccd.client.model.CaseDetails;
 @Service(value = "uk.gov.hmcts.ccd.sdk.impl.AuditEventService")
 class AuditEventService {
 
+  private static final String LOAD_HISTORY_SQL = """
+      select ce.id,
+             ce.created_date,
+             ce.security_classification,
+             ce.case_type_version,
+             ce.event_id,
+             ce.summary,
+             ce.description,
+             ce.user_id,
+             ce.case_type_id,
+             ce.state_id,
+             ce.user_first_name,
+             ce.user_last_name,
+             ce.event_name,
+             ce.state_name,
+             ce.proxied_by,
+             ce.proxied_by_first_name,
+             ce.proxied_by_last_name,
+             case when :includeData then ce.data else '{}'::jsonb end as data,
+             cd.reference as "case_reference",
+             significant_item.description as significant_item_description,
+             significant_item."type"::text as significant_item_type,
+             significant_item.url as significant_item_url
+      from ccd.case_event ce
+           join ccd.case_data cd on cd.id = ce.case_data_id
+           left join lateral (
+             select item.description, item."type", item.url
+             from ccd.case_event_significant_items item
+             where item.case_event_id = ce.id
+             order by item.id desc
+             limit 1
+           ) significant_item on true
+      where cd.reference = :caseRef
+        and (cast(:eventId as bigint) is null or ce.id = :eventId)
+      order by ce.id desc
+      """;
+
   private final NamedParameterJdbcTemplate ndb;
   private final ObjectMapper defaultMapper;
   private final Optional<MessagePublisher> publisher;
@@ -59,51 +96,18 @@ class AuditEventService {
   }
 
   public List<DecentralisedAuditEvent> loadHistory(long caseRef) {
-    final String sql = """
-        select ce.*,
-               cd.reference as "case_reference",
-               significant_item.description as significant_item_description,
-               significant_item."type"::text as significant_item_type,
-               significant_item.url as significant_item_url
-        from ccd.case_event ce
-             join ccd.case_data cd on cd.id = ce.case_data_id
-             left join lateral (
-               select item.description, item."type", item.url
-               from ccd.case_event_significant_items item
-               where item.case_event_id = ce.id
-               order by item.id desc
-               limit 1
-             ) significant_item on true
-        where cd.reference = :caseRef
-        order by id desc
-        """;
-
-    return ndb.query(sql, Map.of("caseRef", caseRef), this::mapAuditEvent);
+    var parameters = new MapSqlParameterSource()
+        .addValue("caseRef", caseRef)
+        .addValue("eventId", null)
+        .addValue("includeData", false);
+    return ndb.query(LOAD_HISTORY_SQL, parameters, this::mapAuditEvent);
   }
 
   public DecentralisedAuditEvent loadHistoryEvent(long caseRef, long eventId) {
-    final String sql = """
-        select ce.*,
-               cd.reference as "case_reference",
-               significant_item.description as significant_item_description,
-               significant_item."type"::text as significant_item_type,
-               significant_item.url as significant_item_url
-        from ccd.case_event ce
-             join ccd.case_data cd on cd.id = ce.case_data_id
-             left join lateral (
-               select item.description, item."type", item.url
-               from ccd.case_event_significant_items item
-               where item.case_event_id = ce.id
-               order by item.id desc
-               limit 1
-             ) significant_item on true
-        where cd.reference = :caseRef and ce.id = :eventId
-        """;
-
     try {
       return ndb.queryForObject(
-          sql,
-          Map.of("caseRef", caseRef, "eventId", eventId),
+          LOAD_HISTORY_SQL,
+          Map.of("caseRef", caseRef, "eventId", eventId, "includeData", true),
           this::mapAuditEvent
       );
     } catch (EmptyResultDataAccessException e) {
