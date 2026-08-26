@@ -39,7 +39,7 @@ import uk.gov.hmcts.reform.ccd.client.model.CaseDetails;
 @Service(value = "uk.gov.hmcts.ccd.sdk.impl.AuditEventService")
 class AuditEventService {
 
-  private static final String LOAD_HISTORY_SQL = """
+  private static final String LOAD_HISTORY_SQL_TEMPLATE = """
       select ce.id,
              ce.created_date,
              ce.security_classification,
@@ -57,7 +57,7 @@ class AuditEventService {
              ce.proxied_by,
              ce.proxied_by_first_name,
              ce.proxied_by_last_name,
-             case when :includeData then ce.data else '{}'::jsonb end as data,
+             %s as data,
              cd.reference as "case_reference",
              significant_item.description as significant_item_description,
              significant_item."type"::text as significant_item_type,
@@ -72,9 +72,17 @@ class AuditEventService {
              limit 1
            ) significant_item on true
       where cd.reference = :caseRef
-        and (cast(:eventId as bigint) is null or ce.id = :eventId)
+      %s
       order by ce.id desc
       """;
+  private static final String LOAD_HISTORY_SQL = LOAD_HISTORY_SQL_TEMPLATE.formatted(
+      "'{}'::jsonb",
+      ""
+  );
+  private static final String LOAD_HISTORY_EVENT_SQL = LOAD_HISTORY_SQL_TEMPLATE.formatted(
+      "ce.data",
+      "and ce.id = :eventId"
+  );
 
   private final NamedParameterJdbcTemplate ndb;
   private final ObjectMapper defaultMapper;
@@ -96,18 +104,14 @@ class AuditEventService {
   }
 
   public List<DecentralisedAuditEvent> loadHistory(long caseRef) {
-    var parameters = new MapSqlParameterSource()
-        .addValue("caseRef", caseRef)
-        .addValue("eventId", null)
-        .addValue("includeData", false);
-    return ndb.query(LOAD_HISTORY_SQL, parameters, this::mapAuditEvent);
+    return ndb.query(LOAD_HISTORY_SQL, Map.of("caseRef", caseRef), this::mapAuditEvent);
   }
 
   public DecentralisedAuditEvent loadHistoryEvent(long caseRef, long eventId) {
     try {
       return ndb.queryForObject(
-          LOAD_HISTORY_SQL,
-          Map.of("caseRef", caseRef, "eventId", eventId, "includeData", true),
+          LOAD_HISTORY_EVENT_SQL,
+          Map.of("caseRef", caseRef, "eventId", eventId),
           this::mapAuditEvent
       );
     } catch (EmptyResultDataAccessException e) {
