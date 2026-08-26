@@ -58,15 +58,18 @@ class AuditEventService {
              ce.proxied_by_first_name,
              ce.proxied_by_last_name,
              %s as data,
-             cd.reference as "case_reference",
+             cast(:caseRef as bigint) as "case_reference",
              significant_item.description as significant_item_description,
              significant_item."type"::text as significant_item_type,
              significant_item.url as significant_item_url
       from ccd.case_event ce
-           join ccd.case_data cd on cd.id = ce.case_data_id
            left join ccd.case_event_significant_items significant_item
              on significant_item.case_event_id = ce.id
-      where cd.reference = :caseRef
+      where ce.case_data_id = (
+        select cd.id
+        from ccd.case_data cd
+        where cd.reference = :caseRef
+      )
       %s
       order by ce.id desc
       """;
