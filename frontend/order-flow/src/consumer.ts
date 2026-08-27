@@ -16,9 +16,11 @@ if (!checkbox) {
 
 const orderCheckbox = checkbox;
 
+editor.setClause("order-text", "IT IS ORDERED THAT:");
+
 function updateOrderText(): void {
   if (orderCheckbox.checked) {
-    editor.setClause("cheese-text", "IT IS ORDERED THAT: " + new Date());
+    editor.setClause("cheese-text", "Bacon shall be had ");
   } else {
     editor.removeClause("cheese-text");
   }

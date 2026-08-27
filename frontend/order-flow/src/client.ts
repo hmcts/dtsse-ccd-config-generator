@@ -91,9 +91,7 @@ function formatHtml(html: string): string {
 }
 
 let exampleNode = editorSchema.node("paragraph", { id: "order-text" }, [editorSchema.text("IT IS ORDERED THAT:")]);
-let doc = editorSchema.node("doc", null, [
-  exampleNode
-]);
+const doc = editorSchema.topNodeType.createAndFill()!;
 
 let purplePlugin = new Plugin({
   props: {
@@ -214,7 +212,7 @@ export function createOrderEditor(selector: string): OrderEditor {
     const clauseNode = editorSchema.node(
       "paragraph",
       { id },
-      text ? [editorSchema.text(text)] : undefined,
+      editorSchema.text(text)
     );
     const existingClause = findClause(id);
 
@@ -226,7 +224,13 @@ export function createOrderEditor(selector: string): OrderEditor {
           existingClause.position + existingClause.node.nodeSize,
           clauseNode,
         )
-      : view.state.tr.insert(view.state.doc.content.size, clauseNode);
+      : view.state.doc.textContent
+        ? view.state.tr.insert(view.state.doc.content.size, clauseNode)
+        : view.state.tr.replaceWith(
+            0,
+            view.state.doc.content.size,
+            clauseNode,
+          );
 
     view.dispatch(transaction);
   }
