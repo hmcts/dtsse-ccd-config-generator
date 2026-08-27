@@ -71,20 +71,9 @@ function formatHtml(html: string): string {
 }
 
 let doc = editorSchema.node("doc", null, [
-  editorSchema.node("paragraph", null, [editorSchema.text("One.")]),
-  editorSchema.node("paragraph", null, [editorSchema.text("Two!")])
+  editorSchema.node("paragraph", {"foo": 1}, [editorSchema.text("IT IS ORDERED THAT:")])
 ]);
 let otherdoc = DOMParser.fromSchema(editorSchema).parse(content);
-
-let purplePlugin = new Plugin({
-  props: {
-    decorations(state) {
-      return DecorationSet.create(state.doc, [
-        Decoration.inline(0, state.doc.content.size, {class: "alien"})
-      ])
-    }
-  }
-});
 
 const state = EditorState.create({
   doc: doc,
@@ -94,7 +83,6 @@ const state = EditorState.create({
     keymap(baseKeymap),
     dropCursor(),
     gapCursor(),
-    purplePlugin,
     menuBar({
       floating: true,
       content: buildMenuItems(editorSchema).fullMenu,
