@@ -88,7 +88,6 @@ function formatHtml(html: string): string {
   }).join("\n");
 }
 
-let exampleNode = editorSchema.node("paragraph", { id: "order-text" }, [editorSchema.text("IT IS ORDERED THAT:")]);
 const doc = editorSchema.topNodeType.createAndFill()!;
 
 let purplePlugin = new Plugin({
@@ -97,9 +96,10 @@ let purplePlugin = new Plugin({
       const decorations: Decoration[] = [];
 
       state.doc.descendants((node, pos) => {
+        const original = originalClauses.get(node.attrs.id);
         if (
-          node.attrs.id === "order-text" &&
-          !node.eq(exampleNode)
+          original != undefined &&
+          !node.eq(original)
         ) {
           decorations.push(
             Decoration.node(pos, pos + node.nodeSize, {
@@ -127,11 +127,12 @@ let purplePlugin = new Plugin({
       if (/revert-node-button/.test((event.target as HTMLElement).className)) {
         const nodePosition = Number((event.target as HTMLElement).dataset.nodePosition);
         const node = view.state.doc.nodeAt(nodePosition);
+        const original = originalClauses.get(node?.attrs.id);
 
-        if (node?.attrs.id === "order-text")
+        if (node != null && original != null)
           view.dispatch(
             view.state.tr
-              .replaceWith(nodePosition, nodePosition + node.nodeSize, exampleNode)
+              .replaceWith(nodePosition, nodePosition + node.nodeSize, original)
               .scrollIntoView(),
           );
 
@@ -217,8 +218,8 @@ export function createOrderEditor(selector: string): OrderEditor {
     );
     const existingClause = findClause(id);
 
-    if (existingClause?.node.eq(clauseNode)) return;
     originalClauses.set(id, clauseNode);
+    if (existingClause?.node.eq(clauseNode)) return;
 
     const transaction = existingClause
       ? view.state.tr.replaceWith(
@@ -240,8 +241,8 @@ export function createOrderEditor(selector: string): OrderEditor {
   function removeClause(id: string): void {
     const existingClause = findClause(id);
 
-    if (!existingClause) return;
     originalClauses.delete(id);
+    if (!existingClause) return;
 
     view.dispatch(
       view.state.tr.delete(
