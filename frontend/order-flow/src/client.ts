@@ -31,9 +31,6 @@ if (!editor || !content) {
   throw new Error("The editor page is missing its ProseMirror mount points");
 }
 
-const documentDebug = document.createElement("pre");
-editor.after(documentDebug);
-
 const editorSchema = new Schema({
   nodes: addListNodes(
     schema.spec.nodes,
@@ -42,6 +39,33 @@ const editorSchema = new Schema({
   ),
   marks: schema.spec.marks,
 });
+
+function schemaSection(title: string, names: string[]): HTMLElement {
+  const section = document.createElement("section");
+  const heading = document.createElement("h2");
+  const contents = document.createElement("pre");
+
+  heading.textContent = title;
+  contents.textContent = names.join("\n");
+  section.append(heading, contents);
+
+  return section;
+}
+
+const nodesDebug = schemaSection(
+  "Schema nodes",
+  Object.keys(editorSchema.nodes),
+);
+const marksDebug = schemaSection(
+  "Schema marks",
+  Object.keys(editorSchema.marks),
+);
+const documentSection = document.createElement("section");
+const documentHeading = document.createElement("h2");
+const documentDebug = document.createElement("pre");
+documentHeading.textContent = "Document structure";
+documentSection.append(documentHeading, documentDebug);
+editor.after(documentSection, nodesDebug, marksDebug);
 
 const state = EditorState.create({
   doc: DOMParser.fromSchema(editorSchema).parse(content),
