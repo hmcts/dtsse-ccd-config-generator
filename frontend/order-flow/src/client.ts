@@ -171,6 +171,8 @@ export interface OrderEditor {
   removeClause(id: string): void;
 }
 
+const originalClauses = new Map<string, ProseMirrorNode>();
+
 export function createOrderEditor(selector: string): OrderEditor {
   const editor = document.querySelector<HTMLElement>(selector);
 
@@ -206,6 +208,7 @@ export function createOrderEditor(selector: string): OrderEditor {
     return clause;
   }
 
+
   function setClause(id: string, text: string): void {
     const clauseNode = editorSchema.node(
       "paragraph",
@@ -215,6 +218,7 @@ export function createOrderEditor(selector: string): OrderEditor {
     const existingClause = findClause(id);
 
     if (existingClause?.node.eq(clauseNode)) return;
+    originalClauses.set(id, clauseNode);
 
     const transaction = existingClause
       ? view.state.tr.replaceWith(
@@ -237,6 +241,7 @@ export function createOrderEditor(selector: string): OrderEditor {
     const existingClause = findClause(id);
 
     if (!existingClause) return;
+    originalClauses.delete(id);
 
     view.dispatch(
       view.state.tr.delete(
