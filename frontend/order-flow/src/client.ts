@@ -30,8 +30,9 @@ const documentDebug = document.querySelector<HTMLElement>("#document-debug");
 const htmlDebug = document.querySelector<HTMLElement>("#html-debug");
 const nodesDebug = document.querySelector<HTMLElement>("#nodes-debug");
 const marksDebug = document.querySelector<HTMLElement>("#marks-debug");
+const schemaDebug = document.querySelector<HTMLElement>("#schema-debug");
 
-if (!editor || !content || !documentDebug || !htmlDebug || !nodesDebug || !marksDebug) {
+if (!editor || !content || !documentDebug || !htmlDebug || !nodesDebug || !marksDebug || !schemaDebug) {
   throw new Error("The editor page is missing its ProseMirror mount points");
 }
 
@@ -58,6 +59,14 @@ const editorSchema = new Schema({
 
 nodesDebug.textContent = Object.keys(editorSchema.nodes).join("\n");
 marksDebug.textContent = Object.keys(editorSchema.marks).join("\n");
+schemaDebug.textContent = JSON.stringify(
+  {
+    nodes: editorSchema.spec.nodes.toObject(),
+    marks: editorSchema.spec.marks.toObject(),
+  },
+  (_key, value) => typeof value === "function" ? "[Function]" : value,
+  2,
+);
 
 function formatHtml(html: string): string {
   let depth = 0;
