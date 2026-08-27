@@ -48,9 +48,18 @@ const allowedSchema = new Schema({
   ),
 });
 
+const paragraphSpec = allowedSchema.spec.nodes.get("paragraph")!;
+const nodesWithParagraphId = allowedSchema.spec.nodes.update("paragraph", {
+  ...paragraphSpec,
+  attrs: {
+    ...paragraphSpec.attrs,
+    id: { default: null },
+  },
+});
+
 const editorSchema = new Schema({
   nodes: addListNodes(
-    allowedSchema.spec.nodes,
+    nodesWithParagraphId,
     "paragraph block*",
     "block",
   ),
@@ -80,7 +89,7 @@ function formatHtml(html: string): string {
 }
 
 let doc = editorSchema.node("doc", null, [
-  editorSchema.node("paragraph", {"foo": 1}, [editorSchema.text("IT IS ORDERED THAT:")])
+  editorSchema.node("paragraph", { id: "order-text" }, [editorSchema.text("IT IS ORDERED THAT:")])
 ]);
 let otherdoc = DOMParser.fromSchema(editorSchema).parse(content);
 
