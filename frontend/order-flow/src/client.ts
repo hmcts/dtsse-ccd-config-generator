@@ -126,6 +126,18 @@ let purplePlugin = new Plugin({
               class: "user-authored-paragraph",
             }),
           );
+          decorations.push(
+            Decoration.widget(pos + 1, () => {
+              const button = document.createElement("button");
+              button.type = "button";
+              button.className = "revert-node-button";
+              button.dataset.nodePosition = String(pos);
+              button.setAttribute("aria-label", "Revert this paragraph");
+              button.title = "Revert this paragraph";
+              button.textContent = "↶";
+              return button;
+            }, { side: -1 }),
+          );
         }
       });
 
@@ -137,12 +149,20 @@ let purplePlugin = new Plugin({
         const node = view.state.doc.nodeAt(nodePosition);
         const original = originalClauses.get(node?.attrs.id);
 
-        if (node != null && original != null)
-          view.dispatch(
-            view.state.tr
-              .replaceWith(nodePosition, nodePosition + node.nodeSize, original)
-              .scrollIntoView(),
-          );
+        if (node != null)
+          if (original != null) {
+            view.dispatch(
+              view.state.tr
+                .replaceWith(nodePosition, nodePosition + node.nodeSize, original)
+                .scrollIntoView(),
+            );
+          } else {
+            view.dispatch(
+              view.state.tr
+                .deleteRange(nodePosition, nodePosition + node.nodeSize)
+                .scrollIntoView(),
+            );
+          }
 
         view.focus();
         return true;
