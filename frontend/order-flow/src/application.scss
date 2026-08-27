@@ -50,8 +50,12 @@
   outline-offset: 0;
 }
 
-.alien {
-  color: red;
+.user-authored-paragraph {
+  box-sizing: border-box;
+  padding: govuk-spacing(2) govuk-spacing(3);
+  border-left: 4px solid govuk-colour("green");
+  background: govuk-tint(govuk-colour("green"), 30);
+  background: govuk-colour("green", $variant: "tint-80");
 }
 
 .ProseMirror-focused {

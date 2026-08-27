@@ -54,6 +54,7 @@ const nodesWithParagraphId = allowedSchema.spec.nodes.update("paragraph", {
   attrs: {
     ...paragraphSpec.attrs,
     id: { default: null },
+    provenance: { default: "user" },
   },
 });
 
@@ -117,6 +118,13 @@ let purplePlugin = new Plugin({
               button.textContent = "↶";
               return button;
             }, { side: -1 }),
+          );
+        }
+        if (node.attrs.provenance === "user") {
+          decorations.push(
+            Decoration.node(pos, pos + node.nodeSize, {
+              class: "user-authored-paragraph",
+            }),
           );
         }
       });
@@ -213,7 +221,7 @@ export function createOrderEditor(selector: string): OrderEditor {
   function setClause(id: string, text: string): void {
     const clauseNode = editorSchema.node(
       "paragraph",
-      { id },
+      { id, provenance: "system" },
       editorSchema.text(text)
     );
     const existingClause = findClause(id);
