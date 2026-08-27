@@ -31,6 +31,9 @@ if (!editor || !content) {
   throw new Error("The editor page is missing its ProseMirror mount points");
 }
 
+const documentDebug = document.createElement("pre");
+editor.after(documentDebug);
+
 const editorSchema = new Schema({
   nodes: addListNodes(
     schema.spec.nodes,
@@ -63,4 +66,17 @@ const state = EditorState.create({
   ],
 });
 
-new EditorView(editor, { state });
+const view = new EditorView(editor, {
+  state,
+  dispatchTransaction(transaction) {
+    const nextState = view.state.apply(transaction);
+    view.updateState(nextState);
+    documentDebug.textContent = JSON.stringify(
+      nextState.doc.toJSON(),
+      null,
+      2,
+    );
+  },
+});
+
+documentDebug.textContent = JSON.stringify(view.state.doc.toJSON(), null, 2);
