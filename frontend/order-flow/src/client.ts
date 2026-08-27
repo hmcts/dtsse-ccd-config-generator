@@ -10,7 +10,6 @@ import { history } from "prosemirror-history";
 import { keymap } from "prosemirror-keymap";
 import { menuBar } from "prosemirror-menu";
 import {
-  DOMParser,
   type Node as ProseMirrorNode,
   Schema,
 } from "prosemirror-model";
@@ -24,14 +23,13 @@ import "prosemirror-menu/style/menu.css";
 import "prosemirror-example-setup/style/style.css";
 import "prosemirror-gapcursor/style/gapcursor.css";
 
-const content = document.querySelector<HTMLElement>("#content");
 const documentDebug = document.querySelector<HTMLElement>("#document-debug");
 const htmlDebug = document.querySelector<HTMLElement>("#html-debug");
 const nodesDebug = document.querySelector<HTMLElement>("#nodes-debug");
 const marksDebug = document.querySelector<HTMLElement>("#marks-debug");
 const schemaDebug = document.querySelector<HTMLElement>("#schema-debug");
 
-if (!content || !documentDebug || !htmlDebug || !nodesDebug || !marksDebug || !schemaDebug) {
+if (!documentDebug || !htmlDebug || !nodesDebug || !marksDebug || !schemaDebug) {
   throw new Error("The editor page is missing its ProseMirror mount points");
 }
 
