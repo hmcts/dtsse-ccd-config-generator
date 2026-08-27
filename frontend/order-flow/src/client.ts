@@ -31,13 +31,25 @@ if (!editor || !content) {
   throw new Error("The editor page is missing its ProseMirror mount points");
 }
 
+const allowedNodeNames = ["doc", "paragraph", "heading", "text"];
+const allowedMarkNames = ["em", "strong"];
+
+const allowedSchema = new Schema({
+  nodes: Object.fromEntries(
+    allowedNodeNames.map((name) => [name, schema.spec.nodes.get(name)!]),
+  ),
+  marks: Object.fromEntries(
+    allowedMarkNames.map((name) => [name, schema.spec.marks.get(name)!]),
+  ),
+});
+
 const editorSchema = new Schema({
   nodes: addListNodes(
-    schema.spec.nodes,
+    allowedSchema.spec.nodes,
     "paragraph block*",
     "block",
   ),
-  marks: schema.spec.marks,
+  marks: allowedSchema.spec.marks,
 });
 
 function schemaSection(title: string, names: string[]): HTMLElement {
