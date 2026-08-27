@@ -1,4 +1,5 @@
 {% extends "govuk/template.njk" %}
+{% from "govuk/components/checkboxes/macro.njk" import govukCheckboxes %}
 {% from "govuk/components/date-input/macro.njk" import govukDateInput %}
 
 {% block pageTitle %}ProseMirror editor{% endblock %}
@@ -15,6 +16,22 @@
   <div class="govuk-grid-row">
     <div class="govuk-grid-column-two-thirds">
       <form id="order-form" novalidate>
+        {{ govukCheckboxes({
+          name: "test-checkbox",
+          fieldset: {
+            legend: {
+              text: "Test checkbox",
+              classes: "govuk-fieldset__legend--m"
+            }
+          },
+          items: [
+            {
+              value: "checked",
+              text: "Check this box"
+            }
+          ]
+        }) }}
+
         {{ govukDateInput({
           id: "order-date",
           namePrefix: "order-date",
@@ -69,7 +86,7 @@
 
 {% block bodyEnd %}
   {% if development %}
-    <script type="module" src="/src/client.ts"></script>
+    <script type="module" src="/src/consumer.ts"></script>
   {% else %}
     <script type="module" src="/assets/application.js"></script>
   {% endif %}

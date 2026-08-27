@@ -14,6 +14,8 @@ describe("order flow page", () => {
 
     assert.match(response.text, /class="govuk-template"/);
     assert.match(response.text, /id="main-content"/);
+    assert.match(response.text, /name="test-checkbox"/);
+    assert.match(response.text, /Check this box/);
     assert.match(response.text, /id="editor"/);
     assert.match(response.text, /Hello ProseMirror/);
     assert.match(response.text, /\/assets\/application\.css/);

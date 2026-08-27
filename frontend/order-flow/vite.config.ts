@@ -27,7 +27,7 @@ export default defineConfig({
     emptyOutDir: true,
     outDir: "dist/public",
     rollupOptions: {
-      input: path.resolve("src/client.ts"),
+      input: path.resolve("src/consumer.ts"),
       output: {
         entryFileNames: "assets/application.js",
         assetFileNames: (assetInfo) =>
