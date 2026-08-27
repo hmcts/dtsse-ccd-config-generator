@@ -13,6 +13,10 @@
   outline: none;
 }
 
+.alien {
+  color: red;
+}
+
 .ProseMirror-focused {
   outline: $govuk-focus-width solid $govuk-focus-colour;
   outline-offset: -$govuk-focus-width;

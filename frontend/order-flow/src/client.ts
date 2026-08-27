@@ -12,7 +12,7 @@ import { keymap } from "prosemirror-keymap";
 import { menuBar } from "prosemirror-menu";
 import { DOMParser, Schema } from "prosemirror-model";
 import { EditorState, Plugin } from "prosemirror-state";
-import { EditorView } from "prosemirror-view";
+import {Decoration, DecorationSet, EditorView} from "prosemirror-view";
 import { schema } from "prosemirror-schema-basic";
 import { addListNodes } from "prosemirror-schema-list";
 
@@ -27,11 +27,11 @@ initAll();
 const editor = document.querySelector<HTMLElement>("#editor");
 const content = document.querySelector<HTMLElement>("#content");
 const documentDebug = document.querySelector<HTMLElement>("#document-debug");
-const schemaDebug = document.querySelector<HTMLElement>("#schema-debug");
+const htmlDebug = document.querySelector<HTMLElement>("#html-debug");
 const nodesDebug = document.querySelector<HTMLElement>("#nodes-debug");
 const marksDebug = document.querySelector<HTMLElement>("#marks-debug");
 
-if (!editor || !content || !documentDebug || !schemaDebug || !nodesDebug || !marksDebug) {
+if (!editor || !content || !documentDebug || !htmlDebug || !nodesDebug || !marksDebug) {
   throw new Error("The editor page is missing its ProseMirror mount points");
 }
 
@@ -56,22 +56,36 @@ const editorSchema = new Schema({
   marks: allowedSchema.spec.marks,
 });
 
-schemaDebug.textContent = JSON.stringify(
-  {
-    nodes: editorSchema.spec.nodes.toObject(),
-    marks: editorSchema.spec.marks.toObject(),
-  },
-  (_key, value) => typeof value === "function" ? "[Function]" : value,
-  2,
-);
 nodesDebug.textContent = Object.keys(editorSchema.nodes).join("\n");
 marksDebug.textContent = Object.keys(editorSchema.marks).join("\n");
+
+function formatHtml(html: string): string {
+  let depth = 0;
+
+  return html.replace(/></g, ">\n<").split("\n").map((line) => {
+    if (line.startsWith("</")) depth--;
+    const indentedLine = `${"  ".repeat(depth)}${line}`;
+    if (/^<[^/!][^>]*>$/.test(line)) depth++;
+    return indentedLine;
+  }).join("\n");
+}
 
 let doc = editorSchema.node("doc", null, [
   editorSchema.node("paragraph", null, [editorSchema.text("One.")]),
   editorSchema.node("paragraph", null, [editorSchema.text("Two!")])
 ]);
 let otherdoc = DOMParser.fromSchema(editorSchema).parse(content);
+
+let purplePlugin = new Plugin({
+  props: {
+    decorations(state) {
+      return DecorationSet.create(state.doc, [
+        Decoration.inline(0, state.doc.content.size, {class: "alien"})
+      ])
+    }
+  }
+});
+
 const state = EditorState.create({
   doc: doc,
   plugins: [
@@ -80,6 +94,7 @@ const state = EditorState.create({
     keymap(baseKeymap),
     dropCursor(),
     gapCursor(),
+    purplePlugin,
     menuBar({
       floating: true,
       content: buildMenuItems(editorSchema).fullMenu,
@@ -105,7 +120,9 @@ const view = new EditorView(editor, {
       null,
       2,
     );
+    htmlDebug.textContent = formatHtml(view.dom.outerHTML);
   },
 });
 
 documentDebug.textContent = JSON.stringify(view.state.doc.toJSON(), null, 2);
+htmlDebug.textContent = formatHtml(view.dom.outerHTML);
