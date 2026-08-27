@@ -58,8 +58,13 @@ const editorSchema = new Schema({
 nodesDebug.textContent = Object.keys(editorSchema.nodes).join("\n");
 marksDebug.textContent = Object.keys(editorSchema.marks).join("\n");
 
+let doc = editorSchema.node("doc", null, [
+  editorSchema.node("paragraph", null, [editorSchema.text("One.")]),
+  editorSchema.node("paragraph", null, [editorSchema.text("Two!")])
+]);
+let otherdoc = DOMParser.fromSchema(editorSchema).parse(content);
 const state = EditorState.create({
-  doc: DOMParser.fromSchema(editorSchema).parse(content),
+  doc: doc,
   plugins: [
     buildInputRules(editorSchema),
     keymap(buildKeymap(editorSchema)),
