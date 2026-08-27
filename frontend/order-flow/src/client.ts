@@ -26,8 +26,11 @@ initAll();
 
 const editor = document.querySelector<HTMLElement>("#editor");
 const content = document.querySelector<HTMLElement>("#content");
+const documentDebug = document.querySelector<HTMLElement>("#document-debug");
+const nodesDebug = document.querySelector<HTMLElement>("#nodes-debug");
+const marksDebug = document.querySelector<HTMLElement>("#marks-debug");
 
-if (!editor || !content) {
+if (!editor || !content || !documentDebug || !nodesDebug || !marksDebug) {
   throw new Error("The editor page is missing its ProseMirror mount points");
 }
 
@@ -52,32 +55,8 @@ const editorSchema = new Schema({
   marks: allowedSchema.spec.marks,
 });
 
-function schemaSection(title: string, names: string[]): HTMLElement {
-  const section = document.createElement("section");
-  const heading = document.createElement("h2");
-  const contents = document.createElement("pre");
-
-  heading.textContent = title;
-  contents.textContent = names.join("\n");
-  section.append(heading, contents);
-
-  return section;
-}
-
-const nodesDebug = schemaSection(
-  "Schema nodes",
-  Object.keys(editorSchema.nodes),
-);
-const marksDebug = schemaSection(
-  "Schema marks",
-  Object.keys(editorSchema.marks),
-);
-const documentSection = document.createElement("section");
-const documentHeading = document.createElement("h2");
-const documentDebug = document.createElement("pre");
-documentHeading.textContent = "Document structure";
-documentSection.append(documentHeading, documentDebug);
-editor.after(documentSection, nodesDebug, marksDebug);
+nodesDebug.textContent = Object.keys(editorSchema.nodes).join("\n");
+marksDebug.textContent = Object.keys(editorSchema.marks).join("\n");
 
 const state = EditorState.create({
   doc: DOMParser.fromSchema(editorSchema).parse(content),
