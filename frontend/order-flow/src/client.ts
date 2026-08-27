@@ -94,7 +94,6 @@ let exampleNode = editorSchema.node("paragraph", { id: "order-text" }, [editorSc
 let doc = editorSchema.node("doc", null, [
   exampleNode
 ]);
-let otherdoc = DOMParser.fromSchema(editorSchema).parse(content);
 
 let purplePlugin = new Plugin({
   props: {
@@ -171,7 +170,12 @@ const state = EditorState.create({
   ],
 });
 
-export function createOrderEditor(selector: string) {
+export interface OrderEditor {
+  setClause(id: string, text: string): void;
+  removeClause(id: string): void;
+}
+
+export function createOrderEditor(selector: string): OrderEditor {
   const editor = document.querySelector<HTMLElement>(selector);
 
   if (!editor) {

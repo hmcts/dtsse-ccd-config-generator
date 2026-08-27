@@ -18,7 +18,7 @@ const orderCheckbox = checkbox;
 
 function updateOrderText(): void {
   if (orderCheckbox.checked) {
-    editor.setClause("cheese-text", "IT IS ORDERED THAT:");
+    editor.setClause("cheese-text", "IT IS ORDERED THAT: " + new Date());
   } else {
     editor.removeClause("cheese-text");
   }
