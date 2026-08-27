@@ -88,10 +88,34 @@ function formatHtml(html: string): string {
   }).join("\n");
 }
 
+let exampleNode = editorSchema.node("paragraph", { id: "order-text" }, [editorSchema.text("IT IS ORDERED THAT:")]);
 let doc = editorSchema.node("doc", null, [
-  editorSchema.node("paragraph", { id: "order-text" }, [editorSchema.text("IT IS ORDERED THAT:")])
+  exampleNode
 ]);
 let otherdoc = DOMParser.fromSchema(editorSchema).parse(content);
+
+let purplePlugin = new Plugin({
+  props: {
+    decorations(state) {
+      const decorations: Decoration[] = [];
+
+      state.doc.descendants((node, pos) => {
+        if (
+          node.attrs.id === "order-text" &&
+          !node.eq(exampleNode)
+        ) {
+          decorations.push(
+            Decoration.node(pos, pos + node.nodeSize, {
+              style: "color: red",
+            }),
+          );
+        }
+      });
+
+      return DecorationSet.create(state.doc, decorations);
+    }
+  }
+});
 
 const state = EditorState.create({
   doc: doc,
@@ -100,6 +124,7 @@ const state = EditorState.create({
     keymap(buildKeymap(editorSchema)),
     keymap(baseKeymap),
     dropCursor(),
+    purplePlugin,
     gapCursor(),
     menuBar({
       floating: true,
