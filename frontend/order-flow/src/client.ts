@@ -27,10 +27,11 @@ initAll();
 const editor = document.querySelector<HTMLElement>("#editor");
 const content = document.querySelector<HTMLElement>("#content");
 const documentDebug = document.querySelector<HTMLElement>("#document-debug");
+const schemaDebug = document.querySelector<HTMLElement>("#schema-debug");
 const nodesDebug = document.querySelector<HTMLElement>("#nodes-debug");
 const marksDebug = document.querySelector<HTMLElement>("#marks-debug");
 
-if (!editor || !content || !documentDebug || !nodesDebug || !marksDebug) {
+if (!editor || !content || !documentDebug || !schemaDebug || !nodesDebug || !marksDebug) {
   throw new Error("The editor page is missing its ProseMirror mount points");
 }
 
@@ -55,6 +56,14 @@ const editorSchema = new Schema({
   marks: allowedSchema.spec.marks,
 });
 
+schemaDebug.textContent = JSON.stringify(
+  {
+    nodes: editorSchema.spec.nodes.toObject(),
+    marks: editorSchema.spec.marks.toObject(),
+  },
+  (_key, value) => typeof value === "function" ? "[Function]" : value,
+  2,
+);
 nodesDebug.textContent = Object.keys(editorSchema.nodes).join("\n");
 marksDebug.textContent = Object.keys(editorSchema.marks).join("\n");
 
