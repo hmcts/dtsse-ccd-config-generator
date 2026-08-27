@@ -3,14 +3,51 @@
 #editor {
   @include govuk-font($size: 19);
 
+  position: relative;
   border: 1px solid govuk-colour("black", $variant: "tint-80");
   color: govuk-colour("black");
 }
 
 .ProseMirror {
+  --editor-gutter-width: 2.5rem;
+
   min-height: 12rem;
   padding: govuk-spacing(4);
+  padding-left: calc(var(--editor-gutter-width) + #{govuk-spacing(4)});
   outline: none;
+  background: linear-gradient(
+    to right,
+    govuk-colour("black", $variant: "tint-95") 0,
+    govuk-colour("black", $variant: "tint-95") calc(var(--editor-gutter-width) - 1px),
+    govuk-colour("black", $variant: "tint-80") calc(var(--editor-gutter-width) - 1px),
+    govuk-colour("black", $variant: "tint-80") var(--editor-gutter-width),
+    transparent var(--editor-gutter-width)
+  );
+}
+
+.revert-node-button {
+  @include govuk-font($size: 19, $weight: bold);
+
+  position: absolute;
+  left: govuk-spacing(2);
+  width: 1.5rem;
+  height: 1.5rem;
+  padding: 0;
+  border: 1px solid govuk-colour("black", $variant: "tint-50");
+  border-radius: 2px;
+  background: govuk-colour("white");
+  color: govuk-colour("black");
+  line-height: 1;
+  cursor: pointer;
+}
+
+.revert-node-button:hover {
+  background: govuk-colour("black", $variant: "tint-95");
+}
+
+.revert-node-button:focus {
+  outline: $govuk-focus-width solid $govuk-focus-colour;
+  outline-offset: 0;
 }
 
 .alien {

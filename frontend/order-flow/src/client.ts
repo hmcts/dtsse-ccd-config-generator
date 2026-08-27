@@ -109,12 +109,40 @@ let purplePlugin = new Plugin({
               style: "color: red",
             }),
           );
+          decorations.push(
+            Decoration.widget(pos + 1, () => {
+              const button = document.createElement("button");
+              button.type = "button";
+              button.className = "revert-node-button";
+              button.dataset.nodePosition = String(pos);
+              button.setAttribute("aria-label", "Revert this paragraph");
+              button.title = "Revert this paragraph";
+              button.textContent = "↶";
+              return button;
+            }, { side: -1 }),
+          );
         }
       });
 
       return DecorationSet.create(state.doc, decorations);
-    }
-  }
+    },
+    handleClick(view, _pos, event) {
+      if (/revert-node-button/.test((event.target as HTMLElement).className)) {
+        const nodePosition = Number((event.target as HTMLElement).dataset.nodePosition);
+        const node = view.state.doc.nodeAt(nodePosition);
+
+        if (node?.attrs.id === "order-text")
+          view.dispatch(
+            view.state.tr
+              .replaceWith(nodePosition, nodePosition + node.nodeSize, exampleNode)
+              .scrollIntoView(),
+          );
+
+        view.focus();
+        return true;
+      }
+    },
+  },
 });
 
 const state = EditorState.create({
