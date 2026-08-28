@@ -9,10 +9,7 @@ import { gapCursor } from "prosemirror-gapcursor";
 import { history } from "prosemirror-history";
 import { keymap } from "prosemirror-keymap";
 import { menuBar, type MenuItem } from "prosemirror-menu";
-import {
-  type Node as ProseMirrorNode,
-  Schema,
-} from "prosemirror-model";
+import { type Node as ProseMirrorNode } from "prosemirror-model";
 import {
   EditorState,
   Plugin,
@@ -21,8 +18,9 @@ import {
   type Transaction,
 } from "prosemirror-state";
 import {Decoration, DecorationSet, EditorView} from "prosemirror-view";
-import { schema } from "prosemirror-schema-basic";
-import { addListNodes, wrapInList } from "prosemirror-schema-list";
+import { wrapInList } from "prosemirror-schema-list";
+
+import { editorSchema } from "./schema.js";
 
 import "prosemirror-view/style/prosemirror.css";
 import "prosemirror-menu/style/menu.css";
@@ -41,57 +39,6 @@ if (!documentDebug || !htmlDebug || !nodesDebug || !marksDebug || !schemaDebug) 
 
 const documentDebugElement = documentDebug;
 const htmlDebugElement = htmlDebug;
-
-const allowedNodeNames = ["doc", "paragraph", "heading", "text"];
-const allowedMarkNames = ["em", "strong"];
-
-const allowedSchema = new Schema({
-  nodes: Object.fromEntries(
-    allowedNodeNames.map((name) => [name, schema.spec.nodes.get(name)!]),
-  ),
-  marks: Object.fromEntries(
-    allowedMarkNames.map((name) => [name, schema.spec.marks.get(name)!]),
-  ),
-});
-
-const paragraphSpec = allowedSchema.spec.nodes.get("paragraph")!;
-const nodesWithParagraphId = allowedSchema.spec.nodes.update("paragraph", {
-  ...paragraphSpec,
-  attrs: {
-    ...paragraphSpec.attrs,
-    id: { default: null },
-  },
-});
-
-const nodesWithLists = addListNodes(
-  nodesWithParagraphId,
-  "paragraph block*",
-  "block",
-);
-
-const orderedListSpec = nodesWithLists.get("ordered_list")!;
-const nodesWithListId = nodesWithLists.update("ordered_list", {
-  ...orderedListSpec,
-  attrs: {
-    ...orderedListSpec.attrs,
-    id: { default: null },
-  },
-});
-
-const listItemSpec = nodesWithListId.get("list_item")!;
-const nodesWithListItemId = nodesWithListId.update("list_item", {
-  ...listItemSpec,
-  attrs: {
-    ...listItemSpec.attrs,
-    id: { default: null },
-  },
-});
-
-const editorSchema = new Schema({
-  nodes: nodesWithListItemId,
-  marks: allowedSchema.spec.marks,
-});
-
 
 nodesDebug.textContent = Object.keys(editorSchema.nodes).join("\n");
 marksDebug.textContent = Object.keys(editorSchema.marks).join("\n");
@@ -114,8 +61,6 @@ function formatHtml(html: string): string {
     return indentedLine;
   }).join("\n");
 }
-
-const doc = editorSchema.topNodeType.createAndFill()!;
 
 let debugPlugin = new Plugin({
   props: {
@@ -297,9 +242,10 @@ const generatedKeymap = buildKeymap(editorSchema, {
   "Shift-Ctrl-9": false,
 });
 
-const state = EditorState.create({
-  doc: doc,
-  plugins: [
+function createEditorState(document: ProseMirrorNode): EditorState {
+  return EditorState.create({
+    doc: document,
+    plugins: [
     buildInputRules(editorSchema),
     keymap({ Enter: insertUserParagraphAfterSystem }),
     keymap({
@@ -324,35 +270,27 @@ const state = EditorState.create({
         },
       },
     }),
-  ],
-});
-
-export interface ListBuilder {
-  listItem(id: string, text: string): ListBuilder;
-  build(): OrderEditor;
+    ],
+  });
 }
 
 export interface OrderController {
 
 };
 
-export interface OrderEditor {
-  setClause(id: string, text: string): void;
-  buildList(id: string): ListBuilder;
-  build(): OrderController;
-}
-
 const originalClauses = new Map<string, ProseMirrorNode>();
 
-export function createOrderEditor(selector: string): OrderEditor {
+export function createOrderEditor(
+  selector: string,
+  goldenDocument: ProseMirrorNode,
+): OrderController {
   const editor = document.querySelector<HTMLElement>(selector);
-  const clauses: ProseMirrorNode[]  = [];
   if (!editor) {
     throw new Error(`Editor element not found: ${selector}`);
   }
 
   const view = new EditorView(editor, {
-    state,
+    state: createEditorState(goldenDocument),
     dispatchTransaction(transaction) {
       const nextState = view.state.apply(transaction);
       view.updateState(nextState);
@@ -365,15 +303,6 @@ export function createOrderEditor(selector: string): OrderEditor {
     },
   });
 
-  function setClause(id: string, text: string): void {
-    const clauseNode = editorSchema.node(
-      "paragraph",
-      { id },
-      editorSchema.text(text)
-    );
-    clauses.push(clauseNode);
-  }
-
   documentDebugElement.textContent = JSON.stringify(
     view.state.doc.toJSON(),
     null,
@@ -381,56 +310,9 @@ export function createOrderEditor(selector: string): OrderEditor {
   );
   htmlDebugElement.textContent = formatHtml(view.dom.outerHTML);
 
-  function buildList(id: string): ListBuilder {
-    const listItems: ProseMirrorNode[] = [];
-    const builder: ListBuilder = {
-      listItem(itemId: string, text: string): ListBuilder {
-        const paragraph = editorSchema.node(
-          "paragraph",
-          { id: itemId },
-          editorSchema.text(text),
-        );
-
-        listItems.push(editorSchema.node("list_item", { id: "li-" + itemId}, paragraph));
-        return builder;
-      },
-      build(): OrderEditor {
-        const n = editorSchema.node(
-          "ordered_list",
-          { id },
-          listItems,
-        );
-        clauses.push(n);
-        return orderEditor;
-      }
-    };
-
-    return builder;
-  }
-
   const controller: OrderController = {
 
   };
 
-  function build(): OrderController {
-    const goldenDocument = editorSchema.node(
-      "doc",
-      null,
-      [...clauses],
-    );
-    view.updateState(
-      EditorState.create({
-        doc: goldenDocument,
-        plugins: state.plugins,
-      }),
-    );
-    return controller;
-  }
-
-  const orderEditor: OrderEditor = {
-    setClause,
-    buildList,
-    build,
-  };
-  return orderEditor;
+  return controller;
 }
