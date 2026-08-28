@@ -212,8 +212,29 @@ function createEditorState(document: ProseMirrorNode): EditorState {
 }
 
 export interface OrderController {
+  setActive(id: string, active: boolean): void;
+}
 
-};
+interface TopLevelClause {
+  node: ProseMirrorNode;
+  position: number;
+  index: number;
+}
+
+function findTopLevelClause(
+  document: ProseMirrorNode,
+  id: string,
+): TopLevelClause | undefined {
+  let result: TopLevelClause | undefined;
+
+  document.forEach((node, position, index) => {
+    if (!result && node.attrs.id === id) {
+      result = { node, position, index };
+    }
+  });
+
+  return result;
+}
 
 const originalClauses = new Map<string, ProseMirrorNode>();
 
@@ -248,6 +269,51 @@ export function createOrderEditor(
   htmlDebugElement.textContent = formatHtml(view.dom.outerHTML);
 
   const controller: OrderController = {
+    setActive(id: string, active: boolean): void {
+      const original = findTopLevelClause(goldenDocument, id);
+      if (!original) {
+        throw new Error(`Unknown top-level clause: ${id}`);
+      }
+
+      const current = findTopLevelClause(view.state.doc, id);
+      if (active === Boolean(current)) {
+        return;
+      }
+
+      if (!active && current) {
+        view.dispatch(
+          view.state.tr
+            .delete(current.position, current.position + current.node.nodeSize)
+            .setMeta("addToHistory", false),
+        );
+        return;
+      }
+
+      let insertionPosition = view.state.doc.content.size;
+
+      for (
+        let index = original.index + 1;
+        index < goldenDocument.childCount;
+        index++
+      ) {
+        const nextId = goldenDocument.child(index).attrs.id;
+        if (typeof nextId !== "string") {
+          continue;
+        }
+
+        const nextClause = findTopLevelClause(view.state.doc, nextId);
+        if (nextClause) {
+          insertionPosition = nextClause.position;
+          break;
+        }
+      }
+
+      view.dispatch(
+        view.state.tr
+          .insert(insertionPosition, original.node)
+          .setMeta("addToHistory", false),
+      );
+    }
 
   };
 

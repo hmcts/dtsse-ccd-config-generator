@@ -47,10 +47,7 @@ const goldenDocument = builder.build();
 const controller = createOrderEditor("#editor", goldenDocument);
 
 function updateStructure(): void {
-  if (!sublistControl.checked) {
-    return;
-  }
-
+  controller.setActive("a-list", sublistControl.checked);
 }
 
 sublistControl.addEventListener("change", updateStructure);
