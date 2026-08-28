@@ -9,7 +9,10 @@ import { gapCursor } from "prosemirror-gapcursor";
 import { history } from "prosemirror-history";
 import { keymap } from "prosemirror-keymap";
 import { menuBar, type MenuItem } from "prosemirror-menu";
-import { type Node as ProseMirrorNode } from "prosemirror-model";
+import {
+  Fragment,
+  type Node as ProseMirrorNode,
+} from "prosemirror-model";
 import {
   EditorState,
   Plugin,
@@ -164,6 +167,66 @@ function findTopLevelClause(
   return result;
 }
 
+function reconcileNode(
+  liveNode: ProseMirrorNode,
+  targetNode: ProseMirrorNode,
+): ProseMirrorNode {
+  if (liveNode.type !== targetNode.type) return targetNode;
+
+  const targetChildren = targetNode.content.content;
+  if (
+    targetChildren.length === 0 ||
+    targetChildren.some((child) => typeof child.attrs.id !== "string")
+  ) {
+    return targetNode;
+  }
+
+  const targetIndexes = new Map(
+    targetChildren.map((child, index) => [child.attrs.id as string, index]),
+  );
+  const reconciledChildren: ProseMirrorNode[] = [];
+  let targetIndex = 0;
+
+  liveNode.forEach((liveChild) => {
+    const id = liveChild.attrs.id;
+    if (typeof id !== "string") {
+      reconciledChildren.push(liveChild);
+      return;
+    }
+
+    const matchingIndex = targetIndexes.get(id);
+    if (matchingIndex === undefined || matchingIndex < targetIndex) return;
+
+    while (targetIndex < matchingIndex) {
+      reconciledChildren.push(targetChildren[targetIndex]!);
+      targetIndex++;
+    }
+
+    reconciledChildren.push(
+      reconcileNode(liveChild, targetChildren[targetIndex]!),
+    );
+    targetIndex++;
+  });
+
+  while (targetIndex < targetChildren.length) {
+    reconciledChildren.push(targetChildren[targetIndex]!);
+    targetIndex++;
+  }
+
+  return targetNode.copy(Fragment.fromArray(reconciledChildren));
+}
+
+function validateTarget(target: ProseMirrorNode): void {
+  const ids = new Set<string>();
+
+  target.descendants((node) => {
+    const id = node.attrs.id;
+    if (typeof id !== "string") return;
+    if (ids.has(id)) throw new Error(`Duplicate target clause ID: ${id}`);
+    ids.add(id);
+  });
+}
+
 export function createOrderEditor(
   selector: string
 ): OrderController {
@@ -202,10 +265,8 @@ export function createOrderEditor(
         throw new Error("Every top-level target clause must have an ID");
       }
 
+      validateTarget(target);
       const targetIds = new Set(targetClauses.map((clause) => clause.id));
-      if (targetIds.size !== targetClauses.length) {
-        throw new Error("Top-level target clause IDs must be unique");
-      }
 
       if (!hasRendered) {
         hasRendered = true;
@@ -236,19 +297,26 @@ export function createOrderEditor(
           transaction.doc,
           targetClause.id,
         );
+        let renderedNode = targetClause.node;
 
         if (!liveClause) {
-          transaction.insert(insertionPosition, targetClause.node);
-        } else if (!liveClause.node.eq(targetClause.node)) {
-          transaction.replaceWith(
-            liveClause.position,
-            liveClause.position + liveClause.node.nodeSize,
+          transaction.insert(insertionPosition, renderedNode);
+        } else {
+          renderedNode = reconcileNode(
+            liveClause.node,
             targetClause.node,
           );
+          if (!liveClause.node.eq(renderedNode)) {
+            transaction.replaceWith(
+              liveClause.position,
+              liveClause.position + liveClause.node.nodeSize,
+              renderedNode,
+            );
+          }
         }
 
         insertionPosition = liveClause?.position ?? insertionPosition;
-        insertionPosition += targetClause.node.nodeSize;
+        insertionPosition += renderedNode.nodeSize;
       }
 
       if (transaction.docChanged) {
