@@ -9,9 +9,6 @@ initAll();
 const orderTextCheckbox = document.querySelector<HTMLInputElement>(
   '[name="structure-choice"][value="checked"]',
 );
-const firstSubparagraphCheckbox = document.querySelector<HTMLInputElement>(
-  '[name="structure-choice"][value="subpara-1"]',
-);
 const secondSubparagraphCheckbox = document.querySelector<HTMLInputElement>(
   '[name="structure-choice"][value="subpara-2"]',
 );
@@ -21,7 +18,6 @@ const thirdSubparagraphCheckbox = document.querySelector<HTMLInputElement>(
 
 if (
   !orderTextCheckbox ||
-  !firstSubparagraphCheckbox ||
   !secondSubparagraphCheckbox ||
   !thirdSubparagraphCheckbox
 ) {
@@ -29,7 +25,6 @@ if (
 }
 
 const orderTextControl = orderTextCheckbox;
-const firstSubparagraphControl = firstSubparagraphCheckbox;
 const secondSubparagraphControl = secondSubparagraphCheckbox;
 const thirdSubparagraphControl = thirdSubparagraphCheckbox;
 
@@ -46,13 +41,11 @@ const controller = createOrderEditor("#editor", goldenDocument);
 
 function updateStructure(): void {
   controller.setActive("order-text", orderTextControl.checked);
-  controller.setActive("li-1", firstSubparagraphControl.checked);
   controller.setActive("li-2", secondSubparagraphControl.checked);
   controller.setActive("li-3", thirdSubparagraphControl.checked);
 }
 
 orderTextControl.addEventListener("change", updateStructure);
-firstSubparagraphControl.addEventListener("change", updateStructure);
 secondSubparagraphControl.addEventListener("change", updateStructure);
 thirdSubparagraphControl.addEventListener("change", updateStructure);
 updateStructure();

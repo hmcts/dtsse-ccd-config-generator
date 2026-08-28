@@ -232,13 +232,6 @@ function findTopLevelClause(
     }
   });
 
-
-  // document.forEach((node, position, index) => {
-  //   if (!result && node.attrs.id === id) {
-  //     result = { node, position, index };
-  //   }
-  // });
-
   return result;
 }
 

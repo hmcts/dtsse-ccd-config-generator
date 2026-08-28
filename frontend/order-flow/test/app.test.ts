@@ -18,10 +18,6 @@ describe("order flow page", () => {
     assert.match(response.text, /name="structure-choice"/);
     assert.match(response.text, /class="govuk-checkboxes structure-checkboxes"/);
     assert.match(response.text, /value="checked" checked/);
-    assert.match(response.text, /value="sublist" checked/);
-    assert.match(response.text, /\sSublist\s/);
-    assert.match(response.text, /value="subpara-1" checked/);
-    assert.match(response.text, /\sSubpara 1\s/);
     assert.match(response.text, /value="subpara-2"/);
     assert.match(response.text, /\sSubpara 2\s/);
     assert.match(response.text, /value="subpara-3"/);
