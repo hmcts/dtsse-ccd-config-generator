@@ -6,15 +6,9 @@ import "./application.scss";
 
 initAll();
 
-const checkbox = document.querySelector<HTMLInputElement>(
-  '[name="test-checkbox"]',
+const orderTextCheckbox = document.querySelector<HTMLInputElement>(
+  '[name="structure-choice"][value="checked"]',
 );
-
-if (!checkbox) {
-  throw new Error("The order checkbox is missing");
-}
-
-const orderCheckbox = checkbox;
 const sublistCheckbox = document.querySelector<HTMLInputElement>(
   '[name="structure-choice"][value="sublist"]',
 );
@@ -26,6 +20,7 @@ const thirdSubparagraphCheckbox = document.querySelector<HTMLInputElement>(
 );
 
 if (
+  !orderTextCheckbox ||
   !sublistCheckbox ||
   !secondSubparagraphCheckbox ||
   !thirdSubparagraphCheckbox
@@ -33,6 +28,7 @@ if (
   throw new Error("The structure checkboxes are missing");
 }
 
+const orderTextControl = orderTextCheckbox;
 const sublistControl = sublistCheckbox;
 const secondSubparagraphControl = secondSubparagraphCheckbox;
 const thirdSubparagraphControl = thirdSubparagraphCheckbox;
@@ -47,9 +43,11 @@ const goldenDocument = builder.build();
 const controller = createOrderEditor("#editor", goldenDocument);
 
 function updateStructure(): void {
+  controller.setActive("order-text", orderTextControl.checked);
   controller.setActive("a-list", sublistControl.checked);
 }
 
+orderTextControl.addEventListener("change", updateStructure);
 sublistControl.addEventListener("change", updateStructure);
 secondSubparagraphControl.addEventListener("change", updateStructure);
 thirdSubparagraphControl.addEventListener("change", updateStructure);

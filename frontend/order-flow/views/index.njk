@@ -16,22 +16,6 @@
   <div class="govuk-grid-row">
     <div class="govuk-grid-column-two-thirds">
       <form id="order-form" novalidate>
-        {{ govukCheckboxes({
-          name: "test-checkbox",
-          fieldset: {
-            legend: {
-              text: "Test checkbox",
-              classes: "govuk-fieldset__legend--m"
-            }
-          },
-          items: [
-            {
-              value: "checked",
-              text: "Check this box"
-            }
-          ]
-        }) }}
-
         {{ govukDateInput({
           id: "order-date",
           namePrefix: "order-date",
@@ -57,8 +41,14 @@
           },
           items: [
             {
+              value: "checked",
+              text: "Check this box",
+              checked: true
+            },
+            {
               value: "sublist",
-              text: "Sublist"
+              text: "Sublist",
+              checked: true
             },
             {
               value: "subpara-1",

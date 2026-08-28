@@ -14,11 +14,11 @@ describe("order flow page", () => {
 
     assert.match(response.text, /class="govuk-template"/);
     assert.match(response.text, /id="main-content"/);
-    assert.match(response.text, /name="test-checkbox"/);
     assert.match(response.text, /Check this box/);
     assert.match(response.text, /name="structure-choice"/);
     assert.match(response.text, /class="govuk-checkboxes structure-checkboxes"/);
-    assert.match(response.text, /value="sublist"/);
+    assert.match(response.text, /value="checked" checked/);
+    assert.match(response.text, /value="sublist" checked/);
     assert.match(response.text, /\sSublist\s/);
     assert.match(response.text, /value="subpara-1"/);
     assert.match(response.text, /\sSubpara 1\s/);
