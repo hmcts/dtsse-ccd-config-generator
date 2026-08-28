@@ -33,12 +33,12 @@ export function createOrderBuilder(): OrderBuilder {
       listItem(itemId: string, text: string): ListBuilder {
         const paragraph = editorSchema.node(
           "paragraph",
-          { id: itemId },
+          { id: itemId + "-content" },
           editorSchema.text(text),
         );
 
         listItems.push(
-          editorSchema.node("list_item", { id: `li-${itemId}` }, paragraph),
+          editorSchema.node("list_item", { id: itemId }, paragraph),
         );
         return listBuilder;
       },

@@ -20,10 +20,12 @@ describe("order flow page", () => {
     assert.match(response.text, /value="checked" checked/);
     assert.match(response.text, /value="sublist" checked/);
     assert.match(response.text, /\sSublist\s/);
-    assert.match(response.text, /value="subpara-1"/);
+    assert.match(response.text, /value="subpara-1" checked/);
     assert.match(response.text, /\sSubpara 1\s/);
     assert.match(response.text, /value="subpara-2"/);
     assert.match(response.text, /\sSubpara 2\s/);
+    assert.match(response.text, /value="subpara-3"/);
+    assert.match(response.text, /\sSubpara 3\s/);
     assert.match(response.text, /id="editor"/);
     assert.match(response.text, /\/assets\/application\.css/);
     assert.match(response.text, /\/assets\/application\.js/);

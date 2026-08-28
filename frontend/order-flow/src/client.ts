@@ -218,7 +218,6 @@ export interface OrderController {
 interface TopLevelClause {
   node: ProseMirrorNode;
   position: number;
-  index: number;
 }
 
 function findTopLevelClause(
@@ -227,11 +226,18 @@ function findTopLevelClause(
 ): TopLevelClause | undefined {
   let result: TopLevelClause | undefined;
 
-  document.forEach((node, position, index) => {
-    if (!result && node.attrs.id === id) {
-      result = { node, position, index };
+  document.descendants((node, pos) => {
+    if (node.attrs.id === id) {
+      result = { node, position: pos}
     }
   });
+
+
+  // document.forEach((node, position, index) => {
+  //   if (!result && node.attrs.id === id) {
+  //     result = { node, position, index };
+  //   }
+  // });
 
   return result;
 }
@@ -289,21 +295,25 @@ export function createOrderEditor(
         return;
       }
 
-      let insertionPosition = view.state.doc.content.size;
-
-      for (
-        let index = original.index + 1;
-        index < goldenDocument.childCount;
-        index++
-      ) {
-        const nextId = goldenDocument.child(index).attrs.id;
-        if (typeof nextId !== "string") {
-          continue;
+      let goldenPos = goldenDocument.resolve(original.position);
+      let goldenParent = goldenPos.parent;
+      let insertionPosition = 0;
+      if (goldenParent.attrs.id) {
+        let liveParent = findTopLevelClause(view.state.doc, goldenParent.attrs.id)
+        if (liveParent == null) {
+          return;
         }
+        insertionPosition = liveParent.position + 1;
+      }
 
-        const nextClause = findTopLevelClause(view.state.doc, nextId);
-        if (nextClause) {
-          insertionPosition = nextClause.position;
+      let candidateIndex = goldenPos.index();
+      // Walk back through the preceding golden siblings and insert after the first
+      while (--candidateIndex >= 0) {
+        let candidate = goldenPos.parent.child(candidateIndex)
+        console.log(candidate)
+        let liveCandidate = findTopLevelClause(view.state.doc, candidate.attrs.id)
+        if (liveCandidate) {
+          insertionPosition = liveCandidate.position + liveCandidate.node.nodeSize
           break;
         }
       }

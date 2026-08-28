@@ -9,19 +9,19 @@ initAll();
 const orderTextCheckbox = document.querySelector<HTMLInputElement>(
   '[name="structure-choice"][value="checked"]',
 );
-const sublistCheckbox = document.querySelector<HTMLInputElement>(
-  '[name="structure-choice"][value="sublist"]',
-);
-const secondSubparagraphCheckbox = document.querySelector<HTMLInputElement>(
+const firstSubparagraphCheckbox = document.querySelector<HTMLInputElement>(
   '[name="structure-choice"][value="subpara-1"]',
 );
-const thirdSubparagraphCheckbox = document.querySelector<HTMLInputElement>(
+const secondSubparagraphCheckbox = document.querySelector<HTMLInputElement>(
   '[name="structure-choice"][value="subpara-2"]',
+);
+const thirdSubparagraphCheckbox = document.querySelector<HTMLInputElement>(
+  '[name="structure-choice"][value="subpara-3"]',
 );
 
 if (
   !orderTextCheckbox ||
-  !sublistCheckbox ||
+  !firstSubparagraphCheckbox ||
   !secondSubparagraphCheckbox ||
   !thirdSubparagraphCheckbox
 ) {
@@ -29,7 +29,7 @@ if (
 }
 
 const orderTextControl = orderTextCheckbox;
-const sublistControl = sublistCheckbox;
+const firstSubparagraphControl = firstSubparagraphCheckbox;
 const secondSubparagraphControl = secondSubparagraphCheckbox;
 const thirdSubparagraphControl = thirdSubparagraphCheckbox;
 
@@ -37,6 +37,8 @@ const builder = createOrderBuilder();
 builder.setClause("order-text", "IT IS ORDERED THAT:");
 builder.buildList("a-list")
   .listItem("li-1", "foo")
+  .listItem("li-2", "bar")
+  .listItem("li-3", "baz")
   .build();
 
 const goldenDocument = builder.build();
@@ -44,11 +46,13 @@ const controller = createOrderEditor("#editor", goldenDocument);
 
 function updateStructure(): void {
   controller.setActive("order-text", orderTextControl.checked);
-  controller.setActive("a-list", sublistControl.checked);
+  controller.setActive("li-1", firstSubparagraphControl.checked);
+  controller.setActive("li-2", secondSubparagraphControl.checked);
+  controller.setActive("li-3", thirdSubparagraphControl.checked);
 }
 
 orderTextControl.addEventListener("change", updateStructure);
-sublistControl.addEventListener("change", updateStructure);
+firstSubparagraphControl.addEventListener("change", updateStructure);
 secondSubparagraphControl.addEventListener("change", updateStructure);
 thirdSubparagraphControl.addEventListener("change", updateStructure);
 updateStructure();
