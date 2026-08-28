@@ -18,7 +18,7 @@ import {
   Plugin,
   type Command,
 } from "prosemirror-state";
-import {Decoration, DecorationSet, EditorView} from "prosemirror-view";
+import {EditorView} from "prosemirror-view";
 
 import {
   insertUserParagraphAfterSystem,
@@ -67,19 +67,6 @@ function formatHtml(html: string): string {
     return indentedLine;
   }).join("\n");
 }
-
-let debugPlugin = new Plugin({
-  props: {
-    decorations(state) {
-
-      state.doc.descendants((node, pos) => {
-        console.log(node.type.name, node.toString())
-      });
-
-      return DecorationSet.create(state.doc, []);
-    }
-  }
-});
 
 const menuItems = buildMenuItems(editorSchema);
 
