@@ -77,91 +77,6 @@ let debugPlugin = new Plugin({
   }
 });
 
-let purplePlugin = new Plugin({
-  props: {
-    decorations(state) {
-      const decorations: Decoration[] = [];
-
-      state.doc.descendants((node, pos) => {
-        const original = originalClauses.get(node.attrs.id);
-        if (
-          original != undefined &&
-          !node.eq(original)
-        ) {
-          decorations.push(
-            Decoration.node(pos, pos + node.nodeSize, {
-              style: "color: red",
-            }),
-          );
-          decorations.push(
-            Decoration.widget(pos + 1, () => {
-              const button = document.createElement("button");
-              button.type = "button";
-              button.className = "revert-node-button";
-              button.dataset.nodePosition = String(pos);
-              button.setAttribute("aria-label", "Revert this paragraph");
-              button.title = "Revert this paragraph";
-              button.textContent = "↶";
-              return button;
-            }, { side: -1 }),
-          );
-        }
-        if (node.type.name == "text")
-          return false;
-        if (node.attrs.id == null) {
-          console.log(node.type.name)
-          decorations.push(
-            Decoration.node(pos, pos + node.nodeSize, {
-              class: "user-authored-paragraph",
-            }),
-          );
-          decorations.push(
-            Decoration.widget(pos + 1, () => {
-              const button = document.createElement("button");
-              button.type = "button";
-              button.className = "revert-node-button";
-              button.dataset.nodePosition = String(pos);
-              button.setAttribute("aria-label", "Revert this paragraph");
-              button.title = "Revert this paragraph";
-              button.textContent = "↶";
-              return button;
-            }, { side: -1 }),
-          );
-          // Don't recursively scan children mark only the outer user created node
-          return false;
-        }
-      });
-
-      return DecorationSet.create(state.doc, decorations);
-    },
-    handleClick(view, _pos, event) {
-      if (/revert-node-button/.test((event.target as HTMLElement).className)) {
-        const nodePosition = Number((event.target as HTMLElement).dataset.nodePosition);
-        const node = view.state.doc.nodeAt(nodePosition);
-        const original = originalClauses.get(node?.attrs.id);
-
-        if (node != null)
-          if (original != null) {
-            view.dispatch(
-              view.state.tr
-                .replaceWith(nodePosition, nodePosition + node.nodeSize, original)
-                .scrollIntoView(),
-            );
-          } else {
-            view.dispatch(
-              view.state.tr
-                .deleteRange(nodePosition, nodePosition + node.nodeSize)
-                .scrollIntoView(),
-            );
-          }
-
-        view.focus();
-        return true;
-      }
-    },
-  },
-});
-
 const menuItems = buildMenuItems(editorSchema);
 
 function useCommand(item: MenuItem | undefined, command: Command): void {
@@ -192,8 +107,6 @@ function createEditorState(document: ProseMirrorNode): EditorState {
     keymap(generatedKeymap),
     keymap(baseKeymap),
     dropCursor(),
-    purplePlugin,
-    // debugPlugin,
     gapCursor(),
     menuBar({
       floating: true,
