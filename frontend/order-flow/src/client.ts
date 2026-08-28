@@ -69,8 +69,26 @@ const nodesWithLists = addListNodes(
   "block",
 );
 
+const orderedListSpec = nodesWithLists.get("ordered_list")!;
+const nodesWithListId = nodesWithLists.update("ordered_list", {
+  ...orderedListSpec,
+  attrs: {
+    ...orderedListSpec.attrs,
+    id: { default: null },
+  },
+});
+
+const listItemSpec = nodesWithListId.get("list_item")!;
+const nodesWithListItemId = nodesWithListId.update("list_item", {
+  ...listItemSpec,
+  attrs: {
+    ...listItemSpec.attrs,
+    id: { default: null },
+  },
+});
+
 const editorSchema = new Schema({
-  nodes: nodesWithLists,
+  nodes: nodesWithListItemId,
   marks: allowedSchema.spec.marks,
 });
 
@@ -98,6 +116,19 @@ function formatHtml(html: string): string {
 }
 
 const doc = editorSchema.topNodeType.createAndFill()!;
+
+let debugPlugin = new Plugin({
+  props: {
+    decorations(state) {
+
+      state.doc.descendants((node, pos) => {
+        console.log(node.type.name, node.toString())
+      });
+
+      return DecorationSet.create(state.doc, []);
+    }
+  }
+});
 
 let purplePlugin = new Plugin({
   props: {
@@ -128,7 +159,10 @@ let purplePlugin = new Plugin({
             }, { side: -1 }),
           );
         }
-        if (node.isBlock && original == null) {
+        if (node.type.name == "text")
+          return false;
+        if (node.attrs.id == null) {
+          console.log(node.type.name)
           decorations.push(
             Decoration.node(pos, pos + node.nodeSize, {
               class: "user-authored-paragraph",
@@ -276,6 +310,7 @@ const state = EditorState.create({
     keymap(baseKeymap),
     dropCursor(),
     purplePlugin,
+    // debugPlugin,
     gapCursor(),
     menuBar({
       floating: true,
@@ -292,8 +327,14 @@ const state = EditorState.create({
   ],
 });
 
+export interface ListBuilder {
+  listItem(id: string, text: string): ListBuilder;
+  build(): void;
+}
+
 export interface OrderEditor {
   setClause(id: string, text: string): void;
+  buildList(id: string): ListBuilder;
   removeClause(id: string): void;
 }
 
@@ -384,5 +425,54 @@ export function createOrderEditor(selector: string): OrderEditor {
   );
   htmlDebugElement.textContent = formatHtml(view.dom.outerHTML);
 
-  return { setClause, removeClause };
+  function setList(id: string, listItems: ProseMirrorNode[]): void {
+    const clauseNode = editorSchema.node(
+      "ordered_list",
+      { id },
+      listItems,
+    );
+    const existingClause = findClause(id);
+
+    originalClauses.set(id, clauseNode);
+    if (existingClause?.node.eq(clauseNode)) return;
+
+    const transaction = existingClause
+      ? view.state.tr.replaceWith(
+        existingClause.position,
+        existingClause.position + existingClause.node.nodeSize,
+        clauseNode,
+      )
+      : view.state.doc.textContent
+        ? view.state.tr.insert(view.state.doc.content.size, clauseNode)
+        : view.state.tr.replaceWith(
+          0,
+          view.state.doc.content.size,
+          clauseNode,
+        );
+
+    view.dispatch(transaction);
+  }
+
+  function buildList(id: string): ListBuilder {
+    const listItems: ProseMirrorNode[] = [];
+    const builder: ListBuilder = {
+      listItem(itemId: string, text: string): ListBuilder {
+        const paragraph = editorSchema.node(
+          "paragraph",
+          { id: itemId },
+          editorSchema.text(text),
+        );
+
+        listItems.push(editorSchema.node("list_item", { id: "li-" + itemId}, paragraph));
+        return builder;
+      },
+      build(): void {
+        setList(id, listItems);
+      }
+    };
+
+    return builder;
+  }
+
+  return { setClause, removeClause, buildList };
 }

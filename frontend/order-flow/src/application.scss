@@ -1,5 +1,14 @@
 @use "govuk-frontend/dist/govuk/index" as *;
 
+.structure-checkboxes {
+  display: flex;
+  gap: govuk-spacing(4);
+}
+
+.structure-checkboxes .govuk-checkboxes__item {
+  margin-bottom: 0;
+}
+
 #editor {
   @include govuk-font($size: 19);
 

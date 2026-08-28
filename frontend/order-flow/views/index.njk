@@ -46,6 +46,31 @@
           }
         }) }}
 
+        {{ govukCheckboxes({
+          name: "structure-choice",
+          classes: "structure-checkboxes",
+          fieldset: {
+            legend: {
+              text: "Structure",
+              classes: "govuk-fieldset__legend--m"
+            }
+          },
+          items: [
+            {
+              value: "sublist",
+              text: "Sublist"
+            },
+            {
+              value: "subpara-1",
+              text: "Subpara 1"
+            },
+            {
+              value: "subpara-2",
+              text: "Subpara 2"
+            }
+          ]
+        }) }}
+
         <div id="editor"></div>
 
         <section>
