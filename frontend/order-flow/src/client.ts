@@ -94,9 +94,9 @@ const generatedKeymap = buildKeymap(editorSchema, {
   "Shift-Ctrl-9": false,
 });
 
-function createEditorState(document: ProseMirrorNode): EditorState {
+function createEditorState(): EditorState {
   return EditorState.create({
-    doc: document,
+    schema: editorSchema,
     plugins: [
     buildInputRules(editorSchema),
     keymap({ Enter: insertUserParagraphAfterSystem }),
@@ -125,7 +125,7 @@ function createEditorState(document: ProseMirrorNode): EditorState {
 }
 
 export interface OrderController {
-  setActive(id: string, active: boolean): void;
+  render(target: ProseMirrorNode): void;
 }
 
 interface TopLevelClause {
@@ -148,11 +148,8 @@ function findTopLevelClause(
   return result;
 }
 
-const originalClauses = new Map<string, ProseMirrorNode>();
-
 export function createOrderEditor(
-  selector: string,
-  goldenDocument: ProseMirrorNode,
+  selector: string
 ): OrderController {
   const editor = document.querySelector<HTMLElement>(selector);
   if (!editor) {
@@ -160,7 +157,7 @@ export function createOrderEditor(
   }
 
   const view = new EditorView(editor, {
-    state: createEditorState(goldenDocument),
+    state: createEditorState(),
     dispatchTransaction(transaction) {
       const nextState = view.state.apply(transaction);
       view.updateState(nextState);
@@ -181,56 +178,9 @@ export function createOrderEditor(
   htmlDebugElement.textContent = formatHtml(view.dom.outerHTML);
 
   const controller: OrderController = {
-    setActive(id: string, active: boolean): void {
-      const original = findTopLevelClause(goldenDocument, id);
-      if (!original) {
-        throw new Error(`Unknown top-level clause: ${id}`);
-      }
-
-      const current = findTopLevelClause(view.state.doc, id);
-      if (active === Boolean(current)) {
-        return;
-      }
-
-      if (!active && current) {
-        view.dispatch(
-          view.state.tr
-            .delete(current.position, current.position + current.node.nodeSize)
-            .setMeta("addToHistory", false),
-        );
-        return;
-      }
-
-      let goldenPos = goldenDocument.resolve(original.position);
-      let goldenParent = goldenPos.parent;
-      let insertionPosition = 0;
-      if (goldenParent.attrs.id) {
-        let liveParent = findTopLevelClause(view.state.doc, goldenParent.attrs.id)
-        if (liveParent == null) {
-          return;
-        }
-        insertionPosition = liveParent.position + 1;
-      }
-
-      let candidateIndex = goldenPos.index();
-      // Walk back through the preceding golden siblings and insert after the first
-      while (--candidateIndex >= 0) {
-        let candidate = goldenPos.parent.child(candidateIndex)
-        console.log(candidate)
-        let liveCandidate = findTopLevelClause(view.state.doc, candidate.attrs.id)
-        if (liveCandidate) {
-          insertionPosition = liveCandidate.position + liveCandidate.node.nodeSize
-          break;
-        }
-      }
-
-      view.dispatch(
-        view.state.tr
-          .insert(insertionPosition, original.node)
-          .setMeta("addToHistory", false),
-      );
+    render(_target: ProseMirrorNode): void {
+      // TODO: reconcile the target with view.state.doc.
     }
-
   };
 
   return controller;

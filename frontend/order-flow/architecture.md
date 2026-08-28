@@ -20,7 +20,7 @@ function buildOrder(inputs: OrderInputs): ProseMirrorNode {
 controller.render(buildOrder(inputs));
 ```
 
-It is a pure function that builds a prosemirror target node based on inputs.
+It is a pure function that builds a ProseMirror target node based on inputs.
 
 Stable, unique clause IDs identify the same logical clause.
 User authored nodes are inserted by prosemirror and will lack IDs.

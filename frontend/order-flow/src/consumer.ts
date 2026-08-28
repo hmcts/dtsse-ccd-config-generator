@@ -1,4 +1,5 @@
 import { initAll } from "govuk-frontend";
+import { type Node as ProseMirrorNode } from "prosemirror-model";
 
 import { createOrderBuilder } from "./builder.js";
 import { createOrderEditor } from "./client.js";
@@ -28,21 +29,31 @@ const orderTextControl = orderTextCheckbox;
 const secondSubparagraphControl = secondSubparagraphCheckbox;
 const thirdSubparagraphControl = thirdSubparagraphCheckbox;
 
-const builder = createOrderBuilder();
-builder.setClause("order-text", "IT IS ORDERED THAT:");
-builder.buildList("a-list")
-  .listItem("li-1", "foo")
-  .listItem("li-2", "bar")
-  .listItem("li-3", "baz")
-  .build();
+const controller = createOrderEditor("#editor");
 
-const goldenDocument = builder.build();
-const controller = createOrderEditor("#editor", goldenDocument);
+function buildOrder(): ProseMirrorNode {
+  const builder = createOrderBuilder();
+
+  if (orderTextControl.checked) {
+    builder.setClause("order-text", "IT IS ORDERED THAT:");
+  }
+
+  const list = builder.buildList("a-list")
+    .listItem("li-1", "foo");
+
+  if (secondSubparagraphControl.checked) {
+    list.listItem("li-2", "bar");
+  }
+  if (thirdSubparagraphControl.checked) {
+    list.listItem("li-3", "baz");
+  }
+
+  list.build();
+  return builder.build();
+}
 
 function updateStructure(): void {
-  controller.setActive("order-text", orderTextControl.checked);
-  controller.setActive("li-2", secondSubparagraphControl.checked);
-  controller.setActive("li-3", thirdSubparagraphControl.checked);
+  controller.render(buildOrder());
 }
 
 orderTextControl.addEventListener("change", updateStructure);
