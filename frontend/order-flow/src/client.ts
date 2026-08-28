@@ -129,8 +129,21 @@ export interface OrderController {
 }
 
 interface TopLevelClause {
+  id: string;
   node: ProseMirrorNode;
   position: number;
+}
+
+function topLevelClauses(document: ProseMirrorNode): TopLevelClause[] {
+  const clauses: TopLevelClause[] = [];
+
+  document.forEach((node, position) => {
+    if (typeof node.attrs.id === "string") {
+      clauses.push({ id: node.attrs.id, node, position });
+    }
+  });
+
+  return clauses;
 }
 
 function findTopLevelClause(
@@ -139,9 +152,9 @@ function findTopLevelClause(
 ): TopLevelClause | undefined {
   let result: TopLevelClause | undefined;
 
-  document.descendants((node, pos) => {
+  document.forEach((node, position) => {
     if (node.attrs.id === id) {
-      result = { node, position: pos}
+      result = { id, node, position };
     }
   });
 
@@ -177,9 +190,67 @@ export function createOrderEditor(
   );
   htmlDebugElement.textContent = formatHtml(view.dom.outerHTML);
 
+  let hasRendered = false;
+
   const controller: OrderController = {
-    render(_target: ProseMirrorNode): void {
-      // TODO: reconcile the target with view.state.doc.
+    render(target: ProseMirrorNode): void {
+      const targetClauses = topLevelClauses(target);
+      if (targetClauses.length !== target.childCount) {
+        throw new Error("Every top-level target clause must have an ID");
+      }
+
+      const targetIds = new Set(targetClauses.map((clause) => clause.id));
+      if (targetIds.size !== targetClauses.length) {
+        throw new Error("Top-level target clause IDs must be unique");
+      }
+
+      if (!hasRendered) {
+        hasRendered = true;
+        view.dispatch(
+          view.state.tr
+            .replaceWith(0, view.state.doc.content.size, target.content)
+            .setMeta("addToHistory", false),
+        );
+        return;
+      }
+
+      let transaction = view.state.tr;
+
+      const removedClauses = topLevelClauses(transaction.doc)
+        .filter((clause) => !targetIds.has(clause.id))
+        .reverse();
+      for (const clause of removedClauses) {
+        transaction.delete(
+          clause.position,
+          clause.position + clause.node.nodeSize,
+        );
+      }
+
+      let insertionPosition = 0;
+
+      for (const targetClause of targetClauses) {
+        const liveClause = findTopLevelClause(
+          transaction.doc,
+          targetClause.id,
+        );
+
+        if (!liveClause) {
+          transaction.insert(insertionPosition, targetClause.node);
+        } else if (!liveClause.node.eq(targetClause.node)) {
+          transaction.replaceWith(
+            liveClause.position,
+            liveClause.position + liveClause.node.nodeSize,
+            targetClause.node,
+          );
+        }
+
+        insertionPosition = liveClause?.position ?? insertionPosition;
+        insertionPosition += targetClause.node.nodeSize;
+      }
+
+      if (transaction.docChanged) {
+        view.dispatch(transaction.setMeta("addToHistory", false));
+      }
     }
   };
 
