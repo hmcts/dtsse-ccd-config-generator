@@ -329,20 +329,24 @@ const state = EditorState.create({
 
 export interface ListBuilder {
   listItem(id: string, text: string): ListBuilder;
-  build(): void;
+  build(): OrderEditor;
 }
+
+export interface OrderController {
+
+};
 
 export interface OrderEditor {
   setClause(id: string, text: string): void;
   buildList(id: string): ListBuilder;
-  removeClause(id: string): void;
+  build(): OrderController;
 }
 
 const originalClauses = new Map<string, ProseMirrorNode>();
 
 export function createOrderEditor(selector: string): OrderEditor {
   const editor = document.querySelector<HTMLElement>(selector);
-
+  const clauses: ProseMirrorNode[]  = [];
   if (!editor) {
     throw new Error(`Editor element not found: ${selector}`);
   }
@@ -361,61 +365,13 @@ export function createOrderEditor(selector: string): OrderEditor {
     },
   });
 
-  function findClause(
-    id: string,
-  ): { node: ProseMirrorNode; position: number } | undefined {
-    let clause: { node: ProseMirrorNode; position: number } | undefined;
-
-    view.state.doc.forEach((node, position) => {
-      if (!clause && node.attrs.id === id) {
-        clause = { node, position };
-      }
-    });
-
-    return clause;
-  }
-
-
   function setClause(id: string, text: string): void {
     const clauseNode = editorSchema.node(
       "paragraph",
       { id },
       editorSchema.text(text)
     );
-    const existingClause = findClause(id);
-
-    originalClauses.set(id, clauseNode);
-    if (existingClause?.node.eq(clauseNode)) return;
-
-    const transaction = existingClause
-      ? view.state.tr.replaceWith(
-          existingClause.position,
-          existingClause.position + existingClause.node.nodeSize,
-          clauseNode,
-        )
-      : view.state.doc.textContent
-        ? view.state.tr.insert(view.state.doc.content.size, clauseNode)
-        : view.state.tr.replaceWith(
-            0,
-            view.state.doc.content.size,
-            clauseNode,
-          );
-
-    view.dispatch(transaction);
-  }
-
-  function removeClause(id: string): void {
-    const existingClause = findClause(id);
-
-    originalClauses.delete(id);
-    if (!existingClause) return;
-
-    view.dispatch(
-      view.state.tr.delete(
-        existingClause.position,
-        existingClause.position + existingClause.node.nodeSize,
-      ),
-    );
+    clauses.push(clauseNode);
   }
 
   documentDebugElement.textContent = JSON.stringify(
@@ -424,34 +380,6 @@ export function createOrderEditor(selector: string): OrderEditor {
     2,
   );
   htmlDebugElement.textContent = formatHtml(view.dom.outerHTML);
-
-  function setList(id: string, listItems: ProseMirrorNode[]): void {
-    const clauseNode = editorSchema.node(
-      "ordered_list",
-      { id },
-      listItems,
-    );
-    const existingClause = findClause(id);
-
-    originalClauses.set(id, clauseNode);
-    if (existingClause?.node.eq(clauseNode)) return;
-
-    const transaction = existingClause
-      ? view.state.tr.replaceWith(
-        existingClause.position,
-        existingClause.position + existingClause.node.nodeSize,
-        clauseNode,
-      )
-      : view.state.doc.textContent
-        ? view.state.tr.insert(view.state.doc.content.size, clauseNode)
-        : view.state.tr.replaceWith(
-          0,
-          view.state.doc.content.size,
-          clauseNode,
-        );
-
-    view.dispatch(transaction);
-  }
 
   function buildList(id: string): ListBuilder {
     const listItems: ProseMirrorNode[] = [];
@@ -466,13 +394,43 @@ export function createOrderEditor(selector: string): OrderEditor {
         listItems.push(editorSchema.node("list_item", { id: "li-" + itemId}, paragraph));
         return builder;
       },
-      build(): void {
-        setList(id, listItems);
+      build(): OrderEditor {
+        const n = editorSchema.node(
+          "ordered_list",
+          { id },
+          listItems,
+        );
+        clauses.push(n);
+        return orderEditor;
       }
     };
 
     return builder;
   }
 
-  return { setClause, removeClause, buildList };
+  const controller: OrderController = {
+
+  };
+
+  function build(): OrderController {
+    const goldenDocument = editorSchema.node(
+      "doc",
+      null,
+      [...clauses],
+    );
+    view.updateState(
+      EditorState.create({
+        doc: goldenDocument,
+        plugins: state.plugins,
+      }),
+    );
+    return controller;
+  }
+
+  const orderEditor: OrderEditor = {
+    setClause,
+    buildList,
+    build,
+  };
+  return orderEditor;
 }

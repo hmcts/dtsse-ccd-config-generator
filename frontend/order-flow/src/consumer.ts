@@ -38,36 +38,19 @@ const secondSubparagraphControl = secondSubparagraphCheckbox;
 const thirdSubparagraphControl = thirdSubparagraphCheckbox;
 
 editor.setClause("order-text", "IT IS ORDERED THAT:");
+editor.buildList("a-list")
+  .listItem("li-1", "foo")
+  .build()
+  .build();
 
 function updateStructure(): void {
   if (!sublistControl.checked) {
-    editor.removeClause("a-list");
     return;
   }
 
-  const list = editor.buildList("a-list")
-    .listItem("para-1", "dawg");
-
-  if (secondSubparagraphControl.checked) {
-    list.listItem("para-2", "bruh");
-  }
-
-  if (thirdSubparagraphControl.checked) {
-    list.listItem("para-3", "Third subparagraph");
-  }
-
-  list.build();
 }
 
 sublistControl.addEventListener("change", updateStructure);
 secondSubparagraphControl.addEventListener("change", updateStructure);
 thirdSubparagraphControl.addEventListener("change", updateStructure);
 updateStructure();
-
-checkbox.addEventListener("change", () => {
-  if (orderCheckbox.checked) {
-    editor.setClause("cheese-text", "Bacon shall be had by ");
-  } else {
-    editor.removeClause("cheese-text");
-  }
-});
