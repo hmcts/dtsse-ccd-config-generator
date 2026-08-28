@@ -18,13 +18,10 @@ const orderCheckbox = checkbox;
 
 editor.setClause("order-text", "IT IS ORDERED THAT:");
 
-function updateOrderText(): void {
+checkbox.addEventListener("change", () => {
   if (orderCheckbox.checked) {
     editor.setClause("cheese-text", "Bacon shall be had ");
   } else {
     editor.removeClause("cheese-text");
   }
-}
-
-checkbox.addEventListener("change", updateOrderText);
-updateOrderText();
+});
