@@ -1,5 +1,100 @@
 @use "govuk-frontend/dist/govuk/index" as *;
 
+.govuk-width-container {
+  max-width: none;
+  margin-right: govuk-spacing(6);
+  margin-left: govuk-spacing(6);
+}
+
+.attendance {
+  max-width: 65rem;
+  margin-bottom: govuk-spacing(8);
+}
+
+.attendance-row {
+  display: grid;
+  grid-template-columns: minmax(14rem, 22rem) auto 12rem;
+  align-items: center;
+  gap: govuk-spacing(2);
+  padding: govuk-spacing(1) 0;
+  border-bottom: 1px solid govuk-colour("black", $variant: "tint-80");
+}
+
+.attendance-party,
+.attendance-options .govuk-radios__item {
+  margin-bottom: 0;
+}
+
+.attendance-party {
+  @include govuk-font($size: 16, $weight: bold);
+}
+
+.attendance-options {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 0;
+}
+
+.attendance-options .govuk-radios__label {
+  @include govuk-font($size: 16);
+
+  padding-top: 2px;
+  padding-right: 0;
+  padding-bottom: 2px;
+}
+
+.attendance-name {
+  display: flex;
+  align-items: center;
+  gap: govuk-spacing(1);
+}
+
+.attendance-name .govuk-label {
+  @include govuk-font($size: 16);
+
+  margin-bottom: 0;
+}
+
+.attendance-name .govuk-input {
+  height: 1.875rem;
+  padding: govuk-spacing(1);
+}
+
+#document-debug,
+#html-debug,
+#nodes-debug,
+#marks-debug,
+#schema-debug {
+  overflow-x: auto;
+}
+
+.attendance-options::after {
+  display: none;
+}
+
+.attendance-options .govuk-radios__item {
+  flex: 0 0 auto;
+  margin-right: 0;
+}
+
+@include govuk-media-query($until: tablet) {
+  .govuk-width-container {
+    margin-right: govuk-spacing(3);
+    margin-left: govuk-spacing(3);
+  }
+
+  .attendance-row {
+    grid-template-columns: 1fr;
+    gap: govuk-spacing(3);
+    padding: govuk-spacing(3) 0;
+  }
+
+  .attendance-options {
+    flex-wrap: wrap;
+  }
+}
+
 .structure-checkboxes {
   display: flex;
   gap: govuk-spacing(4);

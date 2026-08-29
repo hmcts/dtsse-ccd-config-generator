@@ -14,6 +14,15 @@ describe("order flow page", () => {
 
     assert.match(response.text, /class="govuk-template"/);
     assert.match(response.text, /id="main-content"/);
+    assert.match(response.text, />Attendance</);
+    assert.match(response.text, /Claimant 1: Mersey Community Housing/);
+    assert.match(response.text, /Defendant 2: Fatima Taylor/);
+    assert.doesNotMatch(response.text, /Defendant 3:/);
+    assert.match(response.text, /name="attendance-claimant-1"/);
+    assert.match(response.text, /value="housing-officer"/);
+    assert.match(response.text, /name="attendance-defendant-2"/);
+    assert.match(response.text, /value="duty-adviser"/);
+    assert.match(response.text, /id="attendance-defendant-2-name"/);
     assert.match(response.text, /Check this box/);
     assert.match(response.text, /name="structure-choice"/);
     assert.match(response.text, /class="govuk-checkboxes structure-checkboxes"/);

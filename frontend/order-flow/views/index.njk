@@ -14,8 +14,55 @@
 
 {% block content %}
   <div class="govuk-grid-row">
-    <div class="govuk-grid-column-two-thirds">
+    <div class="govuk-grid-column-full">
       <form id="order-form" novalidate>
+        <section class="attendance" aria-labelledby="attendance-heading">
+          <h1 class="govuk-heading-xl" id="attendance-heading">Attendance</h1>
+
+          {% set parties = [
+            { id: "claimant-1", kind: "claimant", number: 1, label: "Claimant 1: Mersey Community Housing", selected: "counsel" },
+            { id: "defendant-1", kind: "defendant", number: 1, label: "Defendant 1: David Jones", selected: "solicitor" },
+            { id: "defendant-2", kind: "defendant", number: 2, label: "Defendant 2: Fatima Taylor", selected: "solicitors-agent" }
+          ] %}
+
+          {% for party in parties %}
+            <fieldset class="govuk-fieldset attendance-row"
+                      data-attendance-row
+                      data-party-kind="{{ party.kind }}"
+                      data-party-number="{{ party.number }}">
+              <legend class="govuk-visually-hidden">Attendance for {{ party.label }}</legend>
+              <div class="attendance-party govuk-body govuk-!-font-weight-bold">{{ party.label }}</div>
+              <div class="govuk-radios govuk-radios--inline govuk-radios--small attendance-options">
+                {% set choices = [
+                  { value: "counsel", label: "Csl" },
+                  { value: "solicitor", label: "Sol" },
+                  { value: "solicitors-agent", label: "S/A" },
+                  { value: "housing-officer" if party.kind == "claimant" else "duty-adviser", label: "H/O" if party.kind == "claimant" else "Duty" },
+                  { value: "in-person", label: "LiP" },
+                  { value: "letter", label: "Ltr" },
+                  { value: "not-present", label: "Not present" }
+                ] %}
+                {% for choice in choices %}
+                  <div class="govuk-radios__item">
+                    <input class="govuk-radios__input"
+                           id="attendance-{{ party.id }}-{{ choice.value }}"
+                           name="attendance-{{ party.id }}"
+                           type="radio"
+                           value="{{ choice.value }}"
+                           {% if choice.value == party.selected %}checked{% endif %}>
+                    <label class="govuk-label govuk-radios__label"
+                           for="attendance-{{ party.id }}-{{ choice.value }}">{{ choice.label }}</label>
+                  </div>
+                {% endfor %}
+              </div>
+              <div class="attendance-name">
+                <label class="govuk-label" for="attendance-{{ party.id }}-name">Name</label>
+                <input class="govuk-input" id="attendance-{{ party.id }}-name" name="attendance-{{ party.id }}-name" type="text">
+              </div>
+            </fieldset>
+          {% endfor %}
+        </section>
+
         {{ govukDateInput({
           id: "order-date",
           namePrefix: "order-date",
@@ -43,7 +90,7 @@
             {
               value: "checked",
               text: "Check this box",
-              checked: false
+              checked: true
             },
             {
               value: "subpara-2",
