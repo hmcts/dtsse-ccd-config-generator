@@ -55,9 +55,16 @@ export function createApp({
   }
 
   app.get("/", (_request, response) => {
+    const today = new Date();
+
     response.render("index.njk", {
       assetPath: "/assets",
       development,
+      orderDate: {
+        day: today.getDate(),
+        month: today.getMonth() + 1,
+        year: today.getFullYear(),
+      },
     });
   });
 

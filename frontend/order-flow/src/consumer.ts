@@ -97,6 +97,15 @@ const secondSubparagraphCheckbox = document.querySelector<HTMLInputElement>(
 const thirdSubparagraphCheckbox = document.querySelector<HTMLInputElement>(
   '[name="structure-choice"][value="subpara-3"]',
 );
+const orderDateDay = document.querySelector<HTMLInputElement>(
+  '[name="order-date-day"]',
+);
+const orderDateMonth = document.querySelector<HTMLInputElement>(
+  '[name="order-date-month"]',
+);
+const orderDateYear = document.querySelector<HTMLInputElement>(
+  '[name="order-date-year"]',
+);
 const attendanceRows = document.querySelectorAll<HTMLElement>(
   "[data-attendance-row]",
 );
@@ -105,6 +114,9 @@ if (
   !orderTextCheckbox ||
   !secondSubparagraphCheckbox ||
   !thirdSubparagraphCheckbox ||
+  !orderDateDay ||
+  !orderDateMonth ||
+  !orderDateYear ||
   attendanceRows.length === 0
 ) {
   throw new Error("The order controls are missing");
@@ -113,6 +125,11 @@ if (
 const orderTextControl = orderTextCheckbox;
 const secondSubparagraphControl = secondSubparagraphCheckbox;
 const thirdSubparagraphControl = thirdSubparagraphCheckbox;
+const orderDateControls = {
+  day: orderDateDay,
+  month: orderDateMonth,
+  year: orderDateYear,
+};
 
 const controller = createOrderEditor("#editor");
 
@@ -138,6 +155,31 @@ function readAttendances(): Attendance[] {
   });
 }
 
+function readOrderDate(): string {
+  const day = Number(orderDateControls.day.value);
+  const month = Number(orderDateControls.month.value);
+  const year = Number(orderDateControls.year.value);
+  const date = new Date(Date.UTC(year, month - 1, day));
+
+  if (
+    !Number.isInteger(day) ||
+    !Number.isInteger(month) ||
+    !Number.isInteger(year) ||
+    date.getUTCDate() !== day ||
+    date.getUTCMonth() !== month - 1 ||
+    date.getUTCFullYear() !== year
+  ) {
+    return "[date not provided]";
+  }
+
+  return new Intl.DateTimeFormat("en-GB", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+    timeZone: "UTC",
+  }).format(date);
+}
+
 function buildOrder(): ProseMirrorNode {
   const builder = createOrderBuilder();
 
@@ -153,7 +195,7 @@ function buildOrder(): ProseMirrorNode {
   const list = builder.buildList("order-clauses")
     .listItem("give-possession")
     .text("The defendants must give up possession on or before ")
-    .formValue("deadline", "12 September 2026")
+    .formValue("deadline", readOrderDate())
     .text(".");
 
   if (secondSubparagraphControl.checked) {
@@ -175,6 +217,9 @@ function updateStructure(): void {
 orderTextControl.addEventListener("change", updateStructure);
 secondSubparagraphControl.addEventListener("change", updateStructure);
 thirdSubparagraphControl.addEventListener("change", updateStructure);
+for (const input of Object.values(orderDateControls)) {
+  input.addEventListener("input", updateStructure);
+}
 for (const row of attendanceRows) {
   row.addEventListener("change", updateStructure);
   row.addEventListener("input", updateStructure);
