@@ -3,12 +3,12 @@ import { type Node as ProseMirrorNode } from "prosemirror-model";
 import { editorSchema } from "./schema.js";
 
 export interface ListBuilder {
-  listItem(id: string, text: string): ListBuilder;
+  listItem(clauseId: string, text: string): ListBuilder;
   build(): OrderBuilder;
 }
 
 export interface OrderBuilder {
-  setClause(id: string, text: string): void;
+  setClause(clauseId: string, text: string): void;
   buildList(): ListBuilder;
   build(): ProseMirrorNode;
 }
@@ -16,11 +16,11 @@ export interface OrderBuilder {
 export function createOrderBuilder(): OrderBuilder {
   const clauses: ProseMirrorNode[] = [];
 
-  function setClause(id: string, text: string): void {
+  function setClause(clauseId: string, text: string): void {
     clauses.push(
       editorSchema.node(
         "paragraph",
-        { id },
+        { clause_id: clauseId },
         editorSchema.text(text),
       ),
     );
@@ -30,15 +30,15 @@ export function createOrderBuilder(): OrderBuilder {
     const listItems: ProseMirrorNode[] = [];
 
     const listBuilder: ListBuilder = {
-      listItem(itemId: string, text: string): ListBuilder {
+      listItem(clauseId: string, text: string): ListBuilder {
         const paragraph = editorSchema.node(
           "paragraph",
-          { id: itemId + "-content" },
+          null,
           editorSchema.text(text),
         );
 
         listItems.push(
-          editorSchema.node("list_item", { id: itemId }, paragraph),
+          editorSchema.node("list_item", { clause_id: clauseId }, paragraph),
         );
         return listBuilder;
       },

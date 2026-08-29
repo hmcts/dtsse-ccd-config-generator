@@ -15,30 +15,30 @@ const allowedSchema = new Schema({
 });
 
 const paragraphSpec = allowedSchema.spec.nodes.get("paragraph")!;
-const nodesWithParagraphId = allowedSchema.spec.nodes.update("paragraph", {
+const nodesWithParagraphClauseId = allowedSchema.spec.nodes.update("paragraph", {
   ...paragraphSpec,
   attrs: {
     ...paragraphSpec.attrs,
-    id: { default: null },
+    clause_id: { default: null },
   },
 });
 
 const nodesWithLists = addListNodes(
-  nodesWithParagraphId,
+  nodesWithParagraphClauseId,
   "paragraph block*",
   "block",
 );
 
 const listItemSpec = nodesWithLists.get("list_item")!;
-const nodesWithListItemId = nodesWithLists.update("list_item", {
+const nodesWithListItemClauseId = nodesWithLists.update("list_item", {
   ...listItemSpec,
   attrs: {
     ...listItemSpec.attrs,
-    id: { default: null },
+    clause_id: { default: null },
   },
 });
 
 export const editorSchema = new Schema({
-  nodes: nodesWithListItemId,
+  nodes: nodesWithListItemClauseId,
   marks: allowedSchema.spec.marks,
 });

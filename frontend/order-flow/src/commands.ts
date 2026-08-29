@@ -8,7 +8,7 @@ import {
 import { editorSchema } from "./schema.js";
 
 function selectionTouchesSystemParagraph(state: EditorState): boolean {
-  if (typeof state.selection.$from.parent.attrs.id === "string") {
+  if (typeof state.selection.$from.parent.attrs.clause_id === "string") {
     return true;
   }
 
@@ -18,7 +18,7 @@ function selectionTouchesSystemParagraph(state: EditorState): boolean {
     state.selection.from,
     state.selection.to,
     (node) => {
-      if (node.isTextblock && typeof node.attrs.id === "string") {
+      if (node.isTextblock && typeof node.attrs.clause_id === "string") {
         touchesSystemParagraph = true;
         return false;
       }
@@ -43,7 +43,7 @@ export const insertUserParagraphAfterSystem: Command = (state, dispatch) => {
 
   if (
     $from.depth !== 1 ||
-    typeof $from.parent.attrs.id !== "string"
+    typeof $from.parent.attrs.clause_id !== "string"
   ) {
     return false;
   }
