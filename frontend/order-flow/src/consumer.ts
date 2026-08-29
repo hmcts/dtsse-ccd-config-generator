@@ -38,7 +38,7 @@ function buildOrder(): ProseMirrorNode {
     builder.setClause("order-text", "IT IS ORDERED THAT:");
   }
 
-  const list = builder.buildList("a-list")
+  const list = builder.buildList()
     .listItem("li-1", "foo");
 
   if (secondSubparagraphControl.checked) {

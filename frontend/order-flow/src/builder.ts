@@ -9,7 +9,7 @@ export interface ListBuilder {
 
 export interface OrderBuilder {
   setClause(id: string, text: string): void;
-  buildList(id: string): ListBuilder;
+  buildList(): ListBuilder;
   build(): ProseMirrorNode;
 }
 
@@ -26,7 +26,7 @@ export function createOrderBuilder(): OrderBuilder {
     );
   }
 
-  function buildList(id: string): ListBuilder {
+  function buildList(): ListBuilder {
     const listItems: ProseMirrorNode[] = [];
 
     const listBuilder: ListBuilder = {
@@ -46,7 +46,7 @@ export function createOrderBuilder(): OrderBuilder {
         clauses.push(
           editorSchema.node(
             "ordered_list",
-            { id },
+            null,
             listItems,
           ),
         );

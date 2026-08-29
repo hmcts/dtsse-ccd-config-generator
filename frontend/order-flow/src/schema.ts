@@ -29,17 +29,8 @@ const nodesWithLists = addListNodes(
   "block",
 );
 
-const orderedListSpec = nodesWithLists.get("ordered_list")!;
-const nodesWithListId = nodesWithLists.update("ordered_list", {
-  ...orderedListSpec,
-  attrs: {
-    ...orderedListSpec.attrs,
-    id: { default: null },
-  },
-});
-
-const listItemSpec = nodesWithListId.get("list_item")!;
-const nodesWithListItemId = nodesWithListId.update("list_item", {
+const listItemSpec = nodesWithLists.get("list_item")!;
+const nodesWithListItemId = nodesWithLists.update("list_item", {
   ...listItemSpec,
   attrs: {
     ...listItemSpec.attrs,
