@@ -3,7 +3,6 @@ import { type Node as ProseMirrorNode } from "prosemirror-model";
 
 import { createOrderBuilder } from "./builder.js";
 import { createOrderEditor } from "./client.js";
-import { editorSchema } from "./schema.js";
 import "./application.scss";
 
 initAll();
@@ -152,7 +151,10 @@ function buildOrder(): ProseMirrorNode {
   }
 
   const list = builder.buildList("order-clauses")
-    .listItem("li-1", "foo");
+    .listItem("give-possession")
+    .text("The defendants must give up possession on or before ")
+    .formValue("deadline", "12 September 2026")
+    .text(".");
 
   if (secondSubparagraphControl.checked) {
     list.listItem("li-2", "bar");
@@ -163,27 +165,7 @@ function buildOrder(): ProseMirrorNode {
 
   list.build();
   builder.setClause("outro", "that's all folks");
-
-  const order = builder.build();
-  const givePossessionClause = editorSchema.node(
-    "paragraph",
-    { id: "clause:give-possession" },
-    [
-      editorSchema.text(
-        "The defendants must give up possession on or before ",
-      ),
-      editorSchema.node("form_value", {
-        id: "fact:give-possession:deadline",
-        text: "12 September 2026",
-      }),
-      editorSchema.text("."),
-    ],
-  );
-
-  return editorSchema.node("doc", null, [
-    ...order.children,
-    givePossessionClause,
-  ]);
+  return builder.build();
 }
 
 function updateStructure(): void {
