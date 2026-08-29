@@ -1,27 +1,15 @@
-import { baseKeymap } from "prosemirror-commands";
 import { dropCursor } from "prosemirror-dropcursor";
-import {
-  buildInputRules,
-  buildKeymap,
-  buildMenuItems,
-} from "prosemirror-example-setup";
 import { gapCursor } from "prosemirror-gapcursor";
 import { history } from "prosemirror-history";
-import { keymap } from "prosemirror-keymap";
-import { menuBar } from "prosemirror-menu";
 import { type Node as ProseMirrorNode } from "prosemirror-model";
-import {
-  EditorState,
-  Plugin,
-} from "prosemirror-state";
+import { EditorState } from "prosemirror-state";
 import { EditorView } from "prosemirror-view";
 
+import { createKeymapPlugins } from "./keymap.js";
 import { editorSchema } from "./schema.js";
 
-import "prosemirror-view/style/prosemirror.css";
-import "prosemirror-menu/style/menu.css";
-import "prosemirror-example-setup/style/style.css";
 import "prosemirror-gapcursor/style/gapcursor.css";
+import "prosemirror-view/style/prosemirror.css";
 
 const documentDebug = document.querySelector<HTMLElement>("#document-debug");
 const htmlDebug = document.querySelector<HTMLElement>("#html-debug");
@@ -58,31 +46,14 @@ function formatHtml(html: string): string {
   }).join("\n");
 }
 
-const menuItems = buildMenuItems(editorSchema);
-
-const generatedKeymap = buildKeymap(editorSchema);
-
 function createEditorState(): EditorState {
   return EditorState.create({
     schema: editorSchema,
     plugins: [
-    buildInputRules(editorSchema),
-    keymap(generatedKeymap),
-    keymap(baseKeymap),
-    dropCursor(),
-    gapCursor(),
-    menuBar({
-      floating: true,
-      content: menuItems.fullMenu,
-    }),
-    history(),
-    new Plugin({
-      props: {
-        attributes: {
-          class: "ProseMirror-example-setup-style",
-        },
-      },
-    }),
+      ...createKeymapPlugins(),
+      dropCursor(),
+      gapCursor(),
+      history(),
     ],
   });
 }
