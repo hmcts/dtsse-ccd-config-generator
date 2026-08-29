@@ -1,17 +1,52 @@
 import { type Node as ProseMirrorNode } from "prosemirror-model";
 import { type Transaction } from "prosemirror-state";
 
-function reconciliationKeys(document: ProseMirrorNode): Set<string> {
+function reconciliationKeys(container: ProseMirrorNode): Set<string> {
   const keys = new Set<string>();
-  for (const child of document.children) {
+  for (const child of container.children) {
     const id = child.attrs.id;
     if (typeof id === "string") keys.add(id);
   }
   return keys;
 }
 
+function liveContainer(
+  transaction: Transaction,
+  containerPosition: number | null,
+): ProseMirrorNode {
+  if (containerPosition === null) return transaction.doc;
+
+  const container = transaction.doc.nodeAt(containerPosition);
+  if (!container) throw new Error("Reconciliation container not found");
+  return container;
+}
+
+function contentPosition(containerPosition: number | null): number {
+  return containerPosition === null ? 0 : containerPosition + 1;
+}
+
+function findChildById(
+  transaction: Transaction,
+  containerPosition: number | null,
+  id: string,
+): { node: ProseMirrorNode; position: number } | undefined {
+  let position = contentPosition(containerPosition);
+
+  for (const child of liveContainer(transaction, containerPosition).children) {
+    if (child.attrs.id === id) return { node: child, position };
+    position += child.nodeSize;
+  }
+
+  return undefined;
+}
+
+function isContainer(node: ProseMirrorNode): boolean {
+  return node.type.name === "ordered_list";
+}
+
 function replaceExistingClauses(
   transaction: Transaction,
+  containerPosition: number | null,
   target: ProseMirrorNode,
   replaceKeys: ReadonlySet<string>,
 ): void {
@@ -20,103 +55,107 @@ function replaceExistingClauses(
     if (
       typeof id !== "string" ||
       !replaceKeys.has(id) ||
-      targetChild.type.name === "ordered_list"
+      isContainer(targetChild)
     ) {
       continue;
     }
 
-    let livePosition = 0;
-
-    for (const liveChild of transaction.doc.children) {
-      if (liveChild.attrs.id === id) {
-        if (!liveChild.eq(targetChild)) {
-          transaction.replaceWith(
-            livePosition,
-            livePosition + liveChild.nodeSize,
-            targetChild,
-          );
-        }
-        break;
-      }
-
-      livePosition += liveChild.nodeSize;
+    const liveChild = findChildById(transaction, containerPosition, id);
+    if (liveChild && !liveChild.node.eq(targetChild)) {
+      transaction.replaceWith(
+        liveChild.position,
+        liveChild.position + liveChild.node.nodeSize,
+        targetChild,
+      );
     }
   }
 }
 
-function insertMissingClauses(
+function insertMissingNodes(
   transaction: Transaction,
+  containerPosition: number | null,
   target: ProseMirrorNode,
   insertKeys: ReadonlySet<string>,
 ): void {
   for (let targetIndex = 0; targetIndex < target.children.length; targetIndex++) {
     const child = target.children[targetIndex]!;
     const id = child.attrs.id;
-    if (
-      typeof id !== "string" ||
-      !insertKeys.has(id)
-    ) {
-      continue;
-    }
+    if (typeof id !== "string" || !insertKeys.has(id)) continue;
 
-    let insertionPosition = 0;
-    let predecessorFound = false;
+    let insertionPosition = contentPosition(containerPosition);
 
     for (
       let predecessorIndex = targetIndex - 1;
       predecessorIndex >= 0;
       predecessorIndex--
     ) {
-      const predecessor = target.children[predecessorIndex]!;
-      const predecessorId = predecessor.attrs.id;
-      let livePosition = 0;
+      const predecessorId = target.children[predecessorIndex]!.attrs.id;
+      if (typeof predecessorId !== "string") continue;
 
-      for (const liveChild of transaction.doc.children) {
-        if (
-          typeof predecessorId === "string" &&
-          liveChild.attrs.id === predecessorId
-        ) {
-          insertionPosition = livePosition + liveChild.nodeSize;
-          predecessorFound = true;
-          break;
-        }
+      const predecessor = findChildById(
+        transaction,
+        containerPosition,
+        predecessorId,
+      );
+      if (!predecessor) continue;
 
-        livePosition += liveChild.nodeSize;
-      }
-
-      if (predecessorFound) break;
+      insertionPosition = predecessor.position + predecessor.node.nodeSize;
+      break;
     }
 
     transaction.insert(insertionPosition, child);
   }
 }
 
-function deleteRemovedClauses(
+function deleteRemovedNodes(
   transaction: Transaction,
+  containerPosition: number | null,
   deleteKeys: ReadonlySet<string>,
 ): void {
   for (const id of deleteKeys) {
-    let livePosition = 0;
+    const liveChild = findChildById(transaction, containerPosition, id);
+    if (!liveChild) continue;
 
-    for (const liveChild of transaction.doc.children) {
-      if (liveChild.attrs.id === id) {
-        transaction.delete(
-          livePosition,
-          livePosition + liveChild.nodeSize,
+    transaction.delete(
+      liveChild.position,
+      liveChild.position + liveChild.node.nodeSize,
+    );
+  }
+}
+
+function reconcileChildContainers(
+  transaction: Transaction,
+  containerPosition: number | null,
+  target: ProseMirrorNode,
+): void {
+  for (const targetChild of target.children) {
+    const id = targetChild.attrs.id;
+    if (typeof id !== "string" || !isContainer(targetChild)) continue;
+
+    const liveChild = findChildById(transaction, containerPosition, id);
+    if (liveChild) {
+      if (!liveChild.node.sameMarkup(targetChild)) {
+        transaction.setNodeMarkup(
+          liveChild.position,
+          targetChild.type,
+          targetChild.attrs,
+          targetChild.marks,
         );
-        break;
       }
 
-      livePosition += liveChild.nodeSize;
+      reconcileContainer(transaction, liveChild.position, targetChild);
     }
   }
 }
 
-export function reconcileOrderDocument(
+function reconcileContainer(
   transaction: Transaction,
+  containerPosition: number | null,
   target: ProseMirrorNode,
-): Transaction {
-  const oldKeys = reconciliationKeys(transaction.doc);
+): void {
+  const oldKeys = reconciliationKeys(
+    liveContainer(transaction, containerPosition),
+  );
   const newKeys = reconciliationKeys(target);
 
   const replaceKeys = new Set(
@@ -129,9 +168,21 @@ export function reconcileOrderDocument(
     [...oldKeys].filter((key) => !newKeys.has(key)),
   );
 
-  replaceExistingClauses(transaction, target, replaceKeys);
-  insertMissingClauses(transaction, target, insertKeys);
-  deleteRemovedClauses(transaction, deleteKeys);
+  replaceExistingClauses(
+    transaction,
+    containerPosition,
+    target,
+    replaceKeys,
+  );
+  insertMissingNodes(transaction, containerPosition, target, insertKeys);
+  deleteRemovedNodes(transaction, containerPosition, deleteKeys);
+  reconcileChildContainers(transaction, containerPosition, target);
+}
 
+export function reconcileOrderDocument(
+  transaction: Transaction,
+  target: ProseMirrorNode,
+): Transaction {
+  reconcileContainer(transaction, null, target);
   return transaction;
 }
